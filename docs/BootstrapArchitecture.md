@@ -10,12 +10,19 @@ Change classification: `ARCHITECTURE`.
 
 The bootstrap pins .NET SDK `10.0.401` in `global.json`.
 
-Rationale:
+Selection evidence:
 
 - .NET 10 is the approved V1 target family.
-- SDK 10.0.401 is the current .NET 10 LTS SDK selected for this bootstrap.
-- `rtaime.slnx` is the primary solution format.
-- CI executes the pinned SDK on the Windows reference environment and records restore/build/test evidence.
+- Microsoft publishes SDK `10.0.401` as the current .NET 10 LTS SDK selected for this bootstrap.
+- `rtaime.slnx` is the primary solution format supported by the selected SDK family.
+
+Execution qualification status at this commit:
+
+```text
+Windows restore/build/test: UNVERIFIED
+```
+
+The repository contains `.github/workflows/bootstrap-validation.yml` to execute SDK qualification plus restore, build, and test on the Windows reference environment. No execution result is recorded as PASS until an actual workflow or equivalent Windows validation run has completed successfully.
 
 Target frameworks are centralized:
 
@@ -74,12 +81,14 @@ Key rules include:
 - Production projects cannot reference tests.
 - Hosts cannot reference other hosts.
 - Core/contracts remain package-neutral in the bootstrap.
+- the initial production project set has no package references.
 - vendor/runtime package boundaries are checked for SQLite, inference runtimes, CUDA/NVIDIA families.
 - known vendor/runtime source tokens are rejected in Media/AI contracts.
+- Core, contracts, and Runtime cannot opt into WPF/WindowsDesktop in the bootstrap.
 
 ## Build-time enforcement
 
-`Directory.Build.targets` supplies fast MSBuild guardrails for high-value invalid references and platform consistency.
+`Directory.Build.targets` supplies fast MSBuild guardrails for high-value invalid references, package neutrality, host boundaries, and Operator platform consistency.
 
 These checks complement, rather than replace, the architecture test suite.
 
@@ -97,9 +106,11 @@ These checks complement, rather than replace, the architecture test suite.
 - Operator-through-Client boundary;
 - host-to-host prohibition;
 - Core/contract package neutrality;
+- initial production package neutrality;
 - vendor package boundaries;
 - direct assembly references in Core/contracts;
-- known vendor type/token leakage into Media/AI contracts.
+- known vendor type/token leakage into Media/AI contracts;
+- WPF/WindowsDesktop neutrality for Core, contracts, and Runtime.
 
 Negative fixtures prove that at least these invalid edges are rejected:
 
@@ -116,7 +127,7 @@ Unknown managed projects under `src/` or `tests/` fail architecture validation c
 
 Central Package Management is enabled by `Directory.Packages.props`.
 
-Only test infrastructure packages are present in the bootstrap:
+Only test-runner packages are present in the bootstrap:
 
 ```text
 Microsoft.NET.Test.Sdk
