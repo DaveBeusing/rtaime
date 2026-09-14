@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Control\rtaime.Control\rtaime.Control.csproj" />
+    <ProjectReference Include="..\..\Persistence\rtaime.Persistence\rtaime.Persistence.csproj" />
+    <ProjectReference Include="..\..\Contracts\rtaime.Control.Contracts\rtaime.Control.Contracts.csproj" />
+    <ProjectReference Include="..\..\Contracts\rtaime.Runtime.Contracts\rtaime.Runtime.Contracts.csproj" />
+  </ItemGroup>
+</Project>

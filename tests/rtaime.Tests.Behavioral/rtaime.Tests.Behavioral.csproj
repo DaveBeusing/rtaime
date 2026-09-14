@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RtaimeIsTestProject>true</RtaimeIsTestProject>
+    <IsTestProject>true</IsTestProject>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Hosts\rtaime.ControlHost\rtaime.ControlHost.csproj" />
+    <ProjectReference Include="..\..\src\Hosts\rtaime.RuntimeHost\rtaime.RuntimeHost.csproj" />
+    <ProjectReference Include="..\..\src\Hosts\rtaime.AIHost\rtaime.AIHost.csproj" />
+    <ProjectReference Include="..\..\src\Client\rtaime.Client\rtaime.Client.csproj" />
+    <ProjectReference Include="..\rtaime.TestInfrastructure\rtaime.TestInfrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" />
+  </ItemGroup>
+</Project>

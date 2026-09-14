@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RtaimeIsTestProject>true</RtaimeIsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\rtaime.Core\rtaime.Core.csproj" />
+    <ProjectReference Include="..\..\src\Contracts\rtaime.Media.Contracts\rtaime.Media.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Contracts\rtaime.Provider.Contracts\rtaime.Provider.Contracts.csproj" />
+  </ItemGroup>
+</Project>
