@@ -9,7 +9,7 @@ rtaime V1 keeps durability in three independent lanes:
 2. Production Journal,
 3. media recording.
 
-This implementation covers the first two. Media recording remains owned by `rtaime.Recording`.
+The persistence subsystem covers the first two. Media recording remains owned by `rtaime.Recording`.
 
 The core rule is unchanged: active production truth remains in memory and SQLite must not become a synchronous dependency of the RT-critical media path.
 
@@ -95,27 +95,35 @@ Schema v1 reference files are under `schemas/persistence/v1/`.
 
 ## Recovery boundary
 
-AP-15 persists the evidence needed by later recovery work:
+AP-15 established the durable recovery basis:
 
 ```text
 latest valid checkpoint
 +
-subsequent causal Production Journal
+causal Production Journal
 ```
 
-It does not implement automatic process restart, production reconstruction, replay orchestration or exact live continuation after power loss. Those remain recovery/supervision responsibilities.
+AP-16 activates that basis for ControlHost process recovery. Before a persisted authority snapshot is restored, ControlHost verifies the management SQLite store, checkpoint format and identity/version/revision/source constraints, plus Production Journal SQLite/hash-chain integrity. Only then can the recovered authority participate in Runtime reconciliation.
+
+The Production Journal remains evidence and diagnostic history rather than a general event-sourcing replay engine. V1 recovery restores the latest qualified authoritative checkpoint and reconciles Runtime execution against that revision; it does not reconstruct arbitrary domain state by replaying every journal record.
+
+AP-16 still does not claim exact live continuation after process crash or power loss, frame-identical Runtime continuation, preservation of in-flight transition phase, or distributed recovery. Those remain outside the qualified durability claim.
+
+Detailed process recovery and supervision semantics are documented in `docs/ProcessRecoveryAndSupervision.md`.
 
 ## Failure semantics
 
-Management persistence failure may impair durable management mutation, but it must not redefine already committed Runtime execution.
+Management persistence failure may impair durable management mutation or future ControlHost recovery, but it must not redefine already committed Runtime execution.
 
 Journal pressure or journal-storage failure must be observable and must not synchronously block Program execution.
 
 Checkpoint pressure or checkpoint-storage failure must be observable and must not roll back an authoritative state that has already crossed the Runtime commit boundary.
 
+A malformed or contradictory durable recovery state fails closed instead of silently initializing a fresh revision.
+
 ## Evidence expectations
 
-Acceptance evidence includes:
+Persistence acceptance evidence includes:
 
 - persistence survives store close/reopen,
 - optimistic management version conflicts fail closed,
@@ -127,3 +135,5 @@ Acceptance evidence includes:
 - bounded ingress remains non-blocking when the store stalls,
 - architecture tests prove SQLite remains at the Persistence boundary,
 - full managed build/test suite remains green.
+
+AP-16 adds recovery evidence for valid checkpoint restore, Runtime reconciliation without authority revision advancement, recovery conflicts, process replacement and stale client/session behavior.
