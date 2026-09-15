@@ -10,7 +10,9 @@ public sealed class RepositoryArchitectureTests
         var repo = RepositorySnapshot.Load();
 
         Assert.Equal(28, repo.Projects.Count);
-        Assert.Equal(ArchitectureSpec.AllProjects.OrderBy(x => x), repo.Projects.Keys.OrderBy(x => x));
+        Assert.Equal(
+            ArchitectureSpec.AllProjects.OrderBy(x => x, StringComparer.Ordinal),
+            repo.Projects.Keys.OrderBy(x => x, StringComparer.Ordinal));
     }
 
     [Fact]
@@ -20,11 +22,13 @@ public sealed class RepositoryArchitectureTests
         var solution = XDocument.Load(Path.Combine(repo.Root, "rtaime.slnx"));
         var entries = solution.Descendants("Project")
             .Select(x => Normalize((string?)x.Attribute("Path") ?? string.Empty))
-            .OrderBy(x => x)
+            .OrderBy(x => x, StringComparer.Ordinal)
             .ToArray();
 
         Assert.Equal(28, entries.Length);
-        Assert.Equal(ArchitectureSpec.AllProjects.OrderBy(x => x), entries);
+        Assert.Equal(
+            ArchitectureSpec.AllProjects.OrderBy(x => x, StringComparer.Ordinal),
+            entries);
     }
 
     [Fact]
@@ -45,8 +49,8 @@ public sealed class RepositoryArchitectureTests
 
         foreach (var (source, expected) in ArchitectureSpec.ProductionGraph)
         {
-            var actual = repo.Projects[source].ProjectReferences.OrderBy(x => x).ToArray();
-            var orderedExpected = expected.OrderBy(x => x).ToArray();
+            var actual = repo.Projects[source].ProjectReferences.OrderBy(x => x, StringComparer.Ordinal).ToArray();
+            var orderedExpected = expected.OrderBy(x => x, StringComparer.Ordinal).ToArray();
             if (!actual.SequenceEqual(orderedExpected, StringComparer.Ordinal))
             {
                 failures.Add($"{source}: expected [{string.Join(", ", orderedExpected)}], actual [{string.Join(", ", actual)}]");
@@ -80,12 +84,13 @@ public sealed class RepositoryArchitectureTests
     }
 
     [Fact]
-    public void Core_and_contracts_are_package_and_direct_reference_neutral()
+    public void Core_and_production_contracts_are_package_and_direct_reference_neutral()
     {
         var repo = RepositorySnapshot.Load();
         var failures = repo.Projects.Values
-            .Where(p => p.Name == "rtaime.Core" || p.Name.EndsWith(".Contracts", StringComparison.Ordinal))
-            .SelectMany(p => p.PackageReferences.Select(package => $"{p.Name} -> {package}: package reference forbidden." )
+            .Where(p => p.Name == "rtaime.Core" || p.IsProductionContract)
+            .SelectMany(p => p.PackageReferences
+                .Select(package => $"{p.Name} -> {package}: package reference forbidden.")
                 .Concat(p.AssemblyReferences.Select(reference => $"{p.Name} -> {reference}: direct assembly reference forbidden.")))
             .ToArray();
 
@@ -98,23 +103,45 @@ public sealed class RepositoryArchitectureTests
         var repo = RepositorySnapshot.Load();
         var failures = new List<string>();
 
-        foreach (var project in repo.Projects.Values)
+        foreach (var project in repo.Projects.Values.Where(p => !p.IsTestArtifact))
         {
             foreach (var package in project.PackageReferences)
             {
                 var value = package.ToUpperInvariant();
+
                 if (value.Contains("SQLITE", StringComparison.Ordinal) && project.Name != "rtaime.Persistence")
                     failures.Add($"{project.Name} -> {package}: SQLite belongs in rtaime.Persistence.");
 
-                if ((value.Contains("TENSORRT", StringComparison.Ordinal) || value.Contains("ONNXRUNTIME", StringComparison.Ordinal) || value.Contains("DIRECTML", StringComparison.Ordinal)) && project.Name != "rtaime.Provider.Inference")
+                if ((value.Contains("TENSORRT", StringComparison.Ordinal) ||
+                     value.Contains("ONNXRUNTIME", StringComparison.Ordinal) ||
+                     value.Contains("DIRECTML", StringComparison.Ordinal)) &&
+                    project.Name != "rtaime.Provider.Inference")
+                {
                     failures.Add($"{project.Name} -> {package}: inference runtime belongs in rtaime.Provider.Inference.");
+                }
 
-                if ((value.Contains("CUDA", StringComparison.Ordinal) || value.Contains("NVIDIA", StringComparison.Ordinal)) && project.Name != "rtaime.Provider.Gpu" && project.Name != "rtaime.Provider.Inference")
+                if ((value.Contains("CUDA", StringComparison.Ordinal) || value.Contains("NVIDIA", StringComparison.Ordinal)) &&
+                    project.Name is not "rtaime.Provider.Gpu" and not "rtaime.Provider.Inference")
+                {
                     failures.Add($"{project.Name} -> {package}: GPU/vendor package outside provider boundary.");
+                }
             }
         }
 
         Assert.True(failures.Count == 0, string.Join(Environment.NewLine, failures));
+    }
+
+    [Fact]
+    public void Core_and_production_contracts_do_not_reference_windows_desktop()
+    {
+        var repo = RepositorySnapshot.Load();
+        var failures = repo.Projects.Values
+            .Where(p => p.Name == "rtaime.Core" || p.IsProductionContract)
+            .Where(p => p.UsesWpf || p.TargetFramework.Contains("-windows", StringComparison.OrdinalIgnoreCase))
+            .Select(p => $"{p.Name}: Core/contracts must remain WindowsDesktop/WPF-neutral.")
+            .ToArray();
+
+        Assert.Empty(failures);
     }
 
     [Fact]
@@ -143,13 +170,22 @@ public sealed class RepositoryArchitectureTests
     }
 
     [Theory]
-    [InlineData("rtaime.Runtime", "rtaime.Tests.Unit", false, true, "production-to-test")]
-    [InlineData("rtaime.Media.Contracts", "rtaime.Provider.Gpu", false, false, "contract-to-implementation")]
-    [InlineData("rtaime.Operator", "rtaime.Runtime", false, false, "operator-bypass")]
-    [InlineData("rtaime.ControlHost", "rtaime.RuntimeHost", false, false, "host-to-host")]
-    public void Negative_architecture_fixtures_are_rejected(string source, string target, bool sourceIsTest, bool targetIsTest, string expectedRule)
+    [InlineData("rtaime.Runtime", "rtaime.Tests.Unit", false, true, false, "production-to-test")]
+    [InlineData("rtaime.Media.Contracts", "rtaime.Provider.Gpu", false, false, true, "contract-to-implementation")]
+    [InlineData("rtaime.Operator", "rtaime.Runtime", false, false, false, "operator-bypass")]
+    [InlineData("rtaime.ControlHost", "rtaime.RuntimeHost", false, false, false, "host-to-host")]
+    public void Negative_architecture_fixtures_are_rejected(
+        string source,
+        string target,
+        bool sourceIsTest,
+        bool targetIsTest,
+        bool sourceIsProductionContract,
+        string expectedRule)
     {
-        var failures = ArchitecturePolicy.Validate(ProjectInfo.Synthetic(source, sourceIsTest), ProjectInfo.Synthetic(target, targetIsTest));
+        var failures = ArchitecturePolicy.Validate(
+            ProjectInfo.Synthetic(source, sourceIsTest, sourceIsProductionContract),
+            ProjectInfo.Synthetic(target, targetIsTest));
+
         Assert.Contains(failures, failure => failure.Contains(expectedRule, StringComparison.Ordinal));
     }
 
@@ -184,14 +220,20 @@ internal static class ArchitecturePolicy
         if (source.Name == "rtaime.Core" && target.Name.StartsWith("rtaime.", StringComparison.Ordinal))
             failures.Add($"{source.Name} -> {target.Name}: core must have no rtaime dependency.");
 
-        if (source.Name.EndsWith(".Contracts", StringComparison.Ordinal) && IsImplementation(target.Name))
+        if (source.IsProductionContract && IsImplementation(target.Name))
             failures.Add($"{source.Name} -> {target.Name}: contract-to-implementation reference forbidden.");
 
-        if (source.Name == "rtaime.Control" && (target.Name is "rtaime.Runtime" or "rtaime.Media" or "rtaime.AI" or "rtaime.Persistence" or "rtaime.Operator" || Providers.Contains(target.Name)))
+        if (source.Name == "rtaime.Control" &&
+            (target.Name is "rtaime.Runtime" or "rtaime.Media" or "rtaime.AI" or "rtaime.Persistence" or "rtaime.Operator" || Providers.Contains(target.Name)))
+        {
             failures.Add($"{source.Name} -> {target.Name}: control-to-implementation reference forbidden.");
+        }
 
-        if (source.Name == "rtaime.Runtime" && (target.Name is "rtaime.Control" or "rtaime.Persistence" or "rtaime.Operator" || Providers.Contains(target.Name)))
+        if (source.Name == "rtaime.Runtime" &&
+            (target.Name is "rtaime.Control" or "rtaime.Persistence" or "rtaime.Operator" || Providers.Contains(target.Name)))
+        {
             failures.Add($"{source.Name} -> {target.Name}: runtime-to-authority-or-implementation reference forbidden.");
+        }
 
         if (source.Name == "rtaime.Operator" && target.Name != "rtaime.Client")
             failures.Add($"{source.Name} -> {target.Name}: operator-bypass reference forbidden.");
@@ -212,6 +254,9 @@ internal sealed record ProjectInfo(
     string RelativePath,
     string Directory,
     bool IsTestArtifact,
+    bool IsProductionContract,
+    string TargetFramework,
+    bool UsesWpf,
     IReadOnlyList<string> ProjectReferences,
     IReadOnlyList<string> PackageReferences,
     IReadOnlyList<string> AssemblyReferences)
@@ -223,12 +268,13 @@ internal sealed record ProjectInfo(
         var directory = Path.GetDirectoryName(path)!;
         var name = Path.GetFileNameWithoutExtension(path);
         var isTest = relativePath.StartsWith("tests/", StringComparison.Ordinal);
+        var isProductionContract = relativePath.StartsWith("src/Contracts/", StringComparison.Ordinal);
 
         var projectReferences = document.Descendants("ProjectReference")
             .Select(x => (string?)x.Attribute("Include"))
             .Where(x => !string.IsNullOrWhiteSpace(x))
             .Select(x => Normalize(Path.GetRelativePath(root, Path.GetFullPath(Path.Combine(directory, x!)))))
-            .OrderBy(x => x)
+            .OrderBy(x => x, StringComparer.Ordinal)
             .ToArray();
 
         var packageReferences = document.Descendants("PackageReference")
@@ -243,11 +289,38 @@ internal sealed record ProjectInfo(
             .Select(x => x!)
             .ToArray();
 
-        return new ProjectInfo(name, relativePath, directory, isTest, projectReferences, packageReferences, assemblyReferences);
+        var targetFramework = document.Descendants("TargetFramework")
+            .Select(x => x.Value.Trim())
+            .FirstOrDefault() ?? string.Empty;
+
+        var usesWpf = document.Descendants("UseWPF")
+            .Any(x => string.Equals(x.Value.Trim(), "true", StringComparison.OrdinalIgnoreCase));
+
+        return new ProjectInfo(
+            name,
+            relativePath,
+            directory,
+            isTest,
+            isProductionContract,
+            targetFramework,
+            usesWpf,
+            projectReferences,
+            packageReferences,
+            assemblyReferences);
     }
 
-    public static ProjectInfo Synthetic(string name, bool isTest) =>
-        new(name, string.Empty, string.Empty, isTest, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>());
+    public static ProjectInfo Synthetic(string name, bool isTest, bool isProductionContract = false) =>
+        new(
+            name,
+            string.Empty,
+            string.Empty,
+            isTest,
+            isProductionContract,
+            string.Empty,
+            false,
+            Array.Empty<string>(),
+            Array.Empty<string>(),
+            Array.Empty<string>());
 
     private static string Normalize(string path) => path.Replace('\\', '/');
 }
@@ -285,6 +358,7 @@ internal sealed class RepositorySnapshot
         {
             if (File.Exists(Path.Combine(directory.FullName, "rtaime.slnx")))
                 return directory.FullName;
+
             directory = directory.Parent;
         }
 
