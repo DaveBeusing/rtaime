@@ -1,0 +1,23 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$comment": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+	"title": "rtaime Control Remote API V1",
+	"type": "object",
+	"required": ["messages"],
+	"properties": {
+		"messages": {
+			"type": "array",
+			"prefixItems": [],
+			"items": {
+				"enum": [
+					"control.ping",
+					"control.snapshot.get",
+					"control.preview.select",
+					"control.program.cut",
+					"control.program.dissolve",
+					"control.mutation.response"
+				]
+			}
+		}
+	}
+}

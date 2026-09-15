@@ -1,0 +1,19 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$comment": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+	"title": "rtaime IPC V1 Envelope",
+	"type": "object",
+	"additionalProperties": false,
+	"required": ["protocolVersion", "messageType", "requestId", "correlationId", "hostInstanceId", "sentAtUtc", "stateVersion", "sequence", "payload"],
+	"properties": {
+		"protocolVersion": { "const": "1.0" },
+		"messageType": { "type": "string", "minLength": 1 },
+		"requestId": { "type": "string", "format": "uuid" },
+		"correlationId": { "type": "string", "format": "uuid" },
+		"hostInstanceId": { "type": "string", "minLength": 1 },
+		"sentAtUtc": { "type": "string", "format": "date-time" },
+		"stateVersion": { "type": "integer", "minimum": 0 },
+		"sequence": { "type": "integer", "minimum": 0 },
+		"payload": {}
+	}
+}

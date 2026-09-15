@@ -1,0 +1,37 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$comment": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+	"title": "rtaime IPC V1 Handshake",
+	"oneOf": [
+		{ "$ref": "#/$defs/clientHello" },
+		{ "$ref": "#/$defs/serverHello" }
+	],
+	"$defs": {
+		"contractVersions": {
+			"type": "object",
+			"additionalProperties": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+$" }
+		},
+		"clientHello": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["protocolVersion", "role", "hostInstanceId", "contractVersions"],
+			"properties": {
+				"protocolVersion": { "const": "1.0" },
+				"role": { "enum": ["OperatorClient", "ControlHost", "RuntimeHost"] },
+				"hostInstanceId": { "type": "string", "minLength": 1 },
+				"contractVersions": { "$ref": "#/$defs/contractVersions" }
+			}
+		},
+		"serverHello": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["protocolVersion", "role", "hostInstanceId", "contractVersions"],
+			"properties": {
+				"protocolVersion": { "const": "1.0" },
+				"role": { "enum": ["ControlHost", "RuntimeHost", "AIHost"] },
+				"hostInstanceId": { "type": "string", "minLength": 1 },
+				"contractVersions": { "$ref": "#/$defs/contractVersions" }
+			}
+		}
+	}
+}

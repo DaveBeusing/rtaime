@@ -1,0 +1,167 @@
+<!-- Copyright (c) Dave Beusing <david.beusing@gmail.com>. -->
+
+# Production IPC & Remote API V1
+
+AP-14 introduces the first real cross-process control plane for rtaime while preserving the approved 28-project topology and host authority boundaries.
+
+## Process topology
+
+```text
+Operator
+  -> rtaime.Client
+  -> local Named Pipe
+  -> ControlHost
+  -> local Named Pipe
+  -> RuntimeHost
+
+ControlHost or RuntimeHost
+  -> local Named Pipe
+  -> AIHost
+```
+
+Hosts never reference another host project. IPC implementations live at existing outer composition boundaries and operate only on contract/domain mappings already available to the owning project.
+
+## V1 transport
+
+The Windows V1 reference transport uses `System.IO.Pipes` with `PipeOptions.CurrentUserOnly`. Default endpoints are:
+
+- `rtaime.v1.control.default`
+- `rtaime.v1.runtime.default`
+- `rtaime.v1.ai.default`
+
+Endpoints are configuration values, not contract identities. Local Named Pipes are the qualified AP-14 reference transport. TCP, HTTP, gRPC, TLS, cluster discovery, NMOS and remote-network deployment remain UNVERIFIED.
+
+## Framing and envelope
+
+IPC protocol version is `1.0` and is independent of Control, Runtime, Media, Provider and AI contract versions.
+
+Each message uses:
+
+```text
+uint32 big-endian JSON length
+UTF-8 JSON envelope
+```
+
+Control frames are bounded to 1 MiB before payload allocation. The envelope contains protocol version, message type, request identity, correlation identity, host instance identity, UTC send time, state version, sequence and payload.
+
+## Handshake
+
+The first message on every connection is `client.hello`. A server rejects messages before the handshake, an unsupported IPC version, an invalid role or incompatible required contract versions. No silent downgrade is performed.
+
+Roles used by AP-14 are:
+
+- `OperatorClient`
+- `ControlHost`
+- `RuntimeHost`
+- `AIHost`
+
+Each server process creates a new `HostInstanceId`. Clients use that identity to distinguish reconnect from process replacement.
+
+## Remote APIs
+
+### ControlHost
+
+Operator-facing messages:
+
+- `control.ping`
+- `control.snapshot.get`
+- `control.preview.select`
+- `control.program.cut`
+- `control.program.dissolve`
+
+A successful mutation crosses the existing boundary:
+
+```text
+validate command
+-> stage proposed authoritative state
+-> plan PreparedExecutionContract
+-> remote Runtime apply
+-> Runtime commit result
+-> Control commit confirmation
+```
+
+Transport failure or Runtime rejection never promotes staged state to authoritative state.
+
+### RuntimeHost
+
+Control-facing messages:
+
+- `runtime.ping`
+- `runtime.providers.get`
+- `runtime.snapshot.get`
+- `runtime.execution.apply`
+
+The server delegates execution to `V1RuntimeHostService`. It does not duplicate Runtime prepare/commit semantics.
+
+### AIHost
+
+AI-facing messages:
+
+- `ai.ping`
+- `ai.capabilities.get`
+- `ai.snapshot.get`
+- `ai.inference.execute`
+
+The endpoint delegates governed execution to `AIHostService`. AP-14 proves the process boundary; production Runtime/AI orchestration remains a later package.
+
+## StateVersion and resynchronization
+
+Remote `StateVersion` is separate from authoritative Production `Revision`.
+
+Production Revision advances only when an authoritative production mutation is committed. StateVersion may also change because a host connects, disconnects, changes health or is resynchronized.
+
+Clients establish synchronization from a full snapshot. Timed metadata deltas are valid only when their `BasedOnStateVersion` equals the client's current StateVersion. A gap or HostInstanceId change invalidates the delta stream and requires a new full snapshot.
+
+## Runtime reconnect and restart
+
+ControlHost may start before RuntimeHost and reports `Degraded`. Its binding loop retries without making an authoritative mutation.
+
+When RuntimeHost becomes available:
+
+```text
+connect
+-> handshake
+-> immutable provider snapshot
+-> plan initial state
+-> Runtime prepare/commit
+-> Control confirmation
+-> Ready
+```
+
+When RuntimeHost is replaced, the new HostInstanceId triggers a full provider refresh and re-planning of the current authoritative state. That state is committed to the fresh RuntimeHost without advancing the authoritative Production Revision.
+
+## Idempotency
+
+ControlHost, RuntimeHost and AIHost maintain bounded process-local request-result caches for mutation/execution requests. The same RequestId with the same canonical request returns the cached response. Reusing a RequestId with different request content fails closed.
+
+The cache is intentionally not durable. After a server process restart, clients must obtain a full snapshot rather than blindly replay an uncertain mutation.
+
+## Payload boundary
+
+Management IPC may carry commands, state, provider descriptors, `PreparedExecutionContract`, frame/surface descriptors, opaque handles and governed AI metadata.
+
+It must not carry raw video frames, RGBA byte arrays, audio sample arrays, segmentation mask pixels or GPU memory payloads. Bulk media remains on Media/Provider resource paths.
+
+## Security baseline
+
+AP-14 provides a local-process security baseline:
+
+- `PipeOptions.CurrentUserOnly`
+- explicit roles and version checks
+- bounded frame sizes
+- bounded request caches
+- strict message dispatch
+- timeouts and cancellation
+- no arbitrary runtime type activation
+- no serializer type-name polymorphism
+- no credential/secret payload requirement
+
+Network authentication, TLS/PKI and RBAC are outside AP-14.
+
+## Failure behavior
+
+Malformed, oversized, unknown, role-incompatible and version-incompatible requests fail closed. Runtime transport loss leaves Control authority unchanged and places ControlHost in `Degraded` until a successful resynchronization. AI transport loss cannot gain production authority.
+
+## Evidence boundary
+
+Managed CI can prove framing, mappings, local Named Pipe behavior, cross-process command paths, cancellation, failure isolation and topology invariants. It does not prove remote-network latency, broadcast hard-real-time behavior, GPU cross-process memory sharing, professional hardware timing or security certification.
