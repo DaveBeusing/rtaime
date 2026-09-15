@@ -1,5 +1,6 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
+using System.IO;
 using System.Text.Json;
 using System.Windows;
 using rtaime.Client;
