@@ -389,7 +389,7 @@ public sealed class ControlHostProcess
 			}
 			catch (RuntimeRecoveryConflictException exception)
 			{
-				SetRecovery(ControlHostRecoveryState.Conflict, exception.RuntimeRevision, exception.Message);
+				SetRecovery(ControlHostRecoveryState.Conflict, exception.RuntimeAuthorityRevision, exception.Message);
 				SetOperationalState(ControlHostProcessState.Degraded, ControlHostHealthState.Degraded, "Runtime recovery conflict requires operator intervention; authoritative mutation transport is paused.");
 				if (_runtimeTransport is not null)
 				{
@@ -449,19 +449,13 @@ public sealed class ControlHostProcess
 		CancellationToken cancellationToken)
 	{
 		var authority = control.State;
-		if (runtimeSnapshot.Runtime.ExecutionRevision.CompareTo(authority.Revision) > 0)
-		{
-			throw new RuntimeRecoveryConflictException(
-				authority.Revision,
-				runtimeSnapshot.Runtime.ExecutionRevision,
-				$"RuntimeHost revision {runtimeSnapshot.Runtime.ExecutionRevision} is ahead of durable Control authority revision {authority.Revision}; automatic overwrite is prohibited.");
-		}
+		ValidateRuntimeAuthority(runtimeSnapshot, authority);
 
 		if (RuntimeMatchesAuthority(runtimeSnapshot, authority))
 		{
 			_boundRuntimeHostInstanceId = runtimeHostInstanceId;
-			control.RecordObservation("recovery", "recovery.runtime.aligned", $"RuntimeHost instance '{runtimeHostInstanceId}' is already committed at authoritative revision {authority.Revision}.");
-			SetRecovery(ControlHostRecoveryState.Recovered, authority.Revision, "Durable Control authority and Runtime execution are aligned.");
+			control.RecordObservation("recovery", "recovery.runtime.aligned", $"RuntimeHost instance '{runtimeHostInstanceId}' is already committed against authoritative revision {authority.Revision}.");
+			SetRecovery(ControlHostRecoveryState.Recovered, authority.Revision, "Durable Control authority and Runtime committed authority snapshot are aligned.");
 			SetOperationalState(ControlHostProcessState.Ready, ControlHostHealthState.Healthy, $"ControlHost reconciled with RuntimeHost instance '{runtimeHostInstanceId}' without execution replacement.");
 			return;
 		}
@@ -473,17 +467,54 @@ public sealed class ControlHostProcess
 		var execution = control.PrepareCurrentExecution();
 		var remote = await transport.ApplyExecutionAsync(execution.PreparedExecution, execution.ProgramSinkId, null, cancellationToken).ConfigureAwait(false);
 		if (!remote.Committed || remote.Commit is null) throw new InvalidOperationException(remote.Commit?.Failure?.Message ?? remote.Prepare.Failure?.Message ?? "Runtime reconciliation was rejected.");
-		if (remote.Commit.ExecutionRevision != revisionBefore) throw new InvalidDataException($"Runtime reconciliation committed revision {remote.Commit.ExecutionRevision}, expected {revisionBefore}.");
 		if (control.State.Revision != revisionBefore) throw new InvalidOperationException("Runtime reconciliation must not advance authoritative revision.");
 
-		control.RecordObservation("recovery", "recovery.runtime.reapplied", $"Authoritative revision {revisionBefore} was reapplied to RuntimeHost instance '{runtimeHostInstanceId}'.");
+		var reconciledSnapshot = await transport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
+		if (!RuntimeMatchesAuthority(reconciledSnapshot, control.State))
+			throw new InvalidDataException("Runtime reconciliation committed an execution that is not bound to the current authoritative Control snapshot.");
+
+		control.RecordObservation("recovery", "recovery.runtime.reapplied", $"Authoritative revision {revisionBefore} was reapplied to RuntimeHost instance '{runtimeHostInstanceId}' at Runtime execution revision {remote.Commit.ExecutionRevision}.");
 		_boundRuntimeHostInstanceId = runtimeHostInstanceId;
-		SetRecovery(ControlHostRecoveryState.Recovered, revisionBefore, "Durable Control authority was reapplied to RuntimeHost without revision advancement.");
+		SetRecovery(ControlHostRecoveryState.Recovered, revisionBefore, "Durable Control authority was reapplied to RuntimeHost without authority revision advancement.");
 		SetOperationalState(ControlHostProcessState.Ready, ControlHostHealthState.Healthy, $"ControlHost resynchronized RuntimeHost instance '{runtimeHostInstanceId}'.");
 	}
 
+	private static void ValidateRuntimeAuthority(RuntimeRemoteSnapshot runtimeSnapshot, AuthoritativeProductionState authority)
+	{
+		if (runtimeSnapshot.Runtime.Status == RuntimeExecutionStatus.Committed &&
+			(runtimeSnapshot.AuthorityStateId is null || runtimeSnapshot.AuthorityRevision is null))
+		{
+			throw new RuntimeRecoveryConflictException(
+				authority.Revision,
+				null,
+				"RuntimeHost reports committed execution without an authoritative snapshot reference; automatic reconciliation is prohibited.");
+		}
+
+		if (runtimeSnapshot.AuthorityStateId is not { } runtimeAuthorityStateId ||
+			runtimeSnapshot.AuthorityRevision is not { } runtimeAuthorityRevision)
+			return;
+
+		if (runtimeAuthorityStateId != authority.ProductionId.Value)
+		{
+			throw new RuntimeRecoveryConflictException(
+				authority.Revision,
+				runtimeAuthorityRevision,
+				$"RuntimeHost committed authority state '{runtimeAuthorityStateId}' does not match Control production '{authority.ProductionId}'; automatic overwrite is prohibited.");
+		}
+
+		if (runtimeAuthorityRevision.CompareTo(authority.Revision) > 0)
+		{
+			throw new RuntimeRecoveryConflictException(
+				authority.Revision,
+				runtimeAuthorityRevision,
+				$"RuntimeHost committed authority revision {runtimeAuthorityRevision} is ahead of durable Control authority revision {authority.Revision}; automatic overwrite is prohibited.");
+		}
+	}
+
 	private static bool RuntimeMatchesAuthority(RuntimeRemoteSnapshot runtimeSnapshot, AuthoritativeProductionState authority) =>
-		runtimeSnapshot.Runtime.Status == RuntimeExecutionStatus.Committed && runtimeSnapshot.Runtime.ExecutionRevision == authority.Revision;
+		runtimeSnapshot.Runtime.Status == RuntimeExecutionStatus.Committed &&
+		runtimeSnapshot.AuthorityStateId == authority.ProductionId.Value &&
+		runtimeSnapshot.AuthorityRevision == authority.Revision;
 
 	private string ResolveDurabilityDirectory()
 	{
@@ -594,12 +625,13 @@ public sealed class ControlHostProcess
 
 	private sealed class RuntimeRecoveryConflictException : InvalidOperationException
 	{
-		public RuntimeRecoveryConflictException(Revision controlRevision, Revision runtimeRevision, string message) : base(message)
+		public RuntimeRecoveryConflictException(Revision controlRevision, Revision? runtimeAuthorityRevision, string message) : base(message)
 		{
 			ControlRevision = controlRevision;
-			RuntimeRevision = runtimeRevision;
+			RuntimeAuthorityRevision = runtimeAuthorityRevision;
 		}
+
 		public Revision ControlRevision { get; }
-		public Revision RuntimeRevision { get; }
+		public Revision? RuntimeAuthorityRevision { get; }
 	}
 }
