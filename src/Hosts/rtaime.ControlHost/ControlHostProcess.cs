@@ -260,6 +260,10 @@ public sealed class ControlHostProcess
 			_options.Validate();
 			Compose();
 			await _ipcServer!.StartAsync(cancellationToken).ConfigureAwait(false);
+			SetOperationalState(
+				ControlHostProcessState.Degraded,
+				ControlHostHealthState.Degraded,
+				$"ControlHost is listening on '{_options.ListenEndpoint}' while RuntimeHost binding is pending.");
 			_runtimeBindingTask = RuntimeBindingLoopAsync(cancellationToken);
 		}
 		catch (ArgumentException exception)
@@ -274,11 +278,6 @@ public sealed class ControlHostProcess
 			Update(ControlHostProcessState.Failed, ControlHostHealthState.Unhealthy, $"Startup failed: {exception.Message}");
 			return ControlHostExitCode.StartupFailure;
 		}
-
-		SetOperationalState(
-			ControlHostProcessState.Degraded,
-			ControlHostHealthState.Degraded,
-			$"ControlHost is listening on '{_options.ListenEndpoint}' while RuntimeHost binding is pending.");
 
 		try
 		{
@@ -330,19 +329,19 @@ public sealed class ControlHostProcess
 				var control = _control ?? throw new InvalidOperationException("Control service was not composed.");
 
 				await transport.ConnectAsync(cancellationToken).ConfigureAwait(false);
-				var providers = await transport.GetProviderDescriptorsAsync(cancellationToken).ConfigureAwait(false);
 				if (control.HasPendingExecution)
 				{
 					await Task.Delay(_options.RuntimeRetryInterval, cancellationToken).ConfigureAwait(false);
 					continue;
 				}
 
-				control.RefreshProviderSnapshot(providers);
 				var runtimeHostInstanceId = transport.HostInstanceId
 					?? throw new InvalidDataException("Connected RuntimeHost did not expose a host instance identity.");
 
 				if (!control.HasAuthoritativeState)
 				{
+					var providers = await transport.GetProviderDescriptorsAsync(cancellationToken).ConfigureAwait(false);
+					control.RefreshProviderSnapshot(providers);
 					var staged = control.Initialize();
 					if (staged.Execution is null)
 						throw new InvalidOperationException("Control initialization did not produce a prepared execution.");
@@ -365,12 +364,12 @@ public sealed class ControlHostProcess
 
 					_boundRuntimeHostInstanceId = runtimeHostInstanceId;
 					SetOperationalState(ControlHostProcessState.Ready, ControlHostHealthState.Healthy, $"ControlHost is bound to RuntimeHost instance '{runtimeHostInstanceId}'.");
-					continue;
 				}
-
-				if (!string.Equals(_boundRuntimeHostInstanceId, runtimeHostInstanceId, StringComparison.Ordinal))
+				else if (!string.Equals(_boundRuntimeHostInstanceId, runtimeHostInstanceId, StringComparison.Ordinal))
 				{
 					SetOperationalState(ControlHostProcessState.Degraded, ControlHostHealthState.Degraded, "RuntimeHost instance changed; authoritative execution is being resynchronized.");
+					var providers = await transport.GetProviderDescriptorsAsync(cancellationToken).ConfigureAwait(false);
+					control.RefreshProviderSnapshot(providers);
 					var revisionBefore = control.State.Revision;
 					var execution = control.PrepareCurrentExecution();
 					var remote = await transport.ApplyExecutionAsync(
@@ -386,11 +385,12 @@ public sealed class ControlHostProcess
 					control.RecordObservation("runtime", "runtime.resync.committed", $"Authoritative revision {revisionBefore} was applied to RuntimeHost instance '{runtimeHostInstanceId}'.");
 					_boundRuntimeHostInstanceId = runtimeHostInstanceId;
 					SetOperationalState(ControlHostProcessState.Ready, ControlHostHealthState.Healthy, $"ControlHost resynchronized RuntimeHost instance '{runtimeHostInstanceId}'.");
-					continue;
 				}
-
-				await transport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
-				SetOperationalState(ControlHostProcessState.Ready, ControlHostHealthState.Healthy, $"ControlHost is connected to RuntimeHost instance '{runtimeHostInstanceId}'.");
+				else
+				{
+					await transport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
+					SetOperationalState(ControlHostProcessState.Ready, ControlHostHealthState.Healthy, $"ControlHost is connected to RuntimeHost instance '{runtimeHostInstanceId}'.");
+				}
 			}
 			catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
 			{
