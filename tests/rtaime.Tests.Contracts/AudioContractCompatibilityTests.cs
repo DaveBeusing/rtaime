@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using rtaime.Core;
@@ -87,6 +88,8 @@ public sealed class AudioContractCompatibilityTests
     {
         var options = new JsonSerializerOptions();
         options.Converters.Add(new AudioStreamIdJsonConverter());
+        options.Converters.Add(new AudioFormatJsonConverter());
+        options.Converters.Add(new AudioBufferTimingJsonConverter());
         options.Converters.Add(new ContractScalarJsonConverterFactory());
         return options;
     }
@@ -101,5 +104,80 @@ public sealed class AudioContractCompatibilityTests
 
         public override void Write(Utf8JsonWriter writer, AudioStreamId value, JsonSerializerOptions options) =>
             writer.WriteStringValue(value.ToString());
+    }
+
+    private sealed class AudioFormatJsonConverter : JsonConverter<AudioFormat>
+    {
+        public override AudioFormat Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            using var document = JsonDocument.ParseValue(ref reader);
+            var root = document.RootElement;
+
+            try
+            {
+                return new AudioFormat(
+                    root.GetProperty("sampleRate").GetUInt32(),
+                    (AudioChannelLayout)root.GetProperty("channelLayout").GetInt32(),
+                    (AudioSampleFormat)root.GetProperty("sampleFormat").GetInt32(),
+                    root.GetProperty("channelCount").GetUInt32());
+            }
+            catch (Exception exception) when (exception is KeyNotFoundException or InvalidOperationException or ArgumentException or OverflowException)
+            {
+                throw new JsonException("Invalid audio format representation.", exception);
+            }
+        }
+
+        public override void Write(Utf8JsonWriter writer, AudioFormat value, JsonSerializerOptions options)
+        {
+            writer.WriteStartObject();
+            writer.WriteNumber("sampleRate", value.SampleRate);
+            writer.WriteNumber("channelLayout", (int)value.ChannelLayout);
+            writer.WriteNumber("sampleFormat", (int)value.SampleFormat);
+            writer.WriteNumber("channelCount", value.ChannelCount);
+            writer.WriteEndObject();
+        }
+    }
+
+    private sealed class AudioBufferTimingJsonConverter : JsonConverter<AudioBufferTiming>
+    {
+        public override AudioBufferTiming Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            using var document = JsonDocument.ParseValue(ref reader);
+            var root = document.RootElement;
+
+            try
+            {
+                var samplePosition = ulong.Parse(
+                    root.GetProperty("samplePosition").GetString() ?? throw new JsonException("Sample position is required."),
+                    NumberStyles.None,
+                    CultureInfo.InvariantCulture);
+                var sampleCount = uint.Parse(
+                    root.GetProperty("sampleCount").GetString() ?? throw new JsonException("Sample count is required."),
+                    NumberStyles.None,
+                    CultureInfo.InvariantCulture);
+                var presentationTimestamp = long.Parse(
+                    root.GetProperty("presentationTimestamp").GetString() ?? throw new JsonException("Presentation timestamp is required."),
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture);
+                var timebase = Timebase.Parse(
+                    root.GetProperty("timebase").GetString() ?? throw new JsonException("Timebase is required."));
+
+                return new AudioBufferTiming(samplePosition, sampleCount, presentationTimestamp, timebase);
+            }
+            catch (Exception exception) when (exception is KeyNotFoundException or InvalidOperationException or FormatException or ArgumentException or OverflowException)
+            {
+                throw new JsonException("Invalid audio buffer timing representation.", exception);
+            }
+        }
+
+        public override void Write(Utf8JsonWriter writer, AudioBufferTiming value, JsonSerializerOptions options)
+        {
+            writer.WriteStartObject();
+            writer.WriteString("samplePosition", value.SamplePosition.ToString(CultureInfo.InvariantCulture));
+            writer.WriteString("sampleCount", value.SampleCount.ToString(CultureInfo.InvariantCulture));
+            writer.WriteString("presentationTimestamp", value.PresentationTimestamp.ToString(CultureInfo.InvariantCulture));
+            writer.WriteString("timebase", value.Timebase.ToString());
+            writer.WriteEndObject();
+        }
     }
 }
