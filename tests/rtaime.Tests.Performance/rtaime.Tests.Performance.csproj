@@ -1,32 +1,34 @@
+<!-- Copyright (c) Dave Beusing <david.beusing@gmail.com>. -->
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <RtaimeIsTestProject>true</RtaimeIsTestProject>
-    <IsTestProject>true</IsTestProject>
-    <IsPackable>false</IsPackable>
-  </PropertyGroup>
+	<PropertyGroup>
+		<RtaimeIsTestProject>true</RtaimeIsTestProject>
+		<IsTestProject>true</IsTestProject>
+		<IsPackable>false</IsPackable>
+	</PropertyGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\..\src\rtaime.Core\rtaime.Core.csproj" />
-    <ProjectReference Include="..\..\src\Contracts\rtaime.Control.Contracts\rtaime.Control.Contracts.csproj" />
-    <ProjectReference Include="..\..\src\Contracts\rtaime.Runtime.Contracts\rtaime.Runtime.Contracts.csproj" />
-    <ProjectReference Include="..\..\src\Contracts\rtaime.Media.Contracts\rtaime.Media.Contracts.csproj" />
-    <ProjectReference Include="..\..\src\Contracts\rtaime.AI.Contracts\rtaime.AI.Contracts.csproj" />
-    <ProjectReference Include="..\..\src\Contracts\rtaime.Provider.Contracts\rtaime.Provider.Contracts.csproj" />
-    <ProjectReference Include="..\..\src\Control\rtaime.Control\rtaime.Control.csproj" />
-    <ProjectReference Include="..\..\src\Runtime\rtaime.Runtime\rtaime.Runtime.csproj" />
-    <ProjectReference Include="..\..\src\Media\rtaime.Media\rtaime.Media.csproj" />
-    <ProjectReference Include="..\..\src\AI\rtaime.AI\rtaime.AI.csproj" />
-    <ProjectReference Include="..\..\src\Recording\rtaime.Recording\rtaime.Recording.csproj" />
-    <ProjectReference Include="..\..\src\Hosts\rtaime.RuntimeHost\rtaime.RuntimeHost.csproj" />
-    <ProjectReference Include="..\..\src\Providers\rtaime.Provider.Gpu\rtaime.Provider.Gpu.csproj" />
-    <ProjectReference Include="..\..\src\Providers\rtaime.Provider.VirtualMedia\rtaime.Provider.VirtualMedia.csproj" />
-    <ProjectReference Include="..\..\src\Providers\rtaime.Provider.Inference\rtaime.Provider.Inference.csproj" />
-    <ProjectReference Include="..\rtaime.TestInfrastructure\rtaime.TestInfrastructure.csproj" />
-  </ItemGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\..\src\rtaime.Core\rtaime.Core.csproj" />
+		<ProjectReference Include="..\..\src\Contracts\rtaime.Control.Contracts\rtaime.Control.Contracts.csproj" />
+		<ProjectReference Include="..\..\src\Contracts\rtaime.Runtime.Contracts\rtaime.Runtime.Contracts.csproj" />
+		<ProjectReference Include="..\..\src\Contracts\rtaime.Media.Contracts\rtaime.Media.Contracts.csproj" />
+		<ProjectReference Include="..\..\src\Contracts\rtaime.AI.Contracts\rtaime.AI.Contracts.csproj" />
+		<ProjectReference Include="..\..\src\Contracts\rtaime.Provider.Contracts\rtaime.Provider.Contracts.csproj" />
+		<ProjectReference Include="..\..\src\Control\rtaime.Control\rtaime.Control.csproj" />
+		<ProjectReference Include="..\..\src\Runtime\rtaime.Runtime\rtaime.Runtime.csproj" />
+		<ProjectReference Include="..\..\src\Media\rtaime.Media\rtaime.Media.csproj" />
+		<ProjectReference Include="..\..\src\AI\rtaime.AI\rtaime.AI.csproj" />
+		<ProjectReference Include="..\..\src\Recording\rtaime.Recording\rtaime.Recording.csproj" />
+		<ProjectReference Include="..\..\src\Hosts\rtaime.ControlHost\rtaime.ControlHost.csproj" />
+		<ProjectReference Include="..\..\src\Hosts\rtaime.RuntimeHost\rtaime.RuntimeHost.csproj" />
+		<ProjectReference Include="..\..\src\Providers\rtaime.Provider.Gpu\rtaime.Provider.Gpu.csproj" />
+		<ProjectReference Include="..\..\src\Providers\rtaime.Provider.VirtualMedia\rtaime.Provider.VirtualMedia.csproj" />
+		<ProjectReference Include="..\..\src\Providers\rtaime.Provider.Inference\rtaime.Provider.Inference.csproj" />
+		<ProjectReference Include="..\rtaime.TestInfrastructure\rtaime.TestInfrastructure.csproj" />
+	</ItemGroup>
 
-  <ItemGroup>
-    <PackageReference Include="Microsoft.NET.Test.Sdk" />
-    <PackageReference Include="xunit" />
-    <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" />
-  </ItemGroup>
+	<ItemGroup>
+		<PackageReference Include="Microsoft.NET.Test.Sdk" />
+		<PackageReference Include="xunit" />
+		<PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" />
+	</ItemGroup>
 </Project>
