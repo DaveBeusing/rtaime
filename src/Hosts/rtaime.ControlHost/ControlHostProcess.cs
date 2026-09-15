@@ -281,7 +281,17 @@ public sealed class ControlHostProcess
 
 		try
 		{
-			await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
+			var bindingTask = _runtimeBindingTask ?? throw new InvalidOperationException("Runtime binding worker was not started.");
+			var stopSignal = Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+			var completed = await Task.WhenAny(stopSignal, bindingTask).ConfigureAwait(false);
+			if (completed == bindingTask && !cancellationToken.IsCancellationRequested)
+			{
+				await bindingTask.ConfigureAwait(false);
+				Update(ControlHostProcessState.Failed, ControlHostHealthState.Unhealthy, "Runtime binding worker stopped unexpectedly.");
+				return ControlHostExitCode.UnexpectedFailure;
+			}
+
+			await stopSignal.ConfigureAwait(false);
 		}
 		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
 		{
@@ -327,8 +337,13 @@ public sealed class ControlHostProcess
 			{
 				var transport = _runtimeTransport ?? throw new InvalidOperationException("Runtime transport was not composed.");
 				var control = _control ?? throw new InvalidOperationException("Control service was not composed.");
+				using var operationTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+				operationTimeout.CancelAfter(_options.ConnectTimeout + _options.RequestTimeout);
+				var operationToken = operationTimeout.Token;
 
-				await transport.ConnectAsync(cancellationToken).ConfigureAwait(false);
+				await transport.ConnectAsync(operationToken).ConfigureAwait(false);
+				if (!transport.IsConnected)
+					throw new IOException("Runtime transport did not report a connected state after a successful probe.");
 				if (control.HasPendingExecution)
 				{
 					await Task.Delay(_options.RuntimeRetryInterval, cancellationToken).ConfigureAwait(false);
@@ -340,7 +355,7 @@ public sealed class ControlHostProcess
 
 				if (!control.HasAuthoritativeState)
 				{
-					var providers = await transport.GetProviderDescriptorsAsync(cancellationToken).ConfigureAwait(false);
+					var providers = await transport.GetProviderDescriptorsAsync(operationToken).ConfigureAwait(false);
 					control.RefreshProviderSnapshot(providers);
 					var staged = control.Initialize();
 					if (staged.Execution is null)
@@ -350,7 +365,7 @@ public sealed class ControlHostProcess
 						staged.Execution.PreparedExecution,
 						staged.Execution.ProgramSinkId,
 						staged.Execution.ProgramTransition,
-						cancellationToken).ConfigureAwait(false);
+						operationToken).ConfigureAwait(false);
 					if (remote.Commit is null)
 					{
 						var failure = remote.Prepare.Failure ?? new Failure("runtime.prepare.rejected", "Runtime rejected initial prepare without a commit result.");
@@ -368,7 +383,7 @@ public sealed class ControlHostProcess
 				else if (!string.Equals(_boundRuntimeHostInstanceId, runtimeHostInstanceId, StringComparison.Ordinal))
 				{
 					SetOperationalState(ControlHostProcessState.Degraded, ControlHostHealthState.Degraded, "RuntimeHost instance changed; authoritative execution is being resynchronized.");
-					var providers = await transport.GetProviderDescriptorsAsync(cancellationToken).ConfigureAwait(false);
+					var providers = await transport.GetProviderDescriptorsAsync(operationToken).ConfigureAwait(false);
 					control.RefreshProviderSnapshot(providers);
 					var revisionBefore = control.State.Revision;
 					var execution = control.PrepareCurrentExecution();
@@ -376,7 +391,7 @@ public sealed class ControlHostProcess
 						execution.PreparedExecution,
 						execution.ProgramSinkId,
 						null,
-						cancellationToken).ConfigureAwait(false);
+						operationToken).ConfigureAwait(false);
 					if (!remote.Committed)
 						throw new InvalidOperationException(remote.Commit?.Failure?.Message ?? remote.Prepare.Failure?.Message ?? "Runtime resynchronization was rejected.");
 					if (control.State.Revision != revisionBefore)
@@ -388,7 +403,7 @@ public sealed class ControlHostProcess
 				}
 				else
 				{
-					await transport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
+					await transport.GetSnapshotAsync(operationToken).ConfigureAwait(false);
 					SetOperationalState(ControlHostProcessState.Ready, ControlHostHealthState.Healthy, $"ControlHost is connected to RuntimeHost instance '{runtimeHostInstanceId}'.");
 				}
 			}
@@ -398,14 +413,27 @@ public sealed class ControlHostProcess
 			}
 			catch (Exception exception)
 			{
-				if (_control is { } control)
-					control.RecordObservation("runtime", "runtime.connection.degraded", $"RuntimeHost binding failed: {exception.GetType().Name}.", new Failure("runtime.connection.failed", exception.Message));
+				SetOperationalState(ControlHostProcessState.Degraded, ControlHostHealthState.Degraded, "RuntimeHost is unavailable; authoritative mutation transport is paused.");
 				if (_runtimeTransport is not null)
 				{
 					try { await _runtimeTransport.DisconnectAsync().ConfigureAwait(false); }
 					catch { }
 				}
-				SetOperationalState(ControlHostProcessState.Degraded, ControlHostHealthState.Degraded, "RuntimeHost is unavailable; authoritative mutation transport is paused.");
+				if (_control is { } control)
+				{
+					try
+					{
+						control.RecordObservation(
+							"runtime",
+							"runtime.connection.degraded",
+							$"RuntimeHost binding failed: {exception.GetType().Name}.",
+							new Failure("runtime.connection.failed", exception.Message));
+					}
+					catch
+					{
+						// Runtime supervision must not terminate because diagnostic journaling failed.
+					}
+				}
 			}
 
 			await Task.Delay(_options.RuntimeRetryInterval, cancellationToken).ConfigureAwait(false);
