@@ -22,6 +22,8 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 	private Task? _acceptLoop;
 	private ulong _stateVersion = 1;
 	private ulong _sequence;
+	private Identity? _committedAuthorityStateId;
+	private Revision? _committedAuthorityRevision;
 
 	public RuntimeHostIpcServer(string endpoint, Func<V1RuntimeHostService?> runtimeAccessor)
 	{
@@ -199,7 +201,12 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 				wire.Transition.DurationFrames);
 
 		var result = runtime.ApplyExecution(prepared, sink, transition);
-		if (result.Committed) _stateVersion++;
+		if (result.Committed)
+		{
+			_committedAuthorityStateId = prepared.AuthoritySnapshot.StateId;
+			_committedAuthorityRevision = prepared.AuthoritySnapshot.Revision;
+			_stateVersion++;
+		}
 		return Success(request, "runtime.execution.apply.response", ToWire(result));
 	}
 
@@ -228,12 +235,14 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 			capability.VideoFormats.Select(format => new WireVideoFormat(format.Width, format.Height, format.FrameRate.ToString(), (int)format.PixelFormat, (int)format.ScanMode)).ToArray())).ToArray(),
 		provider.Resources.Select(resource => new WireResource(resource.ResourceId.ToString(), resource.ProviderId.ToString(), resource.Kind, resource.CapacityUnits, resource.Reservable)).ToArray());
 
-	private static WireRuntimeSnapshot ToWire(V1RuntimeHostSnapshot snapshot) => new(
+	private WireRuntimeSnapshot ToWire(V1RuntimeHostSnapshot snapshot) => new(
 		snapshot.Runtime.Version.ToString(),
 		snapshot.Runtime.ActiveExecutionId?.ToString(),
 		snapshot.Runtime.ExecutionRevision.Value,
 		(int)snapshot.Runtime.Status,
 		snapshot.Runtime.Failure is { } runtimeFailure ? new WireFailure(runtimeFailure.Code, runtimeFailure.Message) : null,
+		_committedAuthorityStateId?.ToString(),
+		_committedAuthorityRevision?.Value,
 		snapshot.NextSequenceNumber,
 		(int)snapshot.TimingHealth,
 		snapshot.ActiveGpuSurfaces);
@@ -284,7 +293,17 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 	private sealed record WirePrepareResult(string Version, string PreparedExecutionId, int Status, string? ReservationId, WireFailure? Failure);
 	private sealed record WireCommitResult(string Version, int Status, string? ExecutionInstanceId, ulong ExecutionRevision, WireFailure? Failure);
 	private sealed record WireApplyResponse(WirePrepareResult Prepare, WireCommitResult? Commit, ulong? ActivationSequence);
-	private sealed record WireRuntimeSnapshot(string Version, string? ActiveExecutionId, ulong ExecutionRevision, int Status, WireFailure? Failure, ulong NextSequenceNumber, int TimingHealth, int ActiveGpuSurfaces);
+	private sealed record WireRuntimeSnapshot(
+		string Version,
+		string? ActiveExecutionId,
+		ulong ExecutionRevision,
+		int Status,
+		WireFailure? Failure,
+		string? AuthorityStateId,
+		ulong? AuthorityRevision,
+		ulong NextSequenceNumber,
+		int TimingHealth,
+		int ActiveGpuSurfaces);
 
 	private sealed class BoundedRequestCache
 	{
