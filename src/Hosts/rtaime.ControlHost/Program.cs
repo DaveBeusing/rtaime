@@ -19,21 +19,27 @@ internal static class Program
 		try
 		{
 			ControlHostProcessOptions options;
+			ControlHostChildSupervision supervision;
 			try
 			{
 				options = ControlHostProcessOptions.Load(args);
+				supervision = ControlHostChildSupervision.Load(options);
 			}
-			catch (Exception exception) when (exception is ArgumentException or OverflowException)
+			catch (Exception exception) when (exception is ArgumentException or OverflowException or FileNotFoundException)
 			{
 				Console.Error.WriteLine($"host=ControlHost outcome=configuration-error detail=\"{exception.Message}\"");
 				return (int)ControlHostExitCode.ConfigurationError;
 			}
 
-			var process = new ControlHostProcess(options);
-			var exitCode = await process.RunAsync(shutdown.Token).ConfigureAwait(false);
-			var lifecycle = process.Lifecycle;
-			Console.WriteLine($"host=ControlHost state={lifecycle.State} health={lifecycle.Health} exit={(int)exitCode} detail=\"{lifecycle.Detail}\"");
-			return (int)exitCode;
+			await using (supervision.ConfigureAwait(false))
+			{
+				await supervision.StartAsync(shutdown.Token).ConfigureAwait(false);
+				var process = new ControlHostProcess(options);
+				var exitCode = await process.RunAsync(shutdown.Token).ConfigureAwait(false);
+				var lifecycle = process.Lifecycle;
+				Console.WriteLine($"host=ControlHost state={lifecycle.State} health={lifecycle.Health} exit={(int)exitCode} detail=\"{lifecycle.Detail}\"");
+				return (int)exitCode;
+			}
 		}
 		finally
 		{
