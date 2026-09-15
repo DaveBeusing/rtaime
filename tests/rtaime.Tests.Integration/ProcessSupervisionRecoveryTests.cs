@@ -193,6 +193,36 @@ public sealed class ProcessSupervisionRecoveryTests
 		}
 	}
 
+	[Fact]
+	public async Task Supervisor_exhausts_start_budget_without_unbounded_crash_loop()
+	{
+		var endpoint = Endpoint("runtime-start-budget");
+		var assembly = HostAssembly("rtaime.RuntimeHost");
+		var options = new LocalProcessSupervisionOptions(
+			"RuntimeHost",
+			endpoint,
+			assembly,
+			TimeSpan.FromMilliseconds(100),
+			TimeSpan.FromMilliseconds(100),
+			TimeSpan.FromMilliseconds(100),
+			2)
+		{
+			AdditionalArguments = "--source-a-id=not-an-identity"
+		};
+		await using var supervisor = new LocalProcessSupervisor(options);
+		await supervisor.StartAsync();
+		await WaitUntilAsync(
+			() => supervisor.Snapshot is { State: LocalProcessSupervisionState.Failed, StartAttempts: 2, OwnedProcessId: null },
+			10000);
+
+		var attemptsAfterFailure = supervisor.Snapshot.StartAttempts;
+		await Task.Delay(500);
+		Assert.Equal(2, attemptsAfterFailure);
+		Assert.Equal(attemptsAfterFailure, supervisor.Snapshot.StartAttempts);
+		Assert.Equal(LocalProcessSupervisionState.Failed, supervisor.Snapshot.State);
+		Assert.Null(supervisor.Snapshot.OwnedProcessId);
+	}
+
 	private static LocalProcessSupervisor Supervisor(string name, string endpoint, string assembly) =>
 		new(BaseSupervisorOptions(name, endpoint, assembly));
 
