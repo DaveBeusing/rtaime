@@ -45,12 +45,14 @@ public sealed record RuntimeHostProcessOptions(
 	MediaSourceId SourceAId,
 	MediaSourceId SourceBId,
 	VideoFormat Format,
+	string ListenEndpoint,
 	TimeSpan ShutdownTimeout)
 {
 	public static RuntimeHostProcessOptions Default => new(
 		new MediaSourceId(Identity.Parse("70000000-0000-0000-0000-00000000000a")),
 		new MediaSourceId(Identity.Parse("70000000-0000-0000-0000-00000000000b")),
 		VideoFormat.Hd1080p50Rgba8,
+		"rtaime.v1.runtime.default",
 		TimeSpan.FromSeconds(10));
 
 	public static RuntimeHostProcessOptions Load(
@@ -65,6 +67,7 @@ public sealed record RuntimeHostProcessOptions(
 			new MediaSourceId(ParseIdentity(Get(args, environment, "source-a-id", "RTAIME_RUNTIME_SOURCE_A_ID", defaults.SourceAId.ToString()), "source-a-id")),
 			new MediaSourceId(ParseIdentity(Get(args, environment, "source-b-id", "RTAIME_RUNTIME_SOURCE_B_ID", defaults.SourceBId.ToString()), "source-b-id")),
 			ParseFormat(Get(args, environment, "format", "RTAIME_RUNTIME_FORMAT", "1080p50")),
+			Get(args, environment, "listen-endpoint", "RTAIME_RUNTIME_ENDPOINT", defaults.ListenEndpoint),
 			TimeSpan.FromMilliseconds(ParsePositiveInt(Get(args, environment, "shutdown-timeout-ms", "RTAIME_RUNTIME_SHUTDOWN_TIMEOUT_MS", ((int)defaults.ShutdownTimeout.TotalMilliseconds).ToString()), "shutdown-timeout-ms")));
 	}
 
@@ -76,6 +79,8 @@ public sealed record RuntimeHostProcessOptions(
 			throw new ArgumentException("Runtime source identities must be distinct.");
 		if (Format != VideoFormat.Hd1080p50Rgba8 && Format != VideoFormat.Hd1080p59_94Rgba8)
 			throw new ArgumentException("RuntimeHost V1 supports only 1080p50 RGBA8 and 1080p59.94 RGBA8.", nameof(Format));
+		if (string.IsNullOrWhiteSpace(ListenEndpoint))
+			throw new ArgumentException("RuntimeHost listen endpoint is required.", nameof(ListenEndpoint));
 		if (ShutdownTimeout <= TimeSpan.Zero)
 			throw new ArgumentOutOfRangeException(nameof(ShutdownTimeout));
 	}
@@ -140,6 +145,7 @@ public sealed class RuntimeHostProcess
 		DateTimeOffset.UtcNow);
 	private int _runStarted;
 	private V1RuntimeHostService? _runtime;
+	private RuntimeHostIpcServer? _ipcServer;
 	private bool _runtimeDisposed;
 	private V1RuntimeHostSnapshot? _finalRuntimeSnapshot;
 
@@ -167,6 +173,7 @@ public sealed class RuntimeHostProcess
 	}
 
 	public V1RuntimeHostService? Runtime => _runtime;
+	public RuntimeHostIpcServer? IpcServer => _ipcServer;
 	public bool RuntimeDisposed => _runtimeDisposed;
 	public V1RuntimeHostSnapshot? FinalRuntimeSnapshot => _finalRuntimeSnapshot;
 
@@ -183,6 +190,8 @@ public sealed class RuntimeHostProcess
 				?? throw new InvalidOperationException("Recording writer factory returned null.");
 			_runtime = _runtimeFactory(_options, writer)
 				?? throw new InvalidOperationException("Runtime factory returned null.");
+			_ipcServer = new RuntimeHostIpcServer(_options.ListenEndpoint, () => _runtime);
+			await _ipcServer.StartAsync(cancellationToken).ConfigureAwait(false);
 		}
 		catch (ArgumentException exception)
 		{
@@ -197,7 +206,7 @@ public sealed class RuntimeHostProcess
 			return RuntimeHostExitCode.StartupFailure;
 		}
 
-		Update(RuntimeHostProcessState.Ready, RuntimeHostHealthState.Healthy, "RuntimeHost is ready with transactional runtime, virtual media, GPU and recording composition.");
+		Update(RuntimeHostProcessState.Ready, RuntimeHostHealthState.Healthy, $"RuntimeHost is ready and listening on '{_options.ListenEndpoint}'.");
 
 		try
 		{
@@ -218,10 +227,13 @@ public sealed class RuntimeHostProcess
 
 	private async Task<RuntimeHostExitCode> StopAsync()
 	{
-		Update(RuntimeHostProcessState.Draining, RuntimeHostHealthState.Degraded, "Draining RuntimeHost resources.");
+		Update(RuntimeHostProcessState.Draining, RuntimeHostHealthState.Degraded, "Draining RuntimeHost IPC and runtime resources.");
 		using var timeout = new CancellationTokenSource(_options.ShutdownTimeout);
 		try
 		{
+			if (_ipcServer is not null)
+				await _ipcServer.DisposeAsync().AsTask().WaitAsync(timeout.Token).ConfigureAwait(false);
+
 			if (_runtime is not null)
 			{
 				await _runtime.DisposeAsync().AsTask().WaitAsync(timeout.Token).ConfigureAwait(false);
@@ -231,7 +243,7 @@ public sealed class RuntimeHostProcess
 					throw new InvalidOperationException("RuntimeHost retained GPU surfaces after shutdown.");
 			}
 
-			Update(RuntimeHostProcessState.Stopped, RuntimeHostHealthState.Stopped, "RuntimeHost stopped cleanly and released media/GPU/recording resources.");
+			Update(RuntimeHostProcessState.Stopped, RuntimeHostHealthState.Stopped, "RuntimeHost stopped cleanly and released IPC/media/GPU/recording resources.");
 			return RuntimeHostExitCode.Success;
 		}
 		catch (Exception exception) when (exception is OperationCanceledException or TimeoutException)
@@ -248,6 +260,13 @@ public sealed class RuntimeHostProcess
 
 	private async Task CleanupStartupFailureAsync()
 	{
+		try
+		{
+			if (_ipcServer is not null)
+				await _ipcServer.DisposeAsync().ConfigureAwait(false);
+		}
+		catch { }
+
 		if (_runtime is null)
 			return;
 
