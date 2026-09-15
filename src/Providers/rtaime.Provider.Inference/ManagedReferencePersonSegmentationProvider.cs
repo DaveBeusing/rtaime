@@ -27,7 +27,7 @@ public sealed class ManagedReferencePersonSegmentationProvider : IInferenceProvi
         TimeSpan? executionDelay = null,
         Failure? forcedFailure = null)
     {
-        if (executionDelay < TimeSpan.Zero)
+        if (executionDelay is { } delay && delay < TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(executionDelay));
         if (state == InferenceProviderState.Unavailable && forcedFailure is null)
             forcedFailure = new Failure("ai.provider.reference.unavailable", "Reference inference provider is unavailable.");
