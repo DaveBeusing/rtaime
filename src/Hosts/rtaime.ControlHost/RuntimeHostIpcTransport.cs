@@ -33,6 +33,7 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 	private const string ProtocolVersion = "1.0";
 	private const int MaxFrameBytes = 1024 * 1024;
 	private readonly object _gate = new();
+	private readonly SemaphoreSlim _requestGate = new(1, 1);
 	private readonly string _endpoint;
 	private readonly TimeSpan _connectTimeout;
 	private readonly TimeSpan _requestTimeout;
@@ -127,61 +128,69 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 	{
 		using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 		timeout.CancelAfter(_requestTimeout);
-		await using var pipe = new NamedPipeClientStream(".", _endpoint, PipeDirection.InOut, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+		await _requestGate.WaitAsync(timeout.Token).ConfigureAwait(false);
 		try
 		{
-			using var connect = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token);
-			connect.CancelAfter(_connectTimeout);
-			await pipe.ConnectAsync(connect.Token).ConfigureAwait(false);
+			await using var pipe = new NamedPipeClientStream(".", _endpoint, PipeDirection.InOut, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+			try
+			{
+				using var connect = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token);
+				connect.CancelAfter(_connectTimeout);
+				await pipe.ConnectAsync(connect.Token).ConfigureAwait(false);
 
-			var correlationId = Identity.New().ToString();
-			var helloId = Identity.New().ToString();
-			await Wire.WriteAsync(
-				pipe,
-				Wire.Create(
-					"client.hello",
-					helloId,
-					correlationId,
-					_clientInstanceId,
-					0,
-					0,
-					new ClientHello(
-						ProtocolVersion,
-						"ControlHost",
+				var correlationId = Identity.New().ToString();
+				var helloId = Identity.New().ToString();
+				await Wire.WriteAsync(
+					pipe,
+					Wire.Create(
+						"client.hello",
+						helloId,
+						correlationId,
 						_clientInstanceId,
-						new Dictionary<string, string>(StringComparer.Ordinal)
-						{
-							["runtime"] = RuntimeContractVersion.Current.ToString(),
-							["provider"] = ProviderContractVersion.Current.ToString()
-						})),
-				timeout.Token).ConfigureAwait(false);
+						0,
+						0,
+						new ClientHello(
+							ProtocolVersion,
+							"ControlHost",
+							_clientInstanceId,
+							new Dictionary<string, string>(StringComparer.Ordinal)
+							{
+								["runtime"] = RuntimeContractVersion.Current.ToString(),
+								["provider"] = ProviderContractVersion.Current.ToString()
+							})),
+					timeout.Token).ConfigureAwait(false);
 
-			var hello = await Wire.ReadAsync(pipe, timeout.Token).ConfigureAwait(false);
-			EnsureNotError(hello);
-			if (!string.Equals(hello.MessageType, "server.hello", StringComparison.Ordinal))
-				throw new InvalidDataException("RuntimeHost did not complete the IPC handshake.");
-			var serverHello = hello.Payload.Deserialize<ServerHello>(Wire.JsonOptions)
-				?? throw new InvalidDataException("RuntimeHost ServerHello is required.");
-			if (!string.Equals(serverHello.ProtocolVersion, ProtocolVersion, StringComparison.Ordinal) || !string.Equals(serverHello.Role, "RuntimeHost", StringComparison.Ordinal))
-				throw new InvalidDataException("RuntimeHost handshake role or protocol is incompatible.");
-			MarkConnected(serverHello.HostInstanceId);
+				var hello = await Wire.ReadAsync(pipe, timeout.Token).ConfigureAwait(false);
+				EnsureNotError(hello);
+				if (!string.Equals(hello.MessageType, "server.hello", StringComparison.Ordinal))
+					throw new InvalidDataException("RuntimeHost did not complete the IPC handshake.");
+				var serverHello = hello.Payload.Deserialize<ServerHello>(Wire.JsonOptions)
+					?? throw new InvalidDataException("RuntimeHost ServerHello is required.");
+				if (!string.Equals(serverHello.ProtocolVersion, ProtocolVersion, StringComparison.Ordinal) || !string.Equals(serverHello.Role, "RuntimeHost", StringComparison.Ordinal))
+					throw new InvalidDataException("RuntimeHost handshake role or protocol is incompatible.");
+				MarkConnected(serverHello.HostInstanceId);
 
-			var requestId = Identity.New().ToString();
-			await Wire.WriteAsync(
-				pipe,
-				Wire.Create(messageType, requestId, correlationId, _clientInstanceId, hello.StateVersion, 0, payload),
-				timeout.Token).ConfigureAwait(false);
-			var response = await Wire.ReadAsync(pipe, timeout.Token).ConfigureAwait(false);
-			if (!string.Equals(response.RequestId, requestId, StringComparison.Ordinal) || !string.Equals(response.CorrelationId, correlationId, StringComparison.Ordinal))
-				throw new InvalidDataException("RuntimeHost response correlation is invalid.");
-			EnsureNotError(response);
-			MarkConnected(response.HostInstanceId);
-			return response;
+				var requestId = Identity.New().ToString();
+				await Wire.WriteAsync(
+					pipe,
+					Wire.Create(messageType, requestId, correlationId, _clientInstanceId, hello.StateVersion, 0, payload),
+					timeout.Token).ConfigureAwait(false);
+				var response = await Wire.ReadAsync(pipe, timeout.Token).ConfigureAwait(false);
+				if (!string.Equals(response.RequestId, requestId, StringComparison.Ordinal) || !string.Equals(response.CorrelationId, correlationId, StringComparison.Ordinal))
+					throw new InvalidDataException("RuntimeHost response correlation is invalid.");
+				EnsureNotError(response);
+				MarkConnected(response.HostInstanceId);
+				return response;
+			}
+			catch
+			{
+				MarkDisconnected();
+				throw;
+			}
 		}
-		catch
+		finally
 		{
-			MarkDisconnected();
-			throw;
+			_requestGate.Release();
 		}
 	}
 
