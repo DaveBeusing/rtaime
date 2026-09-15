@@ -41,10 +41,12 @@ public sealed record AIHostLifecycleSnapshot(
 
 public sealed record AIHostProcessOptions(
 	InferenceRuntimeLimits Limits,
+	string ListenEndpoint,
 	TimeSpan ShutdownTimeout)
 {
 	public static AIHostProcessOptions Default => new(
 		InferenceRuntimeLimits.ReferenceV1,
+		"rtaime.v1.ai.default",
 		TimeSpan.FromSeconds(10));
 
 	public static AIHostProcessOptions Load(
@@ -59,16 +61,20 @@ public sealed record AIHostProcessOptions(
 		var vramMiB = ParsePositiveULong(Get(args, environment, "vram-mib", "RTAIME_AI_VRAM_MIB", (defaults.Limits.VramBytes / (1024UL * 1024UL)).ToString()), "vram-mib");
 		var maxConcurrent = ParsePositiveUInt(Get(args, environment, "max-concurrent", "RTAIME_AI_MAX_CONCURRENT", defaults.Limits.MaxConcurrentRequests.ToString()), "max-concurrent");
 		var maxRate = ParsePositiveUInt(Get(args, environment, "max-rate", "RTAIME_AI_MAX_RATE", defaults.Limits.MaxInferenceRatePerSecond.ToString()), "max-rate");
+		var listenEndpoint = Get(args, environment, "listen-endpoint", "RTAIME_AI_ENDPOINT", defaults.ListenEndpoint);
 		var shutdownTimeoutMs = ParsePositiveInt(Get(args, environment, "shutdown-timeout-ms", "RTAIME_AI_SHUTDOWN_TIMEOUT_MS", ((int)defaults.ShutdownTimeout.TotalMilliseconds).ToString()), "shutdown-timeout-ms");
 
 		return new AIHostProcessOptions(
 			new InferenceRuntimeLimits(computeUnits, checked(vramMiB * 1024UL * 1024UL), maxConcurrent, maxRate),
+			listenEndpoint,
 			TimeSpan.FromMilliseconds(shutdownTimeoutMs));
 	}
 
 	public void Validate()
 	{
 		ArgumentNullException.ThrowIfNull(Limits);
+		if (string.IsNullOrWhiteSpace(ListenEndpoint))
+			throw new ArgumentException("AIHost listen endpoint is required.", nameof(ListenEndpoint));
 		if (ShutdownTimeout <= TimeSpan.Zero)
 			throw new ArgumentOutOfRangeException(nameof(ShutdownTimeout));
 	}
@@ -113,7 +119,7 @@ public sealed record AIHostProcessOptions(
 
 /// <summary>
 /// Executable AIHost composition root. Governed inference and resource admission remain owned by
-/// <see cref="AIHostService"/> and <see cref="GovernedInferenceRuntime"/>; this class owns process lifecycle only.
+/// <see cref="AIHostService"/> and <see cref="GovernedInferenceRuntime"/>; this class owns process and IPC lifecycle only.
 /// </summary>
 public sealed class AIHostProcess
 {
@@ -127,6 +133,7 @@ public sealed class AIHostProcess
 		DateTimeOffset.UtcNow);
 	private int _runStarted;
 	private AIHostService? _service;
+	private AIHostIpcServer? _ipcServer;
 	private bool _serviceDisposed;
 	private AIExecutionSnapshot? _finalExecutionSnapshot;
 
@@ -148,6 +155,7 @@ public sealed class AIHostProcess
 	}
 
 	public AIHostService? Service => _service;
+	public AIHostIpcServer? IpcServer => _ipcServer;
 	public bool ServiceDisposed => _serviceDisposed;
 	public AIExecutionSnapshot? FinalExecutionSnapshot => _finalExecutionSnapshot;
 
@@ -162,6 +170,8 @@ public sealed class AIHostProcess
 			_options.Validate();
 			_service = _serviceFactory(_options.Limits)
 				?? throw new InvalidOperationException("AI service factory returned null.");
+			_ipcServer = new AIHostIpcServer(_options.ListenEndpoint, () => _service);
+			await _ipcServer.StartAsync(cancellationToken).ConfigureAwait(false);
 		}
 		catch (ArgumentException exception)
 		{
@@ -177,9 +187,9 @@ public sealed class AIHostProcess
 		}
 
 		if (_service.Capabilities.Count == 0)
-			Update(AIHostProcessState.Degraded, AIHostHealthState.Degraded, "AIHost is running but no inference capability is currently available.");
+			Update(AIHostProcessState.Degraded, AIHostHealthState.Degraded, $"AIHost is listening on '{_options.ListenEndpoint}' but no inference capability is available.");
 		else
-			Update(AIHostProcessState.Ready, AIHostHealthState.Healthy, "AIHost is ready with governed inference and resource admission.");
+			Update(AIHostProcessState.Ready, AIHostHealthState.Healthy, $"AIHost is ready with governed inference on '{_options.ListenEndpoint}'.");
 
 		try
 		{
@@ -200,10 +210,13 @@ public sealed class AIHostProcess
 
 	private async Task<AIHostExitCode> StopAsync()
 	{
-		Update(AIHostProcessState.Draining, AIHostHealthState.Degraded, "Cancelling inference and draining AIHost resources.");
+		Update(AIHostProcessState.Draining, AIHostHealthState.Degraded, "Stopping AIHost IPC, cancelling inference and draining resources.");
 		using var timeout = new CancellationTokenSource(_options.ShutdownTimeout);
 		try
 		{
+			if (_ipcServer is not null)
+				await _ipcServer.DisposeAsync().AsTask().WaitAsync(timeout.Token).ConfigureAwait(false);
+
 			if (_service is not null)
 			{
 				await _service.DisposeAsync().AsTask().WaitAsync(timeout.Token).ConfigureAwait(false);
@@ -217,7 +230,7 @@ public sealed class AIHostProcess
 				}
 			}
 
-			Update(AIHostProcessState.Stopped, AIHostHealthState.Stopped, "AIHost stopped cleanly and released admissions/resources.");
+			Update(AIHostProcessState.Stopped, AIHostHealthState.Stopped, "AIHost stopped cleanly and released IPC/admissions/resources.");
 			return AIHostExitCode.Success;
 		}
 		catch (Exception exception) when (exception is OperationCanceledException or TimeoutException)
@@ -234,6 +247,13 @@ public sealed class AIHostProcess
 
 	private async Task CleanupStartupFailureAsync()
 	{
+		try
+		{
+			if (_ipcServer is not null)
+				await _ipcServer.DisposeAsync().ConfigureAwait(false);
+		}
+		catch { }
+
 		if (_service is null)
 			return;
 
