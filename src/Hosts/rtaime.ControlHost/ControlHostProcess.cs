@@ -2,8 +2,10 @@
 
 using rtaime.Control.Contracts;
 using rtaime.Core;
+using rtaime.Media.Contracts;
 using rtaime.Persistence;
 using rtaime.Provider.Contracts;
+using rtaime.Runtime.Contracts;
 
 namespace rtaime.ControlHost;
 
@@ -43,14 +45,24 @@ public sealed record ControlHostLifecycleSnapshot(
 	DateTimeOffset UpdatedAt);
 
 /// <summary>
-/// AP-13 transport seam. It intentionally carries only the provider snapshot needed to compose ControlHost.
-/// Production network transport is introduced by AP-14 and must implement this boundary without moving
-/// Runtime execution into ControlHost.
+/// Production IPC seam between authoritative ControlHost and execution-owning RuntimeHost.
+/// The boundary carries contracts/descriptors only and never introduces a host-to-host project reference.
 /// </summary>
 public interface IControlRuntimeTransportSeam
 {
 	bool IsConnected { get; }
+	string? HostInstanceId { get; }
 	IReadOnlyList<ProviderDescriptor> ProviderDescriptors { get; }
+
+	ValueTask ConnectAsync(CancellationToken cancellationToken = default);
+	ValueTask<IReadOnlyList<ProviderDescriptor>> GetProviderDescriptorsAsync(CancellationToken cancellationToken = default);
+	ValueTask<RuntimeRemoteSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default);
+	ValueTask<RuntimeRemoteApplyResult> ApplyExecutionAsync(
+		PreparedExecutionContract preparedExecution,
+		MediaSinkId programSinkId,
+		RuntimeProgramTransitionIntent? transition,
+		CancellationToken cancellationToken = default);
+	ValueTask DisconnectAsync();
 }
 
 public sealed class UnboundControlRuntimeTransportSeam : IControlRuntimeTransportSeam
@@ -58,7 +70,26 @@ public sealed class UnboundControlRuntimeTransportSeam : IControlRuntimeTranspor
 	private static readonly IReadOnlyList<ProviderDescriptor> EmptyProviders = Array.Empty<ProviderDescriptor>();
 
 	public bool IsConnected => false;
+	public string? HostInstanceId => null;
 	public IReadOnlyList<ProviderDescriptor> ProviderDescriptors => EmptyProviders;
+
+	public ValueTask ConnectAsync(CancellationToken cancellationToken = default) =>
+		ValueTask.FromException(new InvalidOperationException("Runtime transport is not configured."));
+
+	public ValueTask<IReadOnlyList<ProviderDescriptor>> GetProviderDescriptorsAsync(CancellationToken cancellationToken = default) =>
+		ValueTask.FromException<IReadOnlyList<ProviderDescriptor>>(new InvalidOperationException("Runtime transport is not configured."));
+
+	public ValueTask<RuntimeRemoteSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default) =>
+		ValueTask.FromException<RuntimeRemoteSnapshot>(new InvalidOperationException("Runtime transport is not configured."));
+
+	public ValueTask<RuntimeRemoteApplyResult> ApplyExecutionAsync(
+		PreparedExecutionContract preparedExecution,
+		MediaSinkId programSinkId,
+		RuntimeProgramTransitionIntent? transition,
+		CancellationToken cancellationToken = default) =>
+		ValueTask.FromException<RuntimeRemoteApplyResult>(new InvalidOperationException("Runtime transport is not configured."));
+
+	public ValueTask DisconnectAsync() => ValueTask.CompletedTask;
 }
 
 public sealed record ControlHostProcessOptions(
@@ -67,6 +98,11 @@ public sealed record ControlHostProcessOptions(
 	ProductionSourceId SourceBId,
 	string ProductionName,
 	int JournalCapacity,
+	string ListenEndpoint,
+	string RuntimeEndpoint,
+	TimeSpan ConnectTimeout,
+	TimeSpan RequestTimeout,
+	TimeSpan RuntimeRetryInterval,
 	TimeSpan ShutdownTimeout)
 {
 	public static ControlHostProcessOptions Default => new(
@@ -75,6 +111,11 @@ public sealed record ControlHostProcessOptions(
 		new ProductionSourceId(Identity.Parse("70000000-0000-0000-0000-00000000000b")),
 		"rtaime V1 Production",
 		1024,
+		"rtaime.v1.control.default",
+		"rtaime.v1.runtime.default",
+		TimeSpan.FromSeconds(1),
+		TimeSpan.FromSeconds(5),
+		TimeSpan.FromMilliseconds(250),
 		TimeSpan.FromSeconds(10));
 
 	public static ControlHostProcessOptions Load(
@@ -91,6 +132,11 @@ public sealed record ControlHostProcessOptions(
 			new ProductionSourceId(ParseIdentity(Get(args, environment, "source-b-id", "RTAIME_CONTROL_SOURCE_B_ID", defaults.SourceBId.ToString()), "source-b-id")),
 			Get(args, environment, "production-name", "RTAIME_CONTROL_PRODUCTION_NAME", defaults.ProductionName),
 			ParsePositiveInt(Get(args, environment, "journal-capacity", "RTAIME_CONTROL_JOURNAL_CAPACITY", defaults.JournalCapacity.ToString()), "journal-capacity"),
+			Get(args, environment, "listen-endpoint", "RTAIME_CONTROL_ENDPOINT", defaults.ListenEndpoint),
+			Get(args, environment, "runtime-endpoint", "RTAIME_RUNTIME_ENDPOINT", defaults.RuntimeEndpoint),
+			TimeSpan.FromMilliseconds(ParsePositiveInt(Get(args, environment, "connect-timeout-ms", "RTAIME_CONTROL_CONNECT_TIMEOUT_MS", ((int)defaults.ConnectTimeout.TotalMilliseconds).ToString()), "connect-timeout-ms")),
+			TimeSpan.FromMilliseconds(ParsePositiveInt(Get(args, environment, "request-timeout-ms", "RTAIME_CONTROL_REQUEST_TIMEOUT_MS", ((int)defaults.RequestTimeout.TotalMilliseconds).ToString()), "request-timeout-ms")),
+			TimeSpan.FromMilliseconds(ParsePositiveInt(Get(args, environment, "runtime-retry-ms", "RTAIME_CONTROL_RUNTIME_RETRY_MS", ((int)defaults.RuntimeRetryInterval.TotalMilliseconds).ToString()), "runtime-retry-ms")),
 			TimeSpan.FromMilliseconds(ParsePositiveInt(Get(args, environment, "shutdown-timeout-ms", "RTAIME_CONTROL_SHUTDOWN_TIMEOUT_MS", ((int)defaults.ShutdownTimeout.TotalMilliseconds).ToString()), "shutdown-timeout-ms")));
 	}
 
@@ -106,6 +152,16 @@ public sealed record ControlHostProcessOptions(
 			throw new ArgumentException("Production name is required.", nameof(ProductionName));
 		if (JournalCapacity <= 0)
 			throw new ArgumentOutOfRangeException(nameof(JournalCapacity));
+		if (string.IsNullOrWhiteSpace(ListenEndpoint))
+			throw new ArgumentException("ControlHost listen endpoint is required.", nameof(ListenEndpoint));
+		if (string.IsNullOrWhiteSpace(RuntimeEndpoint))
+			throw new ArgumentException("RuntimeHost endpoint is required.", nameof(RuntimeEndpoint));
+		if (ConnectTimeout <= TimeSpan.Zero)
+			throw new ArgumentOutOfRangeException(nameof(ConnectTimeout));
+		if (RequestTimeout <= TimeSpan.Zero)
+			throw new ArgumentOutOfRangeException(nameof(RequestTimeout));
+		if (RuntimeRetryInterval <= TimeSpan.Zero)
+			throw new ArgumentOutOfRangeException(nameof(RuntimeRetryInterval));
 		if (ShutdownTimeout <= TimeSpan.Zero)
 			throw new ArgumentOutOfRangeException(nameof(ShutdownTimeout));
 	}
@@ -148,7 +204,7 @@ public sealed record ControlHostProcessOptions(
 
 /// <summary>
 /// Executable ControlHost composition root. Production authority remains in <see cref="ControlHostService"/>;
-/// this class only owns process startup, configuration, health and orderly resource shutdown.
+/// this class owns process startup, production IPC, runtime binding/recovery and orderly resource shutdown.
 /// </summary>
 public sealed class ControlHostProcess
 {
@@ -164,13 +220,19 @@ public sealed class ControlHostProcess
 	private BoundedProductionJournal? _journal;
 	private ControlHostService? _control;
 	private IControlRuntimeTransportSeam? _runtimeTransport;
+	private ControlHostIpcServer? _ipcServer;
+	private Task? _runtimeBindingTask;
+	private string? _boundRuntimeHostInstanceId;
 
 	public ControlHostProcess(
 		ControlHostProcessOptions options,
 		Func<IControlRuntimeTransportSeam>? transportFactory = null)
 	{
 		_options = options ?? throw new ArgumentNullException(nameof(options));
-		_transportFactory = transportFactory ?? (() => new UnboundControlRuntimeTransportSeam());
+		_transportFactory = transportFactory ?? (() => new NamedPipeRuntimeHostTransport(
+			_options.RuntimeEndpoint,
+			_options.ConnectTimeout,
+			_options.RequestTimeout));
 	}
 
 	public ControlHostLifecycleSnapshot Lifecycle
@@ -185,6 +247,7 @@ public sealed class ControlHostProcess
 	public ControlHostService? Control => _control;
 	public BoundedProductionJournal? Journal => _journal;
 	public IControlRuntimeTransportSeam? RuntimeTransport => _runtimeTransport;
+	public ControlHostIpcServer? IpcServer => _ipcServer;
 
 	public async Task<ControlHostExitCode> RunAsync(CancellationToken cancellationToken)
 	{
@@ -196,6 +259,8 @@ public sealed class ControlHostProcess
 		{
 			_options.Validate();
 			Compose();
+			await _ipcServer!.StartAsync(cancellationToken).ConfigureAwait(false);
+			_runtimeBindingTask = RuntimeBindingLoopAsync(cancellationToken);
 		}
 		catch (ArgumentException exception)
 		{
@@ -210,10 +275,10 @@ public sealed class ControlHostProcess
 			return ControlHostExitCode.StartupFailure;
 		}
 
-		if (_runtimeTransport!.IsConnected)
-			Update(ControlHostProcessState.Ready, ControlHostHealthState.Healthy, "ControlHost composition is ready.");
-		else
-			Update(ControlHostProcessState.Degraded, ControlHostHealthState.Degraded, "ControlHost is running with an unbound Runtime transport seam; production commit transport is deferred to AP-14.");
+		SetOperationalState(
+			ControlHostProcessState.Degraded,
+			ControlHostHealthState.Degraded,
+			$"ControlHost is listening on '{_options.ListenEndpoint}' while RuntimeHost binding is pending.");
 
 		try
 		{
@@ -252,14 +317,118 @@ public sealed class ControlHostProcess
 			new ProductionRoutingState(_options.SourceAId, _options.SourceAId));
 
 		_control = new ControlHostService(specification, _runtimeTransport.ProviderDescriptors, _journal);
+		_ipcServer = new ControlHostIpcServer(_options.ListenEndpoint, () => _control, _runtimeTransport);
+	}
+
+	private async Task RuntimeBindingLoopAsync(CancellationToken cancellationToken)
+	{
+		while (!cancellationToken.IsCancellationRequested)
+		{
+			try
+			{
+				var transport = _runtimeTransport ?? throw new InvalidOperationException("Runtime transport was not composed.");
+				var control = _control ?? throw new InvalidOperationException("Control service was not composed.");
+
+				await transport.ConnectAsync(cancellationToken).ConfigureAwait(false);
+				var providers = await transport.GetProviderDescriptorsAsync(cancellationToken).ConfigureAwait(false);
+				if (control.HasPendingExecution)
+				{
+					await Task.Delay(_options.RuntimeRetryInterval, cancellationToken).ConfigureAwait(false);
+					continue;
+				}
+
+				control.RefreshProviderSnapshot(providers);
+				var runtimeHostInstanceId = transport.HostInstanceId
+					?? throw new InvalidDataException("Connected RuntimeHost did not expose a host instance identity.");
+
+				if (!control.HasAuthoritativeState)
+				{
+					var staged = control.Initialize();
+					if (staged.Execution is null)
+						throw new InvalidOperationException("Control initialization did not produce a prepared execution.");
+
+					var remote = await transport.ApplyExecutionAsync(
+						staged.Execution.PreparedExecution,
+						staged.Execution.ProgramSinkId,
+						staged.Execution.ProgramTransition,
+						cancellationToken).ConfigureAwait(false);
+					if (remote.Commit is null)
+					{
+						var failure = remote.Prepare.Failure ?? new Failure("runtime.prepare.rejected", "Runtime rejected initial prepare without a commit result.");
+						control.RejectRuntimeCommit(staged.Execution.PreparedExecution.PreparedExecutionId, failure);
+						throw new InvalidOperationException(failure.Message);
+					}
+
+					var confirmation = control.ConfirmRuntimeCommit(staged.Execution.PreparedExecution.PreparedExecutionId, remote.Commit);
+					if (!confirmation.Committed)
+						throw new InvalidOperationException(confirmation.Failure?.Message ?? "Initial Runtime commit was not confirmed.");
+
+					_boundRuntimeHostInstanceId = runtimeHostInstanceId;
+					SetOperationalState(ControlHostProcessState.Ready, ControlHostHealthState.Healthy, $"ControlHost is bound to RuntimeHost instance '{runtimeHostInstanceId}'.");
+					continue;
+				}
+
+				if (!string.Equals(_boundRuntimeHostInstanceId, runtimeHostInstanceId, StringComparison.Ordinal))
+				{
+					SetOperationalState(ControlHostProcessState.Degraded, ControlHostHealthState.Degraded, "RuntimeHost instance changed; authoritative execution is being resynchronized.");
+					var revisionBefore = control.State.Revision;
+					var execution = control.PrepareCurrentExecution();
+					var remote = await transport.ApplyExecutionAsync(
+						execution.PreparedExecution,
+						execution.ProgramSinkId,
+						null,
+						cancellationToken).ConfigureAwait(false);
+					if (!remote.Committed)
+						throw new InvalidOperationException(remote.Commit?.Failure?.Message ?? remote.Prepare.Failure?.Message ?? "Runtime resynchronization was rejected.");
+					if (control.State.Revision != revisionBefore)
+						throw new InvalidOperationException("Runtime resynchronization must not advance authoritative revision.");
+
+					control.RecordObservation("runtime", "runtime.resync.committed", $"Authoritative revision {revisionBefore} was applied to RuntimeHost instance '{runtimeHostInstanceId}'.");
+					_boundRuntimeHostInstanceId = runtimeHostInstanceId;
+					SetOperationalState(ControlHostProcessState.Ready, ControlHostHealthState.Healthy, $"ControlHost resynchronized RuntimeHost instance '{runtimeHostInstanceId}'.");
+					continue;
+				}
+
+				await transport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
+				SetOperationalState(ControlHostProcessState.Ready, ControlHostHealthState.Healthy, $"ControlHost is connected to RuntimeHost instance '{runtimeHostInstanceId}'.");
+			}
+			catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+			{
+				return;
+			}
+			catch (Exception exception)
+			{
+				if (_control is { } control)
+					control.RecordObservation("runtime", "runtime.connection.degraded", $"RuntimeHost binding failed: {exception.GetType().Name}.", new Failure("runtime.connection.failed", exception.Message));
+				if (_runtimeTransport is not null)
+				{
+					try { await _runtimeTransport.DisconnectAsync().ConfigureAwait(false); }
+					catch { }
+				}
+				SetOperationalState(ControlHostProcessState.Degraded, ControlHostHealthState.Degraded, "RuntimeHost is unavailable; authoritative mutation transport is paused.");
+			}
+
+			await Task.Delay(_options.RuntimeRetryInterval, cancellationToken).ConfigureAwait(false);
+		}
 	}
 
 	private async Task<ControlHostExitCode> StopAsync()
 	{
-		Update(ControlHostProcessState.Draining, ControlHostHealthState.Degraded, "Draining ControlHost resources.");
+		Update(ControlHostProcessState.Draining, ControlHostHealthState.Degraded, "Draining ControlHost IPC, runtime transport and journal resources.");
+		_ipcServer?.NotifyObservableStateChanged();
 		using var timeout = new CancellationTokenSource(_options.ShutdownTimeout);
 		try
 		{
+			if (_ipcServer is not null)
+				await _ipcServer.DisposeAsync().AsTask().WaitAsync(timeout.Token).ConfigureAwait(false);
+			if (_runtimeTransport is not null)
+				await _runtimeTransport.DisconnectAsync().AsTask().WaitAsync(timeout.Token).ConfigureAwait(false);
+			if (_runtimeBindingTask is not null)
+			{
+				try { await _runtimeBindingTask.WaitAsync(timeout.Token).ConfigureAwait(false); }
+				catch (OperationCanceledException) when (timeout.IsCancellationRequested) { throw; }
+				catch (OperationCanceledException) { }
+			}
 			if (_journal is not null)
 			{
 				await _journal.FlushAsync(timeout.Token).ConfigureAwait(false);
@@ -283,6 +452,20 @@ public sealed class ControlHostProcess
 
 	private async Task CleanupStartupFailureAsync()
 	{
+		try
+		{
+			if (_ipcServer is not null)
+				await _ipcServer.DisposeAsync().ConfigureAwait(false);
+		}
+		catch { }
+
+		try
+		{
+			if (_runtimeTransport is not null)
+				await _runtimeTransport.DisconnectAsync().ConfigureAwait(false);
+		}
+		catch { }
+
 		if (_journal is null)
 			return;
 
@@ -294,6 +477,19 @@ public sealed class ControlHostProcess
 		{
 			// Preserve the original startup failure as the process outcome.
 		}
+	}
+
+	private void SetOperationalState(ControlHostProcessState state, ControlHostHealthState health, string detail)
+	{
+		var changed = false;
+		lock (_gate)
+		{
+			changed = _lifecycle.State != state || _lifecycle.Health != health || !string.Equals(_lifecycle.Detail, detail, StringComparison.Ordinal);
+			if (changed)
+				_lifecycle = new ControlHostLifecycleSnapshot(state, health, detail, DateTimeOffset.UtcNow);
+		}
+		if (changed)
+			_ipcServer?.NotifyObservableStateChanged();
 	}
 
 	private void Update(ControlHostProcessState state, ControlHostHealthState health, string detail)
