@@ -131,7 +131,7 @@ public sealed class AudioFollowVideoIntegrationTests
         Assert.Equal(audioProvider.SourceB.Descriptor.StreamId, result.StreamId);
         Assert.True(result.Muted);
         Assert.Equal(0.5, result.Gain.Linear, 6);
-        Assert.Equal(0, result.PeakLevel);
+        Assert.Equal(0d, result.PeakLevel);
     }
 
     private static ProductionSpecification CreateSpecification(ProductionSourceId programSourceId)
@@ -160,10 +160,10 @@ public sealed class AudioFollowVideoIntegrationTests
         var programBinding = active.PreparedExecution.Bindings.Single(binding => binding.MediaSinkId == programSinkId);
         var videoSourceId = programBinding.MediaSourceId
             ?? throw new Xunit.Sdk.XunitException("Committed Program binding requires a media source.");
-        var packet = audioProvider.GetSource(videoSourceId.Value).GeneratePacket(sequence);
+        var packet = audioProvider.GetSource(videoSourceId).GeneratePacket(sequence);
 
         return afv.ProcessBoundary(
-            videoSourceId.Value,
+            videoSourceId,
             sequence,
             packet.Descriptor,
             packet.PeakLevel);
