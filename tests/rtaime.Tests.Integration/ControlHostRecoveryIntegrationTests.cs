@@ -63,7 +63,7 @@ public sealed class ControlHostRecoveryIntegrationTests
 			using var secondControlStop = new CancellationTokenSource();
 			var secondControl = new ControlHostProcess(options);
 			var secondControlRun = secondControl.RunAsync(secondControlStop.Token);
-			await WaitUntilAsync(() => secondControl.Lifecycle.State == ControlHostProcessState.Ready && secondControl.Recovery.State == ControlHostRecoveryState.Recovered);
+			await WaitForRecoveredReadyAsync(secondControl, secondControlRun);
 
 			Assert.Equal(committedRevision, secondControl.Control!.State.Revision);
 			Assert.Equal(committedRouting, secondControl.Control.State.Routing);
@@ -228,6 +228,29 @@ public sealed class ControlHostRecoveryIntegrationTests
 		{
 			_connected = false;
 			return ValueTask.CompletedTask;
+		}
+	}
+
+	private static async Task WaitForRecoveredReadyAsync(
+		ControlHostProcess process,
+		Task<ControlHostExitCode> run,
+		int timeoutMilliseconds = 15000)
+	{
+		var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMilliseconds);
+		while (process.Lifecycle.State != ControlHostProcessState.Ready || process.Recovery.State != ControlHostRecoveryState.Recovered)
+		{
+			if (run.IsCompleted)
+			{
+				var exit = await run;
+				throw new InvalidOperationException(
+					$"Recovered ControlHost exited before Ready. Exit={exit}; lifecycle={process.Lifecycle.State}/{process.Lifecycle.Health}: {process.Lifecycle.Detail}; recovery={process.Recovery.State}: {process.Recovery.Detail}");
+			}
+			if (DateTime.UtcNow >= deadline)
+			{
+				throw new TimeoutException(
+					$"Recovered ControlHost did not reach Ready within {timeoutMilliseconds} ms. lifecycle={process.Lifecycle.State}/{process.Lifecycle.Health}: {process.Lifecycle.Detail}; recovery={process.Recovery.State}: {process.Recovery.Detail}");
+			}
+			await Task.Delay(20);
 		}
 	}
 
