@@ -31,16 +31,22 @@ public sealed record ControlHostOperationResult(
     ControlHostExecutionPackage? Execution,
     Failure? Failure)
 {
-    public static ControlHostOperationResult Success(ControlHostExecutionPackage execution) =>
+    public static ControlHostOperationResult Staged(ControlHostExecutionPackage execution) =>
         new(true, execution.AuthoritativeState, execution, null);
 
     public static ControlHostOperationResult Rejected(AuthoritativeProductionState state, Failure failure) =>
         new(false, state, null, failure);
 }
 
+public sealed record ControlHostCommitConfirmation(
+    bool Committed,
+    AuthoritativeProductionState? State,
+    Failure? Failure);
+
 /// <summary>
 /// Authoritative V1 ControlHost composition root. It owns validation/state/planning, but never calls RuntimeHost.
-/// Prepared execution packages cross the host boundary through Runtime contracts.
+/// A proposed authoritative revision is staged with a PreparedExecutionContract and only becomes authoritative
+/// after the corresponding Runtime commit is confirmed.
 /// </summary>
 public sealed class ControlHostService
 {
@@ -50,6 +56,7 @@ public sealed class ControlHostService
     private readonly BoundedProductionJournal _journal;
     private readonly IControlHostClock _clock;
     private AuthoritativeProductionState? _authoritative;
+    private PendingControlCommit? _pending;
 
     public ControlHostService(
         ProductionSpecification specification,
@@ -70,7 +77,16 @@ public sealed class ControlHostService
         get
         {
             lock (_gate)
-                return _authoritative ?? throw new InvalidOperationException("ControlHost is not initialized.");
+                return _authoritative ?? throw new InvalidOperationException("ControlHost has no committed authoritative state.");
+        }
+    }
+
+    public bool HasPendingExecution
+    {
+        get
+        {
+            lock (_gate)
+                return _pending is not null;
         }
     }
 
@@ -78,8 +94,8 @@ public sealed class ControlHostService
     {
         lock (_gate)
         {
-            if (_authoritative is not null)
-                throw new InvalidOperationException("ControlHost has already been initialized.");
+            if (_authoritative is not null || _pending is not null)
+                throw new InvalidOperationException("ControlHost has already been initialized or has a pending initialization.");
 
             var initialized = ControlDomainEngine.Initialize(_specification);
             if (!initialized.Succeeded)
@@ -98,11 +114,11 @@ public sealed class ControlHostService
                 throw new InvalidOperationException(failure.Message);
             }
 
-            _authoritative = proposed;
             var execution = Package(proposed, planning, null);
-            Journal(proposed.Revision, "control", "control.initialized", "Initial authoritative state and execution plan prepared.", null, null);
+            _pending = new PendingControlCommit(execution, null);
+            Journal(proposed.Revision, "control", "control.initialize.staged", "Initial authoritative state is staged pending Runtime commit.", null, null);
             Journal(proposed.Revision, "planning", "planning.prepared", execution.PreparedExecution.PreparedExecutionId.ToString(), null, null);
-            return ControlHostOperationResult.Success(execution);
+            return ControlHostOperationResult.Staged(execution);
         }
     }
 
@@ -110,7 +126,10 @@ public sealed class ControlHostService
     {
         ArgumentNullException.ThrowIfNull(command);
         lock (_gate)
-            return Apply(ControlDomainEngine.Apply(_specification, Current(), command), command.Metadata.CommandId.Value, null);
+        {
+            EnsureNoPending();
+            return Stage(ControlDomainEngine.Apply(_specification, Current(), command), command.Metadata.CommandId.Value, null);
+        }
     }
 
     public ControlHostOperationResult CutProgram(CutProgramCommand command)
@@ -118,13 +137,14 @@ public sealed class ControlHostService
         ArgumentNullException.ThrowIfNull(command);
         lock (_gate)
         {
+            EnsureNoPending();
             var current = Current();
             var transition = current.Routing.ProgramSourceId == command.SourceId
                 ? null
                 : RuntimeProgramTransitionIntent.Cut(
                     new MediaSourceId(current.Routing.ProgramSourceId.Value),
                     new MediaSourceId(command.SourceId.Value));
-            return Apply(ControlDomainEngine.Apply(_specification, current, command), command.Metadata.CommandId.Value, transition);
+            return Stage(ControlDomainEngine.Apply(_specification, current, command), command.Metadata.CommandId.Value, transition);
         }
     }
 
@@ -133,6 +153,7 @@ public sealed class ControlHostService
         ArgumentNullException.ThrowIfNull(command);
         lock (_gate)
         {
+            EnsureNoPending();
             var current = Current();
             var transition = current.Routing.ProgramSourceId == command.SourceId
                 ? null
@@ -140,25 +161,52 @@ public sealed class ControlHostService
                     new MediaSourceId(current.Routing.ProgramSourceId.Value),
                     new MediaSourceId(command.SourceId.Value),
                     command.DurationFrames);
-            return Apply(ControlDomainEngine.Apply(_specification, current, command), command.Metadata.CommandId.Value, transition);
+            return Stage(ControlDomainEngine.Apply(_specification, current, command), command.Metadata.CommandId.Value, transition);
         }
     }
 
-    public void RecordRuntimeCommit(RuntimeCommitResult result, Identity? causationId = null)
+    public ControlHostCommitConfirmation ConfirmRuntimeCommit(
+        PreparedExecutionId preparedExecutionId,
+        RuntimeCommitResult runtimeResult)
     {
-        ArgumentNullException.ThrowIfNull(result);
+        ArgumentNullException.ThrowIfNull(runtimeResult);
         lock (_gate)
         {
-            var revision = _authoritative?.Revision ?? Revision.Initial;
+            if (_pending is null || _pending.Execution.PreparedExecution.PreparedExecutionId != preparedExecutionId)
+            {
+                var failure = new Failure(
+                    "control.commit.pending_mismatch",
+                    "Runtime commit confirmation does not match the staged Control execution.");
+                Journal(_authoritative?.Revision ?? Revision.Initial, "control", "control.commit.rejected", failure.Message, null, failure);
+                return new ControlHostCommitConfirmation(false, _authoritative, failure);
+            }
+
+            var pending = _pending;
+            _pending = null;
+
+            if (runtimeResult.Status != RuntimeCommitStatus.Committed)
+            {
+                var failure = runtimeResult.Failure ?? new Failure("control.commit.runtime_rejected", "Runtime rejected the staged execution.");
+                Journal(_authoritative?.Revision ?? Revision.Initial, "runtime", "runtime.commit.rejected", failure.Message, pending.CausationId, failure);
+                return new ControlHostCommitConfirmation(false, _authoritative, failure);
+            }
+
+            _authoritative = pending.Execution.AuthoritativeState;
             Journal(
-                revision,
+                _authoritative.Revision,
                 "runtime",
-                result.Status == RuntimeCommitStatus.Committed ? "runtime.commit.observed" : "runtime.commit.rejected",
-                result.Status == RuntimeCommitStatus.Committed
-                    ? $"Runtime execution revision {result.ExecutionRevision} committed."
-                    : result.Failure?.Message ?? "Runtime commit rejected.",
-                causationId,
-                result.Failure);
+                "runtime.commit.observed",
+                $"Runtime execution revision {runtimeResult.ExecutionRevision} committed.",
+                pending.CausationId,
+                null);
+            Journal(
+                _authoritative.Revision,
+                "control",
+                "control.authoritative.committed",
+                "Staged authoritative production state crossed the host commit boundary.",
+                pending.CausationId,
+                null);
+            return new ControlHostCommitConfirmation(true, _authoritative, null);
         }
     }
 
@@ -168,7 +216,7 @@ public sealed class ControlHostService
             Journal(_authoritative?.Revision ?? Revision.Initial, category, code, detail, null, failure);
     }
 
-    private ControlHostOperationResult Apply(
+    private ControlHostOperationResult Stage(
         ControlCommandResult domainResult,
         Identity commandId,
         RuntimeProgramTransitionIntent? transition)
@@ -190,12 +238,11 @@ public sealed class ControlHostService
             return ControlHostOperationResult.Rejected(current, failure);
         }
 
-        // The authoritative state advances only after the replacement is completely plan-admissible.
-        _authoritative = proposed;
         var execution = Package(proposed, planning, transition);
-        Journal(proposed.Revision, "control", "control.command.accepted", "Authoritative production command committed.", commandId, null);
+        _pending = new PendingControlCommit(execution, commandId);
+        Journal(proposed.Revision, "control", "control.command.staged", "Validated production command is staged pending Runtime commit.", commandId, null);
         Journal(proposed.Revision, "planning", "planning.prepared", execution.PreparedExecution.PreparedExecutionId.ToString(), commandId, null);
-        return ControlHostOperationResult.Success(execution);
+        return ControlHostOperationResult.Staged(execution);
     }
 
     private static ControlHostExecutionPackage Package(
@@ -216,7 +263,13 @@ public sealed class ControlHostService
     }
 
     private AuthoritativeProductionState Current() =>
-        _authoritative ?? throw new InvalidOperationException("ControlHost is not initialized.");
+        _authoritative ?? throw new InvalidOperationException("ControlHost has no committed authoritative state.");
+
+    private void EnsureNoPending()
+    {
+        if (_pending is not null)
+            throw new InvalidOperationException("ControlHost accepts only one staged production mutation at a time.");
+    }
 
     private void Journal(
         Revision revision,
@@ -244,6 +297,8 @@ public sealed class ControlHostService
             : string.Join("; ", validation.Issues.Select(issue => $"{issue.Code}: {issue.Message}"));
         return new Failure(code, message);
     }
+
+    private sealed record PendingControlCommit(ControlHostExecutionPackage Execution, Identity? CausationId);
 
     private sealed class SnapshotProviderRegistry : IProviderCapabilityRegistry
     {
