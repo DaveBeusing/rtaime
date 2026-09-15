@@ -1,5 +1,6 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
+using System.Text.Json;
 using rtaime.Control.Contracts;
 using rtaime.Core;
 using rtaime.Media.Contracts;
@@ -105,6 +106,10 @@ public sealed record ControlHostProcessOptions(
 	TimeSpan RuntimeRetryInterval,
 	TimeSpan ShutdownTimeout)
 {
+	public string DurabilityRoot { get; init; } = DefaultDurabilityRoot();
+	public int JournalRetainedCapacity { get; init; } = 256;
+	public int CheckpointQueueCapacity { get; init; } = 64;
+
 	public static ControlHostProcessOptions Default => new(
 		new ProductionId(Identity.Parse("70000000-0000-0000-0000-000000000001")),
 		new ProductionSourceId(Identity.Parse("70000000-0000-0000-0000-00000000000a")),
@@ -137,7 +142,12 @@ public sealed record ControlHostProcessOptions(
 			TimeSpan.FromMilliseconds(ParsePositiveInt(Get(args, environment, "connect-timeout-ms", "RTAIME_CONTROL_CONNECT_TIMEOUT_MS", ((int)defaults.ConnectTimeout.TotalMilliseconds).ToString()), "connect-timeout-ms")),
 			TimeSpan.FromMilliseconds(ParsePositiveInt(Get(args, environment, "request-timeout-ms", "RTAIME_CONTROL_REQUEST_TIMEOUT_MS", ((int)defaults.RequestTimeout.TotalMilliseconds).ToString()), "request-timeout-ms")),
 			TimeSpan.FromMilliseconds(ParsePositiveInt(Get(args, environment, "runtime-retry-ms", "RTAIME_CONTROL_RUNTIME_RETRY_MS", ((int)defaults.RuntimeRetryInterval.TotalMilliseconds).ToString()), "runtime-retry-ms")),
-			TimeSpan.FromMilliseconds(ParsePositiveInt(Get(args, environment, "shutdown-timeout-ms", "RTAIME_CONTROL_SHUTDOWN_TIMEOUT_MS", ((int)defaults.ShutdownTimeout.TotalMilliseconds).ToString()), "shutdown-timeout-ms")));
+			TimeSpan.FromMilliseconds(ParsePositiveInt(Get(args, environment, "shutdown-timeout-ms", "RTAIME_CONTROL_SHUTDOWN_TIMEOUT_MS", ((int)defaults.ShutdownTimeout.TotalMilliseconds).ToString()), "shutdown-timeout-ms")))
+		{
+			DurabilityRoot = Get(args, environment, "durability-root", "RTAIME_CONTROL_DURABILITY_ROOT", defaults.DurabilityRoot),
+			JournalRetainedCapacity = ParsePositiveInt(Get(args, environment, "journal-retained-capacity", "RTAIME_CONTROL_JOURNAL_RETAINED_CAPACITY", defaults.JournalRetainedCapacity.ToString()), "journal-retained-capacity"),
+			CheckpointQueueCapacity = ParsePositiveInt(Get(args, environment, "checkpoint-capacity", "RTAIME_CONTROL_CHECKPOINT_CAPACITY", defaults.CheckpointQueueCapacity.ToString()), "checkpoint-capacity")
+		};
 	}
 
 	public void Validate()
@@ -152,6 +162,12 @@ public sealed record ControlHostProcessOptions(
 			throw new ArgumentException("Production name is required.", nameof(ProductionName));
 		if (JournalCapacity <= 0)
 			throw new ArgumentOutOfRangeException(nameof(JournalCapacity));
+		if (JournalRetainedCapacity <= 0)
+			throw new ArgumentOutOfRangeException(nameof(JournalRetainedCapacity));
+		if (CheckpointQueueCapacity <= 0)
+			throw new ArgumentOutOfRangeException(nameof(CheckpointQueueCapacity));
+		if (string.IsNullOrWhiteSpace(DurabilityRoot))
+			throw new ArgumentException("ControlHost durability root is required.", nameof(DurabilityRoot));
 		if (string.IsNullOrWhiteSpace(ListenEndpoint))
 			throw new ArgumentException("ControlHost listen endpoint is required.", nameof(ListenEndpoint));
 		if (string.IsNullOrWhiteSpace(RuntimeEndpoint))
@@ -180,6 +196,14 @@ public sealed record ControlHostProcessOptions(
 
 		var environmentValue = environment(environmentName);
 		return string.IsNullOrWhiteSpace(environmentValue) ? defaultValue : environmentValue.Trim();
+	}
+
+	private static string DefaultDurabilityRoot()
+	{
+		var root = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+		if (string.IsNullOrWhiteSpace(root))
+			root = AppContext.BaseDirectory;
+		return Path.Combine(root, "rtaime", "data");
 	}
 
 	private static Identity ParseIdentity(string value, string key)
@@ -218,6 +242,9 @@ public sealed class ControlHostProcess
 		DateTimeOffset.UtcNow);
 	private int _runStarted;
 	private BoundedProductionJournal? _journal;
+	private SqliteManagementStore? _managementStore;
+	private BoundedProductionCheckpointWriter? _checkpointWriter;
+	private Revision? _lastCheckpointRevision;
 	private ControlHostService? _control;
 	private IControlRuntimeTransportSeam? _runtimeTransport;
 	private ControlHostIpcServer? _ipcServer;
@@ -246,6 +273,8 @@ public sealed class ControlHostProcess
 
 	public ControlHostService? Control => _control;
 	public BoundedProductionJournal? Journal => _journal;
+	public SqliteManagementStore? ManagementStore => _managementStore;
+	public BoundedProductionCheckpointWriter? CheckpointWriter => _checkpointWriter;
 	public IControlRuntimeTransportSeam? RuntimeTransport => _runtimeTransport;
 	public ControlHostIpcServer? IpcServer => _ipcServer;
 
@@ -313,7 +342,15 @@ public sealed class ControlHostProcess
 		if (_runtimeTransport.ProviderDescriptors is null)
 			throw new InvalidOperationException("Runtime transport provider snapshot must not be null.");
 
-		_journal = new BoundedProductionJournal(_options.JournalCapacity);
+		var durabilityDirectory = ResolveDurabilityDirectory();
+		Directory.CreateDirectory(durabilityDirectory);
+		_managementStore = new SqliteManagementStore(Path.Combine(durabilityDirectory, "management.db"));
+		_checkpointWriter = new BoundedProductionCheckpointWriter(_managementStore, _options.CheckpointQueueCapacity);
+		_journal = new BoundedProductionJournal(
+			_options.JournalCapacity,
+			new SqliteProductionJournalStore(Path.Combine(durabilityDirectory, "production-journal.db")),
+			_options.JournalRetainedCapacity);
+
 		var specification = new ProductionSpecification(
 			ControlContractVersion.Current,
 			_options.ProductionId,
@@ -374,9 +411,10 @@ public sealed class ControlHostProcess
 					}
 
 					var confirmation = control.ConfirmRuntimeCommit(staged.Execution.PreparedExecution.PreparedExecutionId, remote.Commit);
-					if (!confirmation.Committed)
+					if (!confirmation.Committed || confirmation.State is null)
 						throw new InvalidOperationException(confirmation.Failure?.Message ?? "Initial Runtime commit was not confirmed.");
 
+					QueueCheckpoint(confirmation.State);
 					_boundRuntimeHostInstanceId = runtimeHostInstanceId;
 					SetOperationalState(ControlHostProcessState.Ready, ControlHostHealthState.Healthy, $"ControlHost is bound to RuntimeHost instance '{runtimeHostInstanceId}'.");
 				}
@@ -398,12 +436,14 @@ public sealed class ControlHostProcess
 						throw new InvalidOperationException("Runtime resynchronization must not advance authoritative revision.");
 
 					control.RecordObservation("runtime", "runtime.resync.committed", $"Authoritative revision {revisionBefore} was applied to RuntimeHost instance '{runtimeHostInstanceId}'.");
+					QueueCheckpointIfAdvanced(control);
 					_boundRuntimeHostInstanceId = runtimeHostInstanceId;
 					SetOperationalState(ControlHostProcessState.Ready, ControlHostHealthState.Healthy, $"ControlHost resynchronized RuntimeHost instance '{runtimeHostInstanceId}'.");
 				}
 				else
 				{
 					await transport.GetSnapshotAsync(operationToken).ConfigureAwait(false);
+					QueueCheckpointIfAdvanced(control);
 					SetOperationalState(ControlHostProcessState.Ready, ControlHostHealthState.Healthy, $"ControlHost is connected to RuntimeHost instance '{runtimeHostInstanceId}'.");
 				}
 			}
@@ -440,9 +480,66 @@ public sealed class ControlHostProcess
 		}
 	}
 
+	private string ResolveDurabilityDirectory()
+	{
+		var safeEndpoint = string.Concat(_options.ListenEndpoint.Select(character =>
+			char.IsLetterOrDigit(character) || character is '-' or '_' or '.' ? character : '_'));
+		return Path.Combine(_options.DurabilityRoot, $"{_options.ProductionId}-{safeEndpoint}");
+	}
+
+	private void QueueCheckpointIfAdvanced(ControlHostService control)
+	{
+		if (!control.HasAuthoritativeState)
+			return;
+		var state = control.State;
+		if (_lastCheckpointRevision is { } revision && revision == state.Revision)
+			return;
+		QueueCheckpoint(state);
+	}
+
+	private void QueueCheckpoint(AuthoritativeProductionState state)
+	{
+		var writer = _checkpointWriter;
+		if (writer is null)
+			return;
+
+		var snapshot = new PersistedAuthoritySnapshot(
+			state.Version.ToString(),
+			state.ProductionId.ToString(),
+			state.Revision.Value,
+			state.Routing.PreviewSourceId.ToString(),
+			state.Routing.ProgramSourceId.ToString());
+		var checkpoint = new ProductionCheckpoint(
+			Identity.New(),
+			state.ProductionId.Value,
+			state.Revision,
+			new UtcTimestamp(DateTimeOffset.UtcNow),
+			"rtaime.control.authority.v1",
+			JsonSerializer.SerializeToUtf8Bytes(snapshot));
+
+		if (writer.TryWrite(checkpoint))
+		{
+			_lastCheckpointRevision = state.Revision;
+			return;
+		}
+
+		try
+		{
+			_control?.RecordObservation(
+				"persistence",
+				"persistence.checkpoint.dropped",
+				$"Checkpoint queue is full at authoritative revision {state.Revision}.",
+				new Failure("persistence.checkpoint.pressure", "Checkpoint queue capacity was exhausted."));
+		}
+		catch
+		{
+			// Checkpoint pressure is observable through writer statistics even if diagnostic journaling is unavailable.
+		}
+	}
+
 	private async Task<ControlHostExitCode> StopAsync()
 	{
-		Update(ControlHostProcessState.Draining, ControlHostHealthState.Degraded, "Draining ControlHost IPC, runtime transport and journal resources.");
+		Update(ControlHostProcessState.Draining, ControlHostHealthState.Degraded, "Draining ControlHost IPC, runtime transport and durability resources.");
 		_ipcServer?.NotifyObservableStateChanged();
 		using var timeout = new CancellationTokenSource(_options.ShutdownTimeout);
 		try
@@ -457,11 +554,29 @@ public sealed class ControlHostProcess
 				catch (OperationCanceledException) when (timeout.IsCancellationRequested) { throw; }
 				catch (OperationCanceledException) { }
 			}
+
+			Exception? durabilityFailure = null;
+			if (_checkpointWriter is not null)
+			{
+				try { await _checkpointWriter.FlushAsync(timeout.Token).ConfigureAwait(false); }
+				catch (Exception exception) { durabilityFailure ??= exception; }
+				try { await _checkpointWriter.DisposeAsync().AsTask().WaitAsync(timeout.Token).ConfigureAwait(false); }
+				catch (Exception exception) { durabilityFailure ??= exception; }
+			}
+			if (_managementStore is not null)
+			{
+				try { await _managementStore.DisposeAsync().AsTask().WaitAsync(timeout.Token).ConfigureAwait(false); }
+				catch (Exception exception) { durabilityFailure ??= exception; }
+			}
 			if (_journal is not null)
 			{
-				await _journal.FlushAsync(timeout.Token).ConfigureAwait(false);
-				await _journal.DisposeAsync().AsTask().WaitAsync(timeout.Token).ConfigureAwait(false);
+				try { await _journal.FlushAsync(timeout.Token).ConfigureAwait(false); }
+				catch (Exception exception) { durabilityFailure ??= exception; }
+				try { await _journal.DisposeAsync().AsTask().WaitAsync(timeout.Token).ConfigureAwait(false); }
+				catch (Exception exception) { durabilityFailure ??= exception; }
 			}
+			if (durabilityFailure is not null)
+				throw new IOException("ControlHost durability drain failed.", durabilityFailure);
 
 			Update(ControlHostProcessState.Stopped, ControlHostHealthState.Stopped, "ControlHost stopped cleanly.");
 			return ControlHostExitCode.Success;
@@ -494,12 +609,24 @@ public sealed class ControlHostProcess
 		}
 		catch { }
 
-		if (_journal is null)
-			return;
+		try
+		{
+			if (_checkpointWriter is not null)
+				await _checkpointWriter.DisposeAsync().ConfigureAwait(false);
+		}
+		catch { }
 
 		try
 		{
-			await _journal.DisposeAsync().ConfigureAwait(false);
+			if (_managementStore is not null)
+				await _managementStore.DisposeAsync().ConfigureAwait(false);
+		}
+		catch { }
+
+		try
+		{
+			if (_journal is not null)
+				await _journal.DisposeAsync().ConfigureAwait(false);
 		}
 		catch
 		{
@@ -525,4 +652,11 @@ public sealed class ControlHostProcess
 		lock (_gate)
 			_lifecycle = new ControlHostLifecycleSnapshot(state, health, detail, DateTimeOffset.UtcNow);
 	}
+
+	private sealed record PersistedAuthoritySnapshot(
+		string Version,
+		string ProductionId,
+		ulong Revision,
+		string PreviewSourceId,
+		string ProgramSourceId);
 }

@@ -1,5 +1,10 @@
+<!-- Copyright (c) Dave Beusing <david.beusing@gmail.com>. -->
 <Project Sdk="Microsoft.NET.Sdk">
-  <ItemGroup>
-    <ProjectReference Include="..\..\rtaime.Core\rtaime.Core.csproj" />
-  </ItemGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\..\rtaime.Core\rtaime.Core.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.Data.Sqlite" />
+	</ItemGroup>
 </Project>
