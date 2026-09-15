@@ -67,7 +67,7 @@ public sealed class CrossHostCommitFailureTests
         Assert.Equal(Revision.Initial, control.State.Revision);
         Assert.Equal(sourceA, control.State.Routing.PreviewSourceId);
 
-        var runtimeFailure = new Failure(
+        var runtimeFailure = new rtaime.Core.Failure(
             "runtime.commit.injected_rejection",
             "Injected Runtime commit rejection for AP-12 failure evidence.");
         var rejectedCommit = new RuntimeCommitResult(
