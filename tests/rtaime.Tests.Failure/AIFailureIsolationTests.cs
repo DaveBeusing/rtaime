@@ -22,7 +22,7 @@ public sealed class AIFailureIsolationTests
         var committedBeforeFailure = runtime.ActiveExecution!;
 
         var failingProvider = new ManagedReferencePersonSegmentationProvider(
-            forcedFailure: new Failure("ai.provider.reference.model_failure", "Simulated model execution failure."));
+            forcedFailure: new rtaime.Core.Failure("ai.provider.reference.model_failure", "Simulated model execution failure."));
         var ai = new GovernedInferenceRuntime(
             new IInferenceProvider[] { failingProvider },
             InferenceRuntimeLimits.ReferenceV1);
