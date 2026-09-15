@@ -132,7 +132,7 @@ When RuntimeHost is replaced, the new HostInstanceId triggers a full provider re
 
 ## Idempotency
 
-ControlHost and RuntimeHost maintain bounded process-local request-result caches for mutation/execution requests. The same RequestId with the same canonical request returns the cached response. Reusing a RequestId with different request content fails closed.
+ControlHost, RuntimeHost and AIHost maintain bounded process-local request-result caches for mutation/execution requests. The same RequestId with the same canonical request returns the cached response. Reusing a RequestId with different request content fails closed.
 
 The cache is intentionally not durable. After a server process restart, clients must obtain a full snapshot rather than blindly replay an uncertain mutation.
 
