@@ -165,8 +165,42 @@ public sealed class GovernedAIContractTests
     {
         var options = new JsonSerializerOptions();
         options.Converters.Add(new GovernedAIStrongIdentityConverterFactory());
+        options.Converters.Add(new InferenceProductionTimeJsonConverter());
         options.Converters.Add(new ContractScalarJsonConverterFactory());
         return options;
+    }
+}
+
+internal sealed class InferenceProductionTimeJsonConverter : JsonConverter<InferenceProductionTime>
+{
+    public override InferenceProductionTime Read(
+        ref Utf8JsonReader reader,
+        Type typeToConvert,
+        JsonSerializerOptions options)
+    {
+        using var document = JsonDocument.ParseValue(ref reader);
+        var root = document.RootElement;
+        try
+        {
+            return new InferenceProductionTime(
+                root.GetProperty("timestamp").GetInt64(),
+                Timebase.Parse(root.GetProperty("timebase").GetString() ?? throw new JsonException("Inference production timebase must not be null.")));
+        }
+        catch (Exception exception) when (exception is KeyNotFoundException or InvalidOperationException or FormatException or ArgumentException or OverflowException)
+        {
+            throw new JsonException("Invalid inference production time representation.", exception);
+        }
+    }
+
+    public override void Write(
+        Utf8JsonWriter writer,
+        InferenceProductionTime value,
+        JsonSerializerOptions options)
+    {
+        writer.WriteStartObject();
+        writer.WriteNumber("timestamp", value.Timestamp);
+        writer.WriteString("timebase", value.Timebase.ToString());
+        writer.WriteEndObject();
     }
 }
 
