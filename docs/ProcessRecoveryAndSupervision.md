@@ -22,10 +22,10 @@ AP-16 builds on the durable checkpoints and causal Production Journal introduced
 | Operator/Control IPC interrupted | production hosts continue | retry connection; a ControlHost HostInstanceId change requires a full snapshot before another mutation | stale client state cannot mutate new authority session |
 | AIHost process lost | core Control/Runtime production continues | optional local supervisor restarts AIHost; inference/fallback policy reconnects independently | AIHost never advances Production Revision |
 | RuntimeHost process lost | ControlHost keeps last committed authority and becomes degraded | optional local supervisor restarts RuntimeHost; ControlHost queries and reconciles execution | mutations pause while Runtime is unavailable; recovery does not advance authority revision |
-| RuntimeHost replacement | ControlHost detects a new HostInstanceId | compare Runtime execution revision with durable/in-memory authority and reconcile | same revision is adopted, behind/idle Runtime is reapplied, Runtime-ahead conflict fails closed |
+| RuntimeHost replacement | ControlHost detects a new HostInstanceId | compare Runtime committed AuthoritySnapshot with durable/in-memory Control authority and reconcile | matching authority is adopted, missing/older authority is reapplied, newer/foreign authority fails closed |
 | ControlHost process lost | already committed Runtime execution may continue independently | OS/service manager restarts ControlHost; checkpoint and journal integrity are verified; durable authority is restored | Control restart never silently creates revision 0 when durable authority exists |
 | ControlHost replacement | Operator sees a new HostInstanceId | full snapshot is mandatory before another mutation | old StateVersion/session continuity is discarded |
-| Control/Runtime recovery disagreement | no automatic authority rewrite | remain degraded and emit `recovery.runtime.conflict` | Runtime revision ahead of durable Control authority is never overwritten automatically |
+| Control/Runtime recovery disagreement | no automatic authority rewrite | remain degraded and emit `recovery.runtime.conflict` | Runtime authority ahead of or foreign to durable Control authority is never overwritten automatically |
 
 ## Durable ControlHost restart
 
@@ -48,22 +48,37 @@ Any malformed, unsupported or contradictory checkpoint fails startup instead of 
 
 ### Runtime reconciliation
 
-For durable Control authority revision `C` and observed Runtime execution revision `R`:
+Runtime and Control use two independent revision spaces:
+
+- Control `Production Revision` identifies authoritative production state.
+- Runtime `ExecutionRevision` identifies Runtime-local transactional execution history.
+- Every committed Runtime execution additionally retains the `AuthoritySnapshot.StateId` and `AuthoritySnapshot.Revision` from the `PreparedExecutionContract` that produced it.
+
+`Runtime ExecutionRevision` is therefore never compared numerically with Control `Production Revision` during recovery.
+
+Let `C` be the durable/in-memory Control authority revision and `A` the AuthorityRevision attached to the currently committed Runtime execution:
 
 ```text
-Runtime committed and R == C
+Runtime committed
+and AuthorityStateId == Control ProductionId
+and A == C
     -> bind existing execution
+    -> Runtime ExecutionRevision may differ from C
     -> no execution replacement
     -> no Production Revision change
 
-R < C, or Runtime is Idle/Prepared/Faulted at R <= C
+Runtime has no committed authority
+or matching AuthorityStateId with A < C
     -> refresh providers
     -> prepare current authoritative state
     -> apply to Runtime
-    -> require Runtime commit at exactly C
+    -> verify the resulting Runtime snapshot references Control ProductionId and C
+    -> Runtime ExecutionRevision may advance independently
     -> no Production Revision change
 
-R > C
+A > C
+or committed AuthorityStateId != Control ProductionId
+or committed execution lacks an AuthoritySnapshot reference
     -> recovery conflict
     -> remain Degraded
     -> disconnect mutation transport
@@ -71,7 +86,7 @@ R > C
     -> require operator/administrative intervention
 ```
 
-The Runtime-ahead case is intentionally fail-closed because AP-16 has no evidence that an automatically chosen side would preserve production truth.
+The Runtime-authority-ahead/foreign case is intentionally fail-closed because AP-16 has no evidence that an automatically chosen side would preserve production truth.
 
 ## Local process supervision
 
@@ -138,7 +153,7 @@ AP-16 qualifies process-level recovery semantics. It does **not** claim:
 - zero-frame Program interruption after RuntimeHost termination,
 - frame-identical continuation after process crash or power loss,
 - preservation of in-flight DISSOLVE phase across RuntimeHost death,
-- automatic resolution when Runtime durable/execution truth is ahead of Control durable authority,
+- automatic resolution when Runtime committed authority is ahead of or foreign to Control durable authority,
 - distributed HA/failover across machines,
 - operating-system service installation or deployment policy,
 - hardware I/O continuity during device/driver reset.
