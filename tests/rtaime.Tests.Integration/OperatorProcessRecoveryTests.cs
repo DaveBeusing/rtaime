@@ -5,6 +5,7 @@ using System.Text.Json;
 using rtaime.Client;
 using rtaime.ControlHost;
 using rtaime.Core;
+using rtaime.RuntimeHost;
 
 namespace rtaime.Tests.Integration;
 
@@ -18,18 +19,11 @@ public sealed class OperatorProcessRecoveryTests
 		var root = TempDirectory();
 		var runtimeEndpoint = Endpoint("runtime-operator-recovery");
 		var controlEndpoint = Endpoint("control-operator-recovery");
-		var runtimeAssembly = HostAssembly("rtaime.RuntimeHost", "net10.0");
 		var operatorAssembly = HostAssembly("rtaime.Operator", "net10.0-windows");
-		await using var runtimeSupervisor = new LocalProcessSupervisor(new LocalProcessSupervisionOptions(
-			"RuntimeHost",
-			runtimeEndpoint,
-			runtimeAssembly,
-			TimeSpan.FromMilliseconds(100),
-			TimeSpan.FromMilliseconds(100),
-			TimeSpan.FromMilliseconds(100),
-			5));
-		await runtimeSupervisor.StartAsync();
-		await WaitUntilAsync(() => runtimeSupervisor.Snapshot.State == LocalProcessSupervisionState.Healthy, ProcessRecoveryTimeoutMilliseconds);
+
+		using var runtimeStop = new CancellationTokenSource();
+		var runtime = new RuntimeHostProcess(RuntimeHostProcessOptions.Default with { ListenEndpoint = runtimeEndpoint });
+		var runtimeRun = runtime.RunAsync(runtimeStop.Token);
 
 		using var controlStop = new CancellationTokenSource();
 		var control = new ControlHostProcess(ControlHostProcessOptions.Default with
@@ -81,6 +75,8 @@ public sealed class OperatorProcessRecoveryTests
 			if (secondOperator is not null) Kill(secondOperator);
 			controlStop.Cancel();
 			Assert.Equal(ControlHostExitCode.Success, await controlRun);
+			runtimeStop.Cancel();
+			Assert.Equal(RuntimeHostExitCode.Success, await runtimeRun);
 			DeleteDirectory(root);
 		}
 	}
