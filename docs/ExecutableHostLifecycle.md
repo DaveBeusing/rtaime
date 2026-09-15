@@ -2,11 +2,11 @@
 
 # Executable Host Lifecycle
 
-AP-13 established `rtaime.ControlHost`, `rtaime.RuntimeHost`, and `rtaime.AIHost` as long-lived executable processes. AP-14 added the local Windows production IPC control plane without moving authority or execution ownership between hosts. AP-15 adds bounded durable ControlHost journal/checkpoint composition while keeping SQLite outside RT-critical media execution.
+AP-13 established `rtaime.ControlHost`, `rtaime.RuntimeHost`, and `rtaime.AIHost` as long-lived executable processes. AP-14 added the local Windows production IPC control plane without moving authority or execution ownership between hosts. AP-15 added bounded durable ControlHost journal/checkpoint composition while keeping SQLite outside RT-critical media execution. AP-16 adds process supervision, HostInstanceId-aware reconnect and durable ControlHost authority recovery/reconciliation.
 
 ## Lifecycle
 
-Each host follows the operational sequence:
+Each service host follows the operational sequence:
 
 ```text
 Created
@@ -17,6 +17,8 @@ Created
 ```
 
 A startup, run-loop, or shutdown failure transitions the host to `Failed`. `Ctrl+C` and process-exit signals request cancellation; the host then drains owned IPC and subsystem resources before returning a structured exit code.
+
+A hard process termination does not execute graceful drain. AP-16 therefore treats restart/reconnect as a separate recovery path rather than pretending graceful shutdown semantics occurred.
 
 ## Exit semantics
 
@@ -51,9 +53,19 @@ Environment variables:
 - `RTAIME_CONTROL_RUNTIME_RETRY_MS`
 - `RTAIME_CONTROL_SHUTDOWN_TIMEOUT_MS`
 
-ControlHost composes the authoritative Control service, bounded production journal, Operator-facing Named Pipe endpoint and RuntimeHost transport. It may start while RuntimeHost is absent and reports `Degraded`. The background binding loop performs handshake, provider refresh, initial Runtime commit and later RuntimeHost-instance resynchronization. A Runtime process replacement never advances authoritative Production Revision by itself.
+Optional local child supervision additionally uses:
 
-AP-15 additionally composes two independent SQLite-backed durability lanes under the configured durability root:
+- `RTAIME_RUNTIME_EXECUTABLE`
+- `RTAIME_AI_EXECUTABLE`
+- `RTAIME_AI_ENDPOINT`
+- `RTAIME_SUPERVISION_PROBE_TIMEOUT_MS`
+- `RTAIME_SUPERVISION_PROBE_INTERVAL_MS`
+- `RTAIME_SUPERVISION_RESTART_BACKOFF_MS`
+- `RTAIME_SUPERVISION_MAX_START_ATTEMPTS`
+
+ControlHost composes the authoritative Control service, bounded production journal, Operator-facing Named Pipe endpoint and RuntimeHost transport. It may start while RuntimeHost is absent and reports `Degraded`. The background binding loop performs handshake, provider refresh, initial Runtime commit and later RuntimeHost-instance reconciliation. A Runtime process replacement never advances authoritative Production Revision by itself.
+
+Two independent SQLite-backed durability lanes live under the configured durability root:
 
 ```text
 <DurabilityRoot>/<ProductionId>-<ControlEndpoint>/management.db
@@ -64,7 +76,9 @@ The default root is `%LOCALAPPDATA%/rtaime/data` on Windows, with an application
 
 `management.db` stores management/configuration documents and controlled production checkpoints. `production-journal.db` is the purpose-built append-only causal journal. The journal and checkpoint writers use independent bounded background queues. Authoritative commits and Program/media execution never synchronously wait for SQLite. Confirmed authoritative revisions are checkpointed asynchronously; journal/checkpoint pressure or storage failures remain observable and are drained/fail-closed during orderly shutdown.
 
-AP-15 does not restore authority from those files at startup. Automatic process/production recovery remains a later recovery responsibility.
+AP-16 verifies both durability lanes before activating recovered authority. A valid latest checkpoint restores the exact persisted Production Revision and routing, after which Runtime execution is queried and reconciled against the committed Runtime `AuthoritySnapshot`, not against Runtime-local `ExecutionRevision`. A Runtime execution whose AuthoritySnapshot matches the restored Control ProductionId and Production Revision is rebound as-is even when its ExecutionRevision differs. A Runtime with no committed authority or an older matching AuthorityRevision is reapplied at the same Control authority revision. A newer or foreign Runtime authority is a fail-closed recovery conflict.
+
+Optional RuntimeHost/AIHost supervision is endpoint-driven. Existing reachable endpoints are adopted without duplicate process launch. Restart attempts are bounded. The ControlHost executable may launch configured Runtime/AI executables, but top-level ControlHost restart remains an operating-system/service-manager responsibility so a ControlHost crash does not become an implicit termination path for already-running child hosts.
 
 ### RuntimeHost
 
@@ -77,6 +91,8 @@ Environment variables:
 - `RTAIME_RUNTIME_SHUTDOWN_TIMEOUT_MS`
 
 RuntimeHost composes the existing transactional runtime, virtual media reference provider, managed GPU provider path, Audio Follow Video, Program output, recording integration and a Control-facing Named Pipe server. Shutdown stops IPC before disposing recording, media pipelines and GPU resources and rejects a clean exit if GPU surfaces remain retained.
+
+If RuntimeHost is killed, ControlHost retains the last committed authoritative revision but becomes degraded and pauses authoritative mutations until a Runtime instance is available and reconciled. AP-16 does not claim zero-frame output continuity while RuntimeHost itself is absent.
 
 ### AIHost
 
@@ -91,7 +107,23 @@ Environment variables:
 
 AIHost composes the governed inference runtime, provider registry, resource admission limits and an IPC endpoint for health, capabilities, snapshot and governed inference. Host shutdown stops IPC, cancels in-flight inference, waits for executions to drain and verifies that active admissions and reserved compute/VRAM return to zero.
 
-## AP-14 IPC lifecycle
+AIHost process loss never transfers production authority. Optional local supervision may restore AIHost availability independently from Control/Runtime authority.
+
+### Operator
+
+Operator remains a presentation/client process. It never owns production truth. On ControlHost HostInstanceId replacement, the Client SDK discards remote state continuity and requires a full authoritative snapshot before another mutation. The UI resynchronizes and requires the user to repeat the requested operation instead of auto-replaying stale intent.
+
+For process-recovery qualification, Operator supports a headless mode that uses the normal Client SDK and repeatedly obtains full snapshots:
+
+```text
+--headless
+--control-endpoint=<pipe>
+--ready-file=<path>
+```
+
+This mode is diagnostic/test composition only; it does not introduce an alternate control path.
+
+## IPC lifecycle
 
 The V1 reference transport is local Windows Named Pipes with `PipeOptions.CurrentUserOnly`.
 
@@ -101,8 +133,8 @@ ControlHost -> RuntimeHost
 ControlHost/RuntimeHost -> AIHost endpoint foundation
 ```
 
-Every connection performs Protocol/Role/Contract handshake before application messages. Each server process exposes a fresh HostInstanceId. ControlHost uses RuntimeHost HostInstanceId changes to distinguish reconnect from process replacement and resynchronize current authority.
+Every connection performs Protocol/Role/Contract handshake before application messages. Each server process exposes a fresh HostInstanceId. HostInstanceId changes distinguish connection interruption from process replacement and trigger the corresponding recovery policy.
 
 The IPC plane transports commands, descriptors, state, capabilities, opaque handles and observations only. Bulk media payloads remain outside management IPC.
 
-Detailed wire, StateVersion, idempotency, security and recovery semantics are documented in `docs/ProductionIpcRemoteApi.md`. Durable storage semantics are documented in `docs/DurablePersistenceAndJournal.md`.
+Detailed wire/StateVersion/idempotency semantics are documented in `docs/ProductionIpcRemoteApi.md`. Durable storage semantics are documented in `docs/DurablePersistenceAndJournal.md`. Process-failure, reconnect and reconciliation semantics are documented in `docs/ProcessRecoveryAndSupervision.md`.

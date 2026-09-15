@@ -19,7 +19,9 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 	private readonly string _clientInstanceId = Identity.New().ToString();
 	private readonly RemoteStateSynchronizer _synchronizer = new();
 	private string? _hostInstanceId;
+	private string? _previousHostInstanceId;
 	private bool _connected;
+	private bool _requiresFullSnapshot;
 
 	public NamedPipeOperatorControlTransport(
 		string endpoint = "rtaime.v1.control.default",
@@ -44,6 +46,11 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		get { lock (_gate) return _hostInstanceId; }
 	}
 
+	public bool RequiresFullSnapshot
+	{
+		get { lock (_gate) return _requiresFullSnapshot; }
+	}
+
 	public ulong StateVersion => _synchronizer.StateVersion;
 
 	public async ValueTask<OperatorStatusSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default)
@@ -53,6 +60,12 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 			?? throw new InvalidDataException("ControlHost snapshot payload is required.");
 		var snapshot = FromWire(wire);
 		_synchronizer.AcceptFullSnapshot(response.HostInstanceId, wire.StateVersion);
+		lock (_gate)
+		{
+			_requiresFullSnapshot = false;
+			_previousHostInstanceId = null;
+			_connected = true;
+		}
 		return snapshot;
 	}
 
@@ -132,7 +145,21 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 				?? throw new InvalidDataException("ControlHost ServerHello is required.");
 			if (!string.Equals(serverHello.ProtocolVersion, ProtocolVersion, StringComparison.Ordinal) || !string.Equals(serverHello.Role, "ControlHost", StringComparison.Ordinal))
 				throw new InvalidDataException("ControlHost handshake role or protocol is incompatible.");
-			MarkConnected(serverHello.HostInstanceId);
+			var previous = MarkConnected(serverHello.HostInstanceId);
+			if (previous is not null)
+				_synchronizer.Reset();
+
+			if (!string.Equals(messageType, "control.snapshot.get", StringComparison.Ordinal) && RequiresFullSnapshot)
+			{
+				string oldHost;
+				string currentHost;
+				lock (_gate)
+				{
+					oldHost = _previousHostInstanceId ?? previous ?? "unknown";
+					currentHost = _hostInstanceId ?? serverHello.HostInstanceId;
+				}
+				throw new RemoteHostSessionChangedException(oldHost, currentHost);
+			}
 
 			var requestId = Identity.New().ToString();
 			await Wire.WriteAsync(
@@ -143,7 +170,9 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 			if (!string.Equals(response.RequestId, requestId, StringComparison.Ordinal) || !string.Equals(response.CorrelationId, correlationId, StringComparison.Ordinal))
 				throw new InvalidDataException("ControlHost response correlation is invalid.");
 			EnsureNotError(response);
-			MarkConnected(response.HostInstanceId);
+			var responsePrevious = MarkConnected(response.HostInstanceId);
+			if (responsePrevious is not null)
+				throw new InvalidDataException("ControlHost process identity changed within one IPC request.");
 			return response;
 		}
 		catch
@@ -179,13 +208,21 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		throw new InvalidOperationException(failure is null ? "Remote IPC request failed." : $"{failure.Code}: {failure.Message}");
 	}
 
-	private void MarkConnected(string hostInstanceId)
+	private string? MarkConnected(string hostInstanceId)
 	{
 		if (string.IsNullOrWhiteSpace(hostInstanceId)) throw new InvalidDataException("ControlHost instance identity is required.");
 		lock (_gate)
 		{
+			string? previous = null;
+			if (_hostInstanceId is not null && !string.Equals(_hostInstanceId, hostInstanceId, StringComparison.Ordinal))
+			{
+				previous = _hostInstanceId;
+				_previousHostInstanceId = previous;
+				_requiresFullSnapshot = true;
+			}
 			_connected = true;
 			_hostInstanceId = hostInstanceId;
+			return previous;
 		}
 	}
 

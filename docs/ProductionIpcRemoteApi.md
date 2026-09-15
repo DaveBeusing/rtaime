@@ -2,7 +2,7 @@
 
 # Production IPC & Remote API V1
 
-AP-14 introduces the first real cross-process control plane for rtaime while preserving the approved 28-project topology and host authority boundaries.
+AP-14 introduces the first real cross-process control plane for rtaime while preserving the approved 28-project topology and host authority boundaries. AP-16 extends the Runtime snapshot payload with the committed authority reference required for process recovery without changing those ownership boundaries.
 
 ## Process topology
 
@@ -29,7 +29,7 @@ The Windows V1 reference transport uses `System.IO.Pipes` with `PipeOptions.Curr
 - `rtaime.v1.runtime.default`
 - `rtaime.v1.ai.default`
 
-Endpoints are configuration values, not contract identities. Local Named Pipes are the qualified AP-14 reference transport. TCP, HTTP, gRPC, TLS, cluster discovery, NMOS and remote-network deployment remain UNVERIFIED.
+Endpoints are configuration values, not contract identities. Local Named Pipes are the qualified V1 reference transport. TCP, HTTP, gRPC, TLS, cluster discovery, NMOS and remote-network deployment remain UNVERIFIED.
 
 ## Framing and envelope
 
@@ -48,7 +48,7 @@ Control frames are bounded to 1 MiB before payload allocation. The envelope cont
 
 The first message on every connection is `client.hello`. A server rejects messages before the handshake, an unsupported IPC version, an invalid role or incompatible required contract versions. No silent downgrade is performed.
 
-Roles used by AP-14 are:
+Roles used by the V1 control plane are:
 
 - `OperatorClient`
 - `ControlHost`
@@ -93,6 +93,18 @@ Control-facing messages:
 
 The server delegates execution to `V1RuntimeHostService`. It does not duplicate Runtime prepare/commit semantics.
 
+A Runtime snapshot exposes two deliberately separate revision domains:
+
+```text
+ExecutionRevision
+AuthorityStateId
+AuthorityRevision
+```
+
+`ExecutionRevision` is Runtime-local transactional history. `AuthorityStateId` and `AuthorityRevision` identify the `AuthoritySnapshotReference` carried by the `PreparedExecutionContract` that produced the currently committed execution. The authority fields are absent when Runtime has no committed authority and are emitted as a pair when present. ControlHost fails closed on a malformed partial pair.
+
+AP-16 process recovery compares the Runtime authority reference with Control authority; it never assumes that `ExecutionRevision == Production Revision`.
+
 ### AIHost
 
 AI-facing messages:
@@ -102,13 +114,13 @@ AI-facing messages:
 - `ai.snapshot.get`
 - `ai.inference.execute`
 
-The endpoint delegates governed execution to `AIHostService`. AP-14 proves the process boundary; production Runtime/AI orchestration remains a later package.
+The endpoint delegates governed execution to `AIHostService`. The process boundary does not transfer production authority to AIHost.
 
 ## StateVersion and resynchronization
 
-Remote `StateVersion` is separate from authoritative Production `Revision`.
+Remote `StateVersion` is separate from authoritative Production `Revision` and from Runtime `ExecutionRevision`.
 
-Production Revision advances only when an authoritative production mutation is committed. StateVersion may also change because a host connects, disconnects, changes health or is resynchronized.
+Production Revision advances only when an authoritative production mutation is committed. Runtime ExecutionRevision advances according to Runtime-local commit history. StateVersion may also change because a host connects, disconnects, changes health or is resynchronized.
 
 Clients establish synchronization from a full snapshot. Timed metadata deltas are valid only when their `BasedOnStateVersion` equals the client's current StateVersion. A gap or HostInstanceId change invalidates the delta stream and requires a new full snapshot.
 
@@ -116,7 +128,7 @@ Clients establish synchronization from a full snapshot. Timed metadata deltas ar
 
 ControlHost may start before RuntimeHost and reports `Degraded`. Its binding loop retries without making an authoritative mutation.
 
-When RuntimeHost becomes available:
+When RuntimeHost becomes available for a fresh production:
 
 ```text
 connect
@@ -128,7 +140,7 @@ connect
 -> Ready
 ```
 
-When RuntimeHost is replaced, the new HostInstanceId triggers a full provider refresh and re-planning of the current authoritative state. That state is committed to the fresh RuntimeHost without advancing the authoritative Production Revision.
+For an existing authoritative production, ControlHost obtains `runtime.snapshot.get` and reconciles the Runtime committed `AuthorityStateId`/`AuthorityRevision` with the Control ProductionId/Production Revision. Matching authority is adopted even when Runtime ExecutionRevision differs. Missing or older matching authority is reapplied without advancing Control Production Revision. Newer or foreign committed authority fails closed and requires intervention.
 
 ## Idempotency
 
@@ -144,7 +156,7 @@ It must not carry raw video frames, RGBA byte arrays, audio sample arrays, segme
 
 ## Security baseline
 
-AP-14 provides a local-process security baseline:
+The local-process security baseline includes:
 
 - `PipeOptions.CurrentUserOnly`
 - explicit roles and version checks
@@ -156,12 +168,12 @@ AP-14 provides a local-process security baseline:
 - no serializer type-name polymorphism
 - no credential/secret payload requirement
 
-Network authentication, TLS/PKI and RBAC are outside AP-14.
+Network authentication, TLS/PKI and RBAC are outside this local V1 IPC baseline.
 
 ## Failure behavior
 
-Malformed, oversized, unknown, role-incompatible and version-incompatible requests fail closed. Runtime transport loss leaves Control authority unchanged and places ControlHost in `Degraded` until a successful resynchronization. AI transport loss cannot gain production authority.
+Malformed, oversized, unknown, role-incompatible and version-incompatible requests fail closed. Runtime transport loss leaves Control authority unchanged and places ControlHost in `Degraded` until a successful resynchronization. A committed Runtime snapshot with a missing authority reference, a foreign AuthorityStateId or an AuthorityRevision ahead of durable Control authority is not overwritten automatically. AI transport loss cannot gain production authority.
 
 ## Evidence boundary
 
-Managed CI can prove framing, mappings, local Named Pipe behavior, cross-process command paths, cancellation, failure isolation and topology invariants. It does not prove remote-network latency, broadcast hard-real-time behavior, GPU cross-process memory sharing, professional hardware timing or security certification.
+Managed CI can prove framing, mappings, local Named Pipe behavior, cross-process command paths, cancellation, failure isolation, process restart semantics and topology invariants. It does not prove remote-network latency, broadcast hard-real-time behavior, GPU cross-process memory sharing, professional hardware timing, distributed HA or security certification.
