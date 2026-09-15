@@ -41,7 +41,8 @@ public sealed class ControlHostChildSupervision : IAsyncDisposable
 			probeTimeout,
 			probeInterval,
 			restartBackoff,
-			maxStarts);
+			maxStarts,
+			$"--source-a-id={controlOptions.SourceAId} --source-b-id={controlOptions.SourceBId}");
 		var aiEndpoint = environment("RTAIME_AI_ENDPOINT");
 		if (string.IsNullOrWhiteSpace(aiEndpoint)) aiEndpoint = "rtaime.v1.ai.default";
 		var ai = Create(
@@ -51,7 +52,8 @@ public sealed class ControlHostChildSupervision : IAsyncDisposable
 			probeTimeout,
 			probeInterval,
 			restartBackoff,
-			maxStarts);
+			maxStarts,
+			string.Empty);
 
 		return new ControlHostChildSupervision(runtime, ai);
 	}
@@ -79,7 +81,8 @@ public sealed class ControlHostChildSupervision : IAsyncDisposable
 		TimeSpan probeTimeout,
 		TimeSpan probeInterval,
 		TimeSpan restartBackoff,
-		int maxStarts)
+		int maxStarts,
+		string additionalArguments)
 	{
 		if (string.IsNullOrWhiteSpace(executable)) return null;
 		return new LocalProcessSupervisor(new LocalProcessSupervisionOptions(
@@ -89,7 +92,10 @@ public sealed class ControlHostChildSupervision : IAsyncDisposable
 			probeTimeout,
 			probeInterval,
 			restartBackoff,
-			maxStarts));
+			maxStarts)
+		{
+			AdditionalArguments = additionalArguments
+		});
 	}
 
 	private static int ParsePositiveInt(string? value, int defaultValue, string name)
