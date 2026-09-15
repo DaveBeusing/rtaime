@@ -8,11 +8,14 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\rtaime.Core\rtaime.Core.csproj" />
     <ProjectReference Include="..\..\src\Contracts\rtaime.Media.Contracts\rtaime.Media.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Contracts\rtaime.AI.Contracts\rtaime.AI.Contracts.csproj" />
     <ProjectReference Include="..\..\src\Runtime\rtaime.Runtime\rtaime.Runtime.csproj" />
     <ProjectReference Include="..\..\src\Media\rtaime.Media\rtaime.Media.csproj" />
+    <ProjectReference Include="..\..\src\AI\rtaime.AI\rtaime.AI.csproj" />
     <ProjectReference Include="..\..\src\Recording\rtaime.Recording\rtaime.Recording.csproj" />
     <ProjectReference Include="..\..\src\Providers\rtaime.Provider.Gpu\rtaime.Provider.Gpu.csproj" />
     <ProjectReference Include="..\..\src\Providers\rtaime.Provider.VirtualMedia\rtaime.Provider.VirtualMedia.csproj" />
+    <ProjectReference Include="..\..\src\Providers\rtaime.Provider.Inference\rtaime.Provider.Inference.csproj" />
     <ProjectReference Include="..\rtaime.TestInfrastructure\rtaime.TestInfrastructure.csproj" />
   </ItemGroup>
 
