@@ -135,7 +135,10 @@ public sealed class ProcessSupervisionRecoveryTests
 				10000);
 			Assert.Equal(runtimePid, runtimeSupervisor.Snapshot.OwnedProcessId);
 
+			await Assert.ThrowsAsync<RemoteHostSessionChangedException>(() => staleClient.CutPreviewAsync().AsTask());
+			Assert.True(transport.RequiresFullSnapshot);
 			var recovered = await RetrySnapshotAsync(staleClient, requireRuntimeReady: true);
+			Assert.False(transport.RequiresFullSnapshot);
 			Assert.Equal(committedRevision, recovered.Production.Revision);
 			Assert.Equal(committed.Production.Routing, recovered.Production.Routing);
 
@@ -228,12 +231,19 @@ public sealed class ProcessSupervisionRecoveryTests
 		var path = Path.Combine(root, $"{productionId}-{controlEndpoint}", "management.db");
 		for (var attempt = 0; attempt < 50; attempt++)
 		{
-			if (File.Exists(path))
+			try
 			{
-				await using var store = new SqliteManagementStore(path);
-				var checkpoint = await store.ReadLatestAsync(productionId.Value);
-				if (checkpoint?.AuthoritativeRevision == revision)
-					return;
+				if (File.Exists(path))
+				{
+					await using var store = new SqliteManagementStore(path);
+					var checkpoint = await store.ReadLatestAsync(productionId.Value);
+					if (checkpoint?.AuthoritativeRevision == revision)
+						return;
+				}
+			}
+			catch (Exception exception) when (exception is IOException or InvalidOperationException)
+			{
+				// The live ControlHost may transiently own a SQLite write transaction; retry within the test deadline.
 			}
 			await Task.Delay(100);
 		}
