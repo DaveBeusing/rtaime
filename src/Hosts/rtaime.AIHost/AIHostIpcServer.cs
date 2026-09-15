@@ -16,6 +16,7 @@ public sealed class AIHostIpcServer : IAsyncDisposable
 	private readonly string _endpoint;
 	private readonly Func<AIHostService?> _serviceAccessor;
 	private readonly CancellationTokenSource _stop = new();
+	private readonly BoundedRequestCache _requestCache = new(256);
 	private readonly string _hostInstanceId = Identity.New().ToString();
 	private Task? _acceptLoop;
 	private ulong _sequence;
@@ -131,13 +132,27 @@ public sealed class AIHostIpcServer : IAsyncDisposable
 					try { request = await Wire.ReadAsync(pipe, cancellationToken).ConfigureAwait(false); }
 					catch (EndOfStreamException) { return; }
 					catch (IOException) { return; }
+
+					var canonical = request.MessageType + "\n" + request.Payload.GetRawText();
+					if (_requestCache.TryGet(request.RequestId, canonical, out var cached, out var conflict))
+					{
+						if (conflict)
+							await WriteErrorAsync(pipe, request, "ipc.request_id_conflict", "RequestId was reused with a different request payload.", cancellationToken).ConfigureAwait(false);
+						else
+							await Wire.WriteRawAsync(pipe, cached!, cancellationToken).ConfigureAwait(false);
+						continue;
+					}
+
 					var response = await DispatchAsync(request, cancellationToken).ConfigureAwait(false);
-					await Wire.WriteAsync(pipe, response, cancellationToken).ConfigureAwait(false);
+					var serialized = Wire.Serialize(response);
+					_requestCache.Add(request.RequestId, canonical, serialized);
+					await Wire.WriteRawAsync(pipe, serialized, cancellationToken).ConfigureAwait(false);
 				}
 			}
 			catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
 			catch (IOException) { }
 			catch (InvalidDataException) { }
+			catch (JsonException) { }
 		}
 	}
 
@@ -169,7 +184,7 @@ public sealed class AIHostIpcServer : IAsyncDisposable
 					return Error(request, "ipc.message.unknown", $"Unknown AIHost message type '{request.MessageType}'.");
 			}
 		}
-		catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or NotSupportedException or FormatException or InvalidDataException)
+		catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or NotSupportedException or FormatException or InvalidDataException or JsonException)
 		{
 			return Error(request, "ai.request.rejected", exception.Message);
 		}
@@ -283,6 +298,50 @@ public sealed class AIHostIpcServer : IAsyncDisposable
 	private sealed record WireResultMetadata(string ResultId, string CapabilityId, string SourceFrameId, string ModelId, string ModelVersion, string ProviderId, string ObservationTimeUtc, long ProductionTimestamp, string ProductionTimebase, long FreshnessTicks, double Confidence, double Uncertainty, string PayloadKind, string PayloadMediaType, string ResourceKind, string ResourceValue);
 	private sealed record WireExecutionResult(string Version, WireAdmission Admission, WireInferenceResult Result, WireResultMetadata? Metadata);
 
+	private sealed class BoundedRequestCache
+	{
+		private readonly int _capacity;
+		private readonly object _gate = new();
+		private readonly Dictionary<string, Entry> _entries = new(StringComparer.Ordinal);
+		private readonly Queue<string> _order = new();
+
+		public BoundedRequestCache(int capacity)
+		{
+			if (capacity <= 0) throw new ArgumentOutOfRangeException(nameof(capacity));
+			_capacity = capacity;
+		}
+
+		public bool TryGet(string requestId, string canonical, out byte[]? response, out bool conflict)
+		{
+			lock (_gate)
+			{
+				if (!_entries.TryGetValue(requestId, out var entry))
+				{
+					response = null;
+					conflict = false;
+					return false;
+				}
+				response = entry.Response;
+				conflict = !string.Equals(entry.Canonical, canonical, StringComparison.Ordinal);
+				return true;
+			}
+		}
+
+		public void Add(string requestId, string canonical, byte[] response)
+		{
+			lock (_gate)
+			{
+				if (_entries.ContainsKey(requestId)) return;
+				_entries.Add(requestId, new Entry(canonical, response));
+				_order.Enqueue(requestId);
+				while (_entries.Count > _capacity)
+					_entries.Remove(_order.Dequeue());
+			}
+		}
+
+		private sealed record Entry(string Canonical, byte[] Response);
+	}
+
 	private static class Wire
 	{
 		public static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -290,9 +349,13 @@ public sealed class AIHostIpcServer : IAsyncDisposable
 		public static WireEnvelope Create(string messageType, string requestId, string correlationId, string hostInstanceId, ulong stateVersion, ulong sequence, object payload) =>
 			new(ProtocolVersion, messageType, requestId, correlationId, hostInstanceId, DateTimeOffset.UtcNow, stateVersion, sequence, JsonSerializer.SerializeToElement(payload, payload.GetType(), JsonOptions));
 
-		public static async Task WriteAsync(Stream stream, WireEnvelope envelope, CancellationToken cancellationToken)
+		public static byte[] Serialize(WireEnvelope envelope) => JsonSerializer.SerializeToUtf8Bytes(envelope, JsonOptions);
+
+		public static Task WriteAsync(Stream stream, WireEnvelope envelope, CancellationToken cancellationToken) =>
+			WriteRawAsync(stream, Serialize(envelope), cancellationToken);
+
+		public static async Task WriteRawAsync(Stream stream, byte[] payload, CancellationToken cancellationToken)
 		{
-			var payload = JsonSerializer.SerializeToUtf8Bytes(envelope, JsonOptions);
 			if (payload.Length > MaxFrameBytes) throw new InvalidDataException("IPC frame exceeds the configured maximum size.");
 			var prefix = new byte[4];
 			BinaryPrimitives.WriteUInt32BigEndian(prefix, checked((uint)payload.Length));
