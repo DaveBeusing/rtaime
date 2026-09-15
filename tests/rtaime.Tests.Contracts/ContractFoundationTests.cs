@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -174,8 +175,28 @@ public sealed class ContractFoundationTests
         Assert.Equal(descriptor.ProviderId, copy.ProviderId);
         Assert.Equal(descriptor.Name, copy.Name);
         Assert.Equal(descriptor.Availability, copy.Availability);
-        Assert.Equal(descriptor.Capabilities, copy.Capabilities);
-        Assert.Equal(descriptor.Resources, copy.Resources);
+
+        Assert.Equal(descriptor.Capabilities.Count, copy.Capabilities.Count);
+        for (var index = 0; index < descriptor.Capabilities.Count; index++)
+        {
+            var expected = descriptor.Capabilities[index];
+            var actual = copy.Capabilities[index];
+            Assert.Equal(expected.CapabilityId, actual.CapabilityId);
+            Assert.Equal(expected.Kind, actual.Kind);
+            Assert.Equal(expected.VideoFormats, actual.VideoFormats);
+        }
+
+        Assert.Equal(descriptor.Resources.Count, copy.Resources.Count);
+        for (var index = 0; index < descriptor.Resources.Count; index++)
+        {
+            var expected = descriptor.Resources[index];
+            var actual = copy.Resources[index];
+            Assert.Equal(expected.ResourceId, actual.ResourceId);
+            Assert.Equal(expected.ProviderId, actual.ProviderId);
+            Assert.Equal(expected.Kind, actual.Kind);
+            Assert.Equal(expected.CapacityUnits, actual.CapacityUnits);
+            Assert.Equal(expected.Reservable, actual.Reservable);
+        }
     }
 
     [Fact]
@@ -339,6 +360,9 @@ internal sealed class ContractScalarJsonConverterFactory : JsonConverterFactory
         typeToConvert == typeof(Timebase) ||
         typeToConvert == typeof(CompatibilityVersion) ||
         typeToConvert == typeof(Failure) ||
+        typeToConvert == typeof(VideoFormat) ||
+        typeToConvert == typeof(SurfaceLifetimeDescriptor) ||
+        typeToConvert == typeof(FrameTiming) ||
         StrongIdentityTypes.Contains(typeToConvert);
 
     public override JsonConverter CreateConverter(Type typeToConvert, JsonSerializerOptions options)
@@ -360,6 +384,9 @@ internal sealed class ContractScalarJsonConverterFactory : JsonConverterFactory
         if (typeToConvert == typeof(Timebase)) return new CanonicalStringJsonConverter<Timebase>(Timebase.Parse, value => value.ToString());
         if (typeToConvert == typeof(CompatibilityVersion)) return new CanonicalStringJsonConverter<CompatibilityVersion>(CompatibilityVersion.Parse, value => value.ToString());
         if (typeToConvert == typeof(Failure)) return new FailureJsonConverter();
+        if (typeToConvert == typeof(VideoFormat)) return new VideoFormatJsonConverter();
+        if (typeToConvert == typeof(SurfaceLifetimeDescriptor)) return new SurfaceLifetimeDescriptorJsonConverter();
+        if (typeToConvert == typeof(FrameTiming)) return new FrameTimingJsonConverter();
 
         throw new NotSupportedException($"No contract scalar converter is registered for {typeToConvert}.");
     }
@@ -458,6 +485,112 @@ internal sealed class FailureJsonConverter : JsonConverter<Failure>
         writer.WriteStartObject();
         writer.WriteString("code", value.Code);
         writer.WriteString("message", value.Message);
+        writer.WriteEndObject();
+    }
+}
+
+internal sealed class VideoFormatJsonConverter : JsonConverter<VideoFormat>
+{
+    public override VideoFormat Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        using var document = JsonDocument.ParseValue(ref reader);
+        var root = document.RootElement;
+
+        try
+        {
+            return new VideoFormat(
+                root.GetProperty("width").GetUInt32(),
+                root.GetProperty("height").GetUInt32(),
+                FrameRate.Parse(root.GetProperty("frameRate").GetString() ?? throw new JsonException("Frame rate must not be null.")),
+                (PixelFormat)root.GetProperty("pixelFormat").GetInt32(),
+                (ScanMode)root.GetProperty("scanMode").GetInt32());
+        }
+        catch (Exception exception) when (exception is KeyNotFoundException or InvalidOperationException or FormatException or ArgumentException or OverflowException)
+        {
+            throw new JsonException("Invalid video format representation.", exception);
+        }
+    }
+
+    public override void Write(Utf8JsonWriter writer, VideoFormat value, JsonSerializerOptions options)
+    {
+        writer.WriteStartObject();
+        writer.WriteNumber("width", value.Width);
+        writer.WriteNumber("height", value.Height);
+        writer.WriteString("frameRate", value.FrameRate.ToString());
+        writer.WriteNumber("pixelFormat", (int)value.PixelFormat);
+        writer.WriteNumber("scanMode", (int)value.ScanMode);
+        writer.WriteEndObject();
+    }
+}
+
+internal sealed class SurfaceLifetimeDescriptorJsonConverter : JsonConverter<SurfaceLifetimeDescriptor>
+{
+    public override SurfaceLifetimeDescriptor Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        using var document = JsonDocument.ParseValue(ref reader);
+        var root = document.RootElement;
+
+        try
+        {
+            var generation = Generation.Parse(root.GetProperty("generation").GetString() ?? throw new JsonException("Generation must not be null."));
+            var leaseProperty = root.GetProperty("leaseId");
+            Identity? leaseId = leaseProperty.ValueKind == JsonValueKind.Null
+                ? null
+                : Identity.Parse(leaseProperty.GetString() ?? throw new JsonException("Lease identity must not be null."));
+
+            return new SurfaceLifetimeDescriptor(generation, leaseId);
+        }
+        catch (Exception exception) when (exception is KeyNotFoundException or InvalidOperationException or FormatException or ArgumentException or OverflowException)
+        {
+            throw new JsonException("Invalid surface lifetime representation.", exception);
+        }
+    }
+
+    public override void Write(Utf8JsonWriter writer, SurfaceLifetimeDescriptor value, JsonSerializerOptions options)
+    {
+        writer.WriteStartObject();
+        writer.WriteString("generation", value.Generation.ToString());
+        if (value.LeaseId is { } leaseId)
+            writer.WriteString("leaseId", leaseId.ToString());
+        else
+            writer.WriteNull("leaseId");
+        writer.WriteEndObject();
+    }
+}
+
+internal sealed class FrameTimingJsonConverter : JsonConverter<FrameTiming>
+{
+    public override FrameTiming Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        using var document = JsonDocument.ParseValue(ref reader);
+        var root = document.RootElement;
+
+        try
+        {
+            var sequenceNumber = ulong.Parse(
+                root.GetProperty("sequenceNumber").GetString() ?? throw new JsonException("Sequence number must not be null."),
+                NumberStyles.None,
+                CultureInfo.InvariantCulture);
+            var presentationTimestamp = long.Parse(
+                root.GetProperty("presentationTimestamp").GetString() ?? throw new JsonException("Presentation timestamp must not be null."),
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture);
+            var timebase = Timebase.Parse(root.GetProperty("timebase").GetString() ?? throw new JsonException("Timebase must not be null."));
+
+            return new FrameTiming(sequenceNumber, presentationTimestamp, timebase);
+        }
+        catch (Exception exception) when (exception is KeyNotFoundException or InvalidOperationException or FormatException or ArgumentException or OverflowException)
+        {
+            throw new JsonException("Invalid frame timing representation.", exception);
+        }
+    }
+
+    public override void Write(Utf8JsonWriter writer, FrameTiming value, JsonSerializerOptions options)
+    {
+        writer.WriteStartObject();
+        writer.WriteString("sequenceNumber", value.SequenceNumber.ToString(CultureInfo.InvariantCulture));
+        writer.WriteString("presentationTimestamp", value.PresentationTimestamp.ToString(CultureInfo.InvariantCulture));
+        writer.WriteString("timebase", value.Timebase.ToString());
         writer.WriteEndObject();
     }
 }
