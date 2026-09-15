@@ -84,13 +84,13 @@ public sealed class RecordingRuntimeIntegrationTests
             });
         var runtime = new TransactionalRuntime(new InMemoryRuntimeResourceReservationManager());
         var prepare = runtime.Prepare(prepared);
-        Assert.True(prepare.Succeeded);
+        Assert.Equal(RuntimePrepareStatus.Prepared, prepare.Status);
         var commit = runtime.Commit(new RuntimeCommitRequest(
             RuntimeContractVersion.Current,
             prepared.PreparedExecutionId,
             prepare.ReservationId!.Value,
             Revision.Initial));
-        Assert.True(commit.Succeeded);
+        Assert.Equal(RuntimeCommitStatus.Committed, commit.Status);
         return runtime;
     }
 
