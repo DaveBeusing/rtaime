@@ -13,6 +13,8 @@ namespace rtaime.ControlHost;
 public sealed record RuntimeRemoteSnapshot(
 	string HostInstanceId,
 	RuntimeExecutionState Runtime,
+	Identity? AuthorityStateId,
+	Revision? AuthorityRevision,
 	ulong NextSequenceNumber,
 	int TimingHealth,
 	int ActiveGpuSurfaces,
@@ -87,9 +89,21 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 		var response = await ExchangeAsync("runtime.snapshot.get", new { }, cancellationToken).ConfigureAwait(false);
 		var snapshot = response.Payload.Deserialize<WireRuntimeSnapshot>(Wire.JsonOptions)
 			?? throw new InvalidDataException("Runtime snapshot response is required.");
+		if ((string.IsNullOrWhiteSpace(snapshot.AuthorityStateId)) != (snapshot.AuthorityRevision is null))
+			throw new InvalidDataException("Runtime authority snapshot identity and revision must either both be present or both be absent.");
+
+		var authorityStateId = string.IsNullOrWhiteSpace(snapshot.AuthorityStateId)
+			? null
+			: Identity.Parse(snapshot.AuthorityStateId);
+		var authorityRevision = snapshot.AuthorityRevision is null
+			? null
+			: new Revision(snapshot.AuthorityRevision.Value);
+
 		return new RuntimeRemoteSnapshot(
 			response.HostInstanceId,
 			FromWire(snapshot),
+			authorityStateId,
+			authorityRevision,
 			snapshot.NextSequenceNumber,
 			snapshot.TimingHealth,
 			snapshot.ActiveGpuSurfaces,
@@ -307,7 +321,17 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 	private sealed record WirePrepareResult(string Version, string PreparedExecutionId, int Status, string? ReservationId, WireFailure? Failure);
 	private sealed record WireCommitResult(string Version, int Status, string? ExecutionInstanceId, ulong ExecutionRevision, WireFailure? Failure);
 	private sealed record WireApplyResponse(WirePrepareResult Prepare, WireCommitResult? Commit, ulong? ActivationSequence);
-	private sealed record WireRuntimeSnapshot(string Version, string? ActiveExecutionId, ulong ExecutionRevision, int Status, WireFailure? Failure, ulong NextSequenceNumber, int TimingHealth, int ActiveGpuSurfaces);
+	private sealed record WireRuntimeSnapshot(
+		string Version,
+		string? ActiveExecutionId,
+		ulong ExecutionRevision,
+		int Status,
+		WireFailure? Failure,
+		string? AuthorityStateId,
+		ulong? AuthorityRevision,
+		ulong NextSequenceNumber,
+		int TimingHealth,
+		int ActiveGpuSurfaces);
 
 	private static class Wire
 	{
