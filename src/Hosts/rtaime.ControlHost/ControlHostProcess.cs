@@ -151,34 +151,20 @@ public sealed record ControlHostProcessOptions(
 
 	public void Validate()
 	{
-		if (ProductionId.Value.IsEmpty)
-			throw new ArgumentException("Production identity must not be empty.", nameof(ProductionId));
-		if (SourceAId.Value.IsEmpty || SourceBId.Value.IsEmpty)
-			throw new ArgumentException("Production source identities must not be empty.");
-		if (SourceAId == SourceBId)
-			throw new ArgumentException("Production source identities must be distinct.");
-		if (string.IsNullOrWhiteSpace(ProductionName))
-			throw new ArgumentException("Production name is required.", nameof(ProductionName));
-		if (JournalCapacity <= 0)
-			throw new ArgumentOutOfRangeException(nameof(JournalCapacity));
-		if (JournalRetainedCapacity <= 0)
-			throw new ArgumentOutOfRangeException(nameof(JournalRetainedCapacity));
-		if (CheckpointQueueCapacity <= 0)
-			throw new ArgumentOutOfRangeException(nameof(CheckpointQueueCapacity));
-		if (string.IsNullOrWhiteSpace(DurabilityRoot))
-			throw new ArgumentException("ControlHost durability root is required.", nameof(DurabilityRoot));
-		if (string.IsNullOrWhiteSpace(ListenEndpoint))
-			throw new ArgumentException("ControlHost listen endpoint is required.", nameof(ListenEndpoint));
-		if (string.IsNullOrWhiteSpace(RuntimeEndpoint))
-			throw new ArgumentException("RuntimeHost endpoint is required.", nameof(RuntimeEndpoint));
-		if (ConnectTimeout <= TimeSpan.Zero)
-			throw new ArgumentOutOfRangeException(nameof(ConnectTimeout));
-		if (RequestTimeout <= TimeSpan.Zero)
-			throw new ArgumentOutOfRangeException(nameof(RequestTimeout));
-		if (RuntimeRetryInterval <= TimeSpan.Zero)
-			throw new ArgumentOutOfRangeException(nameof(RuntimeRetryInterval));
-		if (ShutdownTimeout <= TimeSpan.Zero)
-			throw new ArgumentOutOfRangeException(nameof(ShutdownTimeout));
+		if (ProductionId.Value.IsEmpty) throw new ArgumentException("Production identity must not be empty.", nameof(ProductionId));
+		if (SourceAId.Value.IsEmpty || SourceBId.Value.IsEmpty) throw new ArgumentException("Production source identities must not be empty.");
+		if (SourceAId == SourceBId) throw new ArgumentException("Production source identities must be distinct.");
+		if (string.IsNullOrWhiteSpace(ProductionName)) throw new ArgumentException("Production name is required.", nameof(ProductionName));
+		if (JournalCapacity <= 0) throw new ArgumentOutOfRangeException(nameof(JournalCapacity));
+		if (JournalRetainedCapacity <= 0) throw new ArgumentOutOfRangeException(nameof(JournalRetainedCapacity));
+		if (CheckpointQueueCapacity <= 0) throw new ArgumentOutOfRangeException(nameof(CheckpointQueueCapacity));
+		if (string.IsNullOrWhiteSpace(DurabilityRoot)) throw new ArgumentException("ControlHost durability root is required.", nameof(DurabilityRoot));
+		if (string.IsNullOrWhiteSpace(ListenEndpoint)) throw new ArgumentException("ControlHost listen endpoint is required.", nameof(ListenEndpoint));
+		if (string.IsNullOrWhiteSpace(RuntimeEndpoint)) throw new ArgumentException("RuntimeHost endpoint is required.", nameof(RuntimeEndpoint));
+		if (ConnectTimeout <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(ConnectTimeout));
+		if (RequestTimeout <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(RequestTimeout));
+		if (RuntimeRetryInterval <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(RuntimeRetryInterval));
+		if (ShutdownTimeout <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(ShutdownTimeout));
 	}
 
 	private static string Get(
@@ -190,9 +176,7 @@ public sealed record ControlHostProcessOptions(
 	{
 		var prefix = $"--{key}=";
 		var commandLine = args.LastOrDefault(value => value.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
-		if (commandLine is not null)
-			return commandLine[prefix.Length..];
-
+		if (commandLine is not null) return commandLine[prefix.Length..];
 		var environmentValue = environment(environmentName);
 		return string.IsNullOrWhiteSpace(environmentValue) ? defaultValue : environmentValue.Trim();
 	}
@@ -200,17 +184,13 @@ public sealed record ControlHostProcessOptions(
 	private static string DefaultDurabilityRoot()
 	{
 		var root = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-		if (string.IsNullOrWhiteSpace(root))
-			root = AppContext.BaseDirectory;
+		if (string.IsNullOrWhiteSpace(root)) root = AppContext.BaseDirectory;
 		return Path.Combine(root, "rtaime", "data");
 	}
 
 	private static Identity ParseIdentity(string value, string key)
 	{
-		try
-		{
-			return Identity.Parse(value);
-		}
+		try { return Identity.Parse(value); }
 		catch (Exception exception) when (exception is FormatException or ArgumentException)
 		{
 			throw new ArgumentException($"Configuration '{key}' must be a valid identity.", key, exception);
@@ -234,15 +214,8 @@ public sealed class ControlHostProcess
 	private readonly object _gate = new();
 	private readonly ControlHostProcessOptions _options;
 	private readonly Func<IControlRuntimeTransportSeam> _transportFactory;
-	private ControlHostLifecycleSnapshot _lifecycle = new(
-		ControlHostProcessState.Created,
-		ControlHostHealthState.Unknown,
-		"Process has not started.",
-		DateTimeOffset.UtcNow);
-	private ControlHostRecoverySnapshot _recovery = new(
-		ControlHostRecoveryState.Fresh,
-		null,
-		"Durable recovery has not been evaluated yet.");
+	private ControlHostLifecycleSnapshot _lifecycle = new(ControlHostProcessState.Created, ControlHostHealthState.Unknown, "Process has not started.", DateTimeOffset.UtcNow);
+	private ControlHostRecoverySnapshot _recovery = new(ControlHostRecoveryState.Fresh, null, "Durable recovery has not been evaluated yet.");
 	private int _runStarted;
 	private BoundedProductionJournal? _journal;
 	private SqliteManagementStore? _managementStore;
@@ -254,35 +227,14 @@ public sealed class ControlHostProcess
 	private Task? _runtimeBindingTask;
 	private string? _boundRuntimeHostInstanceId;
 
-	public ControlHostProcess(
-		ControlHostProcessOptions options,
-		Func<IControlRuntimeTransportSeam>? transportFactory = null)
+	public ControlHostProcess(ControlHostProcessOptions options, Func<IControlRuntimeTransportSeam>? transportFactory = null)
 	{
 		_options = options ?? throw new ArgumentNullException(nameof(options));
-		_transportFactory = transportFactory ?? (() => new NamedPipeRuntimeHostTransport(
-			_options.RuntimeEndpoint,
-			_options.ConnectTimeout,
-			_options.RequestTimeout));
+		_transportFactory = transportFactory ?? (() => new NamedPipeRuntimeHostTransport(_options.RuntimeEndpoint, _options.ConnectTimeout, _options.RequestTimeout));
 	}
 
-	public ControlHostLifecycleSnapshot Lifecycle
-	{
-		get
-		{
-			lock (_gate)
-				return _lifecycle;
-		}
-	}
-
-	public ControlHostRecoverySnapshot Recovery
-	{
-		get
-		{
-			lock (_gate)
-				return _recovery;
-		}
-	}
-
+	public ControlHostLifecycleSnapshot Lifecycle { get { lock (_gate) return _lifecycle; } }
+	public ControlHostRecoverySnapshot Recovery { get { lock (_gate) return _recovery; } }
 	public ControlHostService? Control => _control;
 	public BoundedProductionJournal? Journal => _journal;
 	public SqliteManagementStore? ManagementStore => _managementStore;
@@ -292,19 +244,14 @@ public sealed class ControlHostProcess
 
 	public async Task<ControlHostExitCode> RunAsync(CancellationToken cancellationToken)
 	{
-		if (Interlocked.Exchange(ref _runStarted, 1) != 0)
-			throw new InvalidOperationException("A ControlHostProcess instance can be run only once.");
-
+		if (Interlocked.Exchange(ref _runStarted, 1) != 0) throw new InvalidOperationException("A ControlHostProcess instance can be run only once.");
 		Update(ControlHostProcessState.Starting, ControlHostHealthState.Unknown, "Composing ControlHost dependencies and evaluating durable recovery state.");
 		try
 		{
 			_options.Validate();
 			await ComposeAsync(cancellationToken).ConfigureAwait(false);
 			await _ipcServer!.StartAsync(cancellationToken).ConfigureAwait(false);
-			SetOperationalState(
-				ControlHostProcessState.Degraded,
-				ControlHostHealthState.Degraded,
-				$"ControlHost is listening on '{_options.ListenEndpoint}' while RuntimeHost reconciliation is pending.");
+			SetOperationalState(ControlHostProcessState.Degraded, ControlHostHealthState.Degraded, $"ControlHost is listening on '{_options.ListenEndpoint}' while RuntimeHost reconciliation is pending.");
 			_runtimeBindingTask = RuntimeBindingLoopAsync(cancellationToken);
 		}
 		catch (ArgumentException exception)
@@ -331,13 +278,9 @@ public sealed class ControlHostProcess
 				Update(ControlHostProcessState.Failed, ControlHostHealthState.Unhealthy, "Runtime binding worker stopped unexpectedly.");
 				return ControlHostExitCode.UnexpectedFailure;
 			}
-
 			await stopSignal.ConfigureAwait(false);
 		}
-		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-		{
-			// Expected process stop signal.
-		}
+		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
 		catch (Exception exception)
 		{
 			Update(ControlHostProcessState.Failed, ControlHostHealthState.Unhealthy, $"Run loop failed: {exception.Message}");
@@ -349,10 +292,8 @@ public sealed class ControlHostProcess
 
 	private async Task ComposeAsync(CancellationToken cancellationToken)
 	{
-		_runtimeTransport = _transportFactory()
-			?? throw new InvalidOperationException("Runtime transport factory returned null.");
-		if (_runtimeTransport.ProviderDescriptors is null)
-			throw new InvalidOperationException("Runtime transport provider snapshot must not be null.");
+		_runtimeTransport = _transportFactory() ?? throw new InvalidOperationException("Runtime transport factory returned null.");
+		if (_runtimeTransport.ProviderDescriptors is null) throw new InvalidOperationException("Runtime transport provider snapshot must not be null.");
 
 		var specification = new ProductionSpecification(
 			ControlContractVersion.Current,
@@ -369,31 +310,28 @@ public sealed class ControlHostProcess
 		Directory.CreateDirectory(durabilityDirectory);
 		_managementStore = new SqliteManagementStore(Path.Combine(durabilityDirectory, "management.db"));
 		var managementIntegrity = await _managementStore.VerifyIntegrityAsync(cancellationToken).ConfigureAwait(false);
-		if (!managementIntegrity.Healthy)
-			throw new InvalidDataException($"Management persistence integrity failed: {managementIntegrity.Detail}");
+		if (!managementIntegrity.Healthy) throw new InvalidDataException($"Management persistence integrity failed: {managementIntegrity.Detail}");
 
 		var recoveredState = await ControlHostRecovery.LoadAsync(_managementStore, specification, cancellationToken).ConfigureAwait(false);
 		var journalStore = new SqliteProductionJournalStore(Path.Combine(durabilityDirectory, "production-journal.db"));
 		try
 		{
 			var journalIntegrity = await journalStore.VerifyIntegrityAsync(cancellationToken).ConfigureAwait(false);
-			if (!journalIntegrity.Healthy)
-				throw new InvalidDataException($"Production Journal integrity failed: {journalIntegrity.Detail}");
+			if (!journalIntegrity.Healthy) throw new InvalidDataException($"Production Journal integrity failed: {journalIntegrity.Detail}");
 
-			_journal = new BoundedProductionJournal(
-				_options.JournalCapacity,
-				journalStore,
-				_options.JournalRetainedCapacity);
+			_journal = new BoundedProductionJournal(_options.JournalCapacity, journalStore, _options.JournalRetainedCapacity);
 			_checkpointWriter = new BoundedProductionCheckpointWriter(_managementStore, _options.CheckpointQueueCapacity);
-			_control = new ControlHostService(specification, _runtimeTransport.ProviderDescriptors, _journal);
+			_control = new ControlHostService(
+				specification,
+				_runtimeTransport.ProviderDescriptors,
+				_journal,
+				authoritativeCommitted: TryQueueConfirmedCheckpoint);
+
 			if (recoveredState is not null)
 			{
 				_control.RestoreAuthoritativeState(recoveredState);
 				_lastCheckpointRevision = recoveredState.Revision;
-				SetRecovery(
-					ControlHostRecoveryState.Recovered,
-					recoveredState.Revision,
-					$"Durable authoritative revision {recoveredState.Revision} was restored and requires Runtime reconciliation.");
+				SetRecovery(ControlHostRecoveryState.Recovered, recoveredState.Revision, $"Durable authoritative revision {recoveredState.Revision} was restored and requires Runtime reconciliation.");
 			}
 			else
 			{
@@ -404,8 +342,7 @@ public sealed class ControlHostProcess
 		}
 		catch
 		{
-			if (_journal is null)
-				await journalStore.DisposeAsync().ConfigureAwait(false);
+			if (_journal is null) await journalStore.DisposeAsync().ConfigureAwait(false);
 			throw;
 		}
 	}
@@ -423,17 +360,14 @@ public sealed class ControlHostProcess
 				var operationToken = operationTimeout.Token;
 
 				await transport.ConnectAsync(operationToken).ConfigureAwait(false);
-				if (!transport.IsConnected)
-					throw new IOException("Runtime transport did not report a connected state after a successful probe.");
+				if (!transport.IsConnected) throw new IOException("Runtime transport did not report a connected state after a successful probe.");
 				if (control.HasPendingExecution)
 				{
 					await Task.Delay(_options.RuntimeRetryInterval, cancellationToken).ConfigureAwait(false);
 					continue;
 				}
 
-				var runtimeHostInstanceId = transport.HostInstanceId
-					?? throw new InvalidDataException("Connected RuntimeHost did not expose a host instance identity.");
-
+				var runtimeHostInstanceId = transport.HostInstanceId ?? throw new InvalidDataException("Connected RuntimeHost did not expose a host instance identity.");
 				if (!control.HasAuthoritativeState)
 				{
 					await InitializeFreshAuthorityAsync(control, transport, runtimeHostInstanceId, operationToken).ConfigureAwait(false);
@@ -446,10 +380,7 @@ public sealed class ControlHostProcess
 					if (hostChanged || !aligned)
 						await ReconcileRuntimeAsync(control, transport, runtimeHostInstanceId, runtimeSnapshot, operationToken).ConfigureAwait(false);
 					else
-					{
-						QueueCheckpointIfAdvanced(control);
 						SetOperationalState(ControlHostProcessState.Ready, ControlHostHealthState.Healthy, $"ControlHost is connected to RuntimeHost instance '{runtimeHostInstanceId}'.");
-					}
 				}
 			}
 			catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -462,41 +393,20 @@ public sealed class ControlHostProcess
 				SetOperationalState(ControlHostProcessState.Degraded, ControlHostHealthState.Degraded, "Runtime recovery conflict requires operator intervention; authoritative mutation transport is paused.");
 				if (_runtimeTransport is not null)
 				{
-					try { await _runtimeTransport.DisconnectAsync().ConfigureAwait(false); }
-					catch { }
+					try { await _runtimeTransport.DisconnectAsync().ConfigureAwait(false); } catch { }
 				}
-				try
-				{
-					_control?.RecordObservation(
-						"recovery",
-						"recovery.runtime.conflict",
-						exception.Message,
-						new Failure("recovery.runtime.conflict", exception.Message));
-				}
-				catch { }
+				try { _control?.RecordObservation("recovery", "recovery.runtime.conflict", exception.Message, new Failure("recovery.runtime.conflict", exception.Message)); } catch { }
 			}
 			catch (Exception exception)
 			{
 				SetOperationalState(ControlHostProcessState.Degraded, ControlHostHealthState.Degraded, "RuntimeHost is unavailable; authoritative mutation transport is paused.");
 				if (_runtimeTransport is not null)
 				{
-					try { await _runtimeTransport.DisconnectAsync().ConfigureAwait(false); }
-					catch { }
+					try { await _runtimeTransport.DisconnectAsync().ConfigureAwait(false); } catch { }
 				}
 				if (_control is { } control)
 				{
-					try
-					{
-						control.RecordObservation(
-							"runtime",
-							"runtime.connection.degraded",
-							$"RuntimeHost binding failed: {exception.GetType().Name}.",
-							new Failure("runtime.connection.failed", exception.Message));
-					}
-					catch
-					{
-						// Runtime supervision must not terminate because diagnostic journaling failed.
-					}
+					try { control.RecordObservation("runtime", "runtime.connection.degraded", $"RuntimeHost binding failed: {exception.GetType().Name}.", new Failure("runtime.connection.failed", exception.Message)); } catch { }
 				}
 			}
 
@@ -513,14 +423,9 @@ public sealed class ControlHostProcess
 		var providers = await transport.GetProviderDescriptorsAsync(cancellationToken).ConfigureAwait(false);
 		control.RefreshProviderSnapshot(providers);
 		var staged = control.Initialize();
-		if (staged.Execution is null)
-			throw new InvalidOperationException("Control initialization did not produce a prepared execution.");
+		if (staged.Execution is null) throw new InvalidOperationException("Control initialization did not produce a prepared execution.");
 
-		var remote = await transport.ApplyExecutionAsync(
-			staged.Execution.PreparedExecution,
-			staged.Execution.ProgramSinkId,
-			staged.Execution.ProgramTransition,
-			cancellationToken).ConfigureAwait(false);
+		var remote = await transport.ApplyExecutionAsync(staged.Execution.PreparedExecution, staged.Execution.ProgramSinkId, staged.Execution.ProgramTransition, cancellationToken).ConfigureAwait(false);
 		if (remote.Commit is null)
 		{
 			var failure = remote.Prepare.Failure ?? new Failure("runtime.prepare.rejected", "Runtime rejected initial prepare without a commit result.");
@@ -529,10 +434,8 @@ public sealed class ControlHostProcess
 		}
 
 		var confirmation = control.ConfirmRuntimeCommit(staged.Execution.PreparedExecution.PreparedExecutionId, remote.Commit);
-		if (!confirmation.Committed || confirmation.State is null)
-			throw new InvalidOperationException(confirmation.Failure?.Message ?? "Initial Runtime commit was not confirmed.");
+		if (!confirmation.Committed || confirmation.State is null) throw new InvalidOperationException(confirmation.Failure?.Message ?? "Initial Runtime commit was not confirmed.");
 
-		QueueCheckpoint(confirmation.State);
 		_boundRuntimeHostInstanceId = runtimeHostInstanceId;
 		SetRecovery(ControlHostRecoveryState.Fresh, confirmation.State.Revision, "Fresh authority was initialized and committed by RuntimeHost.");
 		SetOperationalState(ControlHostProcessState.Ready, ControlHostHealthState.Healthy, $"ControlHost is bound to RuntimeHost instance '{runtimeHostInstanceId}'.");
@@ -557,10 +460,7 @@ public sealed class ControlHostProcess
 		if (RuntimeMatchesAuthority(runtimeSnapshot, authority))
 		{
 			_boundRuntimeHostInstanceId = runtimeHostInstanceId;
-			control.RecordObservation(
-				"recovery",
-				"recovery.runtime.aligned",
-				$"RuntimeHost instance '{runtimeHostInstanceId}' is already committed at authoritative revision {authority.Revision}.");
+			control.RecordObservation("recovery", "recovery.runtime.aligned", $"RuntimeHost instance '{runtimeHostInstanceId}' is already committed at authoritative revision {authority.Revision}.");
 			SetRecovery(ControlHostRecoveryState.Recovered, authority.Revision, "Durable Control authority and Runtime execution are aligned.");
 			SetOperationalState(ControlHostProcessState.Ready, ControlHostHealthState.Healthy, $"ControlHost reconciled with RuntimeHost instance '{runtimeHostInstanceId}' without execution replacement.");
 			return;
@@ -571,80 +471,46 @@ public sealed class ControlHostProcess
 		control.RefreshProviderSnapshot(providers);
 		var revisionBefore = authority.Revision;
 		var execution = control.PrepareCurrentExecution();
-		var remote = await transport.ApplyExecutionAsync(
-			execution.PreparedExecution,
-			execution.ProgramSinkId,
-			null,
-			cancellationToken).ConfigureAwait(false);
-		if (!remote.Committed || remote.Commit is null)
-			throw new InvalidOperationException(remote.Commit?.Failure?.Message ?? remote.Prepare.Failure?.Message ?? "Runtime reconciliation was rejected.");
-		if (remote.Commit.ExecutionRevision != revisionBefore)
-			throw new InvalidDataException($"Runtime reconciliation committed revision {remote.Commit.ExecutionRevision}, expected {revisionBefore}.");
-		if (control.State.Revision != revisionBefore)
-			throw new InvalidOperationException("Runtime reconciliation must not advance authoritative revision.");
+		var remote = await transport.ApplyExecutionAsync(execution.PreparedExecution, execution.ProgramSinkId, null, cancellationToken).ConfigureAwait(false);
+		if (!remote.Committed || remote.Commit is null) throw new InvalidOperationException(remote.Commit?.Failure?.Message ?? remote.Prepare.Failure?.Message ?? "Runtime reconciliation was rejected.");
+		if (remote.Commit.ExecutionRevision != revisionBefore) throw new InvalidDataException($"Runtime reconciliation committed revision {remote.Commit.ExecutionRevision}, expected {revisionBefore}.");
+		if (control.State.Revision != revisionBefore) throw new InvalidOperationException("Runtime reconciliation must not advance authoritative revision.");
 
-		control.RecordObservation(
-			"recovery",
-			"recovery.runtime.reapplied",
-			$"Authoritative revision {revisionBefore} was reapplied to RuntimeHost instance '{runtimeHostInstanceId}'.");
-		QueueCheckpointIfAdvanced(control);
+		control.RecordObservation("recovery", "recovery.runtime.reapplied", $"Authoritative revision {revisionBefore} was reapplied to RuntimeHost instance '{runtimeHostInstanceId}'.");
 		_boundRuntimeHostInstanceId = runtimeHostInstanceId;
 		SetRecovery(ControlHostRecoveryState.Recovered, revisionBefore, "Durable Control authority was reapplied to RuntimeHost without revision advancement.");
 		SetOperationalState(ControlHostProcessState.Ready, ControlHostHealthState.Healthy, $"ControlHost resynchronized RuntimeHost instance '{runtimeHostInstanceId}'.");
 	}
 
 	private static bool RuntimeMatchesAuthority(RuntimeRemoteSnapshot runtimeSnapshot, AuthoritativeProductionState authority) =>
-		runtimeSnapshot.Runtime.Status == RuntimeExecutionStatus.Committed &&
-		runtimeSnapshot.Runtime.ExecutionRevision == authority.Revision;
+		runtimeSnapshot.Runtime.Status == RuntimeExecutionStatus.Committed && runtimeSnapshot.Runtime.ExecutionRevision == authority.Revision;
 
 	private string ResolveDurabilityDirectory()
 	{
-		var safeEndpoint = string.Concat(_options.ListenEndpoint.Select(character =>
-			char.IsLetterOrDigit(character) || character is '-' or '_' or '.' ? character : '_'));
+		var safeEndpoint = string.Concat(_options.ListenEndpoint.Select(character => char.IsLetterOrDigit(character) || character is '-' or '_' or '.' ? character : '_'));
 		return Path.Combine(_options.DurabilityRoot, $"{_options.ProductionId}-{safeEndpoint}");
 	}
 
-	private void QueueCheckpointIfAdvanced(ControlHostService control)
+	private void TryQueueConfirmedCheckpoint(AuthoritativeProductionState state)
 	{
-		if (!control.HasAuthoritativeState)
-			return;
-		var state = control.State;
-		if (_lastCheckpointRevision is { } revision && revision == state.Revision)
-			return;
-		QueueCheckpoint(state);
-	}
-
-	private void QueueCheckpoint(AuthoritativeProductionState state)
-	{
-		var writer = _checkpointWriter;
-		if (writer is null)
-			return;
-
-		var checkpoint = new ProductionCheckpoint(
-			Identity.New(),
-			state.ProductionId.Value,
-			state.Revision,
-			new UtcTimestamp(DateTimeOffset.UtcNow),
-			ControlHostRecovery.CheckpointFormat,
-			ControlHostRecovery.Serialize(state));
-
-		if (writer.TryWrite(checkpoint))
-		{
-			_lastCheckpointRevision = state.Revision;
-			return;
-		}
-
 		try
 		{
-			_control?.RecordObservation(
-				"persistence",
-				"persistence.checkpoint.dropped",
-				$"Checkpoint queue is full at authoritative revision {state.Revision}.",
-				new Failure("persistence.checkpoint.pressure", "Checkpoint queue capacity was exhausted."));
+			if (_lastCheckpointRevision is { } revision && revision == state.Revision) return;
+			var writer = _checkpointWriter;
+			if (writer is null) return;
+			var checkpoint = new ProductionCheckpoint(
+				Identity.New(),
+				state.ProductionId.Value,
+				state.Revision,
+				new UtcTimestamp(DateTimeOffset.UtcNow),
+				ControlHostRecovery.CheckpointFormat,
+				ControlHostRecovery.Serialize(state));
+			if (writer.TryWrite(checkpoint)) _lastCheckpointRevision = state.Revision;
 		}
 		catch
 		{
-			// Checkpoint pressure is observable through writer statistics even if diagnostic journaling is unavailable.
+			// Durability observation is subordinate to an already-confirmed Runtime/Control commit.
+			// Writer failure remains observable through durability statistics and orderly shutdown evidence.
 		}
 	}
 
@@ -655,10 +521,8 @@ public sealed class ControlHostProcess
 		using var timeout = new CancellationTokenSource(_options.ShutdownTimeout);
 		try
 		{
-			if (_ipcServer is not null)
-				await _ipcServer.DisposeAsync().AsTask().WaitAsync(timeout.Token).ConfigureAwait(false);
-			if (_runtimeTransport is not null)
-				await _runtimeTransport.DisconnectAsync().AsTask().WaitAsync(timeout.Token).ConfigureAwait(false);
+			if (_ipcServer is not null) await _ipcServer.DisposeAsync().AsTask().WaitAsync(timeout.Token).ConfigureAwait(false);
+			if (_runtimeTransport is not null) await _runtimeTransport.DisconnectAsync().AsTask().WaitAsync(timeout.Token).ConfigureAwait(false);
 			if (_runtimeBindingTask is not null)
 			{
 				try { await _runtimeBindingTask.WaitAsync(timeout.Token).ConfigureAwait(false); }
@@ -669,25 +533,19 @@ public sealed class ControlHostProcess
 			Exception? durabilityFailure = null;
 			if (_checkpointWriter is not null)
 			{
-				try { await _checkpointWriter.FlushAsync(timeout.Token).ConfigureAwait(false); }
-				catch (Exception exception) { durabilityFailure ??= exception; }
-				try { await _checkpointWriter.DisposeAsync().AsTask().WaitAsync(timeout.Token).ConfigureAwait(false); }
-				catch (Exception exception) { durabilityFailure ??= exception; }
+				try { await _checkpointWriter.FlushAsync(timeout.Token).ConfigureAwait(false); } catch (Exception exception) { durabilityFailure ??= exception; }
+				try { await _checkpointWriter.DisposeAsync().AsTask().WaitAsync(timeout.Token).ConfigureAwait(false); } catch (Exception exception) { durabilityFailure ??= exception; }
 			}
 			if (_managementStore is not null)
 			{
-				try { await _managementStore.DisposeAsync().AsTask().WaitAsync(timeout.Token).ConfigureAwait(false); }
-				catch (Exception exception) { durabilityFailure ??= exception; }
+				try { await _managementStore.DisposeAsync().AsTask().WaitAsync(timeout.Token).ConfigureAwait(false); } catch (Exception exception) { durabilityFailure ??= exception; }
 			}
 			if (_journal is not null)
 			{
-				try { await _journal.FlushAsync(timeout.Token).ConfigureAwait(false); }
-				catch (Exception exception) { durabilityFailure ??= exception; }
-				try { await _journal.DisposeAsync().AsTask().WaitAsync(timeout.Token).ConfigureAwait(false); }
-				catch (Exception exception) { durabilityFailure ??= exception; }
+				try { await _journal.FlushAsync(timeout.Token).ConfigureAwait(false); } catch (Exception exception) { durabilityFailure ??= exception; }
+				try { await _journal.DisposeAsync().AsTask().WaitAsync(timeout.Token).ConfigureAwait(false); } catch (Exception exception) { durabilityFailure ??= exception; }
 			}
-			if (durabilityFailure is not null)
-				throw new IOException("ControlHost durability drain failed.", durabilityFailure);
+			if (durabilityFailure is not null) throw new IOException("ControlHost durability drain failed.", durabilityFailure);
 
 			Update(ControlHostProcessState.Stopped, ControlHostHealthState.Stopped, "ControlHost stopped cleanly.");
 			return ControlHostExitCode.Success;
@@ -706,49 +564,16 @@ public sealed class ControlHostProcess
 
 	private async Task CleanupStartupFailureAsync()
 	{
-		try
-		{
-			if (_ipcServer is not null)
-				await _ipcServer.DisposeAsync().ConfigureAwait(false);
-		}
-		catch { }
-
-		try
-		{
-			if (_runtimeTransport is not null)
-				await _runtimeTransport.DisconnectAsync().ConfigureAwait(false);
-		}
-		catch { }
-
-		try
-		{
-			if (_checkpointWriter is not null)
-				await _checkpointWriter.DisposeAsync().ConfigureAwait(false);
-		}
-		catch { }
-
-		try
-		{
-			if (_managementStore is not null)
-				await _managementStore.DisposeAsync().ConfigureAwait(false);
-		}
-		catch { }
-
-		try
-		{
-			if (_journal is not null)
-				await _journal.DisposeAsync().ConfigureAwait(false);
-		}
-		catch
-		{
-			// Preserve the original startup failure as the process outcome.
-		}
+		try { if (_ipcServer is not null) await _ipcServer.DisposeAsync().ConfigureAwait(false); } catch { }
+		try { if (_runtimeTransport is not null) await _runtimeTransport.DisconnectAsync().ConfigureAwait(false); } catch { }
+		try { if (_checkpointWriter is not null) await _checkpointWriter.DisposeAsync().ConfigureAwait(false); } catch { }
+		try { if (_managementStore is not null) await _managementStore.DisposeAsync().ConfigureAwait(false); } catch { }
+		try { if (_journal is not null) await _journal.DisposeAsync().ConfigureAwait(false); } catch { }
 	}
 
 	private void SetRecovery(ControlHostRecoveryState state, Revision? revision, string detail)
 	{
-		lock (_gate)
-			_recovery = new ControlHostRecoverySnapshot(state, revision, detail);
+		lock (_gate) _recovery = new ControlHostRecoverySnapshot(state, revision, detail);
 	}
 
 	private void SetOperationalState(ControlHostProcessState state, ControlHostHealthState health, string detail)
@@ -757,28 +582,23 @@ public sealed class ControlHostProcess
 		lock (_gate)
 		{
 			changed = _lifecycle.State != state || _lifecycle.Health != health || !string.Equals(_lifecycle.Detail, detail, StringComparison.Ordinal);
-			if (changed)
-				_lifecycle = new ControlHostLifecycleSnapshot(state, health, detail, DateTimeOffset.UtcNow);
+			if (changed) _lifecycle = new ControlHostLifecycleSnapshot(state, health, detail, DateTimeOffset.UtcNow);
 		}
-		if (changed)
-			_ipcServer?.NotifyObservableStateChanged();
+		if (changed) _ipcServer?.NotifyObservableStateChanged();
 	}
 
 	private void Update(ControlHostProcessState state, ControlHostHealthState health, string detail)
 	{
-		lock (_gate)
-			_lifecycle = new ControlHostLifecycleSnapshot(state, health, detail, DateTimeOffset.UtcNow);
+		lock (_gate) _lifecycle = new ControlHostLifecycleSnapshot(state, health, detail, DateTimeOffset.UtcNow);
 	}
 
 	private sealed class RuntimeRecoveryConflictException : InvalidOperationException
 	{
-		public RuntimeRecoveryConflictException(Revision controlRevision, Revision runtimeRevision, string message)
-			: base(message)
+		public RuntimeRecoveryConflictException(Revision controlRevision, Revision runtimeRevision, string message) : base(message)
 		{
 			ControlRevision = controlRevision;
 			RuntimeRevision = runtimeRevision;
 		}
-
 		public Revision ControlRevision { get; }
 		public Revision RuntimeRevision { get; }
 	}
