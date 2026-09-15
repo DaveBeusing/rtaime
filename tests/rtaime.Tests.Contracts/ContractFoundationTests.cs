@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using rtaime.AI.Contracts;
@@ -44,15 +45,19 @@ public sealed class ContractFoundationTests
     }
 
     [Fact]
-    public void Transport_profile_serializes_identity_as_canonical_guid_string()
+    public void Transport_profile_uses_canonical_scalar_forms()
     {
         var identity = new Identity(Guid.Parse("12345678-1234-1234-1234-123456789abc"));
+        var productionId = new ProductionId(identity);
 
-        var json = JsonSerializer.Serialize(identity, TransportJson);
-        var copy = JsonSerializer.Deserialize<Identity>(json, TransportJson);
+        Assert.Equal("\"12345678-1234-1234-1234-123456789abc\"", JsonSerializer.Serialize(identity, TransportJson));
+        Assert.Equal("\"12345678-1234-1234-1234-123456789abc\"", JsonSerializer.Serialize(productionId, TransportJson));
+        Assert.Equal("\"42\"", JsonSerializer.Serialize(new Revision(42), TransportJson));
+        Assert.Equal("\"60000/1001\"", JsonSerializer.Serialize(FrameRate.Fps59_94, TransportJson));
+        Assert.Equal("\"1.0\"", JsonSerializer.Serialize(new CompatibilityVersion(1, 0), TransportJson));
 
-        Assert.Equal("\"12345678-1234-1234-1234-123456789abc\"", json);
-        Assert.Equal(identity, copy);
+        Assert.Equal(identity, JsonSerializer.Deserialize<Identity>(JsonSerializer.Serialize(identity, TransportJson), TransportJson));
+        Assert.Equal(productionId, JsonSerializer.Deserialize<ProductionId>(JsonSerializer.Serialize(productionId, TransportJson), TransportJson));
     }
 
     [Fact]
@@ -72,14 +77,15 @@ public sealed class ContractFoundationTests
 
         Assert.Equal(2, specification.Sources.Count);
         var copy = RoundTrip(specification);
+        Assert.Equal(specification.Version, copy.Version);
         Assert.Equal(specification.ProductionId, copy.ProductionId);
         Assert.Equal(specification.Name, copy.Name);
-        Assert.Equal(2, copy.Sources.Count);
-        Assert.Equal(sourceA.SourceId, copy.InitialRouting.PreviewSourceId);
+        Assert.Equal(specification.Sources, copy.Sources);
+        Assert.Equal(specification.InitialRouting, copy.InitialRouting);
     }
 
     [Fact]
-    public void Control_command_metadata_preserves_expected_revision()
+    public void Control_command_metadata_preserves_identity_and_revision()
     {
         var metadata = new ControlCommandMetadata(
             ControlContractVersion.Current,
@@ -90,7 +96,10 @@ public sealed class ContractFoundationTests
 
         var copy = RoundTrip(command);
 
-        Assert.Equal(new Revision(42), copy.Metadata.ExpectedRevision);
+        Assert.Equal(command.Metadata.Version, copy.Metadata.Version);
+        Assert.Equal(command.Metadata.CommandId, copy.Metadata.CommandId);
+        Assert.Equal(command.Metadata.ProductionId, copy.Metadata.ProductionId);
+        Assert.Equal(command.Metadata.ExpectedRevision, copy.Metadata.ExpectedRevision);
         Assert.Equal(command.SourceId, copy.SourceId);
     }
 
@@ -106,8 +115,7 @@ public sealed class ContractFoundationTests
 
         var copy = RoundTrip(report);
         Assert.False(copy.IsValid);
-        Assert.Single(copy.Issues);
-        Assert.Equal("control.invalid", copy.Issues[0].Code);
+        Assert.Equal(report.Issues, copy.Issues);
     }
 
     [Fact]
@@ -143,9 +151,15 @@ public sealed class ContractFoundationTests
         var copy = JsonSerializer.Deserialize<FrameDescriptor>(json, TransportJson);
 
         Assert.NotNull(copy);
+        Assert.Equal(descriptor.Version, copy.Version);
         Assert.Equal(descriptor.SourceId, copy.SourceId);
         Assert.Equal(descriptor.Surface.SurfaceId, copy.Surface.SurfaceId);
-        Assert.Equal(descriptor.Timing.SequenceNumber, copy.Timing.SequenceNumber);
+        Assert.Equal(descriptor.Surface.Format, copy.Surface.Format);
+        Assert.Equal(descriptor.Surface.StorageDomain, copy.Surface.StorageDomain);
+        Assert.Equal(descriptor.Surface.Ownership, copy.Surface.Ownership);
+        Assert.Equal(descriptor.Surface.Lifetime, copy.Surface.Lifetime);
+        Assert.Equal(descriptor.Surface.Handle, copy.Surface.Handle);
+        Assert.Equal(descriptor.Timing, copy.Timing);
         Assert.DoesNotContain("PixelData", json, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("BufferData", json, StringComparison.OrdinalIgnoreCase);
     }
@@ -156,20 +170,25 @@ public sealed class ContractFoundationTests
         var descriptor = ContractFixtures.Provider();
         var copy = RoundTrip(descriptor);
 
+        Assert.Equal(descriptor.Version, copy.Version);
         Assert.Equal(descriptor.ProviderId, copy.ProviderId);
-        Assert.Equal(ProviderAvailabilityState.Available, copy.Availability.State);
-        Assert.Single(copy.Capabilities);
-        Assert.Single(copy.Resources);
+        Assert.Equal(descriptor.Name, copy.Name);
+        Assert.Equal(descriptor.Availability, copy.Availability);
+        Assert.Equal(descriptor.Capabilities, copy.Capabilities);
+        Assert.Equal(descriptor.Resources, copy.Resources);
     }
 
     [Fact]
-    public void Provider_unavailable_state_requires_failure()
+    public void Provider_unavailable_state_requires_failure_and_round_trips()
     {
         Assert.Throws<ArgumentException>(() => new ProviderAvailability(ProviderAvailabilityState.Unavailable));
         var availability = new ProviderAvailability(
             ProviderAvailabilityState.Unavailable,
             new Failure("provider.offline", "Provider is offline."));
-        Assert.Equal(ProviderAvailabilityState.Unavailable, availability.State);
+
+        var copy = RoundTrip(availability);
+
+        Assert.Equal(availability, copy);
     }
 
     [Fact]
@@ -178,10 +197,11 @@ public sealed class ContractFoundationTests
         var prepared = ContractFixtures.PreparedExecution();
         var copy = RoundTrip(prepared);
 
+        Assert.Equal(prepared.Version, copy.Version);
         Assert.Equal(prepared.PreparedExecutionId, copy.PreparedExecutionId);
-        Assert.Equal(prepared.AuthoritySnapshot.StateId, copy.AuthoritySnapshot.StateId);
-        Assert.Equal(prepared.AuthoritySnapshot.Revision, copy.AuthoritySnapshot.Revision);
-        Assert.Single(copy.Bindings);
+        Assert.Equal(prepared.AuthoritySnapshot, copy.AuthoritySnapshot);
+        Assert.Equal(prepared.PlanGeneration, copy.PlanGeneration);
+        Assert.Equal(prepared.Bindings, copy.Bindings);
     }
 
     [Fact]
@@ -196,7 +216,11 @@ public sealed class ContractFoundationTests
             reservationId,
             null);
 
-        Assert.Equal(RuntimePrepareStatus.Prepared, RoundTrip(prepared).Status);
+        var preparedCopy = RoundTrip(prepared);
+        Assert.Equal(prepared.Version, preparedCopy.Version);
+        Assert.Equal(prepared.PreparedExecutionId, preparedCopy.PreparedExecutionId);
+        Assert.Equal(prepared.ReservationId, preparedCopy.ReservationId);
+        Assert.Equal(prepared.Status, preparedCopy.Status);
 
         Assert.Throws<ArgumentException>(() => new RuntimePrepareResult(
             RuntimeContractVersion.Current,
@@ -211,8 +235,12 @@ public sealed class ContractFoundationTests
             ExecutionInstanceId.New(),
             new Revision(1),
             null);
+        var committedCopy = RoundTrip(committed);
 
-        Assert.Equal(RuntimeCommitStatus.Committed, RoundTrip(committed).Status);
+        Assert.Equal(committed.Version, committedCopy.Version);
+        Assert.Equal(committed.ExecutionInstanceId, committedCopy.ExecutionInstanceId);
+        Assert.Equal(committed.ExecutionRevision, committedCopy.ExecutionRevision);
+        Assert.Equal(committed.Status, committedCopy.Status);
     }
 
     [Fact]
@@ -233,8 +261,12 @@ public sealed class ContractFoundationTests
         Assert.Equal(new[] { "alpha", "zeta" }, request.Parameters.Select(parameter => parameter.Name));
 
         var copy = RoundTrip(request);
+        Assert.Equal(request.Version, copy.Version);
         Assert.Equal(request.RequestId, copy.RequestId);
-        Assert.Equal(new[] { "alpha", "zeta" }, copy.Parameters.Select(parameter => parameter.Name));
+        Assert.Equal(request.CapabilityId, copy.CapabilityId);
+        Assert.Equal(request.Deadline, copy.Deadline);
+        Assert.Equal(request.InputFrame, copy.InputFrame);
+        Assert.Equal(request.Parameters, copy.Parameters);
     }
 
     [Fact]
@@ -253,8 +285,13 @@ public sealed class ContractFoundationTests
             InferenceExecutionStatus.Succeeded,
             new[] { new InferenceOutput("label", "person") },
             null);
+        var copy = RoundTrip(result);
 
-        Assert.Equal(InferenceExecutionStatus.Succeeded, RoundTrip(result).Status);
+        Assert.Equal(result.Version, copy.Version);
+        Assert.Equal(result.RequestId, copy.RequestId);
+        Assert.Equal(result.Status, copy.Status);
+        Assert.Equal(result.Outputs, copy.Outputs);
+        Assert.Null(copy.Failure);
     }
 
     private static T RoundTrip<T>(T value)
@@ -267,27 +304,162 @@ public sealed class ContractFoundationTests
     private static JsonSerializerOptions CreateTransportJsonOptions()
     {
         var options = new JsonSerializerOptions();
-        options.Converters.Add(new IdentityJsonConverter());
+        options.Converters.Add(new ContractScalarJsonConverterFactory());
         return options;
     }
 }
 
-internal sealed class IdentityJsonConverter : JsonConverter<Identity>
+internal sealed class ContractScalarJsonConverterFactory : JsonConverterFactory
 {
-    public override Identity Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    private static readonly HashSet<Type> StrongIdentityTypes = new()
     {
-        if (reader.TokenType != JsonTokenType.String)
-            throw new JsonException("Identity must be encoded as a canonical GUID string.");
+        typeof(ProductionId),
+        typeof(ProductionSourceId),
+        typeof(CommandId),
+        typeof(MediaSourceId),
+        typeof(MediaSinkId),
+        typeof(SurfaceId),
+        typeof(ProviderId),
+        typeof(CapabilityId),
+        typeof(ProviderResourceId),
+        typeof(InferenceCapabilityId),
+        typeof(InferenceRequestId),
+        typeof(PreparedExecutionId),
+        typeof(ExecutionInstanceId)
+    };
 
-        var value = reader.GetString();
-        if (!Identity.TryParse(value, out var identity))
-            throw new JsonException("Identity must be a non-empty GUID in D format.");
+    public override bool CanConvert(Type typeToConvert) =>
+        typeToConvert == typeof(Identity) ||
+        typeToConvert == typeof(Revision) ||
+        typeToConvert == typeof(Generation) ||
+        typeToConvert == typeof(UtcTimestamp) ||
+        typeToConvert == typeof(Duration) ||
+        typeToConvert == typeof(Rational) ||
+        typeToConvert == typeof(FrameRate) ||
+        typeToConvert == typeof(Timebase) ||
+        typeToConvert == typeof(CompatibilityVersion) ||
+        typeToConvert == typeof(Failure) ||
+        StrongIdentityTypes.Contains(typeToConvert);
 
-        return identity;
+    public override JsonConverter CreateConverter(Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (StrongIdentityTypes.Contains(typeToConvert))
+        {
+            var converterType = typeof(StrongIdentityJsonConverter<>).MakeGenericType(typeToConvert);
+            return (JsonConverter)(Activator.CreateInstance(converterType)
+                ?? throw new InvalidOperationException($"Could not create converter for {typeToConvert}."));
+        }
+
+        if (typeToConvert == typeof(Identity)) return new CanonicalStringJsonConverter<Identity>(Identity.Parse, value => value.ToString());
+        if (typeToConvert == typeof(Revision)) return new CanonicalStringJsonConverter<Revision>(Revision.Parse, value => value.ToString());
+        if (typeToConvert == typeof(Generation)) return new CanonicalStringJsonConverter<Generation>(Generation.Parse, value => value.ToString());
+        if (typeToConvert == typeof(UtcTimestamp)) return new CanonicalStringJsonConverter<UtcTimestamp>(UtcTimestamp.Parse, value => value.ToString());
+        if (typeToConvert == typeof(Duration)) return new CanonicalStringJsonConverter<Duration>(Duration.Parse, value => value.ToString());
+        if (typeToConvert == typeof(Rational)) return new CanonicalStringJsonConverter<Rational>(Rational.Parse, value => value.ToString());
+        if (typeToConvert == typeof(FrameRate)) return new CanonicalStringJsonConverter<FrameRate>(FrameRate.Parse, value => value.ToString());
+        if (typeToConvert == typeof(Timebase)) return new CanonicalStringJsonConverter<Timebase>(Timebase.Parse, value => value.ToString());
+        if (typeToConvert == typeof(CompatibilityVersion)) return new CanonicalStringJsonConverter<CompatibilityVersion>(CompatibilityVersion.Parse, value => value.ToString());
+        if (typeToConvert == typeof(Failure)) return new FailureJsonConverter();
+
+        throw new NotSupportedException($"No contract scalar converter is registered for {typeToConvert}.");
+    }
+}
+
+internal sealed class CanonicalStringJsonConverter<T> : JsonConverter<T>
+{
+    private readonly Func<string, T> _parse;
+    private readonly Func<T, string> _format;
+
+    public CanonicalStringJsonConverter(Func<string, T> parse, Func<T, string> format)
+    {
+        _parse = parse;
+        _format = format;
     }
 
-    public override void Write(Utf8JsonWriter writer, Identity value, JsonSerializerOptions options) =>
-        writer.WriteStringValue(value.ToString());
+    public override T Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType != JsonTokenType.String)
+            throw new JsonException($"{typeof(T).Name} must be encoded as a canonical string.");
+
+        var value = reader.GetString() ?? throw new JsonException($"{typeof(T).Name} must not be null.");
+        try
+        {
+            return _parse(value);
+        }
+        catch (Exception exception) when (exception is FormatException or ArgumentException or OverflowException)
+        {
+            throw new JsonException($"Invalid canonical {typeof(T).Name} value.", exception);
+        }
+    }
+
+    public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options) =>
+        writer.WriteStringValue(_format(value));
+}
+
+internal sealed class StrongIdentityJsonConverter<T> : JsonConverter<T>
+    where T : struct
+{
+    private static readonly ConstructorInfo Constructor = typeof(T).GetConstructor(new[] { typeof(Identity) })
+        ?? throw new InvalidOperationException($"{typeof(T).Name} must expose a public constructor accepting Identity.");
+
+    private static readonly PropertyInfo ValueProperty = typeof(T).GetProperty("Value", BindingFlags.Public | BindingFlags.Instance)
+        ?? throw new InvalidOperationException($"{typeof(T).Name} must expose a public Value property.");
+
+    public override T Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType != JsonTokenType.String)
+            throw new JsonException($"{typeof(T).Name} must be encoded as a canonical GUID string.");
+
+        var text = reader.GetString();
+        if (!Identity.TryParse(text, out var identity))
+            throw new JsonException($"{typeof(T).Name} must contain a non-empty GUID in D format.");
+
+        return (T)(Constructor.Invoke(new object[] { identity })
+            ?? throw new JsonException($"Could not construct {typeof(T).Name}."));
+    }
+
+    public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options)
+    {
+        var identity = ValueProperty.GetValue(value) is Identity typedIdentity
+            ? typedIdentity
+            : throw new JsonException($"{typeof(T).Name}.Value must be an Identity.");
+
+        writer.WriteStringValue(identity.ToString());
+    }
+}
+
+internal sealed class FailureJsonConverter : JsonConverter<Failure>
+{
+    public override Failure Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        using var document = JsonDocument.ParseValue(ref reader);
+        var root = document.RootElement;
+        if (root.ValueKind != JsonValueKind.Object ||
+            !root.TryGetProperty("code", out var codeProperty) ||
+            !root.TryGetProperty("message", out var messageProperty))
+        {
+            throw new JsonException("Failure must contain code and message properties.");
+        }
+
+        try
+        {
+            return new Failure(
+                codeProperty.GetString() ?? throw new JsonException("Failure code must not be null."),
+                messageProperty.GetString() ?? throw new JsonException("Failure message must not be null."));
+        }
+        catch (ArgumentException exception)
+        {
+            throw new JsonException("Failure code and message must be non-empty.", exception);
+        }
+    }
+
+    public override void Write(Utf8JsonWriter writer, Failure value, JsonSerializerOptions options)
+    {
+        writer.WriteStartObject();
+        writer.WriteString("code", value.Code);
+        writer.WriteString("message", value.Message);
+        writer.WriteEndObject();
+    }
 }
 
 internal static class ContractFixtures
@@ -299,7 +471,7 @@ internal static class ContractFixtures
             VideoFormat.Hd1080p50Rgba8,
             SurfaceStorageDomain.Shared,
             SurfaceOwnership.SharedLease,
-            new SurfaceLifetimeDescriptor(Generation.Initial, Identity.New()),
+            new SurfaceLifetimeDescriptor(new Generation(5), Identity.New()),
             new OpaqueSurfaceHandle("fixture", "surface-001"));
 
         return new FrameDescriptor(
