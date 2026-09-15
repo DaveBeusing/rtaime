@@ -76,7 +76,7 @@ public sealed class BoundedProductionJournal : IAsyncDisposable
         _capacity = capacity;
         _channel = Channel.CreateBounded<JournalWorkItem>(new BoundedChannelOptions(capacity)
         {
-            FullMode = BoundedChannelFullMode.DropWrite,
+            FullMode = BoundedChannelFullMode.Wait,
             SingleReader = true,
             SingleWriter = false,
             AllowSynchronousContinuations = false
