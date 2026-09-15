@@ -37,14 +37,22 @@ public sealed class RuntimeRecordingBridge
             .Where(binding => binding.MediaSinkId == output.ProgramSinkId)
             .ToArray();
 
-        if (programBindings.Length != 1 || programBindings[0].MediaSourceId is null)
+        if (programBindings.Length != 1)
         {
             return RecordingEnqueueResult.Rejected(new rtaime.Core.Failure(
                 "recording.runtime.program_binding_invalid",
                 "Committed execution must contain exactly one Program binding for the recording output."));
         }
 
-        if (programBindings[0].MediaSourceId.Value != video.SourceId)
+        var committedSource = programBindings[0].MediaSourceId;
+        if (committedSource is null)
+        {
+            return RecordingEnqueueResult.Rejected(new rtaime.Core.Failure(
+                "recording.runtime.program_binding_invalid",
+                "Committed Program binding requires a media source."));
+        }
+
+        if (committedSource.Value != video.SourceId)
         {
             return RecordingEnqueueResult.Rejected(new rtaime.Core.Failure(
                 "recording.runtime.source_mismatch",
