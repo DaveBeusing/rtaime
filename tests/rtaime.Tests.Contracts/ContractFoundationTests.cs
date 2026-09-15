@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using rtaime.AI.Contracts;
 using rtaime.Control.Contracts;
 using rtaime.Core;
@@ -10,6 +11,8 @@ namespace rtaime.Tests.Contracts;
 
 public sealed class ContractFoundationTests
 {
+    private static readonly JsonSerializerOptions TransportJson = CreateTransportJsonOptions();
+
     [Fact]
     public void All_contract_families_fail_closed_for_unknown_versions()
     {
@@ -38,6 +41,18 @@ public sealed class ContractFoundationTests
         Assert.Equal(expected, MediaContractVersion.Current);
         Assert.Equal(expected, ProviderContractVersion.Current);
         Assert.Equal(expected, AIContractVersion.Current);
+    }
+
+    [Fact]
+    public void Transport_profile_serializes_identity_as_canonical_guid_string()
+    {
+        var identity = new Identity(Guid.Parse("12345678-1234-1234-1234-123456789abc"));
+
+        var json = JsonSerializer.Serialize(identity, TransportJson);
+        var copy = JsonSerializer.Deserialize<Identity>(json, TransportJson);
+
+        Assert.Equal("\"12345678-1234-1234-1234-123456789abc\"", json);
+        Assert.Equal(identity, copy);
     }
 
     [Fact]
@@ -124,8 +139,8 @@ public sealed class ContractFoundationTests
     public void Frame_descriptor_round_trips_without_bulk_media_payload()
     {
         var descriptor = ContractFixtures.Frame();
-        var json = JsonSerializer.Serialize(descriptor);
-        var copy = JsonSerializer.Deserialize<FrameDescriptor>(json);
+        var json = JsonSerializer.Serialize(descriptor, TransportJson);
+        var copy = JsonSerializer.Deserialize<FrameDescriptor>(json, TransportJson);
 
         Assert.NotNull(copy);
         Assert.Equal(descriptor.SourceId, copy.SourceId);
@@ -244,10 +259,35 @@ public sealed class ContractFoundationTests
 
     private static T RoundTrip<T>(T value)
     {
-        var json = JsonSerializer.Serialize(value);
-        return JsonSerializer.Deserialize<T>(json)
+        var json = JsonSerializer.Serialize(value, TransportJson);
+        return JsonSerializer.Deserialize<T>(json, TransportJson)
             ?? throw new Xunit.Sdk.XunitException($"JSON round-trip returned null for {typeof(T).FullName}.");
     }
+
+    private static JsonSerializerOptions CreateTransportJsonOptions()
+    {
+        var options = new JsonSerializerOptions();
+        options.Converters.Add(new IdentityJsonConverter());
+        return options;
+    }
+}
+
+internal sealed class IdentityJsonConverter : JsonConverter<Identity>
+{
+    public override Identity Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType != JsonTokenType.String)
+            throw new JsonException("Identity must be encoded as a canonical GUID string.");
+
+        var value = reader.GetString();
+        if (!Identity.TryParse(value, out var identity))
+            throw new JsonException("Identity must be a non-empty GUID in D format.");
+
+        return identity;
+    }
+
+    public override void Write(Utf8JsonWriter writer, Identity value, JsonSerializerOptions options) =>
+        writer.WriteStringValue(value.ToString());
 }
 
 internal static class ContractFixtures
