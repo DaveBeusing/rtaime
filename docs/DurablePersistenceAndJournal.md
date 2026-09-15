@@ -105,7 +105,7 @@ causal Production Journal
 
 AP-16 activates that basis for ControlHost process recovery. Before a persisted authority snapshot is restored, ControlHost verifies the management SQLite store, checkpoint format and identity/version/revision/source constraints, plus Production Journal SQLite/hash-chain integrity. Only then can the recovered authority participate in Runtime reconciliation.
 
-The Production Journal remains evidence and diagnostic history rather than a general event-sourcing replay engine. V1 recovery restores the latest qualified authoritative checkpoint and reconciles Runtime execution against that revision; it does not reconstruct arbitrary domain state by replaying every journal record.
+The Production Journal remains evidence and diagnostic history rather than a general event-sourcing replay engine. V1 recovery restores the latest qualified authoritative checkpoint and reconciles the Runtime execution's committed `AuthoritySnapshot` against that Control revision; Runtime-local `ExecutionRevision` is a separate counter and is not used as Control authority. Recovery does not reconstruct arbitrary domain state by replaying every journal record.
 
 AP-16 still does not claim exact live continuation after process crash or power loss, frame-identical Runtime continuation, preservation of in-flight transition phase, or distributed recovery. Those remain outside the qualified durability claim.
 
