@@ -98,12 +98,13 @@ public sealed class V1CombinedReferencePerformanceTests
         Assert.Equal(0u, ai.Snapshot.ReservedComputeUnits);
         Assert.Equal(0UL, ai.Snapshot.ReservedVramBytes);
 
-        var metrics = TailMetrics.From(samples);
+        var nominalFrameBudgetMilliseconds = 1000.0 / format.FrameRate.FramesPerSecond;
+        var metrics = TailMetrics.From(samples, nominalFrameBudgetMilliseconds);
         Assert.True(metrics.P50 <= metrics.P95);
         Assert.True(metrics.P95 <= metrics.P99);
         Assert.True(metrics.P99 <= metrics.Worst);
         Assert.True(metrics.Worst < 10_000, $"Managed reference boundary runaway: worst observed {metrics.Worst:0.###} ms.");
-        Assert.Equal(0UL, metrics.DeadlineMisses);
+        Assert.InRange(metrics.NominalFrameBudgetExceedances, 0UL, 12UL);
     }
 
     private static GovernedInferenceExecutionRequest CreateInferenceRequest(FrameDescriptor frame)
@@ -151,18 +152,22 @@ public sealed class V1CombinedReferencePerformanceTests
         double P95,
         double P99,
         double Worst,
-        ulong DeadlineMisses)
+        ulong NominalFrameBudgetExceedances)
     {
-        public static TailMetrics From(IReadOnlyList<double> samples)
+        public static TailMetrics From(IReadOnlyList<double> samples, double nominalFrameBudgetMilliseconds)
         {
             if (samples.Count == 0) throw new ArgumentException("Performance metrics require samples.", nameof(samples));
+            if (!double.IsFinite(nominalFrameBudgetMilliseconds) || nominalFrameBudgetMilliseconds <= 0)
+                throw new ArgumentOutOfRangeException(nameof(nominalFrameBudgetMilliseconds));
+
             var ordered = samples.OrderBy(value => value).ToArray();
+            var exceedances = checked((ulong)samples.Count(value => value > nominalFrameBudgetMilliseconds));
             return new TailMetrics(
                 Percentile(ordered, 0.50),
                 Percentile(ordered, 0.95),
                 Percentile(ordered, 0.99),
                 ordered[^1],
-                0);
+                exceedances);
         }
 
         private static double Percentile(double[] ordered, double percentile)
