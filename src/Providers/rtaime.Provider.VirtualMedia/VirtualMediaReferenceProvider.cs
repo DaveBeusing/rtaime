@@ -133,10 +133,10 @@ public sealed class VirtualVideoOutput
             if (_frames.Count > 0)
             {
                 var previous = _frames[^1].Frame.Timing.SequenceNumber;
-                if (previous == ulong.MaxValue || frame.Timing.SequenceNumber != previous + 1)
+                if (frame.Timing.SequenceNumber <= previous)
                 {
                     throw new InvalidOperationException(
-                        $"Virtual output requires continuous frame sequence numbers. Previous '{previous}', incoming '{frame.Timing.SequenceNumber}'.");
+                        $"Virtual output requires strictly increasing frame sequence numbers. Previous '{previous}', incoming '{frame.Timing.SequenceNumber}'.");
                 }
             }
 
