@@ -57,7 +57,8 @@ public sealed class RecordingRuntimeIntegrationTests
         var rejected = bridge.TryRecordCommittedProgram(runtime.ActiveExecution!, provider.SourceB.GenerateFrame(0));
 
         Assert.Equal(RecordingEnqueueStatus.Rejected, rejected.Status);
-        Assert.Equal("recording.runtime.source_mismatch", rejected.Failure!.Code);
+        Assert.True(rejected.Failure.HasValue);
+        Assert.Equal("recording.runtime.source_mismatch", rejected.Failure.Value.Code);
         Assert.Empty(writer.Samples);
         await recorder.StopAsync();
     }
