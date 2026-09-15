@@ -34,6 +34,8 @@ public sealed record LocalProcessSupervisionOptions(
 	int MaxConsecutiveStartAttempts,
 	bool StopOwnedProcessOnDispose = true)
 {
+	public string AdditionalArguments { get; init; } = string.Empty;
+
 	public void Validate()
 	{
 		if (string.IsNullOrWhiteSpace(Name)) throw new ArgumentException("Supervised process name is required.", nameof(Name));
@@ -58,6 +60,7 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 	private readonly object _gate = new();
 	private readonly LocalProcessSupervisionOptions _options;
 	private readonly CancellationTokenSource _stop = new();
+	private CancellationTokenSource? _linkedStop;
 	private Task? _loop;
 	private Process? _ownedProcess;
 	private int _consecutiveStartAttempts;
@@ -91,8 +94,8 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 		{
 			if (_loop is not null)
 				throw new InvalidOperationException($"Supervisor '{_options.Name}' has already been started.");
-			var linked = CancellationTokenSource.CreateLinkedTokenSource(_stop.Token, cancellationToken);
-			_loop = RunLoopAsync(linked.Token);
+			_linkedStop = CancellationTokenSource.CreateLinkedTokenSource(_stop.Token, cancellationToken);
+			_loop = RunLoopAsync(_linkedStop.Token);
 		}
 		return Task.CompletedTask;
 	}
@@ -129,6 +132,7 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 		}
 
 		Update(LocalProcessSupervisionState.Stopped, "Supervisor stopped.");
+		_linkedStop?.Dispose();
 		_stop.Dispose();
 	}
 
@@ -205,12 +209,13 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 	{
 		var fullPath = Path.GetFullPath(_options.ExecutablePath);
 		var isDll = string.Equals(Path.GetExtension(fullPath), ".dll", StringComparison.OrdinalIgnoreCase);
+		var hostArguments = $"--listen-endpoint={QuoteArgument(_options.Endpoint)}";
+		if (!string.IsNullOrWhiteSpace(_options.AdditionalArguments))
+			hostArguments += " " + _options.AdditionalArguments.Trim();
 		var startInfo = new ProcessStartInfo
 		{
 			FileName = isDll ? "dotnet" : fullPath,
-			Arguments = isDll
-				? $"\"{fullPath}\" --listen-endpoint={QuoteArgument(_options.Endpoint)}"
-				: $"--listen-endpoint={QuoteArgument(_options.Endpoint)}",
+			Arguments = isDll ? $"\"{fullPath}\" {hostArguments}" : hostArguments,
 			WorkingDirectory = Path.GetDirectoryName(fullPath) ?? AppContext.BaseDirectory,
 			UseShellExecute = false,
 			CreateNoWindow = true
