@@ -1,0 +1,291 @@
+// Copyright (c) Dave Beusing <david.beusing@gmail.com>.
+
+using rtaime.Core;
+using rtaime.Media.Contracts;
+using rtaime.Recording;
+
+namespace rtaime.RuntimeHost;
+
+public enum RuntimeHostProcessState
+{
+	Created = 1,
+	Starting = 2,
+	Ready = 3,
+	Degraded = 4,
+	Draining = 5,
+	Stopped = 6,
+	Failed = 7
+}
+
+public enum RuntimeHostHealthState
+{
+	Unknown = 1,
+	Healthy = 2,
+	Degraded = 3,
+	Unhealthy = 4,
+	Stopped = 5
+}
+
+public enum RuntimeHostExitCode
+{
+	Success = 0,
+	ConfigurationError = 2,
+	StartupFailure = 3,
+	ShutdownFailure = 4,
+	UnexpectedFailure = 10
+}
+
+public sealed record RuntimeHostLifecycleSnapshot(
+	RuntimeHostProcessState State,
+	RuntimeHostHealthState Health,
+	string Detail,
+	DateTimeOffset UpdatedAt);
+
+public sealed record RuntimeHostProcessOptions(
+	MediaSourceId SourceAId,
+	MediaSourceId SourceBId,
+	VideoFormat Format,
+	TimeSpan ShutdownTimeout)
+{
+	public static RuntimeHostProcessOptions Default => new(
+		new MediaSourceId(Identity.Parse("70000000-0000-0000-0000-00000000000a")),
+		new MediaSourceId(Identity.Parse("70000000-0000-0000-0000-00000000000b")),
+		VideoFormat.Hd1080p50Rgba8,
+		TimeSpan.FromSeconds(10));
+
+	public static RuntimeHostProcessOptions Load(
+		IReadOnlyList<string> args,
+		Func<string, string?>? environment = null)
+	{
+		ArgumentNullException.ThrowIfNull(args);
+		environment ??= Environment.GetEnvironmentVariable;
+		var defaults = Default;
+
+		return new RuntimeHostProcessOptions(
+			new MediaSourceId(ParseIdentity(Get(args, environment, "source-a-id", "RTAIME_RUNTIME_SOURCE_A_ID", defaults.SourceAId.ToString()), "source-a-id")),
+			new MediaSourceId(ParseIdentity(Get(args, environment, "source-b-id", "RTAIME_RUNTIME_SOURCE_B_ID", defaults.SourceBId.ToString()), "source-b-id")),
+			ParseFormat(Get(args, environment, "format", "RTAIME_RUNTIME_FORMAT", "1080p50")),
+			TimeSpan.FromMilliseconds(ParsePositiveInt(Get(args, environment, "shutdown-timeout-ms", "RTAIME_RUNTIME_SHUTDOWN_TIMEOUT_MS", ((int)defaults.ShutdownTimeout.TotalMilliseconds).ToString()), "shutdown-timeout-ms")));
+	}
+
+	public void Validate()
+	{
+		if (SourceAId.Value.IsEmpty || SourceBId.Value.IsEmpty)
+			throw new ArgumentException("Runtime source identities must not be empty.");
+		if (SourceAId == SourceBId)
+			throw new ArgumentException("Runtime source identities must be distinct.");
+		if (Format is null)
+			throw new ArgumentNullException(nameof(Format));
+		if (Format != VideoFormat.Hd1080p50Rgba8 && Format != VideoFormat.Hd1080p59_94Rgba8)
+			throw new ArgumentException("RuntimeHost V1 supports only 1080p50 RGBA8 and 1080p59.94 RGBA8.", nameof(Format));
+		if (ShutdownTimeout <= TimeSpan.Zero)
+			throw new ArgumentOutOfRangeException(nameof(ShutdownTimeout));
+	}
+
+	private static string Get(
+		IReadOnlyList<string> args,
+		Func<string, string?> environment,
+		string key,
+		string environmentName,
+		string defaultValue)
+	{
+		var prefix = $"--{key}=";
+		var commandLine = args.LastOrDefault(value => value.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+		if (commandLine is not null)
+			return commandLine[prefix.Length..];
+
+		var environmentValue = environment(environmentName);
+		return string.IsNullOrWhiteSpace(environmentValue) ? defaultValue : environmentValue.Trim();
+	}
+
+	private static Identity ParseIdentity(string value, string key)
+	{
+		try
+		{
+			return Identity.Parse(value);
+		}
+		catch (Exception exception) when (exception is FormatException or ArgumentException)
+		{
+			throw new ArgumentException($"Configuration '{key}' must be a valid identity.", key, exception);
+		}
+	}
+
+	private static VideoFormat ParseFormat(string value) => value.Trim().ToLowerInvariant() switch
+	{
+		"1080p50" or "hd1080p50" => VideoFormat.Hd1080p50Rgba8,
+		"1080p59.94" or "1080p59_94" or "hd1080p59.94" => VideoFormat.Hd1080p59_94Rgba8,
+		_ => throw new ArgumentException("Configuration 'format' must be '1080p50' or '1080p59.94'.", "format")
+	};
+
+	private static int ParsePositiveInt(string value, string key)
+	{
+		if (!int.TryParse(value, out var parsed) || parsed <= 0)
+			throw new ArgumentException($"Configuration '{key}' must be a positive integer.", key);
+		return parsed;
+	}
+}
+
+/// <summary>
+/// Executable RuntimeHost composition root. It owns lifecycle only; committed runtime execution,
+/// media processing, GPU processing and recording remain implemented by <see cref="V1RuntimeHostService"/>.
+/// </summary>
+public sealed class RuntimeHostProcess
+{
+	private readonly object _gate = new();
+	private readonly RuntimeHostProcessOptions _options;
+	private readonly Func<IProgramRecordingWriter> _recordingWriterFactory;
+	private readonly Func<RuntimeHostProcessOptions, IProgramRecordingWriter, V1RuntimeHostService> _runtimeFactory;
+	private RuntimeHostLifecycleSnapshot _lifecycle = new(
+		RuntimeHostProcessState.Created,
+		RuntimeHostHealthState.Unknown,
+		"Process has not started.",
+		DateTimeOffset.UtcNow);
+	private int _runStarted;
+	private V1RuntimeHostService? _runtime;
+	private bool _runtimeDisposed;
+	private V1RuntimeHostSnapshot? _finalRuntimeSnapshot;
+
+	public RuntimeHostProcess(
+		RuntimeHostProcessOptions options,
+		Func<IProgramRecordingWriter>? recordingWriterFactory = null,
+		Func<RuntimeHostProcessOptions, IProgramRecordingWriter, V1RuntimeHostService>? runtimeFactory = null)
+	{
+		_options = options ?? throw new ArgumentNullException(nameof(options));
+		_recordingWriterFactory = recordingWriterFactory ?? (() => new NullProgramRecordingWriter());
+		_runtimeFactory = runtimeFactory ?? ((processOptions, writer) => new V1RuntimeHostService(
+			processOptions.SourceAId,
+			processOptions.SourceBId,
+			processOptions.Format,
+			writer));
+	}
+
+	public RuntimeHostLifecycleSnapshot Lifecycle
+	{
+		get
+		{
+			lock (_gate)
+				return _lifecycle;
+		}
+	}
+
+	public V1RuntimeHostService? Runtime => _runtime;
+	public bool RuntimeDisposed => _runtimeDisposed;
+	public V1RuntimeHostSnapshot? FinalRuntimeSnapshot => _finalRuntimeSnapshot;
+
+	public async Task<RuntimeHostExitCode> RunAsync(CancellationToken cancellationToken)
+	{
+		if (Interlocked.Exchange(ref _runStarted, 1) != 0)
+			throw new InvalidOperationException("A RuntimeHostProcess instance can be run only once.");
+
+		Update(RuntimeHostProcessState.Starting, RuntimeHostHealthState.Unknown, "Composing RuntimeHost dependencies.");
+		try
+		{
+			_options.Validate();
+			var writer = _recordingWriterFactory()
+				?? throw new InvalidOperationException("Recording writer factory returned null.");
+			_runtime = _runtimeFactory(_options, writer)
+				?? throw new InvalidOperationException("Runtime factory returned null.");
+		}
+		catch (ArgumentException exception)
+		{
+			await CleanupStartupFailureAsync().ConfigureAwait(false);
+			Update(RuntimeHostProcessState.Failed, RuntimeHostHealthState.Unhealthy, $"Configuration rejected: {exception.Message}");
+			return RuntimeHostExitCode.ConfigurationError;
+		}
+		catch (Exception exception)
+		{
+			await CleanupStartupFailureAsync().ConfigureAwait(false);
+			Update(RuntimeHostProcessState.Failed, RuntimeHostHealthState.Unhealthy, $"Startup failed: {exception.Message}");
+			return RuntimeHostExitCode.StartupFailure;
+		}
+
+		Update(RuntimeHostProcessState.Ready, RuntimeHostHealthState.Healthy, "RuntimeHost is ready with transactional runtime, virtual media, GPU and recording composition.");
+
+		try
+		{
+			await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
+		}
+		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+		{
+			// Expected process stop signal.
+		}
+		catch (Exception exception)
+		{
+			Update(RuntimeHostProcessState.Failed, RuntimeHostHealthState.Unhealthy, $"Run loop failed: {exception.Message}");
+			return RuntimeHostExitCode.UnexpectedFailure;
+		}
+
+		return await StopAsync().ConfigureAwait(false);
+	}
+
+	private async Task<RuntimeHostExitCode> StopAsync()
+	{
+		Update(RuntimeHostProcessState.Draining, RuntimeHostHealthState.Degraded, "Draining RuntimeHost resources.");
+		using var timeout = new CancellationTokenSource(_options.ShutdownTimeout);
+		try
+		{
+			if (_runtime is not null)
+			{
+				await _runtime.DisposeAsync().AsTask().WaitAsync(timeout.Token).ConfigureAwait(false);
+				_runtimeDisposed = true;
+				_finalRuntimeSnapshot = _runtime.Snapshot;
+				if (_finalRuntimeSnapshot.ActiveGpuSurfaces != 0)
+					throw new InvalidOperationException("RuntimeHost retained GPU surfaces after shutdown.");
+			}
+
+			Update(RuntimeHostProcessState.Stopped, RuntimeHostHealthState.Stopped, "RuntimeHost stopped cleanly and released media/GPU/recording resources.");
+			return RuntimeHostExitCode.Success;
+		}
+		catch (Exception exception) when (exception is OperationCanceledException or TimeoutException)
+		{
+			Update(RuntimeHostProcessState.Failed, RuntimeHostHealthState.Unhealthy, "RuntimeHost shutdown exceeded the configured timeout.");
+			return RuntimeHostExitCode.ShutdownFailure;
+		}
+		catch (Exception exception)
+		{
+			Update(RuntimeHostProcessState.Failed, RuntimeHostHealthState.Unhealthy, $"RuntimeHost shutdown failed: {exception.Message}");
+			return RuntimeHostExitCode.ShutdownFailure;
+		}
+	}
+
+	private async Task CleanupStartupFailureAsync()
+	{
+		if (_runtime is null)
+			return;
+
+		try
+		{
+			await _runtime.DisposeAsync().ConfigureAwait(false);
+			_runtimeDisposed = true;
+			_finalRuntimeSnapshot = _runtime.Snapshot;
+		}
+		catch
+		{
+			// Preserve the original startup failure as the process outcome.
+		}
+	}
+
+	private void Update(RuntimeHostProcessState state, RuntimeHostHealthState health, string detail)
+	{
+		lock (_gate)
+			_lifecycle = new RuntimeHostLifecycleSnapshot(state, health, detail, DateTimeOffset.UtcNow);
+	}
+
+	private sealed class NullProgramRecordingWriter : IProgramRecordingWriter
+	{
+		public ValueTask OpenAsync(RecordingStartRequest request, CancellationToken cancellationToken)
+		{
+			cancellationToken.ThrowIfCancellationRequested();
+			return ValueTask.CompletedTask;
+		}
+
+		public ValueTask WriteAsync(RecordingProgramSample sample, CancellationToken cancellationToken)
+		{
+			cancellationToken.ThrowIfCancellationRequested();
+			return ValueTask.CompletedTask;
+		}
+
+		public ValueTask FinalizeAsync(CancellationToken cancellationToken) => ValueTask.CompletedTask;
+		public ValueTask AbortAsync(CancellationToken cancellationToken) => ValueTask.CompletedTask;
+	}
+}
