@@ -55,6 +55,7 @@ public sealed class ControlHostService
 	private readonly Action<AuthoritativeProductionState>? _authoritativeCommitted;
 	private AuthoritativeProductionState? _authoritative;
 	private PendingControlCommit? _pending;
+	private ObservationSignature? _lastObservation;
 
 	public ControlHostService(
 		ProductionSpecification specification,
@@ -253,7 +254,20 @@ public sealed class ControlHostService
 	public void RecordObservation(string category, string code, string detail, Failure? failure = null)
 	{
 		lock (_gate)
-			Journal(_authoritative?.Revision ?? Revision.Initial, category, code, detail, null, failure);
+		{
+			var revision = _authoritative?.Revision ?? Revision.Initial;
+			var signature = new ObservationSignature(
+				revision,
+				category,
+				code,
+				detail,
+				failure?.Code,
+				failure?.Message);
+			if (_lastObservation == signature)
+				return;
+			_lastObservation = signature;
+			Journal(revision, category, code, detail, null, failure);
+		}
 	}
 
 	private ControlHostCommitConfirmation PendingMismatch(string code, string message)
@@ -319,6 +333,13 @@ public sealed class ControlHostService
 	}
 
 	private sealed record PendingControlCommit(ControlHostExecutionPackage Execution, Identity? CausationId);
+	private sealed record ObservationSignature(
+		Revision Revision,
+		string Category,
+		string Code,
+		string Detail,
+		string? FailureCode,
+		string? FailureMessage);
 
 	private sealed class UpdatableProviderRegistry : IProviderCapabilityRegistry
 	{
