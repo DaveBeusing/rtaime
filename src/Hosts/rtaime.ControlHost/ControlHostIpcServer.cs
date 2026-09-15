@@ -189,11 +189,8 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			return Error(request, "control.not_ready", "ControlHost has no committed authoritative state yet.");
 
 		RuntimeRemoteSnapshot? runtime = null;
-		if (_runtimeTransport.IsConnected)
-		{
-			try { runtime = await _runtimeTransport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false); }
-			catch { runtime = null; }
-		}
+		try { runtime = await _runtimeTransport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false); }
+		catch { runtime = null; }
 
 		var state = control.State;
 		var payload = new WireOperatorSnapshot(
@@ -218,8 +215,6 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			var control = _controlAccessor();
 			if (control is null || !control.HasAuthoritativeState)
 				return Error(request, "control.not_ready", "ControlHost has no committed authoritative state yet.");
-			if (!_runtimeTransport.IsConnected)
-				return MutationResponse(request, false, control.State, new Failure("runtime.unavailable", "RuntimeHost is not connected."));
 
 			var command = request.Payload.Deserialize<WireControlCommand>(Wire.JsonOptions)
 				?? throw new InvalidDataException("Control command payload is required.");
