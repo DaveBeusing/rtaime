@@ -8,6 +8,9 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\rtaime.Core\rtaime.Core.csproj" />
     <ProjectReference Include="..\..\src\Contracts\rtaime.Control.Contracts\rtaime.Control.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Contracts\rtaime.Runtime.Contracts\rtaime.Runtime.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Contracts\rtaime.Media.Contracts\rtaime.Media.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Contracts\rtaime.Provider.Contracts\rtaime.Provider.Contracts.csproj" />
     <ProjectReference Include="..\..\src\Control\rtaime.Control\rtaime.Control.csproj" />
   </ItemGroup>
 
