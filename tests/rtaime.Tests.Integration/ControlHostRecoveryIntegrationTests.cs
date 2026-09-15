@@ -87,41 +87,17 @@ public sealed class ControlHostRecoveryIntegrationTests
 	}
 
 	[Fact]
-	public async Task Runtime_ahead_of_durable_Control_authority_fails_closed_without_reapply()
+	public async Task Runtime_authority_ahead_of_durable_Control_authority_fails_closed_without_reapply()
 	{
 		var root = TempDirectory();
 		var controlEndpoint = Endpoint("control-conflict");
-		var options = ControlHostProcessOptions.Default with
-		{
-			ListenEndpoint = controlEndpoint,
-			RuntimeEndpoint = Endpoint("runtime-conflict"),
-			DurabilityRoot = root,
-			ConnectTimeout = TimeSpan.FromMilliseconds(100),
-			RequestTimeout = TimeSpan.FromMilliseconds(500),
-			RuntimeRetryInterval = TimeSpan.FromMilliseconds(25)
-		};
-		var durabilityDirectory = Path.Combine(root, $"{options.ProductionId}-{controlEndpoint}");
-		Directory.CreateDirectory(durabilityDirectory);
-		await using (var store = new SqliteManagementStore(Path.Combine(durabilityDirectory, "management.db")))
-		{
-			var payload = JsonSerializer.SerializeToUtf8Bytes(new
-			{
-				Version = ControlContractVersion.Current.ToString(),
-				ProductionId = options.ProductionId.ToString(),
-				Revision = 1UL,
-				PreviewSourceId = options.SourceBId.ToString(),
-				ProgramSourceId = options.SourceAId.ToString()
-			});
-			await store.WriteAsync(new ProductionCheckpoint(
-				Identity.New(),
-				options.ProductionId.Value,
-				new Revision(1),
-				new UtcTimestamp(DateTimeOffset.UtcNow),
-				"rtaime.control.authority.v1",
-				payload));
-		}
+		var options = RecoveryOptions(root, controlEndpoint, Endpoint("runtime-conflict"));
+		await WriteCheckpointAsync(options, controlEndpoint, new Revision(1));
 
-		var transport = new RuntimeAheadTransport(new Revision(2));
+		var transport = new RuntimeSnapshotTransport(
+			options.ProductionId.Value,
+			executionRevision: new Revision(9),
+			authorityRevision: new Revision(2));
 		using var stop = new CancellationTokenSource();
 		var control = new ControlHostProcess(options, () => transport);
 		var run = control.RunAsync(stop.Token);
@@ -131,6 +107,37 @@ public sealed class ControlHostRecoveryIntegrationTests
 			Assert.Equal(ControlHostProcessState.Degraded, control.Lifecycle.State);
 			Assert.Equal(new Revision(1), control.Control!.State.Revision);
 			Assert.Equal(new Revision(2), control.Recovery.RecoveredRevision);
+			Assert.Equal(0, transport.ApplyCalls);
+		}
+		finally
+		{
+			stop.Cancel();
+			Assert.Equal(ControlHostExitCode.Success, await run);
+			DeleteDirectory(root);
+		}
+	}
+
+	[Fact]
+	public async Task Runtime_execution_revision_is_independent_when_committed_authority_matches_Control()
+	{
+		var root = TempDirectory();
+		var controlEndpoint = Endpoint("control-independent-runtime-revision");
+		var options = RecoveryOptions(root, controlEndpoint, Endpoint("runtime-independent-runtime-revision"));
+		await WriteCheckpointAsync(options, controlEndpoint, new Revision(1));
+
+		var transport = new RuntimeSnapshotTransport(
+			options.ProductionId.Value,
+			executionRevision: new Revision(9),
+			authorityRevision: new Revision(1));
+		using var stop = new CancellationTokenSource();
+		var control = new ControlHostProcess(options, () => transport);
+		var run = control.RunAsync(stop.Token);
+		try
+		{
+			await WaitForRecoveredReadyAsync(control, run);
+			Assert.Equal(new Revision(1), control.Control!.State.Revision);
+			Assert.Equal(ControlHostRecoveryState.Recovered, control.Recovery.State);
+			Assert.Contains("aligned", control.Recovery.Detail, StringComparison.OrdinalIgnoreCase);
 			Assert.Equal(0, transport.ApplyCalls);
 		}
 		finally
@@ -167,7 +174,9 @@ public sealed class ControlHostRecoveryIntegrationTests
 
 		try
 		{
-			var process = new ControlHostProcess(options, () => new RuntimeAheadTransport(new Revision(4)));
+			var process = new ControlHostProcess(
+				options,
+				() => new RuntimeSnapshotTransport(options.ProductionId.Value, new Revision(4), new Revision(4)));
 			var result = await process.RunAsync(CancellationToken.None);
 			Assert.Equal(ControlHostExitCode.StartupFailure, result);
 			Assert.Equal(ControlHostProcessState.Failed, process.Lifecycle.State);
@@ -179,15 +188,22 @@ public sealed class ControlHostRecoveryIntegrationTests
 		}
 	}
 
-	private sealed class RuntimeAheadTransport : IControlRuntimeTransportSeam
+	private sealed class RuntimeSnapshotTransport : IControlRuntimeTransportSeam
 	{
-		private readonly Revision _runtimeRevision;
+		private readonly Identity _authorityStateId;
+		private readonly Revision _executionRevision;
+		private readonly Revision _authorityRevision;
 		private bool _connected;
 
-		public RuntimeAheadTransport(Revision runtimeRevision) => _runtimeRevision = runtimeRevision;
+		public RuntimeSnapshotTransport(Identity authorityStateId, Revision executionRevision, Revision authorityRevision)
+		{
+			_authorityStateId = authorityStateId;
+			_executionRevision = executionRevision;
+			_authorityRevision = authorityRevision;
+		}
 
 		public bool IsConnected => _connected;
-		public string? HostInstanceId => _connected ? "runtime-ahead-instance" : null;
+		public string? HostInstanceId => _connected ? "runtime-snapshot-instance" : null;
 		public IReadOnlyList<ProviderDescriptor> ProviderDescriptors => Array.Empty<ProviderDescriptor>();
 		public int ApplyCalls { get; private set; }
 
@@ -202,13 +218,15 @@ public sealed class ControlHostRecoveryIntegrationTests
 
 		public ValueTask<RuntimeRemoteSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default) =>
 			ValueTask.FromResult(new RuntimeRemoteSnapshot(
-				"runtime-ahead-instance",
+				"runtime-snapshot-instance",
 				new RuntimeExecutionState(
 					RuntimeContractVersion.Current,
 					new ExecutionInstanceId(Identity.New()),
-					_runtimeRevision,
+					_executionRevision,
 					RuntimeExecutionStatus.Committed,
 					null),
+				_authorityStateId,
+				_authorityRevision,
 				1,
 				0,
 				0,
@@ -221,7 +239,7 @@ public sealed class ControlHostRecoveryIntegrationTests
 			CancellationToken cancellationToken = default)
 		{
 			ApplyCalls++;
-			throw new InvalidOperationException("Recovery conflict must be detected before Runtime apply.");
+			throw new InvalidOperationException("Aligned or conflicting recovery must not reach Runtime apply in this transport.");
 		}
 
 		public ValueTask DisconnectAsync()
@@ -229,6 +247,39 @@ public sealed class ControlHostRecoveryIntegrationTests
 			_connected = false;
 			return ValueTask.CompletedTask;
 		}
+	}
+
+	private static ControlHostProcessOptions RecoveryOptions(string root, string controlEndpoint, string runtimeEndpoint) =>
+		ControlHostProcessOptions.Default with
+		{
+			ListenEndpoint = controlEndpoint,
+			RuntimeEndpoint = runtimeEndpoint,
+			DurabilityRoot = root,
+			ConnectTimeout = TimeSpan.FromMilliseconds(100),
+			RequestTimeout = TimeSpan.FromMilliseconds(500),
+			RuntimeRetryInterval = TimeSpan.FromMilliseconds(25)
+		};
+
+	private static async Task WriteCheckpointAsync(ControlHostProcessOptions options, string controlEndpoint, Revision revision)
+	{
+		var durabilityDirectory = Path.Combine(options.DurabilityRoot, $"{options.ProductionId}-{controlEndpoint}");
+		Directory.CreateDirectory(durabilityDirectory);
+		await using var store = new SqliteManagementStore(Path.Combine(durabilityDirectory, "management.db"));
+		var payload = JsonSerializer.SerializeToUtf8Bytes(new
+		{
+			Version = ControlContractVersion.Current.ToString(),
+			ProductionId = options.ProductionId.ToString(),
+			Revision = revision.Value,
+			PreviewSourceId = options.SourceBId.ToString(),
+			ProgramSourceId = options.SourceAId.ToString()
+		});
+		await store.WriteAsync(new ProductionCheckpoint(
+			Identity.New(),
+			options.ProductionId.Value,
+			revision,
+			new UtcTimestamp(DateTimeOffset.UtcNow),
+			"rtaime.control.authority.v1",
+			payload));
 	}
 
 	private static async Task WaitForRecoveredReadyAsync(
