@@ -119,7 +119,7 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 
 	public ValueTask DisconnectAsync()
 	{
-		MarkDisconnected();
+		ResetBinding();
 		return ValueTask.CompletedTask;
 	}
 
@@ -197,6 +197,8 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 		if (string.IsNullOrWhiteSpace(hostInstanceId)) throw new InvalidDataException("RuntimeHost instance identity is required.");
 		lock (_gate)
 		{
+			if (_hostInstanceId is not null && !string.Equals(_hostInstanceId, hostInstanceId, StringComparison.Ordinal))
+				throw new InvalidDataException($"RuntimeHost process identity changed from '{_hostInstanceId}' to '{hostInstanceId}' during an established transport binding.");
 			_connected = true;
 			_hostInstanceId = hostInstanceId;
 		}
@@ -205,6 +207,16 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 	private void MarkDisconnected()
 	{
 		lock (_gate) _connected = false;
+	}
+
+	private void ResetBinding()
+	{
+		lock (_gate)
+		{
+			_connected = false;
+			_hostInstanceId = null;
+			_providers = Array.Empty<ProviderDescriptor>();
+		}
 	}
 
 	private static ProviderDescriptor FromWire(WireProvider provider) => new(
