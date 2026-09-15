@@ -19,7 +19,7 @@ public enum LocalProcessSupervisionState
 public sealed record LocalProcessSupervisionSnapshot(
 	string Name,
 	LocalProcessSupervisionState State,
-	int ConsecutiveStartAttempts,
+	int StartAttempts,
 	int? OwnedProcessId,
 	string Detail,
 	DateTimeOffset UpdatedAt);
@@ -31,7 +31,7 @@ public sealed record LocalProcessSupervisionOptions(
 	TimeSpan ProbeTimeout,
 	TimeSpan ProbeInterval,
 	TimeSpan RestartBackoff,
-	int MaxConsecutiveStartAttempts,
+	int MaxStartAttempts,
 	bool StopOwnedProcessOnDispose = true)
 {
 	public string AdditionalArguments { get; init; } = string.Empty;
@@ -45,15 +45,15 @@ public sealed record LocalProcessSupervisionOptions(
 		if (ProbeTimeout <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(ProbeTimeout));
 		if (ProbeInterval <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(ProbeInterval));
 		if (RestartBackoff < TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(RestartBackoff));
-		if (MaxConsecutiveStartAttempts <= 0) throw new ArgumentOutOfRangeException(nameof(MaxConsecutiveStartAttempts));
+		if (MaxStartAttempts <= 0) throw new ArgumentOutOfRangeException(nameof(MaxStartAttempts));
 	}
 }
 
 /// <summary>
-/// Local endpoint-driven process supervision. The endpoint is authoritative for adoption: if a compatible local
-/// host is already listening, the supervisor does not launch a duplicate process. Only processes launched by this
+/// Local endpoint-driven process supervision. The endpoint is authoritative for adoption: if a local host is
+/// already listening, the supervisor does not launch a duplicate process. Only processes launched by this
 /// instance are ever terminated during an orderly dispose. A supervisor crash therefore does not terminate an
-/// already-running child process.
+/// already-running child process. Start attempts are bounded for the lifetime of this supervisor instance.
 /// </summary>
 public sealed class LocalProcessSupervisor : IAsyncDisposable
 {
@@ -63,7 +63,7 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 	private CancellationTokenSource? _linkedStop;
 	private Task? _loop;
 	private Process? _ownedProcess;
-	private int _consecutiveStartAttempts;
+	private int _startAttempts;
 	private LocalProcessSupervisionSnapshot _snapshot;
 
 	public LocalProcessSupervisor(LocalProcessSupervisionOptions options)
@@ -143,7 +143,6 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 		{
 			if (await ProbeEndpointAsync(cancellationToken).ConfigureAwait(false))
 			{
-				_consecutiveStartAttempts = 0;
 				Update(LocalProcessSupervisionState.Healthy, $"Endpoint '{_options.Endpoint}' is reachable.");
 				await Task.Delay(_options.ProbeInterval, cancellationToken).ConfigureAwait(false);
 				continue;
@@ -157,16 +156,16 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 				continue;
 			}
 
-			if (_consecutiveStartAttempts >= _options.MaxConsecutiveStartAttempts)
+			if (_startAttempts >= _options.MaxStartAttempts)
 			{
 				Update(
 					LocalProcessSupervisionState.Failed,
-					$"Restart budget exhausted after {_consecutiveStartAttempts} consecutive start attempt(s); continuing endpoint probes without launching another process.");
+					$"Start budget exhausted after {_startAttempts} attempt(s); continuing endpoint probes without launching another process.");
 				await Task.Delay(_options.ProbeInterval, cancellationToken).ConfigureAwait(false);
 				continue;
 			}
 
-			if (_consecutiveStartAttempts > 0 && _options.RestartBackoff > TimeSpan.Zero)
+			if (_startAttempts > 0 && _options.RestartBackoff > TimeSpan.Zero)
 			{
 				Update(LocalProcessSupervisionState.RestartBackoff, "Waiting before the next supervised start attempt.");
 				await Task.Delay(_options.RestartBackoff, cancellationToken).ConfigureAwait(false);
@@ -174,9 +173,18 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 					continue;
 			}
 
-			StartOwnedProcess();
-			_consecutiveStartAttempts++;
-			Update(LocalProcessSupervisionState.Starting, $"Started supervised process attempt {_consecutiveStartAttempts}.");
+			_startAttempts++;
+			try
+			{
+				StartOwnedProcess();
+				Update(LocalProcessSupervisionState.Starting, $"Started supervised process attempt {_startAttempts} of {_options.MaxStartAttempts}.");
+			}
+			catch (Exception exception) when (exception is InvalidOperationException or System.ComponentModel.Win32Exception)
+			{
+				Update(
+					_startAttempts >= _options.MaxStartAttempts ? LocalProcessSupervisionState.Failed : LocalProcessSupervisionState.RestartBackoff,
+					$"Supervised process start attempt {_startAttempts} failed: {exception.Message}");
+			}
 			await Task.Delay(_options.ProbeInterval, cancellationToken).ConfigureAwait(false);
 		}
 	}
@@ -269,7 +277,7 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 			_snapshot = new LocalProcessSupervisionSnapshot(
 				_options.Name,
 				state,
-				_consecutiveStartAttempts,
+				_startAttempts,
 				processId,
 				detail,
 				DateTimeOffset.UtcNow);
