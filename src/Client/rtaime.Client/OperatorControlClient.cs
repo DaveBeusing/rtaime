@@ -1,7 +1,17 @@
+using System.Collections.ObjectModel;
 using rtaime.Control.Contracts;
 using rtaime.Core;
 
 namespace rtaime.Client;
+
+public sealed record OperatorSourceDescriptor(string Id, string Name)
+{
+    public OperatorSourceDescriptor(string id, string name) : this(
+        string.IsNullOrWhiteSpace(id) ? throw new ArgumentException("Source id is required.", nameof(id)) : id.Trim(),
+        string.IsNullOrWhiteSpace(name) ? throw new ArgumentException("Source name is required.", nameof(name)) : name.Trim())
+    {
+    }
+}
 
 public sealed record OperatorMutationResponse
 {
@@ -24,8 +34,11 @@ public sealed record OperatorMutationResponse
 
 public sealed record OperatorStatusSnapshot
 {
+    private readonly ReadOnlyCollection<OperatorSourceDescriptor> _sources;
+
     public OperatorStatusSnapshot(
         AuthoritativeProductionState production,
+        IReadOnlyList<OperatorSourceDescriptor> sources,
         string runtimeStatus,
         string timingStatus,
         string inputStatus,
@@ -35,6 +48,9 @@ public sealed record OperatorStatusSnapshot
         double audioPeakLevel)
     {
         Production = production ?? throw new ArgumentNullException(nameof(production));
+        ArgumentNullException.ThrowIfNull(sources);
+        if (sources.Count == 0 || sources.Any(source => source is null))
+            throw new ArgumentException("Operator snapshot requires at least one non-null source.", nameof(sources));
         if (string.IsNullOrWhiteSpace(runtimeStatus)) throw new ArgumentException("Runtime status is required.", nameof(runtimeStatus));
         if (string.IsNullOrWhiteSpace(timingStatus)) throw new ArgumentException("Timing status is required.", nameof(timingStatus));
         if (string.IsNullOrWhiteSpace(inputStatus)) throw new ArgumentException("Input status is required.", nameof(inputStatus));
@@ -43,6 +59,7 @@ public sealed record OperatorStatusSnapshot
         if (!double.IsFinite(audioPeakLevel) || audioPeakLevel is < 0 or > 1)
             throw new ArgumentOutOfRangeException(nameof(audioPeakLevel));
 
+        _sources = Array.AsReadOnly(sources.ToArray());
         RuntimeStatus = runtimeStatus.Trim();
         TimingStatus = timingStatus.Trim();
         InputStatus = inputStatus.Trim();
@@ -53,6 +70,7 @@ public sealed record OperatorStatusSnapshot
     }
 
     public AuthoritativeProductionState Production { get; }
+    public IReadOnlyList<OperatorSourceDescriptor> Sources => _sources;
     public string RuntimeStatus { get; }
     public string TimingStatus { get; }
     public string InputStatus { get; }
@@ -93,6 +111,9 @@ public sealed class OperatorControlClient
         return _snapshot;
     }
 
+    public ValueTask<OperatorMutationResponse> SelectPreviewAsync(string sourceId, CancellationToken cancellationToken = default) =>
+        SelectPreviewAsync(ParseSourceId(sourceId), cancellationToken);
+
     public async ValueTask<OperatorMutationResponse> SelectPreviewAsync(
         ProductionSourceId sourceId,
         CancellationToken cancellationToken = default)
@@ -105,6 +126,12 @@ public sealed class OperatorControlClient
         return result;
     }
 
+    public ValueTask<OperatorMutationResponse> CutAsync(string sourceId, CancellationToken cancellationToken = default) =>
+        CutAsync(ParseSourceId(sourceId), cancellationToken);
+
+    public ValueTask<OperatorMutationResponse> CutPreviewAsync(CancellationToken cancellationToken = default) =>
+        CutAsync(RequireSnapshot().Production.Routing.PreviewSourceId, cancellationToken);
+
     public async ValueTask<OperatorMutationResponse> CutAsync(
         ProductionSourceId sourceId,
         CancellationToken cancellationToken = default)
@@ -116,6 +143,17 @@ public sealed class OperatorControlClient
             await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
+
+    public ValueTask<OperatorMutationResponse> DissolveAsync(
+        string sourceId,
+        uint durationFrames,
+        CancellationToken cancellationToken = default) =>
+        DissolveAsync(ParseSourceId(sourceId), durationFrames, cancellationToken);
+
+    public ValueTask<OperatorMutationResponse> DissolvePreviewAsync(
+        uint durationFrames,
+        CancellationToken cancellationToken = default) =>
+        DissolveAsync(RequireSnapshot().Production.Routing.PreviewSourceId, durationFrames, cancellationToken);
 
     public async ValueTask<OperatorMutationResponse> DissolveAsync(
         ProductionSourceId sourceId,
@@ -134,6 +172,9 @@ public sealed class OperatorControlClient
 
     private OperatorStatusSnapshot RequireSnapshot() =>
         _snapshot ?? throw new InvalidOperationException("Operator client must synchronize authoritative state before issuing commands.");
+
+    private static ProductionSourceId ParseSourceId(string sourceId) =>
+        new(Identity.Parse(sourceId));
 
     private static ControlCommandMetadata Metadata(AuthoritativeProductionState state) =>
         new(ControlContractVersion.Current, CommandId.New(), state.ProductionId, state.Revision);
