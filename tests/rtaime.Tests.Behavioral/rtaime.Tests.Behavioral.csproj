@@ -6,6 +6,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\rtaime.Core\rtaime.Core.csproj" />
+    <ProjectReference Include="..\..\src\Contracts\rtaime.Control.Contracts\rtaime.Control.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Contracts\rtaime.Media.Contracts\rtaime.Media.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Control\rtaime.Control\rtaime.Control.csproj" />
+    <ProjectReference Include="..\..\src\Media\rtaime.Media\rtaime.Media.csproj" />
+    <ProjectReference Include="..\..\src\Providers\rtaime.Provider.VirtualMedia\rtaime.Provider.VirtualMedia.csproj" />
     <ProjectReference Include="..\..\src\Hosts\rtaime.ControlHost\rtaime.ControlHost.csproj" />
     <ProjectReference Include="..\..\src\Hosts\rtaime.RuntimeHost\rtaime.RuntimeHost.csproj" />
     <ProjectReference Include="..\..\src\Hosts\rtaime.AIHost\rtaime.AIHost.csproj" />
