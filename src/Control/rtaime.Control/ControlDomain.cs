@@ -3,16 +3,10 @@ using rtaime.Core;
 
 namespace rtaime.Control;
 
-/// <summary>
-/// Immutable pair of desired and authoritative Control state.
-/// </summary>
 public sealed record ControlStateSnapshot(
     DesiredProductionState Desired,
     AuthoritativeProductionState Authoritative);
 
-/// <summary>
-/// Fail-closed result of creating the initial Control state from a production specification.
-/// </summary>
 public sealed class ControlInitializationResult
 {
     private ControlInitializationResult(ControlValidationReport validation, ControlStateSnapshot? state)
@@ -42,10 +36,6 @@ public sealed class ControlInitializationResult
     }
 }
 
-/// <summary>
-/// Result of evaluating one authoritative Control command.
-/// Rejected commands return the exact current authoritative state and no desired mutation.
-/// </summary>
 public sealed class ControlCommandResult
 {
     private ControlCommandResult(
@@ -90,9 +80,6 @@ public sealed class ControlCommandResult
     }
 }
 
-/// <summary>
-/// Domain validation for the declarative V1 production specification.
-/// </summary>
 public static class ProductionSpecificationValidator
 {
     public static ControlValidationReport Validate(ProductionSpecification specification)
@@ -100,9 +87,7 @@ public static class ProductionSpecificationValidator
         ArgumentNullException.ThrowIfNull(specification);
 
         var issues = new List<ValidationIssue>();
-        var knownSources = specification.Sources
-            .Select(source => source.SourceId)
-            .ToHashSet();
+        var knownSources = specification.Sources.Select(source => source.SourceId).ToHashSet();
 
         if (!knownSources.Contains(specification.InitialRouting.PreviewSourceId))
         {
@@ -125,8 +110,8 @@ public static class ProductionSpecificationValidator
 }
 
 /// <summary>
-/// Pure V1 Control-domain state transition engine.
-/// It validates a command completely before crossing the authoritative commit boundary.
+/// Pure V1 Control-domain state transition engine. CUT and DISSOLVE use the same
+/// validation and authoritative commit path; transition timing remains a Runtime concern.
 /// </summary>
 public static class ControlDomainEngine
 {
@@ -159,12 +144,7 @@ public static class ControlDomainEngine
         SelectPreviewCommand command)
     {
         ArgumentNullException.ThrowIfNull(command);
-        return ApplyCore(
-            specification,
-            current,
-            command.Metadata,
-            command.SourceId,
-            MutationKind.SelectPreview);
+        return ApplyCore(specification, current, command.Metadata, command.SourceId, MutationKind.SelectPreview);
     }
 
     public static ControlCommandResult Apply(
@@ -173,12 +153,16 @@ public static class ControlDomainEngine
         CutProgramCommand command)
     {
         ArgumentNullException.ThrowIfNull(command);
-        return ApplyCore(
-            specification,
-            current,
-            command.Metadata,
-            command.SourceId,
-            MutationKind.CutProgram);
+        return ApplyCore(specification, current, command.Metadata, command.SourceId, MutationKind.ProgramTransition);
+    }
+
+    public static ControlCommandResult Apply(
+        ProductionSpecification specification,
+        AuthoritativeProductionState current,
+        DissolveProgramCommand command)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        return ApplyCore(specification, current, command.Metadata, command.SourceId, MutationKind.ProgramTransition);
     }
 
     private static ControlCommandResult ApplyCore(
@@ -258,12 +242,8 @@ public static class ControlDomainEngine
 
         var desiredRouting = mutationKind switch
         {
-            MutationKind.SelectPreview => new ProductionRoutingState(
-                targetSourceId,
-                current.Routing.ProgramSourceId),
-            MutationKind.CutProgram => new ProductionRoutingState(
-                current.Routing.PreviewSourceId,
-                targetSourceId),
+            MutationKind.SelectPreview => new ProductionRoutingState(targetSourceId, current.Routing.ProgramSourceId),
+            MutationKind.ProgramTransition => new ProductionRoutingState(current.Routing.PreviewSourceId, targetSourceId),
             _ => throw new InvalidOperationException($"Unsupported mutation kind '{mutationKind}'.")
         };
 
@@ -316,6 +296,6 @@ public static class ControlDomainEngine
     private enum MutationKind
     {
         SelectPreview,
-        CutProgram
+        ProgramTransition
     }
 }

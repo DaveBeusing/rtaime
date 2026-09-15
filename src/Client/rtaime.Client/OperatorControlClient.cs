@@ -1,0 +1,186 @@
+using System.Collections.ObjectModel;
+using rtaime.Control.Contracts;
+using rtaime.Core;
+
+namespace rtaime.Client;
+
+public sealed record OperatorSourceDescriptor
+{
+    public OperatorSourceDescriptor(string id, string name)
+    {
+        if (string.IsNullOrWhiteSpace(id)) throw new ArgumentException("Source id is required.", nameof(id));
+        if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Source name is required.", nameof(name));
+        Id = id.Trim();
+        Name = name.Trim();
+    }
+
+    public string Id { get; }
+    public string Name { get; }
+}
+
+public sealed record OperatorMutationResponse
+{
+    public OperatorMutationResponse(bool accepted, AuthoritativeProductionState state, Failure? failure)
+    {
+        State = state ?? throw new ArgumentNullException(nameof(state));
+        if (accepted && failure is not null)
+            throw new ArgumentException("Accepted operator mutations must not carry a failure.", nameof(failure));
+        if (!accepted && failure is null)
+            throw new ArgumentException("Rejected operator mutations require a failure.", nameof(failure));
+
+        Accepted = accepted;
+        Failure = failure;
+    }
+
+    public bool Accepted { get; }
+    public AuthoritativeProductionState State { get; }
+    public Failure? Failure { get; }
+}
+
+public sealed record OperatorStatusSnapshot
+{
+    private readonly ReadOnlyCollection<OperatorSourceDescriptor> _sources;
+
+    public OperatorStatusSnapshot(
+        AuthoritativeProductionState production,
+        IReadOnlyList<OperatorSourceDescriptor> sources,
+        string runtimeStatus,
+        string timingStatus,
+        string inputStatus,
+        string aiStatus,
+        string recordingStatus,
+        bool visualLayerEnabled,
+        double audioPeakLevel)
+    {
+        Production = production ?? throw new ArgumentNullException(nameof(production));
+        ArgumentNullException.ThrowIfNull(sources);
+        if (sources.Count == 0 || sources.Any(source => source is null))
+            throw new ArgumentException("Operator snapshot requires at least one non-null source.", nameof(sources));
+        if (string.IsNullOrWhiteSpace(runtimeStatus)) throw new ArgumentException("Runtime status is required.", nameof(runtimeStatus));
+        if (string.IsNullOrWhiteSpace(timingStatus)) throw new ArgumentException("Timing status is required.", nameof(timingStatus));
+        if (string.IsNullOrWhiteSpace(inputStatus)) throw new ArgumentException("Input status is required.", nameof(inputStatus));
+        if (string.IsNullOrWhiteSpace(aiStatus)) throw new ArgumentException("AI status is required.", nameof(aiStatus));
+        if (string.IsNullOrWhiteSpace(recordingStatus)) throw new ArgumentException("Recording status is required.", nameof(recordingStatus));
+        if (!double.IsFinite(audioPeakLevel) || audioPeakLevel is < 0 or > 1)
+            throw new ArgumentOutOfRangeException(nameof(audioPeakLevel));
+
+        _sources = Array.AsReadOnly(sources.ToArray());
+        RuntimeStatus = runtimeStatus.Trim();
+        TimingStatus = timingStatus.Trim();
+        InputStatus = inputStatus.Trim();
+        AIStatus = aiStatus.Trim();
+        RecordingStatus = recordingStatus.Trim();
+        VisualLayerEnabled = visualLayerEnabled;
+        AudioPeakLevel = audioPeakLevel;
+    }
+
+    public AuthoritativeProductionState Production { get; }
+    public IReadOnlyList<OperatorSourceDescriptor> Sources => _sources;
+    public string RuntimeStatus { get; }
+    public string TimingStatus { get; }
+    public string InputStatus { get; }
+    public string AIStatus { get; }
+    public string RecordingStatus { get; }
+    public bool VisualLayerEnabled { get; }
+    public double AudioPeakLevel { get; }
+}
+
+/// <summary>
+/// Transport seam for the versioned remote-control path. Implementations may use IPC/network transports;
+/// tests may use an in-process adapter, but the Operator never gains production authority.
+/// </summary>
+public interface IOperatorControlTransport
+{
+    ValueTask<OperatorStatusSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default);
+    ValueTask<OperatorMutationResponse> SelectPreviewAsync(SelectPreviewCommand command, CancellationToken cancellationToken = default);
+    ValueTask<OperatorMutationResponse> CutProgramAsync(CutProgramCommand command, CancellationToken cancellationToken = default);
+    ValueTask<OperatorMutationResponse> DissolveProgramAsync(DissolveProgramCommand command, CancellationToken cancellationToken = default);
+}
+
+public sealed class OperatorControlClient
+{
+    private readonly IOperatorControlTransport _transport;
+    private OperatorStatusSnapshot? _snapshot;
+
+    public OperatorControlClient(IOperatorControlTransport transport)
+    {
+        _transport = transport ?? throw new ArgumentNullException(nameof(transport));
+    }
+
+    public OperatorStatusSnapshot? Snapshot => _snapshot;
+    public bool Connected => _snapshot is not null;
+
+    public async ValueTask<OperatorStatusSnapshot> SynchronizeAsync(CancellationToken cancellationToken = default)
+    {
+        _snapshot = await _transport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
+        return _snapshot;
+    }
+
+    public ValueTask<OperatorMutationResponse> SelectPreviewAsync(string sourceId, CancellationToken cancellationToken = default) =>
+        SelectPreviewAsync(ParseSourceId(sourceId), cancellationToken);
+
+    public async ValueTask<OperatorMutationResponse> SelectPreviewAsync(
+        ProductionSourceId sourceId,
+        CancellationToken cancellationToken = default)
+    {
+        var current = RequireSnapshot();
+        var command = new SelectPreviewCommand(Metadata(current.Production), sourceId);
+        var result = await _transport.SelectPreviewAsync(command, cancellationToken).ConfigureAwait(false);
+        if (result.Accepted)
+            await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+
+    public ValueTask<OperatorMutationResponse> CutAsync(string sourceId, CancellationToken cancellationToken = default) =>
+        CutAsync(ParseSourceId(sourceId), cancellationToken);
+
+    public ValueTask<OperatorMutationResponse> CutPreviewAsync(CancellationToken cancellationToken = default) =>
+        CutAsync(RequireSnapshot().Production.Routing.PreviewSourceId, cancellationToken);
+
+    public async ValueTask<OperatorMutationResponse> CutAsync(
+        ProductionSourceId sourceId,
+        CancellationToken cancellationToken = default)
+    {
+        var current = RequireSnapshot();
+        var command = new CutProgramCommand(Metadata(current.Production), sourceId);
+        var result = await _transport.CutProgramAsync(command, cancellationToken).ConfigureAwait(false);
+        if (result.Accepted)
+            await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+
+    public ValueTask<OperatorMutationResponse> DissolveAsync(
+        string sourceId,
+        uint durationFrames,
+        CancellationToken cancellationToken = default) =>
+        DissolveAsync(ParseSourceId(sourceId), durationFrames, cancellationToken);
+
+    public ValueTask<OperatorMutationResponse> DissolvePreviewAsync(
+        uint durationFrames,
+        CancellationToken cancellationToken = default) =>
+        DissolveAsync(RequireSnapshot().Production.Routing.PreviewSourceId, durationFrames, cancellationToken);
+
+    public async ValueTask<OperatorMutationResponse> DissolveAsync(
+        ProductionSourceId sourceId,
+        uint durationFrames,
+        CancellationToken cancellationToken = default)
+    {
+        var current = RequireSnapshot();
+        var command = new DissolveProgramCommand(Metadata(current.Production), sourceId, durationFrames);
+        var result = await _transport.DissolveProgramAsync(command, cancellationToken).ConfigureAwait(false);
+        if (result.Accepted)
+            await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+
+    public void Disconnect() => _snapshot = null;
+
+    private OperatorStatusSnapshot RequireSnapshot() =>
+        _snapshot ?? throw new InvalidOperationException("Operator client must synchronize authoritative state before issuing commands.");
+
+    private static ProductionSourceId ParseSourceId(string sourceId) =>
+        new(Identity.Parse(sourceId));
+
+    private static ControlCommandMetadata Metadata(AuthoritativeProductionState state) =>
+        new(ControlContractVersion.Current, CommandId.New(), state.ProductionId, state.Revision);
+}

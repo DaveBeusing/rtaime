@@ -2,7 +2,90 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="rtaime Operator"
-        Width="800"
-        Height="450">
-    <Grid />
+        Width="1100"
+        Height="680"
+        MinWidth="900"
+        MinHeight="560">
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <DockPanel Grid.Row="0" Margin="0,0,0,20">
+            <TextBlock Text="rtaime V1 Operator" FontSize="28" FontWeight="SemiBold" VerticalAlignment="Center" />
+            <Button Content="Synchronize" Command="{Binding SynchronizeCommand}" Padding="16,8" HorizontalAlignment="Right" DockPanel.Dock="Right" />
+        </DockPanel>
+
+        <Grid Grid.Row="1" Margin="0,0,0,20">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="20" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Border Grid.Column="0" BorderThickness="1" BorderBrush="Gray" Padding="16">
+                <StackPanel>
+                    <TextBlock Text="PREVIEW" FontWeight="Bold" />
+                    <TextBlock Text="{Binding Preview}" FontSize="18" Margin="0,8,0,0" TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+            <Border Grid.Column="2" BorderThickness="1" BorderBrush="Gray" Padding="16">
+                <StackPanel>
+                    <TextBlock Text="PROGRAM" FontWeight="Bold" />
+                    <TextBlock Text="{Binding Program}" FontSize="18" Margin="0,8,0,0" TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="2*" />
+                <ColumnDefinition Width="20" />
+                <ColumnDefinition Width="3*" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0">
+                <TextBlock Text="Source / Transition" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12" />
+                <ComboBox ItemsSource="{Binding Sources}" SelectedItem="{Binding SelectedSource}" DisplayMemberPath="Name" MinHeight="32" />
+                <Button Content="Set Preview" Command="{Binding SetPreviewCommand}" Margin="0,12,0,0" Padding="12,8" />
+                <Button Content="CUT" Command="{Binding CutCommand}" Margin="0,8,0,0" Padding="12,12" FontWeight="Bold" />
+                <DockPanel Margin="0,8,0,0">
+                    <TextBlock Text="Dissolve frames" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <TextBox Text="{Binding TransitionFrames, UpdateSourceTrigger=PropertyChanged}" Width="80" />
+                </DockPanel>
+                <Button Content="DISSOLVE / AUTO" Command="{Binding DissolveCommand}" Margin="0,8,0,0" Padding="12,12" />
+            </StackPanel>
+
+            <Grid Grid.Column="2">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                    <TextBlock Text="System State" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12" />
+                    <TextBlock Text="Runtime" FontWeight="Bold" />
+                    <TextBlock Text="{Binding RuntimeStatus}" Margin="0,0,0,8" />
+                    <TextBlock Text="Timing" FontWeight="Bold" />
+                    <TextBlock Text="{Binding TimingStatus}" Margin="0,0,0,8" />
+                    <TextBlock Text="Inputs" FontWeight="Bold" />
+                    <TextBlock Text="{Binding InputStatus}" Margin="0,0,0,8" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Margin="12,0,0,0">
+                    <TextBlock Text="Optional / Isolated" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12" />
+                    <TextBlock Text="AI" FontWeight="Bold" />
+                    <TextBlock Text="{Binding AIStatus}" Margin="0,0,0,8" />
+                    <TextBlock Text="Recording" FontWeight="Bold" />
+                    <TextBlock Text="{Binding RecordingStatus}" Margin="0,0,0,8" />
+                    <TextBlock Text="Audio Peak" FontWeight="Bold" />
+                    <TextBlock Text="{Binding AudioPeak}" Margin="0,0,0,8" />
+                </StackPanel>
+            </Grid>
+        </Grid>
+
+        <Border Grid.Row="3" Margin="0,20,0,0" Padding="12" BorderThickness="1" BorderBrush="DarkGray">
+            <TextBlock Text="{Binding LastError, TargetNullValue=Remote transport not configured in this bootstrap executable.}" TextWrapping="Wrap" />
+        </Border>
+    </Grid>
 </Window>

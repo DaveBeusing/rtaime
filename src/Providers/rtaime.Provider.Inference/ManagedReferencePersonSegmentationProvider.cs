@@ -106,9 +106,12 @@ public sealed class ManagedReferencePersonSegmentationProvider : IInferenceProvi
             frame.Timing.SequenceNumber,
             request.Request.RequestId.ToString());
 
+        // The normalized region is deterministic reference metadata used only by the V1 visible-effect proof.
+        // It does not represent trained-model accuracy and remains separate from compositor/effect policy.
         var outputs = new[]
         {
             new InferenceOutput("mask.semantic", "person"),
+            new InferenceOutput("mask.region.normalized", "0.25,0.10,0.75,0.90"),
             new InferenceOutput("source.sequence", frame.Timing.SequenceNumber.ToString(CultureInfo.InvariantCulture))
         };
 
