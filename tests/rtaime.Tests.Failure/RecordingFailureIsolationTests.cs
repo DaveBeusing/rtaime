@@ -57,7 +57,8 @@ public sealed class RecordingFailureIsolationTests
 
         Assert.Same(committedBeforeFailure, runtime.ActiveExecution);
         Assert.Equal(committedBeforeFailure.ExecutionRevision, runtime.State.ExecutionRevision);
-        Assert.Equal("recording.write.writer_failure", recorder.Snapshot.Failure!.Code);
+        Assert.True(recorder.Snapshot.Failure.HasValue);
+        Assert.Equal("recording.write.writer_failure", recorder.Snapshot.Failure.Value.Code);
 
         var frame1 = provider.SourceA.GenerateFrame(1);
         Assert.Equal(1UL, frame1.Timing.SequenceNumber);
