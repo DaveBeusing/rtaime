@@ -93,6 +93,31 @@ public sealed class ControlHostService
 		get { lock (_gate) return _pending is not null; }
 	}
 
+	public void RestoreAuthoritativeState(AuthoritativeProductionState state)
+	{
+		ArgumentNullException.ThrowIfNull(state);
+		lock (_gate)
+		{
+			if (_authoritative is not null || _pending is not null)
+				throw new InvalidOperationException("ControlHost authority can only be restored before initialization or staging.");
+			if (state.ProductionId != _specification.ProductionId)
+				throw new InvalidDataException("Recovered authoritative state belongs to a different production identity.");
+			if (!_specification.Sources.Any(source => source.SourceId == state.Routing.PreviewSourceId))
+				throw new InvalidDataException("Recovered Preview source is not present in the production specification.");
+			if (!_specification.Sources.Any(source => source.SourceId == state.Routing.ProgramSourceId))
+				throw new InvalidDataException("Recovered Program source is not present in the production specification.");
+
+			_authoritative = state;
+			Journal(
+				state.Revision,
+				"recovery",
+				"control.authoritative.restored",
+				$"Authoritative production revision {state.Revision} was restored from a durable checkpoint.",
+				null,
+				null);
+		}
+	}
+
 	public ControlHostOperationResult Initialize()
 	{
 		lock (_gate)
