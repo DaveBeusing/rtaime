@@ -92,10 +92,10 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 		if ((string.IsNullOrWhiteSpace(snapshot.AuthorityStateId)) != (snapshot.AuthorityRevision is null))
 			throw new InvalidDataException("Runtime authority snapshot identity and revision must either both be present or both be absent.");
 
-		var authorityStateId = string.IsNullOrWhiteSpace(snapshot.AuthorityStateId)
+		Identity? authorityStateId = string.IsNullOrWhiteSpace(snapshot.AuthorityStateId)
 			? null
 			: Identity.Parse(snapshot.AuthorityStateId);
-		var authorityRevision = snapshot.AuthorityRevision is null
+		Revision? authorityRevision = snapshot.AuthorityRevision is null
 			? null
 			: new Revision(snapshot.AuthorityRevision.Value);
 
