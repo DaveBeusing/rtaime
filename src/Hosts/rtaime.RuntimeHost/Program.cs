@@ -1,9 +1,44 @@
+// Copyright (c) Dave Beusing <david.beusing@gmail.com>.
+
 namespace rtaime.RuntimeHost;
 
 internal static class Program
 {
-    private static int Main()
-    {
-        return 0;
-    }
+	private static async Task<int> Main(string[] args)
+	{
+		using var shutdown = new CancellationTokenSource();
+		ConsoleCancelEventHandler consoleHandler = (_, eventArgs) =>
+		{
+			eventArgs.Cancel = true;
+			shutdown.Cancel();
+		};
+		EventHandler processExitHandler = (_, _) => shutdown.Cancel();
+
+		Console.CancelKeyPress += consoleHandler;
+		AppDomain.CurrentDomain.ProcessExit += processExitHandler;
+		try
+		{
+			RuntimeHostProcessOptions options;
+			try
+			{
+				options = RuntimeHostProcessOptions.Load(args);
+			}
+			catch (Exception exception) when (exception is ArgumentException or OverflowException)
+			{
+				Console.Error.WriteLine($"host=RuntimeHost outcome=configuration-error detail=\"{exception.Message}\"");
+				return (int)RuntimeHostExitCode.ConfigurationError;
+			}
+
+			var process = new RuntimeHostProcess(options);
+			var exitCode = await process.RunAsync(shutdown.Token).ConfigureAwait(false);
+			var lifecycle = process.Lifecycle;
+			Console.WriteLine($"host=RuntimeHost state={lifecycle.State} health={lifecycle.Health} exit={(int)exitCode} detail=\"{lifecycle.Detail}\"");
+			return (int)exitCode;
+		}
+		finally
+		{
+			Console.CancelKeyPress -= consoleHandler;
+			AppDomain.CurrentDomain.ProcessExit -= processExitHandler;
+		}
+	}
 }
