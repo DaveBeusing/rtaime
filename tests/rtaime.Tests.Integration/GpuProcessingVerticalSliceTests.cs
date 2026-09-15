@@ -41,14 +41,30 @@ public sealed class GpuProcessingVerticalSliceTests
             new MediaSourceId(SourceBId.Value),
             format);
         var registry = new SingleProviderCapabilityRegistry(virtualProvider.Descriptor);
-        var runtime = CommitPlan(specification, authoritative, registry, expectedExecutionRevision: Revision.Initial);
+        var initialPlan = CapabilityPlanningEngine.Plan(specification, authoritative, registry);
+        Assert.True(initialPlan.Succeeded);
+        var programSinkId = initialPlan.Graph!.Nodes
+            .Single(node => node.Kind == LogicalProductionNodeKind.ProgramSink)
+            .MediaSinkId!.Value;
+        var runtime = CommitPrepared(initialPlan.PreparedExecution!, Revision.Initial);
 
         using var gpu = new GpuProcessingProvider(new ManagedReferenceGpuBackend());
         gpu.Start();
-        var gpuSourceA = new StaticRgbaSource(new MediaSourceId(SourceAId.Value), RgbaFrameBuffer.Solid(format, 255, 0, 0));
-        var gpuSourceB = new StaticRgbaSource(new MediaSourceId(SourceBId.Value), RgbaFrameBuffer.Solid(format, 0, 0, 255));
+        var gpuSourceA = new StaticRgbaSource(
+            new MediaSourceId(SourceAId.Value),
+            RgbaFrameBuffer.Solid(format, 255, 0, 0));
+        var gpuSourceB = new StaticRgbaSource(
+            new MediaSourceId(SourceBId.Value),
+            RgbaFrameBuffer.Solid(format, 0, 0, 255));
 
-        using var first = ProcessCommittedProgramFrame(runtime, virtualProvider, gpu, gpuSourceA, gpuSourceB, sequence: 0);
+        using var first = ProcessCommittedProgramFrame(
+            runtime,
+            programSinkId,
+            virtualProvider,
+            gpu,
+            gpuSourceA,
+            gpuSourceB,
+            sequence: 0);
         AssertPixel(gpu.Readback(first), 255, 0, 0, 255);
 
         var command = new CutProgramCommand(
@@ -73,10 +89,19 @@ public sealed class GpuProcessingVerticalSliceTests
             runtime.State.ExecutionRevision));
         Assert.Equal(RuntimeCommitStatus.Committed, commit.Status);
 
-        using var second = ProcessCommittedProgramFrame(runtime, virtualProvider, gpu, gpuSourceA, gpuSourceB, sequence: 1);
+        using var second = ProcessCommittedProgramFrame(
+            runtime,
+            programSinkId,
+            virtualProvider,
+            gpu,
+            gpuSourceA,
+            gpuSourceB,
+            sequence: 1);
         AssertPixel(gpu.Readback(second), 0, 0, 255, 255);
 
-        Assert.DoesNotContain("gpu", specification.Name, StringComparison.OrdinalIgnoreCase);
+        var committedProgramBinding = runtime.ActiveExecution!.PreparedExecution.Bindings
+            .Single(binding => binding.MediaSinkId == programSinkId);
+        Assert.Equal(new MediaSourceId(SourceBId.Value), committedProgramBinding.MediaSourceId);
         Assert.All(nextPlan.PreparedExecution.Bindings, binding =>
             Assert.NotEqual(GpuCapabilityKinds.Processing, binding.Resource.Kind));
         Assert.Contains(gpu.Observations, observation => observation.Code == "gpu.composite.cut");
@@ -115,7 +140,6 @@ public sealed class GpuProcessingVerticalSliceTests
         using var output = result.Frame!;
         var pixels = gpu.Readback(output);
 
-        // 50% background dissolve gives ~100 gray. Layer alpha 128 with opacity 128 => effective alpha ~64.
         AssertPixel(pixels, 139, 75, 75, 255);
         Assert.Equal(format, output.Descriptor.Surface.Format);
         Assert.Contains(gpu.Observations, observation => observation.Code == "gpu.composite.dissolve");
@@ -136,21 +160,16 @@ public sealed class GpuProcessingVerticalSliceTests
             new ProductionRoutingState(preview, programSource));
     }
 
-    private static TransactionalRuntime CommitPlan(
-        ProductionSpecification specification,
-        AuthoritativeProductionState authoritative,
-        IProviderCapabilityRegistry registry,
+    private static TransactionalRuntime CommitPrepared(
+        PreparedExecutionContract prepared,
         Revision expectedExecutionRevision)
     {
-        var planning = CapabilityPlanningEngine.Plan(specification, authoritative, registry);
-        Assert.True(planning.Succeeded);
-
         var runtime = new TransactionalRuntime(new InMemoryRuntimeResourceReservationManager());
-        var prepare = runtime.Prepare(planning.PreparedExecution!);
+        var prepare = runtime.Prepare(prepared);
         Assert.Equal(RuntimePrepareStatus.Prepared, prepare.Status);
         var commit = runtime.Commit(new RuntimeCommitRequest(
             RuntimeContractVersion.Current,
-            planning.PreparedExecution!.PreparedExecutionId,
+            prepared.PreparedExecutionId,
             prepare.ReservationId!.Value,
             expectedExecutionRevision));
         Assert.Equal(RuntimeCommitStatus.Committed, commit.Status);
@@ -159,6 +178,7 @@ public sealed class GpuProcessingVerticalSliceTests
 
     private static GpuFrame ProcessCommittedProgramFrame(
         TransactionalRuntime runtime,
+        MediaSinkId programSinkId,
         VirtualMediaReferenceProvider virtualProvider,
         GpuProcessingProvider gpu,
         StaticRgbaSource gpuSourceA,
@@ -166,31 +186,18 @@ public sealed class GpuProcessingVerticalSliceTests
         ulong sequence)
     {
         var active = runtime.ActiveExecution ?? throw new Xunit.Sdk.XunitException("Committed Runtime execution is required.");
-        var programBinding = active.PreparedExecution.Bindings
-            .Single(binding => binding.MediaSinkId is not null &&
-                binding.MediaSourceId is not null &&
-                binding.MediaSourceId.Value == new MediaSourceId(
-                    active.PreparedExecution.Bindings
-                        .Where(value => value.MediaSourceId is not null)
-                        .Select(value => value.MediaSourceId!.Value)
-                        .First(id => id == virtualProvider.SourceA.SourceId || id == virtualProvider.SourceB.SourceId).Value));
-
-        // The binding order does not carry a named Program role in Runtime contracts. Select the source that matches
-        // authoritative Program by observing which route changed across commits: Source A for revision 1, Source B for revision 2.
-        var programSource = active.ExecutionRevision.Value == 1
-            ? virtualProvider.SourceA
-            : virtualProvider.SourceB;
+        var programBinding = active.PreparedExecution.Bindings.Single(binding => binding.MediaSinkId == programSinkId);
+        Assert.NotNull(programBinding.MediaSourceId);
 
         var timing = virtualProvider.Timing.GetFrameTiming(sequence);
         using var a = gpuSourceA.Materialize(gpu, timing);
         using var b = gpuSourceB.Materialize(gpu, timing);
-        var transition = programSource.SourceId == virtualProvider.SourceA.SourceId
+        var transition = programBinding.MediaSourceId!.Value == virtualProvider.SourceA.SourceId
             ? GpuTransition.CutToA
             : GpuTransition.CutToB;
 
         var result = gpu.Composite(new GpuCompositeRequest(GpuOutputSourceId, a, b, transition));
         Assert.True(result.Succeeded, result.Failure?.ToString());
-        _ = programBinding;
         return result.Frame!;
     }
 
