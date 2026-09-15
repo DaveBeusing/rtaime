@@ -11,6 +11,7 @@
     <ProjectReference Include="..\..\src\Contracts\rtaime.Media.Contracts\rtaime.Media.Contracts.csproj" />
     <ProjectReference Include="..\..\src\Contracts\rtaime.AI.Contracts\rtaime.AI.Contracts.csproj" />
     <ProjectReference Include="..\..\src\Contracts\rtaime.Provider.Contracts\rtaime.Provider.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Recording\rtaime.Recording\rtaime.Recording.csproj" />
   </ItemGroup>
 
   <ItemGroup>
