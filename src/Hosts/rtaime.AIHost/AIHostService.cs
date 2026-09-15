@@ -77,7 +77,6 @@ public sealed class AIHostService : IAsyncDisposable
 				return new ValueTask(_disposeTask);
 
 			_disposeStarted = true;
-			_shutdown.Cancel();
 			var drain = _activeExecutions == 0
 				? Task.CompletedTask
 				: _drained?.Task ?? Task.CompletedTask;
@@ -93,6 +92,8 @@ public sealed class AIHostService : IAsyncDisposable
 
 	private async Task CompleteDisposeAsync(Task drain)
 	{
+		await Task.Yield();
+		_shutdown.Cancel();
 		await drain.ConfigureAwait(false);
 		_shutdown.Dispose();
 	}
