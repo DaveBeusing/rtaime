@@ -1,6 +1,7 @@
 using rtaime.Control;
 using rtaime.Control.Contracts;
 using rtaime.Core;
+using rtaime.Media;
 using rtaime.Media.Contracts;
 using rtaime.Provider.Contracts;
 using rtaime.Provider.VirtualMedia;
@@ -39,16 +40,14 @@ public sealed class VirtualMediaRuntimeSliceTests
     {
         var harness = CreateHarness(VideoFormat.Hd1080p50Rgba8, programSource: SourceAId);
 
-        var beforeCut = harness.MediaRuntime.ProcessNextFrameBoundary();
-        Assert.True(beforeCut.Succeeded);
+        var beforeCut = ProcessFrame(harness);
         Assert.Equal((ulong)0, beforeCut.SequenceNumber);
         Assert.Equal(harness.Provider.SourceA.SourceId, harness.ProgramOutput.LastFrame!.Frame.SourceId);
         Assert.Equal(new Revision(1), beforeCut.ExecutionRevision);
 
         CommitCut(harness, SourceBId);
 
-        var afterCut = harness.MediaRuntime.ProcessNextFrameBoundary();
-        Assert.True(afterCut.Succeeded);
+        var afterCut = ProcessFrame(harness);
         Assert.Equal((ulong)1, afterCut.SequenceNumber);
         Assert.Equal(harness.Provider.SourceB.SourceId, harness.ProgramOutput.LastFrame!.Frame.SourceId);
         Assert.Equal(new Revision(2), afterCut.ExecutionRevision);
@@ -72,6 +71,7 @@ public sealed class VirtualMediaRuntimeSliceTests
             harness.ProgramOutput.Frames.Select(frame => frame.Frame.Timing.SequenceNumber));
         Assert.All(harness.ProgramOutput.Frames.Take(5), frame => Assert.Equal(harness.Provider.SourceA.SourceId, frame.Frame.SourceId));
         Assert.All(harness.ProgramOutput.Frames.Skip(5), frame => Assert.Equal(harness.Provider.SourceB.SourceId, frame.Frame.SourceId));
+        Assert.Equal((ulong)0, harness.ProgramPipeline.Statistics.Dropped);
     }
 
     [Theory]
@@ -82,15 +82,15 @@ public sealed class VirtualMediaRuntimeSliceTests
         var format = use5994 ? VideoFormat.Hd1080p59_94Rgba8 : VideoFormat.Hd1080p50Rgba8;
         var harness = CreateHarness(format, programSource: SourceAId);
 
-        var step = harness.MediaRuntime.ProcessNextFrameBoundary();
+        ProcessFrame(harness);
 
-        Assert.True(step.Succeeded);
         var frame = harness.ProgramOutput.LastFrame!.Frame;
         Assert.Equal(format, frame.Surface.Format);
         Assert.Equal((ulong)0, frame.Timing.SequenceNumber);
         Assert.Equal(
             new Timebase(format.FrameRate.Denominator, format.FrameRate.Numerator),
             frame.Timing.Timebase);
+        Assert.Equal((ulong)1, harness.ProgramPipeline.Statistics.Consumed);
     }
 
     [Fact]
@@ -127,8 +127,7 @@ public sealed class VirtualMediaRuntimeSliceTests
         Assert.Equal(activeBefore.ExecutionInstanceId, harness.Runtime.ActiveExecution!.ExecutionInstanceId);
         Assert.Equal(activeBefore.ExecutionRevision, harness.Runtime.ActiveExecution!.ExecutionRevision);
 
-        var next = harness.MediaRuntime.ProcessNextFrameBoundary();
-        Assert.True(next.Succeeded);
+        var next = ProcessFrame(harness);
         Assert.Equal((ulong)1, next.SequenceNumber);
         Assert.Equal(harness.Provider.SourceA.SourceId, harness.ProgramOutput.LastFrame!.Frame.SourceId);
     }
@@ -211,20 +210,10 @@ public sealed class VirtualMediaRuntimeSliceTests
 
         var previewOutput = provider.CreateOutput(previewSinkId);
         var programOutput = provider.CreateOutput(programSinkId);
-        var endpoints = new RuntimeMediaEndpointRegistry(
-            new IRuntimeMediaSource[]
-            {
-                new VirtualSourceAdapter(provider.SourceA),
-                new VirtualSourceAdapter(provider.SourceB)
-            },
-            new IRuntimeMediaOutput[]
-            {
-                new VirtualOutputAdapter(previewOutput),
-                new VirtualOutputAdapter(programOutput)
-            });
+        var previewPipeline = CreatePipeline();
+        var programPipeline = CreatePipeline();
 
-        var clock = new DeterministicClock();
-        var runtime = new TransactionalRuntime(new InMemoryRuntimeResourceReservationManager(), clock);
+        var runtime = new TransactionalRuntime(new InMemoryRuntimeResourceReservationManager(), new DeterministicClock());
         var prepared = planning.PreparedExecution!;
         var prepare = runtime.Prepare(prepared);
         Assert.Equal(RuntimePrepareStatus.Prepared, prepare.Status);
@@ -242,12 +231,20 @@ public sealed class VirtualMediaRuntimeSliceTests
             provider,
             registry,
             runtime,
-            new CommittedMediaRuntime(runtime, endpoints, clock),
+            previewSinkId,
+            programSinkId,
             previewOutput,
             programOutput,
+            previewPipeline,
+            programPipeline,
             prepared.PreparedExecutionId,
             commit.ExecutionInstanceId!.Value);
     }
+
+    private static MediaFramePipeline CreatePipeline() => new(new MediaPipelineOptions(
+        queueCapacity: 3,
+        backpressurePolicy: MediaBackpressurePolicy.Wait,
+        lateToleranceTicks: 0));
 
     private static void CommitCut(Harness harness, ProductionSourceId targetSource)
     {
@@ -288,11 +285,40 @@ public sealed class VirtualMediaRuntimeSliceTests
     private static void ProcessFrames(Harness harness, int count)
     {
         for (var index = 0; index < count; index++)
+            ProcessFrame(harness);
+    }
+
+    private static FrameBoundaryResult ProcessFrame(Harness harness)
+    {
+        var active = harness.Runtime.ActiveExecution ?? throw new Xunit.Sdk.XunitException("Committed execution is required.");
+        var sequence = harness.NextSequenceNumber;
+        var emitted = 0;
+
+        foreach (var binding in active.PreparedExecution.Bindings.OrderBy(value => value.LogicalNodeId.ToString(), StringComparer.Ordinal))
         {
-            var result = harness.MediaRuntime.ProcessNextFrameBoundary();
-            Assert.True(result.Succeeded, result.Failure?.ToString());
-            Assert.Equal(2, result.Emissions.Count);
+            Assert.NotNull(binding.MediaSourceId);
+            Assert.NotNull(binding.MediaSinkId);
+
+            var source = binding.MediaSourceId!.Value == harness.Provider.SourceA.SourceId
+                ? harness.Provider.SourceA
+                : harness.Provider.SourceB;
+            var sinkId = binding.MediaSinkId!.Value;
+            var pipeline = sinkId == harness.ProgramSinkId ? harness.ProgramPipeline : harness.PreviewPipeline;
+            var output = sinkId == harness.ProgramSinkId ? harness.ProgramOutput : harness.PreviewOutput;
+            var frame = source.GenerateFrame(sequence);
+            var position = new MediaClockPosition(frame.Timing.PresentationTimestamp, frame.Timing.Timebase);
+
+            var submit = pipeline.Submit(frame, position);
+            Assert.True(submit.Accepted, submit.Failure?.ToString());
+
+            var consume = pipeline.ConsumeNext(position, output.WriteFrame);
+            Assert.True(consume.Consumed, consume.Failure?.ToString());
+            emitted++;
         }
+
+        Assert.Equal(2, emitted);
+        harness.NextSequenceNumber++;
+        return new FrameBoundaryResult(sequence, active.ExecutionRevision);
     }
 
     private static DeterministicScenarioResult RunDeterministicScenario()
@@ -333,38 +359,9 @@ public sealed class VirtualMediaRuntimeSliceTests
         public IReadOnlyList<ProviderDescriptor> GetProviders() => _providers;
     }
 
-    private sealed class VirtualSourceAdapter : IRuntimeMediaSource
-    {
-        private readonly VirtualSyntheticVideoSource _source;
-
-        public VirtualSourceAdapter(VirtualSyntheticVideoSource source)
-        {
-            _source = source;
-        }
-
-        public MediaSourceId SourceId => _source.SourceId;
-        public VideoFormat Format => _source.Format;
-        public FrameDescriptor ReadFrame(ulong sequenceNumber) => _source.GenerateFrame(sequenceNumber);
-    }
-
-    private sealed class VirtualOutputAdapter : IRuntimeMediaOutput
-    {
-        private readonly VirtualVideoOutput _output;
-
-        public VirtualOutputAdapter(VirtualVideoOutput output)
-        {
-            _output = output;
-        }
-
-        public MediaSinkId SinkId => _output.SinkId;
-        public VideoFormat Format => _output.Format;
-        public void WriteFrame(FrameDescriptor frame) => _output.WriteFrame(frame);
-    }
-
     private sealed class DeterministicClock : IRuntimeClock
     {
         private long _milliseconds;
-
         public UtcTimestamp GetUtcNow() => UtcTimestamp.FromUnixTimeMilliseconds(_milliseconds++);
     }
 
@@ -376,9 +373,12 @@ public sealed class VirtualMediaRuntimeSliceTests
             VirtualMediaReferenceProvider provider,
             IProviderCapabilityRegistry registry,
             TransactionalRuntime runtime,
-            CommittedMediaRuntime mediaRuntime,
+            MediaSinkId previewSinkId,
+            MediaSinkId programSinkId,
             VirtualVideoOutput previewOutput,
             VirtualVideoOutput programOutput,
+            MediaFramePipeline previewPipeline,
+            MediaFramePipeline programPipeline,
             PreparedExecutionId initialPreparedExecutionId,
             ExecutionInstanceId initialExecutionInstanceId)
         {
@@ -387,9 +387,12 @@ public sealed class VirtualMediaRuntimeSliceTests
             Provider = provider;
             Registry = registry;
             Runtime = runtime;
-            MediaRuntime = mediaRuntime;
+            PreviewSinkId = previewSinkId;
+            ProgramSinkId = programSinkId;
             PreviewOutput = previewOutput;
             ProgramOutput = programOutput;
+            PreviewPipeline = previewPipeline;
+            ProgramPipeline = programPipeline;
             InitialPreparedExecutionId = initialPreparedExecutionId;
             InitialExecutionInstanceId = initialExecutionInstanceId;
         }
@@ -399,14 +402,20 @@ public sealed class VirtualMediaRuntimeSliceTests
         public VirtualMediaReferenceProvider Provider { get; }
         public IProviderCapabilityRegistry Registry { get; }
         public TransactionalRuntime Runtime { get; }
-        public CommittedMediaRuntime MediaRuntime { get; }
+        public MediaSinkId PreviewSinkId { get; }
+        public MediaSinkId ProgramSinkId { get; }
         public VirtualVideoOutput PreviewOutput { get; }
         public VirtualVideoOutput ProgramOutput { get; }
+        public MediaFramePipeline PreviewPipeline { get; }
+        public MediaFramePipeline ProgramPipeline { get; }
+        public ulong NextSequenceNumber { get; set; }
         public PreparedExecutionId InitialPreparedExecutionId { get; }
         public ExecutionInstanceId InitialExecutionInstanceId { get; }
         public PreparedExecutionId? CutPreparedExecutionId { get; set; }
         public ExecutionInstanceId? CutExecutionInstanceId { get; set; }
     }
+
+    private sealed record FrameBoundaryResult(ulong SequenceNumber, Revision ExecutionRevision);
 
     private sealed record DeterministicScenarioResult(
         PreparedExecutionId InitialPreparedExecutionId,
