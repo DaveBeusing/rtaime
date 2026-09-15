@@ -3,42 +3,63 @@ using rtaime.Core;
 
 namespace rtaime.Client;
 
-public sealed record OperatorMutationResponse(
-    bool Accepted,
-    AuthoritativeProductionState State,
-    Failure? Failure)
+public sealed record OperatorMutationResponse
 {
-    public OperatorMutationResponse
+    public OperatorMutationResponse(bool accepted, AuthoritativeProductionState state, Failure? failure)
     {
-        ArgumentNullException.ThrowIfNull(State);
-        if (Accepted && Failure is not null)
-            throw new ArgumentException("Accepted operator mutations must not carry a failure.", nameof(Failure));
-        if (!Accepted && Failure is null)
-            throw new ArgumentException("Rejected operator mutations require a failure.", nameof(Failure));
+        State = state ?? throw new ArgumentNullException(nameof(state));
+        if (accepted && failure is not null)
+            throw new ArgumentException("Accepted operator mutations must not carry a failure.", nameof(failure));
+        if (!accepted && failure is null)
+            throw new ArgumentException("Rejected operator mutations require a failure.", nameof(failure));
+
+        Accepted = accepted;
+        Failure = failure;
     }
+
+    public bool Accepted { get; }
+    public AuthoritativeProductionState State { get; }
+    public Failure? Failure { get; }
 }
 
-public sealed record OperatorStatusSnapshot(
-    AuthoritativeProductionState Production,
-    string RuntimeStatus,
-    string TimingStatus,
-    string InputStatus,
-    string AIStatus,
-    string RecordingStatus,
-    bool VisualLayerEnabled,
-    double AudioPeakLevel)
+public sealed record OperatorStatusSnapshot
 {
-    public OperatorStatusSnapshot
+    public OperatorStatusSnapshot(
+        AuthoritativeProductionState production,
+        string runtimeStatus,
+        string timingStatus,
+        string inputStatus,
+        string aiStatus,
+        string recordingStatus,
+        bool visualLayerEnabled,
+        double audioPeakLevel)
     {
-        ArgumentNullException.ThrowIfNull(Production);
-        if (string.IsNullOrWhiteSpace(RuntimeStatus)) throw new ArgumentException("Runtime status is required.", nameof(RuntimeStatus));
-        if (string.IsNullOrWhiteSpace(TimingStatus)) throw new ArgumentException("Timing status is required.", nameof(TimingStatus));
-        if (string.IsNullOrWhiteSpace(InputStatus)) throw new ArgumentException("Input status is required.", nameof(InputStatus));
-        if (string.IsNullOrWhiteSpace(AIStatus)) throw new ArgumentException("AI status is required.", nameof(AIStatus));
-        if (string.IsNullOrWhiteSpace(RecordingStatus)) throw new ArgumentException("Recording status is required.", nameof(RecordingStatus));
-        if (!double.IsFinite(AudioPeakLevel) || AudioPeakLevel is < 0 or > 1)
-            throw new ArgumentOutOfRangeException(nameof(AudioPeakLevel));
+        Production = production ?? throw new ArgumentNullException(nameof(production));
+        if (string.IsNullOrWhiteSpace(runtimeStatus)) throw new ArgumentException("Runtime status is required.", nameof(runtimeStatus));
+        if (string.IsNullOrWhiteSpace(timingStatus)) throw new ArgumentException("Timing status is required.", nameof(timingStatus));
+        if (string.IsNullOrWhiteSpace(inputStatus)) throw new ArgumentException("Input status is required.", nameof(inputStatus));
+        if (string.IsNullOrWhiteSpace(aiStatus)) throw new ArgumentException("AI status is required.", nameof(aiStatus));
+        if (string.IsNullOrWhiteSpace(recordingStatus)) throw new ArgumentException("Recording status is required.", nameof(recordingStatus));
+        if (!double.IsFinite(audioPeakLevel) || audioPeakLevel is < 0 or > 1)
+            throw new ArgumentOutOfRangeException(nameof(audioPeakLevel));
+
+        RuntimeStatus = runtimeStatus.Trim();
+        TimingStatus = timingStatus.Trim();
+        InputStatus = inputStatus.Trim();
+        AIStatus = aiStatus.Trim();
+        RecordingStatus = recordingStatus.Trim();
+        VisualLayerEnabled = visualLayerEnabled;
+        AudioPeakLevel = audioPeakLevel;
     }
+
+    public AuthoritativeProductionState Production { get; }
+    public string RuntimeStatus { get; }
+    public string TimingStatus { get; }
+    public string InputStatus { get; }
+    public string AIStatus { get; }
+    public string RecordingStatus { get; }
+    public bool VisualLayerEnabled { get; }
+    public double AudioPeakLevel { get; }
 }
 
 /// <summary>
