@@ -216,6 +216,20 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			if (control is null || !control.HasAuthoritativeState)
 				return Error(request, "control.not_ready", "ControlHost has no committed authoritative state yet.");
 
+			try
+			{
+				var providers = await _runtimeTransport.GetProviderDescriptorsAsync(cancellationToken).ConfigureAwait(false);
+				control.RefreshProviderSnapshot(providers);
+			}
+			catch (Exception exception)
+			{
+				return MutationResponse(
+					request,
+					false,
+					control.State,
+					new Failure("runtime.transport.failed", $"Runtime provider refresh failed before command staging: {exception.GetType().Name}."));
+			}
+
 			var command = request.Payload.Deserialize<WireControlCommand>(Wire.JsonOptions)
 				?? throw new InvalidDataException("Control command payload is required.");
 			var metadata = new ControlCommandMetadata(
