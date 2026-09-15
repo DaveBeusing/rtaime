@@ -51,9 +51,9 @@ public sealed class SqliteProductionJournalStore : IProductionJournalStore
 			{
 				if (!string.Equals(reader.GetString(1), eventChecksum, StringComparison.Ordinal))
 					throw new InvalidDataException("Production journal EventId was reused with different event content.");
-				var ordinal = checked((ulong)reader.GetInt64(0));
+				var existingOrdinal = checked((ulong)reader.GetInt64(0));
 				transaction.Rollback();
-				return new ProductionJournalEntry(ordinal, journalEvent);
+				return new ProductionJournalEntry(existingOrdinal, journalEvent);
 			}
 		}
 
@@ -186,10 +186,10 @@ public sealed class SqliteProductionJournalStore : IProductionJournalStore
 			while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
 			{
 				var entry = ReadEntry(reader);
-				var eventChecksum = ComputeEventChecksum(entry.Event);
 				var storedEventChecksum = reader.GetString(11);
 				var previousHash = reader.GetString(12);
 				var entryHash = reader.GetString(13);
+				var eventChecksum = ComputeEventChecksum(entry.Event);
 				if (!string.Equals(eventChecksum, storedEventChecksum, StringComparison.Ordinal))
 					return new ProductionJournalIntegrityReport(false, count, $"Event checksum mismatch at ordinal {entry.Ordinal}.");
 				if (!string.Equals(previousHash, expectedPrevious, StringComparison.Ordinal))
