@@ -1,8 +1,11 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 using System.Text;
+using rtaime.Client;
+using rtaime.ControlHost;
 using rtaime.Core;
 using rtaime.Persistence;
+using rtaime.RuntimeHost;
 
 namespace rtaime.Tests.Integration;
 
@@ -171,6 +174,80 @@ public sealed class DurablePersistenceIntegrationTests
 			DeleteDirectory(root);
 		}
 	}
+
+	[Fact]
+	public async Task ControlHost_commits_are_checkpointed_and_journaled_durably()
+	{
+		var root = TempDirectory();
+		var runtimeEndpoint = Endpoint("runtime-durable");
+		var controlEndpoint = Endpoint("control-durable");
+		var options = ControlHostProcessOptions.Default with
+		{
+			ListenEndpoint = controlEndpoint,
+			RuntimeEndpoint = runtimeEndpoint,
+			RuntimeRetryInterval = TimeSpan.FromMilliseconds(25),
+			DurabilityRoot = root
+		};
+		using var runtimeStop = new CancellationTokenSource();
+		using var controlStop = new CancellationTokenSource();
+		var runtime = new RuntimeHostProcess(RuntimeHostProcessOptions.Default with { ListenEndpoint = runtimeEndpoint });
+		var control = new ControlHostProcess(options);
+
+		try
+		{
+			var runtimeRun = runtime.RunAsync(runtimeStop.Token);
+			var controlRun = control.RunAsync(controlStop.Token);
+			await WaitUntilAsync(() => control.Lifecycle.State == ControlHostProcessState.Ready && control.Control?.HasAuthoritativeState == true);
+
+			var client = new OperatorControlClient(new NamedPipeOperatorControlTransport(controlEndpoint, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(5)));
+			var initial = await client.SynchronizeAsync();
+			var mutation = await client.SelectPreviewAsync(initial.Sources[1].Id);
+			Assert.True(mutation.Accepted, mutation.Failure?.ToString());
+			var finalRevision = control.Control!.State.Revision;
+			Assert.True(finalRevision.Value > Revision.Initial.Value);
+
+			await WaitUntilAsync(() => control.CheckpointWriter?.Statistics.Persisted >= 2);
+			await control.Journal!.FlushAsync();
+
+			controlStop.Cancel();
+			runtimeStop.Cancel();
+			Assert.Equal(ControlHostExitCode.Success, await controlRun);
+			Assert.Equal(RuntimeHostExitCode.Success, await runtimeRun);
+
+			var durabilityDirectory = Path.Combine(root, $"{options.ProductionId}-{controlEndpoint}");
+			await using var management = new SqliteManagementStore(Path.Combine(durabilityDirectory, "management.db"));
+			var checkpoint = await management.ReadLatestAsync(options.ProductionId.Value);
+			Assert.NotNull(checkpoint);
+			Assert.Equal(finalRevision, checkpoint.AuthoritativeRevision);
+			Assert.True((await management.VerifyIntegrityAsync()).Healthy);
+
+			await using var journal = new SqliteProductionJournalStore(Path.Combine(durabilityDirectory, "production-journal.db"));
+			var entries = await journal.ReadAsync(0, 1000);
+			Assert.Contains(entries, entry => entry.Event.Code == "control.authoritative.committed" && entry.Event.AuthoritativeRevision == finalRevision);
+			Assert.Contains(entries, entry => entry.Event.Code == "runtime.commit.observed" && entry.Event.AuthoritativeRevision == finalRevision);
+			var integrity = await journal.VerifyIntegrityAsync();
+			Assert.True(integrity.Healthy, integrity.Detail);
+		}
+		finally
+		{
+			controlStop.Cancel();
+			runtimeStop.Cancel();
+			DeleteDirectory(root);
+		}
+	}
+
+	private static async Task WaitUntilAsync(Func<bool> condition, int timeoutMilliseconds = 5000)
+	{
+		var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMilliseconds);
+		while (!condition())
+		{
+			if (DateTime.UtcNow >= deadline)
+				throw new TimeoutException("Condition was not reached before the persistence integration-test deadline.");
+			await Task.Delay(20);
+		}
+	}
+
+	private static string Endpoint(string purpose) => $"rtaime.test.{purpose}.{Guid.NewGuid():N}";
 
 	private static string TempDirectory()
 	{
