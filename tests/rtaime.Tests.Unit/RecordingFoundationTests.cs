@@ -64,7 +64,8 @@ public sealed class RecordingFoundationTests
         var rejected = await recorder.StartAsync(second);
 
         Assert.Equal(RecordingStartStatus.Rejected, rejected.Status);
-        Assert.Equal("recording.start.invalid_state", rejected.Failure!.Code);
+        Assert.True(rejected.Failure.HasValue);
+        Assert.Equal("recording.start.invalid_state", rejected.Failure.Value.Code);
         Assert.Equal(first.SessionId, recorder.Snapshot.SessionId);
         Assert.Equal(first.Output.OutputId, recorder.Snapshot.Output!.OutputId);
         Assert.Equal(RecordingStopStatus.Stopped, (await recorder.StopAsync()).Status);
@@ -82,7 +83,8 @@ public sealed class RecordingFoundationTests
         var result = await recorder.StartAsync(Request());
 
         Assert.Equal(RecordingStartStatus.Failed, result.Status);
-        Assert.Equal("recording.output.unavailable", result.Failure!.Code);
+        Assert.True(result.Failure.HasValue);
+        Assert.Equal("recording.output.unavailable", result.Failure.Value.Code);
         Assert.Equal(RecordingLifecycleState.Failed, recorder.Snapshot.State);
         Assert.Equal(1UL, recorder.Snapshot.Statistics.WriterFailures);
     }
@@ -115,7 +117,8 @@ public sealed class RecordingFoundationTests
         var duplicate = recorder.TryEnqueue(Frame(5));
 
         Assert.Equal(RecordingEnqueueStatus.Rejected, duplicate.Status);
-        Assert.Equal("recording.sequence.non_monotonic", duplicate.Failure!.Code);
+        Assert.True(duplicate.Failure.HasValue);
+        Assert.Equal("recording.sequence.non_monotonic", duplicate.Failure.Value.Code);
         Assert.Equal(1UL, recorder.Snapshot.Statistics.Rejected);
         await recorder.StopAsync();
     }
