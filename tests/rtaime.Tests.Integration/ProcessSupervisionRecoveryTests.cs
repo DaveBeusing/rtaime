@@ -1,7 +1,9 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 using System.Diagnostics;
+using System.IO.Pipes;
 using rtaime.Client;
+using rtaime.Control.Contracts;
 using rtaime.ControlHost;
 using rtaime.Core;
 using rtaime.Persistence;
@@ -111,7 +113,7 @@ public sealed class ProcessSupervisionRecoveryTests
 				"--runtime-retry-ms=25"
 			})
 		};
-		await using var controlSupervisor = new LocalProcessSupervisor(controlSupervisorOptions);
+		var controlSupervisor = new LocalProcessSupervisor(controlSupervisorOptions);
 		await controlSupervisor.StartAsync();
 		await WaitUntilAsync(() => controlSupervisor.Snapshot is { State: LocalProcessSupervisionState.Healthy, OwnedProcessId: not null }, 10000);
 
@@ -146,8 +148,7 @@ public sealed class ProcessSupervisionRecoveryTests
 
 			staleClient.Disconnect();
 			await staleClient.SynchronizeAsync();
-			var staleSnapshot = staleClient.Snapshot!;
-			Assert.Equal(advancedRevision, staleSnapshot.Production.Revision);
+			Assert.Equal(advancedRevision, staleClient.Snapshot!.Production.Revision);
 
 			var deliberatelyStale = new OperatorControlClient(new NamedPipeOperatorControlTransport(controlEndpoint, TimeSpan.FromMilliseconds(500), TimeSpan.FromSeconds(3)));
 			await deliberatelyStale.SynchronizeAsync();
@@ -160,6 +161,7 @@ public sealed class ProcessSupervisionRecoveryTests
 		}
 		finally
 		{
+			await controlSupervisor.DisposeAsync();
 			DeleteDirectory(root);
 		}
 	}
@@ -249,12 +251,21 @@ public sealed class ProcessSupervisionRecoveryTests
 
 	private static async Task WaitForEndpointAsync(string endpoint, int timeoutMilliseconds)
 	{
-		var supervisor = new LocalProcessSupervisor(BaseSupervisorOptions("probe", endpoint, HostAssembly("rtaime.RuntimeHost")) with { MaxConsecutiveStartAttempts = 1 });
-		await using (supervisor)
+		var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMilliseconds);
+		while (DateTime.UtcNow < deadline)
 		{
-			await supervisor.StartAsync();
-			await WaitUntilAsync(() => supervisor.Snapshot.State == LocalProcessSupervisionState.Healthy, timeoutMilliseconds);
+			using var timeout = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
+			await using var pipe = new NamedPipeClientStream(".", endpoint, PipeDirection.InOut, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+			try
+			{
+				await pipe.ConnectAsync(timeout.Token);
+				if (pipe.IsConnected) return;
+			}
+			catch (OperationCanceledException) { }
+			catch (IOException) { }
+			await Task.Delay(50);
 		}
+		throw new TimeoutException($"Endpoint '{endpoint}' did not become reachable before the test deadline.");
 	}
 
 	private static void Kill(int processId)
