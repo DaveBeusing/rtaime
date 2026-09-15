@@ -1,0 +1,22 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$comment": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+	"title": "rtaime Payload Handle V1",
+	"type": "object",
+	"additionalProperties": false,
+	"required": ["kind", "value"],
+	"properties": {
+		"kind": { "type": "string", "minLength": 1 },
+		"value": { "type": "string", "minLength": 1 },
+		"generation": { "type": "integer", "minimum": 0 },
+		"leaseId": { "type": ["string", "null"] }
+	},
+	"not": {
+		"anyOf": [
+			{ "required": ["bytes"] },
+			{ "required": ["base64"] },
+			{ "required": ["pixels"] },
+			{ "required": ["samples"] }
+		]
+	}
+}

@@ -1,0 +1,16 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$comment": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+	"title": "rtaime Timed Metadata V1",
+	"type": "object",
+	"additionalProperties": false,
+	"required": ["sequence", "basedOnStateVersion", "stateVersion", "messageType", "observedAtUtc", "payload"],
+	"properties": {
+		"sequence": { "type": "integer", "minimum": 1 },
+		"basedOnStateVersion": { "type": "integer", "minimum": 1 },
+		"stateVersion": { "type": "integer", "minimum": 2 },
+		"messageType": { "type": "string", "minLength": 1 },
+		"observedAtUtc": { "type": "string", "format": "date-time" },
+		"payload": {}
+	}
+}
