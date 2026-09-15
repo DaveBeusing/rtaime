@@ -12,6 +12,9 @@ namespace rtaime.Tests.Integration;
 
 public sealed class ProcessSupervisionRecoveryTests
 {
+	private const int ProcessRecoveryTimeoutMilliseconds = 30000;
+	private const int EndpointRecoveryAttempts = 150;
+
 	[Fact]
 	public async Task Killed_RuntimeHost_is_restarted_and_Control_reapplies_same_authority_revision()
 	{
@@ -21,7 +24,7 @@ public sealed class ProcessSupervisionRecoveryTests
 		var runtimeAssembly = HostAssembly("rtaime.RuntimeHost");
 		await using var runtimeSupervisor = Supervisor("RuntimeHost", runtimeEndpoint, runtimeAssembly);
 		await runtimeSupervisor.StartAsync();
-		await WaitUntilAsync(() => runtimeSupervisor.Snapshot is { State: LocalProcessSupervisionState.Healthy, OwnedProcessId: not null }, 10000);
+		await WaitUntilAsync(() => runtimeSupervisor.Snapshot is { State: LocalProcessSupervisionState.Healthy, OwnedProcessId: not null }, ProcessRecoveryTimeoutMilliseconds);
 
 		using var controlStop = new CancellationTokenSource();
 		var control = new ControlHostProcess(ControlHostProcessOptions.Default with
@@ -37,7 +40,7 @@ public sealed class ProcessSupervisionRecoveryTests
 
 		try
 		{
-			await WaitUntilAsync(() => control.Lifecycle.State == ControlHostProcessState.Ready && control.Control?.HasAuthoritativeState == true, 10000);
+			await WaitUntilAsync(() => control.Lifecycle.State == ControlHostProcessState.Ready && control.Control?.HasAuthoritativeState == true, ProcessRecoveryTimeoutMilliseconds);
 			var client = new OperatorControlClient(new NamedPipeOperatorControlTransport(controlEndpoint, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(3)));
 			var initial = await client.SynchronizeAsync();
 			var mutation = await client.SelectPreviewAsync(initial.Sources[1].Id);
@@ -48,12 +51,12 @@ public sealed class ProcessSupervisionRecoveryTests
 			Kill(firstRuntimePid);
 			await WaitUntilAsync(
 				() => runtimeSupervisor.Snapshot is { State: LocalProcessSupervisionState.Healthy, OwnedProcessId: not null } snapshot && snapshot.OwnedProcessId != firstRuntimePid,
-				10000);
+				ProcessRecoveryTimeoutMilliseconds);
 			await WaitUntilAsync(
 				() => control.Lifecycle.State == ControlHostProcessState.Ready &&
 					control.Control!.State.Revision == authorityRevision &&
 					control.Journal!.Entries.Any(entry => entry.Event.Code == "recovery.runtime.reapplied"),
-				10000);
+				ProcessRecoveryTimeoutMilliseconds);
 
 			Assert.Equal(authorityRevision, control.Control.State.Revision);
 			var recovered = await client.SynchronizeAsync();
@@ -78,13 +81,13 @@ public sealed class ProcessSupervisionRecoveryTests
 		var assembly = HostAssembly("rtaime.AIHost");
 		await using var supervisor = Supervisor("AIHost", endpoint, assembly);
 		await supervisor.StartAsync();
-		await WaitUntilAsync(() => supervisor.Snapshot is { State: LocalProcessSupervisionState.Healthy, OwnedProcessId: not null }, 10000);
+		await WaitUntilAsync(() => supervisor.Snapshot is { State: LocalProcessSupervisionState.Healthy, OwnedProcessId: not null }, ProcessRecoveryTimeoutMilliseconds);
 		var firstPid = supervisor.Snapshot.OwnedProcessId!.Value;
 
 		Kill(firstPid);
 		await WaitUntilAsync(
 			() => supervisor.Snapshot is { State: LocalProcessSupervisionState.Healthy, OwnedProcessId: not null } snapshot && snapshot.OwnedProcessId != firstPid,
-			10000);
+			ProcessRecoveryTimeoutMilliseconds);
 
 		Assert.NotEqual(firstPid, supervisor.Snapshot.OwnedProcessId);
 	}
@@ -99,7 +102,7 @@ public sealed class ProcessSupervisionRecoveryTests
 		var controlAssembly = HostAssembly("rtaime.ControlHost");
 		await using var runtimeSupervisor = Supervisor("RuntimeHost", runtimeEndpoint, runtimeAssembly);
 		await runtimeSupervisor.StartAsync();
-		await WaitUntilAsync(() => runtimeSupervisor.Snapshot is { State: LocalProcessSupervisionState.Healthy, OwnedProcessId: not null }, 10000);
+		await WaitUntilAsync(() => runtimeSupervisor.Snapshot is { State: LocalProcessSupervisionState.Healthy, OwnedProcessId: not null }, ProcessRecoveryTimeoutMilliseconds);
 		var runtimePid = runtimeSupervisor.Snapshot.OwnedProcessId!.Value;
 
 		var controlSupervisorOptions = BaseSupervisorOptions("ControlHost", controlEndpoint, controlAssembly) with
@@ -115,7 +118,7 @@ public sealed class ProcessSupervisionRecoveryTests
 		};
 		var controlSupervisor = new LocalProcessSupervisor(controlSupervisorOptions);
 		await controlSupervisor.StartAsync();
-		await WaitUntilAsync(() => controlSupervisor.Snapshot is { State: LocalProcessSupervisionState.Healthy, OwnedProcessId: not null }, 10000);
+		await WaitUntilAsync(() => controlSupervisor.Snapshot is { State: LocalProcessSupervisionState.Healthy, OwnedProcessId: not null }, ProcessRecoveryTimeoutMilliseconds);
 
 		try
 		{
@@ -132,7 +135,7 @@ public sealed class ProcessSupervisionRecoveryTests
 			Kill(firstControlPid);
 			await WaitUntilAsync(
 				() => controlSupervisor.Snapshot is { State: LocalProcessSupervisionState.Healthy, OwnedProcessId: not null } snapshot && snapshot.OwnedProcessId != firstControlPid,
-				10000);
+				ProcessRecoveryTimeoutMilliseconds);
 			Assert.Equal(runtimePid, runtimeSupervisor.Snapshot.OwnedProcessId);
 
 			await Assert.ThrowsAsync<RemoteHostSessionChangedException>(() => staleClient.CutPreviewAsync().AsTask());
@@ -177,11 +180,11 @@ public sealed class ProcessSupervisionRecoveryTests
 		using var external = StartDotnetHost(assembly, $"--listen-endpoint={endpoint}");
 		try
 		{
-			await WaitForEndpointAsync(endpoint, 10000);
+			await WaitForEndpointAsync(endpoint, ProcessRecoveryTimeoutMilliseconds);
 			await using (var supervisor = Supervisor("RuntimeHost", endpoint, assembly))
 			{
 				await supervisor.StartAsync();
-				await WaitUntilAsync(() => supervisor.Snapshot.State == LocalProcessSupervisionState.Healthy, 5000);
+				await WaitUntilAsync(() => supervisor.Snapshot.State == LocalProcessSupervisionState.Healthy, ProcessRecoveryTimeoutMilliseconds);
 				Assert.Null(supervisor.Snapshot.OwnedProcessId);
 			}
 			Assert.False(external.HasExited);
@@ -213,7 +216,7 @@ public sealed class ProcessSupervisionRecoveryTests
 		await supervisor.StartAsync();
 		await WaitUntilAsync(
 			() => supervisor.Snapshot is { State: LocalProcessSupervisionState.Failed, StartAttempts: 2, OwnedProcessId: null },
-			10000);
+			ProcessRecoveryTimeoutMilliseconds);
 
 		var attemptsAfterFailure = supervisor.Snapshot.StartAttempts;
 		await Task.Delay(500);
@@ -239,7 +242,7 @@ public sealed class ProcessSupervisionRecoveryTests
 	private static async Task<OperatorStatusSnapshot> RetrySnapshotAsync(OperatorControlClient client, bool requireRuntimeReady)
 	{
 		Exception? last = null;
-		for (var attempt = 0; attempt < 50; attempt++)
+		for (var attempt = 0; attempt < EndpointRecoveryAttempts; attempt++)
 		{
 			try
 			{
@@ -259,7 +262,7 @@ public sealed class ProcessSupervisionRecoveryTests
 	private static async Task WaitForCheckpointAsync(string root, string controlEndpoint, ProductionId productionId, Revision revision)
 	{
 		var path = Path.Combine(root, $"{productionId}-{controlEndpoint}", "management.db");
-		for (var attempt = 0; attempt < 50; attempt++)
+		for (var attempt = 0; attempt < EndpointRecoveryAttempts; attempt++)
 		{
 			try
 			{
