@@ -45,11 +45,6 @@ public sealed record ControlHostCommitConfirmation(
 	AuthoritativeProductionState? State,
 	Failure? Failure);
 
-/// <summary>
-/// Authoritative V1 ControlHost composition root. It owns validation/state/planning, but never calls RuntimeHost.
-/// A proposed authoritative revision is staged with a PreparedExecutionContract and only becomes authoritative
-/// after the corresponding Runtime commit is confirmed.
-/// </summary>
 public sealed class ControlHostService
 {
 	private readonly object _gate = new();
@@ -57,6 +52,7 @@ public sealed class ControlHostService
 	private readonly UpdatableProviderRegistry _providers;
 	private readonly BoundedProductionJournal _journal;
 	private readonly IControlHostClock _clock;
+	private readonly Action<AuthoritativeProductionState>? _authoritativeCommitted;
 	private AuthoritativeProductionState? _authoritative;
 	private PendingControlCommit? _pending;
 
@@ -64,12 +60,14 @@ public sealed class ControlHostService
 		ProductionSpecification specification,
 		IReadOnlyList<ProviderDescriptor> providers,
 		BoundedProductionJournal journal,
-		IControlHostClock? clock = null)
+		IControlHostClock? clock = null,
+		Action<AuthoritativeProductionState>? authoritativeCommitted = null)
 	{
 		_specification = specification ?? throw new ArgumentNullException(nameof(specification));
 		_providers = new UpdatableProviderRegistry(providers ?? throw new ArgumentNullException(nameof(providers)));
 		_journal = journal ?? throw new ArgumentNullException(nameof(journal));
 		_clock = clock ?? new SystemControlHostClock();
+		_authoritativeCommitted = authoritativeCommitted;
 	}
 
 	public ProductionSpecification Specification => _specification;
@@ -108,13 +106,7 @@ public sealed class ControlHostService
 				throw new InvalidDataException("Recovered Program source is not present in the production specification.");
 
 			_authoritative = state;
-			Journal(
-				state.Revision,
-				"recovery",
-				"control.authoritative.restored",
-				$"Authoritative production revision {state.Revision} was restored from a durable checkpoint.",
-				null,
-				null);
+			Journal(state.Revision, "recovery", "control.authoritative.restored", $"Authoritative production revision {state.Revision} was restored from a durable checkpoint.", null, null);
 		}
 	}
 
@@ -200,9 +192,7 @@ public sealed class ControlHostService
 			var current = Current();
 			var transition = current.Routing.ProgramSourceId == command.SourceId
 				? null
-				: RuntimeProgramTransitionIntent.Cut(
-					new MediaSourceId(current.Routing.ProgramSourceId.Value),
-					new MediaSourceId(command.SourceId.Value));
+				: RuntimeProgramTransitionIntent.Cut(new MediaSourceId(current.Routing.ProgramSourceId.Value), new MediaSourceId(command.SourceId.Value));
 			return Stage(ControlDomainEngine.Apply(_specification, current, command), command.Metadata.CommandId.Value, transition);
 		}
 	}
@@ -216,17 +206,12 @@ public sealed class ControlHostService
 			var current = Current();
 			var transition = current.Routing.ProgramSourceId == command.SourceId
 				? null
-				: RuntimeProgramTransitionIntent.Dissolve(
-					new MediaSourceId(current.Routing.ProgramSourceId.Value),
-					new MediaSourceId(command.SourceId.Value),
-					command.DurationFrames);
+				: RuntimeProgramTransitionIntent.Dissolve(new MediaSourceId(current.Routing.ProgramSourceId.Value), new MediaSourceId(command.SourceId.Value), command.DurationFrames);
 			return Stage(ControlDomainEngine.Apply(_specification, current, command), command.Metadata.CommandId.Value, transition);
 		}
 	}
 
-	public ControlHostCommitConfirmation ConfirmRuntimeCommit(
-		PreparedExecutionId preparedExecutionId,
-		RuntimeCommitResult runtimeResult)
+	public ControlHostCommitConfirmation ConfirmRuntimeCommit(PreparedExecutionId preparedExecutionId, RuntimeCommitResult runtimeResult)
 	{
 		ArgumentNullException.ThrowIfNull(runtimeResult);
 		lock (_gate)
@@ -236,7 +221,6 @@ public sealed class ControlHostService
 
 			var pending = _pending;
 			_pending = null;
-
 			if (runtimeResult.Status != RuntimeCommitStatus.Committed)
 			{
 				var failure = runtimeResult.Failure ?? new Failure("control.commit.runtime_rejected", "Runtime rejected the staged execution.");
@@ -245,20 +229,9 @@ public sealed class ControlHostService
 			}
 
 			_authoritative = pending.Execution.AuthoritativeState;
-			Journal(
-				_authoritative.Revision,
-				"runtime",
-				"runtime.commit.observed",
-				$"Runtime execution revision {runtimeResult.ExecutionRevision} committed.",
-				pending.CausationId,
-				null);
-			Journal(
-				_authoritative.Revision,
-				"control",
-				"control.authoritative.committed",
-				"Staged authoritative production state crossed the host commit boundary.",
-				pending.CausationId,
-				null);
+			Journal(_authoritative.Revision, "runtime", "runtime.commit.observed", $"Runtime execution revision {runtimeResult.ExecutionRevision} committed.", pending.CausationId, null);
+			Journal(_authoritative.Revision, "control", "control.authoritative.committed", "Staged authoritative production state crossed the host commit boundary.", pending.CausationId, null);
+			_authoritativeCommitted?.Invoke(_authoritative);
 			return new ControlHostCommitConfirmation(true, _authoritative, null);
 		}
 	}
@@ -270,7 +243,6 @@ public sealed class ControlHostService
 		{
 			if (_pending is null || _pending.Execution.PreparedExecution.PreparedExecutionId != preparedExecutionId)
 				return PendingMismatch("control.commit.pending_mismatch", "Runtime rejection does not match the staged Control execution.");
-
 			var pending = _pending;
 			_pending = null;
 			Journal(_authoritative?.Revision ?? Revision.Initial, "runtime", "runtime.commit.transport_failed", failure.Message, pending.CausationId, failure);
@@ -291,10 +263,7 @@ public sealed class ControlHostService
 		return new ControlHostCommitConfirmation(false, _authoritative, failure);
 	}
 
-	private ControlHostOperationResult Stage(
-		ControlCommandResult domainResult,
-		Identity commandId,
-		RuntimeProgramTransitionIntent? transition)
+	private ControlHostOperationResult Stage(ControlCommandResult domainResult, Identity commandId, RuntimeProgramTransitionIntent? transition)
 	{
 		var current = Current();
 		if (!domainResult.Committed)
@@ -320,25 +289,15 @@ public sealed class ControlHostService
 		return ControlHostOperationResult.Staged(execution);
 	}
 
-	private static ControlHostExecutionPackage Package(
-		AuthoritativeProductionState state,
-		ExecutionPlanningResult planning,
-		RuntimeProgramTransitionIntent? transition)
+	private static ControlHostExecutionPackage Package(AuthoritativeProductionState state, ExecutionPlanningResult planning, RuntimeProgramTransitionIntent? transition)
 	{
 		var graph = planning.Graph ?? throw new InvalidOperationException("Successful planning must expose a graph.");
 		var programSink = graph.Nodes.Single(node => node.Kind == LogicalProductionNodeKind.ProgramSink).MediaSinkId
 			?? throw new InvalidOperationException("Program sink node must expose a media sink identity.");
-
-		return new ControlHostExecutionPackage(
-			state,
-			graph,
-			planning.PreparedExecution ?? throw new InvalidOperationException("Successful planning must expose a prepared execution."),
-			programSink,
-			transition);
+		return new ControlHostExecutionPackage(state, graph, planning.PreparedExecution ?? throw new InvalidOperationException("Successful planning must expose a prepared execution."), programSink, transition);
 	}
 
-	private AuthoritativeProductionState Current() =>
-		_authoritative ?? throw new InvalidOperationException("ControlHost has no committed authoritative state.");
+	private AuthoritativeProductionState Current() => _authoritative ?? throw new InvalidOperationException("ControlHost has no committed authoritative state.");
 
 	private void EnsureNoPending()
 	{
@@ -346,23 +305,9 @@ public sealed class ControlHostService
 			throw new InvalidOperationException("ControlHost accepts only one staged production mutation at a time.");
 	}
 
-	private void Journal(
-		Revision revision,
-		string category,
-		string code,
-		string detail,
-		Identity? causationId,
-		Failure? failure)
+	private void Journal(Revision revision, string category, string code, string detail, Identity? causationId, Failure? failure)
 	{
-		_journal.TryAppend(new ProductionJournalEvent(
-			_specification.ProductionId.Value,
-			revision,
-			_clock.GetUtcNow(),
-			category,
-			code,
-			detail,
-			causationId,
-			failure));
+		_journal.TryAppend(new ProductionJournalEvent(_specification.ProductionId.Value, revision, _clock.GetUtcNow(), category, code, detail, causationId, failure));
 	}
 
 	private static Failure FromValidation(string code, ControlValidationReport validation)
@@ -378,20 +323,13 @@ public sealed class ControlHostService
 	private sealed class UpdatableProviderRegistry : IProviderCapabilityRegistry
 	{
 		private ProviderDescriptor[] _providers;
-
-		public UpdatableProviderRegistry(IReadOnlyList<ProviderDescriptor> providers) =>
-			_providers = Validate(providers);
-
+		public UpdatableProviderRegistry(IReadOnlyList<ProviderDescriptor> providers) => _providers = Validate(providers);
 		public IReadOnlyList<ProviderDescriptor> GetProviders() => Array.AsReadOnly(_providers.ToArray());
-
-		public void Replace(IReadOnlyList<ProviderDescriptor> providers) =>
-			_providers = Validate(providers);
-
+		public void Replace(IReadOnlyList<ProviderDescriptor> providers) => _providers = Validate(providers);
 		private static ProviderDescriptor[] Validate(IReadOnlyList<ProviderDescriptor> providers)
 		{
 			ArgumentNullException.ThrowIfNull(providers);
-			if (providers.Any(provider => provider is null))
-				throw new ArgumentException("Provider snapshot must not contain null values.", nameof(providers));
+			if (providers.Any(provider => provider is null)) throw new ArgumentException("Provider snapshot must not contain null values.", nameof(providers));
 			return providers.ToArray();
 		}
 	}
