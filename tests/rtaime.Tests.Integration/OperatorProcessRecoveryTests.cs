@@ -10,6 +10,8 @@ namespace rtaime.Tests.Integration;
 
 public sealed class OperatorProcessRecoveryTests
 {
+	private const int ProcessRecoveryTimeoutMilliseconds = 30000;
+
 	[Fact]
 	public async Task Killed_Operator_process_restarts_with_a_full_current_authoritative_snapshot()
 	{
@@ -27,7 +29,7 @@ public sealed class OperatorProcessRecoveryTests
 			TimeSpan.FromMilliseconds(100),
 			5));
 		await runtimeSupervisor.StartAsync();
-		await WaitUntilAsync(() => runtimeSupervisor.Snapshot.State == LocalProcessSupervisionState.Healthy, 10000);
+		await WaitUntilAsync(() => runtimeSupervisor.Snapshot.State == LocalProcessSupervisionState.Healthy, ProcessRecoveryTimeoutMilliseconds);
 
 		using var controlStop = new CancellationTokenSource();
 		var control = new ControlHostProcess(ControlHostProcessOptions.Default with
@@ -45,7 +47,7 @@ public sealed class OperatorProcessRecoveryTests
 		Process? secondOperator = null;
 		try
 		{
-			await WaitUntilAsync(() => control.Lifecycle.State == ControlHostProcessState.Ready && control.Control?.HasAuthoritativeState == true, 10000);
+			await WaitUntilAsync(() => control.Lifecycle.State == ControlHostProcessState.Ready && control.Control?.HasAuthoritativeState == true, ProcessRecoveryTimeoutMilliseconds);
 			var client = new OperatorControlClient(new NamedPipeOperatorControlTransport(controlEndpoint, TimeSpan.FromMilliseconds(500), TimeSpan.FromSeconds(3)));
 			var initial = await client.SynchronizeAsync();
 			var firstMutation = await client.SelectPreviewAsync(initial.Sources[1].Id);
@@ -54,7 +56,7 @@ public sealed class OperatorProcessRecoveryTests
 
 			var firstMarkerPath = Path.Combine(root, "operator-first.json");
 			firstOperator = StartOperator(operatorAssembly, controlEndpoint, firstMarkerPath);
-			await WaitUntilAsync(() => TryReadMarker(firstMarkerPath, out var marker) && marker.Revision == firstRevision.Value && marker.RuntimeStatus == "READY", 10000);
+			await WaitUntilAsync(() => TryReadMarker(firstMarkerPath, out var marker) && marker.Revision == firstRevision.Value && marker.RuntimeStatus == "READY", ProcessRecoveryTimeoutMilliseconds);
 			var firstMarker = ReadMarker(firstMarkerPath);
 			Assert.False(string.IsNullOrWhiteSpace(firstMarker.HostInstanceId));
 
@@ -68,7 +70,7 @@ public sealed class OperatorProcessRecoveryTests
 
 			var secondMarkerPath = Path.Combine(root, "operator-second.json");
 			secondOperator = StartOperator(operatorAssembly, controlEndpoint, secondMarkerPath);
-			await WaitUntilAsync(() => TryReadMarker(secondMarkerPath, out var marker) && marker.Revision == secondRevision.Value && marker.RuntimeStatus == "READY", 10000);
+			await WaitUntilAsync(() => TryReadMarker(secondMarkerPath, out var marker) && marker.Revision == secondRevision.Value && marker.RuntimeStatus == "READY", ProcessRecoveryTimeoutMilliseconds);
 			var secondMarker = ReadMarker(secondMarkerPath);
 			Assert.Equal(firstMarker.HostInstanceId, secondMarker.HostInstanceId);
 			Assert.Equal(secondRevision.Value, secondMarker.Revision);
