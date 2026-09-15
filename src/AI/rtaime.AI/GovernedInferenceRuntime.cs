@@ -19,22 +19,29 @@ public sealed class SystemAIClock : IAIClock
 
 public sealed record InferenceRuntimeLimits
 {
-    public InferenceRuntimeLimits(uint computeUnits, ulong vramBytes, uint maxConcurrentRequests)
+    public InferenceRuntimeLimits(
+        uint computeUnits,
+        ulong vramBytes,
+        uint maxConcurrentRequests,
+        uint maxInferenceRatePerSecond = 30)
     {
         if (computeUnits == 0) throw new ArgumentOutOfRangeException(nameof(computeUnits));
         if (vramBytes == 0) throw new ArgumentOutOfRangeException(nameof(vramBytes));
         if (maxConcurrentRequests == 0) throw new ArgumentOutOfRangeException(nameof(maxConcurrentRequests));
+        if (maxInferenceRatePerSecond == 0) throw new ArgumentOutOfRangeException(nameof(maxInferenceRatePerSecond));
 
         ComputeUnits = computeUnits;
         VramBytes = vramBytes;
         MaxConcurrentRequests = maxConcurrentRequests;
+        MaxInferenceRatePerSecond = maxInferenceRatePerSecond;
     }
 
     public uint ComputeUnits { get; }
     public ulong VramBytes { get; }
     public uint MaxConcurrentRequests { get; }
+    public uint MaxInferenceRatePerSecond { get; }
 
-    public static InferenceRuntimeLimits ReferenceV1 => new(100, 512UL * 1024 * 1024, 2);
+    public static InferenceRuntimeLimits ReferenceV1 => new(100, 512UL * 1024 * 1024, 2, 30);
 }
 
 public sealed record AIExecutionObservation(
@@ -291,6 +298,15 @@ public sealed class GovernedInferenceRuntime
                     new Failure("ai.inference.timeout", "Inference execution exceeded its deadline."));
             }
 
+            if (_clock.GetUtcNow().CompareTo(request.Request.Deadline) > 0)
+            {
+                return CompleteFailure(
+                    request,
+                    admission,
+                    InferenceExecutionStatus.TimedOut,
+                    new Failure("ai.inference.late_result", "Inference provider returned a result after the request deadline."));
+            }
+
             if (providerResult.Status != InferenceExecutionStatus.Succeeded)
             {
                 if (providerResult.Status is InferenceExecutionStatus.Failed or InferenceExecutionStatus.Unavailable)
@@ -484,7 +500,8 @@ internal sealed class InferenceResourceGovernor
         {
             if (_activeRequests >= _limits.MaxConcurrentRequests ||
                 budget.ComputeUnits > _limits.ComputeUnits - _computeUnits ||
-                budget.VramBytes > _limits.VramBytes - _vramBytes)
+                budget.VramBytes > _limits.VramBytes - _vramBytes ||
+                budget.MaxInferenceRatePerSecond > _limits.MaxInferenceRatePerSecond)
             {
                 lease = NullLease.Instance;
                 return false;
