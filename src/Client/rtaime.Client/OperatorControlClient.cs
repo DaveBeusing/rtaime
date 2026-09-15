@@ -4,13 +4,18 @@ using rtaime.Core;
 
 namespace rtaime.Client;
 
-public sealed record OperatorSourceDescriptor(string Id, string Name)
+public sealed record OperatorSourceDescriptor
 {
-    public OperatorSourceDescriptor(string id, string name) : this(
-        string.IsNullOrWhiteSpace(id) ? throw new ArgumentException("Source id is required.", nameof(id)) : id.Trim(),
-        string.IsNullOrWhiteSpace(name) ? throw new ArgumentException("Source name is required.", nameof(name)) : name.Trim())
+    public OperatorSourceDescriptor(string id, string name)
     {
+        if (string.IsNullOrWhiteSpace(id)) throw new ArgumentException("Source id is required.", nameof(id));
+        if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Source name is required.", nameof(name));
+        Id = id.Trim();
+        Name = name.Trim();
     }
+
+    public string Id { get; }
+    public string Name { get; }
 }
 
 public sealed record OperatorMutationResponse
