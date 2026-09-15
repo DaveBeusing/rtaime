@@ -50,10 +50,11 @@ public sealed record LocalProcessSupervisionOptions(
 }
 
 /// <summary>
-/// Local endpoint-driven process supervision. The endpoint is authoritative for adoption: if a local host is
-/// already listening, the supervisor does not launch a duplicate process. Only processes launched by this
-/// instance are ever terminated during an orderly dispose. A supervisor crash therefore does not terminate an
-/// already-running child process. Start attempts are bounded for the lifetime of this supervisor instance.
+/// Local process supervision uses the endpoint for adoption and readiness. Once a process launched by this
+/// supervisor has reached endpoint readiness, its Process handle becomes the liveness signal until it exits.
+/// This avoids continuously injecting probe connections into the production IPC endpoint. Only processes
+/// launched by this instance are terminated during orderly disposal. Start attempts are bounded for the
+/// lifetime of this supervisor instance.
 /// </summary>
 public sealed class LocalProcessSupervisor : IAsyncDisposable
 {
@@ -63,6 +64,7 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 	private CancellationTokenSource? _linkedStop;
 	private Task? _loop;
 	private Process? _ownedProcess;
+	private bool _ownedProcessReady;
 	private int _startAttempts;
 	private LocalProcessSupervisionSnapshot _snapshot;
 
@@ -116,6 +118,7 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 		{
 			owned = _ownedProcess;
 			_ownedProcess = null;
+			_ownedProcessReady = false;
 		}
 		if (owned is not null)
 		{
@@ -141,14 +144,22 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 		Update(LocalProcessSupervisionState.Waiting, $"Waiting for endpoint '{_options.Endpoint}'.");
 		while (!cancellationToken.IsCancellationRequested)
 		{
+			DisposeExitedOwnedProcess();
+			if (OwnedProcessIsReadyAndRunning())
+			{
+				Update(LocalProcessSupervisionState.Healthy, $"Owned process is running after endpoint '{_options.Endpoint}' reached readiness.");
+				await Task.Delay(_options.ProbeInterval, cancellationToken).ConfigureAwait(false);
+				continue;
+			}
+
 			if (await ProbeEndpointAsync(cancellationToken).ConfigureAwait(false))
 			{
+				MarkOwnedProcessReadyIfRunning();
 				Update(LocalProcessSupervisionState.Healthy, $"Endpoint '{_options.Endpoint}' is reachable.");
 				await Task.Delay(_options.ProbeInterval, cancellationToken).ConfigureAwait(false);
 				continue;
 			}
 
-			DisposeExitedOwnedProcess();
 			if (OwnedProcessIsRunning())
 			{
 				Update(LocalProcessSupervisionState.Starting, "Owned process is running but its endpoint is not ready yet.");
@@ -170,7 +181,10 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 				Update(LocalProcessSupervisionState.RestartBackoff, "Waiting before the next supervised start attempt.");
 				await Task.Delay(_options.RestartBackoff, cancellationToken).ConfigureAwait(false);
 				if (await ProbeEndpointAsync(cancellationToken).ConfigureAwait(false))
+				{
+					MarkOwnedProcessReadyIfRunning();
 					continue;
+				}
 			}
 
 			_startAttempts++;
@@ -231,7 +245,20 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 		var process = Process.Start(startInfo)
 			?? throw new InvalidOperationException($"Failed to start supervised process '{_options.Name}'.");
 		lock (_gate)
+		{
 			_ownedProcess = process;
+			_ownedProcessReady = false;
+		}
+	}
+
+	private bool OwnedProcessIsReadyAndRunning()
+	{
+		lock (_gate)
+		{
+			if (!_ownedProcessReady) return false;
+			try { return _ownedProcess is { HasExited: false }; }
+			catch (InvalidOperationException) { return false; }
+		}
 	}
 
 	private bool OwnedProcessIsRunning()
@@ -240,6 +267,19 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 		{
 			try { return _ownedProcess is { HasExited: false }; }
 			catch (InvalidOperationException) { return false; }
+		}
+	}
+
+	private void MarkOwnedProcessReadyIfRunning()
+	{
+		lock (_gate)
+		{
+			try
+			{
+				if (_ownedProcess is { HasExited: false })
+					_ownedProcessReady = true;
+			}
+			catch (InvalidOperationException) { }
 		}
 	}
 
@@ -256,6 +296,7 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 			catch (InvalidOperationException) { }
 			process = _ownedProcess;
 			_ownedProcess = null;
+			_ownedProcessReady = false;
 		}
 		process.Dispose();
 	}
