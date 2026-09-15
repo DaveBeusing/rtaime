@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Runtime\rtaime.Runtime\rtaime.Runtime.csproj" />
+    <ProjectReference Include="..\..\Media\rtaime.Media\rtaime.Media.csproj" />
+    <ProjectReference Include="..\..\Recording\rtaime.Recording\rtaime.Recording.csproj" />
+    <ProjectReference Include="..\..\Providers\rtaime.Provider.VirtualMedia\rtaime.Provider.VirtualMedia.csproj" />
+    <ProjectReference Include="..\..\Providers\rtaime.Provider.Gpu\rtaime.Provider.Gpu.csproj" />
+    <ProjectReference Include="..\..\Contracts\rtaime.Runtime.Contracts\rtaime.Runtime.Contracts.csproj" />
+  </ItemGroup>
+</Project>

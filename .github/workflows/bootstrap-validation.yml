@@ -1,0 +1,42 @@
+name: Bootstrap validation
+
+on:
+  push:
+    branches:
+      - master
+      - bootstrap-solution-architecture
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  managed-validation:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Qualify SDK
+        shell: pwsh
+        run: |
+          dotnet --info
+          dotnet --list-sdks
+          dotnet new --list
+          if ((dotnet --version) -ne "10.0.401") {
+            throw "Expected .NET SDK 10.0.401."
+          }
+
+      - name: Restore
+        run: dotnet restore rtaime.slnx
+
+      - name: Build
+        run: dotnet build rtaime.slnx --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test rtaime.slnx --configuration Release --no-build

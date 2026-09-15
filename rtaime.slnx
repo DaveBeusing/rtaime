@@ -1,0 +1,52 @@
+<Solution>
+  <Folder Name="/Core/">
+    <Project Path="src/rtaime.Core/rtaime.Core.csproj" />
+  </Folder>
+  <Folder Name="/Contracts/">
+    <Project Path="src/Contracts/rtaime.Control.Contracts/rtaime.Control.Contracts.csproj" />
+    <Project Path="src/Contracts/rtaime.Runtime.Contracts/rtaime.Runtime.Contracts.csproj" />
+    <Project Path="src/Contracts/rtaime.Media.Contracts/rtaime.Media.Contracts.csproj" />
+    <Project Path="src/Contracts/rtaime.AI.Contracts/rtaime.AI.Contracts.csproj" />
+    <Project Path="src/Contracts/rtaime.Provider.Contracts/rtaime.Provider.Contracts.csproj" />
+  </Folder>
+  <Folder Name="/Control/">
+    <Project Path="src/Control/rtaime.Control/rtaime.Control.csproj" />
+  </Folder>
+  <Folder Name="/Runtime/">
+    <Project Path="src/Runtime/rtaime.Runtime/rtaime.Runtime.csproj" />
+  </Folder>
+  <Folder Name="/Media/">
+    <Project Path="src/Media/rtaime.Media/rtaime.Media.csproj" />
+  </Folder>
+  <Folder Name="/AI/">
+    <Project Path="src/AI/rtaime.AI/rtaime.AI.csproj" />
+  </Folder>
+  <Folder Name="/Durability/">
+    <Project Path="src/Persistence/rtaime.Persistence/rtaime.Persistence.csproj" />
+    <Project Path="src/Recording/rtaime.Recording/rtaime.Recording.csproj" />
+  </Folder>
+  <Folder Name="/Providers/">
+    <Project Path="src/Providers/rtaime.Provider.VirtualMedia/rtaime.Provider.VirtualMedia.csproj" />
+    <Project Path="src/Providers/rtaime.Provider.Gpu/rtaime.Provider.Gpu.csproj" />
+    <Project Path="src/Providers/rtaime.Provider.Inference/rtaime.Provider.Inference.csproj" />
+  </Folder>
+  <Folder Name="/Client/">
+    <Project Path="src/Client/rtaime.Client/rtaime.Client.csproj" />
+  </Folder>
+  <Folder Name="/Hosts/">
+    <Project Path="src/Hosts/rtaime.ControlHost/rtaime.ControlHost.csproj" />
+    <Project Path="src/Hosts/rtaime.RuntimeHost/rtaime.RuntimeHost.csproj" />
+    <Project Path="src/Hosts/rtaime.AIHost/rtaime.AIHost.csproj" />
+    <Project Path="src/Hosts/rtaime.Operator/rtaime.Operator.csproj" />
+  </Folder>
+  <Folder Name="/Tests/">
+    <Project Path="tests/rtaime.TestInfrastructure/rtaime.TestInfrastructure.csproj" />
+    <Project Path="tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj" />
+    <Project Path="tests/rtaime.Tests.Contracts/rtaime.Tests.Contracts.csproj" />
+    <Project Path="tests/rtaime.Tests.Architecture/rtaime.Tests.Architecture.csproj" />
+    <Project Path="tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj" />
+    <Project Path="tests/rtaime.Tests.Behavioral/rtaime.Tests.Behavioral.csproj" />
+    <Project Path="tests/rtaime.Tests.Failure/rtaime.Tests.Failure.csproj" />
+    <Project Path="tests/rtaime.Tests.Performance/rtaime.Tests.Performance.csproj" />
+  </Folder>
+</Solution>

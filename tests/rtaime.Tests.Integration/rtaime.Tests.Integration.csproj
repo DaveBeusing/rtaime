@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RtaimeIsTestProject>true</RtaimeIsTestProject>
+    <IsTestProject>true</IsTestProject>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Control\rtaime.Control\rtaime.Control.csproj" />
+    <ProjectReference Include="..\..\src\Runtime\rtaime.Runtime\rtaime.Runtime.csproj" />
+    <ProjectReference Include="..\..\src\Media\rtaime.Media\rtaime.Media.csproj" />
+    <ProjectReference Include="..\rtaime.TestInfrastructure\rtaime.TestInfrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" />
+  </ItemGroup>
+</Project>

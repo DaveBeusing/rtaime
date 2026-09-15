@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\AI\rtaime.AI\rtaime.AI.csproj" />
+    <ProjectReference Include="..\..\Providers\rtaime.Provider.Inference\rtaime.Provider.Inference.csproj" />
+    <ProjectReference Include="..\..\Contracts\rtaime.AI.Contracts\rtaime.AI.Contracts.csproj" />
+  </ItemGroup>
+</Project>
