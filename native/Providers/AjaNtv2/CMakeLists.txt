@@ -3,6 +3,10 @@
 cmake_minimum_required(VERSION 3.25)
 project(rtaime_media_io LANGUAGES CXX)
 
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
 set(AJA_NTV2_ROOT "$ENV{RTAIME_AJA_NTV2_ROOT}" CACHE PATH "Path to aja-video/libajantv2 release checkout")
 set(RTAIME_AJA_SDK_REVISION "$ENV{RTAIME_AJA_SDK_REVISION}" CACHE STRING "Qualified libajantv2 tag or commit")
 if(NOT AJA_NTV2_ROOT OR NOT EXISTS "${AJA_NTV2_ROOT}/CMakeLists.txt")
