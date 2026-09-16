@@ -45,7 +45,7 @@ No additional Program GPU readback is introduced by AP-33.
 
 ## Transfer mode
 
-AP-33 intentionally qualifies `PinnedHostLease` first.
+AP-33 intentionally enables only `PinnedHostLease` in the AJA reference adapter. Repository tests and native compiler evidence verify that implementation boundary; physical qualification of the transfer path remains **UNVERIFIED** until the dedicated self-hosted workflow produces retained `PASSED` evidence.
 
 The path is:
 
