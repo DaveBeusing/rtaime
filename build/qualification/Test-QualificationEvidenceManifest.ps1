@@ -53,14 +53,20 @@ foreach ($entry in $entries) {
 	Assert-Condition ($seen.Add($name)) "Qualification evidence manifest contains duplicate requirement '$name'."
 	$status = [string]$entry.status
 	Assert-Condition ($status -in @("PASSED", "UNVERIFIED")) "Qualification evidence requirement '$name' has invalid status '$status'."
+	$propertyNames = @($entry.PSObject.Properties.Name)
 
 	if ($status -eq "UNVERIFIED") {
-		Assert-Condition ($null -eq $entry.qualificationType) "UNVERIFIED requirement '$name' must not carry a qualification type."
-		Assert-Condition ($null -eq $entry.binding) "UNVERIFIED requirement '$name' must not carry binding evidence."
-		Assert-Condition ($null -eq $entry.payload) "UNVERIFIED requirement '$name' must not carry payload evidence."
+		Assert-Condition (-not ($propertyNames -contains "qualificationType")) "UNVERIFIED requirement '$name' must not carry a qualification type."
+		Assert-Condition (-not ($propertyNames -contains "binding")) "UNVERIFIED requirement '$name' must not carry binding evidence."
+		Assert-Condition (-not ($propertyNames -contains "payload")) "UNVERIFIED requirement '$name' must not carry payload evidence."
+		Assert-Condition (-not ($propertyNames -contains "workflow")) "UNVERIFIED requirement '$name' must not carry workflow evidence."
 		continue
 	}
 
+	Assert-Condition ($propertyNames -contains "qualificationType") "PASSED requirement '$name' must identify a qualification type."
+	Assert-Condition ($propertyNames -contains "binding") "PASSED requirement '$name' must identify binding evidence."
+	Assert-Condition ($propertyNames -contains "payload") "PASSED requirement '$name' must identify payload evidence."
+	Assert-Condition ($propertyNames -contains "workflow") "PASSED requirement '$name' must identify workflow evidence."
 	$type = [string]$entry.qualificationType
 	Assert-Condition (-not [string]::IsNullOrWhiteSpace($type)) "PASSED requirement '$name' must identify a qualification type."
 	$bindingPolicy = @($qualificationPolicy.bindings | Where-Object { [string]$_.qualificationType -eq $type })
