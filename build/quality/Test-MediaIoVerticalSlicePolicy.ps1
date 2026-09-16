@@ -153,8 +153,8 @@ Assert-Condition ($documentation -match 'DeviceDirectLease.*not advertised') "Do
 Assert-Condition ($documentation -match 'Deferred to AP-34') "Timing/reference qualification must remain deferred to AP-34."
 
 $managedContractFiles = @(
-	Join-Path $repositoryRoot "src/Contracts/rtaime.Media.Contracts/MediaIoContracts.cs",
-	Join-Path $repositoryRoot "src/Contracts/rtaime.Provider.Contracts/MediaIoProviderContracts.cs"
+	(Join-Path $repositoryRoot "src/Contracts/rtaime.Media.Contracts/MediaIoContracts.cs"),
+	(Join-Path $repositoryRoot "src/Contracts/rtaime.Provider.Contracts/MediaIoProviderContracts.cs")
 )
 foreach ($path in $managedContractFiles) {
 	$source = Get-Content -LiteralPath $path -Raw
