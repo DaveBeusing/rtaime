@@ -62,7 +62,7 @@ Assert-Condition ($probe -match 'MaximumObservedJitter') "Timing evidence must e
 Assert-Condition ($probe -match 'MaximumObservedProcessingDuration') "Timing evidence must expose maximum processing duration."
 
 Assert-Condition ($tests -match 'Perfect_cadence_remains_healthy') "Unit coverage must regress healthy cadence."
-Assert-Condition ($tests -match 'Probe_without_boundaries_remains_recovering') "Unit coverage must regress fail-closed pre-evidence timing state."
+Assert-Condition ($tests -match 'No_boundary_evidence_remains_recovering') "Unit coverage must regress fail-closed pre-evidence timing state."
 Assert-Condition ($tests -match 'repeated_violations_become_unstable') "Unit coverage must regress unstable timing behavior."
 Assert-Condition ($tests -match 'Sequence_gap_is_immediately_unstable') "Unit coverage must regress sequence discontinuity."
 Assert-Condition ($tests -match 'three_frame_periods_are_lost') "Unit coverage must regress timing loss detection."
