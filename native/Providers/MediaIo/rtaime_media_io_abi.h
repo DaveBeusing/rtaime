@@ -9,7 +9,7 @@ extern "C" {
 #endif
 
 #define RTAIME_MEDIA_IO_ABI_VERSION_MAJOR 1u
-#define RTAIME_MEDIA_IO_ABI_VERSION_MINOR 0u
+#define RTAIME_MEDIA_IO_ABI_VERSION_MINOR 1u
 #define RTAIME_MEDIA_IO_IDENTITY_BYTES 16u
 
 typedef struct rtaime_media_io_provider rtaime_media_io_provider;
@@ -137,6 +137,8 @@ typedef struct rtaime_media_io_output_frame
 	uint64_t opaque_surface_handle;
 	rtaime_media_io_identity surface_lease_id;
 	uint64_t audio_opaque_handle;
+	uint32_t audio_sample_count;
+	uint32_t audio_channel_count;
 } rtaime_media_io_output_frame;
 
 typedef struct rtaime_media_io_port_status
