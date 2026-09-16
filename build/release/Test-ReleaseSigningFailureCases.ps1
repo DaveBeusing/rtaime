@@ -23,7 +23,8 @@ if (-not (Test-Path -LiteralPath $sourceRoot -PathType Container)) {
 function Invoke-ExpectVerificationFailure {
 	param(
 		[Parameter(Mandatory)][string]$CaseName,
-		[Parameter(Mandatory)][scriptblock]$Mutate
+		[Parameter(Mandatory)][scriptblock]$Mutate,
+		[switch]$RequireTrustedProductionKey
 	)
 
 	$caseRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("rtaime-release-signing-{0}" -f [Guid]::NewGuid().ToString("N"))
@@ -31,7 +32,11 @@ function Invoke-ExpectVerificationFailure {
 		Copy-Item -LiteralPath $sourceRoot -Destination $caseRoot -Recurse -Force
 		& $Mutate $caseRoot
 
-		& pwsh -NoProfile -File $verifier -OutputPath $caseRoot *> $null
+		$arguments = @("-NoProfile", "-File", $verifier, "-OutputPath", $caseRoot)
+		if ($RequireTrustedProductionKey) {
+			$arguments += "-RequireTrustedProductionKey"
+		}
+		& pwsh @arguments *> $null
 		if ($LASTEXITCODE -eq 0) {
 			throw "Negative release-signing case '$CaseName' unexpectedly verified successfully."
 		}
@@ -63,6 +68,10 @@ Invoke-ExpectVerificationFailure -CaseName "private key material in evidence bun
 		(Join-Path $caseRoot "forbidden-private.pem"),
 		"TEST PRIVATE KEY MATERIAL MUST NEVER BE ACCEPTED",
 		[System.Text.UTF8Encoding]::new($false))
+}
+
+Invoke-ExpectVerificationFailure -CaseName "ephemeral signer rejected as production trust" -RequireTrustedProductionKey -Mutate {
+	param($caseRoot)
 }
 
 Write-Host "Release signing failure qualification PASS"
