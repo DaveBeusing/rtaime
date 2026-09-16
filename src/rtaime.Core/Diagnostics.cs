@@ -101,7 +101,7 @@ public static class DiagnosticRedactor
 		"authorization", "credential", "cookie", "connectionstring", "connection_string", "sas", "signature", "privatekey"
 	};
 	private static readonly Regex AssignmentPattern = new(
-		"(?i)(password|passwd|pwd|secret|token|api[-_]?key|authorization|credential|cookie|connection[-_]?string|sas|signature|private[-_]?key)\\s*[:=]\\s*([^\\s;,]+)",
+		"(?i)(password|passwd|pwd|secret|token|api[-_]?key|authorization|credential|cookie|connection[-_]?string|sas|signature|private[-_]?key)\\s*[:=]\\s*(?:Bearer\\s+)?([^\\s;,]+)",
 		RegexOptions.CultureInvariant | RegexOptions.Compiled);
 	private static readonly Regex BearerPattern = new(
 		"(?i)bearer\\s+[A-Za-z0-9\\-._~+/]+=*",
@@ -134,7 +134,7 @@ public static class DiagnosticRedactor
 		new(key.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
 
 	private static string Truncate(string value) =>
-		value.Length <= MaximumValueLength ? value : string.Concat(value.AsSpan(0, MaximumValueLength), "…");
+		value.Length <= MaximumValueLength ? value : value[..MaximumValueLength] + "…";
 }
 
 public sealed record ProductBuildInfo(string ProductVersion, string ReleaseStage)
@@ -146,7 +146,7 @@ public sealed record ProductBuildInfo(string ProductVersion, string ReleaseStage
 		var version = string.IsNullOrWhiteSpace(informational)
 			? assembly.GetName().Version?.ToString() ?? "unknown"
 			: informational.Split('+', 2)[0];
-		var separator = version.IndexOf('-', StringComparison.Ordinal);
+		var separator = version.IndexOf("-", StringComparison.Ordinal);
 		var stage = separator < 0 ? "STABLE" : version[(separator + 1)..].ToUpperInvariant();
 		return new ProductBuildInfo(version, stage);
 	}
