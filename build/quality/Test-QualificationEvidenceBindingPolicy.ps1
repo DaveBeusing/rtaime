@@ -16,6 +16,9 @@ $releaseApply = Join-Path $repositoryRoot "build/release/Apply-QualificationEvid
 $releaseGenerator = Join-Path $repositoryRoot "build/release/New-ReleaseEvidence.ps1"
 $releaseVerifier = Join-Path $repositoryRoot "build/release/Test-ReleaseEvidence.ps1"
 $releasePolicyPath = Join-Path $repositoryRoot "build/release/release-policy.json"
+$offlinePolicyPath = Join-Path $repositoryRoot "build/release/offline-bundle-policy.json"
+$offlineGenerator = Join-Path $repositoryRoot "build/release/New-OfflineReleaseBundle.ps1"
+$offlineVerifier = Join-Path $repositoryRoot "build/release/Test-OfflineReleaseBundle.ps1"
 $releaseSchemaPath = Join-Path $repositoryRoot "schemas/release/v1/release-evidence.schema.json"
 $qualificationSchemaPath = Join-Path $repositoryRoot "schemas/release/v1/qualification-evidence-manifest.schema.json"
 $cudaWorkflowPath = Join-Path $repositoryRoot ".github/workflows/cuda-reference-qualification.yml"
@@ -52,6 +55,9 @@ foreach ($required in @(
 	$releaseGenerator,
 	$releaseVerifier,
 	$releasePolicyPath,
+	$offlinePolicyPath,
+	$offlineGenerator,
+	$offlineVerifier,
 	$releaseSchemaPath,
 	$qualificationSchemaPath,
 	$cudaWorkflowPath,
@@ -98,6 +104,16 @@ Assert-Condition ($releaseApplySource -match 'Get-Sha256[\s\S]*sourceBinding') "
 Assert-Condition ($releaseApplySource -match 'Get-Sha256[\s\S]*sourcePayload') "Release binding must verify source payload hashes."
 Assert-Condition ($releaseVerifierSource -match 'qualificationEvidenceManifest') "Release verification must require the qualification evidence manifest."
 Assert-Condition ($releaseVerifierSource -match 'Qualification binding source commit mismatch') "Release verification must fail closed on a qualification source-commit mismatch."
+
+$offlinePolicy = Get-Content -LiteralPath $offlinePolicyPath -Raw | ConvertFrom-Json
+Assert-Condition (@($offlinePolicy.releaseEvidenceFiles) -contains "qualification-evidence-manifest.json") "Offline release policy must retain the qualification evidence manifest."
+$offlineGeneratorSource = Get-Content -LiteralPath $offlineGenerator -Raw
+$offlineVerifierSource = Get-Content -LiteralPath $offlineVerifier -Raw
+Assert-Condition ($offlineGeneratorSource -match 'qualificationSource') "Offline packaging must copy the release qualification evidence subtree."
+Assert-Condition ($offlineGeneratorSource -match 'releaseDirectory\s+"qualification"') "Offline qualification evidence must remain below the release evidence root."
+Assert-Condition ($offlineVerifierSource -match 'qualificationEvidenceManifest') "Offline verification must validate the signed qualification evidence manifest reference."
+Assert-Condition ($offlineVerifierSource -match 'Contained qualification binding source commit mismatch') "Offline verification must fail closed on a qualification source-commit mismatch."
+Assert-Condition ($offlineVerifierSource -match 'Contained qualification payload hash mismatch') "Offline verification must fail closed on qualification payload tampering."
 
 $testRoot = Join-Path $repositoryRoot "artifacts/quality/qualification-evidence-binding"
 if (Test-Path -LiteralPath $testRoot) { Remove-Item -LiteralPath $testRoot -Recurse -Force }
