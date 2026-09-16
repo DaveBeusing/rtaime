@@ -27,8 +27,9 @@ function Invoke-SecurityCheck {
 		Set-Variable -Name PSNativeCommandUseErrorActionPreference -Value $false
 	}
 	try {
-		& $pwshPath -NoLogo -NoProfile -File $securityScript -RepositoryRoot $RepositoryPath
-		return $LASTEXITCODE
+		& $pwshPath -NoLogo -NoProfile -File $securityScript -RepositoryRoot $RepositoryPath 2>&1 | Out-Host
+		$exitCode = $LASTEXITCODE
+		return [int]$exitCode
 	} finally {
 		if ($null -ne $nativePreferenceVariable) {
 			Set-Variable -Name PSNativeCommandUseErrorActionPreference -Value $previousNativePreference
