@@ -37,9 +37,12 @@ $documentation = Get-Content -LiteralPath $documentationPath -Raw
 Assert-Condition ($source -match 'CudaQualificationStatus[\s\S]*Unverified[\s\S]*Passed[\s\S]*Failed') "CUDA qualification must distinguish UNVERIFIED, PASSED and FAILED."
 Assert-Condition ($source -match 'GpuBackendKind\.NvidiaCuda') "Qualification must require the NVIDIA CUDA backend."
 Assert-Condition ($source -match 'HardwareAccelerated') "Qualification must require hardware acceleration."
-Assert-Condition ($source -match 'Hd1080p50Rgba8') "Qualification must cover 1080p50."
-Assert-Condition ($source -match 'Hd1080p59_94Rgba8') "Qualification must cover 1080p59.94."
-Assert-Condition ([Regex]::Matches($source, 'cases\.Add\(RunCase').Count -eq 8) "Qualification must declare exactly eight V1 format/operation cases."
+Assert-Condition ($source -match 'new\[\]\s*\{\s*VideoFormat\.Hd1080p50Rgba8,\s*VideoFormat\.Hd1080p59_94Rgba8\s*\}') "Qualification must execute both V1 formats from one explicit matrix."
+Assert-Condition ([Regex]::Matches($source, 'cases\.Add\(RunCase').Count -eq 4) "Qualification must declare exactly four operations per V1 format."
+foreach ($operation in @('CUT_A', 'CUT_B', 'DISSOLVE_50', 'DISSOLVE_LAYER')) {
+	Assert-Condition ($source -match [Regex]::Escape($operation)) "CUDA qualification operation '$operation' is required."
+}
+Assert-Condition ($source -match 'cases\.Count == 8') "Qualification must require all eight V1 format/operation results before PASS."
 Assert-Condition ($source -match 'PixelCorrect') "Qualification must verify deterministic output pixels."
 Assert-Condition ($source -match 'SurfaceLifetimeCorrect') "Qualification must verify GPU surface lifetime."
 Assert-Condition ($source -match 'P95Milliseconds') "Qualification must record P95 latency."
