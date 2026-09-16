@@ -1,0 +1,62 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://rtaime.local/schemas/persistence/v1/state-maintenance-policy.schema.json",
+	"$comment": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+	"title": "rtaime Persistent State Maintenance Policy v1",
+	"type": "object",
+	"additionalProperties": false,
+	"required": ["copyright", "schemaVersion", "databaseFamily", "backup", "migration", "recovery", "integration"],
+	"properties": {
+		"copyright": { "type": "string", "minLength": 1 },
+		"schemaVersion": { "const": "1.0" },
+		"databaseFamily": { "const": "SQLITE" },
+		"backup": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["requiredBeforeSchemaMutation", "overwriteExistingBackup", "verifyIntegrity", "verifySchemaInventory", "hashAlgorithm"],
+			"properties": {
+				"requiredBeforeSchemaMutation": { "const": true },
+				"overwriteExistingBackup": { "const": false },
+				"verifyIntegrity": { "const": true },
+				"verifySchemaInventory": { "const": true },
+				"hashAlgorithm": { "const": "SHA256" }
+			}
+		},
+		"migration": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["direction", "registration", "unknownMigrationAction", "allowDowngrade", "transactional", "singleVersionStepsOnly", "postMigrationVerificationRequired"],
+			"properties": {
+				"direction": { "const": "FORWARD_ONLY" },
+				"registration": { "const": "EXPLICIT" },
+				"unknownMigrationAction": { "const": "FAIL_CLOSED" },
+				"allowDowngrade": { "const": false },
+				"transactional": { "const": true },
+				"singleVersionStepsOnly": { "const": true },
+				"postMigrationVerificationRequired": { "const": true }
+			}
+		},
+		"recovery": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["requireExclusiveAccessAcknowledgement", "restoreOnMigrationFailure", "restoreOnPostMigrationVerificationFailure", "verifyBackupBeforeRestore", "verifyRestoredState"],
+			"properties": {
+				"requireExclusiveAccessAcknowledgement": { "const": true },
+				"restoreOnMigrationFailure": { "const": true },
+				"restoreOnPostMigrationVerificationFailure": { "const": true },
+				"verifyBackupBeforeRestore": { "const": true },
+				"verifyRestoredState": { "const": true }
+			}
+		},
+		"integration": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["softwareUpdateStateOrchestration", "automaticBackgroundMigration", "productionPackageActivation"],
+			"properties": {
+				"softwareUpdateStateOrchestration": { "const": "EXPLICIT_ORCHESTRATION_REQUIRED" },
+				"automaticBackgroundMigration": { "const": false },
+				"productionPackageActivation": { "const": "OUT_OF_SCOPE" }
+			}
+		}
+	}
+}

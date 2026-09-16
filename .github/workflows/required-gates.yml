@@ -75,6 +75,10 @@ jobs:
         shell: pwsh
         run: ./build/update/Test-UpdatePolicy.ps1
 
+      - name: Verify persistent-state maintenance policy
+        shell: pwsh
+        run: ./build/state/Test-StateMaintenancePolicy.ps1
+
       - name: Restore
         run: dotnet restore rtaime.slnx
 
