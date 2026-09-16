@@ -4,8 +4,12 @@ cmake_minimum_required(VERSION 3.25)
 project(rtaime_media_io LANGUAGES CXX)
 
 set(AJA_NTV2_ROOT "$ENV{RTAIME_AJA_NTV2_ROOT}" CACHE PATH "Path to aja-video/libajantv2 release checkout")
+set(RTAIME_AJA_SDK_REVISION "$ENV{RTAIME_AJA_SDK_REVISION}" CACHE STRING "Qualified libajantv2 tag or commit")
 if(NOT AJA_NTV2_ROOT OR NOT EXISTS "${AJA_NTV2_ROOT}/CMakeLists.txt")
 	message(FATAL_ERROR "AJA_NTV2_ROOT must point to an aja-video/libajantv2 release checkout.")
+endif()
+if(NOT RTAIME_AJA_SDK_REVISION)
+	set(RTAIME_AJA_SDK_REVISION "release-unverified")
 endif()
 
 set(AJA_BUILD_APPS OFF CACHE BOOL "" FORCE)
@@ -21,6 +25,7 @@ add_library(rtaime_media_io SHARED
 	../MediaIo/rtaime_media_io_abi.h)
 
 target_compile_features(rtaime_media_io PRIVATE cxx_std_20)
+target_compile_definitions(rtaime_media_io PRIVATE RTAIME_AJA_SDK_REVISION="${RTAIME_AJA_SDK_REVISION}")
 target_include_directories(rtaime_media_io PRIVATE
 	${CMAKE_CURRENT_SOURCE_DIR}/../MediaIo
 	${AJA_NTV2_ROOT}
