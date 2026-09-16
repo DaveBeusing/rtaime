@@ -140,6 +140,39 @@ public sealed record MediaIoInputFrameDescriptor
 	public AudioBufferDescriptor? EmbeddedAudio { get; }
 }
 
+/// <summary>
+/// Output submission descriptor. The provider may borrow a producer-owned surface or consume a shared lease, but
+/// the surface must always be represented by an opaque handle rather than a managed payload.
+/// </summary>
+public sealed record MediaIoOutputFrameDescriptor
+{
+	public MediaIoOutputFrameDescriptor(
+		CompatibilityVersion version,
+		MediaIoPortId portId,
+		FrameDescriptor video,
+		AudioBufferDescriptor? embeddedAudio = null)
+	{
+		MediaIoContractVersion.EnsureSupported(version);
+		ArgumentNullException.ThrowIfNull(video);
+		if (video.Surface.Handle is null)
+			throw new ArgumentException("Media I/O output video surfaces require an opaque handle.", nameof(video));
+		if (video.Surface.Ownership == SurfaceOwnership.SharedLease && video.Surface.Lifetime.LeaseId is null)
+			throw new ArgumentException("Shared Media I/O output video surfaces require an explicit lease identity.", nameof(video));
+		if (embeddedAudio is not null && embeddedAudio.Handle is null)
+			throw new ArgumentException("Media I/O embedded audio requires an opaque handle.", nameof(embeddedAudio));
+
+		Version = version;
+		PortId = portId;
+		Video = video;
+		EmbeddedAudio = embeddedAudio;
+	}
+
+	public CompatibilityVersion Version { get; }
+	public MediaIoPortId PortId { get; }
+	public FrameDescriptor Video { get; }
+	public AudioBufferDescriptor? EmbeddedAudio { get; }
+}
+
 public sealed record MediaIoPortStatus
 {
 	public MediaIoPortStatus(
