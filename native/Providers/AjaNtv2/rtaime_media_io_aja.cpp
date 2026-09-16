@@ -147,6 +147,15 @@ namespace
 		return false;
 	}
 
+	static bool external_reference_locked(Session& session)
+	{
+		NTV2ReferenceSource reference_source = NTV2_REFERENCE_INVALID;
+		if (!session.provider->card.GetReference(reference_source) || reference_source != NTV2_REFERENCE_EXTERNAL)
+			return false;
+		const NTV2VideoFormat reference_format = session.provider->card.GetReferenceVideoFormat();
+		return reference_format != NTV2_FORMAT_UNKNOWN && matches_rate(reference_format, session.config.normalized_format);
+	}
+
 	static bool resolve_port(const rtaime_media_io_identity& id, uint32_t& index)
 	{
 		for (uint32_t candidate = 0; candidate < kPortCount; ++candidate)
@@ -551,10 +560,21 @@ extern "C" rtaime_media_io_result rtaime_media_io_get_status(
 	else
 	{
 		AUTOCIRCULATE_STATUS ac_status;
-		status->signal_state = session->provider->card.AutoCirculateGetStatus(session->channel, ac_status) && ac_status.IsRunning()
-			? RTAIME_MEDIA_IO_SIGNAL_LOCKED
-			: RTAIME_MEDIA_IO_SIGNAL_FAULTED;
-		status->vendor_status_code = status->signal_state == RTAIME_MEDIA_IO_SIGNAL_LOCKED ? 0 : -2;
+		if (!session->provider->card.AutoCirculateGetStatus(session->channel, ac_status) || !ac_status.IsRunning())
+		{
+			status->signal_state = RTAIME_MEDIA_IO_SIGNAL_FAULTED;
+			status->vendor_status_code = -2;
+		}
+		else if (session->config.external_reference_required != 0u && !external_reference_locked(*session))
+		{
+			status->signal_state = RTAIME_MEDIA_IO_SIGNAL_LOST;
+			status->vendor_status_code = -3;
+		}
+		else
+		{
+			status->signal_state = RTAIME_MEDIA_IO_SIGNAL_LOCKED;
+			status->vendor_status_code = 0;
+		}
 	}
 	return RTAIME_MEDIA_IO_OK;
 }
@@ -636,6 +656,9 @@ extern "C" rtaime_media_io_result rtaime_media_io_output_try_submit(
 	if (!is_v1_format(frame->format) || frame->opaque_surface_handle == 0u)
 		return RTAIME_MEDIA_IO_INVALID_ARGUMENT;
 	std::lock_guard<std::mutex> lock(session->provider->gate);
+
+	if (session->config.external_reference_required != 0u && !external_reference_locked(*session))
+		return RTAIME_MEDIA_IO_WOULD_BLOCK;
 
 	AUTOCIRCULATE_STATUS status;
 	if (!session->provider->card.AutoCirculateGetStatus(session->channel, status) || !status.IsRunning())

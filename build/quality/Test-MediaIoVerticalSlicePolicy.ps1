@@ -20,6 +20,7 @@ $abiPath = Join-Path $repositoryRoot "native/Providers/MediaIo/rtaime_media_io_a
 $cmakePath = Join-Path $repositoryRoot "native/Providers/AjaNtv2/CMakeLists.txt"
 $nativePath = Join-Path $repositoryRoot "native/Providers/AjaNtv2/rtaime_media_io_aja.cpp"
 $sdkPinPath = Join-Path $repositoryRoot "native/Providers/AjaNtv2/libajantv2.version.json"
+$compatibilityPath = Join-Path $repositoryRoot "build/native/Apply-AjaNtv2BuildCompatibility.ps1"
 $bridgePath = Join-Path $repositoryRoot "src/Media/rtaime.Media/NativeMediaIoAdapter.cs"
 $pumpPath = Join-Path $repositoryRoot "src/Media/rtaime.Media/MediaIoVerticalSlice.cs"
 $runtimePath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/RuntimeHostProcess.cs"
@@ -36,6 +37,7 @@ foreach ($path in @(
 	$cmakePath,
 	$nativePath,
 	$sdkPinPath,
+	$compatibilityPath,
 	$bridgePath,
 	$pumpPath,
 	$runtimePath,
@@ -53,6 +55,7 @@ $abi = Get-Content -LiteralPath $abiPath -Raw
 $cmake = Get-Content -LiteralPath $cmakePath -Raw
 $native = Get-Content -LiteralPath $nativePath -Raw
 $sdkPin = Get-Content -LiteralPath $sdkPinPath -Raw | ConvertFrom-Json
+$compatibility = Get-Content -LiteralPath $compatibilityPath -Raw
 $bridge = Get-Content -LiteralPath $bridgePath -Raw
 $pump = Get-Content -LiteralPath $pumpPath -Raw
 $runtime = Get-Content -LiteralPath $runtimePath -Raw
@@ -79,6 +82,12 @@ Assert-Condition ([string]$sdkPin.repository -eq 'https://github.com/aja-video/l
 Assert-Condition ([string]$sdkPin.referenceBranch -eq 'release') "Reference SDK pin must document the AJA release branch."
 Assert-Condition ([string]$sdkPin.commit -match '^[0-9a-f]{40}$') "Reference SDK pin must contain an exact 40-character commit SHA."
 Assert-Condition ([string]$sdkPin.commit -eq 'aa4d482a47fdd9fd9f2883163e286206ac0d7ae7') "AP-33 reference SDK pin changed without qualification-policy update."
+
+Assert-Condition ($compatibility -match 'aa4d482a47fdd9fd9f2883163e286206ac0d7ae7') "AJA build compatibility must remain pinned to the qualified SDK commit."
+Assert-Condition ($compatibility -match 'ajabase/system/windows/infoimpl\.cpp') "AJA build compatibility must remain scoped to the known Windows SDK source."
+Assert-Condition ($compatibility -match 'source shape changed') "AJA build compatibility must fail closed if the pinned upstream source shape changes."
+Assert-Condition ($compatibility -match 'IWbemServices \*pSvc = NULL') "AJA build compatibility must retain the MSVC goto/declaration fix."
+Assert-Condition ($compatibility -match 'Get-FileHash') "AJA build compatibility must emit a patched-source evidence hash."
 
 Assert-Condition ($native -match 'kPortCount = 3') "AP-33 native topology must expose exactly two capture ports plus one Program output."
 Assert-Condition ($native -match 'NTV2_INPUTSOURCE_SDI1') "AP-33 must use SDI input 1."
@@ -135,6 +144,7 @@ Assert-Condition ($workflow -match 'rtaime-media-io-reference') "Physical workfl
 Assert-Condition ($workflow -match 'libajantv2\.version\.json') "Physical workflow must consume the repository SDK pin."
 Assert-Condition ($workflow -match 'git -C \$sdkRoot rev-parse HEAD') "Physical workflow must resolve the exact libajantv2 commit."
 Assert-Condition ($workflow -match 'differs from pin') "Physical workflow must fail when the resolved SDK differs from the repository pin."
+Assert-Condition ($workflow -match 'Apply-AjaNtv2BuildCompatibility\.ps1') "Physical workflow must apply the repository-controlled pinned SDK compatibility patch."
 Assert-Condition ($workflow -match 'RTAIME_AJA_SDK_REVISION') "Physical workflow must propagate the exact SDK revision into evidence."
 Assert-Condition ($workflow -match 'cmake --build') "Physical workflow must build the native provider from source."
 Assert-Condition ($workflow -match 'rtaime_media_io\.dll') "Physical workflow must expose exactly the built native provider DLL."
@@ -143,6 +153,7 @@ Assert-Condition ($workflow -match 'Upload immutable qualification evidence') "P
 Assert-Condition ($requiredGates -match 'Build pinned native Media I/O provider') "Provider Smoke must compile the pinned native Media I/O provider."
 Assert-Condition ($requiredGates -match 'libajantv2\.version\.json') "Provider Smoke must consume the repository SDK pin."
 Assert-Condition ($requiredGates -match 'git -C \$sdkRoot rev-parse HEAD') "Provider Smoke must verify the exact SDK commit."
+Assert-Condition ($requiredGates -match 'Apply-AjaNtv2BuildCompatibility\.ps1') "Provider Smoke must apply the repository-controlled pinned SDK compatibility patch."
 Assert-Condition ($requiredGates -match 'cmake -S native/Providers/AjaNtv2') "Provider Smoke must configure the actual AJA adapter target."
 Assert-Condition ($requiredGates -match 'cmake --build \$nativeBuild --config Release') "Provider Smoke must compile the native adapter."
 Assert-Condition ($requiredGates -match 'Expected exactly one rtaime_media_io\.dll') "Provider Smoke must verify the native DLL result."
@@ -153,8 +164,8 @@ Assert-Condition ($documentation -match 'DeviceDirectLease.*not advertised') "Do
 Assert-Condition ($documentation -match 'Deferred to AP-34') "Timing/reference qualification must remain deferred to AP-34."
 
 $managedContractFiles = @(
-	Join-Path $repositoryRoot "src/Contracts/rtaime.Media.Contracts/MediaIoContracts.cs",
-	Join-Path $repositoryRoot "src/Contracts/rtaime.Provider.Contracts/MediaIoProviderContracts.cs"
+	(Join-Path $repositoryRoot "src/Contracts/rtaime.Media.Contracts/MediaIoContracts.cs"),
+	(Join-Path $repositoryRoot "src/Contracts/rtaime.Provider.Contracts/MediaIoProviderContracts.cs")
 )
 foreach ($path in $managedContractFiles) {
 	$source = Get-Content -LiteralPath $path -Raw
@@ -164,5 +175,5 @@ foreach ($path in $managedContractFiles) {
 Write-Host "Media I/O vertical slice policy verification PASS"
 Write-Host "Topology: SDI1 + SDI2 capture -> Program SDI output; bounded pinned-host transfer"
 Write-Host "Runtime selection: explicit virtual/native; native failure is fail-closed"
-Write-Host "Native compile evidence: Provider Smoke builds the repository-pinned libajantv2 adapter"
+Write-Host "Native compile evidence: Provider Smoke builds the repository-pinned libajantv2 adapter with a fail-closed MSVC compatibility patch"
 Write-Host "Physical hardware evidence state: UNVERIFIED until dedicated self-hosted qualification PASSES"

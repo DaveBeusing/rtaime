@@ -128,6 +128,10 @@ jobs:
         shell: pwsh
         run: ./build/quality/Test-MediaIoVerticalSlicePolicy.ps1
 
+      - name: Verify timing reference latency and soak policy
+        shell: pwsh
+        run: ./build/quality/Test-TimingQualificationPolicy.ps1
+
       - name: Restore
         run: dotnet restore rtaime.slnx
 
@@ -197,6 +201,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Unable to checkout pinned libajantv2 commit." }
           $resolved = (git -C $sdkRoot rev-parse HEAD).Trim()
           if ($resolved -ne [string]$pin.commit) { throw "Resolved libajantv2 commit '$resolved' differs from pin '$($pin.commit)'." }
+
+          ./build/native/Apply-AjaNtv2BuildCompatibility.ps1 `
+            -SdkRoot $sdkRoot `
+            -ExpectedCommit $resolved
 
           $nativeBuild = Join-Path $PWD "artifacts/native-provider-smoke"
           cmake -S native/Providers/AjaNtv2 -B $nativeBuild -A x64 `

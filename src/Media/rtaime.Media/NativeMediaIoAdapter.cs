@@ -305,9 +305,11 @@ public sealed class NativeMediaIoProviderAdapter : IMediaIoProviderAdapter
 				return MediaIoOutputSubmitResult.Rejected(new Failure("media.io.output.port_mismatch", "Output descriptor targets a different port."));
 			if (frame.Video.Surface.Format != _format)
 				return MediaIoOutputSubmitResult.Rejected(new Failure("media.io.output.format_mismatch", "Output descriptor format differs from the opened session."));
-			if (!string.Equals(frame.Video.Surface.Handle?.Kind, PinnedHostMediaIoMemory.VideoHandleKind, StringComparison.Ordinal))
+
+			var videoHandle = frame.Video.Surface.Handle;
+			if (videoHandle is null || !string.Equals(videoHandle.Kind, PinnedHostMediaIoMemory.VideoHandleKind, StringComparison.Ordinal))
 				return MediaIoOutputSubmitResult.Rejected(new Failure("media.io.output.handle_unsupported", "AP-33 native output requires a pinned-host Media I/O handle."));
-			if (!ulong.TryParse(frame.Video.Surface.Handle.Value, NumberStyles.None, CultureInfo.InvariantCulture, out var pointer) || pointer == 0)
+			if (!ulong.TryParse(videoHandle.Value, NumberStyles.None, CultureInfo.InvariantCulture, out var pointer) || pointer == 0)
 				return MediaIoOutputSubmitResult.Rejected(new Failure("media.io.output.handle_invalid", "Output surface handle is not a valid pinned-host address."));
 
 			ulong audioPointer = 0;
@@ -562,9 +564,10 @@ public static class PinnedHostMediaIoMemory
 	{
 		ArgumentNullException.ThrowIfNull(lease);
 		var frame = lease.Descriptor.Video;
-		if (!string.Equals(frame.Surface.Handle?.Kind, VideoHandleKind, StringComparison.Ordinal))
+		var handle = frame.Surface.Handle;
+		if (handle is null || !string.Equals(handle.Kind, VideoHandleKind, StringComparison.Ordinal))
 			throw new InvalidOperationException("Media I/O frame is not backed by a pinned-host handle.");
-		if (!ulong.TryParse(frame.Surface.Handle.Value, NumberStyles.None, CultureInfo.InvariantCulture, out var address) || address == 0)
+		if (!ulong.TryParse(handle.Value, NumberStyles.None, CultureInfo.InvariantCulture, out var address) || address == 0)
 			throw new InvalidOperationException("Media I/O pinned-host address is invalid.");
 
 		var pixels = new byte[RgbaFrameBuffer.RequiredByteLength(frame.Surface.Format)];
@@ -577,9 +580,11 @@ public static class PinnedHostMediaIoMemory
 		ArgumentNullException.ThrowIfNull(descriptor);
 		if (descriptor.Format != AudioFormat.Stereo48kFloat32)
 			throw new InvalidOperationException("AP-33 Media I/O audio requires stereo 48 kHz Float32.");
-		if (!string.Equals(descriptor.Handle?.Kind, AudioHandleKind, StringComparison.Ordinal))
+
+		var handle = descriptor.Handle;
+		if (handle is null || !string.Equals(handle.Kind, AudioHandleKind, StringComparison.Ordinal))
 			throw new InvalidOperationException("Media I/O audio is not backed by a pinned-host handle.");
-		if (!ulong.TryParse(descriptor.Handle.Value, NumberStyles.None, CultureInfo.InvariantCulture, out var address) || address == 0)
+		if (!ulong.TryParse(handle.Value, NumberStyles.None, CultureInfo.InvariantCulture, out var address) || address == 0)
 			throw new InvalidOperationException("Media I/O pinned-host audio address is invalid.");
 
 		var samples = new float[checked((int)(descriptor.Timing.SampleCount * descriptor.Format.ChannelCount))];

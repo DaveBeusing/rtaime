@@ -84,7 +84,7 @@ public static class ControlHostDiagnostics
 			};
 			if (journalEvent.CausationId is { } causationId)
 				dimensions["causationId"] = causationId.ToString();
-			var failure = journalEvent.Failure is { } sourceFailure
+			Failure? failure = journalEvent.Failure is { } sourceFailure
 				? new Failure(sourceFailure.Code, DiagnosticRedactor.RedactText(sourceFailure.Message))
 				: null;
 			return new DiagnosticEvent(

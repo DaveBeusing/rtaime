@@ -1,6 +1,6 @@
 # Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
-name: Media I/O reference hardware qualification
+name: Timing reference latency and soak qualification
 
 on:
   workflow_dispatch:
@@ -17,29 +17,38 @@ on:
         options:
           - "1080p50"
           - "1080p59.94"
-      minimum_frames:
-        description: Minimum captured frames per input and accepted Program frames
+      soak_seconds:
+        description: Physical soak duration in seconds; minimum 1800
         required: true
-        default: "30"
+        default: "3600"
         type: string
-      require_external_reference:
-        description: Require AJA external reference for Program output
+      maximum_host_cycle_p95_ms:
+        description: Maximum p95 Media I/O host-cycle duration in milliseconds
         required: true
-        default: false
-        type: boolean
+        default: "16.0"
+        type: string
+      external_latency_evidence_path:
+        description: Runner-local JSON emitted by an independent physical end-to-end latency instrument
+        required: true
+        type: string
+      maximum_end_to_end_p95_ms:
+        description: Maximum permitted independently measured physical end-to-end p95 latency in milliseconds
+        required: true
+        default: "80.0"
+        type: string
 
 permissions:
   contents: read
 
 jobs:
-  media-io-reference:
-    name: Media I/O Reference Hardware
+  timing-reference-soak:
+    name: Timing Reference Latency Soak
     runs-on:
       - self-hosted
       - windows
       - x64
       - rtaime-media-io-reference
-    timeout-minutes: 60
+    timeout-minutes: 150
 
     steps:
       - name: Checkout exact source
@@ -50,7 +59,7 @@ jobs:
         with:
           global-json-file: global.json
 
-      - name: Qualify SDK
+      - name: Qualify toolchain
         shell: pwsh
         run: |
           dotnet --info
@@ -101,21 +110,23 @@ jobs:
         shell: pwsh
         run: dotnet build tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release
 
-      - name: Run physical Media I/O qualification
+      - name: Run timing reference latency and soak qualification
         shell: pwsh
         run: |
-          $external = [bool]::Parse("${{ inputs.require_external_reference }}")
-          ./build/qualification/Invoke-MediaIoReferenceQualification.ps1 `
+          ./build/qualification/Invoke-TimingReferenceSoakQualification.ps1 `
             -ExpectedAdapterName "${{ inputs.expected_adapter_name }}" `
             -AjaSdkRevision "$env:RTAIME_AJA_SDK_REVISION" `
-            -MinimumFrames ([int]"${{ inputs.minimum_frames }}") `
             -Format "${{ inputs.format }}" `
-            -RequireExternalReference:$external `
-            -EvidencePath "artifacts/qualification/media-io-reference.json"
+            -SoakSeconds ([int]"${{ inputs.soak_seconds }}") `
+            -MaximumHostCycleP95Milliseconds ([double]"${{ inputs.maximum_host_cycle_p95_ms }}") `
+            -ExternalLatencyEvidencePath "${{ inputs.external_latency_evidence_path }}" `
+            -MaximumEndToEndP95Milliseconds ([double]"${{ inputs.maximum_end_to_end_p95_ms }}") `
+            -RequireReferenceRelock `
+            -EvidencePath "artifacts/qualification/timing-reference-soak.json"
 
-      - name: Upload immutable qualification evidence
+      - name: Upload immutable AP-34 qualification evidence
         uses: actions/upload-artifact@v4
         with:
-          name: media-io-reference-qualification-${{ github.run_id }}-${{ github.run_attempt }}
-          path: artifacts/qualification/media-io-reference.json
+          name: timing-reference-latency-soak-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/qualification/timing-reference-soak.json
           if-no-files-found: error

@@ -60,7 +60,7 @@ public sealed class OperatorMonitoringPlaneTests
 		var frames = new[] { first, second, third };
 
 		Assert.Equal(2, frames.Count(frame => frame.Descriptor.StreamKind == MonitoringStreamKind.Source));
-		var program = Assert.Single(frames.Where(frame => frame.Descriptor.StreamKind == MonitoringStreamKind.Program));
+		var program = Assert.Single(frames, frame => frame.Descriptor.StreamKind == MonitoringStreamKind.Program);
 		Assert.Equal(SourceB, program.Descriptor.SourceId);
 		Assert.Equal(RuntimeMonitoringTap.MonitorWidth, program.Descriptor.Width);
 		Assert.Equal(RuntimeMonitoringTap.MonitorHeight, program.Descriptor.Height);
