@@ -56,7 +56,17 @@ Assert-Condition ($writePermissionMatches.Count -eq 1) "Release Pipeline workflo
 Assert-Condition ($publishBody -match 'New-ReleasePublication\.ps1') "Publication job must run New-ReleasePublication.ps1."
 Assert-Condition ($publishBody -match 'Test-ReleasePublication\.ps1') "Publication job must verify publication metadata before GitHub mutation."
 Assert-Condition ($publishBody -match 'gh\s+release\s+view') "Publication job must refuse an existing GitHub Release."
-Assert-Condition ($publishBody -match 'gh\s+release\s+create') "Publication job must create the GitHub Release from verified assets."
+
+$directReleaseCreate = $publishBody -match '(?m)&\s+gh\s+release\s+create\b'
+$argumentArrayReleaseCreate =
+	$publishBody -match '\$ghArgs\s*=\s*@\(\s*"release"\s*,\s*"create"\s*,\s*\$tag' -and
+	$publishBody -match '\$ghArgs\s*\+=\s*\$assets' -and
+	$publishBody -match '(?m)&\s+gh\s+@ghArgs\b'
+Assert-Condition ($directReleaseCreate -or $argumentArrayReleaseCreate) "Publication job must create the GitHub Release from verified assets."
+Assert-Condition ($publishBody -match 'Join-Path\s+\$candidatePath\s+"release-candidate\.json"') "Publication assets must include the verified Release Candidate manifest."
+Assert-Condition ($publishBody -match 'Join-Path\s+\$candidatePath\s+\(\[string\]\$candidate\.bundle\.fileName\)') "Publication assets must use the bundle declared by the verified Release Candidate."
+Assert-Condition ($publishBody -match 'Join-Path\s+\$candidatePath\s+\(\[string\]\$candidate\.bundle\.sidecarFileName\)') "Publication assets must use the bundle sidecar declared by the verified Release Candidate."
+Assert-Condition ($publishBody -match 'Join-Path\s+\$publicationPath\s+"release-publication\.json"') "Publication assets must include verified publication metadata."
 Assert-Condition ($publishBody -match '--verify-tag') "GitHub Release creation must verify the existing Git tag."
 Assert-Condition ($publishBody -match 'actions/download-artifact@v4') "Publication job must consume the previously built Release Candidate artifact."
 foreach ($forbidden in @('dotnet\s+build', 'dotnet\s+test', 'Invoke-ReleasePipeline\.ps1', 'New-ReleaseEvidence\.ps1', 'New-ReleaseAttestation\.ps1', 'New-OfflineReleaseBundle\.ps1')) {
