@@ -51,15 +51,15 @@ Assert-Condition ([string]$preview.releaseStage -eq "PREVIEW") "PREVIEW channel 
 Assert-Condition ($preview.tagRequired -eq $true) "PREVIEW channel must require a tag."
 Assert-Condition (@($preview.allowedSignerClasses) -contains "TEST_EPHEMERAL") "PREVIEW channel must support TEST_EPHEMERAL qualification."
 Assert-Condition (@($preview.allowedSignerClasses) -contains "EXTERNAL_CONTROLLED") "PREVIEW channel must allow externally controlled signing."
-Assert-Condition ($preview.requireTrustedProductionKey -eq $false) "PREVIEW mechanism qualification must not be misrepresented as required production trust."
-Assert-Condition ($preview.publicationEligible -eq $false) "PREVIEW channel must not be represented as Stable publication readiness."
+Assert-Condition ($preview.requireTrustedProductionKey -eq $false) "PREVIEW candidate creation may qualify with a test key, but publication must apply the stricter AP-22 policy."
+Assert-Condition ($preview.publicationEligible -eq $true) "PREVIEW must be publication-eligible when production trust PASS is established."
 
 $stable = $policy.channels.STABLE
 Assert-Condition ([string]$stable.releaseStage -eq "STABLE") "STABLE channel must map to STABLE stage."
 Assert-Condition ($stable.tagRequired -eq $true) "STABLE channel must require a tag."
 Assert-Condition (@($stable.allowedSignerClasses).Count -eq 1 -and [string]$stable.allowedSignerClasses[0] -eq "EXTERNAL_CONTROLLED") "STABLE must allow EXTERNAL_CONTROLLED signing only."
 Assert-Condition ($stable.requireTrustedProductionKey -eq $true) "STABLE must require active production signing-key trust."
-Assert-Condition ($stable.publicationEligible -eq $true) "STABLE is the only publication-eligible channel."
+Assert-Condition ($stable.publicationEligible -eq $true) "STABLE candidate readiness must be publication eligible."
 
 [xml]$buildProps = Get-Content -LiteralPath $buildPropsPath -Raw
 $productVersion = $buildProps.SelectSingleNode("//RtaimeProductVersion").InnerText.Trim()
@@ -76,7 +76,7 @@ if ($releaseStage -eq "DEV") {
 $requiredGates = Get-Content -LiteralPath $requiredGatesPath -Raw
 $releaseWorkflow = Get-Content -LiteralPath $releaseWorkflowPath -Raw
 foreach ($workflow in @($requiredGates, $releaseWorkflow)) {
-	Assert-Condition ($workflow -match 'Invoke-ReleasePipeline\.ps1') "All packaged/release workflows must call Invoke-ReleasePipeline.ps1."
+	Assert-Condition ($workflow -match 'Invoke-ReleasePipeline\.ps1') "All packaged/release-candidate workflows must call Invoke-ReleasePipeline.ps1."
 	foreach ($forbiddenDirectCall in @(
 		'New-ReleaseEvidence\.ps1',
 		'New-ReleaseAttestation\.ps1',
@@ -89,12 +89,14 @@ foreach ($workflow in @($requiredGates, $releaseWorkflow)) {
 
 Assert-Condition ($releaseWorkflow -match '(?m)^\s+tags:\s*$') "Release Pipeline workflow must have a tag trigger."
 Assert-Condition ($releaseWorkflow -match "(?m)^\s+-\s+'v\*'\s*$") "Release Pipeline workflow must constrain tag trigger to v*."
-Assert-Condition ($releaseWorkflow -match '(?m)^\s*contents:\s+read\s*$') "Release Pipeline workflow must default to read-only contents permission."
-Assert-Condition ($releaseWorkflow -notmatch '(?im)^\s*contents:\s+write\s*$') "Release Pipeline workflow must not publish GitHub Releases in AP-21."
+Assert-Condition ($releaseWorkflow -match '(?m)^permissions:\s*\r?\n\s+contents:\s+read\s*$') "Release Pipeline workflow must default to read-only contents permission."
+Assert-Condition ($releaseWorkflow -match '(?m)^\s+publish-release:\s*$') "Release Pipeline workflow must define a distinct publication job."
+
+& (Join-Path $PSScriptRoot "Test-ReleasePublicationPolicy.ps1")
 
 Write-Host "Release channel policy verification PASS"
 Write-Host "Channels: QUALIFICATION, PREVIEW, STABLE"
 Write-Host "Current source: $productVersion / $releaseStage"
 Write-Host "Single release orchestrator: enforced"
-Write-Host "Stable production trust: required"
-Write-Host "GitHub publication authority: not granted"
+Write-Host "Trusted Preview/Stable publication: enabled through separate publication policy"
+Write-Host "Publication authority: isolated to publish-release job"

@@ -1,0 +1,108 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://rtaime.local/schemas/release/v1/release-publication.schema.json",
+	"$comment": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+	"title": "rtaime Release Publication v1",
+	"type": "object",
+	"additionalProperties": false,
+	"required": [
+		"copyright",
+		"schemaVersion",
+		"publicationId",
+		"repository",
+		"channel",
+		"product",
+		"source",
+		"candidate",
+		"bundle",
+		"trust",
+		"githubRelease",
+		"releaseNotes",
+		"createdAtUtc"
+	],
+	"properties": {
+		"copyright": { "type": "string", "minLength": 1 },
+		"schemaVersion": { "const": "1.0" },
+		"publicationId": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+		"repository": { "type": "string", "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$" },
+		"channel": { "enum": ["PREVIEW", "STABLE"] },
+		"product": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["name", "version", "releaseStage"],
+			"properties": {
+				"name": { "const": "rtaime" },
+				"version": { "type": "string", "minLength": 1 },
+				"releaseStage": { "enum": ["PREVIEW", "STABLE"] }
+			}
+		},
+		"source": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["tag", "sourceCommit"],
+			"properties": {
+				"tag": { "type": "string", "minLength": 2 },
+				"sourceCommit": { "type": "string", "pattern": "^[0-9a-f]{40,64}$" }
+			}
+		},
+		"candidate": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["candidateId", "manifestFileName", "manifestSha256", "sidecarFileName", "sidecarSha256"],
+			"properties": {
+				"candidateId": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+				"manifestFileName": { "const": "release-candidate.json" },
+				"manifestSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+				"sidecarFileName": { "const": "release-candidate.sha256" },
+				"sidecarSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+			}
+		},
+		"bundle": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["fileName", "sha256", "sidecarFileName", "sidecarSha256"],
+			"properties": {
+				"fileName": { "type": "string", "pattern": "\\.zip$" },
+				"sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+				"sidecarFileName": { "type": "string", "pattern": "\\.zip\\.sha256$" },
+				"sidecarSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+			}
+		},
+		"trust": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["signerClass", "keyFingerprint", "productionTrust", "authoritativeTrustSource"],
+			"properties": {
+				"signerClass": { "const": "EXTERNAL_CONTROLLED" },
+				"keyFingerprint": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+				"productionTrust": { "const": "PASS" },
+				"authoritativeTrustSource": { "const": "RELEASE_CANDIDATE" }
+			}
+		},
+		"githubRelease": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["tag", "title", "url", "prerelease", "makeLatest", "existingReleaseAction", "assetOverwriteAllowed", "rebuildAllowed"],
+			"properties": {
+				"tag": { "type": "string", "minLength": 2 },
+				"title": { "type": "string", "minLength": 1 },
+				"url": { "type": "string", "format": "uri" },
+				"prerelease": { "type": "boolean" },
+				"makeLatest": { "type": "boolean" },
+				"existingReleaseAction": { "const": "FAIL" },
+				"assetOverwriteAllowed": { "const": false },
+				"rebuildAllowed": { "const": false }
+			}
+		},
+		"releaseNotes": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["fileName", "sha256"],
+			"properties": {
+				"fileName": { "const": "release-notes.md" },
+				"sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+			}
+		},
+		"createdAtUtc": { "type": "string", "format": "date-time" }
+	}
+}

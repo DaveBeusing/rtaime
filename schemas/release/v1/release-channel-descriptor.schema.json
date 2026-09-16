@@ -1,0 +1,84 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://rtaime.local/schemas/release/v1/release-channel-descriptor.schema.json",
+	"$comment": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+	"title": "rtaime Release Channel Descriptor v1",
+	"type": "object",
+	"additionalProperties": false,
+	"required": [
+		"copyright",
+		"schemaVersion",
+		"channel",
+		"repository",
+		"product",
+		"release",
+		"candidate",
+		"publication",
+		"bundle",
+		"discoveryTrust"
+	],
+	"properties": {
+		"copyright": { "type": "string", "minLength": 1 },
+		"schemaVersion": { "const": "1.0" },
+		"channel": { "enum": ["PREVIEW", "STABLE"] },
+		"repository": { "type": "string", "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$" },
+		"product": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["name", "version"],
+			"properties": {
+				"name": { "const": "rtaime" },
+				"version": { "type": "string", "minLength": 1 }
+			}
+		},
+		"release": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["tag", "url", "prerelease"],
+			"properties": {
+				"tag": { "type": "string", "minLength": 2 },
+				"url": { "type": "string", "format": "uri" },
+				"prerelease": { "type": "boolean" }
+			}
+		},
+		"candidate": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["candidateId", "sourceCommit", "manifestFileName", "manifestSha256"],
+			"properties": {
+				"candidateId": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+				"sourceCommit": { "type": "string", "pattern": "^[0-9a-f]{40,64}$" },
+				"manifestFileName": { "const": "release-candidate.json" },
+				"manifestSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+			}
+		},
+		"publication": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["publicationId", "manifestFileName", "manifestSha256"],
+			"properties": {
+				"publicationId": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+				"manifestFileName": { "const": "release-publication.json" },
+				"manifestSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+			}
+		},
+		"bundle": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["fileName", "sha256"],
+			"properties": {
+				"fileName": { "type": "string", "pattern": "\\.zip$" },
+				"sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+			}
+		},
+		"discoveryTrust": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["status", "details"],
+			"properties": {
+				"status": { "const": "POINTER_ONLY" },
+				"details": { "type": "string", "minLength": 1 }
+			}
+		}
+	}
+}

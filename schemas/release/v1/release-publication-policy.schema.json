@@ -1,0 +1,71 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://rtaime.local/schemas/release/v1/release-publication-policy.schema.json",
+	"$comment": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+	"title": "rtaime Release Publication Policy v1",
+	"type": "object",
+	"additionalProperties": false,
+	"required": ["copyright", "schemaVersion", "channels", "immutability", "discovery"],
+	"properties": {
+		"copyright": { "type": "string", "minLength": 1 },
+		"schemaVersion": { "const": "1.0" },
+		"channels": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["QUALIFICATION", "PREVIEW", "STABLE"],
+			"properties": {
+				"QUALIFICATION": {
+					"type": "object",
+					"additionalProperties": false,
+					"required": ["publish"],
+					"properties": { "publish": { "const": false } }
+				},
+				"PREVIEW": { "$ref": "#/$defs/publishableChannel" },
+				"STABLE": { "$ref": "#/$defs/publishableChannel" }
+			}
+		},
+		"immutability": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["existingReleaseAction", "assetOverwriteAllowed", "rebuildAllowed"],
+			"properties": {
+				"existingReleaseAction": { "const": "FAIL" },
+				"assetOverwriteAllowed": { "const": false },
+				"rebuildAllowed": { "const": false }
+			}
+		},
+		"discovery": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["authoritativeTrustSource", "channelDescriptorIsTrustAnchor"],
+			"properties": {
+				"authoritativeTrustSource": { "const": "RELEASE_CANDIDATE" },
+				"channelDescriptorIsTrustAnchor": { "const": false }
+			}
+		}
+	},
+	"$defs": {
+		"publishableChannel": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": [
+				"publish",
+				"githubPrerelease",
+				"makeLatest",
+				"requiredSignerClass",
+				"requireProductionTrust",
+				"requireCandidatePublicationReadinessPass",
+				"channelDescriptorFileName"
+			],
+			"properties": {
+				"publish": { "const": true },
+				"githubPrerelease": { "type": "boolean" },
+				"makeLatest": { "type": "boolean" },
+				"requiredSignerClass": { "const": "EXTERNAL_CONTROLLED" },
+				"requireProductionTrust": { "const": true },
+				"requireCandidatePublicationReadinessPass": { "type": "boolean" },
+				"channelDescriptorFileName": { "type": "string", "minLength": 1 }
+			}
+		}
+	}
+}

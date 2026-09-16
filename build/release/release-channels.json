@@ -23,7 +23,7 @@
 				"EXTERNAL_CONTROLLED"
 			],
 			"requireTrustedProductionKey": false,
-			"publicationEligible": false
+			"publicationEligible": true
 		},
 		"STABLE": {
 			"releaseStage": "STABLE",

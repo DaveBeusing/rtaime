@@ -69,7 +69,12 @@ if ([string]$manifest.channel -eq "QUALIFICATION") {
 	Assert-Condition ([string]$manifest.product.releaseStage -eq "PREVIEW") "Preview release candidate must use PREVIEW stage."
 	Assert-Condition ([string]$manifest.source.tag -match '^v[0-9]+\.[0-9]+\.[0-9]+-preview\.[0-9]+$') "Preview release candidate has invalid tag."
 	Assert-Condition ([string]$manifest.source.tag -eq "v$($manifest.product.version)") "Preview tag and product version differ."
-	Assert-Condition ([string]$manifest.publicationReadiness.status -ne "PASS") "Preview channel must not be represented as Stable publication readiness."
+	if ([string]$manifest.publicationReadiness.status -eq "PASS") {
+		Assert-Condition ([string]$manifest.trust.signerClass -eq "EXTERNAL_CONTROLLED") "Preview publication readiness PASS requires EXTERNAL_CONTROLLED signing."
+		Assert-Condition ([string]$manifest.trust.productionTrust -eq "PASS") "Preview publication readiness PASS requires production trust PASS."
+	} else {
+		Assert-Condition ([string]$manifest.publicationReadiness.status -eq "UNVERIFIED") "Preview candidate must be PASS or UNVERIFIED for publication readiness."
+	}
 } elseif ([string]$manifest.channel -eq "STABLE") {
 	Assert-Condition ([string]$manifest.product.releaseStage -eq "STABLE") "Stable release candidate must use STABLE stage."
 	Assert-Condition ([string]$manifest.source.tag -match '^v[0-9]+\.[0-9]+\.[0-9]+$') "Stable release candidate has invalid tag."
@@ -100,7 +105,7 @@ Assert-Condition ([string]$manifest.candidateId -eq $expectedCandidateId) "Relea
 
 $repositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "../.."))
 $bundleVerifier = Join-Path $repositoryRoot "build/release/Test-OfflineReleaseBundle.ps1"
-if ([string]$manifest.channel -eq "STABLE") {
+if ([string]$manifest.trust.productionTrust -eq "PASS" -and [string]$manifest.trust.signerClass -eq "EXTERNAL_CONTROLLED") {
 	& $bundleVerifier -BundlePath $bundlePath -RequireTrustedProductionKey
 } else {
 	& $bundleVerifier -BundlePath $bundlePath

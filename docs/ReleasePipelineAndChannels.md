@@ -4,7 +4,7 @@
 
 ## Purpose
 
-AP-21 consolidates the software release lifecycle into one authoritative implementation:
+The software release lifecycle has one authoritative implementation:
 
 ```text
 Source identity
@@ -68,8 +68,6 @@ Directory.Build.props
 
 The release pipeline does not silently override the source version through CI parameters.
 
-This ensures that the version represented by the release candidate was already part of the source commit being released.
-
 ## Channels
 
 Channel policy is version-controlled in:
@@ -79,12 +77,6 @@ build/release/release-channels.json
 ```
 
 ### QUALIFICATION
-
-Purpose:
-
-```text
-pull-request / master packaged E2E qualification
-```
 
 Required source state:
 
@@ -123,10 +115,12 @@ Rules:
 - tag version must exactly equal the source-controlled product version,
 - tag commit must equal the checked-out source commit,
 - `TEST_EPHEMERAL` may qualify the Preview mechanism,
-- `EXTERNAL_CONTROLLED` signing is also supported,
-- Preview does not claim Stable publication readiness.
+- `EXTERNAL_CONTROLLED` signing is supported,
+- Preview is publication-eligible only when Production Trust is `PASS`.
 
-A Preview candidate signed by a CI test key remains cryptographically useful evidence but production trust is `UNVERIFIED`.
+A Preview candidate signed by a CI test key remains useful qualification evidence but its publication readiness stays `UNVERIFIED`.
+
+An externally controlled Preview Candidate whose key is active `SOFTWARE_RELEASE` trust may reach publication readiness `PASS` and can then cross the AP-22 publication boundary.
 
 ### STABLE
 
@@ -200,13 +194,15 @@ Verification includes:
 - bundle sidecar,
 - channel-specific version/tag rules,
 - source/build commit equality,
-- Stable signer/trust requirements,
+- Preview/Stable publication-readiness trust rules,
 - complete offline bundle verification,
 - no undeclared files in the candidate directory.
 
+When a Candidate declares Production Trust `PASS`, the bundle verifier is also required to validate the active trusted production key.
+
 ## Failure qualification
 
-The single pipeline also checks negative cases for the final candidate layer:
+The single pipeline checks negative cases for the final candidate layer:
 
 ```text
 tampered bundle
@@ -226,9 +222,7 @@ These complement the lower-level release-attestation and offline-bundle failure 
 
 ## GitHub Required Gates
 
-`Packaged E2E` no longer reimplements release evidence, signing and packaging steps.
-
-Instead it calls:
+`Packaged E2E` calls:
 
 ```text
 Invoke-ReleasePipeline.ps1 -Channel QUALIFICATION
@@ -245,7 +239,7 @@ Security
 Provider Smoke
 ```
 
-`Quality` also runs `Test-ReleaseChannelPolicy.ps1`, which fails if workflows bypass the authoritative orchestrator or the channel trust rules drift.
+`Quality` runs `Test-ReleaseChannelPolicy.ps1`, which also validates the separate publication policy and permission boundary.
 
 ## GitHub Release Pipeline workflow
 
@@ -256,7 +250,9 @@ push tag v*
 workflow_dispatch
 ```
 
-For tag pushes the channel is resolved automatically from the source-controlled release stage.
+The `release-candidate` job owns Release Candidate creation.
+
+For a tag push, AP-22 adds a separate `publish-release` job that consumes that Candidate artifact without rebuilding it.
 
 For manual runs the operator selects:
 
@@ -266,7 +262,7 @@ PREVIEW
 STABLE
 ```
 
-PREVIEW/STABLE manual runs must provide an existing matching Git tag.
+Manual runs qualify Candidates but do not publish GitHub Releases because official publication is tied to a tag-push event.
 
 ## Signing input
 
@@ -277,26 +273,23 @@ secret: RTAIME_RELEASE_SIGNING_KEY_PEM
 variable: RTAIME_RELEASE_SIGNER_ID
 ```
 
-The private key is materialized only in the runner temporary directory and deleted in `finally`.
+The private key is materialized only in the Candidate job's runner temporary directory and deleted in `finally`.
 
-It is never written into the repository or uploaded release candidate.
-
-This is an integration seam, not a claim that production key provisioning is currently complete.
+It is never transferred to the publication job, repository or release assets.
 
 ## Publication boundary
 
-AP-21 deliberately keeps:
+Candidate creation defaults to read-only repository permission.
+
+Only the downstream publication job receives:
 
 ```text
-permissions:
-  contents: read
+contents: write
 ```
 
-for the release workflow.
+Publication is defined in `docs/ReleasePublicationAndDiscovery.md` and is required to consume the already-built Candidate rather than invoking the release pipeline again.
 
-Therefore AP-21 creates and uploads a verified Release Candidate artifact but does **not** create a GitHub Release, update channel index or mutate repository release state.
-
-This separates:
+This preserves:
 
 ```text
 Release Candidate creation
@@ -304,29 +297,22 @@ Release Candidate creation
 Release publication / distribution
 ```
 
-Publication is a later work package with its own authorization, retention and discovery evidence.
+while allowing trusted PREVIEW and STABLE Candidates to be published without a rebuild.
 
 ## Legacy workflow consolidation
 
-The historical:
+The historical `.github/workflows/bootstrap-validation.yml` remains removed.
 
-```text
-.github/workflows/bootstrap-validation.yml
-```
+Managed correctness is covered by `CI`; packaged release correctness is covered by `Packaged E2E` through the authoritative release orchestrator.
 
-is removed by AP-21.
-
-Its managed correctness responsibilities are covered by `CI` and its packaged release responsibilities are covered by `Packaged E2E` through the authoritative release orchestrator.
-
-There is no longer a second release-evidence/signing/packaging implementation in CI.
+There is no second release-evidence/signing/packaging implementation in CI or publication.
 
 ## Non-claims
 
-AP-21 does not claim:
+The release pipeline and publication foundation do not claim:
 
-- GitHub Release publication,
-- release-channel index publication,
 - update-service delivery,
+- autonomous client update selection,
 - immutable external/WORM release retention,
 - production signing-key enrollment completion,
 - HSM/KMS integration,
