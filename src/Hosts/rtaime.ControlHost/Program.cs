@@ -1,6 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 using System.Text.Json;
+using rtaime.Core;
 
 namespace rtaime.ControlHost;
 
@@ -36,6 +37,19 @@ internal static class Program
 				return (int)ControlHostExitCode.ConfigurationError;
 			}
 
+			LocalEndpointLease endpointLease;
+			try
+			{
+				endpointLease = LocalEndpointLease.Acquire(options.ListenEndpoint);
+			}
+			catch (InvalidOperationException exception)
+			{
+				await supervision.DisposeAsync().ConfigureAwait(false);
+				Console.Error.WriteLine($"host=ControlHost outcome=startup-failure detail=\"{exception.Message}\"");
+				return (int)ControlHostExitCode.StartupFailure;
+			}
+
+			using (endpointLease)
 			await using (supervision.ConfigureAwait(false))
 			{
 				await supervision.StartAsync(shutdown.Token).ConfigureAwait(false);

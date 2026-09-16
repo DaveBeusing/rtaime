@@ -1,6 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 using System.Text.Json;
+using rtaime.Core;
 
 namespace rtaime.AIHost;
 
@@ -31,20 +32,34 @@ internal static class Program
 				return (int)AIHostExitCode.ConfigurationError;
 			}
 
-			var process = new AIHostProcess(options);
-			using var monitorStop = new CancellationTokenSource();
-			var monitor = MonitorManagedLifecycleAsync(process, options, shutdown, monitorStop.Token);
+			LocalEndpointLease endpointLease;
 			try
 			{
-				var exitCode = await process.RunAsync(shutdown.Token).ConfigureAwait(false);
-				var lifecycle = process.Lifecycle;
-				Console.WriteLine($"host=AIHost state={lifecycle.State} health={lifecycle.Health} exit={(int)exitCode} detail=\"{lifecycle.Detail}\"");
-				return (int)exitCode;
+				endpointLease = LocalEndpointLease.Acquire(options.ListenEndpoint);
 			}
-			finally
+			catch (InvalidOperationException exception)
 			{
-				monitorStop.Cancel();
-				try { await monitor.ConfigureAwait(false); } catch (OperationCanceledException) { }
+				Console.Error.WriteLine($"host=AIHost outcome=startup-failure detail=\"{exception.Message}\"");
+				return (int)AIHostExitCode.StartupFailure;
+			}
+
+			using (endpointLease)
+			{
+				var process = new AIHostProcess(options);
+				using var monitorStop = new CancellationTokenSource();
+				var monitor = MonitorManagedLifecycleAsync(process, options, shutdown, monitorStop.Token);
+				try
+				{
+					var exitCode = await process.RunAsync(shutdown.Token).ConfigureAwait(false);
+					var lifecycle = process.Lifecycle;
+					Console.WriteLine($"host=AIHost state={lifecycle.State} health={lifecycle.Health} exit={(int)exitCode} detail=\"{lifecycle.Detail}\"");
+					return (int)exitCode;
+				}
+				finally
+				{
+					monitorStop.Cancel();
+					try { await monitor.ConfigureAwait(false); } catch (OperationCanceledException) { }
+				}
 			}
 		}
 		finally

@@ -2,6 +2,7 @@
 
 using System.Diagnostics;
 using System.IO.Pipes;
+using rtaime.Core;
 
 namespace rtaime.ControlHost;
 
@@ -54,13 +55,13 @@ public sealed record LocalProcessSupervisionOptions(
 }
 
 /// <summary>
-/// Local process supervision uses endpoint probing only to adopt an already-running external process. Processes
-/// launched by this supervisor receive unique stop and readiness files; an owned process becomes Healthy only
-/// after the host publishes explicit managed readiness. This prevents a bare pipe connection from being treated
-/// as operational readiness. Before the first managed launch, endpoint absence must remain continuous for the
-/// bounded initial-adoption window so a short external Named Pipe re-arm gap cannot create a split-brain child.
-/// Only processes launched by this instance are terminated during orderly disposal. Start attempts are bounded
-/// for the lifetime of this supervisor instance.
+/// Local process supervision uses endpoint probing to adopt an already-running external process and a process-lifetime
+/// endpoint lease to distinguish a live/re-arming host from an actually absent host. Processes launched by this supervisor
+/// receive unique stop and readiness files; an owned process becomes Healthy only after the host publishes explicit managed
+/// readiness. This prevents a bare pipe connection from being treated as operational readiness and prevents a short Named
+/// Pipe re-arm gap from creating a split-brain child. The bounded initial-adoption window remains a compatibility guard for
+/// endpoints that do not yet publish a lease. Only processes launched by this instance are terminated during orderly disposal.
+/// Start attempts are bounded for the lifetime of this supervisor instance.
 /// </summary>
 public sealed class LocalProcessSupervisor : IAsyncDisposable
 {
@@ -198,6 +199,16 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 				continue;
 			}
 
+			if (LocalEndpointLease.IsHeld(_options.Endpoint))
+			{
+				_initialEndpointAbsentSince = null;
+				Update(
+					LocalProcessSupervisionState.Waiting,
+					$"Endpoint '{_options.Endpoint}' is leased by an existing host; waiting for its IPC listener without launching a competing process.");
+				await Task.Delay(_options.ProbeInterval, cancellationToken).ConfigureAwait(false);
+				continue;
+			}
+
 			if (_startAttempts == 0)
 			{
 				var now = _lifetime.Elapsed;
@@ -229,6 +240,11 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 				if (await ProbeEndpointAsync(cancellationToken).ConfigureAwait(false))
 				{
 					Update(LocalProcessSupervisionState.Healthy, $"Adopted reachable external endpoint '{_options.Endpoint}' during restart backoff.");
+					continue;
+				}
+				if (LocalEndpointLease.IsHeld(_options.Endpoint))
+				{
+					Update(LocalProcessSupervisionState.Waiting, $"Endpoint '{_options.Endpoint}' became leased during restart backoff; suppressing managed restart.");
 					continue;
 				}
 			}
