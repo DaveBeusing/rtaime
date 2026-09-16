@@ -47,7 +47,7 @@ jobs:
         run: dotnet build rtaime.slnx --configuration Release --no-restore
 
       - name: Test
-        run: dotnet test rtaime.slnx --configuration Release --no-build
+        run: dotnet test rtaime.slnx --configuration Release --no-build -m:1
 
   quality:
     name: Quality
@@ -116,6 +116,10 @@ jobs:
       - name: Repository security governance
         shell: pwsh
         run: ./build/governance/Test-RepositorySecurity.ps1
+
+      - name: Repository security exit-code regression
+        shell: pwsh
+        run: ./build/governance/Test-RepositorySecurityExitCodes.ps1
 
   provider-smoke:
     name: Provider Smoke
