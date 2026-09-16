@@ -23,6 +23,29 @@ public sealed class LocalEndpointLeaseTests
 	}
 
 	[Fact]
+	public void Readiness_is_distinct_from_process_lifetime_lease()
+	{
+		var endpoint = $"rtaime.test.readiness.{Guid.NewGuid():N}";
+		Assert.False(LocalEndpointLease.IsHeld(endpoint));
+		Assert.False(LocalEndpointReadinessLease.IsHeld(endpoint));
+
+		using var lifetime = LocalEndpointLease.Acquire(endpoint);
+		Assert.True(LocalEndpointLease.IsHeld(endpoint));
+		Assert.False(LocalEndpointReadinessLease.IsHeld(endpoint));
+
+		using (var readiness = LocalEndpointReadinessLease.Acquire(endpoint))
+		{
+			Assert.Equal(endpoint, readiness.Endpoint);
+			Assert.True(LocalEndpointLease.IsHeld(endpoint));
+			Assert.True(LocalEndpointReadinessLease.IsHeld(endpoint));
+			Assert.Throws<InvalidOperationException>(() => LocalEndpointReadinessLease.Acquire(endpoint));
+		}
+
+		Assert.True(LocalEndpointLease.IsHeld(endpoint));
+		Assert.False(LocalEndpointReadinessLease.IsHeld(endpoint));
+	}
+
+	[Fact]
 	public void Independent_endpoints_can_be_leased_concurrently()
 	{
 		var firstEndpoint = $"rtaime.test.lease.{Guid.NewGuid():N}";
