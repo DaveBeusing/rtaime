@@ -14,9 +14,7 @@ function Assert-Condition {
 		[Parameter(Mandatory)][bool]$Condition,
 		[Parameter(Mandatory)][string]$Message
 	)
-	if (-not $Condition) {
-		throw $Message
-	}
+	if (-not $Condition) { throw $Message }
 }
 
 function Get-FileSha256Hex {
@@ -27,6 +25,32 @@ function Get-FileSha256Hex {
 function Get-Sha256Hex {
 	param([Parameter(Mandatory)][byte[]]$Bytes)
 	return [Convert]::ToHexString([System.Security.Cryptography.SHA256]::HashData($Bytes)).ToLowerInvariant()
+}
+
+function Assert-SafeAssetName {
+	param([Parameter(Mandatory)][string]$Name, [Parameter(Mandatory)][string]$Description)
+	Assert-Condition (-not [string]::IsNullOrWhiteSpace($Name)) "$Description must not be empty."
+	Assert-Condition (-not [System.IO.Path]::IsPathRooted($Name)) "$Description '$Name' must be a file name, not a rooted path."
+	Assert-Condition ([System.IO.Path]::GetFileName($Name) -eq $Name) "$Description '$Name' must not contain path separators."
+	Assert-Condition ($Name -notmatch '[\\/]') "$Description '$Name' must not contain path separators."
+	Assert-Condition ($Name -notin @('.', '..')) "$Description '$Name' is invalid."
+}
+
+function Read-ZipEntryBytes {
+	param([Parameter(Mandatory)][string]$ArchivePath, [Parameter(Mandatory)][string]$EntryName)
+	$archive = [System.IO.Compression.ZipFile]::OpenRead($ArchivePath)
+	try {
+		$matches = @($archive.Entries | Where-Object { $_.FullName.Replace('\\', '/') -eq $EntryName })
+		Assert-Condition ($matches.Count -eq 1) "Release bundle must contain exactly one '$EntryName' entry."
+		$stream = $matches[0].Open()
+		try {
+			$memory = [System.IO.MemoryStream]::new()
+			try {
+				$stream.CopyTo($memory)
+				return $memory.ToArray()
+			} finally { $memory.Dispose() }
+		} finally { $stream.Dispose() }
+	} finally { $archive.Dispose() }
 }
 
 $candidateRoot = [System.IO.Path]::GetFullPath($CandidatePath)
@@ -49,8 +73,15 @@ $manifestHash = Get-FileSha256Hex -Path $manifestPath
 $sidecar = [System.IO.File]::ReadAllText($sidecarPath).Trim()
 Assert-Condition ($sidecar -eq "$manifestHash  release-candidate.json") "Release candidate manifest SHA-256 sidecar mismatch."
 
-$bundlePath = Join-Path $candidateRoot ([string]$manifest.bundle.fileName)
-$bundleSidecarPath = Join-Path $candidateRoot ([string]$manifest.bundle.sidecarFileName)
+$bundleFileName = [string]$manifest.bundle.fileName
+$bundleSidecarFileName = [string]$manifest.bundle.sidecarFileName
+Assert-SafeAssetName -Name $bundleFileName -Description "Release candidate bundle file name"
+Assert-SafeAssetName -Name $bundleSidecarFileName -Description "Release candidate bundle sidecar file name"
+Assert-Condition ([System.IO.Path]::GetExtension($bundleFileName).Equals('.zip', [StringComparison]::OrdinalIgnoreCase)) "Release candidate bundle must be a ZIP file."
+Assert-Condition ($bundleSidecarFileName -eq "$bundleFileName.sha256") "Release candidate bundle sidecar name must equal '<bundle>.sha256'."
+
+$bundlePath = Join-Path $candidateRoot $bundleFileName
+$bundleSidecarPath = Join-Path $candidateRoot $bundleSidecarFileName
 Assert-Condition (Test-Path -LiteralPath $bundlePath -PathType Leaf) "Release candidate bundle is missing."
 Assert-Condition (Test-Path -LiteralPath $bundleSidecarPath -PathType Leaf) "Release candidate bundle SHA-256 sidecar is missing."
 Assert-Condition ((Get-Item -LiteralPath $bundlePath).Length -eq [long]$manifest.bundle.size) "Release candidate bundle size mismatch."
@@ -58,7 +89,7 @@ $bundleHash = Get-FileSha256Hex -Path $bundlePath
 Assert-Condition ($bundleHash -eq ([string]$manifest.bundle.sha256).ToLowerInvariant()) "Release candidate bundle SHA-256 mismatch."
 Assert-Condition ((Get-FileSha256Hex -Path $bundleSidecarPath) -eq ([string]$manifest.bundle.sidecarSha256).ToLowerInvariant()) "Release candidate bundle sidecar SHA-256 mismatch."
 $bundleSidecar = [System.IO.File]::ReadAllText($bundleSidecarPath).Trim()
-Assert-Condition ($bundleSidecar -eq "$bundleHash  $([System.IO.Path]::GetFileName($bundlePath))") "Release candidate bundle sidecar content mismatch."
+Assert-Condition ($bundleSidecar -eq "$bundleHash  $bundleFileName") "Release candidate bundle sidecar content mismatch."
 
 if ([string]$manifest.channel -eq "QUALIFICATION") {
 	Assert-Condition ($null -eq $manifest.source.tag) "Qualification release candidate must not carry a Git tag."
@@ -104,18 +135,38 @@ $expectedCandidateId = Get-Sha256Hex -Bytes ([System.Text.Encoding]::UTF8.GetByt
 Assert-Condition ([string]$manifest.candidateId -eq $expectedCandidateId) "Release candidate content id mismatch."
 
 $repositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "../.."))
-$bundleVerifier = Join-Path $repositoryRoot "build/release/Test-OfflineReleaseBundle.ps1"
+$bundleVerifierCandidates = @(
+	(Join-Path $PSScriptRoot "Test-OfflineReleaseBundle.ps1"),
+	(Join-Path $repositoryRoot "build/release/Test-OfflineReleaseBundle.ps1")
+)
+$bundleVerifier = $bundleVerifierCandidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
+Assert-Condition (-not [string]::IsNullOrWhiteSpace($bundleVerifier)) "Offline release bundle verifier is unavailable."
 if ([string]$manifest.trust.productionTrust -eq "PASS" -and [string]$manifest.trust.signerClass -eq "EXTERNAL_CONTROLLED") {
 	& $bundleVerifier -BundlePath $bundlePath -RequireTrustedProductionKey
 } else {
 	& $bundleVerifier -BundlePath $bundlePath
 }
 
+$bundleManifestBytes = Read-ZipEntryBytes -ArchivePath $bundlePath -EntryName "bundle-manifest.json"
+$bundleManifest = [System.Text.Encoding]::UTF8.GetString($bundleManifestBytes) | ConvertFrom-Json
+$releaseEvidenceBytes = Read-ZipEntryBytes -ArchivePath $bundlePath -EntryName "release/release-evidence.json"
+$releaseEvidenceHash = Get-Sha256Hex -Bytes $releaseEvidenceBytes
+Assert-Condition ([string]$bundleManifest.productName -eq [string]$manifest.product.name) "Candidate/bundle product identity mismatch."
+Assert-Condition ([string]$bundleManifest.productVersion -eq [string]$manifest.product.version) "Candidate/bundle product version mismatch."
+Assert-Condition ([string]$bundleManifest.releaseStage -eq [string]$manifest.product.releaseStage) "Candidate/bundle release-stage mismatch."
+Assert-Condition ([string]$bundleManifest.sourceCommit -eq [string]$manifest.source.sourceCommit) "Candidate/bundle source commit mismatch."
+Assert-Condition ([string]$bundleManifest.buildCommit -eq [string]$manifest.source.buildCommit) "Candidate/bundle build commit mismatch."
+Assert-Condition ([string]$bundleManifest.buildId -eq [string]$manifest.source.buildId) "Candidate/bundle build identity mismatch."
+Assert-Condition ([string]$bundleManifest.releaseTrust.releaseRecordId -eq [string]$manifest.releaseRecord.recordId) "Candidate/bundle Release Record id mismatch."
+Assert-Condition ([string]$bundleManifest.releaseTrust.releaseKeyFingerprint -eq [string]$manifest.trust.keyFingerprint) "Candidate/bundle signing-key fingerprint mismatch."
+Assert-Condition ([string]$bundleManifest.releaseTrust.releaseSignerClass -eq [string]$manifest.trust.signerClass) "Candidate/bundle signer-class mismatch."
+Assert-Condition ($releaseEvidenceHash -eq ([string]$manifest.releaseRecord.releaseEvidenceSha256).ToLowerInvariant()) "Candidate/bundle Release Evidence SHA-256 mismatch."
+
 $allowedFiles = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
 $allowedFiles.Add("release-candidate.json") | Out-Null
 $allowedFiles.Add("release-candidate.sha256") | Out-Null
-$allowedFiles.Add([string]$manifest.bundle.fileName) | Out-Null
-$allowedFiles.Add([string]$manifest.bundle.sidecarFileName) | Out-Null
+$allowedFiles.Add($bundleFileName) | Out-Null
+$allowedFiles.Add($bundleSidecarFileName) | Out-Null
 foreach ($file in @(Get-ChildItem -LiteralPath $candidateRoot -File)) {
 	Assert-Condition ($allowedFiles.Contains($file.Name)) "Release candidate contains unlisted file '$($file.Name)'."
 }
@@ -125,5 +176,6 @@ Write-Host "Release candidate verification PASS"
 Write-Host "Candidate id: $($manifest.candidateId)"
 Write-Host "Channel: $($manifest.channel)"
 Write-Host "Product version: $($manifest.product.version)"
+Write-Host "Signed bundle identity binding: PASS"
 Write-Host "Production signing trust: $($manifest.trust.productionTrust)"
 Write-Host "Publication readiness: $($manifest.publicationReadiness.status)"

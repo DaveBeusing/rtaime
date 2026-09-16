@@ -13,9 +13,7 @@ function Assert-Condition {
 		[Parameter(Mandatory)][bool]$Condition,
 		[Parameter(Mandatory)][string]$Message
 	)
-	if (-not $Condition) {
-		throw $Message
-	}
+	if (-not $Condition) { throw $Message }
 }
 
 $policyPath = Join-Path $repositoryRoot "build/release/release-publication-policy.json"
@@ -47,17 +45,20 @@ Assert-Condition ($policy.discovery.channelDescriptorIsTrustAnchor -eq $false) "
 
 $workflow = Get-Content -LiteralPath $workflowPath -Raw
 Assert-Condition ($workflow -match '(?m)^permissions:\s*\r?\n\s+contents:\s+read\s*$') "Release Pipeline workflow must default to contents: read."
-Assert-Condition ($workflow -match '(?ms)^\s+publish-release:\s*.*?\s+permissions:\s*\r?\n\s+contents:\s+write\s*$') "Only the publication job may request contents: write."
-Assert-Condition ($workflow -match 'New-ReleasePublication\.ps1') "Publication job must run New-ReleasePublication.ps1."
-Assert-Condition ($workflow -match 'Test-ReleasePublication\.ps1') "Publication job must verify publication metadata before GitHub mutation."
-Assert-Condition ($workflow -match 'gh\s+release\s+view') "Publication job must refuse an existing GitHub Release."
-Assert-Condition ($workflow -match 'gh\s+release\s+create') "Publication job must create the GitHub Release from verified assets."
-Assert-Condition ($workflow -match '--verify-tag') "GitHub Release creation must verify the existing Git tag."
-Assert-Condition ($workflow -match 'actions/download-artifact@v4') "Publication job must consume the previously built Release Candidate artifact."
+$publicationMarker = "  publish-release:"
+$publicationIndex = $workflow.IndexOf($publicationMarker, [StringComparison]::Ordinal)
+Assert-Condition ($publicationIndex -ge 0) "Publication job definition was not found."
+$publishBody = $workflow.Substring($publicationIndex)
+Assert-Condition ($publishBody -match '(?m)^\s{4}permissions:\s*\r?\n\s{6}contents:\s+write\s*$') "Publication job must request contents: write."
+$writePermissionMatches = [Regex]::Matches($workflow, '(?m)^\s+contents:\s+write\s*$')
+Assert-Condition ($writePermissionMatches.Count -eq 1) "Release Pipeline workflow must contain exactly one contents: write grant."
 
-$publishMatch = [Regex]::Match($workflow, '(?ms)^\s+publish-release:\s*(?<body>.*)$')
-Assert-Condition $publishMatch.Success "Publication job definition was not found."
-$publishBody = $publishMatch.Groups["body"].Value
+Assert-Condition ($publishBody -match 'New-ReleasePublication\.ps1') "Publication job must run New-ReleasePublication.ps1."
+Assert-Condition ($publishBody -match 'Test-ReleasePublication\.ps1') "Publication job must verify publication metadata before GitHub mutation."
+Assert-Condition ($publishBody -match 'gh\s+release\s+view') "Publication job must refuse an existing GitHub Release."
+Assert-Condition ($publishBody -match 'gh\s+release\s+create') "Publication job must create the GitHub Release from verified assets."
+Assert-Condition ($publishBody -match '--verify-tag') "GitHub Release creation must verify the existing Git tag."
+Assert-Condition ($publishBody -match 'actions/download-artifact@v4') "Publication job must consume the previously built Release Candidate artifact."
 foreach ($forbidden in @('dotnet\s+build', 'dotnet\s+test', 'Invoke-ReleasePipeline\.ps1', 'New-ReleaseEvidence\.ps1', 'New-ReleaseAttestation\.ps1', 'New-OfflineReleaseBundle\.ps1')) {
 	Assert-Condition ($publishBody -notmatch $forbidden) "Publication job must not rebuild or regenerate trust artifacts via '$forbidden'."
 }
@@ -67,4 +68,5 @@ Write-Host "QUALIFICATION publication: blocked"
 Write-Host "PREVIEW publication: candidate readiness PASS + EXTERNAL_CONTROLLED + production trust PASS"
 Write-Host "STABLE publication: candidate readiness PASS + EXTERNAL_CONTROLLED + production trust PASS"
 Write-Host "Publication rebuild: blocked"
+Write-Host "Publication write authority: isolated to one job"
 Write-Host "Channel descriptors are discovery pointers, not trust anchors"

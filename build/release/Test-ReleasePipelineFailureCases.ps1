@@ -29,13 +29,31 @@ function Copy-DirectoryContent {
 	}
 }
 
+function Invoke-NativePowerShell {
+	param([Parameter(Mandatory)][string[]]$Arguments)
+	$nativePreferenceVariable = Get-Variable -Name PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue
+	$previousNativePreference = $null
+	if ($null -ne $nativePreferenceVariable) {
+		$previousNativePreference = [bool]$nativePreferenceVariable.Value
+		Set-Variable -Name PSNativeCommandUseErrorActionPreference -Value $false
+	}
+	try {
+		& pwsh @Arguments *> $null
+		return $LASTEXITCODE
+	} finally {
+		if ($null -ne $nativePreferenceVariable) {
+			Set-Variable -Name PSNativeCommandUseErrorActionPreference -Value $previousNativePreference
+		}
+	}
+}
+
 function Invoke-ExpectedFailure {
 	param(
 		[Parameter(Mandatory)][string]$CaseName,
 		[Parameter(Mandatory)][string[]]$Arguments
 	)
-	& pwsh @Arguments *> $null
-	if ($LASTEXITCODE -eq 0) {
+	$exitCode = Invoke-NativePowerShell -Arguments $Arguments
+	if ($exitCode -eq 0) {
 		throw "Negative release-pipeline case '$CaseName' unexpectedly succeeded."
 	}
 	Write-Host "Negative case PASS: $CaseName"

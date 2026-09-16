@@ -1,0 +1,45 @@
+{
+	"copyright": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+	"schemaVersion": "1.0",
+	"repository": "DaveBeusing/rtaime",
+	"platform": {
+		"osFamily": "Windows",
+		"architecture": "x64",
+		"rid": "win-x64"
+	},
+	"supportedCurrentChannels": [
+		"PREVIEW",
+		"STABLE"
+	],
+	"targetChannelTransitions": {
+		"PREVIEW": [
+			"PREVIEW",
+			"STABLE"
+		],
+		"STABLE": [
+			"STABLE"
+		]
+	},
+	"trust": {
+		"requirePublishedRelease": true,
+		"requiredSignerClass": "EXTERNAL_CONTROLLED",
+		"requireProductionTrust": true,
+		"requireCandidatePublicationReadinessPass": true,
+		"requireTrustedProductionBundle": true
+	},
+	"selection": {
+		"allowDowngrade": false,
+		"allowReinstallSameVersion": false,
+		"allowDraftRelease": false,
+		"stableMaySelectPrerelease": false,
+		"previewMayPromoteToStable": true
+	},
+	"replacement": {
+		"requireExplicitQuiescenceAcknowledgement": true,
+		"rollbackSlotSuffix": ".rollback",
+		"workStateSuffix": ".update-state",
+		"retainRollbackAfterSuccess": true,
+		"failIfRollbackSlotExists": true,
+		"persistentStateMigration": "NOT_IMPLEMENTED"
+	}
+}

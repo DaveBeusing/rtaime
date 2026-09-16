@@ -71,6 +71,10 @@ jobs:
         shell: pwsh
         run: ./build/release/Test-ReleaseChannelPolicy.ps1
 
+      - name: Verify update policy
+        shell: pwsh
+        run: ./build/update/Test-UpdatePolicy.ps1
+
       - name: Restore
         run: dotnet restore rtaime.slnx
 
@@ -127,7 +131,7 @@ jobs:
   packaged-e2e:
     name: Packaged E2E
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 55
     needs:
       - ci
 
@@ -155,6 +159,15 @@ jobs:
             -Channel QUALIFICATION `
             -SignerClass TEST_EPHEMERAL `
             -SignerId "github-actions-packaged-e2e"
+
+      - name: Qualify update replacement and rollback foundation
+        shell: pwsh
+        run: |
+          $bundles = @(Get-ChildItem -LiteralPath ./artifacts/release-pipeline -Filter *.zip -File -Recurse)
+          if ($bundles.Count -ne 1) {
+            throw "Expected exactly one qualification bundle, found $($bundles.Count)."
+          }
+          ./build/update/Test-UpdateFoundation.ps1 -BundlePath $bundles[0].FullName
 
       - name: Upload packaged E2E evidence
         uses: actions/upload-artifact@v4

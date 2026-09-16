@@ -1,0 +1,52 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://rtaime.local/schemas/update/v1/update-plan.schema.json",
+	"$comment": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+	"title": "rtaime Update Plan v1",
+	"type": "object",
+	"additionalProperties": false,
+	"required": ["copyright", "schemaVersion", "decision", "current", "target", "replacement", "createdAtUtc"],
+	"properties": {
+		"copyright": { "type": "string", "minLength": 1 },
+		"schemaVersion": { "const": "1.0" },
+		"decision": { "const": "UPDATE_ALLOWED" },
+		"current": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["version", "channel", "sourceCommit", "releaseRecordId"],
+			"properties": {
+				"version": { "type": "string", "minLength": 1 },
+				"channel": { "enum": ["PREVIEW", "STABLE"] },
+				"sourceCommit": { "type": "string", "pattern": "^[0-9a-f]{40,64}$" },
+				"releaseRecordId": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+			}
+		},
+		"target": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["version", "channel", "tag", "sourceCommit", "candidateId", "keyFingerprint", "bundleFileName", "bundleSha256"],
+			"properties": {
+				"version": { "type": "string", "minLength": 1 },
+				"channel": { "enum": ["PREVIEW", "STABLE"] },
+				"tag": { "type": "string", "pattern": "^v" },
+				"sourceCommit": { "type": "string", "pattern": "^[0-9a-f]{40,64}$" },
+				"candidateId": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+				"keyFingerprint": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+				"bundleFileName": { "type": "string", "pattern": "\\.zip$" },
+				"bundleSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+			}
+		},
+		"replacement": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["mode", "retainRollbackAfterSuccess", "persistentStateMigration", "requireExplicitQuiescenceAcknowledgement"],
+			"properties": {
+				"mode": { "const": "SIDE_BY_SIDE_STAGE_THEN_RENAME" },
+				"retainRollbackAfterSuccess": { "const": true },
+				"persistentStateMigration": { "const": "NOT_IMPLEMENTED" },
+				"requireExplicitQuiescenceAcknowledgement": { "const": true }
+			}
+		},
+		"createdAtUtc": { "type": "string", "format": "date-time" }
+	}
+}

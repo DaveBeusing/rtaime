@@ -40,13 +40,31 @@ function Copy-DirectoryContent {
 	}
 }
 
+function Invoke-NativePowerShell {
+	param([Parameter(Mandatory)][string[]]$Arguments)
+	$nativePreferenceVariable = Get-Variable -Name PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue
+	$previousNativePreference = $null
+	if ($null -ne $nativePreferenceVariable) {
+		$previousNativePreference = [bool]$nativePreferenceVariable.Value
+		Set-Variable -Name PSNativeCommandUseErrorActionPreference -Value $false
+	}
+	try {
+		& pwsh @Arguments *> $null
+		return $LASTEXITCODE
+	} finally {
+		if ($null -ne $nativePreferenceVariable) {
+			Set-Variable -Name PSNativeCommandUseErrorActionPreference -Value $previousNativePreference
+		}
+	}
+}
+
 function Invoke-ExpectedFailure {
 	param(
 		[Parameter(Mandatory)][string]$CaseName,
 		[Parameter(Mandatory)][string[]]$Arguments
 	)
-	& pwsh @Arguments *> $null
-	if ($LASTEXITCODE -eq 0) {
+	$exitCode = Invoke-NativePowerShell -Arguments $Arguments
+	if ($exitCode -eq 0) {
 		throw "Negative offline-deployment case '$CaseName' unexpectedly succeeded."
 	}
 	Write-Host "Negative case PASS: $CaseName"
@@ -80,10 +98,7 @@ try {
 
 	$injectedPayload = Join-Path $tempRoot "injected-payload"
 	Copy-DirectoryContent -Source $bundleRoot -Destination $injectedPayload
-	[System.IO.File]::WriteAllText(
-		(Join-Path $injectedPayload "unexpected.txt"),
-		"unlisted payload",
-		[System.Text.UTF8Encoding]::new($false))
+	[System.IO.File]::WriteAllText((Join-Path $injectedPayload "unexpected.txt"), "unlisted payload", [System.Text.UTF8Encoding]::new($false))
 	Invoke-ExpectedFailure -CaseName "unlisted injected payload" -Arguments @("-NoProfile", "-File", $verifier, "-BundlePath", $injectedPayload)
 
 	$traversalArchive = Join-Path $tempRoot "traversal.zip"
@@ -129,16 +144,15 @@ try {
 	}
 
 	$cleanTarget = Join-Path $tempRoot "clean-install"
-	& pwsh -NoProfile -File $installer -BundlePath $archive -InstallPath $cleanTarget *> $null
-	if ($LASTEXITCODE -ne 0) {
+	$exitCode = Invoke-NativePowerShell -Arguments @("-NoProfile", "-File", $installer, "-BundlePath", $archive, "-InstallPath", $cleanTarget)
+	if ($exitCode -ne 0) {
 		throw "Positive clean offline installation qualification failed."
 	}
-	& pwsh -NoProfile -File (Join-Path $cleanTarget "tools/Test-OfflineReleaseBundle.ps1") -BundlePath $cleanTarget *> $null
-	if ($LASTEXITCODE -ne 0) {
+	$exitCode = Invoke-NativePowerShell -Arguments @("-NoProfile", "-File", (Join-Path $cleanTarget "tools/Test-OfflineReleaseBundle.ps1"), "-BundlePath", $cleanTarget)
+	if ($exitCode -ne 0) {
 		throw "Installed offline bundle failed post-install verification."
 	}
 	Write-Host "Positive case PASS: verified clean offline installation"
-
 	Write-Host "Offline deployment failure qualification PASS"
 } finally {
 	if (Test-Path -LiteralPath $tempRoot) {
