@@ -39,7 +39,8 @@ Assert-Condition ($theme -match 'OperatorProgramBrush') "Operator theme must def
 Assert-Condition ($theme -match 'OperatorErrorBrush') "Operator theme must define an error semantic brush."
 
 Assert-Condition ($window -match 'ItemsSource="\{Binding Sources\}"') "Operator must expose the source bank as a bound collection."
-Assert-Condition ($window -match 'Monitoring unavailable until AP-29') "Operator must explicitly identify the monitoring boundary before AP-29."
+Assert-Condition ($window -match 'Text="\{Binding MonitoringStatus\}"') "Operator must bind the explicit monitoring boundary into Preview and Program presentation."
+Assert-Condition ($viewModel -match 'Monitoring unavailable until AP-29') "Operator must explicitly identify the monitoring boundary before AP-29."
 Assert-Condition ($window -match 'Key="F5"') "Operator must expose keyboard synchronization."
 Assert-Condition ($window -match 'Key="Space"\s+Command="\{Binding CutCommand\}"') "Operator must expose a keyboard CUT command."
 Assert-Condition ($window -match 'Modifiers="Control"\s+Command="\{Binding DissolveCommand\}"') "Operator must expose a keyboard DISSOLVE/AUTO command."
