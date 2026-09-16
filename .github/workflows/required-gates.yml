@@ -83,6 +83,10 @@ jobs:
         shell: pwsh
         run: ./build/update/Test-CoordinatedUpgradePolicy.ps1
 
+      - name: Verify managed host lifecycle policy
+        shell: pwsh
+        run: ./build/operations/Test-HostLifecyclePolicy.ps1
+
       - name: Restore
         run: dotnet restore rtaime.slnx
 
@@ -139,7 +143,7 @@ jobs:
   packaged-e2e:
     name: Packaged E2E
     runs-on: windows-latest
-    timeout-minutes: 55
+    timeout-minutes: 70
     needs:
       - ci
 
@@ -185,6 +189,15 @@ jobs:
             throw "Expected exactly one qualification bundle, found $($bundles.Count)."
           }
           ./build/update/Test-CoordinatedUpgradePackaging.ps1 -BundlePath $bundles[0].FullName
+
+      - name: Qualify managed host lifecycle and restart
+        shell: pwsh
+        run: |
+          $bundles = @(Get-ChildItem -LiteralPath ./artifacts/release-pipeline -Filter *.zip -File -Recurse)
+          if ($bundles.Count -ne 1) {
+            throw "Expected exactly one qualification bundle, found $($bundles.Count)."
+          }
+          ./build/operations/Test-ManagedHostLifecycle.ps1 -BundlePath $bundles[0].FullName
 
       - name: Upload packaged E2E evidence
         uses: actions/upload-artifact@v4

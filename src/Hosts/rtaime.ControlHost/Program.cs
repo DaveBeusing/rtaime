@@ -1,5 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
+using System.Text.Json;
+
 namespace rtaime.ControlHost;
 
 internal static class Program
@@ -38,10 +40,20 @@ internal static class Program
 			{
 				await supervision.StartAsync(shutdown.Token).ConfigureAwait(false);
 				var process = new ControlHostProcess(options);
-				var exitCode = await process.RunAsync(shutdown.Token).ConfigureAwait(false);
-				var lifecycle = process.Lifecycle;
-				Console.WriteLine($"host=ControlHost state={lifecycle.State} health={lifecycle.Health} exit={(int)exitCode} detail=\"{lifecycle.Detail}\"");
-				return (int)exitCode;
+				using var monitorStop = new CancellationTokenSource();
+				var monitor = MonitorManagedLifecycleAsync(process, supervision, options, shutdown, monitorStop.Token);
+				try
+				{
+					var exitCode = await process.RunAsync(shutdown.Token).ConfigureAwait(false);
+					var lifecycle = process.Lifecycle;
+					Console.WriteLine($"host=ControlHost state={lifecycle.State} health={lifecycle.Health} exit={(int)exitCode} detail=\"{lifecycle.Detail}\"");
+					return (int)exitCode;
+				}
+				finally
+				{
+					monitorStop.Cancel();
+					try { await monitor.ConfigureAwait(false); } catch (OperationCanceledException) { }
+				}
 			}
 		}
 		finally
@@ -49,5 +61,104 @@ internal static class Program
 			Console.CancelKeyPress -= consoleHandler;
 			AppDomain.CurrentDomain.ProcessExit -= processExitHandler;
 		}
+	}
+
+	private static async Task MonitorManagedLifecycleAsync(
+		ControlHostProcess process,
+		ControlHostChildSupervision supervision,
+		ControlHostProcessOptions options,
+		CancellationTokenSource shutdown,
+		CancellationToken cancellationToken)
+	{
+		var readinessValue = Environment.GetEnvironmentVariable("RTAIME_HOST_READINESS_FILE");
+		var stopValue = Environment.GetEnvironmentVariable("RTAIME_HOST_STOP_FILE");
+		if (string.IsNullOrWhiteSpace(readinessValue) && string.IsNullOrWhiteSpace(stopValue)) return;
+
+		var readinessPath = string.IsNullOrWhiteSpace(readinessValue) ? null : Path.GetFullPath(readinessValue);
+		var stopPath = string.IsNullOrWhiteSpace(stopValue) ? null : Path.GetFullPath(stopValue);
+		if (readinessPath is not null)
+		{
+			var directory = Path.GetDirectoryName(readinessPath);
+			if (!string.IsNullOrWhiteSpace(directory)) Directory.CreateDirectory(directory);
+			if (File.Exists(readinessPath)) File.Delete(readinessPath);
+		}
+
+		var publishedReady = false;
+		try
+		{
+			while (!cancellationToken.IsCancellationRequested && !shutdown.IsCancellationRequested)
+			{
+				if (stopPath is not null && File.Exists(stopPath))
+				{
+					shutdown.Cancel();
+					break;
+				}
+
+				var lifecycle = process.Lifecycle;
+				var runtime = supervision.Runtime;
+				var ai = supervision.AI;
+				var runtimeReady = runtime is not null && runtime.State == LocalProcessSupervisionState.Healthy;
+				var aiReady = ai is not null && ai.State == LocalProcessSupervisionState.Healthy;
+				var ready = lifecycle.State == ControlHostProcessState.Ready &&
+					lifecycle.Health == ControlHostHealthState.Healthy &&
+					runtimeReady &&
+					aiReady;
+
+				if (readinessPath is not null && ready && !publishedReady)
+				{
+					var aiEndpoint = Environment.GetEnvironmentVariable("RTAIME_AI_ENDPOINT");
+					if (string.IsNullOrWhiteSpace(aiEndpoint)) aiEndpoint = "rtaime.v1.ai.default";
+					var payload = new
+					{
+						copyright = "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+						schemaVersion = "1.0",
+						host = "ControlHost",
+						processId = Environment.ProcessId,
+						state = lifecycle.State.ToString().ToUpperInvariant(),
+						health = lifecycle.Health.ToString().ToUpperInvariant(),
+						controlEndpoint = options.ListenEndpoint,
+						runtimeEndpoint = options.RuntimeEndpoint,
+						aiEndpoint,
+						runtimeSupervision = new
+						{
+							state = runtime!.State.ToString().ToUpperInvariant(),
+							processId = runtime.OwnedProcessId,
+							startAttempts = runtime.StartAttempts
+						},
+						aiSupervision = new
+						{
+							state = ai!.State.ToString().ToUpperInvariant(),
+							processId = ai.OwnedProcessId,
+							startAttempts = ai.StartAttempts
+						},
+						readyAtUtc = DateTimeOffset.UtcNow
+					};
+					WriteJsonAtomic(readinessPath, payload);
+					publishedReady = true;
+				}
+				else if (readinessPath is not null && !ready && publishedReady)
+				{
+					try { File.Delete(readinessPath); } catch (IOException) { }
+					publishedReady = false;
+				}
+
+				await Task.Delay(100, cancellationToken).ConfigureAwait(false);
+			}
+		}
+		finally
+		{
+			if (readinessPath is not null && shutdown.IsCancellationRequested)
+			{
+				try { File.Delete(readinessPath); } catch (IOException) { }
+			}
+		}
+	}
+
+	private static void WriteJsonAtomic(string path, object value)
+	{
+		var temporary = $"{path}.{Guid.NewGuid():N}.tmp";
+		var json = JsonSerializer.Serialize(value, new JsonSerializerOptions { WriteIndented = true });
+		File.WriteAllText(temporary, json + Environment.NewLine);
+		File.Move(temporary, path, overwrite: true);
 	}
 }

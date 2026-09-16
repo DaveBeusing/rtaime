@@ -1,0 +1,47 @@
+{
+	"copyright": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+	"schemaVersion": "1.0",
+	"platform": {
+		"osFamily": "Windows",
+		"architecture": "x64",
+		"rid": "win-x64"
+	},
+	"authority": {
+		"topLevelHost": "ControlHost",
+		"childSupervisionOwner": "ControlHost",
+		"managedChildren": ["RuntimeHost", "AIHost"],
+		"operatorClientManaged": false
+	},
+	"endpoints": {
+		"control": "rtaime.v1.control.default",
+		"runtime": "rtaime.v1.runtime.default",
+		"ai": "rtaime.v1.ai.default"
+	},
+	"startup": {
+		"timeoutMs": 30000,
+		"probeTimeoutMs": 500,
+		"probeIntervalMs": 200,
+		"childRestartBackoffMs": 500,
+		"childMaxStartAttempts": 5,
+		"requireControlReadyHealthy": true,
+		"requireRuntimeSupervisorHealthy": true,
+		"requireAiSupervisorHealthy": true,
+		"requireAllNamedPipesReachable": true
+	},
+	"shutdown": {
+		"timeoutMs": 20000,
+		"managedStopSignal": "FILE_SENTINEL",
+		"fallbackKillAllowed": true,
+		"fallbackKillIsPass": false
+	},
+	"restart": {
+		"mode": "EXPLICIT_OPERATOR_ACTION",
+		"requireSuccessfulStopBeforeStart": true
+	},
+	"readiness": {
+		"passRequiresAllServiceHosts": true,
+		"runtimeReadinessOnPass": "PASS",
+		"productionPackageActivation": "NOT_PERFORMED",
+		"automaticWindowsServiceRegistration": false
+	}
+}

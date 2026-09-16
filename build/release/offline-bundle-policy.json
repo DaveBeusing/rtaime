@@ -37,6 +37,7 @@
 		"build/update/update-policy.json",
 		"build/update/coordinated-upgrade-policy.json",
 		"build/state/state-upgrade-catalog.json",
+		"build/operations/host-lifecycle-policy.json",
 		"build/update/Get-InstalledReleaseState.ps1",
 		"build/update/Resolve-UpdateDiscovery.ps1",
 		"build/update/Get-VerifiedUpdateCandidate.ps1",
@@ -45,7 +46,8 @@
 		"build/update/Invoke-AtomicSoftwareReplacement.ps1",
 		"build/update/Invoke-SoftwareRollback.ps1",
 		"build/update/Invoke-CoordinatedUpgrade.ps1",
-		"build/update/Invoke-VerifiedUpdate.ps1"
+		"build/update/Invoke-VerifiedUpdate.ps1",
+		"build/operations/Invoke-ManagedHostLifecycle.ps1"
 	],
 	"rootDocumentation": [
 		"README.md"
