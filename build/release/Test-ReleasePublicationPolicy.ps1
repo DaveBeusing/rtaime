@@ -64,8 +64,8 @@ $argumentArrayReleaseCreate =
 	$publishBody -match '(?m)&\s+gh\s+@ghArgs\b'
 Assert-Condition ($directReleaseCreate -or $argumentArrayReleaseCreate) "Publication job must create the GitHub Release from verified assets."
 Assert-Condition ($publishBody -match 'Join-Path\s+\$candidatePath\s+"release-candidate\.json"') "Publication assets must include the verified Release Candidate manifest."
-Assert-Condition ($publishBody -match 'Join-Path\s+\$candidatePath\s+\(\[string\]\$candidate\.bundle\.fileName\)') "Publication assets must use the bundle declared by the verified Release Candidate."
-Assert-Condition ($publishBody -match 'Join-Path\s+\$candidatePath\s+\(\[string\]\$candidate\.bundle\.sidecarFileName\)') "Publication assets must use the bundle sidecar declared by the verified Release Candidate."
+Assert-Condition ($publishBody -match 'Join-Path\s+\$candidatePath\s+\(\[string\]\$publication\.bundle\.fileName\)') "Publication assets must use the bundle declared by verified publication metadata."
+Assert-Condition ($publishBody -match 'Join-Path\s+\$candidatePath\s+\(\[string\]\$publication\.bundle\.sidecarFileName\)') "Publication assets must use the bundle sidecar declared by verified publication metadata."
 Assert-Condition ($publishBody -match 'Join-Path\s+\$publicationPath\s+"release-publication\.json"') "Publication assets must include verified publication metadata."
 Assert-Condition ($publishBody -match '--verify-tag') "GitHub Release creation must verify the existing Git tag."
 Assert-Condition ($publishBody -match 'actions/download-artifact@v4') "Publication job must consume the previously built Release Candidate artifact."
