@@ -1,0 +1,4 @@
+# Copyright (c) Dave Beusing <david.beusing@gmail.com>.
+
+artifacts/*
+!artifacts/.gitkeep

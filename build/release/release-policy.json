@@ -1,0 +1,69 @@
+{
+	"copyright": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+	"schemaVersion": "1.0",
+	"productName": "rtaime",
+	"sdkVersion": "10.0.401",
+	"targetFrameworks": [
+		"net10.0",
+		"net10.0-windows"
+	],
+	"contracts": {
+		"AI": [
+			"1.0"
+		],
+		"Control": [
+			"1.0"
+		],
+		"Media": [
+			"1.0"
+		],
+		"Provider": [
+			"1.0"
+		],
+		"Runtime": [
+			"1.0"
+		]
+	},
+	"ipc": {
+		"protocolVersions": [
+			"1.0"
+		],
+		"schemaSet": "schemas/ipc/v1"
+	},
+	"hosts": [
+		{
+			"name": "rtaime.ControlHost",
+			"targetFramework": "net10.0",
+			"outputPath": "src/Hosts/rtaime.ControlHost/bin/{configuration}/net10.0"
+		},
+		{
+			"name": "rtaime.RuntimeHost",
+			"targetFramework": "net10.0",
+			"outputPath": "src/Hosts/rtaime.RuntimeHost/bin/{configuration}/net10.0"
+		},
+		{
+			"name": "rtaime.AIHost",
+			"targetFramework": "net10.0",
+			"outputPath": "src/Hosts/rtaime.AIHost/bin/{configuration}/net10.0"
+		},
+		{
+			"name": "rtaime.Operator",
+			"targetFramework": "net10.0-windows",
+			"outputPath": "src/Hosts/rtaime.Operator/bin/{configuration}/net10.0-windows"
+		}
+	],
+	"hardwareQualification": [
+		{
+			"requirement": "REFERENCE_GPU",
+			"status": "UNVERIFIED"
+		},
+		{
+			"requirement": "PROFESSIONAL_MEDIA_IO",
+			"status": "UNVERIFIED"
+		},
+		{
+			"requirement": "GENLOCK",
+			"status": "UNVERIFIED"
+		}
+	]
+}
