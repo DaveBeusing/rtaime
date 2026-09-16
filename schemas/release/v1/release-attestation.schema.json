@@ -1,0 +1,57 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://rtaime.local/schemas/release/v1/release-attestation.schema.json",
+	"$comment": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+	"title": "rtaime Release Attestation v1",
+	"type": "object",
+	"additionalProperties": false,
+	"required": [
+		"copyright",
+		"schemaVersion",
+		"attestationType",
+		"subject",
+		"algorithm",
+		"signatureFormat",
+		"key",
+		"signature",
+		"signedAtUtc"
+	],
+	"properties": {
+		"copyright": { "type": "string", "minLength": 1 },
+		"schemaVersion": { "const": "1.0" },
+		"attestationType": { "const": "rtaime.software-release.v1" },
+		"subject": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["path", "sha256"],
+			"properties": {
+				"path": { "const": "release-evidence.json" },
+				"sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+			}
+		},
+		"algorithm": { "const": "ECDSA_P256_SHA256" },
+		"signatureFormat": { "const": "IEEE_P1363_FIXED_64" },
+		"key": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": [
+				"fingerprintAlgorithm",
+				"fingerprint",
+				"publicKeyFormat",
+				"publicKey",
+				"signerClass",
+				"signerId"
+			],
+			"properties": {
+				"fingerprintAlgorithm": { "const": "SHA256" },
+				"fingerprint": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+				"publicKeyFormat": { "const": "SUBJECT_PUBLIC_KEY_INFO_DER_BASE64" },
+				"publicKey": { "type": "string", "minLength": 1 },
+				"signerClass": { "enum": ["TEST_EPHEMERAL", "EXTERNAL_CONTROLLED"] },
+				"signerId": { "type": ["string", "null"] }
+			}
+		},
+		"signature": { "type": "string", "minLength": 1 },
+		"signedAtUtc": { "type": "string", "format": "date-time" }
+	}
+}

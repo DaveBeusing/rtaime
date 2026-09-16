@@ -285,11 +285,11 @@ $evidenceDomains = @(
 	[ordered]@{ domain = "FAILURE"; status = $ManagedValidationStatus; severity = "CRITICAL"; source = $testSource; details = "Failure and process-recovery evidence completed within the managed validation run." },
 	[ordered]@{ domain = "PERFORMANCE"; status = $ManagedValidationStatus; severity = "MAJOR"; source = $testSource; details = "The managed performance test project completed; this does not qualify unavailable reference hardware." },
 	[ordered]@{ domain = "COMPATIBILITY"; status = "PASS"; severity = "CRITICAL"; source = "compatibility-manifest.json"; details = "Current supported contract and IPC versions are explicitly declared." },
-	[ordered]@{ domain = "SECURITY"; status = "UNVERIFIED"; severity = "CRITICAL"; source = "release-policy"; details = "A complete product security release gate is outside this foundation package." },
+	[ordered]@{ domain = "SECURITY"; status = "UNVERIFIED"; severity = "CRITICAL"; source = "release-policy"; details = "A complete product security release gate is outside this release-trust package." },
 	[ordered]@{ domain = "SUPPLY_CHAIN"; status = "PASS"; severity = "CRITICAL"; source = "artifact-manifest.json + sbom.cdx.json"; details = "SHA-256 artifact inventory and resolved production NuGet component inventory were generated." },
 	[ordered]@{ domain = "DOCUMENTATION"; status = "PASS"; severity = "MAJOR"; source = "docs/ReleaseEvidence.md"; details = "Offline release-evidence generation and verification boundaries are documented." },
 	[ordered]@{ domain = "COMPLIANCE"; status = "UNVERIFIED"; severity = "MAJOR"; source = "release-policy"; details = "This evidence bundle does not claim formal CRA conformity or another legal compliance determination." },
-	[ordered]@{ domain = "KNOWN_ISSUES"; status = "UNVERIFIED"; severity = "MAJOR"; source = "release-policy"; details = "A formal release-candidate known-issues assessment has not been performed by this foundation package." }
+	[ordered]@{ domain = "KNOWN_ISSUES"; status = "UNVERIFIED"; severity = "MAJOR"; source = "release-policy"; details = "A formal release-candidate known-issues assessment has not been performed by this release-trust package." }
 )
 
 $releaseEvidence = [ordered]@{
@@ -318,7 +318,7 @@ $releaseEvidence = [ordered]@{
 	}
 	signingAttestation = [ordered]@{
 		status = "UNVERIFIED"
-		details = "Production signing and attestation technology and controlled keys are not implemented by this foundation package."
+		details = "Production signing trust is not established by this DEV evidence manifest. A downstream attestation may cryptographically bind these exact bytes without rewriting this subject; production trust still requires an externally controlled enrolled release key."
 	}
 	releaseReadiness = [ordered]@{
 		status = "UNVERIFIED"
@@ -336,4 +336,4 @@ Write-Host "Source commit: $SourceCommit"
 Write-Host "Build commit:  $BuildCommit"
 Write-Host "Artifacts: $($artifactRecords.Count)"
 Write-Host "CycloneDX components: $($components.Count)"
-Write-Host "Release readiness: UNVERIFIED (by design for the current DEV foundation)"
+Write-Host "Release readiness: UNVERIFIED (by design for the current DEV release evidence)"
