@@ -1,0 +1,44 @@
+{
+	"copyright": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+	"schemaVersion": "1.0",
+	"channels": {
+		"QUALIFICATION": {
+			"releaseStage": "DEV",
+			"tagRequired": false,
+			"versionPattern": "^[0-9]+\\.[0-9]+\\.[0-9]+-dev$",
+			"tagPattern": null,
+			"allowedSignerClasses": [
+				"TEST_EPHEMERAL"
+			],
+			"requireTrustedProductionKey": false,
+			"publicationEligible": false
+		},
+		"PREVIEW": {
+			"releaseStage": "PREVIEW",
+			"tagRequired": true,
+			"versionPattern": "^[0-9]+\\.[0-9]+\\.[0-9]+-preview\\.[0-9]+$",
+			"tagPattern": "^v(?<version>[0-9]+\\.[0-9]+\\.[0-9]+-preview\\.[0-9]+)$",
+			"allowedSignerClasses": [
+				"TEST_EPHEMERAL",
+				"EXTERNAL_CONTROLLED"
+			],
+			"requireTrustedProductionKey": false,
+			"publicationEligible": false
+		},
+		"STABLE": {
+			"releaseStage": "STABLE",
+			"tagRequired": true,
+			"versionPattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+			"tagPattern": "^v(?<version>[0-9]+\\.[0-9]+\\.[0-9]+)$",
+			"allowedSignerClasses": [
+				"EXTERNAL_CONTROLLED"
+			],
+			"requireTrustedProductionKey": true,
+			"publicationEligible": true
+		}
+	},
+	"candidate": {
+		"hashAlgorithm": "SHA256",
+		"manifestSchemaVersion": "1.0"
+	}
+}

@@ -1,0 +1,97 @@
+# Copyright (c) Dave Beusing <david.beusing@gmail.com>.
+
+name: Release pipeline
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: Release channel to qualify
+        required: true
+        type: choice
+        default: QUALIFICATION
+        options:
+          - QUALIFICATION
+          - PREVIEW
+          - STABLE
+      tag:
+        description: Existing Git tag for PREVIEW/STABLE; leave empty for QUALIFICATION
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-pipeline-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release-candidate:
+    name: Release Candidate
+    runs-on: windows-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Resolve channel and run authoritative release pipeline
+        shell: pwsh
+        env:
+          RTAIME_RELEASE_SIGNING_KEY_PEM: ${{ secrets.RTAIME_RELEASE_SIGNING_KEY_PEM }}
+          RTAIME_RELEASE_SIGNER_ID: ${{ vars.RTAIME_RELEASE_SIGNER_ID }}
+        run: |
+          $channel = if ("${{ github.event_name }}" -eq "push") { "AUTO" } else { "${{ inputs.channel }}" }
+          $tag = if ("${{ github.event_name }}" -eq "push") { "${{ github.ref_name }}" } else { "${{ inputs.tag }}" }
+          $keyPath = ""
+          $signerClass = "TEST_EPHEMERAL"
+          $signerId = "github-actions-release-pipeline"
+
+          try {
+            if (-not [string]::IsNullOrWhiteSpace($env:RTAIME_RELEASE_SIGNING_KEY_PEM)) {
+              if ([string]::IsNullOrWhiteSpace($env:RTAIME_RELEASE_SIGNER_ID)) {
+                throw "RTAIME_RELEASE_SIGNER_ID must be configured when an external release signing key is supplied."
+              }
+              $keyPath = Join-Path $env:RUNNER_TEMP "rtaime-external-release-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT.pem"
+              [System.IO.File]::WriteAllText(
+                $keyPath,
+                $env:RTAIME_RELEASE_SIGNING_KEY_PEM,
+                [System.Text.UTF8Encoding]::new($false))
+              $signerClass = "EXTERNAL_CONTROLLED"
+              $signerId = $env:RTAIME_RELEASE_SIGNER_ID.Trim()
+            }
+
+            ./build/release/Invoke-ReleasePipeline.ps1 `
+              -Channel $channel `
+              -Tag $tag `
+              -SourceCommit "${{ github.sha }}" `
+              -BuildCommit "${{ github.sha }}" `
+              -BuildId "release-${{ github.run_id }}-${{ github.run_attempt }}" `
+              -SignerClass $signerClass `
+              -PrivateKeyPath $keyPath `
+              -SignerId $signerId
+          }
+          finally {
+            if (-not [string]::IsNullOrWhiteSpace($keyPath) -and (Test-Path -LiteralPath $keyPath)) {
+              Remove-Item -LiteralPath $keyPath -Force
+            }
+          }
+
+      - name: Upload release candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: rtaime-release-candidate-${{ github.run_id }}
+          path: artifacts/release-pipeline
+          if-no-files-found: error

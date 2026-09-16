@@ -318,11 +318,11 @@ $releaseEvidence = [ordered]@{
 	}
 	signingAttestation = [ordered]@{
 		status = "UNVERIFIED"
-		details = "Production signing trust is not established by this DEV evidence manifest. A downstream attestation may cryptographically bind these exact bytes without rewriting this subject; production trust still requires an externally controlled enrolled release key."
+		details = "Production signing trust is not established by the unsigned release-evidence subject itself. A downstream attestation may cryptographically bind these exact bytes without rewriting this subject; production trust still requires an externally controlled enrolled release key."
 	}
 	releaseReadiness = [ordered]@{
 		status = "UNVERIFIED"
-		details = "The DEV evidence bundle is integrity-verifiable, but higher release-stage gates remain unsatisfied until their required evidence exists."
+		details = "The release evidence bundle is integrity-verifiable for stage '$releaseStage', but publication or higher qualification gates remain unsatisfied until their required evidence exists."
 	}
 	evidenceDomains = $evidenceDomains
 	knownIssues = @()
@@ -336,4 +336,4 @@ Write-Host "Source commit: $SourceCommit"
 Write-Host "Build commit:  $BuildCommit"
 Write-Host "Artifacts: $($artifactRecords.Count)"
 Write-Host "CycloneDX components: $($components.Count)"
-Write-Host "Release readiness: UNVERIFIED (by design for the current DEV release evidence)"
+Write-Host "Release readiness: UNVERIFIED (release stage: $releaseStage)"

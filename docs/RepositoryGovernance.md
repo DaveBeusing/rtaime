@@ -4,7 +4,7 @@
 
 ## Purpose
 
-AP-20 turns repository governance into an explicit, version-controlled contract for the `master` integration branch.
+Repository governance is an explicit, version-controlled contract for the `master` integration branch.
 
 The intended enforcement model is:
 
@@ -42,7 +42,7 @@ The names are duplicated in:
 - `.github/rulesets/master.ruleset.json`,
 - `.github/workflows/required-gates.yml`.
 
-`build/governance/Test-RepositoryGovernance.ps1` fails if these three sources drift.
+`build/governance/Test-RepositoryGovernance.ps1` fails if these sources drift.
 
 ## Gate responsibilities
 
@@ -56,21 +56,20 @@ build Release
 complete solution test run
 ```
 
-It is the primary regression gate for the managed solution.
-
 ### Quality
 
-`Quality` checks repository-governance intent and the high-value architecture/contract/unit suites:
+`Quality` checks:
 
 ```text
 repository governance intent
+release channel / single-pipeline policy
 Release build
 Architecture tests
 Contract tests
 Unit tests
 ```
 
-The gate is deliberately separate from `CI` so architecture and contract regressions are visible as a dedicated required status.
+`build/release/Test-ReleaseChannelPolicy.ps1` also verifies that release workflows call only the authoritative release orchestrator rather than duplicating low-level evidence/signing/packaging logic.
 
 ### Security
 
@@ -96,23 +95,44 @@ It does not qualify unavailable physical GPU or professional media-I/O hardware.
 
 ### Packaged E2E
 
-`Packaged E2E` rebuilds and retests the exact candidate it packages, then executes:
+`Packaged E2E` checks out the exact pull-request head and calls:
 
 ```text
-Release Evidence generation
-Release Evidence verification
-TEST_EPHEMERAL signing
-Release Attestation verification
-signing failure qualification
-offline bundle generation
-ZIP verification
-offline preflight
-offline failure qualification
-clean installation
-post-install verification
+build/release/Invoke-ReleasePipeline.ps1
+    -Channel QUALIFICATION
+    -SignerClass TEST_EPHEMERAL
 ```
 
-This gate proves the managed package path without pretending a CI test key is production signing trust.
+The orchestrator owns:
+
+```text
+restore
+build
+complete tests
+Release Evidence
+Release Attestation
+signing failure qualification
+offline bundle
+offline verification and preflight
+offline failure qualification
+clean install / post-install verification
+Release Candidate manifest
+candidate failure qualification
+```
+
+This proves the complete packaged path without pretending that a CI test key is production signing trust.
+
+## Single release implementation
+
+Release implementation is centralized in:
+
+```text
+build/release/Invoke-ReleasePipeline.ps1
+```
+
+The Required Gates workflow and dedicated Release Pipeline workflow both invoke this script.
+
+The legacy `.github/workflows/bootstrap-validation.yml` was removed after the single-pipeline consolidation because its managed validation is covered by `CI` and its packaged path is covered by `Packaged E2E`.
 
 ## Primary branch rules
 
@@ -151,7 +171,7 @@ UNVERIFIED
 
 until live repository settings provide direct evidence.
 
-At AP-20 implementation start, the live repository reported:
+At the most recent repository check before AP-21 implementation, GitHub still reported:
 
 ```text
 master protected = false
@@ -160,11 +180,11 @@ repository rulesets = []
 
 That state must not be represented as governance PASS.
 
-The connected repository automation available during AP-20 can read rulesets but does not expose administrative ruleset mutation. Consequently the package can implement and validate the repository-side contract, while live activation remains an explicit repository-administration action and evidence obligation.
+The connected repository automation can read rulesets but does not expose administrative ruleset mutation. Live activation remains an explicit repository-administration action and evidence obligation.
 
 ## Required live GitHub state
 
-For AP-20 administrative enforcement to become PASS, live repository evidence must show an active branch ruleset for `refs/heads/master` equivalent to the version-controlled specification and requiring exactly:
+Administrative enforcement becomes PASS only when live repository evidence shows an active branch ruleset for `refs/heads/master` equivalent to the version-controlled specification and requiring exactly:
 
 ```text
 CI
@@ -176,7 +196,7 @@ Provider Smoke
 
 with pull requests required, force push blocked and deletion blocked.
 
-If live state differs from the version-controlled specification, the live enforcement status is not PASS.
+If live state differs from the version-controlled specification, live enforcement status is not PASS.
 
 ## Workflow permissions
 
@@ -186,15 +206,11 @@ If live state differs from the version-controlled specification, the live enforc
 contents: read
 ```
 
-The Required Gates workflow must not need repository write authority.
+`.github/workflows/release-pipeline.yml` also remains read-only during AP-21.
 
-Future publishing workflows may legitimately need narrower write permissions, but those permissions belong to their dedicated workflow and do not broaden the required validation gates.
+Release Candidate creation therefore does not imply GitHub Release publication authority.
 
-## Existing validation workflow
-
-`bootstrap-validation.yml` remains present during AP-20 for continuity.
-
-AP-20 adds stable required gates without claiming that the entire repository already has one final release pipeline. Consolidation into a single trusted Source → Evidence → Package → Release pipeline belongs to the next release-pipeline hardening package.
+Future publication workflows may legitimately need narrower write permissions, but those permissions belong to their dedicated publication boundary and must not broaden validation workflows.
 
 ## Evidence boundary
 
@@ -204,14 +220,16 @@ Repository-side PASS can cover:
 - stable required check names,
 - managed build/test execution,
 - architecture/contract/unit quality tests,
+- release-channel policy consistency,
 - repository secret/private-key guardrails,
 - provider integration smoke,
-- packaged end-to-end qualification.
+- authoritative packaged end-to-end qualification.
 
 The following remains separate:
 
 - live GitHub ruleset activation,
 - production signing-key enrollment,
+- release publication/distribution,
 - hardware qualification,
 - formal compliance determination.
 

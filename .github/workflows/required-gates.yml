@@ -67,6 +67,10 @@ jobs:
         shell: pwsh
         run: ./build/governance/Test-RepositoryGovernance.ps1
 
+      - name: Verify release channel policy
+        shell: pwsh
+        run: ./build/release/Test-ReleaseChannelPolicy.ps1
+
       - name: Restore
         run: dotnet restore rtaime.slnx
 
@@ -123,95 +127,40 @@ jobs:
   packaged-e2e:
     name: Packaged E2E
     runs-on: windows-latest
-    timeout-minutes: 40
+    timeout-minutes: 45
     needs:
       - ci
 
     steps:
-      - name: Checkout
+      - name: Checkout exact source candidate
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
 
-      - name: Restore
-        run: dotnet restore rtaime.slnx
-
-      - name: Build
-        run: dotnet build rtaime.slnx --configuration Release --no-restore
-
-      - name: Test exact packaged build
-        run: dotnet test rtaime.slnx --configuration Release --no-build
-
-      - name: Generate release evidence
+      - name: Run authoritative release pipeline qualification
         shell: pwsh
         env:
           RTAIME_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
-          RTAIME_BUILD_COMMIT: ${{ github.sha }}
-          RTAIME_BUILD_ID: required-gates-${{ github.run_id }}-${{ github.run_attempt }}
-        run: ./build/release/New-ReleaseEvidence.ps1 -ManagedValidationStatus PASS
-
-      - name: Verify release evidence
-        shell: pwsh
-        run: ./build/release/Test-ReleaseEvidence.ps1
-
-      - name: Package and qualify offline deployment
-        shell: pwsh
+          RTAIME_BUILD_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+          RTAIME_BUILD_ID: packaged-e2e-${{ github.run_id }}-${{ github.run_attempt }}
         run: |
-          $keyPath = Join-Path $env:RUNNER_TEMP "rtaime-release-test-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT.pem"
-          $installPath = Join-Path $env:RUNNER_TEMP "rtaime-required-gate-install-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
-          try {
-            ./build/release/New-TestReleaseSigningKey.ps1 -PrivateKeyPath $keyPath
-            ./build/release/New-ReleaseAttestation.ps1 `
-              -PrivateKeyPath $keyPath `
-              -SignerClass TEST_EPHEMERAL `
-              -SignerId "github-actions-required-gates"
-            ./build/release/Test-ReleaseAttestation.ps1
-            ./build/release/Test-ReleaseSigningFailureCases.ps1
-
-            ./build/release/New-OfflineReleaseBundle.ps1 `
-              -PrivateKeyPath $keyPath `
-              -SignerClass TEST_EPHEMERAL `
-              -SignerId "github-actions-required-gates"
-
-            $bundleDirectories = @(Get-ChildItem -LiteralPath ./artifacts/offline-release -Directory)
-            $bundleArchives = @(Get-ChildItem -LiteralPath ./artifacts/offline-release -Filter *.zip -File)
-            if ($bundleDirectories.Count -ne 1) {
-              throw "Expected exactly one generated offline bundle directory."
-            }
-            if ($bundleArchives.Count -ne 1) {
-              throw "Expected exactly one generated offline bundle ZIP."
-            }
-
-            ./build/release/Test-OfflineReleaseBundle.ps1 -BundlePath $bundleArchives[0].FullName
-            ./build/release/Invoke-OfflinePreflight.ps1 `
-              -BundlePath $bundleArchives[0].FullName `
-              -InstallPath $installPath
-            ./build/release/Test-OfflineReleaseFailureCases.ps1 `
-              -BundleDirectory $bundleDirectories[0].FullName `
-              -ArchivePath $bundleArchives[0].FullName
-            ./build/release/Install-OfflineRelease.ps1 `
-              -BundlePath $bundleArchives[0].FullName `
-              -InstallPath $installPath
-            & (Join-Path $installPath "tools/Test-OfflineReleaseBundle.ps1") -BundlePath $installPath
-          }
-          finally {
-            if (Test-Path -LiteralPath $keyPath) {
-              Remove-Item -LiteralPath $keyPath -Force
-            }
-            if (Test-Path -LiteralPath $installPath) {
-              Remove-Item -LiteralPath $installPath -Recurse -Force
-            }
-          }
+          ./build/release/Invoke-ReleasePipeline.ps1 `
+            -Channel QUALIFICATION `
+            -SignerClass TEST_EPHEMERAL `
+            -SignerId "github-actions-packaged-e2e"
 
       - name: Upload packaged E2E evidence
         uses: actions/upload-artifact@v4
         with:
           name: rtaime-packaged-e2e-${{ github.run_id }}
           path: |
+            artifacts/release-pipeline
             artifacts/release-evidence
-            artifacts/offline-release/*.zip
-            artifacts/offline-release/*.zip.sha256
           if-no-files-found: error
