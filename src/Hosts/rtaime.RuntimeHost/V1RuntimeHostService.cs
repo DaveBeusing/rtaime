@@ -103,6 +103,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private MediaSinkId? _programSinkId;
 	private AnchoredTransition? _transition;
 	private V1VisualLayerMode _visualLayerMode = V1VisualLayerMode.Disabled;
+	private V1TimingHealthState _timingHealth = V1TimingHealthState.Recovering;
 	private ulong _nextSequenceNumber;
 	private bool _disposed;
 
@@ -199,7 +200,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				return new V1RuntimeHostSnapshot(
 					_runtime.State,
 					_nextSequenceNumber,
-					V1TimingHealthState.Healthy,
+					_timingHealth,
 					new ReadOnlyDictionary<MediaSourceId, V1InputSignalState>(new Dictionary<MediaSourceId, V1InputSignalState>(_inputSignals)),
 					_visualLayerMode,
 					_audio.Statistics,
@@ -356,6 +357,18 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			ThrowIfDisposed();
 			_visualLayerMode = mode;
 			Observe($"graphics.layer.mode:{mode}");
+		}
+	}
+
+	public void SetTimingHealth(V1TimingHealthState state)
+	{
+		if (!Enum.IsDefined(typeof(V1TimingHealthState), state)) throw new ArgumentOutOfRangeException(nameof(state));
+		lock (_gate)
+		{
+			ThrowIfDisposed();
+			if (_timingHealth == state) return;
+			_timingHealth = state;
+			Observe($"timing.health:{state}");
 		}
 	}
 
