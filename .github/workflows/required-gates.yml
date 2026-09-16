@@ -116,6 +116,10 @@ jobs:
         shell: pwsh
         run: ./build/quality/Test-ObservabilityPolicy.ps1
 
+      - name: Verify CUDA qualification policy
+        shell: pwsh
+        run: ./build/quality/Test-CudaQualificationPolicy.ps1
+
       - name: Restore
         run: dotnet restore rtaime.slnx
 
