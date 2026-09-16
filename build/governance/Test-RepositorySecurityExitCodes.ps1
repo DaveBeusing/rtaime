@@ -20,8 +20,20 @@ function Assert-Condition {
 
 function Invoke-SecurityCheck {
 	param([Parameter(Mandatory)][string]$RepositoryPath)
-	& $pwshPath -NoLogo -NoProfile -File $securityScript -RepositoryRoot $RepositoryPath
-	return $LASTEXITCODE
+	$nativePreferenceVariable = Get-Variable -Name PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue
+	$previousNativePreference = $null
+	if ($null -ne $nativePreferenceVariable) {
+		$previousNativePreference = [bool]$nativePreferenceVariable.Value
+		Set-Variable -Name PSNativeCommandUseErrorActionPreference -Value $false
+	}
+	try {
+		& $pwshPath -NoLogo -NoProfile -File $securityScript -RepositoryRoot $RepositoryPath
+		return $LASTEXITCODE
+	} finally {
+		if ($null -ne $nativePreferenceVariable) {
+			Set-Variable -Name PSNativeCommandUseErrorActionPreference -Value $previousNativePreference
+		}
+	}
 }
 
 $validExitCode = Invoke-SecurityCheck -RepositoryPath $repositoryRoot
