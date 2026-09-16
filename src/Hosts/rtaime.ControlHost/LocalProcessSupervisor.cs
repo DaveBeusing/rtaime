@@ -55,13 +55,12 @@ public sealed record LocalProcessSupervisionOptions(
 }
 
 /// <summary>
-/// Local process supervision uses endpoint probing to adopt an already-running external process and a process-lifetime
-/// endpoint lease to distinguish a live/re-arming host from an actually absent host. Processes launched by this supervisor
-/// receive unique stop and readiness files; an owned process becomes Healthy only after the host publishes explicit managed
-/// readiness. This prevents a bare pipe connection from being treated as operational readiness and prevents a short Named
-/// Pipe re-arm gap from creating a split-brain child. The bounded initial-adoption window remains a compatibility guard for
-/// endpoints that do not yet publish a lease. Only processes launched by this instance are terminated during orderly disposal.
-/// Start attempts are bounded for the lifetime of this supervisor instance.
+/// Local process supervision uses process-shared endpoint lifetime and readiness leases to adopt current rtaime hosts without
+/// destructively probing their Named Pipe listener. A lifetime lease suppresses competing child starts while a distinct readiness
+/// lease proves that the external host lifecycle is healthy and its IPC server is running. Processes launched by this supervisor
+/// still require their unique managed readiness file before becoming Healthy. Bare endpoint probing remains only as a bounded
+/// compatibility fallback for legacy endpoints that publish neither lease. Only processes launched by this instance are terminated
+/// during orderly disposal. Start attempts are bounded for the lifetime of this supervisor instance.
 /// </summary>
 public sealed class LocalProcessSupervisor : IAsyncDisposable
 {
@@ -191,20 +190,29 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 				continue;
 			}
 
-			if (await ProbeEndpointAsync(cancellationToken).ConfigureAwait(false))
+			var endpointLeased = LocalEndpointLease.IsHeld(_options.Endpoint);
+			if (endpointLeased && LocalEndpointReadinessLease.IsHeld(_options.Endpoint))
 			{
 				_initialEndpointAbsentSince = null;
-				Update(LocalProcessSupervisionState.Healthy, $"Adopted reachable external endpoint '{_options.Endpoint}'.");
+				Update(LocalProcessSupervisionState.Healthy, $"Adopted explicitly ready external endpoint '{_options.Endpoint}'.");
 				await Task.Delay(_options.ProbeInterval, cancellationToken).ConfigureAwait(false);
 				continue;
 			}
 
-			if (LocalEndpointLease.IsHeld(_options.Endpoint))
+			if (endpointLeased)
 			{
 				_initialEndpointAbsentSince = null;
 				Update(
 					LocalProcessSupervisionState.Waiting,
-					$"Endpoint '{_options.Endpoint}' is leased by an existing host; waiting for its IPC listener without launching a competing process.");
+					$"Endpoint '{_options.Endpoint}' is leased by an existing host but is not explicitly ready; suppressing managed launch.");
+				await Task.Delay(_options.ProbeInterval, cancellationToken).ConfigureAwait(false);
+				continue;
+			}
+
+			if (await ProbeEndpointAsync(cancellationToken).ConfigureAwait(false))
+			{
+				_initialEndpointAbsentSince = null;
+				Update(LocalProcessSupervisionState.Healthy, $"Adopted reachable legacy external endpoint '{_options.Endpoint}'.");
 				await Task.Delay(_options.ProbeInterval, cancellationToken).ConfigureAwait(false);
 				continue;
 			}
@@ -237,14 +245,21 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 			{
 				Update(LocalProcessSupervisionState.RestartBackoff, "Waiting before the next supervised start attempt.");
 				await Task.Delay(_options.RestartBackoff, cancellationToken).ConfigureAwait(false);
-				if (await ProbeEndpointAsync(cancellationToken).ConfigureAwait(false))
+
+				endpointLeased = LocalEndpointLease.IsHeld(_options.Endpoint);
+				if (endpointLeased && LocalEndpointReadinessLease.IsHeld(_options.Endpoint))
 				{
-					Update(LocalProcessSupervisionState.Healthy, $"Adopted reachable external endpoint '{_options.Endpoint}' during restart backoff.");
+					Update(LocalProcessSupervisionState.Healthy, $"Adopted explicitly ready external endpoint '{_options.Endpoint}' during restart backoff.");
 					continue;
 				}
-				if (LocalEndpointLease.IsHeld(_options.Endpoint))
+				if (endpointLeased)
 				{
-					Update(LocalProcessSupervisionState.Waiting, $"Endpoint '{_options.Endpoint}' became leased during restart backoff; suppressing managed restart.");
+					Update(LocalProcessSupervisionState.Waiting, $"Endpoint '{_options.Endpoint}' became leased during restart backoff; suppressing managed restart until explicit readiness is published.");
+					continue;
+				}
+				if (await ProbeEndpointAsync(cancellationToken).ConfigureAwait(false))
+				{
+					Update(LocalProcessSupervisionState.Healthy, $"Adopted reachable legacy external endpoint '{_options.Endpoint}' during restart backoff.");
 					continue;
 				}
 			}
