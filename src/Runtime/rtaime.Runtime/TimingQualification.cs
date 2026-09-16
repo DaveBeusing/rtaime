@@ -6,10 +6,11 @@ namespace rtaime.Runtime;
 
 public enum TimingQualificationState
 {
-	Healthy = 1,
-	Degraded = 2,
-	Unstable = 3,
-	Lost = 4
+	Recovering = 1,
+	Healthy = 2,
+	Degraded = 3,
+	Unstable = 4,
+	Lost = 5
 }
 
 public sealed record TimingQualificationThresholds(
@@ -179,6 +180,9 @@ public sealed class RuntimeTimingQualificationProbe
 
 	private TimingQualificationState EvaluateState(TimeSpan observedAt)
 	{
+		if (_totalBoundaries == 0)
+			return TimingQualificationState.Recovering;
+
 		if (_lastObservedAt is { } lastObservedAt)
 		{
 			var lostAfter = TimeSpan.FromTicks(checked(_thresholds.ExpectedFramePeriod.Ticks * LostFramePeriods));
