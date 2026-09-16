@@ -1,0 +1,33 @@
+{
+	"copyright": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+	"schemaVersion": "1.0",
+	"databaseFamily": "SQLITE",
+	"backup": {
+		"requiredBeforeSchemaMutation": true,
+		"overwriteExistingBackup": false,
+		"verifyIntegrity": true,
+		"verifySchemaInventory": true,
+		"hashAlgorithm": "SHA256"
+	},
+	"migration": {
+		"direction": "FORWARD_ONLY",
+		"registration": "EXPLICIT",
+		"unknownMigrationAction": "FAIL_CLOSED",
+		"allowDowngrade": false,
+		"transactional": true,
+		"singleVersionStepsOnly": true,
+		"postMigrationVerificationRequired": true
+	},
+	"recovery": {
+		"requireExclusiveAccessAcknowledgement": true,
+		"restoreOnMigrationFailure": true,
+		"restoreOnPostMigrationVerificationFailure": true,
+		"verifyBackupBeforeRestore": true,
+		"verifyRestoredState": true
+	},
+	"integration": {
+		"softwareUpdateStateOrchestration": "EXPLICIT_ORCHESTRATION_REQUIRED",
+		"automaticBackgroundMigration": false,
+		"productionPackageActivation": "OUT_OF_SCOPE"
+	}
+}
