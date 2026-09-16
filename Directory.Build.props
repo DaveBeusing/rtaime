@@ -1,15 +1,19 @@
+<!-- Copyright (c) Dave Beusing <david.beusing@gmail.com>. -->
 <Project>
-  <PropertyGroup>
-    <RtaimeTargetFramework>net10.0</RtaimeTargetFramework>
-    <RtaimeWindowsTargetFramework>net10.0-windows</RtaimeWindowsTargetFramework>
+	<PropertyGroup>
+		<RtaimeTargetFramework>net10.0</RtaimeTargetFramework>
+		<RtaimeWindowsTargetFramework>net10.0-windows</RtaimeWindowsTargetFramework>
+		<RtaimeProductVersion>0.1.0-dev</RtaimeProductVersion>
+		<RtaimeReleaseStage>DEV</RtaimeReleaseStage>
 
-    <TargetFramework Condition="'$(TargetFramework)' == ''">$(RtaimeTargetFramework)</TargetFramework>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <PlatformTarget>x64</PlatformTarget>
-    <Deterministic>true</Deterministic>
-    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+		<TargetFramework Condition="'$(TargetFramework)' == ''">$(RtaimeTargetFramework)</TargetFramework>
+		<Version>$(RtaimeProductVersion)</Version>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<PlatformTarget>x64</PlatformTarget>
+		<Deterministic>true</Deterministic>
+		<ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
 
-    <RtaimeIsTestProject Condition="'$(RtaimeIsTestProject)' == ''">false</RtaimeIsTestProject>
-  </PropertyGroup>
+		<RtaimeIsTestProject Condition="'$(RtaimeIsTestProject)' == ''">false</RtaimeIsTestProject>
+	</PropertyGroup>
 </Project>

@@ -1,3 +1,5 @@
+# Copyright (c) Dave Beusing <david.beusing@gmail.com>.
+
 name: Bootstrap validation
 
 on:
@@ -8,6 +10,9 @@ on:
   pull_request:
     branches:
       - master
+
+permissions:
+  contents: read
 
 jobs:
   managed-validation:
@@ -40,3 +45,22 @@ jobs:
 
       - name: Test
         run: dotnet test rtaime.slnx --configuration Release --no-build
+
+      - name: Generate release evidence
+        shell: pwsh
+        env:
+          RTAIME_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+          RTAIME_BUILD_COMMIT: ${{ github.sha }}
+          RTAIME_BUILD_ID: github-${{ github.run_id }}-${{ github.run_attempt }}
+        run: ./build/release/New-ReleaseEvidence.ps1 -ManagedValidationStatus PASS
+
+      - name: Verify release evidence
+        shell: pwsh
+        run: ./build/release/Test-ReleaseEvidence.ps1
+
+      - name: Upload release evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: rtaime-release-evidence-${{ github.run_id }}
+          path: artifacts/release-evidence
+          if-no-files-found: error

@@ -1,0 +1,129 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://rtaime.local/schemas/release/v1/release-evidence.schema.json",
+	"$comment": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+	"title": "rtaime Release Evidence Manifest v1",
+	"type": "object",
+	"additionalProperties": false,
+	"required": [
+		"copyright",
+		"schemaVersion",
+		"productName",
+		"productVersion",
+		"releaseStage",
+		"sourceCommit",
+		"buildCommit",
+		"buildId",
+		"generatedAtUtc",
+		"artifactManifest",
+		"sbom",
+		"compatibilityManifest",
+		"signingAttestation",
+		"releaseReadiness",
+		"evidenceDomains",
+		"knownIssues"
+	],
+	"properties": {
+		"copyright": { "type": "string", "minLength": 1 },
+		"schemaVersion": { "const": "1.0" },
+		"productName": { "const": "rtaime" },
+		"productVersion": { "type": "string", "minLength": 1 },
+		"releaseStage": {
+			"enum": ["DEV", "PREVIEW", "RELEASE_CANDIDATE", "STABLE", "VALIDATED", "CERTIFIED"]
+		},
+		"sourceCommit": { "type": "string", "pattern": "^[0-9a-fA-F]{40,64}$" },
+		"buildCommit": { "type": "string", "pattern": "^[0-9a-fA-F]{40,64}$" },
+		"buildId": { "type": "string", "minLength": 1 },
+		"generatedAtUtc": { "type": "string", "format": "date-time" },
+		"artifactManifest": { "$ref": "#/$defs/hashReference" },
+		"sbom": {
+			"allOf": [
+				{ "$ref": "#/$defs/hashReference" },
+				{
+					"type": "object",
+					"required": ["format", "specVersion"],
+					"properties": {
+						"format": { "const": "CycloneDX" },
+						"specVersion": { "const": "1.6" }
+					}
+				}
+			]
+		},
+		"compatibilityManifest": { "$ref": "#/$defs/hashReference" },
+		"signingAttestation": {
+			"type": "object",
+			"required": ["status", "details"],
+			"properties": {
+				"status": { "$ref": "#/$defs/status" },
+				"details": { "type": "string", "minLength": 1 },
+				"signaturePath": { "type": "string", "minLength": 1 }
+			}
+		},
+		"releaseReadiness": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["status", "details"],
+			"properties": {
+				"status": { "$ref": "#/$defs/status" },
+				"details": { "type": "string", "minLength": 1 }
+			}
+		},
+		"evidenceDomains": {
+			"type": "array",
+			"minItems": 11,
+			"items": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["domain", "status", "severity", "source", "details"],
+				"properties": {
+					"domain": {
+						"enum": [
+							"ARCHITECTURE",
+							"CONTRACTS",
+							"BEHAVIOR",
+							"FAILURE",
+							"PERFORMANCE",
+							"COMPATIBILITY",
+							"SECURITY",
+							"SUPPLY_CHAIN",
+							"DOCUMENTATION",
+							"COMPLIANCE",
+							"KNOWN_ISSUES"
+						]
+					},
+					"status": { "$ref": "#/$defs/status" },
+					"severity": {
+						"enum": ["BLOCKER", "CRITICAL", "MAJOR", "MINOR", "INFORMATIONAL"]
+					},
+					"source": { "type": "string", "minLength": 1 },
+					"details": { "type": "string", "minLength": 1 }
+				}
+			}
+		},
+		"knownIssues": {
+			"type": "array",
+			"items": {
+				"type": "object",
+				"required": ["id", "severity", "summary"],
+				"properties": {
+					"id": { "type": "string", "minLength": 1 },
+					"severity": { "enum": ["BLOCKER", "CRITICAL", "MAJOR", "MINOR", "INFORMATIONAL"] },
+					"summary": { "type": "string", "minLength": 1 }
+				}
+			}
+		}
+	},
+	"$defs": {
+		"status": {
+			"enum": ["PASS", "FAIL", "NOT_APPLICABLE", "UNVERIFIED"]
+		},
+		"hashReference": {
+			"type": "object",
+			"required": ["path", "sha256"],
+			"properties": {
+				"path": { "type": "string", "minLength": 1 },
+				"sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+			}
+		}
+	}
+}
