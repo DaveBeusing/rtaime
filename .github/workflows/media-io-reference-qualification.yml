@@ -9,10 +9,6 @@ on:
         description: Expected AJA adapter name substring
         required: true
         type: string
-      aja_sdk_revision:
-        description: Exact libajantv2 commit, tag, or ref to resolve and pin
-        required: true
-        type: string
       format:
         description: V1 video format
         required: true
@@ -64,17 +60,21 @@ jobs:
           cmake --version
           git --version
 
-      - name: Resolve exact AJA SDK source
+      - name: Resolve pinned AJA SDK source
         shell: pwsh
         run: |
+          $pin = Get-Content -LiteralPath ./native/Providers/AjaNtv2/libajantv2.version.json -Raw | ConvertFrom-Json
+          if ([string]::IsNullOrWhiteSpace([string]$pin.repository)) { throw "Pinned libajantv2 repository is missing." }
+          if ([string]$pin.commit -notmatch '^[0-9a-f]{40}$') { throw "Pinned libajantv2 commit is invalid." }
+
           $sdkRoot = Join-Path $env:RUNNER_TEMP "rtaime-libajantv2"
           if (Test-Path -LiteralPath $sdkRoot) { Remove-Item -LiteralPath $sdkRoot -Recurse -Force }
-          git clone --filter=blob:none https://github.com/aja-video/libajantv2.git $sdkRoot
-          if ($LASTEXITCODE -ne 0) { throw "Unable to clone libajantv2." }
-          git -C $sdkRoot checkout --detach "${{ inputs.aja_sdk_revision }}"
-          if ($LASTEXITCODE -ne 0) { throw "Unable to resolve requested libajantv2 revision." }
+          git clone --filter=blob:none ([string]$pin.repository) $sdkRoot
+          if ($LASTEXITCODE -ne 0) { throw "Unable to clone pinned libajantv2 repository." }
+          git -C $sdkRoot checkout --detach ([string]$pin.commit)
+          if ($LASTEXITCODE -ne 0) { throw "Unable to checkout pinned libajantv2 commit." }
           $resolved = (git -C $sdkRoot rev-parse HEAD).Trim()
-          if ([string]::IsNullOrWhiteSpace($resolved)) { throw "Resolved libajantv2 revision is empty." }
+          if ($resolved -ne [string]$pin.commit) { throw "Resolved libajantv2 commit '$resolved' differs from pin '$($pin.commit)'." }
           "RTAIME_AJA_NTV2_ROOT=$sdkRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "RTAIME_AJA_SDK_REVISION=$resolved" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
