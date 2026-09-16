@@ -1,0 +1,116 @@
+# Copyright (c) Dave Beusing <david.beusing@gmail.com>.
+
+name: Media I/O reference hardware qualification
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_adapter_name:
+        description: Expected AJA adapter name substring
+        required: true
+        type: string
+      aja_sdk_revision:
+        description: Exact libajantv2 commit, tag, or ref to resolve and pin
+        required: true
+        type: string
+      format:
+        description: V1 video format
+        required: true
+        default: "1080p50"
+        type: choice
+        options:
+          - "1080p50"
+          - "1080p59.94"
+      minimum_frames:
+        description: Minimum captured frames per input and accepted Program frames
+        required: true
+        default: "30"
+        type: string
+      require_external_reference:
+        description: Require AJA external reference for Program output
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  media-io-reference:
+    name: Media I/O Reference Hardware
+    runs-on:
+      - self-hosted
+      - windows
+      - x64
+      - rtaime-media-io-reference
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Qualify SDK
+        shell: pwsh
+        run: |
+          dotnet --info
+          if ((dotnet --version) -ne "10.0.401") {
+            throw "Expected .NET SDK 10.0.401."
+          }
+          cmake --version
+          git --version
+
+      - name: Resolve exact AJA SDK source
+        shell: pwsh
+        run: |
+          $sdkRoot = Join-Path $env:RUNNER_TEMP "rtaime-libajantv2"
+          if (Test-Path -LiteralPath $sdkRoot) { Remove-Item -LiteralPath $sdkRoot -Recurse -Force }
+          git clone --filter=blob:none https://github.com/aja-video/libajantv2.git $sdkRoot
+          if ($LASTEXITCODE -ne 0) { throw "Unable to clone libajantv2." }
+          git -C $sdkRoot checkout --detach "${{ inputs.aja_sdk_revision }}"
+          if ($LASTEXITCODE -ne 0) { throw "Unable to resolve requested libajantv2 revision." }
+          $resolved = (git -C $sdkRoot rev-parse HEAD).Trim()
+          if ([string]::IsNullOrWhiteSpace($resolved)) { throw "Resolved libajantv2 revision is empty." }
+          "RTAIME_AJA_NTV2_ROOT=$sdkRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "RTAIME_AJA_SDK_REVISION=$resolved" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Build native AJA provider
+        shell: pwsh
+        run: |
+          $buildDir = Join-Path $PWD "artifacts/native/aja"
+          cmake -S native/Providers/AjaNtv2 -B $buildDir -A x64 `
+            -DAJA_NTV2_ROOT="$env:RTAIME_AJA_NTV2_ROOT" `
+            -DRTAIME_AJA_SDK_REVISION="$env:RTAIME_AJA_SDK_REVISION"
+          if ($LASTEXITCODE -ne 0) { throw "Native Media I/O configure failed." }
+          cmake --build $buildDir --config Release
+          if ($LASTEXITCODE -ne 0) { throw "Native Media I/O build failed." }
+          $dlls = @(Get-ChildItem -LiteralPath $buildDir -Filter rtaime_media_io.dll -File -Recurse)
+          if ($dlls.Count -ne 1) { throw "Expected exactly one rtaime_media_io.dll, found $($dlls.Count)." }
+          "PATH=$($dlls[0].Directory.FullName);$env:PATH" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Build qualification target
+        shell: pwsh
+        run: dotnet build tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release
+
+      - name: Run physical Media I/O qualification
+        shell: pwsh
+        run: |
+          $external = [bool]::Parse("${{ inputs.require_external_reference }}")
+          ./build/qualification/Invoke-MediaIoReferenceQualification.ps1 `
+            -ExpectedAdapterName "${{ inputs.expected_adapter_name }}" `
+            -AjaSdkRevision "$env:RTAIME_AJA_SDK_REVISION" `
+            -MinimumFrames ([int]"${{ inputs.minimum_frames }}") `
+            -Format "${{ inputs.format }}" `
+            -RequireExternalReference:$external `
+            -EvidencePath "artifacts/qualification/media-io-reference.json"
+
+      - name: Upload immutable qualification evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: media-io-reference-qualification-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/qualification/media-io-reference.json
+          if-no-files-found: error
