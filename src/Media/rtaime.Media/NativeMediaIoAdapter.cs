@@ -464,7 +464,7 @@ public sealed class NativeMediaIoProviderAdapter : IMediaIoProviderAdapter
 	{
 		public NativeIdentity LeaseId;
 		public ulong OpaqueHandle;
-		public uint ByteLength;
+		public ulong ByteLength;
 		public uint RowBytes;
 		public uint TransferMode;
 		public uint StorageDomain;
