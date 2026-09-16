@@ -116,20 +116,20 @@ New-Item -ItemType Directory -Path $outputRoot -Force | Out-Null
 $productRoot = Join-Path $outputRoot "product"
 New-Item -ItemType Directory -Path $productRoot -Force | Out-Null
 
-foreach ($host in $policy.hosts) {
-	$relativeOutput = [string]$host.outputPath
+foreach ($hostPolicy in $policy.hosts) {
+	$relativeOutput = [string]$hostPolicy.outputPath
 	$relativeOutput = $relativeOutput.Replace("{configuration}", $Configuration)
 	$sourceDirectory = Resolve-RepositoryPath $relativeOutput
 	if (-not (Test-Path -LiteralPath $sourceDirectory)) {
-		throw "Built host output for '$($host.name)' was not found at '$sourceDirectory'."
+		throw "Built host output for '$($hostPolicy.name)' was not found at '$sourceDirectory'."
 	}
 
-	$destinationDirectory = Join-Path $productRoot ([string]$host.name)
+	$destinationDirectory = Join-Path $productRoot ([string]$hostPolicy.name)
 	New-Item -ItemType Directory -Path $destinationDirectory -Force | Out-Null
 
 	$sourceFiles = @(Get-ChildItem -LiteralPath $sourceDirectory -File -Recurse | Where-Object Extension -ne ".pdb")
 	if ($sourceFiles.Count -eq 0) {
-		throw "Built host output for '$($host.name)' does not contain release artifacts."
+		throw "Built host output for '$($hostPolicy.name)' does not contain release artifacts."
 	}
 
 	foreach ($sourceFile in $sourceFiles) {
@@ -234,7 +234,6 @@ $contractEntries = @(
 			compatibilityPolicy = "EXACT_DECLARED"
 			supportedVersions = @($contract.Value)
 		}
-	}
 )
 $hardwareQualification = @(
 	foreach ($requirement in $policy.hardwareQualification) {
