@@ -34,6 +34,9 @@ internal sealed class RuntimeMediaIoVerticalSlice : IDisposable
 	}
 
 	public MediaIoVerticalSliceStatistics Statistics => _mediaIo.Statistics;
+	public MediaIoPortStatus InputAStatus => _mediaIo.InputAStatus;
+	public MediaIoPortStatus InputBStatus => _mediaIo.InputBStatus;
+	public MediaIoPortStatus ProgramOutputStatus => _mediaIo.ProgramOutputStatus;
 
 	public void PumpInputs()
 	{
