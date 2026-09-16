@@ -248,12 +248,15 @@ try {
 		"schemas/release/v1/offline-bundle-manifest.schema.json",
 		"schemas/release/v1/offline-bundle-attestation.schema.json",
 		"schemas/release/v1/runtime-requirements.schema.json",
+		"schemas/release/v1/qualification-evidence-manifest.schema.json",
 		"docs/ReleasePackagingAndOfflineDeployment.md",
+		"docs/QualificationEvidenceProvenance.md",
 		"tools/Test-OfflineReleaseBundle.ps1",
 		"tools/Invoke-OfflinePreflight.ps1",
 		"tools/Install-OfflineRelease.ps1",
 		"trust/trusted-release-keys.json",
 		"metadata/runtime-requirements.json",
+		"release/qualification-evidence-manifest.json",
 		"OFFLINE-README.md"
 	)
 	foreach ($relativePath in $requiredBundleFiles) {
@@ -277,11 +280,14 @@ try {
 	$artifactManifestPath = Join-Path $releaseDirectory "artifact-manifest.json"
 	$sbomPath = Join-Path $releaseDirectory "sbom.cdx.json"
 	$compatibilityPath = Join-Path $releaseDirectory "compatibility-manifest.json"
+	$qualificationManifestPath = Join-Path $releaseDirectory "qualification-evidence-manifest.json"
 
 	$releaseEvidence = Read-JsonFile $releaseEvidencePath
 	$releaseAttestation = Read-JsonFile $releaseAttestationPath
 	$releaseRecord = Read-JsonFile $releaseRecordPath
 	$artifactManifest = Read-JsonFile $artifactManifestPath
+	$compatibilityManifest = Read-JsonFile $compatibilityPath
+	$qualificationManifest = Read-JsonFile $qualificationManifestPath
 
 	$releaseEvidenceBytes = [System.IO.File]::ReadAllBytes($releaseEvidencePath)
 	$releaseTrust = Test-EcdsaAttestation `
@@ -335,11 +341,48 @@ try {
 	$releaseReferences = @(
 		@{ Name = "artifact manifest"; Reference = $releaseEvidence.artifactManifest; Path = $artifactManifestPath },
 		@{ Name = "SBOM"; Reference = $releaseEvidence.sbom; Path = $sbomPath },
-		@{ Name = "compatibility manifest"; Reference = $releaseEvidence.compatibilityManifest; Path = $compatibilityPath }
+		@{ Name = "compatibility manifest"; Reference = $releaseEvidence.compatibilityManifest; Path = $compatibilityPath },
+		@{ Name = "qualification evidence manifest"; Reference = $releaseEvidence.qualificationEvidenceManifest; Path = $qualificationManifestPath }
 	)
 	foreach ($reference in $releaseReferences) {
 		Assert-Condition (Test-Path -LiteralPath $reference.Path -PathType Leaf) "Contained $($reference.Name) is missing."
 		Assert-Condition ((Get-FileSha256Hex -Path $reference.Path) -eq ([string]$reference.Reference.sha256).ToLowerInvariant()) "Contained $($reference.Name) hash mismatch."
+	}
+
+	Assert-Condition ([string]$qualificationManifest.schemaVersion -eq "1.0") "Contained qualification evidence manifest schema mismatch."
+	Assert-Condition ([string]$qualificationManifest.repository -eq "DaveBeusing/rtaime") "Contained qualification evidence repository identity mismatch."
+	Assert-Condition ([string]$qualificationManifest.sourceCommit -eq [string]$releaseEvidence.sourceCommit) "Contained qualification evidence source commit mismatch."
+	$qualificationRequirements = @($qualificationManifest.requirements)
+	$compatibilityHardware = @($compatibilityManifest.hardwareQualification)
+	Assert-Condition ($qualificationRequirements.Count -eq $compatibilityHardware.Count) "Contained qualification and compatibility hardware requirement counts differ."
+	foreach ($qualification in $qualificationRequirements) {
+		$name = [string]$qualification.requirement
+		$status = [string]$qualification.status
+		Assert-Condition ($status -in @("PASSED", "UNVERIFIED")) "Contained qualification '$name' has invalid status '$status'."
+		$compatibility = @($compatibilityHardware | Where-Object { [string]$_.requirement -eq $name })
+		Assert-Condition ($compatibility.Count -eq 1) "Contained compatibility evidence must contain exactly one '$name' requirement."
+		if ($status -eq "UNVERIFIED") {
+			Assert-Condition ([string]$compatibility[0].status -eq "UNVERIFIED") "Contained compatibility requirement '$name' must remain UNVERIFIED without physical evidence."
+			continue
+		}
+
+		Assert-Condition ([string]$compatibility[0].status -eq "PASS") "Contained compatibility requirement '$name' must be PASS when physical evidence is PASSED."
+		$bindingPath = Resolve-BundlePayloadPath -Root $releaseDirectory -RelativePath ([string]$qualification.binding.path)
+		$payloadPath = Resolve-BundlePayloadPath -Root $releaseDirectory -RelativePath ([string]$qualification.payload.path)
+		Assert-Condition (Test-Path -LiteralPath $bindingPath -PathType Leaf) "Contained qualification binding for '$name' is missing."
+		Assert-Condition (Test-Path -LiteralPath $payloadPath -PathType Leaf) "Contained qualification payload for '$name' is missing."
+		Assert-Condition ((Get-FileSha256Hex -Path $bindingPath) -eq [string]$qualification.binding.sha256) "Contained qualification binding hash mismatch for '$name'."
+		Assert-Condition ((Get-FileSha256Hex -Path $payloadPath) -eq [string]$qualification.payload.sha256) "Contained qualification payload hash mismatch for '$name'."
+		$binding = Read-JsonFile $bindingPath
+		$physicalPayload = Read-JsonFile $payloadPath
+		Assert-Condition ([string]$binding.schemaVersion -eq "1.0") "Contained qualification binding schema mismatch for '$name'."
+		Assert-Condition ([string]$binding.status -eq "PASSED") "Contained qualification binding is not PASSED for '$name'."
+		Assert-Condition ([string]$binding.sourceCommit -eq [string]$releaseEvidence.sourceCommit) "Contained qualification binding source commit mismatch for '$name'."
+		Assert-Condition (@($binding.releaseRequirements) -contains $name) "Contained qualification binding does not authorize release requirement '$name'."
+		Assert-Condition ([string]$binding.payload.sha256 -eq [string]$qualification.payload.sha256) "Contained qualification binding payload hash mismatch for '$name'."
+		Assert-Condition ([string]$physicalPayload.status -eq "PASSED") "Contained physical qualification payload is not PASSED for '$name'."
+		Assert-Condition ([string]$binding.workflow.runId -eq [string]$qualification.workflow.runId) "Contained qualification workflow runId mismatch for '$name'."
+		Assert-Condition ([int]$binding.workflow.runAttempt -eq [int]$qualification.workflow.runAttempt) "Contained qualification workflow runAttempt mismatch for '$name'."
 	}
 
 	foreach ($artifact in @($artifactManifest.artifacts)) {
@@ -378,6 +421,7 @@ try {
 	Write-Host "Bundle: $($manifest.bundleName)"
 	Write-Host "Product: $($manifest.productName) $($manifest.productVersion) ($($manifest.releaseStage))"
 	Write-Host "Payload files verified: $($payload.Count)"
+	Write-Host "Physical qualification requirements: $(@($qualificationRequirements | Where-Object { [string]$_.status -eq 'PASSED' }).Count) / $($qualificationRequirements.Count) PASSED"
 	Write-Host "Bundle signature: PASS"
 	Write-Host "Contained release signature: PASS"
 	Write-Host "Production key trust: $productionTrust"
