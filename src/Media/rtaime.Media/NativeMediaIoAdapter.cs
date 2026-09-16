@@ -14,6 +14,9 @@ namespace rtaime.Media;
 /// </summary>
 public sealed class NativeMediaIoProviderAdapter : IMediaIoProviderAdapter
 {
+	private const uint AbiMajor = 1;
+	private const uint AbiMinor = 1;
+
 	private static readonly ProviderId ProviderIdentity =
 		new(Identity.Parse("95000000-0000-0000-0000-000000000001"));
 
@@ -23,7 +26,7 @@ public sealed class NativeMediaIoProviderAdapter : IMediaIoProviderAdapter
 
 	public NativeMediaIoProviderAdapter()
 	{
-		var result = NativeMethods.CreateProvider(1, 0, out _provider);
+		var result = NativeMethods.CreateProvider(AbiMajor, AbiMinor, out _provider);
 		Ensure(result, "create provider");
 		try
 		{
@@ -48,7 +51,7 @@ public sealed class NativeMediaIoProviderAdapter : IMediaIoProviderAdapter
 			MediaIoContractVersion.Current,
 			portId,
 			MediaIoSignalState.Unknown,
-			UtcTimestamp.Now());
+			new UtcTimestamp(DateTimeOffset.UtcNow));
 	}
 
 	public IMediaIoInputSession OpenInput(MediaIoSessionRequest request)
@@ -86,8 +89,8 @@ public sealed class NativeMediaIoProviderAdapter : IMediaIoProviderAdapter
 	{
 		var config = new NativeSessionConfig
 		{
-			AbiVersionMajor = 1,
-			AbiVersionMinor = 0,
+			AbiVersionMajor = AbiMajor,
+			AbiVersionMinor = AbiMinor,
 			PortId = NativeIdentity.From(request.PortId.Value),
 			Direction = (uint)request.Direction,
 			NormalizedFormat = NativeVideoFormat.From(request.VideoFormat),
@@ -289,10 +292,15 @@ public sealed class NativeMediaIoProviderAdapter : IMediaIoProviderAdapter
 				return MediaIoOutputSubmitResult.Rejected(new Failure("media.io.output.handle_invalid", "Output surface handle is not a valid pinned-host address."));
 
 			ulong audioPointer = 0;
+			uint audioSampleCount = 0;
+			uint audioChannelCount = 0;
 			if (frame.EmbeddedAudio?.Handle is { } audioHandle &&
-				string.Equals(audioHandle.Kind, PinnedHostMediaIoMemory.AudioHandleKind, StringComparison.Ordinal))
+				string.Equals(audioHandle.Kind, PinnedHostMediaIoMemory.AudioHandleKind, StringComparison.Ordinal) &&
+				ulong.TryParse(audioHandle.Value, NumberStyles.None, CultureInfo.InvariantCulture, out var parsedAudioPointer))
 			{
-				ulong.TryParse(audioHandle.Value, NumberStyles.None, CultureInfo.InvariantCulture, out audioPointer);
+				audioPointer = parsedAudioPointer;
+				audioSampleCount = frame.EmbeddedAudio.Timing.SampleCount;
+				audioChannelCount = frame.EmbeddedAudio.Format.ChannelCount;
 			}
 
 			var native = new NativeOutputFrame
@@ -304,8 +312,10 @@ public sealed class NativeMediaIoProviderAdapter : IMediaIoProviderAdapter
 				TimebaseDenominator = checked((uint)frame.Video.Timing.Timebase.Denominator),
 				Format = NativeVideoFormat.From(frame.Video.Surface.Format),
 				OpaqueSurfaceHandle = pointer,
-				SurfaceLeaseId = NativeIdentity.From(frame.Video.Surface.Lifetime.LeaseId ?? Identity.New()),
-				AudioOpaqueHandle = audioPointer
+				SurfaceLeaseId = NativeIdentity.From(frame.Video.Surface.Lifetime.LeaseId ?? frame.Video.Surface.SurfaceId.Value),
+				AudioOpaqueHandle = audioPointer,
+				AudioSampleCount = audioSampleCount,
+				AudioChannelCount = audioChannelCount
 			};
 			var result = NativeMethods.OutputTrySubmit(_session, in native);
 			return result switch
@@ -335,7 +345,7 @@ public sealed class NativeMediaIoProviderAdapter : IMediaIoProviderAdapter
 			MediaIoContractVersion.Current,
 			portId,
 			(MediaIoSignalState)native.SignalState,
-			UtcTimestamp.FromUnixMilliseconds(native.ObservedAtUnixMilliseconds),
+			UtcTimestamp.FromUnixTimeMilliseconds(native.ObservedAtUnixMilliseconds),
 			null,
 			failure);
 	}
@@ -460,6 +470,8 @@ public sealed class NativeMediaIoProviderAdapter : IMediaIoProviderAdapter
 		public ulong OpaqueSurfaceHandle;
 		public NativeIdentity SurfaceLeaseId;
 		public ulong AudioOpaqueHandle;
+		public uint AudioSampleCount;
+		public uint AudioChannelCount;
 	}
 
 	[StructLayout(LayoutKind.Sequential)]
@@ -528,5 +540,20 @@ public static class PinnedHostMediaIoMemory
 		var pixels = new byte[RgbaFrameBuffer.RequiredByteLength(frame.Surface.Format)];
 		Marshal.Copy(new IntPtr(unchecked((long)address)), pixels, 0, pixels.Length);
 		return new RgbaFrameBuffer(frame.Surface.Format, pixels);
+	}
+
+	public static float[] CopyStereoFloat32(AudioBufferDescriptor descriptor)
+	{
+		ArgumentNullException.ThrowIfNull(descriptor);
+		if (descriptor.Format != AudioFormat.Stereo48kFloat32)
+			throw new InvalidOperationException("AP-33 Media I/O audio requires stereo 48 kHz Float32.");
+		if (!string.Equals(descriptor.Handle?.Kind, AudioHandleKind, StringComparison.Ordinal))
+			throw new InvalidOperationException("Media I/O audio is not backed by a pinned-host handle.");
+		if (!ulong.TryParse(descriptor.Handle.Value, NumberStyles.None, CultureInfo.InvariantCulture, out var address) || address == 0)
+			throw new InvalidOperationException("Media I/O pinned-host audio address is invalid.");
+
+		var samples = new float[checked((int)(descriptor.Timing.SampleCount * descriptor.Format.ChannelCount))];
+		Marshal.Copy(new IntPtr(unchecked((long)address)), samples, 0, samples.Length);
+		return samples;
 	}
 }
