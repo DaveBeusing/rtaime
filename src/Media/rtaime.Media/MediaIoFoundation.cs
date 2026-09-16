@@ -114,7 +114,7 @@ public interface IMediaIoOutputSession : IDisposable
 {
 	MediaIoPortDescriptor Port { get; }
 	MediaIoPortStatus Status { get; }
-	MediaIoOutputSubmitResult TrySubmit(FrameDescriptor video, AudioBufferDescriptor? embeddedAudio = null);
+	MediaIoOutputSubmitResult TrySubmit(MediaIoOutputFrameDescriptor frame);
 }
 
 /// <summary>
