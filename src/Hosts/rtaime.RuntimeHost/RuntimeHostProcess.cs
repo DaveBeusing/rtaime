@@ -1,9 +1,11 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
+using System.Diagnostics;
 using rtaime.Core;
 using rtaime.Media;
 using rtaime.Media.Contracts;
 using rtaime.Recording;
+using rtaime.Runtime;
 
 namespace rtaime.RuntimeHost;
 
@@ -167,6 +169,8 @@ public sealed class RuntimeHostProcess
 	private readonly RuntimeHostProcessOptions _options;
 	private readonly Func<IProgramRecordingWriter> _recordingWriterFactory;
 	private readonly Func<RuntimeHostProcessOptions, IProgramRecordingWriter, V1RuntimeHostService> _runtimeFactory;
+	private readonly Stopwatch _timingClock = Stopwatch.StartNew();
+	private readonly RuntimeTimingQualificationProbe _timingProbe;
 	private RuntimeHostLifecycleSnapshot _lifecycle = new(
 		RuntimeHostProcessState.Created,
 		RuntimeHostHealthState.Unknown,
@@ -193,6 +197,13 @@ public sealed class RuntimeHostProcess
 			processOptions.SourceBId,
 			processOptions.Format,
 			writer));
+
+		var framePeriod = TimeSpan.FromSeconds(options.Format.FrameRate.Denominator / (double)options.Format.FrameRate.Numerator);
+		_timingProbe = new RuntimeTimingQualificationProbe(new TimingQualificationThresholds(
+			framePeriod,
+			TimeSpan.FromTicks(Math.Max(1, framePeriod.Ticks / 4)),
+			framePeriod,
+			2048));
 	}
 
 	public RuntimeHostLifecycleSnapshot Lifecycle
@@ -211,6 +222,7 @@ public sealed class RuntimeHostProcess
 	public bool RuntimeDisposed => _runtimeDisposed;
 	public V1RuntimeHostSnapshot? FinalRuntimeSnapshot => _finalRuntimeSnapshot;
 	public MediaIoVerticalSliceStatistics? MediaIoStatistics => _mediaIo?.Statistics;
+	public TimingQualificationSnapshot TimingQualification => _timingProbe.Snapshot(_timingClock.Elapsed);
 
 	public async Task<RuntimeHostExitCode> RunAsync(CancellationToken cancellationToken)
 	{
@@ -286,7 +298,7 @@ public sealed class RuntimeHostProcess
 		return await StopAsync().ConfigureAwait(false);
 	}
 
-	private static async Task RunMediaLoopAsync(
+	private async Task RunMediaLoopAsync(
 		V1RuntimeHostService runtime,
 		RuntimeMediaIoVerticalSlice? mediaIo,
 		CancellationToken cancellationToken)
@@ -295,10 +307,16 @@ public sealed class RuntimeHostProcess
 		using var timer = new PeriodicTimer(framePeriod);
 		while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
 		{
+			var boundaryObservedAt = _timingClock.Elapsed;
 			mediaIo?.PumpInputs();
 			if (!runtime.HasCommittedExecution) continue;
+
+			var processingStartedAt = _timingClock.Elapsed;
 			var boundary = runtime.ProcessNextBoundary();
 			mediaIo?.SubmitProgram(boundary);
+			var processingDuration = _timingClock.Elapsed - processingStartedAt;
+			var timing = _timingProbe.RecordBoundary(boundary.SequenceNumber, boundaryObservedAt, processingDuration);
+			runtime.SetTimingHealth(MapTimingHealth(timing.State));
 		}
 	}
 
@@ -384,6 +402,15 @@ public sealed class RuntimeHostProcess
 		lock (_gate)
 			_lifecycle = new RuntimeHostLifecycleSnapshot(state, health, detail, DateTimeOffset.UtcNow);
 	}
+
+	private static V1TimingHealthState MapTimingHealth(TimingQualificationState state) => state switch
+	{
+		TimingQualificationState.Healthy => V1TimingHealthState.Healthy,
+		TimingQualificationState.Degraded => V1TimingHealthState.Degraded,
+		TimingQualificationState.Unstable => V1TimingHealthState.Unstable,
+		TimingQualificationState.Lost => V1TimingHealthState.Lost,
+		_ => V1TimingHealthState.Recovering
+	};
 
 	private sealed class NullProgramRecordingWriter : IProgramRecordingWriter
 	{
