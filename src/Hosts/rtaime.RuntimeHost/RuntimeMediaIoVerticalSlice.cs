@@ -2,6 +2,7 @@
 
 using rtaime.Media;
 using rtaime.Media.Contracts;
+using rtaime.Provider.Gpu;
 
 namespace rtaime.RuntimeHost;
 
@@ -82,9 +83,11 @@ internal sealed class RuntimeMediaIoVerticalSlice : IDisposable
 	{
 		if (capture is null || appliedSequence == capture.CaptureSequence)
 			return;
+
+		var gpuInput = new RgbaFrameBuffer(capture.Video.Format, capture.Video.Pixels.Span);
 		_runtime.SetExternalInputContent(
 			capture.RuntimeSourceId,
-			capture.Video,
+			gpuInput,
 			MapSignal(capture.PortStatus.SignalState));
 		appliedSequence = capture.CaptureSequence;
 	}
