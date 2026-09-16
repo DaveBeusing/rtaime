@@ -101,6 +101,9 @@ public sealed class MediaIoVerticalSlice : IDisposable
 	public MediaIoPortDescriptor InputAPort => _inputA.Port;
 	public MediaIoPortDescriptor InputBPort => _inputB.Port;
 	public MediaIoPortDescriptor ProgramOutputPort => _output.Port;
+	public MediaIoPortStatus InputAStatus => _inputA.Status;
+	public MediaIoPortStatus InputBStatus => _inputB.Status;
+	public MediaIoPortStatus ProgramOutputStatus => _output.Status;
 
 	public MediaIoCapturedInput? LatestA
 	{
