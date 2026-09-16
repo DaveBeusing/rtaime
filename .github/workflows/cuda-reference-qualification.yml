@@ -63,9 +63,29 @@ jobs:
             -SampleIterations ([int]"${{ inputs.sample_iterations }}") `
             -EvidencePath "artifacts/qualification/cuda-reference.json"
 
+      - name: Bind qualification evidence to exact source
+        shell: pwsh
+        run: |
+          $sourceCommit = (git rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0 -or $sourceCommit -notmatch '^[0-9a-f]{40}$') {
+            throw "Unable to resolve exact qualification source commit."
+          }
+          ./build/qualification/New-QualificationEvidenceBinding.ps1 `
+            -QualificationType "CUDA_REFERENCE" `
+            -EvidencePath "artifacts/qualification/cuda-reference.json" `
+            -SourceCommit $sourceCommit `
+            -RunId "${{ github.run_id }}" `
+            -RunAttempt ([int]"${{ github.run_attempt }}")
+          ./build/qualification/Test-QualificationEvidenceBinding.ps1 `
+            -BindingPath "artifacts/qualification/bindings/cuda-reference.binding.json" `
+            -ExpectedSourceCommit $sourceCommit `
+            -ExpectedQualificationType "CUDA_REFERENCE"
+
       - name: Upload immutable qualification evidence
         uses: actions/upload-artifact@v4
         with:
           name: cuda-reference-qualification-${{ github.run_id }}-${{ github.run_attempt }}
-          path: artifacts/qualification/cuda-reference.json
+          path: |
+            artifacts/qualification/cuda-reference.json
+            artifacts/qualification/bindings/cuda-reference.binding.json
           if-no-files-found: error
