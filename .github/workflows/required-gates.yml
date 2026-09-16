@@ -104,6 +104,10 @@ jobs:
         shell: pwsh
         run: ./build/operations/Test-HostLifecyclePolicy.ps1
 
+      - name: Verify operator UI policy
+        shell: pwsh
+        run: ./build/quality/Test-OperatorUiPolicy.ps1
+
       - name: Restore
         run: dotnet restore rtaime.slnx
 
