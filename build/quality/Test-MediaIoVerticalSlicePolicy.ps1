@@ -19,6 +19,7 @@ function Assert-Condition {
 $abiPath = Join-Path $repositoryRoot "native/Providers/MediaIo/rtaime_media_io_abi.h"
 $cmakePath = Join-Path $repositoryRoot "native/Providers/AjaNtv2/CMakeLists.txt"
 $nativePath = Join-Path $repositoryRoot "native/Providers/AjaNtv2/rtaime_media_io_aja.cpp"
+$sdkPinPath = Join-Path $repositoryRoot "native/Providers/AjaNtv2/libajantv2.version.json"
 $bridgePath = Join-Path $repositoryRoot "src/Media/rtaime.Media/NativeMediaIoAdapter.cs"
 $pumpPath = Join-Path $repositoryRoot "src/Media/rtaime.Media/MediaIoVerticalSlice.cs"
 $runtimePath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/RuntimeHostProcess.cs"
@@ -27,12 +28,14 @@ $testPath = Join-Path $repositoryRoot "tests/rtaime.Tests.Unit/MediaIoVerticalSl
 $hardwareTestPath = Join-Path $repositoryRoot "tests/rtaime.Tests.Integration/HardwareMediaIoQualificationTests.cs"
 $qualificationPath = Join-Path $repositoryRoot "build/qualification/Invoke-MediaIoReferenceQualification.ps1"
 $workflowPath = Join-Path $repositoryRoot ".github/workflows/media-io-reference-qualification.yml"
+$requiredGatesPath = Join-Path $repositoryRoot ".github/workflows/required-gates.yml"
 $documentationPath = Join-Path $repositoryRoot "docs/MediaIoVerticalSlice.md"
 
 foreach ($path in @(
 	$abiPath,
 	$cmakePath,
 	$nativePath,
+	$sdkPinPath,
 	$bridgePath,
 	$pumpPath,
 	$runtimePath,
@@ -41,6 +44,7 @@ foreach ($path in @(
 	$hardwareTestPath,
 	$qualificationPath,
 	$workflowPath,
+	$requiredGatesPath,
 	$documentationPath)) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required AP-33 Media I/O artifact is missing: '$path'."
 }
@@ -48,6 +52,7 @@ foreach ($path in @(
 $abi = Get-Content -LiteralPath $abiPath -Raw
 $cmake = Get-Content -LiteralPath $cmakePath -Raw
 $native = Get-Content -LiteralPath $nativePath -Raw
+$sdkPin = Get-Content -LiteralPath $sdkPinPath -Raw | ConvertFrom-Json
 $bridge = Get-Content -LiteralPath $bridgePath -Raw
 $pump = Get-Content -LiteralPath $pumpPath -Raw
 $runtime = Get-Content -LiteralPath $runtimePath -Raw
@@ -56,6 +61,7 @@ $tests = Get-Content -LiteralPath $testPath -Raw
 $hardwareTests = Get-Content -LiteralPath $hardwareTestPath -Raw
 $qualification = Get-Content -LiteralPath $qualificationPath -Raw
 $workflow = Get-Content -LiteralPath $workflowPath -Raw
+$requiredGates = Get-Content -LiteralPath $requiredGatesPath -Raw
 $documentation = Get-Content -LiteralPath $documentationPath -Raw
 
 Assert-Condition ($abi -match 'RTAIME_MEDIA_IO_ABI_VERSION_MAJOR 1u') "Media I/O ABI major must remain 1."
@@ -68,6 +74,11 @@ Assert-Condition ($cmake -match 'libajantv2') "AJA adapter build must consume li
 Assert-Condition ($cmake -match 'RTAIME_AJA_NTV2_ROOT') "AJA SDK location must be explicit."
 Assert-Condition ($cmake -match 'RTAIME_AJA_SDK_REVISION') "AJA SDK revision must be evidence-addressable."
 Assert-Condition ($cmake -match 'target_link_libraries\(rtaime_media_io PRIVATE ajantv2\)') "Native adapter must link the SDK target only at the provider boundary."
+
+Assert-Condition ([string]$sdkPin.repository -eq 'https://github.com/aja-video/libajantv2.git') "Reference SDK pin must target aja-video/libajantv2."
+Assert-Condition ([string]$sdkPin.referenceBranch -eq 'release') "Reference SDK pin must document the AJA release branch."
+Assert-Condition ([string]$sdkPin.commit -match '^[0-9a-f]{40}$') "Reference SDK pin must contain an exact 40-character commit SHA."
+Assert-Condition ([string]$sdkPin.commit -eq 'aa4d482a47fdd9fd9f2883163e286206ac0d7ae7') "AP-33 reference SDK pin changed without qualification-policy update."
 
 Assert-Condition ($native -match 'kPortCount = 3') "AP-33 native topology must expose exactly two capture ports plus one Program output."
 Assert-Condition ($native -match 'NTV2_INPUTSOURCE_SDI1') "AP-33 must use SDI input 1."
@@ -121,11 +132,20 @@ Assert-Condition ($qualification -match 'transferMode -ne "PinnedHostLease"') "Q
 Assert-Condition ($qualification -match 'OutputRejected') "Qualification runner must reject hard Program-output failures."
 
 Assert-Condition ($workflow -match 'rtaime-media-io-reference') "Physical workflow must target the dedicated Media I/O reference runner."
+Assert-Condition ($workflow -match 'libajantv2\.version\.json') "Physical workflow must consume the repository SDK pin."
 Assert-Condition ($workflow -match 'git -C \$sdkRoot rev-parse HEAD') "Physical workflow must resolve the exact libajantv2 commit."
+Assert-Condition ($workflow -match 'differs from pin') "Physical workflow must fail when the resolved SDK differs from the repository pin."
 Assert-Condition ($workflow -match 'RTAIME_AJA_SDK_REVISION') "Physical workflow must propagate the exact SDK revision into evidence."
 Assert-Condition ($workflow -match 'cmake --build') "Physical workflow must build the native provider from source."
 Assert-Condition ($workflow -match 'rtaime_media_io\.dll') "Physical workflow must expose exactly the built native provider DLL."
 Assert-Condition ($workflow -match 'Upload immutable qualification evidence') "Physical workflow must retain qualification evidence."
+
+Assert-Condition ($requiredGates -match 'Build pinned native Media I/O provider') "Provider Smoke must compile the pinned native Media I/O provider."
+Assert-Condition ($requiredGates -match 'libajantv2\.version\.json') "Provider Smoke must consume the repository SDK pin."
+Assert-Condition ($requiredGates -match 'git -C \$sdkRoot rev-parse HEAD') "Provider Smoke must verify the exact SDK commit."
+Assert-Condition ($requiredGates -match 'cmake -S native/Providers/AjaNtv2') "Provider Smoke must configure the actual AJA adapter target."
+Assert-Condition ($requiredGates -match 'cmake --build \$nativeBuild --config Release') "Provider Smoke must compile the native adapter."
+Assert-Condition ($requiredGates -match 'Expected exactly one rtaime_media_io\.dll') "Provider Smoke must verify the native DLL result."
 
 Assert-Condition ($documentation -match 'Physical hardware qualification state[\s\S]*UNVERIFIED') "Documentation must retain UNVERIFIED until real hardware evidence exists."
 Assert-Condition ($documentation -match 'PinnedHostLease') "Documentation must identify the AP-33 qualified transfer-mode target."
@@ -144,4 +164,5 @@ foreach ($path in $managedContractFiles) {
 Write-Host "Media I/O vertical slice policy verification PASS"
 Write-Host "Topology: SDI1 + SDI2 capture -> Program SDI output; bounded pinned-host transfer"
 Write-Host "Runtime selection: explicit virtual/native; native failure is fail-closed"
+Write-Host "Native compile evidence: Provider Smoke builds the repository-pinned libajantv2 adapter"
 Write-Host "Physical hardware evidence state: UNVERIFIED until dedicated self-hosted qualification PASSES"
