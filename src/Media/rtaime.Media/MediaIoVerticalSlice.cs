@@ -4,14 +4,37 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 using rtaime.Core;
 using rtaime.Media.Contracts;
+using rtaime.Provider.Contracts;
 
 namespace rtaime.Media;
+
+public sealed class MediaIoRgbaFrame
+{
+	private readonly byte[] _pixels;
+
+	public MediaIoRgbaFrame(VideoFormat format, ReadOnlySpan<byte> pixels)
+	{
+		if (format.PixelFormat != PixelFormat.Rgba8)
+			throw new ArgumentException("Media I/O RGBA frames require the Rgba8 pixel format.", nameof(format));
+		var expectedLength = RequiredByteLength(format);
+		if (pixels.Length != expectedLength)
+			throw new ArgumentException($"Media I/O RGBA frame requires exactly '{expectedLength}' bytes.", nameof(pixels));
+		Format = format;
+		_pixels = pixels.ToArray();
+	}
+
+	public VideoFormat Format { get; }
+	public ReadOnlyMemory<byte> Pixels => _pixels;
+
+	public static int RequiredByteLength(VideoFormat format) =>
+		checked((int)(format.Width * format.Height * 4u));
+}
 
 public sealed record MediaIoCapturedInput(
 	MediaSourceId RuntimeSourceId,
 	MediaIoPortId PortId,
 	ulong CaptureSequence,
-	RgbaFrameBuffer Video,
+	MediaIoRgbaFrame Video,
 	float[]? AudioSamples,
 	AudioBufferTiming? AudioTiming,
 	MediaIoPortStatus PortStatus);
@@ -162,7 +185,7 @@ public sealed class MediaIoVerticalSlice : IDisposable
 		bool muted = false)
 	{
 		ArgumentNullException.ThrowIfNull(rgbaPixels);
-		if (rgbaPixels.Length != RgbaFrameBuffer.RequiredByteLength(_format))
+		if (rgbaPixels.Length != MediaIoRgbaFrame.RequiredByteLength(_format))
 			throw new ArgumentException("Program RGBA payload does not match the configured Media I/O format.", nameof(rgbaPixels));
 		if ((audioSamples is null) != (audioTiming is null))
 			throw new ArgumentException("Program audio samples and timing must either both be supplied or both be omitted.");
