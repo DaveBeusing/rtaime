@@ -1,5 +1,6 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -40,18 +41,22 @@ public sealed class LocalEndpointLease : IDisposable
 
 /// <summary>
 /// Explicit process-shared readiness lease for a local IPC endpoint. Hosts acquire this lease only
-/// while their lifecycle is healthy and their IPC server is running. It is intentionally distinct
-/// from <see cref="LocalEndpointLease"/>, which only proves that a host process owns the endpoint.
+/// while their lifecycle is healthy and their IPC server is running. Readiness is represented by a
+/// deterministic local marker containing both process identity and process start time, so a stale
+/// marker left by an abrupt process exit cannot be mistaken for a live ready host.
 /// </summary>
 public sealed class LocalEndpointReadinessLease : IDisposable
 {
-	private const string NamePrefix = "rtaime.endpoint.ready.";
-	private Mutex? _mutex;
+	private readonly int _processId;
+	private readonly long _processStartUtcTicks;
+	private string? _markerPath;
 
-	private LocalEndpointReadinessLease(string endpoint, Mutex mutex)
+	private LocalEndpointReadinessLease(string endpoint, string markerPath, int processId, long processStartUtcTicks)
 	{
 		Endpoint = endpoint;
-		_mutex = mutex;
+		_markerPath = markerPath;
+		_processId = processId;
+		_processStartUtcTicks = processStartUtcTicks;
 	}
 
 	public string Endpoint { get; }
@@ -59,16 +64,51 @@ public sealed class LocalEndpointReadinessLease : IDisposable
 	public static LocalEndpointReadinessLease Acquire(string endpoint)
 	{
 		var normalized = LocalEndpointLeaseNames.Normalize(endpoint);
-		var mutex = LocalEndpointLeaseNames.Acquire(NamePrefix, normalized, "Local endpoint readiness");
-		return new LocalEndpointReadinessLease(normalized, mutex);
+		var markerPath = LocalEndpointReadinessMarker.GetPath(normalized);
+		if (IsHeld(normalized))
+			throw new InvalidOperationException($"Local endpoint readiness '{normalized}' is already leased by another process.");
+
+		using var process = Process.GetCurrentProcess();
+		var processId = process.Id;
+		var processStartUtcTicks = process.StartTime.ToUniversalTime().Ticks;
+		LocalEndpointReadinessMarker.Write(markerPath, normalized, processId, processStartUtcTicks);
+		return new LocalEndpointReadinessLease(normalized, markerPath, processId, processStartUtcTicks);
 	}
 
-	public static bool IsHeld(string endpoint) =>
-		LocalEndpointLeaseNames.IsHeld(NamePrefix, LocalEndpointLeaseNames.Normalize(endpoint));
+	public static bool IsHeld(string endpoint)
+	{
+		var normalized = LocalEndpointLeaseNames.Normalize(endpoint);
+		var markerPath = LocalEndpointReadinessMarker.GetPath(normalized);
+		if (!LocalEndpointReadinessMarker.TryRead(markerPath, normalized, out var processId, out var processStartUtcTicks))
+			return false;
+
+		try
+		{
+			using var process = Process.GetProcessById(processId);
+			if (process.HasExited)
+			{
+				LocalEndpointReadinessMarker.DeleteIfMatches(markerPath, normalized, processId, processStartUtcTicks);
+				return false;
+			}
+
+			var observedStartUtcTicks = process.StartTime.ToUniversalTime().Ticks;
+			if (observedStartUtcTicks == processStartUtcTicks)
+				return true;
+		}
+		catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception)
+		{
+			// A marker is readiness evidence only while its exact process identity can still be validated.
+		}
+
+		LocalEndpointReadinessMarker.DeleteIfMatches(markerPath, normalized, processId, processStartUtcTicks);
+		return false;
+	}
 
 	public void Dispose()
 	{
-		Interlocked.Exchange(ref _mutex, null)?.Dispose();
+		var markerPath = Interlocked.Exchange(ref _markerPath, null);
+		if (markerPath is null) return;
+		LocalEndpointReadinessMarker.DeleteIfMatches(markerPath, Endpoint, _processId, _processStartUtcTicks);
 	}
 }
 
@@ -116,5 +156,75 @@ internal static class LocalEndpointLeaseNames
 		var bytes = Encoding.UTF8.GetBytes(endpoint);
 		var hash = SHA256.HashData(bytes);
 		return prefix + Convert.ToHexString(hash).ToLowerInvariant();
+	}
+}
+
+internal static class LocalEndpointReadinessMarker
+{
+	private const string MarkerDirectoryName = "endpoint-readiness";
+
+	public static string GetPath(string endpoint)
+	{
+		var hash = SHA256.HashData(Encoding.UTF8.GetBytes(endpoint));
+		var fileName = Convert.ToHexString(hash).ToLowerInvariant() + ".ready";
+		return Path.Combine(Path.GetTempPath(), "rtaime", MarkerDirectoryName, fileName);
+	}
+
+	public static void Write(string markerPath, string endpoint, int processId, long processStartUtcTicks)
+	{
+		var directory = Path.GetDirectoryName(markerPath)
+			?? throw new InvalidOperationException("Endpoint readiness marker directory could not be resolved.");
+		Directory.CreateDirectory(directory);
+		var temporaryPath = markerPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+		var content = string.Join(
+			Environment.NewLine,
+			$"endpoint={endpoint}",
+			$"processId={processId}",
+			$"processStartUtcTicks={processStartUtcTicks}") + Environment.NewLine;
+		try
+		{
+			File.WriteAllText(temporaryPath, content, new UTF8Encoding(false));
+			File.Move(temporaryPath, markerPath, overwrite: true);
+		}
+		finally
+		{
+			try { if (File.Exists(temporaryPath)) File.Delete(temporaryPath); }
+			catch (IOException) { }
+		}
+	}
+
+	public static bool TryRead(string markerPath, string expectedEndpoint, out int processId, out long processStartUtcTicks)
+	{
+		processId = 0;
+		processStartUtcTicks = 0;
+		if (!File.Exists(markerPath)) return false;
+
+		try
+		{
+			var values = File.ReadAllLines(markerPath)
+				.Select(line => line.Split('=', 2))
+				.Where(parts => parts.Length == 2)
+				.ToDictionary(parts => parts[0], parts => parts[1], StringComparer.Ordinal);
+			return values.TryGetValue("endpoint", out var endpoint) &&
+				string.Equals(endpoint, expectedEndpoint, StringComparison.Ordinal) &&
+				values.TryGetValue("processId", out var processIdText) &&
+				int.TryParse(processIdText, out processId) &&
+				processId > 0 &&
+				values.TryGetValue("processStartUtcTicks", out var processStartText) &&
+				long.TryParse(processStartText, out processStartUtcTicks) &&
+				processStartUtcTicks > 0;
+		}
+		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
+		{
+			return false;
+		}
+	}
+
+	public static void DeleteIfMatches(string markerPath, string endpoint, int processId, long processStartUtcTicks)
+	{
+		if (!TryRead(markerPath, endpoint, out var observedProcessId, out var observedStartUtcTicks)) return;
+		if (observedProcessId != processId || observedStartUtcTicks != processStartUtcTicks) return;
+		try { File.Delete(markerPath); }
+		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException) { }
 	}
 }
