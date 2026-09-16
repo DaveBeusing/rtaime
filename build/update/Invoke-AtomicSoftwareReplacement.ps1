@@ -23,6 +23,13 @@ function Invoke-BundleVerification {
 	if ($Qualification) { & $Verifier -BundlePath $Path } else { & $Verifier -BundlePath $Path -RequireTrustedProductionKey }
 }
 
+function Test-PathWithin {
+	param([string]$Path, [string]$Root)
+	$fullPath = [System.IO.Path]::GetFullPath($Path).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+	$fullRoot = [System.IO.Path]::GetFullPath($Root).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+	return $fullPath.Equals($fullRoot, [StringComparison]::OrdinalIgnoreCase) -or $fullPath.StartsWith($fullRoot + [System.IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)
+}
+
 $target = [System.IO.Path]::GetFullPath($InstallPath)
 $bundle = [System.IO.Path]::GetFullPath($BundlePath)
 Assert-Condition (Test-Path -LiteralPath $target -PathType Container) "Managed update requires an existing installation at '$target'."
@@ -42,6 +49,14 @@ Invoke-BundleVerification -Verifier $currentVerifier -Path $target -Qualificatio
 $currentManifestHash = (Get-FileHash -LiteralPath (Join-Path $target 'bundle-manifest.json') -Algorithm SHA256).Hash.ToLowerInvariant()
 
 $parent = Split-Path -Parent $target
+Assert-Condition (-not [string]::IsNullOrWhiteSpace($parent)) "Install path must have a parent directory."
+$originalLocation = (Get-Location).Path
+$relocatedLocation = $false
+if (Test-PathWithin -Path $originalLocation -Root $target) {
+	Set-Location -LiteralPath $parent
+	$relocatedLocation = $true
+}
+
 $stage = Join-Path $parent ('.{0}.rtaime-update-stage-{1}' -f [System.IO.Path]::GetFileName($target), [Guid]::NewGuid().ToString('N'))
 $snapshotArchive = Join-Path ([System.IO.Path]::GetTempPath()) ('rtaime-update-{0}.zip' -f [Guid]::NewGuid().ToString('N'))
 $rollbackCreated = $false
@@ -88,4 +103,7 @@ try {
 } finally {
 	if (Test-Path -LiteralPath $stage -PathType Container) { Remove-Item -LiteralPath $stage -Recurse -Force }
 	if (Test-Path -LiteralPath $snapshotArchive -PathType Leaf) { Remove-Item -LiteralPath $snapshotArchive -Force }
+	if ($relocatedLocation) {
+		if (Test-Path -LiteralPath $originalLocation -PathType Container) { Set-Location -LiteralPath $originalLocation } else { Set-Location -LiteralPath $parent }
+	}
 }

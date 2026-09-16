@@ -23,6 +23,13 @@ function Verify-Install {
 	if ($Qualification) { & $verifier -BundlePath $Path } else { & $verifier -BundlePath $Path -RequireTrustedProductionKey }
 }
 
+function Test-PathWithin {
+	param([string]$Path, [string]$Root)
+	$fullPath = [System.IO.Path]::GetFullPath($Path).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+	$fullRoot = [System.IO.Path]::GetFullPath($Root).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+	return $fullPath.Equals($fullRoot, [StringComparison]::OrdinalIgnoreCase) -or $fullPath.StartsWith($fullRoot + [System.IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)
+}
+
 Assert-Condition $AcknowledgeProcessesStopped "Rollback requires explicit acknowledgement that rtaime processes/services using the software installation have been stopped."
 $target = [System.IO.Path]::GetFullPath($InstallPath)
 $policyPathCandidates = @((Join-Path $PSScriptRoot 'update-policy.json'), (Join-Path $PSScriptRoot '../update/update-policy.json'))
@@ -37,6 +44,14 @@ Verify-Install -Path $target -Qualification $QualificationMode
 Verify-Install -Path $rollback -Qualification $QualificationMode
 
 $parent = Split-Path -Parent $target
+Assert-Condition (-not [string]::IsNullOrWhiteSpace($parent)) "Install path must have a parent directory."
+$originalLocation = (Get-Location).Path
+$relocatedLocation = $false
+if ((Test-PathWithin -Path $originalLocation -Root $target) -or (Test-PathWithin -Path $originalLocation -Root $rollback)) {
+	Set-Location -LiteralPath $parent
+	$relocatedLocation = $true
+}
+
 $swap = Join-Path $parent ('.{0}.rtaime-rollback-swap-{1}' -f [System.IO.Path]::GetFileName($target), [Guid]::NewGuid().ToString('N'))
 $targetMoved = $false
 $rollbackActivated = $false
@@ -64,7 +79,8 @@ try {
 	}
 	throw $originalError
 } finally {
-	if (Test-Path -LiteralPath $swap -PathType Container) {
-		Remove-Item -LiteralPath $swap -Recurse -Force
+	if (Test-Path -LiteralPath $swap -PathType Container) { Remove-Item -LiteralPath $swap -Recurse -Force }
+	if ($relocatedLocation) {
+		if (Test-Path -LiteralPath $originalLocation -PathType Container) { Set-Location -LiteralPath $originalLocation } else { Set-Location -LiteralPath $parent }
 	}
 }
