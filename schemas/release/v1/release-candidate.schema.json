@@ -1,0 +1,89 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://rtaime.local/schemas/release/v1/release-candidate.schema.json",
+	"$comment": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+	"title": "rtaime Release Candidate v1",
+	"type": "object",
+	"additionalProperties": false,
+	"required": [
+		"copyright",
+		"schemaVersion",
+		"candidateId",
+		"channel",
+		"product",
+		"source",
+		"trust",
+		"releaseRecord",
+		"bundle",
+		"publicationReadiness",
+		"createdAtUtc"
+	],
+	"properties": {
+		"copyright": { "type": "string", "minLength": 1 },
+		"schemaVersion": { "const": "1.0" },
+		"candidateId": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+		"channel": { "enum": ["QUALIFICATION", "PREVIEW", "STABLE"] },
+		"product": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["name", "version", "releaseStage"],
+			"properties": {
+				"name": { "const": "rtaime" },
+				"version": { "type": "string", "minLength": 1 },
+				"releaseStage": { "enum": ["DEV", "PREVIEW", "STABLE"] }
+			}
+		},
+		"source": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["tag", "sourceCommit", "buildCommit", "buildId"],
+			"properties": {
+				"tag": { "type": ["string", "null"] },
+				"sourceCommit": { "type": "string", "pattern": "^[0-9a-f]{40,64}$" },
+				"buildCommit": { "type": "string", "pattern": "^[0-9a-f]{40,64}$" },
+				"buildId": { "type": "string", "minLength": 1 }
+			}
+		},
+		"trust": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["signerClass", "keyFingerprint", "productionTrust"],
+			"properties": {
+				"signerClass": { "enum": ["TEST_EPHEMERAL", "EXTERNAL_CONTROLLED"] },
+				"keyFingerprint": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+				"productionTrust": { "enum": ["PASS", "UNVERIFIED"] }
+			}
+		},
+		"releaseRecord": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["recordId", "releaseEvidenceSha256"],
+			"properties": {
+				"recordId": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+				"releaseEvidenceSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+			}
+		},
+		"bundle": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["fileName", "size", "sha256", "sidecarFileName", "sidecarSha256"],
+			"properties": {
+				"fileName": { "type": "string", "pattern": "\\.zip$" },
+				"size": { "type": "integer", "minimum": 1 },
+				"sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+				"sidecarFileName": { "type": "string", "pattern": "\\.zip\\.sha256$" },
+				"sidecarSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+			}
+		},
+		"publicationReadiness": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["status", "details"],
+			"properties": {
+				"status": { "enum": ["PASS", "NOT_APPLICABLE", "UNVERIFIED"] },
+				"details": { "type": "string", "minLength": 1 }
+			}
+		},
+		"createdAtUtc": { "type": "string", "format": "date-time" }
+	}
+}
