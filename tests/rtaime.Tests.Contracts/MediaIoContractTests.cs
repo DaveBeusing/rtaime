@@ -43,12 +43,42 @@ public sealed class MediaIoContractTests
 	}
 
 	[Fact]
+	public void Output_frame_requires_opaque_handle()
+	{
+		var sourceId = MediaSourceId.New();
+		var portId = MediaIoPortId.New();
+		var timing = new FrameTiming(11, 11, new Timebase(1, 50));
+		var validSurface = new SurfaceDescriptor(
+			SurfaceId.New(),
+			VideoFormat.Hd1080p50Rgba8,
+			SurfaceStorageDomain.Device,
+			SurfaceOwnership.ProducerOwned,
+			new SurfaceLifetimeDescriptor(Generation.Initial, null),
+			new OpaqueSurfaceHandle("rtaime.gpu.hardware.composite", "surface-11"));
+		var validFrame = new FrameDescriptor(MediaContractVersion.Current, sourceId, validSurface, timing);
+
+		var descriptor = new MediaIoOutputFrameDescriptor(MediaIoContractVersion.Current, portId, validFrame);
+		Assert.NotNull(descriptor.Video.Surface.Handle);
+
+		var missingHandle = new SurfaceDescriptor(
+			SurfaceId.New(),
+			VideoFormat.Hd1080p50Rgba8,
+			SurfaceStorageDomain.Device,
+			SurfaceOwnership.ProducerOwned,
+			new SurfaceLifetimeDescriptor(Generation.Initial, null),
+			null);
+		var invalidFrame = new FrameDescriptor(MediaContractVersion.Current, sourceId, missingHandle, timing);
+		Assert.Throws<ArgumentException>(() => new MediaIoOutputFrameDescriptor(MediaIoContractVersion.Current, portId, invalidFrame));
+	}
+
+	[Fact]
 	public void Media_io_contract_contains_no_bulk_media_payload_property()
 	{
 		var types = new[]
 		{
 			typeof(MediaIoNativeVideoFormat),
 			typeof(MediaIoInputFrameDescriptor),
+			typeof(MediaIoOutputFrameDescriptor),
 			typeof(MediaIoPortStatus),
 			typeof(MediaIoPortDescriptor),
 			typeof(MediaIoProviderDescriptor)
