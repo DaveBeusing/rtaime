@@ -113,9 +113,29 @@ jobs:
             -RequireExternalReference:$external `
             -EvidencePath "artifacts/qualification/media-io-reference.json"
 
+      - name: Bind qualification evidence to exact source
+        shell: pwsh
+        run: |
+          $sourceCommit = (git rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0 -or $sourceCommit -notmatch '^[0-9a-f]{40}$') {
+            throw "Unable to resolve exact qualification source commit."
+          }
+          ./build/qualification/New-QualificationEvidenceBinding.ps1 `
+            -QualificationType "MEDIA_IO_REFERENCE" `
+            -EvidencePath "artifacts/qualification/media-io-reference.json" `
+            -SourceCommit $sourceCommit `
+            -RunId "${{ github.run_id }}" `
+            -RunAttempt ([int]"${{ github.run_attempt }}")
+          ./build/qualification/Test-QualificationEvidenceBinding.ps1 `
+            -BindingPath "artifacts/qualification/bindings/media-io-reference.binding.json" `
+            -ExpectedSourceCommit $sourceCommit `
+            -ExpectedQualificationType "MEDIA_IO_REFERENCE"
+
       - name: Upload immutable qualification evidence
         uses: actions/upload-artifact@v4
         with:
           name: media-io-reference-qualification-${{ github.run_id }}-${{ github.run_attempt }}
-          path: artifacts/qualification/media-io-reference.json
+          path: |
+            artifacts/qualification/media-io-reference.json
+            artifacts/qualification/bindings/media-io-reference.binding.json
           if-no-files-found: error

@@ -134,7 +134,11 @@ foreach ($releaseFile in @($policy.releaseEvidenceFiles)) {
 	if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
 		throw "Required release evidence file '$releaseFile' is missing."
 	}
-	Copy-Item -LiteralPath $source -Destination (Join-Path $releaseDirectory ([string]$releaseFile) ) -Force
+	Copy-Item -LiteralPath $source -Destination (Join-Path $releaseDirectory ([string]$releaseFile)) -Force
+}
+$qualificationSource = Join-Path $evidenceRoot "qualification"
+if (Test-Path -LiteralPath $qualificationSource -PathType Container) {
+	Copy-DirectoryContent -Source $qualificationSource -Destination (Join-Path $releaseDirectory "qualification")
 }
 
 $schemaSource = Resolve-RepositoryPath ([string]$policy.schemaRoot)

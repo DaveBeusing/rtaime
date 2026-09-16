@@ -86,8 +86,6 @@ internal static class Program
 	{
 		var readinessValue = Environment.GetEnvironmentVariable("RTAIME_HOST_READINESS_FILE");
 		var stopValue = Environment.GetEnvironmentVariable("RTAIME_HOST_STOP_FILE");
-		if (string.IsNullOrWhiteSpace(readinessValue) && string.IsNullOrWhiteSpace(stopValue)) return;
-
 		var readinessPath = string.IsNullOrWhiteSpace(readinessValue) ? null : Path.GetFullPath(readinessValue);
 		var stopPath = string.IsNullOrWhiteSpace(stopValue) ? null : Path.GetFullPath(stopValue);
 		if (readinessPath is not null)
@@ -98,6 +96,7 @@ internal static class Program
 		}
 
 		var publishedReady = false;
+		LocalEndpointReadinessLease? endpointReadiness = null;
 		try
 		{
 			while (!cancellationToken.IsCancellationRequested && !shutdown.IsCancellationRequested)
@@ -118,6 +117,24 @@ internal static class Program
 					process.IpcServer?.Running == true &&
 					runtimeReady &&
 					aiReady;
+
+				if (ready && endpointReadiness is null)
+				{
+					try
+					{
+						endpointReadiness = LocalEndpointReadinessLease.Acquire(options.ListenEndpoint);
+					}
+					catch (InvalidOperationException)
+					{
+						shutdown.Cancel();
+						throw;
+					}
+				}
+				else if (!ready && endpointReadiness is not null)
+				{
+					endpointReadiness.Dispose();
+					endpointReadiness = null;
+				}
 
 				if (readinessPath is not null && ready && !publishedReady)
 				{
@@ -162,6 +179,7 @@ internal static class Program
 		}
 		finally
 		{
+			endpointReadiness?.Dispose();
 			DeleteManagedFile(readinessPath);
 		}
 	}

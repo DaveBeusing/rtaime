@@ -24,6 +24,7 @@
 		"artifact-manifest.json",
 		"sbom.cdx.json",
 		"compatibility-manifest.json",
+		"qualification-evidence-manifest.json",
 		"release-evidence.json",
 		"release-attestation.json",
 		"release-record.json",

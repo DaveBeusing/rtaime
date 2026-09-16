@@ -124,9 +124,29 @@ jobs:
             -RequireReferenceRelock `
             -EvidencePath "artifacts/qualification/timing-reference-soak.json"
 
+      - name: Bind qualification evidence to exact source
+        shell: pwsh
+        run: |
+          $sourceCommit = (git rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0 -or $sourceCommit -notmatch '^[0-9a-f]{40}$') {
+            throw "Unable to resolve exact qualification source commit."
+          }
+          ./build/qualification/New-QualificationEvidenceBinding.ps1 `
+            -QualificationType "TIMING_REFERENCE_SOAK" `
+            -EvidencePath "artifacts/qualification/timing-reference-soak.json" `
+            -SourceCommit $sourceCommit `
+            -RunId "${{ github.run_id }}" `
+            -RunAttempt ([int]"${{ github.run_attempt }}")
+          ./build/qualification/Test-QualificationEvidenceBinding.ps1 `
+            -BindingPath "artifacts/qualification/bindings/timing-reference-soak.binding.json" `
+            -ExpectedSourceCommit $sourceCommit `
+            -ExpectedQualificationType "TIMING_REFERENCE_SOAK"
+
       - name: Upload immutable AP-34 qualification evidence
         uses: actions/upload-artifact@v4
         with:
           name: timing-reference-latency-soak-${{ github.run_id }}-${{ github.run_attempt }}
-          path: artifacts/qualification/timing-reference-soak.json
+          path: |
+            artifacts/qualification/timing-reference-soak.json
+            artifacts/qualification/bindings/timing-reference-soak.binding.json
           if-no-files-found: error

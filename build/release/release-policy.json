@@ -64,6 +64,14 @@
 		{
 			"requirement": "GENLOCK",
 			"status": "UNVERIFIED"
+		},
+		{
+			"requirement": "PHYSICAL_END_TO_END_LATENCY",
+			"status": "UNVERIFIED"
+		},
+		{
+			"requirement": "LONG_SOAK",
+			"status": "UNVERIFIED"
 		}
 	]
 }
