@@ -20,6 +20,10 @@
 #include <string>
 #include <vector>
 
+#ifndef RTAIME_AJA_SDK_REVISION
+#define RTAIME_AJA_SDK_REVISION "release-unverified"
+#endif
+
 namespace
 {
 	constexpr uint32_t kAbiMajor = 1;
@@ -27,7 +31,6 @@ namespace
 	constexpr uint32_t kPortCount = 3;
 	constexpr uint32_t kAutoCirculateFrames = 7;
 	constexpr uint32_t kStereoChannels = 2;
-	constexpr uint32_t kSampleRate = 48000;
 
 	struct Provider;
 
@@ -59,6 +62,15 @@ namespace
 		std::array<bool, kPortCount> reserved{};
 		std::string device_spec;
 	};
+
+	static void copy_text(char* destination, size_t capacity, const std::string& value)
+	{
+		if (destination == nullptr || capacity == 0)
+			return;
+		const size_t count = std::min(capacity - 1, value.size());
+		std::memcpy(destination, value.data(), count);
+		destination[count] = '\0';
+	}
 
 	static void fill_identity(rtaime_media_io_identity& identity, uint8_t scope, uint8_t ordinal)
 	{
@@ -389,7 +401,8 @@ extern "C" rtaime_media_io_result rtaime_media_io_create_provider(
 	if (!instance->card.features().CanDoFrameBufferFormat(NTV2_FBF_RGBA))
 		return RTAIME_MEDIA_IO_FORMAT_UNSUPPORTED;
 
-	instance->card.SetMultiFormatMode(instance->card.features().CanDoMultiFormat());
+	if (instance->card.features().CanDoMultiFormat())
+		instance->card.SetMultiFormatMode(true);
 	*provider = instance.release();
 	return RTAIME_MEDIA_IO_OK;
 }
@@ -397,6 +410,20 @@ extern "C" rtaime_media_io_result rtaime_media_io_create_provider(
 extern "C" void rtaime_media_io_destroy_provider(rtaime_media_io_provider* provider)
 {
 	delete provider;
+}
+
+extern "C" rtaime_media_io_result rtaime_media_io_get_provider_info(
+	rtaime_media_io_provider* provider,
+	rtaime_media_io_provider_info* info)
+{
+	if (provider == nullptr || info == nullptr)
+		return RTAIME_MEDIA_IO_INVALID_ARGUMENT;
+	std::lock_guard<std::mutex> lock(provider->gate);
+	std::memset(info, 0, sizeof(*info));
+	copy_text(info->adapter_name, sizeof(info->adapter_name), provider->card.GetDisplayName());
+	copy_text(info->driver_version, sizeof(info->driver_version), provider->card.GetDriverVersionString());
+	copy_text(info->sdk_revision, sizeof(info->sdk_revision), RTAIME_AJA_SDK_REVISION);
+	return RTAIME_MEDIA_IO_OK;
 }
 
 extern "C" rtaime_media_io_result rtaime_media_io_get_port_count(
