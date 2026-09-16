@@ -22,6 +22,27 @@ The native reference adapter targets the supported `aja-video/libajantv2` SDK li
 
 The adapter is built with CMake under `native/Providers/AjaNtv2`. No Visual C++ project is added to the managed solution, and the approved 28 managed-project graph is unchanged.
 
+## RuntimeHost selection
+
+RuntimeHost defaults to the existing virtual Media I/O path. Physical Media I/O is selected only through the explicit `native` mode:
+
+- command line: `--media-io=native`;
+- environment: `RTAIME_RUNTIME_MEDIA_IO=native`.
+
+`virtual` and `native` are the only accepted values. When `native` is requested, RuntimeHost constructs `NativeMediaIoProviderAdapter`, opens the two input sessions and Program output through `RuntimeMediaIoVerticalSlice`, and starts only if the complete native path is available. Missing DLLs, missing devices, unsupported formats, unavailable ports or rejected sessions fail startup. There is no automatic fallback to the virtual provider.
+
+External reference may be requested only for native mode through `--require-external-reference=true` or `RTAIME_RUNTIME_REQUIRE_EXTERNAL_REFERENCE=true`. This is an admission requirement; AP-34 owns the measured timing/reference qualification.
+
+The physical bridge wraps the existing committed execution boundary:
+
+1. physical inputs are pumped into the current source-A/source-B working content;
+2. Control/Runtime routing and transition authority remain unchanged;
+3. the existing compositor executes CUT/DISSOLVE/layer logic;
+4. the already existing Program GPU readback is reused for monitoring and physical Program output;
+5. the followed capture audio window is submitted with the existing AFV gain/mute result.
+
+No additional Program GPU readback is introduced by AP-33.
+
 ## Transfer mode
 
 AP-33 intentionally qualifies `PinnedHostLease` first.
@@ -81,16 +102,29 @@ Normal Required Gates verify:
 - vendor-neutral orchestration with an in-memory provider;
 - capture lease release;
 - bounded output/backpressure behavior;
+- explicit RuntimeHost `virtual|native` selection and fail-closed native startup;
 - architecture and vendor-boundary policy;
+- presence and fail-closed structure of the physical qualification path;
 - no accidental generic-CI hardware claim.
 
-The dedicated reference-hardware workflow additionally builds `rtaime_media_io.dll` against the pinned `libajantv2` checkout and exercises the physical SDI path.
+The dedicated `.github/workflows/media-io-reference-qualification.yml` workflow runs only on the self-hosted `rtaime-media-io-reference` Windows x64 runner. It:
+
+1. resolves the requested `libajantv2` ref to an exact commit;
+2. builds `rtaime_media_io.dll` from that exact source through CMake;
+3. exposes only that built native provider to the test process;
+4. runs `HardwareMediaIoQualificationTests.Reference_hardware_profile_must_pass_when_explicitly_enabled`;
+5. requires two locked SDI inputs, minimum capture counts, accepted Program output and zero hard capture/output failures;
+6. retains `artifacts/qualification/media-io-reference.json` as immutable workflow evidence.
+
+The evidence records source commit, expected/detected AJA adapter, driver version, exact AJA SDK revision, ABI version, managed Media I/O contract version, format, transfer mode, reference requirement, signal states and frame/backpressure counters.
 
 ## Physical hardware qualification state
 
 **UNVERIFIED**
 
 Repository implementation, tests and normal GitHub-hosted CI are not physical AJA evidence. AP-33 may only be described as physically qualified after the self-hosted Media I/O reference workflow produces retained `PASSED` evidence for the declared AJA adapter, driver and SDK revision.
+
+A successful normal Required-Gates run therefore proves the implementation and qualification mechanism, not the presence or behavior of physical AJA hardware.
 
 ## Deferred to AP-34
 
