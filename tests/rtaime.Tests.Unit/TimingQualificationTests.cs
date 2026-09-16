@@ -13,6 +13,17 @@ public sealed class TimingQualificationTests
 		8);
 
 	[Fact]
+	public void No_boundary_evidence_remains_recovering()
+	{
+		var probe = new RuntimeTimingQualificationProbe(Thresholds);
+
+		var snapshot = probe.Snapshot(TimeSpan.FromSeconds(10));
+
+		Assert.Equal(TimingQualificationState.Recovering, snapshot.State);
+		Assert.Equal(0UL, snapshot.TotalBoundaries);
+	}
+
+	[Fact]
 	public void Perfect_cadence_remains_healthy()
 	{
 		var probe = new RuntimeTimingQualificationProbe(Thresholds);
