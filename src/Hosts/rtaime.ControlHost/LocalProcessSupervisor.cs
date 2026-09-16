@@ -55,8 +55,10 @@ public sealed record LocalProcessSupervisionOptions(
 /// Local process supervision uses endpoint probing only to adopt an already-running external process. Processes
 /// launched by this supervisor receive unique stop and readiness files; an owned process becomes Healthy only
 /// after the host publishes explicit managed readiness. This prevents a bare pipe connection from being treated
-/// as operational readiness. Only processes launched by this instance are terminated during orderly disposal.
-/// Start attempts are bounded for the lifetime of this supervisor instance.
+/// as operational readiness. Before the first managed launch, endpoint absence must be observed twice across one
+/// probe interval to avoid split-brain startup during a short external Named Pipe re-arm window. Only processes
+/// launched by this instance are terminated during orderly disposal. Start attempts are bounded for the lifetime
+/// of this supervisor instance.
 /// </summary>
 public sealed class LocalProcessSupervisor : IAsyncDisposable
 {
@@ -69,6 +71,7 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 	private string? _ownedStopFilePath;
 	private string? _ownedReadinessFilePath;
 	private bool _ownedProcessReady;
+	private bool _initialEndpointAbsenceObserved;
 	private int _startAttempts;
 	private LocalProcessSupervisionSnapshot _snapshot;
 
@@ -186,7 +189,18 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 
 			if (await ProbeEndpointAsync(cancellationToken).ConfigureAwait(false))
 			{
+				_initialEndpointAbsenceObserved = false;
 				Update(LocalProcessSupervisionState.Healthy, $"Adopted reachable external endpoint '{_options.Endpoint}'.");
+				await Task.Delay(_options.ProbeInterval, cancellationToken).ConfigureAwait(false);
+				continue;
+			}
+
+			if (_startAttempts == 0 && !_initialEndpointAbsenceObserved)
+			{
+				_initialEndpointAbsenceObserved = true;
+				Update(
+					LocalProcessSupervisionState.Waiting,
+					$"Endpoint '{_options.Endpoint}' was absent on the first probe; confirming absence before the initial managed launch.");
 				await Task.Delay(_options.ProbeInterval, cancellationToken).ConfigureAwait(false);
 				continue;
 			}
