@@ -1,5 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
+using System.Text.Json;
+
 namespace rtaime.RuntimeHost;
 
 internal static class Program
@@ -31,7 +33,7 @@ internal static class Program
 
 			var process = new RuntimeHostProcess(options);
 			using var monitorStop = new CancellationTokenSource();
-			var stopWatcher = WatchManagedStopAsync(shutdown, monitorStop.Token);
+			var monitor = MonitorManagedLifecycleAsync(process, options, shutdown, monitorStop.Token);
 			try
 			{
 				var exitCode = await process.RunAsync(shutdown.Token).ConfigureAwait(false);
@@ -42,7 +44,7 @@ internal static class Program
 			finally
 			{
 				monitorStop.Cancel();
-				try { await stopWatcher.ConfigureAwait(false); } catch (OperationCanceledException) { }
+				try { await monitor.ConfigureAwait(false); } catch (OperationCanceledException) { }
 			}
 		}
 		finally
@@ -52,19 +54,86 @@ internal static class Program
 		}
 	}
 
-	private static async Task WatchManagedStopAsync(CancellationTokenSource shutdown, CancellationToken cancellationToken)
+	private static async Task MonitorManagedLifecycleAsync(
+		RuntimeHostProcess process,
+		RuntimeHostProcessOptions options,
+		CancellationTokenSource shutdown,
+		CancellationToken cancellationToken)
 	{
-		var stopFile = Environment.GetEnvironmentVariable("RTAIME_HOST_STOP_FILE");
-		if (string.IsNullOrWhiteSpace(stopFile)) return;
-		var path = Path.GetFullPath(stopFile);
-		while (!cancellationToken.IsCancellationRequested && !shutdown.IsCancellationRequested)
+		var readinessValue = Environment.GetEnvironmentVariable("RTAIME_HOST_READINESS_FILE");
+		var stopValue = Environment.GetEnvironmentVariable("RTAIME_HOST_STOP_FILE");
+		if (string.IsNullOrWhiteSpace(readinessValue) && string.IsNullOrWhiteSpace(stopValue)) return;
+
+		var readinessPath = string.IsNullOrWhiteSpace(readinessValue) ? null : Path.GetFullPath(readinessValue);
+		var stopPath = string.IsNullOrWhiteSpace(stopValue) ? null : Path.GetFullPath(stopValue);
+		PrepareReadinessPath(readinessPath);
+
+		var publishedReady = false;
+		try
 		{
-			if (File.Exists(path))
+			while (!cancellationToken.IsCancellationRequested && !shutdown.IsCancellationRequested)
 			{
-				shutdown.Cancel();
-				return;
+				if (stopPath is not null && File.Exists(stopPath))
+				{
+					shutdown.Cancel();
+					break;
+				}
+
+				var lifecycle = process.Lifecycle;
+				var ready = lifecycle.State == RuntimeHostProcessState.Ready &&
+					lifecycle.Health == RuntimeHostHealthState.Healthy &&
+					process.IpcServer?.Running == true;
+
+				if (readinessPath is not null && ready && !publishedReady)
+				{
+					var payload = new
+					{
+						copyright = "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+						schemaVersion = "1.0",
+						host = "RuntimeHost",
+						processId = Environment.ProcessId,
+						state = lifecycle.State.ToString().ToUpperInvariant(),
+						health = lifecycle.Health.ToString().ToUpperInvariant(),
+						endpoint = options.ListenEndpoint,
+						readyAtUtc = DateTimeOffset.UtcNow
+					};
+					WriteJsonAtomic(readinessPath, payload);
+					publishedReady = true;
+				}
+				else if (readinessPath is not null && !ready && publishedReady)
+				{
+					DeleteManagedFile(readinessPath);
+					publishedReady = false;
+				}
+
+				await Task.Delay(100, cancellationToken).ConfigureAwait(false);
 			}
-			await Task.Delay(100, cancellationToken).ConfigureAwait(false);
 		}
+		finally
+		{
+			DeleteManagedFile(readinessPath);
+		}
+	}
+
+	private static void PrepareReadinessPath(string? path)
+	{
+		if (path is null) return;
+		var directory = Path.GetDirectoryName(path);
+		if (!string.IsNullOrWhiteSpace(directory)) Directory.CreateDirectory(directory);
+		DeleteManagedFile(path);
+	}
+
+	private static void WriteJsonAtomic(string path, object value)
+	{
+		var temporary = $"{path}.{Guid.NewGuid():N}.tmp";
+		var json = JsonSerializer.Serialize(value, new JsonSerializerOptions { WriteIndented = true });
+		File.WriteAllText(temporary, json + Environment.NewLine);
+		File.Move(temporary, path, overwrite: true);
+	}
+
+	private static void DeleteManagedFile(string? path)
+	{
+		if (string.IsNullOrWhiteSpace(path)) return;
+		try { if (File.Exists(path)) File.Delete(path); } catch (IOException) { }
 	}
 }
