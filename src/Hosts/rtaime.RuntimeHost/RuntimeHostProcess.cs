@@ -222,6 +222,9 @@ public sealed class RuntimeHostProcess
 	public bool RuntimeDisposed => _runtimeDisposed;
 	public V1RuntimeHostSnapshot? FinalRuntimeSnapshot => _finalRuntimeSnapshot;
 	public MediaIoVerticalSliceStatistics? MediaIoStatistics => _mediaIo?.Statistics;
+	public MediaIoPortStatus? MediaIoInputAStatus => _mediaIo?.InputAStatus;
+	public MediaIoPortStatus? MediaIoInputBStatus => _mediaIo?.InputBStatus;
+	public MediaIoPortStatus? MediaIoProgramOutputStatus => _mediaIo?.ProgramOutputStatus;
 	public TimingQualificationSnapshot TimingQualification => _timingProbe.Snapshot(_timingClock.Elapsed);
 
 	public async Task<RuntimeHostExitCode> RunAsync(CancellationToken cancellationToken)
@@ -405,11 +408,12 @@ public sealed class RuntimeHostProcess
 
 	private static V1TimingHealthState MapTimingHealth(TimingQualificationState state) => state switch
 	{
+		TimingQualificationState.Recovering => V1TimingHealthState.Recovering,
 		TimingQualificationState.Healthy => V1TimingHealthState.Healthy,
 		TimingQualificationState.Degraded => V1TimingHealthState.Degraded,
 		TimingQualificationState.Unstable => V1TimingHealthState.Unstable,
 		TimingQualificationState.Lost => V1TimingHealthState.Lost,
-		_ => V1TimingHealthState.Recovering
+		_ => throw new InvalidOperationException($"Unsupported timing qualification state '{state}'.")
 	};
 
 	private sealed class NullProgramRecordingWriter : IProgramRecordingWriter
