@@ -1,6 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 using rtaime.Core;
+using rtaime.Media;
 using rtaime.Media.Contracts;
 using rtaime.Recording;
 
@@ -35,6 +36,12 @@ public enum RuntimeHostExitCode
 	UnexpectedFailure = 10
 }
 
+public enum RuntimeMediaIoMode
+{
+	Virtual = 1,
+	Native = 2
+}
+
 public sealed record RuntimeHostLifecycleSnapshot(
 	RuntimeHostProcessState State,
 	RuntimeHostHealthState Health,
@@ -46,7 +53,9 @@ public sealed record RuntimeHostProcessOptions(
 	MediaSourceId SourceBId,
 	VideoFormat Format,
 	string ListenEndpoint,
-	TimeSpan ShutdownTimeout)
+	TimeSpan ShutdownTimeout,
+	RuntimeMediaIoMode MediaIoMode = RuntimeMediaIoMode.Virtual,
+	bool RequireExternalReference = false)
 {
 	public static RuntimeHostProcessOptions Default => new(
 		new MediaSourceId(Identity.Parse("70000000-0000-0000-0000-00000000000a")),
@@ -68,7 +77,9 @@ public sealed record RuntimeHostProcessOptions(
 			new MediaSourceId(ParseIdentity(Get(args, environment, "source-b-id", "RTAIME_RUNTIME_SOURCE_B_ID", defaults.SourceBId.ToString()), "source-b-id")),
 			ParseFormat(Get(args, environment, "format", "RTAIME_RUNTIME_FORMAT", "1080p50")),
 			Get(args, environment, "listen-endpoint", "RTAIME_RUNTIME_ENDPOINT", defaults.ListenEndpoint),
-			TimeSpan.FromMilliseconds(ParsePositiveInt(Get(args, environment, "shutdown-timeout-ms", "RTAIME_RUNTIME_SHUTDOWN_TIMEOUT_MS", ((int)defaults.ShutdownTimeout.TotalMilliseconds).ToString()), "shutdown-timeout-ms")));
+			TimeSpan.FromMilliseconds(ParsePositiveInt(Get(args, environment, "shutdown-timeout-ms", "RTAIME_RUNTIME_SHUTDOWN_TIMEOUT_MS", ((int)defaults.ShutdownTimeout.TotalMilliseconds).ToString()), "shutdown-timeout-ms")),
+			ParseMediaIoMode(Get(args, environment, "media-io", "RTAIME_RUNTIME_MEDIA_IO", "virtual")),
+			ParseBoolean(Get(args, environment, "require-external-reference", "RTAIME_RUNTIME_REQUIRE_EXTERNAL_REFERENCE", "false"), "require-external-reference"));
 	}
 
 	public void Validate()
@@ -83,6 +94,10 @@ public sealed record RuntimeHostProcessOptions(
 			throw new ArgumentException("RuntimeHost listen endpoint is required.", nameof(ListenEndpoint));
 		if (ShutdownTimeout <= TimeSpan.Zero)
 			throw new ArgumentOutOfRangeException(nameof(ShutdownTimeout));
+		if (!Enum.IsDefined(typeof(RuntimeMediaIoMode), MediaIoMode))
+			throw new ArgumentOutOfRangeException(nameof(MediaIoMode));
+		if (RequireExternalReference && MediaIoMode != RuntimeMediaIoMode.Native)
+			throw new ArgumentException("External reference may be required only when native Media I/O is selected.", nameof(RequireExternalReference));
 	}
 
 	private static string Get(
@@ -120,6 +135,20 @@ public sealed record RuntimeHostProcessOptions(
 		_ => throw new ArgumentException("Configuration 'format' must be '1080p50' or '1080p59.94'.", "format")
 	};
 
+	private static RuntimeMediaIoMode ParseMediaIoMode(string value) => value.Trim().ToLowerInvariant() switch
+	{
+		"virtual" => RuntimeMediaIoMode.Virtual,
+		"native" => RuntimeMediaIoMode.Native,
+		_ => throw new ArgumentException("Configuration 'media-io' must be 'virtual' or 'native'.", "media-io")
+	};
+
+	private static bool ParseBoolean(string value, string key)
+	{
+		if (!bool.TryParse(value, out var parsed))
+			throw new ArgumentException($"Configuration '{key}' must be 'true' or 'false'.", key);
+		return parsed;
+	}
+
 	private static int ParsePositiveInt(string value, string key)
 	{
 		if (!int.TryParse(value, out var parsed) || parsed <= 0)
@@ -145,6 +174,7 @@ public sealed class RuntimeHostProcess
 		DateTimeOffset.UtcNow);
 	private int _runStarted;
 	private V1RuntimeHostService? _runtime;
+	private RuntimeMediaIoVerticalSlice? _mediaIo;
 	private RuntimeHostIpcServer? _ipcServer;
 	private RuntimeHostMonitoringServer? _monitoringServer;
 	private Task? _mediaLoop;
@@ -180,6 +210,7 @@ public sealed class RuntimeHostProcess
 	public string MonitoringEndpoint => $"{_options.ListenEndpoint}.monitor";
 	public bool RuntimeDisposed => _runtimeDisposed;
 	public V1RuntimeHostSnapshot? FinalRuntimeSnapshot => _finalRuntimeSnapshot;
+	public MediaIoVerticalSliceStatistics? MediaIoStatistics => _mediaIo?.Statistics;
 
 	public async Task<RuntimeHostExitCode> RunAsync(CancellationToken cancellationToken)
 	{
@@ -194,11 +225,31 @@ public sealed class RuntimeHostProcess
 				?? throw new InvalidOperationException("Recording writer factory returned null.");
 			_runtime = _runtimeFactory(_options, writer)
 				?? throw new InvalidOperationException("Runtime factory returned null.");
+
+			if (_options.MediaIoMode == RuntimeMediaIoMode.Native)
+			{
+				var adapter = new NativeMediaIoProviderAdapter();
+				try
+				{
+					_mediaIo = new RuntimeMediaIoVerticalSlice(
+						_runtime,
+						adapter,
+						_options.SourceAId,
+						_options.SourceBId,
+						_options.RequireExternalReference);
+				}
+				catch
+				{
+					await adapter.DisposeAsync().ConfigureAwait(false);
+					throw;
+				}
+			}
+
 			_ipcServer = new RuntimeHostIpcServer(_options.ListenEndpoint, () => _runtime);
 			_monitoringServer = new RuntimeHostMonitoringServer(MonitoringEndpoint, _runtime.MonitoringHub);
 			await _ipcServer.StartAsync(cancellationToken).ConfigureAwait(false);
 			await _monitoringServer.StartAsync(cancellationToken).ConfigureAwait(false);
-			_mediaLoop = RunMediaLoopAsync(_runtime, cancellationToken);
+			_mediaLoop = RunMediaLoopAsync(_runtime, _mediaIo, cancellationToken);
 		}
 		catch (ArgumentException exception)
 		{
@@ -213,7 +264,10 @@ public sealed class RuntimeHostProcess
 			return RuntimeHostExitCode.StartupFailure;
 		}
 
-		Update(RuntimeHostProcessState.Ready, RuntimeHostHealthState.Healthy, $"RuntimeHost is ready on '{_options.ListenEndpoint}' with monitoring on '{MonitoringEndpoint}'.");
+		Update(
+			RuntimeHostProcessState.Ready,
+			RuntimeHostHealthState.Healthy,
+			$"RuntimeHost is ready on '{_options.ListenEndpoint}' with monitoring on '{MonitoringEndpoint}' and Media I/O mode '{_options.MediaIoMode}'.");
 
 		try
 		{
@@ -232,14 +286,19 @@ public sealed class RuntimeHostProcess
 		return await StopAsync().ConfigureAwait(false);
 	}
 
-	private async Task RunMediaLoopAsync(V1RuntimeHostService runtime, CancellationToken cancellationToken)
+	private static async Task RunMediaLoopAsync(
+		V1RuntimeHostService runtime,
+		RuntimeMediaIoVerticalSlice? mediaIo,
+		CancellationToken cancellationToken)
 	{
 		var framePeriod = TimeSpan.FromSeconds(runtime.Format.FrameRate.Denominator / (double)runtime.Format.FrameRate.Numerator);
 		using var timer = new PeriodicTimer(framePeriod);
 		while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
 		{
+			mediaIo?.PumpInputs();
 			if (!runtime.HasCommittedExecution) continue;
-			runtime.ProcessNextBoundary();
+			var boundary = runtime.ProcessNextBoundary();
+			mediaIo?.SubmitProgram(boundary);
 		}
 	}
 
@@ -254,6 +313,9 @@ public sealed class RuntimeHostProcess
 
 			if (_ipcServer is not null)
 				await _ipcServer.DisposeAsync().AsTask().WaitAsync(timeout.Token).ConfigureAwait(false);
+
+			_mediaIo?.Dispose();
+			_mediaIo = null;
 
 			if (_runtime is not null)
 			{
@@ -292,6 +354,13 @@ public sealed class RuntimeHostProcess
 		{
 			if (_ipcServer is not null)
 				await _ipcServer.DisposeAsync().ConfigureAwait(false);
+		}
+		catch { }
+
+		try
+		{
+			_mediaIo?.Dispose();
+			_mediaIo = null;
 		}
 		catch { }
 

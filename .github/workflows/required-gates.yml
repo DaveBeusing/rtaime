@@ -124,6 +124,10 @@ jobs:
         shell: pwsh
         run: ./build/quality/Test-MediaIoFoundationPolicy.ps1
 
+      - name: Verify media I/O vertical slice policy
+        shell: pwsh
+        run: ./build/quality/Test-MediaIoVerticalSlicePolicy.ps1
+
       - name: Restore
         run: dotnet restore rtaime.slnx
 
@@ -177,6 +181,35 @@ jobs:
 
       - name: Build provider and host graph
         run: dotnet build rtaime.slnx --configuration Release --no-restore
+
+      - name: Build pinned native Media I/O provider
+        shell: pwsh
+        run: |
+          $pin = Get-Content -LiteralPath ./native/Providers/AjaNtv2/libajantv2.version.json -Raw | ConvertFrom-Json
+          if ([string]::IsNullOrWhiteSpace([string]$pin.repository)) { throw "Pinned libajantv2 repository is missing." }
+          if ([string]$pin.commit -notmatch '^[0-9a-f]{40}$') { throw "Pinned libajantv2 commit is invalid." }
+
+          $sdkRoot = Join-Path $env:RUNNER_TEMP "rtaime-libajantv2"
+          if (Test-Path -LiteralPath $sdkRoot) { Remove-Item -LiteralPath $sdkRoot -Recurse -Force }
+          git clone --filter=blob:none ([string]$pin.repository) $sdkRoot
+          if ($LASTEXITCODE -ne 0) { throw "Unable to clone pinned libajantv2 repository." }
+          git -C $sdkRoot checkout --detach ([string]$pin.commit)
+          if ($LASTEXITCODE -ne 0) { throw "Unable to checkout pinned libajantv2 commit." }
+          $resolved = (git -C $sdkRoot rev-parse HEAD).Trim()
+          if ($resolved -ne [string]$pin.commit) { throw "Resolved libajantv2 commit '$resolved' differs from pin '$($pin.commit)'." }
+
+          $nativeBuild = Join-Path $PWD "artifacts/native-provider-smoke"
+          cmake -S native/Providers/AjaNtv2 -B $nativeBuild -A x64 `
+            -DAJA_NTV2_ROOT="$sdkRoot" `
+            -DRTAIME_AJA_SDK_REVISION="$resolved"
+          if ($LASTEXITCODE -ne 0) { throw "Native Media I/O configure failed." }
+          cmake --build $nativeBuild --config Release
+          if ($LASTEXITCODE -ne 0) { throw "Native Media I/O build failed." }
+
+          $dlls = @(Get-ChildItem -LiteralPath $nativeBuild -Filter rtaime_media_io.dll -File -Recurse)
+          if ($dlls.Count -ne 1) { throw "Expected exactly one rtaime_media_io.dll, found $($dlls.Count)." }
+          Write-Host "Native Media I/O provider compile PASS: $($dlls[0].FullName)"
+          Write-Host "libajantv2 commit: $resolved"
 
       - name: Provider integration smoke
         run: dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build

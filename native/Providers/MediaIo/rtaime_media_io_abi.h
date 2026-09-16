@@ -9,8 +9,9 @@ extern "C" {
 #endif
 
 #define RTAIME_MEDIA_IO_ABI_VERSION_MAJOR 1u
-#define RTAIME_MEDIA_IO_ABI_VERSION_MINOR 0u
+#define RTAIME_MEDIA_IO_ABI_VERSION_MINOR 1u
 #define RTAIME_MEDIA_IO_IDENTITY_BYTES 16u
+#define RTAIME_MEDIA_IO_TEXT_BYTES 128u
 
 typedef struct rtaime_media_io_provider rtaime_media_io_provider;
 typedef struct rtaime_media_io_session rtaime_media_io_session;
@@ -64,6 +65,13 @@ typedef struct rtaime_media_io_identity
 {
 	uint8_t bytes[RTAIME_MEDIA_IO_IDENTITY_BYTES];
 } rtaime_media_io_identity;
+
+typedef struct rtaime_media_io_provider_info
+{
+	char adapter_name[RTAIME_MEDIA_IO_TEXT_BYTES];
+	char driver_version[RTAIME_MEDIA_IO_TEXT_BYTES];
+	char sdk_revision[RTAIME_MEDIA_IO_TEXT_BYTES];
+} rtaime_media_io_provider_info;
 
 typedef struct rtaime_media_io_video_format
 {
@@ -137,6 +145,8 @@ typedef struct rtaime_media_io_output_frame
 	uint64_t opaque_surface_handle;
 	rtaime_media_io_identity surface_lease_id;
 	uint64_t audio_opaque_handle;
+	uint32_t audio_sample_count;
+	uint32_t audio_channel_count;
 } rtaime_media_io_output_frame;
 
 typedef struct rtaime_media_io_port_status
@@ -153,6 +163,10 @@ rtaime_media_io_result rtaime_media_io_create_provider(
 	rtaime_media_io_provider** provider);
 
 void rtaime_media_io_destroy_provider(rtaime_media_io_provider* provider);
+
+rtaime_media_io_result rtaime_media_io_get_provider_info(
+	rtaime_media_io_provider* provider,
+	rtaime_media_io_provider_info* info);
 
 rtaime_media_io_result rtaime_media_io_get_port_count(
 	rtaime_media_io_provider* provider,
