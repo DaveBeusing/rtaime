@@ -1,0 +1,97 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://rtaime.local/schemas/operations/v1/host-lifecycle-policy.schema.json",
+	"$comment": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+	"title": "rtaime Managed Host Lifecycle Policy v1",
+	"type": "object",
+	"additionalProperties": false,
+	"required": ["copyright", "schemaVersion", "platform", "authority", "endpoints", "startup", "shutdown", "restart", "readiness"],
+	"properties": {
+		"copyright": { "type": "string", "minLength": 1 },
+		"schemaVersion": { "const": "1.0" },
+		"platform": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["osFamily", "architecture", "rid"],
+			"properties": {
+				"osFamily": { "const": "Windows" },
+				"architecture": { "const": "x64" },
+				"rid": { "const": "win-x64" }
+			}
+		},
+		"authority": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["topLevelHost", "childSupervisionOwner", "managedChildren", "operatorClientManaged"],
+			"properties": {
+				"topLevelHost": { "const": "ControlHost" },
+				"childSupervisionOwner": { "const": "ControlHost" },
+				"managedChildren": {
+					"type": "array",
+					"minItems": 2,
+					"maxItems": 2,
+					"uniqueItems": true,
+					"items": { "enum": ["RuntimeHost", "AIHost"] }
+				},
+				"operatorClientManaged": { "const": false }
+			}
+		},
+		"endpoints": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["control", "runtime", "ai"],
+			"properties": {
+				"control": { "type": "string", "minLength": 1 },
+				"runtime": { "type": "string", "minLength": 1 },
+				"ai": { "type": "string", "minLength": 1 }
+			}
+		},
+		"startup": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["timeoutMs", "probeTimeoutMs", "probeIntervalMs", "childRestartBackoffMs", "childMaxStartAttempts", "requireControlReadyHealthy", "requireRuntimeSupervisorHealthy", "requireAiSupervisorHealthy", "requireAllNamedPipesReachable"],
+			"properties": {
+				"timeoutMs": { "type": "integer", "minimum": 1000 },
+				"probeTimeoutMs": { "type": "integer", "minimum": 1 },
+				"probeIntervalMs": { "type": "integer", "minimum": 1 },
+				"childRestartBackoffMs": { "type": "integer", "minimum": 0 },
+				"childMaxStartAttempts": { "type": "integer", "minimum": 1 },
+				"requireControlReadyHealthy": { "const": true },
+				"requireRuntimeSupervisorHealthy": { "const": true },
+				"requireAiSupervisorHealthy": { "const": true },
+				"requireAllNamedPipesReachable": { "const": true }
+			}
+		},
+		"shutdown": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["timeoutMs", "managedStopSignal", "fallbackKillAllowed", "fallbackKillIsPass"],
+			"properties": {
+				"timeoutMs": { "type": "integer", "minimum": 1000 },
+				"managedStopSignal": { "const": "FILE_SENTINEL" },
+				"fallbackKillAllowed": { "const": true },
+				"fallbackKillIsPass": { "const": false }
+			}
+		},
+		"restart": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["mode", "requireSuccessfulStopBeforeStart"],
+			"properties": {
+				"mode": { "const": "EXPLICIT_OPERATOR_ACTION" },
+				"requireSuccessfulStopBeforeStart": { "const": true }
+			}
+		},
+		"readiness": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["passRequiresAllServiceHosts", "runtimeReadinessOnPass", "productionPackageActivation", "automaticWindowsServiceRegistration"],
+			"properties": {
+				"passRequiresAllServiceHosts": { "const": true },
+				"runtimeReadinessOnPass": { "const": "PASS" },
+				"productionPackageActivation": { "const": "NOT_PERFORMED" },
+				"automaticWindowsServiceRegistration": { "const": false }
+			}
+		}
+	}
+}

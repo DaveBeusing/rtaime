@@ -35,6 +35,7 @@ public sealed record LocalProcessSupervisionOptions(
 	bool StopOwnedProcessOnDispose = true)
 {
 	public string AdditionalArguments { get; init; } = string.Empty;
+	public TimeSpan GracefulStopTimeout { get; init; } = TimeSpan.FromSeconds(10);
 
 	public void Validate()
 	{
@@ -46,6 +47,7 @@ public sealed record LocalProcessSupervisionOptions(
 		if (ProbeInterval <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(ProbeInterval));
 		if (RestartBackoff < TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(RestartBackoff));
 		if (MaxStartAttempts <= 0) throw new ArgumentOutOfRangeException(nameof(MaxStartAttempts));
+		if (GracefulStopTimeout <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(GracefulStopTimeout));
 	}
 }
 
@@ -64,6 +66,7 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 	private CancellationTokenSource? _linkedStop;
 	private Task? _loop;
 	private Process? _ownedProcess;
+	private string? _ownedStopFilePath;
 	private bool _ownedProcessReady;
 	private int _startAttempts;
 	private LocalProcessSupervisionSnapshot _snapshot;
@@ -114,10 +117,13 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 		}
 
 		Process? owned;
+		string? stopFile;
 		lock (_gate)
 		{
 			owned = _ownedProcess;
+			stopFile = _ownedStopFilePath;
 			_ownedProcess = null;
+			_ownedStopFilePath = null;
 			_ownedProcessReady = false;
 		}
 		if (owned is not null)
@@ -125,13 +131,14 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 			try
 			{
 				if (_options.StopOwnedProcessOnDispose && !owned.HasExited)
-				{
-					owned.Kill(entireProcessTree: true);
-					await owned.WaitForExitAsync().ConfigureAwait(false);
-				}
+					await StopOwnedProcessAsync(owned, stopFile).ConfigureAwait(false);
 			}
 			catch (InvalidOperationException) { }
-			finally { owned.Dispose(); }
+			finally
+			{
+				owned.Dispose();
+				CleanupStopFile(stopFile);
+			}
 		}
 
 		Update(LocalProcessSupervisionState.Stopped, "Supervisor stopped.");
@@ -234,6 +241,9 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 		var hostArguments = $"--listen-endpoint={QuoteArgument(_options.Endpoint)}";
 		if (!string.IsNullOrWhiteSpace(_options.AdditionalArguments))
 			hostArguments += " " + _options.AdditionalArguments.Trim();
+		var stopDirectory = Path.Combine(Path.GetTempPath(), "rtaime", "supervision");
+		Directory.CreateDirectory(stopDirectory);
+		var stopFile = Path.Combine(stopDirectory, $"{_options.Name}-{Guid.NewGuid():N}.stop");
 		var startInfo = new ProcessStartInfo
 		{
 			FileName = isDll ? "dotnet" : fullPath,
@@ -242,12 +252,37 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 			UseShellExecute = false,
 			CreateNoWindow = true
 		};
+		startInfo.Environment["RTAIME_HOST_STOP_FILE"] = stopFile;
 		var process = Process.Start(startInfo)
 			?? throw new InvalidOperationException($"Failed to start supervised process '{_options.Name}'.");
 		lock (_gate)
 		{
 			_ownedProcess = process;
+			_ownedStopFilePath = stopFile;
 			_ownedProcessReady = false;
+		}
+	}
+
+	private async Task StopOwnedProcessAsync(Process process, string? stopFile)
+	{
+		if (!string.IsNullOrWhiteSpace(stopFile))
+		{
+			var directory = Path.GetDirectoryName(stopFile);
+			if (!string.IsNullOrWhiteSpace(directory)) Directory.CreateDirectory(directory);
+			File.WriteAllText(stopFile, $"stopRequestedAtUtc={DateTimeOffset.UtcNow:O}{Environment.NewLine}");
+			using var timeout = new CancellationTokenSource(_options.GracefulStopTimeout);
+			try
+			{
+				await process.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
+				return;
+			}
+			catch (OperationCanceledException) when (timeout.IsCancellationRequested) { }
+		}
+
+		if (!process.HasExited)
+		{
+			process.Kill(entireProcessTree: true);
+			await process.WaitForExitAsync().ConfigureAwait(false);
 		}
 	}
 
@@ -286,6 +321,7 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 	private void DisposeExitedOwnedProcess()
 	{
 		Process? process = null;
+		string? stopFile = null;
 		lock (_gate)
 		{
 			if (_ownedProcess is null) return;
@@ -295,10 +331,13 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 			}
 			catch (InvalidOperationException) { }
 			process = _ownedProcess;
+			stopFile = _ownedStopFilePath;
 			_ownedProcess = null;
+			_ownedStopFilePath = null;
 			_ownedProcessReady = false;
 		}
 		process.Dispose();
+		CleanupStopFile(stopFile);
 	}
 
 	private void Update(LocalProcessSupervisionState state, string detail)
@@ -323,6 +362,12 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 				detail,
 				DateTimeOffset.UtcNow);
 		}
+	}
+
+	private static void CleanupStopFile(string? stopFile)
+	{
+		if (string.IsNullOrWhiteSpace(stopFile)) return;
+		try { if (File.Exists(stopFile)) File.Delete(stopFile); } catch (IOException) { }
 	}
 
 	private static string QuoteArgument(string value) => value.Contains(' ') ? $"\"{value.Replace("\"", "\\\"")}\"" : value;

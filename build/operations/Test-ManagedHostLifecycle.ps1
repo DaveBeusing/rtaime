@@ -1,0 +1,72 @@
+# Copyright (c) Dave Beusing <david.beusing@gmail.com>.
+
+[CmdletBinding()]
+param(
+	[Parameter(Mandatory)]
+	[string]$BundlePath
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+
+function Assert-Condition {
+	param([Parameter(Mandatory)][bool]$Condition, [Parameter(Mandatory)][string]$Message)
+	if (-not $Condition) { throw $Message }
+}
+
+$repositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
+$bundle = [System.IO.Path]::GetFullPath($BundlePath)
+Assert-Condition ((Test-Path -LiteralPath $bundle -PathType Leaf) -or (Test-Path -LiteralPath $bundle -PathType Container)) "Qualification bundle was not found at '$bundle'."
+
+$root = Join-Path ([System.IO.Path]::GetTempPath()) ("rtaime-host-lifecycle-{0}" -f [Guid]::NewGuid().ToString('N'))
+$install = Join-Path $root 'install'
+$stateRoot = Join-Path $root 'state'
+$workRoot = Join-Path $root 'lifecycle'
+$instanceId = "qualification-$([Guid]::NewGuid().ToString('N'))"
+$lifecycle = $null
+
+try {
+	New-Item -ItemType Directory -Path $root -Force | Out-Null
+	& (Join-Path $repositoryRoot 'build/release/Install-OfflineRelease.ps1') -BundlePath $bundle -InstallPath $install
+	$lifecycle = Join-Path $install 'tools/Invoke-ManagedHostLifecycle.ps1'
+	Assert-Condition (Test-Path -LiteralPath $lifecycle -PathType Leaf) "Installed qualification bundle does not contain managed lifecycle controller."
+
+	$start = & $lifecycle -Action Start -InstallPath $install -StateRoot $stateRoot -WorkPath $workRoot -InstanceId $instanceId -QualificationMode
+	Assert-Condition ([string]$start.status -eq 'PASS') "Managed lifecycle Start did not return PASS."
+	Assert-Condition ([string]$start.runtimeReadiness -eq 'PASS') "Managed lifecycle Start did not qualify runtime readiness."
+	Assert-Condition ([int]$start.controlProcessId -gt 0 -and [int]$start.runtimeProcessId -gt 0 -and [int]$start.aiProcessId -gt 0) "Managed lifecycle Start did not record all service-host process identities."
+
+	$statusBeforeRestart = & $lifecycle -Action Status -InstallPath $install -WorkPath $workRoot -InstanceId $instanceId -QualificationMode
+	Assert-Condition ([string]$statusBeforeRestart.status -eq 'PASS') "Managed lifecycle Status before restart did not return PASS."
+	Assert-Condition ([string]$statusBeforeRestart.runtimeReadiness -eq 'PASS') "Managed lifecycle Status before restart did not return runtimeReadiness PASS."
+
+	$restart = & $lifecycle -Action Restart -InstallPath $install -StateRoot $stateRoot -WorkPath $workRoot -InstanceId $instanceId -QualificationMode
+	Assert-Condition ([string]$restart.status -eq 'PASS') "Managed lifecycle Restart did not return PASS."
+	Assert-Condition ([string]$restart.runtimeReadiness -eq 'PASS') "Managed lifecycle Restart did not re-qualify runtime readiness."
+	Assert-Condition ([int]$restart.controlProcessId -ne [int]$start.controlProcessId) "Managed lifecycle Restart did not create a new ControlHost process identity."
+
+	$statusAfterRestart = & $lifecycle -Action Status -InstallPath $install -WorkPath $workRoot -InstanceId $instanceId -QualificationMode
+	Assert-Condition ([string]$statusAfterRestart.status -eq 'PASS') "Managed lifecycle Status after restart did not return PASS."
+	Assert-Condition ([string]$statusAfterRestart.runtimeReadiness -eq 'PASS') "Managed lifecycle Status after restart did not return runtimeReadiness PASS."
+
+	$stop = & $lifecycle -Action Stop -InstallPath $install -WorkPath $workRoot -InstanceId $instanceId -QualificationMode
+	Assert-Condition ([string]$stop.status -eq 'PASS') "Managed lifecycle Stop did not return PASS."
+	Assert-Condition ($stop.graceful -eq $true) "Managed lifecycle Stop was not graceful."
+	Assert-Condition (-not (Test-Path -LiteralPath (Join-Path $workRoot 'lifecycle-state.json') -PathType Leaf)) "Lifecycle state remained after successful Stop."
+
+	$stoppedStatus = & $lifecycle -Action Status -InstallPath $install -WorkPath $workRoot -InstanceId $instanceId -QualificationMode
+	Assert-Condition ([string]$stoppedStatus.status -eq 'STOPPED') "Managed lifecycle Status after Stop did not report STOPPED."
+	Assert-Condition ([string]$stoppedStatus.runtimeReadiness -eq 'NOT_APPLICABLE') "Stopped lifecycle must not report runtime readiness PASS."
+
+	Write-Host 'Managed host lifecycle qualification PASS'
+	Write-Host 'Sequence: Start -> Status -> Restart -> Status -> Stop'
+	Write-Host 'Runtime readiness observed: PASS while running'
+	Write-Host 'Shutdown observed: graceful'
+} finally {
+	if ($null -ne $lifecycle -and (Test-Path -LiteralPath $lifecycle -PathType Leaf) -and (Test-Path -LiteralPath (Join-Path $workRoot 'lifecycle-state.json') -PathType Leaf)) {
+		try { & $lifecycle -Action Stop -InstallPath $install -WorkPath $workRoot -InstanceId $instanceId -QualificationMode | Out-Null } catch { }
+	}
+	for ($attempt = 0; $attempt -lt 10 -and (Test-Path -LiteralPath $root); $attempt++) {
+		try { Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction Stop } catch { Start-Sleep -Milliseconds 200 }
+	}
+}

@@ -1,0 +1,28 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://rtaime.local/schemas/operations/v1/operational-readiness-receipt.schema.json",
+	"$comment": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+	"title": "rtaime Operational Readiness Receipt v1",
+	"type": "object",
+	"additionalProperties": true,
+	"required": ["copyright", "schemaVersion", "status", "runtimeReadiness", "installPath", "instanceId"],
+	"properties": {
+		"copyright": { "type": "string", "minLength": 1 },
+		"schemaVersion": { "const": "1.0" },
+		"operation": { "enum": ["START", "STOP"] },
+		"status": { "enum": ["PASS", "FAIL", "STOPPED", "NOT_APPLICABLE"] },
+		"runtimeReadiness": { "enum": ["PASS", "FAIL", "NOT_APPLICABLE", "UNVERIFIED"] },
+		"installPath": { "type": "string", "minLength": 1 },
+		"instanceId": { "type": "string", "minLength": 1 },
+		"productVersion": { "type": "string" },
+		"sourceCommit": { "type": "string" },
+		"controlProcessId": { "type": ["integer", "null"], "minimum": 1 },
+		"runtimeProcessId": { "type": ["integer", "null"], "minimum": 1 },
+		"aiProcessId": { "type": ["integer", "null"], "minimum": 1 },
+		"operatorClientManaged": { "type": "boolean" },
+		"productionPackageActivation": { "enum": ["NOT_PERFORMED"] },
+		"graceful": { "type": "boolean" },
+		"completedAtUtc": { "type": "string", "format": "date-time" },
+		"checkedAtUtc": { "type": "string", "format": "date-time" }
+	}
+}

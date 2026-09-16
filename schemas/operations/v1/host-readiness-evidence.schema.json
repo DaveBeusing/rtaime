@@ -1,0 +1,35 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://rtaime.local/schemas/operations/v1/host-readiness-evidence.schema.json",
+	"$comment": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+	"title": "rtaime Host Readiness Evidence v1",
+	"type": "object",
+	"additionalProperties": false,
+	"required": ["copyright", "schemaVersion", "host", "processId", "state", "health", "controlEndpoint", "runtimeEndpoint", "aiEndpoint", "runtimeSupervision", "aiSupervision", "readyAtUtc"],
+	"properties": {
+		"copyright": { "type": "string", "minLength": 1 },
+		"schemaVersion": { "const": "1.0" },
+		"host": { "const": "ControlHost" },
+		"processId": { "type": "integer", "minimum": 1 },
+		"state": { "const": "READY" },
+		"health": { "const": "HEALTHY" },
+		"controlEndpoint": { "type": "string", "minLength": 1 },
+		"runtimeEndpoint": { "type": "string", "minLength": 1 },
+		"aiEndpoint": { "type": "string", "minLength": 1 },
+		"runtimeSupervision": { "$ref": "#/$defs/supervision" },
+		"aiSupervision": { "$ref": "#/$defs/supervision" },
+		"readyAtUtc": { "type": "string", "format": "date-time" }
+	},
+	"$defs": {
+		"supervision": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["state", "processId", "startAttempts"],
+			"properties": {
+				"state": { "const": "HEALTHY" },
+				"processId": { "type": "integer", "minimum": 1 },
+				"startAttempts": { "type": "integer", "minimum": 1 }
+			}
+		}
+	}
+}
