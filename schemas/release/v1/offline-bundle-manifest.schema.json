@@ -1,0 +1,91 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://rtaime.local/schemas/release/v1/offline-bundle-manifest.schema.json",
+	"$comment": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+	"title": "rtaime Offline Software Release Bundle Manifest v1",
+	"type": "object",
+	"additionalProperties": false,
+	"required": [
+		"copyright",
+		"schemaVersion",
+		"bundleType",
+		"packageFormatVersion",
+		"bundleName",
+		"productName",
+		"productVersion",
+		"releaseStage",
+		"platform",
+		"sourceCommit",
+		"buildCommit",
+		"buildId",
+		"releaseTrust",
+		"runtimeRequirementsPath",
+		"payloadHashAlgorithm",
+		"createdAtUtc",
+		"payload"
+	],
+	"properties": {
+		"copyright": { "type": "string", "minLength": 1 },
+		"schemaVersion": { "const": "1.0" },
+		"bundleType": { "const": "SOFTWARE_RELEASE" },
+		"packageFormatVersion": { "const": "1.0" },
+		"bundleName": { "type": "string", "minLength": 1 },
+		"productName": { "const": "rtaime" },
+		"productVersion": { "type": "string", "minLength": 1 },
+		"releaseStage": {
+			"enum": ["DEV", "PREVIEW", "RELEASE_CANDIDATE", "STABLE", "VALIDATED", "CERTIFIED"]
+		},
+		"platform": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["osFamily", "architecture", "rid"],
+			"properties": {
+				"osFamily": { "const": "Windows" },
+				"architecture": { "const": "x64" },
+				"rid": { "const": "win-x64" }
+			}
+		},
+		"sourceCommit": { "type": "string", "pattern": "^[0-9a-fA-F]{40,64}$" },
+		"buildCommit": { "type": "string", "pattern": "^[0-9a-fA-F]{40,64}$" },
+		"buildId": { "type": "string", "minLength": 1 },
+		"releaseTrust": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["releaseRecordId", "releaseKeyFingerprint", "releaseSignerClass"],
+			"properties": {
+				"releaseRecordId": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+				"releaseKeyFingerprint": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+				"releaseSignerClass": { "enum": ["TEST_EPHEMERAL", "EXTERNAL_CONTROLLED"] }
+			}
+		},
+		"runtimeRequirementsPath": { "const": "metadata/runtime-requirements.json" },
+		"payloadHashAlgorithm": { "const": "SHA256" },
+		"createdAtUtc": { "type": "string", "format": "date-time" },
+		"payload": {
+			"type": "array",
+			"minItems": 1,
+			"items": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["path", "role", "size", "sha256"],
+				"properties": {
+					"path": { "type": "string", "minLength": 1, "pattern": "^[^\\\\/](?:.*[^/])?$" },
+					"role": {
+						"enum": [
+							"PRODUCT_PAYLOAD",
+							"RELEASE_EVIDENCE",
+							"SCHEMA",
+							"DOCUMENTATION",
+							"OFFLINE_TOOL",
+							"TRUST_METADATA",
+							"RUNTIME_METADATA",
+							"PACKAGE_METADATA"
+						]
+					},
+					"size": { "type": "integer", "minimum": 0 },
+					"sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+				}
+			}
+		}
+	}
+}
