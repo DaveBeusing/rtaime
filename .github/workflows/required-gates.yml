@@ -202,6 +202,10 @@ jobs:
           $resolved = (git -C $sdkRoot rev-parse HEAD).Trim()
           if ($resolved -ne [string]$pin.commit) { throw "Resolved libajantv2 commit '$resolved' differs from pin '$($pin.commit)'." }
 
+          ./build/native/Apply-AjaNtv2BuildCompatibility.ps1 `
+            -SdkRoot $sdkRoot `
+            -ExpectedCommit $resolved
+
           $nativeBuild = Join-Path $PWD "artifacts/native-provider-smoke"
           cmake -S native/Providers/AjaNtv2 -B $nativeBuild -A x64 `
             -DAJA_NTV2_ROOT="$sdkRoot" `
