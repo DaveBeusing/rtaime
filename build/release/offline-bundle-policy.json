@@ -35,6 +35,8 @@
 		"build/release/Invoke-OfflinePreflight.ps1",
 		"build/release/Install-OfflineRelease.ps1",
 		"build/update/update-policy.json",
+		"build/update/coordinated-upgrade-policy.json",
+		"build/state/state-upgrade-catalog.json",
 		"build/update/Get-InstalledReleaseState.ps1",
 		"build/update/Resolve-UpdateDiscovery.ps1",
 		"build/update/Get-VerifiedUpdateCandidate.ps1",
@@ -42,6 +44,7 @@
 		"build/update/New-UpdatePlan.ps1",
 		"build/update/Invoke-AtomicSoftwareReplacement.ps1",
 		"build/update/Invoke-SoftwareRollback.ps1",
+		"build/update/Invoke-CoordinatedUpgrade.ps1",
 		"build/update/Invoke-VerifiedUpdate.ps1"
 	],
 	"rootDocumentation": [

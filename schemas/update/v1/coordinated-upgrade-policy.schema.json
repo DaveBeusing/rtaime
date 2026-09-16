@@ -1,0 +1,62 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://rtaime.local/schemas/update/v1/coordinated-upgrade-policy.schema.json",
+	"$comment": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+	"title": "rtaime Coordinated Upgrade Policy v1",
+	"type": "object",
+	"additionalProperties": false,
+	"required": [
+		"copyright",
+		"schemaVersion",
+		"requireExplicitQuiescenceAcknowledgement",
+		"productionStateCatalog",
+		"qualificationExternalCatalogAllowed",
+		"stateRootRequired",
+		"workStateSuffix",
+		"recoveryStateSuffix",
+		"preBackupBeforeSoftwareActivation",
+		"migrationAfterSoftwareActivation",
+		"retainPreUpgradeSnapshotsAfterSuccess",
+		"directSoftwareRollbackWhenStateChanged",
+		"failureRecoveryOrder",
+		"processLifecycle",
+		"productionPackageActivation"
+	],
+	"properties": {
+		"copyright": { "type": "string", "minLength": 1 },
+		"schemaVersion": { "const": "1.0" },
+		"requireExplicitQuiescenceAcknowledgement": { "const": true },
+		"productionStateCatalog": { "const": "tools/state-upgrade-catalog.json" },
+		"qualificationExternalCatalogAllowed": { "const": true },
+		"stateRootRequired": { "const": true },
+		"workStateSuffix": { "const": ".coordinated-update-state" },
+		"recoveryStateSuffix": { "const": ".upgrade-recovery" },
+		"preBackupBeforeSoftwareActivation": { "const": true },
+		"migrationAfterSoftwareActivation": { "const": true },
+		"retainPreUpgradeSnapshotsAfterSuccess": { "const": true },
+		"directSoftwareRollbackWhenStateChanged": { "const": "BLOCKED" },
+		"failureRecoveryOrder": {
+			"type": "array",
+			"prefixItems": [
+				{ "const": "SOFTWARE_ROLLBACK" },
+				{ "const": "VERIFY_RESTORED_SOFTWARE" },
+				{ "const": "RESTORE_STATE_REVERSE_ORDER" },
+				{ "const": "VERIFY_RESTORED_STATE" }
+			],
+			"items": false,
+			"minItems": 4,
+			"maxItems": 4
+		},
+		"processLifecycle": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["automaticStop", "automaticStart", "runtimeReadiness"],
+			"properties": {
+				"automaticStop": { "const": false },
+				"automaticStart": { "const": false },
+				"runtimeReadiness": { "const": "UNVERIFIED_AFTER_COORDINATED_COMMIT" }
+			}
+		},
+		"productionPackageActivation": { "const": "OUT_OF_SCOPE" }
+	}
+}

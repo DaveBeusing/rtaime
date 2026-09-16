@@ -6,6 +6,9 @@ internal static class Program
 {
 	private static async Task<int> Main(string[] args)
 	{
+		if (StateMaintenanceCli.IsRequested(args))
+			return await StateMaintenanceCli.RunAsync(args[1..], CancellationToken.None).ConfigureAwait(false);
+
 		using var shutdown = new CancellationTokenSource();
 		ConsoleCancelEventHandler consoleHandler = (_, eventArgs) =>
 		{

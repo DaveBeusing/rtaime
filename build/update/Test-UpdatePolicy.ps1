@@ -46,12 +46,15 @@ Assert-Condition ($policy.replacement.requireExplicitQuiescenceAcknowledgement -
 Assert-Condition ([string]$policy.replacement.rollbackSlotSuffix -eq '.rollback') "Unexpected rollback slot suffix."
 Assert-Condition ($policy.replacement.retainRollbackAfterSuccess -eq $true) "Successful updates must retain one rollback slot."
 Assert-Condition ($policy.replacement.failIfRollbackSlotExists -eq $true) "Managed updates must fail closed when a rollback slot already exists."
-Assert-Condition ([string]$policy.replacement.persistentStateMigration -eq 'NOT_IMPLEMENTED') "AP-23 must not claim persistent-state migration."
+Assert-Condition ([string]$policy.replacement.persistentStateMigration -eq 'COORDINATED_ONLY') "Persistent-state migration must be available only through coordinated upgrade orchestration."
+Assert-Condition ([string]$policy.replacement.coordinatedRecoverySuffix -eq '.upgrade-recovery') "Unexpected coordinated recovery suffix."
 
 $bundlePolicy = Get-Content -LiteralPath $bundlePolicyPath -Raw | ConvertFrom-Json
 $requiredTools = @(
 	'build/release/Test-OfflineReleaseBundle.ps1',
 	'build/update/update-policy.json',
+	'build/update/coordinated-upgrade-policy.json',
+	'build/state/state-upgrade-catalog.json',
 	'build/update/Get-InstalledReleaseState.ps1',
 	'build/update/Resolve-UpdateDiscovery.ps1',
 	'build/update/Get-VerifiedUpdateCandidate.ps1',
@@ -59,6 +62,7 @@ $requiredTools = @(
 	'build/update/New-UpdatePlan.ps1',
 	'build/update/Invoke-AtomicSoftwareReplacement.ps1',
 	'build/update/Invoke-SoftwareRollback.ps1',
+	'build/update/Invoke-CoordinatedUpgrade.ps1',
 	'build/update/Invoke-VerifiedUpdate.ps1'
 )
 foreach ($tool in $requiredTools) {
@@ -68,21 +72,24 @@ foreach ($tool in $requiredTools) {
 $requiredGates = Get-Content -LiteralPath $requiredGatesPath -Raw
 Assert-Condition ($requiredGates -match 'Test-UpdatePolicy\.ps1') "Quality gate must verify update policy."
 Assert-Condition ($requiredGates -match 'Test-UpdateFoundation\.ps1') "Packaged E2E must qualify replacement/rollback mechanics."
+Assert-Condition ($requiredGates -match 'Test-CoordinatedUpgradePolicy\.ps1') "Quality gate must verify coordinated upgrade policy."
 
 $releaseWorkflow = Get-Content -LiteralPath $releaseWorkflowPath -Raw
-foreach ($forbidden in @('Invoke-VerifiedUpdate\.ps1', 'Invoke-AtomicSoftwareReplacement\.ps1', 'Invoke-SoftwareRollback\.ps1')) {
-	Assert-Condition ($releaseWorkflow -notmatch $forbidden) "Release publication workflow must not perform software updates or rollback."
+foreach ($forbidden in @('Invoke-VerifiedUpdate\.ps1', 'Invoke-CoordinatedUpgrade\.ps1', 'Invoke-AtomicSoftwareReplacement\.ps1', 'Invoke-SoftwareRollback\.ps1')) {
+	Assert-Condition ($releaseWorkflow -notmatch $forbidden) "Release publication workflow must not perform software updates, state migration or rollback."
 }
 
 $verifiedUpdatePath = Join-Path $PSScriptRoot 'Invoke-VerifiedUpdate.ps1'
 $verifiedUpdate = Get-Content -LiteralPath $verifiedUpdatePath -Raw
 Assert-Condition ($verifiedUpdate -match 'AcknowledgeProcessesStopped') "Managed update must require process-quiescence acknowledgement."
-Assert-Condition ($verifiedUpdate -notmatch '(?i)Start-ScheduledTask|Register-ScheduledTask|New-Service') "AP-23 must not install automatic background update scheduling or services."
+Assert-Condition ($verifiedUpdate -match 'Invoke-CoordinatedUpgrade\.ps1') "Managed production update must delegate to coordinated orchestration."
+Assert-Condition ($verifiedUpdate -match '\$StateRoot') "Managed production update must require persistent-state root context."
+Assert-Condition ($verifiedUpdate -notmatch '(?i)Start-ScheduledTask|Register-ScheduledTask|New-Service') "Managed update must not install automatic background update scheduling or services."
 
 Write-Host "Update policy verification PASS"
 Write-Host "Channels: PREVIEW → PREVIEW/STABLE; STABLE → STABLE"
 Write-Host "Production trust: required"
 Write-Host "Downgrade/reinstall: blocked"
 Write-Host "Rollback slot: retained"
-Write-Host "Persistent state migration: NOT_IMPLEMENTED"
+Write-Host "Persistent state migration: COORDINATED_ONLY"
 Write-Host "Automatic update scheduling: disabled"

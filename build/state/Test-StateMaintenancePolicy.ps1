@@ -21,14 +21,15 @@ $maintenancePath = Join-Path $repositoryRoot "src/Persistence/rtaime.Persistence
 $integrationTestsPath = Join-Path $repositoryRoot "tests/rtaime.Tests.Integration/PersistentStateRecoveryIntegrationTests.cs"
 $workflowPath = Join-Path $repositoryRoot ".github/workflows/required-gates.yml"
 $updatePolicyPath = Join-Path $repositoryRoot "build/update/update-policy.json"
+$coordinatorPath = Join-Path $repositoryRoot "build/update/Invoke-CoordinatedUpgrade.ps1"
 
-foreach ($path in @($policyPath, $maintenancePath, $integrationTestsPath, $workflowPath, $updatePolicyPath)) {
+foreach ($path in @($policyPath, $maintenancePath, $integrationTestsPath, $workflowPath, $updatePolicyPath, $coordinatorPath)) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required persistent-state maintenance file is missing: '$path'."
 }
 
 $policy = Get-Content -LiteralPath $policyPath -Raw | ConvertFrom-Json
 Assert-Condition ([string]$policy.schemaVersion -eq "1.0") "Unsupported state-maintenance policy schema version."
-Assert-Condition ([string]$policy.databaseFamily -eq "SQLITE") "AP-24 state-maintenance foundation must remain SQLite-scoped."
+Assert-Condition ([string]$policy.databaseFamily -eq "SQLITE") "State-maintenance foundation must remain SQLite-scoped."
 Assert-Condition ($policy.backup.requiredBeforeSchemaMutation -eq $true) "Schema mutation must require a prior backup."
 Assert-Condition ($policy.backup.overwriteExistingBackup -eq $false) "Existing backup evidence must never be overwritten implicitly."
 Assert-Condition ($policy.backup.verifyIntegrity -eq $true) "Backup integrity verification is mandatory."
@@ -46,9 +47,9 @@ Assert-Condition ($policy.recovery.restoreOnMigrationFailure -eq $true) "Migrati
 Assert-Condition ($policy.recovery.restoreOnPostMigrationVerificationFailure -eq $true) "Post-migration verification failure must restore the verified snapshot."
 Assert-Condition ($policy.recovery.verifyBackupBeforeRestore -eq $true) "Restore must verify backup evidence before replacement."
 Assert-Condition ($policy.recovery.verifyRestoredState -eq $true) "Restore must verify the activated state."
-Assert-Condition ([string]$policy.integration.softwareUpdateStateOrchestration -eq "EXPLICIT_ORCHESTRATION_REQUIRED") "Software update/state recovery must not be implicitly coupled."
+Assert-Condition ([string]$policy.integration.softwareUpdateStateOrchestration -eq "EXPLICIT_ORCHESTRATION_REQUIRED") "Software update/state recovery must remain explicitly orchestrated."
 Assert-Condition ($policy.integration.automaticBackgroundMigration -eq $false) "Automatic background migration must remain disabled."
-Assert-Condition ([string]$policy.integration.productionPackageActivation -eq "OUT_OF_SCOPE") "Production Package activation must remain outside AP-24."
+Assert-Condition ([string]$policy.integration.productionPackageActivation -eq "OUT_OF_SCOPE") "Production Package activation must remain outside state maintenance scope."
 
 $maintenance = Get-Content -LiteralPath $maintenancePath -Raw
 foreach ($requiredToken in @(
@@ -77,7 +78,10 @@ foreach ($requiredCase in @(
 }
 
 $updatePolicy = Get-Content -LiteralPath $updatePolicyPath -Raw | ConvertFrom-Json
-Assert-Condition ([string]$updatePolicy.replacement.persistentStateMigration -eq "NOT_IMPLEMENTED") "AP-24 foundation must not silently claim that AP-23 managed software updates already orchestrate persistent-state migration."
+Assert-Condition ([string]$updatePolicy.replacement.persistentStateMigration -eq "COORDINATED_ONLY") "Persistent-state mutation must only be exposed through coordinated upgrade orchestration."
+$coordinator = Get-Content -LiteralPath $coordinatorPath -Raw
+Assert-Condition ($coordinator -match 'productionStateCatalog') "Coordinator must consume the signed state-upgrade catalog selected by policy."
+Assert-Condition ($coordinator -match 'Invoke-StateMaintenance') "Coordinator must use the ControlHost state-maintenance boundary."
 
 $workflow = Get-Content -LiteralPath $workflowPath -Raw
 Assert-Condition ($workflow -match 'Test-StateMaintenancePolicy\.ps1') "Quality gate must validate persistent-state maintenance policy."
@@ -87,4 +91,4 @@ Write-Host "Database family: SQLite"
 Write-Host "Backup before schema mutation: required"
 Write-Host "Migration: registered forward-only, transactional"
 Write-Host "Failure recovery: verified snapshot restore"
-Write-Host "Automatic software-update migration orchestration: not claimed"
+Write-Host "Software-update integration: COORDINATED_ONLY"

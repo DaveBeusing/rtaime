@@ -79,6 +79,10 @@ jobs:
         shell: pwsh
         run: ./build/state/Test-StateMaintenancePolicy.ps1
 
+      - name: Verify coordinated upgrade policy
+        shell: pwsh
+        run: ./build/update/Test-CoordinatedUpgradePolicy.ps1
+
       - name: Restore
         run: dotnet restore rtaime.slnx
 
@@ -172,6 +176,15 @@ jobs:
             throw "Expected exactly one qualification bundle, found $($bundles.Count)."
           }
           ./build/update/Test-UpdateFoundation.ps1 -BundlePath $bundles[0].FullName
+
+      - name: Qualify coordinated upgrade packaging
+        shell: pwsh
+        run: |
+          $bundles = @(Get-ChildItem -LiteralPath ./artifacts/release-pipeline -Filter *.zip -File -Recurse)
+          if ($bundles.Count -ne 1) {
+            throw "Expected exactly one qualification bundle, found $($bundles.Count)."
+          }
+          ./build/update/Test-CoordinatedUpgradePackaging.ps1 -BundlePath $bundles[0].FullName
 
       - name: Upload packaged E2E evidence
         uses: actions/upload-artifact@v4
