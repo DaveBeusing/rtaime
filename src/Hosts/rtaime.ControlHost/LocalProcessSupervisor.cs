@@ -52,11 +52,11 @@ public sealed record LocalProcessSupervisionOptions(
 }
 
 /// <summary>
-/// Local process supervision uses the endpoint for adoption and readiness. Once a process launched by this
-/// supervisor has reached endpoint readiness, its Process handle becomes the liveness signal until it exits.
-/// This avoids continuously injecting probe connections into the production IPC endpoint. Only processes
-/// launched by this instance are terminated during orderly disposal. Start attempts are bounded for the
-/// lifetime of this supervisor instance.
+/// Local process supervision uses endpoint probing only to adopt an already-running external process. Processes
+/// launched by this supervisor receive unique stop and readiness files; an owned process becomes Healthy only
+/// after the host publishes explicit managed readiness. This prevents a bare pipe connection from being treated
+/// as operational readiness. Only processes launched by this instance are terminated during orderly disposal.
+/// Start attempts are bounded for the lifetime of this supervisor instance.
 /// </summary>
 public sealed class LocalProcessSupervisor : IAsyncDisposable
 {
@@ -67,6 +67,7 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 	private Task? _loop;
 	private Process? _ownedProcess;
 	private string? _ownedStopFilePath;
+	private string? _ownedReadinessFilePath;
 	private bool _ownedProcessReady;
 	private int _startAttempts;
 	private LocalProcessSupervisionSnapshot _snapshot;
@@ -118,12 +119,15 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 
 		Process? owned;
 		string? stopFile;
+		string? readinessFile;
 		lock (_gate)
 		{
 			owned = _ownedProcess;
 			stopFile = _ownedStopFilePath;
+			readinessFile = _ownedReadinessFilePath;
 			_ownedProcess = null;
 			_ownedStopFilePath = null;
+			_ownedReadinessFilePath = null;
 			_ownedProcessReady = false;
 		}
 		if (owned is not null)
@@ -137,8 +141,14 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 			finally
 			{
 				owned.Dispose();
-				CleanupStopFile(stopFile);
+				CleanupManagedFile(stopFile);
+				CleanupManagedFile(readinessFile);
 			}
+		}
+		else
+		{
+			CleanupManagedFile(stopFile);
+			CleanupManagedFile(readinessFile);
 		}
 
 		Update(LocalProcessSupervisionState.Stopped, "Supervisor stopped.");
@@ -154,22 +164,29 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 			DisposeExitedOwnedProcess();
 			if (OwnedProcessIsReadyAndRunning())
 			{
-				Update(LocalProcessSupervisionState.Healthy, $"Owned process is running after endpoint '{_options.Endpoint}' reached readiness.");
-				await Task.Delay(_options.ProbeInterval, cancellationToken).ConfigureAwait(false);
-				continue;
-			}
-
-			if (await ProbeEndpointAsync(cancellationToken).ConfigureAwait(false))
-			{
-				MarkOwnedProcessReadyIfRunning();
-				Update(LocalProcessSupervisionState.Healthy, $"Endpoint '{_options.Endpoint}' is reachable.");
+				Update(LocalProcessSupervisionState.Healthy, "Owned process is running with explicit managed readiness.");
 				await Task.Delay(_options.ProbeInterval, cancellationToken).ConfigureAwait(false);
 				continue;
 			}
 
 			if (OwnedProcessIsRunning())
 			{
-				Update(LocalProcessSupervisionState.Starting, "Owned process is running but its endpoint is not ready yet.");
+				if (OwnedProcessReadinessObserved())
+				{
+					MarkOwnedProcessReadyIfRunning();
+					Update(LocalProcessSupervisionState.Healthy, "Owned process published explicit managed readiness.");
+				}
+				else
+				{
+					Update(LocalProcessSupervisionState.Starting, "Owned process is running but has not published managed readiness yet.");
+				}
+				await Task.Delay(_options.ProbeInterval, cancellationToken).ConfigureAwait(false);
+				continue;
+			}
+
+			if (await ProbeEndpointAsync(cancellationToken).ConfigureAwait(false))
+			{
+				Update(LocalProcessSupervisionState.Healthy, $"Adopted reachable external endpoint '{_options.Endpoint}'.");
 				await Task.Delay(_options.ProbeInterval, cancellationToken).ConfigureAwait(false);
 				continue;
 			}
@@ -189,7 +206,7 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 				await Task.Delay(_options.RestartBackoff, cancellationToken).ConfigureAwait(false);
 				if (await ProbeEndpointAsync(cancellationToken).ConfigureAwait(false))
 				{
-					MarkOwnedProcessReadyIfRunning();
+					Update(LocalProcessSupervisionState.Healthy, $"Adopted reachable external endpoint '{_options.Endpoint}' during restart backoff.");
 					continue;
 				}
 			}
@@ -198,7 +215,7 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 			try
 			{
 				StartOwnedProcess();
-				Update(LocalProcessSupervisionState.Starting, $"Started supervised process attempt {_startAttempts} of {_options.MaxStartAttempts}.");
+				Update(LocalProcessSupervisionState.Starting, $"Started supervised process attempt {_startAttempts} of {_options.MaxStartAttempts}; awaiting managed readiness.");
 			}
 			catch (Exception exception) when (exception is InvalidOperationException or System.ComponentModel.Win32Exception)
 			{
@@ -241,9 +258,13 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 		var hostArguments = $"--listen-endpoint={QuoteArgument(_options.Endpoint)}";
 		if (!string.IsNullOrWhiteSpace(_options.AdditionalArguments))
 			hostArguments += " " + _options.AdditionalArguments.Trim();
-		var stopDirectory = Path.Combine(Path.GetTempPath(), "rtaime", "supervision");
-		Directory.CreateDirectory(stopDirectory);
-		var stopFile = Path.Combine(stopDirectory, $"{_options.Name}-{Guid.NewGuid():N}.stop");
+		var supervisionDirectory = Path.Combine(Path.GetTempPath(), "rtaime", "supervision");
+		Directory.CreateDirectory(supervisionDirectory);
+		var instanceId = Guid.NewGuid().ToString("N");
+		var stopFile = Path.Combine(supervisionDirectory, $"{_options.Name}-{instanceId}.stop");
+		var readinessFile = Path.Combine(supervisionDirectory, $"{_options.Name}-{instanceId}.ready.json");
+		CleanupManagedFile(stopFile);
+		CleanupManagedFile(readinessFile);
 		var startInfo = new ProcessStartInfo
 		{
 			FileName = isDll ? "dotnet" : fullPath,
@@ -253,12 +274,14 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 			CreateNoWindow = true
 		};
 		startInfo.Environment["RTAIME_HOST_STOP_FILE"] = stopFile;
+		startInfo.Environment["RTAIME_HOST_READINESS_FILE"] = readinessFile;
 		var process = Process.Start(startInfo)
 			?? throw new InvalidOperationException($"Failed to start supervised process '{_options.Name}'.");
 		lock (_gate)
 		{
 			_ownedProcess = process;
 			_ownedStopFilePath = stopFile;
+			_ownedReadinessFilePath = readinessFile;
 			_ownedProcessReady = false;
 		}
 	}
@@ -290,7 +313,7 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 	{
 		lock (_gate)
 		{
-			if (!_ownedProcessReady) return false;
+			if (!_ownedProcessReady || string.IsNullOrWhiteSpace(_ownedReadinessFilePath) || !File.Exists(_ownedReadinessFilePath)) return false;
 			try { return _ownedProcess is { HasExited: false }; }
 			catch (InvalidOperationException) { return false; }
 		}
@@ -305,14 +328,28 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 		}
 	}
 
+	private bool OwnedProcessReadinessObserved()
+	{
+		lock (_gate)
+		{
+			if (string.IsNullOrWhiteSpace(_ownedReadinessFilePath) || !File.Exists(_ownedReadinessFilePath)) return false;
+			try { return _ownedProcess is { HasExited: false }; }
+			catch (InvalidOperationException) { return false; }
+		}
+	}
+
 	private void MarkOwnedProcessReadyIfRunning()
 	{
 		lock (_gate)
 		{
 			try
 			{
-				if (_ownedProcess is { HasExited: false })
+				if (_ownedProcess is { HasExited: false } &&
+					!string.IsNullOrWhiteSpace(_ownedReadinessFilePath) &&
+					File.Exists(_ownedReadinessFilePath))
+				{
 					_ownedProcessReady = true;
+				}
 			}
 			catch (InvalidOperationException) { }
 		}
@@ -322,6 +359,7 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 	{
 		Process? process = null;
 		string? stopFile = null;
+		string? readinessFile = null;
 		lock (_gate)
 		{
 			if (_ownedProcess is null) return;
@@ -332,12 +370,15 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 			catch (InvalidOperationException) { }
 			process = _ownedProcess;
 			stopFile = _ownedStopFilePath;
+			readinessFile = _ownedReadinessFilePath;
 			_ownedProcess = null;
 			_ownedStopFilePath = null;
+			_ownedReadinessFilePath = null;
 			_ownedProcessReady = false;
 		}
 		process.Dispose();
-		CleanupStopFile(stopFile);
+		CleanupManagedFile(stopFile);
+		CleanupManagedFile(readinessFile);
 	}
 
 	private void Update(LocalProcessSupervisionState state, string detail)
@@ -364,10 +405,11 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 		}
 	}
 
-	private static void CleanupStopFile(string? stopFile)
+	private static void CleanupManagedFile(string? path)
 	{
-		if (string.IsNullOrWhiteSpace(stopFile)) return;
-		try { if (File.Exists(stopFile)) File.Delete(stopFile); } catch (IOException) { }
+		if (string.IsNullOrWhiteSpace(path)) return;
+		try { if (File.Exists(path)) File.Delete(path); }
+		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException) { }
 	}
 
 	private static string QuoteArgument(string value) => value.Contains(' ') ? $"\"{value.Replace("\"", "\\\"")}\"" : value;
