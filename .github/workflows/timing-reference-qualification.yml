@@ -1,0 +1,127 @@
+# Copyright (c) Dave Beusing <david.beusing@gmail.com>.
+
+name: Timing reference latency and soak qualification
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_adapter_name:
+        description: Expected AJA adapter name substring
+        required: true
+        type: string
+      format:
+        description: V1 video format
+        required: true
+        default: "1080p50"
+        type: choice
+        options:
+          - "1080p50"
+          - "1080p59.94"
+      soak_seconds:
+        description: Physical soak duration in seconds; minimum 1800
+        required: true
+        default: "3600"
+        type: string
+      maximum_host_cycle_p95_ms:
+        description: Maximum p95 Media I/O host-cycle duration in milliseconds
+        required: true
+        default: "16.0"
+        type: string
+      external_latency_evidence_path:
+        description: Runner-local JSON emitted by an independent physical end-to-end latency instrument
+        required: true
+        type: string
+      maximum_end_to_end_p95_ms:
+        description: Maximum permitted independently measured physical end-to-end p95 latency in milliseconds
+        required: true
+        default: "80.0"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  timing-reference-soak:
+    name: Timing Reference Latency Soak
+    runs-on:
+      - self-hosted
+      - windows
+      - x64
+      - rtaime-media-io-reference
+    timeout-minutes: 150
+
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Qualify toolchain
+        shell: pwsh
+        run: |
+          dotnet --info
+          if ((dotnet --version) -ne "10.0.401") {
+            throw "Expected .NET SDK 10.0.401."
+          }
+          cmake --version
+          git --version
+
+      - name: Resolve pinned AJA SDK source
+        shell: pwsh
+        run: |
+          $pin = Get-Content -LiteralPath ./native/Providers/AjaNtv2/libajantv2.version.json -Raw | ConvertFrom-Json
+          if ([string]::IsNullOrWhiteSpace([string]$pin.repository)) { throw "Pinned libajantv2 repository is missing." }
+          if ([string]$pin.commit -notmatch '^[0-9a-f]{40}$') { throw "Pinned libajantv2 commit is invalid." }
+
+          $sdkRoot = Join-Path $env:RUNNER_TEMP "rtaime-libajantv2"
+          if (Test-Path -LiteralPath $sdkRoot) { Remove-Item -LiteralPath $sdkRoot -Recurse -Force }
+          git clone --filter=blob:none ([string]$pin.repository) $sdkRoot
+          if ($LASTEXITCODE -ne 0) { throw "Unable to clone pinned libajantv2 repository." }
+          git -C $sdkRoot checkout --detach ([string]$pin.commit)
+          if ($LASTEXITCODE -ne 0) { throw "Unable to checkout pinned libajantv2 commit." }
+          $resolved = (git -C $sdkRoot rev-parse HEAD).Trim()
+          if ($resolved -ne [string]$pin.commit) { throw "Resolved libajantv2 commit '$resolved' differs from pin '$($pin.commit)'." }
+          "RTAIME_AJA_NTV2_ROOT=$sdkRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "RTAIME_AJA_SDK_REVISION=$resolved" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Build native AJA provider
+        shell: pwsh
+        run: |
+          $buildDir = Join-Path $PWD "artifacts/native/aja"
+          cmake -S native/Providers/AjaNtv2 -B $buildDir -A x64 `
+            -DAJA_NTV2_ROOT="$env:RTAIME_AJA_NTV2_ROOT" `
+            -DRTAIME_AJA_SDK_REVISION="$env:RTAIME_AJA_SDK_REVISION"
+          if ($LASTEXITCODE -ne 0) { throw "Native Media I/O configure failed." }
+          cmake --build $buildDir --config Release
+          if ($LASTEXITCODE -ne 0) { throw "Native Media I/O build failed." }
+          $dlls = @(Get-ChildItem -LiteralPath $buildDir -Filter rtaime_media_io.dll -File -Recurse)
+          if ($dlls.Count -ne 1) { throw "Expected exactly one rtaime_media_io.dll, found $($dlls.Count)." }
+          "PATH=$($dlls[0].Directory.FullName);$env:PATH" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Build qualification target
+        shell: pwsh
+        run: dotnet build tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release
+
+      - name: Run timing reference latency and soak qualification
+        shell: pwsh
+        run: |
+          ./build/qualification/Invoke-TimingReferenceSoakQualification.ps1 `
+            -ExpectedAdapterName "${{ inputs.expected_adapter_name }}" `
+            -AjaSdkRevision "$env:RTAIME_AJA_SDK_REVISION" `
+            -Format "${{ inputs.format }}" `
+            -SoakSeconds ([int]"${{ inputs.soak_seconds }}") `
+            -MaximumHostCycleP95Milliseconds ([double]"${{ inputs.maximum_host_cycle_p95_ms }}") `
+            -ExternalLatencyEvidencePath "${{ inputs.external_latency_evidence_path }}" `
+            -MaximumEndToEndP95Milliseconds ([double]"${{ inputs.maximum_end_to_end_p95_ms }}") `
+            -RequireReferenceRelock `
+            -EvidencePath "artifacts/qualification/timing-reference-soak.json"
+
+      - name: Upload immutable AP-34 qualification evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: timing-reference-latency-soak-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/qualification/timing-reference-soak.json
+          if-no-files-found: error
