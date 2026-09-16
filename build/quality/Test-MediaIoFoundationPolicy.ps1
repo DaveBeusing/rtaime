@@ -56,7 +56,12 @@ Assert-Condition ($providerContracts -match 'resource\.Kind') "Provider-resource
 Assert-Condition ($foundation -match 'IMediaIoProviderAdapter') "Media I/O foundation must define a vendor-neutral adapter seam."
 Assert-Condition ($foundation -match 'bool TryAcquire') "Input acquisition must remain non-blocking."
 Assert-Condition ($foundation -match 'TrySubmit\(MediaIoOutputFrameDescriptor frame\)') "Output submission must remain explicit, handle-based and non-blocking."
-Assert-Condition ($foundation -match 'MediaIoAdmission\.Validate') "Media I/O session admission must be explicit."
+Assert-Condition ($foundation -match 'public static class MediaIoAdmission[\s\S]*public static ValidationResult Validate\(MediaIoProviderDescriptor descriptor, MediaIoSessionRequest request\)') "Media I/O session admission must retain an explicit validator."
+Assert-Condition ($foundation -match 'media\.io\.provider_mismatch') "Media I/O admission must fail closed on provider mismatch."
+Assert-Condition ($foundation -match 'media\.io\.direction_mismatch') "Media I/O admission must fail closed on port-direction mismatch."
+Assert-Condition ($foundation -match 'media\.io\.transfer_mode_unsupported') "Media I/O admission must fail closed on unsupported transfer mode."
+Assert-Condition ($foundation -match 'media\.io\.external_reference_unsupported') "Media I/O admission must fail closed when required external reference is unsupported."
+Assert-Condition ($foundation -match 'media\.io\.capability_missing') "Media I/O admission must require matching provider capability."
 Assert-Condition ($foundation -notmatch 'NamedPipe|Http|Socket') "Media I/O foundation must not introduce management or host-to-host transport."
 
 Assert-Condition ($abi -match 'RTAIME_MEDIA_IO_ABI_VERSION_MAJOR 1u') "Native Media I/O ABI major version must remain explicit."
