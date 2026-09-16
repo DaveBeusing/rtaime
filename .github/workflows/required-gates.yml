@@ -112,6 +112,10 @@ jobs:
         shell: pwsh
         run: ./build/quality/Test-OperatorMonitoringPolicy.ps1
 
+      - name: Verify observability diagnostics policy
+        shell: pwsh
+        run: ./build/quality/Test-ObservabilityPolicy.ps1
+
       - name: Restore
         run: dotnet restore rtaime.slnx
 
