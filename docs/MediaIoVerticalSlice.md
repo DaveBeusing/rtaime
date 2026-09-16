@@ -18,7 +18,7 @@ The V1 reference topology is deliberately small:
 
 ## Reference adapter
 
-The native reference adapter targets the supported `aja-video/libajantv2` SDK line. Hardware qualification must use an explicitly identified release checkout or commit through `RTAIME_AJA_NTV2_ROOT` and `RTAIME_AJA_SDK_REVISION`. The deprecated predecessor repository is not the AP-33 dependency.
+The native reference adapter targets the supported `aja-video/libajantv2` SDK line. The AP-33 reference source is pinned in `native/Providers/AjaNtv2/libajantv2.version.json` to the exact `release`-line commit `aa4d482a47fdd9fd9f2883163e286206ac0d7ae7`. Both generic native compile evidence and physical qualification must resolve this exact commit before building the adapter. A moving branch tip is never accepted as qualification evidence.
 
 The adapter is built with CMake under `native/Providers/AjaNtv2`. No Visual C++ project is added to the managed solution, and the approved 28 managed-project graph is unchanged.
 
@@ -104,17 +104,19 @@ Normal Required Gates verify:
 - bounded output/backpressure behavior;
 - explicit RuntimeHost `virtual|native` selection and fail-closed native startup;
 - architecture and vendor-boundary policy;
-- presence and fail-closed structure of the physical qualification path;
 - no accidental generic-CI hardware claim.
+
+Provider Smoke additionally clones the repository-pinned `libajantv2` source, verifies the exact commit, configures the real AJA native target with CMake, compiles `rtaime_media_io.dll`, requires exactly one resulting provider DLL, and then runs the managed provider integration smoke tests. This is native compiler evidence only; it is not physical AJA hardware evidence.
 
 The dedicated `.github/workflows/media-io-reference-qualification.yml` workflow runs only on the self-hosted `rtaime-media-io-reference` Windows x64 runner. It:
 
-1. resolves the requested `libajantv2` ref to an exact commit;
-2. builds `rtaime_media_io.dll` from that exact source through CMake;
-3. exposes only that built native provider to the test process;
-4. runs `HardwareMediaIoQualificationTests.Reference_hardware_profile_must_pass_when_explicitly_enabled`;
-5. requires two locked SDI inputs, minimum capture counts, accepted Program output and zero hard capture/output failures;
-6. retains `artifacts/qualification/media-io-reference.json` as immutable workflow evidence.
+1. reads the same repository SDK pin used by Provider Smoke;
+2. resolves and verifies the exact pinned `libajantv2` commit;
+3. builds `rtaime_media_io.dll` from that exact source through CMake;
+4. exposes only that built native provider to the test process;
+5. runs `HardwareMediaIoQualificationTests.Reference_hardware_profile_must_pass_when_explicitly_enabled`;
+6. requires two locked SDI inputs, minimum capture counts, accepted Program output and zero hard capture/output failures;
+7. retains `artifacts/qualification/media-io-reference.json` as immutable workflow evidence.
 
 The evidence records source commit, expected/detected AJA adapter, driver version, exact AJA SDK revision, ABI version, managed Media I/O contract version, format, transfer mode, reference requirement, signal states and frame/backpressure counters.
 
@@ -122,7 +124,7 @@ The evidence records source commit, expected/detected AJA adapter, driver versio
 
 **UNVERIFIED**
 
-Repository implementation, tests and normal GitHub-hosted CI are not physical AJA evidence. AP-33 may only be described as physically qualified after the self-hosted Media I/O reference workflow produces retained `PASSED` evidence for the declared AJA adapter, driver and SDK revision.
+Repository implementation, native compiler evidence, tests and normal GitHub-hosted CI are not physical AJA evidence. AP-33 may only be described as physically qualified after the self-hosted Media I/O reference workflow produces retained `PASSED` evidence for the declared AJA adapter, driver and pinned SDK revision.
 
 A successful normal Required-Gates run therefore proves the implementation and qualification mechanism, not the presence or behavior of physical AJA hardware.
 
