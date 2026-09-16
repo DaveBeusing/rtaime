@@ -58,10 +58,11 @@ jobs:
         shell: pwsh
         run: ./build/release/Test-ReleaseEvidence.ps1
 
-      - name: Qualify release signing and record
+      - name: Qualify release signing, packaging and offline deployment
         shell: pwsh
         run: |
           $keyPath = Join-Path $env:RUNNER_TEMP "rtaime-release-test-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT.pem"
+          $installPath = Join-Path $env:RUNNER_TEMP "rtaime-offline-install-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
           try {
             ./build/release/New-TestReleaseSigningKey.ps1 -PrivateKeyPath $keyPath
             ./build/release/New-ReleaseAttestation.ps1 `
@@ -70,10 +71,39 @@ jobs:
               -SignerId "github-actions"
             ./build/release/Test-ReleaseAttestation.ps1
             ./build/release/Test-ReleaseSigningFailureCases.ps1
+
+            ./build/release/New-OfflineReleaseBundle.ps1 `
+              -PrivateKeyPath $keyPath `
+              -SignerClass TEST_EPHEMERAL `
+              -SignerId "github-actions"
+
+            $bundleDirectories = @(Get-ChildItem -LiteralPath ./artifacts/offline-release -Directory)
+            $bundleArchives = @(Get-ChildItem -LiteralPath ./artifacts/offline-release -Filter *.zip -File)
+            if ($bundleDirectories.Count -ne 1) {
+              throw "Expected exactly one generated offline bundle directory."
+            }
+            if ($bundleArchives.Count -ne 1) {
+              throw "Expected exactly one generated offline bundle ZIP."
+            }
+
+            ./build/release/Test-OfflineReleaseBundle.ps1 -BundlePath $bundleArchives[0].FullName
+            ./build/release/Invoke-OfflinePreflight.ps1 `
+              -BundlePath $bundleArchives[0].FullName `
+              -InstallPath $installPath
+            ./build/release/Test-OfflineReleaseFailureCases.ps1 `
+              -BundleDirectory $bundleDirectories[0].FullName `
+              -ArchivePath $bundleArchives[0].FullName
+            ./build/release/Install-OfflineRelease.ps1 `
+              -BundlePath $bundleArchives[0].FullName `
+              -InstallPath $installPath
+            & (Join-Path $installPath "tools/Test-OfflineReleaseBundle.ps1") -BundlePath $installPath
           }
           finally {
             if (Test-Path -LiteralPath $keyPath) {
               Remove-Item -LiteralPath $keyPath -Force
+            }
+            if (Test-Path -LiteralPath $installPath) {
+              Remove-Item -LiteralPath $installPath -Recurse -Force
             }
           }
 
@@ -82,4 +112,13 @@ jobs:
         with:
           name: rtaime-release-evidence-${{ github.run_id }}
           path: artifacts/release-evidence
+          if-no-files-found: error
+
+      - name: Upload offline release bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: rtaime-offline-release-${{ github.run_id }}
+          path: |
+            artifacts/offline-release/*.zip
+            artifacts/offline-release/*.zip.sha256
           if-no-files-found: error

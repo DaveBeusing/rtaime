@@ -1,0 +1,48 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://rtaime.local/schemas/release/v1/runtime-requirements.schema.json",
+	"$comment": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+	"title": "rtaime Offline Runtime Requirements v1",
+	"type": "object",
+	"additionalProperties": false,
+	"required": [
+		"copyright",
+		"schemaVersion",
+		"productName",
+		"productVersion",
+		"platform",
+		"dotnetRuntimes",
+		"continuousInternetRequired"
+	],
+	"properties": {
+		"copyright": { "type": "string", "minLength": 1 },
+		"schemaVersion": { "const": "1.0" },
+		"productName": { "const": "rtaime" },
+		"productVersion": { "type": "string", "minLength": 1 },
+		"platform": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["osFamily", "architecture", "rid"],
+			"properties": {
+				"osFamily": { "const": "Windows" },
+				"architecture": { "const": "x64" },
+				"rid": { "const": "win-x64" }
+			}
+		},
+		"dotnetRuntimes": {
+			"type": "array",
+			"minItems": 1,
+			"items": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["name", "majorMinor", "minimumVersion"],
+				"properties": {
+					"name": { "type": "string", "minLength": 1 },
+					"majorMinor": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+$" },
+					"minimumVersion": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" }
+				}
+			}
+		},
+		"continuousInternetRequired": { "const": false }
+	}
+}

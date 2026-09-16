@@ -1,0 +1,44 @@
+{
+	"copyright": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+	"schemaVersion": "1.0",
+	"bundleType": "SOFTWARE_RELEASE",
+	"packageFormatVersion": "1.0",
+	"platform": {
+		"osFamily": "Windows",
+		"architecture": "x64",
+		"rid": "win-x64"
+	},
+	"runtimeRequirements": [
+		{
+			"name": "Microsoft.NETCore.App",
+			"majorMinor": "10.0",
+			"minimumVersion": "10.0.0"
+		},
+		{
+			"name": "Microsoft.WindowsDesktop.App",
+			"majorMinor": "10.0",
+			"minimumVersion": "10.0.0"
+		}
+	],
+	"releaseEvidenceFiles": [
+		"artifact-manifest.json",
+		"sbom.cdx.json",
+		"compatibility-manifest.json",
+		"release-evidence.json",
+		"release-attestation.json",
+		"release-record.json",
+		"release-record.sha256"
+	],
+	"offlineTools": [
+		"build/release/Test-OfflineReleaseBundle.ps1",
+		"build/release/Invoke-OfflinePreflight.ps1",
+		"build/release/Install-OfflineRelease.ps1"
+	],
+	"rootDocumentation": [
+		"README.md"
+	],
+	"documentationRoot": "docs",
+	"schemaRoot": "schemas",
+	"trustedReleaseKeys": "build/release/trusted-release-keys.json",
+	"installationReserveBytes": 268435456
+}
