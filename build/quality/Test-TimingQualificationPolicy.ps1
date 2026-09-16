@@ -22,6 +22,7 @@ $artifacts = @{
 	RuntimeHost = "src/Hosts/rtaime.RuntimeHost/RuntimeHostProcess.cs"
 	RuntimeService = "src/Hosts/rtaime.RuntimeHost/V1RuntimeHostService.cs"
 	NativeAja = "native/Providers/AjaNtv2/rtaime_media_io_aja.cpp"
+	AjaCompatibility = "build/native/Apply-AjaNtv2BuildCompatibility.ps1"
 	MediaIoSlice = "src/Media/rtaime.Media/MediaIoVerticalSlice.cs"
 	HardwareTest = "tests/rtaime.Tests.Integration/TimingReferenceHardwareQualificationTests.cs"
 	Runner = "build/qualification/Invoke-TimingReferenceSoakQualification.ps1"
@@ -42,6 +43,7 @@ $tests = $content.UnitTests
 $runtimeHost = $content.RuntimeHost
 $runtimeService = $content.RuntimeService
 $nativeAja = $content.NativeAja
+$ajaCompatibility = $content.AjaCompatibility
 $mediaIoSlice = $content.MediaIoSlice
 $hardwareTest = $content.HardwareTest
 $runner = $content.Runner
@@ -50,7 +52,7 @@ $requiredGates = $content.RequiredGates
 $documentation = $content.Documentation
 
 Assert-Condition ($probe -match 'class RuntimeTimingQualificationProbe') "AP-34 must retain a dedicated Runtime timing qualification probe."
-Assert-Condition ($probe -match 'TimingQualificationState[\s\S]*Healthy[\s\S]*Degraded[\s\S]*Unstable[\s\S]*Lost') "Timing qualification state model is incomplete."
+Assert-Condition ($probe -match 'TimingQualificationState[\s\S]*Recovering[\s\S]*Healthy[\s\S]*Degraded[\s\S]*Unstable[\s\S]*Lost') "Timing qualification state model is incomplete."
 Assert-Condition ($probe -match 'RetainedSampleCapacity') "Timing evidence must retain an explicit bounded sample capacity."
 Assert-Condition ($probe -match 'new TimingBoundaryObservation\[') "Timing evidence must use bounded fixed-capacity retention."
 Assert-Condition ($probe -notmatch 'File\.Write|File\.Append|StreamWriter|HttpClient|Socket|NamedPipe') "Runtime timing probe must not perform synchronous disk or network I/O."
@@ -60,6 +62,7 @@ Assert-Condition ($probe -match 'MaximumObservedJitter') "Timing evidence must e
 Assert-Condition ($probe -match 'MaximumObservedProcessingDuration') "Timing evidence must expose maximum processing duration."
 
 Assert-Condition ($tests -match 'Perfect_cadence_remains_healthy') "Unit coverage must regress healthy cadence."
+Assert-Condition ($tests -match 'Probe_without_boundaries_remains_recovering') "Unit coverage must regress fail-closed pre-evidence timing state."
 Assert-Condition ($tests -match 'repeated_violations_become_unstable') "Unit coverage must regress unstable timing behavior."
 Assert-Condition ($tests -match 'Sequence_gap_is_immediately_unstable') "Unit coverage must regress sequence discontinuity."
 Assert-Condition ($tests -match 'three_frame_periods_are_lost') "Unit coverage must regress timing loss detection."
@@ -84,6 +87,10 @@ Assert-Condition ($nativeAja -match 'external_reference_required[\s\S]*RTAIME_ME
 Assert-Condition ($nativeAja -notmatch 'SetReference\(NTV2_REFERENCE_FREERUN') "AP-34 must never silently fall back from external reference to free-run."
 Assert-Condition ($mediaIoSlice -match 'ProgramOutputStatus => _output\.Status') "AP-34 qualification must be able to observe Program-output reference state."
 
+Assert-Condition ($ajaCompatibility -match 'aa4d482a47fdd9fd9f2883163e286206ac0d7ae7') "AP-34 native qualification must retain the exact AJA compatibility scope."
+Assert-Condition ($ajaCompatibility -match 'source shape changed') "AJA compatibility patch must fail closed if upstream source shape differs."
+Assert-Condition ($ajaCompatibility -match 'MSVC C2362') "AJA compatibility patch must remain explicitly scoped to the verified compiler incompatibility."
+
 Assert-Condition ($hardwareTest -match 'RTAIME_TIMING_REFERENCE_QUALIFICATION') "Physical AP-34 test must be explicit opt-in."
 Assert-Condition ($hardwareTest -match 'requireExternalReference: true') "Physical AP-34 qualification must require external reference."
 Assert-Condition ($hardwareTest -match 'referenceLossObserved') "Physical qualification must retain a reference-loss observation."
@@ -103,6 +110,7 @@ Assert-Condition ($workflow -match 'workflow_dispatch:') "AP-34 physical workflo
 Assert-Condition ($workflow -notmatch '(?m)^\s*(pull_request|push):') "AP-34 physical qualification must not run as generic CI."
 Assert-Condition ($workflow -match 'self-hosted') "AP-34 workflow must run on self-hosted reference hardware."
 Assert-Condition ($workflow -match 'rtaime-media-io-reference') "AP-34 workflow must use the declared reference-hardware runner label."
+Assert-Condition ($workflow -match 'Apply-AjaNtv2BuildCompatibility\.ps1') "AP-34 physical workflow must apply the repository-controlled pinned SDK compatibility patch."
 Assert-Condition ($workflow -match 'Invoke-TimingReferenceSoakQualification\.ps1') "AP-34 workflow must invoke the fail-closed qualification runner."
 Assert-Condition ($workflow -match 'external_latency_evidence_path') "AP-34 workflow must require independent physical-latency evidence."
 Assert-Condition ($workflow -match 'actions/upload-artifact@v4') "AP-34 workflow must retain immutable evidence as an artifact."
