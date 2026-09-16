@@ -1,0 +1,26 @@
+{
+	"copyright": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+	"schemaVersion": "1.0",
+	"requireExplicitQuiescenceAcknowledgement": true,
+	"productionStateCatalog": "tools/state-upgrade-catalog.json",
+	"qualificationExternalCatalogAllowed": true,
+	"stateRootRequired": true,
+	"workStateSuffix": ".coordinated-update-state",
+	"recoveryStateSuffix": ".upgrade-recovery",
+	"preBackupBeforeSoftwareActivation": true,
+	"migrationAfterSoftwareActivation": true,
+	"retainPreUpgradeSnapshotsAfterSuccess": true,
+	"directSoftwareRollbackWhenStateChanged": "BLOCKED",
+	"failureRecoveryOrder": [
+		"SOFTWARE_ROLLBACK",
+		"VERIFY_RESTORED_SOFTWARE",
+		"RESTORE_STATE_REVERSE_ORDER",
+		"VERIFY_RESTORED_STATE"
+	],
+	"processLifecycle": {
+		"automaticStop": false,
+		"automaticStart": false,
+		"runtimeReadiness": "UNVERIFIED_AFTER_COORDINATED_COMMIT"
+	},
+	"productionPackageActivation": "OUT_OF_SCOPE"
+}

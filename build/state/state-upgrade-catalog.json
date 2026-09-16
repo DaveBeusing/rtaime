@@ -1,0 +1,21 @@
+{
+	"copyright": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+	"schemaVersion": "1.0",
+	"catalogVersion": 1,
+	"databaseKinds": [
+		{
+			"id": "management",
+			"fileName": "management.db",
+			"component": "management",
+			"targetSchemaVersion": 1,
+			"migrations": []
+		},
+		{
+			"id": "production-journal",
+			"fileName": "production-journal.db",
+			"component": "production-journal",
+			"targetSchemaVersion": 1,
+			"migrations": []
+		}
+	]
+}

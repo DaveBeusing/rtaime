@@ -1,0 +1,50 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://rtaime.local/schemas/update/v1/coordinated-upgrade-receipt.schema.json",
+	"$comment": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+	"title": "rtaime Coordinated Upgrade Receipt v1",
+	"type": "object",
+	"additionalProperties": true,
+	"required": [
+		"copyright",
+		"schemaVersion",
+		"status",
+		"installPath",
+		"stateRoot",
+		"softwareRollbackPath",
+		"persistentStateMigration",
+		"stateChanges",
+		"runtimeReadiness",
+		"processesRemainStopped",
+		"productionPackageActivation",
+		"completedAtUtc"
+	],
+	"properties": {
+		"copyright": { "type": "string", "minLength": 1 },
+		"schemaVersion": { "const": "1.0" },
+		"status": { "const": "PASS" },
+		"installPath": { "type": "string", "minLength": 1 },
+		"stateRoot": { "type": "string", "minLength": 1 },
+		"softwareRollbackPath": { "type": "string", "minLength": 1 },
+		"persistentStateMigration": { "enum": ["PASS", "NOT_APPLICABLE"] },
+		"stateChanges": {
+			"type": "array",
+			"items": {
+				"type": "object",
+				"required": ["databasePath", "databaseKind", "component", "fromVersion", "targetVersion", "preSnapshotPath"],
+				"properties": {
+					"databasePath": { "type": "string", "minLength": 1 },
+					"databaseKind": { "type": "string", "minLength": 1 },
+					"component": { "type": "string", "minLength": 1 },
+					"fromVersion": { "type": "integer", "minimum": 1 },
+					"targetVersion": { "type": "integer", "minimum": 1 },
+					"preSnapshotPath": { "type": "string", "minLength": 1 }
+				}
+			}
+		},
+		"runtimeReadiness": { "const": "UNVERIFIED" },
+		"processesRemainStopped": { "const": true },
+		"productionPackageActivation": { "const": "NOT_PERFORMED" },
+		"completedAtUtc": { "type": "string", "minLength": 1 }
+	}
+}

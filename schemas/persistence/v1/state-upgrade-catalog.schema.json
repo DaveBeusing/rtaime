@@ -1,0 +1,42 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://rtaime.local/schemas/persistence/v1/state-upgrade-catalog.schema.json",
+	"$comment": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+	"title": "rtaime State Upgrade Catalog v1",
+	"type": "object",
+	"additionalProperties": false,
+	"required": ["copyright", "schemaVersion", "catalogVersion", "databaseKinds"],
+	"properties": {
+		"copyright": { "type": "string", "minLength": 1 },
+		"schemaVersion": { "const": "1.0" },
+		"catalogVersion": { "type": "integer", "minimum": 1 },
+		"databaseKinds": {
+			"type": "array",
+			"minItems": 1,
+			"items": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["id", "fileName", "component", "targetSchemaVersion", "migrations"],
+				"properties": {
+					"id": { "type": "string", "minLength": 1 },
+					"fileName": { "type": "string", "pattern": "^[A-Za-z0-9._-]+\\.db$" },
+					"component": { "type": "string", "minLength": 1 },
+					"targetSchemaVersion": { "type": "integer", "minimum": 1 },
+					"migrations": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"additionalProperties": false,
+							"required": ["fromVersion", "toVersion", "sql"],
+							"properties": {
+								"fromVersion": { "type": "integer", "minimum": 1 },
+								"toVersion": { "type": "integer", "minimum": 2 },
+								"sql": { "type": "string", "minLength": 1 }
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}

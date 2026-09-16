@@ -40,6 +40,7 @@
 		"workStateSuffix": ".update-state",
 		"retainRollbackAfterSuccess": true,
 		"failIfRollbackSlotExists": true,
-		"persistentStateMigration": "NOT_IMPLEMENTED"
+		"persistentStateMigration": "COORDINATED_ONLY",
+		"coordinatedRecoverySuffix": ".upgrade-recovery"
 	}
 }

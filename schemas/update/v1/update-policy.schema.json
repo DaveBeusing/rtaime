@@ -63,14 +63,15 @@
 		"replacement": {
 			"type": "object",
 			"additionalProperties": false,
-			"required": ["requireExplicitQuiescenceAcknowledgement", "rollbackSlotSuffix", "workStateSuffix", "retainRollbackAfterSuccess", "failIfRollbackSlotExists", "persistentStateMigration"],
+			"required": ["requireExplicitQuiescenceAcknowledgement", "rollbackSlotSuffix", "workStateSuffix", "retainRollbackAfterSuccess", "failIfRollbackSlotExists", "persistentStateMigration", "coordinatedRecoverySuffix"],
 			"properties": {
 				"requireExplicitQuiescenceAcknowledgement": { "const": true },
 				"rollbackSlotSuffix": { "const": ".rollback" },
 				"workStateSuffix": { "const": ".update-state" },
 				"retainRollbackAfterSuccess": { "const": true },
 				"failIfRollbackSlotExists": { "const": true },
-				"persistentStateMigration": { "const": "NOT_IMPLEMENTED" }
+				"persistentStateMigration": { "const": "COORDINATED_ONLY" },
+				"coordinatedRecoverySuffix": { "const": ".upgrade-recovery" }
 			}
 		}
 	}

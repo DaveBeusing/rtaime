@@ -5,7 +5,8 @@ param(
 	[Parameter(Mandatory)]
 	[string]$InstallPath,
 	[switch]$AcknowledgeProcessesStopped,
-	[switch]$QualificationMode
+	[switch]$QualificationMode,
+	[switch]$CoordinatedStateHandled
 )
 
 Set-StrictMode -Version Latest
@@ -37,6 +38,11 @@ $policyPath = $policyPathCandidates | Where-Object { Test-Path -LiteralPath $_ -
 Assert-Condition (-not [string]::IsNullOrWhiteSpace($policyPath)) "Update policy is unavailable."
 $policy = Get-Content -LiteralPath $policyPath -Raw | ConvertFrom-Json
 $rollback = "$target$([string]$policy.replacement.rollbackSlotSuffix)"
+$coordinatedRecoverySuffix = if ($policy.replacement.PSObject.Properties.Name -contains 'coordinatedRecoverySuffix') { [string]$policy.replacement.coordinatedRecoverySuffix } else { '.upgrade-recovery' }
+$coordinatedRecoveryRoot = "$target$coordinatedRecoverySuffix"
+if ((Test-Path -LiteralPath $coordinatedRecoveryRoot) -and -not $CoordinatedStateHandled) {
+	throw "Software-only rollback is blocked because coordinated persistent-state recovery evidence exists at '$coordinatedRecoveryRoot'. Use the coordinated recovery path so software and state cannot diverge."
+}
 
 Assert-Condition (Test-Path -LiteralPath $target -PathType Container) "Current installation was not found."
 Assert-Condition (Test-Path -LiteralPath $rollback -PathType Container) "Rollback installation was not found at '$rollback'."

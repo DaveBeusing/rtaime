@@ -134,7 +134,7 @@ foreach ($releaseFile in @($policy.releaseEvidenceFiles)) {
 	if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
 		throw "Required release evidence file '$releaseFile' is missing."
 	}
-	Copy-Item -LiteralPath $source -Destination (Join-Path $releaseDirectory ([string]$releaseFile)) -Force
+	Copy-Item -LiteralPath $source -Destination (Join-Path $releaseDirectory ([string]$releaseFile) ) -Force
 }
 
 $schemaSource = Resolve-RepositoryPath ([string]$policy.schemaRoot)
@@ -207,7 +207,15 @@ Clean installation into a new or empty directory:
 ./tools/Install-OfflineRelease.ps1 -BundlePath . -InstallPath C:\rtaime
 ```
 
-The V1 foundation does not perform in-place upgrade, rollback, Windows service registration or Production Package activation.
+Verified managed upgrade from an existing PREVIEW/STABLE installation:
+
+```powershell
+./tools/Invoke-VerifiedUpdate.ps1 -InstallPath C:\rtaime -StateRoot C:\ProgramData\rtaime -Channel PREVIEW -AcknowledgeProcessesStopped
+```
+
+Managed production updates use the coordinated software/state path. The target bundle's signed state-upgrade catalog determines whether persistent SQLite migration is required. Direct software-only rollback is blocked while coordinated recovery evidence exists.
+
+This bundle does not automatically stop/start rtaime processes, establish post-upgrade runtime readiness, register Windows services, schedule background updates or perform Production Package activation.
 "@
 [System.IO.File]::WriteAllText((Join-Path $bundleRoot "OFFLINE-README.md"), $offlineReadme + [Environment]::NewLine, [System.Text.UTF8Encoding]::new($false))
 
