@@ -1,0 +1,30 @@
+{
+	"copyright": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+	"schemaVersion": "1.0",
+	"repository": "DaveBeusing/rtaime",
+	"bindings": [
+		{
+			"qualificationType": "CUDA_REFERENCE",
+			"payloadSchemaVersion": "1.0",
+			"releaseRequirements": [
+				"REFERENCE_GPU"
+			]
+		},
+		{
+			"qualificationType": "MEDIA_IO_REFERENCE",
+			"payloadSchemaVersion": "1.0",
+			"releaseRequirements": [
+				"PROFESSIONAL_MEDIA_IO"
+			]
+		},
+		{
+			"qualificationType": "TIMING_REFERENCE_SOAK",
+			"payloadSchemaVersion": "1.0",
+			"releaseRequirements": [
+				"GENLOCK",
+				"PHYSICAL_END_TO_END_LATENCY",
+				"LONG_SOAK"
+			]
+		}
+	]
+}
