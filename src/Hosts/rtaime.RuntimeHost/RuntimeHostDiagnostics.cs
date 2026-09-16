@@ -1,5 +1,6 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
+using System.Globalization;
 using rtaime.Core;
 
 namespace rtaime.RuntimeHost;
@@ -13,6 +14,7 @@ public static class RuntimeHostDiagnostics
 		ArgumentNullException.ThrowIfNull(process);
 		var captured = (capturedAtUtc ?? DateTimeOffset.UtcNow).ToUniversalTime();
 		var lifecycle = process.Lifecycle;
+		var timing = process.TimingQualification;
 		var build = ProductBuildInfo.FromAssembly(typeof(RuntimeHostProcess).Assembly);
 		var builder = new SupportSnapshotBuilder(
 			build,
@@ -23,12 +25,31 @@ public static class RuntimeHostDiagnostics
 			.Status("lifecycle.detail", lifecycle.Detail)
 			.Status("ipc.running", (process.IpcServer?.Running ?? false).ToString())
 			.Status("monitoring.running", (process.MonitoringServer?.Running ?? false).ToString())
+			.Status("timing.qualificationState", timing.State.ToString())
+			.Status("timing.maximumObservedJitterMs", timing.MaximumObservedJitter.TotalMilliseconds.ToString("F6", CultureInfo.InvariantCulture))
+			.Status("timing.maximumObservedProcessingMs", timing.MaximumObservedProcessingDuration.TotalMilliseconds.ToString("F6", CultureInfo.InvariantCulture))
+			.Counter("timing.totalBoundaries", ToCounter(timing.TotalBoundaries))
+			.Counter("timing.sequenceDiscontinuities", ToCounter(timing.SequenceDiscontinuities))
+			.Counter("timing.jitterViolations", ToCounter(timing.JitterViolations))
+			.Counter("timing.processingViolations", ToCounter(timing.ProcessingViolations))
+			.Counter("timing.consecutiveViolations", timing.ConsecutiveViolations)
 			.Configuration("monitoringEndpoint", process.MonitoringEndpoint);
 
 		if (process.IpcServer is { } ipc)
 		{
 			builder.Identity("hostInstanceId", ipc.HostInstanceId)
 				.Configuration("runtimeEndpoint", ipc.Endpoint);
+		}
+
+		if (process.MediaIoStatistics is { } mediaIo)
+		{
+			builder.Counter("mediaIo.capturedA", ToCounter(mediaIo.CapturedA))
+				.Counter("mediaIo.capturedB", ToCounter(mediaIo.CapturedB))
+				.Counter("mediaIo.captureWouldBlock", ToCounter(mediaIo.CaptureWouldBlock))
+				.Counter("mediaIo.captureFailures", ToCounter(mediaIo.CaptureFailures))
+				.Counter("mediaIo.outputAccepted", ToCounter(mediaIo.OutputAccepted))
+				.Counter("mediaIo.outputBackpressure", ToCounter(mediaIo.OutputBackpressure))
+				.Counter("mediaIo.outputRejected", ToCounter(mediaIo.OutputRejected));
 		}
 
 		if (process.Runtime is { } runtime)
