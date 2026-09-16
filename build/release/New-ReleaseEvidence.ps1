@@ -7,6 +7,7 @@ param(
 	[string]$SourceCommit = $env:RTAIME_SOURCE_COMMIT,
 	[string]$BuildCommit = $env:RTAIME_BUILD_COMMIT,
 	[string]$BuildId = $env:RTAIME_BUILD_ID,
+	[string]$QualificationBindingRoot = "artifacts/qualification/bindings",
 	[ValidateSet("PASS", "UNVERIFIED")]
 	[string]$ManagedValidationStatus = "UNVERIFIED"
 )
@@ -329,6 +330,11 @@ $releaseEvidence = [ordered]@{
 }
 $releaseEvidencePath = Join-Path $outputRoot "release-evidence.json"
 Write-JsonFile -Value $releaseEvidence -Path $releaseEvidencePath
+
+& (Join-Path $PSScriptRoot "Apply-QualificationEvidence.ps1") `
+	-OutputPath $outputRoot `
+	-SourceCommit $SourceCommit `
+	-BindingRoot $QualificationBindingRoot
 
 Write-Host "Release evidence generated: $outputRoot"
 Write-Host "Product: $($policy.productName) $productVersion ($releaseStage)"
