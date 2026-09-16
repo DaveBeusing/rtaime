@@ -234,6 +234,7 @@ $contractEntries = @(
 			compatibilityPolicy = "EXACT_DECLARED"
 			supportedVersions = @($contract.Value)
 		}
+	}
 )
 $hardwareQualification = @(
 	foreach ($requirement in $policy.hardwareQualification) {
