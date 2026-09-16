@@ -6,7 +6,7 @@
 
 The release-evidence foundation turns a successful managed validation run into an offline-verifiable evidence bundle without claiming a release level that has not been earned.
 
-The implemented trust path is:
+The current trust path is:
 
 ```text
 Source identity
@@ -23,10 +23,16 @@ Explicit Compatibility Manifest
     ↓
 Release Evidence Manifest
     ↓
+Release Attestation
+    ↓
+Content-addressed Release Record
+    ↓
 Offline verification
 ```
 
-Production signing, attestation and immutable official release publication are deliberately outside this foundation. Their status remains `UNVERIFIED` until a later controlled implementation provides direct evidence.
+Release evidence generation and release signing remain separate trust steps. The evidence manifest is complete before it is signed; signing therefore binds the exact evidence bytes instead of rewriting the signed subject afterward.
+
+Production key trust and immutable external publication remain `UNVERIFIED` until their dedicated controlled infrastructure and evidence exist.
 
 ## Product identity
 
@@ -48,7 +54,7 @@ VALIDATED
 CERTIFIED
 ```
 
-The foundation does not promote the product beyond `DEV`.
+The current product remains `DEV`.
 
 ## Source commit vs build commit
 
@@ -59,9 +65,9 @@ Pull-request CI builds GitHub's tested merge ref rather than the branch head in 
 
 On a normal `master` build these values are expected to be the same. Keeping them separate prevents an evidence record from claiming that bytes produced from a tested merge tree came from the unmerged branch tree alone.
 
-## Generated bundle
+## Generated evidence bundle
 
-`build/release/New-ReleaseEvidence.ps1` creates:
+`build/release/New-ReleaseEvidence.ps1` first creates:
 
 ```text
 artifacts/release-evidence/
@@ -76,9 +82,17 @@ artifacts/release-evidence/
 └─ release-evidence.json
 ```
 
-The `product/` directory is a release-evidence payload assembled from the already-built Release outputs. It is not yet an installer, deployment package or claim of offline deployment acceptance.
+The signing stage can then add:
 
-PDB files are excluded from this evidence payload. All included files are recorded with byte length and SHA-256.
+```text
+release-attestation.json
+release-record.json
+release-record.sha256
+```
+
+The `product/` directory is a release-evidence payload assembled from the already-built Release outputs. It is not an installer, deployment package or claim of offline deployment acceptance.
+
+PDB files are excluded from this evidence payload. All included product files are recorded with byte length and SHA-256.
 
 ## Artifact Manifest
 
@@ -91,13 +105,13 @@ PDB files are excluded from this evidence payload. All included files are record
 - every collected product artifact,
 - exact byte length and digest.
 
-The verifier recalculates every digest from the actual bundle. A missing, added-by-reference, truncated or modified recorded artifact therefore fails verification.
+The verifier recalculates every digest from the actual bundle. A missing, truncated or modified recorded artifact fails verification.
 
 ## Software Bill of Materials
 
 `sbom.cdx.json` uses CycloneDX `1.6`.
 
-The current generator derives the production dependency inventory from resolved `project.assets.json` files below `src/`. Test-only projects are not used as the production software-composition source.
+The generator derives the production dependency inventory from resolved `project.assets.json` files below `src/`. Test-only projects are not used as the production software-composition source.
 
 The SBOM proves the resolved NuGet component inventory captured by this build. It does not by itself prove:
 
@@ -106,7 +120,7 @@ The SBOM proves the resolved NuGet component inventory captured by this build. I
 - dependency security review,
 - formal CRA conformity.
 
-Those claims require their own evidence and remain separate from software-composition inventory.
+Those claims require separate evidence.
 
 ## Compatibility Manifest
 
@@ -167,17 +181,17 @@ INFORMATIONAL
 
 A CI invocation may mark the managed test-backed domains `PASS` only because evidence generation happens after the complete `dotnet test rtaime.slnx --configuration Release --no-build` command has succeeded.
 
-The foundation intentionally records:
+The current DEV evidence intentionally keeps:
 
 - `SECURITY = UNVERIFIED`,
 - `COMPLIANCE = UNVERIFIED`,
 - `KNOWN_ISSUES = UNVERIFIED`,
-- signing/attestation `UNVERIFIED`,
+- production signing trust `UNVERIFIED`,
 - overall release readiness `UNVERIFIED`.
 
-This is not a defect in the manifest. It is the required distinction between a verifiable DEV evidence bundle and an earned release-readiness claim.
+A later cryptographic attestation does not rewrite those claims. It proves the integrity/provenance relationship of the evidence subject; it does not magically satisfy every release domain.
 
-## Offline verification
+## Evidence verification
 
 Run after a Release build and evidence generation:
 
@@ -185,7 +199,7 @@ Run after a Release build and evidence generation:
 ./build/release/Test-ReleaseEvidence.ps1
 ```
 
-The verifier performs local-only checks and does not require an Internet service. It validates at minimum:
+It validates at minimum:
 
 - product/source/build identities across manifests,
 - artifact existence, byte length and SHA-256,
@@ -194,12 +208,16 @@ The verifier performs local-only checks and does not require an Internet service
 - explicit contract and IPC compatibility against release policy,
 - evidence status and severity allowlists,
 - required evidence-domain presence,
-- release schema/documentation presence,
 - fail-closed handling of any `FAIL` evidence,
-- signing claims requiring actual signature evidence,
 - release-stage promotion requiring an explicit readiness `PASS`.
 
-`UNVERIFIED` is accepted as `UNVERIFIED` for the current `DEV` stage; it is never converted into success.
+After release attestation is created, also run:
+
+```powershell
+./build/release/Test-ReleaseAttestation.ps1
+```
+
+The signing profile, trust-store policy, tamper qualification and content-addressed record are documented in `docs/ReleaseSigningAndAttestation.md`.
 
 ## CI integration
 
@@ -211,23 +229,31 @@ Build
 Test
 Generate Release Evidence
 Verify Release Evidence
+Generate ephemeral CI signing key outside repository
+Sign Release Evidence
+Verify Signature + Release Record
+Run negative signing qualification
+Delete ephemeral private key
 Upload Evidence Bundle
 ```
 
-The uploaded GitHub Actions artifact is evidence for the specific build run. It is not an immutable official release record and does not substitute for a future signed release publication flow.
+The uploaded GitHub Actions artifact is evidence for the specific build run. A test-ephemeral signature is not an official production signature and the Actions artifact is not automatically an immutable official release record store.
 
 ## Security boundary
 
 Private production signing material must not be stored in the repository, release policy, test fixtures, generated evidence bundle or logs.
 
-The current package introduces no signing key, no placeholder private key and no simulated signing success.
+Only public release-key trust metadata may be version-controlled.
+
+The CI signing key is purpose-built test material generated outside the repository for one qualification run and deleted after use. It cannot establish production signing trust.
 
 ## Scope boundary
 
-This foundation implements release traceability mechanics. It does not claim:
+The release evidence and signing foundations do not claim:
 
 - `STABLE`, `VALIDATED` or `CERTIFIED` product status,
-- production signing or attestation,
+- production key provisioning or HSM/KMS qualification,
+- immutable external release-record retention,
 - formal CRA compliance or conformity,
 - vulnerability-management completion,
 - license-compliance approval,

@@ -58,6 +58,25 @@ jobs:
         shell: pwsh
         run: ./build/release/Test-ReleaseEvidence.ps1
 
+      - name: Qualify release signing and record
+        shell: pwsh
+        run: |
+          $keyPath = Join-Path $env:RUNNER_TEMP "rtaime-release-test-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT.pem"
+          try {
+            ./build/release/New-TestReleaseSigningKey.ps1 -PrivateKeyPath $keyPath
+            ./build/release/New-ReleaseAttestation.ps1 `
+              -PrivateKeyPath $keyPath `
+              -SignerClass TEST_EPHEMERAL `
+              -SignerId "github-actions"
+            ./build/release/Test-ReleaseAttestation.ps1
+            ./build/release/Test-ReleaseSigningFailureCases.ps1
+          }
+          finally {
+            if (Test-Path -LiteralPath $keyPath) {
+              Remove-Item -LiteralPath $keyPath -Force
+            }
+          }
+
       - name: Upload release evidence
         uses: actions/upload-artifact@v4
         with:
