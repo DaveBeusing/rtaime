@@ -52,6 +52,13 @@ public static class RuntimeHostDiagnostics
 				.Counter("mediaIo.outputRejected", ToCounter(mediaIo.OutputRejected));
 		}
 
+		if (process.MediaIoInputAStatus is { } inputA)
+			builder.Status("mediaIo.inputA.signal", inputA.SignalState.ToString());
+		if (process.MediaIoInputBStatus is { } inputB)
+			builder.Status("mediaIo.inputB.signal", inputB.SignalState.ToString());
+		if (process.MediaIoProgramOutputStatus is { } programOutput)
+			builder.Status("mediaIo.programOutput.signal", programOutput.SignalState.ToString());
+
 		if (process.Runtime is { } runtime)
 		{
 			var snapshot = runtime.Snapshot;
