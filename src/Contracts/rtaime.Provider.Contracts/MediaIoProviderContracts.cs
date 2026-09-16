@@ -107,9 +107,24 @@ public sealed class MediaIoProviderDescriptor
 		if (ports.Select(port => port.PortId).Distinct().Count() != ports.Count) throw new ArgumentException("Media I/O port identities must be unique.", nameof(ports));
 		if (ports.Select(port => port.ResourceId).Distinct().Count() != ports.Count) throw new ArgumentException("Media I/O resource identities must be unique per port.", nameof(ports));
 
-		var providerResources = provider.Resources.Select(resource => resource.ResourceId).ToHashSet();
-		if (ports.Any(port => !providerResources.Contains(port.ResourceId)))
-			throw new ArgumentException("Every Media I/O port must map to a declared provider resource.", nameof(ports));
+		var providerResources = provider.Resources.ToDictionary(resource => resource.ResourceId);
+		foreach (var port in ports)
+		{
+			if (!providerResources.TryGetValue(port.ResourceId, out var resource))
+				throw new ArgumentException("Every Media I/O port must map to a declared provider resource.", nameof(ports));
+
+			var expectedKind = port.Direction == MediaIoDirection.Input
+				? MediaIoCapabilityKinds.VideoInput
+				: MediaIoCapabilityKinds.VideoOutput;
+			if (!string.Equals(resource.Kind, expectedKind, StringComparison.Ordinal))
+				throw new ArgumentException("Media I/O provider resource kind must match the physical port direction.", nameof(ports));
+
+			var capabilityCoversPort = provider.Capabilities.Any(capability =>
+				string.Equals(capability.Kind, expectedKind, StringComparison.Ordinal) &&
+				port.NormalizedVideoFormats.All(format => capability.VideoFormats.Contains(format)));
+			if (!capabilityCoversPort)
+				throw new ArgumentException("Generic provider capabilities must cover every normalized Media I/O port format.", nameof(ports));
+		}
 
 		Version = version;
 		_ports = Array.AsReadOnly(ports.ToArray());
