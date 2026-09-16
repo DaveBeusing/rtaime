@@ -1,0 +1,71 @@
+# Copyright (c) Dave Beusing <david.beusing@gmail.com>.
+
+name: CUDA reference hardware qualification
+
+on:
+	workflow_dispatch:
+		inputs:
+			expected_device_name:
+				description: Expected NVIDIA reference GPU name substring
+				required: true
+				type: string
+			device_ordinal:
+				description: CUDA device ordinal
+				required: true
+				default: "0"
+				type: string
+			sample_iterations:
+				description: Measured iterations per qualification case
+				required: true
+				default: "30"
+				type: string
+
+permissions:
+	contents: read
+
+jobs:
+	cuda-reference:
+		name: CUDA Reference Hardware
+		runs-on:
+			- self-hosted
+			- windows
+			- x64
+			- rtaime-cuda-reference
+		timeout-minutes: 45
+
+		steps:
+			- name: Checkout exact source
+				uses: actions/checkout@v4
+
+			- name: Setup .NET
+				uses: actions/setup-dotnet@v4
+				with:
+					global-json-file: global.json
+
+			- name: Qualify SDK
+				shell: pwsh
+				run: |
+					dotnet --info
+					if ((dotnet --version) -ne "10.0.401") {
+						throw "Expected .NET SDK 10.0.401."
+					}
+
+			- name: Build qualification target
+				shell: pwsh
+				run: dotnet build tests/rtaime.Tests.Performance/rtaime.Tests.Performance.csproj --configuration Release
+
+			- name: Run CUDA reference qualification
+				shell: pwsh
+				run: |
+					./build/qualification/Invoke-CudaReferenceQualification.ps1 `
+						-ExpectedDeviceName "${{ inputs.expected_device_name }}" `
+						-DeviceOrdinal ([int]"${{ inputs.device_ordinal }}") `
+						-SampleIterations ([int]"${{ inputs.sample_iterations }}") `
+						-EvidencePath "artifacts/qualification/cuda-reference.json"
+
+			- name: Upload immutable qualification evidence
+				uses: actions/upload-artifact@v4
+				with:
+					name: cuda-reference-qualification-${{ github.run_id }}-${{ github.run_attempt }}
+					path: artifacts/qualification/cuda-reference.json
+					if-no-files-found: error
