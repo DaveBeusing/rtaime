@@ -1,3 +1,5 @@
+// Copyright (c) Dave Beusing <david.beusing@gmail.com>.
+
 using System.Collections.ObjectModel;
 using System.Security.Cryptography;
 using System.Text;
@@ -86,11 +88,14 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
     private readonly AudioFollowVideoEngine _audio;
     private readonly Dictionary<MediaSourceId, AudioStreamDescriptor> _audioStreams;
     private readonly Dictionary<MediaSourceId, RgbaFrameBuffer> _backgrounds;
+    private readonly RgbaFrameBuffer _blackBackground;
     private readonly Dictionary<MediaSourceId, V1InputSignalState> _inputSignals;
     private readonly StaticRgbaSource _staticLayer;
     private readonly DynamicRgbaSource _dynamicLayer;
     private readonly ProgramRecorder _recorder;
     private readonly RuntimeRecordingBridge _recordingBridge;
+    private readonly RuntimeMonitoringHub _monitoringHub;
+    private readonly RuntimeMonitoringTap _monitoringTap;
     private readonly List<string> _observations = new();
 
     private VirtualVideoOutput? _programOutput;
@@ -136,6 +141,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
             [sourceAId] = RgbaFrameBuffer.Solid(format, 32, 72, 196),
             [sourceBId] = RgbaFrameBuffer.Solid(format, 196, 72, 32)
         };
+        _blackBackground = RgbaFrameBuffer.Solid(format, 0, 0, 0);
         _inputSignals = new Dictionary<MediaSourceId, V1InputSignalState>
         {
             [sourceAId] = V1InputSignalState.Valid,
@@ -151,6 +157,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 
         _recorder = new ProgramRecorder(recordingWriter ?? throw new ArgumentNullException(nameof(recordingWriter)));
         _recordingBridge = new RuntimeRecordingBridge(_recorder);
+        _monitoringHub = new RuntimeMonitoringHub();
+        _monitoringTap = new RuntimeMonitoringTap(_monitoringHub);
     }
 
     public IReadOnlyList<ProviderDescriptor> ProviderDescriptors =>
@@ -158,6 +166,19 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 
     public IReadOnlyList<VirtualOutputFrame> ProgramFrames =>
         _programOutput?.Frames ?? Array.Empty<VirtualOutputFrame>();
+
+    public RuntimeMonitoringHub MonitoringHub => _monitoringHub;
+    public RuntimeMonitoringTapStatistics MonitoringStatistics => _monitoringTap.Statistics;
+    public VideoFormat Format => _format;
+
+    public bool HasCommittedExecution
+    {
+        get
+        {
+            lock (_gate)
+                return _runtime.ActiveExecution is not null;
+        }
+    }
 
     public IReadOnlyList<string> Observations
     {
@@ -248,8 +269,10 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
                 [frameB.SourceId] = frameB
             };
 
-            using var gpuA = MaterializeInput(frameA);
-            using var gpuB = MaterializeInput(frameB);
+            var contentA = ResolveInputContent(frameA);
+            var contentB = ResolveInputContent(frameB);
+            using var gpuA = MaterializeInput(frameA, contentA);
+            using var gpuB = MaterializeInput(frameB, contentB);
             var gpuFrames = new Dictionary<MediaSourceId, GpuFrame>
             {
                 [frameA.SourceId] = gpuA,
@@ -277,6 +300,15 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
             var pixels = _gpu.Readback(output);
             var probe = ProbeCenter(pixels, _format);
             _programOutput!.WriteFrame(output.Descriptor);
+            _monitoringTap.TryCapture(
+                frameA.SourceId,
+                contentA.Pixels,
+                frameB.SourceId,
+                contentB.Pixels,
+                committedSource,
+                pixels,
+                _format,
+                output.Descriptor.Timing);
 
             var audioBuffer = CreateAudioBuffer(committedSource, sequence);
             var audio = _audio.ProcessBoundary(
@@ -434,6 +466,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
         }
         if (!dispose) return;
 
+        await _monitoringTap.DisposeAsync().ConfigureAwait(false);
+        _monitoringHub.Dispose();
         await _recorder.DisposeAsync().ConfigureAwait(false);
         _sourceAPipeline.Dispose();
         _sourceBPipeline.Dispose();
@@ -461,15 +495,19 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
         return consumed;
     }
 
-    private GpuFrame MaterializeInput(FrameDescriptor frame)
+    private RgbaFrameBuffer ResolveInputContent(FrameDescriptor frame)
     {
         var state = _inputSignals[frame.SourceId];
-        var content = state == V1InputSignalState.Lost
-            ? RgbaFrameBuffer.Solid(_format, 0, 0, 0)
-            : _backgrounds[frame.SourceId];
-        if (state == V1InputSignalState.Lost)
-            Observe($"input.fallback.black:{frame.SourceId}:{frame.Timing.SequenceNumber}");
+        if (state != V1InputSignalState.Lost)
+            return _backgrounds[frame.SourceId];
 
+        Observe($"input.fallback.black:{frame.SourceId}:{frame.Timing.SequenceNumber}");
+        return _blackBackground;
+    }
+
+    private GpuFrame MaterializeInput(FrameDescriptor frame, RgbaFrameBuffer content)
+    {
+        var state = _inputSignals[frame.SourceId];
         return _gpu.Upload(
             frame.SourceId,
             content,
