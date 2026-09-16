@@ -19,6 +19,8 @@ SHA-256 Artifact Manifest
     ↓
 CycloneDX SBOM
     ↓
+Source-bound Qualification Evidence Manifest
+    ↓
 Explicit Compatibility Manifest
     ↓
 Release Evidence Manifest
@@ -65,9 +67,11 @@ Pull-request CI builds GitHub's tested merge ref rather than the branch head in 
 
 On a normal `master` build these values are expected to be the same. Keeping them separate prevents an evidence record from claiming that bytes produced from a tested merge tree came from the unmerged branch tree alone.
 
+Physical qualification evidence is stricter: a qualification binding must name the exact `sourceCommit` it qualified. Evidence from another source commit is rejected rather than inherited implicitly.
+
 ## Generated evidence bundle
 
-`build/release/New-ReleaseEvidence.ps1` first creates:
+`build/release/New-ReleaseEvidence.ps1` first creates the release evidence and then applies any valid source-bound physical qualification bindings:
 
 ```text
 artifacts/release-evidence/
@@ -76,11 +80,17 @@ artifacts/release-evidence/
 │  ├─ rtaime.RuntimeHost/
 │  ├─ rtaime.AIHost/
 │  └─ rtaime.Operator/
+├─ qualification/
+│  ├─ bindings/
+│  └─ payloads/
 ├─ artifact-manifest.json
 ├─ sbom.cdx.json
 ├─ compatibility-manifest.json
+├─ qualification-evidence-manifest.json
 └─ release-evidence.json
 ```
+
+The `qualification/` directories can be empty when no physical evidence exists. In that case all physical requirements remain `UNVERIFIED`.
 
 The signing stage can then add:
 
@@ -122,6 +132,24 @@ The SBOM proves the resolved NuGet component inventory captured by this build. I
 
 Those claims require separate evidence.
 
+## Qualification Evidence Manifest
+
+`qualification-evidence-manifest.json` is the release-local bridge between dedicated physical qualification workflows and compatibility evidence.
+
+The static release policy never grants physical hardware `PASS`. Its five V1 requirements remain configured as `UNVERIFIED`:
+
+```text
+REFERENCE_GPU
+PROFESSIONAL_MEDIA_IO
+GENLOCK
+PHYSICAL_END_TO_END_LATENCY
+LONG_SOAK
+```
+
+A requirement becomes `PASSED` in the qualification manifest only when a repository-authorized binding exists for the same source commit and the exact binding/payload bytes pass their fail-closed verifier. The accepted bytes are copied into the release-evidence bundle and hashed again after the copy.
+
+The current qualification mapping is documented in `docs/QualificationEvidenceProvenance.md`.
+
 ## Compatibility Manifest
 
 Compatibility is explicit rather than inferred from version equality.
@@ -140,7 +168,9 @@ IPC schema set     schemas/ipc/v1
 
 The generated manifest uses `EXACT_DECLARED` compatibility policy. The offline verifier compares the generated manifest back to the controlled policy and fails on undeclared, missing or changed compatibility entries.
 
-Reference GPU, professional media I/O and genlock qualification remain `UNVERIFIED`. Virtual or managed tests must not turn those hardware claims into `PASS`.
+Physical compatibility status is derived from the source-bound qualification evidence manifest. `UNVERIFIED` remains `UNVERIFIED`; only a verified manifest `PASSED` entry becomes compatibility `PASS`.
+
+Normal managed or virtual tests must not turn hardware claims into `PASS`.
 
 ## Release Evidence Manifest
 
@@ -189,6 +219,8 @@ The current DEV evidence intentionally keeps:
 - production signing trust `UNVERIFIED`,
 - overall release readiness `UNVERIFIED`.
 
+Physical hardware requirements also remain `UNVERIFIED` unless same-source physical bindings are actually supplied to that release build.
+
 A later cryptographic attestation does not rewrite those claims. It proves the integrity/provenance relationship of the evidence subject; it does not magically satisfy every release domain.
 
 ## Evidence verification
@@ -206,6 +238,9 @@ It validates at minimum:
 - manifest-to-manifest hash references,
 - CycloneDX format and production component inventory,
 - explicit contract and IPC compatibility against release policy,
+- source-bound physical qualification provenance,
+- byte-identical copied qualification binding and payload hashes,
+- qualification workflow run/attempt provenance,
 - evidence status and severity allowlists,
 - required evidence-domain presence,
 - fail-closed handling of any `FAIL` evidence,
@@ -228,6 +263,7 @@ Restore
 Build
 Test
 Generate Release Evidence
+Bind same-source physical qualification evidence if present
 Verify Release Evidence
 Generate ephemeral CI signing key outside repository
 Sign Release Evidence
@@ -239,6 +275,8 @@ Upload Evidence Bundle
 
 The uploaded GitHub Actions artifact is evidence for the specific build run. A test-ephemeral signature is not an official production signature and the Actions artifact is not automatically an immutable official release record store.
 
+Normal GitHub-hosted Required Gates do not contain reference hardware artifacts, so their qualification manifest remains `UNVERIFIED`. That behavior is intentional and is separately regression-tested.
+
 ## Security boundary
 
 Private production signing material must not be stored in the repository, release policy, test fixtures, generated evidence bundle or logs.
@@ -246,6 +284,8 @@ Private production signing material must not be stored in the repository, releas
 Only public release-key trust metadata may be version-controlled.
 
 The CI signing key is purpose-built test material generated outside the repository for one qualification run and deleted after use. It cannot establish production signing trust.
+
+Qualification bindings contain provenance and hashes only. They do not carry private signing material.
 
 ## Scope boundary
 
@@ -257,9 +297,11 @@ The release evidence and signing foundations do not claim:
 - formal CRA compliance or conformity,
 - vulnerability-management completion,
 - license-compliance approval,
-- professional GPU qualification,
-- professional media-I/O qualification,
-- genlock qualification,
+- professional GPU qualification without retained same-source physical evidence,
+- professional media-I/O qualification without retained same-source physical evidence,
+- genlock qualification without retained same-source physical evidence,
+- physical end-to-end latency qualification without retained same-source physical evidence,
+- long-soak qualification without retained same-source physical evidence,
 - installer/deployment acceptance,
 - byte-for-byte reproducible builds across independent environments.
 
