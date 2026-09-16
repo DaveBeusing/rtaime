@@ -124,6 +124,10 @@ jobs:
         shell: pwsh
         run: ./build/quality/Test-MediaIoFoundationPolicy.ps1
 
+      - name: Verify media I/O vertical slice policy
+        shell: pwsh
+        run: ./build/quality/Test-MediaIoVerticalSlicePolicy.ps1
+
       - name: Restore
         run: dotnet restore rtaime.slnx
 
