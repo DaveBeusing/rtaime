@@ -1,0 +1,40 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://rtaime.local/schemas/update/v1/installed-release-state.schema.json",
+	"$comment": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+	"title": "rtaime Installed Release State v1",
+	"type": "object",
+	"additionalProperties": false,
+	"required": ["copyright", "schemaVersion", "installPath", "productName", "productVersion", "releaseStage", "channel", "sourceCommit", "buildCommit", "releaseRecordId", "releaseKeyFingerprint", "releaseSignerClass", "activeTrustedReleaseKeyFingerprints", "platform", "integrityVerification", "productionTrustRequired"],
+	"properties": {
+		"copyright": { "type": "string", "minLength": 1 },
+		"schemaVersion": { "const": "1.0" },
+		"installPath": { "type": "string", "minLength": 1 },
+		"productName": { "const": "rtaime" },
+		"productVersion": { "type": "string", "minLength": 1 },
+		"releaseStage": { "enum": ["DEV", "PREVIEW", "STABLE", "VALIDATED", "CERTIFIED"] },
+		"channel": { "enum": ["QUALIFICATION", "PREVIEW", "STABLE", "UNSUPPORTED"] },
+		"sourceCommit": { "type": "string", "pattern": "^[0-9a-f]{40,64}$" },
+		"buildCommit": { "type": "string", "pattern": "^[0-9a-f]{40,64}$" },
+		"releaseRecordId": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+		"releaseKeyFingerprint": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+		"releaseSignerClass": { "enum": ["TEST_EPHEMERAL", "EXTERNAL_CONTROLLED"] },
+		"activeTrustedReleaseKeyFingerprints": {
+			"type": "array",
+			"uniqueItems": true,
+			"items": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+		},
+		"platform": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["osFamily", "architecture", "rid"],
+			"properties": {
+				"osFamily": { "const": "Windows" },
+				"architecture": { "const": "x64" },
+				"rid": { "const": "win-x64" }
+			}
+		},
+		"integrityVerification": { "const": "PASS" },
+		"productionTrustRequired": { "type": "boolean" }
+	}
+}

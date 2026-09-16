@@ -32,7 +32,16 @@
 	"offlineTools": [
 		"build/release/Test-OfflineReleaseBundle.ps1",
 		"build/release/Invoke-OfflinePreflight.ps1",
-		"build/release/Install-OfflineRelease.ps1"
+		"build/release/Install-OfflineRelease.ps1",
+		"build/update/update-policy.json",
+		"build/update/Get-InstalledReleaseState.ps1",
+		"build/update/Resolve-UpdateDiscovery.ps1",
+		"build/update/Get-VerifiedUpdateCandidate.ps1",
+		"build/update/Test-DownloadedRelease.ps1",
+		"build/update/New-UpdatePlan.ps1",
+		"build/update/Invoke-AtomicSoftwareReplacement.ps1",
+		"build/update/Invoke-SoftwareRollback.ps1",
+		"build/update/Invoke-VerifiedUpdate.ps1"
 	],
 	"rootDocumentation": [
 		"README.md"

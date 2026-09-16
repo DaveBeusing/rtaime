@@ -1,0 +1,77 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://rtaime.local/schemas/update/v1/update-policy.schema.json",
+	"$comment": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+	"title": "rtaime Update Policy v1",
+	"type": "object",
+	"additionalProperties": false,
+	"required": ["copyright", "schemaVersion", "repository", "platform", "supportedCurrentChannels", "targetChannelTransitions", "trust", "selection", "replacement"],
+	"properties": {
+		"copyright": { "type": "string", "minLength": 1 },
+		"schemaVersion": { "const": "1.0" },
+		"repository": { "const": "DaveBeusing/rtaime" },
+		"platform": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["osFamily", "architecture", "rid"],
+			"properties": {
+				"osFamily": { "const": "Windows" },
+				"architecture": { "const": "x64" },
+				"rid": { "const": "win-x64" }
+			}
+		},
+		"supportedCurrentChannels": {
+			"type": "array",
+			"minItems": 2,
+			"maxItems": 2,
+			"uniqueItems": true,
+			"items": { "enum": ["PREVIEW", "STABLE"] }
+		},
+		"targetChannelTransitions": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["PREVIEW", "STABLE"],
+			"properties": {
+				"PREVIEW": { "type": "array", "items": { "enum": ["PREVIEW", "STABLE"] }, "minItems": 1, "uniqueItems": true },
+				"STABLE": { "type": "array", "items": { "const": "STABLE" }, "minItems": 1, "maxItems": 1 }
+			}
+		},
+		"trust": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["requirePublishedRelease", "requiredSignerClass", "requireProductionTrust", "requireCandidatePublicationReadinessPass", "requireTrustedProductionBundle"],
+			"properties": {
+				"requirePublishedRelease": { "const": true },
+				"requiredSignerClass": { "const": "EXTERNAL_CONTROLLED" },
+				"requireProductionTrust": { "const": true },
+				"requireCandidatePublicationReadinessPass": { "const": true },
+				"requireTrustedProductionBundle": { "const": true }
+			}
+		},
+		"selection": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["allowDowngrade", "allowReinstallSameVersion", "allowDraftRelease", "stableMaySelectPrerelease", "previewMayPromoteToStable"],
+			"properties": {
+				"allowDowngrade": { "const": false },
+				"allowReinstallSameVersion": { "const": false },
+				"allowDraftRelease": { "const": false },
+				"stableMaySelectPrerelease": { "const": false },
+				"previewMayPromoteToStable": { "const": true }
+			}
+		},
+		"replacement": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["requireExplicitQuiescenceAcknowledgement", "rollbackSlotSuffix", "workStateSuffix", "retainRollbackAfterSuccess", "failIfRollbackSlotExists", "persistentStateMigration"],
+			"properties": {
+				"requireExplicitQuiescenceAcknowledgement": { "const": true },
+				"rollbackSlotSuffix": { "const": ".rollback" },
+				"workStateSuffix": { "const": ".update-state" },
+				"retainRollbackAfterSuccess": { "const": true },
+				"failIfRollbackSlotExists": { "const": true },
+				"persistentStateMigration": { "const": "NOT_IMPLEMENTED" }
+			}
+		}
+	}
+}
