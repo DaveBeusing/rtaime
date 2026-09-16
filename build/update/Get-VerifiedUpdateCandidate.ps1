@@ -15,8 +15,18 @@ function Assert-Condition {
 	if (-not $Condition) { throw $Message }
 }
 
+function Assert-SafeAssetName {
+	param([Parameter(Mandatory)][string]$Name)
+	Assert-Condition (-not [string]::IsNullOrWhiteSpace($Name)) "Release asset name must not be empty."
+	Assert-Condition (-not [System.IO.Path]::IsPathRooted($Name)) "Release asset '$Name' must not be rooted."
+	Assert-Condition ([System.IO.Path]::GetFileName($Name) -eq $Name) "Release asset '$Name' must be a basename."
+	Assert-Condition ($Name -notmatch '[\\/]') "Release asset '$Name' must not contain path separators."
+	Assert-Condition ($Name -notin @('.', '..')) "Release asset name '$Name' is invalid."
+}
+
 function Get-Asset {
 	param([Parameter(Mandatory)]$Discovery, [Parameter(Mandatory)][string]$Name)
+	Assert-SafeAssetName -Name $Name
 	$matches = @($Discovery.assets | Where-Object { [string]$_.name -eq $Name })
 	Assert-Condition ($matches.Count -eq 1) "Release discovery must contain exactly one asset named '$Name'."
 	return $matches[0]
@@ -24,14 +34,16 @@ function Get-Asset {
 
 function Download-Asset {
 	param([Parameter(Mandatory)]$Asset, [Parameter(Mandatory)][string]$Destination)
+	$name = [string]$Asset.name
+	Assert-SafeAssetName -Name $name
 	$url = [string]$Asset.browserDownloadUrl
-	Assert-Condition ($url.StartsWith('https://github.com/DaveBeusing/rtaime/releases/download/', [StringComparison]::OrdinalIgnoreCase)) "Asset '$($Asset.name)' does not use the expected GitHub release download origin."
+	Assert-Condition ($url.StartsWith('https://github.com/DaveBeusing/rtaime/releases/download/', [StringComparison]::OrdinalIgnoreCase)) "Asset '$name' does not use the expected GitHub release download origin."
 	$parent = Split-Path -Parent $Destination
 	if (-not (Test-Path -LiteralPath $parent)) { New-Item -ItemType Directory -Path $parent -Force | Out-Null }
 	Invoke-WebRequest -Uri $url -OutFile $Destination -Headers @{ 'User-Agent' = 'rtaime-update-download' } -MaximumRedirection 10
-	Assert-Condition (Test-Path -LiteralPath $Destination -PathType Leaf) "Asset '$($Asset.name)' was not downloaded."
+	Assert-Condition (Test-Path -LiteralPath $Destination -PathType Leaf) "Asset '$name' was not downloaded."
 	if ([long]$Asset.size -gt 0) {
-		Assert-Condition ((Get-Item -LiteralPath $Destination).Length -eq [long]$Asset.size) "Downloaded asset '$($Asset.name)' size mismatch."
+		Assert-Condition ((Get-Item -LiteralPath $Destination).Length -eq [long]$Asset.size) "Downloaded asset '$name' size mismatch."
 	}
 }
 
@@ -51,6 +63,10 @@ New-Item -ItemType Directory -Path $candidateRoot -Force | Out-Null
 New-Item -ItemType Directory -Path $publicationRoot -Force | Out-Null
 
 $descriptorName = [string]$discovery.descriptorAssetName
+Assert-SafeAssetName -Name $descriptorName
+$expectedDescriptorName = if ([string]$discovery.channel -eq 'PREVIEW') { 'rtaime-channel-preview.json' } else { 'rtaime-channel-stable.json' }
+Assert-Condition ($descriptorName -eq $expectedDescriptorName) "Discovery descriptor asset name does not match channel."
+
 $fixedAssets = @(
 	@('release-candidate.json', $candidateRoot),
 	@('release-candidate.sha256', $candidateRoot),
@@ -66,12 +82,24 @@ foreach ($entry in $fixedAssets) {
 	Download-Asset -Asset (Get-Asset -Discovery $discovery -Name $name) -Destination (Join-Path $destinationRoot $name)
 }
 
-$candidate = Get-Content -LiteralPath (Join-Path $candidateRoot 'release-candidate.json') -Raw | ConvertFrom-Json
+$candidateManifestPath = Join-Path $candidateRoot 'release-candidate.json'
+$candidateManifestHash = (Get-FileHash -LiteralPath $candidateManifestPath -Algorithm SHA256).Hash.ToLowerInvariant()
+$candidateSidecar = [System.IO.File]::ReadAllText((Join-Path $candidateRoot 'release-candidate.sha256')).Trim()
+Assert-Condition ($candidateSidecar -eq "$candidateManifestHash  release-candidate.json") "Downloaded Candidate manifest sidecar mismatch."
+
+$candidate = Get-Content -LiteralPath $candidateManifestPath -Raw | ConvertFrom-Json
 Assert-Condition ([string]$candidate.channel -eq [string]$discovery.channel) "Downloaded candidate channel differs from discovery metadata."
 Assert-Condition ([string]$candidate.product.version -eq [string]$discovery.version) "Downloaded candidate version differs from discovery metadata."
 Assert-Condition ([string]$candidate.source.tag -eq [string]$discovery.tag) "Downloaded candidate tag differs from discovery metadata."
 
-foreach ($name in @([string]$candidate.bundle.fileName, [string]$candidate.bundle.sidecarFileName)) {
+$bundleFileName = [string]$candidate.bundle.fileName
+$bundleSidecarFileName = [string]$candidate.bundle.sidecarFileName
+Assert-SafeAssetName -Name $bundleFileName
+Assert-SafeAssetName -Name $bundleSidecarFileName
+Assert-Condition ([System.IO.Path]::GetExtension($bundleFileName).Equals('.zip', [StringComparison]::OrdinalIgnoreCase)) "Downloaded Candidate bundle must be a ZIP file."
+Assert-Condition ($bundleSidecarFileName -eq "$bundleFileName.sha256") "Downloaded Candidate bundle sidecar name is invalid."
+
+foreach ($name in @($bundleFileName, $bundleSidecarFileName)) {
 	Download-Asset -Asset (Get-Asset -Discovery $discovery -Name $name) -Destination (Join-Path $candidateRoot $name)
 }
 
@@ -88,17 +116,13 @@ $releaseMetadata = [ordered]@{
 $metadataPath = Join-Path $outputRoot 'github-release.json'
 [System.IO.File]::WriteAllText($metadataPath, ($releaseMetadata | ConvertTo-Json -Depth 32) + [Environment]::NewLine, [System.Text.UTF8Encoding]::new($false))
 
-$verifierCandidates = @(
-	(Join-Path $PSScriptRoot 'Test-DownloadedRelease.ps1'),
-	(Join-Path $PSScriptRoot '../update/Test-DownloadedRelease.ps1')
-)
-$verifier = $verifierCandidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
-Assert-Condition (-not [string]::IsNullOrWhiteSpace($verifier)) "Downloaded release verifier is unavailable."
+$verifier = Join-Path $PSScriptRoot 'Test-DownloadedRelease.ps1'
+Assert-Condition (Test-Path -LiteralPath $verifier -PathType Leaf) "Downloaded release verifier is unavailable."
 $result = & $verifier -CandidatePath $candidateRoot -PublicationPath $publicationRoot -GitHubReleaseMetadataPath $metadataPath
 
 Write-Host "Verified update download PASS"
 Write-Host "Version: $($candidate.product.version)"
-Write-Host "Bundle: $($candidate.bundle.fileName)"
+Write-Host "Bundle: $bundleFileName"
 Write-Host "Output: $outputRoot"
 
 return [ordered]@{

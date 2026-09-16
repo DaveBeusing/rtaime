@@ -17,15 +17,14 @@ function Assert-Condition {
 	if (-not $Condition) { throw $Message }
 }
 
-function Get-Sha256 {
+function Get-FileSha256Hex {
 	param([Parameter(Mandatory)][string]$Path)
 	return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
 }
 
-function Get-CanonicalSha256 {
-	param([Parameter(Mandatory)][string[]]$Values)
-	$bytes = [System.Text.Encoding]::UTF8.GetBytes(($Values -join "`n"))
-	return [Convert]::ToHexString([System.Security.Cryptography.SHA256]::HashData($bytes)).ToLowerInvariant()
+function Get-Sha256Hex {
+	param([Parameter(Mandatory)][byte[]]$Bytes)
+	return [Convert]::ToHexString([System.Security.Cryptography.SHA256]::HashData($Bytes)).ToLowerInvariant()
 }
 
 $candidateRoot = [System.IO.Path]::GetFullPath($CandidatePath)
@@ -33,13 +32,17 @@ $publicationRoot = [System.IO.Path]::GetFullPath($PublicationPath)
 Assert-Condition (Test-Path -LiteralPath $candidateRoot -PathType Container) "Candidate directory was not found."
 Assert-Condition (Test-Path -LiteralPath $publicationRoot -PathType Container) "Publication directory was not found."
 
+$candidateVerifierCandidates = @(
+	(Join-Path $PSScriptRoot 'Test-ReleaseCandidate.ps1'),
+	(Join-Path $PSScriptRoot '../release/Test-ReleaseCandidate.ps1')
+)
+$candidateVerifier = $candidateVerifierCandidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
+Assert-Condition (-not [string]::IsNullOrWhiteSpace($candidateVerifier)) "Release Candidate verifier is unavailable."
+& $candidateVerifier -CandidatePath $candidateRoot
+
 $candidateManifestPath = Join-Path $candidateRoot 'release-candidate.json'
 $candidateSidecarPath = Join-Path $candidateRoot 'release-candidate.sha256'
-Assert-Condition (Test-Path -LiteralPath $candidateManifestPath -PathType Leaf) "release-candidate.json is missing."
-Assert-Condition (Test-Path -LiteralPath $candidateSidecarPath -PathType Leaf) "release-candidate.sha256 is missing."
 $candidate = Get-Content -LiteralPath $candidateManifestPath -Raw | ConvertFrom-Json
-
-Assert-Condition ([string]$candidate.schemaVersion -eq '1.0') "Unsupported Release Candidate schema version."
 Assert-Condition ([string]$candidate.channel -in @('PREVIEW', 'STABLE')) "Downloaded update candidate must be PREVIEW or STABLE."
 Assert-Condition ([string]$candidate.product.name -eq 'rtaime') "Unexpected product identity."
 Assert-Condition ([string]$candidate.trust.signerClass -eq 'EXTERNAL_CONTROLLED') "Downloaded update candidate must use EXTERNAL_CONTROLLED signing."
@@ -47,37 +50,28 @@ Assert-Condition ([string]$candidate.trust.productionTrust -eq 'PASS') "Download
 Assert-Condition ([string]$candidate.publicationReadiness.status -eq 'PASS') "Downloaded update candidate requires publication readiness PASS."
 Assert-Condition ([string]$candidate.source.tag -eq "v$($candidate.product.version)") "Candidate tag/version mismatch."
 
-$candidateManifestHash = Get-Sha256 $candidateManifestPath
+$candidateManifestHash = Get-FileSha256Hex -Path $candidateManifestPath
 Assert-Condition ([System.IO.File]::ReadAllText($candidateSidecarPath).Trim() -eq "$candidateManifestHash  release-candidate.json") "Candidate manifest sidecar mismatch."
 
 $bundlePath = Join-Path $candidateRoot ([string]$candidate.bundle.fileName)
 $bundleSidecarPath = Join-Path $candidateRoot ([string]$candidate.bundle.sidecarFileName)
-Assert-Condition (Test-Path -LiteralPath $bundlePath -PathType Leaf) "Candidate bundle is missing."
-Assert-Condition (Test-Path -LiteralPath $bundleSidecarPath -PathType Leaf) "Candidate bundle sidecar is missing."
-$bundleHash = Get-Sha256 $bundlePath
+$bundleHash = Get-FileSha256Hex -Path $bundlePath
 Assert-Condition ($bundleHash -eq ([string]$candidate.bundle.sha256).ToLowerInvariant()) "Candidate bundle SHA-256 mismatch."
 Assert-Condition ([System.IO.File]::ReadAllText($bundleSidecarPath).Trim() -eq "$bundleHash  $([System.IO.Path]::GetFileName($bundlePath))") "Candidate bundle sidecar mismatch."
-
-$bundleVerifierCandidates = @(
-	(Join-Path $PSScriptRoot 'Test-OfflineReleaseBundle.ps1'),
-	(Join-Path $PSScriptRoot '../release/Test-OfflineReleaseBundle.ps1')
-)
-$bundleVerifier = $bundleVerifierCandidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
-Assert-Condition (-not [string]::IsNullOrWhiteSpace($bundleVerifier)) "Trusted offline bundle verifier is unavailable."
-& $bundleVerifier -BundlePath $bundlePath -RequireTrustedProductionKey
 
 $publicationManifestPath = Join-Path $publicationRoot 'release-publication.json'
 $publicationSidecarPath = Join-Path $publicationRoot 'release-publication.sha256'
 Assert-Condition (Test-Path -LiteralPath $publicationManifestPath -PathType Leaf) "release-publication.json is missing."
 Assert-Condition (Test-Path -LiteralPath $publicationSidecarPath -PathType Leaf) "release-publication.sha256 is missing."
 $publication = Get-Content -LiteralPath $publicationManifestPath -Raw | ConvertFrom-Json
-$publicationHash = Get-Sha256 $publicationManifestPath
+$publicationHash = Get-FileSha256Hex -Path $publicationManifestPath
 Assert-Condition ([System.IO.File]::ReadAllText($publicationSidecarPath).Trim() -eq "$publicationHash  release-publication.json") "Publication manifest sidecar mismatch."
 
 Assert-Condition ([string]$publication.schemaVersion -eq '1.0') "Unsupported publication schema version."
 Assert-Condition ([string]$publication.repository -eq 'DaveBeusing/rtaime') "Unexpected publication repository."
 Assert-Condition ([string]$publication.channel -eq [string]$candidate.channel) "Publication/candidate channel mismatch."
 Assert-Condition ([string]$publication.product.version -eq [string]$candidate.product.version) "Publication/candidate version mismatch."
+Assert-Condition ([string]$publication.product.releaseStage -eq [string]$candidate.product.releaseStage) "Publication/candidate release-stage mismatch."
 Assert-Condition ([string]$publication.source.tag -eq [string]$candidate.source.tag) "Publication/candidate tag mismatch."
 Assert-Condition ([string]$publication.source.sourceCommit -eq [string]$candidate.source.sourceCommit) "Publication/candidate source mismatch."
 Assert-Condition ([string]$publication.candidate.candidateId -eq [string]$candidate.candidateId) "Publication/candidate identity mismatch."
@@ -85,6 +79,7 @@ Assert-Condition ([string]$publication.candidate.manifestSha256 -eq $candidateMa
 Assert-Condition ([string]$publication.bundle.sha256 -eq $bundleHash) "Publication bundle hash mismatch."
 Assert-Condition ([string]$publication.trust.signerClass -eq 'EXTERNAL_CONTROLLED') "Publication signer class is invalid."
 Assert-Condition ([string]$publication.trust.productionTrust -eq 'PASS') "Publication production trust is not PASS."
+Assert-Condition ([string]$publication.trust.keyFingerprint -eq [string]$candidate.trust.keyFingerprint) "Publication/Candidate key fingerprint mismatch."
 Assert-Condition ([string]$publication.trust.authoritativeTrustSource -eq 'RELEASE_CANDIDATE') "Publication trust source must remain RELEASE_CANDIDATE."
 Assert-Condition ($publication.githubRelease.assetOverwriteAllowed -eq $false) "Publication allows asset overwrite."
 Assert-Condition ($publication.githubRelease.rebuildAllowed -eq $false) "Publication allows rebuild."
@@ -97,7 +92,7 @@ Assert-Condition (Test-Path -LiteralPath $descriptorPath -PathType Leaf) "Channe
 Assert-Condition (Test-Path -LiteralPath $descriptorSidecarPath -PathType Leaf) "Channel descriptor sidecar is missing."
 Assert-Condition (Test-Path -LiteralPath $notesPath -PathType Leaf) "Release notes are missing."
 $descriptor = Get-Content -LiteralPath $descriptorPath -Raw | ConvertFrom-Json
-$descriptorHash = Get-Sha256 $descriptorPath
+$descriptorHash = Get-FileSha256Hex -Path $descriptorPath
 Assert-Condition ([System.IO.File]::ReadAllText($descriptorSidecarPath).Trim() -eq "$descriptorHash  $descriptorName") "Channel descriptor sidecar mismatch."
 Assert-Condition ([string]$descriptor.discoveryTrust.status -eq 'POINTER_ONLY') "Channel descriptor must remain discovery-only."
 Assert-Condition ([string]$descriptor.repository -eq [string]$publication.repository) "Descriptor repository mismatch."
@@ -108,9 +103,9 @@ Assert-Condition ([string]$descriptor.candidate.manifestSha256 -eq $candidateMan
 Assert-Condition ([string]$descriptor.publication.publicationId -eq [string]$publication.publicationId) "Descriptor publication identity mismatch."
 Assert-Condition ([string]$descriptor.publication.manifestSha256 -eq $publicationHash) "Descriptor publication hash mismatch."
 Assert-Condition ([string]$descriptor.bundle.sha256 -eq $bundleHash) "Descriptor bundle hash mismatch."
-Assert-Condition ([string]$publication.releaseNotes.sha256 -eq (Get-Sha256 $notesPath)) "Release notes hash mismatch."
+Assert-Condition ([string]$publication.releaseNotes.sha256 -eq (Get-FileSha256Hex $notesPath)) "Release notes hash mismatch."
 
-$expectedPublicationId = Get-CanonicalSha256 @(
+$expectedPublicationId = Get-Sha256Hex -Bytes ([System.Text.Encoding]::UTF8.GetBytes((@(
 	'rtaime.release-publication.v1',
 	[string]$publication.repository,
 	[string]$publication.channel,
@@ -120,7 +115,7 @@ $expectedPublicationId = Get-CanonicalSha256 @(
 	[string]$publication.candidate.candidateId,
 	$candidateManifestHash,
 	$bundleHash
-)
+) -join "`n")))
 Assert-Condition ([string]$publication.publicationId -eq $expectedPublicationId) "Publication content id mismatch."
 
 if (-not [string]::IsNullOrWhiteSpace($GitHubReleaseMetadataPath)) {
@@ -146,6 +141,7 @@ Write-Host "Channel: $($candidate.channel)"
 Write-Host "Version: $($candidate.product.version)"
 Write-Host "Candidate id: $($candidate.candidateId)"
 Write-Host "Publication id: $($publication.publicationId)"
+Write-Host "Signed bundle identity binding: PASS"
 Write-Host "Production trust: PASS"
 
 return [ordered]@{
