@@ -1,0 +1,36 @@
+{
+	"copyright": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+	"schemaVersion": "1.0",
+	"channels": {
+		"QUALIFICATION": {
+			"publish": false
+		},
+		"PREVIEW": {
+			"publish": true,
+			"githubPrerelease": true,
+			"makeLatest": false,
+			"requiredSignerClass": "EXTERNAL_CONTROLLED",
+			"requireProductionTrust": true,
+			"requireCandidatePublicationReadinessPass": true,
+			"channelDescriptorFileName": "rtaime-channel-preview.json"
+		},
+		"STABLE": {
+			"publish": true,
+			"githubPrerelease": false,
+			"makeLatest": true,
+			"requiredSignerClass": "EXTERNAL_CONTROLLED",
+			"requireProductionTrust": true,
+			"requireCandidatePublicationReadinessPass": true,
+			"channelDescriptorFileName": "rtaime-channel-stable.json"
+		}
+	},
+	"immutability": {
+		"existingReleaseAction": "FAIL",
+		"assetOverwriteAllowed": false,
+		"rebuildAllowed": false
+	},
+	"discovery": {
+		"authoritativeTrustSource": "RELEASE_CANDIDATE",
+		"channelDescriptorIsTrustAnchor": false
+	}
+}

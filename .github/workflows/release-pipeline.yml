@@ -95,3 +95,141 @@ jobs:
           name: rtaime-release-candidate-${{ github.run_id }}
           path: artifacts/release-pipeline
           if-no-files-found: error
+
+  publish-release:
+    name: Publish Release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs:
+      - release-candidate
+    runs-on: windows-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout publication policy and verifier
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Download exact release candidate
+        uses: actions/download-artifact@v4
+        with:
+          name: rtaime-release-candidate-${{ github.run_id }}
+          path: artifacts/release-pipeline
+
+      - name: Prepare and verify immutable publication
+        id: publication
+        shell: pwsh
+        run: |
+          $candidateDirectories = @(
+            Get-ChildItem -LiteralPath ./artifacts/release-pipeline -Directory -Recurse |
+              Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName "release-candidate.json") }
+          )
+          if ($candidateDirectories.Count -ne 1) {
+            throw "Expected exactly one downloaded Release Candidate directory, found $($candidateDirectories.Count)."
+          }
+
+          ./build/release/New-ReleasePublication.ps1 `
+            -CandidatePath $candidateDirectories[0].FullName `
+            -Repository "${{ github.repository }}"
+          ./build/release/Test-ReleasePublication.ps1 `
+            -CandidatePath $candidateDirectories[0].FullName `
+            -PublicationPath ./artifacts/release-publication
+
+          $manifest = Get-Content -LiteralPath ./artifacts/release-publication/release-publication.json -Raw | ConvertFrom-Json
+          "candidate_path=$($candidateDirectories[0].FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "channel=$($manifest.channel)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "tag=$($manifest.source.tag)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "title=$($manifest.githubRelease.title)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Publish exact verified assets
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $candidatePath = "${{ steps.publication.outputs.candidate_path }}"
+          $tag = "${{ steps.publication.outputs.tag }}"
+          $channel = "${{ steps.publication.outputs.channel }}"
+          $title = "${{ steps.publication.outputs.title }}"
+          $repository = "${{ github.repository }}"
+          $publicationPath = [System.IO.Path]::GetFullPath("./artifacts/release-publication")
+          $publication = Get-Content -LiteralPath (Join-Path $publicationPath "release-publication.json") -Raw | ConvertFrom-Json
+
+          & gh release view $tag --repo $repository *> $null
+          if ($LASTEXITCODE -eq 0) {
+            throw "GitHub Release '$tag' already exists. Immutable publication refuses update or asset overwrite."
+          }
+
+          $descriptorName = if ($channel -eq "PREVIEW") { "rtaime-channel-preview.json" } else { "rtaime-channel-stable.json" }
+          $assets = @(
+            (Join-Path $candidatePath "release-candidate.json"),
+            (Join-Path $candidatePath "release-candidate.sha256"),
+            (Join-Path $candidatePath ([string]$publication.bundle.fileName)),
+            (Join-Path $candidatePath ([string]$publication.bundle.sidecarFileName)),
+            (Join-Path $publicationPath "release-publication.json"),
+            (Join-Path $publicationPath "release-publication.sha256"),
+            (Join-Path $publicationPath $descriptorName),
+            (Join-Path $publicationPath "$descriptorName.sha256"),
+            (Join-Path $publicationPath "release-notes.md")
+          )
+          foreach ($asset in $assets) {
+            if (-not (Test-Path -LiteralPath $asset -PathType Leaf)) {
+              throw "Publication asset is missing: '$asset'."
+            }
+          }
+
+          $ghArgs = @(
+            "release", "create", $tag,
+            "--repo", $repository,
+            "--verify-tag",
+            "--title", $title,
+            "--notes-file", (Join-Path $publicationPath "release-notes.md")
+          )
+          if ($channel -eq "PREVIEW") {
+            $ghArgs += "--prerelease"
+          } elseif ($channel -eq "STABLE") {
+            $ghArgs += "--latest"
+          } else {
+            throw "Unexpected publishable channel '$channel'."
+          }
+          $ghArgs += $assets
+
+          & gh @ghArgs
+          if ($LASTEXITCODE -ne 0) {
+            throw "GitHub Release creation failed."
+          }
+
+          $releaseJson = & gh release view $tag --repo $repository --json tagName,isDraft,isPrerelease,url,assets
+          if ($LASTEXITCODE -ne 0) {
+            throw "Unable to verify newly created GitHub Release '$tag'."
+          }
+          $release = $releaseJson | ConvertFrom-Json
+          if ([string]$release.tagName -ne $tag -or $release.isDraft -eq $true) {
+            throw "Published GitHub Release metadata does not match the requested immutable release."
+          }
+          $expectedPrerelease = $channel -eq "PREVIEW"
+          if ([bool]$release.isPrerelease -ne $expectedPrerelease) {
+            throw "Published GitHub Release prerelease flag mismatch."
+          }
+          $actualAssets = @($release.assets | ForEach-Object { [string]$_.name })
+          foreach ($asset in $assets) {
+            $assetName = [System.IO.Path]::GetFileName($asset)
+            if ($actualAssets -notcontains $assetName) {
+              throw "Published GitHub Release is missing asset '$assetName'."
+            }
+          }
+
+          Write-Host "GitHub Release publication PASS"
+          Write-Host "Release: $($release.url)"
+          Write-Host "Channel: $channel"
+          Write-Host "Published assets: $($actualAssets.Count)"
+
+      - name: Upload publication evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: rtaime-release-publication-${{ github.run_id }}
+          path: artifacts/release-publication
+          if-no-files-found: error
