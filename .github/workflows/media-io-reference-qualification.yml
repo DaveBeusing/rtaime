@@ -75,6 +75,11 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Unable to checkout pinned libajantv2 commit." }
           $resolved = (git -C $sdkRoot rev-parse HEAD).Trim()
           if ($resolved -ne [string]$pin.commit) { throw "Resolved libajantv2 commit '$resolved' differs from pin '$($pin.commit)'." }
+
+          ./build/native/Apply-AjaNtv2BuildCompatibility.ps1 `
+            -SdkRoot $sdkRoot `
+            -ExpectedCommit $resolved
+
           "RTAIME_AJA_NTV2_ROOT=$sdkRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "RTAIME_AJA_SDK_REVISION=$resolved" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
