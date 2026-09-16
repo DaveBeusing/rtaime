@@ -128,6 +128,10 @@ jobs:
         shell: pwsh
         run: ./build/quality/Test-MediaIoVerticalSlicePolicy.ps1
 
+      - name: Verify timing reference latency and soak policy
+        shell: pwsh
+        run: ./build/quality/Test-TimingQualificationPolicy.ps1
+
       - name: Restore
         run: dotnet restore rtaime.slnx
 
