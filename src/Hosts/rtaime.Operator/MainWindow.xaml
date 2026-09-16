@@ -76,16 +76,14 @@
 										<TextBlock Text="No production media is transported over management IPC." Style="{StaticResource OperatorLabel}" HorizontalAlignment="Center" Margin="0,4,0,0" />
 									</StackPanel>
 								</Border>
-								<Grid>
-									<Grid.ColumnDefinitions>
-										<ColumnDefinition Width="Auto" />
-										<ColumnDefinition Width="*" />
-									</Grid.ColumnDefinitions>
+								<DockPanel Margin="0,0,0,6">
 									<TextBlock Text="SIGNAL" Style="{StaticResource OperatorLabel}" />
-									<TextBlock Grid.Column="1" Text="{Binding InputStatus}" Style="{StaticResource OperatorValue}" HorizontalAlignment="Right" />
-									<TextBlock Grid.Row="1" Text="TIMING" Style="{StaticResource OperatorLabel}" Margin="0,6,0,0" />
-									<TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding TimingStatus}" Style="{StaticResource OperatorValue}" HorizontalAlignment="Right" Margin="0,6,0,0" />
-								</Grid>
+									<TextBlock Text="{Binding InputStatus}" Style="{StaticResource OperatorValue}" HorizontalAlignment="Right" DockPanel.Dock="Right" />
+								</DockPanel>
+								<DockPanel>
+									<TextBlock Text="TIMING" Style="{StaticResource OperatorLabel}" />
+									<TextBlock Text="{Binding TimingStatus}" Style="{StaticResource OperatorValue}" HorizontalAlignment="Right" DockPanel.Dock="Right" />
+								</DockPanel>
 								<TextBlock Text="{Binding FormatStatus}" Style="{StaticResource OperatorLabel}" Margin="0,10,0,0" TextWrapping="Wrap" />
 							</StackPanel>
 						</Border>
@@ -101,16 +99,14 @@
 										<TextBlock Text="Program continuity remains independent of this UI." Style="{StaticResource OperatorLabel}" HorizontalAlignment="Center" Margin="0,4,0,0" />
 									</StackPanel>
 								</Border>
-								<Grid>
-									<Grid.ColumnDefinitions>
-										<ColumnDefinition Width="Auto" />
-										<ColumnDefinition Width="*" />
-									</Grid.ColumnDefinitions>
+								<DockPanel Margin="0,0,0,6">
 									<TextBlock Text="RUNTIME" Style="{StaticResource OperatorLabel}" />
-									<TextBlock Grid.Column="1" Text="{Binding RuntimeStatus}" Style="{StaticResource OperatorValue}" HorizontalAlignment="Right" />
-									<TextBlock Grid.Row="1" Text="LAYER" Style="{StaticResource OperatorLabel}" Margin="0,6,0,0" />
-									<TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding VisualLayerStatus}" Style="{StaticResource OperatorValue}" HorizontalAlignment="Right" Margin="0,6,0,0" />
-								</Grid>
+									<TextBlock Text="{Binding RuntimeStatus}" Style="{StaticResource OperatorValue}" HorizontalAlignment="Right" DockPanel.Dock="Right" />
+								</DockPanel>
+								<DockPanel>
+									<TextBlock Text="LAYER" Style="{StaticResource OperatorLabel}" />
+									<TextBlock Text="{Binding VisualLayerStatus}" Style="{StaticResource OperatorValue}" HorizontalAlignment="Right" DockPanel.Dock="Right" />
+								</DockPanel>
 								<TextBlock Text="{Binding FormatStatus}" Style="{StaticResource OperatorLabel}" Margin="0,10,0,0" TextWrapping="Wrap" />
 							</StackPanel>
 						</Border>
@@ -119,10 +115,7 @@
 					<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14">
 						<StackPanel>
 							<TextBlock Text="SOURCE BANK" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,12" />
-							<ListBox ItemsSource="{Binding Sources}"
-								SelectedItem="{Binding SelectedSource}"
-								Style="{StaticResource OperatorSourceBank}"
-								ItemContainerStyle="{StaticResource OperatorSourceItem}">
+							<ListBox ItemsSource="{Binding Sources}" SelectedItem="{Binding SelectedSource}" Style="{StaticResource OperatorSourceBank}" ItemContainerStyle="{StaticResource OperatorSourceItem}">
 								<ListBox.ItemTemplate>
 									<DataTemplate>
 										<Grid>
@@ -172,59 +165,27 @@
 					<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14">
 						<StackPanel>
 							<TextBlock Text="SYSTEM" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,12" />
-							<Grid>
-								<Grid.ColumnDefinitions>
-									<ColumnDefinition Width="*" />
-									<ColumnDefinition Width="Auto" />
-								</Grid.ColumnDefinitions>
-								<TextBlock Text="Runtime" Style="{StaticResource OperatorLabel}" />
-								<TextBlock Grid.Column="1" Text="{Binding RuntimeStatus}" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" />
-								<TextBlock Grid.Row="1" Text="Timing" Style="{StaticResource OperatorLabel}" Margin="0,8,0,0" />
-								<TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding TimingStatus}" Style="{StaticResource OperatorValue}" Margin="0,8,0,0" />
-								<TextBlock Grid.Row="2" Text="Inputs" Style="{StaticResource OperatorLabel}" Margin="0,8,0,0" />
-								<TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding InputStatus}" Style="{StaticResource OperatorValue}" Margin="0,8,0,0" />
-							</Grid>
+							<DockPanel Margin="0,0,0,8"><TextBlock Text="Runtime" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding RuntimeStatus}" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" DockPanel.Dock="Right" /></DockPanel>
+							<DockPanel Margin="0,0,0,8"><TextBlock Text="Timing" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding TimingStatus}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
+							<DockPanel><TextBlock Text="Inputs" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding InputStatus}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
 						</StackPanel>
 					</Border>
 
 					<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14">
 						<StackPanel>
 							<TextBlock Text="ISOLATED SERVICES" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,12" />
-							<Grid>
-								<Grid.ColumnDefinitions>
-									<ColumnDefinition Width="*" />
-									<ColumnDefinition Width="Auto" />
-								</Grid.ColumnDefinitions>
-								<TextBlock Text="AI" Style="{StaticResource OperatorLabel}" />
-								<TextBlock Grid.Column="1" Text="{Binding AIStatus}" Style="{StaticResource OperatorValue}" />
-								<TextBlock Grid.Row="1" Text="Recording" Style="{StaticResource OperatorLabel}" Margin="0,8,0,0" />
-								<TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding RecordingStatus}" Style="{StaticResource OperatorValue}" Margin="0,8,0,0" />
-								<TextBlock Grid.Row="2" Text="Audio peak" Style="{StaticResource OperatorLabel}" Margin="0,8,0,0" />
-								<StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal" Margin="0,8,0,0">
-									<TextBlock Text="{Binding AudioPeakPercent}" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" />
-									<TextBlock Text="  (" Style="{StaticResource OperatorLabel}" />
-									<TextBlock Text="{Binding AudioPeak}" Style="{StaticResource OperatorLabel}" />
-									<TextBlock Text=")" Style="{StaticResource OperatorLabel}" />
-								</StackPanel>
-							</Grid>
+							<DockPanel Margin="0,0,0,8"><TextBlock Text="AI" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding AIStatus}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
+							<DockPanel Margin="0,0,0,8"><TextBlock Text="Recording" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding RecordingStatus}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
+							<DockPanel><TextBlock Text="Audio peak" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding AudioPeakPercent}" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" DockPanel.Dock="Right" /></DockPanel>
 						</StackPanel>
 					</Border>
 
 					<Border Style="{StaticResource OperatorPanel}">
 						<StackPanel>
 							<TextBlock Text="OPERATOR STATE" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,12" />
-							<Grid>
-								<Grid.ColumnDefinitions>
-									<ColumnDefinition Width="*" />
-									<ColumnDefinition Width="Auto" />
-								</Grid.ColumnDefinitions>
-								<TextBlock Text="Command" Style="{StaticResource OperatorLabel}" />
-								<TextBlock Grid.Column="1" Text="{Binding CommandStatus}" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" />
-								<TextBlock Grid.Row="1" Text="Busy" Style="{StaticResource OperatorLabel}" Margin="0,8,0,0" />
-								<TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding IsBusy}" Style="{StaticResource OperatorValue}" Margin="0,8,0,0" />
-								<TextBlock Grid.Row="2" Text="Snapshot stale" Style="{StaticResource OperatorLabel}" Margin="0,8,0,0" />
-								<TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding IsStale}" Style="{StaticResource OperatorValue}" Margin="0,8,0,0" />
-							</Grid>
+							<DockPanel Margin="0,0,0,8"><TextBlock Text="Command" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding CommandStatus}" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" DockPanel.Dock="Right" /></DockPanel>
+							<DockPanel Margin="0,0,0,8"><TextBlock Text="Busy" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding IsBusy}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
+							<DockPanel><TextBlock Text="Snapshot stale" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding IsStale}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
 						</StackPanel>
 					</Border>
 				</StackPanel>
