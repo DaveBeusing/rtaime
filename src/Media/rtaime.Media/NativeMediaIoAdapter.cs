@@ -8,6 +8,11 @@ using rtaime.Provider.Contracts;
 
 namespace rtaime.Media;
 
+public sealed record NativeMediaIoProviderMetadata(
+	string AdapterName,
+	string DriverVersion,
+	string SdkRevision);
+
 /// <summary>
 /// Managed bridge over the stable rtaime Media I/O C ABI. Loading is explicit: construction fails closed when
 /// the native provider module is absent or rejects the requested ABI.
@@ -30,7 +35,8 @@ public sealed class NativeMediaIoProviderAdapter : IMediaIoProviderAdapter
 		Ensure(result, "create provider");
 		try
 		{
-			Descriptor = BuildDescriptor(_provider, out _ports);
+			Metadata = ReadMetadata(_provider);
+			Descriptor = BuildDescriptor(_provider, Metadata, out _ports);
 		}
 		catch
 		{
@@ -39,6 +45,7 @@ public sealed class NativeMediaIoProviderAdapter : IMediaIoProviderAdapter
 		}
 	}
 
+	public NativeMediaIoProviderMetadata Metadata { get; }
 	public MediaIoProviderDescriptor Descriptor { get; }
 
 	public MediaIoPortStatus GetPortStatus(MediaIoPortId portId)
@@ -113,8 +120,20 @@ public sealed class NativeMediaIoProviderAdapter : IMediaIoProviderAdapter
 		}
 	}
 
+	private static NativeMediaIoProviderMetadata ReadMetadata(IntPtr provider)
+	{
+		Ensure(NativeMethods.GetProviderInfo(provider, out var info), "get provider info");
+		var adapter = info.AdapterName?.Trim() ?? string.Empty;
+		var driver = info.DriverVersion?.Trim() ?? string.Empty;
+		var sdk = info.SdkRevision?.Trim() ?? string.Empty;
+		if (string.IsNullOrWhiteSpace(adapter) || string.IsNullOrWhiteSpace(driver) || string.IsNullOrWhiteSpace(sdk))
+			throw new InvalidOperationException("Native Media I/O provider metadata is incomplete.");
+		return new NativeMediaIoProviderMetadata(adapter, driver, sdk);
+	}
+
 	private static MediaIoProviderDescriptor BuildDescriptor(
 		IntPtr provider,
+		NativeMediaIoProviderMetadata metadata,
 		out Dictionary<MediaIoPortId, MediaIoPortDescriptor> portsById)
 	{
 		Ensure(NativeMethods.GetPortCount(provider, out var count), "get port count");
@@ -163,7 +182,7 @@ public sealed class NativeMediaIoProviderAdapter : IMediaIoProviderAdapter
 		var generic = new ProviderDescriptor(
 			ProviderContractVersion.Current,
 			ProviderIdentity,
-			"rtaime Native Media I/O",
+			$"AJA NTV2 - {metadata.AdapterName}",
 			new ProviderAvailability(ProviderAvailabilityState.Available),
 			capabilities,
 			resources);
@@ -386,6 +405,14 @@ public sealed class NativeMediaIoProviderAdapter : IMediaIoProviderAdapter
 		}
 	}
 
+	[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
+	private struct NativeProviderInfo
+	{
+		[MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string AdapterName;
+		[MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string DriverVersion;
+		[MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string SdkRevision;
+	}
+
 	[StructLayout(LayoutKind.Sequential)]
 	private struct NativeVideoFormat
 	{
@@ -492,6 +519,9 @@ public sealed class NativeMediaIoProviderAdapter : IMediaIoProviderAdapter
 
 		[DllImport(Library, EntryPoint = "rtaime_media_io_destroy_provider", CallingConvention = CallingConvention.Cdecl)]
 		internal static extern void DestroyProvider(IntPtr provider);
+
+		[DllImport(Library, EntryPoint = "rtaime_media_io_get_provider_info", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+		internal static extern NativeResult GetProviderInfo(IntPtr provider, out NativeProviderInfo info);
 
 		[DllImport(Library, EntryPoint = "rtaime_media_io_get_port_count", CallingConvention = CallingConvention.Cdecl)]
 		internal static extern NativeResult GetPortCount(IntPtr provider, out uint count);
