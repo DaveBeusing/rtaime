@@ -31,6 +31,7 @@ namespace
 	constexpr uint32_t kPortCount = 3;
 	constexpr uint32_t kAutoCirculateFrames = 7;
 	constexpr uint32_t kStereoChannels = 2;
+	constexpr uint32_t kMaxAudioBytes = 401u * 1024u;
 
 	struct Provider;
 
@@ -67,7 +68,7 @@ namespace
 	{
 		if (destination == nullptr || capacity == 0)
 			return;
-		const size_t count = std::min(capacity - 1, value.size());
+		const size_t count = (std::min)(capacity - 1, value.size());
 		std::memcpy(destination, value.data(), count);
 		destination[count] = '\0';
 	}
@@ -228,7 +229,7 @@ namespace
 		card.SetAudioLoopBack(NTV2_AUDIO_LOOPBACK_OFF, session.audio_system);
 		card.StopAudioInput(session.audio_system);
 		card.SetAudioCaptureEnable(session.audio_system, true);
-		return session.audio_buffer.Allocate(NTV2_AUDIOSIZE_MAX, true);
+		return session.audio_buffer.Allocate(kMaxAudioBytes, true);
 	}
 
 	static bool configure_audio_output(Session& session)
