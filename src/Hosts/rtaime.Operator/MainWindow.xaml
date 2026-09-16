@@ -34,12 +34,15 @@
 				</Grid.ColumnDefinitions>
 				<StackPanel>
 					<TextBlock Text="rtaime V1 Operator" FontSize="24" FontWeight="SemiBold" />
-					<TextBlock Text="Non-authoritative production control surface" Style="{StaticResource OperatorLabel}" Margin="0,4,0,0" />
+					<TextBlock Text="Non-authoritative production control and monitoring surface" Style="{StaticResource OperatorLabel}" Margin="0,4,0,0" />
 					<TextBlock Text="{Binding ConnectionDetail}" Foreground="{DynamicResource OperatorMutedTextBrush}" FontSize="12" Margin="0,8,0,0" TextTrimming="CharacterEllipsis" />
 				</StackPanel>
 				<StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
 					<Border Background="{DynamicResource OperatorRaisedSurfaceBrush}" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" CornerRadius="6" Padding="10,6" Margin="0,0,8,0">
 						<TextBlock Text="{Binding ConnectionState}" FontWeight="Bold" />
+					</Border>
+					<Border Background="{DynamicResource OperatorRaisedSurfaceBrush}" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" CornerRadius="6" Padding="10,6" Margin="0,0,8,0">
+						<TextBlock Text="{Binding Monitoring.State, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" FontWeight="Bold" />
 					</Border>
 					<Border Background="{DynamicResource OperatorRaisedSurfaceBrush}" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" CornerRadius="6" Padding="10,6" Margin="0,0,8,0">
 						<TextBlock Text="{Binding RevisionLabel}" FontWeight="SemiBold" />
@@ -70,12 +73,12 @@
 								<TextBlock Text="PREVIEW" Foreground="{DynamicResource OperatorPreviewBrush}" FontWeight="Bold" FontSize="13" />
 								<TextBlock Text="{Binding PreviewSourceName}" FontSize="25" FontWeight="SemiBold" Margin="0,10,0,0" TextTrimming="CharacterEllipsis" />
 								<TextBlock Text="{Binding PreviewSourceId}" Style="{StaticResource OperatorLabel}" Margin="0,2,0,12" TextTrimming="CharacterEllipsis" />
-								<Border Background="#12161C" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" CornerRadius="4" Padding="12" Margin="0,0,0,12">
-									<StackPanel>
-										<TextBlock Text="{Binding MonitoringStatus}" Foreground="{DynamicResource OperatorWarningBrush}" FontWeight="SemiBold" HorizontalAlignment="Center" />
-										<TextBlock Text="No production media is transported over management IPC." Style="{StaticResource OperatorLabel}" HorizontalAlignment="Center" Margin="0,4,0,0" />
-									</StackPanel>
-								</Border>
+								<Grid Height="220" Background="#090C10" Margin="0,0,0,12" ClipToBounds="True">
+									<Image Source="{Binding Monitoring.PreviewImage, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Stretch="Uniform" SnapsToDevicePixels="True" />
+									<Border VerticalAlignment="Bottom" Background="#B0000000" Padding="8,5">
+										<TextBlock Text="{Binding Monitoring.PreviewFormat, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" FontSize="11" Foreground="White" TextTrimming="CharacterEllipsis" />
+									</Border>
+								</Grid>
 								<DockPanel Margin="0,0,0,6">
 									<TextBlock Text="SIGNAL" Style="{StaticResource OperatorLabel}" />
 									<TextBlock Text="{Binding InputStatus}" Style="{StaticResource OperatorValue}" HorizontalAlignment="Right" DockPanel.Dock="Right" />
@@ -84,7 +87,6 @@
 									<TextBlock Text="TIMING" Style="{StaticResource OperatorLabel}" />
 									<TextBlock Text="{Binding TimingStatus}" Style="{StaticResource OperatorValue}" HorizontalAlignment="Right" DockPanel.Dock="Right" />
 								</DockPanel>
-								<TextBlock Text="{Binding FormatStatus}" Style="{StaticResource OperatorLabel}" Margin="0,10,0,0" TextWrapping="Wrap" />
 							</StackPanel>
 						</Border>
 
@@ -93,12 +95,12 @@
 								<TextBlock Text="PROGRAM" Foreground="{DynamicResource OperatorProgramBrush}" FontWeight="Bold" FontSize="13" />
 								<TextBlock Text="{Binding ProgramSourceName}" FontSize="25" FontWeight="SemiBold" Margin="0,10,0,0" TextTrimming="CharacterEllipsis" />
 								<TextBlock Text="{Binding ProgramSourceId}" Style="{StaticResource OperatorLabel}" Margin="0,2,0,12" TextTrimming="CharacterEllipsis" />
-								<Border Background="#12161C" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" CornerRadius="4" Padding="12" Margin="0,0,0,12">
-									<StackPanel>
-										<TextBlock Text="{Binding MonitoringStatus}" Foreground="{DynamicResource OperatorWarningBrush}" FontWeight="SemiBold" HorizontalAlignment="Center" />
-										<TextBlock Text="Program continuity remains independent of this UI." Style="{StaticResource OperatorLabel}" HorizontalAlignment="Center" Margin="0,4,0,0" />
-									</StackPanel>
-								</Border>
+								<Grid Height="220" Background="#090C10" Margin="0,0,0,12" ClipToBounds="True">
+									<Image Source="{Binding Monitoring.ProgramImage, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Stretch="Uniform" SnapsToDevicePixels="True" />
+									<Border VerticalAlignment="Bottom" Background="#B0000000" Padding="8,5">
+										<TextBlock Text="{Binding Monitoring.ProgramFormat, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" FontSize="11" Foreground="White" TextTrimming="CharacterEllipsis" />
+									</Border>
+								</Grid>
 								<DockPanel Margin="0,0,0,6">
 									<TextBlock Text="RUNTIME" Style="{StaticResource OperatorLabel}" />
 									<TextBlock Text="{Binding RuntimeStatus}" Style="{StaticResource OperatorValue}" HorizontalAlignment="Right" DockPanel.Dock="Right" />
@@ -107,7 +109,6 @@
 									<TextBlock Text="LAYER" Style="{StaticResource OperatorLabel}" />
 									<TextBlock Text="{Binding VisualLayerStatus}" Style="{StaticResource OperatorValue}" HorizontalAlignment="Right" DockPanel.Dock="Right" />
 								</DockPanel>
-								<TextBlock Text="{Binding FormatStatus}" Style="{StaticResource OperatorLabel}" Margin="0,10,0,0" TextWrapping="Wrap" />
 							</StackPanel>
 						</Border>
 					</Grid>
@@ -173,6 +174,14 @@
 
 					<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14">
 						<StackPanel>
+							<TextBlock Text="MONITORING" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,12" />
+							<DockPanel Margin="0,0,0,8"><TextBlock Text="Plane" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding Monitoring.State, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" DockPanel.Dock="Right" /></DockPanel>
+							<TextBlock Text="{Binding Monitoring.Detail, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+						</StackPanel>
+					</Border>
+
+					<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14">
+						<StackPanel>
 							<TextBlock Text="ISOLATED SERVICES" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,12" />
 							<DockPanel Margin="0,0,0,8"><TextBlock Text="AI" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding AIStatus}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
 							<DockPanel Margin="0,0,0,8"><TextBlock Text="Recording" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding RecordingStatus}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
@@ -184,29 +193,21 @@
 						<StackPanel>
 							<TextBlock Text="OPERATOR STATE" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,12" />
 							<DockPanel Margin="0,0,0,8"><TextBlock Text="Command" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding CommandStatus}" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" DockPanel.Dock="Right" /></DockPanel>
-							<DockPanel Margin="0,0,0,8"><TextBlock Text="Busy" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding IsBusy}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
-							<DockPanel><TextBlock Text="Snapshot stale" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding IsStale}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
+							<TextBlock Text="{Binding LastEvent}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
 						</StackPanel>
 					</Border>
 				</StackPanel>
 			</Grid>
 		</ScrollViewer>
 
-		<Border Grid.Row="2" Style="{StaticResource OperatorPanel}" Margin="0,14,0,0" Padding="14,10">
+		<Border Grid.Row="2" Style="{StaticResource OperatorPanel}" Margin="0,14,0,0" Padding="12,8">
 			<Grid>
 				<Grid.ColumnDefinitions>
-					<ColumnDefinition Width="2*" />
-					<ColumnDefinition Width="16" />
-					<ColumnDefinition Width="3*" />
+					<ColumnDefinition Width="Auto" />
+					<ColumnDefinition Width="*" />
 				</Grid.ColumnDefinitions>
-				<StackPanel>
-					<TextBlock Text="LAST EVENT" Style="{StaticResource OperatorLabel}" />
-					<TextBlock Text="{Binding LastEvent}" Style="{StaticResource OperatorValue}" Margin="0,2,0,0" TextWrapping="Wrap" />
-				</StackPanel>
-				<StackPanel Grid.Column="2">
-					<TextBlock Text="ERROR / REJECTION" Style="{StaticResource OperatorLabel}" />
-					<TextBlock Text="{Binding LastError, TargetNullValue=No active errors.}" Foreground="{DynamicResource OperatorErrorBrush}" FontSize="13" Margin="0,2,0,0" TextWrapping="Wrap" />
-				</StackPanel>
+				<TextBlock Text="EVENT / ERROR" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" Margin="0,0,12,0" />
+				<TextBlock Grid.Column="1" Text="{Binding LastError, TargetNullValue=No active control error.}" TextWrapping="Wrap" VerticalAlignment="Center" />
 			</Grid>
 		</Border>
 	</Grid>

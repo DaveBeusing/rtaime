@@ -130,7 +130,7 @@ public sealed record RuntimeHostProcessOptions(
 
 /// <summary>
 /// Executable RuntimeHost composition root. It owns lifecycle only; committed runtime execution,
-/// media processing, GPU processing and recording remain implemented by <see cref="V1RuntimeHostService"/>.
+/// media processing, GPU processing, monitoring and recording remain implemented by dedicated runtime services.
 /// </summary>
 public sealed class RuntimeHostProcess
 {
@@ -146,6 +146,8 @@ public sealed class RuntimeHostProcess
 	private int _runStarted;
 	private V1RuntimeHostService? _runtime;
 	private RuntimeHostIpcServer? _ipcServer;
+	private RuntimeHostMonitoringServer? _monitoringServer;
+	private Task? _mediaLoop;
 	private bool _runtimeDisposed;
 	private V1RuntimeHostSnapshot? _finalRuntimeSnapshot;
 
@@ -174,6 +176,8 @@ public sealed class RuntimeHostProcess
 
 	public V1RuntimeHostService? Runtime => _runtime;
 	public RuntimeHostIpcServer? IpcServer => _ipcServer;
+	public RuntimeHostMonitoringServer? MonitoringServer => _monitoringServer;
+	public string MonitoringEndpoint => $"{_options.ListenEndpoint}.monitor";
 	public bool RuntimeDisposed => _runtimeDisposed;
 	public V1RuntimeHostSnapshot? FinalRuntimeSnapshot => _finalRuntimeSnapshot;
 
@@ -191,7 +195,10 @@ public sealed class RuntimeHostProcess
 			_runtime = _runtimeFactory(_options, writer)
 				?? throw new InvalidOperationException("Runtime factory returned null.");
 			_ipcServer = new RuntimeHostIpcServer(_options.ListenEndpoint, () => _runtime);
+			_monitoringServer = new RuntimeHostMonitoringServer(MonitoringEndpoint, _runtime.MonitoringHub);
 			await _ipcServer.StartAsync(cancellationToken).ConfigureAwait(false);
+			await _monitoringServer.StartAsync(cancellationToken).ConfigureAwait(false);
+			_mediaLoop = RunMediaLoopAsync(_runtime, cancellationToken);
 		}
 		catch (ArgumentException exception)
 		{
@@ -206,11 +213,11 @@ public sealed class RuntimeHostProcess
 			return RuntimeHostExitCode.StartupFailure;
 		}
 
-		Update(RuntimeHostProcessState.Ready, RuntimeHostHealthState.Healthy, $"RuntimeHost is ready and listening on '{_options.ListenEndpoint}'.");
+		Update(RuntimeHostProcessState.Ready, RuntimeHostHealthState.Healthy, $"RuntimeHost is ready on '{_options.ListenEndpoint}' with monitoring on '{MonitoringEndpoint}'.");
 
 		try
 		{
-			await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
+			await _mediaLoop.ConfigureAwait(false);
 		}
 		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
 		{
@@ -225,12 +232,26 @@ public sealed class RuntimeHostProcess
 		return await StopAsync().ConfigureAwait(false);
 	}
 
+	private async Task RunMediaLoopAsync(V1RuntimeHostService runtime, CancellationToken cancellationToken)
+	{
+		var framePeriod = TimeSpan.FromSeconds(runtime.Format.FrameRate.Denominator / (double)runtime.Format.FrameRate.Numerator);
+		using var timer = new PeriodicTimer(framePeriod);
+		while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
+		{
+			if (!runtime.HasCommittedExecution) continue;
+			runtime.ProcessNextBoundary();
+		}
+	}
+
 	private async Task<RuntimeHostExitCode> StopAsync()
 	{
-		Update(RuntimeHostProcessState.Draining, RuntimeHostHealthState.Degraded, "Draining RuntimeHost IPC and runtime resources.");
+		Update(RuntimeHostProcessState.Draining, RuntimeHostHealthState.Degraded, "Draining RuntimeHost IPC, monitoring and runtime resources.");
 		using var timeout = new CancellationTokenSource(_options.ShutdownTimeout);
 		try
 		{
+			if (_monitoringServer is not null)
+				await _monitoringServer.DisposeAsync().AsTask().WaitAsync(timeout.Token).ConfigureAwait(false);
+
 			if (_ipcServer is not null)
 				await _ipcServer.DisposeAsync().AsTask().WaitAsync(timeout.Token).ConfigureAwait(false);
 
@@ -243,7 +264,7 @@ public sealed class RuntimeHostProcess
 					throw new InvalidOperationException("RuntimeHost retained GPU surfaces after shutdown.");
 			}
 
-			Update(RuntimeHostProcessState.Stopped, RuntimeHostHealthState.Stopped, "RuntimeHost stopped cleanly and released IPC/media/GPU/recording resources.");
+			Update(RuntimeHostProcessState.Stopped, RuntimeHostHealthState.Stopped, "RuntimeHost stopped cleanly and released IPC/monitoring/media/GPU/recording resources.");
 			return RuntimeHostExitCode.Success;
 		}
 		catch (Exception exception) when (exception is OperationCanceledException or TimeoutException)
@@ -260,6 +281,13 @@ public sealed class RuntimeHostProcess
 
 	private async Task CleanupStartupFailureAsync()
 	{
+		try
+		{
+			if (_monitoringServer is not null)
+				await _monitoringServer.DisposeAsync().ConfigureAwait(false);
+		}
+		catch { }
+
 		try
 		{
 			if (_ipcServer is not null)

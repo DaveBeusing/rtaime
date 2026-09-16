@@ -108,6 +108,10 @@ jobs:
         shell: pwsh
         run: ./build/quality/Test-OperatorUiPolicy.ps1
 
+      - name: Verify operator monitoring policy
+        shell: pwsh
+        run: ./build/quality/Test-OperatorMonitoringPolicy.ps1
+
       - name: Restore
         run: dotnet restore rtaime.slnx
 
