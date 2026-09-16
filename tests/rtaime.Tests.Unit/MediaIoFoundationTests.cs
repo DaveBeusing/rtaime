@@ -33,13 +33,13 @@ public sealed class MediaIoFoundationTests
 	public void Admission_fails_closed_for_direction_format_transfer_and_reference_mismatch()
 	{
 		var profile = CreateProfile();
-		var input = profile.Ports.Single(candidate => candidate.Direction == MediaIoDirection.Input);
+		var output = profile.Ports.Single(candidate => candidate.Direction == MediaIoDirection.Output);
 		var unsupportedFormat = new VideoFormat(1280, 720, FrameRate.Fps50, PixelFormat.Rgba8, ScanMode.Progressive);
 		var request = new MediaIoSessionRequest(
 			MediaIoContractVersion.Current,
 			profile.Provider.ProviderId,
-			input.PortId,
-			MediaIoDirection.Output,
+			output.PortId,
+			MediaIoDirection.Input,
 			unsupportedFormat,
 			MediaIoTransferMode.PinnedHostLease,
 			AudioFormat.Stereo48kFloat32,
