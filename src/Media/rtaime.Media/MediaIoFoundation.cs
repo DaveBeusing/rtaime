@@ -81,8 +81,10 @@ public static class MediaIoAdmission
 		var capabilityKind = request.Direction == MediaIoDirection.Input
 			? MediaIoCapabilityKinds.VideoInput
 			: MediaIoCapabilityKinds.VideoOutput;
-		var capability = descriptor.Provider.Capabilities.FirstOrDefault(candidate => string.Equals(candidate.Kind, capabilityKind, StringComparison.Ordinal));
-		if (capability is null || !capability.VideoFormats.Contains(request.VideoFormat))
+		var capabilityAvailable = descriptor.Provider.Capabilities.Any(candidate =>
+			string.Equals(candidate.Kind, capabilityKind, StringComparison.Ordinal) &&
+			candidate.VideoFormats.Contains(request.VideoFormat));
+		if (!capabilityAvailable)
 			issues.Add(new ValidationIssue("media.io.capability_missing", $"Provider does not advertise '{capabilityKind}' for the requested video format."));
 
 		return ValidationResult.From(issues);
