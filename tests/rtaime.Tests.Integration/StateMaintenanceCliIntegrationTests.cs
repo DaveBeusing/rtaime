@@ -49,7 +49,8 @@ public sealed class StateMaintenanceCliIntegrationTests
 			Assert.Equal(0, backupResult.ExitCode);
 			Assert.True(File.Exists(backup));
 			Assert.True(File.Exists(snapshot));
-			Assert.True((await new SqliteManagementStore(backup).VerifyIntegrityAsync()).Healthy);
+			await using var backupStore = new SqliteManagementStore(backup);
+			Assert.True((await backupStore.VerifyIntegrityAsync()).Healthy);
 		}
 		finally
 		{
@@ -102,6 +103,13 @@ public sealed class StateMaintenanceCliIntegrationTests
 
 	private static async Task<ProcessResult> RunAsync(string assembly, params string[] arguments)
 	{
+		var runtimeConfig = Path.Combine(AppContext.BaseDirectory, "rtaime.Tests.Integration.runtimeconfig.json");
+		var depsFile = Path.Combine(AppContext.BaseDirectory, "rtaime.Tests.Integration.deps.json");
+		if (!File.Exists(runtimeConfig))
+			throw new FileNotFoundException("Integration-test runtimeconfig was not found.", runtimeConfig);
+		if (!File.Exists(depsFile))
+			throw new FileNotFoundException("Integration-test deps file was not found.", depsFile);
+
 		var startInfo = new ProcessStartInfo
 		{
 			FileName = "dotnet",
@@ -110,6 +118,11 @@ public sealed class StateMaintenanceCliIntegrationTests
 			UseShellExecute = false,
 			CreateNoWindow = true
 		};
+		startInfo.ArgumentList.Add("exec");
+		startInfo.ArgumentList.Add("--runtimeconfig");
+		startInfo.ArgumentList.Add(runtimeConfig);
+		startInfo.ArgumentList.Add("--depsfile");
+		startInfo.ArgumentList.Add(depsFile);
 		startInfo.ArgumentList.Add(assembly);
 		foreach (var argument in arguments)
 			startInfo.ArgumentList.Add(argument);
