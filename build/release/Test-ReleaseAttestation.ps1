@@ -49,7 +49,9 @@ Assert-Condition (Test-Path -LiteralPath $outputRoot -PathType Container) "Relea
 $privateMaterial = @(Get-ChildItem -LiteralPath $outputRoot -File -Recurse | Where-Object {
 	$_.Extension.ToLowerInvariant() -in @(".pem", ".key", ".pfx", ".p12")
 })
-Assert-Condition ($privateMaterial.Count -eq 0) "Release evidence bundle contains forbidden key-material file '$($privateMaterial[0].FullName)'."
+if ($privateMaterial.Count -gt 0) {
+	throw "Release evidence bundle contains forbidden key-material file '$($privateMaterial[0].FullName)'."
+}
 
 $releaseEvidencePath = Join-Path $outputRoot "release-evidence.json"
 $attestationPath = Join-Path $outputRoot "release-attestation.json"
@@ -61,6 +63,16 @@ $releaseEvidence = Read-JsonFile $releaseEvidencePath
 $attestation = Read-JsonFile $attestationPath
 $releaseRecord = Read-JsonFile $releaseRecordPath
 $trustStore = Read-JsonFile $trustStorePath
+
+$requiredRepositoryFiles = @(
+	"schemas/release/v1/release-attestation.schema.json",
+	"schemas/release/v1/release-record.schema.json",
+	"schemas/release/v1/trusted-release-keys.schema.json",
+	"docs/ReleaseSigningAndAttestation.md"
+)
+foreach ($relativePath in $requiredRepositoryFiles) {
+	Assert-Condition (Test-Path -LiteralPath (Join-Path $repositoryRoot $relativePath) -PathType Leaf) "Required signing trust artifact '$relativePath' is missing."
+}
 
 Assert-Condition ([string]$attestation.schemaVersion -eq "1.0") "Unsupported release attestation schema version."
 Assert-Condition ([string]$attestation.attestationType -eq "rtaime.software-release.v1") "Unsupported release attestation type."
