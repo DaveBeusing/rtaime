@@ -13,8 +13,24 @@ function Assert-Condition {
 		[Parameter(Mandatory)][bool]$Condition,
 		[Parameter(Mandatory)][string]$Message
 	)
-	if (-not $Condition) {
-		throw $Message
+	if (-not $Condition) { throw $Message }
+}
+
+function Invoke-GitGrepForPrivateKeyMarkers {
+	$nativePreferenceVariable = Get-Variable -Name PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue
+	$previousNativePreference = $null
+	if ($null -ne $nativePreferenceVariable) {
+		$previousNativePreference = [bool]$nativePreferenceVariable.Value
+		Set-Variable -Name PSNativeCommandUseErrorActionPreference -Value $false
+	}
+	try {
+		$output = @(& git -C $repositoryRoot grep -I -n -E -- '-----BEGIN (RSA |EC |OPENSSH |DSA |ENCRYPTED )?PRIVATE KEY-----' -- . 2>$null)
+		$exitCode = $LASTEXITCODE
+		return [ordered]@{ output = $output; exitCode = $exitCode }
+	} finally {
+		if ($null -ne $nativePreferenceVariable) {
+			Set-Variable -Name PSNativeCommandUseErrorActionPreference -Value $previousNativePreference
+		}
 	}
 }
 
@@ -29,12 +45,11 @@ $forbiddenFiles = @($trackedFiles | Where-Object {
 })
 Assert-Condition ($forbiddenFiles.Count -eq 0) "Repository contains forbidden tracked private-key-like file(s): $($forbiddenFiles -join ', ')."
 
-$privateKeyMatches = @(& git -C $repositoryRoot grep -I -n -E -- '-----BEGIN (RSA |EC |OPENSSH |DSA |ENCRYPTED )?PRIVATE KEY-----' -- . 2>$null)
-$grepExitCode = $LASTEXITCODE
-if ($grepExitCode -eq 0) {
-	throw "Repository contains PEM private-key material: $($privateKeyMatches -join '; ')."
+$grepResult = Invoke-GitGrepForPrivateKeyMarkers
+if ([int]$grepResult.exitCode -eq 0) {
+	throw "Repository contains PEM private-key material: $(@($grepResult.output) -join '; ')."
 }
-Assert-Condition ($grepExitCode -eq 1) "Private-key material scan failed with git grep exit code $grepExitCode."
+Assert-Condition ([int]$grepResult.exitCode -eq 1) "Private-key material scan failed with git grep exit code $($grepResult.exitCode)."
 
 $artifactFiles = @($trackedFiles | Where-Object { $_ -like "artifacts/*" -and $_ -ne "artifacts/.gitkeep" })
 Assert-Condition ($artifactFiles.Count -eq 0) "Generated artifact content must not be committed: $($artifactFiles -join ', ')."
