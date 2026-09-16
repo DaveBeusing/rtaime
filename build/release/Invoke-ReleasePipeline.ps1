@@ -89,7 +89,7 @@ try {
 	if ($LASTEXITCODE -ne 0) { throw "dotnet build failed." }
 
 	Write-Host "Release pipeline: test exact build"
-	& dotnet test rtaime.slnx --configuration Release --no-build
+	& dotnet test rtaime.slnx --configuration Release --no-build -m:1
 	if ($LASTEXITCODE -ne 0) { throw "dotnet test failed." }
 
 	$evidenceRoot = Join-Path $repositoryRoot "artifacts/release-evidence"

@@ -80,7 +80,7 @@ internal static class Program
 		{
 			var directory = Path.GetDirectoryName(readinessPath);
 			if (!string.IsNullOrWhiteSpace(directory)) Directory.CreateDirectory(directory);
-			if (File.Exists(readinessPath)) File.Delete(readinessPath);
+			DeleteManagedFile(readinessPath);
 		}
 
 		var publishedReady = false;
@@ -97,10 +97,11 @@ internal static class Program
 				var lifecycle = process.Lifecycle;
 				var runtime = supervision.Runtime;
 				var ai = supervision.AI;
-				var runtimeReady = runtime is not null && runtime.State == LocalProcessSupervisionState.Healthy;
-				var aiReady = ai is not null && ai.State == LocalProcessSupervisionState.Healthy;
+				var runtimeReady = runtime is null || runtime.State == LocalProcessSupervisionState.Healthy;
+				var aiReady = ai is null || ai.State == LocalProcessSupervisionState.Healthy;
 				var ready = lifecycle.State == ControlHostProcessState.Ready &&
 					lifecycle.Health == ControlHostHealthState.Healthy &&
+					process.IpcServer?.Running == true &&
 					runtimeReady &&
 					aiReady;
 
@@ -119,15 +120,15 @@ internal static class Program
 						controlEndpoint = options.ListenEndpoint,
 						runtimeEndpoint = options.RuntimeEndpoint,
 						aiEndpoint,
-						runtimeSupervision = new
+						runtimeSupervision = runtime is null ? null : new
 						{
-							state = runtime!.State.ToString().ToUpperInvariant(),
+							state = runtime.State.ToString().ToUpperInvariant(),
 							processId = runtime.OwnedProcessId,
 							startAttempts = runtime.StartAttempts
 						},
-						aiSupervision = new
+						aiSupervision = ai is null ? null : new
 						{
-							state = ai!.State.ToString().ToUpperInvariant(),
+							state = ai.State.ToString().ToUpperInvariant(),
 							processId = ai.OwnedProcessId,
 							startAttempts = ai.StartAttempts
 						},
@@ -138,7 +139,7 @@ internal static class Program
 				}
 				else if (readinessPath is not null && !ready && publishedReady)
 				{
-					try { File.Delete(readinessPath); } catch (IOException) { }
+					DeleteManagedFile(readinessPath);
 					publishedReady = false;
 				}
 
@@ -147,10 +148,7 @@ internal static class Program
 		}
 		finally
 		{
-			if (readinessPath is not null && shutdown.IsCancellationRequested)
-			{
-				try { File.Delete(readinessPath); } catch (IOException) { }
-			}
+			DeleteManagedFile(readinessPath);
 		}
 	}
 
@@ -160,5 +158,11 @@ internal static class Program
 		var json = JsonSerializer.Serialize(value, new JsonSerializerOptions { WriteIndented = true });
 		File.WriteAllText(temporary, json + Environment.NewLine);
 		File.Move(temporary, path, overwrite: true);
+	}
+
+	private static void DeleteManagedFile(string? path)
+	{
+		if (string.IsNullOrWhiteSpace(path)) return;
+		try { if (File.Exists(path)) File.Delete(path); } catch (IOException) { }
 	}
 }

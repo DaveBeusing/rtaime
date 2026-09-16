@@ -1,12 +1,18 @@
 # Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 [CmdletBinding()]
-param()
+param(
+	[string]$RepositoryRoot = ""
+)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$repositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "../.."))
+$repositoryRoot = if ([string]::IsNullOrWhiteSpace($RepositoryRoot)) {
+	[System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "../.."))
+} else {
+	[System.IO.Path]::GetFullPath($RepositoryRoot)
+}
 
 function Assert-Condition {
 	param(
@@ -33,6 +39,8 @@ function Invoke-GitGrepForPrivateKeyMarkers {
 		}
 	}
 }
+
+Assert-Condition (Test-Path -LiteralPath $repositoryRoot -PathType Container) "Repository root '$repositoryRoot' does not exist."
 
 $trackedFiles = @(& git -C $repositoryRoot ls-files)
 Assert-Condition ($LASTEXITCODE -eq 0) "Unable to enumerate tracked repository files."
@@ -81,3 +89,4 @@ Write-Host "PEM private key markers: none"
 Write-Host "Committed generated artifacts: none"
 Write-Host "Trusted release key metadata: structurally valid"
 Write-Host "Required gates workflow permissions: read-only"
+exit 0

@@ -47,7 +47,24 @@ jobs:
         run: dotnet build rtaime.slnx --configuration Release --no-restore
 
       - name: Test
-        run: dotnet test rtaime.slnx --configuration Release --no-build
+        run: dotnet test rtaime.slnx --configuration Release --no-build -m:1
+
+      - name: Repeat process recovery qualification
+        shell: pwsh
+        run: |
+          $tests = @(
+            "FullyQualifiedName~ProcessSupervisionRecoveryTests.Killed_RuntimeHost_is_restarted_and_Control_reapplies_same_authority_revision",
+            "FullyQualifiedName~ProcessSupervisionRecoveryTests.Killed_ControlHost_restores_durable_authority_while_Runtime_continues_and_stale_client_fails_closed"
+          )
+          foreach ($iteration in 1..3) {
+            foreach ($test in $tests) {
+              Write-Host "Recovery qualification iteration ${iteration}: $test"
+              dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter $test
+              if ($LASTEXITCODE -ne 0) {
+                throw "Process recovery qualification failed in iteration $iteration for '$test'."
+              }
+            }
+          }
 
   quality:
     name: Quality
@@ -116,6 +133,10 @@ jobs:
       - name: Repository security governance
         shell: pwsh
         run: ./build/governance/Test-RepositorySecurity.ps1
+
+      - name: Repository security exit-code regression
+        shell: pwsh
+        run: ./build/governance/Test-RepositorySecurityExitCodes.ps1
 
   provider-smoke:
     name: Provider Smoke
