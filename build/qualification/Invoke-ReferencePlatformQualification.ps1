@@ -50,7 +50,7 @@ function Write-JsonFile {
 
 function Write-TextFile {
 	param(
-		[Parameter(Mandatory)][string[]]$Lines,
+		[Parameter(Mandatory)][AllowEmptyString()][AllowEmptyCollection()][string[]]$Lines,
 		[Parameter(Mandatory)][string]$Path
 	)
 	$directory = Split-Path -Parent $Path
