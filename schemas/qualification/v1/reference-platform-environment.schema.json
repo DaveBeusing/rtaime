@@ -1,0 +1,95 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://rtaime.local/schemas/qualification/v1/reference-platform-environment.schema.json",
+	"$comment": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+	"title": "rtaime V1 Reference Platform Environment Evidence",
+	"type": "object",
+	"additionalProperties": false,
+	"required": [
+		"copyright",
+		"schemaVersion",
+		"capturedAtUtc",
+		"profile",
+		"sourceCommit",
+		"osDescription",
+		"osArchitecture",
+		"processArchitecture",
+		"frameworkDescription",
+		"dotnetSdk",
+		"processorCount",
+		"platformStatus",
+		"platformChecks"
+	],
+	"properties": {
+		"copyright": {
+			"const": "Copyright (c) Dave Beusing <david.beusing@gmail.com>."
+		},
+		"schemaVersion": {
+			"const": "1.0"
+		},
+		"capturedAtUtc": {
+			"type": "string",
+			"format": "date-time"
+		},
+		"profile": {
+			"const": "rtaime-v1-reference-platform"
+		},
+		"sourceCommit": {
+			"type": "string",
+			"pattern": "^(?:[0-9a-f]{40}|UNAVAILABLE)$"
+		},
+		"osDescription": {
+			"type": "string",
+			"minLength": 1
+		},
+		"osArchitecture": {
+			"type": "string",
+			"minLength": 1
+		},
+		"processArchitecture": {
+			"type": "string",
+			"minLength": 1
+		},
+		"frameworkDescription": {
+			"type": "string",
+			"minLength": 1
+		},
+		"dotnetSdk": {
+			"type": "string",
+			"minLength": 1
+		},
+		"processorCount": {
+			"type": "integer",
+			"minimum": 1
+		},
+		"platformStatus": {
+			"enum": ["PASS", "FAIL"]
+		},
+		"platformChecks": {
+			"type": "array",
+			"minItems": 3,
+			"maxItems": 3,
+			"items": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["name", "expected", "actual", "status"],
+				"properties": {
+					"name": {
+						"enum": ["OperatingSystemFamily", "Architecture", "DotNetSdk"]
+					},
+					"expected": {
+						"type": "string",
+						"minLength": 1
+					},
+					"actual": {
+						"type": "string",
+						"minLength": 1
+					},
+					"status": {
+						"enum": ["PASS", "FAIL"]
+					}
+				}
+			}
+		}
+	}
+}
