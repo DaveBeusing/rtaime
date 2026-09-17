@@ -66,9 +66,10 @@ function Get-SourceCommit {
 		return $Requested.Trim().ToLowerInvariant()
 	}
 	try {
-		$value = (& git -C $repositoryRoot rev-parse HEAD 2>$null | Select-Object -First 1)
-		if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace([string]$value)) {
-			return ([string]$value).Trim().ToLowerInvariant()
+		$output = @(& git -C $repositoryRoot rev-parse HEAD 2>$null)
+		$exitCode = $LASTEXITCODE
+		if ($exitCode -eq 0 -and $output.Count -gt 0 -and -not [string]::IsNullOrWhiteSpace([string]$output[0])) {
+			return ([string]$output[0]).Trim().ToLowerInvariant()
 		}
 	} catch {
 		# Environment evidence remains useful even when Git metadata is unavailable.
@@ -113,8 +114,11 @@ $capturedAtUtc = [DateTimeOffset]::UtcNow
 $resolvedSourceCommit = Get-SourceCommit -Requested $SourceCommit
 $dotnetVersion = "UNAVAILABLE"
 try {
-	$dotnetVersion = ([string](& dotnet --version | Select-Object -First 1)).Trim()
-	if ($LASTEXITCODE -ne 0) { $dotnetVersion = "UNAVAILABLE" }
+	$dotnetOutput = @(& dotnet --version 2>$null)
+	$dotnetExitCode = $LASTEXITCODE
+	if ($dotnetExitCode -eq 0 -and $dotnetOutput.Count -gt 0 -and -not [string]::IsNullOrWhiteSpace([string]$dotnetOutput[0])) {
+		$dotnetVersion = ([string]$dotnetOutput[0]).Trim()
+	}
 } catch {
 	$dotnetVersion = "UNAVAILABLE"
 }
