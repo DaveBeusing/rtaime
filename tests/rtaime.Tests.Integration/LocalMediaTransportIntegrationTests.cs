@@ -52,7 +52,7 @@ public sealed class LocalMediaTransportIntegrationTests
 		var applied = session.ApplyExecution(planning.PreparedExecution!);
 		Assert.True(applied.Committed);
 		Assert.Equal(MediaTransportState.Ready, session.Transport.State);
-		Assert.Equal(4, session.Transport.Position.TotalFrames);
+		Assert.Equal(50, session.Transport.Position.TotalFrames);
 
 		var play = session.ApplyTransport(Command(assetId, MediaTransportCommandKind.Play));
 		Assert.True(play.Succeeded, play.Failure?.Message);
@@ -97,7 +97,7 @@ public sealed class LocalMediaTransportIntegrationTests
 		Assert.Equal(0, beforeStart.Snapshot.Position.CurrentFrame);
 		var beyondEnd = session.ApplyTransport(Seek(assetId, 100));
 		Assert.True(beyondEnd.Succeeded, beyondEnd.Failure?.Message);
-		Assert.Equal(3, beyondEnd.Snapshot.Position.CurrentFrame);
+		Assert.Equal(49, beyondEnd.Snapshot.Position.CurrentFrame);
 
 		var stop = session.ApplyTransport(Command(assetId, MediaTransportCommandKind.Stop));
 		Assert.True(stop.Succeeded, stop.Failure?.Message);
@@ -116,7 +116,7 @@ public sealed class LocalMediaTransportIntegrationTests
 		new(MediaContractVersion.Current, assetId, MediaTransportCommandKind.Seek, frame);
 
 	private static string ReferenceAssetPath() =>
-		Path.Combine(FindRepositoryRoot(), "tests", "TestAssets", "media", "reference-1080p50-h264-aac-80ms.mp4");
+		Path.Combine(FindRepositoryRoot(), "tests", "TestAssets", "media", "reference-1080p50-h264-aac-1s.mp4");
 
 	private static string FindRepositoryRoot()
 	{
