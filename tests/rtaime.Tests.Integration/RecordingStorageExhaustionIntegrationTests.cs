@@ -53,7 +53,7 @@ public sealed class RecordingStorageExhaustionIntegrationTests
 			Assert.Equal(RuntimeExecutionStatus.Committed, runtime.Snapshot.Runtime.Status);
 			Assert.True(runtime.Snapshot.Recording.Failure.HasValue);
 			Assert.Equal("recording.write.writer_failure", runtime.Snapshot.Recording.Failure.Value.Code);
-			Assert.Contains(runtime.Snapshot.Recording.Failure.Value.Message, "quota", StringComparison.OrdinalIgnoreCase);
+			Assert.Contains("quota", runtime.Snapshot.Recording.Failure.Value.Message, StringComparison.OrdinalIgnoreCase);
 			Assert.False(File.Exists(writer.FinalPath));
 			Assert.False(File.Exists(writer.PartialPath));
 
