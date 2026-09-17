@@ -1,0 +1,111 @@
+// Copyright (c) Dave Beusing <david.beusing@gmail.com>.
+
+using rtaime.Core;
+
+namespace rtaime.Media.Contracts;
+
+public readonly record struct MediaAssetId
+{
+	public MediaAssetId(Identity value)
+	{
+		if (value.IsEmpty)
+			throw new ArgumentException("Media asset identity must not be empty.", nameof(value));
+
+		Value = value;
+	}
+
+	public Identity Value { get; }
+	public static MediaAssetId New() => new(Identity.New());
+	public override string ToString() => Value.ToString();
+}
+
+public enum MediaContainerFormat
+{
+	Mp4 = 1
+}
+
+public enum MediaVideoCodec
+{
+	H264 = 1
+}
+
+public enum MediaAudioCodec
+{
+	Aac = 1
+}
+
+public sealed record LocalMediaProbe
+{
+	public LocalMediaProbe(
+		CompatibilityVersion version,
+		MediaAssetId assetId,
+		MediaSourceId sourceId,
+		string fileName,
+		MediaContainerFormat container,
+		MediaVideoCodec videoCodec,
+		MediaAudioCodec audioCodec,
+		VideoFormat videoFormat,
+		AudioFormat audioFormat,
+		TimeSpan duration)
+	{
+		MediaContractVersion.EnsureSupported(version);
+		if (string.IsNullOrWhiteSpace(fileName))
+			throw new ArgumentException("Local media file name is required.", nameof(fileName));
+		if (!Enum.IsDefined(typeof(MediaContainerFormat), container))
+			throw new ArgumentOutOfRangeException(nameof(container));
+		if (!Enum.IsDefined(typeof(MediaVideoCodec), videoCodec))
+			throw new ArgumentOutOfRangeException(nameof(videoCodec));
+		if (!Enum.IsDefined(typeof(MediaAudioCodec), audioCodec))
+			throw new ArgumentOutOfRangeException(nameof(audioCodec));
+		if (duration <= TimeSpan.Zero)
+			throw new ArgumentOutOfRangeException(nameof(duration), "Local media duration must be greater than zero.");
+
+		Version = version;
+		AssetId = assetId;
+		SourceId = sourceId;
+		FileName = fileName.Trim();
+		Container = container;
+		VideoCodec = videoCodec;
+		AudioCodec = audioCodec;
+		VideoFormat = videoFormat;
+		AudioFormat = audioFormat;
+		Duration = duration;
+	}
+
+	public CompatibilityVersion Version { get; }
+	public MediaAssetId AssetId { get; }
+	public MediaSourceId SourceId { get; }
+	public string FileName { get; }
+	public MediaContainerFormat Container { get; }
+	public MediaVideoCodec VideoCodec { get; }
+	public MediaAudioCodec AudioCodec { get; }
+	public VideoFormat VideoFormat { get; }
+	public AudioFormat AudioFormat { get; }
+	public TimeSpan Duration { get; }
+}
+
+public sealed record LocalMediaDecodedFrame
+{
+	public LocalMediaDecodedFrame(
+		FrameDescriptor video,
+		ReadOnlyMemory<byte> rgbaPixels,
+		AudioBufferDescriptor? audio,
+		ReadOnlyMemory<byte> audioPayload)
+	{
+		Video = video ?? throw new ArgumentNullException(nameof(video));
+		if (rgbaPixels.IsEmpty)
+			throw new ArgumentException("Decoded local media frame requires RGBA pixels.", nameof(rgbaPixels));
+		if (audio is null && !audioPayload.IsEmpty)
+			throw new ArgumentException("Audio payload requires an audio descriptor.", nameof(audioPayload));
+
+		Video = video;
+		RgbaPixels = rgbaPixels;
+		Audio = audio;
+		AudioPayload = audioPayload;
+	}
+
+	public FrameDescriptor Video { get; }
+	public ReadOnlyMemory<byte> RgbaPixels { get; }
+	public AudioBufferDescriptor? Audio { get; }
+	public ReadOnlyMemory<byte> AudioPayload { get; }
+}
