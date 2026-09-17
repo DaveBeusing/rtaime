@@ -240,6 +240,8 @@ foreach ($requiredDomain in $requiredDomains) {
 	Assert-Condition ($domainIndex.ContainsKey($requiredDomain)) "Release evidence is missing required domain '$requiredDomain'."
 }
 
+& (Join-Path $script:RepositoryRoot "build/security/Test-ProductSecurityAssessmentBinding.ps1") -OutputPath $outputRoot
+
 Assert-Condition ([string]$releaseEvidence.signingAttestation.status -in $allowedStatuses) "Signing/attestation status is invalid."
 if ([string]$releaseEvidence.signingAttestation.status -eq "PASS") {
 	Assert-Condition ($releaseEvidence.signingAttestation.PSObject.Properties.Name -contains "signaturePath") "Signing/attestation PASS requires signaturePath evidence."
@@ -258,7 +260,8 @@ $schemaFiles = @(
 	"schemas/release/v1/artifact-manifest.schema.json",
 	"schemas/release/v1/compatibility-manifest.schema.json",
 	"schemas/release/v1/qualification-evidence-manifest.schema.json",
-	"schemas/release/v1/release-evidence.schema.json"
+	"schemas/release/v1/release-evidence.schema.json",
+	"schemas/security/v1/product-security-assessment.schema.json"
 )
 foreach ($relativeSchema in $schemaFiles) {
 	Assert-Condition (Test-Path -LiteralPath (Join-Path $script:RepositoryRoot $relativeSchema) -PathType Leaf) "Required release schema '$relativeSchema' is missing."
@@ -272,4 +275,5 @@ Write-Host "Build commit:  $($releaseEvidence.buildCommit)"
 Write-Host "Artifacts verified: $($artifacts.Count)"
 Write-Host "CycloneDX components verified: $($components.Count)"
 Write-Host "Qualification requirements verified: $(@($qualificationRequirements | Where-Object { [string]$_.status -eq 'PASSED' }).Count) / $($qualificationRequirements.Count) PASSED"
+Write-Host "Release SECURITY domain: $($domainIndex['SECURITY'])"
 Write-Host "Release readiness: $($releaseEvidence.releaseReadiness.status)"
