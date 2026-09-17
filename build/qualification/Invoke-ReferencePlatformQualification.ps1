@@ -119,15 +119,15 @@ try {
 	$dotnetVersion = "UNAVAILABLE"
 }
 
-$isWindows = [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Windows)
+$windowsPlatformDetected = [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Windows)
 $osArchitecture = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
 $processArchitecture = [System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString()
 $platformChecks = @(
 	[ordered]@{
 		name = "OperatingSystemFamily"
 		expected = [string]$profile.platform.operatingSystemFamily
-		actual = if ($isWindows) { "Windows" } else { [System.Runtime.InteropServices.RuntimeInformation]::OSDescription }
-		status = if ($isWindows -and [string]$profile.platform.operatingSystemFamily -eq "Windows") { "PASS" } else { "FAIL" }
+		actual = if ($windowsPlatformDetected) { "Windows" } else { [System.Runtime.InteropServices.RuntimeInformation]::OSDescription }
+		status = if ($windowsPlatformDetected -and [string]$profile.platform.operatingSystemFamily -eq "Windows") { "PASS" } else { "FAIL" }
 	},
 	[ordered]@{
 		name = "Architecture"
