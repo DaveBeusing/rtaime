@@ -131,7 +131,7 @@ public sealed class LocalMediaRuntimeIntegrationTests
 	}
 
 	private static string ReferenceAssetPath() =>
-		Path.Combine(FindRepositoryRoot(), "tests", "TestAssets", "media", "reference-1080p50-h264-aac-80ms.mp4");
+		Path.Combine(FindRepositoryRoot(), "tests", "TestAssets", "media", "reference-1080p50-h264-aac-1s.mp4");
 
 	private static string FindRepositoryRoot()
 	{
