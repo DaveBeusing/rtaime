@@ -12,6 +12,7 @@ param(
 	[string]$SignerClass = "TEST_EPHEMERAL",
 	[string]$PrivateKeyPath = "",
 	[string]$SignerId = "",
+	[string]$SecurityAssessmentPath = "",
 	[string]$OutputRoot = "artifacts/release-pipeline"
 )
 
@@ -99,6 +100,12 @@ try {
 		-BuildCommit ([string]$identity.buildCommit) `
 		-BuildId ([string]$identity.buildId) `
 		-ManagedValidationStatus PASS
+
+	if (-not [string]::IsNullOrWhiteSpace($SecurityAssessmentPath)) {
+		& (Join-Path $repositoryRoot "build/security/Bind-ProductSecurityAssessment.ps1") `
+			-AssessmentPath $SecurityAssessmentPath `
+			-OutputPath $evidenceRoot
+	}
 	& (Join-Path $PSScriptRoot "Test-ReleaseEvidence.ps1") -OutputPath $evidenceRoot
 
 	if ([string]::IsNullOrWhiteSpace($effectiveKeyPath)) {
@@ -264,6 +271,7 @@ try {
 	Write-Host "Channel: $($identity.channel)"
 	Write-Host "Candidate: $candidateRoot"
 	Write-Host "Candidate id: $candidateId"
+	Write-Host "Product security assessment: $(if ([string]::IsNullOrWhiteSpace($SecurityAssessmentPath)) { 'UNVERIFIED' } else { 'BOUND' })"
 	Write-Host "Production signing trust: $productionTrust"
 	Write-Host "Publication readiness: $publicationStatus"
 } finally {
