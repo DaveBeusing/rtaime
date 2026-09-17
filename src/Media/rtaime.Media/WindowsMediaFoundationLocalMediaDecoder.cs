@@ -64,6 +64,10 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 				MediaFoundation.ReleaseComObject(attributes);
 			}
 
+			MediaFoundation.ThrowIfFailed(reader.SetStreamSelection(MediaFoundation.AllStreams, false));
+			MediaFoundation.ThrowIfFailed(reader.SetStreamSelection(MediaFoundation.FirstVideoStream, true));
+			MediaFoundation.ThrowIfFailed(reader.SetStreamSelection(MediaFoundation.FirstAudioStream, true));
+
 			var videoNative = GetNativeMediaType(reader, MediaFoundation.FirstVideoStream);
 			var audioNative = GetNativeMediaType(reader, MediaFoundation.FirstAudioStream);
 			try
@@ -92,6 +96,8 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 
 				ConfigureDecodedVideo(reader, MediaFoundation.FirstVideoStream);
 				ConfigureDecodedAudio(reader, MediaFoundation.FirstAudioStream);
+				MediaFoundation.ThrowIfFailed(reader.SetStreamSelection(MediaFoundation.FirstVideoStream, true));
+				MediaFoundation.ThrowIfFailed(reader.SetStreamSelection(MediaFoundation.FirstAudioStream, true));
 
 				var probe = new LocalMediaProbe(
 					MediaContractVersion.Current,
