@@ -66,6 +66,18 @@ jobs:
             }
           }
 
+      - name: Qualify V1 reference platform software profile
+        shell: pwsh
+        run: ./build/qualification/Invoke-ReferencePlatformQualification.ps1 -NoBuild
+
+      - name: Upload reference platform qualification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rtaime-reference-platform-qualification-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/qualification/reference-platform
+          if-no-files-found: error
+
   quality:
     name: Quality
     runs-on: windows-latest
@@ -135,6 +147,10 @@ jobs:
       - name: Verify qualification evidence provenance policy
         shell: pwsh
         run: ./build/quality/Test-QualificationEvidenceBindingPolicy.ps1
+
+      - name: Verify reference platform qualification policy
+        shell: pwsh
+        run: ./build/quality/Test-ReferencePlatformQualificationPolicy.ps1
 
       - name: Restore
         run: dotnet restore rtaime.slnx
