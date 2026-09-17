@@ -64,7 +64,7 @@ public sealed class ProductionIpcRecoveryTests
 
 		var transport = new NamedPipeOperatorControlTransport(controlEndpoint, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(3));
 		var client = new OperatorControlClient(transport);
-		var snapshot = await client.SynchronizeAsync();
+		var snapshot = await SynchronizeWithRetryAsync(client);
 		var revisionBefore = snapshot.Production.Revision;
 
 		runtimeStop.Cancel();
@@ -102,13 +102,13 @@ public sealed class ProductionIpcRecoveryTests
 
 		var transport = new NamedPipeOperatorControlTransport(controlEndpoint, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(3));
 		var client = new OperatorControlClient(transport);
-		var first = await client.SynchronizeAsync();
+		var first = await SynchronizeWithRetryAsync(client);
 		var stateVersionBefore = transport.StateVersion;
 		var hostInstanceBefore = transport.HostInstanceId;
 
 		client.Disconnect();
 		Assert.False(client.Connected);
-		var resynchronized = await client.SynchronizeAsync();
+		var resynchronized = await SynchronizeWithRetryAsync(client);
 
 		Assert.True(client.Connected);
 		Assert.Equal(first.Production, resynchronized.Production);
@@ -119,6 +119,32 @@ public sealed class ProductionIpcRecoveryTests
 		runtimeStop.Cancel();
 		Assert.Equal(ControlHostExitCode.Success, await controlRun);
 		Assert.Equal(RuntimeHostExitCode.Success, await runtimeRun);
+	}
+
+	private static async Task<OperatorStatusSnapshot> SynchronizeWithRetryAsync(
+		OperatorControlClient client,
+		int attempts = 5,
+		TimeSpan? delay = null)
+	{
+		ArgumentNullException.ThrowIfNull(client);
+		if (attempts <= 0) throw new ArgumentOutOfRangeException(nameof(attempts));
+
+		Exception? last = null;
+		for (var attempt = 1; attempt <= attempts; attempt++)
+		{
+			try
+			{
+				return await client.SynchronizeAsync();
+			}
+			catch (Exception exception) when (exception is IOException or TimeoutException or OperationCanceledException)
+			{
+				last = exception;
+				if (attempt == attempts) break;
+				await Task.Delay(delay ?? TimeSpan.FromMilliseconds(100));
+			}
+		}
+
+		throw new InvalidOperationException("Operator control endpoint did not become available within the bounded integration-test retry window.", last);
 	}
 
 	private static async Task WaitUntilAsync(Func<bool> condition, int timeoutMilliseconds = 5000)
