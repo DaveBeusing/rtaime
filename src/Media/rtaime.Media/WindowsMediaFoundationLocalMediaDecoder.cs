@@ -20,6 +20,8 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 	private readonly IMFSourceReader _reader;
 	private readonly MediaAssetId _assetId;
 	private readonly MediaSourceId _sourceId;
+	private readonly uint _videoStreamIndex;
+	private readonly uint _audioStreamIndex;
 	private ulong _audioSamplePosition;
 	private bool _disposed;
 
@@ -27,11 +29,15 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 		IMFSourceReader reader,
 		MediaAssetId assetId,
 		MediaSourceId sourceId,
+		uint videoStreamIndex,
+		uint audioStreamIndex,
 		LocalMediaProbe probe)
 	{
 		_reader = reader;
 		_assetId = assetId;
 		_sourceId = sourceId;
+		_videoStreamIndex = videoStreamIndex;
+		_audioStreamIndex = audioStreamIndex;
 		Probe = probe;
 	}
 
@@ -64,8 +70,20 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 				MediaFoundation.ReleaseComObject(attributes);
 			}
 
-			var videoNative = GetNativeMediaType(reader, MediaFoundation.FirstVideoStream);
-			var audioNative = GetNativeMediaType(reader, MediaFoundation.FirstAudioStream);
+			var videoStreamIndex = FindFirstStream(reader, MediaFoundation.MfMediaTypeVideo);
+			if (videoStreamIndex is null)
+				return RejectAndRelease("media.file.video_stream_missing", "The local media file does not contain a readable video stream.", reader, mediaFoundationStarted);
+
+			var audioStreamIndex = FindFirstStream(reader, MediaFoundation.MfMediaTypeAudio);
+			if (audioStreamIndex is null)
+				return RejectAndRelease("media.file.audio_stream_missing", "The local media file does not contain a readable audio stream.", reader, mediaFoundationStarted);
+
+			MediaFoundation.ThrowIfFailed(reader.SetStreamSelection(MediaFoundation.AllStreams, false));
+			MediaFoundation.ThrowIfFailed(reader.SetStreamSelection(videoStreamIndex.Value, true));
+			MediaFoundation.ThrowIfFailed(reader.SetStreamSelection(audioStreamIndex.Value, true));
+
+			var videoNative = GetNativeMediaType(reader, videoStreamIndex.Value);
+			var audioNative = GetNativeMediaType(reader, audioStreamIndex.Value);
 			try
 			{
 				var videoMajor = GetGuid(videoNative, MediaFoundation.MfMtMajorType);
@@ -90,8 +108,8 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 				if (metadata.Duration <= TimeSpan.Zero)
 					return RejectAndRelease("media.file.metadata_invalid", "The local media file reports an invalid duration.", reader, mediaFoundationStarted);
 
-				ConfigureDecodedVideo(reader);
-				ConfigureDecodedAudio(reader);
+				ConfigureDecodedVideo(reader, videoStreamIndex.Value);
+				ConfigureDecodedAudio(reader, audioStreamIndex.Value);
 
 				var probe = new LocalMediaProbe(
 					MediaContractVersion.Current,
@@ -110,7 +128,13 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 					AudioFormat.Stereo48kFloat32,
 					metadata.Duration);
 
-				return LocalMediaDecoderOpenResult.Ready(new WindowsMediaFoundationLocalMediaDecoder(reader, assetId, sourceId, probe));
+				return LocalMediaDecoderOpenResult.Ready(new WindowsMediaFoundationLocalMediaDecoder(
+					reader,
+					assetId,
+					sourceId,
+					videoStreamIndex.Value,
+					audioStreamIndex.Value,
+					probe));
 			}
 			finally
 			{
@@ -131,7 +155,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 	public bool TryReadNext(ulong sequenceNumber, out LocalMediaDecodedFrame? frame)
 	{
 		ObjectDisposedException.ThrowIf(_disposed, this);
-		if (!TryReadSample(MediaFoundation.FirstVideoStream, out var videoTimestamp, out var videoPayload))
+		if (!TryReadSample(_videoStreamIndex, out var videoTimestamp, out var videoPayload))
 		{
 			frame = null;
 			return false;
@@ -150,7 +174,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 
 		AudioBufferDescriptor? audio = null;
 		ReadOnlyMemory<byte> audioPayload = ReadOnlyMemory<byte>.Empty;
-		if (TryReadSample(MediaFoundation.FirstAudioStream, out var audioTimestamp, out var decodedAudio) && decodedAudio.Length > 0)
+		if (TryReadSample(_audioStreamIndex, out var audioTimestamp, out var decodedAudio) && decodedAudio.Length > 0)
 		{
 			var bytesPerSampleFrame = checked((int)Probe.AudioFormat.ChannelCount * sizeof(float));
 			if (decodedAudio.Length % bytesPerSampleFrame != 0)
@@ -186,11 +210,12 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 
 	private bool TryReadSample(uint streamIndex, out long timestamp, out byte[] payload)
 	{
+		var draining = false;
 		while (true)
 		{
 			MediaFoundation.ThrowIfFailed(_reader.ReadSample(
 				streamIndex,
-				0,
+				draining ? MediaFoundation.SourceReaderControlDrain : 0,
 				out _,
 				out var flags,
 				out timestamp,
@@ -198,11 +223,18 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 
 			if (sample is null)
 			{
-				if ((flags & MediaFoundation.SourceReaderEndOfStream) != 0)
+				if (!draining && (flags & MediaFoundation.SourceReaderEndOfStream) != 0)
+				{
+					draining = true;
+					continue;
+				}
+
+				if (draining)
 				{
 					payload = Array.Empty<byte>();
 					return false;
 				}
+
 				continue;
 			}
 
@@ -253,6 +285,28 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 		return rgba;
 	}
 
+	private static uint? FindFirstStream(IMFSourceReader reader, Guid majorType)
+	{
+		for (uint streamIndex = 0; streamIndex < MediaFoundation.MaximumProbeStreamCount; streamIndex++)
+		{
+			var result = reader.GetNativeMediaType(streamIndex, 0, out var mediaType);
+			if (result < 0)
+				continue;
+
+			try
+			{
+				if (GetGuid(mediaType, MediaFoundation.MfMtMajorType) == majorType)
+					return streamIndex;
+			}
+			finally
+			{
+				MediaFoundation.ReleaseComObject(mediaType);
+			}
+		}
+
+		return null;
+	}
+
 	private static IMFMediaType GetNativeMediaType(IMFSourceReader reader, uint streamIndex)
 	{
 		MediaFoundation.ThrowIfFailed(reader.GetNativeMediaType(streamIndex, 0, out var mediaType));
@@ -265,7 +319,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 		return value;
 	}
 
-	private static void ConfigureDecodedVideo(IMFSourceReader reader)
+	private static void ConfigureDecodedVideo(IMFSourceReader reader, uint streamIndex)
 	{
 		MediaFoundation.ThrowIfFailed(MediaFoundation.MFCreateMediaType(out var mediaType));
 		try
@@ -276,7 +330,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 			var subtypeKey = MediaFoundation.MfMtSubtype;
 			var subtypeValue = MediaFoundation.MfVideoFormatRgb32;
 			MediaFoundation.ThrowIfFailed(mediaType.SetGUID(ref subtypeKey, ref subtypeValue));
-			MediaFoundation.ThrowIfFailed(reader.SetCurrentMediaType(MediaFoundation.FirstVideoStream, IntPtr.Zero, mediaType));
+			MediaFoundation.ThrowIfFailed(reader.SetCurrentMediaType(streamIndex, IntPtr.Zero, mediaType));
 		}
 		finally
 		{
@@ -284,7 +338,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 		}
 	}
 
-	private static void ConfigureDecodedAudio(IMFSourceReader reader)
+	private static void ConfigureDecodedAudio(IMFSourceReader reader, uint streamIndex)
 	{
 		MediaFoundation.ThrowIfFailed(MediaFoundation.MFCreateMediaType(out var mediaType));
 		try
@@ -295,7 +349,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 			var subtypeKey = MediaFoundation.MfMtSubtype;
 			var subtypeValue = MediaFoundation.MfAudioFormatFloat;
 			MediaFoundation.ThrowIfFailed(mediaType.SetGUID(ref subtypeKey, ref subtypeValue));
-			MediaFoundation.ThrowIfFailed(reader.SetCurrentMediaType(MediaFoundation.FirstAudioStream, IntPtr.Zero, mediaType));
+			MediaFoundation.ThrowIfFailed(reader.SetCurrentMediaType(streamIndex, IntPtr.Zero, mediaType));
 		}
 		finally
 		{
@@ -321,9 +375,10 @@ internal static class MediaFoundation
 {
 	public const int MfVersion = 0x00020070;
 	public const int MfStartupFull = 0;
-	public const uint FirstVideoStream = 0xFFFFFFFC;
-	public const uint FirstAudioStream = 0xFFFFFFFD;
+	public const uint AllStreams = 0xFFFFFFFE;
 	public const uint SourceReaderEndOfStream = 0x00000002;
+	public const uint SourceReaderControlDrain = 0x00000001;
+	public const uint MaximumProbeStreamCount = 32;
 
 	public static Guid MfSourceReaderEnableVideoProcessing = new("FB394F3D-CCF1-42EE-BBB3-F9B845D5681D");
 	public static Guid MfMtMajorType = new("48EBA18E-F8C9-4687-BF11-0A74C9F96A8F");
