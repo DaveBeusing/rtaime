@@ -66,6 +66,12 @@ public sealed class LocalMediaRuntimeIntegrationTests
 		Assert.True(applied.Committed);
 		Assert.Equal(RuntimeCommitStatus.Committed, applied.Commit!.Status);
 
+		var play = session.ApplyTransport(new MediaTransportCommand(
+			MediaContractVersion.Current,
+			open.Source.AssetId,
+			MediaTransportCommandKind.Play));
+		Assert.True(play.Succeeded, play.Failure?.Message);
+
 		var boundary = session.ProcessNextBoundary();
 		Assert.True(boundary.Succeeded, boundary.Failure?.Message);
 		Assert.Equal(mediaSourceId, boundary.Video!.SourceId);
