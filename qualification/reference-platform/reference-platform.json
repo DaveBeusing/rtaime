@@ -1,0 +1,185 @@
+{
+	"copyright": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+	"schemaVersion": "1.0",
+	"profile": "rtaime-v1-reference-platform",
+	"description": "V1 reference-platform qualification profile. Software evidence may execute on CI; physical requirements remain UNVERIFIED until exact source-bound hardware evidence is present.",
+	"platform": {
+		"operatingSystemFamily": "Windows",
+		"architecture": "x64",
+		"dotnetSdk": "10.0.401",
+		"developmentFormats": [
+			"1080p50",
+			"1080p59.94"
+		],
+		"requiredHosts": [
+			"rtaime.ControlHost",
+			"rtaime.RuntimeHost",
+			"rtaime.AIHost",
+			"rtaime.Operator"
+		],
+		"gpuClass": "Qualified NVIDIA professional GPU using the rtaime CUDA backend",
+		"mediaIoClass": "Qualified professional Media I/O provider using the pinned AJA NTV2 integration"
+	},
+	"softwareScenarios": [
+		{
+			"id": "Q01",
+			"name": "Platform Bootstrap",
+			"mandatory": true,
+			"evidenceGroup": "host-lifecycle",
+			"testProject": "tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj",
+			"filter": "FullyQualifiedName~ExecutableHostLifecycleTests.ControlHost_composes_as_degraded_without_AP14_transport_and_drains_journal|FullyQualifiedName~ExecutableHostLifecycleTests.RuntimeHost_starts_cancels_and_releases_runtime_resources|FullyQualifiedName~ExecutableHostLifecycleTests.AIHost_shutdown_cancels_inflight_inference_and_releases_admission",
+			"proves": [
+				"ControlHost bootstrap and orderly shutdown",
+				"RuntimeHost ready state and GPU-resource release",
+				"AIHost ready state, cancellation and admission release"
+			]
+		},
+		{
+			"id": "Q02",
+			"name": "1080p50 End-to-End",
+			"mandatory": true,
+			"evidenceGroup": "v1-end-to-end",
+			"testProject": "tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj",
+			"filter": "FullyQualifiedName~V1EndToEndProofTests.V1_reference_workload_executes_end_to_end_for_both_development_formats",
+			"proves": [
+				"1080p50 V1 authority-to-output execution",
+				"journal and observation continuity"
+			]
+		},
+		{
+			"id": "Q03",
+			"name": "1080p59.94 End-to-End",
+			"mandatory": true,
+			"evidenceGroup": "v1-end-to-end",
+			"testProject": "tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj",
+			"filter": "FullyQualifiedName~V1EndToEndProofTests.V1_reference_workload_executes_end_to_end_for_both_development_formats",
+			"proves": [
+				"1080p59.94 V1 authority-to-output execution",
+				"fractional frame-rate timebase preservation"
+			]
+		},
+		{
+			"id": "Q04",
+			"name": "CUT Qualification",
+			"mandatory": true,
+			"evidenceGroup": "v1-end-to-end",
+			"testProject": "tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj",
+			"filter": "FullyQualifiedName~V1EndToEndProofTests.V1_reference_workload_executes_end_to_end_for_both_development_formats",
+			"proves": [
+				"Preview-to-Program CUT",
+				"authoritative commit reflected by Program and AFV"
+			]
+		},
+		{
+			"id": "Q05",
+			"name": "DISSOLVE Qualification",
+			"mandatory": true,
+			"evidenceGroup": "v1-end-to-end",
+			"testProject": "tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj",
+			"filter": "FullyQualifiedName~V1EndToEndProofTests.V1_reference_workload_executes_end_to_end_for_both_development_formats",
+			"proves": [
+				"deterministic three-boundary DISSOLVE",
+				"defined completion state"
+			]
+		},
+		{
+			"id": "Q06",
+			"name": "Graphics and RGBA Source",
+			"mandatory": true,
+			"evidenceGroup": "v1-end-to-end",
+			"testProject": "tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj",
+			"filter": "FullyQualifiedName~V1EndToEndProofTests.V1_reference_workload_executes_end_to_end_for_both_development_formats",
+			"proves": [
+				"static RGBA layer",
+				"dynamic governed-AI-driven RGBA layer"
+			]
+		},
+		{
+			"id": "Q07",
+			"name": "Audio Follow Video",
+			"mandatory": true,
+			"evidenceGroup": "v1-end-to-end",
+			"testProject": "tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj",
+			"filter": "FullyQualifiedName~V1EndToEndProofTests.V1_reference_workload_executes_end_to_end_for_both_development_formats",
+			"proves": [
+				"AFV follows CUT and DISSOLVE Program authority",
+				"audio remains emitted on fallback boundaries"
+			]
+		},
+		{
+			"id": "Q08",
+			"name": "Governed AI and Inference Path",
+			"mandatory": true,
+			"evidenceGroup": "v1-end-to-end",
+			"testProject": "tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj",
+			"filter": "FullyQualifiedName~V1EndToEndProofTests.V1_reference_workload_executes_end_to_end_for_both_development_formats",
+			"proves": [
+				"governed Person Segmentation execution",
+				"unavailable inference falls back without taking Production authority"
+			]
+		},
+		{
+			"id": "Q09",
+			"name": "Controlled Fault",
+			"mandatory": true,
+			"evidenceGroup": "recording-storage-fault",
+			"testProject": "tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj",
+			"filter": "FullyQualifiedName~RecordingStorageExhaustionIntegrationTests.Storage_exhaustion_fails_recording_without_stopping_committed_program",
+			"proves": [
+				"recording storage exhaustion is detected and contained",
+				"no false final recording artifact is published",
+				"committed Program continues"
+			]
+		},
+		{
+			"id": "Q10",
+			"name": "Restart and Recovery Sanity",
+			"mandatory": true,
+			"evidenceGroup": "operator-recovery",
+			"testProject": "tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj",
+			"filter": "FullyQualifiedName~OperatorProcessRecoveryTests.Killed_Operator_process_restarts_with_a_full_current_authoritative_snapshot",
+			"proves": [
+				"headless Operator process restart",
+				"authoritative snapshot resynchronization after restart",
+				"Runtime and Control continuity during Operator restart"
+			]
+		}
+	],
+	"hardwareRequirements": [
+		{
+			"id": "H01",
+			"requirement": "REFERENCE_GPU",
+			"mandatory": true,
+			"qualificationType": "CUDA_REFERENCE",
+			"bindingFile": "cuda-reference.binding.json"
+		},
+		{
+			"id": "H02",
+			"requirement": "PROFESSIONAL_MEDIA_IO",
+			"mandatory": true,
+			"qualificationType": "MEDIA_IO_REFERENCE",
+			"bindingFile": "media-io-reference.binding.json"
+		},
+		{
+			"id": "H03",
+			"requirement": "GENLOCK",
+			"mandatory": true,
+			"qualificationType": "TIMING_REFERENCE_SOAK",
+			"bindingFile": "timing-reference-soak.binding.json"
+		},
+		{
+			"id": "H04",
+			"requirement": "PHYSICAL_END_TO_END_LATENCY",
+			"mandatory": true,
+			"qualificationType": "TIMING_REFERENCE_SOAK",
+			"bindingFile": "timing-reference-soak.binding.json"
+		},
+		{
+			"id": "H05",
+			"requirement": "LONG_SOAK",
+			"mandatory": true,
+			"qualificationType": "TIMING_REFERENCE_SOAK",
+			"bindingFile": "timing-reference-soak.binding.json"
+		}
+	]
+}
