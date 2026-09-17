@@ -13,6 +13,9 @@ $resultVerifierPath = Join-Path $repositoryRoot "build/qualification/Test-Refere
 $bindingVerifierPath = Join-Path $repositoryRoot "build/qualification/Test-QualificationEvidenceBinding.ps1"
 $requiredGatesPath = Join-Path $repositoryRoot ".github/workflows/required-gates.yml"
 $documentationPath = Join-Path $repositoryRoot "docs/qualification/ReferencePlatformQualification.md"
+$profileSchemaPath = Join-Path $repositoryRoot "schemas/qualification/v1/reference-platform.schema.json"
+$resultSchemaPath = Join-Path $repositoryRoot "schemas/qualification/v1/reference-platform-result.schema.json"
+$environmentSchemaPath = Join-Path $repositoryRoot "schemas/qualification/v1/reference-platform-environment.schema.json"
 
 function Assert-Condition {
 	param(
@@ -35,14 +38,17 @@ function Write-JsonFile {
 	[System.IO.File]::WriteAllText($Path, $json + [Environment]::NewLine, [System.Text.UTF8Encoding]::new($false))
 }
 
-foreach ($required in @(
+foreach ($requiredPath in @(
 	$profilePath,
 	$runnerPath,
 	$resultVerifierPath,
 	$bindingVerifierPath,
 	$requiredGatesPath,
-	$documentationPath)) {
-	Assert-Condition (Test-Path -LiteralPath $required -PathType Leaf) "Required AP-39 artifact is missing: '$required'."
+	$documentationPath,
+	$profileSchemaPath,
+	$resultSchemaPath,
+	$environmentSchemaPath)) {
+	Assert-Condition (Test-Path -LiteralPath $requiredPath -PathType Leaf) "Required AP-39 artifact is missing: '$requiredPath'."
 }
 
 $profile = Get-Content -LiteralPath $profilePath -Raw | ConvertFrom-Json
@@ -54,8 +60,8 @@ Assert-Condition ([string]$profile.platform.dotnetSdk -eq "10.0.401") "V1 refere
 Assert-Condition (@($profile.platform.developmentFormats).Count -eq 2) "Reference-platform profile must declare exactly the two V1 development formats."
 Assert-Condition (@($profile.platform.developmentFormats) -contains "1080p50") "Reference-platform profile must retain 1080p50."
 Assert-Condition (@($profile.platform.developmentFormats) -contains "1080p59.94") "Reference-platform profile must retain 1080p59.94."
-foreach ($host in @("rtaime.ControlHost", "rtaime.RuntimeHost", "rtaime.AIHost", "rtaime.Operator")) {
-	Assert-Condition (@($profile.platform.requiredHosts) -contains $host) "Reference-platform profile is missing required host '$host'."
+foreach ($requiredHost in @("rtaime.ControlHost", "rtaime.RuntimeHost", "rtaime.AIHost", "rtaime.Operator")) {
+	Assert-Condition (@($profile.platform.requiredHosts) -contains $requiredHost) "Reference-platform profile is missing required host '$requiredHost'."
 }
 
 $scenarios = @($profile.softwareScenarios)
@@ -98,6 +104,18 @@ foreach ($name in $expectedHardware.Keys) {
 	Assert-Condition ([bool]$item[0].mandatory) "Physical requirement '$name' must remain mandatory for full reference-platform PASS."
 	Assert-Condition ([string]$item[0].qualificationType -eq [string]$expectedHardware[$name].Type) "Physical requirement '$name' has the wrong qualification type."
 	Assert-Condition ([string]$item[0].bindingFile -eq [string]$expectedHardware[$name].Binding) "Physical requirement '$name' has the wrong evidence binding."
+}
+
+foreach ($schemaPath in @($profileSchemaPath, $resultSchemaPath, $environmentSchemaPath)) {
+	$schema = Get-Content -LiteralPath $schemaPath -Raw | ConvertFrom-Json
+	Assert-Condition ([string]$schema.'$schema' -eq "https://json-schema.org/draft/2020-12/schema") "Qualification schema '$schemaPath' must use JSON Schema 2020-12."
+	Assert-Condition (-not [string]::IsNullOrWhiteSpace([string]$schema.'$id')) "Qualification schema '$schemaPath' is missing its stable schema ID."
+}
+$resultSchema = Get-Content -LiteralPath $resultSchemaPath -Raw | ConvertFrom-Json
+$statusValues = @($resultSchema.'$defs'.qualificationStatus.enum)
+Assert-Condition ($statusValues.Count -eq 4) "Qualification result schema must retain exactly four status values."
+foreach ($status in @("PASS", "FAIL", "NOT_APPLICABLE", "UNVERIFIED")) {
+	Assert-Condition ($statusValues -contains $status) "Qualification result schema is missing status '$status'."
 }
 
 $runner = Get-Content -LiteralPath $runnerPath -Raw
