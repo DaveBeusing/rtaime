@@ -1,6 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using rtaime.Core;
 using rtaime.Media.Contracts;
 
@@ -12,6 +13,7 @@ public sealed record LocalMediaDecodedFrame(
 	AudioBufferDescriptor? Audio,
 	ReadOnlyMemory<byte> AudioPayload);
 
+[SupportedOSPlatform("windows")]
 internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecoder
 {
 	private static readonly Timebase MediaFoundationTimebase = new(1, 10_000_000);
@@ -80,40 +82,50 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 				if (audioSubtype != MediaFoundation.MfAudioFormatAac)
 					return RejectAndRelease("media.file.audio_codec_unsupported", "V1 local media supports embedded AAC audio only.", reader, mediaFoundationStarted);
 
-				var packedSize = GetUInt64(videoNative, MediaFoundation.MfMtFrameSize);
-				var width = checked((uint)(packedSize >> 32));
-				var height = checked((uint)(packedSize & uint.MaxValue));
-				var packedRate = GetUInt64(videoNative, MediaFoundation.MfMtFrameRate);
-				var rateNumerator = checked((long)(packedRate >> 32));
-				var rateDenominator = checked((long)(packedRate & uint.MaxValue));
-				if (rateNumerator <= 0 || rateDenominator <= 0)
-					return RejectAndRelease("media.file.metadata_invalid", "The local media file reports an invalid frame rate.", reader, mediaFoundationStarted);
-
-				var channels = GetUInt32(audioNative, MediaFoundation.MfMtAudioNumChannels);
-				var sampleRate = GetUInt32(audioNative, MediaFoundation.MfMtAudioSamplesPerSecond);
-				if (channels != 2 || sampleRate != 48_000)
-					return RejectAndRelease("media.file.audio_format_unsupported", "V1 local media requires embedded 48 kHz stereo audio.", reader, mediaFoundationStarted);
-
-				var duration = GetDuration(reader);
-				if (duration <= TimeSpan.Zero)
-					return RejectAndRelease("media.file.metadata_invalid", "The local media file reports an invalid duration.", reader, mediaFoundationStarted);
-
 				ConfigureDecodedVideo(reader);
 				ConfigureDecodedAudio(reader);
 
-				var probe = new LocalMediaProbe(
-					MediaContractVersion.Current,
-					assetId,
-					sourceId,
-					System.IO.Path.GetFileName(path),
-					MediaContainerFormat.Mp4,
-					MediaVideoCodec.H264,
-					MediaAudioCodec.Aac,
-					new VideoFormat(width, height, new FrameRate(rateNumerator, rateDenominator), PixelFormat.Rgba8, ScanMode.Progressive),
-					AudioFormat.Stereo48kFloat32,
-					duration);
+				var videoDecoded = GetCurrentMediaType(reader, MediaFoundation.FirstVideoStream);
+				var audioDecoded = GetCurrentMediaType(reader, MediaFoundation.FirstAudioStream);
+				try
+				{
+					var packedSize = GetUInt64(videoDecoded, MediaFoundation.MfMtFrameSize);
+					var width = checked((uint)(packedSize >> 32));
+					var height = checked((uint)(packedSize & uint.MaxValue));
+					var packedRate = GetUInt64(videoDecoded, MediaFoundation.MfMtFrameRate);
+					var rateNumerator = checked((long)(packedRate >> 32));
+					var rateDenominator = checked((long)(packedRate & uint.MaxValue));
+					if (rateNumerator <= 0 || rateDenominator <= 0)
+						return RejectAndRelease("media.file.metadata_invalid", "The local media file reports an invalid frame rate.", reader, mediaFoundationStarted);
 
-				return LocalMediaDecoderOpenResult.Ready(new WindowsMediaFoundationLocalMediaDecoder(reader, assetId, sourceId, probe));
+					var channels = GetUInt32(audioDecoded, MediaFoundation.MfMtAudioNumChannels);
+					var sampleRate = GetUInt32(audioDecoded, MediaFoundation.MfMtAudioSamplesPerSecond);
+					if (channels != 2 || sampleRate != 48_000)
+						return RejectAndRelease("media.file.audio_format_unsupported", "V1 local media requires embedded 48 kHz stereo audio.", reader, mediaFoundationStarted);
+
+					var duration = GetDuration(reader);
+					if (duration <= TimeSpan.Zero)
+						return RejectAndRelease("media.file.metadata_invalid", "The local media file reports an invalid duration.", reader, mediaFoundationStarted);
+
+					var probe = new LocalMediaProbe(
+						MediaContractVersion.Current,
+						assetId,
+						sourceId,
+						System.IO.Path.GetFileName(path),
+						MediaContainerFormat.Mp4,
+						MediaVideoCodec.H264,
+						MediaAudioCodec.Aac,
+						new VideoFormat(width, height, new FrameRate(rateNumerator, rateDenominator), PixelFormat.Rgba8, ScanMode.Progressive),
+						AudioFormat.Stereo48kFloat32,
+						duration);
+
+					return LocalMediaDecoderOpenResult.Ready(new WindowsMediaFoundationLocalMediaDecoder(reader, assetId, sourceId, probe));
+				}
+				finally
+				{
+					MediaFoundation.ReleaseComObject(videoDecoded);
+					MediaFoundation.ReleaseComObject(audioDecoded);
+				}
 			}
 			finally
 			{
@@ -263,6 +275,12 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 		return mediaType;
 	}
 
+	private static IMFMediaType GetCurrentMediaType(IMFSourceReader reader, uint streamIndex)
+	{
+		MediaFoundation.ThrowIfFailed(reader.GetCurrentMediaType(streamIndex, out var mediaType));
+		return mediaType;
+	}
+
 	private static Guid GetGuid(IMFAttributes attributes, Guid key)
 	{
 		MediaFoundation.ThrowIfFailed(attributes.GetGUID(ref key, out var value));
@@ -352,6 +370,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 	}
 }
 
+[SupportedOSPlatform("windows")]
 internal static class MediaFoundation
 {
 	public const int MfVersion = 0x00020070;
