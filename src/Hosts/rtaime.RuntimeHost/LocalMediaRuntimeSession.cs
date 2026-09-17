@@ -12,7 +12,8 @@ public enum LocalMediaRuntimeBoundaryStatus
 {
 	Frame = 1,
 	Ended = 2,
-	Failed = 3
+	Failed = 3,
+	NotPlaying = 4
 }
 
 public sealed record LocalMediaRuntimeBoundaryResult(
@@ -21,6 +22,7 @@ public sealed record LocalMediaRuntimeBoundaryResult(
 	ReadOnlyMemory<byte> RgbaPixels,
 	AudioBufferDescriptor? Audio,
 	ReadOnlyMemory<byte> AudioPayload,
+	MediaTransportSnapshot Transport,
 	Failure? Failure)
 {
 	public bool Succeeded => Status == LocalMediaRuntimeBoundaryStatus.Frame && Video is not null;
@@ -29,7 +31,7 @@ public sealed record LocalMediaRuntimeBoundaryResult(
 /// <summary>
 /// RuntimeHost composition for one committed local-media source. Production authority remains in Control;
 /// this class only accepts a PreparedExecutionContract, commits it through TransactionalRuntime and then
-/// pushes decoded frames through the existing MediaFramePipeline.
+/// applies observable media transport commands before pushing decoded frames through MediaFramePipeline.
 /// </summary>
 public sealed class LocalMediaRuntimeSession : IDisposable
 {
@@ -37,6 +39,7 @@ public sealed class LocalMediaRuntimeSession : IDisposable
 	private readonly LocalMediaFileSource _source;
 	private readonly TransactionalRuntime _runtime;
 	private readonly MediaFramePipeline _pipeline;
+	private readonly LocalMediaTransportController _transport;
 	private ulong _nextSequenceNumber;
 	private bool _disposed;
 
@@ -46,10 +49,14 @@ public sealed class LocalMediaRuntimeSession : IDisposable
 		_source = source ?? throw new ArgumentNullException(nameof(source));
 		_runtime = new TransactionalRuntime(new InMemoryRuntimeResourceReservationManager());
 		_pipeline = new MediaFramePipeline(new MediaPipelineOptions(3, MediaBackpressurePolicy.RejectIncoming));
+		_transport = new LocalMediaTransportController(
+			source.Probe,
+			frame => source.SeekToFrame(frame).Failure);
 	}
 
 	public LocalMediaProbe Probe => _source.Probe;
 	public RuntimeExecutionState RuntimeState => _runtime.State;
+	public MediaTransportSnapshot Transport => _transport.Snapshot;
 	public ulong NextSequenceNumber => _nextSequenceNumber;
 
 	public RuntimeHostApplyResult ApplyExecution(PreparedExecutionContract preparedExecution)
@@ -91,6 +98,21 @@ public sealed class LocalMediaRuntimeSession : IDisposable
 			commit.Status == RuntimeCommitStatus.Committed ? _nextSequenceNumber : null);
 	}
 
+	public MediaTransportCommandResult ApplyTransport(MediaTransportCommand command)
+	{
+		ArgumentNullException.ThrowIfNull(command);
+		ObjectDisposedException.ThrowIf(_disposed, this);
+		if (_runtime.ActiveExecution is null)
+		{
+			return MediaTransportCommandResult.Rejected(
+				_transport.Snapshot,
+				"runtime.local_media.execution_missing",
+				"Media transport requires a committed execution.");
+		}
+
+		return _transport.Apply(command);
+	}
+
 	public LocalMediaRuntimeBoundaryResult ProcessNextBoundary()
 	{
 		ObjectDisposedException.ThrowIf(_disposed, this);
@@ -111,38 +133,69 @@ public sealed class LocalMediaRuntimeSession : IDisposable
 				"Committed execution no longer contains the local media source binding.");
 		}
 
+		if (_transport.Snapshot.State != MediaTransportState.Playing)
+		{
+			return new LocalMediaRuntimeBoundaryResult(
+				LocalMediaRuntimeBoundaryStatus.NotPlaying,
+				null,
+				ReadOnlyMemory<byte>.Empty,
+				null,
+				ReadOnlyMemory<byte>.Empty,
+				_transport.Snapshot,
+				null);
+		}
+
 		var decoded = _source.ReadNext(_nextSequenceNumber);
 		if (decoded.Status == LocalMediaFrameReadStatus.Ended)
 		{
+			_transport.MarkEnded();
 			return new LocalMediaRuntimeBoundaryResult(
 				LocalMediaRuntimeBoundaryStatus.Ended,
 				null,
 				ReadOnlyMemory<byte>.Empty,
 				null,
 				ReadOnlyMemory<byte>.Empty,
+				_transport.Snapshot,
 				null);
 		}
 		if (!decoded.Succeeded)
 		{
+			var failure = decoded.Failure ?? new Failure(
+				"runtime.local_media.decode_failed",
+				"Local media decoding failed without failure details.");
+			_transport.MarkError(failure);
 			return new LocalMediaRuntimeBoundaryResult(
 				LocalMediaRuntimeBoundaryStatus.Failed,
 				null,
 				ReadOnlyMemory<byte>.Empty,
 				null,
 				ReadOnlyMemory<byte>.Empty,
-				decoded.Failure);
+				_transport.Snapshot,
+				failure);
 		}
 
 		var media = decoded.Frame!;
 		var clock = new MediaClockPosition(media.Video.Timing.PresentationTimestamp, media.Video.Timing.Timebase);
 		var submitted = _pipeline.Submit(media.Video, clock);
 		if (!submitted.Accepted)
-			return Failed(submitted.Failure?.Code ?? "runtime.local_media.pipeline_rejected", submitted.Failure?.Message ?? "Local media frame was rejected by the media pipeline.");
+		{
+			return Failed(
+				submitted.Failure?.Code ?? "runtime.local_media.pipeline_rejected",
+				submitted.Failure?.Message ?? "Local media frame was rejected by the media pipeline.");
+		}
 
 		FrameDescriptor? consumed = null;
 		var consumption = _pipeline.ConsumeNext(clock, frame => consumed = frame);
 		if (!consumption.Consumed || consumed is null)
-			return Failed(consumption.Failure?.Code ?? "runtime.local_media.pipeline_empty", consumption.Failure?.Message ?? "Local media frame could not be consumed from the media pipeline.");
+		{
+			return Failed(
+				consumption.Failure?.Code ?? "runtime.local_media.pipeline_empty",
+				consumption.Failure?.Message ?? "Local media frame could not be consumed from the media pipeline.");
+		}
+
+		_transport.ObserveDecodedTimestamp(
+			consumed.Timing.PresentationTimestamp,
+			consumed.Timing.Timebase);
 
 		if (_nextSequenceNumber == ulong.MaxValue)
 			return Failed("runtime.local_media.sequence_exhausted", "Local media sequence number exhausted.");
@@ -154,6 +207,7 @@ public sealed class LocalMediaRuntimeSession : IDisposable
 			media.RgbaPixels,
 			media.Audio,
 			media.AudioPayload,
+			_transport.Snapshot,
 			null);
 	}
 
@@ -167,12 +221,17 @@ public sealed class LocalMediaRuntimeSession : IDisposable
 		_source.Dispose();
 	}
 
-	private static LocalMediaRuntimeBoundaryResult Failed(string code, string message) =>
-		new(
+	private LocalMediaRuntimeBoundaryResult Failed(string code, string message)
+	{
+		var failure = new Failure(code, message);
+		_transport.MarkError(failure);
+		return new LocalMediaRuntimeBoundaryResult(
 			LocalMediaRuntimeBoundaryStatus.Failed,
 			null,
 			ReadOnlyMemory<byte>.Empty,
 			null,
 			ReadOnlyMemory<byte>.Empty,
-			new Failure(code, message));
+			_transport.Snapshot,
+			failure);
+	}
 }

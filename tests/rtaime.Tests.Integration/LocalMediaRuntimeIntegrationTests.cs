@@ -66,8 +66,14 @@ public sealed class LocalMediaRuntimeIntegrationTests
 		Assert.True(applied.Committed);
 		Assert.Equal(RuntimeCommitStatus.Committed, applied.Commit!.Status);
 
+		var play = session.ApplyTransport(new MediaTransportCommand(
+			MediaContractVersion.Current,
+			open.Source.AssetId,
+			MediaTransportCommandKind.Play));
+		Assert.True(play.Succeeded, play.Failure?.Message);
+
 		var boundary = session.ProcessNextBoundary();
-		Assert.True(boundary.Succeeded, boundary.Failure?.Message);
+		Assert.True(boundary.Succeeded, $"{boundary.Status}: {boundary.Failure?.Message}");
 		Assert.Equal(mediaSourceId, boundary.Video!.SourceId);
 		Assert.Equal((long)1920 * 1080 * 4, boundary.RgbaPixels.Length);
 		Assert.NotNull(boundary.Audio);
@@ -125,7 +131,7 @@ public sealed class LocalMediaRuntimeIntegrationTests
 	}
 
 	private static string ReferenceAssetPath() =>
-		Path.Combine(FindRepositoryRoot(), "tests", "TestAssets", "media", "reference-1080p50-h264-aac.mp4");
+		Path.Combine(FindRepositoryRoot(), "tests", "TestAssets", "media", "reference-1080p50-h264-aac-80ms.mp4");
 
 	private static string FindRepositoryRoot()
 	{

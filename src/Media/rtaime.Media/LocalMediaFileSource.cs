@@ -59,6 +59,16 @@ public sealed record LocalMediaFrameReadResult(
 		new(LocalMediaFrameReadStatus.Failed, null, new Failure(code, message));
 }
 
+public sealed record LocalMediaSeekResult(long TargetFrame, Failure? Failure)
+{
+	public bool Succeeded => Failure is null;
+
+	public static LocalMediaSeekResult Positioned(long targetFrame) => new(targetFrame, null);
+
+	public static LocalMediaSeekResult Rejected(long targetFrame, string code, string message) =>
+		new(targetFrame, new Failure(code, message));
+}
+
 public sealed class LocalMediaFileSource : IDisposable
 {
 	private readonly ILocalMediaDecoder _decoder;
@@ -91,6 +101,12 @@ public sealed class LocalMediaFileSource : IDisposable
 				"media.file.decode_failed",
 				$"Local media decoding failed: {exception.Message}");
 		}
+	}
+
+	public LocalMediaSeekResult SeekToFrame(long frameNumber)
+	{
+		ObjectDisposedException.ThrowIf(_disposed, this);
+		return _decoder.SeekToFrame(frameNumber);
 	}
 
 	public void Dispose()
@@ -228,6 +244,7 @@ internal interface ILocalMediaDecoder : IDisposable
 {
 	LocalMediaProbe Probe { get; }
 	bool TryReadNext(ulong sequenceNumber, out LocalMediaDecodedFrame? frame);
+	LocalMediaSeekResult SeekToFrame(long frameNumber);
 }
 
 internal readonly record struct LocalMediaDecoderOpenResult(

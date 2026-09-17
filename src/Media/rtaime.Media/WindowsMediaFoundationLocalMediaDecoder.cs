@@ -20,24 +20,18 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 	private readonly IMFSourceReader _reader;
 	private readonly MediaAssetId _assetId;
 	private readonly MediaSourceId _sourceId;
-	private readonly uint _videoStreamIndex;
-	private readonly uint _audioStreamIndex;
-	private ulong _audioSamplePosition;
+	private long? _pendingSeekTimestamp;
 	private bool _disposed;
 
 	private WindowsMediaFoundationLocalMediaDecoder(
 		IMFSourceReader reader,
 		MediaAssetId assetId,
 		MediaSourceId sourceId,
-		uint videoStreamIndex,
-		uint audioStreamIndex,
 		LocalMediaProbe probe)
 	{
 		_reader = reader;
 		_assetId = assetId;
 		_sourceId = sourceId;
-		_videoStreamIndex = videoStreamIndex;
-		_audioStreamIndex = audioStreamIndex;
 		Probe = probe;
 	}
 
@@ -70,20 +64,8 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 				MediaFoundation.ReleaseComObject(attributes);
 			}
 
-			var videoStreamIndex = FindFirstStream(reader, MediaFoundation.MfMediaTypeVideo);
-			if (videoStreamIndex is null)
-				return RejectAndRelease("media.file.video_stream_missing", "The local media file does not contain a readable video stream.", reader, mediaFoundationStarted);
-
-			var audioStreamIndex = FindFirstStream(reader, MediaFoundation.MfMediaTypeAudio);
-			if (audioStreamIndex is null)
-				return RejectAndRelease("media.file.audio_stream_missing", "The local media file does not contain a readable audio stream.", reader, mediaFoundationStarted);
-
-			MediaFoundation.ThrowIfFailed(reader.SetStreamSelection(MediaFoundation.AllStreams, false));
-			MediaFoundation.ThrowIfFailed(reader.SetStreamSelection(videoStreamIndex.Value, true));
-			MediaFoundation.ThrowIfFailed(reader.SetStreamSelection(audioStreamIndex.Value, true));
-
-			var videoNative = GetNativeMediaType(reader, videoStreamIndex.Value);
-			var audioNative = GetNativeMediaType(reader, audioStreamIndex.Value);
+			var videoNative = GetNativeMediaType(reader, MediaFoundation.FirstVideoStream);
+			var audioNative = GetNativeMediaType(reader, MediaFoundation.FirstAudioStream);
 			try
 			{
 				var videoMajor = GetGuid(videoNative, MediaFoundation.MfMtMajorType);
@@ -108,8 +90,8 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 				if (metadata.Duration <= TimeSpan.Zero)
 					return RejectAndRelease("media.file.metadata_invalid", "The local media file reports an invalid duration.", reader, mediaFoundationStarted);
 
-				ConfigureDecodedVideo(reader, videoStreamIndex.Value);
-				ConfigureDecodedAudio(reader, audioStreamIndex.Value);
+				ConfigureDecodedVideo(reader, MediaFoundation.FirstVideoStream);
+				ConfigureDecodedAudio(reader, MediaFoundation.FirstAudioStream);
 
 				var probe = new LocalMediaProbe(
 					MediaContractVersion.Current,
@@ -132,8 +114,6 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 					reader,
 					assetId,
 					sourceId,
-					videoStreamIndex.Value,
-					audioStreamIndex.Value,
 					probe));
 			}
 			finally
@@ -152,10 +132,46 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 		}
 	}
 
+	public LocalMediaSeekResult SeekToFrame(long frameNumber)
+	{
+		ObjectDisposedException.ThrowIf(_disposed, this);
+		var totalFrames = LocalMediaFrameMath.GetTotalFrames(Probe);
+		if (frameNumber < 0 || frameNumber >= totalFrames)
+		{
+			return LocalMediaSeekResult.Rejected(
+				frameNumber,
+				"media.file.seek_out_of_range",
+				$"Frame '{frameNumber}' is outside the valid range 0..{totalFrames - 1}.");
+		}
+
+		try
+		{
+			var target = LocalMediaFrameMath.FrameToTimeSpan(frameNumber, Probe.VideoFormat.FrameRate).Ticks;
+			MediaFoundation.ThrowIfFailed(_reader.Flush(MediaFoundation.AllStreams));
+			var timeFormat = Guid.Empty;
+			var position = new PropVariant
+			{
+				VarType = MediaFoundation.VtI8,
+				Int64Value = target
+			};
+			MediaFoundation.ThrowIfFailed(_reader.SetCurrentPosition(ref timeFormat, ref position));
+			_pendingSeekTimestamp = target;
+			return LocalMediaSeekResult.Positioned(frameNumber);
+		}
+		catch (Exception exception) when (exception is COMException or ExternalException or InvalidDataException or OverflowException)
+		{
+			return LocalMediaSeekResult.Rejected(
+				frameNumber,
+				"media.file.seek_failed",
+				$"Local media seek failed: {exception.Message}");
+		}
+	}
+
 	public bool TryReadNext(ulong sequenceNumber, out LocalMediaDecodedFrame? frame)
 	{
 		ObjectDisposedException.ThrowIf(_disposed, this);
-		if (!TryReadSample(_videoStreamIndex, out var videoTimestamp, out var videoPayload))
+		var minimumTimestamp = _pendingSeekTimestamp;
+		if (!TryReadSample(MediaFoundation.FirstVideoStream, minimumTimestamp, out var videoTimestamp, out var videoPayload))
 		{
 			frame = null;
 			return false;
@@ -174,7 +190,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 
 		AudioBufferDescriptor? audio = null;
 		ReadOnlyMemory<byte> audioPayload = ReadOnlyMemory<byte>.Empty;
-		if (TryReadSample(_audioStreamIndex, out var audioTimestamp, out var decodedAudio) && decodedAudio.Length > 0)
+		if (TryReadSample(MediaFoundation.FirstAudioStream, minimumTimestamp, out var audioTimestamp, out var decodedAudio) && decodedAudio.Length > 0)
 		{
 			var bytesPerSampleFrame = checked((int)Probe.AudioFormat.ChannelCount * sizeof(float));
 			if (decodedAudio.Length % bytesPerSampleFrame != 0)
@@ -182,18 +198,19 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 			var sampleCount = checked((uint)(decodedAudio.Length / bytesPerSampleFrame));
 			if (sampleCount > 0)
 			{
+				var audioSamplePosition = TimestampToAudioSamplePosition(audioTimestamp, Probe.AudioFormat.SampleRate);
 				audio = new AudioBufferDescriptor(
 					MediaContractVersion.Current,
 					new AudioStreamId(LocalMediaIdentity.Create("audio-stream", _assetId.ToString())),
 					Probe.AudioFormat,
 					LocalMediaIdentity.Create("timing-domain", _assetId.ToString()),
-					new AudioBufferTiming(_audioSamplePosition, sampleCount, audioTimestamp, MediaFoundationTimebase),
+					new AudioBufferTiming(audioSamplePosition, sampleCount, audioTimestamp, MediaFoundationTimebase),
 					new OpaqueAudioHandle("local.media.audio.float32", $"{_assetId}:{sequenceNumber}"));
-				_audioSamplePosition = checked(_audioSamplePosition + sampleCount);
 				audioPayload = decodedAudio;
 			}
 		}
 
+		_pendingSeekTimestamp = null;
 		frame = new LocalMediaDecodedFrame(video, rgba, audio, audioPayload);
 		return true;
 	}
@@ -208,14 +225,17 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 		MediaFoundation.MFShutdown();
 	}
 
-	private bool TryReadSample(uint streamIndex, out long timestamp, out byte[] payload)
+	private bool TryReadSample(
+		uint streamIndex,
+		long? minimumTimestamp,
+		out long timestamp,
+		out byte[] payload)
 	{
-		var draining = false;
 		while (true)
 		{
 			MediaFoundation.ThrowIfFailed(_reader.ReadSample(
 				streamIndex,
-				draining ? MediaFoundation.SourceReaderControlDrain : 0,
+				0,
 				out _,
 				out var flags,
 				out timestamp,
@@ -223,13 +243,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 
 			if (sample is null)
 			{
-				if (!draining && (flags & MediaFoundation.SourceReaderEndOfStream) != 0)
-				{
-					draining = true;
-					continue;
-				}
-
-				if (draining)
+				if ((flags & MediaFoundation.SourceReaderEndOfStream) != 0)
 				{
 					payload = Array.Empty<byte>();
 					return false;
@@ -240,6 +254,9 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 
 			try
 			{
+				if (minimumTimestamp is not null && timestamp < minimumTimestamp.Value)
+					continue;
+
 				MediaFoundation.ThrowIfFailed(sample.ConvertToContiguousBuffer(out var buffer));
 				try
 				{
@@ -268,6 +285,15 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 		}
 	}
 
+	private static ulong TimestampToAudioSamplePosition(long timestamp, uint sampleRate)
+	{
+		if (timestamp <= 0)
+			return 0;
+
+		var position = decimal.Floor((decimal)timestamp * sampleRate / 10_000_000m);
+		return checked((ulong)position);
+	}
+
 	private static byte[] ConvertRgb32ToRgba(byte[] source, VideoFormat format)
 	{
 		var required = checked((int)((ulong)format.Width * format.Height * 4UL));
@@ -283,28 +309,6 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 			rgba[offset + 3] = byte.MaxValue;
 		}
 		return rgba;
-	}
-
-	private static uint? FindFirstStream(IMFSourceReader reader, Guid majorType)
-	{
-		for (uint streamIndex = 0; streamIndex < MediaFoundation.MaximumProbeStreamCount; streamIndex++)
-		{
-			var result = reader.GetNativeMediaType(streamIndex, 0, out var mediaType);
-			if (result < 0)
-				continue;
-
-			try
-			{
-				if (GetGuid(mediaType, MediaFoundation.MfMtMajorType) == majorType)
-					return streamIndex;
-			}
-			finally
-			{
-				MediaFoundation.ReleaseComObject(mediaType);
-			}
-		}
-
-		return null;
 	}
 
 	private static IMFMediaType GetNativeMediaType(IMFSourceReader reader, uint streamIndex)
@@ -375,10 +379,11 @@ internal static class MediaFoundation
 {
 	public const int MfVersion = 0x00020070;
 	public const int MfStartupFull = 0;
+	public const ushort VtI8 = 20;
+	public const uint FirstVideoStream = 0xFFFFFFFC;
+	public const uint FirstAudioStream = 0xFFFFFFFD;
 	public const uint AllStreams = 0xFFFFFFFE;
 	public const uint SourceReaderEndOfStream = 0x00000002;
-	public const uint SourceReaderControlDrain = 0x00000001;
-	public const uint MaximumProbeStreamCount = 32;
 
 	public static Guid MfSourceReaderEnableVideoProcessing = new("FB394F3D-CCF1-42EE-BBB3-F9B845D5681D");
 	public static Guid MfMtMajorType = new("48EBA18E-F8C9-4687-BF11-0A74C9F96A8F");
