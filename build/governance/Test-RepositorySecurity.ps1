@@ -82,11 +82,16 @@ Assert-Condition ($requiredWorkflow -notmatch '(?im)^\s*permissions:\s*write-all
 Assert-Condition ($requiredWorkflow -notmatch '(?im)^\s*contents:\s+write\s*$') "Required gates workflow must not request contents: write."
 Assert-Condition ($requiredWorkflow -notmatch '(?im)^\s*actions:\s+write\s*$') "Required gates workflow must not request actions: write."
 
+$productSecurityPolicy = Join-Path $PSScriptRoot "Test-ProductSecurityPolicy.ps1"
+Assert-Condition (Test-Path -LiteralPath $productSecurityPolicy -PathType Leaf) "Product-security policy verifier is missing."
+& $productSecurityPolicy
+
 Write-Host "Repository security governance PASS"
 Write-Host "Tracked files scanned: $($trackedFiles.Count)"
 Write-Host "Private key files: none"
 Write-Host "PEM private key markers: none"
 Write-Host "Committed generated artifacts: none"
 Write-Host "Trusted release key metadata: structurally valid"
+Write-Host "Product security policy: PASS"
 Write-Host "Required gates workflow permissions: read-only"
 exit 0

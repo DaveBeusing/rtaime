@@ -25,7 +25,8 @@ if (-not (Test-Path -LiteralPath $directory)) {
 	New-Item -ItemType Directory -Path $directory -Force | Out-Null
 }
 
-$ecdsa = [System.Security.Cryptography.ECDsa]::Create([System.Security.Cryptography.ECCurve]::NamedCurves.nistP256)
+$curve = [System.Security.Cryptography.ECCurve]::CreateFromFriendlyName("nistP256")
+$ecdsa = [System.Security.Cryptography.ECDsa]::Create($curve)
 try {
 	$privatePem = $ecdsa.ExportPkcs8PrivateKeyPem()
 	$publicKey = $ecdsa.ExportSubjectPublicKeyInfo()
