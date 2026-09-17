@@ -52,6 +52,16 @@
 		},
 		"compatibilityManifest": { "$ref": "#/$defs/hashReference" },
 		"qualificationEvidenceManifest": { "$ref": "#/$defs/hashReference" },
+		"securityAssessment": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["path", "sha256", "assessmentId"],
+			"properties": {
+				"path": { "const": "security-assessment.json" },
+				"sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+				"assessmentId": { "type": "string", "minLength": 1 }
+			}
+		},
 		"signingAttestation": {
 			"type": "object",
 			"required": ["status", "details"],

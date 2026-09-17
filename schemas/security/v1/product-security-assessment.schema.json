@@ -1,0 +1,182 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://rtaime.invalid/schemas/security/v1/product-security-assessment.schema.json",
+	"$comment": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+	"title": "rtaime Product Security Assessment",
+	"type": "object",
+	"additionalProperties": false,
+	"required": [
+		"copyright",
+		"schemaVersion",
+		"assessmentId",
+		"product",
+		"source",
+		"status",
+		"checks",
+		"findings",
+		"reviewer",
+		"assessedAtUtc"
+	],
+	"properties": {
+		"copyright": {
+			"type": "string",
+			"minLength": 1
+		},
+		"schemaVersion": {
+			"const": "1.0"
+		},
+		"assessmentId": {
+			"type": "string",
+			"minLength": 1
+		},
+		"product": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": [
+				"name",
+				"version"
+			],
+			"properties": {
+				"name": {
+					"const": "rtaime"
+				},
+				"version": {
+					"type": "string",
+					"minLength": 1
+				}
+			}
+		},
+		"source": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": [
+				"sourceCommit",
+				"buildCommit",
+				"buildId"
+			],
+			"properties": {
+				"sourceCommit": {
+					"type": "string",
+					"pattern": "^[0-9a-fA-F]{40,64}$"
+				},
+				"buildCommit": {
+					"type": "string",
+					"pattern": "^[0-9a-fA-F]{40,64}$"
+				},
+				"buildId": {
+					"type": "string",
+					"minLength": 1
+				}
+			}
+		},
+		"status": {
+			"enum": [
+				"PASS",
+				"FAIL",
+				"UNVERIFIED"
+			]
+		},
+		"checks": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": [
+				"sourceReview",
+				"dependencyReview",
+				"vulnerabilityTriage",
+				"securityUpdatePath"
+			],
+			"properties": {
+				"sourceReview": {
+					"$ref": "#/$defs/checkStatus"
+				},
+				"dependencyReview": {
+					"$ref": "#/$defs/checkStatus"
+				},
+				"vulnerabilityTriage": {
+					"$ref": "#/$defs/checkStatus"
+				},
+				"securityUpdatePath": {
+					"$ref": "#/$defs/checkStatus"
+				}
+			}
+		},
+		"findings": {
+			"type": "array",
+			"items": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"id",
+					"severity",
+					"status",
+					"summary"
+				],
+				"properties": {
+					"id": {
+						"type": "string",
+						"minLength": 1
+					},
+					"severity": {
+						"enum": [
+							"BLOCKER",
+							"CRITICAL",
+							"HIGH",
+							"MEDIUM",
+							"LOW",
+							"INFORMATIONAL"
+						]
+					},
+					"status": {
+						"enum": [
+							"OPEN",
+							"MITIGATED",
+							"ACCEPTED_RISK",
+							"CLOSED"
+						]
+					},
+					"summary": {
+						"type": "string",
+						"minLength": 1
+					},
+					"evidenceReference": {
+						"type": [
+							"string",
+							"null"
+						]
+					}
+				}
+			}
+		},
+		"reviewer": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": [
+				"identity",
+				"role"
+			],
+			"properties": {
+				"identity": {
+					"type": "string",
+					"minLength": 1
+				},
+				"role": {
+					"type": "string",
+					"minLength": 1
+				}
+			}
+		},
+		"assessedAtUtc": {
+			"type": "string",
+			"format": "date-time"
+		}
+	},
+	"$defs": {
+		"checkStatus": {
+			"enum": [
+				"PASS",
+				"FAIL",
+				"UNVERIFIED"
+			]
+		}
+	}
+}
