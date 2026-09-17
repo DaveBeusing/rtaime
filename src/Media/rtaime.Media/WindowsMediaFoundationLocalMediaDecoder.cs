@@ -196,16 +196,15 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 				out timestamp,
 				out var sample));
 
-			if ((flags & MediaFoundation.SourceReaderEndOfStream) != 0)
-			{
-				if (sample is not null)
-					MediaFoundation.ReleaseComObject(sample);
-				payload = Array.Empty<byte>();
-				return false;
-			}
-
 			if (sample is null)
+			{
+				if ((flags & MediaFoundation.SourceReaderEndOfStream) != 0)
+				{
+					payload = Array.Empty<byte>();
+					return false;
+				}
 				continue;
+			}
 
 			try
 			{
