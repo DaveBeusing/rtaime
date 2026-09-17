@@ -39,7 +39,9 @@ function Invoke-NativePowerShell {
 	}
 	try {
 		& pwsh @Arguments *> $null
-		return $LASTEXITCODE
+		$exitCode = $LASTEXITCODE
+		$global:LASTEXITCODE = 0
+		return $exitCode
 	} finally {
 		if ($null -ne $nativePreferenceVariable) {
 			Set-Variable -Name PSNativeCommandUseErrorActionPreference -Value $previousNativePreference
