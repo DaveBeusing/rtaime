@@ -25,6 +25,15 @@ function Assert-Condition {
 	if (-not $Condition) { throw $Message }
 }
 
+function Assert-TextContains {
+	param(
+		[Parameter(Mandatory)][string]$Text,
+		[Parameter(Mandatory)][string]$Value,
+		[Parameter(Mandatory)][string]$Message
+	)
+	if (-not $Text.Contains($Value, [StringComparison]::Ordinal)) { throw $Message }
+}
+
 function Write-JsonFile {
 	param(
 		[Parameter(Mandatory)]$Value,
@@ -78,16 +87,16 @@ foreach ($index in 1..10) {
 }
 
 $q01 = @($scenarios | Where-Object id -eq "Q01")[0]
-Assert-Condition ([string]$q01.filter -match 'ExecutableHostLifecycleTests') "Q01 must remain bound to executable host lifecycle evidence."
+Assert-TextContains -Text ([string]$q01.filter) -Value "ExecutableHostLifecycleTests" -Message "Q01 must remain bound to executable host lifecycle evidence."
 foreach ($id in @("Q02", "Q03", "Q04", "Q05", "Q06", "Q07", "Q08")) {
 	$scenario = @($scenarios | Where-Object id -eq $id)[0]
 	Assert-Condition ([string]$scenario.evidenceGroup -eq "v1-end-to-end") "Scenario '$id' must reuse the single V1 end-to-end execution evidence group."
-	Assert-Condition ([string]$scenario.filter).Contains("V1EndToEndProofTests.V1_reference_workload_executes_end_to_end_for_both_development_formats") "Scenario '$id' must remain bound to the V1 end-to-end proof."
+	Assert-TextContains -Text ([string]$scenario.filter) -Value "V1EndToEndProofTests.V1_reference_workload_executes_end_to_end_for_both_development_formats" -Message "Scenario '$id' must remain bound to the V1 end-to-end proof."
 }
 $q09 = @($scenarios | Where-Object id -eq "Q09")[0]
-Assert-Condition ([string]$q09.filter -match 'RecordingStorageExhaustionIntegrationTests') "Q09 must remain bound to controlled recording storage-exhaustion evidence."
+Assert-TextContains -Text ([string]$q09.filter) -Value "RecordingStorageExhaustionIntegrationTests" -Message "Q09 must remain bound to controlled recording storage-exhaustion evidence."
 $q10 = @($scenarios | Where-Object id -eq "Q10")[0]
-Assert-Condition ([string]$q10.filter -match 'OperatorProcessRecoveryTests') "Q10 must remain bound to real Operator process restart/resynchronization evidence."
+Assert-TextContains -Text ([string]$q10.filter) -Value "OperatorProcessRecoveryTests" -Message "Q10 must remain bound to real Operator process restart/resynchronization evidence."
 
 $hardware = @($profile.hardwareRequirements)
 Assert-Condition ($hardware.Count -eq 5) "Reference-platform profile must retain exactly five physical requirements."
@@ -119,17 +128,17 @@ foreach ($status in @("PASS", "FAIL", "NOT_APPLICABLE", "UNVERIFIED")) {
 }
 
 $runner = Get-Content -LiteralPath $runnerPath -Raw
-Assert-Condition $runner.Contains("Test-QualificationEvidenceBinding.ps1") "Reference-platform runner must reuse the source-bound physical evidence verifier."
-Assert-Condition $runner.Contains("qualification-result.json") "Reference-platform runner must emit a machine-readable result."
-Assert-Condition $runner.Contains("qualification-summary.md") "Reference-platform runner must emit a human-readable summary."
-Assert-Condition $runner.Contains("environment.json") "Reference-platform runner must emit environment evidence."
-Assert-Condition $runner.Contains("UNVERIFIED") "Reference-platform runner must preserve explicit UNVERIFIED semantics."
-Assert-Condition $runner.Contains("RequirePass") "Reference-platform runner must provide an explicit full-PASS gate without making it the CI default."
+Assert-TextContains -Text $runner -Value "Test-QualificationEvidenceBinding.ps1" -Message "Reference-platform runner must reuse the source-bound physical evidence verifier."
+Assert-TextContains -Text $runner -Value "qualification-result.json" -Message "Reference-platform runner must emit a machine-readable result."
+Assert-TextContains -Text $runner -Value "qualification-summary.md" -Message "Reference-platform runner must emit a human-readable summary."
+Assert-TextContains -Text $runner -Value "environment.json" -Message "Reference-platform runner must emit environment evidence."
+Assert-TextContains -Text $runner -Value "UNVERIFIED" -Message "Reference-platform runner must preserve explicit UNVERIFIED semantics."
+Assert-TextContains -Text $runner -Value "RequirePass" -Message "Reference-platform runner must provide an explicit full-PASS gate without making it the CI default."
 
 $requiredGates = Get-Content -LiteralPath $requiredGatesPath -Raw
-Assert-Condition $requiredGates.Contains("Invoke-ReferencePlatformQualification.ps1") "Required Gates must execute the CI-safe reference-platform qualification profile."
-Assert-Condition $requiredGates.Contains("Test-ReferencePlatformQualificationPolicy.ps1") "Required Gates quality job must verify AP-39 qualification policy."
-Assert-Condition $requiredGates.Contains("artifacts/qualification/reference-platform") "Required Gates must retain AP-39 qualification evidence as a workflow artifact."
+Assert-TextContains -Text $requiredGates -Value "Invoke-ReferencePlatformQualification.ps1" -Message "Required Gates must execute the CI-safe reference-platform qualification profile."
+Assert-TextContains -Text $requiredGates -Value "Test-ReferencePlatformQualificationPolicy.ps1" -Message "Required Gates quality job must verify AP-39 qualification policy."
+Assert-TextContains -Text $requiredGates -Value "artifacts/qualification/reference-platform" -Message "Required Gates must retain AP-39 qualification evidence as a workflow artifact."
 
 $testRoot = Join-Path $repositoryRoot "artifacts/quality/reference-platform-qualification"
 if (Test-Path -LiteralPath $testRoot) { Remove-Item -LiteralPath $testRoot -Recurse -Force }
