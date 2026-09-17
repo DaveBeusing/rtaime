@@ -1,3 +1,5 @@
+<!-- Copyright (c) Dave Beusing <david.beusing@gmail.com>. -->
+
 # V1 End-to-End Architecture Proof
 
 **Status:** AP-12 software architecture proof  
@@ -337,3 +339,29 @@ This distinction is intentional:
 > UNVERIFIED is not PASS.
 
 > V1 proves the production architecture, not the size of the feature list.
+
+## AP-38 functional-gap closure addendum
+
+AP-38 closes two software gaps that were intentionally still listed as `UNVERIFIED` by the original AP-12 evidence boundary. The historical AP-12 list above remains unchanged because it describes what AP-12 itself proved; later work packages provide additional evidence rather than retroactively changing AP-12.
+
+### Headless automation
+
+The existing `OperatorControlClient` and `IOperatorControlTransport` are reused as the headless V1 automation surface. `AutomationClientSemanticEquivalenceTests` exercises this path without WPF and verifies authoritative synchronization, Preview, CUT, DISSOLVE, stale-revision rejection, disconnect and reconnect/resynchronization.
+
+No parallel automation authority, direct Runtime command path or second command model is introduced.
+
+When final latest-head AP-38 Required Gates are green, the AP-12 item `Automation client semantic-equivalence proof` has separate AP-38 software evidence and no longer remains an unproven functional V1 gap.
+
+### Actual reference recording payload
+
+AP-38 adds `ReferenceRecordingPayloadWriter` and `ReferenceRecordingPayloadReader` without changing the descriptor-only `RecordingProgramSample` contract. The RuntimeHost composition root supplies actual post-composite RGBA8 Program bytes and deterministic AFV Stereo 48 kHz Float32 bytes to this optional writer capability while storage I/O remains on the recorder worker.
+
+The payload proof covers both V1 development formats, validates exact timing/format metadata and verifies SHA-256 media-payload integrity. A deterministic quota exercises storage exhaustion; separate failure evidence covers finalization failure and later-session recovery while Runtime remains committed and Program continues.
+
+This closes the software/reference payload gap only. `hardware recording codec/container qualification` remains `UNVERIFIED`, as do professional storage throughput, codec interoperability and hardware encoder evidence.
+
+### Functional-scope interpretation
+
+After final latest-head AP-38 Required Gates pass, no known **software-only functional allowlist gap** remains for V1. Remaining work is qualification/evidence work, including physical media I/O, timing/reference, hardware GPU deadlines, physical latency, professional recording/codec behavior, soak and release acceptance.
+
+The detailed AP-38 audit and retained evidence boundary are documented in `V1FunctionalGapClosure.md`.
