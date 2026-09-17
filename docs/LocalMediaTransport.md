@@ -69,7 +69,7 @@ Coverage includes:
 - A/V timestamp/timebase consistency after seek;
 - AP-41 local-file planning/commit/decode path remains covered.
 
-The deterministic multi-frame fixture is stored as Base64 text under `tests/TestAssets/media` so the repository remains connector-friendly; tests materialize it to a temporary `.mp4` before opening it through the production provider.
+The deterministic multi-frame fixture is stored directly under `tests/TestAssets/media/reference-1080p50-h264-aac-80ms.mp4`. It contains four synthetic 1080p50 video frames plus embedded 48 kHz stereo AAC audio and no third-party footage.
 
 ## Handoff to AP-43
 
