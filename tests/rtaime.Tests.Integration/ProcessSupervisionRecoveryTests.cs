@@ -1,7 +1,6 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 using System.Diagnostics;
-using System.IO.Pipes;
 using rtaime.Client;
 using rtaime.Control.Contracts;
 using rtaime.ControlHost;
@@ -180,12 +179,13 @@ public sealed class ProcessSupervisionRecoveryTests
 		using var external = StartDotnetHost(assembly, $"--listen-endpoint={endpoint}");
 		try
 		{
-			await WaitForEndpointAsync(endpoint, ProcessRecoveryTimeoutMilliseconds);
+			await WaitForExplicitEndpointReadinessAsync(endpoint, ProcessRecoveryTimeoutMilliseconds);
 			await using (var supervisor = Supervisor("RuntimeHost", endpoint, assembly))
 			{
 				await supervisor.StartAsync();
 				await WaitUntilAsync(() => supervisor.Snapshot.State == LocalProcessSupervisionState.Healthy, ProcessRecoveryTimeoutMilliseconds);
 				Assert.Null(supervisor.Snapshot.OwnedProcessId);
+				Assert.Contains("Adopted explicitly ready external endpoint", supervisor.Snapshot.Detail);
 			}
 			Assert.False(external.HasExited);
 		}
@@ -292,23 +292,16 @@ public sealed class ProcessSupervisionRecoveryTests
 			CreateNoWindow = true
 		}) ?? throw new InvalidOperationException($"Failed to start host '{assembly}'.");
 
-	private static async Task WaitForEndpointAsync(string endpoint, int timeoutMilliseconds)
+	private static async Task WaitForExplicitEndpointReadinessAsync(string endpoint, int timeoutMilliseconds)
 	{
 		var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMilliseconds);
 		while (DateTime.UtcNow < deadline)
 		{
-			using var timeout = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
-			await using var pipe = new NamedPipeClientStream(".", endpoint, PipeDirection.InOut, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
-			try
-			{
-				await pipe.ConnectAsync(timeout.Token);
-				if (pipe.IsConnected) return;
-			}
-			catch (OperationCanceledException) { }
-			catch (IOException) { }
+			if (LocalEndpointLease.IsHeld(endpoint) && LocalEndpointReadinessLease.IsHeld(endpoint))
+				return;
 			await Task.Delay(50);
 		}
-		throw new TimeoutException($"Endpoint '{endpoint}' did not become reachable before the test deadline.");
+		throw new TimeoutException($"Endpoint '{endpoint}' did not publish explicit readiness before the test deadline.");
 	}
 
 	private static void Kill(int processId)
