@@ -136,6 +136,17 @@ foreach ($releaseFile in @($policy.releaseEvidenceFiles)) {
 	}
 	Copy-Item -LiteralPath $source -Destination (Join-Path $releaseDirectory ([string]$releaseFile)) -Force
 }
+if (@($releaseEvidence.PSObject.Properties.Name) -contains "securityAssessment") {
+	$securityAssessmentRelativePath = [string]$releaseEvidence.securityAssessment.path
+	if ($securityAssessmentRelativePath -ne "security-assessment.json") {
+		throw "Unexpected product-security assessment release path '$securityAssessmentRelativePath'."
+	}
+	$securityAssessmentSource = Join-Path $evidenceRoot $securityAssessmentRelativePath
+	if (-not (Test-Path -LiteralPath $securityAssessmentSource -PathType Leaf)) {
+		throw "Bound product-security assessment '$securityAssessmentRelativePath' is missing."
+	}
+	Copy-Item -LiteralPath $securityAssessmentSource -Destination (Join-Path $releaseDirectory $securityAssessmentRelativePath) -Force
+}
 $qualificationSource = Join-Path $evidenceRoot "qualification"
 if (Test-Path -LiteralPath $qualificationSource -PathType Container) {
 	Copy-DirectoryContent -Source $qualificationSource -Destination (Join-Path $releaseDirectory "qualification")
