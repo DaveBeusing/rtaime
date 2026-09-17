@@ -6,7 +6,7 @@ using rtaime.Core;
 using rtaime.Media.Contracts;
 using rtaime.Persistence;
 using rtaime.Recording;
-using rtaime.Runtime;
+using rtaime.Runtime.Contracts;
 using rtaime.RuntimeHost;
 
 namespace rtaime.Tests.Integration;
@@ -79,7 +79,7 @@ public sealed class RecordingStorageExhaustionIntegrationTests
 		var execution = Assert.IsType<ControlHostExecutionPackage>(staged.Execution);
 		var applied = runtime.ApplyExecution(execution.PreparedExecution, execution.ProgramSinkId, execution.ProgramTransition);
 		Assert.True(applied.Committed, applied.Commit?.Failure?.ToString() ?? applied.Prepare.Failure?.ToString());
-		var commit = Assert.IsType<rtaime.Runtime.Contracts.RuntimeCommitResult>(applied.Commit);
+		var commit = Assert.IsType<RuntimeCommitResult>(applied.Commit);
 		var confirmed = control.ConfirmRuntimeCommit(execution.PreparedExecution.PreparedExecutionId, commit);
 		Assert.True(confirmed.Committed, confirmed.Failure?.ToString());
 	}
