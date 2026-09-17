@@ -1,5 +1,6 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
+using System.Buffers.Binary;
 using System.Collections.ObjectModel;
 using System.Security.Cryptography;
 using System.Text;
@@ -95,6 +96,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private readonly DynamicRgbaSource _dynamicLayer;
 	private readonly ProgramRecorder _recorder;
 	private readonly RuntimeRecordingBridge _recordingBridge;
+	private readonly IProgramRecordingPayloadWriter? _recordingPayloadWriter;
 	private readonly RuntimeMonitoringHub _monitoringHub;
 	private readonly RuntimeMonitoringTap _monitoringTap;
 	private readonly List<string> _observations = new();
@@ -157,7 +159,10 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			new MediaSourceId(HostIdentity.Create("v1-layer-source", "dynamic")),
 			RgbaFrameBuffer.Solid(format, 235, 200, 24, 72));
 
-		_recorder = new ProgramRecorder(recordingWriter ?? throw new ArgumentNullException(nameof(recordingWriter)));
+		if (recordingWriter is null)
+			throw new ArgumentNullException(nameof(recordingWriter));
+		_recordingPayloadWriter = recordingWriter as IProgramRecordingPayloadWriter;
+		_recorder = new ProgramRecorder(recordingWriter);
 		_recordingBridge = new RuntimeRecordingBridge(_recorder);
 		_monitoringHub = new RuntimeMonitoringHub();
 		_monitoringTap = new RuntimeMonitoringTap(_monitoringHub);
@@ -321,7 +326,26 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 
 			RecordingEnqueueResult? recording = null;
 			if (_recorder.Snapshot.State == RecordingLifecycleState.Recording)
+			{
+				if (_recordingPayloadWriter is not null)
+				{
+					try
+					{
+						_recordingPayloadWriter.StagePayload(
+							sequence,
+							pixels,
+							MaterializeReferenceAudioPayload(audioBuffer, audio));
+					}
+					catch (Exception exception)
+					{
+						Observe($"recording.payload.stage.failed:{exception.GetType().Name}");
+					}
+				}
+
 				recording = _recordingBridge.TryRecordCommittedProgram(execution, output.Descriptor, audioBuffer);
+				if (recording is { Accepted: false })
+					_recordingPayloadWriter?.DiscardPayload(sequence);
+			}
 
 			if (transitionComplete)
 			{
@@ -596,6 +620,34 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			stream.TimingDomainId,
 			new AudioBufferTiming(window.SamplePosition, window.SampleCount, window.PresentationTimestamp, window.Timebase),
 			new OpaqueAudioHandle("virtual.embedded.audio", $"{stream.StreamId}:{sequence}"));
+	}
+
+	private static byte[] MaterializeReferenceAudioPayload(
+		AudioBufferDescriptor descriptor,
+		AudioFollowVideoResult result)
+	{
+		if (!result.Emitted)
+			return Array.Empty<byte>();
+		if (descriptor.Format.SampleFormat != AudioSampleFormat.Float32)
+			throw new InvalidOperationException("V1 reference recording payload supports Float32 audio only.");
+
+		var channelCount = checked((int)descriptor.Format.ChannelCount);
+		var sampleCount = checked((int)descriptor.Timing.SampleCount);
+		var payload = new byte[checked(sampleCount * channelCount * sizeof(float))];
+		var amplitude = result.Muted ? 0f : checked((float)result.PeakLevel);
+		var offset = 0;
+		for (var sampleIndex = 0; sampleIndex < sampleCount; sampleIndex++)
+		{
+			var absoluteSample = descriptor.Timing.SamplePosition + checked((ulong)sampleIndex);
+			var value = (absoluteSample & 1UL) == 0 ? amplitude : -amplitude;
+			for (var channel = 0; channel < channelCount; channel++)
+			{
+				BinaryPrimitives.WriteSingleLittleEndian(payload.AsSpan(offset, sizeof(float)), value);
+				offset += sizeof(float);
+			}
+		}
+
+		return payload;
 	}
 
 	private static ProgramPixelProbe ProbeCenter(byte[] pixels, VideoFormat format)
