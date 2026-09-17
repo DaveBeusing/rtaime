@@ -1,6 +1,8 @@
+<!-- Copyright (c) Dave Beusing <david.beusing@gmail.com>. -->
+
 # Recording Foundation
 
-Status: AP-10 implementation foundation.
+Status: AP-10 implementation foundation, extended by AP-38 reference payload closure.
 
 ## Change classification
 
@@ -47,17 +49,17 @@ Normal lifecycle:
 
 ```text
 Idle / Completed
-    ↓ StartAsync
+	↓ StartAsync
 Recording
-    ↓ StopAsync / ShutdownAsync
+	↓ StopAsync / ShutdownAsync
 Finalizing
-    ↓ queue drained + writer finalized
+	↓ queue drained + writer finalized
 Completed
 ```
 
 Writer/open/write/finalize failures move the session to `Failed` and create stable observations.
 
-A later new recording session may be started with a new session/output identity after a completed session. A concurrent second start is rejected fail-closed.
+A later new recording session may be started with a new session/output identity after a completed or failed session once the previous worker has terminated. A concurrent second start is rejected fail-closed.
 
 ## Program-path isolation
 
@@ -89,31 +91,66 @@ This implements the V1 failure-isolation rule: recorder backpressure or storage 
 
 A `RecordingProgramSample` transports existing `FrameDescriptor` and optional `AudioBufferDescriptor` objects. It does not add bulk pixel/audio arrays or expose vendor/device pointers.
 
-The backend interface is:
+The stable backend interface remains:
 
 ```text
 IProgramRecordingWriter
-  OpenAsync
-  WriteAsync
-  FinalizeAsync
-  AbortAsync
+	OpenAsync
+	WriteAsync
+	FinalizeAsync
+	AbortAsync
 ```
 
-A future qualified encoder/device implementation can resolve opaque media handles behind this boundary without changing Runtime, Control or the recording lifecycle.
+AP-38 adds an optional subsystem-local capability:
 
-## Local architectural-proof artifact
+```text
+IProgramRecordingPayloadWriter : IProgramRecordingWriter
+	StagePayload
+	DiscardPayload
+```
 
-`LocalRecordingManifestWriter` provides a protected local artifact lifecycle for the hardware-free architectural proof:
+This capability does not change `RecordingProgramSample`, Media contracts, Runtime contracts or IPC contracts. The RuntimeHost composition root may provide already-materialized Program/AFV reference bytes to a capable writer while the normal recorder queue continues to carry descriptor-level samples.
+
+A future qualified encoder/device implementation can resolve opaque media handles behind the writer boundary without changing Runtime, Control or the recording lifecycle.
+
+## Local architectural-proof artifacts
+
+`LocalRecordingManifestWriter` remains the descriptor-level architectural-proof writer. It persists Program sample identity, timing and opaque-handle references only.
+
+AP-38 adds `ReferenceRecordingPayloadWriter`, a deterministic software-only payload artifact for V1 functional proof. It persists:
+
+- actual post-composite Program RGBA8 bytes supplied by the RuntimeHost reference path;
+- deterministic Stereo 48 kHz Float32 AFV sample bytes for the exact Program boundary;
+- exact video/audio timing and format metadata;
+- video/audio sample counts;
+- SHA-256 integrity over persisted media payloads.
+
+Both protected local artifact paths use the same lifecycle concept:
 
 ```text
 <RecordingOutputId>.partial
-    ↓ orderly FinalizeAsync
+	↓ orderly FinalizeAsync
 <RecordingOutputId>.rtaime-recording
 ```
 
-It uses `CreateNew` semantics so an existing output identity is never silently overwritten. The final artifact is promoted only after the queue drains and the writer flushes/finalizes successfully.
+`CreateNew` semantics prevent silent overwrite. The reference payload artifact is promoted only after queued samples are written, footer counts and integrity data are emitted, and the writer flushes/finalizes successfully.
 
-The current local writer persists Program sample identity, timing and opaque-handle references. It does **not** claim to be a qualified encoded video/audio container. Real codec payload writing, professional storage throughput, DMA/device-surface resolution and long-duration media integrity require separate measured backend evidence and remain `UNVERIFIED` until such a backend/environment exists.
+`ReferenceRecordingPayloadReader` validates the file magic/version, sample structure, payload lengths, footer counts, trailing-data absence and SHA-256 integrity.
+
+The AP-38 reference container is intentionally uncompressed and CI-verifiable. It is **not** a qualified professional codec/container. Professional storage throughput, DMA/device-surface resolution, codec interoperability, hardware encoding and long-duration media integrity remain `UNVERIFIED` until measured on the declared production environment.
+
+## Storage exhaustion and recovery
+
+`ReferenceRecordingPayloadWriter` supports a deterministic payload-byte quota for failure evidence. Exhausting the quota raises a writer-side storage failure on the asynchronous recorder worker rather than blocking Program execution.
+
+AP-38 verifies that:
+
+- storage exhaustion moves Recording to `Failed`;
+- no valid final artifact is published;
+- Runtime remains committed;
+- Program and AFV continue on later boundaries;
+- finalization failure is isolated;
+- a later recording session can recover after a failed finalization.
 
 ## Observability
 
@@ -130,6 +167,8 @@ Representative codes include:
 
 Statistics track accepted, written, dropped, rejected and writer-failure counts.
 
+RuntimeHost also emits a non-authoritative `recording.payload.stage.failed:<ExceptionType>` observation if optional reference-payload staging itself cannot be materialized. Such a staging error is not thrown into Program execution; the recorder worker subsequently owns recording failure semantics.
+
 ## Verification obligations
 
 AP-10 verifies at minimum:
@@ -145,5 +184,16 @@ AP-10 verifies at minimum:
 - orderly local finalization
 - bounded/nonblocking enqueue under slow storage
 - architecture graph remains unchanged
+
+AP-38 adds verification for:
+
+- actual reference Program video payload bytes;
+- actual reference AFV audio payload bytes;
+- both 1080p50 and 1080p59.94 development formats;
+- deterministic reference-container parsing and integrity validation;
+- storage quota exhaustion;
+- Program continuity after storage failure;
+- finalize failure;
+- later-session recovery.
 
 Hardware/codec/storage qualification must remain `UNVERIFIED` unless executed on the declared production environment.
