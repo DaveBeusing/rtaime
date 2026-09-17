@@ -83,29 +83,3 @@ public sealed record LocalMediaProbe
 	public AudioFormat AudioFormat { get; }
 	public TimeSpan Duration { get; }
 }
-
-public sealed record LocalMediaDecodedFrame
-{
-	public LocalMediaDecodedFrame(
-		FrameDescriptor video,
-		ReadOnlyMemory<byte> rgbaPixels,
-		AudioBufferDescriptor? audio,
-		ReadOnlyMemory<byte> audioPayload)
-	{
-		Video = video ?? throw new ArgumentNullException(nameof(video));
-		if (rgbaPixels.IsEmpty)
-			throw new ArgumentException("Decoded local media frame requires RGBA pixels.", nameof(rgbaPixels));
-		if (audio is null && !audioPayload.IsEmpty)
-			throw new ArgumentException("Audio payload requires an audio descriptor.", nameof(audioPayload));
-
-		Video = video;
-		RgbaPixels = rgbaPixels;
-		Audio = audio;
-		AudioPayload = audioPayload;
-	}
-
-	public FrameDescriptor Video { get; }
-	public ReadOnlyMemory<byte> RgbaPixels { get; }
-	public AudioBufferDescriptor? Audio { get; }
-	public ReadOnlyMemory<byte> AudioPayload { get; }
-}
