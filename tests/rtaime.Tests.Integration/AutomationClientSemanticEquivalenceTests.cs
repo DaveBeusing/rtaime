@@ -5,6 +5,7 @@ using rtaime.Control.Contracts;
 using rtaime.ControlHost;
 using rtaime.Core;
 using rtaime.Media.Contracts;
+using rtaime.Persistence;
 using rtaime.Recording;
 using rtaime.Runtime.Contracts;
 using rtaime.RuntimeHost;
@@ -35,7 +36,8 @@ public sealed class AutomationClientSemanticEquivalenceTests
 			new MediaSourceId(sourceB.Value),
 			VideoFormat.Hd1080p50Rgba8,
 			new NoopRecordingWriter());
-		var control = new ControlHostService(specification, runtime.ProviderDescriptors);
+		await using var journal = new BoundedProductionJournal(64);
+		var control = new ControlHostService(specification, runtime.ProviderDescriptors, journal);
 		var transport = new HeadlessControlTransport(control, runtime, specification);
 		transport.Initialize();
 
@@ -52,7 +54,7 @@ public sealed class AutomationClientSemanticEquivalenceTests
 
 		var stale = await competingClient.CutAsync(sourceB.ToString());
 		Assert.False(stale.Accepted);
-		Assert.NotNull(stale.Failure);
+		Assert.True(stale.Failure.HasValue);
 		Assert.Equal(competingInitial.Production.Revision, competingClient.Snapshot!.Production.Revision);
 		Assert.Equal(control.State.Revision, stale.State.Revision);
 
