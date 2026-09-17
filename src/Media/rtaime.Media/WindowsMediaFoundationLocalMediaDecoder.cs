@@ -82,50 +82,35 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 				if (audioSubtype != MediaFoundation.MfAudioFormatAac)
 					return RejectAndRelease("media.file.audio_codec_unsupported", "V1 local media supports embedded AAC audio only.", reader, mediaFoundationStarted);
 
+				var metadata = Mp4LocalMediaMetadataReader.Read(path);
+				if (metadata.AudioChannels != 2 || metadata.AudioSampleRate != 48_000)
+					return RejectAndRelease("media.file.audio_format_unsupported", "V1 local media requires embedded 48 kHz stereo audio.", reader, mediaFoundationStarted);
+				if (metadata.FrameRateNumerator <= 0 || metadata.FrameRateDenominator <= 0)
+					return RejectAndRelease("media.file.metadata_invalid", "The local media file reports an invalid frame rate.", reader, mediaFoundationStarted);
+				if (metadata.Duration <= TimeSpan.Zero)
+					return RejectAndRelease("media.file.metadata_invalid", "The local media file reports an invalid duration.", reader, mediaFoundationStarted);
+
 				ConfigureDecodedVideo(reader);
 				ConfigureDecodedAudio(reader);
 
-				var videoDecoded = GetCurrentMediaType(reader, MediaFoundation.FirstVideoStream);
-				var audioDecoded = GetCurrentMediaType(reader, MediaFoundation.FirstAudioStream);
-				try
-				{
-					var packedSize = GetUInt64(videoDecoded, MediaFoundation.MfMtFrameSize);
-					var width = checked((uint)(packedSize >> 32));
-					var height = checked((uint)(packedSize & uint.MaxValue));
-					var packedRate = GetUInt64(videoDecoded, MediaFoundation.MfMtFrameRate);
-					var rateNumerator = checked((long)(packedRate >> 32));
-					var rateDenominator = checked((long)(packedRate & uint.MaxValue));
-					if (rateNumerator <= 0 || rateDenominator <= 0)
-						return RejectAndRelease("media.file.metadata_invalid", "The local media file reports an invalid frame rate.", reader, mediaFoundationStarted);
+				var probe = new LocalMediaProbe(
+					MediaContractVersion.Current,
+					assetId,
+					sourceId,
+					System.IO.Path.GetFileName(path),
+					MediaContainerFormat.Mp4,
+					MediaVideoCodec.H264,
+					MediaAudioCodec.Aac,
+					new VideoFormat(
+						metadata.Width,
+						metadata.Height,
+						new FrameRate(metadata.FrameRateNumerator, metadata.FrameRateDenominator),
+						PixelFormat.Rgba8,
+						ScanMode.Progressive),
+					AudioFormat.Stereo48kFloat32,
+					metadata.Duration);
 
-					var channels = GetUInt32(audioDecoded, MediaFoundation.MfMtAudioNumChannels);
-					var sampleRate = GetUInt32(audioDecoded, MediaFoundation.MfMtAudioSamplesPerSecond);
-					if (channels != 2 || sampleRate != 48_000)
-						return RejectAndRelease("media.file.audio_format_unsupported", "V1 local media requires embedded 48 kHz stereo audio.", reader, mediaFoundationStarted);
-
-					var duration = GetDuration(reader);
-					if (duration <= TimeSpan.Zero)
-						return RejectAndRelease("media.file.metadata_invalid", "The local media file reports an invalid duration.", reader, mediaFoundationStarted);
-
-					var probe = new LocalMediaProbe(
-						MediaContractVersion.Current,
-						assetId,
-						sourceId,
-						System.IO.Path.GetFileName(path),
-						MediaContainerFormat.Mp4,
-						MediaVideoCodec.H264,
-						MediaAudioCodec.Aac,
-						new VideoFormat(width, height, new FrameRate(rateNumerator, rateDenominator), PixelFormat.Rgba8, ScanMode.Progressive),
-						AudioFormat.Stereo48kFloat32,
-						duration);
-
-					return LocalMediaDecoderOpenResult.Ready(new WindowsMediaFoundationLocalMediaDecoder(reader, assetId, sourceId, probe));
-				}
-				finally
-				{
-					MediaFoundation.ReleaseComObject(videoDecoded);
-					MediaFoundation.ReleaseComObject(audioDecoded);
-				}
+				return LocalMediaDecoderOpenResult.Ready(new WindowsMediaFoundationLocalMediaDecoder(reader, assetId, sourceId, probe));
 			}
 			finally
 			{
@@ -133,7 +118,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 				MediaFoundation.ReleaseComObject(audioNative);
 			}
 		}
-		catch (Exception exception) when (exception is COMException or ExternalException or InvalidDataException or OverflowException)
+		catch (Exception exception) when (exception is COMException or ExternalException or InvalidDataException or IOException or OverflowException)
 		{
 			if (reader is not null)
 				MediaFoundation.ReleaseComObject(reader);
@@ -275,48 +260,10 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 		return mediaType;
 	}
 
-	private static IMFMediaType GetCurrentMediaType(IMFSourceReader reader, uint streamIndex)
-	{
-		MediaFoundation.ThrowIfFailed(reader.GetCurrentMediaType(streamIndex, out var mediaType));
-		return mediaType;
-	}
-
 	private static Guid GetGuid(IMFAttributes attributes, Guid key)
 	{
 		MediaFoundation.ThrowIfFailed(attributes.GetGUID(ref key, out var value));
 		return value;
-	}
-
-	private static ulong GetUInt64(IMFAttributes attributes, Guid key)
-	{
-		MediaFoundation.ThrowIfFailed(attributes.GetUINT64(ref key, out var value));
-		return value;
-	}
-
-	private static uint GetUInt32(IMFAttributes attributes, Guid key)
-	{
-		MediaFoundation.ThrowIfFailed(attributes.GetUINT32(ref key, out var value));
-		return value;
-	}
-
-	private static TimeSpan GetDuration(IMFSourceReader reader)
-	{
-		var key = MediaFoundation.MfPdDuration;
-		MediaFoundation.ThrowIfFailed(reader.GetPresentationAttribute(MediaFoundation.MediaSource, ref key, out var value));
-		try
-		{
-			var ticks = value.VarType switch
-			{
-				MediaFoundation.VtI8 => value.Int64Value,
-				MediaFoundation.VtUi8 => checked((long)value.UInt64Value),
-				_ => throw new InvalidDataException($"Unsupported Media Foundation duration variant type '{value.VarType}'.")
-			};
-			return TimeSpan.FromTicks(ticks);
-		}
-		finally
-		{
-			MediaFoundation.PropVariantClear(ref value);
-		}
 	}
 
 	private static void ConfigureDecodedVideo(IMFSourceReader reader)
@@ -377,19 +324,11 @@ internal static class MediaFoundation
 	public const int MfStartupFull = 0;
 	public const uint FirstVideoStream = 0xFFFFFFFC;
 	public const uint FirstAudioStream = 0xFFFFFFFD;
-	public const uint MediaSource = 0xFFFFFFFF;
 	public const uint SourceReaderEndOfStream = 0x00000002;
-	public const ushort VtI8 = 20;
-	public const ushort VtUi8 = 21;
 
 	public static Guid MfSourceReaderEnableVideoProcessing = new("FB394F3D-CCF1-42EE-BBB3-F9B845D5681D");
 	public static Guid MfMtMajorType = new("48EBA18E-F8C9-4687-BF11-0A74C9F96A8F");
 	public static Guid MfMtSubtype = new("F7E34C9A-42E8-4714-B74B-CB29D72C35E5");
-	public static Guid MfMtFrameSize = new("1652C33D-D6B2-4012-B834-72030849A37D");
-	public static Guid MfMtFrameRate = new("C459A2E8-3D2C-4E44-B132-FEE5156C7BB0");
-	public static Guid MfMtAudioNumChannels = new("37E48BF5-645E-4C5B-89DE-ADA9E29B696A");
-	public static Guid MfMtAudioSamplesPerSecond = new("5FAEEAE7-0290-4C31-9E8A-C534F68D9DBA");
-	public static Guid MfPdDuration = new("6C990D31-BB8E-477A-8598-0D5D96FCD88A");
 	public static Guid MfMediaTypeVideo = new("73646976-0000-0010-8000-00AA00389B71");
 	public static Guid MfMediaTypeAudio = new("73647561-0000-0010-8000-00AA00389B71");
 	public static Guid MfVideoFormatH264 = new("34363248-0000-0010-8000-00AA00389B71");
@@ -414,9 +353,6 @@ internal static class MediaFoundation
 		string url,
 		IMFAttributes? attributes,
 		out IMFSourceReader sourceReader);
-
-	[DllImport("ole32.dll", ExactSpelling = true)]
-	public static extern int PropVariantClear(ref PropVariant value);
 
 	public static void ThrowIfFailed(int hr)
 	{
