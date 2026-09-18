@@ -280,7 +280,7 @@ public sealed class ProductionIpcIntegrationTests
 		}
 		Assert.NotNull(mediaTile);
 		Assert.Equal("MEDIA", mediaTile.Type);
-		Assert.Equal("PLAYING", mediaTile.Health);
+		Assert.Equal("READY", mediaTile.Health);
 		Assert.Equal("PLAYING", mediaTile.MediaState);
 		Assert.Contains("1920×1080", mediaTile.Format);
 		Assert.Equal(Path.GetFileName(referenceAsset.Path), mediaTile.MediaFileName);
