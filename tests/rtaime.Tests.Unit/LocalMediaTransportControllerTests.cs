@@ -32,6 +32,25 @@ public sealed class LocalMediaTransportControllerTests
 	}
 
 	[Fact]
+	public void Play_after_ended_rewinds_and_restarts_deterministically()
+	{
+		var seeks = new List<long>();
+		var controller = new LocalMediaTransportController(Probe(), frame =>
+		{
+			seeks.Add(frame);
+			return null;
+		});
+		controller.MarkEnded(7);
+
+		var replay = controller.Apply(Command(MediaTransportCommandKind.Play));
+
+		Assert.True(replay.Succeeded);
+		Assert.Equal(MediaTransportState.Playing, replay.Snapshot.State);
+		Assert.Equal(0, replay.Snapshot.Position.CurrentFrame);
+		Assert.Equal(new long[] { 0 }, seeks);
+	}
+
+	[Fact]
 	public void Seek_clamps_to_clip_range_and_preserves_play_pause_semantics()
 	{
 		var seeks = new List<long>();

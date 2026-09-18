@@ -381,7 +381,7 @@ public sealed class MediaTimelineController : IAsyncDisposable
 			Math.Clamp(progress, 0, 1),
 			MediaTimelineTimecode.FormatFrame(displayFrame, position.FrameRate),
 			MediaTimelineTimecode.FormatDuration(position.Duration, position.FrameRate),
-			MediaTimelineTimecode.FormatDuration(position.Remaining, position.FrameRate),
+			MediaTimelineTimecode.FormatFrame(_confirmed.EffectiveRemainingFrames, position.FrameRate),
 			position.FrameRate.ToString(),
 			canSeek,
 			_previewFrame is not null && _previewFrame.Value != position.CurrentFrame,

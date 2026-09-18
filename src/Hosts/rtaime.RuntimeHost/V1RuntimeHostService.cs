@@ -245,6 +245,23 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		}
 	}
 
+	public MediaSourceId? CommittedProgramSourceId
+	{
+		get
+		{
+			lock (_gate)
+			{
+				var execution = _runtime.ActiveExecution;
+				var sink = _programSinkId;
+				if (execution is null || sink is null)
+					return null;
+				return execution.PreparedExecution.Bindings
+					.FirstOrDefault(binding => binding.MediaSinkId == sink.Value)
+					?.MediaSourceId;
+			}
+		}
+	}
+
 	public IReadOnlyList<string> Observations
 	{
 		get

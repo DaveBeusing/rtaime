@@ -4,6 +4,7 @@ using System.Diagnostics;
 using rtaime.Core;
 using rtaime.Media;
 using rtaime.Media.Contracts;
+using rtaime.Provider.Gpu;
 using rtaime.Recording;
 using rtaime.Runtime;
 
@@ -342,6 +343,7 @@ public sealed class RuntimeHostProcess
 		using var timer = new PeriodicTimer(framePeriod);
 		while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
 		{
+			mediaDeck.ObserveProgramSource(runtime.CommittedProgramSourceId);
 			var snapshot = mediaDeck.ProcessBoundary();
 			if (snapshot.SourceId is not { } sourceId)
 			{
@@ -356,6 +358,21 @@ public sealed class RuntimeHostProcess
 			activeDeckSource = sourceId;
 
 			var boundary = mediaDeck.LatestBoundary;
+			if (boundary is { Succeeded: true, Video: not null } && !boundary.RgbaPixels.IsEmpty)
+			{
+				if (boundary.Video.Surface.Format == runtime.Format)
+				{
+					runtime.SetExternalInputContent(
+						sourceId,
+						new RgbaFrameBuffer(runtime.Format, boundary.RgbaPixels.Span),
+						V1InputSignalState.Valid);
+				}
+				else
+				{
+					runtime.SetInputSignalState(sourceId, V1InputSignalState.Unstable);
+				}
+			}
+
 			if (boundary is { Succeeded: true } && !boundary.AudioPayload.IsEmpty)
 			{
 				runtime.SetExternalAudioInput(sourceId, boundary.AudioPayload.Span, available: true);

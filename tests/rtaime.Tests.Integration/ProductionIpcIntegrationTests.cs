@@ -251,17 +251,41 @@ public sealed class ProductionIpcIntegrationTests
 		Assert.Equal(MediaDeckState.Ready, opened.State);
 		Assert.Equal(50, opened.Transport!.Position.TotalFrames);
 
-		var sourceBinReady = await client.SynchronizeAsync();
-		var mediaTile = sourceBinReady.Sources.Single(source => source.Id == sourceId.ToString());
+		var stablePlayback = await deck.ConfigurePlaybackAsync(
+			autoPlayOnProgram: true,
+			MediaDeckEndBehavior.Loop);
+		Assert.True(stablePlayback.Transport!.AutoPlayOnProgram);
+		Assert.Equal(MediaDeckEndBehavior.Loop, stablePlayback.Transport.EndBehavior);
+
+		var autoplayDeadline = DateTime.UtcNow.AddSeconds(5);
+		while (DateTime.UtcNow < autoplayDeadline)
+		{
+			await deck.RefreshAsync();
+			if (deck.Snapshot.Transport is { State: MediaTransportState.Playing, IsOnProgram: true })
+				break;
+			await Task.Delay(20);
+		}
+		Assert.Equal(MediaDeckState.Playing, deck.Snapshot.State);
+		Assert.True(deck.Snapshot.Transport!.IsOnProgram);
+
+		OperatorSourceDescriptor? mediaTile = null;
+		var sourceBinDeadline = DateTime.UtcNow.AddSeconds(5);
+		while (DateTime.UtcNow < sourceBinDeadline)
+		{
+			var sourceBinOpened = await client.SynchronizeAsync();
+			mediaTile = sourceBinOpened.Sources.Single(source => source.Id == sourceId.ToString());
+			if (string.Equals(mediaTile.MediaState, "PLAYING", StringComparison.Ordinal))
+				break;
+			await Task.Delay(20);
+		}
+		Assert.NotNull(mediaTile);
 		Assert.Equal("MEDIA", mediaTile.Type);
 		Assert.Equal("READY", mediaTile.Health);
-		Assert.Equal("READY", mediaTile.MediaState);
+		Assert.Equal("PLAYING", mediaTile.MediaState);
 		Assert.Contains("1920×1080", mediaTile.Format);
 		Assert.Equal(Path.GetFileName(referenceAsset.Path), mediaTile.MediaFileName);
 		Assert.NotNull(mediaTile.Remaining);
 
-		var playing = await deck.PlayAsync();
-		Assert.Equal(MediaDeckState.Playing, playing.State);
 		var playbackDeadline = DateTime.UtcNow.AddSeconds(2);
 		do
 		{
