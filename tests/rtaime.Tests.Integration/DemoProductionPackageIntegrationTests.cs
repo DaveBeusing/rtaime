@@ -1,6 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 using System.Security.Cryptography;
+using System.Text.Json;
 using rtaime.AIHost;
 using rtaime.Client;
 using rtaime.ControlHost;
@@ -133,14 +134,23 @@ public sealed class DemoProductionPackageIntegrationTests
 	private static byte[] DecodeBundledProductClip()
 	{
 		var root = FindRepositoryRoot();
-		var path = Path.Combine(root, "src", "Hosts", "rtaime.Operator", "DemoAssets", "ProductClip.mp4.b64");
+		var assets = Path.Combine(root, "src", "Hosts", "rtaime.Operator", "DemoAssets");
+		using var manifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(assets, "demo-production.package.json")));
+		var product = manifest.RootElement.GetProperty("productClip");
+		var bundleFiles = product.GetProperty("bundleFiles")
+			.EnumerateArray()
+			.Select(element => element.GetString() ?? throw new InvalidDataException("Product Clip bundle file is required."))
+			.ToArray();
+		Assert.NotEmpty(bundleFiles);
+
 		var encoded = string.Concat(
-			File.ReadLines(path)
-				.Select(line => line.Trim())
-				.Where(line => line.Length > 0 && !line.StartsWith("#", StringComparison.Ordinal)));
+			bundleFiles.SelectMany(bundleFile =>
+				File.ReadLines(Path.Combine(assets, bundleFile))
+					.Select(line => line.Trim())
+					.Where(line => line.Length > 0 && !line.StartsWith("#", StringComparison.Ordinal))));
 		var bytes = Convert.FromBase64String(encoded);
 		Assert.Equal(
-			"b273df458854b11dada32e4cd304c9869e55feb4e6eaf8349e4e1cb51cfe99a5",
+			product.GetProperty("sha256").GetString(),
 			Convert.ToHexStringLower(SHA256.HashData(bytes)));
 		return bytes;
 	}
