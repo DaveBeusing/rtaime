@@ -164,8 +164,8 @@ public sealed class ProductionIpcIntegrationTests
 		Assert.Equal(RuntimeExecutionStatus.Committed, runtime.Runtime!.Snapshot.Runtime.Status);
 
 		controlStop.Cancel();
-		runtimeStop.Cancel();
 		Assert.Equal(ControlHostExitCode.Success, await controlRun);
+		runtimeStop.Cancel();
 		Assert.Equal(RuntimeHostExitCode.Success, await runtimeRun);
 	}
 
@@ -214,8 +214,8 @@ public sealed class ProductionIpcIntegrationTests
 		Assert.Equal(RuntimeExecutionStatus.Committed, runtime.Runtime!.Snapshot.Runtime.Status);
 
 		controlStop.Cancel();
-		runtimeStop.Cancel();
 		Assert.Equal(ControlHostExitCode.Success, await controlRun);
+		runtimeStop.Cancel();
 		Assert.Equal(RuntimeHostExitCode.Success, await runtimeRun);
 	}
 
@@ -290,8 +290,8 @@ public sealed class ProductionIpcIntegrationTests
 		Assert.Equal("Decision", reopened.Markers.CuePoints.Single().Name);
 
 		controlStop.Cancel();
-		runtimeStop.Cancel();
 		Assert.Equal(ControlHostExitCode.Success, await controlRun);
+		runtimeStop.Cancel();
 		Assert.Equal(RuntimeHostExitCode.Success, await runtimeRun);
 	}
 
