@@ -1073,6 +1073,10 @@ internal sealed class AsyncRelayCommand : ICommand
 		{
 			await _execute();
 		}
+		catch (OperationCanceledException)
+		{
+			// Cancellation is an expected UI/lifecycle outcome and must not escape async-void ICommand execution.
+		}
 		finally
 		{
 			_executing = false;
