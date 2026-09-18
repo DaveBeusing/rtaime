@@ -513,13 +513,15 @@ public sealed class UnifiedApplicationHost
 		if (!string.Equals(evidence.ControlEndpoint, endpoints.Control, StringComparison.Ordinal) ||
 			!string.Equals(evidence.RuntimeEndpoint, endpoints.Runtime, StringComparison.Ordinal) ||
 			!string.Equals(evidence.AIEndpoint, endpoints.AI, StringComparison.Ordinal)) return false;
-		if (evidence.RuntimeSupervision is not { ProcessId: { } runtimePid } ||
-			!string.Equals(evidence.RuntimeSupervision.State, "HEALTHY", StringComparison.OrdinalIgnoreCase) ||
-			!_platform.IsProcessAlive(runtimePid)) return false;
-		if (_options.RequireAI &&
-			(evidence.AISupervision is not { ProcessId: { } aiPid } ||
-			 !string.Equals(evidence.AISupervision.State, "HEALTHY", StringComparison.OrdinalIgnoreCase) ||
-			 !_platform.IsProcessAlive(aiPid))) return false;
+		if (evidence.RuntimeSupervision is null ||
+			!string.Equals(evidence.RuntimeSupervision.State, "HEALTHY", StringComparison.OrdinalIgnoreCase)) return false;
+		if (evidence.RuntimeSupervision.ProcessId is { } runtimePid && !_platform.IsProcessAlive(runtimePid)) return false;
+		if (_options.RequireAI)
+		{
+			if (evidence.AISupervision is null ||
+				!string.Equals(evidence.AISupervision.State, "HEALTHY", StringComparison.OrdinalIgnoreCase)) return false;
+			if (evidence.AISupervision.ProcessId is { } aiPid && !_platform.IsProcessAlive(aiPid)) return false;
+		}
 
 		if (!await _platform.ProbePipeAsync(endpoints.Control, _options.Policy.ProbeTimeout, cancellationToken).ConfigureAwait(false)) return false;
 		if (!await _platform.ProbePipeAsync(endpoints.Runtime, _options.Policy.ProbeTimeout, cancellationToken).ConfigureAwait(false)) return false;
