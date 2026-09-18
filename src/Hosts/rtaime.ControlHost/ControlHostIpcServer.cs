@@ -276,10 +276,20 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		try { runtime = await _runtimeTransport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false); }
 		catch { runtime = null; }
 
+		MediaDeckSnapshot? mediaDeck = null;
+		if (_mediaDeck is not null)
+		{
+			try { mediaDeck = await _mediaDeck.GetSnapshotAsync(cancellationToken).ConfigureAwait(false); }
+			catch { mediaDeck = null; }
+		}
+
 		var state = control.State;
+		var sources = control.Specification.Sources
+			.Select(source => ToWireSource(source, runtime, mediaDeck))
+			.ToArray();
 		var payload = new WireOperatorSnapshot(
 			ToWire(state),
-			control.Specification.Sources.Select(source => new WireSource(source.SourceId.ToString(), source.Name)).ToArray(),
+			sources,
 			runtime is null ? "DEGRADED" : "READY",
 			runtime is null ? "UNKNOWN" : runtime.TimingHealth.ToString(),
 			runtime is null ? "UNKNOWN" : "VALID",
@@ -290,6 +300,51 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			StateVersion);
 		return Success(request, "control.snapshot.response", payload);
 	}
+
+
+	private static WireSource ToWireSource(
+		ProductionSourceSpecification source,
+		RuntimeRemoteSnapshot? runtime,
+		MediaDeckSnapshot? mediaDeck)
+	{
+		var mediaSourceId = new MediaSourceId(source.SourceId.Value);
+		var isMedia = mediaDeck?.IsLoaded == true && mediaDeck.SourceId == mediaSourceId;
+		if (isMedia)
+		{
+			var probe = mediaDeck!.Probe!;
+			var transport = mediaDeck.Transport!;
+			return new WireSource(
+				source.SourceId.ToString(),
+				source.Name,
+				"MEDIA",
+				FormatVideo(probe.VideoFormat),
+				mediaDeck.State == MediaDeckState.Error ? "ERROR" : "READY",
+				mediaDeck.State.ToString().ToUpperInvariant(),
+				transport.Position.Remaining.Ticks,
+				probe.FileName);
+		}
+
+		var health = "UNKNOWN";
+		if (runtime is not null)
+		{
+			health = runtime.InputSignals.TryGetValue(mediaSourceId, out var signal)
+				? signal
+				: "VALID";
+		}
+		return new WireSource(
+			source.SourceId.ToString(),
+			source.Name,
+			"LIVE",
+			runtime is null ? "UNKNOWN" : FormatVideo(runtime.Format),
+			health,
+			"—",
+			null,
+			null);
+	}
+
+	private static string FormatVideo(VideoFormat format) =>
+		$"{format.Width}×{format.Height} {format.FrameRate}";
+
 
 	private async ValueTask<WireEnvelope> MutateAsync(WireEnvelope request, MutationKind kind, CancellationToken cancellationToken)
 	{
@@ -451,7 +506,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	private sealed record ClientHello(string ProtocolVersion, string Role, string HostInstanceId, Dictionary<string, string> ContractVersions);
 	private sealed record ServerHello(string ProtocolVersion, string Role, string HostInstanceId, Dictionary<string, string> ContractVersions);
 	private sealed record WireFailure(string Code, string Message);
-	private sealed record WireSource(string Id, string Name);
+	private sealed record WireSource(string Id, string Name, string Type, string Format, string Health, string MediaState, long? RemainingTicks, string? MediaFileName);
 	private sealed record WireProductionState(string Version, string ProductionId, ulong Revision, string PreviewSourceId, string ProgramSourceId);
 	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, ulong StateVersion);
 	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path);
