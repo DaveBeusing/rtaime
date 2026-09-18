@@ -88,8 +88,17 @@ public sealed class LocalMediaTransportController
 
 	private MediaTransportCommandResult Play()
 	{
-		if (_state is not (MediaTransportState.Ready or MediaTransportState.Paused))
+		if (_state == MediaTransportState.Ended)
+		{
+			var seek = SeekDecoder(0);
+			if (seek is not null)
+				return seek;
+			_currentFrame = 0;
+		}
+		else if (_state is not (MediaTransportState.Ready or MediaTransportState.Paused))
+		{
 			return InvalidTransition(MediaTransportCommandKind.Play);
+		}
 
 		_state = MediaTransportState.Playing;
 		return MediaTransportCommandResult.Accepted(Snapshot);
