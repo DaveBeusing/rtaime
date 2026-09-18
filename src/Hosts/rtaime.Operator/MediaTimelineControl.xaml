@@ -4,7 +4,9 @@
 	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 	xmlns:automation="clr-namespace:System.Windows.Automation;assembly=PresentationCore"
 	MinHeight="142"
-	Focusable="False">
+	Focusable="False"
+	UseLayoutRounding="True"
+	SnapsToDevicePixels="True">
 	<Border Style="{StaticResource OperatorPanel}">
 		<Grid>
 			<Grid.RowDefinitions>
@@ -46,9 +48,9 @@
 					<ColumnDefinition Width="*" />
 					<ColumnDefinition Width="Auto" />
 				</Grid.ColumnDefinitions>
-				<TextBlock Text="{Binding CurrentTimecode}" FontFamily="Consolas" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,0" />
+				<TextBlock Text="{Binding CurrentTimecode}" Style="{StaticResource OperatorTimecode}" FontSize="16" VerticalAlignment="Center" Margin="0,0,12,0" />
 				<Grid Grid.Column="1" Height="34" VerticalAlignment="Center">
-					<ProgressBar Minimum="0" Maximum="100" Value="{Binding ProgressPercent}" Height="5" VerticalAlignment="Center" Background="{DynamicResource OperatorRaisedSurfaceBrush}" Foreground="{DynamicResource OperatorAccentBrush}" IsHitTestVisible="False" />
+					<ProgressBar Minimum="0" Maximum="100" Value="{Binding ProgressPercent}" Style="{StaticResource OperatorMeter}" VerticalAlignment="Center" Foreground="{DynamicResource OperatorAccentBrush}" IsHitTestVisible="False" />
 					<Slider x:Name="TimelineSlider"
 						Minimum="0"
 						Maximum="{Binding SliderMaximum}"
@@ -58,7 +60,7 @@
 						TickFrequency="1"
 						SmallChange="1"
 						LargeChange="10"
-						Background="Transparent"
+						Style="{StaticResource OperatorTimelineSlider}"
 						VerticalAlignment="Center"
 						PreviewMouseLeftButtonDown="TimelineSlider_PreviewMouseLeftButtonDown"
 						PreviewMouseMove="TimelineSlider_PreviewMouseMove"
@@ -67,7 +69,7 @@
 						automation:AutomationProperties.Name="Media timeline seeker"
 						automation:AutomationProperties.HelpText="{Binding AccessibilityDescription}" />
 				</Grid>
-				<TextBlock Grid.Column="2" Text="{Binding DurationTimecode}" FontFamily="Consolas" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" Margin="12,0,0,0" />
+				<TextBlock Grid.Column="2" Text="{Binding DurationTimecode}" Style="{StaticResource OperatorTimecode}" FontSize="16" VerticalAlignment="Center" Margin="12,0,0,0" />
 			</Grid>
 
 			<Grid Grid.Row="2" Margin="0,0,0,10">
@@ -78,7 +80,7 @@
 				</Grid.ColumnDefinitions>
 				<TextBlock Text="{Binding DisplayFrame, StringFormat=Frame {0:N0}}" Style="{StaticResource OperatorLabel}" />
 				<TextBlock Grid.Column="1" Text="REMAINING" Style="{StaticResource OperatorLabel}" Margin="0,0,8,0" />
-				<TextBlock Grid.Column="2" Text="{Binding RemainingTimecode}" FontFamily="Consolas" FontSize="12" FontWeight="SemiBold" />
+				<TextBlock Grid.Column="2" Text="{Binding RemainingTimecode}" Style="{StaticResource OperatorTimecode}" FontSize="12" />
 			</Grid>
 
 			<Grid Grid.Row="3">
