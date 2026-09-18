@@ -2,7 +2,7 @@
 
 ## Status
 
-AP-06 architecture proof implementation.
+Virtual Media Runtime Slice architecture proof implementation.
 
 This package establishes the first executable rtaime production path that does not require external media hardware.
 
@@ -70,7 +70,7 @@ The frame sequence number is also used as the presentation-timestamp tick. This 
 
 ## Runtime media execution
 
-`rtaime.Runtime` now contains the minimal provider-neutral committed-media executor required by AP-06.
+`rtaime.Runtime` now contains the minimal provider-neutral committed-media executor required by Virtual Media Runtime Slice.
 
 The runtime:
 
@@ -103,11 +103,11 @@ The new Program source becomes visible only after:
 - a commit completed before a boundary is used by that boundary,
 - a commit completed after the boundary snapshot can affect only a later boundary.
 
-This is the AP-06 deterministic activation rule.
+This is the Virtual Media Runtime Slice deterministic activation rule.
 
 ## Resource reservation
 
-AP-06 adds an in-memory deterministic implementation of the AP-05 reservation abstraction for reference execution.
+Virtual Media Runtime Slice adds an in-memory deterministic implementation of the Transactional Runtime Commit reservation abstraction for reference execution.
 
 It:
 
@@ -122,9 +122,9 @@ It is not a physical device reservation mechanism.
 
 The current `ProductionSpecification` contract does not yet carry an explicit production `VideoFormat`.
 
-AP-06 does not silently change that contract. The virtual reference environment is explicitly parameterized with one of the two already defined V1 development formats and proves execution behavior for both.
+Virtual Media Runtime Slice does not silently change that contract. The virtual reference environment is explicitly parameterized with one of the two already defined V1 development formats and proves execution behavior for both.
 
-Therefore AP-06 proves:
+Therefore Virtual Media Runtime Slice proves:
 
 - deterministic execution at 1080p50,
 - deterministic execution at 1080p59.94,
@@ -134,9 +134,9 @@ but it does **not** claim that production-format selection is already represente
 
 ## Provisional media-lifecycle boundary
 
-This is intentionally the minimal virtual execution required before AP-07.
+This is intentionally the minimal virtual execution required before Media Pipeline Foundation.
 
-AP-06 does not yet claim production-grade implementations for:
+Virtual Media Runtime Slice does not yet claim production-grade implementations for:
 
 - bounded media queues,
 - backpressure,
@@ -146,11 +146,11 @@ AP-06 does not yet claim production-grade implementations for:
 - zero-copy hardware paths,
 - atomic multi-output hardware presentation.
 
-Those are owned by AP-07 Media Pipeline Foundation.
+Those are owned by Media Pipeline Foundation Media Pipeline Foundation.
 
 ## Verification obligations
 
-AP-06 integration evidence covers at least:
+Virtual Media Runtime Slice integration evidence covers at least:
 
 - Source A → Program,
 - Source B → Program,

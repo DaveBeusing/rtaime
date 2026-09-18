@@ -4,7 +4,7 @@
 
 ## Purpose
 
-AP-22 adds the publication boundary after AP-21 Release Candidate creation.
+Release Publication & Discovery adds the publication boundary after Release Pipeline & Channels Release Candidate creation.
 
 The authoritative lifecycle is now:
 
@@ -65,7 +65,7 @@ matching version/tag/source commit
 
 The GitHub Release is created as a prerelease and must not become the latest Stable release.
 
-AP-21 still permits `TEST_EPHEMERAL` Preview mechanism qualification. AP-22 deliberately rejects such a Candidate for public distribution.
+Release Pipeline & Channels still permits `TEST_EPHEMERAL` Preview mechanism qualification. Release Publication & Discovery deliberately rejects such a Candidate for public distribution.
 
 ### STABLE
 
@@ -205,7 +205,7 @@ The attached `rtaime-channel-stable.json` then provides the rtaime-specific disc
 
 Preview is represented by GitHub prereleases. A discovery client may enumerate releases and select the newest Preview release according to an explicit version/channel policy, then verify `rtaime-channel-preview.json` and finally the Candidate trust chain.
 
-AP-22 does not implement a client-side updater or autonomous version selection engine.
+Release Publication & Discovery does not implement a client-side updater or autonomous version selection engine.
 
 ## Publication verification
 
@@ -253,11 +253,11 @@ Repository/CI qualification can prove:
 
 Until the first real trusted Preview or Stable tag is published, actual GitHub Release creation remains `UNVERIFIED`.
 
-There were no GitHub Releases in the repository when AP-22 implementation began.
+There were no GitHub Releases in the repository when Release Publication & Discovery implementation began.
 
 ## Non-claims
 
-AP-22 does not implement or claim:
+Release Publication & Discovery does not implement or claim:
 
 - automatic client updates,
 - background update download,

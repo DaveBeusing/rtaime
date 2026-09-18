@@ -2,11 +2,11 @@
 
 ## Scope
 
-This document records the AP-02 V1 contract foundation. It is subordinate to the binding Project Architecture Context, accepted ADRs, V1 Product Definition, Technology Baseline, Subsystem & Solution Architecture, V1 Project & Dependency Map, Initial Solution Bootstrap & Project Reference Map, and Project Development & Product Governance.
+This document records the V1 Contract Foundation V1 contract foundation. It is subordinate to the binding Project Architecture Context, accepted ADRs, V1 Product Definition, Technology Baseline, Subsystem & Solution Architecture, V1 Project & Dependency Map, Initial Solution Bootstrap & Project Reference Map, and Project Development & Product Governance.
 
 Change classification: `CONTRACT`.
 
-AP-02 establishes the first stable, transport-neutral V1 vocabulary across:
+V1 Contract Foundation establishes the first stable, transport-neutral V1 vocabulary across:
 
 ```text
 Control -> Planning -> Runtime -> Media / Provider / AI
@@ -51,7 +51,7 @@ This keeps compatibility policy out of `rtaime.Core`, which continues to provide
 
 Control contracts intentionally do not reference Media, Runtime, Provider, AI, Persistence, hosts, UI, or transport technologies.
 
-Desired state and authoritative state are distinct public contract types. AP-03 owns the actual domain validation and transition rules.
+Desired state and authoritative state are distinct public contract types. Control Domain Foundation owns the actual domain validation and transition rules.
 
 ## Media contracts
 
@@ -105,7 +105,7 @@ No concrete GPU, capture-card, inference-runtime, SDK, IPC, or operating-system 
 
 Runtime contracts do not reference Control contracts. The authority boundary is represented by an opaque state identity plus revision, preserving the approved dependency direction.
 
-Prepare/commit behavior is not implemented in AP-02. AP-05 owns transactional runtime semantics.
+Prepare/commit behavior is not implemented in V1 Contract Foundation. Transactional Runtime Commit owns transactional runtime semantics.
 
 ## AI contracts
 
@@ -125,7 +125,7 @@ AI contracts may carry an optional Media `FrameDescriptor` as an input reference
 
 Public collection-bearing contracts snapshot input collections before exposing them as read-only views.
 
-Where unordered name/value inputs are accepted, AP-02 canonicalizes them by ordinal name before exposing or serializing them. Identifiers, revisions, timestamps, frame rates, and timebases reuse the deterministic Core semantics introduced by AP-01.
+Where unordered name/value inputs are accepted, V1 Contract Foundation canonicalizes them by ordinal name before exposing or serializing them. Identifiers, revisions, timestamps, frame rates, and timebases reuse the deterministic Core semantics introduced by Core Domain Semantics.
 
 Enum-backed contract values reject undefined values at construction boundaries rather than silently accepting unknown meanings.
 

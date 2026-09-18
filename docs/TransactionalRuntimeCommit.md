@@ -2,7 +2,7 @@
 
 ## Scope
 
-AP-05 establishes the Runtime-side prepare/commit transaction boundary for a `PreparedExecutionContract`.
+Transactional Runtime Commit establishes the Runtime-side prepare/commit transaction boundary for a `PreparedExecutionContract`.
 
 Change classification: `ARCHITECTURE`.
 
@@ -25,7 +25,7 @@ Control remains the production authority.
 
 Runtime does not derive or mutate authoritative production state. It receives a prepared execution produced from an authoritative snapshot and owns only the execution that has actually crossed the commit boundary.
 
-The Runtime contract types remain unchanged in AP-05.
+The Runtime contract types remain unchanged in Transactional Runtime Commit.
 
 ## Transaction invariants
 
@@ -107,7 +107,7 @@ The abstraction deliberately does not introduce hardware-, GPU-, capture-, or ve
 
 The resource manager returns explicit result objects rather than using exceptions for expected reservation/release rejection. Unexpected exceptions are converted into fail-closed Runtime failures.
 
-AP-05 does not define provider discovery or real hardware reservation. Those remain outside this package.
+Transactional Runtime Commit does not define provider discovery or real hardware reservation. Those remain outside this package.
 
 ## Commit boundary
 
@@ -178,7 +178,7 @@ Observation timestamps are supplied through `IRuntimeClock` so tests can use det
 
 ## Failure containment
 
-The central AP-05 failure rule is:
+The central Transactional Runtime Commit failure rule is:
 
 ```text
 failure before commit
@@ -192,7 +192,7 @@ No failure in this package promotes Runtime into production authority. Runtime o
 
 ## Tests
 
-AP-05 unit coverage includes:
+Transactional Runtime Commit unit coverage includes:
 
 - prepare success,
 - prepare failure,
@@ -209,7 +209,7 @@ The full repository architecture, contract, behavioral, failure, integration, pe
 
 ## Out of scope
 
-AP-05 intentionally does not implement:
+Transactional Runtime Commit intentionally does not implement:
 
 - media frame processing,
 - timing loops,
@@ -223,4 +223,4 @@ AP-05 intentionally does not implement:
 - Operator behavior,
 - AI execution.
 
-AP-06 consumes this transaction boundary for the first Virtual Media runtime vertical slice.
+Virtual Media Runtime Slice consumes this transaction boundary for the first Virtual Media runtime vertical slice.

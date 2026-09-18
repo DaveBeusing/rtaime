@@ -2,7 +2,7 @@
 
 # V1 End-to-End Architecture Proof
 
-**Status:** AP-12 software architecture proof  
+**Status:** V1 End-to-End Proof software architecture proof  
 **Change classification:** `CONTRACT`, `REALTIME_CRITICAL`  
 **Branch:** `v1-end-to-end-proof`
 
@@ -76,7 +76,7 @@ The package realizes architecture already approved by the Project Architecture C
 
 ## Production authority and transactional commit
 
-The final AP-12 host boundary is deliberately two-phase.
+The final V1 End-to-End Proof host boundary is deliberately two-phase.
 
 1. The Operator or another client creates a versioned production Command against the current authoritative revision.
 2. `ControlHostService` validates the command and computes the proposed production state.
@@ -103,7 +103,7 @@ The client:
 
 The WPF Operator is an MVVM presentation client over that seam. Its production project dependency remains `Operator -> Client` only.
 
-The AP-12 automated end-to-end tests use an **in-process test adapter** to compose ControlHost, RuntimeHost and AIHost. That adapter is test infrastructure and is not evidence for a production network/IPC implementation.
+The V1 End-to-End Proof automated end-to-end tests use an **in-process test adapter** to compose ControlHost, RuntimeHost and AIHost. That adapter is test infrastructure and is not evidence for a production network/IPC implementation.
 
 ## CUT and DISSOLVE
 
@@ -185,7 +185,7 @@ The model therefore supplies analysis data only. It does not decide authoritativ
 
 ## Input signal failure
 
-AP-12 defines an observable reference fallback for a lost input signal:
+V1 End-to-End Proof defines an observable reference fallback for a lost input signal:
 
 ```text
 VALID → LOST → black reference fallback
@@ -246,7 +246,7 @@ The journal records the Runtime rejection. No later revision is marked authorita
 
 ## Combined managed-reference performance evidence
 
-AP-12 includes a combined performance regression test for both V1 development formats. Each run composes:
+V1 End-to-End Proof includes a combined performance regression test for both V1 development formats. Each run composes:
 
 - two timed inputs,
 - media lifecycle/queues,
@@ -265,7 +265,7 @@ A generous runaway guard exists only to catch pathological regression. It is not
 
 ## Automated evidence obligations
 
-The AP-12 branch requires the complete managed solution to pass on the Windows reference CI runner:
+The V1 End-to-End Proof branch requires the complete managed solution to pass on the Windows reference CI runner:
 
 - Architecture tests,
 - Contract tests,
@@ -300,9 +300,9 @@ The following may be marked PASS only when directly supported by final latest-he
 - rejected Runtime commit preserving authoritative state,
 - managed combined-workload regression bounds.
 
-## Explicitly UNVERIFIED after AP-12
+## Explicitly UNVERIFIED after V1 End-to-End Proof
 
-Unless separate evidence exists, AP-12 does **not** mark the following PASS:
+Unless separate evidence exists, V1 End-to-End Proof does **not** mark the following PASS:
 
 - qualified professional capture/output hardware provider,
 - real genlock/reference/PTP hardware behavior,
@@ -330,7 +330,7 @@ Simulation and managed reference providers prove contracts and behavior only. Th
 
 ## Completion interpretation
 
-AP-12 is complete when the final branch demonstrates the required V1 **software architecture proof** reproducibly on the Windows reference CI runner and all remaining unsupported claims are explicitly left `UNVERIFIED`.
+V1 End-to-End Proof is complete when the final branch demonstrates the required V1 **software architecture proof** reproducibly on the Windows reference CI runner and all remaining unsupported claims are explicitly left `UNVERIFIED`.
 
 This distinction is intentional:
 
@@ -340,9 +340,9 @@ This distinction is intentional:
 
 > V1 proves the production architecture, not the size of the feature list.
 
-## AP-38 functional-gap closure addendum
+## V1 Functional Gap Closure functional-gap closure addendum
 
-AP-38 closes two software gaps that were intentionally still listed as `UNVERIFIED` by the original AP-12 evidence boundary. The historical AP-12 list above remains unchanged because it describes what AP-12 itself proved; later work packages provide additional evidence rather than retroactively changing AP-12.
+V1 Functional Gap Closure closes two software gaps that were intentionally still listed as `UNVERIFIED` by the original V1 End-to-End Proof evidence boundary. The historical V1 End-to-End Proof list above remains unchanged because it describes what V1 End-to-End Proof itself proved; later work packages provide additional evidence rather than retroactively changing V1 End-to-End Proof.
 
 ### Headless automation
 
@@ -350,11 +350,11 @@ The existing `OperatorControlClient` and `IOperatorControlTransport` are reused 
 
 No parallel automation authority, direct Runtime command path or second command model is introduced.
 
-When final latest-head AP-38 Required Gates are green, the AP-12 item `Automation client semantic-equivalence proof` has separate AP-38 software evidence and no longer remains an unproven functional V1 gap.
+When final latest-head V1 Functional Gap Closure Required Gates are green, the V1 End-to-End Proof item `Automation client semantic-equivalence proof` has separate V1 Functional Gap Closure software evidence and no longer remains an unproven functional V1 gap.
 
 ### Actual reference recording payload
 
-AP-38 adds `ReferenceRecordingPayloadWriter` and `ReferenceRecordingPayloadReader` without changing the descriptor-only `RecordingProgramSample` contract. The RuntimeHost composition root supplies actual post-composite RGBA8 Program bytes and deterministic AFV Stereo 48 kHz Float32 bytes to this optional writer capability while storage I/O remains on the recorder worker.
+V1 Functional Gap Closure adds `ReferenceRecordingPayloadWriter` and `ReferenceRecordingPayloadReader` without changing the descriptor-only `RecordingProgramSample` contract. The RuntimeHost composition root supplies actual post-composite RGBA8 Program bytes and deterministic AFV Stereo 48 kHz Float32 bytes to this optional writer capability while storage I/O remains on the recorder worker.
 
 The payload proof covers both V1 development formats, validates exact timing/format metadata and verifies SHA-256 media-payload integrity. A deterministic quota exercises storage exhaustion; separate failure evidence covers finalization failure and later-session recovery while Runtime remains committed and Program continues.
 
@@ -362,6 +362,6 @@ This closes the software/reference payload gap only. `hardware recording codec/c
 
 ### Functional-scope interpretation
 
-After final latest-head AP-38 Required Gates pass, no known **software-only functional allowlist gap** remains for V1. Remaining work is qualification/evidence work, including physical media I/O, timing/reference, hardware GPU deadlines, physical latency, professional recording/codec behavior, soak and release acceptance.
+After final latest-head V1 Functional Gap Closure Required Gates pass, no known **software-only functional allowlist gap** remains for V1. Remaining work is qualification/evidence work, including physical media I/O, timing/reference, hardware GPU deadlines, physical latency, professional recording/codec behavior, soak and release acceptance.
 
-The detailed AP-38 audit and retained evidence boundary are documented in `V1FunctionalGapClosure.md`.
+The detailed V1 Functional Gap Closure audit and retained evidence boundary are documented in `V1FunctionalGapClosure.md`.

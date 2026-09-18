@@ -2,7 +2,7 @@
 
 # Recording Foundation
 
-Status: AP-10 implementation foundation, extended by AP-38 reference payload closure.
+Status: implementation foundation, extended by reference payload closure.
 
 ## Change classification
 
@@ -101,7 +101,7 @@ IProgramRecordingWriter
 	AbortAsync
 ```
 
-AP-38 adds an optional subsystem-local capability:
+V1 Functional Gap Closure adds an optional subsystem-local capability:
 
 ```text
 IProgramRecordingPayloadWriter : IProgramRecordingWriter
@@ -117,7 +117,7 @@ A future qualified encoder/device implementation can resolve opaque media handle
 
 `LocalRecordingManifestWriter` remains the descriptor-level architectural-proof writer. It persists Program sample identity, timing and opaque-handle references only.
 
-AP-38 adds `ReferenceRecordingPayloadWriter`, a deterministic software-only payload artifact for V1 functional proof. It persists:
+V1 Functional Gap Closure adds `ReferenceRecordingPayloadWriter`, a deterministic software-only payload artifact for V1 functional proof. It persists:
 
 - actual post-composite Program RGBA8 bytes supplied by the RuntimeHost reference path;
 - deterministic Stereo 48 kHz Float32 AFV sample bytes for the exact Program boundary;
@@ -137,13 +137,13 @@ Both protected local artifact paths use the same lifecycle concept:
 
 `ReferenceRecordingPayloadReader` validates the file magic/version, sample structure, payload lengths, footer counts, trailing-data absence and SHA-256 integrity.
 
-The AP-38 reference container is intentionally uncompressed and CI-verifiable. It is **not** a qualified professional codec/container. Professional storage throughput, DMA/device-surface resolution, codec interoperability, hardware encoding and long-duration media integrity remain `UNVERIFIED` until measured on the declared production environment.
+The V1 Functional Gap Closure reference container is intentionally uncompressed and CI-verifiable. It is **not** a qualified professional codec/container. Professional storage throughput, DMA/device-surface resolution, codec interoperability, hardware encoding and long-duration media integrity remain `UNVERIFIED` until measured on the declared production environment.
 
 ## Storage exhaustion and recovery
 
 `ReferenceRecordingPayloadWriter` supports a deterministic payload-byte quota for failure evidence. Exhausting the quota raises a writer-side storage failure on the asynchronous recorder worker rather than blocking Program execution.
 
-AP-38 verifies that:
+V1 Functional Gap Closure verifies that:
 
 - storage exhaustion moves Recording to `Failed`;
 - no valid final artifact is published;
@@ -171,7 +171,7 @@ RuntimeHost also emits a non-authoritative `recording.payload.stage.failed:<Exce
 
 ## Verification obligations
 
-AP-10 verifies at minimum:
+Recording Foundation verifies at minimum:
 
 - start
 - stop
@@ -185,7 +185,7 @@ AP-10 verifies at minimum:
 - bounded/nonblocking enqueue under slow storage
 - architecture graph remains unchanged
 
-AP-38 adds verification for:
+V1 Functional Gap Closure adds verification for:
 
 - actual reference Program video payload bytes;
 - actual reference AFV audio payload bytes;

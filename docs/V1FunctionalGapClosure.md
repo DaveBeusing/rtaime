@@ -2,12 +2,12 @@
 
 # V1 Functional Gap Closure
 
-**Work package:** AP-38  
+**Scope:** V1 functional gap closure  
 **Change classification:** `CONTRACT`, `REALTIME_CRITICAL`
 
 ## Purpose
 
-AP-38 closes the remaining software-only functional gaps in the V1 allowlist before physical hardware qualification. It does not expand the V1 feature scope and it does not convert hardware, codec, timing, latency, soak, security/compliance or release evidence to `PASS`.
+V1 Functional Gap Closure closes the remaining software-only functional gaps in the V1 allowlist before physical hardware qualification. It does not expand the V1 feature scope and it does not convert hardware, codec, timing, latency, soak, security/compliance or release evidence to `PASS`.
 
 The implementation preserves the existing authority model:
 
@@ -29,7 +29,7 @@ Automation never calls Runtime, Persistence, Media or AI implementations directl
 
 ## Automation semantic equivalence
 
-The existing transport-neutral `IOperatorControlTransport` and `OperatorControlClient` are the V1 automation API. AP-38 deliberately does not create a second command stack or another managed project.
+The existing transport-neutral `IOperatorControlTransport` and `OperatorControlClient` are the V1 automation API. V1 Functional Gap Closure deliberately does not create a second command stack or another managed project.
 
 `AutomationClientSemanticEquivalenceTests` exercises the same client path without WPF and proves:
 
@@ -47,7 +47,7 @@ A competing headless client cannot commit a mutation against an obsolete revisio
 
 The stable `RecordingProgramSample` contract remains descriptor-only. Bulk video/audio bytes are not added to normal Media, Runtime or cross-process contracts.
 
-AP-38 adds the optional subsystem-local `IProgramRecordingPayloadWriter` capability. `V1RuntimeHostService` detects that capability at composition time and supplies media payload only while recording is active.
+V1 Functional Gap Closure adds the optional subsystem-local `IProgramRecordingPayloadWriter` capability. `V1RuntimeHostService` detects that capability at composition time and supplies media payload only while recording is active.
 
 The software-only reference path persists:
 
@@ -90,7 +90,7 @@ The synchronous Program path still performs no storage I/O. Runtime only stages 
 
 Payload staging failure is observed but not thrown into Program execution. Storage writing remains on the recorder worker.
 
-AP-38 evidence covers:
+V1 Functional Gap Closure evidence covers:
 
 - output/open failure;
 - asynchronous write failure;
@@ -112,9 +112,9 @@ For each format the test compares the persisted video payload byte-for-byte with
 
 ## V1 functional audit
 
-The following software capabilities are considered AP-38 closure candidates. A candidate is `PASS` only when the latest-head Required Gates covering its implementation are green. A stale or earlier workflow run is not evidence for a later commit.
+The following software capabilities are considered V1 Functional Gap Closure closure candidates. A candidate is `PASS` only when the latest-head Required Gates covering its implementation are green. A stale or earlier workflow run is not evidence for a later commit.
 
-| V1 capability | Repository evidence | AP-38 classification |
+| V1 capability | Repository evidence | V1 Functional Gap Closure classification |
 |---|---|---|
 | Two video inputs | V1 end-to-end proof | software evidence |
 | Preview / Program | V1 end-to-end proof | software evidence |
@@ -122,9 +122,9 @@ The following software capabilities are considered AP-38 closure candidates. A c
 | DISSOLVE | V1 end-to-end proof | software evidence |
 | Static RGBA layer | V1 end-to-end proof | software evidence |
 | Dynamic RGBA layer | V1 end-to-end proof | software evidence |
-| 1080p50 | V1 end-to-end + AP-38 recording payload test | software evidence |
-| 1080p59.94 | V1 end-to-end + AP-38 recording payload test | software evidence |
-| Audio Follow Video | V1 end-to-end + AP-38 recording payload test | software evidence |
+| 1080p50 | V1 end-to-end + V1 Functional Gap Closure recording payload test | software evidence |
+| 1080p59.94 | V1 end-to-end + V1 Functional Gap Closure recording payload test | software evidence |
+| Audio Follow Video | V1 end-to-end + V1 Functional Gap Closure recording payload test | software evidence |
 | Program recording lifecycle | Recording foundation tests | software evidence |
 | Actual reference recording video payload | `ReferenceRecordingPayloadTests` | software evidence |
 | Actual reference AFV audio payload | `ReferenceRecordingPayloadTests` | software evidence |
@@ -134,16 +134,16 @@ The following software capabilities are considered AP-38 closure candidates. A c
 | Operator client | existing Client/Operator evidence | software evidence |
 | Headless automation client | `AutomationClientSemanticEquivalenceTests` | software evidence |
 | Automation semantic equivalence | `AutomationClientSemanticEquivalenceTests` | software evidence |
-| Operator reconnect/resync | existing IPC/client evidence plus AP-38 headless resync | software evidence |
+| Operator reconnect/resync | existing IPC/client evidence plus V1 Functional Gap Closure headless resync | software evidence |
 | Lost-input fallback | V1 end-to-end/failure evidence | software evidence |
 | Governed Person Segmentation | V1 end-to-end AI evidence | software evidence |
 | AI unavailable fallback | V1 end-to-end AI evidence | software evidence |
 | Durable production state | existing persistence/recovery evidence | software evidence |
 | Production journal/recovery | existing persistence/journal evidence | software evidence |
 
-## Explicitly UNVERIFIED after AP-38
+## Explicitly UNVERIFIED after V1 Functional Gap Closure
 
-AP-38 does not provide evidence for:
+V1 Functional Gap Closure does not provide evidence for:
 
 - qualified professional capture/output hardware;
 - SDI electrical/output qualification;
@@ -162,9 +162,9 @@ The `.rtaime-recording` artifact introduced here is a deterministic reference co
 
 ## Architecture result
 
-AP-38 adds no Production Authority, no new host, no new cross-process contract project and no external codec dependency. The existing managed project topology remains unchanged.
+V1 Functional Gap Closure adds no Production Authority, no new host, no new cross-process contract project and no external codec dependency. The existing managed project topology remains unchanged.
 
-The V1 software feature allowlist is closed when the final AP-38 head passes all Required Gates. Remaining V1 work then moves from feature implementation to physical/reference-platform qualification and release evidence.
+The V1 software feature allowlist is closed when the final V1 Functional Gap Closure head passes all Required Gates. Remaining V1 work then moves from feature implementation to physical/reference-platform qualification and release evidence.
 
 > No evidence, no claim.
 
