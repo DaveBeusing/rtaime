@@ -22,6 +22,8 @@ $deckPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MediaDeckContro
 $timelinePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MediaTimelineControl.xaml"
 $viewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorViewModel.cs"
 $monitorViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorMonitoringViewModel.cs"
+$programOutputControllerPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/ProgramOutputController.cs"
+$programOutputWindowPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/ProgramOutputWindow.xaml"
 $sourceTileViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorSourceTileViewModel.cs"
 $audioInputViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorAudioInputViewModel.cs"
 $graphicsLoaderPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/GraphicsOverlayAssetLoader.cs"
@@ -31,7 +33,7 @@ $manifestPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/app.manifes
 $projectPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/rtaime.Operator.csproj"
 $documentationPath = Join-Path $repositoryRoot "docs/OperatorUiV1.md"
 
-foreach ($path in @($appPath, $windowPath, $deckPath, $timelinePath, $viewModelPath, $monitorViewModelPath, $sourceTileViewModelPath, $audioInputViewModelPath, $graphicsLoaderPath, $tokensPath, $themePath, $manifestPath, $projectPath, $documentationPath)) {
+foreach ($path in @($appPath, $windowPath, $deckPath, $timelinePath, $viewModelPath, $monitorViewModelPath, $programOutputControllerPath, $programOutputWindowPath, $sourceTileViewModelPath, $audioInputViewModelPath, $graphicsLoaderPath, $tokensPath, $themePath, $manifestPath, $projectPath, $documentationPath)) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required Operator UI artifact is missing: '$path'."
 }
 
@@ -41,6 +43,8 @@ $deck = Get-Content -LiteralPath $deckPath -Raw
 $timeline = Get-Content -LiteralPath $timelinePath -Raw
 $viewModel = Get-Content -LiteralPath $viewModelPath -Raw
 $monitorViewModel = Get-Content -LiteralPath $monitorViewModelPath -Raw
+$programOutputController = Get-Content -LiteralPath $programOutputControllerPath -Raw
+$programOutputWindow = Get-Content -LiteralPath $programOutputWindowPath -Raw
 $sourceTileViewModel = Get-Content -LiteralPath $sourceTileViewModelPath -Raw
 $audioInputViewModel = Get-Content -LiteralPath $audioInputViewModelPath -Raw
 $graphicsLoader = Get-Content -LiteralPath $graphicsLoaderPath -Raw
@@ -61,6 +65,7 @@ foreach ($resource in @("OperatorPreviewBrush", "OperatorProgramBrush", "Operato
 
 Assert-Condition ($manifest -match 'PerMonitorV2,PerMonitor') "Operator must declare PerMonitorV2 DPI awareness with PerMonitor fallback."
 Assert-Condition ($project -match '<ApplicationManifest>app\.manifest</ApplicationManifest>') "Operator project must bind the DPI-awareness manifest."
+Assert-Condition ($project -match '<UseWindowsForms>true</UseWindowsForms>') "AP-51 display enumeration must use the Windows desktop display surface without adding a project dependency."
 Assert-Condition ($window -match 'UseLayoutRounding="True"') "Operator window must use layout rounding."
 Assert-Condition ($window -match 'SnapsToDevicePixels="True"') "Operator window must snap layout edges to device pixels."
 Assert-Condition ($window -match 'TextOptions\.TextFormattingMode="Display"') "Operator must use display text formatting for production-console legibility."
@@ -97,6 +102,22 @@ Assert-Condition ($window -match 'Monitoring\.PreviewImage') "Operator Preview m
 Assert-Condition ($window -match 'Monitoring\.ProgramImage') "Operator Program must bind the independent monitoring image."
 Assert-Condition ($window -match '<Image\s') "AP-29 must render visual monitoring with WPF Image surfaces."
 Assert-Condition ($window -notmatch 'MediaElement|VideoDrawing') "Operator monitoring must use the qualified bounded bitmap path, not an ungoverned media player."
+Assert-Condition ($window -match 'Text="PROGRAM OUTPUT / CLEAN FEED"') "AP-51 must expose Program Output controls in the Operator."
+Assert-Condition ($window -match 'ProgramOutput\.Displays') "AP-51 must expose display selection."
+Assert-Condition ($window -match 'ProgramOutput\.StartCommand') "AP-51 must expose controlled Program Output start."
+Assert-Condition ($window -match 'ProgramOutput\.StopCommand') "AP-51 must expose controlled Program Output stop."
+Assert-Condition ($window -match 'ProgramOutput\.ToggleFullscreenCommand') "AP-51 must expose fullscreen/windowed control."
+Assert-Condition ($window -match 'ProgramOutput\.Health') "AP-51 must expose visible output health."
+Assert-Condition ($programOutputWindow -match 'Source="\{Binding ProgramImage\}"') "Clean Feed must present the same Runtime-derived ProgramImage used by the Operator monitoring surface."
+Assert-Condition ($programOutputWindow -match 'Stretch="Uniform"') "Clean Feed must preserve Program aspect ratio."
+Assert-Condition ($programOutputWindow -notmatch '<Button|<ComboBox|<TextBox|MediaElement|VideoDrawing') "Clean Feed must contain no Operator controls or independent media player."
+Assert-Condition ($programOutputController -match 'OperatorMonitoringViewModel') "Clean Feed controller must consume the existing Operator monitoring projection rather than own Program rendering."
+Assert-Condition ($programOutputController -match 'FormsScreen\.AllScreens') "AP-51 must enumerate selectable Windows displays."
+Assert-Condition ($programOutputController -match 'SystemEvents\.DisplaySettingsChanged') "AP-51 must react to display topology changes."
+Assert-Condition ($programOutputController -match 'WindowStyle\.None' -and $programOutputController -match 'WindowStyle\.SingleBorderWindow') "AP-51 must support fullscreen and defined windowed fallback."
+Assert-Condition ($programOutputController -match 'SetWindowPos') "AP-51 display placement must target the selected physical display."
+Assert-Condition ($programOutputController -match '_fallbackActive' -and $programOutputController -match 'Selected display was removed') "AP-51 must surface controlled display-disconnect fallback."
+Assert-Condition ($programOutputController -notmatch 'ControlHost|RuntimeHost|MediaElement|VideoDrawing') "Program Output presentation must not bypass the Client/monitoring boundary or create a second renderer."
 Assert-Condition ($timeline -match 'Style="\{StaticResource OperatorTimelineSlider\}"') "Timeline seeker must use the design-system slider style."
 Assert-Condition ($timeline -match 'Style="\{StaticResource OperatorMeter\}"') "Timeline progress must use the design-system meter style."
 Assert-Condition ($deck -match 'OperatorStatusBadge') "Media deck state must use shared status presentation."
@@ -176,5 +197,6 @@ Write-Host "Production workspace: selected source -> confirmed Preview -> confir
 Write-Host "Source bin: live/media metadata, monitoring thumbnails, health, PGM/PVW and remaining-time presentation verified"
 Write-Host "Graphics: PNG/RGBA load, placement, scale and confirmed show/hide through Client SDK verified"
 Write-Host "Audio: AFV, stereo/master meters, gain, mute, clipping/health and clip-audio status use Runtime observations"
+Write-Host "Program Output: display selection, start/stop, fullscreen/windowed fallback and shared Program monitoring truth verified"
 Write-Host "Commit state: pending, confirmed, rejected/failed and resynchronization presentation verified"
 Write-Host "Keyboard controls: synchronization, Preview, CUT and DISSOLVE/AUTO declared"
