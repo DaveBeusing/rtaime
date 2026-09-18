@@ -81,7 +81,7 @@ The maintenance mode does not start ControlHost supervision, IPC authority or ch
 
 ## Backup-before-activation rule
 
-For every discovered database whose current schema is below the signed target schema, the coordinator creates a verified AP-24 snapshot before software activation.
+For every discovered database whose current schema is below the signed target schema, the coordinator creates a verified Persistent State Backup, Migration & Recovery snapshot before software activation.
 
 Database instances are discovered only below the explicitly supplied `StateRoot` and only by signed catalog filenames.
 
@@ -105,7 +105,7 @@ The existing rollback slot remains:
 
 After the new software tree has been activated, the coordinator resolves the newly active `rtaime.ControlHost.dll` and invokes its state-maintenance mode for each required database migration.
 
-Each database migration still uses the AP-24 transaction and internal migration backup. The pre-activation snapshot is retained separately as coordinated recovery evidence.
+Each database migration still uses the Persistent State Backup, Migration & Recovery transaction and internal migration backup. The pre-activation snapshot is retained separately as coordinated recovery evidence.
 
 After migration, the coordinator inspects the database again and requires the exact signed target schema version.
 
@@ -154,7 +154,7 @@ The package adds three layers of evidence:
 2. integration tests launch the built `rtaime.ControlHost.dll` as a real process and qualify inspect/backup plus acknowledgement rejection;
 3. Packaged E2E verifies that the signed offline bundle contains the coordinator, policy, state catalog, rollback guard and ControlHost executable assembly.
 
-The existing AP-24 integration suite remains the executable qualification for transactional migration and automatic SQLite snapshot restoration.
+The existing Persistent State Backup, Migration & Recovery integration suite remains the executable qualification for transactional migration and automatic SQLite snapshot restoration.
 
 The current production state catalog has no migrations, so CI does not fabricate a production schema upgrade merely to create positive evidence.
 

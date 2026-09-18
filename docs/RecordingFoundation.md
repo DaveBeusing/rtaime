@@ -199,9 +199,9 @@ V1 Functional Gap Closure adds verification for:
 Hardware/codec/storage qualification must remain `UNVERIFIED` unless executed on the declared production environment.
 
 
-## AP-53 Operator recording workflow
+## Operator recording workflow
 
-AP-53 promotes the existing recording foundation into an explicit Operator workflow without moving recording authority or storage execution into WPF.
+Recording Operator Workflow promotes the existing recording foundation into an explicit Operator workflow without moving recording authority or storage execution into WPF.
 
 The command path is:
 
@@ -228,7 +228,7 @@ Final publication retains create-new semantics. An existing target is rejected r
 
 ### Validation and evidence boundary
 
-The AP-53 result is externally readable through `ReferenceRecordingPayloadReader`. Acceptance evidence validates:
+The Recording Operator Workflow result is externally readable through `ReferenceRecordingPayloadReader`. Acceptance evidence validates:
 
 - at least one Program video sample;
 - matching audio sample presence;
@@ -237,4 +237,4 @@ The AP-53 result is externally readable through `ReferenceRecordingPayloadReader
 - repeated recordings with distinct names in one RuntimeHost lifecycle;
 - controlled storage failure propagated back to the Operator while Runtime Program remains committed.
 
-The V1 reference artifact remains an uncompressed architectural-proof container, not MP4/MOV/MXF and not a qualified professional codec. The current Media Deck accepts MP4 input, so AP-53 does **not** claim direct Media Deck playback of `.rtaime-recording` files. External validation is provided by the deterministic reader. Professional encoded recording, ISO input recording, replay, segment recording and cloud upload remain outside AP-53.
+The V1 reference artifact remains an uncompressed architectural-proof container, not MP4/MOV/MXF and not a qualified professional codec. The current Media Deck accepts MP4 input, so Recording Operator Workflow does **not** claim direct Media Deck playback of `.rtaime-recording` files. External validation is provided by the deterministic reader. Professional encoded recording, ISO input recording, replay, segment recording and cloud upload remain outside Recording Operator Workflow.

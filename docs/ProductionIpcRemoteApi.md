@@ -190,9 +190,9 @@ Malformed, oversized, unknown, role-incompatible and version-incompatible reques
 Managed CI can prove framing, mappings, local Named Pipe behavior, cross-process command paths, cancellation, failure isolation, process restart semantics and topology invariants. It does not prove remote-network latency, broadcast hard-real-time behavior, GPU cross-process memory sharing, professional hardware timing, distributed HA or security certification.
 
 
-## AP-53 recording control extension
+## recording control extension
 
-AP-53 adds recording control to the existing private management IPC without creating a new public Control contract or transferring media payloads over Named Pipes.
+Recording Operator Workflow adds recording control to the existing private management IPC without creating a new public Control contract or transferring media payloads over Named Pipes.
 
 Operator-facing ControlHost messages:
 

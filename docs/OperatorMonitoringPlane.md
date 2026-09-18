@@ -86,9 +86,9 @@ Monitoring must fail open relative to production continuity:
 - the Operator can continue command/control operation when visual monitoring is unavailable, subject to the existing authoritative control readiness rules.
 
 
-## AP-51 clean-feed consumer
+## clean-feed consumer
 
-AP-51 adds a second WPF presentation surface for the existing Program monitoring image. It does not add a monitoring contract version, RuntimeHost render path, new subscriber, or management-IPC payload.
+Program Output / Clean Feed adds a second WPF presentation surface for the existing Program monitoring image. It does not add a monitoring contract version, RuntimeHost render path, new subscriber, or management-IPC payload.
 
 OperatorMonitoringViewModel continues to own the single NamedPipeOperatorMonitoringTransport reader and converts each received Program frame once into a frozen WPF bitmap. Both the in-workspace Program monitor and ProgramOutputWindow bind that same ProgramImage reference.
 

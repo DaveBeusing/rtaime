@@ -342,7 +342,7 @@ Those operations require separate operational authority and evidence.
 
 ## Upgrade and rollback boundary
 
-AP-19 deliberately does not implement in-place update or rollback.
+Release Packaging & Offline Deployment deliberately does not implement in-place update or rollback.
 
 Existing installations are protected by a fail-closed rule:
 
