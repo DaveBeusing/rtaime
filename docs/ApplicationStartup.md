@@ -212,6 +212,7 @@ Supported application arguments include:
 --state-root=<path>
 --work-root=<path>
 --instance-id=<id>
+--service-name=<windows-service-id>
 --windows-service
 --disposable
 --no-ai
