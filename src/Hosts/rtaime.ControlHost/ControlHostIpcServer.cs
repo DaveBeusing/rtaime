@@ -189,6 +189,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			"control.audio.input.set" => await SetAudioInputStateAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.recording.start" => await StartRecordingAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.recording.stop" => await StopRecordingAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.ai_showcase.set" => await SetAIShowcaseAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.media_deck.snapshot.get" => await GetMediaDeckSnapshotAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.media_deck.open" => await OpenMediaDeckAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.media_deck.transport" => await ApplyMediaDeckTransportAsync(request, cancellationToken).ConfigureAwait(false),
@@ -292,6 +293,37 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or NotSupportedException or FormatException or InvalidDataException or IOException)
 			{
 				return Error(request, "control.graphics.overlay.rejected", exception.Message);
+			}
+		}
+		finally
+		{
+			_mutationGate.Release();
+		}
+	}
+
+	private async ValueTask<WireEnvelope> SetAIShowcaseAsync(WireEnvelope request, CancellationToken cancellationToken)
+	{
+		var wire = request.Payload.Deserialize<WireAIShowcaseState>(Wire.JsonOptions)
+			?? throw new InvalidDataException("AI showcase state payload is required.");
+
+		await _mutationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+		try
+		{
+			var control = _controlAccessor();
+			if (control is null || !control.HasAuthoritativeState)
+				return Error(request, "control.not_ready", "ControlHost has no committed authoritative state yet.");
+			if (!_runtimeTransport.IsConnected)
+				return Error(request, "runtime.unavailable", "RuntimeHost is not connected.");
+
+			try
+			{
+				var snapshot = await _runtimeTransport.SetAIShowcaseEnabledAsync(wire.Enabled, cancellationToken).ConfigureAwait(false);
+				NotifyObservableStateChanged();
+				return Success(request, "control.ai_showcase.response", ToWire(snapshot));
+			}
+			catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or NotSupportedException or FormatException or InvalidDataException or IOException)
+			{
+				return Error(request, "control.ai_showcase.rejected", exception.Message);
 			}
 		}
 		finally
@@ -481,6 +513,9 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		var recording = runtime?.Recording is { } runtimeRecording
 			? ToWire(runtimeRecording)
 			: WireRecordingSnapshot.Unavailable;
+		var aiShowcase = runtime?.AIShowcase is { } runtimeAI
+			? ToWire(runtimeAI)
+			: WireAIShowcase.Unavailable;
 		var health = OperatorHealthProjection.Evaluate(
 			runtime,
 			runtime is null ? Array.Empty<ProviderDescriptor>() : _runtimeTransport.ProviderDescriptors,
@@ -493,7 +528,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			runtime is null ? "DEGRADED" : "READY",
 			runtime is null ? "UNKNOWN" : runtime.TimingHealth.ToString(),
 			runtime is null ? "UNKNOWN" : "VALID",
-			"AVAILABLE",
+			aiShowcase.Status,
 			recording.State,
 			runtime?.GraphicsOverlay.Visible == true,
 			audioProgram.MasterPeak,
@@ -502,6 +537,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			audioProgram,
 			recording,
 			ToWire(health),
+			aiShowcase,
 			StateVersion);
 		return Success(request, "control.snapshot.response", payload);
 	}
@@ -746,6 +782,20 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		snapshot.WriterFailures,
 		snapshot.Failure is { } failure ? new WireFailure(failure.Code, failure.Message) : null);
 
+	private static WireAIShowcase ToWire(RuntimeAIShowcaseRemoteSnapshot snapshot) => new(
+		snapshot.Enabled,
+		snapshot.Feature,
+		snapshot.Status,
+		snapshot.Provider,
+		snapshot.InferenceTime.Ticks,
+		snapshot.PersonRegionCount,
+		snapshot.SourceSequence,
+		snapshot.AppliedSequence,
+		snapshot.Confidence,
+		snapshot.EffectVisible,
+		snapshot.Failure is { } failure ? new WireFailure(failure.Code, failure.Message) : null,
+		snapshot.UpdatedAtUtc);
+
 	private static WireRecordingCommandResult ToWire(RuntimeRecordingCommandResult result) => new(
 		result.Succeeded,
 		ToWire(result.Snapshot),
@@ -807,6 +857,11 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		public static WireRecordingSnapshot Unavailable { get; } = new("UNAVAILABLE", 0, null, null, null, 0, 0, 0, 0, 0, null);
 	}
 	private sealed record WireRecordingCommandResult(bool Succeeded, WireRecordingSnapshot Snapshot, WireFailure? Failure);
+	private sealed record WireAIShowcaseState(bool Enabled);
+	private sealed record WireAIShowcase(bool Enabled, string Feature, string Status, string Provider, long InferenceTimeTicks, uint PersonRegionCount, ulong? SourceSequence, ulong? AppliedSequence, double? Confidence, bool EffectVisible, WireFailure? Failure, DateTimeOffset? UpdatedAtUtc)
+	{
+		public static WireAIShowcase Unavailable { get; } = new(false, "Person Segmentation Highlight", "UNAVAILABLE", "UNVERIFIED", 0, 0, null, null, null, false, null, null);
+	}
 	private sealed record WireHealthMetric(string State, string Detail);
 	private sealed record WireHealthSnapshot(
 		WireHealthMetric Engine,
@@ -823,7 +878,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		string GpuUtilization,
 		string Vram,
 		DateTimeOffset ObservedAtUtc);
-	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, WireRecordingSnapshot Recording, WireHealthSnapshot Health, ulong StateVersion);
+	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, WireRecordingSnapshot Recording, WireHealthSnapshot Health, WireAIShowcase AIShowcase, ulong StateVersion);
 	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path);
 	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame, bool? AutoPlayOnProgram, int? EndBehavior, long? InPointFrame, long? OutPointFrame);
 	private sealed record WireMediaMarkerCommand(string Version, string AssetId, int Kind, long? PositionFrame, string? CuePointId, string? Name);
