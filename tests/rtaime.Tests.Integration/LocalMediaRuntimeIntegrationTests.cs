@@ -35,10 +35,11 @@ public sealed class LocalMediaRuntimeIntegrationTests
 		var initialized = ControlDomainEngine.Initialize(specification);
 		Assert.True(initialized.Succeeded);
 
+		using var referenceAsset = LocalMediaTestAsset.ExtractReference1080p50();
 		var provider = new LocalMediaFileProvider();
 		var mediaSourceId = new MediaSourceId(sourceA.Value);
 		var open = provider.TryOpen(
-			ReferenceAssetPath(),
+			referenceAsset.Path,
 			mediaSourceId,
 			new MediaAssetId(Id(100)));
 
@@ -128,22 +129,6 @@ public sealed class LocalMediaRuntimeIntegrationTests
 			if (File.Exists(path))
 				File.Delete(path);
 		}
-	}
-
-	private static string ReferenceAssetPath() =>
-		Path.Combine(FindRepositoryRoot(), "tests", "TestAssets", "media", "reference-1080p50-h264-aac-1s.mp4");
-
-	private static string FindRepositoryRoot()
-	{
-		DirectoryInfo? directory = new(AppContext.BaseDirectory);
-		while (directory is not null)
-		{
-			if (File.Exists(Path.Combine(directory.FullName, "rtaime.slnx")))
-				return directory.FullName;
-			directory = directory.Parent;
-		}
-
-		throw new Xunit.Sdk.XunitException("Repository root containing rtaime.slnx could not be located.");
 	}
 
 	private static Identity Id(int value) =>
