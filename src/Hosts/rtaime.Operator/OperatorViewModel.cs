@@ -15,6 +15,7 @@ namespace rtaime.Operator;
 public sealed class OperatorViewModel : INotifyPropertyChanged
 {
 	private readonly OperatorControlClient? _client;
+	private Func<OperatorGraphicsAsset?>? _graphicsAssetPicker;
 	private OperatorSourceTileViewModel? _selectedSource;
 	private string? _mediaDeckSourceId;
 	private string _previewSourceName = "—";
@@ -27,6 +28,13 @@ public sealed class OperatorViewModel : INotifyPropertyChanged
 	private string _aiStatus = "UNKNOWN";
 	private string _recordingStatus = "UNKNOWN";
 	private string _visualLayerStatus = "UNKNOWN";
+	private string _graphicsAssetName = "No graphics asset loaded";
+	private string _graphicsDimensions = "—";
+	private string _graphicsState = "EMPTY";
+	private bool _graphicsVisible;
+	private double _graphicsPositionX = 72.0;
+	private double _graphicsPositionY = 6.0;
+	private double _graphicsScale = 1.0;
 	private string _audioPeak = "0.000";
 	private string _audioPeakPercent = "0%";
 	private string _connectionState = "DISCONNECTED";
@@ -42,14 +50,21 @@ public sealed class OperatorViewModel : INotifyPropertyChanged
 	private bool _isConnected;
 	private bool _isStale;
 
-	public OperatorViewModel(OperatorControlClient? client = null)
+	public OperatorViewModel(
+		OperatorControlClient? client = null,
+		Func<OperatorGraphicsAsset?>? graphicsAssetPicker = null)
 	{
 		_client = client;
+		_graphicsAssetPicker = graphicsAssetPicker;
 		Sources = new ObservableCollection<OperatorSourceTileViewModel>();
 		SynchronizeCommand = new AsyncRelayCommand(SynchronizeAsync, () => _client is not null && !IsBusy);
 		SetPreviewCommand = new AsyncRelayCommand(SetPreviewAsync, CanSetPreview);
 		CutCommand = new AsyncRelayCommand(CutAsync, CanTakePreview);
 		DissolveCommand = new AsyncRelayCommand(DissolveAsync, () => CanTakePreview() && TransitionFrames >= 2);
+		LoadGraphicsCommand = new AsyncRelayCommand(LoadGraphicsAsync, () => CanControl() && _graphicsAssetPicker is not null);
+		ApplyGraphicsCommand = new AsyncRelayCommand(ApplyGraphicsAsync, CanApplyGraphics);
+		ToggleGraphicsCommand = new AsyncRelayCommand(ToggleGraphicsAsync, CanApplyGraphics);
+		ClearGraphicsCommand = new AsyncRelayCommand(ClearGraphicsAsync, CanApplyGraphics);
 	}
 
 	internal OperatorControlClient? Client => _client;
@@ -61,6 +76,10 @@ public sealed class OperatorViewModel : INotifyPropertyChanged
 	public ICommand SetPreviewCommand { get; }
 	public ICommand CutCommand { get; }
 	public ICommand DissolveCommand { get; }
+	public ICommand LoadGraphicsCommand { get; }
+	public ICommand ApplyGraphicsCommand { get; }
+	public ICommand ToggleGraphicsCommand { get; }
+	public ICommand ClearGraphicsCommand { get; }
 
 	public string MonitoringStatus => "Monitoring unavailable until AP-29";
 	public string FormatStatus => "Format metadata is not exposed by the management snapshot.";
@@ -85,6 +104,37 @@ public sealed class OperatorViewModel : INotifyPropertyChanged
 	public string AIStatus { get => _aiStatus; private set => Set(ref _aiStatus, value); }
 	public string RecordingStatus { get => _recordingStatus; private set => Set(ref _recordingStatus, value); }
 	public string VisualLayerStatus { get => _visualLayerStatus; private set => Set(ref _visualLayerStatus, value); }
+	public string GraphicsAssetName { get => _graphicsAssetName; private set => Set(ref _graphicsAssetName, value); }
+	public string GraphicsDimensions { get => _graphicsDimensions; private set => Set(ref _graphicsDimensions, value); }
+	public string GraphicsState { get => _graphicsState; private set => Set(ref _graphicsState, value); }
+	public bool GraphicsVisible { get => _graphicsVisible; private set => Set(ref _graphicsVisible, value); }
+	public double GraphicsPositionX
+	{
+		get => _graphicsPositionX;
+		set
+		{
+			if (Set(ref _graphicsPositionX, Math.Clamp(value, 0.0, 100.0)))
+				RaiseCommandState();
+		}
+	}
+	public double GraphicsPositionY
+	{
+		get => _graphicsPositionY;
+		set
+		{
+			if (Set(ref _graphicsPositionY, Math.Clamp(value, 0.0, 100.0)))
+				RaiseCommandState();
+		}
+	}
+	public double GraphicsScale
+	{
+		get => _graphicsScale;
+		set
+		{
+			if (Set(ref _graphicsScale, Math.Clamp(value, 0.05, 4.0)))
+				RaiseCommandState();
+		}
+	}
 	public string AudioPeak { get => _audioPeak; private set => Set(ref _audioPeak, value); }
 	public string AudioPeakPercent { get => _audioPeakPercent; private set => Set(ref _audioPeakPercent, value); }
 	public string ConnectionState { get => _connectionState; private set => Set(ref _connectionState, value); }
@@ -119,6 +169,10 @@ public sealed class OperatorViewModel : INotifyPropertyChanged
 	private bool CanSetPreview() => CanControl() && SelectedSource is not null;
 
 	private bool CanTakePreview() => CanControl() && _client?.Snapshot is not null;
+
+	private bool CanApplyGraphics() =>
+		CanControl() &&
+		_client?.Snapshot?.GraphicsOverlay.AssetLoaded == true;
 
 	private async Task SynchronizeAsync()
 	{
@@ -184,6 +238,79 @@ public sealed class OperatorViewModel : INotifyPropertyChanged
 			CommandStatus = "APPLIED";
 			TransitionStatus = $"DISSOLVE {durationFrames}F CONFIRMED";
 			LastEvent = $"DISSOLVE committed confirmed Preview source {previewName} to Program over {durationFrames} frames.";
+		});
+	}
+
+	private async Task LoadGraphicsAsync()
+	{
+		if (_client is null || _graphicsAssetPicker is null) return;
+		OperatorGraphicsAsset? asset;
+		try
+		{
+			asset = _graphicsAssetPicker();
+		}
+		catch (Exception exception) when (exception is IOException or InvalidDataException or NotSupportedException or ArgumentException)
+		{
+			LastError = exception.Message;
+			CommandStatus = "GRAPHICS LOAD REJECTED";
+			LastEvent = "Graphics asset validation failed before upload.";
+			return;
+		}
+		if (asset is null) return;
+
+		await ExecuteAsync("LOAD GRAPHICS", async () =>
+		{
+			await _client.LoadGraphicsOverlayAsync(asset);
+			Apply(_client.Snapshot!);
+			CommandStatus = "GRAPHICS LOADED";
+			LastEvent = $"Graphics asset {asset.Name} loaded and confirmed by RuntimeHost.";
+		});
+	}
+
+	private async Task ApplyGraphicsAsync()
+	{
+		if (_client is null || _client.Snapshot?.GraphicsOverlay.AssetLoaded != true) return;
+		await ExecuteAsync("APPLY GRAPHICS", async () =>
+		{
+			await _client.SetGraphicsOverlayAsync(
+				GraphicsVisible,
+				GraphicsPositionX / 100.0,
+				GraphicsPositionY / 100.0,
+				GraphicsScale);
+			Apply(_client.Snapshot!);
+			CommandStatus = "GRAPHICS APPLIED";
+			LastEvent = $"Graphics placement confirmed at X {GraphicsPositionX:0.#}%, Y {GraphicsPositionY:0.#}%, scale {GraphicsScale:0.##}.";
+		});
+	}
+
+	private async Task ToggleGraphicsAsync()
+	{
+		if (_client is null || _client.Snapshot?.GraphicsOverlay.AssetLoaded != true) return;
+		var show = !GraphicsVisible;
+		await ExecuteAsync(show ? "SHOW GRAPHICS" : "HIDE GRAPHICS", async () =>
+		{
+			await _client.SetGraphicsOverlayAsync(
+				show,
+				GraphicsPositionX / 100.0,
+				GraphicsPositionY / 100.0,
+				GraphicsScale);
+			Apply(_client.Snapshot!);
+			CommandStatus = show ? "GRAPHICS ON AIR" : "GRAPHICS HIDDEN";
+			LastEvent = show
+				? "Graphics overlay is visible in the confirmed Runtime Program path."
+				: "Graphics overlay is hidden in the confirmed Runtime Program path.";
+		});
+	}
+
+	private async Task ClearGraphicsAsync()
+	{
+		if (_client is null || _client.Snapshot?.GraphicsOverlay.AssetLoaded != true) return;
+		await ExecuteAsync("CLEAR GRAPHICS", async () =>
+		{
+			await _client.ClearGraphicsOverlayAsync();
+			Apply(_client.Snapshot!);
+			CommandStatus = "GRAPHICS CLEARED";
+			LastEvent = "Graphics overlay asset was cleared from RuntimeHost.";
 		});
 	}
 
@@ -287,7 +414,15 @@ public sealed class OperatorViewModel : INotifyPropertyChanged
 		InputStatus = snapshot.InputStatus;
 		AIStatus = snapshot.AIStatus;
 		RecordingStatus = snapshot.RecordingStatus;
-		VisualLayerStatus = snapshot.VisualLayerEnabled ? "ENABLED" : "DISABLED";
+		var graphics = snapshot.GraphicsOverlay;
+		GraphicsAssetName = graphics.AssetLoaded ? graphics.AssetName ?? "Unnamed graphics asset" : "No graphics asset loaded";
+		GraphicsDimensions = graphics.AssetLoaded ? $"{graphics.AssetWidth}×{graphics.AssetHeight}" : "—";
+		GraphicsVisible = graphics.Visible;
+		GraphicsPositionX = graphics.PositionX * 100.0;
+		GraphicsPositionY = graphics.PositionY * 100.0;
+		GraphicsScale = graphics.Scale;
+		GraphicsState = graphics.Visible ? "ON AIR" : graphics.AssetLoaded ? "READY" : "EMPTY";
+		VisualLayerStatus = graphics.Visible ? "GRAPHICS ON" : snapshot.VisualLayerEnabled ? "ENABLED" : "DISABLED";
 		AudioPeak = snapshot.AudioPeakLevel.ToString("0.000", CultureInfo.InvariantCulture);
 		AudioPeakPercent = snapshot.AudioPeakLevel.ToString("P0", CultureInfo.InvariantCulture);
 		RevisionLabel = $"REV {snapshot.Production.Revision.Value}";
@@ -305,6 +440,12 @@ public sealed class OperatorViewModel : INotifyPropertyChanged
 		RaiseCommandState();
 	}
 
+
+	internal void SetGraphicsAssetPicker(Func<OperatorGraphicsAsset?> graphicsAssetPicker)
+	{
+		_graphicsAssetPicker = graphicsAssetPicker ?? throw new ArgumentNullException(nameof(graphicsAssetPicker));
+		RaiseCommandState();
+	}
 
 	internal void ApplySourceThumbnail(string sourceId, ImageSource thumbnail, string format)
 	{
@@ -367,6 +508,10 @@ public sealed class OperatorViewModel : INotifyPropertyChanged
 		(SetPreviewCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 		(CutCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 		(DissolveCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+		(LoadGraphicsCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+		(ApplyGraphicsCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+		(ToggleGraphicsCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+		(ClearGraphicsCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 	}
 
 	private bool Set<T>(ref T field, T value, [CallerMemberName] string? name = null)
