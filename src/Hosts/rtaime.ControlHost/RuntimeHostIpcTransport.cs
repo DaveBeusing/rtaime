@@ -46,7 +46,7 @@ public sealed record RuntimeRemoteApplyResult(
 public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 {
 	private const string ProtocolVersion = "1.0";
-	private const int MaxFrameBytes = 2 * 1024 * 1024;
+	private const int MaxFrameBytes = 1024 * 1024;
 	private readonly object _gate = new();
 	private readonly SemaphoreSlim _requestGate = new(1, 1);
 	private readonly string _endpoint;
