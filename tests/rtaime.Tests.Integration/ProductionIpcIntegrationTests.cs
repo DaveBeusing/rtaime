@@ -251,6 +251,12 @@ public sealed class ProductionIpcIntegrationTests
 		Assert.Equal(MediaDeckState.Ready, opened.State);
 		Assert.Equal(50, opened.Transport!.Position.TotalFrames);
 
+		var stablePlayback = await deck.ConfigurePlaybackAsync(
+			autoPlayOnProgram: true,
+			MediaDeckEndBehavior.Loop);
+		Assert.True(stablePlayback.Transport!.AutoPlayOnProgram);
+		Assert.Equal(MediaDeckEndBehavior.Loop, stablePlayback.Transport.EndBehavior);
+
 		var autoplayDeadline = DateTime.UtcNow.AddSeconds(5);
 		while (DateTime.UtcNow < autoplayDeadline)
 		{
