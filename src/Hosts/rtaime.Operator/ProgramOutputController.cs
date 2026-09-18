@@ -8,7 +8,6 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
 using Microsoft.Win32;
-using FormsScreen = System.Windows.Forms.Screen;
 
 namespace rtaime.Operator;
 
@@ -193,8 +192,7 @@ public sealed class ProgramOutputController : INotifyPropertyChanged, IDisposabl
 	private void RefreshDisplays()
 	{
 		var previousId = _selectedDisplay?.Id;
-		var displays = FormsScreen.AllScreens
-			.Select(CreateDisplay)
+		var displays = EnumerateDisplays()
 			.OrderByDescending(display => display.IsPrimary)
 			.ThenBy(display => display.Id, StringComparer.Ordinal)
 			.ToArray();
@@ -229,23 +227,47 @@ public sealed class ProgramOutputController : INotifyPropertyChanged, IDisposabl
 		RaiseCommandState();
 	}
 
-	private static ProgramOutputDisplay CreateDisplay(FormsScreen screen)
+	private static IReadOnlyList<ProgramOutputDisplay> EnumerateDisplays()
 	{
-		var bounds = screen.Bounds;
-		var working = screen.WorkingArea;
-		var label = $"{screen.DeviceName} • {bounds.Width}×{bounds.Height}{(screen.Primary ? " • PRIMARY" : string.Empty)}";
-		return new ProgramOutputDisplay(
-			screen.DeviceName,
-			label,
-			screen.Primary,
-			bounds.X,
-			bounds.Y,
-			bounds.Width,
-			bounds.Height,
-			working.X,
-			working.Y,
-			working.Width,
-			working.Height);
+		var displays = new List<ProgramOutputDisplay>();
+		MonitorEnumProc callback = (monitor, _, _, _) =>
+		{
+			var info = new MonitorInfoEx
+			{
+				Size = checked((uint)Marshal.SizeOf<MonitorInfoEx>())
+			};
+			if (!GetMonitorInfoW(monitor, ref info))
+				return true;
+
+			var width = checked(info.Monitor.Right - info.Monitor.Left);
+			var height = checked(info.Monitor.Bottom - info.Monitor.Top);
+			var workWidth = checked(info.Work.Right - info.Work.Left);
+			var workHeight = checked(info.Work.Bottom - info.Work.Top);
+			var isPrimary = (info.Flags & MonitorInfoPrimary) != 0;
+			var deviceName = string.IsNullOrWhiteSpace(info.DeviceName)
+				? $"MONITOR-{displays.Count + 1}"
+				: info.DeviceName.TrimEnd('\0');
+			var label = $"{deviceName} • {width}×{height}{(isPrimary ? " • PRIMARY" : string.Empty)}";
+			displays.Add(new ProgramOutputDisplay(
+				deviceName,
+				label,
+				isPrimary,
+				info.Monitor.Left,
+				info.Monitor.Top,
+				width,
+				height,
+				info.Work.Left,
+				info.Work.Top,
+				workWidth,
+				workHeight));
+			return true;
+		};
+
+		if (!EnumDisplayMonitors(nint.Zero, nint.Zero, callback, nint.Zero))
+			throw new InvalidOperationException($"Unable to enumerate Windows displays. Win32 error {Marshal.GetLastWin32Error()}.");
+
+		GC.KeepAlive(callback);
+		return displays;
 	}
 
 	private void ApplyPlacement()
@@ -381,6 +403,49 @@ public sealed class ProgramOutputController : INotifyPropertyChanged, IDisposabl
 
 	private void OnPropertyChanged([CallerMemberName] string? propertyName = null) =>
 		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+
+	private const uint MonitorInfoPrimary = 0x00000001;
+
+	private delegate bool MonitorEnumProc(
+		nint monitor,
+		nint hdc,
+		nint monitorRect,
+		nint data);
+
+	[StructLayout(LayoutKind.Sequential)]
+	private struct NativeRect
+	{
+		public int Left;
+		public int Top;
+		public int Right;
+		public int Bottom;
+	}
+
+	[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+	private struct MonitorInfoEx
+	{
+		public uint Size;
+		public NativeRect Monitor;
+		public NativeRect Work;
+		public uint Flags;
+
+		[MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
+		public string DeviceName;
+	}
+
+	[DllImport("user32.dll", SetLastError = true)]
+	[return: MarshalAs(UnmanagedType.Bool)]
+	private static extern bool EnumDisplayMonitors(
+		nint hdc,
+		nint clipRect,
+		MonitorEnumProc callback,
+		nint data);
+
+	[DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+	[return: MarshalAs(UnmanagedType.Bool)]
+	private static extern bool GetMonitorInfoW(
+		nint monitor,
+		ref MonitorInfoEx monitorInfo);
 
 	[DllImport("user32.dll", SetLastError = true)]
 	[return: MarshalAs(UnmanagedType.Bool)]
