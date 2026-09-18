@@ -40,7 +40,7 @@ public sealed class NamedPipeOperatorMonitoringTransport
 				".",
 				_endpoint,
 				PipeDirection.In,
-				PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+				PipeOptions.Asynchronous);
 
 			if (!await TryConnectAsync(pipe, cancellationToken).ConfigureAwait(false))
 			{

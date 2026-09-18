@@ -76,12 +76,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	{
 		while (!cancellationToken.IsCancellationRequested)
 		{
-			var pipe = new NamedPipeServerStream(
-				_endpoint,
-				PipeDirection.InOut,
-				NamedPipeServerStream.MaxAllowedServerInstances,
-				PipeTransmissionMode.Byte,
-				PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+			var pipe = OperatorPipeServerFactory.Create(_endpoint, PipeDirection.InOut);
 			try
 			{
 				await pipe.WaitForConnectionAsync(cancellationToken).ConfigureAwait(false);

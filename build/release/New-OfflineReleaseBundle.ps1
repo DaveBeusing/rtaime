@@ -273,19 +273,33 @@ Clean installation into a new or empty directory:
 ./tools/Install-OfflineRelease.ps1 -BundlePath . -InstallPath C:\rtaime
 ```
 
-Verified managed upgrade from an existing PREVIEW/STABLE installation:
+Persistent Windows production engine:
 
 ```powershell
-./tools/Invoke-VerifiedUpdate.ps1 -InstallPath C:\rtaime -StateRoot C:\ProgramData\rtaime -Channel PREVIEW -AcknowledgeProcessesStopped
+./tools/Invoke-WindowsServiceLifecycle.ps1 -Action Install -InstallPath C:\rtaime -StateRoot C:\ProgramData\rtaime
+./tools/Invoke-WindowsServiceLifecycle.ps1 -Action Start -InstallPath C:\rtaime -StateRoot C:\ProgramData\rtaime
+./tools/Invoke-WindowsServiceLifecycle.ps1 -Action Qualify -InstallPath C:\rtaime -StateRoot C:\ProgramData\rtaime
 ```
 
-Managed production updates use the coordinated software/state path. The target bundle's signed state-upgrade catalog determines whether persistent SQLite migration is required. Direct software-only rollback is blocked while coordinated recovery evidence exists.
+Service-managed verified upgrade:
+
+```powershell
+./tools/Invoke-ServiceManagedUpdate.ps1 -InstallPath C:\rtaime -StateRoot C:\ProgramData\rtaime -Channel PREVIEW -AcknowledgeExternalProcessesStopped
+```
+
+Service-managed rollback:
+
+```powershell
+./tools/Invoke-ServiceManagedRollback.ps1 -InstallPath C:\rtaime -StateRoot C:\ProgramData\rtaime -AcknowledgeExternalProcessesStopped
+```
+
+The service-managed maintenance paths stop the persistent engine, delegate to the existing verified update or rollback controls, restart the engine only after successful maintenance, and require qualified readiness before reporting PASS.
 
 Investor funding showcase:
 
 Double-click `Start-rtaime-Showcase.cmd` in the installed bundle root. The launcher uses the managed host lifecycle, opens the Operator with the qualified endpoints, and stops only the lifecycle it started when the Operator closes.
 
-This bundle does not automatically stop/start rtaime processes, establish post-upgrade runtime readiness, register Windows services, schedule background updates or perform Production Package activation.
+Clean installation does not automatically register or start the Windows service. Service registration is an explicit administrative action. This bundle does not schedule background updates or perform Production Package activation.
 "@
 [System.IO.File]::WriteAllText((Join-Path $bundleRoot "OFFLINE-README.md"), $offlineReadme + [Environment]::NewLine, [System.Text.UTF8Encoding]::new($false))
 

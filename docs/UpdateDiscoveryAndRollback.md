@@ -198,17 +198,29 @@ The resulting `update-plan.json` binds the exact target Candidate id and bundle 
 
 ## Process quiescence
 
-Update Discovery & Rollback does not automatically stop ControlHost, RuntimeHost, AIHost, Operator, Windows services, or third-party provider processes.
+The base Update Discovery & Rollback layer does not silently stop ControlHost, RuntimeHost, AIHost, Operator, Windows services or third-party provider processes.
 
-Production update invocation requires explicit:
+Direct production update invocation therefore still requires explicit:
 
 ```powershell
 -AcknowledgeProcessesStopped
 ```
 
-This makes process quiescence a deliberate operational boundary rather than silently replacing binaries that may still be in use.
+Persistent Windows production deployments add an outer service-lifecycle coordinator:
 
-Automated service/process coordination belongs to a later operational deployment package.
+```text
+Invoke-ServiceManagedUpdate.ps1
+```
+
+It requires explicit acknowledgement that Operator and external/provider users of the installation are quiesced, then stops the registered persistent engine service, invokes the existing verified coordinated update, restarts the service only after successful maintenance and requires qualified runtime readiness before reporting PASS.
+
+The equivalent software rollback path is:
+
+```text
+Invoke-ServiceManagedRollback.ps1
+```
+
+It preserves the same service stop → maintenance → service start → readiness boundary. A failed update or rollback remains failed and does not automatically restart an uncertain engine state.
 
 ## Atomic software replacement
 

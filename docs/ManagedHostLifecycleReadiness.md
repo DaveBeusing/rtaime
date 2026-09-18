@@ -154,7 +154,9 @@ Start
 full readiness qualification repeated
 ```
 
-There is no implicit unattended top-level ControlHost restart scheduler in Managed Host Lifecycle Readiness.
+There is no implicit unattended top-level ControlHost restart scheduler inside the non-service Managed Host Lifecycle Readiness controller.
+
+Persistent Windows production operation is a separate outer layer: Windows Service Control Manager may restart the AppHost service process after top-level failure, while ControlHost continues to own bounded RuntimeHost/AIHost child recovery.
 
 RuntimeHost and AIHost continue to have bounded child restart semantics inside ControlHost supervision.
 
@@ -220,7 +222,7 @@ The qualification uses unique Named Pipe endpoint names and the same lifecycle s
 
 ## Scope boundary / non-claims
 
-Managed Host Lifecycle Readiness does not implement or claim:
+The non-service Managed Host Lifecycle Readiness controller itself does not implement or claim:
 
 - Windows service registration,
 - automatic boot-start registration,
@@ -233,4 +235,4 @@ Managed Host Lifecycle Readiness does not implement or claim:
 - formal hardware qualification,
 - formal CRA conformity.
 
-Those boundaries remain explicit rather than being inferred from `runtimeReadiness = PASS`.
+Those boundaries remain explicit for this controller rather than being inferred from `runtimeReadiness = PASS`. Persistent Windows service behavior is documented and qualified separately in [Windows Production Lifecycle](WindowsProductionLifecycle.md).
