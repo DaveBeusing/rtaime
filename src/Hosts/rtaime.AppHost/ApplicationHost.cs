@@ -87,6 +87,7 @@ public sealed record ApplicationHostOptions(
 	string InstanceId,
 	ApplicationLifecycleOwnership Ownership,
 	bool WindowsService,
+	string WindowsServiceName,
 	bool RequireAI,
 	bool DisposableInteractiveSession,
 	ApplicationLifecyclePolicy Policy)
@@ -131,6 +132,9 @@ public sealed record ApplicationHostOptions(
 			throw new ArgumentException("InstanceId must contain only letters, digits, '.', '_' or '-' and be at most 64 characters.", nameof(args));
 
 		var windowsService = args.Contains("--windows-service", StringComparer.OrdinalIgnoreCase);
+		var windowsServiceName = Resolve("service-name", "RTAIME_WINDOWS_SERVICE_NAME", "rtaime-engine");
+		if (!System.Text.RegularExpressions.Regex.IsMatch(windowsServiceName, "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"))
+			throw new ArgumentException("Windows service name contains unsupported characters.", nameof(args));
 		var disposable = args.Contains("--disposable", StringComparer.OrdinalIgnoreCase);
 		var defaultOwnership = profile == ApplicationStartupProfile.Showcase || disposable
 			? ApplicationLifecycleOwnership.EphemeralLocal
@@ -155,7 +159,7 @@ public sealed record ApplicationHostOptions(
 		var policy = ApplicationLifecyclePolicy.Load(installRoot, string.IsNullOrWhiteSpace(policyPath) ? null : policyPath);
 		var requireAI = !args.Contains("--no-ai", StringComparer.OrdinalIgnoreCase);
 
-		return new ApplicationHostOptions(profile, installRoot, stateRoot, workRoot, instanceId, ownership, windowsService, requireAI, disposable, policy);
+		return new ApplicationHostOptions(profile, installRoot, stateRoot, workRoot, instanceId, ownership, windowsService, windowsServiceName, requireAI, disposable, policy);
 	}
 
 	private string WithInstance(string endpoint) =>
