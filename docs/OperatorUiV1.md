@@ -345,3 +345,25 @@ The source tile and deck countdown use the same effective remaining range. AP-52
 `build/quality/Test-OperatorMonitoringPolicy.ps1` verifies the monitoring-plane separation, bounded/loss-tolerant behavior and prohibition on management-IPC pixel transport.
 
 The existing Required Gates remain authoritative for build, architecture, contracts, unit, integration, security, provider smoke and packaged end-to-end qualification.
+
+
+## AP-53 Program recording workflow
+
+The right-side production workspace now includes a dedicated **PROGRAM RECORDING** panel.
+
+It exposes:
+
+- confirmed REC lifecycle state;
+- live elapsed time;
+- editable destination directory;
+- editable file name;
+- explicit START REC and STOP REC controls;
+- written/dropped/writer-failure statistics;
+- finalized file path;
+- Runtime-reported failure detail.
+
+The panel is a Client-SDK projection only. `OperatorViewModel` calls `OperatorControlClient.StartRecordingAsync` and `StopRecordingAsync`; it never creates a recorder, recording writer, encoder or file stream. The existing bounded 200 ms management refresh also projects recording observations so elapsed time and asynchronous writer failures become visible without inventing local state.
+
+Recording commands are serialized through ControlHost and delegated to RuntimeHost. They do not alter Preview/Program routing or advance Production revision. The recorded media is the same post-transition/post-graphics Program video and post-AFV Program audio already owned by RuntimeHost.
+
+The current V1 output is the deterministic `.rtaime-recording` reference artifact. It is externally verifiable with `ReferenceRecordingPayloadReader`; it is not presented as an MP4/MOV/MXF broadcast deliverable.
