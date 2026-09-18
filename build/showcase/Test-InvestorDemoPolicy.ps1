@@ -23,8 +23,9 @@ $documentationPath = Join-Path $repositoryRoot "docs/InvestorDemoScenario.md"
 $bundlePolicyPath = Join-Path $repositoryRoot "build/release/offline-bundle-policy.json"
 $workflowPath = Join-Path $repositoryRoot ".github/workflows/required-gates.yml"
 $appCodePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/App.xaml.cs"
+$bundleBuilderPath = Join-Path $repositoryRoot "build/release/New-OfflineReleaseBundle.ps1"
 
-foreach ($path in @($launcherPath, $entryPointPath, $packagedTestPath, $documentationPath, $bundlePolicyPath, $workflowPath, $appCodePath)) {
+foreach ($path in @($launcherPath, $entryPointPath, $packagedTestPath, $documentationPath, $bundlePolicyPath, $workflowPath, $appCodePath, $bundleBuilderPath)) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required investor-demo artifact is missing: '$path'."
 }
 
@@ -35,6 +36,7 @@ $documentation = Get-Content -LiteralPath $documentationPath -Raw
 $bundlePolicy = Get-Content -LiteralPath $bundlePolicyPath -Raw | ConvertFrom-Json
 $workflow = Get-Content -LiteralPath $workflowPath -Raw
 $appCode = Get-Content -LiteralPath $appCodePath -Raw
+$bundleBuilder = Get-Content -LiteralPath $bundleBuilderPath -Raw
 
 foreach ($artifact in @($launcher, $entryPoint, $packagedTest, $documentation)) {
 	Assert-Condition ($artifact -match 'Copyright \(c\).*Dave Beusing') "Investor-demo text artifacts must retain the project copyright header."
@@ -46,6 +48,7 @@ foreach ($tool in @("build/showcase/Invoke-InvestorDemo.ps1", "build/showcase/St
 }
 
 Assert-Condition ($entryPoint -match 'Invoke-InvestorDemo\.ps1') "One-click entry point must delegate to the governed showcase launcher."
+Assert-Condition ($bundleBuilder -match 'Start-rtaime-Showcase\.cmd' -and $bundleBuilder -match 'bundleRoot') "Offline bundle must expose the one-click showcase entry point at bundle root."
 Assert-Condition ($entryPoint -notmatch 'ControlHost|RuntimeHost|AIHost') "One-click entry point must not directly launch production hosts."
 Assert-Condition ($launcher -match 'Invoke-ManagedHostLifecycle\.ps1') "Showcase launcher must reuse the managed host lifecycle controller."
 Assert-Condition ($launcher -match 'rtaime\.Operator\.dll') "Showcase launcher must start the packaged Operator client."
