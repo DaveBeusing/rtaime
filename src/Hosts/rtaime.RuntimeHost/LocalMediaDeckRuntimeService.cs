@@ -150,7 +150,7 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
 			MediaTransportState.Error => MediaDeckState.Error,
 			_ => MediaDeckState.Ready
 		};
-		var failure = state == MediaDeckState.Error
+		Failure? failure = state == MediaDeckState.Error
 			? transport.Failure ?? _failure ?? new Failure("runtime.media_deck.failed", "Local media deck entered an error state.")
 			: null;
 		return new MediaDeckRuntimeSnapshot(
