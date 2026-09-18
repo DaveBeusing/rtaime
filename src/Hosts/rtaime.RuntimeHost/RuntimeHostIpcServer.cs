@@ -19,6 +19,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 	private readonly string _endpoint;
 	private readonly Func<V1RuntimeHostService?> _runtimeAccessor;
 	private readonly Func<LocalMediaDeckRuntimeService?> _mediaDeckAccessor;
+	private readonly Func<RuntimeAIShowcaseService?> _aiShowcaseAccessor;
 	private readonly CancellationTokenSource _stop = new();
 	private readonly BoundedRequestCache _requestCache = new(256);
 	private readonly string _hostInstanceId = Identity.New().ToString();
@@ -31,12 +32,14 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 	public RuntimeHostIpcServer(
 		string endpoint,
 		Func<V1RuntimeHostService?> runtimeAccessor,
-		Func<LocalMediaDeckRuntimeService?>? mediaDeckAccessor = null)
+		Func<LocalMediaDeckRuntimeService?>? mediaDeckAccessor = null,
+		Func<RuntimeAIShowcaseService?>? aiShowcaseAccessor = null)
 	{
 		if (string.IsNullOrWhiteSpace(endpoint)) throw new ArgumentException("RuntimeHost IPC endpoint is required.", nameof(endpoint));
 		_endpoint = endpoint.Trim();
 		_runtimeAccessor = runtimeAccessor ?? throw new ArgumentNullException(nameof(runtimeAccessor));
 		_mediaDeckAccessor = mediaDeckAccessor ?? (() => null);
+		_aiShowcaseAccessor = aiShowcaseAccessor ?? (() => null);
 	}
 
 	public string Endpoint => _endpoint;
@@ -179,7 +182,8 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 			{
 				"runtime.ping" => ValueTask.FromResult(Success(request, "runtime.ping.response", new { status = "ready" })),
 				"runtime.providers.get" => ValueTask.FromResult(Success(request, "runtime.providers.response", ProviderDescriptors(runtime).Select(ToWire).ToArray())),
-				"runtime.snapshot.get" => ValueTask.FromResult(Success(request, "runtime.snapshot.response", ToWire(runtime.Snapshot, runtime.Format))),
+				"runtime.snapshot.get" => ValueTask.FromResult(Success(request, "runtime.snapshot.response", ToWire(runtime.Snapshot, runtime.Format, _aiShowcaseAccessor()?.Snapshot ?? RuntimeAIShowcaseSnapshot.Disabled))),
+				"runtime.ai_showcase.set" => ValueTask.FromResult(SetAIShowcase(request)),
 				"runtime.execution.apply" => ValueTask.FromResult(ApplyExecution(request, runtime)),
 				"runtime.graphics.overlay.load" => ValueTask.FromResult(LoadGraphicsOverlay(request, runtime)),
 				"runtime.graphics.overlay.set" => ValueTask.FromResult(SetGraphicsOverlay(request, runtime)),
@@ -198,6 +202,18 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		{
 			return ValueTask.FromResult(Error(request, "runtime.request.rejected", exception.Message));
 		}
+	}
+
+	private WireEnvelope SetAIShowcase(WireEnvelope request)
+	{
+		var showcase = _aiShowcaseAccessor();
+		if (showcase is null)
+			return Error(request, "runtime.ai_showcase.unavailable", "AI showcase service is not available.");
+		var wire = request.Payload.Deserialize<WireAIShowcaseState>(Wire.JsonOptions)
+			?? throw new InvalidDataException("AI showcase state payload is required.");
+		var snapshot = showcase.SetEnabled(wire.Enabled);
+		_stateVersion++;
+		return Success(request, "runtime.ai_showcase.response", ToWire(snapshot));
 	}
 
 	private IReadOnlyList<ProviderDescriptor> ProviderDescriptors(V1RuntimeHostService runtime)
@@ -400,7 +416,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 			capability.VideoFormats.Select(format => new WireVideoFormat(format.Width, format.Height, format.FrameRate.ToString(), (int)format.PixelFormat, (int)format.ScanMode)).ToArray())).ToArray(),
 		provider.Resources.Select(resource => new WireResource(resource.ResourceId.ToString(), resource.ProviderId.ToString(), resource.Kind, resource.CapacityUnits, resource.Reservable)).ToArray());
 
-	private WireRuntimeSnapshot ToWire(V1RuntimeHostSnapshot snapshot, VideoFormat format) => new(
+	private WireRuntimeSnapshot ToWire(V1RuntimeHostSnapshot snapshot, VideoFormat format, RuntimeAIShowcaseSnapshot aiShowcase) => new(
 		snapshot.Runtime.Version.ToString(),
 		snapshot.Runtime.ActiveExecutionId?.ToString(),
 		snapshot.Runtime.ExecutionRevision.Value,
@@ -421,7 +437,8 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 			.ToArray(),
 		ToWire(snapshot.AudioProgram),
 		ToWire(snapshot.RecordingOperator),
-		ToWire(snapshot.Performance));
+		ToWire(snapshot.Performance),
+		ToWire(aiShowcase));
 
 	private static WireGraphicsOverlay ToWire(V1GraphicsOverlaySnapshot snapshot) => new(
 		snapshot.AssetLoaded,
@@ -480,6 +497,20 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		snapshot.GpuVramUsedBytes,
 		snapshot.GpuVramTotalBytes,
 		snapshot.GpuTelemetryEvidence);
+
+	private static WireAIShowcase ToWire(RuntimeAIShowcaseSnapshot snapshot) => new(
+		snapshot.Enabled,
+		snapshot.Feature,
+		snapshot.Status,
+		snapshot.Provider,
+		snapshot.InferenceTime.Ticks,
+		snapshot.PersonRegionCount,
+		snapshot.SourceSequence,
+		snapshot.AppliedSequence,
+		snapshot.Confidence,
+		snapshot.EffectVisible,
+		snapshot.Failure is { } failure ? new WireFailure(failure.Code, failure.Message) : null,
+		snapshot.UpdatedAtUtc);
 
 	private static WireApplyResponse ToWire(RuntimeHostApplyResult result) => new(
 		new WirePrepareResult(
@@ -582,6 +613,8 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 	private sealed record WireRecordingStart(string SessionId, string OutputId, string DestinationDirectory, string FileName);
 	private sealed record WireRecordingSnapshot(string State, long ElapsedTicks, string? Destination, string? FileName, string? FinalPath, ulong Accepted, ulong Written, ulong Dropped, ulong Rejected, ulong WriterFailures, WireFailure? Failure);
 	private sealed record WireRuntimePerformance(long UptimeTicks, long FrameBudgetTicks, long LastFrameProcessingTicks, ulong DroppedFrames, string GpuDeviceName, bool GpuHardwareAccelerated, double? GpuUtilizationPercent, ulong? GpuVramUsedBytes, ulong? GpuVramTotalBytes, string GpuTelemetryEvidence);
+	private sealed record WireAIShowcaseState(bool Enabled);
+	private sealed record WireAIShowcase(bool Enabled, string Feature, string Status, string Provider, long InferenceTimeTicks, uint PersonRegionCount, ulong? SourceSequence, ulong? AppliedSequence, double? Confidence, bool EffectVisible, WireFailure? Failure, DateTimeOffset? UpdatedAtUtc);
 	private sealed record WireRecordingCommandResult(bool Succeeded, WireRecordingSnapshot Snapshot, WireFailure? Failure);
 	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path, WirePreparedExecution PreparedExecution);
 	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame, bool? AutoPlayOnProgram, int? EndBehavior, long? InPointFrame, long? OutPointFrame);
@@ -607,7 +640,8 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		WireAudioInput[] AudioInputs,
 		WireAudioProgram AudioProgram,
 		WireRecordingSnapshot Recording,
-		WireRuntimePerformance Performance);
+		WireRuntimePerformance Performance,
+		WireAIShowcase AIShowcase);
 
 	private sealed class BoundedRequestCache
 	{
