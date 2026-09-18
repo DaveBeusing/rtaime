@@ -358,8 +358,7 @@ public sealed class RuntimeHostProcess
 			var boundary = mediaDeck.LatestBoundary;
 			if (boundary is { Succeeded: true } && !boundary.AudioPayload.IsEmpty)
 			{
-				var meter = AudioMetering.MeasureInterleavedStereoFloat32(boundary.AudioPayload.Span);
-				runtime.SetExternalAudioMeter(sourceId, meter.LeftPeakLevel, meter.RightPeakLevel, available: true);
+				runtime.SetExternalAudioInput(sourceId, boundary.AudioPayload.Span, available: true);
 			}
 			else
 			{
