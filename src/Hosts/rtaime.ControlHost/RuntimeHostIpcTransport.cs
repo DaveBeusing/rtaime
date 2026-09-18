@@ -18,6 +18,8 @@ public sealed record RuntimeRemoteSnapshot(
 	ulong NextSequenceNumber,
 	int TimingHealth,
 	int ActiveGpuSurfaces,
+	VideoFormat Format,
+	IReadOnlyDictionary<MediaSourceId, string> InputSignals,
 	ulong StateVersion);
 
 public sealed record RuntimeRemoteApplyResult(
@@ -107,6 +109,16 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 			snapshot.NextSequenceNumber,
 			snapshot.TimingHealth,
 			snapshot.ActiveGpuSurfaces,
+			new VideoFormat(
+				snapshot.Format.Width,
+				snapshot.Format.Height,
+				FrameRate.Parse(snapshot.Format.FrameRate),
+				Enum.IsDefined(typeof(PixelFormat), snapshot.Format.PixelFormat) ? (PixelFormat)snapshot.Format.PixelFormat : throw new InvalidDataException("Runtime pixel format is invalid."),
+				Enum.IsDefined(typeof(ScanMode), snapshot.Format.ScanMode) ? (ScanMode)snapshot.Format.ScanMode : throw new InvalidDataException("Runtime scan mode is invalid.")),
+			snapshot.InputSignals.ToDictionary(
+				signal => new MediaSourceId(Identity.Parse(signal.SourceId)),
+				signal => string.IsNullOrWhiteSpace(signal.Health) ? "UNKNOWN" : signal.Health.Trim(),
+				EqualityComparer<MediaSourceId>.Default),
 			response.StateVersion);
 	}
 
@@ -422,6 +434,7 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 	private sealed record ServerHello(string ProtocolVersion, string Role, string HostInstanceId, Dictionary<string, string> ContractVersions);
 	private sealed record WireFailure(string Code, string Message);
 	private sealed record WireVideoFormat(uint Width, uint Height, string FrameRate, int PixelFormat, int ScanMode);
+	private sealed record WireInputSignal(string SourceId, string Health);
 	private sealed record WireCapability(string CapabilityId, string Kind, WireVideoFormat[] VideoFormats);
 	private sealed record WireResource(string ResourceId, string ProviderId, string Kind, uint CapacityUnits, bool Reservable);
 	private sealed record WireProvider(string Version, string ProviderId, string Name, int AvailabilityState, WireFailure? Failure, WireCapability[] Capabilities, WireResource[] Resources);
@@ -449,7 +462,9 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 		ulong? AuthorityRevision,
 		ulong NextSequenceNumber,
 		int TimingHealth,
-		int ActiveGpuSurfaces);
+		int ActiveGpuSurfaces,
+		WireVideoFormat Format,
+		WireInputSignal[] InputSignals);
 
 	private static class Wire
 	{
