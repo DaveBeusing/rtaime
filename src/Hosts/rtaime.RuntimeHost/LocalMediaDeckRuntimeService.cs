@@ -15,7 +15,7 @@ namespace rtaime.RuntimeHost;
 public sealed class LocalMediaDeckRuntimeService : IDisposable
 {
 	private readonly object _gate = new();
-	private readonly LocalMediaFileProvider _provider = new();
+	private readonly LocalMediaFileProvider _provider;
 	private LocalMediaRuntimeSession? _session;
 	private LocalMediaRuntimeBoundaryResult? _latestBoundary;
 	private Failure? _failure;
@@ -25,6 +25,16 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
 	private long? _outPointFrame;
 	private bool _isOnProgram;
 	private bool _disposed;
+
+	public LocalMediaDeckRuntimeService()
+		: this(VideoFormat.Hd1080p50Rgba8)
+	{
+	}
+
+	public LocalMediaDeckRuntimeService(VideoFormat outputFormat)
+	{
+		_provider = new LocalMediaFileProvider(outputFormat);
+	}
 
 	public ProviderDescriptor ProviderDescriptor => _provider.Descriptor;
 
