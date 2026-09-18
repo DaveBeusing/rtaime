@@ -15,7 +15,7 @@ namespace rtaime.Operator;
 public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 {
 	private readonly OperatorControlClient? _client;
-	private readonly SynchronizationContext? _synchronizationContext;
+	private SynchronizationContext? _synchronizationContext;
 	private readonly CancellationTokenSource _audioPollingStop = new();
 	private Func<OperatorGraphicsAsset?>? _graphicsAssetPicker;
 	private Task? _audioPollingTask;
@@ -618,6 +618,9 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		}
 		_synchronizationContext.Post(static state => ((Action)state!).Invoke(), action);
 	}
+
+	internal void SetSynchronizationContext(SynchronizationContext synchronizationContext) =>
+		_synchronizationContext = synchronizationContext ?? throw new ArgumentNullException(nameof(synchronizationContext));
 
 	internal void SetGraphicsAssetPicker(Func<OperatorGraphicsAsset?> graphicsAssetPicker)
 	{
