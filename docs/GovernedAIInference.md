@@ -237,3 +237,25 @@ The following remain `UNVERIFIED` unless separately qualified:
 - professional hardware validation/certification.
 
 `UNVERIFIED` is never treated as PASS.
+
+
+## AP-55 governed person-segmentation showcase
+
+AP-55 promotes the existing person-segmentation reference capability into one visible production-workflow demonstration without changing the AI authority model.
+
+RuntimeHost acts as a bounded inference consumer. It submits a committed Program `FrameDescriptor` to AIHost at no more than 5 Hz and never waits for inference inside the media loop. AIHost continues to own provider selection, resource admission, execution, timeout/failure semantics and result metadata.
+
+A usable AP-55 result must:
+
+1. succeed through AIHost;
+2. identify the submitted Program surface;
+3. carry the matching `source.sequence`;
+4. declare `mask.semantic=person`;
+5. contain a valid normalized `mask.region.normalized`;
+6. meet the V1 confidence threshold of 0.90.
+
+Only after those checks does RuntimeHost update its existing dynamic RGBA layer. The snapshot records source and application sequence separately so presentation does not imply zero-latency inference.
+
+The private AIHost IPC result metadata now includes the selected provider display name in addition to its stable provider ID. This is observational metadata for the Operator showcase and does not change the public AI contract.
+
+Provider unavailable, timeout, invalid synchronization, low confidence and transport failures remove the showcase effect and leave committed Program execution running. The current managed reference person-segmentation provider remains deterministic architecture/CI evidence and is not a production-quality model claim.
