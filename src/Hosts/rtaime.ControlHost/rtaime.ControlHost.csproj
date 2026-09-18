@@ -2,11 +2,6 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
   </PropertyGroup>
-
-  <ItemGroup>
-    <PackageReference Include="System.IO.Pipes.AccessControl" />
-  </ItemGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\..\Control\rtaime.Control\rtaime.Control.csproj" />
     <ProjectReference Include="..\..\Persistence\rtaime.Persistence\rtaime.Persistence.csproj" />

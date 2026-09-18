@@ -63,6 +63,14 @@ Debug build:
 dotnet build rtaime.slnx --configuration Debug
 ```
 
+Run the Debug AppHost directly after the complete solution build:
+
+```powershell
+./src/Hosts/rtaime.AppHost/bin/Debug/net10.0/rtaime.exe
+```
+
+Repository development startup resolves the sibling host outputs from the same build configuration. Installed/offline bundles continue to use their packaged product payload.
+
 Repository automation scripts live under `build/`; the repository does not use a root `tools/` source directory. For the full build/publish matrix, see [Build, Publish & Test](docs/BuildAndTest.md).
 
 ## Application startup and single-file EXE

@@ -215,7 +215,52 @@ public sealed class SystemApplicationHostPlatform : IApplicationHostPlatform
 			if (matches.Length > 1) throw new InvalidOperationException($"Expected one '{baseName + extension}' in product payload; found {matches.Length}.");
 		}
 
-		throw new FileNotFoundException($"Product artifact '{baseName}' was not found below '{productRoot}'.");
+		var developmentArtifact = FindRepositoryBuildArtifact(installRoot, baseName);
+		if (developmentArtifact is not null) return developmentArtifact;
+
+		throw new FileNotFoundException(
+			$"Product artifact '{baseName}' was not found below '{productRoot}'. " +
+			"Build the complete rtaime.slnx solution or use an installed/offline bundle.");
+	}
+
+	private static string? FindRepositoryBuildArtifact(string installRoot, string baseName)
+	{
+		var repositoryRoot = FindRepositoryRoot(installRoot);
+		if (repositoryRoot is null) return null;
+
+		var relativeInstallRoot = Path.GetRelativePath(repositoryRoot, Path.GetFullPath(installRoot));
+		var segments = relativeInstallRoot.Split(
+			new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar },
+			StringSplitOptions.RemoveEmptyEntries);
+		var binIndex = Array.FindIndex(segments, segment => string.Equals(segment, "bin", StringComparison.OrdinalIgnoreCase));
+		if (binIndex < 0 || binIndex + 1 >= segments.Length) return null;
+
+		var configuration = segments[binIndex + 1];
+		var targetFramework = string.Equals(baseName, "rtaime.Operator", StringComparison.Ordinal)
+			? "net10.0-windows"
+			: "net10.0";
+		var artifactRoot = Path.Combine(repositoryRoot, "src", "Hosts", baseName, "bin", configuration, targetFramework);
+		if (!Directory.Exists(artifactRoot)) return null;
+
+		foreach (var extension in new[] { ".exe", ".dll" })
+		{
+			var candidate = Path.Combine(artifactRoot, baseName + extension);
+			if (File.Exists(candidate)) return candidate;
+		}
+
+		return null;
+	}
+
+	private static string? FindRepositoryRoot(string startPath)
+	{
+		DirectoryInfo? directory = new(Path.GetFullPath(startPath));
+		while (directory is not null)
+		{
+			if (File.Exists(Path.Combine(directory.FullName, "rtaime.slnx")))
+				return directory.FullName;
+			directory = directory.Parent;
+		}
+		return null;
 	}
 
 	public int StartProcess(ApplicationProcessSpec spec)
@@ -416,7 +461,8 @@ public sealed class UnifiedApplicationHost
 				}
 			}
 
-			TrackReadiness(ready.Value);
+			var qualifiedReadiness = ready ?? throw new InvalidOperationException("Engine startup completed without qualified readiness evidence.");
+			TrackReadiness(qualifiedReadiness);
 			Transition(ApplicationLifecycleState.Healthy);
 
 			if (_options.Profile == ApplicationStartupProfile.HeadlessEngine)

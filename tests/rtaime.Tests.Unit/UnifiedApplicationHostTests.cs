@@ -52,6 +52,31 @@ public sealed class UnifiedApplicationHostTests
 	}
 
 	[Fact]
+	public void Direct_development_startup_resolves_sibling_host_build_output()
+	{
+		var root = Path.Combine(Path.GetTempPath(), "rtaime-development-startup-tests", Guid.NewGuid().ToString("N"));
+		var appHostRoot = Path.Combine(root, "src", "Hosts", "rtaime.AppHost", "bin", "Debug", "net10.0");
+		var controlHostRoot = Path.Combine(root, "src", "Hosts", "rtaime.ControlHost", "bin", "Debug", "net10.0");
+		Directory.CreateDirectory(appHostRoot);
+		Directory.CreateDirectory(controlHostRoot);
+		File.WriteAllText(Path.Combine(root, "rtaime.slnx"), "<Solution />");
+		var expected = Path.Combine(controlHostRoot, "rtaime.ControlHost.dll");
+		File.WriteAllText(expected, string.Empty);
+
+		try
+		{
+			var platform = new SystemApplicationHostPlatform();
+			var resolved = platform.FindProductArtifact(appHostRoot, "rtaime.ControlHost");
+
+			Assert.Equal(Path.GetFullPath(expected), Path.GetFullPath(resolved));
+		}
+		finally
+		{
+			Directory.Delete(root, recursive: true);
+		}
+	}
+
+	[Fact]
 	public async Task Startup_failure_ends_in_failed_state()
 	{
 		var options = CreateOptions(ApplicationStartupProfile.Interactive);

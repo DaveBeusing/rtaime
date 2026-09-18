@@ -65,6 +65,22 @@ rtaime.exe / AppHost
 └── Operator
 ```
 
+After a complete solution build, the AppHost can also be started directly from its normal build output. In repository development mode it resolves the sibling ControlHost, RuntimeHost, AIHost and Operator outputs from the same build configuration; installed bundles continue to resolve only their packaged product payload.
+
+Debug example:
+
+```powershell
+./src/Hosts/rtaime.AppHost/bin/Debug/net10.0/rtaime.exe
+```
+
+Release example:
+
+```powershell
+./src/Hosts/rtaime.AppHost/bin/Release/net10.0/rtaime.exe
+```
+
+Build the complete `rtaime.slnx` before using this direct development startup path.
+
 ## Single-file Windows publish
 
 ### Architecture boundary
