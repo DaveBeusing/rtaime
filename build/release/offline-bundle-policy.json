@@ -48,7 +48,9 @@
 		"build/update/Invoke-SoftwareRollback.ps1",
 		"build/update/Invoke-CoordinatedUpgrade.ps1",
 		"build/update/Invoke-VerifiedUpdate.ps1",
-		"build/operations/Invoke-ManagedHostLifecycle.ps1"
+		"build/operations/Invoke-ManagedHostLifecycle.ps1",
+		"build/showcase/Invoke-InvestorDemo.ps1",
+		"build/showcase/Start-rtaime-Showcase.cmd"
 	],
 	"rootDocumentation": [
 		"README.md"

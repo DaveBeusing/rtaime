@@ -10,16 +10,21 @@ namespace rtaime.Operator;
 
 public partial class App : Application
 {
+	private bool _headlessMode;
+
 	protected override void OnStartup(StartupEventArgs e)
 	{
 		DispatcherUnhandledException += OnDispatcherUnhandledException;
 		base.OnStartup(e);
-		if (e.Args.Any(argument => string.Equals(argument, "--headless", StringComparison.OrdinalIgnoreCase)))
+		var headless = e.Args.Any(argument => string.Equals(argument, "--headless", StringComparison.OrdinalIgnoreCase));
+		var headlessOnce = e.Args.Any(argument => string.Equals(argument, "--headless-once", StringComparison.OrdinalIgnoreCase));
+		_headlessMode = headless || headlessOnce;
+		if (_headlessMode)
 		{
 			ShutdownMode = ShutdownMode.OnExplicitShutdown;
 			var endpoint = GetArgument(e.Args, "control-endpoint") ?? Environment.GetEnvironmentVariable("RTAIME_CONTROL_ENDPOINT") ?? "rtaime.v1.control.default";
 			var readyFile = GetArgument(e.Args, "ready-file");
-			_ = RunHeadlessRecoveryProbeAsync(endpoint, readyFile);
+			_ = RunHeadlessRecoveryProbeAsync(endpoint, readyFile, headlessOnce);
 			return;
 		}
 
@@ -42,11 +47,14 @@ public partial class App : Application
 			? "A diagnostic report could not be written."
 			: $"Diagnostic report: {reportPath}";
 
-		MessageBox.Show(
-			$"rtaime Operator encountered an unexpected error and must close.\n\n{e.Exception.Message}\n\n{reportDetail}",
-			"rtaime Operator — Unexpected error",
-			MessageBoxButton.OK,
-			MessageBoxImage.Error);
+		if (!_headlessMode)
+		{
+			MessageBox.Show(
+				$"rtaime Operator encountered an unexpected error and must close.\n\n{e.Exception.Message}\n\n{reportDetail}",
+				"rtaime Operator — Unexpected error",
+				MessageBoxButton.OK,
+				MessageBoxImage.Error);
+		}
 
 		e.Handled = true;
 		Shutdown(-1);
@@ -73,7 +81,7 @@ public partial class App : Application
 		}
 	}
 
-	private async Task RunHeadlessRecoveryProbeAsync(string endpoint, string? readyFile)
+	private async Task RunHeadlessRecoveryProbeAsync(string endpoint, string? readyFile, bool stopAfterFirstSuccess)
 	{
 		var transport = new NamedPipeOperatorControlTransport(endpoint, TimeSpan.FromMilliseconds(500), TimeSpan.FromSeconds(2));
 		var client = new OperatorControlClient(transport);
@@ -92,6 +100,12 @@ public partial class App : Application
 						snapshot.RuntimeStatus,
 						DateTimeOffset.UtcNow));
 					await File.WriteAllTextAsync(fullPath, marker).ConfigureAwait(false);
+				}
+
+				if (stopAfterFirstSuccess)
+				{
+					await Dispatcher.InvokeAsync(() => Shutdown(0));
+					return;
 				}
 			}
 			catch
