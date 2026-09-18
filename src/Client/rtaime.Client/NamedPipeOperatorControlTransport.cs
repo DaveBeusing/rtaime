@@ -79,6 +79,23 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 	public ValueTask<OperatorMutationResponse> DissolveProgramAsync(DissolveProgramCommand command, CancellationToken cancellationToken = default) =>
 		MutateAsync("control.program.dissolve", command.Metadata, command.SourceId, command.DurationFrames, cancellationToken);
 
+	public async ValueTask<OperatorAudioInputDescriptor> SetAudioInputStateAsync(
+		string sourceId,
+		double gain,
+		bool muted,
+		CancellationToken cancellationToken = default)
+	{
+		if (string.IsNullOrWhiteSpace(sourceId))
+			throw new ArgumentException("Audio source id is required.", nameof(sourceId));
+		var response = await ExchangeAsync(
+			"control.audio.input.set",
+			new WireAudioInputState(sourceId.Trim(), gain, muted),
+			cancellationToken).ConfigureAwait(false);
+		var wire = response.Payload.Deserialize<WireAudioInput>(Wire.JsonOptions)
+			?? throw new InvalidDataException("ControlHost audio input payload is required.");
+		return FromWire(wire);
+	}
+
 	public async ValueTask<OperatorGraphicsOverlayDescriptor> LoadGraphicsOverlayAsync(
 		OperatorGraphicsAsset asset,
 		CancellationToken cancellationToken = default)
@@ -370,7 +387,31 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		wire.RecordingStatus,
 		wire.VisualLayerEnabled,
 		wire.AudioPeakLevel,
-		FromWire(wire.GraphicsOverlay));
+		FromWire(wire.GraphicsOverlay),
+		wire.AudioInputs.Select(FromWire).ToArray(),
+		FromWire(wire.AudioProgram));
+
+	private static OperatorAudioInputDescriptor FromWire(WireAudioInput input) => new(
+		input.SourceId,
+		input.StreamId,
+		input.Gain,
+		input.Muted,
+		input.LeftPeak,
+		input.RightPeak,
+		input.MasterPeak,
+		input.Clipping,
+		input.Health);
+
+	private static OperatorAudioProgramDescriptor FromWire(WireAudioProgram program) => new(
+		program.ActiveVideoSourceId,
+		program.ActiveStreamId,
+		program.Gain,
+		program.Muted,
+		program.LeftPeak,
+		program.RightPeak,
+		program.MasterPeak,
+		program.Clipping,
+		program.Health);
 
 	private static OperatorGraphicsOverlayDescriptor FromWire(WireGraphicsOverlay overlay) => new(
 		overlay.AssetLoaded,
@@ -428,7 +469,10 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 	private sealed record WireGraphicsAsset(string Name, uint Width, uint Height, byte[] RgbaPixels);
 	private sealed record WireGraphicsOverlayState(bool Visible, double PositionX, double PositionY, double Scale);
 	private sealed record WireGraphicsOverlay(bool AssetLoaded, string? AssetName, uint AssetWidth, uint AssetHeight, bool Visible, double PositionX, double PositionY, double Scale);
-	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, ulong StateVersion);
+	private sealed record WireAudioInputState(string SourceId, double Gain, bool Muted);
+	private sealed record WireAudioInput(string SourceId, string StreamId, double Gain, bool Muted, double LeftPeak, double RightPeak, double MasterPeak, bool Clipping, string Health);
+	private sealed record WireAudioProgram(string ActiveVideoSourceId, string ActiveStreamId, double Gain, bool Muted, double LeftPeak, double RightPeak, double MasterPeak, bool Clipping, string Health);
+	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, ulong StateVersion);
 	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path);
 	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame);
 	private sealed record WireMediaMarkerCommand(string Version, string AssetId, int Kind, long? PositionFrame, string? CuePointId, string? Name);
