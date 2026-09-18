@@ -91,7 +91,7 @@ Assert-Condition ($theme -match 'IsKeyboardFocused') "Primary controls must expo
 Assert-Condition ($theme -match 'IsKeyboardFocusWithin') "Selectable source tiles must expose visible keyboard-focus state."
 Assert-Condition ($window -notmatch 'Width="1100"\s*\r?\n\s*Height="680"') "Operator must not retain the fixed bootstrap 1100x680 layout."
 
-foreach ($propertyName in @("IsBusy", "IsConnected", "IsStale", "ConnectionState", "CommandStatus", "LastEvent")) {
+foreach ($propertyName in @("IsBusy", "IsConnected", "IsStale", "ConnectionState", "CommandStatus", "CommitStatus", "TransitionStatus", "LastEvent")) {
 	Assert-Condition ($viewModel -match "public\s+[^\r\n]+\s+$propertyName\b") "Operator presentation state '$propertyName' is required."
 }
 Assert-Condition ($viewModel -match 'RemoteHostSessionChangedException') "Operator must retain explicit ControlHost-session resynchronization handling."
@@ -114,4 +114,6 @@ Write-Host "Operator authority: remote Client SDK only"
 Write-Host "Design system: tokens, semantic tallies, reusable controls and keyboard focus verified"
 Write-Host "DPI qualification: PerMonitorV2; 1920x1080 reference layout supports 100%, 125% and 150% scaling invariants"
 Write-Host "Monitoring: independent non-authoritative bitmap plane"
+Write-Host "Production workspace: selected source -> confirmed Preview -> confirmed Program TAKE semantics verified"
+Write-Host "Commit state: pending, confirmed, rejected/failed and resynchronization presentation verified"
 Write-Host "Keyboard controls: synchronization, Preview, CUT and DISSOLVE/AUTO declared"
