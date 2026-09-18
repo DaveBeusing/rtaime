@@ -23,6 +23,7 @@ public partial class MainWindow : Window
 
 		var controlTransport = new NamedPipeOperatorControlTransport(controlEndpoint);
 		var viewModel = new OperatorViewModel(new OperatorControlClient(controlTransport));
+		Timeline = new MediaTimelineViewModel();
 		Monitoring = new OperatorMonitoringViewModel(
 			viewModel,
 			new NamedPipeOperatorMonitoringTransport(monitoringEndpoint),
@@ -30,19 +31,30 @@ public partial class MainWindow : Window
 		InitializeComponent();
 		DataContext = viewModel;
 		Monitoring.Start();
-		Closed += async (_, _) => await Monitoring.DisposeAsync();
+		Closed += async (_, _) =>
+		{
+			await Monitoring.DisposeAsync();
+			await Timeline.DisposeAsync();
+		};
 	}
 
 	public MainWindow(OperatorViewModel viewModel)
 	{
 		ArgumentNullException.ThrowIfNull(viewModel);
+		Timeline = new MediaTimelineViewModel();
 		Monitoring = new OperatorMonitoringViewModel(
 			viewModel,
 			new NamedPipeOperatorMonitoringTransport("rtaime.v1.runtime.default.monitor"),
 			new DispatcherSynchronizationContext(Dispatcher));
 		InitializeComponent();
 		DataContext = viewModel;
+		Closed += async (_, _) =>
+		{
+			await Monitoring.DisposeAsync();
+			await Timeline.DisposeAsync();
+		};
 	}
 
 	public OperatorMonitoringViewModel Monitoring { get; }
+	public MediaTimelineViewModel Timeline { get; }
 }

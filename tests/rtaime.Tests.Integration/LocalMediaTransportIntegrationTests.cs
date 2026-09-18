@@ -34,10 +34,11 @@ public sealed class LocalMediaTransportIntegrationTests
 		var initialized = ControlDomainEngine.Initialize(specification);
 		Assert.True(initialized.Succeeded);
 
+		using var referenceAsset = LocalMediaTestAsset.ExtractReference1080p50();
 		var provider = new LocalMediaFileProvider();
 		var mediaSourceId = new MediaSourceId(sourceA.Value);
 		var assetId = new MediaAssetId(Id(100));
-		var open = provider.TryOpen(ReferenceAssetPath(), mediaSourceId, assetId);
+		var open = provider.TryOpen(referenceAsset.Path, mediaSourceId, assetId);
 		Assert.True(open.Succeeded, open.Failure?.Message);
 		Assert.NotNull(open.Source);
 
@@ -52,7 +53,7 @@ public sealed class LocalMediaTransportIntegrationTests
 		var applied = session.ApplyExecution(planning.PreparedExecution!);
 		Assert.True(applied.Committed);
 		Assert.Equal(MediaTransportState.Ready, session.Transport.State);
-		Assert.Equal(4, session.Transport.Position.TotalFrames);
+		Assert.Equal(50, session.Transport.Position.TotalFrames);
 
 		var play = session.ApplyTransport(Command(assetId, MediaTransportCommandKind.Play));
 		Assert.True(play.Succeeded, play.Failure?.Message);
@@ -97,7 +98,7 @@ public sealed class LocalMediaTransportIntegrationTests
 		Assert.Equal(0, beforeStart.Snapshot.Position.CurrentFrame);
 		var beyondEnd = session.ApplyTransport(Seek(assetId, 100));
 		Assert.True(beyondEnd.Succeeded, beyondEnd.Failure?.Message);
-		Assert.Equal(3, beyondEnd.Snapshot.Position.CurrentFrame);
+		Assert.Equal(49, beyondEnd.Snapshot.Position.CurrentFrame);
 
 		var stop = session.ApplyTransport(Command(assetId, MediaTransportCommandKind.Stop));
 		Assert.True(stop.Succeeded, stop.Failure?.Message);
@@ -114,22 +115,6 @@ public sealed class LocalMediaTransportIntegrationTests
 
 	private static MediaTransportCommand Seek(MediaAssetId assetId, long frame) =>
 		new(MediaContractVersion.Current, assetId, MediaTransportCommandKind.Seek, frame);
-
-	private static string ReferenceAssetPath() =>
-		Path.Combine(FindRepositoryRoot(), "tests", "TestAssets", "media", "reference-1080p50-h264-aac-80ms.mp4");
-
-	private static string FindRepositoryRoot()
-	{
-		DirectoryInfo? directory = new(AppContext.BaseDirectory);
-		while (directory is not null)
-		{
-			if (File.Exists(Path.Combine(directory.FullName, "rtaime.slnx")))
-				return directory.FullName;
-			directory = directory.Parent;
-		}
-
-		throw new Xunit.Sdk.XunitException("Repository root containing rtaime.slnx could not be located.");
-	}
 
 	private static Identity Id(int value) =>
 		Identity.Parse($"42000000-0000-0000-0000-{value:000000000000}");

@@ -2,6 +2,7 @@
 <Window x:Class="rtaime.Operator.MainWindow"
 	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
 	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	xmlns:local="clr-namespace:rtaime.Operator"
 	Title="rtaime Operator"
 	Width="1280"
 	Height="800"
@@ -112,6 +113,8 @@
 							</StackPanel>
 						</Border>
 					</Grid>
+
+					<local:MediaTimelineControl DataContext="{Binding Timeline, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Margin="0,0,0,14" />
 
 					<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14">
 						<StackPanel>
