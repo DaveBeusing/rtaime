@@ -75,19 +75,19 @@ function Invoke-Lifecycle {
 		[Parameter(Mandatory)][ValidateSet("Start", "Stop", "Restart", "Status")][string]$Action,
 		[switch]$NeedsStateRoot
 	)
-	$arguments = @(
-		"-Action", $Action,
-		"-InstallPath", $installRoot,
-		"-WorkPath", $workRoot,
-		"-InstanceId", $InstanceId
-	)
+	$parameters = @{
+		Action = $Action
+		InstallPath = $installRoot
+		WorkPath = $workRoot
+		InstanceId = $InstanceId
+	}
 	if ($NeedsStateRoot) {
-		$arguments += @("-StateRoot", $stateRootFull)
+		$parameters.StateRoot = $stateRootFull
 	}
 	if ($QualificationMode) {
-		$arguments += "-QualificationMode"
+		$parameters.QualificationMode = $true
 	}
-	return & $lifecycle @arguments
+	return & $lifecycle @parameters
 }
 
 $startedLifecycle = $false
