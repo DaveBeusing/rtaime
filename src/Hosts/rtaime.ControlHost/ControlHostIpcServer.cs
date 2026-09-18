@@ -13,7 +13,7 @@ namespace rtaime.ControlHost;
 public sealed class ControlHostIpcServer : IAsyncDisposable
 {
 	private const string ProtocolVersion = "1.0";
-	private const int MaxFrameBytes = 2 * 1024 * 1024;
+	private const int MaxFrameBytes = 1024 * 1024;
 	private readonly string _endpoint;
 	private readonly Func<ControlHostService?> _controlAccessor;
 	private readonly IControlRuntimeTransportSeam _runtimeTransport;
