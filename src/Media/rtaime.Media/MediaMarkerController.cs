@@ -29,9 +29,9 @@ public sealed class MediaMarkerController
 		return command.Kind switch
 		{
 			MediaMarkerCommandKind.SetInPoint => SetInPoint(command.PositionFrame!.Value),
-			MediaMarkerCommandKind.ClearInPoint => Replace(inPointFrame: null),
+			MediaMarkerCommandKind.ClearInPoint => Replace(inPointFrame: null, keepInPoint: false),
 			MediaMarkerCommandKind.SetOutPoint => SetOutPoint(command.PositionFrame!.Value),
-			MediaMarkerCommandKind.ClearOutPoint => Replace(outPointFrame: null),
+			MediaMarkerCommandKind.ClearOutPoint => Replace(outPointFrame: null, keepOutPoint: false),
 			MediaMarkerCommandKind.AddCuePoint => AddCue(command),
 			MediaMarkerCommandKind.RenameCuePoint => RenameCue(command),
 			MediaMarkerCommandKind.DeleteCuePoint => DeleteCue(command.CuePointId!.Value),
