@@ -116,6 +116,7 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 
 		var sourceId = descriptor.SourceId.ToString();
 		_sourceFrames[sourceId] = bitmap;
+		_controlState.ApplySourceThumbnail(sourceId, bitmap, format);
 		if (string.Equals(sourceId, _controlState.PreviewSourceId, StringComparison.Ordinal))
 		{
 			PreviewImage = bitmap;
