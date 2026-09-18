@@ -10,7 +10,7 @@ namespace rtaime.RuntimeHost;
 
 /// <summary>
 /// Runtime-owned single local-media deck. ControlHost supplies the prepared execution and remains authoritative;
-/// this service owns only decode, transport and frame advancement.
+/// this service owns decode, transport, Program-edge autoplay and deterministic clip-end behavior.
 /// </summary>
 public sealed class LocalMediaDeckRuntimeService : IDisposable
 {
@@ -19,6 +19,11 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
 	private LocalMediaRuntimeSession? _session;
 	private LocalMediaRuntimeBoundaryResult? _latestBoundary;
 	private Failure? _failure;
+	private bool _autoPlayOnProgram = true;
+	private MediaDeckEndBehavior _endBehavior = MediaDeckEndBehavior.HoldLastFrame;
+	private long? _inPointFrame;
+	private long? _outPointFrame;
+	private bool _isOnProgram;
 	private bool _disposed;
 
 	public ProviderDescriptor ProviderDescriptor => _provider.Descriptor;
@@ -54,6 +59,9 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
 			DisposeSession();
 			_latestBoundary = null;
 			_failure = null;
+			_inPointFrame = null;
+			_outPointFrame = null;
+			_isOnProgram = false;
 
 			var open = _provider.TryOpen(request.Path, request.SourceId);
 			if (!open.Succeeded || open.Source is null)
@@ -94,13 +102,61 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
 					"runtime.media_deck.unloaded",
 					"Local media deck has no loaded asset.");
 			}
+			if (command.AssetId != _session.Probe.AssetId)
+			{
+				return MediaTransportCommandResult.Rejected(
+					Decorate(_session.Transport),
+					"runtime.media_deck.asset_mismatch",
+					"Media-deck command targets a different media asset.");
+			}
+
+			if (command.Kind == MediaTransportCommandKind.ConfigurePlayback)
+			{
+				var totalFrames = _session.Transport.Position.TotalFrames;
+				var inPoint = command.InPointFrame;
+				var outPoint = command.OutPointFrame;
+				if (inPoint.HasValue && inPoint.Value >= totalFrames)
+					return ConfigurationRejected("runtime.media_deck.in_out_of_range", "Playback IN point is outside the loaded clip.");
+				if (outPoint.HasValue && outPoint.Value >= totalFrames)
+					return ConfigurationRejected("runtime.media_deck.out_out_of_range", "Playback OUT point is outside the loaded clip.");
+
+				_autoPlayOnProgram = command.AutoPlayOnProgram!.Value;
+				_endBehavior = command.EndBehavior!.Value;
+				_inPointFrame = inPoint;
+				_outPointFrame = outPoint;
+				_failure = null;
+				return MediaTransportCommandResult.Accepted(Decorate(_session.Transport));
+			}
 
 			var result = _session.ApplyTransport(command);
 			if (!result.Succeeded && result.Failure is { } failure)
 				_failure = failure;
 			else if (result.Succeeded)
 				_failure = null;
-			return result;
+			return new MediaTransportCommandResult(
+				result.Succeeded,
+				Decorate(result.Snapshot),
+				result.Failure);
+		}
+	}
+
+	public MediaDeckRuntimeSnapshot ObserveProgramSource(MediaSourceId? programSourceId)
+	{
+		ObjectDisposedException.ThrowIf(_disposed, this);
+		lock (_gate)
+		{
+			if (_session is null)
+			{
+				_isOnProgram = false;
+				return CreateSnapshot();
+			}
+
+			var wasOnProgram = _isOnProgram;
+			_isOnProgram = programSourceId.HasValue && programSourceId.Value == _session.Probe.SourceId;
+			if (_isOnProgram && !wasOnProgram && _autoPlayOnProgram)
+				StartForProgramUnsafe();
+
+			return CreateSnapshot();
 		}
 	}
 
@@ -118,7 +174,16 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
 			var result = _session.ProcessNextBoundary();
 			_latestBoundary = result;
 			if (result.Status == LocalMediaRuntimeBoundaryStatus.Failed)
+			{
 				_failure = result.Failure;
+				return CreateSnapshot();
+			}
+
+			if (result.Succeeded && result.Transport.Position.CurrentFrame >= EffectiveEndFrameUnsafe())
+				ApplyEndBehaviorUnsafe();
+			else if (result.Status == LocalMediaRuntimeBoundaryStatus.Ended)
+				ApplyEndBehaviorUnsafe();
+
 			return CreateSnapshot();
 		}
 	}
@@ -131,6 +196,9 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
 			DisposeSession();
 			_latestBoundary = null;
 			_failure = null;
+			_inPointFrame = null;
+			_outPointFrame = null;
+			_isOnProgram = false;
 			return MediaDeckRuntimeSnapshot.Unloaded;
 		}
 	}
@@ -144,6 +212,149 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
 			DisposeSession();
 	}
 
+	private void StartForProgramUnsafe()
+	{
+		if (_session is null)
+			return;
+
+		var transport = _session.Transport;
+		var start = EffectiveStartFrameUnsafe();
+		var end = EffectiveEndFrameUnsafe();
+		if (transport.Position.CurrentFrame < start ||
+			transport.Position.CurrentFrame > end ||
+			transport.State == MediaTransportState.Ended)
+		{
+			var seek = _session.ApplyTransport(new MediaTransportCommand(
+				MediaContractVersion.Current,
+				_session.Probe.AssetId,
+				MediaTransportCommandKind.Seek,
+				start));
+			if (!seek.Succeeded)
+			{
+				_failure = seek.Failure;
+				return;
+			}
+			transport = seek.Snapshot;
+		}
+
+		if (transport.State is MediaTransportState.Ready or MediaTransportState.Paused)
+		{
+			var play = _session.ApplyTransport(new MediaTransportCommand(
+				MediaContractVersion.Current,
+				_session.Probe.AssetId,
+				MediaTransportCommandKind.Play));
+			if (!play.Succeeded)
+				_failure = play.Failure;
+		}
+	}
+
+	private void ApplyEndBehaviorUnsafe()
+	{
+		if (_session is null)
+			return;
+
+		var assetId = _session.Probe.AssetId;
+		MediaTransportCommandResult result;
+		switch (_endBehavior)
+		{
+			case MediaDeckEndBehavior.HoldLastFrame:
+				if (_session.Transport.State != MediaTransportState.Ended)
+				_session.MarkEnded();
+				return;
+
+			case MediaDeckEndBehavior.Stop:
+				result = _session.ApplyTransport(new MediaTransportCommand(
+					MediaContractVersion.Current,
+					assetId,
+					MediaTransportCommandKind.Stop));
+				break;
+
+			case MediaDeckEndBehavior.Loop:
+				result = _session.ApplyTransport(new MediaTransportCommand(
+					MediaContractVersion.Current,
+					assetId,
+					MediaTransportCommandKind.Seek,
+					EffectiveStartFrameUnsafe()));
+				if (result.Succeeded && result.Snapshot.State != MediaTransportState.Playing)
+				{
+					result = _session.ApplyTransport(new MediaTransportCommand(
+						MediaContractVersion.Current,
+						assetId,
+						MediaTransportCommandKind.Play));
+				}
+				break;
+
+			case MediaDeckEndBehavior.ReturnToIn:
+				if (_session.Transport.State == MediaTransportState.Playing)
+				{
+					result = _session.ApplyTransport(new MediaTransportCommand(
+						MediaContractVersion.Current,
+						assetId,
+						MediaTransportCommandKind.Pause));
+					if (!result.Succeeded)
+						break;
+				}
+				result = _session.ApplyTransport(new MediaTransportCommand(
+					MediaContractVersion.Current,
+					assetId,
+					MediaTransportCommandKind.Seek,
+					EffectiveStartFrameUnsafe()));
+				break;
+
+			default:
+				throw new InvalidOperationException($"Unsupported media deck end behavior '{_endBehavior}'.");
+		}
+
+		if (!result.Succeeded)
+			_failure = result.Failure;
+	}
+
+	private long EffectiveStartFrameUnsafe()
+	{
+		if (_session is null)
+			return 0;
+		return Math.Clamp(_inPointFrame ?? 0, 0, _session.Transport.Position.TotalFrames - 1);
+	}
+
+	private long EffectiveEndFrameUnsafe()
+	{
+		if (_session is null)
+			return 0;
+		var last = _session.Transport.Position.TotalFrames - 1;
+		return Math.Clamp(_outPointFrame ?? last, EffectiveStartFrameUnsafe(), last);
+	}
+
+	private MediaTransportSnapshot Decorate(MediaTransportSnapshot transport)
+	{
+		var start = Math.Clamp(_inPointFrame ?? 0, 0, transport.Position.TotalFrames - 1);
+		var end = Math.Clamp(_outPointFrame ?? transport.Position.TotalFrames - 1, start, transport.Position.TotalFrames - 1);
+		var effectiveCurrent = Math.Clamp(transport.Position.CurrentFrame, start, end);
+		var remainingFrames = Math.Max(0, end - effectiveCurrent);
+		var remaining = TimeSpan.FromSeconds(
+			remainingFrames * transport.Position.FrameRate.Denominator /
+			(double)transport.Position.FrameRate.Numerator);
+		return new MediaTransportSnapshot(
+			transport.Version,
+			transport.AssetId,
+			transport.SourceId,
+			transport.State,
+			transport.Position,
+			transport.Failure,
+			_autoPlayOnProgram,
+			_endBehavior,
+			_isOnProgram,
+			start,
+			end,
+			remainingFrames,
+			remaining);
+	}
+
+	private MediaTransportCommandResult ConfigurationRejected(string code, string message) =>
+		MediaTransportCommandResult.Rejected(
+			Decorate(_session!.Transport),
+			code,
+			message);
+
 	private MediaDeckRuntimeSnapshot CreateSnapshot()
 	{
 		if (_session is null)
@@ -156,7 +367,7 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
 					failure: _failure);
 		}
 
-		var transport = _session.Transport;
+		var transport = Decorate(_session.Transport);
 		var state = transport.State switch
 		{
 			MediaTransportState.Ready => MediaDeckState.Ready,
