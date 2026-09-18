@@ -15,6 +15,48 @@ public enum MediaDeckState
 	Error = 7
 }
 
+
+public sealed record MediaDeckRuntimeSnapshot
+{
+	public MediaDeckRuntimeSnapshot(
+		CompatibilityVersion version,
+		MediaDeckState state,
+		MediaSourceId? sourceId = null,
+		LocalMediaProbe? probe = null,
+		MediaTransportSnapshot? transport = null,
+		Failure? failure = null)
+	{
+		MediaContractVersion.EnsureSupported(version);
+		if (!Enum.IsDefined(typeof(MediaDeckState), state))
+			throw new ArgumentOutOfRangeException(nameof(state));
+
+		var loaded = state is MediaDeckState.Ready or MediaDeckState.Playing or MediaDeckState.Paused or MediaDeckState.Ended;
+		if (loaded && (sourceId is null || probe is null || transport is null))
+			throw new ArgumentException("Loaded runtime media-deck states require source, probe and transport snapshots.");
+		if (state == MediaDeckState.Error && failure is null)
+			throw new ArgumentException("Error runtime media-deck state requires failure details.", nameof(failure));
+		if (state != MediaDeckState.Error && failure is not null)
+			throw new ArgumentException("Only error runtime media-deck state may carry failure details.", nameof(failure));
+
+		Version = version;
+		State = state;
+		SourceId = sourceId;
+		Probe = probe;
+		Transport = transport;
+		Failure = failure;
+	}
+
+	public CompatibilityVersion Version { get; }
+	public MediaDeckState State { get; }
+	public MediaSourceId? SourceId { get; }
+	public LocalMediaProbe? Probe { get; }
+	public MediaTransportSnapshot? Transport { get; }
+	public Failure? Failure { get; }
+
+	public static MediaDeckRuntimeSnapshot Unloaded { get; } =
+		new(MediaContractVersion.Current, MediaDeckState.Unloaded);
+}
+
 public sealed record MediaDeckSnapshot
 {
 	public MediaDeckSnapshot(
