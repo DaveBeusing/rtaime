@@ -450,20 +450,20 @@
 							<Grid Margin="0,0,0,3">
 								<Grid.ColumnDefinitions><ColumnDefinition Width="24" /><ColumnDefinition Width="*" /><ColumnDefinition Width="48" /></Grid.ColumnDefinitions>
 								<TextBlock Text="L" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" />
-								<ProgressBar Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding AudioLeftPeak}" Style="{StaticResource OperatorMeter}" VerticalAlignment="Center" />
+								<ProgressBar Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding AudioLeftPeak, Mode=OneWay}" Style="{StaticResource OperatorMeter}" VerticalAlignment="Center" />
 								<TextBlock Grid.Column="2" Text="{Binding AudioLeftPeak, StringFormat={}{0:P0}}" Style="{StaticResource OperatorLabel}" HorizontalAlignment="Right" />
 							</Grid>
 							<Grid Margin="0,0,0,10">
 								<Grid.ColumnDefinitions><ColumnDefinition Width="24" /><ColumnDefinition Width="*" /><ColumnDefinition Width="48" /></Grid.ColumnDefinitions>
 								<TextBlock Text="R" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" />
-								<ProgressBar Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding AudioRightPeak}" Style="{StaticResource OperatorMeter}" VerticalAlignment="Center" />
+								<ProgressBar Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding AudioRightPeak, Mode=OneWay}" Style="{StaticResource OperatorMeter}" VerticalAlignment="Center" />
 								<TextBlock Grid.Column="2" Text="{Binding AudioRightPeak, StringFormat={}{0:P0}}" Style="{StaticResource OperatorLabel}" HorizontalAlignment="Right" />
 							</Grid>
 							<DockPanel Margin="0,0,0,10">
 								<TextBlock Text="MASTER" Style="{StaticResource OperatorLabel}" />
 								<TextBlock Text="{Binding AudioPeakPercent}" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" DockPanel.Dock="Right" />
 							</DockPanel>
-							<ProgressBar Minimum="0" Maximum="1" Value="{Binding AudioMasterPeak}" Style="{StaticResource OperatorMeter}" Margin="0,0,0,12" />
+							<ProgressBar Minimum="0" Maximum="1" Value="{Binding AudioMasterPeak, Mode=OneWay}" Style="{StaticResource OperatorMeter}" Margin="0,0,0,12" />
 							<ListBox ItemsSource="{Binding AudioInputs}" SelectedItem="{Binding SelectedAudioInput}" Style="{StaticResource OperatorSourceBank}" MaxHeight="190" Margin="0,0,0,10">
 								<ListBox.ItemContainerStyle><StaticResource ResourceKey="OperatorSourceItem" /></ListBox.ItemContainerStyle>
 								<ListBox.ItemTemplate>
@@ -479,8 +479,8 @@
 											</DockPanel>
 											<Grid>
 												<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="6" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-												<ProgressBar Grid.Column="0" Minimum="0" Maximum="1" Value="{Binding LeftPeak}" Style="{StaticResource OperatorMeter}" />
-												<ProgressBar Grid.Column="2" Minimum="0" Maximum="1" Value="{Binding RightPeak}" Style="{StaticResource OperatorMeter}" />
+												<ProgressBar Grid.Column="0" Minimum="0" Maximum="1" Value="{Binding LeftPeak, Mode=OneWay}" Style="{StaticResource OperatorMeter}" />
+												<ProgressBar Grid.Column="2" Minimum="0" Maximum="1" Value="{Binding RightPeak, Mode=OneWay}" Style="{StaticResource OperatorMeter}" />
 											</Grid>
 										</StackPanel>
 									</DataTemplate>
