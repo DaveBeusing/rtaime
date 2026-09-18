@@ -1,6 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 using System.IO.Pipes;
+using System.Runtime.Versioning;
 using System.Security.AccessControl;
 using System.Security.Principal;
 
@@ -38,6 +39,7 @@ internal static class OperatorPipeServerFactory
 			security);
 	}
 
+	[SupportedOSPlatform("windows")]
 	private static PipeSecurity CreateSecurity(string operatorPipeSid)
 	{
 		var serviceSid = new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null);
