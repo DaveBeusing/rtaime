@@ -147,6 +147,60 @@ public sealed record OperatorAudioProgramDescriptor(
         new("—", "—", 1, false, 0, 0, 0, false, "UNKNOWN");
 }
 
+public sealed record OperatorRecordingDescriptor
+{
+    public OperatorRecordingDescriptor(
+        string state,
+        TimeSpan elapsed,
+        string? destination,
+        string? fileName,
+        string? finalPath,
+        ulong accepted,
+        ulong written,
+        ulong dropped,
+        ulong rejected,
+        ulong writerFailures,
+        Failure? failure)
+    {
+        if (string.IsNullOrWhiteSpace(state))
+            throw new ArgumentException("Recording state is required.", nameof(state));
+        if (elapsed < TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(elapsed));
+
+        State = state.Trim().ToUpperInvariant();
+        Elapsed = elapsed;
+        Destination = string.IsNullOrWhiteSpace(destination) ? null : destination.Trim();
+        FileName = string.IsNullOrWhiteSpace(fileName) ? null : fileName.Trim();
+        FinalPath = string.IsNullOrWhiteSpace(finalPath) ? null : finalPath.Trim();
+        Accepted = accepted;
+        Written = written;
+        Dropped = dropped;
+        Rejected = rejected;
+        WriterFailures = writerFailures;
+        Failure = failure;
+    }
+
+    public string State { get; }
+    public TimeSpan Elapsed { get; }
+    public string? Destination { get; }
+    public string? FileName { get; }
+    public string? FinalPath { get; }
+    public ulong Accepted { get; }
+    public ulong Written { get; }
+    public ulong Dropped { get; }
+    public ulong Rejected { get; }
+    public ulong WriterFailures { get; }
+    public Failure? Failure { get; }
+
+    public static OperatorRecordingDescriptor Unavailable { get; } =
+        new("UNAVAILABLE", TimeSpan.Zero, null, null, null, 0, 0, 0, 0, 0, null);
+}
+
+public sealed record OperatorRecordingCommandResult(
+    bool Succeeded,
+    OperatorRecordingDescriptor Snapshot,
+    Failure? Failure);
+
 public sealed record OperatorMutationResponse
 {
     public OperatorMutationResponse(bool accepted, AuthoritativeProductionState state, Failure? failure)
@@ -183,7 +237,8 @@ public sealed record OperatorStatusSnapshot
         double audioPeakLevel,
         OperatorGraphicsOverlayDescriptor? graphicsOverlay = null,
         IReadOnlyList<OperatorAudioInputDescriptor>? audioInputs = null,
-        OperatorAudioProgramDescriptor? audioProgram = null)
+        OperatorAudioProgramDescriptor? audioProgram = null,
+        OperatorRecordingDescriptor? recording = null)
     {
         Production = production ?? throw new ArgumentNullException(nameof(production));
         ArgumentNullException.ThrowIfNull(sources);
@@ -208,6 +263,7 @@ public sealed record OperatorStatusSnapshot
         AudioPeakLevel = audioPeakLevel;
         GraphicsOverlay = graphicsOverlay ?? OperatorGraphicsOverlayDescriptor.Empty;
         AudioProgram = audioProgram ?? OperatorAudioProgramDescriptor.Unknown;
+        Recording = recording ?? OperatorRecordingDescriptor.Unavailable;
     }
 
     public AuthoritativeProductionState Production { get; }
@@ -222,6 +278,7 @@ public sealed record OperatorStatusSnapshot
     public OperatorGraphicsOverlayDescriptor GraphicsOverlay { get; }
     public IReadOnlyList<OperatorAudioInputDescriptor> AudioInputs => _audioInputs;
     public OperatorAudioProgramDescriptor AudioProgram { get; }
+    public OperatorRecordingDescriptor Recording { get; }
 }
 
 /// <summary>
@@ -257,6 +314,15 @@ public interface IOperatorControlTransport
 
     ValueTask<OperatorGraphicsOverlayDescriptor> ClearGraphicsOverlayAsync(CancellationToken cancellationToken = default) =>
         ValueTask.FromException<OperatorGraphicsOverlayDescriptor>(new NotSupportedException("Operator transport does not expose graphics overlay control."));
+
+    ValueTask<OperatorRecordingCommandResult> StartRecordingAsync(
+        string destinationDirectory,
+        string fileName,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<OperatorRecordingCommandResult>(new NotSupportedException("Operator transport does not expose recording control."));
+
+    ValueTask<OperatorRecordingCommandResult> StopRecordingAsync(CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<OperatorRecordingCommandResult>(new NotSupportedException("Operator transport does not expose recording control."));
 
     ValueTask<MediaDeckSnapshot> GetMediaDeckSnapshotAsync(CancellationToken cancellationToken = default) =>
         ValueTask.FromException<MediaDeckSnapshot>(new NotSupportedException("Operator transport does not expose media-deck control."));
@@ -394,6 +460,32 @@ public sealed class OperatorControlClient
     public async ValueTask<OperatorGraphicsOverlayDescriptor> ClearGraphicsOverlayAsync(CancellationToken cancellationToken = default)
     {
         var result = await _transport.ClearGraphicsOverlayAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+
+    public async ValueTask<OperatorRecordingCommandResult> StartRecordingAsync(
+        string destinationDirectory,
+        string fileName,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(destinationDirectory))
+            throw new ArgumentException("Recording destination directory is required.", nameof(destinationDirectory));
+        if (string.IsNullOrWhiteSpace(fileName))
+            throw new ArgumentException("Recording file name is required.", nameof(fileName));
+
+        RequireSnapshot();
+        var result = await _transport
+            .StartRecordingAsync(destinationDirectory.Trim(), fileName.Trim(), cancellationToken)
+            .ConfigureAwait(false);
+        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+
+    public async ValueTask<OperatorRecordingCommandResult> StopRecordingAsync(CancellationToken cancellationToken = default)
+    {
+        RequireSnapshot();
+        var result = await _transport.StopRecordingAsync(cancellationToken).ConfigureAwait(false);
         await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
