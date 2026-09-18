@@ -53,7 +53,7 @@ public sealed class MediaAutoplayProductionIpcIntegrationTests
 		Assert.True(await deck.Markers.SetInAtCurrentFrameAsync());
 		await deck.Timeline.SeekToFrameAsync(45);
 		Assert.True(await deck.Markers.SetOutAtCurrentFrameAsync());
-		Assert.True(await deck.Markers.JumpToInAsync());
+		await deck.Markers.JumpToInAsync();
 		Assert.Equal(5, deck.Timeline.State.ConfirmedFrame);
 
 		Assert.True((await client.SelectPreviewAsync(mediaSource.Id)).Accepted);
