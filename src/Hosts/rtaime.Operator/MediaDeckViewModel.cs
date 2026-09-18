@@ -48,6 +48,7 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 		RefreshCommand = new AsyncRelayCommand(RefreshAsync, () => !IsBusy);
 		PlayCommand = new AsyncRelayCommand(() => TransportAsync(_controller.PlayAsync), () => CanPlay);
 		PauseCommand = new AsyncRelayCommand(() => TransportAsync(_controller.PauseAsync), () => CanPause);
+		TogglePlayPauseCommand = new AsyncRelayCommand(TogglePlayPauseAsync, () => CanPlay || CanPause);
 		StopCommand = new AsyncRelayCommand(() => TransportAsync(_controller.StopAsync), () => CanStop);
 		CloseCommand = new AsyncRelayCommand(CloseAsync, () => IsLoaded && !IsBusy);
 		SetInCommand = new AsyncRelayCommand(() => MarkerAsync(() => _controller.Markers.SetInAtCurrentFrameAsync()), () => CanMark);
@@ -71,6 +72,7 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 	public ICommand RefreshCommand { get; }
 	public ICommand PlayCommand { get; }
 	public ICommand PauseCommand { get; }
+	public ICommand TogglePlayPauseCommand { get; }
 	public ICommand StopCommand { get; }
 	public ICommand CloseCommand { get; }
 	public ICommand SetInCommand { get; }
@@ -246,6 +248,11 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 		}
 	}
 
+	private Task TogglePlayPauseAsync() =>
+		_snapshot.Transport?.State == MediaTransportState.Playing
+			? TransportAsync(_controller.PauseAsync)
+			: TransportAsync(_controller.PlayAsync);
+
 	private async Task TransportAsync(
 		Func<CancellationToken, ValueTask<MediaDeckSnapshot>> action)
 	{
@@ -395,7 +402,7 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 	{
 		foreach (var command in new[]
 		{
-			OpenCommand, RefreshCommand, PlayCommand, PauseCommand, StopCommand, CloseCommand,
+			OpenCommand, RefreshCommand, PlayCommand, PauseCommand, TogglePlayPauseCommand, StopCommand, CloseCommand,
 			SetInCommand, ClearInCommand, SetOutCommand, ClearOutCommand, JumpInCommand, JumpOutCommand,
 			AddCueCommand, RenameCueCommand, DeleteCueCommand, JumpCueCommand
 		}.OfType<AsyncRelayCommand>())
