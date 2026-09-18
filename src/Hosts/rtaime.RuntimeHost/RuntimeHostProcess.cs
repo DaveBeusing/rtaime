@@ -183,6 +183,7 @@ public sealed class RuntimeHostProcess
 	private RuntimeHostIpcServer? _ipcServer;
 	private RuntimeHostMonitoringServer? _monitoringServer;
 	private Task? _mediaLoop;
+	private Task? _mediaDeckLoop;
 	private bool _runtimeDisposed;
 	private V1RuntimeHostSnapshot? _finalRuntimeSnapshot;
 
@@ -268,6 +269,7 @@ public sealed class RuntimeHostProcess
 			await _ipcServer.StartAsync(cancellationToken).ConfigureAwait(false);
 			await _monitoringServer.StartAsync(cancellationToken).ConfigureAwait(false);
 			_mediaLoop = RunMediaLoopAsync(_runtime, _mediaIo, cancellationToken);
+			_mediaDeckLoop = RunMediaDeckLoopAsync(_mediaDeck, cancellationToken);
 		}
 		catch (ArgumentException exception)
 		{
@@ -289,7 +291,9 @@ public sealed class RuntimeHostProcess
 
 		try
 		{
-			await _mediaLoop.ConfigureAwait(false);
+			await Task.WhenAll(
+				_mediaLoop,
+				_mediaDeckLoop ?? Task.CompletedTask).ConfigureAwait(false);
 		}
 		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
 		{
@@ -313,8 +317,6 @@ public sealed class RuntimeHostProcess
 		using var timer = new PeriodicTimer(framePeriod);
 		while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
 		{
-			_mediaDeck?.ProcessBoundary();
-
 			var boundaryObservedAt = _timingClock.Elapsed;
 			mediaIo?.PumpInputs();
 			if (!runtime.HasCommittedExecution) continue;
@@ -326,6 +328,18 @@ public sealed class RuntimeHostProcess
 			var timing = _timingProbe.RecordBoundary(boundary.SequenceNumber, boundaryObservedAt, processingDuration);
 			runtime.SetTimingHealth(MapTimingHealth(timing.State));
 		}
+	}
+
+	private async Task RunMediaDeckLoopAsync(
+		LocalMediaDeckRuntimeService mediaDeck,
+		CancellationToken cancellationToken)
+	{
+		var framePeriod = TimeSpan.FromSeconds(
+			_options.Format.FrameRate.Denominator /
+			(double)_options.Format.FrameRate.Numerator);
+		using var timer = new PeriodicTimer(framePeriod);
+		while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
+			mediaDeck.ProcessBoundary();
 	}
 
 	private async Task<RuntimeHostExitCode> StopAsync()
