@@ -399,6 +399,12 @@ public sealed class UnifiedApplicationHost
 				_adopted = true;
 				_controlProcessId = ready.Value.Evidence.ProcessId;
 				_activeReadinessPath = ready.Value.Path;
+				if (_options.WindowsService)
+				{
+					if (!string.Equals(Path.GetFullPath(ready.Value.Path), Path.GetFullPath(_options.ReadinessPath), StringComparison.OrdinalIgnoreCase))
+						throw new InvalidOperationException("Windows service refused to claim a lifecycle outside its deterministic service readiness root.");
+					_ownedControlProcessId = ready.Value.Evidence.ProcessId;
+				}
 			}
 
 			Transition(ApplicationLifecycleState.Healthy);
