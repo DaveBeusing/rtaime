@@ -339,10 +339,88 @@
 
 					<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14">
 						<StackPanel>
+							<DockPanel Margin="0,0,0,12">
+								<TextBlock Text="AUDIO / AFV" Style="{StaticResource OperatorSectionTitle}" />
+								<Border Style="{StaticResource OperatorStatusBadge}" DockPanel.Dock="Right">
+									<TextBlock Text="{Binding AudioHealth}" FontWeight="Bold" />
+								</Border>
+							</DockPanel>
+							<DockPanel Margin="0,0,0,8">
+								<TextBlock Text="AFV follows Program" Style="{StaticResource OperatorLabel}" />
+								<TextBlock Text="{Binding AudioAfvSourceName}" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" DockPanel.Dock="Right" TextTrimming="CharacterEllipsis" />
+							</DockPanel>
+							<DockPanel Margin="0,0,0,10">
+								<TextBlock Text="Meter transport" Style="{StaticResource OperatorLabel}" />
+								<TextBlock Text="{Binding AudioMeterStatus}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" />
+							</DockPanel>
+							<Grid Margin="0,0,0,3">
+								<Grid.ColumnDefinitions><ColumnDefinition Width="24" /><ColumnDefinition Width="*" /><ColumnDefinition Width="48" /></Grid.ColumnDefinitions>
+								<TextBlock Text="L" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" />
+								<ProgressBar Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding AudioLeftPeak}" Style="{StaticResource OperatorMeter}" VerticalAlignment="Center" />
+								<TextBlock Grid.Column="2" Text="{Binding AudioLeftPeak, StringFormat={}{0:P0}}" Style="{StaticResource OperatorLabel}" HorizontalAlignment="Right" />
+							</Grid>
+							<Grid Margin="0,0,0,10">
+								<Grid.ColumnDefinitions><ColumnDefinition Width="24" /><ColumnDefinition Width="*" /><ColumnDefinition Width="48" /></Grid.ColumnDefinitions>
+								<TextBlock Text="R" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" />
+								<ProgressBar Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding AudioRightPeak}" Style="{StaticResource OperatorMeter}" VerticalAlignment="Center" />
+								<TextBlock Grid.Column="2" Text="{Binding AudioRightPeak, StringFormat={}{0:P0}}" Style="{StaticResource OperatorLabel}" HorizontalAlignment="Right" />
+							</Grid>
+							<DockPanel Margin="0,0,0,10">
+								<TextBlock Text="MASTER" Style="{StaticResource OperatorLabel}" />
+								<TextBlock Text="{Binding AudioPeakPercent}" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" DockPanel.Dock="Right" />
+							</DockPanel>
+							<ProgressBar Minimum="0" Maximum="1" Value="{Binding AudioMasterPeak}" Style="{StaticResource OperatorMeter}" Margin="0,0,0,12" />
+							<ListBox ItemsSource="{Binding AudioInputs}" SelectedItem="{Binding SelectedAudioInput}" Style="{StaticResource OperatorSourceBank}" MaxHeight="190" Margin="0,0,0,10">
+								<ListBox.ItemContainerStyle><StaticResource ResourceKey="OperatorSourceItem" /></ListBox.ItemContainerStyle>
+								<ListBox.ItemTemplate>
+									<DataTemplate>
+										<StackPanel>
+											<DockPanel>
+												<TextBlock Text="{Binding SourceName}" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" />
+												<TextBlock Text="{Binding AfvLabel}" Style="{StaticResource OperatorLabel}" DockPanel.Dock="Right" />
+											</DockPanel>
+											<DockPanel Margin="0,4,0,4">
+												<TextBlock Text="{Binding SourceType}" Style="{StaticResource OperatorLabel}" />
+												<TextBlock Text="{Binding Health}" Style="{StaticResource OperatorLabel}" DockPanel.Dock="Right" />
+											</DockPanel>
+											<Grid>
+												<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="6" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+												<ProgressBar Grid.Column="0" Minimum="0" Maximum="1" Value="{Binding LeftPeak}" Style="{StaticResource OperatorMeter}" />
+												<ProgressBar Grid.Column="2" Minimum="0" Maximum="1" Value="{Binding RightPeak}" Style="{StaticResource OperatorMeter}" />
+											</Grid>
+										</StackPanel>
+									</DataTemplate>
+								</ListBox.ItemTemplate>
+							</ListBox>
+							<Grid Margin="0,0,0,8">
+								<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="8" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+								<StackPanel Grid.Column="0">
+									<TextBlock Text="Selected gain 0.0–4.0x" Style="{StaticResource OperatorLabel}" />
+									<TextBox Text="{Binding SelectedAudioInput.Gain, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource OperatorTextBox}" />
+								</StackPanel>
+								<StackPanel Grid.Column="2">
+									<TextBlock Text="Confirmed mute" Style="{StaticResource OperatorLabel}" />
+									<TextBlock Text="{Binding SelectedAudioInput.Muted}" Style="{StaticResource OperatorValue}" Margin="0,8,0,0" />
+								</StackPanel>
+							</Grid>
+							<Grid>
+								<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="6" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+								<Button Grid.Column="0" Content="APPLY GAIN" Command="{Binding ApplyAudioGainCommand}" Style="{StaticResource OperatorAccentButton}" />
+								<Button Grid.Column="2" Content="{Binding SelectedAudioInput.MuteActionLabel}" Command="{Binding ToggleAudioMuteCommand}" Style="{StaticResource OperatorButton}" />
+							</Grid>
+							<DockPanel Margin="0,10,0,0">
+								<TextBlock Text="Clip audio" Style="{StaticResource OperatorLabel}" />
+								<TextBlock Text="{Binding ClipAudioStatus}" Style="{StaticResource OperatorLabel}" DockPanel.Dock="Right" TextTrimming="CharacterEllipsis" MaxWidth="230" />
+							</DockPanel>
+							<TextBlock Text="Meters are RuntimeHost observations; no WPF-generated meter animation is used." Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,8,0,0" />
+						</StackPanel>
+					</Border>
+
+					<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14">
+						<StackPanel>
 							<TextBlock Text="ISOLATED SERVICES" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,12" />
 							<DockPanel Margin="0,0,0,8"><TextBlock Text="AI" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding AIStatus}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
-							<DockPanel Margin="0,0,0,8"><TextBlock Text="Recording" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding RecordingStatus}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
-							<DockPanel><TextBlock Text="Audio peak" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding AudioPeakPercent}" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" DockPanel.Dock="Right" /></DockPanel>
+							<DockPanel><TextBlock Text="Recording" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding RecordingStatus}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
 						</StackPanel>
 					</Border>
 
