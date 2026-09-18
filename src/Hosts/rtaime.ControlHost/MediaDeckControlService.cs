@@ -326,7 +326,7 @@ public sealed class MediaDeckControlService
 					return OutOfRange(snapshot, command.PositionFrame.Value);
 				if (cues.Any(cue => cue.Id == command.CuePointId!.Value))
 					return MediaMarkerCommandResult.Rejected(snapshot, "media.marker.cue_id_conflict", "Cue-point identity already exists.");
-				cues.Add(new MediaCuePoint(command.CuePointId.Value, command.Name!, command.PositionFrame.Value));
+				cues.Add(new MediaCuePoint(command.CuePointId!.Value, command.Name!, command.PositionFrame.Value));
 				break;
 
 			case MediaMarkerCommandKind.RenameCuePoint:
