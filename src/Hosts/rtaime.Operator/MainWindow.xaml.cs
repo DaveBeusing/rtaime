@@ -25,7 +25,10 @@ public partial class MainWindow : Window
 
 		var controlTransport = new NamedPipeOperatorControlTransport(controlEndpoint);
 		var client = new OperatorControlClient(controlTransport);
-		var viewModel = new OperatorViewModel(client, PickGraphicsAsset);
+		var viewModel = new OperatorViewModel(
+			client,
+			PickGraphicsAsset,
+			new DispatcherSynchronizationContext(Dispatcher));
 		MediaDeck = CreateMediaDeck(viewModel, client);
 		MediaDeck.SnapshotChanged += viewModel.ApplyMediaDeckSnapshot;
 		Monitoring = new OperatorMonitoringViewModel(
@@ -36,6 +39,7 @@ public partial class MainWindow : Window
 		DataContext = viewModel;
 		MediaDeck.Start();
 		Monitoring.Start();
+		viewModel.StartAudioMetering();
 		Closed += OnClosedAsync;
 	}
 
@@ -43,6 +47,7 @@ public partial class MainWindow : Window
 	{
 		ArgumentNullException.ThrowIfNull(viewModel);
 		viewModel.SetGraphicsAssetPicker(PickGraphicsAsset);
+		viewModel.SetSynchronizationContext(new DispatcherSynchronizationContext(Dispatcher));
 		var client = viewModel.Client ?? new OperatorControlClient(new UnavailableOperatorControlTransport());
 		MediaDeck = CreateMediaDeck(viewModel, client);
 		MediaDeck.SnapshotChanged += viewModel.ApplyMediaDeckSnapshot;
@@ -53,6 +58,7 @@ public partial class MainWindow : Window
 		InitializeComponent();
 		DataContext = viewModel;
 		MediaDeck.Start();
+		viewModel.StartAudioMetering();
 		Closed += OnClosedAsync;
 	}
 
@@ -99,6 +105,8 @@ public partial class MainWindow : Window
 	{
 		await Monitoring.DisposeAsync();
 		await MediaDeck.DisposeAsync();
+		if (DataContext is OperatorViewModel viewModel)
+			await viewModel.DisposeAsync();
 	}
 
 	private sealed class UnavailableOperatorControlTransport : IOperatorControlTransport
