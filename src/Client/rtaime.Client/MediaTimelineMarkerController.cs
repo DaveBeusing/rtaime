@@ -66,10 +66,10 @@ public sealed class MediaTimelineMarkerController : IAsyncDisposable
 		RaiseStateChanged();
 	}
 
-	public ValueTask SetInAtCurrentFrameAsync(CancellationToken cancellationToken = default) =>
+	public ValueTask<bool> SetInAtCurrentFrameAsync(CancellationToken cancellationToken = default) =>
 		SendAtCurrentFrameAsync(MediaMarkerCommandKind.SetInPoint, cancellationToken);
 
-	public ValueTask ClearInAsync(CancellationToken cancellationToken = default) =>
+	public ValueTask<bool> ClearInAsync(CancellationToken cancellationToken = default) =>
 		SendAsync(
 			snapshot => new MediaMarkerCommand(
 				MediaContractVersion.Current,
@@ -77,10 +77,10 @@ public sealed class MediaTimelineMarkerController : IAsyncDisposable
 				MediaMarkerCommandKind.ClearInPoint),
 			cancellationToken);
 
-	public ValueTask SetOutAtCurrentFrameAsync(CancellationToken cancellationToken = default) =>
+	public ValueTask<bool> SetOutAtCurrentFrameAsync(CancellationToken cancellationToken = default) =>
 		SendAtCurrentFrameAsync(MediaMarkerCommandKind.SetOutPoint, cancellationToken);
 
-	public ValueTask ClearOutAsync(CancellationToken cancellationToken = default) =>
+	public ValueTask<bool> ClearOutAsync(CancellationToken cancellationToken = default) =>
 		SendAsync(
 			snapshot => new MediaMarkerCommand(
 				MediaContractVersion.Current,
@@ -105,7 +105,7 @@ public sealed class MediaTimelineMarkerController : IAsyncDisposable
 		return sent ? cueId : null;
 	}
 
-	public ValueTask RenameCueAsync(
+	public ValueTask<bool> RenameCueAsync(
 		MediaCuePointId cueId,
 		string name,
 		CancellationToken cancellationToken = default) =>
@@ -118,7 +118,7 @@ public sealed class MediaTimelineMarkerController : IAsyncDisposable
 				name: name),
 			cancellationToken);
 
-	public ValueTask DeleteCueAsync(
+	public ValueTask<bool> DeleteCueAsync(
 		MediaCuePointId cueId,
 		CancellationToken cancellationToken = default) =>
 		SendAsync(
@@ -166,7 +166,7 @@ public sealed class MediaTimelineMarkerController : IAsyncDisposable
 		return ValueTask.CompletedTask;
 	}
 
-	private ValueTask SendAtCurrentFrameAsync(
+	private ValueTask<bool> SendAtCurrentFrameAsync(
 		MediaMarkerCommandKind kind,
 		CancellationToken cancellationToken)
 	{
