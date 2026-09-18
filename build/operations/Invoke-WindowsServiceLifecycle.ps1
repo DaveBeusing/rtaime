@@ -216,8 +216,8 @@ switch ($Action) {
 	'Install' {
 		Assert-Condition ($null -eq (Get-ServiceOrNull)) "Windows service '$ServiceName' is already installed."
 		$startValue = if ($StartupType -eq 'Automatic') { 'auto' } else { 'demand' }
-		$binaryPath = ('"{0}" --windows-service --profile=HeadlessEngine --ownership=PersistentEngine --install-root="{1}" --state-root="{2}" --work-root="{3}" --instance-id="{4}"' -f
-			$applicationExecutable, $installRoot, $stateRootFull, $workRoot, $InstanceId)
+		$binaryPath = ('"{0}" --windows-service --service-name="{1}" --profile=HeadlessEngine --ownership=PersistentEngine --install-root="{2}" --state-root="{3}" --work-root="{4}" --instance-id="{5}"' -f
+			$applicationExecutable, $ServiceName, $installRoot, $stateRootFull, $workRoot, $InstanceId)
 		Invoke-ServiceControl -Arguments @('create', $ServiceName, 'binPath=', $binaryPath, 'start=', $startValue, 'obj=', 'LocalSystem', 'DisplayName=', 'rtaime Engine')
 		Invoke-ServiceControl -Arguments @('description', $ServiceName, 'rtaime persistent production engine')
 		Invoke-ServiceControl -Arguments @('failure', $ServiceName, 'reset=', '86400', 'actions=', 'restart/5000/restart/15000/restart/60000')
