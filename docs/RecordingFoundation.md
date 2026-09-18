@@ -197,3 +197,44 @@ AP-38 adds verification for:
 - later-session recovery.
 
 Hardware/codec/storage qualification must remain `UNVERIFIED` unless executed on the declared production environment.
+
+
+## AP-53 Operator recording workflow
+
+AP-53 promotes the existing recording foundation into an explicit Operator workflow without moving recording authority or storage execution into WPF.
+
+The command path is:
+
+```text
+Operator
+  -> rtaime.Client
+  -> ControlHost
+  -> RuntimeHost
+  -> ProgramRecorder
+  -> ReferenceRecordingPayloadWriter
+```
+
+The Operator exposes explicit **START REC** and **STOP REC** actions plus confirmed recording state, elapsed time, destination directory, file name, final output path, sample statistics and failure detail. Recording commands do not advance the authoritative Production revision.
+
+RuntimeHost remains the recording execution owner. The normal Program boundary stages the already-produced post-transition/post-graphics RGBA Program pixels and the post-AFV/post-gain Float32 Program audio payload before the bounded `ProgramRecorder` enqueue. Storage remains on the recorder worker and never moves into the Program hot path.
+
+### Destination and naming
+
+The reference writer implements the optional `IConfigurableProgramRecordingWriter` capability. Before a recording starts, RuntimeHost may configure an explicit directory and file name. File names are restricted to a single valid file-name component and receive the `.rtaime-recording` extension when omitted. Existing output-id naming remains the fallback for callers that do not configure a target.
+
+The default RuntimeHost process composes `ReferenceRecordingPayloadWriter` under the current user's local application-data `rtaime/recordings` directory. Operator-selected destinations override that default per recording.
+
+Final publication retains create-new semantics. An existing target is rejected rather than overwritten, and the `.partial` artifact is promoted only after the asynchronous queue drains and footer/hash finalization succeeds.
+
+### Validation and evidence boundary
+
+The AP-53 result is externally readable through `ReferenceRecordingPayloadReader`. Acceptance evidence validates:
+
+- at least one Program video sample;
+- matching audio sample presence;
+- checksum-valid finalization;
+- post-graphics Program pixels in the persisted payload;
+- repeated recordings with distinct names in one RuntimeHost lifecycle;
+- controlled storage failure propagated back to the Operator while Runtime Program remains committed.
+
+The V1 reference artifact remains an uncompressed architectural-proof container, not MP4/MOV/MXF and not a qualified professional codec. The current Media Deck accepts MP4 input, so AP-53 does **not** claim direct Media Deck playback of `.rtaime-recording` files. External validation is provided by the deterministic reader. Professional encoded recording, ISO input recording, replay, segment recording and cloud upload remain outside AP-53.

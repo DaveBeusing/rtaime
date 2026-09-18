@@ -128,6 +128,29 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		return ReadGraphicsOverlay(response);
 	}
 
+	public async ValueTask<OperatorRecordingCommandResult> StartRecordingAsync(
+		string destinationDirectory,
+		string fileName,
+		CancellationToken cancellationToken = default)
+	{
+		if (string.IsNullOrWhiteSpace(destinationDirectory))
+			throw new ArgumentException("Recording destination directory is required.", nameof(destinationDirectory));
+		if (string.IsNullOrWhiteSpace(fileName))
+			throw new ArgumentException("Recording file name is required.", nameof(fileName));
+
+		var response = await ExchangeAsync(
+			"control.recording.start",
+			new WireRecordingStart(destinationDirectory.Trim(), fileName.Trim()),
+			cancellationToken).ConfigureAwait(false);
+		return ReadRecordingCommandResult(response);
+	}
+
+	public async ValueTask<OperatorRecordingCommandResult> StopRecordingAsync(CancellationToken cancellationToken = default)
+	{
+		var response = await ExchangeAsync("control.recording.stop", new { }, cancellationToken).ConfigureAwait(false);
+		return ReadRecordingCommandResult(response);
+	}
+
 	public async ValueTask<MediaDeckSnapshot> GetMediaDeckSnapshotAsync(CancellationToken cancellationToken = default)
 	{
 		var response = await ExchangeAsync("control.media_deck.snapshot.get", new { }, cancellationToken).ConfigureAwait(false);
@@ -295,6 +318,16 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		}
 	}
 
+	private static OperatorRecordingCommandResult ReadRecordingCommandResult(WireEnvelope response)
+	{
+		var wire = response.Payload.Deserialize<WireRecordingCommandResult>(Wire.JsonOptions)
+			?? throw new InvalidDataException("ControlHost recording command response is required.");
+		return new OperatorRecordingCommandResult(
+			wire.Succeeded,
+			FromWire(wire.Snapshot),
+			wire.Failure is null ? null : new Failure(wire.Failure.Code, wire.Failure.Message));
+	}
+
 	private static OperatorGraphicsOverlayDescriptor ReadGraphicsOverlay(WireEnvelope response)
 	{
 		var wire = response.Payload.Deserialize<WireGraphicsOverlay>(Wire.JsonOptions)
@@ -402,7 +435,8 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		wire.AudioPeakLevel,
 		FromWire(wire.GraphicsOverlay),
 		wire.AudioInputs.Select(FromWire).ToArray(),
-		FromWire(wire.AudioProgram));
+		FromWire(wire.AudioProgram),
+		FromWire(wire.Recording));
 
 	private static OperatorAudioInputDescriptor FromWire(WireAudioInput input) => new(
 		input.SourceId,
@@ -425,6 +459,19 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		program.MasterPeak,
 		program.Clipping,
 		program.Health);
+
+	private static OperatorRecordingDescriptor FromWire(WireRecordingSnapshot recording) => new(
+		recording.State,
+		TimeSpan.FromTicks(Math.Max(0, recording.ElapsedTicks)),
+		recording.Destination,
+		recording.FileName,
+		recording.FinalPath,
+		recording.Accepted,
+		recording.Written,
+		recording.Dropped,
+		recording.Rejected,
+		recording.WriterFailures,
+		recording.Failure is null ? null : new Failure(recording.Failure.Code, recording.Failure.Message));
 
 	private static OperatorGraphicsOverlayDescriptor FromWire(WireGraphicsOverlay overlay) => new(
 		overlay.AssetLoaded,
@@ -485,7 +532,10 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 	private sealed record WireAudioInputState(string SourceId, double Gain, bool Muted);
 	private sealed record WireAudioInput(string SourceId, string StreamId, double Gain, bool Muted, double LeftPeak, double RightPeak, double MasterPeak, bool Clipping, string Health);
 	private sealed record WireAudioProgram(string ActiveVideoSourceId, string ActiveStreamId, double Gain, bool Muted, double LeftPeak, double RightPeak, double MasterPeak, bool Clipping, string Health);
-	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, ulong StateVersion);
+	private sealed record WireRecordingStart(string DestinationDirectory, string FileName);
+	private sealed record WireRecordingSnapshot(string State, long ElapsedTicks, string? Destination, string? FileName, string? FinalPath, ulong Accepted, ulong Written, ulong Dropped, ulong Rejected, ulong WriterFailures, WireFailure? Failure);
+	private sealed record WireRecordingCommandResult(bool Succeeded, WireRecordingSnapshot Snapshot, WireFailure? Failure);
+	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, WireRecordingSnapshot Recording, ulong StateVersion);
 	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path);
 	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame, bool? AutoPlayOnProgram, int? EndBehavior, long? InPointFrame, long? OutPointFrame);
 	private sealed record WireMediaMarkerCommand(string Version, string AssetId, int Kind, long? PositionFrame, string? CuePointId, string? Name);

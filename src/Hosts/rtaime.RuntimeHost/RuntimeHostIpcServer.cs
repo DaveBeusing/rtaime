@@ -7,6 +7,7 @@ using rtaime.Core;
 using rtaime.Media;
 using rtaime.Media.Contracts;
 using rtaime.Provider.Contracts;
+using rtaime.Recording;
 using rtaime.Runtime.Contracts;
 
 namespace rtaime.RuntimeHost;
@@ -184,6 +185,8 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 				"runtime.graphics.overlay.set" => ValueTask.FromResult(SetGraphicsOverlay(request, runtime)),
 				"runtime.graphics.overlay.clear" => ValueTask.FromResult(ClearGraphicsOverlay(request, runtime)),
 				"runtime.audio.input.set" => ValueTask.FromResult(SetAudioInputState(request, runtime)),
+				"runtime.recording.start" => StartRecordingAsync(request, runtime, cancellationToken),
+				"runtime.recording.stop" => StopRecordingAsync(request, runtime, cancellationToken),
 				"runtime.media_deck.snapshot.get" => ValueTask.FromResult(MediaDeckSnapshot(request)),
 				"runtime.media_deck.open" => ValueTask.FromResult(OpenMediaDeck(request)),
 				"runtime.media_deck.transport" => ValueTask.FromResult(ApplyMediaDeckTransport(request)),
@@ -240,6 +243,45 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 			wire.Muted);
 		_stateVersion++;
 		return Success(request, "runtime.audio.input.response", ToWire(snapshot));
+	}
+
+	private async ValueTask<WireEnvelope> StartRecordingAsync(
+		WireEnvelope request,
+		V1RuntimeHostService runtime,
+		CancellationToken cancellationToken)
+	{
+		var wire = request.Payload.Deserialize<WireRecordingStart>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Recording start payload is required.");
+		var result = await runtime.StartRecordingAsync(
+			new RecordingSessionId(Identity.Parse(wire.SessionId)),
+			new RecordingOutputId(Identity.Parse(wire.OutputId)),
+			wire.DestinationDirectory,
+			wire.FileName,
+			cancellationToken).ConfigureAwait(false);
+		_stateVersion++;
+		return Success(
+			request,
+			"runtime.recording.command.response",
+			new WireRecordingCommandResult(
+				result.Succeeded,
+				ToWire(runtime.Snapshot.RecordingOperator),
+				result.Failure is { } failure ? new WireFailure(failure.Code, failure.Message) : null));
+	}
+
+	private async ValueTask<WireEnvelope> StopRecordingAsync(
+		WireEnvelope request,
+		V1RuntimeHostService runtime,
+		CancellationToken cancellationToken)
+	{
+		var result = await runtime.StopRecordingAsync(cancellationToken).ConfigureAwait(false);
+		_stateVersion++;
+		return Success(
+			request,
+			"runtime.recording.command.response",
+			new WireRecordingCommandResult(
+				result.Status != RecordingStopStatus.Failed,
+				ToWire(runtime.Snapshot.RecordingOperator),
+				result.Failure is { } failure ? new WireFailure(failure.Code, failure.Message) : null));
 	}
 
 	private WireEnvelope MediaDeckSnapshot(WireEnvelope request)
@@ -377,7 +419,8 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		snapshot.AudioInputs.OrderBy(pair => pair.Key.ToString(), StringComparer.Ordinal)
 			.Select(pair => ToWire(pair.Value))
 			.ToArray(),
-		ToWire(snapshot.AudioProgram));
+		ToWire(snapshot.AudioProgram),
+		ToWire(snapshot.RecordingOperator));
 
 	private static WireGraphicsOverlay ToWire(V1GraphicsOverlaySnapshot snapshot) => new(
 		snapshot.AssetLoaded,
@@ -411,6 +454,19 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		snapshot.Clipping,
 		(int)snapshot.Health);
 
+
+	private static WireRecordingSnapshot ToWire(V1RecordingOperatorSnapshot snapshot) => new(
+		snapshot.State.ToString().ToUpperInvariant(),
+		snapshot.Elapsed.Ticks,
+		snapshot.Destination,
+		snapshot.FileName,
+		snapshot.FinalPath,
+		snapshot.Statistics.Accepted,
+		snapshot.Statistics.Written,
+		snapshot.Statistics.Dropped,
+		snapshot.Statistics.Rejected,
+		snapshot.Statistics.WriterFailures,
+		snapshot.Failure is { } failure ? new WireFailure(failure.Code, failure.Message) : null);
 
 	private static WireApplyResponse ToWire(RuntimeHostApplyResult result) => new(
 		new WirePrepareResult(
@@ -510,6 +566,9 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 	private sealed record WirePrepareResult(string Version, string PreparedExecutionId, int Status, string? ReservationId, WireFailure? Failure);
 	private sealed record WireCommitResult(string Version, int Status, string? ExecutionInstanceId, ulong ExecutionRevision, WireFailure? Failure);
 	private sealed record WireApplyResponse(WirePrepareResult Prepare, WireCommitResult? Commit, ulong? ActivationSequence);
+	private sealed record WireRecordingStart(string SessionId, string OutputId, string DestinationDirectory, string FileName);
+	private sealed record WireRecordingSnapshot(string State, long ElapsedTicks, string? Destination, string? FileName, string? FinalPath, ulong Accepted, ulong Written, ulong Dropped, ulong Rejected, ulong WriterFailures, WireFailure? Failure);
+	private sealed record WireRecordingCommandResult(bool Succeeded, WireRecordingSnapshot Snapshot, WireFailure? Failure);
 	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path, WirePreparedExecution PreparedExecution);
 	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame, bool? AutoPlayOnProgram, int? EndBehavior, long? InPointFrame, long? OutPointFrame);
 	private sealed record WireLocalMediaProbe(string Version, string AssetId, string SourceId, string FileName, int Container, int VideoCodec, int AudioCodec, uint Width, uint Height, string FrameRate, long DurationTicks);
@@ -532,7 +591,8 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		WireInputSignal[] InputSignals,
 		WireGraphicsOverlay GraphicsOverlay,
 		WireAudioInput[] AudioInputs,
-		WireAudioProgram AudioProgram);
+		WireAudioProgram AudioProgram,
+		WireRecordingSnapshot Recording);
 
 	private sealed class BoundedRequestCache
 	{

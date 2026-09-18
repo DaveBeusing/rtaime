@@ -92,6 +92,17 @@ public interface IControlRuntimeTransportSeam
 		ValueTask.FromException<RuntimeGraphicsOverlaySnapshot>(
 			new NotSupportedException("Runtime transport does not expose graphics overlay control."));
 
+	ValueTask<RuntimeRecordingCommandResult> StartRecordingAsync(
+		string destinationDirectory,
+		string fileName,
+		CancellationToken cancellationToken = default) =>
+		ValueTask.FromException<RuntimeRecordingCommandResult>(
+			new NotSupportedException("Runtime transport does not expose recording control."));
+
+	ValueTask<RuntimeRecordingCommandResult> StopRecordingAsync(CancellationToken cancellationToken = default) =>
+		ValueTask.FromException<RuntimeRecordingCommandResult>(
+			new NotSupportedException("Runtime transport does not expose recording control."));
+
 	ValueTask<MediaDeckRuntimeSnapshot> GetMediaDeckSnapshotAsync(CancellationToken cancellationToken = default) =>
 		ValueTask.FromException<MediaDeckRuntimeSnapshot>(
 			new NotSupportedException("Runtime transport does not expose media-deck control."));

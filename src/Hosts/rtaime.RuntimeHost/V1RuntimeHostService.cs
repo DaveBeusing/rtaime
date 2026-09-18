@@ -108,6 +108,15 @@ public sealed record V1AudioProgramSnapshot(
 	bool Clipping,
 	V1AudioHealthState Health);
 
+public sealed record V1RecordingOperatorSnapshot(
+	RecordingLifecycleState State,
+	TimeSpan Elapsed,
+	string? Destination,
+	string? FileName,
+	string? FinalPath,
+	RecordingStatistics Statistics,
+	Failure? Failure);
+
 public sealed record V1RuntimeHostSnapshot(
 	RuntimeExecutionState Runtime,
 	ulong NextSequenceNumber,
@@ -119,6 +128,7 @@ public sealed record V1RuntimeHostSnapshot(
 	V1AudioProgramSnapshot AudioProgram,
 	AudioFollowVideoStatistics Audio,
 	RecordingSnapshot Recording,
+	V1RecordingOperatorSnapshot RecordingOperator,
 	int ActiveGpuSurfaces);
 
 /// <summary>
@@ -149,6 +159,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private readonly ProgramRecorder _recorder;
 	private readonly RuntimeRecordingBridge _recordingBridge;
 	private readonly IProgramRecordingPayloadWriter? _recordingPayloadWriter;
+	private readonly IConfigurableProgramRecordingWriter? _recordingTargetWriter;
 	private readonly RuntimeMonitoringHub _monitoringHub;
 	private readonly RuntimeMonitoringTap _monitoringTap;
 	private readonly List<string> _observations = new();
@@ -168,6 +179,10 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private V1TimingHealthState _timingHealth = V1TimingHealthState.Recovering;
 	private ulong _nextSequenceNumber;
 	private AudioFollowVideoResult? _lastAudioResult;
+	private DateTimeOffset? _recordingStartedAtUtc;
+	private DateTimeOffset? _recordingCompletedAtUtc;
+	private string? _recordingDestination;
+	private string? _recordingFileName;
 	private bool _disposed;
 
 	public V1RuntimeHostService(
@@ -220,6 +235,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		if (recordingWriter is null)
 			throw new ArgumentNullException(nameof(recordingWriter));
 		_recordingPayloadWriter = recordingWriter as IProgramRecordingPayloadWriter;
+		_recordingTargetWriter = recordingWriter as IConfigurableProgramRecordingWriter;
 		_recorder = new ProgramRecorder(recordingWriter);
 		_recordingBridge = new RuntimeRecordingBridge(_recorder);
 		_monitoringHub = new RuntimeMonitoringHub();
@@ -288,6 +304,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 					AudioProgramSnapshotUnsafe(),
 					_audio.Statistics,
 					_recorder.Snapshot,
+					RecordingOperatorSnapshotUnsafe(),
 					_gpu.ActiveSurfaceCount);
 			}
 		}
@@ -718,26 +735,68 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		}
 	}
 
+	public ValueTask<RecordingStartResult> StartRecordingAsync(
+		RecordingSessionId sessionId,
+		RecordingOutputId outputId,
+		CancellationToken cancellationToken = default) =>
+		StartRecordingCoreAsync(sessionId, outputId, null, null, cancellationToken);
+
 	public async ValueTask<RecordingStartResult> StartRecordingAsync(
 		RecordingSessionId sessionId,
 		RecordingOutputId outputId,
+		string destinationDirectory,
+		string fileName,
 		CancellationToken cancellationToken = default)
+	{
+		if (_recordingTargetWriter is null)
+		{
+			return RecordingStartResult.Rejected(new Failure(
+				"recording.destination.unsupported",
+				"Configured RuntimeHost recording writer does not support operator-selected destinations."));
+		}
+
+		_recordingTargetWriter.ConfigureTarget(destinationDirectory, fileName);
+		var normalizedFileName = fileName.Trim().EndsWith(".rtaime-recording", StringComparison.OrdinalIgnoreCase)
+			? fileName.Trim()
+			: fileName.Trim() + ".rtaime-recording";
+		return await StartRecordingCoreAsync(
+			sessionId,
+			outputId,
+			Path.GetFullPath(destinationDirectory.Trim()),
+			normalizedFileName,
+			cancellationToken).ConfigureAwait(false);
+	}
+
+	private async ValueTask<RecordingStartResult> StartRecordingCoreAsync(
+		RecordingSessionId sessionId,
+		RecordingOutputId outputId,
+		string? destinationDirectory,
+		string? fileName,
+		CancellationToken cancellationToken)
 	{
 		MediaSinkId sink;
 		lock (_gate)
 		{
 			ThrowIfDisposed();
 			sink = _programSinkId ?? throw new InvalidOperationException("Program sink must be committed before recording starts.");
+			_recordingDestination = destinationDirectory;
+			_recordingFileName = fileName;
+			_recordingStartedAtUtc = null;
+			_recordingCompletedAtUtc = null;
 		}
 
 		var result = await _recorder.StartAsync(
 			new RecordingStartRequest(
 				RecordingContractVersion.Current,
 				sessionId,
-				new RecordingOutputDescriptor(outputId, sink, "V1 Program")),
+				new RecordingOutputDescriptor(outputId, sink, fileName ?? "V1 Program")),
 			cancellationToken).ConfigureAwait(false);
 		lock (_gate)
+		{
+			if (result.Succeeded)
+				_recordingStartedAtUtc = DateTimeOffset.UtcNow;
 			Observe($"recording.start:{result.Status}");
+		}
 		return result;
 	}
 
@@ -745,7 +804,11 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	{
 		var result = await _recorder.StopAsync(cancellationToken).ConfigureAwait(false);
 		lock (_gate)
+		{
+			if (result.Status == RecordingStopStatus.Stopped)
+				_recordingCompletedAtUtc = DateTimeOffset.UtcNow;
 			Observe($"recording.stop:{result.Status}");
+		}
 		return result;
 	}
 
@@ -821,6 +884,26 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			V1VisualLayerMode.Dynamic => _dynamicLayer.Materialize(_gpu, timing),
 			_ => throw new InvalidOperationException($"Unsupported visual layer mode '{_visualLayerMode}'.")
 		};
+	}
+
+	private V1RecordingOperatorSnapshot RecordingOperatorSnapshotUnsafe()
+	{
+		var snapshot = _recorder.Snapshot;
+		var elapsed = TimeSpan.Zero;
+		if (_recordingStartedAtUtc is { } started)
+		{
+			var end = _recordingCompletedAtUtc ?? DateTimeOffset.UtcNow;
+			elapsed = end > started ? end - started : TimeSpan.Zero;
+		}
+
+		return new V1RecordingOperatorSnapshot(
+			snapshot.State,
+			elapsed,
+			_recordingDestination,
+			_recordingFileName,
+			_recordingTargetWriter?.FinalPath,
+			snapshot.Statistics,
+			snapshot.Failure);
 	}
 
 	private IReadOnlyDictionary<MediaSourceId, V1AudioInputSnapshot> AudioInputSnapshotsUnsafe() =>

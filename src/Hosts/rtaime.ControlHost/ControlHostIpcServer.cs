@@ -186,6 +186,8 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			"control.graphics.overlay.set" => await SetGraphicsOverlayAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.graphics.overlay.clear" => await ClearGraphicsOverlayAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.audio.input.set" => await SetAudioInputStateAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.recording.start" => await StartRecordingAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.recording.stop" => await StopRecordingAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.media_deck.snapshot.get" => await GetMediaDeckSnapshotAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.media_deck.open" => await OpenMediaDeckAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.media_deck.transport" => await ApplyMediaDeckTransportAsync(request, cancellationToken).ConfigureAwait(false),
@@ -289,6 +291,71 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or NotSupportedException or FormatException or InvalidDataException or IOException)
 			{
 				return Error(request, "control.graphics.overlay.rejected", exception.Message);
+			}
+		}
+		finally
+		{
+			_mutationGate.Release();
+		}
+	}
+
+	private async ValueTask<WireEnvelope> StartRecordingAsync(WireEnvelope request, CancellationToken cancellationToken)
+	{
+		var wire = request.Payload.Deserialize<WireRecordingStart>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Recording start payload is required.");
+		if (string.IsNullOrWhiteSpace(wire.DestinationDirectory))
+			return Error(request, "control.recording.destination.invalid", "Recording destination directory is required.");
+		if (string.IsNullOrWhiteSpace(wire.FileName))
+			return Error(request, "control.recording.file_name.invalid", "Recording file name is required.");
+
+		await _mutationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+		try
+		{
+			var control = _controlAccessor();
+			if (control is null || !control.HasAuthoritativeState)
+				return Error(request, "control.not_ready", "ControlHost has no committed authoritative state yet.");
+			if (!_runtimeTransport.IsConnected)
+				return Error(request, "runtime.unavailable", "RuntimeHost is not connected.");
+
+			try
+			{
+				var result = await _runtimeTransport
+					.StartRecordingAsync(wire.DestinationDirectory, wire.FileName, cancellationToken)
+					.ConfigureAwait(false);
+				NotifyObservableStateChanged();
+				return Success(request, "control.recording.command.response", ToWire(result));
+			}
+			catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or NotSupportedException or FormatException or InvalidDataException or IOException or UnauthorizedAccessException)
+			{
+				return Error(request, "control.recording.start.rejected", exception.Message);
+			}
+		}
+		finally
+		{
+			_mutationGate.Release();
+		}
+	}
+
+	private async ValueTask<WireEnvelope> StopRecordingAsync(WireEnvelope request, CancellationToken cancellationToken)
+	{
+		await _mutationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+		try
+		{
+			var control = _controlAccessor();
+			if (control is null || !control.HasAuthoritativeState)
+				return Error(request, "control.not_ready", "ControlHost has no committed authoritative state yet.");
+			if (!_runtimeTransport.IsConnected)
+				return Error(request, "runtime.unavailable", "RuntimeHost is not connected.");
+
+			try
+			{
+				var result = await _runtimeTransport.StopRecordingAsync(cancellationToken).ConfigureAwait(false);
+				NotifyObservableStateChanged();
+				return Success(request, "control.recording.command.response", ToWire(result));
+			}
+			catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or NotSupportedException or FormatException or InvalidDataException or IOException)
+			{
+				return Error(request, "control.recording.stop.rejected", exception.Message);
 			}
 		}
 		finally
@@ -410,6 +477,9 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		var audioProgram = runtime is null
 			? WireAudioProgram.Empty
 			: ToWire(runtime.AudioProgram);
+		var recording = runtime?.Recording is { } runtimeRecording
+			? ToWire(runtimeRecording)
+			: WireRecordingSnapshot.Unavailable;
 		var payload = new WireOperatorSnapshot(
 			ToWire(state),
 			sources,
@@ -417,12 +487,13 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			runtime is null ? "UNKNOWN" : runtime.TimingHealth.ToString(),
 			runtime is null ? "UNKNOWN" : "VALID",
 			"AVAILABLE",
-			"IDLE",
+			recording.State,
 			runtime?.GraphicsOverlay.Visible == true,
 			audioProgram.MasterPeak,
 			runtime is null ? WireGraphicsOverlay.Empty : ToWire(runtime.GraphicsOverlay),
 			audioInputs,
 			audioProgram,
+			recording,
 			StateVersion);
 		return Success(request, "control.snapshot.response", payload);
 	}
@@ -654,6 +725,24 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			snapshot.Markers.CuePoints.Select(cue => new WireCuePoint(cue.Id.ToString(), cue.Name, cue.PositionFrame)).ToArray()),
 		snapshot.Failure is { } failure ? new WireFailure(failure.Code, failure.Message) : null);
 
+	private static WireRecordingSnapshot ToWire(RuntimeRecordingSnapshot snapshot) => new(
+		snapshot.State,
+		snapshot.Elapsed.Ticks,
+		snapshot.Destination,
+		snapshot.FileName,
+		snapshot.FinalPath,
+		snapshot.Accepted,
+		snapshot.Written,
+		snapshot.Dropped,
+		snapshot.Rejected,
+		snapshot.WriterFailures,
+		snapshot.Failure is { } failure ? new WireFailure(failure.Code, failure.Message) : null);
+
+	private static WireRecordingCommandResult ToWire(RuntimeRecordingCommandResult result) => new(
+		result.Succeeded,
+		ToWire(result.Snapshot),
+		result.Failure is { } failure ? new WireFailure(failure.Code, failure.Message) : null);
+
 	private static WireProductionState ToWire(AuthoritativeProductionState state) => new(
 		state.Version.ToString(),
 		state.ProductionId.ToString(),
@@ -685,7 +774,13 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	{
 		public static WireAudioProgram Empty { get; } = new(string.Empty, string.Empty, 1, false, 0, 0, 0, false, "UNKNOWN");
 	}
-	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, ulong StateVersion);
+	private sealed record WireRecordingStart(string DestinationDirectory, string FileName);
+	private sealed record WireRecordingSnapshot(string State, long ElapsedTicks, string? Destination, string? FileName, string? FinalPath, ulong Accepted, ulong Written, ulong Dropped, ulong Rejected, ulong WriterFailures, WireFailure? Failure)
+	{
+		public static WireRecordingSnapshot Unavailable { get; } = new("UNAVAILABLE", 0, null, null, null, 0, 0, 0, 0, 0, null);
+	}
+	private sealed record WireRecordingCommandResult(bool Succeeded, WireRecordingSnapshot Snapshot, WireFailure? Failure);
+	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, WireRecordingSnapshot Recording, ulong StateVersion);
 	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path);
 	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame, bool? AutoPlayOnProgram, int? EndBehavior, long? InPointFrame, long? OutPointFrame);
 	private sealed record WireMediaMarkerCommand(string Version, string AssetId, int Kind, long? PositionFrame, string? CuePointId, string? Name);

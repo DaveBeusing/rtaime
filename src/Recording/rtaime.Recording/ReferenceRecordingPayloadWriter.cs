@@ -17,6 +17,12 @@ public interface IProgramRecordingPayloadWriter : IProgramRecordingWriter
 	void DiscardPayload(ulong sequenceNumber);
 }
 
+public interface IConfigurableProgramRecordingWriter
+{
+	void ConfigureTarget(string destinationDirectory, string fileName);
+	string? FinalPath { get; }
+}
+
 public sealed record ReferenceRecordingPayloadSample(
 	ulong SequenceNumber,
 	string SourceId,
@@ -47,15 +53,17 @@ public sealed record ReferenceRecordingPayloadArtifact(
 /// Deterministic, software-only V1 reference container. It is deliberately uncompressed and is evidence for the
 /// Recording payload path only; it is not a professional codec/container qualification.
 /// </summary>
-public sealed class ReferenceRecordingPayloadWriter : IProgramRecordingPayloadWriter
+public sealed class ReferenceRecordingPayloadWriter : IProgramRecordingPayloadWriter, IConfigurableProgramRecordingWriter
 {
 	private static readonly byte[] Magic = Encoding.ASCII.GetBytes("RTAIME-REFREC-1\n");
 	private const byte SampleMarker = 1;
 	private const byte FooterMarker = byte.MaxValue;
 
 	private readonly object _gate = new();
-	private readonly string _rootDirectory;
+	private readonly string _defaultRootDirectory;
 	private readonly long? _maximumPayloadBytes;
+	private string? _configuredRootDirectory;
+	private string? _configuredFileName;
 	private readonly Dictionary<ulong, StagedPayload> _stagedPayloads = new();
 
 	private FileStream? _stream;
@@ -75,12 +83,39 @@ public sealed class ReferenceRecordingPayloadWriter : IProgramRecordingPayloadWr
 		if (maximumPayloadBytes is <= 0)
 			throw new ArgumentOutOfRangeException(nameof(maximumPayloadBytes), "Recording payload quota must be greater than zero when specified.");
 
-		_rootDirectory = Path.GetFullPath(rootDirectory);
+		_defaultRootDirectory = Path.GetFullPath(rootDirectory);
 		_maximumPayloadBytes = maximumPayloadBytes;
 	}
 
 	public string? PartialPath => _partialPath;
 	public string? FinalPath => _finalPath;
+
+	public void ConfigureTarget(string destinationDirectory, string fileName)
+	{
+		if (string.IsNullOrWhiteSpace(destinationDirectory))
+			throw new ArgumentException("Recording destination directory is required.", nameof(destinationDirectory));
+		if (string.IsNullOrWhiteSpace(fileName))
+			throw new ArgumentException("Recording file name is required.", nameof(fileName));
+
+		var trimmedName = fileName.Trim();
+		if (!string.Equals(Path.GetFileName(trimmedName), trimmedName, StringComparison.Ordinal) ||
+			trimmedName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+		{
+			throw new ArgumentException("Recording file name must be a valid file name without directory components.", nameof(fileName));
+		}
+
+		if (!trimmedName.EndsWith(".rtaime-recording", StringComparison.OrdinalIgnoreCase))
+			trimmedName += ".rtaime-recording";
+
+		lock (_gate)
+		{
+			if (_opened)
+				throw new InvalidOperationException("Recording target cannot change while the writer is open.");
+
+			_configuredRootDirectory = Path.GetFullPath(destinationDirectory.Trim());
+			_configuredFileName = trimmedName;
+		}
+	}
 
 	public ValueTask OpenAsync(RecordingStartRequest request, CancellationToken cancellationToken)
 	{
@@ -97,10 +132,16 @@ public sealed class ReferenceRecordingPayloadWriter : IProgramRecordingPayloadWr
 			_audioSamples = 0;
 		}
 
-		Directory.CreateDirectory(_rootDirectory);
-		var stem = request.Output.OutputId.ToString();
-		var partialPath = Path.Combine(_rootDirectory, stem + ".partial");
-		var finalPath = Path.Combine(_rootDirectory, stem + ".rtaime-recording");
+		string rootDirectory;
+		string finalFileName;
+		lock (_gate)
+		{
+			rootDirectory = _configuredRootDirectory ?? _defaultRootDirectory;
+			finalFileName = _configuredFileName ?? request.Output.OutputId + ".rtaime-recording";
+		}
+		Directory.CreateDirectory(rootDirectory);
+		var finalPath = Path.Combine(rootDirectory, finalFileName);
+		var partialPath = finalPath + ".partial";
 		if (File.Exists(partialPath) || File.Exists(finalPath))
 			throw new RecordingOutputUnavailableException("Recording output identity already exists in the target directory.");
 
