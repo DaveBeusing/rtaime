@@ -280,6 +280,41 @@
 							<TextBlock Text="MONITORING" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,12" />
 							<DockPanel Margin="0,0,0,8"><TextBlock Text="Plane" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding Monitoring.State, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" DockPanel.Dock="Right" /></DockPanel>
 							<TextBlock Text="{Binding Monitoring.Detail, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+							<Border Height="1" Background="{DynamicResource OperatorBorderBrush}" Margin="0,14,0,14" />
+							<DockPanel Margin="0,0,0,10">
+								<TextBlock Text="PROGRAM OUTPUT / CLEAN FEED" Style="{StaticResource OperatorSectionTitle}" />
+								<Border Style="{StaticResource OperatorStatusBadge}" DockPanel.Dock="Right">
+									<TextBlock Text="{Binding ProgramOutput.Health, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" FontWeight="Bold" />
+								</Border>
+							</DockPanel>
+							<TextBlock Text="Display" Style="{StaticResource OperatorLabel}" Margin="0,0,0,4" />
+							<ComboBox
+								ItemsSource="{Binding ProgramOutput.Displays, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+								SelectedItem="{Binding ProgramOutput.SelectedDisplay, RelativeSource={RelativeSource AncestorType={x:Type Window}}, Mode=TwoWay}"
+								DisplayMemberPath="Label"
+								MinHeight="32"
+								Margin="0,0,0,8" />
+							<Grid Margin="0,0,0,8">
+								<Grid.ColumnDefinitions>
+									<ColumnDefinition Width="*" />
+									<ColumnDefinition Width="6" />
+									<ColumnDefinition Width="*" />
+									<ColumnDefinition Width="6" />
+									<ColumnDefinition Width="*" />
+								</Grid.ColumnDefinitions>
+								<Button Grid.Column="0" Content="START OUTPUT" Command="{Binding ProgramOutput.StartCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorProgramButton}" />
+								<Button Grid.Column="2" Content="STOP OUTPUT" Command="{Binding ProgramOutput.StopCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorButton}" />
+								<Button Grid.Column="4" Content="{Binding ProgramOutput.FullscreenAction, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Command="{Binding ProgramOutput.ToggleFullscreenCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorAccentButton}" />
+							</Grid>
+							<DockPanel Margin="0,0,0,6">
+								<TextBlock Text="State" Style="{StaticResource OperatorLabel}" />
+								<TextBlock Text="{Binding ProgramOutput.RunState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" DockPanel.Dock="Right" />
+							</DockPanel>
+							<DockPanel Margin="0,0,0,8">
+								<TextBlock Text="Mode" Style="{StaticResource OperatorLabel}" />
+								<TextBlock Text="{Binding ProgramOutput.Mode, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" />
+							</DockPanel>
+							<TextBlock Text="{Binding ProgramOutput.Detail, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
 						</StackPanel>
 					</Border>
 
