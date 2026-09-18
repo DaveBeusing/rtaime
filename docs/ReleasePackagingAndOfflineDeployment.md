@@ -176,7 +176,11 @@ The offline preflight checks installed runtimes locally.
 
 It does not download or bootstrap missing runtimes from the Internet.
 
-A future self-contained or bundled-runtime distribution is a separate packaging decision and must have its own size, servicing, licensing and security evidence.
+Self-contained and single-file publishing is supported as a developer/distribution build option and is documented in [BuildAndTest.md](BuildAndTest.md).
+
+The **authoritative V1 offline release bundle remains framework-dependent** until self-contained/single-file artifacts are explicitly added to the release pipeline, artifact inventory, runtime policy, offline preflight and release evidence. A developer single-file publish therefore must not be represented as a qualified PREVIEW/STABLE release artifact merely because it executes successfully.
+
+A future qualified self-contained distribution must have its own size, servicing, licensing, extraction, integrity and security evidence.
 
 ## Offline verification
 

@@ -1,0 +1,228 @@
+<!--
+Copyright (c) 2026 Dave Beusing
+david.beusing@gmail.com
+-->
+
+# Build, Publish & Test
+
+## Purpose
+
+This document is the canonical developer entry point for building, publishing and testing **rtaime — Real Time AI Media Engine**.
+
+**Production-grade real-time AI media platform.**
+
+The repository's primary managed solution is `rtaime.slnx`.
+
+## Prerequisites
+
+The repository pins the .NET SDK in `global.json`:
+
+```text
+.NET SDK 10.0.401
+```
+
+The V1 reference development platform is Windows x64. The WPF Operator targets `net10.0-windows`; platform-neutral libraries and non-UI hosts target `net10.0`.
+
+Verify the SDK:
+
+```powershell
+dotnet --info
+dotnet --list-sdks
+```
+
+## Restore
+
+From the repository root:
+
+```powershell
+dotnet restore rtaime.slnx
+```
+
+## Standard builds
+
+Debug:
+
+```powershell
+dotnet build rtaime.slnx --configuration Debug
+```
+
+Release:
+
+```powershell
+dotnet restore rtaime.slnx
+dotnet build rtaime.slnx --configuration Release --no-restore
+```
+
+The normal build is framework-dependent and preserves the multi-process V1 topology:
+
+```text
+ControlHost
+RuntimeHost
+AIHost
+Operator
+```
+
+## Single-file Windows publish
+
+### Architecture boundary
+
+rtaime V1 is intentionally a multi-process system. A single-file publish therefore means **one self-contained executable per executable host**, not one monolithic executable containing ControlHost, RuntimeHost, AIHost and Operator.
+
+A future all-in-one process would be a separate architecture decision and is not implied by the commands below.
+
+### Operator-only single-file EXE
+
+Use this when the Control/Runtime/AI lifecycle is already available separately:
+
+```powershell
+dotnet publish src/Hosts/rtaime.Operator/rtaime.Operator.csproj `
+	--configuration Release `
+	--runtime win-x64 `
+	--self-contained true `
+	-p:PublishSingleFile=true `
+	-p:IncludeNativeLibrariesForSelfExtract=true `
+	-p:IncludeAllContentForSelfExtract=true `
+	-p:DebugType=None `
+	-p:DebugSymbols=false `
+	--output artifacts/publish/rtaime.Operator-win-x64
+```
+
+The resulting distribution is intended to be started as `rtaime.Operator.exe`. Content required by the Operator is included in the single-file bundle and may be extracted by the .NET single-file host at runtime.
+
+### Full host set as self-contained single-file executables
+
+Publish all four executable hosts:
+
+```powershell
+dotnet publish src/Hosts/rtaime.ControlHost/rtaime.ControlHost.csproj `
+	-c Release -r win-x64 --self-contained true `
+	-p:PublishSingleFile=true `
+	-p:IncludeNativeLibrariesForSelfExtract=true `
+	-p:IncludeAllContentForSelfExtract=true `
+	-p:DebugType=None -p:DebugSymbols=false `
+	-o artifacts/publish/rtaime.ControlHost-win-x64
+
+dotnet publish src/Hosts/rtaime.RuntimeHost/rtaime.RuntimeHost.csproj `
+	-c Release -r win-x64 --self-contained true `
+	-p:PublishSingleFile=true `
+	-p:IncludeNativeLibrariesForSelfExtract=true `
+	-p:IncludeAllContentForSelfExtract=true `
+	-p:DebugType=None -p:DebugSymbols=false `
+	-o artifacts/publish/rtaime.RuntimeHost-win-x64
+
+dotnet publish src/Hosts/rtaime.AIHost/rtaime.AIHost.csproj `
+	-c Release -r win-x64 --self-contained true `
+	-p:PublishSingleFile=true `
+	-p:IncludeNativeLibrariesForSelfExtract=true `
+	-p:IncludeAllContentForSelfExtract=true `
+	-p:DebugType=None -p:DebugSymbols=false `
+	-o artifacts/publish/rtaime.AIHost-win-x64
+
+dotnet publish src/Hosts/rtaime.Operator/rtaime.Operator.csproj `
+	-c Release -r win-x64 --self-contained true `
+	-p:PublishSingleFile=true `
+	-p:IncludeNativeLibrariesForSelfExtract=true `
+	-p:IncludeAllContentForSelfExtract=true `
+	-p:DebugType=None -p:DebugSymbols=false `
+	-o artifacts/publish/rtaime.Operator-win-x64
+```
+
+### Release qualification boundary
+
+These commands are developer/distribution build options. The authoritative V1 release pipeline currently produces and qualifies the framework-dependent offline bundle documented in [ReleasePackagingAndOfflineDeployment.md](ReleasePackagingAndOfflineDeployment.md).
+
+A self-contained/single-file artifact must not be represented as an officially qualified release artifact until the release pipeline, integrity inventory, offline preflight and release evidence explicitly cover that artifact shape.
+
+## Test runs
+
+Build Release first when using `--no-build`:
+
+```powershell
+dotnet restore rtaime.slnx
+dotnet build rtaime.slnx --configuration Release --no-restore
+```
+
+### Complete solution test run
+
+This matches the serialized managed test shape used by the authoritative release pipeline:
+
+```powershell
+dotnet test rtaime.slnx --configuration Release --no-build -m:1
+```
+
+### Fast correctness tests
+
+```powershell
+dotnet test tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj --configuration Release --no-build
+dotnet test tests/rtaime.Tests.Contracts/rtaime.Tests.Contracts.csproj --configuration Release --no-build
+dotnet test tests/rtaime.Tests.Architecture/rtaime.Tests.Architecture.csproj --configuration Release --no-build
+```
+
+### Integration and behavior
+
+```powershell
+dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build -m:1
+dotnet test tests/rtaime.Tests.Behavioral/rtaime.Tests.Behavioral.csproj --configuration Release --no-build -m:1
+```
+
+### Failure qualification
+
+```powershell
+dotnet test tests/rtaime.Tests.Failure/rtaime.Tests.Failure.csproj --configuration Release --no-build -m:1
+```
+
+### Performance suite
+
+```powershell
+dotnet test tests/rtaime.Tests.Performance/rtaime.Tests.Performance.csproj --configuration Release --no-build -m:1
+```
+
+A passing performance test project is managed evidence only. It does not replace physical reference-platform latency, GPU, media-I/O or long-soak qualification.
+
+### List or filter tests
+
+List tests in a project:
+
+```powershell
+dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --list-tests
+```
+
+Run a targeted test class/name:
+
+```powershell
+dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj `
+	--configuration Release `
+	--no-build `
+	--filter "FullyQualifiedName~ProductionIpcIntegrationTests"
+```
+
+## Repository quality gates
+
+The version-controlled required gates are:
+
+```text
+CI
+Quality
+Security
+Packaged E2E
+Provider Smoke
+```
+
+Local `dotnet build` and `dotnet test` runs are necessary developer validation, but they do not replace packaged release qualification, security checks, provider smoke evidence or physical hardware qualification.
+
+See:
+
+- [RepositoryGovernance.md](RepositoryGovernance.md)
+- [ReleasePipelineAndChannels.md](ReleasePipelineAndChannels.md)
+- [ReleaseEvidence.md](ReleaseEvidence.md)
+- [QualificationEvidenceProvenance.md](QualificationEvidenceProvenance.md)
+
+## Funding showcase
+
+The qualified packaged showcase remains the preferred full-stack demonstration path:
+
+```text
+Start-rtaime-Showcase.cmd
+```
+
+See [InvestorDemoScenario.md](InvestorDemoScenario.md) for the deterministic demonstration flow and acceptance boundary.

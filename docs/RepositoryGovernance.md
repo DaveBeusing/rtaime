@@ -56,6 +56,8 @@ build Release
 complete solution test run
 ```
 
+The equivalent developer commands and targeted test-suite commands are maintained in [BuildAndTest.md](BuildAndTest.md). Local execution is useful pre-PR evidence but does not replace the required GitHub checks.
+
 ### Quality
 
 `Quality` checks:

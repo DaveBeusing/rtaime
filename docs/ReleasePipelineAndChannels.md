@@ -36,6 +36,8 @@ build/release/Invoke-ReleasePipeline.ps1
 
 GitHub workflows may trigger it, but they must not reimplement the release path.
 
+Developer build, single-file publish and targeted test commands are documented centrally in [BuildAndTest.md](BuildAndTest.md). Those commands are development conveniences and do not replace the authoritative release pipeline or its evidence gates.
+
 ## Source identity is immutable
 
 The release pipeline requires:
