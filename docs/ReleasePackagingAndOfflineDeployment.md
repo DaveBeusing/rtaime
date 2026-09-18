@@ -52,6 +52,7 @@ A generated bundle contains:
 bundle-manifest.json
 bundle-attestation.json
 OFFLINE-README.md
+Start-rtaime-Showcase.cmd
 
 product/
     rtaime.ControlHost/
@@ -84,6 +85,9 @@ tools/
     Test-OfflineReleaseBundle.ps1
     Invoke-OfflinePreflight.ps1
     Install-OfflineRelease.ps1
+    Invoke-ManagedHostLifecycle.ps1
+    Invoke-InvestorDemo.ps1
+    Start-rtaime-Showcase.cmd
 ```
 
 The ZIP transport is accompanied by a `.zip.sha256` sidecar.
@@ -288,6 +292,32 @@ non-empty installation target
 valid clean installation
 → install + post-install verification PASS
 ```
+
+## Funding showcase entry point
+
+The installed bundle root contains `Start-rtaime-Showcase.cmd` for the controlled funding-showcase workflow.
+
+The entry point does not create a parallel service manager. It delegates to the packaged showcase launcher, which reuses `Invoke-ManagedHostLifecycle.ps1`. ControlHost remains the top-level managed service process and retains RuntimeHost/AIHost supervision.
+
+On a clean showcase start, the launcher:
+
+```text
+verify/start managed lifecycle
+        ↓
+runtime readiness PASS
+        ↓
+launch Operator with exact lifecycle endpoints
+        ↓
+interactive showcase
+        ↓
+Operator closes
+        ↓
+gracefully stop only the lifecycle started by the launcher
+```
+
+The entry point requires PowerShell 7 (`pwsh.exe`) because the existing offline lifecycle tooling is implemented in PowerShell. The entry point checks that prerequisite before changing lifecycle state. The presenter does not enter terminal commands or edit JSON/environment configuration.
+
+See `InvestorDemoScenario.md` for the continuous demonstration sequence and acceptance boundary.
 
 ## Deployment boundary
 
