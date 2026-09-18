@@ -111,12 +111,15 @@ try {
 	Assert-Condition ([string]$status.status -eq "PASS") "Showcase host lifecycle did not reach PASS."
 	Assert-Condition ([string]$status.runtimeReadiness -eq "PASS") "Showcase host lifecycle did not reach runtimeReadiness PASS."
 
-	$controlEndpoint = [string]$status.endpoints.control
-	$runtimeEndpoint = [string]$status.endpoints.runtime
-	$aiEndpoint = [string]$status.endpoints.ai
-	Assert-Condition (-not [string]::IsNullOrWhiteSpace($controlEndpoint)) "Lifecycle status did not provide the Control endpoint."
-	Assert-Condition (-not [string]::IsNullOrWhiteSpace($runtimeEndpoint)) "Lifecycle status did not provide the Runtime endpoint."
-	Assert-Condition (-not [string]::IsNullOrWhiteSpace($aiEndpoint)) "Lifecycle status did not provide the AI endpoint."
+	$lifecycleStatePath = Join-Path $workRoot "lifecycle-state.json"
+	Assert-Condition (Test-Path -LiteralPath $lifecycleStatePath -PathType Leaf) "Managed lifecycle state was not published."
+	$lifecycleState = Get-Content -LiteralPath $lifecycleStatePath -Raw | ConvertFrom-Json
+	$controlEndpoint = [string]$lifecycleState.endpoints.control
+	$runtimeEndpoint = [string]$lifecycleState.endpoints.runtime
+	$aiEndpoint = [string]$lifecycleState.endpoints.ai
+	Assert-Condition (-not [string]::IsNullOrWhiteSpace($controlEndpoint)) "Lifecycle state did not provide the Control endpoint."
+	Assert-Condition (-not [string]::IsNullOrWhiteSpace($runtimeEndpoint)) "Lifecycle state did not provide the Runtime endpoint."
+	Assert-Condition (-not [string]::IsNullOrWhiteSpace($aiEndpoint)) "Lifecycle state did not provide the AI endpoint."
 
 	$operatorAssembly = Find-ProductAssembly -InstallRoot $installRoot -Name "rtaime.Operator.dll"
 	$startInfo = [System.Diagnostics.ProcessStartInfo]::new()
