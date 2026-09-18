@@ -10,6 +10,16 @@ using rtaime.Runtime.Contracts;
 
 namespace rtaime.ControlHost;
 
+public sealed record RuntimeGraphicsOverlaySnapshot(
+	bool AssetLoaded,
+	string? AssetName,
+	uint AssetWidth,
+	uint AssetHeight,
+	bool Visible,
+	double PositionX,
+	double PositionY,
+	double Scale);
+
 public sealed record RuntimeRemoteSnapshot(
 	string HostInstanceId,
 	RuntimeExecutionState Runtime,
@@ -20,6 +30,7 @@ public sealed record RuntimeRemoteSnapshot(
 	int ActiveGpuSurfaces,
 	VideoFormat Format,
 	IReadOnlyDictionary<MediaSourceId, string> InputSignals,
+	RuntimeGraphicsOverlaySnapshot GraphicsOverlay,
 	ulong StateVersion);
 
 public sealed record RuntimeRemoteApplyResult(
@@ -35,7 +46,7 @@ public sealed record RuntimeRemoteApplyResult(
 public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 {
 	private const string ProtocolVersion = "1.0";
-	private const int MaxFrameBytes = 1024 * 1024;
+	private const int MaxFrameBytes = 2 * 1024 * 1024;
 	private readonly object _gate = new();
 	private readonly SemaphoreSlim _requestGate = new(1, 1);
 	private readonly string _endpoint;
@@ -119,6 +130,7 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 				signal => new MediaSourceId(Identity.Parse(signal.SourceId)),
 				signal => string.IsNullOrWhiteSpace(signal.Health) ? "UNKNOWN" : signal.Health.Trim(),
 				EqualityComparer<MediaSourceId>.Default),
+			FromWire(snapshot.GraphicsOverlay),
 			response.StateVersion);
 	}
 
@@ -142,6 +154,48 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 			apply.Commit is null ? null : FromWire(apply.Commit),
 			apply.ActivationSequence,
 			response.StateVersion);
+	}
+
+	public async ValueTask<RuntimeGraphicsOverlaySnapshot> LoadGraphicsOverlayAsync(
+		string assetName,
+		uint width,
+		uint height,
+		byte[] rgbaPixels,
+		CancellationToken cancellationToken = default)
+	{
+		if (string.IsNullOrWhiteSpace(assetName)) throw new ArgumentException("Graphics asset name is required.", nameof(assetName));
+		ArgumentNullException.ThrowIfNull(rgbaPixels);
+		var response = await ExchangeAsync(
+			"runtime.graphics.overlay.load",
+			new WireGraphicsAsset(assetName.Trim(), width, height, rgbaPixels),
+			cancellationToken).ConfigureAwait(false);
+		var wire = response.Payload.Deserialize<WireGraphicsOverlay>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Runtime graphics overlay response is required.");
+		return FromWire(wire);
+	}
+
+	public async ValueTask<RuntimeGraphicsOverlaySnapshot> SetGraphicsOverlayAsync(
+		bool visible,
+		double positionX,
+		double positionY,
+		double scale,
+		CancellationToken cancellationToken = default)
+	{
+		var response = await ExchangeAsync(
+			"runtime.graphics.overlay.set",
+			new WireGraphicsOverlayState(visible, positionX, positionY, scale),
+			cancellationToken).ConfigureAwait(false);
+		var wire = response.Payload.Deserialize<WireGraphicsOverlay>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Runtime graphics overlay response is required.");
+		return FromWire(wire);
+	}
+
+	public async ValueTask<RuntimeGraphicsOverlaySnapshot> ClearGraphicsOverlayAsync(CancellationToken cancellationToken = default)
+	{
+		var response = await ExchangeAsync("runtime.graphics.overlay.clear", new { }, cancellationToken).ConfigureAwait(false);
+		var wire = response.Payload.Deserialize<WireGraphicsOverlay>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Runtime graphics overlay response is required.");
+		return FromWire(wire);
 	}
 
 	public async ValueTask<MediaDeckRuntimeSnapshot> GetMediaDeckSnapshotAsync(CancellationToken cancellationToken = default)
@@ -334,6 +388,16 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 			resource.CapacityUnits,
 			resource.Reservable)).ToArray());
 
+	private static RuntimeGraphicsOverlaySnapshot FromWire(WireGraphicsOverlay snapshot) => new(
+		snapshot.AssetLoaded,
+		snapshot.AssetName,
+		snapshot.AssetWidth,
+		snapshot.AssetHeight,
+		snapshot.Visible,
+		snapshot.PositionX,
+		snapshot.PositionY,
+		snapshot.Scale);
+
 	private static MediaDeckRuntimeSnapshot FromWire(WireMediaDeckRuntimeSnapshot snapshot)
 	{
 		var state = Enum.IsDefined(typeof(MediaDeckState), snapshot.State)
@@ -435,6 +499,9 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 	private sealed record WireFailure(string Code, string Message);
 	private sealed record WireVideoFormat(uint Width, uint Height, string FrameRate, int PixelFormat, int ScanMode);
 	private sealed record WireInputSignal(string SourceId, string Health);
+	private sealed record WireGraphicsAsset(string Name, uint Width, uint Height, byte[] RgbaPixels);
+	private sealed record WireGraphicsOverlayState(bool Visible, double PositionX, double PositionY, double Scale);
+	private sealed record WireGraphicsOverlay(bool AssetLoaded, string? AssetName, uint AssetWidth, uint AssetHeight, bool Visible, double PositionX, double PositionY, double Scale);
 	private sealed record WireCapability(string CapabilityId, string Kind, WireVideoFormat[] VideoFormats);
 	private sealed record WireResource(string ResourceId, string ProviderId, string Kind, uint CapacityUnits, bool Reservable);
 	private sealed record WireProvider(string Version, string ProviderId, string Name, int AvailabilityState, WireFailure? Failure, WireCapability[] Capabilities, WireResource[] Resources);
@@ -464,7 +531,8 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 		int TimingHealth,
 		int ActiveGpuSurfaces,
 		WireVideoFormat Format,
-		WireInputSignal[] InputSignals);
+		WireInputSignal[] InputSignals,
+		WireGraphicsOverlay GraphicsOverlay);
 
 	private static class Wire
 	{
