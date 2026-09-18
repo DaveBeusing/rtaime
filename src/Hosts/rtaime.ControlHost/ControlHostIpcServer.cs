@@ -480,6 +480,12 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		var recording = runtime?.Recording is { } runtimeRecording
 			? ToWire(runtimeRecording)
 			: WireRecordingSnapshot.Unavailable;
+		var health = OperatorHealthProjection.Evaluate(
+			runtime,
+			runtime is null ? Array.Empty<ProviderDescriptor>() : _runtimeTransport.ProviderDescriptors,
+			mediaDeck,
+			control.HasAuthoritativeState,
+			DateTimeOffset.UtcNow);
 		var payload = new WireOperatorSnapshot(
 			ToWire(state),
 			sources,
@@ -494,6 +500,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			audioInputs,
 			audioProgram,
 			recording,
+			ToWire(health),
 			StateVersion);
 		return Success(request, "control.snapshot.response", payload);
 	}
@@ -743,6 +750,25 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		ToWire(result.Snapshot),
 		result.Failure is { } failure ? new WireFailure(failure.Code, failure.Message) : null);
 
+	private static WireHealthSnapshot ToWire(OperatorHealthProjectionSnapshot snapshot) => new(
+		ToWire(snapshot.Engine),
+		ToWire(snapshot.Control),
+		ToWire(snapshot.Runtime),
+		ToWire(snapshot.Media),
+		ToWire(snapshot.Provider),
+		ToWire(snapshot.GpuProvider),
+		snapshot.CurrentFormat,
+		snapshot.FrameTime.Ticks,
+		snapshot.FrameBudget.Ticks,
+		snapshot.DroppedFrames,
+		snapshot.Uptime.Ticks,
+		snapshot.GpuUtilization,
+		snapshot.Vram,
+		snapshot.ObservedAtUtc);
+
+	private static WireHealthMetric ToWire(OperatorHealthMetric metric) =>
+		new(metric.State, metric.Detail);
+
 	private static WireProductionState ToWire(AuthoritativeProductionState state) => new(
 		state.Version.ToString(),
 		state.ProductionId.ToString(),
@@ -780,7 +806,23 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		public static WireRecordingSnapshot Unavailable { get; } = new("UNAVAILABLE", 0, null, null, null, 0, 0, 0, 0, 0, null);
 	}
 	private sealed record WireRecordingCommandResult(bool Succeeded, WireRecordingSnapshot Snapshot, WireFailure? Failure);
-	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, WireRecordingSnapshot Recording, ulong StateVersion);
+	private sealed record WireHealthMetric(string State, string Detail);
+	private sealed record WireHealthSnapshot(
+		WireHealthMetric Engine,
+		WireHealthMetric Control,
+		WireHealthMetric Runtime,
+		WireHealthMetric Media,
+		WireHealthMetric Provider,
+		WireHealthMetric GpuProvider,
+		string CurrentFormat,
+		long FrameTimeTicks,
+		long FrameBudgetTicks,
+		ulong DroppedFrames,
+		long UptimeTicks,
+		string GpuUtilization,
+		string Vram,
+		DateTimeOffset ObservedAtUtc);
+	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, WireRecordingSnapshot Recording, WireHealthSnapshot Health, ulong StateVersion);
 	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path);
 	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame, bool? AutoPlayOnProgram, int? EndBehavior, long? InPointFrame, long? OutPointFrame);
 	private sealed record WireMediaMarkerCommand(string Version, string AssetId, int Kind, long? PositionFrame, string? CuePointId, string? Name);
