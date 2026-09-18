@@ -446,7 +446,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 				FormatVideo(probe.VideoFormat),
 				mediaDeck.State == MediaDeckState.Error ? "ERROR" : "READY",
 				mediaDeck.State.ToString().ToUpperInvariant(),
-				transport.Position.Remaining.Ticks,
+				transport.EffectiveRemaining.Ticks,
 				probe.FileName);
 		}
 
