@@ -104,6 +104,26 @@ public sealed class UnifiedApplicationHostTests
 	}
 
 	[Fact]
+	public async Task Windows_service_reclaims_healthy_engine_from_its_service_root()
+	{
+		var options = CreateOptions(
+			ApplicationStartupProfile.HeadlessEngine,
+			ApplicationLifecycleOwnership.PersistentEngine,
+			windowsService: true);
+		using var cancellation = new CancellationTokenSource();
+		var platform = new FakeApplicationHostPlatform(options);
+		platform.PublishReadiness(42);
+		platform.OnDelay = () => cancellation.Cancel();
+
+		var host = new UnifiedApplicationHost(options, platform);
+		var result = await host.RunAsync(cancellation.Token);
+
+		Assert.True(result.AdoptedControlHost);
+		Assert.True(platform.StopSignalWritten);
+		Assert.False(host.OwnsControlLifecycle);
+	}
+
+	[Fact]
 	public async Task Headless_engine_fails_when_readiness_does_not_recover()
 	{
 		var options = CreateOptions(ApplicationStartupProfile.HeadlessEngine);
@@ -209,7 +229,8 @@ public sealed class UnifiedApplicationHostTests
 
 	private static ApplicationHostOptions CreateOptions(
 		ApplicationStartupProfile profile,
-		ApplicationLifecycleOwnership? ownership = null)
+		ApplicationLifecycleOwnership? ownership = null,
+		bool windowsService = false)
 	{
 		var root = Path.Combine(Path.GetTempPath(), "rtaime-apphost-tests", Guid.NewGuid().ToString("N"));
 		var resolvedOwnership = ownership ??
@@ -223,7 +244,7 @@ public sealed class UnifiedApplicationHostTests
 			Path.Combine(root, "work"),
 			"default",
 			resolvedOwnership,
-			false,
+			windowsService,
 			"rtaime-engine",
 			true,
 			false,
