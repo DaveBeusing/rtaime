@@ -80,16 +80,17 @@ foreach ($token in @(
 Assert-Condition ($serviceLifecycle -notmatch 'Stop-Process') "Windows service lifecycle must not bypass graceful service stop with Stop-Process."
 Assert-Condition ($serviceLifecycle -notmatch '\.Kill\(') "Windows service lifecycle must not classify direct process killing as service shutdown."
 
-foreach ($maintenance in @(
-	@($serviceUpdate, 'Invoke-VerifiedUpdate.ps1', 'SERVICE_MANAGED_UPDATE'),
-	@($serviceRollback, 'Invoke-SoftwareRollback.ps1', 'SERVICE_MANAGED_ROLLBACK')
-)) {
-	Assert-Condition ($maintenance[0] -match [Regex]::Escape('Invoke-WindowsServiceLifecycle.ps1')) "Service maintenance must use the Windows service lifecycle authority."
-	Assert-Condition ($maintenance[0] -match [Regex]::Escape($maintenance[1])) "Service maintenance must delegate to '$($maintenance[1])'."
-	Assert-Condition ($maintenance[0] -match [Regex]::Escape($maintenance[2])) "Service maintenance must emit '$($maintenance[2])' evidence."
-	Assert-Condition ($maintenance[0] -match "-Action Stop") "Service maintenance must stop the engine before maintenance."
-	Assert-Condition ($maintenance[0] -match "-Action Start") "Service maintenance must restart the engine only after maintenance."
-	Assert-Condition ($maintenance[0] -match "-Action Qualify") "Service maintenance must qualify readiness after restart."
+$maintenanceChecks = @(
+	[pscustomobject]@{ Content = $serviceUpdate; Delegate = 'Invoke-VerifiedUpdate.ps1'; Evidence = 'SERVICE_MANAGED_UPDATE' },
+	[pscustomobject]@{ Content = $serviceRollback; Delegate = 'Invoke-SoftwareRollback.ps1'; Evidence = 'SERVICE_MANAGED_ROLLBACK' }
+)
+foreach ($maintenance in $maintenanceChecks) {
+	Assert-Condition ($maintenance.Content -match [Regex]::Escape('Invoke-WindowsServiceLifecycle.ps1')) "Service maintenance must use the Windows service lifecycle authority."
+	Assert-Condition ($maintenance.Content -match [Regex]::Escape($maintenance.Delegate)) "Service maintenance must delegate to '$($maintenance.Delegate)'."
+	Assert-Condition ($maintenance.Content -match [Regex]::Escape($maintenance.Evidence)) "Service maintenance must emit '$($maintenance.Evidence)' evidence."
+	Assert-Condition ($maintenance.Content -match '-Action Stop') "Service maintenance must stop the engine before maintenance."
+	Assert-Condition ($maintenance.Content -match '-Action Start') "Service maintenance must restart the engine only after maintenance."
+	Assert-Condition ($maintenance.Content -match '-Action Qualify') "Service maintenance must qualify readiness after restart."
 }
 
 $requiredOfflineTools = @(
