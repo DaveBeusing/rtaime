@@ -172,6 +172,7 @@ public sealed class RuntimeHostProcess
 	private readonly Func<RuntimeHostProcessOptions, IProgramRecordingWriter, V1RuntimeHostService> _runtimeFactory;
 	private readonly Stopwatch _timingClock = Stopwatch.StartNew();
 	private readonly RuntimeTimingQualificationProbe _timingProbe;
+	private readonly RuntimeFrameDropCounter _frameDropCounter = new();
 	private RuntimeHostLifecycleSnapshot _lifecycle = new(
 		RuntimeHostProcessState.Created,
 		RuntimeHostHealthState.Unknown,
@@ -331,7 +332,13 @@ public sealed class RuntimeHostProcess
 			mediaIo?.SubmitProgram(boundary);
 			var processingDuration = _timingClock.Elapsed - processingStartedAt;
 			var timing = _timingProbe.RecordBoundary(boundary.SequenceNumber, boundaryObservedAt, processingDuration);
-			runtime.SetTimingHealth(MapTimingHealth(timing.State));
+			var mediaIoStatistics = mediaIo?.Statistics;
+			var droppedFrames = _frameDropCounter.Observe(
+				boundaryObservedAt,
+				framePeriod,
+				mediaIoStatistics?.OutputBackpressure ?? 0,
+				mediaIoStatistics?.OutputRejected ?? 0);
+			runtime.SetTimingHealth(MapTimingHealth(timing.State), processingDuration, droppedFrames);
 		}
 	}
 
