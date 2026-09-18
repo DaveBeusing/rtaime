@@ -13,9 +13,9 @@ public static class OperatorHealthStates
 	public const string Unverified = "UNVERIFIED";
 }
 
-public sealed record OperatorHealthMetric(string State, string Detail)
+public sealed record OperatorHealthMetric
 {
-	public OperatorHealthMetric(string state, string detail) : this()
+	public OperatorHealthMetric(string state, string detail)
 	{
 		if (state is not (OperatorHealthStates.Pass or OperatorHealthStates.Fail or OperatorHealthStates.Unverified))
 			throw new ArgumentException("Health state must be PASS, FAIL or UNVERIFIED.", nameof(state));
@@ -26,8 +26,8 @@ public sealed record OperatorHealthMetric(string State, string Detail)
 		Detail = detail.Trim();
 	}
 
-	public string State { get; init; } = OperatorHealthStates.Unverified;
-	public string Detail { get; init; } = "No evidence.";
+	public string State { get; }
+	public string Detail { get; }
 }
 
 public sealed record OperatorHealthProjectionSnapshot(
