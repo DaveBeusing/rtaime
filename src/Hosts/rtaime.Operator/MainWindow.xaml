@@ -453,9 +453,39 @@
 
 					<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14">
 						<StackPanel>
+							<DockPanel Margin="0,0,0,12">
+								<TextBlock Text="PROGRAM RECORDING" Style="{StaticResource OperatorSectionTitle}" />
+								<Border Style="{StaticResource OperatorStatusBadge}" DockPanel.Dock="Right">
+									<StackPanel Orientation="Horizontal">
+										<TextBlock Text="REC · " FontWeight="Bold" />
+										<TextBlock Text="{Binding RecordingStatus}" FontWeight="Bold" />
+									</StackPanel>
+								</Border>
+							</DockPanel>
+							<TextBlock Text="{Binding RecordingElapsed}" Style="{StaticResource OperatorTimecode}" FontSize="24" FontWeight="Bold" Margin="0,0,0,12" />
+							<TextBlock Text="DESTINATION" Style="{StaticResource OperatorLabel}" />
+							<TextBox Text="{Binding RecordingDestination, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource OperatorTextBox}" Margin="0,4,0,10" />
+							<TextBlock Text="FILE NAME" Style="{StaticResource OperatorLabel}" />
+							<TextBox Text="{Binding RecordingFileName, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource OperatorTextBox}" Margin="0,4,0,10" />
+							<Grid Margin="0,0,0,10">
+								<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="6" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+								<Button Grid.Column="0" Content="START REC" Command="{Binding StartRecordingCommand}" Style="{StaticResource OperatorProgramButton}" />
+								<Button Grid.Column="2" Content="STOP REC" Command="{Binding StopRecordingCommand}" Style="{StaticResource OperatorButton}" />
+							</Grid>
+							<DockPanel Margin="0,0,0,6">
+								<TextBlock Text="Samples" Style="{StaticResource OperatorLabel}" />
+								<TextBlock Text="{Binding RecordingStatistics}" Style="{StaticResource OperatorLabel}" DockPanel.Dock="Right" />
+							</DockPanel>
+							<TextBlock Text="Final file" Style="{StaticResource OperatorLabel}" />
+							<TextBlock Text="{Binding RecordingFinalPath}" Style="{StaticResource OperatorValue}" TextWrapping="Wrap" Margin="0,4,0,0" />
+							<TextBlock Text="{Binding RecordingError}" Foreground="{DynamicResource OperatorErrorBrush}" TextWrapping="Wrap" Margin="0,8,0,0" />
+						</StackPanel>
+					</Border>
+
+					<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14">
+						<StackPanel>
 							<TextBlock Text="ISOLATED SERVICES" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,12" />
-							<DockPanel Margin="0,0,0,8"><TextBlock Text="AI" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding AIStatus}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
-							<DockPanel><TextBlock Text="Recording" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding RecordingStatus}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
+							<DockPanel><TextBlock Text="AI" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding AIStatus}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
 						</StackPanel>
 					</Border>
 
