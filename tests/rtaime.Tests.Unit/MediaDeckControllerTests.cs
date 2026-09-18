@@ -61,6 +61,33 @@ public sealed class MediaDeckControllerTests
 	}
 
 	[Fact]
+	public async Task Close_clears_timeline_and_marker_projection_and_late_actions_are_safe()
+	{
+		var transport = new FakeDeckTransport();
+		var client = new OperatorControlClient(transport);
+		await using var deck = new MediaDeckController(client);
+		await deck.OpenAsync(@"C:\media\reference.mp4", new MediaSourceId(Id(2)));
+		await deck.Timeline.SeekToFrameAsync(12);
+		Assert.True(await deck.Markers.SetInAtCurrentFrameAsync());
+
+		await deck.CloseAsync();
+
+		Assert.False(deck.Snapshot.IsLoaded);
+		Assert.False(deck.Timeline.State.IsLoaded);
+		Assert.False(deck.Timeline.State.CanSeek);
+		Assert.False(deck.Markers.State.IsLoaded);
+		Assert.Null(deck.Markers.State.InPointFrame);
+		Assert.Empty(deck.Markers.State.CuePoints);
+
+		var transportCalls = transport.TransportCalls;
+		var markerCalls = transport.MarkerCalls;
+		await deck.Timeline.CompletePointerSeekAsync(20);
+		Assert.False(await deck.Markers.SetInAtCurrentFrameAsync());
+		Assert.Equal(transportCalls, transport.TransportCalls);
+		Assert.Equal(markerCalls, transport.MarkerCalls);
+	}
+
+	[Fact]
 	public async Task Refresh_replaces_local_projection_with_remote_confirmed_snapshot()
 	{
 		var transport = new FakeDeckTransport();

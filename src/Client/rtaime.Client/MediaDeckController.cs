@@ -5,6 +5,16 @@ using rtaime.Media.Contracts;
 
 namespace rtaime.Client;
 
+internal sealed class MediaDeckTransportUnavailableException : InvalidOperationException
+{
+	public MediaDeckTransportUnavailableException() : base("Media deck transport is not loaded.") { }
+}
+
+internal sealed class MediaDeckMarkersUnavailableException : InvalidOperationException
+{
+	public MediaDeckMarkersUnavailableException() : base("Media deck markers are not loaded.") { }
+}
+
 public sealed class MediaDeckController : IAsyncDisposable
 {
 	private readonly object _gate = new();
@@ -124,7 +134,7 @@ public sealed class MediaDeckController : IAsyncDisposable
 	{
 		MediaTransportSnapshot previous;
 		lock (_gate)
-			previous = _snapshot.Transport ?? throw new InvalidOperationException("Media deck transport is not loaded.");
+			previous = _snapshot.Transport ?? throw new MediaDeckTransportUnavailableException();
 
 		var response = await _client.ApplyMediaDeckTransportAsync(command, cancellationToken).ConfigureAwait(false);
 		ApplySnapshot(response);
@@ -143,7 +153,7 @@ public sealed class MediaDeckController : IAsyncDisposable
 	{
 		MediaMarkerSnapshot previous;
 		lock (_gate)
-			previous = _snapshot.Markers ?? throw new InvalidOperationException("Media deck markers are not loaded.");
+			previous = _snapshot.Markers ?? throw new MediaDeckMarkersUnavailableException();
 
 		var response = await _client.ApplyMediaDeckMarkerAsync(command, cancellationToken).ConfigureAwait(false);
 		ApplySnapshot(response);
@@ -163,8 +173,12 @@ public sealed class MediaDeckController : IAsyncDisposable
 
 		if (snapshot.Transport is not null)
 			Timeline.ApplyConfirmedSnapshot(snapshot.Transport);
+		else
+			Timeline.ClearConfirmedSnapshot();
 		if (snapshot.Markers is not null)
 			Markers.ApplyConfirmedSnapshot(snapshot.Markers);
+		else
+			Markers.ClearConfirmedSnapshot();
 		StateChanged?.Invoke(this, EventArgs.Empty);
 	}
 

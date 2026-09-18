@@ -23,6 +23,7 @@ $windowCodePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MainWindo
 $deckPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MediaDeckControl.xaml"
 $deckViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MediaDeckViewModel.cs"
 $timelinePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MediaTimelineControl.xaml"
+$timelineCodePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MediaTimelineControl.xaml.cs"
 $viewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorViewModel.cs"
 $monitorViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorMonitoringViewModel.cs"
 $programOutputControllerPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/ProgramOutputController.cs"
@@ -41,7 +42,7 @@ $manifestPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/app.manifes
 $projectPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/rtaime.Operator.csproj"
 $documentationPath = Join-Path $repositoryRoot "docs/OperatorUiV1.md"
 
-foreach ($path in @($appPath, $appCodePath, $windowPath, $windowCodePath, $deckPath, $deckViewModelPath, $timelinePath, $viewModelPath, $monitorViewModelPath, $programOutputControllerPath, $programOutputWindowPath, $sourceTileViewModelPath, $audioInputViewModelPath, $graphicsLoaderPath, $demoControllerPath, $demoManifestPath, $demoProductPath, $demoGraphicsPath, $demoDocumentationPath, $tokensPath, $themePath, $manifestPath, $projectPath, $documentationPath)) {
+foreach ($path in @($appPath, $appCodePath, $windowPath, $windowCodePath, $deckPath, $deckViewModelPath, $timelinePath, $timelineCodePath, $viewModelPath, $monitorViewModelPath, $programOutputControllerPath, $programOutputWindowPath, $sourceTileViewModelPath, $audioInputViewModelPath, $graphicsLoaderPath, $demoControllerPath, $demoManifestPath, $demoProductPath, $demoGraphicsPath, $demoDocumentationPath, $tokensPath, $themePath, $manifestPath, $projectPath, $documentationPath)) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required Operator UI artifact is missing: '$path'."
 }
 
@@ -52,6 +53,7 @@ $windowCode = Get-Content -LiteralPath $windowCodePath -Raw
 $deck = Get-Content -LiteralPath $deckPath -Raw
 $deckViewModel = Get-Content -LiteralPath $deckViewModelPath -Raw
 $timeline = Get-Content -LiteralPath $timelinePath -Raw
+$timelineCode = Get-Content -LiteralPath $timelineCodePath -Raw
 $viewModel = Get-Content -LiteralPath $viewModelPath -Raw
 $monitorViewModel = Get-Content -LiteralPath $monitorViewModelPath -Raw
 $programOutputController = Get-Content -LiteralPath $programOutputControllerPath -Raw
@@ -136,6 +138,9 @@ Assert-Condition ($timeline -match 'Style="\{StaticResource OperatorTimelineSlid
 Assert-Condition ($timeline -match 'Style="\{StaticResource OperatorMeter\}"') "Timeline progress must use the design-system meter style."
 Assert-Condition ($timeline -match 'Value="\{Binding ProgressPercent, Mode=OneWay\}"') "Read-only timeline progress must bind OneWay to avoid WPF source-write failures."
 Assert-Condition ($timeline -match 'Value="\{Binding SliderValue, Mode=OneWay\}"') "Read-only timeline slider projection must remain OneWay; seeking is handled by explicit operator interaction."
+Assert-Condition ($timelineCode -match 'catch \(OperationCanceledException\)') "Timeline pointer interaction must treat lifecycle/IPC cancellation as non-fatal."
+Assert-Condition ($demoController -match 'catch \(OperationCanceledException\)') "Demo Production startup must surface IPC cancellation without crashing Operator."
+Assert-Condition ($viewModel -match 'internal sealed class AsyncRelayCommand[\s\S]+catch \(OperationCanceledException\)') "Async Operator commands must not let cancellation escape async-void ICommand execution."
 Assert-Condition ($deck -match 'OperatorStatusBadge') "Media deck state must use shared status presentation."
 Assert-Condition ($deck -match 'AUTO PLAY ON PROGRAM') "Media Autoplay & End Behavior must expose Auto Play on Program."
 Assert-Condition ($deck -match 'Binding EndBehaviors') "Media Autoplay & End Behavior must expose deterministic media-deck end behavior selection."
