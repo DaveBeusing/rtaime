@@ -157,7 +157,11 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 				command.Version.ToString(),
 				command.AssetId.ToString(),
 				(int)command.Kind,
-				command.TargetFrame),
+				command.TargetFrame,
+				command.AutoPlayOnProgram,
+				command.EndBehavior is null ? null : (int)command.EndBehavior.Value,
+				command.InPointFrame,
+				command.OutPointFrame),
 			cancellationToken).ConfigureAwait(false);
 		return ReadMediaDeckSnapshot(response);
 	}
@@ -346,7 +350,16 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 				TimeSpan.FromTicks(wire.Transport.DurationTicks),
 				TimeSpan.FromTicks(wire.Transport.RemainingTicks),
 				FrameRate.Parse(wire.Transport.FrameRate)),
-			wire.Transport.Failure is null ? null : new Failure(wire.Transport.Failure.Code, wire.Transport.Failure.Message));
+			wire.Transport.Failure is null ? null : new Failure(wire.Transport.Failure.Code, wire.Transport.Failure.Message),
+			wire.Transport.AutoPlayOnProgram,
+			Enum.IsDefined(typeof(MediaDeckEndBehavior), wire.Transport.EndBehavior)
+				? (MediaDeckEndBehavior)wire.Transport.EndBehavior
+				: throw new InvalidDataException("Media-deck end behavior is invalid."),
+			wire.Transport.IsOnProgram,
+			wire.Transport.EffectiveStartFrame,
+			wire.Transport.EffectiveEndFrame,
+			wire.Transport.EffectiveRemainingFrames,
+			TimeSpan.FromTicks(wire.Transport.EffectiveRemainingTicks));
 
 		var markers = wire.Markers is null ? null : new MediaMarkerSnapshot(
 			CompatibilityVersion.Parse(wire.Markers.Version),
@@ -474,10 +487,10 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 	private sealed record WireAudioProgram(string ActiveVideoSourceId, string ActiveStreamId, double Gain, bool Muted, double LeftPeak, double RightPeak, double MasterPeak, bool Clipping, string Health);
 	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, ulong StateVersion);
 	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path);
-	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame);
+	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame, bool? AutoPlayOnProgram, int? EndBehavior, long? InPointFrame, long? OutPointFrame);
 	private sealed record WireMediaMarkerCommand(string Version, string AssetId, int Kind, long? PositionFrame, string? CuePointId, string? Name);
 	private sealed record WireLocalMediaProbe(string Version, string AssetId, string SourceId, string FileName, int Container, int VideoCodec, int AudioCodec, uint Width, uint Height, string FrameRate, long DurationTicks);
-	private sealed record WireMediaTransportSnapshot(string Version, string AssetId, string SourceId, int State, long CurrentFrame, long TotalFrames, long PositionTicks, long DurationTicks, long RemainingTicks, string FrameRate, WireFailure? Failure);
+	private sealed record WireMediaTransportSnapshot(string Version, string AssetId, string SourceId, int State, long CurrentFrame, long TotalFrames, long PositionTicks, long DurationTicks, long RemainingTicks, string FrameRate, WireFailure? Failure, bool AutoPlayOnProgram, int EndBehavior, bool IsOnProgram, long EffectiveStartFrame, long EffectiveEndFrame, long EffectiveRemainingFrames, long EffectiveRemainingTicks);
 	private sealed record WireCuePoint(string Id, string Name, long PositionFrame);
 	private sealed record WireMediaMarkerSnapshot(string Version, string AssetId, long TotalFrames, long? InPointFrame, long? OutPointFrame, WireCuePoint[] CuePoints);
 	private sealed record WireMediaDeckSnapshot(int State, string? SourceId, WireLocalMediaProbe? Probe, WireMediaTransportSnapshot? Transport, WireMediaMarkerSnapshot? Markers, WireFailure? Failure);
