@@ -142,9 +142,9 @@ public sealed record ApplicationHostOptions(
 			!System.Text.RegularExpressions.Regex.IsMatch(operatorPipeSid, "^S-1-(?:[0-9]+-){1,14}[0-9]+$", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
 			throw new ArgumentException("Operator pipe SID is not a valid Windows SID string.", nameof(args));
 		var disposable = args.Contains("--disposable", StringComparer.OrdinalIgnoreCase);
-		var defaultOwnership = profile == ApplicationStartupProfile.Showcase || disposable
-			? ApplicationLifecycleOwnership.EphemeralLocal
-			: ApplicationLifecycleOwnership.PersistentEngine;
+		var defaultOwnership = profile == ApplicationStartupProfile.HeadlessEngine
+			? ApplicationLifecycleOwnership.PersistentEngine
+			: ApplicationLifecycleOwnership.EphemeralLocal;
 		var ownershipText = Resolve("ownership", "RTAIME_LIFECYCLE_OWNERSHIP", defaultOwnership.ToString());
 		if (!Enum.TryParse<ApplicationLifecycleOwnership>(ownershipText, true, out var ownership))
 			throw new ArgumentException($"Unknown lifecycle ownership '{ownershipText}'.", nameof(args));

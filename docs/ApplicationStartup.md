@@ -40,9 +40,9 @@ A monolithic all-in-one process is not introduced.
 ./rtaime.exe --profile=Interactive
 ```
 
-Interactive is the default profile.
+Interactive is the default profile and uses `EphemeralLocal` lifecycle ownership by default.
 
-The AppHost starts or adopts the engine lifecycle, waits for qualified readiness and then opens Operator.
+The AppHost starts or adopts the engine lifecycle, waits for qualified readiness and then opens Operator. When this AppHost starts the local engine itself, closing Operator or terminating the local AppHost requests a graceful shutdown of that owned ControlHost lifecycle. An already-running engine that is merely adopted is never terminated implicitly.
 
 ### Showcase
 
@@ -84,9 +84,9 @@ The AppHost may start the engine for the current local session and stops only th
 ./rtaime.exe --profile=Interactive --ownership=PersistentEngine
 ```
 
-This is the default ownership for normal Interactive startup.
+`PersistentEngine` is explicit for interactive desktop startup and is the required ownership for Windows-service hosting.
 
-Closing Operator does not stop an owned persistent engine. Engine lifetime is independent from Operator lifetime.
+Closing Operator does not stop an owned persistent engine. Engine lifetime is independent from Operator lifetime. Use this mode only when the engine is deliberately intended to outlive the interactive Operator session.
 
 For Windows service hosting:
 

@@ -101,6 +101,8 @@ PersistentEngine
 ExternalManaged
 ```
 
+Normal local `Interactive` startup defaults to `EphemeralLocal`: when `rtaime.exe` starts the local engine, closing Operator also shuts down that owned lifecycle so development binaries are not left locked by background hosts. `PersistentEngine` remains explicit and is used by the supported Windows-service production path.
+
 The supported persistent Windows production path runs the same AppHost lifecycle under Windows Service Control Manager. Closing or crashing Operator does not stop a persistent engine; `ExternalManaged` desktop startup adopts the running engine without lifecycle authority.
 
 Service installation and operation from an installed bundle:

@@ -76,6 +76,56 @@ public sealed class UnifiedApplicationHostTests
 		}
 	}
 
+	[Theory]
+	[InlineData("Interactive", ApplicationLifecycleOwnership.EphemeralLocal)]
+	[InlineData("Showcase", ApplicationLifecycleOwnership.EphemeralLocal)]
+	[InlineData("HeadlessEngine", ApplicationLifecycleOwnership.PersistentEngine)]
+	public void Startup_profile_defaults_to_expected_lifecycle_ownership(
+		string profile,
+		ApplicationLifecycleOwnership expectedOwnership)
+	{
+		var root = Path.Combine(Path.GetTempPath(), "rtaime-apphost-option-tests", Guid.NewGuid().ToString("N"));
+		Directory.CreateDirectory(root);
+		var policyPath = Path.Combine(root, "host-lifecycle-policy.json");
+		File.WriteAllText(policyPath, JsonSerializer.Serialize(new
+		{
+			schemaVersion = "1.0",
+			endpoints = new
+			{
+				control = "rtaime.test.control",
+				runtime = "rtaime.test.runtime",
+				ai = "rtaime.test.ai"
+			},
+			startup = new
+			{
+				timeoutMs = 30000,
+				probeTimeoutMs = 500,
+				probeIntervalMs = 200,
+				childRestartBackoffMs = 500,
+				childMaxStartAttempts = 5
+			},
+			shutdown = new { timeoutMs = 15000 }
+		}));
+
+		try
+		{
+			var options = ApplicationHostOptions.Load(new[]
+			{
+				$"--profile={profile}",
+				$"--install-root={root}",
+				$"--state-root={Path.Combine(root, "state")}",
+				$"--work-root={Path.Combine(root, "work")}",
+				$"--policy={policyPath}"
+			});
+
+			Assert.Equal(expectedOwnership, options.Ownership);
+		}
+		finally
+		{
+			Directory.Delete(root, recursive: true);
+		}
+	}
+
 	[Fact]
 	public async Task Startup_failure_ends_in_failed_state()
 	{

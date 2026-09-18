@@ -64,6 +64,8 @@ foreach ($ownership in @("EphemeralLocal", "PersistentEngine", "ExternalManaged"
 
 Assert-Condition ($appProgram -match [Regex]::Escape("--windows-service")) "Canonical AppHost must expose the Windows service hosting switch."
 Assert-Condition ($appProgram -match "AddWindowsService") "Canonical AppHost must use supported Windows service hosting."
+Assert-Condition ($appCode -match 'profile == ApplicationStartupProfile\.HeadlessEngine') "HeadlessEngine must be the only profile that defaults to persistent lifecycle ownership."
+Assert-Condition ($appCode -match '\? ApplicationLifecycleOwnership\.PersistentEngine\s+: ApplicationLifecycleOwnership\.EphemeralLocal') "Interactive and Showcase must default to EphemeralLocal ownership."
 
 foreach ($state in @("Stopped", "Starting", "Healthy", "Degraded", "Recovering", "Failed", "Stopping")) {
 	Assert-Condition ($appCode -match [Regex]::Escape($state)) "AppHost is missing lifecycle state '$state'."

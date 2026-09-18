@@ -55,6 +55,16 @@ dotnet restore rtaime.slnx
 dotnet build rtaime.slnx --configuration Release --no-restore
 ```
 
+Local `Interactive` startup defaults to `EphemeralLocal`, so an engine started by the AppHost is shut down when the Operator session ends. This keeps normal development build outputs replaceable on the next build.
+
+If a host from an older build is still running and locking `bin/` files, stop that stale development lifecycle once before rebuilding:
+
+```powershell
+Get-Process rtaime.ControlHost,rtaime.RuntimeHost,rtaime.AIHost -ErrorAction SilentlyContinue | Stop-Process
+```
+
+Do not use this cleanup command against an intentionally installed production Windows service; manage that lifecycle through the service-management tooling instead.
+
 The normal build is framework-dependent and preserves the multi-process V1 topology behind one product entry point:
 
 ```text
