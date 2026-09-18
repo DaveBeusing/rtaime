@@ -32,143 +32,85 @@ No terminal interaction, No JSON editing and No manually started services or man
 
 ## Demo sequence
 
-### 1. Start and readiness
+**Target duration:** approximately five minutes for the complete continuous run.
 
-Double-click `Start-rtaime-Showcase.cmd`.
+### 1. Launch
 
-The Operator opens after the managed service topology is ready. Use **Synchronize** to make the authoritative connection/revision state visible before presenting production actions.
+Double-click `Start-rtaime-Showcase.cmd` in the installed release root. No terminal interaction is part of the presentation.
 
-Expected evidence:
+### 2. Confirm authoritative readiness
 
-- Control/Runtime are connected and commandable.
-- Runtime Health is visible.
-- no terminal interaction occurred;
-- no service was manually started.
+Use **Synchronize** and confirm that Control/Runtime are connected, the revision is visible and production commands are available. The presenter must not need to start or restart a service manually.
 
-### 2. Open Demo Production
+### 3. Open Demo Production
 
-Select **Open Demo Production**.
+Select **Open Demo Production**. Input A becomes the confirmed Program baseline and Product Clip / Input B becomes confirmed Preview. The action prepares Preview but does not automatically TAKE it to Program.
 
-Expected prepared state:
+### 4. Show the Source Bin
 
-- Input A is confirmed Program.
-- Product Clip / Input B is confirmed Preview.
-- the bundled SSD-style local media clip is loaded through the Media Deck path.
-- deterministic IN/OUT and Product Intro / Product End Cue points are present.
-- Auto Play on Program is enabled.
-- end behavior is Hold Last Frame.
-- Product Clip Audio is unity/unmuted.
-- the pre-rendered logo/lower-third Graphics asset is loaded and ready.
-- Person Segmentation Highlight AI is enabled through the governed path.
+Confirm the visible Input A and Input B/Product Clip sources, source type/format, Preview/Program tallies and health state.
 
-The action prepares Preview but does not automatically TAKE it to Program.
+### 5. Show the local SSD-style media source
 
-### 3. Media Deck, Timeline and Cues
+Confirm that the bundled local media clip is loaded through the Media Deck path, including H.264/AAC metadata and the deterministic effective range.
 
-Scrub the Timeline and demonstrate the confirmed playhead.
+### 6. Scrub the Timeline
 
-Select the Product Intro and Product End Cue points and return to the intended take position.
+Scrub the Timeline and demonstrate that the confirmed playhead follows the existing Media Deck seek path.
 
-Expected evidence:
+### 7. Demonstrate Cue points and IN/OUT
 
-- Timeline seek is deterministic.
-- IN/OUT remains visible.
-- Cue selection moves through the existing Media Deck path.
-- remaining/countdown presentation remains consistent with the effective range.
+Select the Product Intro and Product End Cue points, show IN/OUT, and return to the intended take position. Remaining/countdown presentation must stay consistent with the effective range.
 
-### 4. Preview, TAKE and Program
+### 8. Confirm Preview
 
-Confirm Product Clip on Preview and perform a CUT or TAKE to Program.
+Show Product Clip as the authoritative Preview / next-take source. Local source selection must remain distinct from confirmed Preview.
 
-Expected evidence:
+### 9. TAKE / CUT to Program
 
-- the Program source changes only after the authoritative command is accepted;
-- the clip starts automatically when it reaches Program;
-- Program and Preview tallies remain distinct;
-- Program monitoring follows Runtime output rather than local selection.
+Use **CUT PREVIEW → PROGRAM**. Program must change only after the authoritative command is accepted.
 
-### 5. DISSOLVE
+### 10. Demonstrate autoplay and end behavior
 
-Route the alternate source to Preview and use **AUTO PREVIEW → PROGRAM** with the prepared DISSOLVE duration.
+Confirm that the clip starts automatically when it reaches Program and that the prepared **Hold Last Frame** behavior is visible at the effective end of the clip.
 
-Expected evidence:
+### 11. Demonstrate DISSOLVE
 
-- DISSOLVE uses the confirmed Preview source;
-- transition state is visible;
-- Program commits only authoritative Runtime output.
+Route the alternate source to Preview and use **AUTO PREVIEW → PROGRAM** with the prepared DISSOLVE duration. Transition state must remain visible and Program must reflect Runtime-owned output.
 
-### 6. Graphics
+### 12. Demonstrate Graphics
 
-Show and hide the prepared logo/lower-third asset.
+Show and hide the prepared logo/lower-third Graphics asset. Program monitoring must reflect the RuntimeHost post-composite frame. When the explicit graphics layer is visible, the AI highlight may be reported as suppressed according to the existing layer precedence.
 
-Expected evidence:
+### 13. Demonstrate Audio / AFV
 
-- Graphics are composited in RuntimeHost;
-- Program monitoring reflects the post-composite frame;
-- graphics controls do not own render authority.
+Show the AFV source, stereo/master meters and confirmed mute/gain state. AFV must follow confirmed Program and the meters must remain Runtime observations.
 
-When the explicit graphics layer is visible, the AI highlight may be reported as suppressed according to the existing layer precedence.
+### 14. Demonstrate AI
 
-### 7. Audio / AFV
+Use **AI ON** and **AI OFF** to demonstrate Person Segmentation Highlight. Provider, status, inference time, person-region count and confidence remain visible. Disabling or failing AI must not interrupt Program continuity.
 
-Show the AFV source, stereo/master meters and confirmed mute/gain state.
+### 15. Start Recording
 
-Expected evidence:
+Start Program Recording and confirm REC state plus elapsed time. Recording remains Runtime-owned and includes Program video, audio and graphics.
 
-- AFV follows confirmed Program;
-- Audio meters are Runtime observations;
-- audio controls cross the normal Client/Control/Runtime path.
+### 16. Show Program Output on display 2
 
-### 8. AI showcase
-
-Use **AI ON** and **AI OFF** to demonstrate Person Segmentation Highlight and controlled fallback.
-
-Expected evidence:
-
-- provider/status/inference time/person-region/confidence information is visible;
-- inference executes through AIHost;
-- disabling or failing AI does not interrupt Program continuity.
-
-### 9. Recording
-
-Start Program Recording, run a short production action, then stop Recording.
-
-Expected evidence:
-
-- REC state and elapsed time are visible;
-- the finalized recording path is shown;
-- recorded content is the Runtime-owned Program video/audio/graphics result.
-
-The V1 reference artifact remains the deterministic `.rtaime-recording` format. The demo does not claim MP4/MOV/MXF delivery.
-
-### 10. Program Output on display 2
-
-Select the second display, start Program Output and switch it to fullscreen.
-
-Expected evidence:
-
-- display 2 contains only the clean Program surface;
-- Operator controls remain on the primary display;
-- aspect ratio is preserved;
-- removing the selected display produces the defined windowed fallback state.
+Select the second display, start Program Output and switch it to fullscreen. Display 2 contains only the clean Program surface while Operator controls remain on the primary display. Aspect ratio is preserved. A selected-display disconnect must use the defined windowed fallback.
 
 The current Program Output uses the bounded monitoring plane and is showcase/monitor grade, not a claim of SDI/NDI/SRT broadcast output.
 
-### 11. Runtime Health
+### 17. Show Runtime Health / Performance
 
-Show the Runtime Health / Performance HUD.
+Show Engine, Control, Runtime, Media and Provider evidence together with frame time, dropped frames and uptime. Unavailable GPU utilization or VRAM telemetry must remain UNVERIFIED rather than false PASS.
 
-Expected evidence:
+### 18. Stop cleanly
 
-- Engine, Control, Runtime, Media and Provider evidence is visible;
-- frame time, dropped frames and uptime are visible;
-- unavailable GPU utilization or VRAM telemetry remains UNVERIFIED instead of false PASS.
+Stop Recording and Program Output if active, confirm the finalized recording path, then close the Operator. When the showcase launcher owns the service lifecycle, closing the Operator triggers graceful managed host shutdown with no service-stop command from the presenter.
 
-### 12. Stop
+The V1 recording remains the deterministic `.rtaime-recording` reference artifact; the showcase does not claim MP4/MOV/MXF delivery.
 
-Stop Recording/Program Output if still active and close the Operator.
-
-When the showcase launcher owns the service lifecycle, closing the Operator triggers graceful managed host shutdown. No service-stop command is required from the presenter.
+**Continuous-run acceptance:** all 18 steps complete without developer configuration changes, terminal commands, JSON editing, manually started services, manual process restarts or unresolved error states that require presenter explanation.
 
 ## Automated acceptance
 
