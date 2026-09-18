@@ -49,7 +49,14 @@ public partial class MediaTimelineControl : UserControl
 		if (ViewModel is { CanSeek: true } viewModel)
 		{
 			var position = e.GetPosition(TimelineSlider);
-			await viewModel.CompletePointerSeekAsync(position.X, TimelineSlider.ActualWidth);
+			try
+			{
+				await viewModel.CompletePointerSeekAsync(position.X, TimelineSlider.ActualWidth);
+			}
+			catch (OperationCanceledException)
+			{
+				// Endpoint loss or lifecycle shutdown can cancel an in-flight pointer seek.
+			}
 		}
 		e.Handled = true;
 	}
