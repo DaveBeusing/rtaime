@@ -1,6 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 using rtaime.Client;
+using rtaime.ControlHost;
 using rtaime.Core;
 using rtaime.Media.Contracts;
 using rtaime.RuntimeHost;
