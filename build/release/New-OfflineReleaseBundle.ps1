@@ -77,7 +77,10 @@ function Copy-DirectoryContent {
 
 function Get-PayloadRole {
 	param([Parameter(Mandatory)][string]$RelativePath)
-	if ($RelativePath.StartsWith("product/", [StringComparison]::OrdinalIgnoreCase)) { return "PRODUCT_PAYLOAD" }
+	if ($RelativePath.StartsWith("product/", [StringComparison]::OrdinalIgnoreCase) -or
+		$RelativePath -in @("rtaime.exe", "rtaime.dll", "rtaime.deps.json", "rtaime.runtimeconfig.json", "host-lifecycle-policy.json")) {
+		return "PRODUCT_PAYLOAD"
+	}
 	if ($RelativePath.StartsWith("release/", [StringComparison]::OrdinalIgnoreCase)) { return "RELEASE_EVIDENCE" }
 	if ($RelativePath.StartsWith("schemas/", [StringComparison]::OrdinalIgnoreCase)) { return "SCHEMA" }
 	if ($RelativePath.StartsWith("docs/", [StringComparison]::OrdinalIgnoreCase)) { return "DOCUMENTATION" }
