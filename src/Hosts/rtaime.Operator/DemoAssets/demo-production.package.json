@@ -8,9 +8,28 @@
 		"productClip": "Input B"
 	},
 	"productClip": {
-		"bundleFile": "ProductClip.mp4.b64",
+		"bundleFiles": [
+				"ProductClip.mp4.b64.part01",
+				"ProductClip.mp4.b64.part02",
+				"ProductClip.mp4.b64.part03",
+				"ProductClip.mp4.b64.part04",
+				"ProductClip.mp4.b64.part05",
+				"ProductClip.mp4.b64.part06-01",
+				"ProductClip.mp4.b64.part06-02",
+				"ProductClip.mp4.b64.part06-03",
+				"ProductClip.mp4.b64.part06-04",
+				"ProductClip.mp4.b64.part06-05",
+				"ProductClip.mp4.b64.part06-06",
+				"ProductClip.mp4.b64.part06-07",
+				"ProductClip.mp4.b64.part07",
+				"ProductClip.mp4.b64.part08",
+				"ProductClip.mp4.b64.part09",
+				"ProductClip.mp4.b64.part10",
+				"ProductClip.mp4.b64.part11",
+				"ProductClip.mp4.b64.part12"
+		],
 		"materializedFile": "rtaime-demo-product.mp4",
-		"sha256": "b273df458854b11dada32e4cd304c9869e55feb4e6eaf8349e4e1cb51cfe99a5",
+		"sha256": "63fc1909fa8e876997758dc02581c9e2827f50af60d76233cca9942f5f5af2a4",
 		"autoPlayOnProgram": true,
 		"endBehavior": "HoldLastFrame",
 		"inFrame": 0,
@@ -21,7 +40,7 @@
 		]
 	},
 	"graphics": {
-		"bundleFile": "LowerThird.png.b64",
+		"bundleFiles": ["LowerThird.png.b64"],
 		"materializedFile": "rtaime-demo-lower-third.png",
 		"sha256": "b598fc60e2bcbb9a534af5374cb379be95c99bf8a01eb6880dcfd1e2c853d1c6",
 		"kind": "PreRenderedLowerThirdWithRtaimeLogo",
