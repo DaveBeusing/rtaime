@@ -100,6 +100,10 @@ jobs:
         shell: pwsh
         run: ./build/release/Test-ReleaseChannelPolicy.ps1
 
+      - name: Verify offline bundle source paths
+        shell: pwsh
+        run: ./build/release/Test-OfflineBundleSourcePolicy.ps1
+
       - name: Verify update policy
         shell: pwsh
         run: ./build/update/Test-UpdatePolicy.ps1
