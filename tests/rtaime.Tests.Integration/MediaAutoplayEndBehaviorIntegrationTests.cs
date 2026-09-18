@@ -132,7 +132,7 @@ public sealed class MediaAutoplayEndBehaviorIntegrationTests
 		var provider = deck.ProviderDescriptor;
 		var capability = provider.Capabilities.Single(candidate =>
 			string.Equals(candidate.Kind, "media.route", StringComparison.Ordinal));
-		var resource = provider.Resources.Single(candidate =>
+		var resource = provider.Resources.First(candidate =>
 			string.Equals(candidate.Kind, "media.route", StringComparison.Ordinal));
 		return new PreparedExecutionContract(
 			RuntimeContractVersion.Current,
