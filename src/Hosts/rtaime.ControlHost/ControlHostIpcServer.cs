@@ -6,6 +6,7 @@ using System.Text.Json;
 using rtaime.Control.Contracts;
 using rtaime.Core;
 using rtaime.Media.Contracts;
+using rtaime.Provider.Contracts;
 using rtaime.Runtime.Contracts;
 
 namespace rtaime.ControlHost;
