@@ -79,7 +79,7 @@ foreach ($source in @($mediaContracts, $providerContracts, $foundation)) {
 Assert-Condition ($documentation -match 'AJA NTV2 SDK') "Media I/O decision must identify the V1 reference adapter path."
 Assert-Condition ($documentation -match 'Physical hardware qualification state:\s*\*\*UNVERIFIED\*\*') "Media I/O documentation must not overstate physical qualification."
 Assert-Condition ($documentation -match 'DeviceDirectLease[\s\S]*SharedOpaqueHandle[\s\S]*PinnedHostLease') "Documentation must retain zero-copy-first transfer preference."
-Assert-Condition ($documentation -match 'Deferred to AP-33') "Physical adapter implementation must remain explicitly deferred to AP-33."
+Assert-Condition ($documentation -match 'Deferred to Media I/O Vertical Slice') "Physical adapter implementation must remain explicitly deferred to the Media I/O Vertical Slice."
 
 Assert-Condition ($contractTests -match 'contains_no_bulk_media_payload_property') "Contracts must regress bulk-payload exclusion."
 Assert-Condition ($contractTests -match 'requires_shared_opaque_lease') "Contracts must regress input lease semantics."
@@ -88,7 +88,7 @@ Assert-Condition ($unitTests -match 'Admission_fails_closed') "Unit tests must r
 Assert-Condition ($unitTests -match 'releases_exactly_once') "Unit tests must regress idempotent input lease release."
 
 $nativeProjects = @(Get-ChildItem -LiteralPath (Join-Path $repositoryRoot "native/Providers") -Filter *.vcxproj -File -Recurse -ErrorAction SilentlyContinue)
-Assert-Condition ($nativeProjects.Count -eq 0) "AP-32 must not introduce a native build project before the AP-33 physical adapter implementation."
+Assert-Condition ($nativeProjects.Count -eq 0) "The Media I/O foundation must not introduce a native build project before the physical Media I/O Vertical Slice adapter implementation."
 
 Write-Host "Media I/O foundation policy verification PASS"
 Write-Host "Reference adapter decision: AJA NTV2; physical hardware state: UNVERIFIED"
