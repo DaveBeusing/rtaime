@@ -327,7 +327,7 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 		var state = Enum.IsDefined(typeof(MediaDeckState), snapshot.State)
 			? (MediaDeckState)snapshot.State
 			: throw new InvalidDataException("Media-deck state is invalid.");
-		var sourceId = string.IsNullOrWhiteSpace(snapshot.SourceId)
+		MediaSourceId? sourceId = string.IsNullOrWhiteSpace(snapshot.SourceId)
 			? null
 			: new MediaSourceId(Identity.Parse(snapshot.SourceId));
 		return new MediaDeckRuntimeSnapshot(
