@@ -131,6 +131,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged
 		{
 			Apply(await _client.SynchronizeAsync());
 			CommandStatus = "SYNCHRONIZED";
+			TransitionStatus = "READY";
 			LastEvent = "Authoritative state synchronized from ControlHost.";
 		});
 	}
@@ -145,7 +146,8 @@ public sealed class OperatorViewModel : INotifyPropertyChanged
 			if (!Accept(response, "Set Preview")) return;
 			Apply(_client.Snapshot!);
 			CommandStatus = "APPLIED";
-			LastEvent = $"Preview source changed to {source.Name}.";
+			TransitionStatus = "PREVIEW CONFIRMED";
+			LastEvent = $"Preview source changed to {source.Name} and confirmed by authoritative control.";
 		});
 	}
 
@@ -201,7 +203,9 @@ public sealed class OperatorViewModel : INotifyPropertyChanged
 
 		IsBusy = true;
 		CommandStatus = $"{operation} IN FLIGHT";
-		CommitStatus = "COMMIT PENDING";
+		CommitStatus = string.Equals(operation, "SYNCHRONIZE", StringComparison.Ordinal)
+			? "SYNCHRONIZING"
+			: "COMMIT PENDING";
 		LastError = null;
 		RaiseCommandState();
 		try
