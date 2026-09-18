@@ -511,8 +511,26 @@
 
 					<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14">
 						<StackPanel>
-							<TextBlock Text="ISOLATED SERVICES" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,12" />
-							<DockPanel><TextBlock Text="AI" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding AIStatus}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
+							<DockPanel Margin="0,0,0,12">
+								<TextBlock Text="AI / PERSON SEGMENTATION" Style="{StaticResource OperatorSectionTitle}" />
+								<Border Style="{StaticResource OperatorStatusBadge}" DockPanel.Dock="Right">
+									<TextBlock Text="{Binding AIStatus}" FontWeight="Bold" />
+								</Border>
+							</DockPanel>
+							<TextBlock Text="{Binding AIFeature}" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,10" />
+							<DockPanel Margin="0,0,0,6"><TextBlock Text="Enabled" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding AIEnabled}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
+							<DockPanel Margin="0,0,0,6"><TextBlock Text="Provider" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding AIProvider}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" TextTrimming="CharacterEllipsis" MaxWidth="230" /></DockPanel>
+							<DockPanel Margin="0,0,0,6"><TextBlock Text="Inference Time" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding AIInferenceTime}" Style="{StaticResource OperatorTimecode}" DockPanel.Dock="Right" /></DockPanel>
+							<DockPanel Margin="0,0,0,6"><TextBlock Text="Person Regions" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding AIPersonRegions}" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" DockPanel.Dock="Right" /></DockPanel>
+							<DockPanel Margin="0,0,0,6"><TextBlock Text="Confidence" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding AIConfidence}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
+							<DockPanel Margin="0,0,0,10"><TextBlock Text="Synchronization" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding AISynchronization}" Style="{StaticResource OperatorLabel}" DockPanel.Dock="Right" /></DockPanel>
+							<Grid>
+								<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="6" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+								<Button Grid.Column="0" Content="AI ON" Command="{Binding EnableAIShowcaseCommand}" Style="{StaticResource OperatorAccentButton}" />
+								<Button Grid.Column="2" Content="AI OFF" Command="{Binding DisableAIShowcaseCommand}" Style="{StaticResource OperatorButton}" />
+							</Grid>
+							<TextBlock Text="{Binding AIError}" Foreground="{DynamicResource OperatorWarningBrush}" TextWrapping="Wrap" Margin="0,8,0,0" />
+							<TextBlock Text="Inference executes in AIHost. RuntimeHost applies only synchronized segmentation results; failure falls back to clean Program." Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,8,0,0" />
 						</StackPanel>
 					</Border>
 
