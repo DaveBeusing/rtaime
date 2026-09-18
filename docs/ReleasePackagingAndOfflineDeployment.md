@@ -92,6 +92,14 @@ tools/
 
 The ZIP transport is accompanied by a `.zip.sha256` sidecar.
 
+### Canonical application entry point
+
+The installed/generated bundle root exposes `rtaime.exe` as the canonical product entry point. The executable is the thin AppHost and is copied from the controlled `product/rtaime` release payload together with its framework-dependent runtime files.
+
+Starting `rtaime.exe` does not collapse the internal topology. ControlHost, RuntimeHost, AIHost and Operator remain separate product artifacts below `product/`. AppHost starts or adopts ControlHost, waits for qualified readiness, and launches Operator only when the selected startup profile requires it.
+
+The existing `tools/Invoke-ManagedHostLifecycle.ps1` remains the administrative lifecycle entry point, and `Start-rtaime-Showcase.cmd` remains the deterministic showcase compatibility entry point.
+
 ### Repository source paths vs bundle paths
 
 The repository does **not** use a root `tools/` directory as a source location. Offline operational tools are maintained at their canonical repository paths under:
