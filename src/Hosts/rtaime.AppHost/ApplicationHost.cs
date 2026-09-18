@@ -146,7 +146,7 @@ public sealed record ApplicationHostOptions(
 
 		var stateFallback = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "rtaime");
 		var stateRoot = Path.GetFullPath(Resolve("state-root", "RTAIME_STATE_ROOT", stateFallback));
-		var workFallback = windowsService
+		var workFallback = windowsService || ownership == ApplicationLifecycleOwnership.ExternalManaged
 			? Path.Combine(stateRoot, "service", instanceId)
 			: Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "rtaime", "apphost", instanceId);
 		var workRoot = Path.GetFullPath(Resolve("work-root", "RTAIME_APPHOST_WORK_ROOT", workFallback));
