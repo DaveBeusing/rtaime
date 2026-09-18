@@ -128,6 +128,21 @@ The standard solution and integration suites already cover the production capabi
 - Operator UI authority and UX policy;
 - managed host lifecycle readiness/restart/stop.
 
+The scenario is traceable to existing executable evidence:
+
+| Demo area | Primary automated evidence |
+| --- | --- |
+| One-click packaged bootstrap | `build/showcase/Test-PackagedInvestorDemo.ps1` |
+| Demo Production preparation / packaged media state | `DemoProductionPackageIntegrationTests` |
+| Timeline, cues, autoplay and end behavior | `MediaAutoplayProductionIpcIntegrationTests` plus the Demo Production integration |
+| Preview/CUT/DISSOLVE authority | `ProductionIpcIntegrationTests` and `V1EndToEndProofTests` |
+| Graphics composition | `GraphicsOverlayIntegrationTests` |
+| Audio / AFV | `AudioOperatorWorkflowIntegrationTests` |
+| Program Recording | `RecordingOperatorWorkflowIntegrationTests` |
+| AI showcase and continuity | `AIShowcaseIntegrationTests` |
+| Runtime Health evidence semantics | `RuntimeHealthPerformanceHudIntegrationTests` |
+| Program Output display selection/fallback | Operator UI policy plus manual physical-display acceptance |
+
 Packaged E2E additionally installs the generated release bundle and executes the same showcase launcher in bounded one-shot qualification mode:
 
 `install → managed lifecycle → Operator authoritative synchronization → readiness evidence → Operator exit → graceful lifecycle stop`
