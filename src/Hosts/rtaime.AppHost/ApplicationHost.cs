@@ -13,6 +13,13 @@ public enum ApplicationStartupProfile
 	HeadlessEngine
 }
 
+public enum ApplicationLifecycleOwnership
+{
+	EphemeralLocal,
+	PersistentEngine,
+	ExternalManaged
+}
+
 public enum ApplicationLifecycleState
 {
 	Stopped,
@@ -78,6 +85,8 @@ public sealed record ApplicationHostOptions(
 	string StateRoot,
 	string WorkRoot,
 	string InstanceId,
+	ApplicationLifecycleOwnership Ownership,
+	bool WindowsService,
 	bool RequireAI,
 	bool DisposableInteractiveSession,
 	ApplicationLifecyclePolicy Policy)
@@ -120,16 +129,32 @@ public sealed record ApplicationHostOptions(
 		if (!System.Text.RegularExpressions.Regex.IsMatch(instanceId, "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"))
 			throw new ArgumentException("InstanceId must contain only letters, digits, '.', '_' or '-' and be at most 64 characters.", nameof(args));
 
+		var windowsService = args.Contains("--windows-service", StringComparer.OrdinalIgnoreCase);
+		var disposable = args.Contains("--disposable", StringComparer.OrdinalIgnoreCase);
+		var defaultOwnership = profile == ApplicationStartupProfile.Showcase || disposable
+			? ApplicationLifecycleOwnership.EphemeralLocal
+			: ApplicationLifecycleOwnership.PersistentEngine;
+		var ownershipText = Resolve("ownership", "RTAIME_LIFECYCLE_OWNERSHIP", defaultOwnership.ToString());
+		if (!Enum.TryParse<ApplicationLifecycleOwnership>(ownershipText, true, out var ownership))
+			throw new ArgumentException($"Unknown lifecycle ownership '{ownershipText}'.", nameof(args));
+		if (disposable && ownership != ApplicationLifecycleOwnership.EphemeralLocal)
+			throw new ArgumentException("--disposable requires EphemeralLocal lifecycle ownership.", nameof(args));
+		if (windowsService && profile != ApplicationStartupProfile.HeadlessEngine)
+			throw new ArgumentException("--windows-service requires the HeadlessEngine startup profile.", nameof(args));
+		if (windowsService && ownership != ApplicationLifecycleOwnership.PersistentEngine)
+			throw new ArgumentException("--windows-service requires PersistentEngine lifecycle ownership.", nameof(args));
+
 		var stateFallback = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "rtaime");
 		var stateRoot = Path.GetFullPath(Resolve("state-root", "RTAIME_STATE_ROOT", stateFallback));
-		var workFallback = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "rtaime", "apphost", instanceId);
+		var workFallback = windowsService
+			? Path.Combine(stateRoot, "service", instanceId)
+			: Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "rtaime", "apphost", instanceId);
 		var workRoot = Path.GetFullPath(Resolve("work-root", "RTAIME_APPHOST_WORK_ROOT", workFallback));
 		var policyPath = Resolve("policy", "RTAIME_LIFECYCLE_POLICY", string.Empty);
 		var policy = ApplicationLifecyclePolicy.Load(installRoot, string.IsNullOrWhiteSpace(policyPath) ? null : policyPath);
 		var requireAI = !args.Contains("--no-ai", StringComparer.OrdinalIgnoreCase);
-		var disposable = args.Contains("--disposable", StringComparer.OrdinalIgnoreCase);
 
-		return new ApplicationHostOptions(profile, installRoot, stateRoot, workRoot, instanceId, requireAI, disposable, policy);
+		return new ApplicationHostOptions(profile, installRoot, stateRoot, workRoot, instanceId, ownership, windowsService, requireAI, disposable, policy);
 	}
 
 	private string WithInstance(string endpoint) =>
@@ -350,8 +375,18 @@ public sealed class UnifiedApplicationHost
 			var ready = await FindHealthyReadinessAsync(cancellationToken).ConfigureAwait(false);
 			if (ready is null)
 			{
-				StartControlHost();
-				ready = await WaitForReadinessAsync(cancellationToken).ConfigureAwait(false);
+				if (_options.Ownership == ApplicationLifecycleOwnership.ExternalManaged)
+				{
+					ready = await WaitForExternalReadinessAsync(cancellationToken).ConfigureAwait(false);
+					_adopted = true;
+					_controlProcessId = ready.Value.Evidence.ProcessId;
+					_activeReadinessPath = ready.Value.Path;
+				}
+				else
+				{
+					StartControlHost();
+					ready = await WaitForReadinessAsync(cancellationToken).ConfigureAwait(false);
+				}
 			}
 			else
 			{
@@ -370,11 +405,8 @@ public sealed class UnifiedApplicationHost
 			{
 				var operatorProcessId = StartOperator();
 				await ObserveOperatorAsync(operatorProcessId, cancellationToken).ConfigureAwait(false);
-				if (_options.Profile == ApplicationStartupProfile.Showcase ||
-					(_options.Profile == ApplicationStartupProfile.Interactive && _options.DisposableInteractiveSession))
-				{
+				if (_options.Ownership == ApplicationLifecycleOwnership.EphemeralLocal)
 					await StopOwnedControlAsync(CancellationToken.None).ConfigureAwait(false);
-				}
 			}
 
 			Transition(ApplicationLifecycleState.Stopped);
@@ -382,13 +414,15 @@ public sealed class UnifiedApplicationHost
 		}
 		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
 		{
-			await StopOwnedControlAsync(CancellationToken.None).ConfigureAwait(false);
+			if (ShouldStopOwnedControlOnHostExit())
+				await StopOwnedControlAsync(CancellationToken.None).ConfigureAwait(false);
 			Transition(ApplicationLifecycleState.Stopped);
 			return new ApplicationHostRunResult(true, _options.Profile, _adopted, _controlProcessId ?? 0);
 		}
 		catch
 		{
-			await StopOwnedControlAsync(CancellationToken.None).ConfigureAwait(false);
+			if (State == ApplicationLifecycleState.Starting || ShouldStopOwnedControlOnHostExit())
+				await StopOwnedControlAsync(CancellationToken.None).ConfigureAwait(false);
 			Transition(ApplicationLifecycleState.Failed);
 			throw;
 		}
@@ -473,6 +507,20 @@ public sealed class UnifiedApplicationHost
 		throw new TimeoutException("rtaime engine did not reach qualified readiness before the configured startup timeout.");
 	}
 
+	private async Task<(string Path, ApplicationReadinessEvidence Evidence)> WaitForExternalReadinessAsync(CancellationToken cancellationToken)
+	{
+		var deadline = _platform.UtcNow + _options.Policy.StartupTimeout;
+		while (_platform.UtcNow < deadline)
+		{
+			cancellationToken.ThrowIfCancellationRequested();
+			var ready = await FindHealthyReadinessAsync(cancellationToken).ConfigureAwait(false);
+			if (ready is not null) return ready.Value;
+			await _platform.DelayAsync(_options.Policy.ProbeInterval, cancellationToken).ConfigureAwait(false);
+		}
+
+		throw new TimeoutException("Externally managed rtaime engine did not reach qualified readiness before the configured startup timeout.");
+	}
+
 	private async Task<(string Path, ApplicationReadinessEvidence Evidence)?> FindHealthyReadinessAsync(CancellationToken cancellationToken)
 	{
 		foreach (var path in GetReadinessCandidates())
@@ -535,9 +583,6 @@ public sealed class UnifiedApplicationHost
 		while (_platform.IsProcessAlive(operatorProcessId))
 		{
 			cancellationToken.ThrowIfCancellationRequested();
-			if (_controlProcessId is { } controlPid && !_platform.IsProcessAlive(controlPid))
-				throw new InvalidOperationException("ControlHost stopped while Operator was active.");
-
 			var readiness = await FindHealthyReadinessAsync(cancellationToken).ConfigureAwait(false);
 			if (readiness is null)
 			{
@@ -546,11 +591,15 @@ public sealed class UnifiedApplicationHost
 				if (_platform.UtcNow - degradedSince >= _options.Policy.StartupTimeout)
 					throw new TimeoutException("Engine readiness did not recover within the configured recovery window.");
 			}
-			else if (degradedSince is not null)
+			else
 			{
-				Transition(ApplicationLifecycleState.Recovering);
-				degradedSince = null;
-				Transition(ApplicationLifecycleState.Healthy);
+				TrackReadiness(readiness.Value);
+				if (degradedSince is not null)
+				{
+					Transition(ApplicationLifecycleState.Recovering);
+					degradedSince = null;
+					Transition(ApplicationLifecycleState.Healthy);
+				}
 			}
 			await _platform.DelayAsync(_options.Policy.ProbeInterval, cancellationToken).ConfigureAwait(false);
 		}
@@ -587,6 +636,24 @@ public sealed class UnifiedApplicationHost
 			await _platform.DelayAsync(_options.Policy.ProbeInterval, cancellationToken).ConfigureAwait(false);
 		}
 	}
+
+	private void TrackReadiness((string Path, ApplicationReadinessEvidence Evidence) readiness)
+	{
+		var previousControlProcessId = _controlProcessId;
+		_controlProcessId = readiness.Evidence.ProcessId;
+		_activeReadinessPath = readiness.Path;
+		if (previousControlProcessId == _controlProcessId) return;
+		if (_ownedControlProcessId is { } ownedProcessId && ownedProcessId != _controlProcessId && !_platform.IsProcessAlive(ownedProcessId))
+		{
+			_ownedControlProcessId = null;
+			_adopted = true;
+		}
+	}
+
+	private bool ShouldStopOwnedControlOnHostExit() =>
+		_options.Ownership == ApplicationLifecycleOwnership.EphemeralLocal ||
+		(_options.Profile == ApplicationStartupProfile.HeadlessEngine &&
+			_options.Ownership == ApplicationLifecycleOwnership.PersistentEngine);
 
 	private async Task StopOwnedControlAsync(CancellationToken cancellationToken)
 	{
