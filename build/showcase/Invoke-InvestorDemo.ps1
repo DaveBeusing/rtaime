@@ -198,12 +198,13 @@ try {
 		}
 	}
 
+	$shutdownAccepted = -not $startedLifecycle -or $stopStatus -eq "PASS"
 	$receipt = [ordered]@{
 		copyright = "Copyright (c) Dave Beusing <david.beusing@gmail.com>."
 		schemaVersion = "1.0"
 		scenario = "INVESTOR_DEMO"
-		status = if ($null -eq $failureDetail -and $operatorExitCode -eq 0 -and $stopStatus -ne "FAIL") { "PASS" } else { "FAIL" }
-		serviceReadiness = if ($null -eq $failureDetail) { "PASS" } else { "FAIL" }
+		status = if ($null -eq $failureDetail -and $operatorExitCode -eq 0 -and $shutdownAccepted) { "PASS" } else { "FAIL" }
+		serviceReadiness = if ($null -ne $operatorExitCode) { "PASS" } else { "FAIL" }
 		operatorReadiness = $operatorReadiness
 		operatorExitCode = $operatorExitCode
 		lifecycleOwnedByLauncher = $startedLifecycle
