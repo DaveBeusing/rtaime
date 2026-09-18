@@ -39,6 +39,16 @@ Regulatory notification is a separate manufacturer responsibility from public di
 
 The repository policy models the EU Cyber Resilience Act reporting timelines that apply to actively exploited vulnerabilities and severe security incidents, but repository metadata alone is not legal evidence that a notification was submitted.
 
+## Windows service deployment boundary
+
+The supported persistent Windows engine can be registered through the packaged `Invoke-WindowsServiceLifecycle.ps1` administration tool.
+
+The current default service registration uses the Windows `LocalSystem` account so the production engine can access its machine-level state root and qualified device/provider surfaces without an interactive user session. This is a privileged deployment identity, not a claim of least-privilege certification.
+
+Production qualification must therefore verify the service account, filesystem ACLs, provider/device access, event-log visibility and operational access policy for the target machine. A deployment that requires a narrower service identity must validate that identity and its required ACL/device permissions before production use.
+
+Operator remains an independent client process and does not acquire service-account privileges merely by connecting to the engine.
+
 ## Supported versions
 
 The project has not yet established a production support-period declaration. Until such a declaration is approved and release evidence is updated, support-period status remains `UNVERIFIED`.
