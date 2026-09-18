@@ -65,6 +65,7 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 	}
 
 	public event PropertyChangedEventHandler? PropertyChanged;
+	public event Action<MediaDeckSnapshot>? SnapshotChanged;
 
 	public MediaTimelineViewModel Timeline { get; }
 	public ObservableCollection<MediaDeckCueItem> Cues { get; }
@@ -391,6 +392,7 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 		OnPropertyChanged(nameof(InTimecode));
 		OnPropertyChanged(nameof(OutTimecode));
 		OnPropertyChanged(nameof(StatusDetail));
+		SnapshotChanged?.Invoke(_snapshot);
 		RaiseCommands();
 	}
 
