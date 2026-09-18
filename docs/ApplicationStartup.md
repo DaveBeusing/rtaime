@@ -167,3 +167,12 @@ Application startup does not implement:
 - new Control/Runtime authority paths;
 - media or AI business-logic changes.
 
+
+
+## Operator startup presentation
+
+The product entry point still owns process-level startup and qualifies ControlHost, RuntimeHost and the required AIHost endpoint before it launches the interactive Operator. The Operator then performs an ordinary Client SDK full-snapshot synchronization before exposing its production workspace as interactive.
+
+During that synchronization the Operator shows a lightweight startup surface driven only by real connection, health and lifecycle evidence. There are no fake progress timers and no optimistic completion. The surface reports Control, Runtime, AI and Operator state and remains present until the first authoritative snapshot proves the UI is ready.
+
+Direct launches of `rtaime.Operator` use the same behavior: the bounded management refresh keeps attempting the normal full-snapshot path until ControlHost is available. Once initial readiness has completed, the startup surface is latched off; later outages are presented as in-place recovery rather than hiding the production workspace.

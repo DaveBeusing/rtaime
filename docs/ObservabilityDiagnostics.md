@@ -114,3 +114,12 @@ GPU utilization and used VRAM remain `UNVERIFIED` when the active backend cannot
 ControlHost derives the Operator health projection from existing Runtime snapshots, provider availability, Media observations and authoritative Control availability. The projection uses `PASS / FAIL / UNVERIFIED` evidence semantics and carries only metadata through management IPC.
 
 The Operator consumes this projection on the existing bounded 200 ms management refresh. Runtime Health & Performance HUD adds no per-frame UI callback, no second telemetry polling task and no local GPU probing. No per-frame disk write is introduced.
+
+
+## Operator lifecycle projection
+
+The Operator derives its compact engine lifecycle and Program-safety presentation from the existing authoritative management snapshot. It does not add another telemetry collector.
+
+The projection uses the existing Control, Runtime, Media, Provider and GPU Provider `PASS / FAIL / UNVERIFIED` evidence together with Runtime readiness, connection freshness and the existing AI showcase state. Unknown evidence remains unverified and is never converted to healthy.
+
+The existing bounded 200 ms management refresh is also the reconnect mechanism. When Control synchronization becomes stale, mutations are blocked while the same refresh continues requesting a full snapshot. Recovery is complete only after a new authoritative snapshot is accepted. Repeated failures update one bounded status/error presentation rather than accumulating modal errors or an unbounded event list.

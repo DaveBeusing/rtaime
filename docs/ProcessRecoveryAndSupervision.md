@@ -161,3 +161,22 @@ Process Recovery & Supervision qualifies process-level recovery semantics. It do
 - hardware I/O continuity during device/driver reset.
 
 Those remain UNVERIFIED unless a later package provides direct evidence.
+
+
+## Operator recovery experience
+
+The normal interactive Operator now turns the existing reconnect semantics into an explicit lifecycle presentation:
+
+```text
+HEALTHY
+  -> DEGRADED / RECOVERING
+  -> HEALTHY
+```
+
+A stale Control session immediately blocks production mutations while preserving read-only Program/monitoring visibility where the independent monitoring plane is still available. The existing bounded management refresh continues attempting `control.snapshot.get`; it does not stop merely because the prior session became stale. A ControlHost replacement therefore returns through the mandatory full-snapshot path before mutation controls can become active again.
+
+The startup overlay is used only until the first qualified authoritative synchronization. After that point the main production workspace remains visible during degradation and recovery so the operator can understand what is happening.
+
+AI effect failure is kept separate from core production authority. When an enabled governed AI effect reports `UNAVAILABLE`, `TIMEOUT` or `FAILED` while core Control/Runtime evidence remains valid, the engine presentation is `DEGRADED` but Program safety remains valid or cautionary according to the core evidence. The UI does not claim that AI loss is a Program failure.
+
+`FAILED` is reserved for explicit recovery-exhaustion evidence. The Operator does not infer terminal failure merely from missing metrics or from an arbitrary local retry count.

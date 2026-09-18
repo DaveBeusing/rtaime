@@ -80,6 +80,13 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	private bool _audioMuted;
 	private double _audioProgramGain = 1.0;
 	private string _clipAudioStatus = "NO CLIP AUDIO";
+	private string _engineLifecycleState = OperatorLifecycleStates.Starting;
+	private string _engineLifecycleDetail = "Waiting for the first authoritative Control snapshot.";
+	private string _programSafety = OperatorProgramSafetyStates.Unknown;
+	private string _recoveryAction = "Startup is automatic; no operator action is required.";
+	private string _affectedComponent = "Control";
+	private bool _startupComplete;
+	private bool _hasSynchronized;
 	private string _connectionState = "DISCONNECTED";
 	private string _connectionDetail = "Synchronize to load authoritative state.";
 	private string _commandStatus = "IDLE";
@@ -272,6 +279,12 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	public bool IsBusy { get => _isBusy; private set => Set(ref _isBusy, value); }
 	public bool IsConnected { get => _isConnected; private set => Set(ref _isConnected, value); }
 	public bool IsStale { get => _isStale; private set => Set(ref _isStale, value); }
+	public string EngineLifecycleState { get => _engineLifecycleState; private set => Set(ref _engineLifecycleState, value); }
+	public string EngineLifecycleDetail { get => _engineLifecycleDetail; private set => Set(ref _engineLifecycleDetail, value); }
+	public string ProgramSafety { get => _programSafety; private set => Set(ref _programSafety, value); }
+	public string RecoveryAction { get => _recoveryAction; private set => Set(ref _recoveryAction, value); }
+	public string AffectedComponent { get => _affectedComponent; private set => Set(ref _affectedComponent, value); }
+	public bool StartupComplete { get => _startupComplete; private set => Set(ref _startupComplete, value); }
 
 	public uint TransitionFrames
 	{
@@ -288,6 +301,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		IsConnected &&
 		!IsStale &&
 		!IsBusy &&
+		ProgramSafety != OperatorProgramSafetyStates.Blocked &&
 		string.Equals(RuntimeStatus, "READY", StringComparison.OrdinalIgnoreCase);
 
 	private bool CanSetPreview() => CanControl() && SelectedSource is not null;
@@ -333,17 +347,32 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(200));
 		while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
 		{
-			if (_client is null || !IsConnected || IsStale || IsBusy)
+			if (_client is null || IsBusy)
 				continue;
 			try
 			{
 				var snapshot = await _client.SynchronizeAsync(cancellationToken).ConfigureAwait(false);
 				Post(() =>
 				{
-					ApplyAudio(snapshot, preserveSelectedGainEdit: true);
-					ApplyRecording(snapshot.Recording, preserveTargetEdit: true);
-					ApplyHealth(snapshot.Health);
-					ApplyAI(snapshot.AIShowcase);
+					var recovered = _hasSynchronized && (IsStale || !IsConnected);
+					if (!_hasSynchronized || recovered)
+					{
+						Apply(snapshot);
+						if (recovered)
+						{
+							CommandStatus = "RESYNCHRONIZED";
+							LastError = null;
+							LastEvent = "Automatic recovery restored a full authoritative Control snapshot.";
+						}
+					}
+					else
+					{
+						ApplyAudio(snapshot, preserveSelectedGainEdit: true);
+						ApplyRecording(snapshot.Recording, preserveTargetEdit: true);
+						ApplyHealth(snapshot.Health);
+						ApplyAI(snapshot.AIShowcase);
+						ApplyLifecycle(snapshot);
+					}
 					AudioMeterStatus = "LIVE";
 				});
 			}
@@ -353,7 +382,23 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 			}
 			catch (Exception exception) when (exception is IOException or TimeoutException or InvalidOperationException)
 			{
-				Post(() => AudioMeterStatus = "STALE");
+				Post(() =>
+				{
+					AudioMeterStatus = "STALE";
+					if (_hasSynchronized)
+					{
+						if (!IsStale)
+						{
+							MarkStale("Control synchronization is stale. Automatic full-snapshot recovery is active.");
+							CommandStatus = "RECOVERING";
+							LastEvent = "Control connection was lost; automatic recovery is running.";
+						}
+					}
+					else
+					{
+						MarkStartupWaiting(exception.Message);
+					}
+				});
 			}
 		}
 	}
@@ -643,15 +688,26 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		}
 		catch (Exception exception)
 		{
-			if (exception is IOException or TimeoutException or OperationCanceledException)
-				MarkStale(exception.Message);
+			var connectivityFailure = exception is IOException or TimeoutException or OperationCanceledException;
+			var startupWaiting = connectivityFailure && !_hasSynchronized;
+			if (connectivityFailure)
+			{
+				if (startupWaiting)
+					MarkStartupWaiting(exception.Message);
+				else
+					MarkStale(exception.Message);
+			}
 			else
+			{
 				LastError = exception.Message;
+			}
 
-			CommandStatus = "FAILED";
-			CommitStatus = IsStale ? "UNCONFIRMED" : $"FAILED · {RevisionLabel} UNCHANGED";
-			TransitionStatus = $"{operation} FAILED";
-			LastEvent = $"{operation} failed; Program was not advanced locally.";
+			CommandStatus = startupWaiting ? "WAITING" : "FAILED";
+			CommitStatus = startupWaiting ? "UNCONFIRMED" : IsStale ? "UNCONFIRMED" : $"FAILED · {RevisionLabel} UNCHANGED";
+			TransitionStatus = startupWaiting ? "STARTING" : $"{operation} FAILED";
+			LastEvent = startupWaiting
+				? "Waiting for authoritative Control readiness."
+				: $"{operation} failed; Program was not advanced locally.";
 		}
 		finally
 		{
@@ -713,6 +769,8 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 			? "CONNECTED"
 			: "DEGRADED";
 		ConnectionDetail = $"Authoritative snapshot loaded. Runtime status: {snapshot.RuntimeStatus}.";
+		_hasSynchronized = true;
+		ApplyLifecycle(snapshot);
 		if (!IsBusy)
 			TransitionStatus = "READY";
 		RaiseCommandState();
@@ -923,6 +981,40 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		GpuProviderHealth = "UNVERIFIED";
 		HealthObserved = "STALE";
 		LastError = detail;
+		ApplyLifecycle(_client?.Snapshot);
+		RaiseCommandState();
+	}
+
+	private void MarkStartupWaiting(string detail)
+	{
+		IsConnected = false;
+		IsStale = false;
+		ConnectionState = "STARTING";
+		ConnectionDetail = $"Waiting for authoritative startup readiness. {detail}";
+		CommandStatus = "WAITING";
+		CommitStatus = "UNCONFIRMED";
+		TransitionStatus = "STARTING";
+		LastError = null;
+		ApplyLifecycle(null);
+		RaiseCommandState();
+	}
+
+	private void ApplyLifecycle(OperatorStatusSnapshot? snapshot)
+	{
+		var projection = OperatorSystemLifecycleProjection.Evaluate(
+			snapshot?.Health ?? OperatorHealthDescriptor.Unavailable,
+			snapshot?.RuntimeStatus ?? RuntimeStatus,
+			snapshot?.AIShowcase ?? OperatorAIShowcaseDescriptor.Unavailable,
+			IsConnected,
+			IsStale);
+
+		EngineLifecycleState = projection.State;
+		EngineLifecycleDetail = projection.Detail;
+		ProgramSafety = projection.ProgramSafety;
+		RecoveryAction = projection.RequiredAction;
+		AffectedComponent = projection.AffectedComponent ?? "—";
+		if (!StartupComplete && projection.MainUiReady)
+			StartupComplete = true;
 		RaiseCommandState();
 	}
 

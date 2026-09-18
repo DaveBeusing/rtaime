@@ -44,6 +44,12 @@
 					<TextBlock Text="{Binding ConnectionDetail}" Foreground="{DynamicResource OperatorMutedTextBrush}" FontSize="12" Margin="0,8,0,0" TextTrimming="CharacterEllipsis" />
 				</StackPanel>
 				<StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+					<Border Style="{StaticResource OperatorLifecycleBadge}" Tag="{Binding EngineLifecycleState}" Margin="0,0,8,0" ToolTip="{Binding EngineLifecycleDetail}" AutomationProperties.Name="Engine lifecycle status">
+						<StackPanel Orientation="Horizontal">
+							<TextBlock Text="ENGINE " FontWeight="SemiBold" />
+							<TextBlock Text="{Binding EngineLifecycleState}" FontWeight="Bold" />
+						</StackPanel>
+					</Border>
 					<Border Style="{StaticResource OperatorStatusBadge}" Margin="0,0,8,0">
 						<TextBlock Text="{Binding ConnectionState}" FontWeight="Bold" />
 					</Border>
@@ -289,12 +295,15 @@
 					<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14">
 						<StackPanel>
 							<DockPanel Margin="0,0,0,12">
-								<TextBlock Text="RUNTIME HEALTH / PERFORMANCE" Style="{StaticResource OperatorSectionTitle}" />
+								<TextBlock Text="SYSTEM STATUS" Style="{StaticResource OperatorSectionTitle}" />
 								<Border Style="{StaticResource OperatorEvidenceBadge}" Tag="{Binding EngineHealth}" DockPanel.Dock="Right">
 									<TextBlock Text="{Binding EngineHealth}" FontWeight="Bold" />
 								</Border>
 							</DockPanel>
 							<TextBlock Text="{Binding EngineHealthDetail}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,0,0,12" />
+							<DockPanel Margin="0,0,0,6"><TextBlock Text="Lifecycle" Style="{StaticResource OperatorLabel}" /><Border Style="{StaticResource OperatorLifecycleBadge}" Tag="{Binding EngineLifecycleState}" DockPanel.Dock="Right"><TextBlock Text="{Binding EngineLifecycleState}" FontWeight="Bold" /></Border></DockPanel>
+							<DockPanel Margin="0,0,0,6"><TextBlock Text="Program Safety" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding ProgramSafety}" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" DockPanel.Dock="Right" /></DockPanel>
+							<DockPanel Margin="0,0,0,12"><TextBlock Text="Affected" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding AffectedComponent}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
 							<Grid Margin="0,0,0,12">
 								<Grid.ColumnDefinitions>
 									<ColumnDefinition Width="*" />
@@ -308,9 +317,12 @@
 								</StackPanel>
 								<StackPanel Grid.Column="2">
 									<DockPanel Margin="0,0,0,6"><TextBlock Text="Providers" Style="{StaticResource OperatorLabel}" /><Border Style="{StaticResource OperatorEvidenceBadge}" Tag="{Binding ProviderHealth}" DockPanel.Dock="Right"><TextBlock Text="{Binding ProviderHealth}" FontWeight="Bold" /></Border></DockPanel>
-									<DockPanel><TextBlock Text="GPU Provider" Style="{StaticResource OperatorLabel}" /><Border Style="{StaticResource OperatorEvidenceBadge}" Tag="{Binding GpuProviderHealth}" DockPanel.Dock="Right"><TextBlock Text="{Binding GpuProviderHealth}" FontWeight="Bold" /></Border></DockPanel>
+									<DockPanel Margin="0,0,0,6"><TextBlock Text="GPU Provider" Style="{StaticResource OperatorLabel}" /><Border Style="{StaticResource OperatorEvidenceBadge}" Tag="{Binding GpuProviderHealth}" DockPanel.Dock="Right"><TextBlock Text="{Binding GpuProviderHealth}" FontWeight="Bold" /></Border></DockPanel>
+									<DockPanel Margin="0,0,0,6"><TextBlock Text="AI" Style="{StaticResource OperatorLabel}" /><Border Style="{StaticResource OperatorStatusBadge}" DockPanel.Dock="Right"><TextBlock Text="{Binding AIStatus}" FontWeight="Bold" /></Border></DockPanel>
+									<DockPanel><TextBlock Text="Recording" Style="{StaticResource OperatorLabel}" /><Border Style="{StaticResource OperatorStatusBadge}" DockPanel.Dock="Right"><TextBlock Text="{Binding RecordingStatus}" FontWeight="Bold" /></Border></DockPanel>
 								</StackPanel>
 							</Grid>
+							<TextBlock Text="{Binding RecoveryAction}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,0,0,12" />
 							<Border Height="1" Background="{DynamicResource OperatorBorderBrush}" Margin="0,0,0,12" />
 							<DockPanel Margin="0,0,0,6"><TextBlock Text="Current Format" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding CurrentFormat}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
 							<DockPanel Margin="0,0,0,6"><TextBlock Text="Frame Time / Budget" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding FrameTime}" Style="{StaticResource OperatorTimecode}" DockPanel.Dock="Right" /></DockPanel>
@@ -587,6 +599,50 @@
 					</Border.Style>
 					<TextBlock Text="{Binding LastError}" Foreground="{DynamicResource OperatorErrorBrush}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
 				</Border>
+			</Grid>
+		</Border>
+
+		<Border Grid.RowSpan="3" Panel.ZIndex="100" Background="{DynamicResource OperatorSurfaceBrush}" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1">
+			<Border.Style>
+				<Style TargetType="Border">
+					<Setter Property="Visibility" Value="Visible" />
+					<Style.Triggers>
+						<DataTrigger Binding="{Binding StartupComplete}" Value="True">
+							<Setter Property="Visibility" Value="Collapsed" />
+						</DataTrigger>
+					</Style.Triggers>
+				</Style>
+			</Border.Style>
+			<Grid MaxWidth="620" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="32">
+				<Grid.RowDefinitions>
+					<RowDefinition Height="Auto" />
+					<RowDefinition Height="Auto" />
+					<RowDefinition Height="Auto" />
+				</Grid.RowDefinitions>
+				<StackPanel>
+					<TextBlock Text="rtaime" FontSize="36" FontWeight="SemiBold" HorizontalAlignment="Center" />
+					<TextBlock Text="Production-grade real-time AI media platform." Style="{StaticResource OperatorLabel}" HorizontalAlignment="Center" Margin="0,6,0,24" />
+					<Border Style="{StaticResource OperatorLifecycleBadge}" Tag="{Binding EngineLifecycleState}" HorizontalAlignment="Center" Margin="0,0,0,14">
+						<StackPanel Orientation="Horizontal">
+							<TextBlock Text="ENGINE " FontWeight="SemiBold" />
+							<TextBlock Text="{Binding EngineLifecycleState}" FontWeight="Bold" />
+						</StackPanel>
+					</Border>
+					<TextBlock Text="{Binding EngineLifecycleDetail}" FontSize="16" TextAlignment="Center" TextWrapping="Wrap" Margin="0,0,0,22" />
+				</StackPanel>
+				<Grid Grid.Row="1" Margin="70,0">
+					<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+					<Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+					<TextBlock Text="Control" Style="{StaticResource OperatorLabel}" Margin="0,4" />
+					<TextBlock Grid.Column="1" Text="{Binding ControlHealth}" FontWeight="SemiBold" Margin="20,4,0,4" />
+					<TextBlock Grid.Row="1" Text="Runtime" Style="{StaticResource OperatorLabel}" Margin="0,4" />
+					<TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding RuntimeHealth}" FontWeight="SemiBold" Margin="20,4,0,4" />
+					<TextBlock Grid.Row="2" Text="AI" Style="{StaticResource OperatorLabel}" Margin="0,4" />
+					<TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding AIStatus}" FontWeight="SemiBold" Margin="20,4,0,4" />
+					<TextBlock Grid.Row="3" Text="Operator" Style="{StaticResource OperatorLabel}" Margin="0,4" />
+					<TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding ConnectionState}" FontWeight="SemiBold" Margin="20,4,0,4" />
+				</Grid>
+				<TextBlock Grid.Row="2" Text="{Binding RecoveryAction}" Style="{StaticResource OperatorLabel}" TextAlignment="Center" TextWrapping="Wrap" Margin="0,22,0,0" />
 			</Grid>
 		</Border>
 	</Grid>

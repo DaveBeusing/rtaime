@@ -121,6 +121,11 @@ public partial class MainWindow : Window
 	{
 		ContentRendered -= OnContentRendered;
 		SynchronizeButton.Focus();
+		if (DataContext is OperatorViewModel viewModel &&
+			viewModel.SynchronizeCommand.CanExecute(null))
+		{
+			viewModel.SynchronizeCommand.Execute(null);
+		}
 	}
 
 	private async void OnClosingAsync(object? sender, CancelEventArgs e)
