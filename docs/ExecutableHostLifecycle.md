@@ -32,9 +32,11 @@ rtaime.exe / AppHost
 └── opens Operator after qualified readiness
 ```
 
-AppHost does not take project references on the service hosts and does not directly supervise RuntimeHost or AIHost. It observes product lifecycle state, reuses the existing ControlHost readiness evidence and Named Pipe readiness checks, and only stops a ControlHost lifecycle that it owns. A ControlHost process loss is reported as application failure; V1 does not add an unattended AppHost restart loop.
+AppHost does not take project references on the service hosts and does not directly supervise RuntimeHost or AIHost. It observes product lifecycle state and reuses the existing ControlHost readiness evidence and Named Pipe readiness checks.
 
-See `docs/ApplicationStartup.md` for startup profiles, adoption, readiness and ownership semantics.
+Lifecycle ownership is explicit. Ephemeral local sessions may stop a ControlHost lifecycle they own; interactive persistent sessions and externally managed sessions do not tear the engine down when Operator exits. The persistent Windows-service path runs the same AppHost lifecycle in HeadlessEngine mode. A top-level ControlHost loss fails that service process so Windows Service Control Manager recovery can restart the persistent lifecycle and require fresh qualified readiness.
+
+See `docs/ApplicationStartup.md` and `docs/WindowsProductionLifecycle.md` for startup profiles, ownership, Windows service operation and qualification semantics.
 
 ## Exit semantics
 
@@ -94,7 +96,7 @@ The default root is `%LOCALAPPDATA%/rtaime/data` on Windows, with an application
 
 Process Recovery & Supervision verifies both durability lanes before activating recovered authority. A valid latest checkpoint restores the exact persisted Production Revision and routing, after which Runtime execution is queried and reconciled against the committed Runtime `AuthoritySnapshot`, not against Runtime-local `ExecutionRevision`. A Runtime execution whose AuthoritySnapshot matches the restored Control ProductionId and Production Revision is rebound as-is even when its ExecutionRevision differs. A Runtime with no committed authority or an older matching AuthorityRevision is reapplied at the same Control authority revision. A newer or foreign Runtime authority is a fail-closed recovery conflict.
 
-Optional RuntimeHost/AIHost supervision is endpoint-driven. Existing reachable endpoints are adopted without duplicate process launch. Restart attempts are bounded. The ControlHost executable may launch configured Runtime/AI executables. Product startup may start or adopt ControlHost through AppHost, while administrative or future operating-system service management may also own that top-level lifecycle. No V1 component automatically restarts a failed ControlHost, so a ControlHost crash does not become an implicit termination path for already-running child hosts.
+Optional RuntimeHost/AIHost supervision is endpoint-driven. Existing reachable endpoints are adopted without duplicate process launch. Restart attempts are bounded. The ControlHost executable may launch configured Runtime/AI executables. Product startup may start or adopt ControlHost through AppHost, while Windows Service Control Manager may own the persistent top-level lifecycle. ControlHost does not supervise itself; when the persistent service process fails, configured Service Control Manager recovery starts a new top-level lifecycle that must restore qualified readiness.
 
 ### RuntimeHost
 
