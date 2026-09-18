@@ -194,7 +194,11 @@ public sealed class RuntimeHostProcess
 		Func<RuntimeHostProcessOptions, IProgramRecordingWriter, V1RuntimeHostService>? runtimeFactory = null)
 	{
 		_options = options ?? throw new ArgumentNullException(nameof(options));
-		_recordingWriterFactory = recordingWriterFactory ?? (() => new NullProgramRecordingWriter());
+		_recordingWriterFactory = recordingWriterFactory ?? (() => new ReferenceRecordingPayloadWriter(
+			Path.Combine(
+				Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+				"rtaime",
+				"recordings")));
 		_runtimeFactory = runtimeFactory ?? ((processOptions, writer) => new V1RuntimeHostService(
 			processOptions.SourceAId,
 			processOptions.SourceBId,
