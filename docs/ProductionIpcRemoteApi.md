@@ -2,7 +2,7 @@
 
 # Production IPC & Remote API V1
 
-AP-14 introduces the first real cross-process control plane for rtaime while preserving the approved 28-project topology and host authority boundaries. AP-16 extends the Runtime snapshot payload with the committed authority reference required for process recovery without changing those ownership boundaries.
+Production IPC & Remote API introduces the first real cross-process control plane for rtaime while preserving the approved 28-project topology and host authority boundaries. Process Recovery & Supervision extends the Runtime snapshot payload with the committed authority reference required for process recovery without changing those ownership boundaries.
 
 ## Process topology
 
@@ -114,7 +114,7 @@ AuthorityRevision
 
 `ExecutionRevision` is Runtime-local transactional history. `AuthorityStateId` and `AuthorityRevision` identify the `AuthoritySnapshotReference` carried by the `PreparedExecutionContract` that produced the currently committed execution. The authority fields are absent when Runtime has no committed authority and are emitted as a pair when present. ControlHost fails closed on a malformed partial pair.
 
-AP-16 process recovery compares the Runtime authority reference with Control authority; it never assumes that `ExecutionRevision == Production Revision`.
+Process Recovery & Supervision process recovery compares the Runtime authority reference with Control authority; it never assumes that `ExecutionRevision == Production Revision`.
 
 ### AIHost
 
@@ -209,18 +209,18 @@ The normal ControlHost snapshot now carries the Runtime-observed recording lifec
 Only commands and recording metadata cross management IPC. Program RGBA pixels and Float32 audio remain inside RuntimeHost and the Recording subsystem. Recording start/stop is serialized by ControlHost's existing mutation gate but does not create or advance an authoritative Production revision.
 
 
-## AP-54 Runtime health snapshot extension
+## Runtime Health & Performance HUD Runtime health snapshot extension
 
-AP-54 extends the existing private RuntimeHost and ControlHost snapshot payloads with bounded observational health/performance metadata. No public Control or Runtime contract version changes are introduced.
+Runtime Health & Performance HUD extends the existing private RuntimeHost and ControlHost snapshot payloads with bounded observational health/performance metadata. No public Control or Runtime contract version changes are introduced.
 
 RuntimeHost snapshot metadata now carries Runtime uptime, frame budget, the last observed Program-boundary processing duration, cumulative dropped-frame evidence, GPU backend identity and optional GPU utilization/VRAM measurements. Optional GPU measurements remain absent when the active backend has no qualified source.
 
 ControlHost combines this Runtime metadata with its authoritative-state availability, Runtime timing/execution state, media observations and cached Runtime provider descriptors to produce the Operator `PASS / FAIL / UNVERIFIED` health projection.
 
-Only metadata crosses management IPC. AP-54 does not transport frame pixels, audio samples, GPU surfaces or telemetry histories, and it introduces no new polling transport or remote-monitoring API.
+Only metadata crosses management IPC. Runtime Health & Performance HUD does not transport frame pixels, audio samples, GPU surfaces or telemetry histories, and it introduces no new polling transport or remote-monitoring API.
 
 
-## AP-55 AI showcase control and observation
+## Visible AI Showcase Integration AI showcase control and observation
 
 Operator-facing ControlHost adds:
 

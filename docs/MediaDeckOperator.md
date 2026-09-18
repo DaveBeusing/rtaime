@@ -4,7 +4,7 @@
 
 ## Scope
 
-AP-45 composes the local-media capabilities delivered by AP-41 through AP-44 into one showcase-ready Operator module.
+Media Deck Operator composes the local-media capabilities delivered by Local Media File Source through Media Markers into one showcase-ready Operator module.
 
 The deck exposes:
 
@@ -19,7 +19,7 @@ The deck exposes:
 - explicit unloaded, ready, playing, paused, ended and error presentation;
 - keyboard access without stealing the existing production CUT shortcut.
 
-Playlist, clip-bank, multi-deck, waveform, thumbnails and final showcase styling remain outside AP-45. Program-triggered playback and deterministic end behavior are added by AP-52 below.
+Playlist, clip-bank, multi-deck, waveform, thumbnails and final showcase styling remain outside Media Deck Operator. Program-triggered playback and deterministic end behavior are added by AP-52 below.
 
 ## Authority and process boundaries
 
@@ -87,7 +87,7 @@ Timeline focus retains Left/Right frame stepping and Home/End clip-boundary seek
 
 ## Acceptance evidence
 
-AP-45 requires:
+Media Deck Operator requires:
 
 - Release solution build;
 - architecture tests;

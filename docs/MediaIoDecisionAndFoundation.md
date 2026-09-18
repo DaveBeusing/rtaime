@@ -2,7 +2,7 @@
 
 # Media I/O Decision & Foundation
 
-Status: **ACCEPTED for AP-32**  
+Status: **ACCEPTED for Media I/O Decision & Foundation**  
 Decision date: **2026-09-16**  
 V1 reference adapter target: **AJA NTV2 SDK**  
 Physical hardware qualification state: **UNVERIFIED**
@@ -18,11 +18,11 @@ Runtime / Media pipeline
 	-> rtaime Media-I/O contracts and admission
 	-> IMediaIoProviderAdapter
 	-> rtaime_media_io_abi.h
-	-> native AJA NTV2 adapter (AP-33)
+	-> native AJA NTV2 adapter (Media I/O Vertical Slice)
 	-> AJA SDK / driver / hardware
 ```
 
-The AP-32 repository continues to contain exactly the approved 28 managed projects. No vendor SDK package and no native build project is introduced in this package. The first physical adapter is intentionally deferred to AP-33 so that the native dependency is justified by an explicit hardware boundary rather than added to the bootstrap graph speculatively.
+The Media I/O Decision & Foundation repository continues to contain exactly the approved 28 managed projects. No vendor SDK package and no native build project is introduced in this package. The first physical adapter is intentionally deferred to Media I/O Vertical Slice so that the native dependency is justified by an explicit hardware boundary rather than added to the bootstrap graph speculatively.
 
 ## Why AJA NTV2 is the V1 reference path
 
@@ -34,7 +34,7 @@ The decision is based on the following V1 priorities:
 4. **Build reproducibility.** The reference adapter can be isolated under `native/Providers` without making stable managed assemblies depend on proprietary binary packages.
 5. **Future provider plurality.** The rtaime-facing ABI contains no AJA identifiers, allowing a DeckLink or other professional adapter to be added later without changing Control/Runtime contracts.
 
-Blackmagic DeckLink remains a valid future adapter option. The current DeckLink SDK is cross-platform and its Windows API is COM-based; current documentation also describes NVIDIA GPUDirect support on Windows/Linux x86_64. It was not selected as the V1 reference adapter because AP-32 prioritizes a directly auditable/open core SDK and a narrow native C++ boundary. This is a reference-provider decision, not a claim that AJA hardware is universally superior.
+Blackmagic DeckLink remains a valid future adapter option. The current DeckLink SDK is cross-platform and its Windows API is COM-based; current documentation also describes NVIDIA GPUDirect support on Windows/Linux x86_64. It was not selected as the V1 reference adapter because Media I/O Decision & Foundation prioritizes a directly auditable/open core SDK and a narrow native C++ boundary. This is a reference-provider decision, not a claim that AJA hardware is universally superior.
 
 ## Contract model
 
@@ -60,7 +60,7 @@ The runtime-facing normalized V1 video formats remain:
 - 1920x1080p50 RGBA8
 - 1920x1080p59.94 RGBA8
 
-Physical I/O adapters may capture/output a different native wire/storage encoding. AP-32 explicitly models the initial native encodings:
+Physical I/O adapters may capture/output a different native wire/storage encoding. Media I/O Decision & Foundation explicitly models the initial native encodings:
 
 - RGBA8
 - UYVY 8-bit 4:2:2
@@ -92,7 +92,7 @@ This makes buffer lifetime observable and prevents accidental ownership transfer
 
 ## Native ABI
 
-`native/Providers/MediaIo/rtaime_media_io_abi.h` is the only AP-32 native-facing ABI definition. It deliberately contains:
+`native/Providers/MediaIo/rtaime_media_io_abi.h` is the only Media I/O Decision & Foundation native-facing ABI definition. It deliberately contains:
 
 - opaque provider/session handles
 - port enumeration
@@ -129,23 +129,23 @@ Physical ports map one-to-one to generic `ProviderResourceDescriptor` resources,
 
 ## Audio
 
-AP-32 preserves embedded audio as a handle/descriptor path using the existing `AudioBufferDescriptor`. No audio byte payload is added to Media I/O contracts. V1 logical audio remains compatible with the existing stereo 48 kHz model; native adapter conversion/interleave details stay behind the provider boundary.
+Media I/O Decision & Foundation preserves embedded audio as a handle/descriptor path using the existing `AudioBufferDescriptor`. No audio byte payload is added to Media I/O contracts. V1 logical audio remains compatible with the existing stereo 48 kHz model; native adapter conversion/interleave details stay behind the provider boundary.
 
 ## Timing and reference
 
 The adapter must preserve capture/output sequence number, presentation timestamp and timebase. External reference support is declared per port and is an admission requirement when requested.
 
-AP-32 does not claim genlock, reference-lock accuracy or end-to-end latency qualification. Those require physical evidence in AP-33/AP-34.
+Media I/O Decision & Foundation does not claim genlock, reference-lock accuracy or end-to-end latency qualification. Those require physical evidence in Media I/O Vertical Slice/Timing/Reference/Latency/Soak Qualification.
 
 ## Failure behavior
 
 Media I/O is not production authority. Device/signal failure must be represented as provider/port status and may degrade execution, but it must not mutate authoritative Control state by itself.
 
-Input acquisition and output submission are non-blocking seams. Backpressure, lost signal, device loss and queue exhaustion must be observable and bounded. AP-33 must not introduce synchronous vendor calls into Control management paths.
+Input acquisition and output submission are non-blocking seams. Backpressure, lost signal, device loss and queue exhaustion must be observable and bounded. Media I/O Vertical Slice must not introduce synchronous vendor calls into Control management paths.
 
-## AP-32 deliverables
+## Media I/O Decision & Foundation deliverables
 
-AP-32 establishes:
+Media I/O Decision & Foundation establishes:
 
 - vendor-neutral media-I/O contracts
 - provider port/profile contracts
@@ -156,9 +156,9 @@ AP-32 establishes:
 - AJA NTV2 as the V1 reference adapter decision
 - contract/unit/policy guardrails
 
-## Deferred to AP-33
+## Deferred to Media I/O Vertical Slice
 
-AP-33 will implement the first physical vertical slice. It must add evidence for:
+Media I/O Vertical Slice will implement the first physical vertical slice. It must add evidence for:
 
 - AJA device discovery
 - two V1 video inputs
@@ -172,7 +172,7 @@ AP-33 will implement the first physical vertical slice. It must add evidence for
 - actual transfer-mode reporting
 - RuntimeHost composition through the provider seam
 
-A specific AJA hardware SKU must be declared by the AP-33 qualification environment. AP-32 does not hard-code or falsely qualify a physical device.
+A specific AJA hardware SKU must be declared by the Media I/O Vertical Slice qualification environment. Media I/O Decision & Foundation does not hard-code or falsely qualify a physical device.
 
 ## Source basis for the vendor decision
 
@@ -181,4 +181,4 @@ Current vendor documentation reviewed on 2026-09-16:
 - AJA Developer platform: open-source `libajantv2` path under MIT plus a full NTV2 Developer Program for professional KONA/Corvid integrations.
 - Blackmagic Design Desktop Video 16.0 SDK / DeckLink SDK Manual, released 2026-04-08: Windows/macOS/Linux support, COM-style Windows integration and documented GPUDirect capability on supported Windows/Linux x86_64 systems.
 
-These vendor facts support only the reference-provider decision. Actual rtaime compatibility and performance remain evidence-driven and unverified until AP-33 hardware qualification.
+These vendor facts support only the reference-provider decision. Actual rtaime compatibility and performance remain evidence-driven and unverified until Media I/O Vertical Slice hardware qualification.

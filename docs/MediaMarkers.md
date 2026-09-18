@@ -4,7 +4,7 @@
 
 ## Scope
 
-AP-44 adds persistent, frame-based media markers on top of the AP-42 transport and AP-43 timeline coordinate system.
+Media Markers adds persistent, frame-based media markers on top of the Local Media Transport transport and Media Timeline Seeker timeline coordinate system.
 
 Supported V1 marker operations:
 
@@ -17,7 +17,7 @@ Supported V1 marker operations:
 - jump to a cue point;
 - persist and restore all marker metadata by `MediaAssetId`.
 
-Waveforms, thumbnails, timeline zoom, playlists, macros, cue colors and external trigger protocols remain outside AP-44.
+Waveforms, thumbnails, timeline zoom, playlists, macros, cue colors and external trigger protocols remain outside Media Markers.
 
 ## Authority
 
@@ -25,7 +25,7 @@ Marker state is not owned by WPF controls.
 
 `MediaMarkerController` in `rtaime.Media` applies versioned `MediaMarkerCommand` values and returns a confirmed `MediaMarkerSnapshot`. The client-side `MediaTimelineMarkerController` only translates operator intent into marker commands and reconciles the returned snapshot.
 
-Jump operations use the AP-43 absolute timeline seek seam, which in turn submits the existing AP-42 transport seek command. The Operator therefore does not acquire a second playback or marker authority.
+Jump operations use the Media Timeline Seeker absolute timeline seek seam, which in turn submits the existing Local Media Transport transport seek command. The Operator therefore does not acquire a second playback or marker authority.
 
 ## Frame semantics
 
@@ -51,27 +51,27 @@ Persistence uses optimistic document versions. A stale expected storage version 
 
 ## Media Foundation qualification stabilization
 
-The AP-44 branch also simplifies the inherited local-media decoder boundary used by AP-42/AP-43 qualification. Windows Media Foundation is asked for decoder-native NV12 video and PCM audio using only major type and subtype. rtaime converts NV12 to RGBA and PCM16 to Float32 in managed code.
+The Media Markers branch also simplifies the inherited local-media decoder boundary used by Local Media Transport/Media Timeline Seeker qualification. Windows Media Foundation is asked for decoder-native NV12 video and PCM audio using only major type and subtype. rtaime converts NV12 to RGBA and PCM16 to Float32 in managed code.
 
 This removes the optional Source Reader RGB32 video-processing stage from the qualification path while preserving the existing external RGBA/Float32 media contracts.
 
 ## Acceptance evidence
 
-AP-44 evidence covers:
+Media Markers evidence covers:
 
 - contract validation for frame ranges, cue identities and command-specific fields;
 - deterministic cue ordering;
 - IN/OUT ordering and controlled rejections;
 - add/rename/delete cue behavior;
 - client commands sourced from the confirmed transport frame;
-- jump-to-IN and jump-to-cue through the AP-43 seek seam;
+- jump-to-IN and jump-to-cue through the Media Timeline Seeker seek seam;
 - SQLite save/load roundtrip;
 - optimistic persistence version conflict;
 - changed-media frame-count rejection;
 - normal Release build, architecture, contract, unit, integration and provider smoke gates.
 
-## Handover to AP-45
+## Handover to Media Deck Operator
 
-AP-45 may compose these marker capabilities into the Media Deck Operator surface: visible IN/OUT indicators, cue list, buttons, keyboard bindings, tally/loading/error presentation and deck lifecycle.
+Media Deck Operator may compose these marker capabilities into the Media Deck Operator surface: visible IN/OUT indicators, cue list, buttons, keyboard bindings, tally/loading/error presentation and deck lifecycle.
 
-AP-45 must not move marker truth into the UI. It must render confirmed `MediaMarkerSnapshot` state and submit commands through the existing client/control seams.
+Media Deck Operator must not move marker truth into the UI. It must render confirmed `MediaMarkerSnapshot` state and submit commands through the existing client/control seams.

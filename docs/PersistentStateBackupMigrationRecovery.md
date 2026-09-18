@@ -127,7 +127,7 @@ The software update policy now records:
 persistentStateMigration = COORDINATED_ONLY
 ```
 
-This does not move persistence logic into the software updater. Instead, `Invoke-CoordinatedUpgrade.ps1` explicitly composes the AP-23 software replacement boundary with this maintenance primitive.
+This does not move persistence logic into the software updater. Instead, `Invoke-CoordinatedUpgrade.ps1` explicitly composes the Update Discovery & Rollback software replacement boundary with this maintenance primitive.
 
 Production migration authority comes from the signed target bundle's:
 

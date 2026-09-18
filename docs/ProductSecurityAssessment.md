@@ -2,11 +2,11 @@
 
 # Product Security Assessment & Release Evidence Binding
 
-Status: AP-37 IMPLEMENTATION FOUNDATION
+Status: IMPLEMENTATION FOUNDATION
 
 ## Purpose
 
-AP-37 adds a fail-closed bridge between a completed product-security review and the `SECURITY` domain in release evidence.
+Product Security Assessment adds a fail-closed bridge between a completed product-security review and the `SECURITY` domain in release evidence.
 
 The assessment is engineering evidence for one exact source and build identity. It does not assert CRA conformity, CE readiness, legal product classification, regulatory submission, production support-period fulfillment, or production signing trust.
 
