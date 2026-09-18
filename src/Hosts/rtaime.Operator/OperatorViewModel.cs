@@ -31,6 +31,12 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	private string _inputStatus = "UNKNOWN";
 	private string _aiStatus = "UNKNOWN";
 	private string _recordingStatus = "UNKNOWN";
+	private string _recordingDestination = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyVideos), "rtaime");
+	private string _recordingFileName = CreateRecordingFileName();
+	private string _recordingElapsed = "00:00:00";
+	private string _recordingFinalPath = "—";
+	private string _recordingStatistics = "0 written · 0 dropped";
+	private string? _recordingError;
 	private string _visualLayerStatus = "UNKNOWN";
 	private string _graphicsAssetName = "No graphics asset loaded";
 	private string _graphicsDimensions = "—";
@@ -85,6 +91,8 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		ClearGraphicsCommand = new AsyncRelayCommand(ClearGraphicsAsync, CanApplyGraphics);
 		ApplyAudioGainCommand = new AsyncRelayCommand(ApplyAudioGainAsync, CanApplyAudio);
 		ToggleAudioMuteCommand = new AsyncRelayCommand(ToggleAudioMuteAsync, CanApplyAudio);
+		StartRecordingCommand = new AsyncRelayCommand(StartRecordingAsync, CanStartRecording);
+		StopRecordingCommand = new AsyncRelayCommand(StopRecordingAsync, CanStopRecording);
 	}
 
 	internal OperatorControlClient? Client => _client;
@@ -103,6 +111,8 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	public ICommand ClearGraphicsCommand { get; }
 	public ICommand ApplyAudioGainCommand { get; }
 	public ICommand ToggleAudioMuteCommand { get; }
+	public ICommand StartRecordingCommand { get; }
+	public ICommand StopRecordingCommand { get; }
 
 	public string MonitoringStatus => "Monitoring unavailable until AP-29";
 	public string FormatStatus => "Format metadata is not exposed by the management snapshot.";
@@ -136,6 +146,28 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	public string InputStatus { get => _inputStatus; private set => Set(ref _inputStatus, value); }
 	public string AIStatus { get => _aiStatus; private set => Set(ref _aiStatus, value); }
 	public string RecordingStatus { get => _recordingStatus; private set => Set(ref _recordingStatus, value); }
+	public string RecordingDestination
+	{
+		get => _recordingDestination;
+		set
+		{
+			if (Set(ref _recordingDestination, value))
+				RaiseCommandState();
+		}
+	}
+	public string RecordingFileName
+	{
+		get => _recordingFileName;
+		set
+		{
+			if (Set(ref _recordingFileName, value))
+				RaiseCommandState();
+		}
+	}
+	public string RecordingElapsed { get => _recordingElapsed; private set => Set(ref _recordingElapsed, value); }
+	public string RecordingFinalPath { get => _recordingFinalPath; private set => Set(ref _recordingFinalPath, value); }
+	public string RecordingStatistics { get => _recordingStatistics; private set => Set(ref _recordingStatistics, value); }
+	public string? RecordingError { get => _recordingError; private set => Set(ref _recordingError, value); }
 	public string VisualLayerStatus { get => _visualLayerStatus; private set => Set(ref _visualLayerStatus, value); }
 	public string GraphicsAssetName { get => _graphicsAssetName; private set => Set(ref _graphicsAssetName, value); }
 	public string GraphicsDimensions { get => _graphicsDimensions; private set => Set(ref _graphicsDimensions, value); }
@@ -220,6 +252,17 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 
 	private bool CanApplyAudio() => CanControl() && SelectedAudioInput is not null;
 
+	private bool CanStartRecording() =>
+		CanControl() &&
+		!string.IsNullOrWhiteSpace(RecordingDestination) &&
+		!string.IsNullOrWhiteSpace(RecordingFileName) &&
+		RecordingStatus is not ("RECORDING" or "FINALIZING");
+
+	private bool CanStopRecording() =>
+		CanControl() &&
+		string.Equals(RecordingStatus, "RECORDING", StringComparison.Ordinal);
+
+
 	public void StartAudioMetering()
 	{
 		if (_audioPollingTask is null && _client is not null)
@@ -250,6 +293,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 				Post(() =>
 				{
 					ApplyAudio(snapshot, preserveSelectedGainEdit: true);
+					ApplyRecording(snapshot.Recording, preserveTargetEdit: true);
 					AudioMeterStatus = "LIVE";
 				});
 			}
@@ -328,6 +372,56 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 			CommandStatus = "APPLIED";
 			TransitionStatus = $"DISSOLVE {durationFrames}F CONFIRMED";
 			LastEvent = $"DISSOLVE committed confirmed Preview source {previewName} to Program over {durationFrames} frames.";
+		});
+	}
+
+	private async Task StartRecordingAsync()
+	{
+		if (_client is null) return;
+		var destination = RecordingDestination;
+		var fileName = RecordingFileName;
+
+		await ExecuteAsync("START RECORDING", async () =>
+		{
+			var result = await _client.StartRecordingAsync(destination, fileName);
+			Apply(_client.Snapshot!);
+			if (!result.Succeeded)
+			{
+				RecordingError = result.Failure?.Message ?? "Recording start was rejected.";
+				LastError = RecordingError;
+				CommandStatus = "RECORDING FAILED";
+				LastEvent = "Recording start was rejected; Program execution remains unchanged.";
+				return;
+			}
+
+			RecordingError = null;
+			CommandStatus = "RECORDING";
+			LastEvent = $"Program recording started: {fileName}.";
+		});
+	}
+
+	private async Task StopRecordingAsync()
+	{
+		if (_client is null) return;
+		await ExecuteAsync("STOP RECORDING", async () =>
+		{
+			var result = await _client.StopRecordingAsync();
+			Apply(_client.Snapshot!);
+			if (!result.Succeeded)
+			{
+				RecordingError = result.Failure?.Message ?? "Recording stop failed.";
+				LastError = RecordingError;
+				CommandStatus = "RECORDING FAILED";
+				LastEvent = "Recording stop/finalization failed; RuntimeHost reported the failure.";
+				return;
+			}
+
+			RecordingError = null;
+			CommandStatus = "RECORDING SAVED";
+			LastEvent = string.IsNullOrWhiteSpace(RecordingFinalPath)
+				? "Program recording finalized."
+				: $"Program recording finalized: {RecordingFinalPath}.";
+			RecordingFileName = CreateRecordingFileName();
 		});
 	}
 
@@ -532,7 +626,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		TimingStatus = snapshot.TimingStatus;
 		InputStatus = snapshot.InputStatus;
 		AIStatus = snapshot.AIStatus;
-		RecordingStatus = snapshot.RecordingStatus;
+		ApplyRecording(snapshot.Recording, preserveTargetEdit: false);
 		var graphics = snapshot.GraphicsOverlay;
 		GraphicsAssetName = graphics.AssetLoaded ? graphics.AssetName ?? "Unnamed graphics asset" : "No graphics asset loaded";
 		GraphicsDimensions = graphics.AssetLoaded ? $"{graphics.AssetWidth}×{graphics.AssetHeight}" : "—";
@@ -608,6 +702,31 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 			AudioMeterStatus = "LIVE";
 		RaiseCommandState();
 	}
+
+	private void ApplyRecording(OperatorRecordingDescriptor recording, bool preserveTargetEdit)
+	{
+		RecordingStatus = recording.State;
+		RecordingElapsed = FormatElapsed(recording.Elapsed);
+		RecordingFinalPath = string.IsNullOrWhiteSpace(recording.FinalPath) ? "—" : recording.FinalPath;
+		RecordingStatistics = $"{recording.Written} written · {recording.Dropped} dropped · {recording.WriterFailures} writer failures";
+		RecordingError = recording.Failure?.Message;
+
+		if (!preserveTargetEdit || recording.State is "RECORDING" or "FINALIZING")
+		{
+			if (!string.IsNullOrWhiteSpace(recording.Destination))
+				RecordingDestination = recording.Destination;
+			if (!string.IsNullOrWhiteSpace(recording.FileName))
+				RecordingFileName = recording.FileName;
+		}
+
+		RaiseCommandState();
+	}
+
+	private static string FormatElapsed(TimeSpan elapsed) =>
+		$"{(int)elapsed.TotalHours:00}:{elapsed.Minutes:00}:{elapsed.Seconds:00}";
+
+	private static string CreateRecordingFileName() =>
+		$"rtaime-{DateTime.Now:yyyyMMdd-HHmmss}";
 
 	private void Post(Action action)
 	{
@@ -698,6 +817,8 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		(ClearGraphicsCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 		(ApplyAudioGainCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 		(ToggleAudioMuteCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+		(StartRecordingCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+		(StopRecordingCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 	}
 
 	private bool Set<T>(ref T field, T value, [CallerMemberName] string? name = null)
