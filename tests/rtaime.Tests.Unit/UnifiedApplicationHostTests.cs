@@ -142,6 +142,24 @@ public sealed class UnifiedApplicationHostTests
 	}
 
 	[Fact]
+	public async Task Forced_shutdown_is_evidenced_as_failure()
+	{
+		var options = CreateOptions(ApplicationStartupProfile.Interactive, ApplicationLifecycleOwnership.EphemeralLocal);
+		var platform = new FakeApplicationHostPlatform(options)
+		{
+			PublishReadinessOnControlStart = true,
+			IgnoreStopSignal = true
+		};
+
+		await new UnifiedApplicationHost(options, platform).RunAsync();
+
+		using var evidence = JsonDocument.Parse(platform.ReadAllText(options.ShutdownEvidencePath));
+		Assert.Equal("FAIL", evidence.RootElement.GetProperty("status").GetString());
+		Assert.False(evidence.RootElement.GetProperty("graceful").GetBoolean());
+		Assert.True(evidence.RootElement.GetProperty("forcedTermination").GetBoolean());
+	}
+
+	[Fact]
 	public async Task External_managed_never_starts_control_host()
 	{
 		var options = CreateOptions(ApplicationStartupProfile.Interactive, ApplicationLifecycleOwnership.ExternalManaged);
@@ -224,6 +242,7 @@ public sealed class UnifiedApplicationHostTests
 		public bool PublishReadinessAfterDelay { get; init; }
 		public bool PipeReachable { get; set; } = true;
 		public bool StopSignalWritten { get; private set; }
+		public bool IgnoreStopSignal { get; set; }
 		public int OperatorDelayBudget { get; set; }
 		public Action? OnDelay { get; set; }
 		public List<string> StartedBaseNames { get; } = new();
@@ -265,7 +284,7 @@ public sealed class UnifiedApplicationHostTests
 			if (Path.GetFullPath(path) == Path.GetFullPath(_options.StopPath))
 			{
 				StopSignalWritten = true;
-				if (_alive.Count > 0) _alive.Remove(_alive.Min());
+				if (!IgnoreStopSignal && _alive.Count > 0) _alive.Remove(_alive.Min());
 			}
 		}
 
