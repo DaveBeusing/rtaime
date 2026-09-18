@@ -1,5 +1,5 @@
 {
-	"$schema": "rtaime.demo.production-package/1",
+	"schema": "rtaime.demo.production-package/1",
 	"$comment": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
 	"name": "rtaime Funding Prototype Demo",
 	"version": "1.0",
