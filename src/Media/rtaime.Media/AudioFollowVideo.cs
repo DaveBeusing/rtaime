@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Numerics;
+using System.Runtime.InteropServices;
 using rtaime.Core;
 using rtaime.Media.Contracts;
 
@@ -59,6 +60,56 @@ public readonly record struct AudioGain
 
 public sealed record AudioInputState(AudioStreamId StreamId, AudioGain Gain, bool Muted);
 
+public readonly record struct AudioStereoMeter
+{
+	public AudioStereoMeter(double leftPeakLevel, double rightPeakLevel)
+	{
+		if (!double.IsFinite(leftPeakLevel) || leftPeakLevel is < 0 or > 1)
+			throw new ArgumentOutOfRangeException(nameof(leftPeakLevel), "Left audio peak must be finite and in the inclusive range 0..1.");
+		if (!double.IsFinite(rightPeakLevel) || rightPeakLevel is < 0 or > 1)
+			throw new ArgumentOutOfRangeException(nameof(rightPeakLevel), "Right audio peak must be finite and in the inclusive range 0..1.");
+
+		LeftPeakLevel = leftPeakLevel;
+		RightPeakLevel = rightPeakLevel;
+	}
+
+	public double LeftPeakLevel { get; }
+	public double RightPeakLevel { get; }
+	public double PeakLevel => Math.Max(LeftPeakLevel, RightPeakLevel);
+
+	public static AudioStereoMeter Mono(double peakLevel) => new(peakLevel, peakLevel);
+}
+
+public static class AudioMetering
+{
+	public static AudioStereoMeter MeasureInterleavedStereoFloat32(ReadOnlySpan<float> samples)
+	{
+		if (samples.Length == 0)
+			return new AudioStereoMeter(0, 0);
+		if ((samples.Length & 1) != 0)
+			throw new ArgumentException("Stereo audio samples must contain an even number of interleaved values.", nameof(samples));
+
+		double left = 0;
+		double right = 0;
+		for (var index = 0; index < samples.Length; index += 2)
+		{
+			left = Math.Max(left, Peak(samples[index]));
+			right = Math.Max(right, Peak(samples[index + 1]));
+		}
+		return new AudioStereoMeter(Math.Min(1, left), Math.Min(1, right));
+	}
+
+	public static AudioStereoMeter MeasureInterleavedStereoFloat32(ReadOnlySpan<byte> payload)
+	{
+		if ((payload.Length % sizeof(float)) != 0)
+			throw new ArgumentException("Float32 audio payload length must be aligned to four bytes.", nameof(payload));
+		return MeasureInterleavedStereoFloat32(MemoryMarshal.Cast<byte, float>(payload));
+	}
+
+	private static double Peak(float sample) =>
+		float.IsFinite(sample) ? Math.Abs((double)sample) : 1;
+}
+
 public enum AudioFollowVideoStatus
 {
     Emitted = 1,
@@ -81,6 +132,9 @@ public sealed record AudioFollowVideoResult(
     Failure? Failure)
 {
     public bool Emitted => Status == AudioFollowVideoStatus.Emitted;
+    public double LeftPeakLevel { get; init; }
+    public double RightPeakLevel { get; init; }
+    public bool Clipping { get; init; }
 }
 
 public readonly record struct AudioFollowVideoStatistics(
@@ -232,7 +286,18 @@ public sealed class AudioFollowVideoEngine
         MediaSourceId committedVideoSourceId,
         ulong videoFrameSequence,
         AudioBufferDescriptor? buffer,
-        double observedPeakLevel)
+        double observedPeakLevel) =>
+        ProcessBoundary(
+            committedVideoSourceId,
+            videoFrameSequence,
+            buffer,
+            AudioStereoMeter.Mono(observedPeakLevel));
+
+    public AudioFollowVideoResult ProcessBoundary(
+        MediaSourceId committedVideoSourceId,
+        ulong videoFrameSequence,
+        AudioBufferDescriptor? buffer,
+        AudioStereoMeter observedMeter)
     {
         lock (_gate)
         {
@@ -321,16 +386,16 @@ public sealed class AudioFollowVideoEngine
                     validationFailure);
             }
 
-            if (!double.IsFinite(observedPeakLevel) || observedPeakLevel < 0 || observedPeakLevel > 1)
-                throw new ArgumentOutOfRangeException(nameof(observedPeakLevel), "Observed peak level must be finite and in the inclusive range 0..1.");
-
-            var effectivePeak = inputState.Muted
-                ? 0
-                : Math.Min(1, observedPeakLevel * inputState.Gain.Linear);
+            var leftUnclamped = inputState.Muted ? 0 : observedMeter.LeftPeakLevel * inputState.Gain.Linear;
+            var rightUnclamped = inputState.Muted ? 0 : observedMeter.RightPeakLevel * inputState.Gain.Linear;
+            var effectiveLeft = Math.Min(1, leftUnclamped);
+            var effectiveRight = Math.Min(1, rightUnclamped);
+            var effectivePeak = Math.Max(effectiveLeft, effectiveRight);
+            var clipping = !inputState.Muted && (leftUnclamped >= 1 || rightUnclamped >= 1);
 
             _emitted++;
             _lastPeakLevel = effectivePeak;
-            Observe("audio.afv.emitted", videoFrameSequence, _activeStreamId, null);
+            Observe(clipping ? "audio.afv.clipping" : "audio.afv.emitted", videoFrameSequence, _activeStreamId, null);
 
             return new AudioFollowVideoResult(
                 AudioFollowVideoStatus.Emitted,
@@ -342,7 +407,12 @@ public sealed class AudioFollowVideoEngine
                 inputState.Gain,
                 inputState.Muted,
                 effectivePeak,
-                null);
+                null)
+            {
+                LeftPeakLevel = effectiveLeft,
+                RightPeakLevel = effectiveRight,
+                Clipping = clipping
+            };
         }
     }
 

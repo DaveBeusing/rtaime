@@ -23,6 +23,7 @@ $timelinePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MediaTimeli
 $viewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorViewModel.cs"
 $monitorViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorMonitoringViewModel.cs"
 $sourceTileViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorSourceTileViewModel.cs"
+$audioInputViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorAudioInputViewModel.cs"
 $graphicsLoaderPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/GraphicsOverlayAssetLoader.cs"
 $tokensPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Themes/OperatorTokens.xaml"
 $themePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Themes/OperatorTheme.xaml"
@@ -30,7 +31,7 @@ $manifestPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/app.manifes
 $projectPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/rtaime.Operator.csproj"
 $documentationPath = Join-Path $repositoryRoot "docs/OperatorUiV1.md"
 
-foreach ($path in @($appPath, $windowPath, $deckPath, $timelinePath, $viewModelPath, $monitorViewModelPath, $sourceTileViewModelPath, $graphicsLoaderPath, $tokensPath, $themePath, $manifestPath, $projectPath, $documentationPath)) {
+foreach ($path in @($appPath, $windowPath, $deckPath, $timelinePath, $viewModelPath, $monitorViewModelPath, $sourceTileViewModelPath, $audioInputViewModelPath, $graphicsLoaderPath, $tokensPath, $themePath, $manifestPath, $projectPath, $documentationPath)) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required Operator UI artifact is missing: '$path'."
 }
 
@@ -41,6 +42,7 @@ $timeline = Get-Content -LiteralPath $timelinePath -Raw
 $viewModel = Get-Content -LiteralPath $viewModelPath -Raw
 $monitorViewModel = Get-Content -LiteralPath $monitorViewModelPath -Raw
 $sourceTileViewModel = Get-Content -LiteralPath $sourceTileViewModelPath -Raw
+$audioInputViewModel = Get-Content -LiteralPath $audioInputViewModelPath -Raw
 $graphicsLoader = Get-Content -LiteralPath $graphicsLoaderPath -Raw
 $tokens = Get-Content -LiteralPath $tokensPath -Raw
 $theme = Get-Content -LiteralPath $themePath -Raw
@@ -131,6 +133,21 @@ Assert-Condition ($viewModel -match 'ClearGraphicsOverlayAsync') "Operator graph
 Assert-Condition ($graphicsLoader -match 'PngBitmapDecoder') "Graphics asset loader must use the bounded PNG decode path."
 Assert-Condition ($graphicsLoader -match 'PixelFormats\.Bgra32') "Graphics asset loader must normalize PNG pixels before RGBA conversion."
 Assert-Condition ($graphicsLoader -match 'rgba\[offset\] = bgra\[offset \+ 2\]') "Graphics asset loader must preserve RGBA channel order for RuntimeHost."
+Assert-Condition ($window -match 'Text="AUDIO / AFV"') "Operator must expose the AP-50 audio/AFV workflow."
+Assert-Condition ($window -match 'ItemsSource="\{Binding AudioInputs\}"') "Audio workflow must expose Runtime-observed inputs."
+Assert-Condition ($window -match 'Binding AudioLeftPeak') "Audio workflow must expose left Program meter."
+Assert-Condition ($window -match 'Binding AudioRightPeak') "Audio workflow must expose right Program meter."
+Assert-Condition ($window -match 'Binding AudioMasterPeak') "Audio workflow must expose master Program meter."
+Assert-Condition ($window -match 'Binding AudioAfvSourceName') "Audio workflow must identify the Program-followed AFV source."
+Assert-Condition ($window -match 'Binding AudioHealth') "Audio workflow must expose audio health/clipping state."
+Assert-Condition ($window -match 'Binding ClipAudioStatus') "Audio workflow must expose local clip audio metadata/state."
+Assert-Condition ($window -match 'Binding ApplyAudioGainCommand') "Audio workflow must expose gain control."
+Assert-Condition ($window -match 'Binding ToggleAudioMuteCommand') "Audio workflow must expose mute control."
+Assert-Condition ($viewModel -match 'SetAudioInputStateAsync') "Audio mutations must cross the Client SDK seam."
+Assert-Condition ($viewModel -match 'PeriodicTimer\(TimeSpan\.FromMilliseconds\(200\)\)') "Audio meters must poll confirmed Runtime observations on a bounded management cadence."
+Assert-Condition ($viewModel -notmatch 'DispatcherTimer|DoubleAnimation') "Audio meters must not be locally animated or synthesized by WPF."
+Assert-Condition ($audioInputViewModel -match 'OperatorAudioInputDescriptor') "Audio input presentation must project Client SDK descriptors."
+Assert-Condition ($audioInputViewModel -match 'LeftPeak' -and $audioInputViewModel -match 'RightPeak') "Audio input presentation must retain stereo meter values."
 Assert-Condition ($window -match 'Text="COMMIT"') "Program workspace must expose commit status."
 Assert-Condition ($window -match 'Binding CommitStatus') "Program workspace must bind authoritative commit status."
 Assert-Condition ($window -match 'Binding TransitionStatus') "Program workspace must expose transition state."
@@ -158,5 +175,6 @@ Write-Host "Monitoring: independent non-authoritative bitmap plane"
 Write-Host "Production workspace: selected source -> confirmed Preview -> confirmed Program TAKE semantics verified"
 Write-Host "Source bin: live/media metadata, monitoring thumbnails, health, PGM/PVW and remaining-time presentation verified"
 Write-Host "Graphics: PNG/RGBA load, placement, scale and confirmed show/hide through Client SDK verified"
+Write-Host "Audio: AFV, stereo/master meters, gain, mute, clipping/health and clip-audio status use Runtime observations"
 Write-Host "Commit state: pending, confirmed, rejected/failed and resynchronization presentation verified"
 Write-Host "Keyboard controls: synchronization, Preview, CUT and DISSOLVE/AUTO declared"

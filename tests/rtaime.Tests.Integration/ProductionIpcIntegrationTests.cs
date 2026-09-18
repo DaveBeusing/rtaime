@@ -83,6 +83,23 @@ public sealed class ProductionIpcIntegrationTests
 		runtime.Runtime.SetInputSignalState(new MediaSourceId(Identity.Parse(sourceB.Id)), V1InputSignalState.Valid);
 		await client.SynchronizeAsync();
 
+		var revisionBeforeAudio = client.Snapshot!.Production.Revision;
+		Assert.Equal(2, client.Snapshot.AudioInputs.Count);
+		Assert.Equal(sourceA.Id, client.Snapshot.AudioProgram.ActiveVideoSourceId);
+
+		var gainedAudio = await client.SetAudioInputStateAsync(sourceA.Id, 0.5, muted: false);
+		Assert.Equal(sourceA.Id, gainedAudio.SourceId);
+		Assert.Equal(0.5, gainedAudio.Gain, 6);
+		Assert.False(gainedAudio.Muted);
+		Assert.Equal(revisionBeforeAudio, client.Snapshot!.Production.Revision);
+
+		var mutedAudio = await client.SetAudioInputStateAsync(sourceA.Id, 0.5, muted: true);
+		Assert.True(mutedAudio.Muted);
+		Assert.Equal("MUTED", client.Snapshot!.AudioInputs.Single(input => input.SourceId == sourceA.Id).Health);
+		Assert.Equal(revisionBeforeAudio, client.Snapshot.Production.Revision);
+
+		await client.SetAudioInputStateAsync(sourceA.Id, 1.0, muted: false);
+
 		var revisionBeforeGraphics = client.Snapshot!.Production.Revision;
 		var graphicsAsset = new OperatorGraphicsAsset(
 			"operator-logo.rgba",
@@ -124,6 +141,10 @@ public sealed class ProductionIpcIntegrationTests
 		var cut = await client.CutPreviewAsync();
 		Assert.True(cut.Accepted, cut.Failure?.ToString());
 		Assert.Equal(sourceB.Id, client.Snapshot!.Production.Routing.ProgramSourceId.ToString());
+		await WaitUntilAsync(() => runtime.Runtime!.Snapshot.AudioProgram.ActiveVideoSourceId.ToString() == sourceB.Id);
+		await client.SynchronizeAsync();
+		Assert.Equal(sourceB.Id, client.Snapshot!.AudioProgram.ActiveVideoSourceId);
+		Assert.Equal("HEALTHY", client.Snapshot.AudioProgram.Health);
 
 		var previewBack = await client.SelectPreviewAsync(sourceA.Id);
 		Assert.True(previewBack.Accepted, previewBack.Failure?.ToString());
@@ -132,16 +153,19 @@ public sealed class ProductionIpcIntegrationTests
 
 		var dissolve = await client.DissolvePreviewAsync(12);
 		Assert.True(dissolve.Accepted, dissolve.Failure?.ToString());
+		await WaitUntilAsync(() => runtime.Runtime!.Snapshot.AudioProgram.ActiveVideoSourceId.ToString() == sourceA.Id);
+		await client.SynchronizeAsync();
 
 		Assert.Equal(sourceA.Id, client.Snapshot!.Production.Routing.ProgramSourceId.ToString());
+		Assert.Equal(sourceA.Id, client.Snapshot.AudioProgram.ActiveVideoSourceId);
 		Assert.True(client.Snapshot.Production.Revision.Value >= 4);
 		Assert.True(transport.Connected);
 		Assert.True(transport.StateVersion > 1);
 		Assert.Equal(RuntimeExecutionStatus.Committed, runtime.Runtime!.Snapshot.Runtime.Status);
 
 		controlStop.Cancel();
-		runtimeStop.Cancel();
 		Assert.Equal(ControlHostExitCode.Success, await controlRun);
+		runtimeStop.Cancel();
 		Assert.Equal(RuntimeHostExitCode.Success, await runtimeRun);
 	}
 
@@ -190,8 +214,8 @@ public sealed class ProductionIpcIntegrationTests
 		Assert.Equal(RuntimeExecutionStatus.Committed, runtime.Runtime!.Snapshot.Runtime.Status);
 
 		controlStop.Cancel();
-		runtimeStop.Cancel();
 		Assert.Equal(ControlHostExitCode.Success, await controlRun);
+		runtimeStop.Cancel();
 		Assert.Equal(RuntimeHostExitCode.Success, await runtimeRun);
 	}
 
@@ -238,8 +262,13 @@ public sealed class ProductionIpcIntegrationTests
 
 		var playing = await deck.PlayAsync();
 		Assert.Equal(MediaDeckState.Playing, playing.State);
-		await Task.Delay(120);
-		await deck.RefreshAsync();
+		var playbackDeadline = DateTime.UtcNow.AddSeconds(2);
+		do
+		{
+			await Task.Delay(40);
+			await deck.RefreshAsync();
+		}
+		while (deck.Snapshot.Transport!.Position.CurrentFrame == 0 && DateTime.UtcNow < playbackDeadline);
 		Assert.True(deck.Snapshot.Transport!.Position.CurrentFrame > 0);
 		var sourceBinPlaying = await client.SynchronizeAsync();
 		var playingTile = sourceBinPlaying.Sources.Single(source => source.Id == sourceId.ToString());
@@ -261,8 +290,8 @@ public sealed class ProductionIpcIntegrationTests
 		Assert.Equal("Decision", reopened.Markers.CuePoints.Single().Name);
 
 		controlStop.Cancel();
-		runtimeStop.Cancel();
 		Assert.Equal(ControlHostExitCode.Success, await controlRun);
+		runtimeStop.Cancel();
 		Assert.Equal(RuntimeHostExitCode.Success, await runtimeRun);
 	}
 

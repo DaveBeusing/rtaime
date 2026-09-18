@@ -269,7 +269,7 @@ public sealed class RuntimeHostProcess
 			await _ipcServer.StartAsync(cancellationToken).ConfigureAwait(false);
 			await _monitoringServer.StartAsync(cancellationToken).ConfigureAwait(false);
 			_mediaLoop = RunMediaLoopAsync(_runtime, _mediaIo, cancellationToken);
-			_mediaDeckLoop = RunMediaDeckLoopAsync(_mediaDeck, cancellationToken);
+			_mediaDeckLoop = RunMediaDeckLoopAsync(_runtime, _mediaDeck, cancellationToken);
 		}
 		catch (ArgumentException exception)
 		{
@@ -331,15 +331,41 @@ public sealed class RuntimeHostProcess
 	}
 
 	private async Task RunMediaDeckLoopAsync(
+		V1RuntimeHostService runtime,
 		LocalMediaDeckRuntimeService mediaDeck,
 		CancellationToken cancellationToken)
 	{
 		var framePeriod = TimeSpan.FromSeconds(
 			_options.Format.FrameRate.Denominator /
 			(double)_options.Format.FrameRate.Numerator);
+		MediaSourceId? activeDeckSource = null;
 		using var timer = new PeriodicTimer(framePeriod);
 		while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
-			mediaDeck.ProcessBoundary();
+		{
+			var snapshot = mediaDeck.ProcessBoundary();
+			if (snapshot.SourceId is not { } sourceId)
+			{
+				if (activeDeckSource is { } previous)
+					runtime.ClearExternalAudioMeter(previous);
+				activeDeckSource = null;
+				continue;
+			}
+
+			if (activeDeckSource is { } previousSource && previousSource != sourceId)
+				runtime.ClearExternalAudioMeter(previousSource);
+			activeDeckSource = sourceId;
+
+			var boundary = mediaDeck.LatestBoundary;
+			if (boundary is { Succeeded: true } && !boundary.AudioPayload.IsEmpty)
+			{
+				runtime.SetExternalAudioInput(sourceId, boundary.AudioPayload.Span, available: true);
+			}
+			else
+			{
+				var available = snapshot.State != MediaDeckState.Error;
+				runtime.SetExternalAudioMeter(sourceId, 0, 0, available);
+			}
+		}
 	}
 
 	private async Task<RuntimeHostExitCode> StopAsync()

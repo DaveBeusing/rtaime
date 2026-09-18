@@ -5,24 +5,35 @@ using rtaime.Media.Contracts;
 
 namespace rtaime.Provider.VirtualMedia;
 
-public sealed record VirtualAudioPacket(AudioBufferDescriptor Descriptor, double PeakLevel);
+public sealed record VirtualAudioPacket(
+    AudioBufferDescriptor Descriptor,
+    double LeftPeakLevel,
+    double RightPeakLevel)
+{
+    public double PeakLevel => Math.Max(LeftPeakLevel, RightPeakLevel);
+}
 
 public sealed class VirtualSyntheticAudioSource
 {
     private readonly FrameRate _videoFrameRate;
-    private readonly double _peakLevel;
+    private readonly double _leftPeakLevel;
+    private readonly double _rightPeakLevel;
 
     internal VirtualSyntheticAudioSource(
         AudioStreamDescriptor descriptor,
         FrameRate videoFrameRate,
-        double peakLevel)
+        double leftPeakLevel,
+        double rightPeakLevel)
     {
-        if (!double.IsFinite(peakLevel) || peakLevel < 0 || peakLevel > 1)
-            throw new ArgumentOutOfRangeException(nameof(peakLevel));
+        if (!double.IsFinite(leftPeakLevel) || leftPeakLevel is < 0 or > 1)
+            throw new ArgumentOutOfRangeException(nameof(leftPeakLevel));
+        if (!double.IsFinite(rightPeakLevel) || rightPeakLevel is < 0 or > 1)
+            throw new ArgumentOutOfRangeException(nameof(rightPeakLevel));
 
         Descriptor = descriptor ?? throw new ArgumentNullException(nameof(descriptor));
         _videoFrameRate = videoFrameRate;
-        _peakLevel = peakLevel;
+        _leftPeakLevel = leftPeakLevel;
+        _rightPeakLevel = rightPeakLevel;
     }
 
     public AudioStreamDescriptor Descriptor { get; }
@@ -43,7 +54,7 @@ public sealed class VirtualSyntheticAudioSource
             timing,
             new OpaqueAudioHandle("virtual.synthetic.audio", handleIdentity.ToString()));
 
-        return new VirtualAudioPacket(buffer, _peakLevel);
+        return new VirtualAudioPacket(buffer, _leftPeakLevel, _rightPeakLevel);
     }
 
     private AudioBufferTiming GetTiming(ulong videoFrameSequence)
@@ -90,8 +101,8 @@ public sealed class VirtualEmbeddedAudioReferenceProvider
             videoFormat.FrameRate.ToString(),
             AudioFormat.SampleRate.ToString());
 
-        SourceA = CreateSource(sourceAId, "A", 0.25);
-        SourceB = CreateSource(sourceBId, "B", 0.75);
+        SourceA = CreateSource(sourceAId, "A", 0.25, 0.18);
+        SourceB = CreateSource(sourceBId, "B", 0.75, 0.58);
         _sources = Array.AsReadOnly(new[] { SourceA, SourceB });
         _sourceByVideoSource = _sources.ToDictionary(source => source.Descriptor.FollowedVideoSourceId);
     }
@@ -112,7 +123,8 @@ public sealed class VirtualEmbeddedAudioReferenceProvider
     private VirtualSyntheticAudioSource CreateSource(
         MediaSourceId videoSourceId,
         string suffix,
-        double peakLevel)
+        double leftPeakLevel,
+        double rightPeakLevel)
     {
         var streamId = new AudioStreamId(VirtualMediaIdentity.Create(
             "virtual-audio-stream",
@@ -125,6 +137,10 @@ public sealed class VirtualEmbeddedAudioReferenceProvider
             AudioFormat,
             TimingDomainId);
 
-        return new VirtualSyntheticAudioSource(descriptor, VideoFormat.FrameRate, peakLevel);
+        return new VirtualSyntheticAudioSource(
+            descriptor,
+            VideoFormat.FrameRate,
+            leftPeakLevel,
+            rightPeakLevel);
     }
 }

@@ -215,6 +215,40 @@ The optional P1 lower-third workflow is deliberately not implemented in AP-49. T
 - graphics state changes do not advance authoritative Preview/Program routing revision;
 - Operator UI policy verifies the PNG decode path, graphics controls and Client-SDK-only authority boundary.
 
+## AP-50 Audio Operator Workflow
+
+AP-50 adds a production-facing audio panel while preserving the existing authority boundary. The Operator does not own audio routing, meter generation or Program truth.
+
+The panel exposes:
+
+- the confirmed AFV source that follows Program;
+- Runtime-owned stereo L/R Program meters and a master peak meter;
+- per-input Runtime health and AFV/PGM indication;
+- per-input linear gain from 0.0x to 4.0x;
+- confirmed mute/unmute;
+- clipping, silence, underrun and error state;
+- local clip audio codec/channel/sample-rate/transport state.
+
+Audio control follows **Operator → rtaime.Client → ControlHost → RuntimeHost**. ControlHost accepts audio commands only for authoritative production sources and serializes them through the management mutation gate. RuntimeHost remains the execution owner and the Operator refreshes the confirmed snapshot after each command.
+
+Audio state changes do not advance the authoritative Preview/Program production revision. AFV follows the confirmed Program source only after Runtime execution has switched to that source.
+
+### Live meters and hot-path isolation
+
+The Runtime media paths measure actual Float32 stereo samples. Physical Media I/O uses captured audio samples; local media uses the decoded Media Deck Float32 payload; the virtual reference provider supplies deterministic stereo observations when no external media source is active.
+
+The WPF client refreshes audio observations through the management snapshot at a bounded 200 ms cadence. There is no locally generated meter animation and no raw audio payload crosses Operator/ControlHost management IPC.
+
+RuntimeHost keeps external sample buffering bounded and consumes one exact Program audio window per boundary. The same post-gain/mute Program payload is used by recording and physical Program output.
+
+### AP-50 acceptance evidence
+
+- unit tests cover stereo metering, gain and clipping;
+- Runtime integration covers actual external/clip-style Float32 Program payload, gain, mute, silence, clipping and underrun;
+- process-boundary integration covers Operator audio commands without changing production revision;
+- AFV integration verifies that the Runtime audio source follows confirmed Program after source changes;
+- Operator UI policy verifies stereo/master meters, AFV source, health, clip-audio state, gain/mute commands and the absence of WPF meter synthesis;
+- Operator remains dependent only on `rtaime.Client`.
 ## Verification
 
 `build/quality/Test-OperatorUiPolicy.ps1` verifies the primary UI architectural and UX guardrails, including:
@@ -232,6 +266,7 @@ The optional P1 lower-third workflow is deliberately not implemented in AP-49. T
 - Preview-derived CUT/AUTO take semantics;
 - visible commit and transition status;
 - PNG/RGBA graphics load, placement, scale and confirmed show/hide controls;
+- AFV source, stereo/master audio meters, gain, mute, clipping/health and clip-audio state;
 - retained Client-only Operator project dependency.
 
 `build/quality/Test-OperatorMonitoringPolicy.ps1` verifies the monitoring-plane separation, bounded/loss-tolerant behavior and prohibition on management-IPC pixel transport.

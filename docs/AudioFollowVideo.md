@@ -1,6 +1,6 @@
 # Audio Follow Video
 
-Status: AP-09 foundation
+Status: AP-09 foundation + AP-50 operator workflow
 
 Change classification:
 
@@ -234,6 +234,57 @@ The long-run managed qualification exercises:
 
 The broad CI elapsed-time guard is a regression guard for the managed descriptor/timing path. It is not professional audio-hardware latency certification.
 
+## AP-50 operator audio workflow
+
+AP-50 promotes the existing V1 FOLLOW_VIDEO foundation into a bounded production-operator workflow without creating a second audio engine.
+
+The RuntimeHost remains the owner of:
+
+- FOLLOW_VIDEO source selection from confirmed Program routing;
+- per-input linear gain (0..4);
+- per-input mute;
+- stereo L/R peak measurement;
+- Program master peak;
+- clipping, silence, underrun and error health;
+- actual Program audio payload selection.
+
+The Operator receives snapshots through **Operator → rtaime.Client → ControlHost → RuntimeHost** and can change only the existing Runtime input gain/mute state. Audio mutations are serialized by ControlHost and confirmed by RuntimeHost. They do not fabricate or advance Preview/Program routing revisions.
+
+### Stereo metering
+
+`AudioMetering.MeasureInterleavedStereoFloat32` measures actual interleaved Float32 samples without allocating on the measurement path. RuntimeHost applies input gain/mute to the observed L/R peaks and reports clipping when the pre-clamped post-gain level reaches or exceeds full scale.
+
+The Operator polls confirmed management snapshots at a bounded 200 ms cadence. WPF does not animate or synthesize meter values.
+
+### Live and local-media payloads
+
+Physical Media I/O and the local Media Deck feed decoded/captured Float32 samples into a bounded RuntimeHost audio queue. RuntimeHost consumes the required sample window for the committed Program source, applies the same AFV gain/mute state and exposes one Program audio payload.
+
+That payload is then reused for:
+
+- Program recording payload staging;
+- physical Program output when a qualified Media I/O output is active.
+
+When no external source is active, deterministic virtual reference audio remains the V1 fallback/reference source. Paused/stopped local media is represented as intentional silence; unavailable external audio fails as an AFV underrun rather than silently borrowing audio from another video source.
+
+The external queue is bounded to approximately 500 ms per source and drops oldest samples if a producer outruns Program consumption. It is not an unbounded media queue.
+
+### Health semantics
+
+AP-50 exposes these Runtime-owned states:
+
+- `HEALTHY`
+- `MUTED`
+- `SILENCE`
+- `CLIPPING`
+- `UNDERRUN`
+- `ERROR`
+
+AFV still follows only the committed Program video source. CUT/DISSOLVE routing remains authoritative in Control; audio does not implement an independent BREAKAWAY path.
+
+### Scope boundary
+
+AP-50 does not add EQ, compression, limiter configuration, aux buses, a routing matrix, multichannel mixing, loudness normalization or a loudness-compliance suite. Those remain outside the V1 showcase audio workflow.
 ## Evidence boundary
 
 Virtual/synthetic evidence proves deterministic contract and architecture behaviour.

@@ -2,6 +2,7 @@
 
 using System.Buffers.Binary;
 using System.Collections.ObjectModel;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using rtaime.Core;
@@ -40,6 +41,16 @@ public enum V1TimingHealthState
 	Recovering = 5
 }
 
+public enum V1AudioHealthState
+{
+	Healthy = 1,
+	Muted = 2,
+	Silence = 3,
+	Clipping = 4,
+	Underrun = 5,
+	Error = 6
+}
+
 public readonly record struct ProgramPixelProbe(byte Red, byte Green, byte Blue, byte Alpha);
 
 public sealed record RuntimeHostApplyResult(
@@ -57,6 +68,8 @@ public sealed record V1ProgramBoundaryResult(
 	byte[] ProgramPixels,
 	ProgramPixelProbe PixelProbe,
 	AudioFollowVideoResult Audio,
+	AudioBufferDescriptor ProgramAudioBuffer,
+	byte[] ProgramAudioPayload,
 	RecordingEnqueueResult? Recording,
 	RuntimeProgramTransitionKind? TransitionKind,
 	byte BlendWeight,
@@ -73,6 +86,28 @@ public sealed record V1GraphicsOverlaySnapshot(
 	double PositionY,
 	double Scale);
 
+public sealed record V1AudioInputSnapshot(
+	MediaSourceId SourceId,
+	AudioStreamId StreamId,
+	double Gain,
+	bool Muted,
+	double LeftPeak,
+	double RightPeak,
+	double MasterPeak,
+	bool Clipping,
+	V1AudioHealthState Health);
+
+public sealed record V1AudioProgramSnapshot(
+	MediaSourceId ActiveVideoSourceId,
+	AudioStreamId ActiveStreamId,
+	double Gain,
+	bool Muted,
+	double LeftPeak,
+	double RightPeak,
+	double MasterPeak,
+	bool Clipping,
+	V1AudioHealthState Health);
+
 public sealed record V1RuntimeHostSnapshot(
 	RuntimeExecutionState Runtime,
 	ulong NextSequenceNumber,
@@ -80,6 +115,8 @@ public sealed record V1RuntimeHostSnapshot(
 	IReadOnlyDictionary<MediaSourceId, V1InputSignalState> InputSignals,
 	V1VisualLayerMode VisualLayerMode,
 	V1GraphicsOverlaySnapshot GraphicsOverlay,
+	IReadOnlyDictionary<MediaSourceId, V1AudioInputSnapshot> AudioInputs,
+	V1AudioProgramSnapshot AudioProgram,
 	AudioFollowVideoStatistics Audio,
 	RecordingSnapshot Recording,
 	int ActiveGpuSurfaces);
@@ -98,8 +135,11 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private readonly ManagedReferenceGpuBackend _gpuBackend;
 	private readonly GpuProcessingProvider _gpu;
 	private readonly TransactionalRuntime _runtime;
+	private readonly VirtualEmbeddedAudioReferenceProvider _virtualAudio;
 	private readonly AudioFollowVideoEngine _audio;
 	private readonly Dictionary<MediaSourceId, AudioStreamDescriptor> _audioStreams;
+	private readonly Dictionary<MediaSourceId, AudioMeterObservation> _audioMeters;
+	private readonly Dictionary<MediaSourceId, Queue<float>> _externalAudioQueues;
 	private readonly Dictionary<MediaSourceId, RgbaFrameBuffer> _backgrounds;
 	private readonly RgbaFrameBuffer _blackBackground;
 	private readonly Dictionary<MediaSourceId, V1InputSignalState> _inputSignals;
@@ -127,6 +167,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private double _operatorGraphicsScale = 1.0;
 	private V1TimingHealthState _timingHealth = V1TimingHealthState.Recovering;
 	private ulong _nextSequenceNumber;
+	private AudioFollowVideoResult? _lastAudioResult;
 	private bool _disposed;
 
 	public V1RuntimeHostService(
@@ -144,21 +185,15 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		_gpu.Start();
 		_runtime = new TransactionalRuntime(new InMemoryRuntimeResourceReservationManager());
 
-		var timingDomain = HostIdentity.Create("v1-audio-timing", format.FrameRate.ToString());
-		var streamA = new AudioStreamDescriptor(
-			MediaContractVersion.Current,
-			new AudioStreamId(HostIdentity.Create("v1-audio-stream", sourceAId.ToString())),
-			sourceAId,
-			AudioFormat.Stereo48kFloat32,
-			timingDomain);
-		var streamB = new AudioStreamDescriptor(
-			MediaContractVersion.Current,
-			new AudioStreamId(HostIdentity.Create("v1-audio-stream", sourceBId.ToString())),
-			sourceBId,
-			AudioFormat.Stereo48kFloat32,
-			timingDomain);
-		_audioStreams = new[] { streamA, streamB }.ToDictionary(stream => stream.FollowedVideoSourceId);
-		_audio = new AudioFollowVideoEngine(new[] { streamA, streamB }, format.FrameRate, sourceAId);
+		_virtualAudio = new VirtualEmbeddedAudioReferenceProvider(sourceAId, sourceBId, format);
+		_audioStreams = _virtualAudio.Streams.ToDictionary(stream => stream.FollowedVideoSourceId);
+		_audio = new AudioFollowVideoEngine(_virtualAudio.Streams, format.FrameRate, sourceAId);
+		_audioMeters = _audioStreams.Keys.ToDictionary(
+			sourceId => sourceId,
+			_ => new AudioMeterObservation(new AudioStereoMeter(0, 0), Available: false, External: false));
+		_externalAudioQueues = _audioStreams.Keys.ToDictionary(
+			sourceId => sourceId,
+			_ => new Queue<float>());
 
 		_backgrounds = new Dictionary<MediaSourceId, RgbaFrameBuffer>
 		{
@@ -232,6 +267,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 					new ReadOnlyDictionary<MediaSourceId, V1InputSignalState>(new Dictionary<MediaSourceId, V1InputSignalState>(_inputSignals)),
 					_operatorGraphicsVisible ? V1VisualLayerMode.Static : _visualLayerMode,
 					GraphicsOverlaySnapshotUnsafe(),
+					AudioInputSnapshotsUnsafe(),
+					AudioProgramSnapshotUnsafe(),
 					_audio.Statistics,
 					_recorder.Snapshot,
 					_gpu.ActiveSurfaceCount);
@@ -341,12 +378,28 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				_format,
 				output.Descriptor.Timing);
 
-			var audioBuffer = CreateAudioBuffer(committedSource, sequence);
+			RefreshVirtualAudioMetersUnsafe(sequence);
+			var audioPacket = _virtualAudio.GetSource(committedSource).GeneratePacket(sequence);
+			var audioObservation = _audioMeters[committedSource];
+			var audioBuffer = audioPacket.Descriptor;
+			var externalAudioPayload = audioObservation.External
+				? ConsumeExternalAudioPayloadUnsafe(committedSource, audioBuffer)
+				: null;
+			var measuredAudio = externalAudioPayload is { Length: > 0 }
+				? AudioMetering.MeasureInterleavedStereoFloat32(externalAudioPayload)
+				: audioObservation.Meter;
+			var afvBuffer = audioObservation.External && !audioObservation.Available
+				? null
+				: audioBuffer;
 			var audio = _audio.ProcessBoundary(
 				committedSource,
 				sequence,
-				audioBuffer,
-				committedSource == _virtualMedia.SourceA.SourceId ? 0.42 : 0.64);
+				afvBuffer,
+				measuredAudio);
+			_lastAudioResult = audio;
+			var programAudioPayload = externalAudioPayload is { Length: > 0 }
+				? ApplyAudioStateToPayload(externalAudioPayload, audio)
+				: MaterializeReferenceAudioPayload(audioBuffer, audio);
 
 			RecordingEnqueueResult? recording = null;
 			if (_recorder.Snapshot.State == RecordingLifecycleState.Recording)
@@ -358,7 +411,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 						_recordingPayloadWriter.StagePayload(
 							sequence,
 							pixels,
-							MaterializeReferenceAudioPayload(audioBuffer, audio));
+							programAudioPayload);
 					}
 					catch (Exception exception)
 					{
@@ -389,6 +442,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				pixels,
 				probe,
 				audio,
+				audioBuffer,
+				programAudioPayload,
 				recording,
 				transitionKind,
 				blendWeight,
@@ -536,7 +591,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		}
 	}
 
-	public void SetAudioInputState(MediaSourceId sourceId, AudioGain gain, bool muted)
+	public V1AudioInputSnapshot SetAudioInputState(MediaSourceId sourceId, AudioGain gain, bool muted)
 	{
 		lock (_gate)
 		{
@@ -545,6 +600,69 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				throw new KeyNotFoundException($"Unknown media source '{sourceId}'.");
 			_audio.SetInputState(stream.StreamId, gain, muted);
 			Observe($"audio.input.state:{sourceId}:{gain.Linear}:{muted}");
+			return AudioInputSnapshotUnsafe(sourceId);
+		}
+	}
+
+	public void SetExternalAudioMeter(
+		MediaSourceId sourceId,
+		double leftPeak,
+		double rightPeak,
+		bool available = true)
+	{
+		var meter = new AudioStereoMeter(leftPeak, rightPeak);
+		lock (_gate)
+		{
+			ThrowIfDisposed();
+			EnsureAudioSourceUnsafe(sourceId);
+			_externalAudioQueues[sourceId].Clear();
+			_audioMeters[sourceId] = new AudioMeterObservation(meter, available, External: true);
+		}
+	}
+
+	public void SetExternalAudioInput(
+		MediaSourceId sourceId,
+		ReadOnlySpan<float> interleavedStereoSamples,
+		bool available = true)
+	{
+		var meter = AudioMetering.MeasureInterleavedStereoFloat32(interleavedStereoSamples);
+		lock (_gate)
+		{
+			ThrowIfDisposed();
+			EnsureAudioSourceUnsafe(sourceId);
+			var queue = _externalAudioQueues[sourceId];
+			var maximumBufferedValues = checked((int)(_audioStreams[sourceId].Format.SampleRate * _audioStreams[sourceId].Format.ChannelCount / 2));
+			foreach (var sample in interleavedStereoSamples)
+			{
+				queue.Enqueue(float.IsFinite(sample) ? Math.Clamp(sample, -1f, 1f) : 0f);
+				while (queue.Count > maximumBufferedValues)
+					queue.Dequeue();
+			}
+			_audioMeters[sourceId] = new AudioMeterObservation(meter, available, External: true);
+		}
+	}
+
+	public void SetExternalAudioInput(
+		MediaSourceId sourceId,
+		ReadOnlySpan<byte> float32InterleavedStereoPayload,
+		bool available = true)
+	{
+		if ((float32InterleavedStereoPayload.Length % sizeof(float)) != 0)
+			throw new ArgumentException("Float32 audio payload length must be aligned to four bytes.", nameof(float32InterleavedStereoPayload));
+		SetExternalAudioInput(
+			sourceId,
+			MemoryMarshal.Cast<byte, float>(float32InterleavedStereoPayload),
+			available);
+	}
+
+	public void ClearExternalAudioMeter(MediaSourceId sourceId)
+	{
+		lock (_gate)
+		{
+			ThrowIfDisposed();
+			EnsureAudioSourceUnsafe(sourceId);
+			_externalAudioQueues[sourceId].Clear();
+			_audioMeters[sourceId] = new AudioMeterObservation(new AudioStereoMeter(0, 0), Available: false, External: false);
 		}
 	}
 
@@ -688,6 +806,96 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		};
 	}
 
+	private IReadOnlyDictionary<MediaSourceId, V1AudioInputSnapshot> AudioInputSnapshotsUnsafe() =>
+		new ReadOnlyDictionary<MediaSourceId, V1AudioInputSnapshot>(
+			_audioStreams.Keys.ToDictionary(sourceId => sourceId, AudioInputSnapshotUnsafe));
+
+	private V1AudioInputSnapshot AudioInputSnapshotUnsafe(MediaSourceId sourceId)
+	{
+		var stream = _audioStreams[sourceId];
+		var state = _audio.GetInputState(stream.StreamId);
+		var observation = _audioMeters[sourceId];
+		var leftUnclamped = state.Muted ? 0 : observation.Meter.LeftPeakLevel * state.Gain.Linear;
+		var rightUnclamped = state.Muted ? 0 : observation.Meter.RightPeakLevel * state.Gain.Linear;
+		var left = Math.Min(1, leftUnclamped);
+		var right = Math.Min(1, rightUnclamped);
+		var clipping = !state.Muted && (leftUnclamped >= 1 || rightUnclamped >= 1);
+		var health = !_inputSignals.TryGetValue(sourceId, out var signal) || signal == V1InputSignalState.Lost || !observation.Available
+			? V1AudioHealthState.Error
+			: state.Muted
+				? V1AudioHealthState.Muted
+				: clipping
+					? V1AudioHealthState.Clipping
+					: Math.Max(left, right) <= 0.000001
+						? V1AudioHealthState.Silence
+						: V1AudioHealthState.Healthy;
+
+		return new V1AudioInputSnapshot(
+			sourceId,
+			stream.StreamId,
+			state.Gain.Linear,
+			state.Muted,
+			left,
+			right,
+			Math.Max(left, right),
+			clipping,
+			health);
+	}
+
+	private V1AudioProgramSnapshot AudioProgramSnapshotUnsafe()
+	{
+		var activeSource = _audio.ActiveVideoSourceId;
+		var activeStream = _audio.ActiveStreamId;
+		var state = _audio.GetInputState(activeStream);
+		if (_lastAudioResult is not { } result)
+		{
+			return new V1AudioProgramSnapshot(
+				activeSource,
+				activeStream,
+				state.Gain.Linear,
+				state.Muted,
+				0,
+				0,
+				0,
+				false,
+				state.Muted ? V1AudioHealthState.Muted : V1AudioHealthState.Silence);
+		}
+
+		var health = result.Status switch
+		{
+			AudioFollowVideoStatus.Underrun => V1AudioHealthState.Underrun,
+			AudioFollowVideoStatus.Emitted when result.Muted => V1AudioHealthState.Muted,
+			AudioFollowVideoStatus.Emitted when result.Clipping => V1AudioHealthState.Clipping,
+			AudioFollowVideoStatus.Emitted when result.PeakLevel <= 0.000001 => V1AudioHealthState.Silence,
+			AudioFollowVideoStatus.Emitted => V1AudioHealthState.Healthy,
+			_ => V1AudioHealthState.Error
+		};
+		return new V1AudioProgramSnapshot(
+			result.VideoSourceId,
+			result.StreamId ?? activeStream,
+			result.Gain.Linear,
+			result.Muted,
+			result.LeftPeakLevel,
+			result.RightPeakLevel,
+			result.PeakLevel,
+			result.Clipping,
+			health);
+	}
+
+	private void RefreshVirtualAudioMetersUnsafe(ulong sequence)
+	{
+		foreach (var sourceId in _audioStreams.Keys)
+		{
+			if (_audioMeters[sourceId].External)
+				continue;
+			var packet = _virtualAudio.GetSource(sourceId).GeneratePacket(sequence);
+			_audioMeters[sourceId] = new AudioMeterObservation(
+				new AudioStereoMeter(packet.LeftPeakLevel, packet.RightPeakLevel),
+				Available: true,
+				External: false);
+		}
+	}
+
 	private V1GraphicsOverlaySnapshot GraphicsOverlaySnapshotUnsafe() => new(
 		_operatorGraphicsAsset is not null,
 		_operatorGraphicsAssetName,
@@ -775,6 +983,43 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			new OpaqueAudioHandle("virtual.embedded.audio", $"{stream.StreamId}:{sequence}"));
 	}
 
+	private byte[]? ConsumeExternalAudioPayloadUnsafe(
+		MediaSourceId sourceId,
+		AudioBufferDescriptor descriptor)
+	{
+		var queue = _externalAudioQueues[sourceId];
+		var requiredValues = checked((int)(descriptor.Timing.SampleCount * descriptor.Format.ChannelCount));
+		if (queue.Count < requiredValues)
+			return null;
+
+		var samples = new float[requiredValues];
+		for (var index = 0; index < requiredValues; index++)
+			samples[index] = queue.Dequeue();
+		return MemoryMarshal.AsBytes(samples.AsSpan()).ToArray();
+	}
+
+	private static byte[] ApplyAudioStateToPayload(
+		byte[] payload,
+		AudioFollowVideoResult result)
+	{
+		if (!result.Emitted)
+			return Array.Empty<byte>();
+		var output = payload.ToArray();
+		var samples = MemoryMarshal.Cast<byte, float>(output.AsSpan());
+		for (var index = 0; index < samples.Length; index++)
+		{
+			var value = result.Muted ? 0f : samples[index] * checked((float)result.Gain.Linear);
+			samples[index] = float.IsFinite(value) ? Math.Clamp(value, -1f, 1f) : 0f;
+		}
+		return output;
+	}
+
+	private void EnsureAudioSourceUnsafe(MediaSourceId sourceId)
+	{
+		if (!_audioStreams.ContainsKey(sourceId))
+			throw new KeyNotFoundException($"Unknown media source '{sourceId}'.");
+	}
+
 	private static byte[] MaterializeReferenceAudioPayload(
 		AudioBufferDescriptor descriptor,
 		AudioFollowVideoResult result)
@@ -815,6 +1060,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 
 	private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(_disposed, this);
 
+	private sealed record AudioMeterObservation(AudioStereoMeter Meter, bool Available, bool External);
 	private sealed record AnchoredTransition(RuntimeProgramTransitionIntent Intent, ulong StartSequence);
 }
 
