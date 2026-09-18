@@ -82,8 +82,8 @@ public sealed class DemoProductionPackageController : INotifyPropertyChanged
 			await RestoreProgramSourceAsync(programSource, snapshot);
 
 			Detail = "Materializing integrity-checked bundled demo assets.";
-			var productPath = MaterializeBundledAsset(package.ProductClip.BundleFile, package.ProductClip.MaterializedFile, package.ProductClip.Sha256);
-			var lowerThirdPath = MaterializeBundledAsset(package.Graphics.BundleFile, package.Graphics.MaterializedFile, package.Graphics.Sha256);
+			var productPath = MaterializeBundledAsset(package.ProductClip.BundleFiles, package.ProductClip.MaterializedFile, package.ProductClip.Sha256);
+			var lowerThirdPath = MaterializeBundledAsset(package.Graphics.BundleFiles, package.Graphics.MaterializedFile, package.Graphics.Sha256);
 
 			Detail = "Preparing Product Clip, IN/OUT, cue points and playback policy.";
 			var cues = package.ProductClip.CuePoints
@@ -206,8 +206,8 @@ public sealed class DemoProductionPackageController : INotifyPropertyChanged
 		if (package.ProductClip.CuePoints.Select(cue => cue.Name).Distinct(StringComparer.Ordinal).Count() != package.ProductClip.CuePoints.Count)
 			throw new InvalidDataException("Demo Product Clip cue names must be unique.");
 		_ = ParseEndBehavior(package.ProductClip.EndBehavior);
-		ValidateAsset(package.ProductClip.BundleFile, package.ProductClip.MaterializedFile, package.ProductClip.Sha256, ".mp4");
-		ValidateAsset(package.Graphics.BundleFile, package.Graphics.MaterializedFile, package.Graphics.Sha256, ".png");
+		ValidateAsset(package.ProductClip.BundleFiles, package.ProductClip.MaterializedFile, package.ProductClip.Sha256, ".mp4");
+		ValidateAsset(package.Graphics.BundleFiles, package.Graphics.MaterializedFile, package.Graphics.Sha256, ".png");
 		if (!double.IsFinite(package.Graphics.PositionX) || package.Graphics.PositionX is < 0 or > 1 ||
 			!double.IsFinite(package.Graphics.PositionY) || package.Graphics.PositionY is < 0 or > 1 ||
 			!double.IsFinite(package.Graphics.Scale) || package.Graphics.Scale is < 0.05 or > 4)
@@ -229,11 +229,25 @@ public sealed class DemoProductionPackageController : INotifyPropertyChanged
 			throw new InvalidDataException("AP-56 requires the AP-55 Person Segmentation Highlight showcase.");
 	}
 
-	private static void ValidateAsset(string bundleFile, string materializedFile, string sha256, string expectedExtension)
+	private static void ValidateAsset(
+		IReadOnlyList<string> bundleFiles,
+		string materializedFile,
+		string sha256,
+		string expectedExtension)
 	{
-		if (string.IsNullOrWhiteSpace(bundleFile) || !string.Equals(Path.GetFileName(bundleFile), bundleFile, StringComparison.Ordinal))
-			throw new InvalidDataException("Demo bundle asset name must be a simple file name.");
-		if (string.IsNullOrWhiteSpace(materializedFile) || !string.Equals(Path.GetFileName(materializedFile), materializedFile, StringComparison.Ordinal))
+		ArgumentNullException.ThrowIfNull(bundleFiles);
+		if (bundleFiles.Count == 0)
+			throw new InvalidDataException("Demo bundle requires at least one asset chunk.");
+		foreach (var bundleFile in bundleFiles)
+		{
+			if (string.IsNullOrWhiteSpace(bundleFile) ||
+				!string.Equals(Path.GetFileName(bundleFile), bundleFile, StringComparison.Ordinal))
+				throw new InvalidDataException("Demo bundle asset chunk name must be a simple file name.");
+		}
+		if (bundleFiles.Distinct(StringComparer.Ordinal).Count() != bundleFiles.Count)
+			throw new InvalidDataException("Demo bundle asset chunk names must be unique.");
+		if (string.IsNullOrWhiteSpace(materializedFile) ||
+			!string.Equals(Path.GetFileName(materializedFile), materializedFile, StringComparison.Ordinal))
 			throw new InvalidDataException("Demo materialized asset name must be a simple file name.");
 		if (!string.Equals(Path.GetExtension(materializedFile), expectedExtension, StringComparison.OrdinalIgnoreCase))
 			throw new InvalidDataException($"Demo materialized asset must use '{expectedExtension}'.");
@@ -241,23 +255,20 @@ public sealed class DemoProductionPackageController : INotifyPropertyChanged
 			throw new InvalidDataException("Demo bundle asset SHA-256 must contain exactly 64 hexadecimal characters.");
 	}
 
-	private static string MaterializeBundledAsset(string bundleFile, string materializedFile, string expectedSha256)
+	private static string MaterializeBundledAsset(
+		IReadOnlyList<string> bundleFiles,
+		string materializedFile,
+		string expectedSha256)
 	{
-		var bundlePath = Path.Combine(AppContext.BaseDirectory, "DemoAssets", bundleFile);
-		if (!File.Exists(bundlePath))
-			throw new FileNotFoundException($"Bundled Demo Production asset '{bundleFile}' is missing.", bundlePath);
-
-		var encoded = string.Concat(
-			File.ReadLines(bundlePath)
-				.Select(line => line.Trim())
-				.Where(line => line.Length > 0 && !line.StartsWith("#", StringComparison.Ordinal)));
+		ArgumentNullException.ThrowIfNull(bundleFiles);
+		var encoded = string.Concat(bundleFiles.Select(ReadBundleChunk));
 		byte[] bytes;
 		try { bytes = Convert.FromBase64String(encoded); }
-		catch (FormatException exception) { throw new InvalidDataException($"Bundled Demo Production asset '{bundleFile}' is not valid base64.", exception); }
+		catch (FormatException exception) { throw new InvalidDataException($"Bundled Demo Production asset '{materializedFile}' is not valid base64.", exception); }
 
 		var actualHash = Convert.ToHexStringLower(SHA256.HashData(bytes));
 		if (!string.Equals(actualHash, expectedSha256, StringComparison.OrdinalIgnoreCase))
-			throw new CryptographicException($"Bundled Demo Production asset '{bundleFile}' failed SHA-256 verification.");
+			throw new CryptographicException($"Bundled Demo Production asset '{materializedFile}' failed SHA-256 verification.");
 
 		var root = Path.Combine(
 			Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -285,6 +296,17 @@ public sealed class DemoProductionPackageController : INotifyPropertyChanged
 				File.Delete(temporary);
 		}
 		return destination;
+	}
+
+	private static string ReadBundleChunk(string bundleFile)
+	{
+		var bundlePath = Path.Combine(AppContext.BaseDirectory, "DemoAssets", bundleFile);
+		if (!File.Exists(bundlePath))
+			throw new FileNotFoundException($"Bundled Demo Production asset chunk '{bundleFile}' is missing.", bundlePath);
+		return string.Concat(
+			File.ReadLines(bundlePath)
+				.Select(line => line.Trim())
+				.Where(line => line.Length > 0 && !line.StartsWith("#", StringComparison.Ordinal)));
 	}
 
 	private static MediaDeckEndBehavior ParseEndBehavior(string value) =>
@@ -344,7 +366,7 @@ public sealed class DemoProductionPackageController : INotifyPropertyChanged
 
 	private sealed record DemoSources(string Program, string ProductClip);
 	private sealed record DemoProductClip(
-		string BundleFile,
+		IReadOnlyList<string> BundleFiles,
 		string MaterializedFile,
 		string Sha256,
 		bool AutoPlayOnProgram,
@@ -354,7 +376,7 @@ public sealed class DemoProductionPackageController : INotifyPropertyChanged
 		IReadOnlyList<DemoCuePoint> CuePoints);
 	private sealed record DemoCuePoint(string Name, long Frame);
 	private sealed record DemoGraphics(
-		string BundleFile,
+		IReadOnlyList<string> BundleFiles,
 		string MaterializedFile,
 		string Sha256,
 		string Kind,
