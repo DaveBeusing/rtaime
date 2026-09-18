@@ -59,6 +59,12 @@ Assert-Condition ($appCode -match '--headless-once' -and $appCode -match 'stopAf
 Assert-Condition ($packagedTest -match 'Install-OfflineRelease\.ps1' -and $packagedTest -match 'HeadlessAcceptance') "Packaged acceptance must execute from an installed release, not repository binaries."
 Assert-Condition ($packagedTest -match 'Manual service start: NOT REQUIRED' -and $packagedTest -match 'Terminal configuration: NOT REQUIRED') "Packaged acceptance must assert the no-manual-bootstrap contract."
 
+Assert-Condition ($documentation -match 'approximately five minutes') "Investor demo must retain the approximately five-minute continuous-run target."
+foreach ($step in 1..18) {
+	Assert-Condition ($documentation -match [Regex]::Escape("### $step.")) "Investor demo documentation is missing numbered step $step."
+}
+Assert-Condition ($documentation -match 'developer configuration changes' -and $documentation -match 'manual process restarts' -and $documentation -match 'unresolved error states') "Continuous-run acceptance must prohibit developer intervention and presenter-explained failures."
+
 foreach ($requiredText in @(
 	"Start-rtaime-Showcase.cmd",
 	"Open Demo Production",
