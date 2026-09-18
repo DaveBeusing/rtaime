@@ -102,7 +102,7 @@ public sealed record ApplicationHostOptions(
 	{
 		ArgumentNullException.ThrowIfNull(args);
 		var values = args
-			.Where(argument => argument.StartsWith("--", StringComparison.Ordinal) && argument.Contains('=', StringComparison.Ordinal))
+			.Where(argument => argument.StartsWith("--", StringComparison.Ordinal) && argument.Contains('='))
 			.Select(argument => argument[2..].Split('=', 2))
 			.ToDictionary(parts => parts[0], parts => parts[1], StringComparer.OrdinalIgnoreCase);
 
@@ -388,8 +388,8 @@ public sealed class UnifiedApplicationHost
 		}
 		catch
 		{
-			Transition(ApplicationLifecycleState.Failed);
 			await StopOwnedControlAsync(CancellationToken.None).ConfigureAwait(false);
+			Transition(ApplicationLifecycleState.Failed);
 			throw;
 		}
 	}
@@ -488,15 +488,20 @@ public sealed class UnifiedApplicationHost
 	{
 		yield return _options.ReadinessPath;
 		if (!_platform.FileExists(_options.LegacyLifecycleStatePath)) yield break;
+
+		string? legacyReadiness = null;
 		try
 		{
 			using var document = JsonDocument.Parse(_platform.ReadAllText(_options.LegacyLifecycleStatePath));
-			if (document.RootElement.TryGetProperty("readinessPath", out var value) && value.GetString() is { Length: > 0 } readiness)
-				yield return Path.GetFullPath(readiness);
+			if (document.RootElement.TryGetProperty("readinessPath", out var value))
+				legacyReadiness = value.GetString();
 		}
 		catch (JsonException)
 		{
 		}
+
+		if (!string.IsNullOrWhiteSpace(legacyReadiness))
+			yield return Path.GetFullPath(legacyReadiness);
 	}
 
 	private async Task<bool> IsHealthyAsync(ApplicationReadinessEvidence evidence, CancellationToken cancellationToken)
