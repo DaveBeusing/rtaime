@@ -73,8 +73,8 @@ public sealed record RuntimeRemoteSnapshot(
 	RuntimeGraphicsOverlaySnapshot GraphicsOverlay,
 	IReadOnlyDictionary<MediaSourceId, RuntimeAudioInputSnapshot> AudioInputs,
 	RuntimeAudioProgramSnapshot AudioProgram,
-	RuntimeRecordingSnapshot Recording,
-	ulong StateVersion);
+	ulong StateVersion,
+	RuntimeRecordingSnapshot? Recording = null);
 
 public sealed record RuntimeRemoteApplyResult(
 	string HostInstanceId,
@@ -179,8 +179,8 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 				FromWire,
 				EqualityComparer<MediaSourceId>.Default),
 			FromWire(snapshot.AudioProgram),
-			FromWire(snapshot.Recording),
-			response.StateVersion);
+			response.StateVersion,
+			FromWire(snapshot.Recording));
 	}
 
 	public async ValueTask<RuntimeRemoteApplyResult> ApplyExecutionAsync(
