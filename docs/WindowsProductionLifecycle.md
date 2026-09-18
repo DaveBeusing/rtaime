@@ -136,7 +136,7 @@ Uninstall:
 	-StateRoot C:\ProgramData\rtaime
 ```
 
-The default service name is `rtaime-engine`.
+The default service name is `rtaime-engine`. The registration tool passes that exact SCM service identity to `rtaime.exe --service-name=...`, so the .NET service host and Service Control Manager use the same internal service name.
 
 Installation configures the service for automatic startup by default and configures bounded Service Control Manager recovery actions. The service process runs the canonical `rtaime.exe` in `HeadlessEngine` / `PersistentEngine` mode.
 
