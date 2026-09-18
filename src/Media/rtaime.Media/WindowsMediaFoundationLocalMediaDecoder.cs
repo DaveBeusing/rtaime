@@ -93,6 +93,15 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 				if (metadata.Duration <= TimeSpan.Zero)
 					return RejectAndRelease("media.file.metadata_invalid", "The local media file reports an invalid duration.", reader, mediaFoundationStarted);
 
+				var averageBitRate = TryGetUInt32(videoNative, MediaFoundation.MfMtAvgBitrate);
+				var inputProfile = new LocalMediaInputProfile(
+					metadata.Width,
+					metadata.Height,
+					new FrameRate(metadata.FrameRateNumerator, metadata.FrameRateDenominator),
+					averageBitRate);
+				if (LocalMediaInputPolicy.Validate(inputProfile) is { } inputFailure)
+					return RejectAndRelease(inputFailure.Code, inputFailure.Message, reader, mediaFoundationStarted);
+
 				ConfigureDecodedVideo(reader, MediaFoundation.FirstVideoStream, outputFormat);
 				ConfigureDecodedAudio(reader, MediaFoundation.FirstAudioStream);
 				MediaFoundation.ThrowIfFailed(reader.SetStreamSelection(MediaFoundation.FirstVideoStream, true));
@@ -449,6 +458,12 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 		return value;
 	}
 
+	private static uint? TryGetUInt32(IMFMediaType attributes, Guid key)
+	{
+		var result = attributes.GetUINT32(ref key, out var value);
+		return result >= 0 ? value : null;
+	}
+
 	private static void ConfigureDecodedVideo(
 		IMFSourceReader reader,
 		uint streamIndex,
@@ -557,6 +572,7 @@ internal static class MediaFoundation
 	public const uint MfVideoInterlaceProgressive = 2;
 
 	public static Guid MfSourceReaderEnableAdvancedVideoProcessing = new("0F81DA2C-B537-4672-A8B2-A681B17307A3");
+	public static Guid MfMtAvgBitrate = new("20332624-FB0D-4D9E-BD0D-CBF6786C102E");
 	public static Guid MfMtMajorType = new("48EBA18E-F8C9-4687-BF11-0A74C9F96A8F");
 	public static Guid MfMtSubtype = new("F7E34C9A-42E8-4714-B74B-CB29D72C35E5");
 	public static Guid MfMtFrameSize = new("1652C33D-D6B2-4012-B834-72030849A37D");
