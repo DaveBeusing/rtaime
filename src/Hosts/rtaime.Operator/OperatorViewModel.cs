@@ -661,7 +661,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		var remaining = snapshot.Transport is null
 			? "—"
 			: MediaTimelineTimecode.FormatFrame(
-				snapshot.Transport.Position.TotalFrames - snapshot.Transport.Position.CurrentFrame,
+				snapshot.Transport.EffectiveRemainingFrames,
 				snapshot.Transport.Position.FrameRate);
 		source.ApplyMediaDeck(
 			snapshot.State.ToString().ToUpperInvariant(),
