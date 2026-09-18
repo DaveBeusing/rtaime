@@ -4,6 +4,7 @@ using System.Buffers.Binary;
 using System.IO.Pipes;
 using System.Text.Json;
 using rtaime.Core;
+using rtaime.Media;
 using rtaime.Media.Contracts;
 using rtaime.Provider.Contracts;
 using rtaime.Runtime.Contracts;
@@ -182,6 +183,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 				"runtime.graphics.overlay.load" => ValueTask.FromResult(LoadGraphicsOverlay(request, runtime)),
 				"runtime.graphics.overlay.set" => ValueTask.FromResult(SetGraphicsOverlay(request, runtime)),
 				"runtime.graphics.overlay.clear" => ValueTask.FromResult(ClearGraphicsOverlay(request, runtime)),
+				"runtime.audio.input.set" => ValueTask.FromResult(SetAudioInputState(request, runtime)),
 				"runtime.media_deck.snapshot.get" => ValueTask.FromResult(MediaDeckSnapshot(request)),
 				"runtime.media_deck.open" => ValueTask.FromResult(OpenMediaDeck(request)),
 				"runtime.media_deck.transport" => ValueTask.FromResult(ApplyMediaDeckTransport(request)),
@@ -226,6 +228,18 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		var snapshot = runtime.ClearGraphicsOverlay();
 		_stateVersion++;
 		return Success(request, "runtime.graphics.overlay.response", ToWire(snapshot));
+	}
+
+	private WireEnvelope SetAudioInputState(WireEnvelope request, V1RuntimeHostService runtime)
+	{
+		var wire = request.Payload.Deserialize<WireAudioInputState>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Audio input state payload is required.");
+		var snapshot = runtime.SetAudioInputState(
+			new MediaSourceId(Identity.Parse(wire.SourceId)),
+			new AudioGain(wire.Gain),
+			wire.Muted);
+		_stateVersion++;
+		return Success(request, "runtime.audio.input.response", ToWire(snapshot));
 	}
 
 	private WireEnvelope MediaDeckSnapshot(WireEnvelope request)
@@ -351,7 +365,11 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		snapshot.InputSignals.OrderBy(pair => pair.Key.ToString(), StringComparer.Ordinal)
 			.Select(pair => new WireInputSignal(pair.Key.ToString(), pair.Value.ToString().ToUpperInvariant()))
 			.ToArray(),
-		ToWire(snapshot.GraphicsOverlay));
+		ToWire(snapshot.GraphicsOverlay),
+		snapshot.AudioInputs.OrderBy(pair => pair.Key.ToString(), StringComparer.Ordinal)
+			.Select(pair => ToWire(pair.Value))
+			.ToArray(),
+		ToWire(snapshot.AudioProgram));
 
 	private static WireGraphicsOverlay ToWire(V1GraphicsOverlaySnapshot snapshot) => new(
 		snapshot.AssetLoaded,
@@ -362,6 +380,29 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		snapshot.PositionX,
 		snapshot.PositionY,
 		snapshot.Scale);
+
+	private static WireAudioInput ToWire(V1AudioInputSnapshot snapshot) => new(
+		snapshot.SourceId.ToString(),
+		snapshot.StreamId.ToString(),
+		snapshot.Gain,
+		snapshot.Muted,
+		snapshot.LeftPeak,
+		snapshot.RightPeak,
+		snapshot.MasterPeak,
+		snapshot.Clipping,
+		(int)snapshot.Health);
+
+	private static WireAudioProgram ToWire(V1AudioProgramSnapshot snapshot) => new(
+		snapshot.ActiveVideoSourceId.ToString(),
+		snapshot.ActiveStreamId.ToString(),
+		snapshot.Gain,
+		snapshot.Muted,
+		snapshot.LeftPeak,
+		snapshot.RightPeak,
+		snapshot.MasterPeak,
+		snapshot.Clipping,
+		(int)snapshot.Health);
+
 
 	private static WireApplyResponse ToWire(RuntimeHostApplyResult result) => new(
 		new WirePrepareResult(
@@ -441,6 +482,9 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 	private sealed record WireGraphicsAsset(string Name, uint Width, uint Height, byte[] RgbaPixels);
 	private sealed record WireGraphicsOverlayState(bool Visible, double PositionX, double PositionY, double Scale);
 	private sealed record WireGraphicsOverlay(bool AssetLoaded, string? AssetName, uint AssetWidth, uint AssetHeight, bool Visible, double PositionX, double PositionY, double Scale);
+	private sealed record WireAudioInputState(string SourceId, double Gain, bool Muted);
+	private sealed record WireAudioInput(string SourceId, string StreamId, double Gain, bool Muted, double LeftPeak, double RightPeak, double MasterPeak, bool Clipping, int Health);
+	private sealed record WireAudioProgram(string ActiveVideoSourceId, string ActiveStreamId, double Gain, bool Muted, double LeftPeak, double RightPeak, double MasterPeak, bool Clipping, int Health);
 	private sealed record WireCapability(string CapabilityId, string Kind, WireVideoFormat[] VideoFormats);
 	private sealed record WireResource(string ResourceId, string ProviderId, string Kind, uint CapacityUnits, bool Reservable);
 	private sealed record WireProvider(string Version, string ProviderId, string Name, int AvailabilityState, WireFailure? Failure, WireCapability[] Capabilities, WireResource[] Resources);
@@ -471,7 +515,9 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		int ActiveGpuSurfaces,
 		WireVideoFormat Format,
 		WireInputSignal[] InputSignals,
-		WireGraphicsOverlay GraphicsOverlay);
+		WireGraphicsOverlay GraphicsOverlay,
+		WireAudioInput[] AudioInputs,
+		WireAudioProgram AudioProgram);
 
 	private sealed class BoundedRequestCache
 	{
