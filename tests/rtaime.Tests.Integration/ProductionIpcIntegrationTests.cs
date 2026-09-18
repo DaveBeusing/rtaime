@@ -83,6 +83,39 @@ public sealed class ProductionIpcIntegrationTests
 		runtime.Runtime.SetInputSignalState(new MediaSourceId(Identity.Parse(sourceB.Id)), V1InputSignalState.Valid);
 		await client.SynchronizeAsync();
 
+		var revisionBeforeGraphics = client.Snapshot!.Production.Revision;
+		var graphicsAsset = new OperatorGraphicsAsset(
+			"operator-logo.rgba",
+			2,
+			2,
+			new byte[]
+			{
+				255, 0, 0, 255,
+				0, 255, 0, 128,
+				0, 0, 255, 255,
+				255, 255, 0, 64
+			});
+		var loadedGraphics = await client.LoadGraphicsOverlayAsync(graphicsAsset);
+		Assert.True(loadedGraphics.AssetLoaded);
+		Assert.False(loadedGraphics.Visible);
+		Assert.Equal("operator-logo.rgba", client.Snapshot!.GraphicsOverlay.AssetName);
+		Assert.Equal(revisionBeforeGraphics, client.Snapshot.Production.Revision);
+
+		var onAirGraphics = await client.SetGraphicsOverlayAsync(true, 0.25, 0.10, 1.5);
+		Assert.True(onAirGraphics.Visible);
+		Assert.True(client.Snapshot!.VisualLayerEnabled);
+		Assert.Equal(0.25, client.Snapshot.GraphicsOverlay.PositionX, 6);
+		Assert.Equal(0.10, client.Snapshot.GraphicsOverlay.PositionY, 6);
+		Assert.Equal(1.5, client.Snapshot.GraphicsOverlay.Scale, 6);
+		Assert.True(runtime.Runtime!.Snapshot.GraphicsOverlay.Visible);
+		Assert.Equal(revisionBeforeGraphics, client.Snapshot.Production.Revision);
+
+		var clearedGraphics = await client.ClearGraphicsOverlayAsync();
+		Assert.False(clearedGraphics.AssetLoaded);
+		Assert.False(client.Snapshot!.GraphicsOverlay.Visible);
+		Assert.False(runtime.Runtime.Snapshot.GraphicsOverlay.AssetLoaded);
+		Assert.Equal(revisionBeforeGraphics, client.Snapshot.Production.Revision);
+
 		var preview = await client.SelectPreviewAsync(sourceB.Id);
 		Assert.True(preview.Accepted, preview.Failure?.ToString());
 		Assert.Equal(sourceB.Id, client.Snapshot!.Production.Routing.PreviewSourceId.ToString());

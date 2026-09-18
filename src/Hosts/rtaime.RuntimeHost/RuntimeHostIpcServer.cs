@@ -179,6 +179,9 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 				"runtime.providers.get" => ValueTask.FromResult(Success(request, "runtime.providers.response", ProviderDescriptors(runtime).Select(ToWire).ToArray())),
 				"runtime.snapshot.get" => ValueTask.FromResult(Success(request, "runtime.snapshot.response", ToWire(runtime.Snapshot, runtime.Format))),
 				"runtime.execution.apply" => ValueTask.FromResult(ApplyExecution(request, runtime)),
+				"runtime.graphics.overlay.load" => ValueTask.FromResult(LoadGraphicsOverlay(request, runtime)),
+				"runtime.graphics.overlay.set" => ValueTask.FromResult(SetGraphicsOverlay(request, runtime)),
+				"runtime.graphics.overlay.clear" => ValueTask.FromResult(ClearGraphicsOverlay(request, runtime)),
 				"runtime.media_deck.snapshot.get" => ValueTask.FromResult(MediaDeckSnapshot(request)),
 				"runtime.media_deck.open" => ValueTask.FromResult(OpenMediaDeck(request)),
 				"runtime.media_deck.transport" => ValueTask.FromResult(ApplyMediaDeckTransport(request)),
@@ -198,6 +201,31 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		return deck is null
 			? runtime.ProviderDescriptors
 			: runtime.ProviderDescriptors.Concat(new[] { deck.ProviderDescriptor }).ToArray();
+	}
+
+	private WireEnvelope LoadGraphicsOverlay(WireEnvelope request, V1RuntimeHostService runtime)
+	{
+		var wire = request.Payload.Deserialize<WireGraphicsAsset>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Graphics overlay asset payload is required.");
+		var snapshot = runtime.LoadGraphicsOverlay(wire.Name, wire.Width, wire.Height, wire.RgbaPixels);
+		_stateVersion++;
+		return Success(request, "runtime.graphics.overlay.response", ToWire(snapshot));
+	}
+
+	private WireEnvelope SetGraphicsOverlay(WireEnvelope request, V1RuntimeHostService runtime)
+	{
+		var wire = request.Payload.Deserialize<WireGraphicsOverlayState>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Graphics overlay state payload is required.");
+		var snapshot = runtime.SetGraphicsOverlay(wire.Visible, wire.PositionX, wire.PositionY, wire.Scale);
+		_stateVersion++;
+		return Success(request, "runtime.graphics.overlay.response", ToWire(snapshot));
+	}
+
+	private WireEnvelope ClearGraphicsOverlay(WireEnvelope request, V1RuntimeHostService runtime)
+	{
+		var snapshot = runtime.ClearGraphicsOverlay();
+		_stateVersion++;
+		return Success(request, "runtime.graphics.overlay.response", ToWire(snapshot));
 	}
 
 	private WireEnvelope MediaDeckSnapshot(WireEnvelope request)
@@ -322,7 +350,18 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		new WireVideoFormat(format.Width, format.Height, format.FrameRate.ToString(), (int)format.PixelFormat, (int)format.ScanMode),
 		snapshot.InputSignals.OrderBy(pair => pair.Key.ToString(), StringComparer.Ordinal)
 			.Select(pair => new WireInputSignal(pair.Key.ToString(), pair.Value.ToString().ToUpperInvariant()))
-			.ToArray());
+			.ToArray(),
+		ToWire(snapshot.GraphicsOverlay));
+
+	private static WireGraphicsOverlay ToWire(V1GraphicsOverlaySnapshot snapshot) => new(
+		snapshot.AssetLoaded,
+		snapshot.AssetName,
+		snapshot.AssetWidth,
+		snapshot.AssetHeight,
+		snapshot.Visible,
+		snapshot.PositionX,
+		snapshot.PositionY,
+		snapshot.Scale);
 
 	private static WireApplyResponse ToWire(RuntimeHostApplyResult result) => new(
 		new WirePrepareResult(
@@ -399,6 +438,9 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 	private sealed record WireFailure(string Code, string Message);
 	private sealed record WireVideoFormat(uint Width, uint Height, string FrameRate, int PixelFormat, int ScanMode);
 	private sealed record WireInputSignal(string SourceId, string Health);
+	private sealed record WireGraphicsAsset(string Name, uint Width, uint Height, byte[] RgbaPixels);
+	private sealed record WireGraphicsOverlayState(bool Visible, double PositionX, double PositionY, double Scale);
+	private sealed record WireGraphicsOverlay(bool AssetLoaded, string? AssetName, uint AssetWidth, uint AssetHeight, bool Visible, double PositionX, double PositionY, double Scale);
 	private sealed record WireCapability(string CapabilityId, string Kind, WireVideoFormat[] VideoFormats);
 	private sealed record WireResource(string ResourceId, string ProviderId, string Kind, uint CapacityUnits, bool Reservable);
 	private sealed record WireProvider(string Version, string ProviderId, string Name, int AvailabilityState, WireFailure? Failure, WireCapability[] Capabilities, WireResource[] Resources);
@@ -428,7 +470,8 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		int TimingHealth,
 		int ActiveGpuSurfaces,
 		WireVideoFormat Format,
-		WireInputSignal[] InputSignals);
+		WireInputSignal[] InputSignals,
+		WireGraphicsOverlay GraphicsOverlay);
 
 	private sealed class BoundedRequestCache
 	{

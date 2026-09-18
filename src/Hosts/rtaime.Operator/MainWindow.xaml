@@ -285,6 +285,60 @@
 
 					<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14">
 						<StackPanel>
+							<DockPanel Margin="0,0,0,12">
+								<TextBlock Text="GRAPHICS / OVERLAY" Style="{StaticResource OperatorSectionTitle}" />
+								<Border Style="{StaticResource OperatorStatusBadge}" DockPanel.Dock="Right"><TextBlock Text="{Binding GraphicsState}" FontWeight="Bold" /></Border>
+							</DockPanel>
+							<TextBlock Text="{Binding GraphicsAssetName}" FontSize="16" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+							<DockPanel Margin="0,3,0,12">
+								<TextBlock Text="PNG / RGBA asset" Style="{StaticResource OperatorLabel}" />
+								<TextBlock Text="{Binding GraphicsDimensions}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" />
+							</DockPanel>
+							<Grid Margin="0,0,0,10">
+								<Grid.ColumnDefinitions>
+									<ColumnDefinition Width="*" />
+									<ColumnDefinition Width="8" />
+									<ColumnDefinition Width="*" />
+									<ColumnDefinition Width="8" />
+									<ColumnDefinition Width="*" />
+								</Grid.ColumnDefinitions>
+								<StackPanel Grid.Column="0">
+									<TextBlock Text="X %" Style="{StaticResource OperatorLabel}" />
+									<TextBox Text="{Binding GraphicsPositionX, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource OperatorTextBox}" />
+								</StackPanel>
+								<StackPanel Grid.Column="2">
+									<TextBlock Text="Y %" Style="{StaticResource OperatorLabel}" />
+									<TextBox Text="{Binding GraphicsPositionY, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource OperatorTextBox}" />
+								</StackPanel>
+								<StackPanel Grid.Column="4">
+									<TextBlock Text="SCALE" Style="{StaticResource OperatorLabel}" />
+									<TextBox Text="{Binding GraphicsScale, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource OperatorTextBox}" />
+								</StackPanel>
+							</Grid>
+							<Grid>
+								<Grid.ColumnDefinitions>
+									<ColumnDefinition Width="*" />
+									<ColumnDefinition Width="6" />
+									<ColumnDefinition Width="*" />
+								</Grid.ColumnDefinitions>
+								<Button Grid.Column="0" Content="LOAD PNG" Command="{Binding LoadGraphicsCommand}" Style="{StaticResource OperatorAccentButton}" />
+								<Button Grid.Column="2" Content="APPLY POSITION" Command="{Binding ApplyGraphicsCommand}" Style="{StaticResource OperatorButton}" />
+							</Grid>
+							<Grid Margin="0,6,0,0">
+								<Grid.ColumnDefinitions>
+									<ColumnDefinition Width="*" />
+									<ColumnDefinition Width="6" />
+									<ColumnDefinition Width="*" />
+								</Grid.ColumnDefinitions>
+								<Button Grid.Column="0" Content="SHOW / HIDE" Command="{Binding ToggleGraphicsCommand}" Style="{StaticResource OperatorProgramButton}" />
+								<Button Grid.Column="2" Content="CLEAR" Command="{Binding ClearGraphicsCommand}" Style="{StaticResource OperatorButton}" />
+							</Grid>
+							<TextBlock Text="Graphics are composited in RuntimeHost after the transition and before Program monitoring / recording." Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,10,0,0" />
+						</StackPanel>
+					</Border>
+
+					<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14">
+						<StackPanel>
 							<TextBlock Text="ISOLATED SERVICES" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,12" />
 							<DockPanel Margin="0,0,0,8"><TextBlock Text="AI" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding AIStatus}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
 							<DockPanel Margin="0,0,0,8"><TextBlock Text="Recording" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding RecordingStatus}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>

@@ -79,6 +79,38 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 	public ValueTask<OperatorMutationResponse> DissolveProgramAsync(DissolveProgramCommand command, CancellationToken cancellationToken = default) =>
 		MutateAsync("control.program.dissolve", command.Metadata, command.SourceId, command.DurationFrames, cancellationToken);
 
+	public async ValueTask<OperatorGraphicsOverlayDescriptor> LoadGraphicsOverlayAsync(
+		OperatorGraphicsAsset asset,
+		CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(asset);
+		var response = await ExchangeAsync(
+			"control.graphics.overlay.load",
+			new WireGraphicsAsset(asset.Name, asset.Width, asset.Height, asset.RgbaPixels),
+			cancellationToken).ConfigureAwait(false);
+		return ReadGraphicsOverlay(response);
+	}
+
+	public async ValueTask<OperatorGraphicsOverlayDescriptor> SetGraphicsOverlayAsync(
+		bool visible,
+		double positionX,
+		double positionY,
+		double scale,
+		CancellationToken cancellationToken = default)
+	{
+		var response = await ExchangeAsync(
+			"control.graphics.overlay.set",
+			new WireGraphicsOverlayState(visible, positionX, positionY, scale),
+			cancellationToken).ConfigureAwait(false);
+		return ReadGraphicsOverlay(response);
+	}
+
+	public async ValueTask<OperatorGraphicsOverlayDescriptor> ClearGraphicsOverlayAsync(CancellationToken cancellationToken = default)
+	{
+		var response = await ExchangeAsync("control.graphics.overlay.clear", new { }, cancellationToken).ConfigureAwait(false);
+		return ReadGraphicsOverlay(response);
+	}
+
 	public async ValueTask<MediaDeckSnapshot> GetMediaDeckSnapshotAsync(CancellationToken cancellationToken = default)
 	{
 		var response = await ExchangeAsync("control.media_deck.snapshot.get", new { }, cancellationToken).ConfigureAwait(false);
@@ -242,6 +274,13 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		}
 	}
 
+	private static OperatorGraphicsOverlayDescriptor ReadGraphicsOverlay(WireEnvelope response)
+	{
+		var wire = response.Payload.Deserialize<WireGraphicsOverlay>(Wire.JsonOptions)
+			?? throw new InvalidDataException("ControlHost graphics overlay payload is required.");
+		return FromWire(wire);
+	}
+
 	private static MediaDeckSnapshot ReadMediaDeckSnapshot(WireEnvelope response)
 	{
 		var wire = response.Payload.Deserialize<WireMediaDeckSnapshot>(Wire.JsonOptions)
@@ -330,7 +369,18 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		wire.AIStatus,
 		wire.RecordingStatus,
 		wire.VisualLayerEnabled,
-		wire.AudioPeakLevel);
+		wire.AudioPeakLevel,
+		FromWire(wire.GraphicsOverlay));
+
+	private static OperatorGraphicsOverlayDescriptor FromWire(WireGraphicsOverlay overlay) => new(
+		overlay.AssetLoaded,
+		overlay.AssetName,
+		overlay.AssetWidth,
+		overlay.AssetHeight,
+		overlay.Visible,
+		overlay.PositionX,
+		overlay.PositionY,
+		overlay.Scale);
 
 	private static AuthoritativeProductionState FromWire(WireProductionState state) => new(
 		CompatibilityVersion.Parse(state.Version),
@@ -375,7 +425,10 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 	private sealed record WireFailure(string Code, string Message);
 	private sealed record WireSource(string Id, string Name, string Type, string Format, string Health, string MediaState, long? RemainingTicks, string? MediaFileName);
 	private sealed record WireProductionState(string Version, string ProductionId, ulong Revision, string PreviewSourceId, string ProgramSourceId);
-	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, ulong StateVersion);
+	private sealed record WireGraphicsAsset(string Name, uint Width, uint Height, byte[] RgbaPixels);
+	private sealed record WireGraphicsOverlayState(bool Visible, double PositionX, double PositionY, double Scale);
+	private sealed record WireGraphicsOverlay(bool AssetLoaded, string? AssetName, uint AssetWidth, uint AssetHeight, bool Visible, double PositionX, double PositionY, double Scale);
+	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, ulong StateVersion);
 	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path);
 	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame);
 	private sealed record WireMediaMarkerCommand(string Version, string AssetId, int Kind, long? PositionFrame, string? CuePointId, string? Name);

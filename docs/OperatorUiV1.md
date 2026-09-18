@@ -164,6 +164,57 @@ Selecting a source tile updates `SelectedSource`. `Set Preview` / `Ctrl+P` remai
 - integration tests verify live health changes and Media Deck READY/PLAYING/remaining observations across real IPC;
 - Operator UI policy verifies the source-bin bindings and monitoring/media projection boundaries.
 
+## AP-49 Graphics & Overlay Operator Workflow
+
+AP-49 adds a bounded P0 graphics workflow to the Operator without introducing a second renderer or any WPF-owned production state. The implementation is classified as **REALTIME_CRITICAL / HOST_INTEGRATION** because it extends the RuntimeHost composite path and the private management IPC seams. No public Control contract or persisted schema version changes are required.
+
+The Operator can:
+
+- load a PNG asset through the Windows reference client;
+- decode it to straight RGBA while preserving the PNG alpha channel;
+- load the bounded RGBA asset into RuntimeHost;
+- position it using normalized X/Y coordinates;
+- scale it from 0.05x to 4.0x;
+- explicitly show/hide the overlay;
+- clear the loaded asset.
+
+The V1 asset boundary is intentionally narrow: PNG input only, maximum 384 x 384 pixels, with exact RGBA payload validation. Management IPC frames remain retained at 1 MiB, which accommodates the largest supported 384 x 384 RGBA asset after JSON/base64 framing without turning management IPC into a bulk-media transport.
+
+### Production rendering and authority
+
+Graphics commands follow **Operator → rtaime.Client → ControlHost → RuntimeHost**. ControlHost serializes the commands through its existing mutation gate, requires an authoritative production state plus a connected RuntimeHost, and reports success only after RuntimeHost accepts the requested graphics state. The Operator then refreshes the confirmed snapshot; it never marks an overlay on-air locally.
+
+The graphics mutation seam is intentionally separate from production routing revisions. Loading or positioning a logo does not invent a new Preview/Program routing revision, while RuntimeHost remains the execution owner of the confirmed graphics state.
+
+RuntimeHost materializes the selected asset into a transparent full-frame RGBA layer when the asset or placement changes. The frame hot path only materializes the already-prepared GPU layer. Existing GPU alpha compositing therefore remains the single render path for both managed-reference and CUDA backends.
+
+The render order remains:
+
+1. resolve CUT/DISSOLVE;
+2. composite the active graphics layer over the transitioned background;
+3. read the final Program pixels;
+4. publish Program monitoring;
+5. stage those same Program pixels for recording.
+
+This means Program monitoring and recording observe the same post-graphics image rather than independent approximations.
+
+### Recovery and persistence boundary
+
+AP-49 does not add durable graphics rundown persistence. The current asset and placement are RuntimeHost process state and are observable through ControlHost snapshots. A RuntimeHost restart therefore clears the loaded asset and the Operator resynchronizes to the empty graphics state. Durable graphics/rundown persistence is outside the AP-49 P0 scope.
+
+### P1 lower third decision
+
+The optional P1 lower-third workflow is deliberately not implemented in AP-49. The current V1 production path has no qualified text/CG renderer. Rendering lower-third text in WPF and presenting it as production truth would violate the RuntimeHost rendering boundary. A future lower-third implementation should first introduce a governed production CG/text-rendering capability rather than simulating one in the Operator.
+
+### AP-49 acceptance evidence
+
+- bounded graphics-asset validation covers dimensions and exact RGBA payload length;
+- Runtime integration tests cover alpha, show/hide, position, scale and persistence across DISSOLVE frames;
+- recording integration evidence verifies that the recorded video payload exactly equals the post-graphics Program pixels;
+- real process-boundary integration verifies Operator/Client → ControlHost → RuntimeHost load, placement, show and clear state;
+- graphics state changes do not advance authoritative Preview/Program routing revision;
+- Operator UI policy verifies the PNG decode path, graphics controls and Client-SDK-only authority boundary.
+
 ## Verification
 
 `build/quality/Test-OperatorUiPolicy.ps1` verifies the primary UI architectural and UX guardrails, including:
@@ -180,6 +231,7 @@ Selecting a source tile updates `SelectedSource`. `Set Preview` / `Ctrl+P` remai
 - selected-source vs confirmed-Preview separation;
 - Preview-derived CUT/AUTO take semantics;
 - visible commit and transition status;
+- PNG/RGBA graphics load, placement, scale and confirmed show/hide controls;
 - retained Client-only Operator project dependency.
 
 `build/quality/Test-OperatorMonitoringPolicy.ps1` verifies the monitoring-plane separation, bounded/loss-tolerant behavior and prohibition on management-IPC pixel transport.
