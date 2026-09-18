@@ -599,6 +599,9 @@ internal static class MediaFoundation
 	public static ulong PackRatio(uint high, uint low) =>
 		((ulong)high << 32) | low;
 
+	public static ulong PackRatio(long high, long low) =>
+		PackRatio(checked((uint)high), checked((uint)low));
+
 	public static void ThrowIfFailed(int hr)
 	{
 		if (hr < 0)
