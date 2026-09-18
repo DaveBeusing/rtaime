@@ -585,9 +585,6 @@ internal static class MediaFoundation
 	public static extern int MFCreateAttributes(out IMFAttributes attributes, uint initialSize);
 
 	[DllImport("mfplat.dll", ExactSpelling = true)]
-	public static extern int MFCreateAttributes(out IMFAttributes attributes, uint initialSize);
-
-	[DllImport("mfplat.dll", ExactSpelling = true)]
 	public static extern int MFCreateMediaType(out IMFMediaType mediaType);
 
 	[DllImport("mfreadwrite.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
