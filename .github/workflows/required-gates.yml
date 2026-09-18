@@ -124,6 +124,10 @@ jobs:
         shell: pwsh
         run: ./build/operations/Test-ApplicationStartupPolicy.ps1
 
+      - name: Verify Windows production lifecycle policy
+        shell: pwsh
+        run: ./build/operations/Test-WindowsServiceLifecyclePolicy.ps1
+
       - name: Verify operator UI policy
         shell: pwsh
         run: ./build/quality/Test-OperatorUiPolicy.ps1
