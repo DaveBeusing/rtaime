@@ -40,7 +40,8 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 	public static LocalMediaDecoderOpenResult TryOpen(
 		string path,
 		MediaAssetId assetId,
-		MediaSourceId sourceId)
+		MediaSourceId sourceId,
+		VideoFormat outputFormat)
 	{
 		if (!OperatingSystem.IsWindows())
 			return LocalMediaDecoderOpenResult.Rejected("media.file.platform_unsupported", "Windows Media Foundation is not available on this platform.");
@@ -52,7 +53,17 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 			MediaFoundation.ThrowIfFailed(MediaFoundation.MFStartup(MediaFoundation.MfVersion, MediaFoundation.MfStartupFull));
 			mediaFoundationStarted = true;
 
-			MediaFoundation.ThrowIfFailed(MediaFoundation.MFCreateSourceReaderFromURL(path, null, out reader));
+			MediaFoundation.ThrowIfFailed(MediaFoundation.MFCreateAttributes(out var readerAttributes, 2));
+			try
+			{
+				var advancedVideoProcessing = MediaFoundation.MfSourceReaderEnableAdvancedVideoProcessing;
+				MediaFoundation.ThrowIfFailed(readerAttributes.SetUINT32(ref advancedVideoProcessing, 1));
+				MediaFoundation.ThrowIfFailed(MediaFoundation.MFCreateSourceReaderFromURL(path, readerAttributes, out reader));
+			}
+			finally
+			{
+				MediaFoundation.ReleaseComObject(readerAttributes);
+			}
 
 			MediaFoundation.ThrowIfFailed(reader.SetStreamSelection(MediaFoundation.AllStreams, false));
 			MediaFoundation.ThrowIfFailed(reader.SetStreamSelection(MediaFoundation.FirstVideoStream, true));
@@ -77,14 +88,12 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 					return RejectAndRelease("media.file.audio_codec_unsupported", "V1 local media supports embedded AAC audio only.", reader, mediaFoundationStarted);
 
 				var metadata = Mp4LocalMediaMetadataReader.Read(path);
-				if (metadata.AudioChannels != 2 || metadata.AudioSampleRate != 48_000)
-					return RejectAndRelease("media.file.audio_format_unsupported", "V1 local media requires embedded 48 kHz stereo audio.", reader, mediaFoundationStarted);
 				if (metadata.FrameRateNumerator <= 0 || metadata.FrameRateDenominator <= 0)
 					return RejectAndRelease("media.file.metadata_invalid", "The local media file reports an invalid frame rate.", reader, mediaFoundationStarted);
 				if (metadata.Duration <= TimeSpan.Zero)
 					return RejectAndRelease("media.file.metadata_invalid", "The local media file reports an invalid duration.", reader, mediaFoundationStarted);
 
-				ConfigureDecodedVideo(reader, MediaFoundation.FirstVideoStream);
+				ConfigureDecodedVideo(reader, MediaFoundation.FirstVideoStream, outputFormat);
 				ConfigureDecodedAudio(reader, MediaFoundation.FirstAudioStream);
 				MediaFoundation.ThrowIfFailed(reader.SetStreamSelection(MediaFoundation.FirstVideoStream, true));
 				MediaFoundation.ThrowIfFailed(reader.SetStreamSelection(MediaFoundation.FirstAudioStream, true));
@@ -97,12 +106,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 					MediaContainerFormat.Mp4,
 					MediaVideoCodec.H264,
 					MediaAudioCodec.Aac,
-					new VideoFormat(
-						metadata.Width,
-						metadata.Height,
-						new FrameRate(metadata.FrameRateNumerator, metadata.FrameRateDenominator),
-						PixelFormat.Rgba8,
-						ScanMode.Progressive),
+					outputFormat,
 					AudioFormat.Stereo48kFloat32,
 					metadata.Duration);
 
@@ -445,29 +449,80 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 		return value;
 	}
 
-	private static void ConfigureDecodedVideo(IMFSourceReader reader, uint streamIndex)
-	{
-		ConfigureDecodedType(reader, streamIndex, MediaFoundation.MfMediaTypeVideo, MediaFoundation.MfVideoFormatNv12);
-	}
-
-	private static void ConfigureDecodedAudio(IMFSourceReader reader, uint streamIndex)
-	{
-		ConfigureDecodedType(reader, streamIndex, MediaFoundation.MfMediaTypeAudio, MediaFoundation.MfAudioFormatPcm);
-	}
-
-	private static void ConfigureDecodedType(
+	private static void ConfigureDecodedVideo(
 		IMFSourceReader reader,
 		uint streamIndex,
-		Guid majorType,
-		Guid subtype)
+		VideoFormat outputFormat)
 	{
 		MediaFoundation.ThrowIfFailed(MediaFoundation.MFCreateMediaType(out var mediaType));
 		try
 		{
 			var majorKey = MediaFoundation.MfMtMajorType;
+			var majorType = MediaFoundation.MfMediaTypeVideo;
 			MediaFoundation.ThrowIfFailed(mediaType.SetGUID(ref majorKey, ref majorType));
+
 			var subtypeKey = MediaFoundation.MfMtSubtype;
+			var subtype = MediaFoundation.MfVideoFormatNv12;
 			MediaFoundation.ThrowIfFailed(mediaType.SetGUID(ref subtypeKey, ref subtype));
+
+			var frameSizeKey = MediaFoundation.MfMtFrameSize;
+			MediaFoundation.ThrowIfFailed(mediaType.SetUINT64(
+				ref frameSizeKey,
+				MediaFoundation.PackRatio(outputFormat.Width, outputFormat.Height)));
+
+			var frameRateKey = MediaFoundation.MfMtFrameRate;
+			MediaFoundation.ThrowIfFailed(mediaType.SetUINT64(
+				ref frameRateKey,
+				MediaFoundation.PackRatio(
+					outputFormat.FrameRate.Numerator,
+					outputFormat.FrameRate.Denominator)));
+
+			var interlaceKey = MediaFoundation.MfMtInterlaceMode;
+			MediaFoundation.ThrowIfFailed(mediaType.SetUINT32(
+				ref interlaceKey,
+				MediaFoundation.MfVideoInterlaceProgressive));
+
+			var pixelAspectKey = MediaFoundation.MfMtPixelAspectRatio;
+			MediaFoundation.ThrowIfFailed(mediaType.SetUINT64(
+				ref pixelAspectKey,
+				MediaFoundation.PackRatio(1, 1)));
+
+			MediaFoundation.ThrowIfFailed(reader.SetCurrentMediaType(streamIndex, IntPtr.Zero, mediaType));
+		}
+		finally
+		{
+			MediaFoundation.ReleaseComObject(mediaType);
+		}
+	}
+
+	private static void ConfigureDecodedAudio(IMFSourceReader reader, uint streamIndex)
+	{
+		MediaFoundation.ThrowIfFailed(MediaFoundation.MFCreateMediaType(out var mediaType));
+		try
+		{
+			var majorKey = MediaFoundation.MfMtMajorType;
+			var majorType = MediaFoundation.MfMediaTypeAudio;
+			MediaFoundation.ThrowIfFailed(mediaType.SetGUID(ref majorKey, ref majorType));
+
+			var subtypeKey = MediaFoundation.MfMtSubtype;
+			var subtype = MediaFoundation.MfAudioFormatPcm;
+			MediaFoundation.ThrowIfFailed(mediaType.SetGUID(ref subtypeKey, ref subtype));
+
+			var channelsKey = MediaFoundation.MfMtAudioNumChannels;
+			MediaFoundation.ThrowIfFailed(mediaType.SetUINT32(ref channelsKey, 2));
+
+			var sampleRateKey = MediaFoundation.MfMtAudioSamplesPerSecond;
+			MediaFoundation.ThrowIfFailed(mediaType.SetUINT32(ref sampleRateKey, 48_000));
+
+			var bitsPerSampleKey = MediaFoundation.MfMtAudioBitsPerSample;
+			MediaFoundation.ThrowIfFailed(mediaType.SetUINT32(ref bitsPerSampleKey, 16));
+
+			var blockAlignmentKey = MediaFoundation.MfMtAudioBlockAlignment;
+			MediaFoundation.ThrowIfFailed(mediaType.SetUINT32(ref blockAlignmentKey, 4));
+
+			var averageBytesKey = MediaFoundation.MfMtAudioAverageBytesPerSecond;
+			MediaFoundation.ThrowIfFailed(mediaType.SetUINT32(ref averageBytesKey, 192_000));
+
 			MediaFoundation.ThrowIfFailed(reader.SetCurrentMediaType(streamIndex, IntPtr.Zero, mediaType));
 		}
 		finally
@@ -499,9 +554,20 @@ internal static class MediaFoundation
 	public const uint FirstAudioStream = 0xFFFFFFFD;
 	public const uint AllStreams = 0xFFFFFFFE;
 	public const uint SourceReaderEndOfStream = 0x00000002;
+	public const uint MfVideoInterlaceProgressive = 2;
 
+	public static Guid MfSourceReaderEnableAdvancedVideoProcessing = new("0F81DA2C-B537-4672-A8B2-A681B17307A3");
 	public static Guid MfMtMajorType = new("48EBA18E-F8C9-4687-BF11-0A74C9F96A8F");
 	public static Guid MfMtSubtype = new("F7E34C9A-42E8-4714-B74B-CB29D72C35E5");
+	public static Guid MfMtFrameSize = new("1652C33D-D6B2-4012-B834-72030849A37D");
+	public static Guid MfMtFrameRate = new("C459A2E8-3D2C-4E44-B132-FEE5156C7BB0");
+	public static Guid MfMtInterlaceMode = new("E2724BB8-E676-4806-B4B2-A8D6EFB44CCD");
+	public static Guid MfMtPixelAspectRatio = new("C6376A1E-8D0A-4027-BE45-6D9A0AD39BB6");
+	public static Guid MfMtAudioNumChannels = new("37E48BF5-645E-4C5B-89DE-ADA9E29B696A");
+	public static Guid MfMtAudioSamplesPerSecond = new("5FAEEAE7-0290-4C31-9E8A-C534F68D9DBA");
+	public static Guid MfMtAudioBitsPerSample = new("F2DEB57F-40FA-4764-AA33-ED4F2D1FF669");
+	public static Guid MfMtAudioBlockAlignment = new("322DE230-9EEB-43BD-AB7A-FF412251541D");
+	public static Guid MfMtAudioAverageBytesPerSecond = new("1AAB75C8-CFEF-451C-AB95-AC034B8E1731");
 	public static Guid MfMediaTypeVideo = new("73646976-0000-0010-8000-00AA00389B71");
 	public static Guid MfMediaTypeAudio = new("73647561-0000-0010-8000-00AA00389B71");
 	public static Guid MfVideoFormatH264 = new("34363248-0000-0010-8000-00AA00389B71");
@@ -519,6 +585,9 @@ internal static class MediaFoundation
 	public static extern int MFCreateAttributes(out IMFAttributes attributes, uint initialSize);
 
 	[DllImport("mfplat.dll", ExactSpelling = true)]
+	public static extern int MFCreateAttributes(out IMFAttributes attributes, uint initialSize);
+
+	[DllImport("mfplat.dll", ExactSpelling = true)]
 	public static extern int MFCreateMediaType(out IMFMediaType mediaType);
 
 	[DllImport("mfreadwrite.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
@@ -526,6 +595,9 @@ internal static class MediaFoundation
 		string url,
 		IMFAttributes? attributes,
 		out IMFSourceReader sourceReader);
+
+	public static ulong PackRatio(uint high, uint low) =>
+		((ulong)high << 32) | low;
 
 	public static void ThrowIfFailed(int hr)
 	{
