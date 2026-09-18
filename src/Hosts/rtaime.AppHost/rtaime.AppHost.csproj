@@ -1,0 +1,15 @@
+<!-- Copyright (c) Dave Beusing <david.beusing@gmail.com>. -->
+<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<OutputType>Exe</OutputType>
+		<AssemblyName>rtaime</AssemblyName>
+		<RootNamespace>rtaime.AppHost</RootNamespace>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<None Include="..\..\..\build\operations\host-lifecycle-policy.json" Link="host-lifecycle-policy.json">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+			<CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+		</None>
+	</ItemGroup>
+</Project>
