@@ -180,6 +180,24 @@ public sealed class UnifiedApplicationHostTests
 	}
 
 	[Fact]
+	public async Task Unexpected_control_exit_is_not_evidenced_as_graceful_shutdown()
+	{
+		var options = CreateOptions(ApplicationStartupProfile.HeadlessEngine);
+		var platform = new FakeApplicationHostPlatform(options) { PublishReadinessOnControlStart = true };
+		platform.OnDelay = platform.KillControlProcess;
+		var host = new UnifiedApplicationHost(options, platform);
+
+		await Assert.ThrowsAsync<InvalidOperationException>(() => host.RunAsync());
+
+		using var evidence = JsonDocument.Parse(platform.ReadAllText(options.ShutdownEvidencePath));
+		Assert.Equal("FAIL", evidence.RootElement.GetProperty("status").GetString());
+		Assert.False(evidence.RootElement.GetProperty("graceful").GetBoolean());
+		Assert.False(evidence.RootElement.GetProperty("forcedTermination").GetBoolean());
+		Assert.False(evidence.RootElement.GetProperty("processAliveAtRequest").GetBoolean());
+		Assert.False(platform.StopSignalWritten);
+	}
+
+	[Fact]
 	public async Task External_managed_operator_exit_never_stops_adopted_engine()
 	{
 		var options = CreateOptions(ApplicationStartupProfile.Interactive, ApplicationLifecycleOwnership.ExternalManaged);
@@ -327,6 +345,11 @@ public sealed class UnifiedApplicationHostTests
 		public bool IsProcessAlive(int processId) => _alive.Contains(processId);
 
 		public void KillProcessTree(int processId) => _alive.Remove(processId);
+
+		public void KillControlProcess()
+		{
+			if (_alive.Count > 0) _alive.Remove(_alive.Min());
+		}
 
 		public bool FileExists(string path) => _files.ContainsKey(Path.GetFullPath(path));
 
