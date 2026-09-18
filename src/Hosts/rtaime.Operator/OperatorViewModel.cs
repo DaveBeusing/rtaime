@@ -12,11 +12,15 @@ using rtaime.Media.Contracts;
 
 namespace rtaime.Operator;
 
-public sealed class OperatorViewModel : INotifyPropertyChanged
+public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 {
 	private readonly OperatorControlClient? _client;
+	private readonly SynchronizationContext? _synchronizationContext;
+	private readonly CancellationTokenSource _audioPollingStop = new();
 	private Func<OperatorGraphicsAsset?>? _graphicsAssetPicker;
+	private Task? _audioPollingTask;
 	private OperatorSourceTileViewModel? _selectedSource;
+	private OperatorAudioInputViewModel? _selectedAudioInput;
 	private string? _mediaDeckSourceId;
 	private string _previewSourceName = "—";
 	private string _previewSourceId = "—";
@@ -37,6 +41,17 @@ public sealed class OperatorViewModel : INotifyPropertyChanged
 	private double _graphicsScale = 1.0;
 	private string _audioPeak = "0.000";
 	private string _audioPeakPercent = "0%";
+	private string _audioAfvSourceName = "—";
+	private string _audioAfvSourceId = "—";
+	private string _audioHealth = "UNKNOWN";
+	private string _audioMeterStatus = "IDLE";
+	private double _audioLeftPeak;
+	private double _audioRightPeak;
+	private double _audioMasterPeak;
+	private bool _audioClipping;
+	private bool _audioMuted;
+	private double _audioProgramGain = 1.0;
+	private string _clipAudioStatus = "NO CLIP AUDIO";
 	private string _connectionState = "DISCONNECTED";
 	private string _connectionDetail = "Synchronize to load authoritative state.";
 	private string _commandStatus = "IDLE";
@@ -52,11 +67,14 @@ public sealed class OperatorViewModel : INotifyPropertyChanged
 
 	public OperatorViewModel(
 		OperatorControlClient? client = null,
-		Func<OperatorGraphicsAsset?>? graphicsAssetPicker = null)
+		Func<OperatorGraphicsAsset?>? graphicsAssetPicker = null,
+		SynchronizationContext? synchronizationContext = null)
 	{
 		_client = client;
 		_graphicsAssetPicker = graphicsAssetPicker;
+		_synchronizationContext = synchronizationContext ?? SynchronizationContext.Current;
 		Sources = new ObservableCollection<OperatorSourceTileViewModel>();
+		AudioInputs = new ObservableCollection<OperatorAudioInputViewModel>();
 		SynchronizeCommand = new AsyncRelayCommand(SynchronizeAsync, () => _client is not null && !IsBusy);
 		SetPreviewCommand = new AsyncRelayCommand(SetPreviewAsync, CanSetPreview);
 		CutCommand = new AsyncRelayCommand(CutAsync, CanTakePreview);
@@ -65,6 +83,8 @@ public sealed class OperatorViewModel : INotifyPropertyChanged
 		ApplyGraphicsCommand = new AsyncRelayCommand(ApplyGraphicsAsync, CanApplyGraphics);
 		ToggleGraphicsCommand = new AsyncRelayCommand(ToggleGraphicsAsync, CanApplyGraphics);
 		ClearGraphicsCommand = new AsyncRelayCommand(ClearGraphicsAsync, CanApplyGraphics);
+		ApplyAudioGainCommand = new AsyncRelayCommand(ApplyAudioGainAsync, CanApplyAudio);
+		ToggleAudioMuteCommand = new AsyncRelayCommand(ToggleAudioMuteAsync, CanApplyAudio);
 	}
 
 	internal OperatorControlClient? Client => _client;
@@ -72,6 +92,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged
 	public event PropertyChangedEventHandler? PropertyChanged;
 
 	public ObservableCollection<OperatorSourceTileViewModel> Sources { get; }
+	public ObservableCollection<OperatorAudioInputViewModel> AudioInputs { get; }
 	public ICommand SynchronizeCommand { get; }
 	public ICommand SetPreviewCommand { get; }
 	public ICommand CutCommand { get; }
@@ -80,6 +101,8 @@ public sealed class OperatorViewModel : INotifyPropertyChanged
 	public ICommand ApplyGraphicsCommand { get; }
 	public ICommand ToggleGraphicsCommand { get; }
 	public ICommand ClearGraphicsCommand { get; }
+	public ICommand ApplyAudioGainCommand { get; }
+	public ICommand ToggleAudioMuteCommand { get; }
 
 	public string MonitoringStatus => "Monitoring unavailable until AP-29";
 	public string FormatStatus => "Format metadata is not exposed by the management snapshot.";
@@ -90,6 +113,16 @@ public sealed class OperatorViewModel : INotifyPropertyChanged
 		set
 		{
 			if (Set(ref _selectedSource, value))
+				RaiseCommandState();
+		}
+	}
+
+	public OperatorAudioInputViewModel? SelectedAudioInput
+	{
+		get => _selectedAudioInput;
+		set
+		{
+			if (Set(ref _selectedAudioInput, value))
 				RaiseCommandState();
 		}
 	}
@@ -137,6 +170,17 @@ public sealed class OperatorViewModel : INotifyPropertyChanged
 	}
 	public string AudioPeak { get => _audioPeak; private set => Set(ref _audioPeak, value); }
 	public string AudioPeakPercent { get => _audioPeakPercent; private set => Set(ref _audioPeakPercent, value); }
+	public string AudioAfvSourceName { get => _audioAfvSourceName; private set => Set(ref _audioAfvSourceName, value); }
+	public string AudioAfvSourceId { get => _audioAfvSourceId; private set => Set(ref _audioAfvSourceId, value); }
+	public string AudioHealth { get => _audioHealth; private set => Set(ref _audioHealth, value); }
+	public string AudioMeterStatus { get => _audioMeterStatus; private set => Set(ref _audioMeterStatus, value); }
+	public double AudioLeftPeak { get => _audioLeftPeak; private set => Set(ref _audioLeftPeak, value); }
+	public double AudioRightPeak { get => _audioRightPeak; private set => Set(ref _audioRightPeak, value); }
+	public double AudioMasterPeak { get => _audioMasterPeak; private set => Set(ref _audioMasterPeak, value); }
+	public bool AudioClipping { get => _audioClipping; private set => Set(ref _audioClipping, value); }
+	public bool AudioMuted { get => _audioMuted; private set => Set(ref _audioMuted, value); }
+	public double AudioProgramGain { get => _audioProgramGain; private set => Set(ref _audioProgramGain, value); }
+	public string ClipAudioStatus { get => _clipAudioStatus; private set => Set(ref _clipAudioStatus, value); }
 	public string ConnectionState { get => _connectionState; private set => Set(ref _connectionState, value); }
 	public string ConnectionDetail { get => _connectionDetail; private set => Set(ref _connectionDetail, value); }
 	public string CommandStatus { get => _commandStatus; private set => Set(ref _commandStatus, value); }
@@ -173,6 +217,52 @@ public sealed class OperatorViewModel : INotifyPropertyChanged
 	private bool CanApplyGraphics() =>
 		CanControl() &&
 		_client?.Snapshot?.GraphicsOverlay.AssetLoaded == true;
+
+	private bool CanApplyAudio() => CanControl() && SelectedAudioInput is not null;
+
+	public void StartAudioMetering()
+	{
+		if (_audioPollingTask is null && _client is not null)
+			_audioPollingTask = PollAudioAsync(_audioPollingStop.Token);
+	}
+
+	public async ValueTask DisposeAsync()
+	{
+		_audioPollingStop.Cancel();
+		if (_audioPollingTask is not null)
+		{
+			try { await _audioPollingTask.ConfigureAwait(false); }
+			catch (OperationCanceledException) { }
+		}
+		_audioPollingStop.Dispose();
+	}
+
+	private async Task PollAudioAsync(CancellationToken cancellationToken)
+	{
+		using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(200));
+		while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
+		{
+			if (_client is null || !IsConnected || IsStale || IsBusy)
+				continue;
+			try
+			{
+				var snapshot = await _client.SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+				Post(() =>
+				{
+					ApplyAudio(snapshot, preserveSelectedGainEdit: true);
+					AudioMeterStatus = "LIVE";
+				});
+			}
+			catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+			{
+				throw;
+			}
+			catch (Exception exception) when (exception is IOException or TimeoutException or InvalidOperationException)
+			{
+				Post(() => AudioMeterStatus = "STALE");
+			}
+		}
+	}
 
 	private async Task SynchronizeAsync()
 	{
@@ -314,6 +404,33 @@ public sealed class OperatorViewModel : INotifyPropertyChanged
 		});
 	}
 
+	private async Task ApplyAudioGainAsync()
+	{
+		if (_client is null || SelectedAudioInput is null) return;
+		var input = SelectedAudioInput;
+		await ExecuteAsync("AUDIO GAIN", async () =>
+		{
+			await _client.SetAudioInputStateAsync(input.SourceId, input.Gain, input.Muted);
+			ApplyAudio(_client.Snapshot!, preserveSelectedGainEdit: false);
+			CommandStatus = "AUDIO CONFIRMED";
+			LastEvent = $"Audio gain {input.Gain:0.##}x confirmed for {input.SourceName}.";
+		});
+	}
+
+	private async Task ToggleAudioMuteAsync()
+	{
+		if (_client is null || SelectedAudioInput is null) return;
+		var input = SelectedAudioInput;
+		var muted = !input.Muted;
+		await ExecuteAsync(muted ? "AUDIO MUTE" : "AUDIO UNMUTE", async () =>
+		{
+			await _client.SetAudioInputStateAsync(input.SourceId, input.Gain, muted);
+			ApplyAudio(_client.Snapshot!, preserveSelectedGainEdit: false);
+			CommandStatus = muted ? "AUDIO MUTED" : "AUDIO LIVE";
+			LastEvent = $"{input.SourceName} audio {(muted ? "muted" : "unmuted")} and confirmed by RuntimeHost.";
+		});
+	}
+
 	private bool Accept(OperatorMutationResponse response, string operation)
 	{
 		if (response.Accepted) return true;
@@ -335,7 +452,9 @@ public sealed class OperatorViewModel : INotifyPropertyChanged
 		CommandStatus = $"{operation} IN FLIGHT";
 		CommitStatus = string.Equals(operation, "SYNCHRONIZE", StringComparison.Ordinal)
 			? "SYNCHRONIZING"
-			: "COMMIT PENDING";
+			: operation.StartsWith("AUDIO ", StringComparison.Ordinal)
+				? "RUNTIME CONFIRM PENDING"
+				: "COMMIT PENDING";
 		LastError = null;
 		RaiseCommandState();
 		try
@@ -423,8 +542,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged
 		GraphicsScale = graphics.Scale;
 		GraphicsState = graphics.Visible ? "ON AIR" : graphics.AssetLoaded ? "READY" : "EMPTY";
 		VisualLayerStatus = graphics.Visible ? "GRAPHICS ON" : snapshot.VisualLayerEnabled ? "ENABLED" : "DISABLED";
-		AudioPeak = snapshot.AudioPeakLevel.ToString("0.000", CultureInfo.InvariantCulture);
-		AudioPeakPercent = snapshot.AudioPeakLevel.ToString("P0", CultureInfo.InvariantCulture);
+		ApplyAudio(snapshot, preserveSelectedGainEdit: false);
 		RevisionLabel = $"REV {snapshot.Production.Revision.Value}";
 		CommitStatus = string.Equals(snapshot.RuntimeStatus, "READY", StringComparison.OrdinalIgnoreCase)
 			? $"CONFIRMED · REV {snapshot.Production.Revision.Value}"
@@ -440,6 +558,66 @@ public sealed class OperatorViewModel : INotifyPropertyChanged
 		RaiseCommandState();
 	}
 
+
+	private void ApplyAudio(OperatorStatusSnapshot snapshot, bool preserveSelectedGainEdit)
+	{
+		var previousSelectedId = SelectedAudioInput?.SourceId;
+		var existing = AudioInputs.ToDictionary(input => input.SourceId, StringComparer.Ordinal);
+		AudioInputs.Clear();
+		foreach (var descriptor in snapshot.AudioInputs)
+		{
+			var source = snapshot.Sources.FirstOrDefault(candidate => string.Equals(candidate.Id, descriptor.SourceId, StringComparison.Ordinal));
+			var isAfv = string.Equals(descriptor.SourceId, snapshot.AudioProgram.ActiveVideoSourceId, StringComparison.Ordinal);
+			if (!existing.TryGetValue(descriptor.SourceId, out var input))
+			{
+				input = new OperatorAudioInputViewModel(
+					descriptor,
+					source?.Name ?? descriptor.SourceId,
+					source?.Type ?? "LIVE",
+					isAfv);
+			}
+			else
+			{
+				input.Apply(
+					descriptor,
+					source?.Name ?? descriptor.SourceId,
+					source?.Type ?? "LIVE",
+					isAfv,
+					preserveGainEdit && string.Equals(previousSelectedId, descriptor.SourceId, StringComparison.Ordinal));
+			}
+			AudioInputs.Add(input);
+		}
+
+		SelectedAudioInput = AudioInputs.FirstOrDefault(input => string.Equals(input.SourceId, previousSelectedId, StringComparison.Ordinal))
+			?? AudioInputs.FirstOrDefault(input => input.IsAfv)
+			?? AudioInputs.FirstOrDefault();
+
+		var program = snapshot.AudioProgram;
+		AudioAfvSourceId = program.ActiveVideoSourceId;
+		AudioAfvSourceName = ResolveSourceName(snapshot, program.ActiveVideoSourceId);
+		AudioHealth = program.Health;
+		AudioLeftPeak = program.LeftPeak;
+		AudioRightPeak = program.RightPeak;
+		AudioMasterPeak = program.MasterPeak;
+		AudioClipping = program.Clipping;
+		AudioMuted = program.Muted;
+		AudioProgramGain = program.Gain;
+		AudioPeak = program.MasterPeak.ToString("0.000", CultureInfo.InvariantCulture);
+		AudioPeakPercent = program.MasterPeak.ToString("P0", CultureInfo.InvariantCulture);
+		if (!string.Equals(AudioMeterStatus, "STALE", StringComparison.Ordinal))
+			AudioMeterStatus = "LIVE";
+		RaiseCommandState();
+	}
+
+	private void Post(Action action)
+	{
+		if (_synchronizationContext is null)
+		{
+			action();
+			return;
+		}
+		_synchronizationContext.Post(static state => ((Action)state!).Invoke(), action);
+	}
 
 	internal void SetGraphicsAssetPicker(Func<OperatorGraphicsAsset?> graphicsAssetPicker)
 	{
@@ -464,6 +642,9 @@ public sealed class OperatorViewModel : INotifyPropertyChanged
 		}
 
 		_mediaDeckSourceId = sourceId;
+		ClipAudioStatus = snapshot.Probe is null
+			? "NO CLIP AUDIO"
+			: $"{snapshot.Probe.AudioCodec.ToString().ToUpperInvariant()} · {snapshot.Probe.AudioFormat.ChannelCount}ch · {snapshot.Probe.AudioFormat.SampleRate / 1000.0:0.#} kHz · {snapshot.State.ToString().ToUpperInvariant()}";
 		if (sourceId is null)
 			return;
 
@@ -512,6 +693,8 @@ public sealed class OperatorViewModel : INotifyPropertyChanged
 		(ApplyGraphicsCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 		(ToggleGraphicsCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 		(ClearGraphicsCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+		(ApplyAudioGainCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+		(ToggleAudioMuteCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 	}
 
 	private bool Set<T>(ref T field, T value, [CallerMemberName] string? name = null)
