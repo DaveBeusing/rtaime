@@ -30,6 +30,9 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 	private string _cueName = "Cue";
 	private string? _lastError;
 	private bool _isBusy;
+	private bool _autoPlayOnProgram = true;
+	private MediaDeckEndBehavior _endBehavior = MediaDeckEndBehavior.HoldLastFrame;
+	private bool _playbackPolicyDirty;
 
 	public MediaDeckViewModel(
 		MediaDeckController controller,
@@ -62,6 +65,7 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 		RenameCueCommand = new AsyncRelayCommand(RenameCueAsync, () => SelectedCue is not null && !IsBusy && !string.IsNullOrWhiteSpace(CueName));
 		DeleteCueCommand = new AsyncRelayCommand(DeleteCueAsync, () => SelectedCue is not null && !IsBusy);
 		JumpCueCommand = new AsyncRelayCommand(JumpCueAsync, () => SelectedCue is not null && CanSeek);
+		ApplyPlaybackPolicyCommand = new AsyncRelayCommand(ApplyPlaybackPolicyAsync, () => IsLoaded && !IsBusy);
 	}
 
 	public event PropertyChangedEventHandler? PropertyChanged;
@@ -69,6 +73,7 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 
 	public MediaTimelineViewModel Timeline { get; }
 	public ObservableCollection<MediaDeckCueItem> Cues { get; }
+	public IReadOnlyList<MediaDeckEndBehavior> EndBehaviors { get; } = Enum.GetValues<MediaDeckEndBehavior>();
 
 	public ICommand OpenCommand { get; }
 	public ICommand RefreshCommand { get; }
@@ -87,6 +92,7 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 	public ICommand RenameCueCommand { get; }
 	public ICommand DeleteCueCommand { get; }
 	public ICommand JumpCueCommand { get; }
+	public ICommand ApplyPlaybackPolicyCommand { get; }
 
 	public string State => _snapshot.State.ToString().ToUpperInvariant();
 	public bool IsLoaded => _snapshot.IsLoaded;
@@ -108,6 +114,32 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 	public bool HasIn => _snapshot.Markers?.InPointFrame is not null;
 	public bool HasOut => _snapshot.Markers?.OutPointFrame is not null;
 
+	public bool AutoPlayOnProgram
+	{
+		get => _autoPlayOnProgram;
+		set
+		{
+			if (Set(ref _autoPlayOnProgram, value))
+			{
+				_playbackPolicyDirty = true;
+				RaiseCommands();
+			}
+		}
+	}
+
+	public MediaDeckEndBehavior EndBehavior
+	{
+		get => _endBehavior;
+		set
+		{
+			if (Set(ref _endBehavior, value))
+			{
+				_playbackPolicyDirty = true;
+				RaiseCommands();
+			}
+		}
+	}
+
 	public string FileName => _snapshot.Probe?.FileName ?? "No local media loaded";
 	public string SourceId => _snapshot.SourceId?.ToString() ?? "—";
 	public string Resolution => _snapshot.Probe is null
@@ -120,7 +152,16 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 		: $"{_snapshot.Probe.AudioCodec.ToString().ToUpperInvariant()} · {_snapshot.Probe.AudioFormat.ChannelCount}ch · {_snapshot.Probe.AudioFormat.SampleRate / 1000.0:0.#} kHz";
 	public string Duration => Timeline.DurationTimecode;
 	public string Current => Timeline.CurrentTimecode;
-	public string Remaining => Timeline.RemainingTimecode;
+	public string Remaining => _snapshot.Transport is null
+		? "—"
+		: MediaTimelineTimecode.FormatFrame(
+			_snapshot.Transport.EffectiveRemainingFrames,
+			_snapshot.Transport.Position.FrameRate);
+	public string Countdown => _snapshot.Transport is null ? "T-—" : $"T-{Remaining}";
+	public string ProgramDeckState => _snapshot.Transport?.IsOnProgram == true ? "ON PROGRAM" : "OFF PROGRAM";
+	public string EffectiveRange => _snapshot.Transport is null
+		? "—"
+		: $"{MediaTimelineTimecode.FormatFrame(_snapshot.Transport.EffectiveStartFrame, _snapshot.Transport.Position.FrameRate)} → {MediaTimelineTimecode.FormatFrame(_snapshot.Transport.EffectiveEndFrame, _snapshot.Transport.Position.FrameRate)}";
 	public string InTimecode => FormatMarker(_snapshot.Markers?.InPointFrame);
 	public string OutTimecode => FormatMarker(_snapshot.Markers?.OutPointFrame);
 	public string StatusDetail => LastError ??
@@ -250,6 +291,31 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 		}
 	}
 
+	private async Task ApplyPlaybackPolicyAsync()
+	{
+		try
+		{
+			IsBusy = true;
+			var result = await _controller
+				.ConfigurePlaybackAsync(AutoPlayOnProgram, EndBehavior, _dispose.Token)
+				.ConfigureAwait(false);
+			Post(() =>
+			{
+				_playbackPolicyDirty = false;
+				LastError = result.Failure?.Message;
+				RefreshState();
+			});
+		}
+		catch (Exception exception) when (exception is IOException or InvalidOperationException or ArgumentException)
+		{
+			Post(() => LastError = exception.Message);
+		}
+		finally
+		{
+			Post(() => IsBusy = false);
+		}
+	}
+
 	private Task TogglePlayPauseAsync() =>
 		_snapshot.Transport?.State == MediaTransportState.Playing
 			? TransportAsync(_controller.PauseAsync)
@@ -356,6 +422,13 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 	{
 		_snapshot = _controller.Snapshot;
 		LastError = _snapshot.Failure?.Message;
+		if (!_playbackPolicyDirty && _snapshot.Transport is { } playback)
+		{
+			_autoPlayOnProgram = playback.AutoPlayOnProgram;
+			_endBehavior = playback.EndBehavior;
+			OnPropertyChanged(nameof(AutoPlayOnProgram));
+			OnPropertyChanged(nameof(EndBehavior));
+		}
 
 		Cues.Clear();
 		if (_snapshot.Markers is not null && _snapshot.Probe is not null)
@@ -389,6 +462,9 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 		OnPropertyChanged(nameof(Duration));
 		OnPropertyChanged(nameof(Current));
 		OnPropertyChanged(nameof(Remaining));
+		OnPropertyChanged(nameof(Countdown));
+		OnPropertyChanged(nameof(ProgramDeckState));
+		OnPropertyChanged(nameof(EffectiveRange));
 		OnPropertyChanged(nameof(InTimecode));
 		OnPropertyChanged(nameof(OutTimecode));
 		OnPropertyChanged(nameof(StatusDetail));
@@ -407,7 +483,7 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 		{
 			OpenCommand, RefreshCommand, PlayCommand, PauseCommand, TogglePlayPauseCommand, StopCommand, CloseCommand,
 			SetInCommand, ClearInCommand, SetOutCommand, ClearOutCommand, JumpInCommand, JumpOutCommand,
-			AddCueCommand, RenameCueCommand, DeleteCueCommand, JumpCueCommand
+			AddCueCommand, RenameCueCommand, DeleteCueCommand, JumpCueCommand, ApplyPlaybackPolicyCommand
 		}.OfType<AsyncRelayCommand>())
 		{
 			command.RaiseCanExecuteChanged();
