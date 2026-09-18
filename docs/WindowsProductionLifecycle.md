@@ -142,6 +142,8 @@ Installation configures the service for automatic startup by default and configu
 
 The current registration uses the Windows `LocalSystem` account. This is a privileged deployment identity rather than a least-privilege certification. Target-machine qualification must validate filesystem ACLs, provider/device access and operational access policy; see the repository security policy.
 
+By default, installation resolves the current elevated Windows identity as the authorized Operator principal. Use `-OperatorPrincipal` with an explicit account name or SID when the interactive Operator runs under another identity. The resolved SID is applied only to the Operator-facing named pipes; RuntimeHost and AIHost management pipes remain service-account-local.
+
 ## State, work and diagnostics
 
 Default persistent state root:
@@ -156,7 +158,7 @@ Default service work root:
 C:\ProgramData\rtaime\service\default
 ```
 
-The work root contains the ControlHost readiness and graceful-stop coordination files used by the lifecycle controller.
+The work root contains the ControlHost readiness and graceful-stop coordination files used by the lifecycle controller. In service mode, AppHost also publishes `apphost-readiness.json` with the service process identity, current ControlHost/RuntimeHost/AIHost identities, endpoint identity and the result of service-account-local pipe qualification. Administrative `Status` and `Qualify` consume that evidence instead of assuming that SCM `Running` means the engine is ready.
 
 Windows service hosting uses the standard .NET Windows service integration. Service-host diagnostics are therefore available through the Windows Application event log in addition to rtaime subsystem diagnostics.
 
