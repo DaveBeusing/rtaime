@@ -103,6 +103,12 @@ public interface IControlRuntimeTransportSeam
 		ValueTask.FromException<RuntimeRecordingCommandResult>(
 			new NotSupportedException("Runtime transport does not expose recording control."));
 
+	ValueTask<RuntimeAIShowcaseRemoteSnapshot> SetAIShowcaseEnabledAsync(
+		bool enabled,
+		CancellationToken cancellationToken = default) =>
+		ValueTask.FromException<RuntimeAIShowcaseRemoteSnapshot>(
+			new NotSupportedException("Runtime transport does not expose AI showcase control."));
+
 	ValueTask<MediaDeckRuntimeSnapshot> GetMediaDeckSnapshotAsync(CancellationToken cancellationToken = default) =>
 		ValueTask.FromException<MediaDeckRuntimeSnapshot>(
 			new NotSupportedException("Runtime transport does not expose media-deck control."));
