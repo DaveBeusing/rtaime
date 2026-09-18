@@ -583,7 +583,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 					source?.Name ?? descriptor.SourceId,
 					source?.Type ?? "LIVE",
 					isAfv,
-					preserveGainEdit && string.Equals(previousSelectedId, descriptor.SourceId, StringComparison.Ordinal));
+					preserveSelectedGainEdit && string.Equals(previousSelectedId, descriptor.SourceId, StringComparison.Ordinal));
 			}
 			AudioInputs.Add(input);
 		}
