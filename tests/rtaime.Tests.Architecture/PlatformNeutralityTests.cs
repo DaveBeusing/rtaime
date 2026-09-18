@@ -23,6 +23,10 @@ public sealed class PlatformNeutralityTests
 			["rtaime.Persistence"] = new HashSet<string>(StringComparer.Ordinal)
 			{
 				"Microsoft.Data.Sqlite"
+			},
+			["rtaime.AppHost"] = new HashSet<string>(StringComparer.Ordinal)
+			{
+				"Microsoft.Extensions.Hosting.WindowsServices"
 			}
 		};
 
