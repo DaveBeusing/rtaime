@@ -61,6 +61,25 @@ public sealed class MediaDeckController : IAsyncDisposable
 	public ValueTask<MediaDeckSnapshot> StopAsync(CancellationToken cancellationToken = default) =>
 		SendTransportKindAsync(MediaTransportCommandKind.Stop, cancellationToken);
 
+	public async ValueTask<MediaDeckSnapshot> ConfigurePlaybackAsync(
+		bool autoPlayOnProgram,
+		MediaDeckEndBehavior endBehavior,
+		CancellationToken cancellationToken = default)
+	{
+		if (!Enum.IsDefined(typeof(MediaDeckEndBehavior), endBehavior))
+			throw new ArgumentOutOfRangeException(nameof(endBehavior));
+		var snapshot = RequireLoaded();
+		var command = new MediaTransportCommand(
+			MediaContractVersion.Current,
+			snapshot.Probe!.AssetId,
+			MediaTransportCommandKind.ConfigurePlayback,
+			autoPlayOnProgram: autoPlayOnProgram,
+			endBehavior: endBehavior);
+		var response = await _client.ApplyMediaDeckTransportAsync(command, cancellationToken).ConfigureAwait(false);
+		ApplySnapshot(response);
+		return response;
+	}
+
 	public async ValueTask<MediaDeckSnapshot> CloseAsync(CancellationToken cancellationToken = default)
 	{
 		ThrowIfDisposed();
