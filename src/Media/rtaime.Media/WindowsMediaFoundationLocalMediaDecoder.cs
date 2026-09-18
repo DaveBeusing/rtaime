@@ -392,7 +392,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 		return mediaType;
 	}
 
-	private static Guid GetGuid(IMFAttributes attributes, Guid key)
+	private static Guid GetGuid(IMFMediaType attributes, Guid key)
 	{
 		MediaFoundation.ThrowIfFailed(attributes.GetGUID(ref key, out var value));
 		return value;
@@ -546,8 +546,38 @@ internal interface IMFAttributes
 [ComImport]
 [Guid("44AE0FA8-EA31-4109-8D2E-4CAE4997C555")]
 [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-internal interface IMFMediaType : IMFAttributes
+internal interface IMFMediaType
 {
+	[PreserveSig] int GetItem(ref Guid key, IntPtr value);
+	[PreserveSig] int GetItemType(ref Guid key, out int type);
+	[PreserveSig] int CompareItem(ref Guid key, IntPtr value, out int result);
+	[PreserveSig] int Compare(IMFAttributes other, int matchType, out int result);
+	[PreserveSig] int GetUINT32(ref Guid key, out uint value);
+	[PreserveSig] int GetUINT64(ref Guid key, out ulong value);
+	[PreserveSig] int GetDouble(ref Guid key, out double value);
+	[PreserveSig] int GetGUID(ref Guid key, out Guid value);
+	[PreserveSig] int GetStringLength(ref Guid key, out uint length);
+	[PreserveSig] int GetString(ref Guid key, IntPtr value, uint size, out uint length);
+	[PreserveSig] int GetAllocatedString(ref Guid key, out IntPtr value, out uint length);
+	[PreserveSig] int GetBlobSize(ref Guid key, out uint size);
+	[PreserveSig] int GetBlob(ref Guid key, IntPtr buffer, uint size, out uint blobSize);
+	[PreserveSig] int GetAllocatedBlob(ref Guid key, out IntPtr buffer, out uint size);
+	[PreserveSig] int GetUnknown(ref Guid key, ref Guid riid, out IntPtr value);
+	[PreserveSig] int SetItem(ref Guid key, IntPtr value);
+	[PreserveSig] int DeleteItem(ref Guid key);
+	[PreserveSig] int DeleteAllItems();
+	[PreserveSig] int SetUINT32(ref Guid key, uint value);
+	[PreserveSig] int SetUINT64(ref Guid key, ulong value);
+	[PreserveSig] int SetDouble(ref Guid key, double value);
+	[PreserveSig] int SetGUID(ref Guid key, ref Guid value);
+	[PreserveSig] int SetString(ref Guid key, [MarshalAs(UnmanagedType.LPWStr)] string value);
+	[PreserveSig] int SetBlob(ref Guid key, IntPtr buffer, uint size);
+	[PreserveSig] int SetUnknown(ref Guid key, [MarshalAs(UnmanagedType.IUnknown)] object value);
+	[PreserveSig] int LockStore();
+	[PreserveSig] int UnlockStore();
+	[PreserveSig] int GetCount(out uint count);
+	[PreserveSig] int GetItemByIndex(uint index, out Guid key, IntPtr value);
+	[PreserveSig] int CopyAllItems(IMFAttributes destination);
 	[PreserveSig] int GetMajorType(out Guid majorType);
 	[PreserveSig] int IsCompressedFormat([MarshalAs(UnmanagedType.Bool)] out bool compressed);
 	[PreserveSig] int IsEqual(IMFMediaType mediaType, out uint flags);
@@ -581,8 +611,38 @@ internal interface IMFSourceReader
 [ComImport]
 [Guid("C40A00F2-B93A-4D80-AE8C-5A1C634F58E4")]
 [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-internal interface IMFSample : IMFAttributes
+internal interface IMFSample
 {
+	[PreserveSig] int GetItem(ref Guid key, IntPtr value);
+	[PreserveSig] int GetItemType(ref Guid key, out int type);
+	[PreserveSig] int CompareItem(ref Guid key, IntPtr value, out int result);
+	[PreserveSig] int Compare(IMFAttributes other, int matchType, out int result);
+	[PreserveSig] int GetUINT32(ref Guid key, out uint value);
+	[PreserveSig] int GetUINT64(ref Guid key, out ulong value);
+	[PreserveSig] int GetDouble(ref Guid key, out double value);
+	[PreserveSig] int GetGUID(ref Guid key, out Guid value);
+	[PreserveSig] int GetStringLength(ref Guid key, out uint length);
+	[PreserveSig] int GetString(ref Guid key, IntPtr value, uint size, out uint length);
+	[PreserveSig] int GetAllocatedString(ref Guid key, out IntPtr value, out uint length);
+	[PreserveSig] int GetBlobSize(ref Guid key, out uint size);
+	[PreserveSig] int GetBlob(ref Guid key, IntPtr buffer, uint size, out uint blobSize);
+	[PreserveSig] int GetAllocatedBlob(ref Guid key, out IntPtr buffer, out uint size);
+	[PreserveSig] int GetUnknown(ref Guid key, ref Guid riid, out IntPtr value);
+	[PreserveSig] int SetItem(ref Guid key, IntPtr value);
+	[PreserveSig] int DeleteItem(ref Guid key);
+	[PreserveSig] int DeleteAllItems();
+	[PreserveSig] int SetUINT32(ref Guid key, uint value);
+	[PreserveSig] int SetUINT64(ref Guid key, ulong value);
+	[PreserveSig] int SetDouble(ref Guid key, double value);
+	[PreserveSig] int SetGUID(ref Guid key, ref Guid value);
+	[PreserveSig] int SetString(ref Guid key, [MarshalAs(UnmanagedType.LPWStr)] string value);
+	[PreserveSig] int SetBlob(ref Guid key, IntPtr buffer, uint size);
+	[PreserveSig] int SetUnknown(ref Guid key, [MarshalAs(UnmanagedType.IUnknown)] object value);
+	[PreserveSig] int LockStore();
+	[PreserveSig] int UnlockStore();
+	[PreserveSig] int GetCount(out uint count);
+	[PreserveSig] int GetItemByIndex(uint index, out Guid key, IntPtr value);
+	[PreserveSig] int CopyAllItems(IMFAttributes destination);
 	[PreserveSig] int GetSampleFlags(out uint flags);
 	[PreserveSig] int SetSampleFlags(uint flags);
 	[PreserveSig] int GetSampleTime(out long time);
