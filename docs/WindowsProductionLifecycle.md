@@ -231,7 +231,9 @@ If update or post-update readiness fails, the operation remains failed. The wrap
 
 Automatic service startup provides the supported boot path.
 
-ControlHost continues to supervise RuntimeHost and AIHost. If the persistent service process fails, Service Control Manager recovery policy performs bounded service restarts. A restarted service must rebuild qualified readiness from persistent state; machine reboot is not claimed as frame-identical Program continuity.
+ControlHost continues to supervise RuntimeHost and AIHost. If the persistent AppHost service process fails while its ControlHost remains healthy, the restarted service may explicitly reclaim that lifecycle only from its deterministic service readiness root. This is an ownership-policy decision, not parent/child inference.
+
+If ControlHost is also unavailable, Service Control Manager recovery starts a new persistent lifecycle. In both cases the restarted service must establish qualified readiness; machine reboot is not claimed as frame-identical Program continuity.
 
 ## Reference-platform qualification
 
