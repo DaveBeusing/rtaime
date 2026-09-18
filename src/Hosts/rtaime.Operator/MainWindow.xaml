@@ -268,10 +268,37 @@
 				<StackPanel Grid.Column="2">
 					<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14">
 						<StackPanel>
-							<TextBlock Text="SYSTEM" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,12" />
-							<DockPanel Margin="0,0,0,8"><TextBlock Text="Runtime" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding RuntimeStatus}" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" DockPanel.Dock="Right" /></DockPanel>
-							<DockPanel Margin="0,0,0,8"><TextBlock Text="Timing" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding TimingStatus}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
-							<DockPanel><TextBlock Text="Inputs" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding InputStatus}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
+							<DockPanel Margin="0,0,0,12">
+								<TextBlock Text="RUNTIME HEALTH / PERFORMANCE" Style="{StaticResource OperatorSectionTitle}" />
+								<Border Style="{StaticResource OperatorEvidenceBadge}" Tag="{Binding EngineHealth}" DockPanel.Dock="Right">
+									<TextBlock Text="{Binding EngineHealth}" FontWeight="Bold" />
+								</Border>
+							</DockPanel>
+							<TextBlock Text="{Binding EngineHealthDetail}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,0,0,12" />
+							<Grid Margin="0,0,0,12">
+								<Grid.ColumnDefinitions>
+									<ColumnDefinition Width="*" />
+									<ColumnDefinition Width="6" />
+									<ColumnDefinition Width="*" />
+								</Grid.ColumnDefinitions>
+								<StackPanel Grid.Column="0">
+									<DockPanel Margin="0,0,0,6"><TextBlock Text="Control" Style="{StaticResource OperatorLabel}" /><Border Style="{StaticResource OperatorEvidenceBadge}" Tag="{Binding ControlHealth}" DockPanel.Dock="Right"><TextBlock Text="{Binding ControlHealth}" FontWeight="Bold" /></Border></DockPanel>
+									<DockPanel Margin="0,0,0,6"><TextBlock Text="Runtime" Style="{StaticResource OperatorLabel}" /><Border Style="{StaticResource OperatorEvidenceBadge}" Tag="{Binding RuntimeHealth}" DockPanel.Dock="Right"><TextBlock Text="{Binding RuntimeHealth}" FontWeight="Bold" /></Border></DockPanel>
+									<DockPanel><TextBlock Text="Media" Style="{StaticResource OperatorLabel}" /><Border Style="{StaticResource OperatorEvidenceBadge}" Tag="{Binding MediaHealth}" DockPanel.Dock="Right"><TextBlock Text="{Binding MediaHealth}" FontWeight="Bold" /></Border></DockPanel>
+								</StackPanel>
+								<StackPanel Grid.Column="2">
+									<DockPanel Margin="0,0,0,6"><TextBlock Text="Providers" Style="{StaticResource OperatorLabel}" /><Border Style="{StaticResource OperatorEvidenceBadge}" Tag="{Binding ProviderHealth}" DockPanel.Dock="Right"><TextBlock Text="{Binding ProviderHealth}" FontWeight="Bold" /></Border></DockPanel>
+									<DockPanel><TextBlock Text="GPU Provider" Style="{StaticResource OperatorLabel}" /><Border Style="{StaticResource OperatorEvidenceBadge}" Tag="{Binding GpuProviderHealth}" DockPanel.Dock="Right"><TextBlock Text="{Binding GpuProviderHealth}" FontWeight="Bold" /></Border></DockPanel>
+								</StackPanel>
+							</Grid>
+							<Border Height="1" Background="{DynamicResource OperatorBorderBrush}" Margin="0,0,0,12" />
+							<DockPanel Margin="0,0,0,6"><TextBlock Text="Current Format" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding CurrentFormat}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
+							<DockPanel Margin="0,0,0,6"><TextBlock Text="Frame Time / Budget" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding FrameTime}" Style="{StaticResource OperatorTimecode}" DockPanel.Dock="Right" /></DockPanel>
+							<DockPanel Margin="0,0,0,6"><TextBlock Text="Dropped Frames" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding DroppedFrames}" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" DockPanel.Dock="Right" /></DockPanel>
+							<DockPanel Margin="0,0,0,6"><TextBlock Text="Uptime" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding Uptime}" Style="{StaticResource OperatorTimecode}" DockPanel.Dock="Right" /></DockPanel>
+							<DockPanel Margin="0,0,0,6"><TextBlock Text="GPU Utilization" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding GpuUtilization}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
+							<DockPanel Margin="0,0,0,6"><TextBlock Text="VRAM" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding Vram}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
+							<DockPanel><TextBlock Text="Observed" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding HealthObserved}" Style="{StaticResource OperatorLabel}" DockPanel.Dock="Right" /></DockPanel>
 						</StackPanel>
 					</Border>
 
