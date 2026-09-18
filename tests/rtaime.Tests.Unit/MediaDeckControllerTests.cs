@@ -45,6 +45,22 @@ public sealed class MediaDeckControllerTests
 	}
 
 	[Fact]
+	public async Task Playback_policy_round_trips_through_confirmed_deck_snapshot()
+	{
+		var transport = new FakeDeckTransport();
+		var client = new OperatorControlClient(transport);
+		await using var deck = new MediaDeckController(client);
+		await deck.OpenAsync(@"C:\media\reference.mp4", new MediaSourceId(Id(2)));
+
+		var configured = await deck.ConfigurePlaybackAsync(false, MediaDeckEndBehavior.Loop);
+
+		Assert.False(configured.Transport!.AutoPlayOnProgram);
+		Assert.Equal(MediaDeckEndBehavior.Loop, configured.Transport.EndBehavior);
+		Assert.False(deck.Snapshot.Transport!.AutoPlayOnProgram);
+		Assert.Equal(MediaDeckEndBehavior.Loop, deck.Snapshot.Transport.EndBehavior);
+	}
+
+	[Fact]
 	public async Task Refresh_replaces_local_projection_with_remote_confirmed_snapshot()
 	{
 		var transport = new FakeDeckTransport();
@@ -137,7 +153,20 @@ public sealed class MediaDeckControllerTests
 				MediaTransportCommandKind.Stop => MediaTransportState.Ready,
 				_ => current.State
 			};
-			_deck = Rebuild(Transport(current.SourceId, frame, state), _deck.Markers!);
+			var next = Transport(current.SourceId, frame, state);
+			if (command.Kind == MediaTransportCommandKind.ConfigurePlayback)
+			{
+				next = new MediaTransportSnapshot(
+					next.Version,
+					next.AssetId,
+					next.SourceId,
+					next.State,
+					next.Position,
+					next.Failure,
+					command.AutoPlayOnProgram!.Value,
+					command.EndBehavior!.Value);
+			}
+			_deck = Rebuild(next, _deck.Markers!);
 			return ValueTask.FromResult(_deck);
 		}
 
