@@ -224,6 +224,7 @@ public sealed class UnifiedApplicationHostTests
 			"default",
 			resolvedOwnership,
 			false,
+			"rtaime-engine",
 			true,
 			false,
 			new ApplicationLifecyclePolicy(
