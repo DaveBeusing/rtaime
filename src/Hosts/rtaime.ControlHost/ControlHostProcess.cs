@@ -249,6 +249,7 @@ public sealed class ControlHostProcess
 	private Revision? _lastCheckpointRevision;
 	private ControlHostService? _control;
 	private IControlRuntimeTransportSeam? _runtimeTransport;
+	private MediaDeckControlService? _mediaDeckControl;
 	private ControlHostIpcServer? _ipcServer;
 	private Task? _runtimeBindingTask;
 	private string? _boundRuntimeHostInstanceId;
@@ -266,6 +267,7 @@ public sealed class ControlHostProcess
 	public SqliteManagementStore? ManagementStore => _managementStore;
 	public BoundedProductionCheckpointWriter? CheckpointWriter => _checkpointWriter;
 	public IControlRuntimeTransportSeam? RuntimeTransport => _runtimeTransport;
+	public MediaDeckControlService? MediaDeckControl => _mediaDeckControl;
 	public ControlHostIpcServer? IpcServer => _ipcServer;
 
 	public async Task<ControlHostExitCode> RunAsync(CancellationToken cancellationToken)
@@ -364,7 +366,15 @@ public sealed class ControlHostProcess
 				SetRecovery(ControlHostRecoveryState.Fresh, null, "No durable authority checkpoint exists; a fresh Runtime-backed initialization is required.");
 			}
 
-			_ipcServer = new ControlHostIpcServer(_options.ListenEndpoint, () => _control, _runtimeTransport);
+			_mediaDeckControl = new MediaDeckControlService(
+				() => _control,
+				_runtimeTransport,
+				new MediaMarkerPersistenceStore(_managementStore));
+			_ipcServer = new ControlHostIpcServer(
+				_options.ListenEndpoint,
+				() => _control,
+				_runtimeTransport,
+				_mediaDeckControl);
 		}
 		catch
 		{
