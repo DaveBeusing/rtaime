@@ -334,7 +334,15 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 				Enum.IsDefined(typeof(MediaTransportCommandKind), wire.Kind)
 					? (MediaTransportCommandKind)wire.Kind
 					: throw new InvalidDataException("Media transport command kind is invalid."),
-				wire.TargetFrame),
+				wire.TargetFrame,
+				wire.AutoPlayOnProgram,
+				wire.EndBehavior is null
+					? null
+					: Enum.IsDefined(typeof(MediaDeckEndBehavior), wire.EndBehavior.Value)
+						? (MediaDeckEndBehavior)wire.EndBehavior.Value
+						: throw new InvalidDataException("Media-deck end behavior is invalid."),
+				wire.InPointFrame,
+				wire.OutPointFrame),
 			cancellationToken).ConfigureAwait(false);
 		NotifyObservableStateChanged();
 		return Success(request, "control.media_deck.snapshot.response", ToWire(snapshot));
@@ -629,7 +637,14 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			snapshot.Transport.Position.Duration.Ticks,
 			snapshot.Transport.Position.Remaining.Ticks,
 			snapshot.Transport.Position.FrameRate.ToString(),
-			snapshot.Transport.Failure is { } transportFailure ? new WireFailure(transportFailure.Code, transportFailure.Message) : null),
+			snapshot.Transport.Failure is { } transportFailure ? new WireFailure(transportFailure.Code, transportFailure.Message) : null,
+			snapshot.Transport.AutoPlayOnProgram,
+			(int)snapshot.Transport.EndBehavior,
+			snapshot.Transport.IsOnProgram,
+			snapshot.Transport.EffectiveStartFrame,
+			snapshot.Transport.EffectiveEndFrame,
+			snapshot.Transport.EffectiveRemainingFrames,
+			snapshot.Transport.EffectiveRemaining.Ticks),
 		snapshot.Markers is null ? null : new WireMediaMarkerSnapshot(
 			snapshot.Markers.Version.ToString(),
 			snapshot.Markers.AssetId.ToString(),
@@ -672,10 +687,10 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	}
 	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, ulong StateVersion);
 	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path);
-	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame);
+	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame, bool? AutoPlayOnProgram, int? EndBehavior, long? InPointFrame, long? OutPointFrame);
 	private sealed record WireMediaMarkerCommand(string Version, string AssetId, int Kind, long? PositionFrame, string? CuePointId, string? Name);
 	private sealed record WireLocalMediaProbe(string Version, string AssetId, string SourceId, string FileName, int Container, int VideoCodec, int AudioCodec, uint Width, uint Height, string FrameRate, long DurationTicks);
-	private sealed record WireMediaTransportSnapshot(string Version, string AssetId, string SourceId, int State, long CurrentFrame, long TotalFrames, long PositionTicks, long DurationTicks, long RemainingTicks, string FrameRate, WireFailure? Failure);
+	private sealed record WireMediaTransportSnapshot(string Version, string AssetId, string SourceId, int State, long CurrentFrame, long TotalFrames, long PositionTicks, long DurationTicks, long RemainingTicks, string FrameRate, WireFailure? Failure, bool AutoPlayOnProgram, int EndBehavior, bool IsOnProgram, long EffectiveStartFrame, long EffectiveEndFrame, long EffectiveRemainingFrames, long EffectiveRemainingTicks);
 	private sealed record WireCuePoint(string Id, string Name, long PositionFrame);
 	private sealed record WireMediaMarkerSnapshot(string Version, string AssetId, long TotalFrames, long? InPointFrame, long? OutPointFrame, WireCuePoint[] CuePoints);
 	private sealed record WireMediaDeckSnapshot(int State, string? SourceId, WireLocalMediaProbe? Probe, WireMediaTransportSnapshot? Transport, WireMediaMarkerSnapshot? Markers, WireFailure? Failure);
