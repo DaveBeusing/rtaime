@@ -262,8 +262,13 @@ public sealed class ProductionIpcIntegrationTests
 
 		var playing = await deck.PlayAsync();
 		Assert.Equal(MediaDeckState.Playing, playing.State);
-		await Task.Delay(120);
-		await deck.RefreshAsync();
+		var playbackDeadline = DateTime.UtcNow.AddSeconds(2);
+		do
+		{
+			await Task.Delay(40);
+			await deck.RefreshAsync();
+		}
+		while (deck.Snapshot.Transport!.Position.CurrentFrame == 0 && DateTime.UtcNow < playbackDeadline);
 		Assert.True(deck.Snapshot.Transport!.Position.CurrentFrame > 0);
 		var sourceBinPlaying = await client.SynchronizeAsync();
 		var playingTile = sourceBinPlaying.Sources.Single(source => source.Id == sourceId.ToString());
