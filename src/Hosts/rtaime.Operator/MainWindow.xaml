@@ -109,6 +109,14 @@
 									<TextBlock Text="RUNTIME" Style="{StaticResource OperatorLabel}" />
 									<TextBlock Text="{Binding RuntimeStatus}" Style="{StaticResource OperatorValue}" HorizontalAlignment="Right" DockPanel.Dock="Right" />
 								</DockPanel>
+								<DockPanel Margin="0,0,0,6">
+									<TextBlock Text="COMMIT" Style="{StaticResource OperatorLabel}" />
+									<TextBlock Text="{Binding CommitStatus}" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" HorizontalAlignment="Right" DockPanel.Dock="Right" />
+								</DockPanel>
+								<DockPanel Margin="0,0,0,6">
+									<TextBlock Text="TRANSITION" Style="{StaticResource OperatorLabel}" />
+									<TextBlock Text="{Binding TransitionStatus}" Style="{StaticResource OperatorValue}" HorizontalAlignment="Right" DockPanel.Dock="Right" />
+								</DockPanel>
 								<DockPanel>
 									<TextBlock Text="LAYER" Style="{StaticResource OperatorLabel}" />
 									<TextBlock Text="{Binding VisualLayerStatus}" Style="{StaticResource OperatorValue}" HorizontalAlignment="Right" DockPanel.Dock="Right" />
@@ -145,8 +153,23 @@
 					<Border Style="{StaticResource OperatorPanel}">
 						<StackPanel>
 							<TextBlock Text="TRANSITION" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,12" />
-							<TextBlock Text="Selected source" Style="{StaticResource OperatorLabel}" />
-							<TextBlock Text="{Binding SelectedSource.Name, TargetNullValue=No source selected}" FontSize="18" FontWeight="SemiBold" Margin="0,3,0,12" />
+							<Grid Margin="0,0,0,12">
+								<Grid.ColumnDefinitions>
+									<ColumnDefinition Width="*" />
+									<ColumnDefinition Width="14" />
+									<ColumnDefinition Width="*" />
+								</Grid.ColumnDefinitions>
+								<StackPanel>
+									<TextBlock Text="SELECTED SOURCE" Style="{StaticResource OperatorLabel}" />
+									<TextBlock Text="{Binding SelectedSource.Name, TargetNullValue=No source selected}" FontSize="18" FontWeight="SemiBold" Margin="0,3,0,0" TextTrimming="CharacterEllipsis" />
+								</StackPanel>
+								<Border Grid.Column="2" Style="{StaticResource OperatorPreviewTally}">
+									<StackPanel>
+										<TextBlock Text="CONFIRMED PREVIEW / NEXT TAKE" Style="{StaticResource OperatorLabel}" Foreground="{DynamicResource OperatorPreviewBrush}" />
+										<TextBlock Text="{Binding PreviewSourceName}" FontSize="18" FontWeight="SemiBold" Margin="0,3,0,0" TextTrimming="CharacterEllipsis" />
+									</StackPanel>
+								</Border>
+							</Grid>
 							<Grid>
 								<Grid.ColumnDefinitions>
 									<ColumnDefinition Width="*" />
@@ -155,9 +178,9 @@
 									<ColumnDefinition Width="10" />
 									<ColumnDefinition Width="*" />
 								</Grid.ColumnDefinitions>
-								<Button Grid.Column="0" Content="SET PREVIEW&#x0a;Ctrl+P" Command="{Binding SetPreviewCommand}" Style="{StaticResource OperatorAccentButton}" />
-								<Button Grid.Column="2" Content="CUT&#x0a;Space" Command="{Binding CutCommand}" Style="{StaticResource OperatorProgramButton}" />
-								<Button Grid.Column="4" Content="AUTO / DISSOLVE&#x0a;Ctrl+Space" Command="{Binding DissolveCommand}" Style="{StaticResource OperatorButton}" />
+								<Button Grid.Column="0" Content="SET SELECTED → PREVIEW&#x0a;Ctrl+P" Command="{Binding SetPreviewCommand}" Style="{StaticResource OperatorAccentButton}" />
+								<Button Grid.Column="2" Content="CUT PREVIEW → PROGRAM&#x0a;Space" Command="{Binding CutCommand}" Style="{StaticResource OperatorProgramButton}" />
+								<Button Grid.Column="4" Content="AUTO PREVIEW → PROGRAM&#x0a;Ctrl+Space" Command="{Binding DissolveCommand}" Style="{StaticResource OperatorButton}" />
 							</Grid>
 							<DockPanel Margin="0,12,0,0">
 								<TextBlock Text="Dissolve duration" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" Margin="0,0,10,0" />
@@ -199,6 +222,8 @@
 						<StackPanel>
 							<TextBlock Text="OPERATOR STATE" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,12" />
 							<DockPanel Margin="0,0,0,8"><TextBlock Text="Command" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding CommandStatus}" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" DockPanel.Dock="Right" /></DockPanel>
+														<DockPanel Margin="0,0,0,8"><TextBlock Text="Commit" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding CommitStatus}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
+														<DockPanel Margin="0,0,0,8"><TextBlock Text="Transition" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding TransitionStatus}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
 							<TextBlock Text="{Binding LastEvent}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
 						</StackPanel>
 					</Border>
