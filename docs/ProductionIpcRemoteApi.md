@@ -207,3 +207,14 @@ ControlHost-facing RuntimeHost messages:
 The normal ControlHost snapshot now carries the Runtime-observed recording lifecycle, elapsed time, configured destination/file name, final path, bounded recorder statistics and failure metadata.
 
 Only commands and recording metadata cross management IPC. Program RGBA pixels and Float32 audio remain inside RuntimeHost and the Recording subsystem. Recording start/stop is serialized by ControlHost's existing mutation gate but does not create or advance an authoritative Production revision.
+
+
+## AP-54 Runtime health snapshot extension
+
+AP-54 extends the existing private RuntimeHost and ControlHost snapshot payloads with bounded observational health/performance metadata. No public Control or Runtime contract version changes are introduced.
+
+RuntimeHost snapshot metadata now carries Runtime uptime, frame budget, the last observed Program-boundary processing duration, cumulative dropped-frame evidence, GPU backend identity and optional GPU utilization/VRAM measurements. Optional GPU measurements remain absent when the active backend has no qualified source.
+
+ControlHost combines this Runtime metadata with its authoritative-state availability, Runtime timing/execution state, media observations and cached Runtime provider descriptors to produce the Operator `PASS / FAIL / UNVERIFIED` health projection.
+
+Only metadata crosses management IPC. AP-54 does not transport frame pixels, audio samples, GPU surfaces or telemetry histories, and it introduces no new polling transport or remote-monitoring API.
