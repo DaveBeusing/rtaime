@@ -55,6 +55,8 @@ Assert-Condition ($applicationCode -match 'WaitForExternalReadinessAsync') "Exte
 Assert-Condition ($applicationCode -match 'windowsService \|\| ownership == ApplicationLifecycleOwnership\.ExternalManaged') "ExternalManaged must default to the persistent service work root."
 Assert-Condition ($program -match [Regex]::Escape('--windows-service')) "AppHost must expose Windows service mode."
 Assert-Condition ($program -match 'AddWindowsService') "AppHost must use supported .NET Windows service hosting."
+Assert-Condition ($program -match 'options\.WindowsServiceName') "Windows service hosting must use the exact configured SCM service identity."
+Assert-Condition ($serviceLifecycle -match [Regex]::Escape('--service-name=')) "Service registration must pass the SCM service identity to AppHost."
 Assert-Condition ($program -match 'WindowsEngineBackgroundService') "AppHost must host the persistent lifecycle in a background service."
 Assert-Condition ($project -match 'Microsoft\.Extensions\.Hosting\.WindowsServices') "AppHost must reference the Windows service hosting package."
 Assert-Condition ($project -notmatch '<UseWPF>true</UseWPF>') "Windows service AppHost must not take a WPF dependency."
