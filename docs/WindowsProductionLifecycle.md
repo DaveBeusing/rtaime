@@ -140,6 +140,8 @@ The default service name is `rtaime-engine`.
 
 Installation configures the service for automatic startup by default and configures bounded Service Control Manager recovery actions. The service process runs the canonical `rtaime.exe` in `HeadlessEngine` / `PersistentEngine` mode.
 
+The current registration uses the Windows `LocalSystem` account. This is a privileged deployment identity rather than a least-privilege certification. Target-machine qualification must validate filesystem ACLs, provider/device access and operational access policy; see the repository security policy.
+
 ## State, work and diagnostics
 
 Default persistent state root:
@@ -183,7 +185,9 @@ A Service Control Manager stop is an explicit engine stop.
 
 The service host cancels the persistent headless lifecycle, which routes shutdown through the existing ControlHost stop-sentinel path. RuntimeHost and AIHost shutdown remain under ControlHost supervision.
 
-The service-management tool does not force-kill a service and does not classify a timeout as graceful success. If the service or engine processes remain alive beyond the bounded shutdown window, the operation fails.
+The service-management tool does not force-kill a service and does not classify a timeout as graceful success. AppHost writes `apphost-shutdown.json` for an owned shutdown. A normal service stop requires `status = PASS`, `graceful = true` and `forcedTermination = false`.
+
+If ControlHost does not exit within the bounded AppHost shutdown window, emergency process-tree cleanup may still be used to prevent orphaned owned processes, but the evidence is written as `FAIL` with `forcedTermination = true`. The service stop therefore cannot be reported as a graceful PASS.
 
 ## Update and maintenance
 
