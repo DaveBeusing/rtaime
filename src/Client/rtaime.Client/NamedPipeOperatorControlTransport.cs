@@ -436,7 +436,8 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		FromWire(wire.GraphicsOverlay),
 		wire.AudioInputs.Select(FromWire).ToArray(),
 		FromWire(wire.AudioProgram),
-		FromWire(wire.Recording));
+		FromWire(wire.Recording),
+		FromWire(wire.Health));
 
 	private static OperatorAudioInputDescriptor FromWire(WireAudioInput input) => new(
 		input.SourceId,
@@ -472,6 +473,25 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		recording.Rejected,
 		recording.WriterFailures,
 		recording.Failure is null ? null : new Failure(recording.Failure.Code, recording.Failure.Message));
+
+	private static OperatorHealthDescriptor FromWire(WireHealthSnapshot health) => new(
+		FromWire(health.Engine),
+		FromWire(health.Control),
+		FromWire(health.Runtime),
+		FromWire(health.Media),
+		FromWire(health.Provider),
+		FromWire(health.GpuProvider),
+		health.CurrentFormat,
+		TimeSpan.FromTicks(Math.Max(0, health.FrameTimeTicks)),
+		TimeSpan.FromTicks(Math.Max(0, health.FrameBudgetTicks)),
+		health.DroppedFrames,
+		TimeSpan.FromTicks(Math.Max(0, health.UptimeTicks)),
+		health.GpuUtilization,
+		health.Vram,
+		health.ObservedAtUtc);
+
+	private static OperatorHealthMetricDescriptor FromWire(WireHealthMetric metric) =>
+		new(metric.State, metric.Detail);
 
 	private static OperatorGraphicsOverlayDescriptor FromWire(WireGraphicsOverlay overlay) => new(
 		overlay.AssetLoaded,
@@ -535,7 +555,23 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 	private sealed record WireRecordingStart(string DestinationDirectory, string FileName);
 	private sealed record WireRecordingSnapshot(string State, long ElapsedTicks, string? Destination, string? FileName, string? FinalPath, ulong Accepted, ulong Written, ulong Dropped, ulong Rejected, ulong WriterFailures, WireFailure? Failure);
 	private sealed record WireRecordingCommandResult(bool Succeeded, WireRecordingSnapshot Snapshot, WireFailure? Failure);
-	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, WireRecordingSnapshot Recording, ulong StateVersion);
+	private sealed record WireHealthMetric(string State, string Detail);
+	private sealed record WireHealthSnapshot(
+		WireHealthMetric Engine,
+		WireHealthMetric Control,
+		WireHealthMetric Runtime,
+		WireHealthMetric Media,
+		WireHealthMetric Provider,
+		WireHealthMetric GpuProvider,
+		string CurrentFormat,
+		long FrameTimeTicks,
+		long FrameBudgetTicks,
+		ulong DroppedFrames,
+		long UptimeTicks,
+		string GpuUtilization,
+		string Vram,
+		DateTimeOffset ObservedAtUtc);
+	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, WireRecordingSnapshot Recording, WireHealthSnapshot Health, ulong StateVersion);
 	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path);
 	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame, bool? AutoPlayOnProgram, int? EndBehavior, long? InPointFrame, long? OutPointFrame);
 	private sealed record WireMediaMarkerCommand(string Version, string AssetId, int Kind, long? PositionFrame, string? CuePointId, string? Name);
