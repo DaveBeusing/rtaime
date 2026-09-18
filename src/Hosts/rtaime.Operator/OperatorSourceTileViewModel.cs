@@ -99,7 +99,14 @@ public sealed class OperatorSourceTileViewModel : INotifyPropertyChanged
 		OnPropertyChanged(nameof(StateDetail));
 	}
 
-	public void ClearMediaDeck() => ApplyDescriptor(_descriptor);
+	public void ClearMediaDeck()
+	{
+		Type = "LIVE";
+		Health = "UNKNOWN";
+		MediaState = "—";
+		Remaining = "—";
+		MediaFileName = null;
+	}
 
 	private static string FormatRemaining(TimeSpan? remaining)
 	{
