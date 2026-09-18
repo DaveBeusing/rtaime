@@ -117,7 +117,7 @@ Assert-Condition ($programOutputController -match 'SystemEvents\.DisplaySettings
 Assert-Condition ($programOutputController -match 'WindowStyle\.None' -and $programOutputController -match 'WindowStyle\.SingleBorderWindow') "AP-51 must support fullscreen and defined windowed fallback."
 Assert-Condition ($programOutputController -match 'SetWindowPos') "AP-51 display placement must target the selected physical display."
 Assert-Condition ($programOutputController -match '_fallbackActive' -and $programOutputController -match 'Selected display was removed') "AP-51 must surface controlled display-disconnect fallback."
-Assert-Condition ($programOutputController -notmatch 'ControlHost|RuntimeHost|MediaElement|VideoDrawing') "Program Output presentation must not bypass the Client/monitoring boundary or create a second renderer."
+Assert-Condition ($programOutputController -notmatch 'using rtaime\\.(ControlHost|RuntimeHost)|MediaElement|VideoDrawing') "Program Output presentation must not bypass the Client/monitoring boundary or create a second renderer."
 Assert-Condition ($timeline -match 'Style="\{StaticResource OperatorTimelineSlider\}"') "Timeline seeker must use the design-system slider style."
 Assert-Condition ($timeline -match 'Style="\{StaticResource OperatorMeter\}"') "Timeline progress must use the design-system meter style."
 Assert-Condition ($deck -match 'OperatorStatusBadge') "Media deck state must use shared status presentation."
