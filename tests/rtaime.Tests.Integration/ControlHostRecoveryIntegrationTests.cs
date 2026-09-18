@@ -233,6 +233,17 @@ public sealed class ControlHostRecoveryIntegrationTests
 				VideoFormat.Hd1080p50Rgba8,
 				new Dictionary<MediaSourceId, string>(),
 				new RuntimeGraphicsOverlaySnapshot(false, null, 0, 0, false, 0.72, 0.06, 1.0),
+				new Dictionary<MediaSourceId, RuntimeAudioInputSnapshot>(),
+				new RuntimeAudioProgramSnapshot(
+					new MediaSourceId(Identity.Parse("7f000000-0000-0000-0000-00000000000a")),
+					new AudioStreamId(Identity.Parse("7f000000-0000-0000-0000-00000000000b")),
+					1,
+					false,
+					0,
+					0,
+					0,
+					false,
+					"SILENCE"),
 				1));
 
 		public ValueTask<RuntimeRemoteApplyResult> ApplyExecutionAsync(
