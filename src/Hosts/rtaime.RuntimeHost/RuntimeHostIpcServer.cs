@@ -282,7 +282,15 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 			Enum.IsDefined(typeof(MediaTransportCommandKind), wire.Kind)
 				? (MediaTransportCommandKind)wire.Kind
 				: throw new InvalidDataException("Media transport command kind is invalid."),
-			wire.TargetFrame);
+			wire.TargetFrame,
+			wire.AutoPlayOnProgram,
+			wire.EndBehavior is null
+				? null
+				: Enum.IsDefined(typeof(MediaDeckEndBehavior), wire.EndBehavior.Value)
+					? (MediaDeckEndBehavior)wire.EndBehavior.Value
+					: throw new InvalidDataException("Media-deck end behavior is invalid."),
+			wire.InPointFrame,
+			wire.OutPointFrame);
 		var result = deck.ApplyTransport(command);
 		_stateVersion++;
 		return Success(request, "runtime.media_deck.transport.response", ToWire(result));
@@ -450,7 +458,14 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		snapshot.Position.Duration.Ticks,
 		snapshot.Position.Remaining.Ticks,
 		snapshot.Position.FrameRate.ToString(),
-		snapshot.Failure is { } failure ? new WireFailure(failure.Code, failure.Message) : null);
+		snapshot.Failure is { } failure ? new WireFailure(failure.Code, failure.Message) : null,
+		snapshot.AutoPlayOnProgram,
+		(int)snapshot.EndBehavior,
+		snapshot.IsOnProgram,
+		snapshot.EffectiveStartFrame,
+		snapshot.EffectiveEndFrame,
+		snapshot.EffectiveRemainingFrames,
+		snapshot.EffectiveRemaining.Ticks);
 
 	private static WireMediaTransportResult ToWire(MediaTransportCommandResult result) => new(
 		result.Succeeded,
@@ -496,9 +511,9 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 	private sealed record WireCommitResult(string Version, int Status, string? ExecutionInstanceId, ulong ExecutionRevision, WireFailure? Failure);
 	private sealed record WireApplyResponse(WirePrepareResult Prepare, WireCommitResult? Commit, ulong? ActivationSequence);
 	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path, WirePreparedExecution PreparedExecution);
-	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame);
+	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame, bool? AutoPlayOnProgram, int? EndBehavior, long? InPointFrame, long? OutPointFrame);
 	private sealed record WireLocalMediaProbe(string Version, string AssetId, string SourceId, string FileName, int Container, int VideoCodec, int AudioCodec, uint Width, uint Height, string FrameRate, long DurationTicks);
-	private sealed record WireMediaTransportSnapshot(string Version, string AssetId, string SourceId, int State, long CurrentFrame, long TotalFrames, long PositionTicks, long DurationTicks, long RemainingTicks, string FrameRate, WireFailure? Failure);
+	private sealed record WireMediaTransportSnapshot(string Version, string AssetId, string SourceId, int State, long CurrentFrame, long TotalFrames, long PositionTicks, long DurationTicks, long RemainingTicks, string FrameRate, WireFailure? Failure, bool AutoPlayOnProgram, int EndBehavior, bool IsOnProgram, long EffectiveStartFrame, long EffectiveEndFrame, long EffectiveRemainingFrames, long EffectiveRemainingTicks);
 	private sealed record WireMediaDeckRuntimeSnapshot(int State, string? SourceId, WireLocalMediaProbe? Probe, WireMediaTransportSnapshot? Transport, WireFailure? Failure);
 	private sealed record WireMediaTransportResult(bool Accepted, WireMediaTransportSnapshot Snapshot, WireFailure? Failure);
 
