@@ -62,15 +62,26 @@ public interface IControlRuntimeTransportSeam
 		MediaSinkId programSinkId,
 		RuntimeProgramTransitionIntent? transition,
 		CancellationToken cancellationToken = default);
-	ValueTask<MediaDeckRuntimeSnapshot> GetMediaDeckSnapshotAsync(CancellationToken cancellationToken = default);
+	ValueTask<MediaDeckRuntimeSnapshot> GetMediaDeckSnapshotAsync(CancellationToken cancellationToken = default) =>
+		ValueTask.FromException<MediaDeckRuntimeSnapshot>(
+			new NotSupportedException("Runtime transport does not expose media-deck control."));
+
 	ValueTask<MediaDeckRuntimeSnapshot> OpenMediaDeckAsync(
 		MediaDeckOpenRequest request,
 		PreparedExecutionContract preparedExecution,
-		CancellationToken cancellationToken = default);
+		CancellationToken cancellationToken = default) =>
+		ValueTask.FromException<MediaDeckRuntimeSnapshot>(
+			new NotSupportedException("Runtime transport does not expose media-deck control."));
+
 	ValueTask<MediaTransportCommandResult> ApplyMediaDeckTransportAsync(
 		MediaTransportCommand command,
-		CancellationToken cancellationToken = default);
-	ValueTask<MediaDeckRuntimeSnapshot> CloseMediaDeckAsync(CancellationToken cancellationToken = default);
+		CancellationToken cancellationToken = default) =>
+		ValueTask.FromException<MediaTransportCommandResult>(
+			new NotSupportedException("Runtime transport does not expose media-deck control."));
+
+	ValueTask<MediaDeckRuntimeSnapshot> CloseMediaDeckAsync(CancellationToken cancellationToken = default) =>
+		ValueTask.FromException<MediaDeckRuntimeSnapshot>(
+			new NotSupportedException("Runtime transport does not expose media-deck control."));
 	ValueTask DisconnectAsync();
 }
 
