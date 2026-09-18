@@ -298,6 +298,29 @@ AP-51 evidence consists of:
 - structural checks for selectable displays, start/stop, fullscreen/windowed placement and display-change fallback;
 - the existing Architecture gate proving the Operator still references only rtaime.Client.
 
+## AP-52 Media Autoplay & End Behavior
+
+The local Media Deck now exposes production playback policy next to the existing transport and timeline:
+
+- Auto Play on Program enable/disable;
+- Hold Last Frame, Stop, Loop and Return to IN end behavior;
+- ON PROGRAM / OFF PROGRAM state;
+- effective IN/OUT range;
+- T-minus countdown derived from effective remaining frames;
+- explicit APPLY POLICY action through the Client SDK.
+
+The Operator remains a presentation/control surface. Program-edge detection and end behavior execute in RuntimeHost against committed Program state. The UI continuously refreshes loaded-deck observations so a Runtime-triggered autoplay transition from READY/PAUSED to PLAYING is visible without synthesizing local state.
+
+The source tile and deck countdown use the same effective remaining range. AP-52 deliberately does not implement auto-pause when the clip leaves Program, playlist auto-advance, rundown automation or macros.
+
+### AP-52 acceptance evidence
+
+- contract tests validate playback-policy and effective-range invariants;
+- Runtime integration covers all four end modes, IN/OUT and retake after end;
+- process-boundary integration covers cued CUT and DISSOLVE autoplay;
+- client tests prove confirmed policy round-trip;
+- Operator UI policy checks the autoplay control, end-mode selector, Program state, effective range and countdown.
+
 ## Verification
 
 `build/quality/Test-OperatorUiPolicy.ps1` verifies the primary UI architectural and UX guardrails, including:
@@ -316,6 +339,7 @@ AP-51 evidence consists of:
 - visible commit and transition status;
 - PNG/RGBA graphics load, placement, scale and confirmed show/hide controls;
 - AFV source, stereo/master audio meters, gain, mute, clipping/health and clip-audio state;
+- media autoplay/end-behavior controls with effective-range countdown;
 - retained Client-only Operator project dependency.
 
 `build/quality/Test-OperatorMonitoringPolicy.ps1` verifies the monitoring-plane separation, bounded/loss-tolerant behavior and prohibition on management-IPC pixel transport.
