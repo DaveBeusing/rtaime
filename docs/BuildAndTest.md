@@ -13,6 +13,8 @@ This document is the canonical developer entry point for building, publishing an
 
 The repository's primary managed solution is `rtaime.slnx`.
 
+Repository automation and qualification scripts are source-controlled under `build/`. The repository intentionally has no root `tools/` source directory. A `tools/` directory exists only inside generated offline release bundles, where the release builder copies a controlled allowlist of scripts and policy files from their canonical `build/...` source paths.
+
 ## Prerequisites
 
 The repository pins the .NET SDK in `global.json`:
@@ -102,7 +104,6 @@ dotnet publish src/Hosts/rtaime.ControlHost/rtaime.ControlHost.csproj `
 	-c Release -r win-x64 --self-contained true `
 	-p:PublishSingleFile=true `
 	-p:IncludeNativeLibrariesForSelfExtract=true `
-	-p:IncludeAllContentForSelfExtract=true `
 	-p:DebugType=None -p:DebugSymbols=false `
 	-o artifacts/publish/rtaime.ControlHost-win-x64
 
@@ -110,7 +111,6 @@ dotnet publish src/Hosts/rtaime.RuntimeHost/rtaime.RuntimeHost.csproj `
 	-c Release -r win-x64 --self-contained true `
 	-p:PublishSingleFile=true `
 	-p:IncludeNativeLibrariesForSelfExtract=true `
-	-p:IncludeAllContentForSelfExtract=true `
 	-p:DebugType=None -p:DebugSymbols=false `
 	-o artifacts/publish/rtaime.RuntimeHost-win-x64
 
@@ -118,7 +118,6 @@ dotnet publish src/Hosts/rtaime.AIHost/rtaime.AIHost.csproj `
 	-c Release -r win-x64 --self-contained true `
 	-p:PublishSingleFile=true `
 	-p:IncludeNativeLibrariesForSelfExtract=true `
-	-p:IncludeAllContentForSelfExtract=true `
 	-p:DebugType=None -p:DebugSymbols=false `
 	-o artifacts/publish/rtaime.AIHost-win-x64
 

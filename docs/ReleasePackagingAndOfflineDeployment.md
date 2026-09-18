@@ -92,6 +92,20 @@ tools/
 
 The ZIP transport is accompanied by a `.zip.sha256` sidecar.
 
+### Repository source paths vs bundle paths
+
+The repository does **not** use a root `tools/` directory as a source location. Offline operational tools are maintained at their canonical repository paths under:
+
+```text
+build/release/
+build/update/
+build/state/
+build/operations/
+build/showcase/
+```
+
+`build/release/offline-bundle-policy.json` is the allowlist that maps those source files into the generated bundle's flat `tools/` directory. The bundle path `tools/...` therefore always refers to an installed/generated release bundle, not to a repository source directory.
+
 ## Self-description and integrity
 
 `bundle-manifest.json` declares:

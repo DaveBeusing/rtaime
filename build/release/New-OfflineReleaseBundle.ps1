@@ -167,12 +167,38 @@ foreach ($rootDocumentation in @($policy.rootDocumentation)) {
 
 $toolsDirectory = Join-Path $bundleRoot "tools"
 New-Item -ItemType Directory -Path $toolsDirectory -Force | Out-Null
+$toolOutputNames = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
 foreach ($tool in @($policy.offlineTools)) {
-	$source = Resolve-RepositoryPath ([string]$tool)
-	if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
-		throw "Required offline tool '$tool' is missing."
+	$toolPath = [string]$tool
+	if ([string]::IsNullOrWhiteSpace($toolPath)) {
+		throw "Offline tool source path must not be empty."
 	}
-	Copy-Item -LiteralPath $source -Destination (Join-Path $toolsDirectory ([System.IO.Path]::GetFileName($source))) -Force
+	if ([System.IO.Path]::IsPathRooted($toolPath)) {
+		throw "Offline tool source path '$toolPath' must be repository-relative."
+	}
+	$normalizedToolPath = $toolPath.Replace('\', '/')
+	$segments = @($normalizedToolPath.Split('/'))
+	if ($segments -contains '..' -or $segments -contains '.' -or $segments -contains '') {
+		throw "Offline tool source path '$toolPath' contains invalid relative path segments."
+	}
+	if (-not $normalizedToolPath.StartsWith("build/", [StringComparison]::OrdinalIgnoreCase)) {
+		throw "Offline tool source path '$toolPath' must come from the repository build/ tree."
+	}
+
+	$source = Resolve-RepositoryPath $toolPath
+	if (-not $source.StartsWith($repositoryPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+		throw "Offline tool source path '$toolPath' escapes the repository root."
+	}
+	if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
+		throw "Required offline tool '$toolPath' is missing."
+	}
+
+	$outputName = [System.IO.Path]::GetFileName($source)
+	if (-not $toolOutputNames.Add($outputName)) {
+		throw "Offline tool source '$toolPath' collides with another bundle tool named '$outputName'."
+	}
+
+	Copy-Item -LiteralPath $source -Destination (Join-Path $toolsDirectory $outputName) -Force
 }
 
 $showcaseEntryPoint = Join-Path $toolsDirectory "Start-rtaime-Showcase.cmd"

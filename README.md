@@ -63,7 +63,7 @@ Debug build:
 dotnet build rtaime.slnx --configuration Debug
 ```
 
-For the full build/publish matrix, see [Build, Publish & Test](docs/BuildAndTest.md).
+Repository automation scripts live under `build/`; the repository does not use a root `tools/` source directory. For the full build/publish matrix, see [Build, Publish & Test](docs/BuildAndTest.md).
 
 ## Single-file EXE
 
