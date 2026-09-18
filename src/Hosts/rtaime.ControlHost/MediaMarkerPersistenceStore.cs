@@ -3,6 +3,7 @@
 using System.Text.Json;
 using rtaime.Core;
 using rtaime.Media.Contracts;
+using rtaime.Persistence;
 
 namespace rtaime.ControlHost;
 
