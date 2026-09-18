@@ -129,20 +129,94 @@
 
 					<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14">
 						<StackPanel>
-							<TextBlock Text="SOURCE BANK" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,12" />
+							<DockPanel Margin="0,0,0,12">
+								<TextBlock Text="SOURCE BIN" Style="{StaticResource OperatorSectionTitle}" />
+								<TextBlock Text="Select a tile, then Set Preview / Ctrl+P" Style="{StaticResource OperatorLabel}" DockPanel.Dock="Right" VerticalAlignment="Center" />
+							</DockPanel>
 							<ListBox ItemsSource="{Binding Sources}" SelectedItem="{Binding SelectedSource}" Style="{StaticResource OperatorSourceBank}" ItemContainerStyle="{StaticResource OperatorSourceItem}">
 								<ListBox.ItemTemplate>
 									<DataTemplate>
-										<Grid>
+										<Grid MinHeight="138">
 											<Grid.ColumnDefinitions>
+												<ColumnDefinition Width="200" />
+												<ColumnDefinition Width="14" />
 												<ColumnDefinition Width="*" />
-												<ColumnDefinition Width="Auto" />
 											</Grid.ColumnDefinitions>
-											<StackPanel>
-												<TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="14" />
-												<TextBlock Text="{Binding Id}" Style="{StaticResource OperatorLabel}" Margin="0,2,0,0" />
-											</StackPanel>
-											<TextBlock Grid.Column="1" Text="SELECT" Foreground="{DynamicResource OperatorAccentBrush}" FontWeight="SemiBold" VerticalAlignment="Center" />
+											<Grid Grid.Column="0" Background="#090C10" ClipToBounds="True">
+												<Image Source="{Binding Thumbnail}" Stretch="Uniform" SnapsToDevicePixels="True" />
+												<Border VerticalAlignment="Bottom" Background="#B0000000" Padding="7,4">
+													<TextBlock Text="{Binding ThumbnailFormat}" FontSize="10" Foreground="White" TextTrimming="CharacterEllipsis" />
+												</Border>
+											</Grid>
+											<Grid Grid.Column="2">
+												<Grid.RowDefinitions>
+													<RowDefinition Height="Auto" />
+													<RowDefinition Height="Auto" />
+													<RowDefinition Height="*" />
+													<RowDefinition Height="Auto" />
+												</Grid.RowDefinitions>
+												<Grid>
+													<Grid.ColumnDefinitions>
+														<ColumnDefinition Width="*" />
+														<ColumnDefinition Width="Auto" />
+													</Grid.ColumnDefinitions>
+													<TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="17" TextTrimming="CharacterEllipsis" />
+													<StackPanel Grid.Column="1" Orientation="Horizontal">
+														<Border Margin="0,0,6,0">
+															<Border.Style>
+																<Style TargetType="Border" BasedOn="{StaticResource OperatorPreviewTally}">
+																	<Setter Property="Visibility" Value="Collapsed" />
+																	<Style.Triggers><DataTrigger Binding="{Binding IsPreview}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
+																</Style>
+															</Border.Style>
+															<TextBlock Text="PVW" Foreground="{DynamicResource OperatorPreviewBrush}" FontWeight="Bold" />
+														</Border>
+														<Border>
+															<Border.Style>
+																<Style TargetType="Border" BasedOn="{StaticResource OperatorProgramTally}">
+																	<Setter Property="Visibility" Value="Collapsed" />
+																	<Style.Triggers><DataTrigger Binding="{Binding IsProgram}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
+																</Style>
+															</Border.Style>
+															<TextBlock Text="PGM" Foreground="{DynamicResource OperatorProgramBrush}" FontWeight="Bold" />
+														</Border>
+													</StackPanel>
+												</Grid>
+												<TextBlock Grid.Row="1" Text="{Binding Id}" Style="{StaticResource OperatorLabel}" Margin="0,2,0,8" TextTrimming="CharacterEllipsis" />
+												<Grid Grid.Row="2">
+													<Grid.ColumnDefinitions>
+														<ColumnDefinition Width="Auto" />
+														<ColumnDefinition Width="12" />
+														<ColumnDefinition Width="*" />
+													</Grid.ColumnDefinitions>
+													<Border Style="{StaticResource OperatorStatusBadge}" Padding="7,3" VerticalAlignment="Top">
+														<TextBlock Text="{Binding Type}" FontWeight="Bold" />
+													</Border>
+													<StackPanel Grid.Column="2">
+														<DockPanel Margin="0,0,0,4"><TextBlock Text="FORMAT" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding Format}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
+														<DockPanel>
+															<TextBlock Text="HEALTH" Style="{StaticResource OperatorLabel}" />
+															<Border DockPanel.Dock="Right" Padding="7,2">
+																<Border.Style>
+																	<Style TargetType="Border" BasedOn="{StaticResource OperatorHealthyBadge}">
+																		<Style.Triggers>
+																			<DataTrigger Binding="{Binding Health}" Value="UNSTABLE"><Setter Property="BorderBrush" Value="{DynamicResource OperatorWarningBrush}" /></DataTrigger>
+																			<DataTrigger Binding="{Binding Health}" Value="RECOVERING"><Setter Property="BorderBrush" Value="{DynamicResource OperatorWarningBrush}" /></DataTrigger>
+																			<DataTrigger Binding="{Binding Health}" Value="LOST"><Setter Property="BorderBrush" Value="{DynamicResource OperatorErrorBrush}" /></DataTrigger>
+																			<DataTrigger Binding="{Binding Health}" Value="ERROR"><Setter Property="BorderBrush" Value="{DynamicResource OperatorErrorBrush}" /></DataTrigger>
+																		</Style.Triggers>
+																	</Style>
+																</Border.Style>
+																<TextBlock Text="{Binding Health}" FontWeight="SemiBold" />
+															</Border>
+														</DockPanel>
+													</StackPanel>
+												</Grid>
+												<DockPanel Grid.Row="3" Margin="0,8,0,0">
+													<TextBlock Text="{Binding Detail}" Style="{StaticResource OperatorLabel}" TextTrimming="CharacterEllipsis" />
+													<TextBlock Text="{Binding StateDetail}" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" DockPanel.Dock="Right" />
+												</DockPanel>
+											</Grid>
 										</Grid>
 									</DataTemplate>
 								</ListBox.ItemTemplate>
