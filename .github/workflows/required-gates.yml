@@ -120,6 +120,10 @@ jobs:
         shell: pwsh
         run: ./build/quality/Test-OperatorUiPolicy.ps1
 
+      - name: Verify investor demo policy
+        shell: pwsh
+        run: ./build/showcase/Test-InvestorDemoPolicy.ps1
+
       - name: Verify operator monitoring policy
         shell: pwsh
         run: ./build/quality/Test-OperatorMonitoringPolicy.ps1
@@ -300,6 +304,15 @@ jobs:
             throw "Expected exactly one qualification bundle, found $($bundles.Count)."
           }
           ./build/operations/Test-ManagedHostLifecycle.ps1 -BundlePath $bundles[0].FullName
+
+      - name: Qualify packaged investor demo bootstrap
+        shell: pwsh
+        run: |
+          $bundles = @(Get-ChildItem -LiteralPath ./artifacts/release-pipeline -Filter *.zip -File -Recurse)
+          if ($bundles.Count -ne 1) {
+            throw "Expected exactly one qualification bundle, found $($bundles.Count)."
+          }
+          ./build/showcase/Test-PackagedInvestorDemo.ps1 -BundlePath $bundles[0].FullName
 
       - name: Upload packaged E2E evidence
         uses: actions/upload-artifact@v4
