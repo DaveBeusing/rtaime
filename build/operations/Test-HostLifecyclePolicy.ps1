@@ -29,8 +29,8 @@ foreach ($path in @($policyPath, $controllerPath, $qualificationPath, $controlPr
 
 $policy = Get-Content -LiteralPath $policyPath -Raw | ConvertFrom-Json
 Assert-Condition ([string]$policy.schemaVersion -eq '1.0') "Unsupported host-lifecycle policy schema version."
-Assert-Condition ([string]$policy.platform.osFamily -eq 'Windows') "AP-26 lifecycle policy must remain on the V1 Windows reference platform."
-Assert-Condition ([string]$policy.platform.architecture -eq 'x64') "AP-26 lifecycle policy must remain x64."
+Assert-Condition ([string]$policy.platform.osFamily -eq 'Windows') "Managed host lifecycle policy must remain on the V1 Windows reference platform."
+Assert-Condition ([string]$policy.platform.architecture -eq 'x64') "Managed host lifecycle policy must remain x64."
 Assert-Condition ([string]$policy.authority.topLevelHost -eq 'ControlHost') "ControlHost must remain the top-level managed service host."
 Assert-Condition ([string]$policy.authority.childSupervisionOwner -eq 'ControlHost') "ControlHost must own local RuntimeHost/AIHost child supervision."
 Assert-Condition (@($policy.authority.managedChildren).Count -eq 2) "Exactly RuntimeHost and AIHost must be managed children."
@@ -48,7 +48,7 @@ Assert-Condition ([string]$policy.restart.mode -eq 'EXPLICIT_OPERATOR_ACTION') "
 Assert-Condition ($policy.restart.requireSuccessfulStopBeforeStart -eq $true) "Restart must require a successful stop before start."
 Assert-Condition ($policy.readiness.passRequiresAllServiceHosts -eq $true) "Readiness PASS must require all three service hosts."
 Assert-Condition ([string]$policy.readiness.runtimeReadinessOnPass -eq 'PASS') "Successful host qualification must emit runtimeReadiness PASS."
-Assert-Condition ($policy.readiness.automaticWindowsServiceRegistration -eq $false) "AP-26 must not register Windows services automatically."
+Assert-Condition ($policy.readiness.automaticWindowsServiceRegistration -eq $false) "Managed host lifecycle must not register Windows services automatically."
 
 $controller = Get-Content -LiteralPath $controllerPath -Raw
 foreach ($token in @('Start', 'Stop', 'Restart', 'Status', 'Test-NamedPipeEndpoint', 'RTAIME_RUNTIME_EXECUTABLE', 'RTAIME_AI_EXECUTABLE', 'runtimeReadiness = ''PASS''', 'fallbackKillIsPass')) {
