@@ -139,7 +139,7 @@
 								<TextBlock Text="SOURCE BIN" Style="{StaticResource OperatorSectionTitle}" />
 								<TextBlock Text="Select a tile, then Set Preview / Ctrl+P" Style="{StaticResource OperatorLabel}" DockPanel.Dock="Right" VerticalAlignment="Center" />
 							</DockPanel>
-							<Border Style="{StaticResource OperatorEmptyState}" Margin="0,0,0,10" IsHitTestVisible="False">
+							<Border Margin="0,0,0,10" IsHitTestVisible="False">
 								<Border.Style>
 									<Style TargetType="Border" BasedOn="{StaticResource OperatorEmptyState}">
 										<Setter Property="Visibility" Value="Collapsed" />
@@ -576,7 +576,7 @@
 				</Grid.ColumnDefinitions>
 				<TextBlock Text="STATUS" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" Margin="0,0,12,0" />
 				<TextBlock Grid.Column="1" Text="{Binding LastEvent}" TextWrapping="Wrap" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-				<Border Grid.Column="2" Style="{StaticResource OperatorErrorBadge}" Margin="12,0,0,0" MaxWidth="520" ToolTip="{Binding LastError}">
+				<Border Grid.Column="2" Margin="12,0,0,0" MaxWidth="520" ToolTip="{Binding LastError}">
 					<Border.Style>
 						<Style TargetType="Border" BasedOn="{StaticResource OperatorErrorBadge}">
 							<Style.Triggers>
