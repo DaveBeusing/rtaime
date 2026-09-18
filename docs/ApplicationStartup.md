@@ -75,8 +75,8 @@ Operator launch is gated on positive evidence. AppHost requires:
 1. the ControlHost process identity in readiness evidence to be live;
 2. ControlHost lifecycle state `READY`;
 3. ControlHost health `HEALTHY`;
-4. RuntimeHost supervision state `HEALTHY` with a live process identity;
-5. AIHost supervision state `HEALTHY` with a live process identity when AI is required;
+4. RuntimeHost supervision state `HEALTHY`; when the supervisor owns a RuntimeHost process identity, that process must be live;
+5. AIHost supervision state `HEALTHY` when AI is required; when the supervisor owns an AIHost process identity, that process must be live;
 6. Control Named Pipe connectivity;
 7. Runtime Named Pipe connectivity;
 8. AI Named Pipe connectivity when AI is required;
