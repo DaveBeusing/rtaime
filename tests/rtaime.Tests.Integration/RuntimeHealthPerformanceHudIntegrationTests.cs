@@ -86,18 +86,18 @@ public sealed class RuntimeHealthPerformanceHudIntegrationTests
 				TimeSpan.FromSeconds(1),
 				TimeSpan.FromSeconds(3)));
 			var ready = await SynchronizeWithRetryAsync(client);
-			Assert.NotEqual(ProjectionHealthStates.Fail, ready.Health.Control.State);
+			Assert.NotEqual(ClientHealthStates.Fail, ready.Health.Control.State);
 
 			runtimeStop.Cancel();
 			Assert.Equal(RuntimeHostExitCode.Success, await runtimeRun);
 			await WaitUntilAsync(() => control.Lifecycle.State == ControlHostProcessState.Degraded);
 
 			var disconnected = await SynchronizeWithRetryAsync(client);
-			Assert.Equal(ProjectionHealthStates.Fail, disconnected.Health.Runtime.State);
-			Assert.Equal(ProjectionHealthStates.Fail, disconnected.Health.Media.State);
-			Assert.Equal(ProjectionHealthStates.Fail, disconnected.Health.Provider.State);
-			Assert.Equal(ProjectionHealthStates.Fail, disconnected.Health.GpuProvider.State);
-			Assert.Equal(ProjectionHealthStates.Fail, disconnected.Health.Engine.State);
+			Assert.Equal(ClientHealthStates.Fail, disconnected.Health.Runtime.State);
+			Assert.Equal(ClientHealthStates.Fail, disconnected.Health.Media.State);
+			Assert.Equal(ClientHealthStates.Fail, disconnected.Health.Provider.State);
+			Assert.Equal(ClientHealthStates.Fail, disconnected.Health.GpuProvider.State);
+			Assert.Equal(ClientHealthStates.Fail, disconnected.Health.Engine.State);
 		}
 		finally
 		{
