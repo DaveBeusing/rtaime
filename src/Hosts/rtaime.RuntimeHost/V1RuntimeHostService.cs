@@ -190,7 +190,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		_audio = new AudioFollowVideoEngine(_virtualAudio.Streams, format.FrameRate, sourceAId);
 		_audioMeters = _audioStreams.Keys.ToDictionary(
 			sourceId => sourceId,
-			_ => new AudioMeterObservation(new AudioStereoMeter(0, 0), available: false, external: false));
+			_ => new AudioMeterObservation(new AudioStereoMeter(0, 0), Available: false, External: false));
 		_externalAudioQueues = _audioStreams.Keys.ToDictionary(
 			sourceId => sourceId,
 			_ => new Queue<float>());
@@ -616,7 +616,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			ThrowIfDisposed();
 			EnsureAudioSourceUnsafe(sourceId);
 			_externalAudioQueues[sourceId].Clear();
-			_audioMeters[sourceId] = new AudioMeterObservation(meter, available, external: true);
+			_audioMeters[sourceId] = new AudioMeterObservation(meter, available, External: true);
 		}
 	}
 
@@ -638,7 +638,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				while (queue.Count > maximumBufferedValues)
 					queue.Dequeue();
 			}
-			_audioMeters[sourceId] = new AudioMeterObservation(meter, available, external: true);
+			_audioMeters[sourceId] = new AudioMeterObservation(meter, available, External: true);
 		}
 	}
 
@@ -662,7 +662,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			ThrowIfDisposed();
 			EnsureAudioSourceUnsafe(sourceId);
 			_externalAudioQueues[sourceId].Clear();
-			_audioMeters[sourceId] = new AudioMeterObservation(new AudioStereoMeter(0, 0), available: false, external: false);
+			_audioMeters[sourceId] = new AudioMeterObservation(new AudioStereoMeter(0, 0), Available: false, External: false);
 		}
 	}
 
@@ -891,8 +891,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			var packet = _virtualAudio.GetSource(sourceId).GeneratePacket(sequence);
 			_audioMeters[sourceId] = new AudioMeterObservation(
 				new AudioStereoMeter(packet.LeftPeakLevel, packet.RightPeakLevel),
-				available: true,
-				external: false);
+				Available: true,
+				External: false);
 		}
 	}
 
