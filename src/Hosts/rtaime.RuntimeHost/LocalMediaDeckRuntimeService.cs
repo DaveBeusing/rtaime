@@ -259,7 +259,7 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
 		{
 			case MediaDeckEndBehavior.HoldLastFrame:
 				if (_session.Transport.State != MediaTransportState.Ended)
-				_session.MarkEnded();
+				_session.MarkEnded(EffectiveEndFrameUnsafe());
 				return;
 
 			case MediaDeckEndBehavior.Stop:
