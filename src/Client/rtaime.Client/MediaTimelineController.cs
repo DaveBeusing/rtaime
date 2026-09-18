@@ -161,6 +161,19 @@ public sealed class MediaTimelineController : IAsyncDisposable
 		RaiseStateChanged();
 	}
 
+	internal void ClearConfirmedSnapshot()
+	{
+		ThrowIfDisposed();
+		lock (_gate)
+		{
+			_confirmed = null;
+			_previewFrame = null;
+			_queuedFrame = null;
+			_isDragging = false;
+		}
+		RaiseStateChanged();
+	}
+
 	public void BeginPointerSeek()
 	{
 		ThrowIfDisposed();
@@ -345,7 +358,16 @@ public sealed class MediaTimelineController : IAsyncDisposable
 				snapshot.AssetId,
 				MediaTransportCommandKind.Seek,
 				ClampFrame(targetFrame, snapshot.Position.TotalFrames));
-			var result = await sender(command, linked.Token).ConfigureAwait(false);
+			MediaTransportCommandResult result;
+			try
+			{
+				result = await sender(command, linked.Token).ConfigureAwait(false);
+			}
+			catch (MediaDeckTransportUnavailableException)
+			{
+				ClearConfirmedSnapshot();
+				return;
+			}
 			lock (_gate)
 			{
 				_confirmed = result.Snapshot;
