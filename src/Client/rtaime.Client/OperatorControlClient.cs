@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using rtaime.Control.Contracts;
 using rtaime.Core;
+using rtaime.Media.Contracts;
 
 namespace rtaime.Client;
 
@@ -95,6 +96,21 @@ public interface IOperatorControlTransport
     ValueTask<OperatorMutationResponse> SelectPreviewAsync(SelectPreviewCommand command, CancellationToken cancellationToken = default);
     ValueTask<OperatorMutationResponse> CutProgramAsync(CutProgramCommand command, CancellationToken cancellationToken = default);
     ValueTask<OperatorMutationResponse> DissolveProgramAsync(DissolveProgramCommand command, CancellationToken cancellationToken = default);
+
+    ValueTask<MediaDeckSnapshot> GetMediaDeckSnapshotAsync(CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<MediaDeckSnapshot>(new NotSupportedException("Operator transport does not expose media-deck control."));
+
+    ValueTask<MediaDeckSnapshot> OpenMediaDeckAsync(MediaDeckOpenRequest request, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<MediaDeckSnapshot>(new NotSupportedException("Operator transport does not expose media-deck control."));
+
+    ValueTask<MediaDeckSnapshot> ApplyMediaDeckTransportAsync(MediaTransportCommand command, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<MediaDeckSnapshot>(new NotSupportedException("Operator transport does not expose media-deck control."));
+
+    ValueTask<MediaDeckSnapshot> ApplyMediaDeckMarkerAsync(MediaMarkerCommand command, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<MediaDeckSnapshot>(new NotSupportedException("Operator transport does not expose media-deck control."));
+
+    ValueTask<MediaDeckSnapshot> CloseMediaDeckAsync(CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<MediaDeckSnapshot>(new NotSupportedException("Operator transport does not expose media-deck control."));
 }
 
 public sealed class OperatorControlClient
@@ -172,6 +188,30 @@ public sealed class OperatorControlClient
             await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
+
+    public ValueTask<MediaDeckSnapshot> GetMediaDeckSnapshotAsync(CancellationToken cancellationToken = default) =>
+        _transport.GetMediaDeckSnapshotAsync(cancellationToken);
+
+    public ValueTask<MediaDeckSnapshot> OpenMediaDeckAsync(
+        string path,
+        MediaSourceId sourceId,
+        CancellationToken cancellationToken = default) =>
+        _transport.OpenMediaDeckAsync(
+            new MediaDeckOpenRequest(MediaContractVersion.Current, sourceId, path),
+            cancellationToken);
+
+    public ValueTask<MediaDeckSnapshot> ApplyMediaDeckTransportAsync(
+        MediaTransportCommand command,
+        CancellationToken cancellationToken = default) =>
+        _transport.ApplyMediaDeckTransportAsync(command, cancellationToken);
+
+    public ValueTask<MediaDeckSnapshot> ApplyMediaDeckMarkerAsync(
+        MediaMarkerCommand command,
+        CancellationToken cancellationToken = default) =>
+        _transport.ApplyMediaDeckMarkerAsync(command, cancellationToken);
+
+    public ValueTask<MediaDeckSnapshot> CloseMediaDeckAsync(CancellationToken cancellationToken = default) =>
+        _transport.CloseMediaDeckAsync(cancellationToken);
 
     public void Disconnect() => _snapshot = null;
 
