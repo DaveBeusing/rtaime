@@ -257,7 +257,7 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 	{
 		using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 		timeout.CancelAfter(_requestTimeout);
-		await using var pipe = new NamedPipeClientStream(".", _endpoint, PipeDirection.InOut, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+		await using var pipe = new NamedPipeClientStream(".", _endpoint, PipeDirection.InOut, PipeOptions.Asynchronous);
 		try
 		{
 			using var connect = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token);
