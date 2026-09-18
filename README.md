@@ -85,6 +85,24 @@ rtaime.exe / AppHost
 
 Supported startup profiles are `Interactive`, `Showcase` and `HeadlessEngine`.
 
+Lifecycle ownership is explicit:
+
+```text
+EphemeralLocal
+PersistentEngine
+ExternalManaged
+```
+
+The supported persistent Windows production path runs the same AppHost lifecycle under Windows Service Control Manager. Closing or crashing Operator does not stop a persistent engine; `ExternalManaged` desktop startup adopts the running engine without lifecycle authority.
+
+Service installation and operation from an installed bundle:
+
+```powershell
+./tools/Invoke-WindowsServiceLifecycle.ps1 -Action Install -InstallPath C:\rtaime -StateRoot C:\ProgramData\rtaime
+./tools/Invoke-WindowsServiceLifecycle.ps1 -Action Start -InstallPath C:\rtaime -StateRoot C:\ProgramData\rtaime
+./tools/Invoke-WindowsServiceLifecycle.ps1 -Action Qualify -InstallPath C:\rtaime -StateRoot C:\ProgramData\rtaime
+```
+
 The AppHost itself can be published as a self-contained single-file Windows executable:
 
 ```powershell
@@ -144,6 +162,7 @@ Start here:
 - [Product Identity](docs/ProductIdentity.md) — naming, pronunciation, acronym and slogan.
 - [Build, Publish & Test](docs/BuildAndTest.md) — developer build matrix, single-file publishing and test runs.
 - [Application Startup](docs/ApplicationStartup.md) — canonical `rtaime.exe` startup, profiles, readiness and ownership semantics.
+- [Windows Production Lifecycle](docs/WindowsProductionLifecycle.md) — persistent service operation, boot/recovery, maintenance and qualification boundaries.
 - [Bootstrap Architecture](docs/BootstrapArchitecture.md) — solution structure and architecture guardrails.
 - [Repository Governance](docs/RepositoryGovernance.md) — required gates and integration policy.
 - [V1 End-to-End Proof](docs/V1EndToEndProof.md) — production-shaped end-to-end execution proof.
