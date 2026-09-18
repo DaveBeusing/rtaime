@@ -104,6 +104,20 @@ public sealed class UnifiedApplicationHostTests
 	}
 
 	[Fact]
+	public async Task Headless_engine_fails_when_readiness_does_not_recover()
+	{
+		var options = CreateOptions(ApplicationStartupProfile.HeadlessEngine);
+		var platform = new FakeApplicationHostPlatform(options) { PublishReadinessOnControlStart = true };
+		platform.OnDelay = () => platform.PipeReachable = false;
+		var host = new UnifiedApplicationHost(options, platform);
+
+		await Assert.ThrowsAsync<TimeoutException>(() => host.RunAsync());
+
+		Assert.Equal(ApplicationLifecycleState.Failed, host.State);
+		Assert.True(platform.StopSignalWritten);
+	}
+
+	[Fact]
 	public async Task Interactive_operator_exit_keeps_owned_engine_running_by_default()
 	{
 		var options = CreateOptions(ApplicationStartupProfile.Interactive);
@@ -154,7 +168,7 @@ public sealed class UnifiedApplicationHostTests
 		public DateTimeOffset UtcNow { get; private set; }
 		public bool PublishReadinessOnControlStart { get; init; }
 		public bool PublishReadinessAfterDelay { get; init; }
-		public bool PipeReachable { get; init; } = true;
+		public bool PipeReachable { get; set; } = true;
 		public bool StopSignalWritten { get; private set; }
 		public Action? OnDelay { get; set; }
 		public List<string> StartedBaseNames { get; } = new();
