@@ -128,9 +128,18 @@ public sealed class LocalMediaFileProvider
 		VideoFormat.Hd1080p50Rgba8,
 		VideoFormat.Hd1080p59_94Rgba8
 	};
+	private readonly VideoFormat _outputFormat;
 
 	public LocalMediaFileProvider()
+		: this(VideoFormat.Hd1080p50Rgba8)
 	{
+	}
+
+	public LocalMediaFileProvider(VideoFormat outputFormat)
+	{
+		if (!SupportedVideoFormats.Contains(outputFormat))
+			throw new ArgumentException("Local media output format must be 1080p50 or 1080p59.94 RGBA8.", nameof(outputFormat));
+		_outputFormat = outputFormat;
 		var providerId = new ProviderId(LocalMediaIdentity.Create("provider", "local-media-file"));
 		var availability = OperatingSystem.IsWindows()
 			? new ProviderAvailability(ProviderAvailabilityState.Available)
@@ -215,27 +224,11 @@ public sealed class LocalMediaFileProvider
 		}
 
 		var resolvedAssetId = assetId ?? new MediaAssetId(LocalMediaIdentity.Create("asset", fullPath));
-		var open = WindowsMediaFoundationLocalMediaDecoder.TryOpen(fullPath, resolvedAssetId, sourceId);
+		var open = WindowsMediaFoundationLocalMediaDecoder.TryOpen(fullPath, resolvedAssetId, sourceId, _outputFormat);
 		if (!open.Succeeded)
 			return LocalMediaOpenResult.Rejected(open.Failure!.Value.Code, open.Failure.Value.Message);
 
 		var decoder = open.Decoder!;
-		if (!SupportedVideoFormats.Contains(decoder.Probe.VideoFormat))
-		{
-			decoder.Dispose();
-			return LocalMediaOpenResult.Rejected(
-				"media.file.video_format_unsupported",
-				$"Unsupported V1 video format '{decoder.Probe.VideoFormat.Width}x{decoder.Probe.VideoFormat.Height} {decoder.Probe.VideoFormat.FrameRate}'.");
-		}
-
-		if (decoder.Probe.AudioFormat != AudioFormat.Stereo48kFloat32)
-		{
-			decoder.Dispose();
-			return LocalMediaOpenResult.Rejected(
-				"media.file.audio_format_unsupported",
-				"V1 local media requires embedded 48 kHz stereo audio.");
-		}
-
 		return LocalMediaOpenResult.Ready(new LocalMediaFileSource(fullPath, decoder.Probe, decoder));
 	}
 }

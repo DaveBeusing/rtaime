@@ -263,7 +263,7 @@ public sealed class RuntimeHostProcess
 				?? throw new InvalidOperationException("Recording writer factory returned null.");
 			_runtime = _runtimeFactory(_options, writer)
 				?? throw new InvalidOperationException("Runtime factory returned null.");
-			_mediaDeck = new LocalMediaDeckRuntimeService();
+			_mediaDeck = new LocalMediaDeckRuntimeService(_options.Format);
 			_aiShowcase = _aiShowcaseFactory(_runtime, _options)
 				?? throw new InvalidOperationException("AI showcase factory returned null.");
 
