@@ -126,6 +126,44 @@ Rapid repeated UI actions remain serialized by the existing `AsyncRelayCommand` 
 
 Existing RuntimeHost restart and Operator reconnect/resynchronization tests remain the recovery evidence for the workspace; AP-47 does not introduce a second recovery mechanism.
 
+## AP-48 Source Bin & Live Source Tiles
+
+AP-48 upgrades the source bank into a production source bin while preserving the same authoritative routing model. The Operator does not create source truth; it projects observations already owned by RuntimeHost, ControlHost, the Media Deck and the independent monitoring plane.
+
+Each source tile exposes:
+
+- source name and stable source identity;
+- LIVE or MEDIA source type;
+- production video format;
+- per-source signal/health state;
+- live monitoring thumbnail when a sampled source frame is available;
+- explicit PVW and PGM tallies derived from authoritative routing;
+- Media Deck state and remaining time for the slot currently hosting local media;
+- media file name when a local clip is loaded.
+
+### Data ownership
+
+RuntimeHost remains the owner of live source signal state and active V1 video format. Its existing private host snapshot now carries per-source input observations and the active format to ControlHost. ControlHost combines those observations with its production specification and, when applicable, the existing Media Deck snapshot before returning the Operator snapshot.
+
+The source snapshot extension is observational only. It does not change Control contracts, production authority, prepared execution, commit semantics or Runtime scheduling.
+
+Media Deck state is also pushed into the tile projection from `MediaDeckViewModel` so PLAYING/PAUSED/READY and remaining time update while the clip is running without waiting for an unrelated production mutation. Closing the deck clears the MEDIA overlay immediately.
+
+Live thumbnails come exclusively from `OperatorMonitoringViewModel` source frames. Monitoring loss may make thumbnails stale, but it does not block or alter Program execution.
+
+### Selection and Preview
+
+Selecting a source tile updates `SelectedSource`. `Set Preview` / `Ctrl+P` remains the explicit operator action that sends that selected source through the authoritative `SelectPreviewAsync` path. CUT and AUTO continue to take only the confirmed Preview source as established by AP-47.
+
+### AP-48 acceptance evidence
+
+- RuntimeHost snapshot exposes actual V1 format and per-source signal state;
+- ControlHost source snapshot distinguishes LIVE from the currently loaded MEDIA slot;
+- Client source descriptors carry format, health, Media Deck state, remaining time and file identity;
+- source tiles display monitoring thumbnails plus PGM/PVW state;
+- integration tests verify live health changes and Media Deck READY/PLAYING/remaining observations across real IPC;
+- Operator UI policy verifies the source-bin bindings and monitoring/media projection boundaries.
+
 ## Verification
 
 `build/quality/Test-OperatorUiPolicy.ps1` verifies the primary UI architectural and UX guardrails, including:
@@ -135,7 +173,7 @@ Existing RuntimeHost restart and Operator reconnect/resynchronization tests rema
 - visible keyboard-focus resources;
 - 1920 x 1080 reference layout and 125%/150% DPI invariants;
 - Preview/Program semantic resources;
-- source-bank binding;
+- source-bin binding with live/media metadata, health, thumbnails, PGM/PVW and remaining time;
 - keyboard command declarations;
 - live Preview/Program image bindings;
 - stale/busy/connection presentation state;

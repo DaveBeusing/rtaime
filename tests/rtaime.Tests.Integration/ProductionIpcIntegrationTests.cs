@@ -69,6 +69,20 @@ public sealed class ProductionIpcIntegrationTests
 		var sourceA = initial.Sources[0];
 		var sourceB = initial.Sources[1];
 
+		Assert.All(initial.Sources, source =>
+		{
+			Assert.Equal("LIVE", source.Type);
+			Assert.Contains("1920×1080", source.Format);
+			Assert.Equal("VALID", source.Health);
+			Assert.Equal("—", source.MediaState);
+			Assert.Null(source.Remaining);
+		});
+		runtime.Runtime!.SetInputSignalState(new MediaSourceId(Identity.Parse(sourceB.Id)), V1InputSignalState.Lost);
+		var lostSignal = await client.SynchronizeAsync();
+		Assert.Equal("LOST", lostSignal.Sources.Single(source => source.Id == sourceB.Id).Health);
+		runtime.Runtime.SetInputSignalState(new MediaSourceId(Identity.Parse(sourceB.Id)), V1InputSignalState.Valid);
+		await client.SynchronizeAsync();
+
 		var preview = await client.SelectPreviewAsync(sourceB.Id);
 		Assert.True(preview.Accepted, preview.Failure?.ToString());
 		Assert.Equal(sourceB.Id, client.Snapshot!.Production.Routing.PreviewSourceId.ToString());
@@ -180,11 +194,24 @@ public sealed class ProductionIpcIntegrationTests
 		Assert.Equal(MediaDeckState.Ready, opened.State);
 		Assert.Equal(50, opened.Transport!.Position.TotalFrames);
 
+		var sourceBinReady = await client.SynchronizeAsync();
+		var mediaTile = sourceBinReady.Sources.Single(source => source.Id == sourceId.ToString());
+		Assert.Equal("MEDIA", mediaTile.Type);
+		Assert.Equal("READY", mediaTile.Health);
+		Assert.Equal("READY", mediaTile.MediaState);
+		Assert.Contains("1920×1080", mediaTile.Format);
+		Assert.Equal(Path.GetFileName(referenceAsset.Path), mediaTile.MediaFileName);
+		Assert.NotNull(mediaTile.Remaining);
+
 		var playing = await deck.PlayAsync();
 		Assert.Equal(MediaDeckState.Playing, playing.State);
 		await Task.Delay(120);
 		await deck.RefreshAsync();
 		Assert.True(deck.Snapshot.Transport!.Position.CurrentFrame > 0);
+		var sourceBinPlaying = await client.SynchronizeAsync();
+		var playingTile = sourceBinPlaying.Sources.Single(source => source.Id == sourceId.ToString());
+		Assert.Equal("PLAYING", playingTile.MediaState);
+		Assert.True(playingTile.Remaining < opened.Transport.Position.Remaining);
 
 		await deck.PauseAsync();
 		await deck.Timeline.SeekToFrameAsync(10);

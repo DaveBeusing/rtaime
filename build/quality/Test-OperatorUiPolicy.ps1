@@ -22,13 +22,14 @@ $deckPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MediaDeckContro
 $timelinePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MediaTimelineControl.xaml"
 $viewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorViewModel.cs"
 $monitorViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorMonitoringViewModel.cs"
+$sourceTileViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorSourceTileViewModel.cs"
 $tokensPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Themes/OperatorTokens.xaml"
 $themePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Themes/OperatorTheme.xaml"
 $manifestPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/app.manifest"
 $projectPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/rtaime.Operator.csproj"
 $documentationPath = Join-Path $repositoryRoot "docs/OperatorUiV1.md"
 
-foreach ($path in @($appPath, $windowPath, $deckPath, $timelinePath, $viewModelPath, $monitorViewModelPath, $tokensPath, $themePath, $manifestPath, $projectPath, $documentationPath)) {
+foreach ($path in @($appPath, $windowPath, $deckPath, $timelinePath, $viewModelPath, $monitorViewModelPath, $sourceTileViewModelPath, $tokensPath, $themePath, $manifestPath, $projectPath, $documentationPath)) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required Operator UI artifact is missing: '$path'."
 }
 
@@ -38,6 +39,7 @@ $deck = Get-Content -LiteralPath $deckPath -Raw
 $timeline = Get-Content -LiteralPath $timelinePath -Raw
 $viewModel = Get-Content -LiteralPath $viewModelPath -Raw
 $monitorViewModel = Get-Content -LiteralPath $monitorViewModelPath -Raw
+$sourceTileViewModel = Get-Content -LiteralPath $sourceTileViewModelPath -Raw
 $tokens = Get-Content -LiteralPath $tokensPath -Raw
 $theme = Get-Content -LiteralPath $themePath -Raw
 $manifest = Get-Content -LiteralPath $manifestPath -Raw
@@ -72,6 +74,17 @@ Assert-Condition ($window -match '<ScrollViewer[^>]+VerticalScrollBarVisibility=
 Assert-Condition ($window -match 'ItemsSource="\{Binding Sources\}"') "Operator must expose the source bank as a bound collection."
 Assert-Condition ($window -match 'Style="\{StaticResource OperatorSourceBank\}"') "Source bank must use the shared design-system collection style."
 Assert-Condition ($window -match 'ItemContainerStyle="\{StaticResource OperatorSourceItem\}"') "Source tiles must use the shared tile style."
+Assert-Condition ($window -match 'Text="SOURCE BIN"') "Operator must present the source collection as a production source bin."
+Assert-Condition ($window -match 'Binding Thumbnail') "Source tiles must render live monitoring thumbnails."
+Assert-Condition ($window -match 'Binding Type') "Source tiles must expose LIVE/MEDIA source type."
+Assert-Condition ($window -match 'Binding Format') "Source tiles must expose source format."
+Assert-Condition ($window -match 'Binding Health') "Source tiles must expose source health."
+Assert-Condition ($window -match 'Binding IsPreview') "Source tiles must expose Preview tally state."
+Assert-Condition ($window -match 'Binding IsProgram') "Source tiles must expose Program tally state."
+Assert-Condition ($window -match 'Binding StateDetail') "Source tiles must expose media state and remaining time."
+Assert-Condition ($sourceTileViewModel -match 'ApplyRouting') "Source tile presentation must derive PGM/PVW state from authoritative routing."
+Assert-Condition ($sourceTileViewModel -match 'ApplyMediaDeck') "Source tile presentation must project Media Deck state without taking media authority."
+Assert-Condition ($monitorViewModel -match 'ApplySourceThumbnail') "Source thumbnails must derive from the independent monitoring plane."
 Assert-Condition ($window -match 'OperatorPreviewPanel') "Preview monitor must use Preview semantic styling."
 Assert-Condition ($window -match 'OperatorProgramPanel') "Program monitor must use Program semantic styling."
 Assert-Condition ($window -match 'OperatorPreviewTally') "Preview tally semantics must be explicit."
@@ -128,5 +141,6 @@ Write-Host "Design system: tokens, semantic tallies, reusable controls and keybo
 Write-Host "DPI qualification: PerMonitorV2; 1920x1080 reference layout supports 100%, 125% and 150% scaling invariants"
 Write-Host "Monitoring: independent non-authoritative bitmap plane"
 Write-Host "Production workspace: selected source -> confirmed Preview -> confirmed Program TAKE semantics verified"
+Write-Host "Source bin: live/media metadata, monitoring thumbnails, health, PGM/PVW and remaining-time presentation verified"
 Write-Host "Commit state: pending, confirmed, rejected/failed and resynchronization presentation verified"
 Write-Host "Keyboard controls: synchronization, Preview, CUT and DISSOLVE/AUTO declared"

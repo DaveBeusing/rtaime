@@ -27,6 +27,7 @@ public partial class MainWindow : Window
 		var client = new OperatorControlClient(controlTransport);
 		var viewModel = new OperatorViewModel(client);
 		MediaDeck = CreateMediaDeck(viewModel, client);
+		MediaDeck.SnapshotChanged += viewModel.ApplyMediaDeckSnapshot;
 		Monitoring = new OperatorMonitoringViewModel(
 			viewModel,
 			new NamedPipeOperatorMonitoringTransport(monitoringEndpoint),
@@ -43,6 +44,7 @@ public partial class MainWindow : Window
 		ArgumentNullException.ThrowIfNull(viewModel);
 		var client = viewModel.Client ?? new OperatorControlClient(new UnavailableOperatorControlTransport());
 		MediaDeck = CreateMediaDeck(viewModel, client);
+		MediaDeck.SnapshotChanged += viewModel.ApplyMediaDeckSnapshot;
 		Monitoring = new OperatorMonitoringViewModel(
 			viewModel,
 			new NamedPipeOperatorMonitoringTransport("rtaime.v1.runtime.default.monitor"),

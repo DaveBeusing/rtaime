@@ -6,14 +6,17 @@ using System.Globalization;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
+using System.Windows.Media;
 using rtaime.Client;
+using rtaime.Media.Contracts;
 
 namespace rtaime.Operator;
 
 public sealed class OperatorViewModel : INotifyPropertyChanged
 {
 	private readonly OperatorControlClient? _client;
-	private OperatorSourceDescriptor? _selectedSource;
+	private OperatorSourceTileViewModel? _selectedSource;
+	private string? _mediaDeckSourceId;
 	private string _previewSourceName = "—";
 	private string _previewSourceId = "—";
 	private string _programSourceName = "—";
@@ -42,7 +45,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged
 	public OperatorViewModel(OperatorControlClient? client = null)
 	{
 		_client = client;
-		Sources = new ObservableCollection<OperatorSourceDescriptor>();
+		Sources = new ObservableCollection<OperatorSourceTileViewModel>();
 		SynchronizeCommand = new AsyncRelayCommand(SynchronizeAsync, () => _client is not null && !IsBusy);
 		SetPreviewCommand = new AsyncRelayCommand(SetPreviewAsync, CanSetPreview);
 		CutCommand = new AsyncRelayCommand(CutAsync, CanTakePreview);
@@ -53,7 +56,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged
 
 	public event PropertyChangedEventHandler? PropertyChanged;
 
-	public ObservableCollection<OperatorSourceDescriptor> Sources { get; }
+	public ObservableCollection<OperatorSourceTileViewModel> Sources { get; }
 	public ICommand SynchronizeCommand { get; }
 	public ICommand SetPreviewCommand { get; }
 	public ICommand CutCommand { get; }
@@ -62,7 +65,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged
 	public string MonitoringStatus => "Monitoring unavailable until AP-29";
 	public string FormatStatus => "Format metadata is not exposed by the management snapshot.";
 
-	public OperatorSourceDescriptor? SelectedSource
+	public OperatorSourceTileViewModel? SelectedSource
 	{
 		get => _selectedSource;
 		set
@@ -256,12 +259,21 @@ public sealed class OperatorViewModel : INotifyPropertyChanged
 	private void Apply(OperatorStatusSnapshot snapshot)
 	{
 		var previousSelectionId = SelectedSource?.Id;
+		var existing = Sources.ToDictionary(source => source.Id, StringComparer.Ordinal);
 		Sources.Clear();
-		foreach (var source in snapshot.Sources)
+		foreach (var descriptor in snapshot.Sources)
+		{
+			if (!existing.TryGetValue(descriptor.Id, out var source))
+				source = new OperatorSourceTileViewModel(descriptor);
+			else
+				source.ApplyDescriptor(descriptor);
 			Sources.Add(source);
+		}
 
 		var previewId = snapshot.Production.Routing.PreviewSourceId.ToString();
 		var programId = snapshot.Production.Routing.ProgramSourceId.ToString();
+		foreach (var source in Sources)
+			source.ApplyRouting(previewId, programId);
 		SelectedSource = Sources.FirstOrDefault(source => string.Equals(source.Id, previousSelectionId, StringComparison.Ordinal))
 			?? Sources.FirstOrDefault(source => string.Equals(source.Id, previewId, StringComparison.Ordinal))
 			?? Sources.FirstOrDefault();
@@ -292,6 +304,47 @@ public sealed class OperatorViewModel : INotifyPropertyChanged
 			TransitionStatus = "READY";
 		RaiseCommandState();
 	}
+
+
+	internal void ApplySourceThumbnail(string sourceId, ImageSource thumbnail, string format)
+	{
+		var source = Sources.FirstOrDefault(candidate => string.Equals(candidate.Id, sourceId, StringComparison.Ordinal));
+		source?.ApplyThumbnail(thumbnail, format);
+	}
+
+	internal void ApplyMediaDeckSnapshot(MediaDeckSnapshot snapshot)
+	{
+		ArgumentNullException.ThrowIfNull(snapshot);
+		var sourceId = snapshot.SourceId?.ToString();
+		if (_mediaDeckSourceId is not null && !string.Equals(_mediaDeckSourceId, sourceId, StringComparison.Ordinal))
+		{
+			Sources.FirstOrDefault(source => string.Equals(source.Id, _mediaDeckSourceId, StringComparison.Ordinal))
+				?.ClearMediaDeck();
+		}
+
+		_mediaDeckSourceId = sourceId;
+		if (sourceId is null)
+			return;
+
+		var source = Sources.FirstOrDefault(candidate => string.Equals(candidate.Id, sourceId, StringComparison.Ordinal));
+		if (source is null)
+			return;
+
+		var format = snapshot.Probe is null
+			? source.Format
+			: $"{snapshot.Probe.VideoFormat.Width}×{snapshot.Probe.VideoFormat.Height} {snapshot.Probe.VideoFormat.FrameRate}";
+		var remaining = snapshot.Transport is null
+			? "—"
+			: MediaTimelineTimecode.FormatFrame(
+				snapshot.Transport.Position.TotalFrames - snapshot.Transport.Position.CurrentFrame,
+				snapshot.Transport.Position.FrameRate);
+		source.ApplyMediaDeck(
+			snapshot.State.ToString().ToUpperInvariant(),
+			format,
+			remaining,
+			snapshot.Probe?.FileName);
+	}
+
 
 	private void MarkStale(string detail)
 	{
