@@ -14,6 +14,8 @@ The recovery model preserves the existing ownership rules:
 
 Process Recovery & Supervision builds on the durable checkpoints and causal Production Journal introduced by Durable Persistence & Journal.
 
+The product-level `rtaime.exe` AppHost does not change these authority rules. It may start or adopt ControlHost and observe recovery/readiness state, but RuntimeHost and AIHost supervision remains owned by ControlHost. AppHost never performs Runtime authority reconciliation itself.
+
 ## Failure matrix
 
 | Failure | Continuing responsibility | Recovery action | Authority rule |
@@ -23,7 +25,7 @@ Process Recovery & Supervision builds on the durable checkpoints and causal Prod
 | AIHost process lost | core Control/Runtime production continues | optional local supervisor restarts AIHost; inference/fallback policy reconnects independently | AIHost never advances Production Revision |
 | RuntimeHost process lost | ControlHost keeps last committed authority and becomes degraded | optional local supervisor restarts RuntimeHost; ControlHost queries and reconciles execution | mutations pause while Runtime is unavailable; recovery does not advance authority revision |
 | RuntimeHost replacement | ControlHost detects a new HostInstanceId | compare Runtime committed AuthoritySnapshot with durable/in-memory Control authority and reconcile | matching authority is adopted, missing/older authority is reapplied, newer/foreign authority fails closed |
-| ControlHost process lost | already committed Runtime execution may continue independently | OS/service manager restarts ControlHost; checkpoint and journal integrity are verified; durable authority is restored | Control restart never silently creates revision 0 when durable authority exists |
+| ControlHost process lost | already committed Runtime execution may continue independently | AppHost reports application failure; an explicit application/administrative or operating-system lifecycle restart starts ControlHost, verifies checkpoint/journal integrity and restores durable authority | Control restart never silently creates revision 0 when durable authority exists |
 | ControlHost replacement | Operator sees a new HostInstanceId | full snapshot is mandatory before another mutation | old StateVersion/session continuity is discarded |
 | Control/Runtime recovery disagreement | no automatic authority rewrite | remain degraded and emit `recovery.runtime.conflict` | Runtime authority ahead of or foreign to durable Control authority is never overwritten automatically |
 
@@ -106,7 +108,7 @@ RTAIME_SUPERVISION_MAX_START_ATTEMPTS
 
 If an endpoint is already present, the supervisor adopts it and does not launch a duplicate process. Only a process launched by the current supervisor instance is terminated during orderly supervisor disposal.
 
-A hard ControlHost process loss does not automatically terminate an already-running RuntimeHost or AIHost. Top-level ControlHost restart is therefore deliberately assigned to the operating system/service manager. This prevents ControlHost supervision ownership from becoming a hidden Runtime continuity dependency.
+A hard ControlHost process loss does not automatically terminate an already-running RuntimeHost or AIHost. The product AppHost observes that loss as a failed application lifecycle but does not automatically create a replacement ControlHost. Recovery therefore remains an explicit application/administrative or operating-system lifecycle action. This prevents ControlHost supervision ownership from becoming a hidden Runtime continuity dependency.
 
 Restart attempts are bounded. Exhausting the configured start budget reports `Failed` and continues endpoint probing without an unbounded crash loop.
 

@@ -9,7 +9,7 @@ public sealed class RepositoryArchitectureTests
     {
         var repo = RepositorySnapshot.Load();
 
-        Assert.Equal(28, repo.Projects.Count);
+        Assert.Equal(29, repo.Projects.Count);
         Assert.Equal(
             ArchitectureSpec.AllProjects.OrderBy(x => x, StringComparer.Ordinal),
             repo.Projects.Keys.OrderBy(x => x, StringComparer.Ordinal));
@@ -25,7 +25,7 @@ public sealed class RepositoryArchitectureTests
             .OrderBy(x => x, StringComparer.Ordinal)
             .ToArray();
 
-        Assert.Equal(28, entries.Length);
+        Assert.Equal(29, entries.Length);
         Assert.Equal(
             ArchitectureSpec.AllProjects.OrderBy(x => x, StringComparer.Ordinal),
             entries);
@@ -174,6 +174,7 @@ public sealed class RepositoryArchitectureTests
     [InlineData("rtaime.Media.Contracts", "rtaime.Provider.Gpu", false, false, true, "contract-to-implementation")]
     [InlineData("rtaime.Operator", "rtaime.Runtime", false, false, false, "operator-bypass")]
     [InlineData("rtaime.ControlHost", "rtaime.RuntimeHost", false, false, false, "host-to-host")]
+    [InlineData("rtaime.AppHost", "rtaime.ControlHost", false, false, false, "host-to-host")]
     public void Negative_architecture_fixtures_are_rejected(
         string source,
         string target,
@@ -202,7 +203,7 @@ internal static class ArchitecturePolicy
 {
     private static readonly HashSet<string> Hosts = new(StringComparer.Ordinal)
     {
-        "rtaime.ControlHost", "rtaime.RuntimeHost", "rtaime.AIHost", "rtaime.Operator"
+        "rtaime.AppHost", "rtaime.ControlHost", "rtaime.RuntimeHost", "rtaime.AIHost", "rtaime.Operator"
     };
 
     private static readonly HashSet<string> Providers = new(StringComparer.Ordinal)
@@ -392,6 +393,7 @@ internal static class ArchitectureSpec
         "src/Providers/rtaime.Provider.Gpu/rtaime.Provider.Gpu.csproj",
         "src/Providers/rtaime.Provider.Inference/rtaime.Provider.Inference.csproj",
         "src/Client/rtaime.Client/rtaime.Client.csproj",
+        "src/Hosts/rtaime.AppHost/rtaime.AppHost.csproj",
         "src/Hosts/rtaime.ControlHost/rtaime.ControlHost.csproj",
         "src/Hosts/rtaime.RuntimeHost/rtaime.RuntimeHost.csproj",
         "src/Hosts/rtaime.AIHost/rtaime.AIHost.csproj",
@@ -424,6 +426,7 @@ internal static class ArchitectureSpec
         ["src/Providers/rtaime.Provider.Gpu/rtaime.Provider.Gpu.csproj"] = new[] { "src/rtaime.Core/rtaime.Core.csproj", "src/Contracts/rtaime.Media.Contracts/rtaime.Media.Contracts.csproj", "src/Contracts/rtaime.Provider.Contracts/rtaime.Provider.Contracts.csproj" },
         ["src/Providers/rtaime.Provider.Inference/rtaime.Provider.Inference.csproj"] = new[] { "src/rtaime.Core/rtaime.Core.csproj", "src/Contracts/rtaime.AI.Contracts/rtaime.AI.Contracts.csproj", "src/Contracts/rtaime.Media.Contracts/rtaime.Media.Contracts.csproj", "src/Contracts/rtaime.Provider.Contracts/rtaime.Provider.Contracts.csproj" },
         ["src/Client/rtaime.Client/rtaime.Client.csproj"] = new[] { "src/rtaime.Core/rtaime.Core.csproj", "src/Contracts/rtaime.Control.Contracts/rtaime.Control.Contracts.csproj", "src/Contracts/rtaime.Media.Contracts/rtaime.Media.Contracts.csproj" },
+        ["src/Hosts/rtaime.AppHost/rtaime.AppHost.csproj"] = Array.Empty<string>(),
         ["src/Hosts/rtaime.ControlHost/rtaime.ControlHost.csproj"] = new[] { "src/Control/rtaime.Control/rtaime.Control.csproj", "src/Persistence/rtaime.Persistence/rtaime.Persistence.csproj", "src/Contracts/rtaime.Control.Contracts/rtaime.Control.Contracts.csproj", "src/Contracts/rtaime.Runtime.Contracts/rtaime.Runtime.Contracts.csproj" },
         ["src/Hosts/rtaime.RuntimeHost/rtaime.RuntimeHost.csproj"] = new[] { "src/Runtime/rtaime.Runtime/rtaime.Runtime.csproj", "src/Media/rtaime.Media/rtaime.Media.csproj", "src/Recording/rtaime.Recording/rtaime.Recording.csproj", "src/Providers/rtaime.Provider.VirtualMedia/rtaime.Provider.VirtualMedia.csproj", "src/Providers/rtaime.Provider.Gpu/rtaime.Provider.Gpu.csproj", "src/Contracts/rtaime.Runtime.Contracts/rtaime.Runtime.Contracts.csproj" },
         ["src/Hosts/rtaime.AIHost/rtaime.AIHost.csproj"] = new[] { "src/AI/rtaime.AI/rtaime.AI.csproj", "src/Providers/rtaime.Provider.Inference/rtaime.Provider.Inference.csproj", "src/Contracts/rtaime.AI.Contracts/rtaime.AI.Contracts.csproj" },

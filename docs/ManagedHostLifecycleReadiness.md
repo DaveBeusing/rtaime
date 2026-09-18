@@ -18,7 +18,9 @@ ControlHost
 Operator = interactive client, not a background managed service
 ```
 
-ControlHost is the only top-level process started by the lifecycle controller. Existing `ControlHostChildSupervision` remains authoritative for local RuntimeHost and AIHost launch, adoption, endpoint readiness and bounded restart attempts.
+ControlHost is the only top-level service process started by the lifecycle controller. Existing `ControlHostChildSupervision` remains authoritative for local RuntimeHost and AIHost launch, adoption, endpoint readiness and bounded restart attempts.
+
+The product-level `rtaime.exe` AppHost sits above this boundary. It may start or adopt ControlHost and launch Operator after qualified readiness, but it does not directly supervise RuntimeHost or AIHost. The PowerShell lifecycle controller remains available for deployment, administration and qualification.
 
 ## Lifecycle controller
 
@@ -226,7 +228,7 @@ Managed Host Lifecycle Readiness does not implement or claim:
 - unattended top-level ControlHost restart,
 - clustering or multi-node failover,
 - remote host orchestration,
-- Operator desktop auto-launch,
+- Operator desktop auto-launch from the administrative PowerShell lifecycle controller (product startup is provided separately by `rtaime.exe`),
 - Production Package activation,
 - formal hardware qualification,
 - formal CRA conformity.

@@ -58,5 +58,9 @@
 	"documentationRoot": "docs",
 	"schemaRoot": "schemas",
 	"trustedReleaseKeys": "build/release/trusted-release-keys.json",
-	"installationReserveBytes": 268435456
+	"installationReserveBytes": 268435456,
+	"applicationEntryPoint": {
+		"productDirectory": "rtaime",
+		"executable": "rtaime.exe"
+	}
 }

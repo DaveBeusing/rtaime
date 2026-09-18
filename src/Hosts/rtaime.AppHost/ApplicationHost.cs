@@ -1,0 +1,611 @@
+// Copyright (c) Dave Beusing <david.beusing@gmail.com>.
+
+using System.Diagnostics;
+using System.IO.Pipes;
+using System.Text.Json;
+
+namespace rtaime.AppHost;
+
+public enum ApplicationStartupProfile
+{
+	Interactive,
+	Showcase,
+	HeadlessEngine
+}
+
+public enum ApplicationLifecycleState
+{
+	Stopped,
+	Starting,
+	Healthy,
+	Degraded,
+	Recovering,
+	Failed,
+	Stopping
+}
+
+public sealed record ApplicationEndpointSet(string Control, string Runtime, string AI);
+
+public sealed record ApplicationLifecyclePolicy(
+	ApplicationEndpointSet Endpoints,
+	TimeSpan StartupTimeout,
+	TimeSpan ProbeTimeout,
+	TimeSpan ProbeInterval,
+	TimeSpan ChildRestartBackoff,
+	int ChildMaxStartAttempts,
+	TimeSpan ShutdownTimeout)
+{
+	public static ApplicationLifecyclePolicy Load(string installRoot, string? explicitPath = null)
+	{
+		var candidates = new[]
+		{
+			explicitPath,
+			Path.Combine(AppContext.BaseDirectory, "host-lifecycle-policy.json"),
+			Path.Combine(installRoot, "tools", "host-lifecycle-policy.json")
+		}.Where(path => !string.IsNullOrWhiteSpace(path)).Select(path => Path.GetFullPath(path!)).Distinct(StringComparer.OrdinalIgnoreCase);
+
+		var policyPath = candidates.FirstOrDefault(File.Exists)
+			?? throw new FileNotFoundException("Managed host lifecycle policy was not found.");
+
+		using var document = JsonDocument.Parse(File.ReadAllText(policyPath));
+		var root = document.RootElement;
+		if (!root.TryGetProperty("schemaVersion", out var schema) || schema.GetString() != "1.0")
+			throw new InvalidDataException("Unsupported managed host lifecycle policy schema version.");
+
+		var endpoints = root.GetProperty("endpoints");
+		var startup = root.GetProperty("startup");
+		var shutdown = root.GetProperty("shutdown");
+		return new ApplicationLifecyclePolicy(
+			new ApplicationEndpointSet(
+				endpoints.GetProperty("control").GetString() ?? throw new InvalidDataException("Control endpoint is missing."),
+				endpoints.GetProperty("runtime").GetString() ?? throw new InvalidDataException("Runtime endpoint is missing."),
+				endpoints.GetProperty("ai").GetString() ?? throw new InvalidDataException("AI endpoint is missing.")),
+			TimeSpan.FromMilliseconds(ReadInt(startup, "timeoutMs", 30000)),
+			TimeSpan.FromMilliseconds(ReadInt(startup, "probeTimeoutMs", 500)),
+			TimeSpan.FromMilliseconds(ReadInt(startup, "probeIntervalMs", 200)),
+			TimeSpan.FromMilliseconds(ReadInt(startup, "childRestartBackoffMs", 500)),
+			ReadInt(startup, "childMaxStartAttempts", 5),
+			TimeSpan.FromMilliseconds(ReadInt(shutdown, "timeoutMs", 15000)));
+	}
+
+	private static int ReadInt(JsonElement element, string name, int fallback) =>
+		element.TryGetProperty(name, out var value) && value.TryGetInt32(out var result) ? result : fallback;
+}
+
+public sealed record ApplicationHostOptions(
+	ApplicationStartupProfile Profile,
+	string InstallRoot,
+	string StateRoot,
+	string WorkRoot,
+	string InstanceId,
+	bool RequireAI,
+	bool DisposableInteractiveSession,
+	ApplicationLifecyclePolicy Policy)
+{
+	public string ReadinessPath => Path.Combine(WorkRoot, "control-readiness.json");
+	public string StopPath => Path.Combine(WorkRoot, "control-stop.signal");
+	public string LegacyLifecycleStatePath => Path.Combine($"{InstallRoot}.host-lifecycle", "lifecycle-state.json");
+
+	public ApplicationEndpointSet Endpoints
+	{
+		get
+		{
+			if (InstanceId == "default") return Policy.Endpoints;
+			return new ApplicationEndpointSet(
+				WithInstance(Policy.Endpoints.Control),
+				WithInstance(Policy.Endpoints.Runtime),
+				WithInstance(Policy.Endpoints.AI));
+		}
+	}
+
+	public static ApplicationHostOptions Load(string[] args)
+	{
+		ArgumentNullException.ThrowIfNull(args);
+		var values = args
+			.Where(argument => argument.StartsWith("--", StringComparison.Ordinal) && argument.Contains('='))
+			.Select(argument => argument[2..].Split('=', 2))
+			.ToDictionary(parts => parts[0], parts => parts[1], StringComparer.OrdinalIgnoreCase);
+
+		string Resolve(string name, string environment, string fallback) =>
+			values.TryGetValue(name, out var value) && !string.IsNullOrWhiteSpace(value)
+				? value
+				: Environment.GetEnvironmentVariable(environment) is { Length: > 0 } configured ? configured : fallback;
+
+		var profileText = Resolve("profile", "RTAIME_STARTUP_PROFILE", "Interactive");
+		if (!Enum.TryParse<ApplicationStartupProfile>(profileText, true, out var profile))
+			throw new ArgumentException($"Unknown startup profile '{profileText}'.", nameof(args));
+
+		var installRoot = Path.GetFullPath(Resolve("install-root", "RTAIME_INSTALL_ROOT", AppContext.BaseDirectory));
+		var instanceId = Resolve("instance-id", "RTAIME_INSTANCE_ID", "default");
+		if (!System.Text.RegularExpressions.Regex.IsMatch(instanceId, "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"))
+			throw new ArgumentException("InstanceId must contain only letters, digits, '.', '_' or '-' and be at most 64 characters.", nameof(args));
+
+		var stateFallback = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "rtaime");
+		var stateRoot = Path.GetFullPath(Resolve("state-root", "RTAIME_STATE_ROOT", stateFallback));
+		var workFallback = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "rtaime", "apphost", instanceId);
+		var workRoot = Path.GetFullPath(Resolve("work-root", "RTAIME_APPHOST_WORK_ROOT", workFallback));
+		var policyPath = Resolve("policy", "RTAIME_LIFECYCLE_POLICY", string.Empty);
+		var policy = ApplicationLifecyclePolicy.Load(installRoot, string.IsNullOrWhiteSpace(policyPath) ? null : policyPath);
+		var requireAI = !args.Contains("--no-ai", StringComparer.OrdinalIgnoreCase);
+		var disposable = args.Contains("--disposable", StringComparer.OrdinalIgnoreCase);
+
+		return new ApplicationHostOptions(profile, installRoot, stateRoot, workRoot, instanceId, requireAI, disposable, policy);
+	}
+
+	private string WithInstance(string endpoint) =>
+		endpoint.EndsWith(".default", StringComparison.Ordinal)
+			? endpoint[..^".default".Length] + "." + InstanceId
+			: endpoint + "." + InstanceId;
+}
+
+public sealed record ApplicationProcessSpec(
+	string ArtifactPath,
+	string WorkingDirectory,
+	IReadOnlyList<string> Arguments,
+	IReadOnlyDictionary<string, string> Environment,
+	bool CreateNoWindow);
+
+public interface IApplicationHostPlatform
+{
+	DateTimeOffset UtcNow { get; }
+	string FindProductArtifact(string installRoot, string baseName);
+	int StartProcess(ApplicationProcessSpec spec);
+	bool IsProcessAlive(int processId);
+	void KillProcessTree(int processId);
+	bool FileExists(string path);
+	string ReadAllText(string path);
+	void WriteAllText(string path, string content);
+	void DeleteFile(string path);
+	void CreateDirectory(string path);
+	Task<bool> ProbePipeAsync(string endpoint, TimeSpan timeout, CancellationToken cancellationToken);
+	Task DelayAsync(TimeSpan delay, CancellationToken cancellationToken);
+}
+
+public sealed class SystemApplicationHostPlatform : IApplicationHostPlatform
+{
+	public DateTimeOffset UtcNow => DateTimeOffset.UtcNow;
+
+	public string FindProductArtifact(string installRoot, string baseName)
+	{
+		var productRoot = Directory.Exists(Path.Combine(installRoot, "product")) ? Path.Combine(installRoot, "product") : installRoot;
+		if (!Directory.Exists(productRoot)) throw new DirectoryNotFoundException($"Product payload was not found at '{productRoot}'.");
+
+		foreach (var extension in new[] { ".exe", ".dll" })
+		{
+			var matches = Directory.EnumerateFiles(productRoot, baseName + extension, SearchOption.AllDirectories).ToArray();
+			if (matches.Length == 1) return matches[0];
+			if (matches.Length > 1) throw new InvalidOperationException($"Expected one '{baseName + extension}' in product payload; found {matches.Length}.");
+		}
+
+		throw new FileNotFoundException($"Product artifact '{baseName}' was not found below '{productRoot}'.");
+	}
+
+	public int StartProcess(ApplicationProcessSpec spec)
+	{
+		var startInfo = new ProcessStartInfo
+		{
+			UseShellExecute = false,
+			CreateNoWindow = spec.CreateNoWindow,
+			WorkingDirectory = spec.WorkingDirectory
+		};
+		if (string.Equals(Path.GetExtension(spec.ArtifactPath), ".dll", StringComparison.OrdinalIgnoreCase))
+		{
+			startInfo.FileName = "dotnet";
+			startInfo.ArgumentList.Add(spec.ArtifactPath);
+		}
+		else
+		{
+			startInfo.FileName = spec.ArtifactPath;
+		}
+
+		foreach (var argument in spec.Arguments) startInfo.ArgumentList.Add(argument);
+		foreach (var pair in spec.Environment) startInfo.Environment[pair.Key] = pair.Value;
+
+		using var process = Process.Start(startInfo) ?? throw new InvalidOperationException($"Failed to start '{spec.ArtifactPath}'.");
+		return process.Id;
+	}
+
+	public bool IsProcessAlive(int processId)
+	{
+		try
+		{
+			using var process = Process.GetProcessById(processId);
+			return !process.HasExited;
+		}
+		catch (ArgumentException)
+		{
+			return false;
+		}
+	}
+
+	public void KillProcessTree(int processId)
+	{
+		try
+		{
+			using var process = Process.GetProcessById(processId);
+			if (!process.HasExited) process.Kill(entireProcessTree: true);
+		}
+		catch (ArgumentException)
+		{
+		}
+	}
+
+	public bool FileExists(string path) => File.Exists(path);
+	public string ReadAllText(string path) => File.ReadAllText(path);
+
+	public void WriteAllText(string path, string content)
+	{
+		var directory = Path.GetDirectoryName(path);
+		if (!string.IsNullOrWhiteSpace(directory)) Directory.CreateDirectory(directory);
+		File.WriteAllText(path, content);
+	}
+
+	public void DeleteFile(string path)
+	{
+		try
+		{
+			if (File.Exists(path)) File.Delete(path);
+		}
+		catch (IOException)
+		{
+		}
+	}
+
+	public void CreateDirectory(string path) => Directory.CreateDirectory(path);
+
+	public async Task<bool> ProbePipeAsync(string endpoint, TimeSpan timeout, CancellationToken cancellationToken)
+	{
+		using var pipe = new NamedPipeClientStream(".", endpoint, PipeDirection.InOut, PipeOptions.Asynchronous);
+		try
+		{
+			await pipe.ConnectAsync((int)Math.Max(1, timeout.TotalMilliseconds), cancellationToken).ConfigureAwait(false);
+			return pipe.IsConnected;
+		}
+		catch (Exception exception) when (exception is IOException or TimeoutException)
+		{
+			return false;
+		}
+	}
+
+	public Task DelayAsync(TimeSpan delay, CancellationToken cancellationToken) => Task.Delay(delay, cancellationToken);
+}
+
+public sealed record ApplicationSupervisionEvidence(string State, int? ProcessId);
+
+public sealed record ApplicationReadinessEvidence(
+	int ProcessId,
+	string State,
+	string Health,
+	string ControlEndpoint,
+	string RuntimeEndpoint,
+	string AIEndpoint,
+	ApplicationSupervisionEvidence? RuntimeSupervision,
+	ApplicationSupervisionEvidence? AISupervision)
+{
+	public static bool TryParse(string json, out ApplicationReadinessEvidence? evidence)
+	{
+		try
+		{
+			using var document = JsonDocument.Parse(json);
+			var root = document.RootElement;
+			evidence = new ApplicationReadinessEvidence(
+				root.GetProperty("processId").GetInt32(),
+				root.GetProperty("state").GetString() ?? string.Empty,
+				root.GetProperty("health").GetString() ?? string.Empty,
+				root.GetProperty("controlEndpoint").GetString() ?? string.Empty,
+				root.GetProperty("runtimeEndpoint").GetString() ?? string.Empty,
+				root.GetProperty("aiEndpoint").GetString() ?? string.Empty,
+				ReadSupervision(root, "runtimeSupervision"),
+				ReadSupervision(root, "aiSupervision"));
+			return true;
+		}
+		catch (Exception exception) when (exception is JsonException or InvalidOperationException or KeyNotFoundException)
+		{
+			evidence = null;
+			return false;
+		}
+	}
+
+	private static ApplicationSupervisionEvidence? ReadSupervision(JsonElement root, string name)
+	{
+		if (!root.TryGetProperty(name, out var value) || value.ValueKind == JsonValueKind.Null) return null;
+		int? processId = value.TryGetProperty("processId", out var process) && process.ValueKind == JsonValueKind.Number ? process.GetInt32() : null;
+		return new ApplicationSupervisionEvidence(value.GetProperty("state").GetString() ?? string.Empty, processId);
+	}
+}
+
+public sealed record ApplicationHostRunResult(
+	bool Success,
+	ApplicationStartupProfile Profile,
+	bool AdoptedControlHost,
+	int ControlProcessId);
+
+public sealed class UnifiedApplicationHost
+{
+	private readonly ApplicationHostOptions _options;
+	private readonly IApplicationHostPlatform _platform;
+	private int? _ownedControlProcessId;
+	private int? _controlProcessId;
+	private string? _activeReadinessPath;
+	private bool _adopted;
+
+	public UnifiedApplicationHost(ApplicationHostOptions options, IApplicationHostPlatform platform)
+	{
+		_options = options ?? throw new ArgumentNullException(nameof(options));
+		_platform = platform ?? throw new ArgumentNullException(nameof(platform));
+	}
+
+	public ApplicationLifecycleState State { get; private set; } = ApplicationLifecycleState.Stopped;
+	public bool OwnsControlLifecycle => _ownedControlProcessId is not null;
+	public event Action<ApplicationLifecycleState>? StateChanged;
+
+	public async Task<ApplicationHostRunResult> RunAsync(CancellationToken cancellationToken = default)
+	{
+		Transition(ApplicationLifecycleState.Starting);
+		try
+		{
+			_platform.CreateDirectory(_options.WorkRoot);
+			_platform.CreateDirectory(_options.StateRoot);
+
+			var ready = await FindHealthyReadinessAsync(cancellationToken).ConfigureAwait(false);
+			if (ready is null)
+			{
+				StartControlHost();
+				ready = await WaitForReadinessAsync(cancellationToken).ConfigureAwait(false);
+			}
+			else
+			{
+				_adopted = true;
+				_controlProcessId = ready.Value.Evidence.ProcessId;
+				_activeReadinessPath = ready.Value.Path;
+			}
+
+			Transition(ApplicationLifecycleState.Healthy);
+
+			if (_options.Profile == ApplicationStartupProfile.HeadlessEngine)
+			{
+				await ObserveHeadlessAsync(cancellationToken).ConfigureAwait(false);
+			}
+			else
+			{
+				var operatorProcessId = StartOperator();
+				await ObserveOperatorAsync(operatorProcessId, cancellationToken).ConfigureAwait(false);
+				if (_options.Profile == ApplicationStartupProfile.Showcase ||
+					(_options.Profile == ApplicationStartupProfile.Interactive && _options.DisposableInteractiveSession))
+				{
+					await StopOwnedControlAsync(CancellationToken.None).ConfigureAwait(false);
+				}
+			}
+
+			Transition(ApplicationLifecycleState.Stopped);
+			return new ApplicationHostRunResult(true, _options.Profile, _adopted, _controlProcessId ?? 0);
+		}
+		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+		{
+			await StopOwnedControlAsync(CancellationToken.None).ConfigureAwait(false);
+			Transition(ApplicationLifecycleState.Stopped);
+			return new ApplicationHostRunResult(true, _options.Profile, _adopted, _controlProcessId ?? 0);
+		}
+		catch
+		{
+			await StopOwnedControlAsync(CancellationToken.None).ConfigureAwait(false);
+			Transition(ApplicationLifecycleState.Failed);
+			throw;
+		}
+	}
+
+	private void StartControlHost()
+	{
+		var endpoints = _options.Endpoints;
+		var controlArtifact = _platform.FindProductArtifact(_options.InstallRoot, "rtaime.ControlHost");
+		var runtimeArtifact = _platform.FindProductArtifact(_options.InstallRoot, "rtaime.RuntimeHost");
+		var aiArtifact = _options.RequireAI ? _platform.FindProductArtifact(_options.InstallRoot, "rtaime.AIHost") : string.Empty;
+
+		_platform.DeleteFile(_options.ReadinessPath);
+		_platform.DeleteFile(_options.StopPath);
+
+		var environment = new Dictionary<string, string>(StringComparer.Ordinal)
+		{
+			["RTAIME_CONTROL_ENDPOINT"] = endpoints.Control,
+			["RTAIME_RUNTIME_ENDPOINT"] = endpoints.Runtime,
+			["RTAIME_AI_ENDPOINT"] = endpoints.AI,
+			["RTAIME_CONTROL_DURABILITY_ROOT"] = _options.StateRoot,
+			["RTAIME_RUNTIME_EXECUTABLE"] = runtimeArtifact,
+			["RTAIME_HOST_READINESS_FILE"] = _options.ReadinessPath,
+			["RTAIME_HOST_STOP_FILE"] = _options.StopPath,
+			["RTAIME_SUPERVISION_PROBE_TIMEOUT_MS"] = ((int)_options.Policy.ProbeTimeout.TotalMilliseconds).ToString(System.Globalization.CultureInfo.InvariantCulture),
+			["RTAIME_SUPERVISION_PROBE_INTERVAL_MS"] = ((int)_options.Policy.ProbeInterval.TotalMilliseconds).ToString(System.Globalization.CultureInfo.InvariantCulture),
+			["RTAIME_SUPERVISION_RESTART_BACKOFF_MS"] = ((int)_options.Policy.ChildRestartBackoff.TotalMilliseconds).ToString(System.Globalization.CultureInfo.InvariantCulture),
+			["RTAIME_SUPERVISION_MAX_START_ATTEMPTS"] = _options.Policy.ChildMaxStartAttempts.ToString(System.Globalization.CultureInfo.InvariantCulture)
+		};
+		if (_options.RequireAI) environment["RTAIME_AI_EXECUTABLE"] = aiArtifact;
+
+		var processId = _platform.StartProcess(new ApplicationProcessSpec(
+			controlArtifact,
+			Path.GetDirectoryName(controlArtifact) ?? _options.InstallRoot,
+			Array.Empty<string>(),
+			environment,
+			true));
+
+		_ownedControlProcessId = processId;
+		_controlProcessId = processId;
+		_activeReadinessPath = _options.ReadinessPath;
+	}
+
+	private int StartOperator()
+	{
+		var endpoints = _options.Endpoints;
+		var operatorArtifact = _platform.FindProductArtifact(_options.InstallRoot, "rtaime.Operator");
+		var environment = new Dictionary<string, string>(StringComparer.Ordinal)
+		{
+			["RTAIME_CONTROL_ENDPOINT"] = endpoints.Control,
+			["RTAIME_RUNTIME_ENDPOINT"] = endpoints.Runtime,
+			["RTAIME_AI_ENDPOINT"] = endpoints.AI,
+			["RTAIME_MONITOR_ENDPOINT"] = endpoints.Runtime + ".monitor"
+		};
+		return _platform.StartProcess(new ApplicationProcessSpec(
+			operatorArtifact,
+			Path.GetDirectoryName(operatorArtifact) ?? _options.InstallRoot,
+			Array.Empty<string>(),
+			environment,
+			false));
+	}
+
+	private async Task<(string Path, ApplicationReadinessEvidence Evidence)?> WaitForReadinessAsync(CancellationToken cancellationToken)
+	{
+		var deadline = _platform.UtcNow + _options.Policy.StartupTimeout;
+		while (_platform.UtcNow < deadline)
+		{
+			cancellationToken.ThrowIfCancellationRequested();
+			if (_controlProcessId is { } controlPid && !_platform.IsProcessAlive(controlPid))
+				throw new InvalidOperationException("ControlHost exited before qualified readiness.");
+
+			var ready = await FindHealthyReadinessAsync(cancellationToken).ConfigureAwait(false);
+			if (ready is not null)
+			{
+				_controlProcessId = ready.Value.Evidence.ProcessId;
+				_activeReadinessPath = ready.Value.Path;
+				return ready;
+			}
+			await _platform.DelayAsync(_options.Policy.ProbeInterval, cancellationToken).ConfigureAwait(false);
+		}
+
+		throw new TimeoutException("rtaime engine did not reach qualified readiness before the configured startup timeout.");
+	}
+
+	private async Task<(string Path, ApplicationReadinessEvidence Evidence)?> FindHealthyReadinessAsync(CancellationToken cancellationToken)
+	{
+		foreach (var path in GetReadinessCandidates())
+		{
+			if (!_platform.FileExists(path)) continue;
+			if (!ApplicationReadinessEvidence.TryParse(_platform.ReadAllText(path), out var evidence) || evidence is null) continue;
+			if (await IsHealthyAsync(evidence, cancellationToken).ConfigureAwait(false)) return (path, evidence);
+		}
+		return null;
+	}
+
+	private IEnumerable<string> GetReadinessCandidates()
+	{
+		yield return _options.ReadinessPath;
+		if (!_platform.FileExists(_options.LegacyLifecycleStatePath)) yield break;
+
+		string? legacyReadiness = null;
+		try
+		{
+			using var document = JsonDocument.Parse(_platform.ReadAllText(_options.LegacyLifecycleStatePath));
+			if (document.RootElement.TryGetProperty("readinessPath", out var value))
+				legacyReadiness = value.GetString();
+		}
+		catch (JsonException)
+		{
+		}
+
+		if (!string.IsNullOrWhiteSpace(legacyReadiness))
+			yield return Path.GetFullPath(legacyReadiness);
+	}
+
+	private async Task<bool> IsHealthyAsync(ApplicationReadinessEvidence evidence, CancellationToken cancellationToken)
+	{
+		var endpoints = _options.Endpoints;
+		if (!_platform.IsProcessAlive(evidence.ProcessId)) return false;
+		if (!string.Equals(evidence.State, "READY", StringComparison.OrdinalIgnoreCase) ||
+			!string.Equals(evidence.Health, "HEALTHY", StringComparison.OrdinalIgnoreCase)) return false;
+		if (!string.Equals(evidence.ControlEndpoint, endpoints.Control, StringComparison.Ordinal) ||
+			!string.Equals(evidence.RuntimeEndpoint, endpoints.Runtime, StringComparison.Ordinal) ||
+			!string.Equals(evidence.AIEndpoint, endpoints.AI, StringComparison.Ordinal)) return false;
+		if (evidence.RuntimeSupervision is null ||
+			!string.Equals(evidence.RuntimeSupervision.State, "HEALTHY", StringComparison.OrdinalIgnoreCase)) return false;
+		if (evidence.RuntimeSupervision.ProcessId is { } runtimePid && !_platform.IsProcessAlive(runtimePid)) return false;
+		if (_options.RequireAI)
+		{
+			if (evidence.AISupervision is null ||
+				!string.Equals(evidence.AISupervision.State, "HEALTHY", StringComparison.OrdinalIgnoreCase)) return false;
+			if (evidence.AISupervision.ProcessId is { } aiPid && !_platform.IsProcessAlive(aiPid)) return false;
+		}
+
+		if (!await _platform.ProbePipeAsync(endpoints.Control, _options.Policy.ProbeTimeout, cancellationToken).ConfigureAwait(false)) return false;
+		if (!await _platform.ProbePipeAsync(endpoints.Runtime, _options.Policy.ProbeTimeout, cancellationToken).ConfigureAwait(false)) return false;
+		return !_options.RequireAI ||
+			await _platform.ProbePipeAsync(endpoints.AI, _options.Policy.ProbeTimeout, cancellationToken).ConfigureAwait(false);
+	}
+
+	private async Task ObserveOperatorAsync(int operatorProcessId, CancellationToken cancellationToken)
+	{
+		DateTimeOffset? degradedSince = null;
+		while (_platform.IsProcessAlive(operatorProcessId))
+		{
+			cancellationToken.ThrowIfCancellationRequested();
+			if (_controlProcessId is { } controlPid && !_platform.IsProcessAlive(controlPid))
+				throw new InvalidOperationException("ControlHost stopped while Operator was active.");
+
+			var readiness = await FindHealthyReadinessAsync(cancellationToken).ConfigureAwait(false);
+			if (readiness is null)
+			{
+				degradedSince ??= _platform.UtcNow;
+				Transition(ApplicationLifecycleState.Degraded);
+				if (_platform.UtcNow - degradedSince >= _options.Policy.StartupTimeout)
+					throw new TimeoutException("Engine readiness did not recover within the configured recovery window.");
+			}
+			else if (degradedSince is not null)
+			{
+				Transition(ApplicationLifecycleState.Recovering);
+				degradedSince = null;
+				Transition(ApplicationLifecycleState.Healthy);
+			}
+			await _platform.DelayAsync(_options.Policy.ProbeInterval, cancellationToken).ConfigureAwait(false);
+		}
+	}
+
+	private async Task ObserveHeadlessAsync(CancellationToken cancellationToken)
+	{
+		DateTimeOffset? degradedSince = null;
+		while (true)
+		{
+			cancellationToken.ThrowIfCancellationRequested();
+			if (_controlProcessId is { } controlPid && !_platform.IsProcessAlive(controlPid))
+				throw new InvalidOperationException("ControlHost stopped while HeadlessEngine profile was active.");
+
+			var readiness = await FindHealthyReadinessAsync(cancellationToken).ConfigureAwait(false);
+			if (readiness is null)
+			{
+				degradedSince ??= _platform.UtcNow;
+				Transition(ApplicationLifecycleState.Degraded);
+				if (_platform.UtcNow - degradedSince >= _options.Policy.StartupTimeout)
+					throw new TimeoutException("Engine readiness did not recover within the configured recovery window.");
+			}
+			else if (degradedSince is not null)
+			{
+				Transition(ApplicationLifecycleState.Recovering);
+				degradedSince = null;
+				Transition(ApplicationLifecycleState.Healthy);
+			}
+			else
+			{
+				Transition(ApplicationLifecycleState.Healthy);
+			}
+
+			await _platform.DelayAsync(_options.Policy.ProbeInterval, cancellationToken).ConfigureAwait(false);
+		}
+	}
+
+	private async Task StopOwnedControlAsync(CancellationToken cancellationToken)
+	{
+		if (_ownedControlProcessId is not { } processId) return;
+		Transition(ApplicationLifecycleState.Stopping);
+		_platform.WriteAllText(_options.StopPath, $"stopRequestedAtUtc={_platform.UtcNow:O}{Environment.NewLine}");
+		var deadline = _platform.UtcNow + _options.Policy.ShutdownTimeout;
+		while (_platform.UtcNow < deadline && _platform.IsProcessAlive(processId))
+			await _platform.DelayAsync(TimeSpan.FromMilliseconds(100), cancellationToken).ConfigureAwait(false);
+		if (_platform.IsProcessAlive(processId)) _platform.KillProcessTree(processId);
+		_platform.DeleteFile(_options.ReadinessPath);
+		_platform.DeleteFile(_options.StopPath);
+		_ownedControlProcessId = null;
+	}
+
+	private void Transition(ApplicationLifecycleState next)
+	{
+		if (State == next) return;
+		State = next;
+		StateChanged?.Invoke(next);
+	}
+}

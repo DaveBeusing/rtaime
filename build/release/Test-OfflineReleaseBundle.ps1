@@ -245,6 +245,11 @@ try {
 	}
 
 	$requiredBundleFiles = @(
+		"rtaime.exe",
+		"rtaime.dll",
+		"rtaime.deps.json",
+		"rtaime.runtimeconfig.json",
+		"host-lifecycle-policy.json",
 		"schemas/release/v1/offline-bundle-manifest.schema.json",
 		"schemas/release/v1/offline-bundle-attestation.schema.json",
 		"schemas/release/v1/runtime-requirements.schema.json",

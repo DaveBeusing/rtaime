@@ -46,6 +46,8 @@ Assert-Condition (-not (Test-Path -LiteralPath $repositoryToolsPath)) "Repositor
 
 $policy = Get-Content -LiteralPath $policyPath -Raw | ConvertFrom-Json
 Assert-Condition ([string]$policy.schemaVersion -eq "1.0") "Unsupported offline bundle policy schema version."
+Assert-Condition ([string]$policy.applicationEntryPoint.productDirectory -eq "rtaime") "Canonical application host must come from the rtaime product payload."
+Assert-Condition ([string]$policy.applicationEntryPoint.executable -eq "rtaime.exe") "Canonical installed application entry point must be rtaime.exe."
 
 foreach ($directoryProperty in @("schemaRoot", "documentationRoot")) {
 	$relativePath = [string]$policy.$directoryProperty
@@ -80,6 +82,7 @@ foreach ($tool in $offlineTools) {
 }
 
 $builder = Get-Content -LiteralPath $builderPath -Raw
+Assert-Condition ($builder -match 'applicationEntryPoint' -and $builder -match 'applicationHostSource') "Offline bundle builder must materialize the canonical application host at bundle root."
 Assert-Condition ($builder -match 'policy\.offlineTools') "Offline bundle builder must consume offlineTools from policy."
 Assert-Condition ($builder -match 'Join-Path \$bundleRoot "tools"') "Offline bundle builder must materialize the generated bundle tools/ directory."
 Assert-Condition ($builder -match 'toolOutputNames') "Offline bundle builder must reject duplicate flattened tool names."

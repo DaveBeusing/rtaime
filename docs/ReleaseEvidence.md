@@ -85,6 +85,7 @@ Physical qualification evidence is stricter: a qualification binding must name t
 ```text
 artifacts/release-evidence/
 ├─ product/
+│  ├─ rtaime/
 │  ├─ rtaime.ControlHost/
 │  ├─ rtaime.RuntimeHost/
 │  ├─ rtaime.AIHost/

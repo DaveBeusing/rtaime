@@ -34,6 +34,7 @@
     <Project Path="src/Client/rtaime.Client/rtaime.Client.csproj" />
   </Folder>
   <Folder Name="/Hosts/">
+    <Project Path="src/Hosts/rtaime.AppHost/rtaime.AppHost.csproj" />
     <Project Path="src/Hosts/rtaime.ControlHost/rtaime.ControlHost.csproj" />
     <Project Path="src/Hosts/rtaime.RuntimeHost/rtaime.RuntimeHost.csproj" />
     <Project Path="src/Hosts/rtaime.AIHost/rtaime.AIHost.csproj" />

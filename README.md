@@ -27,7 +27,7 @@ The repository contains the V1 production-shaped architecture and funding-showca
 - Program Recording;
 - governed AI showcase integration;
 - Runtime/Provider health and monitoring;
-- managed ControlHost/RuntimeHost/AIHost lifecycle;
+- unified `rtaime.exe` startup with managed ControlHost/RuntimeHost/AIHost lifecycle;
 - release, offline packaging and qualification evidence.
 
 Hardware and production-readiness claims remain limited to evidence explicitly recorded by the qualification system.
@@ -65,30 +65,41 @@ dotnet build rtaime.slnx --configuration Debug
 
 Repository automation scripts live under `build/`; the repository does not use a root `tools/` source directory. For the full build/publish matrix, see [Build, Publish & Test](docs/BuildAndTest.md).
 
-## Single-file EXE
+## Application startup and single-file EXE
 
-rtaime V1 intentionally uses separate executable hosts. Single-file publishing therefore creates a self-contained EXE **per host**, preserving the production topology.
+The canonical product entry point is:
 
-Example: self-contained Windows x64 Operator:
+```text
+rtaime.exe
+```
+
+`rtaime.exe` is the thin AppHost. It starts or adopts the qualified ControlHost lifecycle, waits for engine readiness and then opens Operator for the `Interactive` profile. It does **not** merge the service hosts into one process:
+
+```text
+rtaime.exe / AppHost
+├── starts or adopts ControlHost
+│   ├── supervises RuntimeHost
+│   └── supervises AIHost
+└── starts Operator after qualified readiness
+```
+
+Supported startup profiles are `Interactive`, `Showcase` and `HeadlessEngine`.
+
+The AppHost itself can be published as a self-contained single-file Windows executable:
 
 ```powershell
-dotnet publish src/Hosts/rtaime.Operator/rtaime.Operator.csproj `
+dotnet publish src/Hosts/rtaime.AppHost/rtaime.AppHost.csproj `
 	--configuration Release `
 	--runtime win-x64 `
 	--self-contained true `
 	-p:PublishSingleFile=true `
 	-p:IncludeNativeLibrariesForSelfExtract=true `
-	-p:IncludeAllContentForSelfExtract=true `
 	-p:DebugType=None `
 	-p:DebugSymbols=false `
-	--output artifacts/publish/rtaime.Operator-win-x64
+	--output artifacts/publish/rtaime-win-x64
 ```
 
-The same single-file model is available for `rtaime.ControlHost`, `rtaime.RuntimeHost` and `rtaime.AIHost`. The Operator command additionally uses .NET's compatibility extraction mode because the current Demo Production assets are resolved from files below `AppContext.BaseDirectory`; see `docs/BuildAndTest.md` for the boundary and qualification note.
-
-A single monolithic executable containing all four processes is **not** the current architecture.
-
-The authoritative release bundle remains separately qualified; see [Release Packaging & Offline Deployment](docs/ReleasePackagingAndOfflineDeployment.md).
+ControlHost, RuntimeHost, AIHost and Operator remain separate executable artifacts internally. A single monolithic process is not the V1 architecture. See [Application Startup](docs/ApplicationStartup.md) and [Build, Publish & Test](docs/BuildAndTest.md).
 
 ## Tests
 
@@ -132,6 +143,7 @@ Start here:
 
 - [Product Identity](docs/ProductIdentity.md) — naming, pronunciation, acronym and slogan.
 - [Build, Publish & Test](docs/BuildAndTest.md) — developer build matrix, single-file publishing and test runs.
+- [Application Startup](docs/ApplicationStartup.md) — canonical `rtaime.exe` startup, profiles, readiness and ownership semantics.
 - [Bootstrap Architecture](docs/BootstrapArchitecture.md) — solution structure and architecture guardrails.
 - [Repository Governance](docs/RepositoryGovernance.md) — required gates and integration policy.
 - [V1 End-to-End Proof](docs/V1EndToEndProof.md) — production-shaped end-to-end execution proof.

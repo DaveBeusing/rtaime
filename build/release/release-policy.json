@@ -32,6 +32,11 @@
 	},
 	"hosts": [
 		{
+			"name": "rtaime",
+			"targetFramework": "net10.0",
+			"outputPath": "src/Hosts/rtaime.AppHost/bin/{configuration}/net10.0"
+		},
+		{
 			"name": "rtaime.ControlHost",
 			"targetFramework": "net10.0",
 			"outputPath": "src/Hosts/rtaime.ControlHost/bin/{configuration}/net10.0"

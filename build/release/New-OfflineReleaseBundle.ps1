@@ -77,7 +77,10 @@ function Copy-DirectoryContent {
 
 function Get-PayloadRole {
 	param([Parameter(Mandatory)][string]$RelativePath)
-	if ($RelativePath.StartsWith("product/", [StringComparison]::OrdinalIgnoreCase)) { return "PRODUCT_PAYLOAD" }
+	if ($RelativePath.StartsWith("product/", [StringComparison]::OrdinalIgnoreCase) -or
+		$RelativePath -in @("rtaime.exe", "rtaime.dll", "rtaime.deps.json", "rtaime.runtimeconfig.json", "host-lifecycle-policy.json")) {
+		return "PRODUCT_PAYLOAD"
+	}
 	if ($RelativePath.StartsWith("release/", [StringComparison]::OrdinalIgnoreCase)) { return "RELEASE_EVIDENCE" }
 	if ($RelativePath.StartsWith("schemas/", [StringComparison]::OrdinalIgnoreCase)) { return "SCHEMA" }
 	if ($RelativePath.StartsWith("docs/", [StringComparison]::OrdinalIgnoreCase)) { return "DOCUMENTATION" }
@@ -126,6 +129,15 @@ $bundleRoot = Join-Path $outputRoot $bundleName
 New-Item -ItemType Directory -Path $bundleRoot -Force | Out-Null
 
 Copy-DirectoryContent -Source (Join-Path $evidenceRoot "product") -Destination (Join-Path $bundleRoot "product")
+
+$applicationEntryPoint = $policy.applicationEntryPoint
+Assert-Condition (-not [string]::IsNullOrWhiteSpace([string]$applicationEntryPoint.productDirectory)) "Offline bundle policy must define the application entry-point product directory."
+Assert-Condition (-not [string]::IsNullOrWhiteSpace([string]$applicationEntryPoint.executable)) "Offline bundle policy must define the application entry-point executable."
+$applicationHostSource = Join-Path (Join-Path $evidenceRoot "product") ([string]$applicationEntryPoint.productDirectory)
+Assert-Condition (Test-Path -LiteralPath $applicationHostSource -PathType Container) "Application host product payload was not found at '$applicationHostSource'."
+$applicationExecutable = Join-Path $applicationHostSource ([string]$applicationEntryPoint.executable)
+Assert-Condition (Test-Path -LiteralPath $applicationExecutable -PathType Leaf) "Canonical application executable was not found at '$applicationExecutable'."
+Copy-DirectoryContent -Source $applicationHostSource -Destination $bundleRoot
 
 $releaseDirectory = Join-Path $bundleRoot "release"
 New-Item -ItemType Directory -Path $releaseDirectory -Force | Out-Null
@@ -234,6 +246,14 @@ $offlineReadme = @"
 # rtaime Offline Release Bundle
 
 This is a SOFTWARE_RELEASE deployment bundle, not a Production Package.
+
+Canonical product startup:
+
+```powershell
+./rtaime.exe
+```
+
+The AppHost starts or adopts ControlHost, waits for qualified engine readiness and opens Operator for the default Interactive profile. ControlHost, RuntimeHost, AIHost and Operator remain separate processes.
 
 Offline verification:
 
