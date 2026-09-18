@@ -178,7 +178,7 @@ The Operator can:
 - explicitly show/hide the overlay;
 - clear the loaded asset.
 
-The V1 asset boundary is intentionally narrow: PNG input only, maximum 512 x 512 pixels, with exact RGBA payload validation. Management IPC frames remain bounded at 2 MiB, which accommodates the largest supported RGBA asset after JSON/base64 framing without turning management IPC into a bulk-media transport.
+The V1 asset boundary is intentionally narrow: PNG input only, maximum 384 x 384 pixels, with exact RGBA payload validation. Management IPC frames remain retained at 1 MiB, which accommodates the largest supported 384 x 384 RGBA asset after JSON/base64 framing without turning management IPC into a bulk-media transport.
 
 ### Production rendering and authority
 
