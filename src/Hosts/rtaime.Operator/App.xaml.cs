@@ -10,13 +10,16 @@ namespace rtaime.Operator;
 
 public partial class App : Application
 {
+	private bool _headlessMode;
+
 	protected override void OnStartup(StartupEventArgs e)
 	{
 		DispatcherUnhandledException += OnDispatcherUnhandledException;
 		base.OnStartup(e);
 		var headless = e.Args.Any(argument => string.Equals(argument, "--headless", StringComparison.OrdinalIgnoreCase));
 		var headlessOnce = e.Args.Any(argument => string.Equals(argument, "--headless-once", StringComparison.OrdinalIgnoreCase));
-		if (headless || headlessOnce)
+		_headlessMode = headless || headlessOnce;
+		if (_headlessMode)
 		{
 			ShutdownMode = ShutdownMode.OnExplicitShutdown;
 			var endpoint = GetArgument(e.Args, "control-endpoint") ?? Environment.GetEnvironmentVariable("RTAIME_CONTROL_ENDPOINT") ?? "rtaime.v1.control.default";
@@ -44,11 +47,14 @@ public partial class App : Application
 			? "A diagnostic report could not be written."
 			: $"Diagnostic report: {reportPath}";
 
-		MessageBox.Show(
-			$"rtaime Operator encountered an unexpected error and must close.\n\n{e.Exception.Message}\n\n{reportDetail}",
-			"rtaime Operator — Unexpected error",
-			MessageBoxButton.OK,
-			MessageBoxImage.Error);
+		if (!_headlessMode)
+		{
+			MessageBox.Show(
+				$"rtaime Operator encountered an unexpected error and must close.\n\n{e.Exception.Message}\n\n{reportDetail}",
+				"rtaime Operator — Unexpected error",
+				MessageBoxButton.OK,
+				MessageBoxImage.Error);
+		}
 
 		e.Handled = true;
 		Shutdown(-1);
