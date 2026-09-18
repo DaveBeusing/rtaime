@@ -222,6 +222,12 @@ public sealed class MediaTimelineController : IAsyncDisposable
 		await SendSeekAsync(clamped, cancellationToken).ConfigureAwait(false);
 	}
 
+	public async ValueTask SeekToFrameAsync(long targetFrame, CancellationToken cancellationToken = default)
+	{
+		ThrowIfDisposed();
+		await SendSeekAsync(targetFrame, cancellationToken).ConfigureAwait(false);
+	}
+
 	public async ValueTask SeekRelativeAsync(long frameDelta, CancellationToken cancellationToken = default)
 	{
 		ThrowIfDisposed();

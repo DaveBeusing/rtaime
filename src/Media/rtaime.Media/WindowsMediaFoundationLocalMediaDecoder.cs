@@ -52,17 +52,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 			MediaFoundation.ThrowIfFailed(MediaFoundation.MFStartup(MediaFoundation.MfVersion, MediaFoundation.MfStartupFull));
 			mediaFoundationStarted = true;
 
-			MediaFoundation.ThrowIfFailed(MediaFoundation.MFCreateAttributes(out var attributes, 1));
-			try
-			{
-				var processingKey = MediaFoundation.MfSourceReaderEnableVideoProcessing;
-				MediaFoundation.ThrowIfFailed(attributes.SetUINT32(ref processingKey, 1));
-				MediaFoundation.ThrowIfFailed(MediaFoundation.MFCreateSourceReaderFromURL(path, attributes, out reader));
-			}
-			finally
-			{
-				MediaFoundation.ReleaseComObject(attributes);
-			}
+			MediaFoundation.ThrowIfFailed(MediaFoundation.MFCreateSourceReaderFromURL(path, null, out reader));
 
 			MediaFoundation.ThrowIfFailed(reader.SetStreamSelection(MediaFoundation.AllStreams, false));
 			MediaFoundation.ThrowIfFailed(reader.SetStreamSelection(MediaFoundation.FirstVideoStream, true));
@@ -94,7 +84,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 				if (metadata.Duration <= TimeSpan.Zero)
 					return RejectAndRelease("media.file.metadata_invalid", "The local media file reports an invalid duration.", reader, mediaFoundationStarted);
 
-				ConfigureDecodedVideo(reader, MediaFoundation.FirstVideoStream, metadata);
+				ConfigureDecodedVideo(reader, MediaFoundation.FirstVideoStream);
 				ConfigureDecodedAudio(reader, MediaFoundation.FirstAudioStream);
 				MediaFoundation.ThrowIfFailed(reader.SetStreamSelection(MediaFoundation.FirstVideoStream, true));
 				MediaFoundation.ThrowIfFailed(reader.SetStreamSelection(MediaFoundation.FirstAudioStream, true));
@@ -181,7 +171,12 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 		byte[] videoPayload;
 		try
 		{
-			if (!TryReadSample(MediaFoundation.FirstVideoStream, minimumTimestamp, out videoTimestamp, out videoPayload))
+			if (!TryReadSample(
+				MediaFoundation.FirstVideoStream,
+				minimumTimestamp,
+				copy2DContiguous: true,
+				out videoTimestamp,
+				out videoPayload))
 			{
 				frame = null;
 				return false;
@@ -195,7 +190,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 		byte[] rgba;
 		try
 		{
-			rgba = ConvertRgb32ToRgba(videoPayload, Probe.VideoFormat);
+			rgba = ConvertNv12ToRgba(videoPayload, Probe.VideoFormat);
 		}
 		catch (InvalidDataException exception)
 		{
@@ -221,6 +216,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 			audioAvailable = TryReadSample(
 				MediaFoundation.FirstAudioStream,
 				minimumTimestamp,
+				copy2DContiguous: false,
 				out audioTimestamp,
 				out decodedAudio);
 		}
@@ -231,12 +227,13 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 
 		if (audioAvailable && decodedAudio.Length > 0)
 		{
-			var bytesPerSampleFrame = checked((int)Probe.AudioFormat.ChannelCount * sizeof(float));
-			if (decodedAudio.Length % bytesPerSampleFrame != 0)
-				throw new InvalidDataException("Decoded local media audio payload is not aligned to complete stereo Float32 samples.");
-			var sampleCount = checked((uint)(decodedAudio.Length / bytesPerSampleFrame));
+			var bytesPerPcmFrame = checked((int)Probe.AudioFormat.ChannelCount * sizeof(short));
+			if (decodedAudio.Length % bytesPerPcmFrame != 0)
+				throw new InvalidDataException("Decoded local media PCM payload is not aligned to complete stereo Int16 samples.");
+			var sampleCount = checked((uint)(decodedAudio.Length / bytesPerPcmFrame));
 			if (sampleCount > 0)
 			{
+				var floatAudio = ConvertPcm16ToFloat32(decodedAudio);
 				var audioSamplePosition = TimestampToAudioSamplePosition(audioTimestamp, Probe.AudioFormat.SampleRate);
 				audio = new AudioBufferDescriptor(
 					MediaContractVersion.Current,
@@ -245,7 +242,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 					LocalMediaIdentity.Create("timing-domain", _assetId.ToString()),
 					new AudioBufferTiming(audioSamplePosition, sampleCount, audioTimestamp, MediaFoundationTimebase),
 					new OpaqueAudioHandle("local.media.audio.float32", $"{_assetId}:{sequenceNumber}"));
-				audioPayload = decodedAudio;
+				audioPayload = floatAudio;
 			}
 		}
 
@@ -267,6 +264,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 	private bool TryReadSample(
 		uint streamIndex,
 		long? minimumTimestamp,
+		bool copy2DContiguous,
 		out long timestamp,
 		out byte[] payload)
 	{
@@ -299,18 +297,10 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 				MediaFoundation.ThrowIfFailed(sample.ConvertToContiguousBuffer(out var buffer));
 				try
 				{
-					MediaFoundation.ThrowIfFailed(buffer.Lock(out var address, out _, out var currentLength));
-					try
-					{
-						payload = new byte[checked((int)currentLength)];
-						if (payload.Length > 0)
-							Marshal.Copy(address, payload, 0, payload.Length);
-						return true;
-					}
-					finally
-					{
-						MediaFoundation.ThrowIfFailed(buffer.Unlock());
-					}
+					payload = copy2DContiguous
+						? Copy2DBufferToContiguous(buffer)
+						: CopyMediaBuffer(buffer);
+					return true;
 				}
 				finally
 				{
@@ -324,6 +314,46 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 		}
 	}
 
+	private static byte[] Copy2DBufferToContiguous(IMFMediaBuffer buffer)
+	{
+		if (buffer is not IMF2DBuffer buffer2D)
+			return CopyMediaBuffer(buffer);
+
+		MediaFoundation.ThrowIfFailed(buffer2D.GetContiguousLength(out var contiguousLength));
+		var payload = new byte[checked((int)contiguousLength)];
+		if (payload.Length == 0)
+			return payload;
+
+		var handle = GCHandle.Alloc(payload, GCHandleType.Pinned);
+		try
+		{
+			MediaFoundation.ThrowIfFailed(
+				buffer2D.ContiguousCopyTo(handle.AddrOfPinnedObject(), contiguousLength));
+		}
+		finally
+		{
+			handle.Free();
+		}
+
+		return payload;
+	}
+
+	private static byte[] CopyMediaBuffer(IMFMediaBuffer buffer)
+	{
+		MediaFoundation.ThrowIfFailed(buffer.Lock(out var address, out _, out var currentLength));
+		try
+		{
+			var payload = new byte[checked((int)currentLength)];
+			if (payload.Length > 0)
+				Marshal.Copy(address, payload, 0, payload.Length);
+			return payload;
+		}
+		finally
+		{
+			MediaFoundation.ThrowIfFailed(buffer.Unlock());
+		}
+	}
+
 	private static ulong TimestampToAudioSamplePosition(long timestamp, uint sampleRate)
 	{
 		if (timestamp <= 0)
@@ -333,22 +363,67 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 		return checked((ulong)position);
 	}
 
-	private static byte[] ConvertRgb32ToRgba(byte[] source, VideoFormat format)
+	private static byte[] ConvertNv12ToRgba(byte[] source, VideoFormat format)
 	{
-		var required = checked((int)((ulong)format.Width * format.Height * 4UL));
-		if (source.Length != required)
-			throw new InvalidDataException($"Decoded RGB32 frame has '{source.Length}' bytes; expected '{required}'.");
+		var width = checked((int)format.Width);
+		var height = checked((int)format.Height);
+		if ((width & 1) != 0 || (height & 1) != 0)
+			throw new InvalidDataException("NV12 local media frames require even width and height.");
 
-		var rgba = new byte[required];
-		for (var offset = 0; offset < required; offset += 4)
+		var yPlaneLength = checked(width * height);
+		var required = checked(yPlaneLength + (yPlaneLength / 2));
+		if (source.Length != required)
+			throw new InvalidDataException($"Decoded NV12 frame has '{source.Length}' bytes; expected '{required}'.");
+
+		var rgba = new byte[checked(yPlaneLength * 4)];
+		var uvOffset = yPlaneLength;
+		for (var y = 0; y < height; y++)
 		{
-			rgba[offset] = source[offset + 2];
-			rgba[offset + 1] = source[offset + 1];
-			rgba[offset + 2] = source[offset];
-			rgba[offset + 3] = byte.MaxValue;
+			for (var x = 0; x < width; x++)
+			{
+				var yValue = source[(y * width) + x];
+				var uvIndex = uvOffset + ((y / 2) * width) + (x & ~1);
+				var uValue = source[uvIndex];
+				var vValue = source[uvIndex + 1];
+
+				var c = Math.Max(0, yValue - 16);
+				var d = uValue - 128;
+				var e = vValue - 128;
+				var red = ClampByte((298 * c + 459 * e + 128) >> 8);
+				var green = ClampByte((298 * c - 55 * d - 136 * e + 128) >> 8);
+				var blue = ClampByte((298 * c + 541 * d + 128) >> 8);
+
+				var output = ((y * width) + x) * 4;
+				rgba[output] = red;
+				rgba[output + 1] = green;
+				rgba[output + 2] = blue;
+				rgba[output + 3] = byte.MaxValue;
+			}
 		}
 		return rgba;
 	}
+
+	private static byte[] ConvertPcm16ToFloat32(byte[] source)
+	{
+		if ((source.Length & 1) != 0)
+			throw new InvalidDataException("Decoded PCM16 audio payload has an odd byte count.");
+
+		var output = new byte[checked(source.Length * 2)];
+		for (var sourceOffset = 0; sourceOffset < source.Length; sourceOffset += 2)
+		{
+			var sample = (short)(source[sourceOffset] | (source[sourceOffset + 1] << 8));
+			var value = sample / 32768f;
+			var bits = BitConverter.SingleToInt32Bits(value);
+			var target = sourceOffset * 2;
+			output[target] = (byte)bits;
+			output[target + 1] = (byte)(bits >> 8);
+			output[target + 2] = (byte)(bits >> 16);
+			output[target + 3] = (byte)(bits >> 24);
+		}
+		return output;
+	}
+
+	private static byte ClampByte(int value) => (byte)Math.Clamp(value, 0, 255);
 
 	private static IMFMediaType GetNativeMediaType(IMFSourceReader reader, uint streamIndex)
 	{
@@ -356,81 +431,35 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 		return mediaType;
 	}
 
-	private static Guid GetGuid(IMFAttributes attributes, Guid key)
+	private static Guid GetGuid(IMFMediaType attributes, Guid key)
 	{
 		MediaFoundation.ThrowIfFailed(attributes.GetGUID(ref key, out var value));
 		return value;
 	}
 
-	private static void ConfigureDecodedVideo(
-		IMFSourceReader reader,
-		uint streamIndex,
-		Mp4LocalMediaMetadata metadata)
+	private static void ConfigureDecodedVideo(IMFSourceReader reader, uint streamIndex)
 	{
-		MediaFoundation.ThrowIfFailed(MediaFoundation.MFCreateMediaType(out var mediaType));
-		try
-		{
-			var majorKey = MediaFoundation.MfMtMajorType;
-			var majorValue = MediaFoundation.MfMediaTypeVideo;
-			MediaFoundation.ThrowIfFailed(mediaType.SetGUID(ref majorKey, ref majorValue));
-			var subtypeKey = MediaFoundation.MfMtSubtype;
-			var subtypeValue = MediaFoundation.MfVideoFormatRgb32;
-			MediaFoundation.ThrowIfFailed(mediaType.SetGUID(ref subtypeKey, ref subtypeValue));
-
-			var frameSizeKey = MediaFoundation.MfMtFrameSize;
-			MediaFoundation.ThrowIfFailed(mediaType.SetUINT64(
-				ref frameSizeKey,
-				MediaFoundation.PackRatio(metadata.Width, metadata.Height)));
-			var frameRateKey = MediaFoundation.MfMtFrameRate;
-			MediaFoundation.ThrowIfFailed(mediaType.SetUINT64(
-				ref frameRateKey,
-				MediaFoundation.PackRatio(
-					checked((uint)metadata.FrameRateNumerator),
-					checked((uint)metadata.FrameRateDenominator))));
-			var interlaceKey = MediaFoundation.MfMtInterlaceMode;
-			MediaFoundation.ThrowIfFailed(mediaType.SetUINT32(
-				ref interlaceKey,
-				MediaFoundation.VideoInterlaceProgressive));
-			var aspectRatioKey = MediaFoundation.MfMtPixelAspectRatio;
-			MediaFoundation.ThrowIfFailed(mediaType.SetUINT64(
-				ref aspectRatioKey,
-				MediaFoundation.PackRatio(1, 1)));
-			var independentKey = MediaFoundation.MfMtAllSamplesIndependent;
-			MediaFoundation.ThrowIfFailed(mediaType.SetUINT32(ref independentKey, 1));
-
-			MediaFoundation.ThrowIfFailed(reader.SetCurrentMediaType(streamIndex, IntPtr.Zero, mediaType));
-		}
-		finally
-		{
-			MediaFoundation.ReleaseComObject(mediaType);
-		}
+		ConfigureDecodedType(reader, streamIndex, MediaFoundation.MfMediaTypeVideo, MediaFoundation.MfVideoFormatNv12);
 	}
 
 	private static void ConfigureDecodedAudio(IMFSourceReader reader, uint streamIndex)
 	{
+		ConfigureDecodedType(reader, streamIndex, MediaFoundation.MfMediaTypeAudio, MediaFoundation.MfAudioFormatPcm);
+	}
+
+	private static void ConfigureDecodedType(
+		IMFSourceReader reader,
+		uint streamIndex,
+		Guid majorType,
+		Guid subtype)
+	{
 		MediaFoundation.ThrowIfFailed(MediaFoundation.MFCreateMediaType(out var mediaType));
 		try
 		{
 			var majorKey = MediaFoundation.MfMtMajorType;
-			var majorValue = MediaFoundation.MfMediaTypeAudio;
-			MediaFoundation.ThrowIfFailed(mediaType.SetGUID(ref majorKey, ref majorValue));
+			MediaFoundation.ThrowIfFailed(mediaType.SetGUID(ref majorKey, ref majorType));
 			var subtypeKey = MediaFoundation.MfMtSubtype;
-			var subtypeValue = MediaFoundation.MfAudioFormatFloat;
-			MediaFoundation.ThrowIfFailed(mediaType.SetGUID(ref subtypeKey, ref subtypeValue));
-
-			var channelKey = MediaFoundation.MfMtAudioNumChannels;
-			MediaFoundation.ThrowIfFailed(mediaType.SetUINT32(ref channelKey, 2));
-			var sampleRateKey = MediaFoundation.MfMtAudioSamplesPerSecond;
-			MediaFoundation.ThrowIfFailed(mediaType.SetUINT32(ref sampleRateKey, 48_000));
-			var bitsPerSampleKey = MediaFoundation.MfMtAudioBitsPerSample;
-			MediaFoundation.ThrowIfFailed(mediaType.SetUINT32(ref bitsPerSampleKey, 32));
-			var blockAlignmentKey = MediaFoundation.MfMtAudioBlockAlignment;
-			MediaFoundation.ThrowIfFailed(mediaType.SetUINT32(ref blockAlignmentKey, 8));
-			var averageBytesKey = MediaFoundation.MfMtAudioAverageBytesPerSecond;
-			MediaFoundation.ThrowIfFailed(mediaType.SetUINT32(ref averageBytesKey, 384_000));
-			var independentKey = MediaFoundation.MfMtAllSamplesIndependent;
-			MediaFoundation.ThrowIfFailed(mediaType.SetUINT32(ref independentKey, 1));
-
+			MediaFoundation.ThrowIfFailed(mediaType.SetGUID(ref subtypeKey, ref subtype));
 			MediaFoundation.ThrowIfFailed(reader.SetCurrentMediaType(streamIndex, IntPtr.Zero, mediaType));
 		}
 		finally
@@ -463,25 +492,14 @@ internal static class MediaFoundation
 	public const uint AllStreams = 0xFFFFFFFE;
 	public const uint SourceReaderEndOfStream = 0x00000002;
 
-	public static Guid MfSourceReaderEnableVideoProcessing = new("FB394F3D-CCF1-42EE-BBB3-F9B845D5681D");
 	public static Guid MfMtMajorType = new("48EBA18E-F8C9-4687-BF11-0A74C9F96A8F");
 	public static Guid MfMtSubtype = new("F7E34C9A-42E8-4714-B74B-CB29D72C35E5");
-	public static Guid MfMtAllSamplesIndependent = new("C9173739-5E56-461C-B713-46FB995CB95F");
-	public static Guid MfMtFrameSize = new("1652C33D-D6B2-4012-B834-72030849A37D");
-	public static Guid MfMtFrameRate = new("C459A2E8-3D2C-4E44-B132-FEE5156C7BB0");
-	public static Guid MfMtInterlaceMode = new("E2724BB8-E676-4806-B4B2-A8D6EFB44CCD");
-	public static Guid MfMtPixelAspectRatio = new("C6376A1E-8D0A-4027-BE45-6D9A0AD39BB6");
-	public static Guid MfMtAudioNumChannels = new("37E48BF5-645E-4C5B-89DE-ADA9E29B696A");
-	public static Guid MfMtAudioSamplesPerSecond = new("5FAEEAE7-0290-4C31-9E8A-C534F68D9DBA");
-	public static Guid MfMtAudioBlockAlignment = new("322DE230-9EEB-43BD-AB7A-FF412251541D");
-	public static Guid MfMtAudioAverageBytesPerSecond = new("1AAB75C8-CFEF-451C-AB95-AC034B8E1731");
-	public static Guid MfMtAudioBitsPerSample = new("F2DEB57F-40FA-4764-AA33-ED4F2D1FF669");
 	public static Guid MfMediaTypeVideo = new("73646976-0000-0010-8000-00AA00389B71");
 	public static Guid MfMediaTypeAudio = new("73647561-0000-0010-8000-00AA00389B71");
 	public static Guid MfVideoFormatH264 = new("34363248-0000-0010-8000-00AA00389B71");
-	public static Guid MfVideoFormatRgb32 = new("00000016-0000-0010-8000-00AA00389B71");
+	public static Guid MfVideoFormatNv12 = new("3231564E-0000-0010-8000-00AA00389B71");
 	public static Guid MfAudioFormatAac = new("00001610-0000-0010-8000-00AA00389B71");
-	public static Guid MfAudioFormatFloat = new("00000003-0000-0010-8000-00AA00389B71");
+	public static Guid MfAudioFormatPcm = new("00000001-0000-0010-8000-00AA00389B71");
 
 	[DllImport("mfplat.dll", ExactSpelling = true)]
 	public static extern int MFStartup(int version, int flags);
@@ -500,15 +518,6 @@ internal static class MediaFoundation
 		string url,
 		IMFAttributes? attributes,
 		out IMFSourceReader sourceReader);
-
-	public const uint VideoInterlaceProgressive = 2;
-
-	public static ulong PackRatio(uint numerator, uint denominator)
-	{
-		if (denominator == 0)
-			throw new ArgumentOutOfRangeException(nameof(denominator));
-		return ((ulong)numerator << 32) | denominator;
-	}
 
 	public static void ThrowIfFailed(int hr)
 	{
@@ -576,8 +585,38 @@ internal interface IMFAttributes
 [ComImport]
 [Guid("44AE0FA8-EA31-4109-8D2E-4CAE4997C555")]
 [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-internal interface IMFMediaType : IMFAttributes
+internal interface IMFMediaType
 {
+	[PreserveSig] int GetItem(ref Guid key, IntPtr value);
+	[PreserveSig] int GetItemType(ref Guid key, out int type);
+	[PreserveSig] int CompareItem(ref Guid key, IntPtr value, out int result);
+	[PreserveSig] int Compare(IMFAttributes other, int matchType, out int result);
+	[PreserveSig] int GetUINT32(ref Guid key, out uint value);
+	[PreserveSig] int GetUINT64(ref Guid key, out ulong value);
+	[PreserveSig] int GetDouble(ref Guid key, out double value);
+	[PreserveSig] int GetGUID(ref Guid key, out Guid value);
+	[PreserveSig] int GetStringLength(ref Guid key, out uint length);
+	[PreserveSig] int GetString(ref Guid key, IntPtr value, uint size, out uint length);
+	[PreserveSig] int GetAllocatedString(ref Guid key, out IntPtr value, out uint length);
+	[PreserveSig] int GetBlobSize(ref Guid key, out uint size);
+	[PreserveSig] int GetBlob(ref Guid key, IntPtr buffer, uint size, out uint blobSize);
+	[PreserveSig] int GetAllocatedBlob(ref Guid key, out IntPtr buffer, out uint size);
+	[PreserveSig] int GetUnknown(ref Guid key, ref Guid riid, out IntPtr value);
+	[PreserveSig] int SetItem(ref Guid key, IntPtr value);
+	[PreserveSig] int DeleteItem(ref Guid key);
+	[PreserveSig] int DeleteAllItems();
+	[PreserveSig] int SetUINT32(ref Guid key, uint value);
+	[PreserveSig] int SetUINT64(ref Guid key, ulong value);
+	[PreserveSig] int SetDouble(ref Guid key, double value);
+	[PreserveSig] int SetGUID(ref Guid key, ref Guid value);
+	[PreserveSig] int SetString(ref Guid key, [MarshalAs(UnmanagedType.LPWStr)] string value);
+	[PreserveSig] int SetBlob(ref Guid key, IntPtr buffer, uint size);
+	[PreserveSig] int SetUnknown(ref Guid key, [MarshalAs(UnmanagedType.IUnknown)] object value);
+	[PreserveSig] int LockStore();
+	[PreserveSig] int UnlockStore();
+	[PreserveSig] int GetCount(out uint count);
+	[PreserveSig] int GetItemByIndex(uint index, out Guid key, IntPtr value);
+	[PreserveSig] int CopyAllItems(IMFAttributes destination);
 	[PreserveSig] int GetMajorType(out Guid majorType);
 	[PreserveSig] int IsCompressedFormat([MarshalAs(UnmanagedType.Bool)] out bool compressed);
 	[PreserveSig] int IsEqual(IMFMediaType mediaType, out uint flags);
@@ -611,8 +650,38 @@ internal interface IMFSourceReader
 [ComImport]
 [Guid("C40A00F2-B93A-4D80-AE8C-5A1C634F58E4")]
 [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-internal interface IMFSample : IMFAttributes
+internal interface IMFSample
 {
+	[PreserveSig] int GetItem(ref Guid key, IntPtr value);
+	[PreserveSig] int GetItemType(ref Guid key, out int type);
+	[PreserveSig] int CompareItem(ref Guid key, IntPtr value, out int result);
+	[PreserveSig] int Compare(IMFAttributes other, int matchType, out int result);
+	[PreserveSig] int GetUINT32(ref Guid key, out uint value);
+	[PreserveSig] int GetUINT64(ref Guid key, out ulong value);
+	[PreserveSig] int GetDouble(ref Guid key, out double value);
+	[PreserveSig] int GetGUID(ref Guid key, out Guid value);
+	[PreserveSig] int GetStringLength(ref Guid key, out uint length);
+	[PreserveSig] int GetString(ref Guid key, IntPtr value, uint size, out uint length);
+	[PreserveSig] int GetAllocatedString(ref Guid key, out IntPtr value, out uint length);
+	[PreserveSig] int GetBlobSize(ref Guid key, out uint size);
+	[PreserveSig] int GetBlob(ref Guid key, IntPtr buffer, uint size, out uint blobSize);
+	[PreserveSig] int GetAllocatedBlob(ref Guid key, out IntPtr buffer, out uint size);
+	[PreserveSig] int GetUnknown(ref Guid key, ref Guid riid, out IntPtr value);
+	[PreserveSig] int SetItem(ref Guid key, IntPtr value);
+	[PreserveSig] int DeleteItem(ref Guid key);
+	[PreserveSig] int DeleteAllItems();
+	[PreserveSig] int SetUINT32(ref Guid key, uint value);
+	[PreserveSig] int SetUINT64(ref Guid key, ulong value);
+	[PreserveSig] int SetDouble(ref Guid key, double value);
+	[PreserveSig] int SetGUID(ref Guid key, ref Guid value);
+	[PreserveSig] int SetString(ref Guid key, [MarshalAs(UnmanagedType.LPWStr)] string value);
+	[PreserveSig] int SetBlob(ref Guid key, IntPtr buffer, uint size);
+	[PreserveSig] int SetUnknown(ref Guid key, [MarshalAs(UnmanagedType.IUnknown)] object value);
+	[PreserveSig] int LockStore();
+	[PreserveSig] int UnlockStore();
+	[PreserveSig] int GetCount(out uint count);
+	[PreserveSig] int GetItemByIndex(uint index, out Guid key, IntPtr value);
+	[PreserveSig] int CopyAllItems(IMFAttributes destination);
 	[PreserveSig] int GetSampleFlags(out uint flags);
 	[PreserveSig] int SetSampleFlags(uint flags);
 	[PreserveSig] int GetSampleTime(out long time);
@@ -627,6 +696,20 @@ internal interface IMFSample : IMFAttributes
 	[PreserveSig] int RemoveAllBuffers();
 	[PreserveSig] int GetTotalLength(out uint totalLength);
 	[PreserveSig] int CopyToBuffer(IMFMediaBuffer buffer);
+}
+
+[ComImport]
+[Guid("7DC9D5F9-9ED9-44EC-9BBF-0600BB589FBB")]
+[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+internal interface IMF2DBuffer
+{
+	[PreserveSig] int Lock2D(out IntPtr scanline0, out int pitch);
+	[PreserveSig] int Unlock2D();
+	[PreserveSig] int GetScanline0AndPitch(out IntPtr scanline0, out int pitch);
+	[PreserveSig] int IsContiguousFormat([MarshalAs(UnmanagedType.Bool)] out bool contiguous);
+	[PreserveSig] int GetContiguousLength(out uint length);
+	[PreserveSig] int ContiguousCopyTo(IntPtr destination, uint destinationLength);
+	[PreserveSig] int ContiguousCopyFrom(IntPtr source, uint sourceLength);
 }
 
 [ComImport]
