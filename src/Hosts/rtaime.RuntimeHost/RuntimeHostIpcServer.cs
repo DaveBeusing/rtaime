@@ -420,7 +420,8 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 			.Select(pair => ToWire(pair.Value))
 			.ToArray(),
 		ToWire(snapshot.AudioProgram),
-		ToWire(snapshot.RecordingOperator));
+		ToWire(snapshot.RecordingOperator),
+		ToWire(snapshot.Performance));
 
 	private static WireGraphicsOverlay ToWire(V1GraphicsOverlaySnapshot snapshot) => new(
 		snapshot.AssetLoaded,
@@ -467,6 +468,18 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		snapshot.Statistics.Rejected,
 		snapshot.Statistics.WriterFailures,
 		snapshot.Failure is { } failure ? new WireFailure(failure.Code, failure.Message) : null);
+
+	private static WireRuntimePerformance ToWire(V1RuntimePerformanceSnapshot snapshot) => new(
+		snapshot.Uptime.Ticks,
+		snapshot.FrameBudget.Ticks,
+		snapshot.LastFrameProcessingTime.Ticks,
+		snapshot.DroppedFrames,
+		snapshot.GpuDeviceName,
+		snapshot.GpuHardwareAccelerated,
+		snapshot.GpuUtilizationPercent,
+		snapshot.GpuVramUsedBytes,
+		snapshot.GpuVramTotalBytes,
+		snapshot.GpuTelemetryEvidence);
 
 	private static WireApplyResponse ToWire(RuntimeHostApplyResult result) => new(
 		new WirePrepareResult(
@@ -568,6 +581,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 	private sealed record WireApplyResponse(WirePrepareResult Prepare, WireCommitResult? Commit, ulong? ActivationSequence);
 	private sealed record WireRecordingStart(string SessionId, string OutputId, string DestinationDirectory, string FileName);
 	private sealed record WireRecordingSnapshot(string State, long ElapsedTicks, string? Destination, string? FileName, string? FinalPath, ulong Accepted, ulong Written, ulong Dropped, ulong Rejected, ulong WriterFailures, WireFailure? Failure);
+	private sealed record WireRuntimePerformance(long UptimeTicks, long FrameBudgetTicks, long LastFrameProcessingTicks, ulong DroppedFrames, string GpuDeviceName, bool GpuHardwareAccelerated, double? GpuUtilizationPercent, ulong? GpuVramUsedBytes, ulong? GpuVramTotalBytes, string GpuTelemetryEvidence);
 	private sealed record WireRecordingCommandResult(bool Succeeded, WireRecordingSnapshot Snapshot, WireFailure? Failure);
 	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path, WirePreparedExecution PreparedExecution);
 	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame, bool? AutoPlayOnProgram, int? EndBehavior, long? InPointFrame, long? OutPointFrame);
@@ -592,7 +606,8 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		WireGraphicsOverlay GraphicsOverlay,
 		WireAudioInput[] AudioInputs,
 		WireAudioProgram AudioProgram,
-		WireRecordingSnapshot Recording);
+		WireRecordingSnapshot Recording,
+		WireRuntimePerformance Performance);
 
 	private sealed class BoundedRequestCache
 	{
