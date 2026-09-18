@@ -194,6 +194,22 @@ public sealed class UnifiedApplicationHostTests
 	}
 
 	[Fact]
+	public async Task External_managed_requires_only_operator_facing_control_pipe()
+	{
+		var options = CreateOptions(ApplicationStartupProfile.Interactive, ApplicationLifecycleOwnership.ExternalManaged);
+		var platform = new FakeApplicationHostPlatform(options);
+		platform.PublishReadiness(42);
+		platform.UnreachableEndpoints.Add(options.Endpoints.Runtime);
+		platform.UnreachableEndpoints.Add(options.Endpoints.AI);
+
+		var result = await new UnifiedApplicationHost(options, platform).RunAsync();
+
+		Assert.True(result.Success);
+		Assert.True(result.AdoptedControlHost);
+		Assert.False(platform.StopSignalWritten);
+	}
+
+	[Fact]
 	public async Task External_managed_never_starts_control_host()
 	{
 		var options = CreateOptions(ApplicationStartupProfile.Interactive, ApplicationLifecycleOwnership.ExternalManaged);
@@ -246,6 +262,7 @@ public sealed class UnifiedApplicationHostTests
 			resolvedOwnership,
 			windowsService,
 			"rtaime-engine",
+			windowsService ? "S-1-5-32-545" : string.Empty,
 			true,
 			false,
 			new ApplicationLifecyclePolicy(
@@ -277,6 +294,7 @@ public sealed class UnifiedApplicationHostTests
 		public bool PublishReadinessOnControlStart { get; init; }
 		public bool PublishReadinessAfterDelay { get; init; }
 		public bool PipeReachable { get; set; } = true;
+		public HashSet<string> UnreachableEndpoints { get; } = new(StringComparer.Ordinal);
 		public bool StopSignalWritten { get; private set; }
 		public bool IgnoreStopSignal { get; set; }
 		public int OperatorDelayBudget { get; set; }
@@ -331,7 +349,7 @@ public sealed class UnifiedApplicationHostTests
 		}
 
 		public Task<bool> ProbePipeAsync(string endpoint, TimeSpan timeout, CancellationToken cancellationToken) =>
-			Task.FromResult(PipeReachable);
+			Task.FromResult(PipeReachable && !UnreachableEndpoints.Contains(endpoint));
 
 		public Task DelayAsync(TimeSpan delay, CancellationToken cancellationToken)
 		{
