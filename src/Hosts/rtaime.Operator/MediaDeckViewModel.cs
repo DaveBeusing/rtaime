@@ -402,7 +402,7 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 		using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(100));
 		while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
 		{
-			if (_snapshot.State != MediaDeckState.Playing || IsBusy)
+			if (!IsLoaded || IsBusy)
 				continue;
 			try
 			{
