@@ -248,20 +248,19 @@ public sealed class ProductionIpcIntegrationTests
 		var opened = await deck.OpenAsync(referenceAsset.Path, sourceId);
 		Assert.True(opened.IsLoaded, opened.Failure?.Message);
 		Assert.Equal(Path.GetFileName(referenceAsset.Path), opened.Probe!.FileName);
-		Assert.Equal(MediaDeckState.Ready, opened.State);
-		Assert.Equal(50, opened.Transport!.Position.TotalFrames);
+		Assert.Equal(MediaDeckState.Playing, opened.State);
+		Assert.True(opened.Transport!.IsOnProgram);
+		Assert.Equal(50, opened.Transport.Position.TotalFrames);
 
-		var sourceBinReady = await client.SynchronizeAsync();
-		var mediaTile = sourceBinReady.Sources.Single(source => source.Id == sourceId.ToString());
+		var sourceBinOpened = await client.SynchronizeAsync();
+		var mediaTile = sourceBinOpened.Sources.Single(source => source.Id == sourceId.ToString());
 		Assert.Equal("MEDIA", mediaTile.Type);
-		Assert.Equal("READY", mediaTile.Health);
-		Assert.Equal("READY", mediaTile.MediaState);
+		Assert.Equal("PLAYING", mediaTile.Health);
+		Assert.Equal("PLAYING", mediaTile.MediaState);
 		Assert.Contains("1920×1080", mediaTile.Format);
 		Assert.Equal(Path.GetFileName(referenceAsset.Path), mediaTile.MediaFileName);
 		Assert.NotNull(mediaTile.Remaining);
 
-		var playing = await deck.PlayAsync();
-		Assert.Equal(MediaDeckState.Playing, playing.State);
 		var playbackDeadline = DateTime.UtcNow.AddSeconds(2);
 		do
 		{
