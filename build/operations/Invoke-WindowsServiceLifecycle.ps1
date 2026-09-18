@@ -129,6 +129,7 @@ $policy = Get-Content -LiteralPath $policyPath -Raw | ConvertFrom-Json
 Assert-Condition ([string]$policy.schemaVersion -eq '1.0') "Unsupported managed host lifecycle policy schema version."
 $endpoints = Get-EndpointSet -Policy $policy
 $readinessPath = Join-Path $workRoot 'control-readiness.json'
+$shutdownEvidencePath = Join-Path $workRoot 'apphost-shutdown.json'
 
 function Get-RuntimeReadiness {
 	$service = Get-ServiceOrNull
@@ -197,9 +198,13 @@ function Stop-ServiceGracefully {
 	$service = Get-ServiceOrNull
 	if ($null -eq $service -or [string]$service.Status -eq 'Stopped') { return }
 	$before = Get-RuntimeReadiness
+	Remove-Item -LiteralPath $shutdownEvidencePath -Force -ErrorAction SilentlyContinue
 	Stop-Service -Name $ServiceName -ErrorAction Stop
 	$timeoutMs = [int]$policy.shutdown.timeoutMs + 10000
 	Assert-Condition (Wait-ServiceState -ExpectedState 'Stopped' -TimeoutMs $timeoutMs) "Windows service did not stop before the shutdown timeout."
+	Assert-Condition (Test-Path -LiteralPath $shutdownEvidencePath -PathType Leaf) "Windows service stopped without AppHost shutdown evidence."
+	$shutdownEvidence = Get-Content -LiteralPath $shutdownEvidencePath -Raw | ConvertFrom-Json
+	Assert-Condition ([string]$shutdownEvidence.status -eq 'PASS' -and [bool]$shutdownEvidence.graceful -and -not [bool]$shutdownEvidence.forcedTermination) "Windows service shutdown required forced termination and is not a graceful PASS."
 	foreach ($processId in @($before.controlProcessId, $before.runtimeProcessId, $before.aiProcessId)) {
 		if ($null -ne $processId) {
 			Assert-Condition (-not (Test-ProcessRunning -ProcessId ([int]$processId))) "Engine process $processId remained alive after Windows service shutdown."
