@@ -41,22 +41,33 @@ public sealed class DemoProductionPackageManifestTests
 		Assert.True(value.GetProperty("aiShowcase").GetProperty("enabled").GetBoolean());
 		Assert.Equal("Person Segmentation Highlight", value.GetProperty("aiShowcase").GetProperty("feature").GetString());
 
-		var clipBytes = DecodeBundle(Path.Combine(assets, product.GetProperty("bundleFile").GetString()!));
+		var productBundleFiles = BundleFiles(product);
+		Assert.Equal(productBundleFiles.Count, productBundleFiles.Distinct(StringComparer.Ordinal).Count());
+		var clipBytes = DecodeBundle(assets, productBundleFiles);
 		Assert.Equal(product.GetProperty("sha256").GetString(), Hash(clipBytes));
 		Assert.True(clipBytes.Length > 12);
 		Assert.Equal("ftyp", Encoding.ASCII.GetString(clipBytes, 4, 4));
 
-		var graphicsBytes = DecodeBundle(Path.Combine(assets, graphics.GetProperty("bundleFile").GetString()!));
+		var graphicsBundleFiles = BundleFiles(graphics);
+		var graphicsBytes = DecodeBundle(assets, graphicsBundleFiles);
 		Assert.Equal(graphics.GetProperty("sha256").GetString(), Hash(graphicsBytes));
 		Assert.True(graphicsBytes.AsSpan(0, 8).SequenceEqual(new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }));
 	}
 
-	private static byte[] DecodeBundle(string path)
+	private static IReadOnlyList<string> BundleFiles(JsonElement asset) =>
+		asset.GetProperty("bundleFiles")
+			.EnumerateArray()
+			.Select(element => element.GetString() ?? throw new InvalidDataException("Bundle file name is required."))
+			.ToArray();
+
+	private static byte[] DecodeBundle(string assetsRoot, IReadOnlyList<string> bundleFiles)
 	{
+		Assert.NotEmpty(bundleFiles);
 		var encoded = string.Concat(
-			File.ReadLines(path)
-				.Select(line => line.Trim())
-				.Where(line => line.Length > 0 && !line.StartsWith("#", StringComparison.Ordinal)));
+			bundleFiles.SelectMany(bundleFile =>
+				File.ReadLines(Path.Combine(assetsRoot, bundleFile))
+					.Select(line => line.Trim())
+					.Where(line => line.Length > 0 && !line.StartsWith("#", StringComparison.Ordinal))));
 		return Convert.FromBase64String(encoded);
 	}
 
