@@ -132,8 +132,8 @@ public sealed record AudioFollowVideoResult(
     Failure? Failure)
 {
     public bool Emitted => Status == AudioFollowVideoStatus.Emitted;
-    public double LeftPeakLevel { get; init; } = PeakLevel;
-    public double RightPeakLevel { get; init; } = PeakLevel;
+    public double LeftPeakLevel { get; init; }
+    public double RightPeakLevel { get; init; }
     public bool Clipping { get; init; }
 }
 
