@@ -2,6 +2,7 @@
 
 using System.Buffers.Binary;
 using System.Collections.ObjectModel;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using rtaime.Core;
@@ -67,6 +68,8 @@ public sealed record V1ProgramBoundaryResult(
 	byte[] ProgramPixels,
 	ProgramPixelProbe PixelProbe,
 	AudioFollowVideoResult Audio,
+	AudioBufferDescriptor ProgramAudioBuffer,
+	byte[] ProgramAudioPayload,
 	RecordingEnqueueResult? Recording,
 	RuntimeProgramTransitionKind? TransitionKind,
 	byte BlendWeight,
@@ -136,6 +139,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private readonly AudioFollowVideoEngine _audio;
 	private readonly Dictionary<MediaSourceId, AudioStreamDescriptor> _audioStreams;
 	private readonly Dictionary<MediaSourceId, AudioMeterObservation> _audioMeters;
+	private readonly Dictionary<MediaSourceId, Queue<float>> _externalAudioQueues;
 	private readonly Dictionary<MediaSourceId, RgbaFrameBuffer> _backgrounds;
 	private readonly RgbaFrameBuffer _blackBackground;
 	private readonly Dictionary<MediaSourceId, V1InputSignalState> _inputSignals;
@@ -187,6 +191,9 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		_audioMeters = _audioStreams.Keys.ToDictionary(
 			sourceId => sourceId,
 			_ => new AudioMeterObservation(new AudioStereoMeter(0, 0), available: false, external: false));
+		_externalAudioQueues = _audioStreams.Keys.ToDictionary(
+			sourceId => sourceId,
+			_ => new Queue<float>());
 
 		_backgrounds = new Dictionary<MediaSourceId, RgbaFrameBuffer>
 		{
@@ -373,14 +380,26 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 
 			RefreshVirtualAudioMetersUnsafe(sequence);
 			var audioPacket = _virtualAudio.GetSource(committedSource).GeneratePacket(sequence);
-			var audioMeter = _audioMeters[committedSource];
+			var audioObservation = _audioMeters[committedSource];
 			var audioBuffer = audioPacket.Descriptor;
+			var externalAudioPayload = audioObservation.External
+				? ConsumeExternalAudioPayloadUnsafe(committedSource, audioBuffer)
+				: null;
+			var measuredAudio = externalAudioPayload is { Length: > 0 }
+				? AudioMetering.MeasureInterleavedStereoFloat32(externalAudioPayload)
+				: audioObservation.Meter;
+			var afvBuffer = audioObservation.External && !audioObservation.Available
+				? null
+				: audioBuffer;
 			var audio = _audio.ProcessBoundary(
 				committedSource,
 				sequence,
-				audioBuffer,
-				audioMeter.Meter);
+				afvBuffer,
+				measuredAudio);
 			_lastAudioResult = audio;
+			var programAudioPayload = externalAudioPayload is { Length: > 0 }
+				? ApplyAudioStateToPayload(externalAudioPayload, audio)
+				: MaterializeReferenceAudioPayload(audioBuffer, audio);
 
 			RecordingEnqueueResult? recording = null;
 			if (_recorder.Snapshot.State == RecordingLifecycleState.Recording)
@@ -392,7 +411,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 						_recordingPayloadWriter.StagePayload(
 							sequence,
 							pixels,
-							MaterializeReferenceAudioPayload(audioBuffer, audio));
+							programAudioPayload);
 					}
 					catch (Exception exception)
 					{
@@ -423,6 +442,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				pixels,
 				probe,
 				audio,
+				audioBuffer,
+				programAudioPayload,
 				recording,
 				transitionKind,
 				blendWeight,
@@ -593,10 +614,45 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		lock (_gate)
 		{
 			ThrowIfDisposed();
-			if (!_audioStreams.ContainsKey(sourceId))
-				throw new KeyNotFoundException($"Unknown media source '{sourceId}'.");
+			EnsureAudioSourceUnsafe(sourceId);
+			_externalAudioQueues[sourceId].Clear();
 			_audioMeters[sourceId] = new AudioMeterObservation(meter, available, external: true);
 		}
+	}
+
+	public void SetExternalAudioInput(
+		MediaSourceId sourceId,
+		ReadOnlySpan<float> interleavedStereoSamples,
+		bool available = true)
+	{
+		var meter = AudioMetering.MeasureInterleavedStereoFloat32(interleavedStereoSamples);
+		lock (_gate)
+		{
+			ThrowIfDisposed();
+			EnsureAudioSourceUnsafe(sourceId);
+			var queue = _externalAudioQueues[sourceId];
+			var maximumBufferedValues = checked((int)(_audioStreams[sourceId].Format.SampleRate * _audioStreams[sourceId].Format.ChannelCount / 2));
+			foreach (var sample in interleavedStereoSamples)
+			{
+				queue.Enqueue(float.IsFinite(sample) ? Math.Clamp(sample, -1f, 1f) : 0f);
+				while (queue.Count > maximumBufferedValues)
+					queue.Dequeue();
+			}
+			_audioMeters[sourceId] = new AudioMeterObservation(meter, available, external: true);
+		}
+	}
+
+	public void SetExternalAudioInput(
+		MediaSourceId sourceId,
+		ReadOnlySpan<byte> float32InterleavedStereoPayload,
+		bool available = true)
+	{
+		if ((float32InterleavedStereoPayload.Length % sizeof(float)) != 0)
+			throw new ArgumentException("Float32 audio payload length must be aligned to four bytes.", nameof(float32InterleavedStereoPayload));
+		SetExternalAudioInput(
+			sourceId,
+			MemoryMarshal.Cast<byte, float>(float32InterleavedStereoPayload),
+			available);
 	}
 
 	public void ClearExternalAudioMeter(MediaSourceId sourceId)
@@ -604,8 +660,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		lock (_gate)
 		{
 			ThrowIfDisposed();
-			if (!_audioStreams.ContainsKey(sourceId))
-				throw new KeyNotFoundException($"Unknown media source '{sourceId}'.");
+			EnsureAudioSourceUnsafe(sourceId);
+			_externalAudioQueues[sourceId].Clear();
 			_audioMeters[sourceId] = new AudioMeterObservation(new AudioStereoMeter(0, 0), available: false, external: false);
 		}
 	}
@@ -925,6 +981,43 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			stream.TimingDomainId,
 			new AudioBufferTiming(window.SamplePosition, window.SampleCount, window.PresentationTimestamp, window.Timebase),
 			new OpaqueAudioHandle("virtual.embedded.audio", $"{stream.StreamId}:{sequence}"));
+	}
+
+	private byte[]? ConsumeExternalAudioPayloadUnsafe(
+		MediaSourceId sourceId,
+		AudioBufferDescriptor descriptor)
+	{
+		var queue = _externalAudioQueues[sourceId];
+		var requiredValues = checked((int)(descriptor.Timing.SampleCount * descriptor.Format.ChannelCount));
+		if (queue.Count < requiredValues)
+			return null;
+
+		var samples = new float[requiredValues];
+		for (var index = 0; index < requiredValues; index++)
+			samples[index] = queue.Dequeue();
+		return MemoryMarshal.AsBytes(samples.AsSpan()).ToArray();
+	}
+
+	private static byte[] ApplyAudioStateToPayload(
+		byte[] payload,
+		AudioFollowVideoResult result)
+	{
+		if (!result.Emitted)
+			return Array.Empty<byte>();
+		var output = payload.ToArray();
+		var samples = MemoryMarshal.Cast<byte, float>(output.AsSpan());
+		for (var index = 0; index < samples.Length; index++)
+		{
+			var value = result.Muted ? 0f : samples[index] * checked((float)result.Gain.Linear);
+			samples[index] = float.IsFinite(value) ? Math.Clamp(value, -1f, 1f) : 0f;
+		}
+		return output;
+	}
+
+	private void EnsureAudioSourceUnsafe(MediaSourceId sourceId)
+	{
+		if (!_audioStreams.ContainsKey(sourceId))
+			throw new KeyNotFoundException($"Unknown media source '{sourceId}'.");
 	}
 
 	private static byte[] MaterializeReferenceAudioPayload(
