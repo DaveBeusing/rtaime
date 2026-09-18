@@ -2,7 +2,7 @@
 
 ## Scope
 
-This document records AP-08, `GPU Processing Foundation`.
+This document records GPU Processing Foundation, `GPU Processing Foundation`.
 
 Change classification: `REALTIME_CRITICAL`.
 
@@ -26,7 +26,7 @@ managed GPU backend abstraction
 CUDA Driver API when hardware is available
 ```
 
-No native C++ adapter is introduced because AP-08 does not currently have evidence that a separate native layer is required for SDK, memory, interop, or measured real-time reasons.
+No native C++ adapter is introduced because GPU Processing Foundation does not currently have evidence that a separate native layer is required for SDK, memory, interop, or measured real-time reasons.
 
 The NVIDIA CUDA backend uses direct managed P/Invoke to the CUDA Driver API. It is entirely behind `rtaime.Provider.Gpu` and does not leak CUDA identities, handles, or types into Control, Planning, Runtime contracts, Media contracts, or Provider contracts.
 
@@ -108,7 +108,7 @@ The backend owns:
 - host-to-device upload,
 - device-to-host diagnostic readback,
 - deterministic RGBA composite kernel launch,
-- synchronization at the AP-08 processing boundary.
+- synchronization at the GPU Processing Foundation processing boundary.
 
 The current hosted Windows CI environment does not provide qualified NVIDIA GPU evidence. Therefore CUDA execution remains `UNVERIFIED` unless a run on an approved GPU environment is explicitly captured.
 
@@ -159,7 +159,7 @@ Dynamic source generation remains separate from frame timing and surface identit
 
 ## Minimal compositor
 
-AP-08 implements a deterministic RGBA8 compositor with:
+GPU Processing Foundation implements a deterministic RGBA8 compositor with:
 
 ```text
 Background A
@@ -216,7 +216,7 @@ The layer has:
 
 Effective alpha is source alpha multiplied by layer opacity, followed by deterministic straight-alpha composition over the transitioned background.
 
-AP-08 does not introduce a graphics authoring system, browser graphics, multi-layer scene graph, or UI-timer animation.
+GPU Processing Foundation does not introduce a graphics authoring system, browser graphics, multi-layer scene graph, or UI-timer animation.
 
 ## GPU observations
 
@@ -236,7 +236,7 @@ Unexpected backend exceptions are converted into stable processing failure resul
 
 ## VirtualMedia vertical reuse
 
-The AP-08 integration proof keeps the existing authority path unchanged:
+The GPU Processing Foundation integration proof keeps the existing authority path unchanged:
 
 ```text
 Production Specification
@@ -254,7 +254,7 @@ Control and Planning still resolve `media.route` through the VirtualMedia provid
 
 The committed Runtime Program binding selects which background is used for GPU CUT processing.
 
-DISSOLVE and the RGBA layer are proven as GPU-provider processing primitives in AP-08. Their future authoritative production-control representation must be introduced only through an explicit later contract/product integration step; AP-08 does not silently extend the Control contract.
+DISSOLVE and the RGBA layer are proven as GPU-provider processing primitives in GPU Processing Foundation. Their future authoritative production-control representation must be introduced only through an explicit later contract/product integration step; GPU Processing Foundation does not silently extend the Control contract.
 
 ## Failure and recovery
 
@@ -340,7 +340,7 @@ Per project governance, `UNVERIFIED` is never treated as `PASS`.
 
 ## Out of scope
 
-AP-08 does not implement:
+GPU Processing Foundation does not implement:
 
 - GPU-specific Control state,
 - GPU-specific Planning branches,

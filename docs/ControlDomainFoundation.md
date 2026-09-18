@@ -1,4 +1,4 @@
-# AP-03 Control Domain Foundation
+# Control Domain Foundation
 
 ## Scope
 
@@ -26,7 +26,7 @@ No new architecture decision is introduced. The implementation realizes already 
 
 ## State boundaries
 
-AP-03 keeps the following states distinct:
+Control Domain Foundation keeps the following states distinct:
 
 - `ProductionSpecification` is declarative production intent and topology.
 - `DesiredProductionState` is the validated state requested by one accepted command.
@@ -34,7 +34,7 @@ AP-03 keeps the following states distinct:
 
 Execution, observed, derived, and semantic AI state remain outside this package.
 
-An authoritative Control commit in AP-03 does **not** claim that physical media execution has occurred. Runtime preparation, deterministic execution contracts, and Runtime commit semantics are later work packages.
+An authoritative Control commit in Control Domain Foundation does **not** claim that physical media execution has occurred. Runtime preparation, deterministic execution contracts, and Runtime commit semantics are later work packages.
 
 ## Initialization
 
@@ -102,7 +102,7 @@ The current program source is preserved.
 
 The current preview source is preserved.
 
-No media switch, frame operation, transition effect, provider call, or Runtime action occurs in AP-03.
+No media switch, frame operation, transition effect, provider call, or Runtime action occurs in Control Domain Foundation.
 
 ## Fail-closed validation codes
 
@@ -126,7 +126,7 @@ These codes describe Control-domain failures only. They do not define transport 
 
 ## Revision semantics
 
-AP-03 uses the Core `Revision` primitive as the monotonic authoritative Control revision.
+Control Domain Foundation uses the Core `Revision` primitive as the monotonic authoritative Control revision.
 
 Rules:
 
@@ -140,7 +140,7 @@ Command replay/idempotency by `CommandId` is intentionally not implemented here 
 
 ## Dependency boundaries
 
-AP-03 adds behavior only to `rtaime.Control`.
+Control Domain Foundation adds behavior only to `rtaime.Control`.
 
 The Control implementation continues to obey the approved inward dependency graph. The new domain implementation uses only Core and V1 Control-contract semantics even though the bootstrap project currently carries the wider approved Control reference set.
 
@@ -158,7 +158,7 @@ The implementation contains no direct dependency on:
 
 ## Verification
 
-Unit coverage added by AP-03 verifies:
+Unit coverage added by Control Domain Foundation verifies:
 
 - valid initialization;
 - fail-closed invalid initial routing;

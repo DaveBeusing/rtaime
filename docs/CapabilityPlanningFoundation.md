@@ -2,7 +2,7 @@
 
 ## Scope
 
-This document records AP-04, the first deterministic planning path from an authoritative Control state to a `PreparedExecutionContract`.
+This document records Capability Planning Foundation, the first deterministic planning path from an authoritative Control state to a `PreparedExecutionContract`.
 
 The package implements the already defined architecture path:
 
@@ -22,7 +22,7 @@ The implementation remains in `rtaime.Control`. This preserves the approved 28-p
 
 Change classification: `ARCHITECTURE`.
 
-AP-04 realizes architecture boundaries already established by the binding project context. It does not introduce a new architectural boundary or replace an accepted decision, so no ADR is added.
+Capability Planning Foundation realizes architecture boundaries already established by the binding project context. It does not introduce a new architectural boundary or replace an accepted decision, so no ADR is added.
 
 ## Planning input boundary
 
@@ -56,7 +56,7 @@ Program Source  → Program Route  → Program Sink
 
 All declared sources remain represented as source endpoints, while only the authoritative Preview and Program selections are connected to the two active route nodes.
 
-Route nodes carry both a media source identity and media sink identity. This is deliberate: the existing AP-02 `PreparedExecutionBinding` can therefore express an executable route without extending or changing the Runtime contract in AP-04.
+Route nodes carry both a media source identity and media sink identity. This is deliberate: the existing V1 Contract Foundation `PreparedExecutionBinding` can therefore express an executable route without extending or changing the Runtime contract in Capability Planning Foundation.
 
 Graph validation is fail-closed for:
 
@@ -95,13 +95,13 @@ media.route
 
 A Preview route and Program route each require one unit of this capability.
 
-The current Control specification does not yet declare an exact video format, so AP-04-generated route requirements intentionally carry no video-format constraint. An empty accepted-format set means that no format constraint was declared by the requirement; it does not mean that an unknown declared format may be silently accepted.
+The current Control specification does not yet declare an exact video format, so Capability Planning Foundation-generated route requirements intentionally carry no video-format constraint. An empty accepted-format set means that no format constraint was declared by the requirement; it does not mean that an unknown declared format may be silently accepted.
 
 When a requirement does declare accepted video formats, `CapabilityRequirementMatcher` requires an exact `VideoFormat` intersection. A capability with no advertised format cannot satisfy a requirement that explicitly declares formats.
 
 ## Provider capability registry
 
-`IProviderCapabilityRegistry` is a snapshot abstraction only. AP-04 does not implement discovery, polling, lifecycle management, device probing, or vendor integration.
+`IProviderCapabilityRegistry` is a snapshot abstraction only. Capability Planning Foundation does not implement discovery, polling, lifecycle management, device probing, or vendor integration.
 
 One planning snapshot must have unique:
 
@@ -139,7 +139,7 @@ A candidate resource must:
 - meet or exceed the requirement's `RequiredCapacityUnits`,
 - not already be bound by another requirement in the same prepared execution.
 
-The final rule is intentionally conservative. The AP-02 Runtime contract carries a resource descriptor but no fractional allocation quantity. AP-04 therefore does not invent hidden partial-reservation semantics. One resource descriptor is bound at most once within one plan. Resource subdivision can only be introduced later with an explicit contract and architecture decision if required.
+The final rule is intentionally conservative. The V1 Contract Foundation Runtime contract carries a resource descriptor but no fractional allocation quantity. Capability Planning Foundation therefore does not invent hidden partial-reservation semantics. One resource descriptor is bound at most once within one plan. Resource subdivision can only be introduced later with an explicit contract and architecture decision if required.
 
 If matching capability exists but no eligible unused resource can admit a requirement, planning fails with resource exhaustion and no execution plan or prepared execution is emitted.
 
@@ -179,7 +179,7 @@ A successful admission is converted to an immutable `ExecutionPlan` containing:
 - selected provider resource,
 - route media source and sink identities.
 
-For AP-04, `PlanGeneration` follows the authoritative revision value. A new authoritative revision therefore produces a new generation while repeated planning of the same authoritative revision remains stable.
+For Capability Planning Foundation, `PlanGeneration` follows the authoritative revision value. A new authoritative revision therefore produces a new generation while repeated planning of the same authoritative revision remains stable.
 
 The `PreparedExecutionContract` is generated entirely from the validated plan. Its `PreparedExecutionId` is deterministic over the authority snapshot, plan generation, and ordered bindings.
 
@@ -187,7 +187,7 @@ Creation of a prepared execution is not a Runtime prepare operation and is not e
 
 ## Tests
 
-AP-04 unit coverage verifies:
+Capability Planning Foundation unit coverage verifies:
 
 - complete capability coverage produces a prepared execution,
 - missing capability fails closed,
@@ -204,7 +204,7 @@ Existing contract and architecture tests continue to protect the approved depend
 
 ## Evidence boundary
 
-AP-04 establishes deterministic planning semantics only.
+Capability Planning Foundation establishes deterministic planning semantics only.
 
 It does **not** prove:
 
@@ -217,4 +217,4 @@ It does **not** prove:
 - GPU or hardware support,
 - production failover.
 
-Those capabilities belong to later work packages, beginning with AP-05 Transactional Runtime Commit Foundation.
+Those capabilities belong to later work packages, beginning with Transactional Runtime Commit Transactional Runtime Commit Foundation.

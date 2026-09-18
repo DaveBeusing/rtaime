@@ -2,7 +2,7 @@
 
 ## Status
 
-AP-11 implements the governed V1 inference path on branch `governed-ai-inference`.
+Governed AI Inference implements the governed V1 inference path on branch `governed-ai-inference`.
 
 Change classification:
 
@@ -71,7 +71,7 @@ The V1 reference package is deliberately marked as a synthetic CI/reference pack
 
 ## Request model
 
-The AP-02 `GovernedInferenceRequest` remains compatible and is wrapped by `GovernedInferenceExecutionRequest` with explicit execution context.
+The V1 Contract Foundation `GovernedInferenceRequest` remains compatible and is wrapped by `GovernedInferenceExecutionRequest` with explicit execution context.
 
 The governed request path carries concepts equivalent to:
 
@@ -198,11 +198,11 @@ Automated failure evidence verifies that a provider/model execution failure:
 - leaves the committed Runtime execution and revision unchanged,
 - does not prevent the next deterministic Program frame.
 
-A real operating-system termination/restart of the `AIHost` process over a production IPC transport is not simulated as hardware/process evidence in AP-11 and remains `UNVERIFIED` until that process boundary is exercised directly.
+A real operating-system termination/restart of the `AIHost` process over a production IPC transport is not simulated as hardware/process evidence in Governed AI Inference and remains `UNVERIFIED` until that process boundary is exercised directly.
 
 ## Test and evidence obligations
 
-AP-11 includes:
+Governed AI Inference includes:
 
 - Contract evidence for additive governance contracts and descriptor-only transport,
 - Unit evidence for capability advertisement, admission, deadline, timeout, cancellation, resource recovery and result-use policy,
@@ -239,13 +239,13 @@ The following remain `UNVERIFIED` unless separately qualified:
 `UNVERIFIED` is never treated as PASS.
 
 
-## AP-55 governed person-segmentation showcase
+## Visible AI Showcase Integration governed person-segmentation showcase
 
-AP-55 promotes the existing person-segmentation reference capability into one visible production-workflow demonstration without changing the AI authority model.
+Visible AI Showcase Integration promotes the existing person-segmentation reference capability into one visible production-workflow demonstration without changing the AI authority model.
 
 RuntimeHost acts as a bounded inference consumer. It submits a committed Program `FrameDescriptor` to AIHost at no more than 5 Hz and never waits for inference inside the media loop. AIHost continues to own provider selection, resource admission, execution, timeout/failure semantics and result metadata.
 
-A usable AP-55 result must:
+A usable Visible AI Showcase Integration result must:
 
 1. succeed through AIHost;
 2. identify the submitted Program surface;

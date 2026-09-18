@@ -4,7 +4,7 @@
 
 ## Purpose
 
-AP-25 composes the software update/rollback foundation with the SQLite backup/migration/recovery foundation into one fail-closed maintenance transaction.
+Coordinated Software State Upgrade composes the software update/rollback foundation with the SQLite backup/migration/recovery foundation into one fail-closed maintenance transaction.
 
 The package deliberately does not turn updates into an unattended background service.
 
@@ -45,14 +45,14 @@ tools/state-upgrade-catalog.json
 
 inside the already verified offline software bundle. Because it is a normal bundle payload, it is covered by the bundle manifest, hash set and release signing chain.
 
-The current AP-25 catalog declares:
+The current Coordinated Software State Upgrade catalog declares:
 
 ```text
 management           target schema 1
 production-journal   target schema 1
 ```
 
-with no migration steps because AP-25 does not change a production persistence schema.
+with no migration steps because Coordinated Software State Upgrade does not change a production persistence schema.
 
 When a future release changes a schema, that release must carry the exact registered `N → N+1` migration chain in its signed catalog.
 
@@ -91,9 +91,9 @@ A missing, ambiguous or skipped migration step fails before software activation.
 
 ## Software activation
 
-Software replacement continues to use the AP-23 `Invoke-AtomicSoftwareReplacement.ps1` path.
+Software replacement continues to use the Update Discovery & Rollback `Invoke-AtomicSoftwareReplacement.ps1` path.
 
-AP-25 does not duplicate extraction, bundle trust validation or software filesystem swap logic.
+Coordinated Software State Upgrade does not duplicate extraction, bundle trust validation or software filesystem swap logic.
 
 The existing rollback slot remains:
 
@@ -160,7 +160,7 @@ The current production state catalog has no migrations, so CI does not fabricate
 
 ## Operational boundary
 
-AP-25 does not automatically:
+Coordinated Software State Upgrade does not automatically:
 
 - stop ControlHost, RuntimeHost, AIHost or Operator;
 - start hosts after maintenance;

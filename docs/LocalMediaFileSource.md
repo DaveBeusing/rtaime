@@ -7,7 +7,7 @@ David Beusing <david.beusing@gmail.com>
 
 ## Scope
 
-AP-41 introduces local SSD/HDD media as a real rtaime Media/Runtime source. It does not introduce transport controls, seeking, timeline UI, cue points, IN/OUT, playlists, streaming URLs or network media.
+Local Media File Source introduces local SSD/HDD media as a real rtaime Media/Runtime source. It does not introduce transport controls, seeking, timeline UI, cue points, IN/OUT, playlists, streaming URLs or network media.
 
 Change classification: `REALTIME_CRITICAL` for decoded-frame admission into the existing media pipeline; the probing/open path is non-real-time.
 
@@ -34,7 +34,7 @@ Files outside this allowlist fail closed before production playback. Missing, un
 - `MediaAudioCodec`;
 - `LocalMediaProbe`.
 
-Bulk decoded video/audio payloads remain implementation-local and are not added to cross-process contracts. `MediaContractVersion.Current` remains `1.0`; AP-41 is an additive contract extension and does not change existing wire semantics.
+Bulk decoded video/audio payloads remain implementation-local and are not added to cross-process contracts. `MediaContractVersion.Current` remains `1.0`; Local Media File Source is an additive contract extension and does not change existing wire semantics.
 
 ## Provider and decoder boundary
 
@@ -67,6 +67,6 @@ Coverage includes:
 - decoded frame admission through `MediaFramePipeline`;
 - embedded audio availability and shared A/V timebase.
 
-## Known limitations / handoff to AP-42
+## Known limitations / handoff to Local Media Transport
 
-AP-41 is sequential-read only. End-of-media is reported explicitly. There is intentionally no Play/Pause/Stop/Seek/Frame-Step state machine yet; those semantics belong to AP-42. Decoder seeking, resume behavior and frame-accurate positioning must build on the existing `MediaAssetId`, `LocalMediaProbe`, `MediaSourceId` and Runtime session rather than creating a second playback authority.
+Local Media File Source is sequential-read only. End-of-media is reported explicitly. There is intentionally no Play/Pause/Stop/Seek/Frame-Step state machine yet; those semantics belong to Local Media Transport. Decoder seeking, resume behavior and frame-accurate positioning must build on the existing `MediaAssetId`, `LocalMediaProbe`, `MediaSourceId` and Runtime session rather than creating a second playback authority.

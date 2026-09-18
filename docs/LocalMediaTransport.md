@@ -7,7 +7,7 @@ David Beusing <david.beusing@gmail.com>
 
 ## Scope
 
-AP-42 adds deterministic transport semantics to the AP-41 local-file source. The implementation remains below the Operator UI and does not add timeline, cue, IN/OUT, loop, playlist or autoplay behavior.
+Local Media Transport adds deterministic transport semantics to the Local Media File Source local-file source. The implementation remains below the Operator UI and does not add timeline, cue, IN/OUT, loop, playlist or autoplay behavior.
 
 Change classification: `REALTIME_CRITICAL` because transport commands reposition the decoder used by the RuntimeHost media path. Command evaluation itself is non-real-time.
 
@@ -26,7 +26,7 @@ The additive contract remains compatible with Media contract version `1.0` becau
 
 ## State semantics
 
-A local file that has already passed AP-41 probing enters `Ready`; AP-41 performs synchronous open/probe, so `Unloaded` and `Loading` exist in the contract for observation/composition but are not emitted by the current loaded RuntimeHost session.
+A local file that has already passed Local Media File Source probing enters `Ready`; Local Media File Source performs synchronous open/probe, so `Unloaded` and `Loading` exist in the contract for observation/composition but are not emitted by the current loaded RuntimeHost session.
 
 Allowed V1 transitions are intentionally narrow:
 
@@ -54,7 +54,7 @@ Audio buffer sample position is derived from its post-seek presentation timestam
 
 `LocalMediaRuntimeSession` owns the transport controller for the committed local source. Commands are rejected until a `PreparedExecutionContract` has been committed. `ProcessNextBoundary` emits media only while the transport is `Playing`; while paused/ready/ended it returns `NotPlaying` or `Ended` without inventing UI state.
 
-The Operator UI is not a source of truth. AP-43 must render its playhead from `MediaTransportSnapshot` and submit commands back through the control/runtime path.
+The Operator UI is not a source of truth. Media Timeline Seeker must render its playhead from `MediaTransportSnapshot` and submit commands back through the control/runtime path.
 
 ## Evidence
 
@@ -67,13 +67,13 @@ Coverage includes:
 - decoder seek failure -> Error;
 - real Media Foundation seek against a deterministic multi-frame 1080p50 H.264/AAC fixture;
 - A/V timestamp/timebase consistency after seek;
-- AP-41 local-file planning/commit/decode path remains covered.
+- Local Media File Source local-file planning/commit/decode path remains covered.
 
 The deterministic multi-frame fixture is stored directly under `tests/TestAssets/media/reference-1080p50-h264-aac-80ms.mp4`. It contains four synthetic 1080p50 video frames plus embedded 48 kHz stereo AAC audio and no third-party footage.
 
-## Handoff to AP-43
+## Handoff to Media Timeline Seeker
 
-AP-43 may rely on:
+Media Timeline Seeker may rely on:
 
 - stable zero-based frame positions;
 - exact frame-rate metadata as the timecode basis;

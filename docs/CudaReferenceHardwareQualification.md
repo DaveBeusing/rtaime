@@ -3,7 +3,7 @@
 
 ## Purpose
 
-AP-31 qualifies the existing NVIDIA CUDA Driver API backend on one explicitly selected Windows x64 NVIDIA professional GPU. The presence of `CudaGpuProcessingBackend` or a green standard CI run is not hardware qualification evidence.
+CUDA Reference Hardware Qualification qualifies the existing NVIDIA CUDA Driver API backend on one explicitly selected Windows x64 NVIDIA professional GPU. The presence of `CudaGpuProcessingBackend` or a green standard CI run is not hardware qualification evidence.
 
 The qualification is deliberately evidence-driven. A candidate remains `UNVERIFIED` until the dedicated self-hosted reference runner executes the full profile and produces a `PASSED` evidence document.
 
@@ -11,7 +11,7 @@ The qualification is deliberately evidence-driven. A candidate remains `UNVERIFI
 
 `UNVERIFIED` until a physical reference-hardware run of `.github/workflows/cuda-reference-qualification.yml` completes successfully and its immutable `cuda-reference-qualification-<run>-<attempt>` artifact is retained with the release evidence.
 
-Standard GitHub-hosted Required Gates compile and structurally verify the qualification path, but they do not satisfy AP-31 hardware evidence.
+Standard GitHub-hosted Required Gates compile and structurally verify the qualification path, but they do not satisfy CUDA Reference Hardware Qualification hardware evidence.
 
 ## Qualification profile
 
@@ -47,7 +47,7 @@ Each case compares the center output pixel with the deterministic V1 blend/compo
 
 Each case holds exactly three persistent input surfaces: A, B and layer. Every warm-up and measured output surface is disposed immediately after readback. The provider surface count must return to the three-surface baseline after every output. Leaving the case disposes all persistent inputs.
 
-This validates provider-visible allocation/release lifetime. AP-31 does not claim vendor-driver VRAM accounting beyond the device memory metadata reported by CUDA capability detection.
+This validates provider-visible allocation/release lifetime. CUDA Reference Hardware Qualification does not claim vendor-driver VRAM accounting beyond the device memory metadata reported by CUDA capability detection.
 
 ## Timing evidence
 
@@ -97,4 +97,4 @@ The workflow uploads the JSON evidence as an immutable GitHub Actions artifact f
 
 ## Scope boundary
 
-AP-31 qualifies the V1 CUDA compositor backend and its current synchronous readback behavior. It does not introduce multi-GPU scheduling, external media I/O, GPUDirect, vendor video SDK integration or a new production authority path. Those remain outside this work package or are addressed by later media-I/O work packages.
+CUDA Reference Hardware Qualification qualifies the V1 CUDA compositor backend and its current synchronous readback behavior. It does not introduce multi-GPU scheduling, external media I/O, GPUDirect, vendor video SDK integration or a new production authority path. Those remain outside this work package or are addressed by later media-I/O work packages.

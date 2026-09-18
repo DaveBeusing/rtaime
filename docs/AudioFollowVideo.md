@@ -1,13 +1,13 @@
 # Audio Follow Video
 
-Status: AP-09 foundation + AP-50 operator workflow
+Status: foundation + operator workflow
 
 Change classification:
 
 - `CONTRACT`
 - `REALTIME_CRITICAL`
 
-AP-09 introduces the minimal V1 audio path and couples it to the committed Program video selection through the `FOLLOW_VIDEO` policy.
+Audio Follow Video introduces the minimal V1 audio path and couples it to the committed Program video selection through the `FOLLOW_VIDEO` policy.
 
 ## Scope
 
@@ -150,7 +150,7 @@ Mute: true/false
 
 Gain/mute state is independent per input and does not change the FOLLOW_VIDEO mapping.
 
-The AP-09 peak value is a minimal deterministic metering proof. The effective peak is:
+The Audio Follow Video peak value is a minimal deterministic metering proof. The effective peak is:
 
 ```text
 mute ? 0 : min(1, observedPeak * gain)
@@ -212,7 +212,7 @@ Synthetic packets contain an opaque virtual handle and a deterministic test peak
 
 ## Evidence obligations
 
-AP-09 is both `CONTRACT` and `REALTIME_CRITICAL`.
+Audio Follow Video is both `CONTRACT` and `REALTIME_CRITICAL`.
 
 Required evidence therefore includes:
 
@@ -234,9 +234,9 @@ The long-run managed qualification exercises:
 
 The broad CI elapsed-time guard is a regression guard for the managed descriptor/timing path. It is not professional audio-hardware latency certification.
 
-## AP-50 operator audio workflow
+## Audio Operator Workflow operator audio workflow
 
-AP-50 promotes the existing V1 FOLLOW_VIDEO foundation into a bounded production-operator workflow without creating a second audio engine.
+Audio Operator Workflow promotes the existing V1 FOLLOW_VIDEO foundation into a bounded production-operator workflow without creating a second audio engine.
 
 The RuntimeHost remains the owner of:
 
@@ -271,7 +271,7 @@ The external queue is bounded to approximately 500 ms per source and drops oldes
 
 ### Health semantics
 
-AP-50 exposes these Runtime-owned states:
+Audio Operator Workflow exposes these Runtime-owned states:
 
 - `HEALTHY`
 - `MUTED`
@@ -284,7 +284,7 @@ AFV still follows only the committed Program video source. CUT/DISSOLVE routing 
 
 ### Scope boundary
 
-AP-50 does not add EQ, compression, limiter configuration, aux buses, a routing matrix, multichannel mixing, loudness normalization or a loudness-compliance suite. Those remain outside the V1 showcase audio workflow.
+Audio Operator Workflow does not add EQ, compression, limiter configuration, aux buses, a routing matrix, multichannel mixing, loudness normalization or a loudness-compliance suite. Those remain outside the V1 showcase audio workflow.
 ## Evidence boundary
 
 Virtual/synthetic evidence proves deterministic contract and architecture behaviour.

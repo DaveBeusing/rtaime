@@ -2,7 +2,7 @@
 
 ## Scope
 
-This document records the public, dependency-neutral semantics introduced by AP-01 in `rtaime.Core`.
+This document records the public, dependency-neutral semantics introduced by Core Domain Semantics in `rtaime.Core`.
 
 `rtaime.Core` remains the innermost managed project. It has no `rtaime.*` project dependency, no package dependency, no direct assembly reference, and no knowledge of Control, Runtime, Media, AI, providers, persistence, transports, hosts, UI, hardware, or vendor SDKs.
 
@@ -69,19 +69,19 @@ All three types use canonical invariant `numerator/denominator` formatting. Floa
 
 `CompatibilityVersion` is a `major.minor` marker with deterministic invariant parsing, formatting, comparison, and same-major inspection.
 
-It intentionally does **not** implement a compatibility policy. Contract-specific packages decide whether a producer/consumer version pair is compatible. This keeps AP-01 from silently deciding the fail-closed version behavior required later by the V1 contract work.
+It intentionally does **not** implement a compatibility policy. Contract-specific packages decide whether a producer/consumer version pair is compatible. This keeps Core Domain Semantics from silently deciding the fail-closed version behavior required later by the V1 contract work.
 
 This type is not a replacement for product/package SemVer or the repository's layered versioning governance.
 
 ## Determinism and immutability
 
-The public AP-01 value objects are immutable. Equality is value-based for the scalar value objects and canonical rational wrappers. Text representations are culture-invariant and deterministic.
+The public Core Domain Semantics value objects are immutable. Equality is value-based for the scalar value objects and canonical rational wrappers. Text representations are culture-invariant and deterministic.
 
 No bulk media data, hardware terminology, IPC type, runtime service, production graph, command model, or execution-planning concern belongs in these primitives.
 
 ## Verification
 
-AP-01 adds unit coverage for:
+Core Domain Semantics adds unit coverage for:
 
 - value equality,
 - parsing and formatting,

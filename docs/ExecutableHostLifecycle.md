@@ -2,7 +2,7 @@
 
 # Executable Host Lifecycle
 
-AP-13 established `rtaime.ControlHost`, `rtaime.RuntimeHost`, and `rtaime.AIHost` as long-lived executable processes. AP-14 added the local Windows production IPC control plane without moving authority or execution ownership between hosts. AP-15 added bounded durable ControlHost journal/checkpoint composition while keeping SQLite outside RT-critical media execution. AP-16 adds process supervision, HostInstanceId-aware reconnect and durable ControlHost authority recovery/reconciliation.
+Executable Host Lifecycle established `rtaime.ControlHost`, `rtaime.RuntimeHost`, and `rtaime.AIHost` as long-lived executable processes. Production IPC & Remote API added the local Windows production IPC control plane without moving authority or execution ownership between hosts. Durable Persistence & Journal added bounded durable ControlHost journal/checkpoint composition while keeping SQLite outside RT-critical media execution. Process Recovery & Supervision adds process supervision, HostInstanceId-aware reconnect and durable ControlHost authority recovery/reconciliation.
 
 ## Lifecycle
 
@@ -18,7 +18,7 @@ Created
 
 A startup, run-loop, or shutdown failure transitions the host to `Failed`. `Ctrl+C` and process-exit signals request cancellation; the host then drains owned IPC and subsystem resources before returning a structured exit code.
 
-A hard process termination does not execute graceful drain. AP-16 therefore treats restart/reconnect as a separate recovery path rather than pretending graceful shutdown semantics occurred.
+A hard process termination does not execute graceful drain. Process Recovery & Supervision therefore treats restart/reconnect as a separate recovery path rather than pretending graceful shutdown semantics occurred.
 
 ## Exit semantics
 
@@ -76,7 +76,7 @@ The default root is `%LOCALAPPDATA%/rtaime/data` on Windows, with an application
 
 `management.db` stores management/configuration documents and controlled production checkpoints. `production-journal.db` is the purpose-built append-only causal journal. The journal and checkpoint writers use independent bounded background queues. Authoritative commits and Program/media execution never synchronously wait for SQLite. Confirmed authoritative revisions are checkpointed asynchronously; journal/checkpoint pressure or storage failures remain observable and are drained/fail-closed during orderly shutdown.
 
-AP-16 verifies both durability lanes before activating recovered authority. A valid latest checkpoint restores the exact persisted Production Revision and routing, after which Runtime execution is queried and reconciled against the committed Runtime `AuthoritySnapshot`, not against Runtime-local `ExecutionRevision`. A Runtime execution whose AuthoritySnapshot matches the restored Control ProductionId and Production Revision is rebound as-is even when its ExecutionRevision differs. A Runtime with no committed authority or an older matching AuthorityRevision is reapplied at the same Control authority revision. A newer or foreign Runtime authority is a fail-closed recovery conflict.
+Process Recovery & Supervision verifies both durability lanes before activating recovered authority. A valid latest checkpoint restores the exact persisted Production Revision and routing, after which Runtime execution is queried and reconciled against the committed Runtime `AuthoritySnapshot`, not against Runtime-local `ExecutionRevision`. A Runtime execution whose AuthoritySnapshot matches the restored Control ProductionId and Production Revision is rebound as-is even when its ExecutionRevision differs. A Runtime with no committed authority or an older matching AuthorityRevision is reapplied at the same Control authority revision. A newer or foreign Runtime authority is a fail-closed recovery conflict.
 
 Optional RuntimeHost/AIHost supervision is endpoint-driven. Existing reachable endpoints are adopted without duplicate process launch. Restart attempts are bounded. The ControlHost executable may launch configured Runtime/AI executables, but top-level ControlHost restart remains an operating-system/service-manager responsibility so a ControlHost crash does not become an implicit termination path for already-running child hosts.
 
@@ -92,7 +92,7 @@ Environment variables:
 
 RuntimeHost composes the existing transactional runtime, virtual media reference provider, managed GPU provider path, Audio Follow Video, Program output, recording integration and a Control-facing Named Pipe server. Shutdown stops IPC before disposing recording, media pipelines and GPU resources and rejects a clean exit if GPU surfaces remain retained.
 
-If RuntimeHost is killed, ControlHost retains the last committed authoritative revision but becomes degraded and pauses authoritative mutations until a Runtime instance is available and reconciled. AP-16 does not claim zero-frame output continuity while RuntimeHost itself is absent.
+If RuntimeHost is killed, ControlHost retains the last committed authoritative revision but becomes degraded and pauses authoritative mutations until a Runtime instance is available and reconciled. Process Recovery & Supervision does not claim zero-frame output continuity while RuntimeHost itself is absent.
 
 ### AIHost
 

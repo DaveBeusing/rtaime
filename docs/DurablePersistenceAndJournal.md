@@ -95,7 +95,7 @@ Schema v1 reference files are under `schemas/persistence/v1/`.
 
 ## Recovery boundary
 
-AP-15 established the durable recovery basis:
+Durable Persistence & Journal established the durable recovery basis:
 
 ```text
 latest valid checkpoint
@@ -103,11 +103,11 @@ latest valid checkpoint
 causal Production Journal
 ```
 
-AP-16 activates that basis for ControlHost process recovery. Before a persisted authority snapshot is restored, ControlHost verifies the management SQLite store, checkpoint format and identity/version/revision/source constraints, plus Production Journal SQLite/hash-chain integrity. Only then can the recovered authority participate in Runtime reconciliation.
+Process Recovery & Supervision activates that basis for ControlHost process recovery. Before a persisted authority snapshot is restored, ControlHost verifies the management SQLite store, checkpoint format and identity/version/revision/source constraints, plus Production Journal SQLite/hash-chain integrity. Only then can the recovered authority participate in Runtime reconciliation.
 
 The Production Journal remains evidence and diagnostic history rather than a general event-sourcing replay engine. V1 recovery restores the latest qualified authoritative checkpoint and reconciles the Runtime execution's committed `AuthoritySnapshot` against that Control revision; Runtime-local `ExecutionRevision` is a separate counter and is not used as Control authority. Recovery does not reconstruct arbitrary domain state by replaying every journal record.
 
-AP-16 still does not claim exact live continuation after process crash or power loss, frame-identical Runtime continuation, preservation of in-flight transition phase, or distributed recovery. Those remain outside the qualified durability claim.
+Process Recovery & Supervision still does not claim exact live continuation after process crash or power loss, frame-identical Runtime continuation, preservation of in-flight transition phase, or distributed recovery. Those remain outside the qualified durability claim.
 
 Detailed process recovery and supervision semantics are documented in `docs/ProcessRecoveryAndSupervision.md`.
 
@@ -136,4 +136,4 @@ Persistence acceptance evidence includes:
 - architecture tests prove SQLite remains at the Persistence boundary,
 - full managed build/test suite remains green.
 
-AP-16 adds recovery evidence for valid checkpoint restore, Runtime reconciliation without authority revision advancement, recovery conflicts, process replacement and stale client/session behavior.
+Process Recovery & Supervision adds recovery evidence for valid checkpoint restore, Runtime reconciliation without authority revision advancement, recovery conflicts, process replacement and stale client/session behavior.
