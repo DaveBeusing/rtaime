@@ -23,7 +23,7 @@ public sealed class OperatorGraphicsAssetTests
 		Assert.Throws<ArgumentException>(() =>
 			new OperatorGraphicsAsset("logo.rgba", 2, 1, new byte[7]));
 		Assert.Throws<ArgumentOutOfRangeException>(() =>
-			new OperatorGraphicsAsset("logo.rgba", 513, 1, new byte[513 * 4]));
+			new OperatorGraphicsAsset("logo.rgba", 385, 1, new byte[385 * 4]));
 		Assert.Throws<ArgumentException>(() =>
 			new OperatorGraphicsAsset(" ", 1, 1, new byte[4]));
 	}
