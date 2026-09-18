@@ -92,6 +92,9 @@ tools/
     Invoke-OfflinePreflight.ps1
     Install-OfflineRelease.ps1
     Invoke-ManagedHostLifecycle.ps1
+    Invoke-WindowsServiceLifecycle.ps1
+    Invoke-ServiceManagedUpdate.ps1
+    Invoke-ServiceManagedRollback.ps1
     Invoke-InvestorDemo.ps1
     Start-rtaime-Showcase.cmd
 ```
@@ -104,7 +107,7 @@ The installed/generated bundle root exposes `rtaime.exe` as the canonical produc
 
 Starting `rtaime.exe` does not collapse the internal topology. ControlHost, RuntimeHost, AIHost and Operator remain separate product artifacts below `product/`. AppHost starts or adopts ControlHost, waits for qualified readiness, and launches Operator only when the selected startup profile requires it.
 
-The existing `tools/Invoke-ManagedHostLifecycle.ps1` remains the administrative lifecycle entry point, and `Start-rtaime-Showcase.cmd` remains the deterministic showcase compatibility entry point.
+The existing `tools/Invoke-ManagedHostLifecycle.ps1` remains available for explicit non-service lifecycle administration. Persistent Windows production operation uses `tools/Invoke-WindowsServiceLifecycle.ps1`, while service-managed update and rollback use the corresponding maintenance wrappers. `Start-rtaime-Showcase.cmd` remains the deterministic showcase compatibility entry point.
 
 ### Repository source paths vs bundle paths
 
@@ -355,9 +358,10 @@ See `InvestorDemoScenario.md` for the continuous demonstration sequence and acce
 
 The clean installer places the verified bundle tree at the requested location.
 
+Clean installation deliberately does not register or start Windows services automatically. The installed bundle contains an explicit administrative service-registration tool.
+
 It does not:
 
-- register Windows services,
 - write machine-wide environment variables,
 - configure firewall rules,
 - install GPU/media-I/O drivers,
