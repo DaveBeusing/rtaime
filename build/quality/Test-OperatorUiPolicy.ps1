@@ -229,7 +229,7 @@ Assert-Condition ($viewModel -match 'ApplyAI\(snapshot\.AIShowcase\)') "Visible 
 Assert-Condition ($viewModel -notmatch 'ManagedReferencePersonSegmentationProvider|GovernedInferenceRuntime|AIHostService|ai\.inference\.execute') "Operator must not own inference or bypass the Client SDK."
 $aiShowcasePollCount = [Regex]::Matches($viewModel, 'PeriodicTimer\(TimeSpan\.FromMilliseconds\(200\)\)').Count
 Assert-Condition ($aiShowcasePollCount -eq 1) "Visible AI Showcase must reuse the existing bounded management poll rather than add an AI UI polling loop."
-Assert-Condition ($window -match 'Text="RUNTIME HEALTH / PERFORMANCE"') "Runtime Health & Performance HUD must expose a compact Runtime health/performance HUD."
+Assert-Condition ($window -match 'Text="SYSTEM STATUS"') "Operator must expose a compact System Status surface that includes Runtime health/performance evidence."
 foreach ($binding in @("EngineHealth", "ControlHealth", "RuntimeHealth", "MediaHealth", "ProviderHealth", "GpuProviderHealth", "CurrentFormat", "FrameTime", "DroppedFrames", "Uptime", "GpuUtilization", "Vram")) {
 	Assert-Condition ($window -match "Binding $binding") "Runtime Health & Performance HUD HUD binding '$binding' is required."
 }
@@ -278,6 +278,19 @@ Assert-Condition ($demoDocumentation -match 'pre-rendered' -and $demoDocumentati
 Assert-Condition ($documentation -match 'Demo Production Package') "Operator UI documentation must record the Demo Production Package."
 
 
+Assert-Condition ($window -match 'Binding StartupComplete') "Startup presentation must remain visible until the first qualified authoritative synchronization completes."
+Assert-Condition ($window -match 'Binding EngineLifecycleState' -and $window -match 'ENGINE ') "Engine lifecycle state must stay persistently visible with text, not color alone."
+Assert-Condition ($window -match 'Binding ProgramSafety') "System Status must expose whether Program mutations are currently safe."
+Assert-Condition ($window -match 'Binding RecoveryAction') "System Status must provide a concise recovery/operator action."
+Assert-Condition ($window -match 'Binding AIStatus' -and $window -match 'Binding RecordingStatus') "System Status must distinguish AI and recording state from core Control/Runtime state."
+Assert-Condition ($theme -match 'OperatorLifecycleBadge' -and $theme -match 'Value="RECOVERING"' -and $theme -match 'Value="FAILED"') "Lifecycle presentation must provide explicit semantic states for recovery and terminal failure."
+Assert-Condition ($windowCode -match 'SynchronizeCommand\.Execute\(null\)') "Operator startup must initiate authoritative synchronization automatically."
+Assert-Condition ($viewModel -match 'Automatic full-snapshot recovery is active') "Control transport loss must enter visible automatic recovery."
+Assert-Condition ($viewModel -match 'Apply\(snapshot\)' -and $viewModel -match 'Automatic recovery restored a full authoritative Control snapshot') "Automatic recovery must restore a complete authoritative snapshot before normal operation resumes."
+Assert-Condition ($viewModel -notmatch '_client is null \|\| !IsConnected \|\| IsStale \|\| IsBusy') "The bounded management refresh must continue attempting synchronization while stale/disconnected."
+Assert-Condition ($viewModel -match 'ProgramSafety != OperatorProgramSafetyStates\.Blocked') "Unsafe lifecycle states must participate in the shared mutation gate."
+Assert-Condition ($viewModel -match 'if \(!StartupComplete && projection\.MainUiReady\)') "Startup completion must latch after initial readiness so later recovery remains visible in the main Operator."
+
 Write-Host "Operator UI policy verification PASS"
 Write-Host "Operator authority: remote Client SDK only"
 Write-Host "Design system: tokens, semantic tallies, reusable controls and keyboard focus verified"
@@ -290,7 +303,7 @@ Write-Host "Media autoplay: Program-triggered playback policy, effective-range c
 Write-Host "Graphics: PNG/RGBA load, placement, scale and confirmed show/hide through Client SDK verified"
 Write-Host "Audio: AFV, stereo/master meters, gain, mute, clipping/health and clip-audio status use Runtime observations"
 Write-Host "Recording: confirmed REC state, elapsed time, destination/name, final path and failures use RuntimeHost recording truth"
-Write-Host "Health HUD: PASS/FAIL/UNVERIFIED Runtime evidence, bounded 5 Hz projection and no locally invented GPU telemetry"
+Write-Host "System status: lifecycle, Program safety, PASS/FAIL/UNVERIFIED evidence, AI/recording state and bounded 5 Hz projection verified"
 Write-Host "AI showcase: Person Segmentation Highlight, explicit ON/OFF, AIHost execution and clean Program fallback verified"
 Write-Host "Demo Production: one-click integrity-checked Product Clip, cues, audio, lower third, transition and AI preparation verified"
 Write-Host "Program Output: display selection, start/stop, fullscreen/windowed fallback and shared Program monitoring truth verified"

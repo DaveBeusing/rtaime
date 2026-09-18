@@ -494,3 +494,32 @@ The funding-demo Operator now has an explicit presentation and lifecycle hardeni
 The existing 1920×1080, 125% and 150% DPI qualification remains unchanged, as does the local Program Output fallback behavior for second-display removal.
 
 See `docs/ShowcaseUxHardening.md` for scope, lifecycle behavior, qualification evidence and the manual showcase checklist.
+
+
+## Startup, recovery and System Status UX
+
+The Operator now presents a single coherent lifecycle vocabulary: `STARTING`, `HEALTHY`, `DEGRADED`, `RECOVERING`, `FAILED`, `STOPPING` and `STOPPED`. The visible state is a projection of existing lifecycle, authoritative synchronization and health evidence; it is not a second monitoring or supervision subsystem.
+
+### Startup
+
+A full-window startup surface remains above the production workspace until the first authoritative Control snapshot establishes qualified Operator readiness. It shows real Control, Runtime, AI and Operator states and starts ordinary Client SDK synchronization automatically. No timer is used to simulate progress.
+
+Startup completion is latched. Later service loss does not bring the startup surface back over the production UI.
+
+### Persistent engine status and safety
+
+The header always includes an `ENGINE <state>` badge with text as well as semantic styling. System Status exposes lifecycle, Program Safety, affected component, recovery action, Control/Runtime/Media/provider evidence, AI state, recording state and the existing bounded performance observations.
+
+`Program Safety = BLOCKED` participates in the shared mutation gate. Stale/recovering Control state therefore preserves observation where possible but cannot issue Preview, TAKE, graphics, audio, recording or AI mutations.
+
+### Automatic resynchronization
+
+The existing 200 ms management refresh remains the only periodic Operator management loop. It now continues attempting a full snapshot while disconnected or stale. The first successful full snapshot after a loss restores the authoritative session and clears recovery state; no local state is promoted to authority.
+
+### AI degradation
+
+An enabled AI effect that becomes unavailable, times out or fails is represented as AI-specific degradation. If Control and Runtime remain valid, the UI does not mark Program failed and continues to describe the governed fallback as independent of core production execution.
+
+### Evidence semantics
+
+System Status retains `PASS / FAIL / UNVERIFIED` semantics for subsystem evidence. Lifecycle presentation never turns missing GPU/provider metrics into healthy evidence. A terminal `FAILED` lifecycle requires explicit recovery-exhaustion evidence rather than an Operator-local retry guess.
