@@ -25,7 +25,10 @@ public sealed class VirtualSyntheticAudioSource
         double leftPeakLevel,
         double rightPeakLevel)
     {
-        _ = new rtaime.Media.AudioStereoMeter(leftPeakLevel, rightPeakLevel);
+        if (!double.IsFinite(leftPeakLevel) || leftPeakLevel is < 0 or > 1)
+            throw new ArgumentOutOfRangeException(nameof(leftPeakLevel));
+        if (!double.IsFinite(rightPeakLevel) || rightPeakLevel is < 0 or > 1)
+            throw new ArgumentOutOfRangeException(nameof(rightPeakLevel));
 
         Descriptor = descriptor ?? throw new ArgumentNullException(nameof(descriptor));
         _videoFrameRate = videoFrameRate;
