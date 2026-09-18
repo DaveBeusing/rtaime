@@ -251,11 +251,16 @@ public sealed class ProductionIpcIntegrationTests
 		Assert.Equal(MediaDeckState.Ready, opened.State);
 		Assert.Equal(50, opened.Transport!.Position.TotalFrames);
 
-		await WaitUntilAsync(async () =>
+		var autoplayDeadline = DateTime.UtcNow.AddSeconds(5);
+		while (DateTime.UtcNow < autoplayDeadline)
 		{
 			await deck.RefreshAsync();
-			return deck.Snapshot.Transport is { State: MediaTransportState.Playing, IsOnProgram: true };
-		});
+			if (deck.Snapshot.Transport is { State: MediaTransportState.Playing, IsOnProgram: true })
+				break;
+			await Task.Delay(20);
+		}
+		Assert.Equal(MediaDeckState.Playing, deck.Snapshot.State);
+		Assert.True(deck.Snapshot.Transport!.IsOnProgram);
 
 		var sourceBinOpened = await client.SynchronizeAsync();
 		var mediaTile = sourceBinOpened.Sources.Single(source => source.Id == sourceId.ToString());
