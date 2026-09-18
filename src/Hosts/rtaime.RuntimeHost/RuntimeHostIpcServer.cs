@@ -177,7 +177,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 			{
 				"runtime.ping" => ValueTask.FromResult(Success(request, "runtime.ping.response", new { status = "ready" })),
 				"runtime.providers.get" => ValueTask.FromResult(Success(request, "runtime.providers.response", ProviderDescriptors(runtime).Select(ToWire).ToArray())),
-				"runtime.snapshot.get" => ValueTask.FromResult(Success(request, "runtime.snapshot.response", ToWire(runtime.Snapshot))),
+				"runtime.snapshot.get" => ValueTask.FromResult(Success(request, "runtime.snapshot.response", ToWire(runtime.Snapshot, runtime.Format))),
 				"runtime.execution.apply" => ValueTask.FromResult(ApplyExecution(request, runtime)),
 				"runtime.media_deck.snapshot.get" => ValueTask.FromResult(MediaDeckSnapshot(request)),
 				"runtime.media_deck.open" => ValueTask.FromResult(OpenMediaDeck(request)),
@@ -308,7 +308,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 			capability.VideoFormats.Select(format => new WireVideoFormat(format.Width, format.Height, format.FrameRate.ToString(), (int)format.PixelFormat, (int)format.ScanMode)).ToArray())).ToArray(),
 		provider.Resources.Select(resource => new WireResource(resource.ResourceId.ToString(), resource.ProviderId.ToString(), resource.Kind, resource.CapacityUnits, resource.Reservable)).ToArray());
 
-	private WireRuntimeSnapshot ToWire(V1RuntimeHostSnapshot snapshot) => new(
+	private WireRuntimeSnapshot ToWire(V1RuntimeHostSnapshot snapshot, VideoFormat format) => new(
 		snapshot.Runtime.Version.ToString(),
 		snapshot.Runtime.ActiveExecutionId?.ToString(),
 		snapshot.Runtime.ExecutionRevision.Value,
@@ -318,7 +318,11 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		_committedAuthorityRevision?.Value,
 		snapshot.NextSequenceNumber,
 		(int)snapshot.TimingHealth,
-		snapshot.ActiveGpuSurfaces);
+		snapshot.ActiveGpuSurfaces,
+		new WireVideoFormat(format.Width, format.Height, format.FrameRate.ToString(), (int)format.PixelFormat, (int)format.ScanMode),
+		snapshot.InputSignals.OrderBy(pair => pair.Key.ToString(), StringComparer.Ordinal)
+			.Select(pair => new WireInputSignal(pair.Key.ToString(), pair.Value.ToString().ToUpperInvariant()))
+			.ToArray());
 
 	private static WireApplyResponse ToWire(RuntimeHostApplyResult result) => new(
 		new WirePrepareResult(
@@ -394,6 +398,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 	private sealed record ServerHello(string ProtocolVersion, string Role, string HostInstanceId, Dictionary<string, string> ContractVersions);
 	private sealed record WireFailure(string Code, string Message);
 	private sealed record WireVideoFormat(uint Width, uint Height, string FrameRate, int PixelFormat, int ScanMode);
+	private sealed record WireInputSignal(string SourceId, string Health);
 	private sealed record WireCapability(string CapabilityId, string Kind, WireVideoFormat[] VideoFormats);
 	private sealed record WireResource(string ResourceId, string ProviderId, string Kind, uint CapacityUnits, bool Reservable);
 	private sealed record WireProvider(string Version, string ProviderId, string Name, int AvailabilityState, WireFailure? Failure, WireCapability[] Capabilities, WireResource[] Resources);
@@ -421,7 +426,9 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		ulong? AuthorityRevision,
 		ulong NextSequenceNumber,
 		int TimingHealth,
-		int ActiveGpuSurfaces);
+		int ActiveGpuSurfaces,
+		WireVideoFormat Format,
+		WireInputSignal[] InputSignals);
 
 	private sealed class BoundedRequestCache
 	{
