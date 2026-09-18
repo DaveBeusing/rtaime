@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Numerics;
+using System.Runtime.InteropServices;
 using rtaime.Core;
 using rtaime.Media.Contracts;
 
@@ -77,6 +78,36 @@ public readonly record struct AudioStereoMeter
 	public double PeakLevel => Math.Max(LeftPeakLevel, RightPeakLevel);
 
 	public static AudioStereoMeter Mono(double peakLevel) => new(peakLevel, peakLevel);
+}
+
+public static class AudioMetering
+{
+	public static AudioStereoMeter MeasureInterleavedStereoFloat32(ReadOnlySpan<float> samples)
+	{
+		if (samples.Length == 0)
+			return new AudioStereoMeter(0, 0);
+		if ((samples.Length & 1) != 0)
+			throw new ArgumentException("Stereo audio samples must contain an even number of interleaved values.", nameof(samples));
+
+		double left = 0;
+		double right = 0;
+		for (var index = 0; index < samples.Length; index += 2)
+		{
+			left = Math.Max(left, Peak(samples[index]));
+			right = Math.Max(right, Peak(samples[index + 1]));
+		}
+		return new AudioStereoMeter(Math.Min(1, left), Math.Min(1, right));
+	}
+
+	public static AudioStereoMeter MeasureInterleavedStereoFloat32(ReadOnlySpan<byte> payload)
+	{
+		if ((payload.Length % sizeof(float)) != 0)
+			throw new ArgumentException("Float32 audio payload length must be aligned to four bytes.", nameof(payload));
+		return MeasureInterleavedStereoFloat32(MemoryMarshal.Cast<byte, float>(payload));
+	}
+
+	private static double Peak(float sample) =>
+		float.IsFinite(sample) ? Math.Abs((double)sample) : 1;
 }
 
 public enum AudioFollowVideoStatus
