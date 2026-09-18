@@ -1,0 +1,45 @@
+{
+	"$schema": "rtaime.demo.production-package/1",
+	"$comment": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+	"name": "rtaime Funding Prototype Demo",
+	"version": "1.0",
+	"sources": {
+		"program": "Input A",
+		"productClip": "Input B"
+	},
+	"productClip": {
+		"bundleFile": "ProductClip.mp4.b64",
+		"materializedFile": "rtaime-demo-product.mp4",
+		"sha256": "b273df458854b11dada32e4cd304c9869e55feb4e6eaf8349e4e1cb51cfe99a5",
+		"autoPlayOnProgram": true,
+		"endBehavior": "HoldLastFrame",
+		"inFrame": 0,
+		"outFrame": "last",
+		"cuePoints": [
+			{ "name": "Product Intro", "frame": 5 },
+			{ "name": "Product End", "frame": 20 }
+		]
+	},
+	"graphics": {
+		"bundleFile": "LowerThird.png.b64",
+		"materializedFile": "rtaime-demo-lower-third.png",
+		"sha256": "b598fc60e2bcbb9a534af5374cb379be95c99bf8a01eb6880dcfd1e2c853d1c6",
+		"kind": "PreRenderedLowerThirdWithRtaimeLogo",
+		"initialVisible": false,
+		"positionX": 0.02,
+		"positionY": 0.80,
+		"scale": 1.0
+	},
+	"transition": {
+		"dissolveFrames": 12
+	},
+	"audio": {
+		"source": "Input B",
+		"gain": 1.0,
+		"muted": false
+	},
+	"aiShowcase": {
+		"enabled": true,
+		"feature": "Person Segmentation Highlight"
+	}
+}
