@@ -40,6 +40,16 @@ try {
 	Assert-Condition (Test-Path -LiteralPath (Join-Path $install "tools/Start-rtaime-Showcase.cmd") -PathType Leaf) "Installed bundle does not contain the one-click showcase entry point."
 	Assert-Condition (Test-Path -LiteralPath (Join-Path $install "Start-rtaime-Showcase.cmd") -PathType Leaf) "Installed bundle root does not expose the one-click showcase entry point."
 
+	$demoManifests = @(Get-ChildItem -LiteralPath (Join-Path $install "product") -Filter "demo-production.package.json" -File -Recurse)
+	Assert-Condition ($demoManifests.Count -eq 1) "Installed bundle must contain exactly one Demo Production manifest."
+	$demoManifest = Get-Content -LiteralPath $demoManifests[0].FullName -Raw | ConvertFrom-Json
+	Assert-Condition ([string]$demoManifest.schema -eq "rtaime.demo.production-package/1") "Installed Demo Production manifest schema is unexpected."
+	foreach ($asset in @($demoManifest.productClip, $demoManifest.graphics)) {
+		foreach ($bundleFile in @($asset.bundleFiles)) {
+			Assert-Condition (Test-Path -LiteralPath (Join-Path $demoManifests[0].DirectoryName ([string]$bundleFile)) -PathType Leaf) "Installed Demo Production asset chunk '$bundleFile' is missing."
+		}
+	}
+
 	$result = & $launcher `
 		-InstallPath $install `
 		-StateRoot $stateRoot `
