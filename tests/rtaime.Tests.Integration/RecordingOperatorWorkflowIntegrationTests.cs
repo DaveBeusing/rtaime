@@ -3,6 +3,7 @@
 using rtaime.Client;
 using rtaime.ControlHost;
 using rtaime.Core;
+using rtaime.Media.Contracts;
 using rtaime.Recording;
 using rtaime.Runtime.Contracts;
 using rtaime.RuntimeHost;
