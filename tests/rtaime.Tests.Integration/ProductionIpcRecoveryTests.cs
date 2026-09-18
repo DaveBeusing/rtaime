@@ -82,6 +82,53 @@ public sealed class ProductionIpcRecoveryTests
 	}
 
 	[Fact]
+	public async Task Runtime_loss_rejects_preview_take_without_changing_confirmed_program()
+	{
+		var runtimeEndpoint = Endpoint("runtime-take-loss");
+		var controlEndpoint = Endpoint("control-take-loss");
+		using var runtimeStop = new CancellationTokenSource();
+		using var controlStop = new CancellationTokenSource();
+		var runtime = new RuntimeHostProcess(RuntimeHostProcessOptions.Default with { ListenEndpoint = runtimeEndpoint });
+		var control = new ControlHostProcess(ControlHostProcessOptions.Default with
+		{
+			ListenEndpoint = controlEndpoint,
+			RuntimeEndpoint = runtimeEndpoint,
+			ConnectTimeout = TimeSpan.FromMilliseconds(100),
+			RequestTimeout = TimeSpan.FromSeconds(1),
+			RuntimeRetryInterval = TimeSpan.FromMilliseconds(25)
+		});
+
+		var runtimeRun = runtime.RunAsync(runtimeStop.Token);
+		var controlRun = control.RunAsync(controlStop.Token);
+		await WaitUntilAsync(() => control.Lifecycle.State == ControlHostProcessState.Ready && control.Control?.HasAuthoritativeState == true);
+
+		var client = new OperatorControlClient(new NamedPipeOperatorControlTransport(controlEndpoint, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(3)));
+		var initial = await SynchronizeWithRetryAsync(client);
+		var programBefore = initial.Production.Routing.ProgramSourceId;
+		var previewTarget = initial.Sources.First(source => !string.Equals(source.Id, programBefore.ToString(), StringComparison.Ordinal));
+		var preview = await client.SelectPreviewAsync(previewTarget.Id);
+		Assert.True(preview.Accepted, preview.Failure?.ToString());
+		var revisionBefore = client.Snapshot!.Production.Revision;
+		Assert.Equal(programBefore, client.Snapshot.Production.Routing.ProgramSourceId);
+		Assert.Equal(previewTarget.Id, client.Snapshot.Production.Routing.PreviewSourceId.ToString());
+
+		runtimeStop.Cancel();
+		Assert.Equal(RuntimeHostExitCode.Success, await runtimeRun);
+		await WaitUntilAsync(() => control.Lifecycle.State == ControlHostProcessState.Degraded);
+
+		var take = await client.CutPreviewAsync();
+		Assert.False(take.Accepted);
+		Assert.NotNull(take.Failure);
+		Assert.Equal(revisionBefore, control.Control!.State.Revision);
+		Assert.Equal(programBefore, control.Control.State.Routing.ProgramSourceId);
+		Assert.Equal(programBefore, client.Snapshot!.Production.Routing.ProgramSourceId);
+		Assert.False(control.Control.HasPendingExecution);
+
+		controlStop.Cancel();
+		Assert.Equal(ControlHostExitCode.Success, await controlRun);
+	}
+
+	[Fact]
 	public async Task Operator_disconnect_requires_and_accepts_full_snapshot_resynchronization()
 	{
 		var runtimeEndpoint = Endpoint("runtime-operator-reconnect");
