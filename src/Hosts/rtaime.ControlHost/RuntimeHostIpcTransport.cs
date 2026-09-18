@@ -42,6 +42,24 @@ public sealed record RuntimeAudioProgramSnapshot(
 	bool Clipping,
 	string Health);
 
+public sealed record RuntimeRecordingSnapshot(
+	string State,
+	TimeSpan Elapsed,
+	string? Destination,
+	string? FileName,
+	string? FinalPath,
+	ulong Accepted,
+	ulong Written,
+	ulong Dropped,
+	ulong Rejected,
+	ulong WriterFailures,
+	Failure? Failure);
+
+public sealed record RuntimeRecordingCommandResult(
+	bool Succeeded,
+	RuntimeRecordingSnapshot Snapshot,
+	Failure? Failure);
+
 public sealed record RuntimeRemoteSnapshot(
 	string HostInstanceId,
 	RuntimeExecutionState Runtime,
@@ -55,6 +73,7 @@ public sealed record RuntimeRemoteSnapshot(
 	RuntimeGraphicsOverlaySnapshot GraphicsOverlay,
 	IReadOnlyDictionary<MediaSourceId, RuntimeAudioInputSnapshot> AudioInputs,
 	RuntimeAudioProgramSnapshot AudioProgram,
+	RuntimeRecordingSnapshot Recording,
 	ulong StateVersion);
 
 public sealed record RuntimeRemoteApplyResult(
@@ -160,6 +179,7 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 				FromWire,
 				EqualityComparer<MediaSourceId>.Default),
 			FromWire(snapshot.AudioProgram),
+			FromWire(snapshot.Recording),
 			response.StateVersion);
 	}
 
@@ -240,6 +260,33 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 		var wire = response.Payload.Deserialize<WireGraphicsOverlay>(Wire.JsonOptions)
 			?? throw new InvalidDataException("Runtime graphics overlay response is required.");
 		return FromWire(wire);
+	}
+
+	public async ValueTask<RuntimeRecordingCommandResult> StartRecordingAsync(
+		string destinationDirectory,
+		string fileName,
+		CancellationToken cancellationToken = default)
+	{
+		if (string.IsNullOrWhiteSpace(destinationDirectory))
+			throw new ArgumentException("Recording destination is required.", nameof(destinationDirectory));
+		if (string.IsNullOrWhiteSpace(fileName))
+			throw new ArgumentException("Recording file name is required.", nameof(fileName));
+
+		var response = await ExchangeAsync(
+			"runtime.recording.start",
+			new WireRecordingStart(
+				Identity.New().ToString(),
+				Identity.New().ToString(),
+				destinationDirectory.Trim(),
+				fileName.Trim()),
+			cancellationToken).ConfigureAwait(false);
+		return ReadRecordingCommandResult(response);
+	}
+
+	public async ValueTask<RuntimeRecordingCommandResult> StopRecordingAsync(CancellationToken cancellationToken = default)
+	{
+		var response = await ExchangeAsync("runtime.recording.stop", new { }, cancellationToken).ConfigureAwait(false);
+		return ReadRecordingCommandResult(response);
 	}
 
 	public async ValueTask<MediaDeckRuntimeSnapshot> GetMediaDeckSnapshotAsync(CancellationToken cancellationToken = default)
@@ -458,6 +505,29 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 		snapshot.Clipping,
 		AudioHealth(snapshot.Health));
 
+	private static RuntimeRecordingSnapshot FromWire(WireRecordingSnapshot snapshot) => new(
+		string.IsNullOrWhiteSpace(snapshot.State) ? "UNKNOWN" : snapshot.State.Trim().ToUpperInvariant(),
+		TimeSpan.FromTicks(Math.Max(0, snapshot.ElapsedTicks)),
+		snapshot.Destination,
+		snapshot.FileName,
+		snapshot.FinalPath,
+		snapshot.Accepted,
+		snapshot.Written,
+		snapshot.Dropped,
+		snapshot.Rejected,
+		snapshot.WriterFailures,
+		snapshot.Failure is null ? null : new Failure(snapshot.Failure.Code, snapshot.Failure.Message));
+
+	private static RuntimeRecordingCommandResult ReadRecordingCommandResult(WireEnvelope response)
+	{
+		var wire = response.Payload.Deserialize<WireRecordingCommandResult>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Runtime recording command response is required.");
+		return new RuntimeRecordingCommandResult(
+			wire.Succeeded,
+			FromWire(wire.Snapshot),
+			wire.Failure is null ? null : new Failure(wire.Failure.Code, wire.Failure.Message));
+	}
+
 	private static string AudioHealth(int health) => health switch
 	{
 		1 => "HEALTHY",
@@ -605,6 +675,9 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 	private sealed record WirePrepareResult(string Version, string PreparedExecutionId, int Status, string? ReservationId, WireFailure? Failure);
 	private sealed record WireCommitResult(string Version, int Status, string? ExecutionInstanceId, ulong ExecutionRevision, WireFailure? Failure);
 	private sealed record WireApplyResponse(WirePrepareResult Prepare, WireCommitResult? Commit, ulong? ActivationSequence);
+	private sealed record WireRecordingStart(string SessionId, string OutputId, string DestinationDirectory, string FileName);
+	private sealed record WireRecordingSnapshot(string State, long ElapsedTicks, string? Destination, string? FileName, string? FinalPath, ulong Accepted, ulong Written, ulong Dropped, ulong Rejected, ulong WriterFailures, WireFailure? Failure);
+	private sealed record WireRecordingCommandResult(bool Succeeded, WireRecordingSnapshot Snapshot, WireFailure? Failure);
 	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path, WirePreparedExecution PreparedExecution);
 	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame, bool? AutoPlayOnProgram, int? EndBehavior, long? InPointFrame, long? OutPointFrame);
 	private sealed record WireLocalMediaProbe(string Version, string AssetId, string SourceId, string FileName, int Container, int VideoCodec, int AudioCodec, uint Width, uint Height, string FrameRate, long DurationTicks);
@@ -627,7 +700,8 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 		WireInputSignal[] InputSignals,
 		WireGraphicsOverlay GraphicsOverlay,
 		WireAudioInput[] AudioInputs,
-		WireAudioProgram AudioProgram);
+		WireAudioProgram AudioProgram,
+		WireRecordingSnapshot Recording);
 
 	private static class Wire
 	{
