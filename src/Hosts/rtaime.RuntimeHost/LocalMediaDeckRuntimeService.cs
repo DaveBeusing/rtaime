@@ -84,9 +84,9 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
 			}
 
 			var result = _session.ApplyTransport(command);
-			if (!result.Accepted && result.Failure is { } failure)
+			if (!result.Succeeded && result.Failure is { } failure)
 				_failure = failure;
-			else if (result.Accepted)
+			else if (result.Succeeded)
 				_failure = null;
 			return result;
 		}
