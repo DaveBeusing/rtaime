@@ -50,7 +50,7 @@
 				</Grid.ColumnDefinitions>
 				<TextBlock Text="{Binding CurrentTimecode}" Style="{StaticResource OperatorTimecode}" FontSize="16" VerticalAlignment="Center" Margin="0,0,12,0" />
 				<Grid Grid.Column="1" Height="34" VerticalAlignment="Center">
-					<ProgressBar Minimum="0" Maximum="100" Value="{Binding ProgressPercent}" Style="{StaticResource OperatorMeter}" VerticalAlignment="Center" Foreground="{DynamicResource OperatorAccentBrush}" IsHitTestVisible="False" />
+					<ProgressBar Minimum="0" Maximum="100" Value="{Binding ProgressPercent, Mode=OneWay}" Style="{StaticResource OperatorMeter}" VerticalAlignment="Center" Foreground="{DynamicResource OperatorAccentBrush}" IsHitTestVisible="False" />
 					<Slider x:Name="TimelineSlider"
 						Minimum="0"
 						Maximum="{Binding SliderMaximum}"

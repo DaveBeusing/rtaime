@@ -134,6 +134,8 @@ Assert-Condition ($programOutputController -match '_fallbackActive' -and $progra
 Assert-Condition ($programOutputController -notmatch 'using rtaime\\.(ControlHost|RuntimeHost)|MediaElement|VideoDrawing') "Program Output presentation must not bypass the Client/monitoring boundary or create a second renderer."
 Assert-Condition ($timeline -match 'Style="\{StaticResource OperatorTimelineSlider\}"') "Timeline seeker must use the design-system slider style."
 Assert-Condition ($timeline -match 'Style="\{StaticResource OperatorMeter\}"') "Timeline progress must use the design-system meter style."
+Assert-Condition ($timeline -match 'Value="\{Binding ProgressPercent, Mode=OneWay\}"') "Read-only timeline progress must bind OneWay to avoid WPF source-write failures."
+Assert-Condition ($timeline -match 'Value="\{Binding SliderValue, Mode=OneWay\}"') "Read-only timeline slider projection must remain OneWay; seeking is handled by explicit operator interaction."
 Assert-Condition ($deck -match 'OperatorStatusBadge') "Media deck state must use shared status presentation."
 Assert-Condition ($deck -match 'AUTO PLAY ON PROGRAM') "Media Autoplay & End Behavior must expose Auto Play on Program."
 Assert-Condition ($deck -match 'Binding EndBehaviors') "Media Autoplay & End Behavior must expose deterministic media-deck end behavior selection."
@@ -195,6 +197,10 @@ Assert-Condition ($window -match 'ItemsSource="\{Binding AudioInputs\}"') "Audio
 Assert-Condition ($window -match 'Binding AudioLeftPeak') "Audio workflow must expose left Program meter."
 Assert-Condition ($window -match 'Binding AudioRightPeak') "Audio workflow must expose right Program meter."
 Assert-Condition ($window -match 'Binding AudioMasterPeak') "Audio workflow must expose master Program meter."
+foreach ($readOnlyMeter in @("AudioLeftPeak", "AudioRightPeak", "AudioMasterPeak", "LeftPeak", "RightPeak")) {
+	$pattern = 'Value="\{Binding ' + [Regex]::Escape($readOnlyMeter) + ', Mode=OneWay\}"'
+	Assert-Condition ($window -match $pattern) "Read-only audio meter '$readOnlyMeter' must bind OneWay to avoid WPF source-write failures."
+}
 Assert-Condition ($window -match 'Binding AudioAfvSourceName') "Audio workflow must identify the Program-followed AFV source."
 Assert-Condition ($window -match 'Binding AudioHealth') "Audio workflow must expose audio health/clipping state."
 Assert-Condition ($window -match 'Binding ClipAudioStatus') "Audio workflow must expose local clip audio metadata/state."
