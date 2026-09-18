@@ -370,13 +370,21 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 		if ((width & 1) != 0 || (height & 1) != 0)
 			throw new InvalidDataException("NV12 local media frames require even width and height.");
 
-		var yPlaneLength = checked(width * height);
-		var required = checked(yPlaneLength + (yPlaneLength / 2));
-		if (source.Length != required)
-			throw new InvalidDataException($"Decoded NV12 frame has '{source.Length}' bytes; expected '{required}'.");
+		var visibleYPlaneLength = checked(width * height);
+		var minimumLength = checked(visibleYPlaneLength + (visibleYPlaneLength / 2));
+		if (source.Length < minimumLength)
+			throw new InvalidDataException($"Decoded NV12 frame has '{source.Length}' bytes; expected at least '{minimumLength}'.");
 
-		var rgba = new byte[checked(yPlaneLength * 4)];
-		var uvOffset = yPlaneLength;
+		var storageHeightNumerator = checked((long)source.Length * 2);
+		var storageHeightDenominator = checked((long)width * 3);
+		if (storageHeightNumerator % storageHeightDenominator != 0)
+			throw new InvalidDataException($"Decoded NV12 frame length '{source.Length}' cannot be mapped to an integral storage height at width '{width}'.");
+		var storageHeight = checked((int)(storageHeightNumerator / storageHeightDenominator));
+		if (storageHeight < height || (storageHeight & 1) != 0)
+			throw new InvalidDataException($"Decoded NV12 storage height '{storageHeight}' is invalid for visible height '{height}'.");
+
+		var rgba = new byte[checked(visibleYPlaneLength * 4)];
+		var uvOffset = checked(width * storageHeight);
 		for (var y = 0; y < height; y++)
 		{
 			for (var x = 0; x < width; x++)
