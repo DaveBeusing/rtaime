@@ -51,6 +51,10 @@
 					<Border Style="{StaticResource OperatorStatusBadge}" Margin="0,0,8,0">
 						<TextBlock Text="{Binding RevisionLabel}" FontWeight="SemiBold" />
 					</Border>
+					<Border Style="{StaticResource OperatorStatusBadge}" Margin="0,0,8,0" ToolTip="{Binding DemoProduction.Detail, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
+						<TextBlock Text="{Binding DemoProduction.State, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" FontWeight="Bold" />
+					</Border>
+					<Button Content="Open Demo Production" Command="{Binding DemoProduction.OpenCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorProgramButton}" Margin="0,0,8,0" />
 					<Button Content="Synchronize  F5" Command="{Binding SynchronizeCommand}" Style="{StaticResource OperatorAccentButton}" />
 				</StackPanel>
 			</Grid>
