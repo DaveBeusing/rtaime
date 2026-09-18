@@ -15,11 +15,11 @@ The demo is intentionally a production-shaped architectural proof. It uses the r
 
 A packaged Windows release contains:
 
-`tools\Start-rtaime-Showcase.cmd`
+`Start-rtaime-Showcase.cmd`
 
 The presenter starts the showcase by double-clicking that entry point. No terminal commands are required.
 
-The entry point delegates to `Invoke-InvestorDemo.ps1`, which:
+The root entry point delegates to `tools\Invoke-InvestorDemo.ps1`, which:
 
 1. verifies or starts the existing managed host lifecycle;
 2. lets ControlHost supervise RuntimeHost and AIHost;
