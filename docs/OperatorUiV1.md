@@ -17,14 +17,14 @@ The professional V1 control surface provides:
 - distinct Preview and Program presentation with source identity;
 - live non-authoritative Preview and Program monitoring surfaces;
 - a source bank with explicit selection;
-- Set Preview, CUT and AUTO/DISSOLVE controls;
+- Set Preview plus Preview-to-Program CUT and AUTO/DISSOLVE controls;
 - configurable DISSOLVE duration in frames;
 - Runtime, timing and input state;
 - AI, recording, audio peak and visual-layer state;
 - command in-flight, rejected, failed and resynchronized presentation states;
 - a persistent last-event and error/rejection footer.
 
-Controls are disabled whenever the presentation snapshot is stale, synchronization is in flight, Runtime is not `READY`, or no source is selected.
+Production mutations are disabled whenever the presentation snapshot is stale, synchronization is in flight, or Runtime is not `READY`. `Set Preview` additionally requires a locally selected source. CUT/AUTO do not take the local selection directly; they take the confirmed authoritative Preview source.
 
 ## Keyboard operation
 
@@ -32,8 +32,8 @@ Controls are disabled whenever the presentation snapshot is stale, synchronizati
 | --- | --- |
 | `F5` | Synchronize authoritative state |
 | `Ctrl+P` | Set selected source to Preview |
-| `Space` | CUT selected source to Program |
-| `Ctrl+Space` | AUTO/DISSOLVE selected source to Program |
+| `Space` | CUT confirmed Preview source to Program |
+| `Ctrl+Space` | AUTO/DISSOLVE confirmed Preview source to Program |
 
 Keyboard commands invoke the same ViewModel commands as the visible buttons. They do not bypass readiness or authoritative validation.
 
@@ -95,6 +95,37 @@ At 125% and 150%, the minimum workspace remains within the available logical bou
 - the Quality gate checks 1920 x 1080 reference-layout constraints and 125%/150% scaling invariants;
 - Control/Runtime/Media authority boundaries are unchanged.
 
+## AP-47 Preview / Program production workspace
+
+AP-47 formalizes the switcher workflow as **Selected Source → confirmed Preview → confirmed Program**. The local source-bank selection is only an operator intent for `Set Preview`; it is never treated as Program authority.
+
+The workspace exposes:
+
+- distinct live Preview and Program monitors with their existing tally semantics;
+- the locally selected source next to the confirmed Preview / next-take source;
+- explicit `SET SELECTED → PREVIEW`, `CUT PREVIEW → PROGRAM` and `AUTO PREVIEW → PROGRAM` actions;
+- configurable DISSOLVE duration in frames;
+- Runtime, commit and transition state next to Program;
+- command, commit, rejection/failure and last-event state in the operator-status panel.
+
+### Authority and commit semantics
+
+`Set Preview` uses `OperatorControlClient.SelectPreviewAsync`. CUT and AUTO/DISSOLVE use `CutPreviewAsync` and `DissolvePreviewAsync`, which derive the take target from the client's last synchronized authoritative Preview routing. The Operator does not send `SelectedSource.Id` directly to Program.
+
+The Program name/id are updated only by applying a synchronized authoritative snapshot after an accepted mutation. Rejected or failed mutations do not call `Apply` with a locally invented Program state. During a take the UI reports `COMMIT PENDING`; after synchronization it reports the confirmed revision. Runtime/session loss marks the presentation unconfirmed/stale and blocks further mutation until recovery.
+
+Rapid repeated UI actions remain serialized by the existing `AsyncRelayCommand` execution guard plus `OperatorViewModel.IsBusy`; a second action cannot run concurrently while a take is in flight.
+
+### AP-47 integration evidence
+
+`ProductionIpcIntegrationTests.Operator_commands_cross_ControlHost_and_RuntimeHost_process_boundaries` proves Source → Preview → CUT Preview → Program and Preview → DISSOLVE Preview → Program over the real ControlHost/RuntimeHost IPC path.
+
+`ProductionIpcIntegrationTests.Serialized_operator_preview_takes_remain_authoritative_under_rapid_actions` performs repeated serialized Preview/take cycles without delay and verifies that every confirmed Program source matches the authoritative Preview target, revisions advance, Runtime remains committed and no pending execution is left behind.
+
+`ProductionIpcRecoveryTests.Runtime_loss_rejects_preview_take_without_changing_confirmed_program` proves that a take rejected after Runtime loss leaves the previously confirmed Program source and revision unchanged.
+
+Existing RuntimeHost restart and Operator reconnect/resynchronization tests remain the recovery evidence for the workspace; AP-47 does not introduce a second recovery mechanism.
+
 ## Verification
 
 `build/quality/Test-OperatorUiPolicy.ps1` verifies the primary UI architectural and UX guardrails, including:
@@ -108,6 +139,9 @@ At 125% and 150%, the minimum workspace remains within the available logical bou
 - keyboard command declarations;
 - live Preview/Program image bindings;
 - stale/busy/connection presentation state;
+- selected-source vs confirmed-Preview separation;
+- Preview-derived CUT/AUTO take semantics;
+- visible commit and transition status;
 - retained Client-only Operator project dependency.
 
 `build/quality/Test-OperatorMonitoringPolicy.ps1` verifies the monitoring-plane separation, bounded/loss-tolerant behavior and prohibition on management-IPC pixel transport.
