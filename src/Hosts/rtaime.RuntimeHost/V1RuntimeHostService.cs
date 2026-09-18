@@ -63,12 +63,23 @@ public sealed record V1ProgramBoundaryResult(
 	V1VisualLayerMode VisualLayerMode,
 	int ActiveGpuSurfacesAfterBoundary);
 
+public sealed record V1GraphicsOverlaySnapshot(
+	bool AssetLoaded,
+	string? AssetName,
+	uint AssetWidth,
+	uint AssetHeight,
+	bool Visible,
+	double PositionX,
+	double PositionY,
+	double Scale);
+
 public sealed record V1RuntimeHostSnapshot(
 	RuntimeExecutionState Runtime,
 	ulong NextSequenceNumber,
 	V1TimingHealthState TimingHealth,
 	IReadOnlyDictionary<MediaSourceId, V1InputSignalState> InputSignals,
 	V1VisualLayerMode VisualLayerMode,
+	V1GraphicsOverlaySnapshot GraphicsOverlay,
 	AudioFollowVideoStatistics Audio,
 	RecordingSnapshot Recording,
 	int ActiveGpuSurfaces);
@@ -94,6 +105,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private readonly Dictionary<MediaSourceId, V1InputSignalState> _inputSignals;
 	private readonly StaticRgbaSource _staticLayer;
 	private readonly DynamicRgbaSource _dynamicLayer;
+	private readonly DynamicRgbaSource _operatorGraphicsLayer;
 	private readonly ProgramRecorder _recorder;
 	private readonly RuntimeRecordingBridge _recordingBridge;
 	private readonly IProgramRecordingPayloadWriter? _recordingPayloadWriter;
@@ -105,6 +117,14 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private MediaSinkId? _programSinkId;
 	private AnchoredTransition? _transition;
 	private V1VisualLayerMode _visualLayerMode = V1VisualLayerMode.Disabled;
+	private byte[]? _operatorGraphicsAsset;
+	private string? _operatorGraphicsAssetName;
+	private uint _operatorGraphicsAssetWidth;
+	private uint _operatorGraphicsAssetHeight;
+	private bool _operatorGraphicsVisible;
+	private double _operatorGraphicsPositionX = 0.72;
+	private double _operatorGraphicsPositionY = 0.06;
+	private double _operatorGraphicsScale = 1.0;
 	private V1TimingHealthState _timingHealth = V1TimingHealthState.Recovering;
 	private ulong _nextSequenceNumber;
 	private bool _disposed;
@@ -158,6 +178,9 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		_dynamicLayer = new DynamicRgbaSource(
 			new MediaSourceId(HostIdentity.Create("v1-layer-source", "dynamic")),
 			RgbaFrameBuffer.Solid(format, 235, 200, 24, 72));
+		_operatorGraphicsLayer = new DynamicRgbaSource(
+			new MediaSourceId(HostIdentity.Create("v1-layer-source", "operator-graphics")),
+			RgbaFrameBuffer.Solid(format, 0, 0, 0, 0));
 
 		if (recordingWriter is null)
 			throw new ArgumentNullException(nameof(recordingWriter));
@@ -207,7 +230,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 					_nextSequenceNumber,
 					_timingHealth,
 					new ReadOnlyDictionary<MediaSourceId, V1InputSignalState>(new Dictionary<MediaSourceId, V1InputSignalState>(_inputSignals)),
-					_visualLayerMode,
+					_operatorGraphicsVisible ? V1VisualLayerMode.Static : _visualLayerMode,
+					GraphicsOverlaySnapshotUnsafe(),
 					_audio.Statistics,
 					_recorder.Snapshot,
 					_gpu.ActiveSurfaceCount);
@@ -368,7 +392,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				recording,
 				transitionKind,
 				blendWeight,
-				_visualLayerMode,
+				_operatorGraphicsVisible ? V1VisualLayerMode.Static : _visualLayerMode,
 				_gpu.ActiveSurfaceCount - 1);
 		}
 	}
@@ -381,6 +405,79 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			ThrowIfDisposed();
 			_visualLayerMode = mode;
 			Observe($"graphics.layer.mode:{mode}");
+		}
+	}
+
+	public V1GraphicsOverlaySnapshot LoadGraphicsOverlay(
+		string assetName,
+		uint width,
+		uint height,
+		ReadOnlySpan<byte> rgbaPixels)
+	{
+		if (string.IsNullOrWhiteSpace(assetName))
+			throw new ArgumentException("Graphics asset name is required.", nameof(assetName));
+		if (width == 0 || height == 0 || width > 512 || height > 512)
+			throw new ArgumentOutOfRangeException(nameof(width), "V1 graphics assets must be between 1x1 and 512x512 pixels.");
+		var expected = checked((int)((ulong)width * height * 4UL));
+		if (rgbaPixels.Length != expected)
+			throw new ArgumentException($"Graphics RGBA payload requires exactly '{expected}' bytes.", nameof(rgbaPixels));
+
+		lock (_gate)
+		{
+			ThrowIfDisposed();
+			_operatorGraphicsAsset = rgbaPixels.ToArray();
+			_operatorGraphicsAssetName = assetName.Trim();
+			_operatorGraphicsAssetWidth = width;
+			_operatorGraphicsAssetHeight = height;
+			RebuildOperatorGraphicsLayerUnsafe();
+			Observe($"graphics.overlay.asset.loaded:{_operatorGraphicsAssetName}:{width}x{height}");
+			return GraphicsOverlaySnapshotUnsafe();
+		}
+	}
+
+	public V1GraphicsOverlaySnapshot SetGraphicsOverlay(
+		bool visible,
+		double positionX,
+		double positionY,
+		double scale)
+	{
+		if (!double.IsFinite(positionX) || positionX is < 0 or > 1)
+			throw new ArgumentOutOfRangeException(nameof(positionX), "Graphics X position must be normalized to 0..1.");
+		if (!double.IsFinite(positionY) || positionY is < 0 or > 1)
+			throw new ArgumentOutOfRangeException(nameof(positionY), "Graphics Y position must be normalized to 0..1.");
+		if (!double.IsFinite(scale) || scale is < 0.05 or > 4.0)
+			throw new ArgumentOutOfRangeException(nameof(scale), "Graphics scale must be between 0.05 and 4.0.");
+
+		lock (_gate)
+		{
+			ThrowIfDisposed();
+			if (visible && _operatorGraphicsAsset is null)
+				throw new InvalidOperationException("A graphics asset must be loaded before the overlay can be shown.");
+
+			_operatorGraphicsVisible = visible;
+			_operatorGraphicsPositionX = positionX;
+			_operatorGraphicsPositionY = positionY;
+			_operatorGraphicsScale = scale;
+			if (_operatorGraphicsAsset is not null)
+				RebuildOperatorGraphicsLayerUnsafe();
+			Observe($"graphics.overlay.state:{visible}:{positionX:0.###}:{positionY:0.###}:{scale:0.###}");
+			return GraphicsOverlaySnapshotUnsafe();
+		}
+	}
+
+	public V1GraphicsOverlaySnapshot ClearGraphicsOverlay()
+	{
+		lock (_gate)
+		{
+			ThrowIfDisposed();
+			_operatorGraphicsAsset = null;
+			_operatorGraphicsAssetName = null;
+			_operatorGraphicsAssetWidth = 0;
+			_operatorGraphicsAssetHeight = 0;
+			_operatorGraphicsVisible = false;
+			_operatorGraphicsLayer.Update(RgbaFrameBuffer.Solid(_format, 0, 0, 0, 0));
+			Observe("graphics.overlay.cleared");
+			return GraphicsOverlaySnapshotUnsafe();
 		}
 	}
 
@@ -577,13 +674,69 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			state == V1InputSignalState.Lost ? "input-fallback" : "runtime-input");
 	}
 
-	private GpuFrame? MaterializeLayer(FrameTiming timing) => _visualLayerMode switch
+	private GpuFrame? MaterializeLayer(FrameTiming timing)
 	{
-		V1VisualLayerMode.Disabled => null,
-		V1VisualLayerMode.Static => _staticLayer.Materialize(_gpu, timing),
-		V1VisualLayerMode.Dynamic => _dynamicLayer.Materialize(_gpu, timing),
-		_ => throw new InvalidOperationException($"Unsupported visual layer mode '{_visualLayerMode}'.")
-	};
+		if (_operatorGraphicsVisible && _operatorGraphicsAsset is not null)
+			return _operatorGraphicsLayer.Materialize(_gpu, timing);
+
+		return _visualLayerMode switch
+		{
+			V1VisualLayerMode.Disabled => null,
+			V1VisualLayerMode.Static => _staticLayer.Materialize(_gpu, timing),
+			V1VisualLayerMode.Dynamic => _dynamicLayer.Materialize(_gpu, timing),
+			_ => throw new InvalidOperationException($"Unsupported visual layer mode '{_visualLayerMode}'.")
+		};
+	}
+
+	private V1GraphicsOverlaySnapshot GraphicsOverlaySnapshotUnsafe() => new(
+		_operatorGraphicsAsset is not null,
+		_operatorGraphicsAssetName,
+		_operatorGraphicsAssetWidth,
+		_operatorGraphicsAssetHeight,
+		_operatorGraphicsVisible,
+		_operatorGraphicsPositionX,
+		_operatorGraphicsPositionY,
+		_operatorGraphicsScale);
+
+	private void RebuildOperatorGraphicsLayerUnsafe()
+	{
+		var output = new byte[RgbaFrameBuffer.RequiredByteLength(_format)];
+		if (_operatorGraphicsAsset is null)
+		{
+			_operatorGraphicsLayer.Update(new RgbaFrameBuffer(_format, output));
+			return;
+		}
+
+		var sourceWidth = checked((int)_operatorGraphicsAssetWidth);
+		var sourceHeight = checked((int)_operatorGraphicsAssetHeight);
+		var targetWidth = Math.Max(1, checked((int)Math.Round(sourceWidth * _operatorGraphicsScale)));
+		var targetHeight = Math.Max(1, checked((int)Math.Round(sourceHeight * _operatorGraphicsScale)));
+		var outputWidth = checked((int)_format.Width);
+		var outputHeight = checked((int)_format.Height);
+		var originX = checked((int)Math.Round(_operatorGraphicsPositionX * Math.Max(0, outputWidth - 1)));
+		var originY = checked((int)Math.Round(_operatorGraphicsPositionY * Math.Max(0, outputHeight - 1)));
+
+		for (var y = 0; y < targetHeight; y++)
+		{
+			var destinationY = originY + y;
+			if ((uint)destinationY >= (uint)outputHeight) continue;
+			var sourceY = Math.Min(sourceHeight - 1, (int)((long)y * sourceHeight / targetHeight));
+			for (var x = 0; x < targetWidth; x++)
+			{
+				var destinationX = originX + x;
+				if ((uint)destinationX >= (uint)outputWidth) continue;
+				var sourceX = Math.Min(sourceWidth - 1, (int)((long)x * sourceWidth / targetWidth));
+				var sourceOffset = checked((sourceY * sourceWidth + sourceX) * 4);
+				var destinationOffset = checked((destinationY * outputWidth + destinationX) * 4);
+				output[destinationOffset] = _operatorGraphicsAsset[sourceOffset];
+				output[destinationOffset + 1] = _operatorGraphicsAsset[sourceOffset + 1];
+				output[destinationOffset + 2] = _operatorGraphicsAsset[sourceOffset + 2];
+				output[destinationOffset + 3] = _operatorGraphicsAsset[sourceOffset + 3];
+			}
+		}
+
+		_operatorGraphicsLayer.Update(new RgbaFrameBuffer(_format, output));
+	}
 
 	private (GpuFrame From, GpuFrame To, GpuTransition Transition, byte BlendWeight, bool Complete) ResolveTransition(
 		MediaSourceId committedSource,
