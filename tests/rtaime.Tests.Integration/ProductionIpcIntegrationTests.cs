@@ -71,17 +71,75 @@ public sealed class ProductionIpcIntegrationTests
 
 		var preview = await client.SelectPreviewAsync(sourceB.Id);
 		Assert.True(preview.Accepted, preview.Failure?.ToString());
-		var cut = await client.CutAsync(sourceB.Id);
+		Assert.Equal(sourceB.Id, client.Snapshot!.Production.Routing.PreviewSourceId.ToString());
+		Assert.Equal(sourceA.Id, client.Snapshot.Production.Routing.ProgramSourceId.ToString());
+
+		var cut = await client.CutPreviewAsync();
 		Assert.True(cut.Accepted, cut.Failure?.ToString());
+		Assert.Equal(sourceB.Id, client.Snapshot!.Production.Routing.ProgramSourceId.ToString());
+
 		var previewBack = await client.SelectPreviewAsync(sourceA.Id);
 		Assert.True(previewBack.Accepted, previewBack.Failure?.ToString());
-		var dissolve = await client.DissolveAsync(sourceA.Id, 12);
+		Assert.Equal(sourceA.Id, client.Snapshot!.Production.Routing.PreviewSourceId.ToString());
+		Assert.Equal(sourceB.Id, client.Snapshot.Production.Routing.ProgramSourceId.ToString());
+
+		var dissolve = await client.DissolvePreviewAsync(12);
 		Assert.True(dissolve.Accepted, dissolve.Failure?.ToString());
 
 		Assert.Equal(sourceA.Id, client.Snapshot!.Production.Routing.ProgramSourceId.ToString());
 		Assert.True(client.Snapshot.Production.Revision.Value >= 4);
 		Assert.True(transport.Connected);
 		Assert.True(transport.StateVersion > 1);
+		Assert.Equal(RuntimeExecutionStatus.Committed, runtime.Runtime!.Snapshot.Runtime.Status);
+
+		controlStop.Cancel();
+		runtimeStop.Cancel();
+		Assert.Equal(ControlHostExitCode.Success, await controlRun);
+		Assert.Equal(RuntimeHostExitCode.Success, await runtimeRun);
+	}
+
+	[Fact]
+	public async Task Serialized_operator_preview_takes_remain_authoritative_under_rapid_actions()
+	{
+		var runtimeEndpoint = Endpoint("runtime-rapid-takes");
+		var controlEndpoint = Endpoint("control-rapid-takes");
+		using var runtimeStop = new CancellationTokenSource();
+		using var controlStop = new CancellationTokenSource();
+		var runtime = new RuntimeHostProcess(RuntimeHostProcessOptions.Default with { ListenEndpoint = runtimeEndpoint });
+		var control = new ControlHostProcess(ControlHostProcessOptions.Default with
+		{
+			ListenEndpoint = controlEndpoint,
+			RuntimeEndpoint = runtimeEndpoint,
+			RuntimeRetryInterval = TimeSpan.FromMilliseconds(25)
+		});
+
+		var runtimeRun = runtime.RunAsync(runtimeStop.Token);
+		var controlRun = control.RunAsync(controlStop.Token);
+		await WaitUntilAsync(() => control.Lifecycle.State == ControlHostProcessState.Ready && control.Control?.HasAuthoritativeState == true);
+
+		var client = new OperatorControlClient(new NamedPipeOperatorControlTransport(controlEndpoint, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(5)));
+		var initial = await client.SynchronizeAsync();
+		var sourceA = initial.Sources[0];
+		var sourceB = initial.Sources[1];
+		var previousRevision = initial.Production.Revision.Value;
+
+		for (var index = 0; index < 8; index++)
+		{
+			var next = index % 2 == 0 ? sourceB : sourceA;
+			var preview = await client.SelectPreviewAsync(next.Id);
+			Assert.True(preview.Accepted, preview.Failure?.ToString());
+			Assert.Equal(next.Id, client.Snapshot!.Production.Routing.PreviewSourceId.ToString());
+
+			var take = index % 3 == 0
+				? await client.DissolvePreviewAsync(2)
+				: await client.CutPreviewAsync();
+			Assert.True(take.Accepted, take.Failure?.ToString());
+			Assert.Equal(next.Id, client.Snapshot!.Production.Routing.ProgramSourceId.ToString());
+			Assert.True(client.Snapshot.Production.Revision.Value > previousRevision);
+			previousRevision = client.Snapshot.Production.Revision.Value;
+			Assert.False(control.Control!.HasPendingExecution);
+		}
+
 		Assert.Equal(RuntimeExecutionStatus.Committed, runtime.Runtime!.Snapshot.Runtime.Status);
 
 		controlStop.Cancel();
