@@ -356,20 +356,27 @@ public sealed class ProgramRecorder : IAsyncDisposable
         {
             _writerFailures++;
             _failure = failure;
-            _state = RecordingLifecycleState.Failed;
+            _state = RecordingLifecycleState.Finalizing;
             _stopRequested = true;
             _queue.Clear();
             ObserveUnsafe("recording.writer.failed", failure.Message, sequence);
         }
 
+        var abortFailed = false;
         try
         {
             await _writer.AbortAsync(CancellationToken.None).ConfigureAwait(false);
         }
         catch
         {
-            lock (_gate)
+            abortFailed = true;
+        }
+
+        lock (_gate)
+        {
+            if (abortFailed)
                 ObserveUnsafe("recording.abort.failed", "Recording writer abort also failed after the primary writer failure.", sequence);
+            _state = RecordingLifecycleState.Failed;
         }
     }
 
