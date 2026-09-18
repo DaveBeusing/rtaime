@@ -19,7 +19,7 @@ The deck exposes:
 - explicit unloaded, ready, playing, paused, ended and error presentation;
 - keyboard access without stealing the existing production CUT shortcut.
 
-Playlist, clip-bank, multi-deck, autoplay-on-program, waveform, thumbnails and final showcase styling remain outside this work package.
+Playlist, clip-bank, multi-deck, waveform, thumbnails and final showcase styling remain outside AP-45. Program-triggered playback and deterministic end behavior are added by AP-52 below.
 
 ## Authority and process boundaries
 
@@ -62,7 +62,7 @@ Marker writes use optimistic storage versions and remain outside the Runtime med
 
 ## Operator lifecycle
 
-`MediaDeckViewModel` starts a lightweight 100 ms state poll only while the deck is playing. The polling loop is cancellation-aware and is disposed when the Operator window closes.
+`MediaDeckViewModel` starts a lightweight 100 ms state poll while a deck is loaded. Polling loaded state is required because RuntimeHost may start a cued READY/PAUSED deck when its source becomes committed Program. The loop is cancellation-aware and is disposed when the Operator window closes.
 
 The WPF file dialog selects an MP4 path only. Opening the selected path still crosses the full Client -> ControlHost -> RuntimeHost path.
 
@@ -99,3 +99,67 @@ AP-45 requires:
 - provider smoke.
 
 The work package is complete only when those gates are green.
+
+
+## AP-52 Media Autoplay & End Behavior
+
+AP-52 makes the single local-media deck behave like a bounded production clip player when its assigned source becomes Program.
+
+Playback policy is configured through the existing command path:
+
+```text
+Operator
+  -> rtaime.Client MediaDeckController
+  -> ControlHost MediaDeckControlService
+  -> RuntimeHost LocalMediaDeckRuntimeService
+```
+
+No WPF timer or local UI event starts production playback. RuntimeHost observes the source bound to the committed Program sink. A rising edge from off-Program to on-Program starts the deck when **Auto Play on Program** is enabled. This applies equally to CUT and DISSOLVE because both converge on the same committed Runtime execution state.
+
+### Effective playback range
+
+Persisted ControlHost marker state remains authoritative for IN and OUT. When playback policy or markers change, ControlHost sends RuntimeHost the confirmed effective range.
+
+The range is:
+
+- start = IN when set, otherwise clip frame 0;
+- end = OUT when set, otherwise the final clip frame.
+
+A valid cue position already inside this range is preserved when the source is taken to Program. If the transport is ended or outside the effective range, Program autoplay seeks to effective IN before playing.
+
+Remaining time and the visible countdown are calculated against the effective OUT rather than the physical file duration. Source-tile remaining time uses the same effective value.
+
+### End behavior
+
+The V1 deck exposes four explicit end modes:
+
+- **Hold Last Frame**: transport enters ENDED while holding the effective OUT frame;
+- **Stop**: transport returns to READY at clip frame 0;
+- **Loop**: transport seeks to effective IN and continues PLAYING;
+- **Return to IN**: transport becomes PAUSED at effective IN.
+
+Loop therefore respects IN/OUT rather than looping the complete source file.
+
+Removing the media source from Program does **not** automatically pause it in AP-52. Auto-pause-on-remove was optional in the work-package definition and is intentionally not claimed without a stronger product rule.
+
+### Runtime video and audio feed
+
+The local-media Runtime worker now stages successfully decoded RGBA video into the existing V1 external-input surface for the assigned source, alongside the already existing Float32 audio feed. The clip must match the active V1 Program video format exactly; AP-52 does not introduce scaling or format conversion.
+
+Raw media remains inside RuntimeHost. Management IPC continues to carry only commands, metadata and confirmed state.
+
+### Evidence
+
+AP-52 qualification covers:
+
+- cued media starting when its source becomes Program;
+- CUT and DISSOLVE through real ControlHost/RuntimeHost IPC;
+- Hold Last Frame, Stop, Loop and Return to IN;
+- IN/OUT effective-range enforcement;
+- loop restart at effective IN;
+- effective remaining/countdown metadata;
+- retake after ENDED;
+- disabled Auto Play preserving PAUSED state;
+- client round-trip of confirmed playback policy.
+
+Playlist auto-advance, rundown automation and macros remain out of scope.
