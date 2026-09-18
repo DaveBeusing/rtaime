@@ -331,39 +331,61 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 
 	private static void ConfigureDecodedVideo(IMFSourceReader reader, uint streamIndex)
 	{
+		var nativeType = GetNativeMediaType(reader, streamIndex);
 		MediaFoundation.ThrowIfFailed(MediaFoundation.MFCreateMediaType(out var mediaType));
 		try
 		{
+			MediaFoundation.ThrowIfFailed(nativeType.CopyAllItems(mediaType));
 			var majorKey = MediaFoundation.MfMtMajorType;
 			var majorValue = MediaFoundation.MfMediaTypeVideo;
 			MediaFoundation.ThrowIfFailed(mediaType.SetGUID(ref majorKey, ref majorValue));
 			var subtypeKey = MediaFoundation.MfMtSubtype;
 			var subtypeValue = MediaFoundation.MfVideoFormatRgb32;
 			MediaFoundation.ThrowIfFailed(mediaType.SetGUID(ref subtypeKey, ref subtypeValue));
+			var independentKey = MediaFoundation.MfMtAllSamplesIndependent;
+			MediaFoundation.ThrowIfFailed(mediaType.SetUINT32(ref independentKey, 1));
 			MediaFoundation.ThrowIfFailed(reader.SetCurrentMediaType(streamIndex, IntPtr.Zero, mediaType));
 		}
 		finally
 		{
 			MediaFoundation.ReleaseComObject(mediaType);
+			MediaFoundation.ReleaseComObject(nativeType);
 		}
 	}
 
 	private static void ConfigureDecodedAudio(IMFSourceReader reader, uint streamIndex)
 	{
+		var nativeType = GetNativeMediaType(reader, streamIndex);
 		MediaFoundation.ThrowIfFailed(MediaFoundation.MFCreateMediaType(out var mediaType));
 		try
 		{
+			MediaFoundation.ThrowIfFailed(nativeType.CopyAllItems(mediaType));
 			var majorKey = MediaFoundation.MfMtMajorType;
 			var majorValue = MediaFoundation.MfMediaTypeAudio;
 			MediaFoundation.ThrowIfFailed(mediaType.SetGUID(ref majorKey, ref majorValue));
 			var subtypeKey = MediaFoundation.MfMtSubtype;
 			var subtypeValue = MediaFoundation.MfAudioFormatFloat;
 			MediaFoundation.ThrowIfFailed(mediaType.SetGUID(ref subtypeKey, ref subtypeValue));
+
+			var channelKey = MediaFoundation.MfMtAudioNumChannels;
+			MediaFoundation.ThrowIfFailed(mediaType.SetUINT32(ref channelKey, 2));
+			var sampleRateKey = MediaFoundation.MfMtAudioSamplesPerSecond;
+			MediaFoundation.ThrowIfFailed(mediaType.SetUINT32(ref sampleRateKey, 48_000));
+			var bitsPerSampleKey = MediaFoundation.MfMtAudioBitsPerSample;
+			MediaFoundation.ThrowIfFailed(mediaType.SetUINT32(ref bitsPerSampleKey, 32));
+			var blockAlignmentKey = MediaFoundation.MfMtAudioBlockAlignment;
+			MediaFoundation.ThrowIfFailed(mediaType.SetUINT32(ref blockAlignmentKey, 8));
+			var averageBytesKey = MediaFoundation.MfMtAudioAverageBytesPerSecond;
+			MediaFoundation.ThrowIfFailed(mediaType.SetUINT32(ref averageBytesKey, 384_000));
+			var independentKey = MediaFoundation.MfMtAllSamplesIndependent;
+			MediaFoundation.ThrowIfFailed(mediaType.SetUINT32(ref independentKey, 1));
+
 			MediaFoundation.ThrowIfFailed(reader.SetCurrentMediaType(streamIndex, IntPtr.Zero, mediaType));
 		}
 		finally
 		{
 			MediaFoundation.ReleaseComObject(mediaType);
+			MediaFoundation.ReleaseComObject(nativeType);
 		}
 	}
 
@@ -394,6 +416,12 @@ internal static class MediaFoundation
 	public static Guid MfSourceReaderEnableVideoProcessing = new("FB394F3D-CCF1-42EE-BBB3-F9B845D5681D");
 	public static Guid MfMtMajorType = new("48EBA18E-F8C9-4687-BF11-0A74C9F96A8F");
 	public static Guid MfMtSubtype = new("F7E34C9A-42E8-4714-B74B-CB29D72C35E5");
+	public static Guid MfMtAllSamplesIndependent = new("C9173739-5E56-461C-B713-46FB995CB95F");
+	public static Guid MfMtAudioNumChannels = new("37E48BF5-645E-4C5B-89DE-ADA9E29B696A");
+	public static Guid MfMtAudioSamplesPerSecond = new("5FAEEAE7-0290-4C31-9E8A-C534F68D9DBA");
+	public static Guid MfMtAudioBlockAlignment = new("322DE230-9EEB-43BD-AB7A-FF412251541D");
+	public static Guid MfMtAudioAverageBytesPerSecond = new("1AAB75C8-CFEF-451C-AB95-AC034B8E1731");
+	public static Guid MfMtAudioBitsPerSample = new("F2DEB57F-40FA-4764-AA33-ED4F2D1FF669");
 	public static Guid MfMediaTypeVideo = new("73646976-0000-0010-8000-00AA00389B71");
 	public static Guid MfMediaTypeAudio = new("73647561-0000-0010-8000-00AA00389B71");
 	public static Guid MfVideoFormatH264 = new("34363248-0000-0010-8000-00AA00389B71");
