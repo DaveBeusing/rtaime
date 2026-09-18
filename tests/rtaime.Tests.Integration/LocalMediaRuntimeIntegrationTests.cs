@@ -85,6 +85,34 @@ public sealed class LocalMediaRuntimeIntegrationTests
 	}
 
 	[Fact]
+	public void Reference_mp4_normalizes_to_requested_runtime_format()
+	{
+		if (!OperatingSystem.IsWindows())
+			return;
+
+		using var referenceAsset = LocalMediaTestAsset.ExtractReference1080p50();
+		var targetFormat = VideoFormat.Hd1080p59_94Rgba8;
+		var provider = new LocalMediaFileProvider(targetFormat);
+		var open = provider.TryOpen(
+			referenceAsset.Path,
+			MediaSourceId.New(),
+			new MediaAssetId(Id(101)));
+
+		Assert.True(open.Succeeded, open.Failure?.Message);
+		Assert.NotNull(open.Source);
+		Assert.Equal(targetFormat, open.Source!.Probe.VideoFormat);
+		Assert.Equal(AudioFormat.Stereo48kFloat32, open.Source.Probe.AudioFormat);
+
+		var decoded = open.Source.ReadNext(0);
+		Assert.True(decoded.Succeeded, decoded.Failure?.Message);
+		Assert.NotNull(decoded.Frame);
+		Assert.Equal(targetFormat, decoded.Frame!.Video.Surface.Format);
+		Assert.Equal((long)targetFormat.Width * targetFormat.Height * 4, decoded.Frame.RgbaPixels.Length);
+		Assert.NotNull(decoded.Frame.Audio);
+		Assert.Equal(AudioFormat.Stereo48kFloat32, decoded.Frame.Audio!.Format);
+	}
+
+	[Fact]
 	public void Missing_and_invalid_container_files_fail_without_runtime_exception()
 	{
 		var provider = new LocalMediaFileProvider();
