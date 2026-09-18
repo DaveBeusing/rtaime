@@ -50,8 +50,8 @@ public sealed record OperatorGraphicsAsset
     public OperatorGraphicsAsset(string name, uint width, uint height, byte[] rgbaPixels)
     {
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Graphics asset name is required.", nameof(name));
-        if (width == 0 || height == 0 || width > 512 || height > 512)
-            throw new ArgumentOutOfRangeException(nameof(width), "Graphics assets must be between 1x1 and 512x512 pixels.");
+        if (width == 0 || height == 0 || width > 384 || height > 384)
+            throw new ArgumentOutOfRangeException(nameof(width), "Graphics assets must be between 1x1 and 384x384 pixels.");
         ArgumentNullException.ThrowIfNull(rgbaPixels);
         var expected = checked((int)((ulong)width * height * 4UL));
         if (rgbaPixels.Length != expected)
