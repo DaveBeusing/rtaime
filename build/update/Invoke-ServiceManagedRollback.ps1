@@ -9,8 +9,7 @@ param(
 	[string]$WorkPath = '',
 	[string]$InstanceId = 'default',
 	[string]$ServiceName = 'rtaime-engine',
-	[switch]$AcknowledgeExternalProcessesStopped,
-	[switch]$CoordinatedStateHandled
+	[switch]$AcknowledgeExternalProcessesStopped
 )
 
 Set-StrictMode -Version Latest
@@ -77,7 +76,6 @@ try {
 		InstallPath = $installRoot
 		AcknowledgeProcessesStopped = $true
 	}
-	if ($CoordinatedStateHandled) { $rollbackArguments.CoordinatedStateHandled = $true }
 	& $rollbackTool @rollbackArguments | Out-Null
 
 	$serviceTool = Join-Path $installRoot 'tools/Invoke-WindowsServiceLifecycle.ps1'
