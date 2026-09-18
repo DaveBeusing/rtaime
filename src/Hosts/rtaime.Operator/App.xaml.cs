@@ -3,6 +3,7 @@
 using System.IO;
 using System.Text.Json;
 using System.Windows;
+using System.Windows.Threading;
 using rtaime.Client;
 
 namespace rtaime.Operator;
@@ -11,6 +12,7 @@ public partial class App : Application
 {
 	protected override void OnStartup(StartupEventArgs e)
 	{
+		DispatcherUnhandledException += OnDispatcherUnhandledException;
 		base.OnStartup(e);
 		if (e.Args.Any(argument => string.Equals(argument, "--headless", StringComparison.OrdinalIgnoreCase)))
 		{
@@ -25,6 +27,50 @@ public partial class App : Application
 		var window = new MainWindow();
 		MainWindow = window;
 		window.Show();
+	}
+
+	protected override void OnExit(ExitEventArgs e)
+	{
+		DispatcherUnhandledException -= OnDispatcherUnhandledException;
+		base.OnExit(e);
+	}
+
+	private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
+	{
+		var reportPath = TryWriteCrashReport(e.Exception);
+		var reportDetail = reportPath is null
+			? "A diagnostic report could not be written."
+			: $"Diagnostic report: {reportPath}";
+
+		MessageBox.Show(
+			$"rtaime Operator encountered an unexpected error and must close.\n\n{e.Exception.Message}\n\n{reportDetail}",
+			"rtaime Operator — Unexpected error",
+			MessageBoxButton.OK,
+			MessageBoxImage.Error);
+
+		e.Handled = true;
+		Shutdown(-1);
+	}
+
+	private static string? TryWriteCrashReport(Exception exception)
+	{
+		try
+		{
+			var root = Path.Combine(
+				Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+				"rtaime",
+				"logs");
+			Directory.CreateDirectory(root);
+			var path = Path.Combine(root, $"operator-crash-{DateTimeOffset.UtcNow:yyyyMMdd-HHmmssfff}.log");
+			File.WriteAllText(
+				path,
+				$"UTC: {DateTimeOffset.UtcNow:O}{Environment.NewLine}{exception}");
+			return path;
+		}
+		catch
+		{
+			return null;
+		}
 	}
 
 	private async Task RunHeadlessRecoveryProbeAsync(string endpoint, string? readyFile)

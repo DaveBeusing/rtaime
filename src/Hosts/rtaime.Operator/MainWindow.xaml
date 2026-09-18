@@ -15,6 +15,8 @@
 	SnapsToDevicePixels="True"
 	TextOptions.TextFormattingMode="Display"
 	TextOptions.TextRenderingMode="ClearType"
+	KeyboardNavigation.TabNavigation="Cycle"
+	KeyboardNavigation.ControlTabNavigation="Cycle"
 	WindowStartupLocation="CenterScreen">
 	<Window.InputBindings>
 		<KeyBinding Key="F5" Command="{Binding SynchronizeCommand}" />
@@ -54,8 +56,8 @@
 					<Border Style="{StaticResource OperatorStatusBadge}" Margin="0,0,8,0" ToolTip="{Binding DemoProduction.Detail, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
 						<TextBlock Text="{Binding DemoProduction.State, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" FontWeight="Bold" />
 					</Border>
-					<Button Content="Open Demo Production" Command="{Binding DemoProduction.OpenCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorProgramButton}" Margin="0,0,8,0" />
-					<Button Content="Synchronize  F5" Command="{Binding SynchronizeCommand}" Style="{StaticResource OperatorAccentButton}" />
+					<Button Content="Open Demo Production" Command="{Binding DemoProduction.OpenCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorProgramButton}" Margin="0,0,8,0" ToolTip="Prepare the deterministic showcase state. Preview remains under operator TAKE control." AutomationProperties.Name="Open Demo Production" />
+					<Button x:Name="SynchronizeButton" Content="Synchronize  F5" Command="{Binding SynchronizeCommand}" Style="{StaticResource OperatorAccentButton}" ToolTip="Synchronize authoritative ControlHost state (F5)." AutomationProperties.Name="Synchronize authoritative state" />
 				</StackPanel>
 			</Grid>
 		</Border>
@@ -137,7 +139,21 @@
 								<TextBlock Text="SOURCE BIN" Style="{StaticResource OperatorSectionTitle}" />
 								<TextBlock Text="Select a tile, then Set Preview / Ctrl+P" Style="{StaticResource OperatorLabel}" DockPanel.Dock="Right" VerticalAlignment="Center" />
 							</DockPanel>
-							<ListBox ItemsSource="{Binding Sources}" SelectedItem="{Binding SelectedSource}" Style="{StaticResource OperatorSourceBank}" ItemContainerStyle="{StaticResource OperatorSourceItem}">
+							<Border Margin="0,0,0,10" IsHitTestVisible="False">
+								<Border.Style>
+									<Style TargetType="Border" BasedOn="{StaticResource OperatorEmptyState}">
+										<Setter Property="Visibility" Value="Collapsed" />
+										<Style.Triggers>
+											<DataTrigger Binding="{Binding Sources.Count}" Value="0"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
+										</Style.Triggers>
+									</Style>
+								</Border.Style>
+								<StackPanel>
+									<TextBlock Text="No production sources available" FontWeight="SemiBold" />
+									<TextBlock Text="Synchronize with ControlHost to populate the source bank." Style="{StaticResource OperatorLabel}" Margin="0,3,0,0" />
+								</StackPanel>
+							</Border>
+							<ListBox AutomationProperties.Name="Production sources" ItemsSource="{Binding Sources}" SelectedItem="{Binding SelectedSource}" Style="{StaticResource OperatorSourceBank}" ItemContainerStyle="{StaticResource OperatorSourceItem}">
 								<ListBox.ItemTemplate>
 									<DataTemplate>
 										<Grid MinHeight="138">
@@ -256,9 +272,9 @@
 									<ColumnDefinition Width="10" />
 									<ColumnDefinition Width="*" />
 								</Grid.ColumnDefinitions>
-								<Button Grid.Column="0" Content="SET SELECTED → PREVIEW&#x0a;Ctrl+P" Command="{Binding SetPreviewCommand}" Style="{StaticResource OperatorAccentButton}" />
-								<Button Grid.Column="2" Content="CUT PREVIEW → PROGRAM&#x0a;Space" Command="{Binding CutCommand}" Style="{StaticResource OperatorProgramButton}" />
-								<Button Grid.Column="4" Content="AUTO PREVIEW → PROGRAM&#x0a;Ctrl+Space" Command="{Binding DissolveCommand}" Style="{StaticResource OperatorButton}" />
+								<Button Grid.Column="0" Content="SET SELECTED → PREVIEW&#x0a;Ctrl+P" Command="{Binding SetPreviewCommand}" Style="{StaticResource OperatorAccentButton}" ToolTip="Route the selected source to confirmed Preview (Ctrl+P)." AutomationProperties.Name="Set selected source to Preview" />
+								<Button Grid.Column="2" Content="CUT PREVIEW → PROGRAM&#x0a;Space" Command="{Binding CutCommand}" Style="{StaticResource OperatorProgramButton}" ToolTip="CUT the confirmed Preview source to Program (Space)." AutomationProperties.Name="Cut Preview to Program" />
+								<Button Grid.Column="4" Content="AUTO PREVIEW → PROGRAM&#x0a;Ctrl+Space" Command="{Binding DissolveCommand}" Style="{StaticResource OperatorButton}" ToolTip="Dissolve the confirmed Preview source to Program (Ctrl+Space)." AutomationProperties.Name="Dissolve Preview to Program" />
 							</Grid>
 							<DockPanel Margin="0,12,0,0">
 								<TextBlock Text="Dissolve duration" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" Margin="0,0,10,0" />
@@ -333,9 +349,9 @@
 									<ColumnDefinition Width="6" />
 									<ColumnDefinition Width="*" />
 								</Grid.ColumnDefinitions>
-								<Button Grid.Column="0" Content="START OUTPUT" Command="{Binding ProgramOutput.StartCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorProgramButton}" />
-								<Button Grid.Column="2" Content="STOP OUTPUT" Command="{Binding ProgramOutput.StopCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorButton}" />
-								<Button Grid.Column="4" Content="{Binding ProgramOutput.FullscreenAction, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Command="{Binding ProgramOutput.ToggleFullscreenCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorAccentButton}" />
+								<Button Grid.Column="0" Content="START OUTPUT" Command="{Binding ProgramOutput.StartCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorProgramButton}" ToolTip="Open the clean Program feed on the selected display." />
+								<Button Grid.Column="2" Content="STOP OUTPUT" Command="{Binding ProgramOutput.StopCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorButton}" ToolTip="Close the clean Program feed." />
+								<Button Grid.Column="4" Content="{Binding ProgramOutput.FullscreenAction, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Command="{Binding ProgramOutput.ToggleFullscreenCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorAccentButton}" ToolTip="Toggle the clean feed between fullscreen and windowed presentation." />
 							</Grid>
 							<DockPanel Margin="0,0,0,6">
 								<TextBlock Text="State" Style="{StaticResource OperatorLabel}" />
@@ -500,8 +516,8 @@
 							<TextBox Text="{Binding RecordingFileName, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource OperatorTextBox}" Margin="0,4,0,10" />
 							<Grid Margin="0,0,0,10">
 								<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="6" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-								<Button Grid.Column="0" Content="START REC" Command="{Binding StartRecordingCommand}" Style="{StaticResource OperatorProgramButton}" />
-								<Button Grid.Column="2" Content="STOP REC" Command="{Binding StopRecordingCommand}" Style="{StaticResource OperatorButton}" />
+								<Button Grid.Column="0" Content="START REC" Command="{Binding StartRecordingCommand}" Style="{StaticResource OperatorProgramButton}" ToolTip="Start recording confirmed Program video/audio/graphics." />
+								<Button Grid.Column="2" Content="STOP REC" Command="{Binding StopRecordingCommand}" Style="{StaticResource OperatorButton}" ToolTip="Stop and finalize the active Program recording." />
 							</Grid>
 							<DockPanel Margin="0,0,0,6">
 								<TextBlock Text="Samples" Style="{StaticResource OperatorLabel}" />
@@ -530,8 +546,8 @@
 							<DockPanel Margin="0,0,0,10"><TextBlock Text="Synchronization" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding AISynchronization}" Style="{StaticResource OperatorLabel}" DockPanel.Dock="Right" /></DockPanel>
 							<Grid>
 								<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="6" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-								<Button Grid.Column="0" Content="AI ON" Command="{Binding EnableAIShowcaseCommand}" Style="{StaticResource OperatorAccentButton}" />
-								<Button Grid.Column="2" Content="AI OFF" Command="{Binding DisableAIShowcaseCommand}" Style="{StaticResource OperatorButton}" />
+								<Button Grid.Column="0" Content="AI ON" Command="{Binding EnableAIShowcaseCommand}" Style="{StaticResource OperatorAccentButton}" ToolTip="Enable the governed Person Segmentation Highlight through AIHost." />
+								<Button Grid.Column="2" Content="AI OFF" Command="{Binding DisableAIShowcaseCommand}" Style="{StaticResource OperatorButton}" ToolTip="Disable the AI showcase effect without interrupting Program." />
 							</Grid>
 							<TextBlock Text="{Binding AIError}" Foreground="{DynamicResource OperatorWarningBrush}" TextWrapping="Wrap" Margin="0,8,0,0" />
 							<TextBlock Text="Inference executes in AIHost. RuntimeHost applies only synchronized segmentation results; failure falls back to clean Program." Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,8,0,0" />
@@ -556,9 +572,21 @@
 				<Grid.ColumnDefinitions>
 					<ColumnDefinition Width="Auto" />
 					<ColumnDefinition Width="*" />
+					<ColumnDefinition Width="Auto" />
 				</Grid.ColumnDefinitions>
-				<TextBlock Text="EVENT / ERROR" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" Margin="0,0,12,0" />
-				<TextBlock Grid.Column="1" Text="{Binding LastError, TargetNullValue=No active control error.}" TextWrapping="Wrap" VerticalAlignment="Center" />
+				<TextBlock Text="STATUS" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" Margin="0,0,12,0" />
+				<TextBlock Grid.Column="1" Text="{Binding LastEvent}" TextWrapping="Wrap" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+				<Border Grid.Column="2" Margin="12,0,0,0" MaxWidth="520" ToolTip="{Binding LastError}">
+					<Border.Style>
+						<Style TargetType="Border" BasedOn="{StaticResource OperatorErrorBadge}">
+							<Style.Triggers>
+								<DataTrigger Binding="{Binding LastError}" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
+								<DataTrigger Binding="{Binding LastError}" Value=""><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
+							</Style.Triggers>
+						</Style>
+					</Border.Style>
+					<TextBlock Text="{Binding LastError}" Foreground="{DynamicResource OperatorErrorBrush}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+				</Border>
 			</Grid>
 		</Border>
 	</Grid>

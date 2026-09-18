@@ -486,3 +486,11 @@ The lower-third asset is loaded but initially hidden because the current V1 expl
 Package state is presented as IDLE / LOADING / READY / FAILED in the toolbar. READY is emitted only after the Client/Runtime snapshots confirm the package's Program, Preview, Media Deck, graphics and AI enable state. Details and integrity/failure errors remain visible via the package status tooltip.
 
 See `docs/DemoProductionPackage.md` for package contents, integrity verification, repeatability and acceptance evidence.
+
+## Showcase UX hardening
+
+The funding-demo Operator now has an explicit presentation and lifecycle hardening layer with no new production authority or feature scope. It standardizes primary-action tooltips, cyclic keyboard navigation, initial focus, empty-state presentation, status/error separation, graceful asynchronous shutdown and controlled unexpected-UI-error reporting.
+
+The existing 1920×1080, 125% and 150% DPI qualification remains unchanged, as does the local Program Output fallback behavior for second-display removal.
+
+See `docs/ShowcaseUxHardening.md` for scope, lifecycle behavior, qualification evidence and the manual showcase checklist.
