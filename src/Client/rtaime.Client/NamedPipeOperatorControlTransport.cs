@@ -315,7 +315,15 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 
 	private static OperatorStatusSnapshot FromWire(WireOperatorSnapshot wire) => new(
 		FromWire(wire.Production),
-		wire.Sources.Select(source => new OperatorSourceDescriptor(source.Id, source.Name)).ToArray(),
+		wire.Sources.Select(source => new OperatorSourceDescriptor(
+			source.Id,
+			source.Name,
+			source.Type,
+			source.Format,
+			source.Health,
+			source.MediaState,
+			source.RemainingTicks is null ? null : TimeSpan.FromTicks(source.RemainingTicks.Value),
+			source.MediaFileName)).ToArray(),
 		wire.RuntimeStatus,
 		wire.TimingStatus,
 		wire.InputStatus,
@@ -365,7 +373,7 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 	private sealed record ClientHello(string ProtocolVersion, string Role, string HostInstanceId, Dictionary<string, string> ContractVersions);
 	private sealed record ServerHello(string ProtocolVersion, string Role, string HostInstanceId, Dictionary<string, string> ContractVersions);
 	private sealed record WireFailure(string Code, string Message);
-	private sealed record WireSource(string Id, string Name);
+	private sealed record WireSource(string Id, string Name, string Type, string Format, string Health, string MediaState, long? RemainingTicks, string? MediaFileName);
 	private sealed record WireProductionState(string Version, string ProductionId, ulong Revision, string PreviewSourceId, string ProgramSourceId);
 	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, ulong StateVersion);
 	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path);
