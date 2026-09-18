@@ -188,3 +188,22 @@ Malformed, oversized, unknown, role-incompatible and version-incompatible reques
 ## Evidence boundary
 
 Managed CI can prove framing, mappings, local Named Pipe behavior, cross-process command paths, cancellation, failure isolation, process restart semantics and topology invariants. It does not prove remote-network latency, broadcast hard-real-time behavior, GPU cross-process memory sharing, professional hardware timing, distributed HA or security certification.
+
+
+## AP-53 recording control extension
+
+AP-53 adds recording control to the existing private management IPC without creating a new public Control contract or transferring media payloads over Named Pipes.
+
+Operator-facing ControlHost messages:
+
+- `control.recording.start`
+- `control.recording.stop`
+
+ControlHost-facing RuntimeHost messages:
+
+- `runtime.recording.start`
+- `runtime.recording.stop`
+
+The normal ControlHost snapshot now carries the Runtime-observed recording lifecycle, elapsed time, configured destination/file name, final path, bounded recorder statistics and failure metadata.
+
+Only commands and recording metadata cross management IPC. Program RGBA pixels and Float32 audio remain inside RuntimeHost and the Recording subsystem. Recording start/stop is serialized by ControlHost's existing mutation gate but does not create or advance an authoritative Production revision.
