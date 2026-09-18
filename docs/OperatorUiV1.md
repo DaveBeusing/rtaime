@@ -249,6 +249,55 @@ RuntimeHost keeps external sample buffering bounded and consumes one exact Progr
 - AFV integration verifies that the Runtime audio source follows confirmed Program after source changes;
 - Operator UI policy verifies stereo/master meters, AFV source, health, clip-audio state, gain/mute commands and the absence of WPF meter synthesis;
 - Operator remains dependent only on `rtaime.Client`.
+
+## AP-51 Program Output / Clean Feed
+
+AP-51 adds a separate local Program Output window for presentation on a second Windows display without introducing another production renderer or authority path.
+
+The Operator can:
+
+- select any currently attached Windows display;
+- start and stop the clean-feed window explicitly;
+- switch the running output to another display;
+- toggle fullscreen and windowed presentation;
+- see a dedicated output health state and placement detail;
+- continue operating the main Operator workspace independently.
+
+The clean-feed window contains only the Program image on a black surface. It exposes no source selection, transition, graphics, audio or transport controls.
+
+### Program truth and aspect ratio
+
+ProgramOutputWindow binds directly to the existing OperatorMonitoringViewModel.ProgramImage. The same frozen bitmap object that feeds the Operator Program monitor therefore feeds the clean-feed presentation surface. AP-51 does not create another decode path, WPF media player, compositor or routing state.
+
+RuntimeHost remains the source of Program pixels. The monitoring tap is derived from the post-transition/post-graphics Program readback already used by the independent monitoring plane. Stretch=Uniform preserves the Program aspect ratio; letter/pillar boxing is black.
+
+### Display lifecycle
+
+The controller enumerates Windows displays and targets the selected physical display using native window placement so PerMonitorV2 DPI does not reinterpret physical monitor bounds as WPF DIPs.
+
+If the selected display disappears while output is running:
+
+1. the controller re-enumerates display topology;
+2. the primary display is selected;
+3. fullscreen is disabled;
+4. the clean feed remains available in a centered windowed fallback;
+5. the Operator reports FALLBACK instead of silently claiming a healthy output.
+
+A user-selected display or fullscreen change clears the fallback state. Closing the clean-feed window is equivalent to a controlled stop.
+
+### Performance and evidence boundary
+
+The clean feed deliberately reuses the existing loss-tolerant monitoring plane, so it does not add another RuntimeHost subscriber, another frame conversion, or a management-IPC bulk-media path. The Operator UI and clean-feed window share the already-created frozen ProgramImage.
+
+The current monitoring plane is monitor-grade: 320×180 and sampled every fourth production frame. This is sufficient for the AP-51 local showcase surface and preserves hot-path isolation, but it is not a claim of full-resolution/full-frame-rate broadcast output. SDI, NDI, SRT and network streaming remain outside AP-51.
+
+AP-51 evidence consists of:
+
+- the existing Runtime monitoring integration proving Program monitoring originates from the actual Program frame;
+- Operator UI policy checks proving the clean feed binds that same ProgramImage;
+- structural checks for selectable displays, start/stop, fullscreen/windowed placement and display-change fallback;
+- the existing Architecture gate proving the Operator still references only rtaime.Client.
+
 ## Verification
 
 `build/quality/Test-OperatorUiPolicy.ps1` verifies the primary UI architectural and UX guardrails, including:
