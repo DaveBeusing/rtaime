@@ -227,6 +227,39 @@ The wrapper does not bypass the existing release-trust, state-migration or rollb
 
 If update or post-update readiness fails, the operation remains failed. The wrapper does not automatically restart an uncertain engine state.
 
+Verified service-managed rollback uses:
+
+```text
+tools/Invoke-ServiceManagedRollback.ps1
+```
+
+The rollback sequence remains explicit:
+
+```text
+acknowledge Operator/provider quiescence
+	↓
+stop persistent engine service
+	↓
+verified software rollback
+	↓
+start persistent engine service
+	↓
+qualified readiness
+	↓
+Operator may reconnect
+```
+
+Example:
+
+```powershell
+./tools/Invoke-ServiceManagedRollback.ps1 \`
+	-InstallPath C:\\rtaime \`
+	-StateRoot C:\\ProgramData\\rtaime \`
+	-AcknowledgeExternalProcessesStopped
+```
+
+The rollback wrapper delegates software restoration to `Invoke-SoftwareRollback.ps1`, then requires the persistent engine to return to qualified readiness. Failed rollback or post-rollback readiness remains `FAIL`; it is never hidden as a successful recovery.
+
 ## Boot and crash recovery
 
 Automatic service startup provides the supported boot path.
