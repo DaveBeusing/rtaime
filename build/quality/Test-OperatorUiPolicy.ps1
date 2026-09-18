@@ -19,6 +19,7 @@ function Assert-Condition {
 $appPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/App.xaml"
 $windowPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MainWindow.xaml"
 $deckPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MediaDeckControl.xaml"
+$deckViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MediaDeckViewModel.cs"
 $timelinePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MediaTimelineControl.xaml"
 $viewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorViewModel.cs"
 $monitorViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorMonitoringViewModel.cs"
@@ -33,13 +34,14 @@ $manifestPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/app.manifes
 $projectPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/rtaime.Operator.csproj"
 $documentationPath = Join-Path $repositoryRoot "docs/OperatorUiV1.md"
 
-foreach ($path in @($appPath, $windowPath, $deckPath, $timelinePath, $viewModelPath, $monitorViewModelPath, $programOutputControllerPath, $programOutputWindowPath, $sourceTileViewModelPath, $audioInputViewModelPath, $graphicsLoaderPath, $tokensPath, $themePath, $manifestPath, $projectPath, $documentationPath)) {
+foreach ($path in @($appPath, $windowPath, $deckPath, $deckViewModelPath, $timelinePath, $viewModelPath, $monitorViewModelPath, $programOutputControllerPath, $programOutputWindowPath, $sourceTileViewModelPath, $audioInputViewModelPath, $graphicsLoaderPath, $tokensPath, $themePath, $manifestPath, $projectPath, $documentationPath)) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required Operator UI artifact is missing: '$path'."
 }
 
 $app = Get-Content -LiteralPath $appPath -Raw
 $window = Get-Content -LiteralPath $windowPath -Raw
 $deck = Get-Content -LiteralPath $deckPath -Raw
+$deckViewModel = Get-Content -LiteralPath $deckViewModelPath -Raw
 $timeline = Get-Content -LiteralPath $timelinePath -Raw
 $viewModel = Get-Content -LiteralPath $viewModelPath -Raw
 $monitorViewModel = Get-Content -LiteralPath $monitorViewModelPath -Raw
@@ -128,6 +130,9 @@ Assert-Condition ($deck -match 'Binding Countdown') "AP-52 must expose a visible
 Assert-Condition ($deck -match 'Binding ProgramDeckState') "AP-52 must expose whether the loaded media slot is on Program."
 Assert-Condition ($deck -match 'Binding EffectiveRange') "AP-52 must expose the effective IN/OUT playback range."
 Assert-Condition ($deck -match 'Binding ApplyPlaybackPolicyCommand') "AP-52 playback policy changes must be explicit operator actions."
+Assert-Condition ($deckViewModel -match 'ConfigurePlaybackAsync\(AutoPlayOnProgram, EndBehavior') "AP-52 policy changes must cross the Client SDK deck controller."
+Assert-Condition ($deckViewModel -match 'if \(!IsLoaded \|\| IsBusy\)') "Loaded media decks must keep observing Runtime-triggered autoplay state."
+Assert-Condition ($deckViewModel -match 'EffectiveRemainingFrames') "Deck countdown must use effective IN/OUT remaining frames."
 Assert-Condition ($deck -notmatch 'Auto Pause') "AP-52 must not imply unspecified auto-pause-on-remove semantics."
 Assert-Condition ($viewModel -match 'EffectiveRemainingFrames') "Source-tile remaining time must use the effective media range."
 Assert-Condition ($deck -match 'Remaining') "Media deck must retain remaining-time presentation."
