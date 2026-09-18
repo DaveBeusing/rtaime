@@ -174,6 +174,7 @@ public sealed class RepositoryArchitectureTests
     [InlineData("rtaime.Media.Contracts", "rtaime.Provider.Gpu", false, false, true, "contract-to-implementation")]
     [InlineData("rtaime.Operator", "rtaime.Runtime", false, false, false, "operator-bypass")]
     [InlineData("rtaime.ControlHost", "rtaime.RuntimeHost", false, false, false, "host-to-host")]
+    [InlineData("rtaime.AppHost", "rtaime.ControlHost", false, false, false, "host-to-host")]
     public void Negative_architecture_fixtures_are_rejected(
         string source,
         string target,
