@@ -160,6 +160,20 @@ public sealed class UnifiedApplicationHostTests
 	}
 
 	[Fact]
+	public async Task External_managed_operator_exit_never_stops_adopted_engine()
+	{
+		var options = CreateOptions(ApplicationStartupProfile.Interactive, ApplicationLifecycleOwnership.ExternalManaged);
+		var platform = new FakeApplicationHostPlatform(options);
+		platform.PublishReadiness(42);
+
+		var result = await new UnifiedApplicationHost(options, platform).RunAsync();
+
+		Assert.True(result.AdoptedControlHost);
+		Assert.False(platform.StopSignalWritten);
+		Assert.True(platform.IsProcessAlive(42));
+	}
+
+	[Fact]
 	public async Task External_managed_never_starts_control_host()
 	{
 		var options = CreateOptions(ApplicationStartupProfile.Interactive, ApplicationLifecycleOwnership.ExternalManaged);
