@@ -66,6 +66,14 @@ public sealed class MediaTimelineMarkerController : IAsyncDisposable
 		RaiseStateChanged();
 	}
 
+	internal void ClearConfirmedSnapshot()
+	{
+		ThrowIfDisposed();
+		lock (_gate)
+			_confirmed = null;
+		RaiseStateChanged();
+	}
+
 	public ValueTask<bool> SetInAtCurrentFrameAsync(CancellationToken cancellationToken = default) =>
 		SendAtCurrentFrameAsync(MediaMarkerCommandKind.SetInPoint, cancellationToken);
 
@@ -195,7 +203,16 @@ public sealed class MediaTimelineMarkerController : IAsyncDisposable
 		await _sendGate.WaitAsync(linked.Token).ConfigureAwait(false);
 		try
 		{
-			var result = await _sender(commandFactory(snapshot), linked.Token).ConfigureAwait(false);
+			MediaMarkerCommandResult result;
+			try
+			{
+				result = await _sender(commandFactory(snapshot), linked.Token).ConfigureAwait(false);
+			}
+			catch (MediaDeckMarkersUnavailableException)
+			{
+				ClearConfirmedSnapshot();
+				return false;
+			}
 			lock (_gate)
 				_confirmed = result.Snapshot;
 			RaiseStateChanged();
