@@ -218,8 +218,12 @@ public sealed class DemoProductionPackageController : INotifyPropertyChanged
 			throw new InvalidDataException("Demo DISSOLVE duration must be at least two frames.");
 		if (!double.IsFinite(package.Audio.Gain) || package.Audio.Gain is < 0 or > 4)
 			throw new InvalidDataException("Demo audio gain must be in the inclusive range 0..4.");
+		if (!string.Equals(package.Audio.Source, package.Sources.ProductClip, StringComparison.Ordinal))
+			throw new InvalidDataException("Demo audio source must match the Product Clip source.");
 		if (package.Audio.Muted)
 			throw new InvalidDataException("Demo Product Clip audio must start unmuted.");
+		if (!string.Equals(package.Graphics.Kind, "PreRenderedLowerThirdWithRtaimeLogo", StringComparison.Ordinal))
+			throw new InvalidDataException("AP-56 graphics asset must remain the pre-rendered lower-third/logo package asset.");
 		if (!package.AIShowcase.Enabled ||
 			!string.Equals(package.AIShowcase.Feature, "Person Segmentation Highlight", StringComparison.Ordinal))
 			throw new InvalidDataException("AP-56 requires the AP-55 Person Segmentation Highlight showcase.");
@@ -269,7 +273,7 @@ public sealed class DemoProductionPackageController : INotifyPropertyChanged
 				return destination;
 		}
 
-		var temporary = destination + "." + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture) + ".tmp";
+		var temporary = destination + "." + Guid.NewGuid().ToString("N") + ".tmp";
 		try
 		{
 			File.WriteAllBytes(temporary, bytes);
