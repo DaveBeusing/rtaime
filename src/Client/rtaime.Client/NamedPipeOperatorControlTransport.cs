@@ -250,7 +250,7 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 			? (MediaDeckState)wire.State
 			: throw new InvalidDataException("Media-deck state is invalid.");
 
-		var sourceId = string.IsNullOrWhiteSpace(wire.SourceId)
+		MediaSourceId? sourceId = string.IsNullOrWhiteSpace(wire.SourceId)
 			? null
 			: new MediaSourceId(Identity.Parse(wire.SourceId));
 		var probe = wire.Probe is null ? null : new LocalMediaProbe(
