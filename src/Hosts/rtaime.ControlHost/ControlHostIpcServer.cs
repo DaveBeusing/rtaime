@@ -185,6 +185,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			"control.graphics.overlay.load" => await LoadGraphicsOverlayAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.graphics.overlay.set" => await SetGraphicsOverlayAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.graphics.overlay.clear" => await ClearGraphicsOverlayAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.audio.input.set" => await SetAudioInputStateAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.media_deck.snapshot.get" => await GetMediaDeckSnapshotAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.media_deck.open" => await OpenMediaDeckAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.media_deck.transport" => await ApplyMediaDeckTransportAsync(request, cancellationToken).ConfigureAwait(false),
@@ -192,6 +193,51 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			"control.media_deck.close" => await CloseMediaDeckAsync(request, cancellationToken).ConfigureAwait(false),
 			_ => Error(request, "ipc.message.unknown", $"Unknown ControlHost message type '{request.MessageType}'.")
 		};
+	}
+
+	private async ValueTask<WireEnvelope> SetAudioInputStateAsync(WireEnvelope request, CancellationToken cancellationToken)
+	{
+		var wire = request.Payload.Deserialize<WireAudioInputState>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Audio input state payload is required.");
+		if (!double.IsFinite(wire.Gain) || wire.Gain is < 0 or > 4)
+			return Error(request, "control.audio.gain.invalid", "Audio gain must be finite and in the inclusive range 0..4.");
+
+		await _mutationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+		try
+		{
+			var control = _controlAccessor();
+			if (control is null || !control.HasAuthoritativeState)
+				return Error(request, "control.not_ready", "ControlHost has no committed authoritative state yet.");
+			if (!_runtimeTransport.IsConnected)
+				return Error(request, "runtime.unavailable", "RuntimeHost is not connected.");
+
+			MediaSourceId sourceId;
+			try { sourceId = new MediaSourceId(Identity.Parse(wire.SourceId)); }
+			catch (Exception exception) when (exception is FormatException or ArgumentException)
+			{
+				return Error(request, "control.audio.source.invalid", exception.Message);
+			}
+
+			if (!control.Specification.Sources.Any(source => source.SourceId.Value == sourceId.Value))
+				return Error(request, "control.audio.source.unknown", "Audio input must belong to an authoritative production source.");
+
+			try
+			{
+				var snapshot = await _runtimeTransport
+					.SetAudioInputStateAsync(sourceId, wire.Gain, wire.Muted, cancellationToken)
+					.ConfigureAwait(false);
+				NotifyObservableStateChanged();
+				return Success(request, "control.audio.input.response", ToWire(snapshot));
+			}
+			catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or NotSupportedException or FormatException or InvalidDataException or IOException)
+			{
+				return Error(request, "control.audio.input.rejected", exception.Message);
+			}
+		}
+		finally
+		{
+			_mutationGate.Release();
+		}
 	}
 
 	private async ValueTask<WireEnvelope> LoadGraphicsOverlayAsync(WireEnvelope request, CancellationToken cancellationToken)
@@ -347,6 +393,15 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		var sources = control.Specification.Sources
 			.Select(source => ToWireSource(source, runtime, mediaDeck))
 			.ToArray();
+		var audioInputs = runtime is null
+			? Array.Empty<WireAudioInput>()
+			: runtime.AudioInputs.Values
+				.OrderBy(input => input.SourceId.ToString(), StringComparer.Ordinal)
+				.Select(ToWire)
+				.ToArray();
+		var audioProgram = runtime is null
+			? WireAudioProgram.Empty
+			: ToWire(runtime.AudioProgram);
 		var payload = new WireOperatorSnapshot(
 			ToWire(state),
 			sources,
@@ -356,8 +411,10 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			"AVAILABLE",
 			"IDLE",
 			runtime?.GraphicsOverlay.Visible == true,
-			0.0,
+			audioProgram.MasterPeak,
 			runtime is null ? WireGraphicsOverlay.Empty : ToWire(runtime.GraphicsOverlay),
+			audioInputs,
+			audioProgram,
 			StateVersion);
 		return Success(request, "control.snapshot.response", payload);
 	}
@@ -514,6 +571,28 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		return checked((ulong)Interlocked.Increment(ref _sequence));
 	}
 
+	private static WireAudioInput ToWire(RuntimeAudioInputSnapshot snapshot) => new(
+		snapshot.SourceId.ToString(),
+		snapshot.StreamId.ToString(),
+		snapshot.Gain,
+		snapshot.Muted,
+		snapshot.LeftPeak,
+		snapshot.RightPeak,
+		snapshot.MasterPeak,
+		snapshot.Clipping,
+		snapshot.Health);
+
+	private static WireAudioProgram ToWire(RuntimeAudioProgramSnapshot snapshot) => new(
+		snapshot.ActiveVideoSourceId.ToString(),
+		snapshot.ActiveStreamId.ToString(),
+		snapshot.Gain,
+		snapshot.Muted,
+		snapshot.LeftPeak,
+		snapshot.RightPeak,
+		snapshot.MasterPeak,
+		snapshot.Clipping,
+		snapshot.Health);
+
 	private static WireGraphicsOverlay ToWire(RuntimeGraphicsOverlaySnapshot snapshot) => new(
 		snapshot.AssetLoaded,
 		snapshot.AssetName,
@@ -585,7 +664,13 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	{
 		public static WireGraphicsOverlay Empty { get; } = new(false, null, 0, 0, false, 0.72, 0.06, 1.0);
 	}
-	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, ulong StateVersion);
+	private sealed record WireAudioInputState(string SourceId, double Gain, bool Muted);
+	private sealed record WireAudioInput(string SourceId, string StreamId, double Gain, bool Muted, double LeftPeak, double RightPeak, double MasterPeak, bool Clipping, string Health);
+	private sealed record WireAudioProgram(string ActiveVideoSourceId, string ActiveStreamId, double Gain, bool Muted, double LeftPeak, double RightPeak, double MasterPeak, bool Clipping, string Health)
+	{
+		public static WireAudioProgram Empty { get; } = new(string.Empty, string.Empty, 1, false, 0, 0, 0, false, "UNKNOWN");
+	}
+	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, ulong StateVersion);
 	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path);
 	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame);
 	private sealed record WireMediaMarkerCommand(string Version, string AssetId, int Kind, long? PositionFrame, string? CuePointId, string? Name);
