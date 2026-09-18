@@ -558,7 +558,7 @@ public sealed class UnifiedApplicationHost
 
 	private async Task ObserveHeadlessAsync(CancellationToken cancellationToken)
 	{
-		var degraded = false;
+		DateTimeOffset? degradedSince = null;
 		while (true)
 		{
 			cancellationToken.ThrowIfCancellationRequested();
@@ -568,13 +568,15 @@ public sealed class UnifiedApplicationHost
 			var readiness = await FindHealthyReadinessAsync(cancellationToken).ConfigureAwait(false);
 			if (readiness is null)
 			{
-				degraded = true;
+				degradedSince ??= _platform.UtcNow;
 				Transition(ApplicationLifecycleState.Degraded);
+				if (_platform.UtcNow - degradedSince >= _options.Policy.StartupTimeout)
+					throw new TimeoutException("Engine readiness did not recover within the configured recovery window.");
 			}
-			else if (degraded)
+			else if (degradedSince is not null)
 			{
 				Transition(ApplicationLifecycleState.Recovering);
-				degraded = false;
+				degradedSince = null;
 				Transition(ApplicationLifecycleState.Healthy);
 			}
 			else
