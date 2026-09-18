@@ -28,13 +28,18 @@ $programOutputWindowPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/
 $sourceTileViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorSourceTileViewModel.cs"
 $audioInputViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorAudioInputViewModel.cs"
 $graphicsLoaderPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/GraphicsOverlayAssetLoader.cs"
+$demoControllerPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/DemoProductionPackageController.cs"
+$demoManifestPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/DemoAssets/demo-production.package.json"
+$demoProductPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/DemoAssets/ProductClip.mp4.b64"
+$demoGraphicsPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/DemoAssets/LowerThird.png.b64"
+$demoDocumentationPath = Join-Path $repositoryRoot "docs/DemoProductionPackage.md"
 $tokensPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Themes/OperatorTokens.xaml"
 $themePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Themes/OperatorTheme.xaml"
 $manifestPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/app.manifest"
 $projectPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/rtaime.Operator.csproj"
 $documentationPath = Join-Path $repositoryRoot "docs/OperatorUiV1.md"
 
-foreach ($path in @($appPath, $windowPath, $deckPath, $deckViewModelPath, $timelinePath, $viewModelPath, $monitorViewModelPath, $programOutputControllerPath, $programOutputWindowPath, $sourceTileViewModelPath, $audioInputViewModelPath, $graphicsLoaderPath, $tokensPath, $themePath, $manifestPath, $projectPath, $documentationPath)) {
+foreach ($path in @($appPath, $windowPath, $deckPath, $deckViewModelPath, $timelinePath, $viewModelPath, $monitorViewModelPath, $programOutputControllerPath, $programOutputWindowPath, $sourceTileViewModelPath, $audioInputViewModelPath, $graphicsLoaderPath, $demoControllerPath, $demoManifestPath, $demoProductPath, $demoGraphicsPath, $demoDocumentationPath, $tokensPath, $themePath, $manifestPath, $projectPath, $documentationPath)) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required Operator UI artifact is missing: '$path'."
 }
 
@@ -50,6 +55,9 @@ $programOutputWindow = Get-Content -LiteralPath $programOutputWindowPath -Raw
 $sourceTileViewModel = Get-Content -LiteralPath $sourceTileViewModelPath -Raw
 $audioInputViewModel = Get-Content -LiteralPath $audioInputViewModelPath -Raw
 $graphicsLoader = Get-Content -LiteralPath $graphicsLoaderPath -Raw
+$demoController = Get-Content -LiteralPath $demoControllerPath -Raw
+$demoManifest = Get-Content -LiteralPath $demoManifestPath -Raw
+$demoDocumentation = Get-Content -LiteralPath $demoDocumentationPath -Raw
 $tokens = Get-Content -LiteralPath $tokensPath -Raw
 $theme = Get-Content -LiteralPath $themePath -Raw
 $manifest = Get-Content -LiteralPath $manifestPath -Raw
@@ -242,6 +250,21 @@ Assert-Condition ($documentation -match 'AP-54 Runtime Health') "Operator UI doc
 Assert-Condition ($documentation -match 'PASS / FAIL / UNVERIFIED') "AP-54 documentation must preserve evidence-state semantics."
 Assert-Condition ($documentation -match 'AP-55 Visible AI Showcase') "Operator UI documentation must record AP-55."
 Assert-Condition ($documentation -match 'Person Segmentation Highlight') "AP-55 documentation must identify the real existing segmentation capability."
+Assert-Condition ($window -match 'Content="Open Demo Production"') "AP-56 must expose a one-click Open Demo Production action."
+Assert-Condition ($window -match 'DemoProduction\.OpenCommand') "AP-56 one-click action must bind the Demo Production controller."
+Assert-Condition ($window -match 'DemoProduction\.State') "AP-56 must expose visible package state."
+Assert-Condition ($demoController -match 'OperatorControlClient' -and $demoController -match 'MediaDeckViewModel') "AP-56 orchestration must stay on existing Client/Media Deck seams."
+Assert-Condition ($demoController -match 'SynchronizeAsync' -and $demoController -match 'SelectPreviewAsync' -and $demoController -match 'SetAudioInputStateAsync' -and $demoController -match 'LoadGraphicsOverlayAsync' -and $demoController -match 'SetAIShowcaseEnabledAsync') "AP-56 must compose existing authoritative feature seams rather than bypass them."
+Assert-Condition ($demoController -match 'SHA256\.HashData' -and $demoController -match 'LocalApplicationData') "AP-56 bundled assets must be integrity-checked before user-local materialization."
+Assert-Condition ($demoController -notmatch 'using rtaime\.(ControlHost|RuntimeHost|AIHost|Media);|GovernedInferenceRuntime|ProgramRecorder|Process\.Start') "AP-56 Operator orchestration must not own production hosts, inference, recording or host lifecycle."
+Assert-Condition ($project -match 'DemoAssets\\\*\*\\\*' -and $project -match 'CopyToPublishDirectory') "AP-56 DemoAssets must be included in build/publish output."
+foreach ($required in @('"schema": "rtaime.demo.production-package/1"', '"program": "Input A"', '"productClip": "Input B"', '"Product Intro"', '"Product End"', '"dissolveFrames": 12', '"source": "Input B"', '"feature": "Person Segmentation Highlight"')) {
+	Assert-Condition ($demoManifest -match [Regex]::Escape($required)) "AP-56 Demo Production manifest is missing '$required'."
+}
+Assert-Condition ($demoManifest -match '"initialVisible": false') "AP-56 lower third must start hidden while the AI highlight is enabled."
+Assert-Condition ($demoDocumentation -match 'pre-rendered' -and $demoDocumentation -match 'does not automatically TAKE') "AP-56 documentation must preserve the CG boundary and operator TAKE authority."
+Assert-Condition ($documentation -match 'AP-56 Demo Production Package') "Operator UI documentation must record AP-56."
+
 
 Write-Host "Operator UI policy verification PASS"
 Write-Host "Operator authority: remote Client SDK only"
@@ -256,6 +279,7 @@ Write-Host "Audio: AFV, stereo/master meters, gain, mute, clipping/health and cl
 Write-Host "Recording: confirmed REC state, elapsed time, destination/name, final path and failures use RuntimeHost recording truth"
 Write-Host "Health HUD: PASS/FAIL/UNVERIFIED Runtime evidence, bounded 5 Hz projection and no locally invented GPU telemetry"
 Write-Host "AI showcase: Person Segmentation Highlight, explicit ON/OFF, AIHost execution and clean Program fallback verified"
+Write-Host "Demo Production: one-click integrity-checked Product Clip, cues, audio, lower third, transition and AI preparation verified"
 Write-Host "Program Output: display selection, start/stop, fullscreen/windowed fallback and shared Program monitoring truth verified"
 Write-Host "Commit state: pending, confirmed, rejected/failed and resynchronization presentation verified"
 Write-Host "Keyboard controls: synchronization, Preview, CUT and DISSOLVE/AUTO declared"
