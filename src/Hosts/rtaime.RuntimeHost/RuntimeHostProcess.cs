@@ -60,6 +60,8 @@ public sealed record RuntimeHostProcessOptions(
 	RuntimeMediaIoMode MediaIoMode = RuntimeMediaIoMode.Virtual,
 	bool RequireExternalReference = false)
 {
+	public string AIEndpoint { get; init; } = "rtaime.v1.ai.default";
+
 	public static RuntimeHostProcessOptions Default => new(
 		new MediaSourceId(Identity.Parse("70000000-0000-0000-0000-00000000000a")),
 		new MediaSourceId(Identity.Parse("70000000-0000-0000-0000-00000000000b")),
@@ -82,7 +84,10 @@ public sealed record RuntimeHostProcessOptions(
 			Get(args, environment, "listen-endpoint", "RTAIME_RUNTIME_ENDPOINT", defaults.ListenEndpoint),
 			TimeSpan.FromMilliseconds(ParsePositiveInt(Get(args, environment, "shutdown-timeout-ms", "RTAIME_RUNTIME_SHUTDOWN_TIMEOUT_MS", ((int)defaults.ShutdownTimeout.TotalMilliseconds).ToString()), "shutdown-timeout-ms")),
 			ParseMediaIoMode(Get(args, environment, "media-io", "RTAIME_RUNTIME_MEDIA_IO", "virtual")),
-			ParseBoolean(Get(args, environment, "require-external-reference", "RTAIME_RUNTIME_REQUIRE_EXTERNAL_REFERENCE", "false"), "require-external-reference"));
+			ParseBoolean(Get(args, environment, "require-external-reference", "RTAIME_RUNTIME_REQUIRE_EXTERNAL_REFERENCE", "false"), "require-external-reference"))
+		{
+			AIEndpoint = Get(args, environment, "ai-endpoint", "RTAIME_AI_ENDPOINT", defaults.AIEndpoint)
+		};
 	}
 
 	public void Validate()
@@ -95,6 +100,8 @@ public sealed record RuntimeHostProcessOptions(
 			throw new ArgumentException("RuntimeHost V1 supports only 1080p50 RGBA8 and 1080p59.94 RGBA8.", nameof(Format));
 		if (string.IsNullOrWhiteSpace(ListenEndpoint))
 			throw new ArgumentException("RuntimeHost listen endpoint is required.", nameof(ListenEndpoint));
+		if (string.IsNullOrWhiteSpace(AIEndpoint))
+			throw new ArgumentException("AIHost endpoint is required.", nameof(AIEndpoint));
 		if (ShutdownTimeout <= TimeSpan.Zero)
 			throw new ArgumentOutOfRangeException(nameof(ShutdownTimeout));
 		if (!Enum.IsDefined(typeof(RuntimeMediaIoMode), MediaIoMode))
@@ -170,6 +177,7 @@ public sealed class RuntimeHostProcess
 	private readonly RuntimeHostProcessOptions _options;
 	private readonly Func<IProgramRecordingWriter> _recordingWriterFactory;
 	private readonly Func<RuntimeHostProcessOptions, IProgramRecordingWriter, V1RuntimeHostService> _runtimeFactory;
+	private readonly Func<V1RuntimeHostService, RuntimeHostProcessOptions, RuntimeAIShowcaseService> _aiShowcaseFactory;
 	private readonly Stopwatch _timingClock = Stopwatch.StartNew();
 	private readonly RuntimeTimingQualificationProbe _timingProbe;
 	private readonly RuntimeFrameDropCounter _frameDropCounter = new();
@@ -182,6 +190,7 @@ public sealed class RuntimeHostProcess
 	private V1RuntimeHostService? _runtime;
 	private LocalMediaDeckRuntimeService? _mediaDeck;
 	private RuntimeMediaIoVerticalSlice? _mediaIo;
+	private RuntimeAIShowcaseService? _aiShowcase;
 	private RuntimeHostIpcServer? _ipcServer;
 	private RuntimeHostMonitoringServer? _monitoringServer;
 	private Task? _mediaLoop;
@@ -192,7 +201,8 @@ public sealed class RuntimeHostProcess
 	public RuntimeHostProcess(
 		RuntimeHostProcessOptions options,
 		Func<IProgramRecordingWriter>? recordingWriterFactory = null,
-		Func<RuntimeHostProcessOptions, IProgramRecordingWriter, V1RuntimeHostService>? runtimeFactory = null)
+		Func<RuntimeHostProcessOptions, IProgramRecordingWriter, V1RuntimeHostService>? runtimeFactory = null,
+		Func<V1RuntimeHostService, RuntimeHostProcessOptions, RuntimeAIShowcaseService>? aiShowcaseFactory = null)
 	{
 		_options = options ?? throw new ArgumentNullException(nameof(options));
 		_recordingWriterFactory = recordingWriterFactory ?? (() => new ReferenceRecordingPayloadWriter(
@@ -205,6 +215,9 @@ public sealed class RuntimeHostProcess
 			processOptions.SourceBId,
 			processOptions.Format,
 			writer));
+		_aiShowcaseFactory = aiShowcaseFactory ?? ((runtime, processOptions) => new RuntimeAIShowcaseService(
+			runtime,
+			new NamedPipeRuntimeAIHostTransport(processOptions.AIEndpoint)));
 
 		var framePeriod = TimeSpan.FromSeconds(options.Format.FrameRate.Denominator / (double)options.Format.FrameRate.Numerator);
 		_timingProbe = new RuntimeTimingQualificationProbe(new TimingQualificationThresholds(
@@ -227,6 +240,7 @@ public sealed class RuntimeHostProcess
 	public LocalMediaDeckRuntimeService? MediaDeck => _mediaDeck;
 	public RuntimeHostIpcServer? IpcServer => _ipcServer;
 	public RuntimeHostMonitoringServer? MonitoringServer => _monitoringServer;
+	public RuntimeAIShowcaseService? AIShowcase => _aiShowcase;
 	public string MonitoringEndpoint => $"{_options.ListenEndpoint}.monitor";
 	public bool RuntimeDisposed => _runtimeDisposed;
 	public V1RuntimeHostSnapshot? FinalRuntimeSnapshot => _finalRuntimeSnapshot;
@@ -250,6 +264,8 @@ public sealed class RuntimeHostProcess
 			_runtime = _runtimeFactory(_options, writer)
 				?? throw new InvalidOperationException("Runtime factory returned null.");
 			_mediaDeck = new LocalMediaDeckRuntimeService();
+			_aiShowcase = _aiShowcaseFactory(_runtime, _options)
+				?? throw new InvalidOperationException("AI showcase factory returned null.");
 
 			if (_options.MediaIoMode == RuntimeMediaIoMode.Native)
 			{
@@ -270,11 +286,11 @@ public sealed class RuntimeHostProcess
 				}
 			}
 
-			_ipcServer = new RuntimeHostIpcServer(_options.ListenEndpoint, () => _runtime, () => _mediaDeck);
+			_ipcServer = new RuntimeHostIpcServer(_options.ListenEndpoint, () => _runtime, () => _mediaDeck, () => _aiShowcase);
 			_monitoringServer = new RuntimeHostMonitoringServer(MonitoringEndpoint, _runtime.MonitoringHub);
 			await _ipcServer.StartAsync(cancellationToken).ConfigureAwait(false);
 			await _monitoringServer.StartAsync(cancellationToken).ConfigureAwait(false);
-			_mediaLoop = RunMediaLoopAsync(_runtime, _mediaIo, cancellationToken);
+			_mediaLoop = RunMediaLoopAsync(_runtime, _mediaIo, _aiShowcase, cancellationToken);
 			_mediaDeckLoop = RunMediaDeckLoopAsync(_runtime, _mediaDeck, cancellationToken);
 		}
 		catch (ArgumentException exception)
@@ -317,6 +333,7 @@ public sealed class RuntimeHostProcess
 	private async Task RunMediaLoopAsync(
 		V1RuntimeHostService runtime,
 		RuntimeMediaIoVerticalSlice? mediaIo,
+		RuntimeAIShowcaseService aiShowcase,
 		CancellationToken cancellationToken)
 	{
 		var framePeriod = TimeSpan.FromSeconds(runtime.Format.FrameRate.Denominator / (double)runtime.Format.FrameRate.Numerator);
@@ -330,6 +347,7 @@ public sealed class RuntimeHostProcess
 			var processingStartedAt = _timingClock.Elapsed;
 			var boundary = runtime.ProcessNextBoundary();
 			mediaIo?.SubmitProgram(boundary);
+			aiShowcase.ObserveProgramBoundary(boundary.ProgramFrame);
 			var processingDuration = _timingClock.Elapsed - processingStartedAt;
 			var timing = _timingProbe.RecordBoundary(boundary.SequenceNumber, boundaryObservedAt, processingDuration);
 			var mediaIoStatistics = mediaIo?.Statistics;
@@ -409,6 +427,10 @@ public sealed class RuntimeHostProcess
 			if (_ipcServer is not null)
 				await _ipcServer.DisposeAsync().AsTask().WaitAsync(timeout.Token).ConfigureAwait(false);
 
+			if (_aiShowcase is not null)
+				await _aiShowcase.DisposeAsync().AsTask().WaitAsync(timeout.Token).ConfigureAwait(false);
+			_aiShowcase = null;
+
 			_mediaIo?.Dispose();
 			_mediaIo = null;
 			_mediaDeck?.Dispose();
@@ -451,6 +473,14 @@ public sealed class RuntimeHostProcess
 		{
 			if (_ipcServer is not null)
 				await _ipcServer.DisposeAsync().ConfigureAwait(false);
+		}
+		catch { }
+
+		try
+		{
+			if (_aiShowcase is not null)
+				await _aiShowcase.DisposeAsync().ConfigureAwait(false);
+			_aiShowcase = null;
 		}
 		catch { }
 
