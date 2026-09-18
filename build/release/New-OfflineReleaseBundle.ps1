@@ -244,6 +244,14 @@ $offlineReadme = @"
 
 This is a SOFTWARE_RELEASE deployment bundle, not a Production Package.
 
+Canonical product startup:
+
+```powershell
+./rtaime.exe
+```
+
+The AppHost starts or adopts ControlHost, waits for qualified engine readiness and opens Operator for the default Interactive profile. ControlHost, RuntimeHost, AIHost and Operator remain separate processes.
+
 Offline verification:
 
 ```powershell
