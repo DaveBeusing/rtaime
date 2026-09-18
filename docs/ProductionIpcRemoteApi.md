@@ -68,8 +68,15 @@ Operator-facing messages:
 - `control.preview.select`
 - `control.program.cut`
 - `control.program.dissolve`
+- `control.media_deck.snapshot.get`
+- `control.media_deck.open`
+- `control.media_deck.transport`
+- `control.media_deck.marker`
+- `control.media_deck.close`
 
-A successful mutation crosses the existing boundary:
+The media-deck messages preserve the same authority direction. Operator intent enters ControlHost, which validates the selected production source slot, owns persisted IN/OUT and cue metadata, and proxies decode/transport execution to RuntimeHost. The Operator does not obtain direct RuntimeHost access.
+
+A successful production-routing mutation crosses the existing boundary:
 
 ```text
 validate command
@@ -90,8 +97,12 @@ Control-facing messages:
 - `runtime.providers.get`
 - `runtime.snapshot.get`
 - `runtime.execution.apply`
+- `runtime.media_deck.snapshot.get`
+- `runtime.media_deck.open`
+- `runtime.media_deck.transport`
+- `runtime.media_deck.close`
 
-The server delegates execution to `V1RuntimeHostService`. It does not duplicate Runtime prepare/commit semantics.
+The server delegates normal production execution to `V1RuntimeHostService`. The media-deck slice delegates local-file decode and transport to the RuntimeHost-owned single-deck service, using a ControlHost-supplied `PreparedExecutionContract`. Raw video/audio payloads never cross this management IPC boundary.
 
 A Runtime snapshot exposes two deliberately separate revision domains:
 
@@ -150,7 +161,7 @@ The cache is intentionally not durable. After a server process restart, clients 
 
 ## Payload boundary
 
-Management IPC may carry commands, state, provider descriptors, `PreparedExecutionContract`, frame/surface descriptors, opaque handles and governed AI metadata.
+Management IPC may carry commands, state, provider descriptors, `PreparedExecutionContract`, media-deck metadata, frame/surface descriptors, opaque handles and governed AI metadata.
 
 It must not carry raw video frames, RGBA byte arrays, audio sample arrays, segmentation mask pixels or GPU memory payloads. Bulk media remains on Media/Provider resource paths.
 
