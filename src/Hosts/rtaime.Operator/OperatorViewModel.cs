@@ -863,6 +863,12 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		source?.ApplyThumbnail(thumbnail, format);
 	}
 
+	internal void ApplyConfirmedSnapshot(OperatorStatusSnapshot snapshot)
+	{
+		ArgumentNullException.ThrowIfNull(snapshot);
+		Apply(snapshot);
+	}
+
 	internal void ApplyMediaDeckSnapshot(MediaDeckSnapshot snapshot)
 	{
 		ArgumentNullException.ThrowIfNull(snapshot);

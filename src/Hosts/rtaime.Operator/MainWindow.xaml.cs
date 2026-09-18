@@ -31,6 +31,7 @@ public partial class MainWindow : Window
 			new DispatcherSynchronizationContext(Dispatcher));
 		MediaDeck = CreateMediaDeck(viewModel, client);
 		MediaDeck.SnapshotChanged += viewModel.ApplyMediaDeckSnapshot;
+		DemoProduction = new DemoProductionPackageController(client, viewModel, MediaDeck);
 		Monitoring = new OperatorMonitoringViewModel(
 			viewModel,
 			new NamedPipeOperatorMonitoringTransport(monitoringEndpoint),
@@ -54,6 +55,7 @@ public partial class MainWindow : Window
 		var client = viewModel.Client ?? new OperatorControlClient(new UnavailableOperatorControlTransport());
 		MediaDeck = CreateMediaDeck(viewModel, client);
 		MediaDeck.SnapshotChanged += viewModel.ApplyMediaDeckSnapshot;
+		DemoProduction = new DemoProductionPackageController(client, viewModel, MediaDeck);
 		Monitoring = new OperatorMonitoringViewModel(
 			viewModel,
 			new NamedPipeOperatorMonitoringTransport("rtaime.v1.runtime.default.monitor"),
@@ -71,6 +73,7 @@ public partial class MainWindow : Window
 	public OperatorMonitoringViewModel Monitoring { get; }
 	public ProgramOutputController ProgramOutput { get; }
 	public MediaDeckViewModel MediaDeck { get; }
+	public DemoProductionPackageController DemoProduction { get; }
 	public MediaTimelineViewModel Timeline => MediaDeck.Timeline;
 
 	private MediaDeckViewModel CreateMediaDeck(

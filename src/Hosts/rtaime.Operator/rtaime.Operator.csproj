@@ -9,4 +9,11 @@
 	<ItemGroup>
 		<ProjectReference Include="..\..\Client\rtaime.Client\rtaime.Client.csproj" />
 	</ItemGroup>
+
+	<ItemGroup>
+		<None Update="DemoAssets\**\*">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+			<CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+		</None>
+	</ItemGroup>
 </Project>

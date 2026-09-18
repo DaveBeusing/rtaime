@@ -474,3 +474,15 @@ The managed reference provider is architecture/demo evidence, not a claim of pro
 - inference time, provider, confidence, Person Regions and source/application synchronization are visible;
 - Operator UI policy verifies ON/OFF controls and prohibits local inference ownership;
 - no project-reference topology or public AI/Runtime contract version changes are required.
+
+## AP-56 Demo Production Package
+
+The Operator toolbar now exposes `Open Demo Production` as a single explicit showcase-bootstrap action. It does not create a new authority path: production routing still crosses `OperatorControlClient` into ControlHost, Media Deck operations remain on the existing Client/Runtime path, graphics use the AP-49 overlay seam, audio uses the AP-50 input-state seam, and AI enable uses the AP-55 showcase seam.
+
+The bundled package prepares Program = Input A and Preview = Product Clip/Input B, deterministic IN/OUT plus two cue points, Auto Play on Program with Hold Last Frame, unity/unmuted clip audio, a 12-frame DISSOLVE, a pre-rendered lower-third/logo asset and the Person Segmentation Highlight.
+
+The lower-third asset is loaded but initially hidden because the current V1 explicit graphics overlay takes precedence over the dynamic AI highlight. This keeps the package honest about what is simultaneously visible while leaving the lower third immediately ready for the existing SHOW/HIDE control.
+
+Package state is presented as IDLE / LOADING / READY / FAILED in the toolbar. READY is emitted only after the Client/Runtime snapshots confirm the package's Program, Preview, Media Deck, graphics and AI enable state. Details and integrity/failure errors remain visible via the package status tooltip.
+
+See `docs/DemoProductionPackage.md` for package contents, integrity verification, repeatability and acceptance evidence.
