@@ -62,6 +62,15 @@ public interface IControlRuntimeTransportSeam
 		MediaSinkId programSinkId,
 		RuntimeProgramTransitionIntent? transition,
 		CancellationToken cancellationToken = default);
+	ValueTask<MediaDeckRuntimeSnapshot> GetMediaDeckSnapshotAsync(CancellationToken cancellationToken = default);
+	ValueTask<MediaDeckRuntimeSnapshot> OpenMediaDeckAsync(
+		MediaDeckOpenRequest request,
+		PreparedExecutionContract preparedExecution,
+		CancellationToken cancellationToken = default);
+	ValueTask<MediaTransportCommandResult> ApplyMediaDeckTransportAsync(
+		MediaTransportCommand command,
+		CancellationToken cancellationToken = default);
+	ValueTask<MediaDeckRuntimeSnapshot> CloseMediaDeckAsync(CancellationToken cancellationToken = default);
 	ValueTask DisconnectAsync();
 }
 
@@ -88,6 +97,23 @@ public sealed class UnboundControlRuntimeTransportSeam : IControlRuntimeTranspor
 		RuntimeProgramTransitionIntent? transition,
 		CancellationToken cancellationToken = default) =>
 		ValueTask.FromException<RuntimeRemoteApplyResult>(new InvalidOperationException("Runtime transport is not configured."));
+
+	public ValueTask<MediaDeckRuntimeSnapshot> GetMediaDeckSnapshotAsync(CancellationToken cancellationToken = default) =>
+		ValueTask.FromException<MediaDeckRuntimeSnapshot>(new InvalidOperationException("Runtime transport is not configured."));
+
+	public ValueTask<MediaDeckRuntimeSnapshot> OpenMediaDeckAsync(
+		MediaDeckOpenRequest request,
+		PreparedExecutionContract preparedExecution,
+		CancellationToken cancellationToken = default) =>
+		ValueTask.FromException<MediaDeckRuntimeSnapshot>(new InvalidOperationException("Runtime transport is not configured."));
+
+	public ValueTask<MediaTransportCommandResult> ApplyMediaDeckTransportAsync(
+		MediaTransportCommand command,
+		CancellationToken cancellationToken = default) =>
+		ValueTask.FromException<MediaTransportCommandResult>(new InvalidOperationException("Runtime transport is not configured."));
+
+	public ValueTask<MediaDeckRuntimeSnapshot> CloseMediaDeckAsync(CancellationToken cancellationToken = default) =>
+		ValueTask.FromException<MediaDeckRuntimeSnapshot>(new InvalidOperationException("Runtime transport is not configured."));
 
 	public ValueTask DisconnectAsync() => ValueTask.CompletedTask;
 }
