@@ -98,10 +98,10 @@ public sealed class LocalMediaRuntimeSession : IDisposable
 			commit.Status == RuntimeCommitStatus.Committed ? _nextSequenceNumber : null);
 	}
 
-	public void MarkEnded()
+	public void MarkEnded(long? holdFrame = null)
 	{
 		ObjectDisposedException.ThrowIf(_disposed, this);
-		_transport.MarkEnded();
+		_transport.MarkEnded(holdFrame);
 	}
 
 	public MediaTransportCommandResult ApplyTransport(MediaTransportCommand command)
