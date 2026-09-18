@@ -59,11 +59,50 @@ See `docs/OperatorMonitoringPlane.md` for transport, backpressure and failure-is
 
 The Operator uses `Themes/OperatorTheme.xaml` for reusable dark-surface, typography, button, source-bank and semantic state resources. Preview and Program use distinct semantic accents. The window is resizable and uses minimum dimensions rather than the original fixed bootstrap layout.
 
+## AP-46 design system and reference-layout qualification
+
+AP-46 formalizes the Operator presentation layer as a reusable production-console design system. `Themes/OperatorTokens.xaml` owns typography, spacing, geometry and semantic color tokens. `Themes/OperatorTheme.xaml` consumes those tokens and provides panels, toolbars, buttons, armed toggles, source tiles, status badges, Preview/Program tallies, meters, text inputs, timecode typography and a timeline seeker style.
+
+Production semantics are deliberate rather than decorative:
+
+- Preview uses the green Preview semantic only.
+- Program/on-air uses the red Program semantic only.
+- Armed/selected intent uses amber or the neutral selection accent; it is not presented as Program truth.
+- Healthy, Warning and Error each have independent semantic resources.
+- keyboard focus is rendered with a high-contrast focus border on primary controls and selectable tiles.
+
+The design system changes presentation only. It does not add production authority, infer successful commits, synthesize monitoring state or bypass `rtaime.Client`.
+
+### Reference resolution and DPI
+
+The qualified reference surface is **1920 x 1080**. The Operator opens at 1600 x 900 device-independent units, retains a 1100 x 640 minimum workspace and uses vertical scrolling when the available logical height is reduced.
+
+WPF device-independent layout, `UseLayoutRounding`, device-pixel snapping and an explicit `PerMonitorV2` manifest are used together. The policy gate qualifies the layout invariants for:
+
+- 100% scaling: 1920 x 1080 logical reference surface.
+- 125% scaling: 1536 x 864 logical workspace.
+- 150% scaling: 1280 x 720 logical workspace.
+
+At 125% and 150%, the minimum workspace remains within the available logical bounds and vertical scrolling preserves access to lower panels. AP-46 does not claim pixel-identical rendering across GPU drivers, Windows text-rendering settings or monitor profiles; screenshot-based visual review remains a manual showcase check.
+
+### AP-46 acceptance evidence
+
+- primary Operator views use the shared dark production theme instead of bootstrap/default styling;
+- Preview and Program monitors use distinct tally and panel semantics;
+- buttons, toggles, text inputs, source tiles, meters and the timeline use reusable styles;
+- keyboard focus is visible;
+- the Operator declares per-monitor DPI awareness;
+- the Quality gate checks 1920 x 1080 reference-layout constraints and 125%/150% scaling invariants;
+- Control/Runtime/Media authority boundaries are unchanged.
+
 ## Verification
 
 `build/quality/Test-OperatorUiPolicy.ps1` verifies the primary UI architectural and UX guardrails, including:
 
-- reusable theme loading;
+- reusable token and theme loading;
+- typography, spacing and semantic production-state resources;
+- visible keyboard-focus resources;
+- 1920 x 1080 reference layout and 125%/150% DPI invariants;
 - Preview/Program semantic resources;
 - source-bank binding;
 - keyboard command declarations;

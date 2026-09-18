@@ -4,7 +4,9 @@
 	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 	xmlns:local="clr-namespace:rtaime.Operator"
 	MinHeight="560"
-	Focusable="True">
+	Focusable="True"
+	UseLayoutRounding="True"
+	SnapsToDevicePixels="True">
 	<UserControl.InputBindings>
 		<KeyBinding Key="P" Command="{Binding TogglePlayPauseCommand}" />
 		<KeyBinding Key="S" Command="{Binding StopCommand}" />
@@ -33,8 +35,7 @@
 				<StackPanel>
 					<StackPanel Orientation="Horizontal">
 						<TextBlock Text="LOCAL MEDIA DECK" Style="{StaticResource OperatorSectionTitle}" />
-						<Border Margin="10,0,0,0" Padding="7,2" CornerRadius="4"
-							Background="{DynamicResource OperatorRaisedSurfaceBrush}">
+						<Border Margin="10,0,0,0" Style="{StaticResource OperatorStatusBadge}" Padding="7,2">
 							<TextBlock Text="{Binding State}" Style="{StaticResource OperatorLabel}" />
 						</Border>
 					</StackPanel>
@@ -88,9 +89,9 @@
 						<DockPanel Margin="0,0,0,8"><TextBlock Text="Frame rate" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding FrameRate}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
 						<DockPanel Margin="0,0,0,8"><TextBlock Text="Video" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding VideoCodec}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
 						<DockPanel Margin="0,0,0,8"><TextBlock Text="Audio" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding AudioCodec}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
-						<DockPanel Margin="0,0,0,8"><TextBlock Text="Duration" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding Duration}" Style="{StaticResource OperatorValue}" FontFamily="Consolas" DockPanel.Dock="Right" /></DockPanel>
-						<DockPanel Margin="0,0,0,8"><TextBlock Text="Current" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding Current}" Style="{StaticResource OperatorValue}" FontFamily="Consolas" DockPanel.Dock="Right" /></DockPanel>
-						<DockPanel><TextBlock Text="Remaining" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding Remaining}" Style="{StaticResource OperatorValue}" FontFamily="Consolas" DockPanel.Dock="Right" /></DockPanel>
+						<DockPanel Margin="0,0,0,8"><TextBlock Text="Duration" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding Duration}" Style="{StaticResource OperatorTimecode}" DockPanel.Dock="Right" /></DockPanel>
+						<DockPanel Margin="0,0,0,8"><TextBlock Text="Current" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding Current}" Style="{StaticResource OperatorTimecode}" DockPanel.Dock="Right" /></DockPanel>
+						<DockPanel><TextBlock Text="Remaining" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding Remaining}" Style="{StaticResource OperatorTimecode}" DockPanel.Dock="Right" /></DockPanel>
 					</StackPanel>
 				</Border>
 			</Grid>
@@ -167,7 +168,8 @@
 						<TextBlock Grid.Row="0" Text="CUE POINTS" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,10" />
 
 						<ListBox Grid.Row="1" ItemsSource="{Binding Cues}" SelectedItem="{Binding SelectedCue}"
-							MinHeight="100" MaxHeight="180" Background="Transparent" BorderThickness="0">
+							MinHeight="100" MaxHeight="180" Background="Transparent" BorderThickness="0"
+							ItemContainerStyle="{StaticResource OperatorSourceItem}">
 							<ListBox.ItemTemplate>
 								<DataTemplate>
 									<Grid Margin="0,2">
@@ -179,7 +181,7 @@
 											<TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
 											<TextBlock Text="{Binding Frame, StringFormat=Frame {0:N0}}" Style="{StaticResource OperatorLabel}" />
 										</StackPanel>
-										<TextBlock Grid.Column="1" Text="{Binding Timecode}" FontFamily="Consolas" FontWeight="SemiBold" VerticalAlignment="Center" />
+										<TextBlock Grid.Column="1" Text="{Binding Timecode}" Style="{StaticResource OperatorTimecode}" VerticalAlignment="Center" />
 									</Grid>
 								</DataTemplate>
 							</ListBox.ItemTemplate>
@@ -201,8 +203,7 @@
 				</Border>
 			</Grid>
 
-			<Border Grid.Row="5" Background="{DynamicResource OperatorRaisedSurfaceBrush}"
-				BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" CornerRadius="6" Padding="10">
+			<Border Grid.Row="5" Style="{StaticResource OperatorStatusBadge}" Padding="10">
 				<Grid>
 					<Grid.ColumnDefinitions>
 						<ColumnDefinition Width="Auto" />
