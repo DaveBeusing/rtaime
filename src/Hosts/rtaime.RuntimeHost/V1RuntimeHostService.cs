@@ -588,23 +588,26 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		}
 	}
 
-	public void SetTimingHealth(
-		V1TimingHealthState state,
-		TimeSpan? processingDuration = null,
-		ulong? droppedFrames = null)
+	public void SetTimingHealth(V1TimingHealthState state)
 	{
 		if (!Enum.IsDefined(typeof(V1TimingHealthState), state)) throw new ArgumentOutOfRangeException(nameof(state));
+		lock (_gate)
+		{
+			ThrowIfDisposed();
+			if (_timingHealth == state) return;
+			_timingHealth = state;
+			Observe($"timing.health:{state}");
+		}
+	}
+
+	public void SetPerformanceObservations(TimeSpan processingDuration, ulong droppedFrames)
+	{
 		if (processingDuration < TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(processingDuration));
 		lock (_gate)
 		{
 			ThrowIfDisposed();
-			if (processingDuration is { } duration)
-				_lastFrameProcessingTime = duration;
-			if (droppedFrames is { } drops)
-				_droppedFrames = drops;
-			if (_timingHealth == state) return;
-			_timingHealth = state;
-			Observe($"timing.health:{state}");
+			_lastFrameProcessingTime = processingDuration;
+			_droppedFrames = droppedFrames;
 		}
 	}
 
