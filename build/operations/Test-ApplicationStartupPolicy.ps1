@@ -58,6 +58,13 @@ foreach ($profile in @("Interactive", "Showcase", "HeadlessEngine")) {
 	Assert-Condition ($appCode -match [Regex]::Escape($profile)) "AppHost is missing startup profile '$profile'."
 }
 
+foreach ($ownership in @("EphemeralLocal", "PersistentEngine", "ExternalManaged")) {
+	Assert-Condition ($appCode -match [Regex]::Escape($ownership)) "AppHost is missing lifecycle ownership '$ownership'."
+}
+
+Assert-Condition ($appProgram -match [Regex]::Escape("--windows-service")) "Canonical AppHost must expose the Windows service hosting switch."
+Assert-Condition ($appProgram -match "AddWindowsService") "Canonical AppHost must use supported Windows service hosting."
+
 foreach ($state in @("Stopped", "Starting", "Healthy", "Degraded", "Recovering", "Failed", "Stopping")) {
 	Assert-Condition ($appCode -match [Regex]::Escape($state)) "AppHost is missing lifecycle state '$state'."
 }
@@ -98,3 +105,4 @@ Write-Host "Application startup policy PASS"
 Write-Host "Canonical entry point: rtaime.exe"
 Write-Host "Service supervision owner: ControlHost"
 Write-Host "Startup profiles: Interactive, Showcase, HeadlessEngine"
+Write-Host "Lifecycle ownership: EphemeralLocal, PersistentEngine, ExternalManaged"
