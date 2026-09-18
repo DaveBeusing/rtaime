@@ -39,6 +39,19 @@ public sealed class UnifiedApplicationHostTests
 	}
 
 	[Fact]
+	public async Task Adopts_healthy_control_with_endpoint_adopted_children()
+	{
+		var options = CreateOptions(ApplicationStartupProfile.Interactive);
+		var platform = new FakeApplicationHostPlatform(options);
+		platform.PublishReadiness(42, includeChildProcessIds: false);
+
+		var result = await new UnifiedApplicationHost(options, platform).RunAsync();
+
+		Assert.True(result.AdoptedControlHost);
+		Assert.Equal(new[] { "rtaime.Operator" }, platform.StartedBaseNames);
+	}
+
+	[Fact]
 	public async Task Startup_failure_ends_in_failed_state()
 	{
 		var options = CreateOptions(ApplicationStartupProfile.Interactive);
@@ -206,12 +219,15 @@ public sealed class UnifiedApplicationHostTests
 			return Task.CompletedTask;
 		}
 
-		public void PublishReadiness(int controlProcessId)
+		public void PublishReadiness(int controlProcessId, bool includeChildProcessIds = true)
 		{
 			_published = true;
 			_alive.Add(controlProcessId);
-			_alive.Add(7001);
-			_alive.Add(7002);
+			if (includeChildProcessIds)
+			{
+				_alive.Add(7001);
+				_alive.Add(7002);
+			}
 			var endpoints = _options.Endpoints;
 			var payload = new
 			{
@@ -221,8 +237,8 @@ public sealed class UnifiedApplicationHostTests
 				controlEndpoint = endpoints.Control,
 				runtimeEndpoint = endpoints.Runtime,
 				aiEndpoint = endpoints.AI,
-				runtimeSupervision = new { state = "HEALTHY", processId = 7001 },
-				aiSupervision = new { state = "HEALTHY", processId = 7002 }
+				runtimeSupervision = new { state = "HEALTHY", processId = includeChildProcessIds ? 7001 : (int?)null },
+				aiSupervision = new { state = "HEALTHY", processId = includeChildProcessIds ? 7002 : (int?)null }
 			};
 			_files[Path.GetFullPath(_options.ReadinessPath)] = JsonSerializer.Serialize(payload);
 		}
