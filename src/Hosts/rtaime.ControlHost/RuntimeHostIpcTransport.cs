@@ -67,6 +67,20 @@ public sealed record RuntimePerformanceSnapshot(
 	ulong? GpuVramTotalBytes,
 	string GpuTelemetryEvidence);
 
+public sealed record RuntimeAIShowcaseRemoteSnapshot(
+	bool Enabled,
+	string Feature,
+	string Status,
+	string Provider,
+	TimeSpan InferenceTime,
+	uint PersonRegionCount,
+	ulong? SourceSequence,
+	ulong? AppliedSequence,
+	double? Confidence,
+	bool EffectVisible,
+	Failure? Failure,
+	DateTimeOffset? UpdatedAtUtc);
+
 public sealed record RuntimeRecordingCommandResult(
 	bool Succeeded,
 	RuntimeRecordingSnapshot Snapshot,
@@ -87,7 +101,8 @@ public sealed record RuntimeRemoteSnapshot(
 	RuntimeAudioProgramSnapshot AudioProgram,
 	ulong StateVersion,
 	RuntimeRecordingSnapshot? Recording = null,
-	RuntimePerformanceSnapshot? Performance = null);
+	RuntimePerformanceSnapshot? Performance = null,
+	RuntimeAIShowcaseRemoteSnapshot? AIShowcase = null);
 
 public sealed record RuntimeRemoteApplyResult(
 	string HostInstanceId,
@@ -194,7 +209,8 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 			FromWire(snapshot.AudioProgram),
 			response.StateVersion,
 			FromWire(snapshot.Recording),
-			FromWire(snapshot.Performance));
+			FromWire(snapshot.Performance),
+			FromWire(snapshot.AIShowcase));
 	}
 
 	public async ValueTask<RuntimeRemoteApplyResult> ApplyExecutionAsync(
@@ -301,6 +317,19 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 	{
 		var response = await ExchangeAsync("runtime.recording.stop", new { }, cancellationToken).ConfigureAwait(false);
 		return ReadRecordingCommandResult(response);
+	}
+
+	public async ValueTask<RuntimeAIShowcaseRemoteSnapshot> SetAIShowcaseEnabledAsync(
+		bool enabled,
+		CancellationToken cancellationToken = default)
+	{
+		var response = await ExchangeAsync(
+			"runtime.ai_showcase.set",
+			new WireAIShowcaseState(enabled),
+			cancellationToken).ConfigureAwait(false);
+		var wire = response.Payload.Deserialize<WireAIShowcase>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Runtime AI showcase response is required.");
+		return FromWire(wire);
 	}
 
 	public async ValueTask<MediaDeckRuntimeSnapshot> GetMediaDeckSnapshotAsync(CancellationToken cancellationToken = default)
@@ -544,6 +573,20 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 		snapshot.GpuVramTotalBytes,
 		string.IsNullOrWhiteSpace(snapshot.GpuTelemetryEvidence) ? "UNVERIFIED" : snapshot.GpuTelemetryEvidence.Trim());
 
+	private static RuntimeAIShowcaseRemoteSnapshot FromWire(WireAIShowcase snapshot) => new(
+		snapshot.Enabled,
+		snapshot.Feature,
+		snapshot.Status,
+		snapshot.Provider,
+		TimeSpan.FromTicks(Math.Max(0, snapshot.InferenceTimeTicks)),
+		snapshot.PersonRegionCount,
+		snapshot.SourceSequence,
+		snapshot.AppliedSequence,
+		snapshot.Confidence,
+		snapshot.EffectVisible,
+		snapshot.Failure is null ? null : new Failure(snapshot.Failure.Code, snapshot.Failure.Message),
+		snapshot.UpdatedAtUtc);
+
 	private static RuntimeRecordingCommandResult ReadRecordingCommandResult(WireEnvelope response)
 	{
 		var wire = response.Payload.Deserialize<WireRecordingCommandResult>(Wire.JsonOptions)
@@ -704,6 +747,8 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 	private sealed record WireRecordingStart(string SessionId, string OutputId, string DestinationDirectory, string FileName);
 	private sealed record WireRecordingSnapshot(string State, long ElapsedTicks, string? Destination, string? FileName, string? FinalPath, ulong Accepted, ulong Written, ulong Dropped, ulong Rejected, ulong WriterFailures, WireFailure? Failure);
 	private sealed record WireRuntimePerformance(long UptimeTicks, long FrameBudgetTicks, long LastFrameProcessingTicks, ulong DroppedFrames, string GpuDeviceName, bool GpuHardwareAccelerated, double? GpuUtilizationPercent, ulong? GpuVramUsedBytes, ulong? GpuVramTotalBytes, string GpuTelemetryEvidence);
+	private sealed record WireAIShowcaseState(bool Enabled);
+	private sealed record WireAIShowcase(bool Enabled, string Feature, string Status, string Provider, long InferenceTimeTicks, uint PersonRegionCount, ulong? SourceSequence, ulong? AppliedSequence, double? Confidence, bool EffectVisible, WireFailure? Failure, DateTimeOffset? UpdatedAtUtc);
 	private sealed record WireRecordingCommandResult(bool Succeeded, WireRecordingSnapshot Snapshot, WireFailure? Failure);
 	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path, WirePreparedExecution PreparedExecution);
 	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame, bool? AutoPlayOnProgram, int? EndBehavior, long? InPointFrame, long? OutPointFrame);
@@ -729,7 +774,8 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 		WireAudioInput[] AudioInputs,
 		WireAudioProgram AudioProgram,
 		WireRecordingSnapshot Recording,
-		WireRuntimePerformance Performance);
+		WireRuntimePerformance Performance,
+		WireAIShowcase AIShowcase);
 
 	private static class Wire
 	{
