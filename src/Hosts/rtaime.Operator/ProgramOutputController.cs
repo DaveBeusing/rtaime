@@ -236,7 +236,7 @@ public sealed class ProgramOutputController : INotifyPropertyChanged, IDisposabl
 			{
 				Size = checked((uint)Marshal.SizeOf<MonitorInfoEx>())
 			};
-			if (!GetMonitorInfoW(monitor, ref info))
+			if (!GetMonitorInfo(monitor, ref info))
 				return true;
 
 			var width = checked(info.Monitor.Right - info.Monitor.Left);
@@ -443,7 +443,7 @@ public sealed class ProgramOutputController : INotifyPropertyChanged, IDisposabl
 
 	[DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
 	[return: MarshalAs(UnmanagedType.Bool)]
-	private static extern bool GetMonitorInfoW(
+	private static extern bool GetMonitorInfo(
 		nint monitor,
 		ref MonitorInfoEx monitorInfo);
 
