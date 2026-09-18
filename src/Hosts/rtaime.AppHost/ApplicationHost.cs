@@ -718,21 +718,27 @@ public sealed class UnifiedApplicationHost
 		if (_ownedControlProcessId is not { } processId) return;
 		Transition(ApplicationLifecycleState.Stopping);
 		var requestedAtUtc = _platform.UtcNow;
-		_platform.WriteAllText(_options.StopPath, $"stopRequestedAtUtc={requestedAtUtc:O}{Environment.NewLine}");
-		var deadline = _platform.UtcNow + _options.Policy.ShutdownTimeout;
-		while (_platform.UtcNow < deadline && _platform.IsProcessAlive(processId))
-			await _platform.DelayAsync(TimeSpan.FromMilliseconds(100), cancellationToken).ConfigureAwait(false);
+		var processAliveAtRequest = _platform.IsProcessAlive(processId);
+		if (processAliveAtRequest)
+		{
+			_platform.WriteAllText(_options.StopPath, $"stopRequestedAtUtc={requestedAtUtc:O}{Environment.NewLine}");
+			var deadline = _platform.UtcNow + _options.Policy.ShutdownTimeout;
+			while (_platform.UtcNow < deadline && _platform.IsProcessAlive(processId))
+				await _platform.DelayAsync(TimeSpan.FromMilliseconds(100), cancellationToken).ConfigureAwait(false);
+		}
 
-		var forcedTermination = _platform.IsProcessAlive(processId);
+		var forcedTermination = processAliveAtRequest && _platform.IsProcessAlive(processId);
 		if (forcedTermination) _platform.KillProcessTree(processId);
+		var graceful = processAliveAtRequest && !forcedTermination;
 
 		var evidence = JsonSerializer.Serialize(new
 		{
 			copyright = "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
 			schemaVersion = "1.0",
-			status = forcedTermination ? "FAIL" : "PASS",
-			graceful = !forcedTermination,
+			status = graceful ? "PASS" : "FAIL",
+			graceful,
 			forcedTermination,
+			processAliveAtRequest,
 			controlProcessId = processId,
 			requestedAtUtc,
 			completedAtUtc = _platform.UtcNow
