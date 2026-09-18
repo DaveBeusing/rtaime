@@ -133,7 +133,12 @@ public sealed class DemoProductionPackageController : INotifyPropertyChanged
 			Summary = $"PGM {programSource.Name} · PVW Product Clip/{productSource.Name} · AUTO {package.Transition.DissolveFrames}F · {cues.Length} cues · Lower Third READY · Audio 1.0x · AI ON";
 			Detail = "Demo Production is prepared and TAKE-ready. Lower Third is loaded but initially hidden so the AI highlight remains visible.";
 		}
-		catch (Exception exception) when (exception is IOException or InvalidDataException or InvalidOperationException or ArgumentException or FormatException or UnauthorizedAccessException or CryptographicException)
+		catch (OperationCanceledException)
+		{
+			State = "FAILED";
+			Detail = "Demo Production synchronization was canceled because the engine endpoint became unavailable or the operation was stopped.";
+		}
+		catch (Exception exception) when (exception is IOException or InvalidDataException or InvalidOperationException or ArgumentException or FormatException or UnauthorizedAccessException or CryptographicException or TimeoutException)
 		{
 			State = "FAILED";
 			Detail = exception.Message;
