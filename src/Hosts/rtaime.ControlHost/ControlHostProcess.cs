@@ -62,6 +62,14 @@ public interface IControlRuntimeTransportSeam
 		MediaSinkId programSinkId,
 		RuntimeProgramTransitionIntent? transition,
 		CancellationToken cancellationToken = default);
+	ValueTask<RuntimeAudioInputSnapshot> SetAudioInputStateAsync(
+		MediaSourceId sourceId,
+		double gain,
+		bool muted,
+		CancellationToken cancellationToken = default) =>
+		ValueTask.FromException<RuntimeAudioInputSnapshot>(
+			new NotSupportedException("Runtime transport does not expose audio input control."));
+
 	ValueTask<RuntimeGraphicsOverlaySnapshot> LoadGraphicsOverlayAsync(
 		string assetName,
 		uint width,
