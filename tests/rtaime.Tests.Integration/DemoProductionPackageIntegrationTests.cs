@@ -52,8 +52,8 @@ public sealed class DemoProductionPackageIntegrationTests
 		string clipPath)
 	{
 		var snapshot = await SynchronizeWithRetryAsync(client);
-		var inputA = Assert.Single(snapshot.Sources.Where(source => source.Name == "Input A"));
-		var inputB = Assert.Single(snapshot.Sources.Where(source => source.Name == "Input B"));
+		var inputA = Assert.Single(snapshot.Sources, source => source.Name == "Input A");
+		var inputB = Assert.Single(snapshot.Sources, source => source.Name == "Input B");
 
 		if (snapshot.Production.Routing.ProgramSourceId.ToString() != inputA.Id)
 		{
@@ -112,8 +112,8 @@ public sealed class DemoProductionPackageIntegrationTests
 
 	private static void AssertReady(OperatorStatusSnapshot snapshot, MediaDeckSnapshot deck)
 	{
-		var inputA = Assert.Single(snapshot.Sources.Where(source => source.Name == "Input A"));
-		var inputB = Assert.Single(snapshot.Sources.Where(source => source.Name == "Input B"));
+		var inputA = Assert.Single(snapshot.Sources, source => source.Name == "Input A");
+		var inputB = Assert.Single(snapshot.Sources, source => source.Name == "Input B");
 		Assert.Equal(inputA.Id, snapshot.Production.Routing.ProgramSourceId.ToString());
 		Assert.Equal(inputB.Id, snapshot.Production.Routing.PreviewSourceId.ToString());
 		Assert.True(deck.IsLoaded);
@@ -125,7 +125,7 @@ public sealed class DemoProductionPackageIntegrationTests
 		Assert.True(snapshot.GraphicsOverlay.AssetLoaded);
 		Assert.False(snapshot.GraphicsOverlay.Visible);
 		Assert.True(snapshot.AIShowcase.Enabled);
-		var audio = Assert.Single(snapshot.AudioInputs.Where(input => input.SourceId == inputB.Id));
+		var audio = Assert.Single(snapshot.AudioInputs, input => input.SourceId == inputB.Id);
 		Assert.Equal(1.0, audio.Gain, 6);
 		Assert.False(audio.Muted);
 	}
