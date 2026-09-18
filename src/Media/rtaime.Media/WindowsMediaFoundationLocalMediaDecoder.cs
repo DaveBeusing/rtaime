@@ -171,7 +171,12 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 		byte[] videoPayload;
 		try
 		{
-			if (!TryReadSample(MediaFoundation.FirstVideoStream, minimumTimestamp, out videoTimestamp, out videoPayload))
+			if (!TryReadSample(
+				MediaFoundation.FirstVideoStream,
+				minimumTimestamp,
+				copy2DContiguous: true,
+				out videoTimestamp,
+				out videoPayload))
 			{
 				frame = null;
 				return false;
@@ -211,6 +216,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 			audioAvailable = TryReadSample(
 				MediaFoundation.FirstAudioStream,
 				minimumTimestamp,
+				copy2DContiguous: false,
 				out audioTimestamp,
 				out decodedAudio);
 		}
@@ -258,6 +264,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 	private bool TryReadSample(
 		uint streamIndex,
 		long? minimumTimestamp,
+		bool copy2DContiguous,
 		out long timestamp,
 		out byte[] payload)
 	{
@@ -290,18 +297,10 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 				MediaFoundation.ThrowIfFailed(sample.ConvertToContiguousBuffer(out var buffer));
 				try
 				{
-					MediaFoundation.ThrowIfFailed(buffer.Lock(out var address, out _, out var currentLength));
-					try
-					{
-						payload = new byte[checked((int)currentLength)];
-						if (payload.Length > 0)
-							Marshal.Copy(address, payload, 0, payload.Length);
-						return true;
-					}
-					finally
-					{
-						MediaFoundation.ThrowIfFailed(buffer.Unlock());
-					}
+					payload = copy2DContiguous
+						? Copy2DBufferToContiguous(buffer)
+						: CopyMediaBuffer(buffer);
+					return true;
 				}
 				finally
 				{
@@ -312,6 +311,46 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 			{
 				MediaFoundation.ReleaseComObject(sample);
 			}
+		}
+	}
+
+	private static byte[] Copy2DBufferToContiguous(IMFMediaBuffer buffer)
+	{
+		if (buffer is not IMF2DBuffer buffer2D)
+			return CopyMediaBuffer(buffer);
+
+		MediaFoundation.ThrowIfFailed(buffer2D.GetContiguousLength(out var contiguousLength));
+		var payload = new byte[checked((int)contiguousLength)];
+		if (payload.Length == 0)
+			return payload;
+
+		var handle = GCHandle.Alloc(payload, GCHandleType.Pinned);
+		try
+		{
+			MediaFoundation.ThrowIfFailed(
+				buffer2D.ContiguousCopyTo(handle.AddrOfPinnedObject(), contiguousLength));
+		}
+		finally
+		{
+			handle.Free();
+		}
+
+		return payload;
+	}
+
+	private static byte[] CopyMediaBuffer(IMFMediaBuffer buffer)
+	{
+		MediaFoundation.ThrowIfFailed(buffer.Lock(out var address, out _, out var currentLength));
+		try
+		{
+			var payload = new byte[checked((int)currentLength)];
+			if (payload.Length > 0)
+				Marshal.Copy(address, payload, 0, payload.Length);
+			return payload;
+		}
+		finally
+		{
+			MediaFoundation.ThrowIfFailed(buffer.Unlock());
 		}
 	}
 
@@ -657,6 +696,20 @@ internal interface IMFSample
 	[PreserveSig] int RemoveAllBuffers();
 	[PreserveSig] int GetTotalLength(out uint totalLength);
 	[PreserveSig] int CopyToBuffer(IMFMediaBuffer buffer);
+}
+
+[ComImport]
+[Guid("7DC9D5F9-9ED9-44EC-9BBF-0600BB589FBB")]
+[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+internal interface IMF2DBuffer
+{
+	[PreserveSig] int Lock2D(out IntPtr scanline0, out int pitch);
+	[PreserveSig] int Unlock2D();
+	[PreserveSig] int GetScanline0AndPitch(out IntPtr scanline0, out int pitch);
+	[PreserveSig] int IsContiguousFormat([MarshalAs(UnmanagedType.Bool)] out bool contiguous);
+	[PreserveSig] int GetContiguousLength(out uint length);
+	[PreserveSig] int ContiguousCopyTo(IntPtr destination, uint destinationLength);
+	[PreserveSig] int ContiguousCopyFrom(IntPtr source, uint sourceLength);
 }
 
 [ComImport]
