@@ -118,9 +118,9 @@ public sealed class UnifiedApplicationHostTests
 	}
 
 	[Fact]
-	public async Task Interactive_operator_exit_keeps_owned_engine_running_by_default()
+	public async Task Persistent_engine_keeps_owned_engine_running_when_operator_exits()
 	{
-		var options = CreateOptions(ApplicationStartupProfile.Interactive);
+		var options = CreateOptions(ApplicationStartupProfile.Interactive, ApplicationLifecycleOwnership.PersistentEngine);
 		var platform = new FakeApplicationHostPlatform(options) { PublishReadinessOnControlStart = true };
 		var host = new UnifiedApplicationHost(options, platform);
 
@@ -130,15 +130,68 @@ public sealed class UnifiedApplicationHostTests
 		Assert.False(platform.StopSignalWritten);
 	}
 
-	private static ApplicationHostOptions CreateOptions(ApplicationStartupProfile profile)
+	[Fact]
+	public async Task Ephemeral_local_stops_owned_engine_when_operator_exits()
+	{
+		var options = CreateOptions(ApplicationStartupProfile.Interactive, ApplicationLifecycleOwnership.EphemeralLocal);
+		var platform = new FakeApplicationHostPlatform(options) { PublishReadinessOnControlStart = true };
+
+		await new UnifiedApplicationHost(options, platform).RunAsync();
+
+		Assert.True(platform.StopSignalWritten);
+	}
+
+	[Fact]
+	public async Task External_managed_never_starts_control_host()
+	{
+		var options = CreateOptions(ApplicationStartupProfile.Interactive, ApplicationLifecycleOwnership.ExternalManaged);
+		var platform = new FakeApplicationHostPlatform(options);
+
+		await Assert.ThrowsAsync<TimeoutException>(() => new UnifiedApplicationHost(options, platform).RunAsync());
+
+		Assert.Empty(platform.StartedBaseNames);
+		Assert.False(platform.StopSignalWritten);
+	}
+
+	[Fact]
+	public async Task Operator_tracks_replaced_control_host_without_stopping_engine()
+	{
+		var options = CreateOptions(ApplicationStartupProfile.Interactive, ApplicationLifecycleOwnership.ExternalManaged);
+		var platform = new FakeApplicationHostPlatform(options) { OperatorDelayBudget = 3 };
+		platform.PublishReadiness(42);
+		var delayCount = 0;
+		platform.OnDelay = () =>
+		{
+			delayCount++;
+			if (delayCount != 1) return;
+			platform.KillProcessTree(42);
+			platform.PublishReadiness(43);
+		};
+
+		var result = await new UnifiedApplicationHost(options, platform).RunAsync();
+
+		Assert.True(result.AdoptedControlHost);
+		Assert.Equal(43, result.ControlProcessId);
+		Assert.False(platform.StopSignalWritten);
+	}
+
+	private static ApplicationHostOptions CreateOptions(
+		ApplicationStartupProfile profile,
+		ApplicationLifecycleOwnership? ownership = null)
 	{
 		var root = Path.Combine(Path.GetTempPath(), "rtaime-apphost-tests", Guid.NewGuid().ToString("N"));
+		var resolvedOwnership = ownership ??
+			(profile == ApplicationStartupProfile.Showcase
+				? ApplicationLifecycleOwnership.EphemeralLocal
+				: ApplicationLifecycleOwnership.PersistentEngine);
 		return new ApplicationHostOptions(
 			profile,
 			Path.Combine(root, "install"),
 			Path.Combine(root, "state"),
 			Path.Combine(root, "work"),
 			"default",
+			resolvedOwnership,
+			false,
 			true,
 			false,
 			new ApplicationLifecyclePolicy(
@@ -170,6 +223,7 @@ public sealed class UnifiedApplicationHostTests
 		public bool PublishReadinessAfterDelay { get; init; }
 		public bool PipeReachable { get; set; } = true;
 		public bool StopSignalWritten { get; private set; }
+		public int OperatorDelayBudget { get; set; }
 		public Action? OnDelay { get; set; }
 		public List<string> StartedBaseNames { get; } = new();
 		public List<string> Events { get; } = new();
@@ -184,7 +238,10 @@ public sealed class UnifiedApplicationHostTests
 			var processId = ++_nextProcessId;
 
 			if (baseName == "rtaime.Operator")
+			{
+				if (OperatorDelayBudget > 0) _alive.Add(processId);
 				return processId;
+			}
 
 			_alive.Add(processId);
 			if (baseName == "rtaime.ControlHost" && PublishReadinessOnControlStart)
@@ -230,6 +287,15 @@ public sealed class UnifiedApplicationHostTests
 				PublishReadiness(controlProcessId);
 			}
 			OnDelay?.Invoke();
+			if (OperatorDelayBudget > 0)
+			{
+				OperatorDelayBudget--;
+				if (OperatorDelayBudget == 0)
+				{
+					var operatorProcessId = _alive.FirstOrDefault(processId => processId >= 101 && processId < 7000);
+					if (operatorProcessId != 0) _alive.Remove(operatorProcessId);
+				}
+			}
 			return Task.CompletedTask;
 		}
 
