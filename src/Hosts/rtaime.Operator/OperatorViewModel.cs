@@ -37,6 +37,20 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	private string _recordingFinalPath = "—";
 	private string _recordingStatistics = "0 written · 0 dropped";
 	private string? _recordingError;
+	private string _engineHealth = "UNVERIFIED";
+	private string _engineHealthDetail = "Health snapshot unavailable.";
+	private string _controlHealth = "UNVERIFIED";
+	private string _runtimeHealth = "UNVERIFIED";
+	private string _mediaHealth = "UNVERIFIED";
+	private string _providerHealth = "UNVERIFIED";
+	private string _gpuProviderHealth = "UNVERIFIED";
+	private string _currentFormat = "UNVERIFIED";
+	private string _frameTime = "UNVERIFIED";
+	private string _droppedFrames = "0";
+	private string _uptime = "00:00:00";
+	private string _gpuUtilization = "UNVERIFIED";
+	private string _vram = "UNVERIFIED";
+	private string _healthObserved = "—";
 	private string _visualLayerStatus = "UNKNOWN";
 	private string _graphicsAssetName = "No graphics asset loaded";
 	private string _graphicsDimensions = "—";
@@ -114,8 +128,8 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	public ICommand StartRecordingCommand { get; }
 	public ICommand StopRecordingCommand { get; }
 
-	public string MonitoringStatus => "Monitoring unavailable until AP-29";
-	public string FormatStatus => "Format metadata is not exposed by the management snapshot.";
+	public string MonitoringStatus => "Independent Runtime monitoring active when connected.";
+	public string FormatStatus => CurrentFormat;
 
 	public OperatorSourceTileViewModel? SelectedSource
 	{
@@ -168,6 +182,20 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	public string RecordingFinalPath { get => _recordingFinalPath; private set => Set(ref _recordingFinalPath, value); }
 	public string RecordingStatistics { get => _recordingStatistics; private set => Set(ref _recordingStatistics, value); }
 	public string? RecordingError { get => _recordingError; private set => Set(ref _recordingError, value); }
+	public string EngineHealth { get => _engineHealth; private set => Set(ref _engineHealth, value); }
+	public string EngineHealthDetail { get => _engineHealthDetail; private set => Set(ref _engineHealthDetail, value); }
+	public string ControlHealth { get => _controlHealth; private set => Set(ref _controlHealth, value); }
+	public string RuntimeHealth { get => _runtimeHealth; private set => Set(ref _runtimeHealth, value); }
+	public string MediaHealth { get => _mediaHealth; private set => Set(ref _mediaHealth, value); }
+	public string ProviderHealth { get => _providerHealth; private set => Set(ref _providerHealth, value); }
+	public string GpuProviderHealth { get => _gpuProviderHealth; private set => Set(ref _gpuProviderHealth, value); }
+	public string CurrentFormat { get => _currentFormat; private set { if (Set(ref _currentFormat, value)) PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(FormatStatus))); } }
+	public string FrameTime { get => _frameTime; private set => Set(ref _frameTime, value); }
+	public string DroppedFrames { get => _droppedFrames; private set => Set(ref _droppedFrames, value); }
+	public string Uptime { get => _uptime; private set => Set(ref _uptime, value); }
+	public string GpuUtilization { get => _gpuUtilization; private set => Set(ref _gpuUtilization, value); }
+	public string Vram { get => _vram; private set => Set(ref _vram, value); }
+	public string HealthObserved { get => _healthObserved; private set => Set(ref _healthObserved, value); }
 	public string VisualLayerStatus { get => _visualLayerStatus; private set => Set(ref _visualLayerStatus, value); }
 	public string GraphicsAssetName { get => _graphicsAssetName; private set => Set(ref _graphicsAssetName, value); }
 	public string GraphicsDimensions { get => _graphicsDimensions; private set => Set(ref _graphicsDimensions, value); }
@@ -294,6 +322,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 				{
 					ApplyAudio(snapshot, preserveSelectedGainEdit: true);
 					ApplyRecording(snapshot.Recording, preserveTargetEdit: true);
+					ApplyHealth(snapshot.Health);
 					AudioMeterStatus = "LIVE";
 				});
 			}
@@ -627,6 +656,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		InputStatus = snapshot.InputStatus;
 		AIStatus = snapshot.AIStatus;
 		ApplyRecording(snapshot.Recording, preserveTargetEdit: false);
+		ApplyHealth(snapshot.Health);
 		var graphics = snapshot.GraphicsOverlay;
 		GraphicsAssetName = graphics.AssetLoaded ? graphics.AssetName ?? "Unnamed graphics asset" : "No graphics asset loaded";
 		GraphicsDimensions = graphics.AssetLoaded ? $"{graphics.AssetWidth}×{graphics.AssetHeight}" : "—";
@@ -722,6 +752,28 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		RaiseCommandState();
 	}
 
+	private void ApplyHealth(OperatorHealthDescriptor health)
+	{
+		EngineHealth = health.Engine.State;
+		EngineHealthDetail = health.Engine.Detail;
+		ControlHealth = health.Control.State;
+		RuntimeHealth = health.Runtime.State;
+		MediaHealth = health.Media.State;
+		ProviderHealth = health.Provider.State;
+		GpuProviderHealth = health.GpuProvider.State;
+		CurrentFormat = health.CurrentFormat;
+		FrameTime = health.FrameBudget > TimeSpan.Zero
+			? $"{health.FrameTime.TotalMilliseconds:0.00} ms / {health.FrameBudget.TotalMilliseconds:0.00} ms"
+			: "UNVERIFIED";
+		DroppedFrames = health.DroppedFrames.ToString(CultureInfo.InvariantCulture);
+		Uptime = FormatElapsed(health.Uptime);
+		GpuUtilization = health.GpuUtilization;
+		Vram = health.Vram;
+		HealthObserved = health.ObservedAtUtc == DateTimeOffset.MinValue
+			? "—"
+			: health.ObservedAtUtc.ToLocalTime().ToString("HH:mm:ss", CultureInfo.InvariantCulture);
+	}
+
 	private static string FormatElapsed(TimeSpan elapsed) =>
 		$"{(int)elapsed.TotalHours:00}:{elapsed.Minutes:00}:{elapsed.Seconds:00}";
 
@@ -798,6 +850,14 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		ConnectionDetail = detail;
 		CommitStatus = "UNCONFIRMED";
 		TransitionStatus = "BLOCKED";
+		EngineHealth = "FAIL";
+		EngineHealthDetail = $"Control connection is stale: {detail}";
+		ControlHealth = "FAIL";
+		RuntimeHealth = "UNVERIFIED";
+		MediaHealth = "UNVERIFIED";
+		ProviderHealth = "UNVERIFIED";
+		GpuProviderHealth = "UNVERIFIED";
+		HealthObserved = "STALE";
 		LastError = detail;
 		RaiseCommandState();
 	}

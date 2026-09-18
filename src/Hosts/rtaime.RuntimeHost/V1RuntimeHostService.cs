@@ -2,6 +2,7 @@
 
 using System.Buffers.Binary;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
@@ -117,6 +118,18 @@ public sealed record V1RecordingOperatorSnapshot(
 	RecordingStatistics Statistics,
 	Failure? Failure);
 
+public sealed record V1RuntimePerformanceSnapshot(
+	TimeSpan Uptime,
+	TimeSpan FrameBudget,
+	TimeSpan LastFrameProcessingTime,
+	ulong DroppedFrames,
+	string GpuDeviceName,
+	bool GpuHardwareAccelerated,
+	double? GpuUtilizationPercent,
+	ulong? GpuVramUsedBytes,
+	ulong? GpuVramTotalBytes,
+	string GpuTelemetryEvidence);
+
 public sealed record V1RuntimeHostSnapshot(
 	RuntimeExecutionState Runtime,
 	ulong NextSequenceNumber,
@@ -129,6 +142,7 @@ public sealed record V1RuntimeHostSnapshot(
 	AudioFollowVideoStatistics Audio,
 	RecordingSnapshot Recording,
 	V1RecordingOperatorSnapshot RecordingOperator,
+	V1RuntimePerformanceSnapshot Performance,
 	int ActiveGpuSurfaces);
 
 /// <summary>
@@ -162,6 +176,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private readonly IConfigurableProgramRecordingWriter? _recordingTargetWriter;
 	private readonly RuntimeMonitoringHub _monitoringHub;
 	private readonly RuntimeMonitoringTap _monitoringTap;
+	private readonly Stopwatch _uptimeClock = Stopwatch.StartNew();
 	private readonly List<string> _observations = new();
 
 	private VirtualVideoOutput? _programOutput;
@@ -177,6 +192,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private double _operatorGraphicsPositionY = 0.06;
 	private double _operatorGraphicsScale = 1.0;
 	private V1TimingHealthState _timingHealth = V1TimingHealthState.Recovering;
+	private TimeSpan _lastFrameProcessingTime;
+	private ulong _droppedFrames;
 	private ulong _nextSequenceNumber;
 	private AudioFollowVideoResult? _lastAudioResult;
 	private DateTimeOffset? _recordingStartedAtUtc;
@@ -305,6 +322,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 					_audio.Statistics,
 					_recorder.Snapshot,
 					RecordingOperatorSnapshotUnsafe(),
+					PerformanceSnapshotUnsafe(),
 					_gpu.ActiveSurfaceCount);
 			}
 		}
@@ -579,6 +597,17 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			if (_timingHealth == state) return;
 			_timingHealth = state;
 			Observe($"timing.health:{state}");
+		}
+	}
+
+	public void SetPerformanceObservations(TimeSpan processingDuration, ulong droppedFrames)
+	{
+		if (processingDuration < TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(processingDuration));
+		lock (_gate)
+		{
+			ThrowIfDisposed();
+			_lastFrameProcessingTime = processingDuration;
+			_droppedFrames = droppedFrames;
 		}
 	}
 
@@ -884,6 +913,23 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			V1VisualLayerMode.Dynamic => _dynamicLayer.Materialize(_gpu, timing),
 			_ => throw new InvalidOperationException($"Unsupported visual layer mode '{_visualLayerMode}'.")
 		};
+	}
+
+	private V1RuntimePerformanceSnapshot PerformanceSnapshotUnsafe()
+	{
+		var backend = _gpu.BackendInfo;
+		var frameBudget = TimeSpan.FromSeconds(_format.FrameRate.Denominator / (double)_format.FrameRate.Numerator);
+		return new V1RuntimePerformanceSnapshot(
+			_uptimeClock.Elapsed,
+			frameBudget,
+			_lastFrameProcessingTime,
+			_droppedFrames,
+			backend.DeviceName,
+			backend.HardwareAccelerated,
+			null,
+			null,
+			backend.TotalMemoryBytes,
+			"UNVERIFIED: active GPU backend exposes no qualified utilization or used-VRAM telemetry source.");
 	}
 
 	private V1RecordingOperatorSnapshot RecordingOperatorSnapshotUnsafe()

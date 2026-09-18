@@ -367,3 +367,64 @@ The panel is a Client-SDK projection only. `OperatorViewModel` calls `OperatorCo
 Recording commands are serialized through ControlHost and delegated to RuntimeHost. They do not alter Preview/Program routing or advance Production revision. The recorded media is the same post-transition/post-graphics Program video and post-AFV Program audio already owned by RuntimeHost.
 
 The current V1 output is the deterministic `.rtaime-recording` reference artifact. It is externally verifiable with `ReferenceRecordingPayloadReader`; it is not presented as an MP4/MOV/MXF broadcast deliverable.
+
+
+## AP-54 Runtime Health & Performance HUD
+
+AP-54 replaces the former coarse SYSTEM summary with a compact evidence-based Runtime health/performance HUD. The Operator still owns no health truth; it renders the health projection returned through `rtaime.Client`.
+
+The HUD exposes:
+
+- Engine Health;
+- Control Health;
+- Runtime Health;
+- Media Health;
+- Provider Health;
+- GPU Provider Health;
+- current Runtime video format;
+- last measured Program-frame processing time and frame budget;
+- cumulative dropped-frame evidence;
+- Runtime uptime;
+- GPU utilization when a qualified measurement source exists;
+- VRAM usage/capacity when a qualified measurement source exists;
+- the observation timestamp.
+
+### PASS / FAIL / UNVERIFIED semantics
+
+Health evidence uses exactly three presentation states:
+
+- `PASS` means the required live evidence is present and healthy.
+- `FAIL` means a required subsystem has explicit failed/degraded execution evidence or is unavailable where availability is required.
+- `UNVERIFIED` means the system may be operating, but available evidence is insufficient to claim healthy PASS.
+
+The theme maps PASS to the healthy semantic, FAIL to the error semantic and UNVERIFIED to the warning semantic. UNVERIFIED is therefore never presented as a false green state.
+
+The V1 managed reference GPU provider is intentionally `Degraded` because it is functional but not hardware-qualified. Consequently the provider/GPU projection and aggregate Engine Health remain UNVERIFIED rather than PASS on that development path. This is deliberate evidence semantics, not a UI failure.
+
+### Runtime metrics and hot-path boundary
+
+RuntimeHost reuses its existing scheduler timing observation to publish the last Program-boundary processing duration and frame budget. A small `RuntimeFrameDropCounter` keeps only the prior scheduler timestamp plus a cumulative counter; it allocates no history and performs no file/network I/O.
+
+Dropped-frame evidence combines:
+
+1. scheduler frame periods missed between consecutive committed Program boundaries; and
+2. cumulative native Program-output backpressure/rejections when the native Media I/O path is active.
+
+Uptime is measured by a monotonic RuntimeHost stopwatch.
+
+GPU utilization and used VRAM are nullable evidence. The current active backend exposes no qualified utilization or used-VRAM telemetry source, so these fields remain `UNVERIFIED`. A known total-memory capacity may be shown separately, but it is not converted into an invented usage value.
+
+### Operator update cadence
+
+AP-54 adds no second UI telemetry loop. Health/performance observations reuse the existing bounded 200 ms management snapshot refresh that already drives audio/recording observations. The effective presentation cadence is therefore at most 5 Hz and does not participate in Runtime scheduling or Program rendering.
+
+RuntimeHost support diagnostics consume the same performance snapshot, preserving one observation source instead of creating a parallel metrics truth.
+
+### AP-54 acceptance evidence
+
+- deterministic projection tests cover healthy PASS evidence and degraded-provider UNVERIFIED behavior;
+- process-boundary integration covers Runtime disconnect becoming visible as FAIL;
+- dropped-frame counter tests cover missed scheduler cadence plus output backpressure/rejection;
+- Operator UI policy verifies all required HUD fields and PASS/FAIL/UNVERIFIED visual semantics;
+- policy verifies one bounded 200 ms management polling loop and no local WPF/NVML/performance-counter GPU synthesis;
+- observability policy verifies support diagnostics reuse the same Runtime performance snapshot and that the drop counter remains allocation/history/I/O free.

@@ -55,6 +55,18 @@ public sealed record RuntimeRecordingSnapshot(
 	ulong WriterFailures,
 	Failure? Failure);
 
+public sealed record RuntimePerformanceSnapshot(
+	TimeSpan Uptime,
+	TimeSpan FrameBudget,
+	TimeSpan LastFrameProcessingTime,
+	ulong DroppedFrames,
+	string GpuDeviceName,
+	bool GpuHardwareAccelerated,
+	double? GpuUtilizationPercent,
+	ulong? GpuVramUsedBytes,
+	ulong? GpuVramTotalBytes,
+	string GpuTelemetryEvidence);
+
 public sealed record RuntimeRecordingCommandResult(
 	bool Succeeded,
 	RuntimeRecordingSnapshot Snapshot,
@@ -74,7 +86,8 @@ public sealed record RuntimeRemoteSnapshot(
 	IReadOnlyDictionary<MediaSourceId, RuntimeAudioInputSnapshot> AudioInputs,
 	RuntimeAudioProgramSnapshot AudioProgram,
 	ulong StateVersion,
-	RuntimeRecordingSnapshot? Recording = null);
+	RuntimeRecordingSnapshot? Recording = null,
+	RuntimePerformanceSnapshot? Performance = null);
 
 public sealed record RuntimeRemoteApplyResult(
 	string HostInstanceId,
@@ -180,7 +193,8 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 				EqualityComparer<MediaSourceId>.Default),
 			FromWire(snapshot.AudioProgram),
 			response.StateVersion,
-			FromWire(snapshot.Recording));
+			FromWire(snapshot.Recording),
+			FromWire(snapshot.Performance));
 	}
 
 	public async ValueTask<RuntimeRemoteApplyResult> ApplyExecutionAsync(
@@ -518,6 +532,18 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 		snapshot.WriterFailures,
 		snapshot.Failure is null ? null : new Failure(snapshot.Failure.Code, snapshot.Failure.Message));
 
+	private static RuntimePerformanceSnapshot FromWire(WireRuntimePerformance snapshot) => new(
+		TimeSpan.FromTicks(Math.Max(0, snapshot.UptimeTicks)),
+		TimeSpan.FromTicks(Math.Max(0, snapshot.FrameBudgetTicks)),
+		TimeSpan.FromTicks(Math.Max(0, snapshot.LastFrameProcessingTicks)),
+		snapshot.DroppedFrames,
+		string.IsNullOrWhiteSpace(snapshot.GpuDeviceName) ? "UNKNOWN" : snapshot.GpuDeviceName.Trim(),
+		snapshot.GpuHardwareAccelerated,
+		snapshot.GpuUtilizationPercent,
+		snapshot.GpuVramUsedBytes,
+		snapshot.GpuVramTotalBytes,
+		string.IsNullOrWhiteSpace(snapshot.GpuTelemetryEvidence) ? "UNVERIFIED" : snapshot.GpuTelemetryEvidence.Trim());
+
 	private static RuntimeRecordingCommandResult ReadRecordingCommandResult(WireEnvelope response)
 	{
 		var wire = response.Payload.Deserialize<WireRecordingCommandResult>(Wire.JsonOptions)
@@ -677,6 +703,7 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 	private sealed record WireApplyResponse(WirePrepareResult Prepare, WireCommitResult? Commit, ulong? ActivationSequence);
 	private sealed record WireRecordingStart(string SessionId, string OutputId, string DestinationDirectory, string FileName);
 	private sealed record WireRecordingSnapshot(string State, long ElapsedTicks, string? Destination, string? FileName, string? FinalPath, ulong Accepted, ulong Written, ulong Dropped, ulong Rejected, ulong WriterFailures, WireFailure? Failure);
+	private sealed record WireRuntimePerformance(long UptimeTicks, long FrameBudgetTicks, long LastFrameProcessingTicks, ulong DroppedFrames, string GpuDeviceName, bool GpuHardwareAccelerated, double? GpuUtilizationPercent, ulong? GpuVramUsedBytes, ulong? GpuVramTotalBytes, string GpuTelemetryEvidence);
 	private sealed record WireRecordingCommandResult(bool Succeeded, WireRecordingSnapshot Snapshot, WireFailure? Failure);
 	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path, WirePreparedExecution PreparedExecution);
 	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame, bool? AutoPlayOnProgram, int? EndBehavior, long? InPointFrame, long? OutPointFrame);
@@ -701,7 +728,8 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 		WireGraphicsOverlay GraphicsOverlay,
 		WireAudioInput[] AudioInputs,
 		WireAudioProgram AudioProgram,
-		WireRecordingSnapshot Recording);
+		WireRecordingSnapshot Recording,
+		WireRuntimePerformance Performance);
 
 	private static class Wire
 	{

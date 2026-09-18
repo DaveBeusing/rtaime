@@ -65,6 +65,7 @@ public static class RuntimeHostDiagnostics
 			var monitorTap = runtime.MonitoringStatistics;
 			var monitorHub = runtime.MonitoringHub.Statistics;
 			var recording = snapshot.Recording;
+			var performance = snapshot.Performance;
 			builder.Status("runtime.executionStatus", snapshot.Runtime.Status.ToString())
 				.Status("runtime.executionRevision", snapshot.Runtime.ExecutionRevision.ToString())
 				.Status("runtime.activeExecutionId", snapshot.Runtime.ActiveExecutionId?.ToString() ?? "none")
@@ -74,7 +75,17 @@ public static class RuntimeHostDiagnostics
 				.Status("format.width", runtime.Format.Width.ToString())
 				.Status("format.height", runtime.Format.Height.ToString())
 				.Status("format.frameRate", runtime.Format.FrameRate.ToString())
+				.Status("performance.frameBudgetMs", performance.FrameBudget.TotalMilliseconds.ToString("F6", CultureInfo.InvariantCulture))
+				.Status("performance.lastFrameProcessingMs", performance.LastFrameProcessingTime.TotalMilliseconds.ToString("F6", CultureInfo.InvariantCulture))
+				.Status("performance.uptime", performance.Uptime.ToString())
+				.Status("gpu.deviceName", performance.GpuDeviceName)
+				.Status("gpu.hardwareAccelerated", performance.GpuHardwareAccelerated.ToString())
+				.Status("gpu.utilizationPercent", performance.GpuUtilizationPercent?.ToString("F3", CultureInfo.InvariantCulture) ?? "UNVERIFIED")
+				.Status("gpu.vramUsedBytes", performance.GpuVramUsedBytes?.ToString(CultureInfo.InvariantCulture) ?? "UNVERIFIED")
+				.Status("gpu.vramTotalBytes", performance.GpuVramTotalBytes?.ToString(CultureInfo.InvariantCulture) ?? "UNVERIFIED")
+				.Status("gpu.telemetryEvidence", performance.GpuTelemetryEvidence)
 				.Counter("runtime.nextSequenceNumber", ToCounter(snapshot.NextSequenceNumber))
+				.Counter("runtime.droppedFrames", ToCounter(performance.DroppedFrames))
 				.Counter("gpu.activeSurfaces", snapshot.ActiveGpuSurfaces)
 				.Counter("monitoring.tapCaptured", ToCounter(monitorTap.Captured))
 				.Counter("monitoring.tapDropped", ToCounter(monitorTap.DroppedBeforeProcessing))

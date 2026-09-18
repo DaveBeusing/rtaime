@@ -61,7 +61,7 @@ Assert-Condition ($theme -match 'Source="OperatorTokens\.xaml"') "Operator theme
 foreach ($token in @("OperatorFontFamily", "OperatorWindowPadding", "OperatorControlHeight", "OperatorColorPreview", "OperatorColorProgram", "OperatorColorHealthy", "OperatorColorWarning", "OperatorColorError")) {
 	Assert-Condition ($tokens -match [Regex]::Escape($token)) "Operator design token '$token' is required."
 }
-foreach ($resource in @("OperatorPreviewBrush", "OperatorProgramBrush", "OperatorArmedBrush", "OperatorHealthyBrush", "OperatorWarningBrush", "OperatorErrorBrush", "OperatorFocusVisual", "OperatorToolbar", "OperatorToggleButton", "OperatorSourceItem", "OperatorMeter", "OperatorTimelineSlider", "OperatorPreviewTally", "OperatorProgramTally")) {
+foreach ($resource in @("OperatorPreviewBrush", "OperatorProgramBrush", "OperatorArmedBrush", "OperatorHealthyBrush", "OperatorWarningBrush", "OperatorErrorBrush", "OperatorEvidenceBadge", "OperatorFocusVisual", "OperatorToolbar", "OperatorToggleButton", "OperatorSourceItem", "OperatorMeter", "OperatorTimelineSlider", "OperatorPreviewTally", "OperatorProgramTally")) {
 	Assert-Condition ($theme -match [Regex]::Escape($resource)) "Operator theme resource '$resource' is required."
 }
 
@@ -198,6 +198,17 @@ Assert-Condition ($viewModel -match '_client\.StartRecordingAsync') "Recording s
 Assert-Condition ($viewModel -match '_client\.StopRecordingAsync') "Recording stop must cross the Client SDK seam."
 Assert-Condition ($viewModel -match 'ApplyRecording\(snapshot\.Recording') "Recording status must project confirmed Runtime observations."
 Assert-Condition ($viewModel -notmatch 'ProgramRecorder|ReferenceRecordingPayloadWriter') "Operator must not own recording execution or storage writers."
+Assert-Condition ($window -match 'Text="RUNTIME HEALTH / PERFORMANCE"') "AP-54 must expose a compact Runtime health/performance HUD."
+foreach ($binding in @("EngineHealth", "ControlHealth", "RuntimeHealth", "MediaHealth", "ProviderHealth", "GpuProviderHealth", "CurrentFormat", "FrameTime", "DroppedFrames", "Uptime", "GpuUtilization", "Vram")) {
+	Assert-Condition ($window -match "Binding $binding") "AP-54 HUD binding '$binding' is required."
+}
+Assert-Condition ($theme -match 'Trigger Property="Tag" Value="PASS"' -and $theme -match 'OperatorHealthyBrush') "PASS evidence must use the healthy semantic."
+Assert-Condition ($theme -match 'Trigger Property="Tag" Value="FAIL"' -and $theme -match 'OperatorErrorBrush') "FAIL evidence must use the error semantic."
+Assert-Condition ($theme -match 'Trigger Property="Tag" Value="UNVERIFIED"' -and $theme -match 'OperatorWarningBrush') "UNVERIFIED evidence must remain visually distinct from healthy PASS."
+Assert-Condition ($viewModel -match 'ApplyHealth\(snapshot\.Health\)') "AP-54 HUD must project confirmed Client health snapshots."
+$managementPollCount = [Regex]::Matches($viewModel, 'PeriodicTimer\(TimeSpan\.FromMilliseconds\(200\)\)').Count
+Assert-Condition ($managementPollCount -eq 1) "AP-54 must reuse the single bounded 200 ms management poll rather than add a new UI telemetry loop."
+Assert-Condition ($viewModel -notmatch 'PerformanceCounter|ManagementObjectSearcher|nvidia-smi|NVML') "Operator must not synthesize GPU telemetry locally."
 Assert-Condition ($window -match 'Text="COMMIT"') "Program workspace must expose commit status."
 Assert-Condition ($window -match 'Binding CommitStatus') "Program workspace must bind authoritative commit status."
 Assert-Condition ($window -match 'Binding TransitionStatus') "Program workspace must expose transition state."
@@ -216,6 +227,8 @@ Assert-Condition ($project -notmatch 'ControlHost|RuntimeHost|AIHost') "Operator
 Assert-Condition ($documentation -match '1920.?x.?1080') "Operator UI documentation must record the reference resolution."
 Assert-Condition ($documentation -match '125%') "Operator UI documentation must record 125% DPI qualification."
 Assert-Condition ($documentation -match '150%') "Operator UI documentation must record 150% DPI qualification."
+Assert-Condition ($documentation -match 'AP-54 Runtime Health') "Operator UI documentation must record the AP-54 Runtime health/performance HUD."
+Assert-Condition ($documentation -match 'PASS / FAIL / UNVERIFIED') "AP-54 documentation must preserve evidence-state semantics."
 
 Write-Host "Operator UI policy verification PASS"
 Write-Host "Operator authority: remote Client SDK only"
@@ -228,6 +241,7 @@ Write-Host "Media autoplay: Program-triggered playback policy, effective-range c
 Write-Host "Graphics: PNG/RGBA load, placement, scale and confirmed show/hide through Client SDK verified"
 Write-Host "Audio: AFV, stereo/master meters, gain, mute, clipping/health and clip-audio status use Runtime observations"
 Write-Host "Recording: confirmed REC state, elapsed time, destination/name, final path and failures use RuntimeHost recording truth"
+Write-Host "Health HUD: PASS/FAIL/UNVERIFIED Runtime evidence, bounded 5 Hz projection and no locally invented GPU telemetry"
 Write-Host "Program Output: display selection, start/stop, fullscreen/windowed fallback and shared Program monitoring truth verified"
 Write-Host "Commit state: pending, confirmed, rejected/failed and resynchronization presentation verified"
 Write-Host "Keyboard controls: synchronization, Preview, CUT and DISSOLVE/AUTO declared"
