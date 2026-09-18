@@ -84,6 +84,44 @@ public sealed class AudioFollowVideoTests
     }
 
     [Fact]
+    public void Stereo_meter_preserves_channels_applies_gain_and_reports_clipping()
+    {
+        var engine = CreateEngine(FrameRate.Fps50);
+        engine.SetInputState(StreamA, new AudioGain(2.0), muted: false);
+
+        var result = engine.ProcessBoundary(
+            SourceA,
+            0,
+            Buffer(StreamA, FrameRate.Fps50, 0),
+            new AudioStereoMeter(0.6, 0.3));
+
+        Assert.True(result.Emitted);
+        Assert.True(result.Clipping);
+        Assert.Equal(1.0, result.LeftPeakLevel, 6);
+        Assert.Equal(0.6, result.RightPeakLevel, 6);
+        Assert.Equal(1.0, result.PeakLevel, 6);
+        Assert.Contains(engine.Observations, observation => observation.Code == "audio.afv.clipping");
+    }
+
+    [Fact]
+    public void Allocation_free_stereo_metering_measures_real_interleaved_samples()
+    {
+        var samples = new float[]
+        {
+            0.10f, -0.20f,
+            -0.70f, 0.45f,
+            0.30f, -0.90f
+        };
+
+        var meter = AudioMetering.MeasureInterleavedStereoFloat32(samples);
+
+        Assert.Equal(0.70, meter.LeftPeakLevel, 5);
+        Assert.Equal(0.90, meter.RightPeakLevel, 5);
+        Assert.Equal(0.90, meter.PeakLevel, 5);
+        Assert.Equal(new AudioStereoMeter(0, 0), AudioMetering.MeasureInterleavedStereoFloat32(ReadOnlySpan<float>.Empty));
+    }
+
+    [Fact]
     public void Sequence_mismatch_fails_closed_without_consuming_expected_boundary()
     {
         var engine = CreateEngine(FrameRate.Fps50);
