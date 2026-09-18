@@ -89,6 +89,19 @@ internal sealed class RuntimeMediaIoVerticalSlice : IDisposable
 			capture.RuntimeSourceId,
 			gpuInput,
 			MapSignal(capture.PortStatus.SignalState));
+		if (capture.AudioSamples is { Length: >= 2 } audioSamples)
+		{
+			var meter = AudioMetering.MeasureInterleavedStereoFloat32(audioSamples);
+			_runtime.SetExternalAudioMeter(
+				capture.RuntimeSourceId,
+				meter.LeftPeakLevel,
+				meter.RightPeakLevel,
+				available: true);
+		}
+		else
+		{
+			_runtime.SetExternalAudioMeter(capture.RuntimeSourceId, 0, 0, available: false);
+		}
 		appliedSequence = capture.CaptureSequence;
 	}
 
