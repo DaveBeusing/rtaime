@@ -262,8 +262,17 @@ public sealed class ProductionIpcIntegrationTests
 		Assert.Equal(MediaDeckState.Playing, deck.Snapshot.State);
 		Assert.True(deck.Snapshot.Transport!.IsOnProgram);
 
-		var sourceBinOpened = await client.SynchronizeAsync();
-		var mediaTile = sourceBinOpened.Sources.Single(source => source.Id == sourceId.ToString());
+		OperatorSourceDescriptor? mediaTile = null;
+		var sourceBinDeadline = DateTime.UtcNow.AddSeconds(5);
+		while (DateTime.UtcNow < sourceBinDeadline)
+		{
+			var sourceBinOpened = await client.SynchronizeAsync();
+			mediaTile = sourceBinOpened.Sources.Single(source => source.Id == sourceId.ToString());
+			if (string.Equals(mediaTile.MediaState, "PLAYING", StringComparison.Ordinal))
+				break;
+			await Task.Delay(20);
+		}
+		Assert.NotNull(mediaTile);
 		Assert.Equal("MEDIA", mediaTile.Type);
 		Assert.Equal("PLAYING", mediaTile.Health);
 		Assert.Equal("PLAYING", mediaTile.MediaState);
