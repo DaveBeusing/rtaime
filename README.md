@@ -84,7 +84,7 @@ dotnet publish src/Hosts/rtaime.Operator/rtaime.Operator.csproj `
 	--output artifacts/publish/rtaime.Operator-win-x64
 ```
 
-The same publish shape is supported for `rtaime.ControlHost`, `rtaime.RuntimeHost` and `rtaime.AIHost`.
+The same single-file model is available for `rtaime.ControlHost`, `rtaime.RuntimeHost` and `rtaime.AIHost`. The Operator command additionally uses .NET's compatibility extraction mode because the current Demo Production assets are resolved from files below `AppContext.BaseDirectory`; see `docs/BuildAndTest.md` for the boundary and qualification note.
 
 A single monolithic executable containing all four processes is **not** the current architecture.
 

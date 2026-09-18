@@ -72,7 +72,11 @@ A future all-in-one process would be a separate architecture decision and is not
 
 ### Operator-only single-file EXE
 
-Use this when the Control/Runtime/AI lifecycle is already available separately:
+Use this when the Control/Runtime/AI lifecycle is already available separately.
+
+The Operator currently resolves Demo Production assets as files relative to `AppContext.BaseDirectory`. The command therefore uses `IncludeAllContentForSelfExtract=true` so those bundled assets are extracted before startup. Microsoft documents this property as a compatibility mode rather than the preferred general single-file model. Treat this as a developer/showcase publish option until the Operator asset-access path or release qualification is updated.
+
+Reference: https://learn.microsoft.com/dotnet/core/deploying/single-file/overview
 
 ```powershell
 dotnet publish src/Hosts/rtaime.Operator/rtaime.Operator.csproj `
