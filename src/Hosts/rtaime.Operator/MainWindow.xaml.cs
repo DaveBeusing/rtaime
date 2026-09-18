@@ -2,7 +2,9 @@
 
 using System.Windows;
 using System.Windows.Threading;
+using Microsoft.Win32;
 using rtaime.Client;
+using rtaime.Control.Contracts;
 
 namespace rtaime.Operator;
 
@@ -22,39 +24,84 @@ public partial class MainWindow : Window
 			monitoringEndpoint = $"{runtimeEndpoint}.monitor";
 
 		var controlTransport = new NamedPipeOperatorControlTransport(controlEndpoint);
-		var viewModel = new OperatorViewModel(new OperatorControlClient(controlTransport));
-		Timeline = new MediaTimelineViewModel();
+		var client = new OperatorControlClient(controlTransport);
+		var viewModel = new OperatorViewModel(client);
+		MediaDeck = CreateMediaDeck(viewModel, client);
 		Monitoring = new OperatorMonitoringViewModel(
 			viewModel,
 			new NamedPipeOperatorMonitoringTransport(monitoringEndpoint),
 			new DispatcherSynchronizationContext(Dispatcher));
 		InitializeComponent();
 		DataContext = viewModel;
+		MediaDeck.Start();
 		Monitoring.Start();
-		Closed += async (_, _) =>
-		{
-			await Monitoring.DisposeAsync();
-			await Timeline.DisposeAsync();
-		};
+		Closed += OnClosedAsync;
 	}
 
 	public MainWindow(OperatorViewModel viewModel)
 	{
 		ArgumentNullException.ThrowIfNull(viewModel);
-		Timeline = new MediaTimelineViewModel();
+		var client = viewModel.Client ?? new OperatorControlClient(new UnavailableOperatorControlTransport());
+		MediaDeck = CreateMediaDeck(viewModel, client);
 		Monitoring = new OperatorMonitoringViewModel(
 			viewModel,
 			new NamedPipeOperatorMonitoringTransport("rtaime.v1.runtime.default.monitor"),
 			new DispatcherSynchronizationContext(Dispatcher));
 		InitializeComponent();
 		DataContext = viewModel;
-		Closed += async (_, _) =>
-		{
-			await Monitoring.DisposeAsync();
-			await Timeline.DisposeAsync();
-		};
+		MediaDeck.Start();
+		Closed += OnClosedAsync;
 	}
 
 	public OperatorMonitoringViewModel Monitoring { get; }
-	public MediaTimelineViewModel Timeline { get; }
+	public MediaDeckViewModel MediaDeck { get; }
+	public MediaTimelineViewModel Timeline => MediaDeck.Timeline;
+
+	private MediaDeckViewModel CreateMediaDeck(
+		OperatorViewModel viewModel,
+		OperatorControlClient client) =>
+		new(
+			new MediaDeckController(client),
+			PickLocalMediaFile,
+			() => viewModel.SelectedSource?.Id,
+			new DispatcherSynchronizationContext(Dispatcher));
+
+	private static string? PickLocalMediaFile()
+	{
+		var dialog = new OpenFileDialog
+		{
+			Title = "Open local media",
+			Filter = "MP4 Video (*.mp4)|*.mp4",
+			CheckFileExists = true,
+			Multiselect = false
+		};
+		return dialog.ShowDialog() == true ? dialog.FileName : null;
+	}
+
+	private async void OnClosedAsync(object? sender, EventArgs e)
+	{
+		await Monitoring.DisposeAsync();
+		await MediaDeck.DisposeAsync();
+	}
+
+	private sealed class UnavailableOperatorControlTransport : IOperatorControlTransport
+	{
+		public ValueTask<OperatorStatusSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default) =>
+			ValueTask.FromException<OperatorStatusSnapshot>(new InvalidOperationException("Operator transport is not configured."));
+
+		public ValueTask<OperatorMutationResponse> SelectPreviewAsync(
+			SelectPreviewCommand command,
+			CancellationToken cancellationToken = default) =>
+			ValueTask.FromException<OperatorMutationResponse>(new InvalidOperationException("Operator transport is not configured."));
+
+		public ValueTask<OperatorMutationResponse> CutProgramAsync(
+			CutProgramCommand command,
+			CancellationToken cancellationToken = default) =>
+			ValueTask.FromException<OperatorMutationResponse>(new InvalidOperationException("Operator transport is not configured."));
+
+		public ValueTask<OperatorMutationResponse> DissolveProgramAsync(
+			DissolveProgramCommand command,
+			CancellationToken cancellationToken = default) =>
+			ValueTask.FromException<OperatorMutationResponse>(new InvalidOperationException("Operator transport is not configured."));
+	}
 }

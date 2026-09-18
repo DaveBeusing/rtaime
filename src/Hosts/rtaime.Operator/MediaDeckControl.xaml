@@ -1,0 +1,228 @@
+<!-- Copyright (c) Dave Beusing <david.beusing@gmail.com>. -->
+<UserControl x:Class="rtaime.Operator.MediaDeckControl"
+	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	xmlns:local="clr-namespace:rtaime.Operator"
+	MinHeight="560"
+	Focusable="True">
+	<UserControl.InputBindings>
+		<KeyBinding Key="P" Command="{Binding TogglePlayPauseCommand}" />
+		<KeyBinding Key="S" Command="{Binding StopCommand}" />
+		<KeyBinding Key="I" Command="{Binding SetInCommand}" />
+		<KeyBinding Key="O" Command="{Binding SetOutCommand}" />
+		<KeyBinding Key="M" Command="{Binding AddCueCommand}" />
+		<KeyBinding Key="Delete" Command="{Binding DeleteCueCommand}" />
+	</UserControl.InputBindings>
+
+	<Border Style="{StaticResource OperatorPanel}">
+		<Grid>
+			<Grid.RowDefinitions>
+				<RowDefinition Height="Auto" />
+				<RowDefinition Height="Auto" />
+				<RowDefinition Height="Auto" />
+				<RowDefinition Height="Auto" />
+				<RowDefinition Height="Auto" />
+				<RowDefinition Height="Auto" />
+			</Grid.RowDefinitions>
+
+			<Grid Grid.Row="0" Margin="0,0,0,14">
+				<Grid.ColumnDefinitions>
+					<ColumnDefinition Width="*" />
+					<ColumnDefinition Width="Auto" />
+				</Grid.ColumnDefinitions>
+				<StackPanel>
+					<StackPanel Orientation="Horizontal">
+						<TextBlock Text="LOCAL MEDIA DECK" Style="{StaticResource OperatorSectionTitle}" />
+						<Border Margin="10,0,0,0" Padding="7,2" CornerRadius="4"
+							Background="{DynamicResource OperatorRaisedSurfaceBrush}">
+							<TextBlock Text="{Binding State}" Style="{StaticResource OperatorLabel}" />
+						</Border>
+					</StackPanel>
+					<TextBlock Text="{Binding FileName}" FontSize="19" FontWeight="SemiBold" Margin="0,7,0,0"
+						TextTrimming="CharacterEllipsis" />
+					<TextBlock Text="{Binding SourceId, StringFormat=Source slot: {0}}" Style="{StaticResource OperatorLabel}"
+						Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />
+				</StackPanel>
+
+				<StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+					<Button Content="OPEN MP4" Command="{Binding OpenCommand}" Style="{StaticResource OperatorAccentButton}" Margin="0,0,8,0" />
+					<Button Content="REFRESH" Command="{Binding RefreshCommand}" Style="{StaticResource OperatorButton}" Margin="0,0,8,0" />
+					<Button Content="CLOSE" Command="{Binding CloseCommand}" Style="{StaticResource OperatorButton}" />
+				</StackPanel>
+			</Grid>
+
+			<Grid Grid.Row="1" Margin="0,0,0,14">
+				<Grid.ColumnDefinitions>
+					<ColumnDefinition Width="1.55*" />
+					<ColumnDefinition Width="14" />
+					<ColumnDefinition Width="1*" />
+				</Grid.ColumnDefinitions>
+
+				<Border Grid.Column="0" BorderBrush="{DynamicResource OperatorPreviewBrush}" BorderThickness="1"
+					CornerRadius="6" Background="#090C10" Padding="1">
+					<Grid Height="260" ClipToBounds="True">
+						<Image Source="{Binding Monitoring.PreviewImage, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							Stretch="Uniform" SnapsToDevicePixels="True" />
+						<Border VerticalAlignment="Top" HorizontalAlignment="Left" Background="#C0000000" Padding="8,5" Margin="8">
+							<TextBlock Text="PRODUCTION PREVIEW MONITOR" Foreground="{DynamicResource OperatorPreviewBrush}"
+								FontSize="11" FontWeight="Bold" />
+						</Border>
+						<Border VerticalAlignment="Bottom" Background="#C0000000" Padding="10,7">
+							<Grid>
+								<Grid.ColumnDefinitions>
+									<ColumnDefinition Width="*" />
+									<ColumnDefinition Width="Auto" />
+								</Grid.ColumnDefinitions>
+								<TextBlock Text="{Binding FileName}" Foreground="White" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+								<TextBlock Grid.Column="1" Text="{Binding State}" Foreground="White" FontWeight="Bold" Margin="12,0,0,0" />
+							</Grid>
+						</Border>
+					</Grid>
+				</Border>
+
+				<Border Grid.Column="2" Background="{DynamicResource OperatorRaisedSurfaceBrush}"
+					BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" CornerRadius="6" Padding="12">
+					<StackPanel>
+						<TextBlock Text="CLIP METADATA" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,12" />
+						<DockPanel Margin="0,0,0,8"><TextBlock Text="Resolution" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding Resolution}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
+						<DockPanel Margin="0,0,0,8"><TextBlock Text="Frame rate" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding FrameRate}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
+						<DockPanel Margin="0,0,0,8"><TextBlock Text="Video" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding VideoCodec}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
+						<DockPanel Margin="0,0,0,8"><TextBlock Text="Audio" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding AudioCodec}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
+						<DockPanel Margin="0,0,0,8"><TextBlock Text="Duration" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding Duration}" Style="{StaticResource OperatorValue}" FontFamily="Consolas" DockPanel.Dock="Right" /></DockPanel>
+						<DockPanel Margin="0,0,0,8"><TextBlock Text="Current" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding Current}" Style="{StaticResource OperatorValue}" FontFamily="Consolas" DockPanel.Dock="Right" /></DockPanel>
+						<DockPanel><TextBlock Text="Remaining" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding Remaining}" Style="{StaticResource OperatorValue}" FontFamily="Consolas" DockPanel.Dock="Right" /></DockPanel>
+					</StackPanel>
+				</Border>
+			</Grid>
+
+			<Grid Grid.Row="2" Margin="0,0,0,14">
+				<Grid.ColumnDefinitions>
+					<ColumnDefinition Width="*" />
+					<ColumnDefinition Width="10" />
+					<ColumnDefinition Width="*" />
+					<ColumnDefinition Width="10" />
+					<ColumnDefinition Width="*" />
+				</Grid.ColumnDefinitions>
+				<Button Grid.Column="0" Content="PLAY / PAUSE&#x0a;P" Command="{Binding TogglePlayPauseCommand}"
+					Style="{StaticResource OperatorAccentButton}" FontSize="15" />
+				<Button Grid.Column="2" Content="STOP&#x0a;S" Command="{Binding StopCommand}" Style="{StaticResource OperatorButton}" />
+				<Button Grid.Column="4" Content="REFRESH STATE" Command="{Binding RefreshCommand}" Style="{StaticResource OperatorButton}" />
+			</Grid>
+
+			<local:MediaTimelineControl Grid.Row="3" DataContext="{Binding Timeline}" Margin="0,0,0,14" />
+
+			<Grid Grid.Row="4" Margin="0,0,0,14">
+				<Grid.ColumnDefinitions>
+					<ColumnDefinition Width="1*" />
+					<ColumnDefinition Width="14" />
+					<ColumnDefinition Width="1.35*" />
+				</Grid.ColumnDefinitions>
+
+				<Border Grid.Column="0" Background="{DynamicResource OperatorRaisedSurfaceBrush}"
+					BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" CornerRadius="6" Padding="12">
+					<StackPanel>
+						<TextBlock Text="IN / OUT" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,12" />
+
+						<Grid Margin="0,0,0,10">
+							<Grid.ColumnDefinitions>
+								<ColumnDefinition Width="Auto" />
+								<ColumnDefinition Width="*" />
+								<ColumnDefinition Width="Auto" />
+								<ColumnDefinition Width="Auto" />
+							</Grid.ColumnDefinitions>
+							<TextBlock Text="IN" Foreground="{DynamicResource OperatorPreviewBrush}" FontWeight="Bold" VerticalAlignment="Center" />
+							<TextBlock Grid.Column="1" Text="{Binding InTimecode}" FontFamily="Consolas" FontSize="15" FontWeight="SemiBold" Margin="12,0" VerticalAlignment="Center" />
+							<Button Grid.Column="2" Content="SET  I" Command="{Binding SetInCommand}" Style="{StaticResource OperatorButton}" Padding="9,5" Margin="0,0,6,0" />
+							<Button Grid.Column="3" Content="JUMP" Command="{Binding JumpInCommand}" Style="{StaticResource OperatorButton}" Padding="9,5" />
+						</Grid>
+
+						<Grid Margin="0,0,0,12">
+							<Grid.ColumnDefinitions>
+								<ColumnDefinition Width="Auto" />
+								<ColumnDefinition Width="*" />
+								<ColumnDefinition Width="Auto" />
+								<ColumnDefinition Width="Auto" />
+							</Grid.ColumnDefinitions>
+							<TextBlock Text="OUT" Foreground="{DynamicResource OperatorProgramBrush}" FontWeight="Bold" VerticalAlignment="Center" />
+							<TextBlock Grid.Column="1" Text="{Binding OutTimecode}" FontFamily="Consolas" FontSize="15" FontWeight="SemiBold" Margin="12,0" VerticalAlignment="Center" />
+							<Button Grid.Column="2" Content="SET  O" Command="{Binding SetOutCommand}" Style="{StaticResource OperatorButton}" Padding="9,5" Margin="0,0,6,0" />
+							<Button Grid.Column="3" Content="JUMP" Command="{Binding JumpOutCommand}" Style="{StaticResource OperatorButton}" Padding="9,5" />
+						</Grid>
+
+						<StackPanel Orientation="Horizontal">
+							<Button Content="CLEAR IN" Command="{Binding ClearInCommand}" Style="{StaticResource OperatorButton}" Padding="9,5" Margin="0,0,8,0" />
+							<Button Content="CLEAR OUT" Command="{Binding ClearOutCommand}" Style="{StaticResource OperatorButton}" Padding="9,5" />
+						</StackPanel>
+					</StackPanel>
+				</Border>
+
+				<Border Grid.Column="2" Background="{DynamicResource OperatorRaisedSurfaceBrush}"
+					BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" CornerRadius="6" Padding="12">
+					<Grid>
+						<Grid.RowDefinitions>
+							<RowDefinition Height="Auto" />
+							<RowDefinition Height="*" />
+							<RowDefinition Height="Auto" />
+						</Grid.RowDefinitions>
+						<TextBlock Grid.Row="0" Text="CUE POINTS" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,10" />
+
+						<ListBox Grid.Row="1" ItemsSource="{Binding Cues}" SelectedItem="{Binding SelectedCue}"
+							MinHeight="100" MaxHeight="180" Background="Transparent" BorderThickness="0">
+							<ListBox.ItemTemplate>
+								<DataTemplate>
+									<Grid Margin="0,2">
+										<Grid.ColumnDefinitions>
+											<ColumnDefinition Width="*" />
+											<ColumnDefinition Width="Auto" />
+										</Grid.ColumnDefinitions>
+										<StackPanel>
+											<TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+											<TextBlock Text="{Binding Frame, StringFormat=Frame {0:N0}}" Style="{StaticResource OperatorLabel}" />
+										</StackPanel>
+										<TextBlock Grid.Column="1" Text="{Binding Timecode}" FontFamily="Consolas" FontWeight="SemiBold" VerticalAlignment="Center" />
+									</Grid>
+								</DataTemplate>
+							</ListBox.ItemTemplate>
+						</ListBox>
+
+						<Grid Grid.Row="2" Margin="0,10,0,0">
+							<Grid.ColumnDefinitions>
+								<ColumnDefinition Width="*" />
+								<ColumnDefinition Width="Auto" />
+								<ColumnDefinition Width="Auto" />
+								<ColumnDefinition Width="Auto" />
+							</Grid.ColumnDefinitions>
+							<TextBox Text="{Binding CueName, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource OperatorTextBox}" Margin="0,0,8,0" />
+							<Button Grid.Column="1" Content="ADD  M" Command="{Binding AddCueCommand}" Style="{StaticResource OperatorAccentButton}" Padding="9,5" Margin="0,0,6,0" />
+							<Button Grid.Column="2" Content="JUMP" Command="{Binding JumpCueCommand}" Style="{StaticResource OperatorButton}" Padding="9,5" Margin="0,0,6,0" />
+							<Button Grid.Column="3" Content="DELETE" Command="{Binding DeleteCueCommand}" Style="{StaticResource OperatorButton}" Padding="9,5" />
+						</Grid>
+					</Grid>
+				</Border>
+			</Grid>
+
+			<Border Grid.Row="5" Background="{DynamicResource OperatorRaisedSurfaceBrush}"
+				BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" CornerRadius="6" Padding="10">
+				<Grid>
+					<Grid.ColumnDefinitions>
+						<ColumnDefinition Width="Auto" />
+						<ColumnDefinition Width="*" />
+					</Grid.ColumnDefinitions>
+					<TextBlock Text="DECK STATUS" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" Margin="0,0,12,0" />
+					<TextBlock Grid.Column="1" Text="{Binding StatusDetail}" TextWrapping="Wrap" VerticalAlignment="Center">
+						<TextBlock.Style>
+							<Style TargetType="TextBlock">
+								<Setter Property="Foreground" Value="{DynamicResource OperatorTextBrush}" />
+								<Style.Triggers>
+									<DataTrigger Binding="{Binding HasError}" Value="True">
+										<Setter Property="Foreground" Value="{DynamicResource OperatorErrorBrush}" />
+									</DataTrigger>
+								</Style.Triggers>
+							</Style>
+						</TextBlock.Style>
+					</TextBlock>
+				</Grid>
+			</Border>
+		</Grid>
+	</Border>
+</UserControl>

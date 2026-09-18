@@ -132,6 +132,61 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 			response.StateVersion);
 	}
 
+	public async ValueTask<MediaDeckRuntimeSnapshot> GetMediaDeckSnapshotAsync(CancellationToken cancellationToken = default)
+	{
+		var response = await ExchangeAsync("runtime.media_deck.snapshot.get", new { }, cancellationToken).ConfigureAwait(false);
+		var wire = response.Payload.Deserialize<WireMediaDeckRuntimeSnapshot>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Runtime media-deck snapshot response is required.");
+		return FromWire(wire);
+	}
+
+	public async ValueTask<MediaDeckRuntimeSnapshot> OpenMediaDeckAsync(
+		MediaDeckOpenRequest request,
+		PreparedExecutionContract preparedExecution,
+		CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(request);
+		ArgumentNullException.ThrowIfNull(preparedExecution);
+		var payload = new WireMediaDeckOpen(
+			request.Version.ToString(),
+			request.SourceId.ToString(),
+			request.Path,
+			ToWire(preparedExecution));
+		var response = await ExchangeAsync("runtime.media_deck.open", payload, cancellationToken).ConfigureAwait(false);
+		var wire = response.Payload.Deserialize<WireMediaDeckRuntimeSnapshot>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Runtime media-deck open response is required.");
+		return FromWire(wire);
+	}
+
+	public async ValueTask<MediaTransportCommandResult> ApplyMediaDeckTransportAsync(
+		MediaTransportCommand command,
+		CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(command);
+		var response = await ExchangeAsync(
+			"runtime.media_deck.transport",
+			new WireMediaTransportCommand(
+				command.Version.ToString(),
+				command.AssetId.ToString(),
+				(int)command.Kind,
+				command.TargetFrame),
+			cancellationToken).ConfigureAwait(false);
+		var wire = response.Payload.Deserialize<WireMediaTransportResult>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Runtime media-deck transport response is required.");
+		return new MediaTransportCommandResult(
+			wire.Succeeded,
+			FromWire(wire.Snapshot),
+			wire.Failure is null ? null : new Failure(wire.Failure.Code, wire.Failure.Message));
+	}
+
+	public async ValueTask<MediaDeckRuntimeSnapshot> CloseMediaDeckAsync(CancellationToken cancellationToken = default)
+	{
+		var response = await ExchangeAsync("runtime.media_deck.close", new { }, cancellationToken).ConfigureAwait(false);
+		var wire = response.Payload.Deserialize<WireMediaDeckRuntimeSnapshot>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Runtime media-deck close response is required.");
+		return FromWire(wire);
+	}
+
 	public ValueTask DisconnectAsync()
 	{
 		ResetBinding();
@@ -267,6 +322,62 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 			resource.CapacityUnits,
 			resource.Reservable)).ToArray());
 
+	private static MediaDeckRuntimeSnapshot FromWire(WireMediaDeckRuntimeSnapshot snapshot)
+	{
+		var state = Enum.IsDefined(typeof(MediaDeckState), snapshot.State)
+			? (MediaDeckState)snapshot.State
+			: throw new InvalidDataException("Media-deck state is invalid.");
+		MediaSourceId? sourceId = string.IsNullOrWhiteSpace(snapshot.SourceId)
+			? null
+			: new MediaSourceId(Identity.Parse(snapshot.SourceId));
+		return new MediaDeckRuntimeSnapshot(
+			MediaContractVersion.Current,
+			state,
+			sourceId,
+			snapshot.Probe is null ? null : FromWire(snapshot.Probe),
+			snapshot.Transport is null ? null : FromWire(snapshot.Transport),
+			snapshot.Failure is null ? null : new Failure(snapshot.Failure.Code, snapshot.Failure.Message));
+	}
+
+	private static LocalMediaProbe FromWire(WireLocalMediaProbe probe) => new(
+		CompatibilityVersion.Parse(probe.Version),
+		new MediaAssetId(Identity.Parse(probe.AssetId)),
+		new MediaSourceId(Identity.Parse(probe.SourceId)),
+		probe.FileName,
+		Enum.IsDefined(typeof(MediaContainerFormat), probe.Container)
+			? (MediaContainerFormat)probe.Container
+			: throw new InvalidDataException("Media container format is invalid."),
+		Enum.IsDefined(typeof(MediaVideoCodec), probe.VideoCodec)
+			? (MediaVideoCodec)probe.VideoCodec
+			: throw new InvalidDataException("Media video codec is invalid."),
+		Enum.IsDefined(typeof(MediaAudioCodec), probe.AudioCodec)
+			? (MediaAudioCodec)probe.AudioCodec
+			: throw new InvalidDataException("Media audio codec is invalid."),
+		new VideoFormat(
+			probe.Width,
+			probe.Height,
+			FrameRate.Parse(probe.FrameRate),
+			PixelFormat.Rgba8,
+			ScanMode.Progressive),
+		AudioFormat.Stereo48kFloat32,
+		TimeSpan.FromTicks(probe.DurationTicks));
+
+	private static MediaTransportSnapshot FromWire(WireMediaTransportSnapshot snapshot) => new(
+		CompatibilityVersion.Parse(snapshot.Version),
+		new MediaAssetId(Identity.Parse(snapshot.AssetId)),
+		new MediaSourceId(Identity.Parse(snapshot.SourceId)),
+		Enum.IsDefined(typeof(MediaTransportState), snapshot.State)
+			? (MediaTransportState)snapshot.State
+			: throw new InvalidDataException("Media transport state is invalid."),
+		new MediaTransportPosition(
+			snapshot.CurrentFrame,
+			snapshot.TotalFrames,
+			TimeSpan.FromTicks(snapshot.PositionTicks),
+			TimeSpan.FromTicks(snapshot.DurationTicks),
+			TimeSpan.FromTicks(snapshot.RemainingTicks),
+			FrameRate.Parse(snapshot.FrameRate)),
+		snapshot.Failure is null ? null : new Failure(snapshot.Failure.Code, snapshot.Failure.Message));
+
 	private static RuntimeExecutionState FromWire(WireRuntimeSnapshot snapshot) => new(
 		CompatibilityVersion.Parse(snapshot.Version),
 		string.IsNullOrWhiteSpace(snapshot.ActiveExecutionId) ? null : new ExecutionInstanceId(Identity.Parse(snapshot.ActiveExecutionId)),
@@ -321,6 +432,13 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 	private sealed record WirePrepareResult(string Version, string PreparedExecutionId, int Status, string? ReservationId, WireFailure? Failure);
 	private sealed record WireCommitResult(string Version, int Status, string? ExecutionInstanceId, ulong ExecutionRevision, WireFailure? Failure);
 	private sealed record WireApplyResponse(WirePrepareResult Prepare, WireCommitResult? Commit, ulong? ActivationSequence);
+	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path, WirePreparedExecution PreparedExecution);
+	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame);
+	private sealed record WireLocalMediaProbe(string Version, string AssetId, string SourceId, string FileName, int Container, int VideoCodec, int AudioCodec, uint Width, uint Height, string FrameRate, long DurationTicks);
+	private sealed record WireMediaTransportSnapshot(string Version, string AssetId, string SourceId, int State, long CurrentFrame, long TotalFrames, long PositionTicks, long DurationTicks, long RemainingTicks, string FrameRate, WireFailure? Failure);
+	private sealed record WireMediaDeckRuntimeSnapshot(int State, string? SourceId, WireLocalMediaProbe? Probe, WireMediaTransportSnapshot? Transport, WireFailure? Failure);
+	private sealed record WireMediaTransportResult(bool Succeeded, WireMediaTransportSnapshot Snapshot, WireFailure? Failure);
+
 	private sealed record WireRuntimeSnapshot(
 		string Version,
 		string? ActiveExecutionId,

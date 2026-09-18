@@ -47,6 +47,8 @@ public sealed class OperatorViewModel : INotifyPropertyChanged
 		DissolveCommand = new AsyncRelayCommand(DissolveAsync, () => CanMutate() && TransitionFrames >= 2);
 	}
 
+	internal OperatorControlClient? Client => _client;
+
 	public event PropertyChangedEventHandler? PropertyChanged;
 
 	public ObservableCollection<OperatorSourceDescriptor> Sources { get; }

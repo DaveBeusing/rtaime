@@ -62,6 +62,26 @@ public interface IControlRuntimeTransportSeam
 		MediaSinkId programSinkId,
 		RuntimeProgramTransitionIntent? transition,
 		CancellationToken cancellationToken = default);
+	ValueTask<MediaDeckRuntimeSnapshot> GetMediaDeckSnapshotAsync(CancellationToken cancellationToken = default) =>
+		ValueTask.FromException<MediaDeckRuntimeSnapshot>(
+			new NotSupportedException("Runtime transport does not expose media-deck control."));
+
+	ValueTask<MediaDeckRuntimeSnapshot> OpenMediaDeckAsync(
+		MediaDeckOpenRequest request,
+		PreparedExecutionContract preparedExecution,
+		CancellationToken cancellationToken = default) =>
+		ValueTask.FromException<MediaDeckRuntimeSnapshot>(
+			new NotSupportedException("Runtime transport does not expose media-deck control."));
+
+	ValueTask<MediaTransportCommandResult> ApplyMediaDeckTransportAsync(
+		MediaTransportCommand command,
+		CancellationToken cancellationToken = default) =>
+		ValueTask.FromException<MediaTransportCommandResult>(
+			new NotSupportedException("Runtime transport does not expose media-deck control."));
+
+	ValueTask<MediaDeckRuntimeSnapshot> CloseMediaDeckAsync(CancellationToken cancellationToken = default) =>
+		ValueTask.FromException<MediaDeckRuntimeSnapshot>(
+			new NotSupportedException("Runtime transport does not expose media-deck control."));
 	ValueTask DisconnectAsync();
 }
 
@@ -88,6 +108,23 @@ public sealed class UnboundControlRuntimeTransportSeam : IControlRuntimeTranspor
 		RuntimeProgramTransitionIntent? transition,
 		CancellationToken cancellationToken = default) =>
 		ValueTask.FromException<RuntimeRemoteApplyResult>(new InvalidOperationException("Runtime transport is not configured."));
+
+	public ValueTask<MediaDeckRuntimeSnapshot> GetMediaDeckSnapshotAsync(CancellationToken cancellationToken = default) =>
+		ValueTask.FromException<MediaDeckRuntimeSnapshot>(new InvalidOperationException("Runtime transport is not configured."));
+
+	public ValueTask<MediaDeckRuntimeSnapshot> OpenMediaDeckAsync(
+		MediaDeckOpenRequest request,
+		PreparedExecutionContract preparedExecution,
+		CancellationToken cancellationToken = default) =>
+		ValueTask.FromException<MediaDeckRuntimeSnapshot>(new InvalidOperationException("Runtime transport is not configured."));
+
+	public ValueTask<MediaTransportCommandResult> ApplyMediaDeckTransportAsync(
+		MediaTransportCommand command,
+		CancellationToken cancellationToken = default) =>
+		ValueTask.FromException<MediaTransportCommandResult>(new InvalidOperationException("Runtime transport is not configured."));
+
+	public ValueTask<MediaDeckRuntimeSnapshot> CloseMediaDeckAsync(CancellationToken cancellationToken = default) =>
+		ValueTask.FromException<MediaDeckRuntimeSnapshot>(new InvalidOperationException("Runtime transport is not configured."));
 
 	public ValueTask DisconnectAsync() => ValueTask.CompletedTask;
 }
@@ -223,6 +260,7 @@ public sealed class ControlHostProcess
 	private Revision? _lastCheckpointRevision;
 	private ControlHostService? _control;
 	private IControlRuntimeTransportSeam? _runtimeTransport;
+	private MediaDeckControlService? _mediaDeckControl;
 	private ControlHostIpcServer? _ipcServer;
 	private Task? _runtimeBindingTask;
 	private string? _boundRuntimeHostInstanceId;
@@ -240,6 +278,7 @@ public sealed class ControlHostProcess
 	public SqliteManagementStore? ManagementStore => _managementStore;
 	public BoundedProductionCheckpointWriter? CheckpointWriter => _checkpointWriter;
 	public IControlRuntimeTransportSeam? RuntimeTransport => _runtimeTransport;
+	public MediaDeckControlService? MediaDeckControl => _mediaDeckControl;
 	public ControlHostIpcServer? IpcServer => _ipcServer;
 
 	public async Task<ControlHostExitCode> RunAsync(CancellationToken cancellationToken)
@@ -338,7 +377,15 @@ public sealed class ControlHostProcess
 				SetRecovery(ControlHostRecoveryState.Fresh, null, "No durable authority checkpoint exists; a fresh Runtime-backed initialization is required.");
 			}
 
-			_ipcServer = new ControlHostIpcServer(_options.ListenEndpoint, () => _control, _runtimeTransport);
+			_mediaDeckControl = new MediaDeckControlService(
+				() => _control,
+				_runtimeTransport,
+				new MediaMarkerPersistenceStore(_managementStore));
+			_ipcServer = new ControlHostIpcServer(
+				_options.ListenEndpoint,
+				() => _control,
+				_runtimeTransport,
+				_mediaDeckControl);
 		}
 		catch
 		{

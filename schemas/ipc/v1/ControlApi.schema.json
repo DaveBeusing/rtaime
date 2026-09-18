@@ -15,7 +15,12 @@
 					"control.preview.select",
 					"control.program.cut",
 					"control.program.dissolve",
-					"control.mutation.response"
+					"control.mutation.response",
+					"control.media_deck.snapshot.get",
+					"control.media_deck.open",
+					"control.media_deck.transport",
+					"control.media_deck.marker",
+					"control.media_deck.close"
 				]
 			}
 		}

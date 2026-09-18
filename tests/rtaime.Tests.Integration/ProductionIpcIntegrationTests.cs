@@ -91,6 +91,64 @@ public sealed class ProductionIpcIntegrationTests
 	}
 
 	[Fact]
+	public async Task Media_deck_crosses_operator_control_and_runtime_boundaries_with_persistent_markers()
+	{
+		using var referenceAsset = LocalMediaTestAsset.ExtractReference1080p50();
+		var runtimeEndpoint = Endpoint("runtime-deck");
+		var controlEndpoint = Endpoint("control-deck");
+		using var runtimeStop = new CancellationTokenSource();
+		using var controlStop = new CancellationTokenSource();
+		var runtime = new RuntimeHostProcess(RuntimeHostProcessOptions.Default with { ListenEndpoint = runtimeEndpoint });
+		var control = new ControlHostProcess(ControlHostProcessOptions.Default with
+		{
+			ListenEndpoint = controlEndpoint,
+			RuntimeEndpoint = runtimeEndpoint,
+			RuntimeRetryInterval = TimeSpan.FromMilliseconds(25)
+		});
+
+		var runtimeRun = runtime.RunAsync(runtimeStop.Token);
+		var controlRun = control.RunAsync(controlStop.Token);
+		await WaitUntilAsync(() => control.Lifecycle.State == ControlHostProcessState.Ready && control.Control?.HasAuthoritativeState == true);
+
+		var transport = new NamedPipeOperatorControlTransport(controlEndpoint, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(5));
+		var client = new OperatorControlClient(transport);
+		var production = await client.SynchronizeAsync();
+		var sourceId = new MediaSourceId(Identity.Parse(production.Sources[0].Id));
+		await using var deck = new MediaDeckController(client);
+
+		var opened = await deck.OpenAsync(referenceAsset.Path, sourceId);
+		Assert.True(opened.IsLoaded, opened.Failure?.Message);
+		Assert.Equal(Path.GetFileName(referenceAsset.Path), opened.Probe!.FileName);
+		Assert.Equal(MediaDeckState.Ready, opened.State);
+		Assert.Equal(50, opened.Transport!.Position.TotalFrames);
+
+		var playing = await deck.PlayAsync();
+		Assert.Equal(MediaDeckState.Playing, playing.State);
+		await Task.Delay(120);
+		await deck.RefreshAsync();
+		Assert.True(deck.Snapshot.Transport!.Position.CurrentFrame > 0);
+
+		await deck.PauseAsync();
+		await deck.Timeline.SeekToFrameAsync(10);
+		Assert.Equal(10, deck.Timeline.State.ConfirmedFrame);
+		Assert.True(await deck.Markers.SetInAtCurrentFrameAsync());
+		var cueId = await deck.Markers.AddCueAtCurrentFrameAsync("Decision");
+		Assert.True(cueId.HasValue);
+		Assert.Equal(10, deck.Snapshot.Markers!.InPointFrame);
+		Assert.Single(deck.Snapshot.Markers.CuePoints);
+
+		await deck.CloseAsync();
+		var reopened = await deck.OpenAsync(referenceAsset.Path, sourceId);
+		Assert.Equal(10, reopened.Markers!.InPointFrame);
+		Assert.Equal("Decision", reopened.Markers.CuePoints.Single().Name);
+
+		controlStop.Cancel();
+		runtimeStop.Cancel();
+		Assert.Equal(ControlHostExitCode.Success, await controlRun);
+		Assert.Equal(RuntimeHostExitCode.Success, await runtimeRun);
+	}
+
+	[Fact]
 	public async Task RuntimeHost_restart_resynchronizes_without_advancing_authoritative_revision()
 	{
 		var runtimeEndpoint = Endpoint("runtime-restart");

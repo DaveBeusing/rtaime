@@ -178,10 +178,12 @@ public sealed class RuntimeHostProcess
 		DateTimeOffset.UtcNow);
 	private int _runStarted;
 	private V1RuntimeHostService? _runtime;
+	private LocalMediaDeckRuntimeService? _mediaDeck;
 	private RuntimeMediaIoVerticalSlice? _mediaIo;
 	private RuntimeHostIpcServer? _ipcServer;
 	private RuntimeHostMonitoringServer? _monitoringServer;
 	private Task? _mediaLoop;
+	private Task? _mediaDeckLoop;
 	private bool _runtimeDisposed;
 	private V1RuntimeHostSnapshot? _finalRuntimeSnapshot;
 
@@ -216,6 +218,7 @@ public sealed class RuntimeHostProcess
 	}
 
 	public V1RuntimeHostService? Runtime => _runtime;
+	public LocalMediaDeckRuntimeService? MediaDeck => _mediaDeck;
 	public RuntimeHostIpcServer? IpcServer => _ipcServer;
 	public RuntimeHostMonitoringServer? MonitoringServer => _monitoringServer;
 	public string MonitoringEndpoint => $"{_options.ListenEndpoint}.monitor";
@@ -240,6 +243,7 @@ public sealed class RuntimeHostProcess
 				?? throw new InvalidOperationException("Recording writer factory returned null.");
 			_runtime = _runtimeFactory(_options, writer)
 				?? throw new InvalidOperationException("Runtime factory returned null.");
+			_mediaDeck = new LocalMediaDeckRuntimeService();
 
 			if (_options.MediaIoMode == RuntimeMediaIoMode.Native)
 			{
@@ -260,11 +264,12 @@ public sealed class RuntimeHostProcess
 				}
 			}
 
-			_ipcServer = new RuntimeHostIpcServer(_options.ListenEndpoint, () => _runtime);
+			_ipcServer = new RuntimeHostIpcServer(_options.ListenEndpoint, () => _runtime, () => _mediaDeck);
 			_monitoringServer = new RuntimeHostMonitoringServer(MonitoringEndpoint, _runtime.MonitoringHub);
 			await _ipcServer.StartAsync(cancellationToken).ConfigureAwait(false);
 			await _monitoringServer.StartAsync(cancellationToken).ConfigureAwait(false);
 			_mediaLoop = RunMediaLoopAsync(_runtime, _mediaIo, cancellationToken);
+			_mediaDeckLoop = RunMediaDeckLoopAsync(_mediaDeck, cancellationToken);
 		}
 		catch (ArgumentException exception)
 		{
@@ -286,7 +291,9 @@ public sealed class RuntimeHostProcess
 
 		try
 		{
-			await _mediaLoop.ConfigureAwait(false);
+			await Task.WhenAll(
+				_mediaLoop,
+				_mediaDeckLoop ?? Task.CompletedTask).ConfigureAwait(false);
 		}
 		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
 		{
@@ -323,6 +330,18 @@ public sealed class RuntimeHostProcess
 		}
 	}
 
+	private async Task RunMediaDeckLoopAsync(
+		LocalMediaDeckRuntimeService mediaDeck,
+		CancellationToken cancellationToken)
+	{
+		var framePeriod = TimeSpan.FromSeconds(
+			_options.Format.FrameRate.Denominator /
+			(double)_options.Format.FrameRate.Numerator);
+		using var timer = new PeriodicTimer(framePeriod);
+		while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
+			mediaDeck.ProcessBoundary();
+	}
+
 	private async Task<RuntimeHostExitCode> StopAsync()
 	{
 		Update(RuntimeHostProcessState.Draining, RuntimeHostHealthState.Degraded, "Draining RuntimeHost IPC, monitoring and runtime resources.");
@@ -337,6 +356,8 @@ public sealed class RuntimeHostProcess
 
 			_mediaIo?.Dispose();
 			_mediaIo = null;
+			_mediaDeck?.Dispose();
+			_mediaDeck = null;
 
 			if (_runtime is not null)
 			{
@@ -382,6 +403,13 @@ public sealed class RuntimeHostProcess
 		{
 			_mediaIo?.Dispose();
 			_mediaIo = null;
+		}
+		catch { }
+
+		try
+		{
+			_mediaDeck?.Dispose();
+			_mediaDeck = null;
 		}
 		catch { }
 
