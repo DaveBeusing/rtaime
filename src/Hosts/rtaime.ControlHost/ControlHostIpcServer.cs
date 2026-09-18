@@ -477,7 +477,9 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		var audioProgram = runtime is null
 			? WireAudioProgram.Empty
 			: ToWire(runtime.AudioProgram);
-		var recording = runtime is null ? WireRecordingSnapshot.Unavailable : ToWire(runtime.Recording);
+		var recording = runtime?.Recording is { } runtimeRecording
+			? ToWire(runtimeRecording)
+			: WireRecordingSnapshot.Unavailable;
 		var payload = new WireOperatorSnapshot(
 			ToWire(state),
 			sources,
