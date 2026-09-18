@@ -556,13 +556,30 @@ public sealed class UnifiedApplicationHost
 
 	private async Task ObserveHeadlessAsync(CancellationToken cancellationToken)
 	{
+		var degraded = false;
 		while (true)
 		{
 			cancellationToken.ThrowIfCancellationRequested();
 			if (_controlProcessId is { } controlPid && !_platform.IsProcessAlive(controlPid))
 				throw new InvalidOperationException("ControlHost stopped while HeadlessEngine profile was active.");
+
 			var readiness = await FindHealthyReadinessAsync(cancellationToken).ConfigureAwait(false);
-			Transition(readiness is null ? ApplicationLifecycleState.Degraded : ApplicationLifecycleState.Healthy);
+			if (readiness is null)
+			{
+				degraded = true;
+				Transition(ApplicationLifecycleState.Degraded);
+			}
+			else if (degraded)
+			{
+				Transition(ApplicationLifecycleState.Recovering);
+				degraded = false;
+				Transition(ApplicationLifecycleState.Healthy);
+			}
+			else
+			{
+				Transition(ApplicationLifecycleState.Healthy);
+			}
+
 			await _platform.DelayAsync(_options.Policy.ProbeInterval, cancellationToken).ConfigureAwait(false);
 		}
 	}
