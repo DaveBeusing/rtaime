@@ -428,3 +428,49 @@ RuntimeHost support diagnostics consume the same performance snapshot, preservin
 - Operator UI policy verifies all required HUD fields and PASS/FAIL/UNVERIFIED visual semantics;
 - policy verifies one bounded 200 ms management polling loop and no local WPF/NVML/performance-counter GPU synthesis;
 - observability policy verifies support diagnostics reuse the same Runtime performance snapshot and that the drop counter remains allocation/history/I/O free.
+
+
+## AP-55 Visible AI Showcase
+
+AP-55 adds one deliberately narrow, visually understandable AI feature: **Person Segmentation Highlight**.
+
+The repository does not currently expose a person-detection capability or object bounding boxes. The implemented showcase therefore uses the existing governed `ai.person-segmentation` capability instead of inventing a detection result. The managed reference provider returns a deterministic normalized person region; RuntimeHost renders that region through its existing dynamic RGBA layer.
+
+The Operator panel exposes:
+
+- explicit AI ON / AI OFF controls;
+- feature name;
+- AIHost provider name;
+- current state;
+- measured inference round-trip time;
+- Person Regions count;
+- result confidence;
+- source-sequence to Program-application sequence;
+- failure/suppression detail.
+
+### Execution and authority boundary
+
+The control path is **Operator → rtaime.Client → ControlHost → RuntimeHost**. RuntimeHost owns the bounded showcase policy but not inference execution. At most every 200 ms it submits the current committed Program `FrameDescriptor` to AIHost through AIHost's existing versioned named-pipe protocol.
+
+AIHost remains the governed inference boundary. No inference runtime, provider package, model execution or segmentation logic exists in WPF. Only descriptors and inference metadata cross management IPC; Program pixel payloads are not transported to ControlHost or the Operator.
+
+RuntimeHost validates the returned source frame/sequence, person semantic, normalized region and confidence threshold before updating its existing dynamic visual layer. The effect becomes visible only on a subsequent Program boundary, and the UI exposes both source and application sequence.
+
+### Failure and fallback
+
+Inference is asynchronous and never awaited by the Program media loop. Only one request may be in flight and submissions are capped at 5 Hz.
+
+Provider unavailability, transport loss, malformed/stale results, low confidence and timeout all fail closed for the AI effect. RuntimeHost restores the previous visual-layer mode and Program continues without the AI highlight. AI failure therefore cannot terminate or replace committed Program execution.
+
+If the explicit Operator graphics overlay is active, the AI result is reported as `SUPPRESSED` rather than falsely claiming that the highlight is visible, because the current V1 compositor gives that explicit graphics layer precedence.
+
+The managed reference provider is architecture/demo evidence, not a claim of production model quality or qualified GPU inference.
+
+### AP-55 acceptance evidence
+
+- real AIHost → RuntimeHost process integration enables the segmentation highlight;
+- Operator/Client/ControlHost enable and disable cross the normal management authority boundary;
+- provider-unavailable and timeout integration tests prove clean Program continuity;
+- inference time, provider, confidence, Person Regions and source/application synchronization are visible;
+- Operator UI policy verifies ON/OFF controls and prohibits local inference ownership;
+- no project-reference topology or public AI/Runtime contract version changes are required.

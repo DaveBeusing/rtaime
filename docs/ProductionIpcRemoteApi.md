@@ -218,3 +218,18 @@ RuntimeHost snapshot metadata now carries Runtime uptime, frame budget, the last
 ControlHost combines this Runtime metadata with its authoritative-state availability, Runtime timing/execution state, media observations and cached Runtime provider descriptors to produce the Operator `PASS / FAIL / UNVERIFIED` health projection.
 
 Only metadata crosses management IPC. AP-54 does not transport frame pixels, audio samples, GPU surfaces or telemetry histories, and it introduces no new polling transport or remote-monitoring API.
+
+
+## AP-55 AI showcase control and observation
+
+Operator-facing ControlHost adds:
+
+- `control.ai_showcase.set`
+
+ControlHost-facing RuntimeHost adds:
+
+- `runtime.ai_showcase.set`
+
+The Runtime snapshot and Operator snapshot carry the bounded Person Segmentation Highlight state: enable flag, feature/status/provider, measured inference time, Person Regions count, source/application sequence, confidence, visible-effect flag and optional failure.
+
+RuntimeHost communicates with AIHost using the existing `client.hello`, `ai.capabilities.get` and `ai.inference.execute` protocol as role `RuntimeHost`. No host project reference is introduced. The handoff contains the Program `FrameDescriptor` and inference metadata only; no Program RGBA payload crosses the management IPC path.

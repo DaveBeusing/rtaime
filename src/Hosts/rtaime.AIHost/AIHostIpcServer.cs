@@ -178,7 +178,7 @@ public sealed class AIHostIpcServer : IAsyncDisposable
 						?? throw new InvalidDataException("AI execution request payload is required.");
 					var result = await service.ExecuteAsync(FromWire(execution), cancellationToken).ConfigureAwait(false);
 					_stateVersion++;
-					return Success(request, "ai.inference.execute.response", ToWire(result));
+					return Success(request, "ai.inference.execute.response", ToWire(result, service));
 				}
 				default:
 					return Error(request, "ipc.message.unknown", $"Unknown AIHost message type '{request.MessageType}'.");
@@ -252,7 +252,7 @@ public sealed class AIHostIpcServer : IAsyncDisposable
 		return new GovernedInferenceExecutionRequest(CompatibilityVersion.Parse(execution.Version), request, context);
 	}
 
-	private static WireExecutionResult ToWire(GovernedInferenceExecutionResult result) => new(
+	private static WireExecutionResult ToWire(GovernedInferenceExecutionResult result, AIHostService service) => new(
 		result.Version.ToString(),
 		new WireAdmission(
 			result.Admission.RequestId.ToString(),
@@ -271,6 +271,7 @@ public sealed class AIHostIpcServer : IAsyncDisposable
 			result.Metadata.ModelId.ToString(),
 			result.Metadata.ModelVersion,
 			result.Metadata.ProviderId.ToString(),
+			service.Runtime.Providers.Single(provider => provider.ProviderId == result.Metadata.ProviderId).Name,
 			result.Metadata.ObservationTime.ToString(),
 			result.Metadata.ProductionTime.Timestamp,
 			result.Metadata.ProductionTime.Timebase.ToString(),
@@ -295,7 +296,7 @@ public sealed class AIHostIpcServer : IAsyncDisposable
 	private sealed record WireExecutionRequest(string Version, WireInferenceRequest Request, WireContext Context);
 	private sealed record WireAdmission(string RequestId, int Status, string? ProviderId, WireFailure? Failure);
 	private sealed record WireInferenceResult(string RequestId, int Status, WireNameValue[] Outputs, WireFailure? Failure);
-	private sealed record WireResultMetadata(string ResultId, string CapabilityId, string SourceFrameId, string ModelId, string ModelVersion, string ProviderId, string ObservationTimeUtc, long ProductionTimestamp, string ProductionTimebase, long FreshnessTicks, double Confidence, double Uncertainty, string PayloadKind, string PayloadMediaType, string ResourceKind, string ResourceValue);
+	private sealed record WireResultMetadata(string ResultId, string CapabilityId, string SourceFrameId, string ModelId, string ModelVersion, string ProviderId, string ProviderName, string ObservationTimeUtc, long ProductionTimestamp, string ProductionTimebase, long FreshnessTicks, double Confidence, double Uncertainty, string PayloadKind, string PayloadMediaType, string ResourceKind, string ResourceValue);
 	private sealed record WireExecutionResult(string Version, WireAdmission Admission, WireInferenceResult Result, WireResultMetadata? Metadata);
 
 	private sealed class BoundedRequestCache

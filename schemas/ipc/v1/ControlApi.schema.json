@@ -12,6 +12,7 @@
 				"enum": [
 					"control.ping",
 					"control.snapshot.get",
+					"control.ai_showcase.set",
 					"control.preview.select",
 					"control.program.cut",
 					"control.program.dissolve",

@@ -260,6 +260,35 @@ public sealed record OperatorHealthDescriptor(
         DateTimeOffset.MinValue);
 }
 
+public sealed record OperatorAIShowcaseDescriptor(
+    bool Enabled,
+    string Feature,
+    string Status,
+    string Provider,
+    TimeSpan InferenceTime,
+    uint PersonRegionCount,
+    ulong? SourceSequence,
+    ulong? AppliedSequence,
+    double? Confidence,
+    bool EffectVisible,
+    Failure? Failure,
+    DateTimeOffset? UpdatedAtUtc)
+{
+    public static OperatorAIShowcaseDescriptor Unavailable { get; } = new(
+        false,
+        "Person Segmentation Highlight",
+        "UNAVAILABLE",
+        "UNVERIFIED",
+        TimeSpan.Zero,
+        0,
+        null,
+        null,
+        null,
+        false,
+        null,
+        null);
+}
+
 public sealed record OperatorMutationResponse
 {
     public OperatorMutationResponse(bool accepted, AuthoritativeProductionState state, Failure? failure)
@@ -298,7 +327,8 @@ public sealed record OperatorStatusSnapshot
         IReadOnlyList<OperatorAudioInputDescriptor>? audioInputs = null,
         OperatorAudioProgramDescriptor? audioProgram = null,
         OperatorRecordingDescriptor? recording = null,
-        OperatorHealthDescriptor? health = null)
+        OperatorHealthDescriptor? health = null,
+        OperatorAIShowcaseDescriptor? aiShowcase = null)
     {
         Production = production ?? throw new ArgumentNullException(nameof(production));
         ArgumentNullException.ThrowIfNull(sources);
@@ -325,6 +355,7 @@ public sealed record OperatorStatusSnapshot
         AudioProgram = audioProgram ?? OperatorAudioProgramDescriptor.Unknown;
         Recording = recording ?? OperatorRecordingDescriptor.Unavailable;
         Health = health ?? OperatorHealthDescriptor.Unavailable;
+        AIShowcase = aiShowcase ?? OperatorAIShowcaseDescriptor.Unavailable;
     }
 
     public AuthoritativeProductionState Production { get; }
@@ -341,6 +372,7 @@ public sealed record OperatorStatusSnapshot
     public OperatorAudioProgramDescriptor AudioProgram { get; }
     public OperatorRecordingDescriptor Recording { get; }
     public OperatorHealthDescriptor Health { get; }
+    public OperatorAIShowcaseDescriptor AIShowcase { get; }
 }
 
 /// <summary>
@@ -385,6 +417,11 @@ public interface IOperatorControlTransport
 
     ValueTask<OperatorRecordingCommandResult> StopRecordingAsync(CancellationToken cancellationToken = default) =>
         ValueTask.FromException<OperatorRecordingCommandResult>(new NotSupportedException("Operator transport does not expose recording control."));
+
+    ValueTask<OperatorAIShowcaseDescriptor> SetAIShowcaseEnabledAsync(
+        bool enabled,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<OperatorAIShowcaseDescriptor>(new NotSupportedException("Operator transport does not expose AI showcase control."));
 
     ValueTask<MediaDeckSnapshot> GetMediaDeckSnapshotAsync(CancellationToken cancellationToken = default) =>
         ValueTask.FromException<MediaDeckSnapshot>(new NotSupportedException("Operator transport does not expose media-deck control."));
@@ -548,6 +585,16 @@ public sealed class OperatorControlClient
     {
         RequireSnapshot();
         var result = await _transport.StopRecordingAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+
+    public async ValueTask<OperatorAIShowcaseDescriptor> SetAIShowcaseEnabledAsync(
+        bool enabled,
+        CancellationToken cancellationToken = default)
+    {
+        RequireSnapshot();
+        var result = await _transport.SetAIShowcaseEnabledAsync(enabled, cancellationToken).ConfigureAwait(false);
         await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }

@@ -30,6 +30,14 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	private string _timingStatus = "UNKNOWN";
 	private string _inputStatus = "UNKNOWN";
 	private string _aiStatus = "UNKNOWN";
+	private bool _aiEnabled;
+	private string _aiFeature = "Person Segmentation Highlight";
+	private string _aiProvider = "UNVERIFIED";
+	private string _aiInferenceTime = "—";
+	private string _aiPersonRegions = "0";
+	private string _aiSynchronization = "—";
+	private string _aiConfidence = "—";
+	private string? _aiError;
 	private string _recordingStatus = "UNKNOWN";
 	private string _recordingDestination = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyVideos), "rtaime");
 	private string _recordingFileName = CreateRecordingFileName();
@@ -107,6 +115,8 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		ToggleAudioMuteCommand = new AsyncRelayCommand(ToggleAudioMuteAsync, CanApplyAudio);
 		StartRecordingCommand = new AsyncRelayCommand(StartRecordingAsync, CanStartRecording);
 		StopRecordingCommand = new AsyncRelayCommand(StopRecordingAsync, CanStopRecording);
+		EnableAIShowcaseCommand = new AsyncRelayCommand(() => SetAIShowcaseAsync(true), () => CanControl() && !AIEnabled);
+		DisableAIShowcaseCommand = new AsyncRelayCommand(() => SetAIShowcaseAsync(false), () => CanControl() && AIEnabled);
 	}
 
 	internal OperatorControlClient? Client => _client;
@@ -127,6 +137,8 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	public ICommand ToggleAudioMuteCommand { get; }
 	public ICommand StartRecordingCommand { get; }
 	public ICommand StopRecordingCommand { get; }
+	public ICommand EnableAIShowcaseCommand { get; }
+	public ICommand DisableAIShowcaseCommand { get; }
 
 	public string MonitoringStatus => "Independent Runtime monitoring active when connected.";
 	public string FormatStatus => CurrentFormat;
@@ -159,6 +171,14 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	public string TimingStatus { get => _timingStatus; private set => Set(ref _timingStatus, value); }
 	public string InputStatus { get => _inputStatus; private set => Set(ref _inputStatus, value); }
 	public string AIStatus { get => _aiStatus; private set => Set(ref _aiStatus, value); }
+	public bool AIEnabled { get => _aiEnabled; private set => Set(ref _aiEnabled, value); }
+	public string AIFeature { get => _aiFeature; private set => Set(ref _aiFeature, value); }
+	public string AIProvider { get => _aiProvider; private set => Set(ref _aiProvider, value); }
+	public string AIInferenceTime { get => _aiInferenceTime; private set => Set(ref _aiInferenceTime, value); }
+	public string AIPersonRegions { get => _aiPersonRegions; private set => Set(ref _aiPersonRegions, value); }
+	public string AISynchronization { get => _aiSynchronization; private set => Set(ref _aiSynchronization, value); }
+	public string AIConfidence { get => _aiConfidence; private set => Set(ref _aiConfidence, value); }
+	public string? AIError { get => _aiError; private set => Set(ref _aiError, value); }
 	public string RecordingStatus { get => _recordingStatus; private set => Set(ref _recordingStatus, value); }
 	public string RecordingDestination
 	{
@@ -323,6 +343,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 					ApplyAudio(snapshot, preserveSelectedGainEdit: true);
 					ApplyRecording(snapshot.Recording, preserveTargetEdit: true);
 					ApplyHealth(snapshot.Health);
+					ApplyAI(snapshot.AIShowcase);
 					AudioMeterStatus = "LIVE";
 				});
 			}
@@ -426,6 +447,20 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 			RecordingError = null;
 			CommandStatus = "RECORDING";
 			LastEvent = $"Program recording started: {fileName}.";
+		});
+	}
+
+	private async Task SetAIShowcaseAsync(bool enabled)
+	{
+		if (_client is null) return;
+		await ExecuteAsync(enabled ? "ENABLE AI SHOWCASE" : "DISABLE AI SHOWCASE", async () =>
+		{
+			await _client.SetAIShowcaseEnabledAsync(enabled);
+			Apply(_client.Snapshot!);
+			CommandStatus = enabled ? "AI ENABLED" : "AI DISABLED";
+			LastEvent = enabled
+				? "Person Segmentation Highlight enabled through ControlHost and RuntimeHost; AIHost inference remains failure-isolated."
+				: "Person Segmentation Highlight disabled and Runtime visual fallback restored.";
 		});
 	}
 
@@ -655,6 +690,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		TimingStatus = snapshot.TimingStatus;
 		InputStatus = snapshot.InputStatus;
 		AIStatus = snapshot.AIStatus;
+		ApplyAI(snapshot.AIShowcase);
 		ApplyRecording(snapshot.Recording, preserveTargetEdit: false);
 		ApplyHealth(snapshot.Health);
 		var graphics = snapshot.GraphicsOverlay;
@@ -749,6 +785,28 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 				RecordingFileName = recording.FileName;
 		}
 
+		RaiseCommandState();
+	}
+
+	private void ApplyAI(OperatorAIShowcaseDescriptor showcase)
+	{
+		AIEnabled = showcase.Enabled;
+		AIFeature = showcase.Feature;
+		AIStatus = showcase.Status;
+		AIProvider = showcase.Provider;
+		AIInferenceTime = showcase.InferenceTime > TimeSpan.Zero
+			? $"{showcase.InferenceTime.TotalMilliseconds:0.0} ms"
+			: "—";
+		AIPersonRegions = showcase.PersonRegionCount.ToString(CultureInfo.InvariantCulture);
+		AISynchronization = showcase.SourceSequence is { } source
+			? showcase.AppliedSequence is { } applied
+				? $"source {source} → Program {applied}"
+				: $"source {source} → not applied"
+			: "—";
+		AIConfidence = showcase.Confidence is { } confidence
+			? confidence.ToString("P0", CultureInfo.InvariantCulture)
+			: "—";
+		AIError = showcase.Failure?.Message;
 		RaiseCommandState();
 	}
 
@@ -879,6 +937,8 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		(ToggleAudioMuteCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 		(StartRecordingCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 		(StopRecordingCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+		(EnableAIShowcaseCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+		(DisableAIShowcaseCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 	}
 
 	private bool Set<T>(ref T field, T value, [CallerMemberName] string? name = null)
