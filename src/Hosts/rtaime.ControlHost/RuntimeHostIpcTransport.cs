@@ -20,6 +20,28 @@ public sealed record RuntimeGraphicsOverlaySnapshot(
 	double PositionY,
 	double Scale);
 
+public sealed record RuntimeAudioInputSnapshot(
+	MediaSourceId SourceId,
+	AudioStreamId StreamId,
+	double Gain,
+	bool Muted,
+	double LeftPeak,
+	double RightPeak,
+	double MasterPeak,
+	bool Clipping,
+	string Health);
+
+public sealed record RuntimeAudioProgramSnapshot(
+	MediaSourceId ActiveVideoSourceId,
+	AudioStreamId ActiveStreamId,
+	double Gain,
+	bool Muted,
+	double LeftPeak,
+	double RightPeak,
+	double MasterPeak,
+	bool Clipping,
+	string Health);
+
 public sealed record RuntimeRemoteSnapshot(
 	string HostInstanceId,
 	RuntimeExecutionState Runtime,
@@ -31,6 +53,8 @@ public sealed record RuntimeRemoteSnapshot(
 	VideoFormat Format,
 	IReadOnlyDictionary<MediaSourceId, string> InputSignals,
 	RuntimeGraphicsOverlaySnapshot GraphicsOverlay,
+	IReadOnlyDictionary<MediaSourceId, RuntimeAudioInputSnapshot> AudioInputs,
+	RuntimeAudioProgramSnapshot AudioProgram,
 	ulong StateVersion);
 
 public sealed record RuntimeRemoteApplyResult(
@@ -131,6 +155,11 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 				signal => string.IsNullOrWhiteSpace(signal.Health) ? "UNKNOWN" : signal.Health.Trim(),
 				EqualityComparer<MediaSourceId>.Default),
 			FromWire(snapshot.GraphicsOverlay),
+			snapshot.AudioInputs.ToDictionary(
+				input => new MediaSourceId(Identity.Parse(input.SourceId)),
+				FromWire,
+				EqualityComparer<MediaSourceId>.Default),
+			FromWire(snapshot.AudioProgram),
 			response.StateVersion);
 	}
 
@@ -154,6 +183,21 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 			apply.Commit is null ? null : FromWire(apply.Commit),
 			apply.ActivationSequence,
 			response.StateVersion);
+	}
+
+	public async ValueTask<RuntimeAudioInputSnapshot> SetAudioInputStateAsync(
+		MediaSourceId sourceId,
+		double gain,
+		bool muted,
+		CancellationToken cancellationToken = default)
+	{
+		var response = await ExchangeAsync(
+			"runtime.audio.input.set",
+			new WireAudioInputState(sourceId.ToString(), gain, muted),
+			cancellationToken).ConfigureAwait(false);
+		var wire = response.Payload.Deserialize<WireAudioInput>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Runtime audio input response is required.");
+		return FromWire(wire);
 	}
 
 	public async ValueTask<RuntimeGraphicsOverlaySnapshot> LoadGraphicsOverlayAsync(
@@ -388,6 +432,39 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 			resource.CapacityUnits,
 			resource.Reservable)).ToArray());
 
+	private static RuntimeAudioInputSnapshot FromWire(WireAudioInput snapshot) => new(
+		new MediaSourceId(Identity.Parse(snapshot.SourceId)),
+		new AudioStreamId(Identity.Parse(snapshot.StreamId)),
+		snapshot.Gain,
+		snapshot.Muted,
+		snapshot.LeftPeak,
+		snapshot.RightPeak,
+		snapshot.MasterPeak,
+		snapshot.Clipping,
+		AudioHealth(snapshot.Health));
+
+	private static RuntimeAudioProgramSnapshot FromWire(WireAudioProgram snapshot) => new(
+		new MediaSourceId(Identity.Parse(snapshot.ActiveVideoSourceId)),
+		new AudioStreamId(Identity.Parse(snapshot.ActiveStreamId)),
+		snapshot.Gain,
+		snapshot.Muted,
+		snapshot.LeftPeak,
+		snapshot.RightPeak,
+		snapshot.MasterPeak,
+		snapshot.Clipping,
+		AudioHealth(snapshot.Health));
+
+	private static string AudioHealth(int health) => health switch
+	{
+		1 => "HEALTHY",
+		2 => "MUTED",
+		3 => "SILENCE",
+		4 => "CLIPPING",
+		5 => "UNDERRUN",
+		6 => "ERROR",
+		_ => throw new InvalidDataException("Runtime audio health state is invalid.")
+	};
+
 	private static RuntimeGraphicsOverlaySnapshot FromWire(WireGraphicsOverlay snapshot) => new(
 		snapshot.AssetLoaded,
 		snapshot.AssetName,
@@ -502,6 +579,9 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 	private sealed record WireGraphicsAsset(string Name, uint Width, uint Height, byte[] RgbaPixels);
 	private sealed record WireGraphicsOverlayState(bool Visible, double PositionX, double PositionY, double Scale);
 	private sealed record WireGraphicsOverlay(bool AssetLoaded, string? AssetName, uint AssetWidth, uint AssetHeight, bool Visible, double PositionX, double PositionY, double Scale);
+	private sealed record WireAudioInputState(string SourceId, double Gain, bool Muted);
+	private sealed record WireAudioInput(string SourceId, string StreamId, double Gain, bool Muted, double LeftPeak, double RightPeak, double MasterPeak, bool Clipping, int Health);
+	private sealed record WireAudioProgram(string ActiveVideoSourceId, string ActiveStreamId, double Gain, bool Muted, double LeftPeak, double RightPeak, double MasterPeak, bool Clipping, int Health);
 	private sealed record WireCapability(string CapabilityId, string Kind, WireVideoFormat[] VideoFormats);
 	private sealed record WireResource(string ResourceId, string ProviderId, string Kind, uint CapacityUnits, bool Reservable);
 	private sealed record WireProvider(string Version, string ProviderId, string Name, int AvailabilityState, WireFailure? Failure, WireCapability[] Capabilities, WireResource[] Resources);
@@ -532,7 +612,9 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 		int ActiveGpuSurfaces,
 		WireVideoFormat Format,
 		WireInputSignal[] InputSignals,
-		WireGraphicsOverlay GraphicsOverlay);
+		WireGraphicsOverlay GraphicsOverlay,
+		WireAudioInput[] AudioInputs,
+		WireAudioProgram AudioProgram);
 
 	private static class Wire
 	{
