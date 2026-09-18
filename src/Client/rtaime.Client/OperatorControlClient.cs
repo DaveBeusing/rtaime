@@ -45,6 +45,44 @@ public sealed record OperatorSourceDescriptor
     public string? MediaFileName { get; }
 }
 
+public sealed record OperatorGraphicsAsset
+{
+    public OperatorGraphicsAsset(string name, uint width, uint height, byte[] rgbaPixels)
+    {
+        if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Graphics asset name is required.", nameof(name));
+        if (width == 0 || height == 0 || width > 512 || height > 512)
+            throw new ArgumentOutOfRangeException(nameof(width), "Graphics assets must be between 1x1 and 512x512 pixels.");
+        ArgumentNullException.ThrowIfNull(rgbaPixels);
+        var expected = checked((int)((ulong)width * height * 4UL));
+        if (rgbaPixels.Length != expected)
+            throw new ArgumentException($"Graphics RGBA payload requires exactly '{expected}' bytes.", nameof(rgbaPixels));
+
+        Name = name.Trim();
+        Width = width;
+        Height = height;
+        RgbaPixels = rgbaPixels.ToArray();
+    }
+
+    public string Name { get; }
+    public uint Width { get; }
+    public uint Height { get; }
+    public byte[] RgbaPixels { get; }
+}
+
+public sealed record OperatorGraphicsOverlayDescriptor(
+    bool AssetLoaded,
+    string? AssetName,
+    uint AssetWidth,
+    uint AssetHeight,
+    bool Visible,
+    double PositionX,
+    double PositionY,
+    double Scale)
+{
+    public static OperatorGraphicsOverlayDescriptor Empty { get; } =
+        new(false, null, 0, 0, false, 0.72, 0.06, 1.0);
+}
+
 public sealed record OperatorMutationResponse
 {
     public OperatorMutationResponse(bool accepted, AuthoritativeProductionState state, Failure? failure)
@@ -77,7 +115,8 @@ public sealed record OperatorStatusSnapshot
         string aiStatus,
         string recordingStatus,
         bool visualLayerEnabled,
-        double audioPeakLevel)
+        double audioPeakLevel,
+        OperatorGraphicsOverlayDescriptor? graphicsOverlay = null)
     {
         Production = production ?? throw new ArgumentNullException(nameof(production));
         ArgumentNullException.ThrowIfNull(sources);
@@ -99,6 +138,7 @@ public sealed record OperatorStatusSnapshot
         RecordingStatus = recordingStatus.Trim();
         VisualLayerEnabled = visualLayerEnabled;
         AudioPeakLevel = audioPeakLevel;
+        GraphicsOverlay = graphicsOverlay ?? OperatorGraphicsOverlayDescriptor.Empty;
     }
 
     public AuthoritativeProductionState Production { get; }
@@ -110,6 +150,7 @@ public sealed record OperatorStatusSnapshot
     public string RecordingStatus { get; }
     public bool VisualLayerEnabled { get; }
     public double AudioPeakLevel { get; }
+    public OperatorGraphicsOverlayDescriptor GraphicsOverlay { get; }
 }
 
 /// <summary>
@@ -122,6 +163,22 @@ public interface IOperatorControlTransport
     ValueTask<OperatorMutationResponse> SelectPreviewAsync(SelectPreviewCommand command, CancellationToken cancellationToken = default);
     ValueTask<OperatorMutationResponse> CutProgramAsync(CutProgramCommand command, CancellationToken cancellationToken = default);
     ValueTask<OperatorMutationResponse> DissolveProgramAsync(DissolveProgramCommand command, CancellationToken cancellationToken = default);
+
+    ValueTask<OperatorGraphicsOverlayDescriptor> LoadGraphicsOverlayAsync(
+        OperatorGraphicsAsset asset,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<OperatorGraphicsOverlayDescriptor>(new NotSupportedException("Operator transport does not expose graphics overlay control."));
+
+    ValueTask<OperatorGraphicsOverlayDescriptor> SetGraphicsOverlayAsync(
+        bool visible,
+        double positionX,
+        double positionY,
+        double scale,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<OperatorGraphicsOverlayDescriptor>(new NotSupportedException("Operator transport does not expose graphics overlay control."));
+
+    ValueTask<OperatorGraphicsOverlayDescriptor> ClearGraphicsOverlayAsync(CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<OperatorGraphicsOverlayDescriptor>(new NotSupportedException("Operator transport does not expose graphics overlay control."));
 
     ValueTask<MediaDeckSnapshot> GetMediaDeckSnapshotAsync(CancellationToken cancellationToken = default) =>
         ValueTask.FromException<MediaDeckSnapshot>(new NotSupportedException("Operator transport does not expose media-deck control."));
@@ -212,6 +269,35 @@ public sealed class OperatorControlClient
         var result = await _transport.DissolveProgramAsync(command, cancellationToken).ConfigureAwait(false);
         if (result.Accepted)
             await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+
+    public async ValueTask<OperatorGraphicsOverlayDescriptor> LoadGraphicsOverlayAsync(
+        OperatorGraphicsAsset asset,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(asset);
+        var result = await _transport.LoadGraphicsOverlayAsync(asset, cancellationToken).ConfigureAwait(false);
+        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+
+    public async ValueTask<OperatorGraphicsOverlayDescriptor> SetGraphicsOverlayAsync(
+        bool visible,
+        double positionX,
+        double positionY,
+        double scale,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await _transport.SetGraphicsOverlayAsync(visible, positionX, positionY, scale, cancellationToken).ConfigureAwait(false);
+        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+
+    public async ValueTask<OperatorGraphicsOverlayDescriptor> ClearGraphicsOverlayAsync(CancellationToken cancellationToken = default)
+    {
+        var result = await _transport.ClearGraphicsOverlayAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
 
