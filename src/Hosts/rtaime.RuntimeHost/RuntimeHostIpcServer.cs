@@ -13,7 +13,7 @@ namespace rtaime.RuntimeHost;
 public sealed class RuntimeHostIpcServer : IAsyncDisposable
 {
 	private const string ProtocolVersion = "1.0";
-	private const int MaxFrameBytes = 2 * 1024 * 1024;
+	private const int MaxFrameBytes = 1024 * 1024;
 	private readonly string _endpoint;
 	private readonly Func<V1RuntimeHostService?> _runtimeAccessor;
 	private readonly Func<LocalMediaDeckRuntimeService?> _mediaDeckAccessor;
