@@ -55,22 +55,36 @@ dotnet restore rtaime.slnx
 dotnet build rtaime.slnx --configuration Release --no-restore
 ```
 
-The normal build is framework-dependent and preserves the multi-process V1 topology:
+The normal build is framework-dependent and preserves the multi-process V1 topology behind one product entry point:
 
 ```text
-ControlHost
-RuntimeHost
-AIHost
-Operator
+rtaime.exe / AppHost
+├── ControlHost
+│   ├── RuntimeHost
+│   └── AIHost
+└── Operator
 ```
 
 ## Single-file Windows publish
 
 ### Architecture boundary
 
-rtaime V1 is intentionally a multi-process system. A single-file publish therefore means **one self-contained executable per executable host**, not one monolithic executable containing ControlHost, RuntimeHost, AIHost and Operator.
+rtaime V1 is intentionally a multi-process system. The canonical `rtaime.exe` AppHost may be published as one self-contained executable, but ControlHost, RuntimeHost, AIHost and Operator remain separate process artifacts. Single-file publishing does not create a monolithic runtime.
 
 A future all-in-one process would be a separate architecture decision and is not implied by the commands below.
+
+### Canonical rtaime.exe AppHost
+
+```powershell
+dotnet publish src/Hosts/rtaime.AppHost/rtaime.AppHost.csproj `
+	-c Release -r win-x64 --self-contained true `
+	-p:PublishSingleFile=true `
+	-p:IncludeNativeLibrariesForSelfExtract=true `
+	-p:DebugType=None -p:DebugSymbols=false `
+	-o artifacts/publish/rtaime-win-x64
+```
+
+The AppHost resolves the installed product payload, starts or adopts ControlHost, waits for qualified readiness, and starts Operator only for profiles that require it.
 
 ### Operator-only single-file EXE
 
@@ -95,9 +109,9 @@ dotnet publish src/Hosts/rtaime.Operator/rtaime.Operator.csproj `
 
 The resulting distribution is intended to be started as `rtaime.Operator.exe`. Content required by the Operator is included in the single-file bundle and may be extracted by the .NET single-file host at runtime.
 
-### Full host set as self-contained single-file executables
+### Full internal host set as self-contained single-file executables
 
-Publish all four executable hosts:
+Publish the four internal service/client executables when a fully self-contained distribution is required:
 
 ```powershell
 dotnet publish src/Hosts/rtaime.ControlHost/rtaime.ControlHost.csproj `
