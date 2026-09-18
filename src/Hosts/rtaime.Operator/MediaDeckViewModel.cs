@@ -71,6 +71,8 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 	public event PropertyChangedEventHandler? PropertyChanged;
 	public event Action<MediaDeckSnapshot>? SnapshotChanged;
 
+	internal MediaDeckSnapshot ConfirmedSnapshot => _controller.Snapshot;
+
 	public MediaTimelineViewModel Timeline { get; }
 	public ObservableCollection<MediaDeckCueItem> Cues { get; }
 	public IReadOnlyList<MediaDeckEndBehavior> EndBehaviors { get; } = Enum.GetValues<MediaDeckEndBehavior>();
@@ -208,6 +210,85 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 	{
 		if (_pollTask is null)
 			_pollTask = PollAsync(_dispose.Token);
+	}
+
+	internal async Task PrepareDemoPackageAsync(
+		string path,
+		MediaSourceId sourceId,
+		long inFrame,
+		IReadOnlyList<(string Name, long Frame)> cuePoints,
+		bool autoPlayOnProgram,
+		MediaDeckEndBehavior endBehavior,
+		CancellationToken cancellationToken = default)
+	{
+		if (string.IsNullOrWhiteSpace(path))
+			throw new ArgumentException("Demo media path is required.", nameof(path));
+		ArgumentNullException.ThrowIfNull(cuePoints);
+		if (IsBusy)
+			throw new InvalidOperationException("Media Deck is busy.");
+
+		IsBusy = true;
+		try
+		{
+			if (_controller.Snapshot.IsLoaded)
+				await _controller.CloseAsync(cancellationToken).ConfigureAwait(false);
+
+			var opened = await _controller.OpenAsync(path, sourceId, cancellationToken).ConfigureAwait(false);
+			if (!opened.IsLoaded || opened.Transport is null)
+				throw new InvalidDataException(opened.Failure?.Message ?? "Demo Product Clip did not open.");
+
+			foreach (var cue in _controller.Markers.State.CuePoints.ToArray())
+			{
+				if (!await _controller.Markers.DeleteCueAsync(cue.Id, cancellationToken).ConfigureAwait(false))
+					throw new InvalidOperationException($"Existing cue '{cue.Name}' could not be cleared.");
+			}
+			if (_controller.Markers.State.InPointFrame is not null &&
+				!await _controller.Markers.ClearInAsync(cancellationToken).ConfigureAwait(false))
+				throw new InvalidOperationException("Existing IN marker could not be cleared.");
+			if (_controller.Markers.State.OutPointFrame is not null &&
+				!await _controller.Markers.ClearOutAsync(cancellationToken).ConfigureAwait(false))
+				throw new InvalidOperationException("Existing OUT marker could not be cleared.");
+
+			var totalFrames = _controller.Snapshot.Transport?.Position.TotalFrames
+				?? throw new InvalidDataException("Demo Product Clip has no confirmed transport length.");
+			if (totalFrames <= 1)
+				throw new InvalidDataException("Demo Product Clip must contain at least two frames.");
+			if (inFrame < 0 || inFrame >= totalFrames)
+				throw new InvalidDataException("Demo Product Clip IN frame is outside the asset.");
+			if (cuePoints.Any(cue => cue.Frame < inFrame || cue.Frame >= totalFrames))
+				throw new InvalidDataException("Demo Product Clip cue point is outside the effective asset range.");
+
+			await _controller.Timeline.SeekToFrameAsync(inFrame, cancellationToken).ConfigureAwait(false);
+			if (!await _controller.Markers.SetInAtCurrentFrameAsync(cancellationToken).ConfigureAwait(false))
+				throw new InvalidOperationException("Demo Product Clip IN marker could not be set.");
+
+			foreach (var cue in cuePoints)
+			{
+				await _controller.Timeline.SeekToFrameAsync(cue.Frame, cancellationToken).ConfigureAwait(false);
+				var cueId = await _controller.Markers.AddCueAtCurrentFrameAsync(cue.Name, cancellationToken).ConfigureAwait(false);
+				if (cueId is null)
+					throw new InvalidOperationException($"Demo cue '{cue.Name}' could not be added.");
+			}
+
+			await _controller.Timeline.SeekToFrameAsync(totalFrames - 1, cancellationToken).ConfigureAwait(false);
+			if (!await _controller.Markers.SetOutAtCurrentFrameAsync(cancellationToken).ConfigureAwait(false))
+				throw new InvalidOperationException("Demo Product Clip OUT marker could not be set.");
+
+			await _controller.Timeline.SeekToFrameAsync(inFrame, cancellationToken).ConfigureAwait(false);
+			var configured = await _controller
+				.ConfigurePlaybackAsync(autoPlayOnProgram, endBehavior, cancellationToken)
+				.ConfigureAwait(false);
+			if (configured.State == MediaDeckState.Error)
+				throw new InvalidOperationException(configured.Failure?.Message ?? "Demo playback policy was rejected.");
+		}
+		finally
+		{
+			Post(() =>
+			{
+				RefreshState();
+				IsBusy = false;
+			});
+		}
 	}
 
 	public async ValueTask DisposeAsync()
