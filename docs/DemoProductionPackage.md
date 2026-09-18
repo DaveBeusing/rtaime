@@ -7,7 +7,7 @@ david.beusing@gmail.com
 
 ## Purpose
 
-AP-56 adds one reproducible funding-prototype showcase package to the WPF Operator. The package prepares the existing V1 workflow through already-qualified Client, ControlHost, RuntimeHost, Media, Audio, Graphics and AI seams.
+Demo Production Package adds one reproducible funding-prototype showcase package to the WPF Operator. The package prepares the existing V1 workflow through already-qualified Client, ControlHost, RuntimeHost, Media, Audio, Graphics and AI seams.
 
 `Open Demo Production` is not a new production-authority subsystem and is not the software-release package format. It does not replace ControlHost authority, durable state, host lifecycle, update orchestration or the existing Production Specification.
 
@@ -15,27 +15,27 @@ AP-56 adds one reproducible funding-prototype showcase package to the WPF Operat
 
 The package manifest is `src/Hosts/rtaime.Operator/DemoAssets/demo-production.package.json` with schema marker `rtaime.demo.production-package/1`.
 
-The package declares Input A as Program source, Input B as Product Clip source, a bundled 1920x1080p50 MP4 with H.264 video and AAC stereo 48 kHz audio, deterministic IN/OUT and two cue points, Auto Play on Program, Hold Last Frame, a 12-frame DISSOLVE, unity/unmuted clip audio, a pre-rendered rtaime-logo/lower-third PNG, and the AP-55 Person Segmentation Highlight.
+The package declares Input A as Program source, Input B as Product Clip source, a bundled 1920x1080p50 MP4 with H.264 video and AAC stereo 48 kHz audio, deterministic IN/OUT and two cue points, Auto Play on Program, Hold Last Frame, a 12-frame DISSOLVE, unity/unmuted clip audio, a pre-rendered rtaime-logo/lower-third PNG, and the Visible AI Showcase Integration Person Segmentation Highlight.
 
 The MP4 and PNG are text-safe base64 bundle resources. The manifest carries SHA-256 digests of the decoded bytes. On activation the Operator verifies those bytes before materializing them below the current user's Local Application Data at `rtaime/demo/v1`. Matching files are reused; corrupt or mismatched bundle bytes fail closed.
 
 ## One-click flow
 
-The Operator toolbar exposes `Open Demo Production`. Activation synchronizes authoritative state, resolves Input A/B, restores Program to Input A when needed, materializes verified assets, opens the Product Clip on Input B, recreates IN/OUT and cue points, returns transport to IN, configures Auto Play/Hold Last Frame, confirms Input B audio, loads the pre-rendered lower third, enables AP-55 AI, sets the Operator DISSOLVE duration to 12 frames, selects Input B as Preview, then resynchronizes and validates the final state.
+The Operator toolbar exposes `Open Demo Production`. Activation synchronizes authoritative state, resolves Input A/B, restores Program to Input A when needed, materializes verified assets, opens the Product Clip on Input B, recreates IN/OUT and cue points, returns transport to IN, configures Auto Play/Hold Last Frame, confirms Input B audio, loads the pre-rendered lower third, enables Visible AI Showcase Integration AI, sets the Operator DISSOLVE duration to 12 frames, selects Input B as Preview, then resynchronizes and validates the final state.
 
 The ready state is Program = Input A, Preview = Product Clip/Input B, media cued at IN, Auto Play armed, clip audio ready for AFV, lower third loaded, AI enabled and a 12-frame DISSOLVE configured. The package does not automatically TAKE Preview to Program.
 
 ## Lower-third boundary
 
-AP-49 intentionally did not introduce a general text/CG renderer. AP-56 does not reverse that decision. The bundled lower third is a pre-rendered RGBA/PNG asset containing the rtaime logo and lower-third design and uses the existing RuntimeHost graphics overlay path.
+Graphics & Overlay Operator Workflow intentionally did not introduce a general text/CG renderer. Demo Production Package does not reverse that decision. The bundled lower third is a pre-rendered RGBA/PNG asset containing the rtaime logo and lower-third design and uses the existing RuntimeHost graphics overlay path.
 
-The current V1 compositor gives the explicit Operator graphics overlay precedence over the AP-55 dynamic AI highlight. The package therefore loads the lower third but starts it hidden while AI is enabled. It is immediately ready for SHOW/HIDE, but AP-56 does not claim simultaneous lower-third and AI-highlight visibility.
+The current V1 compositor gives the explicit Operator graphics overlay precedence over the Visible AI Showcase Integration dynamic AI highlight. The package therefore loads the lower third but starts it hidden while AI is enabled. It is immediately ready for SHOW/HIDE, but Demo Production Package does not claim simultaneous lower-third and AI-highlight visibility.
 
 ## Reproducibility and failure behavior
 
 A clean build/publish output contains the manifest and both base64 assets because the Operator project copies `DemoAssets/**` to output. Activation may be repeated in one host lifecycle; existing Product Clip markers are cleared and recreated so cue points do not accumulate.
 
-Activation reports FAILED instead of READY when a required source, asset/hash, media, audio, graphics, AI enable, routing command or final confirmation fails. AI execution remains failure-isolated under AP-55.
+Activation reports FAILED instead of READY when a required source, asset/hash, media, audio, graphics, AI enable, routing command or final confirmation fails. AI execution remains failure-isolated under Visible AI Showcase Integration.
 
 ## Acceptance evidence
 

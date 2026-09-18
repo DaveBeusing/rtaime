@@ -3,7 +3,7 @@
 
 ## Scope
 
-AP-29 adds non-authoritative visual Preview and Program monitoring to the V1 Operator. The monitoring plane is deliberately separate from the versioned ControlHost management path. It carries visual observation only and cannot mutate production state, commit Runtime execution, change routing, control recording or influence Program continuity.
+Operator Monitoring Plane adds non-authoritative visual Preview and Program monitoring to the V1 Operator. The monitoring plane is deliberately separate from the versioned ControlHost management path. It carries visual observation only and cannot mutate production state, commit Runtime execution, change routing, control recording or influence Program continuity.
 
 The authoritative control path remains:
 
@@ -15,7 +15,7 @@ The visual monitoring path is independent:
 
 ## Monitoring contract
 
-`rtaime.Media.Contracts` defines a dedicated `MonitoringContractVersion` and `MonitoringFrameDescriptor`. AP-29 uses monitoring contract version `1.0` independently from the primary Media contract version.
+`rtaime.Media.Contracts` defines a dedicated `MonitoringContractVersion` and `MonitoringFrameDescriptor`. Operator Monitoring Plane uses monitoring contract version `1.0` independently from the primary Media contract version.
 
 Each frame declares:
 
@@ -32,7 +32,7 @@ The monitoring wire format is not embedded in ControlHost or RuntimeHost managem
 
 The RuntimeHost monitoring tap is fed from the committed execution path after timed input processing. Source A and Source B use the same immutable RGBA input buffers that feed GPU upload. Program monitoring uses the existing post-composite GPU readback, so CUT, DISSOLVE and V1 visual-layer results are represented by the Program monitor rather than reconstructed in the Operator.
 
-AP-29 does not add an additional Program GPU readback. It reuses the readback already required by the managed V1 reference pipeline.
+Operator Monitoring Plane does not add an additional Program GPU readback. It reuses the readback already required by the managed V1 reference pipeline.
 
 ## Bounded and loss-tolerant behavior
 
@@ -86,9 +86,9 @@ Monitoring must fail open relative to production continuity:
 - the Operator can continue command/control operation when visual monitoring is unavailable, subject to the existing authoritative control readiness rules.
 
 
-## AP-51 clean-feed consumer
+## clean-feed consumer
 
-AP-51 adds a second WPF presentation surface for the existing Program monitoring image. It does not add a monitoring contract version, RuntimeHost render path, new subscriber, or management-IPC payload.
+Program Output / Clean Feed adds a second WPF presentation surface for the existing Program monitoring image. It does not add a monitoring contract version, RuntimeHost render path, new subscriber, or management-IPC payload.
 
 OperatorMonitoringViewModel continues to own the single NamedPipeOperatorMonitoringTransport reader and converts each received Program frame once into a frozen WPF bitmap. Both the in-workspace Program monitor and ProgramOutputWindow bind that same ProgramImage reference.
 

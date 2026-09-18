@@ -7,7 +7,7 @@ The V1 Operator is the WPF reference client for human interaction with the autho
 
 The Operator depends only on `rtaime.Client`. All production mutations continue to cross the versioned remote-control path and are accepted or rejected by authoritative ControlHost state.
 
-AP-29 adds a separate non-authoritative monitoring transport through the same Client SDK assembly. Visual observation remains isolated from the management/control transport.
+Operator Monitoring Plane adds a separate non-authoritative monitoring transport through the same Client SDK assembly. Visual observation remains isolated from the management/control transport.
 
 ## Control surface
 
@@ -47,7 +47,7 @@ Monitoring state is independent. A lost or stale monitoring stream affects visua
 
 ## Visual monitoring boundary
 
-AP-29 provides live Preview and Program monitoring through a dedicated RuntimeHost monitoring pipe. Production bulk media is not sent through ControlHost or RuntimeHost management IPC.
+Operator Monitoring Plane provides live Preview and Program monitoring through a dedicated RuntimeHost monitoring pipe. Production bulk media is not sent through ControlHost or RuntimeHost management IPC.
 
 Preview visual monitoring follows the authoritative Preview source identity received through the control snapshot. Program visual monitoring is emitted from the actual Runtime post-composite Program output, including V1 transition and visual-layer results.
 
@@ -59,9 +59,9 @@ See `docs/OperatorMonitoringPlane.md` for transport, backpressure and failure-is
 
 The Operator uses `Themes/OperatorTheme.xaml` for reusable dark-surface, typography, button, source-bank and semantic state resources. Preview and Program use distinct semantic accents. The window is resizable and uses minimum dimensions rather than the original fixed bootstrap layout.
 
-## AP-46 design system and reference-layout qualification
+## design system and reference-layout qualification
 
-AP-46 formalizes the Operator presentation layer as a reusable production-console design system. `Themes/OperatorTokens.xaml` owns typography, spacing, geometry and semantic color tokens. `Themes/OperatorTheme.xaml` consumes those tokens and provides panels, toolbars, buttons, armed toggles, source tiles, status badges, Preview/Program tallies, meters, text inputs, timecode typography and a timeline seeker style.
+Operator UI Design System formalizes the Operator presentation layer as a reusable production-console design system. `Themes/OperatorTokens.xaml` owns typography, spacing, geometry and semantic color tokens. `Themes/OperatorTheme.xaml` consumes those tokens and provides panels, toolbars, buttons, armed toggles, source tiles, status badges, Preview/Program tallies, meters, text inputs, timecode typography and a timeline seeker style.
 
 Production semantics are deliberate rather than decorative:
 
@@ -83,9 +83,9 @@ WPF device-independent layout, `UseLayoutRounding`, device-pixel snapping and an
 - 125% scaling: 1536 x 864 logical workspace.
 - 150% scaling: 1280 x 720 logical workspace.
 
-At 125% and 150%, the minimum workspace remains within the available logical bounds and vertical scrolling preserves access to lower panels. AP-46 does not claim pixel-identical rendering across GPU drivers, Windows text-rendering settings or monitor profiles; screenshot-based visual review remains a manual showcase check.
+At 125% and 150%, the minimum workspace remains within the available logical bounds and vertical scrolling preserves access to lower panels. Operator UI Design System does not claim pixel-identical rendering across GPU drivers, Windows text-rendering settings or monitor profiles; screenshot-based visual review remains a manual showcase check.
 
-### AP-46 acceptance evidence
+### Operator UI Design System acceptance evidence
 
 - primary Operator views use the shared dark production theme instead of bootstrap/default styling;
 - Preview and Program monitors use distinct tally and panel semantics;
@@ -95,9 +95,9 @@ At 125% and 150%, the minimum workspace remains within the available logical bou
 - the Quality gate checks 1920 x 1080 reference-layout constraints and 125%/150% scaling invariants;
 - Control/Runtime/Media authority boundaries are unchanged.
 
-## AP-47 Preview / Program production workspace
+## Preview / Program production workspace
 
-AP-47 formalizes the switcher workflow as **Selected Source → confirmed Preview → confirmed Program**. The local source-bank selection is only an operator intent for `Set Preview`; it is never treated as Program authority.
+Preview / Program Production Workspace formalizes the switcher workflow as **Selected Source → confirmed Preview → confirmed Program**. The local source-bank selection is only an operator intent for `Set Preview`; it is never treated as Program authority.
 
 The workspace exposes:
 
@@ -116,7 +116,7 @@ The Program name/id are updated only by applying a synchronized authoritative sn
 
 Rapid repeated UI actions remain serialized by the existing `AsyncRelayCommand` execution guard plus `OperatorViewModel.IsBusy`; a second action cannot run concurrently while a take is in flight.
 
-### AP-47 integration evidence
+### Preview / Program Production Workspace integration evidence
 
 `ProductionIpcIntegrationTests.Operator_commands_cross_ControlHost_and_RuntimeHost_process_boundaries` proves Source → Preview → CUT Preview → Program and Preview → DISSOLVE Preview → Program over the real ControlHost/RuntimeHost IPC path.
 
@@ -124,11 +124,11 @@ Rapid repeated UI actions remain serialized by the existing `AsyncRelayCommand` 
 
 `ProductionIpcRecoveryTests.Runtime_loss_rejects_preview_take_without_changing_confirmed_program` proves that a take rejected after Runtime loss leaves the previously confirmed Program source and revision unchanged.
 
-Existing RuntimeHost restart and Operator reconnect/resynchronization tests remain the recovery evidence for the workspace; AP-47 does not introduce a second recovery mechanism.
+Existing RuntimeHost restart and Operator reconnect/resynchronization tests remain the recovery evidence for the workspace; Preview / Program Production Workspace does not introduce a second recovery mechanism.
 
-## AP-48 Source Bin & Live Source Tiles
+## Source Bin & Live Source Tiles
 
-AP-48 upgrades the source bank into a production source bin while preserving the same authoritative routing model. The Operator does not create source truth; it projects observations already owned by RuntimeHost, ControlHost, the Media Deck and the independent monitoring plane.
+Source Bin & Live Source Tiles upgrades the source bank into a production source bin while preserving the same authoritative routing model. The Operator does not create source truth; it projects observations already owned by RuntimeHost, ControlHost, the Media Deck and the independent monitoring plane.
 
 Each source tile exposes:
 
@@ -153,9 +153,9 @@ Live thumbnails come exclusively from `OperatorMonitoringViewModel` source frame
 
 ### Selection and Preview
 
-Selecting a source tile updates `SelectedSource`. `Set Preview` / `Ctrl+P` remains the explicit operator action that sends that selected source through the authoritative `SelectPreviewAsync` path. CUT and AUTO continue to take only the confirmed Preview source as established by AP-47.
+Selecting a source tile updates `SelectedSource`. `Set Preview` / `Ctrl+P` remains the explicit operator action that sends that selected source through the authoritative `SelectPreviewAsync` path. CUT and AUTO continue to take only the confirmed Preview source as established by Preview / Program Production Workspace.
 
-### AP-48 acceptance evidence
+### Source Bin & Live Source Tiles acceptance evidence
 
 - RuntimeHost snapshot exposes actual V1 format and per-source signal state;
 - ControlHost source snapshot distinguishes LIVE from the currently loaded MEDIA slot;
@@ -164,9 +164,9 @@ Selecting a source tile updates `SelectedSource`. `Set Preview` / `Ctrl+P` remai
 - integration tests verify live health changes and Media Deck READY/PLAYING/remaining observations across real IPC;
 - Operator UI policy verifies the source-bin bindings and monitoring/media projection boundaries.
 
-## AP-49 Graphics & Overlay Operator Workflow
+## Graphics & Overlay Operator Workflow
 
-AP-49 adds a bounded P0 graphics workflow to the Operator without introducing a second renderer or any WPF-owned production state. The implementation is classified as **REALTIME_CRITICAL / HOST_INTEGRATION** because it extends the RuntimeHost composite path and the private management IPC seams. No public Control contract or persisted schema version changes are required.
+Graphics & Overlay Operator Workflow adds a bounded P0 graphics workflow to the Operator without introducing a second renderer or any WPF-owned production state. The implementation is classified as **REALTIME_CRITICAL / HOST_INTEGRATION** because it extends the RuntimeHost composite path and the private management IPC seams. No public Control contract or persisted schema version changes are required.
 
 The Operator can:
 
@@ -200,13 +200,13 @@ This means Program monitoring and recording observe the same post-graphics image
 
 ### Recovery and persistence boundary
 
-AP-49 does not add durable graphics rundown persistence. The current asset and placement are RuntimeHost process state and are observable through ControlHost snapshots. A RuntimeHost restart therefore clears the loaded asset and the Operator resynchronizes to the empty graphics state. Durable graphics/rundown persistence is outside the AP-49 P0 scope.
+Graphics & Overlay Operator Workflow does not add durable graphics rundown persistence. The current asset and placement are RuntimeHost process state and are observable through ControlHost snapshots. A RuntimeHost restart therefore clears the loaded asset and the Operator resynchronizes to the empty graphics state. Durable graphics/rundown persistence is outside the Graphics & Overlay Operator Workflow P0 scope.
 
 ### P1 lower third decision
 
-The optional P1 lower-third workflow is deliberately not implemented in AP-49. The current V1 production path has no qualified text/CG renderer. Rendering lower-third text in WPF and presenting it as production truth would violate the RuntimeHost rendering boundary. A future lower-third implementation should first introduce a governed production CG/text-rendering capability rather than simulating one in the Operator.
+The optional P1 lower-third workflow is deliberately not implemented in Graphics & Overlay Operator Workflow. The current V1 production path has no qualified text/CG renderer. Rendering lower-third text in WPF and presenting it as production truth would violate the RuntimeHost rendering boundary. A future lower-third implementation should first introduce a governed production CG/text-rendering capability rather than simulating one in the Operator.
 
-### AP-49 acceptance evidence
+### Graphics & Overlay Operator Workflow acceptance evidence
 
 - bounded graphics-asset validation covers dimensions and exact RGBA payload length;
 - Runtime integration tests cover alpha, show/hide, position, scale and persistence across DISSOLVE frames;
@@ -215,9 +215,9 @@ The optional P1 lower-third workflow is deliberately not implemented in AP-49. T
 - graphics state changes do not advance authoritative Preview/Program routing revision;
 - Operator UI policy verifies the PNG decode path, graphics controls and Client-SDK-only authority boundary.
 
-## AP-50 Audio Operator Workflow
+## Audio Operator Workflow
 
-AP-50 adds a production-facing audio panel while preserving the existing authority boundary. The Operator does not own audio routing, meter generation or Program truth.
+Audio Operator Workflow adds a production-facing audio panel while preserving the existing authority boundary. The Operator does not own audio routing, meter generation or Program truth.
 
 The panel exposes:
 
@@ -241,7 +241,7 @@ The WPF client refreshes audio observations through the management snapshot at a
 
 RuntimeHost keeps external sample buffering bounded and consumes one exact Program audio window per boundary. The same post-gain/mute Program payload is used by recording and physical Program output.
 
-### AP-50 acceptance evidence
+### Audio Operator Workflow acceptance evidence
 
 - unit tests cover stereo metering, gain and clipping;
 - Runtime integration covers actual external/clip-style Float32 Program payload, gain, mute, silence, clipping and underrun;
@@ -250,9 +250,9 @@ RuntimeHost keeps external sample buffering bounded and consumes one exact Progr
 - Operator UI policy verifies stereo/master meters, AFV source, health, clip-audio state, gain/mute commands and the absence of WPF meter synthesis;
 - Operator remains dependent only on `rtaime.Client`.
 
-## AP-51 Program Output / Clean Feed
+## Program Output / Clean Feed
 
-AP-51 adds a separate local Program Output window for presentation on a second Windows display without introducing another production renderer or authority path.
+Program Output / Clean Feed adds a separate local Program Output window for presentation on a second Windows display without introducing another production renderer or authority path.
 
 The Operator can:
 
@@ -267,7 +267,7 @@ The clean-feed window contains only the Program image on a black surface. It exp
 
 ### Program truth and aspect ratio
 
-ProgramOutputWindow binds directly to the existing OperatorMonitoringViewModel.ProgramImage. The same frozen bitmap object that feeds the Operator Program monitor therefore feeds the clean-feed presentation surface. AP-51 does not create another decode path, WPF media player, compositor or routing state.
+ProgramOutputWindow binds directly to the existing OperatorMonitoringViewModel.ProgramImage. The same frozen bitmap object that feeds the Operator Program monitor therefore feeds the clean-feed presentation surface. Program Output / Clean Feed does not create another decode path, WPF media player, compositor or routing state.
 
 RuntimeHost remains the source of Program pixels. The monitoring tap is derived from the post-transition/post-graphics Program readback already used by the independent monitoring plane. Stretch=Uniform preserves the Program aspect ratio; letter/pillar boxing is black.
 
@@ -289,16 +289,16 @@ A user-selected display or fullscreen change clears the fallback state. Closing 
 
 The clean feed deliberately reuses the existing loss-tolerant monitoring plane, so it does not add another RuntimeHost subscriber, another frame conversion, or a management-IPC bulk-media path. The Operator UI and clean-feed window share the already-created frozen ProgramImage.
 
-The current monitoring plane is monitor-grade: 320×180 and sampled every fourth production frame. This is sufficient for the AP-51 local showcase surface and preserves hot-path isolation, but it is not a claim of full-resolution/full-frame-rate broadcast output. SDI, NDI, SRT and network streaming remain outside AP-51.
+The current monitoring plane is monitor-grade: 320×180 and sampled every fourth production frame. This is sufficient for the Program Output / Clean Feed local showcase surface and preserves hot-path isolation, but it is not a claim of full-resolution/full-frame-rate broadcast output. SDI, NDI, SRT and network streaming remain outside Program Output / Clean Feed.
 
-AP-51 evidence consists of:
+Program Output / Clean Feed evidence consists of:
 
 - the existing Runtime monitoring integration proving Program monitoring originates from the actual Program frame;
 - Operator UI policy checks proving the clean feed binds that same ProgramImage;
 - structural checks for selectable displays, start/stop, fullscreen/windowed placement and display-change fallback;
 - the existing Architecture gate proving the Operator still references only rtaime.Client.
 
-## AP-52 Media Autoplay & End Behavior
+## Media Autoplay & End Behavior
 
 The local Media Deck now exposes production playback policy next to the existing transport and timeline:
 
@@ -311,9 +311,9 @@ The local Media Deck now exposes production playback policy next to the existing
 
 The Operator remains a presentation/control surface. Program-edge detection and end behavior execute in RuntimeHost against committed Program state. The UI continuously refreshes loaded-deck observations so a Runtime-triggered autoplay transition from READY/PAUSED to PLAYING is visible without synthesizing local state.
 
-The source tile and deck countdown use the same effective remaining range. AP-52 deliberately does not implement auto-pause when the clip leaves Program, playlist auto-advance, rundown automation or macros.
+The source tile and deck countdown use the same effective remaining range. Media Autoplay & End Behavior deliberately does not implement auto-pause when the clip leaves Program, playlist auto-advance, rundown automation or macros.
 
-### AP-52 acceptance evidence
+### Media Autoplay & End Behavior acceptance evidence
 
 - contract tests validate playback-policy and effective-range invariants;
 - Runtime integration covers all four end modes, IN/OUT and retake after end;
@@ -347,7 +347,7 @@ The source tile and deck countdown use the same effective remaining range. AP-52
 The existing Required Gates remain authoritative for build, architecture, contracts, unit, integration, security, provider smoke and packaged end-to-end qualification.
 
 
-## AP-53 Program recording workflow
+## Program recording workflow
 
 The right-side production workspace now includes a dedicated **PROGRAM RECORDING** panel.
 
@@ -369,9 +369,9 @@ Recording commands are serialized through ControlHost and delegated to RuntimeHo
 The current V1 output is the deterministic `.rtaime-recording` reference artifact. It is externally verifiable with `ReferenceRecordingPayloadReader`; it is not presented as an MP4/MOV/MXF broadcast deliverable.
 
 
-## AP-54 Runtime Health & Performance HUD
+## Runtime Health & Performance HUD
 
-AP-54 replaces the former coarse SYSTEM summary with a compact evidence-based Runtime health/performance HUD. The Operator still owns no health truth; it renders the health projection returned through `rtaime.Client`.
+Runtime Health & Performance HUD replaces the former coarse SYSTEM summary with a compact evidence-based Runtime health/performance HUD. The Operator still owns no health truth; it renders the health projection returned through `rtaime.Client`.
 
 The HUD exposes:
 
@@ -416,11 +416,11 @@ GPU utilization and used VRAM are nullable evidence. The current active backend 
 
 ### Operator update cadence
 
-AP-54 adds no second UI telemetry loop. Health/performance observations reuse the existing bounded 200 ms management snapshot refresh that already drives audio/recording observations. The effective presentation cadence is therefore at most 5 Hz and does not participate in Runtime scheduling or Program rendering.
+Runtime Health & Performance HUD adds no second UI telemetry loop. Health/performance observations reuse the existing bounded 200 ms management snapshot refresh that already drives audio/recording observations. The effective presentation cadence is therefore at most 5 Hz and does not participate in Runtime scheduling or Program rendering.
 
 RuntimeHost support diagnostics consume the same performance snapshot, preserving one observation source instead of creating a parallel metrics truth.
 
-### AP-54 acceptance evidence
+### Runtime Health & Performance HUD acceptance evidence
 
 - deterministic projection tests cover healthy PASS evidence and degraded-provider UNVERIFIED behavior;
 - process-boundary integration covers Runtime disconnect becoming visible as FAIL;
@@ -430,9 +430,9 @@ RuntimeHost support diagnostics consume the same performance snapshot, preservin
 - observability policy verifies support diagnostics reuse the same Runtime performance snapshot and that the drop counter remains allocation/history/I/O free.
 
 
-## AP-55 Visible AI Showcase
+## Visible AI Showcase
 
-AP-55 adds one deliberately narrow, visually understandable AI feature: **Person Segmentation Highlight**.
+Visible AI Showcase Integration adds one deliberately narrow, visually understandable AI feature: **Person Segmentation Highlight**.
 
 The repository does not currently expose a person-detection capability or object bounding boxes. The implemented showcase therefore uses the existing governed `ai.person-segmentation` capability instead of inventing a detection result. The managed reference provider returns a deterministic normalized person region; RuntimeHost renders that region through its existing dynamic RGBA layer.
 
@@ -466,7 +466,7 @@ If the explicit Operator graphics overlay is active, the AI result is reported a
 
 The managed reference provider is architecture/demo evidence, not a claim of production model quality or qualified GPU inference.
 
-### AP-55 acceptance evidence
+### Visible AI Showcase Integration acceptance evidence
 
 - real AIHost → RuntimeHost process integration enables the segmentation highlight;
 - Operator/Client/ControlHost enable and disable cross the normal management authority boundary;
@@ -475,9 +475,9 @@ The managed reference provider is architecture/demo evidence, not a claim of pro
 - Operator UI policy verifies ON/OFF controls and prohibits local inference ownership;
 - no project-reference topology or public AI/Runtime contract version changes are required.
 
-## AP-56 Demo Production Package
+## Demo Production Package
 
-The Operator toolbar now exposes `Open Demo Production` as a single explicit showcase-bootstrap action. It does not create a new authority path: production routing still crosses `OperatorControlClient` into ControlHost, Media Deck operations remain on the existing Client/Runtime path, graphics use the AP-49 overlay seam, audio uses the AP-50 input-state seam, and AI enable uses the AP-55 showcase seam.
+The Operator toolbar now exposes `Open Demo Production` as a single explicit showcase-bootstrap action. It does not create a new authority path: production routing still crosses `OperatorControlClient` into ControlHost, Media Deck operations remain on the existing Client/Runtime path, graphics use the Graphics & Overlay Operator Workflow overlay seam, audio uses the Audio Operator Workflow input-state seam, and AI enable uses the Visible AI Showcase Integration showcase seam.
 
 The bundled package prepares Program = Input A and Preview = Product Clip/Input B, deterministic IN/OUT plus two cue points, Auto Play on Program with Hold Last Frame, unity/unmuted clip audio, a 12-frame DISSOLVE, a pre-rendered lower-third/logo asset and the Person Segmentation Highlight.
 

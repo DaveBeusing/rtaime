@@ -2,7 +2,7 @@
 
 # Recording Foundation
 
-Status: AP-10 implementation foundation, extended by AP-38 reference payload closure.
+Status: implementation foundation, extended by reference payload closure.
 
 ## Change classification
 
@@ -101,7 +101,7 @@ IProgramRecordingWriter
 	AbortAsync
 ```
 
-AP-38 adds an optional subsystem-local capability:
+V1 Functional Gap Closure adds an optional subsystem-local capability:
 
 ```text
 IProgramRecordingPayloadWriter : IProgramRecordingWriter
@@ -117,7 +117,7 @@ A future qualified encoder/device implementation can resolve opaque media handle
 
 `LocalRecordingManifestWriter` remains the descriptor-level architectural-proof writer. It persists Program sample identity, timing and opaque-handle references only.
 
-AP-38 adds `ReferenceRecordingPayloadWriter`, a deterministic software-only payload artifact for V1 functional proof. It persists:
+V1 Functional Gap Closure adds `ReferenceRecordingPayloadWriter`, a deterministic software-only payload artifact for V1 functional proof. It persists:
 
 - actual post-composite Program RGBA8 bytes supplied by the RuntimeHost reference path;
 - deterministic Stereo 48 kHz Float32 AFV sample bytes for the exact Program boundary;
@@ -137,13 +137,13 @@ Both protected local artifact paths use the same lifecycle concept:
 
 `ReferenceRecordingPayloadReader` validates the file magic/version, sample structure, payload lengths, footer counts, trailing-data absence and SHA-256 integrity.
 
-The AP-38 reference container is intentionally uncompressed and CI-verifiable. It is **not** a qualified professional codec/container. Professional storage throughput, DMA/device-surface resolution, codec interoperability, hardware encoding and long-duration media integrity remain `UNVERIFIED` until measured on the declared production environment.
+The V1 Functional Gap Closure reference container is intentionally uncompressed and CI-verifiable. It is **not** a qualified professional codec/container. Professional storage throughput, DMA/device-surface resolution, codec interoperability, hardware encoding and long-duration media integrity remain `UNVERIFIED` until measured on the declared production environment.
 
 ## Storage exhaustion and recovery
 
 `ReferenceRecordingPayloadWriter` supports a deterministic payload-byte quota for failure evidence. Exhausting the quota raises a writer-side storage failure on the asynchronous recorder worker rather than blocking Program execution.
 
-AP-38 verifies that:
+V1 Functional Gap Closure verifies that:
 
 - storage exhaustion moves Recording to `Failed`;
 - no valid final artifact is published;
@@ -171,7 +171,7 @@ RuntimeHost also emits a non-authoritative `recording.payload.stage.failed:<Exce
 
 ## Verification obligations
 
-AP-10 verifies at minimum:
+Recording Foundation verifies at minimum:
 
 - start
 - stop
@@ -185,7 +185,7 @@ AP-10 verifies at minimum:
 - bounded/nonblocking enqueue under slow storage
 - architecture graph remains unchanged
 
-AP-38 adds verification for:
+V1 Functional Gap Closure adds verification for:
 
 - actual reference Program video payload bytes;
 - actual reference AFV audio payload bytes;
@@ -199,9 +199,9 @@ AP-38 adds verification for:
 Hardware/codec/storage qualification must remain `UNVERIFIED` unless executed on the declared production environment.
 
 
-## AP-53 Operator recording workflow
+## Operator recording workflow
 
-AP-53 promotes the existing recording foundation into an explicit Operator workflow without moving recording authority or storage execution into WPF.
+Recording Operator Workflow promotes the existing recording foundation into an explicit Operator workflow without moving recording authority or storage execution into WPF.
 
 The command path is:
 
@@ -228,7 +228,7 @@ Final publication retains create-new semantics. An existing target is rejected r
 
 ### Validation and evidence boundary
 
-The AP-53 result is externally readable through `ReferenceRecordingPayloadReader`. Acceptance evidence validates:
+The Recording Operator Workflow result is externally readable through `ReferenceRecordingPayloadReader`. Acceptance evidence validates:
 
 - at least one Program video sample;
 - matching audio sample presence;
@@ -237,4 +237,4 @@ The AP-53 result is externally readable through `ReferenceRecordingPayloadReader
 - repeated recordings with distinct names in one RuntimeHost lifecycle;
 - controlled storage failure propagated back to the Operator while Runtime Program remains committed.
 
-The V1 reference artifact remains an uncompressed architectural-proof container, not MP4/MOV/MXF and not a qualified professional codec. The current Media Deck accepts MP4 input, so AP-53 does **not** claim direct Media Deck playback of `.rtaime-recording` files. External validation is provided by the deterministic reader. Professional encoded recording, ISO input recording, replay, segment recording and cloud upload remain outside AP-53.
+The V1 reference artifact remains an uncompressed architectural-proof container, not MP4/MOV/MXF and not a qualified professional codec. The current Media Deck accepts MP4 input, so Recording Operator Workflow does **not** claim direct Media Deck playback of `.rtaime-recording` files. External validation is provided by the deterministic reader. Professional encoded recording, ISO input recording, replay, segment recording and cloud upload remain outside Recording Operator Workflow.

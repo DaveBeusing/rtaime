@@ -2,11 +2,11 @@
 
 ## Work package
 
-AP-07 – Media Pipeline Foundation
+Media Pipeline Foundation – Media Pipeline Foundation
 
 Change classification: `REALTIME_CRITICAL`
 
-This package replaces the provisional AP-06 Runtime frame executor with the reusable media-lifecycle foundation owned by `rtaime.Media`.
+This package replaces the provisional Virtual Media Runtime Slice Runtime frame executor with the reusable media-lifecycle foundation owned by `rtaime.Media`.
 
 ## Architectural placement
 
@@ -152,7 +152,7 @@ Observations intentionally contain descriptors/counters and failures rather than
 
 ## VirtualMedia integration
 
-The AP-06 architecture-proof integration now routes VirtualMedia frames through `MediaFramePipeline`.
+The Virtual Media Runtime Slice architecture-proof integration now routes VirtualMedia frames through `MediaFramePipeline`.
 
 This means synthetic 1080p50 and 1080p59.94 frames use the same:
 
@@ -165,11 +165,11 @@ This means synthetic 1080p50 and 1080p59.94 frames use the same:
 
 that later provider compositions can reuse.
 
-The provisional `CommittedMediaRuntime` implementation from AP-06 is removed. Its hardware-free resource reservation helper remains in Runtime as a separate component because it belongs to Runtime prepare/commit testing rather than Media processing.
+The provisional `CommittedMediaRuntime` implementation from Virtual Media Runtime Slice is removed. Its hardware-free resource reservation helper remains in Runtime as a separate component because it belongs to Runtime prepare/commit testing rather than Media processing.
 
 ## Test coverage
 
-AP-07 adds qualification for:
+Media Pipeline Foundation adds qualification for:
 
 - frame lifetime transitions,
 - invalid ownership at pipeline entry,
@@ -183,7 +183,7 @@ AP-07 adds qualification for:
 - cancellation of a blocked producer,
 - sequence-gap rejection,
 - descriptor/opaque-handle identity preservation,
-- existing AP-06 VirtualMedia E2E behaviour through the new pipeline,
+- existing Virtual Media Runtime Slice VirtualMedia E2E behaviour through the new pipeline,
 - 50 fps long-run simulation,
 - 59.94 fps long-run simulation.
 

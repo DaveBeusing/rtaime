@@ -4,7 +4,7 @@
 
 ## Purpose
 
-AP-25 composes the software update/rollback foundation with the SQLite backup/migration/recovery foundation into one fail-closed maintenance transaction.
+Coordinated Software State Upgrade composes the software update/rollback foundation with the SQLite backup/migration/recovery foundation into one fail-closed maintenance transaction.
 
 The package deliberately does not turn updates into an unattended background service.
 
@@ -45,14 +45,14 @@ tools/state-upgrade-catalog.json
 
 inside the already verified offline software bundle. Because it is a normal bundle payload, it is covered by the bundle manifest, hash set and release signing chain.
 
-The current AP-25 catalog declares:
+The current Coordinated Software State Upgrade catalog declares:
 
 ```text
 management           target schema 1
 production-journal   target schema 1
 ```
 
-with no migration steps because AP-25 does not change a production persistence schema.
+with no migration steps because Coordinated Software State Upgrade does not change a production persistence schema.
 
 When a future release changes a schema, that release must carry the exact registered `N → N+1` migration chain in its signed catalog.
 
@@ -81,7 +81,7 @@ The maintenance mode does not start ControlHost supervision, IPC authority or ch
 
 ## Backup-before-activation rule
 
-For every discovered database whose current schema is below the signed target schema, the coordinator creates a verified AP-24 snapshot before software activation.
+For every discovered database whose current schema is below the signed target schema, the coordinator creates a verified Persistent State Backup, Migration & Recovery snapshot before software activation.
 
 Database instances are discovered only below the explicitly supplied `StateRoot` and only by signed catalog filenames.
 
@@ -91,9 +91,9 @@ A missing, ambiguous or skipped migration step fails before software activation.
 
 ## Software activation
 
-Software replacement continues to use the AP-23 `Invoke-AtomicSoftwareReplacement.ps1` path.
+Software replacement continues to use the Update Discovery & Rollback `Invoke-AtomicSoftwareReplacement.ps1` path.
 
-AP-25 does not duplicate extraction, bundle trust validation or software filesystem swap logic.
+Coordinated Software State Upgrade does not duplicate extraction, bundle trust validation or software filesystem swap logic.
 
 The existing rollback slot remains:
 
@@ -105,7 +105,7 @@ The existing rollback slot remains:
 
 After the new software tree has been activated, the coordinator resolves the newly active `rtaime.ControlHost.dll` and invokes its state-maintenance mode for each required database migration.
 
-Each database migration still uses the AP-24 transaction and internal migration backup. The pre-activation snapshot is retained separately as coordinated recovery evidence.
+Each database migration still uses the Persistent State Backup, Migration & Recovery transaction and internal migration backup. The pre-activation snapshot is retained separately as coordinated recovery evidence.
 
 After migration, the coordinator inspects the database again and requires the exact signed target schema version.
 
@@ -154,13 +154,13 @@ The package adds three layers of evidence:
 2. integration tests launch the built `rtaime.ControlHost.dll` as a real process and qualify inspect/backup plus acknowledgement rejection;
 3. Packaged E2E verifies that the signed offline bundle contains the coordinator, policy, state catalog, rollback guard and ControlHost executable assembly.
 
-The existing AP-24 integration suite remains the executable qualification for transactional migration and automatic SQLite snapshot restoration.
+The existing Persistent State Backup, Migration & Recovery integration suite remains the executable qualification for transactional migration and automatic SQLite snapshot restoration.
 
 The current production state catalog has no migrations, so CI does not fabricate a production schema upgrade merely to create positive evidence.
 
 ## Operational boundary
 
-AP-25 does not automatically:
+Coordinated Software State Upgrade does not automatically:
 
 - stop ControlHost, RuntimeHost, AIHost or Operator;
 - start hosts after maintenance;

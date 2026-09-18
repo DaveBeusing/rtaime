@@ -4,9 +4,9 @@
 
 ## Purpose
 
-AP-26 closes the operational readiness boundary left intentionally open by coordinated software/state upgrade.
+Managed Host Lifecycle Readiness closes the operational readiness boundary left intentionally open by coordinated software/state upgrade.
 
-AP-25 may finish with verified software and persistent state while all production processes remain stopped. AP-26 provides the explicit transition from that maintenance state to a running and externally qualified service-host set.
+Coordinated Software State Upgrade may finish with verified software and persistent state while all production processes remain stopped. Managed Host Lifecycle Readiness provides the explicit transition from that maintenance state to a running and externally qualified service-host set.
 
 The managed service topology remains:
 
@@ -115,7 +115,7 @@ A child can be adopted when its configured endpoint is already reachable, or lau
 
 The supervisor does not continuously inject probe traffic after an owned child has reached readiness; the process handle becomes its liveness signal until exit. If the child exits, endpoint probing and the bounded restart policy resume.
 
-AP-26 does not add a second supervisor implementation.
+Managed Host Lifecycle Readiness does not add a second supervisor implementation.
 
 ## Graceful stop
 
@@ -152,7 +152,7 @@ Start
 full readiness qualification repeated
 ```
 
-There is no implicit unattended top-level ControlHost restart scheduler in AP-26.
+There is no implicit unattended top-level ControlHost restart scheduler in Managed Host Lifecycle Readiness.
 
 RuntimeHost and AIHost continue to have bounded child restart semantics inside ControlHost supervision.
 
@@ -177,7 +177,7 @@ A successful start creates an operational receipt containing:
 
 ## Relationship to coordinated upgrade
 
-AP-25 remains responsible for:
+Coordinated Software State Upgrade remains responsible for:
 
 ```text
 software verification
@@ -189,7 +189,7 @@ software verification
 
 Its receipt correctly ends with `runtimeReadiness = UNVERIFIED` because no host was started there.
 
-AP-26 is the separate next boundary:
+Managed Host Lifecycle Readiness is the separate next boundary:
 
 ```text
 maintenance PASS
@@ -199,7 +199,7 @@ maintenance PASS
 → runtimeReadiness PASS
 ```
 
-The AP-25 receipt is historical evidence and is not rewritten in place.
+The Coordinated Software State Upgrade receipt is historical evidence and is not rewritten in place.
 
 ## Packaged E2E
 
@@ -218,7 +218,7 @@ The qualification uses unique Named Pipe endpoint names and the same lifecycle s
 
 ## Scope boundary / non-claims
 
-AP-26 does not implement or claim:
+Managed Host Lifecycle Readiness does not implement or claim:
 
 - Windows service registration,
 - automatic boot-start registration,

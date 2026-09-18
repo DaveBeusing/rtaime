@@ -1,3 +1,5 @@
+<!-- Copyright (c) Dave Beusing <david.beusing@gmail.com>. -->
+
 # Initial Solution Bootstrap and Architecture Guardrails
 
 ## Scope
@@ -22,7 +24,7 @@ Execution qualification status at this commit:
 Windows restore/build/test: UNVERIFIED
 ```
 
-The repository contains `.github/workflows/bootstrap-validation.yml` to execute SDK qualification plus restore, build, and test on the Windows reference environment. No execution result is recorded as PASS until an actual workflow or equivalent Windows validation run has completed successfully.
+Managed restore/build/test validation is executed by the current Required Gates workflow. The historical bootstrap-only workflow has been retired in favor of the repository-wide required-gates and single release-pipeline model. No execution result is recorded as PASS until an actual workflow or equivalent Windows validation run has completed successfully.
 
 Target frameworks are centralized:
 
@@ -139,16 +141,15 @@ No production vendor package is introduced by this work package.
 
 ## Local verification
 
-Run from repository root:
+The canonical developer build, single-file publish and test commands are maintained in [BuildAndTest.md](BuildAndTest.md).
+
+The baseline managed verification remains:
 
 ```powershell
 dotnet --info
-dotnet --list-sdks
-dotnet new --list
-
 dotnet restore rtaime.slnx
 dotnet build rtaime.slnx --configuration Release --no-restore
-dotnet test rtaime.slnx --configuration Release --no-build
+dotnet test rtaime.slnx --configuration Release --no-build -m:1
 ```
 
-A successful skeleton build is not evidence for real-time behavior, media I/O, GPU processing, inference, hardware support, or production qualification.
+A successful managed build/test run is not evidence for physical real-time behavior, professional media I/O, GPU qualification, physical inference performance, hardware support or production qualification.

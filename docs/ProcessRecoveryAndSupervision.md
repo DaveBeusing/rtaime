@@ -3,7 +3,7 @@
 
 ## Purpose
 
-AP-16 defines how the V1 multi-process reference system behaves when Operator, AIHost, RuntimeHost, ControlHost or their local IPC connection disappears and later returns.
+Process Recovery & Supervision defines how the V1 multi-process reference system behaves when Operator, AIHost, RuntimeHost, ControlHost or their local IPC connection disappears and later returns.
 
 The recovery model preserves the existing ownership rules:
 
@@ -12,7 +12,7 @@ The recovery model preserves the existing ownership rules:
 - AIHost owns governed inference only and never gains production authority.
 - Operator is presentation/client state and never owns production truth.
 
-AP-16 builds on the durable checkpoints and causal Production Journal introduced by AP-15.
+Process Recovery & Supervision builds on the durable checkpoints and causal Production Journal introduced by Durable Persistence & Journal.
 
 ## Failure matrix
 
@@ -86,7 +86,7 @@ or committed execution lacks an AuthoritySnapshot reference
     -> require operator/administrative intervention
 ```
 
-The Runtime-authority-ahead/foreign case is intentionally fail-closed because AP-16 has no evidence that an automatically chosen side would preserve production truth.
+The Runtime-authority-ahead/foreign case is intentionally fail-closed because Process Recovery & Supervision has no evidence that an automatically chosen side would preserve production truth.
 
 ## Local process supervision
 
@@ -130,7 +130,7 @@ The headless mode repeatedly performs ordinary full snapshot synchronization; it
 
 AIHost loss must not transfer authority to ControlHost, RuntimeHost or Operator. Core preview/program authority and Runtime execution are independent of AIHost process availability.
 
-Where an effect has a qualified fallback path, that fallback remains subject to the existing governed inference/fallback contracts. AP-16 process supervision only restores process availability; it does not change inference semantics.
+Where an effect has a qualified fallback path, that fallback remains subject to the existing governed inference/fallback contracts. Process Recovery & Supervision process supervision only restores process availability; it does not change inference semantics.
 
 ## Observability
 
@@ -148,7 +148,7 @@ ControlHost additionally exposes `Fresh`, `Recovered` or `Conflict` recovery sta
 
 ## Claims and non-claims
 
-AP-16 qualifies process-level recovery semantics. It does **not** claim:
+Process Recovery & Supervision qualifies process-level recovery semantics. It does **not** claim:
 
 - zero-frame Program interruption after RuntimeHost termination,
 - frame-identical continuation after process crash or power loss,

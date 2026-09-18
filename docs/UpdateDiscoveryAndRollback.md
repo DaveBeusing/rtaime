@@ -4,7 +4,7 @@
 
 ## Purpose
 
-AP-23 adds the first controlled software-update foundation on top of the AP-19 offline package, AP-21 Release Candidate, and AP-22 publication/discovery trust chain.
+Update Discovery & Rollback adds the first controlled software-update foundation on top of the Release Packaging & Offline Deployment offline package, Release Pipeline & Channels Release Candidate, and Release Publication & Discovery publication/discovery trust chain.
 
 The production path is:
 
@@ -119,7 +119,7 @@ This prevents a newly downloaded bundle from becoming trusted merely by shipping
 
 Key rotation must therefore be prepared in an earlier trusted software release by enrolling the future key before releases signed exclusively by that key are offered as updates.
 
-AP-23 does not implement cross-signing or emergency trust recovery.
+Update Discovery & Rollback does not implement cross-signing or emergency trust recovery.
 
 ## Online discovery
 
@@ -198,7 +198,7 @@ The resulting `update-plan.json` binds the exact target Candidate id and bundle 
 
 ## Process quiescence
 
-AP-23 does not automatically stop ControlHost, RuntimeHost, AIHost, Operator, Windows services, or third-party provider processes.
+Update Discovery & Rollback does not automatically stop ControlHost, RuntimeHost, AIHost, Operator, Windows services, or third-party provider processes.
 
 Production update invocation requires explicit:
 
@@ -267,7 +267,7 @@ This allows an operator to reverse the rollback if required while preserving exa
 
 ## Persistent application state boundary
 
-AP-23 does **not** migrate, back up, restore, or claim successful protection of persisted operational/application data.
+Update Discovery & Rollback does **not** migrate, back up, restore, or claim successful protection of persisted operational/application data.
 
 Policy explicitly records:
 
@@ -300,7 +300,7 @@ This qualifies mechanics without promoting TEST_EPHEMERAL trust to production tr
 
 ## Production command
 
-From an installed bundle carrying the AP-23 tools:
+From an installed bundle carrying the Update Discovery & Rollback tools:
 
 ```powershell
 ./tools/Invoke-VerifiedUpdate.ps1 `
@@ -319,7 +319,7 @@ The update remains operator-initiated.
 
 ## Explicit non-claims
 
-AP-23 does not implement or claim:
+Update Discovery & Rollback does not implement or claim:
 
 - background or scheduled auto-update,
 - automatic host/service quiescence,

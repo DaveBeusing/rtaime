@@ -38,7 +38,16 @@ Production key trust and immutable external publication remain `UNVERIFIED` unti
 
 ## Product identity
 
-The current development identity is declared centrally in `Directory.Build.props`:
+The canonical product identity is defined in [ProductIdentity.md](ProductIdentity.md):
+
+```text
+Name        rtaime
+Pronounced  realtime
+Expansion   Real Time AI Media Engine
+Slogan      Production-grade real-time AI media platform.
+```
+
+The current development version/release identity is declared centrally in `Directory.Build.props`:
 
 ```text
 RtaimeProductVersion = 0.1.0-dev

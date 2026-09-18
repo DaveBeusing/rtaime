@@ -36,6 +36,8 @@ build/release/Invoke-ReleasePipeline.ps1
 
 GitHub workflows may trigger it, but they must not reimplement the release path.
 
+Developer build, single-file publish and targeted test commands are documented centrally in [BuildAndTest.md](BuildAndTest.md). Those commands are development conveniences and do not replace the authoritative release pipeline or its evidence gates.
+
 ## Source identity is immutable
 
 The release pipeline requires:
@@ -120,7 +122,7 @@ Rules:
 
 A Preview candidate signed by a CI test key remains useful qualification evidence but its publication readiness stays `UNVERIFIED`.
 
-An externally controlled Preview Candidate whose key is active `SOFTWARE_RELEASE` trust may reach publication readiness `PASS` and can then cross the AP-22 publication boundary.
+An externally controlled Preview Candidate whose key is active `SOFTWARE_RELEASE` trust may reach publication readiness `PASS` and can then cross the Release Publication & Discovery publication boundary.
 
 ### STABLE
 
@@ -252,7 +254,7 @@ workflow_dispatch
 
 The `release-candidate` job owns Release Candidate creation.
 
-For a tag push, AP-22 adds a separate `publish-release` job that consumes that Candidate artifact without rebuilding it.
+For a tag push, Release Publication & Discovery adds a separate `publish-release` job that consumes that Candidate artifact without rebuilding it.
 
 For manual runs the operator selects:
 

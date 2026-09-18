@@ -2,6 +2,8 @@
 
 # Security Policy
 
+This policy applies to **rtaime — Real Time AI Media Engine**, the **Production-grade real-time AI media platform.**
+
 ## Reporting a vulnerability
 
 Please report suspected vulnerabilities privately to `david.beusing@gmail.com` with the subject prefix `[rtaime security]`.

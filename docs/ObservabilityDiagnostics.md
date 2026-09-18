@@ -3,7 +3,7 @@
 
 ## Scope
 
-AP-30 introduces a non-authoritative diagnostics plane for supportability and production operations. Diagnostics observe existing host, runtime, provider and persistence state; they do not create production truth and they do not participate in command acceptance, Runtime commit, media timing, inference admission or recording continuity.
+Observability & Diagnostics introduces a non-authoritative diagnostics plane for supportability and production operations. Diagnostics observe existing host, runtime, provider and persistence state; they do not create production truth and they do not participate in command acceptance, Runtime commit, media timing, inference admission or recording continuity.
 
 The support snapshot format is intentionally metadata-only. It must never contain raw video/audio payloads, GPU surface contents, credentials, signing material, access tokens or connection secrets.
 
@@ -81,7 +81,7 @@ Diagnostics must remain subordinate to production continuity:
 
 ## Verification
 
-AP-30 verification includes:
+Observability & Diagnostics verification includes:
 
 - ring-buffer boundedness and chronological retention;
 - secret-key and inline credential redaction;
@@ -92,9 +92,9 @@ AP-30 verification includes:
 The existing Required Gates remain authoritative for architecture, contracts, unit/integration behavior, security, provider smoke and packaged end-to-end qualification.
 
 
-## AP-54 Runtime health and performance projection
+## Runtime Health & Performance HUD Runtime health and performance projection
 
-AP-54 extends the existing observational plane rather than introducing a separate metrics system. RuntimeHost now exposes one bounded `V1RuntimePerformanceSnapshot` containing Runtime uptime, the active frame budget, the most recently observed Program-boundary processing duration, cumulative dropped-frame evidence and GPU telemetry evidence.
+Runtime Health & Performance HUD extends the existing observational plane rather than introducing a separate metrics system. RuntimeHost now exposes one bounded `V1RuntimePerformanceSnapshot` containing Runtime uptime, the active frame budget, the most recently observed Program-boundary processing duration, cumulative dropped-frame evidence and GPU telemetry evidence.
 
 The dropped-frame counter is intentionally O(1). It retains only the previous scheduler-boundary timestamp and one cumulative count. It does not retain per-frame history, allocate a diagnostic collection, write files, call a remote endpoint or otherwise change Program scheduling.
 
@@ -113,4 +113,4 @@ GPU utilization and used VRAM remain `UNVERIFIED` when the active backend cannot
 
 ControlHost derives the Operator health projection from existing Runtime snapshots, provider availability, Media observations and authoritative Control availability. The projection uses `PASS / FAIL / UNVERIFIED` evidence semantics and carries only metadata through management IPC.
 
-The Operator consumes this projection on the existing bounded 200 ms management refresh. AP-54 adds no per-frame UI callback, no second telemetry polling task and no local GPU probing. No per-frame disk write is introduced.
+The Operator consumes this projection on the existing bounded 200 ms management refresh. Runtime Health & Performance HUD adds no per-frame UI callback, no second telemetry polling task and no local GPU probing. No per-frame disk write is introduced.

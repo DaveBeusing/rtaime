@@ -4,7 +4,7 @@
 
 ## Scope
 
-AP-45 composes the local-media capabilities delivered by AP-41 through AP-44 into one showcase-ready Operator module.
+Media Deck Operator composes the local-media capabilities delivered by Local Media File Source through Media Markers into one showcase-ready Operator module.
 
 The deck exposes:
 
@@ -19,7 +19,7 @@ The deck exposes:
 - explicit unloaded, ready, playing, paused, ended and error presentation;
 - keyboard access without stealing the existing production CUT shortcut.
 
-Playlist, clip-bank, multi-deck, waveform, thumbnails and final showcase styling remain outside AP-45. Program-triggered playback and deterministic end behavior are added by AP-52 below.
+Playlist, clip-bank, multi-deck, waveform, thumbnails and final showcase styling remain outside Media Deck Operator. Program-triggered playback and deterministic end behavior are added by Media Autoplay & End Behavior below.
 
 ## Authority and process boundaries
 
@@ -87,7 +87,7 @@ Timeline focus retains Left/Right frame stepping and Home/End clip-boundary seek
 
 ## Acceptance evidence
 
-AP-45 requires:
+Media Deck Operator requires:
 
 - Release solution build;
 - architecture tests;
@@ -101,9 +101,9 @@ AP-45 requires:
 The work package is complete only when those gates are green.
 
 
-## AP-52 Media Autoplay & End Behavior
+## Media Autoplay & End Behavior
 
-AP-52 makes the single local-media deck behave like a bounded production clip player when its assigned source becomes Program.
+Media Autoplay & End Behavior makes the single local-media deck behave like a bounded production clip player when its assigned source becomes Program.
 
 Playback policy is configured through the existing command path:
 
@@ -140,17 +140,17 @@ The V1 deck exposes four explicit end modes:
 
 Loop therefore respects IN/OUT rather than looping the complete source file.
 
-Removing the media source from Program does **not** automatically pause it in AP-52. Auto-pause-on-remove was optional in the work-package definition and is intentionally not claimed without a stronger product rule.
+Removing the media source from Program does **not** automatically pause it in Media Autoplay & End Behavior. Auto-pause-on-remove was optional in the work-package definition and is intentionally not claimed without a stronger product rule.
 
 ### Runtime video and audio feed
 
-The local-media Runtime worker now stages successfully decoded RGBA video into the existing V1 external-input surface for the assigned source, alongside the already existing Float32 audio feed. The clip must match the active V1 Program video format exactly; AP-52 does not introduce scaling or format conversion.
+The local-media Runtime worker now stages successfully decoded RGBA video into the existing V1 external-input surface for the assigned source, alongside the already existing Float32 audio feed. The clip must match the active V1 Program video format exactly; Media Autoplay & End Behavior does not introduce scaling or format conversion.
 
 Raw media remains inside RuntimeHost. Management IPC continues to carry only commands, metadata and confirmed state.
 
 ### Evidence
 
-AP-52 qualification covers:
+Media Autoplay & End Behavior qualification covers:
 
 - cued media starting when its source becomes Program;
 - CUT and DISSOLVE through real ControlHost/RuntimeHost IPC;

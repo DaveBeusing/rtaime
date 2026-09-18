@@ -4,7 +4,7 @@
 
 ## Scope
 
-AP-34 qualifies the temporal behavior of the V1 execution path without changing production authority. ControlHost remains authoritative, RuntimeHost remains the committed execution owner, and timing/reference evidence is observational.
+Timing/Reference/Latency/Soak Qualification qualifies the temporal behavior of the V1 execution path without changing production authority. ControlHost remains authoritative, RuntimeHost remains the committed execution owner, and timing/reference evidence is observational.
 
 The qualification model separates evidence that can be proven deterministically in generic CI from evidence that requires the physical AJA reference system and an independent physical-latency instrument.
 
@@ -49,7 +49,7 @@ These defaults are operational health thresholds, not a physical-platform certif
 
 ## Layer 2: external reference observation
 
-AP-34 does not add a new Media I/O contract or native ABI. The existing output `MediaIoPortStatus` is sufficient for live reference observation.
+Timing/Reference/Latency/Soak Qualification does not add a new Media I/O contract or native ABI. The existing output `MediaIoPortStatus` is sufficient for live reference observation.
 
 When the native AJA Program-output session was opened with external reference required:
 
@@ -92,7 +92,7 @@ Reference-loss backpressure is allowed because it is the explicit bounded recove
 
 ## Latency terminology
 
-AP-34 distinguishes two latency classes and does not conflate them:
+Timing/Reference/Latency/Soak Qualification distinguishes two latency classes and does not conflate them:
 
 1. **Host pipeline / host-cycle latency**: monotonic time spent inside defined Runtime/Media-I/O software observation points. Software can measure this directly.
 2. **Physical end-to-end latency**: measured from physical SDI input presentation to physical Program output presentation using an independent external measurement method.
@@ -101,7 +101,7 @@ Host-side timing can never be relabeled as physical end-to-end latency.
 
 ## Independent physical end-to-end latency evidence
 
-The full AP-34 runner `build/qualification/Invoke-TimingReferenceSoakQualification.ps1` requires a runner-local JSON file produced by an independent latency measurement instrument or measurement workflow. The accepted evidence schema is `1.0` and requires at least:
+The full Timing/Reference/Latency/Soak Qualification runner `build/qualification/Invoke-TimingReferenceSoakQualification.ps1` requires a runner-local JSON file produced by an independent latency measurement instrument or measurement workflow. The accepted evidence schema is `1.0` and requires at least:
 
 - `schemaVersion`: `1.0`;
 - non-empty `measurementMethod`;
@@ -109,7 +109,7 @@ The full AP-34 runner `build/qualification/Invoke-TimingReferenceSoakQualificati
 - `p95Milliseconds`;
 - `maximumMilliseconds`.
 
-The wrapper rejects non-finite values, a maximum below p95, too few samples or a p95 above the explicitly declared acceptance threshold. Only after both the AJA soak/reference test and independent latency evidence pass does the wrapper write `physicalEndToEndLatency.status = PASSED` into the retained AP-34 evidence.
+The wrapper rejects non-finite values, a maximum below p95, too few samples or a p95 above the explicitly declared acceptance threshold. Only after both the AJA soak/reference test and independent latency evidence pass does the wrapper write `physicalEndToEndLatency.status = PASSED` into the retained Timing/Reference/Latency/Soak Qualification evidence.
 
 No repository test can synthesize this external evidence.
 
@@ -124,7 +124,7 @@ It:
 3. resolves the repository-pinned AJA SDK source and verifies the exact commit;
 4. builds the native `rtaime_media_io.dll` from that exact source;
 5. builds the integration qualification target;
-6. invokes the fail-closed AP-34 runner with the declared soak/timing/E2E thresholds;
+6. invokes the fail-closed Timing/Reference/Latency/Soak Qualification runner with the declared soak/timing/E2E thresholds;
 7. requires an explicit external-reference loss/re-lock exercise;
 8. uploads only the resulting combined qualification JSON as retained workflow evidence.
 
@@ -134,7 +134,7 @@ The default workflow requests a 3,600-second soak, while the runner itself enfor
 
 Normal Required Gates prove the implementation, state machine, build graph and policy only. They do not prove AJA hardware, physical reference, real SDI continuity, physical latency or long-duration behavior.
 
-The dedicated hardware workflow may emit `PASSED` only when every requested AP-34 dimension is evidenced. A missing independent E2E-latency file, missing loss/re-lock event, short soak, mismatched adapter/SDK, continuity failure or threshold violation is a failed qualification rather than an implicit pass.
+The dedicated hardware workflow may emit `PASSED` only when every requested Timing/Reference/Latency/Soak Qualification dimension is evidenced. A missing independent E2E-latency file, missing loss/re-lock event, short soak, mismatched adapter/SDK, continuity failure or threshold violation is a failed qualification rather than an implicit pass.
 
 ## Current evidence state
 
@@ -151,4 +151,4 @@ The dedicated hardware workflow may emit `PASSED` only when every requested AP-3
 - physical end-to-end latency qualification: **UNVERIFIED**;
 - long soak qualification: **UNVERIFIED**.
 
-No AP-34 physical-hardware claim is valid until `.github/workflows/timing-reference-qualification.yml` emits retained `PASSED` evidence for the exact tested source, AJA adapter, driver and pinned SDK identity together with the independent physical-latency evidence.
+No Timing/Reference/Latency/Soak Qualification physical-hardware claim is valid until `.github/workflows/timing-reference-qualification.yml` emits retained `PASSED` evidence for the exact tested source, AJA adapter, driver and pinned SDK identity together with the independent physical-latency evidence.

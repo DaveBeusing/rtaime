@@ -2,12 +2,12 @@
 
 # Reference Platform Qualification
 
-**Work package:** AP-39  
+**Work package:** Reference Platform Qualification  
 **Profile:** `rtaime-v1-reference-platform`
 
 ## Purpose
 
-AP-39 turns the existing V1 software and physical qualification mechanisms into one explicit reference-platform result. It does not add product features, create a new Production Authority or replace the existing physical qualification workflows.
+Reference Platform Qualification turns the existing V1 software and physical qualification mechanisms into one explicit reference-platform result. It does not add product features, create a new Production Authority or replace the existing physical qualification workflows.
 
 The qualification answers two separate questions:
 
@@ -32,7 +32,7 @@ Core
 	→ Qualification tooling
 ```
 
-Production subsystems do not reference AP-39 code. The runner consumes existing test surfaces and the existing source-bound physical evidence bindings.
+Production subsystems do not reference Reference Platform Qualification code. The runner consumes existing test surfaces and the existing source-bound physical evidence bindings.
 
 The authoritative machine-readable profile is:
 
@@ -54,7 +54,7 @@ The profile deliberately describes qualified platform classes and capabilities i
 
 ## Qualification status model
 
-AP-39 uses exactly these statuses:
+Reference Platform Qualification uses exactly these statuses:
 
 | Status | Meaning |
 | --- | --- |
@@ -73,7 +73,7 @@ The verifier independently recomputes software, hardware and overall status, so 
 
 ## Software scenarios
 
-AP-39 reuses existing integration evidence instead of creating a parallel test stack.
+Reference Platform Qualification reuses existing integration evidence instead of creating a parallel test stack.
 
 | ID | Scenario | Existing evidence |
 | --- | --- | --- |
@@ -90,11 +90,11 @@ AP-39 reuses existing integration evidence instead of creating a parallel test s
 
 Q02-Q08 intentionally share one V1 end-to-end execution evidence group. The runner executes that mapped test once and references the same retained log from each semantic qualification scenario. This keeps CI runtime bounded while preserving explicit scenario-level reporting.
 
-Q10 exercises an actual Operator operating-system process restart. Broader RuntimeHost and ControlHost supervision/recovery evidence remains in the existing Required Gates and is not duplicated inside AP-39.
+Q10 exercises an actual Operator operating-system process restart. Broader RuntimeHost and ControlHost supervision/recovery evidence remains in the existing Required Gates and is not duplicated inside Reference Platform Qualification.
 
 ## Physical requirements
 
-AP-39 consumes the source-bound evidence model introduced before this work package. It does not weaken or bypass it.
+Reference Platform Qualification consumes the source-bound evidence model introduced before this work package. It does not weaken or bypass it.
 
 | Requirement | Existing qualification type | Expected binding |
 | --- | --- | --- |
@@ -125,7 +125,7 @@ Before scenario acceptance the runner captures `environment.json` and validates:
 
 Environment evidence also records OS/runtime descriptions, processor count, capture time and source commit.
 
-This is an environment identity check, not a performance claim. AP-39 introduces no arbitrary performance threshold. GPU deadlines, physical latency and long-soak acceptance remain owned by their existing measured physical qualification mechanisms.
+This is an environment identity check, not a performance claim. Reference Platform Qualification introduces no arbitrary performance threshold. GPU deadlines, physical latency and long-soak acceptance remain owned by their existing measured physical qualification mechanisms.
 
 ## Running the qualification
 
@@ -167,13 +167,13 @@ logs/
 	software-*.log
 ```
 
-`qualification-result.json` is the machine-readable truth for the AP-39 run. `qualification-summary.md` is a human-readable projection. `Test-ReferencePlatformQualificationResult.ps1` independently validates the machine-readable artifact.
+`qualification-result.json` is the machine-readable truth for the Reference Platform Qualification run. `qualification-summary.md` is a human-readable projection. `Test-ReferencePlatformQualificationResult.ps1` independently validates the machine-readable artifact.
 
 Because `artifacts/*` is ignored by Git, generated qualification evidence is retained as CI/release evidence rather than committed as source.
 
 ## CI behavior
 
-Required Gates execute the CI-safe AP-39 runner after the normal Release build/test and process-recovery checks. The generated reference-platform evidence directory is uploaded as a workflow artifact.
+Required Gates execute the CI-safe Reference Platform Qualification runner after the normal Release build/test and process-recovery checks. The generated reference-platform evidence directory is uploaded as a workflow artifact.
 
 The Quality job executes `Test-ReferencePlatformQualificationPolicy.ps1`, which protects:
 
@@ -213,7 +213,7 @@ The runner exits non-zero for `FAIL`, preserving CI failure semantics while allo
 
 ## Scope boundary
 
-AP-39 does not claim:
+Reference Platform Qualification does not claim:
 
 - certification of arbitrary customer hardware;
 - qualification of unbound or stale physical evidence;
@@ -224,8 +224,8 @@ AP-39 does not claim:
 - security/compliance acceptance outside their existing release evidence domains;
 - performance guarantees beyond thresholds already owned by dedicated measured qualification mechanisms.
 
-AP-39 is reference-platform qualification evidence, not a general product certification statement.
+Reference Platform Qualification is reference-platform qualification evidence, not a general product certification statement.
 
 ## Completion criterion
 
-AP-39 is complete when the profile, runner, verifier, policy regression, documentation and CI retention path are present and Required Gates pass. Full **physical reference-platform PASS** remains evidence-dependent: it is achieved only by supplying successful exact source-bound CUDA, professional Media I/O and timing/reference/latency/soak qualification bindings for the candidate commit.
+Reference Platform Qualification is complete when the profile, runner, verifier, policy regression, documentation and CI retention path are present and Required Gates pass. Full **physical reference-platform PASS** remains evidence-dependent: it is achieved only by supplying successful exact source-bound CUDA, professional Media I/O and timing/reference/latency/soak qualification bindings for the candidate commit.

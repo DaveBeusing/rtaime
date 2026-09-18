@@ -56,6 +56,8 @@ build Release
 complete solution test run
 ```
 
+The equivalent developer commands and targeted test-suite commands are maintained in [BuildAndTest.md](BuildAndTest.md). Local execution is useful pre-PR evidence but does not replace the required GitHub checks.
+
 ### Quality
 
 `Quality` checks:
@@ -171,7 +173,7 @@ UNVERIFIED
 
 until live repository settings provide direct evidence.
 
-At the most recent repository check before AP-21 implementation, GitHub still reported:
+At the most recent repository check before Release Pipeline & Channels implementation, GitHub still reported:
 
 ```text
 master protected = false
@@ -206,7 +208,7 @@ If live state differs from the version-controlled specification, live enforcemen
 contents: read
 ```
 
-`.github/workflows/release-pipeline.yml` also remains read-only during AP-21.
+`.github/workflows/release-pipeline.yml` also remains read-only during Release Pipeline & Channels.
 
 Release Candidate creation therefore does not imply GitHub Release publication authority.
 

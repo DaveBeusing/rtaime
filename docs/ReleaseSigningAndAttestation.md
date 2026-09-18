@@ -43,7 +43,7 @@ A future signing profile can be introduced through an explicit format/schema ver
 
 ## Files
 
-After signing, the evidence bundle contains the AP-17 files plus:
+After signing, the evidence bundle contains the Release Evidence Foundation files plus:
 
 ```text
 release-attestation.json
@@ -239,7 +239,7 @@ Production signing key trusted
 Official immutable publication retained
 ```
 
-For the AP-18 CI path:
+For the Release Signing & Attestation CI path:
 
 ```text
 Cryptographic mechanism       PASS

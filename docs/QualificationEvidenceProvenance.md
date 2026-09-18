@@ -4,7 +4,7 @@
 
 ## Purpose
 
-AP-35 closes the trust gap between the physical qualification workflows and the release-evidence system. A hardware qualification result is not release evidence merely because a workflow emitted a JSON file with `status: PASSED`.
+Qualification Evidence Provenance closes the trust gap between the physical qualification workflows and the release-evidence system. A hardware qualification result is not release evidence merely because a workflow emitted a JSON file with `status: PASSED`.
 
 A physical result may affect release compatibility evidence only when all of the following are true:
 
@@ -79,7 +79,7 @@ The binding and release stages reject, among other cases:
 
 ## Evidence state
 
-AP-35 changes provenance and release binding only. It does **not** manufacture physical evidence.
+Qualification Evidence Provenance changes provenance and release binding only. It does **not** manufacture physical evidence.
 
 Until the dedicated reference-hardware workflows actually run and their bindings are supplied to a release build, the corresponding requirements remain `UNVERIFIED`:
 
