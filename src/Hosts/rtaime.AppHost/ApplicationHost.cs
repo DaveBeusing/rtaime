@@ -646,6 +646,7 @@ public sealed class UnifiedApplicationHost
 			if (readiness is null)
 			{
 				degradedSince ??= _platform.UtcNow;
+				_platform.DeleteFile(_options.ServiceReadinessEvidencePath);
 				Transition(ApplicationLifecycleState.Degraded);
 				if (_platform.UtcNow - degradedSince >= _options.Policy.StartupTimeout)
 					throw new TimeoutException("Engine readiness did not recover within the configured recovery window.");
@@ -694,6 +695,7 @@ public sealed class UnifiedApplicationHost
 			lifecycleOwnership = ApplicationLifecycleOwnership.PersistentEngine.ToString(),
 			serviceName = _options.WindowsServiceName,
 			instanceId = _options.InstanceId,
+			serviceProcessId = Environment.ProcessId,
 			controlProcessId = evidence.ProcessId,
 			runtimeProcessId = evidence.RuntimeSupervision?.ProcessId,
 			aiProcessId = _options.RequireAI ? evidence.AISupervision?.ProcessId : null,
