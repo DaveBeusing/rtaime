@@ -369,7 +369,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		snapshot.Failure is { } failure ? new WireFailure(failure.Code, failure.Message) : null);
 
 	private static WireMediaTransportResult ToWire(MediaTransportCommandResult result) => new(
-		result.Accepted,
+		result.Succeeded,
 		ToWire(result.Snapshot),
 		result.Failure is { } failure ? new WireFailure(failure.Code, failure.Message) : null);
 
