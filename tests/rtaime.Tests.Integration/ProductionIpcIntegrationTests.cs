@@ -118,7 +118,7 @@ public sealed class ProductionIpcIntegrationTests
 
 		var opened = await deck.OpenAsync(referenceAsset.Path, sourceId);
 		Assert.True(opened.IsLoaded, opened.Failure?.Message);
-		Assert.Equal("reference-1080p50-h264-aac-1s.mp4", opened.Probe!.FileName);
+		Assert.Equal(Path.GetFileName(referenceAsset.Path), opened.Probe!.FileName);
 		Assert.Equal(MediaDeckState.Ready, opened.State);
 		Assert.Equal(50, opened.Transport!.Position.TotalFrames);
 
