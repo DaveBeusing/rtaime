@@ -461,7 +461,8 @@ public sealed class UnifiedApplicationHost
 				}
 			}
 
-			TrackReadiness(ready.Value);
+			var qualifiedReadiness = ready ?? throw new InvalidOperationException("Engine startup completed without qualified readiness evidence.");
+			TrackReadiness(qualifiedReadiness);
 			Transition(ApplicationLifecycleState.Healthy);
 
 			if (_options.Profile == ApplicationStartupProfile.HeadlessEngine)
