@@ -127,6 +127,15 @@ New-Item -ItemType Directory -Path $bundleRoot -Force | Out-Null
 
 Copy-DirectoryContent -Source (Join-Path $evidenceRoot "product") -Destination (Join-Path $bundleRoot "product")
 
+$applicationEntryPoint = $policy.applicationEntryPoint
+Assert-Condition (-not [string]::IsNullOrWhiteSpace([string]$applicationEntryPoint.productDirectory)) "Offline bundle policy must define the application entry-point product directory."
+Assert-Condition (-not [string]::IsNullOrWhiteSpace([string]$applicationEntryPoint.executable)) "Offline bundle policy must define the application entry-point executable."
+$applicationHostSource = Join-Path (Join-Path $evidenceRoot "product") ([string]$applicationEntryPoint.productDirectory)
+Assert-Condition (Test-Path -LiteralPath $applicationHostSource -PathType Container) "Application host product payload was not found at '$applicationHostSource'."
+$applicationExecutable = Join-Path $applicationHostSource ([string]$applicationEntryPoint.executable)
+Assert-Condition (Test-Path -LiteralPath $applicationExecutable -PathType Leaf) "Canonical application executable was not found at '$applicationExecutable'."
+Copy-DirectoryContent -Source $applicationHostSource -Destination $bundleRoot
+
 $releaseDirectory = Join-Path $bundleRoot "release"
 New-Item -ItemType Directory -Path $releaseDirectory -Force | Out-Null
 foreach ($releaseFile in @($policy.releaseEvidenceFiles)) {
