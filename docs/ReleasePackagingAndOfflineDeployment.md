@@ -52,9 +52,15 @@ A generated bundle contains:
 bundle-manifest.json
 bundle-attestation.json
 OFFLINE-README.md
+rtaime.exe
+rtaime.dll
+rtaime.deps.json
+rtaime.runtimeconfig.json
+host-lifecycle-policy.json
 Start-rtaime-Showcase.cmd
 
 product/
+    rtaime/
     rtaime.ControlHost/
     rtaime.RuntimeHost/
     rtaime.AIHost/
