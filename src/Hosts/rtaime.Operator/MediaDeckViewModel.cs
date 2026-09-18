@@ -321,10 +321,15 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 		{
 			IsBusy = true;
 			LastError = null;
-			await _controller.OpenAsync(
+			var opened = await _controller.OpenAsync(
 				path,
 				new MediaSourceId(Identity.Parse(sourceIdText)),
 				_dispose.Token).ConfigureAwait(false);
+			Post(() =>
+			{
+				RefreshState();
+				LastError = opened.Failure?.Message;
+			});
 		}
 		catch (Exception exception) when (exception is IOException or InvalidOperationException or ArgumentException or FormatException)
 		{
