@@ -29,6 +29,8 @@ public sealed class OperatorViewModel : INotifyPropertyChanged
 	private string _connectionState = "DISCONNECTED";
 	private string _connectionDetail = "Synchronize to load authoritative state.";
 	private string _commandStatus = "IDLE";
+	private string _commitStatus = "UNCONFIRMED";
+	private string _transitionStatus = "IDLE";
 	private string _lastEvent = "Operator started. Synchronization pending.";
 	private string _revisionLabel = "REV —";
 	private uint _transitionFrames = 12;
@@ -42,9 +44,9 @@ public sealed class OperatorViewModel : INotifyPropertyChanged
 		_client = client;
 		Sources = new ObservableCollection<OperatorSourceDescriptor>();
 		SynchronizeCommand = new AsyncRelayCommand(SynchronizeAsync, () => _client is not null && !IsBusy);
-		SetPreviewCommand = new AsyncRelayCommand(SetPreviewAsync, CanMutate);
-		CutCommand = new AsyncRelayCommand(CutAsync, CanMutate);
-		DissolveCommand = new AsyncRelayCommand(DissolveAsync, () => CanMutate() && TransitionFrames >= 2);
+		SetPreviewCommand = new AsyncRelayCommand(SetPreviewAsync, CanSetPreview);
+		CutCommand = new AsyncRelayCommand(CutAsync, CanTakePreview);
+		DissolveCommand = new AsyncRelayCommand(DissolveAsync, () => CanTakePreview() && TransitionFrames >= 2);
 	}
 
 	internal OperatorControlClient? Client => _client;
@@ -85,6 +87,8 @@ public sealed class OperatorViewModel : INotifyPropertyChanged
 	public string ConnectionState { get => _connectionState; private set => Set(ref _connectionState, value); }
 	public string ConnectionDetail { get => _connectionDetail; private set => Set(ref _connectionDetail, value); }
 	public string CommandStatus { get => _commandStatus; private set => Set(ref _commandStatus, value); }
+	public string CommitStatus { get => _commitStatus; private set => Set(ref _commitStatus, value); }
+	public string TransitionStatus { get => _transitionStatus; private set => Set(ref _transitionStatus, value); }
 	public string LastEvent { get => _lastEvent; private set => Set(ref _lastEvent, value); }
 	public string RevisionLabel { get => _revisionLabel; private set => Set(ref _revisionLabel, value); }
 	public string? LastError { get => _lastError; private set => Set(ref _lastError, value); }
@@ -102,13 +106,16 @@ public sealed class OperatorViewModel : INotifyPropertyChanged
 		}
 	}
 
-	private bool CanMutate() =>
+	private bool CanControl() =>
 		_client is not null &&
-		SelectedSource is not null &&
 		IsConnected &&
 		!IsStale &&
 		!IsBusy &&
 		string.Equals(RuntimeStatus, "READY", StringComparison.OrdinalIgnoreCase);
+
+	private bool CanSetPreview() => CanControl() && SelectedSource is not null;
+
+	private bool CanTakePreview() => CanControl() && _client?.Snapshot is not null;
 
 	private async Task SynchronizeAsync()
 	{
@@ -144,30 +151,34 @@ public sealed class OperatorViewModel : INotifyPropertyChanged
 
 	private async Task CutAsync()
 	{
-		if (_client is null || SelectedSource is null) return;
-		var source = SelectedSource;
+		if (_client is null || _client.Snapshot is null) return;
+		var previewName = PreviewSourceName;
 		await ExecuteAsync("CUT", async () =>
 		{
-			var response = await _client.CutAsync(source.Id);
+			TransitionStatus = "CUT IN FLIGHT";
+			var response = await _client.CutPreviewAsync();
 			if (!Accept(response, "CUT")) return;
 			Apply(_client.Snapshot!);
 			CommandStatus = "APPLIED";
-			LastEvent = $"CUT committed to {source.Name}.";
+			TransitionStatus = "CUT CONFIRMED";
+			LastEvent = $"CUT committed confirmed Preview source {previewName} to Program.";
 		});
 	}
 
 	private async Task DissolveAsync()
 	{
-		if (_client is null || SelectedSource is null) return;
-		var source = SelectedSource;
+		if (_client is null || _client.Snapshot is null) return;
+		var previewName = PreviewSourceName;
 		var durationFrames = TransitionFrames;
 		await ExecuteAsync("DISSOLVE", async () =>
 		{
-			var response = await _client.DissolveAsync(source.Id, durationFrames);
+			TransitionStatus = $"DISSOLVE {durationFrames}F IN FLIGHT";
+			var response = await _client.DissolvePreviewAsync(durationFrames);
 			if (!Accept(response, "DISSOLVE")) return;
 			Apply(_client.Snapshot!);
 			CommandStatus = "APPLIED";
-			LastEvent = $"DISSOLVE committed to {source.Name} over {durationFrames} frames.";
+			TransitionStatus = $"DISSOLVE {durationFrames}F CONFIRMED";
+			LastEvent = $"DISSOLVE committed confirmed Preview source {previewName} to Program over {durationFrames} frames.";
 		});
 	}
 
@@ -177,8 +188,10 @@ public sealed class OperatorViewModel : INotifyPropertyChanged
 
 		var message = response.Failure?.Message ?? $"{operation} command rejected.";
 		CommandStatus = "REJECTED";
+		CommitStatus = $"REJECTED · {RevisionLabel} UNCHANGED";
+		TransitionStatus = $"{operation} REJECTED";
 		LastError = message;
-		LastEvent = $"{operation} rejected by authoritative control.";
+		LastEvent = $"{operation} rejected by authoritative control; Program remains at the last confirmed revision.";
 		return false;
 	}
 
@@ -188,6 +201,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged
 
 		IsBusy = true;
 		CommandStatus = $"{operation} IN FLIGHT";
+		CommitStatus = "COMMIT PENDING";
 		LastError = null;
 		RaiseCommandState();
 		try
@@ -200,6 +214,8 @@ public sealed class OperatorViewModel : INotifyPropertyChanged
 			ConnectionState = "RESYNCING";
 			ConnectionDetail = "ControlHost session changed. Full authoritative resynchronization is required.";
 			CommandStatus = "RESYNC REQUIRED";
+			CommitStatus = "UNCONFIRMED · RESYNC REQUIRED";
+			TransitionStatus = "BLOCKED";
 			RaiseCommandState();
 			try
 			{
@@ -222,7 +238,9 @@ public sealed class OperatorViewModel : INotifyPropertyChanged
 				LastError = exception.Message;
 
 			CommandStatus = "FAILED";
-			LastEvent = $"{operation} failed.";
+			CommitStatus = IsStale ? "UNCONFIRMED" : $"FAILED · {RevisionLabel} UNCHANGED";
+			TransitionStatus = $"{operation} FAILED";
+			LastEvent = $"{operation} failed; Program was not advanced locally.";
 		}
 		finally
 		{
@@ -257,12 +275,17 @@ public sealed class OperatorViewModel : INotifyPropertyChanged
 		AudioPeak = snapshot.AudioPeakLevel.ToString("0.000", CultureInfo.InvariantCulture);
 		AudioPeakPercent = snapshot.AudioPeakLevel.ToString("P0", CultureInfo.InvariantCulture);
 		RevisionLabel = $"REV {snapshot.Production.Revision.Value}";
+		CommitStatus = string.Equals(snapshot.RuntimeStatus, "READY", StringComparison.OrdinalIgnoreCase)
+			? $"CONFIRMED · REV {snapshot.Production.Revision.Value}"
+			: $"RUNTIME {snapshot.RuntimeStatus} · REV {snapshot.Production.Revision.Value}";
 		IsConnected = true;
 		IsStale = false;
 		ConnectionState = string.Equals(snapshot.RuntimeStatus, "READY", StringComparison.OrdinalIgnoreCase)
 			? "CONNECTED"
 			: "DEGRADED";
 		ConnectionDetail = $"Authoritative snapshot loaded. Runtime status: {snapshot.RuntimeStatus}.";
+		if (!IsBusy)
+			TransitionStatus = "READY";
 		RaiseCommandState();
 	}
 
@@ -272,6 +295,8 @@ public sealed class OperatorViewModel : INotifyPropertyChanged
 		IsStale = true;
 		ConnectionState = "STALE";
 		ConnectionDetail = detail;
+		CommitStatus = "UNCONFIRMED";
+		TransitionStatus = "BLOCKED";
 		LastError = detail;
 		RaiseCommandState();
 	}
