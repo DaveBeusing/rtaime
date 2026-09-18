@@ -39,6 +39,7 @@ public sealed class MediaDeckControlService
 		{
 			var runtime = await _runtime.GetMediaDeckSnapshotAsync(cancellationToken).ConfigureAwait(false);
 			await EnsureMarkersLoadedAsync(runtime, cancellationToken).ConfigureAwait(false);
+			runtime = await SynchronizePlaybackRangeAsync(runtime, cancellationToken).ConfigureAwait(false);
 			return Compose(runtime);
 		}
 		finally
@@ -128,6 +129,21 @@ public sealed class MediaDeckControlService
 				return MediaDeckSnapshot.Failed("control.media_deck.unloaded", "Media deck has no loaded asset.");
 			if (command.AssetId != current.Probe.AssetId)
 				return MediaDeckSnapshot.Failed("control.media_deck.asset_mismatch", "Transport command asset does not match the loaded deck asset.");
+			await EnsureMarkersLoadedAsync(current, cancellationToken).ConfigureAwait(false);
+
+			if (command.Kind == MediaTransportCommandKind.ConfigurePlayback)
+			{
+				if (_markers is null)
+					return MediaDeckSnapshot.Failed("control.media_deck.markers_unavailable", "Playback configuration requires authoritative marker state.");
+				command = new MediaTransportCommand(
+					command.Version,
+					command.AssetId,
+					MediaTransportCommandKind.ConfigurePlayback,
+					autoPlayOnProgram: command.AutoPlayOnProgram,
+					endBehavior: command.EndBehavior,
+					inPointFrame: _markers.InPointFrame,
+					outPointFrame: _markers.OutPointFrame);
+			}
 
 			await _runtime.ApplyMediaDeckTransportAsync(command, cancellationToken).ConfigureAwait(false);
 			var runtime = await _runtime.GetMediaDeckSnapshotAsync(cancellationToken).ConfigureAwait(false);
@@ -173,6 +189,7 @@ public sealed class MediaDeckControlService
 
 			_markers = persisted.Persisted.Snapshot;
 			_markerStorageVersion = persisted.Persisted.StorageVersion;
+			runtime = await SynchronizePlaybackRangeAsync(runtime, cancellationToken).ConfigureAwait(false);
 			return Compose(runtime);
 		}
 		finally
@@ -215,6 +232,25 @@ public sealed class MediaDeckControlService
 			.ConfigureAwait(false);
 		_markers = persisted.Snapshot;
 		_markerStorageVersion = persisted.StorageVersion;
+	}
+
+	private async ValueTask<MediaDeckRuntimeSnapshot> SynchronizePlaybackRangeAsync(
+		MediaDeckRuntimeSnapshot runtime,
+		CancellationToken cancellationToken)
+	{
+		if (runtime.Probe is null || runtime.Transport is null || _markers is null)
+			return runtime;
+
+		var command = new MediaTransportCommand(
+			MediaContractVersion.Current,
+			runtime.Probe.AssetId,
+			MediaTransportCommandKind.ConfigurePlayback,
+			autoPlayOnProgram: runtime.Transport.AutoPlayOnProgram,
+			endBehavior: runtime.Transport.EndBehavior,
+			inPointFrame: _markers.InPointFrame,
+			outPointFrame: _markers.OutPointFrame);
+		await _runtime.ApplyMediaDeckTransportAsync(command, cancellationToken).ConfigureAwait(false);
+		return await _runtime.GetMediaDeckSnapshotAsync(cancellationToken).ConfigureAwait(false);
 	}
 
 	private MediaDeckSnapshot Compose(MediaDeckRuntimeSnapshot runtime, Failure? controlFailure = null)
