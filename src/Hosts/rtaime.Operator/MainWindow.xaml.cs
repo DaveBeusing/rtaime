@@ -35,6 +35,9 @@ public partial class MainWindow : Window
 			viewModel,
 			new NamedPipeOperatorMonitoringTransport(monitoringEndpoint),
 			new DispatcherSynchronizationContext(Dispatcher));
+		ProgramOutput = new ProgramOutputController(
+			Monitoring,
+			new DispatcherSynchronizationContext(Dispatcher));
 		InitializeComponent();
 		DataContext = viewModel;
 		MediaDeck.Start();
@@ -55,6 +58,9 @@ public partial class MainWindow : Window
 			viewModel,
 			new NamedPipeOperatorMonitoringTransport("rtaime.v1.runtime.default.monitor"),
 			new DispatcherSynchronizationContext(Dispatcher));
+		ProgramOutput = new ProgramOutputController(
+			Monitoring,
+			new DispatcherSynchronizationContext(Dispatcher));
 		InitializeComponent();
 		DataContext = viewModel;
 		MediaDeck.Start();
@@ -63,6 +69,7 @@ public partial class MainWindow : Window
 	}
 
 	public OperatorMonitoringViewModel Monitoring { get; }
+	public ProgramOutputController ProgramOutput { get; }
 	public MediaDeckViewModel MediaDeck { get; }
 	public MediaTimelineViewModel Timeline => MediaDeck.Timeline;
 
@@ -103,6 +110,7 @@ public partial class MainWindow : Window
 
 	private async void OnClosedAsync(object? sender, EventArgs e)
 	{
+		ProgramOutput.Dispose();
 		await Monitoring.DisposeAsync();
 		await MediaDeck.DisposeAsync();
 		if (DataContext is OperatorViewModel viewModel)
