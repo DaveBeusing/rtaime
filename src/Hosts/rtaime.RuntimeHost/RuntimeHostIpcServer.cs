@@ -16,6 +16,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 	private const int MaxFrameBytes = 1024 * 1024;
 	private readonly string _endpoint;
 	private readonly Func<V1RuntimeHostService?> _runtimeAccessor;
+	private readonly Func<LocalMediaDeckRuntimeService?> _mediaDeckAccessor;
 	private readonly CancellationTokenSource _stop = new();
 	private readonly BoundedRequestCache _requestCache = new(256);
 	private readonly string _hostInstanceId = Identity.New().ToString();
@@ -25,11 +26,15 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 	private Identity? _committedAuthorityStateId;
 	private Revision? _committedAuthorityRevision;
 
-	public RuntimeHostIpcServer(string endpoint, Func<V1RuntimeHostService?> runtimeAccessor)
+	public RuntimeHostIpcServer(
+		string endpoint,
+		Func<V1RuntimeHostService?> runtimeAccessor,
+		Func<LocalMediaDeckRuntimeService?>? mediaDeckAccessor = null)
 	{
 		if (string.IsNullOrWhiteSpace(endpoint)) throw new ArgumentException("RuntimeHost IPC endpoint is required.", nameof(endpoint));
 		_endpoint = endpoint.Trim();
 		_runtimeAccessor = runtimeAccessor ?? throw new ArgumentNullException(nameof(runtimeAccessor));
+		_mediaDeckAccessor = mediaDeckAccessor ?? (() => null);
 	}
 
 	public string Endpoint => _endpoint;
@@ -171,9 +176,13 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 			return request.MessageType switch
 			{
 				"runtime.ping" => ValueTask.FromResult(Success(request, "runtime.ping.response", new { status = "ready" })),
-				"runtime.providers.get" => ValueTask.FromResult(Success(request, "runtime.providers.response", runtime.ProviderDescriptors.Select(ToWire).ToArray())),
+				"runtime.providers.get" => ValueTask.FromResult(Success(request, "runtime.providers.response", ProviderDescriptors(runtime).Select(ToWire).ToArray())),
 				"runtime.snapshot.get" => ValueTask.FromResult(Success(request, "runtime.snapshot.response", ToWire(runtime.Snapshot))),
 				"runtime.execution.apply" => ValueTask.FromResult(ApplyExecution(request, runtime)),
+				"runtime.media_deck.snapshot.get" => ValueTask.FromResult(MediaDeckSnapshot(request)),
+				"runtime.media_deck.open" => ValueTask.FromResult(OpenMediaDeck(request)),
+				"runtime.media_deck.transport" => ValueTask.FromResult(ApplyMediaDeckTransport(request)),
+				"runtime.media_deck.close" => ValueTask.FromResult(CloseMediaDeck(request)),
 				_ => ValueTask.FromResult(Error(request, "ipc.message.unknown", $"Unknown RuntimeHost message type '{request.MessageType}'."))
 			};
 		}
@@ -181,6 +190,70 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		{
 			return ValueTask.FromResult(Error(request, "runtime.request.rejected", exception.Message));
 		}
+	}
+
+	private IReadOnlyList<ProviderDescriptor> ProviderDescriptors(V1RuntimeHostService runtime)
+	{
+		var deck = _mediaDeckAccessor();
+		return deck is null
+			? runtime.ProviderDescriptors
+			: runtime.ProviderDescriptors.Concat(new[] { deck.ProviderDescriptor }).ToArray();
+	}
+
+	private WireEnvelope MediaDeckSnapshot(WireEnvelope request)
+	{
+		var deck = _mediaDeckAccessor();
+		if (deck is null)
+			return Error(request, "runtime.media_deck.unavailable", "Local media deck service is not available.");
+		return Success(request, "runtime.media_deck.snapshot.response", ToWire(deck.Snapshot));
+	}
+
+	private WireEnvelope OpenMediaDeck(WireEnvelope request)
+	{
+		var deck = _mediaDeckAccessor();
+		if (deck is null)
+			return Error(request, "runtime.media_deck.unavailable", "Local media deck service is not available.");
+
+		var wire = request.Payload.Deserialize<WireMediaDeckOpen>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Media-deck open payload is required.");
+		var open = new MediaDeckOpenRequest(
+			CompatibilityVersion.Parse(wire.Version),
+			new MediaSourceId(Identity.Parse(wire.SourceId)),
+			wire.Path);
+		var prepared = FromWire(wire.PreparedExecution);
+		var snapshot = deck.Open(open, prepared);
+		_stateVersion++;
+		return Success(request, "runtime.media_deck.open.response", ToWire(snapshot));
+	}
+
+	private WireEnvelope ApplyMediaDeckTransport(WireEnvelope request)
+	{
+		var deck = _mediaDeckAccessor();
+		if (deck is null)
+			return Error(request, "runtime.media_deck.unavailable", "Local media deck service is not available.");
+
+		var wire = request.Payload.Deserialize<WireMediaTransportCommand>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Media-deck transport payload is required.");
+		var command = new MediaTransportCommand(
+			CompatibilityVersion.Parse(wire.Version),
+			new MediaAssetId(Identity.Parse(wire.AssetId)),
+			Enum.IsDefined(typeof(MediaTransportCommandKind), wire.Kind)
+				? (MediaTransportCommandKind)wire.Kind
+				: throw new InvalidDataException("Media transport command kind is invalid."),
+			wire.TargetFrame);
+		var result = deck.ApplyTransport(command);
+		_stateVersion++;
+		return Success(request, "runtime.media_deck.transport.response", ToWire(result));
+	}
+
+	private WireEnvelope CloseMediaDeck(WireEnvelope request)
+	{
+		var deck = _mediaDeckAccessor();
+		if (deck is null)
+			return Error(request, "runtime.media_deck.unavailable", "Local media deck service is not available.");
+		var snapshot = deck.Close();
+		_stateVersion++;
+		return Success(request, "runtime.media_deck.close.response", ToWire(snapshot));
 	}
 
 	private WireEnvelope ApplyExecution(WireEnvelope request, V1RuntimeHostService runtime)
@@ -262,6 +335,44 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 			result.Commit.Failure is { } commitFailure ? new WireFailure(commitFailure.Code, commitFailure.Message) : null),
 		result.ActivationSequence);
 
+	private static WireMediaDeckRuntimeSnapshot ToWire(MediaDeckRuntimeSnapshot snapshot) => new(
+		(int)snapshot.State,
+		snapshot.SourceId?.ToString(),
+		snapshot.Probe is null ? null : ToWire(snapshot.Probe),
+		snapshot.Transport is null ? null : ToWire(snapshot.Transport),
+		snapshot.Failure is { } failure ? new WireFailure(failure.Code, failure.Message) : null);
+
+	private static WireLocalMediaProbe ToWire(LocalMediaProbe probe) => new(
+		probe.Version.ToString(),
+		probe.AssetId.ToString(),
+		probe.SourceId.ToString(),
+		probe.FileName,
+		(int)probe.Container,
+		(int)probe.VideoCodec,
+		(int)probe.AudioCodec,
+		probe.VideoFormat.Width,
+		probe.VideoFormat.Height,
+		probe.VideoFormat.FrameRate.ToString(),
+		probe.Duration.Ticks);
+
+	private static WireMediaTransportSnapshot ToWire(MediaTransportSnapshot snapshot) => new(
+		snapshot.Version.ToString(),
+		snapshot.AssetId.ToString(),
+		snapshot.SourceId.ToString(),
+		(int)snapshot.State,
+		snapshot.Position.CurrentFrame,
+		snapshot.Position.TotalFrames,
+		snapshot.Position.Position.Ticks,
+		snapshot.Position.Duration.Ticks,
+		snapshot.Position.Remaining.Ticks,
+		snapshot.Position.FrameRate.ToString(),
+		snapshot.Failure is { } failure ? new WireFailure(failure.Code, failure.Message) : null);
+
+	private static WireMediaTransportResult ToWire(MediaTransportCommandResult result) => new(
+		result.Accepted,
+		ToWire(result.Snapshot),
+		result.Failure is { } failure ? new WireFailure(failure.Code, failure.Message) : null);
+
 	private static PreparedExecutionContract FromWire(WirePreparedExecution prepared) => new(
 		CompatibilityVersion.Parse(prepared.Version),
 		new PreparedExecutionId(Identity.Parse(prepared.PreparedExecutionId)),
@@ -293,6 +404,13 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 	private sealed record WirePrepareResult(string Version, string PreparedExecutionId, int Status, string? ReservationId, WireFailure? Failure);
 	private sealed record WireCommitResult(string Version, int Status, string? ExecutionInstanceId, ulong ExecutionRevision, WireFailure? Failure);
 	private sealed record WireApplyResponse(WirePrepareResult Prepare, WireCommitResult? Commit, ulong? ActivationSequence);
+	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path, WirePreparedExecution PreparedExecution);
+	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame);
+	private sealed record WireLocalMediaProbe(string Version, string AssetId, string SourceId, string FileName, int Container, int VideoCodec, int AudioCodec, uint Width, uint Height, string FrameRate, long DurationTicks);
+	private sealed record WireMediaTransportSnapshot(string Version, string AssetId, string SourceId, int State, long CurrentFrame, long TotalFrames, long PositionTicks, long DurationTicks, long RemainingTicks, string FrameRate, WireFailure? Failure);
+	private sealed record WireMediaDeckRuntimeSnapshot(int State, string? SourceId, WireLocalMediaProbe? Probe, WireMediaTransportSnapshot? Transport, WireFailure? Failure);
+	private sealed record WireMediaTransportResult(bool Accepted, WireMediaTransportSnapshot Snapshot, WireFailure? Failure);
+
 	private sealed record WireRuntimeSnapshot(
 		string Version,
 		string? ActiveExecutionId,
