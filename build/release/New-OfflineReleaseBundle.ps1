@@ -175,6 +175,11 @@ foreach ($tool in @($policy.offlineTools)) {
 	Copy-Item -LiteralPath $source -Destination (Join-Path $toolsDirectory ([System.IO.Path]::GetFileName($source))) -Force
 }
 
+$showcaseEntryPoint = Join-Path $toolsDirectory "Start-rtaime-Showcase.cmd"
+if (Test-Path -LiteralPath $showcaseEntryPoint -PathType Leaf) {
+	Copy-Item -LiteralPath $showcaseEntryPoint -Destination (Join-Path $bundleRoot "Start-rtaime-Showcase.cmd") -Force
+}
+
 $trustDirectory = Join-Path $bundleRoot "trust"
 New-Item -ItemType Directory -Path $trustDirectory -Force | Out-Null
 $trustedKeysSource = Resolve-RepositoryPath ([string]$policy.trustedReleaseKeys)
@@ -229,6 +234,10 @@ Verified managed upgrade from an existing PREVIEW/STABLE installation:
 ```
 
 Managed production updates use the coordinated software/state path. The target bundle's signed state-upgrade catalog determines whether persistent SQLite migration is required. Direct software-only rollback is blocked while coordinated recovery evidence exists.
+
+Investor funding showcase:
+
+Double-click `Start-rtaime-Showcase.cmd` in the installed bundle root. The launcher uses the managed host lifecycle, opens the Operator with the qualified endpoints, and stops only the lifecycle it started when the Operator closes.
 
 This bundle does not automatically stop/start rtaime processes, establish post-upgrade runtime readiness, register Windows services, schedule background updates or perform Production Package activation.
 "@
