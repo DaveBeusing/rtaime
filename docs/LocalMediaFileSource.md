@@ -24,6 +24,27 @@ Decoded video is converted to the existing RGBA8 Runtime representation. Embedde
 
 This normalization keeps the existing Runtime/GPU production format invariant intact while allowing ordinary H.264/AAC MP4 files with different native dimensions or frame rates to be imported. If Windows Media Foundation cannot perform the requested conversion, or if the container/codecs are unsupported, the file fails closed with an explicit `Failure` value.
 
+### Expanded H.264 input envelope
+
+The import path accepts a broad native H.264 input envelope before normalizing to the active RuntimeHost production format:
+
+| Input property | Supported import envelope |
+| --- | --- |
+| Container | MP4 |
+| H.264 sample entry | `avc1` or `avc3` |
+| H.264 decoder profile/level | Windows Media Foundation Baseline/Main/High, up to Level 5.1 |
+| Resolution | 48×48 through 4096×2304 |
+| Native frame rate | up to 240 fps, additionally bounded by the Level 5.1 decode-rate envelope |
+| Average video bitrate | up to 300 Mbit/s when Media Foundation reports `MF_MT_AVG_BITRATE` |
+| Runtime output | normalized to 1920×1080p50 or 1920×1080p59.94 |
+| Pixel/audio runtime representation | RGBA8 video, 48 kHz stereo Float32 audio |
+
+The decode-rate guard uses a maximum of 983,040 H.264 macroblocks per second. This intentionally permits common profiles such as 4K24/25/30, 1440p60, 1080p100/120 and 720p200/240 while rejecting combinations such as 4K60 that exceed the V1 H.264 Level 5.1 envelope.
+
+Variable-frame-rate MP4 files are admitted from their MP4 timing metadata and are normalized by Media Foundation frame-rate conversion to the fixed RuntimeHost production cadence. Bitrate is not used to alter production timing; it is an input decode-admission property only.
+
+Acceptance by this software policy is not hardware-performance qualification. UHD/high-bitrate/high-frame-rate decoding remains `UNVERIFIED` on the reference hardware until dedicated sustained-load qualification evidence exists.
+
 ## Contract boundary
 
 `rtaime.Media.Contracts` adds only stable media identity and metadata:
