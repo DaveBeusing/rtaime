@@ -70,7 +70,9 @@ public sealed class MediaAutoplayProductionIpcIntegrationTests
 		Assert.True((await client.SelectPreviewAsync(standbySource.Id)).Accepted);
 		Assert.True((await client.CutPreviewAsync()).Accepted);
 		await WaitUntilAsync(() => runtime.Runtime!.CommittedProgramSourceId?.ToString() == standbySource.Id);
-		await deck.PauseAsync();
+		await deck.RefreshAsync();
+		if (deck.Snapshot.Transport?.State == MediaTransportState.Playing)
+			await deck.PauseAsync();
 		await deck.Timeline.SeekToFrameAsync(12);
 		Assert.Equal(12, deck.Timeline.State.ConfirmedFrame);
 
