@@ -12,6 +12,7 @@
 					"runtime.ping",
 					"runtime.providers.get",
 					"runtime.snapshot.get",
+					"runtime.ai_showcase.set",
 					"runtime.execution.apply",
 					"runtime.media_deck.snapshot.get",
 					"runtime.media_deck.open",
