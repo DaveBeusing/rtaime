@@ -58,7 +58,7 @@ internal static class Program
 
 		var options = ApplicationHostOptions.Load(args);
 		var builder = Host.CreateApplicationBuilder();
-		builder.Services.AddWindowsService(serviceOptions => serviceOptions.ServiceName = "rtaime Engine");
+		builder.Services.AddWindowsService(serviceOptions => serviceOptions.ServiceName = options.WindowsServiceName);
 		builder.Services.AddSingleton(options);
 		builder.Services.AddSingleton<IApplicationHostPlatform, SystemApplicationHostPlatform>();
 		builder.Services.AddSingleton<UnifiedApplicationHost>();
