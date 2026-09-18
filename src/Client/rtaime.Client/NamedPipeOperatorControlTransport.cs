@@ -151,6 +151,19 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		return ReadRecordingCommandResult(response);
 	}
 
+	public async ValueTask<OperatorAIShowcaseDescriptor> SetAIShowcaseEnabledAsync(
+		bool enabled,
+		CancellationToken cancellationToken = default)
+	{
+		var response = await ExchangeAsync(
+			"control.ai_showcase.set",
+			new WireAIShowcaseState(enabled),
+			cancellationToken).ConfigureAwait(false);
+		var wire = response.Payload.Deserialize<WireAIShowcase>(Wire.JsonOptions)
+			?? throw new InvalidDataException("ControlHost AI showcase payload is required.");
+		return FromWire(wire);
+	}
+
 	public async ValueTask<MediaDeckSnapshot> GetMediaDeckSnapshotAsync(CancellationToken cancellationToken = default)
 	{
 		var response = await ExchangeAsync("control.media_deck.snapshot.get", new { }, cancellationToken).ConfigureAwait(false);
@@ -437,7 +450,8 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		wire.AudioInputs.Select(FromWire).ToArray(),
 		FromWire(wire.AudioProgram),
 		FromWire(wire.Recording),
-		FromWire(wire.Health));
+		FromWire(wire.Health),
+		FromWire(wire.AIShowcase));
 
 	private static OperatorAudioInputDescriptor FromWire(WireAudioInput input) => new(
 		input.SourceId,
@@ -473,6 +487,20 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		recording.Rejected,
 		recording.WriterFailures,
 		recording.Failure is null ? null : new Failure(recording.Failure.Code, recording.Failure.Message));
+
+	private static OperatorAIShowcaseDescriptor FromWire(WireAIShowcase showcase) => new(
+		showcase.Enabled,
+		showcase.Feature,
+		showcase.Status,
+		showcase.Provider,
+		TimeSpan.FromTicks(Math.Max(0, showcase.InferenceTimeTicks)),
+		showcase.PersonRegionCount,
+		showcase.SourceSequence,
+		showcase.AppliedSequence,
+		showcase.Confidence,
+		showcase.EffectVisible,
+		showcase.Failure is null ? null : new Failure(showcase.Failure.Code, showcase.Failure.Message),
+		showcase.UpdatedAtUtc);
 
 	private static OperatorHealthDescriptor FromWire(WireHealthSnapshot health) => new(
 		FromWire(health.Engine),
@@ -555,6 +583,8 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 	private sealed record WireRecordingStart(string DestinationDirectory, string FileName);
 	private sealed record WireRecordingSnapshot(string State, long ElapsedTicks, string? Destination, string? FileName, string? FinalPath, ulong Accepted, ulong Written, ulong Dropped, ulong Rejected, ulong WriterFailures, WireFailure? Failure);
 	private sealed record WireRecordingCommandResult(bool Succeeded, WireRecordingSnapshot Snapshot, WireFailure? Failure);
+	private sealed record WireAIShowcaseState(bool Enabled);
+	private sealed record WireAIShowcase(bool Enabled, string Feature, string Status, string Provider, long InferenceTimeTicks, uint PersonRegionCount, ulong? SourceSequence, ulong? AppliedSequence, double? Confidence, bool EffectVisible, WireFailure? Failure, DateTimeOffset? UpdatedAtUtc);
 	private sealed record WireHealthMetric(string State, string Detail);
 	private sealed record WireHealthSnapshot(
 		WireHealthMetric Engine,
@@ -571,7 +601,7 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		string GpuUtilization,
 		string Vram,
 		DateTimeOffset ObservedAtUtc);
-	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, WireRecordingSnapshot Recording, WireHealthSnapshot Health, ulong StateVersion);
+	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, WireRecordingSnapshot Recording, WireHealthSnapshot Health, WireAIShowcase AIShowcase, ulong StateVersion);
 	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path);
 	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame, bool? AutoPlayOnProgram, int? EndBehavior, long? InPointFrame, long? OutPointFrame);
 	private sealed record WireMediaMarkerCommand(string Version, string AssetId, int Kind, long? PositionFrame, string? CuePointId, string? Name);
