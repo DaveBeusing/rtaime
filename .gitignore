@@ -1,4 +1,145 @@
 # Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
-artifacts/*
-!artifacts/.gitkeep
+# -----------------------------------------------------------------------------
+# Repository-generated artifacts
+# -----------------------------------------------------------------------------
+/artifacts/*
+!/artifacts/.gitkeep
+
+# -----------------------------------------------------------------------------
+# .NET / MSBuild
+# -----------------------------------------------------------------------------
+**/[Bb]in/
+**/[Oo]bj/
+**/[Pp]ublish/
+**/[Aa]pp.[Pp]ublish/
+**/[Aa]pp[Pp]ackages/
+**/[Bb]undle[Aa]rtifacts/
+
+*.binlog
+*.dll
+*.exe
+*.pdb
+*.deps.json
+*.runtimeconfig.dev.json
+
+# NuGet package outputs and legacy restore folders
+**/[Pp]ackages/
+*.nupkg
+*.snupkg
+
+# -----------------------------------------------------------------------------
+# Tests, coverage and benchmarks
+# -----------------------------------------------------------------------------
+**/[Tt]est[Rr]esults/
+**/[Cc]overage/
+.coverage/
+coverage/
+coverage.*
+*.trx
+*.coverage
+*.coveragexml
+*.cobertura.xml
+BenchmarkDotNet.Artifacts/
+
+# -----------------------------------------------------------------------------
+# Visual Studio / Rider / editor-local state
+# -----------------------------------------------------------------------------
+.vs/
+.idea/
+.vscode/
+
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.rsuser
+*.DotSettings.user
+*.VC.db
+*.VC.VC.opendb
+
+_ReSharper*/
+*.[Rr]e[Ss]harper
+
+# -----------------------------------------------------------------------------
+# Native / CMake generated output
+# Keep /build tracked: it contains repository build and governance scripts.
+# -----------------------------------------------------------------------------
+native/**/build/
+native/**/out/
+native/**/cmake-build-*/
+**/CMakeFiles/
+**/CMakeCache.txt
+**/cmake_install.cmake
+**/compile_commands.json
+**/build.ninja
+**/.ninja_deps
+**/.ninja_log
+
+*.o
+*.obj
+*.lib
+*.a
+*.exp
+*.ilk
+*.idb
+*.iobj
+*.ipdb
+*.pch
+
+# -----------------------------------------------------------------------------
+# Packaging / installer outputs
+# -----------------------------------------------------------------------------
+*.zip
+*.7z
+*.tar
+*.tar.gz
+*.tgz
+*.msi
+*.msix
+*.msixbundle
+*.appx
+*.appxbundle
+
+# -----------------------------------------------------------------------------
+# Local runtime, persistence and qualification state
+# -----------------------------------------------------------------------------
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.pid
+*.dmp
+
+# -----------------------------------------------------------------------------
+# Local secrets / signing material
+# Public trust metadata belongs in the repository; private key material does not.
+# -----------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+
+*.pfx
+*.p12
+*.pem
+*.key
+
+# -----------------------------------------------------------------------------
+# Temporary files and logs
+# -----------------------------------------------------------------------------
+*.log
+*.tmp
+*.temp
+*.bak
+*.old
+*~
+.~lock.*
+
+# -----------------------------------------------------------------------------
+# OS metadata
+# -----------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+Desktop.ini
