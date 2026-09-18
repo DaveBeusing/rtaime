@@ -1,5 +1,6 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
+using System.Runtime.InteropServices;
 using rtaime.Media;
 using rtaime.Media.Contracts;
 using rtaime.Provider.Gpu;
@@ -52,21 +53,21 @@ internal sealed class RuntimeMediaIoVerticalSlice : IDisposable
 		ArgumentNullException.ThrowIfNull(boundary);
 		ThrowIfDisposed();
 
-		var followedCapture = boundary.CommittedProgramSourceId == _mediaIo.LatestA?.RuntimeSourceId
-			? _mediaIo.LatestA
-			: boundary.CommittedProgramSourceId == _mediaIo.LatestB?.RuntimeSourceId
-				? _mediaIo.LatestB
-				: null;
-		var audioSamples = followedCapture?.AudioSamples;
-		var audioTiming = followedCapture?.AudioTiming;
+		float[]? audioSamples = null;
+		AudioBufferTiming? audioTiming = null;
+		if (boundary.ProgramAudioPayload.Length > 0)
+		{
+			audioSamples = MemoryMarshal.Cast<byte, float>(boundary.ProgramAudioPayload.AsSpan()).ToArray();
+			audioTiming = boundary.ProgramAudioBuffer.Timing;
+		}
 		var result = _mediaIo.TrySubmitProgram(
 			boundary.CommittedProgramSourceId,
 			boundary.ProgramFrame.Timing,
 			boundary.ProgramPixels,
 			audioSamples,
 			audioTiming,
-			boundary.Audio.Gain,
-			boundary.Audio.Muted);
+			AudioGain.Unity,
+			muted: false);
 
 		if (!result.Accepted && !string.Equals(result.Failure?.Code, "media.io.output.backpressure", StringComparison.Ordinal))
 			throw new InvalidOperationException(result.Failure?.Message ?? "Physical Program output rejected the frame.");
@@ -91,11 +92,9 @@ internal sealed class RuntimeMediaIoVerticalSlice : IDisposable
 			MapSignal(capture.PortStatus.SignalState));
 		if (capture.AudioSamples is { Length: >= 2 } audioSamples)
 		{
-			var meter = AudioMetering.MeasureInterleavedStereoFloat32(audioSamples);
-			_runtime.SetExternalAudioMeter(
+			_runtime.SetExternalAudioInput(
 				capture.RuntimeSourceId,
-				meter.LeftPeakLevel,
-				meter.RightPeakLevel,
+				audioSamples,
 				available: true);
 		}
 		else
