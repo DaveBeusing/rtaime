@@ -72,7 +72,7 @@ public sealed class ProductionIpcIntegrationTests
 		Assert.All(initial.Sources, source =>
 		{
 			Assert.Equal("LIVE", source.Type);
-			Assert.Contains("1920×1080", source.Format, StringComparison.Ordinal);
+			Assert.Contains("1920×1080", source.Format);
 			Assert.Equal("VALID", source.Health);
 			Assert.Equal("—", source.MediaState);
 			Assert.Null(source.Remaining);
@@ -199,7 +199,7 @@ public sealed class ProductionIpcIntegrationTests
 		Assert.Equal("MEDIA", mediaTile.Type);
 		Assert.Equal("READY", mediaTile.Health);
 		Assert.Equal("READY", mediaTile.MediaState);
-		Assert.Contains("1920×1080", mediaTile.Format, StringComparison.Ordinal);
+		Assert.Contains("1920×1080", mediaTile.Format);
 		Assert.Equal(Path.GetFileName(referenceAsset.Path), mediaTile.MediaFileName);
 		Assert.NotNull(mediaTile.Remaining);
 
