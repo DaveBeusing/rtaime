@@ -114,7 +114,7 @@
 						</Border>
 					</Grid>
 
-					<local:MediaTimelineControl DataContext="{Binding Timeline, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Margin="0,0,0,14" />
+					<local:MediaDeckControl DataContext="{Binding MediaDeck, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Margin="0,0,0,14" />
 
 					<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14">
 						<StackPanel>
