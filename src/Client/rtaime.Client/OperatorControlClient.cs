@@ -83,6 +83,70 @@ public sealed record OperatorGraphicsOverlayDescriptor(
         new(false, null, 0, 0, false, 0.72, 0.06, 1.0);
 }
 
+public sealed record OperatorAudioInputDescriptor
+{
+    public OperatorAudioInputDescriptor(
+        string sourceId,
+        string streamId,
+        double gain,
+        bool muted,
+        double leftPeak,
+        double rightPeak,
+        double masterPeak,
+        bool clipping,
+        string health)
+    {
+        if (string.IsNullOrWhiteSpace(sourceId)) throw new ArgumentException("Audio source id is required.", nameof(sourceId));
+        if (string.IsNullOrWhiteSpace(streamId)) throw new ArgumentException("Audio stream id is required.", nameof(streamId));
+        if (!double.IsFinite(gain) || gain is < 0 or > 4) throw new ArgumentOutOfRangeException(nameof(gain));
+        ValidatePeak(leftPeak, nameof(leftPeak));
+        ValidatePeak(rightPeak, nameof(rightPeak));
+        ValidatePeak(masterPeak, nameof(masterPeak));
+        if (string.IsNullOrWhiteSpace(health)) throw new ArgumentException("Audio health is required.", nameof(health));
+
+        SourceId = sourceId.Trim();
+        StreamId = streamId.Trim();
+        Gain = gain;
+        Muted = muted;
+        LeftPeak = leftPeak;
+        RightPeak = rightPeak;
+        MasterPeak = masterPeak;
+        Clipping = clipping;
+        Health = health.Trim().ToUpperInvariant();
+    }
+
+    public string SourceId { get; }
+    public string StreamId { get; }
+    public double Gain { get; }
+    public bool Muted { get; }
+    public double LeftPeak { get; }
+    public double RightPeak { get; }
+    public double MasterPeak { get; }
+    public bool Clipping { get; }
+    public string Health { get; }
+
+    private static void ValidatePeak(double value, string name)
+    {
+        if (!double.IsFinite(value) || value is < 0 or > 1)
+            throw new ArgumentOutOfRangeException(name, "Audio peak must be finite and in the inclusive range 0..1.");
+    }
+}
+
+public sealed record OperatorAudioProgramDescriptor(
+    string ActiveVideoSourceId,
+    string ActiveStreamId,
+    double Gain,
+    bool Muted,
+    double LeftPeak,
+    double RightPeak,
+    double MasterPeak,
+    bool Clipping,
+    string Health)
+{
+    public static OperatorAudioProgramDescriptor Unknown { get; } =
+        new("—", "—", 1, false, 0, 0, 0, false, "UNKNOWN");
+}
+
 public sealed record OperatorMutationResponse
 {
     public OperatorMutationResponse(bool accepted, AuthoritativeProductionState state, Failure? failure)
@@ -105,6 +169,7 @@ public sealed record OperatorMutationResponse
 public sealed record OperatorStatusSnapshot
 {
     private readonly ReadOnlyCollection<OperatorSourceDescriptor> _sources;
+    private readonly ReadOnlyCollection<OperatorAudioInputDescriptor> _audioInputs;
 
     public OperatorStatusSnapshot(
         AuthoritativeProductionState production,
@@ -116,7 +181,9 @@ public sealed record OperatorStatusSnapshot
         string recordingStatus,
         bool visualLayerEnabled,
         double audioPeakLevel,
-        OperatorGraphicsOverlayDescriptor? graphicsOverlay = null)
+        OperatorGraphicsOverlayDescriptor? graphicsOverlay = null,
+        IReadOnlyList<OperatorAudioInputDescriptor>? audioInputs = null,
+        OperatorAudioProgramDescriptor? audioProgram = null)
     {
         Production = production ?? throw new ArgumentNullException(nameof(production));
         ArgumentNullException.ThrowIfNull(sources);
@@ -131,6 +198,7 @@ public sealed record OperatorStatusSnapshot
             throw new ArgumentOutOfRangeException(nameof(audioPeakLevel));
 
         _sources = Array.AsReadOnly(sources.ToArray());
+        _audioInputs = Array.AsReadOnly((audioInputs ?? Array.Empty<OperatorAudioInputDescriptor>()).ToArray());
         RuntimeStatus = runtimeStatus.Trim();
         TimingStatus = timingStatus.Trim();
         InputStatus = inputStatus.Trim();
@@ -139,6 +207,7 @@ public sealed record OperatorStatusSnapshot
         VisualLayerEnabled = visualLayerEnabled;
         AudioPeakLevel = audioPeakLevel;
         GraphicsOverlay = graphicsOverlay ?? OperatorGraphicsOverlayDescriptor.Empty;
+        AudioProgram = audioProgram ?? OperatorAudioProgramDescriptor.Unknown;
     }
 
     public AuthoritativeProductionState Production { get; }
@@ -151,6 +220,8 @@ public sealed record OperatorStatusSnapshot
     public bool VisualLayerEnabled { get; }
     public double AudioPeakLevel { get; }
     public OperatorGraphicsOverlayDescriptor GraphicsOverlay { get; }
+    public IReadOnlyList<OperatorAudioInputDescriptor> AudioInputs => _audioInputs;
+    public OperatorAudioProgramDescriptor AudioProgram { get; }
 }
 
 /// <summary>
@@ -163,6 +234,13 @@ public interface IOperatorControlTransport
     ValueTask<OperatorMutationResponse> SelectPreviewAsync(SelectPreviewCommand command, CancellationToken cancellationToken = default);
     ValueTask<OperatorMutationResponse> CutProgramAsync(CutProgramCommand command, CancellationToken cancellationToken = default);
     ValueTask<OperatorMutationResponse> DissolveProgramAsync(DissolveProgramCommand command, CancellationToken cancellationToken = default);
+
+    ValueTask<OperatorAudioInputDescriptor> SetAudioInputStateAsync(
+        string sourceId,
+        double gain,
+        bool muted,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<OperatorAudioInputDescriptor>(new NotSupportedException("Operator transport does not expose audio input control."));
 
     ValueTask<OperatorGraphicsOverlayDescriptor> LoadGraphicsOverlayAsync(
         OperatorGraphicsAsset asset,
@@ -269,6 +347,25 @@ public sealed class OperatorControlClient
         var result = await _transport.DissolveProgramAsync(command, cancellationToken).ConfigureAwait(false);
         if (result.Accepted)
             await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+
+    public async ValueTask<OperatorAudioInputDescriptor> SetAudioInputStateAsync(
+        string sourceId,
+        double gain,
+        bool muted,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(sourceId))
+            throw new ArgumentException("Audio source id is required.", nameof(sourceId));
+        if (!double.IsFinite(gain) || gain is < 0 or > 4)
+            throw new ArgumentOutOfRangeException(nameof(gain), "Audio gain must be finite and in the inclusive range 0..4.");
+
+        RequireSnapshot();
+        var result = await _transport
+            .SetAudioInputStateAsync(sourceId.Trim(), gain, muted, cancellationToken)
+            .ConfigureAwait(false);
+        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
 
