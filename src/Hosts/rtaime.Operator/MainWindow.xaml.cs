@@ -1,5 +1,6 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Threading;
 using Microsoft.Win32;
@@ -10,6 +11,9 @@ namespace rtaime.Operator;
 
 public partial class MainWindow : Window
 {
+	private bool _shutdownStarted;
+	private bool _shutdownComplete;
+
 	public MainWindow()
 	{
 		var controlEndpoint = Environment.GetEnvironmentVariable("RTAIME_CONTROL_ENDPOINT");
@@ -44,7 +48,8 @@ public partial class MainWindow : Window
 		MediaDeck.Start();
 		Monitoring.Start();
 		viewModel.StartAudioMetering();
-		Closed += OnClosedAsync;
+		ContentRendered += OnContentRendered;
+		Closing += OnClosingAsync;
 	}
 
 	public MainWindow(OperatorViewModel viewModel)
@@ -67,7 +72,8 @@ public partial class MainWindow : Window
 		DataContext = viewModel;
 		MediaDeck.Start();
 		viewModel.StartAudioMetering();
-		Closed += OnClosedAsync;
+		ContentRendered += OnContentRendered;
+		Closing += OnClosingAsync;
 	}
 
 	public OperatorMonitoringViewModel Monitoring { get; }
@@ -111,13 +117,38 @@ public partial class MainWindow : Window
 		return dialog.ShowDialog() == true ? dialog.FileName : null;
 	}
 
-	private async void OnClosedAsync(object? sender, EventArgs e)
+	private void OnContentRendered(object? sender, EventArgs e)
 	{
-		ProgramOutput.Dispose();
-		await Monitoring.DisposeAsync();
-		await MediaDeck.DisposeAsync();
-		if (DataContext is OperatorViewModel viewModel)
-			await viewModel.DisposeAsync();
+		ContentRendered -= OnContentRendered;
+		SynchronizeButton.Focus();
+	}
+
+	private async void OnClosingAsync(object? sender, CancelEventArgs e)
+	{
+		if (_shutdownComplete)
+			return;
+
+		e.Cancel = true;
+		if (_shutdownStarted)
+			return;
+
+		_shutdownStarted = true;
+		IsEnabled = false;
+		try
+		{
+			ProgramOutput.Dispose();
+			MediaDeck.SnapshotChanged -= ((OperatorViewModel)DataContext).ApplyMediaDeckSnapshot;
+			await Monitoring.DisposeAsync();
+			await MediaDeck.DisposeAsync();
+			if (DataContext is OperatorViewModel viewModel)
+				await viewModel.DisposeAsync();
+		}
+		finally
+		{
+			_shutdownComplete = true;
+			Closing -= OnClosingAsync;
+			Close();
+		}
 	}
 
 	private sealed class UnavailableOperatorControlTransport : IOperatorControlTransport
