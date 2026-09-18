@@ -32,6 +32,8 @@ The branch also replaces the previous 80 ms AP-42 Windows decoder qualification 
 
 The one-second fixture remains synthetic and deterministic, but provides enough GOP/sample depth for production-path decode and frame-accurate seek qualification.
 
+The repository stores this qualification fixture as `reference-1080p50-h264-aac-1s.mp4.gz`. Integration tests expand it to a unique temporary `.mp4` before invoking the production `LocalMediaFileProvider`, then remove the temporary file on disposal. Compression is repository packaging only and does not alter the media path under test.
+
 ## Acceptance evidence
 
 AP-43 unit evidence covers:
