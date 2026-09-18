@@ -201,6 +201,65 @@ public sealed record OperatorRecordingCommandResult(
     OperatorRecordingDescriptor Snapshot,
     Failure? Failure);
 
+public static class OperatorHealthStates
+{
+    public const string Pass = "PASS";
+    public const string Fail = "FAIL";
+    public const string Unverified = "UNVERIFIED";
+}
+
+public sealed record OperatorHealthMetricDescriptor
+{
+    public OperatorHealthMetricDescriptor(string state, string detail)
+    {
+        if (state is not (OperatorHealthStates.Pass or OperatorHealthStates.Fail or OperatorHealthStates.Unverified))
+            throw new ArgumentException("Health state must be PASS, FAIL or UNVERIFIED.", nameof(state));
+        if (string.IsNullOrWhiteSpace(detail))
+            throw new ArgumentException("Health detail is required.", nameof(detail));
+        State = state;
+        Detail = detail.Trim();
+    }
+
+    public string State { get; }
+    public string Detail { get; }
+
+    public static OperatorHealthMetricDescriptor Unverified(string detail) =>
+        new(OperatorHealthStates.Unverified, detail);
+}
+
+public sealed record OperatorHealthDescriptor(
+    OperatorHealthMetricDescriptor Engine,
+    OperatorHealthMetricDescriptor Control,
+    OperatorHealthMetricDescriptor Runtime,
+    OperatorHealthMetricDescriptor Media,
+    OperatorHealthMetricDescriptor Provider,
+    OperatorHealthMetricDescriptor GpuProvider,
+    string CurrentFormat,
+    TimeSpan FrameTime,
+    TimeSpan FrameBudget,
+    ulong DroppedFrames,
+    TimeSpan Uptime,
+    string GpuUtilization,
+    string Vram,
+    DateTimeOffset ObservedAtUtc)
+{
+    public static OperatorHealthDescriptor Unavailable { get; } = new(
+        OperatorHealthMetricDescriptor.Unverified("Health snapshot unavailable."),
+        OperatorHealthMetricDescriptor.Unverified("Control health unavailable."),
+        OperatorHealthMetricDescriptor.Unverified("Runtime health unavailable."),
+        OperatorHealthMetricDescriptor.Unverified("Media health unavailable."),
+        OperatorHealthMetricDescriptor.Unverified("Provider health unavailable."),
+        OperatorHealthMetricDescriptor.Unverified("GPU provider health unavailable."),
+        "UNVERIFIED",
+        TimeSpan.Zero,
+        TimeSpan.Zero,
+        0,
+        TimeSpan.Zero,
+        "UNVERIFIED",
+        "UNVERIFIED",
+        DateTimeOffset.MinValue);
+}
+
 public sealed record OperatorMutationResponse
 {
     public OperatorMutationResponse(bool accepted, AuthoritativeProductionState state, Failure? failure)
@@ -238,7 +297,8 @@ public sealed record OperatorStatusSnapshot
         OperatorGraphicsOverlayDescriptor? graphicsOverlay = null,
         IReadOnlyList<OperatorAudioInputDescriptor>? audioInputs = null,
         OperatorAudioProgramDescriptor? audioProgram = null,
-        OperatorRecordingDescriptor? recording = null)
+        OperatorRecordingDescriptor? recording = null,
+        OperatorHealthDescriptor? health = null)
     {
         Production = production ?? throw new ArgumentNullException(nameof(production));
         ArgumentNullException.ThrowIfNull(sources);
@@ -264,6 +324,7 @@ public sealed record OperatorStatusSnapshot
         GraphicsOverlay = graphicsOverlay ?? OperatorGraphicsOverlayDescriptor.Empty;
         AudioProgram = audioProgram ?? OperatorAudioProgramDescriptor.Unknown;
         Recording = recording ?? OperatorRecordingDescriptor.Unavailable;
+        Health = health ?? OperatorHealthDescriptor.Unavailable;
     }
 
     public AuthoritativeProductionState Production { get; }
@@ -279,6 +340,7 @@ public sealed record OperatorStatusSnapshot
     public IReadOnlyList<OperatorAudioInputDescriptor> AudioInputs => _audioInputs;
     public OperatorAudioProgramDescriptor AudioProgram { get; }
     public OperatorRecordingDescriptor Recording { get; }
+    public OperatorHealthDescriptor Health { get; }
 }
 
 /// <summary>
