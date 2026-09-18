@@ -93,6 +93,7 @@ public sealed record ApplicationHostOptions(
 {
 	public string ReadinessPath => Path.Combine(WorkRoot, "control-readiness.json");
 	public string StopPath => Path.Combine(WorkRoot, "control-stop.signal");
+	public string ShutdownEvidencePath => Path.Combine(WorkRoot, "apphost-shutdown.json");
 	public string LegacyLifecycleStatePath => Path.Combine($"{InstallRoot}.host-lifecycle", "lifecycle-state.json");
 
 	public ApplicationEndpointSet Endpoints
@@ -371,6 +372,7 @@ public sealed class UnifiedApplicationHost
 		{
 			_platform.CreateDirectory(_options.WorkRoot);
 			_platform.CreateDirectory(_options.StateRoot);
+			_platform.DeleteFile(_options.ShutdownEvidencePath);
 
 			var ready = await FindHealthyReadinessAsync(cancellationToken).ConfigureAwait(false);
 			if (ready is null)
@@ -659,11 +661,27 @@ public sealed class UnifiedApplicationHost
 	{
 		if (_ownedControlProcessId is not { } processId) return;
 		Transition(ApplicationLifecycleState.Stopping);
-		_platform.WriteAllText(_options.StopPath, $"stopRequestedAtUtc={_platform.UtcNow:O}{Environment.NewLine}");
+		var requestedAtUtc = _platform.UtcNow;
+		_platform.WriteAllText(_options.StopPath, $"stopRequestedAtUtc={requestedAtUtc:O}{Environment.NewLine}");
 		var deadline = _platform.UtcNow + _options.Policy.ShutdownTimeout;
 		while (_platform.UtcNow < deadline && _platform.IsProcessAlive(processId))
 			await _platform.DelayAsync(TimeSpan.FromMilliseconds(100), cancellationToken).ConfigureAwait(false);
-		if (_platform.IsProcessAlive(processId)) _platform.KillProcessTree(processId);
+
+		var forcedTermination = _platform.IsProcessAlive(processId);
+		if (forcedTermination) _platform.KillProcessTree(processId);
+
+		var evidence = JsonSerializer.Serialize(new
+		{
+			copyright = "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+			schemaVersion = "1.0",
+			status = forcedTermination ? "FAIL" : "PASS",
+			graceful = !forcedTermination,
+			forcedTermination,
+			controlProcessId = processId,
+			requestedAtUtc,
+			completedAtUtc = _platform.UtcNow
+		});
+		_platform.WriteAllText(_options.ShutdownEvidencePath, evidence + Environment.NewLine);
 		_platform.DeleteFile(_options.ReadinessPath);
 		_platform.DeleteFile(_options.StopPath);
 		_ownedControlProcessId = null;
