@@ -688,15 +688,26 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		}
 		catch (Exception exception)
 		{
-			if (exception is IOException or TimeoutException or OperationCanceledException)
-				MarkStale(exception.Message);
+			var connectivityFailure = exception is IOException or TimeoutException or OperationCanceledException;
+			var startupWaiting = connectivityFailure && !_hasSynchronized;
+			if (connectivityFailure)
+			{
+				if (startupWaiting)
+					MarkStartupWaiting(exception.Message);
+				else
+					MarkStale(exception.Message);
+			}
 			else
+			{
 				LastError = exception.Message;
+			}
 
-			CommandStatus = "FAILED";
-			CommitStatus = IsStale ? "UNCONFIRMED" : $"FAILED · {RevisionLabel} UNCHANGED";
-			TransitionStatus = $"{operation} FAILED";
-			LastEvent = $"{operation} failed; Program was not advanced locally.";
+			CommandStatus = startupWaiting ? "WAITING" : "FAILED";
+			CommitStatus = startupWaiting ? "UNCONFIRMED" : IsStale ? "UNCONFIRMED" : $"FAILED · {RevisionLabel} UNCHANGED";
+			TransitionStatus = startupWaiting ? "STARTING" : $"{operation} FAILED";
+			LastEvent = startupWaiting
+				? "Waiting for authoritative Control readiness."
+				: $"{operation} failed; Program was not advanced locally.";
 		}
 		finally
 		{
