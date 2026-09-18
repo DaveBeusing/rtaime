@@ -177,13 +177,30 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 	{
 		ObjectDisposedException.ThrowIf(_disposed, this);
 		var minimumTimestamp = _pendingSeekTimestamp;
-		if (!TryReadSample(MediaFoundation.FirstVideoStream, minimumTimestamp, out var videoTimestamp, out var videoPayload))
+		long videoTimestamp;
+		byte[] videoPayload;
+		try
 		{
-			frame = null;
-			return false;
+			if (!TryReadSample(MediaFoundation.FirstVideoStream, minimumTimestamp, out videoTimestamp, out videoPayload))
+			{
+				frame = null;
+				return false;
+			}
+		}
+		catch (ExternalException exception)
+		{
+			throw new InvalidDataException($"Video sample read failed: {exception.Message}", exception);
 		}
 
-		var rgba = ConvertRgb32ToRgba(videoPayload, Probe.VideoFormat);
+		byte[] rgba;
+		try
+		{
+			rgba = ConvertRgb32ToRgba(videoPayload, Probe.VideoFormat);
+		}
+		catch (InvalidDataException exception)
+		{
+			throw new InvalidDataException($"Video frame conversion failed: {exception.Message}", exception);
+		}
 		var timing = new FrameTiming(sequenceNumber, videoTimestamp, MediaFoundationTimebase);
 		var surface = new SurfaceDescriptor(
 			new SurfaceId(LocalMediaIdentity.Create("surface", _assetId.ToString(), sequenceNumber.ToString())),
@@ -196,7 +213,23 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 
 		AudioBufferDescriptor? audio = null;
 		ReadOnlyMemory<byte> audioPayload = ReadOnlyMemory<byte>.Empty;
-		if (TryReadSample(MediaFoundation.FirstAudioStream, minimumTimestamp, out var audioTimestamp, out var decodedAudio) && decodedAudio.Length > 0)
+		long audioTimestamp;
+		byte[] decodedAudio;
+		bool audioAvailable;
+		try
+		{
+			audioAvailable = TryReadSample(
+				MediaFoundation.FirstAudioStream,
+				minimumTimestamp,
+				out audioTimestamp,
+				out decodedAudio);
+		}
+		catch (ExternalException exception)
+		{
+			throw new InvalidDataException($"Audio sample read failed: {exception.Message}", exception);
+		}
+
+		if (audioAvailable && decodedAudio.Length > 0)
 		{
 			var bytesPerSampleFrame = checked((int)Probe.AudioFormat.ChannelCount * sizeof(float));
 			if (decodedAudio.Length % bytesPerSampleFrame != 0)
