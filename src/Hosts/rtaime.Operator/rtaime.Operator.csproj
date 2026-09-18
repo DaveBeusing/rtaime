@@ -3,7 +3,6 @@
 		<OutputType>WinExe</OutputType>
 		<TargetFramework>$(RtaimeWindowsTargetFramework)</TargetFramework>
 		<UseWPF>true</UseWPF>
-		<UseWindowsForms>true</UseWindowsForms>
 		<ApplicationManifest>app.manifest</ApplicationManifest>
 	</PropertyGroup>
 
