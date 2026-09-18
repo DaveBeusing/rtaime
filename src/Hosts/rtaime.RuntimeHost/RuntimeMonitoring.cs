@@ -364,12 +364,7 @@ public sealed class RuntimeHostMonitoringServer : IAsyncDisposable
 	{
 		while (!cancellationToken.IsCancellationRequested)
 		{
-			var pipe = new NamedPipeServerStream(
-				_endpoint,
-				PipeDirection.Out,
-				NamedPipeServerStream.MaxAllowedServerInstances,
-				PipeTransmissionMode.Byte,
-				PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+			var pipe = OperatorPipeServerFactory.Create(_endpoint, PipeDirection.Out);
 			try
 			{
 				await pipe.WaitForConnectionAsync(cancellationToken).ConfigureAwait(false);
