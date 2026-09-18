@@ -18,37 +18,78 @@ function Assert-Condition {
 
 $appPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/App.xaml"
 $windowPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MainWindow.xaml"
+$deckPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MediaDeckControl.xaml"
+$timelinePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MediaTimelineControl.xaml"
 $viewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorViewModel.cs"
 $monitorViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorMonitoringViewModel.cs"
+$tokensPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Themes/OperatorTokens.xaml"
 $themePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Themes/OperatorTheme.xaml"
+$manifestPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/app.manifest"
 $projectPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/rtaime.Operator.csproj"
 $documentationPath = Join-Path $repositoryRoot "docs/OperatorUiV1.md"
 
-foreach ($path in @($appPath, $windowPath, $viewModelPath, $monitorViewModelPath, $themePath, $projectPath, $documentationPath)) {
+foreach ($path in @($appPath, $windowPath, $deckPath, $timelinePath, $viewModelPath, $monitorViewModelPath, $tokensPath, $themePath, $manifestPath, $projectPath, $documentationPath)) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required Operator UI artifact is missing: '$path'."
 }
 
 $app = Get-Content -LiteralPath $appPath -Raw
 $window = Get-Content -LiteralPath $windowPath -Raw
+$deck = Get-Content -LiteralPath $deckPath -Raw
+$timeline = Get-Content -LiteralPath $timelinePath -Raw
 $viewModel = Get-Content -LiteralPath $viewModelPath -Raw
 $monitorViewModel = Get-Content -LiteralPath $monitorViewModelPath -Raw
+$tokens = Get-Content -LiteralPath $tokensPath -Raw
 $theme = Get-Content -LiteralPath $themePath -Raw
+$manifest = Get-Content -LiteralPath $manifestPath -Raw
 $project = Get-Content -LiteralPath $projectPath -Raw
+$documentation = Get-Content -LiteralPath $documentationPath -Raw
 
 Assert-Condition ($app -match 'Source="Themes/OperatorTheme\.xaml"') "Operator must load the reusable theme resource dictionary."
-Assert-Condition ($theme -match 'OperatorPreviewBrush') "Operator theme must define a Preview semantic brush."
-Assert-Condition ($theme -match 'OperatorProgramBrush') "Operator theme must define a Program semantic brush."
-Assert-Condition ($theme -match 'OperatorErrorBrush') "Operator theme must define an error semantic brush."
+Assert-Condition ($theme -match 'Source="OperatorTokens\.xaml"') "Operator theme must load the shared design-token dictionary."
+foreach ($token in @("OperatorFontFamily", "OperatorWindowPadding", "OperatorControlHeight", "OperatorColorPreview", "OperatorColorProgram", "OperatorColorHealthy", "OperatorColorWarning", "OperatorColorError")) {
+	Assert-Condition ($tokens -match [Regex]::Escape($token)) "Operator design token '$token' is required."
+}
+foreach ($resource in @("OperatorPreviewBrush", "OperatorProgramBrush", "OperatorArmedBrush", "OperatorHealthyBrush", "OperatorWarningBrush", "OperatorErrorBrush", "OperatorFocusVisual", "OperatorToolbar", "OperatorToggleButton", "OperatorSourceItem", "OperatorMeter", "OperatorTimelineSlider", "OperatorPreviewTally", "OperatorProgramTally")) {
+	Assert-Condition ($theme -match [Regex]::Escape($resource)) "Operator theme resource '$resource' is required."
+}
+
+Assert-Condition ($manifest -match 'PerMonitorV2,PerMonitor') "Operator must declare PerMonitorV2 DPI awareness with PerMonitor fallback."
+Assert-Condition ($project -match '<ApplicationManifest>app\.manifest</ApplicationManifest>') "Operator project must bind the DPI-awareness manifest."
+Assert-Condition ($window -match 'UseLayoutRounding="True"') "Operator window must use layout rounding."
+Assert-Condition ($window -match 'SnapsToDevicePixels="True"') "Operator window must snap layout edges to device pixels."
+Assert-Condition ($window -match 'TextOptions\.TextFormattingMode="Display"') "Operator must use display text formatting for production-console legibility."
+Assert-Condition ($window -match 'FontFamily="\{StaticResource OperatorFontFamily\}"') "Operator typography must use the shared font-family token."
+
+$width = [int]([Regex]::Match($window, 'Width="(?<value>\d+)"').Groups["value"].Value)
+$height = [int]([Regex]::Match($window, 'Height="(?<value>\d+)"').Groups["value"].Value)
+$minWidth = [int]([Regex]::Match($window, 'MinWidth="(?<value>\d+)"').Groups["value"].Value)
+$minHeight = [int]([Regex]::Match($window, 'MinHeight="(?<value>\d+)"').Groups["value"].Value)
+Assert-Condition ($width -le 1920 -and $height -le 1080) "Operator reference window must fit within the 1920x1080 qualification surface."
+Assert-Condition ($minWidth -le [Math]::Floor(1920 / 1.5)) "Operator minimum width must remain usable at 150% scaling on 1920x1080."
+Assert-Condition ($minHeight -le [Math]::Floor(1080 / 1.5)) "Operator minimum height must remain usable at 150% scaling on 1920x1080."
+Assert-Condition ($window -match '<ScrollViewer[^>]+VerticalScrollBarVisibility="Auto"') "Operator must preserve vertical access when DPI scaling reduces logical workspace height."
 
 Assert-Condition ($window -match 'ItemsSource="\{Binding Sources\}"') "Operator must expose the source bank as a bound collection."
+Assert-Condition ($window -match 'Style="\{StaticResource OperatorSourceBank\}"') "Source bank must use the shared design-system collection style."
+Assert-Condition ($window -match 'ItemContainerStyle="\{StaticResource OperatorSourceItem\}"') "Source tiles must use the shared tile style."
+Assert-Condition ($window -match 'OperatorPreviewPanel') "Preview monitor must use Preview semantic styling."
+Assert-Condition ($window -match 'OperatorProgramPanel') "Program monitor must use Program semantic styling."
+Assert-Condition ($window -match 'OperatorPreviewTally') "Preview tally semantics must be explicit."
+Assert-Condition ($window -match 'OperatorProgramTally') "Program tally semantics must be explicit."
 Assert-Condition ($window -match 'Monitoring\.PreviewImage') "Operator Preview must bind the independent monitoring image."
 Assert-Condition ($window -match 'Monitoring\.ProgramImage') "Operator Program must bind the independent monitoring image."
 Assert-Condition ($window -match '<Image\s') "AP-29 must render visual monitoring with WPF Image surfaces."
 Assert-Condition ($window -notmatch 'MediaElement|VideoDrawing') "Operator monitoring must use the qualified bounded bitmap path, not an ungoverned media player."
+Assert-Condition ($timeline -match 'Style="\{StaticResource OperatorTimelineSlider\}"') "Timeline seeker must use the design-system slider style."
+Assert-Condition ($timeline -match 'Style="\{StaticResource OperatorMeter\}"') "Timeline progress must use the design-system meter style."
+Assert-Condition ($deck -match 'OperatorStatusBadge') "Media deck state must use shared status presentation."
+
 Assert-Condition ($window -match 'Key="F5"') "Operator must expose keyboard synchronization."
 Assert-Condition ($window -match 'Key="Space"\s+Command="\{Binding CutCommand\}"') "Operator must expose a keyboard CUT command."
 Assert-Condition ($window -match 'Modifiers="Control"\s+Command="\{Binding DissolveCommand\}"') "Operator must expose a keyboard DISSOLVE/AUTO command."
-Assert-Condition ($window -notmatch 'Width="1100"|Height="680"') "Operator must not retain the fixed bootstrap 1100x680 layout."
+Assert-Condition ($theme -match 'IsKeyboardFocused') "Primary controls must expose visible keyboard-focus state."
+Assert-Condition ($theme -match 'IsKeyboardFocusWithin') "Selectable source tiles must expose visible keyboard-focus state."
+Assert-Condition ($window -notmatch 'Width="1100"\s*\r?\n\s*Height="680"') "Operator must not retain the fixed bootstrap 1100x680 layout."
 
 foreach ($propertyName in @("IsBusy", "IsConnected", "IsStale", "ConnectionState", "CommandStatus", "LastEvent")) {
 	Assert-Condition ($viewModel -match "public\s+[^\r\n]+\s+$propertyName\b") "Operator presentation state '$propertyName' is required."
@@ -64,7 +105,13 @@ Assert-Condition ($projectReferenceCount -eq 1) "Operator must retain exactly on
 Assert-Condition ($project -match 'Client\\rtaime\.Client\\rtaime\.Client\.csproj') "Operator may depend only on the Client SDK seam."
 Assert-Condition ($project -notmatch 'ControlHost|RuntimeHost|AIHost') "Operator must not reference production host implementations."
 
+Assert-Condition ($documentation -match '1920.?x.?1080') "Operator UI documentation must record the reference resolution."
+Assert-Condition ($documentation -match '125%') "Operator UI documentation must record 125% DPI qualification."
+Assert-Condition ($documentation -match '150%') "Operator UI documentation must record 150% DPI qualification."
+
 Write-Host "Operator UI policy verification PASS"
 Write-Host "Operator authority: remote Client SDK only"
+Write-Host "Design system: tokens, semantic tallies, reusable controls and keyboard focus verified"
+Write-Host "DPI qualification: PerMonitorV2; 1920x1080 reference layout supports 100%, 125% and 150% scaling invariants"
 Write-Host "Monitoring: independent non-authoritative bitmap plane"
 Write-Host "Keyboard controls: synchronization, Preview, CUT and DISSOLVE/AUTO declared"
