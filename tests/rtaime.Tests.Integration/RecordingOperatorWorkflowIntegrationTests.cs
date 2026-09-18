@@ -66,10 +66,12 @@ public sealed class RecordingOperatorWorkflowIntegrationTests
 			Assert.All(first.Samples, sample => Assert.NotEmpty(sample.AudioPayload));
 			Assert.Equal(new byte[] { 255, 0, 0, 255 }, first.Samples[0].VideoPayload.AsSpan(0, 4).ToArray());
 			Assert.Equal(VideoFormat.Hd1080p50Rgba8, first.Samples[0].VideoFormat);
+			var recordedDuration = TimeSpan.FromSeconds(first.VideoSampleCount / 50.0);
+			Assert.InRange(recordedDuration, TimeSpan.FromMilliseconds(20), TimeSpan.FromSeconds(2));
 
 			var completed = client.Snapshot!.Recording;
 			Assert.Equal("COMPLETED", completed.State);
-			Assert.True(completed.Elapsed >= TimeSpan.Zero);
+			Assert.True(completed.Elapsed + TimeSpan.FromMilliseconds(100) >= recordedDuration);
 			Assert.Equal(firstPath, completed.FinalPath);
 			Assert.Equal(revisionBeforeRecording, client.Snapshot.Production.Revision);
 			Assert.Equal(RuntimeExecutionStatus.Committed, runtime.Runtime!.Snapshot.Runtime.Status);
