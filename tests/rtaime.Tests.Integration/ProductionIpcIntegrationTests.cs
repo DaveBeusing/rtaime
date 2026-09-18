@@ -248,9 +248,14 @@ public sealed class ProductionIpcIntegrationTests
 		var opened = await deck.OpenAsync(referenceAsset.Path, sourceId);
 		Assert.True(opened.IsLoaded, opened.Failure?.Message);
 		Assert.Equal(Path.GetFileName(referenceAsset.Path), opened.Probe!.FileName);
-		Assert.Equal(MediaDeckState.Playing, opened.State);
-		Assert.True(opened.Transport!.IsOnProgram);
-		Assert.Equal(50, opened.Transport.Position.TotalFrames);
+		Assert.Equal(MediaDeckState.Ready, opened.State);
+		Assert.Equal(50, opened.Transport!.Position.TotalFrames);
+
+		await WaitUntilAsync(async () =>
+		{
+			await deck.RefreshAsync();
+			return deck.Snapshot.Transport is { State: MediaTransportState.Playing, IsOnProgram: true };
+		});
 
 		var sourceBinOpened = await client.SynchronizeAsync();
 		var mediaTile = sourceBinOpened.Sources.Single(source => source.Id == sourceId.ToString());
