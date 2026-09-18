@@ -7,6 +7,8 @@ using rtaime.Media.Contracts;
 using rtaime.Provider.Contracts;
 using rtaime.Runtime.Contracts;
 using rtaime.RuntimeHost;
+using ClientHealthStates = rtaime.Client.OperatorHealthStates;
+using ProjectionHealthStates = rtaime.ControlHost.OperatorHealthStates;
 
 namespace rtaime.Tests.Integration;
 
@@ -25,12 +27,12 @@ public sealed class RuntimeHealthPerformanceHudIntegrationTests
 			controlAuthorityAvailable: true,
 			new DateTimeOffset(2026, 9, 18, 12, 0, 0, TimeSpan.Zero));
 
-		Assert.Equal(OperatorHealthStates.Pass, health.Engine.State);
-		Assert.Equal(OperatorHealthStates.Pass, health.Control.State);
-		Assert.Equal(OperatorHealthStates.Pass, health.Runtime.State);
-		Assert.Equal(OperatorHealthStates.Pass, health.Media.State);
-		Assert.Equal(OperatorHealthStates.Pass, health.Provider.State);
-		Assert.Equal(OperatorHealthStates.Pass, health.GpuProvider.State);
+		Assert.Equal(ProjectionHealthStates.Pass, health.Engine.State);
+		Assert.Equal(ProjectionHealthStates.Pass, health.Control.State);
+		Assert.Equal(ProjectionHealthStates.Pass, health.Runtime.State);
+		Assert.Equal(ProjectionHealthStates.Pass, health.Media.State);
+		Assert.Equal(ProjectionHealthStates.Pass, health.Provider.State);
+		Assert.Equal(ProjectionHealthStates.Pass, health.GpuProvider.State);
 		Assert.Equal("UNVERIFIED", health.GpuUtilization);
 		Assert.Equal("UNVERIFIED", health.Vram);
 		Assert.Equal(3UL, health.DroppedFrames);
@@ -51,9 +53,9 @@ public sealed class RuntimeHealthPerformanceHudIntegrationTests
 			controlAuthorityAvailable: true,
 			DateTimeOffset.UtcNow);
 
-		Assert.Equal(OperatorHealthStates.Unverified, health.Provider.State);
-		Assert.Equal(OperatorHealthStates.Unverified, health.GpuProvider.State);
-		Assert.Equal(OperatorHealthStates.Unverified, health.Engine.State);
+		Assert.Equal(ProjectionHealthStates.Unverified, health.Provider.State);
+		Assert.Equal(ProjectionHealthStates.Unverified, health.GpuProvider.State);
+		Assert.Equal(ProjectionHealthStates.Unverified, health.Engine.State);
 		Assert.Contains("reference", health.GpuProvider.Detail, StringComparison.OrdinalIgnoreCase);
 	}
 
@@ -84,18 +86,18 @@ public sealed class RuntimeHealthPerformanceHudIntegrationTests
 				TimeSpan.FromSeconds(1),
 				TimeSpan.FromSeconds(3)));
 			var ready = await SynchronizeWithRetryAsync(client);
-			Assert.NotEqual(OperatorHealthStates.Fail, ready.Health.Control.State);
+			Assert.NotEqual(ProjectionHealthStates.Fail, ready.Health.Control.State);
 
 			runtimeStop.Cancel();
 			Assert.Equal(RuntimeHostExitCode.Success, await runtimeRun);
 			await WaitUntilAsync(() => control.Lifecycle.State == ControlHostProcessState.Degraded);
 
 			var disconnected = await SynchronizeWithRetryAsync(client);
-			Assert.Equal(OperatorHealthStates.Fail, disconnected.Health.Runtime.State);
-			Assert.Equal(OperatorHealthStates.Fail, disconnected.Health.Media.State);
-			Assert.Equal(OperatorHealthStates.Fail, disconnected.Health.Provider.State);
-			Assert.Equal(OperatorHealthStates.Fail, disconnected.Health.GpuProvider.State);
-			Assert.Equal(OperatorHealthStates.Fail, disconnected.Health.Engine.State);
+			Assert.Equal(ProjectionHealthStates.Fail, disconnected.Health.Runtime.State);
+			Assert.Equal(ProjectionHealthStates.Fail, disconnected.Health.Media.State);
+			Assert.Equal(ProjectionHealthStates.Fail, disconnected.Health.Provider.State);
+			Assert.Equal(ProjectionHealthStates.Fail, disconnected.Health.GpuProvider.State);
+			Assert.Equal(ProjectionHealthStates.Fail, disconnected.Health.Engine.State);
 		}
 		finally
 		{
@@ -162,7 +164,7 @@ public sealed class RuntimeHealthPerformanceHudIntegrationTests
 	private static ProviderDescriptor CreateGpuProvider(ProviderAvailabilityState state)
 	{
 		var providerId = new ProviderId(Identity.Parse("74000000-0000-0000-0000-000000000010"));
-		var failure = state == ProviderAvailabilityState.Available
+		Failure? failure = state == ProviderAvailabilityState.Available
 			? null
 			: new Failure("gpu.backend.reference_only", "Managed reference provider lacks hardware qualification evidence.");
 		return new ProviderDescriptor(
