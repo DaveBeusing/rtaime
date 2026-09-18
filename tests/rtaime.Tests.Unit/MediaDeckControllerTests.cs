@@ -17,7 +17,7 @@ public sealed class MediaDeckControllerTests
 		await using var deck = new MediaDeckController(client);
 		var sourceId = new MediaSourceId(Id(2));
 
-		var opened = await deck.OpenAsync("C:\media\reference.mp4", sourceId);
+		var opened = await deck.OpenAsync(@"C:\media\reference.mp4", sourceId);
 
 		Assert.True(opened.IsLoaded);
 		Assert.Equal(MediaDeckState.Ready, deck.Snapshot.State);
@@ -51,7 +51,7 @@ public sealed class MediaDeckControllerTests
 		var client = new OperatorControlClient(transport);
 		await using var deck = new MediaDeckController(client);
 		var sourceId = new MediaSourceId(Id(2));
-		await deck.OpenAsync("C:\media\reference.mp4", sourceId);
+		await deck.OpenAsync(@"C:\media\reference.mp4", sourceId);
 		transport.SetRemoteFrame(25);
 
 		await deck.RefreshAsync();
