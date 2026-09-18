@@ -210,6 +210,7 @@ public sealed class UnifiedApplicationHostTests
 		private readonly Dictionary<string, string> _files = new(StringComparer.OrdinalIgnoreCase);
 		private readonly HashSet<int> _alive = new();
 		private int _nextProcessId = 100;
+		private int? _operatorProcessId;
 		private bool _published;
 
 		public FakeApplicationHostPlatform(ApplicationHostOptions options)
@@ -239,6 +240,7 @@ public sealed class UnifiedApplicationHostTests
 
 			if (baseName == "rtaime.Operator")
 			{
+				_operatorProcessId = processId;
 				if (OperatorDelayBudget > 0) _alive.Add(processId);
 				return processId;
 			}
@@ -290,11 +292,8 @@ public sealed class UnifiedApplicationHostTests
 			if (OperatorDelayBudget > 0)
 			{
 				OperatorDelayBudget--;
-				if (OperatorDelayBudget == 0)
-				{
-					var operatorProcessId = _alive.FirstOrDefault(processId => processId >= 101 && processId < 7000);
-					if (operatorProcessId != 0) _alive.Remove(operatorProcessId);
-				}
+				if (OperatorDelayBudget == 0 && _operatorProcessId is { } operatorProcessId)
+					_alive.Remove(operatorProcessId);
 			}
 			return Task.CompletedTask;
 		}
