@@ -27,8 +27,8 @@ internal static class GraphicsOverlayAssetLoader
 		var source = decoder.Frames[0];
 		var width = checked((uint)source.PixelWidth);
 		var height = checked((uint)source.PixelHeight);
-		if (width == 0 || height == 0 || width > 512 || height > 512)
-			throw new InvalidDataException("V1 graphics assets must be between 1x1 and 512x512 pixels.");
+		if (width == 0 || height == 0 || width > 384 || height > 384)
+			throw new InvalidDataException("V1 graphics assets must be between 1x1 and 384x384 pixels.");
 
 		var converted = new FormatConvertedBitmap(source, PixelFormats.Bgra32, null, 0);
 		var stride = checked(source.PixelWidth * 4);
