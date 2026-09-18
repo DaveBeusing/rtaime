@@ -82,10 +82,10 @@ function Invoke-Lifecycle {
 		InstanceId = $InstanceId
 	}
 	if ($NeedsStateRoot) {
-		$parameters.StateRoot = $stateRootFull
+		$parameters["StateRoot"] = $stateRootFull
 	}
 	if ($QualificationMode) {
-		$parameters.QualificationMode = $true
+		$parameters["QualificationMode"] = $true
 	}
 	return & $lifecycle @parameters
 }
