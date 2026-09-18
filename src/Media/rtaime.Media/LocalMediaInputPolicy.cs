@@ -33,6 +33,12 @@ public static class LocalMediaInputPolicy
 
 		var frameRateNumerator = profile.FrameRate.Numerator;
 		var frameRateDenominator = profile.FrameRate.Denominator;
+		if (frameRateNumerator <= 0 || frameRateDenominator <= 0)
+		{
+			return new Failure(
+				"media.file.frame_rate_unsupported",
+				"H.264 input frame rate must be greater than zero.");
+		}
 		if ((decimal)frameRateNumerator >
 			(decimal)MaximumFramesPerSecond * frameRateDenominator)
 		{
