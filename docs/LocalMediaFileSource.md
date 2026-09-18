@@ -11,18 +11,18 @@ Local Media File Source introduces local SSD/HDD media as a real rtaime Media/Ru
 
 Change classification: `REALTIME_CRITICAL` for decoded-frame admission into the existing media pipeline; the probing/open path is non-real-time.
 
-## V1 allowlist
+## V1 import contract
 
-The reference local-file provider accepts:
+The reference local-file provider accepts MP4 files with H.264/AVC video and embedded AAC audio. Native file resolution, frame rate and audio sample rate no longer need to match the active production format exactly.
 
-- container: MP4;
-- video codec: H.264/AVC;
-- video formats: 1920x1080 progressive at 50/1 or 60000/1001 fps;
-- decoded pixel format: RGBA8;
-- embedded audio codec: AAC;
-- embedded audio format: 48 kHz stereo, decoded to interleaved Float32.
+On Windows, the Media Foundation Source Reader uses advanced video processing to normalize decoded video to the RuntimeHost production format:
 
-Files outside this allowlist fail closed before production playback. Missing, unreadable, corrupt or unsupported media return explicit `Failure` values rather than becoming unhandled Runtime failures.
+- 1920x1080 progressive at 50/1; or
+- 1920x1080 progressive at 60000/1001.
+
+Decoded video is converted to the existing RGBA8 Runtime representation. Embedded AAC audio is requested as 48 kHz stereo PCM and then converted to the existing interleaved Float32 representation.
+
+This normalization keeps the existing Runtime/GPU production format invariant intact while allowing ordinary H.264/AAC MP4 files with different native dimensions or frame rates to be imported. If Windows Media Foundation cannot perform the requested conversion, or if the container/codecs are unsupported, the file fails closed with an explicit `Failure` value.
 
 ## Contract boundary
 
@@ -38,7 +38,7 @@ Bulk decoded video/audio payloads remain implementation-local and are not added 
 
 ## Provider and decoder boundary
 
-`LocalMediaFileProvider` exposes the existing `media.route` capability plus the explicit `media.file.decode` capability. The Windows reference implementation uses Media Foundation through direct COM/P/Invoke interop from C#/.NET. No WPF `MediaPlayer`, FFmpeg runtime dependency or new production NuGet package is introduced.
+`LocalMediaFileProvider` exposes the existing `media.route` capability plus the explicit `media.file.decode` capability. The Windows reference implementation uses Media Foundation through direct COM/P/Invoke interop from C#/.NET. Advanced Source Reader video processing performs resize and frame-rate normalization before frames enter rtaime's Runtime pipeline. No WPF `MediaPlayer`, FFmpeg runtime dependency or new production NuGet package is introduced.
 
 The provider is unavailable on non-Windows hosts. That is deliberate for the V1 Windows reference-platform family and is surfaced as `media.file.platform_unsupported`.
 
