@@ -23,13 +23,14 @@ $timelinePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MediaTimeli
 $viewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorViewModel.cs"
 $monitorViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorMonitoringViewModel.cs"
 $sourceTileViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorSourceTileViewModel.cs"
+$graphicsLoaderPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/GraphicsOverlayAssetLoader.cs"
 $tokensPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Themes/OperatorTokens.xaml"
 $themePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Themes/OperatorTheme.xaml"
 $manifestPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/app.manifest"
 $projectPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/rtaime.Operator.csproj"
 $documentationPath = Join-Path $repositoryRoot "docs/OperatorUiV1.md"
 
-foreach ($path in @($appPath, $windowPath, $deckPath, $timelinePath, $viewModelPath, $monitorViewModelPath, $sourceTileViewModelPath, $tokensPath, $themePath, $manifestPath, $projectPath, $documentationPath)) {
+foreach ($path in @($appPath, $windowPath, $deckPath, $timelinePath, $viewModelPath, $monitorViewModelPath, $sourceTileViewModelPath, $graphicsLoaderPath, $tokensPath, $themePath, $manifestPath, $projectPath, $documentationPath)) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required Operator UI artifact is missing: '$path'."
 }
 
@@ -40,6 +41,7 @@ $timeline = Get-Content -LiteralPath $timelinePath -Raw
 $viewModel = Get-Content -LiteralPath $viewModelPath -Raw
 $monitorViewModel = Get-Content -LiteralPath $monitorViewModelPath -Raw
 $sourceTileViewModel = Get-Content -LiteralPath $sourceTileViewModelPath -Raw
+$graphicsLoader = Get-Content -LiteralPath $graphicsLoaderPath -Raw
 $tokens = Get-Content -LiteralPath $tokensPath -Raw
 $theme = Get-Content -LiteralPath $themePath -Raw
 $manifest = Get-Content -LiteralPath $manifestPath -Raw
@@ -116,6 +118,19 @@ Assert-Condition ($viewModel -match 'DissolvePreviewAsync\(durationFrames\)') "A
 Assert-Condition ($viewModel -notmatch 'CutAsync\(source\.Id\)') "Operator CUT must not route the local selected-source id directly to Program."
 Assert-Condition ($viewModel -notmatch 'DissolveAsync\(source\.Id') "Operator DISSOLVE must not route the local selected-source id directly to Program."
 Assert-Condition ($viewModel -match 'if \(IsBusy\) return;') "Operator command execution must reject rapid re-entry while an authoritative command is in flight."
+Assert-Condition ($window -match 'Text="GRAPHICS / OVERLAY"') "Operator must expose the AP-49 graphics workflow."
+Assert-Condition ($window -match 'Binding LoadGraphicsCommand') "Graphics workflow must expose PNG asset loading."
+Assert-Condition ($window -match 'Binding ApplyGraphicsCommand') "Graphics workflow must expose explicit placement apply."
+Assert-Condition ($window -match 'Binding ToggleGraphicsCommand') "Graphics workflow must expose confirmed show/hide control."
+Assert-Condition ($window -match 'Binding GraphicsPositionX') "Graphics workflow must expose X placement."
+Assert-Condition ($window -match 'Binding GraphicsPositionY') "Graphics workflow must expose Y placement."
+Assert-Condition ($window -match 'Binding GraphicsScale') "Graphics workflow must expose scale."
+Assert-Condition ($viewModel -match 'LoadGraphicsOverlayAsync') "Operator graphics load must cross the Client SDK seam."
+Assert-Condition ($viewModel -match 'SetGraphicsOverlayAsync') "Operator graphics state changes must cross the Client SDK seam."
+Assert-Condition ($viewModel -match 'ClearGraphicsOverlayAsync') "Operator graphics clear must cross the Client SDK seam."
+Assert-Condition ($graphicsLoader -match 'PngBitmapDecoder') "Graphics asset loader must use the bounded PNG decode path."
+Assert-Condition ($graphicsLoader -match 'PixelFormats\.Bgra32') "Graphics asset loader must normalize PNG pixels before RGBA conversion."
+Assert-Condition ($graphicsLoader -match 'rgba\[offset\] = bgra\[offset \+ 2\]') "Graphics asset loader must preserve RGBA channel order for RuntimeHost."
 Assert-Condition ($window -match 'Text="COMMIT"') "Program workspace must expose commit status."
 Assert-Condition ($window -match 'Binding CommitStatus') "Program workspace must bind authoritative commit status."
 Assert-Condition ($window -match 'Binding TransitionStatus') "Program workspace must expose transition state."
@@ -142,5 +157,6 @@ Write-Host "DPI qualification: PerMonitorV2; 1920x1080 reference layout supports
 Write-Host "Monitoring: independent non-authoritative bitmap plane"
 Write-Host "Production workspace: selected source -> confirmed Preview -> confirmed Program TAKE semantics verified"
 Write-Host "Source bin: live/media metadata, monitoring thumbnails, health, PGM/PVW and remaining-time presentation verified"
+Write-Host "Graphics: PNG/RGBA load, placement, scale and confirmed show/hide through Client SDK verified"
 Write-Host "Commit state: pending, confirmed, rejected/failed and resynchronization presentation verified"
 Write-Host "Keyboard controls: synchronization, Preview, CUT and DISSOLVE/AUTO declared"
