@@ -198,6 +198,17 @@ Assert-Condition ($viewModel -match '_client\.StartRecordingAsync') "Recording s
 Assert-Condition ($viewModel -match '_client\.StopRecordingAsync') "Recording stop must cross the Client SDK seam."
 Assert-Condition ($viewModel -match 'ApplyRecording\(snapshot\.Recording') "Recording status must project confirmed Runtime observations."
 Assert-Condition ($viewModel -notmatch 'ProgramRecorder|ReferenceRecordingPayloadWriter') "Operator must not own recording execution or storage writers."
+Assert-Condition ($window -match 'Text="AI / PERSON SEGMENTATION"') "AP-55 must expose one visible AI showcase panel."
+Assert-Condition ($window -match 'Content="AI ON"' -and $window -match 'Binding EnableAIShowcaseCommand') "AP-55 must expose explicit AI enable control."
+Assert-Condition ($window -match 'Content="AI OFF"' -and $window -match 'Binding DisableAIShowcaseCommand') "AP-55 must expose explicit AI disable control."
+foreach ($binding in @("AIProvider", "AIStatus", "AIInferenceTime", "AIPersonRegions", "AIConfidence", "AISynchronization")) {
+	Assert-Condition ($window -match "Binding $binding") "AP-55 Operator binding '$binding' is required."
+}
+Assert-Condition ($viewModel -match '_client\.SetAIShowcaseEnabledAsync') "AP-55 AI enable/disable must cross the Client SDK seam."
+Assert-Condition ($viewModel -match 'ApplyAI\(snapshot\.AIShowcase\)') "AP-55 observations must project confirmed Runtime/AIHost state."
+Assert-Condition ($viewModel -notmatch 'ManagedReferencePersonSegmentationProvider|GovernedInferenceRuntime|AIHostService|ai\.inference\.execute') "Operator must not own inference or bypass the Client SDK."
+$ap55PollCount = [Regex]::Matches($viewModel, 'PeriodicTimer\(TimeSpan\.FromMilliseconds\(200\)\)').Count
+Assert-Condition ($ap55PollCount -eq 1) "AP-55 must reuse the existing bounded management poll rather than add an AI UI polling loop."
 Assert-Condition ($window -match 'Text="RUNTIME HEALTH / PERFORMANCE"') "AP-54 must expose a compact Runtime health/performance HUD."
 foreach ($binding in @("EngineHealth", "ControlHealth", "RuntimeHealth", "MediaHealth", "ProviderHealth", "GpuProviderHealth", "CurrentFormat", "FrameTime", "DroppedFrames", "Uptime", "GpuUtilization", "Vram")) {
 	Assert-Condition ($window -match "Binding $binding") "AP-54 HUD binding '$binding' is required."
@@ -229,6 +240,8 @@ Assert-Condition ($documentation -match '125%') "Operator UI documentation must 
 Assert-Condition ($documentation -match '150%') "Operator UI documentation must record 150% DPI qualification."
 Assert-Condition ($documentation -match 'AP-54 Runtime Health') "Operator UI documentation must record the AP-54 Runtime health/performance HUD."
 Assert-Condition ($documentation -match 'PASS / FAIL / UNVERIFIED') "AP-54 documentation must preserve evidence-state semantics."
+Assert-Condition ($documentation -match 'AP-55 Visible AI Showcase') "Operator UI documentation must record AP-55."
+Assert-Condition ($documentation -match 'Person Segmentation Highlight') "AP-55 documentation must identify the real existing segmentation capability."
 
 Write-Host "Operator UI policy verification PASS"
 Write-Host "Operator authority: remote Client SDK only"
@@ -242,6 +255,7 @@ Write-Host "Graphics: PNG/RGBA load, placement, scale and confirmed show/hide th
 Write-Host "Audio: AFV, stereo/master meters, gain, mute, clipping/health and clip-audio status use Runtime observations"
 Write-Host "Recording: confirmed REC state, elapsed time, destination/name, final path and failures use RuntimeHost recording truth"
 Write-Host "Health HUD: PASS/FAIL/UNVERIFIED Runtime evidence, bounded 5 Hz projection and no locally invented GPU telemetry"
+Write-Host "AI showcase: Person Segmentation Highlight, explicit ON/OFF, AIHost execution and clean Program fallback verified"
 Write-Host "Program Output: display selection, start/stop, fullscreen/windowed fallback and shared Program monitoring truth verified"
 Write-Host "Commit state: pending, confirmed, rejected/failed and resynchronization presentation verified"
 Write-Host "Keyboard controls: synchronization, Preview, CUT and DISSOLVE/AUTO declared"
