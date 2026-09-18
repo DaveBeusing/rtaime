@@ -62,6 +62,28 @@ public interface IControlRuntimeTransportSeam
 		MediaSinkId programSinkId,
 		RuntimeProgramTransitionIntent? transition,
 		CancellationToken cancellationToken = default);
+	ValueTask<RuntimeGraphicsOverlaySnapshot> LoadGraphicsOverlayAsync(
+		string assetName,
+		uint width,
+		uint height,
+		byte[] rgbaPixels,
+		CancellationToken cancellationToken = default) =>
+		ValueTask.FromException<RuntimeGraphicsOverlaySnapshot>(
+			new NotSupportedException("Runtime transport does not expose graphics overlay control."));
+
+	ValueTask<RuntimeGraphicsOverlaySnapshot> SetGraphicsOverlayAsync(
+		bool visible,
+		double positionX,
+		double positionY,
+		double scale,
+		CancellationToken cancellationToken = default) =>
+		ValueTask.FromException<RuntimeGraphicsOverlaySnapshot>(
+			new NotSupportedException("Runtime transport does not expose graphics overlay control."));
+
+	ValueTask<RuntimeGraphicsOverlaySnapshot> ClearGraphicsOverlayAsync(CancellationToken cancellationToken = default) =>
+		ValueTask.FromException<RuntimeGraphicsOverlaySnapshot>(
+			new NotSupportedException("Runtime transport does not expose graphics overlay control."));
+
 	ValueTask<MediaDeckRuntimeSnapshot> GetMediaDeckSnapshotAsync(CancellationToken cancellationToken = default) =>
 		ValueTask.FromException<MediaDeckRuntimeSnapshot>(
 			new NotSupportedException("Runtime transport does not expose media-deck control."));
