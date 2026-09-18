@@ -137,11 +137,18 @@ public partial class MainWindow : Window
 		try
 		{
 			ProgramOutput.Dispose();
-			MediaDeck.SnapshotChanged -= ((OperatorViewModel)DataContext).ApplyMediaDeckSnapshot;
-			await Monitoring.DisposeAsync();
-			await MediaDeck.DisposeAsync();
 			if (DataContext is OperatorViewModel viewModel)
+			{
+				MediaDeck.SnapshotChanged -= viewModel.ApplyMediaDeckSnapshot;
+				await Monitoring.DisposeAsync();
+				await MediaDeck.DisposeAsync();
 				await viewModel.DisposeAsync();
+			}
+			else
+			{
+				await Monitoring.DisposeAsync();
+				await MediaDeck.DisposeAsync();
+			}
 		}
 		finally
 		{
