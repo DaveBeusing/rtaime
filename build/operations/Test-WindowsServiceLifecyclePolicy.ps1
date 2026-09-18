@@ -72,7 +72,9 @@ foreach ($token in @(
 	"'failure'",
 	"'failureflag'",
 	'Wait-RuntimeReadiness',
-	'Stop-ServiceGracefully'
+	'Stop-ServiceGracefully',
+	'apphost-shutdown.json',
+	'forcedTermination'
 )) {
 	Assert-Condition ($serviceLifecycle -match [Regex]::Escape($token)) "Windows service lifecycle is missing required behavior '$token'."
 }
