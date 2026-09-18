@@ -25,7 +25,7 @@ public partial class MainWindow : Window
 
 		var controlTransport = new NamedPipeOperatorControlTransport(controlEndpoint);
 		var client = new OperatorControlClient(controlTransport);
-		var viewModel = new OperatorViewModel(client);
+		var viewModel = new OperatorViewModel(client, PickGraphicsAsset);
 		MediaDeck = CreateMediaDeck(viewModel, client);
 		MediaDeck.SnapshotChanged += viewModel.ApplyMediaDeckSnapshot;
 		Monitoring = new OperatorMonitoringViewModel(
@@ -42,6 +42,7 @@ public partial class MainWindow : Window
 	public MainWindow(OperatorViewModel viewModel)
 	{
 		ArgumentNullException.ThrowIfNull(viewModel);
+		viewModel.SetGraphicsAssetPicker(PickGraphicsAsset);
 		var client = viewModel.Client ?? new OperatorControlClient(new UnavailableOperatorControlTransport());
 		MediaDeck = CreateMediaDeck(viewModel, client);
 		MediaDeck.SnapshotChanged += viewModel.ApplyMediaDeckSnapshot;
@@ -67,6 +68,20 @@ public partial class MainWindow : Window
 			PickLocalMediaFile,
 			() => viewModel.SelectedSource?.Id,
 			new DispatcherSynchronizationContext(Dispatcher));
+
+	private static OperatorGraphicsAsset? PickGraphicsAsset()
+	{
+		var dialog = new OpenFileDialog
+		{
+			Title = "Load graphics overlay",
+			Filter = "PNG Image (*.png)|*.png",
+			CheckFileExists = true,
+			Multiselect = false
+		};
+		return dialog.ShowDialog() == true
+			? GraphicsOverlayAssetLoader.LoadPng(dialog.FileName)
+			: null;
+	}
 
 	private static string? PickLocalMediaFile()
 	{
