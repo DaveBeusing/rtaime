@@ -17,10 +17,20 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
 	private readonly object _gate = new();
 	private readonly LocalMediaFileProvider _provider = new();
 	private LocalMediaRuntimeSession? _session;
+	private LocalMediaRuntimeBoundaryResult? _latestBoundary;
 	private Failure? _failure;
 	private bool _disposed;
 
 	public ProviderDescriptor ProviderDescriptor => _provider.Descriptor;
+
+	public LocalMediaRuntimeBoundaryResult? LatestBoundary
+	{
+		get
+		{
+			lock (_gate)
+				return _latestBoundary;
+		}
+	}
 
 	public MediaDeckRuntimeSnapshot Snapshot
 	{
@@ -42,6 +52,7 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
 		lock (_gate)
 		{
 			DisposeSession();
+			_latestBoundary = null;
 			_failure = null;
 
 			var open = _provider.TryOpen(request.Path, request.SourceId);
@@ -99,9 +110,13 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
 		lock (_gate)
 		{
 			if (_session is null || _session.Transport.State != MediaTransportState.Playing)
+			{
+				_latestBoundary = null;
 				return CreateSnapshot();
+			}
 
 			var result = _session.ProcessNextBoundary();
+			_latestBoundary = result;
 			if (result.Status == LocalMediaRuntimeBoundaryStatus.Failed)
 				_failure = result.Failure;
 			return CreateSnapshot();
@@ -114,6 +129,7 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
 		lock (_gate)
 		{
 			DisposeSession();
+			_latestBoundary = null;
 			_failure = null;
 			return MediaDeckRuntimeSnapshot.Unloaded;
 		}
@@ -166,6 +182,7 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
 	{
 		_session?.Dispose();
 		_session = null;
+		_latestBoundary = null;
 	}
 
 	private static MediaTransportSnapshot CreateEmptyTransport(MediaAssetId assetId) =>
