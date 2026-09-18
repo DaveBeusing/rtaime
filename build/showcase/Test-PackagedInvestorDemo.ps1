@@ -38,6 +38,7 @@ try {
 	Assert-Condition (Test-Path -LiteralPath $launcher -PathType Leaf) "Installed bundle does not contain the investor demo launcher."
 	Assert-Condition (Test-Path -LiteralPath $lifecycle -PathType Leaf) "Installed bundle does not contain the managed lifecycle controller."
 	Assert-Condition (Test-Path -LiteralPath (Join-Path $install "tools/Start-rtaime-Showcase.cmd") -PathType Leaf) "Installed bundle does not contain the one-click showcase entry point."
+	Assert-Condition (Test-Path -LiteralPath (Join-Path $install "Start-rtaime-Showcase.cmd") -PathType Leaf) "Installed bundle root does not expose the one-click showcase entry point."
 
 	$result = & $launcher `
 		-InstallPath $install `
