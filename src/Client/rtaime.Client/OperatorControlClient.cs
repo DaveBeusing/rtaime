@@ -7,16 +7,42 @@ namespace rtaime.Client;
 
 public sealed record OperatorSourceDescriptor
 {
-    public OperatorSourceDescriptor(string id, string name)
+    public OperatorSourceDescriptor(
+        string id,
+        string name,
+        string type = "LIVE",
+        string format = "UNKNOWN",
+        string health = "UNKNOWN",
+        string mediaState = "—",
+        TimeSpan? remaining = null,
+        string? mediaFileName = null)
     {
         if (string.IsNullOrWhiteSpace(id)) throw new ArgumentException("Source id is required.", nameof(id));
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Source name is required.", nameof(name));
+        if (string.IsNullOrWhiteSpace(type)) throw new ArgumentException("Source type is required.", nameof(type));
+        if (string.IsNullOrWhiteSpace(format)) throw new ArgumentException("Source format is required.", nameof(format));
+        if (string.IsNullOrWhiteSpace(health)) throw new ArgumentException("Source health is required.", nameof(health));
+        if (string.IsNullOrWhiteSpace(mediaState)) throw new ArgumentException("Media state is required.", nameof(mediaState));
+        if (remaining < TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(remaining));
+
         Id = id.Trim();
         Name = name.Trim();
+        Type = type.Trim().ToUpperInvariant();
+        Format = format.Trim();
+        Health = health.Trim().ToUpperInvariant();
+        MediaState = mediaState.Trim().ToUpperInvariant();
+        Remaining = remaining;
+        MediaFileName = string.IsNullOrWhiteSpace(mediaFileName) ? null : mediaFileName.Trim();
     }
 
     public string Id { get; }
     public string Name { get; }
+    public string Type { get; }
+    public string Format { get; }
+    public string Health { get; }
+    public string MediaState { get; }
+    public TimeSpan? Remaining { get; }
+    public string? MediaFileName { get; }
 }
 
 public sealed record OperatorMutationResponse
