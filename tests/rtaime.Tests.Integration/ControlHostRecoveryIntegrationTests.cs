@@ -230,6 +230,8 @@ public sealed class ControlHostRecoveryIntegrationTests
 				1,
 				0,
 				0,
+				VideoFormat.Hd1080p50Rgba8,
+				new Dictionary<MediaSourceId, string>(),
 				1));
 
 		public ValueTask<RuntimeRemoteApplyResult> ApplyExecutionAsync(
