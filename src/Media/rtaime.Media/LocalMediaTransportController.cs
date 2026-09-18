@@ -70,12 +70,12 @@ public sealed class LocalMediaTransportController
 			_totalFrames - 1);
 	}
 
-	public void MarkEnded()
+	public void MarkEnded(long? holdFrame = null)
 	{
 		if (_state == MediaTransportState.Error)
 			return;
 
-		_currentFrame = _totalFrames - 1;
+		_currentFrame = Math.Clamp(holdFrame ?? (_totalFrames - 1), 0, _totalFrames - 1);
 		_state = MediaTransportState.Ended;
 		_failure = null;
 	}
