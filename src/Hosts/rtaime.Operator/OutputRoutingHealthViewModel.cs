@@ -186,6 +186,8 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 		var renderSample = hasRuntimePerformance ? TryParseLeadingDouble(_control.FrameTime) : null;
 		var droppedSample = hasRuntimePerformance ? TryParseUnsigned(_control.DroppedFrames) : null;
 		var gpuSample = TryParsePercentage(_control.GpuUtilization);
+		var gpuValue = NormalizeAvailability(_control.GpuUtilization);
+		var vramValue = NormalizeAvailability(_control.Vram);
 
 		UpdateMetric(
 			"cpu",
@@ -196,8 +198,8 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 			sampleHistory);
 		UpdateMetric(
 			"gpu",
-			NormalizeAvailability(_control.GpuUtilization),
-			NormalizeEvidence(_control.GpuProviderHealth),
+			gpuValue,
+			ResolveMetricEvidence(gpuValue, _control.GpuProviderHealth),
 			"Runtime-published GPU utilization evidence. No local probing is performed.",
 			gpuSample,
 			sampleHistory);
@@ -210,8 +212,8 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 			sampleHistory);
 		UpdateMetric(
 			"vram",
-			NormalizeAvailability(_control.Vram),
-			NormalizeEvidence(_control.GpuProviderHealth),
+			vramValue,
+			ResolveMetricEvidence(vramValue, _control.GpuProviderHealth),
 			"Runtime-published GPU memory evidence.",
 			null,
 			sampleHistory);
@@ -316,6 +318,11 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 		var separator = normalized.IndexOf('/');
 		return separator < 0 ? normalized : normalized[..separator].Trim();
 	}
+
+	private static string ResolveMetricEvidence(string value, string providerEvidence) =>
+		value == Unavailable || value.Contains("UNVERIFIED", StringComparison.OrdinalIgnoreCase)
+			? "UNVERIFIED"
+			: NormalizeEvidence(providerEvidence);
 
 	private static string NormalizeEvidence(string? value) =>
 		value?.Trim().ToUpperInvariant() switch
