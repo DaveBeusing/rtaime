@@ -263,7 +263,7 @@ Assert-Condition ($viewModel -match 'ApplyHealth\(snapshot\.Health\)') "Runtime 
 $managementPollCount = [Regex]::Matches($viewModel, 'PeriodicTimer\(TimeSpan\.FromMilliseconds\(200\)\)').Count
 Assert-Condition ($managementPollCount -eq 1) "Runtime Health & Performance HUD must reuse the single bounded 200 ms management poll rather than add a new UI telemetry loop."
 Assert-Condition ($viewModel -notmatch 'PerformanceCounter|ManagementObjectSearcher|nvidia-smi|NVML') "Operator must not synthesize GPU telemetry locally."
-Assert-Condition ($window -match 'Text="COMMIT"') "Program workspace must expose commit status."
+Assert-Condition ($programViewer -match 'Text="COMMIT"') "Program viewer must expose authoritative commit status."
 Assert-Condition ($window -match 'Binding CommitStatus') "Program workspace must bind authoritative commit status."
 Assert-Condition ($window -match 'Binding TransitionStatus') "Program workspace must expose transition state."
 Assert-Condition ($window -match 'CONFIRMED PREVIEW / NEXT TAKE') "Transition workspace must make the authoritative Preview take target explicit."
