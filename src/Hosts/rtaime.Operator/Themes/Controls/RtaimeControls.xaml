@@ -1,0 +1,516 @@
+<!-- Copyright (c) Dave Beusing <david.beusing@gmail.com>. -->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	xmlns:controls="clr-namespace:rtaime.Operator.Controls">
+
+	<Style TargetType="{x:Type controls:RtaimeButton}">
+		<Setter Property="Background" Value="{DynamicResource OperatorRaisedSurfaceBrush}" />
+		<Setter Property="Foreground" Value="{DynamicResource OperatorTextBrush}" />
+		<Setter Property="BorderBrush" Value="{DynamicResource OperatorBorderBrush}" />
+		<Setter Property="BorderThickness" Value="1" />
+		<Setter Property="MinHeight" Value="{DynamicResource OperatorControlHeight}" />
+		<Setter Property="Padding" Value="{DynamicResource OperatorControlPadding}" />
+		<Setter Property="FontSize" Value="{DynamicResource OperatorFontSizeControl}" />
+		<Setter Property="FontWeight" Value="SemiBold" />
+		<Setter Property="HorizontalContentAlignment" Value="Center" />
+		<Setter Property="VerticalContentAlignment" Value="Center" />
+		<Setter Property="Cursor" Value="Hand" />
+		<Setter Property="FocusVisualStyle" Value="{x:Null}" />
+		<Setter Property="ToolTipService.InitialShowDelay" Value="300" />
+		<Setter Property="ToolTipService.ShowDuration" Value="15000" />
+		<Setter Property="Template">
+			<Setter.Value>
+				<ControlTemplate TargetType="{x:Type controls:RtaimeButton}">
+					<Border x:Name="Chrome"
+						Background="{TemplateBinding Background}"
+						BorderBrush="{TemplateBinding BorderBrush}"
+						BorderThickness="{TemplateBinding BorderThickness}"
+						CornerRadius="{DynamicResource OperatorRadiusControl}"
+						Padding="{TemplateBinding Padding}"
+						SnapsToDevicePixels="True">
+						<ContentPresenter
+							HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+							VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+							RecognizesAccessKey="True" />
+					</Border>
+					<ControlTemplate.Triggers>
+						<Trigger Property="IsCompact" Value="True">
+							<Setter Property="MinHeight" Value="{DynamicResource OperatorCompactControlHeight}" />
+							<Setter Property="Padding" Value="{DynamicResource OperatorCompactControlPadding}" />
+						</Trigger>
+						<Trigger Property="IsMouseOver" Value="True">
+							<Setter TargetName="Chrome" Property="Background" Value="{DynamicResource OperatorRaisedHoverBrush}" />
+							<Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource OperatorAccentBrush}" />
+						</Trigger>
+						<Trigger Property="IsKeyboardFocused" Value="True">
+							<Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource OperatorFocusBrush}" />
+						</Trigger>
+						<Trigger Property="IsPressed" Value="True">
+							<Setter TargetName="Chrome" Property="Background" Value="{DynamicResource OperatorAlternateSurfaceBrush}" />
+							<Setter TargetName="Chrome" Property="Opacity" Value="0.78" />
+						</Trigger>
+						<Trigger Property="IsEnabled" Value="False">
+							<Setter Property="Foreground" Value="{DynamicResource OperatorDisabledBrush}" />
+							<Setter TargetName="Chrome" Property="Opacity" Value="0.45" />
+						</Trigger>
+					</ControlTemplate.Triggers>
+				</ControlTemplate>
+			</Setter.Value>
+		</Setter>
+	</Style>
+
+	<Style TargetType="{x:Type controls:RtaimeIconButton}">
+		<Setter Property="Width" Value="28" />
+		<Setter Property="Height" Value="28" />
+		<Setter Property="Background" Value="{DynamicResource OperatorRaisedSurfaceBrush}" />
+		<Setter Property="Foreground" Value="{DynamicResource OperatorTextBrush}" />
+		<Setter Property="BorderBrush" Value="{DynamicResource OperatorBorderBrush}" />
+		<Setter Property="BorderThickness" Value="1" />
+		<Setter Property="Padding" Value="0" />
+		<Setter Property="Cursor" Value="Hand" />
+		<Setter Property="FocusVisualStyle" Value="{x:Null}" />
+		<Setter Property="Template">
+			<Setter.Value>
+				<ControlTemplate TargetType="{x:Type controls:RtaimeIconButton}">
+					<Border x:Name="Chrome"
+						Background="{TemplateBinding Background}"
+						BorderBrush="{TemplateBinding BorderBrush}"
+						BorderThickness="{TemplateBinding BorderThickness}"
+						CornerRadius="{DynamicResource OperatorRadiusControl}"
+						SnapsToDevicePixels="True">
+						<Path
+							Width="16"
+							Height="16"
+							Data="{TemplateBinding IconData}"
+							Fill="{TemplateBinding Foreground}"
+							Stretch="Uniform"
+							HorizontalAlignment="Center"
+							VerticalAlignment="Center"
+							SnapsToDevicePixels="True" />
+					</Border>
+					<ControlTemplate.Triggers>
+						<Trigger Property="IsMouseOver" Value="True">
+							<Setter TargetName="Chrome" Property="Background" Value="{DynamicResource OperatorRaisedHoverBrush}" />
+							<Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource OperatorAccentBrush}" />
+						</Trigger>
+						<Trigger Property="IsKeyboardFocused" Value="True">
+							<Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource OperatorFocusBrush}" />
+						</Trigger>
+						<Trigger Property="IsPressed" Value="True">
+							<Setter TargetName="Chrome" Property="Background" Value="{DynamicResource OperatorAlternateSurfaceBrush}" />
+							<Setter TargetName="Chrome" Property="Opacity" Value="0.78" />
+						</Trigger>
+						<Trigger Property="IsEnabled" Value="False">
+							<Setter Property="Foreground" Value="{DynamicResource OperatorDisabledBrush}" />
+							<Setter TargetName="Chrome" Property="Opacity" Value="0.45" />
+						</Trigger>
+					</ControlTemplate.Triggers>
+				</ControlTemplate>
+			</Setter.Value>
+		</Setter>
+	</Style>
+
+	<Style TargetType="{x:Type controls:RtaimeToggleButton}">
+		<Setter Property="Background" Value="{DynamicResource OperatorRaisedSurfaceBrush}" />
+		<Setter Property="Foreground" Value="{DynamicResource OperatorTextBrush}" />
+		<Setter Property="BorderBrush" Value="{DynamicResource OperatorBorderBrush}" />
+		<Setter Property="BorderThickness" Value="1" />
+		<Setter Property="MinHeight" Value="{DynamicResource OperatorControlHeight}" />
+		<Setter Property="Padding" Value="{DynamicResource OperatorControlPadding}" />
+		<Setter Property="FontSize" Value="{DynamicResource OperatorFontSizeControl}" />
+		<Setter Property="FontWeight" Value="SemiBold" />
+		<Setter Property="HorizontalContentAlignment" Value="Center" />
+		<Setter Property="VerticalContentAlignment" Value="Center" />
+		<Setter Property="Cursor" Value="Hand" />
+		<Setter Property="FocusVisualStyle" Value="{x:Null}" />
+		<Setter Property="Template">
+			<Setter.Value>
+				<ControlTemplate TargetType="{x:Type controls:RtaimeToggleButton}">
+					<Border x:Name="Chrome"
+						Background="{TemplateBinding Background}"
+						BorderBrush="{TemplateBinding BorderBrush}"
+						BorderThickness="{TemplateBinding BorderThickness}"
+						CornerRadius="{DynamicResource OperatorRadiusControl}"
+						Padding="{TemplateBinding Padding}"
+						SnapsToDevicePixels="True">
+						<ContentPresenter
+							HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+							VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+					</Border>
+					<ControlTemplate.Triggers>
+						<Trigger Property="IsCompact" Value="True">
+							<Setter Property="MinHeight" Value="{DynamicResource OperatorCompactControlHeight}" />
+							<Setter Property="Padding" Value="{DynamicResource OperatorCompactControlPadding}" />
+						</Trigger>
+						<Trigger Property="IsChecked" Value="True">
+							<Setter TargetName="Chrome" Property="Background" Value="{DynamicResource OperatorSelectionSurfaceBrush}" />
+							<Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource OperatorAccentBrush}" />
+						</Trigger>
+						<Trigger Property="IsMouseOver" Value="True">
+							<Setter TargetName="Chrome" Property="Background" Value="{DynamicResource OperatorRaisedHoverBrush}" />
+							<Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource OperatorAccentBrush}" />
+						</Trigger>
+						<Trigger Property="IsKeyboardFocused" Value="True">
+							<Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource OperatorFocusBrush}" />
+						</Trigger>
+						<Trigger Property="IsPressed" Value="True">
+							<Setter TargetName="Chrome" Property="Opacity" Value="0.78" />
+						</Trigger>
+						<Trigger Property="IsEnabled" Value="False">
+							<Setter Property="Foreground" Value="{DynamicResource OperatorDisabledBrush}" />
+							<Setter TargetName="Chrome" Property="Opacity" Value="0.45" />
+						</Trigger>
+					</ControlTemplate.Triggers>
+				</ControlTemplate>
+			</Setter.Value>
+		</Setter>
+	</Style>
+
+	<Style TargetType="{x:Type controls:RtaimeTransportButton}">
+		<Setter Property="Background" Value="{DynamicResource OperatorRaisedSurfaceBrush}" />
+		<Setter Property="Foreground" Value="{DynamicResource OperatorTextBrush}" />
+		<Setter Property="BorderBrush" Value="{DynamicResource OperatorBorderBrush}" />
+		<Setter Property="BorderThickness" Value="1" />
+		<Setter Property="MinHeight" Value="{DynamicResource OperatorControlHeight}" />
+		<Setter Property="MinWidth" Value="30" />
+		<Setter Property="Padding" Value="8,4" />
+		<Setter Property="FontSize" Value="{DynamicResource OperatorFontSizeControl}" />
+		<Setter Property="FontWeight" Value="SemiBold" />
+		<Setter Property="Cursor" Value="Hand" />
+		<Setter Property="FocusVisualStyle" Value="{x:Null}" />
+		<Setter Property="Template">
+			<Setter.Value>
+				<ControlTemplate TargetType="{x:Type controls:RtaimeTransportButton}">
+					<Border x:Name="Chrome"
+						Background="{TemplateBinding Background}"
+						BorderBrush="{TemplateBinding BorderBrush}"
+						BorderThickness="{TemplateBinding BorderThickness}"
+						CornerRadius="{DynamicResource OperatorRadiusControl}"
+						Padding="{TemplateBinding Padding}"
+						SnapsToDevicePixels="True">
+						<StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+							<Path
+								Width="14"
+								Height="14"
+								Data="{TemplateBinding IconData}"
+								Fill="{TemplateBinding Foreground}"
+								Stretch="Uniform"
+								VerticalAlignment="Center"
+								SnapsToDevicePixels="True" />
+							<ContentPresenter Margin="6,0,0,0" VerticalAlignment="Center" RecognizesAccessKey="True" />
+						</StackPanel>
+					</Border>
+					<ControlTemplate.Triggers>
+						<Trigger Property="Content" Value="{x:Null}">
+							<Setter TargetName="Chrome" Property="Padding" Value="7" />
+						</Trigger>
+						<Trigger Property="IsMouseOver" Value="True">
+							<Setter TargetName="Chrome" Property="Background" Value="{DynamicResource OperatorRaisedHoverBrush}" />
+							<Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource OperatorAccentBrush}" />
+						</Trigger>
+						<Trigger Property="IsKeyboardFocused" Value="True">
+							<Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource OperatorFocusBrush}" />
+						</Trigger>
+						<Trigger Property="IsPressed" Value="True">
+							<Setter TargetName="Chrome" Property="Background" Value="{DynamicResource OperatorAlternateSurfaceBrush}" />
+							<Setter TargetName="Chrome" Property="Opacity" Value="0.78" />
+						</Trigger>
+						<Trigger Property="IsEnabled" Value="False">
+							<Setter Property="Foreground" Value="{DynamicResource OperatorDisabledBrush}" />
+							<Setter TargetName="Chrome" Property="Opacity" Value="0.45" />
+						</Trigger>
+					</ControlTemplate.Triggers>
+				</ControlTemplate>
+			</Setter.Value>
+		</Setter>
+	</Style>
+
+	<Style TargetType="{x:Type controls:RtaimeNavigationItem}">
+		<Setter Property="Width" Value="{DynamicResource OperatorNavigationWidth}" />
+		<Setter Property="MinHeight" Value="72" />
+		<Setter Property="Background" Value="Transparent" />
+		<Setter Property="Foreground" Value="{DynamicResource OperatorSecondaryTextBrush}" />
+		<Setter Property="BorderBrush" Value="Transparent" />
+		<Setter Property="BorderThickness" Value="1" />
+		<Setter Property="FontSize" Value="{DynamicResource OperatorFontSizeCaption}" />
+		<Setter Property="FontWeight" Value="SemiBold" />
+		<Setter Property="Cursor" Value="Hand" />
+		<Setter Property="FocusVisualStyle" Value="{x:Null}" />
+		<Setter Property="AutomationProperties.Name" Value="{Binding Label, RelativeSource={RelativeSource Self}}" />
+		<Setter Property="Template">
+			<Setter.Value>
+				<ControlTemplate TargetType="{x:Type controls:RtaimeNavigationItem}">
+					<Grid SnapsToDevicePixels="True">
+						<Border x:Name="Chrome"
+							Background="{TemplateBinding Background}"
+							BorderBrush="{TemplateBinding BorderBrush}"
+							BorderThickness="{TemplateBinding BorderThickness}"
+							CornerRadius="{DynamicResource OperatorRadiusControl}" />
+						<Border x:Name="ActiveAccent"
+							Width="2"
+							Margin="0,7,0,7"
+							HorizontalAlignment="Left"
+							Background="Transparent" />
+						<StackPanel Margin="6" HorizontalAlignment="Center" VerticalAlignment="Center">
+							<Path
+								Width="18"
+								Height="18"
+								Data="{TemplateBinding IconData}"
+								Fill="{TemplateBinding Foreground}"
+								Stretch="Uniform"
+								HorizontalAlignment="Center"
+								SnapsToDevicePixels="True" />
+							<TextBlock
+								Margin="0,6,0,0"
+								Text="{TemplateBinding Label}"
+								Foreground="{TemplateBinding Foreground}"
+								FontSize="{TemplateBinding FontSize}"
+								FontWeight="{TemplateBinding FontWeight}"
+								TextAlignment="Center" />
+						</StackPanel>
+					</Grid>
+					<ControlTemplate.Triggers>
+						<Trigger Property="IsActive" Value="True">
+							<Setter TargetName="Chrome" Property="Background" Value="{DynamicResource OperatorRaisedSurfaceBrush}" />
+							<Setter TargetName="ActiveAccent" Property="Background" Value="{DynamicResource OperatorAccentBrush}" />
+							<Setter Property="Foreground" Value="{DynamicResource OperatorTextBrush}" />
+						</Trigger>
+						<Trigger Property="IsMouseOver" Value="True">
+							<Setter TargetName="Chrome" Property="Background" Value="{DynamicResource OperatorRaisedHoverBrush}" />
+							<Setter Property="Foreground" Value="{DynamicResource OperatorTextBrush}" />
+						</Trigger>
+						<Trigger Property="IsKeyboardFocused" Value="True">
+							<Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource OperatorFocusBrush}" />
+						</Trigger>
+						<Trigger Property="IsPressed" Value="True">
+							<Setter TargetName="Chrome" Property="Opacity" Value="0.78" />
+						</Trigger>
+						<Trigger Property="IsEnabled" Value="False">
+							<Setter Property="Foreground" Value="{DynamicResource OperatorDisabledBrush}" />
+							<Setter TargetName="Chrome" Property="Opacity" Value="0.45" />
+						</Trigger>
+					</ControlTemplate.Triggers>
+				</ControlTemplate>
+			</Setter.Value>
+		</Setter>
+	</Style>
+
+	<Style TargetType="{x:Type controls:RtaimePanelHeader}">
+		<Setter Property="MinHeight" Value="30" />
+		<Setter Property="Foreground" Value="{DynamicResource OperatorTextBrush}" />
+		<Setter Property="Background" Value="Transparent" />
+		<Setter Property="BorderBrush" Value="{DynamicResource OperatorBorderBrush}" />
+		<Setter Property="BorderThickness" Value="0,0,0,1" />
+		<Setter Property="Padding" Value="8,0" />
+		<Setter Property="FontSize" Value="{DynamicResource OperatorFontSizeSection}" />
+		<Setter Property="FontWeight" Value="SemiBold" />
+		<Setter Property="Template">
+			<Setter.Value>
+				<ControlTemplate TargetType="{x:Type controls:RtaimePanelHeader}">
+					<Border
+						Background="{TemplateBinding Background}"
+						BorderBrush="{TemplateBinding BorderBrush}"
+						BorderThickness="{TemplateBinding BorderThickness}"
+						Padding="{TemplateBinding Padding}"
+						SnapsToDevicePixels="True">
+						<Grid>
+							<Grid.ColumnDefinitions>
+								<ColumnDefinition Width="*" />
+								<ColumnDefinition Width="Auto" />
+							</Grid.ColumnDefinitions>
+							<ContentPresenter
+								ContentSource="Header"
+								VerticalAlignment="Center"
+								RecognizesAccessKey="True" />
+							<ContentPresenter
+								Grid.Column="1"
+								ContentSource="Content"
+								Margin="8,0,0,0"
+								VerticalAlignment="Center" />
+						</Grid>
+					</Border>
+				</ControlTemplate>
+			</Setter.Value>
+		</Setter>
+	</Style>
+
+	<Style TargetType="{x:Type controls:RtaimeStatusBadge}">
+		<Setter Property="MinHeight" Value="24" />
+		<Setter Property="MaxHeight" Value="26" />
+		<Setter Property="Background" Value="{DynamicResource OperatorAlternateSurfaceBrush}" />
+		<Setter Property="Foreground" Value="{DynamicResource OperatorSecondaryTextBrush}" />
+		<Setter Property="BorderBrush" Value="{DynamicResource OperatorBorderBrush}" />
+		<Setter Property="BorderThickness" Value="1" />
+		<Setter Property="Padding" Value="7,2" />
+		<Setter Property="FontSize" Value="{DynamicResource OperatorFontSizeCaption}" />
+		<Setter Property="FontWeight" Value="SemiBold" />
+		<Setter Property="HorizontalContentAlignment" Value="Center" />
+		<Setter Property="VerticalContentAlignment" Value="Center" />
+		<Setter Property="Template">
+			<Setter.Value>
+				<ControlTemplate TargetType="{x:Type controls:RtaimeStatusBadge}">
+					<Border x:Name="Chrome"
+						Background="{TemplateBinding Background}"
+						BorderBrush="{TemplateBinding BorderBrush}"
+						BorderThickness="{TemplateBinding BorderThickness}"
+						CornerRadius="{DynamicResource OperatorRadiusStatus}"
+						Padding="{TemplateBinding Padding}"
+						SnapsToDevicePixels="True">
+						<StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+							<Ellipse
+								x:Name="Indicator"
+								Width="6"
+								Height="6"
+								Margin="0,0,6,0"
+								Fill="{DynamicResource OperatorMutedTextBrush}"
+								VerticalAlignment="Center" />
+							<ContentPresenter
+								VerticalAlignment="Center"
+								RecognizesAccessKey="True" />
+						</StackPanel>
+					</Border>
+					<ControlTemplate.Triggers>
+						<Trigger Property="ShowIndicator" Value="False">
+							<Setter TargetName="Indicator" Property="Visibility" Value="Collapsed" />
+						</Trigger>
+						<Trigger Property="Status" Value="{x:Static controls:RtaimeStatusKind.Selection}">
+							<Setter TargetName="Indicator" Property="Fill" Value="{DynamicResource OperatorAccentBrush}" />
+							<Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource OperatorAccentBrush}" />
+							<Setter Property="Foreground" Value="{DynamicResource OperatorTextBrush}" />
+						</Trigger>
+						<Trigger Property="Status" Value="{x:Static controls:RtaimeStatusKind.Action}">
+							<Setter TargetName="Indicator" Property="Fill" Value="{DynamicResource OperatorAccentBrush}" />
+							<Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource OperatorAccentBrush}" />
+							<Setter Property="Foreground" Value="{DynamicResource OperatorTextBrush}" />
+						</Trigger>
+						<Trigger Property="Status" Value="{x:Static controls:RtaimeStatusKind.Healthy}">
+							<Setter TargetName="Indicator" Property="Fill" Value="{DynamicResource OperatorHealthyBrush}" />
+							<Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource OperatorHealthyBrush}" />
+							<Setter Property="Foreground" Value="{DynamicResource OperatorTextBrush}" />
+						</Trigger>
+						<Trigger Property="Status" Value="{x:Static controls:RtaimeStatusKind.Ready}">
+							<Setter TargetName="Indicator" Property="Fill" Value="{DynamicResource OperatorHealthyBrush}" />
+							<Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource OperatorHealthyBrush}" />
+							<Setter Property="Foreground" Value="{DynamicResource OperatorTextBrush}" />
+						</Trigger>
+						<Trigger Property="Status" Value="{x:Static controls:RtaimeStatusKind.Preview}">
+							<Setter TargetName="Indicator" Property="Fill" Value="{DynamicResource OperatorPreviewBrush}" />
+							<Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource OperatorPreviewBrush}" />
+							<Setter Property="Foreground" Value="{DynamicResource OperatorTextBrush}" />
+						</Trigger>
+						<Trigger Property="Status" Value="{x:Static controls:RtaimeStatusKind.Warning}">
+							<Setter TargetName="Indicator" Property="Fill" Value="{DynamicResource OperatorWarningBrush}" />
+							<Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource OperatorWarningBrush}" />
+							<Setter Property="Foreground" Value="{DynamicResource OperatorTextBrush}" />
+						</Trigger>
+						<Trigger Property="Status" Value="{x:Static controls:RtaimeStatusKind.Armed}">
+							<Setter TargetName="Indicator" Property="Fill" Value="{DynamicResource OperatorArmedBrush}" />
+							<Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource OperatorArmedBrush}" />
+							<Setter Property="Foreground" Value="{DynamicResource OperatorTextBrush}" />
+						</Trigger>
+						<Trigger Property="Status" Value="{x:Static controls:RtaimeStatusKind.Program}">
+							<Setter TargetName="Indicator" Property="Fill" Value="{DynamicResource OperatorProgramBrush}" />
+							<Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource OperatorProgramBrush}" />
+							<Setter Property="Foreground" Value="{DynamicResource OperatorTextBrush}" />
+						</Trigger>
+						<Trigger Property="Status" Value="{x:Static controls:RtaimeStatusKind.OnAir}">
+							<Setter TargetName="Indicator" Property="Fill" Value="{DynamicResource OperatorProgramBrush}" />
+							<Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource OperatorProgramBrush}" />
+							<Setter Property="Foreground" Value="{DynamicResource OperatorTextBrush}" />
+						</Trigger>
+						<Trigger Property="IsEnabled" Value="False">
+							<Setter TargetName="Chrome" Property="Opacity" Value="0.45" />
+						</Trigger>
+					</ControlTemplate.Triggers>
+				</ControlTemplate>
+			</Setter.Value>
+		</Setter>
+	</Style>
+
+	<Style TargetType="{x:Type controls:RtaimeMetricBar}">
+		<Setter Property="Height" Value="4" />
+		<Setter Property="MinWidth" Value="24" />
+		<Setter Property="Background" Value="{DynamicResource OperatorRaisedSurfaceBrush}" />
+		<Setter Property="Foreground" Value="{DynamicResource OperatorHealthyBrush}" />
+		<Setter Property="BorderThickness" Value="0" />
+		<Setter Property="FocusVisualStyle" Value="{x:Null}" />
+		<Setter Property="Template">
+			<Setter.Value>
+				<ControlTemplate TargetType="{x:Type controls:RtaimeMetricBar}">
+					<Grid x:Name="PART_Track" SnapsToDevicePixels="True">
+						<Border Background="{TemplateBinding Background}" CornerRadius="2" />
+						<Border
+							x:Name="PART_Indicator"
+							HorizontalAlignment="Left"
+							Background="{TemplateBinding Foreground}"
+							CornerRadius="2" />
+					</Grid>
+					<ControlTemplate.Triggers>
+						<Trigger Property="IsEnabled" Value="False">
+							<Setter Property="Opacity" Value="0.4" />
+						</Trigger>
+					</ControlTemplate.Triggers>
+				</ControlTemplate>
+			</Setter.Value>
+		</Setter>
+	</Style>
+
+	<Style TargetType="{x:Type controls:RtaimeTimecode}">
+		<Setter Property="Foreground" Value="{DynamicResource OperatorTextBrush}" />
+		<Setter Property="FontFamily" Value="{DynamicResource OperatorTimecodeFontFamily}" />
+		<Setter Property="FontSize" Value="{DynamicResource OperatorFontSizeBody}" />
+		<Setter Property="FontWeight" Value="SemiBold" />
+		<Setter Property="HorizontalContentAlignment" Value="Left" />
+		<Setter Property="VerticalContentAlignment" Value="Center" />
+		<Setter Property="FocusVisualStyle" Value="{x:Null}" />
+		<Setter Property="Template">
+			<Setter.Value>
+				<ControlTemplate TargetType="{x:Type controls:RtaimeTimecode}">
+					<ContentPresenter
+						HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+						VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+						RecognizesAccessKey="False"
+						SnapsToDevicePixels="True" />
+				</ControlTemplate>
+			</Setter.Value>
+		</Setter>
+	</Style>
+
+	<Style TargetType="{x:Type controls:RtaimeIcon}">
+		<Setter Property="Width" Value="16" />
+		<Setter Property="Height" Value="16" />
+		<Setter Property="Foreground" Value="{DynamicResource OperatorTextBrush}" />
+		<Setter Property="Focusable" Value="False" />
+		<Setter Property="Template">
+			<Setter.Value>
+				<ControlTemplate TargetType="{x:Type controls:RtaimeIcon}">
+					<Path
+						Data="{TemplateBinding Data}"
+						Fill="{TemplateBinding Foreground}"
+						Stretch="Uniform"
+						SnapsToDevicePixels="True" />
+				</ControlTemplate>
+			</Setter.Value>
+		</Setter>
+	</Style>
+
+	<Style x:Key="RtaimeIcon14" TargetType="{x:Type controls:RtaimeIcon}">
+		<Setter Property="Width" Value="14" />
+		<Setter Property="Height" Value="14" />
+	</Style>
+
+	<Style x:Key="RtaimeIcon16" TargetType="{x:Type controls:RtaimeIcon}">
+		<Setter Property="Width" Value="16" />
+		<Setter Property="Height" Value="16" />
+	</Style>
+
+	<Style x:Key="RtaimeIcon18" TargetType="{x:Type controls:RtaimeIcon}">
+		<Setter Property="Width" Value="18" />
+		<Setter Property="Height" Value="18" />
+	</Style>
+
+	<Style x:Key="RtaimeIcon20" TargetType="{x:Type controls:RtaimeIcon}">
+		<Setter Property="Width" Value="20" />
+		<Setter Property="Height" Value="20" />
+	</Style>
+</ResourceDictionary>
