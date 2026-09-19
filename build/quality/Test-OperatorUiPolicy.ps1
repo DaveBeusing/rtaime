@@ -299,7 +299,7 @@ Assert-Condition ($shell -match 'CompactViewportWidth' -and $shell -match 'IsCom
 Assert-Condition ($window -match '<controls:RtaimeScrollViewer[^>]+VerticalScrollBarVisibility="Auto"') "Operator must preserve vertical access through the custom scroll surface when DPI scaling reduces logical workspace height."
 
 Assert-Condition ($window -match 'ItemsSource="\{Binding Sources\}"') "Operator must expose the source bank as a bound collection."
-Assert-Condition ($window -match 'Style="\{StaticResource OperatorSourceBank\}"') "Source bank must use the shared design-system collection style."
+Assert-Condition ($window -match 'Style="\{StaticResource RtaimeSourceBank\}"' -and $customInputTheme -match 'x:Key="RtaimeSourceBank"') "Source bank must use the shared custom rtaime collection style."
 Assert-Condition ($window -match 'ItemContainerStyle="\{StaticResource OperatorSourceItem\}"') "Source tiles must use the shared tile style."
 Assert-Condition ($window -match 'Text="SOURCE BIN"') "Operator must present the source collection as a production source bin."
 Assert-Condition ($window -match 'Binding Thumbnail') "Source tiles must render live monitoring thumbnails."
