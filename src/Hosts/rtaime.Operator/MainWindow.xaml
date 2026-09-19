@@ -130,6 +130,7 @@
 						</Grid.ColumnDefinitions>
 
 						<local:PreviewViewer Grid.Column="0"
+							Visibility="{Binding Shell.PreviewViewerVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 							Frame="{Binding Monitoring.PreviewImage, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 							SourceName="{Binding PreviewSourceName}"
 							SourceId="{Binding PreviewSourceId}"
@@ -138,6 +139,7 @@
 							MaximizeCommand="{Binding Shell.MaximizePreviewCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
 
 						<local:ProgramViewer Grid.Column="2"
+							Visibility="{Binding Shell.ProgramViewerVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 							Frame="{Binding Monitoring.ProgramImage, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 							SourceName="{Binding ProgramSourceName}"
 							SourceId="{Binding ProgramSourceId}"
