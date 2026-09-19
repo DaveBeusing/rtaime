@@ -128,13 +128,15 @@ $project = Get-Content -LiteralPath $projectPath -Raw
 $documentation = Get-Content -LiteralPath $documentationPath -Raw
 $workspaceDocumentation = Get-Content -LiteralPath $workspaceDocumentationPath -Raw
 $mediaLibraryDocumentation = Get-Content -LiteralPath $mediaLibraryDocumentationPath -Raw
+$operatorXaml = (Get-ChildItem -LiteralPath (Join-Path $repositoryRoot "src/Hosts/rtaime.Operator") -Filter "*.xaml" -File -Recurse |
+	ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join "`n"
 
 Assert-Condition ($app -match 'Source="Themes/OperatorTheme\.xaml"') "Operator must load the reusable theme resource dictionary."
 Assert-Condition ($theme -match 'Source="OperatorTokens\.xaml"') "Operator theme must load the shared design-token dictionary."
 foreach ($token in @("OperatorFontFamily", "OperatorWindowPadding", "OperatorControlHeight", "OperatorColorPreview", "OperatorColorProgram", "OperatorColorHealthy", "OperatorColorWarning", "OperatorColorError")) {
 	Assert-Condition ($tokens -match [Regex]::Escape($token)) "Operator design token '$token' is required."
 }
-foreach ($resource in @("OperatorPreviewBrush", "OperatorProgramBrush", "OperatorArmedBrush", "OperatorHealthyBrush", "OperatorWarningBrush", "OperatorErrorBrush", "OperatorEvidenceBadge", "OperatorFocusVisual", "OperatorToolbar", "OperatorToggleButton", "OperatorSourceItem", "OperatorMeter", "OperatorTimelineSlider", "OperatorPreviewTally", "OperatorProgramTally", "OperatorTopBar", "OperatorShellRegion", "OperatorTransportBar", "StatusPill", "MetricMeter", "WorkspaceNavItem", "PanelHeader", "SectionDivider")) {
+foreach ($resource in @("OperatorPreviewBrush", "OperatorProgramBrush", "OperatorArmedBrush", "OperatorHealthyBrush", "OperatorWarningBrush", "OperatorErrorBrush", "OperatorEvidenceBadge", "OperatorFocusVisual", "OperatorToolbar", "OperatorToggleButton", "OperatorSourceItem", "OperatorMeter", "OperatorTimelineSlider", "OperatorPreviewTally", "OperatorProgramTally", "OperatorTopBar", "OperatorShellRegion", "OperatorTransportBar", "StatusPill", "MetricMeter", "WorkspaceNavItem", "PanelHeader", "SectionDivider", "OperatorVerticalSplitter", "OperatorHorizontalSplitter", "OperatorLoadingState", "OperatorErrorState")) {
 	Assert-Condition ($theme -match [Regex]::Escape($resource)) "Operator theme resource '$resource' is required."
 }
 
@@ -153,6 +155,9 @@ $minHeight = [int]([Regex]::Match($window, 'MinHeight="(?<value>\d+)"').Groups["
 Assert-Condition ($width -le 1920 -and $height -le 1080) "Operator reference window must fit within the 1920x1080 qualification surface."
 Assert-Condition ($minWidth -le [Math]::Floor(1920 / 1.5)) "Operator minimum width must remain usable at 150% scaling on 1920x1080."
 Assert-Condition ($minHeight -le [Math]::Floor(1080 / 1.5)) "Operator minimum height must remain usable at 150% scaling on 1920x1080."
+Assert-Condition ($minWidth -le [Math]::Floor(1920 / 2.0)) "Operator minimum width must remain usable at 200% scaling on 1920x1080."
+Assert-Condition ($minHeight -le [Math]::Floor(1080 / 2.0)) "Operator minimum height must remain usable at 200% scaling on 1920x1080."
+Assert-Condition ($shell -match 'CompactViewportWidth' -and $shell -match 'IsCompactViewport' -and $shell -match 'CompactLeftPanelWidth' -and $shell -match 'CompactLowerPanelHeight') "Operator shell must provide a presentation-only compact workspace mode for constrained high-DPI viewports."
 Assert-Condition ($window -match '<ScrollViewer[^>]+VerticalScrollBarVisibility="Auto"') "Operator must preserve vertical access when DPI scaling reduces logical workspace height."
 
 Assert-Condition ($window -match 'ItemsSource="\{Binding Sources\}"') "Operator must expose the source bank as a bound collection."
@@ -243,6 +248,7 @@ Assert-Condition ($window -notmatch '<Window.InputBindings>') "Window-level shor
 Assert-Condition ($keyboard -match 'new\("sync".+Key\.F5' -and $keyboard -match 'new\("play-pause".+Key\.Space') "Central keyboard registry must expose synchronization and Preview Play/Pause."
 Assert-Condition ($keyboard -match 'previewTransportContext' -and $keyboard -match '@operator\.PreviewSourceId' -and $keyboard -match 'mediaDeck\.SourceId' -and $keyboard -match 'ContextGuardCommand') "Media transport shortcuts must be gated to the loaded source only while that source is confirmed Preview."
 Assert-Condition ($keyboard -match 'new\("auto".+Key\.Return, ModifierKeys\.None, @operator\.DissolveCommand' -and $keyboard -match 'new\("cut".+Key\.Return, ModifierKeys\.Control, @operator\.CutCommand') "Central keyboard registry must expose Enter=AUTO and Ctrl+Enter=CUT."
+Assert-Condition ($keyboard -match 'new\("delete-cue".+Key\.Delete' -and $deck -notmatch '<KeyBinding Key="Delete"') "Delete must route through the central shortcut registry rather than a Media Deck-local binding."
 Assert-Condition ($keyboard -match 'FindConflicts' -and $keyboard -match 'Operator keyboard shortcut conflict') "Central keyboard registry must reject conflicting bindings."
 Assert-Condition ($keyboard -match 'TryHandle\(KeyEventArgs args\)' -and $windowCode -match 'OnPreviewKeyDown\(KeyEventArgs e\)' -and $windowCode -match 'Shortcuts\.TryHandle\(e\)') "Window-level shortcuts must route through PreviewKeyDown so unmodified production keys do not depend on WPF KeyGesture validation."
 Assert-Condition ($keyboard -notmatch 'new KeyBinding\(' -and $keyboard -notmatch 'KeyGesture' -and $windowCode -notmatch 'Shortcuts\.Apply\(InputBindings\)') "Central shortcut routing must not construct unsupported WPF KeyGesture bindings."
@@ -250,11 +256,16 @@ Assert-Condition ($keyboard -match 'args\.IsRepeat') "Production shortcut routin
 Assert-Condition ($keyboard -match 'IsTextEntryContext' -and $keyboard -match 'TextBoxBase' -and $keyboard -match 'PasswordBox') "Production shortcuts must be suppressed while the operator is typing."
 Assert-Condition ($deck -notmatch '<KeyBinding Key="P"' -and $deck -notmatch '<KeyBinding Key="S"' -and $deck -notmatch '<KeyBinding Key="I"' -and $deck -notmatch '<KeyBinding Key="O"' -and $deck -notmatch '<KeyBinding Key="M"') "Media Deck must not duplicate centralized production shortcuts."
 Assert-Condition ($window -match 'KeyboardNavigation.TabNavigation="Cycle"') "Showcase keyboard navigation must stay inside the Operator workspace."
+Assert-Condition ($theme -match 'OperatorVerticalSplitter' -and $theme -match 'OperatorHorizontalSplitter' -and $theme -match 'KeyboardNavigation.IsTabStop' -and $window -match 'Use arrow keys while focused') "Workspace splitters must expose visible keyboard focus and keyboard resize discoverability."
+Assert-Condition ($theme -match 'TargetType="{x:Type ComboBox}"' -and $theme -match 'TargetType="{x:Type CheckBox}"' -and $theme -match 'TargetType="{x:Type TabItem}"') "Standard interactive controls must inherit shared keyboard-focus styling."
+Assert-Condition ($operatorXaml -notmatch '<Storyboard|<DoubleAnimation|<ColorAnimation|<ThicknessAnimation') "Production Operator XAML must not introduce decorative animation."
 Assert-Condition ($window -match 'x:Name="SynchronizeButton"' -and $windowCode -match 'SynchronizeButton\.Focus\(\)') "Initial keyboard focus must land on the synchronization action."
 Assert-Condition ($window -match 'ToolTip="Prepare the deterministic showcase state' -and $window -match 'ToolTip="CUT the confirmed Preview source to Program') "Primary showcase actions must expose consistent explanatory tooltips."
 Assert-Condition ($theme -match '<Style TargetType="ToolTip">' -and $theme -match 'ToolTipService\.InitialShowDelay') "Showcase tooltips must use the shared theme and bounded presentation timing."
 Assert-Condition ($window -match 'No production sources available' -and $window -match 'Binding Sources\.Count') "Source Bin must expose an explicit empty state instead of a blank panel."
 Assert-Condition ($window -match 'Text="\{Binding LastEvent\}"' -and $window -match 'OperatorErrorBadge' -and $window -match 'Binding LastError') "Footer must separate normal operator status from active error presentation."
+Assert-Condition ($shell -match '\.tmp' -and $shell -match 'File\.Move\(temporaryPath, _path, overwrite: true\)') "Operator layout persistence must use temporary-file replacement to avoid partial JSON state."
+Assert-Condition ($window -match 'OperatorLoadingState' -and $window -match 'OperatorErrorState') "Loading and error presentation must use shared Operator state styles."
 Assert-Condition ($windowCode -match 'Closing \+= OnClosingAsync' -and $windowCode -match '_shutdownComplete' -and $windowCode -match 'await Monitoring\.DisposeAsync') "Operator shutdown must await owned monitoring and view-model resources before final close."
 Assert-Condition ($appCode -match 'DispatcherUnhandledException \+=' -and $appCode -match 'TryWriteCrashReport' -and $appCode -match 'LocalApplicationData') "Unexpected UI failures must produce controlled user-visible presentation and a local diagnostic report."
 Assert-Condition ($theme -match 'IsKeyboardFocused') "Primary controls must expose visible keyboard-focus state."
