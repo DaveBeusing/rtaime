@@ -97,12 +97,27 @@
 						<TextBlock Text="PROGRAM AUDIO" Style="{StaticResource OperatorLabel}" HorizontalAlignment="Center" />
 						<Grid Grid.Row="1" Margin="0,7,0,5">
 							<Grid.ColumnDefinitions>
+								<ColumnDefinition Width="26" />
 								<ColumnDefinition Width="*" />
 								<ColumnDefinition Width="5" />
 								<ColumnDefinition Width="*" />
 							</Grid.ColumnDefinitions>
-							<ProgressBar Grid.Column="0" Orientation="Vertical" Minimum="0" Maximum="1" Value="{Binding AudioLeftPeak, ElementName=Root, Mode=OneWay}" />
-							<ProgressBar Grid.Column="2" Orientation="Vertical" Minimum="0" Maximum="1" Value="{Binding AudioRightPeak, ElementName=Root, Mode=OneWay}" />
+							<Grid Grid.Column="0" Margin="0,0,4,0">
+								<Grid.RowDefinitions>
+									<RowDefinition Height="*" />
+									<RowDefinition Height="*" />
+									<RowDefinition Height="*" />
+									<RowDefinition Height="*" />
+									<RowDefinition Height="*" />
+								</Grid.RowDefinitions>
+								<TextBlock Grid.Row="0" Text="0" Style="{StaticResource OperatorLabel}" HorizontalAlignment="Right" VerticalAlignment="Top" />
+								<TextBlock Grid.Row="1" Text="-6" Style="{StaticResource OperatorLabel}" HorizontalAlignment="Right" />
+								<TextBlock Grid.Row="2" Text="-12" Style="{StaticResource OperatorLabel}" HorizontalAlignment="Right" />
+								<TextBlock Grid.Row="3" Text="-24" Style="{StaticResource OperatorLabel}" HorizontalAlignment="Right" />
+								<TextBlock Grid.Row="4" Text="-60" Style="{StaticResource OperatorLabel}" HorizontalAlignment="Right" VerticalAlignment="Bottom" />
+							</Grid>
+							<ProgressBar Grid.Column="1" Orientation="Vertical" Minimum="0" Maximum="1" Value="{Binding AudioLeftPeak, ElementName=Root, Mode=OneWay}" />
+							<ProgressBar Grid.Column="3" Orientation="Vertical" Minimum="0" Maximum="1" Value="{Binding AudioRightPeak, ElementName=Root, Mode=OneWay}" />
 						</Grid>
 						<StackPanel Grid.Row="2">
 							<TextBlock Text="{Binding AudioLeftDb, ElementName=Root}" Style="{StaticResource OperatorTimecode}" HorizontalAlignment="Center" />
