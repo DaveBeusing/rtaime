@@ -126,21 +126,16 @@
 					</StackPanel>
 
 					<StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-						<controls:RtaimeComboBox
-							Width="124"
-							Height="26"
-							IsEnabled="False"
-							SelectedIndex="0"
+						<controls:RtaimeStatusBadge
+							Status="{x:Static controls:RtaimeStatusKind.Neutral}"
+							Content="SEQ · CURRENT MEDIA"
+							ShowIndicator="False"
 							Margin="0,0,5,0"
-							ToolTip="The current V1 contract exposes one governed media timeline; sequence switching is unavailable."
-							automation:AutomationProperties.Name="Current timeline sequence">
-							<controls:RtaimeComboBoxItem Content="CURRENT MEDIA" />
-						</controls:RtaimeComboBox>
-						<controls:RtaimeToggleButton
+							ToolTip="The current V1 contract exposes one governed media timeline; sequence switching is unavailable." />
+						<controls:RtaimeStatusBadge
+							Status="{x:Static controls:RtaimeStatusKind.Selection}"
 							Content="SELECT"
-							IsChecked="True"
-							IsEnabled="False"
-							IsCompact="True"
+							ShowIndicator="False"
 							Margin="0,0,5,0"
 							ToolTip="Selection is the governed edit mode. Blade/cut editing is not exposed by the current timeline contract." />
 						<controls:RtaimeStatusBadge
@@ -155,16 +150,17 @@
 							IsCompact="True"
 							Margin="0,0,5,0"
 							ToolTip="{Binding SnapStatus}" />
-						<controls:RtaimeComboBox
-							Width="72"
-							Height="26"
-							IsEnabled="False"
-							SelectedIndex="0"
+						<controls:RtaimeStatusBadge
+							Status="{x:Static controls:RtaimeStatusKind.Neutral}"
+							ShowIndicator="False"
 							Margin="0,0,5,0"
 							ToolTip="Timeline frame rate follows the loaded authoritative media transport."
 							automation:AutomationProperties.Name="Timeline frame rate">
-							<controls:RtaimeComboBoxItem Content="{Binding FrameRate}" />
-						</controls:RtaimeComboBox>
+							<StackPanel Orientation="Horizontal">
+								<TextBlock Text="{Binding FrameRate}" />
+								<TextBlock Text=" FPS" />
+							</StackPanel>
+						</controls:RtaimeStatusBadge>
 
 						<controls:RtaimeTransportButton
 							IconData="{StaticResource RtaimeIconPlayGeometry}"
