@@ -240,6 +240,8 @@ public sealed class OperatorLayoutStore
 	};
 
 	private readonly string _path;
+	private readonly object _saveSync = new();
+	private Task _saveTail = Task.CompletedTask;
 
 	public OperatorLayoutStore(string? path = null)
 	{
@@ -266,16 +268,33 @@ public sealed class OperatorLayoutStore
 		}
 	}
 
-	public void Save(OperatorLayoutSettings settings)
+	public Task SaveAsync(OperatorLayoutSettings settings)
 	{
 		ArgumentNullException.ThrowIfNull(settings);
+		var normalized = settings.Normalize();
+		var json = JsonSerializer.Serialize(normalized, SerializerOptions);
+
+		lock (_saveSync)
+		{
+			_saveTail = _saveTail
+				.ContinueWith(
+					_ => WriteAsync(json),
+					CancellationToken.None,
+					TaskContinuationOptions.None,
+					TaskScheduler.Default)
+				.Unwrap();
+			return _saveTail;
+		}
+	}
+
+	private async Task WriteAsync(string json)
+	{
 		try
 		{
-			var normalized = settings.Normalize();
 			var directory = Path.GetDirectoryName(_path);
 			if (!string.IsNullOrWhiteSpace(directory))
 				Directory.CreateDirectory(directory);
-			File.WriteAllText(_path, JsonSerializer.Serialize(normalized, SerializerOptions));
+			await File.WriteAllTextAsync(_path, json).ConfigureAwait(false);
 		}
 		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
 		{
@@ -615,10 +634,12 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 		Save();
 	}
 
-	public void Save()
+	public void Save() => _ = SaveAsync();
+
+	public Task SaveAsync()
 	{
 		CaptureCurrentWorkspace();
-		_store.Save(new OperatorLayoutSettings
+		return _store.SaveAsync(new OperatorLayoutSettings
 		{
 			Version = OperatorLayoutSettings.CurrentVersion,
 			IsFullscreen = IsFullscreen,
