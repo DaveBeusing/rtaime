@@ -3,6 +3,7 @@
 	x:Name="Root"
 	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
 	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	xmlns:controls="clr-namespace:rtaime.Operator.Controls"
 	xmlns:local="clr-namespace:rtaime.Operator"
 	MinHeight="360"
 	AutomationProperties.Name="Live production multiview">
@@ -79,7 +80,7 @@
 			BorderThickness="1"
 			Padding="4">
 			<Grid>
-				<ListBox
+				<controls:RtaimeListBox
 					ItemsSource="{Binding DisplayedSources, ElementName=Root}"
 					SelectedItem="{Binding SelectedSource, ElementName=Root, Mode=TwoWay}"
 					Background="Transparent"
@@ -88,12 +89,12 @@
 					ScrollViewer.VerticalScrollBarVisibility="Auto"
 					ItemContainerStyle="{StaticResource OperatorSourceItem}"
 					AutomationProperties.Name="Live multiview sources">
-					<ListBox.ItemsPanel>
+					<controls:RtaimeListBox.ItemsPanel>
 						<ItemsPanelTemplate>
 							<UniformGrid Columns="{Binding SourceGridColumns, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMultiviewControl}}}" />
 						</ItemsPanelTemplate>
 					</ListBox.ItemsPanel>
-					<ListBox.ItemTemplate>
+					<controls:RtaimeListBox.ItemTemplate>
 						<DataTemplate>
 							<Border MinHeight="132"
 								Margin="3"
@@ -193,7 +194,7 @@
 							</Border>
 						</DataTemplate>
 					</ListBox.ItemTemplate>
-				</ListBox>
+				</controls:RtaimeListBox>
 
 				<Border x:Name="ExpandedPreviewOverlay"
 					Visibility="Collapsed"
