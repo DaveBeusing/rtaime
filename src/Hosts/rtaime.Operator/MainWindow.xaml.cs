@@ -56,7 +56,12 @@ public partial class MainWindow : Window
 		Shell = new OperatorShellViewModel(new OperatorLayoutStore(), SetProductionFullscreen);
 		MediaPool = new MediaPoolInspectorViewModel(viewModel, MediaDeck);
 		QuickControls = new OperatorQuickControlsViewModel(viewModel, MediaDeck, MediaPool, new OperatorQuickControlStore());
-		Shortcuts = OperatorKeyboardCommandRegistry.Create(viewModel, MediaDeck, Timeline, Shell);
+		Shortcuts = OperatorKeyboardCommandRegistry.Create(
+			viewModel,
+			MediaDeck,
+			Timeline,
+			Shell,
+			new AsyncRelayCommand(FocusMediaSearchAsync));
 		Timeline.SelectionChanged += OnTimelineSelectionChanged;
 		InitializeComponent();
 		ApplyWindowPlacement();
@@ -90,7 +95,12 @@ public partial class MainWindow : Window
 		Shell = new OperatorShellViewModel(new OperatorLayoutStore(), SetProductionFullscreen);
 		MediaPool = new MediaPoolInspectorViewModel(viewModel, MediaDeck);
 		QuickControls = new OperatorQuickControlsViewModel(viewModel, MediaDeck, MediaPool, new OperatorQuickControlStore());
-		Shortcuts = OperatorKeyboardCommandRegistry.Create(viewModel, MediaDeck, Timeline, Shell);
+		Shortcuts = OperatorKeyboardCommandRegistry.Create(
+			viewModel,
+			MediaDeck,
+			Timeline,
+			Shell,
+			new AsyncRelayCommand(FocusMediaSearchAsync));
 		Timeline.SelectionChanged += OnTimelineSelectionChanged;
 		InitializeComponent();
 		ApplyWindowPlacement();
@@ -120,6 +130,19 @@ public partial class MainWindow : Window
 			return;
 
 		base.OnPreviewKeyDown(e);
+	}
+
+	private Task FocusMediaSearchAsync()
+	{
+		Shell.SelectWorkspace("MEDIA");
+		Dispatcher.BeginInvoke(
+			() =>
+			{
+				MediaSearchBox.Focus();
+				MediaSearchBox.SelectAll();
+			},
+			DispatcherPriority.Input);
+		return Task.CompletedTask;
 	}
 
 	private MediaDeckViewModel CreateMediaDeck(
