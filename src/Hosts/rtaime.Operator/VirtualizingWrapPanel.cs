@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
+using System.Windows.Threading;
 
 namespace rtaime.Operator;
 
@@ -25,6 +26,7 @@ public sealed class VirtualizingWrapPanel : VirtualizingPanel, IScrollInfo
 	private Size _viewport;
 	private double _verticalOffset;
 	private int _itemsPerRow = 1;
+	private bool _generatorRetryPending;
 
 	public double ItemWidth
 	{
@@ -79,7 +81,10 @@ public sealed class VirtualizingWrapPanel : VirtualizingPanel, IScrollInfo
 
 		var generator = ResolveGenerator();
 		if (generator is null)
+		{
+			QueueGeneratorRetry();
 			return new Size(viewportWidth, Math.Min(_extent.Height, viewportHeight));
+		}
 
 		RealizeItems(generator, firstIndex, lastIndex, itemWidth, itemHeight);
 		CleanUpItems(generator, firstIndex, lastIndex);
@@ -206,21 +211,37 @@ public sealed class VirtualizingWrapPanel : VirtualizingPanel, IScrollInfo
 		{
 			var position = new GeneratorPosition(childIndex, 0);
 			var itemIndex = generator.IndexFromGeneratorPosition(position);
+			if (itemIndex < 0)
+			{
+				RemoveInternalChildRange(childIndex, 1);
+				continue;
+			}
 			if (itemIndex >= firstIndex && itemIndex <= lastIndex)
 				continue;
 
-			generator.Remove(position, 1);
+			if (generator is IRecyclingItemContainerGenerator recyclingGenerator)
+				recyclingGenerator.Recycle(position, 1);
+			else
+				generator.Remove(position, 1);
 			RemoveInternalChildRange(childIndex, 1);
 		}
 	}
 
-	private IItemContainerGenerator? ResolveGenerator()
-	{
-		var generator = ItemContainerGenerator;
-		if (generator is not null)
-			return generator;
+	private IItemContainerGenerator? ResolveGenerator() => ItemContainerGenerator;
 
-		return ItemsControl.GetItemsOwner(this)?.ItemContainerGenerator;
+	private void QueueGeneratorRetry()
+	{
+		if (_generatorRetryPending)
+			return;
+
+		_generatorRetryPending = true;
+		Dispatcher.BeginInvoke(
+			DispatcherPriority.Loaded,
+			new Action(() =>
+			{
+				_generatorRetryPending = false;
+				InvalidateMeasure();
+			}));
 	}
 
 	private void CoerceVerticalOffset()
