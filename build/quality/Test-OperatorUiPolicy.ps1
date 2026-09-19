@@ -196,7 +196,7 @@ Assert-Condition ($customControlTheme -match 'Property="IsMouseOver"' -and $cust
 foreach ($iconSize in @(14, 16, 18, 20)) {
 	Assert-Condition ($customControlTheme -match ('x:Key="RtaimeIcon' + $iconSize + '"')) "Custom icon size '$iconSize' must be available."
 }
-foreach ($iconName in @("Play", "Pause", "Stop", "Previous", "Next", "Media", "Live", "Timeline", "Output", "Compositing", "Settings", "Check", "Warning", "Close", "ChevronLeft", "ChevronRight", "Search", "Add", "Grid", "List", "Fit", "Zoom", "Maximize", "Fullscreen", "MarkIn", "MarkOut")) {
+foreach ($iconName in @("Play", "Pause", "Stop", "Previous", "Next", "Media", "Live", "Timeline", "Output", "Compositing", "Settings", "Check", "Warning", "Close", "ChevronLeft", "ChevronRight", "Search", "Add", "Grid", "List", "Fit", "Zoom", "Maximize", "Fullscreen", "MarkIn", "MarkOut", "More")) {
 	Assert-Condition ($customIconTheme -match ('x:Key="RtaimeIcon' + $iconName + 'Geometry"')) "Custom icon geometry '$iconName' must exist."
 }
 Assert-Condition ($customIconTheme -notmatch '[\uD800-\uDFFF]') "Custom icon resources must use geometry rather than emoji glyphs."
@@ -590,7 +590,19 @@ foreach ($propertyId in @("source.name", "clip.duration", "clip.playback.autopla
 Assert-Condition ($inspectorSurface -match 'METADATA is read-only' -and $inspectorSurface -match 'DESIRED edits' -and $inspectorSurface -match 'COMMITTED') "Inspector must visually distinguish metadata, desired configuration and committed state."
 Assert-Condition ($inspectorHost -match 'MediaDeck\.ApplyPlaybackPolicyCommand' -and $inspectorHost -match 'ApplyAudioGainCommand' -and $inspectorHost -match 'ApplyGraphicsCommand') "Inspector edits must reuse existing product command paths."
 Assert-Condition ($mediaPool -notmatch 'OperatorControlClient|NamedPipe|RuntimeHost|ControlHost|AIHost') "Media Pool selection/Inspector projection must not acquire production host or transport authority."
-Assert-Condition ($window -match '<local:OperatorInspectorControl' -and $inspectorHost -match 'Header="Properties"' -and $inspectorHost -match 'Header="Effects / Processing"' -and $inspectorHost -match 'Header="Metadata"') "Inspector must be hosted as a reusable tabbed control."
+Assert-Condition ($window -match '<local:OperatorInspectorControl' -and $inspectorHost -match 'Header="Inspector"' -and $inspectorHost -match 'Header="Processing"' -and $inspectorHost -match 'Header="Metadata"') "Inspector must retain the mockup top-level Inspector, Processing and Metadata tabs."
+Assert-Condition (($inspectorHost | Select-String -Pattern 'Height" Value="40"' -AllMatches).Matches.Count -ge 1 -and $inspectorHost -match 'InspectorTopTab') "Inspector top tab row must retain the 40px mockup height."
+foreach ($category in @("Video", "Audio", "Transform", "FX")) {
+	Assert-Condition ($inspectorHost -match ('Header="' + $category + '"')) "Inspector property category '$category' is required."
+}
+Assert-Condition ($inspectorHost -match 'InspectorCategoryTab' -and $inspectorHost -match 'Height" Value="34"') "Inspector property-category tabs must retain the compact 34px height."
+Assert-Condition ($inspectorHost -match 'Width="72"' -and $inspectorHost -match 'Height="42"' -and $inspectorHost -match 'InspectorTitle' -and $inspectorHost -match 'InspectorDetail' -and $inspectorHost -match 'RtaimeIconMoreGeometry') "Inspector selection header must expose the 72x42 thumbnail, identity/technical lines and overflow affordance."
+Assert-Condition ($inspectorHost -match '<ColumnDefinition Width="96" />' -and $inspectorHost -match 'MinHeight="32"') "Inspector property rows must retain the approximately 96px label column and 30-34px row density."
+Assert-Condition ($inspectorHost -match 'Content="BASIC PROPERTIES"' -and $inspectorHost -match 'Content="EFFECTS"' -and $inspectorHost -match 'TRANSPORT &amp; CONTROLS') "Inspector must expose flat Basic Properties, Effects and Transport & Controls sections."
+Assert-Condition ($inspectorHost -match 'InspectorEffectTemplate' -and $inspectorHost -match 'RtaimeIconCompositingGeometry' -and $inspectorHost -match 'Content="\+ Add Effect"' -and $inspectorHost -match 'RtaimeIconMoreGeometry') "Inspector Effects rows must expose icon, state/context affordance and a compact Add Effect extension surface."
+Assert-Condition ($inspectorHost -match 'BorderThickness="1,0,0,0"' -and $inspectorHost -notmatch 'OperatorShellRegion') "Inspector must be a continuous flat panel with only the 1px left divider and no nested shell card."
+Assert-Condition ($window -match 'Grid\.RowSpan="2" Grid\.Column="6"' -and $shell -match 'DefaultRightPanelWidth = 340') "Inspector must remain full-height beside the timeline with the exact 340px default shell width."
+Assert-Condition ($inspectorHost -notmatch '<(Button|ToggleButton|CheckBox|RadioButton|TextBox|ComboBox|TabControl|TabItem|ListBox|ListView|TreeView|DataGrid|Slider|ProgressBar|ScrollBar|ScrollViewer|GridSplitter|Menu|MenuItem|ContextMenu|ToolBar)(\s|/|>)') "Inspector feature XAML must expose no directly visible stock WPF tab, input or scrolling controls."
 Assert-Condition ($mediaPool -match 'BuildMultiSelectionInspector' -and $mediaPool -match '"MIXED"' -and $mediaPool -match 'HasMultipleSelection') "Inspector multi-selection must project common values and explicit mixed state."
 Assert-Condition ($inspectorHost -match 'ValidatesOnExceptions=True' -and $inspectorHost -match 'Validation.ErrorTemplate') "Inspector numeric editors must present inline validation failures."
 foreach ($resetCommand in @("ResetAutoPlayCommand", "ResetEndBehaviorCommand", "ResetAudioGainCommand", "ResetGraphicsPositionXCommand", "ResetGraphicsPositionYCommand", "ResetGraphicsScaleCommand")) {
