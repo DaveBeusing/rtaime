@@ -459,10 +459,6 @@
 		<Setter Property="Focusable" Value="False" />
 	</Style>
 
-	<Style x:Key="OperatorNavigationRail" TargetType="Border" BasedOn="{StaticResource OperatorShellRegion}">
-		<Setter Property="Padding" Value="5" />
-	</Style>
-
 	<Style x:Key="OperatorTopBar" TargetType="Border" BasedOn="{StaticResource OperatorPanel}">
 		<Setter Property="Padding" Value="10,7" />
 		<Setter Property="CornerRadius" Value="4" />
@@ -471,6 +467,10 @@
 	<Style x:Key="OperatorShellRegion" TargetType="Border" BasedOn="{StaticResource OperatorPanel}">
 		<Setter Property="Padding" Value="10" />
 		<Setter Property="CornerRadius" Value="4" />
+	</Style>
+
+	<Style x:Key="OperatorNavigationRail" TargetType="Border" BasedOn="{StaticResource OperatorShellRegion}">
+		<Setter Property="Padding" Value="5" />
 	</Style>
 
 	<Style x:Key="OperatorTransportBar" TargetType="Border" BasedOn="{StaticResource OperatorPanel}">
