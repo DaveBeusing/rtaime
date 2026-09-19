@@ -225,6 +225,13 @@
 					</StackPanel>
 
 					<StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Right">
+						<TextBlock
+							Text="{Binding DataContext.LastEvent, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							Style="{StaticResource OperatorLabel}"
+							MaxWidth="150"
+							TextTrimming="CharacterEllipsis"
+							VerticalAlignment="Center"
+							ToolTip="{Binding DataContext.LastEvent, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
 						<controls:RtaimeStatusBadge
 							Status="{x:Static controls:RtaimeStatusKind.Neutral}"
 							Content="{Binding DataContext.MediaDeck.ProgramDeckState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
