@@ -228,7 +228,7 @@
 											</ItemsControl.ItemContainerStyle>
 											<ItemsControl.ItemTemplate>
 												<DataTemplate>
-													<Button Content="{Binding Name, StringFormat=▼ {0}}"
+													<Button Content="{Binding Name, StringFormat='▼ {0}'}"
 														Style="{StaticResource OperatorButton}"
 														Padding="5,2"
 														MinWidth="46"
