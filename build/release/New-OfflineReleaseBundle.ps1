@@ -17,6 +17,16 @@ $ErrorActionPreference = "Stop"
 $script:RepositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "../.."))
 $copyright = "Copyright (c) Dave Beusing <david.beusing@gmail.com>."
 
+function Assert-Condition {
+	param(
+		[Parameter(Mandatory)][bool]$Condition,
+		[Parameter(Mandatory)][string]$Message
+	)
+	if (-not $Condition) {
+		throw $Message
+	}
+}
+
 function Resolve-RepositoryPath {
 	param([Parameter(Mandatory)][string]$Path)
 	if ([System.IO.Path]::IsPathRooted($Path)) {
