@@ -42,7 +42,10 @@
 
 				<StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,0">
 					<TextBlock Text="rtaime" FontSize="20" FontWeight="Bold" />
-					<TextBlock Text="V1 PRODUCTION" Style="{StaticResource OperatorLabel}" />
+					<StackPanel Orientation="Horizontal" ToolTip="{Binding DemoProduction.Detail, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
+						<TextBlock Text="V1 PRODUCTION · " Style="{StaticResource OperatorLabel}" />
+						<TextBlock Text="{Binding DemoProduction.State, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorLabel}" />
+					</StackPanel>
 				</StackPanel>
 
 				<StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,10,0">
