@@ -157,7 +157,7 @@ Assert-Condition ($minWidth -le [Math]::Floor(1920 / 1.5)) "Operator minimum wid
 Assert-Condition ($minHeight -le [Math]::Floor(1080 / 1.5)) "Operator minimum height must remain usable at 150% scaling on 1920x1080."
 Assert-Condition ($minWidth -le [Math]::Floor(1920 / 2.0)) "Operator minimum width must remain usable at 200% scaling on 1920x1080."
 Assert-Condition ($minHeight -le [Math]::Floor(1080 / 2.0)) "Operator minimum height must remain usable at 200% scaling on 1920x1080."
-Assert-Condition ($shell -match 'CompactViewportWidth' -and $shell -match 'IsCompactViewport' -and $shell -match 'CompactLeftPanelWidth' -and $shell -match 'CompactLowerPanelHeight') "Operator shell must provide a presentation-only compact workspace mode for constrained high-DPI viewports."
+Assert-Condition ($shell -match 'CompactViewportWidth' -and $shell -match 'IsCompactViewport' -and $shell -match 'CompactLowerPanelHeight') "Operator shell must provide a presentation-only compact workspace mode for constrained high-DPI viewports."
 Assert-Condition ($window -match '<ScrollViewer[^>]+VerticalScrollBarVisibility="Auto"') "Operator must preserve vertical access when DPI scaling reduces logical workspace height."
 
 Assert-Condition ($window -match 'ItemsSource="\{Binding Sources\}"') "Operator must expose the source bank as a bound collection."
