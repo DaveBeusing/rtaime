@@ -320,6 +320,7 @@ Assert-Condition ($viewModel -match 'if \(!StartupComplete && projection\.MainUi
 # Media Pool and context-sensitive Inspector.
 Assert-Condition ($window -match 'Text="MEDIA"' -and $window -match 'MediaPool\.SearchText' -and $window -match 'MediaPool\.SelectedCategory' -and $window -match 'MediaPool\.SelectedFilter') "Media Pool must expose persistent category, search and filter controls."
 Assert-Condition ($window -match 'MediaPool\.GridViewCommand' -and $window -match 'MediaPool\.ListViewCommand') "Media Pool must support Grid and List presentation."
+Assert-Condition ($mediaPool -match 'ImageSource\? Thumbnail' -and $mediaPool -match 'source\.Thumbnail' -and $window -match 'Source="\{Binding Thumbnail\}"') "Media Pool must reuse existing verified source thumbnails without adding metadata extraction."
 Assert-Condition ($window -match 'MediaPool\.FilteredItems' -and $window -match 'MediaPool\.SelectedItem') "Media Pool presentation must bind the bounded selection projection."
 Assert-Condition ($mediaPool -match 'MaxVisibleItems = 256' -and $mediaPool -match 'Take\(MaxVisibleItems\)') "Media Pool collections must remain explicitly bounded."
 Assert-Condition ($mediaPool -match 'StringComparison\.OrdinalIgnoreCase' -and $mediaPool -match 'OrderBy\(item => item\.Category, StringComparer\.Ordinal\)') "Media Pool search/filter ordering must be deterministic."
