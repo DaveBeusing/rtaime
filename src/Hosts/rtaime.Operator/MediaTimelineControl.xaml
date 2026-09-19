@@ -153,7 +153,18 @@
 									<ColumnDefinition Width="112" />
 									<ColumnDefinition Width="*" />
 								</Grid.ColumnDefinitions>
-								<Border Grid.Column="0" Background="{DynamicResource OperatorRaisedSurfaceBrush}" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" Padding="7,0">
+								<Border Grid.Column="0" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" Padding="7,0">
+									<Border.Style>
+										<Style TargetType="Border">
+											<Setter Property="Background" Value="{DynamicResource OperatorRaisedSurfaceBrush}" />
+											<Style.Triggers>
+												<DataTrigger Binding="{Binding IsActive}" Value="True">
+													<Setter Property="Background" Value="{DynamicResource OperatorSelectedSurfaceBrush}" />
+													<Setter Property="BorderBrush" Value="{DynamicResource OperatorAccentBrush}" />
+												</DataTrigger>
+											</Style.Triggers>
+										</Style>
+									</Border.Style>
 									<TextBlock Text="{Binding Label}" Style="{StaticResource OperatorLabel}" FontWeight="SemiBold" VerticalAlignment="Center" />
 								</Border>
 								<Border Grid.Column="1" Background="#16000000" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="0,1,1,1" ClipToBounds="True">
@@ -259,13 +270,24 @@
 											<ItemsControl.ItemTemplate>
 												<DataTemplate>
 													<Button Content="{Binding Name, StringFormat='▼ {0}'}"
-														Style="{StaticResource OperatorButton}"
 														Padding="5,2"
 														MinWidth="46"
 														MaxWidth="140"
 														FontSize="9"
 														PreviewMouseLeftButtonDown="Cue_PreviewMouseLeftButtonDown"
-														ToolTip="{Binding Timecode}" />
+														ToolTip="{Binding Timecode}">
+														<Button.Style>
+															<Style TargetType="Button" BasedOn="{StaticResource OperatorButton}">
+																<Style.Triggers>
+																	<DataTrigger Binding="{Binding IsSelected}" Value="True">
+																		<Setter Property="Background" Value="{DynamicResource OperatorProgramBrush}" />
+																		<Setter Property="BorderBrush" Value="{DynamicResource OperatorAccentBrush}" />
+																		<Setter Property="Foreground" Value="White" />
+																	</DataTrigger>
+																</Style.Triggers>
+															</Style>
+														</Button.Style>
+													</Button>
 												</DataTemplate>
 											</ItemsControl.ItemTemplate>
 										</ItemsControl>
