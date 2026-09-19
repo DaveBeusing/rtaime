@@ -7,7 +7,7 @@
 	Title="rtaime Operator"
 	Width="1600"
 	Height="900"
-	MinWidth="900"
+	MinWidth="960"
 	MinHeight="500"
 	Background="{DynamicResource OperatorBackgroundBrush}"
 	Foreground="{DynamicResource OperatorTextBrush}"
