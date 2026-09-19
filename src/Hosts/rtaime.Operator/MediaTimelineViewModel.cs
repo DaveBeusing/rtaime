@@ -61,12 +61,31 @@ public sealed record TimelineCueViewModel(
 	long Frame,
 	string Timecode,
 	TimelineCueType Type,
-	string? TargetReference);
+	string? TargetReference) : INotifyPropertyChanged
+{
+	private bool _isSelected;
+
+	public event PropertyChangedEventHandler? PropertyChanged;
+
+	public bool IsSelected
+	{
+		get => _isSelected;
+		set
+		{
+			if (_isSelected == value)
+				return;
+			_isSelected = value;
+			PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsSelected)));
+		}
+	}
+}
 
 public sealed record TimelineRulerTickViewModel(long Frame, string Timecode);
 
-public sealed class TimelineTrackViewModel
+public sealed class TimelineTrackViewModel : INotifyPropertyChanged
 {
+	private bool _isActive;
+
 	public TimelineTrackViewModel(TimelineTrackCategory category, string label)
 	{
 		Category = category;
@@ -75,9 +94,22 @@ public sealed class TimelineTrackViewModel
 		VisibleItems = [];
 	}
 
+	public event PropertyChangedEventHandler? PropertyChanged;
+
 	public TimelineTrackCategory Category { get; }
 	public string Label { get; }
 	public bool IsCueTrack => Category == TimelineTrackCategory.Cue;
+	public bool IsActive
+	{
+		get => _isActive;
+		set
+		{
+			if (_isActive == value)
+				return;
+			_isActive = value;
+			PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsActive)));
+		}
+	}
 	public ObservableCollection<TimelineTrackItemViewModel> Items { get; }
 	public ObservableCollection<TimelineTrackItemViewModel> VisibleItems { get; }
 
@@ -289,6 +321,10 @@ public sealed class MediaTimelineViewModel : INotifyPropertyChanged, IAsyncDispo
 		if (_projectionInitialized && hash == _projectionHash)
 			return;
 
+		var selectedItemIds = SelectedItems.Select(item => item.Id).ToHashSet(StringComparer.Ordinal);
+		var primaryItemId = _selectedItem?.Id;
+		var selectedCueId = _selectedCue?.Id;
+
 		_projectionInitialized = true;
 		_projectionHash = hash;
 		var sourceReference = snapshot.SourceId?.ToString();
@@ -351,6 +387,7 @@ public sealed class MediaTimelineViewModel : INotifyPropertyChanged, IAsyncDispo
 
 		RebuildResourceProjections();
 		RefreshVisibleRange(preserveStart: Zoom > MediaTimelineGeometry.MinimumZoom);
+		RestoreSelection(selectedItemIds, primaryItemId, selectedCueId);
 		OnPropertyChanged(nameof(InPointFrame));
 		OnPropertyChanged(nameof(OutPointFrame));
 		OnPropertyChanged(nameof(PreviewInPointFrame));
@@ -366,7 +403,7 @@ public sealed class MediaTimelineViewModel : INotifyPropertyChanged, IAsyncDispo
 		RaiseSelectionProperties();
 		OnPropertyChanged(nameof(AccessibilityDescription));
 		RaiseCueCommands();
-		SelectionChanged?.Invoke(new TimelineSelection(null, null, []));
+		SelectionChanged?.Invoke(new TimelineSelection(_selectedItem, _selectedCue, SelectedItems.ToArray()));
 	}
 
 	public bool CanAcceptMediaPoolDrop(
@@ -431,8 +468,10 @@ public sealed class MediaTimelineViewModel : INotifyPropertyChanged, IAsyncDispo
 		if (item is null)
 		{
 			ClearSelectedItems();
+			ClearSelectedCue();
 			_selectedItem = null;
 			_selectedCue = null;
+			SetActiveTrack(null);
 			RaiseSelectionProperties();
 			RaiseCueCommands();
 			SelectionChanged?.Invoke(new TimelineSelection(null, null, []));
@@ -458,7 +497,9 @@ public sealed class MediaTimelineViewModel : INotifyPropertyChanged, IAsyncDispo
 			_selectedItem = item;
 		}
 
+		ClearSelectedCue();
 		_selectedCue = null;
+		SetActiveTrack(_selectedItem?.Category);
 		RaiseSelectionProperties();
 		RaiseCueCommands();
 		SelectionChanged?.Invoke(new TimelineSelection(_selectedItem, null, SelectedItems.ToArray()));
@@ -469,8 +510,12 @@ public sealed class MediaTimelineViewModel : INotifyPropertyChanged, IAsyncDispo
 		if (EqualityComparer<TimelineCueViewModel?>.Default.Equals(_selectedCue, cue) && _selectedItem is null)
 			return;
 		ClearSelectedItems();
+		ClearSelectedCue();
 		_selectedCue = cue;
+		if (_selectedCue is not null)
+			_selectedCue.IsSelected = true;
 		_selectedItem = null;
+		SetActiveTrack(cue is null ? null : TimelineTrackCategory.Cue);
 		RaiseSelectionProperties();
 		RaiseCueCommands();
 		SelectionChanged?.Invoke(new TimelineSelection(null, cue, []));
@@ -783,6 +828,49 @@ public sealed class MediaTimelineViewModel : INotifyPropertyChanged, IAsyncDispo
 		foreach (var selected in SelectedItems)
 			selected.IsSelected = false;
 		SelectedItems.Clear();
+	}
+
+	private void ClearSelectedCue()
+	{
+		if (_selectedCue is not null)
+			_selectedCue.IsSelected = false;
+	}
+
+	private void SetActiveTrack(TimelineTrackCategory? category)
+	{
+		foreach (var track in Tracks)
+			track.IsActive = category.HasValue && track.Category == category.Value;
+	}
+
+	private void RestoreSelection(
+		IReadOnlySet<string> selectedItemIds,
+		string? primaryItemId,
+		MediaCuePointId? selectedCueId)
+	{
+		if (selectedCueId is { } cueId)
+		{
+			_selectedCue = Cues.FirstOrDefault(cue => cue.Id == cueId);
+			if (_selectedCue is not null)
+			{
+				_selectedCue.IsSelected = true;
+				_selectedItem = null;
+				SetActiveTrack(TimelineTrackCategory.Cue);
+				return;
+			}
+		}
+
+		foreach (var item in Tracks.SelectMany(track => track.Items).Where(item => selectedItemIds.Contains(item.Id)))
+		{
+			item.IsSelected = true;
+			SelectedItems.Add(item);
+		}
+
+		_selectedItem = primaryItemId is null
+			? SelectedItems.LastOrDefault()
+			: SelectedItems.FirstOrDefault(item => string.Equals(item.Id, primaryItemId, StringComparison.Ordinal))
+				?? SelectedItems.LastOrDefault();
+		_selectedCue = null;
+		SetActiveTrack(_selectedItem?.Category);
 	}
 
 	private void RaiseTrimPreview()
