@@ -526,10 +526,10 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 
 	public Visibility MultiviewVisibility => IsLiveWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility CompositingGraphVisibility => IsCompositingWorkspace ? Visibility.Visible : Visibility.Collapsed;
-	public Visibility StandardViewerVisibility => IsLiveWorkspace || IsCompositingWorkspace ? Visibility.Collapsed : Visibility.Visible;
+	public Visibility StandardViewerVisibility => IsLiveWorkspace || IsCompositingWorkspace || IsEditWorkspace ? Visibility.Collapsed : Visibility.Visible;
 	public Visibility QuickControlsVisibility => IsLiveWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility ProductionControlsVisibility => IsEditWorkspace ? Visibility.Visible : Visibility.Collapsed;
-	public Visibility MediaDeckVisibility => IsEditWorkspace || IsMediaWorkspace ? Visibility.Visible : Visibility.Collapsed;
+	public Visibility MediaDeckVisibility => IsMediaWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility SourceBinVisibility => IsMediaWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility MediaLibraryLeftVisibility => IsLiveWorkspace ? Visibility.Collapsed : Visibility.Visible;
 	public Visibility LiveSceneCueVisibility => IsLiveWorkspace ? Visibility.Visible : Visibility.Collapsed;
