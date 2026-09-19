@@ -49,7 +49,7 @@
 							</StackPanel>
 						</Grid>
 					</DataTemplate>
-				</ListBox.ItemTemplate>
+				</controls:RtaimeListBox.ItemTemplate>
 			</controls:RtaimeListBox>
 		</StackPanel>
 
@@ -85,7 +85,7 @@
 							<TextBlock Text="{Binding Timecode}" Style="{StaticResource OperatorTimecode}" DockPanel.Dock="Right" Margin="8,0,0,0" />
 						</DockPanel>
 					</DataTemplate>
-				</ListBox.ItemTemplate>
+				</controls:RtaimeListBox.ItemTemplate>
 			</controls:RtaimeListBox>
 			<Button Content="JUMP SELECTED CUE"
 				Command="{Binding MediaDeck.JumpCueCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
