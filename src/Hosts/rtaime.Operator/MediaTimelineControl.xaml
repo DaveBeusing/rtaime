@@ -38,12 +38,27 @@
 					<Border Margin="6,0,0,0" Padding="7,2" CornerRadius="4" Background="{DynamicResource OperatorRaisedSurfaceBrush}">
 						<TextBlock Text="{Binding SnapStatus}" Style="{StaticResource OperatorLabel}" />
 					</Border>
+					<Border Margin="6,0,0,0" Padding="7,2" CornerRadius="4" Background="{DynamicResource OperatorRaisedSurfaceBrush}">
+						<TextBlock Text="{Binding SelectionStatus}" Style="{StaticResource OperatorLabel}" />
+					</Border>
 					<TextBlock Text="SEEK PENDING" Foreground="{DynamicResource OperatorWarningBrush}" FontSize="11" FontWeight="Bold" Margin="10,3,0,0">
 						<TextBlock.Style>
 							<Style TargetType="TextBlock">
 								<Setter Property="Visibility" Value="Collapsed" />
 								<Style.Triggers>
 									<DataTrigger Binding="{Binding HasPendingSeek}" Value="True">
+										<Setter Property="Visibility" Value="Visible" />
+									</DataTrigger>
+								</Style.Triggers>
+							</Style>
+						</TextBlock.Style>
+					</TextBlock>
+					<TextBlock Text="TRIM PREVIEW" Foreground="{DynamicResource OperatorAccentBrush}" FontSize="11" FontWeight="Bold" Margin="10,3,0,0">
+						<TextBlock.Style>
+							<Style TargetType="TextBlock">
+								<Setter Property="Visibility" Value="Collapsed" />
+								<Style.Triggers>
+									<DataTrigger Binding="{Binding HasTrimPreview}" Value="True">
 										<Setter Property="Visibility" Value="Visible" />
 									</DataTrigger>
 								</Style.Triggers>
@@ -122,6 +137,7 @@
 				PreviewMouseMove="TimelineWorkspace_PreviewMouseMove"
 				PreviewMouseLeftButtonUp="TimelineWorkspace_PreviewMouseLeftButtonUp"
 				PreviewMouseWheel="TimelineWorkspace_PreviewMouseWheel"
+				LostMouseCapture="TimelineWorkspace_LostMouseCapture"
 				automation:AutomationProperties.Name="Layered media timeline"
 				automation:AutomationProperties.HelpText="{Binding AccessibilityDescription}">
 				<Grid.ColumnDefinitions>
@@ -137,12 +153,23 @@
 									<ColumnDefinition Width="112" />
 									<ColumnDefinition Width="*" />
 								</Grid.ColumnDefinitions>
-								<Border Grid.Column="0" Background="{DynamicResource OperatorRaisedSurfaceBrush}" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" Padding="7,0">
+								<Border Grid.Column="0" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" Padding="7,0">
+									<Border.Style>
+										<Style TargetType="Border">
+											<Setter Property="Background" Value="{DynamicResource OperatorRaisedSurfaceBrush}" />
+											<Style.Triggers>
+												<DataTrigger Binding="{Binding IsActive}" Value="True">
+													<Setter Property="Background" Value="{DynamicResource OperatorSelectionSurfaceBrush}" />
+													<Setter Property="BorderBrush" Value="{DynamicResource OperatorAccentBrush}" />
+												</DataTrigger>
+											</Style.Triggers>
+										</Style>
+									</Border.Style>
 									<TextBlock Text="{Binding Label}" Style="{StaticResource OperatorLabel}" FontWeight="SemiBold" VerticalAlignment="Center" />
 								</Border>
 								<Border Grid.Column="1" Background="#16000000" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="0,1,1,1" ClipToBounds="True">
 									<Grid>
-										<ItemsControl ItemsSource="{Binding Items}">
+										<ItemsControl ItemsSource="{Binding VisibleItems}">
 											<ItemsControl.ItemsPanel>
 												<ItemsPanelTemplate>
 													<Canvas />
@@ -179,10 +206,24 @@
 														Margin="1,2"
 														Padding="7,0"
 														CornerRadius="3"
-														Background="{DynamicResource OperatorAccentBrush}"
-														Opacity="0.78"
 														PreviewMouseLeftButtonDown="TimelineItem_PreviewMouseLeftButtonDown"
 														ToolTip="{Binding Status}">
+														<Border.Style>
+															<Style TargetType="Border">
+																<Setter Property="Background" Value="{DynamicResource OperatorAccentBrush}" />
+																<Setter Property="Opacity" Value="0.78" />
+																<Setter Property="BorderBrush" Value="Transparent" />
+																<Setter Property="BorderThickness" Value="0" />
+																<Style.Triggers>
+																	<DataTrigger Binding="{Binding IsSelected}" Value="True">
+																		<Setter Property="Background" Value="{DynamicResource OperatorProgramBrush}" />
+																		<Setter Property="Opacity" Value="1" />
+																		<Setter Property="BorderBrush" Value="{DynamicResource OperatorAccentBrush}" />
+																		<Setter Property="BorderThickness" Value="2" />
+																	</DataTrigger>
+																</Style.Triggers>
+															</Style>
+														</Border.Style>
 														<Grid>
 															<Grid.ColumnDefinitions>
 																<ColumnDefinition Width="*" />
@@ -196,7 +237,7 @@
 											</ItemsControl.ItemTemplate>
 										</ItemsControl>
 
-										<ItemsControl ItemsSource="{Binding DataContext.Cues, RelativeSource={RelativeSource AncestorType={x:Type local:MediaTimelineControl}}}">
+										<ItemsControl ItemsSource="{Binding DataContext.VisibleCues, RelativeSource={RelativeSource AncestorType={x:Type local:MediaTimelineControl}}}">
 											<ItemsControl.Style>
 												<Style TargetType="ItemsControl">
 													<Setter Property="Visibility" Value="Collapsed" />
@@ -229,13 +270,24 @@
 											<ItemsControl.ItemTemplate>
 												<DataTemplate>
 													<Button Content="{Binding Name, StringFormat='▼ {0}'}"
-														Style="{StaticResource OperatorButton}"
 														Padding="5,2"
 														MinWidth="46"
 														MaxWidth="140"
 														FontSize="9"
 														PreviewMouseLeftButtonDown="Cue_PreviewMouseLeftButtonDown"
-														ToolTip="{Binding Timecode}" />
+														ToolTip="{Binding Timecode}">
+														<Button.Style>
+															<Style TargetType="Button" BasedOn="{StaticResource OperatorButton}">
+																<Style.Triggers>
+																	<DataTrigger Binding="{Binding IsSelected}" Value="True">
+																		<Setter Property="Background" Value="{DynamicResource OperatorProgramBrush}" />
+																		<Setter Property="BorderBrush" Value="{DynamicResource OperatorAccentBrush}" />
+																		<Setter Property="Foreground" Value="White" />
+																	</DataTrigger>
+																</Style.Triggers>
+															</Style>
+														</Button.Style>
+													</Button>
 												</DataTemplate>
 											</ItemsControl.ItemTemplate>
 										</ItemsControl>
@@ -282,7 +334,7 @@
 							</Border.Style>
 							<Canvas.Left>
 								<MultiBinding Converter="{StaticResource TimelineFrameToCanvasLeftConverter}">
-									<Binding Path="InPointFrame" />
+									<Binding Path="EffectiveInPointFrame" />
 									<Binding Path="VisibleStartFrame" />
 									<Binding Path="VisibleEndFrame" />
 									<Binding Path="ActualWidth" ElementName="TimelineOverlay" />
@@ -310,7 +362,7 @@
 							</Border.Style>
 							<Canvas.Left>
 								<MultiBinding Converter="{StaticResource TimelineFrameToCanvasLeftConverter}">
-									<Binding Path="OutPointFrame" />
+									<Binding Path="EffectiveOutPointFrame" />
 									<Binding Path="VisibleStartFrame" />
 									<Binding Path="VisibleEndFrame" />
 									<Binding Path="ActualWidth" ElementName="TimelineOverlay" />

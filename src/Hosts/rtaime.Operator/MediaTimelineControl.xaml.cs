@@ -134,8 +134,14 @@ public partial class MediaTimelineControl : UserControl
 
 	private void TimelineWorkspace_PreviewMouseMove(object sender, MouseEventArgs e)
 	{
-		if (_trimKind is not null)
+		if (_trimKind is { } trimKind)
 		{
+			if (ViewModel is { CanSeek: true } trimViewModel &&
+				e.LeftButton == MouseButtonState.Pressed)
+			{
+				var position = e.GetPosition(TimelineContentArea);
+				trimViewModel.PreviewTrim(trimKind, position.X, TimelineContentArea.ActualWidth);
+			}
 			e.Handled = true;
 			return;
 		}
@@ -171,6 +177,10 @@ public partial class MediaTimelineControl : UserControl
 				catch (OperationCanceledException)
 				{
 					// Lifecycle shutdown may cancel a bounded trim command.
+				}
+				finally
+				{
+					trimViewModel.CancelTrimPreview();
 				}
 			}
 			e.Handled = true;
@@ -230,6 +240,7 @@ public partial class MediaTimelineControl : UserControl
 
 		_pointerSeeking = false;
 		_trimKind = tag;
+		ViewModel.BeginTrimPreview(tag);
 		TimelineWorkspace.CaptureMouse();
 		e.Handled = true;
 	}
@@ -239,7 +250,10 @@ public partial class MediaTimelineControl : UserControl
 		if (sender is FrameworkElement { DataContext: TimelineTrackItemViewModel item } &&
 			ViewModel is { } viewModel)
 		{
-			viewModel.SelectItem(item);
+			var modifiers = Keyboard.Modifiers;
+			var toggle = (modifiers & ModifierKeys.Control) != 0;
+			var extend = toggle || (modifiers & ModifierKeys.Shift) != 0;
+			viewModel.SelectItem(item, extendSelection: extend, toggleSelection: toggle);
 			e.Handled = true;
 		}
 	}
@@ -269,6 +283,16 @@ public partial class MediaTimelineControl : UserControl
 		if (ViewModel is not { } viewModel)
 			return;
 
+		if (e.Key == Key.Escape && _trimKind is not null)
+		{
+			_trimKind = null;
+			_pointerSeeking = false;
+			viewModel.CancelTrimPreview();
+			TimelineWorkspace.ReleaseMouseCapture();
+			e.Handled = true;
+			return;
+		}
+
 		ICommand? command = e.Key switch
 		{
 			Key.Left => viewModel.StepBackwardCommand,
@@ -287,6 +311,16 @@ public partial class MediaTimelineControl : UserControl
 
 		command.Execute(null);
 		e.Handled = true;
+	}
+
+	private void TimelineWorkspace_LostMouseCapture(object sender, MouseEventArgs e)
+	{
+		if (_trimKind is null)
+			return;
+
+		_trimKind = null;
+		_pointerSeeking = false;
+		ViewModel?.CancelTrimPreview();
 	}
 
 	private static FrameworkElement? FindTaggedTrimHandle(DependencyObject? current)

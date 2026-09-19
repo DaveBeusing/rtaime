@@ -22,6 +22,8 @@ The viewport supports:
 
 Playback observation does not recreate timeline clips or cue objects on every refresh. Stable projections are rebuilt only when the loaded source, marker range or cue metadata changes.
 
+Rendering is additionally viewport-bounded. Tracks retain their stable backing projection, while `VisibleItems` and `VisibleCues` expose only objects intersecting the current visible frame range. Zoom and horizontal scroll refresh that bounded presentation without duplicating production state.
+
 ## Semantic tracks
 
 The workspace exposes the following semantic tracks:
@@ -59,7 +61,7 @@ Other cue categories are not presented as active commands until matching backend
 
 Confirmed Media Deck IN and OUT markers are rendered across the timeline. The Video item represents the active effective playback region.
 
-IN and OUT markers are trim handles. A completed trim drag resolves to an integral frame and sends the existing marker command path. The Operator does not commit a local range independently. Invalid ranges are rejected by the authoritative marker semantics and are never forced into production state.
+IN and OUT markers are trim handles. Dragging a handle first updates a local visual preview using the same frame-to-pixel and snapping rules as the final operation. No marker mutation occurs during that preview. Mouse release resolves the final integral frame and sends the existing marker command path; Escape or lost mouse capture cancels the preview. The Operator does not commit a local range independently. Invalid ranges are rejected by the authoritative marker semantics and are never forced into production state.
 
 ## Media Pool drag and drop
 
@@ -78,6 +80,8 @@ Projected items are intentionally not shown as `COMMITTED`. They provide timelin
 
 Selecting a Video item, projected resource or cue populates the existing right-side Inspector. No track-specific property dialog exists.
 
+Timeline items support additive Shift selection and Ctrl toggle selection. One item remains the primary Inspector context, while a multi-selection is projected into the same Inspector using common values and explicit `MIXED` values. The selected item, its active track and a focused cue use distinct presentation states, and stable selection identities are restored after marker/source projection rebuilds when the same objects remain available. This selection state is Operator presentation state only and does not create an edit authority.
+
 Committed media values are identified as `COMMITTED`. UI-only resource projections remain `METADATA`. Existing desired configuration controls continue to require their existing explicit apply/command paths.
 
 ## Interaction reference
@@ -90,14 +94,18 @@ Committed media values are identified as `COMMITTED`. UI-only resource projectio
 - Ctrl+mouse wheel: zoom.
 - Shift+mouse wheel: horizontal timeline scroll.
 - Empty track drag: bounded seek.
-- IN / OUT handle drag: explicit trim command.
+- Timeline item click: replace the current item selection.
+- Shift+item click: add an item to the current timeline selection.
+- Ctrl+item click: toggle an item in the current timeline selection.
+- IN / OUT handle drag: preview locally, then commit through the explicit trim command.
+- Escape during trim drag: cancel the local trim preview.
 - Cue name + + CUE: add a named Media cue at the confirmed playhead frame.
 - Cue double-click: jump to cue.
 - Selected cue Inspector: jump, rename or delete through existing marker commands.
 
 ## Performance boundary
 
-The timeline does not perform disk or network I/O from rendering code. Media observation remains on the existing bounded management cadence. Track and cue projection objects are not allocated per playback frame. Pointer seeking remains coalesced through the existing timeline controller.
+The timeline does not perform disk or network I/O from rendering code. Media observation remains on the existing bounded management cadence. Track and cue projection objects are not allocated per playback frame. Only viewport-intersecting track items and cues are exposed to the WPF item presenters. Pointer seeking remains coalesced through the existing timeline controller.
 
 ## Explicit non-goals
 
@@ -109,5 +117,7 @@ The V1 timeline does not claim:
 - multi-camera editing;
 - distributed show control;
 - timed automation without an authoritative backend contract.
+
+The current governed contracts also expose no clip-move edit operation, timeline undo/redo history, section/show-marker domain, or reusable audio-waveform projection. The Operator therefore does not synthesize those capabilities. They can be connected later when an existing authoritative command/history/data source is available.
 
 These capabilities must not be implied by disabled or decorative controls.

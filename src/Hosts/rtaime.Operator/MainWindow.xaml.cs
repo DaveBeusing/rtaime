@@ -455,9 +455,9 @@ public partial class MainWindow : Window
 		}
 
 		MediaDeck.SelectedCue = null;
-		if (selection.Item is { } item)
+		if (selection.Items.Count > 0)
 		{
-			MediaPool.SelectTimelineItem(item);
+			MediaPool.SelectTimelineItems(selection.Items, selection.Item);
 			return;
 		}
 
