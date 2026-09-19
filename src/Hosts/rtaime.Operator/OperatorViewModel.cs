@@ -1059,10 +1059,16 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 			: MediaTimelineTimecode.FormatFrame(
 				snapshot.Transport.EffectiveRemainingFrames,
 				snapshot.Transport.Position.FrameRate);
+		var timecode = snapshot.Transport is null
+			? "—"
+			: MediaTimelineTimecode.FormatFrame(
+				snapshot.Transport.Position.CurrentFrame,
+				snapshot.Transport.Position.FrameRate);
 		source.ApplyMediaDeck(
 			snapshot.State.ToString().ToUpperInvariant(),
 			format,
 			remaining,
+			timecode,
 			snapshot.Probe?.FileName);
 	}
 
