@@ -26,6 +26,9 @@ $deckPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MediaDeckContro
 $deckViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MediaDeckViewModel.cs"
 $timelinePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MediaTimelineControl.xaml"
 $timelineCodePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MediaTimelineControl.xaml.cs"
+$timelineViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MediaTimelineViewModel.cs"
+$markerControllerPath = Join-Path $repositoryRoot "src/Client/rtaime.Client/MediaTimelineMarkerController.cs"
+$timelineDocumentationPath = Join-Path $repositoryRoot "docs/LayeredTimeline.md"
 $viewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorViewModel.cs"
 $monitorViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorMonitoringViewModel.cs"
 $programOutputControllerPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/ProgramOutputController.cs"
@@ -48,7 +51,7 @@ $manifestPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/app.manifes
 $projectPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/rtaime.Operator.csproj"
 $documentationPath = Join-Path $repositoryRoot "docs/OperatorUiV1.md"
 
-foreach ($path in @($appPath, $appCodePath, $windowPath, $windowCodePath, $shellPath, $mediaPoolPath, $deckPath, $deckViewModelPath, $timelinePath, $timelineCodePath, $viewModelPath, $monitorViewModelPath, $programOutputControllerPath, $programOutputWindowPath, $previewViewerPath, $previewViewerCodePath, $programViewerPath, $programViewerCodePath, $sourceTileViewModelPath, $audioInputViewModelPath, $graphicsLoaderPath, $demoControllerPath, $demoManifestPath, $demoProductPath, $demoGraphicsPath, $demoDocumentationPath, $tokensPath, $themePath, $manifestPath, $projectPath, $documentationPath)) {
+foreach ($path in @($appPath, $appCodePath, $windowPath, $windowCodePath, $shellPath, $mediaPoolPath, $deckPath, $deckViewModelPath, $timelinePath, $timelineCodePath, $timelineViewModelPath, $markerControllerPath, $timelineDocumentationPath, $viewModelPath, $monitorViewModelPath, $programOutputControllerPath, $programOutputWindowPath, $previewViewerPath, $previewViewerCodePath, $programViewerPath, $programViewerCodePath, $sourceTileViewModelPath, $audioInputViewModelPath, $graphicsLoaderPath, $demoControllerPath, $demoManifestPath, $demoProductPath, $demoGraphicsPath, $demoDocumentationPath, $tokensPath, $themePath, $manifestPath, $projectPath, $documentationPath)) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required Operator UI artifact is missing: '$path'."
 }
 
@@ -62,6 +65,9 @@ $deck = Get-Content -LiteralPath $deckPath -Raw
 $deckViewModel = Get-Content -LiteralPath $deckViewModelPath -Raw
 $timeline = Get-Content -LiteralPath $timelinePath -Raw
 $timelineCode = Get-Content -LiteralPath $timelineCodePath -Raw
+$timelineViewModel = Get-Content -LiteralPath $timelineViewModelPath -Raw
+$markerController = Get-Content -LiteralPath $markerControllerPath -Raw
+$timelineDocumentation = Get-Content -LiteralPath $timelineDocumentationPath -Raw
 $viewModel = Get-Content -LiteralPath $viewModelPath -Raw
 $monitorViewModel = Get-Content -LiteralPath $monitorViewModelPath -Raw
 $programOutputController = Get-Content -LiteralPath $programOutputControllerPath -Raw
@@ -148,11 +154,21 @@ Assert-Condition ($programOutputController -match 'WindowStyle\.None' -and $prog
 Assert-Condition ($programOutputController -match 'SetWindowPos') "Program Output / Clean Feed display placement must target the selected physical display."
 Assert-Condition ($programOutputController -match '_fallbackActive' -and $programOutputController -match 'Selected display was removed') "Program Output / Clean Feed must surface controlled display-disconnect fallback."
 Assert-Condition ($programOutputController -notmatch 'using rtaime\\.(ControlHost|RuntimeHost)|MediaElement|VideoDrawing') "Program Output presentation must not bypass the Client/monitoring boundary or create a second renderer."
-Assert-Condition ($timeline -match 'Style="\{StaticResource OperatorTimelineSlider\}"') "Timeline seeker must use the design-system slider style."
-Assert-Condition ($timeline -match 'Style="\{StaticResource OperatorMeter\}"') "Timeline progress must use the design-system meter style."
-Assert-Condition ($timeline -match 'Value="\{Binding ProgressPercent, Mode=OneWay\}"') "Read-only timeline progress must bind OneWay to avoid WPF source-write failures."
-Assert-Condition ($timeline -match 'Value="\{Binding SliderValue, Mode=OneWay\}"') "Read-only timeline slider projection must remain OneWay; seeking is handled by explicit operator interaction."
-Assert-Condition ($timelineCode -match 'catch \(OperationCanceledException\)') "Timeline pointer interaction must treat lifecycle/IPC cancellation as non-fatal."
+Assert-Condition ($timeline -match 'Text="LAYERED TIMELINE"' -and $timeline -match 'ItemsSource="\{Binding Tracks\}"') "Timeline must render a first-class layered production workspace."
+foreach ($trackCategory in @("Video", "Graphics", "Overlay", "Audio", "AI", "Control", "Cue")) {
+	Assert-Condition ($timelineViewModel -match [Regex]::Escape("TimelineTrackCategory.$trackCategory")) "Layered timeline semantic track '$trackCategory' is required."
+}
+Assert-Condition ($timeline -match 'ItemsSource="\{Binding RulerTicks\}"' -and $timelineViewModel -match 'TimelineRulerTickViewModel') "Timeline must expose a frame-derived time ruler."
+Assert-Condition ($timeline -match 'Binding DisplayFrame' -and $timeline -match 'OperatorProgramBrush') "Timeline playhead must remain visually explicit."
+Assert-Condition ($timeline -match 'Binding ScrollValue' -and $timeline -match 'Binding ZoomInCommand' -and $timeline -match 'Binding ZoomOutCommand' -and $timeline -match 'Binding FitCommand') "Timeline must expose horizontal scrolling, zoom and fit controls."
+Assert-Condition ($timelineViewModel -match 'MediaTimelineVisibleRange' -and $timelineViewModel -match 'FrameFromVisiblePosition' -and $timelineViewModel -match 'SnapFrame') "Timeline viewport and snapping must remain frame-based."
+Assert-Condition ($timeline -match 'Binding HasInPoint' -and $timeline -match 'Binding HasOutPoint' -and $timeline -match 'Tag="IN"' -and $timeline -match 'Tag="OUT"') "Timeline must present IN/OUT markers as bounded trim handles."
+Assert-Condition ($timelineCode -match 'TrimInAsync' -and $timelineCode -match 'TrimOutAsync' -and $timelineViewModel -match '_markers\.SetInAtFrameAsync' -and $timelineViewModel -match '_markers\.SetOutAtFrameAsync') "Timeline trim handles must cross explicit marker command paths."
+Assert-Condition ($timeline -match 'PreviousCueCommand' -and $timeline -match 'NextCueCommand' -and $timelineCode -match 'Key\.PageUp' -and $timelineCode -match 'Key\.PageDown') "Cue navigation must be visible and keyboard-accessible."
+Assert-Condition ($markerController -match 'JumpToPreviousCueAsync' -and $markerController -match 'JumpToNextCueAsync' -and $markerController -match '_timeline\.SeekToFrameAsync') "Cue navigation must seek through the existing timeline controller."
+Assert-Condition ($timelineViewModel -match '_projectionInitialized && hash == _projectionHash') "Playback updates must not rebuild stable timeline track/cue projection objects per refresh."
+Assert-Condition ($deckViewModel -match 'PeriodicTimer\(TimeSpan\.FromMilliseconds\(100\)\)') "Timeline/media observation cadence must remain bounded rather than frame-driven."
+Assert-Condition ($timelineCode -match 'catch \(OperationCanceledException\)') "Timeline pointer and trim interaction must treat lifecycle/IPC cancellation as non-fatal."
 Assert-Condition ($demoController -match 'catch \(OperationCanceledException\)') "Demo Production startup must surface IPC cancellation without crashing Operator."
 Assert-Condition ($viewModel -match 'internal sealed class AsyncRelayCommand[\s\S]+catch \(OperationCanceledException\)') "Async Operator commands must not let cancellation escape async-void ICommand execution."
 Assert-Condition ($deck -match 'OperatorStatusBadge') "Media deck state must use shared status presentation."
@@ -328,6 +344,11 @@ Assert-Condition ($mediaPool -match 'ImportCommand => _mediaDeck\.OpenCommand') 
 Assert-Condition ($mediaPool -match 'DropToPreviewAsync' -and $mediaPool -match '_operator\.SetPreviewCommand\.Execute\(null\)') "Media Pool Preview drag/drop must reuse the existing authoritative Preview command path."
 Assert-Condition ($windowCode -match 'DragDropEffects\.None' -and $windowCode -match 'CanDropToPreview') "Invalid Media Pool Preview drops must be rejected safely."
 Assert-Condition ($window -match 'OnTimelineDrop' -and $windowCode -match 'MediaDeck\.RefreshCommand\.Execute\(null\)') "Loaded Clip Timeline drop must reuse the existing Media Deck context rather than create another timeline."
+Assert-Condition ($windowCode -match 'Timeline\.SelectionChanged \+= OnTimelineSelectionChanged' -and $windowCode -match 'MediaPool\.SelectTimelineItem' -and $windowCode -match 'MediaPool\.SelectTimelineCue') "Timeline selection must project into the existing context Inspector."
+foreach ($timelinePropertyId in @("timeline.item.label", "timeline.item.start", "timeline.item.in", "timeline.item.out", "timeline.cue.name", "timeline.cue.time")) {
+	Assert-Condition ($mediaPool -match [Regex]::Escape($timelinePropertyId)) "Timeline Inspector stable property id '$timelinePropertyId' is required."
+}
+Assert-Condition ($timelineDocumentation -match 'Runtime remains the execution authority' -and $timelineDocumentation -match 'No timed Graphics, Audio, AI or Control mutation is invented') "Layered timeline documentation must preserve the production authority boundary."
 foreach ($propertyId in @("source.name", "clip.duration", "clip.playback.autoplay", "audio.gain", "graphics.position.x", "ai.provider", "ai.fallback")) {
 	Assert-Condition ($mediaPool -match [Regex]::Escape($propertyId)) "Inspector stable property id '$propertyId' is required."
 }
