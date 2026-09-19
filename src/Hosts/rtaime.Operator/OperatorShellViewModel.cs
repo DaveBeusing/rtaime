@@ -529,7 +529,7 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 	public bool HasTimelineRegion => IsLiveWorkspace || IsEditWorkspace || IsMediaWorkspace || IsScenesWorkspace || IsCompositingWorkspace;
 	public Visibility LeftRegionVisibility => HasLeftRegion ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility TimelineRegionVisibility => HasTimelineRegion ? Visibility.Visible : Visibility.Collapsed;
-	public bool HasAuxiliaryWorkspaceColumn => IsLiveWorkspace || IsScenesWorkspace || IsCompositingWorkspace || IsOutputsWorkspace || IsSettingsWorkspace;
+	public bool HasAuxiliaryWorkspaceColumn => IsScenesWorkspace || IsCompositingWorkspace || IsOutputsWorkspace || IsSettingsWorkspace;
 	public GridLength AuxiliaryWorkspaceColumnWidth => HasAuxiliaryWorkspaceColumn ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
 	public double AuxiliaryWorkspaceColumnMinWidth => HasAuxiliaryWorkspaceColumn ? 300 : 0;
 	public double AuxiliaryWorkspaceGapWidth => HasAuxiliaryWorkspaceColumn ? 14 : 0;
@@ -537,15 +537,19 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 	public Visibility MultiviewVisibility => IsLiveWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility StandardViewerVisibility => IsLiveWorkspace ? Visibility.Collapsed : Visibility.Visible;
 	public Visibility QuickControlsVisibility => IsLiveWorkspace ? Visibility.Visible : Visibility.Collapsed;
-	public Visibility ProductionControlsVisibility => IsLiveWorkspace || IsEditWorkspace ? Visibility.Visible : Visibility.Collapsed;
-	public Visibility MediaDeckVisibility => IsLiveWorkspace || IsEditWorkspace || IsMediaWorkspace ? Visibility.Visible : Visibility.Collapsed;
-	public Visibility SourceBinVisibility => IsLiveWorkspace || IsMediaWorkspace ? Visibility.Visible : Visibility.Collapsed;
+	public Visibility ProductionControlsVisibility => IsEditWorkspace ? Visibility.Visible : Visibility.Collapsed;
+	public Visibility MediaDeckVisibility => IsEditWorkspace || IsMediaWorkspace ? Visibility.Visible : Visibility.Collapsed;
+	public Visibility SourceBinVisibility => IsMediaWorkspace ? Visibility.Visible : Visibility.Collapsed;
+	public Visibility MediaLibraryLeftVisibility => IsLiveWorkspace ? Visibility.Collapsed : Visibility.Visible;
+	public Visibility LiveSceneCueVisibility => IsLiveWorkspace ? Visibility.Visible : Visibility.Collapsed;
+	public Visibility InspectorVisibility => IsLiveWorkspace ? Visibility.Collapsed : Visibility.Visible;
+	public Visibility LiveControlsVisibility => IsLiveWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility SystemWorkspaceVisibility => IsOutputsWorkspace || IsSettingsWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility SystemStatusVisibility => IsOutputsWorkspace || IsSettingsWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility MonitoringVisibility => IsOutputsWorkspace || IsSettingsWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility GraphicsVisibility => IsScenesWorkspace || IsCompositingWorkspace ? Visibility.Visible : Visibility.Collapsed;
-	public Visibility AudioVisibility => IsLiveWorkspace || IsOutputsWorkspace ? Visibility.Visible : Visibility.Collapsed;
-	public Visibility RecordingVisibility => IsLiveWorkspace || IsOutputsWorkspace ? Visibility.Visible : Visibility.Collapsed;
+	public Visibility AudioVisibility => IsOutputsWorkspace ? Visibility.Visible : Visibility.Collapsed;
+	public Visibility RecordingVisibility => IsOutputsWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility AIVisibility => IsCompositingWorkspace || IsSettingsWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility OperatorStateVisibility => IsSettingsWorkspace ? Visibility.Visible : Visibility.Collapsed;
 
@@ -790,6 +794,10 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 		OnPropertyChanged(nameof(ProductionControlsVisibility));
 		OnPropertyChanged(nameof(MediaDeckVisibility));
 		OnPropertyChanged(nameof(SourceBinVisibility));
+		OnPropertyChanged(nameof(MediaLibraryLeftVisibility));
+		OnPropertyChanged(nameof(LiveSceneCueVisibility));
+		OnPropertyChanged(nameof(InspectorVisibility));
+		OnPropertyChanged(nameof(LiveControlsVisibility));
 		OnPropertyChanged(nameof(SystemWorkspaceVisibility));
 		OnPropertyChanged(nameof(SystemStatusVisibility));
 		OnPropertyChanged(nameof(MonitoringVisibility));
