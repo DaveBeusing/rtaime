@@ -297,6 +297,8 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 				return;
 			OnPropertyChanged(nameof(PreviewViewerWidth));
 			OnPropertyChanged(nameof(ProgramViewerWidth));
+			OnPropertyChanged(nameof(PreviewViewerVisibility));
+			OnPropertyChanged(nameof(ProgramViewerVisibility));
 			OnPropertyChanged(nameof(ViewerGapWidth));
 			OnPropertyChanged(nameof(ViewerModeLabel));
 			(RestoreViewersCommand as OperatorShellCommand)?.RaiseCanExecuteChanged();
@@ -316,6 +318,12 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 		"PROGRAM" => new GridLength(1, GridUnitType.Star),
 		_ => new GridLength(1.15, GridUnitType.Star)
 	};
+
+	public Visibility PreviewViewerVisibility =>
+		string.Equals(ViewerMode, "PROGRAM", StringComparison.Ordinal) ? Visibility.Collapsed : Visibility.Visible;
+
+	public Visibility ProgramViewerVisibility =>
+		string.Equals(ViewerMode, "PREVIEW", StringComparison.Ordinal) ? Visibility.Collapsed : Visibility.Visible;
 
 	public double ViewerGapWidth => string.Equals(ViewerMode, "DUAL", StringComparison.Ordinal) ? 12 : 0;
 	public string ViewerModeLabel => ViewerMode switch
@@ -386,6 +394,8 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 		OnPropertyChanged(nameof(ViewerMode));
 		OnPropertyChanged(nameof(PreviewViewerWidth));
 		OnPropertyChanged(nameof(ProgramViewerWidth));
+		OnPropertyChanged(nameof(PreviewViewerVisibility));
+		OnPropertyChanged(nameof(ProgramViewerVisibility));
 		OnPropertyChanged(nameof(ViewerGapWidth));
 		OnPropertyChanged(nameof(ViewerModeLabel));
 		(RestoreViewersCommand as OperatorShellCommand)?.RaiseCanExecuteChanged();
