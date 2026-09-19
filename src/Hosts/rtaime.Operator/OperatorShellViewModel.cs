@@ -393,6 +393,7 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 	public double NavigationRailWidth => _viewportWidth < 1320 ? 54 : 86;
 	public Visibility NavigationLabelVisibility => _viewportWidth < 1320 ? Visibility.Collapsed : Visibility.Visible;
 	public Visibility SecondaryMetricVisibility => _viewportWidth < 1480 ? Visibility.Collapsed : Visibility.Visible;
+	public Visibility CompactOptionalVisibility => IsCompactViewport ? Visibility.Collapsed : Visibility.Visible;
 
 	public ICommand ToggleLeftPanelCommand { get; }
 	public ICommand ToggleRightPanelCommand { get; }
@@ -443,7 +444,7 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 
 	public GridLength LeftColumnWidth
 	{
-		get => new(IsCenterMaximized || IsLeftCollapsed || !HasLeftRegion ? 0 : IsCompactViewport ? Math.Min(LeftPanelWidth, OperatorLayoutSettings.CompactLeftPanelWidth) : LeftPanelWidth);
+		get => new(IsCenterMaximized || IsLeftCollapsed || !HasLeftRegion || IsCompactViewport ? 0 : LeftPanelWidth);
 		set
 		{
 			if (!IsCenterMaximized && !IsLeftCollapsed && HasLeftRegion && value.IsAbsolute && value.Value > 0)
@@ -549,9 +550,9 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 	public Visibility LeftRegionVisibility => HasLeftRegion ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility TimelineRegionVisibility => HasTimelineRegion ? Visibility.Visible : Visibility.Collapsed;
 	public bool HasAuxiliaryWorkspaceColumn => IsScenesWorkspace || IsCompositingWorkspace || IsOutputsWorkspace || IsSettingsWorkspace;
-	public GridLength AuxiliaryWorkspaceColumnWidth => HasAuxiliaryWorkspaceColumn ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
-	public double AuxiliaryWorkspaceColumnMinWidth => HasAuxiliaryWorkspaceColumn ? 300 : 0;
-	public double AuxiliaryWorkspaceGapWidth => HasAuxiliaryWorkspaceColumn ? 14 : 0;
+	public GridLength AuxiliaryWorkspaceColumnWidth => HasAuxiliaryWorkspaceColumn && !IsCompactViewport ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+	public double AuxiliaryWorkspaceColumnMinWidth => HasAuxiliaryWorkspaceColumn && !IsCompactViewport ? 300 : 0;
+	public double AuxiliaryWorkspaceGapWidth => HasAuxiliaryWorkspaceColumn && !IsCompactViewport ? 14 : 0;
 
 	public Visibility MultiviewVisibility => IsLiveWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility CompositingGraphVisibility => IsCompositingWorkspace ? Visibility.Visible : Visibility.Collapsed;
@@ -655,6 +656,10 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 		if (previousCompactWorkspace != IsCompactViewport)
 		{
 			OnPropertyChanged(nameof(IsCompactViewport));
+			OnPropertyChanged(nameof(CompactOptionalVisibility));
+			OnPropertyChanged(nameof(AuxiliaryWorkspaceColumnWidth));
+			OnPropertyChanged(nameof(AuxiliaryWorkspaceColumnMinWidth));
+			OnPropertyChanged(nameof(AuxiliaryWorkspaceGapWidth));
 			RaiseLayoutGeometryChanged();
 		}
 		if (previousSecondaryMetrics != (_viewportWidth < 1480))
