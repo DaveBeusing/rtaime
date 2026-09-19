@@ -1,0 +1,251 @@
+<!-- Copyright (c) Dave Beusing <david.beusing@gmail.com>. -->
+<UserControl x:Class="rtaime.Operator.CompositingGraphControl"
+	x:Name="Root"
+	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	xmlns:local="clr-namespace:rtaime.Operator"
+	MinHeight="520"
+	Focusable="True">
+	<UserControl.Resources>
+		<Style x:Key="GraphToolbarButton" TargetType="{x:Type Button}" BasedOn="{StaticResource OperatorButton}">
+			<Setter Property="MinHeight" Value="27" />
+			<Setter Property="Padding" Value="8,2" />
+			<Setter Property="Margin" Value="0,0,5,0" />
+		</Style>
+
+		<Style x:Key="GraphNodeBorder" TargetType="{x:Type Border}">
+			<Setter Property="Width" Value="214" />
+			<Setter Property="Height" Value="116" />
+			<Setter Property="Padding" Value="9" />
+			<Setter Property="Background" Value="{DynamicResource OperatorRaisedSurfaceBrush}" />
+			<Setter Property="BorderBrush" Value="{DynamicResource OperatorAccentBrush}" />
+			<Setter Property="BorderThickness" Value="1" />
+			<Setter Property="CornerRadius" Value="6" />
+			<Style.Triggers>
+				<DataTrigger Binding="{Binding KindLabel}" Value="ROUTING">
+					<Setter Property="BorderBrush" Value="{DynamicResource OperatorPreviewBrush}" />
+				</DataTrigger>
+				<DataTrigger Binding="{Binding KindLabel}" Value="TRANSFORM">
+					<Setter Property="BorderBrush" Value="{DynamicResource OperatorWarningBrush}" />
+				</DataTrigger>
+				<DataTrigger Binding="{Binding KindLabel}" Value="OUTPUT">
+					<Setter Property="BorderBrush" Value="{DynamicResource OperatorProgramBrush}" />
+				</DataTrigger>
+				<DataTrigger Binding="{Binding KindLabel}" Value="RECORDER">
+					<Setter Property="BorderBrush" Value="{DynamicResource OperatorProgramBrush}" />
+				</DataTrigger>
+				<DataTrigger Binding="{Binding IsDegraded}" Value="True">
+					<Setter Property="BorderBrush" Value="{DynamicResource OperatorWarningBrush}" />
+				</DataTrigger>
+				<DataTrigger Binding="{Binding IsError}" Value="True">
+					<Setter Property="BorderBrush" Value="{DynamicResource OperatorErrorBrush}" />
+				</DataTrigger>
+				<DataTrigger Binding="{Binding IsSelected}" Value="True">
+					<Setter Property="Background" Value="{DynamicResource OperatorSelectionSurfaceBrush}" />
+					<Setter Property="BorderThickness" Value="2" />
+				</DataTrigger>
+			</Style.Triggers>
+		</Style>
+	</UserControl.Resources>
+
+	<Grid>
+		<Grid.RowDefinitions>
+			<RowDefinition Height="Auto" />
+			<RowDefinition Height="*" />
+		</Grid.RowDefinitions>
+
+		<Border Grid.Row="0" Style="{StaticResource OperatorToolbar}" Padding="8,7" CornerRadius="6,6,0,0">
+			<DockPanel LastChildFill="True">
+				<StackPanel Orientation="Horizontal">
+					<Button Content="SELECT" Command="{Binding SelectModeCommand}" Style="{StaticResource GraphToolbarButton}">
+						<Button.Style>
+							<Style TargetType="{x:Type Button}" BasedOn="{StaticResource GraphToolbarButton}">
+								<Style.Triggers>
+									<DataTrigger Binding="{Binding IsSelectMode}" Value="True">
+										<Setter Property="Background" Value="{DynamicResource OperatorAccentSurfaceBrush}" />
+										<Setter Property="BorderBrush" Value="{DynamicResource OperatorAccentBrush}" />
+									</DataTrigger>
+								</Style.Triggers>
+							</Style>
+						</Button.Style>
+					</Button>
+					<Button Content="PAN" Command="{Binding PanModeCommand}" Style="{StaticResource GraphToolbarButton}">
+						<Button.Style>
+							<Style TargetType="{x:Type Button}" BasedOn="{StaticResource GraphToolbarButton}">
+								<Style.Triggers>
+									<DataTrigger Binding="{Binding IsPanMode}" Value="True">
+										<Setter Property="Background" Value="{DynamicResource OperatorAccentSurfaceBrush}" />
+										<Setter Property="BorderBrush" Value="{DynamicResource OperatorAccentBrush}" />
+									</DataTrigger>
+								</Style.Triggers>
+							</Style>
+						</Button.Style>
+					</Button>
+					<Separator Margin="3,2,8,2" />
+					<Button Content="FIT" Command="{Binding FitCommand}" Style="{StaticResource GraphToolbarButton}" ToolTip="Fit the complete graph into the current viewport." />
+					<Button Content="100 %" Command="{Binding ResetViewCommand}" Style="{StaticResource GraphToolbarButton}" ToolTip="Reset presentation zoom to 100 percent." />
+					<Button Content="AUTO LAYOUT" Command="{Binding AutoLayoutCommand}" Style="{StaticResource GraphToolbarButton}" ToolTip="Restore the deterministic presentation layout without changing Runtime routing." />
+					<Button Content="REWIRE" IsEnabled="False" Style="{StaticResource GraphToolbarButton}" ToolTip="Runtime topology rewiring is not exposed by the current authoritative capability." />
+				</StackPanel>
+
+				<StackPanel Orientation="Horizontal" DockPanel.Dock="Right" HorizontalAlignment="Right">
+					<Border Style="{StaticResource OperatorStatusBadge}" Padding="7,3" Margin="0,0,6,0">
+						<TextBlock Text="READ-ONLY TOPOLOGY" Style="{StaticResource OperatorLabel}" FontWeight="SemiBold" />
+					</Border>
+					<Border Style="{StaticResource OperatorStatusBadge}" Padding="7,3">
+						<TextBlock Text="{Binding ZoomLabel}" FontFamily="{DynamicResource OperatorTimecodeFontFamily}" FontWeight="SemiBold" />
+					</Border>
+				</StackPanel>
+			</DockPanel>
+		</Border>
+
+		<Grid x:Name="GraphViewport"
+			Grid.Row="1"
+			ClipToBounds="True"
+			Background="{DynamicResource OperatorBackgroundBrush}"
+			MouseWheel="OnGraphMouseWheel"
+			MouseDown="OnGraphMouseDown"
+			MouseMove="OnGraphMouseMove"
+			MouseUp="OnGraphMouseUp"
+			MouseLeave="OnGraphMouseLeave"
+			SizeChanged="OnGraphSizeChanged">
+			<Grid.Background>
+				<VisualBrush TileMode="Tile" Viewport="0,0,24,24" ViewportUnits="Absolute">
+					<VisualBrush.Visual>
+						<Grid Width="24" Height="24" Background="{DynamicResource OperatorBackgroundBrush}">
+							<Ellipse Width="1.4" Height="1.4" Fill="{DynamicResource OperatorBorderBrush}" HorizontalAlignment="Left" VerticalAlignment="Top" />
+						</Grid>
+					</VisualBrush.Visual>
+				</VisualBrush>
+			</Grid.Background>
+
+			<Canvas x:Name="GraphWorld"
+				Width="{Binding CanvasWidth}"
+				Height="{Binding CanvasHeight}"
+				HorizontalAlignment="Left"
+				VerticalAlignment="Top"
+				CacheMode="BitmapCache">
+				<Canvas.RenderTransform>
+					<TransformGroup>
+						<ScaleTransform ScaleX="{Binding Zoom}" ScaleY="{Binding Zoom}" />
+						<TranslateTransform X="{Binding PanX}" Y="{Binding PanY}" />
+					</TransformGroup>
+				</Canvas.RenderTransform>
+
+				<ItemsControl ItemsSource="{Binding Connections}"
+					Width="{Binding CanvasWidth}"
+					Height="{Binding CanvasHeight}"
+					IsHitTestVisible="False">
+					<ItemsControl.ItemsPanel>
+						<ItemsPanelTemplate>
+							<Canvas />
+						</ItemsPanelTemplate>
+					</ItemsControl.ItemsPanel>
+					<ItemsControl.ItemTemplate>
+						<DataTemplate>
+							<Canvas Width="{Binding DataContext.CanvasWidth, RelativeSource={RelativeSource AncestorType={x:Type ItemsControl}}}"
+								Height="{Binding DataContext.CanvasHeight, RelativeSource={RelativeSource AncestorType={x:Type ItemsControl}}}">
+								<Path Data="{Binding Geometry}" Stroke="{DynamicResource OperatorAccentBrush}" StrokeThickness="2" Opacity="{Binding Opacity}">
+									<Path.Style>
+										<Style TargetType="{x:Type Path}">
+											<Setter Property="StrokeDashArray" Value="" />
+											<Style.Triggers>
+												<DataTrigger Binding="{Binding IsActive}" Value="False">
+													<Setter Property="StrokeDashArray" Value="5,4" />
+												</DataTrigger>
+											</Style.Triggers>
+										</Style>
+									</Path.Style>
+								</Path>
+								<Polygon Points="{Binding ArrowPoints}" Fill="{DynamicResource OperatorAccentBrush}" Opacity="{Binding Opacity}" />
+							</Canvas>
+						</DataTemplate>
+					</ItemsControl.ItemTemplate>
+				</ItemsControl>
+
+				<ItemsControl ItemsSource="{Binding Nodes}"
+					Width="{Binding CanvasWidth}"
+					Height="{Binding CanvasHeight}">
+					<ItemsControl.ItemsPanel>
+						<ItemsPanelTemplate>
+							<Canvas />
+						</ItemsPanelTemplate>
+					</ItemsControl.ItemsPanel>
+					<ItemsControl.ItemContainerStyle>
+						<Style TargetType="{x:Type ContentPresenter}">
+							<Setter Property="Canvas.Left" Value="{Binding X}" />
+							<Setter Property="Canvas.Top" Value="{Binding Y}" />
+						</Style>
+					</ItemsControl.ItemContainerStyle>
+					<ItemsControl.ItemTemplate>
+						<DataTemplate>
+							<Button Command="{Binding DataContext.SelectNodeCommand, RelativeSource={RelativeSource AncestorType={x:Type ItemsControl}}}"
+								CommandParameter="{Binding}"
+								Background="Transparent"
+								BorderThickness="0"
+								Padding="0"
+								HorizontalContentAlignment="Stretch"
+								VerticalContentAlignment="Stretch"
+								ToolTip="Select node and project its observed state into the Inspector.">
+								<Border Style="{StaticResource GraphNodeBorder}">
+									<Grid>
+										<Grid.RowDefinitions>
+											<RowDefinition Height="Auto" />
+											<RowDefinition Height="*" />
+											<RowDefinition Height="Auto" />
+										</Grid.RowDefinitions>
+
+										<DockPanel>
+											<Border Style="{StaticResource OperatorStatusBadge}" Padding="5,2" DockPanel.Dock="Right" Tag="{Binding HealthLabel}">
+												<Border.Style>
+													<Style TargetType="{x:Type Border}" BasedOn="{StaticResource OperatorStatusBadge}">
+														<Style.Triggers>
+															<DataTrigger Binding="{Binding IsDegraded}" Value="True">
+																<Setter Property="BorderBrush" Value="{DynamicResource OperatorWarningBrush}" />
+															</DataTrigger>
+															<DataTrigger Binding="{Binding IsError}" Value="True">
+																<Setter Property="BorderBrush" Value="{DynamicResource OperatorErrorBrush}" />
+															</DataTrigger>
+														</Style.Triggers>
+													</Style>
+												</Border.Style>
+												<TextBlock Text="{Binding Status}" FontSize="10" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" MaxWidth="82" />
+											</Border>
+											<StackPanel>
+												<TextBlock Text="{Binding KindLabel}" Style="{StaticResource OperatorLabel}" FontSize="10" FontWeight="Bold" />
+												<TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="14" TextTrimming="CharacterEllipsis" MaxWidth="118" />
+											</StackPanel>
+										</DockPanel>
+
+										<TextBlock Grid.Row="1" Text="{Binding Detail}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="34" Margin="0,5,0,4" />
+
+										<Grid Grid.Row="2">
+											<Grid.ColumnDefinitions>
+												<ColumnDefinition Width="*" />
+												<ColumnDefinition Width="12" />
+												<ColumnDefinition Width="*" />
+											</Grid.ColumnDefinitions>
+											<StackPanel>
+												<TextBlock Text="IN" Style="{StaticResource OperatorLabel}" FontSize="9" />
+												<TextBlock Text="{Binding InputPorts}" FontSize="10" TextTrimming="CharacterEllipsis" />
+											</StackPanel>
+											<StackPanel Grid.Column="2" HorizontalAlignment="Right">
+												<TextBlock Text="OUT" Style="{StaticResource OperatorLabel}" FontSize="9" HorizontalAlignment="Right" />
+												<TextBlock Text="{Binding OutputPorts}" FontSize="10" TextTrimming="CharacterEllipsis" HorizontalAlignment="Right" />
+											</StackPanel>
+										</Grid>
+									</Grid>
+								</Border>
+							</Button>
+						</DataTemplate>
+					</ItemsControl.ItemTemplate>
+				</ItemsControl>
+			</Canvas>
+
+			<Border HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="10" Padding="7,4"
+				Background="{DynamicResource OperatorSurfaceBrush}" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" CornerRadius="4">
+				<TextBlock Text="Wheel: zoom · Pan mode or middle mouse: move · Node click: inspect" Style="{StaticResource OperatorLabel}" />
+			</Border>
+		</Grid>
+	</Grid>
+</UserControl>
