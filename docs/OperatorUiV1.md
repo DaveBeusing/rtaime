@@ -339,7 +339,7 @@ The source tile and deck countdown use the same effective remaining range. Media
 
 The persistent lower workspace is now a frame-accurate layered timeline rather than a single seek slider. It exposes Video, Graphics, Overlay, Audio, AI, Control and Cue semantic tracks while preserving Runtime and existing media/marker contracts as the production authority.
 
-The timeline provides a visible ruler and Program playhead, horizontal scroll, 1x–32x zoom, Fit, frame snapping, confirmed IN/OUT markers, the active media range and first-class named Media cues. Page Up/Page Down navigate previous/next cue, cue double-click jumps through the existing seek command path, and IN/OUT handle drags finish through the existing marker command path.
+The timeline provides a visible ruler and Program playhead, horizontal scroll, 1x–32x zoom, Fit, frame snapping, confirmed IN/OUT markers, the active media range and first-class named Media cues. Named cues can be added at the confirmed playhead frame; Page Up/Page Down navigate previous/next cue; cue double-click jumps through the existing seek command path; and selected cues expose Jump/Rename/Delete in the shared Inspector. IN/OUT handle drags finish through the existing marker command path.
 
 The loaded Media Deck clip is the authoritative Video item. Audio and Graphics Media Pool resources may be dropped only onto matching semantic tracks and appear as `PROJECTED` Operator metadata across the current media duration. They are deliberately not represented as `COMMITTED` timed production automation. Unsupported Source/Composition drops are rejected.
 
