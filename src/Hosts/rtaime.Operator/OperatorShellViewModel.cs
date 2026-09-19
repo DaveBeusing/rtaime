@@ -566,14 +566,14 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 	{
 		"PREVIEW" => new GridLength(1, GridUnitType.Star),
 		"PROGRAM" => new GridLength(0),
-		_ => new GridLength(0.85, GridUnitType.Star)
+		_ => new GridLength(1, GridUnitType.Star)
 	};
 
 	public GridLength ProgramViewerWidth => ViewerMode switch
 	{
 		"PREVIEW" => new GridLength(0),
 		"PROGRAM" => new GridLength(1, GridUnitType.Star),
-		_ => new GridLength(1.15, GridUnitType.Star)
+		_ => new GridLength(1, GridUnitType.Star)
 	};
 
 	public Visibility PreviewViewerVisibility =>
@@ -582,7 +582,7 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 	public Visibility ProgramViewerVisibility =>
 		string.Equals(ViewerMode, "PREVIEW", StringComparison.Ordinal) ? Visibility.Collapsed : Visibility.Visible;
 
-	public double ViewerGapWidth => string.Equals(ViewerMode, "DUAL", StringComparison.Ordinal) ? 12 : 0;
+	public double ViewerGapWidth => string.Equals(ViewerMode, "DUAL", StringComparison.Ordinal) ? 6 : 0;
 	public string ViewerModeLabel => ViewerMode switch
 	{
 		"PREVIEW" => "PREVIEW MAXIMIZED",
