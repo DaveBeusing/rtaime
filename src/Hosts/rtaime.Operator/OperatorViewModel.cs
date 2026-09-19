@@ -396,6 +396,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 						ApplyHealth(snapshot.Health);
 						ApplyAI(snapshot.AIShowcase);
 						ApplyLifecycle(snapshot);
+						UpdateViewerStates(snapshot);
 					}
 					AudioMeterStatus = "LIVE";
 				});
@@ -795,7 +796,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		ConnectionDetail = $"Authoritative snapshot loaded. Runtime status: {snapshot.RuntimeStatus}.";
 		_hasSynchronized = true;
 		ApplyLifecycle(snapshot);
-		UpdateViewerStates();
+		UpdateViewerStates(snapshot);
 		if (!IsBusy)
 			TransitionStatus = "READY";
 		RaiseCommandState();
@@ -915,7 +916,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 			: health.ObservedAtUtc.ToLocalTime().ToString("HH:mm:ss", CultureInfo.InvariantCulture);
 	}
 
-	private void UpdateViewerStates()
+	private void UpdateViewerStates(OperatorStatusSnapshot? snapshot = null)
 	{
 		if (IsStale)
 		{
@@ -931,12 +932,15 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 			return;
 		}
 
-		PreviewViewerState = MapViewerSourceState(
-			Sources.FirstOrDefault(source => source.IsPreview)?.Health,
-			RuntimeStatus);
-		ProgramViewerState = MapViewerSourceState(
-			Sources.FirstOrDefault(source => source.IsProgram)?.Health,
-			RuntimeStatus);
+		var previewHealth = snapshot?.Sources.FirstOrDefault(source =>
+			string.Equals(source.Id, snapshot.Production.Routing.PreviewSourceId.ToString(), StringComparison.Ordinal))?.Health
+			?? Sources.FirstOrDefault(source => source.IsPreview)?.Health;
+		var programHealth = snapshot?.Sources.FirstOrDefault(source =>
+			string.Equals(source.Id, snapshot.Production.Routing.ProgramSourceId.ToString(), StringComparison.Ordinal))?.Health
+			?? Sources.FirstOrDefault(source => source.IsProgram)?.Health;
+
+		PreviewViewerState = MapViewerSourceState(previewHealth, snapshot?.RuntimeStatus ?? RuntimeStatus);
+		ProgramViewerState = MapViewerSourceState(programHealth, snapshot?.RuntimeStatus ?? RuntimeStatus);
 	}
 
 	private static string MapViewerSourceState(string? sourceHealth, string runtimeStatus)
