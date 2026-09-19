@@ -246,11 +246,12 @@
 					</ItemsControl.ItemTemplate>
 				</ItemsControl>
 
-				<Grid x:Name="TimelineContentArea" Grid.Column="1" Background="Transparent" IsHitTestVisible="False">
+				<Grid x:Name="TimelineContentArea" Grid.Column="1">
 					<Canvas x:Name="TimelineOverlay" ClipToBounds="True">
 						<Border Width="2"
 							Height="{Binding ActualHeight, ElementName=TrackRows}"
-							Background="{DynamicResource OperatorProgramBrush}">
+							Background="{DynamicResource OperatorProgramBrush}"
+							IsHitTestVisible="False">
 							<Canvas.Left>
 								<MultiBinding Converter="{StaticResource TimelineFrameToCanvasLeftConverter}">
 									<Binding Path="DisplayFrame" />
@@ -264,7 +265,11 @@
 						<Border Width="5"
 							Height="{Binding ActualHeight, ElementName=TrackRows}"
 							Background="{DynamicResource OperatorAccentBrush}"
-							Opacity="0.7">
+							Opacity="0.7"
+							Tag="IN"
+							Cursor="SizeWE"
+							PreviewMouseLeftButtonDown="TrimHandle_PreviewMouseLeftButtonDown"
+							ToolTip="IN trim handle">
 							<Border.Style>
 								<Style TargetType="Border">
 									<Setter Property="Visibility" Value="Collapsed" />
@@ -288,7 +293,11 @@
 						<Border Width="5"
 							Height="{Binding ActualHeight, ElementName=TrackRows}"
 							Background="{DynamicResource OperatorWarningBrush}"
-							Opacity="0.7">
+							Opacity="0.7"
+							Tag="OUT"
+							Cursor="SizeWE"
+							PreviewMouseLeftButtonDown="TrimHandle_PreviewMouseLeftButtonDown"
+							ToolTip="OUT trim handle">
 							<Border.Style>
 								<Style TargetType="Border">
 									<Setter Property="Visibility" Value="Collapsed" />
