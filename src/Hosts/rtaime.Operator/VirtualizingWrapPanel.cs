@@ -66,7 +66,9 @@ public sealed class VirtualizingWrapPanel : VirtualizingPanel, IScrollInfo
 
 		if (itemCount == 0)
 		{
-			CleanUpItems(0, -1);
+			var emptyGenerator = ResolveGenerator();
+			if (emptyGenerator is not null)
+				CleanUpItems(emptyGenerator, 0, -1);
 			return new Size(viewportWidth, 0);
 		}
 
@@ -75,8 +77,12 @@ public sealed class VirtualizingWrapPanel : VirtualizingPanel, IScrollInfo
 		var firstIndex = Math.Min(itemCount - 1, firstVisibleRow * _itemsPerRow);
 		var lastIndex = Math.Min(itemCount - 1, ((firstVisibleRow + visibleRowCount) * _itemsPerRow) - 1);
 
-		RealizeItems(firstIndex, lastIndex, itemWidth, itemHeight);
-		CleanUpItems(firstIndex, lastIndex);
+		var generator = ResolveGenerator();
+		if (generator is null)
+			return new Size(viewportWidth, Math.Min(_extent.Height, viewportHeight));
+
+		RealizeItems(generator, firstIndex, lastIndex, itemWidth, itemHeight);
+		CleanUpItems(generator, firstIndex, lastIndex);
 
 		return new Size(viewportWidth, Math.Min(_extent.Height, viewportHeight));
 	}
@@ -85,7 +91,9 @@ public sealed class VirtualizingWrapPanel : VirtualizingPanel, IScrollInfo
 	{
 		var itemWidth = NormalizeLength(ItemWidth, 168.0);
 		var itemHeight = NormalizeLength(ItemHeight, 126.0);
-		var generator = ItemContainerGenerator;
+		var generator = ResolveGenerator();
+		if (generator is null)
+			return finalSize;
 
 		for (var childIndex = 0; childIndex < InternalChildren.Count; childIndex++)
 		{
@@ -145,7 +153,11 @@ public sealed class VirtualizingWrapPanel : VirtualizingPanel, IScrollInfo
 		if (childIndex < 0)
 			return rectangle;
 
-		var itemIndex = ItemContainerGenerator.IndexFromGeneratorPosition(new GeneratorPosition(childIndex, 0));
+		var generator = ResolveGenerator();
+		if (generator is null)
+			return rectangle;
+
+		var itemIndex = generator.IndexFromGeneratorPosition(new GeneratorPosition(childIndex, 0));
 		if (itemIndex < 0)
 			return rectangle;
 
@@ -161,9 +173,13 @@ public sealed class VirtualizingWrapPanel : VirtualizingPanel, IScrollInfo
 		return new Rect(0, top - VerticalOffset, NormalizeLength(ItemWidth, 168.0), itemHeight);
 	}
 
-	private void RealizeItems(int firstIndex, int lastIndex, double itemWidth, double itemHeight)
+	private void RealizeItems(
+		IItemContainerGenerator generator,
+		int firstIndex,
+		int lastIndex,
+		double itemWidth,
+		double itemHeight)
 	{
-		var generator = ItemContainerGenerator;
 		var startPosition = generator.GeneratorPositionFromIndex(firstIndex);
 		var childIndex = startPosition.Offset == 0 ? startPosition.Index : startPosition.Index + 1;
 
@@ -184,9 +200,8 @@ public sealed class VirtualizingWrapPanel : VirtualizingPanel, IScrollInfo
 		}
 	}
 
-	private void CleanUpItems(int firstIndex, int lastIndex)
+	private void CleanUpItems(IItemContainerGenerator generator, int firstIndex, int lastIndex)
 	{
-		var generator = ItemContainerGenerator;
 		for (var childIndex = InternalChildren.Count - 1; childIndex >= 0; childIndex--)
 		{
 			var position = new GeneratorPosition(childIndex, 0);
@@ -197,6 +212,15 @@ public sealed class VirtualizingWrapPanel : VirtualizingPanel, IScrollInfo
 			generator.Remove(position, 1);
 			RemoveInternalChildRange(childIndex, 1);
 		}
+	}
+
+	private IItemContainerGenerator? ResolveGenerator()
+	{
+		var generator = ItemContainerGenerator;
+		if (generator is not null)
+			return generator;
+
+		return ItemsControl.GetItemsOwner(this)?.ItemContainerGenerator;
 	}
 
 	private void CoerceVerticalOffset()
