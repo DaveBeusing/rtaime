@@ -28,6 +28,11 @@ $multiviewCodePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Operat
 $liveSceneCuePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/LiveSceneCueControl.xaml"
 $liveControlsPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/LiveControlsControl.xaml"
 $liveDocumentationPath = Join-Path $repositoryRoot "docs/LiveMultiviewAndSceneControl.md"
+$compositingGraphPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/CompositingGraphControl.xaml"
+$compositingGraphCodePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/CompositingGraphControl.xaml.cs"
+$compositingGraphViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/CompositingGraphViewModel.cs"
+$compositingGraphProjectionPath = Join-Path $repositoryRoot "src/Client/rtaime.Client/CompositingGraphProjection.cs"
+$compositingGraphDocumentationPath = Join-Path $repositoryRoot "docs/CompositingNodeGraph.md"
 $mediaPoolPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MediaPoolInspectorViewModel.cs"
 $inspectorHostPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorInspectorControl.xaml"
 $virtualizingWrapPanelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/VirtualizingWrapPanel.cs"
@@ -63,7 +68,7 @@ $documentationPath = Join-Path $repositoryRoot "docs/OperatorUiV1.md"
 $workspaceDocumentationPath = Join-Path $repositoryRoot "docs/OperatorWorkspaces.md"
 $mediaLibraryDocumentationPath = Join-Path $repositoryRoot "docs/MediaLibraryAssetBrowser.md"
 
-foreach ($path in @($appPath, $appCodePath, $windowPath, $windowCodePath, $shellPath, $keyboardPath, $quickControlsPath, $multiviewPath, $multiviewCodePath, $liveSceneCuePath, $liveControlsPath, $liveDocumentationPath, $mediaPoolPath, $inspectorHostPath, $virtualizingWrapPanelPath, $deckPath, $deckViewModelPath, $timelinePath, $timelineCodePath, $timelineViewModelPath, $markerControllerPath, $timelineDocumentationPath, $viewModelPath, $monitorViewModelPath, $programOutputControllerPath, $programOutputWindowPath, $previewViewerPath, $previewViewerCodePath, $programViewerPath, $programViewerCodePath, $monitorViewPath, $sourceTileViewModelPath, $audioInputViewModelPath, $graphicsLoaderPath, $demoControllerPath, $demoManifestPath, $demoProductPath, $demoGraphicsPath, $demoDocumentationPath, $tokensPath, $themePath, $manifestPath, $projectPath, $documentationPath, $workspaceDocumentationPath, $mediaLibraryDocumentationPath)) {
+foreach ($path in @($appPath, $appCodePath, $windowPath, $windowCodePath, $shellPath, $keyboardPath, $quickControlsPath, $multiviewPath, $multiviewCodePath, $liveSceneCuePath, $liveControlsPath, $liveDocumentationPath, $compositingGraphPath, $compositingGraphCodePath, $compositingGraphViewModelPath, $compositingGraphProjectionPath, $compositingGraphDocumentationPath, $mediaPoolPath, $inspectorHostPath, $virtualizingWrapPanelPath, $deckPath, $deckViewModelPath, $timelinePath, $timelineCodePath, $timelineViewModelPath, $markerControllerPath, $timelineDocumentationPath, $viewModelPath, $monitorViewModelPath, $programOutputControllerPath, $programOutputWindowPath, $previewViewerPath, $previewViewerCodePath, $programViewerPath, $programViewerCodePath, $monitorViewPath, $sourceTileViewModelPath, $audioInputViewModelPath, $graphicsLoaderPath, $demoControllerPath, $demoManifestPath, $demoProductPath, $demoGraphicsPath, $demoDocumentationPath, $tokensPath, $themePath, $manifestPath, $projectPath, $documentationPath, $workspaceDocumentationPath, $mediaLibraryDocumentationPath)) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required Operator UI artifact is missing: '$path'."
 }
 
@@ -79,6 +84,11 @@ $multiviewCode = Get-Content -LiteralPath $multiviewCodePath -Raw
 $liveSceneCue = Get-Content -LiteralPath $liveSceneCuePath -Raw
 $liveControls = Get-Content -LiteralPath $liveControlsPath -Raw
 $liveDocumentation = Get-Content -LiteralPath $liveDocumentationPath -Raw
+$compositingGraph = Get-Content -LiteralPath $compositingGraphPath -Raw
+$compositingGraphCode = Get-Content -LiteralPath $compositingGraphCodePath -Raw
+$compositingGraphViewModel = Get-Content -LiteralPath $compositingGraphViewModelPath -Raw
+$compositingGraphProjection = Get-Content -LiteralPath $compositingGraphProjectionPath -Raw
+$compositingGraphDocumentation = Get-Content -LiteralPath $compositingGraphDocumentationPath -Raw
 $mediaPool = Get-Content -LiteralPath $mediaPoolPath -Raw
 $inspectorHost = Get-Content -LiteralPath $inspectorHostPath -Raw
 $inspectorSurface = "$window`n$inspectorHost"
@@ -507,6 +517,19 @@ Assert-Condition ($shell -match 'CaptureCurrentWorkspace\(\)' -and $shell -match
 Assert-Condition ($shell -notmatch 'OperatorControlClient|NamedPipe|RuntimeHost|ControlHost|AIHost') "Workspace switching must remain presentation-only."
 Assert-Condition ($window -match 'Header="Save Layout"' -and $window -match 'Shell\.SaveLayoutCommand' -and $window -match 'Header="Reset Layout"') "Operator must expose Save Layout and Reset Layout actions."
 Assert-Condition ($window -match 'Shell\.ProductionControlsVisibility' -and $window -match 'Shell\.MediaDeckVisibility' -and $window -match 'Shell\.GraphicsVisibility' -and $window -match 'Shell\.SystemWorkspaceVisibility') "Workspaces must configure presentation without duplicating product state."
+
+# Compositing node graph.
+Assert-Condition ($shell -match 'CompositingGraphVisibility' -and $shell -match 'StandardViewerVisibility => IsLiveWorkspace \|\| IsCompositingWorkspace') "COMPOSITING must host the dedicated graph instead of duplicating the standard monitor surface."
+Assert-Condition ($window -match '<local:CompositingGraphControl' -and $window -match 'DataContext="\{Binding CompositingGraph') "COMPOSITING must render the dedicated node graph through the existing Operator shell."
+Assert-Condition ($windowCode -match 'CompositingGraphViewModel' -and $windowCode -match 'CompositingGraph\.Dispose\(\)') "The Operator window must own and dispose the graph presentation lifecycle."
+Assert-Condition ($compositingGraph -match 'ItemsSource="\{Binding Connections\}"' -and $compositingGraph -match 'ItemsSource="\{Binding Nodes\}"') "Graph connections and node controls must render in separate presentation layers."
+Assert-Condition ($compositingGraph -match 'MouseWheel="OnGraphMouseWheel"' -and $compositingGraph -match 'Command="\{Binding FitCommand\}"' -and $compositingGraph -match 'Command="\{Binding AutoLayoutCommand\}"') "Compositing graph must expose bounded pan/zoom, Fit and Auto Layout interaction."
+Assert-Condition ($compositingGraph -match 'Content="REWIRE" IsEnabled="False"') "Unsupported Runtime rewiring must remain visibly disabled."
+Assert-Condition ($compositingGraphViewModel -match 'CompositingGraphProjector\.Project' -and $compositingGraphViewModel -match 'node\.Apply\(projection\)' -and $compositingGraphViewModel -match 'UpdateConnections\(\)') "Live graph refresh must update stable node projections incrementally rather than replace the graph on every status change."
+Assert-Condition ($compositingGraphViewModel -notmatch 'using rtaime\.(RuntimeHost|ControlHost|Provider\.Gpu|Recording)') "Compositing presentation must not depend directly on Runtime, ControlHost, GPU provider or recording implementations."
+Assert-Condition ($compositingGraphProjection -match 'CompositingGraphNodeKind' -and $compositingGraphProjection -match 'CanRewire = false' -and $compositingGraphProjection -match '"program-output"' -and $compositingGraphProjection -match '"recorder"') "Client graph projection must expose stable read-only source/routing/composite/output/recorder semantics."
+Assert-Condition ($mediaPool -match 'SelectCompositingNode' -and $mediaPool -match '"graph\.node\.status"' -and $mediaPool -match '"graph\.node\.rewire"') "Graph node selection must project into the existing shared Inspector."
+Assert-Condition ($compositingGraphDocumentation -match 'read-only-first' -and $compositingGraphDocumentation -match 'not a second execution or routing authority' -and $compositingGraphDocumentation -match 'never performs Set Preview, CUT, AUTO') "Compositing documentation must preserve the presentation-only authority boundary."
 
 Assert-Condition ($quickControls -match 'MaximumPinnedControls = 8' -and $quickControls -match 'operator-quick-controls\.json') "Quick Controls must remain bounded and persist only local presentation preferences."
 Assert-Condition ($quickControls -match 'SupportedPropertyIds' -and $quickControls -match 'propertyIds' -and $quickControls -notmatch 'OperatorControlClient|NamedPipe|RuntimeHost|ControlHost|AIHost') "Quick Controls must reference stable Inspector properties without owning production state."
