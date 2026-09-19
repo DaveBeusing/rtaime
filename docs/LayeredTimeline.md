@@ -51,7 +51,7 @@ Media cues are explicit timeline objects with:
 - cue type;
 - optional source reference.
 
-The current implementation exposes the real existing Media cue semantics. Previous Cue, Next Cue and Jump To Cue seek through the existing media timeline controller. Page Up and Page Down provide keyboard navigation; double-clicking a cue jumps to it.
+The current implementation exposes the real existing Media cue semantics. The timeline includes explicit named cue creation at the confirmed playhead frame. Previous Cue, Next Cue and Jump To Cue seek through the existing media timeline controller. Page Up and Page Down provide keyboard navigation; double-clicking a cue jumps to it. Selecting a cue exposes Jump, Rename and Delete in the shared Inspector through the existing Media Deck marker commands.
 
 Other cue categories are not presented as active commands until matching backend semantics exist.
 
@@ -91,7 +91,9 @@ Committed media values are identified as `COMMITTED`. UI-only resource projectio
 - Shift+mouse wheel: horizontal timeline scroll.
 - Empty track drag: bounded seek.
 - IN / OUT handle drag: explicit trim command.
+- Cue name + + CUE: add a named Media cue at the confirmed playhead frame.
 - Cue double-click: jump to cue.
+- Selected cue Inspector: jump, rename or delete through existing marker commands.
 
 ## Performance boundary
 
