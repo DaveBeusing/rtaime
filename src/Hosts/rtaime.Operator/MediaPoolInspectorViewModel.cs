@@ -97,6 +97,7 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 	private bool _isGridView = true;
 	private MediaPoolItemViewModel? _selectedItem;
 	private TimelineTrackItemViewModel? _timelineItem;
+	private readonly List<TimelineTrackItemViewModel> _timelineItems = [];
 	private TimelineCueViewModel? _timelineCue;
 	private string _emptyState = "No assets are available.";
 
@@ -237,6 +238,7 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 			if (!Set(ref _selectedItem, value))
 				return;
 			_timelineItem = null;
+			_timelineItems.Clear();
 			_timelineCue = null;
 			ProjectSelectionToExistingOperatorContext(value);
 			BuildInspector();
@@ -245,7 +247,7 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 	}
 
 	public bool HasItems => FilteredItems.Count > 0;
-	public bool HasSelection => SelectedItem is not null || _timelineItem is not null || _timelineCue is not null;
+	public bool HasSelection => SelectedItem is not null || _timelineItem is not null || _timelineItems.Count > 0 || _timelineCue is not null;
 	public bool CanEditSelection => HasSelection && !HasMultipleSelection;
 	public bool HasMetadata => InspectorMetadataProperties.Count > 0;
 	public bool HasEffects => InspectorEffectProperties.Count > 0;
@@ -267,12 +269,16 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 			(_timelineItem is null && SelectedItem?.Kind == MediaPoolItemKind.Graphics));
 	public bool IsCompositionSelection => _timelineItem is null && _timelineCue is null && SelectedItem?.Kind == MediaPoolItemKind.Composition;
 	public bool IsCueSelection => _timelineCue is not null;
-	public string InspectorTitle => _timelineCue?.Name ?? _timelineItem?.Label ?? SelectedItem?.Name ?? "No selection";
-	public string InspectorDetail => _timelineCue is { } cue
-		? $"CUE · {cue.Type.ToString().ToUpperInvariant()} · {cue.Timecode}"
-		: _timelineItem is { } timelineItem
-			? $"TIMELINE · {timelineItem.Category.ToString().ToUpperInvariant()} · {timelineItem.Status}"
-			: SelectedItem?.Detail ?? "Select a Media Pool resource, timeline item or cue.";
+	public string InspectorTitle => _timelineItems.Count > 1
+		? $"{_timelineItems.Count} timeline items"
+		: _timelineCue?.Name ?? _timelineItem?.Label ?? SelectedItem?.Name ?? "No selection";
+	public string InspectorDetail => _timelineItems.Count > 1
+		? "TIMELINE · MULTI-SELECTION"
+		: _timelineCue is { } cue
+			? $"CUE · {cue.Type.ToString().ToUpperInvariant()} · {cue.Timecode}"
+			: _timelineItem is { } timelineItem
+				? $"TIMELINE · {timelineItem.Category.ToString().ToUpperInvariant()} · {timelineItem.Status}"
+				: SelectedItem?.Detail ?? "Select a Media Pool resource, timeline item or cue.";
 	public string EmptyState
 	{
 		get => _emptyState;
@@ -282,14 +288,17 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 	public bool IsLoading => _mediaDeck.IsBusy;
 	public bool HasError => _mediaDeck.HasError;
 	public string ErrorState => _mediaDeck.LastError ?? string.Empty;
-	public int SelectionCount => SelectedItems.Count;
-	public bool HasMultipleSelection => _timelineItem is null && _timelineCue is null && SelectionCount > 1;
-	public string SelectionSummary => SelectionCount switch
-	{
-		0 => "No selection",
-		1 => "1 asset selected",
-		_ => $"{SelectionCount} assets selected"
-	};
+	public int SelectionCount => _timelineItems.Count > 0 ? _timelineItems.Count : SelectedItems.Count;
+	public bool HasMultipleSelection => _timelineItems.Count > 1 ||
+		(_timelineItem is null && _timelineCue is null && SelectedItems.Count > 1);
+	public string SelectionSummary => _timelineItems.Count > 0
+		? _timelineItems.Count == 1 ? "1 timeline item selected" : $"{_timelineItems.Count} timeline items selected"
+		: SelectionCount switch
+		{
+			0 => "No selection",
+			1 => "1 asset selected",
+			_ => $"{SelectionCount} assets selected"
+		};
 
 	public bool IsOverviewExpanded
 	{
@@ -384,10 +393,24 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 		return Task.CompletedTask;
 	}
 
-	public void SelectTimelineItem(TimelineTrackItemViewModel item)
+	public void SelectTimelineItem(TimelineTrackItemViewModel item) =>
+		SelectTimelineItems([item], item);
+
+	public void SelectTimelineItems(
+		IEnumerable<TimelineTrackItemViewModel> items,
+		TimelineTrackItemViewModel? primary = null)
 	{
-		ArgumentNullException.ThrowIfNull(item);
-		_timelineItem = item;
+		ArgumentNullException.ThrowIfNull(items);
+		var selected = items
+			.GroupBy(item => item.Id, StringComparer.Ordinal)
+			.Select(group => group.First())
+			.ToArray();
+
+		_timelineItems.Clear();
+		_timelineItems.AddRange(selected);
+		_timelineItem = primary is not null && selected.Contains(primary)
+			? primary
+			: selected.LastOrDefault();
 		_timelineCue = null;
 		BuildInspector();
 		RaiseSelectionState();
@@ -398,15 +421,17 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 		ArgumentNullException.ThrowIfNull(cue);
 		_timelineCue = cue;
 		_timelineItem = null;
+		_timelineItems.Clear();
 		BuildInspector();
 		RaiseSelectionState();
 	}
 
 	public void ClearTimelineSelection()
 	{
-		if (_timelineItem is null && _timelineCue is null)
+		if (_timelineItem is null && _timelineItems.Count == 0 && _timelineCue is null)
 			return;
 		_timelineItem = null;
+		_timelineItems.Clear();
 		_timelineCue = null;
 		BuildInspector();
 		RaiseSelectionState();
@@ -631,6 +656,13 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 		InspectorMetadataProperties.Clear();
 		InspectorEffectProperties.Clear();
 
+		if (_timelineItems.Count > 1)
+		{
+			BuildTimelineMultiSelectionInspector();
+			RaiseInspectorProjectionState();
+			return;
+		}
+
 		if (HasMultipleSelection)
 		{
 			BuildMultiSelectionInspector();
@@ -735,6 +767,21 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 		RaiseInspectorProjectionState();
 	}
 
+	private void BuildTimelineMultiSelectionInspector()
+	{
+		var selected = _timelineItems.ToArray();
+		if (selected.Length == 0)
+			return;
+
+		Add("timeline.selection.count", "Selection", $"{selected.Length} timeline items", "METADATA");
+		AddMixed("timeline.selection.track", "Track", selected.Select(item => item.Category.ToString().ToUpperInvariant()));
+		AddMixed("timeline.selection.status", "Status", selected.Select(item => item.Status), "COMMITTED");
+		AddMixed("timeline.selection.start", "Start frame", selected.Select(item => item.StartFrame.ToString("N0")), "COMMITTED");
+		AddMixed("timeline.selection.duration", "Duration frames", selected.Select(item => item.DurationFrames.ToString("N0")), "COMMITTED");
+		AddMixed("timeline.selection.source", "Source", selected.Select(item => item.SourceReference ?? "—"));
+		AddMixed("timeline.selection.trim", "Trim support", selected.Select(item => item.CanTrim ? "AVAILABLE" : "NOT AVAILABLE"), "CAPABILITY");
+	}
+
 	private void BuildMultiSelectionInspector()
 	{
 		var selected = SelectedItems.ToArray();
@@ -780,10 +827,12 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 
 	private string SelectionContextKey => _timelineCue is not null
 		? "cue"
-		: _timelineItem is not null
-			? $"timeline:{_timelineItem.Category}"
-			: HasMultipleSelection
-				? "multi"
+		: _timelineItems.Count > 1
+			? "timeline:multi"
+			: _timelineItem is not null
+				? $"timeline:{_timelineItem.Category}"
+				: HasMultipleSelection
+					? "multi"
 				: SelectedItem is null
 					? "none"
 					: $"asset:{SelectedItem.Kind}";
