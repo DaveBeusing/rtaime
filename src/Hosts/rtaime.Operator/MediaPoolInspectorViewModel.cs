@@ -495,6 +495,7 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 				Add("source.format", "Format", item.Format, "METADATA");
 				Add("source.state", "State", item.State, "COMMITTED");
 				Add("source.readiness", "Readiness", item.IsReady ? "READY" : "NOT READY", "COMMITTED");
+				Add("production.transition.frames", "Transition Duration", $"{_operator.TransitionFrames} frames", "DESIRED", true);
 				break;
 
 			case MediaPoolItemKind.Clip:
@@ -534,6 +535,7 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 
 			case MediaPoolItemKind.Composition:
 				Add("ai.feature", "Feature", _operator.AIFeature, "COMMITTED");
+				Add("ai.enabled", "Enabled", _operator.AIEnabled ? "ON" : "OFF", "COMMITTED", true);
 				Add("ai.provider", "Provider", _operator.AIProvider, "COMMITTED");
 				Add("ai.confidence", "Confidence", _operator.AIConfidence, "COMMITTED");
 				Add("ai.inference", "Inference", _operator.AIInferenceTime, "COMMITTED");
