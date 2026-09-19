@@ -462,14 +462,17 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 
 		if (_timelineItem is { } timelineItem)
 		{
+			var state = timelineItem.Status.StartsWith("PROJECTED", StringComparison.Ordinal)
+				? "METADATA"
+				: "COMMITTED";
 			Add("timeline.item.label", "Item", timelineItem.Label, "METADATA");
 			Add("timeline.item.track", "Track", timelineItem.Category.ToString().ToUpperInvariant(), "METADATA");
-			Add("timeline.item.start", "Start frame", timelineItem.StartFrame.ToString("N0"), "COMMITTED");
-			Add("timeline.item.duration", "Duration frames", timelineItem.DurationFrames.ToString("N0"), "COMMITTED");
+			Add("timeline.item.start", "Start frame", timelineItem.StartFrame.ToString("N0"), state);
+			Add("timeline.item.duration", "Duration frames", timelineItem.DurationFrames.ToString("N0"), state);
 			Add("timeline.item.source", "Source", timelineItem.SourceReference ?? "—", "METADATA");
-			Add("timeline.item.status", "Status", timelineItem.Status, "COMMITTED");
-			Add("timeline.item.in", "IN", timelineItem.InFrame?.ToString("N0") ?? "—", "COMMITTED", timelineItem.CanTrim);
-			Add("timeline.item.out", "OUT", timelineItem.OutFrame?.ToString("N0") ?? "—", "COMMITTED", timelineItem.CanTrim);
+			Add("timeline.item.status", "Status", timelineItem.Status, state);
+			Add("timeline.item.in", "IN", timelineItem.InFrame?.ToString("N0") ?? "—", state, timelineItem.CanTrim);
+			Add("timeline.item.out", "OUT", timelineItem.OutFrame?.ToString("N0") ?? "—", state, timelineItem.CanTrim);
 			return;
 		}
 
