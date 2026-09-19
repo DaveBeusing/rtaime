@@ -2,6 +2,7 @@
 <UserControl x:Class="rtaime.Operator.MediaDeckControl"
 	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
 	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	xmlns:controls="clr-namespace:rtaime.Operator.Controls"
 	xmlns:local="clr-namespace:rtaime.Operator"
 	MinHeight="430"
 	Focusable="True"
@@ -101,11 +102,11 @@
 					</Grid.ColumnDefinitions>
 					<StackPanel>
 						<TextBlock Text="PLAYBACK POLICY" Style="{StaticResource OperatorSectionTitle}" />
-						<CheckBox Content="AUTO PLAY ON PROGRAM" IsChecked="{Binding AutoPlayOnProgram}" Margin="0,8,0,0" />
+						<controls:RtaimeCheckBox Content="AUTO PLAY ON PROGRAM" IsChecked="{Binding AutoPlayOnProgram}" Margin="0,8,0,0" />
 					</StackPanel>
 					<StackPanel Grid.Column="2">
 						<TextBlock Text="END BEHAVIOR" Style="{StaticResource OperatorLabel}" Margin="0,0,0,4" />
-						<ComboBox ItemsSource="{Binding EndBehaviors}" SelectedItem="{Binding EndBehavior}" MinHeight="32" />
+						<controls:RtaimeComboBox ItemsSource="{Binding EndBehaviors}" SelectedItem="{Binding EndBehavior}" MinHeight="32" />
 					</StackPanel>
 					<StackPanel Grid.Column="4" VerticalAlignment="Center">
 						<TextBlock Text="{Binding ProgramDeckState}" Style="{StaticResource OperatorLabel}" FontWeight="Bold" />
@@ -189,10 +190,10 @@
 						</Grid.RowDefinitions>
 						<TextBlock Grid.Row="0" Text="CUE POINTS" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,10" />
 
-						<ListBox Grid.Row="1" ItemsSource="{Binding Cues}" SelectedItem="{Binding SelectedCue}"
+						<controls:RtaimeListBox Grid.Row="1" ItemsSource="{Binding Cues}" SelectedItem="{Binding SelectedCue}"
 							MinHeight="100" MaxHeight="180" Background="Transparent" BorderThickness="0"
 							ItemContainerStyle="{StaticResource OperatorSourceItem}">
-							<ListBox.ItemTemplate>
+							<controls:RtaimeListBox.ItemTemplate>
 								<DataTemplate>
 									<Grid Margin="0,2">
 										<Grid.ColumnDefinitions>
@@ -207,7 +208,7 @@
 									</Grid>
 								</DataTemplate>
 							</ListBox.ItemTemplate>
-						</ListBox>
+						</controls:RtaimeListBox>
 
 						<Grid Grid.Row="2" Margin="0,10,0,0">
 							<Grid.ColumnDefinitions>
@@ -216,7 +217,7 @@
 								<ColumnDefinition Width="Auto" />
 								<ColumnDefinition Width="Auto" />
 							</Grid.ColumnDefinitions>
-							<TextBox Text="{Binding CueName, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource OperatorTextBox}" Margin="0,0,8,0" />
+							<controls:RtaimeTextBox Text="{Binding CueName, UpdateSourceTrigger=PropertyChanged}"  Margin="0,0,8,0" />
 							<Button Grid.Column="1" Content="ADD  M" Command="{Binding AddCueCommand}" Style="{StaticResource OperatorAccentButton}" Padding="9,5" Margin="0,0,6,0" />
 							<Button Grid.Column="2" Content="JUMP" Command="{Binding JumpCueCommand}" Style="{StaticResource OperatorButton}" Padding="9,5" Margin="0,0,6,0" />
 							<Button Grid.Column="3" Content="DELETE" Command="{Binding DeleteCueCommand}" Style="{StaticResource OperatorButton}" Padding="9,5" />
