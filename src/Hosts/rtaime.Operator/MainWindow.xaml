@@ -135,7 +135,7 @@
 							SourceName="{Binding PreviewSourceName}"
 							SourceId="{Binding PreviewSourceId}"
 							Format="{Binding Monitoring.PreviewFormat, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-							State="{Binding PreviewViewerState}"
+							State="{Binding Monitoring.PreviewState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 							MaximizeCommand="{Binding Shell.MaximizePreviewCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
 
 						<local:ProgramViewer Grid.Column="2"
@@ -144,7 +144,7 @@
 							SourceName="{Binding ProgramSourceName}"
 							SourceId="{Binding ProgramSourceId}"
 							Format="{Binding Monitoring.ProgramFormat, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-							State="{Binding ProgramViewerState}"
+							State="{Binding Monitoring.ProgramState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 							OutputState="{Binding ProgramOutput.ViewerOutputState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 							RecordingStatus="{Binding RecordingStatus}"
 							CommitStatus="{Binding CommitStatus}"
