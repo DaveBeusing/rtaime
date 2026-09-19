@@ -75,12 +75,14 @@ public sealed class OperatorKeyboardCommandRegistry
 		OperatorViewModel @operator,
 		MediaDeckViewModel mediaDeck,
 		MediaTimelineViewModel timeline,
-		OperatorShellViewModel shell)
+		OperatorShellViewModel shell,
+		ICommand focusMediaSearchCommand)
 	{
 		ArgumentNullException.ThrowIfNull(@operator);
 		ArgumentNullException.ThrowIfNull(mediaDeck);
 		ArgumentNullException.ThrowIfNull(timeline);
 		ArgumentNullException.ThrowIfNull(shell);
+		ArgumentNullException.ThrowIfNull(focusMediaSearchCommand);
 
 		var recording = new ContextSwitchCommand(
 			@operator.StopRecordingCommand,
@@ -88,6 +90,7 @@ public sealed class OperatorKeyboardCommandRegistry
 		return new OperatorKeyboardCommandRegistry(
 		[
 			new("sync", "Synchronize authoritative state", Key.F5, ModifierKeys.None, @operator.SynchronizeCommand, true),
+			new("media-search", "Focus Media Library search", Key.F, ModifierKeys.Control, focusMediaSearchCommand, true),
 			new("preview", "Set selected source to Preview", Key.P, ModifierKeys.Control, @operator.SetPreviewCommand),
 			new("play-pause", "Media Play / Pause", Key.Space, ModifierKeys.None, mediaDeck.TogglePlayPauseCommand),
 			new("pause", "Media Pause", Key.K, ModifierKeys.None, mediaDeck.PauseCommand),
