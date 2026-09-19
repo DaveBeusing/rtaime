@@ -7,6 +7,7 @@ using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
+using rtaime.Client;
 
 namespace rtaime.Operator;
 
@@ -137,8 +138,10 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 			recordingStatus: NormalizeAvailability(_control.RecordingStatus),
 			streamingStatus: Unavailable);
 
-		var renderSample = TryParseLeadingDouble(_control.FrameTime);
-		var droppedSample = TryParseUnsigned(_control.DroppedFrames);
+		var hasRuntimePerformance = NormalizeAvailability(_control.CurrentFormat) != Unavailable &&
+			NormalizeAvailability(_control.FrameTime) != Unavailable;
+		var renderSample = hasRuntimePerformance ? TryParseLeadingDouble(_control.FrameTime) : null;
+		var droppedSample = hasRuntimePerformance ? TryParseUnsigned(_control.DroppedFrames) : null;
 		var gpuSample = TryParsePercentage(_control.GpuUtilization);
 
 		UpdateMetric(
@@ -178,11 +181,11 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 			sampleHistory);
 		UpdateMetric(
 			"dropped",
-			NormalizeDroppedFrames(_control.DroppedFrames, runtimeEvidence),
+			hasRuntimePerformance ? NormalizeAvailability(_control.DroppedFrames) : Unavailable,
 			runtimeEvidence,
 			"Bounded dropped-frame counter from the Runtime performance snapshot.",
 			droppedSample,
-			sampleHistory && runtimeEvidence != "UNVERIFIED");
+			sampleHistory && hasRuntimePerformance);
 		UpdateMetric(
 			"fps",
 			Unavailable,
@@ -254,8 +257,6 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 			? Unavailable
 			: value;
 
-	private static string NormalizeDroppedFrames(string? value, string evidenceState) =>
-		evidenceState == "UNVERIFIED" ? Unavailable : NormalizeAvailability(value);
 
 	private static string NormalizeRenderTime(string? value)
 	{
@@ -431,7 +432,7 @@ public sealed class PerformanceMetricViewModel : INotifyPropertyChanged
 	private string _evidenceState = "UNVERIFIED";
 	private string _status = "WARNING";
 	private string _detail = "Telemetry is unavailable.";
-	private PointCollection _historyPoints = [];
+	private PointCollection _historyPoints = new();
 
 	public PerformanceMetricViewModel(string name)
 	{
@@ -472,7 +473,7 @@ public sealed class PerformanceMetricViewModel : INotifyPropertyChanged
 	{
 		var history = values.ToArray();
 		if (history.Length == 0)
-			return [];
+			return new PointCollection();
 
 		const double width = 92;
 		const double height = 24;
