@@ -444,7 +444,7 @@ public sealed class OperatorQuickControlsViewModel : INotifyPropertyChanged, IDi
 
 	private void AdjustGraphicsScale(double delta)
 	{
-		_operator.GraphicsScale = Math.Clamp(_operator.GraphicsScale + delta, 0.05, 8.0);
+		_operator.GraphicsScale = Math.Clamp(_operator.GraphicsScale + delta, 0.05, 4.0);
 		Execute(_operator.ApplyGraphicsCommand);
 		Refresh();
 	}
