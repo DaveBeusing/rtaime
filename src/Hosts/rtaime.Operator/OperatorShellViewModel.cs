@@ -99,7 +99,7 @@ public sealed record OperatorLayoutSettings
 	public const double CompactViewportWidth = 1100;
 
 	public int Version { get; init; } = CurrentVersion;
-	public bool IsFullscreen { get; init; }
+	public bool IsFullscreen { get; init; } = true;
 	public string SelectedWorkspace { get; init; } = OperatorWorkspaceNames.Live;
 	public OperatorWindowPlacementSettings WindowPlacement { get; init; } = OperatorWindowPlacementSettings.Default;
 	public Dictionary<string, OperatorWorkspaceLayoutSettings> Workspaces { get; init; } = CreateCanonicalLayouts();
