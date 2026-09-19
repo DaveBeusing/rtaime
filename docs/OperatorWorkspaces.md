@@ -120,6 +120,7 @@ Default bindings are:
 | Enter | AUTO Preview to Program |
 | Ctrl+Enter | CUT Preview to Program |
 | R | Start/stop Program recording when the matching command is available |
+| Ctrl+F | Focus Media Library search |
 | Ctrl+P | Set selected source to Preview |
 | F5 | Synchronize authoritative state |
 | F11 | Operator fullscreen/windowed |
@@ -188,7 +189,7 @@ The three production-shell splitters share the same focus-visible theme and rema
 
 Loading, error and empty presentation reuse shared Operator styles instead of workspace-specific colors. Production Operator XAML intentionally avoids decorative Storyboard/animation transitions so focus, tally and command-state changes remain immediate.
 
-The reference window can shrink to 900 x 500 device-independent units. Combined with PerMonitorV2 awareness, vertical scrolling and the compact workspace presentation this keeps the shell within a 1920 x 1080 display at 100%, 125%, 150% and 200% Windows scaling. Per-monitor movement remains presentation-only and does not restart Runtime or media processing.
+The reference window can shrink to 960 x 500 device-independent units. Combined with PerMonitorV2 awareness, vertical scrolling and the compact workspace presentation this keeps the shell within a 1920 x 1080 display at 100%, 125%, 150% and 200% Windows scaling. Per-monitor movement remains presentation-only and does not restart Runtime or media processing.
 
 ## Authority and performance boundaries
 
