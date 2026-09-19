@@ -180,7 +180,7 @@ Canonical workspace defaults are:
 | OUTPUTS | 220 | 420 | 340 | left | PROGRAM |
 | SETTINGS | 220 | 460 | 340 | left and right | PROGRAM |
 
-At constrained logical widths the shell enters a presentation-only compact viewport mode. It limits the visible left region, temporarily removes the right region from the grid allocation and reduces the lower region allocation without modifying the persisted per-workspace dimensions. Returning to a larger viewport restores the stored presentation values.
+At constrained logical widths the shell enters a presentation-only compact viewport mode. It temporarily removes the left and right side regions plus any auxiliary workspace column from the grid allocation, reduces the lower region allocation and suppresses optional top-bar telemetry without modifying the persisted per-workspace dimensions. The central production surface, Program identity, connection/lifecycle state and core shell actions remain visible. Returning to a larger viewport restores the stored presentation values.
 
 ## Docking, focus and visual polish
 
