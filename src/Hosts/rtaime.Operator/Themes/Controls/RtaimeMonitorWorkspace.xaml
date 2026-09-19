@@ -50,7 +50,7 @@
 	</Style>
 
 	<Style x:Key="RtaimeProductionSceneItem" TargetType="{x:Type controls:RtaimeListBoxItem}">
-		<Setter Property="Height" Value="54" />
+		<Setter Property="Height" Value="50" />
 		<Setter Property="Padding" Value="0" />
 		<Setter Property="Margin" Value="0,0,0,4" />
 		<Setter Property="Background" Value="{DynamicResource OperatorRaisedSurfaceBrush}" />
@@ -72,6 +72,10 @@
 						<ContentPresenter />
 					</Border>
 					<ControlTemplate.Triggers>
+						<DataTrigger Binding="{Binding IsProgram}" Value="True">
+							<Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource OperatorAccentBrush}" />
+							<Setter TargetName="Chrome" Property="Background" Value="{DynamicResource OperatorSelectionSurfaceBrush}" />
+						</DataTrigger>
 						<Trigger Property="IsMouseOver" Value="True">
 							<Setter TargetName="Chrome" Property="Background" Value="{DynamicResource OperatorRaisedHoverBrush}" />
 						</Trigger>
