@@ -334,6 +334,28 @@ public sealed class MediaTimelineViewModel : INotifyPropertyChanged, IAsyncDispo
 		return _controller.CompletePointerSeekAsync(ApplySnap(frame), cancellationToken);
 	}
 
+	public ValueTask<bool> TrimInAsync(
+		double logicalX,
+		double logicalWidth,
+		CancellationToken cancellationToken = default)
+	{
+		if (_markers is null || !CanSeek || TotalFrames <= 0 || logicalWidth <= 0)
+			return ValueTask.FromResult(false);
+		var frame = MediaTimelineGeometry.FrameFromVisiblePosition(logicalX, logicalWidth, _visibleRange);
+		return _markers.SetInAtFrameAsync(ApplySnap(frame), cancellationToken);
+	}
+
+	public ValueTask<bool> TrimOutAsync(
+		double logicalX,
+		double logicalWidth,
+		CancellationToken cancellationToken = default)
+	{
+		if (_markers is null || !CanSeek || TotalFrames <= 0 || logicalWidth <= 0)
+			return ValueTask.FromResult(false);
+		var frame = MediaTimelineGeometry.FrameFromVisiblePosition(logicalX, logicalWidth, _visibleRange);
+		return _markers.SetOutAtFrameAsync(ApplySnap(frame), cancellationToken);
+	}
+
 	public async ValueTask DisposeAsync()
 	{
 		_controller.StateChanged -= OnControllerStateChanged;
