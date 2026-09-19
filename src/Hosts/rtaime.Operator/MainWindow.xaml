@@ -650,13 +650,14 @@
 
 						<Grid Grid.Row="0">
 							<Grid.ColumnDefinitions>
-								<ColumnDefinition Width="532" />
-								<ColumnDefinition Width="6" />
-								<ColumnDefinition Width="532" />
+								<ColumnDefinition Width="{Binding Shell.PreviewViewerWidth, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
+								<ColumnDefinition Width="{Binding Shell.ViewerGapWidth, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
+								<ColumnDefinition Width="{Binding Shell.ProgramViewerWidth, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
 							</Grid.ColumnDefinitions>
 
 							<local:PreviewViewer Grid.Column="0"
 								Height="390"
+								Visibility="{Binding Shell.PreviewViewerVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 								AllowDrop="True"
 								DragOver="OnPreviewDragOver"
 								Drop="OnPreviewDrop"
@@ -683,6 +684,7 @@
 
 							<local:ProgramViewer Grid.Column="2"
 								Height="390"
+								Visibility="{Binding Shell.ProgramViewerVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 								Frame="{Binding Monitoring.ProgramImage, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 								SourceName="{Binding ProgramSourceName}"
 								SourceId="{Binding ProgramSourceId}"
