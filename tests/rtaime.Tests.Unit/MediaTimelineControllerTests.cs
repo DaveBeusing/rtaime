@@ -15,6 +15,9 @@ public sealed class MediaTimelineControllerTests
 	[InlineData(50, 1, 50, "00:00:01:00")]
 	[InlineData(60000, 1001, 59, "00:00:00:59")]
 	[InlineData(60000, 1001, 60, "00:00:01:00")]
+	[InlineData(240, 1, 239, "00:00:00:239")]
+	[InlineData(240, 1, 240, "00:00:01:00")]
+	[InlineData(240000, 1001, 240, "00:00:01:00")]
 	public void Timecode_uses_nominal_frame_field_for_supported_rates(
 		long numerator,
 		long denominator,
