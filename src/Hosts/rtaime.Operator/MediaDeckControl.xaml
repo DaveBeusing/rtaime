@@ -8,11 +8,6 @@
 	UseLayoutRounding="True"
 	SnapsToDevicePixels="True">
 	<UserControl.InputBindings>
-		<KeyBinding Key="P" Command="{Binding TogglePlayPauseCommand}" />
-		<KeyBinding Key="S" Command="{Binding StopCommand}" />
-		<KeyBinding Key="I" Command="{Binding SetInCommand}" />
-		<KeyBinding Key="O" Command="{Binding SetOutCommand}" />
-		<KeyBinding Key="M" Command="{Binding AddCueCommand}" />
 		<KeyBinding Key="Delete" Command="{Binding DeleteCueCommand}" />
 	</UserControl.InputBindings>
 
@@ -135,9 +130,9 @@
 					<ColumnDefinition Width="10" />
 					<ColumnDefinition Width="*" />
 				</Grid.ColumnDefinitions>
-				<Button Grid.Column="0" Content="PLAY / PAUSE&#x0a;P" Command="{Binding TogglePlayPauseCommand}"
+				<Button Grid.Column="0" Content="PLAY / PAUSE&#x0a;Space" Command="{Binding TogglePlayPauseCommand}"
 					Style="{StaticResource OperatorAccentButton}" FontSize="15" />
-				<Button Grid.Column="2" Content="STOP&#x0a;S" Command="{Binding StopCommand}" Style="{StaticResource OperatorButton}" />
+				<Button Grid.Column="2" Content="STOP&#x0a;K / S" Command="{Binding StopCommand}" Style="{StaticResource OperatorButton}" />
 				<Button Grid.Column="4" Content="REFRESH STATE" Command="{Binding RefreshCommand}" Style="{StaticResource OperatorButton}" />
 			</Grid>
 
