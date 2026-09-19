@@ -60,7 +60,8 @@
 					</Border>
 				</StackPanel>
 
-				<StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
+				<StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center"
+					Visibility="{Binding Shell.CompactOptionalVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
 					<Border Style="{StaticResource MetricMeter}" Margin="0,0,4,0"
 						Visibility="{Binding Shell.SecondaryMetricVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 						ToolTip="CPU telemetry is not exposed by the current authoritative Runtime health contract; no value is synthesized.">
@@ -91,6 +92,7 @@
 
 				<StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,10,0">
 					<Border Style="{StaticResource OperatorWarningBadge}" Margin="0,0,5,0"
+						Visibility="{Binding Shell.CompactOptionalVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 						ToolTip="No authoritative external transmission/on-air feed exists in the current V1 contract. Program bus state is shown separately and this indicator remains explicitly unverified."
 						AutomationProperties.Name="Live on-air state unverified">
 						<StackPanel Orientation="Horizontal">
