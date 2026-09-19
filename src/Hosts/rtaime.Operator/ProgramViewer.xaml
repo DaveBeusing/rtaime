@@ -136,11 +136,11 @@
 						<Border Style="{StaticResource OperatorProgramTally}" Margin="0,0,6,0">
 							<TextBlock Text="PROGRAM" Foreground="{DynamicResource OperatorProgramBrush}" FontWeight="Bold" />
 						</Border>
-						<Border Margin="0,0,6,0" Padding="7,3" ToolTip="ON AIR here means the local Clean Program Output is running. External transmission remains separately unverified.">
+						<Border Margin="0,0,6,0" Padding="7,3" ToolTip="ON AIR identifies an observed live Program bus. External transmission remains separately unverified.">
 							<Border.Style>
 								<Style TargetType="Border" BasedOn="{StaticResource OperatorStatusBadge}">
 									<Style.Triggers>
-										<DataTrigger Binding="{Binding OutputState, ElementName=Root}" Value="OUTPUT LIVE">
+										<DataTrigger Binding="{Binding State, ElementName=Root}" Value="LIVE">
 											<Setter Property="BorderBrush" Value="{DynamicResource OperatorProgramBrush}" />
 										</DataTrigger>
 									</Style.Triggers>
@@ -151,7 +151,7 @@
 									<Style TargetType="TextBlock">
 										<Setter Property="Text" Value="PROGRAM STANDBY" />
 										<Style.Triggers>
-											<DataTrigger Binding="{Binding OutputState, ElementName=Root}" Value="OUTPUT LIVE">
+											<DataTrigger Binding="{Binding State, ElementName=Root}" Value="LIVE">
 												<Setter Property="Text" Value="ON AIR" />
 												<Setter Property="Foreground" Value="{DynamicResource OperatorProgramBrush}" />
 											</DataTrigger>
