@@ -54,6 +54,8 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 	private string _selectedFilter = "All";
 	private bool _isGridView = true;
 	private MediaPoolItemViewModel? _selectedItem;
+	private TimelineTrackItemViewModel? _timelineItem;
+	private TimelineCueViewModel? _timelineCue;
 	private string _emptyState = "No assets are available.";
 
 	public MediaPoolInspectorViewModel(OperatorViewModel @operator, MediaDeckViewModel mediaDeck)
@@ -149,6 +151,8 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 		{
 			if (!Set(ref _selectedItem, value))
 				return;
+			_timelineItem = null;
+			_timelineCue = null;
 			ProjectSelectionToExistingOperatorContext(value);
 			BuildInspector();
 			RaiseSelectionState();
@@ -156,9 +160,9 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 	}
 
 	public bool HasItems => FilteredItems.Count > 0;
-	public bool HasSelection => SelectedItem is not null;
-	public bool IsSourceSelection => SelectedItem?.Kind == MediaPoolItemKind.Source;
-	public bool IsClipSelection => SelectedItem?.Kind == MediaPoolItemKind.Clip;
+	public bool HasSelection => SelectedItem is not null || _timelineItem is not null || _timelineCue is not null;
+	public bool IsSourceSelection => _timelineItem is null && _timelineCue is null && SelectedItem?.Kind == MediaPoolItemKind.Source;
+	public bool IsClipSelection => _timelineCue is null && (_timelineItem?.Category == TimelineTrackCategory.Video || SelectedItem?.Kind == MediaPoolItemKind.Clip);
 	public bool IsAudioSelection => SelectedItem?.Kind == MediaPoolItemKind.Audio;
 	public bool IsGraphicsSelection => SelectedItem?.Kind == MediaPoolItemKind.Graphics;
 	public bool IsCompositionSelection => SelectedItem?.Kind == MediaPoolItemKind.Composition;
@@ -193,6 +197,34 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 		if (_operator.SetPreviewCommand.CanExecute(null))
 			_operator.SetPreviewCommand.Execute(null);
 		return Task.CompletedTask;
+	}
+
+	public void SelectTimelineItem(TimelineTrackItemViewModel item)
+	{
+		ArgumentNullException.ThrowIfNull(item);
+		_timelineItem = item;
+		_timelineCue = null;
+		BuildInspector();
+		RaiseSelectionState();
+	}
+
+	public void SelectTimelineCue(TimelineCueViewModel cue)
+	{
+		ArgumentNullException.ThrowIfNull(cue);
+		_timelineCue = cue;
+		_timelineItem = null;
+		BuildInspector();
+		RaiseSelectionState();
+	}
+
+	public void ClearTimelineSelection()
+	{
+		if (_timelineItem is null && _timelineCue is null)
+			return;
+		_timelineItem = null;
+		_timelineCue = null;
+		BuildInspector();
+		RaiseSelectionState();
 	}
 
 	public void Refresh()
@@ -327,7 +359,17 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 			? null
 			: filtered.FirstOrDefault(item => string.Equals(item.Key, preferredSelectionKey, StringComparison.Ordinal));
 		if (preferred is not null)
-			SelectedItem = preferred;
+		{
+			if (SelectedItem is null || !string.Equals(SelectedItem.Key, preferred.Key, StringComparison.Ordinal))
+				SelectedItem = preferred;
+			else
+			{
+				_selectedItem = preferred;
+				OnPropertyChanged(nameof(SelectedItem));
+				if (_timelineItem is null && _timelineCue is null)
+					BuildInspector();
+			}
+		}
 		else if (SelectedItem is not null && filtered.All(item => !string.Equals(item.Key, SelectedItem.Key, StringComparison.Ordinal)))
 			SelectedItem = null;
 
@@ -401,6 +443,30 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 	private void BuildInspector()
 	{
 		InspectorProperties.Clear();
+
+		if (_timelineCue is { } cue)
+		{
+			Add("timeline.cue.name", "Cue", cue.Name, "METADATA", true);
+			Add("timeline.cue.type", "Type", cue.Type.ToString().ToUpperInvariant(), "METADATA");
+			Add("timeline.cue.time", "Time", cue.Timecode, "COMMITTED");
+			Add("timeline.cue.frame", "Frame", cue.Frame.ToString("N0"), "COMMITTED");
+			Add("timeline.cue.target", "Target", cue.TargetReference ?? "—", "METADATA");
+			return;
+		}
+
+		if (_timelineItem is { } timelineItem)
+		{
+			Add("timeline.item.label", "Item", timelineItem.Label, "METADATA");
+			Add("timeline.item.track", "Track", timelineItem.Category.ToString().ToUpperInvariant(), "METADATA");
+			Add("timeline.item.start", "Start frame", timelineItem.StartFrame.ToString("N0"), "COMMITTED");
+			Add("timeline.item.duration", "Duration frames", timelineItem.DurationFrames.ToString("N0"), "COMMITTED");
+			Add("timeline.item.source", "Source", timelineItem.SourceReference ?? "—", "METADATA");
+			Add("timeline.item.status", "Status", timelineItem.Status, "COMMITTED");
+			Add("timeline.item.in", "IN", timelineItem.InFrame?.ToString("N0") ?? "—", "COMMITTED", timelineItem.CanTrim);
+			Add("timeline.item.out", "OUT", timelineItem.OutFrame?.ToString("N0") ?? "—", "COMMITTED", timelineItem.CanTrim);
+			return;
+		}
+
 		var item = SelectedItem;
 		if (item is null)
 			return;
