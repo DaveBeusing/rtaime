@@ -438,16 +438,22 @@ foreach ($layoutProperty in @("LeftPanelWidth", "RightPanelWidth", "LowerPanelHe
 }
 Assert-Condition ($shell -notmatch 'using rtaime\.(Client|Control|Runtime|Media|AI|Recording)') "Production shell layout state must remain presentation-only and must not acquire production authority dependencies."
 Assert-Condition ($windowCode -match 'OnLayoutSplitterDragCompleted' -and $windowCode -match 'Shell\.Save\(\)') "Resizable shell geometry must be persisted after operator layout changes."
+Assert-Condition ($shell -match 'record OperatorWindowPlacementSettings' -and $shell -match 'MinimumWidth = 1100' -and $shell -match 'MinimumHeight = 640') "Window placement persistence must normalize windowed geometry against the Operator minimum size."
+Assert-Condition ($windowCode -match 'ApplyWindowPlacement' -and $windowCode -match 'CaptureWindowPlacement' -and $windowCode -match 'IsWindowPlacementVisible') "Window placement must restore safely and reject off-screen geometry."
+Assert-Condition ($shell -match 'NavigationRailWidth' -and $shell -match '_viewportWidth < 1320' -and $shell -match 'SecondaryMetricVisibility' -and $shell -match '_viewportWidth < 1480') "Production shell must compact navigation and secondary metrics on smaller logical widths."
+Assert-Condition ($window -match 'Text="LIVE / ON AIR "' -and $window -match 'Text="UNVERIFIED"' -and $window -match 'external transmission/on-air feed') "LIVE/ON AIR presentation must fail closed while no authoritative external transmission feed exists."
+Assert-Condition ($window -match 'Text="CPU"' -and $window -match 'Text="RAM"' -and $window -match 'Text="N/A"' -and $window -match 'Text="GPU"' -and $window -match 'Binding GpuUtilization' -and $window -match 'Binding Vram' -and $window -match 'Text="LAT"' -and $window -match 'Binding FrameTime') "Global metrics must reuse available health evidence and explicitly avoid synthesized CPU/RAM values."
 
 # Workspaces, Quick Controls, multiview and Clean Program.
-foreach ($workspace in @("LIVE", "EDIT", "MEDIA", "GRAPHICS", "SYSTEM")) {
+foreach ($workspace in @("MEDIA", "EDIT", "LIVE", "SCENES", "COMPOSITING", "OUTPUTS", "SETTINGS")) {
 	Assert-Condition ($shell -match ('const string [A-Za-z]+ = "' + $workspace + '"')) "Canonical workspace '$workspace' must be defined."
 	Assert-Condition ($window -match ('CommandParameter="' + $workspace + '"')) "Canonical workspace '$workspace' must be selectable from the Operator."
 }
-Assert-Condition ($shell -match 'CurrentVersion = 2' -and $shell -match 'Dictionary<string, OperatorWorkspaceLayoutSettings>') "Workspace layout persistence must be versioned and per-workspace."
+Assert-Condition ($shell -match 'CurrentVersion = 3' -and $shell -match 'Dictionary<string, OperatorWorkspaceLayoutSettings>') "Workspace layout persistence must be versioned and per-workspace."
+Assert-Condition ($shell -match '"GRAPHICS".+Compositing' -and $shell -match '"SYSTEM".+Settings') "Legacy workspace names must migrate to the canonical seven-workspace shell."
 Assert-Condition ($shell -match 'CaptureCurrentWorkspace\(\)' -and $shell -match 'ApplyWorkspaceLayout' -and $shell -match 'SelectWorkspace') "Workspace switching must preserve independent presentation layouts."
 Assert-Condition ($shell -notmatch 'OperatorControlClient|NamedPipe|RuntimeHost|ControlHost|AIHost') "Workspace switching must remain presentation-only."
-Assert-Condition ($window -match 'Content="SAVE LAYOUT"' -and $window -match 'Shell\.SaveLayoutCommand' -and $window -match 'Content="LAYOUT RESET"') "Operator must expose Save Layout and Reset Layout actions."
+Assert-Condition ($window -match 'Header="Save Layout"' -and $window -match 'Shell\.SaveLayoutCommand' -and $window -match 'Header="Reset Layout"') "Operator must expose Save Layout and Reset Layout actions."
 Assert-Condition ($window -match 'Shell\.ProductionControlsVisibility' -and $window -match 'Shell\.MediaDeckVisibility' -and $window -match 'Shell\.GraphicsVisibility' -and $window -match 'Shell\.SystemWorkspaceVisibility') "Workspaces must configure presentation without duplicating product state."
 
 Assert-Condition ($quickControls -match 'MaximumPinnedControls = 8' -and $quickControls -match 'operator-quick-controls\.json') "Quick Controls must remain bounded and persist only local presentation preferences."
@@ -463,5 +469,5 @@ Assert-Condition ($multiview -match 'PreviewImage' -and $multiview -match 'Progr
 Assert-Condition ($multiviewCode -notmatch 'NamedPipe|MediaElement|VideoDrawing|OperatorControlClient') "Multiview must not create another transport, player or authority path."
 Assert-Condition ($window -match 'CLEAN PROGRAM MONITOR' -and $window -match 'not the physical Program output path') "Clean Program must be identified as monitoring rather than physical Program output."
 Assert-Condition ($programOutputController -match 'OperatorMonitoringViewModel' -and $programOutputController -notmatch 'MediaElement|VideoDrawing') "Clean Program must reuse the existing monitoring projection."
-Assert-Condition ($window -match 'Text="SYSTEM WORKSPACE"' -and $window -match 'Text="Engine"' -and $window -match 'Text="Control"' -and $window -match 'Text="Runtime"' -and $window -match 'Text="Outputs"' -and $window -match 'Text="Diagnostics"') "SYSTEM workspace must consolidate existing operational evidence."
-Assert-Condition ($workspaceDocumentation -match 'five task-oriented workspaces' -and $workspaceDocumentation -match 'Quick Controls' -and $workspaceDocumentation -match 'Keyboard-first operation' -and $workspaceDocumentation -match 'Clean Program monitoring') "Operator workspace documentation must cover the implemented UX model."
+Assert-Condition ($window -match 'Text="SYSTEM WORKSPACE"' -and $window -match 'Text="Engine"' -and $window -match 'Text="Control"' -and $window -match 'Text="Runtime"' -and $window -match 'Text="Outputs"' -and $window -match 'Text="Diagnostics"') "OUTPUTS/SETTINGS must reuse the existing operational evidence projection."
+Assert-Condition ($workspaceDocumentation -match 'seven task-oriented workspaces' -and $workspaceDocumentation -match 'SCENES' -and $workspaceDocumentation -match 'COMPOSITING' -and $workspaceDocumentation -match 'OUTPUTS' -and $workspaceDocumentation -match 'SETTINGS' -and $workspaceDocumentation -match 'Quick Controls' -and $workspaceDocumentation -match 'Keyboard-first operation' -and $workspaceDocumentation -match 'Clean Program monitoring') "Operator workspace documentation must cover the implemented UX model."
