@@ -420,7 +420,7 @@
 																Grid.Column="1"
 																ItemsSource="{Binding MediaDeck.EndBehaviors, ElementName=Root}"
 																SelectedItem="{Binding MediaDeck.EndBehavior, ElementName=Root, Mode=TwoWay}"
-																IsCompact="True" />
+																Height="26" />
 															<controls:RtaimeButton
 																Grid.Column="2"
 																Content="RESET"
