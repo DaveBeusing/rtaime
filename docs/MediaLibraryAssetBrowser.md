@@ -34,11 +34,13 @@ Search reacts directly to changes in the search field and matches the projected 
 
 ## Grid and list presentation
 
-The default Grid uses compact asset cards with a thumbnail surface, duration, file type and explicit `ONLINE` / `OFFLINE` state. Offline state is always expressed in text and is therefore not color-only.
+At the 1920×1080 reference viewport, the Media Library occupies the fixed 400-pixel left shell region. The visible inset is 12 pixels from the region edge. Its control stack is 34 pixels for the header, 34 pixels for search/category selection and 32 pixels for the filter row.
 
-The Grid uses `VirtualizingWrapPanel`, which realizes only visible rows plus a small buffer and removes containers outside the active viewport. The List uses WPF recycling virtualization. Large projections therefore do not require all asset visuals or thumbnails to exist in the visual tree at once.
+The default Grid presents exactly three `RtaimeMediaTile` controls per row. Each tile occupies 120×104 pixels with a 120×68 reference thumbnail surface, 8-pixel horizontal spacing and 10-pixel vertical spacing. The filename is a single 11-pixel ellipsized line. Duration is rendered in a compact monospaced overlay. Offline state overlays the thumbnail without resizing the tile and is always expressed in text as well as color.
 
-Existing source thumbnails are reused. The Media Library does not add a parallel thumbnail extraction or media-analysis pipeline.
+The Grid continues to use the existing `VirtualizingWrapPanel`. The panel now includes horizontal and vertical spacing in its realization and scrolling calculations while retaining recycling and bounded visible-row realization. The Media Library uses an overlay `RtaimeScrollBar`, so scrollbar visibility does not reduce the three-column reference viewport. The List continues to use recycling virtualization.
+
+Search uses `RtaimeSearchBox`; filters use the shared rtaime selection controls; asset actions use `RtaimeContextMenu` / `RtaimeMenuItem`. Existing source thumbnails are reused. The Media Library does not add a parallel thumbnail extraction or media-analysis pipeline.
 
 ## Selection
 
@@ -64,7 +66,7 @@ Asset cards and list rows expose the same bounded actions:
 
 The current Scene model exposes no existing asset-assignment mutation path. The Media Library therefore does not invent a Scene command. Scene integration should be added only when a governed Scene asset action exists.
 
-Hover quick actions expose Preview and Timeline only, keeping the card surface compact.
+Hover quick actions expose Preview and Timeline only, keeping the card surface compact. Selection is rendered with the shared cyan border and left accent while ordinary hover remains on the dark raised-hover surface.
 
 ## Loading, empty and error states
 

@@ -22,6 +22,18 @@ public sealed class VirtualizingWrapPanel : VirtualizingPanel, IScrollInfo
 		typeof(VirtualizingWrapPanel),
 		new FrameworkPropertyMetadata(126.0, FrameworkPropertyMetadataOptions.AffectsMeasure));
 
+	public static readonly DependencyProperty HorizontalSpacingProperty = DependencyProperty.Register(
+		nameof(HorizontalSpacing),
+		typeof(double),
+		typeof(VirtualizingWrapPanel),
+		new FrameworkPropertyMetadata(0.0, FrameworkPropertyMetadataOptions.AffectsMeasure | FrameworkPropertyMetadataOptions.AffectsArrange));
+
+	public static readonly DependencyProperty VerticalSpacingProperty = DependencyProperty.Register(
+		nameof(VerticalSpacing),
+		typeof(double),
+		typeof(VirtualizingWrapPanel),
+		new FrameworkPropertyMetadata(0.0, FrameworkPropertyMetadataOptions.AffectsMeasure | FrameworkPropertyMetadataOptions.AffectsArrange));
+
 	private Size _extent;
 	private Size _viewport;
 	private double _verticalOffset;
@@ -40,6 +52,18 @@ public sealed class VirtualizingWrapPanel : VirtualizingPanel, IScrollInfo
 		set => SetValue(ItemHeightProperty, value);
 	}
 
+	public double HorizontalSpacing
+	{
+		get => (double)GetValue(HorizontalSpacingProperty);
+		set => SetValue(HorizontalSpacingProperty, value);
+	}
+
+	public double VerticalSpacing
+	{
+		get => (double)GetValue(VerticalSpacingProperty);
+		set => SetValue(VerticalSpacingProperty, value);
+	}
+
 	public bool CanHorizontallyScroll { get; set; }
 	public bool CanVerticallyScroll { get; set; } = true;
 	public double ExtentHeight => _extent.Height;
@@ -56,12 +80,17 @@ public sealed class VirtualizingWrapPanel : VirtualizingPanel, IScrollInfo
 		var itemCount = owner?.Items.Count ?? 0;
 		var itemWidth = NormalizeLength(ItemWidth, 168.0);
 		var itemHeight = NormalizeLength(ItemHeight, 126.0);
-		var viewportWidth = NormalizeViewport(availableSize.Width, itemWidth * 3.0);
-		var viewportHeight = NormalizeViewport(availableSize.Height, itemHeight * 4.0);
+		var horizontalSpacing = NormalizeSpacing(HorizontalSpacing);
+		var verticalSpacing = NormalizeSpacing(VerticalSpacing);
+		var columnStride = itemWidth + horizontalSpacing;
+		var rowStride = itemHeight + verticalSpacing;
+		var viewportWidth = NormalizeViewport(availableSize.Width, (itemWidth * 3.0) + (horizontalSpacing * 2.0));
+		var viewportHeight = NormalizeViewport(availableSize.Height, (itemHeight * 4.0) + (verticalSpacing * 3.0));
 
-		_itemsPerRow = Math.Max(1, (int)Math.Floor(viewportWidth / itemWidth));
+		_itemsPerRow = Math.Max(1, (int)Math.Floor((viewportWidth + horizontalSpacing) / columnStride));
 		var rowCount = itemCount == 0 ? 0 : (int)Math.Ceiling(itemCount / (double)_itemsPerRow);
-		_extent = new Size(viewportWidth, rowCount * itemHeight);
+		var extentHeight = rowCount == 0 ? 0 : (rowCount * itemHeight) + ((rowCount - 1) * verticalSpacing);
+		_extent = new Size(viewportWidth, extentHeight);
 		_viewport = new Size(viewportWidth, viewportHeight);
 		CoerceVerticalOffset();
 		ScrollOwner?.InvalidateScrollInfo();
@@ -74,8 +103,8 @@ public sealed class VirtualizingWrapPanel : VirtualizingPanel, IScrollInfo
 			return new Size(viewportWidth, 0);
 		}
 
-		var firstVisibleRow = Math.Max(0, (int)Math.Floor(_verticalOffset / itemHeight));
-		var visibleRowCount = Math.Max(1, (int)Math.Ceiling(viewportHeight / itemHeight) + 1);
+		var firstVisibleRow = Math.Max(0, (int)Math.Floor(_verticalOffset / rowStride));
+		var visibleRowCount = Math.Max(1, (int)Math.Ceiling(viewportHeight / rowStride) + 1);
 		var firstIndex = Math.Min(itemCount - 1, firstVisibleRow * _itemsPerRow);
 		var lastIndex = Math.Min(itemCount - 1, ((firstVisibleRow + visibleRowCount) * _itemsPerRow) - 1);
 
@@ -96,6 +125,8 @@ public sealed class VirtualizingWrapPanel : VirtualizingPanel, IScrollInfo
 	{
 		var itemWidth = NormalizeLength(ItemWidth, 168.0);
 		var itemHeight = NormalizeLength(ItemHeight, 126.0);
+		var horizontalSpacing = NormalizeSpacing(HorizontalSpacing);
+		var verticalSpacing = NormalizeSpacing(VerticalSpacing);
 		var generator = ResolveGenerator();
 		if (generator is null)
 			return finalSize;
@@ -109,20 +140,20 @@ public sealed class VirtualizingWrapPanel : VirtualizingPanel, IScrollInfo
 
 			var row = itemIndex / _itemsPerRow;
 			var column = itemIndex % _itemsPerRow;
-			var x = column * itemWidth;
-			var y = (row * itemHeight) - _verticalOffset;
+			var x = column * (itemWidth + horizontalSpacing);
+			var y = (row * (itemHeight + verticalSpacing)) - _verticalOffset;
 			child.Arrange(new Rect(x, y, itemWidth, itemHeight));
 		}
 
 		return finalSize;
 	}
 
-	public void LineDown() => SetVerticalOffset(VerticalOffset + NormalizeLength(ItemHeight, 126.0));
-	public void LineUp() => SetVerticalOffset(VerticalOffset - NormalizeLength(ItemHeight, 126.0));
+	public void LineDown() => SetVerticalOffset(VerticalOffset + NormalizeLength(ItemHeight, 126.0) + NormalizeSpacing(VerticalSpacing));
+	public void LineUp() => SetVerticalOffset(VerticalOffset - NormalizeLength(ItemHeight, 126.0) - NormalizeSpacing(VerticalSpacing));
 	public void LineLeft() { }
 	public void LineRight() { }
-	public void MouseWheelDown() => SetVerticalOffset(VerticalOffset + NormalizeLength(ItemHeight, 126.0) * 3.0);
-	public void MouseWheelUp() => SetVerticalOffset(VerticalOffset - NormalizeLength(ItemHeight, 126.0) * 3.0);
+	public void MouseWheelDown() => SetVerticalOffset(VerticalOffset + ((NormalizeLength(ItemHeight, 126.0) + NormalizeSpacing(VerticalSpacing)) * 3.0));
+	public void MouseWheelUp() => SetVerticalOffset(VerticalOffset - ((NormalizeLength(ItemHeight, 126.0) + NormalizeSpacing(VerticalSpacing)) * 3.0));
 	public void MouseWheelLeft() { }
 	public void MouseWheelRight() { }
 	public void PageDown() => SetVerticalOffset(VerticalOffset + ViewportHeight);
@@ -167,8 +198,9 @@ public sealed class VirtualizingWrapPanel : VirtualizingPanel, IScrollInfo
 			return rectangle;
 
 		var itemHeight = NormalizeLength(ItemHeight, 126.0);
+		var verticalSpacing = NormalizeSpacing(VerticalSpacing);
 		var row = itemIndex / _itemsPerRow;
-		var top = row * itemHeight;
+		var top = row * (itemHeight + verticalSpacing);
 		var bottom = top + itemHeight;
 		if (top < VerticalOffset)
 			SetVerticalOffset(top);
@@ -252,6 +284,9 @@ public sealed class VirtualizingWrapPanel : VirtualizingPanel, IScrollInfo
 
 	private static double NormalizeLength(double value, double fallback) =>
 		double.IsFinite(value) && value > 0 ? value : fallback;
+
+	private static double NormalizeSpacing(double value) =>
+		double.IsFinite(value) && value >= 0 ? value : 0;
 
 	private static double NormalizeViewport(double value, double fallback) =>
 		double.IsFinite(value) && value > 0 ? value : fallback;

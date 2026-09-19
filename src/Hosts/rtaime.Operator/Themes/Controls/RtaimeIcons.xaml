@@ -18,4 +18,8 @@
 	<StreamGeometry x:Key="RtaimeIconCloseGeometry">M3,2 L8,7 L13,2 L14,3 L9,8 L14,13 L13,14 L8,9 L3,14 L2,13 L7,8 L2,3 Z</StreamGeometry>
 	<StreamGeometry x:Key="RtaimeIconChevronLeftGeometry">M10.5,2 L4.5,8 L10.5,14 L12,12.5 L7.5,8 L12,3.5 Z</StreamGeometry>
 	<StreamGeometry x:Key="RtaimeIconChevronRightGeometry">M5.5,2 L11.5,8 L5.5,14 L4,12.5 L8.5,8 L4,3.5 Z</StreamGeometry>
+	<StreamGeometry x:Key="RtaimeIconSearchGeometry">M7,2 A5,5 0 1 1 6.99,2 M10.5,10.5 L15,15 L13.5,16.5 L9,12 Z</StreamGeometry>
+	<StreamGeometry x:Key="RtaimeIconAddGeometry">M7,2 H9 V7 H14 V9 H9 V14 H7 V9 H2 V7 H7 Z</StreamGeometry>
+	<StreamGeometry x:Key="RtaimeIconGridGeometry">M2,2 H7 V7 H2 Z M9,2 H14 V7 H9 Z M2,9 H7 V14 H2 Z M9,9 H14 V14 H9 Z</StreamGeometry>
+	<StreamGeometry x:Key="RtaimeIconListGeometry">M2,3 H4 V5 H2 Z M6,3 H14 V5 H6 Z M2,7 H4 V9 H2 Z M6,7 H14 V9 H6 Z M2,11 H4 V13 H2 Z M6,11 H14 V13 H6 Z</StreamGeometry>
 </ResourceDictionary>
