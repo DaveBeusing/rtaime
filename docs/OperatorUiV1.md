@@ -642,7 +642,7 @@ Fit, 50 percent and 100 percent modes affect only WPF presentation of the alread
 
 Preview reuses the existing Media Deck and Timeline commands for play/pause, stop, IN/OUT and cue navigation. Those controls are enabled only when the loaded Media Deck source identity matches the confirmed Preview source. The centralized keyboard registry applies the same source guard, preventing Preview transport shortcuts from accidentally controlling media that is no longer on Preview. J/L remain unbound because deterministic shuttle semantics are not exposed by the existing Media Deck contract.
 
-Program contains no Preview transport bindings. Its `ON AIR` presentation is derived only from the existing local Clean Program Output state (`OUTPUT LIVE`). This does not claim that an external transmission path is live; the separate top-bar external LIVE / ON AIR state remains explicitly unverified.
+Program contains no Preview transport bindings. Its `ON AIR` presentation is derived from the existing observed Program monitor state being `LIVE`, while the separate local Clean Program Output state remains visible beside it. This does not claim that an external transmission path is live; the top-bar external LIVE / ON AIR state remains explicitly unverified.
 
 Monitor fullscreen is transient Shell presentation state. It maximizes the selected monitor, collapses surrounding presentation regions and uses the existing Operator fullscreen window mode. Exiting fullscreen restores the prior viewer mode and center-layout state. No second playback or monitoring instance is created.
 
