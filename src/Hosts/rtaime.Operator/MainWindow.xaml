@@ -188,12 +188,14 @@
 						<RowDefinition Height="Auto" />
 					</Grid.RowDefinitions>
 
-					<DockPanel Margin="0,0,0,10">
+					<DockPanel Margin="0,0,0,10"
+						Visibility="{Binding Shell.MediaLibraryLeftVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
 						<TextBlock Text="MEDIA" Style="{StaticResource OperatorSectionTitle}" />
 						<Button Content="‹" Command="{Binding Shell.ToggleLeftPanelCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorButton}" MinWidth="30" MinHeight="26" Padding="6,2" DockPanel.Dock="Right" ToolTip="Collapse Media Pool" />
 					</DockPanel>
 
-					<StackPanel Grid.Row="1" Margin="0,0,0,8">
+					<StackPanel Grid.Row="1" Margin="0,0,0,8"
+						Visibility="{Binding Shell.MediaLibraryLeftVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
 						<Grid Margin="0,0,0,6">
 							<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="6" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
 							<TextBox x:Name="MediaSearchBox" Grid.Column="0"
@@ -259,7 +261,8 @@
 						</StackPanel>
 					</StackPanel>
 
-					<Grid Grid.Row="2">
+					<Grid Grid.Row="2"
+						Visibility="{Binding Shell.MediaLibraryLeftVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
 						<ListBox x:Name="MediaAssetGrid"
 							ItemsSource="{Binding MediaPool.FilteredItems, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 							SelectedItem="{Binding MediaPool.SelectedItem, RelativeSource={RelativeSource AncestorType={x:Type Window}}, Mode=TwoWay}"
@@ -417,10 +420,14 @@
 							<TextBlock Text="{Binding MediaPool.ErrorState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" TextWrapping="Wrap" />
 						</Border>
 					</Grid>
-					<DockPanel Grid.Row="3" Margin="0,8,0,0">
+					<DockPanel Grid.Row="3" Margin="0,8,0,0"
+						Visibility="{Binding Shell.MediaLibraryLeftVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
 						<TextBlock Text="{Binding MediaPool.SelectionSummary, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorLabel}" FontWeight="SemiBold" />
 						<TextBlock Text="Ctrl+F search · Ctrl/Shift multi-select" Style="{StaticResource OperatorLabel}" DockPanel.Dock="Right" />
 					</DockPanel>
+
+					<local:LiveSceneCueControl Grid.RowSpan="4"
+						Visibility="{Binding Shell.LiveSceneCueVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
 				</Grid>
 			</Border>
 			<GridSplitter Grid.Column="5" Width="5" HorizontalAlignment="Stretch" Background="{DynamicResource OperatorBorderBrush}" ResizeDirection="Columns" ResizeBehavior="PreviousAndNext" DragCompleted="OnLayoutSplitterDragCompleted" />
@@ -450,7 +457,8 @@
 								ProgramImage="{Binding Monitoring.ProgramImage, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 								PreviewState="{Binding Monitoring.PreviewState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 								ProgramState="{Binding Monitoring.ProgramState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-								Sources="{Binding Sources}" />
+								Sources="{Binding Sources}"
+								SelectedSource="{Binding SelectedSource, Mode=TwoWay}" />
 						</StackPanel>
 					</Border>
 
@@ -1092,15 +1100,18 @@
 			</Grid>
 		</ScrollViewer>
 			<GridSplitter Grid.Column="3" Width="5" HorizontalAlignment="Stretch" Background="{DynamicResource OperatorBorderBrush}" ResizeDirection="Columns" ResizeBehavior="PreviousAndNext" DragCompleted="OnLayoutSplitterDragCompleted" />
-			<local:OperatorInspectorControl
-				x:Name="RightInspectorRegion"
-				Grid.Column="6"
-				Margin="6,0,0,0"
-				Inspector="{Binding MediaPool, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-				ControlState="{Binding}"
-				MediaDeck="{Binding MediaDeck, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-				QuickControls="{Binding QuickControls, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-				CollapseCommand="{Binding Shell.ToggleRightPanelCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
+			<Grid Grid.Column="6" Margin="6,0,0,0">
+				<local:OperatorInspectorControl
+					x:Name="RightInspectorRegion"
+					Visibility="{Binding Shell.InspectorVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+					Inspector="{Binding MediaPool, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+					ControlState="{Binding}"
+					MediaDeck="{Binding MediaDeck, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+					QuickControls="{Binding QuickControls, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+					CollapseCommand="{Binding Shell.ToggleRightPanelCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
+				<local:LiveControlsControl
+					Visibility="{Binding Shell.LiveControlsVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
+			</Grid>
 		</Grid>
 
 		<GridSplitter Grid.Row="2" Height="{Binding Shell.LowerSplitterHeight, ElementName=RootWindow}" VerticalAlignment="Stretch" Background="{DynamicResource OperatorBorderBrush}" ResizeDirection="Rows" ResizeBehavior="PreviousAndNext" DragCompleted="OnLayoutSplitterDragCompleted" />
