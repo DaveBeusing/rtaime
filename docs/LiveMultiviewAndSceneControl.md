@@ -6,11 +6,9 @@
 
 The LIVE workspace is the fast production-operation surface. It composes existing Operator, monitoring, Media Deck, graphics, recording and Clean Program projections without creating another routing, transition, media or output authority.
 
-The workspace is organized as three operator zones:
+The workspace follows the 1920×1080 live reference composition below the 60-pixel top bar. The body uses a fixed **360 / 6 / flexible / 6 / 420** split: Scenes & Cues on the left, the live center surface in the middle and Live Controls on the right. LIVE hides the edit timeline so the full body height remains available for show operation.
 
-- left: source/scene selection and Media cues;
-- center: adaptive multiview and Quick Controls;
-- right: explicit routing/take, layer, recording/output and alert controls.
+The center surface is split vertically into the multiview, a 6-pixel gap and a compact 270-pixel Output Routing block.
 
 Selection is deliberately non-destructive. A selected source does not become Preview or Program until the existing routing commands are invoked.
 
@@ -18,55 +16,44 @@ Selection is deliberately non-destructive. A selected source does not become Pre
 
 The multiview reuses the existing independent RuntimeHost monitoring plane and OperatorSourceTileViewModel source projections. It does not open another monitoring transport, decoder or renderer.
 
-Two dedicated monitor tiles retain Preview and Program observation. The source bank below them adapts its density to the available source count:
+The reference mode is **default 3×3** with 6-pixel tile gaps. The toolbar can explicitly switch to 2×2, 3×3 or 4×4 presentation and can maximize/restore the live center surface through the existing Shell presentation command. Capacity is bounded to 16 displayed sources. Program, Preview and failed/unavailable sources are preserved preferentially when the selected grid capacity is smaller than the complete source set.
 
-- up to 4 displayed sources: 2 columns;
-- 5 through 9 displayed sources: 3 columns;
-- 10 through 16 displayed sources: 4 columns;
-- more than 16 sources: the first 16 are shown and the header reports that the view is bounded.
+Each source tile uses an aspect-safe 16:9 presentation where an image is available. Its 26-pixel top overlay contains:
 
-Each source tile exposes existing data only:
-
+- stable input/display number;
 - source name;
-- source format;
-- source health/state;
-- confirmed PGM/PVW tally;
-- source thumbnail from the existing monitoring cache;
-- stereo audio peaks where the existing Runtime audio snapshot exposes them;
-- clipping indication.
+- observed frame-rate label;
+- health dot;
+- red PGM tally when the source is authoritative Program.
 
-Failed or unavailable sources remain visible. LOST, ERROR, FAILED and OFFLINE states are surfaced directly on the tile instead of removing the source from the layout.
+The lower overlay contains source timecode when it is available, cyan PVW state and slim left/right audio meters backed by the existing Runtime audio observations. Failed sources remain visible with explicit LOST, ERROR, FAILED or OFFLINE evidence and an INPUT UNAVAILABLE overlay.
 
-Double-clicking Preview, Program or a source tile opens a larger presentation of the already available image. The large-view action has no routing command and cannot change Preview or Program.
+PGM/PVW state comes only from the existing authoritative routing projection. Clicking a tile changes selection only. Double-clicking Preview, Program or a source tile opens a larger presentation of the already available image and cannot route, take or mutate production state.
 
 The control refreshes its bounded source projection only while visible. Per-source image and meter changes continue to originate from the existing monitoring/audio cadences; no WPF animation or second polling loop is introduced.
 
 ## Source, Scene and Cue Selection
 
-The left LIVE region separates selection from production action.
+The left 360-pixel LIVE region is the compact Scenes & Cues surface. It uses the own rtaime search box and approximately 74-pixel source rows with a 92×52 thumbnail, source index, name, duration/remaining information, NEXT/PVW state, LIVE/PGM state, cyan selected-row treatment and the own overflow affordance.
 
-The source list reuses OperatorViewModel.Sources and SelectedSource. Selecting a row changes only Operator selection. SET PVW invokes the existing SetPreviewCommand; CUT TAKE invokes the existing CutCommand.
+The list reuses OperatorViewModel.Sources and SelectedSource. Selecting a row changes only Operator selection. SET NEXT invokes the existing SetPreviewCommand; TAKE invokes the existing CutCommand. The selected row does not implicitly become Preview or Program.
 
 Media cues reuse MediaDeckViewModel.Cues and SelectedCue. Selecting a cue changes only the cue selection. JUMP SELECTED CUE invokes the existing JumpCueCommand through the current marker/timeline path.
 
-The current V1 product does not expose a governed multi-scene activation contract. The LIVE workspace therefore labels dedicated scene activation as unavailable rather than synthesizing a scene command. Existing graphics/layer visibility remains the current governed layer operation.
+The current V1 product does not expose a governed multi-scene activation contract. Dedicated scene activation therefore remains explicitly unavailable rather than being synthesized in the Operator.
 
 ## Live Controls
 
-The right LIVE region keeps production mutations explicit:
+The right 420-pixel LIVE region is divided into four compact sections:
 
-- selected source versus confirmed Preview versus confirmed Program;
-- Set Preview;
-- CUT;
-- AUTO/DISSOLVE;
-- transition duration;
-- current graphics/layer status and Show/Hide through the existing graphics command;
-- Program recording Start/Stop;
-- Clean Program monitoring Start/Stop.
+- **Transitions** — selected source versus confirmed NEXT/Preview versus confirmed LIVE/Program, explicit SET NEXT, TAKE and AUTO/DISSOLVE plus the existing transition duration.
+- **Layer Stack (PGM)** — compact approximately 38-pixel layer rows and the existing governed graphics Show/Hide path.
+- **Stream & Record** — Program recording and Clean Program monitoring through the existing command paths. External streaming/on-air transmission remains UNVERIFIED.
+- **Alerts & Notifications** — existing lifecycle, health, Operator error and recording-failure evidence using severity-dot presentation and concise two-line messages.
 
-External streaming/on-air transmission is shown as UNVERIFIED because no authoritative external-transmission contract is currently exposed.
+TAKE uses the cyan primary action treatment because it is an operator action, not a Program-state indicator. Red remains reserved for critical/live-state presentation such as confirmed PGM/LIVE or stop/critical conditions.
 
-The legacy central Production Controls, Media Deck, Source Bin, Audio and Recording panels are hidden in LIVE to avoid duplicate control surfaces. The lower edit timeline is also hidden in LIVE so the multiview retains the available show-operation height; cue access remains in the dedicated left LIVE region. These surfaces remain available in the workspaces where they are otherwise used.
+No independent routing, transition, layer, recording, stream or alert authority is introduced.
 
 ## Alerts
 
@@ -109,7 +96,8 @@ Source thumbnails continue to be written by OperatorMonitoringViewModel. Audio o
 
 build/quality/Test-OperatorUiPolicy.ps1 verifies:
 
-- 2/3/4-column adaptive multiview behavior and the 16-source bound;
+- the 360 / 6 / flexible / 6 / 420 body split and compact 270-pixel Output Routing block;
+- default 3×3 multiview plus explicit 2×2 / 3×3 / 4×4 presentation and the 16-source bound;
 - PGM/PVW, health, format and source-audio presentation;
 - failed-source visibility;
 - selection-only multiview behavior;

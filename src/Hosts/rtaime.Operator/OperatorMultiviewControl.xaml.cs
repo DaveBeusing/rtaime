@@ -16,8 +16,8 @@ public partial class OperatorMultiviewControl : UserControl, INotifyPropertyChan
 {
 	private const int MaximumDisplayedSources = 16;
 	private INotifyCollectionChanged? _sourceNotifications;
-	private int _sourceGridColumns = 2;
-	private string _sourceGridPreset = "2×2";
+	private int _sourceGridColumns = 3;
+	private string _sourceGridPreset = "3×3";
 	private string _displayedSourceSummary = "0 sources";
 
 	public static readonly DependencyProperty PreviewImageProperty = DependencyProperty.Register(
@@ -148,7 +148,19 @@ public partial class OperatorMultiviewControl : UserControl, INotifyPropertyChan
 			return;
 
 		var sources = Sources?.Cast<object>().ToArray() ?? [];
-		var displayed = sources.Take(MaximumDisplayedSources).ToArray();
+		var capacity = Math.Min(MaximumDisplayedSources, SourceGridColumns * SourceGridColumns);
+		var displayed = sources.Take(capacity).ToList();
+
+		foreach (var prioritySource in sources.Skip(capacity).Where(IsPrioritySource))
+		{
+			if (displayed.Contains(prioritySource))
+				continue;
+
+			var replaceIndex = displayed.FindLastIndex(source => !IsPrioritySource(source));
+			if (replaceIndex < 0)
+				break;
+			displayed[replaceIndex] = prioritySource;
+		}
 
 		if (!DisplayedSources.SequenceEqual(displayed))
 		{
@@ -157,21 +169,9 @@ public partial class OperatorMultiviewControl : UserControl, INotifyPropertyChan
 				DisplayedSources.Add(source);
 		}
 
-		SourceGridColumns = displayed.Length switch
-		{
-			<= 4 => 2,
-			<= 9 => 3,
-			_ => 4
-		};
-		SourceGridPreset = SourceGridColumns switch
-		{
-			2 => "2×2",
-			3 => "3×3",
-			_ => "4×4"
-		};
-		DisplayedSourceSummary = sources.Length > MaximumDisplayedSources
-			? $"{displayed.Length} of {sources.Length} sources"
-			: $"{displayed.Length} source{(displayed.Length == 1 ? string.Empty : "s")}";
+		DisplayedSourceSummary = sources.Length > capacity
+			? $"{displayed.Count} of {sources.Length} sources"
+			: $"{displayed.Count} source{(displayed.Count == 1 ? string.Empty : "s")}";
 	}
 
 	private void OnVisibilityChanged(object sender, DependencyPropertyChangedEventArgs e)
@@ -179,6 +179,26 @@ public partial class OperatorMultiviewControl : UserControl, INotifyPropertyChan
 		if (e.NewValue is true)
 			RefreshDisplayedSources();
 	}
+
+	private void Grid2x2_Click(object sender, RoutedEventArgs e) => SetGridPreset(2);
+
+	private void Grid3x3_Click(object sender, RoutedEventArgs e) => SetGridPreset(3);
+
+	private void Grid4x4_Click(object sender, RoutedEventArgs e) => SetGridPreset(4);
+
+	private void SetGridPreset(int columns)
+	{
+		SourceGridColumns = Math.Clamp(columns, 2, 4);
+		SourceGridPreset = $"{SourceGridColumns}×{SourceGridColumns}";
+		RefreshDisplayedSources();
+	}
+
+	private static bool IsPrioritySource(object source) =>
+		source is OperatorSourceTileViewModel tile &&
+		(tile.IsProgram || tile.IsPreview || IsFailedHealth(tile.Health));
+
+	private static bool IsFailedHealth(string health) =>
+		health is "LOST" or "ERROR" or "FAILED" or "OFFLINE";
 
 	private void PreviewTile_MouseDoubleClick(object sender, MouseButtonEventArgs e)
 	{

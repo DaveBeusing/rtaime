@@ -25,6 +25,7 @@ public sealed class OperatorSourceTileViewModel : INotifyPropertyChanged
 	private bool _audioClipping;
 	private bool _hasAudio;
 	private int _displayIndex;
+	private string _timecodeLabel = "—";
 
 	public OperatorSourceTileViewModel(OperatorSourceDescriptor descriptor)
 	{
@@ -46,6 +47,8 @@ public sealed class OperatorSourceTileViewModel : INotifyPropertyChanged
 	public string ThumbnailFormat { get => _thumbnailFormat; private set => Set(ref _thumbnailFormat, value); }
 	public string Type { get => _type; private set => Set(ref _type, value); }
 	public string Format { get => _format; private set => Set(ref _format, value); }
+	public string FrameRateLabel => ExtractFrameRate(Format);
+	public string TimecodeLabel { get => _timecodeLabel; private set => Set(ref _timecodeLabel, value); }
 	public string Health { get => _health; private set => Set(ref _health, value); }
 	public string MediaState { get => _mediaState; private set => Set(ref _mediaState, value); }
 	public string Remaining { get => _remaining; private set => Set(ref _remaining, value); }
@@ -114,13 +117,14 @@ public sealed class OperatorSourceTileViewModel : INotifyPropertyChanged
 		HasAudio = false;
 	}
 
-	public void ApplyMediaDeck(string state, string format, string remaining, string? fileName)
+	public void ApplyMediaDeck(string state, string format, string remaining, string timecode, string? fileName)
 	{
 		Type = "MEDIA";
 		Format = string.IsNullOrWhiteSpace(format) ? _descriptor.Format : format.Trim();
 		Health = string.Equals(state, "ERROR", StringComparison.OrdinalIgnoreCase) ? "ERROR" : "READY";
 		MediaState = string.IsNullOrWhiteSpace(state) ? "UNKNOWN" : state.Trim().ToUpperInvariant();
 		Remaining = string.IsNullOrWhiteSpace(remaining) ? "—" : remaining.Trim();
+		TimecodeLabel = string.IsNullOrWhiteSpace(timecode) ? "—" : timecode.Trim();
 		MediaFileName = string.IsNullOrWhiteSpace(fileName) ? null : fileName.Trim();
 		OnPropertyChanged(nameof(IsMedia));
 		OnPropertyChanged(nameof(Detail));
@@ -133,7 +137,25 @@ public sealed class OperatorSourceTileViewModel : INotifyPropertyChanged
 		Health = "UNKNOWN";
 		MediaState = "—";
 		Remaining = "—";
+		TimecodeLabel = "—";
 		MediaFileName = null;
+	}
+
+	private static string ExtractFrameRate(string format)
+	{
+		if (string.IsNullOrWhiteSpace(format))
+			return "—";
+
+		var normalized = format.Trim();
+		var lastSpace = normalized.LastIndexOf(' ');
+		if (lastSpace >= 0 && lastSpace < normalized.Length - 1)
+			return normalized[(lastSpace + 1)..];
+
+		var progressive = normalized.LastIndexOf('p');
+		if (progressive >= 0 && progressive < normalized.Length - 1)
+			return normalized[(progressive + 1)..];
+
+		return normalized;
 	}
 
 	private static string FormatRemaining(TimeSpan? remaining)
@@ -152,6 +174,8 @@ public sealed class OperatorSourceTileViewModel : INotifyPropertyChanged
 		OnPropertyChanged(propertyName);
 		if (propertyName is nameof(Type) or nameof(Format) or nameof(Health) or nameof(MediaState) or nameof(Remaining) or nameof(MediaFileName))
 		{
+			if (propertyName == nameof(Format))
+				OnPropertyChanged(nameof(FrameRateLabel));
 			OnPropertyChanged(nameof(IsMedia));
 			OnPropertyChanged(nameof(Detail));
 			OnPropertyChanged(nameof(StateDetail));

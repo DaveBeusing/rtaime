@@ -5,145 +5,193 @@
 	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 	xmlns:controls="clr-namespace:rtaime.Operator.Controls"
 	xmlns:local="clr-namespace:rtaime.Operator"
-	MinHeight="360"
+	MinHeight="320"
 	AutomationProperties.Name="Live production multiview">
+	<UserControl.Resources>
+		<Style x:Key="LiveMultiviewItem" TargetType="{x:Type controls:RtaimeListBoxItem}">
+			<Setter Property="Padding" Value="0" />
+			<Setter Property="Margin" Value="3" />
+			<Setter Property="Background" Value="Transparent" />
+			<Setter Property="BorderThickness" Value="0" />
+			<Setter Property="HorizontalContentAlignment" Value="Stretch" />
+			<Setter Property="VerticalContentAlignment" Value="Stretch" />
+			<Setter Property="FocusVisualStyle" Value="{x:Null}" />
+			<Setter Property="Template">
+				<Setter.Value>
+					<ControlTemplate TargetType="{x:Type controls:RtaimeListBoxItem}">
+						<ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+					</ControlTemplate>
+				</Setter.Value>
+			</Setter>
+		</Style>
+	</UserControl.Resources>
+
 	<Grid>
 		<Grid.RowDefinitions>
-			<RowDefinition Height="Auto" />
-			<RowDefinition Height="170" />
-			<RowDefinition Height="8" />
+			<RowDefinition Height="34" />
 			<RowDefinition Height="*" />
 		</Grid.RowDefinitions>
 
-		<DockPanel Grid.Row="0" Margin="0,0,0,8">
-			<StackPanel Orientation="Horizontal">
-				<TextBlock Text="LIVE MULTIVIEW" Style="{StaticResource OperatorSectionTitle}" VerticalAlignment="Center" />
-				<Border Style="{StaticResource OperatorStatusBadge}" Margin="8,0,0,0">
-					<TextBlock Text="{Binding SourceGridPreset, ElementName=Root}" FontWeight="SemiBold" />
-				</Border>
-			</StackPanel>
-			<StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
-				<TextBlock Text="{Binding DisplayedSourceSummary, ElementName=Root}" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" Margin="0,0,10,0" />
-				<TextBlock Text="Double-click tile for large view · selection never routes" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" />
-			</StackPanel>
-		</DockPanel>
-
-		<Grid Grid.Row="1">
-			<Grid.ColumnDefinitions>
-				<ColumnDefinition Width="*" />
-				<ColumnDefinition Width="8" />
-				<ColumnDefinition Width="*" />
-			</Grid.ColumnDefinitions>
-
-			<Border Grid.Column="0"
-				BorderBrush="{DynamicResource OperatorPreviewBrush}"
-				BorderThickness="2"
-				Background="Black"
-				PreviewMouseLeftButtonDown="PreviewTile_MouseDoubleClick">
-				<Grid>
-					<Image Source="{Binding PreviewImage, ElementName=Root}" Stretch="Uniform" SnapsToDevicePixels="True" />
-					<Border VerticalAlignment="Top" HorizontalAlignment="Left" Background="#D0000000" Padding="8,4">
-						<TextBlock Text="PVW · PREVIEW" Foreground="{DynamicResource OperatorPreviewBrush}" FontWeight="Bold" />
-					</Border>
-					<Border VerticalAlignment="Bottom" Background="#D0000000" Padding="8,4">
-						<DockPanel>
-							<TextBlock Text="{Binding PreviewState, ElementName=Root}" Foreground="White" FontWeight="SemiBold" />
-							<TextBlock Text="MONITOR" Foreground="{DynamicResource OperatorMutedTextBrush}" DockPanel.Dock="Right" />
-						</DockPanel>
-					</Border>
-				</Grid>
-			</Border>
-
-			<Border Grid.Column="2"
-				BorderBrush="{DynamicResource OperatorProgramBrush}"
-				BorderThickness="2"
-				Background="Black"
-				PreviewMouseLeftButtonDown="ProgramTile_MouseDoubleClick">
-				<Grid>
-					<Image Source="{Binding ProgramImage, ElementName=Root}" Stretch="Uniform" SnapsToDevicePixels="True" />
-					<Border VerticalAlignment="Top" HorizontalAlignment="Left" Background="#D0000000" Padding="8,4">
-						<TextBlock Text="PGM · PROGRAM" Foreground="{DynamicResource OperatorProgramBrush}" FontWeight="Bold" />
-					</Border>
-					<Border VerticalAlignment="Bottom" Background="#D0000000" Padding="8,4">
-						<DockPanel>
-							<TextBlock Text="{Binding ProgramState, ElementName=Root}" Foreground="White" FontWeight="SemiBold" />
-							<TextBlock Text="MONITOR" Foreground="{DynamicResource OperatorMutedTextBrush}" DockPanel.Dock="Right" />
-						</DockPanel>
-					</Border>
-				</Grid>
-			</Border>
-		</Grid>
-
-		<Border Grid.Row="3"
-			Background="{DynamicResource OperatorBackgroundBrush}"
+		<Border Grid.Row="0"
+			Background="{DynamicResource OperatorAlternateSurfaceBrush}"
 			BorderBrush="{DynamicResource OperatorBorderBrush}"
 			BorderThickness="1"
-			Padding="4">
+			Padding="7,0">
 			<Grid>
-				<controls:RtaimeListBox
-					ItemsSource="{Binding DisplayedSources, ElementName=Root}"
-					SelectedItem="{Binding SelectedSource, ElementName=Root, Mode=TwoWay}"
-					Background="Transparent"
-					BorderThickness="0"
-					ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-					ScrollViewer.VerticalScrollBarVisibility="Auto"
-					ItemContainerStyle="{StaticResource OperatorSourceItem}"
-					AutomationProperties.Name="Live multiview sources">
-					<controls:RtaimeListBox.ItemsPanel>
-						<ItemsPanelTemplate>
-							<UniformGrid Columns="{Binding SourceGridColumns, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMultiviewControl}}}" />
-						</ItemsPanelTemplate>
-					</controls:RtaimeListBox.ItemsPanel>
-					<controls:RtaimeListBox.ItemTemplate>
-						<DataTemplate>
-							<Border MinHeight="132"
-								Margin="3"
+				<Grid.ColumnDefinitions>
+					<ColumnDefinition Width="Auto" />
+					<ColumnDefinition Width="*" />
+					<ColumnDefinition Width="Auto" />
+				</Grid.ColumnDefinitions>
+				<StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+					<TextBlock Text="MULTIVIEW" Style="{StaticResource OperatorSectionTitle}" VerticalAlignment="Center" />
+					<controls:RtaimeStatusBadge
+						Status="{x:Static controls:RtaimeStatusKind.Neutral}"
+						Content="{Binding SourceGridPreset, ElementName=Root}"
+						ShowIndicator="False"
+						Margin="8,0,0,0" />
+					<TextBlock
+						Text="{Binding DisplayedSourceSummary, ElementName=Root}"
+						Style="{StaticResource OperatorLabel}"
+						Margin="8,0,0,0"
+						VerticalAlignment="Center" />
+				</StackPanel>
+
+				<TextBlock Grid.Column="1"
+					Text="Selection never routes"
+					Style="{StaticResource OperatorLabel}"
+					HorizontalAlignment="Center"
+					VerticalAlignment="Center" />
+
+				<StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+					<controls:RtaimeButton Content="2×2" IsCompact="True" Width="42" Height="26" Margin="0,0,3,0" Click="Grid2x2_Click" ToolTip="Show up to four sources." />
+					<controls:RtaimeButton Content="3×3" IsCompact="True" Width="42" Height="26" Margin="0,0,3,0" Click="Grid3x3_Click" ToolTip="Reference layout: show up to nine sources." />
+					<controls:RtaimeButton Content="4×4" IsCompact="True" Width="42" Height="26" Margin="0,0,3,0" Click="Grid4x4_Click" ToolTip="Show up to sixteen sources." />
+					<controls:RtaimeIconButton
+						IconData="{StaticResource RtaimeIconFullscreenGeometry}"
+						Command="{Binding DataContext.Shell.ToggleCenterMaximizeCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+						Width="26"
+						Height="26"
+						ToolTip="Maximize or restore the live center workspace."
+						AutomationProperties.Name="Maximize live multiview" />
+				</StackPanel>
+			</Grid>
+		</Border>
+
+		<Grid Grid.Row="1" Background="#05080B" ClipToBounds="True">
+			<controls:RtaimeListBox
+				ItemsSource="{Binding DisplayedSources, ElementName=Root}"
+				SelectedItem="{Binding SelectedSource, ElementName=Root, Mode=TwoWay}"
+				ItemContainerStyle="{StaticResource LiveMultiviewItem}"
+				Background="Transparent"
+				BorderThickness="0"
+				ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+				ScrollViewer.VerticalScrollBarVisibility="Disabled"
+				AutomationProperties.Name="Live multiview source grid">
+				<controls:RtaimeListBox.ItemsPanel>
+					<ItemsPanelTemplate>
+						<UniformGrid
+							Rows="{Binding SourceGridColumns, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMultiviewControl}}}"
+							Columns="{Binding SourceGridColumns, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMultiviewControl}}}" />
+					</ItemsPanelTemplate>
+				</controls:RtaimeListBox.ItemsPanel>
+				<controls:RtaimeListBox.ItemTemplate>
+					<DataTemplate>
+						<Viewbox Stretch="Uniform" StretchDirection="Both">
+							<Border
+								Width="160"
+								Height="90"
 								Background="Black"
 								BorderBrush="{DynamicResource OperatorBorderBrush}"
 								BorderThickness="1"
+								CornerRadius="3"
+								ClipToBounds="True"
 								PreviewMouseLeftButtonDown="SourceTile_MouseDoubleClick"
 								ToolTip="{Binding ThumbnailFormat}">
+								<Border.Style>
+									<Style TargetType="Border">
+										<Setter Property="BorderBrush" Value="{DynamicResource OperatorBorderBrush}" />
+										<Setter Property="BorderThickness" Value="1" />
+										<Style.Triggers>
+											<DataTrigger Binding="{Binding IsPreview}" Value="True">
+												<Setter Property="BorderBrush" Value="{DynamicResource OperatorAccentBrush}" />
+												<Setter Property="BorderThickness" Value="2" />
+											</DataTrigger>
+											<DataTrigger Binding="{Binding IsProgram}" Value="True">
+												<Setter Property="BorderBrush" Value="{DynamicResource OperatorProgramBrush}" />
+												<Setter Property="BorderThickness" Value="2" />
+											</DataTrigger>
+										</Style.Triggers>
+									</Style>
+								</Border.Style>
 								<Grid>
 									<Image Source="{Binding Thumbnail}" Stretch="UniformToFill" SnapsToDevicePixels="True" />
 
-									<Border VerticalAlignment="Top" Background="#D0000000" Padding="6,4">
+									<Border Height="26" VerticalAlignment="Top" Background="#DC071017" Padding="5,0">
 										<Grid>
 											<Grid.ColumnDefinitions>
+												<ColumnDefinition Width="22" />
+												<ColumnDefinition Width="9" />
 												<ColumnDefinition Width="*" />
 												<ColumnDefinition Width="Auto" />
+												<ColumnDefinition Width="Auto" />
 											</Grid.ColumnDefinitions>
-											<StackPanel>
-												<TextBlock Text="{Binding Name}" Foreground="White" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-												<TextBlock Text="{Binding Format}" Foreground="#D8FFFFFF" FontSize="10" TextTrimming="CharacterEllipsis" />
-											</StackPanel>
-											<StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
-												<Border Margin="4,0,0,0">
-													<Border.Style>
-														<Style TargetType="Border" BasedOn="{StaticResource OperatorPreviewTally}">
-															<Setter Property="Visibility" Value="Collapsed" />
-															<Style.Triggers>
-																<DataTrigger Binding="{Binding IsPreview}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
-															</Style.Triggers>
-														</Style>
-													</Border.Style>
-													<TextBlock Text="PVW" Foreground="{DynamicResource OperatorPreviewBrush}" FontSize="10" FontWeight="Bold" />
-												</Border>
-												<Border Margin="4,0,0,0">
-													<Border.Style>
-														<Style TargetType="Border" BasedOn="{StaticResource OperatorProgramTally}">
-															<Setter Property="Visibility" Value="Collapsed" />
-															<Style.Triggers>
-																<DataTrigger Binding="{Binding IsProgram}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
-															</Style.Triggers>
-														</Style>
-													</Border.Style>
-													<TextBlock Text="PGM" Foreground="{DynamicResource OperatorProgramBrush}" FontSize="10" FontWeight="Bold" />
-												</Border>
-											</StackPanel>
+											<TextBlock Text="{Binding DisplayIndex, StringFormat={}{0:00}}"
+												Foreground="White"
+												FontFamily="{DynamicResource OperatorTimecodeFontFamily}"
+												FontSize="10"
+												FontWeight="Bold"
+												VerticalAlignment="Center" />
+											<Ellipse Grid.Column="1" Width="6" Height="6" VerticalAlignment="Center">
+												<Ellipse.Style>
+													<Style TargetType="Ellipse">
+														<Setter Property="Fill" Value="{DynamicResource OperatorWarningBrush}" />
+														<Style.Triggers>
+															<DataTrigger Binding="{Binding Health}" Value="READY"><Setter Property="Fill" Value="{DynamicResource OperatorHealthyBrush}" /></DataTrigger>
+															<DataTrigger Binding="{Binding Health}" Value="HEALTHY"><Setter Property="Fill" Value="{DynamicResource OperatorHealthyBrush}" /></DataTrigger>
+															<DataTrigger Binding="{Binding Health}" Value="OK"><Setter Property="Fill" Value="{DynamicResource OperatorHealthyBrush}" /></DataTrigger>
+															<DataTrigger Binding="{Binding Health}" Value="LOCKED"><Setter Property="Fill" Value="{DynamicResource OperatorHealthyBrush}" /></DataTrigger>
+															<DataTrigger Binding="{Binding Health}" Value="LOST"><Setter Property="Fill" Value="{DynamicResource OperatorErrorBrush}" /></DataTrigger>
+															<DataTrigger Binding="{Binding Health}" Value="ERROR"><Setter Property="Fill" Value="{DynamicResource OperatorErrorBrush}" /></DataTrigger>
+															<DataTrigger Binding="{Binding Health}" Value="FAILED"><Setter Property="Fill" Value="{DynamicResource OperatorErrorBrush}" /></DataTrigger>
+															<DataTrigger Binding="{Binding Health}" Value="OFFLINE"><Setter Property="Fill" Value="{DynamicResource OperatorErrorBrush}" /></DataTrigger>
+														</Style.Triggers>
+													</Style>
+												</Ellipse.Style>
+											</Ellipse>
+											<TextBlock Grid.Column="2"
+												Text="{Binding Name}"
+												Foreground="White"
+												FontSize="10"
+												FontWeight="SemiBold"
+												Margin="4,0"
+												VerticalAlignment="Center"
+												TextTrimming="CharacterEllipsis" />
+											<TextBlock Grid.Column="3"
+												Text="{Binding FrameRateLabel}"
+												Foreground="{DynamicResource OperatorSecondaryTextBrush}"
+												FontSize="9"
+												VerticalAlignment="Center"
+												Margin="4,0" />
+											<Border Grid.Column="4"
+												Padding="4,1"
+												Background="{DynamicResource OperatorProgramBrush}"
+												CornerRadius="2"
+												Visibility="Collapsed">
+												<Border.Style>
+													<Style TargetType="Border">
+														<Setter Property="Visibility" Value="Collapsed" />
+														<Style.Triggers>
+															<DataTrigger Binding="{Binding IsProgram}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
+														</Style.Triggers>
+													</Style>
+												</Border.Style>
+												<TextBlock Text="PGM" Foreground="White" FontSize="8" FontWeight="Bold" />
+											</Border>
 										</Grid>
 									</Border>
 
-									<Border Background="#B0000000" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="10,6">
+									<Border HorizontalAlignment="Center" VerticalAlignment="Center" Background="#D8071017" Padding="8,5">
 										<Border.Style>
 											<Style TargetType="Border">
 												<Setter Property="Visibility" Value="Collapsed" />
@@ -156,74 +204,76 @@
 											</Style>
 										</Border.Style>
 										<StackPanel>
-											<TextBlock Text="SOURCE UNAVAILABLE" Foreground="{DynamicResource OperatorErrorBrush}" FontWeight="Bold" HorizontalAlignment="Center" />
-											<TextBlock Text="{Binding Health}" Foreground="White" HorizontalAlignment="Center" />
+											<TextBlock Text="INPUT UNAVAILABLE" Foreground="{DynamicResource OperatorErrorBrush}" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center" />
+											<TextBlock Text="{Binding Health}" Foreground="White" FontSize="8" HorizontalAlignment="Center" />
 										</StackPanel>
 									</Border>
 
-									<Border VerticalAlignment="Bottom" Background="#D0000000" Padding="6,4">
+									<Border VerticalAlignment="Bottom" Background="#C8071017" Height="18" Padding="5,0">
 										<Grid>
 											<Grid.ColumnDefinitions>
 												<ColumnDefinition Width="*" />
-												<ColumnDefinition Width="70" />
+												<ColumnDefinition Width="Auto" />
 											</Grid.ColumnDefinitions>
-											<StackPanel>
-												<TextBlock Text="{Binding StateDetail}" Foreground="White" FontSize="10" TextTrimming="CharacterEllipsis" />
-												<TextBlock Text="{Binding Health, StringFormat=HEALTH {0}}" Foreground="#D8FFFFFF" FontSize="9" />
-											</StackPanel>
-											<Grid Grid.Column="1" Margin="7,0,0,0">
-												<Grid.RowDefinitions>
-													<RowDefinition Height="*" />
-													<RowDefinition Height="2" />
-													<RowDefinition Height="*" />
-												</Grid.RowDefinitions>
-												<ProgressBar Grid.Row="0" Minimum="0" Maximum="1" Value="{Binding AudioLeftPeak, Mode=OneWay}" Style="{StaticResource OperatorMeter}" Height="5" />
-												<ProgressBar Grid.Row="2" Minimum="0" Maximum="1" Value="{Binding AudioRightPeak, Mode=OneWay}" Style="{StaticResource OperatorMeter}" Height="5" />
-												<Border Grid.RowSpan="3" BorderBrush="{DynamicResource OperatorErrorBrush}" BorderThickness="1">
-													<Border.Style>
-														<Style TargetType="Border">
+											<StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+												<controls:RtaimeTimecode Content="{Binding TimecodeLabel}" FontSize="9" Foreground="White" />
+												<controls:RtaimeStatusBadge
+													Status="{x:Static controls:RtaimeStatusKind.Preview}"
+													Content="PVW"
+													ShowIndicator="False"
+													Margin="5,0,0,0"
+													Padding="3,0"
+													Visibility="Collapsed">
+													<controls:RtaimeStatusBadge.Style>
+														<Style TargetType="{x:Type controls:RtaimeStatusBadge}" BasedOn="{StaticResource {x:Type controls:RtaimeStatusBadge}}">
 															<Setter Property="Visibility" Value="Collapsed" />
-															<Style.Triggers><DataTrigger Binding="{Binding AudioClipping}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
+															<Style.Triggers><DataTrigger Binding="{Binding IsPreview}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
 														</Style>
-													</Border.Style>
-												</Border>
-											</Grid>
+													</controls:RtaimeStatusBadge.Style>
+												</controls:RtaimeStatusBadge>
+											</StackPanel>
+											<StackPanel Grid.Column="1" Width="30" VerticalAlignment="Center">
+												<controls:RtaimeMetricBar Minimum="0" Maximum="1" Value="{Binding AudioLeftPeak, Mode=OneWay}" Height="3" Margin="0,0,0,2" />
+												<controls:RtaimeMetricBar Minimum="0" Maximum="1" Value="{Binding AudioRightPeak, Mode=OneWay}" Height="3" />
+											</StackPanel>
 										</Grid>
 									</Border>
 								</Grid>
 							</Border>
-						</DataTemplate>
-					</controls:RtaimeListBox.ItemTemplate>
-				</controls:RtaimeListBox>
+						</Viewbox>
+					</DataTemplate>
+				</controls:RtaimeListBox.ItemTemplate>
+			</controls:RtaimeListBox>
 
-				<Border x:Name="ExpandedPreviewOverlay"
-					Visibility="Collapsed"
-					Background="#F211151B"
-					BorderBrush="{DynamicResource OperatorAccentBrush}"
-					BorderThickness="2"
-					Panel.ZIndex="20"
-					Padding="10">
-					<Grid>
-						<Grid.RowDefinitions>
-							<RowDefinition Height="Auto" />
-							<RowDefinition Height="*" />
-							<RowDefinition Height="Auto" />
-						</Grid.RowDefinitions>
-						<DockPanel Margin="0,0,0,8">
-							<TextBlock x:Name="ExpandedTitle" Style="{StaticResource OperatorSectionTitle}" />
-							<Button Content="CLOSE"
-								Click="CloseExpanded_Click"
-								Style="{StaticResource OperatorButton}"
-								Padding="8,3"
-								DockPanel.Dock="Right" />
-						</DockPanel>
-						<Border Grid.Row="1" Background="Black">
-							<Image x:Name="ExpandedImage" Stretch="Uniform" SnapsToDevicePixels="True" />
-						</Border>
-						<TextBlock x:Name="ExpandedDetail" Grid.Row="2" Style="{StaticResource OperatorLabel}" Margin="0,8,0,0" TextTrimming="CharacterEllipsis" />
+			<Border x:Name="ExpandedPreviewOverlay"
+				Visibility="Collapsed"
+				Background="#F2071017"
+				BorderBrush="{DynamicResource OperatorAccentBrush}"
+				BorderThickness="1"
+				Panel.ZIndex="20"
+				Padding="8">
+				<Grid>
+					<Grid.RowDefinitions>
+						<RowDefinition Height="32" />
+						<RowDefinition Height="*" />
+						<RowDefinition Height="24" />
+					</Grid.RowDefinitions>
+					<Grid Grid.Row="0">
+						<TextBlock x:Name="ExpandedTitle" Style="{StaticResource OperatorSectionTitle}" VerticalAlignment="Center" />
+						<controls:RtaimeIconButton
+							IconData="{StaticResource RtaimeIconCloseGeometry}"
+							Click="CloseExpanded_Click"
+							Width="26"
+							Height="26"
+							HorizontalAlignment="Right"
+							ToolTip="Close expanded source" />
 					</Grid>
-				</Border>
-			</Grid>
-		</Border>
+					<Border Grid.Row="1" Background="Black">
+						<Image x:Name="ExpandedImage" Stretch="Uniform" SnapsToDevicePixels="True" />
+					</Border>
+					<TextBlock x:Name="ExpandedDetail" Grid.Row="2" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+				</Grid>
+			</Border>
+		</Grid>
 	</Grid>
 </UserControl>

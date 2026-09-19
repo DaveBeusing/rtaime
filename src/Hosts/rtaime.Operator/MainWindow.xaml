@@ -505,9 +505,36 @@
 						Visibility="{Binding Shell.LiveSceneCueVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
 				</Grid>
 			</Border>
-			<controls:RtaimeSplitter Grid.RowSpan="2" Grid.Column="5" Style="{StaticResource RtaimeVerticalSplitter}" DragCompleted="OnLayoutSplitterDragCompleted" ToolTip="Resize Inspector / Live Controls panel. Use arrow keys while focused." AutomationProperties.Name="Resize right workspace panel" />
+			<controls:RtaimeSplitter Grid.RowSpan="2" Grid.Column="5" IsEnabled="{Binding Shell.WorkspacePanelResizeEnabled, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource RtaimeVerticalSplitter}" DragCompleted="OnLayoutSplitterDragCompleted" ToolTip="Resize Inspector / Live Controls panel. Use arrow keys while focused." AutomationProperties.Name="Resize right workspace panel" />
 
-			<controls:RtaimeScrollViewer x:Name="CenterWorkspace" Grid.Column="4" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+			<Grid x:Name="CenterWorkspace" Grid.Column="4" ClipToBounds="True">
+				<Grid x:Name="LiveWorkspaceSurface"
+					Visibility="{Binding Shell.LiveWorkspaceVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
+					<Grid.RowDefinitions>
+						<RowDefinition Height="*" />
+						<RowDefinition Height="6" />
+						<RowDefinition Height="270" />
+					</Grid.RowDefinitions>
+
+					<local:OperatorMultiviewControl
+						Grid.Row="0"
+						PreviewImage="{Binding Monitoring.PreviewImage, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+						ProgramImage="{Binding Monitoring.ProgramImage, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+						PreviewState="{Binding Monitoring.PreviewState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+						ProgramState="{Binding Monitoring.ProgramState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+						Sources="{Binding Sources}"
+						SelectedSource="{Binding SelectedSource, Mode=TwoWay}" />
+
+					<local:OutputRoutingHealthControl
+						Grid.Row="2"
+						CompactMode="True"
+						DataContext="{Binding OutputHealth, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
+				</Grid>
+
+				<controls:RtaimeScrollViewer x:Name="CenterWorkspaceScroll"
+					VerticalScrollBarVisibility="Auto"
+					HorizontalScrollBarVisibility="Disabled"
+					Visibility="{Binding Shell.NonLiveCenterVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
 			<Grid>
 				<Grid.ColumnDefinitions>
 					<ColumnDefinition Width="2.2*" MinWidth="610" />
@@ -517,26 +544,6 @@
 				</Grid.ColumnDefinitions>
 
 				<StackPanel Grid.Column="0">
-					<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,10"
-						Visibility="{Binding Shell.MultiviewVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
-						<StackPanel>
-							<DockPanel Margin="0,0,0,8">
-								<TextBlock Text="MULTIVIEW" Style="{StaticResource OperatorSectionTitle}" />
-								<StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
-									<Button Content="CLEAN PROGRAM" Command="{Binding ProgramOutput.StartCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorProgramButton}" MinHeight="26" Padding="8,2" Margin="0,0,5,0" ToolTip="Open clean Program monitoring on the selected display. This does not change physical Program output." />
-									<Button Content="{Binding ProgramOutput.FullscreenAction, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Command="{Binding ProgramOutput.ToggleFullscreenCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorButton}" MinHeight="26" Padding="8,2" />
-								</StackPanel>
-							</DockPanel>
-							<local:OperatorMultiviewControl
-								PreviewImage="{Binding Monitoring.PreviewImage, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-								ProgramImage="{Binding Monitoring.ProgramImage, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-								PreviewState="{Binding Monitoring.PreviewState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-								ProgramState="{Binding Monitoring.ProgramState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-								Sources="{Binding Sources}"
-								SelectedSource="{Binding SelectedSource, Mode=TwoWay}" />
-						</StackPanel>
-					</Border>
-
 					<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,10"
 						Visibility="{Binding Shell.QuickControlsVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
 						<StackPanel>
@@ -1362,8 +1369,9 @@
 					</Border>
 				</StackPanel>
 			</Grid>
-		</controls:RtaimeScrollViewer>
-			<controls:RtaimeSplitter Grid.Column="3" Style="{StaticResource RtaimeVerticalSplitter}" DragCompleted="OnLayoutSplitterDragCompleted" ToolTip="Resize Media / tool panel. Use arrow keys while focused." AutomationProperties.Name="Resize left workspace panel" />
+						</controls:RtaimeScrollViewer>
+			</Grid>
+			<controls:RtaimeSplitter Grid.Column="3" IsEnabled="{Binding Shell.WorkspacePanelResizeEnabled, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource RtaimeVerticalSplitter}" DragCompleted="OnLayoutSplitterDragCompleted" ToolTip="Resize Media / tool panel. Use arrow keys while focused." AutomationProperties.Name="Resize left workspace panel" />
 			<Grid Grid.RowSpan="2" Grid.Column="6">
 				<local:OperatorInspectorControl
 					x:Name="RightInspectorRegion"

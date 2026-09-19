@@ -414,27 +414,27 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 
 	public GridLength LeftColumnWidth
 	{
-		get => new(IsCenterMaximized || IsLeftCollapsed || IsCompactViewport ? 0 : LeftPanelWidth);
+		get => new(IsCenterMaximized || IsLeftCollapsed || IsCompactViewport ? 0 : IsLiveWorkspace ? 360 : LeftPanelWidth);
 		set
 		{
-			if (!IsCompactViewport && !IsCenterMaximized && !IsLeftCollapsed && value.IsAbsolute && value.Value > 0)
+			if (!IsLiveWorkspace && !IsCompactViewport && !IsCenterMaximized && !IsLeftCollapsed && value.IsAbsolute && value.Value > 0)
 				LeftPanelWidth = value.Value;
 		}
 	}
 
 	public GridLength RightColumnWidth
 	{
-		get => new(IsCenterMaximized || IsRightCollapsed || IsCompactViewport ? 0 : RightPanelWidth);
+		get => new(IsCenterMaximized || IsRightCollapsed || IsCompactViewport ? 0 : IsLiveWorkspace ? 420 : RightPanelWidth);
 		set
 		{
-			if (!IsCompactViewport && !IsCenterMaximized && !IsRightCollapsed && value.IsAbsolute && value.Value > 0)
+			if (!IsLiveWorkspace && !IsCompactViewport && !IsCenterMaximized && !IsRightCollapsed && value.IsAbsolute && value.Value > 0)
 				RightPanelWidth = value.Value;
 		}
 	}
 
 	public GridLength LowerRowHeight
 	{
-		get => new(IsCenterMaximized ? 0 : IsCompactViewport ? Math.Min(LowerPanelHeight, OperatorLayoutSettings.CompactLowerPanelHeight) : LowerPanelHeight);
+		get => new(IsCenterMaximized || IsLiveWorkspace ? 0 : IsCompactViewport ? Math.Min(LowerPanelHeight, OperatorLayoutSettings.CompactLowerPanelHeight) : LowerPanelHeight);
 		set
 		{
 			if (!IsCompactViewport && !IsCenterMaximized && value.IsAbsolute && value.Value > 0)
@@ -527,7 +527,10 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 	public Visibility MultiviewVisibility => IsLiveWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility CompositingGraphVisibility => IsCompositingWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility StandardViewerVisibility => IsLiveWorkspace || IsCompositingWorkspace || IsEditWorkspace ? Visibility.Collapsed : Visibility.Visible;
-	public Visibility QuickControlsVisibility => IsLiveWorkspace ? Visibility.Visible : Visibility.Collapsed;
+	public Visibility QuickControlsVisibility => IsSettingsWorkspace ? Visibility.Visible : Visibility.Collapsed;
+	public Visibility LiveWorkspaceVisibility => IsLiveWorkspace ? Visibility.Visible : Visibility.Collapsed;
+	public Visibility NonLiveCenterVisibility => IsLiveWorkspace ? Visibility.Collapsed : Visibility.Visible;
+	public bool WorkspacePanelResizeEnabled => !IsLiveWorkspace;
 	public Visibility ProductionControlsVisibility => IsEditWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility MediaDeckVisibility => IsMediaWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility SourceBinVisibility => IsMediaWorkspace ? Visibility.Visible : Visibility.Collapsed;
@@ -811,6 +814,9 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 		OnPropertyChanged(nameof(CompositingGraphVisibility));
 		OnPropertyChanged(nameof(StandardViewerVisibility));
 		OnPropertyChanged(nameof(QuickControlsVisibility));
+		OnPropertyChanged(nameof(LiveWorkspaceVisibility));
+		OnPropertyChanged(nameof(NonLiveCenterVisibility));
+		OnPropertyChanged(nameof(WorkspacePanelResizeEnabled));
 		OnPropertyChanged(nameof(ProductionControlsVisibility));
 		OnPropertyChanged(nameof(MediaDeckVisibility));
 		OnPropertyChanged(nameof(SourceBinVisibility));
