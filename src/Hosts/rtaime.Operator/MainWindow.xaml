@@ -123,10 +123,14 @@
 				</StackPanel>
 				<controls:RtaimeStatusBadge Grid.Column="11"
 					Status="{x:Static controls:RtaimeStatusKind.Warning}"
-					Content="LIVE"
 					Margin="8,0"
 					VerticalAlignment="Center"
-					ToolTip="External transmission/on-air state is not authoritative in the current V1 contract." />
+					ToolTip="External transmission/on-air state is not authoritative in the current V1 contract.">
+					<StackPanel HorizontalAlignment="Center">
+						<TextBlock Text="LIVE" FontSize="10" FontWeight="Bold" HorizontalAlignment="Center" />
+						<TextBlock Text="UNVERIFIED" FontSize="8" HorizontalAlignment="Center" />
+					</StackPanel>
+				</controls:RtaimeStatusBadge>
 				<controls:RtaimeStatusBadge Grid.Column="12"
 					Status="{x:Static controls:RtaimeStatusKind.Program}"
 					Margin="8,0"
