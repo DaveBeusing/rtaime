@@ -758,12 +758,6 @@
 						</StackPanel>
 					</Border>
 
-					<local:CompositingGraphControl
-						Margin="0,0,0,10"
-						MinHeight="620"
-						DataContext="{Binding CompositingGraph, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-						Visibility="{Binding Shell.CompositingGraphVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
-
 					<Grid Margin="0,0,0,10"
 						Visibility="{Binding Shell.StandardViewerVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
 						<Grid.ColumnDefinitions>
