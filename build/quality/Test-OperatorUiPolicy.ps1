@@ -25,6 +25,9 @@ $keyboardPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorKey
 $quickControlsPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorQuickControlsViewModel.cs"
 $multiviewPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorMultiviewControl.xaml"
 $multiviewCodePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorMultiviewControl.xaml.cs"
+$liveSceneCuePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/LiveSceneCueControl.xaml"
+$liveControlsPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/LiveControlsControl.xaml"
+$liveDocumentationPath = Join-Path $repositoryRoot "docs/LiveMultiviewAndSceneControl.md"
 $mediaPoolPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MediaPoolInspectorViewModel.cs"
 $inspectorHostPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorInspectorControl.xaml"
 $virtualizingWrapPanelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/VirtualizingWrapPanel.cs"
@@ -60,7 +63,7 @@ $documentationPath = Join-Path $repositoryRoot "docs/OperatorUiV1.md"
 $workspaceDocumentationPath = Join-Path $repositoryRoot "docs/OperatorWorkspaces.md"
 $mediaLibraryDocumentationPath = Join-Path $repositoryRoot "docs/MediaLibraryAssetBrowser.md"
 
-foreach ($path in @($appPath, $appCodePath, $windowPath, $windowCodePath, $shellPath, $keyboardPath, $quickControlsPath, $multiviewPath, $multiviewCodePath, $mediaPoolPath, $inspectorHostPath, $virtualizingWrapPanelPath, $deckPath, $deckViewModelPath, $timelinePath, $timelineCodePath, $timelineViewModelPath, $markerControllerPath, $timelineDocumentationPath, $viewModelPath, $monitorViewModelPath, $programOutputControllerPath, $programOutputWindowPath, $previewViewerPath, $previewViewerCodePath, $programViewerPath, $programViewerCodePath, $monitorViewPath, $sourceTileViewModelPath, $audioInputViewModelPath, $graphicsLoaderPath, $demoControllerPath, $demoManifestPath, $demoProductPath, $demoGraphicsPath, $demoDocumentationPath, $tokensPath, $themePath, $manifestPath, $projectPath, $documentationPath, $workspaceDocumentationPath, $mediaLibraryDocumentationPath)) {
+foreach ($path in @($appPath, $appCodePath, $windowPath, $windowCodePath, $shellPath, $keyboardPath, $quickControlsPath, $multiviewPath, $multiviewCodePath, $liveSceneCuePath, $liveControlsPath, $liveDocumentationPath, $mediaPoolPath, $inspectorHostPath, $virtualizingWrapPanelPath, $deckPath, $deckViewModelPath, $timelinePath, $timelineCodePath, $timelineViewModelPath, $markerControllerPath, $timelineDocumentationPath, $viewModelPath, $monitorViewModelPath, $programOutputControllerPath, $programOutputWindowPath, $previewViewerPath, $previewViewerCodePath, $programViewerPath, $programViewerCodePath, $monitorViewPath, $sourceTileViewModelPath, $audioInputViewModelPath, $graphicsLoaderPath, $demoControllerPath, $demoManifestPath, $demoProductPath, $demoGraphicsPath, $demoDocumentationPath, $tokensPath, $themePath, $manifestPath, $projectPath, $documentationPath, $workspaceDocumentationPath, $mediaLibraryDocumentationPath)) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required Operator UI artifact is missing: '$path'."
 }
 
@@ -73,6 +76,9 @@ $keyboard = Get-Content -LiteralPath $keyboardPath -Raw
 $quickControls = Get-Content -LiteralPath $quickControlsPath -Raw
 $multiview = Get-Content -LiteralPath $multiviewPath -Raw
 $multiviewCode = Get-Content -LiteralPath $multiviewCodePath -Raw
+$liveSceneCue = Get-Content -LiteralPath $liveSceneCuePath -Raw
+$liveControls = Get-Content -LiteralPath $liveControlsPath -Raw
+$liveDocumentation = Get-Content -LiteralPath $liveDocumentationPath -Raw
 $mediaPool = Get-Content -LiteralPath $mediaPoolPath -Raw
 $inspectorHost = Get-Content -LiteralPath $inspectorHostPath -Raw
 $inspectorSurface = "$window`n$inspectorHost"
@@ -513,6 +519,25 @@ Assert-Condition ($mediaPool -match '"production\.transition\.frames"' -and $med
 Assert-Condition ($window -match '<local:OperatorMultiviewControl' -and $window -match 'Monitoring\.PreviewImage' -and $window -match 'Monitoring\.ProgramImage') "LIVE multiview must consume the existing Preview/Program monitoring projection."
 Assert-Condition ($multiview -match 'PreviewImage' -and $multiview -match 'ProgramImage' -and $multiview -match 'Sources') "Reusable multiview must project supported monitoring feeds and source thumbnails."
 Assert-Condition ($multiviewCode -notmatch 'NamedPipe|MediaElement|VideoDrawing|OperatorControlClient') "Multiview must not create another transport, player or authority path."
+Assert-Condition ($multiviewCode -match 'MaximumDisplayedSources = 16' -and $multiviewCode -match '<= 4 => 2|<= 4' -and $multiviewCode -match '<= 9 => 3|<= 9' -and $multiviewCode -match '_ => 4') "LIVE multiview must adapt through 2/3/4-column layouts and remain bounded to 16 source tiles."
+Assert-Condition ($multiview -match 'Binding IsPreview' -and $multiview -match 'Binding IsProgram' -and $multiview -match 'Binding Health' -and $multiview -match 'Binding Format') "LIVE source tiles must expose confirmed PGM/PVW tally, health and format."
+Assert-Condition ($sourceTileViewModel -match 'AudioLeftPeak' -and $sourceTileViewModel -match 'AudioRightPeak' -and $sourceTileViewModel -match 'AudioClipping' -and $viewModel -match 'source\.ApplyAudioMeter') "LIVE source tiles must reuse existing Runtime audio observations."
+foreach ($failedSourceState in @("LOST", "ERROR", "FAILED", "OFFLINE")) {
+	Assert-Condition ($multiview -match ('Value="' + $failedSourceState + '"')) "LIVE multiview must keep failed source state '$failedSourceState' visible."
+}
+Assert-Condition ($multiview -match 'SelectedItem="\{Binding SelectedSource' -and $window -match 'SelectedSource="\{Binding SelectedSource, Mode=TwoWay\}"') "Multiview selection must project into existing SelectedSource state without routing."
+Assert-Condition ($multiviewCode -match 'ShowExpanded' -and $multiviewCode -notmatch 'SetPreviewCommand|CutCommand|DissolveCommand') "Multiview double-click expansion must remain presentation-only and must not route or take."
+Assert-Condition ($multiviewCode -match '!IsVisible' -and $multiviewCode -match 'OnVisibilityChanged' -and $multiviewCode -notmatch 'DispatcherTimer|PeriodicTimer') "Multiview presentation updates must be visibility-aware without adding another polling loop."
+Assert-Condition ($liveSceneCue -match 'SelectedItem="\{Binding SelectedSource, Mode=TwoWay\}"' -and $liveSceneCue -match 'Command="\{Binding SetPreviewCommand\}"' -and $liveSceneCue -match 'Command="\{Binding CutCommand\}"') "LIVE source selection must remain separate from explicit Preview/Take commands."
+Assert-Condition ($liveSceneCue -match 'MediaDeck\.SelectedCue' -and $liveSceneCue -match 'MediaDeck\.JumpCueCommand' -and $liveSceneCue -notmatch 'SelectionChanged=') "LIVE cue selection must not auto-execute cue activation."
+Assert-Condition ($liveSceneCue -match 'NOT AVAILABLE IN V1 CONTRACT') "LIVE scene controls must fail closed while no governed scene activation contract exists."
+Assert-Condition ($liveControls -match 'Binding SetPreviewCommand' -and $liveControls -match 'Binding CutCommand' -and $liveControls -match 'Binding DissolveCommand' -and $liveControls -match 'Binding TransitionFrames') "LIVE controls must reuse existing routing and transition commands."
+Assert-Condition ($liveControls -match 'Binding ToggleGraphicsCommand' -and $liveControls -match 'Binding StartRecordingCommand' -and $liveControls -match 'Binding StopRecordingCommand' -and $liveControls -match 'ProgramOutput\.StartCommand' -and $liveControls -match 'ProgramOutput\.StopCommand') "LIVE controls must reuse existing layer, recording and Clean Program command paths."
+Assert-Condition ($liveControls -match 'STREAM / EXTERNAL ON AIR · UNVERIFIED') "LIVE controls must not infer external stream/on-air state."
+Assert-Condition ($liveControls -match 'EngineLifecycleState' -and $liveControls -match 'EngineHealth' -and $liveControls -match 'RuntimeHealth' -and $liveControls -match 'MediaHealth' -and $liveControls -match 'LastError') "LIVE alerts must project existing lifecycle, health and error evidence."
+Assert-Condition ($shell -match 'MediaLibraryLeftVisibility' -and $shell -match 'LiveSceneCueVisibility' -and $shell -match 'InspectorVisibility' -and $shell -match 'LiveControlsVisibility') "LIVE workspace must isolate dedicated left/right surfaces from Media Library and Inspector presentation."
+Assert-Condition ($shell -match 'ProductionControlsVisibility => IsEditWorkspace' -and $shell -match 'SourceBinVisibility => IsMediaWorkspace' -and $shell -match 'AudioVisibility => IsOutputsWorkspace' -and $shell -match 'RecordingVisibility => IsOutputsWorkspace') "LIVE workspace must not render duplicate production, source, audio or recording panels."
+Assert-Condition ($liveDocumentation -match 'Selection is deliberately non-destructive' -and $liveDocumentation -match 'another monitoring transport' -and $liveDocumentation -match 'UNVERIFIED') "Live multiview documentation must record selection safety, monitoring authority and external-output uncertainty."
 Assert-Condition ($window -match 'CLEAN PROGRAM MONITOR' -and $window -match 'not the physical Program output path') "Clean Program must be identified as monitoring rather than physical Program output."
 Assert-Condition ($programOutputController -match 'OperatorMonitoringViewModel' -and $programOutputController -notmatch 'MediaElement|VideoDrawing') "Clean Program must reuse the existing monitoring projection."
 Assert-Condition ($window -match 'Text="SYSTEM WORKSPACE"' -and $window -match 'Text="Engine"' -and $window -match 'Text="Control"' -and $window -match 'Text="Runtime"' -and $window -match 'Text="Outputs"' -and $window -match 'Text="Diagnostics"') "OUTPUTS/SETTINGS must reuse the existing operational evidence projection."
