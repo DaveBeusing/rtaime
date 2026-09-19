@@ -816,7 +816,8 @@
 						</StackPanel>
 					</Border>
 
-					<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14">
+					<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14"
+						Visibility="{Binding Shell.RecordingVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
 						<StackPanel>
 							<DockPanel Margin="0,0,0,12">
 								<TextBlock Text="PROGRAM RECORDING" Style="{StaticResource OperatorSectionTitle}" />
