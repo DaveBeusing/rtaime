@@ -20,6 +20,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 	private readonly IMFSourceReader _reader;
 	private readonly MediaAssetId _assetId;
 	private readonly MediaSourceId _sourceId;
+	private readonly bool _hasAudio;
 	private long? _pendingSeekTimestamp;
 	private bool _disposed;
 
@@ -27,12 +28,14 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 		IMFSourceReader reader,
 		MediaAssetId assetId,
 		MediaSourceId sourceId,
-		LocalMediaProbe probe)
+		LocalMediaProbe probe,
+		bool hasAudio)
 	{
 		_reader = reader;
 		_assetId = assetId;
 		_sourceId = sourceId;
 		Probe = probe;
+		_hasAudio = hasAudio;
 	}
 
 	public LocalMediaProbe Probe { get; }
@@ -67,10 +70,9 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 
 			MediaFoundation.ThrowIfFailed(reader.SetStreamSelection(MediaFoundation.AllStreams, false));
 			MediaFoundation.ThrowIfFailed(reader.SetStreamSelection(MediaFoundation.FirstVideoStream, true));
-			MediaFoundation.ThrowIfFailed(reader.SetStreamSelection(MediaFoundation.FirstAudioStream, true));
 
 			var videoNative = GetNativeMediaType(reader, MediaFoundation.FirstVideoStream);
-			var audioNative = GetNativeMediaType(reader, MediaFoundation.FirstAudioStream);
+			var audioNative = TryGetNativeMediaType(reader, MediaFoundation.FirstAudioStream);
 			try
 			{
 				var videoMajor = GetGuid(videoNative, MediaFoundation.MfMtMajorType);
@@ -80,12 +82,9 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 				if (videoSubtype != MediaFoundation.MfVideoFormatH264)
 					return RejectAndRelease("media.file.video_codec_unsupported", "V1 local media supports H.264 video only.", reader, mediaFoundationStarted);
 
-				var audioMajor = GetGuid(audioNative, MediaFoundation.MfMtMajorType);
-				var audioSubtype = GetGuid(audioNative, MediaFoundation.MfMtSubtype);
-				if (audioMajor != MediaFoundation.MfMediaTypeAudio)
-					return RejectAndRelease("media.file.audio_stream_invalid", "The local media audio stream has an invalid major type.", reader, mediaFoundationStarted);
-				if (audioSubtype != MediaFoundation.MfAudioFormatAac)
-					return RejectAndRelease("media.file.audio_codec_unsupported", "V1 local media supports embedded AAC audio only.", reader, mediaFoundationStarted);
+				var hasAudio = audioNative is not null &&
+					GetGuid(audioNative, MediaFoundation.MfMtMajorType) == MediaFoundation.MfMediaTypeAudio &&
+					GetGuid(audioNative, MediaFoundation.MfMtSubtype) == MediaFoundation.MfAudioFormatAac;
 
 				var metadata = Mp4LocalMediaMetadataReader.Read(path);
 				if (metadata.FrameRateNumerator <= 0 || metadata.FrameRateDenominator <= 0)
@@ -103,9 +102,12 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 					return RejectAndRelease(inputFailure.Code, inputFailure.Message, reader, mediaFoundationStarted);
 
 				ConfigureDecodedVideo(reader, MediaFoundation.FirstVideoStream, outputFormat);
-				ConfigureDecodedAudio(reader, MediaFoundation.FirstAudioStream);
 				MediaFoundation.ThrowIfFailed(reader.SetStreamSelection(MediaFoundation.FirstVideoStream, true));
-				MediaFoundation.ThrowIfFailed(reader.SetStreamSelection(MediaFoundation.FirstAudioStream, true));
+				if (hasAudio)
+				{
+					ConfigureDecodedAudio(reader, MediaFoundation.FirstAudioStream);
+					MediaFoundation.ThrowIfFailed(reader.SetStreamSelection(MediaFoundation.FirstAudioStream, true));
+				}
 
 				var probe = new LocalMediaProbe(
 					MediaContractVersion.Current,
@@ -114,7 +116,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 					System.IO.Path.GetFileName(path),
 					MediaContainerFormat.Mp4,
 					MediaVideoCodec.H264,
-					MediaAudioCodec.Aac,
+					hasAudio ? MediaAudioCodec.Aac : MediaAudioCodec.None,
 					outputFormat,
 					AudioFormat.Stereo48kFloat32,
 					metadata.Duration);
@@ -123,7 +125,8 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 					reader,
 					assetId,
 					sourceId,
-					probe));
+					probe,
+					hasAudio));
 			}
 			finally
 			{
@@ -221,41 +224,44 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 
 		AudioBufferDescriptor? audio = null;
 		ReadOnlyMemory<byte> audioPayload = ReadOnlyMemory<byte>.Empty;
-		long audioTimestamp;
-		byte[] decodedAudio;
-		bool audioAvailable;
-		try
+		if (_hasAudio)
 		{
-			audioAvailable = TryReadSample(
-				MediaFoundation.FirstAudioStream,
-				minimumTimestamp,
-				copy2DContiguous: false,
-				out audioTimestamp,
-				out decodedAudio);
-		}
-		catch (ExternalException exception)
-		{
-			throw new InvalidDataException($"Audio sample read failed: {exception.Message}", exception);
-		}
-
-		if (audioAvailable && decodedAudio.Length > 0)
-		{
-			var bytesPerPcmFrame = checked((int)Probe.AudioFormat.ChannelCount * sizeof(short));
-			if (decodedAudio.Length % bytesPerPcmFrame != 0)
-				throw new InvalidDataException("Decoded local media PCM payload is not aligned to complete stereo Int16 samples.");
-			var sampleCount = checked((uint)(decodedAudio.Length / bytesPerPcmFrame));
-			if (sampleCount > 0)
+			long audioTimestamp;
+			byte[] decodedAudio;
+			bool audioAvailable;
+			try
 			{
-				var floatAudio = ConvertPcm16ToFloat32(decodedAudio);
-				var audioSamplePosition = TimestampToAudioSamplePosition(audioTimestamp, Probe.AudioFormat.SampleRate);
-				audio = new AudioBufferDescriptor(
-					MediaContractVersion.Current,
-					new AudioStreamId(LocalMediaIdentity.Create("audio-stream", _assetId.ToString())),
-					Probe.AudioFormat,
-					LocalMediaIdentity.Create("timing-domain", _assetId.ToString()),
-					new AudioBufferTiming(audioSamplePosition, sampleCount, audioTimestamp, MediaFoundationTimebase),
-					new OpaqueAudioHandle("local.media.audio.float32", $"{_assetId}:{sequenceNumber}"));
-				audioPayload = floatAudio;
+				audioAvailable = TryReadSample(
+					MediaFoundation.FirstAudioStream,
+					minimumTimestamp,
+					copy2DContiguous: false,
+					out audioTimestamp,
+					out decodedAudio);
+			}
+			catch (ExternalException exception)
+			{
+				throw new InvalidDataException($"Audio sample read failed: {exception.Message}", exception);
+			}
+
+			if (audioAvailable && decodedAudio.Length > 0)
+			{
+				var bytesPerPcmFrame = checked((int)Probe.AudioFormat.ChannelCount * sizeof(short));
+				if (decodedAudio.Length % bytesPerPcmFrame != 0)
+					throw new InvalidDataException("Decoded local media PCM payload is not aligned to complete stereo Int16 samples.");
+				var sampleCount = checked((uint)(decodedAudio.Length / bytesPerPcmFrame));
+				if (sampleCount > 0)
+				{
+					var floatAudio = ConvertPcm16ToFloat32(decodedAudio);
+					var audioSamplePosition = TimestampToAudioSamplePosition(audioTimestamp, Probe.AudioFormat.SampleRate);
+					audio = new AudioBufferDescriptor(
+						MediaContractVersion.Current,
+						new AudioStreamId(LocalMediaIdentity.Create("audio-stream", _assetId.ToString())),
+						Probe.AudioFormat,
+						LocalMediaIdentity.Create("timing-domain", _assetId.ToString()),
+						new AudioBufferTiming(audioSamplePosition, sampleCount, audioTimestamp, MediaFoundationTimebase),
+						new OpaqueAudioHandle("local.media.audio.float32", $"{_assetId}:{sequenceNumber}"));
+					audioPayload = floatAudio;
+				}
 			}
 		}
 
@@ -450,6 +456,16 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 	{
 		MediaFoundation.ThrowIfFailed(reader.GetNativeMediaType(streamIndex, 0, out var mediaType));
 		return mediaType;
+	}
+
+	private static IMFMediaType? TryGetNativeMediaType(IMFSourceReader reader, uint streamIndex)
+	{
+		var result = reader.GetNativeMediaType(streamIndex, 0, out var mediaType);
+		if (result >= 0)
+			return mediaType;
+
+		MediaFoundation.ReleaseComObject(mediaType);
+		return null;
 	}
 
 	private static Guid GetGuid(IMFMediaType attributes, Guid key)
