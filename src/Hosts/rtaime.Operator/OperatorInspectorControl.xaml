@@ -56,8 +56,9 @@
 								<controls:RtaimeIcon
 									x:Name="Chevron"
 									Grid.Column="1"
-									IconData="{StaticResource RtaimeIconChevronRightGeometry}"
-									IconSize="12"
+									Data="{StaticResource RtaimeIconChevronRightGeometry}"
+									Width="12"
+									Height="12"
 									Foreground="{DynamicResource OperatorMutedTextBrush}"
 									HorizontalAlignment="Center"
 									VerticalAlignment="Center"
