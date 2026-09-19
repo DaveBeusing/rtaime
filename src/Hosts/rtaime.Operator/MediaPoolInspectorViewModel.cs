@@ -162,10 +162,16 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 	public bool HasItems => FilteredItems.Count > 0;
 	public bool HasSelection => SelectedItem is not null || _timelineItem is not null || _timelineCue is not null;
 	public bool IsSourceSelection => _timelineItem is null && _timelineCue is null && SelectedItem?.Kind == MediaPoolItemKind.Source;
-	public bool IsClipSelection => _timelineCue is null && (_timelineItem?.Category == TimelineTrackCategory.Video || SelectedItem?.Kind == MediaPoolItemKind.Clip);
-	public bool IsAudioSelection => SelectedItem?.Kind == MediaPoolItemKind.Audio;
-	public bool IsGraphicsSelection => SelectedItem?.Kind == MediaPoolItemKind.Graphics;
-	public bool IsCompositionSelection => SelectedItem?.Kind == MediaPoolItemKind.Composition;
+	public bool IsClipSelection => _timelineCue is null &&
+		(_timelineItem?.Category == TimelineTrackCategory.Video ||
+			(_timelineItem is null && SelectedItem?.Kind == MediaPoolItemKind.Clip));
+	public bool IsAudioSelection => _timelineCue is null &&
+		(_timelineItem?.Category == TimelineTrackCategory.Audio ||
+			(_timelineItem is null && SelectedItem?.Kind == MediaPoolItemKind.Audio));
+	public bool IsGraphicsSelection => _timelineCue is null &&
+		(_timelineItem?.Category is TimelineTrackCategory.Graphics or TimelineTrackCategory.Overlay ||
+			(_timelineItem is null && SelectedItem?.Kind == MediaPoolItemKind.Graphics));
+	public bool IsCompositionSelection => _timelineItem is null && _timelineCue is null && SelectedItem?.Kind == MediaPoolItemKind.Composition;
 	public bool IsCueSelection => _timelineCue is not null;
 	public string InspectorTitle => _timelineCue?.Name ?? _timelineItem?.Label ?? SelectedItem?.Name ?? "No selection";
 	public string InspectorDetail => _timelineCue is { } cue
