@@ -82,6 +82,7 @@ public sealed class ProgramOutputController : INotifyPropertyChanged, IDisposabl
 		{
 			if (!Set(ref _isRunning, value)) return;
 			OnPropertyChanged(nameof(RunState));
+			OnPropertyChanged(nameof(ViewerOutputState));
 			RaiseCommandState();
 		}
 	}
@@ -100,6 +101,7 @@ public sealed class ProgramOutputController : INotifyPropertyChanged, IDisposabl
 	public string Health { get => _health; private set => Set(ref _health, value); }
 	public string Detail { get => _detail; private set => Set(ref _detail, value); }
 	public string RunState => IsRunning ? "ON AIR" : "STOPPED";
+	public string ViewerOutputState => IsRunning ? "OUTPUT LIVE" : "OUTPUT DISABLED";
 	public string Mode => IsFullscreen ? "FULLSCREEN" : "WINDOWED";
 	public string FullscreenAction => IsFullscreen ? "WINDOWED" : "FULLSCREEN";
 

@@ -29,6 +29,10 @@ $viewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorVi
 $monitorViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorMonitoringViewModel.cs"
 $programOutputControllerPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/ProgramOutputController.cs"
 $programOutputWindowPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/ProgramOutputWindow.xaml"
+$previewViewerPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/PreviewViewer.xaml"
+$previewViewerCodePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/PreviewViewer.xaml.cs"
+$programViewerPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/ProgramViewer.xaml"
+$programViewerCodePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/ProgramViewer.xaml.cs"
 $sourceTileViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorSourceTileViewModel.cs"
 $audioInputViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorAudioInputViewModel.cs"
 $graphicsLoaderPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/GraphicsOverlayAssetLoader.cs"
@@ -43,7 +47,7 @@ $manifestPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/app.manifes
 $projectPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/rtaime.Operator.csproj"
 $documentationPath = Join-Path $repositoryRoot "docs/OperatorUiV1.md"
 
-foreach ($path in @($appPath, $appCodePath, $windowPath, $windowCodePath, $shellPath, $deckPath, $deckViewModelPath, $timelinePath, $timelineCodePath, $viewModelPath, $monitorViewModelPath, $programOutputControllerPath, $programOutputWindowPath, $sourceTileViewModelPath, $audioInputViewModelPath, $graphicsLoaderPath, $demoControllerPath, $demoManifestPath, $demoProductPath, $demoGraphicsPath, $demoDocumentationPath, $tokensPath, $themePath, $manifestPath, $projectPath, $documentationPath)) {
+foreach ($path in @($appPath, $appCodePath, $windowPath, $windowCodePath, $shellPath, $deckPath, $deckViewModelPath, $timelinePath, $timelineCodePath, $viewModelPath, $monitorViewModelPath, $programOutputControllerPath, $programOutputWindowPath, $previewViewerPath, $previewViewerCodePath, $programViewerPath, $programViewerCodePath, $sourceTileViewModelPath, $audioInputViewModelPath, $graphicsLoaderPath, $demoControllerPath, $demoManifestPath, $demoProductPath, $demoGraphicsPath, $demoDocumentationPath, $tokensPath, $themePath, $manifestPath, $projectPath, $documentationPath)) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required Operator UI artifact is missing: '$path'."
 }
 
@@ -60,6 +64,10 @@ $viewModel = Get-Content -LiteralPath $viewModelPath -Raw
 $monitorViewModel = Get-Content -LiteralPath $monitorViewModelPath -Raw
 $programOutputController = Get-Content -LiteralPath $programOutputControllerPath -Raw
 $programOutputWindow = Get-Content -LiteralPath $programOutputWindowPath -Raw
+$previewViewer = Get-Content -LiteralPath $previewViewerPath -Raw
+$previewViewerCode = Get-Content -LiteralPath $previewViewerCodePath -Raw
+$programViewer = Get-Content -LiteralPath $programViewerPath -Raw
+$programViewerCode = Get-Content -LiteralPath $programViewerCodePath -Raw
 $sourceTileViewModel = Get-Content -LiteralPath $sourceTileViewModelPath -Raw
 $audioInputViewModel = Get-Content -LiteralPath $audioInputViewModelPath -Raw
 $graphicsLoader = Get-Content -LiteralPath $graphicsLoaderPath -Raw
@@ -112,14 +120,16 @@ Assert-Condition ($window -match 'Binding StateDetail') "Source tiles must expos
 Assert-Condition ($sourceTileViewModel -match 'ApplyRouting') "Source tile presentation must derive PGM/PVW state from authoritative routing."
 Assert-Condition ($sourceTileViewModel -match 'ApplyMediaDeck') "Source tile presentation must project Media Deck state without taking media authority."
 Assert-Condition ($monitorViewModel -match 'ApplySourceThumbnail') "Source thumbnails must derive from the independent monitoring plane."
-Assert-Condition ($window -match 'OperatorPreviewPanel') "Preview monitor must use Preview semantic styling."
-Assert-Condition ($window -match 'OperatorProgramPanel') "Program monitor must use Program semantic styling."
-Assert-Condition ($window -match 'OperatorPreviewTally') "Preview tally semantics must be explicit."
-Assert-Condition ($window -match 'OperatorProgramTally') "Program tally semantics must be explicit."
+Assert-Condition ($window -match '<local:PreviewViewer' -and $window -match '<local:ProgramViewer') "Operator must compose dedicated reusable Preview and Program viewers."
+Assert-Condition ($previewViewer -match 'OperatorPreviewPanel') "Preview viewer must use Preview semantic styling."
+Assert-Condition ($programViewer -match 'OperatorProgramPanel') "Program viewer must use Program semantic styling."
+Assert-Condition ($previewViewer -match 'OperatorPreviewTally') "Preview tally semantics must be explicit."
+Assert-Condition ($programViewer -match 'OperatorProgramTally') "Program tally semantics must be explicit."
 Assert-Condition ($window -match 'Monitoring\.PreviewImage') "Operator Preview must bind the independent monitoring image."
 Assert-Condition ($window -match 'Monitoring\.ProgramImage') "Operator Program must bind the independent monitoring image."
-Assert-Condition ($window -match '<Image\s') "Operator Monitoring Plane must render visual monitoring with WPF Image surfaces."
-Assert-Condition ($window -notmatch 'MediaElement|VideoDrawing') "Operator monitoring must use the qualified bounded bitmap path, not an ungoverned media player."
+Assert-Condition ($previewViewer -match '<Image\s' -and $programViewer -match '<Image\s') "Preview and Program viewers must render monitoring with WPF Image surfaces."
+Assert-Condition ($previewViewer -match 'Stretch="Uniform"' -and $programViewer -match 'Stretch="Uniform"') "Production viewers must preserve aspect ratio without stretching."
+Assert-Condition (($window + $previewViewer + $programViewer) -notmatch 'MediaElement|VideoDrawing') "Operator monitoring must use the qualified bounded bitmap path, not an ungoverned media player."
 Assert-Condition ($window -match 'Text="PROGRAM OUTPUT / CLEAN FEED"') "Program Output / Clean Feed must expose Program Output controls in the Operator."
 Assert-Condition ($window -match 'ProgramOutput\.Displays') "Program Output / Clean Feed must expose display selection."
 Assert-Condition ($window -match 'ProgramOutput\.StartCommand') "Program Output / Clean Feed must expose controlled Program Output start."
@@ -253,7 +263,7 @@ Assert-Condition ($viewModel -match 'ApplyHealth\(snapshot\.Health\)') "Runtime 
 $managementPollCount = [Regex]::Matches($viewModel, 'PeriodicTimer\(TimeSpan\.FromMilliseconds\(200\)\)').Count
 Assert-Condition ($managementPollCount -eq 1) "Runtime Health & Performance HUD must reuse the single bounded 200 ms management poll rather than add a new UI telemetry loop."
 Assert-Condition ($viewModel -notmatch 'PerformanceCounter|ManagementObjectSearcher|nvidia-smi|NVML') "Operator must not synthesize GPU telemetry locally."
-Assert-Condition ($window -match 'Text="COMMIT"') "Program workspace must expose commit status."
+Assert-Condition ($programViewer -match 'Text="COMMIT"') "Program viewer must expose authoritative commit status."
 Assert-Condition ($window -match 'Binding CommitStatus') "Program workspace must bind authoritative commit status."
 Assert-Condition ($window -match 'Binding TransitionStatus') "Program workspace must expose transition state."
 Assert-Condition ($window -match 'CONFIRMED PREVIEW / NEXT TAKE') "Transition workspace must make the authoritative Preview take target explicit."
@@ -328,6 +338,28 @@ Write-Host "Keyboard controls: synchronization, Preview, CUT and DISSOLVE/AUTO d
 foreach ($region in @("TopBar", "LeftToolRegion", "CenterWorkspace", "RightInspectorRegion", "LowerTimelineRegion", "BottomTransportRegion")) {
 	Assert-Condition ($window -match ('x:Name="' + [Regex]::Escape($region) + '"')) "Production shell region '$region' must remain explicit and addressable."
 }
+Assert-Condition ($window -match 'Key="D1".+Shell\.MaximizePreviewCommand') "Preview maximize must be keyboard-accessible through Ctrl+1."
+Assert-Condition ($window -match 'Key="D2".+Shell\.MaximizeProgramCommand') "Program maximize must be keyboard-accessible through Ctrl+2."
+Assert-Condition ($window -match 'Key="D0".+Shell\.RestoreViewersCommand') "Dual-view restore must be keyboard-accessible through Ctrl+0."
+Assert-Condition ($shell -match 'PreviewViewerWidth' -and $shell -match 'new GridLength\(0\.85, GridUnitType\.Star\)') "Preview must use the smaller default production-view allocation."
+Assert-Condition ($shell -match 'ProgramViewerWidth' -and $shell -match 'new GridLength\(1\.15, GridUnitType\.Star\)') "Program must be visually dominant by default."
+Assert-Condition ($shell -match 'MaximizePreviewCommand' -and $shell -match 'MaximizeProgramCommand' -and $shell -match 'RestoreViewersCommand') "Viewer maximize/restore must remain local presentation commands."
+Assert-Condition ($shell -match 'PreviewViewerVisibility' -and $shell -match 'ProgramViewerVisibility' -and $window -match 'Shell\.PreviewViewerVisibility' -and $window -match 'Shell\.ProgramViewerVisibility') "Maximized production viewers must collapse the inactive viewer and restore it in dual mode."
+Assert-Condition ($window -match 'Text="PRODUCTION CONTROLS"' -and $window -match 'CUT PREVIEW → PROGRAM' -and $window -match 'AUTO PREVIEW → PROGRAM') "CUT/AUTO controls must sit in the central production workspace."
+Assert-Condition ($window -match 'Text="TRANSITION TYPE"' -and $window -match 'Text="CUT / DISSOLVE"' -and $window -match 'Binding TransitionFrames') "Production controls must expose the current transition types and duration."
+Assert-Condition ($window -match 'HOLD / FTB · NOT AVAILABLE IN V1') "Unsupported HOLD/FTB controls must remain an explicit extension surface rather than invented commands."
+Assert-Condition ($programViewer -match 'Binding AudioLeftPeak' -and $programViewer -match 'Binding AudioRightPeak' -and $programViewer -match 'dBFS' -and $programViewer -match 'Text="-60"' -and $programViewer -match 'Text="-12"' -and $programViewer -match 'Text="0"') "Program viewer must keep bounded stereo metering with a visible dBFS reference scale."
+Assert-Condition ($programViewer -match 'CLIP' -and $programViewer -match 'Clipping') "Program viewer must expose clipping with text as well as styling."
+Assert-Condition ($programOutputController -match 'ViewerOutputState => IsRunning \? "OUTPUT LIVE" : "OUTPUT DISABLED"') "Program viewer output tally must distinguish live output from disabled output."
+foreach ($viewerState in @("NO SIGNAL", "DISCONNECTED", "RECOVERING", "SOURCE OFFLINE")) {
+	Assert-Condition ($viewModel -match [Regex]::Escape($viewerState)) "Production viewer state '$viewerState' must be explicit."
+}
+Assert-Condition ($viewModel -match 'ProgramViewerState = MapViewerSourceState' -and $viewModel -notmatch 'ProgramViewerState\s*=\s*.*AIStatus') "Program availability must derive from Runtime/source state rather than AI-only degradation."
+Assert-Condition ($window -match 'Monitoring\.PreviewState' -and $window -match 'Monitoring\.ProgramState') "Production viewers must use monitoring-aware presentation state."
+Assert-Condition ($monitorViewModel -match 'PreviewState => ResolveViewerState' -and $monitorViewModel -match 'ProgramState => ResolveViewerState') "Monitoring availability must be combined with confirmed production state for viewer presentation."
+Assert-Condition ($monitorViewModel -match 'PreviewImage = null' -and $monitorViewModel -match 'No Preview monitor frame received for current source') "Changing Preview to a source without a monitor frame must clear the previous source image."
+Assert-Condition ($monitorViewModel -match 'Value="STALE"|State, "STALE"|State\), "STALE"|string\.Equals\(State, "STALE"') "Stale monitoring must remain explicitly detectable without affecting Program authority."
+
 Assert-Condition ($window -match 'Key="F11".+Shell\.ToggleFullscreenCommand') "Production fullscreen must be keyboard-accessible through F11."
 Assert-Condition ($window -match 'Key="Escape".+Shell\.ExitFullscreenCommand') "Production fullscreen must provide an Escape path back to windowed operation."
 Assert-Condition ($windowCode -match 'WindowStyle = WindowStyle\.None' -and $windowCode -match 'ResizeMode = ResizeMode\.NoResize' -and $windowCode -match 'WindowStyle = _windowedStyle') "Fullscreen must enter borderless mode and restore windowed chrome."

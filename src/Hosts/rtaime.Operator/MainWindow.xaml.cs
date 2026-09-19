@@ -215,7 +215,7 @@ public partial class MainWindow : Window
 	private void OnHelpClick(object sender, RoutedEventArgs e)
 	{
 		MessageBox.Show(
-			"F11  Fullscreen / Windowed\nEsc  Exit fullscreen\nF5  Synchronize\nCtrl+P  Set selected source to Preview\nSpace  CUT Preview to Program\nCtrl+Space  AUTO Preview to Program\nP / S  Media Play-Pause / Stop\nI / O / M  IN / OUT / Cue",
+			"F11  Fullscreen / Windowed\nEsc  Exit fullscreen\nCtrl+1  Maximize Preview\nCtrl+2  Maximize Program\nCtrl+0  Restore dual view\nF5  Synchronize\nCtrl+P  Set selected source to Preview\nSpace  CUT Preview to Program\nCtrl+Space  AUTO Preview to Program\nP / S  Media Play-Pause / Stop\nI / O / M  IN / OUT / Cue",
 			"rtaime Operator — Keyboard Reference",
 			MessageBoxButton.OK,
 			MessageBoxImage.Information);

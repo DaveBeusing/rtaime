@@ -40,14 +40,49 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 
 	public event PropertyChangedEventHandler? PropertyChanged;
 
-	public ImageSource? PreviewImage { get => _previewImage; private set => Set(ref _previewImage, value); }
-	public ImageSource? ProgramImage { get => _programImage; private set => Set(ref _programImage, value); }
-	public string State { get => _state; private set => Set(ref _state, value); }
+	public ImageSource? PreviewImage
+	{
+		get => _previewImage;
+		private set
+		{
+			if (!Set(ref _previewImage, value))
+				return;
+			OnPropertyChanged(nameof(HasPreview));
+			OnPropertyChanged(nameof(PreviewState));
+		}
+	}
+
+	public ImageSource? ProgramImage
+	{
+		get => _programImage;
+		private set
+		{
+			if (!Set(ref _programImage, value))
+				return;
+			OnPropertyChanged(nameof(HasProgram));
+			OnPropertyChanged(nameof(ProgramState));
+		}
+	}
+
+	public string State
+	{
+		get => _state;
+		private set
+		{
+			if (!Set(ref _state, value))
+				return;
+			OnPropertyChanged(nameof(PreviewState));
+			OnPropertyChanged(nameof(ProgramState));
+		}
+	}
+
 	public string Detail { get => _detail; private set => Set(ref _detail, value); }
 	public string PreviewFormat { get => _previewFormat; private set => Set(ref _previewFormat, value); }
 	public string ProgramFormat { get => _programFormat; private set => Set(ref _programFormat, value); }
 	public bool HasPreview => PreviewImage is not null;
 	public bool HasProgram => ProgramImage is not null;
+	public string PreviewState => ResolveViewerState(_controlState.PreviewViewerState, HasPreview);
+	public string ProgramState => ResolveViewerState(_controlState.ProgramViewerState, HasProgram);
 
 	public void Start()
 	{
@@ -110,7 +145,6 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 		{
 			ProgramImage = bitmap;
 			ProgramFormat = format;
-			PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasProgram)));
 			return;
 		}
 
@@ -121,14 +155,21 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 		{
 			PreviewImage = bitmap;
 			PreviewFormat = format;
-			PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasPreview)));
 		}
 	}
 
 	private void ControlStatePropertyChanged(object? sender, PropertyChangedEventArgs eventArgs)
 	{
-		if (!string.Equals(eventArgs.PropertyName, nameof(OperatorViewModel.PreviewSourceId), StringComparison.Ordinal)) return;
-		_uiContext.Post(_ => RefreshPreviewFromCache(), null);
+		if (string.Equals(eventArgs.PropertyName, nameof(OperatorViewModel.PreviewSourceId), StringComparison.Ordinal))
+		{
+			_uiContext.Post(_ => RefreshPreviewFromCache(), null);
+			return;
+		}
+
+		if (string.Equals(eventArgs.PropertyName, nameof(OperatorViewModel.PreviewViewerState), StringComparison.Ordinal))
+			_uiContext.Post(_ => OnPropertyChanged(nameof(PreviewState)), null);
+		else if (string.Equals(eventArgs.PropertyName, nameof(OperatorViewModel.ProgramViewerState), StringComparison.Ordinal))
+			_uiContext.Post(_ => OnPropertyChanged(nameof(ProgramState)), null);
 	}
 
 	private void RefreshPreviewFromCache()
@@ -136,8 +177,23 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 		if (_sourceFrames.TryGetValue(_controlState.PreviewSourceId, out var frame))
 		{
 			PreviewImage = frame;
-			PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasPreview)));
+			return;
 		}
+
+		PreviewImage = null;
+		PreviewFormat = "No Preview monitor frame received for current source.";
+	}
+
+	private string ResolveViewerState(string controlState, bool hasFrame)
+	{
+		if (controlState is "NO SIGNAL" or "SOURCE OFFLINE" or "DISCONNECTED")
+			return controlState;
+		if (string.Equals(State, "STALE", StringComparison.Ordinal) ||
+			string.Equals(State, "DISCONNECTED", StringComparison.Ordinal))
+			return "DISCONNECTED";
+		if (string.Equals(controlState, "RECOVERING", StringComparison.Ordinal) || !hasFrame)
+			return "RECOVERING";
+		return "LIVE";
 	}
 
 	private static BitmapSource CreateBitmap(MonitoringFrame frame)
@@ -172,7 +228,10 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 	{
 		if (EqualityComparer<T>.Default.Equals(field, value)) return false;
 		field = value;
-		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+		OnPropertyChanged(propertyName);
 		return true;
 	}
+
+	private void OnPropertyChanged([CallerMemberName] string? propertyName = null) =>
+		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
 }
