@@ -33,6 +33,7 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 	private bool _autoPlayOnProgram = true;
 	private MediaDeckEndBehavior _endBehavior = MediaDeckEndBehavior.HoldLastFrame;
 	private bool _playbackPolicyDirty;
+	private string? _localPath;
 
 	public MediaDeckViewModel(
 		MediaDeckController controller,
@@ -143,6 +144,8 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 	}
 
 	public string FileName => _snapshot.Probe?.FileName ?? "No local media loaded";
+	public string? LocalPath => _localPath;
+	public bool HasLocalPath => !string.IsNullOrWhiteSpace(_localPath);
 	public string SourceId => _snapshot.SourceId?.ToString() ?? "—";
 	public string Resolution => _snapshot.Probe is null
 		? "—"
@@ -238,6 +241,7 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 			var opened = await _controller.OpenAsync(path, sourceId, cancellationToken).ConfigureAwait(false);
 			if (!opened.IsLoaded || opened.Transport is null)
 				throw new InvalidDataException(opened.Failure?.Message ?? "Demo Product Clip did not open.");
+			_localPath = path;
 
 			foreach (var cue in _controller.Markers.State.CuePoints.ToArray())
 			{
@@ -327,6 +331,7 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 				path,
 				new MediaSourceId(Identity.Parse(sourceIdText)),
 				_dispose.Token).ConfigureAwait(false);
+			_localPath = opened.IsLoaded ? path : null;
 			Post(() =>
 			{
 				RefreshState();
@@ -367,6 +372,7 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 		{
 			IsBusy = true;
 			await _controller.CloseAsync(_dispose.Token).ConfigureAwait(false);
+			_localPath = null;
 			Post(() => LastError = null);
 		}
 		catch (Exception exception) when (exception is IOException or InvalidOperationException)
@@ -510,6 +516,11 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 	{
 		_snapshot = _controller.Snapshot;
 		Timeline.ApplyMediaDeckSnapshot(_snapshot);
+		if (!_snapshot.IsLoaded)
+			_localPath = null;
+		else if (_localPath is not null &&
+			!string.Equals(Path.GetFileName(_localPath), _snapshot.Probe?.FileName, StringComparison.OrdinalIgnoreCase))
+			_localPath = null;
 		LastError = _snapshot.Failure?.Message;
 		if (!_playbackPolicyDirty && _snapshot.Transport is { } playback)
 		{
@@ -543,6 +554,8 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 		OnPropertyChanged(nameof(HasIn));
 		OnPropertyChanged(nameof(HasOut));
 		OnPropertyChanged(nameof(FileName));
+		OnPropertyChanged(nameof(LocalPath));
+		OnPropertyChanged(nameof(HasLocalPath));
 		OnPropertyChanged(nameof(SourceId));
 		OnPropertyChanged(nameof(Resolution));
 		OnPropertyChanged(nameof(FrameRate));

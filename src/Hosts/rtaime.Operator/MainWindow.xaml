@@ -196,7 +196,7 @@
 					<StackPanel Grid.Row="1" Margin="0,0,0,8">
 						<Grid Margin="0,0,0,6">
 							<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="6" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-							<TextBox Grid.Column="0"
+							<TextBox x:Name="MediaSearchBox" Grid.Column="0"
 								Text="{Binding MediaPool.SearchText, RelativeSource={RelativeSource AncestorType={x:Type Window}}, UpdateSourceTrigger=PropertyChanged}"
 								Style="{StaticResource OperatorTextBox}"
 								ToolTip="Search loaded resource metadata"
@@ -208,18 +208,46 @@
 								Padding="8,3"
 								ToolTip="Open local media through the existing Media Deck import path." />
 						</Grid>
-						<Grid>
-							<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="6" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-							<ComboBox Grid.Column="0"
-								ItemsSource="{Binding MediaPool.Categories, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-								SelectedItem="{Binding MediaPool.SelectedCategory, RelativeSource={RelativeSource AncestorType={x:Type Window}}, Mode=TwoWay}"
-								ToolTip="Resource category" />
-							<ComboBox Grid.Column="2"
-								ItemsSource="{Binding MediaPool.Filters, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-								SelectedItem="{Binding MediaPool.SelectedFilter, RelativeSource={RelativeSource AncestorType={x:Type Window}}, Mode=TwoWay}"
-								ToolTip="Resource state/type filter" />
-						</Grid>
-						<StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+						<ComboBox
+							ItemsSource="{Binding MediaPool.Categories, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							SelectedItem="{Binding MediaPool.SelectedCategory, RelativeSource={RelativeSource AncestorType={x:Type Window}}, Mode=TwoWay}"
+							ToolTip="Resource category" />
+						<ListBox Margin="0,6,0,0"
+							ItemsSource="{Binding MediaPool.Filters, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							SelectedItem="{Binding MediaPool.SelectedFilter, RelativeSource={RelativeSource AncestorType={x:Type Window}}, Mode=TwoWay}"
+							Background="Transparent"
+							BorderThickness="0"
+							ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+							ScrollViewer.VerticalScrollBarVisibility="Disabled"
+							ToolTip="Media type and availability filters">
+							<ListBox.ItemsPanel>
+								<ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+							</ListBox.ItemsPanel>
+							<ListBox.ItemContainerStyle>
+								<Style TargetType="{x:Type ListBoxItem}">
+									<Setter Property="Padding" Value="7,3" />
+									<Setter Property="Margin" Value="0,0,4,4" />
+									<Setter Property="Foreground" Value="{DynamicResource OperatorMutedTextBrush}" />
+									<Setter Property="Template">
+										<Setter.Value>
+											<ControlTemplate TargetType="{x:Type ListBoxItem}">
+												<Border x:Name="Chip" Padding="{TemplateBinding Padding}" Background="{DynamicResource OperatorRaisedSurfaceBrush}" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" CornerRadius="3">
+													<ContentPresenter />
+												</Border>
+												<ControlTemplate.Triggers>
+													<Trigger Property="IsSelected" Value="True">
+														<Setter TargetName="Chip" Property="Background" Value="{DynamicResource OperatorAccentSurfaceBrush}" />
+														<Setter TargetName="Chip" Property="BorderBrush" Value="{DynamicResource OperatorAccentBrush}" />
+														<Setter Property="Foreground" Value="{DynamicResource OperatorTextBrush}" />
+													</Trigger>
+												</ControlTemplate.Triggers>
+											</ControlTemplate>
+										</Setter.Value>
+									</Setter>
+								</Style>
+							</ListBox.ItemContainerStyle>
+						</ListBox>
+						<StackPanel Orientation="Horizontal" Margin="0,2,0,0">
 							<Button Content="GRID"
 								Command="{Binding MediaPool.GridViewCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 								Style="{StaticResource OperatorButton}" MinHeight="26" Padding="8,2" Margin="0,0,5,0" />
@@ -232,12 +260,19 @@
 					</StackPanel>
 
 					<Grid Grid.Row="2">
-						<ListBox ItemsSource="{Binding MediaPool.FilteredItems, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+						<ListBox x:Name="MediaAssetGrid"
+							ItemsSource="{Binding MediaPool.FilteredItems, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 							SelectedItem="{Binding MediaPool.SelectedItem, RelativeSource={RelativeSource AncestorType={x:Type Window}}, Mode=TwoWay}"
+							SelectionMode="Extended"
+							SelectionChanged="OnMediaPoolSelectionChanged"
+							IsVisibleChanged="OnMediaPoolViewVisibilityChanged"
 							ItemContainerStyle="{StaticResource OperatorSourceItem}"
 							PreviewMouseLeftButtonDown="OnMediaPoolPreviewMouseLeftButtonDown"
 							PreviewMouseMove="OnMediaPoolPreviewMouseMove"
-							AutomationProperties.Name="Media Pool grid">
+							VirtualizingPanel.IsVirtualizing="True"
+							VirtualizingPanel.VirtualizationMode="Recycling"
+							ScrollViewer.CanContentScroll="True"
+							AutomationProperties.Name="Media Library grid">
 							<ListBox.Style>
 								<Style TargetType="{x:Type ListBox}" BasedOn="{StaticResource OperatorSourceBank}">
 									<Setter Property="Visibility" Value="Collapsed" />
@@ -249,55 +284,103 @@
 								</Style>
 							</ListBox.Style>
 							<ListBox.ItemsPanel>
-								<ItemsPanelTemplate><WrapPanel IsItemsHost="True" /></ItemsPanelTemplate>
+								<ItemsPanelTemplate><local:VirtualizingWrapPanel IsItemsHost="True" ItemWidth="174" ItemHeight="160" /></ItemsPanelTemplate>
 							</ListBox.ItemsPanel>
 							<ListBox.ItemTemplate>
 								<DataTemplate>
-									<Border Width="142" MinHeight="118" Padding="7" Margin="0,0,6,6" BorderThickness="1" BorderBrush="{DynamicResource OperatorBorderBrush}">
+									<Border Margin="3" Padding="6" BorderThickness="1" BorderBrush="{DynamicResource OperatorBorderBrush}" Background="{DynamicResource OperatorRaisedSurfaceBrush}">
+										<Border.ContextMenu>
+											<ContextMenu>
+												<MenuItem Header="Open in Preview" Click="OnMediaPoolPreviewActionClick" />
+												<MenuItem Header="Add to Timeline" Click="OnMediaPoolTimelineActionClick" />
+												<MenuItem Header="Add Cue at Playhead" Click="OnMediaPoolCueActionClick" />
+												<Separator />
+												<MenuItem Header="Reveal in Explorer" Click="OnMediaPoolRevealActionClick" />
+												<MenuItem Header="Properties" Click="OnMediaPoolPropertiesActionClick" />
+											</ContextMenu>
+										</Border.ContextMenu>
 										<StackPanel>
-											<Border Height="52" Background="{DynamicResource OperatorBackgroundBrush}" Margin="0,0,0,5">
+											<Grid Height="86" Background="{DynamicResource OperatorBackgroundBrush}" ClipToBounds="True">
 												<Image Source="{Binding Thumbnail}" Stretch="UniformToFill" />
-											</Border>
+												<Border HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="4" Padding="4,2" Background="#CC11161D">
+													<TextBlock Text="{Binding DurationLabel}" FontSize="10" FontWeight="SemiBold" />
+												</Border>
+												<Border HorizontalAlignment="Left" VerticalAlignment="Top" Margin="4" Padding="4,2" Background="#DD3A1E22">
+													<Border.Style>
+														<Style TargetType="{x:Type Border}">
+															<Setter Property="Visibility" Value="Collapsed" />
+															<Style.Triggers><DataTrigger Binding="{Binding IsOnline}" Value="False"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
+														</Style>
+													</Border.Style>
+													<TextBlock Text="OFFLINE" FontSize="10" FontWeight="Bold" />
+												</Border>
+												<StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="4">
+													<StackPanel.Style>
+														<Style TargetType="{x:Type StackPanel}">
+															<Setter Property="Visibility" Value="Collapsed" />
+															<Style.Triggers><DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
+														</Style>
+													</StackPanel.Style>
+													<Button Content="PVW" Click="OnMediaPoolPreviewActionClick" Style="{StaticResource OperatorButton}" MinHeight="22" Padding="5,1" Margin="0,0,3,0" ToolTip="Open in Preview" />
+													<Button Content="TL" Click="OnMediaPoolTimelineActionClick" Style="{StaticResource OperatorButton}" MinHeight="22" Padding="5,1" ToolTip="Add to Timeline" />
+												</StackPanel>
+											</Grid>
+											<TextBlock Text="{Binding Name}" FontWeight="SemiBold" Margin="0,5,0,3" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="34" />
 											<DockPanel>
-												<TextBlock Text="{Binding Category}" Style="{StaticResource OperatorLabel}" />
-												<TextBlock Text="{Binding State}" Style="{StaticResource OperatorLabel}" DockPanel.Dock="Right" TextTrimming="CharacterEllipsis" MaxWidth="68" />
+												<TextBlock Text="{Binding FileTypeLabel}" Style="{StaticResource OperatorLabel}" />
+												<TextBlock Text="{Binding AvailabilityLabel}" Style="{StaticResource OperatorLabel}" DockPanel.Dock="Right" />
 											</DockPanel>
-											<TextBlock Text="{Binding Name}" FontWeight="SemiBold" Margin="0,5,0,3" TextTrimming="CharacterEllipsis" />
-											<TextBlock Text="{Binding Detail}" Style="{StaticResource OperatorLabel}" TextTrimming="CharacterEllipsis" />
-											<TextBlock Text="{Binding Format}" Style="{StaticResource OperatorLabel}" TextTrimming="CharacterEllipsis" />
 										</StackPanel>
 									</Border>
 								</DataTemplate>
 							</ListBox.ItemTemplate>
 						</ListBox>
 
-						<ListBox ItemsSource="{Binding MediaPool.FilteredItems, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+						<ListBox x:Name="MediaAssetList"
+							ItemsSource="{Binding MediaPool.FilteredItems, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 							SelectedItem="{Binding MediaPool.SelectedItem, RelativeSource={RelativeSource AncestorType={x:Type Window}}, Mode=TwoWay}"
+							SelectionMode="Extended"
+							SelectionChanged="OnMediaPoolSelectionChanged"
+							IsVisibleChanged="OnMediaPoolViewVisibilityChanged"
 							ItemContainerStyle="{StaticResource OperatorSourceItem}"
 							PreviewMouseLeftButtonDown="OnMediaPoolPreviewMouseLeftButtonDown"
 							PreviewMouseMove="OnMediaPoolPreviewMouseMove"
-							AutomationProperties.Name="Media Pool list">
+							VirtualizingPanel.IsVirtualizing="True"
+							VirtualizingPanel.VirtualizationMode="Recycling"
+							ScrollViewer.CanContentScroll="True"
+							AutomationProperties.Name="Media Library list">
 							<ListBox.Style>
 								<Style TargetType="{x:Type ListBox}" BasedOn="{StaticResource OperatorSourceBank}">
 									<Setter Property="Visibility" Value="Visible" />
 									<Style.Triggers>
-										<DataTrigger Binding="{Binding MediaPool.IsGridView, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="True">
-											<Setter Property="Visibility" Value="Collapsed" />
-										</DataTrigger>
+										<DataTrigger Binding="{Binding MediaPool.IsGridView, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="True"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
 									</Style.Triggers>
 								</Style>
 							</ListBox.Style>
+							<ListBox.ItemsPanel>
+								<ItemsPanelTemplate><VirtualizingStackPanel IsItemsHost="True" /></ItemsPanelTemplate>
+							</ListBox.ItemsPanel>
 							<ListBox.ItemTemplate>
 								<DataTemplate>
 									<Grid Margin="2">
+										<Grid.ContextMenu>
+											<ContextMenu>
+												<MenuItem Header="Open in Preview" Click="OnMediaPoolPreviewActionClick" />
+												<MenuItem Header="Add to Timeline" Click="OnMediaPoolTimelineActionClick" />
+												<MenuItem Header="Add Cue at Playhead" Click="OnMediaPoolCueActionClick" />
+												<Separator />
+												<MenuItem Header="Reveal in Explorer" Click="OnMediaPoolRevealActionClick" />
+												<MenuItem Header="Properties" Click="OnMediaPoolPropertiesActionClick" />
+											</ContextMenu>
+										</Grid.ContextMenu>
 										<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
 										<StackPanel>
 											<TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
 											<TextBlock Text="{Binding Detail}" Style="{StaticResource OperatorLabel}" TextTrimming="CharacterEllipsis" />
 										</StackPanel>
 										<StackPanel Grid.Column="1" HorizontalAlignment="Right">
-											<TextBlock Text="{Binding Category}" Style="{StaticResource OperatorLabel}" HorizontalAlignment="Right" />
-											<TextBlock Text="{Binding State}" Style="{StaticResource OperatorLabel}" HorizontalAlignment="Right" />
+											<TextBlock Text="{Binding FileTypeLabel}" Style="{StaticResource OperatorLabel}" HorizontalAlignment="Right" />
+											<TextBlock Text="{Binding AvailabilityLabel}" Style="{StaticResource OperatorLabel}" HorizontalAlignment="Right" />
 										</StackPanel>
 									</Grid>
 								</DataTemplate>
@@ -309,19 +392,35 @@
 							<TextBlock.Style>
 								<Style TargetType="{x:Type TextBlock}" BasedOn="{StaticResource OperatorLabel}">
 									<Setter Property="Visibility" Value="Visible" />
-									<Style.Triggers>
-										<DataTrigger Binding="{Binding MediaPool.HasItems, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="True">
-											<Setter Property="Visibility" Value="Collapsed" />
-										</DataTrigger>
-									</Style.Triggers>
+									<Style.Triggers><DataTrigger Binding="{Binding MediaPool.HasItems, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="True"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger></Style.Triggers>
 								</Style>
 							</TextBlock.Style>
 						</TextBlock>
-					</Grid>
 
-					<TextBlock Grid.Row="3"
-						Text="Selection, search and filtering are Operator UI context only. Production changes still require existing commands and confirmed state."
-						Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,8,0,0" />
+						<Border HorizontalAlignment="Center" VerticalAlignment="Top" Margin="8" Padding="8,4" Background="{DynamicResource OperatorRaisedSurfaceBrush}">
+							<Border.Style>
+								<Style TargetType="{x:Type Border}">
+									<Setter Property="Visibility" Value="Collapsed" />
+									<Style.Triggers><DataTrigger Binding="{Binding MediaPool.IsLoading, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
+								</Style>
+							</Border.Style>
+							<TextBlock Text="LOADING ASSETS…" Style="{StaticResource OperatorLabel}" />
+						</Border>
+
+						<Border VerticalAlignment="Bottom" Margin="8" Padding="8,5" Background="{DynamicResource OperatorProgramSurfaceBrush}" BorderBrush="{DynamicResource OperatorErrorBrush}" BorderThickness="1">
+							<Border.Style>
+								<Style TargetType="{x:Type Border}">
+									<Setter Property="Visibility" Value="Collapsed" />
+									<Style.Triggers><DataTrigger Binding="{Binding MediaPool.HasError, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
+								</Style>
+							</Border.Style>
+							<TextBlock Text="{Binding MediaPool.ErrorState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" TextWrapping="Wrap" />
+						</Border>
+					</Grid>
+					<DockPanel Grid.Row="3" Margin="0,8,0,0">
+						<TextBlock Text="{Binding MediaPool.SelectionSummary, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorLabel}" FontWeight="SemiBold" />
+						<TextBlock Text="Ctrl+F search · Ctrl/Shift multi-select" Style="{StaticResource OperatorLabel}" DockPanel.Dock="Right" />
+					</DockPanel>
 				</Grid>
 			</Border>
 			<GridSplitter Grid.Column="5" Width="5" HorizontalAlignment="Stretch" Background="{DynamicResource OperatorBorderBrush}" ResizeDirection="Columns" ResizeBehavior="PreviousAndNext" DragCompleted="OnLayoutSplitterDragCompleted" />

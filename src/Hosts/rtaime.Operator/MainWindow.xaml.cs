@@ -1,7 +1,10 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 using System.ComponentModel;
+using System.Diagnostics;
+using System.IO;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Threading;
@@ -20,6 +23,7 @@ public partial class MainWindow : Window
 	private ResizeMode _windowedResizeMode = ResizeMode.CanResize;
 	private WindowState _windowedState = WindowState.Normal;
 	private Point _mediaPoolDragStart;
+	private bool _syncingMediaPoolSelection;
 
 	public MainWindow()
 	{
@@ -53,7 +57,12 @@ public partial class MainWindow : Window
 		Shell = new OperatorShellViewModel(new OperatorLayoutStore(), SetProductionFullscreen);
 		MediaPool = new MediaPoolInspectorViewModel(viewModel, MediaDeck);
 		QuickControls = new OperatorQuickControlsViewModel(viewModel, MediaDeck, MediaPool, new OperatorQuickControlStore());
-		Shortcuts = OperatorKeyboardCommandRegistry.Create(viewModel, MediaDeck, Timeline, Shell);
+		Shortcuts = OperatorKeyboardCommandRegistry.Create(
+			viewModel,
+			MediaDeck,
+			Timeline,
+			Shell,
+			new AsyncRelayCommand(FocusMediaSearchAsync));
 		Timeline.SelectionChanged += OnTimelineSelectionChanged;
 		InitializeComponent();
 		ApplyWindowPlacement();
@@ -87,7 +96,12 @@ public partial class MainWindow : Window
 		Shell = new OperatorShellViewModel(new OperatorLayoutStore(), SetProductionFullscreen);
 		MediaPool = new MediaPoolInspectorViewModel(viewModel, MediaDeck);
 		QuickControls = new OperatorQuickControlsViewModel(viewModel, MediaDeck, MediaPool, new OperatorQuickControlStore());
-		Shortcuts = OperatorKeyboardCommandRegistry.Create(viewModel, MediaDeck, Timeline, Shell);
+		Shortcuts = OperatorKeyboardCommandRegistry.Create(
+			viewModel,
+			MediaDeck,
+			Timeline,
+			Shell,
+			new AsyncRelayCommand(FocusMediaSearchAsync));
 		Timeline.SelectionChanged += OnTimelineSelectionChanged;
 		InitializeComponent();
 		ApplyWindowPlacement();
@@ -117,6 +131,19 @@ public partial class MainWindow : Window
 			return;
 
 		base.OnPreviewKeyDown(e);
+	}
+
+	private Task FocusMediaSearchAsync()
+	{
+		Shell.SelectWorkspace("MEDIA");
+		Dispatcher.BeginInvoke(
+			() =>
+			{
+				MediaSearchBox.Focus();
+				MediaSearchBox.SelectAll();
+			},
+			DispatcherPriority.Input);
+		return Task.CompletedTask;
 	}
 
 	private MediaDeckViewModel CreateMediaDeck(
@@ -231,26 +258,63 @@ public partial class MainWindow : Window
 			return;
 		}
 
+		var selected = MediaPool.SelectedItems.Any(candidate => string.Equals(candidate.Key, item.Key, StringComparison.Ordinal))
+			? MediaPool.SelectedItems.ToArray()
+			: [item];
+		var payload = new MediaAssetDragPayload(item, selected);
 		DragDrop.DoDragDrop(
 			(DependencyObject)sender,
-			new DataObject(typeof(MediaPoolItemViewModel), item),
+			new DataObject(typeof(MediaAssetDragPayload), payload),
 			DragDropEffects.Copy);
+	}
+
+	private void OnMediaPoolSelectionChanged(object sender, SelectionChangedEventArgs e)
+	{
+		if (_syncingMediaPoolSelection || sender is not ListBox listBox || !listBox.IsVisible)
+			return;
+
+		MediaPool.UpdateSelection(listBox.SelectedItems.Cast<MediaPoolItemViewModel>());
+	}
+
+	private void OnMediaPoolViewVisibilityChanged(object sender, DependencyPropertyChangedEventArgs e)
+	{
+		if (sender is not ListBox listBox || e.NewValue is not true)
+			return;
+
+		var selectedKeys = MediaPool.SelectedItems
+			.Select(item => item.Key)
+			.ToHashSet(StringComparer.Ordinal);
+		if (selectedKeys.Count == 0 && MediaPool.SelectedItem is { } primary)
+			selectedKeys.Add(primary.Key);
+
+		_syncingMediaPoolSelection = true;
+		try
+		{
+			listBox.SelectedItems.Clear();
+			foreach (var item in listBox.Items.Cast<MediaPoolItemViewModel>())
+			{
+				if (selectedKeys.Contains(item.Key))
+					listBox.SelectedItems.Add(item);
+			}
+		}
+		finally
+		{
+			_syncingMediaPoolSelection = false;
+		}
+
+		MediaPool.UpdateSelection(listBox.SelectedItems.Cast<MediaPoolItemViewModel>());
 	}
 
 	private void OnPreviewDragOver(object sender, DragEventArgs e)
 	{
-		var item = e.Data.GetDataPresent(typeof(MediaPoolItemViewModel))
-			? e.Data.GetData(typeof(MediaPoolItemViewModel)) as MediaPoolItemViewModel
-			: null;
+		var item = GetMediaPoolDragItem(e);
 		e.Effects = MediaPool.CanDropToPreview(item) ? DragDropEffects.Copy : DragDropEffects.None;
 		e.Handled = true;
 	}
 
 	private async void OnPreviewDrop(object sender, DragEventArgs e)
 	{
-		var item = e.Data.GetDataPresent(typeof(MediaPoolItemViewModel))
-			? e.Data.GetData(typeof(MediaPoolItemViewModel)) as MediaPoolItemViewModel
-			: null;
+		var item = GetMediaPoolDragItem(e);
 		if (item is not null && MediaPool.CanDropToPreview(item))
 			await MediaPool.DropToPreviewAsync(item);
 		e.Handled = true;
@@ -258,9 +322,7 @@ public partial class MainWindow : Window
 
 	private void OnTimelineDragOver(object sender, DragEventArgs e)
 	{
-		var item = e.Data.GetDataPresent(typeof(MediaPoolItemViewModel))
-			? e.Data.GetData(typeof(MediaPoolItemViewModel)) as MediaPoolItemViewModel
-			: null;
+		var item = GetMediaPoolDragItem(e);
 		var target = sender is MediaTimelineControl control
 			? control.ResolveDropTarget(e.OriginalSource)
 			: null;
@@ -271,9 +333,7 @@ public partial class MainWindow : Window
 
 	private void OnTimelineDrop(object sender, DragEventArgs e)
 	{
-		var item = e.Data.GetDataPresent(typeof(MediaPoolItemViewModel))
-			? e.Data.GetData(typeof(MediaPoolItemViewModel)) as MediaPoolItemViewModel
-			: null;
+		var item = GetMediaPoolDragItem(e);
 		var target = sender is MediaTimelineControl control
 			? control.ResolveDropTarget(e.OriginalSource)
 			: null;
@@ -292,6 +352,98 @@ public partial class MainWindow : Window
 		e.Effects = DragDropEffects.Copy;
 		e.Handled = true;
 	}
+
+	private async void OnMediaPoolPreviewActionClick(object sender, RoutedEventArgs e)
+	{
+		var item = GetMediaPoolItemFromSender(sender);
+		if (item is not null && MediaPool.CanDropToPreview(item))
+			await MediaPool.DropToPreviewAsync(item);
+		e.Handled = true;
+	}
+
+	private void OnMediaPoolTimelineActionClick(object sender, RoutedEventArgs e)
+	{
+		var item = GetMediaPoolItemFromSender(sender);
+		var target = item?.Kind switch
+		{
+			MediaPoolItemKind.Clip => TimelineTrackCategory.Video,
+			MediaPoolItemKind.Audio => TimelineTrackCategory.Audio,
+			MediaPoolItemKind.Graphics => TimelineTrackCategory.Overlay,
+			_ => (TimelineTrackCategory?)null
+		};
+		if (item is not null && target is not null && Timeline.CanAcceptMediaPoolDrop(item, target))
+		{
+			MediaPool.SelectedItem = item;
+			if (item.Kind == MediaPoolItemKind.Clip && MediaDeck.RefreshCommand.CanExecute(null))
+				MediaDeck.RefreshCommand.Execute(null);
+			Timeline.ProjectMediaPoolDrop(item, target.Value);
+		}
+		e.Handled = true;
+	}
+
+	private void OnMediaPoolCueActionClick(object sender, RoutedEventArgs e)
+	{
+		var item = GetMediaPoolItemFromSender(sender);
+		if (item?.Kind == MediaPoolItemKind.Clip &&
+			string.Equals(item.ReferenceId, MediaDeck.SourceId, StringComparison.Ordinal) &&
+			MediaDeck.AddCueCommand.CanExecute(null))
+		{
+			MediaPool.SelectedItem = item;
+			MediaDeck.AddCueCommand.Execute(null);
+		}
+		e.Handled = true;
+	}
+
+	private void OnMediaPoolRevealActionClick(object sender, RoutedEventArgs e)
+	{
+		var item = GetMediaPoolItemFromSender(sender);
+		if (item?.CanRevealInExplorer == true && item.LocalPath is { } path && File.Exists(path))
+		{
+			try
+			{
+				Process.Start(new ProcessStartInfo
+				{
+					FileName = "explorer.exe",
+					Arguments = $"/select,\"{path}\"",
+					UseShellExecute = true
+				});
+			}
+			catch (Exception exception) when (exception is Win32Exception or InvalidOperationException)
+			{
+				// Explorer integration is presentation-only; failure must not affect production state.
+			}
+		}
+		e.Handled = true;
+	}
+
+	private void OnMediaPoolPropertiesActionClick(object sender, RoutedEventArgs e)
+	{
+		var item = GetMediaPoolItemFromSender(sender);
+		if (item is not null)
+			MediaPool.SelectedItem = item;
+		e.Handled = true;
+	}
+
+	private static MediaPoolItemViewModel? GetMediaPoolItemFromSender(object sender)
+	{
+		if (sender is FrameworkElement element && element.DataContext is MediaPoolItemViewModel item)
+			return item;
+
+		if (sender is MenuItem menuItem &&
+			ItemsControl.ItemsControlFromItemContainer(menuItem) is ContextMenu contextMenu &&
+			contextMenu.PlacementTarget is FrameworkElement target &&
+			target.DataContext is MediaPoolItemViewModel targetItem)
+		{
+			return targetItem;
+		}
+
+		return null;
+	}
+
+	private static MediaPoolItemViewModel? GetMediaPoolDragItem(DragEventArgs e) =>
+		e.Data.GetDataPresent(typeof(MediaAssetDragPayload))
+			? (e.Data.GetData(typeof(MediaAssetDragPayload)) as MediaAssetDragPayload)?.Primary
+			: null;
 
 	private void OnTimelineSelectionChanged(TimelineSelection selection)
 	{

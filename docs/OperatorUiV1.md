@@ -588,13 +588,15 @@ The production shell is presentation-only. `OperatorShellViewModel` owns only la
 
 The persistent left shell region is the Operator **Media Pool**. It projects only resource types already represented by current product data: Sources, the loaded local Clip, Audio inputs, the loaded Graphics asset and the current Composition/AI effect. Search and filtering operate only on loaded projection metadata and never mutate source, Runtime or routing state.
 
-The Media Pool supports Grid and List presentation. The visible collection is capped at 256 entries and sorted deterministically. Offline or unavailable resources remain visible when authoritative observations still identify them; their state is presented explicitly instead of synthesizing readiness.
+The Media Pool now acts as the Operator Media Library & Asset Browser. It supports virtualized Grid and List presentation over a deterministic UI projection bounded to 4096 entries. Grid cards expose existing thumbnails, duration/type information and explicit textual ONLINE/OFFLINE state; the List uses recycling virtualization. Offline or unavailable resources remain visible when authoritative observations still identify them rather than being silently removed.
 
-Local media import continues to use the existing Media Deck open path. No second ingest, metadata extraction or file-management subsystem is introduced.
+Search remains local to the current projection, type/availability filters are exposed as compact filter chips, and Ctrl+F focuses the Media Library search field through the central keyboard registry. Grid and List support Extended multi-select while retaining one primary selection for the existing context Inspector.
+
+Local media import continues to use the existing Media Deck open path. Preview, Timeline and Cue actions reuse their existing command paths; Reveal in Explorer is limited to an already-known local Clip path. No second ingest, metadata extraction, thumbnail extraction, directory crawl, media index or persistent DAM/MAM subsystem is introduced. The current Scene model has no governed asset-assignment action, so the browser does not invent one.
 
 ### Selection and drag/drop
 
-Media Pool selection is bounded Operator UI context. Selecting a Source or loaded Clip projects the matching existing OperatorViewModel.SelectedSource; selecting Audio projects the existing SelectedAudioInput. The selection itself is never production authority.
+Media Pool selection is bounded Operator UI context. Selecting a Source or loaded Clip projects the matching existing OperatorViewModel.SelectedSource; selecting Audio projects the existing SelectedAudioInput. Ctrl/Shift multi-select is maintained separately as local presentation state, with SelectedItem remaining the primary Inspector context. The selection itself is never production authority.
 
 A Source or the currently loaded Clip may be dragged to Preview when the corresponding existing source is available. The drop invokes the existing SetPreviewCommand, so the mutation continues through the Client SDK and authoritative ControlHost path. Invalid drops are rejected with DragDropEffects.None.
 
@@ -610,7 +612,9 @@ The persistent right shell region is selection-driven. Every projected Inspector
 
 Clip playback policy edits reuse MediaDeckViewModel.ApplyPlaybackPolicyCommand. Audio gain/mute reuse the existing audio commands. Graphics position/scale reuse ApplyGraphicsCommand. AI feature/provider/confidence/fallback are displayed from confirmed observations, and AI enable/disable reuses the existing Client control commands.
 
-No local edit is presented as committed before the corresponding existing command path has been applied and authoritative state is observed again. Empty selection, no-assets, filtered-empty and offline states use concise production-facing messages.
+No local edit is presented as committed before the corresponding existing command path has been applied and authoritative state is observed again. Empty selection, no-assets, filtered-empty, loading, error and offline states use concise production-facing messages.
+
+See `docs/MediaLibraryAssetBrowser.md` for the Media Library scalability, selection, drag/drop, context-action and authority model.
 
 
 ## Workspaces, Multiview & Keyboard-First UX
