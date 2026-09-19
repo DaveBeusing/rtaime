@@ -86,7 +86,7 @@ public sealed class MediaTimelineViewModel : INotifyPropertyChanged, IAsyncDispo
 	private long? _inPointFrame;
 	private long? _outPointFrame;
 	private bool _snapEnabled = true;
-	private string? _activeSourceReference;
+	private string? _activeTimelineContextReference;
 
 	public MediaTimelineViewModel(
 		MediaTimelineController? controller = null,
@@ -233,10 +233,13 @@ public sealed class MediaTimelineViewModel : INotifyPropertyChanged, IAsyncDispo
 		_projectionInitialized = true;
 		_projectionHash = hash;
 		var sourceReference = snapshot.SourceId?.ToString();
-		if (!string.Equals(_activeSourceReference, sourceReference, StringComparison.Ordinal))
+		var timelineContextReference = snapshot.IsLoaded
+			? $"{snapshot.Probe?.AssetId}|{sourceReference}"
+			: null;
+		if (!string.Equals(_activeTimelineContextReference, timelineContextReference, StringComparison.Ordinal))
 		{
 			_resourceProjections.Clear();
-			_activeSourceReference = sourceReference;
+			_activeTimelineContextReference = timelineContextReference;
 		}
 		foreach (var track in Tracks)
 			track.Items.Clear();
@@ -629,6 +632,7 @@ public sealed class MediaTimelineViewModel : INotifyPropertyChanged, IAsyncDispo
 		hash.Add(snapshot.IsLoaded);
 		hash.Add(snapshot.State);
 		hash.Add(snapshot.SourceId);
+		hash.Add(snapshot.Probe?.AssetId);
 		hash.Add(snapshot.Probe?.FileName, StringComparer.Ordinal);
 		hash.Add(snapshot.Transport?.Position.TotalFrames);
 		hash.Add(snapshot.Transport?.Position.FrameRate);
