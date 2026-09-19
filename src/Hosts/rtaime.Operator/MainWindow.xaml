@@ -834,9 +834,9 @@
 														<Image Stretch="UniformToFill">
 															<Image.Style>
 																<Style TargetType="Image">
-																	<Setter Property="Source" Value="{Binding DataContext.Monitoring.ProgramImage, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
+																	<Setter Property="Source" Value="{Binding Monitoring.ProgramImage, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
 																	<Style.Triggers>
-																		<DataTrigger Binding="{Binding Id}" Value="preview"><Setter Property="Source" Value="{Binding DataContext.Monitoring.PreviewImage, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" /></DataTrigger>
+																		<DataTrigger Binding="{Binding Id}" Value="preview"><Setter Property="Source" Value="{Binding Monitoring.PreviewImage, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" /></DataTrigger>
 																		<DataTrigger Binding="{Binding Id}" Value="aux"><Setter Property="Source" Value="{x:Null}" /></DataTrigger>
 																	</Style.Triggers>
 																</Style>
