@@ -56,6 +56,9 @@ public partial class MainWindow : Window
 		Shortcuts = OperatorKeyboardCommandRegistry.Create(viewModel, MediaDeck, Timeline, Shell);
 		Timeline.SelectionChanged += OnTimelineSelectionChanged;
 		InitializeComponent();
+		ApplyWindowPlacement();
+		Shell.UpdateViewportWidth(ActualWidth > 0 ? ActualWidth : Width);
+		SizeChanged += OnShellSizeChanged;
 		ApplyProductionFullscreen(Shell.IsFullscreen, updateShell: false);
 		DataContext = viewModel;
 		MediaDeck.Start();
@@ -87,6 +90,9 @@ public partial class MainWindow : Window
 		Shortcuts = OperatorKeyboardCommandRegistry.Create(viewModel, MediaDeck, Timeline, Shell);
 		Timeline.SelectionChanged += OnTimelineSelectionChanged;
 		InitializeComponent();
+		ApplyWindowPlacement();
+		Shell.UpdateViewportWidth(ActualWidth > 0 ? ActualWidth : Width);
+		SizeChanged += OnShellSizeChanged;
 		ApplyProductionFullscreen(Shell.IsFullscreen, updateShell: false);
 		DataContext = viewModel;
 		MediaDeck.Start();
@@ -161,7 +167,9 @@ public partial class MainWindow : Window
 
 	private async void OnClosingAsync(object? sender, CancelEventArgs e)
 	{
-		Shell.Save();
+		if (!_fullscreenApplied)
+			CaptureWindowPlacement();
+		await Shell.SaveAsync();
 		if (_shutdownComplete)
 			return;
 
@@ -197,6 +205,7 @@ public partial class MainWindow : Window
 		{
 			_shutdownComplete = true;
 			Closing -= OnClosingAsync;
+			SizeChanged -= OnShellSizeChanged;
 			Close();
 		}
 	}
@@ -306,6 +315,58 @@ public partial class MainWindow : Window
 	private void SetProductionFullscreen(bool fullscreen) =>
 		ApplyProductionFullscreen(fullscreen, updateShell: true);
 
+	private void ApplyWindowPlacement()
+	{
+		var placement = Shell.WindowPlacement.Normalize();
+		Width = placement.Width;
+		Height = placement.Height;
+
+		if (placement.Left is { } left &&
+			placement.Top is { } top &&
+			IsWindowPlacementVisible(left, top, placement.Width, placement.Height))
+		{
+			WindowStartupLocation = WindowStartupLocation.Manual;
+			Left = left;
+			Top = top;
+		}
+
+		WindowState = string.Equals(placement.State, "MAXIMIZED", StringComparison.Ordinal)
+			? WindowState.Maximized
+			: WindowState.Normal;
+	}
+
+	private void CaptureWindowPlacement()
+	{
+		var bounds = RestoreBounds;
+		if (bounds.Width <= 0 || bounds.Height <= 0)
+			return;
+
+		Shell.SetWindowPlacement(
+			bounds.Left,
+			bounds.Top,
+			bounds.Width,
+			bounds.Height,
+			WindowState);
+	}
+
+	private static bool IsWindowPlacementVisible(double left, double top, double width, double height)
+	{
+		if (!double.IsFinite(left) || !double.IsFinite(top) || !double.IsFinite(width) || !double.IsFinite(height))
+			return false;
+
+		var requested = new Rect(left, top, width, height);
+		var virtualScreen = new Rect(
+			SystemParameters.VirtualScreenLeft,
+			SystemParameters.VirtualScreenTop,
+			SystemParameters.VirtualScreenWidth,
+			SystemParameters.VirtualScreenHeight);
+		requested.Intersect(virtualScreen);
+		return requested.Width >= 96 && requested.Height >= 64;
+	}
+
+	private void OnShellSizeChanged(object sender, SizeChangedEventArgs e) =>
+		Shell.UpdateViewportWidth(e.NewSize.Width);
+
 	private void ApplyProductionFullscreen(bool fullscreen, bool updateShell)
 	{
 		if (fullscreen == _fullscreenApplied)
@@ -317,6 +378,7 @@ public partial class MainWindow : Window
 
 		if (fullscreen)
 		{
+			CaptureWindowPlacement();
 			_windowedStyle = WindowStyle;
 			_windowedResizeMode = ResizeMode;
 			_windowedState = WindowState;
@@ -341,10 +403,19 @@ public partial class MainWindow : Window
 	private void OnLayoutSplitterDragCompleted(object sender, DragCompletedEventArgs e) =>
 		Shell.Save();
 
+	private void OnShellMenuClick(object sender, RoutedEventArgs e)
+	{
+		if (sender is not FrameworkElement element || element.ContextMenu is null)
+			return;
+
+		element.ContextMenu.PlacementTarget = element;
+		element.ContextMenu.IsOpen = true;
+	}
+
 	private void OnHelpClick(object sender, RoutedEventArgs e)
 	{
 		MessageBox.Show(
-			$"WORKSPACES\nLIVE  Live switching / multiview / Quick Controls\nEDIT  Timeline-focused editing\nMEDIA  Media preparation\nGRAPHICS  Graphics composition\nSYSTEM  Operational status and diagnostics\n\nKEYBOARD\n{Shortcuts.ReferenceText}\n\nMedia Pool  Search/filter resources; drag a Source or loaded Clip to Preview.\nTimeline  Select clips/cues for Inspector context; drag IN/OUT handles to trim.\nInspector  Use PIN on supported editable properties to add/remove LIVE Quick Controls.\nClean Program  Uses the existing Program monitoring image and never changes physical Program output.",
+			$"WORKSPACES\nMEDIA  Media preparation\nEDIT  Timeline-focused editing\nLIVE  Live switching / multiview / Quick Controls\nSCENES  Scene/layer presentation using existing graphics state\nCOMPOSITING  Graphics/compositing presentation\nOUTPUTS  Output and operational evidence\nSETTINGS  Shell, status and diagnostics\n\nKEYBOARD\n{Shortcuts.ReferenceText}\n\nMedia Pool  Search/filter resources; drag a Source or loaded Clip to Preview.\nTimeline  Select clips/cues for Inspector context; drag IN/OUT handles to trim.\nInspector  Use PIN on supported editable properties to add/remove LIVE Quick Controls.\nClean Program  Uses the existing Program monitoring image and never changes physical Program output.",
 			"rtaime Operator — Workspace & Keyboard Reference",
 			MessageBoxButton.OK,
 			MessageBoxImage.Information);

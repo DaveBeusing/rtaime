@@ -559,9 +559,9 @@ System Status retains `PASS / FAIL / UNVERIFIED` semantics for subsystem evidenc
 
 ## Fullscreen Production Shell & Docking
 
-The Operator is hosted by a persistent production workspace rather than a conventional form-style page. The shell defines six presentation regions: Top Bar, left Tools/Media, center Workspace, right Inspector, lower Timeline, and bottom Transport/Status.
+The Operator is hosted by a persistent production workspace rather than a conventional form-style page. The shell defines a global Top Bar, persistent left Workspace Navigation, left Tools/Media region, center Workspace, right Inspector, lower Timeline, and bottom Transport/Status.
 
-The left and right regions are independently resizable and collapsible. The lower Timeline height is resizable, and **MAXIMIZE VIEW** temporarily dedicates the available workspace to the center region without changing production state. Splitter positions, panel visibility, fullscreen preference and the selected workspace placeholder are local Operator preferences only.
+The left and right regions are independently resizable and collapsible. The lower Timeline height is resizable, and **MAXIMIZE VIEW** temporarily dedicates the available workspace to the center region without changing production state. Splitter positions, panel visibility, fullscreen preference, normalized window placement and the selected workspace are local Operator preferences only.
 
 Layout preferences are stored below the current user's local application data in `rtaime/operator-layout.json`. Persisted dimensions are normalized into bounded ranges before they are applied. Missing, corrupt, non-finite or out-of-range values fall back to safe defaults or are clamped. No routing, Runtime state, recording state, health authority or other production truth is persisted in this file.
 
@@ -573,7 +573,7 @@ Windowed mode remains the default for a fresh profile, so development and debugg
 
 ### Persistent production controls
 
-The compact Top Bar keeps engine lifecycle, connection state, timecode, active format, recording state, synchronization and layout controls visible. The Bottom Transport/Status region keeps media play/pause, stop, current timecode, countdown, on-Program state, the last operator event and active errors visible even while the center workspace scrolls.
+The compact Top Bar keeps engine lifecycle, connection state, GPU/VRAM evidence, Program-boundary processing time, timecode, Program source and synchronization visible. CPU/RAM and external LIVE/ON AIR state remain explicitly N/A/UNVERIFIED while the current authoritative contracts expose no such telemetry; the UI does not synthesize those values. The Bottom Transport/Status region keeps media play/pause, stop, current timecode, countdown, on-Program state, the last operator event and active errors visible even while the center workspace scrolls.
 
 The existing Preview/Program, source-bin, transition, graphics, audio, recording, AI, monitoring and system-status workflows remain in the center workspace. The existing Media Deck remains available there, while the timeline itself is hosted once in the persistent lower region to avoid duplicate seeker surfaces.
 
@@ -615,13 +615,13 @@ No local edit is presented as committed before the corresponding existing comman
 
 ## Workspaces, Multiview & Keyboard-First UX
 
-The Operator now exposes five canonical task workspaces — LIVE, EDIT, MEDIA, GRAPHICS and SYSTEM — over the same authoritative product state. Workspace switching changes presentation only and persists independent layout geometry per workspace.
+The Operator now exposes seven canonical task workspaces — MEDIA, EDIT, LIVE, SCENES, COMPOSITING, OUTPUTS and SETTINGS — over the same authoritative product state. Workspace switching changes presentation only and persists independent layout geometry per workspace. SCENES/COMPOSITING reuse the current graphics projection, while OUTPUTS/SETTINGS reuse the existing operational projection until their dedicated roadmap packages add richer presentation.
 
 LIVE introduces a reusable multiview that consumes the existing Preview/Program monitoring images and already available source thumbnails. It does not open another monitoring transport. The same workspace exposes a bounded Quick Controls pinboard backed by stable Inspector property identifiers; pinned actions continue to invoke the existing Media Deck, audio, graphics, AI and production command paths.
 
 Window-level keyboard bindings are centralized in OperatorKeyboardCommandRegistry with deterministic conflict detection and text-entry safety. Space controls media play/pause, I/O set the current media range, M adds a Media cue, Up/Down navigate cues, Enter performs AUTO, Ctrl+Enter performs CUT, R controls recording where the matching command is available, and F11 retains Operator fullscreen. Unsupported J/L shuttle semantics remain deliberately unbound.
 
-SYSTEM reuses the existing lifecycle, health, monitoring, recording and output projections rather than creating a second diagnostics truth. Clean Program remains a presentation of the existing Runtime-derived Program monitoring image and is explicitly not the physical Program output path.
+OUTPUTS and SETTINGS reuse the existing lifecycle, health, monitoring, recording and output projections rather than creating a second diagnostics truth. Clean Program remains a presentation of the existing Runtime-derived Program monitoring image and is explicitly not the physical Program output path.
 
 Layout persistence is schema-versioned and keeps only UI presentation fields. SAVE LAYOUT stores the current workspace layout, while LAYOUT RESET restores that workspace's canonical defaults. Corrupt or incompatible layout data falls back safely.
 

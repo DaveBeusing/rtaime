@@ -15,10 +15,15 @@
 	<SolidColorBrush x:Key="OperatorMutedTextBrush" Color="{StaticResource OperatorColorMutedText}" />
 	<SolidColorBrush x:Key="OperatorDisabledBrush" Color="{StaticResource OperatorColorDisabled}" />
 	<SolidColorBrush x:Key="OperatorAccentBrush" Color="{StaticResource OperatorColorAccent}" />
+	<SolidColorBrush x:Key="OperatorAccentSurfaceBrush" Color="{StaticResource OperatorColorAccentSurface}" />
+	<SolidColorBrush x:Key="OperatorSelectionSurfaceBrush" Color="{StaticResource OperatorColorSelectionSurface}" />
 	<SolidColorBrush x:Key="OperatorFocusBrush" Color="{StaticResource OperatorColorFocus}" />
 	<SolidColorBrush x:Key="OperatorPreviewBrush" Color="{StaticResource OperatorColorPreview}" />
+	<SolidColorBrush x:Key="OperatorPreviewSurfaceBrush" Color="{StaticResource OperatorColorPreviewSurface}" />
 	<SolidColorBrush x:Key="OperatorProgramBrush" Color="{StaticResource OperatorColorProgram}" />
+	<SolidColorBrush x:Key="OperatorProgramSurfaceBrush" Color="{StaticResource OperatorColorProgramSurface}" />
 	<SolidColorBrush x:Key="OperatorArmedBrush" Color="{StaticResource OperatorColorArmed}" />
+	<SolidColorBrush x:Key="OperatorArmedSurfaceBrush" Color="{StaticResource OperatorColorArmedSurface}" />
 	<SolidColorBrush x:Key="OperatorHealthyBrush" Color="{StaticResource OperatorColorHealthy}" />
 	<SolidColorBrush x:Key="OperatorWarningBrush" Color="{StaticResource OperatorColorWarning}" />
 	<SolidColorBrush x:Key="OperatorErrorBrush" Color="{StaticResource OperatorColorError}" />
@@ -86,17 +91,17 @@
 
 	<Style x:Key="OperatorPreviewTally" TargetType="Border" BasedOn="{StaticResource OperatorStatusBadge}">
 		<Setter Property="BorderBrush" Value="{DynamicResource OperatorPreviewBrush}" />
-		<Setter Property="Background" Value="#183B2A" />
+		<Setter Property="Background" Value="{DynamicResource OperatorPreviewSurfaceBrush}" />
 	</Style>
 
 	<Style x:Key="OperatorProgramTally" TargetType="Border" BasedOn="{StaticResource OperatorStatusBadge}">
 		<Setter Property="BorderBrush" Value="{DynamicResource OperatorProgramBrush}" />
-		<Setter Property="Background" Value="#442326" />
+		<Setter Property="Background" Value="{DynamicResource OperatorProgramSurfaceBrush}" />
 	</Style>
 
 	<Style x:Key="OperatorArmedBadge" TargetType="Border" BasedOn="{StaticResource OperatorStatusBadge}">
 		<Setter Property="BorderBrush" Value="{DynamicResource OperatorArmedBrush}" />
-		<Setter Property="Background" Value="#3A321C" />
+		<Setter Property="Background" Value="{DynamicResource OperatorArmedSurfaceBrush}" />
 	</Style>
 
 	<Style x:Key="OperatorHealthyBadge" TargetType="Border" BasedOn="{StaticResource OperatorStatusBadge}">
@@ -204,7 +209,7 @@
 	</Style>
 
 	<Style x:Key="OperatorProgramButton" TargetType="Button" BasedOn="{StaticResource OperatorButton}">
-		<Setter Property="Background" Value="#442326" />
+		<Setter Property="Background" Value="{DynamicResource OperatorProgramSurfaceBrush}" />
 		<Setter Property="BorderBrush" Value="{DynamicResource OperatorProgramBrush}" />
 		<Setter Property="FontSize" Value="15" />
 	</Style>
@@ -227,7 +232,7 @@
 					<ControlTemplate.Triggers>
 						<Trigger Property="IsChecked" Value="True">
 							<Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource OperatorArmedBrush}" />
-							<Setter TargetName="Chrome" Property="Background" Value="#3A321C" />
+							<Setter TargetName="Chrome" Property="Background" Value="{DynamicResource OperatorArmedSurfaceBrush}" />
 						</Trigger>
 						<Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource OperatorAccentBrush}" /></Trigger>
 						<Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource OperatorFocusBrush}" /><Setter TargetName="Chrome" Property="BorderThickness" Value="2" /></Trigger>
@@ -262,7 +267,7 @@
 					</Border>
 					<ControlTemplate.Triggers>
 						<Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Tile" Property="Background" Value="{DynamicResource OperatorRaisedHoverBrush}" /><Setter TargetName="Tile" Property="BorderBrush" Value="{DynamicResource OperatorAccentBrush}" /></Trigger>
-						<Trigger Property="IsSelected" Value="True"><Setter TargetName="Tile" Property="Background" Value="#22384D" /><Setter TargetName="Tile" Property="BorderBrush" Value="{DynamicResource OperatorAccentBrush}" /><Setter TargetName="Tile" Property="BorderThickness" Value="2" /></Trigger>
+						<Trigger Property="IsSelected" Value="True"><Setter TargetName="Tile" Property="Background" Value="{DynamicResource OperatorSelectionSurfaceBrush}" /><Setter TargetName="Tile" Property="BorderBrush" Value="{DynamicResource OperatorAccentBrush}" /><Setter TargetName="Tile" Property="BorderThickness" Value="2" /></Trigger>
 						<Trigger Property="IsKeyboardFocusWithin" Value="True"><Setter TargetName="Tile" Property="BorderBrush" Value="{DynamicResource OperatorFocusBrush}" /><Setter TargetName="Tile" Property="BorderThickness" Value="2" /></Trigger>
 						<Trigger Property="IsEnabled" Value="False"><Setter TargetName="Tile" Property="Opacity" Value="0.55" /></Trigger>
 					</ControlTemplate.Triggers>
@@ -341,6 +346,45 @@
 				</ControlTemplate>
 			</Setter.Value>
 		</Setter>
+	</Style>
+
+	<!-- Reusable production-shell chrome. These styles own presentation only. -->
+	<Style x:Key="StatusPill" TargetType="Border" BasedOn="{StaticResource OperatorStatusBadge}">
+		<Setter Property="Padding" Value="8,4" />
+		<Setter Property="MinHeight" Value="28" />
+		<Setter Property="VerticalAlignment" Value="Center" />
+	</Style>
+
+	<Style x:Key="MetricMeter" TargetType="Border" BasedOn="{StaticResource OperatorStatusBadge}">
+		<Setter Property="Padding" Value="7,4" />
+		<Setter Property="MinHeight" Value="28" />
+		<Setter Property="MinWidth" Value="72" />
+		<Setter Property="VerticalAlignment" Value="Center" />
+	</Style>
+
+	<Style x:Key="WorkspaceNavItem" TargetType="Button" BasedOn="{StaticResource OperatorButton}">
+		<Setter Property="Background" Value="Transparent" />
+		<Setter Property="BorderBrush" Value="Transparent" />
+		<Setter Property="Padding" Value="6,7" />
+		<Setter Property="MinHeight" Value="52" />
+		<Setter Property="HorizontalContentAlignment" Value="Stretch" />
+		<Setter Property="Margin" Value="0,0,0,4" />
+	</Style>
+
+	<Style x:Key="PanelHeader" TargetType="TextBlock" BasedOn="{StaticResource OperatorSectionTitle}">
+		<Setter Property="FontWeight" Value="Bold" />
+		<Setter Property="Margin" Value="0,0,0,8" />
+	</Style>
+
+	<Style x:Key="SectionDivider" TargetType="Separator">
+		<Setter Property="Background" Value="{DynamicResource OperatorBorderBrush}" />
+		<Setter Property="Height" Value="1" />
+		<Setter Property="Margin" Value="0,8" />
+		<Setter Property="Focusable" Value="False" />
+	</Style>
+
+	<Style x:Key="OperatorNavigationRail" TargetType="Border" BasedOn="{StaticResource OperatorShellRegion}">
+		<Setter Property="Padding" Value="5" />
 	</Style>
 
 	<Style x:Key="OperatorTopBar" TargetType="Border" BasedOn="{StaticResource OperatorPanel}">

@@ -4,15 +4,17 @@
 
 ## Purpose
 
-The Operator provides five task-oriented workspaces over one shared production state. A workspace changes presentation only: panel visibility, panel dimensions, viewer emphasis, timeline height and the current UI context. It does not own routing, media transport, recording, graphics, AI, health or output authority.
+The Operator provides seven task-oriented workspaces over one shared production state. A workspace changes presentation only: panel visibility, panel dimensions, viewer emphasis, timeline height and the current UI context. It does not own routing, media transport, recording, graphics, AI, health or output authority.
 
 The canonical workspaces are:
 
-- LIVE
-- EDIT
 - MEDIA
-- GRAPHICS
-- SYSTEM
+- EDIT
+- LIVE
+- SCENES
+- COMPOSITING
+- OUTPUTS
+- SETTINGS
 
 Switching workspaces never creates a second production snapshot or forks product state.
 
@@ -53,9 +55,13 @@ MEDIA emphasizes preparation:
 
 It does not introduce another ingest or media-management subsystem.
 
-## GRAPHICS
+## SCENES
 
-GRAPHICS emphasizes composition using the existing graphics and AI surfaces:
+SCENES is a shell destination for scene/layer operation. In the current V1 implementation it reuses the existing graphics projection and Inspector surfaces; it does not create a second scene authority or renderer. Dedicated scene-control content is intentionally left to the later UI package.
+
+## COMPOSITING
+
+COMPOSITING emphasizes composition using the existing graphics and AI surfaces:
 
 - Preview and Program;
 - graphics resources in the Media Pool;
@@ -63,23 +69,15 @@ GRAPHICS emphasizes composition using the existing graphics and AI surfaces:
 - selection-driven Inspector;
 - current AI composition control where supported.
 
-No second graphics renderer is introduced.
+No second graphics renderer or processing graph is introduced by the shell.
 
-## SYSTEM
+## OUTPUTS
 
-SYSTEM consolidates operational evidence without exposing a raw developer console. The workspace reuses existing lifecycle, health, monitoring and output projections for:
+OUTPUTS reuses the existing lifecycle, health, recording, monitoring and output projections. It is the operational destination for Program/output evidence without creating a second output or routing authority.
 
-- Engine;
-- Control;
-- Runtime;
-- AI;
-- Media;
-- GPU;
-- Recording;
-- Outputs;
-- Diagnostics.
+## SETTINGS
 
-PASS, FAIL and UNVERIFIED evidence semantics remain unchanged.
+SETTINGS exposes shell/status/diagnostic presentation using the existing system projection. It does not own Runtime configuration or create a parallel settings state. PASS, FAIL and UNVERIFIED evidence semantics remain unchanged.
 
 ## Quick Controls
 
@@ -144,7 +142,7 @@ It is monitoring presentation, not output authority.
 
 ## Per-workspace layout persistence
 
-Operator layout storage uses schema version 2. Each canonical workspace persists only presentation fields:
+Operator layout storage uses schema version 3. Each canonical workspace persists only presentation fields:
 
 - left and right panel width;
 - timeline/lower region height;
@@ -152,7 +150,7 @@ Operator layout storage uses schema version 2. Each canonical workspace persists
 - center-maximized state;
 - viewer presentation mode.
 
-Fullscreen preference and selected workspace remain top-level Operator UI preferences.
+Fullscreen preference, selected workspace and normalized window placement remain top-level Operator UI preferences. Legacy version-2 GRAPHICS/SYSTEM layouts migrate to the corresponding COMPOSITING/OUTPUTS/SETTINGS presentation defaults without carrying production state.
 
 SAVE LAYOUT persists the active workspace presentation. LAYOUT RESET restores only that workspace's canonical defaults. Missing, corrupt, non-finite, out-of-range or incompatible persisted data recovers to safe canonical layouts.
 
@@ -176,10 +174,10 @@ A typical live workflow is:
 
 1. Prepare media and IN/OUT in MEDIA.
 2. Refine cues and timing in EDIT.
-3. Prepare overlay state in GRAPHICS.
+3. Prepare scene/layer state in SCENES or COMPOSITING.
 4. Pin frequently adjusted values from the Inspector.
 5. Switch to LIVE for multiview, production controls and Quick Controls.
 6. Open Clean Program when a dedicated monitoring display is required.
-7. Use SYSTEM when lifecycle, health, recording or output evidence needs attention.
+7. Use OUTPUTS for recording/output evidence and SETTINGS for shell/status diagnostics.
 
 The same underlying production state remains active across every workspace.
