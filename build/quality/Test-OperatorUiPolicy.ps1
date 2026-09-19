@@ -433,6 +433,9 @@ Assert-Condition ($window -match 'DataContext="\{Binding Timeline, RelativeSourc
 Assert-Condition ($deck -notmatch '<local:MediaTimelineControl') "Media Deck must not duplicate the shell-hosted timeline."
 Assert-Condition ($shell -match 'record OperatorLayoutSettings' -and $shell -match 'Normalize\(\)' -and $shell -match 'Math\.Clamp') "Persisted layout dimensions must be normalized and safely clamped."
 Assert-Condition ($shell -match 'LocalApplicationData' -and $shell -match 'operator-layout\.json') "Operator layout persistence must use local user UI configuration storage."
+Assert-Condition ($shell -match 'Task SaveAsync\(' -and $shell -match 'TaskScheduler\.Default' -and $shell -match 'File\.WriteAllTextAsync') "Operator layout persistence must execute file I/O away from the UI thread."
+Assert-Condition ($shell -notmatch 'File\.WriteAllText\(') "Operator layout persistence must not perform synchronous file writes."
+Assert-Condition ($windowCode -match 'await Shell\.SaveAsync\(\)') "Operator shutdown must asynchronously flush the latest layout state before closing."
 foreach ($layoutProperty in @("LeftPanelWidth", "RightPanelWidth", "LowerPanelHeight", "IsLeftCollapsed", "IsRightCollapsed", "IsFullscreen", "SelectedWorkspace", "WindowPlacement", "ViewerMode", "Workspaces", "CurrentVersion")) {
 	Assert-Condition ($shell -match [Regex]::Escape($layoutProperty)) "Operator layout persistence must retain '$layoutProperty'."
 }
