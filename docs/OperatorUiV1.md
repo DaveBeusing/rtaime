@@ -523,3 +523,29 @@ An enabled AI effect that becomes unavailable, times out or fails is represented
 ### Evidence semantics
 
 System Status retains `PASS / FAIL / UNVERIFIED` semantics for subsystem evidence. Lifecycle presentation never turns missing GPU/provider metrics into healthy evidence. A terminal `FAILED` lifecycle requires explicit recovery-exhaustion evidence rather than an Operator-local retry guess.
+
+## Fullscreen Production Shell & Docking
+
+The Operator is hosted by a persistent production workspace rather than a conventional form-style page. The shell defines six presentation regions: Top Bar, left Tools/Media, center Workspace, right Inspector, lower Timeline, and bottom Transport/Status.
+
+The left and right regions are independently resizable and collapsible. The lower Timeline height is resizable, and **MAXIMIZE VIEW** temporarily dedicates the available workspace to the center region without changing production state. Splitter positions, panel visibility, fullscreen preference and the selected workspace placeholder are local Operator preferences only.
+
+Layout preferences are stored below the current user's local application data in `rtaime/operator-layout.json`. Persisted dimensions are normalized into bounded ranges before they are applied. Missing, corrupt, non-finite or out-of-range values fall back to safe defaults or are clamped. No routing, Runtime state, recording state, health authority or other production truth is persisted in this file.
+
+### Fullscreen operation
+
+`F11` toggles between the normal resizable window and borderless Production Fullscreen. `Esc` exits fullscreen without closing the Operator. Fullscreen removes standard Windows chrome and uses the current display's maximized work area while preserving all keyboard production controls.
+
+Windowed mode remains the default for a fresh profile, so development and debugging do not require fullscreen. A user's explicit fullscreen preference is restored on subsequent launches and can always be exited with `F11` or `Esc`.
+
+### Persistent production controls
+
+The compact Top Bar keeps engine lifecycle, connection state, timecode, active format, recording state, synchronization and layout controls visible. The Bottom Transport/Status region keeps media play/pause, stop, current timecode, countdown, on-Program state, the last operator event and active errors visible even while the center workspace scrolls.
+
+The existing Preview/Program, source-bin, transition, graphics, audio, recording, AI, monitoring and system-status workflows remain in the center workspace. The existing Media Deck remains available there, while the timeline itself is hosted once in the persistent lower region to avoid duplicate seeker surfaces.
+
+### Authority boundary
+
+The production shell is presentation-only. `OperatorShellViewModel` owns only layout dimensions, collapsed state, center-maximize state, fullscreen preference and workspace selection. It has no Client, Control, Runtime, Media, AI or Recording dependency and never synthesizes or persists authoritative production state.
+
+`build/quality/Test-OperatorUiPolicy.ps1` guards the canonical region names, fullscreen entry/exit path, splitter availability, persisted layout fields, bounded normalization, single shell-hosted timeline and the presentation-only dependency boundary.
