@@ -62,6 +62,21 @@ public sealed record MediaAssetDragPayload(
 	MediaPoolItemViewModel Primary,
 	IReadOnlyList<MediaPoolItemViewModel> Items);
 
+public sealed class MediaAssetCollection : ObservableCollection<MediaPoolItemViewModel>
+{
+	public void ReplaceWith(IEnumerable<MediaPoolItemViewModel> items)
+	{
+		ArgumentNullException.ThrowIfNull(items);
+		Items.Clear();
+		foreach (var item in items)
+			Items.Add(item);
+
+		OnPropertyChanged(new PropertyChangedEventArgs(nameof(Count)));
+		OnPropertyChanged(new PropertyChangedEventArgs("Item[]"));
+		OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
+	}
+}
+
 public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDisposable
 {
 	private const int MaxProjectedItems = 4096;
@@ -111,7 +126,7 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 
 	public event PropertyChangedEventHandler? PropertyChanged;
 
-	public ObservableCollection<MediaPoolItemViewModel> FilteredItems { get; }
+	public MediaAssetCollection FilteredItems { get; }
 	public ObservableCollection<MediaPoolItemViewModel> SelectedItems { get; }
 	public ObservableCollection<InspectorPropertyViewModel> InspectorProperties { get; }
 	public IReadOnlyList<string> Categories => SupportedCategories;
@@ -430,9 +445,7 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 			.Take(MaxProjectedItems)
 			.ToArray();
 
-		FilteredItems.Clear();
-		foreach (var item in filtered)
-			FilteredItems.Add(item);
+		FilteredItems.ReplaceWith(filtered);
 
 		var preferred = preferredSelectionKey is null
 			? null
