@@ -335,6 +335,20 @@ The source tile and deck countdown use the same effective remaining range. Media
 - client tests prove confirmed policy round-trip;
 - Operator UI policy checks the autoplay control, end-mode selector, Program state, effective range and countdown.
 
+## Live Multiview & Scene/Cue Control
+
+The LIVE workspace now uses a dedicated three-zone production layout. The left region is source/cue selection, the center is the adaptive multiview plus Quick Controls, and the right region contains explicit take, transition, layer, recording/output and alert controls.
+
+The multiview retains the existing Preview and Program monitor images and adds an adaptive bounded source bank. Source tiles show existing name, format, health, PGM/PVW tally, monitoring thumbnail and Runtime-derived stereo audio peaks. Failed sources remain present. Source selection is non-destructive; routing still requires Set Preview and Program changes still require CUT/AUTO.
+
+Source grid density adapts through 2, 3 and 4 columns with a maximum of 16 displayed source tiles. Double-click opens a larger view of the already-available image only. No command path is invoked by the large-view interaction.
+
+The LIVE source/cue surface separates source and cue selection from activation. Media cue execution reuses the existing Media Deck Jump Cue command. The current V1 contracts do not expose dedicated multi-scene activation, so the UI explicitly reports that capability as unavailable instead of creating local scene authority.
+
+The right Live Controls surface reuses existing transition, graphics visibility, recording and Clean Program monitoring commands. Compact alert presentation is derived from the existing lifecycle, health, Operator error and recording error projections. External stream/on-air transmission remains explicitly UNVERIFIED.
+
+Detailed behavior and authority boundaries are documented in docs/LiveMultiviewAndSceneControl.md.
+
 ## Layered Timeline & Cue Workspace
 
 The persistent lower workspace is now a frame-accurate layered timeline rather than a single seek slider. It exposes Video, Graphics, Overlay, Audio, AI, Control and Cue semantic tracks while preserving Runtime and existing media/marker contracts as the production authority.
