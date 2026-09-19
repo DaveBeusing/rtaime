@@ -13,7 +13,7 @@ Two output surfaces are currently represented:
 - PROGRAM reflects the authoritative Runtime Program state and the confirmed Program source.
 - CLEAN PROGRAM MONITOR reflects the existing local Windows presentation managed by `ProgramOutputController`. It displays the Runtime-derived Program monitoring image and is not a physical Program output path.
 
-The selected-output details expose target, assigned source, resolution, frame rate, pixel format, color-space evidence, recording state and streaming evidence. A field is shown as `UNAVAILABLE` when no authoritative value exists.
+The workspace also shows the existing Engine, Control, Runtime, Media and GPU-provider health states as a compact system-health surface. The selected-output details expose target, assigned source, resolution, frame rate, pixel format, color-space evidence, recording state and streaming evidence. A field is shown as `UNAVAILABLE` when no authoritative value exists.
 
 ## Routing
 
@@ -29,7 +29,7 @@ Runtime output health reuses the existing health projection:
 - `UNVERIFIED` is presented as `WARNING`.
 - `FAIL` is presented as `FAULTED`.
 
-The clean Program monitor reuses the existing `ProgramOutputController.Health` state. `LIVE` is presented as healthy, `ERROR` as faulted, and states without confirmed healthy/faulted evidence remain warning-level. The workspace defines no independent warning thresholds.
+The clean Program monitor reuses the existing `ProgramOutputController.Health` state. `LIVE` is presented as healthy, `ERROR` as faulted, and states without confirmed healthy/faulted evidence remain warning-level. The existing monitoring panel remains available in OUTPUTS so display selection, start, stop and fullscreen controls are preserved. The workspace defines no independent warning thresholds.
 
 Technical detail from the existing projections remains visible with the affected output so an operator does not need a log file to identify first-level output failures.
 
