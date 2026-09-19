@@ -80,14 +80,114 @@ public static class MediaTimelineTimecode
 	{
 		var value = (decimal)frameRate.Numerator / frameRate.Denominator;
 		var nominal = checked((int)decimal.Round(value, 0, MidpointRounding.AwayFromZero));
-		if (nominal <= 0 || nominal > 120)
-			throw new ArgumentOutOfRangeException(nameof(frameRate), "Timeline timecode supports nominal frame rates from 1 through 120 fps.");
+		if (nominal <= 0 || nominal > 240)
+			throw new ArgumentOutOfRangeException(nameof(frameRate), "Timeline timecode supports nominal frame rates from 1 through 240 fps.");
 		return nominal;
 	}
 }
 
+public readonly record struct MediaTimelineVisibleRange(long StartFrame, long EndFrame)
+{
+	public long FrameCount => EndFrame >= StartFrame ? EndFrame - StartFrame + 1 : 0;
+}
+
 public static class MediaTimelineGeometry
 {
+	public const double MinimumZoom = 1.0;
+	public const double MaximumZoom = 32.0;
+
+	public static MediaTimelineVisibleRange CalculateVisibleRange(
+		long totalFrames,
+		double zoom,
+		long anchorFrame,
+		double anchorFraction = 0.5)
+	{
+		if (totalFrames <= 0)
+			throw new ArgumentOutOfRangeException(nameof(totalFrames));
+		if (!double.IsFinite(zoom) || zoom < MinimumZoom || zoom > MaximumZoom)
+			throw new ArgumentOutOfRangeException(nameof(zoom));
+		if (!double.IsFinite(anchorFraction) || anchorFraction < 0 || anchorFraction > 1)
+			throw new ArgumentOutOfRangeException(nameof(anchorFraction));
+
+		var visibleFrames = Math.Clamp(
+			checked((long)Math.Ceiling(totalFrames / zoom)),
+			1,
+			totalFrames);
+		var clampedAnchor = Math.Clamp(anchorFrame, 0, totalFrames - 1);
+		var leadingFrames = checked((long)Math.Round(
+			(visibleFrames - 1) * anchorFraction,
+			MidpointRounding.AwayFromZero));
+		var maximumStart = totalFrames - visibleFrames;
+		var start = Math.Clamp(clampedAnchor - leadingFrames, 0, maximumStart);
+		return new MediaTimelineVisibleRange(start, start + visibleFrames - 1);
+	}
+
+	public static MediaTimelineVisibleRange CalculateVisibleRangeFromStart(
+		long totalFrames,
+		double zoom,
+		long requestedStartFrame)
+	{
+		var range = CalculateVisibleRange(totalFrames, zoom, 0, 0);
+		var maximumStart = totalFrames - range.FrameCount;
+		var start = Math.Clamp(requestedStartFrame, 0, maximumStart);
+		return new MediaTimelineVisibleRange(start, start + range.FrameCount - 1);
+	}
+
+	public static long FrameFromVisiblePosition(
+		double logicalX,
+		double logicalWidth,
+		MediaTimelineVisibleRange visibleRange)
+	{
+		if (!double.IsFinite(logicalX))
+			throw new ArgumentOutOfRangeException(nameof(logicalX));
+		if (!double.IsFinite(logicalWidth) || logicalWidth <= 0)
+			throw new ArgumentOutOfRangeException(nameof(logicalWidth));
+		if (visibleRange.FrameCount <= 0)
+			throw new ArgumentOutOfRangeException(nameof(visibleRange));
+
+		var fraction = Math.Clamp(logicalX / logicalWidth, 0, 1);
+		var offset = checked((long)Math.Round(
+			fraction * Math.Max(0, visibleRange.FrameCount - 1),
+			MidpointRounding.AwayFromZero));
+		return visibleRange.StartFrame + offset;
+	}
+
+	public static double LogicalPositionFromFrame(
+		long frame,
+		double logicalWidth,
+		MediaTimelineVisibleRange visibleRange)
+	{
+		if (!double.IsFinite(logicalWidth) || logicalWidth < 0)
+			throw new ArgumentOutOfRangeException(nameof(logicalWidth));
+		if (visibleRange.FrameCount <= 0)
+			throw new ArgumentOutOfRangeException(nameof(visibleRange));
+		if (visibleRange.FrameCount == 1)
+			return 0;
+
+		var clamped = Math.Clamp(frame, visibleRange.StartFrame, visibleRange.EndFrame);
+		return (double)(clamped - visibleRange.StartFrame) /
+			(visibleRange.FrameCount - 1) * logicalWidth;
+	}
+
+	public static long SnapFrame(long frame, IEnumerable<long> snapFrames, long thresholdFrames)
+	{
+		ArgumentNullException.ThrowIfNull(snapFrames);
+		if (thresholdFrames < 0)
+			throw new ArgumentOutOfRangeException(nameof(thresholdFrames));
+
+		var best = frame;
+		var bestDistance = thresholdFrames + 1;
+		foreach (var candidate in snapFrames)
+		{
+			var distance = Math.Abs(candidate - frame);
+			if (distance > thresholdFrames || distance >= bestDistance)
+				continue;
+			best = candidate;
+			bestDistance = distance;
+		}
+		return best;
+	}
+
 	public static long FrameFromLogicalPosition(double logicalX, double logicalWidth, long totalFrames)
 	{
 		if (!double.IsFinite(logicalX))

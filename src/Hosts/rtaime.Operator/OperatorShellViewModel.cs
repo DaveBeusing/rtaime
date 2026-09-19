@@ -21,13 +21,13 @@ public sealed record OperatorLayoutSettings(
 {
 	public const double DefaultLeftPanelWidth = 248;
 	public const double DefaultRightPanelWidth = 320;
-	public const double DefaultLowerPanelHeight = 260;
+	public const double DefaultLowerPanelHeight = 420;
 	public const double MinimumLeftPanelWidth = 180;
 	public const double MaximumLeftPanelWidth = 520;
 	public const double MinimumRightPanelWidth = 240;
 	public const double MaximumRightPanelWidth = 620;
-	public const double MinimumLowerPanelHeight = 150;
-	public const double MaximumLowerPanelHeight = 520;
+	public const double MinimumLowerPanelHeight = 320;
+	public const double MaximumLowerPanelHeight = 680;
 
 	public static OperatorLayoutSettings Default { get; } = new(
 		DefaultLeftPanelWidth,

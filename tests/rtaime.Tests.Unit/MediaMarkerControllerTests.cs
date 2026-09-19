@@ -109,6 +109,63 @@ public sealed class MediaMarkerControllerTests
 		Assert.Equal(new long[] { 25, 12, 12 }, seekTargets);
 	}
 
+	[Fact]
+	public async Task Absolute_trim_and_cue_navigation_use_authoritative_command_paths()
+	{
+		var assetId = new MediaAssetId(Id(100));
+		var initial = new MediaMarkerSnapshot(
+			MediaContractVersion.Current,
+			assetId,
+			100,
+			cuePoints:
+			[
+				new MediaCuePoint(new MediaCuePointId(Id(10)), "Intro", 10),
+				new MediaCuePoint(new MediaCuePointId(Id(30)), "Guest", 30),
+				new MediaCuePoint(new MediaCuePointId(Id(70)), "Outro", 70)
+			]);
+		var domain = new MediaMarkerController(initial);
+		var markerCommands = new List<MediaMarkerCommand>();
+		var seekTargets = new List<long>();
+
+		await using var timeline = new MediaTimelineController((command, _) =>
+		{
+			var target = command.TargetFrame!.Value;
+			seekTargets.Add(target);
+			return ValueTask.FromResult(MediaTransportCommandResult.Accepted(TransportSnapshot(target, 100)));
+		});
+		timeline.ApplyConfirmedSnapshot(TransportSnapshot(50, 100));
+
+		await using var markers = new MediaTimelineMarkerController(
+			timeline,
+			(command, _) =>
+			{
+				markerCommands.Add(command);
+				return ValueTask.FromResult(domain.Apply(command));
+			});
+		markers.ApplyConfirmedSnapshot(initial);
+
+		Assert.True(await markers.SetInAtFrameAsync(8));
+		Assert.True(await markers.SetOutAtFrameAsync(80));
+		Assert.True(await markers.JumpToPreviousCueAsync());
+		Assert.True(await markers.JumpToNextCueAsync());
+
+		Assert.Collection(
+			markerCommands,
+			command =>
+			{
+				Assert.Equal(MediaMarkerCommandKind.SetInPoint, command.Kind);
+				Assert.Equal(8, command.PositionFrame);
+			},
+			command =>
+			{
+				Assert.Equal(MediaMarkerCommandKind.SetOutPoint, command.Kind);
+				Assert.Equal(80, command.PositionFrame);
+			});
+		Assert.Equal(new long[] { 30, 70 }, seekTargets);
+		Assert.Equal(8, markers.State.InPointFrame);
+		Assert.Equal(80, markers.State.OutPointFrame);
+	}
+
 	private static MediaMarkerCommand Command(
 		MediaAssetId assetId,
 		MediaMarkerCommandKind kind,

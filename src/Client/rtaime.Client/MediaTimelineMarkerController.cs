@@ -75,7 +75,10 @@ public sealed class MediaTimelineMarkerController : IAsyncDisposable
 	}
 
 	public ValueTask<bool> SetInAtCurrentFrameAsync(CancellationToken cancellationToken = default) =>
-		SendAtCurrentFrameAsync(MediaMarkerCommandKind.SetInPoint, cancellationToken);
+		SetInAtFrameAsync(_timeline.State.ConfirmedFrame, cancellationToken);
+
+	public ValueTask<bool> SetInAtFrameAsync(long frame, CancellationToken cancellationToken = default) =>
+		SendAtFrameAsync(MediaMarkerCommandKind.SetInPoint, frame, cancellationToken);
 
 	public ValueTask<bool> ClearInAsync(CancellationToken cancellationToken = default) =>
 		SendAsync(
@@ -86,7 +89,10 @@ public sealed class MediaTimelineMarkerController : IAsyncDisposable
 			cancellationToken);
 
 	public ValueTask<bool> SetOutAtCurrentFrameAsync(CancellationToken cancellationToken = default) =>
-		SendAtCurrentFrameAsync(MediaMarkerCommandKind.SetOutPoint, cancellationToken);
+		SetOutAtFrameAsync(_timeline.State.ConfirmedFrame, cancellationToken);
+
+	public ValueTask<bool> SetOutAtFrameAsync(long frame, CancellationToken cancellationToken = default) =>
+		SendAtFrameAsync(MediaMarkerCommandKind.SetOutPoint, frame, cancellationToken);
 
 	public ValueTask<bool> ClearOutAsync(CancellationToken cancellationToken = default) =>
 		SendAsync(
@@ -162,6 +168,38 @@ public sealed class MediaTimelineMarkerController : IAsyncDisposable
 			await _timeline.SeekToFrameAsync(frame.Value, cancellationToken).ConfigureAwait(false);
 	}
 
+	public async ValueTask<bool> JumpToPreviousCueAsync(CancellationToken cancellationToken = default)
+	{
+		var currentFrame = _timeline.State.ConfirmedFrame;
+		long? frame;
+		lock (_gate)
+			frame = _confirmed?.CuePoints
+				.Where(cue => cue.PositionFrame < currentFrame)
+				.Select(cue => (long?)cue.PositionFrame)
+				.LastOrDefault();
+		if (!frame.HasValue)
+			return false;
+
+		await _timeline.SeekToFrameAsync(frame.Value, cancellationToken).ConfigureAwait(false);
+		return true;
+	}
+
+	public async ValueTask<bool> JumpToNextCueAsync(CancellationToken cancellationToken = default)
+	{
+		var currentFrame = _timeline.State.ConfirmedFrame;
+		long? frame;
+		lock (_gate)
+			frame = _confirmed?.CuePoints
+				.Where(cue => cue.PositionFrame > currentFrame)
+				.Select(cue => (long?)cue.PositionFrame)
+				.FirstOrDefault();
+		if (!frame.HasValue)
+			return false;
+
+		await _timeline.SeekToFrameAsync(frame.Value, cancellationToken).ConfigureAwait(false);
+		return true;
+	}
+
 	public ValueTask DisposeAsync()
 	{
 		if (_disposed)
@@ -174,11 +212,14 @@ public sealed class MediaTimelineMarkerController : IAsyncDisposable
 		return ValueTask.CompletedTask;
 	}
 
-	private ValueTask<bool> SendAtCurrentFrameAsync(
+	private ValueTask<bool> SendAtFrameAsync(
 		MediaMarkerCommandKind kind,
+		long frame,
 		CancellationToken cancellationToken)
 	{
-		var frame = _timeline.State.ConfirmedFrame;
+		if (frame < 0)
+			throw new ArgumentOutOfRangeException(nameof(frame));
+
 		return SendAsync(
 			snapshot => new MediaMarkerCommand(
 				MediaContractVersion.Current,

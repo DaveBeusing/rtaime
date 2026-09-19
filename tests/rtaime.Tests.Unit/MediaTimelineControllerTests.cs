@@ -15,6 +15,9 @@ public sealed class MediaTimelineControllerTests
 	[InlineData(50, 1, 50, "00:00:01:00")]
 	[InlineData(60000, 1001, 59, "00:00:00:59")]
 	[InlineData(60000, 1001, 60, "00:00:01:00")]
+	[InlineData(240, 1, 239, "00:00:00:239")]
+	[InlineData(240, 1, 240, "00:00:01:00")]
+	[InlineData(240000, 1001, 240, "00:00:01:00")]
 	public void Timecode_uses_nominal_frame_field_for_supported_rates(
 		long numerator,
 		long denominator,
@@ -134,6 +137,42 @@ public sealed class MediaTimelineControllerTests
 		Assert.Equal(MediaTransportCommandKind.Seek, observed!.Kind);
 		Assert.Equal(expected, observed.TargetFrame);
 		Assert.Equal(expected, controller.State.ConfirmedFrame);
+	}
+
+	[Fact]
+	public void Zoomed_visible_range_preserves_frame_boundaries_without_fractional_time_state()
+	{
+		var centered = MediaTimelineGeometry.CalculateVisibleRange(1000, 4.0, 500);
+
+		Assert.Equal(250, centered.FrameCount);
+		Assert.InRange(500, centered.StartFrame, centered.EndFrame);
+
+		var clampedStart = MediaTimelineGeometry.CalculateVisibleRangeFromStart(1000, 4.0, 990);
+		Assert.Equal(750, clampedStart.StartFrame);
+		Assert.Equal(999, clampedStart.EndFrame);
+	}
+
+	[Theory]
+	[InlineData(0, 200, 400)]
+	[InlineData(500, 300, 400)]
+	[InlineData(1000, 400, 400)]
+	public void Visible_pointer_mapping_is_frame_accurate(double x, long expected, long visibleEnd)
+	{
+		var range = new MediaTimelineVisibleRange(200, visibleEnd);
+		var frame = MediaTimelineGeometry.FrameFromVisiblePosition(x, 1000, range);
+
+		Assert.Equal(expected, frame);
+		Assert.Equal(x, MediaTimelineGeometry.LogicalPositionFromFrame(frame, 1000, range), 6);
+	}
+
+	[Fact]
+	public void Snap_uses_nearest_frame_inside_bounded_threshold()
+	{
+		var snapFrames = new long[] { 10, 25, 40 };
+
+		Assert.Equal(25, MediaTimelineGeometry.SnapFrame(23, snapFrames, 3));
+		Assert.Equal(23, MediaTimelineGeometry.SnapFrame(23, snapFrames, 1));
+		Assert.Equal(40, MediaTimelineGeometry.SnapFrame(38, snapFrames, 2));
 	}
 
 	private static MediaTransportSnapshot Snapshot(

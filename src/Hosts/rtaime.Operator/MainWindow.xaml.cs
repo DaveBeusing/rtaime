@@ -52,6 +52,7 @@ public partial class MainWindow : Window
 			new DispatcherSynchronizationContext(Dispatcher));
 		Shell = new OperatorShellViewModel(new OperatorLayoutStore(), SetProductionFullscreen);
 		MediaPool = new MediaPoolInspectorViewModel(viewModel, MediaDeck);
+		Timeline.SelectionChanged += OnTimelineSelectionChanged;
 		InitializeComponent();
 		ApplyProductionFullscreen(Shell.IsFullscreen, updateShell: false);
 		DataContext = viewModel;
@@ -80,6 +81,7 @@ public partial class MainWindow : Window
 			new DispatcherSynchronizationContext(Dispatcher));
 		Shell = new OperatorShellViewModel(new OperatorLayoutStore(), SetProductionFullscreen);
 		MediaPool = new MediaPoolInspectorViewModel(viewModel, MediaDeck);
+		Timeline.SelectionChanged += OnTimelineSelectionChanged;
 		InitializeComponent();
 		ApplyProductionFullscreen(Shell.IsFullscreen, updateShell: false);
 		DataContext = viewModel;
@@ -161,6 +163,7 @@ public partial class MainWindow : Window
 			if (DataContext is OperatorViewModel viewModel)
 			{
 				MediaDeck.SnapshotChanged -= viewModel.ApplyMediaDeckSnapshot;
+				Timeline.SelectionChanged -= OnTimelineSelectionChanged;
 				MediaPool.Dispose();
 				await Monitoring.DisposeAsync();
 				await MediaDeck.DisposeAsync();
@@ -168,6 +171,7 @@ public partial class MainWindow : Window
 			}
 			else
 			{
+				Timeline.SelectionChanged -= OnTimelineSelectionChanged;
 				MediaPool.Dispose();
 				await Monitoring.DisposeAsync();
 				await MediaDeck.DisposeAsync();
@@ -232,9 +236,10 @@ public partial class MainWindow : Window
 		var item = e.Data.GetDataPresent(typeof(MediaPoolItemViewModel))
 			? e.Data.GetData(typeof(MediaPoolItemViewModel)) as MediaPoolItemViewModel
 			: null;
-		var accepted = item?.Kind == MediaPoolItemKind.Clip &&
-			string.Equals(item.ReferenceId, MediaDeck.SourceId, StringComparison.Ordinal) &&
-			MediaDeck.RefreshCommand.CanExecute(null);
+		var target = sender is MediaTimelineControl control
+			? control.ResolveDropTarget(e.OriginalSource)
+			: null;
+		var accepted = Timeline.CanAcceptMediaPoolDrop(item, target);
 		e.Effects = accepted ? DragDropEffects.Copy : DragDropEffects.None;
 		e.Handled = true;
 	}
@@ -244,14 +249,42 @@ public partial class MainWindow : Window
 		var item = e.Data.GetDataPresent(typeof(MediaPoolItemViewModel))
 			? e.Data.GetData(typeof(MediaPoolItemViewModel)) as MediaPoolItemViewModel
 			: null;
-		if (item?.Kind == MediaPoolItemKind.Clip &&
-			string.Equals(item.ReferenceId, MediaDeck.SourceId, StringComparison.Ordinal) &&
-			MediaDeck.RefreshCommand.CanExecute(null))
+		var target = sender is MediaTimelineControl control
+			? control.ResolveDropTarget(e.OriginalSource)
+			: null;
+		if (item is null || target is null || !Timeline.CanAcceptMediaPoolDrop(item, target))
 		{
-			MediaPool.SelectedItem = item;
-			MediaDeck.RefreshCommand.Execute(null);
+			e.Effects = DragDropEffects.None;
+			e.Handled = true;
+			return;
 		}
+
+		MediaPool.SelectedItem = item;
+		if (item.Kind == MediaPoolItemKind.Clip && MediaDeck.RefreshCommand.CanExecute(null))
+			MediaDeck.RefreshCommand.Execute(null);
+
+		Timeline.ProjectMediaPoolDrop(item, target.Value);
+		e.Effects = DragDropEffects.Copy;
 		e.Handled = true;
+	}
+
+	private void OnTimelineSelectionChanged(TimelineSelection selection)
+	{
+		if (selection.Cue is { } cue)
+		{
+			MediaDeck.SelectedCue = MediaDeck.Cues.FirstOrDefault(candidate => candidate.Id == cue.Id);
+			MediaPool.SelectTimelineCue(cue);
+			return;
+		}
+
+		MediaDeck.SelectedCue = null;
+		if (selection.Item is { } item)
+		{
+			MediaPool.SelectTimelineItem(item);
+			return;
+		}
+
+		MediaPool.ClearTimelineSelection();
 	}
 
 	private void SetProductionFullscreen(bool fullscreen) =>
@@ -295,7 +328,7 @@ public partial class MainWindow : Window
 	private void OnHelpClick(object sender, RoutedEventArgs e)
 	{
 		MessageBox.Show(
-			"F11  Fullscreen / Windowed\nEsc  Exit fullscreen\nCtrl+1  Maximize Preview\nCtrl+2  Maximize Program\nCtrl+0  Restore dual view\nF5  Synchronize\nCtrl+P  Set selected source to Preview\nSpace  CUT Preview to Program\nCtrl+Space  AUTO Preview to Program\nP / S  Media Play-Pause / Stop\nI / O / M  IN / OUT / Cue\nMedia Pool  Search/filter resources; drag a Source or loaded Clip to Preview.\nInspector  METADATA is read-only; DESIRED edits require APPLY before COMMITTED confirmation.",
+			"F11  Fullscreen / Windowed\nEsc  Exit fullscreen\nCtrl+1  Maximize Preview\nCtrl+2  Maximize Program\nCtrl+0  Restore dual view\nF5  Synchronize\nCtrl+P  Set selected source to Preview\nSpace  CUT Preview to Program\nCtrl+Space  AUTO Preview to Program\nP / S  Media Play-Pause / Stop\nI / O / M  IN / OUT / Cue\nPageUp / PageDown  Previous / Next Cue\nCtrl++ / Ctrl+-  Timeline Zoom\nCtrl+Shift+F  Timeline Fit\nMedia Pool  Search/filter resources; drag a Source or loaded Clip to Preview.\nTimeline  Select clips/cues for Inspector context; drag IN/OUT handles to trim.\nInspector  METADATA is read-only; DESIRED edits require APPLY before COMMITTED confirmation.",
 			"rtaime Operator — Keyboard Reference",
 			MessageBoxButton.OK,
 			MessageBoxImage.Information);

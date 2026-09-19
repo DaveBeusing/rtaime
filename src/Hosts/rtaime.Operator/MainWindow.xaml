@@ -806,7 +806,7 @@
 
 					<ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
 						<StackPanel>
-							<TextBlock Text="No selection. Select a Media Pool resource to inspect verified product state."
+							<TextBlock Text="No selection. Select a Media Pool resource, timeline item or cue to inspect its context."
 								TextWrapping="Wrap" Margin="0,0,0,10">
 								<TextBlock.Style>
 									<Style TargetType="{x:Type TextBlock}" BasedOn="{StaticResource OperatorLabel}">
@@ -832,9 +832,9 @@
 									</Style>
 								</StackPanel.Style>
 
-								<TextBlock Text="{Binding MediaPool.SelectedItem.Name, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+								<TextBlock Text="{Binding MediaPool.InspectorTitle, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 									FontSize="17" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-								<TextBlock Text="{Binding MediaPool.SelectedItem.Detail, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+								<TextBlock Text="{Binding MediaPool.InspectorDetail, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 									Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,3,0,10" />
 
 								<ItemsControl ItemsSource="{Binding MediaPool.InspectorProperties, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
@@ -879,6 +879,30 @@
 										Command="{Binding MediaDeck.ApplyPlaybackPolicyCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 										Style="{StaticResource OperatorAccentButton}" />
 									<TextBlock Text="Committed range and playback state update only from the confirmed Media Deck snapshot." Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,6,0,0" />
+								</StackPanel>
+
+								<StackPanel Margin="0,12,0,0">
+									<StackPanel.Style>
+										<Style TargetType="{x:Type StackPanel}">
+											<Setter Property="Visibility" Value="Collapsed" />
+											<Style.Triggers><DataTrigger Binding="{Binding MediaPool.IsCueSelection, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
+										</Style>
+									</StackPanel.Style>
+									<TextBlock Text="CUE EDITING" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,6" />
+									<TextBox Text="{Binding MediaDeck.CueName, RelativeSource={RelativeSource AncestorType={x:Type Window}}, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource OperatorTextBox}" Margin="0,0,0,6" />
+									<Grid>
+										<Grid.ColumnDefinitions>
+											<ColumnDefinition Width="*" />
+											<ColumnDefinition Width="5" />
+											<ColumnDefinition Width="*" />
+											<ColumnDefinition Width="5" />
+											<ColumnDefinition Width="*" />
+										</Grid.ColumnDefinitions>
+										<Button Grid.Column="0" Content="JUMP" Command="{Binding MediaDeck.JumpCueCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorButton}" />
+										<Button Grid.Column="2" Content="RENAME" Command="{Binding MediaDeck.RenameCueCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorAccentButton}" />
+										<Button Grid.Column="4" Content="DELETE" Command="{Binding MediaDeck.DeleteCueCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorButton}" />
+									</Grid>
+									<TextBlock Text="Cue mutations remain explicit Media Deck marker commands." Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,6,0,0" />
 								</StackPanel>
 
 								<StackPanel Margin="0,12,0,0">

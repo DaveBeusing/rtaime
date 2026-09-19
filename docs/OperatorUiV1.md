@@ -335,6 +335,25 @@ The source tile and deck countdown use the same effective remaining range. Media
 - client tests prove confirmed policy round-trip;
 - Operator UI policy checks the autoplay control, end-mode selector, Program state, effective range and countdown.
 
+## Layered Timeline & Cue Workspace
+
+The persistent lower workspace is now a frame-accurate layered timeline rather than a single seek slider. It exposes Video, Graphics, Overlay, Audio, AI, Control and Cue semantic tracks while preserving Runtime and existing media/marker contracts as the production authority.
+
+The timeline provides a visible ruler and Program playhead, horizontal scroll, 1x–32x zoom, Fit, frame snapping, confirmed IN/OUT markers, the active media range and first-class named Media cues. Named cues can be added at the confirmed playhead frame; Page Up/Page Down navigate previous/next cue; cue double-click jumps through the existing seek command path; and selected cues expose Jump/Rename/Delete in the shared Inspector. IN/OUT handle drags finish through the existing marker command path.
+
+The loaded Media Deck clip is the authoritative Video item. Audio and Graphics Media Pool resources may be dropped only onto matching semantic tracks and appear as `PROJECTED` Operator metadata across the current media duration. They are deliberately not represented as `COMMITTED` timed production automation. Unsupported Source/Composition drops are rejected.
+
+Selecting a clip, projected resource or cue reuses the existing right-side context Inspector. No separate timeline property dialogs or hidden production authority are introduced.
+
+The detailed operator and authority semantics are documented in `docs/LayeredTimeline.md`.
+
+### Layered timeline acceptance evidence
+
+- Client unit tests cover frame/time conversion, zoomed visible ranges, pointer mapping and snapping;
+- marker-controller unit tests cover absolute IN/OUT command generation and previous/next cue navigation;
+- Operator UI policy verifies semantic tracks, ruler/playhead, zoom/scroll, trim command paths, cue keyboard navigation, selection-to-Inspector integration and bounded projection refresh;
+- stable track and cue projections are hash-gated so routine playback observations do not allocate a new composition model per frame.
+
 ## Verification
 
 `build/quality/Test-OperatorUiPolicy.ps1` verifies the primary UI architectural and UX guardrails, including:

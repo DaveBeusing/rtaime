@@ -44,7 +44,7 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 		_filePicker = filePicker ?? throw new ArgumentNullException(nameof(filePicker));
 		_sourceIdSelector = sourceIdSelector ?? throw new ArgumentNullException(nameof(sourceIdSelector));
 		_synchronizationContext = synchronizationContext ?? SynchronizationContext.Current;
-		Timeline = new MediaTimelineViewModel(_controller.Timeline);
+		Timeline = new MediaTimelineViewModel(_controller.Timeline, _controller.Markers);
 		Cues = new ObservableCollection<MediaDeckCueItem>();
 		_controller.StateChanged += OnControllerStateChanged;
 
@@ -507,6 +507,7 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 	private void RefreshState()
 	{
 		_snapshot = _controller.Snapshot;
+		Timeline.ApplyMediaDeckSnapshot(_snapshot);
 		LastError = _snapshot.Failure?.Message;
 		if (!_playbackPolicyDirty && _snapshot.Transport is { } playback)
 		{
