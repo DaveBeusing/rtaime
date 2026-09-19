@@ -71,6 +71,8 @@
 					<Button x:Name="SynchronizeButton" Content="SYNC  F5" Command="{Binding SynchronizeCommand}" Style="{StaticResource OperatorAccentButton}" MinHeight="28" Padding="8,3" ToolTip="Synchronize authoritative ControlHost state (F5)." AutomationProperties.Name="Synchronize authoritative state" />
 				</StackPanel>
 				<StackPanel Grid.Column="6" Orientation="Horizontal" VerticalAlignment="Center">
+					<Button Content="TOOLS" Command="{Binding Shell.ToggleLeftPanelCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorButton}" MinHeight="28" Padding="8,3" Margin="0,0,5,0" />
+					<Button Content="INSPECTOR" Command="{Binding Shell.ToggleRightPanelCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorButton}" MinHeight="28" Padding="8,3" Margin="0,0,5,0" />
 					<Button Content="{Binding Shell.CenterModeLabel, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Command="{Binding Shell.ToggleCenterMaximizeCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorButton}" MinHeight="28" Padding="8,3" Margin="0,0,5,0" />
 					<Button Content="{Binding Shell.FullscreenLabel, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Command="{Binding Shell.ToggleFullscreenCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorButton}" MinHeight="28" Padding="8,3" Margin="0,0,5,0" />
 					<Button Content="LAYOUT RESET" Command="{Binding Shell.ResetLayoutCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorButton}" MinHeight="28" Padding="8,3" Margin="0,0,5,0" />
@@ -640,7 +642,7 @@
 							<TextBlock Text="{Binding EngineHealthDetail}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
 						</StackPanel>
 					</ScrollViewer>
-					<Button Grid.Row="2" Content="SHOW FULL INSPECTOR IN WORKSPACE" Command="{Binding Shell.ToggleRightPanelCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorButton}" Margin="0,10,0,0" />
+					<Button Grid.Row="2" Content="COLLAPSE INSPECTOR" Command="{Binding Shell.ToggleRightPanelCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorButton}" Margin="0,10,0,0" />
 				</Grid>
 			</Border>
 		</Grid>
