@@ -85,21 +85,21 @@ public sealed record OperatorWindowPlacementSettings(
 
 public sealed record OperatorLayoutSettings
 {
-	public const int CurrentVersion = 3;
-	public const double DefaultLeftPanelWidth = 248;
-	public const double DefaultRightPanelWidth = 320;
-	public const double DefaultLowerPanelHeight = 420;
-	public const double MinimumLeftPanelWidth = 180;
-	public const double MaximumLeftPanelWidth = 520;
-	public const double MinimumRightPanelWidth = 240;
-	public const double MaximumRightPanelWidth = 620;
-	public const double MinimumLowerPanelHeight = 320;
-	public const double MaximumLowerPanelHeight = 680;
+	public const int CurrentVersion = 4;
+	public const double DefaultLeftPanelWidth = 400;
+	public const double DefaultRightPanelWidth = 340;
+	public const double DefaultLowerPanelHeight = 320;
+	public const double MinimumLeftPanelWidth = 280;
+	public const double MaximumLeftPanelWidth = 560;
+	public const double MinimumRightPanelWidth = 260;
+	public const double MaximumRightPanelWidth = 500;
+	public const double MinimumLowerPanelHeight = 220;
+	public const double MaximumLowerPanelHeight = 500;
 	public const double CompactLowerPanelHeight = 220;
 	public const double CompactViewportWidth = 1100;
 
 	public int Version { get; init; } = CurrentVersion;
-	public bool IsFullscreen { get; init; }
+	public bool IsFullscreen { get; init; } = true;
 	public string SelectedWorkspace { get; init; } = OperatorWorkspaceNames.Live;
 	public OperatorWindowPlacementSettings WindowPlacement { get; init; } = OperatorWindowPlacementSettings.Default;
 	public Dictionary<string, OperatorWorkspaceLayoutSettings> Workspaces { get; init; } = CreateCanonicalLayouts();
@@ -112,6 +112,16 @@ public sealed record OperatorLayoutSettings
 			return Default;
 
 		var selected = OperatorWorkspaceNames.Normalize(SelectedWorkspace);
+		if (Version < CurrentVersion)
+		{
+			return Default with
+			{
+				IsFullscreen = IsFullscreen,
+				SelectedWorkspace = selected,
+				WindowPlacement = (WindowPlacement ?? OperatorWindowPlacementSettings.Default).Normalize()
+			};
+		}
+
 		var layouts = CreateCanonicalLayouts();
 		if (Workspaces is not null)
 		{
@@ -141,63 +151,24 @@ public sealed record OperatorLayoutSettings
 
 	public static Dictionary<string, OperatorWorkspaceLayoutSettings> CreateCanonicalLayouts() => new(StringComparer.Ordinal)
 	{
-		[OperatorWorkspaceNames.Live] = new(
-			220,
-			300,
-			340,
-			false,
-			false,
-			false,
-			"DUAL"),
-		[OperatorWorkspaceNames.Edit] = new(
-			280,
-			350,
-			560,
-			false,
-			false,
-			false,
-			"DUAL"),
-		[OperatorWorkspaceNames.Media] = new(
-			460,
-			360,
-			360,
-			false,
-			false,
-			false,
-			"PREVIEW"),
-		[OperatorWorkspaceNames.Scenes] = new(
-			260,
-			390,
-			360,
-			false,
-			false,
-			false,
-			"DUAL"),
-		[OperatorWorkspaceNames.Compositing] = new(
-			300,
-			390,
-			360,
-			false,
-			false,
-			false,
-			"DUAL"),
-		[OperatorWorkspaceNames.Outputs] = new(
-			220,
-			420,
-			340,
-			true,
-			false,
-			false,
-			"PROGRAM"),
-		[OperatorWorkspaceNames.Settings] = new(
-			220,
-			460,
-			340,
-			true,
-			true,
-			false,
-			"PROGRAM")
+		[OperatorWorkspaceNames.Live] = CreateReferenceLayout("DUAL"),
+		[OperatorWorkspaceNames.Edit] = CreateReferenceLayout("DUAL"),
+		[OperatorWorkspaceNames.Media] = CreateReferenceLayout("PREVIEW"),
+		[OperatorWorkspaceNames.Scenes] = CreateReferenceLayout("DUAL"),
+		[OperatorWorkspaceNames.Compositing] = CreateReferenceLayout("DUAL"),
+		[OperatorWorkspaceNames.Outputs] = CreateReferenceLayout("PROGRAM"),
+		[OperatorWorkspaceNames.Settings] = CreateReferenceLayout("PROGRAM")
 	};
+
+	private static OperatorWorkspaceLayoutSettings CreateReferenceLayout(string viewerMode) => new(
+		DefaultLeftPanelWidth,
+		DefaultRightPanelWidth,
+		DefaultLowerPanelHeight,
+		false,
+		false,
+		false,
+		viewerMode);
+
 }
 
 public static class OperatorWorkspaceNames
@@ -389,8 +360,8 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 	public IReadOnlyList<string> Workspaces => OperatorWorkspaceNames.All;
 	public OperatorWindowPlacementSettings WindowPlacement => _windowPlacement;
 	public bool IsCompactViewport => _viewportWidth < OperatorLayoutSettings.CompactViewportWidth;
-	public double NavigationRailWidth => _viewportWidth < 1320 ? 54 : 86;
-	public Visibility NavigationLabelVisibility => _viewportWidth < 1320 ? Visibility.Collapsed : Visibility.Visible;
+	public double NavigationRailWidth => 92;
+	public Visibility NavigationLabelVisibility => Visibility.Visible;
 	public Visibility SecondaryMetricVisibility => _viewportWidth < 1480 ? Visibility.Collapsed : Visibility.Visible;
 	public Visibility CompactOptionalVisibility => IsCompactViewport ? Visibility.Collapsed : Visibility.Visible;
 
@@ -443,10 +414,10 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 
 	public GridLength LeftColumnWidth
 	{
-		get => new(IsCenterMaximized || IsLeftCollapsed || !HasLeftRegion || IsCompactViewport ? 0 : LeftPanelWidth);
+		get => new(IsCenterMaximized || IsLeftCollapsed || IsCompactViewport ? 0 : LeftPanelWidth);
 		set
 		{
-			if (!IsCompactViewport && !IsCenterMaximized && !IsLeftCollapsed && HasLeftRegion && value.IsAbsolute && value.Value > 0)
+			if (!IsCompactViewport && !IsCenterMaximized && !IsLeftCollapsed && value.IsAbsolute && value.Value > 0)
 				LeftPanelWidth = value.Value;
 		}
 	}
@@ -463,17 +434,17 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 
 	public GridLength LowerRowHeight
 	{
-		get => new(IsCenterMaximized || !HasTimelineRegion ? 0 : IsCompactViewport ? Math.Min(LowerPanelHeight, OperatorLayoutSettings.CompactLowerPanelHeight) : LowerPanelHeight);
+		get => new(IsCenterMaximized ? 0 : IsCompactViewport ? Math.Min(LowerPanelHeight, OperatorLayoutSettings.CompactLowerPanelHeight) : LowerPanelHeight);
 		set
 		{
-			if (!IsCompactViewport && !IsCenterMaximized && HasTimelineRegion && value.IsAbsolute && value.Value > 0)
+			if (!IsCompactViewport && !IsCenterMaximized && value.IsAbsolute && value.Value > 0)
 				LowerPanelHeight = value.Value;
 		}
 	}
 
-	public double LeftSplitterWidth => IsCenterMaximized || IsLeftCollapsed || !HasLeftRegion || IsCompactViewport ? 0 : 5;
-	public double RightSplitterWidth => IsCenterMaximized || IsRightCollapsed || IsCompactViewport ? 0 : 5;
-	public double LowerSplitterHeight => IsCenterMaximized || !HasTimelineRegion || IsCompactViewport ? 0 : 5;
+	public double LeftSplitterWidth => IsCenterMaximized || IsLeftCollapsed || IsCompactViewport ? 0 : 6;
+	public double RightSplitterWidth => IsCenterMaximized || IsRightCollapsed || IsCompactViewport ? 0 : 6;
+	public double LowerSplitterHeight => IsCenterMaximized || !HasTimelineRegion || IsCompactViewport ? 0 : 6;
 
 	public bool IsLeftCollapsed
 	{
@@ -671,9 +642,26 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 		if (string.Equals(normalized, SelectedWorkspace, StringComparison.Ordinal))
 			return;
 
+		var stableLeftPanelWidth = LeftPanelWidth;
+		var stableRightPanelWidth = RightPanelWidth;
+		var stableLowerPanelHeight = LowerPanelHeight;
+		var stableLeftCollapsed = IsLeftCollapsed;
+		var stableRightCollapsed = IsRightCollapsed;
+		var stableCenterMaximized = IsCenterMaximized;
+
 		CaptureCurrentWorkspace();
 		SelectedWorkspace = normalized;
-		ApplyWorkspaceLayout(_workspaceLayouts[SelectedWorkspace]);
+		var target = _workspaceLayouts[SelectedWorkspace] with
+		{
+			LeftPanelWidth = stableLeftPanelWidth,
+			RightPanelWidth = stableRightPanelWidth,
+			LowerPanelHeight = stableLowerPanelHeight,
+			IsLeftCollapsed = stableLeftCollapsed,
+			IsRightCollapsed = stableRightCollapsed,
+			IsCenterMaximized = stableCenterMaximized
+		};
+		_workspaceLayouts[SelectedWorkspace] = target.Normalize();
+		ApplyWorkspaceLayout(target);
 		Save();
 	}
 
