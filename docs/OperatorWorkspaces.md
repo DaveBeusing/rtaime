@@ -93,7 +93,7 @@ Pins are stored below the current user's local application data in rtaime/operat
 
 ## Keyboard-first operation
 
-Window-level shortcuts are defined centrally by OperatorKeyboardCommandRegistry. The registry rejects duplicate key/modifier pairs before applying bindings and generates the Help reference from the same definitions.
+Window-level shortcuts are defined centrally by OperatorKeyboardCommandRegistry. The registry rejects duplicate key/modifier pairs before routing preview key-down events and generates the Help reference from the same definitions. This path supports the unmodified production keys used by the Operator without relying on WPF KeyGesture validation.
 
 Default bindings are:
 
@@ -120,7 +120,7 @@ Default bindings are:
 
 Timeline-local Page Up/Page Down navigation remains inside the timeline control. J and L are intentionally not bound in V1 because deterministic reverse/forward shuttle semantics are not currently exposed by the Media Deck. The UI does not invent those semantics.
 
-Production shortcuts are suppressed while the operator is typing in a text-entry control. Non-destructive application/view commands such as F5 and fullscreen remain available.
+Production shortcuts are suppressed while the operator is typing in a text-entry control. Non-destructive application/view commands such as F5 and fullscreen remain available. Repeated key-down events are consumed without repeatedly executing production commands.
 
 ## Shortcut discoverability
 
