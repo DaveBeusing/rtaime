@@ -806,7 +806,7 @@
 
 					<ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
 						<StackPanel>
-							<TextBlock Text="No selection. Select a Media Pool resource to inspect verified product state."
+							<TextBlock Text="No selection. Select a Media Pool resource, timeline item or cue to inspect its context."
 								TextWrapping="Wrap" Margin="0,0,0,10">
 								<TextBlock.Style>
 									<Style TargetType="{x:Type TextBlock}" BasedOn="{StaticResource OperatorLabel}">
@@ -832,9 +832,9 @@
 									</Style>
 								</StackPanel.Style>
 
-								<TextBlock Text="{Binding MediaPool.SelectedItem.Name, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+								<TextBlock Text="{Binding MediaPool.InspectorTitle, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 									FontSize="17" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-								<TextBlock Text="{Binding MediaPool.SelectedItem.Detail, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+								<TextBlock Text="{Binding MediaPool.InspectorDetail, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 									Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,3,0,10" />
 
 								<ItemsControl ItemsSource="{Binding MediaPool.InspectorProperties, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
