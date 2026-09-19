@@ -8,6 +8,7 @@
 				<ResourceDictionary Source="Themes/OperatorTheme.xaml" />
 				<ResourceDictionary Source="Themes/Controls/RtaimeIcons.xaml" />
 				<ResourceDictionary Source="Themes/Controls/RtaimeControls.xaml" />
+				<ResourceDictionary Source="Themes/Controls/RtaimeInputsAndScrolling.xaml" />
 			</ResourceDictionary.MergedDictionaries>
 		</ResourceDictionary>
 	</Application.Resources>
