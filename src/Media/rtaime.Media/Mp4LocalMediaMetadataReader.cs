@@ -9,8 +9,6 @@ internal readonly record struct Mp4LocalMediaMetadata(
 	uint Height,
 	long FrameRateNumerator,
 	long FrameRateDenominator,
-	uint AudioChannels,
-	uint AudioSampleRate,
 	TimeSpan Duration);
 
 internal static class Mp4LocalMediaMetadataReader
@@ -43,9 +41,6 @@ internal static class Mp4LocalMediaMetadataReader
 		uint? height = null;
 		long? frameRateNumerator = null;
 		long? frameRateDenominator = null;
-		uint? channels = null;
-		uint? sampleRate = null;
-
 		foreach (var track in Children(moov, 0, moov.Length).Where(box => box.Type == Trak))
 		{
 			var media = RequireChild(moov, track.PayloadOffset, track.PayloadLength, Mdia, "mdia");
@@ -64,17 +59,10 @@ internal static class Mp4LocalMediaMetadataReader
 				var timing = RequireChild(moov, sampleTable.PayloadOffset, sampleTable.PayloadLength, Stts, "stts");
 				(frameRateNumerator, frameRateDenominator) = ReadFrameRate(moov, timing, mediaTimescale);
 			}
-			else if (handlerType == Soun)
-			{
-				var audioEntry = ReadFirstSampleEntry(moov, sampleDescription, Mp4a, "mp4a");
-				(channels, sampleRate) = ReadAudioSampleEntry(moov, audioEntry);
-			}
 		}
 
 		if (width is null || height is null || frameRateNumerator is null || frameRateDenominator is null)
 			throw new InvalidDataException("MP4 video metadata is incomplete.");
-		if (channels is null || sampleRate is null)
-			throw new InvalidDataException("MP4 audio metadata is incomplete.");
 		if (duration <= TimeSpan.Zero)
 			throw new InvalidDataException("MP4 duration must be greater than zero.");
 
@@ -83,8 +71,6 @@ internal static class Mp4LocalMediaMetadataReader
 			height.Value,
 			frameRateNumerator.Value,
 			frameRateDenominator.Value,
-			channels.Value,
-			sampleRate.Value,
 			duration);
 	}
 
