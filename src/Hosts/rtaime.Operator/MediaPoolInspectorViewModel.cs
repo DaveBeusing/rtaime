@@ -36,11 +36,35 @@ public sealed record MediaPoolItemViewModel(
 	string? ReferenceId,
 	ImageSource? Thumbnail,
 	bool IsOnline,
-	bool IsReady);
+	bool IsReady,
+	string? LocalPath = null)
+{
+	public string DurationLabel =>
+		Kind == MediaPoolItemKind.Clip
+			? Detail.Split('·', 2, StringSplitOptions.TrimEntries)[0]
+			: string.Empty;
+
+	public string FileTypeLabel => Kind switch
+	{
+		MediaPoolItemKind.Clip => System.IO.Path.GetExtension(Name).TrimStart('.').ToUpperInvariant() is { Length: > 0 } extension ? extension : "VIDEO",
+		MediaPoolItemKind.Source => "SOURCE",
+		MediaPoolItemKind.Audio => "AUDIO",
+		MediaPoolItemKind.Graphics => "GRAPHICS",
+		MediaPoolItemKind.Composition => "COMPOSITION",
+		_ => Kind.ToString().ToUpperInvariant()
+	};
+
+	public string AvailabilityLabel => IsOnline ? "ONLINE" : "OFFLINE";
+	public bool CanRevealInExplorer => Kind == MediaPoolItemKind.Clip && !string.IsNullOrWhiteSpace(LocalPath);
+}
+
+public sealed record MediaAssetDragPayload(
+	MediaPoolItemViewModel Primary,
+	IReadOnlyList<MediaPoolItemViewModel> Items);
 
 public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDisposable
 {
-	private const int MaxVisibleItems = 256;
+	private const int MaxProjectedItems = 4096;
 	private static readonly string[] SupportedCategories = ["All", "Sources", "Clips", "Audio", "Graphics", "Compositions"];
 	private static readonly string[] SupportedFilters = ["All", "Video", "Audio", "Graphics", "Online", "Offline"];
 
@@ -64,6 +88,7 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 		_mediaDeck = mediaDeck ?? throw new ArgumentNullException(nameof(mediaDeck));
 
 		FilteredItems = [];
+		SelectedItems = [];
 		InspectorProperties = [];
 		GridViewCommand = new AsyncRelayCommand(() =>
 		{
@@ -87,6 +112,7 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 	public event PropertyChangedEventHandler? PropertyChanged;
 
 	public ObservableCollection<MediaPoolItemViewModel> FilteredItems { get; }
+	public ObservableCollection<MediaPoolItemViewModel> SelectedItems { get; }
 	public ObservableCollection<InspectorPropertyViewModel> InspectorProperties { get; }
 	public IReadOnlyList<string> Categories => SupportedCategories;
 	public IReadOnlyList<string> Filters => SupportedFilters;
@@ -185,6 +211,45 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 		private set => Set(ref _emptyState, value);
 	}
 
+	public bool IsLoading => _mediaDeck.IsBusy;
+	public bool HasError => _mediaDeck.HasError;
+	public string ErrorState => _mediaDeck.LastError ?? string.Empty;
+	public int SelectionCount => SelectedItems.Count;
+	public bool HasMultipleSelection => SelectionCount > 1;
+	public string SelectionSummary => SelectionCount switch
+	{
+		0 => "No selection",
+		1 => "1 asset selected",
+		_ => $"{SelectionCount} assets selected"
+	};
+
+	public void UpdateSelection(IEnumerable<MediaPoolItemViewModel> items)
+	{
+		ArgumentNullException.ThrowIfNull(items);
+		var selected = items
+			.GroupBy(item => item.Key, StringComparer.Ordinal)
+			.Select(group => group.First())
+			.ToArray();
+
+		SelectedItems.Clear();
+		foreach (var item in selected)
+			SelectedItems.Add(item);
+
+		if (selected.Length == 0)
+		{
+			if (SelectedItem is not null)
+				SelectedItem = null;
+		}
+		else if (SelectedItem is null || selected.All(item => !string.Equals(item.Key, SelectedItem.Key, StringComparison.Ordinal)))
+		{
+			SelectedItem = selected[0];
+		}
+
+		OnPropertyChanged(nameof(SelectionCount));
+		OnPropertyChanged(nameof(HasMultipleSelection));
+		OnPropertyChanged(nameof(SelectionSummary));
+	}
+
 	public bool CanDropToPreview(MediaPoolItemViewModel? item)
 	{
 		if (item is null || item.Kind is not (MediaPoolItemKind.Source or MediaPoolItemKind.Clip))
@@ -245,7 +310,7 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 		var selectedKey = SelectedItem?.Key;
 		_allItems.Clear();
 
-		foreach (var source in _operator.Sources.Take(MaxVisibleItems))
+		foreach (var source in _operator.Sources.Take(MaxProjectedItems))
 		{
 			var online = IsOnlineState(source.Health);
 			_allItems.Add(new MediaPoolItemViewModel(
@@ -276,10 +341,11 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 				_mediaDeck.SourceId,
 				_operator.Sources.FirstOrDefault(source => string.Equals(source.Id, _mediaDeck.SourceId, StringComparison.Ordinal))?.Thumbnail,
 				mediaOnline,
-				mediaOnline && !_mediaDeck.IsBusy));
+				mediaOnline && !_mediaDeck.IsBusy,
+				_mediaDeck.LocalPath));
 		}
 
-		foreach (var input in _operator.AudioInputs.Take(Math.Max(0, MaxVisibleItems - _allItems.Count)))
+		foreach (var input in _operator.AudioInputs.Take(Math.Max(0, MaxProjectedItems - _allItems.Count)))
 		{
 			var online = IsOnlineState(input.Health);
 			_allItems.Add(new MediaPoolItemViewModel(
@@ -331,8 +397,8 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 				ready));
 		}
 
-		if (_allItems.Count > MaxVisibleItems)
-			_allItems.RemoveRange(MaxVisibleItems, _allItems.Count - MaxVisibleItems);
+		if (_allItems.Count > MaxProjectedItems)
+			_allItems.RemoveRange(MaxProjectedItems, _allItems.Count - MaxProjectedItems);
 
 		ApplyFilter(selectedKey);
 	}
@@ -361,7 +427,7 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 			.OrderBy(item => item.Category, StringComparer.Ordinal)
 			.ThenBy(item => item.Name, StringComparer.OrdinalIgnoreCase)
 			.ThenBy(item => item.Key, StringComparer.Ordinal)
-			.Take(MaxVisibleItems)
+			.Take(MaxProjectedItems)
 			.ToArray();
 
 		FilteredItems.Clear();
@@ -419,7 +485,8 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 			Contains(item.Detail, query) ||
 			Contains(item.Format, query) ||
 			Contains(item.State, query) ||
-			Contains(item.ReferenceId, query);
+			Contains(item.ReferenceId, query) ||
+			Contains(item.LocalPath, query);
 	}
 
 	private static bool Contains(string? value, string query) =>
@@ -604,7 +671,13 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 		}
 	}
 
-	private void OnMediaDeckPropertyChanged(object? sender, PropertyChangedEventArgs e) => Refresh();
+	private void OnMediaDeckPropertyChanged(object? sender, PropertyChangedEventArgs e)
+	{
+		Refresh();
+		OnPropertyChanged(nameof(IsLoading));
+		OnPropertyChanged(nameof(HasError));
+		OnPropertyChanged(nameof(ErrorState));
+	}
 	private void OnSourceItemPropertyChanged(object? sender, PropertyChangedEventArgs e) => Refresh();
 	private void OnAudioItemPropertyChanged(object? sender, PropertyChangedEventArgs e) => Refresh();
 
