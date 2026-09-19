@@ -113,7 +113,6 @@
 					<ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
 						<StackPanel Margin="8">
 							<TextBlock Text="No selection. Select a Media Pool resource, timeline item or cue to inspect its context."
-								Style="{StaticResource OperatorLabel}"
 								TextWrapping="Wrap"
 								Margin="0,2,0,8">
 								<TextBlock.Style>
@@ -149,7 +148,6 @@
 									TextWrapping="Wrap"
 									Margin="0,3,0,4" />
 								<TextBlock Text="{Binding Inspector.SelectionSummary, ElementName=Root}"
-									Style="{StaticResource OperatorLabel}"
 									Margin="0,0,0,8">
 									<TextBlock.Style>
 										<Style TargetType="{x:Type TextBlock}" BasedOn="{StaticResource OperatorLabel}">
@@ -370,7 +368,6 @@
 					<ScrollViewer VerticalScrollBarVisibility="Auto">
 						<StackPanel Margin="8">
 							<TextBlock Text="No Effects/Processing capability is exposed for the current selection."
-								Style="{StaticResource OperatorLabel}"
 								TextWrapping="Wrap">
 								<TextBlock.Style>
 									<Style TargetType="{x:Type TextBlock}" BasedOn="{StaticResource OperatorLabel}">
