@@ -513,7 +513,7 @@
 					</ItemsControl.ItemTemplate>
 				</ItemsControl>
 
-				<Grid x:Name="TimelineContentArea" Grid.Column="1" IsHitTestVisible="False">
+				<Grid x:Name="TimelineContentArea" Grid.Column="1">
 					<Canvas x:Name="TimelineOverlay" ClipToBounds="True">
 						<Border
 							Width="2"
