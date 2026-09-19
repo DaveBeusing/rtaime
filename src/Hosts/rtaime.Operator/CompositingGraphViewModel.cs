@@ -93,6 +93,9 @@ public sealed class CompositingGraphNodeViewModel : INotifyPropertyChanged
 		return ports.Length == 0 ? "—" : string.Join(" · ", ports);
 	}
 
+	private void OnPropertyChanged([CallerMemberName] string? propertyName = null) =>
+		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+
 	private bool Set<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
 	{
 		if (EqualityComparer<T>.Default.Equals(field, value))
