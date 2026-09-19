@@ -5,6 +5,7 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
+using System.Windows.Media;
 
 namespace rtaime.Operator;
 
@@ -33,6 +34,7 @@ public sealed record MediaPoolItemViewModel(
 	string Format,
 	string State,
 	string? ReferenceId,
+	ImageSource? Thumbnail,
 	bool IsOnline,
 	bool IsReady);
 
@@ -210,6 +212,7 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 				source.Format,
 				online ? source.StateDetail : $"OFFLINE · {source.StateDetail}",
 				source.Id,
+				source.Thumbnail,
 				online,
 				online));
 		}
@@ -226,6 +229,7 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 				$"{_mediaDeck.Resolution} · {_mediaDeck.FrameRate}",
 				mediaOnline ? _mediaDeck.State : $"OFFLINE · {_mediaDeck.State}",
 				_mediaDeck.SourceId,
+				_operator.Sources.FirstOrDefault(source => string.Equals(source.Id, _mediaDeck.SourceId, StringComparison.Ordinal))?.Thumbnail,
 				mediaOnline,
 				mediaOnline && !_mediaDeck.IsBusy));
 		}
@@ -242,6 +246,7 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 				input.StreamId,
 				online ? input.Health : $"OFFLINE · {input.Health}",
 				input.SourceId,
+				null,
 				online,
 				online));
 		}
@@ -258,6 +263,7 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 				"RGBA / PNG",
 				_operator.GraphicsState,
 				_operator.GraphicsAssetName,
+				null,
 				true,
 				true));
 		}
@@ -274,6 +280,7 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 				_operator.AIProvider,
 				"AI effect",
 				_operator.AIStatus,
+				null,
 				null,
 				ready,
 				ready));
