@@ -80,8 +80,8 @@ public static class MediaTimelineTimecode
 	{
 		var value = (decimal)frameRate.Numerator / frameRate.Denominator;
 		var nominal = checked((int)decimal.Round(value, 0, MidpointRounding.AwayFromZero));
-		if (nominal <= 0 || nominal > 120)
-			throw new ArgumentOutOfRangeException(nameof(frameRate), "Timeline timecode supports nominal frame rates from 1 through 120 fps.");
+		if (nominal <= 0 || nominal > 240)
+			throw new ArgumentOutOfRangeException(nameof(frameRate), "Timeline timecode supports nominal frame rates from 1 through 240 fps.");
 		return nominal;
 	}
 }
