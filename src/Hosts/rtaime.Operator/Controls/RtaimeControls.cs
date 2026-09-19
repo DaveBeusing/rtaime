@@ -198,7 +198,7 @@ public class RtaimeTimecode : ContentControl
 	}
 }
 
-public class RtaimeIcon : Control
+public class RtaimeIcon : System.Windows.Controls.Control
 {
 	public static readonly DependencyProperty DataProperty = DependencyProperty.Register(
 		nameof(Data),
