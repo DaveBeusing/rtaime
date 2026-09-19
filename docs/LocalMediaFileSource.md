@@ -13,14 +13,14 @@ Change classification: `REALTIME_CRITICAL` for decoded-frame admission into the 
 
 ## V1 import contract
 
-The reference local-file provider accepts MP4 files with H.264/AVC video and embedded AAC audio. Native file resolution, frame rate and audio sample rate no longer need to match the active production format exactly.
+The reference local-file provider accepts MP4 files with H.264/AVC video. Embedded AAC audio is supported but no longer required. Video-only MP4 files and H.264 MP4 files whose embedded audio is not AAC remain playable as video; the unsupported audio track is not selected and the Operator reports `NO AUDIO`. Native file resolution, frame rate and supported audio sample rate no longer need to match the active production format exactly.
 
 On Windows, the Media Foundation Source Reader uses advanced video processing to normalize decoded video to the RuntimeHost production format:
 
 - 1920x1080 progressive at 50/1; or
 - 1920x1080 progressive at 60000/1001.
 
-Decoded video is converted to the existing RGBA8 Runtime representation. Embedded AAC audio is requested as 48 kHz stereo PCM and then converted to the existing interleaved Float32 representation.
+Decoded video is converted to the existing RGBA8 Runtime representation. When an AAC track is present, it is requested as 48 kHz stereo PCM and then converted to the existing interleaved Float32 representation. When no supported AAC track is available, decoded frames carry no audio buffer or audio payload.
 
 This normalization keeps the existing Runtime/GPU production format invariant intact while allowing ordinary H.264/AAC MP4 files with different native dimensions or frame rates to be imported. If Windows Media Foundation cannot perform the requested conversion, or if the container/codecs are unsupported, the file fails closed with an explicit `Failure` value.
 
@@ -37,7 +37,8 @@ The import path accepts a broad native H.264 input envelope before normalizing t
 | Native frame rate | up to 240 fps, additionally bounded by the Level 5.1 decode-rate envelope |
 | Average video bitrate | up to 300 Mbit/s when Media Foundation reports `MF_MT_AVG_BITRATE` |
 | Runtime output | normalized to 1920×1080p50 or 1920×1080p59.94 |
-| Pixel/audio runtime representation | RGBA8 video, 48 kHz stereo Float32 audio |
+| Audio | AAC when present; absent or non-AAC audio falls back to video-only playback |
+| Pixel/audio runtime representation | RGBA8 video, optional 48 kHz stereo Float32 audio |
 
 The decode-rate guard uses a maximum of 983,040 H.264 macroblocks per second. This intentionally permits common profiles such as 4K24/25/30, 1440p60, 1080p100/120 and 720p200/240 while rejecting combinations such as 4K60 that exceed the V1 H.264 Level 5.1 envelope.
 
@@ -77,7 +78,7 @@ Video and decoded audio use the Media Foundation 100-nanosecond timebase (`1/100
 
 Coverage includes:
 
-- contract metadata validation;
+- contract metadata validation, including video-only probes;
 - MP4/H.264/AAC probing;
 - V1 video/audio metadata;
 - missing-file rejection;
