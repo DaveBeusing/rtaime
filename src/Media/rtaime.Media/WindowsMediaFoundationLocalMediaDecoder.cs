@@ -79,12 +79,22 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 				var videoSubtype = GetGuid(videoNative, MediaFoundation.MfMtSubtype);
 				if (videoMajor != MediaFoundation.MfMediaTypeVideo)
 					return RejectAndRelease("media.file.video_stream_invalid", "The local media video stream has an invalid major type.", reader, mediaFoundationStarted);
-				if (videoSubtype != MediaFoundation.MfVideoFormatH264)
-					return RejectAndRelease("media.file.video_codec_unsupported", "V1 local media supports H.264 video only.", reader, mediaFoundationStarted);
 
-				var hasAudio = audioNative is not null &&
-					TryGetGuid(audioNative, MediaFoundation.MfMtMajorType) == MediaFoundation.MfMediaTypeAudio &&
-					TryGetGuid(audioNative, MediaFoundation.MfMtSubtype) == MediaFoundation.MfAudioFormatAac;
+				var videoCodec = ResolveVideoCodec(videoSubtype);
+				if (videoCodec is null)
+				{
+					return RejectAndRelease(
+						"media.file.video_codec_unsupported",
+						$"The MP4 video subtype '{videoSubtype}' is not supported by the local media path.",
+						reader,
+						mediaFoundationStarted);
+				}
+
+				var audioCodec = audioNative is not null &&
+					TryGetGuid(audioNative, MediaFoundation.MfMtMajorType) == MediaFoundation.MfMediaTypeAudio
+						? ResolveAudioCodec(TryGetGuid(audioNative, MediaFoundation.MfMtSubtype))
+						: MediaAudioCodec.None;
+				var hasAudio = audioCodec != MediaAudioCodec.None;
 
 				var metadata = Mp4LocalMediaMetadataReader.Read(path);
 				if (metadata.FrameRateNumerator <= 0 || metadata.FrameRateDenominator <= 0)
@@ -94,6 +104,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 
 				var averageBitRate = TryGetUInt32(videoNative, MediaFoundation.MfMtAvgBitrate);
 				var inputProfile = new LocalMediaInputProfile(
+					videoCodec.Value,
 					metadata.Width,
 					metadata.Height,
 					new FrameRate(metadata.FrameRateNumerator, metadata.FrameRateDenominator),
@@ -115,8 +126,8 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 					sourceId,
 					System.IO.Path.GetFileName(path),
 					MediaContainerFormat.Mp4,
-					MediaVideoCodec.H264,
-					hasAudio ? MediaAudioCodec.Aac : MediaAudioCodec.None,
+					videoCodec.Value,
+					audioCodec,
 					outputFormat,
 					AudioFormat.Stereo48kFloat32,
 					metadata.Duration);
@@ -480,6 +491,47 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 		return result >= 0 ? value : null;
 	}
 
+	private static MediaVideoCodec? ResolveVideoCodec(Guid subtype)
+	{
+		if (subtype == MediaFoundation.MfVideoFormatH264 ||
+			subtype == MediaFoundation.MfMpeg4FormatAvc1 ||
+			subtype == MediaFoundation.MfMpeg4FormatAvc3)
+			return MediaVideoCodec.H264;
+		if (subtype == MediaFoundation.MfVideoFormatHevc ||
+			subtype == MediaFoundation.MfMpeg4FormatHvc1 ||
+			subtype == MediaFoundation.MfMpeg4FormatHev1)
+			return MediaVideoCodec.Hevc;
+		if (subtype == MediaFoundation.MfVideoFormatAv1 ||
+			subtype == MediaFoundation.MfMpeg4FormatAv01)
+			return MediaVideoCodec.Av1;
+		if (subtype == MediaFoundation.MfVideoFormatVp90 ||
+			subtype == MediaFoundation.MfMpeg4FormatVp09)
+			return MediaVideoCodec.Vp9;
+		if (subtype == MediaFoundation.MfVideoFormatM4S2 ||
+			subtype == MediaFoundation.MfVideoFormatMp4V ||
+			subtype == MediaFoundation.MfMpeg4FormatMp4V)
+			return MediaVideoCodec.Mpeg4Part2;
+		if (subtype == MediaFoundation.MfVideoFormatWvc1 ||
+			subtype == MediaFoundation.MfMpeg4FormatVc1)
+			return MediaVideoCodec.Vc1;
+		if (subtype == MediaFoundation.MfVideoFormatMjpg ||
+			subtype == MediaFoundation.MfMpeg4FormatJpeg)
+			return MediaVideoCodec.Mjpeg;
+
+		return null;
+	}
+
+	private static MediaAudioCodec ResolveAudioCodec(Guid? subtype)
+	{
+		if (subtype == MediaFoundation.MfAudioFormatAac)
+			return MediaAudioCodec.Aac;
+		if (subtype == MediaFoundation.MfAudioFormatMp3)
+			return MediaAudioCodec.Mp3;
+		if (subtype == MediaFoundation.MfAudioFormatPcm)
+			return MediaAudioCodec.Pcm;
+		return MediaAudioCodec.None;
+	}
+
 	private static uint? TryGetUInt32(IMFMediaType attributes, Guid key)
 	{
 		var result = attributes.GetUINT32(ref key, out var value);
@@ -609,8 +661,25 @@ internal static class MediaFoundation
 	public static Guid MfMediaTypeVideo = new("73646976-0000-0010-8000-00AA00389B71");
 	public static Guid MfMediaTypeAudio = new("73647561-0000-0010-8000-00AA00389B71");
 	public static Guid MfVideoFormatH264 = new("34363248-0000-0010-8000-00AA00389B71");
+	public static Guid MfVideoFormatHevc = new("43564548-0000-0010-8000-00AA00389B71");
+	public static Guid MfVideoFormatAv1 = new("31305641-0000-0010-8000-00AA00389B71");
+	public static Guid MfVideoFormatVp90 = new("30395056-0000-0010-8000-00AA00389B71");
+	public static Guid MfVideoFormatM4S2 = new("3253344D-0000-0010-8000-00AA00389B71");
+	public static Guid MfVideoFormatMp4V = new("5634504D-0000-0010-8000-00AA00389B71");
+	public static Guid MfVideoFormatWvc1 = new("31435657-0000-0010-8000-00AA00389B71");
+	public static Guid MfVideoFormatMjpg = new("47504A4D-0000-0010-8000-00AA00389B71");
+	public static Guid MfMpeg4FormatAvc1 = new("31637661-0000-0010-8000-00AA00389B71");
+	public static Guid MfMpeg4FormatAvc3 = new("33637661-0000-0010-8000-00AA00389B71");
+	public static Guid MfMpeg4FormatHvc1 = new("31637668-0000-0010-8000-00AA00389B71");
+	public static Guid MfMpeg4FormatHev1 = new("31766568-0000-0010-8000-00AA00389B71");
+	public static Guid MfMpeg4FormatAv01 = new("31307661-0000-0010-8000-00AA00389B71");
+	public static Guid MfMpeg4FormatVp09 = new("39307076-0000-0010-8000-00AA00389B71");
+	public static Guid MfMpeg4FormatMp4V = new("7634706D-0000-0010-8000-00AA00389B71");
+	public static Guid MfMpeg4FormatVc1 = new("312D6376-0000-0010-8000-00AA00389B71");
+	public static Guid MfMpeg4FormatJpeg = new("6765706A-0000-0010-8000-00AA00389B71");
 	public static Guid MfVideoFormatNv12 = new("3231564E-0000-0010-8000-00AA00389B71");
 	public static Guid MfAudioFormatAac = new("00001610-0000-0010-8000-00AA00389B71");
+	public static Guid MfAudioFormatMp3 = new("00000055-0000-0010-8000-00AA00389B71");
 	public static Guid MfAudioFormatPcm = new("00000001-0000-0010-8000-00AA00389B71");
 
 	[DllImport("mfplat.dll", ExactSpelling = true)]
