@@ -149,7 +149,18 @@ public partial class OperatorMultiviewControl : UserControl, INotifyPropertyChan
 
 		var sources = Sources?.Cast<object>().ToArray() ?? [];
 		var capacity = Math.Min(MaximumDisplayedSources, SourceGridColumns * SourceGridColumns);
-		var displayed = sources.Take(capacity).ToArray();
+		var displayed = sources.Take(capacity).ToList();
+
+		foreach (var prioritySource in sources.Skip(capacity).Where(IsPrioritySource))
+		{
+			if (displayed.Contains(prioritySource))
+				continue;
+
+			var replaceIndex = displayed.FindLastIndex(source => !IsPrioritySource(source));
+			if (replaceIndex < 0)
+				break;
+			displayed[replaceIndex] = prioritySource;
+		}
 
 		if (!DisplayedSources.SequenceEqual(displayed))
 		{
@@ -159,8 +170,8 @@ public partial class OperatorMultiviewControl : UserControl, INotifyPropertyChan
 		}
 
 		DisplayedSourceSummary = sources.Length > capacity
-			? $"{displayed.Length} of {sources.Length} sources"
-			: $"{displayed.Length} source{(displayed.Length == 1 ? string.Empty : "s")}";
+			? $"{displayed.Count} of {sources.Length} sources"
+			: $"{displayed.Count} source{(displayed.Count == 1 ? string.Empty : "s")}";
 	}
 
 	private void OnVisibilityChanged(object sender, DependencyPropertyChangedEventArgs e)
@@ -181,6 +192,13 @@ public partial class OperatorMultiviewControl : UserControl, INotifyPropertyChan
 		SourceGridPreset = $"{SourceGridColumns}×{SourceGridColumns}";
 		RefreshDisplayedSources();
 	}
+
+	private static bool IsPrioritySource(object source) =>
+		source is OperatorSourceTileViewModel tile &&
+		(tile.IsProgram || tile.IsPreview || IsFailedHealth(tile.Health));
+
+	private static bool IsFailedHealth(string health) =>
+		health is "LOST" or "ERROR" or "FAILED" or "OFFLINE";
 
 	private void PreviewTile_MouseDoubleClick(object sender, MouseButtonEventArgs e)
 	{
