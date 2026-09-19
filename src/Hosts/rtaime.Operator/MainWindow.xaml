@@ -834,6 +834,11 @@
 								<TextBlock Text="SYSTEM WORKSPACE" Style="{StaticResource OperatorSectionTitle}" />
 								<Border Style="{StaticResource OperatorLifecycleBadge}" Tag="{Binding EngineLifecycleState}" DockPanel.Dock="Right"><TextBlock Text="{Binding EngineLifecycleState}" FontWeight="Bold" /></Border>
 							</DockPanel>
+							<Grid Margin="0,0,0,10">
+								<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="6" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+								<controls:RtaimeButton Grid.Column="0" Content="SAVE LAYOUT" Command="{Binding Shell.SaveLayoutCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" IsCompact="True" />
+								<controls:RtaimeButton Grid.Column="2" Content="RESET LAYOUT" Command="{Binding Shell.ResetLayoutCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" IsCompact="True" ToolTip="Restore the 1920x1080 mockup reference dimensions." />
+							</Grid>
 							<DockPanel Margin="0,0,0,6"><TextBlock Text="Engine" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding EngineHealth}" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" DockPanel.Dock="Right" /></DockPanel>
 							<DockPanel Margin="0,0,0,6"><TextBlock Text="Control" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding ControlHealth}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
 							<DockPanel Margin="0,0,0,6"><TextBlock Text="Runtime" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding RuntimeHealth}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
