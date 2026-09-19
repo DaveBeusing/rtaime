@@ -3,6 +3,7 @@
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Threading;
 using Microsoft.Win32;
 using rtaime.Client;
@@ -18,6 +19,7 @@ public partial class MainWindow : Window
 	private WindowStyle _windowedStyle = WindowStyle.SingleBorderWindow;
 	private ResizeMode _windowedResizeMode = ResizeMode.CanResize;
 	private WindowState _windowedState = WindowState.Normal;
+	private Point _mediaPoolDragStart;
 
 	public MainWindow()
 	{
@@ -49,6 +51,7 @@ public partial class MainWindow : Window
 			Monitoring,
 			new DispatcherSynchronizationContext(Dispatcher));
 		Shell = new OperatorShellViewModel(new OperatorLayoutStore(), SetProductionFullscreen);
+		MediaPool = new MediaPoolInspectorViewModel(viewModel, MediaDeck);
 		InitializeComponent();
 		ApplyProductionFullscreen(Shell.IsFullscreen, updateShell: false);
 		DataContext = viewModel;
@@ -76,6 +79,7 @@ public partial class MainWindow : Window
 			Monitoring,
 			new DispatcherSynchronizationContext(Dispatcher));
 		Shell = new OperatorShellViewModel(new OperatorLayoutStore(), SetProductionFullscreen);
+		MediaPool = new MediaPoolInspectorViewModel(viewModel, MediaDeck);
 		InitializeComponent();
 		ApplyProductionFullscreen(Shell.IsFullscreen, updateShell: false);
 		DataContext = viewModel;
@@ -90,6 +94,7 @@ public partial class MainWindow : Window
 	public OperatorShellViewModel Shell { get; }
 	public MediaDeckViewModel MediaDeck { get; }
 	public DemoProductionPackageController DemoProduction { get; }
+	public MediaPoolInspectorViewModel MediaPool { get; }
 	public MediaTimelineViewModel Timeline => MediaDeck.Timeline;
 
 	private MediaDeckViewModel CreateMediaDeck(
@@ -156,12 +161,14 @@ public partial class MainWindow : Window
 			if (DataContext is OperatorViewModel viewModel)
 			{
 				MediaDeck.SnapshotChanged -= viewModel.ApplyMediaDeckSnapshot;
+				MediaPool.Dispose();
 				await Monitoring.DisposeAsync();
 				await MediaDeck.DisposeAsync();
 				await viewModel.DisposeAsync();
 			}
 			else
 			{
+				MediaPool.Dispose();
 				await Monitoring.DisposeAsync();
 				await MediaDeck.DisposeAsync();
 			}
@@ -172,6 +179,79 @@ public partial class MainWindow : Window
 			Closing -= OnClosingAsync;
 			Close();
 		}
+	}
+
+	private void OnMediaPoolPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e) =>
+		_mediaPoolDragStart = e.GetPosition(this);
+
+	private void OnMediaPoolPreviewMouseMove(object sender, MouseEventArgs e)
+	{
+		if (e.LeftButton != MouseButtonState.Pressed)
+			return;
+
+		var position = e.GetPosition(this);
+		if (Math.Abs(position.X - _mediaPoolDragStart.X) < SystemParameters.MinimumHorizontalDragDistance &&
+			Math.Abs(position.Y - _mediaPoolDragStart.Y) < SystemParameters.MinimumVerticalDragDistance)
+		{
+			return;
+		}
+
+		if (e.OriginalSource is not FrameworkElement element ||
+			element.DataContext is not MediaPoolItemViewModel item)
+		{
+			return;
+		}
+
+		DragDrop.DoDragDrop(
+			(DependencyObject)sender,
+			new DataObject(typeof(MediaPoolItemViewModel), item),
+			DragDropEffects.Copy);
+	}
+
+	private void OnPreviewDragOver(object sender, DragEventArgs e)
+	{
+		var item = e.Data.GetDataPresent(typeof(MediaPoolItemViewModel))
+			? e.Data.GetData(typeof(MediaPoolItemViewModel)) as MediaPoolItemViewModel
+			: null;
+		e.Effects = MediaPool.CanDropToPreview(item) ? DragDropEffects.Copy : DragDropEffects.None;
+		e.Handled = true;
+	}
+
+	private async void OnPreviewDrop(object sender, DragEventArgs e)
+	{
+		var item = e.Data.GetDataPresent(typeof(MediaPoolItemViewModel))
+			? e.Data.GetData(typeof(MediaPoolItemViewModel)) as MediaPoolItemViewModel
+			: null;
+		if (item is not null && MediaPool.CanDropToPreview(item))
+			await MediaPool.DropToPreviewAsync(item);
+		e.Handled = true;
+	}
+
+	private void OnTimelineDragOver(object sender, DragEventArgs e)
+	{
+		var item = e.Data.GetDataPresent(typeof(MediaPoolItemViewModel))
+			? e.Data.GetData(typeof(MediaPoolItemViewModel)) as MediaPoolItemViewModel
+			: null;
+		var accepted = item?.Kind == MediaPoolItemKind.Clip &&
+			string.Equals(item.ReferenceId, MediaDeck.SourceId, StringComparison.Ordinal) &&
+			MediaDeck.RefreshCommand.CanExecute(null);
+		e.Effects = accepted ? DragDropEffects.Copy : DragDropEffects.None;
+		e.Handled = true;
+	}
+
+	private void OnTimelineDrop(object sender, DragEventArgs e)
+	{
+		var item = e.Data.GetDataPresent(typeof(MediaPoolItemViewModel))
+			? e.Data.GetData(typeof(MediaPoolItemViewModel)) as MediaPoolItemViewModel
+			: null;
+		if (item?.Kind == MediaPoolItemKind.Clip &&
+			string.Equals(item.ReferenceId, MediaDeck.SourceId, StringComparison.Ordinal) &&
+			MediaDeck.RefreshCommand.CanExecute(null))
+		{
+			MediaPool.SelectedItem = item;
+			MediaDeck.RefreshCommand.Execute(null);
+		}
+		e.Handled = true;
 	}
 
 	private void SetProductionFullscreen(bool fullscreen) =>
@@ -215,7 +295,7 @@ public partial class MainWindow : Window
 	private void OnHelpClick(object sender, RoutedEventArgs e)
 	{
 		MessageBox.Show(
-			"F11  Fullscreen / Windowed\nEsc  Exit fullscreen\nCtrl+1  Maximize Preview\nCtrl+2  Maximize Program\nCtrl+0  Restore dual view\nF5  Synchronize\nCtrl+P  Set selected source to Preview\nSpace  CUT Preview to Program\nCtrl+Space  AUTO Preview to Program\nP / S  Media Play-Pause / Stop\nI / O / M  IN / OUT / Cue",
+			"F11  Fullscreen / Windowed\nEsc  Exit fullscreen\nCtrl+1  Maximize Preview\nCtrl+2  Maximize Program\nCtrl+0  Restore dual view\nF5  Synchronize\nCtrl+P  Set selected source to Preview\nSpace  CUT Preview to Program\nCtrl+Space  AUTO Preview to Program\nP / S  Media Play-Pause / Stop\nI / O / M  IN / OUT / Cue\nMedia Pool  Search/filter resources; drag a Source or loaded Clip to Preview.\nInspector  METADATA is read-only; DESIRED edits require APPLY before COMMITTED confirmation.",
 			"rtaime Operator — Keyboard Reference",
 			MessageBoxButton.OK,
 			MessageBoxImage.Information);

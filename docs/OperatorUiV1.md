@@ -563,3 +563,32 @@ The existing Preview/Program, source-bin, transition, graphics, audio, recording
 The production shell is presentation-only. `OperatorShellViewModel` owns only layout dimensions, collapsed state, center-maximize state, fullscreen preference and workspace selection. It has no Client, Control, Runtime, Media, AI or Recording dependency and never synthesizes or persists authoritative production state.
 
 `build/quality/Test-OperatorUiPolicy.ps1` guards the canonical region names, fullscreen entry/exit path, splitter availability, persisted layout fields, bounded normalization, single shell-hosted timeline and the presentation-only dependency boundary.
+
+
+## Media Pool & Context Inspector
+
+The persistent left shell region is the Operator **Media Pool**. It projects only resource types already represented by current product data: Sources, the loaded local Clip, Audio inputs, the loaded Graphics asset and the current Composition/AI effect. Search and filtering operate only on loaded projection metadata and never mutate source, Runtime or routing state.
+
+The Media Pool supports Grid and List presentation. The visible collection is capped at 256 entries and sorted deterministically. Offline or unavailable resources remain visible when authoritative observations still identify them; their state is presented explicitly instead of synthesizing readiness.
+
+Local media import continues to use the existing Media Deck open path. No second ingest, metadata extraction or file-management subsystem is introduced.
+
+### Selection and drag/drop
+
+Media Pool selection is bounded Operator UI context. Selecting a Source or loaded Clip projects the matching existing OperatorViewModel.SelectedSource; selecting Audio projects the existing SelectedAudioInput. The selection itself is never production authority.
+
+A Source or the currently loaded Clip may be dragged to Preview when the corresponding existing source is available. The drop invokes the existing SetPreviewCommand, so the mutation continues through the Client SDK and authoritative ControlHost path. Invalid drops are rejected with DragDropEffects.None.
+
+The currently loaded Clip may be dropped on the persistent Timeline surface only as a request to select and refresh that existing Media Deck/Timeline context. It does not create a second timeline, playlist or ingest path.
+
+### Context Inspector
+
+The persistent right shell region is selection-driven. Every projected Inspector property has a stable identifier intended for future Quick Controls pinning. Property presentation explicitly distinguishes:
+
+- `METADATA` — verified read-only resource metadata;
+- `DESIRED` — local editable configuration that has not yet been confirmed;
+- `COMMITTED` — state observed back from the existing authoritative path.
+
+Clip playback policy edits reuse MediaDeckViewModel.ApplyPlaybackPolicyCommand. Audio gain/mute reuse the existing audio commands. Graphics position/scale reuse ApplyGraphicsCommand. AI feature/provider/confidence/fallback are displayed from confirmed observations, and AI enable/disable reuses the existing Client control commands.
+
+No local edit is presented as committed before the corresponding existing command path has been applied and authoritative state is observed again. Empty selection, no-assets, filtered-empty and offline states use concise production-facing messages.

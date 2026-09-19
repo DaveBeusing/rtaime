@@ -95,20 +95,147 @@
 
 			<Border x:Name="LeftToolRegion" Grid.Column="0" Style="{StaticResource OperatorShellRegion}" Margin="0,0,6,0">
 				<Grid>
-					<Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+					<Grid.RowDefinitions>
+						<RowDefinition Height="Auto" />
+						<RowDefinition Height="Auto" />
+						<RowDefinition Height="*" />
+						<RowDefinition Height="Auto" />
+					</Grid.RowDefinitions>
+
 					<DockPanel Margin="0,0,0,10">
-						<TextBlock Text="TOOLS / MEDIA" Style="{StaticResource OperatorSectionTitle}" />
-						<Button Content="‹" Command="{Binding Shell.ToggleLeftPanelCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorButton}" MinWidth="30" MinHeight="26" Padding="6,2" DockPanel.Dock="Right" ToolTip="Collapse left tools" />
+						<TextBlock Text="MEDIA" Style="{StaticResource OperatorSectionTitle}" />
+						<Button Content="‹" Command="{Binding Shell.ToggleLeftPanelCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorButton}" MinWidth="30" MinHeight="26" Padding="6,2" DockPanel.Dock="Right" ToolTip="Collapse Media Pool" />
 					</DockPanel>
-					<StackPanel Grid.Row="1">
-						<TextBlock Text="SELECTED SOURCE" Style="{StaticResource OperatorLabel}" />
-						<TextBlock Text="{Binding SelectedSource.Name, TargetNullValue=No source selected}" FontWeight="SemiBold" Margin="0,4,0,12" TextTrimming="CharacterEllipsis" />
-						<Button Content="OPEN LOCAL MP4" Command="{Binding MediaDeck.OpenCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorAccentButton}" Margin="0,0,0,6" />
-						<Button Content="OPEN DEMO PRODUCTION" Command="{Binding DemoProduction.OpenCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorProgramButton}" Margin="0,0,0,12" />
-						<Border Style="{StaticResource OperatorStatusBadge}" Margin="0,0,0,8"><StackPanel><TextBlock Text="MEDIA DECK" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding MediaDeck.State, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" FontWeight="Bold" Margin="0,3,0,0" /></StackPanel></Border>
-						<Border Style="{StaticResource OperatorStatusBadge}"><StackPanel><TextBlock Text="WORKSPACE" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding Shell.SelectedWorkspace, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" FontWeight="SemiBold" Margin="0,3,0,0" /></StackPanel></Border>
+
+					<StackPanel Grid.Row="1" Margin="0,0,0,8">
+						<Grid Margin="0,0,0,6">
+							<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="6" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+							<TextBox Grid.Column="0"
+								Text="{Binding MediaPool.SearchText, RelativeSource={RelativeSource AncestorType={x:Type Window}}, UpdateSourceTrigger=PropertyChanged}"
+								Style="{StaticResource OperatorTextBox}"
+								ToolTip="Search loaded resource metadata"
+								AutomationProperties.Name="Media Pool search" />
+							<Button Grid.Column="2"
+								Content="+ IMPORT"
+								Command="{Binding MediaPool.ImportCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+								Style="{StaticResource OperatorAccentButton}"
+								Padding="8,3"
+								ToolTip="Open local media through the existing Media Deck import path." />
+						</Grid>
+						<Grid>
+							<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="6" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+							<ComboBox Grid.Column="0"
+								ItemsSource="{Binding MediaPool.Categories, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+								SelectedItem="{Binding MediaPool.SelectedCategory, RelativeSource={RelativeSource AncestorType={x:Type Window}}, Mode=TwoWay}"
+								ToolTip="Resource category" />
+							<ComboBox Grid.Column="2"
+								ItemsSource="{Binding MediaPool.Filters, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+								SelectedItem="{Binding MediaPool.SelectedFilter, RelativeSource={RelativeSource AncestorType={x:Type Window}}, Mode=TwoWay}"
+								ToolTip="Resource state/type filter" />
+						</Grid>
+						<StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+							<Button Content="GRID"
+								Command="{Binding MediaPool.GridViewCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+								Style="{StaticResource OperatorButton}" MinHeight="26" Padding="8,2" Margin="0,0,5,0" />
+							<Button Content="LIST"
+								Command="{Binding MediaPool.ListViewCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+								Style="{StaticResource OperatorButton}" MinHeight="26" Padding="8,2" />
+							<TextBlock Text="{Binding MediaPool.ViewModeLabel, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+								Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" Margin="10,0,0,0" />
+						</StackPanel>
 					</StackPanel>
-					<TextBlock Grid.Row="2" Text="Panel widths and visibility are local Operator preferences only." Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,10,0,0" />
+
+					<Grid Grid.Row="2">
+						<ListBox ItemsSource="{Binding MediaPool.FilteredItems, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							SelectedItem="{Binding MediaPool.SelectedItem, RelativeSource={RelativeSource AncestorType={x:Type Window}}, Mode=TwoWay}"
+							ItemContainerStyle="{StaticResource OperatorSourceItem}"
+							PreviewMouseLeftButtonDown="OnMediaPoolPreviewMouseLeftButtonDown"
+							PreviewMouseMove="OnMediaPoolPreviewMouseMove"
+							AutomationProperties.Name="Media Pool grid">
+							<ListBox.Style>
+								<Style TargetType="{x:Type ListBox}" BasedOn="{StaticResource OperatorSourceBank}">
+									<Setter Property="Visibility" Value="Collapsed" />
+									<Style.Triggers>
+										<DataTrigger Binding="{Binding MediaPool.IsGridView, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="True">
+											<Setter Property="Visibility" Value="Visible" />
+										</DataTrigger>
+									</Style.Triggers>
+								</Style>
+							</ListBox.Style>
+							<ListBox.ItemsPanel>
+								<ItemsPanelTemplate><WrapPanel IsItemsHost="True" /></ItemsPanelTemplate>
+							</ListBox.ItemsPanel>
+							<ListBox.ItemTemplate>
+								<DataTemplate>
+									<Border Width="142" MinHeight="118" Padding="7" Margin="0,0,6,6" BorderThickness="1" BorderBrush="{DynamicResource OperatorBorderBrush}">
+										<StackPanel>
+											<Border Height="52" Background="{DynamicResource OperatorBackgroundBrush}" Margin="0,0,0,5">
+												<Image Source="{Binding Thumbnail}" Stretch="UniformToFill" />
+											</Border>
+											<DockPanel>
+												<TextBlock Text="{Binding Category}" Style="{StaticResource OperatorLabel}" />
+												<TextBlock Text="{Binding State}" Style="{StaticResource OperatorLabel}" DockPanel.Dock="Right" TextTrimming="CharacterEllipsis" MaxWidth="68" />
+											</DockPanel>
+											<TextBlock Text="{Binding Name}" FontWeight="SemiBold" Margin="0,5,0,3" TextTrimming="CharacterEllipsis" />
+											<TextBlock Text="{Binding Detail}" Style="{StaticResource OperatorLabel}" TextTrimming="CharacterEllipsis" />
+											<TextBlock Text="{Binding Format}" Style="{StaticResource OperatorLabel}" TextTrimming="CharacterEllipsis" />
+										</StackPanel>
+									</Border>
+								</DataTemplate>
+							</ListBox.ItemTemplate>
+						</ListBox>
+
+						<ListBox ItemsSource="{Binding MediaPool.FilteredItems, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							SelectedItem="{Binding MediaPool.SelectedItem, RelativeSource={RelativeSource AncestorType={x:Type Window}}, Mode=TwoWay}"
+							ItemContainerStyle="{StaticResource OperatorSourceItem}"
+							PreviewMouseLeftButtonDown="OnMediaPoolPreviewMouseLeftButtonDown"
+							PreviewMouseMove="OnMediaPoolPreviewMouseMove"
+							AutomationProperties.Name="Media Pool list">
+							<ListBox.Style>
+								<Style TargetType="{x:Type ListBox}" BasedOn="{StaticResource OperatorSourceBank}">
+									<Setter Property="Visibility" Value="Visible" />
+									<Style.Triggers>
+										<DataTrigger Binding="{Binding MediaPool.IsGridView, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="True">
+											<Setter Property="Visibility" Value="Collapsed" />
+										</DataTrigger>
+									</Style.Triggers>
+								</Style>
+							</ListBox.Style>
+							<ListBox.ItemTemplate>
+								<DataTemplate>
+									<Grid Margin="2">
+										<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+										<StackPanel>
+											<TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+											<TextBlock Text="{Binding Detail}" Style="{StaticResource OperatorLabel}" TextTrimming="CharacterEllipsis" />
+										</StackPanel>
+										<StackPanel Grid.Column="1" HorizontalAlignment="Right">
+											<TextBlock Text="{Binding Category}" Style="{StaticResource OperatorLabel}" HorizontalAlignment="Right" />
+											<TextBlock Text="{Binding State}" Style="{StaticResource OperatorLabel}" HorizontalAlignment="Right" />
+										</StackPanel>
+									</Grid>
+								</DataTemplate>
+							</ListBox.ItemTemplate>
+						</ListBox>
+
+						<TextBlock Text="{Binding MediaPool.EmptyState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							TextWrapping="Wrap" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="12">
+							<TextBlock.Style>
+								<Style TargetType="{x:Type TextBlock}" BasedOn="{StaticResource OperatorLabel}">
+									<Setter Property="Visibility" Value="Visible" />
+									<Style.Triggers>
+										<DataTrigger Binding="{Binding MediaPool.HasItems, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="True">
+											<Setter Property="Visibility" Value="Collapsed" />
+										</DataTrigger>
+									</Style.Triggers>
+								</Style>
+							</TextBlock.Style>
+						</TextBlock>
+					</Grid>
+
+					<TextBlock Grid.Row="3"
+						Text="Selection, search and filtering are Operator UI context only. Production changes still require existing commands and confirmed state."
+						Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,8,0,0" />
 				</Grid>
 			</Border>
 			<GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" Background="{DynamicResource OperatorBorderBrush}" ResizeDirection="Columns" ResizeBehavior="PreviousAndNext" DragCompleted="OnLayoutSplitterDragCompleted" />
@@ -130,6 +257,9 @@
 						</Grid.ColumnDefinitions>
 
 						<local:PreviewViewer Grid.Column="0"
+							AllowDrop="True"
+							DragOver="OnPreviewDragOver"
+							Drop="OnPreviewDrop"
 							Visibility="{Binding Shell.PreviewViewerVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 							Frame="{Binding Monitoring.PreviewImage, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 							SourceName="{Binding PreviewSourceName}"
@@ -673,21 +803,140 @@
 						<TextBlock Text="INSPECTOR" Style="{StaticResource OperatorSectionTitle}" />
 						<Button Content="›" Command="{Binding Shell.ToggleRightPanelCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorButton}" MinWidth="30" MinHeight="26" Padding="6,2" DockPanel.Dock="Right" ToolTip="Collapse inspector" />
 					</DockPanel>
+
 					<ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
 						<StackPanel>
-							<TextBlock Text="PROGRAM" Style="{StaticResource OperatorLabel}" />
-							<TextBlock Text="{Binding ProgramSourceName}" FontSize="18" FontWeight="SemiBold" Margin="0,3,0,10" TextTrimming="CharacterEllipsis" />
-							<TextBlock Text="PREVIEW" Style="{StaticResource OperatorLabel}" />
-							<TextBlock Text="{Binding PreviewSourceName}" FontSize="16" FontWeight="SemiBold" Margin="0,3,0,12" TextTrimming="CharacterEllipsis" />
-							<Border Style="{StaticResource OperatorLifecycleBadge}" Tag="{Binding EngineLifecycleState}" Margin="0,0,0,8"><StackPanel><TextBlock Text="ENGINE" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding EngineLifecycleState}" FontWeight="Bold" Margin="0,3,0,0" /></StackPanel></Border>
-							<DockPanel Margin="0,0,0,6"><TextBlock Text="Format" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding CurrentFormat}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
-							<DockPanel Margin="0,0,0,6"><TextBlock Text="Recording" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding RecordingStatus}" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" DockPanel.Dock="Right" /></DockPanel>
-							<DockPanel Margin="0,0,0,6"><TextBlock Text="Program safety" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding ProgramSafety}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
-							<DockPanel Margin="0,0,0,10"><TextBlock Text="Affected" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding AffectedComponent}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
-							<TextBlock Text="{Binding EngineHealthDetail}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
-						</StackPanel>
-					</ScrollViewer>
-					<Button Grid.Row="2" Content="COLLAPSE INSPECTOR" Command="{Binding Shell.ToggleRightPanelCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorButton}" Margin="0,10,0,0" />
+							<TextBlock Text="No selection. Select a Media Pool resource to inspect verified product state."
+								TextWrapping="Wrap" Margin="0,0,0,10">
+								<TextBlock.Style>
+									<Style TargetType="{x:Type TextBlock}" BasedOn="{StaticResource OperatorLabel}">
+										<Setter Property="Visibility" Value="Visible" />
+										<Style.Triggers>
+											<DataTrigger Binding="{Binding MediaPool.HasSelection, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="True">
+												<Setter Property="Visibility" Value="Collapsed" />
+											</DataTrigger>
+										</Style.Triggers>
+									</Style>
+								</TextBlock.Style>
+							</TextBlock>
+
+							<StackPanel>
+								<StackPanel.Style>
+									<Style TargetType="{x:Type StackPanel}">
+										<Setter Property="Visibility" Value="Collapsed" />
+										<Style.Triggers>
+											<DataTrigger Binding="{Binding MediaPool.HasSelection, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="True">
+												<Setter Property="Visibility" Value="Visible" />
+											</DataTrigger>
+										</Style.Triggers>
+									</Style>
+								</StackPanel.Style>
+
+								<TextBlock Text="{Binding MediaPool.SelectedItem.Name, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+									FontSize="17" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+								<TextBlock Text="{Binding MediaPool.SelectedItem.Detail, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+									Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,3,0,10" />
+
+								<ItemsControl ItemsSource="{Binding MediaPool.InspectorProperties, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
+									<ItemsControl.ItemTemplate>
+										<DataTemplate>
+											<Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource OperatorBorderBrush}" Padding="0,5">
+												<Grid>
+													<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+													<StackPanel>
+														<TextBlock Text="{Binding Label}" Style="{StaticResource OperatorLabel}" />
+														<TextBlock Text="{Binding Value}" Style="{StaticResource OperatorValue}" TextWrapping="Wrap" />
+													</StackPanel>
+													<StackPanel Grid.Column="1" HorizontalAlignment="Right">
+														<TextBlock Text="{Binding State}" Style="{StaticResource OperatorLabel}" HorizontalAlignment="Right" />
+														<TextBlock Text="PIN" HorizontalAlignment="Right" ToolTip="{Binding PropertyId}">
+															<TextBlock.Style>
+																<Style TargetType="{x:Type TextBlock}" BasedOn="{StaticResource OperatorLabel}">
+																	<Setter Property="Visibility" Value="Collapsed" />
+																	<Style.Triggers><DataTrigger Binding="{Binding IsPinnable}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
+																</Style>
+															</TextBlock.Style>
+														</TextBlock>
+													</StackPanel>
+												</Grid>
+											</Border>
+										</DataTemplate>
+									</ItemsControl.ItemTemplate>
+								</ItemsControl>
+
+								<StackPanel Margin="0,12,0,0">
+									<StackPanel.Style>
+										<Style TargetType="{x:Type StackPanel}">
+											<Setter Property="Visibility" Value="Collapsed" />
+											<Style.Triggers><DataTrigger Binding="{Binding MediaPool.IsClipSelection, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
+										</Style>
+									</StackPanel.Style>
+									<TextBlock Text="DESIRED CONFIGURATION" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,6" />
+									<CheckBox Content="Auto Play on Program" IsChecked="{Binding MediaDeck.AutoPlayOnProgram, RelativeSource={RelativeSource AncestorType={x:Type Window}}, Mode=TwoWay}" Margin="0,0,0,6" />
+									<ComboBox ItemsSource="{Binding MediaDeck.EndBehaviors, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+										SelectedItem="{Binding MediaDeck.EndBehavior, RelativeSource={RelativeSource AncestorType={x:Type Window}}, Mode=TwoWay}" Margin="0,0,0,6" />
+									<Button Content="APPLY PLAYBACK POLICY"
+										Command="{Binding MediaDeck.ApplyPlaybackPolicyCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+										Style="{StaticResource OperatorAccentButton}" />
+									<TextBlock Text="Committed range and playback state update only from the confirmed Media Deck snapshot." Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,6,0,0" />
+								</StackPanel>
+
+								<StackPanel Margin="0,12,0,0">
+									<StackPanel.Style>
+										<Style TargetType="{x:Type StackPanel}">
+											<Setter Property="Visibility" Value="Collapsed" />
+											<Style.Triggers><DataTrigger Binding="{Binding MediaPool.IsAudioSelection, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
+										</Style>
+									</StackPanel.Style>
+									<TextBlock Text="DESIRED CONFIGURATION" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,6" />
+									<TextBlock Text="Gain 0.0–4.0x" Style="{StaticResource OperatorLabel}" />
+									<TextBox Text="{Binding SelectedAudioInput.Gain, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource OperatorTextBox}" Margin="0,3,0,6" />
+									<Grid>
+										<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="6" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+										<Button Grid.Column="0" Content="APPLY GAIN" Command="{Binding ApplyAudioGainCommand}" Style="{StaticResource OperatorAccentButton}" />
+										<Button Grid.Column="2" Content="{Binding SelectedAudioInput.MuteActionLabel}" Command="{Binding ToggleAudioMuteCommand}" Style="{StaticResource OperatorButton}" />
+									</Grid>
+								</StackPanel>
+
+								<StackPanel Margin="0,12,0,0">
+									<StackPanel.Style>
+										<Style TargetType="{x:Type StackPanel}">
+											<Setter Property="Visibility" Value="Collapsed" />
+											<Style.Triggers><DataTrigger Binding="{Binding MediaPool.IsGraphicsSelection, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
+										</Style>
+									</StackPanel.Style>
+									<TextBlock Text="DESIRED CONFIGURATION" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,6" />
+									<TextBlock Text="Position X %" Style="{StaticResource OperatorLabel}" />
+									<TextBox Text="{Binding GraphicsPositionX, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource OperatorTextBox}" Margin="0,3,0,5" />
+									<TextBlock Text="Position Y %" Style="{StaticResource OperatorLabel}" />
+									<TextBox Text="{Binding GraphicsPositionY, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource OperatorTextBox}" Margin="0,3,0,5" />
+									<TextBlock Text="Scale" Style="{StaticResource OperatorLabel}" />
+									<TextBox Text="{Binding GraphicsScale, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource OperatorTextBox}" Margin="0,3,0,6" />
+									<Button Content="APPLY GRAPHICS" Command="{Binding ApplyGraphicsCommand}" Style="{StaticResource OperatorAccentButton}" />
+								</StackPanel>
+
+								<StackPanel Margin="0,12,0,0">
+									<StackPanel.Style>
+										<Style TargetType="{x:Type StackPanel}">
+											<Setter Property="Visibility" Value="Collapsed" />
+											<Style.Triggers><DataTrigger Binding="{Binding MediaPool.IsCompositionSelection, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
+										</Style>
+									</StackPanel.Style>
+									<TextBlock Text="AI EFFECT CONTROL" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,6" />
+									<Grid>
+										<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="6" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+										<Button Grid.Column="0" Content="AI ON" Command="{Binding EnableAIShowcaseCommand}" Style="{StaticResource OperatorAccentButton}" />
+										<Button Grid.Column="2" Content="AI OFF" Command="{Binding DisableAIShowcaseCommand}" Style="{StaticResource OperatorButton}" />
+									</Grid>
+									<TextBlock Text="Feature, provider, confidence and fallback above are confirmed observations." Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,6,0,0" />
+								</StackPanel>
+							</StackPanel>
+							</StackPanel>
+						</ScrollViewer>
+
+					<TextBlock Grid.Row="2"
+						Text="METADATA is read-only. DESIRED edits are local until APPLY succeeds and authoritative state is re-observed as COMMITTED."
+						Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,10,0,0" />
 				</Grid>
 			</Border>
 		</Grid>
@@ -700,7 +949,11 @@
 					<TextBlock Text="TIMELINE / CUES" Style="{StaticResource OperatorSectionTitle}" />
 					<TextBlock Text="{Binding MediaDeck.StatusDetail, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorLabel}" DockPanel.Dock="Right" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="760" />
 				</DockPanel>
-				<local:MediaTimelineControl Grid.Row="1" DataContext="{Binding Timeline, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
+				<local:MediaTimelineControl Grid.Row="1"
+					AllowDrop="True"
+					DragOver="OnTimelineDragOver"
+					Drop="OnTimelineDrop"
+					DataContext="{Binding Timeline, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
 			</Grid>
 		</Border>
 
