@@ -3,6 +3,10 @@
 	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 	xmlns:controls="clr-namespace:rtaime.Operator.Controls">
 
+	<ControlTemplate x:Key="RtaimeTextContentHostTemplate" TargetType="{x:Type ScrollViewer}">
+		<ScrollContentPresenter />
+	</ControlTemplate>
+
 	<ControlTemplate x:Key="RtaimeRepeatButtonTemplate" TargetType="{x:Type RepeatButton}">
 		<Border Background="Transparent" />
 	</ControlTemplate>
@@ -194,7 +198,8 @@
 							x:Name="PART_ContentHost"
 							HorizontalScrollBarVisibility="Hidden"
 							VerticalScrollBarVisibility="Hidden"
-							FocusVisualStyle="{x:Null}" />
+							FocusVisualStyle="{x:Null}"
+							Template="{StaticResource RtaimeTextContentHostTemplate}" />
 					</Border>
 					<ControlTemplate.Triggers>
 						<Trigger Property="IsCompact" Value="True">
