@@ -53,7 +53,7 @@ public sealed record OperatorWindowPlacementSettings(
 {
 	public const double DefaultWidth = 1600;
 	public const double DefaultHeight = 900;
-	public const double MinimumWidth = 900;
+	public const double MinimumWidth = 960;
 	public const double MinimumHeight = 500;
 	public const double MaximumWidth = 7680;
 	public const double MaximumHeight = 4320;
