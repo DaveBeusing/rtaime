@@ -1,105 +1,275 @@
 <!-- Copyright (c) Dave Beusing <david.beusing@gmail.com>. -->
 <UserControl x:Class="rtaime.Operator.LiveSceneCueControl"
+	x:Name="Root"
 	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
 	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 	xmlns:controls="clr-namespace:rtaime.Operator.Controls"
-	MinWidth="190"
-	AutomationProperties.Name="Live scene and cue selection">
+	MinWidth="280"
+	AutomationProperties.Name="Live scenes and cues">
+	<UserControl.Resources>
+		<CollectionViewSource x:Key="LiveSceneSourceView" Source="{Binding Sources}" Filter="LiveSceneSourceView_Filter" />
+		<Style x:Key="LiveSceneRow" TargetType="{x:Type controls:RtaimeListBoxItem}">
+			<Setter Property="Height" Value="74" />
+			<Setter Property="Padding" Value="0" />
+			<Setter Property="Margin" Value="0,0,0,4" />
+			<Setter Property="Background" Value="{DynamicResource OperatorRaisedSurfaceBrush}" />
+			<Setter Property="BorderBrush" Value="Transparent" />
+			<Setter Property="BorderThickness" Value="2,0,0,0" />
+			<Setter Property="HorizontalContentAlignment" Value="Stretch" />
+			<Setter Property="VerticalContentAlignment" Value="Stretch" />
+			<Setter Property="FocusVisualStyle" Value="{x:Null}" />
+			<Setter Property="Template">
+				<Setter.Value>
+					<ControlTemplate TargetType="{x:Type controls:RtaimeListBoxItem}">
+						<Border x:Name="Chrome"
+							Background="{TemplateBinding Background}"
+							BorderBrush="{TemplateBinding BorderBrush}"
+							BorderThickness="{TemplateBinding BorderThickness}"
+							CornerRadius="{DynamicResource OperatorRadiusControl}"
+							Padding="{TemplateBinding Padding}">
+							<ContentPresenter />
+						</Border>
+						<ControlTemplate.Triggers>
+							<Trigger Property="IsMouseOver" Value="True">
+								<Setter TargetName="Chrome" Property="Background" Value="{DynamicResource OperatorRaisedHoverBrush}" />
+							</Trigger>
+							<Trigger Property="IsSelected" Value="True">
+								<Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource OperatorAccentBrush}" />
+								<Setter TargetName="Chrome" Property="Background" Value="{DynamicResource OperatorSelectionSurfaceBrush}" />
+							</Trigger>
+							<Trigger Property="IsKeyboardFocused" Value="True">
+								<Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource OperatorFocusBrush}" />
+							</Trigger>
+						</ControlTemplate.Triggers>
+					</ControlTemplate>
+				</Setter.Value>
+			</Setter>
+		</Style>
+
+		<Style x:Key="LiveCueRow" TargetType="{x:Type controls:RtaimeListBoxItem}">
+			<Setter Property="Height" Value="32" />
+			<Setter Property="Padding" Value="7,0" />
+			<Setter Property="Margin" Value="0,0,0,2" />
+			<Setter Property="Background" Value="Transparent" />
+			<Setter Property="BorderBrush" Value="Transparent" />
+			<Setter Property="BorderThickness" Value="2,0,0,0" />
+			<Setter Property="HorizontalContentAlignment" Value="Stretch" />
+			<Setter Property="VerticalContentAlignment" Value="Center" />
+			<Setter Property="FocusVisualStyle" Value="{x:Null}" />
+			<Setter Property="Template">
+				<Setter.Value>
+					<ControlTemplate TargetType="{x:Type controls:RtaimeListBoxItem}">
+						<Border x:Name="Chrome"
+							Background="{TemplateBinding Background}"
+							BorderBrush="{TemplateBinding BorderBrush}"
+							BorderThickness="{TemplateBinding BorderThickness}"
+							CornerRadius="{DynamicResource OperatorRadiusControl}"
+							Padding="{TemplateBinding Padding}">
+							<ContentPresenter />
+						</Border>
+						<ControlTemplate.Triggers>
+							<Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Chrome" Property="Background" Value="{DynamicResource OperatorRaisedHoverBrush}" /></Trigger>
+							<Trigger Property="IsSelected" Value="True">
+								<Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource OperatorAccentBrush}" />
+								<Setter TargetName="Chrome" Property="Background" Value="{DynamicResource OperatorSelectionSurfaceBrush}" />
+							</Trigger>
+						</ControlTemplate.Triggers>
+					</ControlTemplate>
+				</Setter.Value>
+			</Setter>
+		</Style>
+	</UserControl.Resources>
+
 	<Grid>
 		<Grid.RowDefinitions>
-			<RowDefinition Height="Auto" />
+			<RowDefinition Height="34" />
+			<RowDefinition Height="34" />
 			<RowDefinition Height="*" />
-			<RowDefinition Height="Auto" />
-			<RowDefinition Height="*" />
-			<RowDefinition Height="Auto" />
+			<RowDefinition Height="34" />
+			<RowDefinition Height="190" />
+			<RowDefinition Height="32" />
+			<RowDefinition Height="64" />
 		</Grid.RowDefinitions>
 
-		<DockPanel Grid.Row="0" Margin="0,0,0,8">
-			<TextBlock Text="SCENES / CUES" Style="{StaticResource OperatorSectionTitle}" />
-			<Border Style="{StaticResource OperatorStatusBadge}" DockPanel.Dock="Right">
-				<TextBlock Text="SELECT ≠ TAKE" FontSize="10" FontWeight="Bold" />
-			</Border>
-		</DockPanel>
+		<Grid Grid.Row="0">
+			<TextBlock Text="SCENES &amp; CUES" Style="{StaticResource OperatorSectionTitle}" VerticalAlignment="Center" />
+			<controls:RtaimeStatusBadge
+				Status="{x:Static controls:RtaimeStatusKind.Neutral}"
+				Content="SELECT ≠ TAKE"
+				ShowIndicator="False"
+				HorizontalAlignment="Right"
+				VerticalAlignment="Center" />
+		</Grid>
 
-		<StackPanel Grid.Row="1">
-			<TextBlock Text="SOURCE / SCENE SELECTION" Style="{StaticResource OperatorLabel}" Margin="0,0,0,5" />
-			<controls:RtaimeListBox ItemsSource="{Binding Sources}"
-				SelectedItem="{Binding SelectedSource, Mode=TwoWay}"
-				Style="{StaticResource OperatorSourceBank}"
-				ItemContainerStyle="{StaticResource OperatorSourceItem}"
-				MaxHeight="230"
-				AutomationProperties.Name="Live source selection">
+		<controls:RtaimeSearchBox
+			x:Name="SceneSearchBox"
+			Grid.Row="1"
+			Height="30"
+			IconData="{StaticResource RtaimeIconSearchGeometry}"
+			Placeholder="Search scenes / sources…"
+			TextChanged="SceneSearchBox_TextChanged"
+			VerticalAlignment="Center"
+			AutomationProperties.Name="Search live scenes" />
+
+		<controls:RtaimeListBox
+			Grid.Row="2"
+			ItemsSource="{Binding Source={StaticResource LiveSceneSourceView}}"
+			SelectedItem="{Binding SelectedSource, Mode=TwoWay}"
+			ItemContainerStyle="{StaticResource LiveSceneRow}"
+			Background="Transparent"
+			BorderThickness="0"
+			ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+			ScrollViewer.VerticalScrollBarVisibility="Auto"
+			AutomationProperties.Name="Live source and scene selection">
+			<controls:RtaimeListBox.ItemTemplate>
+				<DataTemplate>
+					<Grid Margin="7,0">
+						<Grid.ColumnDefinitions>
+							<ColumnDefinition Width="28" />
+							<ColumnDefinition Width="92" />
+							<ColumnDefinition Width="8" />
+							<ColumnDefinition Width="*" />
+							<ColumnDefinition Width="Auto" />
+						</Grid.ColumnDefinitions>
+
+						<TextBlock Text="{Binding DisplayIndex, StringFormat={}{0:00}}"
+							Style="{StaticResource OperatorLabel}"
+							FontFamily="{DynamicResource OperatorTimecodeFontFamily}"
+							FontSize="10"
+							VerticalAlignment="Center" />
+
+						<Border Grid.Column="1"
+							Width="92"
+							Height="52"
+							Background="Black"
+							BorderBrush="{DynamicResource OperatorBorderBrush}"
+							BorderThickness="1"
+							CornerRadius="2"
+							VerticalAlignment="Center"
+							ClipToBounds="True">
+							<Image Source="{Binding Thumbnail}" Stretch="UniformToFill" />
+						</Border>
+
+						<StackPanel Grid.Column="3" VerticalAlignment="Center">
+							<TextBlock Text="{Binding Name}" FontSize="11" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+							<StackPanel Orientation="Horizontal" Margin="0,3,0,0">
+								<TextBlock Text="{Binding Type}" Style="{StaticResource OperatorLabel}" FontSize="9" />
+								<TextBlock Text=" · " Style="{StaticResource OperatorLabel}" FontSize="9" />
+								<TextBlock Text="{Binding Remaining}" Style="{StaticResource OperatorTimecode}" FontSize="9" />
+							</StackPanel>
+						</StackPanel>
+
+						<StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center">
+							<controls:RtaimeStatusBadge
+								Status="{x:Static controls:RtaimeStatusKind.Preview}"
+								Content="NEXT"
+								ShowIndicator="False"
+								Margin="0,0,3,0">
+								<controls:RtaimeStatusBadge.Style>
+									<Style TargetType="{x:Type controls:RtaimeStatusBadge}" BasedOn="{StaticResource {x:Type controls:RtaimeStatusBadge}}">
+										<Setter Property="Status" Value="{x:Static controls:RtaimeStatusKind.Neutral}" />
+										<Style.Triggers>
+											<DataTrigger Binding="{Binding IsPreview}" Value="True"><Setter Property="Status" Value="{x:Static controls:RtaimeStatusKind.Preview}" /></DataTrigger>
+										</Style.Triggers>
+									</Style>
+								</controls:RtaimeStatusBadge.Style>
+							</controls:RtaimeStatusBadge>
+
+							<controls:RtaimeStatusBadge
+								Status="{x:Static controls:RtaimeStatusKind.Program}"
+								Content="LIVE"
+								ShowIndicator="False"
+								Margin="0,0,3,0">
+								<controls:RtaimeStatusBadge.Style>
+									<Style TargetType="{x:Type controls:RtaimeStatusBadge}" BasedOn="{StaticResource {x:Type controls:RtaimeStatusBadge}}">
+										<Setter Property="Visibility" Value="Collapsed" />
+										<Style.Triggers><DataTrigger Binding="{Binding IsProgram}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
+									</Style>
+								</controls:RtaimeStatusBadge.Style>
+							</controls:RtaimeStatusBadge>
+
+							<controls:RtaimeIconButton
+								IconData="{StaticResource RtaimeIconMoreGeometry}"
+								Width="26"
+								Height="26"
+								Click="SceneOverflow_Click"
+								ToolTip="Select this row. Scene-specific actions are unavailable in V1."
+								AutomationProperties.Name="Scene options" />
+						</StackPanel>
+					</Grid>
+				</DataTemplate>
+			</controls:RtaimeListBox.ItemTemplate>
+		</controls:RtaimeListBox>
+
+		<Grid Grid.Row="3" Margin="0,4,0,0">
+			<Grid.ColumnDefinitions>
+				<ColumnDefinition Width="*" />
+				<ColumnDefinition Width="4" />
+				<ColumnDefinition Width="*" />
+			</Grid.ColumnDefinitions>
+			<controls:RtaimeButton Grid.Column="0"
+				Content="SET NEXT"
+				Command="{Binding SetPreviewCommand}"
+				IsCompact="True"
+				ToolTip="Route only the selected source to Preview. Selection alone never routes." />
+			<controls:RtaimeButton Grid.Column="2"
+				Content="TAKE"
+				Command="{Binding CutCommand}"
+				IsCompact="True"
+				Background="{DynamicResource OperatorAccentBrush}"
+				BorderBrush="{DynamicResource OperatorAccentBrush}"
+				Foreground="{DynamicResource OperatorBackgroundBrush}"
+				ToolTip="Take the already confirmed Preview source to Program." />
+		</Grid>
+
+		<Grid Grid.Row="4" Margin="0,8,0,0">
+			<Grid.RowDefinitions>
+				<RowDefinition Height="26" />
+				<RowDefinition Height="*" />
+			</Grid.RowDefinitions>
+			<DockPanel Grid.Row="0">
+				<TextBlock Text="MEDIA CUES" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" />
+				<TextBlock Text="selection only" Style="{StaticResource OperatorLabel}" DockPanel.Dock="Right" VerticalAlignment="Center" />
+			</DockPanel>
+			<controls:RtaimeListBox
+				Grid.Row="1"
+				ItemsSource="{Binding MediaDeck.Cues, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+				SelectedItem="{Binding MediaDeck.SelectedCue, RelativeSource={RelativeSource AncestorType={x:Type Window}}, Mode=TwoWay}"
+				ItemContainerStyle="{StaticResource LiveCueRow}"
+				Background="Transparent"
+				BorderThickness="0"
+				ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+				ScrollViewer.VerticalScrollBarVisibility="Auto"
+				AutomationProperties.Name="Live media cue selection">
 				<controls:RtaimeListBox.ItemTemplate>
 					<DataTemplate>
-						<Grid Margin="1">
-							<Grid.ColumnDefinitions>
-								<ColumnDefinition Width="64" />
-								<ColumnDefinition Width="7" />
-								<ColumnDefinition Width="*" />
-							</Grid.ColumnDefinitions>
-							<Border Grid.Column="0" Height="42" Background="Black" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1">
-								<Image Source="{Binding Thumbnail}" Stretch="UniformToFill" />
-							</Border>
-							<StackPanel Grid.Column="2">
-								<DockPanel>
-									<TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-									<TextBlock Text="{Binding Tally}" Style="{StaticResource OperatorLabel}" FontWeight="Bold" DockPanel.Dock="Right" Margin="5,0,0,0" />
-								</DockPanel>
-								<TextBlock Text="{Binding StateDetail}" Style="{StaticResource OperatorLabel}" TextTrimming="CharacterEllipsis" />
-							</StackPanel>
+						<Grid>
+							<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+							<TextBlock Text="{Binding Name}" FontSize="10" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+							<TextBlock Grid.Column="1" Text="{Binding Timecode}" Style="{StaticResource OperatorTimecode}" FontSize="9" Margin="8,0,0,0" VerticalAlignment="Center" />
 						</Grid>
 					</DataTemplate>
 				</controls:RtaimeListBox.ItemTemplate>
 			</controls:RtaimeListBox>
-		</StackPanel>
-
-		<Grid Grid.Row="2" Margin="0,7,0,10">
-			<Grid.ColumnDefinitions>
-				<ColumnDefinition Width="*" />
-				<ColumnDefinition Width="5" />
-				<ColumnDefinition Width="*" />
-			</Grid.ColumnDefinitions>
-			<Button Grid.Column="0" Content="SET PVW"
-				Command="{Binding SetPreviewCommand}"
-				Style="{StaticResource OperatorAccentButton}"
-				ToolTip="Route only the selected source to Preview. Selection alone never routes." />
-			<Button Grid.Column="2" Content="CUT TAKE"
-				Command="{Binding CutCommand}"
-				Style="{StaticResource OperatorProgramButton}"
-				ToolTip="Take the already confirmed Preview source to Program." />
 		</Grid>
 
-		<StackPanel Grid.Row="3">
-			<TextBlock Text="MEDIA CUES" Style="{StaticResource OperatorLabel}" Margin="0,0,0,5" />
-			<controls:RtaimeListBox
-				ItemsSource="{Binding MediaDeck.Cues, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-				SelectedItem="{Binding MediaDeck.SelectedCue, RelativeSource={RelativeSource AncestorType={x:Type Window}}, Mode=TwoWay}"
-				Style="{StaticResource OperatorSourceBank}"
-				ItemContainerStyle="{StaticResource OperatorSourceItem}"
-				MaxHeight="190"
-				AutomationProperties.Name="Live media cue selection">
-				<controls:RtaimeListBox.ItemTemplate>
-					<DataTemplate>
-						<DockPanel Margin="1">
-							<TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-							<TextBlock Text="{Binding Timecode}" Style="{StaticResource OperatorTimecode}" DockPanel.Dock="Right" Margin="8,0,0,0" />
-						</DockPanel>
-					</DataTemplate>
-				</controls:RtaimeListBox.ItemTemplate>
-			</controls:RtaimeListBox>
-			<Button Content="JUMP SELECTED CUE"
-				Command="{Binding MediaDeck.JumpCueCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-				Style="{StaticResource OperatorButton}"
-				Margin="0,6,0,0"
-				ToolTip="Execute the selected media cue through the existing marker/timeline command path." />
-		</StackPanel>
+		<controls:RtaimeButton Grid.Row="5"
+			Content="JUMP SELECTED CUE"
+			Command="{Binding MediaDeck.JumpCueCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+			IsCompact="True"
+			Margin="0,4,0,0"
+			ToolTip="Execute the selected media cue through the existing marker/timeline command path." />
 
-		<Border Grid.Row="4" Style="{StaticResource OperatorStatusBadge}" Margin="0,10,0,0">
+		<Border Grid.Row="6"
+			Background="{DynamicResource OperatorAlternateSurfaceBrush}"
+			BorderBrush="{DynamicResource OperatorBorderBrush}"
+			BorderThickness="1"
+			CornerRadius="{DynamicResource OperatorRadiusControl}"
+			Padding="7,5"
+			Margin="0,8,0,0">
 			<StackPanel>
-				<TextBlock Text="SCENE ACTIVATION" Style="{StaticResource OperatorLabel}" />
-				<TextBlock Text="NOT AVAILABLE IN V1 CONTRACT" FontWeight="SemiBold" Margin="0,2,0,0" />
-				<TextBlock Text="Current scene/layer presentation reuses the governed graphics controls; no scene command is synthesized here."
-					Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,4,0,0" />
+				<TextBlock Text="SCENE ACTIVATION · NOT AVAILABLE IN V1 CONTRACT" Style="{StaticResource OperatorLabel}" FontWeight="SemiBold" />
+				<TextBlock Text="Selection is non-destructive; explicit Preview/Take and cue commands remain the only actions here." Style="{StaticResource OperatorLabel}" FontSize="9" TextWrapping="Wrap" Margin="0,2,0,0" />
 			</StackPanel>
 		</Border>
 	</Grid>
