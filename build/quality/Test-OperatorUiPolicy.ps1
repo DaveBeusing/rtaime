@@ -355,6 +355,10 @@ foreach ($viewerState in @("NO SIGNAL", "DISCONNECTED", "RECOVERING", "SOURCE OF
 	Assert-Condition ($viewModel -match [Regex]::Escape($viewerState)) "Production viewer state '$viewerState' must be explicit."
 }
 Assert-Condition ($viewModel -match 'ProgramViewerState = MapViewerSourceState' -and $viewModel -notmatch 'ProgramViewerState\s*=\s*.*AIStatus') "Program availability must derive from Runtime/source state rather than AI-only degradation."
+Assert-Condition ($window -match 'Monitoring\.PreviewState' -and $window -match 'Monitoring\.ProgramState') "Production viewers must use monitoring-aware presentation state."
+Assert-Condition ($monitorViewModel -match 'PreviewState => ResolveViewerState' -and $monitorViewModel -match 'ProgramState => ResolveViewerState') "Monitoring availability must be combined with confirmed production state for viewer presentation."
+Assert-Condition ($monitorViewModel -match 'PreviewImage = null' -and $monitorViewModel -match 'No Preview monitor frame received for current source') "Changing Preview to a source without a monitor frame must clear the previous source image."
+Assert-Condition ($monitorViewModel -match 'Value="STALE"|State, "STALE"|State\), "STALE"|string\.Equals\(State, "STALE"') "Stale monitoring must remain explicitly detectable without affecting Program authority."
 
 Assert-Condition ($window -match 'Key="F11".+Shell\.ToggleFullscreenCommand') "Production fullscreen must be keyboard-accessible through F11."
 Assert-Condition ($window -match 'Key="Escape".+Shell\.ExitFullscreenCommand') "Production fullscreen must provide an Escape path back to windowed operation."
