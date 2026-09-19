@@ -512,7 +512,7 @@ Assert-Condition ($documentation -match 'Runtime Health & Performance HUD') "Ope
 Assert-Condition ($documentation -match 'PASS / FAIL / UNVERIFIED') "Runtime Health & Performance HUD documentation must preserve evidence-state semantics."
 Assert-Condition ($documentation -match 'Visible AI Showcase') "Operator UI documentation must record the Visible AI Showcase."
 Assert-Condition ($documentation -match 'Person Segmentation Highlight') "Visible AI Showcase documentation must identify the real existing segmentation capability."
-Assert-Condition ($window -match 'Header="Open Demo Production"' -and $window -match 'DemoProduction\.OpenCommand') "Demo Production Package must expose a one-click Open Demo Production action."
+Assert-Condition ($window -match 'AutomationProperties\.Name="Open Demo Production"' -and $window -match 'DemoProduction\.OpenCommand' -and $window -match 'Text="V1 PRODUCTION"') "Demo Production Package must expose a one-click custom-control Open Demo Production action."
 Assert-Condition ($window -match 'DemoProduction\.OpenCommand') "Demo Production Package one-click action must bind the Demo Production controller."
 Assert-Condition ($window -match 'DemoProduction\.State') "Demo Production Package must expose visible package state."
 Assert-Condition ($demoController -match 'OperatorControlClient' -and $demoController -match 'MediaDeckViewModel') "Demo Production Package orchestration must stay on existing Client/Media Deck seams."
