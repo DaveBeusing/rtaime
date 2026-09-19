@@ -612,6 +612,14 @@ The persistent right shell region is selection-driven. Every projected Inspector
 
 Clip playback policy edits reuse MediaDeckViewModel.ApplyPlaybackPolicyCommand. Audio gain/mute reuse the existing audio commands. Graphics position/scale reuse ApplyGraphicsCommand. AI feature/provider/confidence/fallback are displayed from confirmed observations, and AI enable/disable reuses the existing Client control commands.
 
+The Inspector is hosted by the reusable `OperatorInspectorControl` and keeps the same interaction model across Media, Edit, Live and Compositing shell contexts. It provides three stable tabs: **Properties**, **Effects / Processing** and **Metadata**. Property groups are collapsible, with expansion state retained per selection context. Numeric edits combine direct text entry with bounded sliders where the existing product model exposes a numeric range, and invalid text conversion is surfaced inline rather than silently ignored.
+
+Extended Media Library selection is represented explicitly. When multiple assets are selected, shared values are shown directly and divergent values are shown as `MIXED`; mutation controls remain scoped to a single active context so the Operator does not accidentally turn a primary-selection command into an unsupported bulk edit.
+
+Reset actions restore the established local desired defaults for playback, audio gain and graphics transform values. Resetting remains a presentation-side edit only; the existing APPLY/command path is still required before authoritative state can change.
+
+The current graphics capability exposes Position X, Position Y and Scale. Rotation, Anchor and Crop are therefore shown as unavailable capability fields rather than being implemented as parallel UI-only domain state. Likewise, the current processing capability exposes the existing governed AI effect enable/disable path but no effect-stack reordering; the Inspector states that limitation explicitly.
+
 No local edit is presented as committed before the corresponding existing command path has been applied and authoritative state is observed again. Empty selection, no-assets, filtered-empty, loading, error and offline states use concise production-facing messages.
 
 See `docs/MediaLibraryAssetBrowser.md` for the Media Library scalability, selection, drag/drop, context-action and authority model.
