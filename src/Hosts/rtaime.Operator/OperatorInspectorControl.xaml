@@ -5,33 +5,96 @@
 	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 	xmlns:controls="clr-namespace:rtaime.Operator.Controls"
 	xmlns:local="clr-namespace:rtaime.Operator"
-	MinWidth="250"
-	Focusable="False">
+	MinWidth="260"
+	Focusable="False"
+	UseLayoutRounding="True"
+	SnapsToDevicePixels="True">
 	<UserControl.Resources>
-		<Style x:Key="InspectorTabItem" TargetType="{x:Type controls:RtaimeTabItem}" BasedOn="{StaticResource {x:Type controls:RtaimeTabItem}}">
-			<Setter Property="Foreground" Value="{DynamicResource OperatorMutedTextBrush}" />
-			<Setter Property="Background" Value="{DynamicResource OperatorSurfaceBrush}" />
-			<Setter Property="BorderBrush" Value="{DynamicResource OperatorBorderBrush}" />
-			<Setter Property="Padding" Value="9,5" />
+		<Style x:Key="InspectorTopTab" TargetType="{x:Type controls:RtaimeTabItem}" BasedOn="{StaticResource {x:Type controls:RtaimeTabItem}}">
+			<Setter Property="Height" Value="40" />
+			<Setter Property="MinWidth" Value="82" />
+			<Setter Property="Padding" Value="12,0" />
+			<Setter Property="FontSize" Value="11" />
 			<Setter Property="FontWeight" Value="SemiBold" />
-			<Setter Property="FocusVisualStyle" Value="{StaticResource OperatorFocusVisual}" />
-			<Style.Triggers>
-				<Trigger Property="IsSelected" Value="True">
-					<Setter Property="Foreground" Value="{DynamicResource OperatorTextBrush}" />
-					<Setter Property="Background" Value="{DynamicResource OperatorRaisedSurfaceBrush}" />
-				</Trigger>
-			</Style.Triggers>
+			<Setter Property="VerticalContentAlignment" Value="Center" />
+		</Style>
+
+		<Style x:Key="InspectorCategoryTab" TargetType="{x:Type controls:RtaimeTabItem}" BasedOn="{StaticResource {x:Type controls:RtaimeTabItem}}">
+			<Setter Property="Height" Value="34" />
+			<Setter Property="MinWidth" Value="70" />
+			<Setter Property="Padding" Value="8,0" />
+			<Setter Property="FontSize" Value="10" />
+			<Setter Property="FontWeight" Value="SemiBold" />
+			<Setter Property="VerticalContentAlignment" Value="Center" />
+		</Style>
+
+		<Style x:Key="InspectorSectionToggle" TargetType="{x:Type controls:RtaimeToggleButton}">
+			<Setter Property="Height" Value="30" />
+			<Setter Property="Padding" Value="8,0" />
+			<Setter Property="Background" Value="Transparent" />
+			<Setter Property="Foreground" Value="{DynamicResource OperatorSecondaryTextBrush}" />
+			<Setter Property="FontSize" Value="10" />
+			<Setter Property="FontWeight" Value="Bold" />
+			<Setter Property="HorizontalContentAlignment" Value="Left" />
+			<Setter Property="FocusVisualStyle" Value="{x:Null}" />
+			<Setter Property="Template">
+				<Setter.Value>
+					<ControlTemplate TargetType="{x:Type controls:RtaimeToggleButton}">
+						<Border x:Name="Chrome"
+							Background="{TemplateBinding Background}"
+							BorderBrush="{DynamicResource OperatorBorderBrush}"
+							BorderThickness="0,1,0,1"
+							Padding="{TemplateBinding Padding}">
+							<Grid>
+								<Grid.ColumnDefinitions>
+									<ColumnDefinition Width="*" />
+									<ColumnDefinition Width="18" />
+								</Grid.ColumnDefinitions>
+								<ContentPresenter
+									VerticalAlignment="Center"
+									HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" />
+								<controls:RtaimeIcon
+									x:Name="Chevron"
+									Grid.Column="1"
+									IconData="{StaticResource RtaimeIconChevronRightGeometry}"
+									IconSize="12"
+									Foreground="{DynamicResource OperatorMutedTextBrush}"
+									HorizontalAlignment="Center"
+									VerticalAlignment="Center"
+									RenderTransformOrigin="0.5,0.5" />
+							</Grid>
+						</Border>
+						<ControlTemplate.Triggers>
+							<Trigger Property="IsMouseOver" Value="True">
+								<Setter TargetName="Chrome" Property="Background" Value="{DynamicResource OperatorRaisedHoverBrush}" />
+								<Setter Property="Foreground" Value="{DynamicResource OperatorTextBrush}" />
+							</Trigger>
+							<Trigger Property="IsChecked" Value="True">
+								<Setter Property="Foreground" Value="{DynamicResource OperatorTextBrush}" />
+								<Setter TargetName="Chevron" Property="RenderTransform">
+									<Setter.Value><RotateTransform Angle="90" /></Setter.Value>
+								</Setter>
+							</Trigger>
+							<Trigger Property="IsKeyboardFocused" Value="True">
+								<Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource OperatorFocusBrush}" />
+							</Trigger>
+						</ControlTemplate.Triggers>
+					</ControlTemplate>
+				</Setter.Value>
+			</Setter>
 		</Style>
 
 		<Style x:Key="InspectorNumericTextBox" TargetType="{x:Type controls:RtaimeTextBox}" BasedOn="{StaticResource {x:Type controls:RtaimeTextBox}}">
+			<Setter Property="IsCompact" Value="True" />
 			<Setter Property="Validation.ErrorTemplate">
 				<Setter.Value>
 					<ControlTemplate>
 						<StackPanel>
 							<AdornedElementPlaceholder />
-							<TextBlock Text="{Binding [0].ErrorContent}"
+							<TextBlock
+								Text="{Binding [0].ErrorContent}"
 								Foreground="{DynamicResource OperatorErrorBrush}"
-								FontSize="10"
+								FontSize="9"
 								TextWrapping="Wrap"
 								Margin="0,2,0,0" />
 						</StackPanel>
@@ -40,399 +103,680 @@
 			</Setter>
 		</Style>
 
-		<DataTemplate x:Key="InspectorPropertyTemplate">
-			<Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource OperatorBorderBrush}" Padding="0,6">
+		<Style x:Key="InspectorPropertySectionContent" TargetType="Border">
+			<Setter Property="Background" Value="{DynamicResource OperatorSurfaceBrush}" />
+			<Setter Property="Padding" Value="8,2,8,4" />
+		</Style>
+
+		<DataTemplate x:Key="InspectorSelectionHeaderTemplate">
+			<Border
+				Height="72"
+				Background="{DynamicResource OperatorAlternateSurfaceBrush}"
+				BorderBrush="{DynamicResource OperatorBorderBrush}"
+				BorderThickness="0,0,0,1"
+				Padding="10,8">
 				<Grid>
 					<Grid.ColumnDefinitions>
+						<ColumnDefinition Width="72" />
+						<ColumnDefinition Width="9" />
 						<ColumnDefinition Width="*" />
-						<ColumnDefinition Width="Auto" />
+						<ColumnDefinition Width="28" />
 					</Grid.ColumnDefinitions>
-					<StackPanel>
-						<TextBlock Text="{Binding Label}" Style="{StaticResource OperatorLabel}" />
-						<TextBlock Text="{Binding Value}" TextWrapping="Wrap">
-							<TextBlock.Style>
-								<Style TargetType="{x:Type TextBlock}" BasedOn="{StaticResource OperatorValue}">
-									<Style.Triggers>
-										<DataTrigger Binding="{Binding IsMixed}" Value="True">
-											<Setter Property="Foreground" Value="{DynamicResource OperatorWarningBrush}" />
-											<Setter Property="FontWeight" Value="SemiBold" />
-										</DataTrigger>
-									</Style.Triggers>
-								</Style>
-							</TextBlock.Style>
-						</TextBlock>
+					<Border
+						Width="72"
+						Height="42"
+						Background="#05080B"
+						BorderBrush="{DynamicResource OperatorBorderBrush}"
+						BorderThickness="1"
+						VerticalAlignment="Center">
+						<Image Source="{Binding SelectedItem.Thumbnail}" Stretch="UniformToFill" />
+					</Border>
+					<StackPanel Grid.Column="2" VerticalAlignment="Center">
+						<TextBlock
+							Text="{Binding InspectorTitle}"
+							FontSize="12"
+							FontWeight="SemiBold"
+							TextTrimming="CharacterEllipsis" />
+						<TextBlock
+							Text="{Binding InspectorDetail}"
+							Style="{StaticResource OperatorLabel}"
+							FontSize="10"
+							TextTrimming="CharacterEllipsis"
+							Margin="0,2,0,0" />
+						<TextBlock
+							Text="{Binding SelectedItem.LocalPath, TargetNullValue=}"
+							Style="{StaticResource OperatorLabel}"
+							Foreground="{DynamicResource OperatorMutedTextBrush}"
+							FontSize="9"
+							TextTrimming="CharacterEllipsis"
+							Margin="0,1,0,0" />
 					</StackPanel>
-					<StackPanel Grid.Column="1" HorizontalAlignment="Right" Margin="8,0,0,0">
-						<TextBlock Text="{Binding State}" Style="{StaticResource OperatorLabel}" HorizontalAlignment="Right" />
-						<Button Content="PIN"
-							Command="{Binding QuickControls.TogglePinCommand, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorInspectorControl}}}"
-							CommandParameter="{Binding}"
-							HorizontalAlignment="Right"
-							MinHeight="22"
-							Padding="5,1"
-							ToolTip="{Binding PropertyId}">
-							<Button.Style>
-								<Style TargetType="{x:Type Button}" BasedOn="{StaticResource OperatorButton}">
-									<Setter Property="Visibility" Value="Collapsed" />
-									<Style.Triggers>
-										<DataTrigger Binding="{Binding IsPinnable}" Value="True">
-											<Setter Property="Visibility" Value="Visible" />
-										</DataTrigger>
-									</Style.Triggers>
-								</Style>
-							</Button.Style>
-						</Button>
+					<controls:RtaimeIconButton
+						Grid.Column="3"
+						IconData="{StaticResource RtaimeIconMoreGeometry}"
+						Width="26"
+						Height="26"
+						HorizontalAlignment="Right"
+						VerticalAlignment="Top"
+						IsEnabled="False"
+						ToolTip="Context actions remain available from the originating workspace."
+						AutomationProperties.Name="Selection context actions unavailable here" />
+				</Grid>
+			</Border>
+		</DataTemplate>
+
+		<DataTemplate x:Key="InspectorPropertyTemplate">
+			<Border
+				MinHeight="32"
+				BorderBrush="{DynamicResource OperatorBorderBrush}"
+				BorderThickness="0,0,0,1"
+				Padding="0">
+				<Grid>
+					<Grid.ColumnDefinitions>
+						<ColumnDefinition Width="96" />
+						<ColumnDefinition Width="*" />
+						<ColumnDefinition Width="54" />
+						<ColumnDefinition Width="34" />
+					</Grid.ColumnDefinitions>
+					<TextBlock
+						Text="{Binding Label}"
+						Style="{StaticResource OperatorLabel}"
+						VerticalAlignment="Center"
+						TextTrimming="CharacterEllipsis" />
+					<TextBlock
+						Grid.Column="1"
+						Text="{Binding Value}"
+						Style="{StaticResource OperatorValue}"
+						VerticalAlignment="Center"
+						TextTrimming="CharacterEllipsis">
+						<TextBlock.Style>
+							<Style TargetType="{x:Type TextBlock}" BasedOn="{StaticResource OperatorValue}">
+								<Style.Triggers>
+									<DataTrigger Binding="{Binding IsMixed}" Value="True">
+										<Setter Property="Foreground" Value="{DynamicResource OperatorWarningBrush}" />
+										<Setter Property="FontWeight" Value="SemiBold" />
+									</DataTrigger>
+								</Style.Triggers>
+							</Style>
+						</TextBlock.Style>
+					</TextBlock>
+					<TextBlock
+						Grid.Column="2"
+						Text="{Binding State}"
+						Style="{StaticResource OperatorLabel}"
+						FontSize="9"
+						HorizontalAlignment="Right"
+						VerticalAlignment="Center"
+						TextTrimming="CharacterEllipsis" />
+					<controls:RtaimeButton
+						Grid.Column="3"
+						Content="PIN"
+						Command="{Binding QuickControls.TogglePinCommand, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorInspectorControl}}}"
+						CommandParameter="{Binding}"
+						IsCompact="True"
+						Width="31"
+						Height="24"
+						Padding="2,0"
+						HorizontalAlignment="Right"
+						ToolTip="{Binding PropertyId}">
+						<controls:RtaimeButton.Style>
+							<Style TargetType="{x:Type controls:RtaimeButton}" BasedOn="{StaticResource {x:Type controls:RtaimeButton}}">
+								<Setter Property="Visibility" Value="Collapsed" />
+								<Style.Triggers>
+									<DataTrigger Binding="{Binding IsPinnable}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
+								</Style.Triggers>
+							</Style>
+						</controls:RtaimeButton.Style>
+					</controls:RtaimeButton>
+				</Grid>
+			</Border>
+		</DataTemplate>
+
+		<DataTemplate x:Key="InspectorEffectTemplate">
+			<Border
+				MinHeight="36"
+				BorderBrush="{DynamicResource OperatorBorderBrush}"
+				BorderThickness="0,0,0,1"
+				Padding="4,2">
+				<Grid>
+					<Grid.ColumnDefinitions>
+						<ColumnDefinition Width="24" />
+						<ColumnDefinition Width="*" />
+						<ColumnDefinition Width="64" />
+						<ColumnDefinition Width="28" />
+					</Grid.ColumnDefinitions>
+					<controls:RtaimeIcon
+						IconData="{StaticResource RtaimeIconCompositingGeometry}"
+						IconSize="14"
+						Foreground="{DynamicResource OperatorAccentBrush}"
+						HorizontalAlignment="Center"
+						VerticalAlignment="Center" />
+					<StackPanel Grid.Column="1" VerticalAlignment="Center">
+						<TextBlock Text="{Binding Label}" FontSize="10" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+						<TextBlock Text="{Binding Value}" Style="{StaticResource OperatorLabel}" FontSize="9" TextTrimming="CharacterEllipsis" />
 					</StackPanel>
+					<TextBlock
+						Grid.Column="2"
+						Text="{Binding State}"
+						Style="{StaticResource OperatorLabel}"
+						FontSize="9"
+						HorizontalAlignment="Right"
+						VerticalAlignment="Center" />
+					<controls:RtaimeIconButton
+						Grid.Column="3"
+						IconData="{StaticResource RtaimeIconMoreGeometry}"
+						Width="24"
+						Height="24"
+						IsEnabled="False"
+						ToolTip="Effect ordering and per-effect context actions are not exposed by the current capability."
+						AutomationProperties.Name="Effect context unavailable" />
 				</Grid>
 			</Border>
 		</DataTemplate>
 	</UserControl.Resources>
 
-	<Border Style="{StaticResource OperatorShellRegion}">
+	<Border
+		Background="{DynamicResource OperatorSurfaceBrush}"
+		BorderBrush="{DynamicResource OperatorBorderBrush}"
+		BorderThickness="1,0,0,0">
 		<Grid>
-			<Grid.RowDefinitions>
-				<RowDefinition Height="Auto" />
-				<RowDefinition Height="*" />
-				<RowDefinition Height="Auto" />
-			</Grid.RowDefinitions>
-
-			<DockPanel Margin="0,0,0,8">
-				<TextBlock Text="INSPECTOR" Style="{StaticResource OperatorSectionTitle}" />
-				<Button Content="›"
-					Command="{Binding CollapseCommand, ElementName=Root}"
-					Style="{StaticResource OperatorButton}"
-					MinWidth="30"
-					MinHeight="26"
-					Padding="6,2"
-					DockPanel.Dock="Right"
-					ToolTip="Collapse inspector" />
-			</DockPanel>
-
-			<controls:RtaimeTabControl Grid.Row="1"
+			<controls:RtaimeTabControl
+				x:Name="InspectorTopTabs"
 				Background="{DynamicResource OperatorSurfaceBrush}"
 				BorderBrush="{DynamicResource OperatorBorderBrush}"
-				Foreground="{DynamicResource OperatorTextBrush}">
-				<controls:RtaimeTabItem Header="Properties" Style="{StaticResource InspectorTabItem}">
-					<controls:RtaimeScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-						<StackPanel Margin="8">
-							<TextBlock Text="No selection. Select a Media Pool resource, timeline item or cue to inspect its context."
-								TextWrapping="Wrap"
-								Margin="0,2,0,8">
-								<TextBlock.Style>
-									<Style TargetType="{x:Type TextBlock}" BasedOn="{StaticResource OperatorLabel}">
-										<Setter Property="Visibility" Value="Visible" />
-										<Style.Triggers>
-											<DataTrigger Binding="{Binding Inspector.HasSelection, ElementName=Root}" Value="True">
-												<Setter Property="Visibility" Value="Collapsed" />
-											</DataTrigger>
-										</Style.Triggers>
-									</Style>
-								</TextBlock.Style>
-							</TextBlock>
+				BorderThickness="0">
+				<controls:RtaimeTabItem Header="Inspector" Style="{StaticResource InspectorTopTab}">
+					<Grid>
+						<Grid.RowDefinitions>
+							<RowDefinition Height="72" />
+							<RowDefinition Height="*" />
+						</Grid.RowDefinitions>
+						<ContentControl
+							Content="{Binding Inspector, ElementName=Root}"
+							ContentTemplate="{StaticResource InspectorSelectionHeaderTemplate}" />
 
-							<StackPanel>
-								<StackPanel.Style>
-									<Style TargetType="{x:Type StackPanel}">
-										<Setter Property="Visibility" Value="Collapsed" />
-										<Style.Triggers>
-											<DataTrigger Binding="{Binding Inspector.HasSelection, ElementName=Root}" Value="True">
-												<Setter Property="Visibility" Value="Visible" />
-											</DataTrigger>
-										</Style.Triggers>
-									</Style>
-								</StackPanel.Style>
-
-								<TextBlock Text="{Binding Inspector.InspectorTitle, ElementName=Root}"
-									FontSize="17"
-									FontWeight="SemiBold"
-									TextTrimming="CharacterEllipsis" />
-								<TextBlock Text="{Binding Inspector.InspectorDetail, ElementName=Root}"
-									Style="{StaticResource OperatorLabel}"
-									TextWrapping="Wrap"
-									Margin="0,3,0,4" />
-								<TextBlock Text="{Binding Inspector.SelectionSummary, ElementName=Root}"
-									Margin="0,0,0,8">
-									<TextBlock.Style>
-										<Style TargetType="{x:Type TextBlock}" BasedOn="{StaticResource OperatorLabel}">
-											<Setter Property="Visibility" Value="Collapsed" />
-											<Style.Triggers>
-												<DataTrigger Binding="{Binding Inspector.HasMultipleSelection, ElementName=Root}" Value="True">
+						<controls:RtaimeTabControl
+							Grid.Row="1"
+							Background="{DynamicResource OperatorSurfaceBrush}"
+							BorderThickness="0">
+							<controls:RtaimeTabItem Header="Video" Style="{StaticResource InspectorCategoryTab}">
+								<controls:RtaimeScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+									<StackPanel>
+										<TextBlock
+											Text="No selection. Select a Media Pool resource, timeline item or cue to inspect its context."
+											Style="{StaticResource OperatorLabel}"
+											TextWrapping="Wrap"
+											Margin="10,10,10,8">
+											<TextBlock.Style>
+												<Style TargetType="{x:Type TextBlock}" BasedOn="{StaticResource OperatorLabel}">
 													<Setter Property="Visibility" Value="Visible" />
-													<Setter Property="Foreground" Value="{DynamicResource OperatorWarningBrush}" />
-												</DataTrigger>
-											</Style.Triggers>
-										</Style>
-									</TextBlock.Style>
-								</TextBlock>
+													<Style.Triggers>
+														<DataTrigger Binding="{Binding Inspector.HasSelection, ElementName=Root}" Value="True"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
+													</Style.Triggers>
+												</Style>
+											</TextBlock.Style>
+										</TextBlock>
 
-								<Expander Header="OVERVIEW"
-									IsExpanded="{Binding Inspector.IsOverviewExpanded, ElementName=Root, Mode=TwoWay}"
-									Foreground="{DynamicResource OperatorTextBrush}"
-									Margin="0,0,0,8">
-									<ItemsControl ItemsSource="{Binding Inspector.InspectorProperties, ElementName=Root}"
-										ItemTemplate="{StaticResource InspectorPropertyTemplate}" />
-								</Expander>
+										<StackPanel>
+											<StackPanel.Style>
+												<Style TargetType="StackPanel">
+													<Setter Property="Visibility" Value="Collapsed" />
+													<Style.Triggers>
+														<DataTrigger Binding="{Binding Inspector.HasSelection, ElementName=Root}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
+													</Style.Triggers>
+												</Style>
+											</StackPanel.Style>
 
-								<Expander Header="PLAYBACK"
-									IsExpanded="{Binding Inspector.IsPlaybackExpanded, ElementName=Root, Mode=TwoWay}"
-									Foreground="{DynamicResource OperatorTextBrush}"
-									Margin="0,0,0,8">
-									<Expander.Style>
-										<Style TargetType="{x:Type Expander}">
-											<Setter Property="Visibility" Value="Collapsed" />
-											<Style.Triggers>
-												<MultiDataTrigger>
-													<MultiDataTrigger.Conditions>
-														<Condition Binding="{Binding Inspector.IsClipSelection, ElementName=Root}" Value="True" />
-														<Condition Binding="{Binding Inspector.HasMultipleSelection, ElementName=Root}" Value="False" />
-													</MultiDataTrigger.Conditions>
-													<Setter Property="Visibility" Value="Visible" />
-												</MultiDataTrigger>
-											</Style.Triggers>
-										</Style>
-									</Expander.Style>
-									<StackPanel Margin="0,6,0,0">
-										<Grid Margin="0,0,0,6">
-											<Grid.ColumnDefinitions>
-												<ColumnDefinition Width="*" />
-												<ColumnDefinition Width="Auto" />
-											</Grid.ColumnDefinitions>
-											<controls:RtaimeCheckBox Content="Auto Play on Program"
-												IsChecked="{Binding MediaDeck.AutoPlayOnProgram, ElementName=Root, Mode=TwoWay}" />
-											<Button Grid.Column="1" Content="RESET"
-												Command="{Binding Inspector.ResetAutoPlayCommand, ElementName=Root}"
-												Style="{StaticResource OperatorButton}"
-												MinHeight="24"
-												Padding="6,2" />
-										</Grid>
-										<Grid Margin="0,0,0,6">
-											<Grid.ColumnDefinitions>
-												<ColumnDefinition Width="*" />
-												<ColumnDefinition Width="6" />
-												<ColumnDefinition Width="Auto" />
-											</Grid.ColumnDefinitions>
-											<controls:RtaimeComboBox ItemsSource="{Binding MediaDeck.EndBehaviors, ElementName=Root}"
-												SelectedItem="{Binding MediaDeck.EndBehavior, ElementName=Root, Mode=TwoWay}" />
-											<Button Grid.Column="2" Content="RESET"
-												Command="{Binding Inspector.ResetEndBehaviorCommand, ElementName=Root}"
-												Style="{StaticResource OperatorButton}"
-												MinHeight="24"
-												Padding="6,2" />
-										</Grid>
-										<Button Content="APPLY PLAYBACK POLICY"
-											Command="{Binding MediaDeck.ApplyPlaybackPolicyCommand, ElementName=Root}"
-											Style="{StaticResource OperatorAccentButton}" />
-									</StackPanel>
-								</Expander>
+											<TextBlock
+												Text="{Binding Inspector.SelectionSummary, ElementName=Root}"
+												Style="{StaticResource OperatorLabel}"
+												Foreground="{DynamicResource OperatorWarningBrush}"
+												Margin="10,6,10,4">
+												<TextBlock.Style>
+													<Style TargetType="{x:Type TextBlock}" BasedOn="{StaticResource OperatorLabel}">
+														<Setter Property="Visibility" Value="Collapsed" />
+														<Style.Triggers>
+															<DataTrigger Binding="{Binding Inspector.HasMultipleSelection, ElementName=Root}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
+														</Style.Triggers>
+													</Style>
+												</TextBlock.Style>
+											</TextBlock>
 
-								<Expander Header="CUE"
-									IsExpanded="{Binding Inspector.IsCueExpanded, ElementName=Root, Mode=TwoWay}"
-									Foreground="{DynamicResource OperatorTextBrush}"
-									Margin="0,0,0,8">
-									<Expander.Style>
-										<Style TargetType="{x:Type Expander}">
-											<Setter Property="Visibility" Value="Collapsed" />
-											<Style.Triggers>
-												<DataTrigger Binding="{Binding Inspector.IsCueSelection, ElementName=Root}" Value="True">
-													<Setter Property="Visibility" Value="Visible" />
-												</DataTrigger>
-											</Style.Triggers>
-										</Style>
-									</Expander.Style>
-									<StackPanel Margin="0,6,0,0">
-										<controls:RtaimeTextBox Text="{Binding MediaDeck.CueName, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-											
-											Margin="0,0,0,6" />
-										<Grid>
-											<Grid.ColumnDefinitions>
-												<ColumnDefinition Width="*" />
-												<ColumnDefinition Width="5" />
-												<ColumnDefinition Width="*" />
-												<ColumnDefinition Width="5" />
-												<ColumnDefinition Width="*" />
-											</Grid.ColumnDefinitions>
-											<Button Grid.Column="0" Content="JUMP" Command="{Binding MediaDeck.JumpCueCommand, ElementName=Root}" Style="{StaticResource OperatorButton}" />
-											<Button Grid.Column="2" Content="RENAME" Command="{Binding MediaDeck.RenameCueCommand, ElementName=Root}" Style="{StaticResource OperatorAccentButton}" />
-											<Button Grid.Column="4" Content="DELETE" Command="{Binding MediaDeck.DeleteCueCommand, ElementName=Root}" Style="{StaticResource OperatorButton}" />
-										</Grid>
-									</StackPanel>
-								</Expander>
+											<controls:RtaimeToggleButton
+												Content="BASIC PROPERTIES"
+												Style="{StaticResource InspectorSectionToggle}"
+												IsChecked="{Binding Inspector.IsOverviewExpanded, ElementName=Root, Mode=TwoWay}" />
+											<Border Style="{StaticResource InspectorPropertySectionContent}">
+												<Border.Style>
+													<Style TargetType="Border" BasedOn="{StaticResource InspectorPropertySectionContent}">
+														<Setter Property="Visibility" Value="Collapsed" />
+														<Style.Triggers>
+															<DataTrigger Binding="{Binding Inspector.IsOverviewExpanded, ElementName=Root}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
+														</Style.Triggers>
+													</Style>
+												</Border.Style>
+												<ItemsControl ItemsSource="{Binding Inspector.InspectorProperties, ElementName=Root}" ItemTemplate="{StaticResource InspectorPropertyTemplate}" />
+											</Border>
 
-								<Expander Header="AUDIO"
-									IsExpanded="{Binding Inspector.IsAudioExpanded, ElementName=Root, Mode=TwoWay}"
-									Foreground="{DynamicResource OperatorTextBrush}"
-									Margin="0,0,0,8">
-									<Expander.Style>
-										<Style TargetType="{x:Type Expander}">
-											<Setter Property="Visibility" Value="Collapsed" />
-											<Style.Triggers>
-												<MultiDataTrigger>
-													<MultiDataTrigger.Conditions>
-														<Condition Binding="{Binding Inspector.IsAudioSelection, ElementName=Root}" Value="True" />
-														<Condition Binding="{Binding Inspector.HasMultipleSelection, ElementName=Root}" Value="False" />
-													</MultiDataTrigger.Conditions>
-													<Setter Property="Visibility" Value="Visible" />
-												</MultiDataTrigger>
-											</Style.Triggers>
-										</Style>
-									</Expander.Style>
-									<StackPanel Margin="0,6,0,0">
-										<Grid>
-											<Grid.ColumnDefinitions>
-												<ColumnDefinition Width="72" />
-												<ColumnDefinition Width="*" />
-												<ColumnDefinition Width="6" />
-												<ColumnDefinition Width="Auto" />
-											</Grid.ColumnDefinitions>
-											<TextBlock Text="Gain" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" />
-											<controls:RtaimeTextBox Grid.Column="1"
-												Text="{Binding ControlState.SelectedAudioInput.Gain, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}"
-												Style="{StaticResource InspectorNumericTextBox}" />
-											<Button Grid.Column="3" Content="RESET"
-												Command="{Binding Inspector.ResetAudioGainCommand, ElementName=Root}"
-												Style="{StaticResource OperatorButton}"
-												Padding="6,2" />
-										</Grid>
-										<controls:RtaimeSlider Minimum="0" Maximum="4" TickFrequency="0.1"
-											Value="{Binding ControlState.SelectedAudioInput.Gain, ElementName=Root, Mode=TwoWay}"
-											Margin="72,4,0,6" />
-										<Grid>
-											<Grid.ColumnDefinitions>
-												<ColumnDefinition Width="*" />
-												<ColumnDefinition Width="6" />
-												<ColumnDefinition Width="*" />
-											</Grid.ColumnDefinitions>
-											<Button Content="APPLY GAIN" Command="{Binding ControlState.ApplyAudioGainCommand, ElementName=Root}" Style="{StaticResource OperatorAccentButton}" />
-											<Button Grid.Column="2" Content="{Binding ControlState.SelectedAudioInput.MuteActionLabel, ElementName=Root}" Command="{Binding ControlState.ToggleAudioMuteCommand, ElementName=Root}" Style="{StaticResource OperatorButton}" />
-										</Grid>
-									</StackPanel>
-								</Expander>
-
-								<Expander Header="TRANSFORM"
-									IsExpanded="{Binding Inspector.IsTransformExpanded, ElementName=Root, Mode=TwoWay}"
-									Foreground="{DynamicResource OperatorTextBrush}"
-									Margin="0,0,0,8">
-									<Expander.Style>
-										<Style TargetType="{x:Type Expander}">
-											<Setter Property="Visibility" Value="Collapsed" />
-											<Style.Triggers>
-												<MultiDataTrigger>
-													<MultiDataTrigger.Conditions>
-														<Condition Binding="{Binding Inspector.IsGraphicsSelection, ElementName=Root}" Value="True" />
-														<Condition Binding="{Binding Inspector.HasMultipleSelection, ElementName=Root}" Value="False" />
-													</MultiDataTrigger.Conditions>
-													<Setter Property="Visibility" Value="Visible" />
-												</MultiDataTrigger>
-											</Style.Triggers>
-										</Style>
-									</Expander.Style>
-									<StackPanel Margin="0,6,0,0">
-										<Grid Margin="0,0,0,3">
-											<Grid.ColumnDefinitions><ColumnDefinition Width="72" /><ColumnDefinition Width="*" /><ColumnDefinition Width="6" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-											<TextBlock Text="Position X" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" />
-											<controls:RtaimeTextBox Grid.Column="1" Text="{Binding ControlState.GraphicsPositionX, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}" Style="{StaticResource InspectorNumericTextBox}" />
-											<Button Grid.Column="3" Content="RESET" Command="{Binding Inspector.ResetGraphicsPositionXCommand, ElementName=Root}" Style="{StaticResource OperatorButton}" Padding="6,2" />
-										</Grid>
-										<controls:RtaimeSlider Minimum="0" Maximum="100" Value="{Binding ControlState.GraphicsPositionX, ElementName=Root, Mode=TwoWay}" Margin="72,0,0,6" />
-
-										<Grid Margin="0,0,0,3">
-											<Grid.ColumnDefinitions><ColumnDefinition Width="72" /><ColumnDefinition Width="*" /><ColumnDefinition Width="6" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-											<TextBlock Text="Position Y" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" />
-											<controls:RtaimeTextBox Grid.Column="1" Text="{Binding ControlState.GraphicsPositionY, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}" Style="{StaticResource InspectorNumericTextBox}" />
-											<Button Grid.Column="3" Content="RESET" Command="{Binding Inspector.ResetGraphicsPositionYCommand, ElementName=Root}" Style="{StaticResource OperatorButton}" Padding="6,2" />
-										</Grid>
-										<controls:RtaimeSlider Minimum="0" Maximum="100" Value="{Binding ControlState.GraphicsPositionY, ElementName=Root, Mode=TwoWay}" Margin="72,0,0,6" />
-
-										<Grid Margin="0,0,0,3">
-											<Grid.ColumnDefinitions><ColumnDefinition Width="72" /><ColumnDefinition Width="*" /><ColumnDefinition Width="6" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-											<TextBlock Text="Scale" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" />
-											<controls:RtaimeTextBox Grid.Column="1" Text="{Binding ControlState.GraphicsScale, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}" Style="{StaticResource InspectorNumericTextBox}" />
-											<Button Grid.Column="3" Content="RESET" Command="{Binding Inspector.ResetGraphicsScaleCommand, ElementName=Root}" Style="{StaticResource OperatorButton}" Padding="6,2" />
-										</Grid>
-										<controls:RtaimeSlider Minimum="0.05" Maximum="4" TickFrequency="0.05" Value="{Binding ControlState.GraphicsScale, ElementName=Root, Mode=TwoWay}" Margin="72,0,0,8" />
-
-										<Button Content="APPLY TRANSFORM" Command="{Binding ControlState.ApplyGraphicsCommand, ElementName=Root}" Style="{StaticResource OperatorAccentButton}" />
-										<Border BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="0,1,0,0" Margin="0,8,0,0" Padding="0,8,0,0">
 											<StackPanel>
-												<DockPanel Margin="0,0,0,4"><TextBlock Text="Rotation" Style="{StaticResource OperatorLabel}" /><TextBlock Text="N/A" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
-												<DockPanel Margin="0,0,0,4"><TextBlock Text="Anchor" Style="{StaticResource OperatorLabel}" /><TextBlock Text="N/A" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
-												<DockPanel><TextBlock Text="Crop" Style="{StaticResource OperatorLabel}" /><TextBlock Text="N/A" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
-												<TextBlock Text="{Binding Inspector.UnsupportedTransformCapabilityText, ElementName=Root}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,6,0,0" />
+												<StackPanel.Style>
+													<Style TargetType="StackPanel">
+														<Setter Property="Visibility" Value="Collapsed" />
+														<Style.Triggers>
+															<MultiDataTrigger>
+																<MultiDataTrigger.Conditions>
+																	<Condition Binding="{Binding Inspector.IsClipSelection, ElementName=Root}" Value="True" />
+																	<Condition Binding="{Binding Inspector.HasMultipleSelection, ElementName=Root}" Value="False" />
+																</MultiDataTrigger.Conditions>
+																<Setter Property="Visibility" Value="Visible" />
+															</MultiDataTrigger>
+														</Style.Triggers>
+													</Style>
+												</StackPanel.Style>
+												<controls:RtaimeToggleButton
+													Content="TRANSPORT &amp; CONTROLS"
+													Style="{StaticResource InspectorSectionToggle}"
+													IsChecked="{Binding Inspector.IsPlaybackExpanded, ElementName=Root, Mode=TwoWay}" />
+												<Border Style="{StaticResource InspectorPropertySectionContent}">
+													<Border.Style>
+														<Style TargetType="Border" BasedOn="{StaticResource InspectorPropertySectionContent}">
+															<Setter Property="Visibility" Value="Collapsed" />
+															<Style.Triggers>
+																<DataTrigger Binding="{Binding Inspector.IsPlaybackExpanded, ElementName=Root}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
+															</Style.Triggers>
+														</Style>
+													</Border.Style>
+													<StackPanel>
+														<Grid Height="32">
+															<Grid.ColumnDefinitions>
+																<ColumnDefinition Width="96" />
+																<ColumnDefinition Width="*" />
+																<ColumnDefinition Width="58" />
+															</Grid.ColumnDefinitions>
+															<TextBlock Text="Auto Play" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" />
+															<controls:RtaimeCheckBox
+																Grid.Column="1"
+																Content="On Program"
+																IsChecked="{Binding MediaDeck.AutoPlayOnProgram, ElementName=Root, Mode=TwoWay}"
+																VerticalAlignment="Center" />
+															<controls:RtaimeButton
+																Grid.Column="2"
+																Content="RESET"
+																Command="{Binding Inspector.ResetAutoPlayCommand, ElementName=Root}"
+																IsCompact="True"
+																Height="24"
+																Padding="4,0" />
+														</Grid>
+														<Grid Height="32">
+															<Grid.ColumnDefinitions>
+																<ColumnDefinition Width="96" />
+																<ColumnDefinition Width="*" />
+																<ColumnDefinition Width="58" />
+															</Grid.ColumnDefinitions>
+															<TextBlock Text="End Behavior" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" />
+															<controls:RtaimeComboBox
+																Grid.Column="1"
+																ItemsSource="{Binding MediaDeck.EndBehaviors, ElementName=Root}"
+																SelectedItem="{Binding MediaDeck.EndBehavior, ElementName=Root, Mode=TwoWay}"
+																IsCompact="True" />
+															<controls:RtaimeButton
+																Grid.Column="2"
+																Content="RESET"
+																Command="{Binding Inspector.ResetEndBehaviorCommand, ElementName=Root}"
+																IsCompact="True"
+																Height="24"
+																Padding="4,0"
+																Margin="4,0,0,0" />
+														</Grid>
+														<controls:RtaimeButton
+															Content="APPLY PLAYBACK POLICY"
+															Command="{Binding MediaDeck.ApplyPlaybackPolicyCommand, ElementName=Root}"
+															IsCompact="True"
+															HorizontalAlignment="Stretch"
+															Margin="96,4,0,4" />
+													</StackPanel>
+												</Border>
+											</StackPanel>
+
+											<StackPanel>
+												<StackPanel.Style>
+													<Style TargetType="StackPanel">
+														<Setter Property="Visibility" Value="Collapsed" />
+														<Style.Triggers>
+															<DataTrigger Binding="{Binding Inspector.IsCueSelection, ElementName=Root}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
+														</Style.Triggers>
+													</Style>
+												</StackPanel.Style>
+												<controls:RtaimeToggleButton
+													Content="CUE CONTROLS"
+													Style="{StaticResource InspectorSectionToggle}"
+													IsChecked="{Binding Inspector.IsCueExpanded, ElementName=Root, Mode=TwoWay}" />
+												<Border Style="{StaticResource InspectorPropertySectionContent}">
+													<Border.Style>
+														<Style TargetType="Border" BasedOn="{StaticResource InspectorPropertySectionContent}">
+															<Setter Property="Visibility" Value="Collapsed" />
+															<Style.Triggers>
+																<DataTrigger Binding="{Binding Inspector.IsCueExpanded, ElementName=Root}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
+															</Style.Triggers>
+														</Style>
+													</Border.Style>
+													<StackPanel>
+														<Grid Height="32">
+															<Grid.ColumnDefinitions><ColumnDefinition Width="96" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+															<TextBlock Text="Cue Name" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" />
+															<controls:RtaimeTextBox
+																Grid.Column="1"
+																Text="{Binding MediaDeck.CueName, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+																IsCompact="True" />
+														</Grid>
+														<Grid Margin="96,4,0,4">
+															<Grid.ColumnDefinitions>
+																<ColumnDefinition Width="*" />
+																<ColumnDefinition Width="4" />
+																<ColumnDefinition Width="*" />
+																<ColumnDefinition Width="4" />
+																<ColumnDefinition Width="*" />
+															</Grid.ColumnDefinitions>
+															<controls:RtaimeButton Grid.Column="0" Content="JUMP" Command="{Binding MediaDeck.JumpCueCommand, ElementName=Root}" IsCompact="True" />
+															<controls:RtaimeButton Grid.Column="2" Content="RENAME" Command="{Binding MediaDeck.RenameCueCommand, ElementName=Root}" IsCompact="True" />
+															<controls:RtaimeButton Grid.Column="4" Content="DELETE" Command="{Binding MediaDeck.DeleteCueCommand, ElementName=Root}" IsCompact="True" />
+														</Grid>
+													</StackPanel>
+												</Border>
+											</StackPanel>
+
+											<TextBlock
+												Text="METADATA is read-only. DESIRED edits remain local until APPLY succeeds and authoritative state is re-observed as COMMITTED."
+												Style="{StaticResource OperatorLabel}"
+												TextWrapping="Wrap"
+												Margin="10,8,10,12" />
+										</StackPanel>
+									</StackPanel>
+								</controls:RtaimeScrollViewer>
+							</controls:RtaimeTabItem>
+
+							<controls:RtaimeTabItem Header="Audio" Style="{StaticResource InspectorCategoryTab}">
+								<controls:RtaimeScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+									<StackPanel>
+										<TextBlock Text="Audio controls are available for a single audio selection." Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="10,10,10,6">
+											<TextBlock.Style>
+												<Style TargetType="TextBlock" BasedOn="{StaticResource OperatorLabel}">
+													<Setter Property="Visibility" Value="Visible" />
+													<Style.Triggers>
+														<MultiDataTrigger>
+															<MultiDataTrigger.Conditions>
+																<Condition Binding="{Binding Inspector.IsAudioSelection, ElementName=Root}" Value="True" />
+																<Condition Binding="{Binding Inspector.HasMultipleSelection, ElementName=Root}" Value="False" />
+															</MultiDataTrigger.Conditions>
+															<Setter Property="Visibility" Value="Collapsed" />
+														</MultiDataTrigger>
+													</Style.Triggers>
+												</Style>
+											</TextBlock.Style>
+										</TextBlock>
+										<StackPanel>
+											<StackPanel.Style>
+												<Style TargetType="StackPanel">
+													<Setter Property="Visibility" Value="Collapsed" />
+													<Style.Triggers>
+														<MultiDataTrigger>
+															<MultiDataTrigger.Conditions>
+																<Condition Binding="{Binding Inspector.IsAudioSelection, ElementName=Root}" Value="True" />
+																<Condition Binding="{Binding Inspector.HasMultipleSelection, ElementName=Root}" Value="False" />
+															</MultiDataTrigger.Conditions>
+															<Setter Property="Visibility" Value="Visible" />
+														</MultiDataTrigger>
+													</Style.Triggers>
+												</Style>
+											</StackPanel.Style>
+											<controls:RtaimeToggleButton
+												Content="AUDIO"
+												Style="{StaticResource InspectorSectionToggle}"
+												IsChecked="{Binding Inspector.IsAudioExpanded, ElementName=Root, Mode=TwoWay}" />
+											<Border Style="{StaticResource InspectorPropertySectionContent}">
+												<Border.Style>
+													<Style TargetType="Border" BasedOn="{StaticResource InspectorPropertySectionContent}">
+														<Setter Property="Visibility" Value="Collapsed" />
+														<Style.Triggers>
+															<DataTrigger Binding="{Binding Inspector.IsAudioExpanded, ElementName=Root}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
+														</Style.Triggers>
+													</Style>
+												</Border.Style>
+												<StackPanel>
+													<Grid Height="34">
+														<Grid.ColumnDefinitions>
+															<ColumnDefinition Width="96" />
+															<ColumnDefinition Width="*" />
+															<ColumnDefinition Width="58" />
+														</Grid.ColumnDefinitions>
+														<TextBlock Text="Gain" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" />
+														<controls:RtaimeTextBox
+															Grid.Column="1"
+															Text="{Binding ControlState.SelectedAudioInput.Gain, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}"
+															Style="{StaticResource InspectorNumericTextBox}" />
+														<controls:RtaimeButton
+															Grid.Column="2"
+															Content="RESET"
+															Command="{Binding Inspector.ResetAudioGainCommand, ElementName=Root}"
+															IsCompact="True"
+															Height="24"
+															Padding="4,0"
+															Margin="4,0,0,0" />
+													</Grid>
+													<Grid Height="32">
+														<Grid.ColumnDefinitions><ColumnDefinition Width="96" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+														<TextBlock Text="Level" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" />
+														<controls:RtaimeSlider
+															Grid.Column="1"
+															Minimum="0"
+															Maximum="4"
+															TickFrequency="0.1"
+															Value="{Binding ControlState.SelectedAudioInput.Gain, ElementName=Root, Mode=TwoWay}" />
+													</Grid>
+													<Grid Margin="96,4,0,4">
+														<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="4" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+														<controls:RtaimeButton Grid.Column="0" Content="APPLY GAIN" Command="{Binding ControlState.ApplyAudioGainCommand, ElementName=Root}" IsCompact="True" />
+														<controls:RtaimeButton Grid.Column="2" Content="{Binding ControlState.SelectedAudioInput.MuteActionLabel, ElementName=Root}" Command="{Binding ControlState.ToggleAudioMuteCommand, ElementName=Root}" IsCompact="True" />
+													</Grid>
+												</StackPanel>
+											</Border>
+										</StackPanel>
+									</StackPanel>
+								</controls:RtaimeScrollViewer>
+							</controls:RtaimeTabItem>
+
+							<controls:RtaimeTabItem Header="Transform" Style="{StaticResource InspectorCategoryTab}">
+								<controls:RtaimeScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+									<StackPanel>
+										<TextBlock Text="Transform controls are available for a single graphics selection." Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="10,10,10,6">
+											<TextBlock.Style>
+												<Style TargetType="TextBlock" BasedOn="{StaticResource OperatorLabel}">
+													<Setter Property="Visibility" Value="Visible" />
+													<Style.Triggers>
+														<MultiDataTrigger>
+															<MultiDataTrigger.Conditions>
+																<Condition Binding="{Binding Inspector.IsGraphicsSelection, ElementName=Root}" Value="True" />
+																<Condition Binding="{Binding Inspector.HasMultipleSelection, ElementName=Root}" Value="False" />
+															</MultiDataTrigger.Conditions>
+															<Setter Property="Visibility" Value="Collapsed" />
+														</MultiDataTrigger>
+													</Style.Triggers>
+												</Style>
+											</TextBlock.Style>
+										</TextBlock>
+										<StackPanel>
+											<StackPanel.Style>
+												<Style TargetType="StackPanel">
+													<Setter Property="Visibility" Value="Collapsed" />
+													<Style.Triggers>
+														<MultiDataTrigger>
+															<MultiDataTrigger.Conditions>
+																<Condition Binding="{Binding Inspector.IsGraphicsSelection, ElementName=Root}" Value="True" />
+																<Condition Binding="{Binding Inspector.HasMultipleSelection, ElementName=Root}" Value="False" />
+															</MultiDataTrigger.Conditions>
+															<Setter Property="Visibility" Value="Visible" />
+														</MultiDataTrigger>
+													</Style.Triggers>
+												</Style>
+											</StackPanel.Style>
+											<controls:RtaimeToggleButton
+												Content="TRANSFORM"
+												Style="{StaticResource InspectorSectionToggle}"
+												IsChecked="{Binding Inspector.IsTransformExpanded, ElementName=Root, Mode=TwoWay}" />
+											<Border Style="{StaticResource InspectorPropertySectionContent}">
+												<Border.Style>
+													<Style TargetType="Border" BasedOn="{StaticResource InspectorPropertySectionContent}">
+														<Setter Property="Visibility" Value="Collapsed" />
+														<Style.Triggers>
+															<DataTrigger Binding="{Binding Inspector.IsTransformExpanded, ElementName=Root}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
+														</Style.Triggers>
+													</Style>
+												</Border.Style>
+												<StackPanel>
+													<Grid Height="34">
+														<Grid.ColumnDefinitions><ColumnDefinition Width="96" /><ColumnDefinition Width="*" /><ColumnDefinition Width="58" /></Grid.ColumnDefinitions>
+														<TextBlock Text="Position X" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" />
+														<controls:RtaimeTextBox Grid.Column="1" Text="{Binding ControlState.GraphicsPositionX, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}" Style="{StaticResource InspectorNumericTextBox}" />
+														<controls:RtaimeButton Grid.Column="2" Content="RESET" Command="{Binding Inspector.ResetGraphicsPositionXCommand, ElementName=Root}" IsCompact="True" Height="24" Padding="4,0" Margin="4,0,0,0" />
+													</Grid>
+													<Grid Height="30"><Grid.ColumnDefinitions><ColumnDefinition Width="96" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><TextBlock Text="X" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" /><controls:RtaimeSlider Grid.Column="1" Minimum="0" Maximum="100" Value="{Binding ControlState.GraphicsPositionX, ElementName=Root, Mode=TwoWay}" /></Grid>
+													<Grid Height="34">
+														<Grid.ColumnDefinitions><ColumnDefinition Width="96" /><ColumnDefinition Width="*" /><ColumnDefinition Width="58" /></Grid.ColumnDefinitions>
+														<TextBlock Text="Position Y" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" />
+														<controls:RtaimeTextBox Grid.Column="1" Text="{Binding ControlState.GraphicsPositionY, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}" Style="{StaticResource InspectorNumericTextBox}" />
+														<controls:RtaimeButton Grid.Column="2" Content="RESET" Command="{Binding Inspector.ResetGraphicsPositionYCommand, ElementName=Root}" IsCompact="True" Height="24" Padding="4,0" Margin="4,0,0,0" />
+													</Grid>
+													<Grid Height="30"><Grid.ColumnDefinitions><ColumnDefinition Width="96" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><TextBlock Text="Y" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" /><controls:RtaimeSlider Grid.Column="1" Minimum="0" Maximum="100" Value="{Binding ControlState.GraphicsPositionY, ElementName=Root, Mode=TwoWay}" /></Grid>
+													<Grid Height="34">
+														<Grid.ColumnDefinitions><ColumnDefinition Width="96" /><ColumnDefinition Width="*" /><ColumnDefinition Width="58" /></Grid.ColumnDefinitions>
+														<TextBlock Text="Scale" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" />
+														<controls:RtaimeTextBox Grid.Column="1" Text="{Binding ControlState.GraphicsScale, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}" Style="{StaticResource InspectorNumericTextBox}" />
+														<controls:RtaimeButton Grid.Column="2" Content="RESET" Command="{Binding Inspector.ResetGraphicsScaleCommand, ElementName=Root}" IsCompact="True" Height="24" Padding="4,0" Margin="4,0,0,0" />
+													</Grid>
+													<Grid Height="30"><Grid.ColumnDefinitions><ColumnDefinition Width="96" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><TextBlock Text="Scale" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" /><controls:RtaimeSlider Grid.Column="1" Minimum="0.05" Maximum="4" TickFrequency="0.05" Value="{Binding ControlState.GraphicsScale, ElementName=Root, Mode=TwoWay}" /></Grid>
+													<controls:RtaimeButton Content="APPLY TRANSFORM" Command="{Binding ControlState.ApplyGraphicsCommand, ElementName=Root}" IsCompact="True" Margin="96,4,0,6" />
+													<Grid Height="30"><Grid.ColumnDefinitions><ColumnDefinition Width="96" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><TextBlock Text="Rotation" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" /><TextBlock Grid.Column="1" Text="N/A" Style="{StaticResource OperatorValue}" VerticalAlignment="Center" /></Grid>
+													<Grid Height="30"><Grid.ColumnDefinitions><ColumnDefinition Width="96" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><TextBlock Text="Anchor" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" /><TextBlock Grid.Column="1" Text="N/A" Style="{StaticResource OperatorValue}" VerticalAlignment="Center" /></Grid>
+													<Grid Height="30"><Grid.ColumnDefinitions><ColumnDefinition Width="96" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><TextBlock Text="Crop" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" /><TextBlock Grid.Column="1" Text="N/A" Style="{StaticResource OperatorValue}" VerticalAlignment="Center" /></Grid>
+													<TextBlock Text="{Binding Inspector.UnsupportedTransformCapabilityText, ElementName=Root}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="96,4,0,4" />
+												</StackPanel>
+											</Border>
+										</StackPanel>
+									</StackPanel>
+								</controls:RtaimeScrollViewer>
+							</controls:RtaimeTabItem>
+
+							<controls:RtaimeTabItem Header="FX" Style="{StaticResource InspectorCategoryTab}">
+								<controls:RtaimeScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+									<StackPanel>
+										<controls:RtaimeToggleButton Content="EFFECTS" Style="{StaticResource InspectorSectionToggle}" IsChecked="{Binding Inspector.IsEffectsExpanded, ElementName=Root, Mode=TwoWay}" />
+										<Border Style="{StaticResource InspectorPropertySectionContent}">
+											<Border.Style>
+												<Style TargetType="Border" BasedOn="{StaticResource InspectorPropertySectionContent}">
+													<Setter Property="Visibility" Value="Collapsed" />
+													<Style.Triggers>
+														<DataTrigger Binding="{Binding Inspector.IsEffectsExpanded, ElementName=Root}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
+													</Style.Triggers>
+												</Style>
+											</Border.Style>
+											<StackPanel>
+												<TextBlock Text="No Effects/Processing capability is exposed for the current selection." Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,6,0,6">
+													<TextBlock.Style>
+														<Style TargetType="TextBlock" BasedOn="{StaticResource OperatorLabel}">
+															<Setter Property="Visibility" Value="Visible" />
+															<Style.Triggers>
+																<DataTrigger Binding="{Binding Inspector.HasEffects, ElementName=Root}" Value="True"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
+															</Style.Triggers>
+														</Style>
+													</TextBlock.Style>
+												</TextBlock>
+												<ItemsControl ItemsSource="{Binding Inspector.InspectorEffectProperties, ElementName=Root}" ItemTemplate="{StaticResource InspectorEffectTemplate}" />
+												<Grid Margin="0,6,0,0">
+													<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="4" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+													<controls:RtaimeButton Grid.Column="0" Content="ENABLE" Command="{Binding ControlState.EnableAIShowcaseCommand, ElementName=Root}" IsCompact="True" />
+													<controls:RtaimeButton Grid.Column="2" Content="DISABLE" Command="{Binding ControlState.DisableAIShowcaseCommand, ElementName=Root}" IsCompact="True" />
+												</Grid>
+												<controls:RtaimeButton
+													Content="+ Add Effect"
+													IsCompact="True"
+													IsEnabled="False"
+													HorizontalAlignment="Left"
+													Margin="0,6,0,0"
+													ToolTip="Effect insertion is not exposed by the current V1 processing capability." />
+												<TextBlock Text="{Binding Inspector.UnsupportedEffectOrderingText, ElementName=Root}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,6,0,0" />
 											</StackPanel>
 										</Border>
 									</StackPanel>
-								</Expander>
+								</controls:RtaimeScrollViewer>
+							</controls:RtaimeTabItem>
+						</controls:RtaimeTabControl>
+					</Grid>
+				</controls:RtaimeTabItem>
+
+				<controls:RtaimeTabItem Header="Processing" Style="{StaticResource InspectorTopTab}">
+					<Grid>
+						<Grid.RowDefinitions><RowDefinition Height="72" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+						<ContentControl Content="{Binding Inspector, ElementName=Root}" ContentTemplate="{StaticResource InspectorSelectionHeaderTemplate}" />
+						<controls:RtaimeScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+							<StackPanel>
+								<controls:RtaimeToggleButton Content="EFFECTS" Style="{StaticResource InspectorSectionToggle}" IsChecked="{Binding Inspector.IsEffectsExpanded, ElementName=Root, Mode=TwoWay}" />
+								<Border Style="{StaticResource InspectorPropertySectionContent}">
+									<StackPanel>
+										<ItemsControl ItemsSource="{Binding Inspector.InspectorEffectProperties, ElementName=Root}" ItemTemplate="{StaticResource InspectorEffectTemplate}" />
+										<Grid Margin="0,6,0,0">
+											<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="4" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+											<controls:RtaimeButton Grid.Column="0" Content="ENABLE" Command="{Binding ControlState.EnableAIShowcaseCommand, ElementName=Root}" IsCompact="True" />
+											<controls:RtaimeButton Grid.Column="2" Content="DISABLE" Command="{Binding ControlState.DisableAIShowcaseCommand, ElementName=Root}" IsCompact="True" />
+										</Grid>
+										<controls:RtaimeButton Content="+ Add Effect" IsCompact="True" IsEnabled="False" HorizontalAlignment="Left" Margin="0,6,0,0" />
+										<TextBlock Text="{Binding Inspector.UnsupportedEffectOrderingText, ElementName=Root}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,6,0,0" />
+									</StackPanel>
+								</Border>
 							</StackPanel>
-						</StackPanel>
-					</controls:RtaimeScrollViewer>
+						</controls:RtaimeScrollViewer>
+					</Grid>
 				</controls:RtaimeTabItem>
 
-				<controls:RtaimeTabItem Header="Effects / Processing" Style="{StaticResource InspectorTabItem}">
-					<controls:RtaimeScrollViewer VerticalScrollBarVisibility="Auto">
-						<StackPanel Margin="8">
-							<TextBlock Text="No Effects/Processing capability is exposed for the current selection."
-								TextWrapping="Wrap">
-								<TextBlock.Style>
-									<Style TargetType="{x:Type TextBlock}" BasedOn="{StaticResource OperatorLabel}">
-										<Setter Property="Visibility" Value="Visible" />
-										<Style.Triggers>
-											<DataTrigger Binding="{Binding Inspector.HasEffects, ElementName=Root}" Value="True">
-												<Setter Property="Visibility" Value="Collapsed" />
-											</DataTrigger>
-										</Style.Triggers>
-									</Style>
-								</TextBlock.Style>
-							</TextBlock>
-							<Expander Header="PROCESSING"
-								IsExpanded="{Binding Inspector.IsEffectsExpanded, ElementName=Root, Mode=TwoWay}"
-								Foreground="{DynamicResource OperatorTextBrush}">
-								<Expander.Style>
-									<Style TargetType="{x:Type Expander}">
-										<Setter Property="Visibility" Value="Collapsed" />
-										<Style.Triggers>
-											<DataTrigger Binding="{Binding Inspector.HasEffects, ElementName=Root}" Value="True">
-												<Setter Property="Visibility" Value="Visible" />
-											</DataTrigger>
-										</Style.Triggers>
-									</Style>
-								</Expander.Style>
-								<StackPanel Margin="0,6,0,0">
-									<ItemsControl ItemsSource="{Binding Inspector.InspectorEffectProperties, ElementName=Root}" ItemTemplate="{StaticResource InspectorPropertyTemplate}" />
-									<Grid Margin="0,8,0,0">
-										<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="6" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-										<Button Grid.Column="0" Content="ENABLE" Command="{Binding ControlState.EnableAIShowcaseCommand, ElementName=Root}" Style="{StaticResource OperatorAccentButton}" />
-										<Button Grid.Column="2" Content="DISABLE" Command="{Binding ControlState.DisableAIShowcaseCommand, ElementName=Root}" Style="{StaticResource OperatorButton}" />
-									</Grid>
-									<TextBlock Text="{Binding Inspector.UnsupportedEffectOrderingText, ElementName=Root}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,8,0,0" />
-								</StackPanel>
-							</Expander>
-						</StackPanel>
-					</controls:RtaimeScrollViewer>
-				</controls:RtaimeTabItem>
-
-				<controls:RtaimeTabItem Header="Metadata" Style="{StaticResource InspectorTabItem}">
-					<controls:RtaimeScrollViewer VerticalScrollBarVisibility="Auto">
-						<StackPanel Margin="8">
-							<Expander Header="TECHNICAL METADATA"
-								IsExpanded="{Binding Inspector.IsMetadataExpanded, ElementName=Root, Mode=TwoWay}"
-								Foreground="{DynamicResource OperatorTextBrush}">
-								<ItemsControl ItemsSource="{Binding Inspector.InspectorMetadataProperties, ElementName=Root}"
-									ItemTemplate="{StaticResource InspectorPropertyTemplate}" />
-							</Expander>
-							<TextBlock Text="Metadata is read-only and is projected from existing Operator, Media Deck and Timeline state."
-								Style="{StaticResource OperatorLabel}"
-								TextWrapping="Wrap"
-								Margin="0,8,0,0" />
-						</StackPanel>
-					</controls:RtaimeScrollViewer>
+				<controls:RtaimeTabItem Header="Metadata" Style="{StaticResource InspectorTopTab}">
+					<Grid>
+						<Grid.RowDefinitions><RowDefinition Height="72" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+						<ContentControl Content="{Binding Inspector, ElementName=Root}" ContentTemplate="{StaticResource InspectorSelectionHeaderTemplate}" />
+						<controls:RtaimeScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+							<StackPanel>
+								<controls:RtaimeToggleButton Content="TECHNICAL METADATA" Style="{StaticResource InspectorSectionToggle}" IsChecked="{Binding Inspector.IsMetadataExpanded, ElementName=Root, Mode=TwoWay}" />
+								<Border Style="{StaticResource InspectorPropertySectionContent}">
+									<Border.Style>
+										<Style TargetType="Border" BasedOn="{StaticResource InspectorPropertySectionContent}">
+											<Setter Property="Visibility" Value="Collapsed" />
+											<Style.Triggers>
+												<DataTrigger Binding="{Binding Inspector.IsMetadataExpanded, ElementName=Root}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
+											</Style.Triggers>
+										</Style>
+									</Border.Style>
+									<ItemsControl ItemsSource="{Binding Inspector.InspectorMetadataProperties, ElementName=Root}" ItemTemplate="{StaticResource InspectorPropertyTemplate}" />
+								</Border>
+								<TextBlock
+									Text="Metadata is read-only and projected from existing Operator, Media Deck, Timeline and graph state."
+									Style="{StaticResource OperatorLabel}"
+									TextWrapping="Wrap"
+									Margin="10,8,10,12" />
+							</StackPanel>
+						</controls:RtaimeScrollViewer>
+					</Grid>
 				</controls:RtaimeTabItem>
 			</controls:RtaimeTabControl>
 
-			<TextBlock Grid.Row="2"
-				Text="METADATA is read-only. DESIRED edits are local until APPLY succeeds and authoritative state is re-observed as COMMITTED."
-				Style="{StaticResource OperatorLabel}"
-				TextWrapping="Wrap"
-				Margin="0,8,0,0" />
+			<controls:RtaimeIconButton
+				IconData="{StaticResource RtaimeIconChevronRightGeometry}"
+				Command="{Binding CollapseCommand, ElementName=Root}"
+				Width="28"
+				Height="28"
+				HorizontalAlignment="Right"
+				VerticalAlignment="Top"
+				Margin="0,6,6,0"
+				Panel.ZIndex="5"
+				ToolTip="Collapse inspector"
+				AutomationProperties.Name="Collapse inspector" />
 		</Grid>
 	</Border>
 </UserControl>
