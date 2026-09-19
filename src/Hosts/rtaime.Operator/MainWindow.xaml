@@ -207,7 +207,7 @@
 				</DockPanel>
 			</Border>
 
-			<Border x:Name="LeftToolRegion" Grid.Column="2" Style="{StaticResource OperatorShellRegion}" Margin="0,0,6,0"
+			<Border x:Name="LeftToolRegion" Grid.Column="2" Style="{StaticResource OperatorShellRegion}" Margin="0"
 				Visibility="{Binding Shell.LeftRegionVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
 				<Grid>
 					<Grid.RowDefinitions>
