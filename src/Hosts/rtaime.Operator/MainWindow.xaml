@@ -292,13 +292,13 @@
 												</DockPanel>
 												<Grid>
 													<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="5" /><ColumnDefinition Width="*" /><ColumnDefinition Width="5" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-													<Button Grid.Column="0" Content="−" Command="{Binding DecreaseCommand}" Style="{StaticResource OperatorButton}">
+													<Button Grid.Column="0" Content="−" Command="{Binding DecreaseCommand}">
 														<Button.Style><Style TargetType="Button" BasedOn="{StaticResource OperatorButton}"><Setter Property="Visibility" Value="Visible" /><Style.Triggers><DataTrigger Binding="{Binding HasDecrease}" Value="False"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger></Style.Triggers></Style></Button.Style>
 													</Button>
-													<Button Grid.Column="2" Content="{Binding ActionLabel}" Command="{Binding PrimaryCommand}" Style="{StaticResource OperatorAccentButton}">
+													<Button Grid.Column="2" Content="{Binding ActionLabel}" Command="{Binding PrimaryCommand}">
 														<Button.Style><Style TargetType="Button" BasedOn="{StaticResource OperatorAccentButton}"><Setter Property="Visibility" Value="Visible" /><Style.Triggers><DataTrigger Binding="{Binding HasPrimary}" Value="False"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger></Style.Triggers></Style></Button.Style>
 													</Button>
-													<Button Grid.Column="4" Content="+" Command="{Binding IncreaseCommand}" Style="{StaticResource OperatorButton}">
+													<Button Grid.Column="4" Content="+" Command="{Binding IncreaseCommand}">
 														<Button.Style><Style TargetType="Button" BasedOn="{StaticResource OperatorButton}"><Setter Property="Visibility" Value="Visible" /><Style.Triggers><DataTrigger Binding="{Binding HasIncrease}" Value="False"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger></Style.Triggers></Style></Button.Style>
 													</Button>
 												</Grid>
@@ -412,24 +412,6 @@
 									<TextBlock Text="CUT / DISSOLVE" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" />
 								</StackPanel>
 								<StackPanel Grid.Column="2">
-					<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14"
-						Visibility="{Binding Shell.SystemWorkspaceVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
-						<StackPanel>
-							<DockPanel Margin="0,0,0,10">
-								<TextBlock Text="SYSTEM WORKSPACE" Style="{StaticResource OperatorSectionTitle}" />
-								<Border Style="{StaticResource OperatorLifecycleBadge}" Tag="{Binding EngineLifecycleState}" DockPanel.Dock="Right"><TextBlock Text="{Binding EngineLifecycleState}" FontWeight="Bold" /></Border>
-							</DockPanel>
-							<DockPanel Margin="0,0,0,6"><TextBlock Text="Engine" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding EngineHealth}" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" DockPanel.Dock="Right" /></DockPanel>
-							<DockPanel Margin="0,0,0,6"><TextBlock Text="Control" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding ControlHealth}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
-							<DockPanel Margin="0,0,0,6"><TextBlock Text="Runtime" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding RuntimeHealth}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
-							<DockPanel Margin="0,0,0,6"><TextBlock Text="AI" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding AIStatus}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
-							<DockPanel Margin="0,0,0,6"><TextBlock Text="Media" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding MediaHealth}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
-							<DockPanel Margin="0,0,0,6"><TextBlock Text="GPU" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding GpuProviderHealth}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
-							<DockPanel Margin="0,0,0,6"><TextBlock Text="Recording" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding RecordingStatus}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
-							<DockPanel Margin="0,0,0,6"><TextBlock Text="Outputs" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding ProgramOutput.RunState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
-							<DockPanel><TextBlock Text="Diagnostics" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding Monitoring.State, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
-						</StackPanel>
-					</Border>
 									<TextBlock Text="DISSOLVE DURATION" Style="{StaticResource OperatorLabel}" />
 									<StackPanel Orientation="Horizontal">
 										<TextBox Text="{Binding TransitionFrames, UpdateSourceTrigger=PropertyChanged}" Width="72" Style="{StaticResource OperatorTextBox}" />
@@ -453,8 +435,8 @@
 									<TextBlock Text="PROGRAM OUTPUT" Style="{StaticResource OperatorLabel}" Margin="0,0,0,4" />
 									<Grid>
 										<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="6" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-										<Button Content="START OUTPUT" Command="{Binding ProgramOutput.StartCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorProgramButton}" />
-										<Button Grid.Column="2" Content="STOP OUTPUT" Command="{Binding ProgramOutput.StopCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorButton}" />
+										<Button Content="START CLEAN PROGRAM" Command="{Binding ProgramOutput.StartCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorProgramButton}" />
+										<Button Grid.Column="2" Content="STOP CLEAN PROGRAM" Command="{Binding ProgramOutput.StopCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorButton}" />
 									</Grid>
 								</StackPanel>
 								<StackPanel Grid.Column="2">
@@ -593,7 +575,25 @@
 				</StackPanel>
 
 				<StackPanel Grid.Column="2">
-					<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14"
+										<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14"
+						Visibility="{Binding Shell.SystemWorkspaceVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
+						<StackPanel>
+							<DockPanel Margin="0,0,0,10">
+								<TextBlock Text="SYSTEM WORKSPACE" Style="{StaticResource OperatorSectionTitle}" />
+								<Border Style="{StaticResource OperatorLifecycleBadge}" Tag="{Binding EngineLifecycleState}" DockPanel.Dock="Right"><TextBlock Text="{Binding EngineLifecycleState}" FontWeight="Bold" /></Border>
+							</DockPanel>
+							<DockPanel Margin="0,0,0,6"><TextBlock Text="Engine" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding EngineHealth}" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" DockPanel.Dock="Right" /></DockPanel>
+							<DockPanel Margin="0,0,0,6"><TextBlock Text="Control" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding ControlHealth}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
+							<DockPanel Margin="0,0,0,6"><TextBlock Text="Runtime" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding RuntimeHealth}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
+							<DockPanel Margin="0,0,0,6"><TextBlock Text="AI" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding AIStatus}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
+							<DockPanel Margin="0,0,0,6"><TextBlock Text="Media" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding MediaHealth}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
+							<DockPanel Margin="0,0,0,6"><TextBlock Text="GPU" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding GpuProviderHealth}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
+							<DockPanel Margin="0,0,0,6"><TextBlock Text="Recording" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding RecordingStatus}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
+							<DockPanel Margin="0,0,0,6"><TextBlock Text="Outputs" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding ProgramOutput.RunState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
+							<DockPanel><TextBlock Text="Diagnostics" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding Monitoring.State, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
+						</StackPanel>
+					</Border>
+<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14"
 						Visibility="{Binding Shell.SystemStatusVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
 						<StackPanel>
 							<DockPanel Margin="0,0,0,12">
@@ -943,7 +943,6 @@
 														<Button Content="PIN"
 															Command="{Binding QuickControls.TogglePinCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 															CommandParameter="{Binding}"
-															Style="{StaticResource OperatorButton}"
 															HorizontalAlignment="Right"
 															MinHeight="22"
 															Padding="5,1"
