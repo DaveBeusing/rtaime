@@ -21,6 +21,7 @@ $appCodePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/App.xaml.cs"
 $windowPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MainWindow.xaml"
 $windowCodePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MainWindow.xaml.cs"
 $shellPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorShellViewModel.cs"
+$mediaPoolPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MediaPoolInspectorViewModel.cs"
 $deckPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MediaDeckControl.xaml"
 $deckViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MediaDeckViewModel.cs"
 $timelinePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MediaTimelineControl.xaml"
@@ -47,7 +48,7 @@ $manifestPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/app.manifes
 $projectPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/rtaime.Operator.csproj"
 $documentationPath = Join-Path $repositoryRoot "docs/OperatorUiV1.md"
 
-foreach ($path in @($appPath, $appCodePath, $windowPath, $windowCodePath, $shellPath, $deckPath, $deckViewModelPath, $timelinePath, $timelineCodePath, $viewModelPath, $monitorViewModelPath, $programOutputControllerPath, $programOutputWindowPath, $previewViewerPath, $previewViewerCodePath, $programViewerPath, $programViewerCodePath, $sourceTileViewModelPath, $audioInputViewModelPath, $graphicsLoaderPath, $demoControllerPath, $demoManifestPath, $demoProductPath, $demoGraphicsPath, $demoDocumentationPath, $tokensPath, $themePath, $manifestPath, $projectPath, $documentationPath)) {
+foreach ($path in @($appPath, $appCodePath, $windowPath, $windowCodePath, $shellPath, $mediaPoolPath, $deckPath, $deckViewModelPath, $timelinePath, $timelineCodePath, $viewModelPath, $monitorViewModelPath, $programOutputControllerPath, $programOutputWindowPath, $previewViewerPath, $previewViewerCodePath, $programViewerPath, $programViewerCodePath, $sourceTileViewModelPath, $audioInputViewModelPath, $graphicsLoaderPath, $demoControllerPath, $demoManifestPath, $demoProductPath, $demoGraphicsPath, $demoDocumentationPath, $tokensPath, $themePath, $manifestPath, $projectPath, $documentationPath)) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required Operator UI artifact is missing: '$path'."
 }
 
@@ -56,6 +57,7 @@ $appCode = Get-Content -LiteralPath $appCodePath -Raw
 $window = Get-Content -LiteralPath $windowPath -Raw
 $windowCode = Get-Content -LiteralPath $windowCodePath -Raw
 $shell = Get-Content -LiteralPath $shellPath -Raw
+$mediaPool = Get-Content -LiteralPath $mediaPoolPath -Raw
 $deck = Get-Content -LiteralPath $deckPath -Raw
 $deckViewModel = Get-Content -LiteralPath $deckViewModelPath -Raw
 $timeline = Get-Content -LiteralPath $timelinePath -Raw
@@ -313,6 +315,25 @@ Assert-Condition ($viewModel -match 'Apply\(snapshot\)' -and $viewModel -match '
 Assert-Condition ($viewModel -notmatch '_client is null \|\| !IsConnected \|\| IsStale \|\| IsBusy') "The bounded management refresh must continue attempting synchronization while stale/disconnected."
 Assert-Condition ($viewModel -match 'ProgramSafety != OperatorProgramSafetyStates\.Blocked') "Unsafe lifecycle states must participate in the shared mutation gate."
 Assert-Condition ($viewModel -match 'if \(!StartupComplete && projection\.MainUiReady\)') "Startup completion must latch after initial readiness so later recovery remains visible in the main Operator."
+
+
+# Media Pool and context-sensitive Inspector.
+Assert-Condition ($window -match 'Text="MEDIA"' -and $window -match 'MediaPool\.SearchText' -and $window -match 'MediaPool\.SelectedCategory' -and $window -match 'MediaPool\.SelectedFilter') "Media Pool must expose persistent category, search and filter controls."
+Assert-Condition ($window -match 'MediaPool\.GridViewCommand' -and $window -match 'MediaPool\.ListViewCommand') "Media Pool must support Grid and List presentation."
+Assert-Condition ($window -match 'MediaPool\.FilteredItems' -and $window -match 'MediaPool\.SelectedItem') "Media Pool presentation must bind the bounded selection projection."
+Assert-Condition ($mediaPool -match 'MaxVisibleItems = 256' -and $mediaPool -match 'Take\(MaxVisibleItems\)') "Media Pool collections must remain explicitly bounded."
+Assert-Condition ($mediaPool -match 'StringComparison\.OrdinalIgnoreCase' -and $mediaPool -match 'OrderBy\(item => item\.Category, StringComparer\.Ordinal\)') "Media Pool search/filter ordering must be deterministic."
+Assert-Condition ($mediaPool -match 'ImportCommand => _mediaDeck\.OpenCommand') "Media Pool import must reuse the existing Media Deck open path."
+Assert-Condition ($mediaPool -match 'DropToPreviewAsync' -and $mediaPool -match '_operator\.SetPreviewCommand\.Execute\(null\)') "Media Pool Preview drag/drop must reuse the existing authoritative Preview command path."
+Assert-Condition ($windowCode -match 'DragDropEffects\.None' -and $windowCode -match 'CanDropToPreview') "Invalid Media Pool Preview drops must be rejected safely."
+Assert-Condition ($window -match 'OnTimelineDrop' -and $windowCode -match 'MediaDeck\.RefreshCommand\.Execute\(null\)') "Loaded Clip Timeline drop must reuse the existing Media Deck context rather than create another timeline."
+foreach ($propertyId in @("source.name", "clip.duration", "clip.playback.autoplay", "audio.gain", "graphics.position.x", "ai.provider", "ai.fallback")) {
+	Assert-Condition ($mediaPool -match [Regex]::Escape($propertyId)) "Inspector stable property id '$propertyId' is required."
+}
+Assert-Condition ($window -match 'METADATA is read-only' -and $window -match 'DESIRED edits' -and $window -match 'COMMITTED') "Inspector must visually distinguish metadata, desired configuration and committed state."
+Assert-Condition ($window -match 'MediaDeck\.ApplyPlaybackPolicyCommand' -and $window -match 'Binding ApplyAudioGainCommand' -and $window -match 'Binding ApplyGraphicsCommand') "Inspector edits must reuse existing product command paths."
+Assert-Condition ($mediaPool -notmatch 'OperatorControlClient|NamedPipe|RuntimeHost|ControlHost|AIHost') "Media Pool selection/Inspector projection must not acquire production host or transport authority."
+Assert-Condition ($documentation -match 'Media Pool & Context Inspector' -and $documentation -match 'METADATA' -and $documentation -match 'DESIRED' -and $documentation -match 'COMMITTED') "Operator documentation must record Media Pool and Inspector state semantics."
 
 Write-Host "Operator UI policy verification PASS"
 Write-Host "Operator authority: remote Client SDK only"
