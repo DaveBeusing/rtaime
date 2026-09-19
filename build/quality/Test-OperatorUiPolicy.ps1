@@ -26,6 +26,7 @@ $quickControlsPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Operat
 $multiviewPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorMultiviewControl.xaml"
 $multiviewCodePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorMultiviewControl.xaml.cs"
 $mediaPoolPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MediaPoolInspectorViewModel.cs"
+$virtualizingWrapPanelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/VirtualizingWrapPanel.cs"
 $deckPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MediaDeckControl.xaml"
 $deckViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MediaDeckViewModel.cs"
 $timelinePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MediaTimelineControl.xaml"
@@ -55,8 +56,9 @@ $manifestPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/app.manifes
 $projectPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/rtaime.Operator.csproj"
 $documentationPath = Join-Path $repositoryRoot "docs/OperatorUiV1.md"
 $workspaceDocumentationPath = Join-Path $repositoryRoot "docs/OperatorWorkspaces.md"
+$mediaLibraryDocumentationPath = Join-Path $repositoryRoot "docs/MediaLibraryAssetBrowser.md"
 
-foreach ($path in @($appPath, $appCodePath, $windowPath, $windowCodePath, $shellPath, $keyboardPath, $quickControlsPath, $multiviewPath, $multiviewCodePath, $mediaPoolPath, $deckPath, $deckViewModelPath, $timelinePath, $timelineCodePath, $timelineViewModelPath, $markerControllerPath, $timelineDocumentationPath, $viewModelPath, $monitorViewModelPath, $programOutputControllerPath, $programOutputWindowPath, $previewViewerPath, $previewViewerCodePath, $programViewerPath, $programViewerCodePath, $sourceTileViewModelPath, $audioInputViewModelPath, $graphicsLoaderPath, $demoControllerPath, $demoManifestPath, $demoProductPath, $demoGraphicsPath, $demoDocumentationPath, $tokensPath, $themePath, $manifestPath, $projectPath, $documentationPath, $workspaceDocumentationPath)) {
+foreach ($path in @($appPath, $appCodePath, $windowPath, $windowCodePath, $shellPath, $keyboardPath, $quickControlsPath, $multiviewPath, $multiviewCodePath, $mediaPoolPath, $virtualizingWrapPanelPath, $deckPath, $deckViewModelPath, $timelinePath, $timelineCodePath, $timelineViewModelPath, $markerControllerPath, $timelineDocumentationPath, $viewModelPath, $monitorViewModelPath, $programOutputControllerPath, $programOutputWindowPath, $previewViewerPath, $previewViewerCodePath, $programViewerPath, $programViewerCodePath, $sourceTileViewModelPath, $audioInputViewModelPath, $graphicsLoaderPath, $demoControllerPath, $demoManifestPath, $demoProductPath, $demoGraphicsPath, $demoDocumentationPath, $tokensPath, $themePath, $manifestPath, $projectPath, $documentationPath, $workspaceDocumentationPath, $mediaLibraryDocumentationPath)) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required Operator UI artifact is missing: '$path'."
 }
 
@@ -70,6 +72,7 @@ $quickControls = Get-Content -LiteralPath $quickControlsPath -Raw
 $multiview = Get-Content -LiteralPath $multiviewPath -Raw
 $multiviewCode = Get-Content -LiteralPath $multiviewCodePath -Raw
 $mediaPool = Get-Content -LiteralPath $mediaPoolPath -Raw
+$virtualizingWrapPanel = Get-Content -LiteralPath $virtualizingWrapPanelPath -Raw
 $deck = Get-Content -LiteralPath $deckPath -Raw
 $deckViewModel = Get-Content -LiteralPath $deckViewModelPath -Raw
 $timeline = Get-Content -LiteralPath $timelinePath -Raw
@@ -97,6 +100,7 @@ $manifest = Get-Content -LiteralPath $manifestPath -Raw
 $project = Get-Content -LiteralPath $projectPath -Raw
 $documentation = Get-Content -LiteralPath $documentationPath -Raw
 $workspaceDocumentation = Get-Content -LiteralPath $workspaceDocumentationPath -Raw
+$mediaLibraryDocumentation = Get-Content -LiteralPath $mediaLibraryDocumentationPath -Raw
 
 Assert-Condition ($app -match 'Source="Themes/OperatorTheme\.xaml"') "Operator must load the reusable theme resource dictionary."
 Assert-Condition ($theme -match 'Source="OperatorTokens\.xaml"') "Operator theme must load the shared design-token dictionary."
@@ -355,9 +359,17 @@ Assert-Condition ($window -match 'Text="MEDIA"' -and $window -match 'MediaPool\.
 Assert-Condition ($window -match 'MediaPool\.GridViewCommand' -and $window -match 'MediaPool\.ListViewCommand') "Media Pool must support Grid and List presentation."
 Assert-Condition ($mediaPool -match 'ImageSource\? Thumbnail' -and $mediaPool -match 'source\.Thumbnail' -and $window -match 'Source="\{Binding Thumbnail\}"') "Media Pool must reuse existing verified source thumbnails without adding metadata extraction."
 Assert-Condition ($window -match 'MediaPool\.FilteredItems' -and $window -match 'MediaPool\.SelectedItem') "Media Pool presentation must bind the bounded selection projection."
-Assert-Condition ($mediaPool -match 'MaxVisibleItems = 256' -and $mediaPool -match 'Take\(MaxVisibleItems\)') "Media Pool collections must remain explicitly bounded."
+Assert-Condition ($window -match 'SelectionMode="Extended"' -and $windowCode -match 'OnMediaPoolSelectionChanged' -and $mediaPool -match 'UpdateSelection' -and $mediaPool -match 'SelectedItems') "Media Library must support explicit multi-selection without adding production authority."
+Assert-Condition ($window -match 'VirtualizingWrapPanel' -and $window -match 'VirtualizingPanel\.VirtualizationMode="Recycling"' -and $virtualizingWrapPanel -match 'VirtualizingPanel' -and $virtualizingWrapPanel -match 'CleanUpItems') "Media Library Grid/List surfaces must virtualize and recycle asset containers."
+Assert-Condition ($window -match 'DurationLabel' -and $window -match 'FileTypeLabel' -and $window -match 'Text="OFFLINE"') "Media Library asset cards must expose duration/type and a textual offline state."
+Assert-Condition ($window -match 'LOADING ASSETS' -and $window -match 'MediaPool\.ErrorState' -and $mediaPool -match 'IsLoading' -and $mediaPool -match 'HasError') "Media Library must expose loading and error states."
+Assert-Condition ($mediaPool -match 'MaxProjectedItems = 4096' -and $mediaPool -match 'Take\(MaxProjectedItems\)') "Media Library projection must remain explicitly bounded while supporting large asset sets."
 Assert-Condition ($mediaPool -match 'StringComparison\.OrdinalIgnoreCase' -and $mediaPool -match 'OrderBy\(item => item\.Category, StringComparer\.Ordinal\)') "Media Pool search/filter ordering must be deterministic."
 Assert-Condition ($mediaPool -match 'ImportCommand => _mediaDeck\.OpenCommand') "Media Pool import must reuse the existing Media Deck open path."
+Assert-Condition ($mediaPool -match 'MediaAssetDragPayload' -and $windowCode -match 'typeof\(MediaAssetDragPayload\)') "Media Library drag/drop must use a typed asset payload that preserves multi-selection context."
+Assert-Condition ($windowCode -match 'OnMediaPoolPreviewActionClick' -and $windowCode -match 'OnMediaPoolTimelineActionClick' -and $windowCode -match 'OnMediaPoolCueActionClick' -and $windowCode -match 'OnMediaPoolRevealActionClick' -and $windowCode -match 'OnMediaPoolPropertiesActionClick') "Media Library context actions must be wired through the existing Operator paths."
+Assert-Condition ($keyboard -match '"media-search"' -and $keyboard -match 'Key\.F, ModifierKeys\.Control' -and $windowCode -match 'FocusMediaSearchAsync' -and $window -match 'x:Name="MediaSearchBox"') "Ctrl+F must focus Media Library search through the central Operator shortcut registry."
+Assert-Condition ($mediaPool -notmatch 'FileSystemWatcher|Directory\.EnumerateFiles|Directory\.GetFiles|Mp4LocalMediaMetadataReader') "Media Library must not introduce a second media indexer, directory crawler or metadata probe."
 Assert-Condition ($mediaPool -match 'DropToPreviewAsync' -and $mediaPool -match '_operator\.SetPreviewCommand\.Execute\(null\)') "Media Pool Preview drag/drop must reuse the existing authoritative Preview command path."
 Assert-Condition ($windowCode -match 'DragDropEffects\.None' -and $windowCode -match 'CanDropToPreview') "Invalid Media Pool Preview drops must be rejected safely."
 Assert-Condition ($window -match 'OnTimelineDrop' -and $windowCode -match 'MediaDeck\.RefreshCommand\.Execute\(null\)') "Loaded Clip Timeline drop must reuse the existing Media Deck context rather than create another timeline."
@@ -377,6 +389,7 @@ Assert-Condition ($window -match 'METADATA is read-only' -and $window -match 'DE
 Assert-Condition ($window -match 'MediaDeck\.ApplyPlaybackPolicyCommand' -and $window -match 'Binding ApplyAudioGainCommand' -and $window -match 'Binding ApplyGraphicsCommand') "Inspector edits must reuse existing product command paths."
 Assert-Condition ($mediaPool -notmatch 'OperatorControlClient|NamedPipe|RuntimeHost|ControlHost|AIHost') "Media Pool selection/Inspector projection must not acquire production host or transport authority."
 Assert-Condition ($documentation -match 'Media Pool & Context Inspector' -and $documentation -match 'METADATA' -and $documentation -match 'DESIRED' -and $documentation -match 'COMMITTED') "Operator documentation must record Media Pool and Inspector state semantics."
+Assert-Condition ($mediaLibraryDocumentation -match 'virtualiz' -and $mediaLibraryDocumentation -match 'multi-select' -and $mediaLibraryDocumentation -match 'Ctrl\+F' -and $mediaLibraryDocumentation -match 'no second media index') "Media Library documentation must record scalability, selection, shortcut and indexing boundaries."
 
 Write-Host "Operator UI policy verification PASS"
 Write-Host "Operator authority: remote Client SDK only"
