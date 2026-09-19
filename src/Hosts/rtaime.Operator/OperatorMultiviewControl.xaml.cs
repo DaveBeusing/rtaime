@@ -180,15 +180,26 @@ public partial class OperatorMultiviewControl : UserControl, INotifyPropertyChan
 			RefreshDisplayedSources();
 	}
 
-	private void PreviewTile_MouseDoubleClick(object sender, MouseButtonEventArgs e) =>
+	private void PreviewTile_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+	{
+		if (e.ClickCount < 2)
+			return;
 		ShowExpanded("PREVIEW", PreviewImage, PreviewState);
+		e.Handled = true;
+	}
 
-	private void ProgramTile_MouseDoubleClick(object sender, MouseButtonEventArgs e) =>
+	private void ProgramTile_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+	{
+		if (e.ClickCount < 2)
+			return;
 		ShowExpanded("PROGRAM", ProgramImage, ProgramState);
+		e.Handled = true;
+	}
 
 	private void SourceTile_MouseDoubleClick(object sender, MouseButtonEventArgs e)
 	{
-		if (sender is not FrameworkElement { DataContext: OperatorSourceTileViewModel source })
+		if (e.ClickCount < 2 ||
+			sender is not FrameworkElement { DataContext: OperatorSourceTileViewModel source })
 			return;
 
 		ShowExpanded(
