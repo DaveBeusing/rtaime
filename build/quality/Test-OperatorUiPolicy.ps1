@@ -140,6 +140,10 @@ foreach ($resource in @("OperatorPreviewBrush", "OperatorProgramBrush", "Operato
 	Assert-Condition ($theme -match [Regex]::Escape($resource)) "Operator theme resource '$resource' is required."
 }
 
+$operatorShellRegionIndex = $theme.IndexOf('x:Key="OperatorShellRegion"', [StringComparison]::Ordinal)
+$operatorNavigationRailIndex = $theme.IndexOf('x:Key="OperatorNavigationRail"', [StringComparison]::Ordinal)
+Assert-Condition ($operatorShellRegionIndex -ge 0 -and $operatorNavigationRailIndex -gt $operatorShellRegionIndex) "OperatorShellRegion must be declared before OperatorNavigationRail because its StaticResource BasedOn is resolved during WPF startup."
+
 Assert-Condition ($manifest -match 'PerMonitorV2,PerMonitor') "Operator must declare PerMonitorV2 DPI awareness with PerMonitor fallback."
 Assert-Condition ($project -match '<ApplicationManifest>app\.manifest</ApplicationManifest>') "Operator project must bind the DPI-awareness manifest."
 Assert-Condition ($project -notmatch '<UseWindowsForms>true</UseWindowsForms>') "Program Output / Clean Feed must keep the Operator WPF-only rather than mixing WinForms into the presentation host."
