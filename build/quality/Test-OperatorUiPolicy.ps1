@@ -142,6 +142,15 @@ $mediaLibraryDocumentation = Get-Content -LiteralPath $mediaLibraryDocumentation
 $operatorXaml = (Get-ChildItem -LiteralPath (Join-Path $repositoryRoot "src/Hosts/rtaime.Operator") -Filter "*.xaml" -File -Recurse |
 	ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join "`n"
 
+$topBarStart = $window.IndexOf('x:Name="TopBar"', [StringComparison]::Ordinal)
+$bodyStart = $window.IndexOf('<Grid Grid.Row="1" ClipToBounds="True">', [StringComparison]::Ordinal)
+$navigationStart = $window.IndexOf('x:Name="WorkspaceNavigation"', [StringComparison]::Ordinal)
+$leftRegionStart = $window.IndexOf('x:Name="LeftToolRegion"', [StringComparison]::Ordinal)
+Assert-Condition ($topBarStart -ge 0 -and $bodyStart -gt $topBarStart) "Operator top bar must precede the production body."
+Assert-Condition ($navigationStart -ge 0 -and $leftRegionStart -gt $navigationStart) "Operator navigation must precede the left tool region."
+$topBarSurface = $window.Substring($topBarStart, $bodyStart - $topBarStart)
+$navigationSurface = $window.Substring($navigationStart, $leftRegionStart - $navigationStart)
+
 Assert-Condition ($app -match 'Source="Themes/OperatorTheme\.xaml"') "Operator must load the reusable theme resource dictionary."
 Assert-Condition ($app -match 'Source="Themes/Controls/RtaimeIcons\.xaml"') "Operator must load the custom icon geometry dictionary."
 Assert-Condition ($app -match 'Source="Themes/Controls/RtaimeControls\.xaml"') "Operator must load the custom control chrome dictionary."
@@ -575,6 +584,22 @@ Write-Host "Keyboard controls: centralized deterministic bindings, conflict dete
 foreach ($region in @("TopBar", "WorkspaceNavigation", "LeftToolRegion", "CenterWorkspace", "RightInspectorRegion", "LowerTimelineRegion", "BottomTransportRegion")) {
 	Assert-Condition ($window -match ('x:Name="' + [Regex]::Escape($region) + '"')) "Production shell region '$region' must remain explicit and addressable."
 }
+
+Assert-Condition ($window -match '<RowDefinition Height="\{StaticResource OperatorTopBarHeight\}" />' -and $tokens -match '<sys:Double x:Key="OperatorTopBarHeight">60</sys:Double>') "Mockup shell top bar must be exactly 60px at the reference viewport."
+Assert-Condition ($shell -match 'DefaultLeftPanelWidth = 400' -and $shell -match 'DefaultRightPanelWidth = 340' -and $shell -match 'DefaultLowerPanelHeight = 320') "Mockup shell reset geometry must restore 400px media, 340px inspector and 320px timeline dimensions."
+Assert-Condition ($shell -match 'NavigationRailWidth => 92' -and $shell -match 'LeftSplitterWidth.+: 6' -and $shell -match 'RightSplitterWidth.+: 6') "Mockup shell must use the 92px navigation rail and 6px horizontal gutters."
+Assert-Condition ($window -match 'Grid\.RowSpan="2" Grid\.Column="0".+OperatorNavigationRail' -and $window -match '<Grid Grid\.RowSpan="2" Grid\.Column="6">') "Navigation and inspector columns must continue through the lower workspace."
+Assert-Condition ($window -match 'x:Name="LowerTimelineRegion" Grid\.Row="1" Grid\.Column="2" Grid\.ColumnSpan="3"' -and $window -match 'x:Name="BottomTransportRegion" Grid\.Row="1" Grid\.Column="2" Grid\.ColumnSpan="3"') "Timeline and transport must occupy only the media-through-center span and stop before the inspector."
+Assert-Condition ($window -notmatch '<Grid Margin="\{StaticResource OperatorWindowPadding\}">') "The fixed mockup shell must not introduce outer padding that shifts reference boundaries."
+Assert-Condition ($window -match 'x:Name="LeftToolRegion".+Margin="0"' -and $window -match 'x:Name="RightInspectorRegion"') "Reference media and inspector boundaries must not include legacy shell margins."
+Assert-Condition ($topBarSurface -match 'controls:RtaimeButton' -and $topBarSurface -match 'controls:RtaimeIconButton' -and $topBarSurface -match 'controls:RtaimeTimecode' -and $topBarSurface -match 'controls:RtaimeStatusBadge') "Top bar must use the own rtaime action, icon, timecode and status controls."
+Assert-Condition ($topBarSurface -notmatch '<(Button|ToggleButton|CheckBox|RadioButton|TextBox|ComboBox|TabControl|TabItem|ListBox|ListView|TreeView|DataGrid|Slider|ProgressBar|ScrollBar|ScrollViewer|GridSplitter|Menu|MenuItem|ContextMenu|ToolBar)(\s|/|>)') "Top bar must expose no directly visible stock WPF interactive controls."
+Assert-Condition ($navigationSurface -match 'controls:RtaimeNavigationItem' -and $navigationSurface -notmatch '<(Button|ToggleButton|CheckBox|RadioButton|TextBox|ComboBox|TabControl|TabItem|ListBox|ListView|TreeView|DataGrid|Slider|ProgressBar|ScrollBar|ScrollViewer|GridSplitter|Menu|MenuItem|ContextMenu|ToolBar)(\s|/|>)') "Workspace navigation must use only custom rtaime navigation controls."
+foreach ($workspace in @("MEDIA", "EDIT", "LIVE", "SCENES", "COMPOSITING", "OUTPUTS", "SETTINGS")) {
+	Assert-Condition ($navigationSurface -match ('CommandParameter="' + $workspace + '"')) "Mockup navigation must retain workspace '$workspace'."
+}
+Assert-Condition ($window -match 'Grid\.RowSpan="2" Panel\.ZIndex="100"' -and $window -match 'Binding StartupComplete') "Startup/recovery presentation must overlay the fixed shell rather than reflow its geometry."
+Assert-Condition ($shell -match 'public bool IsFullscreen \{ get; init; \} = true;' -and $windowCode -match 'WindowStyle = WindowStyle\.None') "Fresh layouts must prefer production fullscreen while preserving the existing borderless/windowed implementation."
 Assert-Condition ($keyboard -match 'new\("preview-view".+Key\.D1.+shell\.MaximizePreviewCommand') "Preview maximize must be keyboard-accessible through Ctrl+1."
 Assert-Condition ($keyboard -match 'new\("program-view".+Key\.D2.+shell\.MaximizeProgramCommand') "Program maximize must be keyboard-accessible through Ctrl+2."
 Assert-Condition ($keyboard -match 'new\("dual-view".+Key\.D0.+shell\.RestoreViewersCommand') "Dual-view restore must be keyboard-accessible through Ctrl+0."
@@ -610,6 +635,7 @@ Assert-Condition ($window -match 'Shell\.ToggleLeftPanelCommand' -and $window -m
 Assert-Condition ($window -match 'DataContext="\{Binding Timeline, RelativeSource=\{RelativeSource AncestorType=\{x:Type Window\}\}\}"') "The timeline must remain available in the persistent lower workspace."
 Assert-Condition ($deck -notmatch '<local:MediaTimelineControl') "Media Deck must not duplicate the shell-hosted timeline."
 Assert-Condition ($shell -match 'record OperatorLayoutSettings' -and $shell -match 'Normalize\(\)' -and $shell -match 'Math\.Clamp') "Persisted layout dimensions must be normalized and safely clamped."
+Assert-Condition ($shell -match 'ResetLayout\(\)' -and $shell -match 'CreateCanonicalLayouts\(\)\[SelectedWorkspace\]' -and $shell -match 'DefaultLeftPanelWidth = 400' -and $shell -match 'DefaultRightPanelWidth = 340' -and $shell -match 'DefaultLowerPanelHeight = 320') "Reset Layout must always restore the binding mockup reference dimensions."
 Assert-Condition ($shell -match 'LocalApplicationData' -and $shell -match 'operator-layout\.json') "Operator layout persistence must use local user UI configuration storage."
 Assert-Condition ($shell -match 'Task SaveAsync\(' -and $shell -match 'TaskScheduler\.Default' -and $shell -match 'File\.WriteAllTextAsync') "Operator layout persistence must execute file I/O away from the UI thread."
 Assert-Condition ($shell -notmatch 'File\.WriteAllText\(') "Operator layout persistence must not perform synchronous file writes."
@@ -621,20 +647,20 @@ Assert-Condition ($shell -notmatch 'using rtaime\.(Client|Control|Runtime|Media|
 Assert-Condition ($windowCode -match 'OnLayoutSplitterDragCompleted' -and $windowCode -match 'Shell\.Save\(\)') "Resizable shell geometry must be persisted after operator layout changes."
 Assert-Condition ($shell -match 'record OperatorWindowPlacementSettings' -and $shell -match 'MinimumWidth = 960' -and $shell -match 'MinimumHeight = 500') "Window placement persistence must normalize windowed geometry against the Operator minimum size."
 Assert-Condition ($windowCode -match 'ApplyWindowPlacement' -and $windowCode -match 'CaptureWindowPlacement' -and $windowCode -match 'IsWindowPlacementVisible') "Window placement must restore safely and reject off-screen geometry."
-Assert-Condition ($shell -match 'NavigationRailWidth' -and $shell -match '_viewportWidth < 1320' -and $shell -match 'SecondaryMetricVisibility' -and $shell -match '_viewportWidth < 1480') "Production shell must compact navigation and secondary metrics on smaller logical widths."
+Assert-Condition ($shell -match 'NavigationRailWidth => 92' -and $shell -match 'NavigationLabelVisibility => Visibility\.Visible' -and $shell -match 'SecondaryMetricVisibility' -and $shell -match '_viewportWidth < 1480') "Production shell must retain the fixed 92px navigation rail while optional top-bar metrics may compact in smaller windowed viewports."
 Assert-Condition ($window -match 'Text="LIVE / ON AIR "' -and $window -match 'Text="UNVERIFIED"' -and $window -match 'external transmission/on-air feed') "LIVE/ON AIR presentation must fail closed while no authoritative external transmission feed exists."
-Assert-Condition ($window -match 'Text="CPU"' -and $window -match 'Text="RAM"' -and $window -match 'Text="N/A"' -and $window -match 'Text="GPU"' -and $window -match 'Binding GpuUtilization' -and $window -match 'Binding Vram' -and $window -match 'Text="LAT"' -and $window -match 'Binding FrameTime') "Global metrics must reuse available health evidence and explicitly avoid synthesized CPU/RAM values."
+Assert-Condition ($topBarSurface -match 'Text="CPU"' -and $topBarSurface -match 'Text="N/A"' -and $topBarSurface -match 'Text="GPU"' -and $topBarSurface -match 'Binding GpuUtilization' -and $topBarSurface -match 'Text="MEMORY"' -and $topBarSurface -match 'Binding Vram' -and $topBarSurface -match 'Text="LATENCY"' -and $topBarSurface -match 'Binding FrameTime') "Mockup top-bar metrics must reuse available health evidence and explicitly avoid synthesized CPU values."
 
 # Workspaces, Quick Controls, multiview and Clean Program.
 foreach ($workspace in @("MEDIA", "EDIT", "LIVE", "SCENES", "COMPOSITING", "OUTPUTS", "SETTINGS")) {
 	Assert-Condition ($shell -match ('const string [A-Za-z]+ = "' + $workspace + '"')) "Canonical workspace '$workspace' must be defined."
 	Assert-Condition ($window -match ('CommandParameter="' + $workspace + '"')) "Canonical workspace '$workspace' must be selectable from the Operator."
 }
-Assert-Condition ($shell -match 'CurrentVersion = 3' -and $shell -match 'Dictionary<string, OperatorWorkspaceLayoutSettings>') "Workspace layout persistence must be versioned and per-workspace."
+Assert-Condition ($shell -match 'CurrentVersion = 4' -and $shell -match 'Dictionary<string, OperatorWorkspaceLayoutSettings>' -and $shell -match 'Version < CurrentVersion') "Workspace layout persistence must be versioned and migrate pre-mockup geometry to reference defaults."
 Assert-Condition ($shell -match '"GRAPHICS".+Compositing' -and $shell -match '"SYSTEM".+Settings') "Legacy workspace names must migrate to the canonical seven-workspace shell."
-Assert-Condition ($shell -match 'CaptureCurrentWorkspace\(\)' -and $shell -match 'ApplyWorkspaceLayout' -and $shell -match 'SelectWorkspace') "Workspace switching must preserve independent presentation layouts."
+Assert-Condition ($shell -match 'stableLeftPanelWidth' -and $shell -match 'stableRightPanelWidth' -and $shell -match 'stableLowerPanelHeight' -and $shell -match 'ApplyWorkspaceLayout') "Workspace switching must preserve macro shell geometry while changing presentation content."
 Assert-Condition ($shell -notmatch 'OperatorControlClient|NamedPipe|RuntimeHost|ControlHost|AIHost') "Workspace switching must remain presentation-only."
-Assert-Condition ($window -match 'Header="Save Layout"' -and $window -match 'Shell\.SaveLayoutCommand' -and $window -match 'Header="Reset Layout"') "Operator must expose Save Layout and Reset Layout actions."
+Assert-Condition ($window -match 'Content="SAVE LAYOUT"' -and $window -match 'Shell\.SaveLayoutCommand' -and $window -match 'Content="RESET LAYOUT"' -and $window -match 'Shell\.ResetLayoutCommand') "SETTINGS must expose custom-control Save Layout and Reset Layout actions."
 Assert-Condition ($window -match 'Shell\.ProductionControlsVisibility' -and $window -match 'Shell\.MediaDeckVisibility' -and $window -match 'Shell\.GraphicsVisibility' -and $window -match 'Shell\.SystemWorkspaceVisibility') "Workspaces must configure presentation without duplicating product state."
 
 # Output routing, health and performance.
