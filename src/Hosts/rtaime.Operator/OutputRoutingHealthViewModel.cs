@@ -14,6 +14,29 @@ namespace rtaime.Operator;
 public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisposable
 {
 	private const string Unavailable = "UNAVAILABLE";
+	private static readonly HashSet<string> RelevantControlProperties = new(StringComparer.Ordinal)
+	{
+		nameof(OperatorViewModel.ProgramSourceName),
+		nameof(OperatorViewModel.ProgramSourceId),
+		nameof(OperatorViewModel.RecordingStatus),
+		nameof(OperatorViewModel.EngineHealth),
+		nameof(OperatorViewModel.EngineHealthDetail),
+		nameof(OperatorViewModel.ControlHealth),
+		nameof(OperatorViewModel.RuntimeHealth),
+		nameof(OperatorViewModel.MediaHealth),
+		nameof(OperatorViewModel.GpuProviderHealth),
+		nameof(OperatorViewModel.CurrentFormat),
+		nameof(OperatorViewModel.FrameTime),
+		nameof(OperatorViewModel.DroppedFrames),
+		nameof(OperatorViewModel.GpuUtilization),
+		nameof(OperatorViewModel.Vram),
+		nameof(OperatorViewModel.HealthObserved),
+		nameof(OperatorViewModel.IsConnected),
+		nameof(OperatorViewModel.IsStale),
+		nameof(OperatorViewModel.IsBusy),
+		nameof(OperatorViewModel.ProgramSafety),
+		nameof(OperatorViewModel.RuntimeStatus)
+	};
 
 	private readonly OperatorViewModel _control;
 	private readonly ProgramOutputController _programOutput;
@@ -100,6 +123,8 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 	private void ControlPropertyChanged(object? sender, PropertyChangedEventArgs e)
 	{
 		if (_disposed)
+			return;
+		if (!string.IsNullOrEmpty(e.PropertyName) && !RelevantControlProperties.Contains(e.PropertyName))
 			return;
 
 		Refresh(sampleHistory: string.Equals(e.PropertyName, nameof(OperatorViewModel.HealthObserved), StringComparison.Ordinal));
