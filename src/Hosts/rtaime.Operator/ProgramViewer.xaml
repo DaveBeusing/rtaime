@@ -1,0 +1,162 @@
+<!-- Copyright (c) Dave Beusing <david.beusing@gmail.com>. -->
+<UserControl x:Class="rtaime.Operator.ProgramViewer"
+	x:Name="Root"
+	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	UseLayoutRounding="True"
+	SnapsToDevicePixels="True">
+	<Border Style="{StaticResource OperatorProgramPanel}">
+		<Grid>
+			<Grid.RowDefinitions>
+				<RowDefinition Height="Auto" />
+				<RowDefinition Height="Auto" />
+				<RowDefinition Height="*" />
+				<RowDefinition Height="Auto" />
+			</Grid.RowDefinitions>
+
+			<Grid>
+				<Grid.ColumnDefinitions>
+					<ColumnDefinition Width="*" />
+					<ColumnDefinition Width="Auto" />
+				</Grid.ColumnDefinitions>
+				<Border Style="{StaticResource OperatorProgramTally}" HorizontalAlignment="Left">
+					<StackPanel Orientation="Horizontal">
+						<TextBlock Text="PGM" Foreground="{DynamicResource OperatorProgramBrush}" FontWeight="Bold" FontSize="13" />
+						<TextBlock Text="  PROGRAM / AUTHORITATIVE OUTPUT" Foreground="{DynamicResource OperatorTextBrush}" FontWeight="SemiBold" FontSize="13" />
+					</StackPanel>
+				</Border>
+				<Button Grid.Column="1"
+					Content="MAX PROGRAM  Ctrl+2"
+					Command="{Binding MaximizeCommand, ElementName=Root}"
+					Style="{StaticResource OperatorButton}"
+					MinHeight="26"
+					Padding="7,2"
+					ToolTip="Maximize Program without changing production routing." />
+			</Grid>
+
+			<StackPanel Grid.Row="1" Margin="0,10,0,10">
+				<TextBlock Text="{Binding SourceName, ElementName=Root}" FontSize="25" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+				<TextBlock Text="{Binding SourceId, ElementName=Root}" Style="{StaticResource OperatorLabel}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />
+			</StackPanel>
+
+			<Grid Grid.Row="2" MinHeight="245">
+				<Grid.ColumnDefinitions>
+					<ColumnDefinition Width="*" />
+					<ColumnDefinition Width="10" />
+					<ColumnDefinition Width="84" />
+				</Grid.ColumnDefinitions>
+
+				<Grid Background="#090C10" ClipToBounds="True">
+					<Image Source="{Binding Frame, ElementName=Root}" Stretch="Uniform" SnapsToDevicePixels="True" />
+					<StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8">
+						<Border Style="{StaticResource OperatorProgramTally}" Margin="0,0,6,0">
+							<TextBlock Text="PROGRAM" Foreground="{DynamicResource OperatorProgramBrush}" FontWeight="Bold" />
+						</Border>
+						<Border Style="{StaticResource OperatorStatusBadge}" Margin="0,0,6,0">
+							<StackPanel Orientation="Horizontal">
+								<TextBlock Text="REC " FontWeight="SemiBold" />
+								<TextBlock Text="{Binding RecordingStatus, ElementName=Root}" FontWeight="Bold" />
+							</StackPanel>
+						</Border>
+						<Border Style="{StaticResource OperatorStatusBadge}">
+							<TextBlock Text="{Binding OutputState, ElementName=Root}" FontWeight="Bold" />
+						</Border>
+					</StackPanel>
+					<Border VerticalAlignment="Top" HorizontalAlignment="Right" Background="#B0000000" Padding="7,4" Margin="8">
+						<TextBlock Text="{Binding State, ElementName=Root}" FontSize="11" FontWeight="Bold" Foreground="White" />
+					</Border>
+					<Border VerticalAlignment="Bottom" Background="#B0000000" Padding="8,5">
+						<TextBlock Text="{Binding Format, ElementName=Root}" FontSize="11" Foreground="White" TextTrimming="CharacterEllipsis" />
+					</Border>
+					<Border Background="#D0090C10">
+						<Border.Style>
+							<Style TargetType="Border">
+								<Setter Property="Visibility" Value="Collapsed" />
+								<Style.Triggers>
+									<DataTrigger Binding="{Binding Frame, ElementName=Root}" Value="{x:Null}">
+										<Setter Property="Visibility" Value="Visible" />
+									</DataTrigger>
+								</Style.Triggers>
+							</Style>
+						</Border.Style>
+						<StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+							<TextBlock Text="{Binding State, ElementName=Root}" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" />
+							<TextBlock Text="Program monitoring frame unavailable; production authority remains remote." Style="{StaticResource OperatorLabel}" Margin="0,4,0,0" />
+						</StackPanel>
+					</Border>
+				</Grid>
+
+				<Border Grid.Column="2" Style="{StaticResource OperatorStatusBadge}" Padding="7">
+					<Grid>
+						<Grid.RowDefinitions>
+							<RowDefinition Height="Auto" />
+							<RowDefinition Height="*" />
+							<RowDefinition Height="Auto" />
+							<RowDefinition Height="Auto" />
+						</Grid.RowDefinitions>
+						<TextBlock Text="PROGRAM AUDIO" Style="{StaticResource OperatorLabel}" HorizontalAlignment="Center" />
+						<Grid Grid.Row="1" Margin="0,7,0,5">
+							<Grid.ColumnDefinitions>
+								<ColumnDefinition Width="*" />
+								<ColumnDefinition Width="5" />
+								<ColumnDefinition Width="*" />
+							</Grid.ColumnDefinitions>
+							<ProgressBar Grid.Column="0" Orientation="Vertical" Minimum="0" Maximum="1" Value="{Binding AudioLeftPeak, ElementName=Root, Mode=OneWay}" />
+							<ProgressBar Grid.Column="2" Orientation="Vertical" Minimum="0" Maximum="1" Value="{Binding AudioRightPeak, ElementName=Root, Mode=OneWay}" />
+						</Grid>
+						<StackPanel Grid.Row="2">
+							<TextBlock Text="{Binding AudioLeftDb, ElementName=Root}" Style="{StaticResource OperatorTimecode}" HorizontalAlignment="Center" />
+							<TextBlock Text="{Binding AudioRightDb, ElementName=Root}" Style="{StaticResource OperatorTimecode}" HorizontalAlignment="Center" />
+							<TextBlock Text="dBFS" Style="{StaticResource OperatorLabel}" HorizontalAlignment="Center" />
+						</StackPanel>
+						<Border Grid.Row="3" Margin="0,6,0,0" Padding="4,2">
+							<Border.Style>
+								<Style TargetType="Border" BasedOn="{StaticResource OperatorStatusBadge}">
+									<Style.Triggers>
+										<DataTrigger Binding="{Binding Clipping, ElementName=Root}" Value="True">
+											<Setter Property="BorderBrush" Value="{DynamicResource OperatorErrorBrush}" />
+										</DataTrigger>
+									</Style.Triggers>
+								</Style>
+							</Border.Style>
+							<TextBlock HorizontalAlignment="Center" FontWeight="Bold">
+								<TextBlock.Style>
+									<Style TargetType="TextBlock">
+										<Setter Property="Text" Value="AUDIO OK" />
+										<Style.Triggers>
+											<DataTrigger Binding="{Binding Clipping, ElementName=Root}" Value="True">
+												<Setter Property="Text" Value="CLIP" />
+												<Setter Property="Foreground" Value="{DynamicResource OperatorErrorBrush}" />
+											</DataTrigger>
+										</Style.Triggers>
+									</Style>
+								</TextBlock.Style>
+							</TextBlock>
+						</Border>
+					</Grid>
+				</Border>
+			</Grid>
+
+			<Grid Grid.Row="3" Margin="0,10,0,0">
+				<Grid.ColumnDefinitions>
+					<ColumnDefinition Width="*" />
+					<ColumnDefinition Width="Auto" />
+					<ColumnDefinition Width="18" />
+					<ColumnDefinition Width="Auto" />
+				</Grid.ColumnDefinitions>
+				<StackPanel>
+					<TextBlock Text="COMMITTED PROGRAM" Style="{StaticResource OperatorLabel}" />
+					<TextBlock Text="{Binding State, ElementName=Root}" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" />
+				</StackPanel>
+				<StackPanel Grid.Column="1">
+					<TextBlock Text="COMMIT" Style="{StaticResource OperatorLabel}" />
+					<TextBlock Text="{Binding CommitStatus, ElementName=Root}" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" />
+				</StackPanel>
+				<StackPanel Grid.Column="3">
+					<TextBlock Text="TRANSITION" Style="{StaticResource OperatorLabel}" />
+					<TextBlock Text="{Binding TransitionStatus, ElementName=Root}" Style="{StaticResource OperatorValue}" />
+				</StackPanel>
+			</Grid>
+		</Grid>
+	</Border>
+</UserControl>
