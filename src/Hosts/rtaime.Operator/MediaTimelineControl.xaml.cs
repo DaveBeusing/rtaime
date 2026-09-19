@@ -260,6 +260,12 @@ public partial class MediaTimelineControl : UserControl
 
 	private void Timeline_PreviewKeyDown(object sender, KeyEventArgs e)
 	{
+		if (FindAncestor<TextBox>(e.OriginalSource as DependencyObject) is not null ||
+			FindAncestor<ComboBox>(e.OriginalSource as DependencyObject) is not null)
+		{
+			return;
+		}
+
 		if (ViewModel is not { } viewModel)
 			return;
 
@@ -289,6 +295,18 @@ public partial class MediaTimelineControl : UserControl
 		{
 			if (current is FrameworkElement { Tag: string tag } element && tag is "IN" or "OUT")
 				return element;
+			current = VisualTreeHelper.GetParent(current);
+		}
+		return null;
+	}
+
+	private static T? FindAncestor<T>(DependencyObject? current)
+		where T : DependencyObject
+	{
+		while (current is not null)
+		{
+			if (current is T match)
+				return match;
 			current = VisualTreeHelper.GetParent(current);
 		}
 		return null;
