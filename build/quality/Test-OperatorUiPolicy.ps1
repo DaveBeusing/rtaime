@@ -21,6 +21,10 @@ $appCodePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/App.xaml.cs"
 $windowPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MainWindow.xaml"
 $windowCodePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MainWindow.xaml.cs"
 $shellPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorShellViewModel.cs"
+$keyboardPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorKeyboardCommandRegistry.cs"
+$quickControlsPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorQuickControlsViewModel.cs"
+$multiviewPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorMultiviewControl.xaml"
+$multiviewCodePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorMultiviewControl.xaml.cs"
 $mediaPoolPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MediaPoolInspectorViewModel.cs"
 $deckPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MediaDeckControl.xaml"
 $deckViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MediaDeckViewModel.cs"
@@ -50,8 +54,9 @@ $themePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Themes/Operato
 $manifestPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/app.manifest"
 $projectPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/rtaime.Operator.csproj"
 $documentationPath = Join-Path $repositoryRoot "docs/OperatorUiV1.md"
+$workspaceDocumentationPath = Join-Path $repositoryRoot "docs/OperatorWorkspaces.md"
 
-foreach ($path in @($appPath, $appCodePath, $windowPath, $windowCodePath, $shellPath, $mediaPoolPath, $deckPath, $deckViewModelPath, $timelinePath, $timelineCodePath, $timelineViewModelPath, $markerControllerPath, $timelineDocumentationPath, $viewModelPath, $monitorViewModelPath, $programOutputControllerPath, $programOutputWindowPath, $previewViewerPath, $previewViewerCodePath, $programViewerPath, $programViewerCodePath, $sourceTileViewModelPath, $audioInputViewModelPath, $graphicsLoaderPath, $demoControllerPath, $demoManifestPath, $demoProductPath, $demoGraphicsPath, $demoDocumentationPath, $tokensPath, $themePath, $manifestPath, $projectPath, $documentationPath)) {
+foreach ($path in @($appPath, $appCodePath, $windowPath, $windowCodePath, $shellPath, $keyboardPath, $quickControlsPath, $multiviewPath, $multiviewCodePath, $mediaPoolPath, $deckPath, $deckViewModelPath, $timelinePath, $timelineCodePath, $timelineViewModelPath, $markerControllerPath, $timelineDocumentationPath, $viewModelPath, $monitorViewModelPath, $programOutputControllerPath, $programOutputWindowPath, $previewViewerPath, $previewViewerCodePath, $programViewerPath, $programViewerCodePath, $sourceTileViewModelPath, $audioInputViewModelPath, $graphicsLoaderPath, $demoControllerPath, $demoManifestPath, $demoProductPath, $demoGraphicsPath, $demoDocumentationPath, $tokensPath, $themePath, $manifestPath, $projectPath, $documentationPath, $workspaceDocumentationPath)) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required Operator UI artifact is missing: '$path'."
 }
 
@@ -60,6 +65,10 @@ $appCode = Get-Content -LiteralPath $appCodePath -Raw
 $window = Get-Content -LiteralPath $windowPath -Raw
 $windowCode = Get-Content -LiteralPath $windowCodePath -Raw
 $shell = Get-Content -LiteralPath $shellPath -Raw
+$keyboard = Get-Content -LiteralPath $keyboardPath -Raw
+$quickControls = Get-Content -LiteralPath $quickControlsPath -Raw
+$multiview = Get-Content -LiteralPath $multiviewPath -Raw
+$multiviewCode = Get-Content -LiteralPath $multiviewCodePath -Raw
 $mediaPool = Get-Content -LiteralPath $mediaPoolPath -Raw
 $deck = Get-Content -LiteralPath $deckPath -Raw
 $deckViewModel = Get-Content -LiteralPath $deckViewModelPath -Raw
@@ -87,6 +96,7 @@ $theme = Get-Content -LiteralPath $themePath -Raw
 $manifest = Get-Content -LiteralPath $manifestPath -Raw
 $project = Get-Content -LiteralPath $projectPath -Raw
 $documentation = Get-Content -LiteralPath $documentationPath -Raw
+$workspaceDocumentation = Get-Content -LiteralPath $workspaceDocumentationPath -Raw
 
 Assert-Condition ($app -match 'Source="Themes/OperatorTheme\.xaml"') "Operator must load the reusable theme resource dictionary."
 Assert-Condition ($theme -match 'Source="OperatorTokens\.xaml"') "Operator theme must load the shared design-token dictionary."
@@ -188,9 +198,11 @@ Assert-Condition ($viewModel -match 'EffectiveRemainingFrames') "Source-tile rem
 Assert-Condition ($deck -match 'Remaining') "Media deck must retain remaining-time presentation."
 Assert-Condition ($monitorViewModel -notmatch 'ConfigurePlayback') "Monitoring must remain independent from media playback policy."
 
-Assert-Condition ($window -match 'Key="F5"') "Operator must expose keyboard synchronization."
-Assert-Condition ($window -match 'Key="Space"\s+Command="\{Binding CutCommand\}"') "Operator must expose a keyboard CUT command."
-Assert-Condition ($window -match 'Modifiers="Control"\s+Command="\{Binding DissolveCommand\}"') "Operator must expose a keyboard DISSOLVE/AUTO command."
+Assert-Condition ($window -notmatch '<Window.InputBindings>') "Window-level shortcuts must be centralized rather than duplicated in XAML."
+Assert-Condition ($keyboard -match 'new\("sync".+Key\.F5' -and $keyboard -match 'new\("play-pause".+Key\.Space') "Central keyboard registry must expose synchronization and media Play/Pause."
+Assert-Condition ($keyboard -match 'new\("auto".+Key\.Enter, ModifierKeys\.None, @operator\.DissolveCommand' -and $keyboard -match 'new\("cut".+Key\.Enter, ModifierKeys\.Control, @operator\.CutCommand') "Central keyboard registry must expose Enter=AUTO and Ctrl+Enter=CUT."
+Assert-Condition ($keyboard -match 'FindConflicts' -and $keyboard -match 'Operator keyboard shortcut conflict') "Central keyboard registry must reject conflicting bindings."
+Assert-Condition ($keyboard -match 'IsTextEntryContext' -and $keyboard -match 'TextBoxBase' -and $keyboard -match 'PasswordBox') "Production shortcuts must be suppressed while the operator is typing."
 Assert-Condition ($window -match 'KeyboardNavigation.TabNavigation="Cycle"') "Showcase keyboard navigation must stay inside the Operator workspace."
 Assert-Condition ($window -match 'x:Name="SynchronizeButton"' -and $windowCode -match 'SynchronizeButton\.Focus\(\)') "Initial keyboard focus must land on the synchronization action."
 Assert-Condition ($window -match 'ToolTip="Prepare the deterministic showcase state' -and $window -match 'ToolTip="CUT the confirmed Preview source to Program') "Primary showcase actions must expose consistent explanatory tooltips."
@@ -379,16 +391,16 @@ Write-Host "AI showcase: Person Segmentation Highlight, explicit ON/OFF, AIHost 
 Write-Host "Demo Production: one-click integrity-checked Product Clip, cues, audio, lower third, transition and AI preparation verified"
 Write-Host "Program Output: display selection, start/stop, fullscreen/windowed fallback and shared Program monitoring truth verified"
 Write-Host "Commit state: pending, confirmed, rejected/failed and resynchronization presentation verified"
-Write-Host "Keyboard controls: synchronization, Preview, CUT and DISSOLVE/AUTO declared"
+Write-Host "Keyboard controls: centralized deterministic bindings, conflict detection and text-entry safety verified"
 
 
 # Fullscreen production shell and layout persistence.
 foreach ($region in @("TopBar", "LeftToolRegion", "CenterWorkspace", "RightInspectorRegion", "LowerTimelineRegion", "BottomTransportRegion")) {
 	Assert-Condition ($window -match ('x:Name="' + [Regex]::Escape($region) + '"')) "Production shell region '$region' must remain explicit and addressable."
 }
-Assert-Condition ($window -match 'Key="D1".+Shell\.MaximizePreviewCommand') "Preview maximize must be keyboard-accessible through Ctrl+1."
-Assert-Condition ($window -match 'Key="D2".+Shell\.MaximizeProgramCommand') "Program maximize must be keyboard-accessible through Ctrl+2."
-Assert-Condition ($window -match 'Key="D0".+Shell\.RestoreViewersCommand') "Dual-view restore must be keyboard-accessible through Ctrl+0."
+Assert-Condition ($keyboard -match 'new\("preview-view".+Key\.D1.+shell\.MaximizePreviewCommand') "Preview maximize must be keyboard-accessible through Ctrl+1."
+Assert-Condition ($keyboard -match 'new\("program-view".+Key\.D2.+shell\.MaximizeProgramCommand') "Program maximize must be keyboard-accessible through Ctrl+2."
+Assert-Condition ($keyboard -match 'new\("dual-view".+Key\.D0.+shell\.RestoreViewersCommand') "Dual-view restore must be keyboard-accessible through Ctrl+0."
 Assert-Condition ($shell -match 'PreviewViewerWidth' -and $shell -match 'new GridLength\(0\.85, GridUnitType\.Star\)') "Preview must use the smaller default production-view allocation."
 Assert-Condition ($shell -match 'ProgramViewerWidth' -and $shell -match 'new GridLength\(1\.15, GridUnitType\.Star\)') "Program must be visually dominant by default."
 Assert-Condition ($shell -match 'MaximizePreviewCommand' -and $shell -match 'MaximizeProgramCommand' -and $shell -match 'RestoreViewersCommand') "Viewer maximize/restore must remain local presentation commands."
@@ -408,8 +420,8 @@ Assert-Condition ($monitorViewModel -match 'PreviewState => ResolveViewerState' 
 Assert-Condition ($monitorViewModel -match 'PreviewImage = null' -and $monitorViewModel -match 'No Preview monitor frame received for current source') "Changing Preview to a source without a monitor frame must clear the previous source image."
 Assert-Condition ($monitorViewModel -match 'Value="STALE"|State, "STALE"|State\), "STALE"|string\.Equals\(State, "STALE"') "Stale monitoring must remain explicitly detectable without affecting Program authority."
 
-Assert-Condition ($window -match 'Key="F11".+Shell\.ToggleFullscreenCommand') "Production fullscreen must be keyboard-accessible through F11."
-Assert-Condition ($window -match 'Key="Escape".+Shell\.ExitFullscreenCommand') "Production fullscreen must provide an Escape path back to windowed operation."
+Assert-Condition ($keyboard -match 'new\("fullscreen".+Key\.F11.+shell\.ToggleFullscreenCommand') "Production fullscreen must be keyboard-accessible through F11."
+Assert-Condition ($keyboard -match 'new\("exit-fullscreen".+Key\.Escape.+shell\.ExitFullscreenCommand') "Production fullscreen must provide an Escape path back to windowed operation."
 Assert-Condition ($windowCode -match 'WindowStyle = WindowStyle\.None' -and $windowCode -match 'ResizeMode = ResizeMode\.NoResize' -and $windowCode -match 'WindowStyle = _windowedStyle') "Fullscreen must enter borderless mode and restore windowed chrome."
 Assert-Condition ($window -match 'ResizeDirection="Columns"' -and $window -match 'ResizeDirection="Rows"') "Production shell side panels and lower workspace must be resizable."
 Assert-Condition ($window -match 'Shell\.ToggleLeftPanelCommand' -and $window -match 'Shell\.ToggleRightPanelCommand' -and $window -match 'Shell\.ToggleCenterMaximizeCommand') "Production shell must expose collapse and center-maximize controls."
@@ -417,8 +429,35 @@ Assert-Condition ($window -match 'DataContext="\{Binding Timeline, RelativeSourc
 Assert-Condition ($deck -notmatch '<local:MediaTimelineControl') "Media Deck must not duplicate the shell-hosted timeline."
 Assert-Condition ($shell -match 'record OperatorLayoutSettings' -and $shell -match 'Normalize\(\)' -and $shell -match 'Math\.Clamp') "Persisted layout dimensions must be normalized and safely clamped."
 Assert-Condition ($shell -match 'LocalApplicationData' -and $shell -match 'operator-layout\.json') "Operator layout persistence must use local user UI configuration storage."
-foreach ($layoutProperty in @("LeftPanelWidth", "RightPanelWidth", "LowerPanelHeight", "IsLeftCollapsed", "IsRightCollapsed", "IsFullscreen", "SelectedWorkspace")) {
+foreach ($layoutProperty in @("LeftPanelWidth", "RightPanelWidth", "LowerPanelHeight", "IsLeftCollapsed", "IsRightCollapsed", "IsFullscreen", "SelectedWorkspace", "ViewerMode", "Workspaces", "CurrentVersion")) {
 	Assert-Condition ($shell -match [Regex]::Escape($layoutProperty)) "Operator layout persistence must retain '$layoutProperty'."
 }
 Assert-Condition ($shell -notmatch 'using rtaime\.(Client|Control|Runtime|Media|AI|Recording)') "Production shell layout state must remain presentation-only and must not acquire production authority dependencies."
 Assert-Condition ($windowCode -match 'OnLayoutSplitterDragCompleted' -and $windowCode -match 'Shell\.Save\(\)') "Resizable shell geometry must be persisted after operator layout changes."
+
+# Workspaces, Quick Controls, multiview and Clean Program.
+foreach ($workspace in @("LIVE", "EDIT", "MEDIA", "GRAPHICS", "SYSTEM")) {
+	Assert-Condition ($shell -match ('const string [A-Za-z]+ = "' + $workspace + '"')) "Canonical workspace '$workspace' must be defined."
+	Assert-Condition ($window -match ('CommandParameter="' + $workspace + '"')) "Canonical workspace '$workspace' must be selectable from the Operator."
+}
+Assert-Condition ($shell -match 'CurrentVersion = 2' -and $shell -match 'Dictionary<string, OperatorWorkspaceLayoutSettings>') "Workspace layout persistence must be versioned and per-workspace."
+Assert-Condition ($shell -match 'CaptureCurrentWorkspace\(\)' -and $shell -match 'ApplyWorkspaceLayout' -and $shell -match 'SelectWorkspace') "Workspace switching must preserve independent presentation layouts."
+Assert-Condition ($shell -notmatch 'OperatorControlClient|NamedPipe|RuntimeHost|ControlHost|AIHost') "Workspace switching must remain presentation-only."
+Assert-Condition ($window -match 'Content="SAVE LAYOUT"' -and $window -match 'Shell\.SaveLayoutCommand' -and $window -match 'Content="LAYOUT RESET"') "Operator must expose Save Layout and Reset Layout actions."
+Assert-Condition ($window -match 'Shell\.ProductionControlsVisibility' -and $window -match 'Shell\.MediaDeckVisibility' -and $window -match 'Shell\.GraphicsVisibility' -and $window -match 'Shell\.SystemWorkspaceVisibility') "Workspaces must configure presentation without duplicating product state."
+
+Assert-Condition ($quickControls -match 'MaximumPinnedControls = 8' -and $quickControls -match 'operator-quick-controls\.json') "Quick Controls must remain bounded and persist only local presentation preferences."
+Assert-Condition ($quickControls -match 'SupportedPropertyIds' -and $quickControls -match 'propertyIds' -and $quickControls -notmatch 'OperatorControlClient|NamedPipe|RuntimeHost|ControlHost|AIHost') "Quick Controls must reference stable Inspector properties without owning production state."
+foreach ($commandName in @("ApplyPlaybackPolicyCommand", "ApplyAudioGainCommand", "ToggleAudioMuteCommand", "ApplyGraphicsCommand", "ToggleGraphicsCommand", "EnableAIShowcaseCommand", "DisableAIShowcaseCommand")) {
+	Assert-Condition ($quickControls -match [Regex]::Escape($commandName)) "Quick Controls must reuse existing command '$commandName'."
+}
+Assert-Condition ($window -match 'QuickControls\.TogglePinCommand' -and $window -match 'CommandParameter="\{Binding\}"') "Pinnable Inspector values must be able to add/remove Quick Controls."
+Assert-Condition ($mediaPool -match '"production\.transition\.frames"' -and $mediaPool -match '"ai\.enabled"') "Inspector must expose stable pinnable production and AI identifiers."
+
+Assert-Condition ($window -match '<local:OperatorMultiviewControl' -and $window -match 'Monitoring\.PreviewImage' -and $window -match 'Monitoring\.ProgramImage') "LIVE multiview must consume the existing Preview/Program monitoring projection."
+Assert-Condition ($multiview -match 'PreviewImage' -and $multiview -match 'ProgramImage' -and $multiview -match 'Sources') "Reusable multiview must project supported monitoring feeds and source thumbnails."
+Assert-Condition ($multiviewCode -notmatch 'NamedPipe|MediaElement|VideoDrawing|OperatorControlClient') "Multiview must not create another transport, player or authority path."
+Assert-Condition ($window -match 'CLEAN PROGRAM MONITOR' -and $window -match 'not the physical Program output path') "Clean Program must be identified as monitoring rather than physical Program output."
+Assert-Condition ($programOutputController -match 'OperatorMonitoringViewModel' -and $programOutputController -notmatch 'MediaElement|VideoDrawing') "Clean Program must reuse the existing monitoring projection."
+Assert-Condition ($window -match 'Text="SYSTEM WORKSPACE"' -and $window -match 'Text="Engine"' -and $window -match 'Text="Control"' -and $window -match 'Text="Runtime"' -and $window -match 'Text="Outputs"' -and $window -match 'Text="Diagnostics"') "SYSTEM workspace must consolidate existing operational evidence."
+Assert-Condition ($workspaceDocumentation -match 'five task-oriented workspaces' -and $workspaceDocumentation -match 'Quick Controls' -and $workspaceDocumentation -match 'Keyboard-first operation' -and $workspaceDocumentation -match 'Clean Program monitoring') "Operator workspace documentation must cover the implemented UX model."
