@@ -1,0 +1,72 @@
+<!-- Copyright (c) Dave Beusing <david.beusing@gmail.com>. -->
+<UserControl x:Class="rtaime.Operator.OperatorMultiviewControl"
+	x:Name="Root"
+	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	MinHeight="260"
+	AutomationProperties.Name="Operator multiview">
+	<Grid>
+		<Grid.ColumnDefinitions>
+			<ColumnDefinition Width="1.05*" />
+			<ColumnDefinition Width="8" />
+			<ColumnDefinition Width="1.65*" />
+		</Grid.ColumnDefinitions>
+		<Grid.RowDefinitions>
+			<RowDefinition Height="1*" />
+			<RowDefinition Height="8" />
+			<RowDefinition Height="1*" />
+		</Grid.RowDefinitions>
+
+		<Border Grid.Row="0" Grid.Column="0" BorderBrush="{DynamicResource OperatorPreviewBrush}" BorderThickness="2" Background="Black">
+			<Grid>
+				<Image Source="{Binding PreviewImage, ElementName=Root}" Stretch="Uniform" />
+				<Border VerticalAlignment="Top" HorizontalAlignment="Left" Background="#B0000000" Padding="7,4">
+					<TextBlock Text="PREVIEW" Foreground="{DynamicResource OperatorPreviewBrush}" FontWeight="Bold" />
+				</Border>
+				<Border VerticalAlignment="Bottom" Background="#B0000000" Padding="7,4">
+					<TextBlock Text="{Binding PreviewState, ElementName=Root}" Foreground="White" FontWeight="SemiBold" />
+				</Border>
+			</Grid>
+		</Border>
+
+		<Border Grid.Row="2" Grid.Column="0" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" Background="{DynamicResource OperatorBackgroundBrush}">
+			<Grid>
+				<ItemsControl ItemsSource="{Binding Sources, ElementName=Root}" Margin="4">
+					<ItemsControl.ItemsPanel>
+						<ItemsPanelTemplate>
+							<WrapPanel />
+						</ItemsPanelTemplate>
+					</ItemsControl.ItemsPanel>
+					<ItemsControl.ItemTemplate>
+						<DataTemplate>
+							<Border Width="132" Height="88" Margin="2" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" Background="Black">
+								<Grid>
+									<Image Source="{Binding Thumbnail}" Stretch="Uniform" />
+									<Border VerticalAlignment="Bottom" Background="#B0000000" Padding="5,3">
+										<DockPanel>
+											<TextBlock Text="{Binding Name}" Foreground="White" FontSize="11" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+											<TextBlock Text="{Binding StateDetail}" Foreground="White" FontSize="10" DockPanel.Dock="Right" Margin="6,0,0,0" />
+										</DockPanel>
+									</Border>
+								</Grid>
+							</Border>
+						</DataTemplate>
+					</ItemsControl.ItemTemplate>
+				</ItemsControl>
+				<TextBlock Text="SUPPORTED SOURCES" Style="{StaticResource OperatorLabel}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="6" IsHitTestVisible="False" />
+			</Grid>
+		</Border>
+
+		<Border Grid.RowSpan="3" Grid.Column="2" BorderBrush="{DynamicResource OperatorProgramBrush}" BorderThickness="2" Background="Black">
+			<Grid>
+				<Image Source="{Binding ProgramImage, ElementName=Root}" Stretch="Uniform" />
+				<Border VerticalAlignment="Top" HorizontalAlignment="Left" Background="#B0000000" Padding="8,5">
+					<TextBlock Text="PROGRAM" Foreground="{DynamicResource OperatorProgramBrush}" FontWeight="Bold" FontSize="15" />
+				</Border>
+				<Border VerticalAlignment="Bottom" Background="#B0000000" Padding="8,5">
+					<TextBlock Text="{Binding ProgramState, ElementName=Root}" Foreground="White" FontWeight="SemiBold" />
+				</Border>
+			</Grid>
+		</Border>
+	</Grid>
+</UserControl>
