@@ -225,6 +225,31 @@
 					</StackPanel>
 
 					<StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Right">
+						<controls:RtaimeStatusBadge
+							Status="{x:Static controls:RtaimeStatusKind.Neutral}"
+							Content="{Binding DataContext.MediaDeck.ProgramDeckState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							ShowIndicator="False"
+							Margin="6,0,0,0"
+							ToolTip="{Binding DataContext.LastEvent, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
+						<controls:RtaimeStatusBadge
+							Status="{x:Static controls:RtaimeStatusKind.Warning}"
+							Content="ERROR"
+							Margin="4,0,0,0"
+							ToolTip="{Binding DataContext.LastError, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
+							<controls:RtaimeStatusBadge.Style>
+								<Style TargetType="{x:Type controls:RtaimeStatusBadge}" BasedOn="{StaticResource {x:Type controls:RtaimeStatusBadge}}">
+									<Setter Property="Visibility" Value="Visible" />
+									<Style.Triggers>
+										<DataTrigger Binding="{Binding DataContext.LastError, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="{x:Null}">
+											<Setter Property="Visibility" Value="Collapsed" />
+										</DataTrigger>
+										<DataTrigger Binding="{Binding DataContext.LastError, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="">
+											<Setter Property="Visibility" Value="Collapsed" />
+										</DataTrigger>
+									</Style.Triggers>
+								</Style>
+							</controls:RtaimeStatusBadge.Style>
+						</controls:RtaimeStatusBadge>
 						<controls:RtaimeTimecode Content="{Binding CurrentTimecode}" FontSize="14" Margin="8,0,8,0" />
 						<controls:RtaimeTextBox
 							Width="94"
