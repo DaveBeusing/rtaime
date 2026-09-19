@@ -245,8 +245,9 @@
 			<Grid>
 				<Grid.ColumnDefinitions>
 					<ColumnDefinition Width="2.2*" MinWidth="610" />
-					<ColumnDefinition Width="14" />
-					<ColumnDefinition Width="1*" MinWidth="300" />
+					<ColumnDefinition Width="{Binding Shell.AuxiliaryWorkspaceGapWidth, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
+					<ColumnDefinition Width="{Binding Shell.AuxiliaryWorkspaceColumnWidth, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+						MinWidth="{Binding Shell.AuxiliaryWorkspaceColumnMinWidth, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
 				</Grid.ColumnDefinitions>
 
 				<StackPanel Grid.Column="0">
