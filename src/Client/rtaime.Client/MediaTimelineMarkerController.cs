@@ -162,6 +162,38 @@ public sealed class MediaTimelineMarkerController : IAsyncDisposable
 			await _timeline.SeekToFrameAsync(frame.Value, cancellationToken).ConfigureAwait(false);
 	}
 
+	public async ValueTask<bool> JumpToPreviousCueAsync(CancellationToken cancellationToken = default)
+	{
+		var currentFrame = _timeline.State.ConfirmedFrame;
+		long? frame;
+		lock (_gate)
+			frame = _confirmed?.CuePoints
+				.Where(cue => cue.PositionFrame < currentFrame)
+				.Select(cue => (long?)cue.PositionFrame)
+				.LastOrDefault();
+		if (!frame.HasValue)
+			return false;
+
+		await _timeline.SeekToFrameAsync(frame.Value, cancellationToken).ConfigureAwait(false);
+		return true;
+	}
+
+	public async ValueTask<bool> JumpToNextCueAsync(CancellationToken cancellationToken = default)
+	{
+		var currentFrame = _timeline.State.ConfirmedFrame;
+		long? frame;
+		lock (_gate)
+			frame = _confirmed?.CuePoints
+				.Where(cue => cue.PositionFrame > currentFrame)
+				.Select(cue => (long?)cue.PositionFrame)
+				.FirstOrDefault();
+		if (!frame.HasValue)
+			return false;
+
+		await _timeline.SeekToFrameAsync(frame.Value, cancellationToken).ConfigureAwait(false);
+		return true;
+	}
+
 	public ValueTask DisposeAsync()
 	{
 		if (_disposed)
