@@ -89,7 +89,7 @@ The design system changes presentation only. It does not add production authorit
 
 ### Reference resolution and DPI
 
-The qualified reference surface is **1920 x 1080**. The Operator opens at 1600 x 900 device-independent units, retains a 900 x 500 minimum workspace and uses vertical scrolling when the available logical height is reduced. Below the compact-workspace threshold the shell reduces presentation-only panel allocation without overwriting persisted workspace sizes.
+The qualified reference surface is **1920 x 1080**. The Operator opens at 1600 x 900 device-independent units, retains a 960 x 500 minimum workspace and uses vertical scrolling when the available logical height is reduced. Below the compact-workspace threshold the shell reduces presentation-only panel allocation without overwriting persisted workspace sizes.
 
 WPF device-independent layout, `UseLayoutRounding`, device-pixel snapping and an explicit `PerMonitorV2` manifest are used together. The policy gate qualifies the layout invariants for:
 
