@@ -293,7 +293,8 @@ public class RtaimeMetricRing : System.Windows.Controls.Control
 			angle > 180d,
 			SweepDirection.Clockwise,
 			true));
-		var geometry = new PathGeometry([figure]);
+		var geometry = new PathGeometry();
+		geometry.Figures.Add(figure);
 		drawingContext.DrawGeometry(null, new Pen(valueBrush, thickness)
 		{
 			StartLineCap = PenLineCap.Round,
