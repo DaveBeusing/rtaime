@@ -639,113 +639,275 @@
 							FullscreenCommand="{Binding Shell.FullscreenProgramCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
 					</Grid>
 
-					<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14"
+					<Grid x:Name="PreviewProgramProductionWorkspace"
+						Height="700"
 						Visibility="{Binding Shell.ProductionControlsVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
-						<StackPanel>
-							<DockPanel Margin="0,0,0,10">
-								<StackPanel Orientation="Horizontal">
-									<TextBlock Text="PRODUCTION CONTROLS" Style="{StaticResource OperatorSectionTitle}" VerticalAlignment="Center" />
-									<Border Style="{StaticResource OperatorStatusBadge}" Margin="10,0,0,0">
-										<TextBlock Text="{Binding Shell.ViewerModeLabel, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" FontWeight="SemiBold" />
-									</Border>
-								</StackPanel>
-								<Button Content="DUAL VIEW  Ctrl+0"
-									Command="{Binding Shell.RestoreViewersCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-									Style="{StaticResource OperatorButton}"
-									MinHeight="28"
-									Padding="8,3"
-									DockPanel.Dock="Right"
-									ToolTip="Restore Preview and Program side by side." />
-							</DockPanel>
+						<Grid.RowDefinitions>
+							<RowDefinition Height="390" />
+							<RowDefinition Height="6" />
+							<RowDefinition Height="304" />
+						</Grid.RowDefinitions>
 
-							<Grid Margin="0,0,0,10">
-								<Grid.ColumnDefinitions>
-									<ColumnDefinition Width="*" />
-									<ColumnDefinition Width="12" />
-									<ColumnDefinition Width="*" />
-								</Grid.ColumnDefinitions>
-								<StackPanel>
-									<TextBlock Text="SELECTED SOURCE" Style="{StaticResource OperatorLabel}" />
-									<TextBlock Text="{Binding SelectedSource.Name, TargetNullValue=No source selected}" FontSize="17" FontWeight="SemiBold" Margin="0,3,0,0" TextTrimming="CharacterEllipsis" />
-								</StackPanel>
-								<Border Grid.Column="2" Style="{StaticResource OperatorPreviewTally}">
-									<StackPanel>
-										<TextBlock Text="CONFIRMED PREVIEW / NEXT TAKE" Style="{StaticResource OperatorLabel}" Foreground="{DynamicResource OperatorPreviewBrush}" />
-										<TextBlock Text="{Binding PreviewSourceName}" FontSize="17" FontWeight="SemiBold" Margin="0,3,0,0" TextTrimming="CharacterEllipsis" />
-									</StackPanel>
-								</Border>
-							</Grid>
+						<Grid Grid.Row="0">
+							<Grid.ColumnDefinitions>
+								<ColumnDefinition Width="532" />
+								<ColumnDefinition Width="6" />
+								<ColumnDefinition Width="532" />
+							</Grid.ColumnDefinitions>
 
-							<Grid Margin="0,0,0,10">
-								<Grid.ColumnDefinitions>
-									<ColumnDefinition Width="*" />
-									<ColumnDefinition Width="8" />
-									<ColumnDefinition Width="*" />
-									<ColumnDefinition Width="8" />
-									<ColumnDefinition Width="*" />
-								</Grid.ColumnDefinitions>
-								<Button Grid.Column="0" Content="SET SELECTED → PREVIEW&#x0a;Ctrl+P" Command="{Binding SetPreviewCommand}" Style="{StaticResource OperatorAccentButton}" ToolTip="Route the selected source to confirmed Preview (Ctrl+P)." AutomationProperties.Name="Set selected source to Preview" />
-								<Button Grid.Column="2" Content="CUT PREVIEW → PROGRAM&#x0a;Ctrl+Enter" Command="{Binding CutCommand}" Style="{StaticResource OperatorProgramButton}" ToolTip="CUT the confirmed Preview source to Program (Ctrl+Enter)." AutomationProperties.Name="Cut Preview to Program" />
-								<Button Grid.Column="4" Content="AUTO PREVIEW → PROGRAM&#x0a;Enter" Command="{Binding DissolveCommand}" Style="{StaticResource OperatorButton}" ToolTip="Dissolve the confirmed Preview source to Program (Enter)." AutomationProperties.Name="Dissolve Preview to Program" />
-							</Grid>
+							<local:PreviewViewer Grid.Column="0"
+								Height="390"
+								AllowDrop="True"
+								DragOver="OnPreviewDragOver"
+								Drop="OnPreviewDrop"
+								Frame="{Binding Monitoring.PreviewImage, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+								SourceName="{Binding PreviewSourceName}"
+								SourceId="{Binding PreviewSourceId}"
+								Format="{Binding Monitoring.PreviewFormat, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+								ProductionFormat="{Binding CurrentFormat}"
+								ColorSpace="N/A"
+								State="{Binding Monitoring.PreviewState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+								Timecode="{Binding MediaDeck.Current, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+								TransportSourceId="{Binding MediaDeck.SourceId, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+								TransportState="{Binding MediaDeck.State, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+								PlayPauseCommand="{Binding MediaDeck.TogglePlayPauseCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+								StopCommand="{Binding MediaDeck.StopCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+								SetInCommand="{Binding MediaDeck.SetInCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+								SetOutCommand="{Binding MediaDeck.SetOutCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+								JumpInCommand="{Binding MediaDeck.JumpInCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+								JumpOutCommand="{Binding MediaDeck.JumpOutCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+								PreviousCueCommand="{Binding Timeline.PreviousCueCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+								NextCueCommand="{Binding Timeline.NextCueCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+								MaximizeCommand="{Binding Shell.MaximizePreviewCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+								FullscreenCommand="{Binding Shell.FullscreenPreviewCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
 
-							<Grid Margin="0,0,0,10">
-								<Grid.ColumnDefinitions>
-									<ColumnDefinition Width="Auto" />
-									<ColumnDefinition Width="18" />
-									<ColumnDefinition Width="Auto" />
-									<ColumnDefinition Width="*" />
-								</Grid.ColumnDefinitions>
-								<StackPanel>
-									<TextBlock Text="TRANSITION TYPE" Style="{StaticResource OperatorLabel}" />
-									<TextBlock Text="CUT / DISSOLVE" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" />
-								</StackPanel>
-								<StackPanel Grid.Column="2">
-									<TextBlock Text="DISSOLVE DURATION" Style="{StaticResource OperatorLabel}" />
-									<StackPanel Orientation="Horizontal">
-										<controls:RtaimeTextBox Text="{Binding TransitionFrames, UpdateSourceTrigger=PropertyChanged}" Width="72"  />
-										<TextBlock Text=" frames" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" />
-									</StackPanel>
-								</StackPanel>
-								<TextBlock Grid.Column="3" Text="{Binding TransitionStatus}" Style="{StaticResource OperatorValue}" HorizontalAlignment="Right" VerticalAlignment="Bottom" />
-							</Grid>
+							<local:ProgramViewer Grid.Column="2"
+								Height="390"
+								Frame="{Binding Monitoring.ProgramImage, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+								SourceName="{Binding ProgramSourceName}"
+								SourceId="{Binding ProgramSourceId}"
+								Format="{Binding Monitoring.ProgramFormat, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+								ProductionFormat="{Binding CurrentFormat}"
+								ColorSpace="N/A"
+								State="{Binding Monitoring.ProgramState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+								Timecode="{Binding MediaDeck.Current, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+								TransportSourceId="{Binding MediaDeck.SourceId, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+								OutputState="{Binding ProgramOutput.ViewerOutputState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+								RecordingStatus="{Binding RecordingStatus}"
+								CommitStatus="{Binding CommitStatus}"
+								TransitionStatus="{Binding TransitionStatus}"
+								AudioLeftPeak="{Binding AudioLeftPeak, Mode=OneWay}"
+								AudioRightPeak="{Binding AudioRightPeak, Mode=OneWay}"
+								AudioLeftDb="{Binding AudioLeftDb}"
+								AudioRightDb="{Binding AudioRightDb}"
+								Clipping="{Binding AudioClipping}"
+								MaximizeCommand="{Binding Shell.MaximizeProgramCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+								FullscreenCommand="{Binding Shell.FullscreenProgramCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
+						</Grid>
 
-							<Border Height="1" Background="{DynamicResource OperatorBorderBrush}" Margin="0,0,0,10" />
+						<Grid Grid.Row="2">
+							<Grid.ColumnDefinitions>
+								<ColumnDefinition Width="320" />
+								<ColumnDefinition Width="6" />
+								<ColumnDefinition Width="462" />
+								<ColumnDefinition Width="6" />
+								<ColumnDefinition Width="276" />
+							</Grid.ColumnDefinitions>
 
-							<Grid>
-								<Grid.ColumnDefinitions>
-									<ColumnDefinition Width="*" />
-									<ColumnDefinition Width="8" />
-									<ColumnDefinition Width="*" />
-									<ColumnDefinition Width="8" />
-									<ColumnDefinition Width="*" />
-								</Grid.ColumnDefinitions>
-								<StackPanel Grid.Column="0">
-									<TextBlock Text="PROGRAM OUTPUT" Style="{StaticResource OperatorLabel}" Margin="0,0,0,4" />
-									<Grid>
-										<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="6" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-										<Button Content="START CLEAN PROGRAM" Command="{Binding ProgramOutput.StartCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorProgramButton}" />
-										<Button Grid.Column="2" Content="STOP CLEAN PROGRAM" Command="{Binding ProgramOutput.StopCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorButton}" />
+							<Border Grid.Column="0" Style="{StaticResource RtaimeProductionLowerPanel}">
+								<Grid>
+									<Grid.RowDefinitions>
+										<RowDefinition Height="28" />
+										<RowDefinition Height="*" />
+										<RowDefinition Height="32" />
+									</Grid.RowDefinitions>
+									<DockPanel Grid.Row="0">
+										<TextBlock Text="SCENE STACK" Style="{StaticResource OperatorSectionTitle}" VerticalAlignment="Center" />
+										<TextBlock Text="SOURCE PROJECTION" Style="{StaticResource OperatorLabel}" DockPanel.Dock="Right" VerticalAlignment="Center" ToolTip="Dedicated scene activation is not exposed by the current V1 contract." />
+									</DockPanel>
+									<controls:RtaimeListBox Grid.Row="1"
+										ItemsSource="{Binding Sources}"
+										SelectedItem="{Binding SelectedSource, Mode=TwoWay}"
+										ItemContainerStyle="{StaticResource RtaimeProductionSceneItem}"
+										Background="Transparent"
+										BorderThickness="0"
+										ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+										ScrollViewer.VerticalScrollBarVisibility="Auto"
+										AutomationProperties.Name="Scene source stack">
+										<controls:RtaimeListBox.ItemTemplate>
+											<DataTemplate>
+												<Grid Margin="5,0">
+													<Grid.ColumnDefinitions>
+														<ColumnDefinition Width="27" />
+														<ColumnDefinition Width="62" />
+														<ColumnDefinition Width="7" />
+														<ColumnDefinition Width="*" />
+														<ColumnDefinition Width="Auto" />
+													</Grid.ColumnDefinitions>
+													<TextBlock Text="{Binding DisplayIndex, StringFormat={}{0:00}}" Style="{StaticResource OperatorLabel}" FontFamily="{DynamicResource OperatorTimecodeFontFamily}" VerticalAlignment="Center" />
+													<Border Grid.Column="1" Width="62" Height="36" Background="Black" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" VerticalAlignment="Center">
+														<Image Source="{Binding Thumbnail}" Stretch="UniformToFill" />
+													</Border>
+													<StackPanel Grid.Column="3" VerticalAlignment="Center">
+														<TextBlock Text="{Binding Name}" FontSize="11" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+														<TextBlock Text="{Binding Remaining, StringFormat=REM {0}}" Style="{StaticResource OperatorLabel}" FontSize="10" />
+													</StackPanel>
+													<StackPanel Grid.Column="4" VerticalAlignment="Center">
+														<controls:RtaimeStatusBadge Status="{x:Static controls:RtaimeStatusKind.Program}" Content="ON AIR" ShowIndicator="True">
+															<controls:RtaimeStatusBadge.Style>
+																<Style TargetType="{x:Type controls:RtaimeStatusBadge}" BasedOn="{StaticResource {x:Type controls:RtaimeStatusBadge}}">
+																	<Setter Property="Visibility" Value="Collapsed" />
+																	<Style.Triggers><DataTrigger Binding="{Binding IsProgram}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
+																</Style>
+															</controls:RtaimeStatusBadge.Style>
+														</controls:RtaimeStatusBadge>
+														<controls:RtaimeStatusBadge Status="{x:Static controls:RtaimeStatusKind.Preview}" Content="PVW" ShowIndicator="False">
+															<controls:RtaimeStatusBadge.Style>
+																<Style TargetType="{x:Type controls:RtaimeStatusBadge}" BasedOn="{StaticResource {x:Type controls:RtaimeStatusBadge}}">
+																	<Setter Property="Visibility" Value="Collapsed" />
+																	<Style.Triggers><DataTrigger Binding="{Binding IsPreview}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
+																</Style>
+															</controls:RtaimeStatusBadge.Style>
+														</controls:RtaimeStatusBadge>
+													</StackPanel>
+												</Grid>
+											</DataTemplate>
+										</controls:RtaimeListBox.ItemTemplate>
+									</controls:RtaimeListBox>
+									<Grid Grid.Row="2" Margin="0,4,0,0">
+										<Grid.ColumnDefinitions>
+											<ColumnDefinition Width="*" />
+											<ColumnDefinition Width="4" />
+											<ColumnDefinition Width="*" />
+											<ColumnDefinition Width="4" />
+											<ColumnDefinition Width="*" />
+										</Grid.ColumnDefinitions>
+										<controls:RtaimeButton Grid.Column="0" Content="SET PVW" Command="{Binding SetPreviewCommand}" IsCompact="True" ToolTip="Route selected source to Preview." />
+										<controls:RtaimeButton Grid.Column="2" Content="CUT" Command="{Binding CutCommand}" IsCompact="True" ToolTip="Take confirmed Preview to Program." />
+										<controls:RtaimeButton Grid.Column="4" Content="AUTO" Command="{Binding DissolveCommand}" IsCompact="True" ToolTip="Dissolve confirmed Preview to Program." />
 									</Grid>
-								</StackPanel>
-								<StackPanel Grid.Column="2">
-									<TextBlock Text="PROGRAM RECORDING" Style="{StaticResource OperatorLabel}" Margin="0,0,0,4" />
-									<Grid>
-										<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="6" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-										<Button Content="START REC" Command="{Binding StartRecordingCommand}" Style="{StaticResource OperatorProgramButton}" />
-										<Button Grid.Column="2" Content="STOP REC" Command="{Binding StopRecordingCommand}" Style="{StaticResource OperatorButton}" />
-									</Grid>
-								</StackPanel>
-								<Border Grid.Column="4" Style="{StaticResource OperatorStatusBadge}">
-									<StackPanel>
-										<TextBlock Text="SAFETY EXTENSION" Style="{StaticResource OperatorLabel}" />
-										<TextBlock Text="HOLD / FTB · NOT AVAILABLE IN V1" FontWeight="SemiBold" Margin="0,3,0,0" TextWrapping="Wrap" />
-									</StackPanel>
-								</Border>
-							</Grid>
-						</StackPanel>
-					</Border>
+								</Grid>
+							</Border>
 
+							<Border Grid.Column="2" Style="{StaticResource RtaimeProductionLowerPanel}">
+								<Grid>
+									<Grid.RowDefinitions>
+										<RowDefinition Height="28" />
+										<RowDefinition Height="*" />
+									</Grid.RowDefinitions>
+									<DockPanel Grid.Row="0">
+										<TextBlock Text="OUTPUT ROUTING" Style="{StaticResource OperatorSectionTitle}" VerticalAlignment="Center" />
+										<TextBlock Text="{Binding OutputHealth.AccessState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorLabel}" DockPanel.Dock="Right" VerticalAlignment="Center" />
+									</DockPanel>
+									<controls:RtaimeListBox Grid.Row="1"
+										ItemsSource="{Binding OutputHealth.Outputs, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+										SelectedItem="{Binding OutputHealth.SelectedOutput, RelativeSource={RelativeSource AncestorType={x:Type Window}}, Mode=TwoWay}"
+										ItemContainerStyle="{StaticResource RtaimeProductionSceneItem}"
+										Background="Transparent"
+										BorderThickness="0"
+										ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+										ScrollViewer.VerticalScrollBarVisibility="Disabled"
+										AutomationProperties.Name="Output routing roles">
+										<controls:RtaimeListBox.ItemTemplate>
+											<DataTemplate>
+												<Grid Margin="5,0" ToolTip="{Binding Detail}">
+													<Grid.ColumnDefinitions>
+														<ColumnDefinition Width="13" />
+														<ColumnDefinition Width="62" />
+														<ColumnDefinition Width="8" />
+														<ColumnDefinition Width="*" />
+														<ColumnDefinition Width="Auto" />
+													</Grid.ColumnDefinitions>
+													<Ellipse Grid.Column="0" Style="{StaticResource RtaimeProductionStatusDot}">
+														<Ellipse.Style>
+															<Style TargetType="Ellipse" BasedOn="{StaticResource RtaimeProductionStatusDot}">
+																<Style.Triggers>
+																	<DataTrigger Binding="{Binding EvidenceState}" Value="PASS"><Setter Property="Fill" Value="{DynamicResource OperatorHealthyBrush}" /></DataTrigger>
+																	<DataTrigger Binding="{Binding EvidenceState}" Value="FAIL"><Setter Property="Fill" Value="{DynamicResource OperatorErrorBrush}" /></DataTrigger>
+																</Style.Triggers>
+															</Style>
+														</Ellipse.Style>
+													</Ellipse>
+													<Border Grid.Column="1" Width="62" Height="36" Background="Black" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" VerticalAlignment="Center">
+														<Image Stretch="UniformToFill">
+															<Image.Style>
+																<Style TargetType="Image">
+																	<Setter Property="Source" Value="{Binding DataContext.Monitoring.ProgramImage, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
+																	<Style.Triggers>
+																		<DataTrigger Binding="{Binding Id}" Value="preview"><Setter Property="Source" Value="{Binding DataContext.Monitoring.PreviewImage, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" /></DataTrigger>
+																		<DataTrigger Binding="{Binding Id}" Value="aux"><Setter Property="Source" Value="{x:Null}" /></DataTrigger>
+																	</Style.Triggers>
+																</Style>
+															</Image.Style>
+														</Image>
+													</Border>
+													<StackPanel Grid.Column="3" VerticalAlignment="Center">
+														<TextBlock Text="{Binding AssignedSource}" FontSize="11" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+														<StackPanel Orientation="Horizontal">
+															<TextBlock Text="{Binding Target}" Style="{StaticResource OperatorLabel}" FontSize="10" TextTrimming="CharacterEllipsis" MaxWidth="118" />
+															<TextBlock Text=" · " Style="{StaticResource OperatorLabel}" FontSize="10" />
+															<TextBlock Text="{Binding Resolution}" Style="{StaticResource OperatorLabel}" FontSize="10" />
+															<TextBlock Text=" · " Style="{StaticResource OperatorLabel}" FontSize="10" />
+															<TextBlock Text="{Binding FrameRate}" Style="{StaticResource OperatorLabel}" FontSize="10" />
+														</StackPanel>
+													</StackPanel>
+													<TextBlock Grid.Column="4" Text="{Binding Name}" Style="{StaticResource OperatorLabel}" FontWeight="Bold" VerticalAlignment="Center" Margin="8,0,0,0" />
+												</Grid>
+											</DataTemplate>
+										</controls:RtaimeListBox.ItemTemplate>
+									</controls:RtaimeListBox>
+								</Grid>
+							</Border>
+
+							<Border Grid.Column="4" Style="{StaticResource RtaimeProductionLowerPanel}">
+								<Grid>
+									<Grid.RowDefinitions>
+										<RowDefinition Height="28" />
+										<RowDefinition Height="*" />
+										<RowDefinition Height="126" />
+									</Grid.RowDefinitions>
+									<TextBlock Grid.Row="0" Text="SYSTEM STATUS" Style="{StaticResource OperatorSectionTitle}" VerticalAlignment="Center" />
+									<ItemsControl Grid.Row="1" ItemsSource="{Binding OutputHealth.SystemHealth, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
+										<ItemsControl.ItemTemplate>
+											<DataTemplate>
+												<DockPanel Height="22">
+													<Ellipse Style="{StaticResource RtaimeProductionStatusDot}">
+														<Ellipse.Style>
+															<Style TargetType="Ellipse" BasedOn="{StaticResource RtaimeProductionStatusDot}">
+																<Style.Triggers>
+																	<DataTrigger Binding="{Binding EvidenceState}" Value="PASS"><Setter Property="Fill" Value="{DynamicResource OperatorHealthyBrush}" /></DataTrigger>
+																	<DataTrigger Binding="{Binding EvidenceState}" Value="FAIL"><Setter Property="Fill" Value="{DynamicResource OperatorErrorBrush}" /></DataTrigger>
+																</Style.Triggers>
+															</Style>
+														</Ellipse.Style>
+													</Ellipse>
+													<TextBlock Text="{Binding Name}" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" />
+													<TextBlock Text="{Binding Status}" Style="{StaticResource OperatorValue}" FontSize="10" FontWeight="SemiBold" DockPanel.Dock="Right" VerticalAlignment="Center" />
+												</DockPanel>
+											</DataTemplate>
+										</ItemsControl.ItemTemplate>
+									</ItemsControl>
+									<StackPanel Grid.Row="2">
+										<DockPanel Height="38">
+											<TextBlock Text="Disk" Style="{StaticResource OperatorLabel}" VerticalAlignment="Top" />
+											<TextBlock Text="{Binding OutputHealth.DiskMetric.Value, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorLabel}" DockPanel.Dock="Right" VerticalAlignment="Top" />
+											<controls:RtaimeMetricBar Minimum="0" Maximum="100" Value="{Binding OutputHealth.DiskMetric.GaugeValue, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" VerticalAlignment="Bottom" />
+										</DockPanel>
+										<DockPanel Height="38">
+											<TextBlock Text="Network" Style="{StaticResource OperatorLabel}" VerticalAlignment="Top" />
+											<TextBlock Text="{Binding OutputHealth.NetworkMetric.Value, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorLabel}" DockPanel.Dock="Right" VerticalAlignment="Top" />
+											<controls:RtaimeMetricBar Minimum="0" Maximum="100" Value="{Binding OutputHealth.NetworkMetric.GaugeValue, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" VerticalAlignment="Bottom" />
+										</DockPanel>
+										<DockPanel Height="38">
+											<TextBlock Text="Temperature" Style="{StaticResource OperatorLabel}" VerticalAlignment="Top" />
+											<TextBlock Text="{Binding OutputHealth.TemperatureMetric.Value, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorLabel}" DockPanel.Dock="Right" VerticalAlignment="Top" />
+											<controls:RtaimeMetricBar Minimum="0" Maximum="100" Value="{Binding OutputHealth.TemperatureMetric.GaugeValue, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" VerticalAlignment="Bottom" />
+										</DockPanel>
+									</StackPanel>
+								</Grid>
+							</Border>
+						</Grid>
+					</Grid>
 					<local:MediaDeckControl DataContext="{Binding MediaDeck, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Margin="0,0,0,14"
 						Visibility="{Binding Shell.MediaDeckVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
 
