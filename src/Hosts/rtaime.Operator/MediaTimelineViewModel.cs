@@ -74,6 +74,7 @@ public sealed class MediaTimelineViewModel : INotifyPropertyChanged, IAsyncDispo
 	private readonly SynchronizationContext? _synchronizationContext;
 	private readonly TimelineTrackViewModel _videoTrack;
 	private readonly List<long> _snapFrames = [];
+	private readonly List<TimelineResourceProjection> _resourceProjections = [];
 	private MediaTimelineState _state;
 	private MediaTimelineVisibleRange _visibleRange;
 	private FrameRate? _projectionFrameRate;
@@ -85,6 +86,7 @@ public sealed class MediaTimelineViewModel : INotifyPropertyChanged, IAsyncDispo
 	private long? _inPointFrame;
 	private long? _outPointFrame;
 	private bool _snapEnabled = true;
+	private string? _activeSourceReference;
 
 	public MediaTimelineViewModel(
 		MediaTimelineController? controller = null,
@@ -230,7 +232,14 @@ public sealed class MediaTimelineViewModel : INotifyPropertyChanged, IAsyncDispo
 
 		_projectionInitialized = true;
 		_projectionHash = hash;
-		_videoTrack.Items.Clear();
+		var sourceReference = snapshot.SourceId?.ToString();
+		if (!string.Equals(_activeSourceReference, sourceReference, StringComparison.Ordinal))
+		{
+			_resourceProjections.Clear();
+			_activeSourceReference = sourceReference;
+		}
+		foreach (var track in Tracks)
+			track.Items.Clear();
 		Cues.Clear();
 		_snapFrames.Clear();
 		_selectedItem = null;
@@ -245,7 +254,6 @@ public sealed class MediaTimelineViewModel : INotifyPropertyChanged, IAsyncDispo
 			var start = markers.InPointFrame ?? 0;
 			var end = markers.OutPointFrame ?? totalFrames - 1;
 			var duration = Math.Max(1, end - start + 1);
-			var sourceReference = snapshot.SourceId?.ToString();
 			var item = new TimelineTrackItemViewModel(
 				$"media:{markers.AssetId}",
 				TimelineTrackCategory.Video,
@@ -276,6 +284,7 @@ public sealed class MediaTimelineViewModel : INotifyPropertyChanged, IAsyncDispo
 				_snapFrames.Add(markers.OutPointFrame.Value);
 		}
 
+		RebuildResourceProjections();
 		RefreshVisibleRange(preserveStart: Zoom > MediaTimelineGeometry.MinimumZoom);
 		OnPropertyChanged(nameof(InPointFrame));
 		OnPropertyChanged(nameof(OutPointFrame));
@@ -287,6 +296,60 @@ public sealed class MediaTimelineViewModel : INotifyPropertyChanged, IAsyncDispo
 		OnPropertyChanged(nameof(AccessibilityDescription));
 		RaiseCueCommands();
 		SelectionChanged?.Invoke(new TimelineSelection(null, null));
+	}
+
+	public bool CanAcceptMediaPoolDrop(
+		MediaPoolItemViewModel? item,
+		TimelineTrackCategory? category)
+	{
+		if (item is null || category is null || !item.IsReady || !IsLoaded || TotalFrames <= 0)
+			return false;
+
+		return item.Kind switch
+		{
+			MediaPoolItemKind.Clip =>
+				category == TimelineTrackCategory.Video &&
+				_videoTrack.Items.Any(candidate =>
+					string.Equals(candidate.SourceReference, item.ReferenceId, StringComparison.Ordinal)),
+			MediaPoolItemKind.Audio => category == TimelineTrackCategory.Audio,
+			MediaPoolItemKind.Graphics => category is TimelineTrackCategory.Graphics or TimelineTrackCategory.Overlay,
+			_ => false
+		};
+	}
+
+	public bool ProjectMediaPoolDrop(
+		MediaPoolItemViewModel item,
+		TimelineTrackCategory category)
+	{
+		ArgumentNullException.ThrowIfNull(item);
+		if (!CanAcceptMediaPoolDrop(item, category))
+			return false;
+
+		if (item.Kind == MediaPoolItemKind.Clip)
+		{
+			var authoritativeItem = _videoTrack.Items.First(candidate =>
+				string.Equals(candidate.SourceReference, item.ReferenceId, StringComparison.Ordinal));
+			SelectItem(authoritativeItem);
+			return true;
+		}
+
+		_resourceProjections.RemoveAll(candidate =>
+			string.Equals(candidate.Key, item.Key, StringComparison.Ordinal) &&
+			candidate.Category == category);
+		_resourceProjections.Add(new TimelineResourceProjection(
+			item.Key,
+			category,
+			item.Name,
+			item.ReferenceId,
+			item.State));
+		RebuildResourceTrack(category);
+
+		var track = Tracks.Single(candidate => candidate.Category == category);
+		var projectedItem = track.Items.LastOrDefault(candidate =>
+			string.Equals(candidate.Id, $"projection:{item.Key}:{category}", StringComparison.Ordinal));
+		if (projectedItem is not null)
+			SelectItem(projectedItem);
+		return projectedItem is not null;
 	}
 
 	public void SelectItem(TimelineTrackItemViewModel? item)
@@ -433,6 +496,35 @@ public sealed class MediaTimelineViewModel : INotifyPropertyChanged, IAsyncDispo
 		RaiseViewport();
 	}
 
+	private void RebuildResourceProjections()
+	{
+		foreach (var category in new[] { TimelineTrackCategory.Audio, TimelineTrackCategory.Graphics, TimelineTrackCategory.Overlay })
+			RebuildResourceTrack(category);
+	}
+
+	private void RebuildResourceTrack(TimelineTrackCategory category)
+	{
+		var track = Tracks.Single(candidate => candidate.Category == category);
+		track.Items.Clear();
+		if (!IsLoaded || TotalFrames <= 0)
+			return;
+
+		foreach (var projection in _resourceProjections.Where(candidate => candidate.Category == category))
+		{
+			track.Items.Add(new TimelineTrackItemViewModel(
+				$"projection:{projection.Key}:{projection.Category}",
+				projection.Category,
+				projection.Label,
+				0,
+				TotalFrames,
+				null,
+				null,
+				projection.ReferenceId,
+				$"PROJECTED · {projection.SourceState}",
+				false));
+		}
+	}
+
 	private long ApplySnap(long frame)
 	{
 		if (!SnapEnabled || _snapFrames.Count == 0 || VisibleFrameCount <= 0)
@@ -561,6 +653,13 @@ public sealed class MediaTimelineViewModel : INotifyPropertyChanged, IAsyncDispo
 		else
 			action();
 	}
+
+	private sealed record TimelineResourceProjection(
+		string Key,
+		TimelineTrackCategory Category,
+		string Label,
+		string? ReferenceId,
+		string SourceState);
 
 	private void OnPropertyChanged([CallerMemberName] string? name = null) =>
 		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
