@@ -86,7 +86,7 @@ Committed media values are identified as `COMMITTED`. UI-only resource projectio
 - Home / End: media start / end.
 - Page Up / Page Down: previous / next cue.
 - Ctrl++ / Ctrl+-: zoom in / out.
-- Ctrl+0: fit timeline.
+- Ctrl+Shift+F: fit timeline.
 - Ctrl+mouse wheel: zoom.
 - Shift+mouse wheel: horizontal timeline scroll.
 - Empty track drag: bounded seek.
