@@ -133,8 +133,42 @@ $operatorXaml = (Get-ChildItem -LiteralPath (Join-Path $repositoryRoot "src/Host
 
 Assert-Condition ($app -match 'Source="Themes/OperatorTheme\.xaml"') "Operator must load the reusable theme resource dictionary."
 Assert-Condition ($theme -match 'Source="OperatorTokens\.xaml"') "Operator theme must load the shared design-token dictionary."
-foreach ($token in @("OperatorFontFamily", "OperatorWindowPadding", "OperatorControlHeight", "OperatorColorPreview", "OperatorColorProgram", "OperatorColorHealthy", "OperatorColorWarning", "OperatorColorError")) {
+foreach ($token in @("OperatorFontFamily", "OperatorTimecodeFontFamily", "OperatorTopBarHeight", "OperatorNavigationWidth", "OperatorMediaPanelWidth", "OperatorInspectorWidth", "OperatorTimelineHeight", "OperatorRegionGap", "OperatorControlHeight", "OperatorCompactControlHeight", "OperatorRadiusPanel", "OperatorRadiusControl", "OperatorColorTopBar", "OperatorColorNavigation", "OperatorColorSurface", "OperatorColorAlternateSurface", "OperatorColorRaisedSurface", "OperatorColorRaisedHover", "OperatorColorBorder", "OperatorColorBorderStrong", "OperatorColorText", "OperatorColorSecondaryText", "OperatorColorMutedText", "OperatorColorAccent", "OperatorColorPreview", "OperatorColorProgram", "OperatorColorHealthy", "OperatorColorWarning", "OperatorColorError", "OperatorColorTimeline", "OperatorColorGraphics", "OperatorColorAudio")) {
 	Assert-Condition ($tokens -match [Regex]::Escape($token)) "Operator design token '$token' is required."
+}
+
+foreach ($contractValue in @(
+	'<sys:Double x:Key="OperatorTopBarHeight">60</sys:Double>',
+	'<sys:Double x:Key="OperatorNavigationWidth">92</sys:Double>',
+	'<sys:Double x:Key="OperatorMediaPanelWidth">400</sys:Double>',
+	'<sys:Double x:Key="OperatorInspectorWidth">340</sys:Double>',
+	'<sys:Double x:Key="OperatorTimelineHeight">320</sys:Double>',
+	'<sys:Double x:Key="OperatorRegionGap">6</sys:Double>',
+	'<sys:Double x:Key="OperatorControlHeight">30</sys:Double>',
+	'<sys:Double x:Key="OperatorCompactControlHeight">26</sys:Double>',
+	'<CornerRadius x:Key="OperatorRadiusPanel">4</CornerRadius>',
+	'<CornerRadius x:Key="OperatorRadiusControl">3</CornerRadius>',
+	'<Color x:Key="OperatorColorBackground">#071017</Color>',
+	'<Color x:Key="OperatorColorTopBar">#09131B</Color>',
+	'<Color x:Key="OperatorColorNavigation">#0B151E</Color>',
+	'<Color x:Key="OperatorColorSurface">#101B24</Color>',
+	'<Color x:Key="OperatorColorAlternateSurface">#121F29</Color>',
+	'<Color x:Key="OperatorColorRaisedSurface">#16242F</Color>',
+	'<Color x:Key="OperatorColorRaisedHover">#1C2D38</Color>',
+	'<Color x:Key="OperatorColorBorder">#25343F</Color>',
+	'<Color x:Key="OperatorColorBorderStrong">#314553</Color>',
+	'<Color x:Key="OperatorColorText">#EEF3F6</Color>',
+	'<Color x:Key="OperatorColorSecondaryText">#9AA8B4</Color>',
+	'<Color x:Key="OperatorColorMutedText">#6F7D89</Color>',
+	'<Color x:Key="OperatorColorAccent">#16CDD3</Color>',
+	'<Color x:Key="OperatorColorHealthy">#29D38B</Color>',
+	'<Color x:Key="OperatorColorProgram">#FF4D52</Color>',
+	'<Color x:Key="OperatorColorWarning">#F6B84A</Color>',
+	'<Color x:Key="OperatorColorTimeline">#3478D4</Color>',
+	'<Color x:Key="OperatorColorGraphics">#7259D7</Color>',
+	'<Color x:Key="OperatorColorAudio">#22A977</Color>'
+)) {
+	Assert-Condition ($tokens -match [Regex]::Escape($contractValue)) "Operator mockup contract value is required: $contractValue"
 }
 foreach ($resource in @("OperatorPreviewBrush", "OperatorProgramBrush", "OperatorArmedBrush", "OperatorHealthyBrush", "OperatorWarningBrush", "OperatorErrorBrush", "OperatorEvidenceBadge", "OperatorFocusVisual", "OperatorToolbar", "OperatorToggleButton", "OperatorSourceItem", "OperatorMeter", "OperatorTimelineSlider", "OperatorPreviewTally", "OperatorProgramTally", "OperatorTopBar", "OperatorShellRegion", "OperatorTransportBar", "StatusPill", "MetricMeter", "WorkspaceNavItem", "PanelHeader", "SectionDivider", "OperatorVerticalSplitter", "OperatorHorizontalSplitter", "OperatorLoadingState", "OperatorErrorState")) {
 	Assert-Condition ($theme -match [Regex]::Escape($resource)) "Operator theme resource '$resource' is required."

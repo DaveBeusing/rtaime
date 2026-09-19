@@ -8,16 +8,24 @@
 	<!-- Brushes derived from the shared tokens. -->
 	<SolidColorBrush x:Key="OperatorBackgroundBrush" Color="{StaticResource OperatorColorBackground}" />
 	<SolidColorBrush x:Key="OperatorSurfaceBrush" Color="{StaticResource OperatorColorSurface}" />
+	<SolidColorBrush x:Key="OperatorTopBarBrush" Color="{StaticResource OperatorColorTopBar}" />
+	<SolidColorBrush x:Key="OperatorNavigationBrush" Color="{StaticResource OperatorColorNavigation}" />
+	<SolidColorBrush x:Key="OperatorAlternateSurfaceBrush" Color="{StaticResource OperatorColorAlternateSurface}" />
 	<SolidColorBrush x:Key="OperatorRaisedSurfaceBrush" Color="{StaticResource OperatorColorRaisedSurface}" />
 	<SolidColorBrush x:Key="OperatorRaisedHoverBrush" Color="{StaticResource OperatorColorRaisedHover}" />
 	<SolidColorBrush x:Key="OperatorBorderBrush" Color="{StaticResource OperatorColorBorder}" />
+	<SolidColorBrush x:Key="OperatorBorderStrongBrush" Color="{StaticResource OperatorColorBorderStrong}" />
 	<SolidColorBrush x:Key="OperatorTextBrush" Color="{StaticResource OperatorColorText}" />
+	<SolidColorBrush x:Key="OperatorSecondaryTextBrush" Color="{StaticResource OperatorColorSecondaryText}" />
 	<SolidColorBrush x:Key="OperatorMutedTextBrush" Color="{StaticResource OperatorColorMutedText}" />
 	<SolidColorBrush x:Key="OperatorDisabledBrush" Color="{StaticResource OperatorColorDisabled}" />
 	<SolidColorBrush x:Key="OperatorAccentBrush" Color="{StaticResource OperatorColorAccent}" />
 	<SolidColorBrush x:Key="OperatorAccentSurfaceBrush" Color="{StaticResource OperatorColorAccentSurface}" />
 	<SolidColorBrush x:Key="OperatorSelectionSurfaceBrush" Color="{StaticResource OperatorColorSelectionSurface}" />
 	<SolidColorBrush x:Key="OperatorFocusBrush" Color="{StaticResource OperatorColorFocus}" />
+	<SolidColorBrush x:Key="OperatorTimelineBrush" Color="{StaticResource OperatorColorTimeline}" />
+	<SolidColorBrush x:Key="OperatorGraphicsBrush" Color="{StaticResource OperatorColorGraphics}" />
+	<SolidColorBrush x:Key="OperatorAudioBrush" Color="{StaticResource OperatorColorAudio}" />
 	<SolidColorBrush x:Key="OperatorPreviewBrush" Color="{StaticResource OperatorColorPreview}" />
 	<SolidColorBrush x:Key="OperatorPreviewSurfaceBrush" Color="{StaticResource OperatorColorPreviewSurface}" />
 	<SolidColorBrush x:Key="OperatorProgramBrush" Color="{StaticResource OperatorColorProgram}" />
@@ -204,7 +212,7 @@
 	</Style>
 
 	<Style x:Key="OperatorAccentButton" TargetType="Button" BasedOn="{StaticResource OperatorButton}">
-		<Setter Property="Background" Value="#233C57" />
+		<Setter Property="Background" Value="{DynamicResource OperatorAccentSurfaceBrush}" />
 		<Setter Property="BorderBrush" Value="{DynamicResource OperatorAccentBrush}" />
 	</Style>
 
@@ -460,6 +468,7 @@
 	</Style>
 
 	<Style x:Key="OperatorTopBar" TargetType="Border" BasedOn="{StaticResource OperatorPanel}">
+		<Setter Property="Background" Value="{DynamicResource OperatorTopBarBrush}" />
 		<Setter Property="Padding" Value="10,7" />
 		<Setter Property="CornerRadius" Value="4" />
 	</Style>
@@ -470,6 +479,7 @@
 	</Style>
 
 	<Style x:Key="OperatorNavigationRail" TargetType="Border" BasedOn="{StaticResource OperatorShellRegion}">
+		<Setter Property="Background" Value="{DynamicResource OperatorNavigationBrush}" />
 		<Setter Property="Padding" Value="5" />
 	</Style>
 
