@@ -169,7 +169,7 @@ public partial class MainWindow : Window
 	{
 		if (!_fullscreenApplied)
 			CaptureWindowPlacement();
-		Shell.Save();
+		await Shell.SaveAsync();
 		if (_shutdownComplete)
 			return;
 
