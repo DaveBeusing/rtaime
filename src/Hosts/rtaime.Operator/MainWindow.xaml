@@ -400,9 +400,9 @@
 							</TextBlock.Style>
 						</TextBlock>
 
-						<Border HorizontalAlignment="Center" VerticalAlignment="Top" Margin="8" Padding="8,4" Background="{DynamicResource OperatorRaisedSurfaceBrush}">
+						<Border HorizontalAlignment="Center" VerticalAlignment="Top" Margin="8" Padding="8,4">
 							<Border.Style>
-								<Style TargetType="{x:Type Border}">
+								<Style TargetType="{x:Type Border}" BasedOn="{StaticResource OperatorLoadingState}">
 									<Setter Property="Visibility" Value="Collapsed" />
 									<Style.Triggers><DataTrigger Binding="{Binding MediaPool.IsLoading, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
 								</Style>
@@ -410,9 +410,9 @@
 							<TextBlock Text="LOADING ASSETS…" Style="{StaticResource OperatorLabel}" />
 						</Border>
 
-						<Border VerticalAlignment="Bottom" Margin="8" Padding="8,5" Background="{DynamicResource OperatorProgramSurfaceBrush}" BorderBrush="{DynamicResource OperatorErrorBrush}" BorderThickness="1">
+						<Border VerticalAlignment="Bottom" Margin="8" Padding="8,5">
 							<Border.Style>
-								<Style TargetType="{x:Type Border}">
+								<Style TargetType="{x:Type Border}" BasedOn="{StaticResource OperatorErrorState}">
 									<Setter Property="Visibility" Value="Collapsed" />
 									<Style.Triggers><DataTrigger Binding="{Binding MediaPool.HasError, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
 								</Style>
