@@ -93,7 +93,7 @@
 						<ItemsPanelTemplate>
 							<UniformGrid Columns="{Binding SourceGridColumns, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorMultiviewControl}}}" />
 						</ItemsPanelTemplate>
-					</ListBox.ItemsPanel>
+					</controls:RtaimeListBox.ItemsPanel>
 					<controls:RtaimeListBox.ItemTemplate>
 						<DataTemplate>
 							<Border MinHeight="132"
@@ -193,7 +193,7 @@
 								</Grid>
 							</Border>
 						</DataTemplate>
-					</ListBox.ItemTemplate>
+					</controls:RtaimeListBox.ItemTemplate>
 				</controls:RtaimeListBox>
 
 				<Border x:Name="ExpandedPreviewOverlay"
