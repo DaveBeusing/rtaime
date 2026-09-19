@@ -24,6 +24,7 @@ public sealed class OperatorSourceTileViewModel : INotifyPropertyChanged
 	private double _audioRightPeak;
 	private bool _audioClipping;
 	private bool _hasAudio;
+	private int _displayIndex;
 
 	public OperatorSourceTileViewModel(OperatorSourceDescriptor descriptor)
 	{
@@ -39,6 +40,7 @@ public sealed class OperatorSourceTileViewModel : INotifyPropertyChanged
 	public event PropertyChangedEventHandler? PropertyChanged;
 
 	public string Id => _descriptor.Id;
+	public int DisplayIndex { get => _displayIndex; private set => Set(ref _displayIndex, value); }
 	public string Name => _descriptor.Name;
 	public ImageSource? Thumbnail { get => _thumbnail; private set => Set(ref _thumbnail, value); }
 	public string ThumbnailFormat { get => _thumbnailFormat; private set => Set(ref _thumbnailFormat, value); }
@@ -81,6 +83,8 @@ public sealed class OperatorSourceTileViewModel : INotifyPropertyChanged
 		OnPropertyChanged(nameof(Detail));
 		OnPropertyChanged(nameof(StateDetail));
 	}
+
+	public void ApplyDisplayIndex(int index) => DisplayIndex = Math.Max(1, index);
 
 	public void ApplyRouting(string previewSourceId, string programSourceId)
 	{
