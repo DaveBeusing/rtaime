@@ -398,7 +398,7 @@ Assert-Condition ($customInputTheme -match 'RtaimeVerticalSplitter' -and $custom
 Assert-Condition ($customInputTheme -match 'controls:RtaimeComboBox' -and $customInputTheme -match 'controls:RtaimeCheckBox' -and $customInputTheme -match 'controls:RtaimeTabItem') "Custom interactive controls must own shared keyboard-focus styling."
 Assert-Condition ($operatorXaml -notmatch '<Storyboard|<DoubleAnimation|<ColorAnimation|<ThicknessAnimation') "Production Operator XAML must not introduce decorative animation."
 Assert-Condition ($window -match 'x:Name="SynchronizeButton"' -and $windowCode -match 'SynchronizeButton\.Focus\(\)') "Initial keyboard focus must land on the synchronization action."
-Assert-Condition ($window -match 'ToolTip="Prepare the deterministic showcase state' -and $window -match 'ToolTip="CUT the confirmed Preview source to Program') "Primary showcase actions must expose consistent explanatory tooltips."
+Assert-Condition ($window -match 'ToolTip="Prepare the deterministic showcase state' -and $window -match 'ToolTip="Take confirmed Preview to Program\."') "Primary showcase actions must expose consistent explanatory tooltips."
 Assert-Condition ($theme -match '<Style TargetType="ToolTip">' -and $theme -match 'ToolTipService\.InitialShowDelay') "Showcase tooltips must use the shared theme and bounded presentation timing."
 Assert-Condition ($window -match 'No production sources available' -and $window -match 'Binding Sources\.Count') "Source Bin must expose an explicit empty state instead of a blank panel."
 Assert-Condition ($window -match 'Text="\{Binding LastEvent\}"' -and $window -match 'OperatorErrorBadge' -and $window -match 'Binding LastError') "Footer must separate normal operator status from active error presentation."
