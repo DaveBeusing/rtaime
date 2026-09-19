@@ -19,17 +19,6 @@
 	KeyboardNavigation.TabNavigation="Cycle"
 	KeyboardNavigation.ControlTabNavigation="Cycle"
 	WindowStartupLocation="CenterScreen">
-	<Window.InputBindings>
-		<KeyBinding Key="F5" Command="{Binding SynchronizeCommand}" />
-		<KeyBinding Key="P" Modifiers="Control" Command="{Binding SetPreviewCommand}" />
-		<KeyBinding Key="Space" Command="{Binding CutCommand}" />
-		<KeyBinding Key="Space" Modifiers="Control" Command="{Binding DissolveCommand}" />
-		<KeyBinding Key="F11" Command="{Binding Shell.ToggleFullscreenCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
-		<KeyBinding Key="Escape" Command="{Binding Shell.ExitFullscreenCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
-		<KeyBinding Key="D1" Modifiers="Control" Command="{Binding Shell.MaximizePreviewCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
-		<KeyBinding Key="D2" Modifiers="Control" Command="{Binding Shell.MaximizeProgramCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
-		<KeyBinding Key="D0" Modifiers="Control" Command="{Binding Shell.RestoreViewersCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
-	</Window.InputBindings>
 
 	<Grid Margin="{StaticResource OperatorWindowPadding}">
 		<Grid.RowDefinitions>
@@ -73,12 +62,23 @@
 					<Button Content="Open Demo Production" Command="{Binding DemoProduction.OpenCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorProgramButton}" MinHeight="28" Padding="8,3" Margin="0,0,6,0" ToolTip="Prepare the deterministic showcase state. Preview remains under operator TAKE control." AutomationProperties.Name="Open Demo Production" />
 					<Button x:Name="SynchronizeButton" Content="SYNC  F5" Command="{Binding SynchronizeCommand}" Style="{StaticResource OperatorAccentButton}" MinHeight="28" Padding="8,3" ToolTip="Synchronize authoritative ControlHost state (F5)." AutomationProperties.Name="Synchronize authoritative state" />
 				</StackPanel>
+				<StackPanel Grid.Column="5" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="14,0">
+					<Border Style="{StaticResource OperatorStatusBadge}" Margin="0,0,6,0">
+						<TextBlock Text="{Binding Shell.WorkspaceTitle, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" FontWeight="Bold" />
+					</Border>
+					<Button Content="LIVE" Command="{Binding Shell.SelectWorkspaceCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" CommandParameter="LIVE" Style="{StaticResource OperatorButton}" MinHeight="28" Padding="7,3" Margin="0,0,3,0" ToolTip="Live operation workspace" />
+					<Button Content="EDIT" Command="{Binding Shell.SelectWorkspaceCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" CommandParameter="EDIT" Style="{StaticResource OperatorButton}" MinHeight="28" Padding="7,3" Margin="0,0,3,0" ToolTip="Timeline-focused editing workspace" />
+					<Button Content="MEDIA" Command="{Binding Shell.SelectWorkspaceCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" CommandParameter="MEDIA" Style="{StaticResource OperatorButton}" MinHeight="28" Padding="7,3" Margin="0,0,3,0" ToolTip="Media preparation workspace" />
+					<Button Content="GRAPHICS" Command="{Binding Shell.SelectWorkspaceCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" CommandParameter="GRAPHICS" Style="{StaticResource OperatorButton}" MinHeight="28" Padding="7,3" Margin="0,0,3,0" ToolTip="Graphics composition workspace" />
+					<Button Content="SYSTEM" Command="{Binding Shell.SelectWorkspaceCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" CommandParameter="SYSTEM" Style="{StaticResource OperatorButton}" MinHeight="28" Padding="7,3" ToolTip="Operational status workspace" />
+				</StackPanel>
 				<StackPanel Grid.Column="6" Orientation="Horizontal" VerticalAlignment="Center">
 					<Button Content="TOOLS" Command="{Binding Shell.ToggleLeftPanelCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorButton}" MinHeight="28" Padding="8,3" Margin="0,0,5,0" />
 					<Button Content="INSPECTOR" Command="{Binding Shell.ToggleRightPanelCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorButton}" MinHeight="28" Padding="8,3" Margin="0,0,5,0" />
 					<Button Content="{Binding Shell.CenterModeLabel, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Command="{Binding Shell.ToggleCenterMaximizeCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorButton}" MinHeight="28" Padding="8,3" Margin="0,0,5,0" />
 					<Button Content="{Binding Shell.FullscreenLabel, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Command="{Binding Shell.ToggleFullscreenCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorButton}" MinHeight="28" Padding="8,3" Margin="0,0,5,0" />
-					<Button Content="LAYOUT RESET" Command="{Binding Shell.ResetLayoutCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorButton}" MinHeight="28" Padding="8,3" Margin="0,0,5,0" />
+					<Button Content="SAVE LAYOUT" Command="{Binding Shell.SaveLayoutCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorButton}" MinHeight="28" Padding="8,3" Margin="0,0,5,0" ToolTip="Save presentation layout for the active workspace." />
+					<Button Content="LAYOUT RESET" Command="{Binding Shell.ResetLayoutCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorButton}" MinHeight="28" Padding="8,3" Margin="0,0,5,0" ToolTip="Restore the canonical layout for the active workspace." />
 					<Button Content="HELP" Click="OnHelpClick" Style="{StaticResource OperatorButton}" MinHeight="28" Padding="8,3" />
 				</StackPanel>
 			</Grid>
@@ -93,7 +93,8 @@
 				<ColumnDefinition Width="{Binding Shell.RightColumnWidth, ElementName=RootWindow, Mode=TwoWay}" MinWidth="0" />
 			</Grid.ColumnDefinitions>
 
-			<Border x:Name="LeftToolRegion" Grid.Column="0" Style="{StaticResource OperatorShellRegion}" Margin="0,0,6,0">
+			<Border x:Name="LeftToolRegion" Grid.Column="0" Style="{StaticResource OperatorShellRegion}" Margin="0,0,6,0"
+				Visibility="{Binding Shell.LeftRegionVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
 				<Grid>
 					<Grid.RowDefinitions>
 						<RowDefinition Height="Auto" />
@@ -249,7 +250,69 @@
 				</Grid.ColumnDefinitions>
 
 				<StackPanel Grid.Column="0">
-					<Grid Margin="0,0,0,10">
+					<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,10"
+						Visibility="{Binding Shell.MultiviewVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
+						<StackPanel>
+							<DockPanel Margin="0,0,0,8">
+								<TextBlock Text="MULTIVIEW" Style="{StaticResource OperatorSectionTitle}" />
+								<StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+									<Button Content="CLEAN PROGRAM" Command="{Binding ProgramOutput.StartCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorProgramButton}" MinHeight="26" Padding="8,2" Margin="0,0,5,0" ToolTip="Open clean Program monitoring on the selected display. This does not change physical Program output." />
+									<Button Content="{Binding ProgramOutput.FullscreenAction, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Command="{Binding ProgramOutput.ToggleFullscreenCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorButton}" MinHeight="26" Padding="8,2" />
+								</StackPanel>
+							</DockPanel>
+							<local:OperatorMultiviewControl
+								PreviewImage="{Binding Monitoring.PreviewImage, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+								ProgramImage="{Binding Monitoring.ProgramImage, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+								PreviewState="{Binding Monitoring.PreviewState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+								ProgramState="{Binding Monitoring.ProgramState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+								Sources="{Binding Sources}" />
+						</StackPanel>
+					</Border>
+
+					<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,10"
+						Visibility="{Binding Shell.QuickControlsVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
+						<StackPanel>
+							<DockPanel Margin="0,0,0,8">
+								<TextBlock Text="QUICK CONTROLS" Style="{StaticResource OperatorSectionTitle}" />
+								<Button Content="CLEAR PINS" Command="{Binding QuickControls.ClearPinsCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorButton}" MinHeight="26" Padding="8,2" DockPanel.Dock="Right" />
+							</DockPanel>
+							<ItemsControl ItemsSource="{Binding QuickControls.Items, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
+								<ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+								<ItemsControl.ItemTemplate>
+									<DataTemplate>
+										<Border Width="218" MinHeight="88" Padding="8" Margin="0,0,7,7" BorderThickness="1" BorderBrush="{DynamicResource OperatorBorderBrush}">
+											<StackPanel>
+												<DockPanel>
+													<TextBlock Text="{Binding Label}" FontWeight="SemiBold" />
+													<Button Content="×" Command="{Binding RemoveCommand}" Style="{StaticResource OperatorButton}" MinWidth="25" MinHeight="22" Padding="3,0" DockPanel.Dock="Right" ToolTip="Remove Quick Control" />
+												</DockPanel>
+												<DockPanel Margin="0,5,0,6">
+													<TextBlock Text="{Binding State}" Style="{StaticResource OperatorLabel}" />
+													<TextBlock Text="{Binding Value}" Style="{StaticResource OperatorValue}" FontWeight="Bold" DockPanel.Dock="Right" />
+												</DockPanel>
+												<Grid>
+													<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="5" /><ColumnDefinition Width="*" /><ColumnDefinition Width="5" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+													<Button Grid.Column="0" Content="−" Command="{Binding DecreaseCommand}" Style="{StaticResource OperatorButton}">
+														<Button.Style><Style TargetType="Button" BasedOn="{StaticResource OperatorButton}"><Setter Property="Visibility" Value="Visible" /><Style.Triggers><DataTrigger Binding="{Binding HasDecrease}" Value="False"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger></Style.Triggers></Style></Button.Style>
+													</Button>
+													<Button Grid.Column="2" Content="{Binding ActionLabel}" Command="{Binding PrimaryCommand}" Style="{StaticResource OperatorAccentButton}">
+														<Button.Style><Style TargetType="Button" BasedOn="{StaticResource OperatorAccentButton}"><Setter Property="Visibility" Value="Visible" /><Style.Triggers><DataTrigger Binding="{Binding HasPrimary}" Value="False"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger></Style.Triggers></Style></Button.Style>
+													</Button>
+													<Button Grid.Column="4" Content="+" Command="{Binding IncreaseCommand}" Style="{StaticResource OperatorButton}">
+														<Button.Style><Style TargetType="Button" BasedOn="{StaticResource OperatorButton}"><Setter Property="Visibility" Value="Visible" /><Style.Triggers><DataTrigger Binding="{Binding HasIncrease}" Value="False"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger></Style.Triggers></Style></Button.Style>
+													</Button>
+												</Grid>
+											</StackPanel>
+										</Border>
+									</DataTemplate>
+								</ItemsControl.ItemTemplate>
+							</ItemsControl>
+							<TextBlock Text="{Binding QuickControls.Status, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+						</StackPanel>
+					</Border>
+
+					<Grid Margin="0,0,0,10"
+						Visibility="{Binding Shell.StandardViewerVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
 						<Grid.ColumnDefinitions>
 							<ColumnDefinition Width="{Binding Shell.PreviewViewerWidth, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
 							<ColumnDefinition Width="{Binding Shell.ViewerGapWidth, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
@@ -287,7 +350,8 @@
 							MaximizeCommand="{Binding Shell.MaximizeProgramCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
 					</Grid>
 
-					<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14">
+					<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14"
+						Visibility="{Binding Shell.ProductionControlsVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
 						<StackPanel>
 							<DockPanel Margin="0,0,0,10">
 								<StackPanel Orientation="Horizontal">
@@ -332,8 +396,8 @@
 									<ColumnDefinition Width="*" />
 								</Grid.ColumnDefinitions>
 								<Button Grid.Column="0" Content="SET SELECTED → PREVIEW&#x0a;Ctrl+P" Command="{Binding SetPreviewCommand}" Style="{StaticResource OperatorAccentButton}" ToolTip="Route the selected source to confirmed Preview (Ctrl+P)." AutomationProperties.Name="Set selected source to Preview" />
-								<Button Grid.Column="2" Content="CUT PREVIEW → PROGRAM&#x0a;Space" Command="{Binding CutCommand}" Style="{StaticResource OperatorProgramButton}" ToolTip="CUT the confirmed Preview source to Program (Space)." AutomationProperties.Name="Cut Preview to Program" />
-								<Button Grid.Column="4" Content="AUTO PREVIEW → PROGRAM&#x0a;Ctrl+Space" Command="{Binding DissolveCommand}" Style="{StaticResource OperatorButton}" ToolTip="Dissolve the confirmed Preview source to Program (Ctrl+Space)." AutomationProperties.Name="Dissolve Preview to Program" />
+								<Button Grid.Column="2" Content="CUT PREVIEW → PROGRAM&#x0a;Ctrl+Enter" Command="{Binding CutCommand}" Style="{StaticResource OperatorProgramButton}" ToolTip="CUT the confirmed Preview source to Program (Ctrl+Enter)." AutomationProperties.Name="Cut Preview to Program" />
+								<Button Grid.Column="4" Content="AUTO PREVIEW → PROGRAM&#x0a;Enter" Command="{Binding DissolveCommand}" Style="{StaticResource OperatorButton}" ToolTip="Dissolve the confirmed Preview source to Program (Enter)." AutomationProperties.Name="Dissolve Preview to Program" />
 							</Grid>
 
 							<Grid Margin="0,0,0,10">
@@ -348,6 +412,24 @@
 									<TextBlock Text="CUT / DISSOLVE" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" />
 								</StackPanel>
 								<StackPanel Grid.Column="2">
+					<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14"
+						Visibility="{Binding Shell.SystemWorkspaceVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
+						<StackPanel>
+							<DockPanel Margin="0,0,0,10">
+								<TextBlock Text="SYSTEM WORKSPACE" Style="{StaticResource OperatorSectionTitle}" />
+								<Border Style="{StaticResource OperatorLifecycleBadge}" Tag="{Binding EngineLifecycleState}" DockPanel.Dock="Right"><TextBlock Text="{Binding EngineLifecycleState}" FontWeight="Bold" /></Border>
+							</DockPanel>
+							<DockPanel Margin="0,0,0,6"><TextBlock Text="Engine" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding EngineHealth}" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" DockPanel.Dock="Right" /></DockPanel>
+							<DockPanel Margin="0,0,0,6"><TextBlock Text="Control" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding ControlHealth}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
+							<DockPanel Margin="0,0,0,6"><TextBlock Text="Runtime" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding RuntimeHealth}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
+							<DockPanel Margin="0,0,0,6"><TextBlock Text="AI" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding AIStatus}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
+							<DockPanel Margin="0,0,0,6"><TextBlock Text="Media" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding MediaHealth}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
+							<DockPanel Margin="0,0,0,6"><TextBlock Text="GPU" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding GpuProviderHealth}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
+							<DockPanel Margin="0,0,0,6"><TextBlock Text="Recording" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding RecordingStatus}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
+							<DockPanel Margin="0,0,0,6"><TextBlock Text="Outputs" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding ProgramOutput.RunState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
+							<DockPanel><TextBlock Text="Diagnostics" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding Monitoring.State, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
+						</StackPanel>
+					</Border>
 									<TextBlock Text="DISSOLVE DURATION" Style="{StaticResource OperatorLabel}" />
 									<StackPanel Orientation="Horizontal">
 										<TextBox Text="{Binding TransitionFrames, UpdateSourceTrigger=PropertyChanged}" Width="72" Style="{StaticResource OperatorTextBox}" />
@@ -393,9 +475,11 @@
 						</StackPanel>
 					</Border>
 
-					<local:MediaDeckControl DataContext="{Binding MediaDeck, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Margin="0,0,0,14" />
+					<local:MediaDeckControl DataContext="{Binding MediaDeck, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Margin="0,0,0,14"
+						Visibility="{Binding Shell.MediaDeckVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
 
-					<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14">
+					<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14"
+						Visibility="{Binding Shell.SourceBinVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
 						<StackPanel>
 							<DockPanel Margin="0,0,0,12">
 								<TextBlock Text="SOURCE BIN" Style="{StaticResource OperatorSectionTitle}" />
@@ -509,7 +593,8 @@
 				</StackPanel>
 
 				<StackPanel Grid.Column="2">
-					<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14">
+					<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14"
+						Visibility="{Binding Shell.SystemStatusVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
 						<StackPanel>
 							<DockPanel Margin="0,0,0,12">
 								<TextBlock Text="SYSTEM STATUS" Style="{StaticResource OperatorSectionTitle}" />
@@ -551,14 +636,15 @@
 						</StackPanel>
 					</Border>
 
-					<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14">
+					<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14"
+						Visibility="{Binding Shell.MonitoringVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
 						<StackPanel>
 							<TextBlock Text="MONITORING" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,12" />
 							<DockPanel Margin="0,0,0,8"><TextBlock Text="Plane" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding Monitoring.State, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" DockPanel.Dock="Right" /></DockPanel>
 							<TextBlock Text="{Binding Monitoring.Detail, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
 							<Border Height="1" Background="{DynamicResource OperatorBorderBrush}" Margin="0,14,0,14" />
 							<DockPanel Margin="0,0,0,10">
-								<TextBlock Text="PROGRAM OUTPUT / CLEAN FEED" Style="{StaticResource OperatorSectionTitle}" />
+								<TextBlock Text="CLEAN PROGRAM MONITOR" Style="{StaticResource OperatorSectionTitle}" />
 								<Border Style="{StaticResource OperatorStatusBadge}" DockPanel.Dock="Right">
 									<TextBlock Text="{Binding ProgramOutput.Health, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" FontWeight="Bold" />
 								</Border>
@@ -578,7 +664,7 @@
 									<ColumnDefinition Width="6" />
 									<ColumnDefinition Width="*" />
 								</Grid.ColumnDefinitions>
-								<Button Grid.Column="0" Content="START OUTPUT" Command="{Binding ProgramOutput.StartCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorProgramButton}" ToolTip="Open the clean Program feed on the selected display." />
+								<Button Grid.Column="0" Content="START OUTPUT" Command="{Binding ProgramOutput.StartCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorProgramButton}" ToolTip="Open clean Program monitoring on the selected display without changing physical Program output." />
 								<Button Grid.Column="2" Content="STOP OUTPUT" Command="{Binding ProgramOutput.StopCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorButton}" ToolTip="Close the clean Program feed." />
 								<Button Grid.Column="4" Content="{Binding ProgramOutput.FullscreenAction, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Command="{Binding ProgramOutput.ToggleFullscreenCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorAccentButton}" ToolTip="Toggle the clean feed between fullscreen and windowed presentation." />
 							</Grid>
@@ -591,10 +677,12 @@
 								<TextBlock Text="{Binding ProgramOutput.Mode, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" />
 							</DockPanel>
 							<TextBlock Text="{Binding ProgramOutput.Detail, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+							<TextBlock Text="Clean Program is a monitoring presentation of the existing Runtime-derived Program image; it is not the physical Program output path." Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,6,0,0" />
 						</StackPanel>
 					</Border>
 
-					<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14">
+					<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14"
+						Visibility="{Binding Shell.GraphicsVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
 						<StackPanel>
 							<DockPanel Margin="0,0,0,12">
 								<TextBlock Text="GRAPHICS / OVERLAY" Style="{StaticResource OperatorSectionTitle}" />
@@ -648,7 +736,8 @@
 						</StackPanel>
 					</Border>
 
-					<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14">
+					<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14"
+						Visibility="{Binding Shell.AudioVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
 						<StackPanel>
 							<DockPanel Margin="0,0,0,12">
 								<TextBlock Text="AUDIO / AFV" Style="{StaticResource OperatorSectionTitle}" />
@@ -758,7 +847,8 @@
 						</StackPanel>
 					</Border>
 
-					<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14">
+					<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14"
+						Visibility="{Binding Shell.AIVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
 						<StackPanel>
 							<DockPanel Margin="0,0,0,12">
 								<TextBlock Text="AI / PERSON SEGMENTATION" Style="{StaticResource OperatorSectionTitle}" />
@@ -783,7 +873,8 @@
 						</StackPanel>
 					</Border>
 
-					<Border Style="{StaticResource OperatorPanel}">
+					<Border Style="{StaticResource OperatorPanel}"
+						Visibility="{Binding Shell.OperatorStateVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
 						<StackPanel>
 							<TextBlock Text="OPERATOR STATE" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,12" />
 							<DockPanel Margin="0,0,0,8"><TextBlock Text="Command" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding CommandStatus}" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" DockPanel.Dock="Right" /></DockPanel>
@@ -849,14 +940,21 @@
 													</StackPanel>
 													<StackPanel Grid.Column="1" HorizontalAlignment="Right">
 														<TextBlock Text="{Binding State}" Style="{StaticResource OperatorLabel}" HorizontalAlignment="Right" />
-														<TextBlock Text="PIN" HorizontalAlignment="Right" ToolTip="{Binding PropertyId}">
-															<TextBlock.Style>
-																<Style TargetType="{x:Type TextBlock}" BasedOn="{StaticResource OperatorLabel}">
+														<Button Content="PIN"
+															Command="{Binding QuickControls.TogglePinCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+															CommandParameter="{Binding}"
+															Style="{StaticResource OperatorButton}"
+															HorizontalAlignment="Right"
+															MinHeight="22"
+															Padding="5,1"
+															ToolTip="{Binding PropertyId}">
+															<Button.Style>
+																<Style TargetType="{x:Type Button}" BasedOn="{StaticResource OperatorButton}">
 																	<Setter Property="Visibility" Value="Collapsed" />
 																	<Style.Triggers><DataTrigger Binding="{Binding IsPinnable}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
 																</Style>
-															</TextBlock.Style>
-														</TextBlock>
+															</Button.Style>
+														</Button>
 													</StackPanel>
 												</Grid>
 											</Border>
@@ -966,7 +1064,8 @@
 		</Grid>
 
 		<GridSplitter Grid.Row="2" Height="{Binding Shell.LowerSplitterHeight, ElementName=RootWindow}" VerticalAlignment="Stretch" Background="{DynamicResource OperatorBorderBrush}" ResizeDirection="Rows" ResizeBehavior="PreviousAndNext" DragCompleted="OnLayoutSplitterDragCompleted" />
-		<Border x:Name="LowerTimelineRegion" Grid.Row="3" Style="{StaticResource OperatorShellRegion}" Margin="0,6,0,6" ClipToBounds="True">
+		<Border x:Name="LowerTimelineRegion" Grid.Row="3" Style="{StaticResource OperatorShellRegion}" Margin="0,6,0,6" ClipToBounds="True"
+			Visibility="{Binding Shell.TimelineRegionVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
 			<Grid>
 				<Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
 				<DockPanel Margin="0,0,0,8">
@@ -992,8 +1091,8 @@
 					<ColumnDefinition Width="Auto" />
 				</Grid.ColumnDefinitions>
 				<StackPanel Grid.Column="0" Orientation="Horizontal">
-					<Button Content="PLAY / PAUSE  P" Command="{Binding MediaDeck.TogglePlayPauseCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorAccentButton}" MinHeight="28" Padding="10,3" Margin="0,0,6,0" />
-					<Button Content="STOP  S" Command="{Binding MediaDeck.StopCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorButton}" MinHeight="28" Padding="10,3" />
+					<Button Content="PLAY / PAUSE  Space" Command="{Binding MediaDeck.TogglePlayPauseCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorAccentButton}" MinHeight="28" Padding="10,3" Margin="0,0,6,0" />
+					<Button Content="STOP  K / S" Command="{Binding MediaDeck.StopCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorButton}" MinHeight="28" Padding="10,3" />
 				</StackPanel>
 				<StackPanel Grid.Column="1" Orientation="Horizontal" Margin="14,0,0,0" VerticalAlignment="Center">
 					<TextBlock Text="{Binding MediaDeck.Current, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorTimecode}" FontSize="16" FontWeight="Bold" />
