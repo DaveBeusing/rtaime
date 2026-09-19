@@ -13,7 +13,7 @@ Change classification: `REALTIME_CRITICAL` for decoded-frame admission into the 
 
 ## V1 import contract
 
-The reference local-file provider accepts MP4 files with H.264/AVC video. Embedded AAC audio is supported but no longer required. Video-only MP4 files and H.264 MP4 files whose embedded audio is not AAC remain playable as video; the unsupported audio track is not selected and the Operator reports `NO AUDIO`. Native file resolution, frame rate and supported audio sample rate no longer need to match the active production format exactly.
+The reference local-file provider accepts MP4 video through the Windows Media Foundation source/decoder path. The admitted codec set is H.264/AVC, HEVC/H.265, AV1, VP9, MPEG-4 Part 2, VC-1 and Motion JPEG. Embedded AAC, MP3 and PCM audio are normalized when present. Files without a supported audio stream remain playable as video and the Operator reports `NO AUDIO`. Native file resolution, frame rate and supported audio sample rate do not need to match the active production format exactly.
 
 On Windows, the Media Foundation Source Reader uses advanced video processing to normalize decoded video to the RuntimeHost production format:
 
@@ -22,25 +22,26 @@ On Windows, the Media Foundation Source Reader uses advanced video processing to
 
 Decoded video is converted to the existing RGBA8 Runtime representation. When an AAC track is present, it is requested as 48 kHz stereo PCM and then converted to the existing interleaved Float32 representation. When no supported AAC track is available, decoded frames carry no audio buffer or audio payload.
 
-This normalization keeps the existing Runtime/GPU production format invariant intact while allowing ordinary H.264/AAC MP4 files with different native dimensions or frame rates to be imported. If Windows Media Foundation cannot perform the requested conversion, or if the container/codecs are unsupported, the file fails closed with an explicit `Failure` value.
+This normalization keeps the existing Runtime/GPU production format invariant intact while allowing ordinary MP4 files with different native dimensions, frame rates and supported codecs to be imported. Decoder availability is determined by the Windows Media Foundation installation on the host. If Media Foundation cannot decode or normalize the selected stream, the file fails closed with an explicit `Failure` value.
 
-### Expanded H.264 input envelope
+### Expanded MP4 input envelope
 
-The import path accepts a broad native H.264 input envelope before normalizing to the active RuntimeHost production format:
+The import path accepts a broad native MP4 input envelope before normalizing to the active RuntimeHost production format:
 
 | Input property | Supported import envelope |
 | --- | --- |
 | Container | MP4 |
-| H.264 sample entry | `avc1` or `avc3` |
-| H.264 decoder profile/level | Windows Media Foundation Baseline/Main/High, up to Level 5.1 |
+| Video codecs | H.264/AVC, HEVC/H.265, AV1, VP9, MPEG-4 Part 2, VC-1, Motion JPEG |
+| Common sample entries | `avc1`, `avc3`, `hvc1`, `hev1`, `av01`, `vp09`, `mp4v`, `vc-1`, `jpeg` |
 | Resolution | 48×48 through 4096×2304 |
-| Native frame rate | up to 240 fps, additionally bounded by the Level 5.1 decode-rate envelope |
+| Native frame rate | up to 240 fps |
 | Average video bitrate | up to 300 Mbit/s when Media Foundation reports `MF_MT_AVG_BITRATE` |
+| H.264 decode-rate guard | Level 5.1 macroblock envelope remains enforced for H.264 |
 | Runtime output | normalized to 1920×1080p50 or 1920×1080p59.94 |
-| Audio | AAC when present; absent or non-AAC audio falls back to video-only playback |
+| Audio | AAC, MP3 or PCM when decodable; absent/unsupported audio falls back to video-only playback |
 | Pixel/audio runtime representation | RGBA8 video, optional 48 kHz stereo Float32 audio |
 
-The decode-rate guard uses a maximum of 983,040 H.264 macroblocks per second. This intentionally permits common profiles such as 4K24/25/30, 1440p60, 1080p100/120 and 720p200/240 while rejecting combinations such as 4K60 that exceed the V1 H.264 Level 5.1 envelope.
+The decode-rate guard uses a maximum of 983,040 H.264 macroblocks per second and applies only to H.264. It intentionally permits common H.264 profiles such as 4K24/25/30, 1440p60, 1080p100/120 and 720p200/240 while rejecting H.264 combinations such as 4K60. Other admitted codecs use the general resolution, frame-rate and bitrate envelope and still depend on an installed Media Foundation decoder.
 
 Variable-frame-rate MP4 files are admitted from their MP4 timing metadata and are normalized by Media Foundation frame-rate conversion to the fixed RuntimeHost production cadence. Bitrate is not used to alter production timing; it is an input decode-admission property only.
 
@@ -79,7 +80,9 @@ Video and decoded audio use the Media Foundation 100-nanosecond timebase (`1/100
 Coverage includes:
 
 - contract metadata validation, including video-only probes;
-- MP4/H.264/AAC probing;
+- MP4/H.264/AAC reference probing;
+- contract and policy coverage for HEVC, AV1, VP9, MPEG-4 Part 2, VC-1 and Motion JPEG;
+- contract coverage for AAC, MP3 and PCM audio;
 - V1 video/audio metadata;
 - missing-file rejection;
 - unsupported-container rejection;
