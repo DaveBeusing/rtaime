@@ -446,7 +446,7 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 		get => new(IsCenterMaximized || IsLeftCollapsed || !HasLeftRegion || IsCompactViewport ? 0 : LeftPanelWidth);
 		set
 		{
-			if (!IsCenterMaximized && !IsLeftCollapsed && HasLeftRegion && value.IsAbsolute && value.Value > 0)
+			if (!IsCompactViewport && !IsCenterMaximized && !IsLeftCollapsed && HasLeftRegion && value.IsAbsolute && value.Value > 0)
 				LeftPanelWidth = value.Value;
 		}
 	}
@@ -456,7 +456,7 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 		get => new(IsCenterMaximized || IsRightCollapsed || IsCompactViewport ? 0 : RightPanelWidth);
 		set
 		{
-			if (!IsCenterMaximized && !IsRightCollapsed && value.IsAbsolute && value.Value > 0)
+			if (!IsCompactViewport && !IsCenterMaximized && !IsRightCollapsed && value.IsAbsolute && value.Value > 0)
 				RightPanelWidth = value.Value;
 		}
 	}
@@ -466,12 +466,12 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 		get => new(IsCenterMaximized || !HasTimelineRegion ? 0 : IsCompactViewport ? Math.Min(LowerPanelHeight, OperatorLayoutSettings.CompactLowerPanelHeight) : LowerPanelHeight);
 		set
 		{
-			if (!IsCenterMaximized && HasTimelineRegion && value.IsAbsolute && value.Value > 0)
+			if (!IsCompactViewport && !IsCenterMaximized && HasTimelineRegion && value.IsAbsolute && value.Value > 0)
 				LowerPanelHeight = value.Value;
 		}
 	}
 
-	public double LeftSplitterWidth => IsCenterMaximized || IsLeftCollapsed || !HasLeftRegion ? 0 : 5;
+	public double LeftSplitterWidth => IsCenterMaximized || IsLeftCollapsed || !HasLeftRegion || IsCompactViewport ? 0 : 5;
 	public double RightSplitterWidth => IsCenterMaximized || IsRightCollapsed || IsCompactViewport ? 0 : 5;
 	public double LowerSplitterHeight => IsCenterMaximized || !HasTimelineRegion || IsCompactViewport ? 0 : 5;
 
