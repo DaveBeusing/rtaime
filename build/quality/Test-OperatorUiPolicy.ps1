@@ -47,6 +47,8 @@ $viewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorVi
 $monitorViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorMonitoringViewModel.cs"
 $programOutputControllerPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/ProgramOutputController.cs"
 $programOutputWindowPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/ProgramOutputWindow.xaml"
+$outputHealthControlPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OutputRoutingHealthControl.xaml"
+$outputHealthViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OutputRoutingHealthViewModel.cs"
 $previewViewerPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/PreviewViewer.xaml"
 $previewViewerCodePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/PreviewViewer.xaml.cs"
 $programViewerPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/ProgramViewer.xaml"
@@ -66,9 +68,10 @@ $manifestPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/app.manifes
 $projectPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/rtaime.Operator.csproj"
 $documentationPath = Join-Path $repositoryRoot "docs/OperatorUiV1.md"
 $workspaceDocumentationPath = Join-Path $repositoryRoot "docs/OperatorWorkspaces.md"
+$outputHealthDocumentationPath = Join-Path $repositoryRoot "docs/OutputRoutingHealth.md"
 $mediaLibraryDocumentationPath = Join-Path $repositoryRoot "docs/MediaLibraryAssetBrowser.md"
 
-foreach ($path in @($appPath, $appCodePath, $windowPath, $windowCodePath, $shellPath, $keyboardPath, $quickControlsPath, $multiviewPath, $multiviewCodePath, $liveSceneCuePath, $liveControlsPath, $liveDocumentationPath, $compositingGraphPath, $compositingGraphCodePath, $compositingGraphViewModelPath, $compositingGraphProjectionPath, $compositingGraphDocumentationPath, $mediaPoolPath, $inspectorHostPath, $virtualizingWrapPanelPath, $deckPath, $deckViewModelPath, $timelinePath, $timelineCodePath, $timelineViewModelPath, $markerControllerPath, $timelineDocumentationPath, $viewModelPath, $monitorViewModelPath, $programOutputControllerPath, $programOutputWindowPath, $previewViewerPath, $previewViewerCodePath, $programViewerPath, $programViewerCodePath, $monitorViewPath, $sourceTileViewModelPath, $audioInputViewModelPath, $graphicsLoaderPath, $demoControllerPath, $demoManifestPath, $demoProductPath, $demoGraphicsPath, $demoDocumentationPath, $tokensPath, $themePath, $manifestPath, $projectPath, $documentationPath, $workspaceDocumentationPath, $mediaLibraryDocumentationPath)) {
+foreach ($path in @($appPath, $appCodePath, $windowPath, $windowCodePath, $shellPath, $keyboardPath, $quickControlsPath, $multiviewPath, $multiviewCodePath, $liveSceneCuePath, $liveControlsPath, $liveDocumentationPath, $compositingGraphPath, $compositingGraphCodePath, $compositingGraphViewModelPath, $compositingGraphProjectionPath, $compositingGraphDocumentationPath, $mediaPoolPath, $inspectorHostPath, $virtualizingWrapPanelPath, $deckPath, $deckViewModelPath, $timelinePath, $timelineCodePath, $timelineViewModelPath, $markerControllerPath, $timelineDocumentationPath, $viewModelPath, $monitorViewModelPath, $programOutputControllerPath, $programOutputWindowPath, $outputHealthControlPath, $outputHealthViewModelPath, $previewViewerPath, $previewViewerCodePath, $programViewerPath, $programViewerCodePath, $monitorViewPath, $sourceTileViewModelPath, $audioInputViewModelPath, $graphicsLoaderPath, $demoControllerPath, $demoManifestPath, $demoProductPath, $demoGraphicsPath, $demoDocumentationPath, $tokensPath, $themePath, $manifestPath, $projectPath, $documentationPath, $workspaceDocumentationPath, $outputHealthDocumentationPath, $mediaLibraryDocumentationPath)) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required Operator UI artifact is missing: '$path'."
 }
 
@@ -76,6 +79,9 @@ $app = Get-Content -LiteralPath $appPath -Raw
 $appCode = Get-Content -LiteralPath $appCodePath -Raw
 $window = Get-Content -LiteralPath $windowPath -Raw
 $windowCode = Get-Content -LiteralPath $windowCodePath -Raw
+$outputHealthControl = Get-Content -LiteralPath $outputHealthControlPath -Raw
+$outputHealthViewModel = Get-Content -LiteralPath $outputHealthViewModelPath -Raw
+$outputHealthDocumentation = Get-Content -LiteralPath $outputHealthDocumentationPath -Raw
 $shell = Get-Content -LiteralPath $shellPath -Raw
 $keyboard = Get-Content -LiteralPath $keyboardPath -Raw
 $quickControls = Get-Content -LiteralPath $quickControlsPath -Raw
@@ -517,6 +523,22 @@ Assert-Condition ($shell -match 'CaptureCurrentWorkspace\(\)' -and $shell -match
 Assert-Condition ($shell -notmatch 'OperatorControlClient|NamedPipe|RuntimeHost|ControlHost|AIHost') "Workspace switching must remain presentation-only."
 Assert-Condition ($window -match 'Header="Save Layout"' -and $window -match 'Shell\.SaveLayoutCommand' -and $window -match 'Header="Reset Layout"') "Operator must expose Save Layout and Reset Layout actions."
 Assert-Condition ($window -match 'Shell\.ProductionControlsVisibility' -and $window -match 'Shell\.MediaDeckVisibility' -and $window -match 'Shell\.GraphicsVisibility' -and $window -match 'Shell\.SystemWorkspaceVisibility') "Workspaces must configure presentation without duplicating product state."
+
+# Output routing, health and performance.
+Assert-Condition ($shell -match 'OutputRoutingVisibility => IsOutputsWorkspace' -and $shell -match 'SystemStatusVisibility => IsSettingsWorkspace') "OUTPUTS must own its dedicated output-health presentation while generic diagnostics remain in SETTINGS."
+Assert-Condition ($window -match '<local:OutputRoutingHealthControl' -and $window -match 'DataContext="\{Binding OutputHealth') "OUTPUTS must render the dedicated output-routing health control through the existing Operator shell."
+Assert-Condition ($windowCode -match 'OutputRoutingHealthViewModel' -and $windowCode -match 'OutputHealth\.Dispose\(\)') "The Operator window must own and dispose the output-health presentation lifecycle."
+Assert-Condition ($outputHealthControl -match 'Text="OUTPUT ROUTING"' -and $outputHealthControl -match 'Text="SELECTED OUTPUT"' -and $outputHealthControl -match 'Text="PERFORMANCE"') "Output health must expose routing, output detail and performance surfaces."
+Assert-Condition ($outputHealthControl -match 'ItemsSource="\{Binding Outputs\}"' -and $outputHealthControl -match 'ItemsSource="\{Binding Metrics\}"' -and $outputHealthControl -match 'Binding SelectedOutput') "Output health must bind the output list, selected detail and metrics projection."
+Assert-Condition ($outputHealthViewModel -match 'RoutePreviewToProgramCommand => _control\.CutCommand') "Output routing must reuse the existing authoritative Preview-to-Program CUT command."
+Assert-Condition ($outputHealthViewModel -match 'SAFE READ-ONLY' -and $outputHealthViewModel -match 'UNAVAILABLE') "Output health must fail closed for routing and represent missing telemetry explicitly."
+Assert-Condition ($outputHealthViewModel -match 'HistoryLimit = 48' -and $outputHealthViewModel -match 'HealthObserved') "Performance histories must be bounded and sample the existing health observation stream."
+Assert-Condition ($outputHealthViewModel -notmatch 'PeriodicTimer|Task\.Delay|PerformanceCounter|ManagementObjectSearcher|nvidia-smi|NVML') "Output health must not add telemetry polling or local hardware probes."
+Assert-Condition ($outputHealthViewModel -notmatch 'RuntimeHost|ControlHost') "Output health must remain a presentation adapter and must not depend directly on host implementations."
+foreach ($metric in @("CPU", "GPU", "MEMORY", "VRAM", "RENDER TIME", "DROPPED FRAMES", "OUTPUT FPS", "DISK", "NETWORK")) {
+	Assert-Condition ($outputHealthViewModel -match [Regex]::Escape($metric)) "Output health metric '$metric' is required."
+}
+Assert-Condition ($outputHealthDocumentation -match 'existing .*CutCommand|existing `OperatorViewModel\.CutCommand`' -and $outputHealthDocumentation -match 'UNAVAILABLE' -and $outputHealthDocumentation -match 'maximum of 48 samples') "Output health documentation must describe authoritative routing, unavailable telemetry and bounded history."
 
 # Compositing node graph.
 Assert-Condition ($shell -match 'CompositingGraphVisibility' -and $shell -match 'StandardViewerVisibility => IsLiveWorkspace \|\| IsCompositingWorkspace') "COMPOSITING must host the dedicated graph instead of duplicating the standard monitor surface."
