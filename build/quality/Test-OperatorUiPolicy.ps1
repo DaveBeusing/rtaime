@@ -65,7 +65,9 @@ $demoDocumentationPath = Join-Path $repositoryRoot "docs/DemoProductionPackage.m
 $tokensPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Themes/OperatorTokens.xaml"
 $themePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Themes/OperatorTheme.xaml"
 $customControlsPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Controls/RtaimeControls.cs"
+$customInputControlsPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Controls/RtaimeInputControls.cs"
 $customControlThemePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Themes/Controls/RtaimeControls.xaml"
+$customInputThemePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Themes/Controls/RtaimeInputsAndScrolling.xaml"
 $customIconThemePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Themes/Controls/RtaimeIcons.xaml"
 $manifestPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/app.manifest"
 $projectPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/rtaime.Operator.csproj"
@@ -74,7 +76,7 @@ $workspaceDocumentationPath = Join-Path $repositoryRoot "docs/OperatorWorkspaces
 $outputHealthDocumentationPath = Join-Path $repositoryRoot "docs/OutputRoutingHealth.md"
 $mediaLibraryDocumentationPath = Join-Path $repositoryRoot "docs/MediaLibraryAssetBrowser.md"
 
-foreach ($path in @($appPath, $appCodePath, $windowPath, $windowCodePath, $shellPath, $keyboardPath, $quickControlsPath, $multiviewPath, $multiviewCodePath, $liveSceneCuePath, $liveControlsPath, $liveDocumentationPath, $compositingGraphPath, $compositingGraphCodePath, $compositingGraphViewModelPath, $compositingGraphProjectionPath, $compositingGraphDocumentationPath, $mediaPoolPath, $inspectorHostPath, $virtualizingWrapPanelPath, $deckPath, $deckViewModelPath, $timelinePath, $timelineCodePath, $timelineViewModelPath, $markerControllerPath, $timelineDocumentationPath, $viewModelPath, $monitorViewModelPath, $programOutputControllerPath, $programOutputWindowPath, $outputHealthControlPath, $outputHealthViewModelPath, $previewViewerPath, $previewViewerCodePath, $programViewerPath, $programViewerCodePath, $monitorViewPath, $sourceTileViewModelPath, $audioInputViewModelPath, $graphicsLoaderPath, $demoControllerPath, $demoManifestPath, $demoProductPath, $demoGraphicsPath, $demoDocumentationPath, $tokensPath, $themePath, $customControlsPath, $customControlThemePath, $customIconThemePath, $manifestPath, $projectPath, $documentationPath, $workspaceDocumentationPath, $outputHealthDocumentationPath, $mediaLibraryDocumentationPath)) {
+foreach ($path in @($appPath, $appCodePath, $windowPath, $windowCodePath, $shellPath, $keyboardPath, $quickControlsPath, $multiviewPath, $multiviewCodePath, $liveSceneCuePath, $liveControlsPath, $liveDocumentationPath, $compositingGraphPath, $compositingGraphCodePath, $compositingGraphViewModelPath, $compositingGraphProjectionPath, $compositingGraphDocumentationPath, $mediaPoolPath, $inspectorHostPath, $virtualizingWrapPanelPath, $deckPath, $deckViewModelPath, $timelinePath, $timelineCodePath, $timelineViewModelPath, $markerControllerPath, $timelineDocumentationPath, $viewModelPath, $monitorViewModelPath, $programOutputControllerPath, $programOutputWindowPath, $outputHealthControlPath, $outputHealthViewModelPath, $previewViewerPath, $previewViewerCodePath, $programViewerPath, $programViewerCodePath, $monitorViewPath, $sourceTileViewModelPath, $audioInputViewModelPath, $graphicsLoaderPath, $demoControllerPath, $demoManifestPath, $demoProductPath, $demoGraphicsPath, $demoDocumentationPath, $tokensPath, $themePath, $customControlsPath, $customInputControlsPath, $customControlThemePath, $customInputThemePath, $customIconThemePath, $manifestPath, $projectPath, $documentationPath, $workspaceDocumentationPath, $outputHealthDocumentationPath, $mediaLibraryDocumentationPath)) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required Operator UI artifact is missing: '$path'."
 }
 
@@ -101,6 +103,7 @@ $compositingGraphDocumentation = Get-Content -LiteralPath $compositingGraphDocum
 $mediaPool = Get-Content -LiteralPath $mediaPoolPath -Raw
 $inspectorHost = Get-Content -LiteralPath $inspectorHostPath -Raw
 $inspectorSurface = "$window`n$inspectorHost"
+$inputSurface = "$window`n$inspectorHost`n$deck`n$timeline`n$liveControls`n$liveSceneCue`n$multiview`n$outputHealthControl"
 $virtualizingWrapPanel = Get-Content -LiteralPath $virtualizingWrapPanelPath -Raw
 $deck = Get-Content -LiteralPath $deckPath -Raw
 $deckViewModel = Get-Content -LiteralPath $deckViewModelPath -Raw
@@ -127,7 +130,9 @@ $demoDocumentation = Get-Content -LiteralPath $demoDocumentationPath -Raw
 $tokens = Get-Content -LiteralPath $tokensPath -Raw
 $theme = Get-Content -LiteralPath $themePath -Raw
 $customControls = Get-Content -LiteralPath $customControlsPath -Raw
+$customInputControls = Get-Content -LiteralPath $customInputControlsPath -Raw
 $customControlTheme = Get-Content -LiteralPath $customControlThemePath -Raw
+$customInputTheme = Get-Content -LiteralPath $customInputThemePath -Raw
 $customIconTheme = Get-Content -LiteralPath $customIconThemePath -Raw
 $manifest = Get-Content -LiteralPath $manifestPath -Raw
 $project = Get-Content -LiteralPath $projectPath -Raw
@@ -140,6 +145,7 @@ $operatorXaml = (Get-ChildItem -LiteralPath (Join-Path $repositoryRoot "src/Host
 Assert-Condition ($app -match 'Source="Themes/OperatorTheme\.xaml"') "Operator must load the reusable theme resource dictionary."
 Assert-Condition ($app -match 'Source="Themes/Controls/RtaimeIcons\.xaml"') "Operator must load the custom icon geometry dictionary."
 Assert-Condition ($app -match 'Source="Themes/Controls/RtaimeControls\.xaml"') "Operator must load the custom control chrome dictionary."
+Assert-Condition ($app -match 'Source="Themes/Controls/RtaimeInputsAndScrolling\.xaml"') "Operator must load the custom input and scrolling dictionary."
 $iconThemeIndex = $app.IndexOf('Source="Themes/Controls/RtaimeIcons.xaml"', [StringComparison]::Ordinal)
 $controlThemeIndex = $app.IndexOf('Source="Themes/Controls/RtaimeControls.xaml"', [StringComparison]::Ordinal)
 Assert-Condition ($iconThemeIndex -ge 0 -and $controlThemeIndex -gt $iconThemeIndex) "Custom icon resources must load before custom control templates."
@@ -170,6 +176,23 @@ foreach ($iconName in @("Play", "Pause", "Stop", "Previous", "Next", "Media", "L
 	Assert-Condition ($customIconTheme -match ('x:Key="RtaimeIcon' + $iconName + 'Geometry"')) "Custom icon geometry '$iconName' must exist."
 }
 Assert-Condition ($customIconTheme -notmatch '[\uD800-\uDFFF]') "Custom icon resources must use geometry rather than emoji glyphs."
+
+foreach ($controlName in @("RtaimeTextBox", "RtaimeComboBoxItem", "RtaimeComboBox", "RtaimeCheckBox", "RtaimeRadioButton", "RtaimeSlider", "RtaimeScrollBar", "RtaimeScrollViewer", "RtaimeSplitter", "RtaimeListBoxItem", "RtaimeListBox", "RtaimeTabItem", "RtaimeTabControl")) {
+	Assert-Condition ($customInputControls -match ("class " + $controlName + "\b")) "Custom Operator input control '$controlName' must exist."
+	Assert-Condition ($customInputControls -match ("OverrideMetadata\(typeof\(" + $controlName + "\)")) "Custom Operator input control '$controlName' must own its default style key."
+	Assert-Condition ($customInputTheme -match ('TargetType="\{x:Type controls:' + $controlName + '\}"')) "Custom Operator input control '$controlName' must have own chrome."
+}
+Assert-Condition ($customInputControls -match 'GetContainerForItemOverride\(\)' -and $customInputControls -match 'RtaimeComboBoxItem' -and $customInputControls -match 'RtaimeListBoxItem' -and $customInputControls -match 'RtaimeTabItem') "Selection controls must generate custom item containers rather than stock WPF containers."
+Assert-Condition ($customInputTheme -match 'RtaimeVerticalScrollBarTemplate' -and $customInputTheme -match 'RtaimeHorizontalScrollBarTemplate' -and $customInputTheme -match 'RtaimeScrollThumbTemplate') "Scrolling must use complete custom vertical, horizontal and thumb templates."
+Assert-Condition ($customInputTheme -match 'RtaimeHorizontalSliderTemplate' -and $customInputTheme -match 'RtaimeVerticalSliderTemplate' -and $customInputTheme -match 'RtaimeSliderThumbTemplate') "Sliders must use complete custom tracks and thumbs."
+Assert-Condition ($customInputTheme -match 'PART_ContentHost' -and $customInputTheme -match 'CaretBrush' -and $customInputTheme -match 'SelectionBrush') "Custom text input must preserve WPF text editing semantics with explicit visual chrome."
+Assert-Condition ($customInputTheme -match 'PART_Popup' -and $customInputTheme -match 'RtaimeScrollViewer' -and $customInputTheme -match 'RtaimeComboBoxItem') "Custom combo boxes must use the custom popup, scrolling and item chrome."
+Assert-Condition ($customInputTheme -match 'FocusVisualStyle" Value="\{x:Null\}"' -and $customInputTheme -match 'OperatorFocusBrush') "Input controls must suppress stock focus visuals and render the shared cyan focus treatment."
+Assert-Condition ($customInputTheme -match 'x:Key="RtaimeVerticalSplitter"' -and $customInputTheme -match 'x:Key="RtaimeHorizontalSplitter"' -and $customInputTheme -match 'ResizeDirection" Value="Columns"' -and $customInputTheme -match 'ResizeDirection" Value="Rows"') "Custom splitters must preserve keyboard-resizable column and row behavior."
+Assert-Condition ($inputSurface -notmatch '<(TextBox|ComboBox|CheckBox|RadioButton|Slider|ScrollViewer|ScrollBar|GridSplitter|ListBox|TabControl|TabItem)(\s|/|>)') "Feature XAML must use rtaime input, selection and scrolling controls instead of direct visible WPF defaults."
+foreach ($customTag in @("RtaimeTextBox", "RtaimeComboBox", "RtaimeCheckBox", "RtaimeSlider", "RtaimeScrollViewer", "RtaimeScrollBar", "RtaimeSplitter", "RtaimeListBox", "RtaimeTabControl", "RtaimeTabItem")) {
+	Assert-Condition ($inputSurface -match ("controls:" + $customTag)) "Migrated Operator surfaces must exercise custom control '$customTag'."
+}
 Assert-Condition ($theme -match 'Source="OperatorTokens\.xaml"') "Operator theme must load the shared design-token dictionary."
 foreach ($token in @("OperatorFontFamily", "OperatorTimecodeFontFamily", "OperatorTopBarHeight", "OperatorNavigationWidth", "OperatorMediaPanelWidth", "OperatorInspectorWidth", "OperatorTimelineHeight", "OperatorRegionGap", "OperatorControlHeight", "OperatorCompactControlHeight", "OperatorRadiusPanel", "OperatorRadiusControl", "OperatorColorTopBar", "OperatorColorNavigation", "OperatorColorSurface", "OperatorColorAlternateSurface", "OperatorColorRaisedSurface", "OperatorColorRaisedHover", "OperatorColorBorder", "OperatorColorBorderStrong", "OperatorColorText", "OperatorColorSecondaryText", "OperatorColorMutedText", "OperatorColorAccent", "OperatorColorPreview", "OperatorColorProgram", "OperatorColorHealthy", "OperatorColorWarning", "OperatorColorError", "OperatorColorTimeline", "OperatorColorGraphics", "OperatorColorAudio")) {
 	Assert-Condition ($tokens -match [Regex]::Escape($token)) "Operator design token '$token' is required."
@@ -234,7 +257,7 @@ Assert-Condition ($minHeight -le [Math]::Floor(1080 / 1.5)) "Operator minimum he
 Assert-Condition ($minWidth -le [Math]::Floor(1920 / 2.0)) "Operator minimum width must remain usable at 200% scaling on 1920x1080."
 Assert-Condition ($minHeight -le [Math]::Floor(1080 / 2.0)) "Operator minimum height must remain usable at 200% scaling on 1920x1080."
 Assert-Condition ($shell -match 'CompactViewportWidth' -and $shell -match 'IsCompactViewport' -and $shell -match 'CompactLowerPanelHeight') "Operator shell must provide a presentation-only compact workspace mode for constrained high-DPI viewports."
-Assert-Condition ($window -match '<ScrollViewer[^>]+VerticalScrollBarVisibility="Auto"') "Operator must preserve vertical access when DPI scaling reduces logical workspace height."
+Assert-Condition ($window -match '<controls:RtaimeScrollViewer[^>]+VerticalScrollBarVisibility="Auto"') "Operator must preserve vertical access through the custom scroll surface when DPI scaling reduces logical workspace height."
 
 Assert-Condition ($window -match 'ItemsSource="\{Binding Sources\}"') "Operator must expose the source bank as a bound collection."
 Assert-Condition ($window -match 'Style="\{StaticResource OperatorSourceBank\}"') "Source bank must use the shared design-system collection style."
@@ -332,8 +355,8 @@ Assert-Condition ($keyboard -match 'args\.IsRepeat') "Production shortcut routin
 Assert-Condition ($keyboard -match 'IsTextEntryContext' -and $keyboard -match 'TextBoxBase' -and $keyboard -match 'PasswordBox') "Production shortcuts must be suppressed while the operator is typing."
 Assert-Condition ($deck -notmatch '<KeyBinding Key="P"' -and $deck -notmatch '<KeyBinding Key="S"' -and $deck -notmatch '<KeyBinding Key="I"' -and $deck -notmatch '<KeyBinding Key="O"' -and $deck -notmatch '<KeyBinding Key="M"') "Media Deck must not duplicate centralized production shortcuts."
 Assert-Condition ($window -match 'KeyboardNavigation.TabNavigation="Cycle"') "Showcase keyboard navigation must stay inside the Operator workspace."
-Assert-Condition ($theme -match 'OperatorVerticalSplitter' -and $theme -match 'OperatorHorizontalSplitter' -and $theme -match 'KeyboardNavigation.IsTabStop' -and $window -match 'Use arrow keys while focused') "Workspace splitters must expose visible keyboard focus and keyboard resize discoverability."
-Assert-Condition ($theme -match 'TargetType="{x:Type ComboBox}"' -and $theme -match 'TargetType="{x:Type CheckBox}"' -and $theme -match 'TargetType="{x:Type TabItem}"') "Standard interactive controls must inherit shared keyboard-focus styling."
+Assert-Condition ($customInputTheme -match 'RtaimeVerticalSplitter' -and $customInputTheme -match 'RtaimeHorizontalSplitter' -and $customInputTheme -match 'KeyboardNavigation.IsTabStop' -and $window -match 'Use arrow keys while focused') "Workspace splitters must expose custom visible keyboard focus and keyboard resize discoverability."
+Assert-Condition ($customInputTheme -match 'controls:RtaimeComboBox' -and $customInputTheme -match 'controls:RtaimeCheckBox' -and $customInputTheme -match 'controls:RtaimeTabItem') "Custom interactive controls must own shared keyboard-focus styling."
 Assert-Condition ($operatorXaml -notmatch '<Storyboard|<DoubleAnimation|<ColorAnimation|<ThicknessAnimation') "Production Operator XAML must not introduce decorative animation."
 Assert-Condition ($window -match 'x:Name="SynchronizeButton"' -and $windowCode -match 'SynchronizeButton\.Focus\(\)') "Initial keyboard focus must land on the synchronization action."
 Assert-Condition ($window -match 'ToolTip="Prepare the deterministic showcase state' -and $window -match 'ToolTip="CUT the confirmed Preview source to Program') "Primary showcase actions must expose consistent explanatory tooltips."
@@ -582,7 +605,7 @@ Assert-Condition ($monitorViewModel -match 'Value="STALE"|State, "STALE"|State\)
 Assert-Condition ($keyboard -match 'new\("fullscreen".+Key\.F11.+shell\.ToggleFullscreenCommand') "Production fullscreen must be keyboard-accessible through F11."
 Assert-Condition ($keyboard -match 'new\("exit-fullscreen".+Key\.Escape.+shell\.ExitFullscreenCommand') "Production fullscreen must provide an Escape path back to windowed operation."
 Assert-Condition ($windowCode -match 'WindowStyle = WindowStyle\.None' -and $windowCode -match 'ResizeMode = ResizeMode\.NoResize' -and $windowCode -match 'WindowStyle = _windowedStyle') "Fullscreen must enter borderless mode and restore windowed chrome."
-Assert-Condition ($window -match 'OperatorVerticalSplitter' -and $window -match 'OperatorHorizontalSplitter' -and $theme -match 'Property="ResizeDirection" Value="Columns"' -and $theme -match 'Property="ResizeDirection" Value="Rows"') "Production shell side panels and lower workspace must be resizable."
+Assert-Condition ($window -match 'RtaimeVerticalSplitter' -and $window -match 'RtaimeHorizontalSplitter' -and $customInputTheme -match 'Property="ResizeDirection" Value="Columns"' -and $customInputTheme -match 'Property="ResizeDirection" Value="Rows"') "Production shell side panels and lower workspace must remain resizable through custom splitters."
 Assert-Condition ($window -match 'Shell\.ToggleLeftPanelCommand' -and $window -match 'Shell\.ToggleRightPanelCommand' -and $window -match 'Shell\.ToggleCenterMaximizeCommand') "Production shell must expose collapse and center-maximize controls."
 Assert-Condition ($window -match 'DataContext="\{Binding Timeline, RelativeSource=\{RelativeSource AncestorType=\{x:Type Window\}\}\}"') "The timeline must remain available in the persistent lower workspace."
 Assert-Condition ($deck -notmatch '<local:MediaTimelineControl') "Media Deck must not duplicate the shell-hosted timeline."
