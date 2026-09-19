@@ -118,6 +118,7 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 	private bool _isCenterMaximized;
 	private bool _isFullscreen;
 	private string _selectedWorkspace;
+	private string _viewerMode = "DUAL";
 
 	public OperatorShellViewModel(
 		OperatorLayoutStore store,
@@ -143,6 +144,9 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 			() => _setFullscreen(false),
 			() => IsFullscreen);
 		ResetLayoutCommand = new OperatorShellCommand(ResetLayout);
+		MaximizePreviewCommand = new OperatorShellCommand(() => SetViewerMode("PREVIEW"));
+		MaximizeProgramCommand = new OperatorShellCommand(() => SetViewerMode("PROGRAM"));
+		RestoreViewersCommand = new OperatorShellCommand(() => SetViewerMode("DUAL"), () => !string.Equals(ViewerMode, "DUAL", StringComparison.Ordinal));
 	}
 
 	public event PropertyChangedEventHandler? PropertyChanged;
@@ -153,6 +157,9 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 	public ICommand ToggleFullscreenCommand { get; }
 	public ICommand ExitFullscreenCommand { get; }
 	public ICommand ResetLayoutCommand { get; }
+	public ICommand MaximizePreviewCommand { get; }
+	public ICommand MaximizeProgramCommand { get; }
+	public ICommand RestoreViewersCommand { get; }
 
 	public double LeftPanelWidth
 	{
@@ -281,6 +288,43 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 	public string FullscreenLabel => IsFullscreen ? "WINDOWED  F11" : "FULLSCREEN  F11";
 	public string CenterModeLabel => IsCenterMaximized ? "RESTORE PANELS" : "MAXIMIZE VIEW";
 
+	public string ViewerMode
+	{
+		get => _viewerMode;
+		private set
+		{
+			if (!Set(ref _viewerMode, value))
+				return;
+			OnPropertyChanged(nameof(PreviewViewerWidth));
+			OnPropertyChanged(nameof(ProgramViewerWidth));
+			OnPropertyChanged(nameof(ViewerGapWidth));
+			OnPropertyChanged(nameof(ViewerModeLabel));
+			(RestoreViewersCommand as OperatorShellCommand)?.RaiseCanExecuteChanged();
+		}
+	}
+
+	public GridLength PreviewViewerWidth => ViewerMode switch
+	{
+		"PREVIEW" => new GridLength(1, GridUnitType.Star),
+		"PROGRAM" => new GridLength(0),
+		_ => new GridLength(0.85, GridUnitType.Star)
+	};
+
+	public GridLength ProgramViewerWidth => ViewerMode switch
+	{
+		"PREVIEW" => new GridLength(0),
+		"PROGRAM" => new GridLength(1, GridUnitType.Star),
+		_ => new GridLength(1.15, GridUnitType.Star)
+	};
+
+	public double ViewerGapWidth => string.Equals(ViewerMode, "DUAL", StringComparison.Ordinal) ? 12 : 0;
+	public string ViewerModeLabel => ViewerMode switch
+	{
+		"PREVIEW" => "PREVIEW MAXIMIZED",
+		"PROGRAM" => "PROGRAM MAXIMIZED",
+		_ => "DUAL VIEW"
+	};
+
 	public void SetFullscreenState(bool fullscreen)
 	{
 		IsFullscreen = fullscreen;
@@ -317,6 +361,11 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 		Save();
 	}
 
+	private void SetViewerMode(string mode)
+	{
+		ViewerMode = mode is "PREVIEW" or "PROGRAM" ? mode : "DUAL";
+	}
+
 	private void ResetLayout()
 	{
 		var defaults = OperatorLayoutSettings.Default;
@@ -327,12 +376,19 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 		_isRightCollapsed = defaults.IsRightCollapsed;
 		_isCenterMaximized = defaults.IsCenterMaximized;
 		_selectedWorkspace = defaults.SelectedWorkspace;
+		_viewerMode = "DUAL";
 		RaiseLayoutGeometryChanged();
 		OnPropertyChanged(nameof(IsLeftCollapsed));
 		OnPropertyChanged(nameof(IsRightCollapsed));
 		OnPropertyChanged(nameof(IsCenterMaximized));
 		OnPropertyChanged(nameof(CenterModeLabel));
 		OnPropertyChanged(nameof(SelectedWorkspace));
+		OnPropertyChanged(nameof(ViewerMode));
+		OnPropertyChanged(nameof(PreviewViewerWidth));
+		OnPropertyChanged(nameof(ProgramViewerWidth));
+		OnPropertyChanged(nameof(ViewerGapWidth));
+		OnPropertyChanged(nameof(ViewerModeLabel));
+		(RestoreViewersCommand as OperatorShellCommand)?.RaiseCanExecuteChanged();
 		Save();
 	}
 
