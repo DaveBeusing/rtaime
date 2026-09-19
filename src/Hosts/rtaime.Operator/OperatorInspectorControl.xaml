@@ -3,6 +3,7 @@
 	x:Name="Root"
 	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
 	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	xmlns:local="clr-namespace:rtaime.Operator"
 	MinWidth="250"
 	Focusable="False">
 	<UserControl.Resources>
@@ -62,7 +63,7 @@
 					<StackPanel Grid.Column="1" HorizontalAlignment="Right" Margin="8,0,0,0">
 						<TextBlock Text="{Binding State}" Style="{StaticResource OperatorLabel}" HorizontalAlignment="Right" />
 						<Button Content="PIN"
-							Command="{Binding QuickControls.TogglePinCommand, ElementName=Root}"
+							Command="{Binding QuickControls.TogglePinCommand, RelativeSource={RelativeSource AncestorType={x:Type local:OperatorInspectorControl}}}"
 							CommandParameter="{Binding}"
 							HorizontalAlignment="Right"
 							MinHeight="22"
