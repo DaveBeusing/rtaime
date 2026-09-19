@@ -20,15 +20,22 @@ Switching workspaces never creates a second production snapshot or forks product
 
 ## LIVE
 
-LIVE is the primary production workspace. It emphasizes the reusable multiview surface, persistent production controls, Runtime-derived audio observations and Quick Controls.
+LIVE is the primary fast production workspace. It is arranged as a three-zone operator surface: source/cue selection on the left, adaptive multiview plus Quick Controls in the center, and explicit Live Controls on the right.
 
-The initial multiview consumes only existing Operator monitoring projections:
+The multiview consumes only existing Operator monitoring and Runtime audio projections:
 
 - confirmed Preview monitoring image and state;
 - confirmed Program monitoring image and state;
-- already available source thumbnails and source state.
+- already available source thumbnails, source state and PGM/PVW tally;
+- existing source audio peak observations.
 
-Program is visually dominant. The multiview does not subscribe to another monitoring transport, decode media or render a second Program path.
+The source bank adapts from 2 to 3 to 4 columns and is bounded to 16 displayed source tiles. Failed sources remain visible with their failure state. Double-clicking a source or monitor tile opens a larger presentation of the same image and does not route or take the source.
+
+Selection is deliberately separate from production mutation. Selecting a source changes only SelectedSource; Set Preview, CUT and AUTO remain explicit existing commands. Media cue selection is likewise separate from Jump Selected Cue. Dedicated scene activation remains unavailable because the current V1 contracts expose no governed scene command; the LIVE workspace does not synthesize one.
+
+The right Live Controls surface reuses existing transition, graphics/layer, recording and Clean Program commands and projects compact existing health/error evidence. External stream/on-air state remains UNVERIFIED until an authoritative contract exists.
+
+The multiview does not subscribe to another monitoring transport, decode media or render a second Program path.
 
 ## EDIT
 
@@ -57,7 +64,7 @@ It does not introduce another ingest or media-management subsystem.
 
 ## SCENES
 
-SCENES is a shell destination for scene/layer operation. In the current V1 implementation it reuses the existing graphics projection and Inspector surfaces; it does not create a second scene authority or renderer. Dedicated scene-control content is intentionally left to the later UI package.
+SCENES is a shell destination for scene/layer operation. In the current V1 implementation it reuses the existing graphics projection and Inspector surfaces; it does not create a second scene authority or renderer. LIVE also exposes the current governed layer state and source/cue selection, but dedicated multi-scene activation remains unavailable until a scene command contract exists.
 
 ## COMPOSITING
 
