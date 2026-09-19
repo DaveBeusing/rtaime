@@ -421,6 +421,7 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 	public bool IsSystemWorkspace => string.Equals(SelectedWorkspace, OperatorWorkspaceNames.System, StringComparison.Ordinal);
 
 	public Visibility MultiviewVisibility => IsLiveWorkspace ? Visibility.Visible : Visibility.Collapsed;
+	public Visibility StandardViewerVisibility => IsLiveWorkspace ? Visibility.Collapsed : Visibility.Visible;
 	public Visibility QuickControlsVisibility => IsLiveWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility ProductionControlsVisibility => IsLiveWorkspace || IsEditWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility MediaDeckVisibility => IsLiveWorkspace || IsEditWorkspace || IsMediaWorkspace ? Visibility.Visible : Visibility.Collapsed;
@@ -591,6 +592,7 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 		OnPropertyChanged(nameof(IsGraphicsWorkspace));
 		OnPropertyChanged(nameof(IsSystemWorkspace));
 		OnPropertyChanged(nameof(MultiviewVisibility));
+		OnPropertyChanged(nameof(StandardViewerVisibility));
 		OnPropertyChanged(nameof(QuickControlsVisibility));
 		OnPropertyChanged(nameof(ProductionControlsVisibility));
 		OnPropertyChanged(nameof(MediaDeckVisibility));
