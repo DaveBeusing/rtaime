@@ -724,4 +724,31 @@
 			</Setter.Value>
 		</Setter>
 	</Style>
+
+	<Style x:Key="RtaimeSourceBank" TargetType="{x:Type controls:RtaimeListBox}" BasedOn="{StaticResource {x:Type controls:RtaimeListBox}}">
+		<Setter Property="Background" Value="Transparent" />
+		<Setter Property="BorderThickness" Value="0" />
+		<Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+		<Setter Property="KeyboardNavigation.DirectionalNavigation" Value="Continue" />
+	</Style>
+
+	<Style x:Key="RtaimeVerticalSplitter" TargetType="{x:Type controls:RtaimeSplitter}" BasedOn="{StaticResource {x:Type controls:RtaimeSplitter}}">
+		<Setter Property="Width" Value="6" />
+		<Setter Property="HorizontalAlignment" Value="Stretch" />
+		<Setter Property="ResizeDirection" Value="Columns" />
+		<Setter Property="ResizeBehavior" Value="PreviousAndNext" />
+		<Setter Property="Focusable" Value="True" />
+		<Setter Property="Cursor" Value="SizeWE" />
+		<Setter Property="ToolTipService.InitialShowDelay" Value="300" />
+	</Style>
+
+	<Style x:Key="RtaimeHorizontalSplitter" TargetType="{x:Type controls:RtaimeSplitter}" BasedOn="{StaticResource {x:Type controls:RtaimeSplitter}}">
+		<Setter Property="Height" Value="6" />
+		<Setter Property="VerticalAlignment" Value="Stretch" />
+		<Setter Property="ResizeDirection" Value="Rows" />
+		<Setter Property="ResizeBehavior" Value="PreviousAndNext" />
+		<Setter Property="Focusable" Value="True" />
+		<Setter Property="Cursor" Value="SizeNS" />
+		<Setter Property="ToolTipService.InitialShowDelay" Value="300" />
+	</Style>
 </ResourceDictionary>
