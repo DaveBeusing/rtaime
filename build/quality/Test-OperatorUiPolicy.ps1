@@ -66,8 +66,10 @@ $tokensPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Themes/Operat
 $themePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Themes/OperatorTheme.xaml"
 $customControlsPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Controls/RtaimeControls.cs"
 $customInputControlsPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Controls/RtaimeInputControls.cs"
+$customMediaControlsPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Controls/RtaimeMediaControls.cs"
 $customControlThemePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Themes/Controls/RtaimeControls.xaml"
 $customInputThemePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Themes/Controls/RtaimeInputsAndScrolling.xaml"
+$customMediaThemePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Themes/Controls/RtaimeMediaLibrary.xaml"
 $customIconThemePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Themes/Controls/RtaimeIcons.xaml"
 $manifestPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/app.manifest"
 $projectPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/rtaime.Operator.csproj"
@@ -76,7 +78,7 @@ $workspaceDocumentationPath = Join-Path $repositoryRoot "docs/OperatorWorkspaces
 $outputHealthDocumentationPath = Join-Path $repositoryRoot "docs/OutputRoutingHealth.md"
 $mediaLibraryDocumentationPath = Join-Path $repositoryRoot "docs/MediaLibraryAssetBrowser.md"
 
-foreach ($path in @($appPath, $appCodePath, $windowPath, $windowCodePath, $shellPath, $keyboardPath, $quickControlsPath, $multiviewPath, $multiviewCodePath, $liveSceneCuePath, $liveControlsPath, $liveDocumentationPath, $compositingGraphPath, $compositingGraphCodePath, $compositingGraphViewModelPath, $compositingGraphProjectionPath, $compositingGraphDocumentationPath, $mediaPoolPath, $inspectorHostPath, $virtualizingWrapPanelPath, $deckPath, $deckViewModelPath, $timelinePath, $timelineCodePath, $timelineViewModelPath, $markerControllerPath, $timelineDocumentationPath, $viewModelPath, $monitorViewModelPath, $programOutputControllerPath, $programOutputWindowPath, $outputHealthControlPath, $outputHealthViewModelPath, $previewViewerPath, $previewViewerCodePath, $programViewerPath, $programViewerCodePath, $monitorViewPath, $sourceTileViewModelPath, $audioInputViewModelPath, $graphicsLoaderPath, $demoControllerPath, $demoManifestPath, $demoProductPath, $demoGraphicsPath, $demoDocumentationPath, $tokensPath, $themePath, $customControlsPath, $customInputControlsPath, $customControlThemePath, $customInputThemePath, $customIconThemePath, $manifestPath, $projectPath, $documentationPath, $workspaceDocumentationPath, $outputHealthDocumentationPath, $mediaLibraryDocumentationPath)) {
+foreach ($path in @($appPath, $appCodePath, $windowPath, $windowCodePath, $shellPath, $keyboardPath, $quickControlsPath, $multiviewPath, $multiviewCodePath, $liveSceneCuePath, $liveControlsPath, $liveDocumentationPath, $compositingGraphPath, $compositingGraphCodePath, $compositingGraphViewModelPath, $compositingGraphProjectionPath, $compositingGraphDocumentationPath, $mediaPoolPath, $inspectorHostPath, $virtualizingWrapPanelPath, $deckPath, $deckViewModelPath, $timelinePath, $timelineCodePath, $timelineViewModelPath, $markerControllerPath, $timelineDocumentationPath, $viewModelPath, $monitorViewModelPath, $programOutputControllerPath, $programOutputWindowPath, $outputHealthControlPath, $outputHealthViewModelPath, $previewViewerPath, $previewViewerCodePath, $programViewerPath, $programViewerCodePath, $monitorViewPath, $sourceTileViewModelPath, $audioInputViewModelPath, $graphicsLoaderPath, $demoControllerPath, $demoManifestPath, $demoProductPath, $demoGraphicsPath, $demoDocumentationPath, $tokensPath, $themePath, $customControlsPath, $customInputControlsPath, $customMediaControlsPath, $customControlThemePath, $customInputThemePath, $customMediaThemePath, $customIconThemePath, $manifestPath, $projectPath, $documentationPath, $workspaceDocumentationPath, $outputHealthDocumentationPath, $mediaLibraryDocumentationPath)) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required Operator UI artifact is missing: '$path'."
 }
 
@@ -131,8 +133,10 @@ $tokens = Get-Content -LiteralPath $tokensPath -Raw
 $theme = Get-Content -LiteralPath $themePath -Raw
 $customControls = Get-Content -LiteralPath $customControlsPath -Raw
 $customInputControls = Get-Content -LiteralPath $customInputControlsPath -Raw
+$customMediaControls = Get-Content -LiteralPath $customMediaControlsPath -Raw
 $customControlTheme = Get-Content -LiteralPath $customControlThemePath -Raw
 $customInputTheme = Get-Content -LiteralPath $customInputThemePath -Raw
+$customMediaTheme = Get-Content -LiteralPath $customMediaThemePath -Raw
 $customIconTheme = Get-Content -LiteralPath $customIconThemePath -Raw
 $manifest = Get-Content -LiteralPath $manifestPath -Raw
 $project = Get-Content -LiteralPath $projectPath -Raw
@@ -150,11 +154,15 @@ Assert-Condition ($topBarStart -ge 0 -and $bodyStart -gt $topBarStart) "Operator
 Assert-Condition ($navigationStart -ge 0 -and $leftRegionStart -gt $navigationStart) "Operator navigation must precede the left tool region."
 $topBarSurface = $window.Substring($topBarStart, $bodyStart - $topBarStart)
 $navigationSurface = $window.Substring($navigationStart, $leftRegionStart - $navigationStart)
+$mediaLibraryEnd = $window.IndexOf('<controls:RtaimeSplitter Grid.RowSpan="2" Grid.Column="5"', $leftRegionStart, [StringComparison]::Ordinal)
+Assert-Condition ($mediaLibraryEnd -gt $leftRegionStart) "Media Library surface must end before the right workspace splitter."
+$mediaLibrarySurface = $window.Substring($leftRegionStart, $mediaLibraryEnd - $leftRegionStart)
 
 Assert-Condition ($app -match 'Source="Themes/OperatorTheme\.xaml"') "Operator must load the reusable theme resource dictionary."
 Assert-Condition ($app -match 'Source="Themes/Controls/RtaimeIcons\.xaml"') "Operator must load the custom icon geometry dictionary."
 Assert-Condition ($app -match 'Source="Themes/Controls/RtaimeControls\.xaml"') "Operator must load the custom control chrome dictionary."
 Assert-Condition ($app -match 'Source="Themes/Controls/RtaimeInputsAndScrolling\.xaml"') "Operator must load the custom input and scrolling dictionary."
+Assert-Condition ($app -match 'Source="Themes/Controls/RtaimeMediaLibrary\.xaml"') "Operator must load the custom Media Library dictionary."
 $iconThemeIndex = $app.IndexOf('Source="Themes/Controls/RtaimeIcons.xaml"', [StringComparison]::Ordinal)
 $controlThemeIndex = $app.IndexOf('Source="Themes/Controls/RtaimeControls.xaml"', [StringComparison]::Ordinal)
 Assert-Condition ($iconThemeIndex -ge 0 -and $controlThemeIndex -gt $iconThemeIndex) "Custom icon resources must load before custom control templates."
@@ -181,7 +189,7 @@ Assert-Condition ($customControlTheme -match 'Property="IsMouseOver"' -and $cust
 foreach ($iconSize in @(14, 16, 18, 20)) {
 	Assert-Condition ($customControlTheme -match ('x:Key="RtaimeIcon' + $iconSize + '"')) "Custom icon size '$iconSize' must be available."
 }
-foreach ($iconName in @("Play", "Pause", "Stop", "Previous", "Next", "Media", "Live", "Timeline", "Output", "Compositing", "Settings", "Check", "Warning", "Close", "ChevronLeft", "ChevronRight")) {
+foreach ($iconName in @("Play", "Pause", "Stop", "Previous", "Next", "Media", "Live", "Timeline", "Output", "Compositing", "Settings", "Check", "Warning", "Close", "ChevronLeft", "ChevronRight", "Search", "Add", "Grid", "List")) {
 	Assert-Condition ($customIconTheme -match ('x:Key="RtaimeIcon' + $iconName + 'Geometry"')) "Custom icon geometry '$iconName' must exist."
 }
 Assert-Condition ($customIconTheme -notmatch '[\uD800-\uDFFF]') "Custom icon resources must use geometry rather than emoji glyphs."
@@ -202,6 +210,17 @@ Assert-Condition ($inputSurface -notmatch '<(TextBox|ComboBox|CheckBox|RadioButt
 foreach ($customTag in @("RtaimeTextBox", "RtaimeComboBox", "RtaimeCheckBox", "RtaimeSlider", "RtaimeScrollViewer", "RtaimeScrollBar", "RtaimeSplitter", "RtaimeListBox", "RtaimeTabControl", "RtaimeTabItem")) {
 	Assert-Condition ($inputSurface -match ("controls:" + $customTag)) "Migrated Operator surfaces must exercise custom control '$customTag'."
 }
+foreach ($controlName in @("RtaimeSearchBox", "RtaimeMediaTile", "RtaimeContextMenu", "RtaimeMenuItem", "RtaimeMenuSeparator")) {
+	Assert-Condition ($customMediaControls -match ("class " + $controlName + "\b")) "Custom Media Library control '$controlName' must exist."
+	Assert-Condition ($customMediaControls -match ("OverrideMetadata\(typeof\(" + $controlName + "\)")) "Custom Media Library control '$controlName' must own its default style key."
+	Assert-Condition ($customMediaTheme -match ('TargetType="\{x:Type controls:' + $controlName + '\}"')) "Custom Media Library control '$controlName' must have own chrome."
+}
+Assert-Condition ($customMediaTheme -match 'RtaimeMediaOverlayScrollViewer' -and $customMediaTheme -match 'PART_VerticalScrollBar' -and $customMediaTheme -match 'controls:RtaimeScrollBar') "Media Library scrolling must use the custom overlay scrollbar."
+Assert-Condition ($customMediaTheme -match 'Property="IsSelected" Value="True"' -and $customMediaTheme -match 'OperatorAccentBrush' -and $customMediaTheme -match 'SelectionAccent') "Media tile selection must use the cyan border/accent treatment."
+Assert-Condition ($customMediaTheme -match 'Property="IsMouseOver" Value="True"' -and $customMediaTheme -match 'OperatorRaisedHoverBrush') "Media tile hover must remain dark and distinct from cyan selection."
+Assert-Condition ($customMediaTheme -match '<RowDefinition Height="68" />' -and $customMediaTheme -match 'FontSize="11"' -and $customMediaTheme -match 'OperatorTimecodeFontFamily') "Media tiles must retain the approximately 120x68 thumbnail, 11px filename and compact mono duration treatment."
+Assert-Condition ($customMediaTheme -match 'OfflineOverlay' -and $customMediaTheme -match 'Text="OFFLINE"' -and $customMediaTheme -match 'IsOnline') "Offline/missing presentation must overlay the thumbnail without changing tile geometry."
+
 Assert-Condition ($theme -match 'Source="OperatorTokens\.xaml"') "Operator theme must load the shared design-token dictionary."
 foreach ($token in @("OperatorFontFamily", "OperatorTimecodeFontFamily", "OperatorTopBarHeight", "OperatorNavigationWidth", "OperatorMediaPanelWidth", "OperatorInspectorWidth", "OperatorTimelineHeight", "OperatorRegionGap", "OperatorControlHeight", "OperatorCompactControlHeight", "OperatorRadiusPanel", "OperatorRadiusControl", "OperatorColorTopBar", "OperatorColorNavigation", "OperatorColorSurface", "OperatorColorAlternateSurface", "OperatorColorRaisedSurface", "OperatorColorRaisedHover", "OperatorColorBorder", "OperatorColorBorderStrong", "OperatorColorText", "OperatorColorSecondaryText", "OperatorColorMutedText", "OperatorColorAccent", "OperatorColorPreview", "OperatorColorProgram", "OperatorColorHealthy", "OperatorColorWarning", "OperatorColorError", "OperatorColorTimeline", "OperatorColorGraphics", "OperatorColorAudio")) {
 	Assert-Condition ($tokens -match [Regex]::Escape($token)) "Operator design token '$token' is required."
@@ -513,15 +532,27 @@ Assert-Condition ($viewModel -match 'if \(!StartupComplete && projection\.MainUi
 
 
 # Media Pool and context-sensitive Inspector.
-Assert-Condition ($window -match 'Text="MEDIA"' -and $window -match 'MediaPool\.SearchText' -and $window -match 'MediaPool\.SelectedCategory' -and $window -match 'MediaPool\.SelectedFilter') "Media Pool must expose persistent category, search and filter controls."
+$mediaReferenceWidth = 400
+$mediaBorderWidth = 2
+$mediaPadding = 11 * 2
+$mediaInnerWidth = $mediaReferenceWidth - $mediaBorderWidth - $mediaPadding
+$threeTileWidth = (3 * 120) + (2 * 8)
+Assert-Condition ($mediaInnerWidth -eq 376 -and $threeTileWidth -eq $mediaInnerWidth) "Reference Media Library geometry must fit exactly three 120px tiles with two 8px gaps."
+Assert-Condition ($mediaLibrarySurface -match 'Padding="11"' -and $theme -match 'x:Key="OperatorPanel"[\s\S]+BorderThickness" Value="1"') "Media Library must preserve an effective 12px inset from the 400px region edge."
+Assert-Condition (($mediaLibrarySurface | Select-String -Pattern '<RowDefinition Height="34" />' -AllMatches).Matches.Count -ge 2 -and $mediaLibrarySurface -match '<RowDefinition Height="32" />') "Media Library header/search/filter rows must be 34/34/32px."
+Assert-Condition ($mediaLibrarySurface -match 'ItemWidth="120"' -and $mediaLibrarySurface -match 'ItemHeight="104"' -and $mediaLibrarySurface -match 'HorizontalSpacing="8"' -and $mediaLibrarySurface -match 'VerticalSpacing="10"') "Media Library grid must retain 120px tiles with 8px horizontal and 10px vertical spacing."
+Assert-Condition ($virtualizingWrapPanel -match 'HorizontalSpacingProperty' -and $virtualizingWrapPanel -match 'VerticalSpacingProperty' -and $virtualizingWrapPanel -match '\(viewportWidth \+ horizontalSpacing\) / columnStride' -and $virtualizingWrapPanel -match 'rowStride') "VirtualizingWrapPanel must include tile spacing in row/column realization math."
+Assert-Condition ($mediaLibrarySurface -match 'controls:RtaimeSearchBox' -and $mediaLibrarySurface -match 'controls:RtaimeMediaTile' -and $mediaLibrarySurface -match 'controls:RtaimeContextMenu') "Media Library must use custom search, tile and context-menu controls."
+Assert-Condition ($mediaLibrarySurface -notmatch '<(Button|ToggleButton|CheckBox|RadioButton|TextBox|ComboBox|TabControl|TabItem|ListBox|ListView|TreeView|DataGrid|Slider|ProgressBar|ScrollBar|ScrollViewer|GridSplitter|Menu|MenuItem|ContextMenu|ToolBar)(\s|/|>)') "Media Library feature XAML must expose no directly visible stock WPF interactive chrome."
+Assert-Condition ($mediaLibrarySurface -match 'Text="MEDIA LIBRARY"' -and $mediaLibrarySurface -match 'MediaPool\.SearchText' -and $mediaLibrarySurface -match 'MediaPool\.SelectedCategory' -and $mediaLibrarySurface -match 'MediaPool\.SelectedFilter') "Media Pool must expose the mockup header, category, search and filter controls."
 Assert-Condition ($window -match 'MediaPool\.GridViewCommand' -and $window -match 'MediaPool\.ListViewCommand') "Media Pool must support Grid and List presentation."
-Assert-Condition ($mediaPool -match 'ImageSource\? Thumbnail' -and $mediaPool -match 'source\.Thumbnail' -and $window -match 'Source="\{Binding Thumbnail\}"') "Media Pool must reuse existing verified source thumbnails without adding metadata extraction."
+Assert-Condition ($mediaPool -match 'ImageSource\? Thumbnail' -and $mediaPool -match 'source\.Thumbnail' -and $mediaLibrarySurface -match 'Thumbnail="\{Binding Thumbnail\}"') "Media Pool must reuse existing verified source thumbnails without adding metadata extraction."
 Assert-Condition ($window -match 'MediaPool\.FilteredItems' -and $window -match 'MediaPool\.SelectedItem') "Media Pool presentation must bind the bounded selection projection."
 Assert-Condition ($window -match 'SelectionMode="Extended"' -and $windowCode -match 'OnMediaPoolSelectionChanged' -and $mediaPool -match 'UpdateSelection' -and $mediaPool -match 'SelectedItems') "Media Library must support explicit multi-selection without adding production authority."
 Assert-Condition ($window -match 'VirtualizingWrapPanel' -and $window -match 'VirtualizingPanel\.VirtualizationMode="Recycling"' -and $virtualizingWrapPanel -match 'VirtualizingPanel' -and $virtualizingWrapPanel -match 'CleanUpItems') "Media Library Grid/List surfaces must virtualize and recycle asset containers."
 Assert-Condition ($virtualizingWrapPanel -match 'ResolveGenerator\(\)' -and $virtualizingWrapPanel -match 'if \(generator is null\)' -and $virtualizingWrapPanel -match 'QueueGeneratorRetry\(\)' -and $virtualizingWrapPanel -match 'DispatcherPriority\.Loaded' -and $virtualizingWrapPanel -notmatch 'ItemsControl\.GetItemsOwner\(this\)\?\.ItemContainerGenerator') "VirtualizingWrapPanel must defer realization until its panel-owned generator is ready."
 Assert-Condition ($virtualizingWrapPanel -match 'if \(itemIndex < 0\)' -and $virtualizingWrapPanel -match 'IRecyclingItemContainerGenerator' -and $virtualizingWrapPanel -match '\.Recycle\(position, 1\)') "VirtualizingWrapPanel cleanup must avoid generator removal for unmapped children and recycle mapped containers when available."
-Assert-Condition ($window -match 'DurationLabel' -and $window -match 'FileTypeLabel' -and $window -match 'Text="OFFLINE"') "Media Library asset cards must expose duration/type and a textual offline state."
+Assert-Condition ($mediaLibrarySurface -match 'DurationLabel' -and $mediaLibrarySurface -match 'FileTypeLabel' -and $customMediaTheme -match 'Text="OFFLINE"') "Media Library asset cards must expose duration/type and a textual offline state."
 Assert-Condition ($window -match 'LOADING ASSETS' -and $window -match 'MediaPool\.ErrorState' -and $mediaPool -match 'IsLoading' -and $mediaPool -match 'HasError') "Media Library must expose loading and error states."
 Assert-Condition ($mediaPool -match 'MaxProjectedItems = 4096' -and $mediaPool -match 'Take\(MaxProjectedItems\)') "Media Library projection must remain explicitly bounded while supporting large asset sets."
 Assert-Condition ($mediaPool -match 'StringComparison\.OrdinalIgnoreCase' -and $mediaPool -match 'OrderBy\(item => item\.Category, StringComparer\.Ordinal\)') "Media Pool search/filter ordering must be deterministic."
