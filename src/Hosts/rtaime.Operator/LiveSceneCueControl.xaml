@@ -161,7 +161,6 @@
 
 						<StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center">
 							<controls:RtaimeStatusBadge
-								Status="{x:Static controls:RtaimeStatusKind.Preview}"
 								Content="NEXT"
 								ShowIndicator="False"
 								Margin="0,0,3,0">
