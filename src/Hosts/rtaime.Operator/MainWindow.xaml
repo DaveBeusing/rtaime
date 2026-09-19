@@ -804,7 +804,7 @@
 									<controls:RtaimeListBox Grid.Row="1"
 										ItemsSource="{Binding OutputHealth.Outputs, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 										SelectedItem="{Binding OutputHealth.SelectedOutput, RelativeSource={RelativeSource AncestorType={x:Type Window}}, Mode=TwoWay}"
-										ItemContainerStyle="{StaticResource RtaimeProductionSceneItem}"
+										ItemContainerStyle="{StaticResource RtaimeProductionOutputItem}"
 										Background="Transparent"
 										BorderThickness="0"
 										ScrollViewer.HorizontalScrollBarVisibility="Disabled"
@@ -851,6 +851,8 @@
 															<TextBlock Text="{Binding Resolution}" Style="{StaticResource OperatorLabel}" FontSize="10" />
 															<TextBlock Text=" · " Style="{StaticResource OperatorLabel}" FontSize="10" />
 															<TextBlock Text="{Binding FrameRate}" Style="{StaticResource OperatorLabel}" FontSize="10" />
+															<TextBlock Text=" · " Style="{StaticResource OperatorLabel}" FontSize="10" />
+															<TextBlock Text="{Binding ColorSpace}" Style="{StaticResource OperatorLabel}" FontSize="10" />
 														</StackPanel>
 													</StackPanel>
 													<TextBlock Grid.Column="4" Text="{Binding Name}" Style="{StaticResource OperatorLabel}" FontWeight="Bold" VerticalAlignment="Center" Margin="8,0,0,0" />
