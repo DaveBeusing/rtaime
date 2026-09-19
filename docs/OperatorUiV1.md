@@ -611,3 +611,18 @@ The persistent right shell region is selection-driven. Every projected Inspector
 Clip playback policy edits reuse MediaDeckViewModel.ApplyPlaybackPolicyCommand. Audio gain/mute reuse the existing audio commands. Graphics position/scale reuse ApplyGraphicsCommand. AI feature/provider/confidence/fallback are displayed from confirmed observations, and AI enable/disable reuses the existing Client control commands.
 
 No local edit is presented as committed before the corresponding existing command path has been applied and authoritative state is observed again. Empty selection, no-assets, filtered-empty and offline states use concise production-facing messages.
+
+
+## Workspaces, Multiview & Keyboard-First UX
+
+The Operator now exposes five canonical task workspaces — LIVE, EDIT, MEDIA, GRAPHICS and SYSTEM — over the same authoritative product state. Workspace switching changes presentation only and persists independent layout geometry per workspace.
+
+LIVE introduces a reusable multiview that consumes the existing Preview/Program monitoring images and already available source thumbnails. It does not open another monitoring transport. The same workspace exposes a bounded Quick Controls pinboard backed by stable Inspector property identifiers; pinned actions continue to invoke the existing Media Deck, audio, graphics, AI and production command paths.
+
+Window-level keyboard bindings are centralized in OperatorKeyboardCommandRegistry with deterministic conflict detection and text-entry safety. Space controls media play/pause, I/O set the current media range, M adds a Media cue, Up/Down navigate cues, Enter performs AUTO, Ctrl+Enter performs CUT, R controls recording where the matching command is available, and F11 retains Operator fullscreen. Unsupported J/L shuttle semantics remain deliberately unbound.
+
+SYSTEM reuses the existing lifecycle, health, monitoring, recording and output projections rather than creating a second diagnostics truth. Clean Program remains a presentation of the existing Runtime-derived Program monitoring image and is explicitly not the physical Program output path.
+
+Layout persistence is schema-versioned and keeps only UI presentation fields. SAVE LAYOUT stores the current workspace layout, while LAYOUT RESET restores that workspace's canonical defaults. Corrupt or incompatible layout data falls back safely.
+
+See docs/OperatorWorkspaces.md for the complete workspace, Quick Controls, shortcut, multiview and Clean Program operating model.
