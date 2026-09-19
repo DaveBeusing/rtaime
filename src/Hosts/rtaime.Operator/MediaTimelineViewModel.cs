@@ -99,6 +99,9 @@ public sealed class TimelineTrackViewModel : INotifyPropertyChanged
 	public TimelineTrackCategory Category { get; }
 	public string Label { get; }
 	public bool IsCueTrack => Category == TimelineTrackCategory.Cue;
+	public bool IsVideoLane => Category is TimelineTrackCategory.Video or TimelineTrackCategory.Graphics or TimelineTrackCategory.Overlay;
+	public bool IsAudioLane => Category is TimelineTrackCategory.Audio or TimelineTrackCategory.AI or TimelineTrackCategory.Control;
+	public double RowHeight => IsVideoLane ? 42.0 : 40.0;
 	public bool IsActive
 	{
 		get => _isActive;
@@ -174,13 +177,12 @@ public sealed class MediaTimelineViewModel : INotifyPropertyChanged, IAsyncDispo
 
 		Tracks =
 		[
-			_videoTrack = new TimelineTrackViewModel(TimelineTrackCategory.Video, "V1  PROGRAM"),
-			new TimelineTrackViewModel(TimelineTrackCategory.Graphics, "V2  GRAPHICS"),
-			new TimelineTrackViewModel(TimelineTrackCategory.Overlay, "V3  OVERLAY"),
-			new TimelineTrackViewModel(TimelineTrackCategory.Audio, "A1  AUDIO"),
-			new TimelineTrackViewModel(TimelineTrackCategory.AI, "AI  AUTOMATION"),
-			new TimelineTrackViewModel(TimelineTrackCategory.Control, "CTRL"),
-			new TimelineTrackViewModel(TimelineTrackCategory.Cue, "CUE")
+			new TimelineTrackViewModel(TimelineTrackCategory.Graphics, "V3  GRAPHICS"),
+			new TimelineTrackViewModel(TimelineTrackCategory.Overlay, "V2  VIDEO"),
+			_videoTrack = new TimelineTrackViewModel(TimelineTrackCategory.Video, "V1  VIDEO"),
+			new TimelineTrackViewModel(TimelineTrackCategory.Audio, "A1  MUSIC"),
+			new TimelineTrackViewModel(TimelineTrackCategory.AI, "A2  SFX"),
+			new TimelineTrackViewModel(TimelineTrackCategory.Control, "A3  VO")
 		];
 		Cues = [];
 		VisibleCues = [];
@@ -420,7 +422,7 @@ public sealed class MediaTimelineViewModel : INotifyPropertyChanged, IAsyncDispo
 				_videoTrack.Items.Any(candidate =>
 					string.Equals(candidate.SourceReference, item.ReferenceId, StringComparison.Ordinal)),
 			MediaPoolItemKind.Audio => category == TimelineTrackCategory.Audio,
-			MediaPoolItemKind.Graphics => category is TimelineTrackCategory.Graphics or TimelineTrackCategory.Overlay,
+			MediaPoolItemKind.Graphics => category == TimelineTrackCategory.Graphics,
 			_ => false
 		};
 	}
@@ -678,7 +680,7 @@ public sealed class MediaTimelineViewModel : INotifyPropertyChanged, IAsyncDispo
 
 	private void RebuildResourceProjections()
 	{
-		foreach (var category in new[] { TimelineTrackCategory.Audio, TimelineTrackCategory.Graphics, TimelineTrackCategory.Overlay })
+		foreach (var category in new[] { TimelineTrackCategory.Audio, TimelineTrackCategory.Graphics })
 			RebuildResourceTrack(category);
 	}
 

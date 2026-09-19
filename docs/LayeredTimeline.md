@@ -24,23 +24,45 @@ Playback observation does not recreate timeline clips or cue objects on every re
 
 Rendering is additionally viewport-bounded. Tracks retain their stable backing projection, while `VisibleItems` and `VisibleCues` expose only objects intersecting the current visible frame range. Zoom and horizontal scroll refresh that bounded presentation without duplicating production state.
 
+## Reference layout
+
+At the 1920×1080 reference surface, the lower workspace occupies x=98–1573 and y=760–1079, for an exact 1476×320 timeline region. The timeline itself owns that full lower span; the legacy separate bottom transport bar is collapsed and its active Play/Pause, Stop, current-time and fullscreen affordances are integrated into the 44-pixel timeline toolbar.
+
+The vertical contract is:
+
+- 44 px timeline toolbar;
+- 30 px frame ruler and cue-marker lane;
+- 42 px V3 Graphics;
+- 42 px V2 Video;
+- 42 px V1 Video;
+- 40 px A1 Music;
+- 40 px A2 SFX;
+- 40 px A3 VO.
+
+The track-header column is 238 pixels wide. The remaining width is the frame canvas. The ruler uses the existing frame-to-pixel converter, the Program playhead uses a 2-pixel cyan line with a cyan head, and visible named cues are projected above the tracks rather than consuming a dedicated cue row.
+
 ## Semantic tracks
 
-The workspace exposes the following semantic tracks:
+The six visible reference lanes are presentation roles over the existing timeline categories:
 
-- Video;
-- Graphics;
-- Overlay;
-- Audio;
-- AI;
-- Control;
-- Cue.
+- **V3 Graphics** — existing Graphics resource projection;
+- **V2 Video** — reserved video presentation lane; no second governed video-track edit authority exists in V1;
+- **V1 Video** — the authoritative loaded Media Deck clip and effective IN/OUT range;
+- **A1 Music** — existing Audio resource projection;
+- **A2 SFX** — reserved audio presentation lane; no separate SFX routing/edit contract exists in V1;
+- **A3 VO** — reserved audio presentation lane; no separate VO routing/edit contract exists in V1.
 
-A track name is a UI semantic category, not a promise that timed backend automation exists for that category.
+The underlying TimelineTrackCategory values remain intact so existing selection, Inspector and compatibility code does not acquire a second domain model. Only Graphics accepts Graphics-resource drops, Audio accepts Audio-resource drops, and V1 Video accepts the loaded Clip context. Reserved V2/A2/A3 lanes remain empty until governed product semantics exist.
 
-The loaded Media Deck clip is projected onto the Video track using its confirmed source identity and effective IN/OUT range. Existing Audio and Graphics resources may be dropped on their matching semantic tracks as clearly marked `PROJECTED` metadata spanning the current media duration. These timeline-only projections are cleared whenever the loaded media asset or source context changes. This changes only the Operator projection and does not create a production mutation.
+Named Media cues remain first-class timeline objects, but they are rendered in the ruler marker lane rather than as a seventh visible track. Cue identity, selection, navigation and Inspector integration remain unchanged.
 
-No timed Graphics, Audio, AI or Control mutation is invented by the timeline. AI and Control tracks therefore remain empty until authoritative product semantics exist.
+No timed Graphics, Audio, AI or Control mutation is invented by the timeline.
+
+## Toolbar capability boundary
+
+The toolbar exposes the current timeline context, SELECT mode, snapping, observed frame rate, Preview Play/Pause and Stop, previous/next cue, zoom, Fit, Operator fullscreen, current timecode and named cue creation through existing commands.
+
+The product currently exposes no governed sequence switching, clip-link command, Blade/Cut edit command or alternate timeline frame-rate mutation. Those unavailable capabilities are identified as context/status only and are not wired to decorative commands.
 
 ## Cues
 
@@ -69,9 +91,9 @@ Drag/drop is semantic and bounded:
 
 | Media Pool resource | Valid track | Result |
 | --- | --- | --- |
-| Loaded Clip | Video | Reuses the existing loaded Media Deck context and selects its authoritative timeline item. |
-| Audio | Audio | Adds a `PROJECTED` Operator metadata item only. |
-| Graphics | Graphics or Overlay | Adds a `PROJECTED` Operator metadata item only. |
+| Loaded Clip | V1 Video | Reuses the existing loaded Media Deck context and selects its authoritative timeline item. |
+| Audio | A1 Music | Adds a `PROJECTED` Operator metadata item only. |
+| Graphics | V3 Graphics | Adds a `PROJECTED` Operator metadata item only. |
 | Source / Composition / mismatched resource | None | Drop is rejected. |
 
 Projected items are intentionally not shown as `COMMITTED`. They provide timeline context for existing product state while preserving the backend boundary.
@@ -118,6 +140,6 @@ The V1 timeline does not claim:
 - distributed show control;
 - timed automation without an authoritative backend contract.
 
-The current governed contracts also expose no clip-move edit operation, timeline undo/redo history, section/show-marker domain, or reusable audio-waveform projection. The Operator therefore does not synthesize those capabilities. They can be connected later when an existing authoritative command/history/data source is available.
+The current governed contracts also expose no clip-move edit operation, timeline undo/redo history, section/show-marker domain, transition-domain projection or reusable audio-waveform projection. The Operator therefore does not synthesize those capabilities. The mockup palette reserves quieter waveform and transition treatments for a future governed projection, but no fake waveform or transition graphic is rendered today.
 
-These capabilities must not be implied by disabled or decorative controls.
+Unavailable edit capabilities are presented only as explicit N/A/context state where the mockup requires their location; no disabled button is wired to a synthetic production command.

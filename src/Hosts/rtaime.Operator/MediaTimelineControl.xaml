@@ -6,7 +6,7 @@
 	xmlns:controls="clr-namespace:rtaime.Operator.Controls"
 	xmlns:automation="clr-namespace:System.Windows.Automation;assembly=PresentationCore"
 	xmlns:local="clr-namespace:rtaime.Operator"
-	MinHeight="330"
+	MinHeight="0"
 	Focusable="True"
 	UseLayoutRounding="True"
 	SnapsToDevicePixels="True"
@@ -14,125 +14,398 @@
 	<UserControl.Resources>
 		<local:TimelineFrameToCanvasLeftConverter x:Key="TimelineFrameToCanvasLeftConverter" />
 		<local:TimelineItemWidthConverter x:Key="TimelineItemWidthConverter" />
+		<SolidColorBrush x:Key="TimelineBackgroundBrush" Color="#0C151D" />
+		<SolidColorBrush x:Key="TimelineRulerBrush" Color="#111D26" />
+		<SolidColorBrush x:Key="TimelineVideoBrush" Color="#3478D4" />
+		<SolidColorBrush x:Key="TimelineGraphicsBrush" Color="#7259D7" />
+		<SolidColorBrush x:Key="TimelineAudioBrush" Color="#22A977" />
+		<SolidColorBrush x:Key="TimelineCueBrush" Color="#F6B84A" />
+
+		<Style x:Key="TimelineTrackHeader" TargetType="Border">
+			<Setter Property="Background" Value="{DynamicResource OperatorSurfaceBrush}" />
+			<Setter Property="BorderBrush" Value="{DynamicResource OperatorBorderBrush}" />
+			<Setter Property="BorderThickness" Value="0,0,1,1" />
+			<Setter Property="Padding" Value="9,0" />
+			<Setter Property="SnapsToDevicePixels" Value="True" />
+			<Style.Triggers>
+				<DataTrigger Binding="{Binding IsActive}" Value="True">
+					<Setter Property="Background" Value="{DynamicResource OperatorSelectionSurfaceBrush}" />
+				</DataTrigger>
+			</Style.Triggers>
+		</Style>
+
+		<Style x:Key="TimelineClip" TargetType="Border">
+			<Setter Property="Height" Value="36" />
+			<Setter Property="Margin" Value="1,3" />
+			<Setter Property="Padding" Value="7,0" />
+			<Setter Property="CornerRadius" Value="3" />
+			<Setter Property="Background" Value="{StaticResource TimelineVideoBrush}" />
+			<Setter Property="BorderBrush" Value="Transparent" />
+			<Setter Property="BorderThickness" Value="1" />
+			<Setter Property="Opacity" Value="0.86" />
+			<Setter Property="SnapsToDevicePixels" Value="True" />
+			<Style.Triggers>
+				<DataTrigger Binding="{Binding Category}" Value="{x:Static local:TimelineTrackCategory.Graphics}">
+					<Setter Property="Background" Value="{StaticResource TimelineGraphicsBrush}" />
+				</DataTrigger>
+				<DataTrigger Binding="{Binding Category}" Value="{x:Static local:TimelineTrackCategory.Overlay}">
+					<Setter Property="Background" Value="{StaticResource TimelineVideoBrush}" />
+				</DataTrigger>
+				<DataTrigger Binding="{Binding Category}" Value="{x:Static local:TimelineTrackCategory.Audio}">
+					<Setter Property="Background" Value="{StaticResource TimelineAudioBrush}" />
+					<Setter Property="Height" Value="34" />
+				</DataTrigger>
+				<DataTrigger Binding="{Binding Category}" Value="{x:Static local:TimelineTrackCategory.AI}">
+					<Setter Property="Background" Value="{StaticResource TimelineAudioBrush}" />
+					<Setter Property="Height" Value="34" />
+				</DataTrigger>
+				<DataTrigger Binding="{Binding Category}" Value="{x:Static local:TimelineTrackCategory.Control}">
+					<Setter Property="Background" Value="{StaticResource TimelineAudioBrush}" />
+					<Setter Property="Height" Value="34" />
+				</DataTrigger>
+				<DataTrigger Binding="{Binding IsSelected}" Value="True">
+					<Setter Property="BorderBrush" Value="{DynamicResource OperatorAccentBrush}" />
+					<Setter Property="BorderThickness" Value="2" />
+					<Setter Property="Opacity" Value="1" />
+				</DataTrigger>
+			</Style.Triggers>
+		</Style>
+
+		<Style x:Key="TimelineCueMarker" TargetType="Border">
+			<Setter Property="Height" Value="18" />
+			<Setter Property="MinWidth" Value="16" />
+			<Setter Property="MaxWidth" Value="112" />
+			<Setter Property="Padding" Value="4,0" />
+			<Setter Property="Margin" Value="-4,9,0,0" />
+			<Setter Property="Background" Value="#E0111D26" />
+			<Setter Property="BorderBrush" Value="{StaticResource TimelineCueBrush}" />
+			<Setter Property="BorderThickness" Value="1,0,0,0" />
+			<Setter Property="CornerRadius" Value="2" />
+			<Style.Triggers>
+				<DataTrigger Binding="{Binding IsSelected}" Value="True">
+					<Setter Property="Background" Value="{DynamicResource OperatorSelectionSurfaceBrush}" />
+					<Setter Property="BorderBrush" Value="{DynamicResource OperatorAccentBrush}" />
+					<Setter Property="BorderThickness" Value="2,0,0,0" />
+				</DataTrigger>
+			</Style.Triggers>
+		</Style>
 	</UserControl.Resources>
 
-	<Border Style="{StaticResource OperatorPanel}">
+	<Border
+		Background="{StaticResource TimelineBackgroundBrush}"
+		BorderBrush="{DynamicResource OperatorBorderBrush}"
+		BorderThickness="1"
+		CornerRadius="0"
+		ClipToBounds="True">
 		<Grid>
 			<Grid.RowDefinitions>
-				<RowDefinition Height="Auto" />
-				<RowDefinition Height="28" />
+				<RowDefinition Height="44" />
+				<RowDefinition Height="30" />
 				<RowDefinition Height="*" />
-				<RowDefinition Height="Auto" />
-				<RowDefinition Height="Auto" />
 			</Grid.RowDefinitions>
 
-			<Grid Grid.Row="0" Margin="0,0,0,8">
-				<Grid.ColumnDefinitions>
-					<ColumnDefinition Width="*" />
-					<ColumnDefinition Width="Auto" />
-				</Grid.ColumnDefinitions>
-				<StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-					<TextBlock Text="LAYERED TIMELINE" Style="{StaticResource OperatorSectionTitle}" />
-					<Border Margin="10,0,0,0" Padding="7,2" CornerRadius="4" Background="{DynamicResource OperatorRaisedSurfaceBrush}">
-						<TextBlock Text="{Binding TransportState}" Style="{StaticResource OperatorLabel}" />
-					</Border>
-					<Border Margin="6,0,0,0" Padding="7,2" CornerRadius="4" Background="{DynamicResource OperatorRaisedSurfaceBrush}">
-						<TextBlock Text="{Binding SnapStatus}" Style="{StaticResource OperatorLabel}" />
-					</Border>
-					<Border Margin="6,0,0,0" Padding="7,2" CornerRadius="4" Background="{DynamicResource OperatorRaisedSurfaceBrush}">
-						<TextBlock Text="{Binding SelectionStatus}" Style="{StaticResource OperatorLabel}" />
-					</Border>
-					<TextBlock Text="SEEK PENDING" Foreground="{DynamicResource OperatorWarningBrush}" FontSize="11" FontWeight="Bold" Margin="10,3,0,0">
-						<TextBlock.Style>
-							<Style TargetType="TextBlock">
-								<Setter Property="Visibility" Value="Collapsed" />
-								<Style.Triggers>
-									<DataTrigger Binding="{Binding HasPendingSeek}" Value="True">
-										<Setter Property="Visibility" Value="Visible" />
-									</DataTrigger>
-								</Style.Triggers>
-							</Style>
-						</TextBlock.Style>
-					</TextBlock>
-					<TextBlock Text="TRIM PREVIEW" Foreground="{DynamicResource OperatorAccentBrush}" FontSize="11" FontWeight="Bold" Margin="10,3,0,0">
-						<TextBlock.Style>
-							<Style TargetType="TextBlock">
-								<Setter Property="Visibility" Value="Collapsed" />
-								<Style.Triggers>
-									<DataTrigger Binding="{Binding HasTrimPreview}" Value="True">
-										<Setter Property="Visibility" Value="Visible" />
-									</DataTrigger>
-								</Style.Triggers>
-							</Style>
-						</TextBlock.Style>
-					</TextBlock>
-					<TextBlock Text="INVALID IN/OUT" Foreground="{DynamicResource OperatorWarningBrush}" FontSize="11" FontWeight="Bold" Margin="10,3,0,0">
-						<TextBlock.Style>
-							<Style TargetType="TextBlock">
-								<Setter Property="Visibility" Value="Collapsed" />
-								<Style.Triggers>
-									<DataTrigger Binding="{Binding HasInvalidRange}" Value="True">
-										<Setter Property="Visibility" Value="Visible" />
-									</DataTrigger>
-								</Style.Triggers>
-							</Style>
-						</TextBlock.Style>
-					</TextBlock>
-				</StackPanel>
+			<Border Grid.Row="0"
+				Background="{DynamicResource OperatorTopBarBrush}"
+				BorderBrush="{DynamicResource OperatorBorderBrush}"
+				BorderThickness="0,0,0,1">
+				<Grid Margin="8,0">
+					<Grid.ColumnDefinitions>
+						<ColumnDefinition Width="220" />
+						<ColumnDefinition Width="*" />
+						<ColumnDefinition Width="Auto" />
+					</Grid.ColumnDefinitions>
 
-				<StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-					<TextBlock Text="{Binding CurrentTimecode}" Style="{StaticResource OperatorTimecode}" FontSize="17" Margin="0,0,12,0" VerticalAlignment="Center" />
-					<Button Content="◀ CUE" Command="{Binding PreviousCueCommand}" Style="{StaticResource OperatorButton}" Padding="8,4" Margin="0,0,4,0" ToolTip="Jump to previous cue (Page Up)." />
-					<Button Content="CUE ▶" Command="{Binding NextCueCommand}" Style="{StaticResource OperatorButton}" Padding="8,4" Margin="0,0,10,0" ToolTip="Jump to next cue (Page Down)." />
-					<Button Content="−" Command="{Binding ZoomOutCommand}" Style="{StaticResource OperatorButton}" Width="28" Padding="4" />
-					<TextBlock Text="{Binding ZoomLabel}" Style="{StaticResource OperatorValue}" Width="42" TextAlignment="Center" VerticalAlignment="Center" />
-					<Button Content="+" Command="{Binding ZoomInCommand}" Style="{StaticResource OperatorButton}" Width="28" Padding="4" />
-					<Button Content="FIT" Command="{Binding FitCommand}" Style="{StaticResource OperatorButton}" Padding="8,4" Margin="4,0,8,0" />
-					<controls:RtaimeCheckBox Content="SNAP" IsChecked="{Binding SnapEnabled, Mode=TwoWay}" VerticalAlignment="Center" FontWeight="SemiBold" />
-				</StackPanel>
-			</Grid>
+					<StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+						<TextBlock Text="TIMELINE" Style="{StaticResource OperatorSectionTitle}" VerticalAlignment="Center" />
+						<controls:RtaimeStatusBadge
+							Status="{x:Static controls:RtaimeStatusKind.Neutral}"
+							Content="{Binding TransportState}"
+							ShowIndicator="False"
+							Margin="10,0,0,0"
+							VerticalAlignment="Center" />
+					</StackPanel>
 
-			<Grid Grid.Row="1" Margin="0,0,0,4">
+					<StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+						<controls:RtaimeStatusBadge
+							Status="{x:Static controls:RtaimeStatusKind.Neutral}"
+							Content="SEQ · CURRENT MEDIA"
+							ShowIndicator="False"
+							Margin="0,0,5,0"
+							ToolTip="The current V1 contract exposes one governed media timeline; sequence switching is unavailable." />
+						<controls:RtaimeStatusBadge
+							Status="{x:Static controls:RtaimeStatusKind.Selection}"
+							Content="SELECT"
+							ShowIndicator="False"
+							Margin="0,0,5,0"
+							ToolTip="Selection is the governed edit mode. Blade/cut editing is not exposed by the current timeline contract." />
+						<controls:RtaimeStatusBadge
+							Status="{x:Static controls:RtaimeStatusKind.Neutral}"
+							Content="LINK N/A"
+							ShowIndicator="False"
+							Margin="0,0,5,0"
+							ToolTip="Clip linking is not exposed by the current timeline contract." />
+						<controls:RtaimeToggleButton
+							Content="SNAP"
+							IsChecked="{Binding SnapEnabled, Mode=TwoWay}"
+							IsCompact="True"
+							Margin="0,0,5,0"
+							ToolTip="{Binding SnapStatus}" />
+						<controls:RtaimeStatusBadge
+							Status="{x:Static controls:RtaimeStatusKind.Neutral}"
+							ShowIndicator="False"
+							Margin="0,0,5,0"
+							ToolTip="Timeline frame rate follows the loaded authoritative media transport."
+							automation:AutomationProperties.Name="Timeline frame rate">
+							<StackPanel Orientation="Horizontal">
+								<TextBlock Text="{Binding FrameRate}" />
+								<TextBlock Text=" FPS" />
+							</StackPanel>
+						</controls:RtaimeStatusBadge>
+
+						<controls:RtaimeTransportButton
+							IconData="{StaticResource RtaimeIconPlayGeometry}"
+							Command="{Binding MediaDeck.TogglePlayPauseCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							Width="28"
+							Height="28"
+							Margin="0,0,3,0"
+							ToolTip="Play or pause Preview media (Space)." />
+						<controls:RtaimeTransportButton
+							IconData="{StaticResource RtaimeIconStopGeometry}"
+							Command="{Binding MediaDeck.StopCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							Width="28"
+							Height="28"
+							Margin="0,0,5,0"
+							ToolTip="Stop Preview media." />
+
+						<controls:RtaimeIconButton
+							IconData="{StaticResource RtaimeIconPreviousGeometry}"
+							Command="{Binding PreviousCueCommand}"
+							Width="26"
+							Height="26"
+							Margin="0,0,3,0"
+							ToolTip="Previous cue (Page Up)." />
+						<controls:RtaimeIconButton
+							IconData="{StaticResource RtaimeIconNextGeometry}"
+							Command="{Binding NextCueCommand}"
+							Width="26"
+							Height="26"
+							Margin="0,0,5,0"
+							ToolTip="Next cue (Page Down)." />
+
+						<controls:RtaimeButton
+							Content="−"
+							Command="{Binding ZoomOutCommand}"
+							Width="26"
+							Height="26"
+							IsCompact="True"
+							Margin="0,0,2,0"
+							ToolTip="Zoom out." />
+						<TextBlock Text="{Binding ZoomLabel}" Style="{StaticResource OperatorValue}" Width="38" TextAlignment="Center" VerticalAlignment="Center" />
+						<controls:RtaimeButton
+							Content="+"
+							Command="{Binding ZoomInCommand}"
+							Width="26"
+							Height="26"
+							IsCompact="True"
+							Margin="2,0,4,0"
+							ToolTip="Zoom in." />
+						<controls:RtaimeButton
+							Content="FIT"
+							Command="{Binding FitCommand}"
+							Height="26"
+							IsCompact="True"
+							Margin="0,0,4,0"
+							ToolTip="Fit the governed media range." />
+						<controls:RtaimeIconButton
+							IconData="{StaticResource RtaimeIconFullscreenGeometry}"
+							Command="{Binding Shell.ToggleFullscreenCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							Width="26"
+							Height="26"
+							ToolTip="Toggle Operator fullscreen (F11)." />
+					</StackPanel>
+
+					<StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Right">
+						<TextBlock
+							Text="{Binding DataContext.LastEvent, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							Style="{StaticResource OperatorLabel}"
+							MaxWidth="150"
+							TextTrimming="CharacterEllipsis"
+							VerticalAlignment="Center"
+							ToolTip="{Binding DataContext.LastEvent, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
+						<controls:RtaimeStatusBadge
+							Status="{x:Static controls:RtaimeStatusKind.Neutral}"
+							Content="{Binding DataContext.MediaDeck.ProgramDeckState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							ShowIndicator="False"
+							Margin="6,0,0,0"
+							ToolTip="{Binding DataContext.LastEvent, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
+						<controls:RtaimeStatusBadge
+							Status="{x:Static controls:RtaimeStatusKind.Warning}"
+							Content="ERROR"
+							Margin="4,0,0,0"
+							ToolTip="{Binding DataContext.LastError, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
+							<controls:RtaimeStatusBadge.Style>
+								<Style TargetType="{x:Type controls:RtaimeStatusBadge}" BasedOn="{StaticResource {x:Type controls:RtaimeStatusBadge}}">
+									<Setter Property="Visibility" Value="Visible" />
+									<Style.Triggers>
+										<DataTrigger Binding="{Binding DataContext.LastError, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="{x:Null}">
+											<Setter Property="Visibility" Value="Collapsed" />
+										</DataTrigger>
+										<DataTrigger Binding="{Binding DataContext.LastError, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="">
+											<Setter Property="Visibility" Value="Collapsed" />
+										</DataTrigger>
+									</Style.Triggers>
+								</Style>
+							</controls:RtaimeStatusBadge.Style>
+						</controls:RtaimeStatusBadge>
+						<controls:RtaimeTimecode Content="{Binding CurrentTimecode}" FontSize="14" Margin="8,0,8,0" />
+						<controls:RtaimeTextBox
+							Width="94"
+							Height="26"
+							Text="{Binding MediaDeck.CueName, RelativeSource={RelativeSource AncestorType={x:Type Window}}, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+							Margin="0,0,4,0"
+							ToolTip="Name for a new cue at the confirmed playhead frame."
+							automation:AutomationProperties.Name="New cue name" />
+						<controls:RtaimeButton
+							Content="+ CUE"
+							Command="{Binding MediaDeck.AddCueCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							Height="26"
+							IsCompact="True"
+							ToolTip="Add a named Media cue at the confirmed playhead frame." />
+					</StackPanel>
+				</Grid>
+			</Border>
+
+			<Grid Grid.Row="1">
 				<Grid.ColumnDefinitions>
-					<ColumnDefinition Width="112" />
+					<ColumnDefinition Width="238" />
 					<ColumnDefinition Width="*" />
 				</Grid.ColumnDefinitions>
-				<TextBlock Grid.Column="0" Text="{Binding VisibleRangeLabel}" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-				<Border Grid.Column="1" Background="{DynamicResource OperatorRaisedSurfaceBrush}" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1,1,1,0" ClipToBounds="True">
-					<ItemsControl ItemsSource="{Binding RulerTicks}">
-						<ItemsControl.ItemsPanel>
-							<ItemsPanelTemplate>
-								<Canvas />
-							</ItemsPanelTemplate>
-						</ItemsControl.ItemsPanel>
-						<ItemsControl.ItemContainerStyle>
-							<Style TargetType="ContentPresenter">
-								<Setter Property="Canvas.Left">
-									<Setter.Value>
-										<MultiBinding Converter="{StaticResource TimelineFrameToCanvasLeftConverter}">
-											<Binding Path="Frame" />
-											<Binding Path="DataContext.VisibleStartFrame" RelativeSource="{RelativeSource AncestorType={x:Type local:MediaTimelineControl}}" />
-											<Binding Path="DataContext.VisibleEndFrame" RelativeSource="{RelativeSource AncestorType={x:Type local:MediaTimelineControl}}" />
-											<Binding Path="ActualWidth" RelativeSource="{RelativeSource AncestorType={x:Type ItemsControl}}" />
-										</MultiBinding>
-									</Setter.Value>
-								</Setter>
-							</Style>
-						</ItemsControl.ItemContainerStyle>
-						<ItemsControl.ItemTemplate>
-							<DataTemplate>
-								<StackPanel>
-									<Border Width="1" Height="6" Background="{DynamicResource OperatorBorderBrush}" />
-									<TextBlock Text="{Binding Timecode}" Style="{StaticResource OperatorLabel}" FontSize="9" Margin="-18,1,0,0" />
-								</StackPanel>
-							</DataTemplate>
-						</ItemsControl.ItemTemplate>
-					</ItemsControl>
+				<Border Grid.Column="0"
+					Background="{StaticResource TimelineRulerBrush}"
+					BorderBrush="{DynamicResource OperatorBorderBrush}"
+					BorderThickness="0,0,1,1"
+					Padding="9,0">
+					<Grid>
+						<TextBlock
+							Text="{Binding VisibleRangeLabel}"
+							Style="{StaticResource OperatorLabel}"
+							FontSize="10"
+							VerticalAlignment="Center"
+							TextTrimming="CharacterEllipsis" />
+						<StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+							<TextBlock Text="{Binding SelectionStatus}" Style="{StaticResource OperatorLabel}" FontSize="9" />
+						</StackPanel>
+					</Grid>
+				</Border>
+
+				<Border Grid.Column="1"
+					Background="{StaticResource TimelineRulerBrush}"
+					BorderBrush="{DynamicResource OperatorBorderBrush}"
+					BorderThickness="0,0,0,1"
+					ClipToBounds="True">
+					<Grid>
+						<ItemsControl ItemsSource="{Binding RulerTicks}">
+							<ItemsControl.ItemsPanel>
+								<ItemsPanelTemplate>
+									<Canvas />
+								</ItemsPanelTemplate>
+							</ItemsControl.ItemsPanel>
+							<ItemsControl.ItemContainerStyle>
+								<Style TargetType="ContentPresenter">
+									<Setter Property="Canvas.Left">
+										<Setter.Value>
+											<MultiBinding Converter="{StaticResource TimelineFrameToCanvasLeftConverter}">
+												<Binding Path="Frame" />
+												<Binding Path="DataContext.VisibleStartFrame" RelativeSource="{RelativeSource AncestorType={x:Type local:MediaTimelineControl}}" />
+												<Binding Path="DataContext.VisibleEndFrame" RelativeSource="{RelativeSource AncestorType={x:Type local:MediaTimelineControl}}" />
+												<Binding Path="ActualWidth" RelativeSource="{RelativeSource AncestorType={x:Type ItemsControl}}" />
+											</MultiBinding>
+										</Setter.Value>
+									</Setter>
+								</Style>
+							</ItemsControl.ItemContainerStyle>
+							<ItemsControl.ItemTemplate>
+								<DataTemplate>
+									<StackPanel>
+										<Border Width="1" Height="8" Background="{DynamicResource OperatorBorderStrongBrush}" />
+										<TextBlock
+											Text="{Binding Timecode}"
+											Style="{StaticResource OperatorLabel}"
+											FontFamily="{DynamicResource OperatorTimecodeFontFamily}"
+											FontSize="9"
+											Margin="-18,1,0,0" />
+									</StackPanel>
+								</DataTemplate>
+							</ItemsControl.ItemTemplate>
+						</ItemsControl>
+
+						<ItemsControl ItemsSource="{Binding VisibleCues}" Panel.ZIndex="3">
+							<ItemsControl.ItemsPanel>
+								<ItemsPanelTemplate>
+									<Canvas />
+								</ItemsPanelTemplate>
+							</ItemsControl.ItemsPanel>
+							<ItemsControl.ItemContainerStyle>
+								<Style TargetType="ContentPresenter">
+									<Setter Property="Canvas.Left">
+										<Setter.Value>
+											<MultiBinding Converter="{StaticResource TimelineFrameToCanvasLeftConverter}">
+												<Binding Path="Frame" />
+												<Binding Path="DataContext.VisibleStartFrame" RelativeSource="{RelativeSource AncestorType={x:Type local:MediaTimelineControl}}" />
+												<Binding Path="DataContext.VisibleEndFrame" RelativeSource="{RelativeSource AncestorType={x:Type local:MediaTimelineControl}}" />
+												<Binding Path="ActualWidth" RelativeSource="{RelativeSource AncestorType={x:Type ItemsControl}}" />
+											</MultiBinding>
+										</Setter.Value>
+									</Setter>
+								</Style>
+							</ItemsControl.ItemContainerStyle>
+							<ItemsControl.ItemTemplate>
+								<DataTemplate>
+									<Border
+										Style="{StaticResource TimelineCueMarker}"
+										PreviewMouseLeftButtonDown="Cue_PreviewMouseLeftButtonDown"
+										ToolTip="{Binding Timecode}">
+										<StackPanel Orientation="Horizontal">
+											<Polygon Points="0,0 7,0 3.5,5" Fill="{StaticResource TimelineCueBrush}" Width="7" Height="5" VerticalAlignment="Center" Margin="0,0,4,0" />
+											<TextBlock Text="{Binding Name}" Foreground="{DynamicResource OperatorTextBrush}" FontSize="9" TextTrimming="CharacterEllipsis" MaxWidth="78" VerticalAlignment="Center" />
+										</StackPanel>
+									</Border>
+								</DataTemplate>
+							</ItemsControl.ItemTemplate>
+						</ItemsControl>
+
+						<Canvas IsHitTestVisible="False" Panel.ZIndex="4">
+							<Polygon Points="0,0 10,0 5,7" Fill="{DynamicResource OperatorAccentBrush}" Width="10" Height="7">
+								<Canvas.Left>
+									<MultiBinding Converter="{StaticResource TimelineFrameToCanvasLeftConverter}">
+										<Binding Path="DisplayFrame" />
+										<Binding Path="VisibleStartFrame" />
+										<Binding Path="VisibleEndFrame" />
+										<Binding Path="ActualWidth" RelativeSource="{RelativeSource AncestorType={x:Type Canvas}}" />
+									</MultiBinding>
+								</Canvas.Left>
+							</Polygon>
+						</Canvas>
+
+						<controls:RtaimeScrollBar
+							Orientation="Horizontal"
+							Height="7"
+							VerticalAlignment="Bottom"
+							Minimum="0"
+							Maximum="{Binding ScrollMaximum}"
+							Value="{Binding ScrollValue, Mode=TwoWay}"
+							ViewportSize="{Binding VisibleFrameCount}"
+							LargeChange="{Binding ScrollLargeChange}"
+							SmallChange="1"
+							IsEnabled="{Binding IsLoaded}"
+							Panel.ZIndex="5" />
+					</Grid>
 				</Border>
 			</Grid>
 
 			<Grid Grid.Row="2"
 				x:Name="TimelineWorkspace"
+				Background="{StaticResource TimelineBackgroundBrush}"
 				ClipToBounds="True"
 				PreviewMouseLeftButtonDown="TimelineWorkspace_PreviewMouseLeftButtonDown"
 				PreviewMouseMove="TimelineWorkspace_PreviewMouseMove"
@@ -142,33 +415,62 @@
 				automation:AutomationProperties.Name="Layered media timeline"
 				automation:AutomationProperties.HelpText="{Binding AccessibilityDescription}">
 				<Grid.ColumnDefinitions>
-					<ColumnDefinition Width="112" />
+					<ColumnDefinition Width="238" />
 					<ColumnDefinition Width="*" />
 				</Grid.ColumnDefinitions>
 
 				<ItemsControl x:Name="TrackRows" Grid.ColumnSpan="2" ItemsSource="{Binding Tracks}">
 					<ItemsControl.ItemTemplate>
 						<DataTemplate>
-							<Grid Height="34" Margin="0,0,0,2">
+							<Grid Height="{Binding RowHeight}">
 								<Grid.ColumnDefinitions>
-									<ColumnDefinition Width="112" />
+									<ColumnDefinition Width="238" />
 									<ColumnDefinition Width="*" />
 								</Grid.ColumnDefinitions>
-								<Border Grid.Column="0" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" Padding="7,0">
-									<Border.Style>
-										<Style TargetType="Border">
-											<Setter Property="Background" Value="{DynamicResource OperatorRaisedSurfaceBrush}" />
-											<Style.Triggers>
-												<DataTrigger Binding="{Binding IsActive}" Value="True">
-													<Setter Property="Background" Value="{DynamicResource OperatorSelectionSurfaceBrush}" />
-													<Setter Property="BorderBrush" Value="{DynamicResource OperatorAccentBrush}" />
-												</DataTrigger>
-											</Style.Triggers>
-										</Style>
-									</Border.Style>
-									<TextBlock Text="{Binding Label}" Style="{StaticResource OperatorLabel}" FontWeight="SemiBold" VerticalAlignment="Center" />
+
+								<Border Grid.Column="0" Style="{StaticResource TimelineTrackHeader}">
+									<Grid>
+										<Grid.ColumnDefinitions>
+											<ColumnDefinition Width="4" />
+											<ColumnDefinition Width="*" />
+											<ColumnDefinition Width="Auto" />
+										</Grid.ColumnDefinitions>
+										<Border Grid.Column="0" Width="3" HorizontalAlignment="Left">
+											<Border.Style>
+												<Style TargetType="Border">
+													<Setter Property="Background" Value="{StaticResource TimelineVideoBrush}" />
+													<Style.Triggers>
+														<DataTrigger Binding="{Binding Category}" Value="{x:Static local:TimelineTrackCategory.Graphics}">
+															<Setter Property="Background" Value="{StaticResource TimelineGraphicsBrush}" />
+														</DataTrigger>
+														<DataTrigger Binding="{Binding IsAudioLane}" Value="True">
+															<Setter Property="Background" Value="{StaticResource TimelineAudioBrush}" />
+														</DataTrigger>
+													</Style.Triggers>
+												</Style>
+											</Border.Style>
+										</Border>
+										<TextBlock Grid.Column="1"
+											Text="{Binding Label}"
+											Foreground="{DynamicResource OperatorTextBrush}"
+											FontSize="11"
+											FontWeight="SemiBold"
+											Margin="8,0,0,0"
+											VerticalAlignment="Center" />
+										<TextBlock Grid.Column="2"
+											Text="{Binding VisibleItems.Count}"
+											Style="{StaticResource OperatorLabel}"
+											FontFamily="{DynamicResource OperatorTimecodeFontFamily}"
+											FontSize="9"
+											VerticalAlignment="Center" />
+									</Grid>
 								</Border>
-								<Border Grid.Column="1" Background="#16000000" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="0,1,1,1" ClipToBounds="True">
+
+								<Border Grid.Column="1"
+									Background="{StaticResource TimelineBackgroundBrush}"
+									BorderBrush="{DynamicResource OperatorBorderBrush}"
+									BorderThickness="0,0,0,1"
+									ClipToBounds="True">
 									<Grid>
 										<ItemsControl ItemsSource="{Binding VisibleItems}">
 											<ItemsControl.ItemsPanel>
@@ -203,92 +505,32 @@
 											</ItemsControl.ItemContainerStyle>
 											<ItemsControl.ItemTemplate>
 												<DataTemplate>
-													<Border Height="28"
-														Margin="1,2"
-														Padding="7,0"
-														CornerRadius="3"
+													<Border
+														Style="{StaticResource TimelineClip}"
 														PreviewMouseLeftButtonDown="TimelineItem_PreviewMouseLeftButtonDown"
 														ToolTip="{Binding Status}">
-														<Border.Style>
-															<Style TargetType="Border">
-																<Setter Property="Background" Value="{DynamicResource OperatorAccentBrush}" />
-																<Setter Property="Opacity" Value="0.78" />
-																<Setter Property="BorderBrush" Value="Transparent" />
-																<Setter Property="BorderThickness" Value="0" />
-																<Style.Triggers>
-																	<DataTrigger Binding="{Binding IsSelected}" Value="True">
-																		<Setter Property="Background" Value="{DynamicResource OperatorProgramBrush}" />
-																		<Setter Property="Opacity" Value="1" />
-																		<Setter Property="BorderBrush" Value="{DynamicResource OperatorAccentBrush}" />
-																		<Setter Property="BorderThickness" Value="2" />
-																	</DataTrigger>
-																</Style.Triggers>
-															</Style>
-														</Border.Style>
 														<Grid>
 															<Grid.ColumnDefinitions>
 																<ColumnDefinition Width="*" />
 																<ColumnDefinition Width="Auto" />
 															</Grid.ColumnDefinitions>
-															<TextBlock Text="{Binding Label}" Foreground="White" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-															<TextBlock Grid.Column="1" Text="{Binding Status}" Foreground="White" FontSize="9" VerticalAlignment="Center" Margin="8,0,0,0" />
+															<TextBlock
+																Text="{Binding Label}"
+																Foreground="White"
+																FontSize="11"
+																FontWeight="SemiBold"
+																VerticalAlignment="Center"
+																TextTrimming="CharacterEllipsis" />
+															<TextBlock Grid.Column="1"
+																Text="{Binding Status}"
+																Foreground="#D8FFFFFF"
+																FontSize="9"
+																Margin="8,0,0,0"
+																VerticalAlignment="Center"
+																TextTrimming="CharacterEllipsis"
+																MaxWidth="86" />
 														</Grid>
 													</Border>
-												</DataTemplate>
-											</ItemsControl.ItemTemplate>
-										</ItemsControl>
-
-										<ItemsControl ItemsSource="{Binding DataContext.VisibleCues, RelativeSource={RelativeSource AncestorType={x:Type local:MediaTimelineControl}}}">
-											<ItemsControl.Style>
-												<Style TargetType="ItemsControl">
-													<Setter Property="Visibility" Value="Collapsed" />
-													<Style.Triggers>
-														<DataTrigger Binding="{Binding IsCueTrack}" Value="True">
-															<Setter Property="Visibility" Value="Visible" />
-														</DataTrigger>
-													</Style.Triggers>
-												</Style>
-											</ItemsControl.Style>
-											<ItemsControl.ItemsPanel>
-												<ItemsPanelTemplate>
-													<Canvas />
-												</ItemsPanelTemplate>
-											</ItemsControl.ItemsPanel>
-											<ItemsControl.ItemContainerStyle>
-												<Style TargetType="ContentPresenter">
-													<Setter Property="Canvas.Left">
-														<Setter.Value>
-															<MultiBinding Converter="{StaticResource TimelineFrameToCanvasLeftConverter}">
-																<Binding Path="Frame" />
-																<Binding Path="DataContext.VisibleStartFrame" RelativeSource="{RelativeSource AncestorType={x:Type local:MediaTimelineControl}}" />
-																<Binding Path="DataContext.VisibleEndFrame" RelativeSource="{RelativeSource AncestorType={x:Type local:MediaTimelineControl}}" />
-																<Binding Path="ActualWidth" RelativeSource="{RelativeSource AncestorType={x:Type ItemsControl}}" />
-															</MultiBinding>
-														</Setter.Value>
-													</Setter>
-												</Style>
-											</ItemsControl.ItemContainerStyle>
-											<ItemsControl.ItemTemplate>
-												<DataTemplate>
-													<Button Content="{Binding Name, StringFormat='▼ {0}'}"
-														Padding="5,2"
-														MinWidth="46"
-														MaxWidth="140"
-														FontSize="9"
-														PreviewMouseLeftButtonDown="Cue_PreviewMouseLeftButtonDown"
-														ToolTip="{Binding Timecode}">
-														<Button.Style>
-															<Style TargetType="Button" BasedOn="{StaticResource OperatorButton}">
-																<Style.Triggers>
-																	<DataTrigger Binding="{Binding IsSelected}" Value="True">
-																		<Setter Property="Background" Value="{DynamicResource OperatorProgramBrush}" />
-																		<Setter Property="BorderBrush" Value="{DynamicResource OperatorAccentBrush}" />
-																		<Setter Property="Foreground" Value="White" />
-																	</DataTrigger>
-																</Style.Triggers>
-															</Style>
-														</Button.Style>
-													</Button>
 												</DataTemplate>
 											</ItemsControl.ItemTemplate>
 										</ItemsControl>
@@ -301,9 +543,10 @@
 
 				<Grid x:Name="TimelineContentArea" Grid.Column="1">
 					<Canvas x:Name="TimelineOverlay" ClipToBounds="True">
-						<Border Width="2"
+						<Border
+							Width="2"
 							Height="{Binding ActualHeight, ElementName=TrackRows}"
-							Background="{DynamicResource OperatorProgramBrush}"
+							Background="{DynamicResource OperatorAccentBrush}"
 							IsHitTestVisible="False">
 							<Canvas.Left>
 								<MultiBinding Converter="{StaticResource TimelineFrameToCanvasLeftConverter}">
@@ -315,21 +558,21 @@
 							</Canvas.Left>
 						</Border>
 
-						<Border Width="5"
+						<Border
+							Width="5"
 							Height="{Binding ActualHeight, ElementName=TrackRows}"
 							Background="{DynamicResource OperatorAccentBrush}"
-							Opacity="0.7"
+							Opacity="0.65"
 							Tag="IN"
 							Cursor="SizeWE"
+							IsHitTestVisible="True"
 							PreviewMouseLeftButtonDown="TrimHandle_PreviewMouseLeftButtonDown"
 							ToolTip="IN trim handle">
 							<Border.Style>
 								<Style TargetType="Border">
 									<Setter Property="Visibility" Value="Collapsed" />
 									<Style.Triggers>
-										<DataTrigger Binding="{Binding HasInPoint}" Value="True">
-											<Setter Property="Visibility" Value="Visible" />
-										</DataTrigger>
+										<DataTrigger Binding="{Binding HasInPoint}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
 									</Style.Triggers>
 								</Style>
 							</Border.Style>
@@ -343,21 +586,21 @@
 							</Canvas.Left>
 						</Border>
 
-						<Border Width="5"
+						<Border
+							Width="5"
 							Height="{Binding ActualHeight, ElementName=TrackRows}"
 							Background="{DynamicResource OperatorWarningBrush}"
-							Opacity="0.7"
+							Opacity="0.65"
 							Tag="OUT"
 							Cursor="SizeWE"
+							IsHitTestVisible="True"
 							PreviewMouseLeftButtonDown="TrimHandle_PreviewMouseLeftButtonDown"
 							ToolTip="OUT trim handle">
 							<Border.Style>
 								<Style TargetType="Border">
 									<Setter Property="Visibility" Value="Collapsed" />
 									<Style.Triggers>
-										<DataTrigger Binding="{Binding HasOutPoint}" Value="True">
-											<Setter Property="Visibility" Value="Visible" />
-										</DataTrigger>
+										<DataTrigger Binding="{Binding HasOutPoint}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
 									</Style.Triggers>
 								</Style>
 							</Border.Style>
@@ -372,63 +615,32 @@
 						</Border>
 					</Canvas>
 				</Grid>
-			</Grid>
 
-			<Grid Grid.Row="3" Margin="112,7,0,7">
-				<Grid.RowDefinitions>
-					<RowDefinition Height="Auto" />
-					<RowDefinition Height="Auto" />
-				</Grid.RowDefinitions>
-				<controls:RtaimeScrollBar Grid.Row="0"
-					Orientation="Horizontal"
-					Minimum="0"
-					Maximum="{Binding ScrollMaximum}"
-					Value="{Binding ScrollValue, Mode=TwoWay}"
-					ViewportSize="{Binding VisibleFrameCount}"
-					LargeChange="{Binding ScrollLargeChange}"
-					SmallChange="1"
-					IsEnabled="{Binding IsLoaded}" />
-				<Grid Grid.Row="1" Margin="0,5,0,0">
-					<Grid.ColumnDefinitions>
-						<ColumnDefinition Width="*" />
-						<ColumnDefinition Width="Auto" />
-					</Grid.ColumnDefinitions>
-					<TextBlock Text="{Binding DisplayFrame, StringFormat=Frame {0:N0}}" Style="{StaticResource OperatorLabel}" />
-					<StackPanel Grid.Column="1" Orientation="Horizontal">
-						<TextBlock Text="{Binding FrameRate, StringFormat={}{0} fps}" Style="{StaticResource OperatorLabel}" Margin="0,0,16,0" />
-						<TextBlock Text="REMAINING" Style="{StaticResource OperatorLabel}" Margin="0,0,7,0" />
-						<TextBlock Text="{Binding RemainingTimecode}" Style="{StaticResource OperatorTimecode}" FontSize="11" />
-					</StackPanel>
-				</Grid>
-			</Grid>
-
-			<Grid Grid.Row="4">
-				<Grid.ColumnDefinitions>
-					<ColumnDefinition Width="Auto" />
-					<ColumnDefinition Width="6" />
-					<ColumnDefinition Width="Auto" />
-					<ColumnDefinition Width="6" />
-					<ColumnDefinition Width="Auto" />
-					<ColumnDefinition Width="6" />
-					<ColumnDefinition Width="Auto" />
-					<ColumnDefinition Width="*" />
-				</Grid.ColumnDefinitions>
-				<Button Grid.Column="0" Content="|◀  HOME" Command="{Binding JumpToStartCommand}" Style="{StaticResource OperatorButton}" Padding="9,5" />
-				<Button Grid.Column="2" Content="◀  -1 FRAME" Command="{Binding StepBackwardCommand}" Style="{StaticResource OperatorButton}" Padding="9,5" />
-				<Button Grid.Column="4" Content="+1 FRAME  ▶" Command="{Binding StepForwardCommand}" Style="{StaticResource OperatorButton}" Padding="9,5" />
-				<Button Grid.Column="6" Content="END  ▶|" Command="{Binding JumpToEndCommand}" Style="{StaticResource OperatorButton}" Padding="9,5" />
-				<StackPanel Grid.Column="7" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-					<TextBlock Text="CUE" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" Margin="0,0,6,0" />
-					<controls:RtaimeTextBox Width="128"
-						Text="{Binding MediaDeck.CueName, RelativeSource={RelativeSource AncestorType={x:Type Window}}, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-						
-						Margin="0,0,5,0"
-						ToolTip="Name for a new cue at the confirmed playhead frame." />
-					<Button Content="+ CUE"
-						Command="{Binding MediaDeck.AddCueCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-						Style="{StaticResource OperatorAccentButton}"
-						Padding="8,4"
-						ToolTip="Add a named Media cue at the confirmed playhead frame." />
+				<StackPanel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,4,6,0" IsHitTestVisible="False">
+					<controls:RtaimeStatusBadge Status="{x:Static controls:RtaimeStatusKind.Warning}" Content="SEEK PENDING" ShowIndicator="True">
+						<controls:RtaimeStatusBadge.Style>
+							<Style TargetType="{x:Type controls:RtaimeStatusBadge}" BasedOn="{StaticResource {x:Type controls:RtaimeStatusBadge}}">
+								<Setter Property="Visibility" Value="Collapsed" />
+								<Style.Triggers><DataTrigger Binding="{Binding HasPendingSeek}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
+							</Style>
+						</controls:RtaimeStatusBadge.Style>
+					</controls:RtaimeStatusBadge>
+					<controls:RtaimeStatusBadge Status="{x:Static controls:RtaimeStatusKind.Selection}" Content="TRIM PREVIEW" ShowIndicator="True">
+						<controls:RtaimeStatusBadge.Style>
+							<Style TargetType="{x:Type controls:RtaimeStatusBadge}" BasedOn="{StaticResource {x:Type controls:RtaimeStatusBadge}}">
+								<Setter Property="Visibility" Value="Collapsed" />
+								<Style.Triggers><DataTrigger Binding="{Binding HasTrimPreview}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
+							</Style>
+						</controls:RtaimeStatusBadge.Style>
+					</controls:RtaimeStatusBadge>
+					<controls:RtaimeStatusBadge Status="{x:Static controls:RtaimeStatusKind.Warning}" Content="INVALID IN/OUT" ShowIndicator="True">
+						<controls:RtaimeStatusBadge.Style>
+							<Style TargetType="{x:Type controls:RtaimeStatusBadge}" BasedOn="{StaticResource {x:Type controls:RtaimeStatusBadge}}">
+								<Setter Property="Visibility" Value="Collapsed" />
+								<Style.Triggers><DataTrigger Binding="{Binding HasInvalidRange}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
+							</Style>
+						</controls:RtaimeStatusBadge.Style>
+					</controls:RtaimeStatusBadge>
 				</StackPanel>
 			</Grid>
 		</Grid>

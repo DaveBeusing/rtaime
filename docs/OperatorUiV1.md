@@ -361,24 +361,30 @@ Detailed behavior and authority boundaries are documented in docs/LiveMultiviewA
 
 ## Layered Timeline & Cue Workspace
 
-The persistent lower workspace is now a frame-accurate layered timeline rather than a single seek slider. It exposes Video, Graphics, Overlay, Audio, AI, Control and Cue semantic tracks while preserving Runtime and existing media/marker contracts as the production authority.
+The persistent lower workspace is a frame-accurate 1476×320 production timeline at the 1920×1080 reference surface. Its exact vertical composition is 44 pixels of toolbar, 30 pixels of ruler/marker lane and six compact reference lanes: V3 Graphics, V2 Video, V1 Video, A1 Music, A2 SFX and A3 VO. Video/graphics lanes are 42 pixels high; audio lanes are 40 pixels high. The fixed track-header column is 238 pixels wide and the remaining width is the frame canvas.
 
-The timeline provides a visible ruler and Program playhead, horizontal scroll, 1x–32x zoom, Fit, frame snapping, confirmed IN/OUT markers, the active media range and first-class named Media cues. Named cues can be added at the confirmed playhead frame; Page Up/Page Down navigate previous/next cue; cue double-click jumps through the existing seek command path; and selected cues expose Jump/Rename/Delete in the shared Inspector. IN/OUT handle drags now render a local trim preview and only commit through the existing marker command path on release; Escape or capture loss cancels the preview.
+The visible lane names are presentation roles only. The loaded Media Deck clip remains the authoritative V1 Video item. Existing Graphics resources project only to V3 Graphics, and existing Audio resources project only to A1 Music. V2 Video, A2 SFX and A3 VO remain empty reference lanes until matching governed product semantics exist. The underlying timeline categories and shared Inspector selection model remain unchanged.
 
-The loaded Media Deck clip is the authoritative Video item. Audio and Graphics Media Pool resources may be dropped only onto matching semantic tracks and appear as `PROJECTED` Operator metadata across the current media duration. They are deliberately not represented as `COMMITTED` timed production automation. Unsupported Source/Composition drops are rejected. Rendering is viewport-bounded through visible-item and visible-cue projections so off-screen timeline objects are not presented to WPF item containers.
+The ruler and clip geometry continue to use the existing frame-derived visible range and frame-to-pixel conversion. The playhead is presented as a 2-pixel cyan line with a cyan head. Confirmed IN/OUT trim handles, bounded snapping, 1×–32× zoom, horizontal scrolling, Fit and pointer seek retain the existing command paths. Named cues are rendered above the tracks in the ruler marker lane and still use the existing Media Deck marker commands for add, jump, rename and delete.
 
-Selecting a clip, projected resource or cue reuses the existing right-side context Inspector. Timeline items support Shift-add and Ctrl-toggle multi-selection; the primary item remains the Inspector context and shared/common fields are shown with explicit `MIXED` values when required. No separate timeline property dialogs or hidden production authority are introduced.
+The timeline toolbar uses rtaime controls only. It exposes current timeline context, SELECT mode, explicit LINK N/A, SNAP, observed FPS, Preview Play/Pause and Stop, previous/next cue, zoom, Fit, Operator fullscreen, timecode and named cue creation. The current contracts expose no sequence-switch command, Blade/Cut edit command, link command or frame-rate mutation, so the UI does not invent them.
 
-The current backend exposes no governed clip-move edit command, timeline undo/redo history, section/show-marker domain or reusable audio-waveform projection. The Operator does not synthesize these as UI-only production semantics.
+The previous separate Bottom Transport visual is collapsed because its active transport/fullscreen actions now live inside the timeline toolbar. This allows the six reference tracks to consume the complete 320-pixel lower workspace without overlap.
 
-The detailed operator and authority semantics are documented in `docs/LayeredTimeline.md`.
+Rendering remains viewport-bounded through VisibleItems and VisibleCues, so zoom/scroll do not allocate a second timeline or present off-screen objects. Selection, Shift-add/Ctrl-toggle multi-selection, cue focus, trim preview, marker commit/cancel and shared Inspector projection remain on their existing paths.
+
+The current backend exposes no governed clip-move edit command, timeline undo/redo history, section/show-marker domain, transition projection or reusable audio-waveform projection. The Operator therefore renders no fake waveform, transition or edit history merely to imitate the mockup.
+
+The detailed operator and authority semantics are documented in docs/LayeredTimeline.md.
 
 ### Layered timeline acceptance evidence
 
-- Client unit tests cover frame/time conversion, zoomed visible ranges, pointer mapping and snapping;
-- marker-controller unit tests cover absolute IN/OUT command generation and previous/next cue navigation;
-- Operator UI policy verifies semantic tracks, ruler/playhead, zoom/scroll, trim preview/commit/cancel paths, cue keyboard navigation, multi-selection-to-Inspector integration and viewport-bounded projection refresh;
-- stable track and cue projections are hash-gated so routine playback observations do not allocate a new composition model per frame.
+- the shell default lower-region height remains exactly 320 pixels;
+- UI policy verifies the 44/30/238 geometry and all six reference lane labels;
+- Client unit tests continue to cover frame/time conversion, zoomed visible ranges, pointer mapping and snapping;
+- marker-controller unit tests continue to cover absolute IN/OUT command generation and previous/next cue navigation;
+- UI policy verifies cyan playhead/cue markers, custom controls, zoom/scroll, trim preview/commit/cancel paths, multi-selection-to-Inspector integration and viewport-bounded projection refresh;
+- stable track and cue projections remain hash-gated so routine playback observations do not allocate a new composition model per frame.
 
 ## Verification
 
