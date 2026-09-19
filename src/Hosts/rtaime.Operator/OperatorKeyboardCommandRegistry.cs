@@ -86,8 +86,6 @@ public sealed class OperatorKeyboardCommandRegistry
 			new("add-cue", "Add marker / cue", Key.M, ModifierKeys.None, mediaDeck.AddCueCommand),
 			new("previous-cue", "Previous cue", Key.Up, ModifierKeys.None, timeline.PreviousCueCommand),
 			new("next-cue", "Next cue", Key.Down, ModifierKeys.None, timeline.NextCueCommand),
-			new("previous-cue-page", "Previous cue", Key.PageUp, ModifierKeys.None, timeline.PreviousCueCommand),
-			new("next-cue-page", "Next cue", Key.PageDown, ModifierKeys.None, timeline.NextCueCommand),
 			new("auto", "AUTO Preview to Program", Key.Enter, ModifierKeys.None, @operator.DissolveCommand),
 			new("cut", "CUT Preview to Program", Key.Enter, ModifierKeys.Control, @operator.CutCommand),
 			new("record", "Start / Stop Program recording", Key.R, ModifierKeys.None, recording),
