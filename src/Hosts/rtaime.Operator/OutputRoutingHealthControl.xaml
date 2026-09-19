@@ -75,7 +75,7 @@
 								</Grid>
 							</Border>
 						</DataTemplate>
-					</ListBox.ItemTemplate>
+					</controls:RtaimeListBox.ItemTemplate>
 				</controls:RtaimeListBox>
 			</StackPanel>
 		</Border>
