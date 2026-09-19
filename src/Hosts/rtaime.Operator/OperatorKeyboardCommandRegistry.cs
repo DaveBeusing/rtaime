@@ -103,6 +103,7 @@ public sealed class OperatorKeyboardCommandRegistry
 			new("set-in", "Set Preview IN", Key.I, ModifierKeys.None, PreviewTransport(mediaDeck.SetInCommand)),
 			new("set-out", "Set Preview OUT", Key.O, ModifierKeys.None, PreviewTransport(mediaDeck.SetOutCommand)),
 			new("add-cue", "Add Preview marker / cue", Key.M, ModifierKeys.None, PreviewTransport(mediaDeck.AddCueCommand)),
+			new("delete-cue", "Delete selected Preview cue", Key.Delete, ModifierKeys.None, mediaDeck.DeleteCueCommand),
 			new("previous-cue", "Previous Preview cue", Key.Up, ModifierKeys.None, PreviewTransport(timeline.PreviousCueCommand)),
 			new("next-cue", "Next Preview cue", Key.Down, ModifierKeys.None, PreviewTransport(timeline.NextCueCommand)),
 			new("auto", "AUTO Preview to Program", Key.Return, ModifierKeys.None, @operator.DissolveCommand),
