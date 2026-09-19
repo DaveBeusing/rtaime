@@ -44,9 +44,48 @@ public sealed record OperatorWorkspaceLayoutSettings(
 			: fallback;
 }
 
+public sealed record OperatorWindowPlacementSettings(
+	double? Left,
+	double? Top,
+	double Width,
+	double Height,
+	string State)
+{
+	public const double DefaultWidth = 1600;
+	public const double DefaultHeight = 900;
+	public const double MinimumWidth = 1100;
+	public const double MinimumHeight = 640;
+	public const double MaximumWidth = 7680;
+	public const double MaximumHeight = 4320;
+
+	public static OperatorWindowPlacementSettings Default { get; } = new(
+		null,
+		null,
+		DefaultWidth,
+		DefaultHeight,
+		"NORMAL");
+
+	public OperatorWindowPlacementSettings Normalize() => this with
+	{
+		Left = NormalizeCoordinate(Left),
+		Top = NormalizeCoordinate(Top),
+		Width = ClampFinite(Width, MinimumWidth, MaximumWidth, DefaultWidth),
+		Height = ClampFinite(Height, MinimumHeight, MaximumHeight, DefaultHeight),
+		State = string.Equals(State?.Trim(), "MAXIMIZED", StringComparison.OrdinalIgnoreCase)
+			? "MAXIMIZED"
+			: "NORMAL"
+	};
+
+	private static double? NormalizeCoordinate(double? value) =>
+		value is { } coordinate && double.IsFinite(coordinate) ? coordinate : null;
+
+	private static double ClampFinite(double value, double minimum, double maximum, double fallback) =>
+		double.IsFinite(value) ? Math.Clamp(value, minimum, maximum) : fallback;
+}
+
 public sealed record OperatorLayoutSettings
 {
-	public const int CurrentVersion = 2;
+	public const int CurrentVersion = 3;
 	public const double DefaultLeftPanelWidth = 248;
 	public const double DefaultRightPanelWidth = 320;
 	public const double DefaultLowerPanelHeight = 420;
@@ -60,19 +99,28 @@ public sealed record OperatorLayoutSettings
 	public int Version { get; init; } = CurrentVersion;
 	public bool IsFullscreen { get; init; }
 	public string SelectedWorkspace { get; init; } = OperatorWorkspaceNames.Live;
+	public OperatorWindowPlacementSettings WindowPlacement { get; init; } = OperatorWindowPlacementSettings.Default;
 	public Dictionary<string, OperatorWorkspaceLayoutSettings> Workspaces { get; init; } = CreateCanonicalLayouts();
 
 	public static OperatorLayoutSettings Default => new();
 
 	public OperatorLayoutSettings Normalize()
 	{
-		if (Version != CurrentVersion)
+		if (Version is < 2 or > CurrentVersion)
 			return Default;
 
 		var selected = OperatorWorkspaceNames.Normalize(SelectedWorkspace);
 		var layouts = CreateCanonicalLayouts();
 		if (Workspaces is not null)
 		{
+			if (Workspaces.TryGetValue("GRAPHICS", out var legacyGraphics) && legacyGraphics is not null)
+				layouts[OperatorWorkspaceNames.Compositing] = legacyGraphics.Normalize();
+			if (Workspaces.TryGetValue("SYSTEM", out var legacySystem) && legacySystem is not null)
+			{
+				layouts[OperatorWorkspaceNames.Outputs] = legacySystem.Normalize();
+				layouts[OperatorWorkspaceNames.Settings] = legacySystem.Normalize();
+			}
+
 			foreach (var workspace in OperatorWorkspaceNames.All)
 			{
 				if (Workspaces.TryGetValue(workspace, out var layout) && layout is not null)
@@ -84,6 +132,7 @@ public sealed record OperatorLayoutSettings
 		{
 			Version = CurrentVersion,
 			SelectedWorkspace = selected,
+			WindowPlacement = (WindowPlacement ?? OperatorWindowPlacementSettings.Default).Normalize(),
 			Workspaces = layouts
 		};
 	}
@@ -114,7 +163,15 @@ public sealed record OperatorLayoutSettings
 			false,
 			false,
 			"PREVIEW"),
-		[OperatorWorkspaceNames.Graphics] = new(
+		[OperatorWorkspaceNames.Scenes] = new(
+			260,
+			390,
+			360,
+			false,
+			false,
+			false,
+			"DUAL"),
+		[OperatorWorkspaceNames.Compositing] = new(
 			300,
 			390,
 			360,
@@ -122,7 +179,15 @@ public sealed record OperatorLayoutSettings
 			false,
 			false,
 			"DUAL"),
-		[OperatorWorkspaceNames.System] = new(
+		[OperatorWorkspaceNames.Outputs] = new(
+			220,
+			420,
+			340,
+			true,
+			false,
+			false,
+			"PROGRAM"),
+		[OperatorWorkspaceNames.Settings] = new(
 			220,
 			460,
 			340,
@@ -138,22 +203,32 @@ public static class OperatorWorkspaceNames
 	public const string Live = "LIVE";
 	public const string Edit = "EDIT";
 	public const string Media = "MEDIA";
-	public const string Graphics = "GRAPHICS";
-	public const string System = "SYSTEM";
+	public const string Scenes = "SCENES";
+	public const string Compositing = "COMPOSITING";
+	public const string Outputs = "OUTPUTS";
+	public const string Settings = "SETTINGS";
 
 	public static IReadOnlyList<string> All { get; } =
 	[
-		Live,
-		Edit,
 		Media,
-		Graphics,
-		System
+		Edit,
+		Live,
+		Scenes,
+		Compositing,
+		Outputs,
+		Settings
 	];
 
 	public static string Normalize(string? value)
 	{
 		var normalized = value?.Trim().ToUpperInvariant();
-		return All.Contains(normalized, StringComparer.Ordinal) ? normalized! : Live;
+		return normalized switch
+		{
+			"GRAPHICS" => Compositing,
+			"SYSTEM" => Settings,
+			_ when All.Contains(normalized, StringComparer.Ordinal) => normalized!,
+			_ => Live
+		};
 	}
 }
 
@@ -223,6 +298,8 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 	private bool _isFullscreen;
 	private string _selectedWorkspace;
 	private string _viewerMode;
+	private OperatorWindowPlacementSettings _windowPlacement;
+	private double _viewportWidth = 1600;
 
 	public OperatorShellViewModel(
 		OperatorLayoutStore store,
@@ -236,6 +313,7 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 			StringComparer.Ordinal);
 		_isFullscreen = settings.IsFullscreen;
 		_selectedWorkspace = settings.SelectedWorkspace;
+		_windowPlacement = settings.WindowPlacement.Normalize();
 		var layout = _workspaceLayouts[_selectedWorkspace];
 		_leftPanelWidth = layout.LeftPanelWidth;
 		_rightPanelWidth = layout.RightPanelWidth;
@@ -268,6 +346,10 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 	public event PropertyChangedEventHandler? PropertyChanged;
 
 	public IReadOnlyList<string> Workspaces => OperatorWorkspaceNames.All;
+	public OperatorWindowPlacementSettings WindowPlacement => _windowPlacement;
+	public double NavigationRailWidth => _viewportWidth < 1320 ? 54 : 86;
+	public Visibility NavigationLabelVisibility => _viewportWidth < 1320 ? Visibility.Collapsed : Visibility.Visible;
+	public Visibility SecondaryMetricVisibility => _viewportWidth < 1480 ? Visibility.Collapsed : Visibility.Visible;
 
 	public ICommand ToggleLeftPanelCommand { get; }
 	public ICommand ToggleRightPanelCommand { get; }
@@ -409,17 +491,19 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 	public string FullscreenLabel => IsFullscreen ? "WINDOWED  F11" : "FULLSCREEN  F11";
 	public string CenterModeLabel => IsCenterMaximized ? "RESTORE PANELS" : "MAXIMIZE VIEW";
 
-	public bool HasLeftRegion => !string.Equals(SelectedWorkspace, OperatorWorkspaceNames.System, StringComparison.Ordinal);
-	public bool HasTimelineRegion => !string.Equals(SelectedWorkspace, OperatorWorkspaceNames.System, StringComparison.Ordinal);
-	public Visibility LeftRegionVisibility => HasLeftRegion ? Visibility.Visible : Visibility.Collapsed;
-	public Visibility TimelineRegionVisibility => HasTimelineRegion ? Visibility.Visible : Visibility.Collapsed;
-
 	public bool IsLiveWorkspace => string.Equals(SelectedWorkspace, OperatorWorkspaceNames.Live, StringComparison.Ordinal);
 	public bool IsEditWorkspace => string.Equals(SelectedWorkspace, OperatorWorkspaceNames.Edit, StringComparison.Ordinal);
 	public bool IsMediaWorkspace => string.Equals(SelectedWorkspace, OperatorWorkspaceNames.Media, StringComparison.Ordinal);
-	public bool IsGraphicsWorkspace => string.Equals(SelectedWorkspace, OperatorWorkspaceNames.Graphics, StringComparison.Ordinal);
-	public bool IsSystemWorkspace => string.Equals(SelectedWorkspace, OperatorWorkspaceNames.System, StringComparison.Ordinal);
-	public bool HasAuxiliaryWorkspaceColumn => IsLiveWorkspace || IsGraphicsWorkspace || IsSystemWorkspace;
+	public bool IsScenesWorkspace => string.Equals(SelectedWorkspace, OperatorWorkspaceNames.Scenes, StringComparison.Ordinal);
+	public bool IsCompositingWorkspace => string.Equals(SelectedWorkspace, OperatorWorkspaceNames.Compositing, StringComparison.Ordinal);
+	public bool IsOutputsWorkspace => string.Equals(SelectedWorkspace, OperatorWorkspaceNames.Outputs, StringComparison.Ordinal);
+	public bool IsSettingsWorkspace => string.Equals(SelectedWorkspace, OperatorWorkspaceNames.Settings, StringComparison.Ordinal);
+
+	public bool HasLeftRegion => IsLiveWorkspace || IsEditWorkspace || IsMediaWorkspace || IsScenesWorkspace || IsCompositingWorkspace;
+	public bool HasTimelineRegion => IsLiveWorkspace || IsEditWorkspace || IsMediaWorkspace || IsScenesWorkspace || IsCompositingWorkspace;
+	public Visibility LeftRegionVisibility => HasLeftRegion ? Visibility.Visible : Visibility.Collapsed;
+	public Visibility TimelineRegionVisibility => HasTimelineRegion ? Visibility.Visible : Visibility.Collapsed;
+	public bool HasAuxiliaryWorkspaceColumn => IsLiveWorkspace || IsScenesWorkspace || IsCompositingWorkspace || IsOutputsWorkspace || IsSettingsWorkspace;
 	public GridLength AuxiliaryWorkspaceColumnWidth => HasAuxiliaryWorkspaceColumn ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
 	public double AuxiliaryWorkspaceColumnMinWidth => HasAuxiliaryWorkspaceColumn ? 300 : 0;
 	public double AuxiliaryWorkspaceGapWidth => HasAuxiliaryWorkspaceColumn ? 14 : 0;
@@ -430,14 +514,14 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 	public Visibility ProductionControlsVisibility => IsLiveWorkspace || IsEditWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility MediaDeckVisibility => IsLiveWorkspace || IsEditWorkspace || IsMediaWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility SourceBinVisibility => IsLiveWorkspace || IsMediaWorkspace ? Visibility.Visible : Visibility.Collapsed;
-	public Visibility SystemWorkspaceVisibility => IsSystemWorkspace ? Visibility.Visible : Visibility.Collapsed;
-	public Visibility SystemStatusVisibility => IsSystemWorkspace ? Visibility.Visible : Visibility.Collapsed;
-	public Visibility MonitoringVisibility => IsSystemWorkspace ? Visibility.Visible : Visibility.Collapsed;
-	public Visibility GraphicsVisibility => IsGraphicsWorkspace || IsSystemWorkspace ? Visibility.Visible : Visibility.Collapsed;
-	public Visibility AudioVisibility => IsLiveWorkspace || IsSystemWorkspace ? Visibility.Visible : Visibility.Collapsed;
-	public Visibility RecordingVisibility => IsLiveWorkspace || IsSystemWorkspace ? Visibility.Visible : Visibility.Collapsed;
-	public Visibility AIVisibility => IsGraphicsWorkspace || IsSystemWorkspace ? Visibility.Visible : Visibility.Collapsed;
-	public Visibility OperatorStateVisibility => IsSystemWorkspace ? Visibility.Visible : Visibility.Collapsed;
+	public Visibility SystemWorkspaceVisibility => IsOutputsWorkspace || IsSettingsWorkspace ? Visibility.Visible : Visibility.Collapsed;
+	public Visibility SystemStatusVisibility => IsOutputsWorkspace || IsSettingsWorkspace ? Visibility.Visible : Visibility.Collapsed;
+	public Visibility MonitoringVisibility => IsOutputsWorkspace || IsSettingsWorkspace ? Visibility.Visible : Visibility.Collapsed;
+	public Visibility GraphicsVisibility => IsScenesWorkspace || IsCompositingWorkspace ? Visibility.Visible : Visibility.Collapsed;
+	public Visibility AudioVisibility => IsLiveWorkspace || IsOutputsWorkspace ? Visibility.Visible : Visibility.Collapsed;
+	public Visibility RecordingVisibility => IsLiveWorkspace || IsOutputsWorkspace ? Visibility.Visible : Visibility.Collapsed;
+	public Visibility AIVisibility => IsCompositingWorkspace || IsSettingsWorkspace ? Visibility.Visible : Visibility.Collapsed;
+	public Visibility OperatorStateVisibility => IsSettingsWorkspace ? Visibility.Visible : Visibility.Collapsed;
 
 	public string ViewerMode
 	{
@@ -490,6 +574,35 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 		Save();
 	}
 
+	public void SetWindowPlacement(double? left, double? top, double width, double height, WindowState state)
+	{
+		_windowPlacement = new OperatorWindowPlacementSettings(
+			left,
+			top,
+			width,
+			height,
+			state == WindowState.Maximized ? "MAXIMIZED" : "NORMAL").Normalize();
+		OnPropertyChanged(nameof(WindowPlacement));
+	}
+
+	public void UpdateViewportWidth(double width)
+	{
+		if (!double.IsFinite(width) || width <= 0 || Math.Abs(_viewportWidth - width) < 0.5)
+			return;
+
+		var previousCompact = _viewportWidth < 1320;
+		var previousSecondaryMetrics = _viewportWidth < 1480;
+		_viewportWidth = width;
+
+		if (previousCompact != (_viewportWidth < 1320))
+		{
+			OnPropertyChanged(nameof(NavigationRailWidth));
+			OnPropertyChanged(nameof(NavigationLabelVisibility));
+		}
+		if (previousSecondaryMetrics != (_viewportWidth < 1480))
+			OnPropertyChanged(nameof(SecondaryMetricVisibility));
+	}
+
 	public void SelectWorkspace(string? workspace)
 	{
 		var normalized = OperatorWorkspaceNames.Normalize(workspace);
@@ -510,6 +623,7 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 			Version = OperatorLayoutSettings.CurrentVersion,
 			IsFullscreen = IsFullscreen,
 			SelectedWorkspace = SelectedWorkspace,
+			WindowPlacement = _windowPlacement,
 			Workspaces = new Dictionary<string, OperatorWorkspaceLayoutSettings>(_workspaceLayouts, StringComparer.Ordinal)
 		});
 	}
@@ -593,8 +707,10 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 		OnPropertyChanged(nameof(IsLiveWorkspace));
 		OnPropertyChanged(nameof(IsEditWorkspace));
 		OnPropertyChanged(nameof(IsMediaWorkspace));
-		OnPropertyChanged(nameof(IsGraphicsWorkspace));
-		OnPropertyChanged(nameof(IsSystemWorkspace));
+		OnPropertyChanged(nameof(IsScenesWorkspace));
+		OnPropertyChanged(nameof(IsCompositingWorkspace));
+		OnPropertyChanged(nameof(IsOutputsWorkspace));
+		OnPropertyChanged(nameof(IsSettingsWorkspace));
 		OnPropertyChanged(nameof(HasAuxiliaryWorkspaceColumn));
 		OnPropertyChanged(nameof(AuxiliaryWorkspaceColumnWidth));
 		OnPropertyChanged(nameof(AuxiliaryWorkspaceColumnMinWidth));
