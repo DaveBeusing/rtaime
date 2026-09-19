@@ -163,11 +163,13 @@
 
 				<TextBlock Text="{Binding AccessDetail}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,0,0,10" />
 
-				<Button Content="TAKE PREVIEW → PROGRAM"
+				<controls:RtaimeButton Content="TAKE PREVIEW → PROGRAM"
 					Command="{Binding RoutePreviewToProgramCommand}"
-					Style="{StaticResource OperatorProgramButton}"
 					MinHeight="34"
 					Margin="0,0,0,12"
+					Background="{DynamicResource OperatorAccentBrush}"
+					BorderBrush="{DynamicResource OperatorAccentBrush}"
+					Foreground="{DynamicResource OperatorBackgroundBrush}"
 					ToolTip="Uses the existing authoritative CUT command. Disabled automatically when routing is not safe." />
 
 				<controls:RtaimeListBox ItemsSource="{Binding Outputs}"
