@@ -57,7 +57,7 @@
 		<Border Grid.Row="0" Style="{StaticResource OperatorToolbar}" Padding="8,7" CornerRadius="6,6,0,0">
 			<DockPanel LastChildFill="True">
 				<StackPanel Orientation="Horizontal">
-					<Button Content="SELECT" Command="{Binding SelectModeCommand}" Style="{StaticResource GraphToolbarButton}">
+					<Button Content="SELECT" Command="{Binding SelectModeCommand}">
 						<Button.Style>
 							<Style TargetType="{x:Type Button}" BasedOn="{StaticResource GraphToolbarButton}">
 								<Style.Triggers>
@@ -69,7 +69,7 @@
 							</Style>
 						</Button.Style>
 					</Button>
-					<Button Content="PAN" Command="{Binding PanModeCommand}" Style="{StaticResource GraphToolbarButton}">
+					<Button Content="PAN" Command="{Binding PanModeCommand}">
 						<Button.Style>
 							<Style TargetType="{x:Type Button}" BasedOn="{StaticResource GraphToolbarButton}">
 								<Style.Triggers>
@@ -102,7 +102,6 @@
 		<Grid x:Name="GraphViewport"
 			Grid.Row="1"
 			ClipToBounds="True"
-			Background="{DynamicResource OperatorBackgroundBrush}"
 			MouseWheel="OnGraphMouseWheel"
 			MouseDown="OnGraphMouseDown"
 			MouseMove="OnGraphMouseMove"
@@ -196,7 +195,7 @@
 										</Grid.RowDefinitions>
 
 										<DockPanel>
-											<Border Style="{StaticResource OperatorStatusBadge}" Padding="5,2" DockPanel.Dock="Right" Tag="{Binding HealthLabel}">
+											<Border Padding="5,2" DockPanel.Dock="Right" Tag="{Binding HealthLabel}">
 												<Border.Style>
 													<Style TargetType="{x:Type Border}" BasedOn="{StaticResource OperatorStatusBadge}">
 														<Style.Triggers>
