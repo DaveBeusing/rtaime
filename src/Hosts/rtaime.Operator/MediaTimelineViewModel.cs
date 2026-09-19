@@ -274,9 +274,9 @@ public sealed class MediaTimelineViewModel : INotifyPropertyChanged, IAsyncDispo
 	public bool HasMultipleItemSelection => SelectedItemCount > 1;
 	public string SelectionStatus => SelectedItemCount switch
 	{
-		0 => "NO CLIP SELECTION",
-		1 => "1 CLIP SELECTED",
-		_ => $"{SelectedItemCount} CLIPS SELECTED"
+		0 => "NO ITEM SELECTION",
+		1 => "1 ITEM SELECTED",
+		_ => $"{SelectedItemCount} ITEMS SELECTED"
 	};
 	public string AccessibilityDescription => IsLoaded
 		? $"Layered media timeline. Current {CurrentTimecode}, visible range {VisibleRangeLabel}, duration {DurationTimecode}."
