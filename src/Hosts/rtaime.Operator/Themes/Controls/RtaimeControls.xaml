@@ -494,22 +494,22 @@
 		</Setter>
 	</Style>
 
-	<Style x:Key="RtaimeIcon14" TargetType="{x:Type controls:RtaimeIcon}">
+	<Style x:Key="RtaimeIcon14" TargetType="{x:Type controls:RtaimeIcon}" BasedOn="{StaticResource {x:Type controls:RtaimeIcon}}">
 		<Setter Property="Width" Value="14" />
 		<Setter Property="Height" Value="14" />
 	</Style>
 
-	<Style x:Key="RtaimeIcon16" TargetType="{x:Type controls:RtaimeIcon}">
+	<Style x:Key="RtaimeIcon16" TargetType="{x:Type controls:RtaimeIcon}" BasedOn="{StaticResource {x:Type controls:RtaimeIcon}}">
 		<Setter Property="Width" Value="16" />
 		<Setter Property="Height" Value="16" />
 	</Style>
 
-	<Style x:Key="RtaimeIcon18" TargetType="{x:Type controls:RtaimeIcon}">
+	<Style x:Key="RtaimeIcon18" TargetType="{x:Type controls:RtaimeIcon}" BasedOn="{StaticResource {x:Type controls:RtaimeIcon}}">
 		<Setter Property="Width" Value="18" />
 		<Setter Property="Height" Value="18" />
 	</Style>
 
-	<Style x:Key="RtaimeIcon20" TargetType="{x:Type controls:RtaimeIcon}">
+	<Style x:Key="RtaimeIcon20" TargetType="{x:Type controls:RtaimeIcon}" BasedOn="{StaticResource {x:Type controls:RtaimeIcon}}">
 		<Setter Property="Width" Value="20" />
 		<Setter Property="Height" Value="20" />
 	</Style>
