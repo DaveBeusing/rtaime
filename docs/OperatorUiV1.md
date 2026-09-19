@@ -34,6 +34,9 @@ Production mutations are disabled whenever the presentation snapshot is stale, s
 | `Ctrl+P` | Set selected source to Preview |
 | `Space` | CUT confirmed Preview source to Program |
 | `Ctrl+Space` | AUTO/DISSOLVE confirmed Preview source to Program |
+| `Ctrl+1` | Maximize Preview viewer |
+| `Ctrl+2` | Maximize Program viewer |
+| `Ctrl+0` | Restore dual Preview/Program view |
 
 Keyboard commands invoke the same ViewModel commands as the visible buttons. They do not bypass readiness or authoritative validation.
 
@@ -101,11 +104,18 @@ Preview / Program Production Workspace formalizes the switcher workflow as **Sel
 
 The workspace exposes:
 
-- distinct live Preview and Program monitors with their existing tally semantics;
+- dedicated reusable Preview and Program viewers fed only by the existing non-authoritative monitoring plane;
+- a default dual-view allocation in which Program receives more visual area than Preview and is explicitly labeled as authoritative output;
 - the locally selected source next to the confirmed Preview / next-take source;
-- explicit `SET SELECTED → PREVIEW`, `CUT PREVIEW → PROGRAM` and `AUTO PREVIEW → PROGRAM` actions;
-- configurable DISSOLVE duration in frames;
+- explicit `SET SELECTED → PREVIEW`, `CUT PREVIEW → PROGRAM` and `AUTO PREVIEW → PROGRAM` actions directly below the viewers;
+- the current V1 transition set, `CUT` and `DISSOLVE`, plus configurable DISSOLVE duration in frames;
+- local presentation-only Preview/Program maximize and dual-view restore controls;
+- permanently visible Program stereo meters with dBFS readout and explicit clipping text;
+- concise Program overlays for PROGRAM, recording and local clean-feed output state;
+- explicit `NO SIGNAL`, `DISCONNECTED`, `RECOVERING`, `SOURCE OFFLINE` and `OUTPUT DISABLED` presentation states;
 - Runtime, commit and transition state next to Program;
+- direct access to existing Program Output and Program Recording commands;
+- a visible HOLD/FTB extension surface that remains non-interactive because those deterministic backend commands are not part of V1;
 - command, commit, rejection/failure and last-event state in the operator-status panel.
 
 ### Authority and commit semantics
@@ -115,6 +125,10 @@ The workspace exposes:
 The Program name/id are updated only by applying a synchronized authoritative snapshot after an accepted mutation. Rejected or failed mutations do not call `Apply` with a locally invented Program state. During a take the UI reports `COMMIT PENDING`; after synchronization it reports the confirmed revision. Runtime/session loss marks the presentation unconfirmed/stale and blocks further mutation until recovery.
 
 Rapid repeated UI actions remain serialized by the existing `AsyncRelayCommand` execution guard plus `OperatorViewModel.IsBusy`; a second action cannot run concurrently while a take is in flight.
+
+Viewer maximize/restore changes only local WPF layout widths. It does not alter routing, monitoring subscriptions, Program Output, recording or Runtime state. The Program viewer derives degraded/unavailable presentation from the confirmed Runtime/source observations; AI-only degradation is therefore displayed in the AI status surface while a valid Runtime fallback can continue to remain visible as Program.
+
+Program stereo metering reuses the existing bounded 200 ms management snapshot cadence. The viewer converts the confirmed linear peak values to dBFS for display only and does not allocate or animate per media frame.
 
 ### Preview / Program Production Workspace integration evidence
 
