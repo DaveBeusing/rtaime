@@ -545,26 +545,6 @@
 
 				<StackPanel Grid.Column="0">
 					<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,10"
-						Visibility="{Binding Shell.MultiviewVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
-						<StackPanel>
-							<DockPanel Margin="0,0,0,8">
-								<TextBlock Text="MULTIVIEW" Style="{StaticResource OperatorSectionTitle}" />
-								<StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
-									<Button Content="CLEAN PROGRAM" Command="{Binding ProgramOutput.StartCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorProgramButton}" MinHeight="26" Padding="8,2" Margin="0,0,5,0" ToolTip="Open clean Program monitoring on the selected display. This does not change physical Program output." />
-									<Button Content="{Binding ProgramOutput.FullscreenAction, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Command="{Binding ProgramOutput.ToggleFullscreenCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorButton}" MinHeight="26" Padding="8,2" />
-								</StackPanel>
-							</DockPanel>
-							<local:OperatorMultiviewControl
-								PreviewImage="{Binding Monitoring.PreviewImage, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-								ProgramImage="{Binding Monitoring.ProgramImage, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-								PreviewState="{Binding Monitoring.PreviewState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-								ProgramState="{Binding Monitoring.ProgramState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-								Sources="{Binding Sources}"
-								SelectedSource="{Binding SelectedSource, Mode=TwoWay}" />
-						</StackPanel>
-					</Border>
-
-					<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,10"
 						Visibility="{Binding Shell.QuickControlsVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
 						<StackPanel>
 							<DockPanel Margin="0,0,0,8">
