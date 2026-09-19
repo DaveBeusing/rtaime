@@ -165,8 +165,8 @@
 				<ColumnDefinition Width="{Binding Shell.RightColumnWidth, ElementName=RootWindow, Mode=TwoWay}" MinWidth="0" />
 			</Grid.ColumnDefinitions>
 
-			<Border x:Name="WorkspaceNavigation" Grid.RowSpan="2" Grid.Column="0" Style="{StaticResource OperatorNavigationRail}">
-				<DockPanel LastChildFill="True">
+			<Border x:Name="WorkspaceNavigation" Grid.RowSpan="2" Grid.Column="0" Style="{StaticResource OperatorNavigationRail}" Padding="0" ClipToBounds="True">
+				<DockPanel LastChildFill="False">
 					<StackPanel DockPanel.Dock="Top">
 						<controls:RtaimeNavigationItem
 							Label="Media"
