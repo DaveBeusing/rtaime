@@ -6,6 +6,7 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using System.Windows.Media;
+using rtaime.Media.Contracts;
 
 namespace rtaime.Operator;
 
@@ -23,7 +24,8 @@ public sealed record InspectorPropertyViewModel(
 	string Label,
 	string Value,
 	string State,
-	bool IsPinnable);
+	bool IsPinnable,
+	bool IsMixed = false);
 
 public sealed record MediaPoolItemViewModel(
 	string Key,
@@ -88,6 +90,7 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 	private readonly List<OperatorSourceTileViewModel> _sourceSubscriptions = [];
 	private readonly List<OperatorAudioInputViewModel> _audioSubscriptions = [];
 	private readonly List<MediaPoolItemViewModel> _allItems = [];
+	private readonly Dictionary<string, Dictionary<string, bool>> _groupExpansion = new(StringComparer.Ordinal);
 	private string _searchText = string.Empty;
 	private string _selectedCategory = "All";
 	private string _selectedFilter = "All";
@@ -105,6 +108,39 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 		FilteredItems = [];
 		SelectedItems = [];
 		InspectorProperties = [];
+		InspectorMetadataProperties = [];
+		InspectorEffectProperties = [];
+		ResetAutoPlayCommand = new AsyncRelayCommand(() =>
+		{
+			_mediaDeck.AutoPlayOnProgram = true;
+			return Task.CompletedTask;
+		});
+		ResetEndBehaviorCommand = new AsyncRelayCommand(() =>
+		{
+			_mediaDeck.EndBehavior = MediaDeckEndBehavior.HoldLastFrame;
+			return Task.CompletedTask;
+		});
+		ResetAudioGainCommand = new AsyncRelayCommand(() =>
+		{
+			if (_operator.SelectedAudioInput is { } input)
+				input.Gain = 1.0;
+			return Task.CompletedTask;
+		});
+		ResetGraphicsPositionXCommand = new AsyncRelayCommand(() =>
+		{
+			_operator.GraphicsPositionX = 72.0;
+			return Task.CompletedTask;
+		});
+		ResetGraphicsPositionYCommand = new AsyncRelayCommand(() =>
+		{
+			_operator.GraphicsPositionY = 6.0;
+			return Task.CompletedTask;
+		});
+		ResetGraphicsScaleCommand = new AsyncRelayCommand(() =>
+		{
+			_operator.GraphicsScale = 1.0;
+			return Task.CompletedTask;
+		});
 		GridViewCommand = new AsyncRelayCommand(() =>
 		{
 			IsGridView = true;
@@ -129,10 +165,18 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 	public MediaAssetCollection FilteredItems { get; }
 	public ObservableCollection<MediaPoolItemViewModel> SelectedItems { get; }
 	public ObservableCollection<InspectorPropertyViewModel> InspectorProperties { get; }
+	public ObservableCollection<InspectorPropertyViewModel> InspectorMetadataProperties { get; }
+	public ObservableCollection<InspectorPropertyViewModel> InspectorEffectProperties { get; }
 	public IReadOnlyList<string> Categories => SupportedCategories;
 	public IReadOnlyList<string> Filters => SupportedFilters;
 	public ICommand GridViewCommand { get; }
 	public ICommand ListViewCommand { get; }
+	public ICommand ResetAutoPlayCommand { get; }
+	public ICommand ResetEndBehaviorCommand { get; }
+	public ICommand ResetAudioGainCommand { get; }
+	public ICommand ResetGraphicsPositionXCommand { get; }
+	public ICommand ResetGraphicsPositionYCommand { get; }
+	public ICommand ResetGraphicsScaleCommand { get; }
 	public ICommand ImportCommand => _mediaDeck.OpenCommand;
 
 	public string SearchText
@@ -202,6 +246,15 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 
 	public bool HasItems => FilteredItems.Count > 0;
 	public bool HasSelection => SelectedItem is not null || _timelineItem is not null || _timelineCue is not null;
+	public bool CanEditSelection => HasSelection && !HasMultipleSelection;
+	public bool HasMetadata => InspectorMetadataProperties.Count > 0;
+	public bool HasEffects => InspectorEffectProperties.Count > 0;
+	public bool SupportsTransformRotation => false;
+	public bool SupportsTransformAnchor => false;
+	public bool SupportsTransformCrop => false;
+	public bool SupportsEffectOrdering => false;
+	public string UnsupportedTransformCapabilityText => "Rotation, Anchor and Crop are not exposed by the current graphics capability.";
+	public string UnsupportedEffectOrderingText => "Effect ordering is not exposed by the current processing capability.";
 	public bool IsSourceSelection => _timelineItem is null && _timelineCue is null && SelectedItem?.Kind == MediaPoolItemKind.Source;
 	public bool IsClipSelection => _timelineCue is null &&
 		(_timelineItem?.Category == TimelineTrackCategory.Video ||
@@ -230,13 +283,49 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 	public bool HasError => _mediaDeck.HasError;
 	public string ErrorState => _mediaDeck.LastError ?? string.Empty;
 	public int SelectionCount => SelectedItems.Count;
-	public bool HasMultipleSelection => SelectionCount > 1;
+	public bool HasMultipleSelection => _timelineItem is null && _timelineCue is null && SelectionCount > 1;
 	public string SelectionSummary => SelectionCount switch
 	{
 		0 => "No selection",
 		1 => "1 asset selected",
 		_ => $"{SelectionCount} assets selected"
 	};
+
+	public bool IsOverviewExpanded
+	{
+		get => GetGroupExpansion("overview", true);
+		set => SetGroupExpansion("overview", value);
+	}
+	public bool IsPlaybackExpanded
+	{
+		get => GetGroupExpansion("playback", true);
+		set => SetGroupExpansion("playback", value);
+	}
+	public bool IsTransformExpanded
+	{
+		get => GetGroupExpansion("transform", true);
+		set => SetGroupExpansion("transform", value);
+	}
+	public bool IsAudioExpanded
+	{
+		get => GetGroupExpansion("audio", true);
+		set => SetGroupExpansion("audio", value);
+	}
+	public bool IsCueExpanded
+	{
+		get => GetGroupExpansion("cue", true);
+		set => SetGroupExpansion("cue", value);
+	}
+	public bool IsEffectsExpanded
+	{
+		get => GetGroupExpansion("effects", true);
+		set => SetGroupExpansion("effects", value);
+	}
+	public bool IsMetadataExpanded
+	{
+		get => GetGroupExpansion("metadata", true);
+		set => SetGroupExpansion("metadata", value);
+	}
 
 	public void UpdateSelection(IEnumerable<MediaPoolItemViewModel> items)
 	{
@@ -260,9 +349,12 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 			SelectedItem = selected[0];
 		}
 
+		BuildInspector();
+		RaiseSelectionState();
 		OnPropertyChanged(nameof(SelectionCount));
 		OnPropertyChanged(nameof(HasMultipleSelection));
 		OnPropertyChanged(nameof(SelectionSummary));
+		OnPropertyChanged(nameof(CanEditSelection));
 	}
 
 	public bool CanDropToPreview(MediaPoolItemViewModel? item)
@@ -536,6 +628,15 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 	private void BuildInspector()
 	{
 		InspectorProperties.Clear();
+		InspectorMetadataProperties.Clear();
+		InspectorEffectProperties.Clear();
+
+		if (HasMultipleSelection)
+		{
+			BuildMultiSelectionInspector();
+			RaiseInspectorProjectionState();
+			return;
+		}
 
 		if (_timelineCue is { } cue)
 		{
@@ -544,6 +645,7 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 			Add("timeline.cue.time", "Time", cue.Timecode, "COMMITTED");
 			Add("timeline.cue.frame", "Frame", cue.Frame.ToString("N0"), "COMMITTED");
 			Add("timeline.cue.target", "Target", cue.TargetReference ?? "—", "METADATA");
+			RaiseInspectorProjectionState();
 			return;
 		}
 
@@ -560,12 +662,16 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 			Add("timeline.item.status", "Status", timelineItem.Status, state);
 			Add("timeline.item.in", "IN", timelineItem.InFrame?.ToString("N0") ?? "—", state, timelineItem.CanTrim);
 			Add("timeline.item.out", "OUT", timelineItem.OutFrame?.ToString("N0") ?? "—", state, timelineItem.CanTrim);
+			RaiseInspectorProjectionState();
 			return;
 		}
 
 		var item = SelectedItem;
 		if (item is null)
+		{
+			RaiseInspectorProjectionState();
 			return;
+		}
 
 		switch (item.Kind)
 		{
@@ -611,6 +717,9 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 				Add("graphics.position.x", "Position X", $"{_operator.GraphicsPositionX:0.##}%", "DESIRED", true);
 				Add("graphics.position.y", "Position Y", $"{_operator.GraphicsPositionY:0.##}%", "DESIRED", true);
 				Add("graphics.scale", "Scale", $"{_operator.GraphicsScale:0.##}x", "DESIRED", true);
+				Add("graphics.rotation", "Rotation", "N/A", "CAPABILITY");
+				Add("graphics.anchor", "Anchor", "N/A", "CAPABILITY");
+				Add("graphics.crop", "Crop", "N/A", "CAPABILITY");
 				break;
 
 			case MediaPoolItemKind.Composition:
@@ -622,10 +731,106 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 				Add("ai.fallback", "Fallback", string.IsNullOrWhiteSpace(_operator.AIError) ? "Clean Program" : _operator.AIError!, "COMMITTED");
 				break;
 		}
+
+		RaiseInspectorProjectionState();
 	}
 
-	private void Add(string id, string label, string value, string state, bool pinnable = false) =>
-		InspectorProperties.Add(new InspectorPropertyViewModel(id, label, value, state, pinnable));
+	private void BuildMultiSelectionInspector()
+	{
+		var selected = SelectedItems.ToArray();
+		if (selected.Length == 0)
+			return;
+
+		Add("selection.count", "Selection", $"{selected.Length} assets", "METADATA");
+		AddMixed("selection.type", "Type", selected.Select(item => item.Kind.ToString().ToUpperInvariant()));
+		AddMixed("selection.category", "Category", selected.Select(item => item.Category.ToUpperInvariant()));
+		AddMixed("selection.state", "State", selected.Select(item => item.State), "COMMITTED");
+		AddMixed("selection.availability", "Availability", selected.Select(item => item.AvailabilityLabel), "COMMITTED");
+		AddMixed("selection.format", "Format", selected.Select(item => item.Format));
+	}
+
+	private void AddMixed(string id, string label, IEnumerable<string> values, string state = "METADATA")
+	{
+		var distinct = values
+			.Where(value => !string.IsNullOrWhiteSpace(value))
+			.Distinct(StringComparer.Ordinal)
+			.Take(2)
+			.ToArray();
+		var mixed = distinct.Length > 1;
+		var value = distinct.Length == 0 ? "—" : mixed ? "MIXED" : distinct[0];
+		Add(id, label, value, state, false, mixed);
+	}
+
+	private void Add(string id, string label, string value, string state, bool pinnable = false, bool mixed = false)
+	{
+		var property = new InspectorPropertyViewModel(id, label, value, state, pinnable, mixed);
+		InspectorProperties.Add(property);
+		if (string.Equals(state, "METADATA", StringComparison.Ordinal) || string.Equals(state, "CAPABILITY", StringComparison.Ordinal))
+			InspectorMetadataProperties.Add(property);
+		if (id.StartsWith("ai.", StringComparison.Ordinal))
+			InspectorEffectProperties.Add(property);
+	}
+
+	private void RaiseInspectorProjectionState()
+	{
+		OnPropertyChanged(nameof(HasMetadata));
+		OnPropertyChanged(nameof(HasEffects));
+		OnPropertyChanged(nameof(CanEditSelection));
+	}
+
+	private string SelectionContextKey => _timelineCue is not null
+		? "cue"
+		: _timelineItem is not null
+			? $"timeline:{_timelineItem.Category}"
+			: HasMultipleSelection
+				? "multi"
+				: SelectedItem is null
+					? "none"
+					: $"asset:{SelectedItem.Kind}";
+
+	private bool GetGroupExpansion(string group, bool defaultValue)
+	{
+		if (_groupExpansion.TryGetValue(SelectionContextKey, out var groups) &&
+			groups.TryGetValue(group, out var expanded))
+		{
+			return expanded;
+		}
+		return defaultValue;
+	}
+
+	private void SetGroupExpansion(string group, bool value)
+	{
+		if (!_groupExpansion.TryGetValue(SelectionContextKey, out var groups))
+		{
+			groups = new Dictionary<string, bool>(StringComparer.Ordinal);
+			_groupExpansion[SelectionContextKey] = groups;
+		}
+		if (groups.TryGetValue(group, out var current) && current == value)
+			return;
+		groups[group] = value;
+		OnPropertyChanged(group switch
+		{
+			"overview" => nameof(IsOverviewExpanded),
+			"playback" => nameof(IsPlaybackExpanded),
+			"transform" => nameof(IsTransformExpanded),
+			"audio" => nameof(IsAudioExpanded),
+			"cue" => nameof(IsCueExpanded),
+			"effects" => nameof(IsEffectsExpanded),
+			"metadata" => nameof(IsMetadataExpanded),
+			_ => null
+		});
+	}
+
+	private void RaiseGroupExpansionState()
+	{
+		OnPropertyChanged(nameof(IsOverviewExpanded));
+		OnPropertyChanged(nameof(IsPlaybackExpanded));
+		OnPropertyChanged(nameof(IsTransformExpanded));
+		OnPropertyChanged(nameof(IsAudioExpanded));
+		OnPropertyChanged(nameof(IsCueExpanded));
+		OnPropertyChanged(nameof(IsEffectsExpanded));
+		OnPropertyChanged(nameof(IsMetadataExpanded));
+	}
 
 	private void RewireItemSubscriptions()
 	{
@@ -705,6 +910,13 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 		OnPropertyChanged(nameof(IsCueSelection));
 		OnPropertyChanged(nameof(InspectorTitle));
 		OnPropertyChanged(nameof(InspectorDetail));
+		OnPropertyChanged(nameof(SelectionCount));
+		OnPropertyChanged(nameof(HasMultipleSelection));
+		OnPropertyChanged(nameof(SelectionSummary));
+		OnPropertyChanged(nameof(CanEditSelection));
+		OnPropertyChanged(nameof(HasMetadata));
+		OnPropertyChanged(nameof(HasEffects));
+		RaiseGroupExpansionState();
 	}
 
 	private bool Set<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
