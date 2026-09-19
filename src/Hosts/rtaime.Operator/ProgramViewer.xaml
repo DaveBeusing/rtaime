@@ -154,6 +154,13 @@
 					<controls:RtaimeIconButton Grid.Column="3" IconData="{StaticResource RtaimeIconMaximizeGeometry}" Command="{Binding MaximizeCommand, ElementName=Root}" Width="28" Height="28" Margin="0,0,3,0" ToolTip="Maximize Program" AutomationProperties.Name="Maximize Program" />
 					<controls:RtaimeIconButton Grid.Column="4" IconData="{StaticResource RtaimeIconFullscreenGeometry}" Command="{Binding FullscreenCommand, ElementName=Root}" Width="28" Height="28" ToolTip="Fullscreen Program" AutomationProperties.Name="Fullscreen Program" />
 
+					<StackPanel Grid.Column="5" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="8,0">
+						<TextBlock Text="COMMIT" Style="{StaticResource OperatorLabel}" FontSize="9" VerticalAlignment="Center" />
+						<TextBlock Text="{Binding CommitStatus, ElementName=Root}" Style="{StaticResource OperatorValue}" FontSize="9" FontWeight="SemiBold" Margin="4,0,0,0" MaxWidth="112" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+						<TextBlock Text=" · TRANS " Style="{StaticResource OperatorLabel}" FontSize="9" VerticalAlignment="Center" />
+						<TextBlock Text="{Binding TransitionStatus, ElementName=Root}" Style="{StaticResource OperatorValue}" FontSize="9" MaxWidth="80" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+					</StackPanel>
+
 					<StackPanel Grid.Column="6" Orientation="Horizontal" VerticalAlignment="Center">
 						<controls:RtaimeToggleButton Content="SAFE" IsChecked="{Binding ShowSafeArea, ElementName=Root, Mode=TwoWay}" IsCompact="True" Margin="0,0,3,0" ToolTip="Safe area" />
 						<controls:RtaimeToggleButton Content="CTR" IsChecked="{Binding ShowCenterMark, ElementName=Root, Mode=TwoWay}" IsCompact="True" Margin="0,0,3,0" ToolTip="Center mark" />

@@ -196,7 +196,7 @@ Assert-Condition ($customControlTheme -match 'Property="IsMouseOver"' -and $cust
 foreach ($iconSize in @(14, 16, 18, 20)) {
 	Assert-Condition ($customControlTheme -match ('x:Key="RtaimeIcon' + $iconSize + '"')) "Custom icon size '$iconSize' must be available."
 }
-foreach ($iconName in @("Play", "Pause", "Stop", "Previous", "Next", "Media", "Live", "Timeline", "Output", "Compositing", "Settings", "Check", "Warning", "Close", "ChevronLeft", "ChevronRight", "Search", "Add", "Grid", "List", "Fit", "Zoom", "Maximize", "Fullscreen", "MarkIn", "MarkOut")) {
+foreach ($iconName in @("Play", "Pause", "Stop", "Previous", "Next", "Media", "Live", "Timeline", "Output", "Compositing", "Settings", "Check", "Warning", "Close", "ChevronLeft", "ChevronRight", "Search", "Add", "Grid", "List", "Fit", "Zoom", "Maximize", "Fullscreen", "MarkIn", "MarkOut", "More")) {
 	Assert-Condition ($customIconTheme -match ('x:Key="RtaimeIcon' + $iconName + 'Geometry"')) "Custom icon geometry '$iconName' must exist."
 }
 Assert-Condition ($customIconTheme -notmatch '[\uD800-\uDFFF]') "Custom icon resources must use geometry rather than emoji glyphs."
@@ -299,7 +299,7 @@ Assert-Condition ($shell -match 'CompactViewportWidth' -and $shell -match 'IsCom
 Assert-Condition ($window -match '<controls:RtaimeScrollViewer[^>]+VerticalScrollBarVisibility="Auto"') "Operator must preserve vertical access through the custom scroll surface when DPI scaling reduces logical workspace height."
 
 Assert-Condition ($window -match 'ItemsSource="\{Binding Sources\}"') "Operator must expose the source bank as a bound collection."
-Assert-Condition ($window -match 'Style="\{StaticResource OperatorSourceBank\}"') "Source bank must use the shared design-system collection style."
+Assert-Condition ($window -match 'Style="\{StaticResource RtaimeSourceBank\}"' -and $customInputTheme -match 'x:Key="RtaimeSourceBank"') "Source bank must use the shared custom rtaime collection style."
 Assert-Condition ($window -match 'ItemContainerStyle="\{StaticResource OperatorSourceItem\}"') "Source tiles must use the shared tile style."
 Assert-Condition ($window -match 'Text="SOURCE BIN"') "Operator must present the source collection as a production source bin."
 Assert-Condition ($window -match 'Binding Thumbnail') "Source tiles must render live monitoring thumbnails."
@@ -398,7 +398,7 @@ Assert-Condition ($customInputTheme -match 'RtaimeVerticalSplitter' -and $custom
 Assert-Condition ($customInputTheme -match 'controls:RtaimeComboBox' -and $customInputTheme -match 'controls:RtaimeCheckBox' -and $customInputTheme -match 'controls:RtaimeTabItem') "Custom interactive controls must own shared keyboard-focus styling."
 Assert-Condition ($operatorXaml -notmatch '<Storyboard|<DoubleAnimation|<ColorAnimation|<ThicknessAnimation') "Production Operator XAML must not introduce decorative animation."
 Assert-Condition ($window -match 'x:Name="SynchronizeButton"' -and $windowCode -match 'SynchronizeButton\.Focus\(\)') "Initial keyboard focus must land on the synchronization action."
-Assert-Condition ($window -match 'ToolTip="Prepare the deterministic showcase state' -and $window -match 'ToolTip="CUT the confirmed Preview source to Program') "Primary showcase actions must expose consistent explanatory tooltips."
+Assert-Condition ($window -match 'ToolTip="Prepare the deterministic showcase state' -and $window -match 'ToolTip="Take confirmed Preview to Program\."') "Primary showcase actions must expose consistent explanatory tooltips."
 Assert-Condition ($theme -match '<Style TargetType="ToolTip">' -and $theme -match 'ToolTipService\.InitialShowDelay') "Showcase tooltips must use the shared theme and bounded presentation timing."
 Assert-Condition ($window -match 'No production sources available' -and $window -match 'Binding Sources\.Count') "Source Bin must expose an explicit empty state instead of a blank panel."
 Assert-Condition ($window -match 'Text="\{Binding LastEvent\}"' -and $window -match 'OperatorErrorBadge' -and $window -match 'Binding LastError') "Footer must separate normal operator status from active error presentation."
@@ -489,12 +489,12 @@ Assert-Condition ($viewModel -match 'ApplyHealth\(snapshot\.Health\)') "Runtime 
 $managementPollCount = [Regex]::Matches($viewModel, 'PeriodicTimer\(TimeSpan\.FromMilliseconds\(200\)\)').Count
 Assert-Condition ($managementPollCount -eq 1) "Runtime Health & Performance HUD must reuse the single bounded 200 ms management poll rather than add a new UI telemetry loop."
 Assert-Condition ($viewModel -notmatch 'PerformanceCounter|ManagementObjectSearcher|nvidia-smi|NVML') "Operator must not synthesize GPU telemetry locally."
-Assert-Condition ($programViewer -match 'Text="COMMIT"') "Program viewer must expose authoritative commit status."
+Assert-Condition ($programViewer -match 'Text="COMMIT"' -and $programViewer -match 'Binding CommitStatus') "Program viewer must expose authoritative commit status."
 Assert-Condition ($window -match 'Binding CommitStatus') "Program workspace must bind authoritative commit status."
-Assert-Condition ($window -match 'Binding TransitionStatus') "Program workspace must expose transition state."
-Assert-Condition ($window -match 'CONFIRMED PREVIEW / NEXT TAKE') "Transition workspace must make the authoritative Preview take target explicit."
-Assert-Condition ($window -match 'CUT PREVIEW → PROGRAM') "CUT control must explicitly describe Preview-to-Program semantics."
-Assert-Condition ($window -match 'AUTO PREVIEW → PROGRAM') "AUTO control must explicitly describe Preview-to-Program semantics."
+Assert-Condition ($programViewer -match 'Binding TransitionStatus' -and $window -match 'Binding TransitionStatus') "Program workspace must expose transition state."
+Assert-Condition ($productionWorkspaceSurface -match 'RtaimeStatusKind\.Preview' -and $productionWorkspaceSurface -match 'Binding IsPreview' -and $productionWorkspaceSurface -match 'Content="PVW"') "Transition workspace must make the authoritative Preview take target explicit."
+Assert-Condition ($productionWorkspaceSurface -match 'Command="\{Binding CutCommand\}"' -and $productionWorkspaceSurface -match 'ToolTip="Take confirmed Preview to Program\."') "CUT control must explicitly describe Preview-to-Program semantics."
+Assert-Condition ($productionWorkspaceSurface -match 'Command="\{Binding DissolveCommand\}"' -and $productionWorkspaceSurface -match 'ToolTip="Dissolve confirmed Preview to Program\."') "AUTO control must explicitly describe Preview-to-Program semantics."
 Assert-Condition ($monitorViewModel -match 'NamedPipeOperatorMonitoringTransport') "Visual monitoring must use the independent monitoring transport."
 Assert-Condition ($monitorViewModel -match 'MonitoringStreamKind\.Program') "Operator monitoring must distinguish actual Program frames from source frames."
 Assert-Condition ($monitorViewModel -match 'PreviewSourceId') "Preview monitoring must follow authoritative Preview routing rather than own routing state."
@@ -512,7 +512,7 @@ Assert-Condition ($documentation -match 'Runtime Health & Performance HUD') "Ope
 Assert-Condition ($documentation -match 'PASS / FAIL / UNVERIFIED') "Runtime Health & Performance HUD documentation must preserve evidence-state semantics."
 Assert-Condition ($documentation -match 'Visible AI Showcase') "Operator UI documentation must record the Visible AI Showcase."
 Assert-Condition ($documentation -match 'Person Segmentation Highlight') "Visible AI Showcase documentation must identify the real existing segmentation capability."
-Assert-Condition ($window -match 'Header="Open Demo Production"' -and $window -match 'DemoProduction\.OpenCommand') "Demo Production Package must expose a one-click Open Demo Production action."
+Assert-Condition ($window -match 'AutomationProperties\.Name="Open Demo Production"' -and $window -match 'DemoProduction\.OpenCommand' -and $window -match 'Text="V1 PRODUCTION"') "Demo Production Package must expose a one-click custom-control Open Demo Production action."
 Assert-Condition ($window -match 'DemoProduction\.OpenCommand') "Demo Production Package one-click action must bind the Demo Production controller."
 Assert-Condition ($window -match 'DemoProduction\.State') "Demo Production Package must expose visible package state."
 Assert-Condition ($demoController -match 'OperatorControlClient' -and $demoController -match 'MediaDeckViewModel') "Demo Production Package orchestration must stay on existing Client/Media Deck seams."
@@ -590,7 +590,22 @@ foreach ($propertyId in @("source.name", "clip.duration", "clip.playback.autopla
 Assert-Condition ($inspectorSurface -match 'METADATA is read-only' -and $inspectorSurface -match 'DESIRED edits' -and $inspectorSurface -match 'COMMITTED') "Inspector must visually distinguish metadata, desired configuration and committed state."
 Assert-Condition ($inspectorHost -match 'MediaDeck\.ApplyPlaybackPolicyCommand' -and $inspectorHost -match 'ApplyAudioGainCommand' -and $inspectorHost -match 'ApplyGraphicsCommand') "Inspector edits must reuse existing product command paths."
 Assert-Condition ($mediaPool -notmatch 'OperatorControlClient|NamedPipe|RuntimeHost|ControlHost|AIHost') "Media Pool selection/Inspector projection must not acquire production host or transport authority."
-Assert-Condition ($window -match '<local:OperatorInspectorControl' -and $inspectorHost -match 'Header="Properties"' -and $inspectorHost -match 'Header="Effects / Processing"' -and $inspectorHost -match 'Header="Metadata"') "Inspector must be hosted as a reusable tabbed control."
+Assert-Condition ($window -match '<local:OperatorInspectorControl' -and $inspectorHost -match 'Header="Inspector"' -and $inspectorHost -match 'Header="Processing"' -and $inspectorHost -match 'Header="Metadata"') "Inspector must retain the mockup top-level Inspector, Processing and Metadata tabs."
+Assert-Condition (($inspectorHost | Select-String -Pattern 'Height" Value="40"' -AllMatches).Matches.Count -ge 1 -and $inspectorHost -match 'InspectorTopTab') "Inspector top tab row must retain the 40px mockup height."
+foreach ($category in @("Video", "Audio", "Transform", "FX")) {
+	Assert-Condition ($inspectorHost -match ('Header="' + $category + '"')) "Inspector property category '$category' is required."
+}
+Assert-Condition ($inspectorHost -match 'InspectorCategoryTab' -and $inspectorHost -match 'Height" Value="34"') "Inspector property-category tabs must retain the compact 34px height."
+Assert-Condition ($inspectorHost -match 'Width="72"' -and $inspectorHost -match 'Height="42"' -and $inspectorHost -match 'InspectorTitle' -and $inspectorHost -match 'InspectorDetail' -and $inspectorHost -match 'RtaimeIconMoreGeometry') "Inspector selection header must expose the 72x42 thumbnail, identity/technical lines and overflow affordance."
+Assert-Condition ($inspectorHost -match '<ColumnDefinition Width="96" />' -and $inspectorHost -match 'MinHeight="32"') "Inspector property rows must retain the approximately 96px label column and 30-34px row density."
+Assert-Condition ($inspectorHost -match 'Content="BASIC PROPERTIES"' -and $inspectorHost -match 'Content="EFFECTS"' -and $inspectorHost -match 'TRANSPORT &amp; CONTROLS') "Inspector must expose flat Basic Properties, Effects and Transport & Controls sections."
+Assert-Condition ($inspectorHost -match 'InspectorEffectTemplate' -and $inspectorHost -match 'RtaimeIconCompositingGeometry' -and $inspectorHost -match 'Content="\+ Add Effect"' -and $inspectorHost -match 'RtaimeIconMoreGeometry') "Inspector Effects rows must expose icon, state/context affordance and a compact Add Effect extension surface."
+Assert-Condition ($inspectorHost -match 'BorderThickness="1,0,0,0"' -and $inspectorHost -notmatch 'OperatorShellRegion') "Inspector must be a continuous flat panel with only the 1px left divider and no nested shell card."
+Assert-Condition ($window -match 'Grid\.RowSpan="2" Grid\.Column="6"' -and $shell -match 'DefaultRightPanelWidth = 340') "Inspector must remain full-height beside the timeline with the exact 340px default shell width."
+Assert-Condition ($inspectorHost -match 'ContentTemplate="\{StaticResource InspectorSelectionHeaderTemplate\}"' -and $inspectorHost -match 'VerticalScrollBarVisibility="Auto"' -and $inspectorHost -match '<RowDefinition Height="72" />') "Inspector context changes must remain inside a fixed header plus own scroll region without changing macro shell geometry."
+Assert-Condition ($customInputTheme -match 'x:Name="SelectionBar"' -and $customInputTheme -match 'Height="2"' -and $customInputTheme -match 'OperatorAccentBrush') "Inspector custom tabs must inherit the 2px cyan active underline from the rtaime tab control."
+Assert-Condition ($inspectorHost -match 'Binding IsMixed' -and $inspectorHost -match 'Text="N/A"' -and $inspectorHost -match 'METADATA is read-only' -and $inspectorHost -match 'COMMITTED') "Inspector must render mixed, unavailable, read-only and committed values explicitly."
+Assert-Condition ($inspectorHost -notmatch '<(Button|ToggleButton|CheckBox|RadioButton|TextBox|ComboBox|TabControl|TabItem|ListBox|ListView|TreeView|DataGrid|Slider|ProgressBar|ScrollBar|ScrollViewer|GridSplitter|Menu|MenuItem|ContextMenu|ToolBar)(\s|/|>)') "Inspector feature XAML must expose no directly visible stock WPF tab, input or scrolling controls."
 Assert-Condition ($mediaPool -match 'BuildMultiSelectionInspector' -and $mediaPool -match '"MIXED"' -and $mediaPool -match 'HasMultipleSelection') "Inspector multi-selection must project common values and explicit mixed state."
 Assert-Condition ($inspectorHost -match 'ValidatesOnExceptions=True' -and $inspectorHost -match 'Validation.ErrorTemplate') "Inspector numeric editors must present inline validation failures."
 foreach ($resetCommand in @("ResetAutoPlayCommand", "ResetEndBehaviorCommand", "ResetAudioGainCommand", "ResetGraphicsPositionXCommand", "ResetGraphicsPositionYCommand", "ResetGraphicsScaleCommand")) {
@@ -633,7 +648,7 @@ Assert-Condition ($shell -match 'NavigationRailWidth => 92' -and $shell -match '
 Assert-Condition ($window -match 'Grid\.RowSpan="2" Grid\.Column="0".+OperatorNavigationRail' -and $window -match '<Grid Grid\.RowSpan="2" Grid\.Column="6">') "Navigation and inspector columns must continue through the lower workspace."
 Assert-Condition ($window -match 'x:Name="LowerTimelineRegion" Grid\.Row="1" Grid\.Column="2" Grid\.ColumnSpan="3"' -and $window -match 'x:Name="BottomTransportRegion" Grid\.Row="1" Grid\.Column="2" Grid\.ColumnSpan="3"') "Timeline and transport must occupy only the media-through-center span and stop before the inspector."
 Assert-Condition ($window -notmatch '<Grid Margin="\{StaticResource OperatorWindowPadding\}">') "The fixed mockup shell must not introduce outer padding that shifts reference boundaries."
-Assert-Condition ($window -match 'x:Name="LeftToolRegion".+Margin="0"' -and $window -match 'x:Name="RightInspectorRegion"') "Reference media and inspector boundaries must not include legacy shell margins."
+Assert-Condition ($window -match 'x:Name="LeftToolRegion"[\s\S]{0,220}Margin="0"' -and $window -match 'x:Name="RightInspectorRegion"') "Reference media and inspector boundaries must not include legacy shell margins."
 Assert-Condition ($topBarSurface -match 'controls:RtaimeButton' -and $topBarSurface -match 'controls:RtaimeIconButton' -and $topBarSurface -match 'controls:RtaimeTimecode' -and $topBarSurface -match 'controls:RtaimeStatusBadge') "Top bar must use the own rtaime action, icon, timecode and status controls."
 Assert-Condition ($topBarSurface -notmatch '<(Button|ToggleButton|CheckBox|RadioButton|TextBox|ComboBox|TabControl|TabItem|ListBox|ListView|TreeView|DataGrid|Slider|ProgressBar|ScrollBar|ScrollViewer|GridSplitter|Menu|MenuItem|ContextMenu|ToolBar)(\s|/|>)') "Top bar must expose no directly visible stock WPF interactive controls."
 Assert-Condition ($navigationSurface -match 'controls:RtaimeNavigationItem' -and $navigationSurface -notmatch '<(Button|ToggleButton|CheckBox|RadioButton|TextBox|ComboBox|TabControl|TabItem|ListBox|ListView|TreeView|DataGrid|Slider|ProgressBar|ScrollBar|ScrollViewer|GridSplitter|Menu|MenuItem|ContextMenu|ToolBar)(\s|/|>)') "Workspace navigation must use only custom rtaime navigation controls."
@@ -653,7 +668,7 @@ Assert-Condition ($productionWorkspaceSurface -match 'Height="700"' -and $produc
 Assert-Condition ($productionWorkspaceSurface -match '<ColumnDefinition Width="320" />' -and $productionWorkspaceSurface -match '<ColumnDefinition Width="462" />' -and $productionWorkspaceSurface -match '<ColumnDefinition Width="276" />') "Lower production row must retain the 320/6/462/6/276 mockup split."
 Assert-Condition ($productionWorkspaceSurface -match 'Text="SCENE STACK"' -and $productionWorkspaceSurface -match 'Text="OUTPUT ROUTING"' -and $productionWorkspaceSurface -match 'Text="SYSTEM STATUS"') "Lower production row must expose Scene Stack, Output Routing and System Status."
 Assert-Condition ($productionWorkspaceSurface -match 'Width="62" Height="36"' -and $productionWorkspaceSurface -match 'Binding DisplayIndex' -and $productionWorkspaceSurface -match 'Binding Remaining') "Scene Stack must retain the compact 62x36 thumbnail, stable index and duration projection."
-Assert-Condition ($monitorWorkspaceTheme -match 'x:Key="RtaimeProductionSceneItem"[sS]+Property="Height" Value="50"' -and $productionWorkspaceSurface -match 'ItemsSource="{Binding Sources}"') "Scene Stack must fit four compact source-projection rows without adding scene authority."
+Assert-Condition ($monitorWorkspaceTheme -match 'x:Key="RtaimeProductionSceneItem"[\s\S]+Property="Height" Value="50"' -and $productionWorkspaceSurface -match 'ItemsSource="{Binding Sources}"') "Scene Stack must fit four compact source-projection rows without adding scene authority."
 Assert-Condition ($productionWorkspaceSurface -match 'Command="\{Binding SetPreviewCommand\}"' -and $productionWorkspaceSurface -match 'Command="\{Binding CutCommand\}"' -and $productionWorkspaceSurface -match 'Command="\{Binding DissolveCommand\}"') "Scene Stack actions must reuse the existing Preview, CUT and AUTO command paths."
 Assert-Condition ($productionWorkspaceSurface -notmatch '<(Button|ToggleButton|CheckBox|RadioButton|TextBox|ComboBox|TabControl|TabItem|ListBox|ListView|TreeView|DataGrid|Slider|ProgressBar|ScrollBar|ScrollViewer|GridSplitter|Menu|MenuItem|ContextMenu|ToolBar)(\s|/|>)') "Edit production workspace must expose no directly visible stock WPF interactive chrome."
 Assert-Condition ($previewViewer -notmatch '<(Button|ToggleButton|ProgressBar|Slider|ScrollViewer)(\s|/|>)' -and $programViewer -notmatch '<(Button|ToggleButton|ProgressBar|Slider|ScrollViewer)(\s|/|>)') "Preview and Program viewer chrome must use only own rtaime interactive controls."
@@ -692,7 +707,7 @@ Assert-Condition ($windowCode -match 'OnLayoutSplitterDragCompleted' -and $windo
 Assert-Condition ($shell -match 'record OperatorWindowPlacementSettings' -and $shell -match 'MinimumWidth = 960' -and $shell -match 'MinimumHeight = 500') "Window placement persistence must normalize windowed geometry against the Operator minimum size."
 Assert-Condition ($windowCode -match 'ApplyWindowPlacement' -and $windowCode -match 'CaptureWindowPlacement' -and $windowCode -match 'IsWindowPlacementVisible') "Window placement must restore safely and reject off-screen geometry."
 Assert-Condition ($shell -match 'NavigationRailWidth => 92' -and $shell -match 'NavigationLabelVisibility => Visibility\.Visible' -and $shell -match 'SecondaryMetricVisibility' -and $shell -match '_viewportWidth < 1480') "Production shell must retain the fixed 92px navigation rail while optional top-bar metrics may compact in smaller windowed viewports."
-Assert-Condition ($window -match 'Text="LIVE / ON AIR "' -and $window -match 'Text="UNVERIFIED"' -and $window -match 'external transmission/on-air feed') "LIVE/ON AIR presentation must fail closed while no authoritative external transmission feed exists."
+Assert-Condition ($window -match 'Text="LIVE"' -and $window -match 'Text="UNVERIFIED"' -and $window -match 'External transmission/on-air state is not authoritative') "LIVE/ON AIR presentation must fail closed while no authoritative external transmission feed exists."
 Assert-Condition ($topBarSurface -match 'Text="CPU"' -and $topBarSurface -match 'Text="N/A"' -and $topBarSurface -match 'Text="GPU"' -and $topBarSurface -match 'Binding GpuUtilization' -and $topBarSurface -match 'Text="MEMORY"' -and $topBarSurface -match 'Binding Vram' -and $topBarSurface -match 'Text="LATENCY"' -and $topBarSurface -match 'Binding FrameTime') "Mockup top-bar metrics must reuse available health evidence and explicitly avoid synthesized CPU values."
 
 # Workspaces, Quick Controls, multiview and Clean Program.
