@@ -95,7 +95,6 @@ public sealed record OperatorLayoutSettings
 	public const double MaximumRightPanelWidth = 620;
 	public const double MinimumLowerPanelHeight = 320;
 	public const double MaximumLowerPanelHeight = 680;
-	public const double CompactLeftPanelWidth = 380;
 	public const double CompactLowerPanelHeight = 220;
 	public const double CompactViewportWidth = 1100;
 
