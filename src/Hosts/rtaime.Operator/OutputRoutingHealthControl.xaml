@@ -12,7 +12,10 @@
 						<TextBlock Text="Authoritative Program state and local monitoring outputs" Style="{StaticResource OperatorLabel}" Margin="0,2,0,0" />
 					</StackPanel>
 					<Border Style="{StaticResource OperatorEvidenceBadge}" Tag="{Binding AccessEvidenceState}" DockPanel.Dock="Right">
-						<TextBlock Text="{Binding AccessState}" FontWeight="Bold" />
+						<StackPanel Orientation="Horizontal">
+							<TextBlock Text="●" Margin="0,0,5,0" />
+							<TextBlock Text="{Binding AccessState}" FontWeight="Bold" />
+						</StackPanel>
 					</Border>
 				</DockPanel>
 
@@ -42,7 +45,10 @@
 									<DockPanel>
 										<TextBlock Text="{Binding Name}" Style="{StaticResource OperatorValue}" FontWeight="Bold" />
 										<Border Style="{StaticResource OperatorEvidenceBadge}" Tag="{Binding EvidenceState}" DockPanel.Dock="Right">
-											<TextBlock Text="{Binding Status}" FontWeight="Bold" />
+											<StackPanel Orientation="Horizontal">
+												<TextBlock Text="●" Margin="0,0,5,0" />
+												<TextBlock Text="{Binding Status}" FontWeight="Bold" />
+											</StackPanel>
 										</Border>
 									</DockPanel>
 									<TextBlock Grid.Row="1" Text="{Binding AssignedSource}" Style="{StaticResource OperatorLabel}" Margin="0,5,0,0" TextTrimming="CharacterEllipsis" />
@@ -62,6 +68,7 @@
 												<Run Text=" · " />
 												<Run Text="{Binding FrameRate}" />
 											</TextBlock>
+											<TextBlock Text="{Binding ColorSpace}" Style="{StaticResource OperatorLabel}" Margin="0,2,0,0" />
 										</StackPanel>
 									</Grid>
 								</Grid>
@@ -87,7 +94,10 @@
 								<StackPanel>
 									<TextBlock Text="{Binding Name}" Style="{StaticResource OperatorLabel}" />
 									<Border Style="{StaticResource OperatorEvidenceBadge}" Tag="{Binding EvidenceState}" Margin="0,5,0,0" HorizontalAlignment="Left">
-										<TextBlock Text="{Binding Status}" FontWeight="Bold" />
+										<StackPanel Orientation="Horizontal">
+											<TextBlock Text="●" Margin="0,0,5,0" />
+											<TextBlock Text="{Binding Status}" FontWeight="Bold" />
+										</StackPanel>
 									</Border>
 								</StackPanel>
 							</Border>
@@ -103,7 +113,10 @@
 				<DockPanel Margin="0,0,0,10">
 					<TextBlock Text="SELECTED OUTPUT" Style="{StaticResource OperatorSectionTitle}" />
 					<Border Style="{StaticResource OperatorEvidenceBadge}" Tag="{Binding SelectedOutput.EvidenceState}" DockPanel.Dock="Right">
-						<TextBlock Text="{Binding SelectedOutput.Status}" FontWeight="Bold" />
+						<StackPanel Orientation="Horizontal">
+							<TextBlock Text="●" Margin="0,0,5,0" />
+							<TextBlock Text="{Binding SelectedOutput.Status}" FontWeight="Bold" />
+						</StackPanel>
 					</Border>
 				</DockPanel>
 
@@ -148,7 +161,10 @@
 									<DockPanel>
 										<TextBlock Text="{Binding Name}" Style="{StaticResource OperatorLabel}" />
 										<Border Style="{StaticResource OperatorEvidenceBadge}" Tag="{Binding EvidenceState}" Padding="5,1" DockPanel.Dock="Right">
-											<TextBlock Text="{Binding Status}" FontSize="9" FontWeight="Bold" />
+											<StackPanel Orientation="Horizontal">
+												<TextBlock Text="●" FontSize="8" Margin="0,0,4,0" />
+												<TextBlock Text="{Binding Status}" FontSize="9" FontWeight="Bold" />
+											</StackPanel>
 										</Border>
 									</DockPanel>
 									<TextBlock Text="{Binding Value}" Style="{StaticResource OperatorValue}" FontSize="14" FontWeight="SemiBold" Margin="0,5,0,4" />
