@@ -83,8 +83,8 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 					return RejectAndRelease("media.file.video_codec_unsupported", "V1 local media supports H.264 video only.", reader, mediaFoundationStarted);
 
 				var hasAudio = audioNative is not null &&
-					GetGuid(audioNative, MediaFoundation.MfMtMajorType) == MediaFoundation.MfMediaTypeAudio &&
-					GetGuid(audioNative, MediaFoundation.MfMtSubtype) == MediaFoundation.MfAudioFormatAac;
+					TryGetGuid(audioNative, MediaFoundation.MfMtMajorType) == MediaFoundation.MfMediaTypeAudio &&
+					TryGetGuid(audioNative, MediaFoundation.MfMtSubtype) == MediaFoundation.MfAudioFormatAac;
 
 				var metadata = Mp4LocalMediaMetadataReader.Read(path);
 				if (metadata.FrameRateNumerator <= 0 || metadata.FrameRateDenominator <= 0)
@@ -105,8 +105,8 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 				MediaFoundation.ThrowIfFailed(reader.SetStreamSelection(MediaFoundation.FirstVideoStream, true));
 				if (hasAudio)
 				{
-					ConfigureDecodedAudio(reader, MediaFoundation.FirstAudioStream);
 					MediaFoundation.ThrowIfFailed(reader.SetStreamSelection(MediaFoundation.FirstAudioStream, true));
+					ConfigureDecodedAudio(reader, MediaFoundation.FirstAudioStream);
 				}
 
 				var probe = new LocalMediaProbe(
@@ -472,6 +472,12 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 	{
 		MediaFoundation.ThrowIfFailed(attributes.GetGUID(ref key, out var value));
 		return value;
+	}
+
+	private static Guid? TryGetGuid(IMFMediaType attributes, Guid key)
+	{
+		var result = attributes.GetGUID(ref key, out var value);
+		return result >= 0 ? value : null;
 	}
 
 	private static uint? TryGetUInt32(IMFMediaType attributes, Guid key)
