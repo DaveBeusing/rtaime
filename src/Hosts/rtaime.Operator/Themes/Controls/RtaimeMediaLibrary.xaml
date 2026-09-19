@@ -126,7 +126,7 @@
 									Visibility="Collapsed">
 									<StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
 										<controls:RtaimeIcon
-											Data="{StaticResource RtaimeIconWarningGeometry}"
+											Data="{DynamicResource RtaimeIconWarningGeometry}"
 											Foreground="{DynamicResource OperatorWarningBrush}"
 											Style="{StaticResource RtaimeIcon16}"
 											HorizontalAlignment="Center" />
