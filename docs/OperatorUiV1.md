@@ -643,7 +643,7 @@ See `docs/MediaLibraryAssetBrowser.md` for the Media Library scalability, select
 
 ## Workspaces, Multiview & Keyboard-First UX
 
-The Operator now exposes seven canonical task workspaces — MEDIA, EDIT, LIVE, SCENES, COMPOSITING, OUTPUTS and SETTINGS — over the same authoritative product state. Workspace switching changes presentation only and persists independent layout geometry per workspace. SCENES/COMPOSITING reuse the current graphics projection, while OUTPUTS/SETTINGS reuse the existing operational projection until their dedicated roadmap packages add richer presentation.
+The Operator exposes seven canonical task workspaces — MEDIA, EDIT, LIVE, SCENES, COMPOSITING, OUTPUTS and SETTINGS — over the same authoritative product state. Workspace switching changes presentation only and persists independent layout geometry per workspace. COMPOSITING now hosts a dedicated read-only-first node graph that projects sources, Preview/Program routing, the existing graphics transform, GPU composition, Program output and recording from already observed Operator state. Node status refreshes update stable projection objects without moving the layout, node selection feeds the shared Inspector, and arbitrary Runtime rewiring remains visibly unavailable because no authoritative rewiring contract exists. OUTPUTS/SETTINGS continue to reuse the existing operational projection.
 
 LIVE introduces a reusable multiview that consumes the existing Preview/Program monitoring images and already available source thumbnails. It does not open another monitoring transport. The same workspace exposes a bounded Quick Controls pinboard backed by stable Inspector property identifiers; pinned actions continue to invoke the existing Media Deck, audio, graphics, AI and production command paths.
 
@@ -653,7 +653,7 @@ OUTPUTS and SETTINGS reuse the existing lifecycle, health, monitoring, recording
 
 Layout persistence is schema-versioned and keeps only UI presentation fields. SAVE LAYOUT stores the current workspace layout, while LAYOUT RESET restores that workspace's canonical defaults. Corrupt or incompatible layout data falls back safely.
 
-See docs/OperatorWorkspaces.md for the complete workspace, Quick Controls, shortcut, multiview and Clean Program operating model.
+See docs/OperatorWorkspaces.md for the complete workspace, Quick Controls, shortcut, multiview and Clean Program operating model.\n\nSee `docs/CompositingNodeGraph.md` for the Compositing graph projection, interaction model and authority boundary.
 
 
 ## Preview / Program production monitors

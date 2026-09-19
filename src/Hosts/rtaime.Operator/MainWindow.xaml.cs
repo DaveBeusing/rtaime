@@ -56,6 +56,7 @@ public partial class MainWindow : Window
 			new DispatcherSynchronizationContext(Dispatcher));
 		Shell = new OperatorShellViewModel(new OperatorLayoutStore(), SetProductionFullscreen);
 		MediaPool = new MediaPoolInspectorViewModel(viewModel, MediaDeck);
+		CompositingGraph = new CompositingGraphViewModel(viewModel, MediaPool);
 		QuickControls = new OperatorQuickControlsViewModel(viewModel, MediaDeck, MediaPool, new OperatorQuickControlStore());
 		Shortcuts = OperatorKeyboardCommandRegistry.Create(
 			viewModel,
@@ -95,6 +96,7 @@ public partial class MainWindow : Window
 			new DispatcherSynchronizationContext(Dispatcher));
 		Shell = new OperatorShellViewModel(new OperatorLayoutStore(), SetProductionFullscreen);
 		MediaPool = new MediaPoolInspectorViewModel(viewModel, MediaDeck);
+		CompositingGraph = new CompositingGraphViewModel(viewModel, MediaPool);
 		QuickControls = new OperatorQuickControlsViewModel(viewModel, MediaDeck, MediaPool, new OperatorQuickControlStore());
 		Shortcuts = OperatorKeyboardCommandRegistry.Create(
 			viewModel,
@@ -121,6 +123,7 @@ public partial class MainWindow : Window
 	public MediaDeckViewModel MediaDeck { get; }
 	public DemoProductionPackageController DemoProduction { get; }
 	public MediaPoolInspectorViewModel MediaPool { get; }
+	public CompositingGraphViewModel CompositingGraph { get; }
 	public OperatorQuickControlsViewModel QuickControls { get; }
 	public OperatorKeyboardCommandRegistry Shortcuts { get; }
 	public MediaTimelineViewModel Timeline => MediaDeck.Timeline;
@@ -214,6 +217,7 @@ public partial class MainWindow : Window
 				MediaDeck.SnapshotChanged -= viewModel.ApplyMediaDeckSnapshot;
 				Timeline.SelectionChanged -= OnTimelineSelectionChanged;
 				QuickControls.Dispose();
+				CompositingGraph.Dispose();
 				MediaPool.Dispose();
 				await Monitoring.DisposeAsync();
 				await MediaDeck.DisposeAsync();
@@ -223,6 +227,7 @@ public partial class MainWindow : Window
 			{
 				Timeline.SelectionChanged -= OnTimelineSelectionChanged;
 				QuickControls.Dispose();
+				CompositingGraph.Dispose();
 				MediaPool.Dispose();
 				await Monitoring.DisposeAsync();
 				await MediaDeck.DisposeAsync();

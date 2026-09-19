@@ -535,7 +535,8 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 	public double AuxiliaryWorkspaceGapWidth => HasAuxiliaryWorkspaceColumn ? 14 : 0;
 
 	public Visibility MultiviewVisibility => IsLiveWorkspace ? Visibility.Visible : Visibility.Collapsed;
-	public Visibility StandardViewerVisibility => IsLiveWorkspace ? Visibility.Collapsed : Visibility.Visible;
+	public Visibility CompositingGraphVisibility => IsCompositingWorkspace ? Visibility.Visible : Visibility.Collapsed;
+	public Visibility StandardViewerVisibility => IsLiveWorkspace || IsCompositingWorkspace ? Visibility.Collapsed : Visibility.Visible;
 	public Visibility QuickControlsVisibility => IsLiveWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility ProductionControlsVisibility => IsEditWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility MediaDeckVisibility => IsEditWorkspace || IsMediaWorkspace ? Visibility.Visible : Visibility.Collapsed;
@@ -789,6 +790,7 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 		OnPropertyChanged(nameof(AuxiliaryWorkspaceColumnMinWidth));
 		OnPropertyChanged(nameof(AuxiliaryWorkspaceGapWidth));
 		OnPropertyChanged(nameof(MultiviewVisibility));
+		OnPropertyChanged(nameof(CompositingGraphVisibility));
 		OnPropertyChanged(nameof(StandardViewerVisibility));
 		OnPropertyChanged(nameof(QuickControlsVisibility));
 		OnPropertyChanged(nameof(ProductionControlsVisibility));
