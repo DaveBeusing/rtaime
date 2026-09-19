@@ -210,7 +210,7 @@
 			<Border x:Name="LeftToolRegion"
 				Grid.Column="2"
 				Style="{StaticResource OperatorShellRegion}"
-				Padding="12"
+				Padding="11"
 				Margin="0"
 				Visibility="{Binding Shell.LeftRegionVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
 				<Grid>
