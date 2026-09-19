@@ -106,6 +106,9 @@ public partial class MediaTimelineControl : UserControl
 
 	private MediaTimelineViewModel? ViewModel => DataContext as MediaTimelineViewModel;
 
+	public TimelineTrackCategory? ResolveDropTarget(object? originalSource) =>
+		FindDataContext<TimelineTrackViewModel>(originalSource as DependencyObject)?.Category;
+
 	private void TimelineWorkspace_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
 	{
 		if (FindTaggedTrimHandle(e.OriginalSource as DependencyObject) is not null ||
