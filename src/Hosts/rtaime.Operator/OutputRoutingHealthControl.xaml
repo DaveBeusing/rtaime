@@ -74,6 +74,32 @@
 
 		<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14">
 			<StackPanel>
+				<TextBlock Text="SYSTEM HEALTH" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,10" />
+				<ItemsControl ItemsSource="{Binding SystemHealth}">
+					<ItemsControl.ItemsPanel>
+						<ItemsPanelTemplate>
+							<WrapPanel />
+						</ItemsPanelTemplate>
+					</ItemsControl.ItemsPanel>
+					<ItemsControl.ItemTemplate>
+						<DataTemplate>
+							<Border BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" CornerRadius="5" Padding="8" Margin="0,0,7,7" MinWidth="116">
+								<StackPanel>
+									<TextBlock Text="{Binding Name}" Style="{StaticResource OperatorLabel}" />
+									<Border Style="{StaticResource OperatorEvidenceBadge}" Tag="{Binding EvidenceState}" Margin="0,5,0,0" HorizontalAlignment="Left">
+										<TextBlock Text="{Binding Status}" FontWeight="Bold" />
+									</Border>
+								</StackPanel>
+							</Border>
+						</DataTemplate>
+					</ItemsControl.ItemTemplate>
+				</ItemsControl>
+				<TextBlock Text="Health state reuses the existing Control projection; no workspace-specific thresholds are applied." Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+			</StackPanel>
+		</Border>
+
+		<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14">
+			<StackPanel>
 				<DockPanel Margin="0,0,0,10">
 					<TextBlock Text="SELECTED OUTPUT" Style="{StaticResource OperatorSectionTitle}" />
 					<Border Style="{StaticResource OperatorEvidenceBadge}" Tag="{Binding SelectedOutput.EvidenceState}" DockPanel.Dock="Right">
