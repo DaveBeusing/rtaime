@@ -526,7 +526,7 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 	public bool IsSettingsWorkspace => string.Equals(SelectedWorkspace, OperatorWorkspaceNames.Settings, StringComparison.Ordinal);
 
 	public bool HasLeftRegion => IsLiveWorkspace || IsEditWorkspace || IsMediaWorkspace || IsScenesWorkspace || IsCompositingWorkspace;
-	public bool HasTimelineRegion => IsLiveWorkspace || IsEditWorkspace || IsMediaWorkspace || IsScenesWorkspace || IsCompositingWorkspace;
+	public bool HasTimelineRegion => IsEditWorkspace || IsMediaWorkspace || IsScenesWorkspace || IsCompositingWorkspace;
 	public Visibility LeftRegionVisibility => HasLeftRegion ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility TimelineRegionVisibility => HasTimelineRegion ? Visibility.Visible : Visibility.Collapsed;
 	public bool HasAuxiliaryWorkspaceColumn => IsScenesWorkspace || IsCompositingWorkspace || IsOutputsWorkspace || IsSettingsWorkspace;
