@@ -39,15 +39,17 @@ The multiview does not subscribe to another monitoring transport, decode media o
 
 ## EDIT
 
-EDIT emphasizes the layered timeline and cue workflow:
+EDIT is the reference Preview / Program production workspace. At 1920×1080 the center region is fixed to 1070×700 pixels:
 
-- larger persisted timeline region;
-- Media Pool;
-- Inspector;
-- Preview and Program viewers;
-- persistent bottom transport.
+- upper monitor row: 390 px with equal 532 px Preview and Program viewers separated by 6 px;
+- shared monitor chrome: 40 px header, aspect-safe image region and 42 px custom transport;
+- lower row: 320 px Scene Stack, 6 px gap, 462 px Output Routing, 6 px gap and 276 px System Status;
+- Scene Stack reuses the existing source projection and explicit Set Preview / CUT / AUTO commands; it does not synthesize scene activation;
+- Output Routing reuses confirmed Program/Preview state and the existing Clean Feed presentation; Aux is explicitly unavailable when no governed role exists;
+- System Status reuses existing health evidence and displays unavailable Disk/Network/Temperature metrics without local probing;
+- persistent 320 px timeline region remains below the 700 px upper workspace.
 
-All seeking, IN/OUT changes and cue operations continue through the existing Media Timeline and marker command paths.
+Viewer maximize/restore and fullscreen remain presentation-only. All seeking, IN/OUT changes, cue operations and take commands continue through the existing Media Deck, Timeline and authoritative Control paths.
 
 ## MEDIA
 
@@ -155,7 +157,7 @@ It is monitoring presentation, not output authority.
 
 ## Per-workspace layout persistence
 
-Operator layout storage uses schema version 3. Each canonical workspace persists only presentation fields:
+Operator layout storage uses schema version 4. Each canonical workspace persists only presentation fields:
 
 - left and right panel width;
 - timeline/lower region height;
@@ -163,23 +165,23 @@ Operator layout storage uses schema version 3. Each canonical workspace persists
 - center-maximized state;
 - viewer presentation mode.
 
-Fullscreen preference, selected workspace and normalized window placement remain top-level Operator UI preferences. Legacy version-2 GRAPHICS/SYSTEM layouts migrate to the corresponding COMPOSITING/OUTPUTS/SETTINGS presentation defaults without carrying production state.
+Fullscreen preference, selected workspace and normalized window placement remain top-level Operator UI preferences. Legacy workspace names migrate to the canonical presentation destinations without carrying production state. Pre-v4 persisted geometry is reset to the binding 400 / 340 / 320 reference shell dimensions while fullscreen preference, selected workspace and normalized window placement are retained.
 
 SAVE LAYOUT persists the active workspace presentation. LAYOUT RESET restores only that workspace's canonical defaults. Missing, corrupt, non-finite, out-of-range or incompatible persisted data recovers to safe canonical layouts.
 
 The layout file remains rtaime/operator-layout.json below the current user's local application data. Persistence writes first use a temporary sibling file and then replace the target path so an interrupted write cannot leave partially serialized layout JSON as the preferred state.
 
-Canonical workspace defaults are:
+Canonical workspace defaults use the same mockup macro geometry and differ only in viewer presentation mode:
 
 | Workspace | Left | Right | Lower | Collapsed by default | Viewer |
 | --- | ---: | ---: | ---: | --- | --- |
-| LIVE | 220 | 300 | 340 | none | DUAL |
-| EDIT | 280 | 350 | 560 | none | DUAL |
-| MEDIA | 460 | 360 | 360 | none | PREVIEW |
-| SCENES | 260 | 390 | 360 | none | DUAL |
-| COMPOSITING | 300 | 390 | 360 | none | DUAL |
-| OUTPUTS | 220 | 420 | 340 | left | PROGRAM |
-| SETTINGS | 220 | 460 | 340 | left and right | PROGRAM |
+| LIVE | 400 | 340 | 320 | none | DUAL |
+| EDIT | 400 | 340 | 320 | none | DUAL |
+| MEDIA | 400 | 340 | 320 | none | PREVIEW |
+| SCENES | 400 | 340 | 320 | none | DUAL |
+| COMPOSITING | 400 | 340 | 320 | none | DUAL |
+| OUTPUTS | 400 | 340 | 320 | none | PROGRAM |
+| SETTINGS | 400 | 340 | 320 | none | PROGRAM |
 
 At constrained logical widths the shell enters a presentation-only compact viewport mode. It temporarily removes the left and right side regions plus any auxiliary workspace column from the grid allocation, reduces the lower region allocation and suppresses optional top-bar telemetry without modifying the persisted per-workspace dimensions. The central production surface, Program identity, connection/lifecycle state and core shell actions remain visible. Returning to a larger viewport restores the stored presentation values.
 
@@ -220,7 +222,7 @@ The same underlying production state remains active across every workspace.
 
 ## Production monitor operation
 
-EDIT, MEDIA and the other standard-viewer workspaces reuse the same Preview and Program monitor components. Viewer changes therefore preserve production state across workspace switches instead of instantiating another playback path.
+EDIT composes the shared Preview and Program monitor components in the fixed 532 / 6 / 532 reference split. MEDIA and the other standard-viewer workspaces reuse the same components where applicable. Viewer changes therefore preserve production state across workspace switches instead of instantiating another playback path.
 
 Preview is the only monitor that exposes Media Deck transport controls. The control row and the corresponding Space/K/S/I/O/M/Up/Down shortcuts are active only when the loaded Media Deck source is the confirmed Preview source. Program intentionally exposes no Preview transport commands.
 
