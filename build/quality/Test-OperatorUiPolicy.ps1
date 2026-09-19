@@ -64,6 +64,9 @@ $demoGraphicsPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/DemoAss
 $demoDocumentationPath = Join-Path $repositoryRoot "docs/DemoProductionPackage.md"
 $tokensPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Themes/OperatorTokens.xaml"
 $themePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Themes/OperatorTheme.xaml"
+$customControlsPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Controls/RtaimeControls.cs"
+$customControlThemePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Themes/Controls/RtaimeControls.xaml"
+$customIconThemePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Themes/Controls/RtaimeIcons.xaml"
 $manifestPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/app.manifest"
 $projectPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/rtaime.Operator.csproj"
 $documentationPath = Join-Path $repositoryRoot "docs/OperatorUiV1.md"
@@ -71,7 +74,7 @@ $workspaceDocumentationPath = Join-Path $repositoryRoot "docs/OperatorWorkspaces
 $outputHealthDocumentationPath = Join-Path $repositoryRoot "docs/OutputRoutingHealth.md"
 $mediaLibraryDocumentationPath = Join-Path $repositoryRoot "docs/MediaLibraryAssetBrowser.md"
 
-foreach ($path in @($appPath, $appCodePath, $windowPath, $windowCodePath, $shellPath, $keyboardPath, $quickControlsPath, $multiviewPath, $multiviewCodePath, $liveSceneCuePath, $liveControlsPath, $liveDocumentationPath, $compositingGraphPath, $compositingGraphCodePath, $compositingGraphViewModelPath, $compositingGraphProjectionPath, $compositingGraphDocumentationPath, $mediaPoolPath, $inspectorHostPath, $virtualizingWrapPanelPath, $deckPath, $deckViewModelPath, $timelinePath, $timelineCodePath, $timelineViewModelPath, $markerControllerPath, $timelineDocumentationPath, $viewModelPath, $monitorViewModelPath, $programOutputControllerPath, $programOutputWindowPath, $outputHealthControlPath, $outputHealthViewModelPath, $previewViewerPath, $previewViewerCodePath, $programViewerPath, $programViewerCodePath, $monitorViewPath, $sourceTileViewModelPath, $audioInputViewModelPath, $graphicsLoaderPath, $demoControllerPath, $demoManifestPath, $demoProductPath, $demoGraphicsPath, $demoDocumentationPath, $tokensPath, $themePath, $manifestPath, $projectPath, $documentationPath, $workspaceDocumentationPath, $outputHealthDocumentationPath, $mediaLibraryDocumentationPath)) {
+foreach ($path in @($appPath, $appCodePath, $windowPath, $windowCodePath, $shellPath, $keyboardPath, $quickControlsPath, $multiviewPath, $multiviewCodePath, $liveSceneCuePath, $liveControlsPath, $liveDocumentationPath, $compositingGraphPath, $compositingGraphCodePath, $compositingGraphViewModelPath, $compositingGraphProjectionPath, $compositingGraphDocumentationPath, $mediaPoolPath, $inspectorHostPath, $virtualizingWrapPanelPath, $deckPath, $deckViewModelPath, $timelinePath, $timelineCodePath, $timelineViewModelPath, $markerControllerPath, $timelineDocumentationPath, $viewModelPath, $monitorViewModelPath, $programOutputControllerPath, $programOutputWindowPath, $outputHealthControlPath, $outputHealthViewModelPath, $previewViewerPath, $previewViewerCodePath, $programViewerPath, $programViewerCodePath, $monitorViewPath, $sourceTileViewModelPath, $audioInputViewModelPath, $graphicsLoaderPath, $demoControllerPath, $demoManifestPath, $demoProductPath, $demoGraphicsPath, $demoDocumentationPath, $tokensPath, $themePath, $customControlsPath, $customControlThemePath, $customIconThemePath, $manifestPath, $projectPath, $documentationPath, $workspaceDocumentationPath, $outputHealthDocumentationPath, $mediaLibraryDocumentationPath)) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required Operator UI artifact is missing: '$path'."
 }
 
@@ -123,6 +126,9 @@ $demoManifest = Get-Content -LiteralPath $demoManifestPath -Raw
 $demoDocumentation = Get-Content -LiteralPath $demoDocumentationPath -Raw
 $tokens = Get-Content -LiteralPath $tokensPath -Raw
 $theme = Get-Content -LiteralPath $themePath -Raw
+$customControls = Get-Content -LiteralPath $customControlsPath -Raw
+$customControlTheme = Get-Content -LiteralPath $customControlThemePath -Raw
+$customIconTheme = Get-Content -LiteralPath $customIconThemePath -Raw
 $manifest = Get-Content -LiteralPath $manifestPath -Raw
 $project = Get-Content -LiteralPath $projectPath -Raw
 $documentation = Get-Content -LiteralPath $documentationPath -Raw
@@ -132,6 +138,38 @@ $operatorXaml = (Get-ChildItem -LiteralPath (Join-Path $repositoryRoot "src/Host
 	ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join "`n"
 
 Assert-Condition ($app -match 'Source="Themes/OperatorTheme\.xaml"') "Operator must load the reusable theme resource dictionary."
+Assert-Condition ($app -match 'Source="Themes/Controls/RtaimeIcons\.xaml"') "Operator must load the custom icon geometry dictionary."
+Assert-Condition ($app -match 'Source="Themes/Controls/RtaimeControls\.xaml"') "Operator must load the custom control chrome dictionary."
+$iconThemeIndex = $app.IndexOf('Source="Themes/Controls/RtaimeIcons.xaml"', [StringComparison]::Ordinal)
+$controlThemeIndex = $app.IndexOf('Source="Themes/Controls/RtaimeControls.xaml"', [StringComparison]::Ordinal)
+Assert-Condition ($iconThemeIndex -ge 0 -and $controlThemeIndex -gt $iconThemeIndex) "Custom icon resources must load before custom control templates."
+
+foreach ($controlName in @("RtaimeButton", "RtaimeIconButton", "RtaimeToggleButton", "RtaimeTransportButton", "RtaimeNavigationItem", "RtaimePanelHeader", "RtaimeStatusBadge", "RtaimeMetricBar", "RtaimeTimecode", "RtaimeIcon")) {
+	Assert-Condition ($customControls -match ("class " + $controlName + "\b")) "Custom Operator control '$controlName' must exist."
+	Assert-Condition ($customControls -match ("OverrideMetadata\(typeof\(" + $controlName + "\)")) "Custom Operator control '$controlName' must own its default style key."
+	Assert-Condition ($customControlTheme -match ('ControlTemplate TargetType="\{x:Type controls:' + $controlName + '\}"')) "Custom Operator control '$controlName' must have a complete own template."
+}
+
+Assert-Condition ($customControls -match 'enum RtaimeStatusKind') "Custom status visuals must use explicit semantic states."
+foreach ($statusKind in @("Selection", "Action", "Healthy", "Ready", "Warning", "Armed", "Preview", "Program", "OnAir")) {
+	Assert-Condition ($customControlTheme -match ('RtaimeStatusKind\.' + $statusKind)) "Custom status badge must style semantic state '$statusKind'."
+}
+Assert-Condition ($customControlTheme -match 'RtaimeStatusKind\.Program[\s\S]+OperatorProgramBrush' -and $customControlTheme -match 'RtaimeStatusKind\.OnAir[\s\S]+OperatorProgramBrush') "Program and On-Air status must use the red Program semantic brush."
+Assert-Condition ($customControlTheme -match 'RtaimeStatusKind\.Healthy[\s\S]+OperatorHealthyBrush' -and $customControlTheme -match 'RtaimeStatusKind\.Ready[\s\S]+OperatorHealthyBrush') "Healthy and Ready status must use the green health semantic brush."
+Assert-Condition ($customControlTheme -match 'RtaimeStatusKind\.Warning[\s\S]+OperatorWarningBrush' -and $customControlTheme -match 'RtaimeStatusKind\.Armed[\s\S]+OperatorArmedBrush') "Warning and Armed status must use the amber semantic brushes."
+Assert-Condition ($customControlTheme -match 'RtaimeStatusKind\.Selection[\s\S]+OperatorAccentBrush' -and $customControlTheme -match 'RtaimeStatusKind\.Action[\s\S]+OperatorAccentBrush') "Selection and action status must use the cyan accent brush."
+Assert-Condition ($customControlTheme -match '<Setter Property="Width" Value="28" />' -and $customControlTheme -match '<Setter Property="Height" Value="28" />') "Custom icon buttons must default to 28x28."
+Assert-Condition ($customControlTheme -match 'Property="Width" Value="\{DynamicResource OperatorNavigationWidth\}"' -and $customControlTheme -match 'Property="MinHeight" Value="72"') "Custom navigation items must use the 92px rail token and approximately 72px item height."
+Assert-Condition ($customControlTheme -match 'Property="MaxHeight" Value="26"' -and $customControlTheme -match 'Property="Height" Value="4"') "Status badges and metric bars must retain compact mockup metrics."
+Assert-Condition ($customControlTheme -match 'FocusVisualStyle" Value="\{x:Null\}"' -and $customControlTheme -match 'Property="IsKeyboardFocused"' -and $customControlTheme -match 'OperatorFocusBrush') "Interactive custom controls must suppress stock focus visuals and provide the cyan focus treatment."
+Assert-Condition ($customControlTheme -match 'Property="IsMouseOver"' -and $customControlTheme -match 'Property="IsPressed"' -and $customControlTheme -match 'Property="IsEnabled" Value="False"') "Custom action controls must define hover, pressed and disabled states."
+foreach ($iconSize in @(14, 16, 18, 20)) {
+	Assert-Condition ($customControlTheme -match ('x:Key="RtaimeIcon' + $iconSize + '"')) "Custom icon size '$iconSize' must be available."
+}
+foreach ($iconName in @("Play", "Pause", "Stop", "Previous", "Next", "Media", "Live", "Timeline", "Output", "Compositing", "Settings", "Check", "Warning", "Close", "ChevronLeft", "ChevronRight")) {
+	Assert-Condition ($customIconTheme -match ('x:Key="RtaimeIcon' + $iconName + 'Geometry"')) "Custom icon geometry '$iconName' must exist."
+}
+Assert-Condition ($customIconTheme -notmatch '[\uD800-\uDFFF]') "Custom icon resources must use geometry rather than emoji glyphs."
 Assert-Condition ($theme -match 'Source="OperatorTokens\.xaml"') "Operator theme must load the shared design-token dictionary."
 foreach ($token in @("OperatorFontFamily", "OperatorTimecodeFontFamily", "OperatorTopBarHeight", "OperatorNavigationWidth", "OperatorMediaPanelWidth", "OperatorInspectorWidth", "OperatorTimelineHeight", "OperatorRegionGap", "OperatorControlHeight", "OperatorCompactControlHeight", "OperatorRadiusPanel", "OperatorRadiusControl", "OperatorColorTopBar", "OperatorColorNavigation", "OperatorColorSurface", "OperatorColorAlternateSurface", "OperatorColorRaisedSurface", "OperatorColorRaisedHover", "OperatorColorBorder", "OperatorColorBorderStrong", "OperatorColorText", "OperatorColorSecondaryText", "OperatorColorMutedText", "OperatorColorAccent", "OperatorColorPreview", "OperatorColorProgram", "OperatorColorHealthy", "OperatorColorWarning", "OperatorColorError", "OperatorColorTimeline", "OperatorColorGraphics", "OperatorColorAudio")) {
 	Assert-Condition ($tokens -match [Regex]::Escape($token)) "Operator design token '$token' is required."
