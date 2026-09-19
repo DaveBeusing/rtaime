@@ -7,10 +7,6 @@
 	Focusable="True"
 	UseLayoutRounding="True"
 	SnapsToDevicePixels="True">
-	<UserControl.InputBindings>
-		<KeyBinding Key="Delete" Command="{Binding DeleteCueCommand}" />
-	</UserControl.InputBindings>
-
 	<Border Style="{StaticResource OperatorPanel}">
 		<Grid>
 			<Grid.RowDefinitions>

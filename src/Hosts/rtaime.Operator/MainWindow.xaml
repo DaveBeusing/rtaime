@@ -7,8 +7,8 @@
 	Title="rtaime Operator"
 	Width="1600"
 	Height="900"
-	MinWidth="1100"
-	MinHeight="640"
+	MinWidth="960"
+	MinHeight="500"
 	Background="{DynamicResource OperatorBackgroundBrush}"
 	Foreground="{DynamicResource OperatorTextBrush}"
 	FontFamily="{StaticResource OperatorFontFamily}"
@@ -60,7 +60,8 @@
 					</Border>
 				</StackPanel>
 
-				<StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
+				<StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center"
+					Visibility="{Binding Shell.CompactOptionalVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
 					<Border Style="{StaticResource MetricMeter}" Margin="0,0,4,0"
 						Visibility="{Binding Shell.SecondaryMetricVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 						ToolTip="CPU telemetry is not exposed by the current authoritative Runtime health contract; no value is synthesized.">
@@ -91,6 +92,7 @@
 
 				<StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,10,0">
 					<Border Style="{StaticResource OperatorWarningBadge}" Margin="0,0,5,0"
+						Visibility="{Binding Shell.CompactOptionalVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 						ToolTip="No authoritative external transmission/on-air feed exists in the current V1 contract. Program bus state is shown separately and this indicator remains explicitly unverified."
 						AutomationProperties.Name="Live on-air state unverified">
 						<StackPanel Orientation="Horizontal">
@@ -109,7 +111,7 @@
 				<StackPanel Grid.Column="5" Orientation="Horizontal" VerticalAlignment="Center">
 					<Button Content="DEMO" Command="{Binding DemoProduction.OpenCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorProgramButton}" MinHeight="28" Padding="8,3" Margin="0,0,4,0" ToolTip="Prepare the deterministic showcase state. Preview remains under operator TAKE control." AutomationProperties.Name="Open Demo Production" />
 					<Button x:Name="SynchronizeButton" Content="SYNC F5" Command="{Binding SynchronizeCommand}" Style="{StaticResource OperatorAccentButton}" MinHeight="28" Padding="8,3" Margin="0,0,4,0" ToolTip="Synchronize authoritative ControlHost state (F5)." AutomationProperties.Name="Synchronize authoritative state" />
-					<Button Content="{Binding Shell.FullscreenLabel, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Command="{Binding Shell.ToggleFullscreenCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorButton}" MinHeight="28" Padding="8,3" Margin="0,0,4,0" />
+					<Button Content="{Binding Shell.FullscreenLabel, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Command="{Binding Shell.ToggleFullscreenCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorButton}" MinHeight="28" Padding="8,3" Margin="0,0,4,0" ToolTip="Toggle Operator fullscreen (F11)." AutomationProperties.Name="Toggle Operator fullscreen" />
 					<Button Content="⋯" Style="{StaticResource OperatorButton}" MinWidth="34" MinHeight="28" Padding="8,3" ToolTip="Shell actions"
 						Tag="{Binding RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Click="OnShellMenuClick">
 						<Button.ContextMenu>
@@ -201,7 +203,7 @@
 							<TextBox x:Name="MediaSearchBox" Grid.Column="0"
 								Text="{Binding MediaPool.SearchText, RelativeSource={RelativeSource AncestorType={x:Type Window}}, UpdateSourceTrigger=PropertyChanged}"
 								Style="{StaticResource OperatorTextBox}"
-								ToolTip="Search loaded resource metadata"
+								ToolTip="Search loaded resource metadata (Ctrl+F)."
 								AutomationProperties.Name="Media Pool search" />
 							<Button Grid.Column="2"
 								Content="+ IMPORT"
@@ -252,10 +254,10 @@
 						<StackPanel Orientation="Horizontal" Margin="0,2,0,0">
 							<Button Content="GRID"
 								Command="{Binding MediaPool.GridViewCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-								Style="{StaticResource OperatorButton}" MinHeight="26" Padding="8,2" Margin="0,0,5,0" />
+								Style="{StaticResource OperatorButton}" MinHeight="26" Padding="8,2" Margin="0,0,5,0" ToolTip="Show Media Library as a grid." />
 							<Button Content="LIST"
 								Command="{Binding MediaPool.ListViewCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-								Style="{StaticResource OperatorButton}" MinHeight="26" Padding="8,2" />
+								Style="{StaticResource OperatorButton}" MinHeight="26" Padding="8,2" ToolTip="Show Media Library as a list." />
 							<TextBlock Text="{Binding MediaPool.ViewModeLabel, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 								Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" Margin="10,0,0,0" />
 						</StackPanel>
@@ -400,9 +402,9 @@
 							</TextBlock.Style>
 						</TextBlock>
 
-						<Border HorizontalAlignment="Center" VerticalAlignment="Top" Margin="8" Padding="8,4" Background="{DynamicResource OperatorRaisedSurfaceBrush}">
+						<Border HorizontalAlignment="Center" VerticalAlignment="Top" Margin="8" Padding="8,4">
 							<Border.Style>
-								<Style TargetType="{x:Type Border}">
+								<Style TargetType="{x:Type Border}" BasedOn="{StaticResource OperatorLoadingState}">
 									<Setter Property="Visibility" Value="Collapsed" />
 									<Style.Triggers><DataTrigger Binding="{Binding MediaPool.IsLoading, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
 								</Style>
@@ -410,9 +412,9 @@
 							<TextBlock Text="LOADING ASSETS…" Style="{StaticResource OperatorLabel}" />
 						</Border>
 
-						<Border VerticalAlignment="Bottom" Margin="8" Padding="8,5" Background="{DynamicResource OperatorProgramSurfaceBrush}" BorderBrush="{DynamicResource OperatorErrorBrush}" BorderThickness="1">
+						<Border VerticalAlignment="Bottom" Margin="8" Padding="8,5">
 							<Border.Style>
-								<Style TargetType="{x:Type Border}">
+								<Style TargetType="{x:Type Border}" BasedOn="{StaticResource OperatorErrorState}">
 									<Setter Property="Visibility" Value="Collapsed" />
 									<Style.Triggers><DataTrigger Binding="{Binding MediaPool.HasError, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
 								</Style>
@@ -430,7 +432,7 @@
 						Visibility="{Binding Shell.LiveSceneCueVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
 				</Grid>
 			</Border>
-			<GridSplitter Grid.Column="5" Width="5" HorizontalAlignment="Stretch" Background="{DynamicResource OperatorBorderBrush}" ResizeDirection="Columns" ResizeBehavior="PreviousAndNext" DragCompleted="OnLayoutSplitterDragCompleted" />
+			<GridSplitter Grid.Column="5" Style="{StaticResource OperatorVerticalSplitter}" DragCompleted="OnLayoutSplitterDragCompleted" ToolTip="Resize Inspector / Live Controls panel. Use arrow keys while focused." AutomationProperties.Name="Resize right workspace panel" />
 
 			<ScrollViewer x:Name="CenterWorkspace" Grid.Column="4" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
 			<Grid>
@@ -1110,7 +1112,7 @@
 				</StackPanel>
 			</Grid>
 		</ScrollViewer>
-			<GridSplitter Grid.Column="3" Width="5" HorizontalAlignment="Stretch" Background="{DynamicResource OperatorBorderBrush}" ResizeDirection="Columns" ResizeBehavior="PreviousAndNext" DragCompleted="OnLayoutSplitterDragCompleted" />
+			<GridSplitter Grid.Column="3" Style="{StaticResource OperatorVerticalSplitter}" DragCompleted="OnLayoutSplitterDragCompleted" ToolTip="Resize Media / tool panel. Use arrow keys while focused." AutomationProperties.Name="Resize left workspace panel" />
 			<Grid Grid.Column="6" Margin="6,0,0,0">
 				<local:OperatorInspectorControl
 					x:Name="RightInspectorRegion"
@@ -1125,7 +1127,7 @@
 			</Grid>
 		</Grid>
 
-		<GridSplitter Grid.Row="2" Height="{Binding Shell.LowerSplitterHeight, ElementName=RootWindow}" VerticalAlignment="Stretch" Background="{DynamicResource OperatorBorderBrush}" ResizeDirection="Rows" ResizeBehavior="PreviousAndNext" DragCompleted="OnLayoutSplitterDragCompleted" />
+		<GridSplitter Grid.Row="2" Height="{Binding Shell.LowerSplitterHeight, ElementName=RootWindow}" Style="{StaticResource OperatorHorizontalSplitter}" DragCompleted="OnLayoutSplitterDragCompleted" ToolTip="Resize timeline / lower workspace. Use arrow keys while focused." AutomationProperties.Name="Resize lower workspace panel" />
 		<Border x:Name="LowerTimelineRegion" Grid.Row="3" Style="{StaticResource OperatorShellRegion}" Margin="0,6,0,6" ClipToBounds="True"
 			Visibility="{Binding Shell.TimelineRegionVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
 			<Grid>

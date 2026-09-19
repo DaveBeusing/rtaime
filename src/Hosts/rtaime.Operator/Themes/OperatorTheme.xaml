@@ -348,6 +348,82 @@
 		</Setter>
 	</Style>
 
+	<!-- Shared keyboard/focus polish for standard WPF controls used across workspaces. -->
+	<Style TargetType="{x:Type ComboBox}">
+		<Setter Property="Background" Value="{DynamicResource OperatorRaisedSurfaceBrush}" />
+		<Setter Property="Foreground" Value="{DynamicResource OperatorTextBrush}" />
+		<Setter Property="BorderBrush" Value="{DynamicResource OperatorBorderBrush}" />
+		<Setter Property="BorderThickness" Value="1" />
+		<Setter Property="MinHeight" Value="{StaticResource OperatorCompactControlHeight}" />
+		<Setter Property="Padding" Value="7,4" />
+		<Setter Property="FocusVisualStyle" Value="{StaticResource OperatorFocusVisual}" />
+		<Setter Property="KeyboardNavigation.TabNavigation" Value="Local" />
+		<Setter Property="ToolTipService.InitialShowDelay" Value="300" />
+		<Setter Property="ToolTipService.ShowDuration" Value="15000" />
+	</Style>
+
+	<Style TargetType="{x:Type CheckBox}">
+		<Setter Property="Foreground" Value="{DynamicResource OperatorTextBrush}" />
+		<Setter Property="MinHeight" Value="{StaticResource OperatorCompactControlHeight}" />
+		<Setter Property="VerticalContentAlignment" Value="Center" />
+		<Setter Property="FocusVisualStyle" Value="{StaticResource OperatorFocusVisual}" />
+	</Style>
+
+	<Style TargetType="{x:Type TabControl}">
+		<Setter Property="Background" Value="{DynamicResource OperatorSurfaceBrush}" />
+		<Setter Property="Foreground" Value="{DynamicResource OperatorTextBrush}" />
+		<Setter Property="BorderBrush" Value="{DynamicResource OperatorBorderBrush}" />
+		<Setter Property="KeyboardNavigation.TabNavigation" Value="Local" />
+	</Style>
+
+	<Style TargetType="{x:Type TabItem}">
+		<Setter Property="Foreground" Value="{DynamicResource OperatorMutedTextBrush}" />
+		<Setter Property="Background" Value="{DynamicResource OperatorSurfaceBrush}" />
+		<Setter Property="Padding" Value="9,5" />
+		<Setter Property="FocusVisualStyle" Value="{StaticResource OperatorFocusVisual}" />
+		<Style.Triggers>
+			<Trigger Property="IsSelected" Value="True">
+				<Setter Property="Foreground" Value="{DynamicResource OperatorTextBrush}" />
+				<Setter Property="Background" Value="{DynamicResource OperatorRaisedSurfaceBrush}" />
+			</Trigger>
+		</Style.Triggers>
+	</Style>
+
+	<Style x:Key="OperatorVerticalSplitter" TargetType="{x:Type GridSplitter}">
+		<Setter Property="Width" Value="5" />
+		<Setter Property="HorizontalAlignment" Value="Stretch" />
+		<Setter Property="Background" Value="{DynamicResource OperatorBorderBrush}" />
+		<Setter Property="ResizeDirection" Value="Columns" />
+		<Setter Property="ResizeBehavior" Value="PreviousAndNext" />
+		<Setter Property="Focusable" Value="True" />
+		<Setter Property="KeyboardNavigation.IsTabStop" Value="True" />
+		<Setter Property="FocusVisualStyle" Value="{StaticResource OperatorFocusVisual}" />
+		<Setter Property="Cursor" Value="SizeWE" />
+		<Setter Property="ToolTipService.InitialShowDelay" Value="300" />
+	</Style>
+
+	<Style x:Key="OperatorHorizontalSplitter" TargetType="{x:Type GridSplitter}">
+		<Setter Property="Height" Value="5" />
+		<Setter Property="VerticalAlignment" Value="Stretch" />
+		<Setter Property="Background" Value="{DynamicResource OperatorBorderBrush}" />
+		<Setter Property="ResizeDirection" Value="Rows" />
+		<Setter Property="ResizeBehavior" Value="PreviousAndNext" />
+		<Setter Property="Focusable" Value="True" />
+		<Setter Property="KeyboardNavigation.IsTabStop" Value="True" />
+		<Setter Property="FocusVisualStyle" Value="{StaticResource OperatorFocusVisual}" />
+		<Setter Property="Cursor" Value="SizeNS" />
+		<Setter Property="ToolTipService.InitialShowDelay" Value="300" />
+	</Style>
+
+	<Style x:Key="OperatorLoadingState" TargetType="Border" BasedOn="{StaticResource OperatorEmptyState}">
+		<Setter Property="BorderBrush" Value="{DynamicResource OperatorAccentBrush}" />
+	</Style>
+
+	<Style x:Key="OperatorErrorState" TargetType="Border" BasedOn="{StaticResource OperatorEmptyState}">
+		<Setter Property="Background" Value="{DynamicResource OperatorProgramSurfaceBrush}" />
+		<Setter Property="BorderBrush" Value="{DynamicResource OperatorErrorBrush}" />
+	</Style>
+
 	<!-- Reusable production-shell chrome. These styles own presentation only. -->
 	<Style x:Key="StatusPill" TargetType="Border" BasedOn="{StaticResource OperatorStatusBadge}">
 		<Setter Property="Padding" Value="8,4" />

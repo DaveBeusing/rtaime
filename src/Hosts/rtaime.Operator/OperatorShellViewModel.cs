@@ -53,8 +53,8 @@ public sealed record OperatorWindowPlacementSettings(
 {
 	public const double DefaultWidth = 1600;
 	public const double DefaultHeight = 900;
-	public const double MinimumWidth = 1100;
-	public const double MinimumHeight = 640;
+	public const double MinimumWidth = 960;
+	public const double MinimumHeight = 500;
 	public const double MaximumWidth = 7680;
 	public const double MaximumHeight = 4320;
 
@@ -95,6 +95,8 @@ public sealed record OperatorLayoutSettings
 	public const double MaximumRightPanelWidth = 620;
 	public const double MinimumLowerPanelHeight = 320;
 	public const double MaximumLowerPanelHeight = 680;
+	public const double CompactLowerPanelHeight = 220;
+	public const double CompactViewportWidth = 1100;
 
 	public int Version { get; init; } = CurrentVersion;
 	public bool IsFullscreen { get; init; }
@@ -289,16 +291,31 @@ public sealed class OperatorLayoutStore
 
 	private async Task WriteAsync(string json)
 	{
+		var temporaryPath = _path + ".tmp";
 		try
 		{
 			var directory = Path.GetDirectoryName(_path);
 			if (!string.IsNullOrWhiteSpace(directory))
 				Directory.CreateDirectory(directory);
-			await File.WriteAllTextAsync(_path, json).ConfigureAwait(false);
+
+			await File.WriteAllTextAsync(temporaryPath, json).ConfigureAwait(false);
+			File.Move(temporaryPath, _path, overwrite: true);
 		}
 		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
 		{
 			// Layout persistence is best-effort and must never affect production operation.
+		}
+		finally
+		{
+			try
+			{
+				if (File.Exists(temporaryPath))
+					File.Delete(temporaryPath);
+			}
+			catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+			{
+				// Temporary-file cleanup is best-effort for the same reason as layout persistence.
+			}
 		}
 	}
 }
@@ -371,9 +388,11 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 
 	public IReadOnlyList<string> Workspaces => OperatorWorkspaceNames.All;
 	public OperatorWindowPlacementSettings WindowPlacement => _windowPlacement;
+	public bool IsCompactViewport => _viewportWidth < OperatorLayoutSettings.CompactViewportWidth;
 	public double NavigationRailWidth => _viewportWidth < 1320 ? 54 : 86;
 	public Visibility NavigationLabelVisibility => _viewportWidth < 1320 ? Visibility.Collapsed : Visibility.Visible;
 	public Visibility SecondaryMetricVisibility => _viewportWidth < 1480 ? Visibility.Collapsed : Visibility.Visible;
+	public Visibility CompactOptionalVisibility => IsCompactViewport ? Visibility.Collapsed : Visibility.Visible;
 
 	public ICommand ToggleLeftPanelCommand { get; }
 	public ICommand ToggleRightPanelCommand { get; }
@@ -424,37 +443,37 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 
 	public GridLength LeftColumnWidth
 	{
-		get => new(IsCenterMaximized || IsLeftCollapsed || !HasLeftRegion ? 0 : LeftPanelWidth);
+		get => new(IsCenterMaximized || IsLeftCollapsed || !HasLeftRegion || IsCompactViewport ? 0 : LeftPanelWidth);
 		set
 		{
-			if (!IsCenterMaximized && !IsLeftCollapsed && HasLeftRegion && value.IsAbsolute && value.Value > 0)
+			if (!IsCompactViewport && !IsCenterMaximized && !IsLeftCollapsed && HasLeftRegion && value.IsAbsolute && value.Value > 0)
 				LeftPanelWidth = value.Value;
 		}
 	}
 
 	public GridLength RightColumnWidth
 	{
-		get => new(IsCenterMaximized || IsRightCollapsed ? 0 : RightPanelWidth);
+		get => new(IsCenterMaximized || IsRightCollapsed || IsCompactViewport ? 0 : RightPanelWidth);
 		set
 		{
-			if (!IsCenterMaximized && !IsRightCollapsed && value.IsAbsolute && value.Value > 0)
+			if (!IsCompactViewport && !IsCenterMaximized && !IsRightCollapsed && value.IsAbsolute && value.Value > 0)
 				RightPanelWidth = value.Value;
 		}
 	}
 
 	public GridLength LowerRowHeight
 	{
-		get => new(IsCenterMaximized || !HasTimelineRegion ? 0 : LowerPanelHeight);
+		get => new(IsCenterMaximized || !HasTimelineRegion ? 0 : IsCompactViewport ? Math.Min(LowerPanelHeight, OperatorLayoutSettings.CompactLowerPanelHeight) : LowerPanelHeight);
 		set
 		{
-			if (!IsCenterMaximized && HasTimelineRegion && value.IsAbsolute && value.Value > 0)
+			if (!IsCompactViewport && !IsCenterMaximized && HasTimelineRegion && value.IsAbsolute && value.Value > 0)
 				LowerPanelHeight = value.Value;
 		}
 	}
 
-	public double LeftSplitterWidth => IsCenterMaximized || IsLeftCollapsed || !HasLeftRegion ? 0 : 5;
-	public double RightSplitterWidth => IsCenterMaximized || IsRightCollapsed ? 0 : 5;
-	public double LowerSplitterHeight => IsCenterMaximized || !HasTimelineRegion ? 0 : 5;
+	public double LeftSplitterWidth => IsCenterMaximized || IsLeftCollapsed || !HasLeftRegion || IsCompactViewport ? 0 : 5;
+	public double RightSplitterWidth => IsCenterMaximized || IsRightCollapsed || IsCompactViewport ? 0 : 5;
+	public double LowerSplitterHeight => IsCenterMaximized || !HasTimelineRegion || IsCompactViewport ? 0 : 5;
 
 	public bool IsLeftCollapsed
 	{
@@ -530,9 +549,9 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 	public Visibility LeftRegionVisibility => HasLeftRegion ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility TimelineRegionVisibility => HasTimelineRegion ? Visibility.Visible : Visibility.Collapsed;
 	public bool HasAuxiliaryWorkspaceColumn => IsScenesWorkspace || IsCompositingWorkspace || IsOutputsWorkspace || IsSettingsWorkspace;
-	public GridLength AuxiliaryWorkspaceColumnWidth => HasAuxiliaryWorkspaceColumn ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
-	public double AuxiliaryWorkspaceColumnMinWidth => HasAuxiliaryWorkspaceColumn ? 300 : 0;
-	public double AuxiliaryWorkspaceGapWidth => HasAuxiliaryWorkspaceColumn ? 14 : 0;
+	public GridLength AuxiliaryWorkspaceColumnWidth => HasAuxiliaryWorkspaceColumn && !IsCompactViewport ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+	public double AuxiliaryWorkspaceColumnMinWidth => HasAuxiliaryWorkspaceColumn && !IsCompactViewport ? 300 : 0;
+	public double AuxiliaryWorkspaceGapWidth => HasAuxiliaryWorkspaceColumn && !IsCompactViewport ? 14 : 0;
 
 	public Visibility MultiviewVisibility => IsLiveWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility CompositingGraphVisibility => IsCompositingWorkspace ? Visibility.Visible : Visibility.Collapsed;
@@ -623,14 +642,24 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 		if (!double.IsFinite(width) || width <= 0 || Math.Abs(_viewportWidth - width) < 0.5)
 			return;
 
-		var previousCompact = _viewportWidth < 1320;
+		var previousCompactNavigation = _viewportWidth < 1320;
+		var previousCompactWorkspace = IsCompactViewport;
 		var previousSecondaryMetrics = _viewportWidth < 1480;
 		_viewportWidth = width;
 
-		if (previousCompact != (_viewportWidth < 1320))
+		if (previousCompactNavigation != (_viewportWidth < 1320))
 		{
 			OnPropertyChanged(nameof(NavigationRailWidth));
 			OnPropertyChanged(nameof(NavigationLabelVisibility));
+		}
+		if (previousCompactWorkspace != IsCompactViewport)
+		{
+			OnPropertyChanged(nameof(IsCompactViewport));
+			OnPropertyChanged(nameof(CompactOptionalVisibility));
+			OnPropertyChanged(nameof(AuxiliaryWorkspaceColumnWidth));
+			OnPropertyChanged(nameof(AuxiliaryWorkspaceColumnMinWidth));
+			OnPropertyChanged(nameof(AuxiliaryWorkspaceGapWidth));
+			RaiseLayoutGeometryChanged();
 		}
 		if (previousSecondaryMetrics != (_viewportWidth < 1480))
 			OnPropertyChanged(nameof(SecondaryMetricVisibility));

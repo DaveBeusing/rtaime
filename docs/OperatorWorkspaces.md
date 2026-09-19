@@ -114,11 +114,13 @@ Default bindings are:
 | I | Set Preview media IN |
 | O | Set Preview media OUT |
 | M | Add named Preview media cue |
+| Delete | Delete the selected Preview media cue when that command is available |
 | Up | Previous Preview media cue |
 | Down | Next Preview media cue |
 | Enter | AUTO Preview to Program |
 | Ctrl+Enter | CUT Preview to Program |
 | R | Start/stop Program recording when the matching command is available |
+| Ctrl+F | Focus Media Library search |
 | Ctrl+P | Set selected source to Preview |
 | F5 | Synchronize authoritative state |
 | F11 | Operator fullscreen/windowed |
@@ -165,7 +167,29 @@ Fullscreen preference, selected workspace and normalized window placement remain
 
 SAVE LAYOUT persists the active workspace presentation. LAYOUT RESET restores only that workspace's canonical defaults. Missing, corrupt, non-finite, out-of-range or incompatible persisted data recovers to safe canonical layouts.
 
-The layout file remains rtaime/operator-layout.json below the current user's local application data.
+The layout file remains rtaime/operator-layout.json below the current user's local application data. Persistence writes first use a temporary sibling file and then replace the target path so an interrupted write cannot leave partially serialized layout JSON as the preferred state.
+
+Canonical workspace defaults are:
+
+| Workspace | Left | Right | Lower | Collapsed by default | Viewer |
+| --- | ---: | ---: | ---: | --- | --- |
+| LIVE | 220 | 300 | 340 | none | DUAL |
+| EDIT | 280 | 350 | 560 | none | DUAL |
+| MEDIA | 460 | 360 | 360 | none | PREVIEW |
+| SCENES | 260 | 390 | 360 | none | DUAL |
+| COMPOSITING | 300 | 390 | 360 | none | DUAL |
+| OUTPUTS | 220 | 420 | 340 | left | PROGRAM |
+| SETTINGS | 220 | 460 | 340 | left and right | PROGRAM |
+
+At constrained logical widths the shell enters a presentation-only compact viewport mode. It temporarily removes the left and right side regions plus any auxiliary workspace column from the grid allocation, reduces the lower region allocation and suppresses optional top-bar telemetry without modifying the persisted per-workspace dimensions. The central production surface, Program identity, connection/lifecycle state and core shell actions remain visible. Returning to a larger viewport restores the stored presentation values.
+
+## Docking, focus and visual polish
+
+The three production-shell splitters share the same focus-visible theme and remain keyboard-focusable. Their tooltips advertise arrow-key resizing. Standard ComboBox, CheckBox and TabItem controls inherit the shared focus visual, while the window retains cyclic tab navigation so core controls remain reachable without a mouse.
+
+Loading, error and empty presentation reuse shared Operator styles instead of workspace-specific colors. Production Operator XAML intentionally avoids decorative Storyboard/animation transitions so focus, tally and command-state changes remain immediate.
+
+The reference window can shrink to 960 x 500 device-independent units. Combined with PerMonitorV2 awareness, vertical scrolling and the compact workspace presentation this keeps the shell within a 1920 x 1080 display at 100%, 125%, 150% and 200% Windows scaling. Per-monitor movement remains presentation-only and does not restart Runtime or media processing.
 
 ## Authority and performance boundaries
 

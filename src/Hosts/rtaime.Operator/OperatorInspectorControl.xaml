@@ -13,6 +13,7 @@
 			<Setter Property="BorderBrush" Value="{DynamicResource OperatorBorderBrush}" />
 			<Setter Property="Padding" Value="9,5" />
 			<Setter Property="FontWeight" Value="SemiBold" />
+			<Setter Property="FocusVisualStyle" Value="{StaticResource OperatorFocusVisual}" />
 			<Style.Triggers>
 				<Trigger Property="IsSelected" Value="True">
 					<Setter Property="Foreground" Value="{DynamicResource OperatorTextBrush}" />

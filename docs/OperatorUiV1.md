@@ -31,9 +31,20 @@ Production mutations are disabled whenever the presentation snapshot is stale, s
 | Shortcut | Action |
 | --- | --- |
 | `F5` | Synchronize authoritative state |
+| `Ctrl+F` | Focus Media Library search |
 | `Ctrl+P` | Set selected source to Preview |
-| `Space` | CUT confirmed Preview source to Program |
-| `Ctrl+Space` | AUTO/DISSOLVE confirmed Preview source to Program |
+| `Space` | Preview media Play/Pause when the loaded source is confirmed Preview |
+| `K` | Preview media Pause |
+| `S` | Preview media Stop |
+| `I` / `O` | Set Preview media IN / OUT |
+| `M` | Add Preview media cue |
+| `Delete` | Delete selected Preview cue when available |
+| `Up` / `Down` | Previous / next Preview cue |
+| `Enter` | AUTO/DISSOLVE confirmed Preview source to Program |
+| `Ctrl+Enter` | CUT confirmed Preview source to Program |
+| `R` | Start/stop Program recording when available |
+| `F11` | Toggle Operator fullscreen/windowed |
+| `Esc` | Exit Operator fullscreen |
 | `Ctrl+1` | Maximize Preview viewer |
 | `Ctrl+2` | Maximize Program viewer |
 | `Ctrl+0` | Restore dual Preview/Program view |
@@ -78,15 +89,16 @@ The design system changes presentation only. It does not add production authorit
 
 ### Reference resolution and DPI
 
-The qualified reference surface is **1920 x 1080**. The Operator opens at 1600 x 900 device-independent units, retains a 1100 x 640 minimum workspace and uses vertical scrolling when the available logical height is reduced.
+The qualified reference surface is **1920 x 1080**. The Operator opens at 1600 x 900 device-independent units, retains a 960 x 500 minimum workspace and uses vertical scrolling when the available logical height is reduced. Below the compact-workspace threshold the shell reduces presentation-only panel allocation without overwriting persisted workspace sizes.
 
 WPF device-independent layout, `UseLayoutRounding`, device-pixel snapping and an explicit `PerMonitorV2` manifest are used together. The policy gate qualifies the layout invariants for:
 
 - 100% scaling: 1920 x 1080 logical reference surface.
 - 125% scaling: 1536 x 864 logical workspace.
 - 150% scaling: 1280 x 720 logical workspace.
+- 200% scaling: 960 x 540 logical workspace.
 
-At 125% and 150%, the minimum workspace remains within the available logical bounds and vertical scrolling preserves access to lower panels. Operator UI Design System does not claim pixel-identical rendering across GPU drivers, Windows text-rendering settings or monitor profiles; screenshot-based visual review remains a manual showcase check.
+At 125%, 150% and 200%, the minimum workspace remains within the available logical bounds. Vertical scrolling plus compact panel allocation preserves access to the central production surface without changing authoritative state or persisted workspace dimensions. Operator UI Design System does not claim pixel-identical rendering across GPU drivers, Windows text-rendering settings or monitor profiles; screenshot-based visual review remains a manual showcase check.
 
 ### Operator UI Design System acceptance evidence
 
