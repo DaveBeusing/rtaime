@@ -127,7 +127,7 @@ public sealed record OperatorLayoutSettings
 			460,
 			340,
 			true,
-			false,
+			true,
 			false,
 			"PROGRAM")
 	};
@@ -419,6 +419,10 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 	public bool IsMediaWorkspace => string.Equals(SelectedWorkspace, OperatorWorkspaceNames.Media, StringComparison.Ordinal);
 	public bool IsGraphicsWorkspace => string.Equals(SelectedWorkspace, OperatorWorkspaceNames.Graphics, StringComparison.Ordinal);
 	public bool IsSystemWorkspace => string.Equals(SelectedWorkspace, OperatorWorkspaceNames.System, StringComparison.Ordinal);
+	public bool HasAuxiliaryWorkspaceColumn => IsLiveWorkspace || IsGraphicsWorkspace || IsSystemWorkspace;
+	public GridLength AuxiliaryWorkspaceColumnWidth => HasAuxiliaryWorkspaceColumn ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+	public double AuxiliaryWorkspaceColumnMinWidth => HasAuxiliaryWorkspaceColumn ? 300 : 0;
+	public double AuxiliaryWorkspaceGapWidth => HasAuxiliaryWorkspaceColumn ? 14 : 0;
 
 	public Visibility MultiviewVisibility => IsLiveWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility StandardViewerVisibility => IsLiveWorkspace ? Visibility.Collapsed : Visibility.Visible;
@@ -591,6 +595,10 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 		OnPropertyChanged(nameof(IsMediaWorkspace));
 		OnPropertyChanged(nameof(IsGraphicsWorkspace));
 		OnPropertyChanged(nameof(IsSystemWorkspace));
+		OnPropertyChanged(nameof(HasAuxiliaryWorkspaceColumn));
+		OnPropertyChanged(nameof(AuxiliaryWorkspaceColumnWidth));
+		OnPropertyChanged(nameof(AuxiliaryWorkspaceColumnMinWidth));
+		OnPropertyChanged(nameof(AuxiliaryWorkspaceGapWidth));
 		OnPropertyChanged(nameof(MultiviewVisibility));
 		OnPropertyChanged(nameof(StandardViewerVisibility));
 		OnPropertyChanged(nameof(QuickControlsVisibility));
