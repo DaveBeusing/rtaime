@@ -10,6 +10,7 @@
 				<ResourceDictionary Source="Themes/Controls/RtaimeControls.xaml" />
 				<ResourceDictionary Source="Themes/Controls/RtaimeInputsAndScrolling.xaml" />
 				<ResourceDictionary Source="Themes/Controls/RtaimeMediaLibrary.xaml" />
+				<ResourceDictionary Source="Themes/Controls/RtaimeMonitorWorkspace.xaml" />
 			</ResourceDictionary.MergedDictionaries>
 		</ResourceDictionary>
 	</Application.Resources>
