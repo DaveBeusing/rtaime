@@ -348,7 +348,7 @@ Assert-Condition ($shell -match 'PreviewViewerVisibility' -and $shell -match 'Pr
 Assert-Condition ($window -match 'Text="PRODUCTION CONTROLS"' -and $window -match 'CUT PREVIEW → PROGRAM' -and $window -match 'AUTO PREVIEW → PROGRAM') "CUT/AUTO controls must sit in the central production workspace."
 Assert-Condition ($window -match 'Text="TRANSITION TYPE"' -and $window -match 'Text="CUT / DISSOLVE"' -and $window -match 'Binding TransitionFrames') "Production controls must expose the current transition types and duration."
 Assert-Condition ($window -match 'HOLD / FTB · NOT AVAILABLE IN V1') "Unsupported HOLD/FTB controls must remain an explicit extension surface rather than invented commands."
-Assert-Condition ($programViewer -match 'Binding AudioLeftPeak' -and $programViewer -match 'Binding AudioRightPeak' -and $programViewer -match 'dBFS') "Program viewer must keep bounded stereo metering with a dBFS scale visible."
+Assert-Condition ($programViewer -match 'Binding AudioLeftPeak' -and $programViewer -match 'Binding AudioRightPeak' -and $programViewer -match 'dBFS' -and $programViewer -match 'Text="-60"' -and $programViewer -match 'Text="-12"' -and $programViewer -match 'Text="0"') "Program viewer must keep bounded stereo metering with a visible dBFS reference scale."
 Assert-Condition ($programViewer -match 'CLIP' -and $programViewer -match 'Clipping') "Program viewer must expose clipping with text as well as styling."
 Assert-Condition ($programOutputController -match 'ViewerOutputState => IsRunning \? "OUTPUT LIVE" : "OUTPUT DISABLED"') "Program viewer output tally must distinguish live output from disabled output."
 foreach ($viewerState in @("NO SIGNAL", "DISCONNECTED", "RECOVERING", "SOURCE OFFLINE")) {
