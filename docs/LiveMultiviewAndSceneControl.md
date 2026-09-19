@@ -66,7 +66,7 @@ The right LIVE region keeps production mutations explicit:
 
 External streaming/on-air transmission is shown as UNVERIFIED because no authoritative external-transmission contract is currently exposed.
 
-The legacy central Production Controls, Media Deck, Source Bin, Audio and Recording panels are hidden in LIVE to avoid duplicate control surfaces. They remain available in the workspaces where they are otherwise used.
+The legacy central Production Controls, Media Deck, Source Bin, Audio and Recording panels are hidden in LIVE to avoid duplicate control surfaces. The lower edit timeline is also hidden in LIVE so the multiview retains the available show-operation height; cue access remains in the dedicated left LIVE region. These surfaces remain available in the workspaces where they are otherwise used.
 
 ## Alerts
 
