@@ -231,7 +231,7 @@
 									<Setter Property="Template">
 										<Setter.Value>
 											<ControlTemplate TargetType="{x:Type ListBoxItem}">
-												<Border x:Name="Chip" Padding="{TemplateBinding Padding}" Background="{DynamicResource OperatorRaisedBrush}" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" CornerRadius="3">
+												<Border x:Name="Chip" Padding="{TemplateBinding Padding}" Background="{DynamicResource OperatorRaisedSurfaceBrush}" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" CornerRadius="3">
 													<ContentPresenter />
 												</Border>
 												<ControlTemplate.Triggers>
@@ -287,7 +287,7 @@
 							</ListBox.ItemsPanel>
 							<ListBox.ItemTemplate>
 								<DataTemplate>
-									<Border Margin="3" Padding="6" BorderThickness="1" BorderBrush="{DynamicResource OperatorBorderBrush}" Background="{DynamicResource OperatorRaisedBrush}">
+									<Border Margin="3" Padding="6" BorderThickness="1" BorderBrush="{DynamicResource OperatorBorderBrush}" Background="{DynamicResource OperatorRaisedSurfaceBrush}">
 										<Border.ContextMenu>
 											<ContextMenu>
 												<MenuItem Header="Open in Preview" Click="OnMediaPoolPreviewActionClick" />
@@ -395,7 +395,7 @@
 							</TextBlock.Style>
 						</TextBlock>
 
-						<Border HorizontalAlignment="Center" VerticalAlignment="Top" Margin="8" Padding="8,4" Background="{DynamicResource OperatorRaisedBrush}">
+						<Border HorizontalAlignment="Center" VerticalAlignment="Top" Margin="8" Padding="8,4" Background="{DynamicResource OperatorRaisedSurfaceBrush}">
 							<Border.Style>
 								<Style TargetType="{x:Type Border}">
 									<Setter Property="Visibility" Value="Collapsed" />
