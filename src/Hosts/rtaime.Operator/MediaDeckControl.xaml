@@ -207,7 +207,7 @@
 										<TextBlock Grid.Column="1" Text="{Binding Timecode}" Style="{StaticResource OperatorTimecode}" VerticalAlignment="Center" />
 									</Grid>
 								</DataTemplate>
-							</ListBox.ItemTemplate>
+							</controls:RtaimeListBox.ItemTemplate>
 						</controls:RtaimeListBox>
 
 						<Grid Grid.Row="2" Margin="0,10,0,0">
