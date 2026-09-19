@@ -53,8 +53,8 @@ public sealed record OperatorWindowPlacementSettings(
 {
 	public const double DefaultWidth = 1600;
 	public const double DefaultHeight = 900;
-	public const double MinimumWidth = 1100;
-	public const double MinimumHeight = 640;
+	public const double MinimumWidth = 900;
+	public const double MinimumHeight = 500;
 	public const double MaximumWidth = 7680;
 	public const double MaximumHeight = 4320;
 
@@ -95,6 +95,9 @@ public sealed record OperatorLayoutSettings
 	public const double MaximumRightPanelWidth = 620;
 	public const double MinimumLowerPanelHeight = 320;
 	public const double MaximumLowerPanelHeight = 680;
+	public const double CompactLeftPanelWidth = 380;
+	public const double CompactLowerPanelHeight = 220;
+	public const double CompactViewportWidth = 1100;
 
 	public int Version { get; init; } = CurrentVersion;
 	public bool IsFullscreen { get; init; }
@@ -386,6 +389,7 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 
 	public IReadOnlyList<string> Workspaces => OperatorWorkspaceNames.All;
 	public OperatorWindowPlacementSettings WindowPlacement => _windowPlacement;
+	public bool IsCompactViewport => _viewportWidth < OperatorLayoutSettings.CompactViewportWidth;
 	public double NavigationRailWidth => _viewportWidth < 1320 ? 54 : 86;
 	public Visibility NavigationLabelVisibility => _viewportWidth < 1320 ? Visibility.Collapsed : Visibility.Visible;
 	public Visibility SecondaryMetricVisibility => _viewportWidth < 1480 ? Visibility.Collapsed : Visibility.Visible;
@@ -439,7 +443,7 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 
 	public GridLength LeftColumnWidth
 	{
-		get => new(IsCenterMaximized || IsLeftCollapsed || !HasLeftRegion ? 0 : LeftPanelWidth);
+		get => new(IsCenterMaximized || IsLeftCollapsed || !HasLeftRegion ? 0 : IsCompactViewport ? Math.Min(LeftPanelWidth, OperatorLayoutSettings.CompactLeftPanelWidth) : LeftPanelWidth);
 		set
 		{
 			if (!IsCenterMaximized && !IsLeftCollapsed && HasLeftRegion && value.IsAbsolute && value.Value > 0)
@@ -449,7 +453,7 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 
 	public GridLength RightColumnWidth
 	{
-		get => new(IsCenterMaximized || IsRightCollapsed ? 0 : RightPanelWidth);
+		get => new(IsCenterMaximized || IsRightCollapsed || IsCompactViewport ? 0 : RightPanelWidth);
 		set
 		{
 			if (!IsCenterMaximized && !IsRightCollapsed && value.IsAbsolute && value.Value > 0)
@@ -459,7 +463,7 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 
 	public GridLength LowerRowHeight
 	{
-		get => new(IsCenterMaximized || !HasTimelineRegion ? 0 : LowerPanelHeight);
+		get => new(IsCenterMaximized || !HasTimelineRegion ? 0 : IsCompactViewport ? Math.Min(LowerPanelHeight, OperatorLayoutSettings.CompactLowerPanelHeight) : LowerPanelHeight);
 		set
 		{
 			if (!IsCenterMaximized && HasTimelineRegion && value.IsAbsolute && value.Value > 0)
@@ -468,8 +472,8 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 	}
 
 	public double LeftSplitterWidth => IsCenterMaximized || IsLeftCollapsed || !HasLeftRegion ? 0 : 5;
-	public double RightSplitterWidth => IsCenterMaximized || IsRightCollapsed ? 0 : 5;
-	public double LowerSplitterHeight => IsCenterMaximized || !HasTimelineRegion ? 0 : 5;
+	public double RightSplitterWidth => IsCenterMaximized || IsRightCollapsed || IsCompactViewport ? 0 : 5;
+	public double LowerSplitterHeight => IsCenterMaximized || !HasTimelineRegion || IsCompactViewport ? 0 : 5;
 
 	public bool IsLeftCollapsed
 	{
@@ -638,14 +642,20 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 		if (!double.IsFinite(width) || width <= 0 || Math.Abs(_viewportWidth - width) < 0.5)
 			return;
 
-		var previousCompact = _viewportWidth < 1320;
+		var previousCompactNavigation = _viewportWidth < 1320;
+		var previousCompactWorkspace = IsCompactViewport;
 		var previousSecondaryMetrics = _viewportWidth < 1480;
 		_viewportWidth = width;
 
-		if (previousCompact != (_viewportWidth < 1320))
+		if (previousCompactNavigation != (_viewportWidth < 1320))
 		{
 			OnPropertyChanged(nameof(NavigationRailWidth));
 			OnPropertyChanged(nameof(NavigationLabelVisibility));
+		}
+		if (previousCompactWorkspace != IsCompactViewport)
+		{
+			OnPropertyChanged(nameof(IsCompactViewport));
+			RaiseLayoutGeometryChanged();
 		}
 		if (previousSecondaryMetrics != (_viewportWidth < 1480))
 			OnPropertyChanged(nameof(SecondaryMetricVisibility));
