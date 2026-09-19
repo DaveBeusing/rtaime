@@ -548,7 +548,7 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 	public Visibility OutputRoutingVisibility => IsOutputsWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility SystemWorkspaceVisibility => IsSettingsWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility SystemStatusVisibility => IsSettingsWorkspace ? Visibility.Visible : Visibility.Collapsed;
-	public Visibility MonitoringVisibility => IsSettingsWorkspace ? Visibility.Visible : Visibility.Collapsed;
+	public Visibility MonitoringVisibility => IsOutputsWorkspace || IsSettingsWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility GraphicsVisibility => IsScenesWorkspace || IsCompositingWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility AudioVisibility => IsOutputsWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility RecordingVisibility => IsOutputsWorkspace ? Visibility.Visible : Visibility.Collapsed;
