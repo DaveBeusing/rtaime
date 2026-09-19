@@ -531,6 +531,178 @@
 						DataContext="{Binding OutputHealth, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
 				</Grid>
 
+				<Grid x:Name="CompositingWorkspaceSurface"
+					Visibility="{Binding Shell.CompositingGraphVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
+					<Grid.ColumnDefinitions>
+						<ColumnDefinition Width="64*" />
+						<ColumnDefinition Width="6" />
+						<ColumnDefinition Width="36*" />
+					</Grid.ColumnDefinitions>
+
+					<local:CompositingGraphControl
+						Grid.Column="0"
+						DataContext="{Binding CompositingGraph, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
+
+					<Grid Grid.Column="2">
+						<Grid.RowDefinitions>
+							<RowDefinition Height="390" />
+							<RowDefinition Height="6" />
+							<RowDefinition Height="*" />
+						</Grid.RowDefinitions>
+
+						<local:PreviewViewer
+							Grid.Row="0"
+							AllowDrop="True"
+							DragOver="OnPreviewDragOver"
+							Drop="OnPreviewDrop"
+							Frame="{Binding Monitoring.PreviewImage, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							SourceName="{Binding PreviewSourceName}"
+							SourceId="{Binding PreviewSourceId}"
+							Format="{Binding Monitoring.PreviewFormat, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							ProductionFormat="{Binding CurrentFormat}"
+							ColorSpace="N/A"
+							State="{Binding Monitoring.PreviewState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							Timecode="{Binding MediaDeck.Current, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							TransportSourceId="{Binding MediaDeck.SourceId, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							TransportState="{Binding MediaDeck.State, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							PlayPauseCommand="{Binding MediaDeck.TogglePlayPauseCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							StopCommand="{Binding MediaDeck.StopCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							SetInCommand="{Binding MediaDeck.SetInCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							SetOutCommand="{Binding MediaDeck.SetOutCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							JumpInCommand="{Binding MediaDeck.JumpInCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							JumpOutCommand="{Binding MediaDeck.JumpOutCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							PreviousCueCommand="{Binding Timeline.PreviousCueCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							NextCueCommand="{Binding Timeline.NextCueCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							MaximizeCommand="{Binding Shell.MaximizePreviewCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							FullscreenCommand="{Binding Shell.FullscreenPreviewCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
+
+						<Border Grid.Row="2"
+							Background="{DynamicResource OperatorSurfaceBrush}"
+							BorderBrush="{DynamicResource OperatorBorderBrush}"
+							BorderThickness="1"
+							CornerRadius="4"
+							Padding="10">
+							<Grid>
+								<Grid.RowDefinitions>
+									<RowDefinition Height="30" />
+									<RowDefinition Height="82" />
+									<RowDefinition Height="42" />
+									<RowDefinition Height="*" />
+								</Grid.RowDefinitions>
+
+								<DockPanel Grid.Row="0">
+									<TextBlock Text="SYSTEM &amp; PERFORMANCE" Style="{StaticResource OperatorSectionTitle}" VerticalAlignment="Center" />
+									<controls:RtaimeStatusBadge
+										DockPanel.Dock="Right"
+										Status="{x:Static controls:RtaimeStatusKind.Neutral}"
+										Content="{Binding EngineLifecycleState}"
+										ShowIndicator="True"
+										ToolTip="{Binding EngineLifecycleDetail}" />
+								</DockPanel>
+
+								<Grid Grid.Row="1" Margin="0,4,0,4">
+									<Grid.ColumnDefinitions>
+										<ColumnDefinition Width="*" />
+										<ColumnDefinition Width="6" />
+										<ColumnDefinition Width="*" />
+										<ColumnDefinition Width="6" />
+										<ColumnDefinition Width="*" />
+									</Grid.ColumnDefinitions>
+
+									<Grid Grid.Column="0">
+										<controls:RtaimeMetricRing
+											Width="58"
+											Height="58"
+											HorizontalAlignment="Center"
+											VerticalAlignment="Top"
+											Foreground="{DynamicResource OperatorSecondaryTextBrush}"
+											BorderBrush="{DynamicResource OperatorBorderStrongBrush}"
+											Value="{Binding OutputHealth.CpuMetric.GaugeValue, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+											HasValue="{Binding OutputHealth.CpuMetric.HasGaugeSample, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
+										<StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+											<TextBlock Text="CPU" Style="{StaticResource OperatorLabel}" FontSize="9" HorizontalAlignment="Center" />
+											<TextBlock Text="{Binding OutputHealth.CpuMetric.Value, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" FontSize="10" FontWeight="SemiBold" HorizontalAlignment="Center" />
+										</StackPanel>
+									</Grid>
+
+									<Grid Grid.Column="2">
+										<controls:RtaimeMetricRing
+											Width="58"
+											Height="58"
+											HorizontalAlignment="Center"
+											VerticalAlignment="Top"
+											Foreground="{DynamicResource OperatorAccentBrush}"
+											BorderBrush="{DynamicResource OperatorBorderStrongBrush}"
+											Value="{Binding OutputHealth.GpuMetric.GaugeValue, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+											HasValue="{Binding OutputHealth.GpuMetric.HasGaugeSample, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
+										<StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+											<TextBlock Text="GPU" Style="{StaticResource OperatorLabel}" FontSize="9" HorizontalAlignment="Center" />
+											<TextBlock Text="{Binding OutputHealth.GpuMetric.Value, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" FontSize="10" FontWeight="SemiBold" HorizontalAlignment="Center" />
+										</StackPanel>
+									</Grid>
+
+									<Grid Grid.Column="4">
+										<controls:RtaimeMetricRing
+											Width="58"
+											Height="58"
+											HorizontalAlignment="Center"
+											VerticalAlignment="Top"
+											Foreground="{DynamicResource OperatorSecondaryTextBrush}"
+											BorderBrush="{DynamicResource OperatorBorderStrongBrush}"
+											Value="{Binding OutputHealth.MemoryMetric.GaugeValue, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+											HasValue="{Binding OutputHealth.MemoryMetric.HasGaugeSample, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
+										<StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+											<TextBlock Text="MEM" Style="{StaticResource OperatorLabel}" FontSize="9" HorizontalAlignment="Center" />
+											<TextBlock Text="{Binding OutputHealth.MemoryMetric.Value, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" FontSize="10" FontWeight="SemiBold" HorizontalAlignment="Center" />
+										</StackPanel>
+									</Grid>
+								</Grid>
+
+								<Grid Grid.Row="2">
+									<Grid.ColumnDefinitions>
+										<ColumnDefinition Width="*" />
+										<ColumnDefinition Width="6" />
+										<ColumnDefinition Width="*" />
+									</Grid.ColumnDefinitions>
+									<Border Grid.Column="0" Background="{DynamicResource OperatorRaisedSurfaceBrush}" CornerRadius="3" Padding="7,4">
+										<DockPanel>
+											<TextBlock Text="VRAM" Style="{StaticResource OperatorLabel}" />
+											<TextBlock Text="{Binding OutputHealth.VramMetric.Value, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" DockPanel.Dock="Right" FontSize="10" FontWeight="SemiBold" />
+										</DockPanel>
+									</Border>
+									<Border Grid.Column="2" Background="{DynamicResource OperatorRaisedSurfaceBrush}" CornerRadius="3" Padding="7,4">
+										<DockPanel>
+											<TextBlock Text="RENDER" Style="{StaticResource OperatorLabel}" />
+											<TextBlock Text="{Binding OutputHealth.RenderMetric.Value, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" DockPanel.Dock="Right" FontSize="10" FontWeight="SemiBold" />
+										</DockPanel>
+									</Border>
+								</Grid>
+
+								<Border Grid.Row="3"
+									Margin="0,6,0,0"
+									Background="#0A141C"
+									BorderBrush="{DynamicResource OperatorBorderBrush}"
+									BorderThickness="1"
+									CornerRadius="3"
+									Padding="7,5">
+									<Grid>
+										<TextBlock Text="GPU HISTORY · RUNTIME SAMPLES" Style="{StaticResource OperatorLabel}" FontSize="8" VerticalAlignment="Top" />
+										<Viewbox Margin="0,14,0,0" Stretch="Fill">
+											<Canvas Width="92" Height="24">
+												<Polyline
+													Points="{Binding OutputHealth.GpuMetric.HistoryPoints, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+													Stroke="{DynamicResource OperatorAccentBrush}"
+													StrokeThickness="1.5"
+													StrokeLineJoin="Round" />
+											</Canvas>
+										</Viewbox>
+									</Grid>
+								</Border>
+							</Grid>
+						</Border>
+					</Grid>
+				</Grid>
+
 				<controls:RtaimeScrollViewer x:Name="CenterWorkspaceScroll"
 					VerticalScrollBarVisibility="Auto"
 					HorizontalScrollBarVisibility="Disabled"
