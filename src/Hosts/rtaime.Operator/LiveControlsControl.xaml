@@ -228,7 +228,7 @@
 						<Border Style="{StaticResource LiveAlertRow}">
 							<Grid>
 								<Grid.ColumnDefinitions><ColumnDefinition Width="14" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-								<Ellipse Width="7" Height="7" Fill="{DynamicResource OperatorWarningBrush}" VerticalAlignment="Center">
+								<Ellipse Width="7" Height="7" VerticalAlignment="Center">
 									<Ellipse.Style>
 										<Style TargetType="Ellipse">
 											<Setter Property="Fill" Value="{DynamicResource OperatorWarningBrush}" />
@@ -263,7 +263,7 @@
 							</Grid>
 						</Border>
 
-						<Border Style="{StaticResource LiveAlertRow}">
+						<Border>
 							<Border.Style>
 								<Style TargetType="Border" BasedOn="{StaticResource LiveAlertRow}">
 									<Setter Property="Visibility" Value="Visible" />
@@ -283,7 +283,7 @@
 							</Grid>
 						</Border>
 
-						<Border Style="{StaticResource LiveAlertRow}" Margin="0">
+						<Border>
 							<Border.Style>
 								<Style TargetType="Border" BasedOn="{StaticResource LiveAlertRow}">
 									<Setter Property="Visibility" Value="Visible" />
