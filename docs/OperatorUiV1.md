@@ -112,35 +112,33 @@ At 125%, 150% and 200%, the minimum workspace remains within the available logic
 
 ## Preview / Program production workspace
 
-Preview / Program Production Workspace formalizes the switcher workflow as **Selected Source → confirmed Preview → confirmed Program**. The local source-bank selection is only an operator intent for `Set Preview`; it is never treated as Program authority.
+Preview / Program Production Workspace formalizes the switcher workflow as **Selected Source → confirmed Preview → confirmed Program**. The local source selection is operator intent for `Set Preview`; it is never treated as Program authority.
 
-The workspace exposes:
+At the 1920×1080 reference viewport, EDIT uses a fixed 1070×700 production surface. The upper 390-pixel monitor row is split into equal 532-pixel Preview and Program viewers with a 6-pixel gap. Both viewers reuse the existing `MonitorView` presentation contract, a shared 40-pixel header and a 42-pixel custom transport strip. FIT remains aspect-safe through `Stretch.Uniform`; 50% and 100% remain local presentation modes.
 
-- dedicated reusable Preview and Program viewers fed only by the existing non-authoritative monitoring plane;
-- a default dual-view allocation in which Program receives more visual area than Preview and is explicitly labeled as authoritative output;
-- the locally selected source next to the confirmed Preview / next-take source;
-- explicit `SET SELECTED → PREVIEW`, `CUT PREVIEW → PROGRAM` and `AUTO PREVIEW → PROGRAM` actions directly below the viewers;
-- the current V1 transition set, `CUT` and `DISSOLVE`, plus configurable DISSOLVE duration in frames;
-- local presentation-only Preview/Program maximize and dual-view restore controls;
-- permanently visible Program stereo meters with dBFS readout and explicit clipping text;
-- concise Program overlays for PROGRAM, recording and local clean-feed output state;
-- explicit `NO SIGNAL`, `DISCONNECTED`, `RECOVERING`, `SOURCE OFFLINE` and `OUTPUT DISABLED` presentation states;
-- Runtime, commit and transition state next to Program;
-- direct access to existing Program Output and Program Recording commands;
-- a visible HOLD/FTB extension surface that remains non-interactive because those deterministic backend commands are not part of V1;
-- command, commit, rejection/failure and last-event state in the operator-status panel.
+The lower 304-pixel row is split into:
+
+- **Scene Stack — 320 px**: a compact four-row source projection using existing source thumbnails, stable display indices, remaining time and authoritative PVW/PGM routing state. A Program row receives the cyan selected-row treatment plus a red `ON AIR` badge. Dedicated multi-scene activation remains unavailable because the current V1 contract exposes no governed scene command.
+- **Output Routing — 462 px**: four presentation roles using the existing output and monitoring projections: Program, Preview, Aux and Clean Feed. Program and Preview reflect confirmed routing state, Clean Feed reflects the existing local Program monitor, and Aux remains explicitly `UNAVAILABLE / UNVERIFIED` because no governed Aux output role exists.
+- **System Status — 276 px**: compact existing Engine, Control, Runtime, Media and GPU health rows plus thin `RtaimeMetricBar` presentation for Disk, Network and Temperature. Those three metrics remain `UNAVAILABLE` while the authoritative health contract does not publish them; the Operator performs no local probing.
+
+Preview retains the existing media transport, cue and IN/OUT command paths. Program intentionally acquires no Preview transport authority. The visible monitor controls use rtaime icon/toggle controls only.
+
+The compact Scene Stack action row reuses the existing `SetPreviewCommand`, `CutCommand` and `DissolveCommand`. CUT and AUTO still operate only on confirmed Preview through the established Client/ControlHost path.
+
+Program `ON AIR` is visible only when the existing Program monitor state is observed as `LIVE`. It describes the confirmed Program bus and does not claim that an external transmission path is on air.
+
+Viewer maximize/restore and monitor fullscreen remain presentation-only. `Ctrl+1`, `Ctrl+2` and `Ctrl+0` continue to change the local viewer allocation without changing routing, monitoring subscriptions, Program Output, recording, Runtime state or media decoding.
 
 ### Authority and commit semantics
 
-`Set Preview` uses `OperatorControlClient.SelectPreviewAsync`. CUT and AUTO/DISSOLVE use `CutPreviewAsync` and `DissolvePreviewAsync`, which derive the take target from the client's last synchronized authoritative Preview routing. The Operator does not send `SelectedSource.Id` directly to Program.
+`Set Preview` uses `OperatorControlClient.SelectPreviewAsync`. CUT and AUTO/DISSOLVE use `CutPreviewAsync` and `DissolvePreviewAsync`, deriving the take target from the client's last synchronized authoritative Preview routing. The Operator does not send `SelectedSource.Id` directly to Program.
 
-The Program name/id are updated only by applying a synchronized authoritative snapshot after an accepted mutation. Rejected or failed mutations do not call `Apply` with a locally invented Program state. During a take the UI reports `COMMIT PENDING`; after synchronization it reports the confirmed revision. Runtime/session loss marks the presentation unconfirmed/stale and blocks further mutation until recovery.
+The Program name/id are updated only by applying a synchronized authoritative snapshot after an accepted mutation. Rejected or failed mutations do not call `Apply` with a locally invented Program state. During a take the UI reports the existing commit state; after synchronization it reports the confirmed revision. Runtime/session loss marks the presentation unconfirmed/stale and blocks further mutation until recovery.
 
 Rapid repeated UI actions remain serialized by the existing `AsyncRelayCommand` execution guard plus `OperatorViewModel.IsBusy`; a second action cannot run concurrently while a take is in flight.
 
-Viewer maximize/restore changes only local WPF layout widths. It does not alter routing, monitoring subscriptions, Program Output, recording or Runtime state. The Program viewer derives degraded/unavailable presentation from the confirmed Runtime/source observations; AI-only degradation is therefore displayed in the AI status surface while a valid Runtime fallback can continue to remain visible as Program.
-
-Program stereo metering reuses the existing bounded 200 ms management snapshot cadence. The viewer converts the confirmed linear peak values to dBFS for display only and does not allocate or animate per media frame.
+The mockup layout adds no pipeline restart, alternate monitor transport, scene authority, output authority or telemetry poller. The same monitoring images, routing commands, source projections and health observations are reused in denser presentation.
 
 ### Preview / Program Production Workspace integration evidence
 
@@ -150,7 +148,7 @@ Program stereo metering reuses the existing bounded 200 ms management snapshot c
 
 `ProductionIpcRecoveryTests.Runtime_loss_rejects_preview_take_without_changing_confirmed_program` proves that a take rejected after Runtime loss leaves the previously confirmed Program source and revision unchanged.
 
-Existing RuntimeHost restart and Operator reconnect/resynchronization tests remain the recovery evidence for the workspace; Preview / Program Production Workspace does not introduce a second recovery mechanism.
+Existing RuntimeHost restart and Operator reconnect/resynchronization tests remain the recovery evidence for the workspace; the mockup presentation introduces no second recovery mechanism.
 
 ## Source Bin & Live Source Tiles
 
