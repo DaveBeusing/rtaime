@@ -135,9 +135,9 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 		_isFullscreen = settings.IsFullscreen;
 		_selectedWorkspace = settings.SelectedWorkspace;
 
-		ToggleLeftPanelCommand = new OperatorShellCommand(() => IsLeftCollapsed = !IsLeftCollapsed);
-		ToggleRightPanelCommand = new OperatorShellCommand(() => IsRightCollapsed = !IsRightCollapsed);
-		ToggleCenterMaximizeCommand = new OperatorShellCommand(() => IsCenterMaximized = !IsCenterMaximized);
+		ToggleLeftPanelCommand = new OperatorShellCommand(ToggleLeftPanel);
+		ToggleRightPanelCommand = new OperatorShellCommand(ToggleRightPanel);
+		ToggleCenterMaximizeCommand = new OperatorShellCommand(ToggleCenterMaximize);
 		ToggleFullscreenCommand = new OperatorShellCommand(() => _setFullscreen(!IsFullscreen));
 		ExitFullscreenCommand = new OperatorShellCommand(
 			() => _setFullscreen(false),
@@ -297,6 +297,25 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 			IsCenterMaximized,
 			IsFullscreen,
 			SelectedWorkspace));
+
+
+	private void ToggleLeftPanel()
+	{
+		IsLeftCollapsed = !IsLeftCollapsed;
+		Save();
+	}
+
+	private void ToggleRightPanel()
+	{
+		IsRightCollapsed = !IsRightCollapsed;
+		Save();
+	}
+
+	private void ToggleCenterMaximize()
+	{
+		IsCenterMaximized = !IsCenterMaximized;
+		Save();
+	}
 
 	private void ResetLayout()
 	{
