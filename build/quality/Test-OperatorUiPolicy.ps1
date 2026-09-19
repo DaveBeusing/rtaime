@@ -148,7 +148,7 @@ Assert-Condition ($window -match 'Monitoring\.ProgramImage') "Operator Program m
 Assert-Condition ($previewViewer -match '<Image\s' -and $programViewer -match '<Image\s') "Preview and Program viewers must render monitoring with WPF Image surfaces."
 Assert-Condition ($previewViewer -match 'Stretch="Uniform"' -and $programViewer -match 'Stretch="Uniform"') "Production viewers must preserve aspect ratio without stretching."
 Assert-Condition (($window + $previewViewer + $programViewer) -notmatch 'MediaElement|VideoDrawing') "Operator monitoring must use the qualified bounded bitmap path, not an ungoverned media player."
-Assert-Condition ($window -match 'Text="PROGRAM OUTPUT / CLEAN FEED"') "Program Output / Clean Feed must expose Program Output controls in the Operator."
+Assert-Condition ($window -match 'Text="CLEAN PROGRAM MONITOR"') "Clean Program monitoring controls must remain visible in the Operator SYSTEM workspace."
 Assert-Condition ($window -match 'ProgramOutput\.Displays') "Program Output / Clean Feed must expose display selection."
 Assert-Condition ($window -match 'ProgramOutput\.StartCommand') "Program Output / Clean Feed must expose controlled Program Output start."
 Assert-Condition ($window -match 'ProgramOutput\.StopCommand') "Program Output / Clean Feed must expose controlled Program Output stop."
