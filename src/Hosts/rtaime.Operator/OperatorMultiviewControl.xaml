@@ -191,7 +191,7 @@
 										</Grid>
 									</Border>
 
-									<Border HorizontalAlignment="Center" VerticalAlignment="Center" Background="#D8071017" Padding="8,5" Visibility="Collapsed">
+									<Border HorizontalAlignment="Center" VerticalAlignment="Center" Background="#D8071017" Padding="8,5">
 										<Border.Style>
 											<Style TargetType="Border">
 												<Setter Property="Visibility" Value="Collapsed" />
