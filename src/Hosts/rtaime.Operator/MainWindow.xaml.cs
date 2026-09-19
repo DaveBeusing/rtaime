@@ -52,8 +52,11 @@ public partial class MainWindow : Window
 			new DispatcherSynchronizationContext(Dispatcher));
 		Shell = new OperatorShellViewModel(new OperatorLayoutStore(), SetProductionFullscreen);
 		MediaPool = new MediaPoolInspectorViewModel(viewModel, MediaDeck);
+		QuickControls = new OperatorQuickControlsViewModel(viewModel, MediaDeck, MediaPool, new OperatorQuickControlStore());
+		Shortcuts = OperatorKeyboardCommandRegistry.Create(viewModel, MediaDeck, Timeline, Shell);
 		Timeline.SelectionChanged += OnTimelineSelectionChanged;
 		InitializeComponent();
+		Shortcuts.Apply(InputBindings);
 		ApplyProductionFullscreen(Shell.IsFullscreen, updateShell: false);
 		DataContext = viewModel;
 		MediaDeck.Start();
@@ -81,8 +84,11 @@ public partial class MainWindow : Window
 			new DispatcherSynchronizationContext(Dispatcher));
 		Shell = new OperatorShellViewModel(new OperatorLayoutStore(), SetProductionFullscreen);
 		MediaPool = new MediaPoolInspectorViewModel(viewModel, MediaDeck);
+		QuickControls = new OperatorQuickControlsViewModel(viewModel, MediaDeck, MediaPool, new OperatorQuickControlStore());
+		Shortcuts = OperatorKeyboardCommandRegistry.Create(viewModel, MediaDeck, Timeline, Shell);
 		Timeline.SelectionChanged += OnTimelineSelectionChanged;
 		InitializeComponent();
+		Shortcuts.Apply(InputBindings);
 		ApplyProductionFullscreen(Shell.IsFullscreen, updateShell: false);
 		DataContext = viewModel;
 		MediaDeck.Start();
@@ -97,6 +103,8 @@ public partial class MainWindow : Window
 	public MediaDeckViewModel MediaDeck { get; }
 	public DemoProductionPackageController DemoProduction { get; }
 	public MediaPoolInspectorViewModel MediaPool { get; }
+	public OperatorQuickControlsViewModel QuickControls { get; }
+	public OperatorKeyboardCommandRegistry Shortcuts { get; }
 	public MediaTimelineViewModel Timeline => MediaDeck.Timeline;
 
 	private MediaDeckViewModel CreateMediaDeck(
@@ -164,6 +172,7 @@ public partial class MainWindow : Window
 			{
 				MediaDeck.SnapshotChanged -= viewModel.ApplyMediaDeckSnapshot;
 				Timeline.SelectionChanged -= OnTimelineSelectionChanged;
+				QuickControls.Dispose();
 				MediaPool.Dispose();
 				await Monitoring.DisposeAsync();
 				await MediaDeck.DisposeAsync();
@@ -172,6 +181,7 @@ public partial class MainWindow : Window
 			else
 			{
 				Timeline.SelectionChanged -= OnTimelineSelectionChanged;
+				QuickControls.Dispose();
 				MediaPool.Dispose();
 				await Monitoring.DisposeAsync();
 				await MediaDeck.DisposeAsync();
@@ -328,8 +338,8 @@ public partial class MainWindow : Window
 	private void OnHelpClick(object sender, RoutedEventArgs e)
 	{
 		MessageBox.Show(
-			"F11  Fullscreen / Windowed\nEsc  Exit fullscreen\nCtrl+1  Maximize Preview\nCtrl+2  Maximize Program\nCtrl+0  Restore dual view\nF5  Synchronize\nCtrl+P  Set selected source to Preview\nSpace  CUT Preview to Program\nCtrl+Space  AUTO Preview to Program\nP / S  Media Play-Pause / Stop\nI / O / M  IN / OUT / Cue\nPageUp / PageDown  Previous / Next Cue\nCtrl++ / Ctrl+-  Timeline Zoom\nCtrl+Shift+F  Timeline Fit\nMedia Pool  Search/filter resources; drag a Source or loaded Clip to Preview.\nTimeline  Select clips/cues for Inspector context; drag IN/OUT handles to trim.\nInspector  METADATA is read-only; DESIRED edits require APPLY before COMMITTED confirmation.",
-			"rtaime Operator — Keyboard Reference",
+			$"WORKSPACES\nLIVE  Live switching / multiview / Quick Controls\nEDIT  Timeline-focused editing\nMEDIA  Media preparation\nGRAPHICS  Graphics composition\nSYSTEM  Operational status and diagnostics\n\nKEYBOARD\n{Shortcuts.ReferenceText}\n\nMedia Pool  Search/filter resources; drag a Source or loaded Clip to Preview.\nTimeline  Select clips/cues for Inspector context; drag IN/OUT handles to trim.\nInspector  Use PIN on supported editable properties to add/remove LIVE Quick Controls.\nClean Program  Uses the existing Program monitoring image and never changes physical Program output.",
+			"rtaime Operator — Workspace & Keyboard Reference",
 			MessageBoxButton.OK,
 			MessageBoxImage.Information);
 	}
