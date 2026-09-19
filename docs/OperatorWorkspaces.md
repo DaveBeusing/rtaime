@@ -97,14 +97,14 @@ Default bindings are:
 
 | Shortcut | Operation |
 | --- | --- |
-| Space | Media Play / Pause |
-| K | Media Pause |
-| S | Media Stop |
-| I | Set IN |
-| O | Set OUT |
-| M | Add named Media cue |
-| Up | Previous cue |
-| Down | Next cue |
+| Space | Preview media Play / Pause when the loaded Media Deck source is confirmed Preview |
+| K | Preview media Pause |
+| S | Preview media Stop |
+| I | Set Preview media IN |
+| O | Set Preview media OUT |
+| M | Add named Preview media cue |
+| Up | Previous Preview media cue |
+| Down | Next Preview media cue |
 | Enter | AUTO Preview to Program |
 | Ctrl+Enter | CUT Preview to Program |
 | R | Start/stop Program recording when the matching command is available |
@@ -181,3 +181,16 @@ A typical live workflow is:
 7. Use OUTPUTS for recording/output evidence and SETTINGS for shell/status diagnostics.
 
 The same underlying production state remains active across every workspace.
+
+
+## Production monitor operation
+
+EDIT, MEDIA and the other standard-viewer workspaces reuse the same Preview and Program monitor components. Viewer changes therefore preserve production state across workspace switches instead of instantiating another playback path.
+
+Preview is the only monitor that exposes Media Deck transport controls. The control row and the corresponding Space/K/S/I/O/M/Up/Down shortcuts are active only when the loaded Media Deck source is the confirmed Preview source. Program intentionally exposes no Preview transport commands.
+
+Both monitors support Fit, 50 percent and 100 percent presentation plus Safe Area, Center Mark and Grid overlays. These are local presentation controls over the independent monitoring bitmap. The header uses the authoritative Runtime video-format projection for resolution/frame-rate/pixel-format evidence. Color space remains `N/A` until a governed contract exposes it.
+
+The Program monitor shows `ON AIR` while the existing Program monitor state reports `LIVE`. The local Clean Program Output state remains a separate indicator, and external transmission is not inferred from either state.
+
+The monitor-specific FULL action uses transient Shell state: it selects the requested viewer, maximizes the center region and enters the existing fullscreen window presentation. Escape or the fullscreen toggle restores the previous viewer mode and center-layout state without restarting media decoding, monitoring or Runtime execution.

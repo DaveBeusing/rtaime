@@ -1,70 +1,122 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 using System.Windows;
-using System.Windows.Controls;
 using System.Windows.Input;
-using System.Windows.Media;
 
 namespace rtaime.Operator;
 
-public partial class PreviewViewer : UserControl
+public partial class PreviewViewer : MonitorView
 {
-	public static readonly DependencyProperty FrameProperty = DependencyProperty.Register(
-		nameof(Frame), typeof(ImageSource), typeof(PreviewViewer), new PropertyMetadata(null));
+	public static readonly DependencyProperty TransportStateProperty = DependencyProperty.Register(
+		nameof(TransportState),
+		typeof(string),
+		typeof(PreviewViewer),
+		new PropertyMetadata("UNLOADED"));
 
-	public static readonly DependencyProperty SourceNameProperty = DependencyProperty.Register(
-		nameof(SourceName), typeof(string), typeof(PreviewViewer), new PropertyMetadata("—"));
+	public static readonly DependencyProperty PlayPauseCommandProperty = DependencyProperty.Register(
+		nameof(PlayPauseCommand),
+		typeof(ICommand),
+		typeof(PreviewViewer),
+		new PropertyMetadata(null));
 
-	public static readonly DependencyProperty SourceIdProperty = DependencyProperty.Register(
-		nameof(SourceId), typeof(string), typeof(PreviewViewer), new PropertyMetadata("—"));
+	public static readonly DependencyProperty StopCommandProperty = DependencyProperty.Register(
+		nameof(StopCommand),
+		typeof(ICommand),
+		typeof(PreviewViewer),
+		new PropertyMetadata(null));
 
-	public static readonly DependencyProperty FormatProperty = DependencyProperty.Register(
-		nameof(Format), typeof(string), typeof(PreviewViewer), new PropertyMetadata("No Preview monitor frame received."));
+	public static readonly DependencyProperty SetInCommandProperty = DependencyProperty.Register(
+		nameof(SetInCommand),
+		typeof(ICommand),
+		typeof(PreviewViewer),
+		new PropertyMetadata(null));
 
-	public static readonly DependencyProperty StateProperty = DependencyProperty.Register(
-		nameof(State), typeof(string), typeof(PreviewViewer), new PropertyMetadata("DISCONNECTED"));
+	public static readonly DependencyProperty SetOutCommandProperty = DependencyProperty.Register(
+		nameof(SetOutCommand),
+		typeof(ICommand),
+		typeof(PreviewViewer),
+		new PropertyMetadata(null));
 
-	public static readonly DependencyProperty MaximizeCommandProperty = DependencyProperty.Register(
-		nameof(MaximizeCommand), typeof(ICommand), typeof(PreviewViewer), new PropertyMetadata(null));
+	public static readonly DependencyProperty JumpInCommandProperty = DependencyProperty.Register(
+		nameof(JumpInCommand),
+		typeof(ICommand),
+		typeof(PreviewViewer),
+		new PropertyMetadata(null));
+
+	public static readonly DependencyProperty JumpOutCommandProperty = DependencyProperty.Register(
+		nameof(JumpOutCommand),
+		typeof(ICommand),
+		typeof(PreviewViewer),
+		new PropertyMetadata(null));
+
+	public static readonly DependencyProperty PreviousCueCommandProperty = DependencyProperty.Register(
+		nameof(PreviousCueCommand),
+		typeof(ICommand),
+		typeof(PreviewViewer),
+		new PropertyMetadata(null));
+
+	public static readonly DependencyProperty NextCueCommandProperty = DependencyProperty.Register(
+		nameof(NextCueCommand),
+		typeof(ICommand),
+		typeof(PreviewViewer),
+		new PropertyMetadata(null));
 
 	public PreviewViewer()
 	{
 		InitializeComponent();
 	}
 
-	public ImageSource? Frame
+	public string TransportState
 	{
-		get => (ImageSource?)GetValue(FrameProperty);
-		set => SetValue(FrameProperty, value);
+		get => (string)GetValue(TransportStateProperty);
+		set => SetValue(TransportStateProperty, value);
 	}
 
-	public string SourceName
+	public ICommand? PlayPauseCommand
 	{
-		get => (string)GetValue(SourceNameProperty);
-		set => SetValue(SourceNameProperty, value);
+		get => (ICommand?)GetValue(PlayPauseCommandProperty);
+		set => SetValue(PlayPauseCommandProperty, value);
 	}
 
-	public string SourceId
+	public ICommand? StopCommand
 	{
-		get => (string)GetValue(SourceIdProperty);
-		set => SetValue(SourceIdProperty, value);
+		get => (ICommand?)GetValue(StopCommandProperty);
+		set => SetValue(StopCommandProperty, value);
 	}
 
-	public string Format
+	public ICommand? SetInCommand
 	{
-		get => (string)GetValue(FormatProperty);
-		set => SetValue(FormatProperty, value);
+		get => (ICommand?)GetValue(SetInCommandProperty);
+		set => SetValue(SetInCommandProperty, value);
 	}
 
-	public string State
+	public ICommand? SetOutCommand
 	{
-		get => (string)GetValue(StateProperty);
-		set => SetValue(StateProperty, value);
+		get => (ICommand?)GetValue(SetOutCommandProperty);
+		set => SetValue(SetOutCommandProperty, value);
 	}
 
-	public ICommand? MaximizeCommand
+	public ICommand? JumpInCommand
 	{
-		get => (ICommand?)GetValue(MaximizeCommandProperty);
-		set => SetValue(MaximizeCommandProperty, value);
+		get => (ICommand?)GetValue(JumpInCommandProperty);
+		set => SetValue(JumpInCommandProperty, value);
+	}
+
+	public ICommand? JumpOutCommand
+	{
+		get => (ICommand?)GetValue(JumpOutCommandProperty);
+		set => SetValue(JumpOutCommandProperty, value);
+	}
+
+	public ICommand? PreviousCueCommand
+	{
+		get => (ICommand?)GetValue(PreviousCueCommandProperty);
+		set => SetValue(PreviousCueCommandProperty, value);
+	}
+
+	public ICommand? NextCueCommand
+	{
+		get => (ICommand?)GetValue(NextCueCommandProperty);
+		set => SetValue(NextCueCommandProperty, value);
 	}
 }

@@ -623,10 +623,27 @@ The Operator now exposes seven canonical task workspaces — MEDIA, EDIT, LIVE, 
 
 LIVE introduces a reusable multiview that consumes the existing Preview/Program monitoring images and already available source thumbnails. It does not open another monitoring transport. The same workspace exposes a bounded Quick Controls pinboard backed by stable Inspector property identifiers; pinned actions continue to invoke the existing Media Deck, audio, graphics, AI and production command paths.
 
-Window-level keyboard bindings are centralized in OperatorKeyboardCommandRegistry with deterministic conflict detection and text-entry safety. Space controls media play/pause, I/O set the current media range, M adds a Media cue, Up/Down navigate cues, Enter performs AUTO, Ctrl+Enter performs CUT, R controls recording where the matching command is available, and F11 retains Operator fullscreen. Unsupported J/L shuttle semantics remain deliberately unbound.
+Window-level keyboard bindings are centralized in OperatorKeyboardCommandRegistry with deterministic conflict detection and text-entry safety. Space controls Preview media play/pause when the loaded Media Deck source is the confirmed Preview source; K/S, I/O, M and Up/Down use the same Preview-source guard. Enter performs AUTO, Ctrl+Enter performs CUT, R controls recording where the matching command is available, and F11 retains Operator fullscreen. Unsupported J/L shuttle semantics remain deliberately unbound.
 
 OUTPUTS and SETTINGS reuse the existing lifecycle, health, monitoring, recording and output projections rather than creating a second diagnostics truth. Clean Program remains a presentation of the existing Runtime-derived Program monitoring image and is explicitly not the physical Program output path.
 
 Layout persistence is schema-versioned and keeps only UI presentation fields. SAVE LAYOUT stores the current workspace layout, while LAYOUT RESET restores that workspace's canonical defaults. Corrupt or incompatible layout data falls back safely.
 
 See docs/OperatorWorkspaces.md for the complete workspace, Quick Controls, shortcut, multiview and Clean Program operating model.
+
+
+## Preview / Program production monitors
+
+Preview and Program share the reusable `MonitorView` presentation base while retaining separate semantic surfaces and authority. Both monitors consume the existing independent monitoring bitmap projection; neither creates a decoder, playback session or frame transport.
+
+Each monitor presents the confirmed source identity, the authoritative Runtime video format, monitoring-surface status and the current presentation zoom. The Runtime health contract currently exposes resolution, frame rate and pixel format but no verified color-space value, so the monitor header shows color space explicitly as `N/A` rather than synthesizing metadata.
+
+Fit, 50 percent and 100 percent modes affect only WPF presentation of the already received monitoring bitmap. Safe Area, Center Mark and Grid are independent overlay layers above the image surface and likewise do not mutate Runtime or media state.
+
+Preview reuses the existing Media Deck and Timeline commands for play/pause, stop, IN/OUT and cue navigation. Those controls are enabled only when the loaded Media Deck source identity matches the confirmed Preview source. The centralized keyboard registry applies the same source guard, preventing Preview transport shortcuts from accidentally controlling media that is no longer on Preview. J/L remain unbound because deterministic shuttle semantics are not exposed by the existing Media Deck contract.
+
+Program contains no Preview transport bindings. Its `ON AIR` presentation is derived from the existing observed Program monitor state being `LIVE`, while the separate local Clean Program Output state remains visible beside it. This does not claim that an external transmission path is live; the top-bar external LIVE / ON AIR state remains explicitly unverified.
+
+Monitor fullscreen is transient Shell presentation state. It maximizes the selected monitor, collapses surrounding presentation regions and uses the existing Operator fullscreen window mode. Exiting fullscreen restores the prior viewer mode and center-layout state. No second playback or monitoring instance is created.
+
+Timecode is displayed only when the loaded Media Deck source identity matches the source currently shown by that monitor. Other sources show an explicit unavailable timecode rather than borrowing unrelated transport state.

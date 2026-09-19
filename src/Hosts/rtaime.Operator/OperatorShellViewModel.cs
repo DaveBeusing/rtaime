@@ -315,6 +315,9 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 	private bool _isRightCollapsed;
 	private bool _isCenterMaximized;
 	private bool _isFullscreen;
+	private bool _monitorFullscreenActive;
+	private string _monitorFullscreenRestoreViewerMode = "DUAL";
+	private bool _monitorFullscreenRestoreCenterMaximized;
 	private string _selectedWorkspace;
 	private string _viewerMode;
 	private OperatorWindowPlacementSettings _windowPlacement;
@@ -347,10 +350,12 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 			() => HasLeftRegion);
 		ToggleRightPanelCommand = new OperatorShellCommand(ToggleRightPanel);
 		ToggleCenterMaximizeCommand = new OperatorShellCommand(ToggleCenterMaximize);
-		ToggleFullscreenCommand = new OperatorShellCommand(() => _setFullscreen(!IsFullscreen));
+		ToggleFullscreenCommand = new OperatorShellCommand(ToggleFullscreen);
 		ExitFullscreenCommand = new OperatorShellCommand(
-			() => _setFullscreen(false),
+			ExitFullscreen,
 			() => IsFullscreen);
+		FullscreenPreviewCommand = new OperatorShellCommand(() => EnterMonitorFullscreen("PREVIEW"));
+		FullscreenProgramCommand = new OperatorShellCommand(() => EnterMonitorFullscreen("PROGRAM"));
 		SaveLayoutCommand = new OperatorShellCommand(Save);
 		ResetLayoutCommand = new OperatorShellCommand(ResetLayout);
 		SelectWorkspaceCommand = new OperatorShellCommand(
@@ -381,6 +386,8 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 	public ICommand MaximizePreviewCommand { get; }
 	public ICommand MaximizeProgramCommand { get; }
 	public ICommand RestoreViewersCommand { get; }
+	public ICommand FullscreenPreviewCommand { get; }
+	public ICommand FullscreenProgramCommand { get; }
 
 	public double LeftPanelWidth
 	{
@@ -590,7 +597,8 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 	public void SetFullscreenState(bool fullscreen)
 	{
 		IsFullscreen = fullscreen;
-		Save();
+		if (!_monitorFullscreenActive)
+			Save();
 	}
 
 	public void SetWindowPlacement(double? left, double? top, double width, double height, WindowState state)
@@ -666,6 +674,46 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 	private void ToggleCenterMaximize()
 	{
 		IsCenterMaximized = !IsCenterMaximized;
+		Save();
+	}
+
+	private void ToggleFullscreen()
+	{
+		if (IsFullscreen)
+		{
+			ExitFullscreen();
+			return;
+		}
+
+		_setFullscreen(true);
+	}
+
+	private void EnterMonitorFullscreen(string mode)
+	{
+		if (!_monitorFullscreenActive)
+		{
+			_monitorFullscreenRestoreViewerMode = ViewerMode;
+			_monitorFullscreenRestoreCenterMaximized = IsCenterMaximized;
+		}
+
+		_monitorFullscreenActive = true;
+		ViewerMode = mode is "PREVIEW" or "PROGRAM" ? mode : "DUAL";
+		IsCenterMaximized = true;
+		_setFullscreen(true);
+	}
+
+	private void ExitFullscreen()
+	{
+		if (!_monitorFullscreenActive)
+		{
+			_setFullscreen(false);
+			return;
+		}
+
+		_setFullscreen(false);
+		ViewerMode = _monitorFullscreenRestoreViewerMode;
+		IsCenterMaximized = _monitorFullscreenRestoreCenterMaximized;
+		_monitorFullscreenActive = false;
 		Save();
 	}
 

@@ -42,6 +42,7 @@ $previewViewerPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Previe
 $previewViewerCodePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/PreviewViewer.xaml.cs"
 $programViewerPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/ProgramViewer.xaml"
 $programViewerCodePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/ProgramViewer.xaml.cs"
+$monitorViewPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MonitorView.cs"
 $sourceTileViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorSourceTileViewModel.cs"
 $audioInputViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorAudioInputViewModel.cs"
 $graphicsLoaderPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/GraphicsOverlayAssetLoader.cs"
@@ -58,7 +59,7 @@ $documentationPath = Join-Path $repositoryRoot "docs/OperatorUiV1.md"
 $workspaceDocumentationPath = Join-Path $repositoryRoot "docs/OperatorWorkspaces.md"
 $mediaLibraryDocumentationPath = Join-Path $repositoryRoot "docs/MediaLibraryAssetBrowser.md"
 
-foreach ($path in @($appPath, $appCodePath, $windowPath, $windowCodePath, $shellPath, $keyboardPath, $quickControlsPath, $multiviewPath, $multiviewCodePath, $mediaPoolPath, $virtualizingWrapPanelPath, $deckPath, $deckViewModelPath, $timelinePath, $timelineCodePath, $timelineViewModelPath, $markerControllerPath, $timelineDocumentationPath, $viewModelPath, $monitorViewModelPath, $programOutputControllerPath, $programOutputWindowPath, $previewViewerPath, $previewViewerCodePath, $programViewerPath, $programViewerCodePath, $sourceTileViewModelPath, $audioInputViewModelPath, $graphicsLoaderPath, $demoControllerPath, $demoManifestPath, $demoProductPath, $demoGraphicsPath, $demoDocumentationPath, $tokensPath, $themePath, $manifestPath, $projectPath, $documentationPath, $workspaceDocumentationPath, $mediaLibraryDocumentationPath)) {
+foreach ($path in @($appPath, $appCodePath, $windowPath, $windowCodePath, $shellPath, $keyboardPath, $quickControlsPath, $multiviewPath, $multiviewCodePath, $mediaPoolPath, $virtualizingWrapPanelPath, $deckPath, $deckViewModelPath, $timelinePath, $timelineCodePath, $timelineViewModelPath, $markerControllerPath, $timelineDocumentationPath, $viewModelPath, $monitorViewModelPath, $programOutputControllerPath, $programOutputWindowPath, $previewViewerPath, $previewViewerCodePath, $programViewerPath, $programViewerCodePath, $monitorViewPath, $sourceTileViewModelPath, $audioInputViewModelPath, $graphicsLoaderPath, $demoControllerPath, $demoManifestPath, $demoProductPath, $demoGraphicsPath, $demoDocumentationPath, $tokensPath, $themePath, $manifestPath, $projectPath, $documentationPath, $workspaceDocumentationPath, $mediaLibraryDocumentationPath)) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required Operator UI artifact is missing: '$path'."
 }
 
@@ -88,6 +89,7 @@ $previewViewer = Get-Content -LiteralPath $previewViewerPath -Raw
 $previewViewerCode = Get-Content -LiteralPath $previewViewerCodePath -Raw
 $programViewer = Get-Content -LiteralPath $programViewerPath -Raw
 $programViewerCode = Get-Content -LiteralPath $programViewerCodePath -Raw
+$monitorView = Get-Content -LiteralPath $monitorViewPath -Raw
 $sourceTileViewModel = Get-Content -LiteralPath $sourceTileViewModelPath -Raw
 $audioInputViewModel = Get-Content -LiteralPath $audioInputViewModelPath -Raw
 $graphicsLoader = Get-Content -LiteralPath $graphicsLoaderPath -Raw
@@ -150,7 +152,10 @@ Assert-Condition ($programViewer -match 'OperatorProgramTally') "Program tally s
 Assert-Condition ($window -match 'Monitoring\.PreviewImage') "Operator Preview must bind the independent monitoring image."
 Assert-Condition ($window -match 'Monitoring\.ProgramImage') "Operator Program must bind the independent monitoring image."
 Assert-Condition ($previewViewer -match '<Image\s' -and $programViewer -match '<Image\s') "Preview and Program viewers must render monitoring with WPF Image surfaces."
-Assert-Condition ($previewViewer -match 'Stretch="Uniform"' -and $programViewer -match 'Stretch="Uniform"') "Production viewers must preserve aspect ratio without stretching."
+Assert-Condition ($previewViewerCode -match 'PreviewViewer : MonitorView' -and $programViewerCode -match 'ProgramViewer : MonitorView') "Preview and Program must reuse the shared monitor presentation component."
+Assert-Condition ($monitorView -match 'Stretch\.Uniform' -and $monitorView -match '"FIT"' -and $monitorView -match '"50%"' -and $monitorView -match '"100%"') "Production monitors must provide aspect-safe Fit, 50 percent and 100 percent presentation modes."
+Assert-Condition ($previewViewer -match 'ShowSafeArea' -and $previewViewer -match 'ShowCenterMark' -and $previewViewer -match 'ShowGrid' -and $programViewer -match 'ShowSafeArea' -and $programViewer -match 'ShowCenterMark' -and $programViewer -match 'ShowGrid') "Production monitors must expose independent Safe Area, Center Mark and Grid overlays."
+Assert-Condition ($previewViewer -match 'DisplayTimecode' -and $programViewer -match 'DisplayTimecode' -and $monitorView -match 'IsTransportSource') "Production monitor timecode must be shown only when the loaded transport source matches the viewed source."
 Assert-Condition (($window + $previewViewer + $programViewer) -notmatch 'MediaElement|VideoDrawing') "Operator monitoring must use the qualified bounded bitmap path, not an ungoverned media player."
 Assert-Condition ($window -match 'Text="CLEAN PROGRAM MONITOR"') "Clean Program monitoring controls must remain visible in the Operator SYSTEM workspace."
 Assert-Condition ($window -match 'ProgramOutput\.Displays') "Program Output / Clean Feed must expose display selection."
@@ -203,7 +208,8 @@ Assert-Condition ($deck -match 'Remaining') "Media deck must retain remaining-ti
 Assert-Condition ($monitorViewModel -notmatch 'ConfigurePlayback') "Monitoring must remain independent from media playback policy."
 
 Assert-Condition ($window -notmatch '<Window.InputBindings>') "Window-level shortcuts must be centralized rather than duplicated in XAML."
-Assert-Condition ($keyboard -match 'new\("sync".+Key\.F5' -and $keyboard -match 'new\("play-pause".+Key\.Space') "Central keyboard registry must expose synchronization and media Play/Pause."
+Assert-Condition ($keyboard -match 'new\("sync".+Key\.F5' -and $keyboard -match 'new\("play-pause".+Key\.Space') "Central keyboard registry must expose synchronization and Preview Play/Pause."
+Assert-Condition ($keyboard -match 'previewTransportContext' -and $keyboard -match '@operator\.PreviewSourceId' -and $keyboard -match 'mediaDeck\.SourceId' -and $keyboard -match 'ContextGuardCommand') "Media transport shortcuts must be gated to the loaded source only while that source is confirmed Preview."
 Assert-Condition ($keyboard -match 'new\("auto".+Key\.Return, ModifierKeys\.None, @operator\.DissolveCommand' -and $keyboard -match 'new\("cut".+Key\.Return, ModifierKeys\.Control, @operator\.CutCommand') "Central keyboard registry must expose Enter=AUTO and Ctrl+Enter=CUT."
 Assert-Condition ($keyboard -match 'FindConflicts' -and $keyboard -match 'Operator keyboard shortcut conflict') "Central keyboard registry must reject conflicting bindings."
 Assert-Condition ($keyboard -match 'TryHandle\(KeyEventArgs args\)' -and $windowCode -match 'OnPreviewKeyDown\(KeyEventArgs e\)' -and $windowCode -match 'Shortcuts\.TryHandle\(e\)') "Window-level shortcuts must route through PreviewKeyDown so unmodified production keys do not depend on WPF KeyGesture validation."
@@ -421,12 +427,17 @@ Assert-Condition ($keyboard -match 'new\("dual-view".+Key\.D0.+shell\.RestoreVie
 Assert-Condition ($shell -match 'PreviewViewerWidth' -and $shell -match 'new GridLength\(0\.85, GridUnitType\.Star\)') "Preview must use the smaller default production-view allocation."
 Assert-Condition ($shell -match 'ProgramViewerWidth' -and $shell -match 'new GridLength\(1\.15, GridUnitType\.Star\)') "Program must be visually dominant by default."
 Assert-Condition ($shell -match 'MaximizePreviewCommand' -and $shell -match 'MaximizeProgramCommand' -and $shell -match 'RestoreViewersCommand') "Viewer maximize/restore must remain local presentation commands."
+Assert-Condition ($shell -match 'FullscreenPreviewCommand' -and $shell -match 'FullscreenProgramCommand' -and $shell -match '_monitorFullscreenRestoreViewerMode' -and $window -match 'Shell\.FullscreenPreviewCommand' -and $window -match 'Shell\.FullscreenProgramCommand') "Monitor fullscreen must remain transient shell presentation state and restore the prior viewer layout."
 Assert-Condition ($shell -match 'PreviewViewerVisibility' -and $shell -match 'ProgramViewerVisibility' -and $window -match 'Shell\.PreviewViewerVisibility' -and $window -match 'Shell\.ProgramViewerVisibility') "Maximized production viewers must collapse the inactive viewer and restore it in dual mode."
 Assert-Condition ($window -match 'Text="PRODUCTION CONTROLS"' -and $window -match 'CUT PREVIEW → PROGRAM' -and $window -match 'AUTO PREVIEW → PROGRAM') "CUT/AUTO controls must sit in the central production workspace."
 Assert-Condition ($window -match 'Text="TRANSITION TYPE"' -and $window -match 'Text="CUT / DISSOLVE"' -and $window -match 'Binding TransitionFrames') "Production controls must expose the current transition types and duration."
 Assert-Condition ($window -match 'HOLD / FTB · NOT AVAILABLE IN V1') "Unsupported HOLD/FTB controls must remain an explicit extension surface rather than invented commands."
 Assert-Condition ($programViewer -match 'Binding AudioLeftPeak' -and $programViewer -match 'Binding AudioRightPeak' -and $programViewer -match 'dBFS' -and $programViewer -match 'Text="-60"' -and $programViewer -match 'Text="-12"' -and $programViewer -match 'Text="0"') "Program viewer must keep bounded stereo metering with a visible dBFS reference scale."
 Assert-Condition ($programViewer -match 'CLIP' -and $programViewer -match 'Clipping') "Program viewer must expose clipping with text as well as styling."
+Assert-Condition ($programViewer -match 'Binding State, ElementName=Root' -and $programViewer -match 'Value="LIVE"' -and $programViewer -match 'Value="ON AIR"' -and $programViewer -match 'External transmission remains separately unverified') "Program ON AIR presentation must derive from the observed live Program bus without claiming external transmission."
+Assert-Condition ($previewViewer -match 'PlayPauseCommand' -and $previewViewer -match 'SetInCommand' -and $previewViewer -match 'SetOutCommand' -and $previewViewer -match 'PreviousCueCommand' -and $previewViewer -match 'NextCueCommand') "Preview viewer must expose existing transport, mark and cue commands."
+Assert-Condition ($programViewer -notmatch 'PlayPauseCommand|SetInCommand|SetOutCommand|PreviousCueCommand|NextCueCommand') "Program viewer must not acquire Preview transport commands."
+Assert-Condition ($window -match 'ProductionFormat="{Binding CurrentFormat}"' -and $window -match 'ColorSpace="N/A"') "Monitor headers must show authoritative runtime format while unavailable color-space telemetry remains explicitly N/A."
 Assert-Condition ($programOutputController -match 'ViewerOutputState => IsRunning \? "OUTPUT LIVE" : "OUTPUT DISABLED"') "Program viewer output tally must distinguish live output from disabled output."
 foreach ($viewerState in @("NO SIGNAL", "DISCONNECTED", "RECOVERING", "SOURCE OFFLINE")) {
 	Assert-Condition ($viewModel -match [Regex]::Escape($viewerState)) "Production viewer state '$viewerState' must be explicit."
