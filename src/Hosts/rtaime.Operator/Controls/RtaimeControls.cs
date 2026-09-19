@@ -192,6 +192,11 @@ public class RtaimeMetricBar : ProgressBar
 
 public class RtaimeMetricRing : System.Windows.Controls.Control
 {
+	static RtaimeMetricRing()
+	{
+		IsHitTestVisibleProperty.OverrideMetadata(typeof(RtaimeMetricRing), new FrameworkPropertyMetadata(false));
+	}
+
 	public static readonly DependencyProperty ValueProperty = DependencyProperty.Register(
 		nameof(Value),
 		typeof(double),
