@@ -139,8 +139,8 @@ public partial class MediaTimelineControl : UserControl
 			if (ViewModel is { CanSeek: true } trimViewModel &&
 				e.LeftButton == MouseButtonState.Pressed)
 			{
-				var position = e.GetPosition(TimelineContentArea);
-				trimViewModel.PreviewTrim(trimKind, position.X, TimelineContentArea.ActualWidth);
+				var trimPosition = e.GetPosition(TimelineContentArea);
+				trimViewModel.PreviewTrim(trimKind, trimPosition.X, TimelineContentArea.ActualWidth);
 			}
 			e.Handled = true;
 			return;
