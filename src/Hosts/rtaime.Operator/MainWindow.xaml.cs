@@ -56,7 +56,6 @@ public partial class MainWindow : Window
 		Shortcuts = OperatorKeyboardCommandRegistry.Create(viewModel, MediaDeck, Timeline, Shell);
 		Timeline.SelectionChanged += OnTimelineSelectionChanged;
 		InitializeComponent();
-		Shortcuts.Apply(InputBindings);
 		ApplyProductionFullscreen(Shell.IsFullscreen, updateShell: false);
 		DataContext = viewModel;
 		MediaDeck.Start();
@@ -88,7 +87,6 @@ public partial class MainWindow : Window
 		Shortcuts = OperatorKeyboardCommandRegistry.Create(viewModel, MediaDeck, Timeline, Shell);
 		Timeline.SelectionChanged += OnTimelineSelectionChanged;
 		InitializeComponent();
-		Shortcuts.Apply(InputBindings);
 		ApplyProductionFullscreen(Shell.IsFullscreen, updateShell: false);
 		DataContext = viewModel;
 		MediaDeck.Start();
@@ -106,6 +104,14 @@ public partial class MainWindow : Window
 	public OperatorQuickControlsViewModel QuickControls { get; }
 	public OperatorKeyboardCommandRegistry Shortcuts { get; }
 	public MediaTimelineViewModel Timeline => MediaDeck.Timeline;
+
+	protected override void OnPreviewKeyDown(KeyEventArgs e)
+	{
+		if (Shortcuts.TryHandle(e))
+			return;
+
+		base.OnPreviewKeyDown(e);
+	}
 
 	private MediaDeckViewModel CreateMediaDeck(
 		OperatorViewModel viewModel,

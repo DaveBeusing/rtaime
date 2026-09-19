@@ -47,17 +47,28 @@ public sealed class OperatorKeyboardCommandRegistry
 		}
 	}
 
-	public void Apply(InputBindingCollection bindings)
+	public bool TryHandle(KeyEventArgs args)
 	{
-		ArgumentNullException.ThrowIfNull(bindings);
-		bindings.Clear();
-		foreach (var definition in _definitions)
-		{
-			bindings.Add(new KeyBinding(
-				new ContextSafeShortcutCommand(definition.Command, definition.AllowInTextEntry),
-				definition.Key,
-				definition.Modifiers));
-		}
+		ArgumentNullException.ThrowIfNull(args);
+
+		var key = args.Key == Key.System ? args.SystemKey : args.Key;
+		var modifiers = Keyboard.Modifiers;
+		var definition = _definitions.FirstOrDefault(item =>
+			item.Key == key &&
+			item.Modifiers == modifiers);
+		if (definition is null)
+			return false;
+
+		if (!definition.AllowInTextEntry && IsTextEntryContext())
+			return false;
+
+		args.Handled = true;
+		if (args.IsRepeat)
+			return true;
+
+		if (definition.Command.CanExecute(null))
+			definition.Command.Execute(null);
+		return true;
 	}
 
 	public static OperatorKeyboardCommandRegistry Create(
@@ -136,34 +147,6 @@ public sealed class OperatorKeyboardCommandRegistry
 			_ => key.ToString()
 		});
 		return string.Join("+", parts);
-	}
-
-	private sealed class ContextSafeShortcutCommand : ICommand
-	{
-		private readonly ICommand _inner;
-		private readonly bool _allowInTextEntry;
-
-		public ContextSafeShortcutCommand(ICommand inner, bool allowInTextEntry)
-		{
-			_inner = inner ?? throw new ArgumentNullException(nameof(inner));
-			_allowInTextEntry = allowInTextEntry;
-			_inner.CanExecuteChanged += OnInnerCanExecuteChanged;
-		}
-
-		public event EventHandler? CanExecuteChanged;
-
-		public bool CanExecute(object? parameter) =>
-			(_allowInTextEntry || !IsTextEntryContext()) &&
-			_inner.CanExecute(parameter);
-
-		public void Execute(object? parameter)
-		{
-			if (CanExecute(parameter))
-				_inner.Execute(parameter);
-		}
-
-		private void OnInnerCanExecuteChanged(object? sender, EventArgs e) =>
-			CanExecuteChanged?.Invoke(this, EventArgs.Empty);
 	}
 
 	private sealed class ContextSwitchCommand : ICommand
