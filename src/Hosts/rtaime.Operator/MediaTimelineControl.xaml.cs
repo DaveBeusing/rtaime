@@ -273,7 +273,7 @@ public partial class MediaTimelineControl : UserControl
 			Key.PageDown => viewModel.NextCueCommand,
 			Key.Add or Key.OemPlus when (Keyboard.Modifiers & ModifierKeys.Control) != 0 => viewModel.ZoomInCommand,
 			Key.Subtract or Key.OemMinus when (Keyboard.Modifiers & ModifierKeys.Control) != 0 => viewModel.ZoomOutCommand,
-			Key.D0 when (Keyboard.Modifiers & ModifierKeys.Control) != 0 => viewModel.FitCommand,
+			Key.F when (Keyboard.Modifiers & (ModifierKeys.Control | ModifierKeys.Shift)) == (ModifierKeys.Control | ModifierKeys.Shift) => viewModel.FitCommand,
 			_ => null
 		};
 		if (command is null || !command.CanExecute(null))
