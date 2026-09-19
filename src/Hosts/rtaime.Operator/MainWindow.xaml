@@ -1377,50 +1377,29 @@
 					Visibility="{Binding Shell.LiveControlsVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
 			</Grid>
 		<controls:RtaimeSplitter Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="3" Height="{Binding Shell.LowerSplitterHeight, ElementName=RootWindow}" VerticalAlignment="Top" Panel.ZIndex="5" ResizeBehavior="PreviousAndCurrent" Visibility="{Binding Shell.TimelineRegionVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource RtaimeHorizontalSplitter}" DragCompleted="OnLayoutSplitterDragCompleted" ToolTip="Resize timeline / lower workspace. Use arrow keys while focused." AutomationProperties.Name="Resize lower workspace panel" />
-		<Border x:Name="LowerTimelineRegion" Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="3" Style="{StaticResource OperatorShellRegion}" Margin="0" ClipToBounds="True"
+		<Border x:Name="LowerTimelineRegion"
+			Grid.Row="1"
+			Grid.Column="2"
+			Grid.ColumnSpan="3"
+			Style="{StaticResource OperatorShellRegion}"
+			Padding="0"
+			CornerRadius="0"
+			Margin="0"
+			ClipToBounds="True"
 			Visibility="{Binding Shell.TimelineRegionVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
-			<Grid>
-				<Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
-				<DockPanel Margin="0,0,0,8">
-					<TextBlock Text="TIMELINE / CUES" Style="{StaticResource OperatorSectionTitle}" />
-					<TextBlock Text="{Binding MediaDeck.StatusDetail, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorLabel}" DockPanel.Dock="Right" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="760" />
-				</DockPanel>
-				<local:MediaTimelineControl Grid.Row="1" Margin="0,0,0,42"
-					AllowDrop="True"
-					DragOver="OnTimelineDragOver"
-					Drop="OnTimelineDrop"
-					DataContext="{Binding Timeline, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
-			</Grid>
+			<local:MediaTimelineControl
+				AllowDrop="True"
+				DragOver="OnTimelineDragOver"
+				Drop="OnTimelineDrop"
+				DataContext="{Binding Timeline, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
 		</Border>
 
-		<Border x:Name="BottomTransportRegion" Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="3" VerticalAlignment="Bottom" Panel.ZIndex="4" Visibility="{Binding Shell.TimelineRegionVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorTransportBar}">
-			<Grid>
-				<Grid.ColumnDefinitions>
-					<ColumnDefinition Width="Auto" />
-					<ColumnDefinition Width="Auto" />
-					<ColumnDefinition Width="Auto" />
-					<ColumnDefinition Width="*" />
-					<ColumnDefinition Width="Auto" />
-					<ColumnDefinition Width="Auto" />
-				</Grid.ColumnDefinitions>
-				<StackPanel Grid.Column="0" Orientation="Horizontal">
-					<Button Content="PLAY / PAUSE  Space" Command="{Binding MediaDeck.TogglePlayPauseCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorAccentButton}" MinHeight="28" Padding="10,3" Margin="0,0,6,0" />
-					<Button Content="STOP  K / S" Command="{Binding MediaDeck.StopCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorButton}" MinHeight="28" Padding="10,3" />
-				</StackPanel>
-				<StackPanel Grid.Column="1" Orientation="Horizontal" Margin="14,0,0,0" VerticalAlignment="Center">
-					<TextBlock Text="{Binding MediaDeck.Current, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorTimecode}" FontSize="16" FontWeight="Bold" />
-					<TextBlock Text="{Binding MediaDeck.Countdown, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorTimecode}" Margin="12,0,0,0" />
-				</StackPanel>
-				<Border Grid.Column="2" Style="{StaticResource OperatorStatusBadge}" Margin="14,0,0,0" VerticalAlignment="Center"><TextBlock Text="{Binding MediaDeck.ProgramDeckState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" FontWeight="Bold" /></Border>
-				<TextBlock Grid.Column="3" Text="{Binding LastEvent}" Margin="14,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-				<Border Grid.Column="4" MaxWidth="420" ToolTip="{Binding LastError}">
-					<Border.Style><Style TargetType="Border" BasedOn="{StaticResource OperatorErrorBadge}"><Style.Triggers><DataTrigger Binding="{Binding LastError}" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger><DataTrigger Binding="{Binding LastError}" Value=""><Setter Property="Visibility" Value="Collapsed" /></DataTrigger></Style.Triggers></Style></Border.Style>
-					<TextBlock Text="{Binding LastError}" Foreground="{DynamicResource OperatorErrorBrush}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-				</Border>
-				<Button Grid.Column="5" Content="{Binding Shell.FullscreenLabel, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Command="{Binding Shell.ToggleFullscreenCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorButton}" MinHeight="28" Padding="8,3" Margin="8,0,0,0" />
-			</Grid>
-		</Border>
-
+		<Border x:Name="BottomTransportRegion"
+			Grid.Row="1"
+			Grid.Column="2"
+			Grid.ColumnSpan="3"
+			Visibility="Collapsed"
+			IsHitTestVisible="False" />
 		</Grid>
 
 		<Border Grid.RowSpan="2" Panel.ZIndex="100" Background="{DynamicResource OperatorSurfaceBrush}" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1">
