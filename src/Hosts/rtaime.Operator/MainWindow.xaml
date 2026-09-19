@@ -513,8 +513,22 @@
 							SourceName="{Binding PreviewSourceName}"
 							SourceId="{Binding PreviewSourceId}"
 							Format="{Binding Monitoring.PreviewFormat, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							ProductionFormat="{Binding CurrentFormat}"
+							ColorSpace="N/A"
 							State="{Binding Monitoring.PreviewState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-							MaximizeCommand="{Binding Shell.MaximizePreviewCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
+							Timecode="{Binding MediaDeck.Current, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							TransportSourceId="{Binding MediaDeck.SourceId, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							TransportState="{Binding MediaDeck.State, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							PlayPauseCommand="{Binding MediaDeck.TogglePlayPauseCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							StopCommand="{Binding MediaDeck.StopCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							SetInCommand="{Binding MediaDeck.SetInCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							SetOutCommand="{Binding MediaDeck.SetOutCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							JumpInCommand="{Binding MediaDeck.JumpInCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							JumpOutCommand="{Binding MediaDeck.JumpOutCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							PreviousCueCommand="{Binding Timeline.PreviousCueCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							NextCueCommand="{Binding Timeline.NextCueCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							MaximizeCommand="{Binding Shell.MaximizePreviewCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							FullscreenCommand="{Binding Shell.FullscreenPreviewCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
 
 						<local:ProgramViewer Grid.Column="2"
 							Visibility="{Binding Shell.ProgramViewerVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
@@ -522,7 +536,11 @@
 							SourceName="{Binding ProgramSourceName}"
 							SourceId="{Binding ProgramSourceId}"
 							Format="{Binding Monitoring.ProgramFormat, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							ProductionFormat="{Binding CurrentFormat}"
+							ColorSpace="N/A"
 							State="{Binding Monitoring.ProgramState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							Timecode="{Binding MediaDeck.Current, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							TransportSourceId="{Binding MediaDeck.SourceId, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 							OutputState="{Binding ProgramOutput.ViewerOutputState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 							RecordingStatus="{Binding RecordingStatus}"
 							CommitStatus="{Binding CommitStatus}"
@@ -532,7 +550,8 @@
 							AudioLeftDb="{Binding AudioLeftDb}"
 							AudioRightDb="{Binding AudioRightDb}"
 							Clipping="{Binding AudioClipping}"
-							MaximizeCommand="{Binding Shell.MaximizeProgramCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
+							MaximizeCommand="{Binding Shell.MaximizeProgramCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							FullscreenCommand="{Binding Shell.FullscreenProgramCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
 					</Grid>
 
 					<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14"
