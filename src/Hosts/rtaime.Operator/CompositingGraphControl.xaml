@@ -103,7 +103,7 @@
 				</Grid.ColumnDefinitions>
 
 				<StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-					<controls:RtaimeButton Content="SELECT" Command="{Binding SelectModeCommand}" Style="{StaticResource GraphToolbarButton}">
+					<controls:RtaimeButton Content="SELECT" Command="{Binding SelectModeCommand}">
 						<controls:RtaimeButton.Style>
 							<Style TargetType="{x:Type controls:RtaimeButton}" BasedOn="{StaticResource GraphToolbarButton}">
 								<Style.Triggers>
