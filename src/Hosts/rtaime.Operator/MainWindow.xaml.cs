@@ -1,7 +1,10 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 using System.ComponentModel;
+using System.Diagnostics;
+using System.IO;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Threading;
@@ -231,26 +234,32 @@ public partial class MainWindow : Window
 			return;
 		}
 
+		var selected = MediaPool.SelectedItems.Any(candidate => string.Equals(candidate.Key, item.Key, StringComparison.Ordinal))
+			? MediaPool.SelectedItems.ToArray()
+			: [item];
+		var payload = new MediaAssetDragPayload(item, selected);
 		DragDrop.DoDragDrop(
 			(DependencyObject)sender,
-			new DataObject(typeof(MediaPoolItemViewModel), item),
+			new DataObject(typeof(MediaAssetDragPayload), payload),
 			DragDropEffects.Copy);
+	}
+
+	private void OnMediaPoolSelectionChanged(object sender, SelectionChangedEventArgs e)
+	{
+		if (sender is ListBox listBox)
+			MediaPool.UpdateSelection(listBox.SelectedItems.Cast<MediaPoolItemViewModel>());
 	}
 
 	private void OnPreviewDragOver(object sender, DragEventArgs e)
 	{
-		var item = e.Data.GetDataPresent(typeof(MediaPoolItemViewModel))
-			? e.Data.GetData(typeof(MediaPoolItemViewModel)) as MediaPoolItemViewModel
-			: null;
+		var item = GetMediaPoolDragItem(e);
 		e.Effects = MediaPool.CanDropToPreview(item) ? DragDropEffects.Copy : DragDropEffects.None;
 		e.Handled = true;
 	}
 
 	private async void OnPreviewDrop(object sender, DragEventArgs e)
 	{
-		var item = e.Data.GetDataPresent(typeof(MediaPoolItemViewModel))
-			? e.Data.GetData(typeof(MediaPoolItemViewModel)) as MediaPoolItemViewModel
-			: null;
+		var item = GetMediaPoolDragItem(e);
 		if (item is not null && MediaPool.CanDropToPreview(item))
 			await MediaPool.DropToPreviewAsync(item);
 		e.Handled = true;
@@ -258,9 +267,7 @@ public partial class MainWindow : Window
 
 	private void OnTimelineDragOver(object sender, DragEventArgs e)
 	{
-		var item = e.Data.GetDataPresent(typeof(MediaPoolItemViewModel))
-			? e.Data.GetData(typeof(MediaPoolItemViewModel)) as MediaPoolItemViewModel
-			: null;
+		var item = GetMediaPoolDragItem(e);
 		var target = sender is MediaTimelineControl control
 			? control.ResolveDropTarget(e.OriginalSource)
 			: null;
@@ -271,9 +278,7 @@ public partial class MainWindow : Window
 
 	private void OnTimelineDrop(object sender, DragEventArgs e)
 	{
-		var item = e.Data.GetDataPresent(typeof(MediaPoolItemViewModel))
-			? e.Data.GetData(typeof(MediaPoolItemViewModel)) as MediaPoolItemViewModel
-			: null;
+		var item = GetMediaPoolDragItem(e);
 		var target = sender is MediaTimelineControl control
 			? control.ResolveDropTarget(e.OriginalSource)
 			: null;
@@ -292,6 +297,91 @@ public partial class MainWindow : Window
 		e.Effects = DragDropEffects.Copy;
 		e.Handled = true;
 	}
+
+	private async void OnMediaPoolPreviewActionClick(object sender, RoutedEventArgs e)
+	{
+		var item = GetMediaPoolItemFromSender(sender);
+		if (item is not null && MediaPool.CanDropToPreview(item))
+			await MediaPool.DropToPreviewAsync(item);
+		e.Handled = true;
+	}
+
+	private void OnMediaPoolTimelineActionClick(object sender, RoutedEventArgs e)
+	{
+		var item = GetMediaPoolItemFromSender(sender);
+		var target = item?.Kind switch
+		{
+			MediaPoolItemKind.Clip => TimelineTrackCategory.Video,
+			MediaPoolItemKind.Audio => TimelineTrackCategory.Audio,
+			MediaPoolItemKind.Graphics => TimelineTrackCategory.Overlay,
+			_ => (TimelineTrackCategory?)null
+		};
+		if (item is not null && target is not null && Timeline.CanAcceptMediaPoolDrop(item, target))
+		{
+			MediaPool.SelectedItem = item;
+			if (item.Kind == MediaPoolItemKind.Clip && MediaDeck.RefreshCommand.CanExecute(null))
+				MediaDeck.RefreshCommand.Execute(null);
+			Timeline.ProjectMediaPoolDrop(item, target.Value);
+		}
+		e.Handled = true;
+	}
+
+	private void OnMediaPoolCueActionClick(object sender, RoutedEventArgs e)
+	{
+		var item = GetMediaPoolItemFromSender(sender);
+		if (item?.Kind == MediaPoolItemKind.Clip &&
+			string.Equals(item.ReferenceId, MediaDeck.SourceId, StringComparison.Ordinal) &&
+			MediaDeck.AddCueCommand.CanExecute(null))
+		{
+			MediaPool.SelectedItem = item;
+			MediaDeck.AddCueCommand.Execute(null);
+		}
+		e.Handled = true;
+	}
+
+	private void OnMediaPoolRevealActionClick(object sender, RoutedEventArgs e)
+	{
+		var item = GetMediaPoolItemFromSender(sender);
+		if (item?.CanRevealInExplorer == true && item.LocalPath is { } path && File.Exists(path))
+		{
+			Process.Start(new ProcessStartInfo
+			{
+				FileName = "explorer.exe",
+				Arguments = $"/select,\"{path}\"",
+				UseShellExecute = true
+			});
+		}
+		e.Handled = true;
+	}
+
+	private void OnMediaPoolPropertiesActionClick(object sender, RoutedEventArgs e)
+	{
+		var item = GetMediaPoolItemFromSender(sender);
+		if (item is not null)
+			MediaPool.SelectedItem = item;
+		e.Handled = true;
+	}
+
+	private static MediaPoolItemViewModel? GetMediaPoolItemFromSender(object sender)
+	{
+		if (sender is FrameworkElement element && element.DataContext is MediaPoolItemViewModel item)
+			return item;
+
+		if (sender is MenuItem menuItem &&
+			menuItem.Parent is ContextMenu contextMenu &&
+			contextMenu.PlacementTarget is FrameworkElement target &&
+			target.DataContext is MediaPoolItemViewModel targetItem)
+		{
+			return targetItem;
+		}
+
+		return null;
+	}
+
+	private static MediaPoolItemViewModel? GetMediaPoolDragItem(DragEventArgs e) =>
+		e.Data.GetDataPresent(typeof(MediaAssetDragPayload))
+			? (e.Data.GetData(typeof(MediaAssetDragPayload)) as MediaAssetDragPayload)?.Primary
+			: null;
 
 	private void OnTimelineSelectionChanged(TimelineSelection selection)
 	{
