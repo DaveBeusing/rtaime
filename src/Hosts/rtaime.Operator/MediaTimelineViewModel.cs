@@ -254,7 +254,7 @@ public sealed class MediaTimelineViewModel : INotifyPropertyChanged, IAsyncDispo
 	public bool HasTrimPreview => PreviewInPointFrame.HasValue || PreviewOutPointFrame.HasValue;
 	public bool HasInPoint => EffectiveInPointFrame.HasValue;
 	public bool HasOutPoint => EffectiveOutPointFrame.HasValue;
-	public bool HasInvalidRange => InPointFrame.HasValue && OutPointFrame.HasValue && InPointFrame.Value > OutPointFrame.Value;
+	public bool HasInvalidRange => EffectiveInPointFrame.HasValue && EffectiveOutPointFrame.HasValue && EffectiveInPointFrame.Value > EffectiveOutPointFrame.Value;
 	public bool SnapEnabled
 	{
 		get => _snapEnabled;
