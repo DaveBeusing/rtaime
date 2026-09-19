@@ -8,7 +8,7 @@ The Operator timeline is a first-class production workspace for frame-accurate m
 
 ## Time model
 
-Timeline state is represented in integral frame numbers. Timecode labels are derived from the confirmed media frame rate. Zoom and scrolling calculate a visible frame range; pointer positions are converted back to frames only at the interaction boundary.
+Timeline state is represented in integral frame numbers. Timecode labels are derived from the confirmed media frame rate. Nominal frame-field formatting remains compatible with the admitted local-media envelope through 240 fps. Zoom and scrolling calculate a visible frame range; pointer positions are converted back to frames only at the interaction boundary.
 
 The viewport supports:
 
@@ -36,7 +36,7 @@ The workspace exposes the following semantic tracks:
 
 A track name is a UI semantic category, not a promise that timed backend automation exists for that category.
 
-The loaded Media Deck clip is projected onto the Video track using its confirmed source identity and effective IN/OUT range. Existing Audio and Graphics resources may be dropped on their matching semantic tracks as clearly marked `PROJECTED` metadata spanning the current media duration. This changes only the Operator projection and does not create a production mutation.
+The loaded Media Deck clip is projected onto the Video track using its confirmed source identity and effective IN/OUT range. Existing Audio and Graphics resources may be dropped on their matching semantic tracks as clearly marked `PROJECTED` metadata spanning the current media duration. These timeline-only projections are cleared whenever the loaded media asset or source context changes. This changes only the Operator projection and does not create a production mutation.
 
 No timed Graphics, Audio, AI or Control mutation is invented by the timeline. AI and Control tracks therefore remain empty until authoritative product semantics exist.
 
