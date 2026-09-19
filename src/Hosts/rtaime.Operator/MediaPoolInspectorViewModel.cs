@@ -257,17 +257,17 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 	public bool SupportsEffectOrdering => false;
 	public string UnsupportedTransformCapabilityText => "Rotation, Anchor and Crop are not exposed by the current graphics capability.";
 	public string UnsupportedEffectOrderingText => "Effect ordering is not exposed by the current processing capability.";
-	public bool IsSourceSelection => _timelineItem is null && _timelineCue is null && SelectedItem?.Kind == MediaPoolItemKind.Source;
-	public bool IsClipSelection => _timelineCue is null &&
+	public bool IsSourceSelection => _timelineItems.Count <= 1 && _timelineItem is null && _timelineCue is null && SelectedItem?.Kind == MediaPoolItemKind.Source;
+	public bool IsClipSelection => _timelineItems.Count <= 1 && _timelineCue is null &&
 		(_timelineItem?.Category == TimelineTrackCategory.Video ||
 			(_timelineItem is null && SelectedItem?.Kind == MediaPoolItemKind.Clip));
-	public bool IsAudioSelection => _timelineCue is null &&
+	public bool IsAudioSelection => _timelineItems.Count <= 1 && _timelineCue is null &&
 		(_timelineItem?.Category == TimelineTrackCategory.Audio ||
 			(_timelineItem is null && SelectedItem?.Kind == MediaPoolItemKind.Audio));
-	public bool IsGraphicsSelection => _timelineCue is null &&
+	public bool IsGraphicsSelection => _timelineItems.Count <= 1 && _timelineCue is null &&
 		(_timelineItem?.Category is TimelineTrackCategory.Graphics or TimelineTrackCategory.Overlay ||
 			(_timelineItem is null && SelectedItem?.Kind == MediaPoolItemKind.Graphics));
-	public bool IsCompositionSelection => _timelineItem is null && _timelineCue is null && SelectedItem?.Kind == MediaPoolItemKind.Composition;
+	public bool IsCompositionSelection => _timelineItems.Count <= 1 && _timelineItem is null && _timelineCue is null && SelectedItem?.Kind == MediaPoolItemKind.Composition;
 	public bool IsCueSelection => _timelineCue is not null;
 	public string InspectorTitle => _timelineItems.Count > 1
 		? $"{_timelineItems.Count} timeline items"
