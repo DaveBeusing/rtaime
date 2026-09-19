@@ -104,7 +104,7 @@
 				</StackPanel>
 
 				<StackPanel Grid.Column="5" Orientation="Horizontal" VerticalAlignment="Center">
-					<Button Content="DEMO" Command="{Binding DemoProduction.OpenCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorProgramButton}" MinHeight="28" Padding="8,3" Margin="0,0,4,0" ToolTip="Prepare the deterministic demo production through the existing command paths." AutomationProperties.Name="Open Demo Production" />
+					<Button Content="DEMO" Command="{Binding DemoProduction.OpenCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorProgramButton}" MinHeight="28" Padding="8,3" Margin="0,0,4,0" ToolTip="Prepare the deterministic showcase state. Preview remains under operator TAKE control." AutomationProperties.Name="Open Demo Production" />
 					<Button x:Name="SynchronizeButton" Content="SYNC F5" Command="{Binding SynchronizeCommand}" Style="{StaticResource OperatorAccentButton}" MinHeight="28" Padding="8,3" Margin="0,0,4,0" ToolTip="Synchronize authoritative ControlHost state (F5)." AutomationProperties.Name="Synchronize authoritative state" />
 					<Button Content="{Binding Shell.FullscreenLabel, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Command="{Binding Shell.ToggleFullscreenCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorButton}" MinHeight="28" Padding="8,3" Margin="0,0,4,0" />
 					<Button Content="⋯" Style="{StaticResource OperatorButton}" MinWidth="34" MinHeight="28" Padding="8,3" ToolTip="Shell actions"
