@@ -602,8 +602,16 @@ public sealed class PerformanceMetricViewModel : INotifyPropertyChanged
 		EvidenceState = evidenceState;
 		Status = status;
 		Detail = detail;
-		HasGaugeSample = sample is { } gauge && double.IsFinite(gauge);
-		GaugeValue = HasGaugeSample ? Math.Clamp(sample!.Value, 0, 100) : 0;
+		if (sample is { } gauge && double.IsFinite(gauge))
+		{
+			HasGaugeSample = true;
+			GaugeValue = Math.Clamp(gauge, 0, 100);
+		}
+		else
+		{
+			HasGaugeSample = false;
+			GaugeValue = 0;
+		}
 
 		if (sample is not { } numeric || !double.IsFinite(numeric))
 			return;
