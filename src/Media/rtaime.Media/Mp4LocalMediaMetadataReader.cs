@@ -29,6 +29,7 @@ internal static class Mp4LocalMediaMetadataReader
 	private const uint Vide = 0x76696465;
 	private const uint Soun = 0x736F756E;
 	private const uint Avc1 = 0x61766331;
+	private const uint Avc3 = 0x61766333;
 	private const uint Mp4a = 0x6D703461;
 
 	public static Mp4LocalMediaMetadata Read(string path)
@@ -58,7 +59,7 @@ internal static class Mp4LocalMediaMetadataReader
 
 			if (handlerType == Vide)
 			{
-				var videoEntry = ReadFirstSampleEntry(moov, sampleDescription, Avc1, "avc1");
+				var videoEntry = ReadFirstSampleEntry(moov, sampleDescription, new[] { Avc1, Avc3 }, "avc1/avc3");
 				(width, height) = ReadVisualSampleEntryDimensions(moov, videoEntry);
 				var timing = RequireChild(moov, sampleTable.PayloadOffset, sampleTable.PayloadLength, Stts, "stts");
 				(frameRateNumerator, frameRateDenominator) = ReadFrameRate(moov, timing, mediaTimescale);
@@ -243,7 +244,14 @@ internal static class Mp4LocalMediaMetadataReader
 		return TimeSpan.FromTicks(ticks);
 	}
 
-	private static BufferBox ReadFirstSampleEntry(byte[] buffer, BufferBox stsd, uint expectedType, string expectedName)
+	private static BufferBox ReadFirstSampleEntry(byte[] buffer, BufferBox stsd, uint expectedType, string expectedName) =>
+		ReadFirstSampleEntry(buffer, stsd, new[] { expectedType }, expectedName);
+
+	private static BufferBox ReadFirstSampleEntry(
+		byte[] buffer,
+		BufferBox stsd,
+		IReadOnlyCollection<uint> expectedTypes,
+		string expectedName)
 	{
 		EnsurePayloadLength(stsd, 16, "stsd");
 		var entryCount = BinaryPrimitives.ReadUInt32BigEndian(buffer.AsSpan(stsd.PayloadOffset + 4, 4));
@@ -251,8 +259,8 @@ internal static class Mp4LocalMediaMetadataReader
 			throw new InvalidDataException("MP4 stsd contains no sample descriptions.");
 		var entryOffset = stsd.PayloadOffset + 8;
 		var entry = ReadBufferBox(buffer, entryOffset, stsd.Offset + stsd.Length);
-		if (entry.Type != expectedType)
-			throw new InvalidDataException($"MP4 sample description is not the required V1 '{expectedName}' type.");
+		if (!expectedTypes.Contains(entry.Type))
+			throw new InvalidDataException($"MP4 sample description is not a supported '{expectedName}' type.");
 		return entry;
 	}
 
