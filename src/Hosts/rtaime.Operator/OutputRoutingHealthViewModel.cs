@@ -18,6 +18,8 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 	{
 		nameof(OperatorViewModel.ProgramSourceName),
 		nameof(OperatorViewModel.ProgramSourceId),
+		nameof(OperatorViewModel.PreviewSourceName),
+		nameof(OperatorViewModel.PreviewSourceId),
 		nameof(OperatorViewModel.RecordingStatus),
 		nameof(OperatorViewModel.EngineHealth),
 		nameof(OperatorViewModel.EngineHealthDetail),
@@ -41,6 +43,8 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 	private readonly OperatorViewModel _control;
 	private readonly ProgramOutputController _programOutput;
 	private readonly OutputStatusViewModel _program;
+	private readonly OutputStatusViewModel _preview;
+	private readonly OutputStatusViewModel _aux;
 	private readonly OutputStatusViewModel _cleanProgram;
 	private readonly Dictionary<string, PerformanceMetricViewModel> _metrics;
 	private readonly Dictionary<string, SystemHealthStatusViewModel> _systemHealth;
@@ -55,10 +59,14 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 		_programOutput = programOutput ?? throw new ArgumentNullException(nameof(programOutput));
 
 		_program = new OutputStatusViewModel("program", "PROGRAM");
-		_cleanProgram = new OutputStatusViewModel("clean-program", "CLEAN PROGRAM MONITOR");
+		_preview = new OutputStatusViewModel("preview", "PREVIEW");
+		_aux = new OutputStatusViewModel("aux", "AUX");
+		_cleanProgram = new OutputStatusViewModel("clean-program", "CLEAN FEED");
 		Outputs = new ObservableCollection<OutputStatusViewModel>
 		{
 			_program,
+			_preview,
+			_aux,
 			_cleanProgram
 		};
 		SelectedOutput = _program;
@@ -73,7 +81,8 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 			["dropped"] = new("DROPPED FRAMES"),
 			["fps"] = new("OUTPUT FPS"),
 			["disk"] = new("DISK"),
-			["network"] = new("NETWORK")
+			["network"] = new("NETWORK"),
+			["temperature"] = new("TEMPERATURE")
 		};
 		Metrics = new ObservableCollection<PerformanceMetricViewModel>(_metrics.Values);
 
@@ -97,6 +106,9 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 	public ObservableCollection<OutputStatusViewModel> Outputs { get; }
 	public ObservableCollection<PerformanceMetricViewModel> Metrics { get; }
 	public ObservableCollection<SystemHealthStatusViewModel> SystemHealth { get; }
+	public PerformanceMetricViewModel DiskMetric => _metrics["disk"];
+	public PerformanceMetricViewModel NetworkMetric => _metrics["network"];
+	public PerformanceMetricViewModel TemperatureMetric => _metrics["temperature"];
 	public ICommand RoutePreviewToProgramCommand => _control.CutCommand;
 
 	public OutputStatusViewModel? SelectedOutput
@@ -164,6 +176,32 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 			evidenceState: runtimeEvidence,
 			detail: runtimeDetail,
 			recordingStatus: NormalizeAvailability(_control.RecordingStatus),
+			streamingStatus: Unavailable);
+
+		_preview.Update(
+			target: "Control Preview",
+			assignedSource: FormatSource(_control.PreviewSourceName, _control.PreviewSourceId),
+			resolution: format.Resolution,
+			frameRate: format.FrameRate,
+			pixelFormat: format.PixelFormat,
+			colorSpace: Unavailable,
+			status: runtimeStatus,
+			evidenceState: runtimeEvidence,
+			detail: "Preview role reflects the authoritative Control routing snapshot.",
+			recordingStatus: Unavailable,
+			streamingStatus: Unavailable);
+
+		_aux.Update(
+			target: Unavailable,
+			assignedSource: Unavailable,
+			resolution: Unavailable,
+			frameRate: Unavailable,
+			pixelFormat: Unavailable,
+			colorSpace: Unavailable,
+			status: "WARNING",
+			evidenceState: "UNVERIFIED",
+			detail: "No governed Aux output role is exposed by the current V1 contract.",
+			recordingStatus: Unavailable,
 			streamingStatus: Unavailable);
 
 		var cleanEvidence = NormalizeOutputEvidence(_programOutput.Health);
@@ -250,6 +288,13 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 			Unavailable,
 			"UNVERIFIED",
 			"No network telemetry is published by the current health contract.",
+			null,
+			sampleHistory);
+		UpdateMetric(
+			"temperature",
+			Unavailable,
+			"UNVERIFIED",
+			"No temperature telemetry is published by the current health contract.",
 			null,
 			sampleHistory);
 
@@ -522,6 +567,7 @@ public sealed class PerformanceMetricViewModel : INotifyPropertyChanged
 	private string _status = "WARNING";
 	private string _detail = "Telemetry is unavailable.";
 	private PointCollection _historyPoints = new();
+	private double _gaugeValue;
 
 	public PerformanceMetricViewModel(string name)
 	{
@@ -535,6 +581,7 @@ public sealed class PerformanceMetricViewModel : INotifyPropertyChanged
 	public string EvidenceState { get => _evidenceState; private set => Set(ref _evidenceState, value); }
 	public string Status { get => _status; private set => Set(ref _status, value); }
 	public string Detail { get => _detail; private set => Set(ref _detail, value); }
+	public double GaugeValue { get => _gaugeValue; private set => Set(ref _gaugeValue, value); }
 	public PointCollection HistoryPoints { get => _historyPoints; private set => Set(ref _historyPoints, value); }
 
 	internal void Update(
@@ -548,6 +595,7 @@ public sealed class PerformanceMetricViewModel : INotifyPropertyChanged
 		EvidenceState = evidenceState;
 		Status = status;
 		Detail = detail;
+		GaugeValue = sample is { } gauge && double.IsFinite(gauge) ? Math.Clamp(gauge, 0, 100) : 0;
 
 		if (sample is not { } numeric || !double.IsFinite(numeric))
 			return;

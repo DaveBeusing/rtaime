@@ -746,12 +746,14 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		var previousSelectionId = SelectedSource?.Id;
 		var existing = Sources.ToDictionary(source => source.Id, StringComparer.Ordinal);
 		Sources.Clear();
+		var displayIndex = 1;
 		foreach (var descriptor in snapshot.Sources)
 		{
 			if (!existing.TryGetValue(descriptor.Id, out var source))
 				source = new OperatorSourceTileViewModel(descriptor);
 			else
 				source.ApplyDescriptor(descriptor);
+			source.ApplyDisplayIndex(displayIndex++);
 			Sources.Add(source);
 		}
 

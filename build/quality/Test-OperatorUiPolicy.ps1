@@ -70,6 +70,7 @@ $customMediaControlsPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/
 $customControlThemePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Themes/Controls/RtaimeControls.xaml"
 $customInputThemePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Themes/Controls/RtaimeInputsAndScrolling.xaml"
 $customMediaThemePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Themes/Controls/RtaimeMediaLibrary.xaml"
+$monitorWorkspaceThemePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Themes/Controls/RtaimeMonitorWorkspace.xaml"
 $customIconThemePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Themes/Controls/RtaimeIcons.xaml"
 $manifestPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/app.manifest"
 $projectPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/rtaime.Operator.csproj"
@@ -78,7 +79,7 @@ $workspaceDocumentationPath = Join-Path $repositoryRoot "docs/OperatorWorkspaces
 $outputHealthDocumentationPath = Join-Path $repositoryRoot "docs/OutputRoutingHealth.md"
 $mediaLibraryDocumentationPath = Join-Path $repositoryRoot "docs/MediaLibraryAssetBrowser.md"
 
-foreach ($path in @($appPath, $appCodePath, $windowPath, $windowCodePath, $shellPath, $keyboardPath, $quickControlsPath, $multiviewPath, $multiviewCodePath, $liveSceneCuePath, $liveControlsPath, $liveDocumentationPath, $compositingGraphPath, $compositingGraphCodePath, $compositingGraphViewModelPath, $compositingGraphProjectionPath, $compositingGraphDocumentationPath, $mediaPoolPath, $inspectorHostPath, $virtualizingWrapPanelPath, $deckPath, $deckViewModelPath, $timelinePath, $timelineCodePath, $timelineViewModelPath, $markerControllerPath, $timelineDocumentationPath, $viewModelPath, $monitorViewModelPath, $programOutputControllerPath, $programOutputWindowPath, $outputHealthControlPath, $outputHealthViewModelPath, $previewViewerPath, $previewViewerCodePath, $programViewerPath, $programViewerCodePath, $monitorViewPath, $sourceTileViewModelPath, $audioInputViewModelPath, $graphicsLoaderPath, $demoControllerPath, $demoManifestPath, $demoProductPath, $demoGraphicsPath, $demoDocumentationPath, $tokensPath, $themePath, $customControlsPath, $customInputControlsPath, $customMediaControlsPath, $customControlThemePath, $customInputThemePath, $customMediaThemePath, $customIconThemePath, $manifestPath, $projectPath, $documentationPath, $workspaceDocumentationPath, $outputHealthDocumentationPath, $mediaLibraryDocumentationPath)) {
+foreach ($path in @($appPath, $appCodePath, $windowPath, $windowCodePath, $shellPath, $keyboardPath, $quickControlsPath, $multiviewPath, $multiviewCodePath, $liveSceneCuePath, $liveControlsPath, $liveDocumentationPath, $compositingGraphPath, $compositingGraphCodePath, $compositingGraphViewModelPath, $compositingGraphProjectionPath, $compositingGraphDocumentationPath, $mediaPoolPath, $inspectorHostPath, $virtualizingWrapPanelPath, $deckPath, $deckViewModelPath, $timelinePath, $timelineCodePath, $timelineViewModelPath, $markerControllerPath, $timelineDocumentationPath, $viewModelPath, $monitorViewModelPath, $programOutputControllerPath, $programOutputWindowPath, $outputHealthControlPath, $outputHealthViewModelPath, $previewViewerPath, $previewViewerCodePath, $programViewerPath, $programViewerCodePath, $monitorViewPath, $sourceTileViewModelPath, $audioInputViewModelPath, $graphicsLoaderPath, $demoControllerPath, $demoManifestPath, $demoProductPath, $demoGraphicsPath, $demoDocumentationPath, $tokensPath, $themePath, $customControlsPath, $customInputControlsPath, $customMediaControlsPath, $customControlThemePath, $customInputThemePath, $customMediaThemePath, $monitorWorkspaceThemePath, $customIconThemePath, $manifestPath, $projectPath, $documentationPath, $workspaceDocumentationPath, $outputHealthDocumentationPath, $mediaLibraryDocumentationPath)) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required Operator UI artifact is missing: '$path'."
 }
 
@@ -137,6 +138,7 @@ $customMediaControls = Get-Content -LiteralPath $customMediaControlsPath -Raw
 $customControlTheme = Get-Content -LiteralPath $customControlThemePath -Raw
 $customInputTheme = Get-Content -LiteralPath $customInputThemePath -Raw
 $customMediaTheme = Get-Content -LiteralPath $customMediaThemePath -Raw
+$monitorWorkspaceTheme = Get-Content -LiteralPath $monitorWorkspaceThemePath -Raw
 $customIconTheme = Get-Content -LiteralPath $customIconThemePath -Raw
 $manifest = Get-Content -LiteralPath $manifestPath -Raw
 $project = Get-Content -LiteralPath $projectPath -Raw
@@ -157,12 +159,17 @@ $navigationSurface = $window.Substring($navigationStart, $leftRegionStart - $nav
 $mediaLibraryEnd = $window.IndexOf('<controls:RtaimeSplitter Grid.RowSpan="2" Grid.Column="5"', $leftRegionStart, [StringComparison]::Ordinal)
 Assert-Condition ($mediaLibraryEnd -gt $leftRegionStart) "Media Library surface must end before the right workspace splitter."
 $mediaLibrarySurface = $window.Substring($leftRegionStart, $mediaLibraryEnd - $leftRegionStart)
+$productionWorkspaceStart = $window.IndexOf('x:Name="PreviewProgramProductionWorkspace"', [StringComparison]::Ordinal)
+$productionWorkspaceEnd = $window.IndexOf('<local:MediaDeckControl', $productionWorkspaceStart, [StringComparison]::Ordinal)
+Assert-Condition ($productionWorkspaceStart -ge 0 -and $productionWorkspaceEnd -gt $productionWorkspaceStart) "Edit production workspace must remain an explicit bounded surface."
+$productionWorkspaceSurface = $window.Substring($productionWorkspaceStart, $productionWorkspaceEnd - $productionWorkspaceStart)
 
 Assert-Condition ($app -match 'Source="Themes/OperatorTheme\.xaml"') "Operator must load the reusable theme resource dictionary."
 Assert-Condition ($app -match 'Source="Themes/Controls/RtaimeIcons\.xaml"') "Operator must load the custom icon geometry dictionary."
 Assert-Condition ($app -match 'Source="Themes/Controls/RtaimeControls\.xaml"') "Operator must load the custom control chrome dictionary."
 Assert-Condition ($app -match 'Source="Themes/Controls/RtaimeInputsAndScrolling\.xaml"') "Operator must load the custom input and scrolling dictionary."
 Assert-Condition ($app -match 'Source="Themes/Controls/RtaimeMediaLibrary\.xaml"') "Operator must load the custom Media Library dictionary."
+Assert-Condition ($app -match 'Source="Themes/Controls/RtaimeMonitorWorkspace\.xaml"') "Operator must load the custom monitor workspace dictionary."
 $iconThemeIndex = $app.IndexOf('Source="Themes/Controls/RtaimeIcons.xaml"', [StringComparison]::Ordinal)
 $controlThemeIndex = $app.IndexOf('Source="Themes/Controls/RtaimeControls.xaml"', [StringComparison]::Ordinal)
 Assert-Condition ($iconThemeIndex -ge 0 -and $controlThemeIndex -gt $iconThemeIndex) "Custom icon resources must load before custom control templates."
@@ -189,7 +196,7 @@ Assert-Condition ($customControlTheme -match 'Property="IsMouseOver"' -and $cust
 foreach ($iconSize in @(14, 16, 18, 20)) {
 	Assert-Condition ($customControlTheme -match ('x:Key="RtaimeIcon' + $iconSize + '"')) "Custom icon size '$iconSize' must be available."
 }
-foreach ($iconName in @("Play", "Pause", "Stop", "Previous", "Next", "Media", "Live", "Timeline", "Output", "Compositing", "Settings", "Check", "Warning", "Close", "ChevronLeft", "ChevronRight", "Search", "Add", "Grid", "List")) {
+foreach ($iconName in @("Play", "Pause", "Stop", "Previous", "Next", "Media", "Live", "Timeline", "Output", "Compositing", "Settings", "Check", "Warning", "Close", "ChevronLeft", "ChevronRight", "Search", "Add", "Grid", "List", "Fit", "Zoom", "Maximize", "Fullscreen", "MarkIn", "MarkOut")) {
 	Assert-Condition ($customIconTheme -match ('x:Key="RtaimeIcon' + $iconName + 'Geometry"')) "Custom icon geometry '$iconName' must exist."
 }
 Assert-Condition ($customIconTheme -notmatch '[\uD800-\uDFFF]') "Custom icon resources must use geometry rather than emoji glyphs."
@@ -220,6 +227,10 @@ Assert-Condition ($customMediaTheme -match 'Property="IsSelected" Value="True"' 
 Assert-Condition ($customMediaTheme -match 'Property="IsMouseOver" Value="True"' -and $customMediaTheme -match 'OperatorRaisedHoverBrush') "Media tile hover must remain dark and distinct from cyan selection."
 Assert-Condition ($customMediaTheme -match '<RowDefinition Height="68" />' -and $customMediaTheme -match 'FontSize="11"' -and $customMediaTheme -match 'OperatorTimecodeFontFamily') "Media tiles must retain the approximately 120x68 thumbnail, 11px filename and compact mono duration treatment."
 Assert-Condition ($customMediaTheme -match 'OfflineOverlay' -and $customMediaTheme -match 'Text="OFFLINE"' -and $customMediaTheme -match 'IsOnline') "Offline/missing presentation must overlay the thumbnail without changing tile geometry."
+
+Assert-Condition ($monitorWorkspaceTheme -match 'x:Key="RtaimeMonitorPanel"' -and $monitorWorkspaceTheme -match 'x:Key="RtaimeMonitorHeader"' -and $monitorWorkspaceTheme -match 'x:Key="RtaimeMonitorTransport"') "Preview and Program must share the custom monitor chrome."
+Assert-Condition ($monitorWorkspaceTheme -match 'Height" Value="40"' -and $monitorWorkspaceTheme -match 'Height" Value="42"') "Shared monitor chrome must retain the 40px header and 42px transport metrics."
+Assert-Condition ($monitorWorkspaceTheme -match 'x:Key="RtaimeProductionLowerPanel"' -and $monitorWorkspaceTheme -match 'x:Key="RtaimeProductionSceneItem"' -and $monitorWorkspaceTheme -match 'x:Key="RtaimeProductionOutputItem"' -and $monitorWorkspaceTheme -match 'RtaimeProductionStatusDot') "Lower production panels must use the shared compact mockup chrome."
 
 Assert-Condition ($theme -match 'Source="OperatorTokens\.xaml"') "Operator theme must load the shared design-token dictionary."
 foreach ($token in @("OperatorFontFamily", "OperatorTimecodeFontFamily", "OperatorTopBarHeight", "OperatorNavigationWidth", "OperatorMediaPanelWidth", "OperatorInspectorWidth", "OperatorTimelineHeight", "OperatorRegionGap", "OperatorControlHeight", "OperatorCompactControlHeight", "OperatorRadiusPanel", "OperatorRadiusControl", "OperatorColorTopBar", "OperatorColorNavigation", "OperatorColorSurface", "OperatorColorAlternateSurface", "OperatorColorRaisedSurface", "OperatorColorRaisedHover", "OperatorColorBorder", "OperatorColorBorderStrong", "OperatorColorText", "OperatorColorSecondaryText", "OperatorColorMutedText", "OperatorColorAccent", "OperatorColorPreview", "OperatorColorProgram", "OperatorColorHealthy", "OperatorColorWarning", "OperatorColorError", "OperatorColorTimeline", "OperatorColorGraphics", "OperatorColorAudio")) {
@@ -302,10 +313,10 @@ Assert-Condition ($sourceTileViewModel -match 'ApplyRouting') "Source tile prese
 Assert-Condition ($sourceTileViewModel -match 'ApplyMediaDeck') "Source tile presentation must project Media Deck state without taking media authority."
 Assert-Condition ($monitorViewModel -match 'ApplySourceThumbnail') "Source thumbnails must derive from the independent monitoring plane."
 Assert-Condition ($window -match '<local:PreviewViewer' -and $window -match '<local:ProgramViewer') "Operator must compose dedicated reusable Preview and Program viewers."
-Assert-Condition ($previewViewer -match 'OperatorPreviewPanel') "Preview viewer must use Preview semantic styling."
-Assert-Condition ($programViewer -match 'OperatorProgramPanel') "Program viewer must use Program semantic styling."
-Assert-Condition ($previewViewer -match 'OperatorPreviewTally') "Preview tally semantics must be explicit."
-Assert-Condition ($programViewer -match 'OperatorProgramTally') "Program tally semantics must be explicit."
+Assert-Condition ($previewViewer -match 'RtaimeMonitorPanel' -and $previewViewer -match 'RtaimeStatusKind\.Preview') "Preview viewer must use shared monitor chrome and Preview semantics."
+Assert-Condition ($programViewer -match 'RtaimeMonitorPanel' -and $programViewer -match 'RtaimeStatusKind\.Program') "Program viewer must use shared monitor chrome and Program semantics."
+Assert-Condition ($previewViewer -match 'Grid\.Row="0".+RtaimeMonitorHeader' -and $previewViewer -match 'Grid\.Row="2".+RtaimeMonitorTransport') "Preview viewer must use the 40px header and 42px custom transport."
+Assert-Condition ($programViewer -match 'Grid\.Row="0".+RtaimeMonitorHeader' -and $programViewer -match 'Grid\.Row="2".+RtaimeMonitorTransport') "Program viewer must use the 40px header and 42px custom transport."
 Assert-Condition ($window -match 'Monitoring\.PreviewImage') "Operator Preview must bind the independent monitoring image."
 Assert-Condition ($window -match 'Monitoring\.ProgramImage') "Operator Program must bind the independent monitoring image."
 Assert-Condition ($previewViewer -match '<Image\s' -and $programViewer -match '<Image\s') "Preview and Program viewers must render monitoring with WPF Image surfaces."
@@ -634,17 +645,19 @@ Assert-Condition ($shell -match 'public bool IsFullscreen \{ get; init; \} = tru
 Assert-Condition ($keyboard -match 'new\("preview-view".+Key\.D1.+shell\.MaximizePreviewCommand') "Preview maximize must be keyboard-accessible through Ctrl+1."
 Assert-Condition ($keyboard -match 'new\("program-view".+Key\.D2.+shell\.MaximizeProgramCommand') "Program maximize must be keyboard-accessible through Ctrl+2."
 Assert-Condition ($keyboard -match 'new\("dual-view".+Key\.D0.+shell\.RestoreViewersCommand') "Dual-view restore must be keyboard-accessible through Ctrl+0."
-Assert-Condition ($shell -match 'PreviewViewerWidth' -and $shell -match 'new GridLength\(0\.85, GridUnitType\.Star\)') "Preview must use the smaller default production-view allocation."
-Assert-Condition ($shell -match 'ProgramViewerWidth' -and $shell -match 'new GridLength\(1\.15, GridUnitType\.Star\)') "Program must be visually dominant by default."
+Assert-Condition ($shell -match 'PreviewViewerWidth' -and $shell -match 'ProgramViewerWidth' -and (($shell | Select-String -Pattern 'new GridLength\(1, GridUnitType\.Star\)' -AllMatches).Matches.Count -ge 2) -and $shell -match 'ViewerGapWidth.+\? 6 : 0') "Dual Preview/Program mode must use the equal 532/6/532 reference split."
 Assert-Condition ($shell -match 'MaximizePreviewCommand' -and $shell -match 'MaximizeProgramCommand' -and $shell -match 'RestoreViewersCommand') "Viewer maximize/restore must remain local presentation commands."
 Assert-Condition ($shell -match 'FullscreenPreviewCommand' -and $shell -match 'FullscreenProgramCommand' -and $shell -match '_monitorFullscreenRestoreViewerMode' -and $window -match 'Shell\.FullscreenPreviewCommand' -and $window -match 'Shell\.FullscreenProgramCommand') "Monitor fullscreen must remain transient shell presentation state and restore the prior viewer layout."
-Assert-Condition ($shell -match 'PreviewViewerVisibility' -and $shell -match 'ProgramViewerVisibility' -and $window -match 'Shell\.PreviewViewerVisibility' -and $window -match 'Shell\.ProgramViewerVisibility') "Maximized production viewers must collapse the inactive viewer and restore it in dual mode."
-Assert-Condition ($window -match 'Text="PRODUCTION CONTROLS"' -and $window -match 'CUT PREVIEW → PROGRAM' -and $window -match 'AUTO PREVIEW → PROGRAM') "CUT/AUTO controls must sit in the central production workspace."
-Assert-Condition ($window -match 'Text="TRANSITION TYPE"' -and $window -match 'Text="CUT / DISSOLVE"' -and $window -match 'Binding TransitionFrames') "Production controls must expose the current transition types and duration."
-Assert-Condition ($window -match 'HOLD / FTB · NOT AVAILABLE IN V1') "Unsupported HOLD/FTB controls must remain an explicit extension surface rather than invented commands."
-Assert-Condition ($programViewer -match 'Binding AudioLeftPeak' -and $programViewer -match 'Binding AudioRightPeak' -and $programViewer -match 'dBFS' -and $programViewer -match 'Text="-60"' -and $programViewer -match 'Text="-12"' -and $programViewer -match 'Text="0"') "Program viewer must keep bounded stereo metering with a visible dBFS reference scale."
-Assert-Condition ($programViewer -match 'CLIP' -and $programViewer -match 'Clipping') "Program viewer must expose clipping with text as well as styling."
-Assert-Condition ($programViewer -match 'Binding State, ElementName=Root' -and $programViewer -match 'Value="LIVE"' -and $programViewer -match 'Value="ON AIR"' -and $programViewer -match 'External transmission remains separately unverified') "Program ON AIR presentation must derive from the observed live Program bus without claiming external transmission."
+Assert-Condition ($shell -match 'PreviewViewerVisibility' -and $shell -match 'ProgramViewerVisibility' -and $productionWorkspaceSurface -match 'Shell\.PreviewViewerVisibility' -and $productionWorkspaceSurface -match 'Shell\.ProgramViewerVisibility') "Maximized production viewers must collapse the inactive viewer and restore it in dual mode."
+Assert-Condition ($productionWorkspaceSurface -match 'Height="700"' -and $productionWorkspaceSurface -match '<RowDefinition Height="390" />' -and $productionWorkspaceSurface -match '<RowDefinition Height="304" />') "Edit production workspace must retain the 700px reference height with 390px monitor and 304px lower rows."
+Assert-Condition ($productionWorkspaceSurface -match '<ColumnDefinition Width="320" />' -and $productionWorkspaceSurface -match '<ColumnDefinition Width="462" />' -and $productionWorkspaceSurface -match '<ColumnDefinition Width="276" />') "Lower production row must retain the 320/6/462/6/276 mockup split."
+Assert-Condition ($productionWorkspaceSurface -match 'Text="SCENE STACK"' -and $productionWorkspaceSurface -match 'Text="OUTPUT ROUTING"' -and $productionWorkspaceSurface -match 'Text="SYSTEM STATUS"') "Lower production row must expose Scene Stack, Output Routing and System Status."
+Assert-Condition ($productionWorkspaceSurface -match 'Width="62" Height="36"' -and $productionWorkspaceSurface -match 'Binding DisplayIndex' -and $productionWorkspaceSurface -match 'Binding Remaining') "Scene Stack must retain the compact 62x36 thumbnail, stable index and duration projection."
+Assert-Condition ($monitorWorkspaceTheme -match 'x:Key="RtaimeProductionSceneItem"[sS]+Property="Height" Value="50"' -and $productionWorkspaceSurface -match 'ItemsSource="{Binding Sources}"') "Scene Stack must fit four compact source-projection rows without adding scene authority."
+Assert-Condition ($productionWorkspaceSurface -match 'Command="\{Binding SetPreviewCommand\}"' -and $productionWorkspaceSurface -match 'Command="\{Binding CutCommand\}"' -and $productionWorkspaceSurface -match 'Command="\{Binding DissolveCommand\}"') "Scene Stack actions must reuse the existing Preview, CUT and AUTO command paths."
+Assert-Condition ($productionWorkspaceSurface -notmatch '<(Button|ToggleButton|CheckBox|RadioButton|TextBox|ComboBox|TabControl|TabItem|ListBox|ListView|TreeView|DataGrid|Slider|ProgressBar|ScrollBar|ScrollViewer|GridSplitter|Menu|MenuItem|ContextMenu|ToolBar)(\s|/|>)') "Edit production workspace must expose no directly visible stock WPF interactive chrome."
+Assert-Condition ($previewViewer -notmatch '<(Button|ToggleButton|ProgressBar|Slider|ScrollViewer)(\s|/|>)' -and $programViewer -notmatch '<(Button|ToggleButton|ProgressBar|Slider|ScrollViewer)(\s|/|>)') "Preview and Program viewer chrome must use only own rtaime interactive controls."
+Assert-Condition ($programViewer -match 'Content="ON AIR"' -and $programViewer -match 'Value="LIVE"' -and $programViewer -match 'RtaimeStatusKind\.Program') "Program ON AIR must appear only from the observed LIVE Program state."
 Assert-Condition ($previewViewer -match 'PlayPauseCommand' -and $previewViewer -match 'SetInCommand' -and $previewViewer -match 'SetOutCommand' -and $previewViewer -match 'PreviousCueCommand' -and $previewViewer -match 'NextCueCommand') "Preview viewer must expose existing transport, mark and cue commands."
 Assert-Condition ($programViewer -notmatch 'PlayPauseCommand|SetInCommand|SetOutCommand|PreviousCueCommand|NextCueCommand') "Program viewer must not acquire Preview transport commands."
 Assert-Condition ($window -match 'ProductionFormat="{Binding CurrentFormat}"' -and $window -match 'ColorSpace="N/A"') "Monitor headers must show authoritative runtime format while unavailable color-space telemetry remains explicitly N/A."
@@ -703,16 +716,21 @@ Assert-Condition ($outputHealthControl -match 'ItemsSource="\{Binding Outputs\}"
 Assert-Condition ($outputHealthControl -match '<Run Text="\{Binding Resolution, Mode=OneWay\}"' -and $outputHealthControl -match '<Run Text="\{Binding FrameRate, Mode=OneWay\}"') "Read-only output format properties rendered through Run.Text must use explicit OneWay bindings."
 Assert-Condition ($outputHealthViewModel -match 'RoutePreviewToProgramCommand => _control\.CutCommand') "Output routing must reuse the existing authoritative Preview-to-Program CUT command."
 Assert-Condition ($outputHealthViewModel -match 'SAFE READ-ONLY' -and $outputHealthViewModel -match 'UNAVAILABLE') "Output health must fail closed for routing and represent missing telemetry explicitly."
+Assert-Condition ($outputHealthViewModel -match 'new OutputStatusViewModel\("program", "PROGRAM"\)' -and $outputHealthViewModel -match 'new OutputStatusViewModel\("preview", "PREVIEW"\)' -and $outputHealthViewModel -match 'new OutputStatusViewModel\("aux", "AUX"\)' -and $outputHealthViewModel -match 'new OutputStatusViewModel\("clean-program", "CLEAN FEED"\)') "Production output projection must expose exactly the four mockup roles without inventing Aux authority."
+Assert-Condition ($outputHealthViewModel -match 'No governed Aux output role is exposed by the current V1 contract' -and $outputHealthViewModel -match 'evidenceState: "UNVERIFIED"') "Aux output must remain explicitly fail-closed."
+Assert-Condition ($productionWorkspaceSurface -match 'OutputHealth\.Outputs' -and $productionWorkspaceSurface -match 'Monitoring\.ProgramImage' -and $productionWorkspaceSurface -match 'Monitoring\.PreviewImage') "Output Routing rows must reuse the existing output projection and monitoring thumbnails."
+Assert-Condition ($productionWorkspaceSurface -match 'Binding Resolution' -and $productionWorkspaceSurface -match 'Binding FrameRate' -and $productionWorkspaceSurface -match 'Binding ColorSpace' -and $productionWorkspaceSurface -match 'Binding Name') "Output Routing rows must expose resolution, frame rate, color-space evidence and the right-side role label."
+Assert-Condition ($productionWorkspaceSurface -match 'OutputHealth\.DiskMetric' -and $productionWorkspaceSurface -match 'OutputHealth\.NetworkMetric' -and $productionWorkspaceSurface -match 'OutputHealth\.TemperatureMetric' -and $productionWorkspaceSurface -match 'controls:RtaimeMetricBar') "System Status must render Disk, Network and Temperature through own thin metric bars."
 Assert-Condition ($outputHealthViewModel -match 'HistoryLimit = 48' -and $outputHealthViewModel -match 'HealthObserved') "Performance histories must be bounded and sample the existing health observation stream."
 Assert-Condition ($outputHealthViewModel -notmatch 'PeriodicTimer|Task\.Delay|PerformanceCounter|ManagementObjectSearcher|nvidia-smi|NVML') "Output health must not add telemetry polling or local hardware probes."
 Assert-Condition ($outputHealthViewModel -notmatch 'RuntimeHost|ControlHost') "Output health must remain a presentation adapter and must not depend directly on host implementations."
-foreach ($metric in @("CPU", "GPU", "MEMORY", "VRAM", "RENDER TIME", "DROPPED FRAMES", "OUTPUT FPS", "DISK", "NETWORK")) {
+foreach ($metric in @("CPU", "GPU", "MEMORY", "VRAM", "RENDER TIME", "DROPPED FRAMES", "OUTPUT FPS", "DISK", "NETWORK", "TEMPERATURE")) {
 	Assert-Condition ($outputHealthViewModel -match [Regex]::Escape($metric)) "Output health metric '$metric' is required."
 }
 Assert-Condition ($outputHealthDocumentation -match 'existing .*CutCommand|existing `OperatorViewModel\.CutCommand`' -and $outputHealthDocumentation -match 'UNAVAILABLE' -and $outputHealthDocumentation -match 'maximum of 48 samples') "Output health documentation must describe authoritative routing, unavailable telemetry and bounded history."
 
 # Compositing node graph.
-Assert-Condition ($shell -match 'CompositingGraphVisibility' -and $shell -match 'StandardViewerVisibility => IsLiveWorkspace \|\| IsCompositingWorkspace') "COMPOSITING must host the dedicated graph instead of duplicating the standard monitor surface."
+Assert-Condition ($shell -match 'CompositingGraphVisibility' -and $shell -match 'StandardViewerVisibility => IsLiveWorkspace \|\| IsCompositingWorkspace \|\| IsEditWorkspace') "COMPOSITING and EDIT must use their dedicated graph/mockup surfaces instead of duplicating the standard monitor surface."
 Assert-Condition ($window -match '<local:CompositingGraphControl' -and $window -match 'DataContext="\{Binding CompositingGraph') "COMPOSITING must render the dedicated node graph through the existing Operator shell."
 Assert-Condition ($windowCode -match 'CompositingGraphViewModel' -and $windowCode -match 'CompositingGraph\.Dispose\(\)') "The Operator window must own and dispose the graph presentation lifecycle."
 Assert-Condition ($compositingGraph -match 'ItemsSource="\{Binding Connections\}"' -and $compositingGraph -match 'ItemsSource="\{Binding Nodes\}"') "Graph connections and node controls must render in separate presentation layers."
