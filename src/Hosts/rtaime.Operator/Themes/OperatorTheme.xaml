@@ -342,4 +342,19 @@
 			</Setter.Value>
 		</Setter>
 	</Style>
+
+	<Style x:Key="OperatorTopBar" TargetType="Border" BasedOn="{StaticResource OperatorPanel}">
+		<Setter Property="Padding" Value="10,7" />
+		<Setter Property="CornerRadius" Value="4" />
+	</Style>
+
+	<Style x:Key="OperatorShellRegion" TargetType="Border" BasedOn="{StaticResource OperatorPanel}">
+		<Setter Property="Padding" Value="10" />
+		<Setter Property="CornerRadius" Value="4" />
+	</Style>
+
+	<Style x:Key="OperatorTransportBar" TargetType="Border" BasedOn="{StaticResource OperatorPanel}">
+		<Setter Property="Padding" Value="8,6" />
+		<Setter Property="CornerRadius" Value="4" />
+	</Style>
 </ResourceDictionary>
