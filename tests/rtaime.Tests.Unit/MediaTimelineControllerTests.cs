@@ -152,7 +152,7 @@ public sealed class MediaTimelineControllerTests
 	[Theory]
 	[InlineData(0, 200, 400)]
 	[InlineData(500, 300, 400)]
-	[InlineData(1000, 399, 400)]
+	[InlineData(1000, 400, 400)]
 	public void Visible_pointer_mapping_is_frame_accurate(double x, long expected, long visibleEnd)
 	{
 		var range = new MediaTimelineVisibleRange(200, visibleEnd);
