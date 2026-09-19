@@ -80,7 +80,7 @@ Projected items are intentionally not shown as `COMMITTED`. They provide timelin
 
 Selecting a Video item, projected resource or cue populates the existing right-side Inspector. No track-specific property dialog exists.
 
-Timeline items support additive Shift selection and Ctrl toggle selection. One item remains the primary Inspector context, while a multi-selection is projected into the same Inspector using common values and explicit `MIXED` values. This selection state is Operator presentation state only and does not create an edit authority.
+Timeline items support additive Shift selection and Ctrl toggle selection. One item remains the primary Inspector context, while a multi-selection is projected into the same Inspector using common values and explicit `MIXED` values. The selected item, its active track and a focused cue use distinct presentation states, and stable selection identities are restored after marker/source projection rebuilds when the same objects remain available. This selection state is Operator presentation state only and does not create an edit authority.
 
 Committed media values are identified as `COMMITTED`. UI-only resource projections remain `METADATA`. Existing desired configuration controls continue to require their existing explicit apply/command paths.
 
