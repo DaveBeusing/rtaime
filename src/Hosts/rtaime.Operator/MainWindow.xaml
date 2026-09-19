@@ -216,7 +216,7 @@
 						</ListBox>
 
 						<TextBlock Text="{Binding MediaPool.EmptyState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-							Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="12">
+							TextWrapping="Wrap" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="12">
 							<TextBlock.Style>
 								<Style TargetType="{x:Type TextBlock}" BasedOn="{StaticResource OperatorLabel}">
 									<Setter Property="Visibility" Value="Visible" />
@@ -804,7 +804,7 @@
 					<ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
 						<StackPanel>
 							<TextBlock Text="No selection. Select a Media Pool resource to inspect verified product state."
-								Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,0,0,10">
+								TextWrapping="Wrap" Margin="0,0,0,10">
 								<TextBlock.Style>
 									<Style TargetType="{x:Type TextBlock}" BasedOn="{StaticResource OperatorLabel}">
 										<Setter Property="Visibility" Value="Visible" />
