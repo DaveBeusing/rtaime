@@ -503,7 +503,7 @@ Assert-Condition ($monitorViewModel -match 'Value="STALE"|State, "STALE"|State\)
 Assert-Condition ($keyboard -match 'new\("fullscreen".+Key\.F11.+shell\.ToggleFullscreenCommand') "Production fullscreen must be keyboard-accessible through F11."
 Assert-Condition ($keyboard -match 'new\("exit-fullscreen".+Key\.Escape.+shell\.ExitFullscreenCommand') "Production fullscreen must provide an Escape path back to windowed operation."
 Assert-Condition ($windowCode -match 'WindowStyle = WindowStyle\.None' -and $windowCode -match 'ResizeMode = ResizeMode\.NoResize' -and $windowCode -match 'WindowStyle = _windowedStyle') "Fullscreen must enter borderless mode and restore windowed chrome."
-Assert-Condition ($window -match 'ResizeDirection="Columns"' -and $window -match 'ResizeDirection="Rows"') "Production shell side panels and lower workspace must be resizable."
+Assert-Condition ($window -match 'OperatorVerticalSplitter' -and $window -match 'OperatorHorizontalSplitter' -and $theme -match 'Property="ResizeDirection" Value="Columns"' -and $theme -match 'Property="ResizeDirection" Value="Rows"') "Production shell side panels and lower workspace must be resizable."
 Assert-Condition ($window -match 'Shell\.ToggleLeftPanelCommand' -and $window -match 'Shell\.ToggleRightPanelCommand' -and $window -match 'Shell\.ToggleCenterMaximizeCommand') "Production shell must expose collapse and center-maximize controls."
 Assert-Condition ($window -match 'DataContext="\{Binding Timeline, RelativeSource=\{RelativeSource AncestorType=\{x:Type Window\}\}\}"') "The timeline must remain available in the persistent lower workspace."
 Assert-Condition ($deck -notmatch '<local:MediaTimelineControl') "Media Deck must not duplicate the shell-hosted timeline."
