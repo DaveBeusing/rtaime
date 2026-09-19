@@ -236,9 +236,10 @@ public partial class MainWindow : Window
 		var item = e.Data.GetDataPresent(typeof(MediaPoolItemViewModel))
 			? e.Data.GetData(typeof(MediaPoolItemViewModel)) as MediaPoolItemViewModel
 			: null;
-		var accepted = item?.Kind == MediaPoolItemKind.Clip &&
-			string.Equals(item.ReferenceId, MediaDeck.SourceId, StringComparison.Ordinal) &&
-			MediaDeck.RefreshCommand.CanExecute(null);
+		var target = sender is MediaTimelineControl control
+			? control.ResolveDropTarget(e.OriginalSource)
+			: null;
+		var accepted = Timeline.CanAcceptMediaPoolDrop(item, target);
 		e.Effects = accepted ? DragDropEffects.Copy : DragDropEffects.None;
 		e.Handled = true;
 	}
@@ -248,13 +249,22 @@ public partial class MainWindow : Window
 		var item = e.Data.GetDataPresent(typeof(MediaPoolItemViewModel))
 			? e.Data.GetData(typeof(MediaPoolItemViewModel)) as MediaPoolItemViewModel
 			: null;
-		if (item?.Kind == MediaPoolItemKind.Clip &&
-			string.Equals(item.ReferenceId, MediaDeck.SourceId, StringComparison.Ordinal) &&
-			MediaDeck.RefreshCommand.CanExecute(null))
+		var target = sender is MediaTimelineControl control
+			? control.ResolveDropTarget(e.OriginalSource)
+			: null;
+		if (item is null || target is null || !Timeline.CanAcceptMediaPoolDrop(item, target))
 		{
-			MediaPool.SelectedItem = item;
-			MediaDeck.RefreshCommand.Execute(null);
+			e.Effects = DragDropEffects.None;
+			e.Handled = true;
+			return;
 		}
+
+		MediaPool.SelectedItem = item;
+		if (item.Kind == MediaPoolItemKind.Clip && MediaDeck.RefreshCommand.CanExecute(null))
+			MediaDeck.RefreshCommand.Execute(null);
+
+		Timeline.ProjectMediaPoolDrop(item, target.Value);
+		e.Effects = DragDropEffects.Copy;
 		e.Handled = true;
 	}
 
