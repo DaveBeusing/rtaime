@@ -35,12 +35,17 @@
 	<Color x:Key="OperatorColorMutedText">#9AA8B8</Color>
 	<Color x:Key="OperatorColorDisabled">#667386</Color>
 	<Color x:Key="OperatorColorAccent">#54A9FF</Color>
+	<Color x:Key="OperatorColorAccentSurface">#1C3145</Color>
+	<Color x:Key="OperatorColorSelectionSurface">#22384D</Color>
 	<Color x:Key="OperatorColorFocus">#CFE7FF</Color>
 
 	<!-- Production semantics. Program and Preview are intentionally never interchangeable. -->
 	<Color x:Key="OperatorColorPreview">#43C785</Color>
+	<Color x:Key="OperatorColorPreviewSurface">#183B2A</Color>
 	<Color x:Key="OperatorColorProgram">#F05A5A</Color>
+	<Color x:Key="OperatorColorProgramSurface">#442326</Color>
 	<Color x:Key="OperatorColorArmed">#E7B84B</Color>
+	<Color x:Key="OperatorColorArmedSurface">#3A321C</Color>
 	<Color x:Key="OperatorColorHealthy">#49C98A</Color>
 	<Color x:Key="OperatorColorWarning">#E7B84B</Color>
 	<Color x:Key="OperatorColorError">#FF6B6B</Color>
