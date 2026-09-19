@@ -161,7 +161,7 @@ Assert-Condition ($requiredGates -match 'Expected exactly one rtaime_media_io\.d
 Assert-Condition ($documentation -match 'Physical hardware qualification state[\s\S]*UNVERIFIED') "Documentation must retain UNVERIFIED until real hardware evidence exists."
 Assert-Condition ($documentation -match 'PinnedHostLease') "Documentation must identify the AP-33 qualified transfer-mode target."
 Assert-Condition ($documentation -match 'DeviceDirectLease.*not advertised') "Documentation must not overstate direct-device transfer support."
-Assert-Condition ($documentation -match 'Deferred to AP-34') "Timing/reference qualification must remain deferred to AP-34."
+Assert-Condition ($documentation -match 'Deferred to Timing/Reference/Latency/Soak Qualification') "Timing/reference qualification must remain deferred to the dedicated timing/reference/latency/soak qualification scope."
 
 $managedContractFiles = @(
 	(Join-Path $repositoryRoot "src/Contracts/rtaime.Media.Contracts/MediaIoContracts.cs"),
