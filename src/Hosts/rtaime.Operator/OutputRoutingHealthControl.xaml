@@ -64,9 +64,9 @@
 										<StackPanel Grid.Column="1">
 											<TextBlock Text="FORMAT" Style="{StaticResource OperatorLabel}" />
 											<TextBlock Style="{StaticResource OperatorValue}">
-												<Run Text="{Binding Resolution}" />
+												<Run Text="{Binding Resolution, Mode=OneWay}" />
 												<Run Text=" · " />
-												<Run Text="{Binding FrameRate}" />
+												<Run Text="{Binding FrameRate, Mode=OneWay}" />
 											</TextBlock>
 											<TextBlock Text="{Binding ColorSpace}" Style="{StaticResource OperatorLabel}" Margin="0,2,0,0" />
 										</StackPanel>
