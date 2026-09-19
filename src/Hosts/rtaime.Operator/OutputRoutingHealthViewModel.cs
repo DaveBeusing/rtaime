@@ -20,6 +20,7 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 	private readonly OutputStatusViewModel _program;
 	private readonly OutputStatusViewModel _cleanProgram;
 	private readonly Dictionary<string, PerformanceMetricViewModel> _metrics;
+	private readonly Dictionary<string, SystemHealthStatusViewModel> _systemHealth;
 	private OutputStatusViewModel? _selectedOutput;
 	private bool _disposed;
 
@@ -53,6 +54,16 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 		};
 		Metrics = new ObservableCollection<PerformanceMetricViewModel>(_metrics.Values);
 
+		_systemHealth = new Dictionary<string, SystemHealthStatusViewModel>(StringComparer.Ordinal)
+		{
+			["engine"] = new("ENGINE"),
+			["control"] = new("CONTROL"),
+			["runtime"] = new("RUNTIME"),
+			["media"] = new("MEDIA"),
+			["gpu"] = new("GPU")
+		};
+		SystemHealth = new ObservableCollection<SystemHealthStatusViewModel>(_systemHealth.Values);
+
 		_control.PropertyChanged += ControlPropertyChanged;
 		_programOutput.PropertyChanged += ProgramOutputPropertyChanged;
 		Refresh(sampleHistory: true);
@@ -62,6 +73,7 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 
 	public ObservableCollection<OutputStatusViewModel> Outputs { get; }
 	public ObservableCollection<PerformanceMetricViewModel> Metrics { get; }
+	public ObservableCollection<SystemHealthStatusViewModel> SystemHealth { get; }
 	public ICommand RoutePreviewToProgramCommand => _control.CutCommand;
 
 	public OutputStatusViewModel? SelectedOutput
@@ -109,6 +121,12 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 		var runtimeDetail = runtimeEvidence == "PASS"
 			? "Program routing reflects the authoritative Runtime state."
 			: _control.EngineHealthDetail;
+
+		UpdateSystemHealth("engine", _control.EngineHealth);
+		UpdateSystemHealth("control", _control.ControlHealth);
+		UpdateSystemHealth("runtime", _control.RuntimeHealth);
+		UpdateSystemHealth("media", _control.MediaHealth);
+		UpdateSystemHealth("gpu", _control.GpuProviderHealth);
 
 		_program.Update(
 			target: "Runtime Program",
@@ -212,6 +230,12 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 		OnPropertyChanged(nameof(AccessState));
 		OnPropertyChanged(nameof(AccessEvidenceState));
 		OnPropertyChanged(nameof(AccessDetail));
+	}
+
+	private void UpdateSystemHealth(string key, string evidenceState)
+	{
+		var normalized = NormalizeEvidence(evidenceState);
+		_systemHealth[key].Update(normalized, ToOperatorStatus(normalized));
 	}
 
 	private void UpdateMetric(
@@ -349,6 +373,39 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
 
 	private sealed record ParsedFormat(string Resolution, string FrameRate, string PixelFormat);
+}
+
+public sealed class SystemHealthStatusViewModel : INotifyPropertyChanged
+{
+	private string _evidenceState = "UNVERIFIED";
+	private string _status = "WARNING";
+
+	public SystemHealthStatusViewModel(string name)
+	{
+		Name = string.IsNullOrWhiteSpace(name) ? throw new ArgumentException("Health name is required.", nameof(name)) : name;
+	}
+
+	public event PropertyChangedEventHandler? PropertyChanged;
+
+	public string Name { get; }
+	public string EvidenceState { get => _evidenceState; private set => Set(ref _evidenceState, value); }
+	public string Status { get => _status; private set => Set(ref _status, value); }
+
+	internal void Update(string evidenceState, string status)
+	{
+		EvidenceState = evidenceState;
+		Status = status;
+	}
+
+	private bool Set<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
+	{
+		if (EqualityComparer<T>.Default.Equals(field, value))
+			return false;
+
+		field = value;
+		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+		return true;
+	}
 }
 
 public sealed class OutputStatusViewModel : INotifyPropertyChanged
