@@ -95,6 +95,8 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	private string _lastEvent = "Operator started. Synchronization pending.";
 	private string _revisionLabel = "REV —";
 	private uint _transitionFrames = 12;
+	private string _previewViewerState = "DISCONNECTED";
+	private string _programViewerState = "DISCONNECTED";
 	private string? _lastError;
 	private bool _isBusy;
 	private bool _isConnected;
@@ -261,8 +263,28 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	public string AudioAfvSourceId { get => _audioAfvSourceId; private set => Set(ref _audioAfvSourceId, value); }
 	public string AudioHealth { get => _audioHealth; private set => Set(ref _audioHealth, value); }
 	public string AudioMeterStatus { get => _audioMeterStatus; private set => Set(ref _audioMeterStatus, value); }
-	public double AudioLeftPeak { get => _audioLeftPeak; private set => Set(ref _audioLeftPeak, value); }
-	public double AudioRightPeak { get => _audioRightPeak; private set => Set(ref _audioRightPeak, value); }
+	public double AudioLeftPeak
+	{
+		get => _audioLeftPeak;
+		private set
+		{
+			if (Set(ref _audioLeftPeak, value))
+				PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(AudioLeftDb)));
+		}
+	}
+
+	public double AudioRightPeak
+	{
+		get => _audioRightPeak;
+		private set
+		{
+			if (Set(ref _audioRightPeak, value))
+				PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(AudioRightDb)));
+		}
+	}
+
+	public string AudioLeftDb => FormatDb(AudioLeftPeak);
+	public string AudioRightDb => FormatDb(AudioRightPeak);
 	public double AudioMasterPeak { get => _audioMasterPeak; private set => Set(ref _audioMasterPeak, value); }
 	public bool AudioClipping { get => _audioClipping; private set => Set(ref _audioClipping, value); }
 	public bool AudioMuted { get => _audioMuted; private set => Set(ref _audioMuted, value); }
@@ -285,6 +307,8 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	public string RecoveryAction { get => _recoveryAction; private set => Set(ref _recoveryAction, value); }
 	public string AffectedComponent { get => _affectedComponent; private set => Set(ref _affectedComponent, value); }
 	public bool StartupComplete { get => _startupComplete; private set => Set(ref _startupComplete, value); }
+	public string PreviewViewerState { get => _previewViewerState; private set => Set(ref _previewViewerState, value); }
+	public string ProgramViewerState { get => _programViewerState; private set => Set(ref _programViewerState, value); }
 
 	public uint TransitionFrames
 	{
@@ -771,6 +795,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		ConnectionDetail = $"Authoritative snapshot loaded. Runtime status: {snapshot.RuntimeStatus}.";
 		_hasSynchronized = true;
 		ApplyLifecycle(snapshot);
+		UpdateViewerStates();
 		if (!IsBusy)
 			TransitionStatus = "READY";
 		RaiseCommandState();
@@ -890,6 +915,54 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 			: health.ObservedAtUtc.ToLocalTime().ToString("HH:mm:ss", CultureInfo.InvariantCulture);
 	}
 
+	private void UpdateViewerStates()
+	{
+		if (IsStale)
+		{
+			PreviewViewerState = "DISCONNECTED";
+			ProgramViewerState = "DISCONNECTED";
+			return;
+		}
+
+		if (!IsConnected)
+		{
+			PreviewViewerState = "RECOVERING";
+			ProgramViewerState = "RECOVERING";
+			return;
+		}
+
+		PreviewViewerState = MapViewerSourceState(
+			Sources.FirstOrDefault(source => source.IsPreview)?.Health,
+			RuntimeStatus);
+		ProgramViewerState = MapViewerSourceState(
+			Sources.FirstOrDefault(source => source.IsProgram)?.Health,
+			RuntimeStatus);
+	}
+
+	private static string MapViewerSourceState(string? sourceHealth, string runtimeStatus)
+	{
+		if (runtimeStatus.Contains("RECOVER", StringComparison.OrdinalIgnoreCase))
+			return "RECOVERING";
+		if (runtimeStatus.Contains("DISCONNECT", StringComparison.OrdinalIgnoreCase) ||
+			runtimeStatus.Contains("OFFLINE", StringComparison.OrdinalIgnoreCase))
+			return "DISCONNECTED";
+
+		return sourceHealth?.Trim().ToUpperInvariant() switch
+		{
+			"LOST" => "NO SIGNAL",
+			"ERROR" or "FAILED" or "OFFLINE" => "SOURCE OFFLINE",
+			"RECOVERING" or "UNSTABLE" or "UNKNOWN" => "RECOVERING",
+			_ => "LIVE"
+		};
+	}
+
+	private static string FormatDb(double peak)
+	{
+		if (peak <= 0)
+			return "−∞";
+		return $"{20.0 * Math.Log10(Math.Clamp(peak, double.Epsilon, 1.0)):0.0}";
+	}
+
 	private static string FormatElapsed(TimeSpan elapsed) =>
 		$"{(int)elapsed.TotalHours:00}:{elapsed.Minutes:00}:{elapsed.Seconds:00}";
 
@@ -982,6 +1055,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		HealthObserved = "STALE";
 		LastError = detail;
 		ApplyLifecycle(_client?.Snapshot);
+		UpdateViewerStates();
 		RaiseCommandState();
 	}
 
@@ -996,6 +1070,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		TransitionStatus = "STARTING";
 		LastError = null;
 		ApplyLifecycle(null);
+		UpdateViewerStates();
 		RaiseCommandState();
 	}
 
