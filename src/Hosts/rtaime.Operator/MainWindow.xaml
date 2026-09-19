@@ -227,7 +227,7 @@
 							ToolTip="Media type and availability filters">
 							<controls:RtaimeListBox.ItemsPanel>
 								<ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
-							</ListBox.ItemsPanel>
+							</controls:RtaimeListBox.ItemsPanel>
 							<controls:RtaimeListBox.ItemContainerStyle>
 								<Style TargetType="{x:Type controls:RtaimeListBoxItem}" BasedOn="{StaticResource {x:Type controls:RtaimeListBoxItem}}">
 									<Setter Property="Padding" Value="7,3" />
@@ -235,7 +235,7 @@
 									<Setter Property="Foreground" Value="{DynamicResource OperatorMutedTextBrush}" />
 									<Setter Property="Template">
 										<Setter.Value>
-											<ControlTemplate TargetType="{x:Type ListBoxItem}">
+											<ControlTemplate TargetType="{x:Type controls:RtaimeListBoxItem}">
 												<Border x:Name="Chip" Padding="{TemplateBinding Padding}" Background="{DynamicResource OperatorRaisedSurfaceBrush}" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" CornerRadius="3">
 													<ContentPresenter />
 												</Border>
@@ -250,7 +250,7 @@
 										</Setter.Value>
 									</Setter>
 								</Style>
-							</ListBox.ItemContainerStyle>
+							</controls:RtaimeListBox.ItemContainerStyle>
 						</controls:RtaimeListBox>
 						<StackPanel Orientation="Horizontal" Margin="0,2,0,0">
 							<Button Content="GRID"
@@ -288,10 +288,10 @@
 										</DataTrigger>
 									</Style.Triggers>
 								</Style>
-							</ListBox.Style>
+							</controls:RtaimeListBox.Style>
 							<controls:RtaimeListBox.ItemsPanel>
 								<ItemsPanelTemplate><local:VirtualizingWrapPanel IsItemsHost="True" ItemWidth="174" ItemHeight="160" /></ItemsPanelTemplate>
-							</ListBox.ItemsPanel>
+							</controls:RtaimeListBox.ItemsPanel>
 							<controls:RtaimeListBox.ItemTemplate>
 								<DataTemplate>
 									<Border Margin="3" Padding="6" BorderThickness="1" BorderBrush="{DynamicResource OperatorBorderBrush}" Background="{DynamicResource OperatorRaisedSurfaceBrush}">
@@ -339,7 +339,7 @@
 										</StackPanel>
 									</Border>
 								</DataTemplate>
-							</ListBox.ItemTemplate>
+							</controls:RtaimeListBox.ItemTemplate>
 						</controls:RtaimeListBox>
 
 						<controls:RtaimeListBox x:Name="MediaAssetList"
@@ -362,10 +362,10 @@
 										<DataTrigger Binding="{Binding MediaPool.IsGridView, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="True"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
 									</Style.Triggers>
 								</Style>
-							</ListBox.Style>
+							</controls:RtaimeListBox.Style>
 							<controls:RtaimeListBox.ItemsPanel>
 								<ItemsPanelTemplate><VirtualizingStackPanel IsItemsHost="True" /></ItemsPanelTemplate>
-							</ListBox.ItemsPanel>
+							</controls:RtaimeListBox.ItemsPanel>
 							<controls:RtaimeListBox.ItemTemplate>
 								<DataTemplate>
 									<Grid Margin="2">
@@ -390,7 +390,7 @@
 										</StackPanel>
 									</Grid>
 								</DataTemplate>
-							</ListBox.ItemTemplate>
+							</controls:RtaimeListBox.ItemTemplate>
 						</controls:RtaimeListBox>
 
 						<TextBlock Text="{Binding MediaPool.EmptyState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
@@ -788,7 +788,7 @@
 											</Grid>
 										</Grid>
 									</DataTemplate>
-								</ListBox.ItemTemplate>
+								</controls:RtaimeListBox.ItemTemplate>
 							</controls:RtaimeListBox>
 						</StackPanel>
 					</Border>
@@ -997,7 +997,7 @@
 							</DockPanel>
 							<ProgressBar Minimum="0" Maximum="1" Value="{Binding AudioMasterPeak, Mode=OneWay}" Style="{StaticResource OperatorMeter}" Margin="0,0,0,12" />
 							<controls:RtaimeListBox ItemsSource="{Binding AudioInputs}" SelectedItem="{Binding SelectedAudioInput}" Style="{StaticResource RtaimeSourceBank}" MaxHeight="190" Margin="0,0,0,10">
-								<controls:RtaimeListBox.ItemContainerStyle><StaticResource ResourceKey="OperatorSourceItem" /></ListBox.ItemContainerStyle>
+								<controls:RtaimeListBox.ItemContainerStyle><StaticResource ResourceKey="OperatorSourceItem" /></controls:RtaimeListBox.ItemContainerStyle>
 								<controls:RtaimeListBox.ItemTemplate>
 									<DataTemplate>
 										<StackPanel>
@@ -1016,7 +1016,7 @@
 											</Grid>
 										</StackPanel>
 									</DataTemplate>
-								</ListBox.ItemTemplate>
+								</controls:RtaimeListBox.ItemTemplate>
 							</controls:RtaimeListBox>
 							<Grid Margin="0,0,0,8">
 								<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="8" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
