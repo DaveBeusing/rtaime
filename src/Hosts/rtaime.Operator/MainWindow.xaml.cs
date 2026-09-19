@@ -23,6 +23,7 @@ public partial class MainWindow : Window
 	private ResizeMode _windowedResizeMode = ResizeMode.CanResize;
 	private WindowState _windowedState = WindowState.Normal;
 	private Point _mediaPoolDragStart;
+	private bool _syncingMediaPoolSelection;
 
 	public MainWindow()
 	{
@@ -269,8 +270,39 @@ public partial class MainWindow : Window
 
 	private void OnMediaPoolSelectionChanged(object sender, SelectionChangedEventArgs e)
 	{
-		if (sender is ListBox listBox)
-			MediaPool.UpdateSelection(listBox.SelectedItems.Cast<MediaPoolItemViewModel>());
+		if (_syncingMediaPoolSelection || sender is not ListBox listBox || !listBox.IsVisible)
+			return;
+
+		MediaPool.UpdateSelection(listBox.SelectedItems.Cast<MediaPoolItemViewModel>());
+	}
+
+	private void OnMediaPoolViewVisibilityChanged(object sender, DependencyPropertyChangedEventArgs e)
+	{
+		if (sender is not ListBox listBox || e.NewValue is not true)
+			return;
+
+		var selectedKeys = MediaPool.SelectedItems
+			.Select(item => item.Key)
+			.ToHashSet(StringComparer.Ordinal);
+		if (selectedKeys.Count == 0 && MediaPool.SelectedItem is { } primary)
+			selectedKeys.Add(primary.Key);
+
+		_syncingMediaPoolSelection = true;
+		try
+		{
+			listBox.SelectedItems.Clear();
+			foreach (var item in listBox.Items.Cast<MediaPoolItemViewModel>())
+			{
+				if (selectedKeys.Contains(item.Key))
+					listBox.SelectedItems.Add(item);
+			}
+		}
+		finally
+		{
+			_syncingMediaPoolSelection = false;
+		}
+
+		MediaPool.UpdateSelection(listBox.SelectedItems.Cast<MediaPoolItemViewModel>());
 	}
 
 	private void OnPreviewDragOver(object sender, DragEventArgs e)
@@ -367,12 +399,19 @@ public partial class MainWindow : Window
 		var item = GetMediaPoolItemFromSender(sender);
 		if (item?.CanRevealInExplorer == true && item.LocalPath is { } path && File.Exists(path))
 		{
-			Process.Start(new ProcessStartInfo
+			try
 			{
-				FileName = "explorer.exe",
-				Arguments = $"/select,\"{path}\"",
-				UseShellExecute = true
-			});
+				Process.Start(new ProcessStartInfo
+				{
+					FileName = "explorer.exe",
+					Arguments = $"/select,\"{path}\"",
+					UseShellExecute = true
+				});
+			}
+			catch (Exception exception) when (exception is Win32Exception or InvalidOperationException)
+			{
+				// Explorer integration is presentation-only; failure must not affect production state.
+			}
 		}
 		e.Handled = true;
 	}
@@ -391,7 +430,7 @@ public partial class MainWindow : Window
 			return item;
 
 		if (sender is MenuItem menuItem &&
-			menuItem.Parent is ContextMenu contextMenu &&
+			ItemsControl.ItemsControlFromItemContainer(menuItem) is ContextMenu contextMenu &&
 			contextMenu.PlacementTarget is FrameworkElement target &&
 			target.DataContext is MediaPoolItemViewModel targetItem)
 		{
