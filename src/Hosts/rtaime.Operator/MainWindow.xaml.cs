@@ -2,6 +2,7 @@
 
 using System.ComponentModel;
 using System.Windows;
+using System.Windows.Controls.Primitives;
 using System.Windows.Threading;
 using Microsoft.Win32;
 using rtaime.Client;
@@ -13,6 +14,10 @@ public partial class MainWindow : Window
 {
 	private bool _shutdownStarted;
 	private bool _shutdownComplete;
+	private bool _fullscreenApplied;
+	private WindowStyle _windowedStyle = WindowStyle.SingleBorderWindow;
+	private ResizeMode _windowedResizeMode = ResizeMode.CanResize;
+	private WindowState _windowedState = WindowState.Normal;
 
 	public MainWindow()
 	{
@@ -43,7 +48,9 @@ public partial class MainWindow : Window
 		ProgramOutput = new ProgramOutputController(
 			Monitoring,
 			new DispatcherSynchronizationContext(Dispatcher));
+		Shell = new OperatorShellViewModel(new OperatorLayoutStore(), SetProductionFullscreen);
 		InitializeComponent();
+		ApplyProductionFullscreen(Shell.IsFullscreen, updateShell: false);
 		DataContext = viewModel;
 		MediaDeck.Start();
 		Monitoring.Start();
@@ -68,7 +75,9 @@ public partial class MainWindow : Window
 		ProgramOutput = new ProgramOutputController(
 			Monitoring,
 			new DispatcherSynchronizationContext(Dispatcher));
+		Shell = new OperatorShellViewModel(new OperatorLayoutStore(), SetProductionFullscreen);
 		InitializeComponent();
+		ApplyProductionFullscreen(Shell.IsFullscreen, updateShell: false);
 		DataContext = viewModel;
 		MediaDeck.Start();
 		viewModel.StartAudioMetering();
@@ -78,6 +87,7 @@ public partial class MainWindow : Window
 
 	public OperatorMonitoringViewModel Monitoring { get; }
 	public ProgramOutputController ProgramOutput { get; }
+	public OperatorShellViewModel Shell { get; }
 	public MediaDeckViewModel MediaDeck { get; }
 	public DemoProductionPackageController DemoProduction { get; }
 	public MediaTimelineViewModel Timeline => MediaDeck.Timeline;
@@ -130,6 +140,7 @@ public partial class MainWindow : Window
 
 	private async void OnClosingAsync(object? sender, CancelEventArgs e)
 	{
+		Shell.Save();
 		if (_shutdownComplete)
 			return;
 
@@ -161,6 +172,53 @@ public partial class MainWindow : Window
 			Closing -= OnClosingAsync;
 			Close();
 		}
+	}
+
+	private void SetProductionFullscreen(bool fullscreen) =>
+		ApplyProductionFullscreen(fullscreen, updateShell: true);
+
+	private void ApplyProductionFullscreen(bool fullscreen, bool updateShell)
+	{
+		if (fullscreen == _fullscreenApplied)
+		{
+			if (updateShell)
+				Shell.SetFullscreenState(fullscreen);
+			return;
+		}
+
+		if (fullscreen)
+		{
+			_windowedStyle = WindowStyle;
+			_windowedResizeMode = ResizeMode;
+			_windowedState = WindowState;
+			WindowState = WindowState.Normal;
+			WindowStyle = WindowStyle.None;
+			ResizeMode = ResizeMode.NoResize;
+			WindowState = WindowState.Maximized;
+		}
+		else
+		{
+			WindowState = WindowState.Normal;
+			WindowStyle = _windowedStyle;
+			ResizeMode = _windowedResizeMode;
+			WindowState = _windowedState == WindowState.Minimized ? WindowState.Normal : _windowedState;
+		}
+
+		_fullscreenApplied = fullscreen;
+		if (updateShell)
+			Shell.SetFullscreenState(fullscreen);
+	}
+
+	private void OnLayoutSplitterDragCompleted(object sender, DragCompletedEventArgs e) =>
+		Shell.Save();
+
+	private void OnHelpClick(object sender, RoutedEventArgs e)
+	{
+		MessageBox.Show(
+			"F11  Fullscreen / Windowed\nEsc  Exit fullscreen\nF5  Synchronize\nCtrl+P  Set selected source to Preview\nSpace  CUT Preview to Program\nCtrl+Space  AUTO Preview to Program\nP / S  Media Play-Pause / Stop\nI / O / M  IN / OUT / Cue",
+			"rtaime Operator — Keyboard Reference",
+			MessageBoxButton.OK,
+			MessageBoxImage.Information);
 	}
 
 	private sealed class UnavailableOperatorControlTransport : IOperatorControlTransport
