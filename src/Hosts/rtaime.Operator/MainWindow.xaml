@@ -167,8 +167,11 @@
 							</ListBox.ItemsPanel>
 							<ListBox.ItemTemplate>
 								<DataTemplate>
-									<Border Width="142" MinHeight="104" Padding="7" Margin="0,0,6,6" BorderThickness="1" BorderBrush="{DynamicResource OperatorBorderBrush}">
+									<Border Width="142" MinHeight="118" Padding="7" Margin="0,0,6,6" BorderThickness="1" BorderBrush="{DynamicResource OperatorBorderBrush}">
 										<StackPanel>
+											<Border Height="52" Background="{DynamicResource OperatorBackgroundBrush}" Margin="0,0,0,5">
+												<Image Source="{Binding Thumbnail}" Stretch="UniformToFill" />
+											</Border>
 											<DockPanel>
 												<TextBlock Text="{Binding Category}" Style="{StaticResource OperatorLabel}" />
 												<TextBlock Text="{Binding State}" Style="{StaticResource OperatorLabel}" DockPanel.Dock="Right" TextTrimming="CharacterEllipsis" MaxWidth="68" />
