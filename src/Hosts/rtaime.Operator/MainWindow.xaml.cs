@@ -272,10 +272,12 @@ public partial class MainWindow : Window
 	{
 		if (selection.Cue is { } cue)
 		{
+			MediaDeck.SelectedCue = MediaDeck.Cues.FirstOrDefault(candidate => candidate.Id == cue.Id);
 			MediaPool.SelectTimelineCue(cue);
 			return;
 		}
 
+		MediaDeck.SelectedCue = null;
 		if (selection.Item is { } item)
 		{
 			MediaPool.SelectTimelineItem(item);
