@@ -26,6 +26,7 @@ $quickControlsPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Operat
 $multiviewPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorMultiviewControl.xaml"
 $multiviewCodePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorMultiviewControl.xaml.cs"
 $mediaPoolPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MediaPoolInspectorViewModel.cs"
+$inspectorHostPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorInspectorControl.xaml"
 $virtualizingWrapPanelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/VirtualizingWrapPanel.cs"
 $deckPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MediaDeckControl.xaml"
 $deckViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MediaDeckViewModel.cs"
@@ -59,7 +60,7 @@ $documentationPath = Join-Path $repositoryRoot "docs/OperatorUiV1.md"
 $workspaceDocumentationPath = Join-Path $repositoryRoot "docs/OperatorWorkspaces.md"
 $mediaLibraryDocumentationPath = Join-Path $repositoryRoot "docs/MediaLibraryAssetBrowser.md"
 
-foreach ($path in @($appPath, $appCodePath, $windowPath, $windowCodePath, $shellPath, $keyboardPath, $quickControlsPath, $multiviewPath, $multiviewCodePath, $mediaPoolPath, $virtualizingWrapPanelPath, $deckPath, $deckViewModelPath, $timelinePath, $timelineCodePath, $timelineViewModelPath, $markerControllerPath, $timelineDocumentationPath, $viewModelPath, $monitorViewModelPath, $programOutputControllerPath, $programOutputWindowPath, $previewViewerPath, $previewViewerCodePath, $programViewerPath, $programViewerCodePath, $monitorViewPath, $sourceTileViewModelPath, $audioInputViewModelPath, $graphicsLoaderPath, $demoControllerPath, $demoManifestPath, $demoProductPath, $demoGraphicsPath, $demoDocumentationPath, $tokensPath, $themePath, $manifestPath, $projectPath, $documentationPath, $workspaceDocumentationPath, $mediaLibraryDocumentationPath)) {
+foreach ($path in @($appPath, $appCodePath, $windowPath, $windowCodePath, $shellPath, $keyboardPath, $quickControlsPath, $multiviewPath, $multiviewCodePath, $mediaPoolPath, $inspectorHostPath, $virtualizingWrapPanelPath, $deckPath, $deckViewModelPath, $timelinePath, $timelineCodePath, $timelineViewModelPath, $markerControllerPath, $timelineDocumentationPath, $viewModelPath, $monitorViewModelPath, $programOutputControllerPath, $programOutputWindowPath, $previewViewerPath, $previewViewerCodePath, $programViewerPath, $programViewerCodePath, $monitorViewPath, $sourceTileViewModelPath, $audioInputViewModelPath, $graphicsLoaderPath, $demoControllerPath, $demoManifestPath, $demoProductPath, $demoGraphicsPath, $demoDocumentationPath, $tokensPath, $themePath, $manifestPath, $projectPath, $documentationPath, $workspaceDocumentationPath, $mediaLibraryDocumentationPath)) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required Operator UI artifact is missing: '$path'."
 }
 
@@ -73,6 +74,8 @@ $quickControls = Get-Content -LiteralPath $quickControlsPath -Raw
 $multiview = Get-Content -LiteralPath $multiviewPath -Raw
 $multiviewCode = Get-Content -LiteralPath $multiviewCodePath -Raw
 $mediaPool = Get-Content -LiteralPath $mediaPoolPath -Raw
+$inspectorHost = Get-Content -LiteralPath $inspectorHostPath -Raw
+$inspectorSurface = "$window`n$inspectorHost"
 $virtualizingWrapPanel = Get-Content -LiteralPath $virtualizingWrapPanelPath -Raw
 $deck = Get-Content -LiteralPath $deckPath -Raw
 $deckViewModel = Get-Content -LiteralPath $deckViewModelPath -Raw
@@ -383,7 +386,7 @@ Assert-Condition ($timelineViewModel -match 'MediaPoolItemKind\.Clip' -and $time
 Assert-Condition ($timelineViewModel -match 'PROJECTED ·' -and $timelineViewModel -match 'CanTrim,?\s*false|false\)') "Unsupported timed Audio/Graphics semantics must remain explicitly projected and non-trimmable."
 Assert-Condition ($timelineViewModel -match '_activeTimelineContextReference' -and $timelineViewModel -match 'snapshot\.Probe\?\.AssetId') "Timeline-only resource projections must reset when the loaded media asset or source context changes."
 Assert-Condition ($windowCode -match 'Timeline\.SelectionChanged \+= OnTimelineSelectionChanged' -and $windowCode -match 'MediaPool\.SelectTimelineItem' -and $windowCode -match 'MediaPool\.SelectTimelineCue') "Timeline selection must project into the existing context Inspector."
-Assert-Condition ($windowCode -match 'MediaDeck\.SelectedCue = MediaDeck\.Cues\.FirstOrDefault' -and $window -match 'MediaDeck\.RenameCueCommand' -and $window -match 'MediaDeck\.DeleteCueCommand') "Selected timeline cues must reuse existing Media Deck rename/delete commands in the shared Inspector."
+Assert-Condition ($windowCode -match 'MediaDeck\.SelectedCue = MediaDeck\.Cues\.FirstOrDefault' -and $inspectorSurface -match 'MediaDeck\.RenameCueCommand' -and $inspectorSurface -match 'MediaDeck\.DeleteCueCommand') "Selected timeline cues must reuse existing Media Deck rename/delete commands in the shared Inspector."
 foreach ($timelinePropertyId in @("timeline.item.label", "timeline.item.start", "timeline.item.in", "timeline.item.out", "timeline.cue.name", "timeline.cue.time")) {
 	Assert-Condition ($mediaPool -match [Regex]::Escape($timelinePropertyId)) "Timeline Inspector stable property id '$timelinePropertyId' is required."
 }
@@ -391,9 +394,18 @@ Assert-Condition ($timelineDocumentation -match 'Runtime remains the execution a
 foreach ($propertyId in @("source.name", "clip.duration", "clip.playback.autoplay", "audio.gain", "graphics.position.x", "ai.provider", "ai.fallback")) {
 	Assert-Condition ($mediaPool -match [Regex]::Escape($propertyId)) "Inspector stable property id '$propertyId' is required."
 }
-Assert-Condition ($window -match 'METADATA is read-only' -and $window -match 'DESIRED edits' -and $window -match 'COMMITTED') "Inspector must visually distinguish metadata, desired configuration and committed state."
-Assert-Condition ($window -match 'MediaDeck\.ApplyPlaybackPolicyCommand' -and $window -match 'Binding ApplyAudioGainCommand' -and $window -match 'Binding ApplyGraphicsCommand') "Inspector edits must reuse existing product command paths."
+Assert-Condition ($inspectorSurface -match 'METADATA is read-only' -and $inspectorSurface -match 'DESIRED edits' -and $inspectorSurface -match 'COMMITTED') "Inspector must visually distinguish metadata, desired configuration and committed state."
+Assert-Condition ($inspectorHost -match 'MediaDeck\.ApplyPlaybackPolicyCommand' -and $inspectorHost -match 'ApplyAudioGainCommand' -and $inspectorHost -match 'ApplyGraphicsCommand') "Inspector edits must reuse existing product command paths."
 Assert-Condition ($mediaPool -notmatch 'OperatorControlClient|NamedPipe|RuntimeHost|ControlHost|AIHost') "Media Pool selection/Inspector projection must not acquire production host or transport authority."
+Assert-Condition ($window -match '<local:OperatorInspectorControl' -and $inspectorHost -match 'Header="Properties"' -and $inspectorHost -match 'Header="Effects / Processing"' -and $inspectorHost -match 'Header="Metadata"') "Inspector must be hosted as a reusable tabbed control."
+Assert-Condition ($mediaPool -match 'BuildMultiSelectionInspector' -and $mediaPool -match '"MIXED"' -and $mediaPool -match 'HasMultipleSelection') "Inspector multi-selection must project common values and explicit mixed state."
+Assert-Condition ($inspectorHost -match 'ValidatesOnExceptions=True' -and $inspectorHost -match 'Validation.ErrorTemplate') "Inspector numeric editors must present inline validation failures."
+foreach ($resetCommand in @("ResetAutoPlayCommand", "ResetEndBehaviorCommand", "ResetAudioGainCommand", "ResetGraphicsPositionXCommand", "ResetGraphicsPositionYCommand", "ResetGraphicsScaleCommand")) {
+	Assert-Condition ($mediaPool -match [Regex]::Escape($resetCommand) -and $inspectorHost -match [Regex]::Escape($resetCommand)) "Inspector reset command '$resetCommand' must be implemented and bound."
+}
+Assert-Condition ($mediaPool -match 'SupportsTransformRotation => false' -and $mediaPool -match 'SupportsTransformAnchor => false' -and $mediaPool -match 'SupportsTransformCrop => false' -and $inspectorHost -match 'Rotation' -and $inspectorHost -match 'Anchor' -and $inspectorHost -match 'Crop') "Unsupported transform capabilities must remain explicit and non-invented."
+Assert-Condition ($mediaPool -match 'SupportsEffectOrdering => false' -and $inspectorHost -match 'UnsupportedEffectOrderingText') "Effect ordering must remain capability-gated when unavailable."
+Assert-Condition ($mediaPool -match '_groupExpansion' -and $mediaPool -match 'SelectionContextKey' -and $inspectorHost -match 'IsTransformExpanded' -and $inspectorHost -match 'IsMetadataExpanded') "Inspector collapse state must be retained per selection context."
 Assert-Condition ($documentation -match 'Media Pool & Context Inspector' -and $documentation -match 'METADATA' -and $documentation -match 'DESIRED' -and $documentation -match 'COMMITTED') "Operator documentation must record Media Pool and Inspector state semantics."
 Assert-Condition ($mediaLibraryDocumentation -match 'virtualiz' -and $mediaLibraryDocumentation -match 'multi-select' -and $mediaLibraryDocumentation -match 'Ctrl\+F' -and $mediaLibraryDocumentation -match 'no second media index') "Media Library documentation must record scalability, selection, shortcut and indexing boundaries."
 
@@ -488,7 +500,7 @@ Assert-Condition ($quickControls -match 'SupportedPropertyIds' -and $quickContro
 foreach ($commandName in @("ApplyPlaybackPolicyCommand", "ApplyAudioGainCommand", "ToggleAudioMuteCommand", "ApplyGraphicsCommand", "ToggleGraphicsCommand", "EnableAIShowcaseCommand", "DisableAIShowcaseCommand")) {
 	Assert-Condition ($quickControls -match [Regex]::Escape($commandName)) "Quick Controls must reuse existing command '$commandName'."
 }
-Assert-Condition ($window -match 'QuickControls\.TogglePinCommand' -and $window -match 'CommandParameter="\{Binding\}"') "Pinnable Inspector values must be able to add/remove Quick Controls."
+Assert-Condition ($inspectorHost -match 'QuickControls\.TogglePinCommand' -and $inspectorHost -match 'CommandParameter="\{Binding\}"') "Pinnable Inspector values must be able to add/remove Quick Controls."
 Assert-Condition ($mediaPool -match '"production\.transition\.frames"' -and $mediaPool -match '"ai\.enabled"') "Inspector must expose stable pinnable production and AI identifiers."
 
 Assert-Condition ($window -match '<local:OperatorMultiviewControl' -and $window -match 'Monitoring\.PreviewImage' -and $window -match 'Monitoring\.ProgramImage') "LIVE multiview must consume the existing Preview/Program monitoring projection."
