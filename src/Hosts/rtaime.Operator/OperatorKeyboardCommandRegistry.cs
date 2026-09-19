@@ -87,19 +87,24 @@ public sealed class OperatorKeyboardCommandRegistry
 		var recording = new ContextSwitchCommand(
 			@operator.StopRecordingCommand,
 			@operator.StartRecordingCommand);
+		var previewTransportContext = new Func<bool>(() =>
+			mediaDeck.IsLoaded &&
+			string.Equals(@operator.PreviewSourceId, mediaDeck.SourceId, StringComparison.Ordinal));
+		ICommand PreviewTransport(ICommand command) => new ContextGuardCommand(command, previewTransportContext);
+
 		return new OperatorKeyboardCommandRegistry(
 		[
 			new("sync", "Synchronize authoritative state", Key.F5, ModifierKeys.None, @operator.SynchronizeCommand, true),
 			new("media-search", "Focus Media Library search", Key.F, ModifierKeys.Control, focusMediaSearchCommand, true),
 			new("preview", "Set selected source to Preview", Key.P, ModifierKeys.Control, @operator.SetPreviewCommand),
-			new("play-pause", "Media Play / Pause", Key.Space, ModifierKeys.None, mediaDeck.TogglePlayPauseCommand),
-			new("pause", "Media Pause", Key.K, ModifierKeys.None, mediaDeck.PauseCommand),
-			new("stop", "Media Stop", Key.S, ModifierKeys.None, mediaDeck.StopCommand),
-			new("set-in", "Set IN", Key.I, ModifierKeys.None, mediaDeck.SetInCommand),
-			new("set-out", "Set OUT", Key.O, ModifierKeys.None, mediaDeck.SetOutCommand),
-			new("add-cue", "Add marker / cue", Key.M, ModifierKeys.None, mediaDeck.AddCueCommand),
-			new("previous-cue", "Previous cue", Key.Up, ModifierKeys.None, timeline.PreviousCueCommand),
-			new("next-cue", "Next cue", Key.Down, ModifierKeys.None, timeline.NextCueCommand),
+			new("play-pause", "Preview Play / Pause", Key.Space, ModifierKeys.None, PreviewTransport(mediaDeck.TogglePlayPauseCommand)),
+			new("pause", "Preview Pause", Key.K, ModifierKeys.None, PreviewTransport(mediaDeck.PauseCommand)),
+			new("stop", "Preview Stop", Key.S, ModifierKeys.None, PreviewTransport(mediaDeck.StopCommand)),
+			new("set-in", "Set Preview IN", Key.I, ModifierKeys.None, PreviewTransport(mediaDeck.SetInCommand)),
+			new("set-out", "Set Preview OUT", Key.O, ModifierKeys.None, PreviewTransport(mediaDeck.SetOutCommand)),
+			new("add-cue", "Add Preview marker / cue", Key.M, ModifierKeys.None, PreviewTransport(mediaDeck.AddCueCommand)),
+			new("previous-cue", "Previous Preview cue", Key.Up, ModifierKeys.None, PreviewTransport(timeline.PreviousCueCommand)),
+			new("next-cue", "Next Preview cue", Key.Down, ModifierKeys.None, PreviewTransport(timeline.NextCueCommand)),
 			new("auto", "AUTO Preview to Program", Key.Return, ModifierKeys.None, @operator.DissolveCommand),
 			new("cut", "CUT Preview to Program", Key.Return, ModifierKeys.Control, @operator.CutCommand),
 			new("record", "Start / Stop Program recording", Key.R, ModifierKeys.None, recording),
@@ -150,6 +155,33 @@ public sealed class OperatorKeyboardCommandRegistry
 			_ => key.ToString()
 		});
 		return string.Join("+", parts);
+	}
+
+	private sealed class ContextGuardCommand : ICommand
+	{
+		private readonly ICommand _inner;
+		private readonly Func<bool> _isContextActive;
+
+		public ContextGuardCommand(ICommand inner, Func<bool> isContextActive)
+		{
+			_inner = inner ?? throw new ArgumentNullException(nameof(inner));
+			_isContextActive = isContextActive ?? throw new ArgumentNullException(nameof(isContextActive));
+			_inner.CanExecuteChanged += OnCanExecuteChanged;
+		}
+
+		public event EventHandler? CanExecuteChanged;
+
+		public bool CanExecute(object? parameter) =>
+			_isContextActive() && _inner.CanExecute(parameter);
+
+		public void Execute(object? parameter)
+		{
+			if (CanExecute(parameter))
+				_inner.Execute(parameter);
+		}
+
+		private void OnCanExecuteChanged(object? sender, EventArgs e) =>
+			CanExecuteChanged?.Invoke(this, EventArgs.Empty);
 	}
 
 	private sealed class ContextSwitchCommand : ICommand
