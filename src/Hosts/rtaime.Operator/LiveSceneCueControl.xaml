@@ -1,0 +1,105 @@
+<!-- Copyright (c) Dave Beusing <david.beusing@gmail.com>. -->
+<UserControl x:Class="rtaime.Operator.LiveSceneCueControl"
+	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	MinWidth="190"
+	AutomationProperties.Name="Live scene and cue selection">
+	<Grid>
+		<Grid.RowDefinitions>
+			<RowDefinition Height="Auto" />
+			<RowDefinition Height="*" />
+			<RowDefinition Height="Auto" />
+			<RowDefinition Height="*" />
+			<RowDefinition Height="Auto" />
+		</Grid.RowDefinitions>
+
+		<DockPanel Grid.Row="0" Margin="0,0,0,8">
+			<TextBlock Text="SCENES / CUES" Style="{StaticResource OperatorSectionTitle}" />
+			<Border Style="{StaticResource OperatorStatusBadge}" DockPanel.Dock="Right">
+				<TextBlock Text="SELECT ≠ TAKE" FontSize="10" FontWeight="Bold" />
+			</Border>
+		</DockPanel>
+
+		<StackPanel Grid.Row="1">
+			<TextBlock Text="SOURCE / SCENE SELECTION" Style="{StaticResource OperatorLabel}" Margin="0,0,0,5" />
+			<ListBox ItemsSource="{Binding Sources}"
+				SelectedItem="{Binding SelectedSource, Mode=TwoWay}"
+				Style="{StaticResource OperatorSourceBank}"
+				ItemContainerStyle="{StaticResource OperatorSourceItem}"
+				MaxHeight="230"
+				AutomationProperties.Name="Live source selection">
+				<ListBox.ItemTemplate>
+					<DataTemplate>
+						<Grid Margin="1">
+							<Grid.ColumnDefinitions>
+								<ColumnDefinition Width="64" />
+								<ColumnDefinition Width="7" />
+								<ColumnDefinition Width="*" />
+							</Grid.ColumnDefinitions>
+							<Border Grid.Column="0" Height="42" Background="Black" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1">
+								<Image Source="{Binding Thumbnail}" Stretch="UniformToFill" />
+							</Border>
+							<StackPanel Grid.Column="2">
+								<DockPanel>
+									<TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+									<TextBlock Text="{Binding Tally}" Style="{StaticResource OperatorLabel}" FontWeight="Bold" DockPanel.Dock="Right" Margin="5,0,0,0" />
+								</DockPanel>
+								<TextBlock Text="{Binding StateDetail}" Style="{StaticResource OperatorLabel}" TextTrimming="CharacterEllipsis" />
+							</StackPanel>
+						</Grid>
+					</DataTemplate>
+				</ListBox.ItemTemplate>
+			</ListBox>
+		</StackPanel>
+
+		<Grid Grid.Row="2" Margin="0,7,0,10">
+			<Grid.ColumnDefinitions>
+				<ColumnDefinition Width="*" />
+				<ColumnDefinition Width="5" />
+				<ColumnDefinition Width="*" />
+			</Grid.ColumnDefinitions>
+			<Button Grid.Column="0" Content="SET PVW"
+				Command="{Binding SetPreviewCommand}"
+				Style="{StaticResource OperatorAccentButton}"
+				ToolTip="Route only the selected source to Preview. Selection alone never routes." />
+			<Button Grid.Column="2" Content="CUT TAKE"
+				Command="{Binding CutCommand}"
+				Style="{StaticResource OperatorProgramButton}"
+				ToolTip="Take the already confirmed Preview source to Program." />
+		</Grid>
+
+		<StackPanel Grid.Row="3">
+			<TextBlock Text="MEDIA CUES" Style="{StaticResource OperatorLabel}" Margin="0,0,0,5" />
+			<ListBox
+				ItemsSource="{Binding MediaDeck.Cues, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+				SelectedItem="{Binding MediaDeck.SelectedCue, RelativeSource={RelativeSource AncestorType={x:Type Window}}, Mode=TwoWay}"
+				Style="{StaticResource OperatorSourceBank}"
+				ItemContainerStyle="{StaticResource OperatorSourceItem}"
+				MaxHeight="190"
+				AutomationProperties.Name="Live media cue selection">
+				<ListBox.ItemTemplate>
+					<DataTemplate>
+						<DockPanel Margin="1">
+							<TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+							<TextBlock Text="{Binding Timecode}" Style="{StaticResource OperatorTimecode}" DockPanel.Dock="Right" Margin="8,0,0,0" />
+						</DockPanel>
+					</DataTemplate>
+				</ListBox.ItemTemplate>
+			</ListBox>
+			<Button Content="JUMP SELECTED CUE"
+				Command="{Binding MediaDeck.JumpCueCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+				Style="{StaticResource OperatorButton}"
+				Margin="0,6,0,0"
+				ToolTip="Execute the selected media cue through the existing marker/timeline command path." />
+		</StackPanel>
+
+		<Border Grid.Row="4" Style="{StaticResource OperatorStatusBadge}" Margin="0,10,0,0">
+			<StackPanel>
+				<TextBlock Text="SCENE ACTIVATION" Style="{StaticResource OperatorLabel}" />
+				<TextBlock Text="NOT AVAILABLE IN V1 CONTRACT" FontWeight="SemiBold" Margin="0,2,0,0" />
+				<TextBlock Text="Current scene/layer presentation reuses the governed graphics controls; no scene command is synthesized here."
+					Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,4,0,0" />
+			</StackPanel>
+		</Border>
+	</Grid>
+</UserControl>

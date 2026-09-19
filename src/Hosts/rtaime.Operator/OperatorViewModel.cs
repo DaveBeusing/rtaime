@@ -836,6 +836,15 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 			?? AudioInputs.FirstOrDefault(input => input.IsAfv)
 			?? AudioInputs.FirstOrDefault();
 
+		foreach (var source in Sources)
+		{
+			var input = AudioInputs.FirstOrDefault(candidate => string.Equals(candidate.SourceId, source.Id, StringComparison.Ordinal));
+			if (input is null)
+				source.ClearAudioMeter();
+			else
+				source.ApplyAudioMeter(input.LeftPeak, input.RightPeak, input.Clipping);
+		}
+
 		var program = snapshot.AudioProgram;
 		AudioAfvSourceId = program.ActiveVideoSourceId;
 		AudioAfvSourceName = ResolveSourceName(snapshot, program.ActiveVideoSourceId);
