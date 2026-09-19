@@ -9,8 +9,6 @@ internal readonly record struct Mp4LocalMediaMetadata(
 	uint Height,
 	long FrameRateNumerator,
 	long FrameRateDenominator,
-	uint AudioChannels,
-	uint AudioSampleRate,
 	TimeSpan Duration);
 
 internal static class Mp4LocalMediaMetadataReader
@@ -27,10 +25,6 @@ internal static class Mp4LocalMediaMetadataReader
 	private const uint Stsd = 0x73747364;
 	private const uint Stts = 0x73747473;
 	private const uint Vide = 0x76696465;
-	private const uint Soun = 0x736F756E;
-	private const uint Avc1 = 0x61766331;
-	private const uint Avc3 = 0x61766333;
-	private const uint Mp4a = 0x6D703461;
 
 	public static Mp4LocalMediaMetadata Read(string path)
 	{
@@ -43,9 +37,6 @@ internal static class Mp4LocalMediaMetadataReader
 		uint? height = null;
 		long? frameRateNumerator = null;
 		long? frameRateDenominator = null;
-		uint? channels = null;
-		uint? sampleRate = null;
-
 		foreach (var track in Children(moov, 0, moov.Length).Where(box => box.Type == Trak))
 		{
 			var media = RequireChild(moov, track.PayloadOffset, track.PayloadLength, Mdia, "mdia");
@@ -59,22 +50,15 @@ internal static class Mp4LocalMediaMetadataReader
 
 			if (handlerType == Vide)
 			{
-				var videoEntry = ReadFirstSampleEntry(moov, sampleDescription, new[] { Avc1, Avc3 }, "avc1/avc3");
+				var videoEntry = ReadFirstSampleEntry(moov, sampleDescription);
 				(width, height) = ReadVisualSampleEntryDimensions(moov, videoEntry);
 				var timing = RequireChild(moov, sampleTable.PayloadOffset, sampleTable.PayloadLength, Stts, "stts");
 				(frameRateNumerator, frameRateDenominator) = ReadFrameRate(moov, timing, mediaTimescale);
-			}
-			else if (handlerType == Soun)
-			{
-				var audioEntry = ReadFirstSampleEntry(moov, sampleDescription, Mp4a, "mp4a");
-				(channels, sampleRate) = ReadAudioSampleEntry(moov, audioEntry);
 			}
 		}
 
 		if (width is null || height is null || frameRateNumerator is null || frameRateDenominator is null)
 			throw new InvalidDataException("MP4 video metadata is incomplete.");
-		if (channels is null || sampleRate is null)
-			throw new InvalidDataException("MP4 audio metadata is incomplete.");
 		if (duration <= TimeSpan.Zero)
 			throw new InvalidDataException("MP4 duration must be greater than zero.");
 
@@ -83,8 +67,6 @@ internal static class Mp4LocalMediaMetadataReader
 			height.Value,
 			frameRateNumerator.Value,
 			frameRateDenominator.Value,
-			channels.Value,
-			sampleRate.Value,
 			duration);
 	}
 
@@ -244,24 +226,13 @@ internal static class Mp4LocalMediaMetadataReader
 		return TimeSpan.FromTicks(ticks);
 	}
 
-	private static BufferBox ReadFirstSampleEntry(byte[] buffer, BufferBox stsd, uint expectedType, string expectedName) =>
-		ReadFirstSampleEntry(buffer, stsd, new[] { expectedType }, expectedName);
-
-	private static BufferBox ReadFirstSampleEntry(
-		byte[] buffer,
-		BufferBox stsd,
-		IReadOnlyCollection<uint> expectedTypes,
-		string expectedName)
+	private static BufferBox ReadFirstSampleEntry(byte[] buffer, BufferBox stsd)
 	{
 		EnsurePayloadLength(stsd, 16, "stsd");
 		var entryCount = BinaryPrimitives.ReadUInt32BigEndian(buffer.AsSpan(stsd.PayloadOffset + 4, 4));
 		if (entryCount == 0)
 			throw new InvalidDataException("MP4 stsd contains no sample descriptions.");
-		var entryOffset = stsd.PayloadOffset + 8;
-		var entry = ReadBufferBox(buffer, entryOffset, stsd.Offset + stsd.Length);
-		if (!expectedTypes.Contains(entry.Type))
-			throw new InvalidDataException($"MP4 sample description is not a supported '{expectedName}' type.");
-		return entry;
+		return ReadBufferBox(buffer, stsd.PayloadOffset + 8, stsd.Offset + stsd.Length);
 	}
 
 	private static (uint Width, uint Height) ReadVisualSampleEntryDimensions(byte[] buffer, BufferBox entry)
@@ -273,18 +244,6 @@ internal static class Mp4LocalMediaMetadataReader
 		if (width == 0 || height == 0)
 			throw new InvalidDataException("MP4 visual sample dimensions must be greater than zero.");
 		return (width, height);
-	}
-
-	private static (uint Channels, uint SampleRate) ReadAudioSampleEntry(byte[] buffer, BufferBox entry)
-	{
-		if (entry.Length < 36)
-			throw new InvalidDataException("MP4 audio sample entry is truncated.");
-		var channels = BinaryPrimitives.ReadUInt16BigEndian(buffer.AsSpan(entry.Offset + 24, 2));
-		var packedSampleRate = BinaryPrimitives.ReadUInt32BigEndian(buffer.AsSpan(entry.Offset + 32, 4));
-		var sampleRate = packedSampleRate >> 16;
-		if (channels == 0 || sampleRate == 0)
-			throw new InvalidDataException("MP4 audio channel count and sample rate must be greater than zero.");
-		return (channels, sampleRate);
 	}
 
 	private static (long Numerator, long Denominator) ReadFrameRate(byte[] buffer, BufferBox stts, uint timescale)

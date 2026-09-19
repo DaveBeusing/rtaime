@@ -151,7 +151,9 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 	public string VideoCodec => _snapshot.Probe?.VideoCodec.ToString().ToUpperInvariant() ?? "—";
 	public string AudioCodec => _snapshot.Probe is null
 		? "—"
-		: $"{_snapshot.Probe.AudioCodec.ToString().ToUpperInvariant()} · {_snapshot.Probe.AudioFormat.ChannelCount}ch · {_snapshot.Probe.AudioFormat.SampleRate / 1000.0:0.#} kHz";
+		: _snapshot.Probe.AudioCodec == MediaAudioCodec.None
+			? "NO AUDIO"
+			: $"{_snapshot.Probe.AudioCodec.ToString().ToUpperInvariant()} · {_snapshot.Probe.AudioFormat.ChannelCount}ch · {_snapshot.Probe.AudioFormat.SampleRate / 1000.0:0.#} kHz";
 	public string Duration => Timeline.DurationTimecode;
 	public string Current => Timeline.CurrentTimecode;
 	public string Remaining => _snapshot.Transport is null

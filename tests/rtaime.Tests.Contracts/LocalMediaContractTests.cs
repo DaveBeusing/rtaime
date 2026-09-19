@@ -36,6 +36,70 @@ public sealed class LocalMediaContractTests
 	}
 
 	[Fact]
+	public void Probe_accepts_video_only_media()
+	{
+		var probe = new LocalMediaProbe(
+			MediaContractVersion.Current,
+			MediaAssetId.New(),
+			MediaSourceId.New(),
+			"silent.mp4",
+			MediaContainerFormat.Mp4,
+			MediaVideoCodec.H264,
+			MediaAudioCodec.None,
+			VideoFormat.Hd1080p50Rgba8,
+			AudioFormat.Stereo48kFloat32,
+			TimeSpan.FromSeconds(5));
+
+		Assert.Equal(MediaAudioCodec.None, probe.AudioCodec);
+	}
+
+	[Theory]
+	[InlineData(MediaVideoCodec.H264)]
+	[InlineData(MediaVideoCodec.Hevc)]
+	[InlineData(MediaVideoCodec.Av1)]
+	[InlineData(MediaVideoCodec.Vp9)]
+	[InlineData(MediaVideoCodec.Mpeg4Part2)]
+	[InlineData(MediaVideoCodec.Vc1)]
+	[InlineData(MediaVideoCodec.Mjpeg)]
+	public void Probe_accepts_supported_video_codecs(MediaVideoCodec codec)
+	{
+		var probe = new LocalMediaProbe(
+			MediaContractVersion.Current,
+			MediaAssetId.New(),
+			MediaSourceId.New(),
+			"codec.mp4",
+			MediaContainerFormat.Mp4,
+			codec,
+			MediaAudioCodec.None,
+			VideoFormat.Hd1080p50Rgba8,
+			AudioFormat.Stereo48kFloat32,
+			TimeSpan.FromSeconds(2));
+
+		Assert.Equal(codec, probe.VideoCodec);
+	}
+
+	[Theory]
+	[InlineData(MediaAudioCodec.Aac)]
+	[InlineData(MediaAudioCodec.Mp3)]
+	[InlineData(MediaAudioCodec.Pcm)]
+	public void Probe_accepts_supported_audio_codecs(MediaAudioCodec codec)
+	{
+		var probe = new LocalMediaProbe(
+			MediaContractVersion.Current,
+			MediaAssetId.New(),
+			MediaSourceId.New(),
+			"audio.mp4",
+			MediaContainerFormat.Mp4,
+			MediaVideoCodec.H264,
+			codec,
+			VideoFormat.Hd1080p50Rgba8,
+			AudioFormat.Stereo48kFloat32,
+			TimeSpan.FromSeconds(2));
+
+		Assert.Equal(codec, probe.AudioCodec);
+	}
+
+	[Fact]
 	public void Probe_rejects_zero_duration()
 	{
 		Assert.Throws<ArgumentOutOfRangeException>(() => new LocalMediaProbe(

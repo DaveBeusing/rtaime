@@ -20,6 +20,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 	private readonly IMFSourceReader _reader;
 	private readonly MediaAssetId _assetId;
 	private readonly MediaSourceId _sourceId;
+	private readonly bool _hasAudio;
 	private long? _pendingSeekTimestamp;
 	private bool _disposed;
 
@@ -27,12 +28,14 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 		IMFSourceReader reader,
 		MediaAssetId assetId,
 		MediaSourceId sourceId,
-		LocalMediaProbe probe)
+		LocalMediaProbe probe,
+		bool hasAudio)
 	{
 		_reader = reader;
 		_assetId = assetId;
 		_sourceId = sourceId;
 		Probe = probe;
+		_hasAudio = hasAudio;
 	}
 
 	public LocalMediaProbe Probe { get; }
@@ -67,25 +70,31 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 
 			MediaFoundation.ThrowIfFailed(reader.SetStreamSelection(MediaFoundation.AllStreams, false));
 			MediaFoundation.ThrowIfFailed(reader.SetStreamSelection(MediaFoundation.FirstVideoStream, true));
-			MediaFoundation.ThrowIfFailed(reader.SetStreamSelection(MediaFoundation.FirstAudioStream, true));
 
 			var videoNative = GetNativeMediaType(reader, MediaFoundation.FirstVideoStream);
-			var audioNative = GetNativeMediaType(reader, MediaFoundation.FirstAudioStream);
+			var audioNative = TryGetNativeMediaType(reader, MediaFoundation.FirstAudioStream);
 			try
 			{
 				var videoMajor = GetGuid(videoNative, MediaFoundation.MfMtMajorType);
 				var videoSubtype = GetGuid(videoNative, MediaFoundation.MfMtSubtype);
 				if (videoMajor != MediaFoundation.MfMediaTypeVideo)
 					return RejectAndRelease("media.file.video_stream_invalid", "The local media video stream has an invalid major type.", reader, mediaFoundationStarted);
-				if (videoSubtype != MediaFoundation.MfVideoFormatH264)
-					return RejectAndRelease("media.file.video_codec_unsupported", "V1 local media supports H.264 video only.", reader, mediaFoundationStarted);
 
-				var audioMajor = GetGuid(audioNative, MediaFoundation.MfMtMajorType);
-				var audioSubtype = GetGuid(audioNative, MediaFoundation.MfMtSubtype);
-				if (audioMajor != MediaFoundation.MfMediaTypeAudio)
-					return RejectAndRelease("media.file.audio_stream_invalid", "The local media audio stream has an invalid major type.", reader, mediaFoundationStarted);
-				if (audioSubtype != MediaFoundation.MfAudioFormatAac)
-					return RejectAndRelease("media.file.audio_codec_unsupported", "V1 local media supports embedded AAC audio only.", reader, mediaFoundationStarted);
+				var videoCodec = ResolveVideoCodec(videoSubtype);
+				if (videoCodec is null)
+				{
+					return RejectAndRelease(
+						"media.file.video_codec_unsupported",
+						$"The MP4 video subtype '{videoSubtype}' is not supported by the local media path.",
+						reader,
+						mediaFoundationStarted);
+				}
+
+				var audioCodec = audioNative is not null &&
+					TryGetGuid(audioNative, MediaFoundation.MfMtMajorType) == MediaFoundation.MfMediaTypeAudio
+						? ResolveAudioCodec(TryGetGuid(audioNative, MediaFoundation.MfMtSubtype))
+						: MediaAudioCodec.None;
+				var hasAudio = audioCodec != MediaAudioCodec.None;
 
 				var metadata = Mp4LocalMediaMetadataReader.Read(path);
 				if (metadata.FrameRateNumerator <= 0 || metadata.FrameRateDenominator <= 0)
@@ -95,6 +104,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 
 				var averageBitRate = TryGetUInt32(videoNative, MediaFoundation.MfMtAvgBitrate);
 				var inputProfile = new LocalMediaInputProfile(
+					videoCodec.Value,
 					metadata.Width,
 					metadata.Height,
 					new FrameRate(metadata.FrameRateNumerator, metadata.FrameRateDenominator),
@@ -103,9 +113,12 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 					return RejectAndRelease(inputFailure.Code, inputFailure.Message, reader, mediaFoundationStarted);
 
 				ConfigureDecodedVideo(reader, MediaFoundation.FirstVideoStream, outputFormat);
-				ConfigureDecodedAudio(reader, MediaFoundation.FirstAudioStream);
 				MediaFoundation.ThrowIfFailed(reader.SetStreamSelection(MediaFoundation.FirstVideoStream, true));
-				MediaFoundation.ThrowIfFailed(reader.SetStreamSelection(MediaFoundation.FirstAudioStream, true));
+				if (hasAudio)
+				{
+					MediaFoundation.ThrowIfFailed(reader.SetStreamSelection(MediaFoundation.FirstAudioStream, true));
+					ConfigureDecodedAudio(reader, MediaFoundation.FirstAudioStream);
+				}
 
 				var probe = new LocalMediaProbe(
 					MediaContractVersion.Current,
@@ -113,8 +126,8 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 					sourceId,
 					System.IO.Path.GetFileName(path),
 					MediaContainerFormat.Mp4,
-					MediaVideoCodec.H264,
-					MediaAudioCodec.Aac,
+					videoCodec.Value,
+					audioCodec,
 					outputFormat,
 					AudioFormat.Stereo48kFloat32,
 					metadata.Duration);
@@ -123,7 +136,8 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 					reader,
 					assetId,
 					sourceId,
-					probe));
+					probe,
+					hasAudio));
 			}
 			finally
 			{
@@ -221,41 +235,44 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 
 		AudioBufferDescriptor? audio = null;
 		ReadOnlyMemory<byte> audioPayload = ReadOnlyMemory<byte>.Empty;
-		long audioTimestamp;
-		byte[] decodedAudio;
-		bool audioAvailable;
-		try
+		if (_hasAudio)
 		{
-			audioAvailable = TryReadSample(
-				MediaFoundation.FirstAudioStream,
-				minimumTimestamp,
-				copy2DContiguous: false,
-				out audioTimestamp,
-				out decodedAudio);
-		}
-		catch (ExternalException exception)
-		{
-			throw new InvalidDataException($"Audio sample read failed: {exception.Message}", exception);
-		}
-
-		if (audioAvailable && decodedAudio.Length > 0)
-		{
-			var bytesPerPcmFrame = checked((int)Probe.AudioFormat.ChannelCount * sizeof(short));
-			if (decodedAudio.Length % bytesPerPcmFrame != 0)
-				throw new InvalidDataException("Decoded local media PCM payload is not aligned to complete stereo Int16 samples.");
-			var sampleCount = checked((uint)(decodedAudio.Length / bytesPerPcmFrame));
-			if (sampleCount > 0)
+			long audioTimestamp;
+			byte[] decodedAudio;
+			bool audioAvailable;
+			try
 			{
-				var floatAudio = ConvertPcm16ToFloat32(decodedAudio);
-				var audioSamplePosition = TimestampToAudioSamplePosition(audioTimestamp, Probe.AudioFormat.SampleRate);
-				audio = new AudioBufferDescriptor(
-					MediaContractVersion.Current,
-					new AudioStreamId(LocalMediaIdentity.Create("audio-stream", _assetId.ToString())),
-					Probe.AudioFormat,
-					LocalMediaIdentity.Create("timing-domain", _assetId.ToString()),
-					new AudioBufferTiming(audioSamplePosition, sampleCount, audioTimestamp, MediaFoundationTimebase),
-					new OpaqueAudioHandle("local.media.audio.float32", $"{_assetId}:{sequenceNumber}"));
-				audioPayload = floatAudio;
+				audioAvailable = TryReadSample(
+					MediaFoundation.FirstAudioStream,
+					minimumTimestamp,
+					copy2DContiguous: false,
+					out audioTimestamp,
+					out decodedAudio);
+			}
+			catch (ExternalException exception)
+			{
+				throw new InvalidDataException($"Audio sample read failed: {exception.Message}", exception);
+			}
+
+			if (audioAvailable && decodedAudio.Length > 0)
+			{
+				var bytesPerPcmFrame = checked((int)Probe.AudioFormat.ChannelCount * sizeof(short));
+				if (decodedAudio.Length % bytesPerPcmFrame != 0)
+					throw new InvalidDataException("Decoded local media PCM payload is not aligned to complete stereo Int16 samples.");
+				var sampleCount = checked((uint)(decodedAudio.Length / bytesPerPcmFrame));
+				if (sampleCount > 0)
+				{
+					var floatAudio = ConvertPcm16ToFloat32(decodedAudio);
+					var audioSamplePosition = TimestampToAudioSamplePosition(audioTimestamp, Probe.AudioFormat.SampleRate);
+					audio = new AudioBufferDescriptor(
+						MediaContractVersion.Current,
+						new AudioStreamId(LocalMediaIdentity.Create("audio-stream", _assetId.ToString())),
+						Probe.AudioFormat,
+						LocalMediaIdentity.Create("timing-domain", _assetId.ToString()),
+						new AudioBufferTiming(audioSamplePosition, sampleCount, audioTimestamp, MediaFoundationTimebase),
+						new OpaqueAudioHandle("local.media.audio.float32", $"{_assetId}:{sequenceNumber}"));
+					audioPayload = floatAudio;
+				}
 			}
 		}
 
@@ -452,10 +469,67 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 		return mediaType;
 	}
 
+	private static IMFMediaType? TryGetNativeMediaType(IMFSourceReader reader, uint streamIndex)
+	{
+		var result = reader.GetNativeMediaType(streamIndex, 0, out var mediaType);
+		if (result >= 0)
+			return mediaType;
+
+		MediaFoundation.ReleaseComObject(mediaType);
+		return null;
+	}
+
 	private static Guid GetGuid(IMFMediaType attributes, Guid key)
 	{
 		MediaFoundation.ThrowIfFailed(attributes.GetGUID(ref key, out var value));
 		return value;
+	}
+
+	private static Guid? TryGetGuid(IMFMediaType attributes, Guid key)
+	{
+		var result = attributes.GetGUID(ref key, out var value);
+		return result >= 0 ? value : null;
+	}
+
+	private static MediaVideoCodec? ResolveVideoCodec(Guid subtype)
+	{
+		if (subtype == MediaFoundation.MfVideoFormatH264 ||
+			subtype == MediaFoundation.MfMpeg4FormatAvc1 ||
+			subtype == MediaFoundation.MfMpeg4FormatAvc3)
+			return MediaVideoCodec.H264;
+		if (subtype == MediaFoundation.MfVideoFormatHevc ||
+			subtype == MediaFoundation.MfMpeg4FormatHvc1 ||
+			subtype == MediaFoundation.MfMpeg4FormatHev1)
+			return MediaVideoCodec.Hevc;
+		if (subtype == MediaFoundation.MfVideoFormatAv1 ||
+			subtype == MediaFoundation.MfMpeg4FormatAv01)
+			return MediaVideoCodec.Av1;
+		if (subtype == MediaFoundation.MfVideoFormatVp90 ||
+			subtype == MediaFoundation.MfMpeg4FormatVp09)
+			return MediaVideoCodec.Vp9;
+		if (subtype == MediaFoundation.MfVideoFormatM4S2 ||
+			subtype == MediaFoundation.MfVideoFormatMp4V ||
+			subtype == MediaFoundation.MfMpeg4FormatMp4V)
+			return MediaVideoCodec.Mpeg4Part2;
+		if (subtype == MediaFoundation.MfVideoFormatWvc1 ||
+			subtype == MediaFoundation.MfMpeg4FormatVc1)
+			return MediaVideoCodec.Vc1;
+		if (subtype == MediaFoundation.MfVideoFormatMjpg ||
+			subtype == MediaFoundation.MfMpeg4FormatJpeg)
+			return MediaVideoCodec.Mjpeg;
+
+		return null;
+	}
+
+	private static MediaAudioCodec ResolveAudioCodec(Guid? subtype)
+	{
+		if (subtype == MediaFoundation.MfAudioFormatAac)
+			return MediaAudioCodec.Aac;
+		if (subtype == MediaFoundation.MfAudioFormatMp3)
+			return MediaAudioCodec.Mp3;
+		if (subtype == MediaFoundation.MfAudioFormatPcm)
+			return MediaAudioCodec.Pcm;
+		return MediaAudioCodec.None;
 	}
 
 	private static uint? TryGetUInt32(IMFMediaType attributes, Guid key)
@@ -587,8 +661,25 @@ internal static class MediaFoundation
 	public static Guid MfMediaTypeVideo = new("73646976-0000-0010-8000-00AA00389B71");
 	public static Guid MfMediaTypeAudio = new("73647561-0000-0010-8000-00AA00389B71");
 	public static Guid MfVideoFormatH264 = new("34363248-0000-0010-8000-00AA00389B71");
+	public static Guid MfVideoFormatHevc = new("43564548-0000-0010-8000-00AA00389B71");
+	public static Guid MfVideoFormatAv1 = new("31305641-0000-0010-8000-00AA00389B71");
+	public static Guid MfVideoFormatVp90 = new("30395056-0000-0010-8000-00AA00389B71");
+	public static Guid MfVideoFormatM4S2 = new("3253344D-0000-0010-8000-00AA00389B71");
+	public static Guid MfVideoFormatMp4V = new("5634504D-0000-0010-8000-00AA00389B71");
+	public static Guid MfVideoFormatWvc1 = new("31435657-0000-0010-8000-00AA00389B71");
+	public static Guid MfVideoFormatMjpg = new("47504A4D-0000-0010-8000-00AA00389B71");
+	public static Guid MfMpeg4FormatAvc1 = new("31637661-0000-0010-8000-00AA00389B71");
+	public static Guid MfMpeg4FormatAvc3 = new("33637661-0000-0010-8000-00AA00389B71");
+	public static Guid MfMpeg4FormatHvc1 = new("31637668-0000-0010-8000-00AA00389B71");
+	public static Guid MfMpeg4FormatHev1 = new("31766568-0000-0010-8000-00AA00389B71");
+	public static Guid MfMpeg4FormatAv01 = new("31307661-0000-0010-8000-00AA00389B71");
+	public static Guid MfMpeg4FormatVp09 = new("39307076-0000-0010-8000-00AA00389B71");
+	public static Guid MfMpeg4FormatMp4V = new("7634706D-0000-0010-8000-00AA00389B71");
+	public static Guid MfMpeg4FormatVc1 = new("312D6376-0000-0010-8000-00AA00389B71");
+	public static Guid MfMpeg4FormatJpeg = new("6765706A-0000-0010-8000-00AA00389B71");
 	public static Guid MfVideoFormatNv12 = new("3231564E-0000-0010-8000-00AA00389B71");
 	public static Guid MfAudioFormatAac = new("00001610-0000-0010-8000-00AA00389B71");
+	public static Guid MfAudioFormatMp3 = new("00000055-0000-0010-8000-00AA00389B71");
 	public static Guid MfAudioFormatPcm = new("00000001-0000-0010-8000-00AA00389B71");
 
 	[DllImport("mfplat.dll", ExactSpelling = true)]

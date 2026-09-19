@@ -2,6 +2,7 @@
 
 using rtaime.Core;
 using rtaime.Media;
+using rtaime.Media.Contracts;
 
 namespace rtaime.Tests.Unit;
 
@@ -28,6 +29,7 @@ public sealed class LocalMediaInputPolicyTests
 		int averageBitRate)
 	{
 		var profile = new LocalMediaInputProfile(
+			MediaVideoCodec.H264,
 			checked((uint)width),
 			checked((uint)height),
 			new FrameRate(frameRateNumerator, frameRateDenominator),
@@ -40,6 +42,7 @@ public sealed class LocalMediaInputPolicyTests
 	public void Missing_bitrate_metadata_does_not_reject_an_otherwise_supported_stream()
 	{
 		var profile = new LocalMediaInputProfile(
+			MediaVideoCodec.H264,
 			1920,
 			1080,
 			FrameRate.Fps50,
@@ -64,6 +67,7 @@ public sealed class LocalMediaInputPolicyTests
 		string expectedCode)
 	{
 		var profile = new LocalMediaInputProfile(
+			MediaVideoCodec.H264,
 			checked((uint)width),
 			checked((uint)height),
 			new FrameRate(frameRateNumerator, frameRateDenominator),
@@ -73,5 +77,24 @@ public sealed class LocalMediaInputPolicyTests
 
 		Assert.NotNull(failure);
 		Assert.Equal(expectedCode, failure.Value.Code);
+	}
+
+	[Theory]
+	[InlineData(MediaVideoCodec.Hevc)]
+	[InlineData(MediaVideoCodec.Av1)]
+	[InlineData(MediaVideoCodec.Vp9)]
+	[InlineData(MediaVideoCodec.Mpeg4Part2)]
+	[InlineData(MediaVideoCodec.Vc1)]
+	[InlineData(MediaVideoCodec.Mjpeg)]
+	public void Non_H264_codecs_use_the_general_MP4_admission_envelope(MediaVideoCodec codec)
+	{
+		var profile = new LocalMediaInputProfile(
+			codec,
+			3840,
+			2160,
+			new FrameRate(60, 1),
+			100_000_000);
+
+		Assert.Null(LocalMediaInputPolicy.Validate(profile));
 	}
 }

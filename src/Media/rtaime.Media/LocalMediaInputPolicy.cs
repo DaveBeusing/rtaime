@@ -1,10 +1,12 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 using rtaime.Core;
+using rtaime.Media.Contracts;
 
 namespace rtaime.Media;
 
 public readonly record struct LocalMediaInputProfile(
+	MediaVideoCodec Codec,
 	uint Width,
 	uint Height,
 	FrameRate FrameRate,
@@ -27,7 +29,7 @@ public static class LocalMediaInputPolicy
 		{
 			return new Failure(
 				"media.file.resolution_unsupported",
-				$"H.264 input resolution '{profile.Width}x{profile.Height}' is outside the supported range " +
+				$"{profile.Codec} input resolution '{profile.Width}x{profile.Height}' is outside the supported range " +
 				$"{MinimumWidth}x{MinimumHeight}..{MaximumWidth}x{MaximumHeight}.");
 		}
 
@@ -37,33 +39,36 @@ public static class LocalMediaInputPolicy
 		{
 			return new Failure(
 				"media.file.frame_rate_unsupported",
-				"H.264 input frame rate must be greater than zero.");
+				$"{profile.Codec} input frame rate must be greater than zero.");
 		}
 		if ((decimal)frameRateNumerator >
 			(decimal)MaximumFramesPerSecond * frameRateDenominator)
 		{
 			return new Failure(
 				"media.file.frame_rate_unsupported",
-				$"H.264 input frame rate '{profile.FrameRate}' exceeds the supported maximum of {MaximumFramesPerSecond} fps.");
+				$"{profile.Codec} input frame rate '{profile.FrameRate}' exceeds the supported maximum of {MaximumFramesPerSecond} fps.");
 		}
 
-		var macroblocksWide = checked(((ulong)profile.Width + 15UL) / 16UL);
-		var macroblocksHigh = checked(((ulong)profile.Height + 15UL) / 16UL);
-		var macroblocksPerFrame = checked(macroblocksWide * macroblocksHigh);
-		var macroblocksPerSecondNumerator = (decimal)macroblocksPerFrame * frameRateNumerator;
-		var macroblocksPerSecondLimit = (decimal)MaximumMacroblocksPerSecond * frameRateDenominator;
-		if (macroblocksPerSecondNumerator > macroblocksPerSecondLimit)
+		if (profile.Codec == MediaVideoCodec.H264)
 		{
-			return new Failure(
-				"media.file.decode_rate_unsupported",
-				$"H.264 input '{profile.Width}x{profile.Height} {profile.FrameRate}' exceeds the supported Level 5.1 decode-rate envelope.");
+			var macroblocksWide = checked(((ulong)profile.Width + 15UL) / 16UL);
+			var macroblocksHigh = checked(((ulong)profile.Height + 15UL) / 16UL);
+			var macroblocksPerFrame = checked(macroblocksWide * macroblocksHigh);
+			var macroblocksPerSecondNumerator = (decimal)macroblocksPerFrame * frameRateNumerator;
+			var macroblocksPerSecondLimit = (decimal)MaximumMacroblocksPerSecond * frameRateDenominator;
+			if (macroblocksPerSecondNumerator > macroblocksPerSecondLimit)
+			{
+				return new Failure(
+					"media.file.decode_rate_unsupported",
+					$"H.264 input '{profile.Width}x{profile.Height} {profile.FrameRate}' exceeds the supported Level 5.1 decode-rate envelope.");
+			}
 		}
 
 		if (profile.AverageBitRate is > MaximumAverageBitRate)
 		{
 			return new Failure(
 				"media.file.bitrate_unsupported",
-				$"H.264 input average bitrate '{profile.AverageBitRate.Value}' bit/s exceeds the supported maximum of " +
+				$"{profile.Codec} input average bitrate '{profile.AverageBitRate.Value}' bit/s exceeds the supported maximum of " +
 				$"{MaximumAverageBitRate} bit/s.");
 		}
 

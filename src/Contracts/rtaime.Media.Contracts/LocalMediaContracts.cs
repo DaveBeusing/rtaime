@@ -26,12 +26,21 @@ public enum MediaContainerFormat
 
 public enum MediaVideoCodec
 {
-	H264 = 1
+	H264 = 1,
+	Hevc = 2,
+	Av1 = 3,
+	Vp9 = 4,
+	Mpeg4Part2 = 5,
+	Vc1 = 6,
+	Mjpeg = 7
 }
 
 public enum MediaAudioCodec
 {
-	Aac = 1
+	None = 0,
+	Aac = 1,
+	Mp3 = 2,
+	Pcm = 3
 }
 
 public sealed record LocalMediaProbe
