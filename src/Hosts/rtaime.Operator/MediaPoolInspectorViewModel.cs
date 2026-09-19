@@ -6,6 +6,7 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using System.Windows.Media;
+using rtaime.Client;
 using rtaime.Media.Contracts;
 
 namespace rtaime.Operator;
@@ -99,6 +100,7 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 	private TimelineTrackItemViewModel? _timelineItem;
 	private readonly List<TimelineTrackItemViewModel> _timelineItems = [];
 	private TimelineCueViewModel? _timelineCue;
+	private CompositingGraphNodeProjection? _compositingNode;
 	private string _emptyState = "No assets are available.";
 
 	public MediaPoolInspectorViewModel(OperatorViewModel @operator, MediaDeckViewModel mediaDeck)
@@ -240,6 +242,7 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 			_timelineItem = null;
 			_timelineItems.Clear();
 			_timelineCue = null;
+			_compositingNode = null;
 			ProjectSelectionToExistingOperatorContext(value);
 			BuildInspector();
 			RaiseSelectionState();
@@ -247,8 +250,8 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 	}
 
 	public bool HasItems => FilteredItems.Count > 0;
-	public bool HasSelection => SelectedItem is not null || _timelineItem is not null || _timelineItems.Count > 0 || _timelineCue is not null;
-	public bool CanEditSelection => HasSelection && !HasMultipleSelection;
+	public bool HasSelection => _compositingNode is not null || SelectedItem is not null || _timelineItem is not null || _timelineItems.Count > 0 || _timelineCue is not null;
+	public bool CanEditSelection => HasSelection && !HasMultipleSelection && _compositingNode is null;
 	public bool HasMetadata => InspectorMetadataProperties.Count > 0;
 	public bool HasEffects => InspectorEffectProperties.Count > 0;
 	public bool SupportsTransformRotation => false;
@@ -269,12 +272,14 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 			(_timelineItem is null && SelectedItem?.Kind == MediaPoolItemKind.Graphics));
 	public bool IsCompositionSelection => _timelineItems.Count <= 1 && _timelineItem is null && _timelineCue is null && SelectedItem?.Kind == MediaPoolItemKind.Composition;
 	public bool IsCueSelection => _timelineCue is not null;
-	public string InspectorTitle => _timelineItems.Count > 1
+	public string InspectorTitle => _compositingNode?.Title ?? (_timelineItems.Count > 1
 		? $"{_timelineItems.Count} timeline items"
-		: _timelineCue?.Name ?? _timelineItem?.Label ?? SelectedItem?.Name ?? "No selection";
-	public string InspectorDetail => _timelineItems.Count > 1
-		? "TIMELINE · MULTI-SELECTION"
-		: _timelineCue is { } cue
+		: _timelineCue?.Name ?? _timelineItem?.Label ?? SelectedItem?.Name ?? "No selection");
+	public string InspectorDetail => _compositingNode is { } graphNode
+		? $"GRAPH · {graphNode.Kind.ToString().ToUpperInvariant()} · {graphNode.Status}"
+		: _timelineItems.Count > 1
+			? "TIMELINE · MULTI-SELECTION"
+			: _timelineCue is { } cue
 			? $"CUE · {cue.Type.ToString().ToUpperInvariant()} · {cue.Timecode}"
 			: _timelineItem is { } timelineItem
 				? $"TIMELINE · {timelineItem.Category.ToString().ToUpperInvariant()} · {timelineItem.Status}"
@@ -288,12 +293,14 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 	public bool IsLoading => _mediaDeck.IsBusy;
 	public bool HasError => _mediaDeck.HasError;
 	public string ErrorState => _mediaDeck.LastError ?? string.Empty;
-	public int SelectionCount => _timelineItems.Count > 0 ? _timelineItems.Count : SelectedItems.Count;
-	public bool HasMultipleSelection => _timelineItems.Count > 1 ||
-		(_timelineItem is null && _timelineCue is null && SelectedItems.Count > 1);
-	public string SelectionSummary => _timelineItems.Count > 0
-		? _timelineItems.Count == 1 ? "1 timeline item selected" : $"{_timelineItems.Count} timeline items selected"
-		: SelectionCount switch
+	public int SelectionCount => _compositingNode is not null ? 1 : _timelineItems.Count > 0 ? _timelineItems.Count : SelectedItems.Count;
+	public bool HasMultipleSelection => _compositingNode is null && (_timelineItems.Count > 1 ||
+		(_timelineItem is null && _timelineCue is null && SelectedItems.Count > 1));
+	public string SelectionSummary => _compositingNode is not null
+		? "1 graph node selected"
+		: _timelineItems.Count > 0
+			? _timelineItems.Count == 1 ? "1 timeline item selected" : $"{_timelineItems.Count} timeline items selected"
+			: SelectionCount switch
 		{
 			0 => "No selection",
 			1 => "1 asset selected",
@@ -406,6 +413,7 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 			.Select(group => group.First())
 			.ToArray();
 
+		_compositingNode = null;
 		_timelineItems.Clear();
 		_timelineItems.AddRange(selected);
 		_timelineItem = primary is not null && selected.Contains(primary)
@@ -419,9 +427,34 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 	public void SelectTimelineCue(TimelineCueViewModel cue)
 	{
 		ArgumentNullException.ThrowIfNull(cue);
+		_compositingNode = null;
 		_timelineCue = cue;
 		_timelineItem = null;
 		_timelineItems.Clear();
+		BuildInspector();
+		RaiseSelectionState();
+	}
+
+	public void SelectCompositingNode(CompositingGraphNodeProjection node)
+	{
+		ArgumentNullException.ThrowIfNull(node);
+		_compositingNode = node;
+		_selectedItem = null;
+		SelectedItems.Clear();
+		_timelineItem = null;
+		_timelineItems.Clear();
+		_timelineCue = null;
+
+		if (node.Id.StartsWith("source:", StringComparison.Ordinal))
+		{
+			var sourceId = node.Id["source:".Length..];
+			var source = _operator.Sources.FirstOrDefault(candidate =>
+				string.Equals(candidate.Id, sourceId, StringComparison.Ordinal));
+			if (source is not null)
+				_operator.SelectedSource = source;
+		}
+
+		OnPropertyChanged(nameof(SelectedItem));
 		BuildInspector();
 		RaiseSelectionState();
 	}
@@ -656,6 +689,19 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 		InspectorMetadataProperties.Clear();
 		InspectorEffectProperties.Clear();
 
+		if (_compositingNode is { } graphNode)
+		{
+			Add("graph.node.kind", "Node", graphNode.Kind.ToString().ToUpperInvariant(), "METADATA");
+			Add("graph.node.detail", "Detail", graphNode.Detail, "METADATA");
+			Add("graph.node.status", "Status", graphNode.Status, "COMMITTED");
+			Add("graph.node.health", "Health", graphNode.Health.ToString().ToUpperInvariant(), "COMMITTED");
+			Add("graph.node.inputs", "Inputs", FormatGraphPorts(graphNode, CompositingGraphPortDirection.Input), "METADATA");
+			Add("graph.node.outputs", "Outputs", FormatGraphPorts(graphNode, CompositingGraphPortDirection.Output), "METADATA");
+			Add("graph.node.rewire", "Rewire", graphNode.CanRewire ? "AVAILABLE" : "READ ONLY", "CAPABILITY");
+			RaiseInspectorProjectionState();
+			return;
+		}
+
 		if (_timelineItems.Count > 1)
 		{
 			BuildTimelineMultiSelectionInspector();
@@ -796,6 +842,17 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 		AddMixed("selection.format", "Format", selected.Select(item => item.Format));
 	}
 
+	private static string FormatGraphPorts(
+		CompositingGraphNodeProjection node,
+		CompositingGraphPortDirection direction)
+	{
+		var ports = node.Ports
+			.Where(port => port.Direction == direction)
+			.Select(port => port.Label)
+			.ToArray();
+		return ports.Length == 0 ? "—" : string.Join(", ", ports);
+	}
+
 	private void AddMixed(string id, string label, IEnumerable<string> values, string state = "METADATA")
 	{
 		var distinct = values
@@ -825,8 +882,10 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 		OnPropertyChanged(nameof(CanEditSelection));
 	}
 
-	private string SelectionContextKey => _timelineCue is not null
-		? "cue"
+	private string SelectionContextKey => _compositingNode is not null
+		? $"graph:{_compositingNode.Id}"
+		: _timelineCue is not null
+			? "cue"
 		: _timelineItems.Count > 1
 			? "timeline:multi"
 			: _timelineItem is not null
