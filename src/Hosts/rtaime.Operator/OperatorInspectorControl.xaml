@@ -186,10 +186,10 @@
 					<TextBlock
 						Grid.Column="1"
 						Text="{Binding Value}"
-						Style="{StaticResource OperatorValue}"
+						
 						VerticalAlignment="Center"
 						TextTrimming="CharacterEllipsis">
-						<TextBlock.Style>
+											<TextBlock.Style>
 							<Style TargetType="{x:Type TextBlock}" BasedOn="{StaticResource OperatorValue}">
 								<Style.Triggers>
 									<DataTrigger Binding="{Binding IsMixed}" Value="True">
@@ -304,7 +304,7 @@
 									<StackPanel>
 										<TextBlock
 											Text="No selection. Select a Media Pool resource, timeline item or cue to inspect its context."
-											Style="{StaticResource OperatorLabel}"
+											
 											TextWrapping="Wrap"
 											Margin="10,10,10,8">
 											<TextBlock.Style>
@@ -329,10 +329,10 @@
 
 											<TextBlock
 												Text="{Binding Inspector.SelectionSummary, ElementName=Root}"
-												Style="{StaticResource OperatorLabel}"
+												
 												Foreground="{DynamicResource OperatorWarningBrush}"
 												Margin="10,6,10,4">
-												<TextBlock.Style>
+											<TextBlock.Style>
 													<Style TargetType="{x:Type TextBlock}" BasedOn="{StaticResource OperatorLabel}">
 														<Setter Property="Visibility" Value="Collapsed" />
 														<Style.Triggers>
@@ -346,8 +346,8 @@
 												Content="BASIC PROPERTIES"
 												Style="{StaticResource InspectorSectionToggle}"
 												IsChecked="{Binding Inspector.IsOverviewExpanded, ElementName=Root, Mode=TwoWay}" />
-											<Border Style="{StaticResource InspectorPropertySectionContent}">
-												<Border.Style>
+											<Border >
+									<Border.Style>
 													<Style TargetType="Border" BasedOn="{StaticResource InspectorPropertySectionContent}">
 														<Setter Property="Visibility" Value="Collapsed" />
 														<Style.Triggers>
@@ -377,8 +377,8 @@
 													Content="TRANSPORT &amp; CONTROLS"
 													Style="{StaticResource InspectorSectionToggle}"
 													IsChecked="{Binding Inspector.IsPlaybackExpanded, ElementName=Root, Mode=TwoWay}" />
-												<Border Style="{StaticResource InspectorPropertySectionContent}">
-													<Border.Style>
+												<Border >
+									<Border.Style>
 														<Style TargetType="Border" BasedOn="{StaticResource InspectorPropertySectionContent}">
 															<Setter Property="Visibility" Value="Collapsed" />
 															<Style.Triggers>
@@ -451,8 +451,8 @@
 													Content="CUE CONTROLS"
 													Style="{StaticResource InspectorSectionToggle}"
 													IsChecked="{Binding Inspector.IsCueExpanded, ElementName=Root, Mode=TwoWay}" />
-												<Border Style="{StaticResource InspectorPropertySectionContent}">
-													<Border.Style>
+												<Border >
+									<Border.Style>
 														<Style TargetType="Border" BasedOn="{StaticResource InspectorPropertySectionContent}">
 															<Setter Property="Visibility" Value="Collapsed" />
 															<Style.Triggers>
@@ -498,7 +498,7 @@
 							<controls:RtaimeTabItem Header="Audio" Style="{StaticResource InspectorCategoryTab}">
 								<controls:RtaimeScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
 									<StackPanel>
-										<TextBlock Text="Audio controls are available for a single audio selection." Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="10,10,10,6">
+										<TextBlock Text="Audio controls are available for a single audio selection."  TextWrapping="Wrap" Margin="10,10,10,6">
 											<TextBlock.Style>
 												<Style TargetType="TextBlock" BasedOn="{StaticResource OperatorLabel}">
 													<Setter Property="Visibility" Value="Visible" />
@@ -533,8 +533,8 @@
 												Content="AUDIO"
 												Style="{StaticResource InspectorSectionToggle}"
 												IsChecked="{Binding Inspector.IsAudioExpanded, ElementName=Root, Mode=TwoWay}" />
-											<Border Style="{StaticResource InspectorPropertySectionContent}">
-												<Border.Style>
+											<Border >
+									<Border.Style>
 													<Style TargetType="Border" BasedOn="{StaticResource InspectorPropertySectionContent}">
 														<Setter Property="Visibility" Value="Collapsed" />
 														<Style.Triggers>
@@ -588,7 +588,7 @@
 							<controls:RtaimeTabItem Header="Transform" Style="{StaticResource InspectorCategoryTab}">
 								<controls:RtaimeScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
 									<StackPanel>
-										<TextBlock Text="Transform controls are available for a single graphics selection." Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="10,10,10,6">
+										<TextBlock Text="Transform controls are available for a single graphics selection."  TextWrapping="Wrap" Margin="10,10,10,6">
 											<TextBlock.Style>
 												<Style TargetType="TextBlock" BasedOn="{StaticResource OperatorLabel}">
 													<Setter Property="Visibility" Value="Visible" />
@@ -623,8 +623,8 @@
 												Content="TRANSFORM"
 												Style="{StaticResource InspectorSectionToggle}"
 												IsChecked="{Binding Inspector.IsTransformExpanded, ElementName=Root, Mode=TwoWay}" />
-											<Border Style="{StaticResource InspectorPropertySectionContent}">
-												<Border.Style>
+											<Border >
+									<Border.Style>
 													<Style TargetType="Border" BasedOn="{StaticResource InspectorPropertySectionContent}">
 														<Setter Property="Visibility" Value="Collapsed" />
 														<Style.Triggers>
@@ -670,8 +670,8 @@
 								<controls:RtaimeScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
 									<StackPanel>
 										<controls:RtaimeToggleButton Content="EFFECTS" Style="{StaticResource InspectorSectionToggle}" IsChecked="{Binding Inspector.IsEffectsExpanded, ElementName=Root, Mode=TwoWay}" />
-										<Border Style="{StaticResource InspectorPropertySectionContent}">
-											<Border.Style>
+										<Border >
+									<Border.Style>
 												<Style TargetType="Border" BasedOn="{StaticResource InspectorPropertySectionContent}">
 													<Setter Property="Visibility" Value="Collapsed" />
 													<Style.Triggers>
@@ -680,8 +680,8 @@
 												</Style>
 											</Border.Style>
 											<StackPanel>
-												<TextBlock Text="No Effects/Processing capability is exposed for the current selection." Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,6,0,6">
-													<TextBlock.Style>
+												<TextBlock Text="No Effects/Processing capability is exposed for the current selection."  TextWrapping="Wrap" Margin="0,6,0,6">
+											<TextBlock.Style>
 														<Style TargetType="TextBlock" BasedOn="{StaticResource OperatorLabel}">
 															<Setter Property="Visibility" Value="Visible" />
 															<Style.Triggers>
@@ -744,7 +744,7 @@
 						<controls:RtaimeScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
 							<StackPanel>
 								<controls:RtaimeToggleButton Content="TECHNICAL METADATA" Style="{StaticResource InspectorSectionToggle}" IsChecked="{Binding Inspector.IsMetadataExpanded, ElementName=Root, Mode=TwoWay}" />
-								<Border Style="{StaticResource InspectorPropertySectionContent}">
+								<Border >
 									<Border.Style>
 										<Style TargetType="Border" BasedOn="{StaticResource InspectorPropertySectionContent}">
 											<Setter Property="Visibility" Value="Collapsed" />
