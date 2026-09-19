@@ -793,7 +793,12 @@
 				</StackPanel>
 
 				<StackPanel Grid.Column="2">
-										<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14"
+					<local:OutputRoutingHealthControl
+						DataContext="{Binding OutputHealth, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+						Visibility="{Binding Shell.OutputRoutingVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+						Margin="0,0,0,14" />
+
+					<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14"
 						Visibility="{Binding Shell.SystemWorkspaceVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
 						<StackPanel>
 							<DockPanel Margin="0,0,0,10">
