@@ -932,24 +932,39 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 			return;
 		}
 
-		var previewHealth = snapshot?.Sources.FirstOrDefault(source =>
-			string.Equals(source.Id, snapshot.Production.Routing.PreviewSourceId.ToString(), StringComparison.Ordinal))?.Health
-			?? Sources.FirstOrDefault(source => source.IsPreview)?.Health;
-		var programHealth = snapshot?.Sources.FirstOrDefault(source =>
-			string.Equals(source.Id, snapshot.Production.Routing.ProgramSourceId.ToString(), StringComparison.Ordinal))?.Health
-			?? Sources.FirstOrDefault(source => source.IsProgram)?.Health;
+		var previewHealth = Sources.FirstOrDefault(source => source.IsPreview)?.Health;
+		var programHealth = Sources.FirstOrDefault(source => source.IsProgram)?.Health;
+		var runtimeStatus = RuntimeStatus;
+		if (snapshot is not null)
+		{
+			var previewId = snapshot.Production.Routing.PreviewSourceId.ToString();
+			var programId = snapshot.Production.Routing.ProgramSourceId.ToString();
+			previewHealth = snapshot.Sources.FirstOrDefault(source =>
+				string.Equals(source.Id, previewId, StringComparison.Ordinal))?.Health ?? previewHealth;
+			programHealth = snapshot.Sources.FirstOrDefault(source =>
+				string.Equals(source.Id, programId, StringComparison.Ordinal))?.Health ?? programHealth;
+			runtimeStatus = snapshot.RuntimeStatus;
+		}
 
-		PreviewViewerState = MapViewerSourceState(previewHealth, snapshot?.RuntimeStatus ?? RuntimeStatus);
-		ProgramViewerState = MapViewerSourceState(programHealth, snapshot?.RuntimeStatus ?? RuntimeStatus);
+		PreviewViewerState = MapViewerSourceState(previewHealth, runtimeStatus);
+		ProgramViewerState = MapViewerSourceState(programHealth, runtimeStatus);
 	}
 
 	private static string MapViewerSourceState(string? sourceHealth, string runtimeStatus)
 	{
-		if (runtimeStatus.Contains("RECOVER", StringComparison.OrdinalIgnoreCase))
+		var normalizedRuntime = runtimeStatus?.Trim() ?? string.Empty;
+		if (normalizedRuntime.Contains("RECOVER", StringComparison.OrdinalIgnoreCase))
 			return "RECOVERING";
-		if (runtimeStatus.Contains("DISCONNECT", StringComparison.OrdinalIgnoreCase) ||
-			runtimeStatus.Contains("OFFLINE", StringComparison.OrdinalIgnoreCase))
-			return "DISCONNECTED";
+		if (!string.Equals(normalizedRuntime, "READY", StringComparison.OrdinalIgnoreCase))
+		{
+			if (normalizedRuntime.Contains("DISCONNECT", StringComparison.OrdinalIgnoreCase) ||
+				normalizedRuntime.Contains("OFFLINE", StringComparison.OrdinalIgnoreCase) ||
+				normalizedRuntime.Contains("FAILED", StringComparison.OrdinalIgnoreCase) ||
+				normalizedRuntime.Contains("UNAVAILABLE", StringComparison.OrdinalIgnoreCase) ||
+				normalizedRuntime.Contains("STOPPED", StringComparison.OrdinalIgnoreCase))
+				return "DISCONNECTED";
+			return "RECOVERING";
+		}
 
 		return sourceHealth?.Trim().ToUpperInvariant() switch
 		{
@@ -962,7 +977,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 
 	private static string FormatDb(double peak)
 	{
-		if (peak <= 0)
+		if (!double.IsFinite(peak) || peak <= 0)
 			return "−∞";
 		return $"{20.0 * Math.Log10(Math.Clamp(peak, double.Epsilon, 1.0)):0.0}";
 	}
