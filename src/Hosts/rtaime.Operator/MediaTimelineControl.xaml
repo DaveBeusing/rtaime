@@ -159,7 +159,7 @@
 											<Setter Property="Background" Value="{DynamicResource OperatorRaisedSurfaceBrush}" />
 											<Style.Triggers>
 												<DataTrigger Binding="{Binding IsActive}" Value="True">
-													<Setter Property="Background" Value="{DynamicResource OperatorSelectedSurfaceBrush}" />
+													<Setter Property="Background" Value="{DynamicResource OperatorSelectionSurfaceBrush}" />
 													<Setter Property="BorderBrush" Value="{DynamicResource OperatorAccentBrush}" />
 												</DataTrigger>
 											</Style.Triggers>
