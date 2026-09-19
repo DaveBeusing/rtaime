@@ -545,8 +545,9 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 	public Visibility LiveSceneCueVisibility => IsLiveWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility InspectorVisibility => IsLiveWorkspace ? Visibility.Collapsed : Visibility.Visible;
 	public Visibility LiveControlsVisibility => IsLiveWorkspace ? Visibility.Visible : Visibility.Collapsed;
-	public Visibility SystemWorkspaceVisibility => IsOutputsWorkspace || IsSettingsWorkspace ? Visibility.Visible : Visibility.Collapsed;
-	public Visibility SystemStatusVisibility => IsOutputsWorkspace || IsSettingsWorkspace ? Visibility.Visible : Visibility.Collapsed;
+	public Visibility OutputRoutingVisibility => IsOutputsWorkspace ? Visibility.Visible : Visibility.Collapsed;
+	public Visibility SystemWorkspaceVisibility => IsSettingsWorkspace ? Visibility.Visible : Visibility.Collapsed;
+	public Visibility SystemStatusVisibility => IsSettingsWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility MonitoringVisibility => IsOutputsWorkspace || IsSettingsWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility GraphicsVisibility => IsScenesWorkspace || IsCompositingWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility AudioVisibility => IsOutputsWorkspace ? Visibility.Visible : Visibility.Collapsed;
@@ -800,6 +801,7 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 		OnPropertyChanged(nameof(LiveSceneCueVisibility));
 		OnPropertyChanged(nameof(InspectorVisibility));
 		OnPropertyChanged(nameof(LiveControlsVisibility));
+		OnPropertyChanged(nameof(OutputRoutingVisibility));
 		OnPropertyChanged(nameof(SystemWorkspaceVisibility));
 		OnPropertyChanged(nameof(SystemStatusVisibility));
 		OnPropertyChanged(nameof(MonitoringVisibility));

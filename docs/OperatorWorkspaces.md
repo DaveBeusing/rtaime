@@ -80,11 +80,15 @@ No second graphics renderer or processing graph is introduced by the shell.
 
 ## OUTPUTS
 
-OUTPUTS reuses the existing lifecycle, health, recording, monitoring and output projections. It is the operational destination for Program/output evidence without creating a second output or routing authority.
+OUTPUTS is the production-facing routing, output-health and performance workspace. It projects the authoritative Runtime Program source and the existing clean Program monitoring presentation without creating a second output or routing authority.
+
+Preview-to-Program routing reuses the existing CUT command and becomes SAFE READ-ONLY whenever the shared mutation gate is unavailable. Output detail exposes only confirmed format, target, recording and health evidence. Missing color-space, streaming, CPU, system-memory, disk, network and measured Output-FPS telemetry remains explicitly UNAVAILABLE.
+
+Available Runtime frame-time, dropped-frame, GPU and VRAM evidence is presented with bounded presentation-only mini histories. The workspace introduces no independent thresholds and no additional telemetry polling loop. See [Output Routing, Health and Performance](OutputRoutingHealth.md).
 
 ## SETTINGS
 
-SETTINGS exposes shell/status/diagnostic presentation using the existing system projection. It does not own Runtime configuration or create a parallel settings state. PASS, FAIL and UNVERIFIED evidence semantics remain unchanged.
+SETTINGS retains the generic lifecycle, system-status and monitoring diagnostics using the existing system projection. It does not own Runtime configuration or create a parallel settings state. PASS, FAIL and UNVERIFIED evidence semantics remain unchanged.
 
 ## Quick Controls
 
