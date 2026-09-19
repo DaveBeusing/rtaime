@@ -20,6 +20,10 @@ public sealed class OperatorSourceTileViewModel : INotifyPropertyChanged
 	private string? _mediaFileName;
 	private bool _isPreview;
 	private bool _isProgram;
+	private double _audioLeftPeak;
+	private double _audioRightPeak;
+	private bool _audioClipping;
+	private bool _hasAudio;
 
 	public OperatorSourceTileViewModel(OperatorSourceDescriptor descriptor)
 	{
@@ -46,6 +50,10 @@ public sealed class OperatorSourceTileViewModel : INotifyPropertyChanged
 	public string? MediaFileName { get => _mediaFileName; private set => Set(ref _mediaFileName, value); }
 	public bool IsPreview { get => _isPreview; private set { if (Set(ref _isPreview, value)) OnPropertyChanged(nameof(Tally)); } }
 	public bool IsProgram { get => _isProgram; private set { if (Set(ref _isProgram, value)) OnPropertyChanged(nameof(Tally)); } }
+	public double AudioLeftPeak { get => _audioLeftPeak; private set => Set(ref _audioLeftPeak, value); }
+	public double AudioRightPeak { get => _audioRightPeak; private set => Set(ref _audioRightPeak, value); }
+	public bool AudioClipping { get => _audioClipping; private set => Set(ref _audioClipping, value); }
+	public bool HasAudio { get => _hasAudio; private set => Set(ref _hasAudio, value); }
 	public string Tally => IsProgram && IsPreview ? "PGM + PVW" : IsProgram ? "PGM" : IsPreview ? "PVW" : "—";
 	public bool IsMedia => string.Equals(Type, "MEDIA", StringComparison.OrdinalIgnoreCase);
 	public string Detail => IsMedia && !string.IsNullOrWhiteSpace(MediaFileName)
@@ -84,6 +92,22 @@ public sealed class OperatorSourceTileViewModel : INotifyPropertyChanged
 	{
 		Thumbnail = thumbnail ?? throw new ArgumentNullException(nameof(thumbnail));
 		ThumbnailFormat = string.IsNullOrWhiteSpace(format) ? "Live source monitor" : format.Trim();
+	}
+
+	public void ApplyAudioMeter(double leftPeak, double rightPeak, bool clipping)
+	{
+		AudioLeftPeak = Math.Clamp(double.IsFinite(leftPeak) ? leftPeak : 0, 0, 1);
+		AudioRightPeak = Math.Clamp(double.IsFinite(rightPeak) ? rightPeak : 0, 0, 1);
+		AudioClipping = clipping;
+		HasAudio = true;
+	}
+
+	public void ClearAudioMeter()
+	{
+		AudioLeftPeak = 0;
+		AudioRightPeak = 0;
+		AudioClipping = false;
+		HasAudio = false;
 	}
 
 	public void ApplyMediaDeck(string state, string format, string remaining, string? fileName)
