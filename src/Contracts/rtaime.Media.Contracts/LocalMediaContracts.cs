@@ -31,6 +31,7 @@ public enum MediaVideoCodec
 
 public enum MediaAudioCodec
 {
+	None = 0,
 	Aac = 1
 }
 
