@@ -166,6 +166,7 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 	public bool IsAudioSelection => SelectedItem?.Kind == MediaPoolItemKind.Audio;
 	public bool IsGraphicsSelection => SelectedItem?.Kind == MediaPoolItemKind.Graphics;
 	public bool IsCompositionSelection => SelectedItem?.Kind == MediaPoolItemKind.Composition;
+	public bool IsCueSelection => _timelineCue is not null;
 	public string InspectorTitle => _timelineCue?.Name ?? _timelineItem?.Label ?? SelectedItem?.Name ?? "No selection";
 	public string InspectorDetail => _timelineCue is { } cue
 		? $"CUE · {cue.Type.ToString().ToUpperInvariant()} · {cue.Timecode}"
@@ -607,6 +608,7 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 		OnPropertyChanged(nameof(IsAudioSelection));
 		OnPropertyChanged(nameof(IsGraphicsSelection));
 		OnPropertyChanged(nameof(IsCompositionSelection));
+		OnPropertyChanged(nameof(IsCueSelection));
 		OnPropertyChanged(nameof(InspectorTitle));
 		OnPropertyChanged(nameof(InspectorDetail));
 	}
