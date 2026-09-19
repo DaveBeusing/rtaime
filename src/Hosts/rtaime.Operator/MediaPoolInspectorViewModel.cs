@@ -166,6 +166,12 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 	public bool IsAudioSelection => SelectedItem?.Kind == MediaPoolItemKind.Audio;
 	public bool IsGraphicsSelection => SelectedItem?.Kind == MediaPoolItemKind.Graphics;
 	public bool IsCompositionSelection => SelectedItem?.Kind == MediaPoolItemKind.Composition;
+	public string InspectorTitle => _timelineCue?.Name ?? _timelineItem?.Label ?? SelectedItem?.Name ?? "No selection";
+	public string InspectorDetail => _timelineCue is { } cue
+		? $"CUE · {cue.Type.ToString().ToUpperInvariant()} · {cue.Timecode}"
+		: _timelineItem is { } timelineItem
+			? $"TIMELINE · {timelineItem.Category.ToString().ToUpperInvariant()} · {timelineItem.Status}"
+			: SelectedItem?.Detail ?? "Select a Media Pool resource, timeline item or cue.";
 	public string EmptyState
 	{
 		get => _emptyState;
@@ -598,6 +604,8 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 		OnPropertyChanged(nameof(IsAudioSelection));
 		OnPropertyChanged(nameof(IsGraphicsSelection));
 		OnPropertyChanged(nameof(IsCompositionSelection));
+		OnPropertyChanged(nameof(InspectorTitle));
+		OnPropertyChanged(nameof(InspectorDetail));
 	}
 
 	private bool Set<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
