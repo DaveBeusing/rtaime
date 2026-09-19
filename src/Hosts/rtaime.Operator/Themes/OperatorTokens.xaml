@@ -3,53 +3,82 @@
 	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 	xmlns:sys="clr-namespace:System;assembly=System.Runtime">
 	<!-- Typography -->
-	<FontFamily x:Key="OperatorFontFamily">Segoe UI</FontFamily>
+	<FontFamily x:Key="OperatorFontFamily">Segoe UI Variable Text, Segoe UI</FontFamily>
 	<FontFamily x:Key="OperatorTimecodeFontFamily">Cascadia Mono, Consolas</FontFamily>
 	<sys:Double x:Key="OperatorFontSizeCaption">11</sys:Double>
-	<sys:Double x:Key="OperatorFontSizeBody">13</sys:Double>
-	<sys:Double x:Key="OperatorFontSizeControl">13</sys:Double>
-	<sys:Double x:Key="OperatorFontSizeSection">15</sys:Double>
+	<sys:Double x:Key="OperatorFontSizeBody">12</sys:Double>
+	<sys:Double x:Key="OperatorFontSizeControl">12</sys:Double>
+	<sys:Double x:Key="OperatorFontSizeSection">14</sys:Double>
+	<sys:Double x:Key="OperatorFontSizeWorkspaceHeader">15</sys:Double>
+	<sys:Double x:Key="OperatorFontSizeLargeTimecode">18</sys:Double>
+	<sys:Double x:Key="OperatorFontSizeProduct">24</sys:Double>
 	<sys:Double x:Key="OperatorFontSizeTitle">24</sys:Double>
 
-	<!-- Geometry and spacing. WPF device-independent units keep these stable across DPI changes. -->
-	<sys:Double x:Key="OperatorControlHeight">36</sys:Double>
-	<sys:Double x:Key="OperatorCompactControlHeight">30</sys:Double>
-	<sys:Double x:Key="OperatorFocusThickness">2</sys:Double>
-	<Thickness x:Key="OperatorWindowPadding">20</Thickness>
-	<Thickness x:Key="OperatorPanelPadding">16</Thickness>
-	<Thickness x:Key="OperatorControlPadding">14,9</Thickness>
-	<Thickness x:Key="OperatorCompactControlPadding">9,5</Thickness>
-	<Thickness x:Key="OperatorStatusPadding">10,6</Thickness>
-	<CornerRadius x:Key="OperatorRadiusPanel">8</CornerRadius>
-	<CornerRadius x:Key="OperatorRadiusControl">5</CornerRadius>
-	<CornerRadius x:Key="OperatorRadiusStatus">6</CornerRadius>
+	<!-- Reference geometry: 1920x1080 at 100 percent. -->
+	<sys:Double x:Key="OperatorReferenceWidth">1920</sys:Double>
+	<sys:Double x:Key="OperatorReferenceHeight">1080</sys:Double>
+	<sys:Double x:Key="OperatorTopBarHeight">60</sys:Double>
+	<sys:Double x:Key="OperatorNavigationWidth">92</sys:Double>
+	<sys:Double x:Key="OperatorMediaPanelWidth">400</sys:Double>
+	<sys:Double x:Key="OperatorCenterWidth">1070</sys:Double>
+	<sys:Double x:Key="OperatorInspectorWidth">340</sys:Double>
+	<sys:Double x:Key="OperatorUpperWorkspaceHeight">700</sys:Double>
+	<sys:Double x:Key="OperatorTimelineHeight">320</sys:Double>
+	<sys:Double x:Key="OperatorRegionGap">6</sys:Double>
+
+	<!-- Spacing and control metrics. -->
+	<sys:Double x:Key="OperatorSpacing4">4</sys:Double>
+	<sys:Double x:Key="OperatorSpacing6">6</sys:Double>
+	<sys:Double x:Key="OperatorSpacing8">8</sys:Double>
+	<sys:Double x:Key="OperatorSpacing12">12</sys:Double>
+	<sys:Double x:Key="OperatorSpacing16">16</sys:Double>
+	<sys:Double x:Key="OperatorSpacing24">24</sys:Double>
+	<sys:Double x:Key="OperatorControlHeight">30</sys:Double>
+	<sys:Double x:Key="OperatorCompactControlHeight">26</sys:Double>
+	<sys:Double x:Key="OperatorFocusThickness">1</sys:Double>
+	<Thickness x:Key="OperatorWindowPadding">6</Thickness>
+	<Thickness x:Key="OperatorPanelPadding">8</Thickness>
+	<Thickness x:Key="OperatorControlPadding">8,4</Thickness>
+	<Thickness x:Key="OperatorCompactControlPadding">6,3</Thickness>
+	<Thickness x:Key="OperatorStatusPadding">8,4</Thickness>
+	<CornerRadius x:Key="OperatorRadiusPanel">4</CornerRadius>
+	<CornerRadius x:Key="OperatorRadiusControl">3</CornerRadius>
+	<CornerRadius x:Key="OperatorRadiusStatus">3</CornerRadius>
 	<CornerRadius x:Key="OperatorRadiusMeter">2</CornerRadius>
 
-	<!-- Neutral production palette -->
-	<Color x:Key="OperatorColorBackground">#0D1117</Color>
-	<Color x:Key="OperatorColorSurface">#151B23</Color>
-	<Color x:Key="OperatorColorRaisedSurface">#1D2631</Color>
-	<Color x:Key="OperatorColorRaisedHover">#263342</Color>
-	<Color x:Key="OperatorColorBorder">#344252</Color>
-	<Color x:Key="OperatorColorText">#F3F6FA</Color>
-	<Color x:Key="OperatorColorMutedText">#9AA8B8</Color>
-	<Color x:Key="OperatorColorDisabled">#667386</Color>
-	<Color x:Key="OperatorColorAccent">#54A9FF</Color>
-	<Color x:Key="OperatorColorAccentSurface">#1C3145</Color>
-	<Color x:Key="OperatorColorSelectionSurface">#22384D</Color>
-	<Color x:Key="OperatorColorFocus">#CFE7FF</Color>
+	<!-- Binding mockup palette. -->
+	<Color x:Key="OperatorColorBackground">#071017</Color>
+	<Color x:Key="OperatorColorTopBar">#09131B</Color>
+	<Color x:Key="OperatorColorNavigation">#0B151E</Color>
+	<Color x:Key="OperatorColorSurface">#101B24</Color>
+	<Color x:Key="OperatorColorAlternateSurface">#121F29</Color>
+	<Color x:Key="OperatorColorRaisedSurface">#16242F</Color>
+	<Color x:Key="OperatorColorRaisedHover">#1C2D38</Color>
+	<Color x:Key="OperatorColorBorder">#25343F</Color>
+	<Color x:Key="OperatorColorBorderStrong">#314553</Color>
+	<Color x:Key="OperatorColorText">#EEF3F6</Color>
+	<Color x:Key="OperatorColorSecondaryText">#9AA8B4</Color>
+	<Color x:Key="OperatorColorMutedText">#6F7D89</Color>
+	<Color x:Key="OperatorColorDisabled">#6F7D89</Color>
+	<Color x:Key="OperatorColorAccent">#16CDD3</Color>
+	<Color x:Key="OperatorColorAccentSurface">#121F29</Color>
+	<Color x:Key="OperatorColorSelectionSurface">#16242F</Color>
+	<Color x:Key="OperatorColorFocus">#16CDD3</Color>
+	<Color x:Key="OperatorColorTimeline">#3478D4</Color>
+	<Color x:Key="OperatorColorGraphics">#7259D7</Color>
+	<Color x:Key="OperatorColorAudio">#22A977</Color>
 
-	<!-- Production semantics. Program and Preview are intentionally never interchangeable. -->
-	<Color x:Key="OperatorColorPreview">#43C785</Color>
-	<Color x:Key="OperatorColorPreviewSurface">#183B2A</Color>
-	<Color x:Key="OperatorColorProgram">#F05A5A</Color>
-	<Color x:Key="OperatorColorProgramSurface">#442326</Color>
-	<Color x:Key="OperatorColorArmed">#E7B84B</Color>
-	<Color x:Key="OperatorColorArmedSurface">#3A321C</Color>
-	<Color x:Key="OperatorColorHealthy">#49C98A</Color>
-	<Color x:Key="OperatorColorWarning">#E7B84B</Color>
-	<Color x:Key="OperatorColorError">#FF6B6B</Color>
-	<Color x:Key="OperatorColorMeterSafe">#49C98A</Color>
-	<Color x:Key="OperatorColorMeterWarning">#E7B84B</Color>
-	<Color x:Key="OperatorColorMeterClip">#F05A5A</Color>
+	<!-- Production semantics. Program and Preview remain intentionally distinct. -->
+	<Color x:Key="OperatorColorPreview">#29D38B</Color>
+	<Color x:Key="OperatorColorPreviewSurface">#121F29</Color>
+	<Color x:Key="OperatorColorProgram">#FF4D52</Color>
+	<Color x:Key="OperatorColorProgramSurface">#121F29</Color>
+	<Color x:Key="OperatorColorArmed">#F6B84A</Color>
+	<Color x:Key="OperatorColorArmedSurface">#121F29</Color>
+	<Color x:Key="OperatorColorHealthy">#29D38B</Color>
+	<Color x:Key="OperatorColorWarning">#F6B84A</Color>
+	<Color x:Key="OperatorColorError">#FF4D52</Color>
+	<Color x:Key="OperatorColorMeterSafe">#29D38B</Color>
+	<Color x:Key="OperatorColorMeterWarning">#F6B84A</Color>
+	<Color x:Key="OperatorColorMeterClip">#FF4D52</Color>
 </ResourceDictionary>
