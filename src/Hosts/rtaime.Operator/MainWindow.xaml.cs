@@ -96,6 +96,7 @@ public partial class MainWindow : Window
 			new DispatcherSynchronizationContext(Dispatcher));
 		Shell = new OperatorShellViewModel(new OperatorLayoutStore(), SetProductionFullscreen);
 		MediaPool = new MediaPoolInspectorViewModel(viewModel, MediaDeck);
+		CompositingGraph = new CompositingGraphViewModel(viewModel, MediaPool);
 		QuickControls = new OperatorQuickControlsViewModel(viewModel, MediaDeck, MediaPool, new OperatorQuickControlStore());
 		Shortcuts = OperatorKeyboardCommandRegistry.Create(
 			viewModel,
@@ -226,6 +227,7 @@ public partial class MainWindow : Window
 			{
 				Timeline.SelectionChanged -= OnTimelineSelectionChanged;
 				QuickControls.Dispose();
+				CompositingGraph.Dispose();
 				MediaPool.Dispose();
 				await Monitoring.DisposeAsync();
 				await MediaDeck.DisposeAsync();
