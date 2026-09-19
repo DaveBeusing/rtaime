@@ -106,17 +106,18 @@
 				<StackPanel Grid.Column="5" Orientation="Horizontal" VerticalAlignment="Center">
 					<Button x:Name="SynchronizeButton" Content="SYNC F5" Command="{Binding SynchronizeCommand}" Style="{StaticResource OperatorAccentButton}" MinHeight="28" Padding="8,3" Margin="0,0,4,0" ToolTip="Synchronize authoritative ControlHost state (F5)." AutomationProperties.Name="Synchronize authoritative state" />
 					<Button Content="{Binding Shell.FullscreenLabel, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Command="{Binding Shell.ToggleFullscreenCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorButton}" MinHeight="28" Padding="8,3" Margin="0,0,4,0" />
-					<Button Content="⋯" Style="{StaticResource OperatorButton}" MinWidth="34" MinHeight="28" Padding="8,3" ToolTip="Shell actions">
+					<Button Content="⋯" Style="{StaticResource OperatorButton}" MinWidth="34" MinHeight="28" Padding="8,3" ToolTip="Shell actions"
+						Tag="{Binding RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Click="OnShellMenuClick">
 						<Button.ContextMenu>
-							<ContextMenu>
-								<MenuItem Header="Open Demo Production" Command="{Binding DemoProduction.OpenCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
+							<ContextMenu DataContext="{Binding PlacementTarget.Tag, RelativeSource={RelativeSource Self}}">
+								<MenuItem Header="Open Demo Production" Command="{Binding DemoProduction.OpenCommand}" />
 								<Separator />
-								<MenuItem Header="Toggle Tools" Command="{Binding Shell.ToggleLeftPanelCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
-								<MenuItem Header="Toggle Inspector" Command="{Binding Shell.ToggleRightPanelCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
-								<MenuItem Header="Maximize / Restore Center" Command="{Binding Shell.ToggleCenterMaximizeCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
+								<MenuItem Header="Toggle Tools" Command="{Binding Shell.ToggleLeftPanelCommand}" />
+								<MenuItem Header="Toggle Inspector" Command="{Binding Shell.ToggleRightPanelCommand}" />
+								<MenuItem Header="Maximize / Restore Center" Command="{Binding Shell.ToggleCenterMaximizeCommand}" />
 								<Separator />
-								<MenuItem Header="Save Layout" Command="{Binding Shell.SaveLayoutCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
-								<MenuItem Header="Reset Layout" Command="{Binding Shell.ResetLayoutCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
+								<MenuItem Header="Save Layout" Command="{Binding Shell.SaveLayoutCommand}" />
+								<MenuItem Header="Reset Layout" Command="{Binding Shell.ResetLayoutCommand}" />
 								<Separator />
 								<MenuItem Header="Help" Click="OnHelpClick" />
 							</ContextMenu>
