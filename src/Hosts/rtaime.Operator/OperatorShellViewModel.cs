@@ -289,16 +289,31 @@ public sealed class OperatorLayoutStore
 
 	private async Task WriteAsync(string json)
 	{
+		var temporaryPath = _path + ".tmp";
 		try
 		{
 			var directory = Path.GetDirectoryName(_path);
 			if (!string.IsNullOrWhiteSpace(directory))
 				Directory.CreateDirectory(directory);
-			await File.WriteAllTextAsync(_path, json).ConfigureAwait(false);
+
+			await File.WriteAllTextAsync(temporaryPath, json).ConfigureAwait(false);
+			File.Move(temporaryPath, _path, overwrite: true);
 		}
 		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
 		{
 			// Layout persistence is best-effort and must never affect production operation.
+		}
+		finally
+		{
+			try
+			{
+				if (File.Exists(temporaryPath))
+					File.Delete(temporaryPath);
+			}
+			catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+			{
+				// Temporary-file cleanup is best-effort for the same reason as layout persistence.
+			}
 		}
 	}
 }
