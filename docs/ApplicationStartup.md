@@ -136,9 +136,9 @@ The startup overlay may animate presentation opacity when Windows client-area an
 
 No current application-startup stage exposes a safe standalone retry operation. Consequently the evidence contract carries `canRetry`, but the Operator does not offer a retry action until a real idempotent retry path exists.
 
-## Readiness contract
+## Production readiness contract
 
-Production workspace handoff is gated on positive evidence. AppHost requires:
+Production readiness and production mutations remain gated on positive evidence even after the Operator shell becomes available. AppHost requires:
 
 1. the ControlHost process identity in readiness evidence to be live;
 2. ControlHost lifecycle state `READY`;
