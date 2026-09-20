@@ -257,10 +257,12 @@ public sealed class RuntimeReadinessService : IRuntimeReadinessService, IDisposa
 		var runtimeFault = health.Runtime.State == OperatorHealthStates.Fail ||
 			health.Engine.State == OperatorHealthStates.Fail;
 		var hardwareChanged = previous.State == RuntimePerformanceVerificationState.Verified &&
-			!string.IsNullOrEmpty(previous.HardwareFingerprint) &&
+			IsQualifiedHardwareFingerprint(previous.HardwareFingerprint) &&
+			IsQualifiedHardwareFingerprint(hardwareFingerprint) &&
 			!string.Equals(previous.HardwareFingerprint, hardwareFingerprint, StringComparison.Ordinal);
 		var pipelineChanged = previous.State == RuntimePerformanceVerificationState.Verified &&
-			!string.IsNullOrEmpty(previous.PipelineFingerprint) &&
+			!IsUnavailable(previous.PipelineFingerprint) &&
+			!IsUnavailable(pipelineFingerprint) &&
 			!string.Equals(previous.PipelineFingerprint, pipelineFingerprint, StringComparison.Ordinal);
 
 		if (runtimeFault)
@@ -493,6 +495,12 @@ public sealed class RuntimeReadinessService : IRuntimeReadinessService, IDisposa
 
 	private static string NormalizeFingerprint(string? value) =>
 		string.IsNullOrWhiteSpace(value) ? "UNVERIFIED" : value.Trim().ToUpperInvariant();
+
+	private static bool IsQualifiedHardwareFingerprint(string fingerprint) =>
+		!string.IsNullOrWhiteSpace(fingerprint) &&
+		!fingerprint.Contains("UNVERIFIED", StringComparison.OrdinalIgnoreCase) &&
+		!fingerprint.Contains("UNKNOWN", StringComparison.OrdinalIgnoreCase) &&
+		!fingerprint.Contains("UNAVAILABLE", StringComparison.OrdinalIgnoreCase);
 
 	private static bool IsUnavailable(string? value) =>
 		string.IsNullOrWhiteSpace(value) ||
