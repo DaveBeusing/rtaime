@@ -22,6 +22,7 @@ public sealed class HealthCenterSubsystemViewModel : INotifyPropertyChanged
 	public string Id => _snapshot.Id;
 	public string DisplayName => _snapshot.DisplayName;
 	public string Category => _snapshot.Category;
+	public SubsystemHealthState HealthState => _snapshot.State;
 	public string State => FormatState(_snapshot.State);
 	public string Detail => _snapshot.Detail;
 	public string StatusSince => _snapshot.StatusSince.ToLocalTime().ToString("HH:mm:ss");
@@ -32,10 +33,7 @@ public sealed class HealthCenterSubsystemViewModel : INotifyPropertyChanged
 	public bool CanRecover => _snapshot.CanRecover;
 	public string RecoveryActionLabel => _snapshot.RecoveryActionLabel ?? "RECOVER";
 	public bool IsHealthy => _snapshot.State == SubsystemHealthState.Healthy;
-	public bool RequiresAttention => _snapshot.State is SubsystemHealthState.Warning
-		or SubsystemHealthState.Degraded
-		or SubsystemHealthState.Recovering
-		or SubsystemHealthState.Failed;
+	public bool RequiresAttention => HealthSnapshotAnalysis.RequiresAttention(_snapshot.State);
 	public bool IsOverview => Id is "cpu" or "memory" or "gpu" or "media" or "compositing" or "output" or "frame-timing";
 
 	public void Apply(SubsystemHealthSnapshot snapshot)
@@ -49,6 +47,7 @@ public sealed class HealthCenterSubsystemViewModel : INotifyPropertyChanged
 		{
 			nameof(DisplayName),
 			nameof(Category),
+			nameof(HealthState),
 			nameof(State),
 			nameof(Detail),
 			nameof(StatusSince),
@@ -233,7 +232,7 @@ public sealed class HealthCenterViewModel : INotifyPropertyChanged, IDisposable
 			Attention,
 			ordered
 				.Where(item => item.RequiresAttention)
-				.OrderByDescending(item => Severity(item.State))
+				.OrderByDescending(item => HealthSnapshotAnalysis.Severity(item.HealthState))
 				.ThenBy(item => item.DisplayName, StringComparer.Ordinal)
 				.ToArray());
 
@@ -258,16 +257,6 @@ public sealed class HealthCenterViewModel : INotifyPropertyChanged, IDisposable
 	private bool CanRecoverSelected() =>
 		SelectedSubsystem is { CanRecover: true, Id: "control" } &&
 		_synchronizeCommand.CanExecute(null);
-
-	private static int Severity(string state) => state switch
-	{
-		"FAILED" => 5,
-		"RECOVERING" => 4,
-		"DEGRADED" => 3,
-		"WARNING" => 2,
-		"UNKNOWN" => 1,
-		_ => 0
-	};
 
 	private static string FormatReadiness(RuntimeReadinessState state) => state switch
 	{
