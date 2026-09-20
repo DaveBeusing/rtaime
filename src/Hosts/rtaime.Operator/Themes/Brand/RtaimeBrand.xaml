@@ -105,7 +105,7 @@
 			<Image Source="{StaticResource RtaimeBrandEmblemImage}" Width="30" Height="30" Stretch="Uniform" VerticalAlignment="Center" />
 			<StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="7,0,0,0">
 				<TextBlock Text="rtaime" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource OperatorTextBrush}" />
-				<TextBlock Text="REAL TIME AI MEDIA ENGINE" FontSize="6.5" FontWeight="SemiBold" CharacterSpacing="130" Foreground="{DynamicResource OperatorMutedTextBrush}" Margin="0,-1,0,0" />
+				<TextBlock Text="REAL TIME AI MEDIA ENGINE" FontSize="6.5" FontWeight="SemiBold" Foreground="{DynamicResource OperatorMutedTextBrush}" Margin="0,-1,0,0" />
 			</StackPanel>
 		</Grid>
 	</DataTemplate>
@@ -114,7 +114,7 @@
 		<StackPanel HorizontalAlignment="Center">
 			<Image Source="{StaticResource RtaimeBrandEmblemImage}" Width="112" Height="112" Stretch="Uniform" HorizontalAlignment="Center" />
 			<TextBlock Text="rtaime" FontSize="42" FontWeight="SemiBold" Foreground="{DynamicResource OperatorTextBrush}" HorizontalAlignment="Center" Margin="0,-8,0,0" />
-			<TextBlock Text="REAL TIME AI MEDIA ENGINE" FontSize="10" FontWeight="SemiBold" CharacterSpacing="220" Foreground="{DynamicResource OperatorMutedTextBrush}" HorizontalAlignment="Center" Margin="0,2,0,0" />
+			<TextBlock Text="R E A L   T I M E   A I   M E D I A   E N G I N E" FontSize="9" FontWeight="SemiBold" Foreground="{DynamicResource OperatorMutedTextBrush}" HorizontalAlignment="Center" Margin="0,2,0,0" />
 		</StackPanel>
 	</DataTemplate>
 </ResourceDictionary>
