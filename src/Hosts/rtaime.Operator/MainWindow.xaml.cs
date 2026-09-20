@@ -37,6 +37,8 @@ public partial class MainWindow : Window
 	private WindowState _windowedState = WindowState.Normal;
 	private Point _mediaPoolDragStart;
 	private bool _syncingMediaPoolSelection;
+	private readonly OperatorSessionRecoveryStore _sessionRecoveryStore = new();
+	private readonly OperatorSessionRecoveryResult _sessionRecovery;
 
 	public MainWindow()
 	{
@@ -71,6 +73,9 @@ public partial class MainWindow : Window
 		OutputHealth = new OutputRoutingHealthViewModel(viewModel, ProgramOutput);
 		RuntimePerformanceStatus = new RuntimePerformanceStatusBarViewModel(viewModel, OutputHealth);
 		Shell = new OperatorShellViewModel(new OperatorLayoutStore(), SetProductionFullscreen);
+		_sessionRecovery = _sessionRecoveryStore.BeginSession(new OperatorSafeSessionState(Shell.SelectedWorkspace));
+		if (_sessionRecovery.PreviousSessionEndedUnexpectedly)
+			Shell.SelectWorkspace(_sessionRecovery.SafeState.SelectedWorkspace);
 		MediaPool = new MediaPoolInspectorViewModel(viewModel, MediaDeck);
 		CompositingGraph = new CompositingGraphViewModel(viewModel, MediaPool);
 		HealthProvider = new OperatorHealthSnapshotProvider(viewModel, MediaDeck, Monitoring, ProgramOutput, CompositingGraph);
@@ -99,6 +104,12 @@ public partial class MainWindow : Window
 			OutputHealth,
 			HealthCenter,
 			Startup);
+		Notifications = new OperatorNotificationCenterViewModel(
+			new NotificationService(),
+			viewModel,
+			new DispatcherSynchronizationContext(Dispatcher));
+		Notifications.NotifySessionRecovery(_sessionRecovery);
+		Shell.PropertyChanged += OnShellPropertyChanged;
 		InitializeComponent();
 		WorkspaceStates.PropertyChanged += OnWorkspaceStatesPropertyChanged;
 		StartStartupBrandAnimation();
@@ -133,6 +144,9 @@ public partial class MainWindow : Window
 		OutputHealth = new OutputRoutingHealthViewModel(viewModel, ProgramOutput);
 		RuntimePerformanceStatus = new RuntimePerformanceStatusBarViewModel(viewModel, OutputHealth);
 		Shell = new OperatorShellViewModel(new OperatorLayoutStore(), SetProductionFullscreen);
+		_sessionRecovery = _sessionRecoveryStore.BeginSession(new OperatorSafeSessionState(Shell.SelectedWorkspace));
+		if (_sessionRecovery.PreviousSessionEndedUnexpectedly)
+			Shell.SelectWorkspace(_sessionRecovery.SafeState.SelectedWorkspace);
 		MediaPool = new MediaPoolInspectorViewModel(viewModel, MediaDeck);
 		CompositingGraph = new CompositingGraphViewModel(viewModel, MediaPool);
 		HealthProvider = new OperatorHealthSnapshotProvider(viewModel, MediaDeck, Monitoring, ProgramOutput, CompositingGraph);
@@ -161,6 +175,12 @@ public partial class MainWindow : Window
 			OutputHealth,
 			HealthCenter,
 			Startup);
+		Notifications = new OperatorNotificationCenterViewModel(
+			new NotificationService(),
+			viewModel,
+			new DispatcherSynchronizationContext(Dispatcher));
+		Notifications.NotifySessionRecovery(_sessionRecovery);
+		Shell.PropertyChanged += OnShellPropertyChanged;
 		InitializeComponent();
 		WorkspaceStates.PropertyChanged += OnWorkspaceStatesPropertyChanged;
 		StartStartupBrandAnimation();
@@ -175,6 +195,7 @@ public partial class MainWindow : Window
 	}
 
 	public StartupLifecycleViewModel Startup { get; }
+	public OperatorNotificationCenterViewModel Notifications { get; }
 	public OperatorWorkspaceStateViewModel WorkspaceStates { get; }
 	public OperatorMonitoringViewModel Monitoring { get; }
 	public ProgramOutputController ProgramOutput { get; }
@@ -260,6 +281,15 @@ public partial class MainWindow : Window
 		StartupBrandPulse.Opacity = 1.0;
 	}
 
+	private void OnShellPropertyChanged(object? sender, PropertyChangedEventArgs e)
+	{
+		if (e.PropertyName != nameof(OperatorShellViewModel.SelectedWorkspace))
+			return;
+
+		_ = _sessionRecoveryStore.CheckpointAsync(
+			new OperatorSafeSessionState(Shell.SelectedWorkspace));
+	}
+
 	private Task FocusMediaSearchAsync()
 	{
 		Shell.SelectWorkspace("MEDIA");
@@ -333,8 +363,10 @@ public partial class MainWindow : Window
 
 		_shutdownStarted = true;
 		IsEnabled = false;
+		var completedNormally = false;
 		try
 		{
+			Shell.PropertyChanged -= OnShellPropertyChanged;
 			WorkspaceStates.PropertyChanged -= OnWorkspaceStatesPropertyChanged;
 			WorkspaceStates.Dispose();
 			Startup.Dispose();
@@ -365,9 +397,18 @@ public partial class MainWindow : Window
 				await Monitoring.DisposeAsync();
 				await MediaDeck.DisposeAsync();
 			}
+			completedNormally = true;
 		}
 		finally
 		{
+			Notifications.Dispose();
+			if (completedNormally &&
+				!(Application.Current is App { UnexpectedFailureDetected: true }))
+			{
+				await _sessionRecoveryStore.MarkCleanShutdownAsync(
+					new OperatorSafeSessionState(Shell.SelectedWorkspace));
+			}
+
 			_shutdownComplete = true;
 			Closing -= OnClosingAsync;
 			SizeChanged -= OnShellSizeChanged;
