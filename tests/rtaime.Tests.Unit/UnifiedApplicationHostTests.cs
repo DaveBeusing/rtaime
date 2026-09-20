@@ -52,6 +52,50 @@ public sealed class UnifiedApplicationHostTests
 	}
 
 	[Fact]
+	public async Task Waits_for_leased_control_endpoint_and_adopts_when_readiness_appears()
+	{
+		var options = CreateOptions(ApplicationStartupProfile.Interactive);
+		var platform = new FakeApplicationHostPlatform(options) { EndpointLeaseHeld = true };
+		platform.OnDelay = () => platform.PublishReadiness(42);
+
+		var result = await new UnifiedApplicationHost(options, platform).RunAsync();
+
+		Assert.True(result.AdoptedControlHost);
+		Assert.Equal(42, result.ControlProcessId);
+		Assert.Equal(new[] { "rtaime.Operator" }, platform.StartedBaseNames);
+	}
+
+	[Fact]
+	public async Task Leased_control_endpoint_without_readiness_times_out_without_competing_start()
+	{
+		var options = CreateOptions(ApplicationStartupProfile.Interactive);
+		var platform = new FakeApplicationHostPlatform(options) { EndpointLeaseHeld = true };
+
+		var exception = await Assert.ThrowsAsync<TimeoutException>(
+			() => new UnifiedApplicationHost(options, platform).RunAsync());
+
+		Assert.Contains("remains owned", exception.Message, StringComparison.Ordinal);
+		Assert.Equal(new[] { "rtaime.Operator" }, platform.StartedBaseNames);
+	}
+
+	[Fact]
+	public async Task Released_control_endpoint_allows_owned_control_start()
+	{
+		var options = CreateOptions(ApplicationStartupProfile.Interactive);
+		var platform = new FakeApplicationHostPlatform(options)
+		{
+			EndpointLeaseHeld = true,
+			PublishReadinessOnControlStart = true
+		};
+		platform.OnDelay = () => platform.EndpointLeaseHeld = false;
+
+		var result = await new UnifiedApplicationHost(options, platform).RunAsync();
+
+		Assert.False(result.AdoptedControlHost);
+		Assert.Equal(new[] { "rtaime.Operator", "rtaime.ControlHost" }, platform.StartedBaseNames);
+	}
+
+	[Fact]
 	public void Direct_development_startup_resolves_sibling_host_build_output()
 	{
 		var root = Path.Combine(Path.GetTempPath(), "rtaime-development-startup-tests", Guid.NewGuid().ToString("N"));
@@ -479,6 +523,7 @@ public sealed class UnifiedApplicationHostTests
 		public bool PublishReadinessOnControlStart { get; init; }
 		public bool PublishReadinessAfterDelay { get; init; }
 		public bool PipeReachable { get; set; } = true;
+		public bool EndpointLeaseHeld { get; set; }
 		public HashSet<string> UnreachableEndpoints { get; } = new(StringComparer.Ordinal);
 		public bool StopSignalWritten { get; private set; }
 		public bool IgnoreStopSignal { get; set; }
@@ -510,6 +555,9 @@ public sealed class UnifiedApplicationHostTests
 		}
 
 		public bool IsProcessAlive(int processId) => _alive.Contains(processId);
+
+		public bool IsEndpointLeaseHeld(string endpoint) =>
+			EndpointLeaseHeld && string.Equals(endpoint, _options.Endpoints.Control, StringComparison.Ordinal);
 
 		public void KillProcessTree(int processId) => _alive.Remove(processId);
 
