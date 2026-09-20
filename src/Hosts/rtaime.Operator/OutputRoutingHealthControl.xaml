@@ -4,11 +4,45 @@
 	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
 	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 	xmlns:controls="clr-namespace:rtaime.Operator.Controls"
+	xmlns:local="clr-namespace:rtaime.Operator"
 	MinWidth="320">
+	<UserControl.Resources>
+		<Style x:Key="OutputRowStyle" TargetType="{x:Type controls:RtaimeOutputRow}" BasedOn="{StaticResource {x:Type controls:RtaimeOutputRow}}">
+			<Setter Property="Thumbnail" Value="{Binding ProgramImage, RelativeSource={RelativeSource AncestorType={x:Type local:OutputRoutingHealthControl}}}" />
+			<Style.Triggers>
+				<DataTrigger Binding="{Binding Id}" Value="preview">
+					<Setter Property="Thumbnail" Value="{Binding PreviewImage, RelativeSource={RelativeSource AncestorType={x:Type local:OutputRoutingHealthControl}}}" />
+				</DataTrigger>
+				<DataTrigger Binding="{Binding Id}" Value="aux">
+					<Setter Property="Thumbnail" Value="{x:Null}" />
+				</DataTrigger>
+			</Style.Triggers>
+		</Style>
+
+		<DataTemplate x:Key="OutputRowTemplate">
+			<controls:RtaimeOutputRow
+				Style="{StaticResource OutputRowStyle}"
+				OutputName="{Binding Name}"
+				AssignedSource="{Binding AssignedSource}"
+				Target="{Binding Target}"
+				Resolution="{Binding Resolution}"
+				FrameRate="{Binding FrameRate}"
+				ColorSpace="{Binding ColorSpace}"
+				RouteState="{Binding Status}"
+				EvidenceState="{Binding EvidenceState}"
+				ToolTip="{Binding Detail}" />
+		</DataTemplate>
+
+		<DataTemplate x:Key="HealthRowTemplate">
+			<controls:RtaimeHealthRow
+				SubsystemName="{Binding Name}"
+				State="{Binding Status}"
+				EvidenceState="{Binding EvidenceState}" />
+		</DataTemplate>
+	</UserControl.Resources>
+
 	<Grid>
-		<Grid x:Name="CompactLiveOutput"
-			Height="270"
-			Background="{DynamicResource OperatorPanelBrush}">
+		<Grid x:Name="CompactLiveOutput" Height="270" Background="{DynamicResource OperatorPanelBrush}">
 			<Grid.Style>
 				<Style TargetType="Grid">
 					<Setter Property="Visibility" Value="Collapsed" />
@@ -20,9 +54,9 @@
 				</Style>
 			</Grid.Style>
 			<Grid.RowDefinitions>
-				<RowDefinition Height="34" />
-				<RowDefinition Height="*" />
-				<RowDefinition Height="34" />
+				<RowDefinition Height="27" />
+				<RowDefinition Height="216" />
+				<RowDefinition Height="27" />
 			</Grid.RowDefinitions>
 
 			<Border Grid.Row="0"
@@ -47,89 +81,46 @@
 			<controls:RtaimeListBox Grid.Row="1"
 				ItemsSource="{Binding Outputs}"
 				SelectedItem="{Binding SelectedOutput, Mode=TwoWay}"
+				ItemTemplate="{StaticResource OutputRowTemplate}"
 				Background="Transparent"
 				BorderBrush="{DynamicResource OperatorBorderBrush}"
-				BorderThickness="1"
+				BorderThickness="1,0,1,0"
 				ScrollViewer.HorizontalScrollBarVisibility="Disabled"
 				ScrollViewer.VerticalScrollBarVisibility="Disabled"
-				AutomationProperties.Name="Compact live output routing">
+				AutomationProperties.Name="Compact output routing">
 				<controls:RtaimeListBox.ItemContainerStyle>
 					<Style TargetType="{x:Type controls:RtaimeListBoxItem}">
-						<Setter Property="Height" Value="48" />
-						<Setter Property="Padding" Value="8,0" />
+						<Setter Property="Height" Value="54" />
+						<Setter Property="Padding" Value="0" />
 						<Setter Property="Margin" Value="0" />
-						<Setter Property="Background" Value="{DynamicResource OperatorSurfaceBrush}" />
-						<Setter Property="BorderBrush" Value="{DynamicResource OperatorBorderBrush}" />
-						<Setter Property="BorderThickness" Value="0,0,0,1" />
+						<Setter Property="Background" Value="Transparent" />
+						<Setter Property="BorderThickness" Value="0" />
 						<Setter Property="HorizontalContentAlignment" Value="Stretch" />
-						<Setter Property="VerticalContentAlignment" Value="Center" />
-						<Setter Property="FocusVisualStyle" Value="{x:Null}" />
-						<Setter Property="Template">
-							<Setter.Value>
-								<ControlTemplate TargetType="{x:Type controls:RtaimeListBoxItem}">
-									<Border x:Name="Chrome"
-										Background="{TemplateBinding Background}"
-										BorderBrush="{TemplateBinding BorderBrush}"
-										BorderThickness="{TemplateBinding BorderThickness}"
-										Padding="{TemplateBinding Padding}">
-										<ContentPresenter />
-									</Border>
-									<ControlTemplate.Triggers>
-										<Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Chrome" Property="Background" Value="{DynamicResource OperatorRaisedHoverBrush}" /></Trigger>
-										<Trigger Property="IsSelected" Value="True"><Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource OperatorAccentBrush}" /></Trigger>
-									</ControlTemplate.Triggers>
-								</ControlTemplate>
-							</Setter.Value>
-						</Setter>
+						<Setter Property="VerticalContentAlignment" Value="Stretch" />
 					</Style>
 				</controls:RtaimeListBox.ItemContainerStyle>
-				<controls:RtaimeListBox.ItemTemplate>
-					<DataTemplate>
-						<Grid ToolTip="{Binding Detail}">
-							<Grid.ColumnDefinitions>
-								<ColumnDefinition Width="14" />
-								<ColumnDefinition Width="112" />
-								<ColumnDefinition Width="*" />
-								<ColumnDefinition Width="112" />
-							</Grid.ColumnDefinitions>
-							<Ellipse Width="7" Height="7" VerticalAlignment="Center">
-								<Ellipse.Style>
-									<Style TargetType="Ellipse">
-										<Setter Property="Fill" Value="{DynamicResource OperatorWarningBrush}" />
-										<Style.Triggers>
-											<DataTrigger Binding="{Binding EvidenceState}" Value="PASS"><Setter Property="Fill" Value="{DynamicResource OperatorHealthyBrush}" /></DataTrigger>
-											<DataTrigger Binding="{Binding EvidenceState}" Value="FAIL"><Setter Property="Fill" Value="{DynamicResource OperatorErrorBrush}" /></DataTrigger>
-										</Style.Triggers>
-									</Style>
-								</Ellipse.Style>
-							</Ellipse>
-							<TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="10" FontWeight="Bold" VerticalAlignment="Center" />
-							<TextBlock Grid.Column="2" Text="{Binding AssignedSource}" FontSize="11" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-							<StackPanel Grid.Column="3" VerticalAlignment="Center" HorizontalAlignment="Right">
-								<TextBlock Text="{Binding Status}" Style="{StaticResource OperatorLabel}" FontWeight="Bold" HorizontalAlignment="Right" />
-								<TextBlock Text="{Binding FrameRate}" Style="{StaticResource OperatorLabel}" FontSize="9" HorizontalAlignment="Right" />
-							</StackPanel>
-						</Grid>
-					</DataTemplate>
-				</controls:RtaimeListBox.ItemTemplate>
 			</controls:RtaimeListBox>
 
 			<Border Grid.Row="2"
 				Background="{DynamicResource OperatorAlternateSurfaceBrush}"
 				BorderBrush="{DynamicResource OperatorBorderBrush}"
 				BorderThickness="1,0,1,1"
-				Padding="6,3">
+				Padding="5,0">
 				<Grid>
-					<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+					<Grid.ColumnDefinitions>
+						<ColumnDefinition Width="*" />
+						<ColumnDefinition Width="Auto" />
+					</Grid.ColumnDefinitions>
 					<TextBlock Text="{Binding AccessDetail}" Style="{StaticResource OperatorLabel}" FontSize="9" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
 					<controls:RtaimeButton Grid.Column="1"
-						Content="TAKE PREVIEW → PROGRAM"
+						Content="TAKE PVW → PGM"
 						Command="{Binding RoutePreviewToProgramCommand}"
 						IsCompact="True"
+						Height="26"
 						Background="{DynamicResource OperatorAccentBrush}"
 						BorderBrush="{DynamicResource OperatorAccentBrush}"
 						Foreground="{DynamicResource OperatorBackgroundBrush}"
-						Margin="8,0,0,0"
+						Margin="6,0,0,0"
 						ToolTip="Uses the existing authoritative CUT command." />
 				</Grid>
 			</Border>
@@ -146,181 +137,140 @@
 					</Style.Triggers>
 				</Style>
 			</StackPanel.Style>
-		<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14">
-			<StackPanel>
-				<DockPanel Margin="0,0,0,10">
-					<StackPanel>
-						<TextBlock Text="OUTPUT ROUTING" Style="{StaticResource OperatorSectionTitle}" />
-						<TextBlock Text="Authoritative Program state and local monitoring outputs" Style="{StaticResource OperatorLabel}" Margin="0,2,0,0" />
-					</StackPanel>
-					<Border Style="{StaticResource OperatorEvidenceBadge}" Tag="{Binding AccessEvidenceState}" DockPanel.Dock="Right">
-						<StackPanel Orientation="Horizontal">
-							<TextBlock Text="●" Margin="0,0,5,0" />
-							<TextBlock Text="{Binding AccessState}" FontWeight="Bold" />
+
+			<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14">
+				<StackPanel>
+					<DockPanel Margin="0,0,0,8">
+						<StackPanel>
+							<TextBlock Text="OUTPUT ROUTING" Style="{StaticResource OperatorSectionTitle}" />
+							<TextBlock Text="Authoritative Program state and local monitoring outputs" Style="{StaticResource OperatorLabel}" Margin="0,2,0,0" />
 						</StackPanel>
-					</Border>
-				</DockPanel>
+						<controls:RtaimeStatusBadge
+							Status="{x:Static controls:RtaimeStatusKind.Neutral}"
+							Content="{Binding AccessState}"
+							ShowIndicator="True"
+							DockPanel.Dock="Right" />
+					</DockPanel>
 
-				<TextBlock Text="{Binding AccessDetail}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,0,0,10" />
+					<controls:RtaimeListBox
+						ItemsSource="{Binding Outputs}"
+						SelectedItem="{Binding SelectedOutput, Mode=TwoWay}"
+						ItemTemplate="{StaticResource OutputRowTemplate}"
+						Background="Transparent"
+						BorderBrush="{DynamicResource OperatorBorderBrush}"
+						BorderThickness="1,1,1,0"
+						ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+						ScrollViewer.VerticalScrollBarVisibility="Disabled">
+						<controls:RtaimeListBox.ItemContainerStyle>
+							<Style TargetType="{x:Type controls:RtaimeListBoxItem}">
+								<Setter Property="Height" Value="54" />
+								<Setter Property="Padding" Value="0" />
+								<Setter Property="Margin" Value="0" />
+								<Setter Property="Background" Value="Transparent" />
+								<Setter Property="BorderThickness" Value="0" />
+								<Setter Property="HorizontalContentAlignment" Value="Stretch" />
+								<Setter Property="VerticalContentAlignment" Value="Stretch" />
+							</Style>
+						</controls:RtaimeListBox.ItemContainerStyle>
+					</controls:RtaimeListBox>
 
-				<controls:RtaimeButton Content="TAKE PREVIEW → PROGRAM"
-					Command="{Binding RoutePreviewToProgramCommand}"
-					MinHeight="34"
-					Margin="0,0,0,12"
-					Background="{DynamicResource OperatorAccentBrush}"
-					BorderBrush="{DynamicResource OperatorAccentBrush}"
-					Foreground="{DynamicResource OperatorBackgroundBrush}"
-					ToolTip="Uses the existing authoritative CUT command. Disabled automatically when routing is not safe." />
+					<controls:RtaimeButton
+						Content="TAKE PREVIEW → PROGRAM"
+						Command="{Binding RoutePreviewToProgramCommand}"
+						MinHeight="30"
+						Margin="0,8,0,0"
+						Background="{DynamicResource OperatorAccentBrush}"
+						BorderBrush="{DynamicResource OperatorAccentBrush}"
+						Foreground="{DynamicResource OperatorBackgroundBrush}"
+						ToolTip="Uses the existing authoritative CUT command. Disabled automatically when routing is not safe." />
+				</StackPanel>
+			</Border>
 
-				<controls:RtaimeListBox ItemsSource="{Binding Outputs}"
-					SelectedItem="{Binding SelectedOutput, Mode=TwoWay}"
-					Background="Transparent"
-					BorderThickness="0"
-					ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-					<controls:RtaimeListBox.ItemTemplate>
-						<DataTemplate>
-							<Border BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" CornerRadius="5" Padding="10" Margin="0,0,0,7" ToolTip="{Binding Detail}">
-								<Grid>
-									<Grid.RowDefinitions>
-										<RowDefinition Height="Auto" />
-										<RowDefinition Height="Auto" />
-										<RowDefinition Height="Auto" />
-									</Grid.RowDefinitions>
-									<DockPanel>
-										<TextBlock Text="{Binding Name}" Style="{StaticResource OperatorValue}" FontWeight="Bold" />
-										<Border Style="{StaticResource OperatorEvidenceBadge}" Tag="{Binding EvidenceState}" DockPanel.Dock="Right">
-											<StackPanel Orientation="Horizontal">
-												<TextBlock Text="●" Margin="0,0,5,0" />
-												<TextBlock Text="{Binding Status}" FontWeight="Bold" />
-											</StackPanel>
-										</Border>
-									</DockPanel>
-									<TextBlock Grid.Row="1" Text="{Binding AssignedSource}" Style="{StaticResource OperatorLabel}" Margin="0,5,0,0" TextTrimming="CharacterEllipsis" />
-									<Grid Grid.Row="2" Margin="0,7,0,0">
-										<Grid.ColumnDefinitions>
-											<ColumnDefinition Width="*" />
-											<ColumnDefinition Width="*" />
-										</Grid.ColumnDefinitions>
-										<StackPanel Grid.Column="0">
-											<TextBlock Text="TARGET" Style="{StaticResource OperatorLabel}" />
-											<TextBlock Text="{Binding Target}" Style="{StaticResource OperatorValue}" TextTrimming="CharacterEllipsis" />
-										</StackPanel>
-										<StackPanel Grid.Column="1">
-											<TextBlock Text="FORMAT" Style="{StaticResource OperatorLabel}" />
-											<TextBlock Style="{StaticResource OperatorValue}">
-												<Run Text="{Binding Resolution, Mode=OneWay}" />
-												<Run Text=" · " />
-												<Run Text="{Binding FrameRate, Mode=OneWay}" />
-											</TextBlock>
-											<TextBlock Text="{Binding ColorSpace}" Style="{StaticResource OperatorLabel}" Margin="0,2,0,0" />
-										</StackPanel>
-									</Grid>
+			<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14">
+				<StackPanel>
+					<TextBlock Text="SYSTEM HEALTH" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,6" />
+					<ItemsControl ItemsSource="{Binding SystemHealth}" ItemTemplate="{StaticResource HealthRowTemplate}" />
+					<TextBlock Text="Health reuses existing Control/Runtime evidence; no workspace-specific thresholds are applied." Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,7,0,0" />
+				</StackPanel>
+			</Border>
+
+			<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14">
+				<StackPanel>
+					<DockPanel Margin="0,0,0,8">
+						<TextBlock Text="SELECTED OUTPUT" Style="{StaticResource OperatorSectionTitle}" />
+						<controls:RtaimeStatusBadge
+							Status="{x:Static controls:RtaimeStatusKind.Neutral}"
+							Content="{Binding SelectedOutput.Status}"
+							ShowIndicator="True"
+							DockPanel.Dock="Right" />
+					</DockPanel>
+
+					<TextBlock Text="{Binding SelectedOutput.Name}" FontSize="15" FontWeight="SemiBold" />
+					<TextBlock Text="{Binding SelectedOutput.Detail}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,2,0,9" />
+
+					<Grid>
+						<Grid.ColumnDefinitions>
+							<ColumnDefinition Width="*" />
+							<ColumnDefinition Width="10" />
+							<ColumnDefinition Width="*" />
+						</Grid.ColumnDefinitions>
+						<StackPanel Grid.Column="0">
+							<DockPanel Height="24"><TextBlock Text="Source" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding SelectedOutput.AssignedSource}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" TextTrimming="CharacterEllipsis" MaxWidth="190" /></DockPanel>
+							<DockPanel Height="24"><TextBlock Text="Resolution" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding SelectedOutput.Resolution}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
+							<DockPanel Height="24"><TextBlock Text="Frame Rate" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding SelectedOutput.FrameRate}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
+							<DockPanel Height="24"><TextBlock Text="Pixel Format" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding SelectedOutput.PixelFormat}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
+						</StackPanel>
+						<StackPanel Grid.Column="2">
+							<DockPanel Height="24"><TextBlock Text="Color Space" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding SelectedOutput.ColorSpace}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
+							<DockPanel Height="24"><TextBlock Text="Recording" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding SelectedOutput.RecordingStatus}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
+							<DockPanel Height="24"><TextBlock Text="Streaming" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding SelectedOutput.StreamingStatus}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
+							<DockPanel Height="24"><TextBlock Text="Target" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding SelectedOutput.Target}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" TextTrimming="CharacterEllipsis" MaxWidth="190" /></DockPanel>
+						</StackPanel>
+					</Grid>
+				</StackPanel>
+			</Border>
+
+			<Border Style="{StaticResource OperatorPanel}">
+				<StackPanel>
+					<TextBlock Text="PERFORMANCE" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,6" />
+					<ItemsControl ItemsSource="{Binding Metrics}">
+						<ItemsControl.ItemTemplate>
+							<DataTemplate>
+								<Grid Height="52" ToolTip="{Binding Detail}">
+									<Grid.ColumnDefinitions>
+										<ColumnDefinition Width="108" />
+										<ColumnDefinition Width="74" />
+										<ColumnDefinition Width="*" />
+										<ColumnDefinition Width="104" />
+									</Grid.ColumnDefinitions>
+									<TextBlock Text="{Binding Name}" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" />
+									<StackPanel Grid.Column="1" VerticalAlignment="Center">
+										<TextBlock Text="{Binding Value}" Style="{StaticResource OperatorValue}" FontSize="10" FontWeight="SemiBold" />
+										<TextBlock Text="{Binding Status}" Style="{StaticResource OperatorLabel}" FontSize="8" />
+									</StackPanel>
+									<controls:RtaimeMetricBar
+										Grid.Column="2"
+										Minimum="0"
+										Maximum="100"
+										Value="{Binding GaugeValue}"
+										HasValue="{Binding HasGaugeSample}"
+										Height="4"
+										Margin="8,0"
+										VerticalAlignment="Center" />
+									<controls:RtaimeSparkline
+										Grid.Column="3"
+										Points="{Binding HistoryPoints}"
+										HasValue="{Binding HasGaugeSample}"
+										Height="24"
+										Margin="4,0,0,0"
+										VerticalAlignment="Center" />
 								</Grid>
-							</Border>
-						</DataTemplate>
-					</controls:RtaimeListBox.ItemTemplate>
-				</controls:RtaimeListBox>
-			</StackPanel>
-		</Border>
-
-		<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14">
-			<StackPanel>
-				<TextBlock Text="SYSTEM HEALTH" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,10" />
-				<ItemsControl ItemsSource="{Binding SystemHealth}">
-					<ItemsControl.ItemsPanel>
-						<ItemsPanelTemplate>
-							<WrapPanel />
-						</ItemsPanelTemplate>
-					</ItemsControl.ItemsPanel>
-					<ItemsControl.ItemTemplate>
-						<DataTemplate>
-							<Border BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" CornerRadius="5" Padding="8" Margin="0,0,7,7" MinWidth="116">
-								<StackPanel>
-									<TextBlock Text="{Binding Name}" Style="{StaticResource OperatorLabel}" />
-									<Border Style="{StaticResource OperatorEvidenceBadge}" Tag="{Binding EvidenceState}" Margin="0,5,0,0" HorizontalAlignment="Left">
-										<StackPanel Orientation="Horizontal">
-											<TextBlock Text="●" Margin="0,0,5,0" />
-											<TextBlock Text="{Binding Status}" FontWeight="Bold" />
-										</StackPanel>
-									</Border>
-								</StackPanel>
-							</Border>
-						</DataTemplate>
-					</ItemsControl.ItemTemplate>
-				</ItemsControl>
-				<TextBlock Text="Health state reuses the existing Control projection; no workspace-specific thresholds are applied." Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
-			</StackPanel>
-		</Border>
-
-		<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14">
-			<StackPanel>
-				<DockPanel Margin="0,0,0,10">
-					<TextBlock Text="SELECTED OUTPUT" Style="{StaticResource OperatorSectionTitle}" />
-					<Border Style="{StaticResource OperatorEvidenceBadge}" Tag="{Binding SelectedOutput.EvidenceState}" DockPanel.Dock="Right">
-						<StackPanel Orientation="Horizontal">
-							<TextBlock Text="●" Margin="0,0,5,0" />
-							<TextBlock Text="{Binding SelectedOutput.Status}" FontWeight="Bold" />
-						</StackPanel>
-					</Border>
-				</DockPanel>
-
-				<TextBlock Text="{Binding SelectedOutput.Name}" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,3" />
-				<TextBlock Text="{Binding SelectedOutput.Detail}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,0,0,12" />
-
-				<Grid>
-					<Grid.ColumnDefinitions>
-						<ColumnDefinition Width="*" />
-						<ColumnDefinition Width="10" />
-						<ColumnDefinition Width="*" />
-					</Grid.ColumnDefinitions>
-					<StackPanel Grid.Column="0">
-						<DockPanel Margin="0,0,0,6"><TextBlock Text="Source" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding SelectedOutput.AssignedSource}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" TextTrimming="CharacterEllipsis" MaxWidth="170" /></DockPanel>
-						<DockPanel Margin="0,0,0,6"><TextBlock Text="Resolution" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding SelectedOutput.Resolution}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
-						<DockPanel Margin="0,0,0,6"><TextBlock Text="Frame Rate" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding SelectedOutput.FrameRate}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
-						<DockPanel><TextBlock Text="Pixel Format" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding SelectedOutput.PixelFormat}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
-					</StackPanel>
-					<StackPanel Grid.Column="2">
-						<DockPanel Margin="0,0,0,6"><TextBlock Text="Color Space" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding SelectedOutput.ColorSpace}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
-						<DockPanel Margin="0,0,0,6"><TextBlock Text="Recording" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding SelectedOutput.RecordingStatus}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
-						<DockPanel Margin="0,0,0,6"><TextBlock Text="Streaming" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding SelectedOutput.StreamingStatus}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
-						<DockPanel><TextBlock Text="Target" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding SelectedOutput.Target}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" TextTrimming="CharacterEllipsis" MaxWidth="170" /></DockPanel>
-					</StackPanel>
-				</Grid>
-			</StackPanel>
-		</Border>
-
-		<Border Style="{StaticResource OperatorPanel}">
-			<StackPanel>
-				<TextBlock Text="PERFORMANCE" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,10" />
-				<ItemsControl ItemsSource="{Binding Metrics}">
-					<ItemsControl.ItemsPanel>
-						<ItemsPanelTemplate>
-							<WrapPanel />
-						</ItemsPanelTemplate>
-					</ItemsControl.ItemsPanel>
-					<ItemsControl.ItemTemplate>
-						<DataTemplate>
-							<Border Width="146" MinHeight="86" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" CornerRadius="5" Padding="9" Margin="0,0,7,7" ToolTip="{Binding Detail}">
-								<StackPanel>
-									<DockPanel>
-										<TextBlock Text="{Binding Name}" Style="{StaticResource OperatorLabel}" />
-										<Border Style="{StaticResource OperatorEvidenceBadge}" Tag="{Binding EvidenceState}" Padding="5,1" DockPanel.Dock="Right">
-											<StackPanel Orientation="Horizontal">
-												<TextBlock Text="●" FontSize="8" Margin="0,0,4,0" />
-												<TextBlock Text="{Binding Status}" FontSize="9" FontWeight="Bold" />
-											</StackPanel>
-										</Border>
-									</DockPanel>
-									<TextBlock Text="{Binding Value}" Style="{StaticResource OperatorValue}" FontSize="14" FontWeight="SemiBold" Margin="0,5,0,4" />
-									<Polyline Points="{Binding HistoryPoints}" Stroke="{DynamicResource OperatorAccentBrush}" StrokeThickness="1.5" Width="92" Height="24" Stretch="None" HorizontalAlignment="Left" />
-								</StackPanel>
-							</Border>
-						</DataTemplate>
-					</ItemsControl.ItemTemplate>
-				</ItemsControl>
-				<TextBlock Text="Unavailable telemetry remains explicitly UNAVAILABLE. No local CPU, memory, disk, network or GPU probing is performed." Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,3,0,0" />
-			</StackPanel>
-		</Border>
+							</DataTemplate>
+						</ItemsControl.ItemTemplate>
+					</ItemsControl>
+					<TextBlock Text="Unavailable telemetry remains explicitly UNAVAILABLE. No local probing or extra sampling loop is introduced." Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,7,0,0" />
+				</StackPanel>
+			</Border>
 		</StackPanel>
 	</Grid>
 </UserControl>
