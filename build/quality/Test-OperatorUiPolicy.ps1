@@ -230,6 +230,12 @@ foreach ($featureFile in $featureXamlFiles) {
 
 Assert-Condition ($featureAuditViolations.Count -eq 0) ("Feature XAML parity audit failed:`n - " + ($featureAuditViolations -join "`n - "))
 
+$readOnlyGaugeBindings = [Regex]::Matches("$window`n$outputHealthControl", 'Value="\{Binding (?<binding>[^"]*GaugeValue[^"]*)\}"')
+Assert-Condition ($readOnlyGaugeBindings.Count -gt 0) "Operator metric surfaces must bind the shared read-only GaugeValue projection."
+foreach ($binding in $readOnlyGaugeBindings) {
+	Assert-Condition ($binding.Groups["binding"].Value -match '(^|,\s*)Mode=OneWay(,|$)') "Read-only GaugeValue bindings must be explicit Mode=OneWay to avoid WPF source-update startup failures."
+}
+
 $topBarStart = $window.IndexOf('x:Name="TopBar"', [StringComparison]::Ordinal)
 $bodyStart = $window.IndexOf('<Grid Grid.Row="1" ClipToBounds="True">', [StringComparison]::Ordinal)
 $navigationStart = $window.IndexOf('x:Name="WorkspaceNavigation"', [StringComparison]::Ordinal)
