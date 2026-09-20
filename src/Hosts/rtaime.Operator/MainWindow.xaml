@@ -242,12 +242,21 @@
 							<StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
 								<controls:RtaimeIconButton
 									IconData="{StaticResource RtaimeIconAddGeometry}"
-									Command="{Binding MediaPool.ImportCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+									Click="OnMediaPoolAddClick"
 									Width="26"
 									Height="26"
 									Margin="0,0,4,0"
-									ToolTip="Import media through the existing Media Deck path."
-									AutomationProperties.Name="Import media" />
+									ToolTip="Add media or a generated test signal."
+									AutomationProperties.Name="Add media or generator">
+									<controls:RtaimeIconButton.ContextMenu>
+										<controls:RtaimeContextMenu>
+											<controls:RtaimeMenuItem Header="Import Media" Click="OnMediaPoolImportMenuClick" />
+											<controls:RtaimeMenuSeparator />
+											<controls:RtaimeMenuItem Header="GENERATOR" IsEnabled="False" />
+											<controls:RtaimeMenuItem Header="Test Signal" Click="OnMediaPoolTestSignalMenuClick" />
+										</controls:RtaimeContextMenu>
+									</controls:RtaimeIconButton.ContextMenu>
+								</controls:RtaimeIconButton>
 								<controls:RtaimeIconButton
 									IconData="{StaticResource RtaimeIconGridGeometry}"
 									Command="{Binding MediaPool.GridViewCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
