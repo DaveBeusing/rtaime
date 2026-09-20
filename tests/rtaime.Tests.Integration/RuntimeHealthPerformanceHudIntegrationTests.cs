@@ -41,6 +41,43 @@ public sealed class RuntimeHealthPerformanceHudIntegrationTests
 	}
 
 	[Fact]
+	public void Measured_hardware_telemetry_is_projected_without_estimation()
+	{
+		var runtime = CreateRuntimeSnapshot();
+		runtime = runtime with
+		{
+			Performance = runtime.Performance! with
+			{
+				CpuDeviceName = "AMD Ryzen Threadripper PRO",
+				CpuLogicalProcessorCount = 64,
+				CpuUtilizationPercent = 42.5,
+				SystemMemoryUsedBytes = 8UL * 1024 * 1024 * 1024,
+				SystemMemoryTotalBytes = 32UL * 1024 * 1024 * 1024,
+				SystemTelemetryEvidence = "PASS: measured.",
+				PhysicalGpuDeviceName = "NVIDIA RTX PRO 6000",
+				GpuUtilizationPercent = 73,
+				GpuVramUsedBytes = 4UL * 1024 * 1024 * 1024,
+				GpuVramTotalBytes = 24UL * 1024 * 1024 * 1024,
+				GpuTelemetryEvidence = "PASS: measured."
+			}
+		};
+
+		var health = OperatorHealthProjection.Evaluate(
+			runtime,
+			new[] { CreateGpuProvider(ProviderAvailabilityState.Available) },
+			null,
+			controlAuthorityAvailable: true,
+			DateTimeOffset.UtcNow);
+
+		Assert.Equal("AMD Ryzen Threadripper PRO · 64 logical", health.CpuDeviceName);
+		Assert.Equal("42.5%", health.CpuUtilization);
+		Assert.Equal("25% · 8.00 GiB / 32.00 GiB", health.SystemMemory);
+		Assert.Equal("NVIDIA RTX PRO 6000", health.GpuDeviceName);
+		Assert.Equal("73%", health.GpuUtilization);
+		Assert.Equal("4.00 GiB / 24.00 GiB", health.Vram);
+	}
+
+	[Fact]
 	public void Degraded_GPU_provider_is_UNVERIFIED_and_never_presented_as_PASS()
 	{
 		var runtime = CreateRuntimeSnapshot();
