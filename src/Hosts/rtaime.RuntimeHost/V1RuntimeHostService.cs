@@ -102,7 +102,12 @@ public sealed record V1AudioInputSnapshot(
 	double RightPeak,
 	double MasterPeak,
 	bool Clipping,
-	V1AudioHealthState Health);
+	V1AudioHealthState Health,
+	bool TestSignalEnabled = false,
+	GeneratedAudioTestSignalMode? TestSignalMode = null,
+	string? TestSignalActiveChannel = null,
+	double? TestSignalFrequencyHz = null,
+	double? TestSignalPeakLevel = null);
 
 public sealed record V1AudioProgramSnapshot(
 	MediaSourceId ActiveVideoSourceId,
@@ -180,6 +185,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private readonly Dictionary<MediaSourceId, AudioStreamDescriptor> _audioStreams;
 	private readonly Dictionary<MediaSourceId, AudioMeterObservation> _audioMeters;
 	private readonly Dictionary<MediaSourceId, Queue<float>> _externalAudioQueues;
+	private readonly Dictionary<MediaSourceId, GeneratedAudioTestSignalGenerator> _audioTestSignals = [];
+	private readonly Dictionary<MediaSourceId, GeneratedAudioTestSignalFrameInfo> _audioTestSignalFrames = [];
 	private readonly Dictionary<MediaSourceId, RgbaFrameBuffer> _backgrounds;
 	private readonly RgbaFrameBuffer _blackBackground;
 	private readonly RgbaFrameBuffer _broadcastTestPattern;
@@ -473,24 +480,37 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			var audioPacket = _virtualAudio.GetSource(committedSource).GeneratePacket(sequence);
 			var audioObservation = _audioMeters[committedSource];
 			var audioBuffer = audioPacket.Descriptor;
-			var externalAudioPayload = audioObservation.External
+			var hasGeneratedSignal = _audioTestSignals.TryGetValue(committedSource, out var audioTestSignal);
+			GeneratedAudioTestSignalFrameInfo generatedFrame = default;
+			var generatedAudioPayload = hasGeneratedSignal
+				? MaterializeGeneratedAudioPayload(audioBuffer, audioTestSignal!, out generatedFrame)
+				: null;
+			if (hasGeneratedSignal)
+				_audioTestSignalFrames[committedSource] = generatedFrame;
+			var externalAudioPayload = !hasGeneratedSignal && audioObservation.External
 				? ConsumeExternalAudioPayloadUnsafe(committedSource, audioBuffer)
 				: null;
-			var measuredAudio = externalAudioPayload is { Length: > 0 }
-				? AudioMetering.MeasureInterleavedStereoFloat32(externalAudioPayload)
-				: audioObservation.Meter;
-			var afvBuffer = audioObservation.External && !audioObservation.Available
-				? null
-				: audioBuffer;
+			var measuredAudio = generatedAudioPayload is not null
+				? new AudioStereoMeter(generatedFrame.LeftPeakLevel, generatedFrame.RightPeakLevel)
+				: externalAudioPayload is { Length: > 0 }
+					? AudioMetering.MeasureInterleavedStereoFloat32(externalAudioPayload)
+					: audioObservation.Meter;
+			var afvBuffer = hasGeneratedSignal
+				? audioBuffer
+				: audioObservation.External && !audioObservation.Available
+					? null
+					: audioBuffer;
 			var audio = _audio.ProcessBoundary(
 				committedSource,
 				sequence,
 				afvBuffer,
 				measuredAudio);
 			_lastAudioResult = audio;
-			var programAudioPayload = externalAudioPayload is { Length: > 0 }
-				? ApplyAudioStateToPayload(externalAudioPayload, audio)
-				: MaterializeReferenceAudioPayload(audioBuffer, audio);
+			var programAudioPayload = generatedAudioPayload is not null
+				? ApplyAudioStateToPayloadInPlace(generatedAudioPayload, audio)
+				: externalAudioPayload is { Length: > 0 }
+					? ApplyAudioStateToPayload(externalAudioPayload, audio)
+					: MaterializeReferenceAudioPayload(audioBuffer, audio);
 
 			RecordingEnqueueResult? recording = null;
 			if (_recorder.Snapshot.State == RecordingLifecycleState.Recording)
@@ -705,6 +725,41 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				throw new KeyNotFoundException($"Unknown media source '{sourceId}'.");
 			_audio.SetInputState(stream.StreamId, gain, muted);
 			Observe($"audio.input.state:{sourceId}:{gain.Linear}:{muted}");
+			return AudioInputSnapshotUnsafe(sourceId);
+		}
+	}
+
+	public V1AudioInputSnapshot SetGeneratedAudioTestSignal(
+		MediaSourceId sourceId,
+		bool enabled,
+		GeneratedAudioTestSignalMode mode = GeneratedAudioTestSignalMode.Tone,
+		double frequencyHz = GeneratedAudioTestSignalConfiguration.DefaultFrequencyHz,
+		double peakLevel = GeneratedAudioTestSignalConfiguration.DefaultPeakLevel)
+	{
+		lock (_gate)
+		{
+			ThrowIfDisposed();
+			if (!_audioStreams.TryGetValue(sourceId, out var stream))
+				throw new KeyNotFoundException($"Unknown media source '{sourceId}'.");
+
+			if (!enabled)
+			{
+				var removed = _audioTestSignals.Remove(sourceId);
+				_audioTestSignalFrames.Remove(sourceId);
+				if (removed)
+					Observe($"audio.test_signal:{sourceId}:disabled");
+				return AudioInputSnapshotUnsafe(sourceId);
+			}
+
+			var configuration = new GeneratedAudioTestSignalConfiguration(
+				stream.Format,
+				mode,
+				frequencyHz,
+				peakLevel);
+			var generator = new GeneratedAudioTestSignalGenerator(configuration);
+			_audioTestSignals[sourceId] = generator;
+			_audioTestSignalFrames[sourceId] = generator.Inspect(CreateAudioBuffer(sourceId, _nextSequenceNumber).Timing);
+			Observe($"audio.test_signal:{sourceId}:enabled:{mode}:{frequencyHz:0.###}:{peakLevel:0.###}");
 			return AudioInputSnapshotUnsafe(sourceId);
 		}
 	}
@@ -1079,12 +1134,30 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		var stream = _audioStreams[sourceId];
 		var state = _audio.GetInputState(stream.StreamId);
 		var observation = _audioMeters[sourceId];
-		var leftUnclamped = state.Muted ? 0 : observation.Meter.LeftPeakLevel * state.Gain.Linear;
-		var rightUnclamped = state.Muted ? 0 : observation.Meter.RightPeakLevel * state.Gain.Linear;
+		var hasTestSignal = _audioTestSignals.TryGetValue(sourceId, out var testSignal);
+		GeneratedAudioTestSignalFrameInfo? testFrame = null;
+		if (hasTestSignal)
+		{
+			if (!_audioTestSignalFrames.TryGetValue(sourceId, out var frame))
+			{
+				frame = testSignal!.Inspect(CreateAudioBuffer(sourceId, _nextSequenceNumber).Timing);
+				_audioTestSignalFrames[sourceId] = frame;
+			}
+			testFrame = frame;
+		}
+
+		var meter = testFrame is { } generated
+			? new AudioStereoMeter(generated.LeftPeakLevel, generated.RightPeakLevel)
+			: observation.Meter;
+		var available = hasTestSignal || observation.Available;
+		var leftUnclamped = state.Muted ? 0 : meter.LeftPeakLevel * state.Gain.Linear;
+		var rightUnclamped = state.Muted ? 0 : meter.RightPeakLevel * state.Gain.Linear;
 		var left = Math.Min(1, leftUnclamped);
 		var right = Math.Min(1, rightUnclamped);
 		var clipping = !state.Muted && (leftUnclamped >= 1 || rightUnclamped >= 1);
-		var health = !_inputSignals.TryGetValue(sourceId, out var signal) || signal == V1InputSignalState.Lost || !observation.Available
+		var sourceAvailable = hasTestSignal ||
+			(_inputSignals.TryGetValue(sourceId, out var signal) && signal != V1InputSignalState.Lost);
+		var health = !sourceAvailable || !available
 			? V1AudioHealthState.Error
 			: state.Muted
 				? V1AudioHealthState.Muted
@@ -1103,7 +1176,12 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			right,
 			Math.Max(left, right),
 			clipping,
-			health);
+			health,
+			hasTestSignal,
+			testSignal?.Configuration.Mode,
+			testFrame?.ActiveChannel,
+			testSignal?.Configuration.FrequencyHz,
+			testSignal?.Configuration.PeakLevel);
 	}
 
 	private V1AudioProgramSnapshot AudioProgramSnapshotUnsafe()
@@ -1150,9 +1228,14 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	{
 		foreach (var sourceId in _audioStreams.Keys)
 		{
+			var packet = _virtualAudio.GetSource(sourceId).GeneratePacket(sequence);
+			if (_audioTestSignals.TryGetValue(sourceId, out var testSignal))
+			{
+				_audioTestSignalFrames[sourceId] = testSignal.Inspect(packet.Descriptor.Timing);
+				continue;
+			}
 			if (_audioMeters[sourceId].External)
 				continue;
-			var packet = _virtualAudio.GetSource(sourceId).GeneratePacket(sequence);
 			_audioMeters[sourceId] = new AudioMeterObservation(
 				new AudioStereoMeter(packet.LeftPeakLevel, packet.RightPeakLevel),
 				Available: true,
@@ -1277,20 +1360,45 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	{
 		if (!result.Emitted)
 			return Array.Empty<byte>();
-		var output = payload.ToArray();
-		var samples = MemoryMarshal.Cast<byte, float>(output.AsSpan());
+		return ApplyAudioStateToPayloadInPlace(payload.ToArray(), result);
+	}
+
+	private static byte[] ApplyAudioStateToPayloadInPlace(
+		byte[] payload,
+		AudioFollowVideoResult result)
+	{
+		if (!result.Emitted)
+			return Array.Empty<byte>();
+		var samples = MemoryMarshal.Cast<byte, float>(payload.AsSpan());
 		for (var index = 0; index < samples.Length; index++)
 		{
 			var value = result.Muted ? 0f : samples[index] * checked((float)result.Gain.Linear);
 			samples[index] = float.IsFinite(value) ? Math.Clamp(value, -1f, 1f) : 0f;
 		}
-		return output;
+		return payload;
 	}
 
 	private void EnsureAudioSourceUnsafe(MediaSourceId sourceId)
 	{
 		if (!_audioStreams.ContainsKey(sourceId))
 			throw new KeyNotFoundException($"Unknown media source '{sourceId}'.");
+	}
+
+	private static byte[] MaterializeGeneratedAudioPayload(
+		AudioBufferDescriptor descriptor,
+		GeneratedAudioTestSignalGenerator generator,
+		out GeneratedAudioTestSignalFrameInfo frameInfo)
+	{
+		if (descriptor.Format.SampleFormat != AudioSampleFormat.Float32)
+			throw new InvalidOperationException("Generated audio payload requires Float32 audio.");
+		if (descriptor.Format != generator.Configuration.Format)
+			throw new InvalidOperationException("Generated audio configuration must match the Runtime audio buffer format.");
+
+		var valueCount = checked((int)(descriptor.Timing.SampleCount * descriptor.Format.ChannelCount));
+		var payload = new byte[checked(valueCount * sizeof(float))];
+		var samples = MemoryMarshal.Cast<byte, float>(payload.AsSpan());
+		frameInfo = generator.FillInterleavedFloat32(descriptor.Timing, samples);
+		return payload;
 	}
 
 	private static byte[] MaterializeReferenceAudioPayload(

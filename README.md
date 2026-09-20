@@ -44,7 +44,7 @@ The V1 path brings together:
 - CUT and DISSOLVE;
 - timeline, IN/OUT, markers and Cue points;
 - graphics and compositing;
-- Audio Follow Video;
+- Audio Follow Video and deterministic generated audio diagnostics;
 - Program Recording;
 - Program Output and monitoring;
 - system health and performance visibility.
@@ -79,7 +79,7 @@ The current V1 development repository implements production-shaped software path
 | Media | local media files, Media Pool, transport, timeline, IN/OUT, markers and Cue points |
 | Switching | authoritative Preview/Program, CUT and DISSOLVE |
 | Compositing | graphics overlays, layers and compositing workspace |
-| Audio | Audio Follow Video, gain/mute/metering seams |
+| Audio | Audio Follow Video, gain/mute/metering seams, deterministic generated test signals |
 | Recording | failure-isolated Program Recording |
 | Output | Program Output, Clean Program monitoring and output health |
 | AI | governed inference showcase with bounded fallback |
@@ -313,6 +313,7 @@ Core architecture and operation:
 - [Executable Host Lifecycle](docs/ExecutableHostLifecycle.md)
 - [Process Recovery & Supervision](docs/ProcessRecoveryAndSupervision.md)
 - [Production IPC / Remote API](docs/ProductionIpcRemoteApi.md)
+- [Audio Test Signal Generator](docs/AudioTestSignalGenerator.md)
 - [Runtime Readiness](docs/RuntimeReadiness.md)
 - [Operator Monitoring Plane](docs/OperatorMonitoringPlane.md)
 - [Observability & Diagnostics](docs/ObservabilityDiagnostics.md)

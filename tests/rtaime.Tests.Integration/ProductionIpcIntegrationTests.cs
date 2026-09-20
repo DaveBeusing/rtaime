@@ -100,6 +100,29 @@ public sealed class ProductionIpcIntegrationTests
 
 		await client.SetAudioInputStateAsync(sourceA.Id, 1.0, muted: false);
 
+		var generatedAudio = await client.SetAudioTestSignalAsync(
+			sourceA.Id,
+			true,
+			2,
+			1_000,
+			0.25);
+		Assert.True(generatedAudio.TestSignalEnabled);
+		Assert.Equal(2, generatedAudio.TestSignalMode);
+		Assert.Equal("ALL", generatedAudio.TestSignalActiveChannel);
+		Assert.Equal(1_000, generatedAudio.TestSignalFrequencyHz);
+		Assert.Equal(0.25, generatedAudio.TestSignalPeakLevel);
+		Assert.Equal(revisionBeforeAudio, client.Snapshot!.Production.Revision);
+		Assert.True(client.Snapshot.AudioInputs.Single(input => input.SourceId == sourceA.Id).TestSignalEnabled);
+
+		var generatedAudioOff = await client.SetAudioTestSignalAsync(
+			sourceA.Id,
+			false,
+			2,
+			1_000,
+			0.25);
+		Assert.False(generatedAudioOff.TestSignalEnabled);
+		Assert.Equal(revisionBeforeAudio, client.Snapshot!.Production.Revision);
+
 		var revisionBeforeGraphics = client.Snapshot!.Production.Revision;
 		var graphicsAsset = new OperatorGraphicsAsset(
 			"operator-logo.rgba",

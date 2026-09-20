@@ -59,6 +59,24 @@ public sealed class OperatorAudioInputViewModel : INotifyPropertyChanged
 	public bool IsAfv { get => _isAfv; private set { if (Set(ref _isAfv, value)) OnPropertyChanged(nameof(AfvLabel)); } }
 	public string AfvLabel => IsAfv ? "AFV / PGM" : "INPUT";
 	public string MuteActionLabel => Muted ? "UNMUTE" : "MUTE";
+	public bool TestSignalEnabled => _descriptor.TestSignalEnabled;
+	public int? TestSignalMode => _descriptor.TestSignalMode;
+	public string TestSignalModeLabel => TestSignalMode switch
+	{
+		1 => "SILENCE",
+		2 => "TONE",
+		3 => "STEREO ID",
+		4 => "CHANNEL ID",
+		5 => "PULSE",
+		_ => "OFF"
+	};
+	public string TestSignalActiveChannel => _descriptor.TestSignalActiveChannel ?? "—";
+	public string TestSignalStatus => TestSignalEnabled
+		? $"{TestSignalModeLabel} · {TestSignalActiveChannel}"
+		: "OFF";
+	public string TestSignalActionLabel => TestSignalEnabled && TestSignalMode == 5
+		? "TEST SIGNAL OFF"
+		: "NEXT TEST SIGNAL";
 
 	public void Apply(
 		OperatorAudioInputDescriptor descriptor,
@@ -73,6 +91,12 @@ public sealed class OperatorAudioInputViewModel : INotifyPropertyChanged
 
 		_descriptor = descriptor;
 		OnPropertyChanged(nameof(StreamId));
+		OnPropertyChanged(nameof(TestSignalEnabled));
+		OnPropertyChanged(nameof(TestSignalMode));
+		OnPropertyChanged(nameof(TestSignalModeLabel));
+		OnPropertyChanged(nameof(TestSignalActiveChannel));
+		OnPropertyChanged(nameof(TestSignalStatus));
+		OnPropertyChanged(nameof(TestSignalActionLabel));
 		SourceName = Normalize(sourceName, descriptor.SourceId);
 		SourceType = Normalize(sourceType, "LIVE").ToUpperInvariant();
 		if (!preserveGainEdit)

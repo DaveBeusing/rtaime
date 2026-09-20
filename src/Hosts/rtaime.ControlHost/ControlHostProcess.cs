@@ -70,6 +70,16 @@ public interface IControlRuntimeTransportSeam
 		ValueTask.FromException<RuntimeAudioInputSnapshot>(
 			new NotSupportedException("Runtime transport does not expose audio input control."));
 
+	ValueTask<RuntimeAudioInputSnapshot> SetAudioTestSignalAsync(
+		MediaSourceId sourceId,
+		bool enabled,
+		int mode,
+		double frequencyHz,
+		double peakLevel,
+		CancellationToken cancellationToken = default) =>
+		ValueTask.FromException<RuntimeAudioInputSnapshot>(
+			new NotSupportedException("Runtime transport does not expose generated audio test signal control."));
+
 	ValueTask<bool> SetBroadcastTestPatternAsync(
 		MediaSourceId sourceId,
 		bool enabled,

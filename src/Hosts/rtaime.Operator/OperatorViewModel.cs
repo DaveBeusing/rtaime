@@ -134,6 +134,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		ClearGraphicsCommand = new AsyncRelayCommand(ClearGraphicsAsync, CanApplyGraphics);
 		ApplyAudioGainCommand = new AsyncRelayCommand(ApplyAudioGainAsync, CanApplyAudio);
 		ToggleAudioMuteCommand = new AsyncRelayCommand(ToggleAudioMuteAsync, CanApplyAudio);
+		CycleAudioTestSignalCommand = new AsyncRelayCommand(CycleAudioTestSignalAsync, CanApplyAudio);
 		StartRecordingCommand = new AsyncRelayCommand(StartRecordingAsync, CanStartRecording);
 		StopRecordingCommand = new AsyncRelayCommand(StopRecordingAsync, CanStopRecording);
 		EnableAIShowcaseCommand = new AsyncRelayCommand(() => SetAIShowcaseAsync(true), () => CanControl() && !AIEnabled);
@@ -160,6 +161,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	public ICommand ClearGraphicsCommand { get; }
 	public ICommand ApplyAudioGainCommand { get; }
 	public ICommand ToggleAudioMuteCommand { get; }
+	public ICommand CycleAudioTestSignalCommand { get; }
 	public ICommand StartRecordingCommand { get; }
 	public ICommand StopRecordingCommand { get; }
 	public ICommand EnableAIShowcaseCommand { get; }
@@ -728,6 +730,28 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 			ApplyAudio(_client.Snapshot!, preserveSelectedGainEdit: false);
 			CommandStatus = muted ? "AUDIO MUTED" : "AUDIO LIVE";
 			LastEvent = $"{input.SourceName} audio {(muted ? "muted" : "unmuted")} and confirmed by RuntimeHost.";
+		});
+	}
+
+	private async Task CycleAudioTestSignalAsync()
+	{
+		if (_client is null || SelectedAudioInput is null) return;
+		var input = SelectedAudioInput;
+		var nextMode = !input.TestSignalEnabled
+			? 1
+			: input.TestSignalMode is >= 1 and < 5
+				? input.TestSignalMode.Value + 1
+				: 0;
+		var enabled = nextMode != 0;
+		var requestMode = enabled ? nextMode : 2;
+		await ExecuteAsync(enabled ? "AUDIO TEST SIGNAL" : "AUDIO TEST SIGNAL OFF", async () =>
+		{
+			await _client.SetAudioTestSignalAsync(input.SourceId, enabled, requestMode, 1_000, 0.25);
+			ApplyAudio(_client.Snapshot!, preserveSelectedGainEdit: false);
+			CommandStatus = enabled ? "AUDIO TEST ACTIVE" : "AUDIO TEST OFF";
+			LastEvent = enabled
+				? $"{input.SourceName} generated audio test signal advanced to mode {requestMode}."
+				: $"{input.SourceName} generated audio test signal disabled.";
 		});
 	}
 
@@ -1303,6 +1327,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		(ClearGraphicsCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 		(ApplyAudioGainCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 		(ToggleAudioMuteCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+		(CycleAudioTestSignalCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 		(StartRecordingCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 		(StopRecordingCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 		(EnableAIShowcaseCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();

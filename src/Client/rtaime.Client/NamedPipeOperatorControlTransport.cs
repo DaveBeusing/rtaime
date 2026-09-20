@@ -96,6 +96,25 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		return FromWire(wire);
 	}
 
+	public async ValueTask<OperatorAudioInputDescriptor> SetAudioTestSignalAsync(
+		string sourceId,
+		bool enabled,
+		int mode,
+		double frequencyHz,
+		double peakLevel,
+		CancellationToken cancellationToken = default)
+	{
+		if (string.IsNullOrWhiteSpace(sourceId))
+			throw new ArgumentException("Audio source id is required.", nameof(sourceId));
+		var response = await ExchangeAsync(
+			"control.audio.test_signal.set",
+			new WireAudioTestSignalState(sourceId.Trim(), enabled, mode, frequencyHz, peakLevel),
+			cancellationToken).ConfigureAwait(false);
+		var wire = response.Payload.Deserialize<WireAudioInput>(Wire.JsonOptions)
+			?? throw new InvalidDataException("ControlHost generated audio test signal payload is required.");
+		return FromWire(wire);
+	}
+
 	public ValueTask<bool> SetBroadcastTestPatternAsync(
 		string sourceId,
 		bool enabled,
@@ -494,7 +513,12 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		input.RightPeak,
 		input.MasterPeak,
 		input.Clipping,
-		input.Health);
+		input.Health,
+		input.TestSignalEnabled,
+		input.TestSignalMode,
+		input.TestSignalActiveChannel,
+		input.TestSignalFrequencyHz,
+		input.TestSignalPeakLevel);
 
 	private static OperatorAudioProgramDescriptor FromWire(WireAudioProgram program) => new(
 		program.ActiveVideoSourceId,
@@ -615,8 +639,23 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 	private sealed record WireGraphicsOverlayState(bool Visible, double PositionX, double PositionY, double Scale);
 	private sealed record WireGraphicsOverlay(bool AssetLoaded, string? AssetName, uint AssetWidth, uint AssetHeight, bool Visible, double PositionX, double PositionY, double Scale);
 	private sealed record WireAudioInputState(string SourceId, double Gain, bool Muted);
+	private sealed record WireAudioTestSignalState(string SourceId, bool Enabled, int Mode, double FrequencyHz, double PeakLevel);
 	private sealed record WireTestPatternState(string SourceId, bool Enabled, bool MotionTiming = false);
-	private sealed record WireAudioInput(string SourceId, string StreamId, double Gain, bool Muted, double LeftPeak, double RightPeak, double MasterPeak, bool Clipping, string Health);
+	private sealed record WireAudioInput(
+		string SourceId,
+		string StreamId,
+		double Gain,
+		bool Muted,
+		double LeftPeak,
+		double RightPeak,
+		double MasterPeak,
+		bool Clipping,
+		string Health,
+		bool TestSignalEnabled = false,
+		int? TestSignalMode = null,
+		string? TestSignalActiveChannel = null,
+		double? TestSignalFrequencyHz = null,
+		double? TestSignalPeakLevel = null);
 	private sealed record WireAudioProgram(string ActiveVideoSourceId, string ActiveStreamId, double Gain, bool Muted, double LeftPeak, double RightPeak, double MasterPeak, bool Clipping, string Health);
 	private sealed record WireRecordingStart(string DestinationDirectory, string FileName);
 	private sealed record WireRecordingSnapshot(string State, long ElapsedTicks, string? Destination, string? FileName, string? FinalPath, ulong Accepted, ulong Written, ulong Dropped, ulong Rejected, ulong WriterFailures, WireFailure? Failure);

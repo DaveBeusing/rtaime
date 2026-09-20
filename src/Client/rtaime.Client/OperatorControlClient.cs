@@ -94,7 +94,12 @@ public sealed record OperatorAudioInputDescriptor
         double rightPeak,
         double masterPeak,
         bool clipping,
-        string health)
+        string health,
+        bool testSignalEnabled = false,
+        int? testSignalMode = null,
+        string? testSignalActiveChannel = null,
+        double? testSignalFrequencyHz = null,
+        double? testSignalPeakLevel = null)
     {
         if (string.IsNullOrWhiteSpace(sourceId)) throw new ArgumentException("Audio source id is required.", nameof(sourceId));
         if (string.IsNullOrWhiteSpace(streamId)) throw new ArgumentException("Audio stream id is required.", nameof(streamId));
@@ -113,6 +118,11 @@ public sealed record OperatorAudioInputDescriptor
         MasterPeak = masterPeak;
         Clipping = clipping;
         Health = health.Trim().ToUpperInvariant();
+        TestSignalEnabled = testSignalEnabled;
+        TestSignalMode = testSignalMode;
+        TestSignalActiveChannel = string.IsNullOrWhiteSpace(testSignalActiveChannel) ? null : testSignalActiveChannel.Trim().ToUpperInvariant();
+        TestSignalFrequencyHz = testSignalFrequencyHz;
+        TestSignalPeakLevel = testSignalPeakLevel;
     }
 
     public string SourceId { get; }
@@ -124,6 +134,11 @@ public sealed record OperatorAudioInputDescriptor
     public double MasterPeak { get; }
     public bool Clipping { get; }
     public string Health { get; }
+    public bool TestSignalEnabled { get; }
+    public int? TestSignalMode { get; }
+    public string? TestSignalActiveChannel { get; }
+    public double? TestSignalFrequencyHz { get; }
+    public double? TestSignalPeakLevel { get; }
 
     private static void ValidatePeak(double value, string name)
     {
@@ -406,6 +421,15 @@ public interface IOperatorControlTransport
         CancellationToken cancellationToken = default) =>
         ValueTask.FromException<OperatorAudioInputDescriptor>(new NotSupportedException("Operator transport does not expose audio input control."));
 
+    ValueTask<OperatorAudioInputDescriptor> SetAudioTestSignalAsync(
+        string sourceId,
+        bool enabled,
+        int mode,
+        double frequencyHz,
+        double peakLevel,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<OperatorAudioInputDescriptor>(new NotSupportedException("Operator transport does not expose generated audio test signal control."));
+
     ValueTask<bool> SetBroadcastTestPatternAsync(
         string sourceId,
         bool enabled,
@@ -557,6 +581,31 @@ public sealed class OperatorControlClient
         RequireSnapshot();
         var result = await _transport
             .SetAudioInputStateAsync(sourceId.Trim(), gain, muted, cancellationToken)
+            .ConfigureAwait(false);
+        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+
+    public async ValueTask<OperatorAudioInputDescriptor> SetAudioTestSignalAsync(
+        string sourceId,
+        bool enabled,
+        int mode,
+        double frequencyHz,
+        double peakLevel,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(sourceId))
+            throw new ArgumentException("Audio source id is required.", nameof(sourceId));
+        if (mode is < 1 or > 5)
+            throw new ArgumentOutOfRangeException(nameof(mode), "Generated audio test signal mode must be in the supported range 1..5.");
+        if (!double.IsFinite(frequencyHz) || frequencyHz <= 0)
+            throw new ArgumentOutOfRangeException(nameof(frequencyHz));
+        if (!double.IsFinite(peakLevel) || peakLevel is < 0 or > 0.5)
+            throw new ArgumentOutOfRangeException(nameof(peakLevel));
+
+        RequireSnapshot();
+        var result = await _transport
+            .SetAudioTestSignalAsync(sourceId.Trim(), enabled, mode, frequencyHz, peakLevel, cancellationToken)
             .ConfigureAwait(false);
         await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
         return result;

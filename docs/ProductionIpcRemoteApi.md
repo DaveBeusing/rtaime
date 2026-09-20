@@ -72,12 +72,16 @@ Operator-facing messages:
 - `control.preview.select`
 - `control.program.cut`
 - `control.program.dissolve`
+- `control.audio.input.set`
+- `control.audio.test_signal.set`
 - `control.test_pattern.set`
 - `control.media_deck.snapshot.get`
 - `control.media_deck.open`
 - `control.media_deck.transport`
 - `control.media_deck.marker`
 - `control.media_deck.close`
+
+The `control.audio.input.set` and `control.audio.test_signal.set` messages validate that the selected audio slot belongs to the authoritative production, then delegate Runtime-owned audio state changes without advancing Production revision. Generated-audio requests carry only source identity, enabled state, mode, frequency and bounded peak level; raw samples never traverse management IPC.
 
 The `control.test_pattern.set` message validates that the selected slot belongs to the authoritative production, then delegates the generated-source state change to RuntimeHost. Its bounded payload carries source identity, enabled state and the optional motion/timing mode flag. The Operator never addresses RuntimeHost directly.
 
@@ -104,13 +108,15 @@ Control-facing messages:
 - `runtime.providers.get`
 - `runtime.snapshot.get`
 - `runtime.execution.apply`
+- `runtime.audio.input.set`
+- `runtime.audio.test_signal.set`
 - `runtime.test_pattern.set`
 - `runtime.media_deck.snapshot.get`
 - `runtime.media_deck.open`
 - `runtime.media_deck.transport`
 - `runtime.media_deck.close`
 
-The server delegates normal production execution to `V1RuntimeHostService`. The `runtime.test_pattern.set` request selects static or motion/timing generation for an existing source slot; snapshots separately identify active generated sources and those currently using motion/timing diagnostics. The media-deck slice delegates local-file decode and transport to the RuntimeHost-owned single-deck service, using a ControlHost-supplied `PreparedExecutionContract`. Raw video/audio payloads never cross this management IPC boundary.
+The server delegates normal production execution to `V1RuntimeHostService`. The `runtime.audio.test_signal.set` request configures the generated audio source for an existing audio input and returns the Runtime-confirmed mode, active identification channel, frequency and peak level through the normal audio-input snapshot. The `runtime.test_pattern.set` request selects static or motion/timing video generation for an existing source slot; snapshots separately identify active generated sources and those currently using motion/timing diagnostics. The media-deck slice delegates local-file decode and transport to the RuntimeHost-owned single-deck service, using a ControlHost-supplied `PreparedExecutionContract`. Raw video/audio payloads never cross this management IPC boundary.
 
 A Runtime snapshot exposes two deliberately separate revision domains:
 

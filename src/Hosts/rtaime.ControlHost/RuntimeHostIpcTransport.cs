@@ -29,7 +29,12 @@ public sealed record RuntimeAudioInputSnapshot(
 	double RightPeak,
 	double MasterPeak,
 	bool Clipping,
-	string Health);
+	string Health,
+	bool TestSignalEnabled = false,
+	int? TestSignalMode = null,
+	string? TestSignalActiveChannel = null,
+	double? TestSignalFrequencyHz = null,
+	double? TestSignalPeakLevel = null);
 
 public sealed record RuntimeAudioProgramSnapshot(
 	MediaSourceId ActiveVideoSourceId,
@@ -263,6 +268,23 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 			cancellationToken).ConfigureAwait(false);
 		var wire = response.Payload.Deserialize<WireAudioInput>(Wire.JsonOptions)
 			?? throw new InvalidDataException("Runtime audio input response is required.");
+		return FromWire(wire);
+	}
+
+	public async ValueTask<RuntimeAudioInputSnapshot> SetAudioTestSignalAsync(
+		MediaSourceId sourceId,
+		bool enabled,
+		int mode,
+		double frequencyHz,
+		double peakLevel,
+		CancellationToken cancellationToken = default)
+	{
+		var response = await ExchangeAsync(
+			"runtime.audio.test_signal.set",
+			new WireAudioTestSignalState(sourceId.ToString(), enabled, mode, frequencyHz, peakLevel),
+			cancellationToken).ConfigureAwait(false);
+		var wire = response.Payload.Deserialize<WireAudioInput>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Runtime generated audio test signal response is required.");
 		return FromWire(wire);
 	}
 
@@ -574,7 +596,12 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 		snapshot.RightPeak,
 		snapshot.MasterPeak,
 		snapshot.Clipping,
-		AudioHealth(snapshot.Health));
+		AudioHealth(snapshot.Health),
+		snapshot.TestSignalEnabled,
+		snapshot.TestSignalMode,
+		snapshot.TestSignalActiveChannel,
+		snapshot.TestSignalFrequencyHz,
+		snapshot.TestSignalPeakLevel);
 
 	private static RuntimeAudioProgramSnapshot FromWire(WireAudioProgram snapshot) => new(
 		new MediaSourceId(Identity.Parse(snapshot.ActiveVideoSourceId)),
@@ -782,7 +809,22 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 	private sealed record WireGraphicsOverlayState(bool Visible, double PositionX, double PositionY, double Scale);
 	private sealed record WireGraphicsOverlay(bool AssetLoaded, string? AssetName, uint AssetWidth, uint AssetHeight, bool Visible, double PositionX, double PositionY, double Scale);
 	private sealed record WireAudioInputState(string SourceId, double Gain, bool Muted);
-	private sealed record WireAudioInput(string SourceId, string StreamId, double Gain, bool Muted, double LeftPeak, double RightPeak, double MasterPeak, bool Clipping, int Health);
+	private sealed record WireAudioTestSignalState(string SourceId, bool Enabled, int Mode, double FrequencyHz, double PeakLevel);
+	private sealed record WireAudioInput(
+		string SourceId,
+		string StreamId,
+		double Gain,
+		bool Muted,
+		double LeftPeak,
+		double RightPeak,
+		double MasterPeak,
+		bool Clipping,
+		int Health,
+		bool TestSignalEnabled = false,
+		int? TestSignalMode = null,
+		string? TestSignalActiveChannel = null,
+		double? TestSignalFrequencyHz = null,
+		double? TestSignalPeakLevel = null);
 	private sealed record WireAudioProgram(string ActiveVideoSourceId, string ActiveStreamId, double Gain, bool Muted, double LeftPeak, double RightPeak, double MasterPeak, bool Clipping, int Health);
 	private sealed record WireCapability(string CapabilityId, string Kind, WireVideoFormat[] VideoFormats);
 	private sealed record WireResource(string ResourceId, string ProviderId, string Kind, uint CapacityUnits, bool Reservable);

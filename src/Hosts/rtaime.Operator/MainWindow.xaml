@@ -1380,9 +1380,13 @@
 												<TextBlock Text="{Binding SourceName}" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" />
 												<TextBlock Text="{Binding AfvLabel}" Style="{StaticResource OperatorLabel}" DockPanel.Dock="Right" />
 											</DockPanel>
-											<DockPanel Margin="0,4,0,4">
+											<DockPanel Margin="0,4,0,2">
 												<TextBlock Text="{Binding SourceType}" Style="{StaticResource OperatorLabel}" />
 												<TextBlock Text="{Binding Health}" Style="{StaticResource OperatorLabel}" DockPanel.Dock="Right" />
+											</DockPanel>
+											<DockPanel Margin="0,0,0,4">
+												<TextBlock Text="TEST" Style="{StaticResource OperatorLabel}" />
+												<TextBlock Text="{Binding TestSignalStatus}" Style="{StaticResource OperatorLabel}" DockPanel.Dock="Right" />
 											</DockPanel>
 											<Grid>
 												<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="6" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
@@ -1409,6 +1413,11 @@
 								<controls:RtaimeButton Grid.Column="0" Content="APPLY GAIN" Command="{Binding ApplyAudioGainCommand}" Background="{DynamicResource OperatorAccentSurfaceBrush}" BorderBrush="{DynamicResource OperatorAccentBrush}" />
 								<controls:RtaimeButton Grid.Column="2" Content="{Binding SelectedAudioInput.MuteActionLabel}" Command="{Binding ToggleAudioMuteCommand}"  />
 							</Grid>
+							<DockPanel Margin="0,8,0,4">
+								<TextBlock Text="Generated test signal" Style="{StaticResource OperatorLabel}" />
+								<TextBlock Text="{Binding SelectedAudioInput.TestSignalStatus}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" />
+							</DockPanel>
+							<controls:RtaimeButton Content="{Binding SelectedAudioInput.TestSignalActionLabel}" Command="{Binding CycleAudioTestSignalCommand}" IsCompact="True" />
 							<DockPanel Margin="0,10,0,0">
 								<TextBlock Text="Clip audio" Style="{StaticResource OperatorLabel}" />
 								<TextBlock Text="{Binding ClipAudioStatus}" Style="{StaticResource OperatorLabel}" DockPanel.Dock="Right" TextTrimming="CharacterEllipsis" MaxWidth="230" />

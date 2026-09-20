@@ -18,6 +18,7 @@
 		<ProjectReference Include="..\..\src\AI\rtaime.AI\rtaime.AI.csproj" />
 		<ProjectReference Include="..\..\src\Recording\rtaime.Recording\rtaime.Recording.csproj" />
 		<ProjectReference Include="..\..\src\Providers\rtaime.Provider.Gpu\rtaime.Provider.Gpu.csproj" />
+		<ProjectReference Include="..\..\src\Providers\rtaime.Provider.VirtualMedia\rtaime.Provider.VirtualMedia.csproj" />
 		<ProjectReference Include="..\..\src\Providers\rtaime.Provider.Inference\rtaime.Provider.Inference.csproj" />
 		<ProjectReference Include="..\..\src\Client\rtaime.Client\rtaime.Client.csproj" />
 		<ProjectReference Include="..\..\src\Hosts\rtaime.AppHost\rtaime.AppHost.csproj" />

@@ -252,7 +252,9 @@ The RuntimeHost remains the owner of:
 - clipping, silence, underrun and error health;
 - actual Program audio payload selection.
 
-The Operator receives snapshots through **Operator → rtaime.Client → ControlHost → RuntimeHost** and can change only the existing Runtime input gain/mute state. Audio mutations are serialized by ControlHost and confirmed by RuntimeHost. They do not fabricate or advance Preview/Program routing revisions.
+The Operator receives snapshots through **Operator → rtaime.Client → ControlHost → RuntimeHost** and can change the existing Runtime input gain/mute state plus the internal generated audio diagnostic source documented in [AudioTestSignalGenerator.md](AudioTestSignalGenerator.md). Audio mutations are serialized by ControlHost and confirmed by RuntimeHost. They do not fabricate or advance Preview/Program routing revisions.
+
+Generated audio diagnostics reuse the same `AudioBufferDescriptor`, exact sample window, FOLLOW_VIDEO selection, gain/mute stage, Program metering and recording/output payload path. They do not introduce a second audio engine or a UI timer.
 
 ### Stereo metering
 
