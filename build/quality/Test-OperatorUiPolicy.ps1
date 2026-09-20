@@ -497,7 +497,7 @@ Assert-Condition ($deck -match 'Binding ProgramDeckState') "Media Autoplay & End
 Assert-Condition ($deck -match 'Binding EffectiveRange') "Media Autoplay & End Behavior must expose the effective IN/OUT playback range."
 Assert-Condition ($deck -match 'Binding ApplyPlaybackPolicyCommand') "Media Autoplay & End Behavior playback policy changes must be explicit operator actions."
 Assert-Condition ($deckViewModel -match 'ConfigurePlaybackAsync\(AutoPlayOnProgram, EndBehavior') "Media Autoplay & End Behavior policy changes must cross the Client SDK deck controller."
-Assert-Condition ($deckViewModel -match 'if \(!IsLoaded \|\| IsBusy\)') "Loaded media decks must keep observing Runtime-triggered autoplay state."
+Assert-Condition ($deckViewModel -match 'ApplyConfirmedSnapshot\(MediaDeckSnapshot snapshot\)' -and $deckViewModel -match 'if \(!_playbackPolicyDirty && _snapshot\.Transport is \{ \} playback\)') "Loaded media decks must keep observing Runtime-triggered autoplay state through the shared confirmed snapshot stream."
 Assert-Condition ($deckViewModel -match 'EffectiveRemainingFrames') "Deck countdown must use effective IN/OUT remaining frames."
 Assert-Condition ($deck -notmatch 'Auto Pause') "Media Autoplay & End Behavior must not imply unspecified auto-pause-on-remove semantics."
 Assert-Condition ($viewModel -match 'EffectiveRemainingFrames') "Source-tile remaining time must use the effective media range."
