@@ -57,6 +57,7 @@ public sealed class ExecutableHostLifecycleTests
 		Assert.True(process.RuntimeDisposed);
 		Assert.NotNull(process.FinalRuntimeSnapshot);
 		Assert.Equal(0, process.FinalRuntimeSnapshot!.ActiveGpuSurfaces);
+		Assert.Equal(0, process.Runtime!.Snapshot.ActiveGpuSurfaces);
 		Assert.Equal(RuntimeHostProcessState.Stopped, process.Lifecycle.State);
 	}
 
