@@ -446,6 +446,10 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 							CommandStatus = "RECOVERING";
 							LastEvent = "Control connection was lost; automatic recovery is running.";
 						}
+						else
+						{
+							ApplyLifecycle(_client?.Snapshot);
+						}
 					}
 					else
 					{
