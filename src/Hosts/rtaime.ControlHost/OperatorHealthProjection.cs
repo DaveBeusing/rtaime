@@ -206,8 +206,8 @@ public static class OperatorHealthProjection
 
 	private static string FormatSystemMemory(RuntimePerformanceSnapshot? performance)
 	{
-		if (performance?.SystemMemoryUsedBytes is { } used && performance.SystemMemoryTotalBytes is { } total)
-			return $"{FormatBytes(used)} / {FormatBytes(total)}";
+		if (performance?.SystemMemoryUsedBytes is { } used && performance.SystemMemoryTotalBytes is { } total && total > 0)
+			return $"{used * 100d / total:0.#}% · {FormatBytes(used)} / {FormatBytes(total)}";
 		if (performance?.SystemMemoryTotalBytes is { } capacity)
 			return $"usage UNVERIFIED / {FormatBytes(capacity)} total";
 		return "UNVERIFIED";
