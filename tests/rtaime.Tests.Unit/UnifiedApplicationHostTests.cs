@@ -176,17 +176,19 @@ public sealed class UnifiedApplicationHostTests
 		Assert.All(provider.Stages, stage => Assert.Equal(LifecycleStageStatus.Pending, stage.Status));
 		provider.StartStage(ApplicationLifecycleStages.ControlHost, "Starting.", canRetry: true);
 		Assert.Equal(LifecycleStageStatus.Starting, provider.ActiveStage?.Status);
-		Assert.True(provider.ActiveStage?.CanRetry);
+		Assert.True(provider.ActiveStage?.CanRetry == true);
 		await platform.DelayAsync(TimeSpan.FromMilliseconds(184), CancellationToken.None);
 		provider.CompleteStage(ApplicationLifecycleStages.ControlHost, "Ready.");
 		var control = provider.Stages.Single(stage => stage.Id == ApplicationLifecycleStages.ControlHost);
 		Assert.Equal(LifecycleStageStatus.Ready, control.Status);
-		Assert.Equal(TimeSpan.FromMilliseconds(184), control.CompletedAt - control.StartedAt);
+		Assert.NotNull(control.StartedAt);
+		Assert.NotNull(control.CompletedAt);
+		Assert.Equal(TimeSpan.FromMilliseconds(184), control.CompletedAt.Value - control.StartedAt.Value);
 		provider.DegradeStage(ApplicationLifecycleStages.ProductionReadiness, "Degraded.");
 		Assert.Equal(LifecycleStageStatus.Degraded, provider.ActiveStage?.Status);
 		provider.FailStage(ApplicationLifecycleStages.ProductionReadiness, "Qualification failed.", canRetry: true);
 		Assert.Equal(LifecycleStageStatus.Failed, provider.ActiveStage?.Status);
-		Assert.True(provider.ActiveStage?.CanRetry);
+		Assert.True(provider.ActiveStage?.CanRetry == true);
 		Assert.True(updates >= 5);
 	}
 
