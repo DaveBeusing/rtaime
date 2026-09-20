@@ -91,6 +91,34 @@ public sealed class RgbaFrameBuffer
         pixels.CopyTo(_pixels);
     }
 
+    public void CopyRegionFrom(
+        ReadOnlySpan<byte> rgbaPixels,
+        int x,
+        int y,
+        int width,
+        int height)
+    {
+        if (x < 0 || y < 0)
+            throw new ArgumentOutOfRangeException(nameof(x), "RGBA region origin must not be negative.");
+        if (width <= 0 || height <= 0)
+            throw new ArgumentOutOfRangeException(nameof(width), "RGBA region dimensions must be greater than zero.");
+        if ((long)x + width > Format.Width || (long)y + height > Format.Height)
+            throw new ArgumentOutOfRangeException(nameof(width), "RGBA region must fit inside the frame buffer.");
+
+        var rowBytes = checked(width * 4);
+        var expectedLength = checked(rowBytes * height);
+        if (rgbaPixels.Length != expectedLength)
+            throw new ArgumentException("RGBA region payload length does not match the requested region.", nameof(rgbaPixels));
+
+        var frameWidth = checked((int)Format.Width);
+        for (var row = 0; row < height; row++)
+        {
+            var source = rgbaPixels.Slice(checked(row * rowBytes), rowBytes);
+            var destinationOffset = checked((((y + row) * frameWidth) + x) * 4);
+            source.CopyTo(_pixels.AsSpan(destinationOffset, rowBytes));
+        }
+    }
+
     public static RgbaFrameBuffer Solid(VideoFormat format, byte red, byte green, byte blue, byte alpha = byte.MaxValue)
     {
         var pixels = new byte[RequiredByteLength(format)];
