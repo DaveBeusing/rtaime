@@ -1,6 +1,5 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
-using System.Collections.Specialized;
 using System.ComponentModel;
 using rtaime.Client;
 
@@ -72,7 +71,7 @@ public sealed class OperatorHealthSnapshotProvider : IHealthSnapshotProvider, ID
 		_mediaDeck.PropertyChanged += MediaDeckPropertyChanged;
 		_monitoring.PropertyChanged += MonitoringPropertyChanged;
 		_output.PropertyChanged += OutputPropertyChanged;
-		_compositing.Nodes.CollectionChanged += CompositingNodesChanged;
+		_compositing.PropertyChanged += CompositingPropertyChanged;
 		Refresh();
 	}
 
@@ -93,7 +92,7 @@ public sealed class OperatorHealthSnapshotProvider : IHealthSnapshotProvider, ID
 		_mediaDeck.PropertyChanged -= MediaDeckPropertyChanged;
 		_monitoring.PropertyChanged -= MonitoringPropertyChanged;
 		_output.PropertyChanged -= OutputPropertyChanged;
-		_compositing.Nodes.CollectionChanged -= CompositingNodesChanged;
+		_compositing.PropertyChanged -= CompositingPropertyChanged;
 	}
 
 	private void OperatorPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -132,9 +131,11 @@ public sealed class OperatorHealthSnapshotProvider : IHealthSnapshotProvider, ID
 		Refresh();
 	}
 
-	private void CompositingNodesChanged(object? sender, NotifyCollectionChangedEventArgs e)
+	private void CompositingPropertyChanged(object? sender, PropertyChangedEventArgs e)
 	{
 		if (_disposed)
+			return;
+		if (!string.Equals(e.PropertyName, nameof(CompositingGraphViewModel.HealthRevision), StringComparison.Ordinal))
 			return;
 		Refresh();
 	}
