@@ -336,7 +336,8 @@ public sealed record OperatorStatusSnapshot
         OperatorAudioProgramDescriptor? audioProgram = null,
         OperatorRecordingDescriptor? recording = null,
         OperatorHealthDescriptor? health = null,
-        OperatorAIShowcaseDescriptor? aiShowcase = null)
+        OperatorAIShowcaseDescriptor? aiShowcase = null,
+        MediaDeckSnapshot? mediaDeck = null)
     {
         Production = production ?? throw new ArgumentNullException(nameof(production));
         ArgumentNullException.ThrowIfNull(sources);
@@ -364,6 +365,7 @@ public sealed record OperatorStatusSnapshot
         Recording = recording ?? OperatorRecordingDescriptor.Unavailable;
         Health = health ?? OperatorHealthDescriptor.Unavailable;
         AIShowcase = aiShowcase ?? OperatorAIShowcaseDescriptor.Unavailable;
+        MediaDeck = mediaDeck ?? MediaDeckSnapshot.Unloaded;
     }
 
     public AuthoritativeProductionState Production { get; }
@@ -381,6 +383,7 @@ public sealed record OperatorStatusSnapshot
     public OperatorRecordingDescriptor Recording { get; }
     public OperatorHealthDescriptor Health { get; }
     public OperatorAIShowcaseDescriptor AIShowcase { get; }
+    public MediaDeckSnapshot MediaDeck { get; }
 }
 
 /// <summary>
