@@ -305,7 +305,7 @@ public sealed class SystemApplicationHostPlatform : IApplicationHostPlatform
 		var diagnosticDirectory = Path.GetDirectoryName(diagnosticPath);
 		if (!string.IsNullOrWhiteSpace(diagnosticDirectory)) Directory.CreateDirectory(diagnosticDirectory);
 		try { if (File.Exists(diagnosticPath)) File.Delete(diagnosticPath); }
-		catch (IOException) { }
+		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException) { }
 
 		startInfo.RedirectStandardOutput = true;
 		startInfo.RedirectStandardError = true;
@@ -355,7 +355,6 @@ public sealed class SystemApplicationHostPlatform : IApplicationHostPlatform
 			processWithDiagnostics.BeginOutputReadLine();
 			processWithDiagnostics.BeginErrorReadLine();
 			processWithDiagnostics.EnableRaisingEvents = true;
-			if (processWithDiagnostics.HasExited) FinalizeDiagnostic();
 			return processId;
 		}
 		catch
@@ -738,7 +737,22 @@ public sealed class UnifiedApplicationHost
 		{
 			cancellationToken.ThrowIfCancellationRequested();
 			if (_controlProcessId is { } controlPid && !_platform.IsProcessAlive(controlPid))
+			{
+				if (_platform.IsEndpointLeaseHeld(_options.Endpoints.Control))
+				{
+					_ownedControlProcessId = null;
+					var adopted = await WaitForLeasedControlReadinessAsync(cancellationToken).ConfigureAwait(false);
+					if (adopted is not null)
+					{
+						_adopted = true;
+						_controlProcessId = adopted.Value.Evidence.ProcessId;
+						_activeReadinessPath = adopted.Value.Path;
+						return adopted;
+					}
+				}
+
 				throw new InvalidOperationException(BuildControlHostExitDetail("ControlHost exited before qualified readiness."));
+			}
 
 			var ready = await FindHealthyReadinessAsync(cancellationToken).ConfigureAwait(false);
 			if (ready is not null)
