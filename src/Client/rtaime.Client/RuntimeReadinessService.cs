@@ -255,7 +255,7 @@ public sealed class RuntimeReadinessService : IRuntimeReadinessService, IDisposa
 			observedAt <= now + TimeSpan.FromSeconds(1) &&
 			now - observedAt <= _performanceValidity;
 		var runtimeFault = health.Runtime.State == OperatorHealthStates.Fail ||
-			health.Engine.State == OperatorHealthStates.Fail;
+			health.GpuProvider.State == OperatorHealthStates.Fail;
 		var hardwareChanged = previous.State == RuntimePerformanceVerificationState.Verified &&
 			IsQualifiedHardwareFingerprint(previous.HardwareFingerprint) &&
 			IsQualifiedHardwareFingerprint(hardwareFingerprint) &&
