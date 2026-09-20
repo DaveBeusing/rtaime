@@ -85,6 +85,46 @@ public sealed class LocalMediaRuntimeIntegrationTests
 	}
 
 	[Fact]
+	public void Reference_mp4_sustains_multiple_playback_cycles_without_decode_failure()
+	{
+		if (!OperatingSystem.IsWindows())
+			return;
+
+		using var referenceAsset = LocalMediaTestAsset.ExtractReference1080p50();
+		var provider = new LocalMediaFileProvider();
+		var open = provider.TryOpen(
+			referenceAsset.Path,
+			MediaSourceId.New(),
+			new MediaAssetId(Id(102)));
+
+		Assert.True(open.Succeeded, open.Failure?.Message);
+		Assert.NotNull(open.Source);
+		using var source = open.Source!;
+
+		const int targetFrames = 250;
+		var decodedFrames = 0;
+		ulong sequence = 0;
+		while (decodedFrames < targetFrames)
+		{
+			var decoded = source.ReadNext(sequence);
+			if (decoded.Status == LocalMediaFrameReadStatus.Ended)
+			{
+				var seek = source.SeekToFrame(0);
+				Assert.True(seek.Succeeded, seek.Failure?.Message);
+				continue;
+			}
+
+			Assert.True(decoded.Succeeded, decoded.Failure?.Message);
+			Assert.NotNull(decoded.Frame);
+			Assert.Equal((long)1920 * 1080 * 4, decoded.Frame!.RgbaPixels.Length);
+			decodedFrames++;
+			sequence++;
+		}
+
+		Assert.Equal(targetFrames, decodedFrames);
+	}
+
+	[Fact]
 	public void Reference_mp4_normalizes_to_requested_runtime_format()
 	{
 		if (!OperatingSystem.IsWindows())
