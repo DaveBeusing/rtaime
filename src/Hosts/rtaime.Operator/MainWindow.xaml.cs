@@ -3,10 +3,12 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Threading;
 using Microsoft.Win32;
 using rtaime.Client;
@@ -16,6 +18,16 @@ namespace rtaime.Operator;
 
 public partial class MainWindow : Window
 {
+	private const int DwmwaUseImmersiveDarkMode = 20;
+	private const int DwmwaUseImmersiveDarkModeLegacy = 19;
+	private const int DwmwaBorderColor = 34;
+	private const int DwmwaCaptionColor = 35;
+	private const int DwmwaTextColor = 36;
+
+	private const int DarkCaptionColor = 0x001B1309;
+	private const int DarkBorderColor = 0x003F3425;
+	private const int LightCaptionTextColor = 0x00F6F3EE;
+
 	private bool _shutdownStarted;
 	private bool _shutdownComplete;
 	private bool _fullscreenApplied;
@@ -131,6 +143,12 @@ public partial class MainWindow : Window
 	public OperatorKeyboardCommandRegistry Shortcuts { get; }
 	public MediaTimelineViewModel Timeline => MediaDeck.Timeline;
 
+	protected override void OnSourceInitialized(EventArgs e)
+	{
+		base.OnSourceInitialized(e);
+		ApplyDarkWindowCaption();
+	}
+
 	protected override void OnPreviewKeyDown(KeyEventArgs e)
 	{
 		if (Shortcuts.TryHandle(e))
@@ -138,6 +156,33 @@ public partial class MainWindow : Window
 
 		base.OnPreviewKeyDown(e);
 	}
+
+	private void ApplyDarkWindowCaption()
+	{
+		var handle = new WindowInteropHelper(this).Handle;
+		if (handle == IntPtr.Zero)
+			return;
+
+		var darkModeEnabled = 1;
+		if (DwmSetWindowAttribute(handle, DwmwaUseImmersiveDarkMode, ref darkModeEnabled, sizeof(int)) != 0)
+			DwmSetWindowAttribute(handle, DwmwaUseImmersiveDarkModeLegacy, ref darkModeEnabled, sizeof(int));
+
+		var captionColor = DarkCaptionColor;
+		DwmSetWindowAttribute(handle, DwmwaCaptionColor, ref captionColor, sizeof(int));
+
+		var borderColor = DarkBorderColor;
+		DwmSetWindowAttribute(handle, DwmwaBorderColor, ref borderColor, sizeof(int));
+
+		var textColor = LightCaptionTextColor;
+		DwmSetWindowAttribute(handle, DwmwaTextColor, ref textColor, sizeof(int));
+	}
+
+	[DllImport("dwmapi.dll", PreserveSig = true)]
+	private static extern int DwmSetWindowAttribute(
+		IntPtr windowHandle,
+		int attribute,
+		ref int attributeValue,
+		int attributeSize);
 
 	private Task FocusMediaSearchAsync()
 	{
