@@ -1,5 +1,6 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
+using System.Windows.Input;
 using rtaime.Client;
 using rtaime.Operator;
 
@@ -28,8 +29,7 @@ public sealed class HealthCenterViewModelTests
 			Snapshot("runtime", "Runtime Service", SubsystemHealthState.Healthy)
 		]);
 		var readiness = new FakeRuntimeReadinessService();
-		using var @operator = new OperatorViewModel();
-		using var center = new HealthCenterViewModel(provider, readiness, @operator, new InlineSynchronizationContext());
+		using var center = new HealthCenterViewModel(provider, readiness, new FakeCommand(), new InlineSynchronizationContext());
 
 		Assert.Equal(3, center.Subsystems.Count);
 		Assert.Equal(2, center.Attention.Count);
@@ -43,8 +43,7 @@ public sealed class HealthCenterViewModelTests
 	{
 		var provider = new FakeHealthSnapshotProvider([Snapshot("runtime", "Runtime Service", SubsystemHealthState.Failed)]);
 		var readiness = new FakeRuntimeReadinessService();
-		using var @operator = new OperatorViewModel();
-		using var center = new HealthCenterViewModel(provider, readiness, @operator, new InlineSynchronizationContext());
+		using var center = new HealthCenterViewModel(provider, readiness, new FakeCommand(), new InlineSynchronizationContext());
 
 		Assert.Equal("FAILED", center.Subsystems.Single().State);
 		provider.Publish([Snapshot("runtime", "Runtime Service", SubsystemHealthState.Recovering)]);
@@ -61,8 +60,7 @@ public sealed class HealthCenterViewModelTests
 	{
 		var provider = new FakeHealthSnapshotProvider([Snapshot("cpu", "CPU", SubsystemHealthState.Healthy, "sample 0")]);
 		var readiness = new FakeRuntimeReadinessService();
-		using var @operator = new OperatorViewModel();
-		using var center = new HealthCenterViewModel(provider, readiness, @operator, new InlineSynchronizationContext());
+		using var center = new HealthCenterViewModel(provider, readiness, new FakeCommand(), new InlineSynchronizationContext());
 
 		for (var index = 1; index <= 500; index++)
 		{
@@ -85,8 +83,7 @@ public sealed class HealthCenterViewModelTests
 			Snapshot("providers", "Processing Providers", SubsystemHealthState.Failed, "GPU provider unavailable.")
 		]);
 		var readiness = new FakeRuntimeReadinessService();
-		using var @operator = new OperatorViewModel();
-		using var center = new HealthCenterViewModel(provider, readiness, @operator, new InlineSynchronizationContext());
+		using var center = new HealthCenterViewModel(provider, readiness, new FakeCommand(), new InlineSynchronizationContext());
 
 		Assert.Equal("FAILED", center.Subsystems.Single().State);
 		Assert.Equal(1, center.FailedCount);
@@ -102,8 +99,7 @@ public sealed class HealthCenterViewModelTests
 			Snapshot("decoder", "Decoder", SubsystemHealthState.Unknown, "No media loaded.")
 		]);
 		var readiness = new FakeRuntimeReadinessService();
-		using var @operator = new OperatorViewModel();
-		using var center = new HealthCenterViewModel(provider, readiness, @operator, new InlineSynchronizationContext());
+		using var center = new HealthCenterViewModel(provider, readiness, new FakeCommand(), new InlineSynchronizationContext());
 
 		Assert.Equal("UNKNOWN", center.Subsystems.Single().State);
 		Assert.Equal(0, center.FailedCount);
@@ -208,6 +204,15 @@ public sealed class HealthCenterViewModelTests
 		}
 
 		public void InvalidatePerformance(string detail)
+		{
+		}
+	}
+
+	private sealed class FakeCommand : ICommand
+	{
+		public event EventHandler? CanExecuteChanged;
+		public bool CanExecute(object? parameter) => false;
+		public void Execute(object? parameter)
 		{
 		}
 	}
