@@ -7,6 +7,7 @@ using rtaime.Core;
 using rtaime.Media;
 using rtaime.Media.Contracts;
 using rtaime.Persistence;
+using rtaime.Provider.VirtualMedia;
 using rtaime.Recording;
 using rtaime.Runtime.Contracts;
 using rtaime.RuntimeHost;
@@ -80,6 +81,96 @@ public sealed class AudioOperatorWorkflowIntegrationTests
 		Assert.Equal(fixture.SourceB, fixture.Runtime.Snapshot.AudioProgram.ActiveVideoSourceId);
 		Assert.Equal(0.30, switched.Audio.LeftPeakLevel, 5);
 		Assert.Equal(0.60, switched.Audio.RightPeakLevel, 5);
+	}
+
+	[Fact]
+	public async Task Generated_audio_test_signal_uses_regular_afv_path_and_restores_preserved_external_input()
+	{
+		await using var fixture = await Fixture.CreateAsync();
+
+		fixture.Runtime.SetExternalAudioInput(fixture.SourceA, StereoSamples(960, 0.10f, -0.20f));
+		var configured = fixture.Runtime.SetGeneratedAudioTestSignal(
+			fixture.SourceA,
+			true,
+			GeneratedAudioTestSignalMode.Tone,
+			1_000,
+			0.25);
+
+		Assert.True(configured.TestSignalEnabled);
+		Assert.Equal(GeneratedAudioTestSignalMode.Tone, configured.TestSignalMode);
+		Assert.Equal("ALL", configured.TestSignalActiveChannel);
+		Assert.Equal(V1AudioHealthState.Healthy, configured.Health);
+
+		var generated = fixture.Runtime.ProcessNextBoundary();
+		Assert.True(generated.Audio.Emitted);
+		Assert.Equal(fixture.SourceA, generated.Audio.VideoSourceId);
+		Assert.Equal(0.25, generated.Audio.PeakLevel, 5);
+		Assert.InRange(
+			generated.ProgramAudioPayload
+				.Chunk(sizeof(float))
+				.Select(bytes => Math.Abs(BinaryPrimitives.ReadSingleLittleEndian(bytes)))
+				.Max(),
+			0.249f,
+			0.251f);
+		Assert.Equal(V1AudioHealthState.Healthy, fixture.Runtime.Snapshot.AudioProgram.Health);
+
+		var disabled = fixture.Runtime.SetGeneratedAudioTestSignal(fixture.SourceA, false);
+		Assert.False(disabled.TestSignalEnabled);
+
+		var restored = fixture.Runtime.ProcessNextBoundary();
+		Assert.True(restored.Audio.Emitted);
+		Assert.Equal(0.10f, ReadFloat(restored.ProgramAudioPayload, 0), 5);
+		Assert.Equal(-0.20f, ReadFloat(restored.ProgramAudioPayload, 1), 5);
+	}
+
+	[Fact]
+	public async Task Generated_stereo_identification_reports_active_channel_and_drives_real_meter_values()
+	{
+		await using var fixture = await Fixture.CreateAsync();
+
+		fixture.Runtime.SetGeneratedAudioTestSignal(
+			fixture.SourceA,
+			true,
+			GeneratedAudioTestSignalMode.StereoIdentification);
+
+		var boundary = fixture.Runtime.ProcessNextBoundary();
+		var snapshot = fixture.Runtime.Snapshot.AudioInputs[fixture.SourceA];
+
+		Assert.True(boundary.Audio.Emitted);
+		Assert.Equal("LEFT", snapshot.TestSignalActiveChannel);
+		Assert.True(snapshot.LeftPeak > 0.2);
+		Assert.Equal(0, snapshot.RightPeak);
+		Assert.True(boundary.Audio.LeftPeakLevel > 0.2);
+		Assert.Equal(0, boundary.Audio.RightPeakLevel);
+		Assert.All(
+			Enumerable.Range(0, checked((int)boundary.Audio.SampleCount)),
+			frame => Assert.Equal(0f, ReadFloat(boundary.ProgramAudioPayload, (frame * 2) + 1)));
+	}
+
+	[Fact]
+	public async Task Generated_silence_remains_available_and_reports_silence_health()
+	{
+		await using var fixture = await Fixture.CreateAsync();
+
+		fixture.Runtime.SetInputSignalState(fixture.SourceA, V1InputSignalState.Lost);
+		var configured = fixture.Runtime.SetGeneratedAudioTestSignal(
+			fixture.SourceA,
+			true,
+			GeneratedAudioTestSignalMode.Silence);
+
+		Assert.True(configured.TestSignalEnabled);
+		Assert.Equal(V1AudioHealthState.Silence, configured.Health);
+
+		var boundary = fixture.Runtime.ProcessNextBoundary();
+		Assert.True(boundary.Audio.Emitted);
+		Assert.Equal(0, boundary.Audio.PeakLevel);
+		Assert.All(
+			Enumerable.Range(0, boundary.ProgramAudioPayload.Length / sizeof(float)),
+			index => Assert.Equal(0f, ReadFloat(boundary.ProgramAudioPayload, index)));
+
+		var disabled = fixture.Runtime.SetGeneratedAudioTestSignal(fixture.SourceA, false);
+		Assert.False(disabled.TestSignalEnabled);
+		Assert.Equal(V1AudioHealthState.Error, disabled.Health);
 	}
 
 	private static float[] StereoSamples(int frames, float left, float right)
