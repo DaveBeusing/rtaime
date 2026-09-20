@@ -124,6 +124,9 @@
 					<Grid.RowDefinitions>
 						<RowDefinition Height="Auto" />
 						<RowDefinition Height="Auto" />
+						<RowDefinition Height="Auto" />
+						<RowDefinition Height="Auto" />
+						<RowDefinition Height="Auto" />
 						<RowDefinition Height="*" />
 					</Grid.RowDefinitions>
 					<DockPanel Margin="0,0,0,8">
@@ -139,8 +142,39 @@
 						<TextBlock Text="  ·  Failed " Style="{StaticResource OperatorLabel}" />
 						<TextBlock Text="{Binding FailedCount}" FontWeight="SemiBold" />
 					</StackPanel>
+					<TextBlock Grid.Row="2" Text="ACTIVE ISSUES" Style="{StaticResource OperatorLabel}" Margin="0,2,0,5" />
 					<controls:RtaimeListBox
-						Grid.Row="2"
+						Grid.Row="3"
+						ItemsSource="{Binding Attention}"
+						SelectedItem="{Binding SelectedSubsystem, Mode=TwoWay}"
+						Background="Transparent"
+						BorderThickness="0"
+						MaxHeight="150"
+						Margin="0,0,0,10"
+						ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+						ScrollViewer.VerticalScrollBarVisibility="Auto"
+						AutomationProperties.Name="Health Center active issues">
+						<controls:RtaimeListBox.ItemTemplate>
+							<DataTemplate>
+								<Grid Margin="5,4">
+									<Grid.ColumnDefinitions>
+										<ColumnDefinition Width="*" />
+										<ColumnDefinition Width="Auto" />
+									</Grid.ColumnDefinitions>
+									<StackPanel>
+										<TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" />
+										<TextBlock Text="{Binding Detail}" Style="{StaticResource OperatorLabel}" FontSize="9" TextTrimming="CharacterEllipsis" MaxWidth="210" />
+									</StackPanel>
+									<Border Grid.Column="1" Style="{StaticResource HealthCenterStateBadge}" Tag="{Binding State}" VerticalAlignment="Center">
+										<TextBlock Text="{Binding State}" FontSize="8" FontWeight="Bold" />
+									</Border>
+								</Grid>
+							</DataTemplate>
+						</controls:RtaimeListBox.ItemTemplate>
+					</controls:RtaimeListBox>
+					<TextBlock Grid.Row="4" Text="ALL SUBSYSTEMS" Style="{StaticResource OperatorLabel}" Margin="0,0,0,5" />
+					<controls:RtaimeListBox
+						Grid.Row="5"
 						ItemsSource="{Binding Subsystems}"
 						SelectedItem="{Binding SelectedSubsystem, Mode=TwoWay}"
 						Background="Transparent"
