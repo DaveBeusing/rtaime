@@ -12,6 +12,20 @@ public enum SubsystemHealthState
 	Unknown
 }
 
+public static class HealthStateMapping
+{
+	public static SubsystemHealthState FromEvidence(string? evidence) =>
+		evidence?.Trim().ToUpperInvariant() switch
+		{
+			"PASS" => SubsystemHealthState.Healthy,
+			"FAIL" => SubsystemHealthState.Failed,
+			"WARNING" => SubsystemHealthState.Warning,
+			"DEGRADED" => SubsystemHealthState.Degraded,
+			"RECOVERING" => SubsystemHealthState.Recovering,
+			_ => SubsystemHealthState.Unknown
+		};
+}
+
 public sealed record HealthMetricSnapshot(
 	string Label,
 	string Value,
