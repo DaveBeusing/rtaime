@@ -98,22 +98,12 @@
 		CornerRadius="0"
 		ClipToBounds="True">
 		<Grid>
-
 			<controls:RtaimeStatePlaceholder
-				State="EMPTY"
-				Title="Timeline is empty"
-				Detail="Load media to begin timeline editing."
-				Panel.ZIndex="50"
-				Margin="12">
-				<controls:RtaimeStatePlaceholder.Style>
-					<Style TargetType="{x:Type controls:RtaimeStatePlaceholder}" BasedOn="{StaticResource {x:Type controls:RtaimeStatePlaceholder}}">
-						<Setter Property="Visibility" Value="Collapsed" />
-						<Style.Triggers>
-							<DataTrigger Binding="{Binding IsLoaded}" Value="False"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
-						</Style.Triggers>
-					</Style>
-				</controls:RtaimeStatePlaceholder.Style>
-			</controls:RtaimeStatePlaceholder>
+							State="{Binding WorkspaceStates.Timeline.State, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							Title="{Binding WorkspaceStates.Timeline.Title, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							Detail="{Binding WorkspaceStates.Timeline.Detail, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							Panel.ZIndex="60"
+							Margin="10" />
 			<Grid.RowDefinitions>
 				<RowDefinition Height="44" />
 				<RowDefinition Height="30" />
