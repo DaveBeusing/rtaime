@@ -165,7 +165,7 @@ The following remain intentional human visual checks because CI does not provide
 - physical display disconnect/fallback;
 - subjective legibility of monitoring, meters, Cues and status surfaces.
 
-A funding-demo run is accepted only when the automated Required Gates are green and these visual checks have been completed on the actual presentation workstation.
+A Product Showcase run is accepted only when the automated Required Gates are green and these visual checks have been completed on the actual presentation workstation.
 
 ## Explicit non-goals
 
@@ -178,4 +178,4 @@ The showcase does not claim or add:
 - Multi-GPU scheduling;
 - remote control or user-management workflows.
 
-Those capabilities remain outside the V1 funding-showcase acceptance boundary.
+Those capabilities remain outside the V1 Product Showcase acceptance boundary.
