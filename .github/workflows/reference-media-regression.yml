@@ -58,7 +58,7 @@ jobs:
         run: ./build/testmedia/Test-ReferenceMediaRegression.ps1
 
       - name: Upload reference manifests
-        if: always()
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: rtaime-reference-media-manifests-${{ github.run_id }}
