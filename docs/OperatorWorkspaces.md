@@ -4,7 +4,7 @@
 
 ## Purpose
 
-The Operator provides seven task-oriented workspaces over one shared production state. A workspace changes presentation only: panel visibility, panel dimensions, viewer emphasis, timeline height and the current UI context. It does not own routing, media transport, recording, graphics, AI, health or output authority.
+The Operator provides eight task-oriented workspaces over one shared production state. A workspace changes presentation only: panel visibility, panel dimensions, viewer emphasis, timeline height and the current UI context. It does not own routing, media transport, recording, graphics, AI, health or output authority.
 
 The canonical workspaces are:
 
@@ -14,6 +14,7 @@ The canonical workspaces are:
 - SCENES
 - COMPOSITING
 - OUTPUTS
+- HEALTH
 - SETTINGS
 
 Switching workspaces never creates a second production snapshot or forks product state.
@@ -88,9 +89,15 @@ Preview-to-Program routing reuses the existing CUT command and becomes SAFE READ
 
 Available Runtime frame-time, dropped-frame and hardware evidence is presented with bounded presentation-only mini histories. The workspace introduces no independent thresholds and no additional telemetry polling loop. See [Output Routing, Health and Performance](OutputRoutingHealth.md).
 
+## HEALTH
+
+HEALTH is the dedicated diagnostic workspace. It consumes the central event-driven health snapshot provider for CPU, Memory, GPU/VRAM, Media, Decoder, Compositing, Output, Frame Timing, Control, Runtime, providers and the monitoring plane.
+
+Subsystem health remains distinct from global Runtime Readiness. The workspace shows state duration, last successful check, measurements, recovery status and optional technical detail without creating another health authority. Recovery controls appear only when an existing safe command is available. See [Health Center](HealthCenter.md).
+
 ## SETTINGS
 
-SETTINGS retains the generic lifecycle, system-status and monitoring diagnostics using the existing system projection. It does not own Runtime configuration or create a parallel settings state. PASS, FAIL and UNVERIFIED evidence semantics remain unchanged.
+SETTINGS retains shell configuration plus compact legacy lifecycle/system-status surfaces. It does not own Runtime configuration or create a parallel settings or diagnostics state. PASS, FAIL and UNVERIFIED evidence semantics remain unchanged.
 
 ## Quick Controls
 
@@ -157,7 +164,7 @@ It is monitoring presentation, not output authority.
 
 ## Per-workspace layout persistence
 
-Operator layout storage uses schema version 4. Each canonical workspace persists only presentation fields:
+Operator layout storage uses schema version 5. Each canonical workspace persists only presentation fields:
 
 - left and right panel width;
 - timeline/lower region height;
@@ -165,7 +172,7 @@ Operator layout storage uses schema version 4. Each canonical workspace persists
 - center-maximized state;
 - viewer presentation mode.
 
-Fullscreen preference, selected workspace and normalized window placement remain top-level Operator UI preferences. Legacy workspace names migrate to the canonical presentation destinations without carrying production state. Pre-v4 persisted geometry is reset to the binding 400 / 340 / 320 reference shell dimensions while fullscreen preference, selected workspace and normalized window placement are retained.
+Fullscreen preference, selected workspace and normalized window placement remain top-level Operator UI preferences. Legacy workspace names migrate to the canonical presentation destinations without carrying production state. Pre-v4 persisted geometry is reset to the binding 400 / 340 / 320 reference shell dimensions while fullscreen preference, selected workspace and normalized window placement are retained. Version-4 layouts migrate in place and receive only the new HEALTH workspace defaults.
 
 SAVE LAYOUT persists the active workspace presentation. LAYOUT RESET restores only that workspace's canonical defaults. Missing, corrupt, non-finite, out-of-range or incompatible persisted data recovers to safe canonical layouts.
 
@@ -181,6 +188,7 @@ Canonical workspace defaults use the same mockup macro geometry and differ only 
 | SCENES | 400 | 340 | 320 | none | DUAL |
 | COMPOSITING | 400 | 340 | 320 | none | DUAL |
 | OUTPUTS | 400 | 340 | 320 | none | PROGRAM |
+| HEALTH | 400 | 340 | 320 | none | PROGRAM |
 | SETTINGS | 400 | 340 | 320 | none | PROGRAM |
 
 At constrained logical widths the shell enters a presentation-only compact viewport mode. It temporarily removes the left and right side regions plus any auxiliary workspace column from the grid allocation, reduces the lower region allocation and suppresses optional top-bar telemetry without modifying the persisted per-workspace dimensions. The central production surface, Program identity, connection/lifecycle state and core shell actions remain visible. Returning to a larger viewport restores the stored presentation values.
@@ -215,7 +223,7 @@ A typical live workflow is:
 4. Pin frequently adjusted values from the Inspector.
 5. Switch to LIVE for multiview, production controls and Quick Controls.
 6. Open Clean Program when a dedicated monitoring display is required.
-7. Use OUTPUTS for recording/output evidence and SETTINGS for shell/status diagnostics.
+7. Use OUTPUTS for recording/output evidence, HEALTH for subsystem diagnostics and SETTINGS for shell configuration.
 
 The same underlying production state remains active across every workspace.
 
