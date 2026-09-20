@@ -1722,5 +1722,115 @@
 				</Border>
 			</Grid>
 		</Border>
+		<ItemsControl
+			Grid.RowSpan="3"
+			Panel.ZIndex="120"
+			HorizontalAlignment="Right"
+			VerticalAlignment="Top"
+			Width="420"
+			Margin="0,72,16,0"
+			ItemsSource="{Binding Notifications.Toasts, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+			AutomationProperties.Name="Operator notifications">
+			<ItemsControl.ItemTemplate>
+				<DataTemplate>
+					<Border
+						Background="{DynamicResource OperatorRaisedSurfaceBrush}"
+						BorderBrush="{DynamicResource OperatorBorderBrush}"
+						BorderThickness="1"
+						CornerRadius="{DynamicResource OperatorRadiusPanel}"
+						Padding="11"
+						Margin="0,0,0,7">
+						<Grid>
+							<Grid.RowDefinitions>
+								<RowDefinition Height="Auto" />
+								<RowDefinition Height="Auto" />
+								<RowDefinition Height="Auto" />
+								<RowDefinition Height="Auto" />
+								<RowDefinition Height="Auto" />
+							</Grid.RowDefinitions>
+							<DockPanel Grid.Row="0" Margin="0,0,0,5">
+								<TextBlock
+									Text="{Binding Category}"
+									Foreground="{DynamicResource OperatorAccentBrush}"
+									FontSize="9"
+									FontWeight="Bold"
+									DockPanel.Dock="Left" />
+								<TextBlock
+									Text="{Binding OccurrenceLabel}"
+									Style="{StaticResource OperatorLabel}"
+									HorizontalAlignment="Right"
+									DockPanel.Dock="Right" />
+							</DockPanel>
+							<TextBlock
+								Grid.Row="1"
+								Text="{Binding Title}"
+								FontSize="12"
+								FontWeight="SemiBold"
+								TextWrapping="Wrap" />
+							<TextBlock
+								Grid.Row="2"
+								Text="{Binding Detail}"
+								Style="{StaticResource OperatorLabel}"
+								TextWrapping="Wrap"
+								Margin="0,4,0,0" />
+							<Grid Grid.Row="3" Margin="0,7,0,0">
+								<Grid.ColumnDefinitions>
+									<ColumnDefinition Width="*" />
+									<ColumnDefinition Width="Auto" />
+								</Grid.ColumnDefinitions>
+								<TextBlock
+									Text="{Binding ProductionImpact}"
+									Style="{StaticResource OperatorLabel}"
+									TextWrapping="Wrap"
+									VerticalAlignment="Center"
+									Margin="0,0,8,0" />
+								<controls:RtaimeButton
+									Grid.Column="1"
+									Content="{Binding TechnicalDetailsActionLabel}"
+									Command="{Binding ToggleTechnicalDetailsCommand}"
+									IsCompact="True"
+									VerticalAlignment="Top">
+									<controls:RtaimeButton.Style>
+										<Style TargetType="{x:Type controls:RtaimeButton}" BasedOn="{StaticResource {x:Type controls:RtaimeButton}}">
+											<Style.Triggers>
+												<DataTrigger Binding="{Binding HasTechnicalDetail}" Value="False">
+													<Setter Property="Visibility" Value="Collapsed" />
+												</DataTrigger>
+											</Style.Triggers>
+										</Style>
+									</controls:RtaimeButton.Style>
+								</controls:RtaimeButton>
+							</Grid>
+							<Border
+								Grid.Row="4"
+								Background="{DynamicResource OperatorAlternateSurfaceBrush}"
+								BorderBrush="{DynamicResource OperatorBorderBrush}"
+								BorderThickness="1"
+								CornerRadius="{DynamicResource OperatorRadiusControl}"
+								Padding="7"
+								Margin="0,7,0,0"
+								Visibility="Collapsed">
+								<Border.Style>
+									<Style TargetType="Border">
+										<Setter Property="Visibility" Value="Collapsed" />
+										<Style.Triggers>
+											<DataTrigger Binding="{Binding IsTechnicalDetailsVisible}" Value="True">
+												<Setter Property="Visibility" Value="Visible" />
+											</DataTrigger>
+										</Style.Triggers>
+									</Style>
+								</Border.Style>
+								<TextBlock
+									Text="{Binding TechnicalDetail}"
+									Style="{StaticResource OperatorLabel}"
+									FontFamily="{DynamicResource OperatorTimecodeFontFamily}"
+									TextWrapping="Wrap" />
+							</Border>
+						</Grid>
+					</Border>
+				</DataTemplate>
+			</ItemsControl.ItemTemplate>
+		</ItemsControl>
+
 	</Grid>
 </Window>
