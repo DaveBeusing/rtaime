@@ -243,37 +243,93 @@
 							EvidenceState="{Binding MediaHealth}"
 							Detail="Production media subsystem" />
 
-						<controls:RtaimeAlertRow
-							SubsystemName="Operator / Control error"
-							State="ERROR"
-							EvidenceState="FAIL"
-							Detail="{Binding LastError}">
-							<controls:RtaimeAlertRow.Style>
-								<Style TargetType="{x:Type controls:RtaimeAlertRow}" BasedOn="{StaticResource {x:Type controls:RtaimeAlertRow}}">
-									<Setter Property="Visibility" Value="Visible" />
-									<Style.Triggers>
-										<DataTrigger Binding="{Binding LastError}" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
-										<DataTrigger Binding="{Binding LastError}" Value=""><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
-									</Style.Triggers>
-								</Style>
-							</controls:RtaimeAlertRow.Style>
-						</controls:RtaimeAlertRow>
-
-						<controls:RtaimeAlertRow
-							SubsystemName="Recording"
-							State="ERROR"
-							EvidenceState="FAIL"
-							Detail="{Binding RecordingError}">
-							<controls:RtaimeAlertRow.Style>
-								<Style TargetType="{x:Type controls:RtaimeAlertRow}" BasedOn="{StaticResource {x:Type controls:RtaimeAlertRow}}">
-									<Setter Property="Visibility" Value="Visible" />
-									<Style.Triggers>
-										<DataTrigger Binding="{Binding RecordingError}" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
-										<DataTrigger Binding="{Binding RecordingError}" Value=""><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
-									</Style.Triggers>
-								</Style>
-							</controls:RtaimeAlertRow.Style>
-						</controls:RtaimeAlertRow>
+						<ItemsControl
+							ItemsSource="{Binding Notifications.ActiveProblems, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							AutomationProperties.Name="Persistent operator problems">
+							<ItemsControl.ItemTemplate>
+								<DataTemplate>
+									<Border Style="{StaticResource LiveAlertRow}">
+										<StackPanel>
+											<DockPanel>
+												<TextBlock
+													Text="{Binding AffectedComponent}"
+													FontSize="10"
+													FontWeight="Bold" />
+												<StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+													<TextBlock Text="{Binding Condition}" Style="{StaticResource OperatorLabel}" FontSize="9" />
+													<TextBlock Text=" " />
+													<TextBlock Text="{Binding OccurrenceLabel}" Style="{StaticResource OperatorLabel}" FontSize="9" />
+												</StackPanel>
+											</DockPanel>
+											<TextBlock
+												Text="{Binding Title}"
+												FontSize="11"
+												FontWeight="SemiBold"
+												TextWrapping="Wrap"
+												Margin="0,3,0,0" />
+											<TextBlock
+												Text="{Binding Detail}"
+												Style="{StaticResource OperatorLabel}"
+												FontSize="9"
+												TextWrapping="Wrap"
+												Margin="0,3,0,0" />
+											<TextBlock
+												Text="{Binding ProductionImpact}"
+												Style="{StaticResource OperatorLabel}"
+												FontSize="9"
+												TextWrapping="Wrap"
+												Margin="0,3,0,0" />
+											<TextBlock
+												Text="{Binding OperatorAction}"
+												Foreground="{DynamicResource OperatorWarningBrush}"
+												FontSize="9"
+												TextWrapping="Wrap"
+												Margin="0,3,0,0" />
+											<controls:RtaimeButton
+												Content="{Binding TechnicalDetailsActionLabel}"
+												Command="{Binding ToggleTechnicalDetailsCommand}"
+												IsCompact="True"
+												HorizontalAlignment="Left"
+												Margin="0,5,0,0">
+												<controls:RtaimeButton.Style>
+													<Style TargetType="{x:Type controls:RtaimeButton}" BasedOn="{StaticResource {x:Type controls:RtaimeButton}}">
+														<Style.Triggers>
+															<DataTrigger Binding="{Binding HasTechnicalDetail}" Value="False">
+																<Setter Property="Visibility" Value="Collapsed" />
+															</DataTrigger>
+														</Style.Triggers>
+													</Style>
+												</controls:RtaimeButton.Style>
+											</controls:RtaimeButton>
+											<Border
+												Background="{DynamicResource OperatorAlternateSurfaceBrush}"
+												BorderBrush="{DynamicResource OperatorBorderBrush}"
+												BorderThickness="1"
+												CornerRadius="{DynamicResource OperatorRadiusControl}"
+												Padding="6"
+												Margin="0,5,0,0">
+												<Border.Style>
+													<Style TargetType="Border">
+														<Setter Property="Visibility" Value="Collapsed" />
+														<Style.Triggers>
+															<DataTrigger Binding="{Binding IsTechnicalDetailsVisible}" Value="True">
+																<Setter Property="Visibility" Value="Visible" />
+															</DataTrigger>
+														</Style.Triggers>
+													</Style>
+												</Border.Style>
+												<TextBlock
+													Text="{Binding TechnicalDetail}"
+													Style="{StaticResource OperatorLabel}"
+													FontFamily="{DynamicResource OperatorTimecodeFontFamily}"
+													FontSize="9"
+													TextWrapping="Wrap" />
+											</Border>
+										</StackPanel>
+									</Border>
+								</DataTemplate>
+							</ItemsControl.ItemTemplate>
+						</ItemsControl>
 					</StackPanel>
 				</Border>
 			</StackPanel>
