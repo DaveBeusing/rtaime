@@ -17,6 +17,7 @@ function Assert-Condition {
 }
 
 $qualificationSourcePath = Join-Path $repositoryRoot "src/Providers/rtaime.Provider.Gpu/CudaReferenceHardwareQualification.cs"
+$cudaBackendPath = Join-Path $repositoryRoot "src/Providers/rtaime.Provider.Gpu/CudaGpuProcessingBackend.cs"
 $runtimeHostPath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/RuntimeHostProcess.cs"
 $qualificationTestPath = Join-Path $repositoryRoot "tests/rtaime.Tests.Performance/CudaReferenceHardwareQualificationTests.cs"
 $runnerPath = Join-Path $repositoryRoot "build/qualification/Invoke-CudaReferenceQualification.ps1"
@@ -24,11 +25,12 @@ $workflowPath = Join-Path $repositoryRoot ".github/workflows/cuda-reference-qual
 $requiredGatesPath = Join-Path $repositoryRoot ".github/workflows/required-gates.yml"
 $documentationPath = Join-Path $repositoryRoot "docs/CudaReferenceHardwareQualification.md"
 
-foreach ($path in @($qualificationSourcePath, $runtimeHostPath, $qualificationTestPath, $runnerPath, $workflowPath, $requiredGatesPath, $documentationPath)) {
+foreach ($path in @($qualificationSourcePath, $cudaBackendPath, $runtimeHostPath, $qualificationTestPath, $runnerPath, $workflowPath, $requiredGatesPath, $documentationPath)) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required CUDA qualification artifact is missing: '$path'."
 }
 
 $source = Get-Content -LiteralPath $qualificationSourcePath -Raw
+$cudaBackend = Get-Content -LiteralPath $cudaBackendPath -Raw
 $runtimeHost = Get-Content -LiteralPath $runtimeHostPath -Raw
 $tests = Get-Content -LiteralPath $qualificationTestPath -Raw
 $runner = Get-Content -LiteralPath $runnerPath -Raw
@@ -53,6 +55,9 @@ Assert-Condition ($source -match 'ProductionMaximumLatencyCeilingMilliseconds\s*
 Assert-Condition ($source -match 'p95 <= ProductionP95LatencyCeilingMilliseconds') "CUDA qualification must apply the production P95 latency ceiling."
 Assert-Condition ($runtimeHost -match 'CudaGpuProcessingBackend\.Detect\(\)' -and $runtimeHost -match 'new CudaGpuProcessingBackend\(\)') "Production RuntimeHost must prefer the CUDA backend when hardware acceleration is available."
 Assert-Condition ($runtimeHost -match 'new ManagedReferenceGpuBackend\(\)') "Production RuntimeHost must retain the managed reference fallback for environments without CUDA."
+Assert-Condition ($cudaBackend -match 'MaxPooledAllocationsPerSize' -and $cudaBackend -match 'RentAllocation' -and $cudaBackend -match 'ReturnAllocation') "CUDA frame processing must reuse bounded device allocations instead of allocating every frame."
+Assert-Condition ($cudaBackend -notmatch 'rgbaPixels\.ToArray\(\)') "CUDA upload must not allocate a second full managed frame before HtoD transfer."
+Assert-Condition ($cudaBackend -match 'cuMemcpyHtoD_v2\(ulong destination, ref byte source') "CUDA upload must pass the existing managed frame buffer directly to the driver boundary."
 
 Assert-Condition ($tests -match 'RTAIME_CUDA_REFERENCE_QUALIFICATION') "Hardware test must require explicit qualification opt-in."
 Assert-Condition ($tests -match 'RTAIME_CUDA_REFERENCE_DEVICE') "Hardware test must require an expected device identity."
