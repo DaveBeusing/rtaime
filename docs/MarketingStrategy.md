@@ -392,7 +392,7 @@ Lead with architecture, operational behavior, failure handling, integration need
 
 ## Demonstration strategy
 
-Rename the external narrative from **funding demo** to **Product Showcase**.
+Use **Product Showcase** as the canonical external demonstration narrative.
 
 Internal filenames and qualified tooling may retain established names where changing them would break automation.
 
