@@ -667,7 +667,7 @@ Assert-Condition ($window -match 'Startup\.ToggleDetailsCommand' -and $window -m
 Assert-Condition ($windowCode -match 'RTAIME_APPHOST_LIFECYCLE_FILE' -and $startupViewModel -match 'FileSystemWatcher') "Operator startup must observe AppHost lifecycle evidence instead of creating an independent polling lifecycle."
 Assert-Condition ($startupViewModel -notmatch 'PeriodicTimer|Task\.Delay|ProgressBar|percent|Percentage') "Startup lifecycle projection must not synthesize timer-driven or percentage progress."
 Assert-Condition ($windowCode -match 'SystemParameters\.ClientAreaAnimation' -and $windowCode -match 'DoubleAnimation' -and $windowCode -match 'UIElement\.OpacityProperty') "Startup branding animation must be opacity-only and honor the Windows reduced-motion/client-animation setting."
-Assert-Condition ($window -match 'Binding EngineLifecycleState' -and $window -match 'ENGINE ') "Engine lifecycle state must stay persistently visible with text, not color alone."
+Assert-Condition ($window -match 'RtaimeGlobalStatusButton' -and $window -match 'Binding GlobalReadinessLabel' -and $window -match 'Binding GlobalReadinessSummary') "Global runtime readiness must stay persistently visible with text, not color alone."
 Assert-Condition ($window -match 'Binding ProgramSafety') "System Status must expose whether Program mutations are currently safe."
 Assert-Condition ($window -match 'Binding RecoveryAction') "System Status must provide a concise recovery/operator action."
 Assert-Condition ($window -match 'Binding AIStatus' -and $window -match 'Binding RecordingStatus') "System Status must distinguish AI and recording state from core Control/Runtime state."
