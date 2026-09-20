@@ -8,7 +8,7 @@ namespace rtaime.Tests.Unit;
 public sealed class UnifiedApplicationHostTests
 {
 	[Fact]
-	public async Task Starts_control_then_operator_only_after_readiness()
+	public async Task Starts_operator_startup_experience_before_control_readiness()
 	{
 		var options = CreateOptions(ApplicationStartupProfile.Interactive);
 		var platform = new FakeApplicationHostPlatform(options) { PublishReadinessAfterDelay = true };
@@ -17,10 +17,10 @@ public sealed class UnifiedApplicationHostTests
 
 		Assert.True(result.Success);
 		Assert.False(result.AdoptedControlHost);
-		Assert.Equal(new[] { "rtaime.ControlHost", "rtaime.Operator" }, platform.StartedBaseNames);
+		Assert.Equal(new[] { "rtaime.Operator", "rtaime.ControlHost" }, platform.StartedBaseNames);
 		Assert.DoesNotContain("rtaime.RuntimeHost", platform.StartedBaseNames);
 		Assert.DoesNotContain("rtaime.AIHost", platform.StartedBaseNames);
-		Assert.True(platform.Events.IndexOf("delay") < platform.Events.IndexOf("start:rtaime.Operator"));
+		Assert.True(platform.Events.IndexOf("start:rtaime.Operator") < platform.Events.IndexOf("delay"));
 	}
 
 	[Fact]
@@ -141,6 +141,53 @@ public sealed class UnifiedApplicationHostTests
 
 		Assert.Equal(ApplicationLifecycleState.Failed, host.State);
 		Assert.True(platform.StopSignalWritten);
+		Assert.Contains(host.Lifecycle.Stages, stage =>
+			stage.Status == LifecycleStageStatus.Failed &&
+			stage.FailureReason is not null);
+	}
+
+	[Fact]
+	public async Task Successful_startup_publishes_ready_lifecycle_stages()
+	{
+		var options = CreateOptions(ApplicationStartupProfile.Interactive);
+		var platform = new FakeApplicationHostPlatform(options) { PublishReadinessOnControlStart = true };
+		var host = new UnifiedApplicationHost(options, platform);
+
+		await host.RunAsync();
+
+		Assert.Equal(7, host.Lifecycle.Stages.Count);
+		Assert.All(host.Lifecycle.Stages, stage => Assert.Equal(LifecycleStageStatus.Ready, stage.Status));
+		Assert.Null(host.Lifecycle.ActiveStage);
+		using var evidence = JsonDocument.Parse(platform.ReadAllText(options.LifecycleEvidencePath));
+		Assert.Equal("1.0", evidence.RootElement.GetProperty("schemaVersion").GetString());
+		Assert.Equal(7, evidence.RootElement.GetProperty("stages").GetArrayLength());
+	}
+
+	[Fact]
+	public async Task Lifecycle_provider_reports_pending_starting_ready_degraded_failed_and_retry_state()
+	{
+		var options = CreateOptions(ApplicationStartupProfile.Interactive);
+		var platform = new FakeApplicationHostPlatform(options);
+		var provider = new ApplicationLifecycleStateProvider(options.LifecycleEvidencePath, requireAI: true, platform);
+		var updates = 0;
+		provider.StateChanged += (_, _) => updates++;
+
+		provider.Initialize();
+		Assert.All(provider.Stages, stage => Assert.Equal(LifecycleStageStatus.Pending, stage.Status));
+		provider.StartStage(ApplicationLifecycleStages.ControlHost, "Starting.", canRetry: true);
+		Assert.Equal(LifecycleStageStatus.Starting, provider.ActiveStage?.Status);
+		Assert.True(provider.ActiveStage?.CanRetry);
+		await platform.DelayAsync(TimeSpan.FromMilliseconds(184), CancellationToken.None);
+		provider.CompleteStage(ApplicationLifecycleStages.ControlHost, "Ready.");
+		var control = provider.Stages.Single(stage => stage.Id == ApplicationLifecycleStages.ControlHost);
+		Assert.Equal(LifecycleStageStatus.Ready, control.Status);
+		Assert.Equal(TimeSpan.FromMilliseconds(184), control.CompletedAt - control.StartedAt);
+		provider.DegradeStage(ApplicationLifecycleStages.ProductionReadiness, "Degraded.");
+		Assert.Equal(LifecycleStageStatus.Degraded, provider.ActiveStage?.Status);
+		provider.FailStage(ApplicationLifecycleStages.ProductionReadiness, "Qualification failed.", canRetry: true);
+		Assert.Equal(LifecycleStageStatus.Failed, provider.ActiveStage?.Status);
+		Assert.True(provider.ActiveStage?.CanRetry);
+		Assert.True(updates >= 5);
 	}
 
 	[Fact]
@@ -310,7 +357,8 @@ public sealed class UnifiedApplicationHostTests
 
 		await Assert.ThrowsAsync<TimeoutException>(() => new UnifiedApplicationHost(options, platform).RunAsync());
 
-		Assert.Empty(platform.StartedBaseNames);
+		Assert.Equal(new[] { "rtaime.Operator" }, platform.StartedBaseNames);
+		Assert.DoesNotContain("rtaime.ControlHost", platform.StartedBaseNames);
 		Assert.False(platform.StopSignalWritten);
 	}
 
