@@ -596,6 +596,8 @@ public sealed class OperatorControlClient
     {
         if (string.IsNullOrWhiteSpace(sourceId))
             throw new ArgumentException("Audio source id is required.", nameof(sourceId));
+        if (mode is < 1 or > 5)
+            throw new ArgumentOutOfRangeException(nameof(mode), "Generated audio test signal mode must be in the supported range 1..5.");
         if (!double.IsFinite(frequencyHz) || frequencyHz <= 0)
             throw new ArgumentOutOfRangeException(nameof(frequencyHz));
         if (!double.IsFinite(peakLevel) || peakLevel is < 0 or > 0.5)
