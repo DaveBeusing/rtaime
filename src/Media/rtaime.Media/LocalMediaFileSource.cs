@@ -89,18 +89,24 @@ public sealed class LocalMediaFileSource : IDisposable
 	public LocalMediaFrameReadResult ReadNext(ulong sequenceNumber)
 	{
 		ObjectDisposedException.ThrowIf(_disposed, this);
-		try
+		Exception? lastFailure = null;
+		for (var attempt = 0; attempt < 2; attempt++)
 		{
-			return _decoder.TryReadNext(sequenceNumber, out var frame)
-				? LocalMediaFrameReadResult.Decoded(frame!)
-				: LocalMediaFrameReadResult.Ended();
+			try
+			{
+				return _decoder.TryReadNext(sequenceNumber, out var frame)
+					? LocalMediaFrameReadResult.Decoded(frame!)
+					: LocalMediaFrameReadResult.Ended();
+			}
+			catch (Exception exception) when (exception is InvalidDataException or IOException or ExternalException)
+			{
+				lastFailure = exception;
+			}
 		}
-		catch (Exception exception) when (exception is InvalidDataException or IOException or ExternalException)
-		{
-			return LocalMediaFrameReadResult.Failed(
-				"media.file.decode_failed",
-				$"Local media decoding failed: {exception.Message}");
-		}
+
+		return LocalMediaFrameReadResult.Failed(
+			"media.file.decode_failed",
+			$"Local media decoding failed after a bounded retry: {lastFailure?.Message ?? "unknown decoder failure"}");
 	}
 
 	public LocalMediaSeekResult SeekToFrame(long frameNumber)
