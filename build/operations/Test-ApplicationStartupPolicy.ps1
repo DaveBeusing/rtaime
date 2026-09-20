@@ -92,6 +92,7 @@ foreach ($token in @(
 	"IsEndpointLeaseHeld",
 	"ControlHostDiagnosticPath",
 	"DiagnosticLogPath",
+	"FlushProcessDiagnosticsAsync",
 	"BuildControlHostExitDetail",
 	"RuntimeSupervision",
 	"AISupervision"
