@@ -74,6 +74,21 @@ public sealed class GpuProcessingTests
     }
 
     [Fact]
+    public void Rgba_frame_buffer_can_update_pixels_without_replacing_storage()
+    {
+        var buffer = Solid(1, 2, 3, 255);
+        var storage = buffer.Pixels;
+        var replacement = Solid(40, 50, 60, 255).Pixels.ToArray();
+
+        buffer.CopyPixelsFrom(replacement);
+
+        Assert.Equal(replacement, buffer.Pixels.ToArray());
+        Assert.True(System.Runtime.InteropServices.MemoryMarshal.TryGetArray(storage, out var before));
+        Assert.True(System.Runtime.InteropServices.MemoryMarshal.TryGetArray(buffer.Pixels, out var after));
+        Assert.Same(before.Array, after.Array);
+    }
+
+    [Fact]
     public void Static_rgba_source_materializes_exact_content()
     {
         var backend = new ManagedReferenceGpuBackend();
