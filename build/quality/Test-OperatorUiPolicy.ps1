@@ -51,6 +51,12 @@ $programOutputControllerPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Opera
 $programOutputWindowPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/ProgramOutputWindow.xaml"
 $outputHealthControlPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OutputRoutingHealthControl.xaml"
 $outputHealthViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OutputRoutingHealthViewModel.cs"
+$healthContractPath = Join-Path $repositoryRoot "src/Client/rtaime.Client/HealthSnapshots.cs"
+$healthProviderPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorHealthSnapshotProvider.cs"
+$healthViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/HealthCenterViewModel.cs"
+$healthControlPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/HealthCenterControl.xaml"
+$healthControlCodePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/HealthCenterControl.xaml.cs"
+$healthDocumentationPath = Join-Path $repositoryRoot "docs/HealthCenter.md"
 $previewViewerPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/PreviewViewer.xaml"
 $previewViewerCodePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/PreviewViewer.xaml.cs"
 $programViewerPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/ProgramViewer.xaml"
@@ -83,7 +89,7 @@ $workspaceDocumentationPath = Join-Path $repositoryRoot "docs/OperatorWorkspaces
 $outputHealthDocumentationPath = Join-Path $repositoryRoot "docs/OutputRoutingHealth.md"
 $mediaLibraryDocumentationPath = Join-Path $repositoryRoot "docs/MediaLibraryAssetBrowser.md"
 
-foreach ($path in @($appPath, $appCodePath, $windowPath, $windowCodePath, $shellPath, $keyboardPath, $quickControlsPath, $multiviewPath, $multiviewCodePath, $liveSceneCuePath, $liveControlsPath, $liveDocumentationPath, $compositingGraphPath, $compositingGraphCodePath, $compositingGraphViewModelPath, $compositingGraphProjectionPath, $compositingGraphDocumentationPath, $mediaPoolPath, $inspectorHostPath, $virtualizingWrapPanelPath, $deckPath, $deckViewModelPath, $timelinePath, $timelineCodePath, $timelineViewModelPath, $markerControllerPath, $timelineDocumentationPath, $viewModelPath, $runtimeReadinessPath, $startupViewModelPath, $monitorViewModelPath, $programOutputControllerPath, $programOutputWindowPath, $outputHealthControlPath, $outputHealthViewModelPath, $previewViewerPath, $previewViewerCodePath, $programViewerPath, $programViewerCodePath, $monitorViewPath, $sourceTileViewModelPath, $audioInputViewModelPath, $graphicsLoaderPath, $demoControllerPath, $demoManifestPath, $demoProductPath, $demoGraphicsPath, $demoDocumentationPath, $tokensPath, $themePath, $customControlsPath, $outputHealthControlsPath, $customInputControlsPath, $customMediaControlsPath, $customControlThemePath, $outputHealthControlThemePath, $customInputThemePath, $customMediaThemePath, $monitorWorkspaceThemePath, $customIconThemePath, $manifestPath, $projectPath, $documentationPath, $workspaceDocumentationPath, $outputHealthDocumentationPath, $mediaLibraryDocumentationPath)) {
+foreach ($path in @($appPath, $appCodePath, $windowPath, $windowCodePath, $shellPath, $keyboardPath, $quickControlsPath, $multiviewPath, $multiviewCodePath, $liveSceneCuePath, $liveControlsPath, $liveDocumentationPath, $compositingGraphPath, $compositingGraphCodePath, $compositingGraphViewModelPath, $compositingGraphProjectionPath, $compositingGraphDocumentationPath, $mediaPoolPath, $inspectorHostPath, $virtualizingWrapPanelPath, $deckPath, $deckViewModelPath, $timelinePath, $timelineCodePath, $timelineViewModelPath, $markerControllerPath, $timelineDocumentationPath, $viewModelPath, $runtimeReadinessPath, $startupViewModelPath, $monitorViewModelPath, $programOutputControllerPath, $programOutputWindowPath, $outputHealthControlPath, $outputHealthViewModelPath, $healthContractPath, $healthProviderPath, $healthViewModelPath, $healthControlPath, $healthControlCodePath, $healthDocumentationPath, $previewViewerPath, $previewViewerCodePath, $programViewerPath, $programViewerCodePath, $monitorViewPath, $sourceTileViewModelPath, $audioInputViewModelPath, $graphicsLoaderPath, $demoControllerPath, $demoManifestPath, $demoProductPath, $demoGraphicsPath, $demoDocumentationPath, $tokensPath, $themePath, $customControlsPath, $outputHealthControlsPath, $customInputControlsPath, $customMediaControlsPath, $customControlThemePath, $outputHealthControlThemePath, $customInputThemePath, $customMediaThemePath, $monitorWorkspaceThemePath, $customIconThemePath, $manifestPath, $projectPath, $documentationPath, $workspaceDocumentationPath, $outputHealthDocumentationPath, $mediaLibraryDocumentationPath)) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required Operator UI artifact is missing: '$path'."
 }
 
@@ -93,6 +99,12 @@ $window = Get-Content -LiteralPath $windowPath -Raw
 $windowCode = Get-Content -LiteralPath $windowCodePath -Raw
 $outputHealthControl = Get-Content -LiteralPath $outputHealthControlPath -Raw
 $outputHealthViewModel = Get-Content -LiteralPath $outputHealthViewModelPath -Raw
+$healthContract = Get-Content -LiteralPath $healthContractPath -Raw
+$healthProvider = Get-Content -LiteralPath $healthProviderPath -Raw
+$healthViewModel = Get-Content -LiteralPath $healthViewModelPath -Raw
+$healthControl = Get-Content -LiteralPath $healthControlPath -Raw
+$healthControlCode = Get-Content -LiteralPath $healthControlCodePath -Raw
+$healthDocumentation = Get-Content -LiteralPath $healthDocumentationPath -Raw
 $outputHealthDocumentation = Get-Content -LiteralPath $outputHealthDocumentationPath -Raw
 $shell = Get-Content -LiteralPath $shellPath -Raw
 $keyboard = Get-Content -LiteralPath $keyboardPath -Raw
@@ -603,10 +615,27 @@ Assert-Condition ($aiShowcasePollCount -eq 1) "Visible AI Showcase must reuse th
 Assert-Condition ($window -match 'Text="SYSTEM STATUS"') "Operator must expose a compact System Status surface that includes Runtime health/performance evidence."
 Assert-Condition ($customControls -match 'class RtaimeGlobalStatusButton' -and $customControlTheme -match 'controls:RtaimeGlobalStatusButton') "Global readiness must use an own rtaime titlebar control."
 Assert-Condition ($topBarSurface -match 'controls:RtaimeGlobalStatusButton' -and $topBarSurface -match 'State="\{Binding GlobalReadinessState\}"' -and $topBarSurface -match 'StatusText="\{Binding GlobalReadinessLabel\}"') "Global Runtime readiness must remain permanently visible in the titlebar."
-Assert-Condition ($topBarSurface -match 'CommandParameter="SETTINGS"' -and $topBarSurface -match 'ToolTip="\{Binding GlobalReadinessTooltip\}"') "Global readiness must navigate to diagnostics and expose reasons without a second state source."
+Assert-Condition ($topBarSurface -match 'CommandParameter="HEALTH"' -and $topBarSurface -match 'ToolTip="\{Binding GlobalReadinessTooltip\}"') "Global readiness must navigate to the Health Center and expose reasons without a second state source."
 Assert-Condition ($viewModel -match 'IRuntimeReadinessService _runtimeReadiness' -and $viewModel -match 'RuntimeReadinessObservation') "Operator must consume the centralized Runtime readiness service."
 Assert-Condition ($viewModel -notmatch 'OperatorSystemLifecycleProjection\.Evaluate') "Operator must not retain a parallel global lifecycle evaluator beside RuntimeReadinessService."
 Assert-Condition ($runtimeReadiness -match 'public sealed class RuntimeReadinessService') "Runtime readiness must be implemented outside the WPF presentation layer."
+Assert-Condition ($healthContract -match 'interface IHealthSnapshotProvider' -and $healthContract -match 'SubsystemHealthState') "Health Center must consume one shared subsystem-health snapshot contract."
+foreach ($state in @("Healthy", "Warning", "Degraded", "Recovering", "Failed", "Unknown")) {
+	Assert-Condition ($healthContract -match $state) "Health Center health model is missing '$state'."
+}
+Assert-Condition ($healthProvider -match 'class OperatorHealthSnapshotProvider' -and $healthProvider -match 'IHealthSnapshotProvider') "Operator must centralize existing health evidence behind the shared Health snapshot provider."
+Assert-Condition ($healthProvider -match 'HealthObserved' -and $healthProvider -match 'GlobalReadinessState') "Health Center Runtime telemetry must update at completed health/readiness observation boundaries."
+Assert-Condition ($healthProvider -notmatch 'PeriodicTimer|DispatcherTimer|Task\.Delay|PerformanceCounter|ManagementObjectSearcher|nvidia-smi|NVML') "Health Center must not introduce polling loops or synchronous/local hardware probing."
+Assert-Condition ($healthProvider -notmatch 'ProgramImage|PreviewImage') "Health Center must not refresh from high-frequency monitoring frame changes."
+Assert-Condition ($healthViewModel -match 'IHealthSnapshotProvider' -and $healthViewModel -match 'IRuntimeReadinessService') "Health Center must keep subsystem health separate from centralized Runtime Readiness."
+Assert-Condition ($healthControl -match 'Text="HEALTH CENTER"' -and $healthControl -match 'Binding OverallState' -and $healthControl -match 'Binding SelectedSubsystem') "Health Center must expose overview and selectable subsystem detail."
+Assert-Condition ($healthControl -match 'StatusSince' -and $healthControl -match 'LastSuccessfulCheck' -and $healthControl -match 'RecoveryStatus' -and $healthControl -match 'TechnicalDetail') "Health Center details must expose state duration, last success, recovery and technical evidence."
+Assert-Condition ($healthControl -match 'controls:RtaimeListBox' -and $healthControl -match 'controls:RtaimeButton') "Health Center interactive surfaces must use own rtaime controls."
+Assert-Condition ($healthControl -notmatch '<(Button|ToggleButton|CheckBox|RadioButton|TextBox|ComboBox|TabControl|TabItem|ListBox|ListView|TreeView|DataGrid|Slider|ProgressBar|ScrollBar|ScrollViewer|GridSplitter|Menu|MenuItem|ContextMenu|ToolBar)(\s|/|>)') "Health Center must expose no directly visible stock WPF interactive controls."
+Assert-Condition ($shell -match 'OperatorWorkspaceNames\.Health' -and $shell -match 'HealthCenterVisibility') "HEALTH must be a dedicated Operator workspace."
+Assert-Condition ($window -match 'CommandParameter="HEALTH"' -and $window -match '<local:HealthCenterControl') "Operator shell must navigate to and render the Health Center."
+Assert-Condition ($windowCode -match 'OperatorHealthSnapshotProvider' -and $windowCode -match 'HealthCenter\.Dispose\(\)' -and $windowCode -match 'HealthProvider\.Dispose\(\)') "Operator window must own and dispose Health Center subscriptions."
+Assert-Condition ($healthDocumentation -match 'Health and readiness remain separate concepts' -and $healthDocumentation -match 'No additional hardware probing') "Health Center documentation must preserve health/readiness and performance boundaries."
 Assert-Condition ($outputHealthViewModel -match 'PerformanceVerificationState' -and $outputHealthViewModel -match 'PerformanceVerificationDetail') "Performance HUD must reuse centralized verification state instead of recomputing verification from view refresh."
 foreach ($binding in @("GlobalReadinessState", "GlobalReadinessLabel", "GlobalReadinessSummary", "PerformanceVerificationState", "PerformanceVerificationDetail")) {
 	Assert-Condition ($window -match "Binding $binding") "Global Runtime readiness UI binding '$binding' is required."
@@ -792,7 +821,7 @@ Assert-Condition ($window -match 'x:Name="LeftToolRegion"[\s\S]{0,220}Margin="0"
 Assert-Condition ($topBarSurface -match 'controls:RtaimeButton' -and $topBarSurface -match 'controls:RtaimeIconButton' -and $topBarSurface -match 'controls:RtaimeTimecode' -and $topBarSurface -match 'controls:RtaimeStatusBadge') "Top bar must use the own rtaime action, icon, timecode and status controls."
 Assert-Condition ($topBarSurface -notmatch '<(Button|ToggleButton|CheckBox|RadioButton|TextBox|ComboBox|TabControl|TabItem|ListBox|ListView|TreeView|DataGrid|Slider|ProgressBar|ScrollBar|ScrollViewer|GridSplitter|Menu|MenuItem|ContextMenu|ToolBar)(\s|/|>)') "Top bar must expose no directly visible stock WPF interactive controls."
 Assert-Condition ($navigationSurface -match 'controls:RtaimeNavigationItem' -and $navigationSurface -notmatch '<(Button|ToggleButton|CheckBox|RadioButton|TextBox|ComboBox|TabControl|TabItem|ListBox|ListView|TreeView|DataGrid|Slider|ProgressBar|ScrollBar|ScrollViewer|GridSplitter|Menu|MenuItem|ContextMenu|ToolBar)(\s|/|>)') "Workspace navigation must use only custom rtaime navigation controls."
-foreach ($workspace in @("MEDIA", "EDIT", "LIVE", "SCENES", "COMPOSITING", "OUTPUTS", "SETTINGS")) {
+foreach ($workspace in @("MEDIA", "EDIT", "LIVE", "SCENES", "COMPOSITING", "OUTPUTS", "HEALTH", "SETTINGS")) {
 	Assert-Condition ($navigationSurface -match ('CommandParameter="' + $workspace + '"')) "Mockup navigation must retain workspace '$workspace'."
 }
 Assert-Condition ($window -match 'Grid\.RowSpan="2" Panel\.ZIndex="100"' -and $window -match 'Binding StartupComplete') "Startup/recovery presentation must overlay the fixed shell rather than reflow its geometry."
@@ -851,7 +880,7 @@ Assert-Condition ($window -match 'Text="LIVE"' -and $window -match 'Text="UNVERI
 Assert-Condition ($topBarSurface -match 'Text="CPU"' -and $topBarSurface -match 'Binding CpuUtilization' -and $topBarSurface -match 'Binding CpuDeviceName' -and $topBarSurface -match 'Text="GPU"' -and $topBarSurface -match 'Binding GpuUtilization' -and $topBarSurface -match 'Binding GpuDeviceName' -and $topBarSurface -match 'Text="MEMORY"' -and $topBarSurface -match 'Binding SystemMemory' -and $topBarSurface -match 'Text="LATENCY"' -and $topBarSurface -match 'Binding FrameTime') "Mockup top-bar metrics must project Runtime-published CPU, GPU and system-memory telemetry without local probing."
 
 # Workspaces, Quick Controls, multiview and Clean Program.
-foreach ($workspace in @("MEDIA", "EDIT", "LIVE", "SCENES", "COMPOSITING", "OUTPUTS", "SETTINGS")) {
+foreach ($workspace in @("MEDIA", "EDIT", "LIVE", "SCENES", "COMPOSITING", "OUTPUTS", "HEALTH", "SETTINGS")) {
 	Assert-Condition ($shell -match ('const string [A-Za-z]+ = "' + $workspace + '"')) "Canonical workspace '$workspace' must be defined."
 	Assert-Condition ($window -match ('CommandParameter="' + $workspace + '"')) "Canonical workspace '$workspace' must be selectable from the Operator."
 }
