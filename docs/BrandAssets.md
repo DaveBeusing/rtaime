@@ -28,6 +28,22 @@ Brand assets are source-controlled and should be reused directly rather than rec
 
 Do not create campaign-specific alternate logos when one of the canonical assets fits.
 
+## Visual reference
+
+<p align="center">
+	<img src="../src/Hosts/rtaime.Operator/Assets/Brand/RtaimeLogoHorizontal.svg" alt="rtaime horizontal logo" width="520" />
+</p>
+
+<p align="center">
+	<img src="../src/Hosts/rtaime.Operator/Assets/Brand/RtaimeEmblem.svg" alt="rtaime emblem" width="96" />
+	&nbsp;&nbsp;&nbsp;&nbsp;
+	<img src="../src/Hosts/rtaime.Operator/Assets/Brand/RtaimeEmblemMonochrome.svg" alt="rtaime monochrome emblem" width="96" />
+	&nbsp;&nbsp;&nbsp;&nbsp;
+	<img src="../src/Hosts/rtaime.Operator/Assets/Brand/RtaimeAppIcon.svg" alt="rtaime app icon" width="96" />
+</p>
+
+The rendered references above use the exact source-controlled vectors consumed by the product. Documentation should link to these files rather than embedding copied vector geometry.
+
 ## Vector source assets
 
 Reusable SVG files are stored under:
