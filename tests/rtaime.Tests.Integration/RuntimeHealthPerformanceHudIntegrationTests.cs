@@ -38,7 +38,8 @@ public sealed class RuntimeHealthPerformanceHudIntegrationTests
 		Assert.Equal(3UL, health.DroppedFrames);
 		Assert.True(health.FrameTime > TimeSpan.Zero);
 		Assert.True(health.FrameBudget > health.FrameTime);
-		Assert.Equal(49.75, health.OutputFramesPerSecond);
+		Assert.NotNull(health.OutputFramesPerSecond);
+		Assert.Equal(49.75, health.OutputFramesPerSecond.Value, 6);
 	}
 
 	[Fact]
@@ -114,6 +115,45 @@ public sealed class RuntimeHealthPerformanceHudIntegrationTests
 		Assert.Equal("25% · 4.00 GiB / 16.00 GiB", health.SystemMemory);
 		Assert.Equal("44%", health.GpuUtilization);
 		Assert.Equal("2.00 GiB / 8.00 GiB", health.Vram);
+	}
+
+	[Fact]
+	public void Gpu_telemetry_recovery_updates_projected_values_without_restart()
+	{
+		var runtime = CreateRuntimeSnapshot();
+		var providers = new[] { CreateGpuProvider(ProviderAvailabilityState.Available) };
+
+		var unavailable = OperatorHealthProjection.Evaluate(
+			runtime,
+			providers,
+			null,
+			controlAuthorityAvailable: true,
+			DateTimeOffset.UtcNow);
+
+		Assert.Equal("UNVERIFIED", unavailable.GpuUtilization);
+		Assert.Equal("UNVERIFIED", unavailable.Vram);
+
+		var recoveredRuntime = runtime with
+		{
+			Performance = runtime.Performance! with
+			{
+				PhysicalGpuDeviceName = "Recovered GPU",
+				GpuUtilizationPercent = 37.5,
+				GpuVramUsedBytes = 6UL * 1024 * 1024 * 1024,
+				GpuVramTotalBytes = 24UL * 1024 * 1024 * 1024,
+				GpuTelemetryEvidence = "PASS: recovered."
+			}
+		};
+		var recovered = OperatorHealthProjection.Evaluate(
+			recoveredRuntime,
+			providers,
+			null,
+			controlAuthorityAvailable: true,
+			DateTimeOffset.UtcNow);
+
+		Assert.Equal("Recovered GPU", recovered.GpuDeviceName);
+		Assert.Equal("37.5%", recovered.GpuUtilization);
+		Assert.Equal("6.00 GiB / 24.00 GiB", recovered.Vram);
 	}
 
 	[Fact]
@@ -201,13 +241,16 @@ public sealed class RuntimeHealthPerformanceHudIntegrationTests
 		Assert.Null(counter.OutputFramesPerSecond);
 
 		Assert.Equal(0UL, counter.Observe(TimeSpan.FromMilliseconds(20), frame));
-		Assert.Equal(50, counter.OutputFramesPerSecond, 6);
+		Assert.NotNull(counter.OutputFramesPerSecond);
+		Assert.Equal(50, counter.OutputFramesPerSecond.Value, 6);
 
 		Assert.Equal(1UL, counter.Observe(TimeSpan.FromMilliseconds(60), frame));
-		Assert.Equal(45, counter.OutputFramesPerSecond, 6);
+		Assert.NotNull(counter.OutputFramesPerSecond);
+		Assert.Equal(45, counter.OutputFramesPerSecond.Value, 6);
 
 		Assert.Equal(4UL, counter.Observe(TimeSpan.FromMilliseconds(80), frame, outputBackpressure: 2, outputRejected: 1));
-		Assert.Equal(46, counter.OutputFramesPerSecond, 6);
+		Assert.NotNull(counter.OutputFramesPerSecond);
+		Assert.Equal(46, counter.OutputFramesPerSecond.Value, 6);
 	}
 
 	private static RuntimeRemoteSnapshot CreateRuntimeSnapshot()
