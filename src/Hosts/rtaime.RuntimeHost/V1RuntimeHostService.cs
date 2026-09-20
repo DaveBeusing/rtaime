@@ -33,6 +33,12 @@ public enum V1InputSignalState
 	Recovering = 4
 }
 
+public enum V1BroadcastTestPatternMode
+{
+	Static = 1,
+	MotionTiming = 2
+}
+
 public enum V1TimingHealthState
 {
 	Healthy = 1,
@@ -144,6 +150,7 @@ public sealed record V1RuntimeHostSnapshot(
 	V1TimingHealthState TimingHealth,
 	IReadOnlyDictionary<MediaSourceId, V1InputSignalState> InputSignals,
 	IReadOnlyCollection<MediaSourceId> BroadcastTestPatternSources,
+	IReadOnlyDictionary<MediaSourceId, V1BroadcastTestPatternMode> BroadcastTestPatternModes,
 	V1VisualLayerMode VisualLayerMode,
 	V1GraphicsOverlaySnapshot GraphicsOverlay,
 	IReadOnlyDictionary<MediaSourceId, V1AudioInputSnapshot> AudioInputs,
@@ -176,7 +183,10 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private readonly Dictionary<MediaSourceId, RgbaFrameBuffer> _backgrounds;
 	private readonly RgbaFrameBuffer _blackBackground;
 	private readonly RgbaFrameBuffer _broadcastTestPattern;
+	private readonly RgbaFrameBuffer _motionTimingTestPattern;
+	private readonly MotionTimingTestSignalGenerator _motionTimingTestSignal;
 	private readonly HashSet<MediaSourceId> _broadcastTestPatternSources = [];
+	private readonly Dictionary<MediaSourceId, V1BroadcastTestPatternMode> _broadcastTestPatternModes = [];
 	private readonly Dictionary<MediaSourceId, V1InputSignalState> _inputSignals;
 	private readonly StaticRgbaSource _staticLayer;
 	private readonly DynamicRgbaSource _dynamicLayer;
@@ -249,6 +259,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		_blackBackground = RgbaFrameBuffer.Solid(format, 0, 0, 0);
 		var broadcastTestPattern = new BroadcastTestPatternGenerator(new BroadcastTestPatternConfiguration(format));
 		_broadcastTestPattern = new RgbaFrameBuffer(format, broadcastTestPattern.Pixels.Span);
+		_motionTimingTestPattern = new RgbaFrameBuffer(format, broadcastTestPattern.Pixels.Span);
+		_motionTimingTestSignal = new MotionTimingTestSignalGenerator(format);
 		_inputSignals = new Dictionary<MediaSourceId, V1InputSignalState>
 		{
 			[sourceAId] = V1InputSignalState.Valid,
@@ -336,6 +348,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 							pair => pair.Key,
 							pair => _broadcastTestPatternSources.Contains(pair.Key) ? V1InputSignalState.Valid : pair.Value)),
 					Array.AsReadOnly(_broadcastTestPatternSources.OrderBy(sourceId => sourceId.ToString(), StringComparer.Ordinal).ToArray()),
+					new ReadOnlyDictionary<MediaSourceId, V1BroadcastTestPatternMode>(
+						_broadcastTestPatternModes.ToDictionary(pair => pair.Key, pair => pair.Value)),
 					_operatorGraphicsVisible ? V1VisualLayerMode.Static : _visualLayerMode,
 					GraphicsOverlaySnapshotUnsafe(),
 					AudioInputSnapshotsUnsafe(),
@@ -770,21 +784,38 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		}
 	}
 
-	public bool SetBroadcastTestPattern(MediaSourceId sourceId, bool enabled)
+	public bool SetBroadcastTestPattern(
+		MediaSourceId sourceId,
+		bool enabled,
+		V1BroadcastTestPatternMode mode = V1BroadcastTestPatternMode.Static)
 	{
+		if (!Enum.IsDefined(typeof(V1BroadcastTestPatternMode), mode))
+			throw new ArgumentOutOfRangeException(nameof(mode));
+
 		lock (_gate)
 		{
 			ThrowIfDisposed();
 			if (!_backgrounds.ContainsKey(sourceId))
 				throw new KeyNotFoundException($"Unknown media source '{sourceId}'.");
 
-			var changed = enabled
-				? _broadcastTestPatternSources.Add(sourceId)
-				: _broadcastTestPatternSources.Remove(sourceId);
-			if (!changed)
+			if (!enabled)
+			{
+				var removed = _broadcastTestPatternSources.Remove(sourceId);
+				_broadcastTestPatternModes.Remove(sourceId);
+				if (!removed)
+					return false;
+
+				Observe($"input.test_pattern:{sourceId}:disabled");
+				return true;
+			}
+
+			var added = _broadcastTestPatternSources.Add(sourceId);
+			var modeChanged = !_broadcastTestPatternModes.TryGetValue(sourceId, out var previousMode) || previousMode != mode;
+			_broadcastTestPatternModes[sourceId] = mode;
+			if (!added && !modeChanged)
 				return false;
 
-			Observe($"input.test_pattern:{sourceId}:{(enabled ? "enabled" : "disabled")}");
+			Observe($"input.test_pattern:{sourceId}:enabled:{mode}");
 			return true;
 		}
 	}
@@ -938,7 +969,24 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private RgbaFrameBuffer ResolveInputContent(FrameDescriptor frame)
 	{
 		if (_broadcastTestPatternSources.Contains(frame.SourceId))
+		{
+			var mode = _broadcastTestPatternModes.TryGetValue(frame.SourceId, out var configuredMode)
+				? configuredMode
+				: V1BroadcastTestPatternMode.Static;
+			if (mode == V1BroadcastTestPatternMode.MotionTiming)
+			{
+				var region = _motionTimingTestSignal.Render(frame.Timing);
+				_motionTimingTestPattern.CopyRegionFrom(
+					region.Pixels.Span,
+					region.X,
+					region.Y,
+					region.Width,
+					region.Height);
+				return _motionTimingTestPattern;
+			}
+
 			return _broadcastTestPattern;
+		}
 
 		var state = _inputSignals[frame.SourceId];
 		if (state != V1InputSignalState.Lost)
@@ -957,7 +1005,9 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			frame.Timing,
 			new Generation(frame.Timing.SequenceNumber),
 			_broadcastTestPatternSources.Contains(frame.SourceId)
-				? "internal-test-pattern"
+				? _broadcastTestPatternModes.TryGetValue(frame.SourceId, out var mode) && mode == V1BroadcastTestPatternMode.MotionTiming
+					? "internal-test-pattern-motion"
+					: "internal-test-pattern"
 				: state == V1InputSignalState.Lost ? "input-fallback" : "runtime-input");
 	}
 
