@@ -39,9 +39,9 @@
 				</StackPanel>
 
 				<StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-					<Button Content="OPEN MP4" Command="{Binding OpenCommand}" Style="{StaticResource OperatorAccentButton}" Margin="0,0,8,0" />
-					<Button Content="REFRESH" Command="{Binding RefreshCommand}" Style="{StaticResource OperatorButton}" Margin="0,0,8,0" />
-					<Button Content="CLOSE" Command="{Binding CloseCommand}" Style="{StaticResource OperatorButton}" />
+					<controls:RtaimeButton Content="OPEN MP4" Command="{Binding OpenCommand}" Background="{DynamicResource OperatorAccentSurfaceBrush}" BorderBrush="{DynamicResource OperatorAccentBrush}" Margin="0,0,8,0" />
+					<controls:RtaimeButton Content="REFRESH" Command="{Binding RefreshCommand}"  Margin="0,0,8,0" />
+					<controls:RtaimeButton Content="CLOSE" Command="{Binding CloseCommand}"  />
 				</StackPanel>
 			</Grid>
 
@@ -53,7 +53,7 @@
 				</Grid.ColumnDefinitions>
 
 				<Border Grid.Column="0" BorderBrush="{DynamicResource OperatorPreviewBrush}" BorderThickness="1"
-					CornerRadius="6" Background="#090C10" Padding="1">
+					CornerRadius="{DynamicResource OperatorRadiusPanel}" Background="{DynamicResource OperatorBackgroundBrush}" Padding="1">
 					<Grid Height="260" ClipToBounds="True">
 						<Image Source="{Binding Monitoring.PreviewImage, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 							Stretch="Uniform" SnapsToDevicePixels="True" />
@@ -67,15 +67,15 @@
 									<ColumnDefinition Width="*" />
 									<ColumnDefinition Width="Auto" />
 								</Grid.ColumnDefinitions>
-								<TextBlock Text="{Binding FileName}" Foreground="White" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-								<TextBlock Grid.Column="1" Text="{Binding State}" Foreground="White" FontWeight="Bold" Margin="12,0,0,0" />
+								<TextBlock Text="{Binding FileName}" Foreground="{DynamicResource OperatorTextBrush}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+								<TextBlock Grid.Column="1" Text="{Binding State}" Foreground="{DynamicResource OperatorTextBrush}" FontWeight="Bold" Margin="12,0,0,0" />
 							</Grid>
 						</Border>
 					</Grid>
 				</Border>
 
 				<Border Grid.Column="2" Background="{DynamicResource OperatorRaisedSurfaceBrush}"
-					BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" CornerRadius="6" Padding="12">
+					BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" CornerRadius="{DynamicResource OperatorRadiusPanel}" Padding="12">
 					<StackPanel>
 						<TextBlock Text="CLIP METADATA" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,12" />
 						<DockPanel Margin="0,0,0,8"><TextBlock Text="Resolution" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding Resolution}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
@@ -90,7 +90,7 @@
 			</Grid>
 
 			<Border Grid.Row="2" Background="{DynamicResource OperatorRaisedSurfaceBrush}"
-				BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" CornerRadius="6" Padding="12" Margin="0,0,0,14">
+				BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" CornerRadius="{DynamicResource OperatorRadiusPanel}" Padding="12" Margin="0,0,0,14">
 				<Grid>
 					<Grid.ColumnDefinitions>
 						<ColumnDefinition Width="Auto" />
@@ -114,7 +114,7 @@
 					</StackPanel>
 					<StackPanel Grid.Column="5" Orientation="Horizontal" VerticalAlignment="Center">
 						<TextBlock Text="{Binding Countdown}" Style="{StaticResource OperatorTimecode}" FontSize="20" FontWeight="Bold" Margin="0,0,12,0" />
-						<Button Content="APPLY POLICY" Command="{Binding ApplyPlaybackPolicyCommand}" Style="{StaticResource OperatorAccentButton}" />
+						<controls:RtaimeButton Content="APPLY POLICY" Command="{Binding ApplyPlaybackPolicyCommand}" Background="{DynamicResource OperatorAccentSurfaceBrush}" BorderBrush="{DynamicResource OperatorAccentBrush}" />
 					</StackPanel>
 				</Grid>
 			</Border>
@@ -127,10 +127,10 @@
 					<ColumnDefinition Width="10" />
 					<ColumnDefinition Width="*" />
 				</Grid.ColumnDefinitions>
-				<Button Grid.Column="0" Content="PLAY / PAUSE&#x0a;Space" Command="{Binding TogglePlayPauseCommand}"
-					Style="{StaticResource OperatorAccentButton}" FontSize="15" />
-				<Button Grid.Column="2" Content="STOP&#x0a;K / S" Command="{Binding StopCommand}" Style="{StaticResource OperatorButton}" />
-				<Button Grid.Column="4" Content="REFRESH STATE" Command="{Binding RefreshCommand}" Style="{StaticResource OperatorButton}" />
+				<controls:RtaimeButton Grid.Column="0" Content="PLAY / PAUSE&#x0a;Space" Command="{Binding TogglePlayPauseCommand}"
+					Background="{DynamicResource OperatorAccentSurfaceBrush}" BorderBrush="{DynamicResource OperatorAccentBrush}" FontSize="15" />
+				<controls:RtaimeButton Grid.Column="2" Content="STOP&#x0a;K / S" Command="{Binding StopCommand}"  />
+				<controls:RtaimeButton Grid.Column="4" Content="REFRESH STATE" Command="{Binding RefreshCommand}"  />
 			</Grid>
 
 			<!-- Timeline is hosted persistently by the production shell lower workspace. -->
@@ -143,7 +143,7 @@
 				</Grid.ColumnDefinitions>
 
 				<Border Grid.Column="0" Background="{DynamicResource OperatorRaisedSurfaceBrush}"
-					BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" CornerRadius="6" Padding="12">
+					BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" CornerRadius="{DynamicResource OperatorRadiusPanel}" Padding="12">
 					<StackPanel>
 						<TextBlock Text="IN / OUT" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,12" />
 
@@ -156,8 +156,8 @@
 							</Grid.ColumnDefinitions>
 							<TextBlock Text="IN" Foreground="{DynamicResource OperatorPreviewBrush}" FontWeight="Bold" VerticalAlignment="Center" />
 							<TextBlock Grid.Column="1" Text="{Binding InTimecode}" FontFamily="Consolas" FontSize="15" FontWeight="SemiBold" Margin="12,0" VerticalAlignment="Center" />
-							<Button Grid.Column="2" Content="SET  I" Command="{Binding SetInCommand}" Style="{StaticResource OperatorButton}" Padding="9,5" Margin="0,0,6,0" />
-							<Button Grid.Column="3" Content="JUMP" Command="{Binding JumpInCommand}" Style="{StaticResource OperatorButton}" Padding="9,5" />
+							<controls:RtaimeButton Grid.Column="2" Content="SET  I" Command="{Binding SetInCommand}"  Padding="9,5" Margin="0,0,6,0" />
+							<controls:RtaimeButton Grid.Column="3" Content="JUMP" Command="{Binding JumpInCommand}"  Padding="9,5" />
 						</Grid>
 
 						<Grid Margin="0,0,0,12">
@@ -169,19 +169,19 @@
 							</Grid.ColumnDefinitions>
 							<TextBlock Text="OUT" Foreground="{DynamicResource OperatorProgramBrush}" FontWeight="Bold" VerticalAlignment="Center" />
 							<TextBlock Grid.Column="1" Text="{Binding OutTimecode}" FontFamily="Consolas" FontSize="15" FontWeight="SemiBold" Margin="12,0" VerticalAlignment="Center" />
-							<Button Grid.Column="2" Content="SET  O" Command="{Binding SetOutCommand}" Style="{StaticResource OperatorButton}" Padding="9,5" Margin="0,0,6,0" />
-							<Button Grid.Column="3" Content="JUMP" Command="{Binding JumpOutCommand}" Style="{StaticResource OperatorButton}" Padding="9,5" />
+							<controls:RtaimeButton Grid.Column="2" Content="SET  O" Command="{Binding SetOutCommand}"  Padding="9,5" Margin="0,0,6,0" />
+							<controls:RtaimeButton Grid.Column="3" Content="JUMP" Command="{Binding JumpOutCommand}"  Padding="9,5" />
 						</Grid>
 
 						<StackPanel Orientation="Horizontal">
-							<Button Content="CLEAR IN" Command="{Binding ClearInCommand}" Style="{StaticResource OperatorButton}" Padding="9,5" Margin="0,0,8,0" />
-							<Button Content="CLEAR OUT" Command="{Binding ClearOutCommand}" Style="{StaticResource OperatorButton}" Padding="9,5" />
+							<controls:RtaimeButton Content="CLEAR IN" Command="{Binding ClearInCommand}"  Padding="9,5" Margin="0,0,8,0" />
+							<controls:RtaimeButton Content="CLEAR OUT" Command="{Binding ClearOutCommand}"  Padding="9,5" />
 						</StackPanel>
 					</StackPanel>
 				</Border>
 
 				<Border Grid.Column="2" Background="{DynamicResource OperatorRaisedSurfaceBrush}"
-					BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" CornerRadius="6" Padding="12">
+					BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" CornerRadius="{DynamicResource OperatorRadiusPanel}" Padding="12">
 					<Grid>
 						<Grid.RowDefinitions>
 							<RowDefinition Height="Auto" />
@@ -218,9 +218,9 @@
 								<ColumnDefinition Width="Auto" />
 							</Grid.ColumnDefinitions>
 							<controls:RtaimeTextBox Text="{Binding CueName, UpdateSourceTrigger=PropertyChanged}"  Margin="0,0,8,0" />
-							<Button Grid.Column="1" Content="ADD  M" Command="{Binding AddCueCommand}" Style="{StaticResource OperatorAccentButton}" Padding="9,5" Margin="0,0,6,0" />
-							<Button Grid.Column="2" Content="JUMP" Command="{Binding JumpCueCommand}" Style="{StaticResource OperatorButton}" Padding="9,5" Margin="0,0,6,0" />
-							<Button Grid.Column="3" Content="DELETE" Command="{Binding DeleteCueCommand}" Style="{StaticResource OperatorButton}" Padding="9,5" />
+							<controls:RtaimeButton Grid.Column="1" Content="ADD  M" Command="{Binding AddCueCommand}" Background="{DynamicResource OperatorAccentSurfaceBrush}" BorderBrush="{DynamicResource OperatorAccentBrush}" Padding="9,5" Margin="0,0,6,0" />
+							<controls:RtaimeButton Grid.Column="2" Content="JUMP" Command="{Binding JumpCueCommand}"  Padding="9,5" Margin="0,0,6,0" />
+							<controls:RtaimeButton Grid.Column="3" Content="DELETE" Command="{Binding DeleteCueCommand}"  Padding="9,5" />
 						</Grid>
 					</Grid>
 				</Border>
