@@ -53,7 +53,7 @@ public partial class App : Application
 		if (!_headlessMode)
 		{
 			MessageBox.Show(
-				$"rtaime Operator encountered an unexpected failure and must close.\n\nThe current production state was not advanced by the failed UI operation. Restart rtaime to restore the safe workspace; outputs remain stopped until explicitly started.\n\n{reportDetail}",
+				$"rtaime Operator encountered an unexpected failure and must close.\n\nThe current production state was not advanced by the failed UI operation. Restart rtaime to restore the safe workspace. Saved UI state never auto-starts outputs or other production actions.\n\n{reportDetail}",
 				"rtaime Operator — Unexpected failure",
 				MessageBoxButton.OK,
 				MessageBoxImage.Error);
