@@ -6,7 +6,7 @@ using rtaime.Client;
 
 namespace rtaime.Operator.Controls;
 
-public abstract class RtaimeStateControl : Control
+public abstract class RtaimeStateControl : System.Windows.Controls.Control
 {
 	public static readonly DependencyProperty StateProperty = DependencyProperty.Register(
 		nameof(State),
@@ -65,7 +65,7 @@ public class RtaimeInlineStatus : RtaimeStateControl
 	}
 }
 
-public class RtaimeLoadingIndicator : Control
+public class RtaimeLoadingIndicator : System.Windows.Controls.Control
 {
 	static RtaimeLoadingIndicator()
 	{
