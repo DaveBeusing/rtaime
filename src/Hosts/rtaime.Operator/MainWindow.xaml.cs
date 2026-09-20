@@ -69,6 +69,7 @@ public partial class MainWindow : Window
 			Monitoring,
 			new DispatcherSynchronizationContext(Dispatcher));
 		OutputHealth = new OutputRoutingHealthViewModel(viewModel, ProgramOutput);
+		RuntimePerformanceStatus = new RuntimePerformanceStatusBarViewModel(viewModel, OutputHealth);
 		Shell = new OperatorShellViewModel(new OperatorLayoutStore(), SetProductionFullscreen);
 		MediaPool = new MediaPoolInspectorViewModel(viewModel, MediaDeck);
 		CompositingGraph = new CompositingGraphViewModel(viewModel, MediaPool);
@@ -121,6 +122,7 @@ public partial class MainWindow : Window
 			Monitoring,
 			new DispatcherSynchronizationContext(Dispatcher));
 		OutputHealth = new OutputRoutingHealthViewModel(viewModel, ProgramOutput);
+		RuntimePerformanceStatus = new RuntimePerformanceStatusBarViewModel(viewModel, OutputHealth);
 		Shell = new OperatorShellViewModel(new OperatorLayoutStore(), SetProductionFullscreen);
 		MediaPool = new MediaPoolInspectorViewModel(viewModel, MediaDeck);
 		CompositingGraph = new CompositingGraphViewModel(viewModel, MediaPool);
@@ -158,6 +160,7 @@ public partial class MainWindow : Window
 	public OperatorMonitoringViewModel Monitoring { get; }
 	public ProgramOutputController ProgramOutput { get; }
 	public OutputRoutingHealthViewModel OutputHealth { get; }
+	public RuntimePerformanceStatusBarViewModel RuntimePerformanceStatus { get; }
 	public OperatorHealthSnapshotProvider HealthProvider { get; }
 	public HealthCenterViewModel HealthCenter { get; }
 	public OperatorShellViewModel Shell { get; }
@@ -317,6 +320,7 @@ public partial class MainWindow : Window
 			StartupBrandPulse.BeginAnimation(UIElement.OpacityProperty, null);
 			HealthCenter.Dispose();
 			HealthProvider.Dispose();
+			RuntimePerformanceStatus.Dispose();
 			OutputHealth.Dispose();
 			ProgramOutput.Dispose();
 			if (DataContext is OperatorViewModel viewModel)
