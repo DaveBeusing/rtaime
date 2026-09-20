@@ -254,6 +254,8 @@ The panel exposes:
 - per-input Runtime health and AFV/PGM indication;
 - per-input linear gain from 0.0x to 4.0x;
 - confirmed mute/unmute;
+- generated audio diagnostic state with the Runtime-confirmed mode and active identification channel;
+- cycle control for Silence, Tone, Stereo ID, Channel ID and Pulse without a UI audio timer;
 - clipping, silence, underrun and error state;
 - local clip audio codec/channel/sample-rate/transport state.
 
@@ -273,9 +275,10 @@ RuntimeHost keeps external sample buffering bounded and consumes one exact Progr
 
 - unit tests cover stereo metering, gain and clipping;
 - Runtime integration covers actual external/clip-style Float32 Program payload, gain, mute, silence, clipping and underrun;
-- process-boundary integration covers Operator audio commands without changing production revision;
+- process-boundary integration covers Operator audio commands and generated test-signal control without changing production revision;
+- generated-audio tests cover phase continuity, safe level bounds, channel identification, pulse timing and hot-path allocations;
 - AFV integration verifies that the Runtime audio source follows confirmed Program after source changes;
-- Operator UI policy verifies stereo/master meters, AFV source, health, clip-audio state, gain/mute commands and the absence of WPF meter synthesis;
+- Operator UI policy verifies stereo/master meters, AFV source, health, clip-audio state, gain/mute/test-signal commands, active-channel projection and the absence of WPF meter synthesis;
 - Operator remains dependent only on `rtaime.Client`.
 
 ## Program Output / Clean Feed
