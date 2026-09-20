@@ -154,6 +154,11 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 			IsGridView = false;
 			return Task.CompletedTask;
 		});
+		AddTestSignalCommand = new AsyncRelayCommand(() => ApplyTestSignalPresetAsync(OperatorTestSignalPreset.Static));
+		SetStaticTestSignalCommand = new AsyncRelayCommand(() => ApplyTestSignalPresetAsync(OperatorTestSignalPreset.Static));
+		SetMotionTestSignalCommand = new AsyncRelayCommand(() => ApplyTestSignalPresetAsync(OperatorTestSignalPreset.Motion));
+		SetAvSyncTestSignalCommand = new AsyncRelayCommand(() => ApplyTestSignalPresetAsync(OperatorTestSignalPreset.AvSync));
+		DisableTestSignalCommand = new AsyncRelayCommand(() => ApplyTestSignalPresetAsync(OperatorTestSignalPreset.Off));
 
 		_operator.PropertyChanged += OnOperatorPropertyChanged;
 		_mediaDeck.PropertyChanged += OnMediaDeckPropertyChanged;
@@ -181,6 +186,11 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 	public ICommand ResetGraphicsPositionYCommand { get; }
 	public ICommand ResetGraphicsScaleCommand { get; }
 	public ICommand ImportCommand => _mediaDeck.OpenCommand;
+	public ICommand AddTestSignalCommand { get; }
+	public ICommand SetStaticTestSignalCommand { get; }
+	public ICommand SetMotionTestSignalCommand { get; }
+	public ICommand SetAvSyncTestSignalCommand { get; }
+	public ICommand DisableTestSignalCommand { get; }
 
 	public string SearchText
 	{
@@ -261,6 +271,41 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 	public string UnsupportedTransformCapabilityText => "Rotation, Anchor and Crop are not exposed by the current graphics capability.";
 	public string UnsupportedEffectOrderingText => "Effect ordering is not exposed by the current processing capability.";
 	public bool IsSourceSelection => _timelineItems.Count <= 1 && _timelineItem is null && _timelineCue is null && SelectedItem?.Kind == MediaPoolItemKind.Source;
+	public bool IsTestSignalSelection => SelectedTestSignalSource?.IsTestPattern == true;
+	public string TestSignalPresetLabel
+	{
+		get
+		{
+			var source = SelectedTestSignalSource;
+			if (source?.IsTestPattern != true)
+				return "OFF";
+			var audio = ResolveAudioInput(source.Id);
+			return string.Equals(source.MediaState, "MOTION", StringComparison.OrdinalIgnoreCase) &&
+				audio?.TestSignalEnabled == true &&
+				audio.TestSignalMode == 5
+					? "A/V SYNC"
+					: string.Equals(source.MediaState, "MOTION", StringComparison.OrdinalIgnoreCase)
+						? "MOTION"
+						: "STATIC";
+		}
+	}
+	public string TestSignalResolutionLabel => ExtractResolution(SelectedTestSignalSource?.Format);
+	public string TestSignalFrameRateLabel => SelectedTestSignalSource?.FrameRateLabel ?? "—";
+	public string TestSignalAudioModeLabel
+	{
+		get
+		{
+			var source = SelectedTestSignalSource;
+			if (source is null)
+				return "OFF";
+			var audio = ResolveAudioInput(source.Id);
+			return audio?.TestSignalEnabled == true ? audio.TestSignalModeLabel : "OFF";
+		}
+	}
+	public bool TestSignalMotionEnabled =>
+		string.Equals(SelectedTestSignalSource?.MediaState, "MOTION", StringComparison.OrdinalIgnoreCase);
+	public bool TestSignalTimecodeEnabled => TestSignalMotionEnabled;
+	public bool TestSignalFrameCounterEnabled => TestSignalMotionEnabled;
 	public bool IsClipSelection => _timelineItems.Count <= 1 && _timelineCue is null &&
 		(_timelineItem?.Category == TimelineTrackCategory.Video ||
 			(_timelineItem is null && SelectedItem?.Kind == MediaPoolItemKind.Clip));
@@ -316,6 +361,11 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 	{
 		get => GetGroupExpansion("playback", true);
 		set => SetGroupExpansion("playback", value);
+	}
+	public bool IsTestSignalExpanded
+	{
+		get => GetGroupExpansion("test-signal", true);
+		set => SetGroupExpansion("test-signal", value);
 	}
 	public bool IsTransformExpanded
 	{
@@ -568,6 +618,7 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 			_allItems.RemoveRange(MaxProjectedItems, _allItems.Count - MaxProjectedItems);
 
 		ApplyFilter(selectedKey);
+		RaiseTestSignalState();
 	}
 
 	public void Dispose()
@@ -761,6 +812,17 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 				Add("source.format", "Format", item.Format, "METADATA");
 				Add("source.state", "State", item.State, "COMMITTED");
 				Add("source.readiness", "Readiness", item.IsReady ? "READY" : "NOT READY", "COMMITTED");
+				if (IsTestSignalSelection)
+				{
+					Add("testsignal.pattern", "Pattern", "Broadcast Reference", "COMMITTED");
+					Add("testsignal.preset", "Preset", TestSignalPresetLabel, "COMMITTED");
+					Add("testsignal.resolution", "Resolution", TestSignalResolutionLabel, "COMMITTED");
+					Add("testsignal.framerate", "Frame rate", TestSignalFrameRateLabel, "COMMITTED");
+					Add("testsignal.audio", "Audio mode", TestSignalAudioModeLabel, "COMMITTED");
+					Add("testsignal.motion", "Motion", TestSignalMotionEnabled ? "ON" : "OFF", "COMMITTED");
+					Add("testsignal.timecode", "Timecode", TestSignalTimecodeEnabled ? "ON" : "OFF", "COMMITTED");
+					Add("testsignal.framecounter", "Frame counter", TestSignalFrameCounterEnabled ? "ON" : "OFF", "COMMITTED");
+				}
 				Add("production.transition.frames", "Transition Duration", $"{_operator.TransitionFrames} frames", "DESIRED", true);
 				break;
 
@@ -935,6 +997,7 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 	{
 		OnPropertyChanged(nameof(IsOverviewExpanded));
 		OnPropertyChanged(nameof(IsPlaybackExpanded));
+		OnPropertyChanged(nameof(IsTestSignalExpanded));
 		OnPropertyChanged(nameof(IsTransformExpanded));
 		OnPropertyChanged(nameof(IsAudioExpanded));
 		OnPropertyChanged(nameof(IsCueExpanded));
@@ -1013,6 +1076,7 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 	{
 		OnPropertyChanged(nameof(HasSelection));
 		OnPropertyChanged(nameof(IsSourceSelection));
+		RaiseTestSignalState();
 		OnPropertyChanged(nameof(IsClipSelection));
 		OnPropertyChanged(nameof(IsAudioSelection));
 		OnPropertyChanged(nameof(IsGraphicsSelection));
@@ -1027,6 +1091,87 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 		OnPropertyChanged(nameof(HasMetadata));
 		OnPropertyChanged(nameof(HasEffects));
 		RaiseGroupExpansionState();
+	}
+
+	private OperatorSourceTileViewModel? SelectedTestSignalSource
+	{
+		get
+		{
+			if (SelectedItem?.Kind is not MediaPoolItemKind.Source || string.IsNullOrWhiteSpace(SelectedItem.ReferenceId))
+				return null;
+			return _operator.Sources.FirstOrDefault(source =>
+				string.Equals(source.Id, SelectedItem.ReferenceId, StringComparison.Ordinal));
+		}
+	}
+
+	private OperatorAudioInputViewModel? ResolveAudioInput(string sourceId) =>
+		_operator.AudioInputs.FirstOrDefault(input =>
+			string.Equals(input.SourceId, sourceId, StringComparison.Ordinal));
+
+	private OperatorSourceTileViewModel? ResolveTestSignalTarget()
+	{
+		if (SelectedItem?.Kind is MediaPoolItemKind.Source or MediaPoolItemKind.Clip &&
+			!string.IsNullOrWhiteSpace(SelectedItem.ReferenceId))
+		{
+			var selected = _operator.Sources.FirstOrDefault(source =>
+				string.Equals(source.Id, SelectedItem.ReferenceId, StringComparison.Ordinal));
+			if (selected is not null)
+				return selected;
+		}
+
+		return _operator.SelectedSource ??
+			_operator.Sources.FirstOrDefault(source => source.IsPreview) ??
+			_operator.Sources.FirstOrDefault();
+	}
+
+	private async Task ApplyTestSignalPresetAsync(OperatorTestSignalPreset preset)
+	{
+		var source = ResolveTestSignalTarget();
+		if (source is null)
+			return;
+
+		await _operator.ConfigureTestSignalAsync(source, preset);
+		Refresh();
+
+		var selected = FilteredItems.FirstOrDefault(item =>
+			item.Kind == MediaPoolItemKind.Source &&
+			string.Equals(item.ReferenceId, source.Id, StringComparison.Ordinal));
+		if (selected is not null)
+			UpdateSelection([selected]);
+	}
+
+	private static string ExtractResolution(string? format)
+	{
+		if (string.IsNullOrWhiteSpace(format))
+			return "—";
+
+		var marker = format.IndexOf('x');
+		if (marker <= 0)
+			return format.Trim();
+
+		var start = marker;
+		while (start > 0 && char.IsDigit(format[start - 1]))
+			start--;
+
+		var end = marker + 1;
+		while (end < format.Length && char.IsDigit(format[end]))
+			end++;
+
+		return start < marker && end > marker + 1
+			? format[start..end]
+			: format.Trim();
+	}
+
+	private void RaiseTestSignalState()
+	{
+		OnPropertyChanged(nameof(IsTestSignalSelection));
+		OnPropertyChanged(nameof(TestSignalPresetLabel));
+		OnPropertyChanged(nameof(TestSignalResolutionLabel));
+		OnPropertyChanged(nameof(TestSignalFrameRateLabel));
+		OnPropertyChanged(nameof(TestSignalAudioModeLabel));
+		OnPropertyChanged(nameof(TestSignalMotionEnabled));
+		OnPropertyChanged(nameof(TestSignalTimecodeEnabled));
+		OnPropertyChanged(nameof(TestSignalFrameCounterEnabled));
 	}
 
 	private bool Set<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
