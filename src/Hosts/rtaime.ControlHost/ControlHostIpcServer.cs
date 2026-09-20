@@ -628,7 +628,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		MediaDeckSnapshot? mediaDeck)
 	{
 		var mediaSourceId = new MediaSourceId(source.SourceId.Value);
-		var isTestPattern = runtime?.BroadcastTestPatternSources.Contains(mediaSourceId) == true;
+		var isTestPattern = runtime?.BroadcastTestPatternSources?.Contains(mediaSourceId) == true;
 		if (isTestPattern)
 		{
 			return new WireSource(
