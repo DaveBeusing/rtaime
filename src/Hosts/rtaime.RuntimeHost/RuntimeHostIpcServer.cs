@@ -189,6 +189,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 				"runtime.graphics.overlay.set" => ValueTask.FromResult(SetGraphicsOverlay(request, runtime)),
 				"runtime.graphics.overlay.clear" => ValueTask.FromResult(ClearGraphicsOverlay(request, runtime)),
 				"runtime.audio.input.set" => ValueTask.FromResult(SetAudioInputState(request, runtime)),
+				"runtime.test_pattern.set" => ValueTask.FromResult(SetBroadcastTestPattern(request, runtime)),
 				"runtime.recording.start" => StartRecordingAsync(request, runtime, cancellationToken),
 				"runtime.recording.stop" => StopRecordingAsync(request, runtime, cancellationToken),
 				"runtime.media_deck.snapshot.get" => ValueTask.FromResult(MediaDeckSnapshot(request)),
@@ -247,6 +248,20 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		var snapshot = runtime.ClearGraphicsOverlay();
 		_stateVersion++;
 		return Success(request, "runtime.graphics.overlay.response", ToWire(snapshot));
+	}
+
+	private WireEnvelope SetBroadcastTestPattern(WireEnvelope request, V1RuntimeHostService runtime)
+	{
+		var wire = request.Payload.Deserialize<WireTestPatternState>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Broadcast test pattern state payload is required.");
+		var sourceId = new MediaSourceId(Identity.Parse(wire.SourceId));
+		var changed = runtime.SetBroadcastTestPattern(sourceId, wire.Enabled);
+		if (changed)
+			_stateVersion++;
+		return Success(
+			request,
+			"runtime.test_pattern.response",
+			new WireTestPatternState(sourceId.ToString(), runtime.Snapshot.BroadcastTestPatternSources.Contains(sourceId)));
 	}
 
 	private WireEnvelope SetAudioInputState(WireEnvelope request, V1RuntimeHostService runtime)
@@ -431,6 +446,10 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		snapshot.InputSignals.OrderBy(pair => pair.Key.ToString(), StringComparer.Ordinal)
 			.Select(pair => new WireInputSignal(pair.Key.ToString(), pair.Value.ToString().ToUpperInvariant()))
 			.ToArray(),
+		snapshot.BroadcastTestPatternSources
+			.OrderBy(sourceId => sourceId.ToString(), StringComparer.Ordinal)
+			.Select(sourceId => sourceId.ToString())
+			.ToArray(),
 		ToWire(snapshot.GraphicsOverlay),
 		snapshot.AudioInputs.OrderBy(pair => pair.Key.ToString(), StringComparer.Ordinal)
 			.Select(pair => ToWire(pair.Value))
@@ -602,6 +621,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 	private sealed record WireFailure(string Code, string Message);
 	private sealed record WireVideoFormat(uint Width, uint Height, string FrameRate, int PixelFormat, int ScanMode);
 	private sealed record WireInputSignal(string SourceId, string Health);
+	private sealed record WireTestPatternState(string SourceId, bool Enabled);
 	private sealed record WireGraphicsAsset(string Name, uint Width, uint Height, byte[] RgbaPixels);
 	private sealed record WireGraphicsOverlayState(bool Visible, double PositionX, double PositionY, double Scale);
 	private sealed record WireGraphicsOverlay(bool AssetLoaded, string? AssetName, uint AssetWidth, uint AssetHeight, bool Visible, double PositionX, double PositionY, double Scale);
@@ -644,6 +664,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		int ActiveGpuSurfaces,
 		WireVideoFormat Format,
 		WireInputSignal[] InputSignals,
+		string[] BroadcastTestPatternSourceIds,
 		WireGraphicsOverlay GraphicsOverlay,
 		WireAudioInput[] AudioInputs,
 		WireAudioProgram AudioProgram,

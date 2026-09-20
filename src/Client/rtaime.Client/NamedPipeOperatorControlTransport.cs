@@ -96,6 +96,25 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		return FromWire(wire);
 	}
 
+	public async ValueTask<bool> SetBroadcastTestPatternAsync(
+		string sourceId,
+		bool enabled,
+		CancellationToken cancellationToken = default)
+	{
+		if (string.IsNullOrWhiteSpace(sourceId))
+			throw new ArgumentException("Broadcast test pattern source id is required.", nameof(sourceId));
+
+		var response = await ExchangeAsync(
+			"control.test_pattern.set",
+			new WireTestPatternState(sourceId.Trim(), enabled),
+			cancellationToken).ConfigureAwait(false);
+		var wire = response.Payload.Deserialize<WireTestPatternState>(Wire.JsonOptions)
+			?? throw new InvalidDataException("ControlHost broadcast test pattern payload is required.");
+		if (!string.Equals(wire.SourceId, sourceId.Trim(), StringComparison.Ordinal))
+			throw new InvalidDataException("ControlHost broadcast test pattern response source does not match the request.");
+		return wire.Enabled;
+	}
+
 	public async ValueTask<OperatorGraphicsOverlayDescriptor> LoadGraphicsOverlayAsync(
 		OperatorGraphicsAsset asset,
 		CancellationToken cancellationToken = default)
@@ -589,6 +608,7 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 	private sealed record WireGraphicsOverlayState(bool Visible, double PositionX, double PositionY, double Scale);
 	private sealed record WireGraphicsOverlay(bool AssetLoaded, string? AssetName, uint AssetWidth, uint AssetHeight, bool Visible, double PositionX, double PositionY, double Scale);
 	private sealed record WireAudioInputState(string SourceId, double Gain, bool Muted);
+	private sealed record WireTestPatternState(string SourceId, bool Enabled);
 	private sealed record WireAudioInput(string SourceId, string StreamId, double Gain, bool Muted, double LeftPeak, double RightPeak, double MasterPeak, bool Clipping, string Health);
 	private sealed record WireAudioProgram(string ActiveVideoSourceId, string ActiveStreamId, double Gain, bool Muted, double LeftPeak, double RightPeak, double MasterPeak, bool Clipping, string Health);
 	private sealed record WireRecordingStart(string DestinationDirectory, string FileName);

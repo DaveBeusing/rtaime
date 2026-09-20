@@ -125,6 +125,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		AudioInputs = new ObservableCollection<OperatorAudioInputViewModel>();
 		SynchronizeCommand = new AsyncRelayCommand(SynchronizeAsync, () => _client is not null && !IsBusy);
 		SetPreviewCommand = new AsyncRelayCommand(SetPreviewAsync, CanSetPreview);
+		ToggleTestPatternCommand = new AsyncRelayCommand(ToggleTestPatternAsync, CanToggleTestPattern);
 		CutCommand = new AsyncRelayCommand(CutAsync, CanTakePreview);
 		DissolveCommand = new AsyncRelayCommand(DissolveAsync, () => CanTakePreview() && TransitionFrames >= 2);
 		LoadGraphicsCommand = new AsyncRelayCommand(LoadGraphicsAsync, () => CanControl() && _graphicsAssetPicker is not null);
@@ -150,6 +151,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	public ObservableCollection<OperatorAudioInputViewModel> AudioInputs { get; }
 	public ICommand SynchronizeCommand { get; }
 	public ICommand SetPreviewCommand { get; }
+	public ICommand ToggleTestPatternCommand { get; }
 	public ICommand CutCommand { get; }
 	public ICommand DissolveCommand { get; }
 	public ICommand LoadGraphicsCommand { get; }
@@ -356,6 +358,8 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 
 	private bool CanSetPreview() => CanControl() && SelectedSource is not null;
 
+	private bool CanToggleTestPattern() => CanControl() && SelectedSource is not null;
+
 	private bool CanTakePreview() => CanControl() && _client?.Snapshot is not null;
 
 	private bool CanApplyGraphics() =>
@@ -493,6 +497,22 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 			CommandStatus = "APPLIED";
 			TransitionStatus = "PREVIEW CONFIRMED";
 			LastEvent = $"Preview source changed to {source.Name} and confirmed by authoritative control.";
+		});
+	}
+
+	private async Task ToggleTestPatternAsync()
+	{
+		if (_client is null || SelectedSource is null) return;
+		var source = SelectedSource;
+		var enable = !source.IsTestPattern;
+		await ExecuteAsync(enable ? "ENABLE TEST SIGNAL" : "DISABLE TEST SIGNAL", async () =>
+		{
+			var enabled = await _client.SetBroadcastTestPatternAsync(source.Id, enable);
+			Apply(_client.Snapshot!);
+			CommandStatus = enabled ? "TEST SIGNAL ACTIVE" : "TEST SIGNAL OFF";
+			LastEvent = enabled
+				? $"Internal broadcast test signal activated on {source.Name}."
+				: $"Internal broadcast test signal deactivated on {source.Name}.";
 		});
 	}
 
@@ -714,7 +734,8 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		CommandStatus = $"{operation} IN FLIGHT";
 		CommitStatus = string.Equals(operation, "SYNCHRONIZE", StringComparison.Ordinal)
 			? "SYNCHRONIZING"
-			: operation.StartsWith("AUDIO ", StringComparison.Ordinal)
+			: operation.StartsWith("AUDIO ", StringComparison.Ordinal) ||
+				operation.EndsWith("TEST SIGNAL", StringComparison.Ordinal)
 				? "RUNTIME CONFIRM PENDING"
 				: "COMMIT PENDING";
 		LastError = null;
@@ -1255,6 +1276,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	{
 		(SynchronizeCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 		(SetPreviewCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+		(ToggleTestPatternCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 		(CutCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 		(DissolveCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 		(LoadGraphicsCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();

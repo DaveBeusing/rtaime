@@ -143,6 +143,7 @@ public sealed record V1RuntimeHostSnapshot(
 	ulong NextSequenceNumber,
 	V1TimingHealthState TimingHealth,
 	IReadOnlyDictionary<MediaSourceId, V1InputSignalState> InputSignals,
+	IReadOnlyCollection<MediaSourceId> BroadcastTestPatternSources,
 	V1VisualLayerMode VisualLayerMode,
 	V1GraphicsOverlaySnapshot GraphicsOverlay,
 	IReadOnlyDictionary<MediaSourceId, V1AudioInputSnapshot> AudioInputs,
@@ -174,6 +175,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private readonly Dictionary<MediaSourceId, Queue<float>> _externalAudioQueues;
 	private readonly Dictionary<MediaSourceId, RgbaFrameBuffer> _backgrounds;
 	private readonly RgbaFrameBuffer _blackBackground;
+	private readonly RgbaFrameBuffer _broadcastTestPattern;
+	private readonly HashSet<MediaSourceId> _broadcastTestPatternSources = [];
 	private readonly Dictionary<MediaSourceId, V1InputSignalState> _inputSignals;
 	private readonly StaticRgbaSource _staticLayer;
 	private readonly DynamicRgbaSource _dynamicLayer;
@@ -244,6 +247,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			[sourceBId] = RgbaFrameBuffer.Solid(format, 196, 72, 32)
 		};
 		_blackBackground = RgbaFrameBuffer.Solid(format, 0, 0, 0);
+		var broadcastTestPattern = new BroadcastTestPatternGenerator(new BroadcastTestPatternConfiguration(format));
+		_broadcastTestPattern = new RgbaFrameBuffer(format, broadcastTestPattern.Pixels.Span);
 		_inputSignals = new Dictionary<MediaSourceId, V1InputSignalState>
 		{
 			[sourceAId] = V1InputSignalState.Valid,
@@ -326,7 +331,11 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 					_runtime.State,
 					_nextSequenceNumber,
 					_timingHealth,
-					new ReadOnlyDictionary<MediaSourceId, V1InputSignalState>(new Dictionary<MediaSourceId, V1InputSignalState>(_inputSignals)),
+					new ReadOnlyDictionary<MediaSourceId, V1InputSignalState>(
+						_inputSignals.ToDictionary(
+							pair => pair.Key,
+							pair => _broadcastTestPatternSources.Contains(pair.Key) ? V1InputSignalState.Valid : pair.Value)),
+					Array.AsReadOnly(_broadcastTestPatternSources.OrderBy(sourceId => sourceId.ToString(), StringComparer.Ordinal).ToArray()),
 					_operatorGraphicsVisible ? V1VisualLayerMode.Static : _visualLayerMode,
 					GraphicsOverlaySnapshotUnsafe(),
 					AudioInputSnapshotsUnsafe(),
@@ -761,6 +770,25 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		}
 	}
 
+	public bool SetBroadcastTestPattern(MediaSourceId sourceId, bool enabled)
+	{
+		lock (_gate)
+		{
+			ThrowIfDisposed();
+			if (!_backgrounds.ContainsKey(sourceId))
+				throw new KeyNotFoundException($"Unknown media source '{sourceId}'.");
+
+			var changed = enabled
+				? _broadcastTestPatternSources.Add(sourceId)
+				: _broadcastTestPatternSources.Remove(sourceId);
+			if (!changed)
+				return false;
+
+			Observe($"input.test_pattern:{sourceId}:{(enabled ? "enabled" : "disabled")}");
+			return true;
+		}
+	}
+
 	/// <summary>
 	/// Replaces the current V1 working-frame content for one logical input without changing runtime authority or
 	/// timing. Physical Media I/O uses this seam after copying an adapter lease into the bounded runtime frame.
@@ -909,6 +937,9 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 
 	private RgbaFrameBuffer ResolveInputContent(FrameDescriptor frame)
 	{
+		if (_broadcastTestPatternSources.Contains(frame.SourceId))
+			return _broadcastTestPattern;
+
 		var state = _inputSignals[frame.SourceId];
 		if (state != V1InputSignalState.Lost)
 			return _backgrounds[frame.SourceId];
@@ -925,7 +956,9 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			content,
 			frame.Timing,
 			new Generation(frame.Timing.SequenceNumber),
-			state == V1InputSignalState.Lost ? "input-fallback" : "runtime-input");
+			_broadcastTestPatternSources.Contains(frame.SourceId)
+				? "internal-test-pattern"
+				: state == V1InputSignalState.Lost ? "input-fallback" : "runtime-input");
 	}
 
 	private GpuFrame? MaterializeLayer(FrameTiming timing)

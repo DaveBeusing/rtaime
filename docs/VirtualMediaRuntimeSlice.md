@@ -61,6 +61,12 @@ The synthetic provider does not allocate or transport bulk pixel payloads. A fra
 
 The virtual implementation is Reference Behaviour and a deterministic test oracle. It is not evidence for professional capture/output hardware, GPU, DMA, genlock or external device qualification.
 
+## Internal broadcast reference signal
+
+The virtual source timing and frame-descriptor path is also reused by the internal broadcast reference signal documented in [BroadcastTestPattern.md](BroadcastTestPattern.md).
+
+Enabling the reference signal replaces only the resolved RGBA content of a selected production source slot. The existing source identity, deterministic timing, media pipeline, GPU processing, monitoring and Program output path remain authoritative. The generated frame is static and retained, so no full-frame pattern construction occurs on production boundaries.
+
 ## Timing semantics
 
 For a configured video format, one virtual timing tick equals exactly one frame duration:

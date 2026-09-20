@@ -17,6 +17,7 @@
 					"control.program.cut",
 					"control.program.dissolve",
 					"control.mutation.response",
+					"control.test_pattern.set",
 					"control.media_deck.snapshot.get",
 					"control.media_deck.open",
 					"control.media_deck.transport",
