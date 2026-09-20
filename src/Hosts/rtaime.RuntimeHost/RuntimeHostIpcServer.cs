@@ -292,7 +292,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 			?? throw new InvalidDataException("Generated audio test signal payload is required.");
 		var mode = Enum.IsDefined(typeof(GeneratedAudioTestSignalMode), wire.Mode)
 			? (GeneratedAudioTestSignalMode)wire.Mode
-			: throw new InvalidDataException("Generated audio test signal mode is invalid.");
+			: throw new ArgumentOutOfRangeException(nameof(wire.Mode), "Generated audio test signal mode is invalid.");
 		var snapshot = runtime.SetGeneratedAudioTestSignal(
 			new MediaSourceId(Identity.Parse(wire.SourceId)),
 			wire.Enabled,
