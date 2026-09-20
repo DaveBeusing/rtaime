@@ -36,20 +36,20 @@
 			SnapsToDevicePixels="True">
 			<Grid>
 				<Grid.ColumnDefinitions>
-					<ColumnDefinition Width="118" />
+					<ColumnDefinition Width="105" />
 					<ColumnDefinition Width="1" />
-					<ColumnDefinition Width="240" />
-					<ColumnDefinition Width="250" />
+					<ColumnDefinition Width="185" />
+					<ColumnDefinition Width="190" />
 					<ColumnDefinition Width="*" />
-					<ColumnDefinition Width="120" />
-					<ColumnDefinition Width="120" />
-					<ColumnDefinition Width="150" />
-					<ColumnDefinition Width="120" />
+					<ColumnDefinition Width="82" />
+					<ColumnDefinition Width="82" />
+					<ColumnDefinition Width="110" />
+					<ColumnDefinition Width="100" />
 					<ColumnDefinition Width="1" />
-					<ColumnDefinition Width="150" />
-					<ColumnDefinition Width="86" />
-					<ColumnDefinition Width="180" />
-					<ColumnDefinition Width="54" />
+					<ColumnDefinition Width="120" />
+					<ColumnDefinition Width="70" />
+					<ColumnDefinition Width="140" />
+					<ColumnDefinition Width="46" />
 				</Grid.ColumnDefinitions>
 
 				<StackPanel Grid.Column="0"
@@ -111,9 +111,9 @@
 					ToolTip="{Binding GlobalReadinessTooltip}"
 					HorizontalAlignment="Right"
 					VerticalAlignment="Center"
-					MinWidth="220"
-					MaxWidth="340"
-					Margin="8,0"
+					MinWidth="0"
+					MaxWidth="360"
+					Margin="6,0"
 					AutomationProperties.Name="Global runtime readiness and diagnostics" />
 
 				<Border Grid.Column="5" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1,0,0,0" Padding="10,6" ToolTip="{Binding CpuDeviceName}">
