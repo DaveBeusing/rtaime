@@ -347,8 +347,15 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 	{
 		if (!_control.IsConnected || _control.IsStale)
 			return "UNVERIFIED";
-		if (NormalizeEvidence(_control.GpuProviderHealth) == "FAIL")
-			return "FAIL";
+
+		var runtimeEvidence = NormalizeEvidence(_control.RuntimeHealth);
+		if (runtimeEvidence != "PASS")
+			return runtimeEvidence;
+
+		var gpuEvidence = NormalizeEvidence(_control.GpuProviderHealth);
+		if (gpuEvidence != "PASS")
+			return gpuEvidence;
+
 		if (NormalizeAvailability(_control.CpuUtilization) == Unavailable ||
 			NormalizeAvailability(_control.SystemMemory) == Unavailable ||
 			NormalizeAvailability(_control.GpuUtilization) == Unavailable)
@@ -360,8 +367,18 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 	{
 		if (!_control.IsConnected || _control.IsStale || value == Unavailable || value.Contains("UNVERIFIED", StringComparison.OrdinalIgnoreCase))
 			return "UNVERIFIED";
-		if (providerEvidence is not null && NormalizeEvidence(providerEvidence) == "FAIL")
-			return "FAIL";
+
+		var runtimeEvidence = NormalizeEvidence(_control.RuntimeHealth);
+		if (runtimeEvidence != "PASS")
+			return runtimeEvidence;
+
+		if (providerEvidence is not null)
+		{
+			var normalizedProvider = NormalizeEvidence(providerEvidence);
+			if (normalizedProvider != "PASS")
+				return normalizedProvider;
+		}
+
 		return "PASS";
 	}
 
