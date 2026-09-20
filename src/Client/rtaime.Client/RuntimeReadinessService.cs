@@ -267,6 +267,7 @@ public sealed class RuntimeReadinessService : IRuntimeReadinessService, IDisposa
 
 		if (runtimeFault)
 		{
+			_explicitPerformanceInvalidatedAt = now;
 			return previous with
 			{
 				State = RuntimePerformanceVerificationState.Invalidated,
