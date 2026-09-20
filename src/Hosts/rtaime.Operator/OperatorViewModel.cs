@@ -1165,7 +1165,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	}
 
 	private void OnRuntimeReadinessChanged(object? sender, RuntimeReadinessChangedEventArgs e) =>
-		Post(() => ApplyRuntimeReadiness(e.Current));
+		Post(() => ApplyRuntimeReadiness(_runtimeReadiness.Current));
 
 	private void ApplyRuntimeReadiness(RuntimeReadinessSnapshot snapshot)
 	{
