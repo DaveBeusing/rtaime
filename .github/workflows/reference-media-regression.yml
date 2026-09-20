@@ -1,0 +1,66 @@
+# Copyright (c) Dave Beusing <david.beusing@gmail.com>.
+
+name: Reference media regression
+
+on:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - "src/Media/**"
+      - "src/Providers/rtaime.Provider.VirtualMedia/**"
+      - "src/Hosts/rtaime.RuntimeHost/**"
+      - "tests/rtaime.Tests.Integration/ReferenceMedia*"
+      - "build/testmedia/**"
+      - "docs/ReferenceMediaRegression.md"
+      - ".github/workflows/reference-media-regression.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reference-media-regression-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  reference-media:
+    name: H264 AAC reference matrix
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Install pinned FFmpeg test encoder
+        shell: pwsh
+        run: |
+          choco install ffmpeg --version=7.1.1 --yes --no-progress
+          if ($LASTEXITCODE -notin @(0, 1641, 3010)) {
+            throw "Pinned FFmpeg installation failed with exit code $LASTEXITCODE."
+          }
+          ffmpeg -version | Select-Object -First 1
+
+      - name: Restore
+        run: dotnet restore rtaime.slnx
+
+      - name: Build integration graph
+        run: dotnet build tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-restore
+
+      - name: Generate and run reference media regressions
+        shell: pwsh
+        run: ./build/testmedia/Test-ReferenceMediaRegression.ps1
+
+      - name: Upload reference manifests
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rtaime-reference-media-manifests-${{ github.run_id }}
+          path: artifacts/testmedia/reference-regression/*.json
+          if-no-files-found: error
