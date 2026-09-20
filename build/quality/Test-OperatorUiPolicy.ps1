@@ -849,7 +849,7 @@ Assert-Condition ($navigationSurface -match 'controls:RtaimeNavigationItem' -and
 foreach ($workspace in @("MEDIA", "EDIT", "LIVE", "SCENES", "COMPOSITING", "OUTPUTS", "HEALTH", "SETTINGS")) {
 	Assert-Condition ($navigationSurface -match ('CommandParameter="' + $workspace + '"')) "Mockup navigation must retain workspace '$workspace'."
 }
-Assert-Condition ($window -match 'Grid\.RowSpan="2"[\s\S]{0,80}Panel\.ZIndex="100"' -and $window -match 'Binding StartupComplete') "Startup/recovery presentation must overlay the fixed shell rather than reflow its geometry."
+Assert-Condition ($window -match 'Grid\.RowSpan="3"[\s\S]{0,80}Panel\.ZIndex="100"' -and $window -match 'Binding StartupComplete') "Startup/recovery presentation must overlay the top bar, workspace and permanent Runtime status bar rather than reflow shell geometry."
 Assert-Condition ($shell -match 'public bool IsFullscreen \{ get; init; \} = true;' -and $windowCode -match 'WindowStyle = WindowStyle\.None') "Fresh layouts must prefer production fullscreen while preserving the existing borderless/windowed implementation."
 Assert-Condition ($keyboard -match 'new\("preview-view".+Key\.D1.+shell\.MaximizePreviewCommand') "Preview maximize must be keyboard-accessible through Ctrl+1."
 Assert-Condition ($keyboard -match 'new\("program-view".+Key\.D2.+shell\.MaximizeProgramCommand') "Program maximize must be keyboard-accessible through Ctrl+2."
