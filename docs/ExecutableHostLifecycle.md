@@ -1,5 +1,9 @@
 <!-- Copyright (c) Dave Beusing <david.beusing@gmail.com>. -->
 
+<p align="right">
+	<img src="../src/Hosts/rtaime.Operator/Assets/Brand/RtaimeLogoHorizontal.svg" alt="rtaime — Real Time AI Media Engine" width="180" />
+</p>
+
 # Executable Host Lifecycle
 
 Executable Host Lifecycle established `rtaime.ControlHost`, `rtaime.RuntimeHost`, and `rtaime.AIHost` as long-lived executable processes. Production IPC & Remote API added the local Windows production IPC control plane without moving authority or execution ownership between hosts. Durable Persistence & Journal added bounded durable ControlHost journal/checkpoint composition while keeping SQLite outside RT-critical media execution. Process Recovery & Supervision adds process supervision, HostInstanceId-aware reconnect and durable ControlHost authority recovery/reconciliation.
