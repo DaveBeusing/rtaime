@@ -439,6 +439,17 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				?? throw new InvalidOperationException("Committed execution must contain exactly one Program binding.");
 			var committedSource = programBinding.MediaSourceId
 				?? throw new InvalidOperationException("Committed Program binding must contain a media source.");
+			var avSyncEnabled = IsAvSyncDiagnosticsEnabledUnsafe(committedSource);
+			if (!avSyncEnabled)
+			{
+				if (_avSyncDiagnosticsSourceId is not null)
+					ResetAvSyncDiagnosticsUnsafe();
+			}
+			else if (_avSyncDiagnosticsSourceId != committedSource)
+			{
+				ResetAvSyncDiagnosticsUnsafe();
+				_avSyncDiagnosticsSourceId = committedSource;
+			}
 
 			var sequence = _nextSequenceNumber;
 			var frameA = ProcessTimedInput(_virtualMedia.SourceA, _sourceAPipeline, sequence);
@@ -484,6 +495,12 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			var pixels = _gpu.Readback(output);
 			var probe = ProbeCenter(pixels, _format);
 			_programOutput!.WriteFrame(output.Descriptor);
+			if (avSyncEnabled)
+			{
+				var videoEvent = _motionTimingTestSignal.InspectSyncEvent(output.Descriptor.Timing);
+				if (videoEvent.IsFlashFrame)
+					_avSyncDiagnostics.RecordVideoSubmit(videoEvent, Stopwatch.GetTimestamp());
+			}
 			_monitoringTap.TryCapture(
 				frameA.SourceId,
 				contentA.Pixels,
@@ -499,6 +516,9 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			var audioObservation = _audioMeters[committedSource];
 			var audioBuffer = audioPacket.Descriptor;
 			var hasGeneratedSignal = _audioTestSignals.TryGetValue(committedSource, out var audioTestSignal);
+			AvSyncAudioEventObservation? audioSyncEvent = avSyncEnabled
+				? _avSyncTimeline.InspectAudio(audioBuffer.Timing, _format.FrameRate, audioBuffer.Format.SampleRate)
+				: null;
 			GeneratedAudioTestSignalFrameInfo generatedFrame = default;
 			var generatedAudioPayload = hasGeneratedSignal
 				? MaterializeGeneratedAudioPayload(audioBuffer, audioTestSignal!, out generatedFrame)
@@ -529,6 +549,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				: externalAudioPayload is { Length: > 0 }
 					? ApplyAudioStateToPayload(externalAudioPayload, audio)
 					: MaterializeReferenceAudioPayload(audioBuffer, audio);
+			if (audioSyncEvent is { ContainsPulse: true } pulseEvent)
+				_avSyncDiagnostics.RecordAudioSubmit(pulseEvent, Stopwatch.GetTimestamp());
 
 			RecordingEnqueueResult? recording = null;
 			if (_recorder.Snapshot.State == RecordingLifecycleState.Recording)
@@ -765,7 +787,10 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				var removed = _audioTestSignals.Remove(sourceId);
 				_audioTestSignalFrames.Remove(sourceId);
 				if (removed)
+				{
+					ResetAvSyncDiagnosticsUnsafe();
 					Observe($"audio.test_signal:{sourceId}:disabled");
+				}
 				return AudioInputSnapshotUnsafe(sourceId);
 			}
 
@@ -777,6 +802,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			var generator = new GeneratedAudioTestSignalGenerator(configuration);
 			_audioTestSignals[sourceId] = generator;
 			_audioTestSignalFrames[sourceId] = generator.Inspect(CreateAudioBuffer(sourceId, _nextSequenceNumber).Timing);
+			ResetAvSyncDiagnosticsUnsafe();
 			Observe($"audio.test_signal:{sourceId}:enabled:{mode}:{frequencyHz:0.###}:{peakLevel:0.###}");
 			return AudioInputSnapshotUnsafe(sourceId);
 		}
@@ -878,6 +904,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				if (!removed)
 					return false;
 
+				ResetAvSyncDiagnosticsUnsafe();
 				Observe($"input.test_pattern:{sourceId}:disabled");
 				return true;
 			}
@@ -888,6 +915,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			if (!added && !modeChanged)
 				return false;
 
+			ResetAvSyncDiagnosticsUnsafe();
 			Observe($"input.test_pattern:{sourceId}:enabled:{mode}");
 			return true;
 		}
@@ -1235,6 +1263,12 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			snapshot.SubmitOffsetMilliseconds,
 			snapshot.DriftFromBaselineMilliseconds,
 			snapshot.Detail);
+	}
+
+	private void ResetAvSyncDiagnosticsUnsafe()
+	{
+		_avSyncDiagnostics.Reset();
+		_avSyncDiagnosticsSourceId = null;
 	}
 
 	private bool IsAvSyncDiagnosticsEnabledUnsafe(MediaSourceId sourceId) =>
