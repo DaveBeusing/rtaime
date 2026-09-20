@@ -73,6 +73,7 @@ public interface IControlRuntimeTransportSeam
 	ValueTask<bool> SetBroadcastTestPatternAsync(
 		MediaSourceId sourceId,
 		bool enabled,
+		bool motionTiming = false,
 		CancellationToken cancellationToken = default) =>
 		ValueTask.FromException<bool>(
 			new NotSupportedException("Runtime transport does not expose broadcast test pattern control."));
