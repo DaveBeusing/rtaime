@@ -115,7 +115,7 @@ public sealed class NotificationService : INotificationService
 			var occurrenceCount = existing is not null && IsSameOccurrence(existing, notification)
 				? checked(existing.OccurrenceCount + 1)
 				: 1;
-			var lifetime = notification.Persistent
+			TimeSpan? lifetime = notification.Persistent
 				? null
 				: notification.Lifetime ?? DefaultTransientLifetime;
 
