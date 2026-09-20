@@ -446,6 +446,9 @@
 							CornerRadius="2" />
 					</Grid>
 					<ControlTemplate.Triggers>
+						<Trigger Property="HasValue" Value="False">
+							<Setter TargetName="PART_Indicator" Property="Visibility" Value="Collapsed" />
+						</Trigger>
 						<Trigger Property="IsEnabled" Value="False">
 							<Setter Property="Opacity" Value="0.4" />
 						</Trigger>

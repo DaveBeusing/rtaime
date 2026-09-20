@@ -57,6 +57,23 @@ The Operator does not probe Performance Counters, driver utilities or hardware A
 
 Mini histories are presentation-only ring buffers with a maximum of 48 samples. Samples are accepted only when the existing health observation changes. No additional polling timer is introduced, and unavailable values are not converted into zero-value samples.
 
+## Shared visual contract
+
+Output, health and performance presentation now uses one reusable Operator control family across EDIT, LIVE, OUTPUTS and COMPOSITING:
+
+- `RtaimeOutputRow` is a fixed 54 px flat row with an 8 px evidence dot, 56×32 monitoring thumbnail, output/source identity, target plus format context and the route state on the right.
+- `RtaimeHealthRow` is a fixed 29 px flat subsystem row with an 8 px evidence dot, subsystem label and textual state. Rows are not wrapped in individual cards.
+- `RtaimeMetricBar` keeps a 4 px track and has explicit `HasValue` semantics. Missing telemetry hides the value indicator rather than presenting a synthetic zero.
+- `RtaimeMetricDial` reuses the bounded metric-ring renderer while preserving the same explicit no-value behavior.
+- `RtaimeSparkline` draws only retained real samples on the flat dark performance background with a 1 px trace.
+- `RtaimeAlertRow` provides the same text-plus-evidence-dot language for LIVE alerts.
+
+EDIT and LIVE reuse the compact `OutputRoutingHealthControl` rather than maintaining separate output-row implementations. OUTPUTS uses the same row controls in its full diagnostic surface. COMPOSITING reuses the metric dial and sparkline for its performance panel.
+
+The 1920×1080 reference shell remains unchanged: Top 60 px, navigation 92 px, media 400 px, center 1070 px, inspector 340 px, upper workspace 700 px and timeline 320 px. The compact LIVE output block remains 270 px: 27 px header, four 54 px output rows and a 27 px action footer.
+
+No presentation component increases the Runtime health observation cadence. Metric histories remain bounded to the existing 48 samples and are updated only from the existing health observation stream.
+
 ## Lifecycle
 
 `OutputRoutingHealthViewModel` subscribes only to the existing `OperatorViewModel` and `ProgramOutputController` presentation state. `MainWindow` owns and disposes the projection together with the other Operator presentation components.

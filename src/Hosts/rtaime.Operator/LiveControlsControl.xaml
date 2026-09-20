@@ -223,88 +223,57 @@
 
 				<Border Style="{StaticResource LiveSection}" Margin="0">
 					<StackPanel>
-						<TextBlock Text="ALERTS &amp; NOTIFICATIONS" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,8" />
+						<TextBlock Text="ALERTS &amp; NOTIFICATIONS" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,6" />
 
-						<Border Style="{StaticResource LiveAlertRow}">
-							<Grid>
-								<Grid.ColumnDefinitions><ColumnDefinition Width="14" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-								<Ellipse Width="7" Height="7" VerticalAlignment="Center">
-									<Ellipse.Style>
-										<Style TargetType="Ellipse">
-											<Setter Property="Fill" Value="{DynamicResource OperatorWarningBrush}" />
-											<Style.Triggers>
-												<DataTrigger Binding="{Binding EngineHealth}" Value="OK"><Setter Property="Fill" Value="{DynamicResource OperatorHealthyBrush}" /></DataTrigger>
-												<DataTrigger Binding="{Binding EngineHealth}" Value="PASS"><Setter Property="Fill" Value="{DynamicResource OperatorHealthyBrush}" /></DataTrigger>
-												<DataTrigger Binding="{Binding EngineHealth}" Value="FAIL"><Setter Property="Fill" Value="{DynamicResource OperatorErrorBrush}" /></DataTrigger>
-											</Style.Triggers>
-										</Style>
-									</Ellipse.Style>
-								</Ellipse>
-								<StackPanel Grid.Column="1">
-									<TextBlock Text="Engine" FontSize="10" FontWeight="SemiBold" />
-									<TextBlock Text="{Binding EngineLifecycleDetail}" Style="{StaticResource OperatorLabel}" FontSize="9" TextTrimming="CharacterEllipsis" />
-								</StackPanel>
-								<StackPanel Grid.Column="2" VerticalAlignment="Center">
-									<TextBlock Text="{Binding EngineLifecycleState}" Style="{StaticResource OperatorValue}" FontSize="10" FontWeight="Bold" HorizontalAlignment="Right" />
-									<TextBlock Text="{Binding EngineHealth}" Style="{StaticResource OperatorLabel}" FontSize="9" HorizontalAlignment="Right" />
-								</StackPanel>
-							</Grid>
-						</Border>
+						<controls:RtaimeAlertRow
+							SubsystemName="Engine"
+							State="{Binding EngineLifecycleState}"
+							EvidenceState="{Binding EngineHealth}"
+							Detail="{Binding EngineLifecycleDetail}" />
 
-						<Border Style="{StaticResource LiveAlertRow}">
-							<Grid>
-								<Grid.ColumnDefinitions><ColumnDefinition Width="14" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-								<Ellipse Width="7" Height="7" Fill="{DynamicResource OperatorWarningBrush}" VerticalAlignment="Center" />
-								<StackPanel Grid.Column="1">
-									<TextBlock Text="Runtime / Media" FontSize="10" FontWeight="SemiBold" />
-									<TextBlock Text="{Binding AffectedComponent}" Style="{StaticResource OperatorLabel}" FontSize="9" TextTrimming="CharacterEllipsis" />
-								</StackPanel>
-								<StackPanel Grid.Column="2" VerticalAlignment="Center">
-									<TextBlock Text="{Binding RuntimeHealth}" Style="{StaticResource OperatorLabel}" FontWeight="Bold" HorizontalAlignment="Right" />
-									<TextBlock Text="{Binding MediaHealth}" Style="{StaticResource OperatorLabel}" FontSize="9" HorizontalAlignment="Right" />
-								</StackPanel>
-							</Grid>
-						</Border>
+						<controls:RtaimeAlertRow
+							SubsystemName="Runtime"
+							State="{Binding RuntimeHealth}"
+							EvidenceState="{Binding RuntimeHealth}"
+							Detail="{Binding AffectedComponent}" />
 
-						<Border>
-							<Border.Style>
-								<Style TargetType="Border" BasedOn="{StaticResource LiveAlertRow}">
+						<controls:RtaimeAlertRow
+							SubsystemName="Media"
+							State="{Binding MediaHealth}"
+							EvidenceState="{Binding MediaHealth}"
+							Detail="Production media subsystem" />
+
+						<controls:RtaimeAlertRow
+							SubsystemName="Operator / Control error"
+							State="ERROR"
+							EvidenceState="FAIL"
+							Detail="{Binding LastError}">
+							<controls:RtaimeAlertRow.Style>
+								<Style TargetType="{x:Type controls:RtaimeAlertRow}" BasedOn="{StaticResource {x:Type controls:RtaimeAlertRow}}">
 									<Setter Property="Visibility" Value="Visible" />
 									<Style.Triggers>
 										<DataTrigger Binding="{Binding LastError}" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
 										<DataTrigger Binding="{Binding LastError}" Value=""><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
 									</Style.Triggers>
 								</Style>
-							</Border.Style>
-							<Grid>
-								<Grid.ColumnDefinitions><ColumnDefinition Width="14" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-								<Ellipse Width="7" Height="7" Fill="{DynamicResource OperatorErrorBrush}" VerticalAlignment="Center" />
-								<StackPanel Grid.Column="1">
-									<TextBlock Text="Operator / Control error" Foreground="{DynamicResource OperatorErrorBrush}" FontSize="10" FontWeight="SemiBold" />
-									<TextBlock Text="{Binding LastError}" Style="{StaticResource OperatorLabel}" FontSize="9" TextTrimming="CharacterEllipsis" />
-								</StackPanel>
-							</Grid>
-						</Border>
+							</controls:RtaimeAlertRow.Style>
+						</controls:RtaimeAlertRow>
 
-						<Border>
-							<Border.Style>
-								<Style TargetType="Border" BasedOn="{StaticResource LiveAlertRow}">
+						<controls:RtaimeAlertRow
+							SubsystemName="Recording"
+							State="ERROR"
+							EvidenceState="FAIL"
+							Detail="{Binding RecordingError}">
+							<controls:RtaimeAlertRow.Style>
+								<Style TargetType="{x:Type controls:RtaimeAlertRow}" BasedOn="{StaticResource {x:Type controls:RtaimeAlertRow}}">
 									<Setter Property="Visibility" Value="Visible" />
 									<Style.Triggers>
 										<DataTrigger Binding="{Binding RecordingError}" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
 										<DataTrigger Binding="{Binding RecordingError}" Value=""><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
 									</Style.Triggers>
 								</Style>
-							</Border.Style>
-							<Grid>
-								<Grid.ColumnDefinitions><ColumnDefinition Width="14" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-								<Ellipse Width="7" Height="7" Fill="{DynamicResource OperatorErrorBrush}" VerticalAlignment="Center" />
-								<StackPanel Grid.Column="1">
-									<TextBlock Text="Recording" Foreground="{DynamicResource OperatorErrorBrush}" FontSize="10" FontWeight="SemiBold" />
-									<TextBlock Text="{Binding RecordingError}" Style="{StaticResource OperatorLabel}" FontSize="9" TextTrimming="CharacterEllipsis" />
-								</StackPanel>
-							</Grid>
-						</Border>
+							</controls:RtaimeAlertRow.Style>
+						</controls:RtaimeAlertRow>
 					</StackPanel>
 				</Border>
 			</StackPanel>

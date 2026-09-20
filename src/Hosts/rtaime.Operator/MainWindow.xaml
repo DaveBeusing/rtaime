@@ -528,6 +528,8 @@
 					<local:OutputRoutingHealthControl
 						Grid.Row="2"
 						CompactMode="True"
+						ProgramImage="{Binding Monitoring.ProgramImage, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+						PreviewImage="{Binding Monitoring.PreviewImage, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 						DataContext="{Binding OutputHealth, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
 				</Grid>
 
@@ -610,7 +612,7 @@
 									</Grid.ColumnDefinitions>
 
 									<Grid Grid.Column="0">
-										<controls:RtaimeMetricRing
+										<controls:RtaimeMetricDial
 											Width="58"
 											Height="58"
 											HorizontalAlignment="Center"
@@ -626,7 +628,7 @@
 									</Grid>
 
 									<Grid Grid.Column="2">
-										<controls:RtaimeMetricRing
+										<controls:RtaimeMetricDial
 											Width="58"
 											Height="58"
 											HorizontalAlignment="Center"
@@ -642,7 +644,7 @@
 									</Grid>
 
 									<Grid Grid.Column="4">
-										<controls:RtaimeMetricRing
+										<controls:RtaimeMetricDial
 											Width="58"
 											Height="58"
 											HorizontalAlignment="Center"
@@ -687,15 +689,13 @@
 									Padding="7,5">
 									<Grid>
 										<TextBlock Text="GPU HISTORY · RUNTIME SAMPLES" Style="{StaticResource OperatorLabel}" FontSize="8" VerticalAlignment="Top" />
-										<Viewbox Margin="0,14,0,0" Stretch="Fill">
-											<Canvas Width="92" Height="24">
-												<Polyline
-													Points="{Binding OutputHealth.GpuMetric.HistoryPoints, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-													Stroke="{DynamicResource OperatorAccentBrush}"
-													StrokeThickness="1.5"
-													StrokeLineJoin="Round" />
-											</Canvas>
-										</Viewbox>
+										<controls:RtaimeSparkline
+											Margin="0,14,0,0"
+											Points="{Binding OutputHealth.GpuMetric.HistoryPoints, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+											HasValue="{Binding OutputHealth.GpuMetric.HasGaugeSample, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+											LineThickness="1"
+											HorizontalAlignment="Stretch"
+											VerticalAlignment="Stretch" />
 									</Grid>
 								</Border>
 							</Grid>
@@ -968,78 +968,13 @@
 								</Grid>
 							</Border>
 
-							<Border Grid.Column="2" Style="{StaticResource RtaimeProductionLowerPanel}">
-								<Grid>
-									<Grid.RowDefinitions>
-										<RowDefinition Height="28" />
-										<RowDefinition Height="*" />
-									</Grid.RowDefinitions>
-									<DockPanel Grid.Row="0">
-										<TextBlock Text="OUTPUT ROUTING" Style="{StaticResource OperatorSectionTitle}" VerticalAlignment="Center" />
-										<TextBlock Text="{Binding OutputHealth.AccessState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorLabel}" DockPanel.Dock="Right" VerticalAlignment="Center" />
-									</DockPanel>
-									<controls:RtaimeListBox Grid.Row="1"
-										ItemsSource="{Binding OutputHealth.Outputs, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-										SelectedItem="{Binding OutputHealth.SelectedOutput, RelativeSource={RelativeSource AncestorType={x:Type Window}}, Mode=TwoWay}"
-										ItemContainerStyle="{StaticResource RtaimeProductionOutputItem}"
-										Background="Transparent"
-										BorderThickness="0"
-										ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-										ScrollViewer.VerticalScrollBarVisibility="Disabled"
-										AutomationProperties.Name="Output routing roles">
-										<controls:RtaimeListBox.ItemTemplate>
-											<DataTemplate>
-												<Grid Margin="5,0" ToolTip="{Binding Detail}">
-													<Grid.ColumnDefinitions>
-														<ColumnDefinition Width="13" />
-														<ColumnDefinition Width="62" />
-														<ColumnDefinition Width="8" />
-														<ColumnDefinition Width="*" />
-														<ColumnDefinition Width="Auto" />
-													</Grid.ColumnDefinitions>
-													<Ellipse Grid.Column="0">
-														<Ellipse.Style>
-															<Style TargetType="Ellipse" BasedOn="{StaticResource RtaimeProductionStatusDot}">
-																<Style.Triggers>
-																	<DataTrigger Binding="{Binding EvidenceState}" Value="PASS"><Setter Property="Fill" Value="{DynamicResource OperatorHealthyBrush}" /></DataTrigger>
-																	<DataTrigger Binding="{Binding EvidenceState}" Value="FAIL"><Setter Property="Fill" Value="{DynamicResource OperatorErrorBrush}" /></DataTrigger>
-																</Style.Triggers>
-															</Style>
-														</Ellipse.Style>
-													</Ellipse>
-													<Border Grid.Column="1" Width="62" Height="36" Background="Black" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" VerticalAlignment="Center">
-														<Image Stretch="UniformToFill">
-															<Image.Style>
-																<Style TargetType="Image">
-																	<Setter Property="Source" Value="{Binding Monitoring.ProgramImage, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
-																	<Style.Triggers>
-																		<DataTrigger Binding="{Binding Id}" Value="preview"><Setter Property="Source" Value="{Binding Monitoring.PreviewImage, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" /></DataTrigger>
-																		<DataTrigger Binding="{Binding Id}" Value="aux"><Setter Property="Source" Value="{x:Null}" /></DataTrigger>
-																	</Style.Triggers>
-																</Style>
-															</Image.Style>
-														</Image>
-													</Border>
-													<StackPanel Grid.Column="3" VerticalAlignment="Center">
-														<TextBlock Text="{Binding AssignedSource}" FontSize="11" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-														<StackPanel Orientation="Horizontal">
-															<TextBlock Text="{Binding Target}" Style="{StaticResource OperatorLabel}" FontSize="10" TextTrimming="CharacterEllipsis" MaxWidth="118" />
-															<TextBlock Text=" · " Style="{StaticResource OperatorLabel}" FontSize="10" />
-															<TextBlock Text="{Binding Resolution}" Style="{StaticResource OperatorLabel}" FontSize="10" />
-															<TextBlock Text=" · " Style="{StaticResource OperatorLabel}" FontSize="10" />
-															<TextBlock Text="{Binding FrameRate}" Style="{StaticResource OperatorLabel}" FontSize="10" />
-															<TextBlock Text=" · " Style="{StaticResource OperatorLabel}" FontSize="10" />
-															<TextBlock Text="{Binding ColorSpace}" Style="{StaticResource OperatorLabel}" FontSize="10" />
-														</StackPanel>
-													</StackPanel>
-													<TextBlock Grid.Column="4" Text="{Binding Name}" Style="{StaticResource OperatorLabel}" FontWeight="Bold" VerticalAlignment="Center" Margin="8,0,0,0" />
-												</Grid>
-											</DataTemplate>
-										</controls:RtaimeListBox.ItemTemplate>
-									</controls:RtaimeListBox>
-								</Grid>
-							</Border>
-
+							<local:OutputRoutingHealthControl
+								Grid.Column="2"
+								CompactMode="True"
+								VerticalAlignment="Top"
+								ProgramImage="{Binding Monitoring.ProgramImage, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+								PreviewImage="{Binding Monitoring.PreviewImage, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+								DataContext="{Binding OutputHealth, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
 							<Border Grid.Column="4" Style="{StaticResource RtaimeProductionLowerPanel}">
 								<Grid>
 									<Grid.RowDefinitions>
@@ -1051,20 +986,10 @@
 									<ItemsControl Grid.Row="1" ItemsSource="{Binding OutputHealth.SystemHealth, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
 										<ItemsControl.ItemTemplate>
 											<DataTemplate>
-												<DockPanel Height="22">
-													<Ellipse>
-														<Ellipse.Style>
-															<Style TargetType="Ellipse" BasedOn="{StaticResource RtaimeProductionStatusDot}">
-																<Style.Triggers>
-																	<DataTrigger Binding="{Binding EvidenceState}" Value="PASS"><Setter Property="Fill" Value="{DynamicResource OperatorHealthyBrush}" /></DataTrigger>
-																	<DataTrigger Binding="{Binding EvidenceState}" Value="FAIL"><Setter Property="Fill" Value="{DynamicResource OperatorErrorBrush}" /></DataTrigger>
-																</Style.Triggers>
-															</Style>
-														</Ellipse.Style>
-													</Ellipse>
-													<TextBlock Text="{Binding Name}" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" />
-													<TextBlock Text="{Binding Status}" Style="{StaticResource OperatorValue}" FontSize="10" FontWeight="SemiBold" DockPanel.Dock="Right" VerticalAlignment="Center" />
-												</DockPanel>
+												<controls:RtaimeHealthRow
+													SubsystemName="{Binding Name}"
+													State="{Binding Status}"
+													EvidenceState="{Binding EvidenceState}" />
 											</DataTemplate>
 										</ItemsControl.ItemTemplate>
 									</ItemsControl>
@@ -1072,17 +997,17 @@
 										<DockPanel Height="38">
 											<TextBlock Text="Disk" Style="{StaticResource OperatorLabel}" VerticalAlignment="Top" />
 											<TextBlock Text="{Binding OutputHealth.DiskMetric.Value, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorLabel}" DockPanel.Dock="Right" VerticalAlignment="Top" />
-											<controls:RtaimeMetricBar Minimum="0" Maximum="100" Value="{Binding OutputHealth.DiskMetric.GaugeValue, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" VerticalAlignment="Bottom" />
+											<controls:RtaimeMetricBar Minimum="0" Maximum="100" Value="{Binding OutputHealth.DiskMetric.GaugeValue, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" HasValue="{Binding OutputHealth.DiskMetric.HasGaugeSample, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" VerticalAlignment="Bottom" />
 										</DockPanel>
 										<DockPanel Height="38">
 											<TextBlock Text="Network" Style="{StaticResource OperatorLabel}" VerticalAlignment="Top" />
 											<TextBlock Text="{Binding OutputHealth.NetworkMetric.Value, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorLabel}" DockPanel.Dock="Right" VerticalAlignment="Top" />
-											<controls:RtaimeMetricBar Minimum="0" Maximum="100" Value="{Binding OutputHealth.NetworkMetric.GaugeValue, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" VerticalAlignment="Bottom" />
+											<controls:RtaimeMetricBar Minimum="0" Maximum="100" Value="{Binding OutputHealth.NetworkMetric.GaugeValue, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" HasValue="{Binding OutputHealth.NetworkMetric.HasGaugeSample, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" VerticalAlignment="Bottom" />
 										</DockPanel>
 										<DockPanel Height="38">
 											<TextBlock Text="Temperature" Style="{StaticResource OperatorLabel}" VerticalAlignment="Top" />
 											<TextBlock Text="{Binding OutputHealth.TemperatureMetric.Value, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorLabel}" DockPanel.Dock="Right" VerticalAlignment="Top" />
-											<controls:RtaimeMetricBar Minimum="0" Maximum="100" Value="{Binding OutputHealth.TemperatureMetric.GaugeValue, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" VerticalAlignment="Bottom" />
+											<controls:RtaimeMetricBar Minimum="0" Maximum="100" Value="{Binding OutputHealth.TemperatureMetric.GaugeValue, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" HasValue="{Binding OutputHealth.TemperatureMetric.HasGaugeSample, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" VerticalAlignment="Bottom" />
 										</DockPanel>
 									</StackPanel>
 								</Grid>
@@ -1209,6 +1134,8 @@
 				<StackPanel Grid.Column="2">
 					<local:OutputRoutingHealthControl
 						DataContext="{Binding OutputHealth, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+						ProgramImage="{Binding Monitoring.ProgramImage, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+						PreviewImage="{Binding Monitoring.PreviewImage, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 						Visibility="{Binding Shell.OutputRoutingVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 						Margin="0,0,0,14" />
 

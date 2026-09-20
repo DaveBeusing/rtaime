@@ -184,9 +184,21 @@ public class RtaimeStatusBadge : ContentControl
 
 public class RtaimeMetricBar : ProgressBar
 {
+	public static readonly DependencyProperty HasValueProperty = DependencyProperty.Register(
+		nameof(HasValue),
+		typeof(bool),
+		typeof(RtaimeMetricBar),
+		new FrameworkPropertyMetadata(true));
+
 	static RtaimeMetricBar()
 	{
 		DefaultStyleKeyProperty.OverrideMetadata(typeof(RtaimeMetricBar), new FrameworkPropertyMetadata(typeof(RtaimeMetricBar)));
+	}
+
+	public bool HasValue
+	{
+		get => (bool)GetValue(HasValueProperty);
+		set => SetValue(HasValueProperty, value);
 	}
 }
 
