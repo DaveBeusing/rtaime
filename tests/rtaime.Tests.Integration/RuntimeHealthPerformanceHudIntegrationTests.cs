@@ -38,6 +38,7 @@ public sealed class RuntimeHealthPerformanceHudIntegrationTests
 		Assert.Equal(3UL, health.DroppedFrames);
 		Assert.True(health.FrameTime > TimeSpan.Zero);
 		Assert.True(health.FrameBudget > health.FrameTime);
+		Assert.Equal(49.75, health.OutputFramesPerSecond);
 	}
 
 	[Fact]
@@ -197,9 +198,16 @@ public sealed class RuntimeHealthPerformanceHudIntegrationTests
 		var frame = TimeSpan.FromMilliseconds(20);
 
 		Assert.Equal(0UL, counter.Observe(TimeSpan.Zero, frame));
+		Assert.Null(counter.OutputFramesPerSecond);
+
 		Assert.Equal(0UL, counter.Observe(TimeSpan.FromMilliseconds(20), frame));
+		Assert.Equal(50, counter.OutputFramesPerSecond, 6);
+
 		Assert.Equal(1UL, counter.Observe(TimeSpan.FromMilliseconds(60), frame));
+		Assert.Equal(45, counter.OutputFramesPerSecond, 6);
+
 		Assert.Equal(4UL, counter.Observe(TimeSpan.FromMilliseconds(80), frame, outputBackpressure: 2, outputRejected: 1));
+		Assert.Equal(46, counter.OutputFramesPerSecond, 6);
 	}
 
 	private static RuntimeRemoteSnapshot CreateRuntimeSnapshot()
@@ -237,7 +245,8 @@ public sealed class RuntimeHealthPerformanceHudIntegrationTests
 				null,
 				null,
 				null,
-				"UNVERIFIED: no qualified utilization or used-VRAM source."));
+				"UNVERIFIED: no qualified utilization or used-VRAM source.",
+				OutputFramesPerSecond: 49.75));
 	}
 
 	private static ProviderDescriptor CreateGpuProvider(ProviderAvailabilityState state)
