@@ -1,0 +1,120 @@
+<!-- Copyright (c) Dave Beusing <david.beusing@gmail.com>. -->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+	<Color x:Key="RtaimeBrandColorDeepBlack">#05070B</Color>
+	<Color x:Key="RtaimeBrandColorGraphite">#1A1F2B</Color>
+	<Color x:Key="RtaimeBrandColorSilver">#E8ECF4</Color>
+	<Color x:Key="RtaimeBrandColorElectricBlue">#00A3FF</Color>
+	<Color x:Key="RtaimeBrandColorBlueDeep">#0059C7</Color>
+
+	<SolidColorBrush x:Key="RtaimeBrandDeepBlackBrush" Color="{StaticResource RtaimeBrandColorDeepBlack}" />
+	<SolidColorBrush x:Key="RtaimeBrandGraphiteBrush" Color="{StaticResource RtaimeBrandColorGraphite}" />
+	<SolidColorBrush x:Key="RtaimeBrandSilverBrush" Color="{StaticResource RtaimeBrandColorSilver}" />
+	<SolidColorBrush x:Key="RtaimeBrandElectricBlueBrush" Color="{StaticResource RtaimeBrandColorElectricBlue}" />
+
+	<LinearGradientBrush x:Key="RtaimeBrandSilverGradientBrush" StartPoint="0,0" EndPoint="1,1">
+		<GradientStop Color="#FFFFFF" Offset="0" />
+		<GradientStop Color="#DCE4F0" Offset="0.48" />
+		<GradientStop Color="#8FA2BB" Offset="1" />
+	</LinearGradientBrush>
+
+	<LinearGradientBrush x:Key="RtaimeBrandBlueGradientBrush" StartPoint="0,0" EndPoint="1,1">
+		<GradientStop Color="#77D9FF" Offset="0" />
+		<GradientStop Color="#00A3FF" Offset="0.5" />
+		<GradientStop Color="#0059C7" Offset="1" />
+	</LinearGradientBrush>
+
+	<DrawingImage x:Key="RtaimeBrandEmblemImage">
+		<DrawingImage.Drawing>
+			<DrawingGroup>
+				<GeometryDrawing Brush="{StaticResource RtaimeBrandSilverGradientBrush}">
+					<GeometryDrawing.Geometry>
+						<PathGeometry Figures="M12,14 L58,14 C77,14 90,25 90,43 C90,55 84,64 72,69 L62,59 C68,55 71,50 71,43 C71,33 64,28 53,28 L27,28 Z" />
+					</GeometryDrawing.Geometry>
+				</GeometryDrawing>
+				<GeometryDrawing Brush="{StaticResource RtaimeBrandBlueGradientBrush}">
+					<GeometryDrawing.Geometry>
+						<PathGeometry Figures="M58,14 C78,14 90,25 90,43 C90,57 82,67 69,71 L92,91 L72,91 L51,70 L60,61 C68,57 72,51 72,43 C72,33 65,28 53,28 L27,28 L12,14 Z" />
+					</GeometryDrawing.Geometry>
+				</GeometryDrawing>
+				<GeometryDrawing Brush="{StaticResource RtaimeBrandSilverGradientBrush}">
+					<GeometryDrawing.Geometry>
+						<PathGeometry Figures="M12,87 L12,53 L45,87 Z" />
+					</GeometryDrawing.Geometry>
+				</GeometryDrawing>
+				<GeometryDrawing Brush="{StaticResource RtaimeBrandBlueGradientBrush}">
+					<GeometryDrawing.Geometry>
+						<PathGeometry Figures="M47,68 L62,61 L92,91 L72,91 Z" />
+					</GeometryDrawing.Geometry>
+				</GeometryDrawing>
+				<GeometryDrawing Brush="{StaticResource RtaimeBrandBlueGradientBrush}">
+					<GeometryDrawing.Geometry>
+						<PathGeometry Figures="M42,35 L42,60 L63,47.5 Z" />
+					</GeometryDrawing.Geometry>
+				</GeometryDrawing>
+			</DrawingGroup>
+		</DrawingImage.Drawing>
+	</DrawingImage>
+
+	<DrawingImage x:Key="RtaimeBrandEmblemMonochromeImage">
+		<DrawingImage.Drawing>
+			<DrawingGroup>
+				<GeometryDrawing Brush="{StaticResource RtaimeBrandSilverBrush}">
+					<GeometryDrawing.Geometry>
+						<PathGeometry Figures="M12,14 L58,14 C77,14 90,25 90,43 C90,57 82,67 69,71 L92,91 L72,91 L51,70 L60,61 C68,57 72,51 72,43 C72,33 65,28 53,28 L27,28 L12,14 Z M12,87 L12,53 L45,87 Z M42,35 L42,60 L63,47.5 Z" />
+					</GeometryDrawing.Geometry>
+				</GeometryDrawing>
+			</DrawingGroup>
+		</DrawingImage.Drawing>
+	</DrawingImage>
+
+	<DrawingImage x:Key="RtaimeBrandAppIconImage">
+		<DrawingImage.Drawing>
+			<DrawingGroup>
+				<GeometryDrawing Brush="{StaticResource RtaimeBrandDeepBlackBrush}">
+					<GeometryDrawing.Geometry>
+						<RectangleGeometry Rect="0,0,100,100" RadiusX="20" RadiusY="20" />
+					</GeometryDrawing.Geometry>
+					<GeometryDrawing.Pen>
+						<Pen Brush="{StaticResource RtaimeBrandElectricBlueBrush}" Thickness="2" />
+					</GeometryDrawing.Pen>
+				</GeometryDrawing>
+				<DrawingGroup Transform="0.78,0,0,0.78,11,11">
+					<GeometryDrawing Brush="{StaticResource RtaimeBrandBlueGradientBrush}">
+						<GeometryDrawing.Geometry>
+							<PathGeometry Figures="M12,14 L58,14 C77,14 90,25 90,43 C90,57 82,67 69,71 L92,91 L72,91 L51,70 L60,61 C68,57 72,51 72,43 C72,33 65,28 53,28 L27,28 L12,14 Z M42,35 L42,60 L63,47.5 Z" />
+						</GeometryDrawing.Geometry>
+					</GeometryDrawing>
+					<GeometryDrawing Brush="{StaticResource RtaimeBrandSilverGradientBrush}">
+						<GeometryDrawing.Geometry>
+							<PathGeometry Figures="M12,87 L12,53 L45,87 Z" />
+						</GeometryDrawing.Geometry>
+					</GeometryDrawing>
+				</DrawingGroup>
+			</DrawingGroup>
+		</DrawingImage.Drawing>
+	</DrawingImage>
+
+	<DataTemplate x:Key="RtaimeBrandCompactLockupTemplate">
+		<Grid Height="34" SnapsToDevicePixels="True">
+			<Grid.ColumnDefinitions>
+				<ColumnDefinition Width="34" />
+				<ColumnDefinition Width="Auto" />
+			</Grid.ColumnDefinitions>
+			<Image Source="{StaticResource RtaimeBrandEmblemImage}" Width="30" Height="30" Stretch="Uniform" VerticalAlignment="Center" />
+			<StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="7,0,0,0">
+				<TextBlock Text="rtaime" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource OperatorTextBrush}" />
+				<TextBlock Text="REAL TIME AI MEDIA ENGINE" FontSize="6.5" FontWeight="SemiBold" CharacterSpacing="130" Foreground="{DynamicResource OperatorMutedTextBrush}" Margin="0,-1,0,0" />
+			</StackPanel>
+		</Grid>
+	</DataTemplate>
+
+	<DataTemplate x:Key="RtaimeBrandHeroLockupTemplate">
+		<StackPanel HorizontalAlignment="Center">
+			<Image Source="{StaticResource RtaimeBrandEmblemImage}" Width="112" Height="112" Stretch="Uniform" HorizontalAlignment="Center" />
+			<TextBlock Text="rtaime" FontSize="42" FontWeight="SemiBold" Foreground="{DynamicResource OperatorTextBrush}" HorizontalAlignment="Center" Margin="0,-8,0,0" />
+			<TextBlock Text="REAL TIME AI MEDIA ENGINE" FontSize="10" FontWeight="SemiBold" CharacterSpacing="220" Foreground="{DynamicResource OperatorMutedTextBrush}" HorizontalAlignment="Center" Margin="0,2,0,0" />
+		</StackPanel>
+	</DataTemplate>
+</ResourceDictionary>
