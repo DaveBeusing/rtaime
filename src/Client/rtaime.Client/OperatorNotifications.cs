@@ -37,7 +37,7 @@ public sealed record OperatorNotification(
 {
 	public bool HasTechnicalDetail => !string.IsNullOrWhiteSpace(TechnicalDetail);
 	public bool RequiresOperatorAction =>
-		Condition is OperatorNotificationCondition.Active or OperatorNotificationCondition.Fatal &&
+		(Condition is OperatorNotificationCondition.Active or OperatorNotificationCondition.Fatal) &&
 		!string.IsNullOrWhiteSpace(OperatorAction);
 
 	public bool IsExpired(DateTimeOffset now) =>
