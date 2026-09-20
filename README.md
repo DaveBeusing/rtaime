@@ -321,7 +321,7 @@ Core architecture and operation:
 Release and qualification:
 
 - [Build, Publish & Test](docs/BuildAndTest.md)
-- [Repository Governance](docs/RepositoryGovernance.md)
+- [Repository Governance](docs/Governance/RepositoryGovernance.md)
 - [Release Pipeline & Channels](docs/ReleasePipelineAndChannels.md)
 - [Release Packaging & Offline Deployment](docs/ReleasePackagingAndOfflineDeployment.md)
 - [Release Evidence](docs/ReleaseEvidence.md)

@@ -1,7 +1,7 @@
 <!-- Copyright (c) Dave Beusing <david.beusing@gmail.com>. -->
 
 <p align="right">
-	<img src="../src/Hosts/rtaime.Operator/Assets/Brand/RtaimeLogoHorizontal.svg" alt="rtaime — Real Time AI Media Engine" width="180" />
+	<img src="../../src/Hosts/rtaime.Operator/Assets/Brand/RtaimeLogoHorizontal.svg" alt="rtaime — Real Time AI Media Engine" width="180" />
 </p>
 
 # Repository Governance & Required Gates
@@ -42,7 +42,7 @@ Provider Smoke
 
 The names are duplicated in:
 
-- `governance/repository-policy.json`,
+- `docs/Governance/RepositoryPolicy.json`,
 - `.github/rulesets/master.ruleset.json`,
 - `.github/workflows/required-gates.yml`.
 
@@ -60,7 +60,7 @@ build Release
 complete solution test run
 ```
 
-The equivalent developer commands and targeted test-suite commands are maintained in [BuildAndTest.md](BuildAndTest.md). Local execution is useful pre-PR evidence but does not replace the required GitHub checks.
+The equivalent developer commands and targeted test-suite commands are maintained in [BuildAndTest.md](../BuildAndTest.md). Local execution is useful pre-PR evidence but does not replace the required GitHub checks.
 
 ### Quality
 
@@ -169,7 +169,7 @@ The project uses PR review and evidence without inventing a foreign-review requi
 
 Repository files cannot by themselves prove that GitHub is enforcing the ruleset.
 
-Therefore `governance/repository-policy.json` records administrative enforcement as:
+Therefore `docs/Governance/RepositoryPolicy.json` records administrative enforcement as:
 
 ```text
 UNVERIFIED

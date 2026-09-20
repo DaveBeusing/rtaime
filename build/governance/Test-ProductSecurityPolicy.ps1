@@ -24,7 +24,7 @@ function Read-RepositoryText {
 }
 
 $securityPolicyText = Read-RepositoryText "SECURITY.md"
-$governanceText = Read-RepositoryText "governance/product-security-policy.json"
+$governanceText = Read-RepositoryText "docs/Governance/ProductSecurityPolicy.json"
 $schemaText = Read-RepositoryText "schemas/security/v1/vulnerability-record.schema.json"
 $assessmentSchemaText = Read-RepositoryText "schemas/security/v1/product-security-assessment.schema.json"
 $documentationText = Read-RepositoryText "docs/ProductSecurityCompliance.md"
