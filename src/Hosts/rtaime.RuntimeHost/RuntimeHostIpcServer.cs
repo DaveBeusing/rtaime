@@ -7,6 +7,7 @@ using rtaime.Core;
 using rtaime.Media;
 using rtaime.Media.Contracts;
 using rtaime.Provider.Contracts;
+using rtaime.Provider.VirtualMedia;
 using rtaime.Recording;
 using rtaime.Runtime.Contracts;
 
@@ -189,6 +190,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 				"runtime.graphics.overlay.set" => ValueTask.FromResult(SetGraphicsOverlay(request, runtime)),
 				"runtime.graphics.overlay.clear" => ValueTask.FromResult(ClearGraphicsOverlay(request, runtime)),
 				"runtime.audio.input.set" => ValueTask.FromResult(SetAudioInputState(request, runtime)),
+				"runtime.audio.test_signal.set" => ValueTask.FromResult(SetAudioTestSignal(request, runtime)),
 				"runtime.test_pattern.set" => ValueTask.FromResult(SetBroadcastTestPattern(request, runtime)),
 				"runtime.recording.start" => StartRecordingAsync(request, runtime, cancellationToken),
 				"runtime.recording.stop" => StopRecordingAsync(request, runtime, cancellationToken),
@@ -282,6 +284,23 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 			wire.Muted);
 		_stateVersion++;
 		return Success(request, "runtime.audio.input.response", ToWire(snapshot));
+	}
+
+	private WireEnvelope SetAudioTestSignal(WireEnvelope request, V1RuntimeHostService runtime)
+	{
+		var wire = request.Payload.Deserialize<WireAudioTestSignalState>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Generated audio test signal payload is required.");
+		var mode = Enum.IsDefined(typeof(GeneratedAudioTestSignalMode), wire.Mode)
+			? (GeneratedAudioTestSignalMode)wire.Mode
+			: throw new InvalidDataException("Generated audio test signal mode is invalid.");
+		var snapshot = runtime.SetGeneratedAudioTestSignal(
+			new MediaSourceId(Identity.Parse(wire.SourceId)),
+			wire.Enabled,
+			mode,
+			wire.FrequencyHz,
+			wire.PeakLevel);
+		_stateVersion++;
+		return Success(request, "runtime.audio.test_signal.response", ToWire(snapshot));
 	}
 
 	private async ValueTask<WireEnvelope> StartRecordingAsync(
@@ -491,7 +510,12 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		snapshot.RightPeak,
 		snapshot.MasterPeak,
 		snapshot.Clipping,
-		(int)snapshot.Health);
+		(int)snapshot.Health,
+		snapshot.TestSignalEnabled,
+		snapshot.TestSignalMode is null ? null : (int)snapshot.TestSignalMode.Value,
+		snapshot.TestSignalActiveChannel,
+		snapshot.TestSignalFrequencyHz,
+		snapshot.TestSignalPeakLevel);
 
 	private static WireAudioProgram ToWire(V1AudioProgramSnapshot snapshot) => new(
 		snapshot.ActiveVideoSourceId.ToString(),
@@ -639,7 +663,22 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 	private sealed record WireGraphicsOverlayState(bool Visible, double PositionX, double PositionY, double Scale);
 	private sealed record WireGraphicsOverlay(bool AssetLoaded, string? AssetName, uint AssetWidth, uint AssetHeight, bool Visible, double PositionX, double PositionY, double Scale);
 	private sealed record WireAudioInputState(string SourceId, double Gain, bool Muted);
-	private sealed record WireAudioInput(string SourceId, string StreamId, double Gain, bool Muted, double LeftPeak, double RightPeak, double MasterPeak, bool Clipping, int Health);
+	private sealed record WireAudioTestSignalState(string SourceId, bool Enabled, int Mode, double FrequencyHz, double PeakLevel);
+	private sealed record WireAudioInput(
+		string SourceId,
+		string StreamId,
+		double Gain,
+		bool Muted,
+		double LeftPeak,
+		double RightPeak,
+		double MasterPeak,
+		bool Clipping,
+		int Health,
+		bool TestSignalEnabled = false,
+		int? TestSignalMode = null,
+		string? TestSignalActiveChannel = null,
+		double? TestSignalFrequencyHz = null,
+		double? TestSignalPeakLevel = null);
 	private sealed record WireAudioProgram(string ActiveVideoSourceId, string ActiveStreamId, double Gain, bool Muted, double LeftPeak, double RightPeak, double MasterPeak, bool Clipping, int Health);
 	private sealed record WireCapability(string CapabilityId, string Kind, WireVideoFormat[] VideoFormats);
 	private sealed record WireResource(string ResourceId, string ProviderId, string Kind, uint CapacityUnits, bool Reservable);
