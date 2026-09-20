@@ -111,7 +111,8 @@ public sealed record RuntimeRemoteSnapshot(
 	RuntimeRecordingSnapshot? Recording = null,
 	RuntimePerformanceSnapshot? Performance = null,
 	RuntimeAIShowcaseRemoteSnapshot? AIShowcase = null,
-	IReadOnlyCollection<MediaSourceId>? BroadcastTestPatternSources = null);
+	IReadOnlyCollection<MediaSourceId>? BroadcastTestPatternSources = null,
+	IReadOnlyCollection<MediaSourceId>? MotionTimingTestPatternSources = null);
 
 public sealed record RuntimeRemoteApplyResult(
 	string HostInstanceId,
@@ -222,6 +223,9 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 			FromWire(snapshot.AIShowcase),
 			Array.AsReadOnly((snapshot.BroadcastTestPatternSourceIds ?? Array.Empty<string>())
 				.Select(sourceId => new MediaSourceId(Identity.Parse(sourceId)))
+				.ToArray()),
+			Array.AsReadOnly((snapshot.MotionTimingTestPatternSourceIds ?? Array.Empty<string>())
+				.Select(sourceId => new MediaSourceId(Identity.Parse(sourceId)))
 				.ToArray()));
 	}
 
@@ -265,11 +269,12 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 	public async ValueTask<bool> SetBroadcastTestPatternAsync(
 		MediaSourceId sourceId,
 		bool enabled,
+		bool motionTiming = false,
 		CancellationToken cancellationToken = default)
 	{
 		var response = await ExchangeAsync(
 			"runtime.test_pattern.set",
-			new WireTestPatternState(sourceId.ToString(), enabled),
+			new WireTestPatternState(sourceId.ToString(), enabled, motionTiming),
 			cancellationToken).ConfigureAwait(false);
 		var wire = response.Payload.Deserialize<WireTestPatternState>(Wire.JsonOptions)
 			?? throw new InvalidDataException("Runtime broadcast test pattern response is required.");
@@ -766,7 +771,7 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 	private sealed record WireFailure(string Code, string Message);
 	private sealed record WireVideoFormat(uint Width, uint Height, string FrameRate, int PixelFormat, int ScanMode);
 	private sealed record WireInputSignal(string SourceId, string Health);
-	private sealed record WireTestPatternState(string SourceId, bool Enabled);
+	private sealed record WireTestPatternState(string SourceId, bool Enabled, bool MotionTiming = false);
 	private sealed record WireGraphicsAsset(string Name, uint Width, uint Height, byte[] RgbaPixels);
 	private sealed record WireGraphicsOverlayState(bool Visible, double PositionX, double PositionY, double Scale);
 	private sealed record WireGraphicsOverlay(bool AssetLoaded, string? AssetName, uint AssetWidth, uint AssetHeight, bool Visible, double PositionX, double PositionY, double Scale);
@@ -810,6 +815,7 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 		WireVideoFormat Format,
 		WireInputSignal[] InputSignals,
 		string[]? BroadcastTestPatternSourceIds,
+		string[]? MotionTimingTestPatternSourceIds,
 		WireGraphicsOverlay GraphicsOverlay,
 		WireAudioInput[] AudioInputs,
 		WireAudioProgram AudioProgram,
