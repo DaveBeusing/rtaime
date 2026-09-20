@@ -316,6 +316,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	{
 		get
 		{
+			var hardware = _hardwareTelemetry.Sample();
 			lock (_gate)
 			{
 				return new V1RuntimeHostSnapshot(
@@ -330,7 +331,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 					_audio.Statistics,
 					_recorder.Snapshot,
 					RecordingOperatorSnapshotUnsafe(),
-					PerformanceSnapshotUnsafe(),
+					PerformanceSnapshotUnsafe(hardware),
 					_gpu.ActiveSurfaceCount);
 			}
 		}
@@ -924,10 +925,9 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		};
 	}
 
-	private V1RuntimePerformanceSnapshot PerformanceSnapshotUnsafe()
+	private V1RuntimePerformanceSnapshot PerformanceSnapshotUnsafe(SystemHardwareTelemetrySnapshot hardware)
 	{
 		var backend = _gpu.BackendInfo;
-		var hardware = _hardwareTelemetry.Sample();
 		var frameBudget = TimeSpan.FromSeconds(_format.FrameRate.Denominator / (double)_format.FrameRate.Numerator);
 		return new V1RuntimePerformanceSnapshot(
 			_uptimeClock.Elapsed,
