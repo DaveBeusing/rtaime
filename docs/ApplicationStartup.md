@@ -9,11 +9,14 @@ rtaime exposes one canonical product entry point while preserving the V1 multi-p
 ```text
 rtaime.exe / AppHost
 │
-├── starts or adopts ControlHost
-│   ├── supervises RuntimeHost
-│   └── supervises AIHost
+├── starts Operator startup experience for interactive profiles
 │
-└── starts Operator after qualified engine readiness
+└── starts or adopts ControlHost
+    ├── supervises RuntimeHost
+    └── supervises AIHost
+
+Operator production workspace opens only after qualified engine readiness
+and the first authoritative Control synchronization.
 ```
 
 The AppHost is lifecycle orchestration only. It is not a production authority and does not own media execution, inference semantics or Runtime state.
@@ -42,7 +45,7 @@ A monolithic all-in-one process is not introduced.
 
 Interactive is the default profile and uses `EphemeralLocal` lifecycle ownership by default.
 
-The AppHost starts or adopts the engine lifecycle, waits for qualified readiness and then opens Operator. When this AppHost starts the local engine itself, closing Operator or terminating the local AppHost requests a graceful shutdown of that owned ControlHost lifecycle. An already-running engine that is merely adopted is never terminated implicitly.
+The AppHost opens the Operator startup experience first, then starts or adopts the engine lifecycle and waits for qualified readiness. The startup surface reads AppHost lifecycle evidence and remains over the production shell until the existing Operator readiness projection confirms the first authoritative Control synchronization. When this AppHost starts the local engine itself, closing Operator or terminating the local AppHost requests a graceful shutdown of that owned ControlHost lifecycle. An already-running engine that is merely adopted is never terminated implicitly.
 
 ### Showcase
 
@@ -114,9 +117,27 @@ By default it uses the same deterministic service work root as the Windows persi
 
 This allows an Operator session to connect to an already-running service without requiring a custom work-root argument.
 
+## Startup experience and lifecycle evidence
+
+Interactive AppHost startup publishes `apphost-lifecycle.json` below the selected work root. The evidence contains only stages backed by the existing application and host lifecycle:
+
+1. Application Bootstrap
+2. Configuration
+3. Operator Interface
+4. ControlHost
+5. RuntimeHost
+6. AIHost
+7. Production Readiness
+
+Each stage is `Pending`, `Starting`, `Ready`, `Degraded` or `Failed` and carries timestamps, status detail and optional failure detail. The Operator observes this file for presentation only; it does not supervise processes, infer missing states or generate percentage progress. CPU, memory and GPU metrics remain Runtime-published health observations and are therefore not represented as independent startup stages until the runtime exposes authoritative lifecycle boundaries for them.
+
+The startup overlay may animate presentation opacity when Windows client-area animations are enabled. Reduced-motion settings disable that animation, and the animation never gates startup completion.
+
+No current application-startup stage exposes a safe standalone retry operation. Consequently the evidence contract carries `canRetry`, but the Operator does not offer a retry action until a real idempotent retry path exists.
+
 ## Readiness contract
 
-Operator launch is gated on positive evidence. AppHost requires:
+Production workspace handoff is gated on positive evidence. AppHost requires:
 
 1. the ControlHost process identity in readiness evidence to be live;
 2. ControlHost lifecycle state `READY`;
