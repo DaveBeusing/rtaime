@@ -46,6 +46,8 @@ $timelineDocumentationPath = Join-Path $repositoryRoot "docs/LayeredTimeline.md"
 $viewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorViewModel.cs"
 $runtimeReadinessPath = Join-Path $repositoryRoot "src/Client/rtaime.Client/RuntimeReadinessService.cs"
 $startupViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/StartupLifecycleViewModel.cs"
+$workspaceStateViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorWorkspaceStateViewModel.cs"
+$operatorUiStatePath = Join-Path $repositoryRoot "src/Client/rtaime.Client/OperatorUiState.cs"
 $monitorViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorMonitoringViewModel.cs"
 $programOutputControllerPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/ProgramOutputController.cs"
 $programOutputWindowPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/ProgramOutputWindow.xaml"
@@ -77,6 +79,8 @@ $demoDocumentationPath = Join-Path $repositoryRoot "docs/DemoProductionPackage.m
 $tokensPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Themes/OperatorTokens.xaml"
 $themePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Themes/OperatorTheme.xaml"
 $customControlsPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Controls/RtaimeControls.cs"
+$stateControlsPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Controls/RtaimeStateControls.cs"
+$stateControlThemePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Themes/Controls/RtaimeStateControls.xaml"
 $outputHealthControlsPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Controls/RtaimeOutputHealthControls.cs"
 $customInputControlsPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Controls/RtaimeInputControls.cs"
 $customMediaControlsPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Controls/RtaimeMediaControls.cs"
@@ -142,6 +146,8 @@ $timelineDocumentation = Get-Content -LiteralPath $timelineDocumentationPath -Ra
 $viewModel = Get-Content -LiteralPath $viewModelPath -Raw
 $runtimeReadiness = Get-Content -LiteralPath $runtimeReadinessPath -Raw
 $startupViewModel = Get-Content -LiteralPath $startupViewModelPath -Raw
+$workspaceStateViewModel = Get-Content -LiteralPath $workspaceStateViewModelPath -Raw
+$operatorUiState = Get-Content -LiteralPath $operatorUiStatePath -Raw
 $monitorViewModel = Get-Content -LiteralPath $monitorViewModelPath -Raw
 $programOutputController = Get-Content -LiteralPath $programOutputControllerPath -Raw
 $programOutputWindow = Get-Content -LiteralPath $programOutputWindowPath -Raw
@@ -159,6 +165,8 @@ $demoDocumentation = Get-Content -LiteralPath $demoDocumentationPath -Raw
 $tokens = Get-Content -LiteralPath $tokensPath -Raw
 $theme = Get-Content -LiteralPath $themePath -Raw
 $customControls = Get-Content -LiteralPath $customControlsPath -Raw
+$stateControls = Get-Content -LiteralPath $stateControlsPath -Raw
+$stateControlTheme = Get-Content -LiteralPath $stateControlThemePath -Raw
 $outputHealthControls = Get-Content -LiteralPath $outputHealthControlsPath -Raw
 $outputHealthControlTheme = Get-Content -LiteralPath $outputHealthControlThemePath -Raw
 $customInputControls = Get-Content -LiteralPath $customInputControlsPath -Raw
@@ -714,12 +722,20 @@ Assert-Condition ($demoDocumentation -match 'pre-rendered' -and $demoDocumentati
 Assert-Condition ($documentation -match 'Demo Production Package') "Operator UI documentation must record the Demo Production Package."
 
 
-Assert-Condition ($window -match 'Binding StartupComplete') "Startup presentation must remain visible until the first qualified authoritative synchronization completes."
+Assert-Condition ($window -match 'WorkspaceStates\.IsShellAvailable') "Startup presentation must yield to the Operator shell as soon as critical shell startup is available."
 Assert-Condition ($window -match 'Binding Startup\.Stages' -and $window -match 'Startup\.ActiveStageName' -and $window -match 'Startup\.Summary') "Startup presentation must expose the AppHost lifecycle stage projection and active-stage detail."
 Assert-Condition ($window -match 'RtaimeBrandHeroLockupTemplate' -and $window -match 'StartupBrandPulse') "Startup presentation must retain the shared rtaime brand lockup and lightweight animation target."
 Assert-Condition ($window -match 'Startup\.ToggleDetailsCommand' -and $window -match 'Startup\.EvidencePath') "Startup presentation must provide collapsible technical lifecycle evidence."
 Assert-Condition ($windowCode -match 'RTAIME_APPHOST_LIFECYCLE_FILE' -and $startupViewModel -match 'FileSystemWatcher') "Operator startup must observe AppHost lifecycle evidence instead of creating an independent polling lifecycle."
 Assert-Condition ($startupViewModel -notmatch 'PeriodicTimer|Task\.Delay|ProgressBar|percent|Percentage') "Startup lifecycle projection must not synthesize timer-driven or percentage progress."
+Assert-Condition ($startupViewModel -match 'IsShellAvailable' -and $startupViewModel -match 'HasCriticalFailure' -and $startupViewModel -match 'HasDeferredInitialization') "Startup lifecycle projection must expose progressive shell activation independently from production readiness."
+Assert-Condition ($windowCode -match 'OperatorWorkspaceStateViewModel' -and $windowCode -match 'WorkspaceStates = new') "Operator shell must own one consolidated workspace-state coordinator."
+Assert-Condition ($workspaceStateViewModel -match 'MediaLibrary = ResolveMediaLibrary' -and $workspaceStateViewModel -match 'Preview = ResolvePreview' -and $workspaceStateViewModel -match 'Program = ResolveProgram' -and $workspaceStateViewModel -match 'Compositing = ResolveCompositing' -and $workspaceStateViewModel -match 'Output = ResolveOutput' -and $workspaceStateViewModel -match 'Health = ResolveHealth') "Workspace state coordinator must cover all central production workspaces."
+Assert-Condition ($operatorUiState -match 'enum OperatorUiStateKind' -and $operatorUiState -match 'Ready' -and $operatorUiState -match 'Loading' -and $operatorUiState -match 'Empty' -and $operatorUiState -match 'Offline' -and $operatorUiState -match 'Unavailable' -and $operatorUiState -match 'Error' -and $operatorUiState -match 'Recovering') "Operator UI state model must define all canonical states."
+Assert-Condition ($stateControls -match 'class RtaimeStatePlaceholder' -and $stateControls -match 'class RtaimeInlineStatus' -and $stateControls -match 'class RtaimeLoadingIndicator' -and $stateControls -match 'class RtaimeEmptyStatePanel' -and $stateControls -match 'class RtaimeRecoveryStatePanel') "Reusable Operator state controls must be present."
+Assert-Condition ($stateControlTheme -match 'RepeatBehavior="Forever"' -and $stateControlTheme -match 'OperatorUiStateKind\.Recovering' -and $stateControlTheme -match 'OperatorUiStateKind\.Ready') "State control theme must provide bounded presentation semantics, loading motion and automatic Ready collapse."
+Assert-Condition ($app -match 'Themes/Controls/RtaimeStateControls\.xaml') "Operator application resources must load the consolidated state-control theme."
+Assert-Condition (($window + $previewViewer + $programViewer + $timeline + $outputHealthControl + $healthControl) -match 'WorkspaceStates\.') "Central workspace surfaces must bind the consolidated state coordinator."
 Assert-Condition ($windowCode -match 'SystemParameters\.ClientAreaAnimation' -and $windowCode -match 'DoubleAnimation' -and $windowCode -match 'UIElement\.OpacityProperty') "Startup branding animation must be opacity-only and honor the Windows reduced-motion/client-animation setting."
 Assert-Condition ($window -match 'RtaimeGlobalStatusButton' -and $window -match 'Binding GlobalReadinessLabel' -and $window -match 'Binding GlobalReadinessSummary') "Global runtime readiness must stay persistently visible with text, not color alone."
 Assert-Condition ($window -match 'Binding ProgramSafety') "System Status must expose whether Program mutations are currently safe."
@@ -849,7 +865,7 @@ Assert-Condition ($navigationSurface -match 'controls:RtaimeNavigationItem' -and
 foreach ($workspace in @("MEDIA", "EDIT", "LIVE", "SCENES", "COMPOSITING", "OUTPUTS", "HEALTH", "SETTINGS")) {
 	Assert-Condition ($navigationSurface -match ('CommandParameter="' + $workspace + '"')) "Mockup navigation must retain workspace '$workspace'."
 }
-Assert-Condition ($window -match 'Grid\.RowSpan="3"[\s\S]{0,80}Panel\.ZIndex="100"' -and $window -match 'Binding StartupComplete') "Startup/recovery presentation must overlay the top bar, workspace and permanent Runtime status bar rather than reflow shell geometry."
+Assert-Condition ($window -match 'Grid\.RowSpan="3"[\s\S]{0,80}Panel\.ZIndex="100"' -and $window -match 'WorkspaceStates\.IsShellAvailable') "Startup/recovery presentation must overlay the top bar, workspace and permanent Runtime status bar rather than reflow shell geometry."
 Assert-Condition ($shell -match 'public bool IsFullscreen \{ get; init; \} = true;' -and $windowCode -match 'WindowStyle = WindowStyle\.None') "Fresh layouts must prefer production fullscreen while preserving the existing borderless/windowed implementation."
 Assert-Condition ($keyboard -match 'new\("preview-view".+Key\.D1.+shell\.MaximizePreviewCommand') "Preview maximize must be keyboard-accessible through Ctrl+1."
 Assert-Condition ($keyboard -match 'new\("program-view".+Key\.D2.+shell\.MaximizeProgramCommand') "Program maximize must be keyboard-accessible through Ctrl+2."
