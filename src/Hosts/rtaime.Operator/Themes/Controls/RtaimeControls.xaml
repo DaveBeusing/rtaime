@@ -59,6 +59,90 @@
 		</Setter>
 	</Style>
 
+	<Style TargetType="{x:Type controls:RtaimeGlobalStatusButton}">
+		<Setter Property="Background" Value="Transparent" />
+		<Setter Property="Foreground" Value="{DynamicResource OperatorTextBrush}" />
+		<Setter Property="BorderBrush" Value="Transparent" />
+		<Setter Property="BorderThickness" Value="1" />
+		<Setter Property="Padding" Value="10,5" />
+		<Setter Property="MinHeight" Value="38" />
+		<Setter Property="Cursor" Value="Hand" />
+		<Setter Property="FocusVisualStyle" Value="{x:Null}" />
+		<Setter Property="HorizontalContentAlignment" Value="Stretch" />
+		<Setter Property="VerticalContentAlignment" Value="Center" />
+		<Setter Property="Template">
+			<Setter.Value>
+				<ControlTemplate TargetType="{x:Type controls:RtaimeGlobalStatusButton}">
+					<Border x:Name="Chrome"
+						Background="{TemplateBinding Background}"
+						BorderBrush="{TemplateBinding BorderBrush}"
+						BorderThickness="{TemplateBinding BorderThickness}"
+						CornerRadius="{DynamicResource OperatorRadiusControl}"
+						Padding="{TemplateBinding Padding}"
+						SnapsToDevicePixels="True">
+						<Grid>
+							<Grid.ColumnDefinitions>
+								<ColumnDefinition Width="12" />
+								<ColumnDefinition Width="*" />
+							</Grid.ColumnDefinitions>
+							<Ellipse x:Name="Indicator"
+								Width="7"
+								Height="7"
+								Fill="{DynamicResource OperatorSecondaryTextBrush}"
+								HorizontalAlignment="Left"
+								VerticalAlignment="Center" />
+							<StackPanel Grid.Column="1" VerticalAlignment="Center">
+								<TextBlock
+									Text="{TemplateBinding StatusText}"
+									FontSize="11"
+									FontWeight="Bold"
+									Foreground="{TemplateBinding Foreground}"
+									TextTrimming="CharacterEllipsis" />
+								<TextBlock
+									Text="{TemplateBinding Detail}"
+									FontSize="8"
+									Foreground="{DynamicResource OperatorSecondaryTextBrush}"
+									TextTrimming="CharacterEllipsis"
+									MaxWidth="300" />
+							</StackPanel>
+						</Grid>
+					</Border>
+					<ControlTemplate.Triggers>
+						<Trigger Property="State" Value="READY">
+							<Setter TargetName="Indicator" Property="Fill" Value="{DynamicResource OperatorHealthyBrush}" />
+							<Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource OperatorHealthyBrush}" />
+						</Trigger>
+						<Trigger Property="State" Value="DEGRADED">
+							<Setter TargetName="Indicator" Property="Fill" Value="{DynamicResource OperatorWarningBrush}" />
+							<Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource OperatorWarningBrush}" />
+						</Trigger>
+						<Trigger Property="State" Value="NOTREADY">
+							<Setter TargetName="Indicator" Property="Fill" Value="{DynamicResource OperatorErrorBrush}" />
+							<Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource OperatorErrorBrush}" />
+						</Trigger>
+						<Trigger Property="State" Value="RECOVERING">
+							<Setter TargetName="Indicator" Property="Fill" Value="{DynamicResource OperatorWarningBrush}" />
+							<Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource OperatorWarningBrush}" />
+						</Trigger>
+						<Trigger Property="State" Value="FAILED">
+							<Setter TargetName="Indicator" Property="Fill" Value="{DynamicResource OperatorErrorBrush}" />
+							<Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource OperatorErrorBrush}" />
+						</Trigger>
+						<Trigger Property="IsMouseOver" Value="True">
+							<Setter TargetName="Chrome" Property="Background" Value="{DynamicResource OperatorRaisedHoverBrush}" />
+						</Trigger>
+						<Trigger Property="IsKeyboardFocused" Value="True">
+							<Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource OperatorFocusBrush}" />
+						</Trigger>
+						<Trigger Property="IsPressed" Value="True">
+							<Setter TargetName="Chrome" Property="Opacity" Value="0.78" />
+						</Trigger>
+					</ControlTemplate.Triggers>
+				</ControlTemplate>
+			</Setter.Value>
+		</Setter>
+	</Style>
+
 	<Style TargetType="{x:Type controls:RtaimeIconButton}">
 		<Setter Property="Width" Value="28" />
 		<Setter Property="Height" Value="28" />
