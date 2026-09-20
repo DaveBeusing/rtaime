@@ -21,6 +21,7 @@ public sealed class RuntimePerformanceStatusBarPerformanceTests
 		var allocated = GC.GetAllocatedBytesForCurrentThread() - start;
 
 		Assert.Equal(0, allocated);
-		Assert.Equal(50, counter.OutputFramesPerSecond, 6);
+		Assert.NotNull(counter.OutputFramesPerSecond);
+		Assert.Equal(50, counter.OutputFramesPerSecond.Value, 6);
 	}
 }
