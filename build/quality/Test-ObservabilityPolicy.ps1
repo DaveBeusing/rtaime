@@ -62,6 +62,8 @@ Assert-Condition ($runtimeService -match 'V1RuntimePerformanceSnapshot') "Runtim
 Assert-Condition ($runtimeService -match 'GpuUtilizationPercent[\s\S]*GpuVramUsedBytes') "Runtime performance telemetry must keep optional GPU utilization and VRAM fields explicit."
 Assert-Condition ($runtimeService -match 'CpuUtilizationPercent[\s\S]*SystemMemoryUsedBytes[\s\S]*SystemMemoryTotalBytes') "Runtime performance telemetry must expose optional CPU and system-memory measurements explicitly."
 Assert-Condition ($hardwareTelemetry -match 'SampleInterval\s*=\s*TimeSpan\.FromMilliseconds\(500\)') "Hardware telemetry sampling must remain bounded and cached."
+Assert-Condition ($hardwareTelemetry -notmatch 'PeriodicTimer|Task\.Run|new Thread') "Hardware telemetry must remain snapshot-driven and must not create an independent polling loop."
+Assert-Condition ($runtimeService -match 'var hardware = _hardwareTelemetry\.Sample\(\);\s*lock \(_gate\)') "Hardware probes must run before the Runtime state lock so management telemetry cannot block Program processing through the shared gate."
 Assert-Condition ($hardwareTelemetry -match 'GetSystemTimes' -and $hardwareTelemetry -match 'GlobalMemoryStatusEx') "Windows CPU and system-memory telemetry must use bounded OS measurements."
 Assert-Condition ($hardwareTelemetry -match 'nvmlDeviceGetUtilizationRates' -and $hardwareTelemetry -match 'nvmlDeviceGetMemoryInfo') "NVIDIA telemetry must use driver-provided NVML measurements."
 Assert-Condition ($frameDrop -match 'class RuntimeFrameDropCounter') "Runtime diagnostics must retain a dedicated O(1) dropped-frame counter."
