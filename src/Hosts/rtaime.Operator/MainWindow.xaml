@@ -104,10 +104,10 @@
 						<TextBlock Text="{Binding GpuUtilization}" FontWeight="SemiBold" />
 					</StackPanel>
 				</Border>
-				<Border Grid.Column="7" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1,0,0,0" Padding="10,6" ToolTip="System RAM usage and physical-memory capacity from Runtime telemetry.">
+				<Border Grid.Column="7" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1,0,0,0" Padding="10,6" ToolTip="{Binding SystemMemory}">
 					<StackPanel VerticalAlignment="Center">
 						<TextBlock Text="MEMORY" Style="{StaticResource OperatorLabel}" />
-						<TextBlock Text="{Binding SystemMemory}" FontWeight="SemiBold" />
+						<TextBlock Text="{Binding SystemMemory}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
 					</StackPanel>
 				</Border>
 				<Border Grid.Column="8" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1,0,0,0" Padding="10,6" ToolTip="Runtime Program-boundary processing time versus frame budget.">
