@@ -286,13 +286,18 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 			ResolveRenderStatus(renderSample, frameBudgetSample, performanceEvidence),
 			$"Core render time. Engineering target is ≤ 3.00 ms; the hardware P95 qualification ceiling is 5.00 ms; full pipeline timing still uses the frame budget. {_control.PerformanceVerificationDetail} Current render/budget: {NormalizeAvailability(_control.FrameTime)}.",
 			sampleHistory ? renderSample : null);
-		UpdateMetric(
-			"dropped",
-			hasRuntimePerformance ? NormalizeAvailability(_control.DroppedFrames) : Unavailable,
-			runtimeEvidence,
-			"Bounded dropped-frame counter from the Runtime performance snapshot.",
-			droppedSample,
-			sampleHistory && hasRuntimePerformance);
+		var droppedValue = hasRuntimePerformance ? NormalizeAvailability(_control.DroppedFrames) : Unavailable;
+		var droppedEvidence = droppedValue == Unavailable ? "UNVERIFIED" : runtimeEvidence;
+		_metrics["dropped"].Update(
+			droppedValue,
+			droppedEvidence,
+			droppedEvidence == "FAIL"
+				? "FAULTED"
+				: droppedSample is > 0
+					? "WARNING"
+					: ToOperatorStatus(droppedEvidence),
+			"Bounded cumulative dropped-frame evidence from Runtime scheduler cadence and output backpressure/rejection counters.",
+			sampleHistory && hasRuntimePerformance ? droppedSample : null);
 		var outputFpsValue = NormalizeAvailability(_control.OutputFps);
 		var outputFpsSample = TryParseLeadingDouble(_control.OutputFps);
 		UpdateMetric(
