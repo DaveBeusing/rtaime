@@ -7,7 +7,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $repositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "../.."))
-$policyPath = Join-Path $repositoryRoot "governance/repository-policy.json"
+$policyPath = Join-Path $repositoryRoot "docs/Governance/RepositoryPolicy.json"
 $rulesetPath = Join-Path $repositoryRoot ".github/rulesets/master.ruleset.json"
 $workflowPath = Join-Path $repositoryRoot ".github/workflows/required-gates.yml"
 
