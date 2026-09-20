@@ -101,6 +101,16 @@ Coverage includes:
 - decoded frame admission through `MediaFramePipeline`;
 - embedded audio availability and shared A/V timebase.
 
+## Generated reference-media matrix
+
+The original committed `reference-1080p50-h264-aac*.mp4` fixtures remain as small bootstrap coverage for ordinary integration tests.
+
+A separate generated regression matrix now exercises native 25/1, 50/1 and 60000/1001 H.264/AAC inputs for six seconds each. These files are produced on demand from the internal broadcast test pattern, motion/timing overlay and generated pulse-audio signal, then decoded through the real Windows Media Foundation path.
+
+The generated suite specifically covers the sustained-playback failure boundary beyond five seconds, repeated loop cycles, A/V event preservation, restart/reload behavior and bounded retained managed memory. Generated MP4 files remain transient test artifacts; per-run JSON manifests record technical metadata and SHA-256 integrity evidence.
+
+See `ReferenceMediaRegression.md` for generation, CI use and interpretation.
+
 ## Known limitations / handoff to Local Media Transport
 
 Local Media File Source is sequential-read only. End-of-media is reported explicitly. There is intentionally no Play/Pause/Stop/Seek/Frame-Step state machine yet; those semantics belong to Local Media Transport. Decoder seeking, resume behavior and frame-accurate positioning must build on the existing `MediaAssetId`, `LocalMediaProbe`, `MediaSourceId` and Runtime session rather than creating a second playback authority.
