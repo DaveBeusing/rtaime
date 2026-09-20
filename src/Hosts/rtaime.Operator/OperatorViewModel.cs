@@ -504,15 +504,33 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	{
 		if (_client is null || SelectedSource is null) return;
 		var source = SelectedSource;
-		var enable = !source.IsTestPattern;
-		await ExecuteAsync(enable ? "ENABLE TEST SIGNAL" : "DISABLE TEST SIGNAL", async () =>
+		var enable = true;
+		var motionTiming = false;
+		var operation = "ENABLE STATIC TEST SIGNAL";
+
+		if (source.IsTestPattern && string.Equals(source.MediaState, "STATIC", StringComparison.OrdinalIgnoreCase))
 		{
-			var enabled = await _client.SetBroadcastTestPatternAsync(source.Id, enable);
+			motionTiming = true;
+			operation = "ENABLE MOTION TEST SIGNAL";
+		}
+		else if (source.IsTestPattern)
+		{
+			enable = false;
+			operation = "DISABLE TEST SIGNAL";
+		}
+
+		await ExecuteAsync(operation, async () =>
+		{
+			var enabled = await _client.SetBroadcastTestPatternAsync(source.Id, enable, motionTiming);
 			Apply(_client.Snapshot!);
-			CommandStatus = enabled ? "TEST SIGNAL ACTIVE" : "TEST SIGNAL OFF";
+			CommandStatus = enabled
+				? motionTiming ? "MOTION TEST ACTIVE" : "STATIC TEST ACTIVE"
+				: "TEST SIGNAL OFF";
 			LastEvent = enabled
-				? $"Internal broadcast test signal activated on {source.Name}."
-				: $"Internal broadcast test signal deactivated on {source.Name}.";
+				? motionTiming
+					? $"Motion/timing test signal activated on {source.Name}."
+					: $"Static broadcast test signal activated on {source.Name}."
+				: $"Internal test signal deactivated on {source.Name}.";
 		});
 	}
 

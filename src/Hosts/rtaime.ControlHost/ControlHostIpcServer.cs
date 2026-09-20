@@ -226,10 +226,13 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			try
 			{
 				var enabled = await _runtimeTransport
-					.SetBroadcastTestPatternAsync(sourceId, wire.Enabled, cancellationToken)
+					.SetBroadcastTestPatternAsync(sourceId, wire.Enabled, wire.MotionTiming, cancellationToken)
 					.ConfigureAwait(false);
 				NotifyObservableStateChanged();
-				return Success(request, "control.test_pattern.response", new WireTestPatternState(sourceId.ToString(), enabled));
+				return Success(
+					request,
+					"control.test_pattern.response",
+					new WireTestPatternState(sourceId.ToString(), enabled, enabled && wire.MotionTiming));
 			}
 			catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or NotSupportedException or FormatException or InvalidDataException or IOException)
 			{
@@ -631,13 +634,14 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		var isTestPattern = runtime?.BroadcastTestPatternSources?.Contains(mediaSourceId) == true;
 		if (isTestPattern)
 		{
+			var motionTiming = runtime?.MotionTimingTestPatternSources?.Contains(mediaSourceId) == true;
 			return new WireSource(
 				source.SourceId.ToString(),
 				source.Name,
 				"TEST",
 				FormatVideo(runtime!.Format),
 				"VALID",
-				"ACTIVE",
+				motionTiming ? "MOTION" : "STATIC",
 				null,
 				null);
 		}
@@ -949,7 +953,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		public static WireGraphicsOverlay Empty { get; } = new(false, null, 0, 0, false, 0.72, 0.06, 1.0);
 	}
 	private sealed record WireAudioInputState(string SourceId, double Gain, bool Muted);
-	private sealed record WireTestPatternState(string SourceId, bool Enabled);
+	private sealed record WireTestPatternState(string SourceId, bool Enabled, bool MotionTiming = false);
 	private sealed record WireAudioInput(string SourceId, string StreamId, double Gain, bool Muted, double LeftPeak, double RightPeak, double MasterPeak, bool Clipping, string Health);
 	private sealed record WireAudioProgram(string ActiveVideoSourceId, string ActiveStreamId, double Gain, bool Muted, double LeftPeak, double RightPeak, double MasterPeak, bool Clipping, string Health)
 	{

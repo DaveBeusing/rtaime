@@ -63,6 +63,64 @@ public sealed class BroadcastTestPatternRuntimeIntegrationTests
 			fixture.Runtime.Snapshot.BroadcastTestPatternSources);
 	}
 
+	[Fact]
+	public async Task Motion_timing_mode_changes_program_content_on_each_authoritative_boundary()
+	{
+		await using var fixture = await Fixture.CreateAsync();
+
+		Assert.True(fixture.Runtime.SetBroadcastTestPattern(
+			fixture.MediaSourceA,
+			true,
+			V1BroadcastTestPatternMode.MotionTiming));
+
+		var first = fixture.Runtime.ProcessNextBoundary();
+		var firstHash = System.Security.Cryptography.SHA256.HashData(first.ProgramPixels);
+		var second = fixture.Runtime.ProcessNextBoundary();
+		var secondHash = System.Security.Cryptography.SHA256.HashData(second.ProgramPixels);
+
+		Assert.NotEqual(firstHash, secondHash);
+		Assert.Equal(
+			V1BroadcastTestPatternMode.MotionTiming,
+			fixture.Runtime.Snapshot.BroadcastTestPatternModes[fixture.MediaSourceA]);
+		Assert.Equal((ulong)2, fixture.Runtime.Snapshot.NextSequenceNumber);
+	}
+
+	[Fact]
+	public async Task Switching_between_static_and_motion_modes_preserves_static_reference_and_input_health()
+	{
+		await using var fixture = await Fixture.CreateAsync();
+
+		fixture.Runtime.SetBroadcastTestPattern(
+			fixture.MediaSourceA,
+			true,
+			V1BroadcastTestPatternMode.Static);
+		var staticBefore = fixture.Runtime.ProcessNextBoundary();
+
+		fixture.Runtime.SetInputSignalState(fixture.MediaSourceA, V1InputSignalState.Lost);
+		Assert.Equal(V1InputSignalState.Valid, fixture.Runtime.Snapshot.InputSignals[fixture.MediaSourceA]);
+
+		fixture.Runtime.SetBroadcastTestPattern(
+			fixture.MediaSourceA,
+			true,
+			V1BroadcastTestPatternMode.MotionTiming);
+		var motion = fixture.Runtime.ProcessNextBoundary();
+
+		fixture.Runtime.SetBroadcastTestPattern(
+			fixture.MediaSourceA,
+			true,
+			V1BroadcastTestPatternMode.Static);
+		var staticAfter = fixture.Runtime.ProcessNextBoundary();
+
+		Assert.NotEqual(
+			System.Security.Cryptography.SHA256.HashData(staticBefore.ProgramPixels),
+			System.Security.Cryptography.SHA256.HashData(motion.ProgramPixels));
+		Assert.Equal(staticBefore.ProgramPixels, staticAfter.ProgramPixels);
+		Assert.Equal(V1InputSignalState.Valid, fixture.Runtime.Snapshot.InputSignals[fixture.MediaSourceA]);
+
+		fixture.Runtime.SetBroadcastTestPattern(fixture.MediaSourceA, false);
+		Assert.Equal(V1InputSignalState.Lost, fixture.Runtime.Snapshot.InputSignals[fixture.MediaSourceA]);
+	}
+
 	private static void AssertPixelMatches(
 		BroadcastTestPatternGenerator pattern,
 		byte[] actualPixels,

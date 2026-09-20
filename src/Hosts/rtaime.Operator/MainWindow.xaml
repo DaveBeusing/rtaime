@@ -1037,10 +1037,10 @@
 								<TextBlock Text="SOURCE BIN" Style="{StaticResource OperatorSectionTitle}" />
 								<StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
 									<TextBlock Text="Select a tile, then Set Preview / Ctrl+P" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" Margin="0,0,10,0" />
-									<controls:RtaimeButton Content="TOGGLE TEST SIGNAL"
+									<controls:RtaimeButton Content="CYCLE TEST SIGNAL"
 										Command="{Binding ToggleTestPatternCommand}"
 										IsCompact="True"
-										ToolTip="Enable or disable the internally generated broadcast reference signal on the selected source slot." />
+										ToolTip="Cycle the selected source through OFF, STATIC broadcast reference and MOTION/TIMING diagnostics." />
 								</StackPanel>
 							</DockPanel>
 							<Border Margin="0,0,0,10" IsHitTestVisible="False">

@@ -255,13 +255,21 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		var wire = request.Payload.Deserialize<WireTestPatternState>(Wire.JsonOptions)
 			?? throw new InvalidDataException("Broadcast test pattern state payload is required.");
 		var sourceId = new MediaSourceId(Identity.Parse(wire.SourceId));
-		var changed = runtime.SetBroadcastTestPattern(sourceId, wire.Enabled);
+		var requestedMode = wire.MotionTiming
+			? V1BroadcastTestPatternMode.MotionTiming
+			: V1BroadcastTestPatternMode.Static;
+		var changed = runtime.SetBroadcastTestPattern(sourceId, wire.Enabled, requestedMode);
 		if (changed)
 			_stateVersion++;
+		var snapshot = runtime.Snapshot;
 		return Success(
 			request,
 			"runtime.test_pattern.response",
-			new WireTestPatternState(sourceId.ToString(), runtime.Snapshot.BroadcastTestPatternSources.Contains(sourceId)));
+			new WireTestPatternState(
+				sourceId.ToString(),
+				snapshot.BroadcastTestPatternSources.Contains(sourceId),
+				snapshot.BroadcastTestPatternModes.TryGetValue(sourceId, out var activeMode) &&
+					activeMode == V1BroadcastTestPatternMode.MotionTiming));
 	}
 
 	private WireEnvelope SetAudioInputState(WireEnvelope request, V1RuntimeHostService runtime)
@@ -450,6 +458,11 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 			.OrderBy(sourceId => sourceId.ToString(), StringComparer.Ordinal)
 			.Select(sourceId => sourceId.ToString())
 			.ToArray(),
+		snapshot.BroadcastTestPatternModes
+			.Where(pair => pair.Value == V1BroadcastTestPatternMode.MotionTiming)
+			.OrderBy(pair => pair.Key.ToString(), StringComparer.Ordinal)
+			.Select(pair => pair.Key.ToString())
+			.ToArray(),
 		ToWire(snapshot.GraphicsOverlay),
 		snapshot.AudioInputs.OrderBy(pair => pair.Key.ToString(), StringComparer.Ordinal)
 			.Select(pair => ToWire(pair.Value))
@@ -621,7 +634,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 	private sealed record WireFailure(string Code, string Message);
 	private sealed record WireVideoFormat(uint Width, uint Height, string FrameRate, int PixelFormat, int ScanMode);
 	private sealed record WireInputSignal(string SourceId, string Health);
-	private sealed record WireTestPatternState(string SourceId, bool Enabled);
+	private sealed record WireTestPatternState(string SourceId, bool Enabled, bool MotionTiming = false);
 	private sealed record WireGraphicsAsset(string Name, uint Width, uint Height, byte[] RgbaPixels);
 	private sealed record WireGraphicsOverlayState(bool Visible, double PositionX, double PositionY, double Scale);
 	private sealed record WireGraphicsOverlay(bool AssetLoaded, string? AssetName, uint AssetWidth, uint AssetHeight, bool Visible, double PositionX, double PositionY, double Scale);
@@ -665,6 +678,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		WireVideoFormat Format,
 		WireInputSignal[] InputSignals,
 		string[] BroadcastTestPatternSourceIds,
+		string[] MotionTimingTestPatternSourceIds,
 		WireGraphicsOverlay GraphicsOverlay,
 		WireAudioInput[] AudioInputs,
 		WireAudioProgram AudioProgram,

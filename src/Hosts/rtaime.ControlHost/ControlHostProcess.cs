@@ -77,6 +77,16 @@ public interface IControlRuntimeTransportSeam
 		ValueTask.FromException<bool>(
 			new NotSupportedException("Runtime transport does not expose broadcast test pattern control."));
 
+	ValueTask<bool> SetBroadcastTestPatternAsync(
+		MediaSourceId sourceId,
+		bool enabled,
+		bool motionTiming,
+		CancellationToken cancellationToken = default) =>
+		motionTiming
+			? ValueTask.FromException<bool>(
+				new NotSupportedException("Runtime transport does not expose motion/timing test pattern control."))
+			: SetBroadcastTestPatternAsync(sourceId, enabled, cancellationToken);
+
 	ValueTask<RuntimeGraphicsOverlaySnapshot> LoadGraphicsOverlayAsync(
 		string assetName,
 		uint width,
