@@ -502,7 +502,9 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 				_mediaDeck.FileName,
 				$"{_mediaDeck.Duration} · {_mediaDeck.VideoCodec}",
 				$"{_mediaDeck.Resolution} · {_mediaDeck.FrameRate}",
-				mediaOnline ? _mediaDeck.State : $"OFFLINE · {_mediaDeck.State}",
+				mediaOnline
+					? _mediaDeck.State
+					: $"OFFLINE · {(_mediaDeck.LastError ?? _mediaDeck.State)}",
 				_mediaDeck.SourceId,
 				_operator.Sources.FirstOrDefault(source => string.Equals(source.Id, _mediaDeck.SourceId, StringComparison.Ordinal))?.Thumbnail,
 				mediaOnline,

@@ -50,7 +50,7 @@ No raw RGBA video or audio payload is transferred over management Named Pipes. T
 
 ## Local media decode qualification
 
-The Windows Media Foundation COM declarations flatten inherited COM VTables explicitly for `IMFMediaType` and `IMFSample`. Video decode requests NV12 and converts it to the existing RGBA8 contract in managed code. NV12 storage padding is handled independently from visible 1920×1080 dimensions, including the common 1088-row decoder allocation.
+The Windows Media Foundation COM declarations flatten inherited COM VTables explicitly for `IMFMediaType` and `IMFSample`. Advanced video processing normalizes video directly to RGB32 at the active Runtime format. The decoder copies rows using the Media Foundation 2D-buffer pitch into one reusable RGBA scratch buffer and normalizes channel order in place. RuntimeHost then updates its already allocated source framebuffer instead of constructing another full-frame object per boundary.
 
 Audio decode requests PCM16 and converts it to the existing stereo Float32 contract.
 
@@ -62,7 +62,7 @@ Marker writes use optimistic storage versions and remain outside the Runtime med
 
 ## Operator lifecycle
 
-`MediaDeckViewModel` starts a lightweight 100 ms state poll while a deck is loaded. Polling loaded state is required because RuntimeHost may start a cued READY/PAUSED deck when its source becomes committed Program. The loop is cancellation-aware and is disposed when the Operator window closes.
+`MediaDeckViewModel` does not run an independent state poll. The existing Operator synchronization snapshot already asks ControlHost for the confirmed media-deck state; that same snapshot now carries the complete `MediaDeckSnapshot` to the Client and drives the deck/timeline UI. This keeps Program-triggered autoplay visible without adding a second management polling loop or competing Runtime request stream.
 
 The WPF file dialog selects an MP4 path only. Opening the selected path still crosses the full Client -> ControlHost -> RuntimeHost path.
 
@@ -144,7 +144,7 @@ Removing the media source from Program does **not** automatically pause it in Me
 
 ### Runtime video and audio feed
 
-The local-media Runtime worker now stages successfully decoded RGBA video into the existing V1 external-input surface for the assigned source, alongside the already existing Float32 audio feed. The clip must match the active V1 Program video format exactly; Media Autoplay & End Behavior does not introduce scaling or format conversion.
+The local-media Runtime worker stages successfully decoded RGBA video into the existing V1 external-input surface for the assigned source, alongside the Float32 audio feed. Windows Media Foundation performs the admitted decode, resize and frame-rate normalization to the active V1 Program format before the frame reaches this worker.
 
 Raw media remains inside RuntimeHost. Management IPC continues to carry only commands, metadata and confirmed state.
 

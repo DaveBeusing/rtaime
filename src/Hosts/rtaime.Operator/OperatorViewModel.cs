@@ -135,6 +135,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	internal OperatorControlClient? Client => _client;
 
 	public event PropertyChangedEventHandler? PropertyChanged;
+	internal event Action<MediaDeckSnapshot>? ConfirmedMediaDeckSnapshot;
 
 	public ObservableCollection<OperatorSourceTileViewModel> Sources { get; }
 	public ObservableCollection<OperatorAudioInputViewModel> AudioInputs { get; }
@@ -403,6 +404,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 						ApplyRecording(snapshot.Recording, preserveTargetEdit: true);
 						ApplyHealth(snapshot.Health);
 						ApplyAI(snapshot.AIShowcase);
+						ApplyEmbeddedMediaDeckSnapshot(snapshot.MediaDeck);
 						ApplyLifecycle(snapshot);
 						UpdateViewerStates(snapshot);
 					}
@@ -794,6 +796,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		GraphicsState = graphics.Visible ? "ON AIR" : graphics.AssetLoaded ? "READY" : "EMPTY";
 		VisualLayerStatus = graphics.Visible ? "GRAPHICS ON" : snapshot.VisualLayerEnabled ? "ENABLED" : "DISABLED";
 		ApplyAudio(snapshot, preserveSelectedGainEdit: false);
+		ApplyEmbeddedMediaDeckSnapshot(snapshot.MediaDeck);
 		RevisionLabel = $"REV {snapshot.Production.Revision.Value}";
 		CommitStatus = string.Equals(snapshot.RuntimeStatus, "READY", StringComparison.OrdinalIgnoreCase)
 			? $"CONFIRMED · REV {snapshot.Production.Revision.Value}"
@@ -1040,6 +1043,12 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	{
 		ArgumentNullException.ThrowIfNull(snapshot);
 		Apply(snapshot);
+	}
+
+	private void ApplyEmbeddedMediaDeckSnapshot(MediaDeckSnapshot snapshot)
+	{
+		ApplyMediaDeckSnapshot(snapshot);
+		ConfirmedMediaDeckSnapshot?.Invoke(snapshot);
 	}
 
 	internal void ApplyMediaDeckSnapshot(MediaDeckSnapshot snapshot)

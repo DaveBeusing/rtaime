@@ -83,6 +83,14 @@ public sealed class RgbaFrameBuffer
     public ReadOnlyMemory<byte> Pixels => _pixels;
     public int ByteLength => _pixels.Length;
 
+    public void CopyPixelsFrom(ReadOnlySpan<byte> pixels)
+    {
+        if (pixels.Length != _pixels.Length)
+            throw new ArgumentException("RGBA update payload length does not match the existing frame buffer.", nameof(pixels));
+
+        pixels.CopyTo(_pixels);
+    }
+
     public static RgbaFrameBuffer Solid(VideoFormat format, byte red, byte green, byte blue, byte alpha = byte.MaxValue)
     {
         var pixels = new byte[RequiredByteLength(format)];

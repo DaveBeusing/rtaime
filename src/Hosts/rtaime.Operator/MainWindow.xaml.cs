@@ -58,6 +58,7 @@ public partial class MainWindow : Window
 			new DispatcherSynchronizationContext(Dispatcher));
 		MediaDeck = CreateMediaDeck(viewModel, client);
 		MediaDeck.SnapshotChanged += viewModel.ApplyMediaDeckSnapshot;
+		viewModel.ConfirmedMediaDeckSnapshot += MediaDeck.ApplyConfirmedSnapshot;
 		DemoProduction = new DemoProductionPackageController(client, viewModel, MediaDeck);
 		Monitoring = new OperatorMonitoringViewModel(
 			viewModel,
@@ -84,7 +85,6 @@ public partial class MainWindow : Window
 		SizeChanged += OnShellSizeChanged;
 		ApplyProductionFullscreen(Shell.IsFullscreen, updateShell: false);
 		DataContext = viewModel;
-		MediaDeck.Start();
 		Monitoring.Start();
 		viewModel.StartAudioMetering();
 		ContentRendered += OnContentRendered;
@@ -99,6 +99,7 @@ public partial class MainWindow : Window
 		var client = viewModel.Client ?? new OperatorControlClient(new UnavailableOperatorControlTransport());
 		MediaDeck = CreateMediaDeck(viewModel, client);
 		MediaDeck.SnapshotChanged += viewModel.ApplyMediaDeckSnapshot;
+		viewModel.ConfirmedMediaDeckSnapshot += MediaDeck.ApplyConfirmedSnapshot;
 		DemoProduction = new DemoProductionPackageController(client, viewModel, MediaDeck);
 		Monitoring = new OperatorMonitoringViewModel(
 			viewModel,
@@ -125,7 +126,6 @@ public partial class MainWindow : Window
 		SizeChanged += OnShellSizeChanged;
 		ApplyProductionFullscreen(Shell.IsFullscreen, updateShell: false);
 		DataContext = viewModel;
-		MediaDeck.Start();
 		viewModel.StartAudioMetering();
 		ContentRendered += OnContentRendered;
 		Closing += OnClosingAsync;
@@ -264,6 +264,7 @@ public partial class MainWindow : Window
 			if (DataContext is OperatorViewModel viewModel)
 			{
 				MediaDeck.SnapshotChanged -= viewModel.ApplyMediaDeckSnapshot;
+				viewModel.ConfirmedMediaDeckSnapshot -= MediaDeck.ApplyConfirmedSnapshot;
 				Timeline.SelectionChanged -= OnTimelineSelectionChanged;
 				QuickControls.Dispose();
 				CompositingGraph.Dispose();
