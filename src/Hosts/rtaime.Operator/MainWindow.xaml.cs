@@ -90,6 +90,15 @@ public partial class MainWindow : Window
 		Startup = new StartupLifecycleViewModel(
 			Environment.GetEnvironmentVariable("RTAIME_APPHOST_LIFECYCLE_FILE"),
 			new DispatcherSynchronizationContext(Dispatcher));
+		WorkspaceStates = new OperatorWorkspaceStateViewModel(
+			viewModel,
+			MediaPool,
+			MediaDeck,
+			Timeline,
+			CompositingGraph,
+			OutputHealth,
+			HealthCenter,
+			Startup);
 		InitializeComponent();
 		viewModel.PropertyChanged += OnOperatorPropertyChanged;
 		StartStartupBrandAnimation();
@@ -143,6 +152,15 @@ public partial class MainWindow : Window
 		Startup = new StartupLifecycleViewModel(
 			Environment.GetEnvironmentVariable("RTAIME_APPHOST_LIFECYCLE_FILE"),
 			new DispatcherSynchronizationContext(Dispatcher));
+		WorkspaceStates = new OperatorWorkspaceStateViewModel(
+			viewModel,
+			MediaPool,
+			MediaDeck,
+			Timeline,
+			CompositingGraph,
+			OutputHealth,
+			HealthCenter,
+			Startup);
 		InitializeComponent();
 		viewModel.PropertyChanged += OnOperatorPropertyChanged;
 		StartStartupBrandAnimation();
@@ -157,6 +175,7 @@ public partial class MainWindow : Window
 	}
 
 	public StartupLifecycleViewModel Startup { get; }
+	public OperatorWorkspaceStateViewModel WorkspaceStates { get; }
 	public OperatorMonitoringViewModel Monitoring { get; }
 	public ProgramOutputController ProgramOutput { get; }
 	public OutputRoutingHealthViewModel OutputHealth { get; }
@@ -316,6 +335,7 @@ public partial class MainWindow : Window
 		IsEnabled = false;
 		try
 		{
+			WorkspaceStates.Dispose();
 			Startup.Dispose();
 			StartupBrandPulse.BeginAnimation(UIElement.OpacityProperty, null);
 			HealthCenter.Dispose();
