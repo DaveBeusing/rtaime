@@ -44,6 +44,21 @@ public sealed class BroadcastTestPatternGeneratorTests
 		Assert.Equal((byte)235, cyanBar.Green);
 		Assert.Equal((byte)235, cyanBar.Blue);
 
+		var redRamp = generator.GetPixel(960, 700);
+		Assert.InRange(redRamp.Red, (byte)127, (byte)129);
+		Assert.Equal((byte)0, redRamp.Green);
+		Assert.Equal((byte)0, redRamp.Blue);
+
+		var greenRamp = generator.GetPixel(960, 735);
+		Assert.Equal((byte)0, greenRamp.Red);
+		Assert.InRange(greenRamp.Green, (byte)127, (byte)129);
+		Assert.Equal((byte)0, greenRamp.Blue);
+
+		var blueRamp = generator.GetPixel(960, 770);
+		Assert.Equal((byte)0, blueRamp.Red);
+		Assert.Equal((byte)0, blueRamp.Green);
+		Assert.InRange(blueRamp.Blue, (byte)127, (byte)129);
+
 		var nearBlack = generator.GetPixel(384, 820);
 		Assert.Equal((byte)16, nearBlack.Red);
 		Assert.Equal((byte)16, nearBlack.Green);
