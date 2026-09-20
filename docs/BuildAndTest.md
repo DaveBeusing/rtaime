@@ -42,28 +42,42 @@ dotnet restore rtaime.slnx
 
 ## Standard builds
 
+The canonical local developer build entry point is:
+
+```powershell
+./build/development/Invoke-DeveloperBuild.ps1 -Configuration Release
+```
+
 Debug:
 
 ```powershell
-dotnet build rtaime.slnx --configuration Debug
+./build/development/Invoke-DeveloperBuild.ps1 -Configuration Debug
 ```
 
-Release:
+The developer build performs three bounded steps:
+
+1. it stops stale **repository-local** `rtaime`, Operator, ControlHost, RuntimeHost and AIHost processes that would lock the current checkout's `bin/` outputs;
+2. it restores the solution unless `-NoRestore` is supplied;
+3. it builds the complete `rtaime.slnx` in the requested configuration.
+
+Process cleanup is path-scoped to executables below the current repository root. Installed product/service processes outside the checkout are never selected by this cleanup path. The AppHost is stopped first so it cannot supervise or restart repository-local child hosts while the build output is being replaced.
+
+For an already restored solution:
+
+```powershell
+./build/development/Invoke-DeveloperBuild.ps1 -Configuration Release -NoRestore
+```
+
+`-SkipProcessCleanup` is available only for development scenarios that deliberately build into outputs that are not used by a running repository-local instance.
+
+A raw `dotnet build` remains valid when no repository development lifecycle is running:
 
 ```powershell
 dotnet restore rtaime.slnx
 dotnet build rtaime.slnx --configuration Release --no-restore
 ```
 
-Local `Interactive` startup defaults to `EphemeralLocal`, so an engine started by the AppHost is shut down when the Operator session ends. This keeps normal development build outputs replaceable on the next build.
-
-If a host from an older build is still running and locking `bin/` files, stop that stale development lifecycle once before rebuilding:
-
-```powershell
-Get-Process rtaime.ControlHost,rtaime.RuntimeHost,rtaime.AIHost -ErrorAction SilentlyContinue | Stop-Process
-```
-
-Do not use this cleanup command against an intentionally installed production Windows service; manage that lifecycle through the service-management tooling instead.
+On Windows, a running .NET executable locks assemblies loaded from its output directory. Building the same configuration while AppHost, Operator or a supervised host is still running can therefore produce `MSB3026`, followed by `MSB3027`/`MSB3021` after the copy retry limit is exhausted. Use the canonical developer build entry point instead of manually killing arbitrary system processes.
 
 The normal build is framework-dependent and preserves the multi-process V1 topology behind one product entry point:
 
@@ -181,8 +195,7 @@ A self-contained/single-file artifact must not be represented as an officially q
 Build Release first when using `--no-build`:
 
 ```powershell
-dotnet restore rtaime.slnx
-dotnet build rtaime.slnx --configuration Release --no-restore
+./build/development/Invoke-DeveloperBuild.ps1 -Configuration Release
 ```
 
 ### Complete solution test run
