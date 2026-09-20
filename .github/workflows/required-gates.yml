@@ -148,6 +148,10 @@ jobs:
         shell: pwsh
         run: ./build/quality/Test-CudaQualificationPolicy.ps1
 
+      - name: Verify sustained local media playback policy
+        shell: pwsh
+        run: ./build/quality/Test-LocalMediaPlaybackPolicy.ps1
+
       - name: Verify media I/O foundation policy
         shell: pwsh
         run: ./build/quality/Test-MediaIoFoundationPolicy.ps1
