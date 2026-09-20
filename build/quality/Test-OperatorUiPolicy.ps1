@@ -329,7 +329,7 @@ Assert-Condition ($monitorWorkspaceTheme -match 'Height" Value="40"' -and $monit
 Assert-Condition ($monitorWorkspaceTheme -match 'x:Key="RtaimeProductionLowerPanel"' -and $monitorWorkspaceTheme -match 'x:Key="RtaimeProductionSceneItem"' -and $monitorWorkspaceTheme -match 'x:Key="RtaimeProductionOutputItem"' -and $monitorWorkspaceTheme -match 'RtaimeProductionStatusDot') "Lower production panels must use the shared compact mockup chrome."
 
 Assert-Condition ($theme -match 'Source="OperatorTokens\.xaml"') "Operator theme must load the shared design-token dictionary."
-foreach ($token in @("OperatorFontFamily", "OperatorTimecodeFontFamily", "OperatorTopBarHeight", "OperatorNavigationWidth", "OperatorMediaPanelWidth", "OperatorInspectorWidth", "OperatorTimelineHeight", "OperatorRegionGap", "OperatorControlHeight", "OperatorCompactControlHeight", "OperatorRadiusPanel", "OperatorRadiusControl", "OperatorColorTopBar", "OperatorColorNavigation", "OperatorColorSurface", "OperatorColorAlternateSurface", "OperatorColorRaisedSurface", "OperatorColorRaisedHover", "OperatorColorBorder", "OperatorColorBorderStrong", "OperatorColorText", "OperatorColorSecondaryText", "OperatorColorMutedText", "OperatorColorAccent", "OperatorColorPreview", "OperatorColorProgram", "OperatorColorHealthy", "OperatorColorWarning", "OperatorColorError", "OperatorColorTimeline", "OperatorColorGraphics", "OperatorColorAudio")) {
+foreach ($token in @("OperatorFontFamily", "OperatorTimecodeFontFamily", "OperatorTopBarHeight", "OperatorTopBarGridLength", "OperatorNavigationWidth", "OperatorMediaPanelWidth", "OperatorInspectorWidth", "OperatorTimelineHeight", "OperatorRegionGap", "OperatorRegionGapGridLength", "OperatorControlHeight", "OperatorCompactControlHeight", "OperatorRadiusPanel", "OperatorRadiusControl", "OperatorColorTopBar", "OperatorColorNavigation", "OperatorColorSurface", "OperatorColorAlternateSurface", "OperatorColorRaisedSurface", "OperatorColorRaisedHover", "OperatorColorBorder", "OperatorColorBorderStrong", "OperatorColorText", "OperatorColorSecondaryText", "OperatorColorMutedText", "OperatorColorAccent", "OperatorColorPreview", "OperatorColorProgram", "OperatorColorHealthy", "OperatorColorWarning", "OperatorColorError", "OperatorColorTimeline", "OperatorColorGraphics", "OperatorColorAudio")) {
 	Assert-Condition ($tokens -match [Regex]::Escape($token)) "Operator design token '$token' is required."
 }
 
@@ -340,6 +340,8 @@ foreach ($contractValue in @(
 	'<sys:Double x:Key="OperatorInspectorWidth">340</sys:Double>',
 	'<sys:Double x:Key="OperatorTimelineHeight">320</sys:Double>',
 	'<sys:Double x:Key="OperatorRegionGap">6</sys:Double>',
+	'<GridLength x:Key="OperatorTopBarGridLength">60</GridLength>',
+	'<GridLength x:Key="OperatorRegionGapGridLength">6</GridLength>',
 	'<sys:Double x:Key="OperatorControlHeight">30</sys:Double>',
 	'<sys:Double x:Key="OperatorCompactControlHeight">26</sys:Double>',
 	'<CornerRadius x:Key="OperatorRadiusPanel">4</CornerRadius>',
@@ -751,7 +753,9 @@ foreach ($region in @("TopBar", "WorkspaceNavigation", "LeftToolRegion", "Center
 	Assert-Condition ($window -match ('x:Name="' + [Regex]::Escape($region) + '"')) "Production shell region '$region' must remain explicit and addressable."
 }
 
-Assert-Condition ($window -match '<RowDefinition Height="\{StaticResource OperatorTopBarHeight\}" />' -and $tokens -match '<sys:Double x:Key="OperatorTopBarHeight">60</sys:Double>') "Mockup shell top bar must be exactly 60px at the reference viewport."
+Assert-Condition ($window -match '<RowDefinition Height="\{StaticResource OperatorTopBarGridLength\}" />' -and $tokens -match '<GridLength x:Key="OperatorTopBarGridLength">60</GridLength>') "Mockup shell top bar must use the typed 60px GridLength token at the reference viewport."
+Assert-Condition ($window -match '<ColumnDefinition Width="\{StaticResource OperatorRegionGapGridLength\}" />' -and $tokens -match '<GridLength x:Key="OperatorRegionGapGridLength">6</GridLength>') "Mockup shell fixed region gap must use the typed 6px GridLength token."
+Assert-Condition ($window -notmatch '(RowDefinition[^>]+Height="\{StaticResource OperatorTopBarHeight\}"|ColumnDefinition[^>]+Width="\{StaticResource OperatorRegionGap\}")') "Grid definitions must not bind Double geometry resources directly; use typed GridLength resources to avoid startup XAML parse failures."
 Assert-Condition ($shell -match 'DefaultLeftPanelWidth = 400' -and $shell -match 'DefaultRightPanelWidth = 340' -and $shell -match 'DefaultLowerPanelHeight = 320') "Mockup shell reset geometry must restore 400px media, 340px inspector and 320px timeline dimensions."
 Assert-Condition ($shell -match 'NavigationRailWidth => 92' -and $shell -match 'LeftSplitterWidth.+: 6' -and $shell -match 'RightSplitterWidth.+: 6') "Mockup shell must use the 92px navigation rail and 6px horizontal gutters."
 Assert-Condition ($window -match 'Grid\.RowSpan="2" Grid\.Column="0".+OperatorNavigationRail' -and $window -match '<Grid Grid\.RowSpan="2" Grid\.Column="6">') "Navigation and inspector columns must continue through the lower workspace."
