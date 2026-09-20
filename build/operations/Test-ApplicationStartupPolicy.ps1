@@ -25,6 +25,8 @@ $bundlePolicyPath = Join-Path $repositoryRoot "build/release/offline-bundle-poli
 $bundleBuilderPath = Join-Path $repositoryRoot "build/release/New-OfflineReleaseBundle.ps1"
 $readmePath = Join-Path $repositoryRoot "README.md"
 $startupDocumentationPath = Join-Path $repositoryRoot "docs/ApplicationStartup.md"
+$developerBuildPath = Join-Path $repositoryRoot "build/development/Invoke-DeveloperBuild.ps1"
+$buildDocumentationPath = Join-Path $repositoryRoot "docs/BuildAndTest.md"
 
 foreach ($path in @(
 	$appProjectPath,
@@ -35,7 +37,9 @@ foreach ($path in @(
 	$bundlePolicyPath,
 	$bundleBuilderPath,
 	$readmePath,
-	$startupDocumentationPath
+	$startupDocumentationPath,
+	$developerBuildPath,
+	$buildDocumentationPath
 )) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required application-startup artifact is missing: '$path'."
 }
@@ -49,6 +53,8 @@ $bundlePolicy = Get-Content -LiteralPath $bundlePolicyPath -Raw | ConvertFrom-Js
 $bundleBuilder = Get-Content -LiteralPath $bundleBuilderPath -Raw
 $readme = Get-Content -LiteralPath $readmePath -Raw
 $startupDocumentation = Get-Content -LiteralPath $startupDocumentationPath -Raw
+$developerBuild = Get-Content -LiteralPath $developerBuildPath -Raw
+$buildDocumentation = Get-Content -LiteralPath $buildDocumentationPath -Raw
 
 Assert-Condition ($appProject -match '<AssemblyName>rtaime</AssemblyName>') "AppHost must build the canonical rtaime executable name."
 Assert-Condition ($appProject -notmatch '<ProjectReference') "AppHost must not take direct project references to service hosts or production implementations."
@@ -89,6 +95,19 @@ foreach ($token in @(
 Assert-Condition ($appCode -notmatch 'StartRuntimeHost') "AppHost must not directly launch RuntimeHost."
 Assert-Condition ($appCode -notmatch 'StartAIHost') "AppHost must not directly launch AIHost."
 Assert-Condition ($appProgram -match 'UnifiedApplicationHost') "Canonical entry point must delegate to UnifiedApplicationHost."
+
+$parseTokens = $null
+$parseErrors = $null
+[void][System.Management.Automation.Language.Parser]::ParseFile($developerBuildPath, [ref]$parseTokens, [ref]$parseErrors)
+Assert-Condition (@($parseErrors).Count -eq 0) "Developer build script must parse as valid PowerShell."
+
+foreach ($processName in @("rtaime", "rtaime.Operator", "rtaime.ControlHost", "rtaime.RuntimeHost", "rtaime.AIHost")) {
+	Assert-Condition ($developerBuild -match [Regex]::Escape('"' + $processName + '"')) "Developer build cleanup is missing repository process '$processName'."
+}
+Assert-Condition ($developerBuild -match '\$process\.Path' -and $developerBuild -match '\$repositoryPrefix' -and $developerBuild -match 'StartsWith\(\$repositoryPrefix') "Developer build cleanup must scope process termination to executables inside the repository."
+Assert-Condition ($developerBuild -match 'if \(\$_.ProcessName -eq "rtaime"\) \{ 0 \} else \{ 1 \}') "Developer build cleanup must stop the AppHost before supervised development hosts."
+Assert-Condition ($developerBuild -match 'dotnet restore' -and $developerBuild -match '"build", \$solutionPath') "Developer build script must retain restore and complete-solution build behavior."
+Assert-Condition ($buildDocumentation -match 'build/development/Invoke-DeveloperBuild\.ps1' -and $readme -match 'build/development/Invoke-DeveloperBuild\.ps1') "Canonical build documentation must direct developers to the lock-safe build entry point."
 
 $appReleaseHost = @($releasePolicy.hosts | Where-Object { [string]$_.name -eq "rtaime" })
 Assert-Condition ($appReleaseHost.Count -eq 1) "Release policy must contain exactly one canonical rtaime AppHost payload."
