@@ -2,45 +2,33 @@
 
 using System.Windows;
 using System.Windows.Controls;
+using rtaime.Client;
 
 namespace rtaime.Operator.Controls;
 
-public class RtaimeStatePlaceholder : Control
+public abstract class RtaimeStateControl : Control
 {
 	public static readonly DependencyProperty StateProperty = DependencyProperty.Register(
 		nameof(State),
-		typeof(string),
-		typeof(RtaimeStatePlaceholder),
-		new FrameworkPropertyMetadata("EMPTY"));
+		typeof(OperatorUiStateKind),
+		typeof(RtaimeStateControl),
+		new FrameworkPropertyMetadata(OperatorUiStateKind.Ready));
 
 	public static readonly DependencyProperty TitleProperty = DependencyProperty.Register(
 		nameof(Title),
 		typeof(string),
-		typeof(RtaimeStatePlaceholder),
+		typeof(RtaimeStateControl),
 		new FrameworkPropertyMetadata(string.Empty));
 
 	public static readonly DependencyProperty DetailProperty = DependencyProperty.Register(
 		nameof(Detail),
 		typeof(string),
-		typeof(RtaimeStatePlaceholder),
+		typeof(RtaimeStateControl),
 		new FrameworkPropertyMetadata(string.Empty));
 
-	public static readonly DependencyProperty IsActiveProperty = DependencyProperty.Register(
-		nameof(IsActive),
-		typeof(bool),
-		typeof(RtaimeStatePlaceholder),
-		new FrameworkPropertyMetadata(true));
-
-	static RtaimeStatePlaceholder()
+	public OperatorUiStateKind State
 	{
-		DefaultStyleKeyProperty.OverrideMetadata(
-			typeof(RtaimeStatePlaceholder),
-			new FrameworkPropertyMetadata(typeof(RtaimeStatePlaceholder)));
-	}
-
-	public string State
-	{
-		get => (string)GetValue(StateProperty);
+		get => (OperatorUiStateKind)GetValue(StateProperty);
 		set => SetValue(StateProperty, value);
 	}
 
@@ -55,50 +43,50 @@ public class RtaimeStatePlaceholder : Control
 		get => (string)GetValue(DetailProperty);
 		set => SetValue(DetailProperty, value);
 	}
+}
 
-	public bool IsActive
+public class RtaimeStatePlaceholder : RtaimeStateControl
+{
+	static RtaimeStatePlaceholder()
 	{
-		get => (bool)GetValue(IsActiveProperty);
-		set => SetValue(IsActiveProperty, value);
+		DefaultStyleKeyProperty.OverrideMetadata(
+			typeof(RtaimeStatePlaceholder),
+			new FrameworkPropertyMetadata(typeof(RtaimeStatePlaceholder)));
 	}
 }
 
-public class RtaimeInlineStatus : RtaimeStatePlaceholder
+public class RtaimeInlineStatus : RtaimeStateControl
 {
 	static RtaimeInlineStatus()
 	{
 		DefaultStyleKeyProperty.OverrideMetadata(
 			typeof(RtaimeInlineStatus),
-			new FrameworkPropertyMetadata(typeof(RtaimeStatePlaceholder)));
+			new FrameworkPropertyMetadata(typeof(RtaimeInlineStatus)));
 	}
 }
 
-public class RtaimeLoadingIndicator : RtaimeStatePlaceholder
+public class RtaimeLoadingIndicator : Control
 {
 	static RtaimeLoadingIndicator()
 	{
 		DefaultStyleKeyProperty.OverrideMetadata(
 			typeof(RtaimeLoadingIndicator),
-			new FrameworkPropertyMetadata(typeof(RtaimeStatePlaceholder)));
+			new FrameworkPropertyMetadata(typeof(RtaimeLoadingIndicator)));
 	}
 }
 
 public class RtaimeEmptyStatePanel : RtaimeStatePlaceholder
 {
-	static RtaimeEmptyStatePanel()
+	public RtaimeEmptyStatePanel()
 	{
-		DefaultStyleKeyProperty.OverrideMetadata(
-			typeof(RtaimeEmptyStatePanel),
-			new FrameworkPropertyMetadata(typeof(RtaimeStatePlaceholder)));
+		State = OperatorUiStateKind.Empty;
 	}
 }
 
 public class RtaimeRecoveryStatePanel : RtaimeStatePlaceholder
 {
-	static RtaimeRecoveryStatePanel()
+	public RtaimeRecoveryStatePanel()
 	{
-		DefaultStyleKeyProperty.OverrideMetadata(
-			typeof(RtaimeRecoveryStatePanel),
-			new FrameworkPropertyMetadata(typeof(RtaimeStatePlaceholder)));
+		State = OperatorUiStateKind.Recovering;
 	}
 }
