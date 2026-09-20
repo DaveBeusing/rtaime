@@ -35,21 +35,21 @@ The shared presentation model defines:
 - Error
 - Recovering
 
-RuntimeReadinessSnapshot remains authoritative. The presentation factory maps that snapshot plus local content availability into a UI state without changing readiness.
+`OperatorUiStateMachine` defines the presentation-only state precedence, while `OperatorWorkspaceStateViewModel` projects existing Operator, Media Deck, Timeline, Compositing, Output, Health and startup evidence into one stable workspace-state surface. `RuntimeReadinessSnapshot` remains the production-readiness authority; the workspace state layer never promotes production readiness.
 
 ## Workspace behavior
 
 Media Library shows an Empty state when no filtered media is available.
 
-Preview and Program show explicit empty states when no monitoring frame is available.
+Preview and Program consume the centralized workspace state. They distinguish empty/unconfigured content from loading, offline, recovering and error conditions without creating monitor-local readiness rules.
 
 Inspector shows an Empty state until a media item, timeline item, cue or compositing node is selected.
 
 Timeline shows an Empty state until local media transport is loaded.
 
-Output Routing shows Unavailable when no governed output rows are available.
+Compositing, Output Routing and Health consume the same centralized workspace state. Output remains Unavailable without an authoritative Program route, while Health preserves the existing Runtime readiness and health evidence.
 
-All placeholders use the shared rtaime state control and preserve their host region dimensions so state changes do not intentionally resize the surrounding workspace.
+All placeholders use the shared rtaime state controls and preserve their host region dimensions so state changes do not intentionally resize the surrounding workspace. Loading and Recovering use the shared reduced-surface loading indicator rather than WPF default progress controls.
 
 ## Recovery and production safety
 
@@ -63,5 +63,7 @@ Unit coverage validates:
 - Loading to Error
 - Offline to Recovering to Ready
 - Empty versus Loading
-- Required For Production failure without fake readiness
-- dependency classification, including profile-required AIHost
+- state precedence for Empty, Loading, Offline, Recovering, Error and Ready
+- lifecycle dependency classification, including profile-required AIHost
+- published lifecycle requirement evidence
+- Required For Production failures remaining independent from shell availability and production readiness
