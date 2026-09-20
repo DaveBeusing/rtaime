@@ -78,6 +78,7 @@ public static class OperatorHealthProjection
 		var gpuProvider = EvaluateGpuProvider(providers, runtime is not null, runtimeObservationFresh);
 		var engine = Combine(control, runtimeHealth, media, provider, gpuProvider);
 		var performance = runtime?.Performance;
+		var avSync = runtimeObservationFresh ? runtime?.AvSyncDiagnostics : null;
 
 		return new OperatorHealthProjectionSnapshot(
 			engine,
@@ -99,12 +100,14 @@ public static class OperatorHealthProjection
 			FormatSystemMemory(performance),
 			FormatGpuDeviceName(performance),
 			performance?.OutputFramesPerSecond,
-			FormatAvSyncState(runtime?.AvSyncDiagnostics),
-			FormatAvSyncEvent(runtime?.AvSyncDiagnostics),
-			FormatAvSyncValue(runtime?.AvSyncDiagnostics?.ScheduledVideoOffsetMilliseconds),
-			FormatAvSyncValue(runtime?.AvSyncDiagnostics?.SubmitOffsetMilliseconds),
-			FormatAvSyncValue(runtime?.AvSyncDiagnostics?.DriftFromBaselineMilliseconds),
-			runtime?.AvSyncDiagnostics?.Detail ?? "A/V sync diagnostics are unavailable.");
+			FormatAvSyncState(avSync),
+			FormatAvSyncEvent(avSync),
+			FormatAvSyncValue(avSync?.ScheduledVideoOffsetMilliseconds),
+			FormatAvSyncValue(avSync?.SubmitOffsetMilliseconds),
+			FormatAvSyncValue(avSync?.DriftFromBaselineMilliseconds),
+			runtimeObservationFresh
+				? avSync?.Detail ?? "A/V sync diagnostics are unavailable."
+				: "A/V sync diagnostics are unavailable while the Runtime observation is stale.");
 	}
 
 	private static OperatorHealthMetric EvaluateRuntime(RuntimeRemoteSnapshot? runtime, bool observationFresh)
