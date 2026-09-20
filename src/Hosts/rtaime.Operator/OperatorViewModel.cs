@@ -381,9 +381,6 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 
 	public async ValueTask DisposeAsync()
 	{
-		_runtimeReadiness.Changed -= OnRuntimeReadinessChanged;
-		if (_ownsRuntimeReadiness && _runtimeReadiness is IDisposable disposableReadiness)
-			disposableReadiness.Dispose();
 		_audioPollingStop.Cancel();
 		if (_audioPollingTask is not null)
 		{
@@ -391,6 +388,9 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 			catch (OperationCanceledException) { }
 		}
 		_audioPollingStop.Dispose();
+		_runtimeReadiness.Changed -= OnRuntimeReadinessChanged;
+		if (_ownsRuntimeReadiness && _runtimeReadiness is IDisposable disposableReadiness)
+			disposableReadiness.Dispose();
 	}
 
 	private async Task PollAudioAsync(CancellationToken cancellationToken)
