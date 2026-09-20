@@ -765,14 +765,21 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		ArgumentNullException.ThrowIfNull(content);
 		if (content.Format != _format)
 			throw new ArgumentException("External input content must match the RuntimeHost video format.", nameof(content));
+		SetExternalInputContent(sourceId, content.Pixels.Span, state);
+	}
+
+	public void SetExternalInputContent(MediaSourceId sourceId, ReadOnlySpan<byte> rgbaPixels, V1InputSignalState state = V1InputSignalState.Valid)
+	{
+		if (rgbaPixels.Length != RgbaFrameBuffer.RequiredByteLength(_format))
+			throw new ArgumentException("External input payload must match the RuntimeHost video format.", nameof(rgbaPixels));
 		if (!Enum.IsDefined(typeof(V1InputSignalState), state))
 			throw new ArgumentOutOfRangeException(nameof(state));
 		lock (_gate)
 		{
 			ThrowIfDisposed();
-			if (!_backgrounds.ContainsKey(sourceId))
+			if (!_backgrounds.TryGetValue(sourceId, out var target))
 				throw new KeyNotFoundException($"Unknown media source '{sourceId}'.");
-			_backgrounds[sourceId] = content;
+			target.CopyPixelsFrom(rgbaPixels);
 			_inputSignals[sourceId] = state;
 			Observe($"input.external.updated:{sourceId}:{state}");
 		}
