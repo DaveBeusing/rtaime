@@ -23,7 +23,7 @@
 
 	<Grid>
 		<Grid.RowDefinitions>
-			<RowDefinition Height="{StaticResource OperatorTopBarHeight}" />
+			<RowDefinition Height="{StaticResource OperatorTopBarGridLength}" />
 			<RowDefinition Height="*" />
 		</Grid.RowDefinitions>
 
@@ -161,7 +161,7 @@
 			</Grid.RowDefinitions>
 			<Grid.ColumnDefinitions>
 				<ColumnDefinition Width="{Binding Shell.NavigationRailWidth, ElementName=RootWindow}" />
-				<ColumnDefinition Width="{StaticResource OperatorRegionGap}" />
+				<ColumnDefinition Width="{StaticResource OperatorRegionGapGridLength}" />
 				<ColumnDefinition Width="{Binding Shell.LeftColumnWidth, ElementName=RootWindow, Mode=TwoWay}" MinWidth="0" />
 				<ColumnDefinition Width="{Binding Shell.LeftSplitterWidth, ElementName=RootWindow}" />
 				<ColumnDefinition Width="*" MinWidth="0" />

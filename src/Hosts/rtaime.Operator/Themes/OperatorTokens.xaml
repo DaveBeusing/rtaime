@@ -25,6 +25,8 @@
 	<sys:Double x:Key="OperatorUpperWorkspaceHeight">700</sys:Double>
 	<sys:Double x:Key="OperatorTimelineHeight">320</sys:Double>
 	<sys:Double x:Key="OperatorRegionGap">6</sys:Double>
+	<GridLength x:Key="OperatorTopBarGridLength">60</GridLength>
+	<GridLength x:Key="OperatorRegionGapGridLength">6</GridLength>
 
 	<!-- Spacing and control metrics. -->
 	<sys:Double x:Key="OperatorSpacing4">4</sys:Double>
