@@ -96,10 +96,16 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		return FromWire(wire);
 	}
 
+	public ValueTask<bool> SetBroadcastTestPatternAsync(
+		string sourceId,
+		bool enabled,
+		CancellationToken cancellationToken = default) =>
+		SetBroadcastTestPatternAsync(sourceId, enabled, false, cancellationToken);
+
 	public async ValueTask<bool> SetBroadcastTestPatternAsync(
 		string sourceId,
 		bool enabled,
-		bool motionTiming = false,
+		bool motionTiming,
 		CancellationToken cancellationToken = default)
 	{
 		if (string.IsNullOrWhiteSpace(sourceId))
