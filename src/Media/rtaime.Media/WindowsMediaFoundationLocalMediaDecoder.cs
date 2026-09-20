@@ -21,6 +21,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 	private readonly MediaAssetId _assetId;
 	private readonly MediaSourceId _sourceId;
 	private readonly bool _hasAudio;
+	private readonly byte[] _rgbaFrameBuffer;
 	private long? _pendingSeekTimestamp;
 	private bool _disposed;
 
@@ -36,6 +37,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 		_sourceId = sourceId;
 		Probe = probe;
 		_hasAudio = hasAudio;
+		_rgbaFrameBuffer = new byte[checked((int)((ulong)probe.VideoFormat.Width * probe.VideoFormat.Height * 4UL))];
 	}
 
 	public LocalMediaProbe Probe { get; }
@@ -195,15 +197,12 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 		ObjectDisposedException.ThrowIf(_disposed, this);
 		var minimumTimestamp = _pendingSeekTimestamp;
 		long videoTimestamp;
-		byte[] videoPayload;
 		try
 		{
-			if (!TryReadSample(
+			if (!TryReadVideoSample(
 				MediaFoundation.FirstVideoStream,
 				minimumTimestamp,
-				copy2DContiguous: true,
-				out videoTimestamp,
-				out videoPayload))
+				out videoTimestamp))
 			{
 				frame = null;
 				return false;
@@ -212,16 +211,6 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 		catch (ExternalException exception)
 		{
 			throw new InvalidDataException($"Video sample read failed: {exception.Message}", exception);
-		}
-
-		byte[] rgba;
-		try
-		{
-			rgba = ConvertNv12ToRgba(videoPayload, Probe.VideoFormat);
-		}
-		catch (InvalidDataException exception)
-		{
-			throw new InvalidDataException($"Video frame conversion failed: {exception.Message}", exception);
 		}
 		var timing = new FrameTiming(sequenceNumber, videoTimestamp, MediaFoundationTimebase);
 		var surface = new SurfaceDescriptor(
@@ -277,7 +266,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 		}
 
 		_pendingSeekTimestamp = null;
-		frame = new LocalMediaDecodedFrame(video, rgba, audio, audioPayload);
+		frame = new LocalMediaDecodedFrame(video, _rgbaFrameBuffer, audio, audioPayload);
 		return true;
 	}
 
@@ -289,6 +278,51 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 		_disposed = true;
 		MediaFoundation.ReleaseComObject(_reader);
 		MediaFoundation.MFShutdown();
+	}
+
+	private bool TryReadVideoSample(
+		uint streamIndex,
+		long? minimumTimestamp,
+		out long timestamp)
+	{
+		while (true)
+		{
+			MediaFoundation.ThrowIfFailed(_reader.ReadSample(
+				streamIndex,
+				0,
+				out _,
+				out var flags,
+				out timestamp,
+				out var sample));
+
+			if (sample is null)
+			{
+				if ((flags & MediaFoundation.SourceReaderEndOfStream) != 0)
+					return false;
+				continue;
+			}
+
+			try
+			{
+				if (minimumTimestamp is not null && timestamp < minimumTimestamp.Value)
+					continue;
+
+				MediaFoundation.ThrowIfFailed(sample.ConvertToContiguousBuffer(out var buffer));
+				try
+				{
+					CopyRgb32ToRgba(buffer, Probe.VideoFormat, _rgbaFrameBuffer);
+					return true;
+				}
+				finally
+				{
+					MediaFoundation.ReleaseComObject(buffer);
+				}
+			}
+			finally
+			{
+				MediaFoundation.ReleaseComObject(sample);
+			}
+		}
 	}
 
 	private bool TryReadSample(
@@ -344,30 +378,6 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 		}
 	}
 
-	private static byte[] Copy2DBufferToContiguous(IMFMediaBuffer buffer)
-	{
-		if (buffer is not IMF2DBuffer buffer2D)
-			return CopyMediaBuffer(buffer);
-
-		MediaFoundation.ThrowIfFailed(buffer2D.GetContiguousLength(out var contiguousLength));
-		var payload = new byte[checked((int)contiguousLength)];
-		if (payload.Length == 0)
-			return payload;
-
-		var handle = GCHandle.Alloc(payload, GCHandleType.Pinned);
-		try
-		{
-			MediaFoundation.ThrowIfFailed(
-				buffer2D.ContiguousCopyTo(handle.AddrOfPinnedObject(), contiguousLength));
-		}
-		finally
-		{
-			handle.Free();
-		}
-
-		return payload;
-	}
-
 	private static byte[] CopyMediaBuffer(IMFMediaBuffer buffer)
 	{
 		MediaFoundation.ThrowIfFailed(buffer.Lock(out var address, out _, out var currentLength));
@@ -393,52 +403,57 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 		return checked((ulong)position);
 	}
 
-	private static byte[] ConvertNv12ToRgba(byte[] source, VideoFormat format)
+	private static void CopyRgb32ToRgba(
+		IMFMediaBuffer buffer,
+		VideoFormat format,
+		byte[] destination)
 	{
 		var width = checked((int)format.Width);
 		var height = checked((int)format.Height);
-		if ((width & 1) != 0 || (height & 1) != 0)
-			throw new InvalidDataException("NV12 local media frames require even width and height.");
+		var rowBytes = checked(width * 4);
+		var requiredLength = checked(rowBytes * height);
+		if (destination.Length != requiredLength)
+			throw new InvalidDataException("Reusable RGBA frame buffer length does not match the configured output format.");
 
-		var visibleYPlaneLength = checked(width * height);
-		var minimumLength = checked(visibleYPlaneLength + (visibleYPlaneLength / 2));
-		if (source.Length < minimumLength)
-			throw new InvalidDataException($"Decoded NV12 frame has '{source.Length}' bytes; expected at least '{minimumLength}'.");
-
-		var storageHeightNumerator = checked((long)source.Length * 2);
-		var storageHeightDenominator = checked((long)width * 3);
-		if (storageHeightNumerator % storageHeightDenominator != 0)
-			throw new InvalidDataException($"Decoded NV12 frame length '{source.Length}' cannot be mapped to an integral storage height at width '{width}'.");
-		var storageHeight = checked((int)(storageHeightNumerator / storageHeightDenominator));
-		if (storageHeight < height || (storageHeight & 1) != 0)
-			throw new InvalidDataException($"Decoded NV12 storage height '{storageHeight}' is invalid for visible height '{height}'.");
-
-		var rgba = new byte[checked(visibleYPlaneLength * 4)];
-		var uvOffset = checked(width * storageHeight);
-		for (var y = 0; y < height; y++)
+		if (buffer is IMF2DBuffer buffer2D)
 		{
-			for (var x = 0; x < width; x++)
+			MediaFoundation.ThrowIfFailed(buffer2D.Lock2D(out var scanline0, out var pitch));
+			try
 			{
-				var yValue = source[(y * width) + x];
-				var uvIndex = uvOffset + ((y / 2) * width) + (x & ~1);
-				var uValue = source[uvIndex];
-				var vValue = source[uvIndex + 1];
+				if (Math.Abs((long)pitch) < rowBytes)
+					throw new InvalidDataException($"Decoded RGB32 surface pitch '{pitch}' is smaller than the visible row width '{rowBytes}'.");
 
-				var c = Math.Max(0, yValue - 16);
-				var d = uValue - 128;
-				var e = vValue - 128;
-				var red = ClampByte((298 * c + 459 * e + 128) >> 8);
-				var green = ClampByte((298 * c - 55 * d - 136 * e + 128) >> 8);
-				var blue = ClampByte((298 * c + 541 * d + 128) >> 8);
-
-				var output = ((y * width) + x) * 4;
-				rgba[output] = red;
-				rgba[output + 1] = green;
-				rgba[output + 2] = blue;
-				rgba[output + 3] = byte.MaxValue;
+				for (var y = 0; y < height; y++)
+				{
+					var row = IntPtr.Add(scanline0, checked(y * pitch));
+					Marshal.Copy(row, destination, checked(y * rowBytes), rowBytes);
+				}
+			}
+			finally
+			{
+				MediaFoundation.ThrowIfFailed(buffer2D.Unlock2D());
 			}
 		}
-		return rgba;
+		else
+		{
+			MediaFoundation.ThrowIfFailed(buffer.Lock(out var address, out _, out var currentLength));
+			try
+			{
+				if (currentLength < requiredLength)
+					throw new InvalidDataException($"Decoded RGB32 frame has '{currentLength}' bytes; expected at least '{requiredLength}'.");
+				Marshal.Copy(address, destination, 0, requiredLength);
+			}
+			finally
+			{
+				MediaFoundation.ThrowIfFailed(buffer.Unlock());
+			}
+		}
+
+		for (var offset = 0; offset < destination.Length; offset += 4)
+		{
+			(destination[offset], destination[offset + 2]) = (destination[offset + 2], destination[offset]);
+			destination[offset + 3] = byte.MaxValue;
+		}
 	}
 
 	private static byte[] ConvertPcm16ToFloat32(byte[] source)
@@ -551,7 +566,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 			MediaFoundation.ThrowIfFailed(mediaType.SetGUID(ref majorKey, ref majorType));
 
 			var subtypeKey = MediaFoundation.MfMtSubtype;
-			var subtype = MediaFoundation.MfVideoFormatNv12;
+			var subtype = MediaFoundation.MfVideoFormatRgb32;
 			MediaFoundation.ThrowIfFailed(mediaType.SetGUID(ref subtypeKey, ref subtype));
 
 			var frameSizeKey = MediaFoundation.MfMtFrameSize;
@@ -575,6 +590,11 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 			MediaFoundation.ThrowIfFailed(mediaType.SetUINT64(
 				ref pixelAspectKey,
 				MediaFoundation.PackRatio(1, 1)));
+
+			var strideKey = MediaFoundation.MfMtDefaultStride;
+			MediaFoundation.ThrowIfFailed(mediaType.SetUINT32(
+				ref strideKey,
+				checked(outputFormat.Width * 4U)));
 
 			MediaFoundation.ThrowIfFailed(reader.SetCurrentMediaType(streamIndex, IntPtr.Zero, mediaType));
 		}
@@ -653,6 +673,7 @@ internal static class MediaFoundation
 	public static Guid MfMtFrameRate = new("C459A2E8-3D2C-4E44-B132-FEE5156C7BB0");
 	public static Guid MfMtInterlaceMode = new("E2724BB8-E676-4806-B4B2-A8D6EFB44CCD");
 	public static Guid MfMtPixelAspectRatio = new("C6376A1E-8D0A-4027-BE45-6D9A0AD39BB6");
+	public static Guid MfMtDefaultStride = new("644B4E48-1E02-4516-B0EB-C01CA9D49AC6");
 	public static Guid MfMtAudioNumChannels = new("37E48BF5-645E-4C5B-89DE-ADA9E29B696A");
 	public static Guid MfMtAudioSamplesPerSecond = new("5FAEEAE7-0290-4C31-9E8A-C534F68D9DBA");
 	public static Guid MfMtAudioBitsPerSample = new("F2DEB57F-40FA-4764-AA33-ED4F2D1FF669");
@@ -677,7 +698,7 @@ internal static class MediaFoundation
 	public static Guid MfMpeg4FormatMp4V = new("7634706D-0000-0010-8000-00AA00389B71");
 	public static Guid MfMpeg4FormatVc1 = new("312D6376-0000-0010-8000-00AA00389B71");
 	public static Guid MfMpeg4FormatJpeg = new("6765706A-0000-0010-8000-00AA00389B71");
-	public static Guid MfVideoFormatNv12 = new("3231564E-0000-0010-8000-00AA00389B71");
+	public static Guid MfVideoFormatRgb32 = new("00000016-0000-0010-8000-00AA00389B71");
 	public static Guid MfAudioFormatAac = new("00001610-0000-0010-8000-00AA00389B71");
 	public static Guid MfAudioFormatMp3 = new("00000055-0000-0010-8000-00AA00389B71");
 	public static Guid MfAudioFormatPcm = new("00000001-0000-0010-8000-00AA00389B71");
