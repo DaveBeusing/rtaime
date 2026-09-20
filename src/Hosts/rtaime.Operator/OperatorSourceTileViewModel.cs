@@ -70,7 +70,7 @@ public sealed class OperatorSourceTileViewModel : INotifyPropertyChanged
 	public string StateDetail => IsMedia
 		? $"{MediaState} · REM {Remaining}"
 		: IsTestPattern
-			? $"GENERATED · SIGNAL {Health}"
+			? $"{MediaState} · GENERATED · SIGNAL {Health}"
 			: $"SIGNAL {Health}";
 
 	public void ApplyDescriptor(OperatorSourceDescriptor descriptor)
