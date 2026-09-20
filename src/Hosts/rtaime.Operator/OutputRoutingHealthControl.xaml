@@ -233,6 +233,20 @@
 			<Border Style="{StaticResource OperatorPanel}">
 				<StackPanel>
 					<TextBlock Text="PERFORMANCE" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,6" />
+					<Grid Margin="0,0,0,8">
+						<Grid.ColumnDefinitions>
+							<ColumnDefinition Width="72" />
+							<ColumnDefinition Width="*" />
+						</Grid.ColumnDefinitions>
+						<Grid.RowDefinitions>
+							<RowDefinition Height="22" />
+							<RowDefinition Height="22" />
+						</Grid.RowDefinitions>
+						<TextBlock Grid.Row="0" Grid.Column="0" Text="CPU" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" />
+						<TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding CpuDeviceName}" Style="{StaticResource OperatorValue}" TextTrimming="CharacterEllipsis" ToolTip="{Binding CpuDeviceName}" VerticalAlignment="Center" />
+						<TextBlock Grid.Row="1" Grid.Column="0" Text="GPU" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" />
+						<TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding GpuDeviceName}" Style="{StaticResource OperatorValue}" TextTrimming="CharacterEllipsis" ToolTip="{Binding GpuDeviceName}" VerticalAlignment="Center" />
+					</Grid>
 					<ItemsControl ItemsSource="{Binding Metrics}">
 						<ItemsControl.ItemTemplate>
 							<DataTemplate>
