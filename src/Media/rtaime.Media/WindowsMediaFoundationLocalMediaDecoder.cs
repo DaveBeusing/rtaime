@@ -234,7 +234,6 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 				audioAvailable = TryReadSample(
 					MediaFoundation.FirstAudioStream,
 					minimumTimestamp,
-					copy2DContiguous: false,
 					out audioTimestamp,
 					out decodedAudio);
 			}
@@ -328,7 +327,6 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 	private bool TryReadSample(
 		uint streamIndex,
 		long? minimumTimestamp,
-		bool copy2DContiguous,
 		out long timestamp,
 		out byte[] payload)
 	{
@@ -361,9 +359,7 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 				MediaFoundation.ThrowIfFailed(sample.ConvertToContiguousBuffer(out var buffer));
 				try
 				{
-					payload = copy2DContiguous
-						? Copy2DBufferToContiguous(buffer)
-						: CopyMediaBuffer(buffer);
+					payload = CopyMediaBuffer(buffer);
 					return true;
 				}
 				finally
@@ -476,7 +472,6 @@ internal sealed class WindowsMediaFoundationLocalMediaDecoder : ILocalMediaDecod
 		return output;
 	}
 
-	private static byte ClampByte(int value) => (byte)Math.Clamp(value, 0, 255);
 
 	private static IMFMediaType GetNativeMediaType(IMFSourceReader reader, uint streamIndex)
 	{
