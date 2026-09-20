@@ -198,6 +198,7 @@ public interface IApplicationHostPlatform
 	int StartProcess(ApplicationProcessSpec spec);
 	bool IsProcessAlive(int processId);
 	bool IsEndpointLeaseHeld(string endpoint) => false;
+	Task FlushProcessDiagnosticsAsync(int processId, CancellationToken cancellationToken) => Task.CompletedTask;
 	void KillProcessTree(int processId);
 	bool FileExists(string path);
 	string ReadAllText(string path);
@@ -211,6 +212,7 @@ public interface IApplicationHostPlatform
 public sealed class SystemApplicationHostPlatform : IApplicationHostPlatform
 {
 	private readonly ConcurrentDictionary<int, Process> _diagnosticProcesses = new();
+	private readonly ConcurrentDictionary<int, TaskCompletionSource<bool>> _diagnosticCompletions = new();
 
 	public DateTimeOffset UtcNow => DateTimeOffset.UtcNow;
 
@@ -311,6 +313,7 @@ public sealed class SystemApplicationHostPlatform : IApplicationHostPlatform
 		startInfo.RedirectStandardError = true;
 		var writeGate = new object();
 		var processWithDiagnostics = new Process { StartInfo = startInfo };
+		var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 		var processId = 0;
 		var finalized = 0;
 
@@ -332,13 +335,27 @@ public sealed class SystemApplicationHostPlatform : IApplicationHostPlatform
 			if (Interlocked.Exchange(ref finalized, 1) != 0) return;
 			try
 			{
+				processWithDiagnostics.WaitForExit();
+			}
+			catch (InvalidOperationException)
+			{
+			}
+
+			try
+			{
 				AppendDiagnostic("process", $"exitCode={processWithDiagnostics.ExitCode}");
 			}
 			catch (InvalidOperationException)
 			{
 				AppendDiagnostic("process", "exitCode=unavailable");
 			}
-			if (processId != 0) _diagnosticProcesses.TryRemove(processId, out _);
+
+			if (processId != 0)
+			{
+				_diagnosticProcesses.TryRemove(processId, out _);
+				_diagnosticCompletions.TryRemove(processId, out _);
+			}
+			completion.TrySetResult(true);
 			processWithDiagnostics.Dispose();
 		}
 
@@ -352,6 +369,7 @@ public sealed class SystemApplicationHostPlatform : IApplicationHostPlatform
 				throw new InvalidOperationException($"Failed to start '{spec.ArtifactPath}'.");
 			processId = processWithDiagnostics.Id;
 			_diagnosticProcesses[processId] = processWithDiagnostics;
+			_diagnosticCompletions[processId] = completion;
 			processWithDiagnostics.BeginOutputReadLine();
 			processWithDiagnostics.BeginErrorReadLine();
 			processWithDiagnostics.EnableRaisingEvents = true;
@@ -359,10 +377,21 @@ public sealed class SystemApplicationHostPlatform : IApplicationHostPlatform
 		}
 		catch
 		{
-			if (processId != 0) _diagnosticProcesses.TryRemove(processId, out _);
+			if (processId != 0)
+			{
+				_diagnosticProcesses.TryRemove(processId, out _);
+				_diagnosticCompletions.TryRemove(processId, out _);
+			}
+			completion.TrySetResult(true);
 			processWithDiagnostics.Dispose();
 			throw;
 		}
+	}
+
+	public async Task FlushProcessDiagnosticsAsync(int processId, CancellationToken cancellationToken)
+	{
+		if (!_diagnosticCompletions.TryGetValue(processId, out var completion)) return;
+		await completion.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
 	}
 
 	public bool IsProcessAlive(int processId)
@@ -751,6 +780,7 @@ public sealed class UnifiedApplicationHost
 					}
 				}
 
+				await _platform.FlushProcessDiagnosticsAsync(controlPid, cancellationToken).ConfigureAwait(false);
 				throw new InvalidOperationException(BuildControlHostExitDetail("ControlHost exited before qualified readiness."));
 			}
 
@@ -882,7 +912,10 @@ public sealed class UnifiedApplicationHost
 		{
 			cancellationToken.ThrowIfCancellationRequested();
 			if (_controlProcessId is { } controlPid && !_platform.IsProcessAlive(controlPid))
+			{
+				await _platform.FlushProcessDiagnosticsAsync(controlPid, cancellationToken).ConfigureAwait(false);
 				throw new InvalidOperationException(BuildControlHostExitDetail("ControlHost stopped while HeadlessEngine profile was active."));
+			}
 
 			var readiness = await FindHealthyReadinessAsync(cancellationToken).ConfigureAwait(false);
 			if (readiness is null)
