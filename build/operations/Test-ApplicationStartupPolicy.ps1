@@ -18,6 +18,7 @@ function Assert-Condition {
 
 $appProjectPath = Join-Path $repositoryRoot "src/Hosts/rtaime.AppHost/rtaime.AppHost.csproj"
 $appCodePath = Join-Path $repositoryRoot "src/Hosts/rtaime.AppHost/ApplicationHost.cs"
+$lifecycleProviderPath = Join-Path $repositoryRoot "src/Hosts/rtaime.AppHost/ApplicationLifecycleStateProvider.cs"
 $appProgramPath = Join-Path $repositoryRoot "src/Hosts/rtaime.AppHost/Program.cs"
 $solutionPath = Join-Path $repositoryRoot "rtaime.slnx"
 $releasePolicyPath = Join-Path $repositoryRoot "build/release/release-policy.json"
@@ -31,6 +32,7 @@ $buildDocumentationPath = Join-Path $repositoryRoot "docs/BuildAndTest.md"
 foreach ($path in @(
 	$appProjectPath,
 	$appCodePath,
+	$lifecycleProviderPath,
 	$appProgramPath,
 	$solutionPath,
 	$releasePolicyPath,
@@ -46,6 +48,7 @@ foreach ($path in @(
 
 $appProject = Get-Content -LiteralPath $appProjectPath -Raw
 $appCode = Get-Content -LiteralPath $appCodePath -Raw
+$lifecycleProvider = Get-Content -LiteralPath $lifecycleProviderPath -Raw
 $appProgram = Get-Content -LiteralPath $appProgramPath -Raw
 $solution = Get-Content -LiteralPath $solutionPath -Raw
 $releasePolicy = Get-Content -LiteralPath $releasePolicyPath -Raw | ConvertFrom-Json
@@ -94,6 +97,15 @@ foreach ($token in @(
 
 Assert-Condition ($appCode -notmatch 'StartRuntimeHost') "AppHost must not directly launch RuntimeHost."
 Assert-Condition ($appCode -notmatch 'StartAIHost') "AppHost must not directly launch AIHost."
+Assert-Condition ($appCode -match 'RTAIME_APPHOST_LIFECYCLE_FILE' -and $appCode -match 'LifecycleEvidencePath') "Interactive startup must expose AppHost lifecycle evidence to the Operator."
+foreach ($stage in @("ApplicationBootstrap", "Configuration", "OperatorInterface", "ControlHost", "RuntimeHost", "AIHost", "ProductionReadiness")) {
+	Assert-Condition ($lifecycleProvider -match [Regex]::Escape($stage)) "AppHost lifecycle evidence is missing stage '$stage'."
+}
+foreach ($status in @("Pending", "Starting", "Ready", "Degraded", "Failed")) {
+	Assert-Condition ($lifecycleProvider -match [Regex]::Escape($status)) "AppHost lifecycle evidence is missing stage status '$status'."
+}
+Assert-Condition ($lifecycleProvider -match 'StartedAt' -and $lifecycleProvider -match 'CompletedAt' -and $lifecycleProvider -match 'CanRetry') "Lifecycle stage evidence must retain timing and retry metadata."
+Assert-Condition ($lifecycleProvider -notmatch 'PeriodicTimer|Task\.Delay|percentage|percent') "AppHost lifecycle evidence must never synthesize timer-driven or percentage progress."
 Assert-Condition ($appProgram -match 'UnifiedApplicationHost') "Canonical entry point must delegate to UnifiedApplicationHost."
 
 $parseTokens = $null
