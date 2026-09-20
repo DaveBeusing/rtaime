@@ -50,9 +50,18 @@ Virtual source timing and frame descriptor
 
 ## Operator workflow
 
-Select a source in the Source Bin and use **CYCLE TEST SIGNAL**.
+The Media Library **Add** action exposes a **GENERATOR** section with **Test Signal**. Activating it applies the static broadcast reference to the current Source selection. If no Source or Clip is selected, the existing Operator selection is used, followed by Preview and then the first available Source as deterministic fallbacks.
 
-The action cycles the selected source through `OFF -> STATIC -> MOTION -> OFF`. Static mode uses the retained broadcast reference image. Motion mode extends the same reference source with frame/time diagnostics described in [MotionTimingTestSignal.md](MotionTimingTestSignal.md).
+Once active, the Video Inspector exposes a dedicated **TEST SIGNAL** section with four explicit presets:
+
+- **STATIC** uses the retained broadcast reference image and disables generated audio on the same Source.
+- **MOTION** adds the frame counter, media-time timecode and motion diagnostics described in [MotionTimingTestSignal.md](MotionTimingTestSignal.md), while generated audio remains disabled.
+- **A/V SYNC** combines the motion/timing video signal with the existing generated `Pulse` audio signal on the same Source. The combined diagnostics are described in [AvSyncDiagnostics.md](AvSyncDiagnostics.md). An associated audio input is required; the request is rejected before video activation when none exists.
+- **OFF** disables both the internal video signal and generated audio for that Source.
+
+Resolution and frame rate are not independent generator overrides. They follow the active Source format and are shown in the Inspector as Runtime-confirmed state. Timecode and frame counter are shown as active only for motion/timing and A/V-sync operation.
+
+The existing Source Bin **CYCLE TEST SIGNAL** action remains available as the fast `OFF -> STATIC -> MOTION -> OFF` workflow.
 
 While active, the source is projected as `TEST`, `STATIC` or `MOTION`, and `VALID`. The underlying physical or media-source signal state can continue to change internally without causing the active internal reference signal to flap to an external-input failure state.
 
@@ -75,6 +84,6 @@ Logging is limited to test-signal state transitions. Normal frame processing doe
 
 ## Boundaries
 
-This feature does not generate audio, export a test file, introduce HDR-specific reference fields, or claim a color space that the active media contract cannot prove.
+`BroadcastTestPatternGenerator` remains a video-only generator. The Operator A/V Sync preset composes it with the existing generated-audio subsystem rather than adding audio generation to the video generator itself.
 
-Audio reference generation and explicit audio/video synchronization signals are separate concerns and are not part of this implementation.
+The feature does not export a test file, introduce HDR-specific reference fields, provide arbitrary per-generator resolution or frame-rate overrides, or claim a color space that the active media contract cannot prove.

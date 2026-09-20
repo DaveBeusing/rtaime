@@ -12,6 +12,14 @@ using rtaime.Media.Contracts;
 
 namespace rtaime.Operator;
 
+internal enum OperatorTestSignalPreset
+{
+	Off,
+	Static,
+	Motion,
+	AvSync
+}
+
 public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 {
 	private readonly OperatorControlClient? _client;
@@ -514,37 +522,77 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		});
 	}
 
-	private async Task ToggleTestPatternAsync()
+	private Task ToggleTestPatternAsync()
 	{
-		if (_client is null || SelectedSource is null) return;
-		var source = SelectedSource;
-		var enable = true;
-		var motionTiming = false;
-		var operation = "ENABLE STATIC TEST SIGNAL";
+		if (SelectedSource is null)
+			return Task.CompletedTask;
 
-		if (source.IsTestPattern && string.Equals(source.MediaState, "STATIC", StringComparison.OrdinalIgnoreCase))
-		{
-			motionTiming = true;
-			operation = "ENABLE MOTION TEST SIGNAL";
-		}
-		else if (source.IsTestPattern)
-		{
-			enable = false;
-			operation = "DISABLE TEST SIGNAL";
-		}
+		var preset = !SelectedSource.IsTestPattern
+			? OperatorTestSignalPreset.Static
+			: string.Equals(SelectedSource.MediaState, "STATIC", StringComparison.OrdinalIgnoreCase)
+				? OperatorTestSignalPreset.Motion
+				: OperatorTestSignalPreset.Off;
+		return ConfigureTestSignalAsync(SelectedSource, preset);
+	}
 
+	internal async Task ConfigureTestSignalAsync(
+		OperatorSourceTileViewModel source,
+		OperatorTestSignalPreset preset)
+	{
+		ArgumentNullException.ThrowIfNull(source);
+		if (_client is null)
+			return;
+
+		var audioInput = AudioInputs.FirstOrDefault(input =>
+			string.Equals(input.SourceId, source.Id, StringComparison.Ordinal));
+		var videoEnabled = preset != OperatorTestSignalPreset.Off;
+		var motionTiming = preset is OperatorTestSignalPreset.Motion or OperatorTestSignalPreset.AvSync;
+		var audioPulse = preset == OperatorTestSignalPreset.AvSync;
+		var operation = preset switch
+		{
+			OperatorTestSignalPreset.Static => "ENABLE STATIC TEST SIGNAL",
+			OperatorTestSignalPreset.Motion => "ENABLE MOTION TEST SIGNAL",
+			OperatorTestSignalPreset.AvSync => "ENABLE A/V SYNC TEST SIGNAL",
+			_ => "DISABLE TEST SIGNAL"
+		};
+
+		SelectedSource = source;
 		await ExecuteAsync(operation, async () =>
 		{
-			var enabled = await _client.SetBroadcastTestPatternAsync(source.Id, enable, motionTiming);
+			if (audioPulse && audioInput is null)
+				throw new InvalidOperationException(
+					$"A/V sync test signal requires an audio input associated with {source.Name}.");
+
+			await _client.SetBroadcastTestPatternAsync(source.Id, videoEnabled, motionTiming);
+
+			if (audioInput is not null)
+			{
+				await _client.SetAudioTestSignalAsync(
+					source.Id,
+					audioPulse,
+					5,
+					1_000,
+					0.25);
+			}
+
 			Apply(_client.Snapshot!);
-			CommandStatus = enabled
-				? motionTiming ? "MOTION TEST ACTIVE" : "STATIC TEST ACTIVE"
-				: "TEST SIGNAL OFF";
-			LastEvent = enabled
-				? motionTiming
-					? $"Motion/timing test signal activated on {source.Name}."
-					: $"Static broadcast test signal activated on {source.Name}."
-				: $"Internal test signal deactivated on {source.Name}.";
+			CommandStatus = preset switch
+			{
+				OperatorTestSignalPreset.Static => "STATIC TEST ACTIVE",
+				OperatorTestSignalPreset.Motion => "MOTION TEST ACTIVE",
+				OperatorTestSignalPreset.AvSync => "A/V SYNC TEST ACTIVE",
+				_ => "TEST SIGNAL OFF"
+			};
+			LastEvent = preset switch
+			{
+				OperatorTestSignalPreset.Static =>
+					$"Static broadcast test signal activated on {source.Name}; generated audio is off.",
+				OperatorTestSignalPreset.Motion =>
+					$"Motion/timing test signal activated on {source.Name}; generated audio is off.",
+				OperatorTestSignalPreset.AvSync =>
+					$"A/V sync diagnostics activated on {source.Name} with motion/timing video and pulse audio.",
+				_ => $"Internal video and generated audio test signals deactivated on {source.Name}."
+			};
 		});
 	}
 

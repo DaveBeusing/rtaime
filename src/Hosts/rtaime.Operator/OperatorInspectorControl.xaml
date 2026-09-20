@@ -373,6 +373,78 @@
 														<Style.Triggers>
 															<MultiDataTrigger>
 																<MultiDataTrigger.Conditions>
+																	<Condition Binding="{Binding Inspector.IsTestSignalSelection, ElementName=Root}" Value="True" />
+																	<Condition Binding="{Binding Inspector.HasMultipleSelection, ElementName=Root}" Value="False" />
+																</MultiDataTrigger.Conditions>
+																<Setter Property="Visibility" Value="Visible" />
+															</MultiDataTrigger>
+														</Style.Triggers>
+													</Style>
+												</StackPanel.Style>
+												<controls:RtaimeToggleButton
+													Content="TEST SIGNAL"
+													Style="{StaticResource InspectorSectionToggle}"
+													IsChecked="{Binding Inspector.IsTestSignalExpanded, ElementName=Root, Mode=TwoWay}" />
+												<Border>
+													<Border.Style>
+														<Style TargetType="Border" BasedOn="{StaticResource InspectorPropertySectionContent}">
+															<Setter Property="Visibility" Value="Collapsed" />
+															<Style.Triggers>
+																<DataTrigger Binding="{Binding Inspector.IsTestSignalExpanded, ElementName=Root}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
+															</Style.Triggers>
+														</Style>
+													</Border.Style>
+													<StackPanel>
+														<Grid Margin="0,4,0,4">
+															<Grid.ColumnDefinitions>
+																<ColumnDefinition Width="*" />
+																<ColumnDefinition Width="4" />
+																<ColumnDefinition Width="*" />
+															</Grid.ColumnDefinitions>
+															<controls:RtaimeButton
+																Grid.Column="0"
+																Content="STATIC"
+																Command="{Binding Inspector.SetStaticTestSignalCommand, ElementName=Root}"
+																IsCompact="True" />
+															<controls:RtaimeButton
+																Grid.Column="2"
+																Content="MOTION"
+																Command="{Binding Inspector.SetMotionTestSignalCommand, ElementName=Root}"
+																IsCompact="True" />
+														</Grid>
+														<Grid Margin="0,0,0,5">
+															<Grid.ColumnDefinitions>
+																<ColumnDefinition Width="*" />
+																<ColumnDefinition Width="4" />
+																<ColumnDefinition Width="*" />
+															</Grid.ColumnDefinitions>
+															<controls:RtaimeButton
+																Grid.Column="0"
+																Content="A/V SYNC"
+																Command="{Binding Inspector.SetAvSyncTestSignalCommand, ElementName=Root}"
+																IsCompact="True" />
+															<controls:RtaimeButton
+																Grid.Column="2"
+																Content="OFF"
+																Command="{Binding Inspector.DisableTestSignalCommand, ElementName=Root}"
+																IsCompact="True" />
+														</Grid>
+														<TextBlock
+															Text="Resolution and frame rate follow the active source format. Motion and A/V Sync enable the authoritative timecode and frame counter; A/V Sync also enables pulse audio on the same source."
+															Style="{StaticResource OperatorLabel}"
+															TextWrapping="Wrap"
+															Margin="0,2,0,4" />
+													</StackPanel>
+												</Border>
+											</StackPanel>
+
+											<StackPanel>
+												<StackPanel.Style>
+													<Style TargetType="StackPanel">
+														<Setter Property="Visibility" Value="Collapsed" />
+														<Style.Triggers>
+															<MultiDataTrigger>
+																<MultiDataTrigger.Conditions>
 																	<Condition Binding="{Binding Inspector.IsClipSelection, ElementName=Root}" Value="True" />
 																	<Condition Binding="{Binding Inspector.HasMultipleSelection, ElementName=Root}" Value="False" />
 																</MultiDataTrigger.Conditions>

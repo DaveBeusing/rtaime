@@ -532,6 +532,31 @@ public partial class MainWindow : Window
 		e.Handled = true;
 	}
 
+	private void OnMediaPoolAddClick(object sender, RoutedEventArgs e)
+	{
+		if (sender is not FrameworkElement { ContextMenu: { } menu } target)
+			return;
+
+		menu.PlacementTarget = target;
+		menu.Placement = PlacementMode.Bottom;
+		menu.IsOpen = true;
+		e.Handled = true;
+	}
+
+	private void OnMediaPoolImportMenuClick(object sender, RoutedEventArgs e)
+	{
+		if (MediaPool.ImportCommand.CanExecute(null))
+			MediaPool.ImportCommand.Execute(null);
+		e.Handled = true;
+	}
+
+	private void OnMediaPoolTestSignalMenuClick(object sender, RoutedEventArgs e)
+	{
+		if (MediaPool.AddTestSignalCommand.CanExecute(null))
+			MediaPool.AddTestSignalCommand.Execute(null);
+		e.Handled = true;
+	}
+
 	private async void OnMediaPoolPreviewActionClick(object sender, RoutedEventArgs e)
 	{
 		var item = GetMediaPoolItemFromSender(sender);
