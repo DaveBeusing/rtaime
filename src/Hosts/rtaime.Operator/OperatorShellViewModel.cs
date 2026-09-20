@@ -112,7 +112,7 @@ public sealed record OperatorLayoutSettings
 			return Default;
 
 		var selected = OperatorWorkspaceNames.Normalize(SelectedWorkspace);
-		if (Version < CurrentVersion)
+		if (Version < 4)
 		{
 			return Default with
 			{
