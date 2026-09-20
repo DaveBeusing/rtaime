@@ -104,6 +104,7 @@ public sealed record RuntimeRemoteSnapshot(
 	int ActiveGpuSurfaces,
 	VideoFormat Format,
 	IReadOnlyDictionary<MediaSourceId, string> InputSignals,
+	IReadOnlyCollection<MediaSourceId> BroadcastTestPatternSources,
 	RuntimeGraphicsOverlaySnapshot GraphicsOverlay,
 	IReadOnlyDictionary<MediaSourceId, RuntimeAudioInputSnapshot> AudioInputs,
 	RuntimeAudioProgramSnapshot AudioProgram,
@@ -209,6 +210,9 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 				signal => new MediaSourceId(Identity.Parse(signal.SourceId)),
 				signal => string.IsNullOrWhiteSpace(signal.Health) ? "UNKNOWN" : signal.Health.Trim(),
 				EqualityComparer<MediaSourceId>.Default),
+			Array.AsReadOnly(snapshot.BroadcastTestPatternSourceIds
+				.Select(sourceId => new MediaSourceId(Identity.Parse(sourceId)))
+				.ToArray()),
 			FromWire(snapshot.GraphicsOverlay),
 			snapshot.AudioInputs.ToDictionary(
 				input => new MediaSourceId(Identity.Parse(input.SourceId)),
@@ -256,6 +260,22 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 		var wire = response.Payload.Deserialize<WireAudioInput>(Wire.JsonOptions)
 			?? throw new InvalidDataException("Runtime audio input response is required.");
 		return FromWire(wire);
+	}
+
+	public async ValueTask<bool> SetBroadcastTestPatternAsync(
+		MediaSourceId sourceId,
+		bool enabled,
+		CancellationToken cancellationToken = default)
+	{
+		var response = await ExchangeAsync(
+			"runtime.test_pattern.set",
+			new WireTestPatternState(sourceId.ToString(), enabled),
+			cancellationToken).ConfigureAwait(false);
+		var wire = response.Payload.Deserialize<WireTestPatternState>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Runtime broadcast test pattern response is required.");
+		if (!string.Equals(wire.SourceId, sourceId.ToString(), StringComparison.Ordinal))
+			throw new InvalidDataException("Runtime broadcast test pattern response source does not match the request.");
+		return wire.Enabled;
 	}
 
 	public async ValueTask<RuntimeGraphicsOverlaySnapshot> LoadGraphicsOverlayAsync(
@@ -746,6 +766,7 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 	private sealed record WireFailure(string Code, string Message);
 	private sealed record WireVideoFormat(uint Width, uint Height, string FrameRate, int PixelFormat, int ScanMode);
 	private sealed record WireInputSignal(string SourceId, string Health);
+	private sealed record WireTestPatternState(string SourceId, bool Enabled);
 	private sealed record WireGraphicsAsset(string Name, uint Width, uint Height, byte[] RgbaPixels);
 	private sealed record WireGraphicsOverlayState(bool Visible, double PositionX, double PositionY, double Scale);
 	private sealed record WireGraphicsOverlay(bool AssetLoaded, string? AssetName, uint AssetWidth, uint AssetHeight, bool Visible, double PositionX, double PositionY, double Scale);
@@ -788,6 +809,7 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 		int ActiveGpuSurfaces,
 		WireVideoFormat Format,
 		WireInputSignal[] InputSignals,
+		string[] BroadcastTestPatternSourceIds,
 		WireGraphicsOverlay GraphicsOverlay,
 		WireAudioInput[] AudioInputs,
 		WireAudioProgram AudioProgram,
