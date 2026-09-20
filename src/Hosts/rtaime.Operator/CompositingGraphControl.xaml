@@ -85,6 +85,12 @@
 	</UserControl.Resources>
 
 	<Grid>
+		<controls:RtaimeStatePlaceholder
+			State="{Binding WorkspaceStates.Compositing.State, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+			Title="{Binding WorkspaceStates.Compositing.Title, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+			Detail="{Binding WorkspaceStates.Compositing.Detail, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+			Panel.ZIndex="60"
+			Margin="10" />
 		<Grid.RowDefinitions>
 			<RowDefinition Height="42" />
 			<RowDefinition Height="*" />
