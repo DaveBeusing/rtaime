@@ -1,5 +1,9 @@
 <!-- Copyright (c) Dave Beusing <david.beusing@gmail.com>. -->
 
+<p align="right">
+	<img src="src/Hosts/rtaime.Operator/Assets/Brand/RtaimeLogoHorizontal.svg" alt="rtaime — Real Time AI Media Engine" width="180" />
+</p>
+
 # Security Policy
 
 This policy applies to **rtaime — Real Time AI Media Engine**, the **Production-grade real-time AI media platform.**

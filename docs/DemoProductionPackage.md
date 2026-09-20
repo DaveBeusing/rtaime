@@ -3,11 +3,15 @@ Copyright (c) 2026 Dave Beusing
 david.beusing@gmail.com
 -->
 
+<p align="right">
+	<img src="../src/Hosts/rtaime.Operator/Assets/Brand/RtaimeLogoHorizontal.svg" alt="rtaime — Real Time AI Media Engine" width="180" />
+</p>
+
 # Demo Production Package
 
 ## Purpose
 
-Demo Production Package adds one reproducible funding-prototype showcase package to the WPF Operator. The package prepares the existing V1 workflow through already-qualified Client, ControlHost, RuntimeHost, Media, Audio, Graphics and AI seams.
+Demo Production Package adds one reproducible Product Showcase package to the WPF Operator. The package prepares the existing V1 workflow through already-qualified Client, ControlHost, RuntimeHost, Media, Audio, Graphics and AI seams.
 
 `Open Demo Production` is not a new production-authority subsystem and is not the software-release package format. It does not replace ControlHost authority, durable state, host lifecycle, update orchestration or the existing Production Specification.
 

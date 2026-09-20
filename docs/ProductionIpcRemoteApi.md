@@ -1,5 +1,9 @@
 <!-- Copyright (c) Dave Beusing <david.beusing@gmail.com>. -->
 
+<p align="right">
+	<img src="../src/Hosts/rtaime.Operator/Assets/Brand/RtaimeLogoHorizontal.svg" alt="rtaime — Real Time AI Media Engine" width="180" />
+</p>
+
 # Production IPC & Remote API V1
 
 Production IPC & Remote API introduces the first real cross-process control plane for rtaime while preserving the approved 28-project topology and host authority boundaries. Process Recovery & Supervision extends the Runtime snapshot payload with the committed authority reference required for process recovery without changing those ownership boundaries.

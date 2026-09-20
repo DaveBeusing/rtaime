@@ -1,5 +1,9 @@
 <!-- Copyright (c) Dave Beusing <david.beusing@gmail.com>. -->
 
+<p align="right">
+	<img src="../src/Hosts/rtaime.Operator/Assets/Brand/RtaimeLogoHorizontal.svg" alt="rtaime — Real Time AI Media Engine" width="180" />
+</p>
+
 # V1 Functional Gap Closure
 
 **Scope:** V1 functional gap closure  

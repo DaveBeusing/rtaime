@@ -1,5 +1,9 @@
 <!-- Copyright (c) Dave Beusing <david.beusing@gmail.com>. -->
 
+<p align="right">
+	<img src="../src/Hosts/rtaime.Operator/Assets/Brand/RtaimeLogoHorizontal.svg" alt="rtaime — Real Time AI Media Engine" width="180" />
+</p>
+
 # Release Packaging & Offline Deployment
 
 ## Purpose
@@ -328,9 +332,9 @@ valid clean installation
 → install + post-install verification PASS
 ```
 
-## Funding showcase entry point
+## Product Showcase entry point
 
-The installed bundle root contains `Start-rtaime-Showcase.cmd` for the controlled funding-showcase workflow.
+The installed bundle root contains `Start-rtaime-Showcase.cmd` for the controlled Product Showcase workflow.
 
 The entry point does not create a parallel service manager. It delegates to the packaged showcase launcher, which reuses `Invoke-ManagedHostLifecycle.ps1`. ControlHost remains the top-level managed service process and retains RuntimeHost/AIHost supervision.
 

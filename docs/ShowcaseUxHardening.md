@@ -3,11 +3,15 @@ Copyright (c) 2026 Dave Beusing
 david.beusing@gmail.com
 -->
 
+<p align="right">
+	<img src="../src/Hosts/rtaime.Operator/Assets/Brand/RtaimeLogoHorizontal.svg" alt="rtaime — Real Time AI Media Engine" width="180" />
+</p>
+
 # Showcase UX Hardening
 
 ## Purpose
 
-This package removes visible prototype friction from the V1 funding showcase without adding product capability or moving production authority into the WPF Operator.
+This package removes visible prototype friction from the V1 Product Showcase without adding product capability or moving production authority into the WPF Operator.
 
 The scope is presentation and lifecycle quality only: layout consistency, keyboard behavior, tooltips, focus, empty/error states, DPI/reference-surface behavior, second-monitor presentation, startup focus, shutdown cleanup and controlled unexpected-error presentation.
 
