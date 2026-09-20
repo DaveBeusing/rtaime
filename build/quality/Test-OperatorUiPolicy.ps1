@@ -152,6 +152,84 @@ $mediaLibraryDocumentation = Get-Content -LiteralPath $mediaLibraryDocumentation
 $operatorXaml = (Get-ChildItem -LiteralPath (Join-Path $repositoryRoot "src/Hosts/rtaime.Operator") -Filter "*.xaml" -File -Recurse |
 	ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join "`n"
 
+# Repository-wide feature-XAML parity audit. Theme/control implementation XAML is intentionally
+# excluded because WPF base elements are required internally there and their default chrome
+# cannot escape the own rtaime control templates.
+$operatorXamlRoot = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator"
+$featureXamlFiles = @(Get-ChildItem -LiteralPath $operatorXamlRoot -Filter "*.xaml" -File -Recurse | Where-Object {
+	$relativePath = [System.IO.Path]::GetRelativePath($operatorXamlRoot, $_.FullName).Replace([System.IO.Path]::DirectorySeparatorChar, '/')
+	-not $relativePath.StartsWith("Themes/", [StringComparison]::OrdinalIgnoreCase) -and
+	-not $relativePath.StartsWith("bin/", [StringComparison]::OrdinalIgnoreCase) -and
+	-not $relativePath.StartsWith("obj/", [StringComparison]::OrdinalIgnoreCase)
+})
+
+$forbiddenFeatureElements = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+foreach ($name in @("Button", "ToggleButton", "CheckBox", "RadioButton", "TextBox", "ComboBox", "TabControl", "TabItem", "ListBox", "ListView", "TreeView", "DataGrid", "Slider", "ProgressBar", "ScrollBar", "ScrollViewer", "GridSplitter", "Menu", "MenuItem", "ContextMenu", "ToolBar")) {
+	[void]$forbiddenFeatureElements.Add($name)
+}
+
+$globalPaletteTokens = @{
+	"#071017" = "OperatorColorBackground"
+	"#09131B" = "OperatorColorTopBar"
+	"#0B151E" = "OperatorColorNavigation"
+	"#101B24" = "OperatorColorSurface"
+	"#121F29" = "OperatorColorAlternateSurface"
+	"#16242F" = "OperatorColorRaisedSurface"
+	"#1C2D38" = "OperatorColorRaisedHover"
+	"#25343F" = "OperatorColorBorder"
+	"#EEF3F6" = "OperatorColorText"
+	"#9AA8B4" = "OperatorColorSecondaryText"
+	"#16CDD3" = "OperatorColorAccent"
+	"#29D38B" = "OperatorColorHealthy"
+	"#FF4D52" = "OperatorColorError"
+	"#F6B84A" = "OperatorColorWarning"
+	"#3478D4" = "OperatorColorTimeline"
+	"#7259D7" = "OperatorColorGraphics"
+	"#22A977" = "OperatorColorAudio"
+}
+
+$featureAuditViolations = [System.Collections.Generic.List[string]]::new()
+foreach ($featureFile in $featureXamlFiles) {
+	$relativePath = [System.IO.Path]::GetRelativePath($operatorXamlRoot, $featureFile.FullName).Replace([System.IO.Path]::DirectorySeparatorChar, '/')
+	try {
+		[xml]$featureDocument = Get-Content -LiteralPath $featureFile.FullName -Raw
+	}
+	catch {
+		$featureAuditViolations.Add("$relativePath is not valid XML/XAML: $($_.Exception.Message)")
+		continue
+	}
+
+	foreach ($node in $featureDocument.SelectNodes("//*")) {
+		if ($forbiddenFeatureElements.Contains($node.LocalName)) {
+			$featureAuditViolations.Add("$relativePath contains direct stock WPF <$($node.LocalName)>.")
+		}
+
+		if ($node.LocalName.StartsWith("Rtaime", [StringComparison]::Ordinal) -and
+			-not $node.NamespaceURI.StartsWith("clr-namespace:rtaime.Operator.Controls", [StringComparison]::Ordinal)) {
+			$featureAuditViolations.Add("$relativePath uses '$($node.LocalName)' outside the own rtaime control namespace.")
+		}
+
+		if ($node.LocalName -eq "Border" -and $node.HasAttribute("CornerRadius")) {
+			$radiusValue = $node.GetAttribute("CornerRadius")
+			if ($radiusValue -match '^\d+(?:\.\d+)?(?:,\d+(?:\.\d+)?){0,3}$') {
+				$numericRadii = @($radiusValue.Split(",") | ForEach-Object { [double]::Parse($_, [Globalization.CultureInfo]::InvariantCulture) })
+				if (($numericRadii | Measure-Object -Maximum).Maximum -gt 4) {
+					$featureAuditViolations.Add("$relativePath contains numeric Border CornerRadius '$radiusValue'; panel/control radii must come from the 4/3 px token system.")
+				}
+			}
+		}
+
+		foreach ($attribute in $node.Attributes) {
+			$value = $attribute.Value.ToUpperInvariant()
+			if ($globalPaletteTokens.ContainsKey($value)) {
+				$featureAuditViolations.Add("$relativePath hardcodes global palette value '$value'; use token '$($globalPaletteTokens[$value])'.")
+			}
+		}
+	}
+}
+
+Assert-Condition ($featureAuditViolations.Count -eq 0) ("Feature XAML parity audit failed:`n - " + ($featureAuditViolations -join "`n - "))
+
 $topBarStart = $window.IndexOf('x:Name="TopBar"', [StringComparison]::Ordinal)
 $bodyStart = $window.IndexOf('<Grid Grid.Row="1" ClipToBounds="True">', [StringComparison]::Ordinal)
 $navigationStart = $window.IndexOf('x:Name="WorkspaceNavigation"', [StringComparison]::Ordinal)
@@ -369,7 +447,7 @@ foreach ($trackLabel in @("V3  GRAPHICS", "V2  VIDEO", "V1  VIDEO", "A1  MUSIC",
 Assert-Condition ($timelineViewModel -match 'RowHeight => IsVideoLane \? 42\.0 : 40\.0' -and $timelineViewModel -match 'IsVideoLane' -and $timelineViewModel -match 'IsAudioLane') "Timeline rows must retain approximately 42px video/graphics and 40px audio density."
 Assert-Condition ($timeline -match '<RowDefinition Height="44" />' -and $timeline -match '<RowDefinition Height="30" />' -and $timeline -match '<ColumnDefinition Width="238" />') "Timeline must retain the 44px toolbar, 30px ruler and 238px track-header reference geometry."
 Assert-Condition ($tokens -match '<sys:Double x:Key="OperatorTimelineHeight">320</sys:Double>' -and $shell -match 'DefaultLowerPanelHeight = 320') "Timeline default shell height must remain exactly 320px."
-Assert-Condition ($timeline -match '#0C151D' -and $timeline -match '#111D26' -and $timeline -match '#3478D4' -and $timeline -match '#7259D7' -and $timeline -match '#22A977') "Timeline must retain the mockup background, ruler and video/graphics/audio palette."
+Assert-Condition ($timeline -match '#0C151D' -and $timeline -match '#111D26' -and $timeline -match 'OperatorColorTimeline' -and $timeline -match 'OperatorColorGraphics' -and $timeline -match 'OperatorColorAudio' -and $timeline -match 'OperatorColorWarning') "Timeline must retain local background/ruler colors while shared semantic colors come from the global token palette."
 Assert-Condition ($timeline -match 'ItemsSource="\{Binding RulerTicks\}"' -and $timelineViewModel -match 'TimelineRulerTickViewModel') "Timeline must expose a frame-derived time ruler."
 Assert-Condition ($timeline -match 'Path="DisplayFrame"' -and $timeline -match 'Width="2"' -and $timeline -match 'OperatorAccentBrush' -and $timeline -match '<Polygon Points="0,0 10,0 5,7"') "Timeline playhead must use the cyan 2px line and cyan head treatment."
 Assert-Condition ($timeline -match 'ItemsSource="\{Binding VisibleCues\}"' -and $timeline -match 'TimelineCueMarker' -and $timeline -match 'Cue_PreviewMouseLeftButtonDown') "Cue markers must render above the tracks through the existing cue projection."

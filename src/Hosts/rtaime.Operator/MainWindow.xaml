@@ -721,7 +721,7 @@
 						<StackPanel>
 							<DockPanel Margin="0,0,0,8">
 								<TextBlock Text="QUICK CONTROLS" Style="{StaticResource OperatorSectionTitle}" />
-								<Button Content="CLEAR PINS" Command="{Binding QuickControls.ClearPinsCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorButton}" MinHeight="26" Padding="8,2" DockPanel.Dock="Right" />
+								<controls:RtaimeButton Content="CLEAR PINS" Command="{Binding QuickControls.ClearPinsCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"  MinHeight="26" Padding="8,2" DockPanel.Dock="Right" />
 							</DockPanel>
 							<ItemsControl ItemsSource="{Binding QuickControls.Items, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
 								<ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
@@ -731,7 +731,7 @@
 											<StackPanel>
 												<DockPanel>
 													<TextBlock Text="{Binding Label}" FontWeight="SemiBold" />
-													<Button Content="×" Command="{Binding RemoveCommand}" Style="{StaticResource OperatorButton}" MinWidth="25" MinHeight="22" Padding="3,0" DockPanel.Dock="Right" ToolTip="Remove Quick Control" />
+													<controls:RtaimeButton Content="×" Command="{Binding RemoveCommand}"  MinWidth="25" MinHeight="22" Padding="3,0" DockPanel.Dock="Right" ToolTip="Remove Quick Control" />
 												</DockPanel>
 												<DockPanel Margin="0,5,0,6">
 													<TextBlock Text="{Binding State}" Style="{StaticResource OperatorLabel}" />
@@ -739,15 +739,15 @@
 												</DockPanel>
 												<Grid>
 													<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="5" /><ColumnDefinition Width="*" /><ColumnDefinition Width="5" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-													<Button Grid.Column="0" Content="−" Command="{Binding DecreaseCommand}">
-														<Button.Style><Style TargetType="Button" BasedOn="{StaticResource OperatorButton}"><Setter Property="Visibility" Value="Visible" /><Style.Triggers><DataTrigger Binding="{Binding HasDecrease}" Value="False"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger></Style.Triggers></Style></Button.Style>
-													</Button>
-													<Button Grid.Column="2" Content="{Binding ActionLabel}" Command="{Binding PrimaryCommand}">
-														<Button.Style><Style TargetType="Button" BasedOn="{StaticResource OperatorAccentButton}"><Setter Property="Visibility" Value="Visible" /><Style.Triggers><DataTrigger Binding="{Binding HasPrimary}" Value="False"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger></Style.Triggers></Style></Button.Style>
-													</Button>
-													<Button Grid.Column="4" Content="+" Command="{Binding IncreaseCommand}">
-														<Button.Style><Style TargetType="Button" BasedOn="{StaticResource OperatorButton}"><Setter Property="Visibility" Value="Visible" /><Style.Triggers><DataTrigger Binding="{Binding HasIncrease}" Value="False"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger></Style.Triggers></Style></Button.Style>
-													</Button>
+													<controls:RtaimeButton Grid.Column="0" Content="−" Command="{Binding DecreaseCommand}">
+														<controls:RtaimeButton.Style><Style TargetType="{x:Type controls:RtaimeButton}" BasedOn="{StaticResource {x:Type controls:RtaimeButton}}"><Setter Property="Visibility" Value="Visible" /><Style.Triggers><DataTrigger Binding="{Binding HasDecrease}" Value="False"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger></Style.Triggers></Style></controls:RtaimeButton.Style>
+													</controls:RtaimeButton>
+													<controls:RtaimeButton Grid.Column="2" Content="{Binding ActionLabel}" Command="{Binding PrimaryCommand}">
+														<controls:RtaimeButton.Style><Style TargetType="{x:Type controls:RtaimeButton}" BasedOn="{StaticResource {x:Type controls:RtaimeButton}}"><Setter Property="Background" Value="{DynamicResource OperatorAccentSurfaceBrush}" /><Setter Property="BorderBrush" Value="{DynamicResource OperatorAccentBrush}" /><Setter Property="Visibility" Value="Visible" /><Style.Triggers><DataTrigger Binding="{Binding HasPrimary}" Value="False"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger></Style.Triggers></Style></controls:RtaimeButton.Style>
+													</controls:RtaimeButton>
+													<controls:RtaimeButton Grid.Column="4" Content="+" Command="{Binding IncreaseCommand}">
+														<controls:RtaimeButton.Style><Style TargetType="{x:Type controls:RtaimeButton}" BasedOn="{StaticResource {x:Type controls:RtaimeButton}}"><Setter Property="Visibility" Value="Visible" /><Style.Triggers><DataTrigger Binding="{Binding HasIncrease}" Value="False"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger></Style.Triggers></Style></controls:RtaimeButton.Style>
+													</controls:RtaimeButton>
 												</Grid>
 											</StackPanel>
 										</Border>
@@ -1240,9 +1240,9 @@
 									<ColumnDefinition Width="6" />
 									<ColumnDefinition Width="*" />
 								</Grid.ColumnDefinitions>
-								<Button Grid.Column="0" Content="START OUTPUT" Command="{Binding ProgramOutput.StartCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorProgramButton}" ToolTip="Open clean Program monitoring on the selected display without changing physical Program output." />
-								<Button Grid.Column="2" Content="STOP OUTPUT" Command="{Binding ProgramOutput.StopCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorButton}" ToolTip="Close the clean Program feed." />
-								<Button Grid.Column="4" Content="{Binding ProgramOutput.FullscreenAction, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Command="{Binding ProgramOutput.ToggleFullscreenCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorAccentButton}" ToolTip="Toggle the clean feed between fullscreen and windowed presentation." />
+								<controls:RtaimeButton Grid.Column="0" Content="START OUTPUT" Command="{Binding ProgramOutput.StartCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Background="{DynamicResource OperatorProgramSurfaceBrush}" BorderBrush="{DynamicResource OperatorProgramBrush}" ToolTip="Open clean Program monitoring on the selected display without changing physical Program output." />
+								<controls:RtaimeButton Grid.Column="2" Content="STOP OUTPUT" Command="{Binding ProgramOutput.StopCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"  ToolTip="Close the clean Program feed." />
+								<controls:RtaimeButton Grid.Column="4" Content="{Binding ProgramOutput.FullscreenAction, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Command="{Binding ProgramOutput.ToggleFullscreenCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Background="{DynamicResource OperatorAccentSurfaceBrush}" BorderBrush="{DynamicResource OperatorAccentBrush}" ToolTip="Toggle the clean feed between fullscreen and windowed presentation." />
 							</Grid>
 							<DockPanel Margin="0,0,0,6">
 								<TextBlock Text="State" Style="{StaticResource OperatorLabel}" />
@@ -1296,8 +1296,8 @@
 									<ColumnDefinition Width="6" />
 									<ColumnDefinition Width="*" />
 								</Grid.ColumnDefinitions>
-								<Button Grid.Column="0" Content="LOAD PNG" Command="{Binding LoadGraphicsCommand}" Style="{StaticResource OperatorAccentButton}" />
-								<Button Grid.Column="2" Content="APPLY POSITION" Command="{Binding ApplyGraphicsCommand}" Style="{StaticResource OperatorButton}" />
+								<controls:RtaimeButton Grid.Column="0" Content="LOAD PNG" Command="{Binding LoadGraphicsCommand}" Background="{DynamicResource OperatorAccentSurfaceBrush}" BorderBrush="{DynamicResource OperatorAccentBrush}" />
+								<controls:RtaimeButton Grid.Column="2" Content="APPLY POSITION" Command="{Binding ApplyGraphicsCommand}"  />
 							</Grid>
 							<Grid Margin="0,6,0,0">
 								<Grid.ColumnDefinitions>
@@ -1305,8 +1305,8 @@
 									<ColumnDefinition Width="6" />
 									<ColumnDefinition Width="*" />
 								</Grid.ColumnDefinitions>
-								<Button Grid.Column="0" Content="SHOW / HIDE" Command="{Binding ToggleGraphicsCommand}" Style="{StaticResource OperatorProgramButton}" />
-								<Button Grid.Column="2" Content="CLEAR" Command="{Binding ClearGraphicsCommand}" Style="{StaticResource OperatorButton}" />
+								<controls:RtaimeButton Grid.Column="0" Content="SHOW / HIDE" Command="{Binding ToggleGraphicsCommand}" Background="{DynamicResource OperatorProgramSurfaceBrush}" BorderBrush="{DynamicResource OperatorProgramBrush}" />
+								<controls:RtaimeButton Grid.Column="2" Content="CLEAR" Command="{Binding ClearGraphicsCommand}"  />
 							</Grid>
 							<TextBlock Text="Graphics are composited in RuntimeHost after the transition and before Program monitoring / recording." Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,10,0,0" />
 						</StackPanel>
@@ -1332,20 +1332,20 @@
 							<Grid Margin="0,0,0,3">
 								<Grid.ColumnDefinitions><ColumnDefinition Width="24" /><ColumnDefinition Width="*" /><ColumnDefinition Width="48" /></Grid.ColumnDefinitions>
 								<TextBlock Text="L" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" />
-								<ProgressBar Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding AudioLeftPeak, Mode=OneWay}" Style="{StaticResource OperatorMeter}" VerticalAlignment="Center" />
+								<controls:RtaimeMetricBar Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding AudioLeftPeak, Mode=OneWay}" Height="4" Foreground="{DynamicResource OperatorAudioBrush}" VerticalAlignment="Center" />
 								<TextBlock Grid.Column="2" Text="{Binding AudioLeftPeak, StringFormat={}{0:P0}}" Style="{StaticResource OperatorLabel}" HorizontalAlignment="Right" />
 							</Grid>
 							<Grid Margin="0,0,0,10">
 								<Grid.ColumnDefinitions><ColumnDefinition Width="24" /><ColumnDefinition Width="*" /><ColumnDefinition Width="48" /></Grid.ColumnDefinitions>
 								<TextBlock Text="R" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" />
-								<ProgressBar Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding AudioRightPeak, Mode=OneWay}" Style="{StaticResource OperatorMeter}" VerticalAlignment="Center" />
+								<controls:RtaimeMetricBar Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding AudioRightPeak, Mode=OneWay}" Height="4" Foreground="{DynamicResource OperatorAudioBrush}" VerticalAlignment="Center" />
 								<TextBlock Grid.Column="2" Text="{Binding AudioRightPeak, StringFormat={}{0:P0}}" Style="{StaticResource OperatorLabel}" HorizontalAlignment="Right" />
 							</Grid>
 							<DockPanel Margin="0,0,0,10">
 								<TextBlock Text="MASTER" Style="{StaticResource OperatorLabel}" />
 								<TextBlock Text="{Binding AudioPeakPercent}" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" DockPanel.Dock="Right" />
 							</DockPanel>
-							<ProgressBar Minimum="0" Maximum="1" Value="{Binding AudioMasterPeak, Mode=OneWay}" Style="{StaticResource OperatorMeter}" Margin="0,0,0,12" />
+							<controls:RtaimeMetricBar Minimum="0" Maximum="1" Value="{Binding AudioMasterPeak, Mode=OneWay}" Height="4" Foreground="{DynamicResource OperatorAudioBrush}" Margin="0,0,0,12" />
 							<controls:RtaimeListBox ItemsSource="{Binding AudioInputs}" SelectedItem="{Binding SelectedAudioInput}" Style="{StaticResource RtaimeSourceBank}" MaxHeight="190" Margin="0,0,0,10">
 								<controls:RtaimeListBox.ItemContainerStyle><StaticResource ResourceKey="OperatorSourceItem" /></controls:RtaimeListBox.ItemContainerStyle>
 								<controls:RtaimeListBox.ItemTemplate>
@@ -1361,8 +1361,8 @@
 											</DockPanel>
 											<Grid>
 												<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="6" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-												<ProgressBar Grid.Column="0" Minimum="0" Maximum="1" Value="{Binding LeftPeak, Mode=OneWay}" Style="{StaticResource OperatorMeter}" />
-												<ProgressBar Grid.Column="2" Minimum="0" Maximum="1" Value="{Binding RightPeak, Mode=OneWay}" Style="{StaticResource OperatorMeter}" />
+												<controls:RtaimeMetricBar Grid.Column="0" Minimum="0" Maximum="1" Value="{Binding LeftPeak, Mode=OneWay}" Height="4" Foreground="{DynamicResource OperatorAudioBrush}" />
+												<controls:RtaimeMetricBar Grid.Column="2" Minimum="0" Maximum="1" Value="{Binding RightPeak, Mode=OneWay}" Height="4" Foreground="{DynamicResource OperatorAudioBrush}" />
 											</Grid>
 										</StackPanel>
 									</DataTemplate>
@@ -1381,8 +1381,8 @@
 							</Grid>
 							<Grid>
 								<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="6" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-								<Button Grid.Column="0" Content="APPLY GAIN" Command="{Binding ApplyAudioGainCommand}" Style="{StaticResource OperatorAccentButton}" />
-								<Button Grid.Column="2" Content="{Binding SelectedAudioInput.MuteActionLabel}" Command="{Binding ToggleAudioMuteCommand}" Style="{StaticResource OperatorButton}" />
+								<controls:RtaimeButton Grid.Column="0" Content="APPLY GAIN" Command="{Binding ApplyAudioGainCommand}" Background="{DynamicResource OperatorAccentSurfaceBrush}" BorderBrush="{DynamicResource OperatorAccentBrush}" />
+								<controls:RtaimeButton Grid.Column="2" Content="{Binding SelectedAudioInput.MuteActionLabel}" Command="{Binding ToggleAudioMuteCommand}"  />
 							</Grid>
 							<DockPanel Margin="0,10,0,0">
 								<TextBlock Text="Clip audio" Style="{StaticResource OperatorLabel}" />
@@ -1411,8 +1411,8 @@
 							<controls:RtaimeTextBox Text="{Binding RecordingFileName, UpdateSourceTrigger=PropertyChanged}"  Margin="0,4,0,10" />
 							<Grid Margin="0,0,0,10">
 								<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="6" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-								<Button Grid.Column="0" Content="START REC" Command="{Binding StartRecordingCommand}" Style="{StaticResource OperatorProgramButton}" ToolTip="Start recording confirmed Program video/audio/graphics." />
-								<Button Grid.Column="2" Content="STOP REC" Command="{Binding StopRecordingCommand}" Style="{StaticResource OperatorButton}" ToolTip="Stop and finalize the active Program recording." />
+								<controls:RtaimeButton Grid.Column="0" Content="START REC" Command="{Binding StartRecordingCommand}" Background="{DynamicResource OperatorProgramSurfaceBrush}" BorderBrush="{DynamicResource OperatorProgramBrush}" ToolTip="Start recording confirmed Program video/audio/graphics." />
+								<controls:RtaimeButton Grid.Column="2" Content="STOP REC" Command="{Binding StopRecordingCommand}"  ToolTip="Stop and finalize the active Program recording." />
 							</Grid>
 							<DockPanel Margin="0,0,0,6">
 								<TextBlock Text="Samples" Style="{StaticResource OperatorLabel}" />
@@ -1442,8 +1442,8 @@
 							<DockPanel Margin="0,0,0,10"><TextBlock Text="Synchronization" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding AISynchronization}" Style="{StaticResource OperatorLabel}" DockPanel.Dock="Right" /></DockPanel>
 							<Grid>
 								<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="6" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-								<Button Grid.Column="0" Content="AI ON" Command="{Binding EnableAIShowcaseCommand}" Style="{StaticResource OperatorAccentButton}" ToolTip="Enable the governed Person Segmentation Highlight through AIHost." />
-								<Button Grid.Column="2" Content="AI OFF" Command="{Binding DisableAIShowcaseCommand}" Style="{StaticResource OperatorButton}" ToolTip="Disable the AI showcase effect without interrupting Program." />
+								<controls:RtaimeButton Grid.Column="0" Content="AI ON" Command="{Binding EnableAIShowcaseCommand}" Background="{DynamicResource OperatorAccentSurfaceBrush}" BorderBrush="{DynamicResource OperatorAccentBrush}" ToolTip="Enable the governed Person Segmentation Highlight through AIHost." />
+								<controls:RtaimeButton Grid.Column="2" Content="AI OFF" Command="{Binding DisableAIShowcaseCommand}"  ToolTip="Disable the AI showcase effect without interrupting Program." />
 							</Grid>
 							<TextBlock Text="{Binding AIError}" Foreground="{DynamicResource OperatorWarningBrush}" TextWrapping="Wrap" Margin="0,8,0,0" />
 							<TextBlock Text="Inference executes in AIHost. RuntimeHost applies only synchronized segmentation results; failure falls back to clean Program." Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,8,0,0" />

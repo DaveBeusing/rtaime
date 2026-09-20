@@ -386,6 +386,18 @@ The detailed operator and authority semantics are documented in docs/LayeredTime
 - UI policy verifies cyan playhead/cue markers, custom controls, zoom/scroll, trim preview/commit/cancel paths, multi-selection-to-Inspector integration and viewport-bounded projection refresh;
 - stable track and cue projections remain hash-gated so routine playback observations do not allocate a new composition model per frame.
 
+## Pixel-parity hardening
+
+The Operator uses the 1920×1080 at 100 percent reference as the binding pixel-layout baseline: 60 px top bar, 92 px navigation, 400 px Media Library, 1070 px center, 340 px Inspector, 700 px upper workspace, 320 px timeline and 6 px region gaps. Dual Preview/Program remains the approximately equal 532 / 6 / 532 split, the Inspector extends beside the lower region, and the timeline terminates before the Inspector.
+
+Feature XAML below `src/Hosts/rtaime.Operator/` is statically audited as XML by `build/quality/Test-OperatorUiPolicy.ps1`. Direct visible WPF Button, ToggleButton, CheckBox, RadioButton, TextBox, ComboBox, Tab/List/Tree/DataGrid, Slider/ProgressBar, scrolling, splitter, menu and toolbar elements fail CI. Theme/control implementation dictionaries remain the only permitted location for WPF base primitives required to implement the own rtaime controls.
+
+The same structured audit rejects numeric feature `Border` radii above the 4 px panel contract and rejects hardcoded uses of the shared global palette where an Operator color token exists. Local purpose-specific colors such as the compositing graph grid and timeline ruler/background remain local because they are not global semantic palette values.
+
+Media Deck, Quick Controls, clean Program controls, Graphics, Audio, Recording and AI actions now use the own `RtaimeButton` family. Audio meter surfaces use `RtaimeMetricBar` rather than visible stock `ProgressBar` chrome. Timeline and Compositing semantic colors resolve through the shared color tokens instead of duplicating global hex values.
+
+DPI/layout qualification keeps the same structure at 2560×1440 at 100 percent, 1920×1080 at 125 percent and 3840×2160 at 150/200 percent. The center can grow at larger viewports; reference shell dimensions, control chrome, borders and glyph resources do not fall back to native WPF visuals.
+
 ## Verification
 
 `build/quality/Test-OperatorUiPolicy.ps1` verifies the primary UI architectural and UX guardrails, including:
