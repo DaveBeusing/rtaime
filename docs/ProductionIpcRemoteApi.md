@@ -72,11 +72,14 @@ Operator-facing messages:
 - `control.preview.select`
 - `control.program.cut`
 - `control.program.dissolve`
+- `control.test_pattern.set`
 - `control.media_deck.snapshot.get`
 - `control.media_deck.open`
 - `control.media_deck.transport`
 - `control.media_deck.marker`
 - `control.media_deck.close`
+
+The `control.test_pattern.set` message validates that the selected slot belongs to the authoritative production, then delegates the generated-source state change to RuntimeHost. The Operator never addresses RuntimeHost directly.
 
 The media-deck messages preserve the same authority direction. Operator intent enters ControlHost, which validates the selected production source slot, owns persisted IN/OUT and cue metadata, and proxies decode/transport execution to RuntimeHost. The Operator does not obtain direct RuntimeHost access.
 
@@ -101,6 +104,7 @@ Control-facing messages:
 - `runtime.providers.get`
 - `runtime.snapshot.get`
 - `runtime.execution.apply`
+- `runtime.test_pattern.set`
 - `runtime.media_deck.snapshot.get`
 - `runtime.media_deck.open`
 - `runtime.media_deck.transport`
