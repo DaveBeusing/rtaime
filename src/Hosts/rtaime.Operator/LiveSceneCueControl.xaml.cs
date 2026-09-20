@@ -1,5 +1,6 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
+using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 

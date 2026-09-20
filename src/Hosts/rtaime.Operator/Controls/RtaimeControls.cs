@@ -190,6 +190,127 @@ public class RtaimeMetricBar : ProgressBar
 	}
 }
 
+public class RtaimeMetricRing : System.Windows.Controls.Control
+{
+	static RtaimeMetricRing()
+	{
+		IsHitTestVisibleProperty.OverrideMetadata(typeof(RtaimeMetricRing), new FrameworkPropertyMetadata(false));
+	}
+
+	public static readonly DependencyProperty ValueProperty = DependencyProperty.Register(
+		nameof(Value),
+		typeof(double),
+		typeof(RtaimeMetricRing),
+		new FrameworkPropertyMetadata(0d, FrameworkPropertyMetadataOptions.AffectsRender));
+
+	public static readonly DependencyProperty MinimumProperty = DependencyProperty.Register(
+		nameof(Minimum),
+		typeof(double),
+		typeof(RtaimeMetricRing),
+		new FrameworkPropertyMetadata(0d, FrameworkPropertyMetadataOptions.AffectsRender));
+
+	public static readonly DependencyProperty MaximumProperty = DependencyProperty.Register(
+		nameof(Maximum),
+		typeof(double),
+		typeof(RtaimeMetricRing),
+		new FrameworkPropertyMetadata(100d, FrameworkPropertyMetadataOptions.AffectsRender));
+
+	public static readonly DependencyProperty HasValueProperty = DependencyProperty.Register(
+		nameof(HasValue),
+		typeof(bool),
+		typeof(RtaimeMetricRing),
+		new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender));
+
+	public static readonly DependencyProperty RingThicknessProperty = DependencyProperty.Register(
+		nameof(RingThickness),
+		typeof(double),
+		typeof(RtaimeMetricRing),
+		new FrameworkPropertyMetadata(5d, FrameworkPropertyMetadataOptions.AffectsRender));
+
+	public double Value
+	{
+		get => (double)GetValue(ValueProperty);
+		set => SetValue(ValueProperty, value);
+	}
+
+	public double Minimum
+	{
+		get => (double)GetValue(MinimumProperty);
+		set => SetValue(MinimumProperty, value);
+	}
+
+	public double Maximum
+	{
+		get => (double)GetValue(MaximumProperty);
+		set => SetValue(MaximumProperty, value);
+	}
+
+	public bool HasValue
+	{
+		get => (bool)GetValue(HasValueProperty);
+		set => SetValue(HasValueProperty, value);
+	}
+
+	public double RingThickness
+	{
+		get => (double)GetValue(RingThicknessProperty);
+		set => SetValue(RingThicknessProperty, value);
+	}
+
+	protected override void OnRender(DrawingContext drawingContext)
+	{
+		base.OnRender(drawingContext);
+
+		var thickness = Math.Clamp(double.IsFinite(RingThickness) ? RingThickness : 5d, 1d, 12d);
+		var radius = Math.Max(0d, (Math.Min(ActualWidth, ActualHeight) - thickness) / 2d);
+		if (radius <= 0)
+			return;
+
+		var center = new Point(ActualWidth / 2d, ActualHeight / 2d);
+		var trackBrush = BorderBrush ?? Brushes.Transparent;
+		var valueBrush = Foreground ?? Brushes.Transparent;
+		drawingContext.DrawEllipse(null, new Pen(trackBrush, thickness), center, radius, radius);
+
+		if (!HasValue)
+			return;
+
+		var span = Maximum - Minimum;
+		if (!double.IsFinite(span) || span <= 0)
+			return;
+
+		var normalized = Math.Clamp((Value - Minimum) / span, 0d, 1d);
+		if (normalized <= 0)
+			return;
+
+		var angle = normalized * 359.99d;
+		var start = PointOnRing(center, radius, -90d);
+		var end = PointOnRing(center, radius, -90d + angle);
+		var figure = new PathFigure { StartPoint = start, IsClosed = false, IsFilled = false };
+		figure.Segments.Add(new ArcSegment(
+			end,
+			new Size(radius, radius),
+			0,
+			angle > 180d,
+			SweepDirection.Clockwise,
+			true));
+		var geometry = new PathGeometry();
+		geometry.Figures.Add(figure);
+		drawingContext.DrawGeometry(null, new Pen(valueBrush, thickness)
+		{
+			StartLineCap = PenLineCap.Round,
+			EndLineCap = PenLineCap.Round
+		}, geometry);
+	}
+
+	private static Point PointOnRing(Point center, double radius, double degrees)
+	{
+		var radians = degrees * Math.PI / 180d;
+		return new Point(
+			center.X + (Math.Cos(radians) * radius),
+			center.Y + (Math.Sin(radians) * radius));
+	}
+}
+
 public class RtaimeTimecode : ContentControl
 {
 	static RtaimeTimecode()

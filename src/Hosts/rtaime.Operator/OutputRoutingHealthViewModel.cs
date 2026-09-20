@@ -106,6 +106,11 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 	public ObservableCollection<OutputStatusViewModel> Outputs { get; }
 	public ObservableCollection<PerformanceMetricViewModel> Metrics { get; }
 	public ObservableCollection<SystemHealthStatusViewModel> SystemHealth { get; }
+	public PerformanceMetricViewModel CpuMetric => _metrics["cpu"];
+	public PerformanceMetricViewModel GpuMetric => _metrics["gpu"];
+	public PerformanceMetricViewModel MemoryMetric => _metrics["memory"];
+	public PerformanceMetricViewModel VramMetric => _metrics["vram"];
+	public PerformanceMetricViewModel RenderMetric => _metrics["render"];
 	public PerformanceMetricViewModel DiskMetric => _metrics["disk"];
 	public PerformanceMetricViewModel NetworkMetric => _metrics["network"];
 	public PerformanceMetricViewModel TemperatureMetric => _metrics["temperature"];
@@ -568,6 +573,7 @@ public sealed class PerformanceMetricViewModel : INotifyPropertyChanged
 	private string _detail = "Telemetry is unavailable.";
 	private PointCollection _historyPoints = new();
 	private double _gaugeValue;
+	private bool _hasGaugeSample;
 
 	public PerformanceMetricViewModel(string name)
 	{
@@ -582,6 +588,7 @@ public sealed class PerformanceMetricViewModel : INotifyPropertyChanged
 	public string Status { get => _status; private set => Set(ref _status, value); }
 	public string Detail { get => _detail; private set => Set(ref _detail, value); }
 	public double GaugeValue { get => _gaugeValue; private set => Set(ref _gaugeValue, value); }
+	public bool HasGaugeSample { get => _hasGaugeSample; private set => Set(ref _hasGaugeSample, value); }
 	public PointCollection HistoryPoints { get => _historyPoints; private set => Set(ref _historyPoints, value); }
 
 	internal void Update(
@@ -595,7 +602,16 @@ public sealed class PerformanceMetricViewModel : INotifyPropertyChanged
 		EvidenceState = evidenceState;
 		Status = status;
 		Detail = detail;
-		GaugeValue = sample is { } gauge && double.IsFinite(gauge) ? Math.Clamp(gauge, 0, 100) : 0;
+		if (sample is { } gauge && double.IsFinite(gauge))
+		{
+			HasGaugeSample = true;
+			GaugeValue = Math.Clamp(gauge, 0, 100);
+		}
+		else
+		{
+			HasGaugeSample = false;
+			GaugeValue = 0;
+		}
 
 		if (sample is not { } numeric || !double.IsFinite(numeric))
 			return;

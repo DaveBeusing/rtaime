@@ -1,56 +1,101 @@
-<!--
-Copyright (c) 2026 Dave Beusing
-david.beusing@gmail.com
-All rights reserved.
--->
+<!-- Copyright (c) Dave Beusing <david.beusing@gmail.com>. -->
 
 # Compositing Node Graph
 
 ## Purpose
 
-The COMPOSITING workspace presents the currently observable production path as a compact, read-only-first node graph. It is an Operator projection over existing source, routing, graphics, Runtime health and recording state; it is not a second execution or routing authority.
+The COMPOSITING workspace presents the observable production path as a compact, read-only-first node graph. It is an Operator projection over existing source, routing, graphics, Runtime health, monitoring and recording state; it is not a second execution or routing authority.
 
-## Projected topology
+## Reference composition
 
-The graph uses stable node identities and projects the following existing product concepts:
+The global production shell is preserved. Media Library remains on the left, the existing 340 px Inspector remains on the far right and the existing 320 px Timeline remains in the lower shell region.
 
-- current production sources;
-- Preview / Program routing;
-- Preview monitoring;
-- the loaded graphics layer and its existing X / Y / Scale transform;
-- the GPU composite stage represented by the qualified Runtime composition path;
-- Program output;
-- Program recording.
+Inside the 1070×700 center surface, COMPOSITING uses the reference **64 / 6 / 36** horizontal split:
 
-Connections are directional and are rendered separately from node controls. Inactive optional paths, such as a hidden graphics layer or an idle recorder, remain visible with reduced emphasis so the Operator can understand the complete available path without mistaking it for an active signal route.
+- approximately 64% for the node graph;
+- 6 px gap;
+- approximately 36% for the Preview and System & Performance stack.
+
+The right stack reuses the established Preview monitor at 390 px high, followed by a 6 px gap and the compact System & Performance panel. No second Preview monitor transport, decoder or timeline is created.
+
+## Node graph visual contract
+
+The graph follows the compositing mockup palette and density:
+
+- graph background: `#0A141C`;
+- minor grid: `#13222C`;
+- major grid: `#1B303C`;
+- node radius: 4 px;
+- node padding: 10 px;
+- neutral connections: 2 px;
+- active connections: cyan;
+- selected node: cyan outline;
+- no large node shadows.
+
+Category identity is shown by a narrow node accent rather than coloring every node outline. Inputs are presented on the left and outputs on the right.
+
+The current product data supports these mockup-facing roles:
+
+- **Media Input** — current source and graphics-source projections;
+- **Output Router** — current Preview / Program routing;
+- **Transform** — the existing graphics X / Y / Scale transform;
+- **Merge** — the current GPU composite stage;
+- **Output** — Preview and Program output projections;
+- **Recorder** — the current Program recorder.
+
+Processing/Enhance, Color Grade and Keying are not rendered because the current projection does not expose authoritative nodes for those roles.
+
+## Stable topology and interaction
+
+The graph uses stable node identities. Ordinary status refreshes update the existing node view models in place and do not reset node positions. Source collection or topology changes may invoke deterministic Auto Layout.
+
+SELECT projects the chosen node into the existing Inspector. PAN, mouse-wheel zoom, FIT, 100% reset and AUTO LAYOUT remain presentation-only operations. Middle-mouse panning remains available independently of the active interaction mode.
+
+Arbitrary Runtime topology rewiring is not exposed by the current contracts. The toolbar therefore states **READ-ONLY TOPOLOGY** and does not provide a decorative REWIRE action.
+
+Node selection never performs Set Preview, CUT, AUTO, graphics mutation, recording mutation or another production command.
+
+## Preview
+
+The right-side Preview reuses the same `PreviewViewer` and monitor chrome used elsewhere in the Operator. It consumes the existing monitoring image, source identity, format, timecode, Media Deck transport, cue navigation, fit/maximize and fullscreen paths.
+
+The compositing workspace does not create another monitoring or playback path.
+
+## System & Performance
+
+The System & Performance panel is a view over the existing `OutputRoutingHealthViewModel` and Operator lifecycle evidence.
+
+CPU, GPU and system Memory use the own `RtaimeMetricRing` presentation. A ring draws a value arc only when a real numeric sample exists. CPU and system Memory remain `UNAVAILABLE / UNVERIFIED` because the current health contract does not publish those metrics. GPU uses the existing Runtime-published utilization value when available.
+
+VRAM and Render Time reuse their existing Runtime-derived values. The small history graph uses only the bounded existing GPU sample history. The panel adds no timer, hardware query, Performance Counter, NVML call or other telemetry probe.
+
+This is **real telemetry only**: missing data remains visibly unavailable rather than being converted into zero, healthy or estimated values.
+
+## Inspector integration
+
+Selecting a graph node uses the existing shared Inspector path. Node status, detail, ports, health and read-only rewiring capability remain Inspector projection data rather than a separate editor model.
 
 ## Authority boundary
 
-CompositingGraphProjector is a deterministic Client-side projection over already observed state. It does not own Runtime execution, routing, media processing, graphics composition or recording.
+`CompositingGraphProjector` is a deterministic Client-side projection over already observed state. It does not own Runtime execution, routing, media processing, graphics composition or recording.
 
-CompositingGraphViewModel consumes the existing OperatorViewModel projection and updates existing node instances by stable identity. Status refreshes therefore retain presentation positions. Source collection changes may trigger deterministic Auto Layout, while ordinary live status updates do not reposition nodes.
+`CompositingGraphViewModel` consumes the existing `OperatorViewModel` projection and updates existing node instances by stable identity. No graph action introduces a second production-state store.
 
-The current Runtime and Control contracts do not expose arbitrary topology rewiring. The workspace therefore exposes REWIRE as visibly disabled and all graph nodes report read-only capability to the shared Inspector. No local graph action is allowed to imply an authoritative topology mutation.
+## Verification
 
-## Operator interaction
+`build/quality/Test-OperatorUiPolicy.ps1` verifies:
 
-The graph toolbar provides:
-
-- SELECT for node inspection;
-- PAN for left-button canvas movement;
-- FIT for fitting the current graph into the viewport;
-- 100 % for presentation reset;
-- AUTO LAYOUT for deterministic presentation layout;
-- REWIRE as a disabled capability indicator.
-
-Mouse-wheel zoom is centered on the current pointer. Middle-mouse panning is available independently of the active interaction mode.
-
-Selecting a node projects that node into the existing shared Inspector. Selecting a source node also updates the existing non-destructive Operator source selection, but never performs Set Preview, CUT, AUTO or another routing mutation.
-
-## Health presentation
-
-Node health is derived from already exposed source, Runtime, GPU, commit, graphics and recording observations. Explicit failure/offline/error evidence is shown as an error state. Degraded, unavailable, unverified, stale or startup evidence is shown as degraded rather than falsely green.
-
-## Testing
-
-The projection is covered for node and connection mapping, stable identities across status updates, error/degraded state, read-only rewiring and a larger-graph performance smoke. Operator UI policy checks protect the presentation-only dependency boundary and the integration with the shared Inspector.
+- the 64 / 6 / 36 center split;
+- exact graph background/grid colors;
+- 4 px node radius and 10 px padding;
+- neutral 2 px connections and cyan active connections;
+- cyan selected-node outline and category accent separation;
+- left input / right output presentation;
+- only currently backed mockup role labels;
+- own rtaime controls with no directly visible stock WPF controls;
+- existing pan/zoom/Fit/Auto Layout behavior;
+- stable node positions across status refreshes;
+- shared Inspector selection;
+- reuse of the established Preview monitor;
+- real-only CPU/GPU/Memory evidence, VRAM/Render values and bounded GPU history;
+- no second telemetry poller or host-level authority dependency.

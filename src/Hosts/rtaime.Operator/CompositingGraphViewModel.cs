@@ -39,6 +39,7 @@ public sealed class CompositingGraphNodeViewModel : INotifyPropertyChanged
 	public string Detail => _projection.Detail;
 	public string Status => _projection.Status;
 	public string KindLabel => _projection.Kind.ToString().ToUpperInvariant();
+	public string RoleLabel => ResolveRoleLabel(_projection);
 	public string HealthLabel => _projection.Health.ToString().ToUpperInvariant();
 	public bool IsError => _projection.Health == CompositingGraphHealth.Error;
 	public bool IsDegraded => _projection.Health == CompositingGraphHealth.Degraded;
@@ -76,6 +77,7 @@ public sealed class CompositingGraphNodeViewModel : INotifyPropertyChanged
 		OnPropertyChanged(nameof(Detail));
 		OnPropertyChanged(nameof(Status));
 		OnPropertyChanged(nameof(KindLabel));
+		OnPropertyChanged(nameof(RoleLabel));
 		OnPropertyChanged(nameof(HealthLabel));
 		OnPropertyChanged(nameof(IsError));
 		OnPropertyChanged(nameof(IsDegraded));
@@ -83,6 +85,18 @@ public sealed class CompositingGraphNodeViewModel : INotifyPropertyChanged
 		OnPropertyChanged(nameof(InputPorts));
 		OnPropertyChanged(nameof(OutputPorts));
 	}
+
+	private static string ResolveRoleLabel(CompositingGraphNodeProjection projection) =>
+		projection.Id switch
+		{
+			"routing" => "OUTPUT ROUTER",
+			"graphics-transform" => "TRANSFORM",
+			"composite" => "MERGE",
+			"recorder" => "RECORDER",
+			"preview-output" or "program-output" => "OUTPUT",
+			_ when projection.Kind == CompositingGraphNodeKind.Source => "MEDIA INPUT",
+			_ => projection.Kind.ToString().ToUpperInvariant()
+		};
 
 	private string FormatPorts(CompositingGraphPortDirection direction)
 	{

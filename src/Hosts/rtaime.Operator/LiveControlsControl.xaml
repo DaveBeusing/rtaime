@@ -244,7 +244,10 @@
 									<TextBlock Text="Engine" FontSize="10" FontWeight="SemiBold" />
 									<TextBlock Text="{Binding EngineLifecycleDetail}" Style="{StaticResource OperatorLabel}" FontSize="9" TextTrimming="CharacterEllipsis" />
 								</StackPanel>
-								<TextBlock Grid.Column="2" Text="{Binding EngineHealth}" Style="{StaticResource OperatorLabel}" FontWeight="Bold" VerticalAlignment="Center" />
+								<StackPanel Grid.Column="2" VerticalAlignment="Center">
+									<TextBlock Text="{Binding EngineLifecycleState}" Style="{StaticResource OperatorValue}" FontSize="10" FontWeight="Bold" HorizontalAlignment="Right" />
+									<TextBlock Text="{Binding EngineHealth}" Style="{StaticResource OperatorLabel}" FontSize="9" HorizontalAlignment="Right" />
+								</StackPanel>
 							</Grid>
 						</Border>
 
