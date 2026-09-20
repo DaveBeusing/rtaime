@@ -508,24 +508,19 @@ public sealed class OperatorHealthSnapshotProvider : IHealthSnapshotProvider, ID
 		string? recoveryActionLabel = null)
 	{
 		existing.TryGetValue(id, out var previous);
-		var statusSince = previous is not null && previous.State == state
-			? previous.StatusSince
-			: now;
-		var lastSuccessfulCheck = state == SubsystemHealthState.Healthy
-			? now
-			: previous?.LastSuccessfulCheck;
-		return new SubsystemHealthSnapshot(
+		var candidate = new SubsystemHealthSnapshot(
 			id,
 			displayName,
 			category,
 			state,
 			string.IsNullOrWhiteSpace(detail) ? "No detail is currently published." : detail.Trim(),
-			statusSince,
-			lastSuccessfulCheck,
+			now,
+			null,
 			metrics,
 			recoveryStatus,
 			technicalDetail,
 			canRecover,
 			recoveryActionLabel);
+		return HealthSnapshotHistory.Retain(candidate, previous, now);
 	}
 }
