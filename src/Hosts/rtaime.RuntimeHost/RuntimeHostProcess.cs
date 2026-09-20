@@ -408,7 +408,7 @@ public sealed class RuntimeHostProcess
 				{
 					runtime.SetExternalInputContent(
 						sourceId,
-						new RgbaFrameBuffer(runtime.Format, boundary.RgbaPixels.Span),
+						boundary.RgbaPixels.Span,
 						V1InputSignalState.Valid);
 				}
 				else
