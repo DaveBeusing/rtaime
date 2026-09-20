@@ -129,10 +129,16 @@ public sealed class OperatorNotificationTests
 			Assert.True(afterCrash.PersistenceAvailable);
 
 			var persistedProperties = typeof(OperatorSafeSessionState)
-				.GetProperties()
+				.GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
 				.Select(property => property.Name)
 				.ToArray();
 			Assert.Equal(["SelectedWorkspace"], persistedProperties);
+
+			var persistedJson = File.ReadAllText(path);
+			Assert.Contains("\"SelectedWorkspace\"", persistedJson, StringComparison.Ordinal);
+			Assert.DoesNotContain("\"Output\"", persistedJson, StringComparison.OrdinalIgnoreCase);
+			Assert.DoesNotContain("\"Recording\"", persistedJson, StringComparison.OrdinalIgnoreCase);
+			Assert.DoesNotContain("\"Program\"", persistedJson, StringComparison.OrdinalIgnoreCase);
 
 			await new OperatorSessionRecoveryStore(path, () => now)
 				.MarkCleanShutdownAsync(new OperatorSafeSessionState("HEALTH"));
