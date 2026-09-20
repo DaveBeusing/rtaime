@@ -3,6 +3,10 @@ Copyright (c) 2026 Dave Beusing
 david.beusing@gmail.com
 -->
 
+<p align="right">
+	<img src="../src/Hosts/rtaime.Operator/Assets/Brand/RtaimeLogoHorizontal.svg" alt="rtaime — Real Time AI Media Engine" width="180" />
+</p>
+
 # Build, Publish & Test
 
 ## Purpose
@@ -273,12 +277,12 @@ See:
 - [ReleaseEvidence.md](ReleaseEvidence.md)
 - [QualificationEvidenceProvenance.md](QualificationEvidenceProvenance.md)
 
-## Funding showcase
+## Product Showcase
 
-The qualified packaged showcase remains the preferred full-stack demonstration path:
+The qualified Product Showcase remains the preferred full-stack demonstration path:
 
 ```text
 Start-rtaime-Showcase.cmd
 ```
 
-See [InvestorDemoScenario.md](InvestorDemoScenario.md) for the deterministic demonstration flow and acceptance boundary.
+See [Product Showcase Scenario](InvestorDemoScenario.md) for the deterministic demonstration flow and acceptance boundary.

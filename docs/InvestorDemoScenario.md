@@ -3,15 +3,19 @@ Copyright (c) 2026 Dave Beusing
 david.beusing@gmail.com
 -->
 
-# Investor Demo Scenario & Acceptance
+<p align="right">
+	<img src="../src/Hosts/rtaime.Operator/Assets/Brand/RtaimeLogoHorizontal.svg" alt="rtaime — Real Time AI Media Engine" width="180" />
+</p>
+
+# Product Showcase Scenario & Acceptance
 
 ## Purpose
 
-This document defines the single V1 funding-showcase scenario and the evidence required to call that scenario demo-ready.
+This document defines the single V1 Product Showcase scenario and the evidence required to call that scenario demo-ready.
 
 Product identity for the presentation is **rtaime** (spoken **“realtime”**), **Real Time AI Media Engine** — **Production-grade real-time AI media platform.** Canonical naming rules are maintained in [ProductIdentity.md](ProductIdentity.md).
 
-The demo is intentionally a production-shaped architectural proof. It uses the real ControlHost, RuntimeHost, AIHost, Client SDK, Operator, Media Deck, graphics, audio, recording, monitoring and health paths already present in the product. It does not introduce a second demo-only authority path.
+The Product Showcase is intentionally a production-shaped architectural proof. It uses the real ControlHost, RuntimeHost, AIHost, Client SDK, Operator, Media Deck, graphics, audio, recording, monitoring and health paths already present in the product. It does not introduce a second demo-only authority path.
 
 ## Entry point
 
