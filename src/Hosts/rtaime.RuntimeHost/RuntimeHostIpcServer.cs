@@ -496,7 +496,14 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		snapshot.GpuUtilizationPercent,
 		snapshot.GpuVramUsedBytes,
 		snapshot.GpuVramTotalBytes,
-		snapshot.GpuTelemetryEvidence);
+		snapshot.GpuTelemetryEvidence,
+		snapshot.CpuDeviceName,
+		snapshot.CpuLogicalProcessorCount,
+		snapshot.CpuUtilizationPercent,
+		snapshot.SystemMemoryUsedBytes,
+		snapshot.SystemMemoryTotalBytes,
+		snapshot.SystemTelemetryEvidence,
+		snapshot.PhysicalGpuDeviceName);
 
 	private static WireAIShowcase ToWire(RuntimeAIShowcaseSnapshot snapshot) => new(
 		snapshot.Enabled,
@@ -612,7 +619,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 	private sealed record WireApplyResponse(WirePrepareResult Prepare, WireCommitResult? Commit, ulong? ActivationSequence);
 	private sealed record WireRecordingStart(string SessionId, string OutputId, string DestinationDirectory, string FileName);
 	private sealed record WireRecordingSnapshot(string State, long ElapsedTicks, string? Destination, string? FileName, string? FinalPath, ulong Accepted, ulong Written, ulong Dropped, ulong Rejected, ulong WriterFailures, WireFailure? Failure);
-	private sealed record WireRuntimePerformance(long UptimeTicks, long FrameBudgetTicks, long LastFrameProcessingTicks, ulong DroppedFrames, string GpuDeviceName, bool GpuHardwareAccelerated, double? GpuUtilizationPercent, ulong? GpuVramUsedBytes, ulong? GpuVramTotalBytes, string GpuTelemetryEvidence);
+	private sealed record WireRuntimePerformance(long UptimeTicks, long FrameBudgetTicks, long LastFrameProcessingTicks, ulong DroppedFrames, string GpuDeviceName, bool GpuHardwareAccelerated, double? GpuUtilizationPercent, ulong? GpuVramUsedBytes, ulong? GpuVramTotalBytes, string GpuTelemetryEvidence, string CpuDeviceName, int CpuLogicalProcessorCount, double? CpuUtilizationPercent, ulong? SystemMemoryUsedBytes, ulong? SystemMemoryTotalBytes, string SystemTelemetryEvidence, string PhysicalGpuDeviceName);
 	private sealed record WireAIShowcaseState(bool Enabled);
 	private sealed record WireAIShowcase(bool Enabled, string Feature, string Status, string Provider, long InferenceTimeTicks, uint PersonRegionCount, ulong? SourceSequence, ulong? AppliedSequence, double? Confidence, bool EffectVisible, WireFailure? Failure, DateTimeOffset? UpdatedAtUtc);
 	private sealed record WireRecordingCommandResult(bool Succeeded, WireRecordingSnapshot Snapshot, WireFailure? Failure);

@@ -65,7 +65,14 @@ public sealed record RuntimePerformanceSnapshot(
 	double? GpuUtilizationPercent,
 	ulong? GpuVramUsedBytes,
 	ulong? GpuVramTotalBytes,
-	string GpuTelemetryEvidence);
+	string GpuTelemetryEvidence,
+	string CpuDeviceName = "UNVERIFIED",
+	int CpuLogicalProcessorCount = 0,
+	double? CpuUtilizationPercent = null,
+	ulong? SystemMemoryUsedBytes = null,
+	ulong? SystemMemoryTotalBytes = null,
+	string SystemTelemetryEvidence = "UNVERIFIED",
+	string PhysicalGpuDeviceName = "UNVERIFIED");
 
 public sealed record RuntimeAIShowcaseRemoteSnapshot(
 	bool Enabled,
@@ -571,7 +578,14 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 		snapshot.GpuUtilizationPercent,
 		snapshot.GpuVramUsedBytes,
 		snapshot.GpuVramTotalBytes,
-		string.IsNullOrWhiteSpace(snapshot.GpuTelemetryEvidence) ? "UNVERIFIED" : snapshot.GpuTelemetryEvidence.Trim());
+		string.IsNullOrWhiteSpace(snapshot.GpuTelemetryEvidence) ? "UNVERIFIED" : snapshot.GpuTelemetryEvidence.Trim(),
+		string.IsNullOrWhiteSpace(snapshot.CpuDeviceName) ? "UNVERIFIED" : snapshot.CpuDeviceName.Trim(),
+		Math.Max(0, snapshot.CpuLogicalProcessorCount),
+		snapshot.CpuUtilizationPercent,
+		snapshot.SystemMemoryUsedBytes,
+		snapshot.SystemMemoryTotalBytes,
+		string.IsNullOrWhiteSpace(snapshot.SystemTelemetryEvidence) ? "UNVERIFIED" : snapshot.SystemTelemetryEvidence.Trim(),
+		string.IsNullOrWhiteSpace(snapshot.PhysicalGpuDeviceName) ? "UNVERIFIED" : snapshot.PhysicalGpuDeviceName.Trim());
 
 	private static RuntimeAIShowcaseRemoteSnapshot FromWire(WireAIShowcase snapshot) => new(
 		snapshot.Enabled,
@@ -746,7 +760,7 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 	private sealed record WireApplyResponse(WirePrepareResult Prepare, WireCommitResult? Commit, ulong? ActivationSequence);
 	private sealed record WireRecordingStart(string SessionId, string OutputId, string DestinationDirectory, string FileName);
 	private sealed record WireRecordingSnapshot(string State, long ElapsedTicks, string? Destination, string? FileName, string? FinalPath, ulong Accepted, ulong Written, ulong Dropped, ulong Rejected, ulong WriterFailures, WireFailure? Failure);
-	private sealed record WireRuntimePerformance(long UptimeTicks, long FrameBudgetTicks, long LastFrameProcessingTicks, ulong DroppedFrames, string GpuDeviceName, bool GpuHardwareAccelerated, double? GpuUtilizationPercent, ulong? GpuVramUsedBytes, ulong? GpuVramTotalBytes, string GpuTelemetryEvidence);
+	private sealed record WireRuntimePerformance(long UptimeTicks, long FrameBudgetTicks, long LastFrameProcessingTicks, ulong DroppedFrames, string GpuDeviceName, bool GpuHardwareAccelerated, double? GpuUtilizationPercent, ulong? GpuVramUsedBytes, ulong? GpuVramTotalBytes, string GpuTelemetryEvidence, string CpuDeviceName, int CpuLogicalProcessorCount, double? CpuUtilizationPercent, ulong? SystemMemoryUsedBytes, ulong? SystemMemoryTotalBytes, string SystemTelemetryEvidence, string PhysicalGpuDeviceName);
 	private sealed record WireAIShowcaseState(bool Enabled);
 	private sealed record WireAIShowcase(bool Enabled, string Feature, string Status, string Provider, long InferenceTimeTicks, uint PersonRegionCount, ulong? SourceSequence, ulong? AppliedSequence, double? Confidence, bool EffectVisible, WireFailure? Failure, DateTimeOffset? UpdatedAtUtc);
 	private sealed record WireRecordingCommandResult(bool Succeeded, WireRecordingSnapshot Snapshot, WireFailure? Failure);

@@ -44,7 +44,11 @@ public sealed record OperatorHealthProjectionSnapshot(
 	TimeSpan Uptime,
 	string GpuUtilization,
 	string Vram,
-	DateTimeOffset ObservedAtUtc);
+	DateTimeOffset ObservedAtUtc,
+	string CpuDeviceName = "UNVERIFIED",
+	string CpuUtilization = "UNVERIFIED",
+	string SystemMemory = "UNVERIFIED",
+	string GpuDeviceName = "UNVERIFIED");
 
 public static class OperatorHealthProjection
 {
@@ -81,7 +85,11 @@ public static class OperatorHealthProjection
 			performance?.Uptime ?? TimeSpan.Zero,
 			FormatGpuUtilization(performance),
 			FormatVram(performance),
-			observedAtUtc.ToUniversalTime());
+			observedAtUtc.ToUniversalTime(),
+			FormatCpuDeviceName(performance),
+			FormatCpuUtilization(performance),
+			FormatSystemMemory(performance),
+			FormatGpuDeviceName(performance));
 	}
 
 	private static OperatorHealthMetric EvaluateRuntime(RuntimeRemoteSnapshot? runtime)
@@ -180,6 +188,41 @@ public static class OperatorHealthProjection
 		performance?.GpuUtilizationPercent is { } utilization
 			? $"{utilization:0.#}%"
 			: "UNVERIFIED";
+
+	private static string FormatCpuDeviceName(RuntimePerformanceSnapshot? performance)
+	{
+		if (performance is null || string.IsNullOrWhiteSpace(performance.CpuDeviceName) || performance.CpuDeviceName == "UNVERIFIED")
+			return "UNVERIFIED";
+
+		return performance.CpuLogicalProcessorCount > 0
+			? $"{performance.CpuDeviceName} · {performance.CpuLogicalProcessorCount} logical"
+			: performance.CpuDeviceName;
+	}
+
+	private static string FormatCpuUtilization(RuntimePerformanceSnapshot? performance) =>
+		performance?.CpuUtilizationPercent is { } utilization
+			? $"{utilization:0.#}%"
+			: "UNVERIFIED";
+
+	private static string FormatSystemMemory(RuntimePerformanceSnapshot? performance)
+	{
+		if (performance?.SystemMemoryUsedBytes is { } used && performance.SystemMemoryTotalBytes is { } total && total > 0)
+			return $"{used * 100d / total:0.#}% · {FormatBytes(used)} / {FormatBytes(total)}";
+		if (performance?.SystemMemoryTotalBytes is { } capacity)
+			return $"usage UNVERIFIED / {FormatBytes(capacity)} total";
+		return "UNVERIFIED";
+	}
+
+	private static string FormatGpuDeviceName(RuntimePerformanceSnapshot? performance)
+	{
+		if (performance is null)
+			return "UNVERIFIED";
+		if (!string.IsNullOrWhiteSpace(performance.PhysicalGpuDeviceName) && performance.PhysicalGpuDeviceName != "UNVERIFIED")
+			return performance.PhysicalGpuDeviceName;
+		if (performance.GpuHardwareAccelerated && !string.IsNullOrWhiteSpace(performance.GpuDeviceName))
+			return performance.GpuDeviceName;
+		return "UNVERIFIED";
+	}
 
 	private static string FormatVram(RuntimePerformanceSnapshot? performance)
 	{

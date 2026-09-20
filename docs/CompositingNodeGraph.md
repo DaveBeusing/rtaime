@@ -65,9 +65,9 @@ The compositing workspace does not create another monitoring or playback path.
 
 The System & Performance panel is a view over the existing `OutputRoutingHealthViewModel` and Operator lifecycle evidence.
 
-CPU, GPU and system Memory use the own `RtaimeMetricRing` presentation. A ring draws a value arc only when a real numeric sample exists. CPU and system Memory remain `UNAVAILABLE / UNVERIFIED` because the current health contract does not publish those metrics. GPU uses the existing Runtime-published utilization value when available.
+CPU, GPU and system Memory use the own `RtaimeMetricRing` presentation. A ring draws a value arc only when a real numeric sample exists. CPU and system Memory now use Runtime-published Windows measurements; GPU uses Runtime-published NVML utilization when a qualified NVIDIA driver exposes it. Missing measurements remain `UNAVAILABLE / UNVERIFIED` rather than being synthesized.
 
-VRAM and Render Time reuse their existing Runtime-derived values. The small history graph uses only the bounded existing GPU sample history. The panel adds no timer, hardware query, Performance Counter, NVML call or other telemetry probe.
+VRAM and Render Time reuse their Runtime-derived values. The small history graph uses only the bounded existing metric history. The Operator panel adds no timer, hardware query, Performance Counter, NVML call or other telemetry probe; hardware sampling is owned and cached by RuntimeHost.
 
 This is **real telemetry only**: missing data remains visibly unavailable rather than being converted into zero, healthy or estimated values.
 

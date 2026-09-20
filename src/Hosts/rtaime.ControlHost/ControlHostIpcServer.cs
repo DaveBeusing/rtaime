@@ -810,7 +810,11 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		snapshot.Uptime.Ticks,
 		snapshot.GpuUtilization,
 		snapshot.Vram,
-		snapshot.ObservedAtUtc);
+		snapshot.ObservedAtUtc,
+		snapshot.CpuDeviceName,
+		snapshot.CpuUtilization,
+		snapshot.SystemMemory,
+		snapshot.GpuDeviceName);
 
 	private static WireHealthMetric ToWire(OperatorHealthMetric metric) =>
 		new(metric.State, metric.Detail);
@@ -872,7 +876,11 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		long UptimeTicks,
 		string GpuUtilization,
 		string Vram,
-		DateTimeOffset ObservedAtUtc);
+		DateTimeOffset ObservedAtUtc,
+		string CpuDeviceName,
+		string CpuUtilization,
+		string SystemMemory,
+		string GpuDeviceName);
 	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, WireRecordingSnapshot Recording, WireHealthSnapshot Health, WireAIShowcase AIShowcase, ulong StateVersion);
 	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path);
 	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame, bool? AutoPlayOnProgram, int? EndBehavior, long? InPointFrame, long? OutPointFrame);

@@ -213,7 +213,7 @@ Only commands and recording metadata cross management IPC. Program RGBA pixels a
 
 Runtime Health & Performance HUD extends the existing private RuntimeHost and ControlHost snapshot payloads with bounded observational health/performance metadata. No public Control or Runtime contract version changes are introduced.
 
-RuntimeHost snapshot metadata now carries Runtime uptime, frame budget, the last observed Program-boundary processing duration, cumulative dropped-frame evidence, GPU backend identity and optional GPU utilization/VRAM measurements. Optional GPU measurements remain absent when the active backend has no qualified source.
+RuntimeHost snapshot metadata now carries Runtime uptime, frame budget, the last observed Program-boundary processing duration, cumulative dropped-frame evidence, CPU identity/utilization, system-memory usage/capacity, GPU backend/physical-device identity and optional GPU utilization/VRAM measurements. CPU and system-memory measurements are qualified on Windows. NVIDIA GPU measurements are supplied by NVML when the installed driver exposes them; otherwise those optional fields remain absent/UNVERIFIED.
 
 ControlHost combines this Runtime metadata with its authoritative-state availability, Runtime timing/execution state, media observations and cached Runtime provider descriptors to produce the Operator `PASS / FAIL / UNVERIFIED` health projection.
 

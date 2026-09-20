@@ -56,6 +56,10 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	private string _frameTime = "UNVERIFIED";
 	private string _droppedFrames = "0";
 	private string _uptime = "00:00:00";
+	private string _cpuDeviceName = "UNVERIFIED";
+	private string _cpuUtilization = "UNVERIFIED";
+	private string _systemMemory = "UNVERIFIED";
+	private string _gpuDeviceName = "UNVERIFIED";
 	private string _gpuUtilization = "UNVERIFIED";
 	private string _vram = "UNVERIFIED";
 	private string _healthObserved = "—";
@@ -222,6 +226,10 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	public string FrameTime { get => _frameTime; private set => Set(ref _frameTime, value); }
 	public string DroppedFrames { get => _droppedFrames; private set => Set(ref _droppedFrames, value); }
 	public string Uptime { get => _uptime; private set => Set(ref _uptime, value); }
+	public string CpuDeviceName { get => _cpuDeviceName; private set => Set(ref _cpuDeviceName, value); }
+	public string CpuUtilization { get => _cpuUtilization; private set => Set(ref _cpuUtilization, value); }
+	public string SystemMemory { get => _systemMemory; private set => Set(ref _systemMemory, value); }
+	public string GpuDeviceName { get => _gpuDeviceName; private set => Set(ref _gpuDeviceName, value); }
 	public string GpuUtilization { get => _gpuUtilization; private set => Set(ref _gpuUtilization, value); }
 	public string Vram { get => _vram; private set => Set(ref _vram, value); }
 	public string HealthObserved { get => _healthObserved; private set => Set(ref _healthObserved, value); }
@@ -920,6 +928,10 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 			: "UNVERIFIED";
 		DroppedFrames = health.DroppedFrames.ToString(CultureInfo.InvariantCulture);
 		Uptime = FormatElapsed(health.Uptime);
+		CpuDeviceName = health.CpuDeviceName;
+		CpuUtilization = health.CpuUtilization;
+		SystemMemory = health.SystemMemory;
+		GpuDeviceName = health.GpuDeviceName;
 		GpuUtilization = health.GpuUtilization;
 		Vram = health.Vram;
 		HealthObserved = health.ObservedAtUtc == DateTimeOffset.MinValue

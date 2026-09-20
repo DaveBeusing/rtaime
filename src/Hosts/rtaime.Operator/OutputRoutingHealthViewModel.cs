@@ -30,6 +30,10 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 		nameof(OperatorViewModel.CurrentFormat),
 		nameof(OperatorViewModel.FrameTime),
 		nameof(OperatorViewModel.DroppedFrames),
+		nameof(OperatorViewModel.CpuDeviceName),
+		nameof(OperatorViewModel.CpuUtilization),
+		nameof(OperatorViewModel.SystemMemory),
+		nameof(OperatorViewModel.GpuDeviceName),
 		nameof(OperatorViewModel.GpuUtilization),
 		nameof(OperatorViewModel.Vram),
 		nameof(OperatorViewModel.HealthObserved),
@@ -92,6 +96,7 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 			["control"] = new("CONTROL"),
 			["runtime"] = new("RUNTIME"),
 			["media"] = new("MEDIA"),
+			["hardware"] = new("HARDWARE"),
 			["gpu"] = new("GPU")
 		};
 		SystemHealth = new ObservableCollection<SystemHealthStatusViewModel>(_systemHealth.Values);
@@ -106,6 +111,8 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 	public ObservableCollection<OutputStatusViewModel> Outputs { get; }
 	public ObservableCollection<PerformanceMetricViewModel> Metrics { get; }
 	public ObservableCollection<SystemHealthStatusViewModel> SystemHealth { get; }
+	public string CpuDeviceName => NormalizeAvailability(_control.CpuDeviceName);
+	public string GpuDeviceName => NormalizeAvailability(_control.GpuDeviceName);
 	public PerformanceMetricViewModel CpuMetric => _metrics["cpu"];
 	public PerformanceMetricViewModel GpuMetric => _metrics["gpu"];
 	public PerformanceMetricViewModel MemoryMetric => _metrics["memory"];
@@ -168,6 +175,7 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 		UpdateSystemHealth("control", _control.ControlHealth);
 		UpdateSystemHealth("runtime", _control.RuntimeHealth);
 		UpdateSystemHealth("media", _control.MediaHealth);
+		UpdateSystemHealth("hardware", ResolveHardwareEvidence());
 		UpdateSystemHealth("gpu", _control.GpuProviderHealth);
 
 		_program.Update(
@@ -228,30 +236,34 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 			NormalizeAvailability(_control.FrameTime) != Unavailable;
 		var renderSample = hasRuntimePerformance ? TryParseLeadingDouble(_control.FrameTime) : null;
 		var droppedSample = hasRuntimePerformance ? TryParseUnsigned(_control.DroppedFrames) : null;
+		var cpuSample = TryParsePercentage(_control.CpuUtilization);
 		var gpuSample = TryParsePercentage(_control.GpuUtilization);
+		var memorySample = TryParseLeadingPercentage(_control.SystemMemory);
+		var cpuValue = NormalizeAvailability(_control.CpuUtilization);
 		var gpuValue = NormalizeAvailability(_control.GpuUtilization);
+		var memoryValue = NormalizeAvailability(_control.SystemMemory);
 		var vramValue = NormalizeAvailability(_control.Vram);
 
 		UpdateMetric(
 			"cpu",
-			Unavailable,
-			"UNVERIFIED",
-			"No CPU telemetry is published by the current health contract.",
-			null,
+			cpuValue,
+			ResolveHardwareMetricEvidence(cpuValue),
+			$"{NormalizeAvailability(_control.CpuDeviceName)}. Runtime-published total CPU utilization.",
+			cpuSample,
 			sampleHistory);
 		UpdateMetric(
 			"gpu",
 			gpuValue,
-			ResolveMetricEvidence(gpuValue, _control.GpuProviderHealth),
-			"Runtime-published GPU utilization evidence. No local probing is performed.",
+			ResolveHardwareMetricEvidence(gpuValue, _control.GpuProviderHealth),
+			$"{NormalizeAvailability(_control.GpuDeviceName)}. Runtime-published GPU utilization evidence.",
 			gpuSample,
 			sampleHistory);
 		UpdateMetric(
 			"memory",
-			Unavailable,
-			"UNVERIFIED",
-			"No system-memory telemetry is published by the current health contract.",
-			null,
+			memoryValue,
+			ResolveHardwareMetricEvidence(memoryValue),
+			"Runtime-published system RAM utilization and physical-memory capacity.",
+			memorySample,
 			sampleHistory);
 		UpdateMetric(
 			"vram",
@@ -303,6 +315,8 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 			null,
 			sampleHistory);
 
+		OnPropertyChanged(nameof(CpuDeviceName));
+		OnPropertyChanged(nameof(GpuDeviceName));
 		OnPropertyChanged(nameof(IsReadOnly));
 		OnPropertyChanged(nameof(AccessState));
 		OnPropertyChanged(nameof(AccessEvidenceState));
@@ -328,6 +342,28 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 			ToOperatorStatus(evidenceState),
 			detail,
 			sampleHistory ? sample : null);
+
+	private string ResolveHardwareEvidence()
+	{
+		if (!_control.IsConnected || _control.IsStale)
+			return "UNVERIFIED";
+		if (NormalizeEvidence(_control.GpuProviderHealth) == "FAIL")
+			return "FAIL";
+		if (NormalizeAvailability(_control.CpuUtilization) == Unavailable ||
+			NormalizeAvailability(_control.SystemMemory) == Unavailable ||
+			NormalizeAvailability(_control.GpuUtilization) == Unavailable)
+			return "UNVERIFIED";
+		return "PASS";
+	}
+
+	private string ResolveHardwareMetricEvidence(string value, string? providerEvidence = null)
+	{
+		if (!_control.IsConnected || _control.IsStale || value == Unavailable || value.Contains("UNVERIFIED", StringComparison.OrdinalIgnoreCase))
+			return "UNVERIFIED";
+		if (providerEvidence is not null && NormalizeEvidence(providerEvidence) == "FAIL")
+			return "FAIL";
+		return "PASS";
+	}
 
 	private string ResolveAccessDetail()
 	{
@@ -428,6 +464,21 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 		ulong.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
 			? parsed
 			: null;
+
+	private static double? TryParseLeadingPercentage(string? value)
+	{
+		var normalized = NormalizeAvailability(value);
+		if (normalized == Unavailable)
+			return null;
+
+		var percentIndex = normalized.IndexOf('%');
+		if (percentIndex <= 0)
+			return null;
+
+		return double.TryParse(normalized[..percentIndex].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
+			? parsed
+			: null;
+	}
 
 	private static double? TryParsePercentage(string? value)
 	{

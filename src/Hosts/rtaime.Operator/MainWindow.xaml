@@ -92,22 +92,22 @@
 					</StackPanel>
 				</controls:RtaimeButton>
 
-				<Border Grid.Column="5" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1,0,0,0" Padding="10,6">
+				<Border Grid.Column="5" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1,0,0,0" Padding="10,6" ToolTip="{Binding CpuDeviceName}">
 					<StackPanel VerticalAlignment="Center">
 						<TextBlock Text="CPU" Style="{StaticResource OperatorLabel}" />
-						<TextBlock Text="N/A" FontWeight="SemiBold" ToolTip="CPU telemetry is not exposed by the current authoritative Runtime health contract." />
+						<TextBlock Text="{Binding CpuUtilization}" FontWeight="SemiBold" />
 					</StackPanel>
 				</Border>
-				<Border Grid.Column="6" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1,0,0,0" Padding="10,6" ToolTip="{Binding GpuProviderHealth}">
+				<Border Grid.Column="6" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1,0,0,0" Padding="10,6" ToolTip="{Binding GpuDeviceName}">
 					<StackPanel VerticalAlignment="Center">
 						<TextBlock Text="GPU" Style="{StaticResource OperatorLabel}" />
 						<TextBlock Text="{Binding GpuUtilization}" FontWeight="SemiBold" />
 					</StackPanel>
 				</Border>
-				<Border Grid.Column="7" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1,0,0,0" Padding="10,6" ToolTip="GPU memory use from the existing Runtime health projection.">
+				<Border Grid.Column="7" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1,0,0,0" Padding="10,6" ToolTip="{Binding SystemMemory}">
 					<StackPanel VerticalAlignment="Center">
 						<TextBlock Text="MEMORY" Style="{StaticResource OperatorLabel}" />
-						<TextBlock Text="{Binding Vram}" FontWeight="SemiBold" />
+						<TextBlock Text="{Binding SystemMemory}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
 					</StackPanel>
 				</Border>
 				<Border Grid.Column="8" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1,0,0,0" Padding="10,6" ToolTip="Runtime Program-boundary processing time versus frame budget.">
