@@ -111,6 +111,8 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 	public ObservableCollection<OutputStatusViewModel> Outputs { get; }
 	public ObservableCollection<PerformanceMetricViewModel> Metrics { get; }
 	public ObservableCollection<SystemHealthStatusViewModel> SystemHealth { get; }
+	public string CpuDeviceName => NormalizeAvailability(_control.CpuDeviceName);
+	public string GpuDeviceName => NormalizeAvailability(_control.GpuDeviceName);
 	public PerformanceMetricViewModel CpuMetric => _metrics["cpu"];
 	public PerformanceMetricViewModel GpuMetric => _metrics["gpu"];
 	public PerformanceMetricViewModel MemoryMetric => _metrics["memory"];
@@ -313,6 +315,8 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 			null,
 			sampleHistory);
 
+		OnPropertyChanged(nameof(CpuDeviceName));
+		OnPropertyChanged(nameof(GpuDeviceName));
 		OnPropertyChanged(nameof(IsReadOnly));
 		OnPropertyChanged(nameof(AccessState));
 		OnPropertyChanged(nameof(AccessEvidenceState));
