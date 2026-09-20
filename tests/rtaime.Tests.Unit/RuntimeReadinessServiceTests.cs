@@ -239,6 +239,7 @@ public sealed class RuntimeReadinessServiceTests
 
 		service.Changed += first;
 		service.Observe(Observation(Healthy(now)));
+		var firstSubscriberEventsAtUnsubscribe = firstSubscriberEvents;
 		service.Changed -= first;
 		service.Changed += second;
 
@@ -248,7 +249,8 @@ public sealed class RuntimeReadinessServiceTests
 		now += TimeSpan.FromMilliseconds(250);
 		service.Observe(Observation(Healthy(now)));
 
-		Assert.True(firstSubscriberEvents >= 1);
+		Assert.True(firstSubscriberEventsAtUnsubscribe >= 1);
+		Assert.Equal(firstSubscriberEventsAtUnsubscribe, firstSubscriberEvents);
 		Assert.True(secondSubscriberEvents >= 1);
 		Assert.Equal(RuntimePerformanceVerificationState.Verified, service.Current.Performance.State);
 	}
