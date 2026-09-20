@@ -596,7 +596,7 @@ Assert-Condition ($viewModel -notmatch 'ManagedReferencePersonSegmentationProvid
 $aiShowcasePollCount = [Regex]::Matches($viewModel, 'PeriodicTimer\(TimeSpan\.FromMilliseconds\(200\)\)').Count
 Assert-Condition ($aiShowcasePollCount -eq 1) "Visible AI Showcase must reuse the existing bounded management poll rather than add an AI UI polling loop."
 Assert-Condition ($window -match 'Text="SYSTEM STATUS"') "Operator must expose a compact System Status surface that includes Runtime health/performance evidence."
-foreach ($binding in @("EngineHealth", "ControlHealth", "RuntimeHealth", "MediaHealth", "ProviderHealth", "GpuProviderHealth", "CurrentFormat", "FrameTime", "DroppedFrames", "Uptime", "GpuUtilization", "Vram")) {
+foreach ($binding in @("EngineHealth", "ControlHealth", "RuntimeHealth", "MediaHealth", "ProviderHealth", "GpuProviderHealth", "CurrentFormat", "FrameTime", "DroppedFrames", "Uptime", "CpuDeviceName", "CpuUtilization", "SystemMemory", "GpuDeviceName", "GpuUtilization", "Vram")) {
 	Assert-Condition ($window -match "Binding $binding") "Runtime Health & Performance HUD HUD binding '$binding' is required."
 }
 Assert-Condition ($theme -match 'Trigger Property="Tag" Value="PASS"' -and $theme -match 'OperatorHealthyBrush') "PASS evidence must use the healthy semantic."
@@ -827,7 +827,7 @@ Assert-Condition ($shell -match 'record OperatorWindowPlacementSettings' -and $s
 Assert-Condition ($windowCode -match 'ApplyWindowPlacement' -and $windowCode -match 'CaptureWindowPlacement' -and $windowCode -match 'IsWindowPlacementVisible') "Window placement must restore safely and reject off-screen geometry."
 Assert-Condition ($shell -match 'NavigationRailWidth => 92' -and $shell -match 'NavigationLabelVisibility => Visibility\.Visible' -and $shell -match 'SecondaryMetricVisibility' -and $shell -match '_viewportWidth < 1480') "Production shell must retain the fixed 92px navigation rail while optional top-bar metrics may compact in smaller windowed viewports."
 Assert-Condition ($window -match 'Text="LIVE"' -and $window -match 'Text="UNVERIFIED"' -and $window -match 'External transmission/on-air state is not authoritative') "LIVE/ON AIR presentation must fail closed while no authoritative external transmission feed exists."
-Assert-Condition ($topBarSurface -match 'Text="CPU"' -and $topBarSurface -match 'Text="N/A"' -and $topBarSurface -match 'Text="GPU"' -and $topBarSurface -match 'Binding GpuUtilization' -and $topBarSurface -match 'Text="MEMORY"' -and $topBarSurface -match 'Binding Vram' -and $topBarSurface -match 'Text="LATENCY"' -and $topBarSurface -match 'Binding FrameTime') "Mockup top-bar metrics must reuse available health evidence and explicitly avoid synthesized CPU values."
+Assert-Condition ($topBarSurface -match 'Text="CPU"' -and $topBarSurface -match 'Binding CpuUtilization' -and $topBarSurface -match 'Binding CpuDeviceName' -and $topBarSurface -match 'Text="GPU"' -and $topBarSurface -match 'Binding GpuUtilization' -and $topBarSurface -match 'Binding GpuDeviceName' -and $topBarSurface -match 'Text="MEMORY"' -and $topBarSurface -match 'Binding SystemMemory' -and $topBarSurface -match 'Text="LATENCY"' -and $topBarSurface -match 'Binding FrameTime') "Mockup top-bar metrics must project Runtime-published CPU, GPU and system-memory telemetry without local probing."
 
 # Workspaces, Quick Controls, multiview and Clean Program.
 foreach ($workspace in @("MEDIA", "EDIT", "LIVE", "SCENES", "COMPOSITING", "OUTPUTS", "SETTINGS")) {
