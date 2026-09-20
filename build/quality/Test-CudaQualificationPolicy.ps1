@@ -17,17 +17,19 @@ function Assert-Condition {
 }
 
 $qualificationSourcePath = Join-Path $repositoryRoot "src/Providers/rtaime.Provider.Gpu/CudaReferenceHardwareQualification.cs"
+$runtimeHostPath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/RuntimeHostProcess.cs"
 $qualificationTestPath = Join-Path $repositoryRoot "tests/rtaime.Tests.Performance/CudaReferenceHardwareQualificationTests.cs"
 $runnerPath = Join-Path $repositoryRoot "build/qualification/Invoke-CudaReferenceQualification.ps1"
 $workflowPath = Join-Path $repositoryRoot ".github/workflows/cuda-reference-qualification.yml"
 $requiredGatesPath = Join-Path $repositoryRoot ".github/workflows/required-gates.yml"
 $documentationPath = Join-Path $repositoryRoot "docs/CudaReferenceHardwareQualification.md"
 
-foreach ($path in @($qualificationSourcePath, $qualificationTestPath, $runnerPath, $workflowPath, $requiredGatesPath, $documentationPath)) {
+foreach ($path in @($qualificationSourcePath, $runtimeHostPath, $qualificationTestPath, $runnerPath, $workflowPath, $requiredGatesPath, $documentationPath)) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required CUDA qualification artifact is missing: '$path'."
 }
 
 $source = Get-Content -LiteralPath $qualificationSourcePath -Raw
+$runtimeHost = Get-Content -LiteralPath $runtimeHostPath -Raw
 $tests = Get-Content -LiteralPath $qualificationTestPath -Raw
 $runner = Get-Content -LiteralPath $runnerPath -Raw
 $workflow = Get-Content -LiteralPath $workflowPath -Raw
@@ -46,8 +48,11 @@ Assert-Condition ($source -match 'cases\.Count == 8') "Qualification must requir
 Assert-Condition ($source -match 'PixelCorrect') "Qualification must verify deterministic output pixels."
 Assert-Condition ($source -match 'SurfaceLifetimeCorrect') "Qualification must verify GPU surface lifetime."
 Assert-Condition ($source -match 'P95Milliseconds') "Qualification must record P95 latency."
-Assert-Condition ($source -match 'maximum <= frameBudget \* 2\.0') "Qualification must retain a maximum-latency guard."
-Assert-Condition ($source -match 'p95 <= frameBudget') "Qualification must retain the one-frame P95 guard."
+Assert-Condition ($source -match 'ProductionP95LatencyCeilingMilliseconds\s*=\s*5\.0') "CUDA qualification must enforce the 5 ms P95 production ceiling."
+Assert-Condition ($source -match 'ProductionMaximumLatencyCeilingMilliseconds\s*=\s*10\.0') "CUDA qualification must enforce the 10 ms maximum production ceiling."
+Assert-Condition ($source -match 'p95 <= ProductionP95LatencyCeilingMilliseconds') "CUDA qualification must apply the production P95 latency ceiling."
+Assert-Condition ($runtimeHost -match 'CudaGpuProcessingBackend\.Detect\(\)' -and $runtimeHost -match 'new CudaGpuProcessingBackend\(\)') "Production RuntimeHost must prefer the CUDA backend when hardware acceleration is available."
+Assert-Condition ($runtimeHost -match 'new ManagedReferenceGpuBackend\(\)') "Production RuntimeHost must retain the managed reference fallback for environments without CUDA."
 
 Assert-Condition ($tests -match 'RTAIME_CUDA_REFERENCE_QUALIFICATION') "Hardware test must require explicit qualification opt-in."
 Assert-Condition ($tests -match 'RTAIME_CUDA_REFERENCE_DEVICE') "Hardware test must require an expected device identity."
@@ -69,7 +74,7 @@ Assert-Condition ($workflow -match 'upload-artifact@v4') "CUDA workflow must ret
 
 Assert-Condition ($documentation -match 'Current qualification state[\s\S]*UNVERIFIED') "Documentation must explicitly retain UNVERIFIED state until physical evidence exists."
 Assert-Condition ($documentation -match 'There is no silent fallback') "Documentation must prohibit silent hardware-to-managed fallback."
-Assert-Condition ($documentation -match 'P95 must be within one frame period') "Documentation must state the timing qualification guard."
+Assert-Condition ($documentation -match 'P95 must be at or below 5 ms') "Documentation must state the production P95 latency ceiling."
 Assert-Condition ($requiredGates -notmatch 'Invoke-CudaReferenceQualification\.ps1') "Generic Required Gates must not masquerade as physical CUDA qualification."
 
 Write-Host "CUDA qualification policy verification PASS"

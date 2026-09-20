@@ -72,6 +72,8 @@ public sealed record CudaQualificationReport(
 
 public static class CudaReferenceHardwareQualification
 {
+	private const double ProductionP95LatencyCeilingMilliseconds = 5.0;
+	private const double ProductionMaximumLatencyCeilingMilliseconds = 10.0;
 	private static readonly MediaSourceId SourceA = new(Identity.Parse("8d000000-0000-0000-0000-000000000001"));
 	private static readonly MediaSourceId SourceB = new(Identity.Parse("8d000000-0000-0000-0000-000000000002"));
 	private static readonly MediaSourceId LayerSource = new(Identity.Parse("8d000000-0000-0000-0000-000000000003"));
@@ -127,7 +129,7 @@ public static class CudaReferenceHardwareQualification
 			if (!result.SurfaceLifetimeCorrect)
 				failures.Add($"{result.Format}/{result.Operation}: GPU surface lifetime did not return to the expected baseline.");
 			if (!result.TimingBudgetMet)
-				failures.Add($"{result.Format}/{result.Operation}: P95 or maximum synchronous composite/readback latency exceeded the V1 frame budget guard.");
+				failures.Add($"{result.Format}/{result.Operation}: synchronous composite/readback latency exceeded the 5 ms P95 or 10 ms maximum production qualification ceiling.");
 		}
 
 		var status = failures.Count == 0 && cases.Count == 8
@@ -242,7 +244,9 @@ public static class CudaReferenceHardwareQualification
 		var p95 = Percentile(samples, 0.95);
 		var maximum = samples[^1];
 		var frameBudget = 1000.0 * format.FrameRate.Denominator / format.FrameRate.Numerator;
-		var timingBudgetMet = p95 <= frameBudget && maximum <= frameBudget * 2.0;
+		var timingBudgetMet =
+			p95 <= ProductionP95LatencyCeilingMilliseconds &&
+			maximum <= ProductionMaximumLatencyCeilingMilliseconds;
 
 		return new CudaQualificationCaseResult(
 			FormatName(format),

@@ -78,6 +78,44 @@ public sealed class RuntimeHealthPerformanceHudIntegrationTests
 	}
 
 	[Fact]
+	public void Retained_runtime_observation_keeps_performance_values_without_false_green_health()
+	{
+		var runtime = CreateRuntimeSnapshot() with
+		{
+			Performance = CreateRuntimeSnapshot().Performance! with
+			{
+				CpuDeviceName = "Test CPU",
+				CpuLogicalProcessorCount = 16,
+				CpuUtilizationPercent = 31.5,
+				SystemMemoryUsedBytes = 4UL * 1024 * 1024 * 1024,
+				SystemMemoryTotalBytes = 16UL * 1024 * 1024 * 1024,
+				PhysicalGpuDeviceName = "Test NVIDIA GPU",
+				GpuUtilizationPercent = 44,
+				GpuVramUsedBytes = 2UL * 1024 * 1024 * 1024,
+				GpuVramTotalBytes = 8UL * 1024 * 1024 * 1024
+			}
+		};
+
+		var health = OperatorHealthProjection.Evaluate(
+			runtime,
+			new[] { CreateGpuProvider(ProviderAvailabilityState.Available) },
+			null,
+			controlAuthorityAvailable: true,
+			DateTimeOffset.UtcNow,
+			runtimeObservationFresh: false);
+
+		Assert.Equal(ProjectionHealthStates.Unverified, health.Engine.State);
+		Assert.Equal(ProjectionHealthStates.Unverified, health.Runtime.State);
+		Assert.Equal(ProjectionHealthStates.Unverified, health.Media.State);
+		Assert.Equal(ProjectionHealthStates.Unverified, health.Provider.State);
+		Assert.Equal(ProjectionHealthStates.Unverified, health.GpuProvider.State);
+		Assert.Equal("31.5%", health.CpuUtilization);
+		Assert.Equal("25% · 4.00 GiB / 16.00 GiB", health.SystemMemory);
+		Assert.Equal("44%", health.GpuUtilization);
+		Assert.Equal("2.00 GiB / 8.00 GiB", health.Vram);
+	}
+
+	[Fact]
 	public void Degraded_GPU_provider_is_UNVERIFIED_and_never_presented_as_PASS()
 	{
 		var runtime = CreateRuntimeSnapshot();

@@ -163,7 +163,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private readonly VirtualMediaReferenceProvider _virtualMedia;
 	private readonly MediaFramePipeline _sourceAPipeline;
 	private readonly MediaFramePipeline _sourceBPipeline;
-	private readonly ManagedReferenceGpuBackend _gpuBackend;
+	private readonly IGpuProcessingBackend _gpuBackend;
 	private readonly GpuProcessingProvider _gpu;
 	private readonly TransactionalRuntime _runtime;
 	private readonly VirtualEmbeddedAudioReferenceProvider _virtualAudio;
@@ -214,13 +214,14 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		MediaSourceId sourceAId,
 		MediaSourceId sourceBId,
 		VideoFormat format,
-		IProgramRecordingWriter recordingWriter)
+		IProgramRecordingWriter recordingWriter,
+		IGpuProcessingBackend? gpuBackend = null)
 	{
 		_format = format;
 		_virtualMedia = new VirtualMediaReferenceProvider(sourceAId, sourceBId, format);
 		_sourceAPipeline = CreatePipeline();
 		_sourceBPipeline = CreatePipeline();
-		_gpuBackend = new ManagedReferenceGpuBackend();
+		_gpuBackend = gpuBackend ?? new ManagedReferenceGpuBackend();
 		_gpu = new GpuProcessingProvider(_gpuBackend);
 		_gpu.Start();
 		_runtime = new TransactionalRuntime(new InMemoryRuntimeResourceReservationManager());

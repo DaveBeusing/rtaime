@@ -26,12 +26,17 @@ internal sealed record SystemHardwareTelemetrySnapshot(
 internal sealed class SystemHardwareTelemetry : IDisposable
 {
 	private static readonly TimeSpan SampleInterval = TimeSpan.FromMilliseconds(500);
+	private static readonly TimeSpan SampleRetentionInterval = TimeSpan.FromSeconds(3);
 
 	private readonly object _gate = new();
 	private readonly WindowsCpuSampler _cpuSampler = new();
 	private readonly NvidiaGpuTelemetry _gpuTelemetry = new();
 	private readonly string _cpuDeviceName = DetectCpuDeviceName();
 	private DateTimeOffset _lastSampleAtUtc;
+	private DateTimeOffset _lastCpuSampleAtUtc;
+	private DateTimeOffset _lastMemorySampleAtUtc;
+	private DateTimeOffset _lastGpuUtilizationSampleAtUtc;
+	private DateTimeOffset _lastGpuMemorySampleAtUtc;
 	private SystemHardwareTelemetrySnapshot? _cached;
 	private bool _disposed;
 
@@ -46,34 +51,78 @@ internal sealed class SystemHardwareTelemetry : IDisposable
 			if (_cached is not null && now - _lastSampleAtUtc < SampleInterval)
 				return _cached;
 
-			var cpu = _cpuSampler.Sample();
-			var memoryAvailable = TryReadMemory(out var memoryUsedBytes, out var memoryTotalBytes);
-			var gpu = _gpuTelemetry.Sample();
+			var previous = _cached;
+			var sampledCpu = _cpuSampler.Sample();
+			if (sampledCpu is not null)
+				_lastCpuSampleAtUtc = now;
+			var cpu = sampledCpu ?? Retain(previous?.CpuUtilizationPercent, _lastCpuSampleAtUtc, now);
+			var cpuRetained = sampledCpu is null && cpu is not null;
+
+			var memoryAvailable = TryReadMemory(out var sampledMemoryUsedBytes, out var sampledMemoryTotalBytes);
+			if (memoryAvailable)
+				_lastMemorySampleAtUtc = now;
+			var memoryUsedBytes = memoryAvailable
+				? sampledMemoryUsedBytes
+				: Retain(previous?.SystemMemoryUsedBytes, _lastMemorySampleAtUtc, now);
+			var memoryTotalBytes = memoryAvailable
+				? sampledMemoryTotalBytes
+				: Retain(previous?.SystemMemoryTotalBytes, _lastMemorySampleAtUtc, now);
+			var memoryRetained = !memoryAvailable && memoryUsedBytes is not null && memoryTotalBytes is not null;
+
+			var sampledGpu = _gpuTelemetry.Sample();
+			if (sampledGpu.UtilizationPercent is not null)
+				_lastGpuUtilizationSampleAtUtc = now;
+			if (sampledGpu.VramUsedBytes is not null && sampledGpu.VramTotalBytes is not null)
+				_lastGpuMemorySampleAtUtc = now;
+
+			var gpuUtilization = sampledGpu.UtilizationPercent ??
+				Retain(previous?.GpuUtilizationPercent, _lastGpuUtilizationSampleAtUtc, now);
+			var gpuVramUsed = sampledGpu.VramUsedBytes ??
+				Retain(previous?.GpuVramUsedBytes, _lastGpuMemorySampleAtUtc, now);
+			var gpuVramTotal = sampledGpu.VramTotalBytes ??
+				Retain(previous?.GpuVramTotalBytes, _lastGpuMemorySampleAtUtc, now);
+			var gpuRetained = sampledGpu.UtilizationPercent is null && gpuUtilization is not null ||
+				(sampledGpu.VramUsedBytes is null || sampledGpu.VramTotalBytes is null) &&
+				gpuVramUsed is not null && gpuVramTotal is not null;
 
 			var systemEvidence = !OperatingSystem.IsWindows()
 				? "UNVERIFIED: system hardware telemetry is currently qualified for Windows only."
-				: !memoryAvailable
+				: memoryUsedBytes is null || memoryTotalBytes is null
 					? "UNVERIFIED: Windows system-memory telemetry could not be read."
 					: cpu is null
 						? "UNVERIFIED: CPU utilization sampler is warming up."
-						: "PASS: Windows CPU and system-memory telemetry is available.";
+						: cpuRetained || memoryRetained
+							? "PASS: recent Windows hardware sample retained after a transient read miss."
+							: "PASS: Windows CPU and system-memory telemetry is available.";
+
+			var gpuEvidence = gpuRetained
+				? "PASS: recent NVIDIA telemetry sample retained after a transient read miss."
+				: sampledGpu.Evidence;
 
 			_cached = new SystemHardwareTelemetrySnapshot(
 				_cpuDeviceName,
 				Environment.ProcessorCount,
 				cpu,
-				memoryAvailable ? memoryUsedBytes : null,
-				memoryAvailable ? memoryTotalBytes : null,
+				memoryUsedBytes,
+				memoryTotalBytes,
 				systemEvidence,
-				gpu.DeviceName,
-				gpu.UtilizationPercent,
-				gpu.VramUsedBytes,
-				gpu.VramTotalBytes,
-				gpu.Evidence);
+				sampledGpu.DeviceName ?? previous?.GpuDeviceName,
+				gpuUtilization,
+				gpuVramUsed,
+				gpuVramTotal,
+				gpuEvidence);
 			_lastSampleAtUtc = now;
 			return _cached;
 		}
 	}
+
+	private static T? Retain<T>(T? value, DateTimeOffset lastValidAtUtc, DateTimeOffset now)
+		where T : struct =>
+		value is not null &&
+		lastValidAtUtc != default &&
+		now - lastValidAtUtc <= SampleRetentionInterval
+			? value
+			: null;
 
 	public void Dispose()
 	{
@@ -215,23 +264,7 @@ internal sealed class SystemHardwareTelemetry : IDisposable
 				if (NvmlDeviceGetCount(out var count) != NvmlSuccess || count == 0)
 				return;
 
-				ulong largestMemory = 0;
-				for (uint index = 0; index < count; index++)
-				{
-					if (NvmlDeviceGetHandleByIndex(index, out var candidate) != NvmlSuccess)
-						continue;
-
-					var total = NvmlDeviceGetMemoryInfo(candidate, out var memory) == NvmlSuccess
-						? memory.Total
-						: 0;
-					if (_device == IntPtr.Zero || total > largestMemory)
-					{
-						_device = candidate;
-						largestMemory = total;
-					}
-				}
-
-				if (_device == IntPtr.Zero)
+				if (NvmlDeviceGetHandleByIndex(0, out _device) != NvmlSuccess || _device == IntPtr.Zero)
 					return;
 
 				_deviceName = ReadDeviceName(_device);
