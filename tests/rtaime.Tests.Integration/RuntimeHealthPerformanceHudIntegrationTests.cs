@@ -101,7 +101,7 @@ public sealed class RuntimeHealthPerformanceHudIntegrationTests
 			controlAuthorityAvailable: true,
 			DateTimeOffset.UtcNow);
 
-		Assert.Equal("0% · 0 B / 32.00 GiB", health.SystemMemory);
+		Assert.Equal("0% · 0.00 GiB / 32.00 GiB", health.SystemMemory);
 		Assert.Equal("24.00 GiB / 24.00 GiB", health.Vram);
 	}
 
