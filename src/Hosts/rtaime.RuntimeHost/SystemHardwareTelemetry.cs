@@ -39,7 +39,8 @@ internal sealed class SystemHardwareTelemetry : IDisposable
 	{
 		lock (_gate)
 		{
-			ObjectDisposedException.ThrowIf(_disposed, this);
+			if (_disposed)
+				throw new ObjectDisposedException(nameof(SystemHardwareTelemetry));
 
 			var now = DateTimeOffset.UtcNow;
 			if (_cached is not null && now - _lastSampleAtUtc < SampleInterval)
