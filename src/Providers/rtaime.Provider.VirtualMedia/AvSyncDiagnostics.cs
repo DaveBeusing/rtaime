@@ -33,6 +33,7 @@ public enum AvSyncMeasurementState
 public sealed record AvSyncDiagnosticsSnapshot(
 	AvSyncMeasurementState State,
 	ulong? EventId,
+	Rational? ExpectedMediaTime,
 	ulong? TargetVideoFrameSequence,
 	ulong? TargetAudioSamplePosition,
 	double? ScheduledVideoOffsetMilliseconds,
@@ -42,6 +43,7 @@ public sealed record AvSyncDiagnosticsSnapshot(
 {
 	public static AvSyncDiagnosticsSnapshot Unavailable { get; } = new(
 		AvSyncMeasurementState.Unavailable,
+		null,
 		null,
 		null,
 		null,
@@ -260,6 +262,7 @@ public sealed class AvSyncDiagnosticsTracker
 		_snapshot = new AvSyncDiagnosticsSnapshot(
 			AvSyncMeasurementState.Partial,
 			scheduled.EventId,
+			scheduled.ExpectedMediaTime,
 			scheduled.TargetVideoFrameSequence,
 			scheduled.TargetAudioSamplePosition,
 			scheduled.ScheduledVideoOffsetMilliseconds,
@@ -281,6 +284,7 @@ public sealed class AvSyncDiagnosticsTracker
 		_snapshot = new AvSyncDiagnosticsSnapshot(
 			AvSyncMeasurementState.Measured,
 			_pendingEvent.EventId,
+			_pendingEvent.ExpectedMediaTime,
 			_pendingEvent.TargetVideoFrameSequence,
 			_pendingEvent.TargetAudioSamplePosition,
 			_pendingEvent.ScheduledVideoOffsetMilliseconds,
