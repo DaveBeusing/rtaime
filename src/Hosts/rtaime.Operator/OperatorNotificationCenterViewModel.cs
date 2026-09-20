@@ -180,10 +180,7 @@ public sealed class OperatorNotificationCenterViewModel : INotifyPropertyChanged
 	private void PublishOperatorError()
 	{
 		if (string.IsNullOrWhiteSpace(_operator.LastError))
-		{
-			_notifications.Dismiss("operator.last-error");
 			return;
-		}
 
 		var blocked = string.Equals(_operator.ProgramSafety, OperatorProgramSafetyStates.Blocked, StringComparison.OrdinalIgnoreCase);
 		_notifications.Publish(new OperatorNotification(
@@ -295,6 +292,9 @@ public sealed class OperatorNotificationCenterViewModel : INotifyPropertyChanged
 			"disabled",
 			"synchronized",
 			"saved");
+
+		if (success && _operator.IsConnected && !_operator.IsStale)
+			_notifications.Dismiss("operator.last-error");
 
 		_notifications.Publish(new OperatorNotification(
 			"operator.last-event",
