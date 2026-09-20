@@ -331,7 +331,10 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 					_runtime.State,
 					_nextSequenceNumber,
 					_timingHealth,
-					new ReadOnlyDictionary<MediaSourceId, V1InputSignalState>(new Dictionary<MediaSourceId, V1InputSignalState>(_inputSignals)),
+					new ReadOnlyDictionary<MediaSourceId, V1InputSignalState>(
+						_inputSignals.ToDictionary(
+							pair => pair.Key,
+							pair => _broadcastTestPatternSources.Contains(pair.Key) ? V1InputSignalState.Valid : pair.Value)),
 					Array.AsReadOnly(_broadcastTestPatternSources.OrderBy(sourceId => sourceId.ToString(), StringComparer.Ordinal).ToArray()),
 					_operatorGraphicsVisible ? V1VisualLayerMode.Static : _visualLayerMode,
 					GraphicsOverlaySnapshotUnsafe(),
@@ -781,8 +784,6 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			if (!changed)
 				return false;
 
-			if (enabled)
-				_inputSignals[sourceId] = V1InputSignalState.Valid;
 			Observe($"input.test_pattern:{sourceId}:{(enabled ? "enabled" : "disabled")}");
 			return true;
 		}
