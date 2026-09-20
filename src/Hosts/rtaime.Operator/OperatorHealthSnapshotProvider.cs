@@ -240,7 +240,7 @@ public sealed class OperatorHealthSnapshotProvider : IHealthSnapshotProvider, ID
 				"media",
 				"Media Engine",
 				"Media",
-				MapEvidence(_operator.MediaHealth),
+				HealthStateMapping.FromEvidence(_operator.MediaHealth),
 				_operator.MediaHealth == "PASS" ? "Runtime media inputs and Program audio are healthy." : _operator.EngineHealthDetail,
 				now,
 				[
@@ -485,14 +485,14 @@ public sealed class OperatorHealthSnapshotProvider : IHealthSnapshotProvider, ID
 			return SubsystemHealthState.Recovering;
 		if (!_operator.IsConnected)
 			return SubsystemHealthState.Unknown;
-		return MapEvidence(_operator.ControlHealth);
+		return HealthStateMapping.FromEvidence(_operator.ControlHealth);
 	}
 
 	private SubsystemHealthState RuntimeState()
 	{
 		if (_operator.IsStale)
 			return SubsystemHealthState.Recovering;
-		return MapEvidence(_operator.RuntimeHealth);
+		return HealthStateMapping.FromEvidence(_operator.RuntimeHealth);
 	}
 
 	private SubsystemHealthState ProviderState()
@@ -510,14 +510,6 @@ public sealed class OperatorHealthSnapshotProvider : IHealthSnapshotProvider, ID
 			return SubsystemHealthState.Failed;
 		return IsUnavailable(value) ? SubsystemHealthState.Unknown : SubsystemHealthState.Healthy;
 	}
-
-	private static SubsystemHealthState MapEvidence(string? state) =>
-		state?.Trim().ToUpperInvariant() switch
-		{
-			"PASS" => SubsystemHealthState.Healthy,
-			"FAIL" => SubsystemHealthState.Failed,
-			_ => SubsystemHealthState.Unknown
-		};
 
 	private static string ResolveRecoveryStatus(string? evidence) =>
 		string.Equals(evidence, "FAIL", StringComparison.OrdinalIgnoreCase)
