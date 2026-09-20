@@ -409,6 +409,7 @@ public interface IOperatorControlTransport
     ValueTask<bool> SetBroadcastTestPatternAsync(
         string sourceId,
         bool enabled,
+        bool motionTiming = false,
         CancellationToken cancellationToken = default) =>
         ValueTask.FromException<bool>(new NotSupportedException("Operator transport does not expose broadcast test pattern control."));
 
@@ -556,6 +557,7 @@ public sealed class OperatorControlClient
     public async ValueTask<bool> SetBroadcastTestPatternAsync(
         string sourceId,
         bool enabled,
+        bool motionTiming = false,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(sourceId))
@@ -563,7 +565,7 @@ public sealed class OperatorControlClient
 
         RequireSnapshot();
         var result = await _transport
-            .SetBroadcastTestPatternAsync(sourceId.Trim(), enabled, cancellationToken)
+            .SetBroadcastTestPatternAsync(sourceId.Trim(), enabled, motionTiming, cancellationToken)
             .ConfigureAwait(false);
         await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
         return result;
