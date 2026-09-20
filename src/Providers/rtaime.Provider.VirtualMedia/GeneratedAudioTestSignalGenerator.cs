@@ -98,9 +98,15 @@ public sealed class GeneratedAudioTestSignalGenerator
 			case GeneratedAudioTestSignalMode.Silence:
 				break;
 			case GeneratedAudioTestSignalMode.Tone:
-			case GeneratedAudioTestSignalMode.Pulse:
 				left = peak;
 				right = _channelCount >= 2 ? peak : left;
+				break;
+			case GeneratedAudioTestSignalMode.Pulse:
+				if (PulseOverlaps(timing))
+				{
+					left = peak;
+					right = _channelCount >= 2 ? peak : left;
+				}
 				break;
 			case GeneratedAudioTestSignalMode.StereoIdentification:
 				(left, right) = StereoIdentificationPeaks(timing.SamplePosition, peak);
@@ -113,6 +119,16 @@ public sealed class GeneratedAudioTestSignalGenerator
 		}
 
 		return new GeneratedAudioTestSignalFrameInfo(_configuration.Mode, activeChannel, left, right);
+	}
+
+	private bool PulseOverlaps(AudioBufferTiming timing)
+	{
+		if (timing.SampleCount >= _pulsePeriodSamples)
+			return true;
+		var startPhase = timing.SamplePosition % _pulsePeriodSamples;
+		if (startPhase < _pulseDurationSamples)
+			return true;
+		return startPhase + timing.SampleCount > _pulsePeriodSamples;
 	}
 
 	private float SignalValue(ulong absoluteSample)
