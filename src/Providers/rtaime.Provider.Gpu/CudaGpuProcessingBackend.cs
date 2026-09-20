@@ -13,7 +13,10 @@ namespace rtaime.Provider.Gpu;
 public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend
 {
     private readonly object _gate = new();
+    private const int MaxPooledAllocationsPerSize = 8;
+
     private readonly Dictionary<SurfaceId, CudaAllocation> _surfaces = new();
+    private readonly Dictionary<nuint, Stack<ulong>> _freeAllocations = new();
     private readonly int _deviceOrdinal;
     private IntPtr _context;
     private IntPtr _module;
@@ -150,6 +153,12 @@ public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend
                     foreach (var allocation in _surfaces.Values)
                         CudaNative.cuMemFree_v2(allocation.DevicePointer);
                     _surfaces.Clear();
+                    foreach (var pool in _freeAllocations.Values)
+                    {
+                        while (pool.TryPop(out var pointer))
+                            CudaNative.cuMemFree_v2(pointer);
+                    }
+                    _freeAllocations.Clear();
                 }
                 finally
                 {
@@ -175,17 +184,18 @@ public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend
                 throw new ArgumentException("CUDA upload length does not match the target format.", nameof(rgbaPixels));
 
             SetCurrentContext();
-            Check(CudaNative.cuMemAlloc_v2(out var pointer, (nuint)byteLength), "cuMemAlloc_v2");
+            var allocationLength = (nuint)byteLength;
+            var pointer = RentAllocation(allocationLength);
 
             try
             {
-                var host = rgbaPixels.ToArray();
-                Check(CudaNative.cuMemcpyHtoD_v2(pointer, host, (nuint)host.Length), "cuMemcpyHtoD_v2");
-                _surfaces.Add(surfaceId, new CudaAllocation(format, pointer, (nuint)byteLength));
+                ref var source = ref MemoryMarshal.GetReference(rgbaPixels);
+                Check(CudaNative.cuMemcpyHtoD_v2(pointer, ref source, allocationLength), "cuMemcpyHtoD_v2");
+                _surfaces.Add(surfaceId, new CudaAllocation(format, pointer, allocationLength));
             }
             catch
             {
-                CudaNative.cuMemFree_v2(pointer);
+                ReturnAllocation(pointer, allocationLength);
                 throw;
             }
         }
@@ -206,7 +216,7 @@ public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend
             var byteLength = (nuint)RgbaFrameBuffer.RequiredByteLength(format);
 
             SetCurrentContext();
-            Check(CudaNative.cuMemAlloc_v2(out var outputPointer, byteLength), "cuMemAlloc_v2");
+            var outputPointer = RentAllocation(byteLength);
 
             try
             {
@@ -243,7 +253,7 @@ public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend
             }
             catch
             {
-                CudaNative.cuMemFree_v2(outputPointer);
+                ReturnAllocation(outputPointer, byteLength);
                 throw;
             }
         }
@@ -273,7 +283,7 @@ public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend
             if (_context != IntPtr.Zero)
             {
                 SetCurrentContext();
-                Check(CudaNative.cuMemFree_v2(allocation.DevicePointer), "cuMemFree_v2");
+                ReturnAllocation(allocation.DevicePointer, allocation.ByteLength);
             }
         }
     }
@@ -287,6 +297,32 @@ public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend
             Stop();
             _disposed = true;
         }
+    }
+
+    private ulong RentAllocation(nuint byteLength)
+    {
+        if (_freeAllocations.TryGetValue(byteLength, out var pool) && pool.TryPop(out var pointer))
+            return pointer;
+
+        Check(CudaNative.cuMemAlloc_v2(out pointer, byteLength), "cuMemAlloc_v2");
+        return pointer;
+    }
+
+    private void ReturnAllocation(ulong pointer, nuint byteLength)
+    {
+        if (!_freeAllocations.TryGetValue(byteLength, out var pool))
+        {
+            pool = new Stack<ulong>();
+            _freeAllocations.Add(byteLength, pool);
+        }
+
+        if (pool.Count < MaxPooledAllocationsPerSize)
+        {
+            pool.Push(pointer);
+            return;
+        }
+
+        Check(CudaNative.cuMemFree_v2(pointer), "cuMemFree_v2");
     }
 
     private CudaAllocation Get(SurfaceId surfaceId, VideoFormat format)
@@ -460,7 +496,7 @@ public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend
         internal static extern CudaResult cuMemFree_v2(ulong devicePointer);
 
         [DllImport(Library, EntryPoint = "cuMemcpyHtoD_v2", CallingConvention = CallingConvention.Winapi)]
-        internal static extern CudaResult cuMemcpyHtoD_v2(ulong destination, byte[] source, nuint bytes);
+        internal static extern CudaResult cuMemcpyHtoD_v2(ulong destination, ref byte source, nuint bytes);
 
         [DllImport(Library, EntryPoint = "cuMemcpyDtoH_v2", CallingConvention = CallingConvention.Winapi)]
         internal static extern CudaResult cuMemcpyDtoH_v2([Out] byte[] destination, ulong source, nuint bytes);
