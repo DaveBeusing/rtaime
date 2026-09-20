@@ -85,9 +85,9 @@ No second graphics renderer or processing graph is introduced by the shell.
 
 OUTPUTS is the production-facing routing, output-health and performance workspace. It projects the authoritative Runtime Program source and the existing clean Program monitoring presentation without creating a second output or routing authority.
 
-Preview-to-Program routing reuses the existing CUT command and becomes SAFE READ-ONLY whenever the shared mutation gate is unavailable. Output detail exposes only confirmed format, target, recording and health evidence. CPU utilization, system-memory utilization/capacity and available NVIDIA GPU/VRAM measurements are projected from the Runtime performance snapshot. Missing color-space, streaming, disk, network and measured Output-FPS telemetry remains explicitly UNAVAILABLE.
+Preview-to-Program routing reuses the existing CUT command and becomes SAFE READ-ONLY whenever the shared mutation gate is unavailable. Output detail exposes only confirmed format, target, recording and health evidence. CPU utilization, system-memory utilization/capacity, available NVIDIA GPU/VRAM measurements and measured Program output FPS are projected from the Runtime performance snapshot. Missing color-space, streaming, disk, network and temperature telemetry remains explicitly UNAVAILABLE.
 
-Available Runtime frame-time, dropped-frame and hardware evidence is presented with bounded presentation-only mini histories. The workspace introduces no independent thresholds and no additional telemetry polling loop. See [Output Routing, Health and Performance](OutputRoutingHealth.md).
+Available Runtime frame-time, measured output cadence, dropped-frame and hardware evidence is presented with bounded presentation-only mini histories. The permanent Production Shell status bar reuses the same projection and adds no independent telemetry polling loop or thresholds. See [Output Routing, Health and Performance](OutputRoutingHealth.md) and [Runtime Performance Status Bar](RuntimePerformanceStatusBar.md).
 
 ## HEALTH
 

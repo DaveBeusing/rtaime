@@ -42,12 +42,13 @@ Technical detail from the existing projections remains visible with the affected
 The current Runtime health contract provides:
 
 - core render time and frame budget;
+- measured Program output FPS;
 - dropped-frame count;
 - GPU utilization when available;
 - VRAM evidence when available;
 - configured video format.
 
-Runtime performance snapshots now provide bounded measured CPU utilization and system-memory usage/capacity on the qualified Windows platform. NVIDIA GPU utilization and VRAM usage are published through driver-provided NVML telemetry when available; unsupported or unavailable GPU telemetry remains explicitly `UNVERIFIED`. The Render metric is the core Runtime render/composite duration, while full pipeline timing remains owned by Runtime timing qualification. The engineering target is at or below 3 ms Runtime render latency, with 5 ms retained as the hardware P95 qualification ceiling. Values at or below 3 ms are healthy, values above the engineering target are warnings, and values beyond the active frame budget are faulted. Disk, network, temperature and measured Output FPS telemetry remain `UNAVAILABLE`. The configured frame rate is shown as context but is not presented as measured Output FPS.
+Runtime performance snapshots provide bounded measured CPU utilization and system-memory usage/capacity on the qualified Windows platform. NVIDIA GPU utilization and VRAM usage are published through driver-provided NVML telemetry when available; unsupported or unavailable GPU telemetry remains explicitly `UNVERIFIED`. The Render metric is the core Runtime render/composite duration, while full pipeline timing remains owned by Runtime timing qualification. The engineering target is at or below 3 ms Runtime render latency, with 5 ms retained as the hardware P95 qualification ceiling. Values at or below 3 ms are healthy, values above the engineering target are warnings, and values beyond the active frame budget are faulted. Measured Output FPS is derived from the existing Program scheduler-boundary cadence using a constant-space smoothed observation and is transported in the same Runtime performance snapshot. Disk, network and temperature telemetry remain `UNAVAILABLE`; the configured frame rate remains context and is not substituted for measured Output FPS.
 
 Color space is likewise `UNAVAILABLE` until it is published by an authoritative output contract. Recording state reuses the existing recording projection. Streaming remains `UNAVAILABLE` while no authoritative streaming state exists.
 

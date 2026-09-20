@@ -233,6 +233,7 @@ public sealed class OperatorHealthSnapshotProvider : IHealthSnapshotProvider, ID
 				now,
 				[
 					new("Frame time / budget", Availability(_operator.FrameTime)),
+					new("Output FPS", Availability(_operator.OutputFps)),
 					new("Dropped frames", Availability(_operator.DroppedFrames)),
 					new("Verification", _operator.PerformanceVerificationState)
 				],

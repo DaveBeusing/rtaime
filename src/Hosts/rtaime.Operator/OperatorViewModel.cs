@@ -56,6 +56,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	private string _gpuProviderHealth = "UNVERIFIED";
 	private string _currentFormat = "UNVERIFIED";
 	private string _frameTime = "UNVERIFIED";
+	private string _outputFps = "UNVERIFIED";
 	private string _droppedFrames = "0";
 	private string _uptime = "00:00:00";
 	private string _cpuDeviceName = "UNVERIFIED";
@@ -233,6 +234,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	public string GpuProviderHealth { get => _gpuProviderHealth; private set => Set(ref _gpuProviderHealth, value); }
 	public string CurrentFormat { get => _currentFormat; private set { if (Set(ref _currentFormat, value)) PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(FormatStatus))); } }
 	public string FrameTime { get => _frameTime; private set => Set(ref _frameTime, value); }
+	public string OutputFps { get => _outputFps; private set => Set(ref _outputFps, value); }
 	public string DroppedFrames { get => _droppedFrames; private set => Set(ref _droppedFrames, value); }
 	public string Uptime { get => _uptime; private set => Set(ref _uptime, value); }
 	public string CpuDeviceName { get => _cpuDeviceName; private set => Set(ref _cpuDeviceName, value); }
@@ -948,10 +950,9 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		ProviderHealth = health.Provider.State;
 		GpuProviderHealth = health.GpuProvider.State;
 		CurrentFormat = health.CurrentFormat;
-		FrameTime = health.FrameBudget > TimeSpan.Zero
-			? $"{health.FrameTime.TotalMilliseconds:0.00} ms / {health.FrameBudget.TotalMilliseconds:0.00} ms"
-			: "UNVERIFIED";
-		DroppedFrames = health.DroppedFrames.ToString(CultureInfo.InvariantCulture);
+		FrameTime = RuntimePerformanceDisplayFormatter.FormatFrameTime(health.FrameTime, health.FrameBudget);
+		OutputFps = RuntimePerformanceDisplayFormatter.FormatFramesPerSecond(health.OutputFramesPerSecond);
+		DroppedFrames = RuntimePerformanceDisplayFormatter.FormatDroppedFrames(health.DroppedFrames);
 		Uptime = FormatElapsed(health.Uptime);
 		CpuDeviceName = health.CpuDeviceName;
 		CpuUtilization = health.CpuUtilization;

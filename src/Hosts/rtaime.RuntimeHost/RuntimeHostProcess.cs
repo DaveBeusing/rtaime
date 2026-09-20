@@ -370,7 +370,10 @@ public sealed class RuntimeHostProcess
 				framePeriod,
 				mediaIoStatistics?.OutputBackpressure ?? 0,
 				mediaIoStatistics?.OutputRejected ?? 0);
-			runtime.SetPerformanceObservations(renderDuration, droppedFrames);
+			runtime.SetPerformanceObservations(
+				renderDuration,
+				droppedFrames,
+				_frameDropCounter.OutputFramesPerSecond);
 			runtime.SetTimingHealth(MapTimingHealth(timing.State));
 		}
 	}

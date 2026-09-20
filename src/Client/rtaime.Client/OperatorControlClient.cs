@@ -245,7 +245,8 @@ public sealed record OperatorHealthDescriptor(
     string CpuDeviceName = "UNVERIFIED",
     string CpuUtilization = "UNVERIFIED",
     string SystemMemory = "UNVERIFIED",
-    string GpuDeviceName = "UNVERIFIED")
+    string GpuDeviceName = "UNVERIFIED",
+    double? OutputFramesPerSecond = null)
 {
     public static OperatorHealthDescriptor Unavailable { get; } = new(
         OperatorHealthMetricDescriptor.Unverified("Health snapshot unavailable."),
@@ -265,7 +266,8 @@ public sealed record OperatorHealthDescriptor(
         "UNVERIFIED",
         "UNVERIFIED",
         "UNVERIFIED",
-        "UNVERIFIED");
+        "UNVERIFIED",
+        null);
 }
 
 public sealed record OperatorAIShowcaseDescriptor(

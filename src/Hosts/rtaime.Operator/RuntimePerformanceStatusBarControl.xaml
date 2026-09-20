@@ -1,0 +1,81 @@
+<!-- Copyright (c) Dave Beusing <david.beusing@gmail.com>. -->
+<UserControl x:Class="rtaime.Operator.RuntimePerformanceStatusBarControl"
+	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	Background="Transparent"
+	Foreground="{DynamicResource OperatorTextBrush}">
+
+	<UserControl.Resources>
+		<Style x:Key="RuntimeStatusBarValue" TargetType="TextBlock">
+			<Setter Property="Foreground" Value="{DynamicResource OperatorTextBrush}" />
+			<Setter Property="FontWeight" Value="SemiBold" />
+			<Setter Property="FontSize" Value="10" />
+			<Style.Triggers>
+				<DataTrigger Binding="{Binding Status}" Value="WARNING">
+					<Setter Property="Foreground" Value="{DynamicResource OperatorWarningBrush}" />
+				</DataTrigger>
+				<DataTrigger Binding="{Binding Status}" Value="FAULTED">
+					<Setter Property="Foreground" Value="{DynamicResource OperatorErrorBrush}" />
+				</DataTrigger>
+			</Style.Triggers>
+		</Style>
+	</UserControl.Resources>
+
+	<Border
+		Background="{DynamicResource OperatorTopBarBrush}"
+		BorderBrush="{DynamicResource OperatorBorderBrush}"
+		BorderThickness="0,1,0,0"
+		Padding="8,3"
+		SnapsToDevicePixels="True">
+		<Grid>
+			<Grid.ColumnDefinitions>
+				<ColumnDefinition Width="88" />
+				<ColumnDefinition Width="*" />
+			</Grid.ColumnDefinitions>
+
+			<StackPanel
+				Grid.Column="0"
+				Orientation="Horizontal"
+				VerticalAlignment="Center">
+				<TextBlock Text="RUNTIME" Style="{StaticResource OperatorSectionTitle}" FontSize="9" />
+			</StackPanel>
+
+			<ItemsControl
+				Grid.Column="1"
+				ItemsSource="{Binding Slots}"
+				Focusable="False"
+				IsHitTestVisible="True">
+				<ItemsControl.ItemsPanel>
+					<ItemsPanelTemplate>
+						<UniformGrid Rows="1" />
+					</ItemsPanelTemplate>
+				</ItemsControl.ItemsPanel>
+				<ItemsControl.ItemTemplate>
+					<DataTemplate>
+						<Border
+							BorderBrush="{DynamicResource OperatorBorderBrush}"
+							BorderThickness="1,0,0,0"
+							Padding="10,0"
+							ToolTip="{Binding Detail}">
+							<DockPanel LastChildFill="True" VerticalAlignment="Center">
+								<TextBlock
+									Text="{Binding Label}"
+									Style="{StaticResource OperatorLabel}"
+									FontSize="8"
+									VerticalAlignment="Center" />
+								<TextBlock
+									Text="{Binding Value}"
+									Style="{StaticResource RuntimeStatusBarValue}"
+									DockPanel.Dock="Right"
+									HorizontalAlignment="Right"
+									VerticalAlignment="Center"
+									TextTrimming="CharacterEllipsis"
+									Margin="8,0,0,0" />
+							</DockPanel>
+						</Border>
+					</DataTemplate>
+				</ItemsControl.ItemTemplate>
+			</ItemsControl>
+		</Grid>
+	</Border>
+</UserControl>

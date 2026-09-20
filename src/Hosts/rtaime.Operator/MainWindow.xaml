@@ -26,6 +26,7 @@
 		<Grid.RowDefinitions>
 			<RowDefinition Height="{StaticResource OperatorTopBarGridLength}" />
 			<RowDefinition Height="*" />
+			<RowDefinition Height="30" />
 		</Grid.RowDefinitions>
 
 		<Border x:Name="TopBar"
@@ -41,10 +42,6 @@
 					<ColumnDefinition Width="185" />
 					<ColumnDefinition Width="190" />
 					<ColumnDefinition Width="*" />
-					<ColumnDefinition Width="82" />
-					<ColumnDefinition Width="82" />
-					<ColumnDefinition Width="110" />
-					<ColumnDefinition Width="100" />
 					<ColumnDefinition Width="1" />
 					<ColumnDefinition Width="120" />
 					<ColumnDefinition Width="70" />
@@ -116,36 +113,12 @@
 					Margin="6,0"
 					AutomationProperties.Name="Global runtime readiness and diagnostics" />
 
-				<Border Grid.Column="5" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1,0,0,0" Padding="10,6" ToolTip="{Binding CpuDeviceName}">
-					<StackPanel VerticalAlignment="Center">
-						<TextBlock Text="CPU" Style="{StaticResource OperatorLabel}" />
-						<TextBlock Text="{Binding CpuUtilization}" FontWeight="SemiBold" />
-					</StackPanel>
-				</Border>
-				<Border Grid.Column="6" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1,0,0,0" Padding="10,6" ToolTip="{Binding GpuDeviceName}">
-					<StackPanel VerticalAlignment="Center">
-						<TextBlock Text="GPU" Style="{StaticResource OperatorLabel}" />
-						<TextBlock Text="{Binding GpuUtilization}" FontWeight="SemiBold" />
-					</StackPanel>
-				</Border>
-				<Border Grid.Column="7" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1,0,0,0" Padding="10,6" ToolTip="{Binding SystemMemory}">
-					<StackPanel VerticalAlignment="Center">
-						<TextBlock Text="MEMORY" Style="{StaticResource OperatorLabel}" />
-						<TextBlock Text="{Binding SystemMemory}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-					</StackPanel>
-				</Border>
-				<Border Grid.Column="8" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1,0,0,0" Padding="10,6" ToolTip="Runtime render latency. Engineering target: ≤3 ms; hardware P95 ceiling: 5 ms.">
-					<StackPanel VerticalAlignment="Center">
-						<TextBlock Text="LATENCY" Style="{StaticResource OperatorLabel}" />
-						<TextBlock Text="{Binding FrameTime}" FontWeight="SemiBold" />
-					</StackPanel>
-				</Border>
-				<Border Grid.Column="9" Background="{DynamicResource OperatorBorderBrush}" Margin="0,12" />
-				<StackPanel Grid.Column="10" VerticalAlignment="Center" HorizontalAlignment="Center">
+				<Border Grid.Column="5" Background="{DynamicResource OperatorBorderBrush}" Margin="0,12" />
+				<StackPanel Grid.Column="6" VerticalAlignment="Center" HorizontalAlignment="Center">
 					<TextBlock Text="TIMECODE" Style="{StaticResource OperatorLabel}" HorizontalAlignment="Center" />
 					<controls:RtaimeTimecode Content="{Binding MediaDeck.Current, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" FontSize="{StaticResource OperatorFontSizeLargeTimecode}" HorizontalContentAlignment="Center" />
 				</StackPanel>
-				<controls:RtaimeStatusBadge Grid.Column="11"
+				<controls:RtaimeStatusBadge Grid.Column="7"
 					Status="{x:Static controls:RtaimeStatusKind.Warning}"
 					Margin="8,0"
 					VerticalAlignment="Center"
@@ -155,7 +128,7 @@
 						<TextBlock Text="UNVERIFIED" FontSize="8" HorizontalAlignment="Center" />
 					</StackPanel>
 				</controls:RtaimeStatusBadge>
-				<controls:RtaimeStatusBadge Grid.Column="12"
+				<controls:RtaimeStatusBadge Grid.Column="8"
 					Status="{x:Static controls:RtaimeStatusKind.Program}"
 					Margin="8,0"
 					VerticalAlignment="Center"
@@ -165,7 +138,7 @@
 						<TextBlock Text="{Binding ProgramSourceName}" TextTrimming="CharacterEllipsis" MaxWidth="125" />
 					</StackPanel>
 				</controls:RtaimeStatusBadge>
-				<controls:RtaimeIconButton Grid.Column="13"
+				<controls:RtaimeIconButton Grid.Column="9"
 					IconData="{StaticResource RtaimeIconSettingsGeometry}"
 					Command="{Binding Shell.SelectWorkspaceCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 					CommandParameter="SETTINGS"
@@ -1543,8 +1516,14 @@
 			IsHitTestVisible="False" />
 		</Grid>
 
+		<local:RuntimePerformanceStatusBarControl
+			Grid.Row="2"
+			DataContext="{Binding RuntimePerformanceStatus, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+			HorizontalAlignment="Stretch"
+			VerticalAlignment="Stretch" />
+
 		<Border x:Name="StartupOverlay"
-			Grid.RowSpan="2"
+			Grid.RowSpan="3"
 			Panel.ZIndex="100"
 			Background="{DynamicResource OperatorSurfaceBrush}"
 			BorderBrush="{DynamicResource OperatorBorderBrush}"

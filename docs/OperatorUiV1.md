@@ -446,6 +446,12 @@ Recording commands are serialized through ControlHost and delegated to RuntimeHo
 The current V1 output is the deterministic `.rtaime-recording` reference artifact. It is externally verifiable with `ReferenceRecordingPayloadReader`; it is not presented as an MP4/MOV/MXF broadcast deliverable.
 
 
+## Runtime Performance Status Bar
+
+The Production Shell now reserves a permanent compact bottom status bar for CPU, GPU, RAM, VRAM, Runtime frame time, measured Output FPS and cumulative dropped-frame evidence. These values reuse the same Runtime/Control performance projection as the OUTPUTS and HEALTH workspaces; the bar owns no telemetry source, hardware probe or polling loop.
+
+Measured Output FPS comes from the existing Program scheduler-boundary observations and uses constant-space smoothing. The title bar remains focused on application lifecycle/readiness, timecode and Program state instead of duplicating performance metrics. See [Runtime Performance Status Bar](RuntimePerformanceStatusBar.md).
+
 ## Runtime Health & Performance HUD
 
 Runtime Health & Performance HUD replaces the former coarse SYSTEM summary with a compact evidence-based Runtime health/performance HUD. The Operator still owns no health truth; it renders the health projection returned through `rtaime.Client`.
@@ -493,7 +499,7 @@ CPU, system-memory, GPU and VRAM measurements are nullable evidence. CPU and sys
 
 ### Operator update cadence
 
-Runtime Health & Performance HUD adds no second UI telemetry loop. Health/performance observations reuse the existing bounded 200 ms management snapshot refresh that already drives audio/recording observations. The effective presentation cadence is therefore at most 5 Hz and does not participate in Runtime scheduling or Program rendering.
+Runtime Health & Performance HUD and the permanent Runtime Performance Status Bar add no second UI telemetry loop. Health/performance observations reuse the existing bounded 200 ms management snapshot refresh that already drives audio/recording observations. The effective presentation cadence is therefore at most 5 Hz and does not participate in Runtime scheduling or Program rendering. Hardware values remain independently bounded by the Runtime hardware sampling cache.
 
 RuntimeHost support diagnostics consume the same performance snapshot, preserving one observation source instead of creating a parallel metrics truth.
 

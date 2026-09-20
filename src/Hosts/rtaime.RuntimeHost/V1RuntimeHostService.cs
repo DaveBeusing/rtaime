@@ -135,7 +135,8 @@ public sealed record V1RuntimePerformanceSnapshot(
 	ulong? SystemMemoryUsedBytes = null,
 	ulong? SystemMemoryTotalBytes = null,
 	string SystemTelemetryEvidence = "UNVERIFIED",
-	string PhysicalGpuDeviceName = "UNVERIFIED");
+	string PhysicalGpuDeviceName = "UNVERIFIED",
+	double? OutputFramesPerSecond = null);
 
 public sealed record V1RuntimeHostSnapshot(
 	RuntimeExecutionState Runtime,
@@ -202,6 +203,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private V1TimingHealthState _timingHealth = V1TimingHealthState.Recovering;
 	private TimeSpan _lastFrameProcessingTime;
 	private ulong _droppedFrames;
+	private double? _outputFramesPerSecond;
 	private ulong _nextSequenceNumber;
 	private AudioFollowVideoResult? _lastAudioResult;
 	private DateTimeOffset? _recordingStartedAtUtc;
@@ -614,14 +616,17 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		}
 	}
 
-	public void SetPerformanceObservations(TimeSpan processingDuration, ulong droppedFrames)
+	public void SetPerformanceObservations(TimeSpan processingDuration, ulong droppedFrames, double? outputFramesPerSecond = null)
 	{
 		if (processingDuration < TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(processingDuration));
+		if (outputFramesPerSecond is { } framesPerSecond && (!double.IsFinite(framesPerSecond) || framesPerSecond <= 0))
+			throw new ArgumentOutOfRangeException(nameof(outputFramesPerSecond));
 		lock (_gate)
 		{
 			ThrowIfDisposed();
 			_lastFrameProcessingTime = processingDuration;
 			_droppedFrames = droppedFrames;
+			_outputFramesPerSecond = outputFramesPerSecond;
 		}
 	}
 
@@ -958,7 +963,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			hardware.SystemMemoryUsedBytes,
 			hardware.SystemMemoryTotalBytes,
 			hardware.SystemTelemetryEvidence,
-			hardware.GpuDeviceName ?? "UNVERIFIED");
+			hardware.GpuDeviceName ?? "UNVERIFIED",
+			_outputFramesPerSecond);
 	}
 
 	private V1RecordingOperatorSnapshot RecordingOperatorSnapshotUnsafe()

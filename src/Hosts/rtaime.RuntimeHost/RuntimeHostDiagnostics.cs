@@ -77,6 +77,7 @@ public static class RuntimeHostDiagnostics
 				.Status("format.frameRate", runtime.Format.FrameRate.ToString())
 				.Status("performance.frameBudgetMs", performance.FrameBudget.TotalMilliseconds.ToString("F6", CultureInfo.InvariantCulture))
 				.Status("performance.lastFrameProcessingMs", performance.LastFrameProcessingTime.TotalMilliseconds.ToString("F6", CultureInfo.InvariantCulture))
+				.Status("performance.outputFramesPerSecond", performance.OutputFramesPerSecond?.ToString("F3", CultureInfo.InvariantCulture) ?? "UNVERIFIED")
 				.Status("performance.uptime", performance.Uptime.ToString())
 				.Status("gpu.deviceName", performance.GpuDeviceName)
 				.Status("gpu.hardwareAccelerated", performance.GpuHardwareAccelerated.ToString())
