@@ -20,6 +20,7 @@ $corePath = Join-Path $repositoryRoot "src/rtaime.Core/Diagnostics.cs"
 $controlPath = Join-Path $repositoryRoot "src/Hosts/rtaime.ControlHost/ControlHostDiagnostics.cs"
 $runtimePath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/RuntimeHostDiagnostics.cs"
 $runtimeServicePath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/V1RuntimeHostService.cs"
+$runtimeProcessPath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/RuntimeHostProcess.cs"
 $hardwareTelemetryPath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/SystemHardwareTelemetry.cs"
 $frameDropPath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/RuntimeFrameDropCounter.cs"
 $healthProjectionPath = Join-Path $repositoryRoot "src/Hosts/rtaime.ControlHost/OperatorHealthProjection.cs"
@@ -31,7 +32,7 @@ $runtimeReadinessTestsPath = Join-Path $repositoryRoot "tests/rtaime.Tests.Unit/
 $documentationPath = Join-Path $repositoryRoot "docs/ObservabilityDiagnostics.md"
 $runtimeReadinessDocumentationPath = Join-Path $repositoryRoot "docs/RuntimeReadiness.md"
 
-foreach ($path in @($corePath, $controlPath, $runtimePath, $runtimeServicePath, $hardwareTelemetryPath, $frameDropPath, $healthProjectionPath, $runtimeReadinessPath, $controlIpcPath, $aiPath, $testsPath, $runtimeReadinessTestsPath, $documentationPath, $runtimeReadinessDocumentationPath)) {
+foreach ($path in @($corePath, $controlPath, $runtimePath, $runtimeServicePath, $runtimeProcessPath, $hardwareTelemetryPath, $frameDropPath, $healthProjectionPath, $runtimeReadinessPath, $controlIpcPath, $aiPath, $testsPath, $runtimeReadinessTestsPath, $documentationPath, $runtimeReadinessDocumentationPath)) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required observability artifact is missing: '$path'."
 }
 
@@ -39,6 +40,7 @@ $core = Get-Content -LiteralPath $corePath -Raw
 $control = Get-Content -LiteralPath $controlPath -Raw
 $runtime = Get-Content -LiteralPath $runtimePath -Raw
 $runtimeService = Get-Content -LiteralPath $runtimeServicePath -Raw
+$runtimeProcess = Get-Content -LiteralPath $runtimeProcessPath -Raw
 $hardwareTelemetry = Get-Content -LiteralPath $hardwareTelemetryPath -Raw
 $frameDrop = Get-Content -LiteralPath $frameDropPath -Raw
 $healthProjection = Get-Content -LiteralPath $healthProjectionPath -Raw
@@ -69,6 +71,10 @@ Assert-Condition ($runtime -match 'gpu\.utilizationPercent' -and $runtime -match
 Assert-Condition ($runtimeService -match 'V1RuntimePerformanceSnapshot') "RuntimeHost must expose a bounded runtime performance snapshot."
 Assert-Condition ($runtimeService -match 'GpuUtilizationPercent[\s\S]*GpuVramUsedBytes') "Runtime performance telemetry must keep optional GPU utilization and VRAM fields explicit."
 Assert-Condition ($runtimeService -match 'CpuUtilizationPercent[\s\S]*SystemMemoryUsedBytes[\s\S]*SystemMemoryTotalBytes') "Runtime performance telemetry must expose optional CPU and system-memory measurements explicitly."
+Assert-Condition ($runtimeService -match 'OutputFramesPerSecond') "Runtime performance telemetry must expose measured Program output cadence explicitly."
+Assert-Condition ($runtimeProcess -match '_frameDropCounter\.OutputFramesPerSecond' -and $runtimeProcess -match 'SetPerformanceObservations') "RuntimeHost must feed output cadence from existing Program-boundary timing observations into the performance snapshot."
+Assert-Condition ($frameDrop -match 'OutputRateSmoothingFactor\s*=\s*0\.2' -and $frameDrop -match 'OutputFramesPerSecond') "Program output cadence must use bounded constant-space smoothing."
+Assert-Condition ($runtime -match 'performance\.outputFramesPerSecond') "Runtime support diagnostics must expose measured output cadence when available."
 Assert-Condition ($hardwareTelemetry -match 'SampleInterval\s*=\s*TimeSpan\.FromMilliseconds\(500\)') "Hardware telemetry sampling must remain bounded and cached."
 Assert-Condition ($hardwareTelemetry -match 'SampleRetentionInterval\s*=\s*TimeSpan\.FromSeconds\(3\)') "Transient hardware read misses must retain recent qualified samples for a bounded three-second window."
 Assert-Condition ($hardwareTelemetry -notmatch 'PeriodicTimer|Task\.Run|new Thread') "Hardware telemetry must remain snapshot-driven and must not create an independent polling loop."
@@ -79,6 +85,7 @@ Assert-Condition ($hardwareTelemetry -match 'GetSystemTimes' -and $hardwareTelem
 Assert-Condition ($hardwareTelemetry -match 'nvmlDeviceGetUtilizationRates' -and $hardwareTelemetry -match 'nvmlDeviceGetMemoryInfo') "NVIDIA telemetry must use driver-provided NVML measurements."
 Assert-Condition ($frameDrop -match 'class RuntimeFrameDropCounter') "Runtime diagnostics must retain a dedicated O(1) dropped-frame counter."
 Assert-Condition ($frameDrop -notmatch 'List<|Queue<|Dictionary<|File\.|Stream') "Dropped-frame observation must not allocate history or perform I/O on the Runtime hot path."
+Assert-Condition ($frameDrop -notmatch 'Stopwatch|DateTime|DateTimeOffset|PeriodicTimer|Task\.Run|new Thread') "Output cadence observation must reuse supplied scheduler-boundary timestamps and create no independent timing or polling source."
 Assert-Condition ($healthProjection -match 'Pass[\s\S]*Fail[\s\S]*Unverified') "Runtime health projection must preserve PASS/FAIL/UNVERIFIED semantics."
 Assert-Condition ($healthProjection -match 'GpuUtilizationPercent is') "Runtime health projection must expose GPU utilization only when a measured value exists."
 Assert-Condition ($healthProjection -match 'CpuUtilizationPercent is' -and $healthProjection -match 'SystemMemoryUsedBytes is') "Runtime health projection must expose CPU and system-memory values only from measured evidence."
@@ -115,6 +122,7 @@ Assert-Condition ($tests -match 'Support_snapshot_serialization_is_deterministic
 Assert-Condition ($documentation -match 'No per-frame disk write') "Observability documentation must explicitly prohibit per-frame diagnostic disk writes."
 Assert-Condition ($documentation -match 'raw video/audio payloads') "Observability documentation must explicitly prohibit bulk media in support snapshots."
 Assert-Condition ($documentation -match 'Runtime Health & Performance HUD') "Observability documentation must record the runtime health/performance projection."
+Assert-Condition ($documentation -match 'performance\.outputFramesPerSecond' -and $documentation -match 'exponentially smoothed Output-FPS scalar') "Observability documentation must record the measured output-cadence path and constant-space smoothing boundary."
 Assert-Condition ($documentation -match 'UNVERIFIED') "Observability documentation must explicitly preserve UNVERIFIED evidence for unavailable GPU telemetry."
 
 Write-Host "Observability diagnostics policy verification PASS"
