@@ -126,7 +126,13 @@ public sealed class BroadcastTestPatternGenerator
 			['W'] = [17, 17, 17, 21, 21, 21, 10],
 			['X'] = [17, 17, 10, 4, 10, 17, 17],
 			['Y'] = [17, 17, 10, 4, 4, 4, 4],
-			['Z'] = [31, 1, 2, 4, 8, 16, 31]
+			['Z'] = [31, 1, 2, 4, 8, 16, 31],
+			['a'] = [0, 0, 14, 1, 15, 17, 15],
+			['e'] = [0, 0, 14, 17, 31, 16, 14],
+			['i'] = [4, 0, 12, 4, 4, 4, 14],
+			['m'] = [0, 0, 26, 21, 21, 21, 21],
+			['r'] = [0, 0, 22, 25, 16, 16, 16],
+			['t'] = [4, 4, 31, 4, 4, 5, 2]
 		});
 
 	private readonly byte[] _pixels;
@@ -169,14 +175,17 @@ public sealed class BroadcastTestPatternGenerator
 		var grayscaleHeight = Math.Max(1, height * 10 / 100);
 		var rampTop = grayscaleTop + grayscaleHeight;
 		var rampHeight = Math.Max(1, height * 10 / 100);
-		var patchesTop = rampTop + rampHeight;
-		var patchesHeight = Math.Max(1, height * 10 / 100);
+		var rgbTop = rampTop + rampHeight;
+		var rgbHeight = Math.Max(3, height * 9 / 100);
+		var patchesTop = rgbTop + rgbHeight;
+		var patchesHeight = Math.Max(1, height * 8 / 100);
 		var infoTop = Math.Min(height - 1, patchesTop + patchesHeight);
 
 		DrawHeader(width, headerHeight);
 		DrawColorBars(width, barsTop, barsHeight);
 		DrawGrayscaleSteps(width, grayscaleTop, grayscaleHeight);
 		DrawLumaRamp(width, rampTop, rampHeight);
+		DrawRgbRamps(width, rgbTop, rgbHeight);
 		DrawReferencePatches(width, patchesTop, patchesHeight);
 		DrawInfoPanel(width, height, infoTop);
 		DrawGeometry(width, height, barsTop, infoTop);
@@ -242,6 +251,20 @@ public sealed class BroadcastTestPatternGenerator
 
 		var labelScale = Math.Max(1, height / 15);
 		DrawText("LUMA 0-255", Math.Max(8, width / 80), top + Math.Max(5, height / 10), labelScale, SignalAccent);
+	}
+
+	private void DrawRgbRamps(int width, int top, int height)
+	{
+		var bandHeight = Math.Max(1, height / 3);
+		for (var x = 0; x < width; x++)
+		{
+			var value = width <= 1
+				? (byte)0
+				: (byte)Math.Round(x * 255d / (width - 1));
+			FillRect(x, top, 1, bandHeight, new Rgba(value, 0, 0));
+			FillRect(x, top + bandHeight, 1, bandHeight, new Rgba(0, value, 0));
+			FillRect(x, top + bandHeight * 2, 1, height - bandHeight * 2, new Rgba(0, 0, value));
+		}
 	}
 
 	private void DrawReferencePatches(int width, int top, int height)
@@ -350,9 +373,11 @@ public sealed class BroadcastTestPatternGenerator
 		var cursor = x;
 		foreach (var raw in text)
 		{
-			var character = char.ToUpperInvariant(raw);
-			if (!Glyphs.TryGetValue(character, out var rows))
+			if (!Glyphs.TryGetValue(raw, out var rows) &&
+				!Glyphs.TryGetValue(char.ToUpperInvariant(raw), out rows))
+			{
 				rows = Glyphs[' '];
+			}
 
 			for (var row = 0; row < 7; row++)
 			{
