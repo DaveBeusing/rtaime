@@ -120,6 +120,27 @@ public sealed class RuntimeReadinessServiceTests
 	}
 
 	[Fact]
+	public void Media_failure_blocks_production_without_destroying_valid_render_verification()
+	{
+		var now = new DateTimeOffset(2026, 9, 20, 10, 0, 0, TimeSpan.Zero);
+		using var service = new RuntimeReadinessService(() => now);
+
+		service.Observe(Observation(Healthy(now)));
+		Assert.Equal(RuntimePerformanceVerificationState.Verified, service.Current.Performance.State);
+
+		now += TimeSpan.FromMilliseconds(100);
+		service.Observe(Observation(Healthy(now) with
+		{
+			Engine = Fail("Media input failed."),
+			Media = Fail("Program input lost.")
+		}));
+
+		Assert.Equal(RuntimeReadinessState.NotReady, service.Current.State);
+		Assert.False(service.Current.IsProductionReady);
+		Assert.Equal(RuntimePerformanceVerificationState.Verified, service.Current.Performance.State);
+	}
+
+	[Fact]
 	public void Performance_verification_expires_after_validity_window()
 	{
 		var now = new DateTimeOffset(2026, 9, 20, 10, 0, 0, TimeSpan.Zero);
