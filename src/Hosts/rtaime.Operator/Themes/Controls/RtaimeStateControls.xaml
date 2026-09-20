@@ -14,37 +14,19 @@
 		<Setter Property="Template">
 			<Setter.Value>
 				<ControlTemplate TargetType="{x:Type controls:RtaimeLoadingIndicator}">
-					<Grid Width="{TemplateBinding Width}" Height="{TemplateBinding Height}" RenderTransformOrigin="0.5,0.5">
-						<Grid.RenderTransform>
-							<RotateTransform x:Name="IndicatorRotation" />
-						</Grid.RenderTransform>
+					<Grid Width="{TemplateBinding Width}" Height="{TemplateBinding Height}">
 						<Ellipse
 							Stroke="{TemplateBinding Foreground}"
 							StrokeThickness="2"
 							Opacity="0.22" />
-						<Ellipse
+						<Path
+							Data="M11,1 A10,10 0 0 1 21,11"
 							Stroke="{TemplateBinding Foreground}"
 							StrokeThickness="2"
-							StrokeDashArray="1.5,4.5"
-							StrokeDashCap="Round" />
+							StrokeStartLineCap="Round"
+							StrokeEndLineCap="Round"
+							Fill="Transparent" />
 					</Grid>
-					<ControlTemplate.Triggers>
-						<Trigger Property="IsVisible" Value="True">
-							<Trigger.EnterActions>
-								<BeginStoryboard>
-									<Storyboard>
-										<DoubleAnimation
-											Storyboard.TargetName="IndicatorRotation"
-											Storyboard.TargetProperty="Angle"
-											From="0"
-											To="360"
-											Duration="0:0:1.1"
-											RepeatBehavior="Forever" />
-									</Storyboard>
-								</BeginStoryboard>
-							</Trigger.EnterActions>
-						</Trigger>
-					</ControlTemplate.Triggers>
 				</ControlTemplate>
 			</Setter.Value>
 		</Setter>
