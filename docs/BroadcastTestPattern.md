@@ -50,11 +50,13 @@ Virtual source timing and frame descriptor
 
 ## Operator workflow
 
-Select a source in the Source Bin and use **TOGGLE TEST SIGNAL**.
+Select a source in the Source Bin and use **CYCLE TEST SIGNAL**.
 
-When enabled, the source is projected as `TEST`, `ACTIVE` and `VALID`. The underlying physical or media-source signal state can continue to change internally without causing the active internal reference signal to flap to an external-input failure state.
+The action cycles the selected source through `OFF -> STATIC -> MOTION -> OFF`. Static mode uses the retained broadcast reference image. Motion mode extends the same reference source with frame/time diagnostics described in [MotionTimingTestSignal.md](MotionTimingTestSignal.md).
 
-When disabled, the source immediately returns to its underlying input state and content. This makes repeated enable, disable and re-enable validation deterministic.
+While active, the source is projected as `TEST`, `STATIC` or `MOTION`, and `VALID`. The underlying physical or media-source signal state can continue to change internally without causing the active internal reference signal to flap to an external-input failure state.
+
+When disabled, the source immediately returns to its underlying input state and content. This makes repeated activation and mode switching deterministic.
 
 ## Supported formats
 
