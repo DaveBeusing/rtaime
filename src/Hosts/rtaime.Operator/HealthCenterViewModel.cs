@@ -93,7 +93,7 @@ public sealed class HealthCenterViewModel : INotifyPropertyChanged, IDisposable
 
 	private readonly IHealthSnapshotProvider _provider;
 	private readonly IRuntimeReadinessService _readiness;
-	private readonly OperatorViewModel _operator;
+	private readonly ICommand _synchronizeCommand;
 	private readonly SynchronizationContext _uiContext;
 	private HealthCenterSubsystemViewModel? _selectedSubsystem;
 	private bool _technicalDetailsVisible;
@@ -102,12 +102,12 @@ public sealed class HealthCenterViewModel : INotifyPropertyChanged, IDisposable
 	public HealthCenterViewModel(
 		IHealthSnapshotProvider provider,
 		IRuntimeReadinessService readiness,
-		OperatorViewModel @operator,
+		ICommand synchronizeCommand,
 		SynchronizationContext? uiContext = null)
 	{
 		_provider = provider ?? throw new ArgumentNullException(nameof(provider));
 		_readiness = readiness ?? throw new ArgumentNullException(nameof(readiness));
-		_operator = @operator ?? throw new ArgumentNullException(nameof(@operator));
+		_synchronizeCommand = synchronizeCommand ?? throw new ArgumentNullException(nameof(synchronizeCommand));
 		_uiContext = uiContext ?? SynchronizationContext.Current ?? new SynchronizationContext();
 
 		Subsystems = [];
@@ -250,14 +250,14 @@ public sealed class HealthCenterViewModel : INotifyPropertyChanged, IDisposable
 
 	private Task RecoverSelectedAsync()
 	{
-		if (SelectedSubsystem?.Id == "control" && _operator.SynchronizeCommand.CanExecute(null))
-			_operator.SynchronizeCommand.Execute(null);
+		if (SelectedSubsystem?.Id == "control" && _synchronizeCommand.CanExecute(null))
+			_synchronizeCommand.Execute(null);
 		return Task.CompletedTask;
 	}
 
 	private bool CanRecoverSelected() =>
 		SelectedSubsystem is { CanRecover: true, Id: "control" } &&
-		_operator.SynchronizeCommand.CanExecute(null);
+		_synchronizeCommand.CanExecute(null);
 
 	private static int Severity(string state) => state switch
 	{
