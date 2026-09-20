@@ -149,6 +149,18 @@ public sealed record V1RuntimePerformanceSnapshot(
 	string PhysicalGpuDeviceName = "UNVERIFIED",
 	double? OutputFramesPerSecond = null);
 
+public sealed record V1AvSyncDiagnosticsSnapshot(
+	bool Enabled,
+	string State,
+	ulong? EventId,
+	string? ExpectedMediaTime,
+	ulong? TargetVideoFrameSequence,
+	ulong? TargetAudioSamplePosition,
+	double? ScheduledVideoOffsetMilliseconds,
+	double? SubmitOffsetMilliseconds,
+	double? DriftFromBaselineMilliseconds,
+	string Detail);
+
 public sealed record V1RuntimeHostSnapshot(
 	RuntimeExecutionState Runtime,
 	ulong NextSequenceNumber,
@@ -164,7 +176,8 @@ public sealed record V1RuntimeHostSnapshot(
 	RecordingSnapshot Recording,
 	V1RecordingOperatorSnapshot RecordingOperator,
 	V1RuntimePerformanceSnapshot Performance,
-	int ActiveGpuSurfaces);
+	int ActiveGpuSurfaces,
+	V1AvSyncDiagnosticsSnapshot? AvSyncDiagnostics = null);
 
 /// <summary>
 /// Windows V1 reference composition root for committed execution, timed media, GPU composition,
@@ -192,6 +205,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private readonly RgbaFrameBuffer _broadcastTestPattern;
 	private readonly RgbaFrameBuffer _motionTimingTestPattern;
 	private readonly MotionTimingTestSignalGenerator _motionTimingTestSignal;
+	private readonly AvSyncEventTimeline _avSyncTimeline = new();
+	private readonly AvSyncDiagnosticsTracker _avSyncDiagnostics = new();
 	private readonly HashSet<MediaSourceId> _broadcastTestPatternSources = [];
 	private readonly Dictionary<MediaSourceId, V1BroadcastTestPatternMode> _broadcastTestPatternModes = [];
 	private readonly Dictionary<MediaSourceId, V1InputSignalState> _inputSignals;
@@ -230,6 +245,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private DateTimeOffset? _recordingCompletedAtUtc;
 	private string? _recordingDestination;
 	private string? _recordingFileName;
+	private MediaSourceId? _avSyncDiagnosticsSourceId;
 	private bool _disposed;
 
 	public V1RuntimeHostService(
@@ -267,7 +283,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		var broadcastTestPattern = new BroadcastTestPatternGenerator(new BroadcastTestPatternConfiguration(format));
 		_broadcastTestPattern = new RgbaFrameBuffer(format, broadcastTestPattern.Pixels.Span);
 		_motionTimingTestPattern = new RgbaFrameBuffer(format, broadcastTestPattern.Pixels.Span);
-		_motionTimingTestSignal = new MotionTimingTestSignalGenerator(format);
+		var syncAudioSampleRate = _audioStreams.Values.Select(stream => stream.Format.SampleRate).Distinct().Single();
+		_motionTimingTestSignal = new MotionTimingTestSignalGenerator(format, syncAudioSampleRate, _avSyncTimeline);
 		_inputSignals = new Dictionary<MediaSourceId, V1InputSignalState>
 		{
 			[sourceAId] = V1InputSignalState.Valid,
@@ -365,7 +382,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 					_recorder.Snapshot,
 					RecordingOperatorSnapshotUnsafe(),
 					PerformanceSnapshotUnsafe(hardware),
-					_gpu.ActiveSurfaceCount);
+					_gpu.ActiveSurfaceCount,
+					AvSyncDiagnosticsSnapshotUnsafe());
 			}
 		}
 	}
@@ -1183,6 +1201,48 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			testSignal?.Configuration.FrequencyHz,
 			testSignal?.Configuration.PeakLevel);
 	}
+
+	private V1AvSyncDiagnosticsSnapshot AvSyncDiagnosticsSnapshotUnsafe()
+	{
+		var activeSource = _audio.ActiveVideoSourceId;
+		if (!IsAvSyncDiagnosticsEnabledUnsafe(activeSource))
+		{
+			return new V1AvSyncDiagnosticsSnapshot(
+				false,
+				"UNAVAILABLE",
+				null,
+				null,
+				null,
+				null,
+				null,
+				null,
+				null,
+				"Enable Motion/Timing video and Pulse audio on the active Program source to run synchronized A/V diagnostics.");
+		}
+
+		var snapshot = _avSyncDiagnostics.Snapshot;
+		return new V1AvSyncDiagnosticsSnapshot(
+			true,
+			snapshot.State.ToString().ToUpperInvariant(),
+			snapshot.EventId,
+			snapshot.EventId is { } eventId ? _avSyncTimeline.PeriodSeconds.Numerator == 1 && _avSyncTimeline.PeriodSeconds.Denominator == 1
+				? $"{eventId}/1"
+				: snapshot.EventId.ToString()
+				: null,
+			snapshot.TargetVideoFrameSequence,
+			snapshot.TargetAudioSamplePosition,
+			snapshot.ScheduledVideoOffsetMilliseconds,
+			snapshot.SubmitOffsetMilliseconds,
+			snapshot.DriftFromBaselineMilliseconds,
+			snapshot.Detail);
+	}
+
+	private bool IsAvSyncDiagnosticsEnabledUnsafe(MediaSourceId sourceId) =>
+		_broadcastTestPatternSources.Contains(sourceId) &&
+		_broadcastTestPatternModes.TryGetValue(sourceId, out var patternMode) &&
+		patternMode == V1BroadcastTestPatternMode.MotionTiming &&
+		_audioTestSignals.TryGetValue(sourceId, out var audioSignal) &&
+		audioSignal.Configuration.Mode == GeneratedAudioTestSignalMode.Pulse;
 
 	private V1AudioProgramSnapshot AudioProgramSnapshotUnsafe()
 	{
