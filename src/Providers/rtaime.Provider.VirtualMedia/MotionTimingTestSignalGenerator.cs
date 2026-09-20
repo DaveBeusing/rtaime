@@ -74,7 +74,10 @@ public sealed class MotionTimingTestSignalGenerator
 	private readonly uint _syncAudioSampleRate;
 	private readonly AvSyncEventTimeline _syncTimeline;
 
-	public MotionTimingTestSignalGenerator(VideoFormat format, uint syncAudioSampleRate = 48_000)
+	public MotionTimingTestSignalGenerator(
+		VideoFormat format,
+		uint syncAudioSampleRate = 48_000,
+		AvSyncEventTimeline? syncTimeline = null)
 	{
 		if (syncAudioSampleRate == 0)
 			throw new ArgumentOutOfRangeException(nameof(syncAudioSampleRate));
@@ -91,7 +94,7 @@ public sealed class MotionTimingTestSignalGenerator
 		_trackLeft = _margin;
 		_trackRight = Math.Max(_trackLeft + 1, _width - _margin - 1);
 		_syncAudioSampleRate = syncAudioSampleRate;
-		_syncTimeline = new AvSyncEventTimeline();
+		_syncTimeline = syncTimeline ?? new AvSyncEventTimeline();
 		_pixels = new byte[checked(_width * _height * 4)];
 	}
 
