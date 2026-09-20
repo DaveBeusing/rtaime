@@ -373,30 +373,38 @@ public sealed class OperatorHealthSnapshotProvider : IHealthSnapshotProvider, ID
 		IReadOnlyDictionary<string, SubsystemHealthSnapshot> existing,
 		DateTimeOffset now)
 	{
-		var state = _output.Health switch
-		{
-			"LIVE" => SubsystemHealthState.Healthy,
-			"FALLBACK" => SubsystemHealthState.Degraded,
-			"STALE" => SubsystemHealthState.Recovering,
-			"ERROR" => SubsystemHealthState.Failed,
-			"WAITING" or "STOPPED" => SubsystemHealthState.Warning,
-			_ => SubsystemHealthState.Unknown
-		};
+		var state = _operator.IsStale
+			? SubsystemHealthState.Recovering
+			: _operator.RuntimeHealth == "FAIL"
+				? SubsystemHealthState.Failed
+				: _output.Health is "ERROR" or "FALLBACK"
+					? SubsystemHealthState.Degraded
+					: _operator.RuntimeHealth == "PASS"
+						? SubsystemHealthState.Healthy
+						: SubsystemHealthState.Unknown;
+		var detail = _operator.RuntimeHealth == "PASS"
+			? _output.Health is "ERROR" or "FALLBACK"
+				? $"Runtime Program is healthy. Clean Program monitoring is {_output.Health}: {_output.Detail}"
+				: "Authoritative Runtime Program execution is healthy."
+			: _operator.EngineHealthDetail;
 		return Create(
 			existing,
 			"output",
 			"Output",
 			"Output",
 			state,
-			_output.Detail,
+			detail,
 			now,
 			[
-				new("State", _output.RunState),
-				new("Mode", _output.Mode),
+				new("Runtime Program", _operator.RuntimeHealth),
+				new("Clean Program monitor", _output.Health),
+				new("Monitor mode", _output.Mode),
 				new("Display", _output.SelectedDisplay?.Label ?? "UNAVAILABLE")
 			],
-			state == SubsystemHealthState.Recovering ? "Monitoring recovery is automatic." : "Output changes remain under operator control.",
-			$"Health={_output.Health}; Monitoring={_monitoring.State}; SelectedDisplay={_output.SelectedDisplay?.Id ?? "none"}");
+			state == SubsystemHealthState.Recovering
+				? "Authoritative-state recovery is automatic."
+				: "Runtime output remains authoritative; Clean Program changes stay under operator control.",
+			$"RuntimeHealth={_operator.RuntimeHealth}; CleanProgram={_output.Health}; Monitoring={_monitoring.State}; SelectedDisplay={_output.SelectedDisplay?.Id ?? "none"}");
 	}
 
 	private SubsystemHealthSnapshot CreateMonitoring(
