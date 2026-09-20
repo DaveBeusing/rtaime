@@ -66,6 +66,12 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	private string _gpuUtilization = "UNVERIFIED";
 	private string _vram = "UNVERIFIED";
 	private string _healthObserved = "—";
+	private string _avSyncState = "UNAVAILABLE";
+	private string _avSyncEvent = "UNAVAILABLE";
+	private string _avSyncScheduledOffset = "UNAVAILABLE";
+	private string _avSyncSubmitOffset = "UNAVAILABLE";
+	private string _avSyncDrift = "UNAVAILABLE";
+	private string _avSyncDetail = "A/V sync diagnostics are unavailable.";
 	private string _visualLayerStatus = "UNKNOWN";
 	private string _graphicsAssetName = "No graphics asset loaded";
 	private string _graphicsDimensions = "—";
@@ -248,6 +254,12 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	public string GpuUtilization { get => _gpuUtilization; private set => Set(ref _gpuUtilization, value); }
 	public string Vram { get => _vram; private set => Set(ref _vram, value); }
 	public string HealthObserved { get => _healthObserved; private set => Set(ref _healthObserved, value); }
+	public string AvSyncState { get => _avSyncState; private set => Set(ref _avSyncState, value); }
+	public string AvSyncEvent { get => _avSyncEvent; private set => Set(ref _avSyncEvent, value); }
+	public string AvSyncScheduledOffset { get => _avSyncScheduledOffset; private set => Set(ref _avSyncScheduledOffset, value); }
+	public string AvSyncSubmitOffset { get => _avSyncSubmitOffset; private set => Set(ref _avSyncSubmitOffset, value); }
+	public string AvSyncDrift { get => _avSyncDrift; private set => Set(ref _avSyncDrift, value); }
+	public string AvSyncDetail { get => _avSyncDetail; private set => Set(ref _avSyncDetail, value); }
 	public string VisualLayerStatus { get => _visualLayerStatus; private set => Set(ref _visualLayerStatus, value); }
 	public string GraphicsAssetName { get => _graphicsAssetName; private set => Set(ref _graphicsAssetName, value); }
 	public string GraphicsDimensions { get => _graphicsDimensions; private set => Set(ref _graphicsDimensions, value); }
@@ -1023,6 +1035,12 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		GpuDeviceName = health.GpuDeviceName;
 		GpuUtilization = health.GpuUtilization;
 		Vram = health.Vram;
+		AvSyncState = health.AvSyncState;
+		AvSyncEvent = health.AvSyncEvent;
+		AvSyncScheduledOffset = health.AvSyncScheduledOffset;
+		AvSyncSubmitOffset = health.AvSyncSubmitOffset;
+		AvSyncDrift = health.AvSyncDrift;
+		AvSyncDetail = health.AvSyncDetail;
 		HealthObserved = health.ObservedAtUtc == DateTimeOffset.MinValue
 			? "—"
 			: health.ObservedAtUtc.ToLocalTime().ToString("HH:mm:ss", CultureInfo.InvariantCulture);
@@ -1195,6 +1213,12 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		MediaHealth = "UNVERIFIED";
 		ProviderHealth = "UNVERIFIED";
 		GpuProviderHealth = "UNVERIFIED";
+		AvSyncState = "UNAVAILABLE";
+		AvSyncEvent = "UNAVAILABLE";
+		AvSyncScheduledOffset = "UNAVAILABLE";
+		AvSyncSubmitOffset = "UNAVAILABLE";
+		AvSyncDrift = "UNAVAILABLE";
+		AvSyncDetail = "A/V sync diagnostics are unavailable while Control is stale.";
 		HealthObserved = "STALE";
 		LastError = detail;
 		ApplyLifecycle(_client?.Snapshot);
