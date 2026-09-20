@@ -42,6 +42,7 @@ Technical detail from the existing projections remains visible with the affected
 The current Runtime health contract provides:
 
 - core render time and frame budget;
+- measured Program output FPS;
 - dropped-frame count;
 - GPU utilization when available;
 - VRAM evidence when available;
