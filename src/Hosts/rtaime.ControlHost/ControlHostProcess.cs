@@ -70,6 +70,13 @@ public interface IControlRuntimeTransportSeam
 		ValueTask.FromException<RuntimeAudioInputSnapshot>(
 			new NotSupportedException("Runtime transport does not expose audio input control."));
 
+	ValueTask<bool> SetBroadcastTestPatternAsync(
+		MediaSourceId sourceId,
+		bool enabled,
+		CancellationToken cancellationToken = default) =>
+		ValueTask.FromException<bool>(
+			new NotSupportedException("Runtime transport does not expose broadcast test pattern control."));
+
 	ValueTask<RuntimeGraphicsOverlaySnapshot> LoadGraphicsOverlayAsync(
 		string assetName,
 		uint width,
