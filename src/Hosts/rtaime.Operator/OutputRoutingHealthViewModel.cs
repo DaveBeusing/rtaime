@@ -238,7 +238,7 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 		var droppedSample = hasRuntimePerformance ? TryParseUnsigned(_control.DroppedFrames) : null;
 		var cpuSample = TryParsePercentage(_control.CpuUtilization);
 		var gpuSample = TryParsePercentage(_control.GpuUtilization);
-		var memorySample = TryParseLeadingDouble(_control.SystemMemory);
+		var memorySample = TryParseLeadingPercentage(_control.SystemMemory);
 		var cpuValue = NormalizeAvailability(_control.CpuUtilization);
 		var gpuValue = NormalizeAvailability(_control.GpuUtilization);
 		var memoryValue = NormalizeAvailability(_control.SystemMemory);
@@ -464,6 +464,21 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 		ulong.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
 			? parsed
 			: null;
+
+	private static double? TryParseLeadingPercentage(string? value)
+	{
+		var normalized = NormalizeAvailability(value);
+		if (normalized == Unavailable)
+			return null;
+
+		var percentIndex = normalized.IndexOf('%');
+		if (percentIndex <= 0)
+			return null;
+
+		return double.TryParse(normalized[..percentIndex].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
+			? parsed
+			: null;
+	}
 
 	private static double? TryParsePercentage(string? value)
 	{
