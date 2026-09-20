@@ -209,7 +209,7 @@ public partial class MainWindow : Window
 			AutoReverse = true,
 			RepeatBehavior = RepeatBehavior.Forever
 		};
-		StartupBrandPulse.BeginAnimation(OpacityProperty, animation);
+		StartupBrandPulse.BeginAnimation(UIElement.OpacityProperty, animation);
 	}
 
 	private void OnOperatorPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -220,7 +220,7 @@ public partial class MainWindow : Window
 			return;
 		}
 
-		StartupBrandPulse.BeginAnimation(OpacityProperty, null);
+		StartupBrandPulse.BeginAnimation(UIElement.OpacityProperty, null);
 		StartupBrandPulse.Opacity = 1.0;
 	}
 
@@ -300,7 +300,7 @@ public partial class MainWindow : Window
 		try
 		{
 			Startup.Dispose();
-			StartupBrandPulse.BeginAnimation(OpacityProperty, null);
+			StartupBrandPulse.BeginAnimation(UIElement.OpacityProperty, null);
 			OutputHealth.Dispose();
 			ProgramOutput.Dispose();
 			if (DataContext is OperatorViewModel viewModel)
