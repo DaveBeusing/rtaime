@@ -61,12 +61,17 @@ public sealed class OperatorSourceTileViewModel : INotifyPropertyChanged
 	public bool HasAudio { get => _hasAudio; private set => Set(ref _hasAudio, value); }
 	public string Tally => IsProgram && IsPreview ? "PGM + PVW" : IsProgram ? "PGM" : IsPreview ? "PVW" : "—";
 	public bool IsMedia => string.Equals(Type, "MEDIA", StringComparison.OrdinalIgnoreCase);
+	public bool IsTestPattern => string.Equals(Type, "TEST", StringComparison.OrdinalIgnoreCase);
 	public string Detail => IsMedia && !string.IsNullOrWhiteSpace(MediaFileName)
 		? MediaFileName!
-		: $"{Type} · {Format}";
+		: IsTestPattern
+			? $"INTERNAL TEST SIGNAL · {Format}"
+			: $"{Type} · {Format}";
 	public string StateDetail => IsMedia
 		? $"{MediaState} · REM {Remaining}"
-		: $"SIGNAL {Health}";
+		: IsTestPattern
+			? $"GENERATED · SIGNAL {Health}"
+			: $"SIGNAL {Health}";
 
 	public void ApplyDescriptor(OperatorSourceDescriptor descriptor)
 	{
@@ -83,6 +88,7 @@ public sealed class OperatorSourceTileViewModel : INotifyPropertyChanged
 		Remaining = FormatRemaining(descriptor.Remaining);
 		MediaFileName = descriptor.MediaFileName;
 		OnPropertyChanged(nameof(IsMedia));
+		OnPropertyChanged(nameof(IsTestPattern));
 		OnPropertyChanged(nameof(Detail));
 		OnPropertyChanged(nameof(StateDetail));
 	}
@@ -119,6 +125,9 @@ public sealed class OperatorSourceTileViewModel : INotifyPropertyChanged
 
 	public void ApplyMediaDeck(string state, string format, string remaining, string timecode, string? fileName)
 	{
+		if (IsTestPattern)
+			return;
+
 		Type = "MEDIA";
 		Format = string.IsNullOrWhiteSpace(format) ? _descriptor.Format : format.Trim();
 		Health = string.Equals(state, "ERROR", StringComparison.OrdinalIgnoreCase) ? "ERROR" : "READY";
@@ -127,18 +136,20 @@ public sealed class OperatorSourceTileViewModel : INotifyPropertyChanged
 		TimecodeLabel = string.IsNullOrWhiteSpace(timecode) ? "—" : timecode.Trim();
 		MediaFileName = string.IsNullOrWhiteSpace(fileName) ? null : fileName.Trim();
 		OnPropertyChanged(nameof(IsMedia));
+		OnPropertyChanged(nameof(IsTestPattern));
 		OnPropertyChanged(nameof(Detail));
 		OnPropertyChanged(nameof(StateDetail));
 	}
 
 	public void ClearMediaDeck()
 	{
-		Type = "LIVE";
-		Health = "UNKNOWN";
-		MediaState = "—";
-		Remaining = "—";
+		Type = _descriptor.Type;
+		Format = _descriptor.Format;
+		Health = _descriptor.Health;
+		MediaState = _descriptor.MediaState;
+		Remaining = FormatRemaining(_descriptor.Remaining);
 		TimecodeLabel = "—";
-		MediaFileName = null;
+		MediaFileName = _descriptor.MediaFileName;
 	}
 
 	private static string ExtractFrameRate(string format)
@@ -177,6 +188,7 @@ public sealed class OperatorSourceTileViewModel : INotifyPropertyChanged
 			if (propertyName == nameof(Format))
 				OnPropertyChanged(nameof(FrameRateLabel));
 			OnPropertyChanged(nameof(IsMedia));
+			OnPropertyChanged(nameof(IsTestPattern));
 			OnPropertyChanged(nameof(Detail));
 			OnPropertyChanged(nameof(StateDetail));
 		}
