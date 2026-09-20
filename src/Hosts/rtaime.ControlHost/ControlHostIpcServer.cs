@@ -186,6 +186,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			"control.graphics.overlay.set" => await SetGraphicsOverlayAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.graphics.overlay.clear" => await ClearGraphicsOverlayAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.audio.input.set" => await SetAudioInputStateAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.audio.test_signal.set" => await SetAudioTestSignalAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.test_pattern.set" => await SetBroadcastTestPatternAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.recording.start" => await StartRecordingAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.recording.stop" => await StopRecordingAsync(request, cancellationToken).ConfigureAwait(false),
@@ -282,6 +283,49 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or NotSupportedException or FormatException or InvalidDataException or IOException)
 			{
 				return Error(request, "control.audio.input.rejected", exception.Message);
+			}
+		}
+		finally
+		{
+			_mutationGate.Release();
+		}
+	}
+
+	private async ValueTask<WireEnvelope> SetAudioTestSignalAsync(WireEnvelope request, CancellationToken cancellationToken)
+	{
+		var wire = request.Payload.Deserialize<WireAudioTestSignalState>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Generated audio test signal payload is required.");
+
+		await _mutationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+		try
+		{
+			var control = _controlAccessor();
+			if (control is null || !control.HasAuthoritativeState)
+				return Error(request, "control.not_ready", "ControlHost has no committed authoritative state yet.");
+			if (!_runtimeTransport.IsConnected)
+				return Error(request, "runtime.unavailable", "RuntimeHost is not connected.");
+
+			MediaSourceId sourceId;
+			try { sourceId = new MediaSourceId(Identity.Parse(wire.SourceId)); }
+			catch (Exception exception) when (exception is FormatException or ArgumentException)
+			{
+				return Error(request, "control.audio.test_signal.source.invalid", exception.Message);
+			}
+
+			if (!control.Specification.Sources.Any(source => source.SourceId.Value == sourceId.Value))
+				return Error(request, "control.audio.test_signal.source.unknown", "Generated audio test signal source must belong to the authoritative production.");
+
+			try
+			{
+				var snapshot = await _runtimeTransport
+					.SetAudioTestSignalAsync(sourceId, wire.Enabled, wire.Mode, wire.FrequencyHz, wire.PeakLevel, cancellationToken)
+					.ConfigureAwait(false);
+				NotifyObservableStateChanged();
+				return Success(request, "control.audio.test_signal.response", ToWire(snapshot));
+			}
+			catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or NotSupportedException or FormatException or InvalidDataException or IOException)
+			{
+				return Error(request, "control.audio.test_signal.rejected", exception.Message);
 			}
 		}
 		finally
@@ -800,7 +844,12 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		snapshot.RightPeak,
 		snapshot.MasterPeak,
 		snapshot.Clipping,
-		snapshot.Health);
+		snapshot.Health,
+		snapshot.TestSignalEnabled,
+		snapshot.TestSignalMode,
+		snapshot.TestSignalActiveChannel,
+		snapshot.TestSignalFrequencyHz,
+		snapshot.TestSignalPeakLevel);
 
 	private static WireAudioProgram ToWire(RuntimeAudioProgramSnapshot snapshot) => new(
 		snapshot.ActiveVideoSourceId.ToString(),
@@ -953,8 +1002,23 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		public static WireGraphicsOverlay Empty { get; } = new(false, null, 0, 0, false, 0.72, 0.06, 1.0);
 	}
 	private sealed record WireAudioInputState(string SourceId, double Gain, bool Muted);
+	private sealed record WireAudioTestSignalState(string SourceId, bool Enabled, int Mode, double FrequencyHz, double PeakLevel);
 	private sealed record WireTestPatternState(string SourceId, bool Enabled, bool MotionTiming = false);
-	private sealed record WireAudioInput(string SourceId, string StreamId, double Gain, bool Muted, double LeftPeak, double RightPeak, double MasterPeak, bool Clipping, string Health);
+	private sealed record WireAudioInput(
+		string SourceId,
+		string StreamId,
+		double Gain,
+		bool Muted,
+		double LeftPeak,
+		double RightPeak,
+		double MasterPeak,
+		bool Clipping,
+		string Health,
+		bool TestSignalEnabled = false,
+		int? TestSignalMode = null,
+		string? TestSignalActiveChannel = null,
+		double? TestSignalFrequencyHz = null,
+		double? TestSignalPeakLevel = null);
 	private sealed record WireAudioProgram(string ActiveVideoSourceId, string ActiveStreamId, double Gain, bool Muted, double LeftPeak, double RightPeak, double MasterPeak, bool Clipping, string Health)
 	{
 		public static WireAudioProgram Empty { get; } = new(string.Empty, string.Empty, 1, false, 0, 0, 0, false, "UNKNOWN");
