@@ -1808,8 +1808,7 @@
 								BorderThickness="1"
 								CornerRadius="{DynamicResource OperatorRadiusControl}"
 								Padding="7"
-								Margin="0,7,0,0"
-								Visibility="Collapsed">
+								Margin="0,7,0,0">
 								<Border.Style>
 									<Style TargetType="Border">
 										<Setter Property="Visibility" Value="Collapsed" />
