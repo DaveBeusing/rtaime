@@ -162,6 +162,8 @@ A running process or Windows service state alone is never treated as engine read
 
 A lifecycle is adopted only when the same readiness rules used for a newly started lifecycle pass.
 
+Before starting a new locally owned ControlHost, AppHost checks the process-shared Control endpoint lease. If another process already owns that endpoint, AppHost waits within the configured startup timeout for qualified readiness instead of launching a competing ControlHost. If the lease disappears before readiness is published, normal owned startup may proceed. If the lease remains held without qualified readiness until the timeout expires, startup fails closed and the existing process is left untouched.
+
 An adopted ControlHost is never re-parented and AppHost does not claim ownership of it.
 
 While Operator is running, AppHost continues to evaluate qualified readiness rather than pinning UI lifetime to the original ControlHost process identity. If ControlHost is replaced, new readiness evidence is adopted and the Operator/Client SDK performs its existing full authoritative snapshot resynchronization.
@@ -192,6 +194,8 @@ Healthy
 ```
 
 If readiness does not recover within the configured recovery window, the application lifecycle becomes `Failed`.
+
+For a ControlHost started by AppHost, process stdout, stderr and the eventual exit code are persisted in `controlhost-process.log` below the selected AppHost work root. When ControlHost exits before qualified readiness, the bounded diagnostic tail is included in the AppHost lifecycle failure detail so endpoint collisions, persistence startup failures and unhandled process failures are visible from the startup experience instead of collapsing into a generic engine failure.
 
 For an interactive client, ControlHost replacement can recover through new qualified readiness and full snapshot resynchronization.
 

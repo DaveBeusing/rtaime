@@ -1,7 +1,10 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO.Pipes;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 
 namespace rtaime.AppHost;
@@ -96,6 +99,7 @@ public sealed record ApplicationHostOptions(
 	public string ReadinessPath => Path.Combine(WorkRoot, "control-readiness.json");
 	public string StopPath => Path.Combine(WorkRoot, "control-stop.signal");
 	public string ShutdownEvidencePath => Path.Combine(WorkRoot, "apphost-shutdown.json");
+	public string ControlHostDiagnosticPath => Path.Combine(WorkRoot, "controlhost-process.log");
 	public string ServiceReadinessEvidencePath => Path.Combine(WorkRoot, "apphost-readiness.json");
 	public string LifecycleEvidencePath => Path.Combine(WorkRoot, "apphost-lifecycle.json");
 	public string LegacyLifecycleStatePath => Path.Combine($"{InstallRoot}.host-lifecycle", "lifecycle-state.json");
@@ -182,7 +186,10 @@ public sealed record ApplicationProcessSpec(
 	string WorkingDirectory,
 	IReadOnlyList<string> Arguments,
 	IReadOnlyDictionary<string, string> Environment,
-	bool CreateNoWindow);
+	bool CreateNoWindow)
+{
+	public string? DiagnosticLogPath { get; init; }
+}
 
 public interface IApplicationHostPlatform
 {
@@ -190,6 +197,8 @@ public interface IApplicationHostPlatform
 	string FindProductArtifact(string installRoot, string baseName);
 	int StartProcess(ApplicationProcessSpec spec);
 	bool IsProcessAlive(int processId);
+	bool IsEndpointLeaseHeld(string endpoint) => false;
+	Task FlushProcessDiagnosticsAsync(int processId, CancellationToken cancellationToken) => Task.CompletedTask;
 	void KillProcessTree(int processId);
 	bool FileExists(string path);
 	string ReadAllText(string path);
@@ -202,6 +211,9 @@ public interface IApplicationHostPlatform
 
 public sealed class SystemApplicationHostPlatform : IApplicationHostPlatform
 {
+	private readonly ConcurrentDictionary<int, Process> _diagnosticProcesses = new();
+	private readonly ConcurrentDictionary<int, TaskCompletionSource<bool>> _diagnosticCompletions = new();
+
 	public DateTimeOffset UtcNow => DateTimeOffset.UtcNow;
 
 	public string FindProductArtifact(string installRoot, string baseName)
@@ -285,8 +297,104 @@ public sealed class SystemApplicationHostPlatform : IApplicationHostPlatform
 		foreach (var argument in spec.Arguments) startInfo.ArgumentList.Add(argument);
 		foreach (var pair in spec.Environment) startInfo.Environment[pair.Key] = pair.Value;
 
-		using var process = Process.Start(startInfo) ?? throw new InvalidOperationException($"Failed to start '{spec.ArtifactPath}'.");
-		return process.Id;
+		if (string.IsNullOrWhiteSpace(spec.DiagnosticLogPath))
+		{
+			using var process = Process.Start(startInfo) ?? throw new InvalidOperationException($"Failed to start '{spec.ArtifactPath}'.");
+			return process.Id;
+		}
+
+		var diagnosticPath = Path.GetFullPath(spec.DiagnosticLogPath);
+		var diagnosticDirectory = Path.GetDirectoryName(diagnosticPath);
+		if (!string.IsNullOrWhiteSpace(diagnosticDirectory)) Directory.CreateDirectory(diagnosticDirectory);
+		try { if (File.Exists(diagnosticPath)) File.Delete(diagnosticPath); }
+		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException) { }
+
+		startInfo.RedirectStandardOutput = true;
+		startInfo.RedirectStandardError = true;
+		var writeGate = new object();
+		var processWithDiagnostics = new Process { StartInfo = startInfo };
+		var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+		var processId = 0;
+		var finalized = 0;
+
+		void AppendDiagnostic(string stream, string? line)
+		{
+			if (line is null) return;
+			try
+			{
+				lock (writeGate)
+					File.AppendAllText(diagnosticPath, $"{DateTimeOffset.UtcNow:O} stream={stream} {line}{Environment.NewLine}");
+			}
+			catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+			{
+			}
+		}
+
+		void FinalizeDiagnostic()
+		{
+			if (Interlocked.Exchange(ref finalized, 1) != 0) return;
+			try
+			{
+				processWithDiagnostics.WaitForExit();
+			}
+			catch (InvalidOperationException)
+			{
+			}
+
+			try
+			{
+				AppendDiagnostic("process", $"exitCode={processWithDiagnostics.ExitCode}");
+			}
+			catch (InvalidOperationException)
+			{
+				AppendDiagnostic("process", "exitCode=unavailable");
+			}
+
+			if (processId != 0)
+			{
+				_diagnosticProcesses.TryRemove(processId, out _);
+				_diagnosticCompletions.TryRemove(processId, out _);
+			}
+			completion.TrySetResult(true);
+			processWithDiagnostics.Dispose();
+		}
+
+		processWithDiagnostics.OutputDataReceived += (_, eventArgs) => AppendDiagnostic("stdout", eventArgs.Data);
+		processWithDiagnostics.ErrorDataReceived += (_, eventArgs) => AppendDiagnostic("stderr", eventArgs.Data);
+		processWithDiagnostics.Exited += (_, _) =>
+		{
+			_ = Task.Run(FinalizeDiagnostic);
+		};
+
+		try
+		{
+			if (!processWithDiagnostics.Start())
+				throw new InvalidOperationException($"Failed to start '{spec.ArtifactPath}'.");
+			processId = processWithDiagnostics.Id;
+			_diagnosticProcesses[processId] = processWithDiagnostics;
+			_diagnosticCompletions[processId] = completion;
+			processWithDiagnostics.BeginOutputReadLine();
+			processWithDiagnostics.BeginErrorReadLine();
+			processWithDiagnostics.EnableRaisingEvents = true;
+			return processId;
+		}
+		catch
+		{
+			if (processId != 0)
+			{
+				_diagnosticProcesses.TryRemove(processId, out _);
+				_diagnosticCompletions.TryRemove(processId, out _);
+			}
+			completion.TrySetResult(true);
+			processWithDiagnostics.Dispose();
+			throw;
+		}
+	}
+
+	public async Task FlushProcessDiagnosticsAsync(int processId, CancellationToken cancellationToken)
+	{
+		if (!_diagnosticCompletions.TryGetValue(processId, out var completion)) return;
+		await completion.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
 	}
 
 	public bool IsProcessAlive(int processId)
@@ -299,6 +407,27 @@ public sealed class SystemApplicationHostPlatform : IApplicationHostPlatform
 		catch (ArgumentException)
 		{
 			return false;
+		}
+	}
+
+	public bool IsEndpointLeaseHeld(string endpoint)
+	{
+		if (string.IsNullOrWhiteSpace(endpoint)) return false;
+		var normalized = endpoint.Trim();
+		var hash = SHA256.HashData(Encoding.UTF8.GetBytes(normalized));
+		var name = "rtaime.endpoint." + Convert.ToHexString(hash).ToLowerInvariant();
+		try
+		{
+			using var existing = Mutex.OpenExisting(name);
+			return true;
+		}
+		catch (WaitHandleCannotBeOpenedException)
+		{
+			return false;
+		}
+		catch (UnauthorizedAccessException)
+		{
+			return true;
 		}
 	}
 
@@ -468,12 +597,22 @@ public sealed class UnifiedApplicationHost
 				}
 				else
 				{
-					StartControlHost();
-					_lifecycle.StartStage(ApplicationLifecycleStages.ControlHost, "ControlHost process started; waiting for qualified readiness.");
-					_lifecycle.StartStage(ApplicationLifecycleStages.RuntimeHost, "Awaiting supervised RuntimeHost readiness.");
-					if (_options.RequireAI)
-						_lifecycle.StartStage(ApplicationLifecycleStages.AIHost, "Awaiting supervised AIHost readiness.");
-					ready = await WaitForReadinessAsync(cancellationToken).ConfigureAwait(false);
+					ready = await WaitForLeasedControlReadinessAsync(cancellationToken).ConfigureAwait(false);
+					if (ready is not null)
+					{
+						_adopted = true;
+						_controlProcessId = ready.Value.Evidence.ProcessId;
+						_activeReadinessPath = ready.Value.Path;
+					}
+					else
+					{
+						StartControlHost();
+						_lifecycle.StartStage(ApplicationLifecycleStages.ControlHost, "ControlHost process started; waiting for qualified readiness.");
+						_lifecycle.StartStage(ApplicationLifecycleStages.RuntimeHost, "Awaiting supervised RuntimeHost readiness.");
+						if (_options.RequireAI)
+							_lifecycle.StartStage(ApplicationLifecycleStages.AIHost, "Awaiting supervised AIHost readiness.");
+						ready = await WaitForReadinessAsync(cancellationToken).ConfigureAwait(false);
+					}
 				}
 			}
 			else
@@ -544,6 +683,7 @@ public sealed class UnifiedApplicationHost
 
 		_platform.DeleteFile(_options.ReadinessPath);
 		_platform.DeleteFile(_options.StopPath);
+		_platform.DeleteFile(_options.ControlHostDiagnosticPath);
 
 		var environment = new Dictionary<string, string>(StringComparer.Ordinal)
 		{
@@ -568,7 +708,10 @@ public sealed class UnifiedApplicationHost
 			Path.GetDirectoryName(controlArtifact) ?? _options.InstallRoot,
 			Array.Empty<string>(),
 			environment,
-			true));
+			true)
+		{
+			DiagnosticLogPath = _options.ControlHostDiagnosticPath
+		});
 
 		_ownedControlProcessId = processId;
 		_controlProcessId = processId;
@@ -595,6 +738,29 @@ public sealed class UnifiedApplicationHost
 			false));
 	}
 
+	private async Task<(string Path, ApplicationReadinessEvidence Evidence)?> WaitForLeasedControlReadinessAsync(CancellationToken cancellationToken)
+	{
+		var endpoint = _options.Endpoints.Control;
+		if (!_platform.IsEndpointLeaseHeld(endpoint)) return null;
+
+		_lifecycle.StartStage(
+			ApplicationLifecycleStages.ControlHost,
+			$"ControlHost endpoint '{endpoint}' is already owned; waiting for qualified readiness instead of starting a competing host.");
+
+		var deadline = _platform.UtcNow + _options.Policy.StartupTimeout;
+		while (_platform.UtcNow < deadline)
+		{
+			cancellationToken.ThrowIfCancellationRequested();
+			var ready = await FindHealthyReadinessAsync(cancellationToken).ConfigureAwait(false);
+			if (ready is not null) return ready;
+			if (!_platform.IsEndpointLeaseHeld(endpoint)) return null;
+			await _platform.DelayAsync(_options.Policy.ProbeInterval, cancellationToken).ConfigureAwait(false);
+		}
+
+		throw new TimeoutException(
+			$"ControlHost endpoint '{endpoint}' remains owned by an existing process that did not publish qualified readiness before the configured startup timeout.");
+	}
+
 	private async Task<(string Path, ApplicationReadinessEvidence Evidence)?> WaitForReadinessAsync(CancellationToken cancellationToken)
 	{
 		var deadline = _platform.UtcNow + _options.Policy.StartupTimeout;
@@ -602,7 +768,23 @@ public sealed class UnifiedApplicationHost
 		{
 			cancellationToken.ThrowIfCancellationRequested();
 			if (_controlProcessId is { } controlPid && !_platform.IsProcessAlive(controlPid))
-				throw new InvalidOperationException("ControlHost exited before qualified readiness.");
+			{
+				if (_platform.IsEndpointLeaseHeld(_options.Endpoints.Control))
+				{
+					_ownedControlProcessId = null;
+					var adopted = await WaitForLeasedControlReadinessAsync(cancellationToken).ConfigureAwait(false);
+					if (adopted is not null)
+					{
+						_adopted = true;
+						_controlProcessId = adopted.Value.Evidence.ProcessId;
+						_activeReadinessPath = adopted.Value.Path;
+						return adopted;
+					}
+				}
+
+				await _platform.FlushProcessDiagnosticsAsync(controlPid, cancellationToken).ConfigureAwait(false);
+				throw new InvalidOperationException(BuildControlHostExitDetail("ControlHost exited before qualified readiness."));
+			}
 
 			var ready = await FindHealthyReadinessAsync(cancellationToken).ConfigureAwait(false);
 			if (ready is not null)
@@ -732,7 +914,10 @@ public sealed class UnifiedApplicationHost
 		{
 			cancellationToken.ThrowIfCancellationRequested();
 			if (_controlProcessId is { } controlPid && !_platform.IsProcessAlive(controlPid))
-				throw new InvalidOperationException("ControlHost stopped while HeadlessEngine profile was active.");
+			{
+				await _platform.FlushProcessDiagnosticsAsync(controlPid, cancellationToken).ConfigureAwait(false);
+				throw new InvalidOperationException(BuildControlHostExitDetail("ControlHost stopped while HeadlessEngine profile was active."));
+			}
 
 			var readiness = await FindHealthyReadinessAsync(cancellationToken).ConfigureAwait(false);
 			if (readiness is null)
@@ -761,6 +946,25 @@ public sealed class UnifiedApplicationHost
 			}
 
 			await _platform.DelayAsync(_options.Policy.ProbeInterval, cancellationToken).ConfigureAwait(false);
+		}
+	}
+
+	private string BuildControlHostExitDetail(string prefix)
+	{
+		if (_ownedControlProcessId is null) return prefix;
+		if (!_platform.FileExists(_options.ControlHostDiagnosticPath)) return prefix;
+		try
+		{
+			var diagnostic = _platform.ReadAllText(_options.ControlHostDiagnosticPath).Trim();
+			if (diagnostic.Length == 0) return prefix;
+			const int maximumDetailLength = 4096;
+			if (diagnostic.Length > maximumDetailLength)
+				diagnostic = diagnostic[^maximumDetailLength..];
+			return $"{prefix} ControlHost diagnostic: {diagnostic}";
+		}
+		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+		{
+			return prefix;
 		}
 	}
 

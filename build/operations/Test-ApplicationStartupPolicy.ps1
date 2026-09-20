@@ -89,6 +89,11 @@ foreach ($token in @(
 	"RTAIME_HOST_READINESS_FILE",
 	"RTAIME_HOST_STOP_FILE",
 	"ProbePipeAsync",
+	"IsEndpointLeaseHeld",
+	"ControlHostDiagnosticPath",
+	"DiagnosticLogPath",
+	"FlushProcessDiagnosticsAsync",
+	"BuildControlHostExitDetail",
 	"RuntimeSupervision",
 	"AISupervision"
 )) {
@@ -97,6 +102,9 @@ foreach ($token in @(
 
 Assert-Condition ($appCode -notmatch 'StartRuntimeHost') "AppHost must not directly launch RuntimeHost."
 Assert-Condition ($appCode -notmatch 'StartAIHost') "AppHost must not directly launch AIHost."
+Assert-Condition ($appCode -match 'WaitForLeasedControlReadinessAsync' -and $appCode -match 'remains owned by an existing process') "AppHost must wait on an existing ControlHost endpoint lease instead of starting a competing host."
+Assert-Condition ($appCode -match 'RedirectStandardOutput = true' -and $appCode -match 'RedirectStandardError = true' -and $appCode -match 'exitCode=') "AppHost must persist ControlHost stdout, stderr and exit-code diagnostics."
+
 Assert-Condition ($appCode -match 'RTAIME_APPHOST_LIFECYCLE_FILE' -and $appCode -match 'LifecycleEvidencePath') "Interactive startup must expose AppHost lifecycle evidence to the Operator."
 foreach ($stage in @("ApplicationBootstrap", "Configuration", "OperatorInterface", "ControlHost", "RuntimeHost", "AIHost", "ProductionReadiness")) {
 	Assert-Condition ($lifecycleProvider -match [Regex]::Escape($stage)) "AppHost lifecycle evidence is missing stage '$stage'."
