@@ -45,6 +45,30 @@ public sealed record SubsystemHealthSnapshot(
 	bool CanRecover = false,
 	string? RecoveryActionLabel = null);
 
+public static class HealthSnapshotHistory
+{
+	public static SubsystemHealthSnapshot Retain(
+		SubsystemHealthSnapshot candidate,
+		SubsystemHealthSnapshot? previous,
+		DateTimeOffset observedAt)
+	{
+		ArgumentNullException.ThrowIfNull(candidate);
+
+		var statusSince = previous is not null && previous.State == candidate.State
+			? previous.StatusSince
+			: observedAt;
+		var lastSuccessfulCheck = candidate.State == SubsystemHealthState.Healthy
+			? observedAt
+			: previous?.LastSuccessfulCheck;
+
+		return candidate with
+		{
+			StatusSince = statusSince,
+			LastSuccessfulCheck = lastSuccessfulCheck
+		};
+	}
+}
+
 public sealed class HealthSnapshotChangedEventArgs(
 	IReadOnlyList<SubsystemHealthSnapshot> current) : EventArgs
 {
