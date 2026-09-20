@@ -29,6 +29,9 @@
 				<Trigger Property="Tag" Value="FAILED">
 					<Setter Property="BorderBrush" Value="{DynamicResource OperatorErrorBrush}" />
 				</Trigger>
+				<Trigger Property="Tag" Value="NOT READY">
+					<Setter Property="BorderBrush" Value="{DynamicResource OperatorErrorBrush}" />
+				</Trigger>
 			</Style.Triggers>
 		</Style>
 	</UserControl.Resources>
@@ -125,7 +128,10 @@
 					</Grid.RowDefinitions>
 					<DockPanel Margin="0,0,0,8">
 						<TextBlock Text="SUBSYSTEMS" Style="{StaticResource OperatorSectionTitle}" />
-						<TextBlock Text="{Binding HealthyCount, StringFormat=Healthy {0}}" Style="{StaticResource OperatorLabel}" DockPanel.Dock="Right" />
+						<StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+							<TextBlock Text="Healthy " Style="{StaticResource OperatorLabel}" />
+							<TextBlock Text="{Binding HealthyCount}" Style="{StaticResource OperatorLabel}" />
+						</StackPanel>
 					</DockPanel>
 					<StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8">
 						<TextBlock Text="Attention " Style="{StaticResource OperatorLabel}" />
