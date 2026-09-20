@@ -327,7 +327,7 @@ public sealed class OperatorNotificationCenterViewModel : INotifyPropertyChanged
 		foreach (var notification in current
 			.Where(candidate =>
 				candidate.Persistent &&
-				candidate.Condition is OperatorNotificationCondition.Active or OperatorNotificationCondition.Fatal)
+				(candidate.Condition is OperatorNotificationCondition.Active or OperatorNotificationCondition.Fatal))
 			.OrderByDescending(candidate => candidate.Condition == OperatorNotificationCondition.Fatal)
 			.ThenByDescending(candidate => candidate.PublishedAtUtc))
 		{
