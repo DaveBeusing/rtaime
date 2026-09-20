@@ -12,6 +12,8 @@ public partial class App : Application
 {
 	private bool _headlessMode;
 
+	public bool UnexpectedFailureDetected { get; private set; }
+
 	protected override void OnStartup(StartupEventArgs e)
 	{
 		DispatcherUnhandledException += OnDispatcherUnhandledException;
@@ -42,6 +44,7 @@ public partial class App : Application
 
 	private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
 	{
+		UnexpectedFailureDetected = true;
 		var reportPath = TryWriteCrashReport(e.Exception);
 		var reportDetail = reportPath is null
 			? "A diagnostic report could not be written."
@@ -50,8 +53,8 @@ public partial class App : Application
 		if (!_headlessMode)
 		{
 			MessageBox.Show(
-				$"rtaime Operator encountered an unexpected error and must close.\n\n{e.Exception.Message}\n\n{reportDetail}",
-				"rtaime Operator — Unexpected error",
+				$"rtaime Operator encountered an unexpected failure and must close.\n\nThe current production state was not advanced by the failed UI operation. Restart rtaime to restore the safe workspace; outputs remain stopped until explicitly started.\n\n{reportDetail}",
+				"rtaime Operator — Unexpected failure",
 				MessageBoxButton.OK,
 				MessageBoxImage.Error);
 		}
