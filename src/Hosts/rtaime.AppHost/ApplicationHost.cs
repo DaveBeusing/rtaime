@@ -2,6 +2,8 @@
 
 using System.Diagnostics;
 using System.IO.Pipes;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 
 namespace rtaime.AppHost;
@@ -190,6 +192,7 @@ public interface IApplicationHostPlatform
 	string FindProductArtifact(string installRoot, string baseName);
 	int StartProcess(ApplicationProcessSpec spec);
 	bool IsProcessAlive(int processId);
+	bool IsEndpointLeaseHeld(string endpoint) => false;
 	void KillProcessTree(int processId);
 	bool FileExists(string path);
 	string ReadAllText(string path);
@@ -299,6 +302,27 @@ public sealed class SystemApplicationHostPlatform : IApplicationHostPlatform
 		catch (ArgumentException)
 		{
 			return false;
+		}
+	}
+
+	public bool IsEndpointLeaseHeld(string endpoint)
+	{
+		if (string.IsNullOrWhiteSpace(endpoint)) return false;
+		var normalized = endpoint.Trim();
+		var hash = SHA256.HashData(Encoding.UTF8.GetBytes(normalized));
+		var name = "rtaime.endpoint." + Convert.ToHexString(hash).ToLowerInvariant();
+		try
+		{
+			using var existing = Mutex.OpenExisting(name);
+			return true;
+		}
+		catch (WaitHandleCannotBeOpenedException)
+		{
+			return false;
+		}
+		catch (UnauthorizedAccessException)
+		{
+			return true;
 		}
 	}
 
@@ -468,12 +492,22 @@ public sealed class UnifiedApplicationHost
 				}
 				else
 				{
-					StartControlHost();
-					_lifecycle.StartStage(ApplicationLifecycleStages.ControlHost, "ControlHost process started; waiting for qualified readiness.");
-					_lifecycle.StartStage(ApplicationLifecycleStages.RuntimeHost, "Awaiting supervised RuntimeHost readiness.");
-					if (_options.RequireAI)
-						_lifecycle.StartStage(ApplicationLifecycleStages.AIHost, "Awaiting supervised AIHost readiness.");
-					ready = await WaitForReadinessAsync(cancellationToken).ConfigureAwait(false);
+					ready = await WaitForLeasedControlReadinessAsync(cancellationToken).ConfigureAwait(false);
+					if (ready is not null)
+					{
+						_adopted = true;
+						_controlProcessId = ready.Value.Evidence.ProcessId;
+						_activeReadinessPath = ready.Value.Path;
+					}
+					else
+					{
+						StartControlHost();
+						_lifecycle.StartStage(ApplicationLifecycleStages.ControlHost, "ControlHost process started; waiting for qualified readiness.");
+						_lifecycle.StartStage(ApplicationLifecycleStages.RuntimeHost, "Awaiting supervised RuntimeHost readiness.");
+						if (_options.RequireAI)
+							_lifecycle.StartStage(ApplicationLifecycleStages.AIHost, "Awaiting supervised AIHost readiness.");
+						ready = await WaitForReadinessAsync(cancellationToken).ConfigureAwait(false);
+					}
 				}
 			}
 			else
@@ -593,6 +627,30 @@ public sealed class UnifiedApplicationHost
 			Array.Empty<string>(),
 			environment,
 			false));
+	}
+
+	private async Task<(string Path, ApplicationReadinessEvidence Evidence)?> WaitForLeasedControlReadinessAsync(CancellationToken cancellationToken)
+	{
+		var endpoint = _options.Endpoints.Control;
+		if (!_platform.IsEndpointLeaseHeld(endpoint)) return null;
+
+		_lifecycle.StartStage(
+			ApplicationLifecycleStages.ControlHost,
+			$"ControlHost endpoint '{endpoint}' is already owned; waiting for qualified readiness instead of starting a competing host.",
+			canRetry: true);
+
+		var deadline = _platform.UtcNow + _options.Policy.StartupTimeout;
+		while (_platform.UtcNow < deadline)
+		{
+			cancellationToken.ThrowIfCancellationRequested();
+			var ready = await FindHealthyReadinessAsync(cancellationToken).ConfigureAwait(false);
+			if (ready is not null) return ready;
+			if (!_platform.IsEndpointLeaseHeld(endpoint)) return null;
+			await _platform.DelayAsync(_options.Policy.ProbeInterval, cancellationToken).ConfigureAwait(false);
+		}
+
+		throw new TimeoutException(
+			$"ControlHost endpoint '{endpoint}' remains owned by an existing process that did not publish qualified readiness before the configured startup timeout.");
 	}
 
 	private async Task<(string Path, ApplicationReadinessEvidence Evidence)?> WaitForReadinessAsync(CancellationToken cancellationToken)
