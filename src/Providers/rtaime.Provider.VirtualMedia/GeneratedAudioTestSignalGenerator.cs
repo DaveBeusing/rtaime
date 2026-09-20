@@ -46,7 +46,7 @@ public sealed class GeneratedAudioTestSignalGenerator
 		var rightPeak = 0d;
 		var activeChannel = ResolveActiveChannelLabel(timing.SamplePosition);
 
-		for (var sampleIndex = 0; sampleIndex < timing.SampleCount; sampleIndex++)
+		for (uint sampleIndex = 0; sampleIndex < timing.SampleCount; sampleIndex++)
 		{
 			var absoluteSample = timing.SamplePosition + sampleIndex;
 			var value = SignalValue(absoluteSample);
