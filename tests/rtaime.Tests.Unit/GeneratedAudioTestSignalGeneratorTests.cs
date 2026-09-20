@@ -158,6 +158,37 @@ public sealed class GeneratedAudioTestSignalGeneratorTests
 	}
 
 	[Fact]
+	public void Recreated_generator_is_bit_stable_at_the_same_sample_clock_position()
+	{
+		var configuration = new GeneratedAudioTestSignalConfiguration(
+			StereoFormat,
+			GeneratedAudioTestSignalMode.Tone,
+			997,
+			0.25);
+		var firstGenerator = new GeneratedAudioTestSignalGenerator(configuration);
+		var secondGenerator = new GeneratedAudioTestSignalGenerator(configuration);
+		var first = new float[257 * 2];
+		var second = new float[257 * 2];
+		var timing = Timing(12_345, 257);
+
+		firstGenerator.FillInterleavedFloat32(timing, first);
+		secondGenerator.FillInterleavedFloat32(timing, second);
+
+		Assert.Equal(first, second);
+	}
+
+	[Fact]
+	public void PcmS16_configuration_fails_closed_until_runtime_payload_supports_it()
+	{
+		var pcm = new AudioFormat(48_000, AudioChannelLayout.Stereo, AudioSampleFormat.PcmS16, 2);
+
+		Assert.Throws<NotSupportedException>(() =>
+			new GeneratedAudioTestSignalConfiguration(
+				pcm,
+				GeneratedAudioTestSignalMode.Tone));
+	}
+
+	[Fact]
 	public void Unsafe_level_and_invalid_stereo_layout_are_rejected()
 	{
 		Assert.Throws<ArgumentOutOfRangeException>(() =>
