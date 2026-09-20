@@ -85,7 +85,7 @@ public sealed record OperatorWindowPlacementSettings(
 
 public sealed record OperatorLayoutSettings
 {
-	public const int CurrentVersion = 4;
+	public const int CurrentVersion = 5;
 	public const double DefaultLeftPanelWidth = 400;
 	public const double DefaultRightPanelWidth = 340;
 	public const double DefaultLowerPanelHeight = 320;
@@ -112,7 +112,7 @@ public sealed record OperatorLayoutSettings
 			return Default;
 
 		var selected = OperatorWorkspaceNames.Normalize(SelectedWorkspace);
-		if (Version < CurrentVersion)
+		if (Version < 4)
 		{
 			return Default with
 			{
@@ -157,6 +157,7 @@ public sealed record OperatorLayoutSettings
 		[OperatorWorkspaceNames.Scenes] = CreateReferenceLayout("DUAL"),
 		[OperatorWorkspaceNames.Compositing] = CreateReferenceLayout("DUAL"),
 		[OperatorWorkspaceNames.Outputs] = CreateReferenceLayout("PROGRAM"),
+		[OperatorWorkspaceNames.Health] = CreateReferenceLayout("PROGRAM"),
 		[OperatorWorkspaceNames.Settings] = CreateReferenceLayout("PROGRAM")
 	};
 
@@ -179,6 +180,7 @@ public static class OperatorWorkspaceNames
 	public const string Scenes = "SCENES";
 	public const string Compositing = "COMPOSITING";
 	public const string Outputs = "OUTPUTS";
+	public const string Health = "HEALTH";
 	public const string Settings = "SETTINGS";
 
 	public static IReadOnlyList<string> All { get; } =
@@ -189,6 +191,7 @@ public static class OperatorWorkspaceNames
 		Scenes,
 		Compositing,
 		Outputs,
+		Health,
 		Settings
 	];
 
@@ -424,7 +427,7 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 
 	public GridLength RightColumnWidth
 	{
-		get => new(IsCenterMaximized || IsRightCollapsed || IsCompactViewport ? 0 : IsLiveWorkspace ? 420 : RightPanelWidth);
+		get => new(IsCenterMaximized || IsRightCollapsed || IsCompactViewport || IsHealthWorkspace ? 0 : IsLiveWorkspace ? 420 : RightPanelWidth);
 		set
 		{
 			if (!IsLiveWorkspace && !IsCompactViewport && !IsCenterMaximized && !IsRightCollapsed && value.IsAbsolute && value.Value > 0)
@@ -434,7 +437,7 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 
 	public GridLength LowerRowHeight
 	{
-		get => new(IsCenterMaximized || IsLiveWorkspace ? 0 : IsCompactViewport ? Math.Min(LowerPanelHeight, OperatorLayoutSettings.CompactLowerPanelHeight) : LowerPanelHeight);
+		get => new(IsCenterMaximized || IsLiveWorkspace || IsHealthWorkspace ? 0 : IsCompactViewport ? Math.Min(LowerPanelHeight, OperatorLayoutSettings.CompactLowerPanelHeight) : LowerPanelHeight);
 		set
 		{
 			if (!IsCompactViewport && !IsCenterMaximized && value.IsAbsolute && value.Value > 0)
@@ -443,7 +446,7 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 	}
 
 	public double LeftSplitterWidth => IsCenterMaximized || IsLeftCollapsed || IsCompactViewport ? 0 : 6;
-	public double RightSplitterWidth => IsCenterMaximized || IsRightCollapsed || IsCompactViewport ? 0 : 6;
+	public double RightSplitterWidth => IsCenterMaximized || IsRightCollapsed || IsCompactViewport || IsHealthWorkspace ? 0 : 6;
 	public double LowerSplitterHeight => IsCenterMaximized || !HasTimelineRegion || IsCompactViewport ? 0 : 6;
 
 	public bool IsLeftCollapsed
@@ -513,6 +516,7 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 	public bool IsScenesWorkspace => string.Equals(SelectedWorkspace, OperatorWorkspaceNames.Scenes, StringComparison.Ordinal);
 	public bool IsCompositingWorkspace => string.Equals(SelectedWorkspace, OperatorWorkspaceNames.Compositing, StringComparison.Ordinal);
 	public bool IsOutputsWorkspace => string.Equals(SelectedWorkspace, OperatorWorkspaceNames.Outputs, StringComparison.Ordinal);
+	public bool IsHealthWorkspace => string.Equals(SelectedWorkspace, OperatorWorkspaceNames.Health, StringComparison.Ordinal);
 	public bool IsSettingsWorkspace => string.Equals(SelectedWorkspace, OperatorWorkspaceNames.Settings, StringComparison.Ordinal);
 
 	public bool HasLeftRegion => IsLiveWorkspace || IsEditWorkspace || IsMediaWorkspace || IsScenesWorkspace || IsCompositingWorkspace;
@@ -526,10 +530,10 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 
 	public Visibility MultiviewVisibility => IsLiveWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility CompositingGraphVisibility => IsCompositingWorkspace ? Visibility.Visible : Visibility.Collapsed;
-	public Visibility StandardViewerVisibility => IsLiveWorkspace || IsCompositingWorkspace || IsEditWorkspace ? Visibility.Collapsed : Visibility.Visible;
+	public Visibility StandardViewerVisibility => IsLiveWorkspace || IsCompositingWorkspace || IsEditWorkspace || IsHealthWorkspace ? Visibility.Collapsed : Visibility.Visible;
 	public Visibility QuickControlsVisibility => IsSettingsWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility LiveWorkspaceVisibility => IsLiveWorkspace ? Visibility.Visible : Visibility.Collapsed;
-	public Visibility NonLiveCenterVisibility => IsLiveWorkspace || IsCompositingWorkspace ? Visibility.Collapsed : Visibility.Visible;
+	public Visibility NonLiveCenterVisibility => IsLiveWorkspace || IsCompositingWorkspace || IsHealthWorkspace ? Visibility.Collapsed : Visibility.Visible;
 	public bool WorkspacePanelResizeEnabled => !IsLiveWorkspace;
 	public Visibility ProductionControlsVisibility => IsEditWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility MediaDeckVisibility => IsMediaWorkspace ? Visibility.Visible : Visibility.Collapsed;
@@ -539,6 +543,7 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 	public Visibility InspectorVisibility => IsLiveWorkspace ? Visibility.Collapsed : Visibility.Visible;
 	public Visibility LiveControlsVisibility => IsLiveWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility OutputRoutingVisibility => IsOutputsWorkspace ? Visibility.Visible : Visibility.Collapsed;
+	public Visibility HealthCenterVisibility => IsHealthWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility SystemWorkspaceVisibility => IsSettingsWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility SystemStatusVisibility => IsSettingsWorkspace ? Visibility.Visible : Visibility.Collapsed;
 	public Visibility MonitoringVisibility => IsOutputsWorkspace || IsSettingsWorkspace ? Visibility.Visible : Visibility.Collapsed;
@@ -805,6 +810,7 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 		OnPropertyChanged(nameof(IsScenesWorkspace));
 		OnPropertyChanged(nameof(IsCompositingWorkspace));
 		OnPropertyChanged(nameof(IsOutputsWorkspace));
+		OnPropertyChanged(nameof(IsHealthWorkspace));
 		OnPropertyChanged(nameof(IsSettingsWorkspace));
 		OnPropertyChanged(nameof(HasAuxiliaryWorkspaceColumn));
 		OnPropertyChanged(nameof(AuxiliaryWorkspaceColumnWidth));
@@ -825,6 +831,7 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 		OnPropertyChanged(nameof(InspectorVisibility));
 		OnPropertyChanged(nameof(LiveControlsVisibility));
 		OnPropertyChanged(nameof(OutputRoutingVisibility));
+		OnPropertyChanged(nameof(HealthCenterVisibility));
 		OnPropertyChanged(nameof(SystemWorkspaceVisibility));
 		OnPropertyChanged(nameof(SystemStatusVisibility));
 		OnPropertyChanged(nameof(MonitoringVisibility));

@@ -107,7 +107,7 @@
 					StatusText="{Binding GlobalReadinessLabel}"
 					Detail="{Binding GlobalReadinessSummary}"
 					Command="{Binding Shell.SelectWorkspaceCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-					CommandParameter="SETTINGS"
+					CommandParameter="HEALTH"
 					ToolTip="{Binding GlobalReadinessTooltip}"
 					HorizontalAlignment="Right"
 					VerticalAlignment="Center"
@@ -222,6 +222,9 @@
 						</controls:RtaimeNavigationItem>
 						<controls:RtaimeNavigationItem Label="Outputs" IconData="{StaticResource RtaimeIconOutputGeometry}" Command="{Binding Shell.SelectWorkspaceCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" CommandParameter="OUTPUTS" ToolTip="Outputs workspace">
 							<controls:RtaimeNavigationItem.Style><Style TargetType="{x:Type controls:RtaimeNavigationItem}" BasedOn="{StaticResource {x:Type controls:RtaimeNavigationItem}}"><Style.Triggers><DataTrigger Binding="{Binding Shell.SelectedWorkspace, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="OUTPUTS"><Setter Property="IsActive" Value="True" /></DataTrigger></Style.Triggers></Style></controls:RtaimeNavigationItem.Style>
+						</controls:RtaimeNavigationItem>
+						<controls:RtaimeNavigationItem Label="Health" IconData="{StaticResource RtaimeIconHealthGeometry}" Command="{Binding Shell.SelectWorkspaceCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" CommandParameter="HEALTH" ToolTip="Health Center and diagnostics">
+							<controls:RtaimeNavigationItem.Style><Style TargetType="{x:Type controls:RtaimeNavigationItem}" BasedOn="{StaticResource {x:Type controls:RtaimeNavigationItem}}"><Style.Triggers><DataTrigger Binding="{Binding Shell.SelectedWorkspace, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="HEALTH"><Setter Property="IsActive" Value="True" /></DataTrigger></Style.Triggers></Style></controls:RtaimeNavigationItem.Style>
 						</controls:RtaimeNavigationItem>
 					</StackPanel>
 					<controls:RtaimeNavigationItem DockPanel.Dock="Bottom"
@@ -726,6 +729,13 @@
 						</Border>
 					</Grid>
 				</Grid>
+
+				<local:HealthCenterControl
+					DataContext="{Binding HealthCenter, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+					Visibility="{Binding Shell.HealthCenterVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+					Margin="0"
+					HorizontalAlignment="Stretch"
+					VerticalAlignment="Stretch" />
 
 				<controls:RtaimeScrollViewer x:Name="CenterWorkspaceScroll"
 					VerticalScrollBarVisibility="Auto"

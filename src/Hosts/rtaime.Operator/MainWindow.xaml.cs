@@ -72,6 +72,12 @@ public partial class MainWindow : Window
 		Shell = new OperatorShellViewModel(new OperatorLayoutStore(), SetProductionFullscreen);
 		MediaPool = new MediaPoolInspectorViewModel(viewModel, MediaDeck);
 		CompositingGraph = new CompositingGraphViewModel(viewModel, MediaPool);
+		HealthProvider = new OperatorHealthSnapshotProvider(viewModel, MediaDeck, Monitoring, ProgramOutput, CompositingGraph);
+		HealthCenter = new HealthCenterViewModel(
+			HealthProvider,
+			viewModel.RuntimeReadiness,
+			viewModel.SynchronizeCommand,
+			new DispatcherSynchronizationContext(Dispatcher));
 		QuickControls = new OperatorQuickControlsViewModel(viewModel, MediaDeck, MediaPool, new OperatorQuickControlStore());
 		Shortcuts = OperatorKeyboardCommandRegistry.Create(
 			viewModel,
@@ -118,6 +124,12 @@ public partial class MainWindow : Window
 		Shell = new OperatorShellViewModel(new OperatorLayoutStore(), SetProductionFullscreen);
 		MediaPool = new MediaPoolInspectorViewModel(viewModel, MediaDeck);
 		CompositingGraph = new CompositingGraphViewModel(viewModel, MediaPool);
+		HealthProvider = new OperatorHealthSnapshotProvider(viewModel, MediaDeck, Monitoring, ProgramOutput, CompositingGraph);
+		HealthCenter = new HealthCenterViewModel(
+			HealthProvider,
+			viewModel.RuntimeReadiness,
+			viewModel.SynchronizeCommand,
+			new DispatcherSynchronizationContext(Dispatcher));
 		QuickControls = new OperatorQuickControlsViewModel(viewModel, MediaDeck, MediaPool, new OperatorQuickControlStore());
 		Shortcuts = OperatorKeyboardCommandRegistry.Create(
 			viewModel,
@@ -146,6 +158,8 @@ public partial class MainWindow : Window
 	public OperatorMonitoringViewModel Monitoring { get; }
 	public ProgramOutputController ProgramOutput { get; }
 	public OutputRoutingHealthViewModel OutputHealth { get; }
+	public OperatorHealthSnapshotProvider HealthProvider { get; }
+	public HealthCenterViewModel HealthCenter { get; }
 	public OperatorShellViewModel Shell { get; }
 	public MediaDeckViewModel MediaDeck { get; }
 	public DemoProductionPackageController DemoProduction { get; }
@@ -301,6 +315,8 @@ public partial class MainWindow : Window
 		{
 			Startup.Dispose();
 			StartupBrandPulse.BeginAnimation(UIElement.OpacityProperty, null);
+			HealthCenter.Dispose();
+			HealthProvider.Dispose();
 			OutputHealth.Dispose();
 			ProgramOutput.Dispose();
 			if (DataContext is OperatorViewModel viewModel)
@@ -665,7 +681,7 @@ public partial class MainWindow : Window
 	private void OnHelpClick(object sender, RoutedEventArgs e)
 	{
 		MessageBox.Show(
-			$"WORKSPACES\nMEDIA  Media preparation\nEDIT  Timeline-focused editing\nLIVE  Multiview, source/cue selection and explicit take controls\nSCENES  Scene/layer presentation using existing graphics state\nCOMPOSITING  Graphics/compositing presentation\nOUTPUTS  Output and operational evidence\nSETTINGS  Shell, status and diagnostics\n\nKEYBOARD\n{Shortcuts.ReferenceText}\n\nLIVE  Select sources/cues without activation; use SET PVW, CUT/AUTO or JUMP CUE explicitly. Double-click a multiview tile only enlarges its monitor image.\nMedia Pool  Search/filter resources; drag a Source or loaded Clip to Preview.\nTimeline  Select clips/cues for Inspector context; drag IN/OUT handles to trim.\nInspector  Use PIN on supported editable properties to add/remove LIVE Quick Controls.\nClean Program  Uses the existing Program monitoring image and never changes physical Program output.",
+			$"WORKSPACES\nMEDIA  Media preparation\nEDIT  Timeline-focused editing\nLIVE  Multiview, source/cue selection and explicit take controls\nSCENES  Scene/layer presentation using existing graphics state\nCOMPOSITING  Graphics/compositing presentation\nOUTPUTS  Output and operational evidence\nHEALTH  Subsystem health and diagnostics\nSETTINGS  Shell configuration\n\nKEYBOARD\n{Shortcuts.ReferenceText}\n\nLIVE  Select sources/cues without activation; use SET PVW, CUT/AUTO or JUMP CUE explicitly. Double-click a multiview tile only enlarges its monitor image.\nMedia Pool  Search/filter resources; drag a Source or loaded Clip to Preview.\nTimeline  Select clips/cues for Inspector context; drag IN/OUT handles to trim.\nInspector  Use PIN on supported editable properties to add/remove LIVE Quick Controls.\nClean Program  Uses the existing Program monitoring image and never changes physical Program output.",
 			"rtaime Operator — Workspace & Keyboard Reference",
 			MessageBoxButton.OK,
 			MessageBoxImage.Information);

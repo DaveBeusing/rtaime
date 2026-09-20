@@ -25,7 +25,7 @@ A degraded snapshot retains every active reason. The titlebar uses the first rea
 
 ## Single source and presentation
 
-`IRuntimeReadinessService` exposes `Current` and the `Changed` event. The Operator keeps one service instance for its lifetime. Workspace changes, view rebinding and Output/Settings view recreation consume that same snapshot instead of recomputing a global readiness state.
+`IRuntimeReadinessService` exposes `Current` and the `Changed` event. The Operator keeps one service instance for its lifetime. Workspace changes, view rebinding and Output/Health/Settings view recreation consume that same snapshot instead of recomputing a global readiness state.
 
 The existing lifecycle labels remain compatibility presentation over the centralized snapshot. They are not a second lifecycle authority.
 
@@ -57,7 +57,7 @@ The dark production titlebar permanently hosts `RtaimeGlobalStatusButton`.
 
 The control shows a semantic status indicator, the global readiness label, the first affected component when attention is required, a concise detail line, and a tooltip with all active readiness reasons and performance-verification detail.
 
-Selecting the control opens the existing `SETTINGS` workspace. The Settings/System Status surfaces expose both global readiness and performance-verification state without introducing another Health Center state model.
+Selecting the control opens the dedicated `HEALTH` workspace. The Health Center displays subsystem health separately while reusing this same readiness snapshot for the overall production-readiness banner; it does not introduce another global readiness model.
 
 ## Failure and recovery
 
