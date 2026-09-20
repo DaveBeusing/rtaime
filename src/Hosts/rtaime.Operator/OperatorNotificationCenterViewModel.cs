@@ -293,8 +293,13 @@ public sealed class OperatorNotificationCenterViewModel : INotifyPropertyChanged
 			"synchronized",
 			"saved");
 
-		if (success && _operator.IsConnected && !_operator.IsStale)
+		if (success &&
+			_operator.IsConnected &&
+			!_operator.IsStale &&
+			string.IsNullOrWhiteSpace(_operator.LastError))
+		{
 			_notifications.Dismiss("operator.last-error");
+		}
 
 		_notifications.Publish(new OperatorNotification(
 			"operator.last-event",
