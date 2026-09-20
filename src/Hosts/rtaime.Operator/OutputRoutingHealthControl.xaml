@@ -252,7 +252,7 @@
 										Grid.Column="2"
 										Minimum="0"
 										Maximum="100"
-										Value="{Binding GaugeValue}"
+										Value="{Binding GaugeValue, Mode=OneWay}"
 										HasValue="{Binding HasGaugeSample}"
 										Height="4"
 										Margin="8,0"
