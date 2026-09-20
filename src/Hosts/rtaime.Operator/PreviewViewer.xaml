@@ -41,24 +41,12 @@
 			</Border>
 
 			<Grid Grid.Row="1" Background="#05080B" ClipToBounds="True">
-
-				<controls:RtaimeStatePlaceholder
-					State="EMPTY"
-					Title="No source selected"
-					Detail="Select a media item, scene or live source."
-					Panel.ZIndex="20"
-					Margin="16">
-					<controls:RtaimeStatePlaceholder.Style>
-						<Style TargetType="{x:Type controls:RtaimeStatePlaceholder}" BasedOn="{StaticResource {x:Type controls:RtaimeStatePlaceholder}}">
-							<Setter Property="Visibility" Value="Collapsed" />
-							<Style.Triggers>
-								<DataTrigger Binding="{Binding Frame, ElementName=Root}" Value="{x:Null}">
-									<Setter Property="Visibility" Value="Visible" />
-								</DataTrigger>
-							</Style.Triggers>
-						</Style>
-					</controls:RtaimeStatePlaceholder.Style>
-				</controls:RtaimeStatePlaceholder>
+			<controls:RtaimeStatePlaceholder
+							State="{Binding WorkspaceStates.Preview.State, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							Title="{Binding WorkspaceStates.Preview.Title, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							Detail="{Binding WorkspaceStates.Preview.Detail, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							Panel.ZIndex="60"
+							Margin="10" />
 
 				<Viewbox Stretch="{Binding ImageStretch, ElementName=Root}" StretchDirection="Both" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
 					<Image Source="{Binding Frame, ElementName=Root}" SnapsToDevicePixels="True">
