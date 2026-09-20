@@ -1,0 +1,25 @@
+{
+	"copyright": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+	"schemaVersion": "1.0",
+	"primaryBranch": "master",
+	"pullRequestRequired": true,
+	"requiredApprovingReviewCount": 0,
+	"requireCodeOwnerReview": false,
+	"requireLastPushApproval": false,
+	"requireReviewThreadResolution": true,
+	"blockForcePush": true,
+	"blockBranchDeletion": true,
+	"strictRequiredStatusChecks": true,
+	"requiredChecks": [
+		"CI",
+		"Quality",
+		"Security",
+		"Packaged E2E",
+		"Provider Smoke"
+	],
+	"administrativeEnforcement": {
+		"required": true,
+		"evidenceStatus": "UNVERIFIED",
+		"details": "Repository-side policy and required checks are version-controlled. GitHub ruleset activation must be proven separately through repository administration evidence."
+	}
+}
