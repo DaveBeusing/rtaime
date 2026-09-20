@@ -25,7 +25,6 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 	private readonly SynchronizationContext? _synchronizationContext;
 	private readonly CancellationTokenSource _dispose = new();
 	private MediaDeckSnapshot _snapshot = MediaDeckSnapshot.Unloaded;
-	private Task? _pollTask;
 	private MediaDeckCueItem? _selectedCue;
 	private string _cueName = "Cue";
 	private string? _lastError;
@@ -211,12 +210,6 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 		}
 	}
 
-	public void Start()
-	{
-		if (_pollTask is null)
-			_pollTask = PollAsync(_dispose.Token);
-	}
-
 	internal async Task PrepareDemoPackageAsync(
 		string path,
 		MediaSourceId sourceId,
@@ -301,11 +294,6 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 	{
 		_controller.StateChanged -= OnControllerStateChanged;
 		_dispose.Cancel();
-		if (_pollTask is not null)
-		{
-			try { await _pollTask.ConfigureAwait(false); }
-			catch (OperationCanceledException) { }
-		}
 		await Timeline.DisposeAsync().ConfigureAwait(false);
 		await _controller.DisposeAsync().ConfigureAwait(false);
 		_dispose.Dispose();
@@ -491,22 +479,10 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 			await _controller.Markers.JumpToCueAsync(SelectedCue.Id, _dispose.Token).ConfigureAwait(false);
 	}
 
-	private async Task PollAsync(CancellationToken cancellationToken)
+	internal void ApplyConfirmedSnapshot(MediaDeckSnapshot snapshot)
 	{
-		using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(100));
-		while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
-		{
-			if (!IsLoaded || IsBusy)
-				continue;
-			try
-			{
-				await _controller.RefreshAsync(cancellationToken).ConfigureAwait(false);
-			}
-			catch (Exception exception) when (exception is IOException or InvalidOperationException or TimeoutException)
-			{
-				Post(() => LastError = exception.Message);
-			}
-		}
+		ArgumentNullException.ThrowIfNull(snapshot);
+		_controller.ApplyConfirmedSnapshot(snapshot);
 	}
 
 	private void OnControllerStateChanged(object? sender, EventArgs e) =>
