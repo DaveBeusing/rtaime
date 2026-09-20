@@ -206,6 +206,9 @@ public sealed class CompositingGraphViewModel : INotifyPropertyChanged, IDisposa
 	private double _canvasHeight = 760;
 	private double _viewportWidth = 1000;
 	private double _viewportHeight = 650;
+	private int _healthFingerprint;
+	private bool _hasHealthFingerprint;
+	private long _healthRevision;
 
 	public CompositingGraphViewModel(
 		OperatorViewModel @operator,
@@ -238,6 +241,7 @@ public sealed class CompositingGraphViewModel : INotifyPropertyChanged, IDisposa
 
 	public ObservableCollection<CompositingGraphNodeViewModel> Nodes { get; }
 	public ObservableCollection<CompositingGraphConnectionViewModel> Connections { get; }
+	public long HealthRevision => _healthRevision;
 	public ICommand SelectNodeCommand { get; }
 	public ICommand SelectModeCommand { get; }
 	public ICommand PanModeCommand { get; }
@@ -441,6 +445,7 @@ public sealed class CompositingGraphViewModel : INotifyPropertyChanged, IDisposa
 		}
 
 		UpdateConnections();
+		PublishHealthRevision(graph.Nodes);
 	}
 
 	public void Dispose()
@@ -551,6 +556,27 @@ public sealed class CompositingGraphViewModel : INotifyPropertyChanged, IDisposa
 	{
 		if (e.PropertyName is nameof(CompositingGraphNodeViewModel.X) or nameof(CompositingGraphNodeViewModel.Y))
 			UpdateConnections();
+	}
+
+	private void PublishHealthRevision(IReadOnlyList<CompositingGraphNodeProjection> nodes)
+	{
+		var fingerprint = new HashCode();
+		foreach (var node in nodes)
+		{
+			fingerprint.Add(node.Id, StringComparer.Ordinal);
+			fingerprint.Add(node.Health);
+			fingerprint.Add(node.Status, StringComparer.Ordinal);
+			fingerprint.Add(node.Detail, StringComparer.Ordinal);
+		}
+
+		var current = fingerprint.ToHashCode();
+		if (_hasHealthFingerprint && current == _healthFingerprint)
+			return;
+
+		_healthFingerprint = current;
+		_hasHealthFingerprint = true;
+		_healthRevision++;
+		OnPropertyChanged(nameof(HealthRevision));
 	}
 
 	private void UpdateConnections()
