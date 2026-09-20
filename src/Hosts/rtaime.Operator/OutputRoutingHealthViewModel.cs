@@ -245,21 +245,21 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 		UpdateMetric(
 			"cpu",
 			cpuValue,
-			cpuValue == Unavailable ? "UNVERIFIED" : "PASS",
+			ResolveHardwareMetricEvidence(cpuValue),
 			$"{NormalizeAvailability(_control.CpuDeviceName)}. Runtime-published total CPU utilization.",
 			cpuSample,
 			sampleHistory);
 		UpdateMetric(
 			"gpu",
 			gpuValue,
-			ResolveMetricEvidence(gpuValue, _control.GpuProviderHealth),
+			ResolveHardwareMetricEvidence(gpuValue, _control.GpuProviderHealth),
 			$"{NormalizeAvailability(_control.GpuDeviceName)}. Runtime-published GPU utilization evidence.",
 			gpuSample,
 			sampleHistory);
 		UpdateMetric(
 			"memory",
 			memoryValue,
-			memoryValue == Unavailable ? "UNVERIFIED" : "PASS",
+			ResolveHardwareMetricEvidence(memoryValue),
 			"Runtime-published system RAM utilization and physical-memory capacity.",
 			memorySample,
 			sampleHistory);
@@ -341,12 +341,23 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 
 	private string ResolveHardwareEvidence()
 	{
+		if (!_control.IsConnected || _control.IsStale)
+			return "UNVERIFIED";
 		if (NormalizeEvidence(_control.GpuProviderHealth) == "FAIL")
 			return "FAIL";
 		if (NormalizeAvailability(_control.CpuUtilization) == Unavailable ||
 			NormalizeAvailability(_control.SystemMemory) == Unavailable ||
 			NormalizeAvailability(_control.GpuUtilization) == Unavailable)
 			return "UNVERIFIED";
+		return "PASS";
+	}
+
+	private string ResolveHardwareMetricEvidence(string value, string? providerEvidence = null)
+	{
+		if (!_control.IsConnected || _control.IsStale || value == Unavailable || value.Contains("UNVERIFIED", StringComparison.OrdinalIgnoreCase))
+			return "UNVERIFIED";
+		if (providerEvidence is not null && NormalizeEvidence(providerEvidence) == "FAIL")
+			return "FAIL";
 		return "PASS";
 	}
 
