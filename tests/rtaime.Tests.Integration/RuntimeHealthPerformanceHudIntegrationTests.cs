@@ -80,6 +80,32 @@ public sealed class RuntimeHealthPerformanceHudIntegrationTests
 	}
 
 	[Fact]
+	public void Memory_and_vram_boundaries_format_without_overflow_or_estimation()
+	{
+		var runtime = CreateRuntimeSnapshot();
+		runtime = runtime with
+		{
+			Performance = runtime.Performance! with
+			{
+				SystemMemoryUsedBytes = 0,
+				SystemMemoryTotalBytes = 32UL * 1024 * 1024 * 1024,
+				GpuVramUsedBytes = 24UL * 1024 * 1024 * 1024,
+				GpuVramTotalBytes = 24UL * 1024 * 1024 * 1024
+			}
+		};
+
+		var health = OperatorHealthProjection.Evaluate(
+			runtime,
+			new[] { CreateGpuProvider(ProviderAvailabilityState.Available) },
+			null,
+			controlAuthorityAvailable: true,
+			DateTimeOffset.UtcNow);
+
+		Assert.Equal("0% · 0 B / 32.00 GiB", health.SystemMemory);
+		Assert.Equal("24.00 GiB / 24.00 GiB", health.Vram);
+	}
+
+	[Fact]
 	public void Retained_runtime_observation_keeps_performance_values_without_false_green_health()
 	{
 		var runtime = CreateRuntimeSnapshot() with
