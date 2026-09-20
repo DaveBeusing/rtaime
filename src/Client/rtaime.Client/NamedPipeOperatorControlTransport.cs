@@ -457,7 +457,7 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		FromWire(wire.Recording),
 		FromWire(wire.Health),
 		FromWire(wire.AIShowcase),
-		FromWire(wire.MediaDeck));
+		wire.MediaDeck is null ? MediaDeckSnapshot.Unloaded : FromWire(wire.MediaDeck));
 
 	private static OperatorAudioInputDescriptor FromWire(WireAudioInput input) => new(
 		input.SourceId,
@@ -615,7 +615,7 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		string CpuUtilization,
 		string SystemMemory,
 		string GpuDeviceName);
-	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, WireRecordingSnapshot Recording, WireHealthSnapshot Health, WireAIShowcase AIShowcase, WireMediaDeckSnapshot MediaDeck, ulong StateVersion);
+	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, WireRecordingSnapshot Recording, WireHealthSnapshot Health, WireAIShowcase AIShowcase, WireMediaDeckSnapshot? MediaDeck, ulong StateVersion);
 	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path);
 	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame, bool? AutoPlayOnProgram, int? EndBehavior, long? InPointFrame, long? OutPointFrame);
 	private sealed record WireMediaMarkerCommand(string Version, string AssetId, int Kind, long? PositionFrame, string? CuePointId, string? Name);
