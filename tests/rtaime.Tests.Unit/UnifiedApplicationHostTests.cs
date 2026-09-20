@@ -171,6 +171,27 @@ public sealed class UnifiedApplicationHostTests
 	}
 
 	[Fact]
+	public async Task ControlHost_process_diagnostic_is_included_in_startup_failure()
+	{
+		var options = CreateOptions(ApplicationStartupProfile.Interactive);
+		var platform = new FakeApplicationHostPlatform(options)
+		{
+			ControlHostExitOnStart = true,
+			ControlHostDiagnosticLine = "stream=stderr host=ControlHost outcome=startup-failure detail=\"endpoint already leased\""
+		};
+
+		var host = new UnifiedApplicationHost(options, platform);
+		var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => host.RunAsync());
+
+		Assert.Contains("ControlHost exited before qualified readiness.", exception.Message, StringComparison.Ordinal);
+		Assert.Contains("endpoint already leased", exception.Message, StringComparison.Ordinal);
+		Assert.Equal(ApplicationLifecycleState.Failed, host.State);
+		Assert.Contains(host.Lifecycle.Stages, stage =>
+			stage.Status == LifecycleStageStatus.Failed &&
+			stage.FailureReason?.Contains("endpoint already leased", StringComparison.Ordinal) == true);
+	}
+
+	[Fact]
 	public async Task Startup_failure_ends_in_failed_state()
 	{
 		var options = CreateOptions(ApplicationStartupProfile.Interactive);
@@ -524,6 +545,8 @@ public sealed class UnifiedApplicationHostTests
 		public bool PublishReadinessAfterDelay { get; init; }
 		public bool PipeReachable { get; set; } = true;
 		public bool EndpointLeaseHeld { get; set; }
+		public bool ControlHostExitOnStart { get; set; }
+		public string ControlHostDiagnosticLine { get; set; } = string.Empty;
 		public HashSet<string> UnreachableEndpoints { get; } = new(StringComparer.Ordinal);
 		public bool StopSignalWritten { get; private set; }
 		public bool IgnoreStopSignal { get; set; }
@@ -545,6 +568,13 @@ public sealed class UnifiedApplicationHostTests
 			{
 				_operatorProcessId = processId;
 				if (OperatorDelayBudget > 0) _alive.Add(processId);
+				return processId;
+			}
+
+			if (baseName == "rtaime.ControlHost" && ControlHostExitOnStart)
+			{
+				if (!string.IsNullOrWhiteSpace(spec.DiagnosticLogPath))
+					_files[Path.GetFullPath(spec.DiagnosticLogPath)] = ControlHostDiagnosticLine + Environment.NewLine;
 				return processId;
 			}
 
