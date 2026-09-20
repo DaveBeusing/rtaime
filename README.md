@@ -50,18 +50,21 @@ The V1 reference development platform is Windows x64. The WPF Operator targets `
 
 ## Build
 
-Restore and build Release:
+Canonical local developer build:
 
 ```powershell
-dotnet restore rtaime.slnx
-dotnet build rtaime.slnx --configuration Release --no-restore
+./build/development/Invoke-DeveloperBuild.ps1 -Configuration Release
 ```
 
 Debug build:
 
 ```powershell
-dotnet build rtaime.slnx --configuration Debug
+./build/development/Invoke-DeveloperBuild.ps1 -Configuration Debug
 ```
+
+The developer build stops only repository-local rtaime processes before replacing build outputs, preventing stale AppHost/Operator/host instances from locking `bin/` assemblies. Installed product or Windows-service processes outside the current checkout are not selected.
+
+A raw `dotnet build` remains valid when no repository development lifecycle is running.
 
 Run the Debug AppHost directly after the complete solution build:
 
@@ -131,9 +134,10 @@ ControlHost, RuntimeHost, AIHost and Operator remain separate executable artifac
 
 ## Tests
 
-Build Release first, then run the complete managed test suite:
+Build Release first with the canonical developer build, then run the complete managed test suite:
 
 ```powershell
+./build/development/Invoke-DeveloperBuild.ps1 -Configuration Release
 dotnet test rtaime.slnx --configuration Release --no-build -m:1
 ```
 
