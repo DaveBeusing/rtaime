@@ -181,6 +181,31 @@ public sealed class RuntimeReadinessServiceTests
 	}
 
 	[Fact]
+	public void Runtime_fault_requires_a_newer_measurement_before_reverification()
+	{
+		var now = new DateTimeOffset(2026, 9, 20, 10, 0, 0, TimeSpan.Zero);
+		using var service = new RuntimeReadinessService(() => now);
+		var healthy = Healthy(now);
+
+		service.Observe(Observation(healthy));
+		Assert.Equal(RuntimePerformanceVerificationState.Verified, service.Current.Performance.State);
+
+		service.Observe(Observation(healthy with
+		{
+			Engine = Fail("Runtime execution failed."),
+			Runtime = Fail("Runtime execution failed.")
+		}, runtimeStatus: "DEGRADED"));
+		Assert.Equal(RuntimePerformanceInvalidationReason.RuntimeFault, service.Current.Performance.InvalidationReason);
+
+		service.Observe(Observation(healthy));
+		Assert.Equal(RuntimePerformanceVerificationState.Invalidated, service.Current.Performance.State);
+
+		now += TimeSpan.FromMilliseconds(100);
+		service.Observe(Observation(Healthy(now)));
+		Assert.Equal(RuntimePerformanceVerificationState.Verified, service.Current.Performance.State);
+	}
+
+	[Fact]
 	public void Hardware_and_pipeline_changes_invalidate_previous_verification()
 	{
 		var now = new DateTimeOffset(2026, 9, 20, 10, 0, 0, TimeSpan.Zero);
