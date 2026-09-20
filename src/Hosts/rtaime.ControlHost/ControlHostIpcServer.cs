@@ -488,6 +488,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		var runtimeObservation = await ObserveRuntimeAsync(cancellationToken).ConfigureAwait(false);
 		var runtime = runtimeObservation.Snapshot;
 		var runtimeFresh = runtimeObservation.Fresh;
+		var runtimeObservedAtUtc = runtimeObservation.ObservedAtUtc;
 
 		MediaDeckSnapshot? mediaDeck = null;
 		if (_mediaDeck is not null)
@@ -520,7 +521,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			runtime is null ? Array.Empty<ProviderDescriptor>() : _runtimeTransport.ProviderDescriptors,
 			mediaDeck,
 			control.HasAuthoritativeState,
-			DateTimeOffset.UtcNow,
+			runtimeObservedAtUtc,
 			runtimeFresh);
 		var payload = new WireOperatorSnapshot(
 			ToWire(state),
@@ -553,7 +554,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 				_lastRuntimeSnapshot = snapshot;
 				_lastRuntimeSnapshotAtUtc = DateTimeOffset.UtcNow;
 			}
-			return new RuntimeObservation(snapshot, true);
+			return new RuntimeObservation(snapshot, true, _lastRuntimeSnapshotAtUtc);
 		}
 		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
 		{
@@ -568,10 +569,10 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 					_lastRuntimeSnapshotAtUtc != default &&
 					now - _lastRuntimeSnapshotAtUtc <= RuntimeObservationRetention)
 				{
-					return new RuntimeObservation(_lastRuntimeSnapshot, false);
+					return new RuntimeObservation(_lastRuntimeSnapshot, false, _lastRuntimeSnapshotAtUtc);
 				}
 			}
-			return new RuntimeObservation(null, false);
+			return new RuntimeObservation(null, false, DateTimeOffset.UtcNow);
 		}
 	}
 
@@ -863,7 +864,10 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		state.Routing.PreviewSourceId.ToString(),
 		state.Routing.ProgramSourceId.ToString());
 
-	private readonly record struct RuntimeObservation(RuntimeRemoteSnapshot? Snapshot, bool Fresh);
+	private readonly record struct RuntimeObservation(
+		RuntimeRemoteSnapshot? Snapshot,
+		bool Fresh,
+		DateTimeOffset ObservedAtUtc);
 
 	private enum MutationKind
 	{
