@@ -549,12 +549,13 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		try
 		{
 			var snapshot = await _runtimeTransport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
+			var observedAtUtc = DateTimeOffset.UtcNow;
 			lock (_runtimeObservationGate)
 			{
 				_lastRuntimeSnapshot = snapshot;
-				_lastRuntimeSnapshotAtUtc = DateTimeOffset.UtcNow;
+				_lastRuntimeSnapshotAtUtc = observedAtUtc;
 			}
-			return new RuntimeObservation(snapshot, true, _lastRuntimeSnapshotAtUtc);
+			return new RuntimeObservation(snapshot, true, observedAtUtc);
 		}
 		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
 		{
