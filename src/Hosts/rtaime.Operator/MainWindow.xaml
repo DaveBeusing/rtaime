@@ -619,7 +619,7 @@
 											VerticalAlignment="Top"
 											Foreground="{DynamicResource OperatorSecondaryTextBrush}"
 											BorderBrush="{DynamicResource OperatorBorderStrongBrush}"
-											Value="{Binding OutputHealth.CpuMetric.GaugeValue, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+											Value="{Binding OutputHealth.CpuMetric.GaugeValue, RelativeSource={RelativeSource AncestorType={x:Type Window}}, Mode=OneWay}"
 											HasValue="{Binding OutputHealth.CpuMetric.HasGaugeSample, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
 										<StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
 											<TextBlock Text="CPU" Style="{StaticResource OperatorLabel}" FontSize="9" HorizontalAlignment="Center" />
@@ -635,7 +635,7 @@
 											VerticalAlignment="Top"
 											Foreground="{DynamicResource OperatorAccentBrush}"
 											BorderBrush="{DynamicResource OperatorBorderStrongBrush}"
-											Value="{Binding OutputHealth.GpuMetric.GaugeValue, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+											Value="{Binding OutputHealth.GpuMetric.GaugeValue, RelativeSource={RelativeSource AncestorType={x:Type Window}}, Mode=OneWay}"
 											HasValue="{Binding OutputHealth.GpuMetric.HasGaugeSample, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
 										<StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
 											<TextBlock Text="GPU" Style="{StaticResource OperatorLabel}" FontSize="9" HorizontalAlignment="Center" />
@@ -651,7 +651,7 @@
 											VerticalAlignment="Top"
 											Foreground="{DynamicResource OperatorSecondaryTextBrush}"
 											BorderBrush="{DynamicResource OperatorBorderStrongBrush}"
-											Value="{Binding OutputHealth.MemoryMetric.GaugeValue, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+											Value="{Binding OutputHealth.MemoryMetric.GaugeValue, RelativeSource={RelativeSource AncestorType={x:Type Window}}, Mode=OneWay}"
 											HasValue="{Binding OutputHealth.MemoryMetric.HasGaugeSample, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
 										<StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
 											<TextBlock Text="MEM" Style="{StaticResource OperatorLabel}" FontSize="9" HorizontalAlignment="Center" />
@@ -997,17 +997,17 @@
 										<DockPanel Height="38">
 											<TextBlock Text="Disk" Style="{StaticResource OperatorLabel}" VerticalAlignment="Top" />
 											<TextBlock Text="{Binding OutputHealth.DiskMetric.Value, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorLabel}" DockPanel.Dock="Right" VerticalAlignment="Top" />
-											<controls:RtaimeMetricBar Minimum="0" Maximum="100" Value="{Binding OutputHealth.DiskMetric.GaugeValue, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" HasValue="{Binding OutputHealth.DiskMetric.HasGaugeSample, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" VerticalAlignment="Bottom" />
+											<controls:RtaimeMetricBar Minimum="0" Maximum="100" Value="{Binding OutputHealth.DiskMetric.GaugeValue, RelativeSource={RelativeSource AncestorType={x:Type Window}}, Mode=OneWay}" HasValue="{Binding OutputHealth.DiskMetric.HasGaugeSample, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" VerticalAlignment="Bottom" />
 										</DockPanel>
 										<DockPanel Height="38">
 											<TextBlock Text="Network" Style="{StaticResource OperatorLabel}" VerticalAlignment="Top" />
 											<TextBlock Text="{Binding OutputHealth.NetworkMetric.Value, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorLabel}" DockPanel.Dock="Right" VerticalAlignment="Top" />
-											<controls:RtaimeMetricBar Minimum="0" Maximum="100" Value="{Binding OutputHealth.NetworkMetric.GaugeValue, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" HasValue="{Binding OutputHealth.NetworkMetric.HasGaugeSample, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" VerticalAlignment="Bottom" />
+											<controls:RtaimeMetricBar Minimum="0" Maximum="100" Value="{Binding OutputHealth.NetworkMetric.GaugeValue, RelativeSource={RelativeSource AncestorType={x:Type Window}}, Mode=OneWay}" HasValue="{Binding OutputHealth.NetworkMetric.HasGaugeSample, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" VerticalAlignment="Bottom" />
 										</DockPanel>
 										<DockPanel Height="38">
 											<TextBlock Text="Temperature" Style="{StaticResource OperatorLabel}" VerticalAlignment="Top" />
 											<TextBlock Text="{Binding OutputHealth.TemperatureMetric.Value, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorLabel}" DockPanel.Dock="Right" VerticalAlignment="Top" />
-											<controls:RtaimeMetricBar Minimum="0" Maximum="100" Value="{Binding OutputHealth.TemperatureMetric.GaugeValue, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" HasValue="{Binding OutputHealth.TemperatureMetric.HasGaugeSample, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" VerticalAlignment="Bottom" />
+											<controls:RtaimeMetricBar Minimum="0" Maximum="100" Value="{Binding OutputHealth.TemperatureMetric.GaugeValue, RelativeSource={RelativeSource AncestorType={x:Type Window}}, Mode=OneWay}" HasValue="{Binding OutputHealth.TemperatureMetric.HasGaugeSample, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" VerticalAlignment="Bottom" />
 										</DockPanel>
 									</StackPanel>
 								</Grid>
