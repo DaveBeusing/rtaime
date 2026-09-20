@@ -76,7 +76,7 @@ public partial class MainWindow : Window
 		HealthCenter = new HealthCenterViewModel(
 			HealthProvider,
 			viewModel.RuntimeReadiness,
-			viewModel,
+			viewModel.SynchronizeCommand,
 			new DispatcherSynchronizationContext(Dispatcher));
 		QuickControls = new OperatorQuickControlsViewModel(viewModel, MediaDeck, MediaPool, new OperatorQuickControlStore());
 		Shortcuts = OperatorKeyboardCommandRegistry.Create(
@@ -128,7 +128,7 @@ public partial class MainWindow : Window
 		HealthCenter = new HealthCenterViewModel(
 			HealthProvider,
 			viewModel.RuntimeReadiness,
-			viewModel,
+			viewModel.SynchronizeCommand,
 			new DispatcherSynchronizationContext(Dispatcher));
 		QuickControls = new OperatorQuickControlsViewModel(viewModel, MediaDeck, MediaPool, new OperatorQuickControlStore());
 		Shortcuts = OperatorKeyboardCommandRegistry.Create(
