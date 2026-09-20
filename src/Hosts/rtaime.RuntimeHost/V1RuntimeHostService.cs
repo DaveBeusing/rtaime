@@ -1118,13 +1118,13 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private HashSet<MediaSourceId> RequiredGpuSourcesUnsafe(MediaSourceId committedSource)
 	{
 		if (_transition is null)
-			return [committedSource];
+			return new HashSet<MediaSourceId> { committedSource };
 
-		return
-		[
+		return new HashSet<MediaSourceId>
+		{
 			_transition.Intent.FromSourceId,
 			_transition.Intent.ToSourceId
-		];
+		};
 	}
 
 	private (GpuFrame From, GpuFrame To, GpuTransition Transition, byte BlendWeight, bool Complete) ResolveTransition(
