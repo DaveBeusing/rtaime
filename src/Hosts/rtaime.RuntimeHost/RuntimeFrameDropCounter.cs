@@ -8,8 +8,12 @@ namespace rtaime.RuntimeHost;
 /// </summary>
 public sealed class RuntimeFrameDropCounter
 {
+	private const double OutputRateSmoothingFactor = 0.2;
 	private TimeSpan? _lastBoundaryObservedAt;
 	private ulong _schedulerDroppedFrames;
+	private double? _outputFramesPerSecond;
+
+	public double? OutputFramesPerSecond => _outputFramesPerSecond;
 
 	public ulong Observe(
 		TimeSpan boundaryObservedAt,
@@ -28,6 +32,14 @@ public sealed class RuntimeFrameDropCounter
 				throw new ArgumentException("Boundary observations must be monotonic.", nameof(boundaryObservedAt));
 
 			var intervalTicks = boundaryObservedAt.Ticks - previous.Ticks;
+			if (intervalTicks > 0)
+			{
+				var instantaneousFramesPerSecond = TimeSpan.TicksPerSecond / (double)intervalTicks;
+				_outputFramesPerSecond = _outputFramesPerSecond is { } smoothed
+					? smoothed + (OutputRateSmoothingFactor * (instantaneousFramesPerSecond - smoothed))
+					: instantaneousFramesPerSecond;
+			}
+
 			var elapsedPeriods = intervalTicks / expectedFramePeriod.Ticks;
 			if (elapsedPeriods > 1)
 				_schedulerDroppedFrames = SaturatingAdd(_schedulerDroppedFrames, checked((ulong)(elapsedPeriods - 1)));
