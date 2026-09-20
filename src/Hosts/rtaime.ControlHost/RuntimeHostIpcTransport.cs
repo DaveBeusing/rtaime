@@ -104,14 +104,14 @@ public sealed record RuntimeRemoteSnapshot(
 	int ActiveGpuSurfaces,
 	VideoFormat Format,
 	IReadOnlyDictionary<MediaSourceId, string> InputSignals,
-	IReadOnlyCollection<MediaSourceId> BroadcastTestPatternSources,
 	RuntimeGraphicsOverlaySnapshot GraphicsOverlay,
 	IReadOnlyDictionary<MediaSourceId, RuntimeAudioInputSnapshot> AudioInputs,
 	RuntimeAudioProgramSnapshot AudioProgram,
 	ulong StateVersion,
 	RuntimeRecordingSnapshot? Recording = null,
 	RuntimePerformanceSnapshot? Performance = null,
-	RuntimeAIShowcaseRemoteSnapshot? AIShowcase = null);
+	RuntimeAIShowcaseRemoteSnapshot? AIShowcase = null,
+	IReadOnlyCollection<MediaSourceId>? BroadcastTestPatternSources = null);
 
 public sealed record RuntimeRemoteApplyResult(
 	string HostInstanceId,
@@ -210,9 +210,6 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 				signal => new MediaSourceId(Identity.Parse(signal.SourceId)),
 				signal => string.IsNullOrWhiteSpace(signal.Health) ? "UNKNOWN" : signal.Health.Trim(),
 				EqualityComparer<MediaSourceId>.Default),
-			Array.AsReadOnly(snapshot.BroadcastTestPatternSourceIds
-				.Select(sourceId => new MediaSourceId(Identity.Parse(sourceId)))
-				.ToArray()),
 			FromWire(snapshot.GraphicsOverlay),
 			snapshot.AudioInputs.ToDictionary(
 				input => new MediaSourceId(Identity.Parse(input.SourceId)),
@@ -222,7 +219,10 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 			response.StateVersion,
 			FromWire(snapshot.Recording),
 			FromWire(snapshot.Performance),
-			FromWire(snapshot.AIShowcase));
+			FromWire(snapshot.AIShowcase),
+			Array.AsReadOnly(snapshot.BroadcastTestPatternSourceIds
+				.Select(sourceId => new MediaSourceId(Identity.Parse(sourceId)))
+				.ToArray()));
 	}
 
 	public async ValueTask<RuntimeRemoteApplyResult> ApplyExecutionAsync(
