@@ -51,6 +51,10 @@ $programOutputControllerPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Opera
 $programOutputWindowPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/ProgramOutputWindow.xaml"
 $outputHealthControlPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OutputRoutingHealthControl.xaml"
 $outputHealthViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OutputRoutingHealthViewModel.cs"
+$runtimeStatusBarPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/RuntimePerformanceStatusBarControl.xaml"
+$runtimeStatusBarCodePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/RuntimePerformanceStatusBarControl.xaml.cs"
+$runtimeStatusBarViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/RuntimePerformanceStatusBarViewModel.cs"
+$runtimeStatusBarDocumentationPath = Join-Path $repositoryRoot "docs/RuntimePerformanceStatusBar.md"
 $healthContractPath = Join-Path $repositoryRoot "src/Client/rtaime.Client/HealthSnapshots.cs"
 $healthProviderPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorHealthSnapshotProvider.cs"
 $healthViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/HealthCenterViewModel.cs"
@@ -89,7 +93,7 @@ $workspaceDocumentationPath = Join-Path $repositoryRoot "docs/OperatorWorkspaces
 $outputHealthDocumentationPath = Join-Path $repositoryRoot "docs/OutputRoutingHealth.md"
 $mediaLibraryDocumentationPath = Join-Path $repositoryRoot "docs/MediaLibraryAssetBrowser.md"
 
-foreach ($path in @($appPath, $appCodePath, $windowPath, $windowCodePath, $shellPath, $keyboardPath, $quickControlsPath, $multiviewPath, $multiviewCodePath, $liveSceneCuePath, $liveControlsPath, $liveDocumentationPath, $compositingGraphPath, $compositingGraphCodePath, $compositingGraphViewModelPath, $compositingGraphProjectionPath, $compositingGraphDocumentationPath, $mediaPoolPath, $inspectorHostPath, $virtualizingWrapPanelPath, $deckPath, $deckViewModelPath, $timelinePath, $timelineCodePath, $timelineViewModelPath, $markerControllerPath, $timelineDocumentationPath, $viewModelPath, $runtimeReadinessPath, $startupViewModelPath, $monitorViewModelPath, $programOutputControllerPath, $programOutputWindowPath, $outputHealthControlPath, $outputHealthViewModelPath, $healthContractPath, $healthProviderPath, $healthViewModelPath, $healthControlPath, $healthControlCodePath, $healthDocumentationPath, $previewViewerPath, $previewViewerCodePath, $programViewerPath, $programViewerCodePath, $monitorViewPath, $sourceTileViewModelPath, $audioInputViewModelPath, $graphicsLoaderPath, $demoControllerPath, $demoManifestPath, $demoProductPath, $demoGraphicsPath, $demoDocumentationPath, $tokensPath, $themePath, $customControlsPath, $outputHealthControlsPath, $customInputControlsPath, $customMediaControlsPath, $customControlThemePath, $outputHealthControlThemePath, $customInputThemePath, $customMediaThemePath, $monitorWorkspaceThemePath, $customIconThemePath, $manifestPath, $projectPath, $documentationPath, $workspaceDocumentationPath, $outputHealthDocumentationPath, $mediaLibraryDocumentationPath)) {
+foreach ($path in @($appPath, $appCodePath, $windowPath, $windowCodePath, $shellPath, $keyboardPath, $quickControlsPath, $multiviewPath, $multiviewCodePath, $liveSceneCuePath, $liveControlsPath, $liveDocumentationPath, $compositingGraphPath, $compositingGraphCodePath, $compositingGraphViewModelPath, $compositingGraphProjectionPath, $compositingGraphDocumentationPath, $mediaPoolPath, $inspectorHostPath, $virtualizingWrapPanelPath, $deckPath, $deckViewModelPath, $timelinePath, $timelineCodePath, $timelineViewModelPath, $markerControllerPath, $timelineDocumentationPath, $viewModelPath, $runtimeReadinessPath, $startupViewModelPath, $monitorViewModelPath, $programOutputControllerPath, $programOutputWindowPath, $outputHealthControlPath, $outputHealthViewModelPath, $runtimeStatusBarPath, $runtimeStatusBarCodePath, $runtimeStatusBarViewModelPath, $runtimeStatusBarDocumentationPath, $healthContractPath, $healthProviderPath, $healthViewModelPath, $healthControlPath, $healthControlCodePath, $healthDocumentationPath, $previewViewerPath, $previewViewerCodePath, $programViewerPath, $programViewerCodePath, $monitorViewPath, $sourceTileViewModelPath, $audioInputViewModelPath, $graphicsLoaderPath, $demoControllerPath, $demoManifestPath, $demoProductPath, $demoGraphicsPath, $demoDocumentationPath, $tokensPath, $themePath, $customControlsPath, $outputHealthControlsPath, $customInputControlsPath, $customMediaControlsPath, $customControlThemePath, $outputHealthControlThemePath, $customInputThemePath, $customMediaThemePath, $monitorWorkspaceThemePath, $customIconThemePath, $manifestPath, $projectPath, $documentationPath, $workspaceDocumentationPath, $outputHealthDocumentationPath, $mediaLibraryDocumentationPath)) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required Operator UI artifact is missing: '$path'."
 }
 
@@ -99,6 +103,10 @@ $window = Get-Content -LiteralPath $windowPath -Raw
 $windowCode = Get-Content -LiteralPath $windowCodePath -Raw
 $outputHealthControl = Get-Content -LiteralPath $outputHealthControlPath -Raw
 $outputHealthViewModel = Get-Content -LiteralPath $outputHealthViewModelPath -Raw
+$runtimeStatusBar = Get-Content -LiteralPath $runtimeStatusBarPath -Raw
+$runtimeStatusBarCode = Get-Content -LiteralPath $runtimeStatusBarCodePath -Raw
+$runtimeStatusBarViewModel = Get-Content -LiteralPath $runtimeStatusBarViewModelPath -Raw
+$runtimeStatusBarDocumentation = Get-Content -LiteralPath $runtimeStatusBarDocumentationPath -Raw
 $healthContract = Get-Content -LiteralPath $healthContractPath -Raw
 $healthProvider = Get-Content -LiteralPath $healthProviderPath -Raw
 $healthViewModel = Get-Content -LiteralPath $healthViewModelPath -Raw
@@ -640,11 +648,25 @@ Assert-Condition ($window -match 'CommandParameter="HEALTH"' -and $window -match
 Assert-Condition ($windowCode -match 'OperatorHealthSnapshotProvider' -and $windowCode -match 'HealthCenter\.Dispose\(\)' -and $windowCode -match 'HealthProvider\.Dispose\(\)') "Operator window must own and dispose Health Center subscriptions."
 Assert-Condition ($healthDocumentation -match 'Health and readiness remain separate concepts' -and $healthDocumentation -match 'No additional hardware probing') "Health Center documentation must preserve health/readiness and performance boundaries."
 Assert-Condition ($outputHealthViewModel -match 'PerformanceVerificationState' -and $outputHealthViewModel -match 'PerformanceVerificationDetail') "Performance HUD must reuse centralized verification state instead of recomputing verification from view refresh."
+Assert-Condition ($window -match '<local:RuntimePerformanceStatusBarControl' -and $window -match 'Binding RuntimePerformanceStatus') "Production Shell must render the permanent Runtime performance status bar."
+Assert-Condition ($runtimeStatusBar -match 'ItemsSource="\{Binding Slots\}"' -and $runtimeStatusBar -match 'OperatorWarningBrush' -and $runtimeStatusBar -match 'OperatorErrorBrush') "Runtime performance status bar must use extensible slots and existing semantic design tokens."
+foreach ($label in @('"CPU"', '"GPU"', '"RAM"', '"VRAM"', '"FRAME"', '"FPS"', '"DROPPED"')) {
+	Assert-Condition ($runtimeStatusBarViewModel -match [Regex]::Escape($label)) "Runtime performance status bar is missing required metric slot $label."
+}
+Assert-Condition ($runtimeStatusBarViewModel -match 'HealthObserved' -and $runtimeStatusBarViewModel -match 'IsConnected' -and $runtimeStatusBarViewModel -match 'IsStale') "Runtime performance status bar must update from completed health observations and connection state."
+Assert-Condition ($runtimeStatusBarViewModel -match '_operator\.PropertyChanged \+= OperatorPropertyChanged' -and $runtimeStatusBarViewModel -match '_operator\.PropertyChanged -= OperatorPropertyChanged') "Runtime performance status bar must release its Operator subscription on dispose."
+Assert-Condition ($runtimeStatusBarViewModel -notmatch 'PeriodicTimer|DispatcherTimer|Task\.Delay|Task\.Run|new Thread|PerformanceCounter|ManagementObjectSearcher|nvidia-smi|NVML') "Runtime performance status bar must not introduce polling, background threads or local hardware probing."
+Assert-Condition ($windowCode -match 'RuntimePerformanceStatusBarViewModel' -and $windowCode -match 'RuntimePerformanceStatus\.Dispose\(\)') "Operator window must own and dispose the Runtime performance status bar projection."
+Assert-Condition ($topBarSurface -notmatch 'Text="CPU"|Text="GPU"|Text="MEMORY"|Text="LATENCY"') "Titlebar must not duplicate metrics owned by the permanent Runtime performance status bar."
+Assert-Condition ($runtimeStatusBarDocumentation -match 'does not own a timer' -and $runtimeStatusBarDocumentation -match 'never performs local hardware discovery') "Runtime performance status bar documentation must preserve polling and hardware-query boundaries."
 foreach ($binding in @("GlobalReadinessState", "GlobalReadinessLabel", "GlobalReadinessSummary", "PerformanceVerificationState", "PerformanceVerificationDetail")) {
 	Assert-Condition ($window -match "Binding $binding") "Global Runtime readiness UI binding '$binding' is required."
 }
-foreach ($binding in @("EngineHealth", "ControlHealth", "RuntimeHealth", "MediaHealth", "ProviderHealth", "GpuProviderHealth", "CurrentFormat", "FrameTime", "DroppedFrames", "Uptime", "CpuDeviceName", "CpuUtilization", "SystemMemory", "GpuDeviceName", "GpuUtilization", "Vram")) {
-	Assert-Condition ($window -match "Binding $binding") "Runtime Health & Performance HUD HUD binding '$binding' is required."
+foreach ($binding in @("EngineHealth", "ControlHealth", "RuntimeHealth", "MediaHealth", "ProviderHealth", "GpuProviderHealth", "CurrentFormat", "FrameTime", "DroppedFrames", "Uptime", "GpuUtilization", "Vram")) {
+	Assert-Condition ($window -match "Binding $binding") "Runtime Health & Performance HUD binding '$binding' is required."
+}
+foreach ($property in @("CpuDeviceName", "CpuUtilization", "SystemMemory", "GpuDeviceName", "GpuUtilization", "Vram", "FrameTime", "OutputFps", "DroppedFrames")) {
+	Assert-Condition ($viewModel -match "public string $property") "Operator Runtime performance property '$property' is required."
 }
 Assert-Condition ($theme -match 'Trigger Property="Tag" Value="PASS"' -and $theme -match 'OperatorHealthyBrush') "PASS evidence must use the healthy semantic."
 Assert-Condition ($theme -match 'Trigger Property="Tag" Value="FAIL"' -and $theme -match 'OperatorErrorBrush') "FAIL evidence must use the error semantic."
