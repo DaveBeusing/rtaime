@@ -1,0 +1,218 @@
+<!-- Copyright (c) Dave Beusing <david.beusing@gmail.com>. -->
+<ResourceDictionary
+	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	xmlns:client="clr-namespace:rtaime.Client;assembly=rtaime.Client"
+	xmlns:controls="clr-namespace:rtaime.Operator.Controls">
+
+	<Style TargetType="{x:Type controls:RtaimeLoadingIndicator}">
+		<Setter Property="Width" Value="22" />
+		<Setter Property="Height" Value="22" />
+		<Setter Property="Foreground" Value="{DynamicResource OperatorAccentBrush}" />
+		<Setter Property="Focusable" Value="False" />
+		<Setter Property="IsHitTestVisible" Value="False" />
+		<Setter Property="Template">
+			<Setter.Value>
+				<ControlTemplate TargetType="{x:Type controls:RtaimeLoadingIndicator}">
+					<Grid Width="{TemplateBinding Width}" Height="{TemplateBinding Height}" RenderTransformOrigin="0.5,0.5">
+						<Grid.RenderTransform>
+							<RotateTransform x:Name="IndicatorRotation" />
+						</Grid.RenderTransform>
+						<Ellipse
+							Stroke="{TemplateBinding Foreground}"
+							StrokeThickness="2"
+							Opacity="0.22" />
+						<Ellipse
+							Stroke="{TemplateBinding Foreground}"
+							StrokeThickness="2"
+							StrokeDashArray="1.5,4.5"
+							StrokeDashCap="Round" />
+					</Grid>
+					<ControlTemplate.Triggers>
+						<Trigger Property="IsVisible" Value="True">
+							<Trigger.EnterActions>
+								<BeginStoryboard>
+									<Storyboard>
+										<DoubleAnimation
+											Storyboard.TargetName="IndicatorRotation"
+											Storyboard.TargetProperty="Angle"
+											From="0"
+											To="360"
+											Duration="0:0:1.1"
+											RepeatBehavior="Forever" />
+									</Storyboard>
+								</BeginStoryboard>
+							</Trigger.EnterActions>
+						</Trigger>
+					</ControlTemplate.Triggers>
+				</ControlTemplate>
+			</Setter.Value>
+		</Setter>
+	</Style>
+
+	<Style TargetType="{x:Type controls:RtaimeStatePlaceholder}">
+		<Setter Property="Focusable" Value="False" />
+		<Setter Property="IsHitTestVisible" Value="False" />
+		<Setter Property="HorizontalContentAlignment" Value="Stretch" />
+		<Setter Property="VerticalContentAlignment" Value="Stretch" />
+		<Setter Property="Visibility" Value="Visible" />
+		<Setter Property="Template">
+			<Setter.Value>
+				<ControlTemplate TargetType="{x:Type controls:RtaimeStatePlaceholder}">
+					<Border
+						Background="{DynamicResource OperatorSurfaceBrush}"
+						BorderBrush="{DynamicResource OperatorBorderBrush}"
+						BorderThickness="1"
+						Padding="22">
+						<StackPanel
+							MaxWidth="520"
+							HorizontalAlignment="Center"
+							VerticalAlignment="Center">
+							<controls:RtaimeLoadingIndicator
+								x:Name="StateIndicator"
+								HorizontalAlignment="Center"
+								Margin="0,0,0,12"
+								Visibility="Collapsed" />
+							<TextBlock
+								x:Name="StateLabel"
+								Text="STATE"
+								Style="{StaticResource OperatorLabel}"
+								FontSize="9"
+								FontWeight="SemiBold"
+								HorizontalAlignment="Center"
+								Margin="0,0,0,5" />
+							<TextBlock
+								Text="{TemplateBinding Title}"
+								FontSize="15"
+								FontWeight="SemiBold"
+								TextAlignment="Center"
+								TextWrapping="Wrap"
+								HorizontalAlignment="Center" />
+							<TextBlock
+								Text="{TemplateBinding Detail}"
+								Style="{StaticResource OperatorLabel}"
+								TextAlignment="Center"
+								TextWrapping="Wrap"
+								HorizontalAlignment="Center"
+								Margin="0,6,0,0" />
+						</StackPanel>
+					</Border>
+					<ControlTemplate.Triggers>
+						<Trigger Property="State" Value="{x:Static client:OperatorUiStateKind.Loading}">
+							<Setter TargetName="StateIndicator" Property="Visibility" Value="Visible" />
+							<Setter TargetName="StateLabel" Property="Text" Value="LOADING" />
+							<Setter TargetName="StateLabel" Property="Foreground" Value="{DynamicResource OperatorAccentBrush}" />
+						</Trigger>
+						<Trigger Property="State" Value="{x:Static client:OperatorUiStateKind.Empty}">
+							<Setter TargetName="StateLabel" Property="Text" Value="EMPTY" />
+						</Trigger>
+						<Trigger Property="State" Value="{x:Static client:OperatorUiStateKind.Offline}">
+							<Setter TargetName="StateLabel" Property="Text" Value="OFFLINE" />
+							<Setter TargetName="StateLabel" Property="Foreground" Value="{DynamicResource OperatorWarningBrush}" />
+						</Trigger>
+						<Trigger Property="State" Value="{x:Static client:OperatorUiStateKind.Unavailable}">
+							<Setter TargetName="StateLabel" Property="Text" Value="UNAVAILABLE" />
+							<Setter TargetName="StateLabel" Property="Foreground" Value="{DynamicResource OperatorWarningBrush}" />
+						</Trigger>
+						<Trigger Property="State" Value="{x:Static client:OperatorUiStateKind.Error}">
+							<Setter TargetName="StateLabel" Property="Text" Value="ERROR" />
+							<Setter TargetName="StateLabel" Property="Foreground" Value="{DynamicResource OperatorErrorBrush}" />
+						</Trigger>
+						<Trigger Property="State" Value="{x:Static client:OperatorUiStateKind.Recovering}">
+							<Setter TargetName="StateIndicator" Property="Visibility" Value="Visible" />
+							<Setter TargetName="StateLabel" Property="Text" Value="RECOVERING" />
+							<Setter TargetName="StateLabel" Property="Foreground" Value="{DynamicResource OperatorWarningBrush}" />
+						</Trigger>
+					</ControlTemplate.Triggers>
+				</ControlTemplate>
+			</Setter.Value>
+		</Setter>
+		<Style.Triggers>
+			<Trigger Property="State" Value="{x:Static client:OperatorUiStateKind.Ready}">
+				<Setter Property="Visibility" Value="Collapsed" />
+			</Trigger>
+		</Style.Triggers>
+	</Style>
+
+	<Style TargetType="{x:Type controls:RtaimeInlineStatus}">
+		<Setter Property="Focusable" Value="False" />
+		<Setter Property="IsHitTestVisible" Value="False" />
+		<Setter Property="Visibility" Value="Visible" />
+		<Setter Property="Template">
+			<Setter.Value>
+				<ControlTemplate TargetType="{x:Type controls:RtaimeInlineStatus}">
+					<Border
+						Background="{DynamicResource OperatorRaisedSurfaceBrush}"
+						BorderBrush="{DynamicResource OperatorBorderBrush}"
+						BorderThickness="1"
+						Padding="9,6">
+						<Grid>
+							<Grid.ColumnDefinitions>
+								<ColumnDefinition Width="Auto" />
+								<ColumnDefinition Width="Auto" />
+								<ColumnDefinition Width="*" />
+							</Grid.ColumnDefinitions>
+							<controls:RtaimeLoadingIndicator
+								x:Name="InlineIndicator"
+								Width="15"
+								Height="15"
+								Margin="0,0,7,0"
+								VerticalAlignment="Center"
+								Visibility="Collapsed" />
+							<TextBlock
+								x:Name="InlineStateLabel"
+								Grid.Column="1"
+								Text="STATE"
+								Style="{StaticResource OperatorLabel}"
+								FontSize="9"
+								FontWeight="Bold"
+								VerticalAlignment="Center"
+								Margin="0,0,8,0" />
+							<StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+								<TextBlock Text="{TemplateBinding Title}" FontWeight="SemiBold" VerticalAlignment="Center" />
+								<TextBlock Text=" · " Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" />
+								<TextBlock
+									Text="{TemplateBinding Detail}"
+									Style="{StaticResource OperatorLabel}"
+									TextTrimming="CharacterEllipsis"
+									VerticalAlignment="Center" />
+							</StackPanel>
+						</Grid>
+					</Border>
+					<ControlTemplate.Triggers>
+						<Trigger Property="State" Value="{x:Static client:OperatorUiStateKind.Loading}">
+							<Setter TargetName="InlineIndicator" Property="Visibility" Value="Visible" />
+							<Setter TargetName="InlineStateLabel" Property="Text" Value="LOADING" />
+							<Setter TargetName="InlineStateLabel" Property="Foreground" Value="{DynamicResource OperatorAccentBrush}" />
+						</Trigger>
+						<Trigger Property="State" Value="{x:Static client:OperatorUiStateKind.Empty}">
+							<Setter TargetName="InlineStateLabel" Property="Text" Value="EMPTY" />
+						</Trigger>
+						<Trigger Property="State" Value="{x:Static client:OperatorUiStateKind.Offline}">
+							<Setter TargetName="InlineStateLabel" Property="Text" Value="OFFLINE" />
+							<Setter TargetName="InlineStateLabel" Property="Foreground" Value="{DynamicResource OperatorWarningBrush}" />
+						</Trigger>
+						<Trigger Property="State" Value="{x:Static client:OperatorUiStateKind.Unavailable}">
+							<Setter TargetName="InlineStateLabel" Property="Text" Value="UNAVAILABLE" />
+							<Setter TargetName="InlineStateLabel" Property="Foreground" Value="{DynamicResource OperatorWarningBrush}" />
+						</Trigger>
+						<Trigger Property="State" Value="{x:Static client:OperatorUiStateKind.Error}">
+							<Setter TargetName="InlineStateLabel" Property="Text" Value="ERROR" />
+							<Setter TargetName="InlineStateLabel" Property="Foreground" Value="{DynamicResource OperatorErrorBrush}" />
+						</Trigger>
+						<Trigger Property="State" Value="{x:Static client:OperatorUiStateKind.Recovering}">
+							<Setter TargetName="InlineIndicator" Property="Visibility" Value="Visible" />
+							<Setter TargetName="InlineStateLabel" Property="Text" Value="RECOVERING" />
+							<Setter TargetName="InlineStateLabel" Property="Foreground" Value="{DynamicResource OperatorWarningBrush}" />
+						</Trigger>
+					</ControlTemplate.Triggers>
+				</ControlTemplate>
+			</Setter.Value>
+		</Setter>
+		<Style.Triggers>
+			<Trigger Property="State" Value="{x:Static client:OperatorUiStateKind.Ready}">
+				<Setter Property="Visibility" Value="Collapsed" />
+			</Trigger>
+		</Style.Triggers>
+	</Style>
+</ResourceDictionary>
