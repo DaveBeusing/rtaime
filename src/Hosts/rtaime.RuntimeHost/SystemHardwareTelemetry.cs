@@ -45,7 +45,7 @@ internal sealed class SystemHardwareTelemetry : IDisposable
 		lock (_gate)
 		{
 			if (_disposed)
-				throw new ObjectDisposedException(nameof(SystemHardwareTelemetry));
+				return _cached ?? CreateShutdownSnapshot();
 
 			var now = DateTimeOffset.UtcNow;
 			if (_cached is not null && now - _lastSampleAtUtc < SampleInterval)
@@ -123,6 +123,19 @@ internal sealed class SystemHardwareTelemetry : IDisposable
 		now - lastValidAtUtc <= SampleRetentionInterval
 			? value
 			: null;
+
+	private SystemHardwareTelemetrySnapshot CreateShutdownSnapshot() => new(
+		_cpuDeviceName,
+		Environment.ProcessorCount,
+		null,
+		null,
+		null,
+		"UNVERIFIED: final system hardware telemetry was not sampled before Runtime shutdown.",
+		null,
+		null,
+		null,
+		null,
+		"UNVERIFIED: final GPU telemetry was not sampled before Runtime shutdown.");
 
 	public void Dispose()
 	{
