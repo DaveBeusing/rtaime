@@ -401,13 +401,18 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 
 			var contentA = ResolveInputContent(frameA);
 			var contentB = ResolveInputContent(frameB);
-			using var gpuA = MaterializeInput(frameA, contentA);
-			using var gpuB = MaterializeInput(frameB, contentB);
-			var gpuFrames = new Dictionary<MediaSourceId, GpuFrame>
-			{
-				[frameA.SourceId] = gpuA,
-				[frameB.SourceId] = gpuB
-			};
+			var requiredGpuSources = RequiredGpuSourcesUnsafe(committedSource);
+			using var gpuA = requiredGpuSources.Contains(frameA.SourceId)
+				? MaterializeInput(frameA, contentA)
+				: null;
+			using var gpuB = requiredGpuSources.Contains(frameB.SourceId)
+				? MaterializeInput(frameB, contentB)
+				: null;
+			var gpuFrames = new Dictionary<MediaSourceId, GpuFrame>();
+			if (gpuA is not null)
+				gpuFrames.Add(frameA.SourceId, gpuA);
+			if (gpuB is not null)
+				gpuFrames.Add(frameB.SourceId, gpuB);
 
 			var transitionKind = _transition?.Intent.Kind;
 			var (fromFrame, toFrame, gpuTransition, blendWeight, transitionComplete) = ResolveTransition(committedSource, sequence, gpuFrames);
@@ -1108,6 +1113,18 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		}
 
 		_operatorGraphicsLayer.Update(new RgbaFrameBuffer(_format, output));
+	}
+
+	private HashSet<MediaSourceId> RequiredGpuSourcesUnsafe(MediaSourceId committedSource)
+	{
+		if (_transition is null)
+			return [committedSource];
+
+		return
+		[
+			_transition.Intent.FromSourceId,
+			_transition.Intent.ToSourceId
+		];
 	}
 
 	private (GpuFrame From, GpuFrame To, GpuTransition Transition, byte BlendWeight, bool Complete) ResolveTransition(
