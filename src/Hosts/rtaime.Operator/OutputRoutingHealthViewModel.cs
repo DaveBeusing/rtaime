@@ -277,7 +277,7 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 			NormalizeRenderTime(_control.FrameTime),
 			runtimeEvidence,
 			ResolveRenderStatus(renderSample, frameBudgetSample, runtimeEvidence),
-			$"Core render time. Production target is < 5.00 ms; full pipeline timing still uses the frame budget. Current render/budget: {NormalizeAvailability(_control.FrameTime)}.",
+			$"Core render time. Engineering target is ≤ 3.00 ms; the hardware P95 qualification ceiling is 5.00 ms; full pipeline timing still uses the frame budget. Current render/budget: {NormalizeAvailability(_control.FrameTime)}.",
 			sampleHistory ? renderSample : null);
 		UpdateMetric(
 			"dropped",
@@ -500,7 +500,7 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 			return "WARNING";
 		if (frameBudgetMilliseconds is { } budget && double.IsFinite(budget) && render > budget)
 			return "FAULTED";
-		return render < 5.0 ? "HEALTHY" : "WARNING";
+		return render <= 3.0 ? "HEALTHY" : "WARNING";
 	}
 
 	private static double? TryParseUnsigned(string? value) =>

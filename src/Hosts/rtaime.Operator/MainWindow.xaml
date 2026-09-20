@@ -119,7 +119,7 @@
 						<TextBlock Text="{Binding SystemMemory}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
 					</StackPanel>
 				</Border>
-				<Border Grid.Column="8" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1,0,0,0" Padding="10,6" ToolTip="Core render latency versus frame budget. Production target: below 5 ms.">
+				<Border Grid.Column="8" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1,0,0,0" Padding="10,6" ToolTip="Runtime render latency. Engineering target: ≤3 ms; hardware P95 ceiling: 5 ms.">
 					<StackPanel VerticalAlignment="Center">
 						<TextBlock Text="LATENCY" Style="{StaticResource OperatorLabel}" />
 						<TextBlock Text="{Binding FrameTime}" FontWeight="SemiBold" />
