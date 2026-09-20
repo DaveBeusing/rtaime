@@ -1035,7 +1035,13 @@
 						<StackPanel>
 							<DockPanel Margin="0,0,0,12">
 								<TextBlock Text="SOURCE BIN" Style="{StaticResource OperatorSectionTitle}" />
-								<TextBlock Text="Select a tile, then Set Preview / Ctrl+P" Style="{StaticResource OperatorLabel}" DockPanel.Dock="Right" VerticalAlignment="Center" />
+								<StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+									<TextBlock Text="Select a tile, then Set Preview / Ctrl+P" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" Margin="0,0,10,0" />
+									<controls:RtaimeButton Content="TOGGLE TEST SIGNAL"
+										Command="{Binding ToggleTestPatternCommand}"
+										IsCompact="True"
+										ToolTip="Enable or disable the internally generated broadcast reference signal on the selected source slot." />
+								</StackPanel>
 							</DockPanel>
 							<Border Margin="0,0,0,10" IsHitTestVisible="False">
 								<Border.Style>
