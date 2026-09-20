@@ -1,3 +1,7 @@
+<p align="right">
+	<img src="../src/Hosts/rtaime.Operator/Assets/Brand/RtaimeLogoHorizontal.svg" alt="rtaime — Real Time AI Media Engine" width="180" />
+</p>
+
 # Transactional Runtime Commit Foundation
 
 ## Scope
