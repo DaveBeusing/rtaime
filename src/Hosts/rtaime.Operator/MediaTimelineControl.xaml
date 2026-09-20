@@ -16,10 +16,10 @@
 		<local:TimelineItemWidthConverter x:Key="TimelineItemWidthConverter" />
 		<SolidColorBrush x:Key="TimelineBackgroundBrush" Color="#0C151D" />
 		<SolidColorBrush x:Key="TimelineRulerBrush" Color="#111D26" />
-		<SolidColorBrush x:Key="TimelineVideoBrush" Color="#3478D4" />
-		<SolidColorBrush x:Key="TimelineGraphicsBrush" Color="#7259D7" />
-		<SolidColorBrush x:Key="TimelineAudioBrush" Color="#22A977" />
-		<SolidColorBrush x:Key="TimelineCueBrush" Color="#F6B84A" />
+		<SolidColorBrush x:Key="TimelineVideoBrush" Color="{StaticResource OperatorColorTimeline}" />
+		<SolidColorBrush x:Key="TimelineGraphicsBrush" Color="{StaticResource OperatorColorGraphics}" />
+		<SolidColorBrush x:Key="TimelineAudioBrush" Color="{StaticResource OperatorColorAudio}" />
+		<SolidColorBrush x:Key="TimelineCueBrush" Color="{StaticResource OperatorColorWarning}" />
 
 		<Style x:Key="TimelineTrackHeader" TargetType="Border">
 			<Setter Property="Background" Value="{DynamicResource OperatorSurfaceBrush}" />
