@@ -72,6 +72,12 @@ public partial class MainWindow : Window
 		Shell = new OperatorShellViewModel(new OperatorLayoutStore(), SetProductionFullscreen);
 		MediaPool = new MediaPoolInspectorViewModel(viewModel, MediaDeck);
 		CompositingGraph = new CompositingGraphViewModel(viewModel, MediaPool);
+		HealthProvider = new OperatorHealthSnapshotProvider(viewModel, MediaDeck, Monitoring, ProgramOutput, CompositingGraph);
+		HealthCenter = new HealthCenterViewModel(
+			HealthProvider,
+			viewModel.RuntimeReadiness,
+			viewModel,
+			new DispatcherSynchronizationContext(Dispatcher));
 		QuickControls = new OperatorQuickControlsViewModel(viewModel, MediaDeck, MediaPool, new OperatorQuickControlStore());
 		Shortcuts = OperatorKeyboardCommandRegistry.Create(
 			viewModel,
@@ -118,6 +124,12 @@ public partial class MainWindow : Window
 		Shell = new OperatorShellViewModel(new OperatorLayoutStore(), SetProductionFullscreen);
 		MediaPool = new MediaPoolInspectorViewModel(viewModel, MediaDeck);
 		CompositingGraph = new CompositingGraphViewModel(viewModel, MediaPool);
+		HealthProvider = new OperatorHealthSnapshotProvider(viewModel, MediaDeck, Monitoring, ProgramOutput, CompositingGraph);
+		HealthCenter = new HealthCenterViewModel(
+			HealthProvider,
+			viewModel.RuntimeReadiness,
+			viewModel,
+			new DispatcherSynchronizationContext(Dispatcher));
 		QuickControls = new OperatorQuickControlsViewModel(viewModel, MediaDeck, MediaPool, new OperatorQuickControlStore());
 		Shortcuts = OperatorKeyboardCommandRegistry.Create(
 			viewModel,
@@ -146,6 +158,8 @@ public partial class MainWindow : Window
 	public OperatorMonitoringViewModel Monitoring { get; }
 	public ProgramOutputController ProgramOutput { get; }
 	public OutputRoutingHealthViewModel OutputHealth { get; }
+	public OperatorHealthSnapshotProvider HealthProvider { get; }
+	public HealthCenterViewModel HealthCenter { get; }
 	public OperatorShellViewModel Shell { get; }
 	public MediaDeckViewModel MediaDeck { get; }
 	public DemoProductionPackageController DemoProduction { get; }
@@ -301,6 +315,8 @@ public partial class MainWindow : Window
 		{
 			Startup.Dispose();
 			StartupBrandPulse.BeginAnimation(UIElement.OpacityProperty, null);
+			HealthCenter.Dispose();
+			HealthProvider.Dispose();
 			OutputHealth.Dispose();
 			ProgramOutput.Dispose();
 			if (DataContext is OperatorViewModel viewModel)
