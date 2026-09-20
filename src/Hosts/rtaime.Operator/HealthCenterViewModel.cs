@@ -271,9 +271,21 @@ public sealed class HealthCenterViewModel : INotifyPropertyChanged, IDisposable
 
 	private static void ReplaceCollection<T>(ObservableCollection<T> target, IReadOnlyList<T> items)
 	{
-		target.Clear();
-		foreach (var item in items)
-			target.Add(item);
+		for (var index = 0; index < items.Count; index++)
+		{
+			var item = items[index];
+			if (index < target.Count && EqualityComparer<T>.Default.Equals(target[index], item))
+				continue;
+
+			var existingIndex = target.IndexOf(item);
+			if (existingIndex >= 0)
+				target.Move(existingIndex, index);
+			else
+				target.Insert(index, item);
+		}
+
+		while (target.Count > items.Count)
+			target.RemoveAt(target.Count - 1);
 	}
 
 	private bool Set<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
