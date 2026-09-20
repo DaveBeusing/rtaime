@@ -316,6 +316,83 @@ Commercial assets should then add:
 - commercial packaging and licensing
 - validated performance envelopes
 
+## Marketing-critical commercialization priorities
+
+The current product is strong enough for technical positioning and design-partner conversations, but several repository-declared boundaries should be treated as commercialization priorities before broader deployment claims.
+
+### 1. Reference hardware qualification
+
+Current physical GPU, Media I/O, latency, reference-lock and long-soak evidence remains bounded by the qualification system and is not universally PASS.
+
+Marketing priority:
+
+- publish a supported reference configuration only after retained evidence exists;
+- convert measured results into a concise supported-performance matrix;
+- keep CI performance results separate from physical-platform claims.
+
+### 2. Professional recording and delivery formats
+
+The current deterministic recording proof uses the rtaime reference recording artifact and does not claim qualified MP4/MOV/MXF professional delivery.
+
+Marketing priority:
+
+- avoid presenting Recording as a finished professional interchange workflow;
+- qualify the intended production recording format before making workflow-complete claims;
+- publish codec/container compatibility only from tested evidence.
+
+### 3. Output, streaming and scene-control breadth
+
+Aux output, authoritative external streaming/on-air state and dedicated governed scene activation remain unavailable or unverified in the current V1 contracts.
+
+Marketing priority:
+
+- sell the current Preview/Program, Program Output and monitoring path as implemented;
+- treat additional output roles, streaming and scene activation as roadmap capabilities until governed contracts exist;
+- do not create decorative UI claims to imply unavailable backend capability.
+
+### 4. Remote and ecosystem integration
+
+Local Named Pipes are the qualified V1 control transport. TCP, HTTP, gRPC, TLS, cluster discovery, NMOS and remote-network deployment remain unverified.
+
+Marketing priority:
+
+- do not market an “open remote API” before a qualified external control boundary exists;
+- prioritize the integrations repeatedly requested by design partners;
+- publish an integration catalog only when those interfaces have stable contracts and qualification evidence.
+
+### 5. Trusted Preview and Stable release
+
+The repository currently identifies the product as 0.1.0-dev / DEV. Production signing trust, trusted public Preview publication and STABLE status require their corresponding release evidence.
+
+Marketing priority:
+
+- Phase 0 messaging should invite evaluation, not deployment;
+- Preview messaging begins only when a publication-ready Preview candidate exists;
+- commercial deployment language begins only after the required Stable/trust boundaries are satisfied.
+
+### 6. Support and deployment policy
+
+The repository does not yet establish a production support-period declaration.
+
+Marketing priority:
+
+- define supported Windows/reference configurations;
+- define support lifecycle and update expectations;
+- define escalation/support ownership before commercial launch;
+- keep community/project availability separate from a commercial support promise.
+
+### 7. Customer proof
+
+Architecture and automated evidence establish technical credibility, but they are not substitutes for customer proof.
+
+Marketing priority:
+
+- use the Product Showcase to recruit design partners;
+- convert repeated design-partner success into named workflow evidence;
+- publish case studies only after the customer and measured claims can be substantiated.
+
+These priorities should guide roadmap sequencing because each one unlocks a stronger class of external claim.
+
 ## Channel strategy
 
 ### GitHub
