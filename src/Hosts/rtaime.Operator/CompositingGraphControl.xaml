@@ -14,12 +14,12 @@
 		<SolidColorBrush x:Key="GraphMinorGridBrush" Color="#13222C" />
 		<SolidColorBrush x:Key="GraphMajorGridBrush" Color="#1B303C" />
 		<SolidColorBrush x:Key="GraphConnectionBrush" Color="#314553" />
-		<SolidColorBrush x:Key="GraphSourceBrush" Color="#3478D4" />
-		<SolidColorBrush x:Key="GraphRoutingBrush" Color="#16CDD3" />
-		<SolidColorBrush x:Key="GraphTransformBrush" Color="#F6B84A" />
-		<SolidColorBrush x:Key="GraphCompositeBrush" Color="#7259D7" />
-		<SolidColorBrush x:Key="GraphOutputBrush" Color="#29D38B" />
-		<SolidColorBrush x:Key="GraphRecorderBrush" Color="#FF4D52" />
+		<SolidColorBrush x:Key="GraphSourceBrush" Color="{StaticResource OperatorColorTimeline}" />
+		<SolidColorBrush x:Key="GraphRoutingBrush" Color="{StaticResource OperatorColorAccent}" />
+		<SolidColorBrush x:Key="GraphTransformBrush" Color="{StaticResource OperatorColorWarning}" />
+		<SolidColorBrush x:Key="GraphCompositeBrush" Color="{StaticResource OperatorColorGraphics}" />
+		<SolidColorBrush x:Key="GraphOutputBrush" Color="{StaticResource OperatorColorHealthy}" />
+		<SolidColorBrush x:Key="GraphRecorderBrush" Color="{StaticResource OperatorColorError}" />
 
 		<Style x:Key="GraphToolbarButton" TargetType="{x:Type controls:RtaimeButton}" BasedOn="{StaticResource {x:Type controls:RtaimeButton}}">
 			<Setter Property="Height" Value="26" />
