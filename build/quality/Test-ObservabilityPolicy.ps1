@@ -20,13 +20,14 @@ $corePath = Join-Path $repositoryRoot "src/rtaime.Core/Diagnostics.cs"
 $controlPath = Join-Path $repositoryRoot "src/Hosts/rtaime.ControlHost/ControlHostDiagnostics.cs"
 $runtimePath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/RuntimeHostDiagnostics.cs"
 $runtimeServicePath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/V1RuntimeHostService.cs"
+$hardwareTelemetryPath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/SystemHardwareTelemetry.cs"
 $frameDropPath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/RuntimeFrameDropCounter.cs"
 $healthProjectionPath = Join-Path $repositoryRoot "src/Hosts/rtaime.ControlHost/OperatorHealthProjection.cs"
 $aiPath = Join-Path $repositoryRoot "src/Hosts/rtaime.AIHost/AIHostDiagnostics.cs"
 $testsPath = Join-Path $repositoryRoot "tests/rtaime.Tests.Unit/DiagnosticsTests.cs"
 $documentationPath = Join-Path $repositoryRoot "docs/ObservabilityDiagnostics.md"
 
-foreach ($path in @($corePath, $controlPath, $runtimePath, $runtimeServicePath, $frameDropPath, $healthProjectionPath, $aiPath, $testsPath, $documentationPath)) {
+foreach ($path in @($corePath, $controlPath, $runtimePath, $runtimeServicePath, $hardwareTelemetryPath, $frameDropPath, $healthProjectionPath, $aiPath, $testsPath, $documentationPath)) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required observability artifact is missing: '$path'."
 }
 
@@ -34,6 +35,7 @@ $core = Get-Content -LiteralPath $corePath -Raw
 $control = Get-Content -LiteralPath $controlPath -Raw
 $runtime = Get-Content -LiteralPath $runtimePath -Raw
 $runtimeService = Get-Content -LiteralPath $runtimeServicePath -Raw
+$hardwareTelemetry = Get-Content -LiteralPath $hardwareTelemetryPath -Raw
 $frameDrop = Get-Content -LiteralPath $frameDropPath -Raw
 $healthProjection = Get-Content -LiteralPath $healthProjectionPath -Raw
 $ai = Get-Content -LiteralPath $aiPath -Raw
@@ -58,10 +60,15 @@ Assert-Condition ($runtime -match 'runtime\.droppedFrames') "Runtime support dia
 Assert-Condition ($runtime -match 'gpu\.utilizationPercent' -and $runtime -match 'UNVERIFIED') "GPU utilization diagnostics must remain UNVERIFIED when no measured value exists."
 Assert-Condition ($runtimeService -match 'V1RuntimePerformanceSnapshot') "RuntimeHost must expose a bounded runtime performance snapshot."
 Assert-Condition ($runtimeService -match 'GpuUtilizationPercent[\s\S]*GpuVramUsedBytes') "Runtime performance telemetry must keep optional GPU utilization and VRAM fields explicit."
+Assert-Condition ($runtimeService -match 'CpuUtilizationPercent[\s\S]*SystemMemoryUsedBytes[\s\S]*SystemMemoryTotalBytes') "Runtime performance telemetry must expose optional CPU and system-memory measurements explicitly."
+Assert-Condition ($hardwareTelemetry -match 'SampleInterval\s*=\s*TimeSpan\.FromMilliseconds\(500\)') "Hardware telemetry sampling must remain bounded and cached."
+Assert-Condition ($hardwareTelemetry -match 'GetSystemTimes' -and $hardwareTelemetry -match 'GlobalMemoryStatusEx') "Windows CPU and system-memory telemetry must use bounded OS measurements."
+Assert-Condition ($hardwareTelemetry -match 'nvmlDeviceGetUtilizationRates' -and $hardwareTelemetry -match 'nvmlDeviceGetMemoryInfo') "NVIDIA telemetry must use driver-provided NVML measurements."
 Assert-Condition ($frameDrop -match 'class RuntimeFrameDropCounter') "Runtime diagnostics must retain a dedicated O(1) dropped-frame counter."
 Assert-Condition ($frameDrop -notmatch 'List<|Queue<|Dictionary<|File\.|Stream') "Dropped-frame observation must not allocate history or perform I/O on the Runtime hot path."
 Assert-Condition ($healthProjection -match 'Pass[\s\S]*Fail[\s\S]*Unverified') "Runtime health projection must preserve PASS/FAIL/UNVERIFIED semantics."
 Assert-Condition ($healthProjection -match 'GpuUtilizationPercent is') "Runtime health projection must expose GPU utilization only when a measured value exists."
+Assert-Condition ($healthProjection -match 'CpuUtilizationPercent is' -and $healthProjection -match 'SystemMemoryUsedBytes is') "Runtime health projection must expose CPU and system-memory values only from measured evidence."
 Assert-Condition ($ai -match 'ReservedVramBytes') "AIHost support snapshots must include governed resource admission state."
 Assert-Condition ($ai -match 'providerCount') "AIHost support snapshots must include provider inventory counts."
 
