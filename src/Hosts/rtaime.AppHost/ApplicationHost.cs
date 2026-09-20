@@ -742,8 +742,7 @@ public sealed class UnifiedApplicationHost
 
 		_lifecycle.StartStage(
 			ApplicationLifecycleStages.ControlHost,
-			$"ControlHost endpoint '{endpoint}' is already owned; waiting for qualified readiness instead of starting a competing host.",
-			canRetry: true);
+			$"ControlHost endpoint '{endpoint}' is already owned; waiting for qualified readiness instead of starting a competing host.");
 
 		var deadline = _platform.UtcNow + _options.Policy.StartupTimeout;
 		while (_platform.UtcNow < deadline)
@@ -949,6 +948,7 @@ public sealed class UnifiedApplicationHost
 
 	private string BuildControlHostExitDetail(string prefix)
 	{
+		if (_ownedControlProcessId is null) return prefix;
 		if (!_platform.FileExists(_options.ControlHostDiagnosticPath)) return prefix;
 		try
 		{
