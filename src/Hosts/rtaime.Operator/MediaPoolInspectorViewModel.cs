@@ -1145,7 +1145,11 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 		if (string.IsNullOrWhiteSpace(format))
 			return "—";
 
-		var marker = format.IndexOf('x');
+		var marker = format.IndexOf('×');
+		if (marker < 0)
+			marker = format.IndexOf('x');
+		if (marker < 0)
+			marker = format.IndexOf('X');
 		if (marker <= 0)
 			return format.Trim();
 
