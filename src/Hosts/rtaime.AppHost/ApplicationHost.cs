@@ -97,6 +97,7 @@ public sealed record ApplicationHostOptions(
 	public string StopPath => Path.Combine(WorkRoot, "control-stop.signal");
 	public string ShutdownEvidencePath => Path.Combine(WorkRoot, "apphost-shutdown.json");
 	public string ServiceReadinessEvidencePath => Path.Combine(WorkRoot, "apphost-readiness.json");
+	public string LifecycleEvidencePath => Path.Combine(WorkRoot, "apphost-lifecycle.json");
 	public string LegacyLifecycleStatePath => Path.Combine($"{InstallRoot}.host-lifecycle", "lifecycle-state.json");
 
 	public ApplicationEndpointSet Endpoints
@@ -407,8 +408,10 @@ public sealed class UnifiedApplicationHost
 {
 	private readonly ApplicationHostOptions _options;
 	private readonly IApplicationHostPlatform _platform;
+	private readonly ApplicationLifecycleStateProvider _lifecycle;
 	private int? _ownedControlProcessId;
 	private int? _controlProcessId;
+	private int? _operatorProcessId;
 	private string? _activeReadinessPath;
 	private bool _adopted;
 
@@ -416,10 +419,12 @@ public sealed class UnifiedApplicationHost
 	{
 		_options = options ?? throw new ArgumentNullException(nameof(options));
 		_platform = platform ?? throw new ArgumentNullException(nameof(platform));
+		_lifecycle = new ApplicationLifecycleStateProvider(_options.LifecycleEvidencePath, _options.RequireAI, _platform);
 	}
 
 	public ApplicationLifecycleState State { get; private set; } = ApplicationLifecycleState.Stopped;
 	public bool OwnsControlLifecycle => _ownedControlProcessId is not null;
+	public IApplicationLifecycleStateProvider Lifecycle => _lifecycle;
 	public event Action<ApplicationLifecycleState>? StateChanged;
 
 	public async Task<ApplicationHostRunResult> RunAsync(CancellationToken cancellationToken = default)
@@ -432,11 +437,30 @@ public sealed class UnifiedApplicationHost
 			_platform.DeleteFile(_options.ShutdownEvidencePath);
 			_platform.DeleteFile(_options.ServiceReadinessEvidencePath);
 
+			_lifecycle.Initialize();
+			_lifecycle.StartStage(ApplicationLifecycleStages.ApplicationBootstrap, "Preparing the application host.");
+			_lifecycle.CompleteStage(ApplicationLifecycleStages.ApplicationBootstrap, "Application host initialized.");
+			_lifecycle.StartStage(ApplicationLifecycleStages.Configuration, "Applying startup profile and lifecycle policy.");
+			_lifecycle.CompleteStage(ApplicationLifecycleStages.Configuration, "Startup profile and lifecycle policy loaded.");
+
+			if (_options.Profile == ApplicationStartupProfile.HeadlessEngine)
+			{
+				_lifecycle.CompleteStage(ApplicationLifecycleStages.OperatorInterface, "Operator interface is not required by the HeadlessEngine profile.");
+			}
+			else
+			{
+				_lifecycle.StartStage(ApplicationLifecycleStages.OperatorInterface, "Launching the Operator startup experience.");
+				_operatorProcessId = StartOperator();
+				_lifecycle.CompleteStage(ApplicationLifecycleStages.OperatorInterface, "Operator startup experience is running.");
+			}
+
+			_lifecycle.StartStage(ApplicationLifecycleStages.ControlHost, "Discovering qualified ControlHost readiness.");
 			var ready = await FindHealthyReadinessAsync(cancellationToken).ConfigureAwait(false);
 			if (ready is null)
 			{
 				if (_options.Ownership == ApplicationLifecycleOwnership.ExternalManaged)
 				{
+					_lifecycle.StartStage(ApplicationLifecycleStages.ControlHost, "Waiting for externally managed ControlHost readiness.");
 					ready = await WaitForExternalReadinessAsync(cancellationToken).ConfigureAwait(false);
 					_adopted = true;
 					_controlProcessId = ready.Value.Evidence.ProcessId;
@@ -445,6 +469,10 @@ public sealed class UnifiedApplicationHost
 				else
 				{
 					StartControlHost();
+					_lifecycle.StartStage(ApplicationLifecycleStages.ControlHost, "ControlHost process started; waiting for qualified readiness.");
+					_lifecycle.StartStage(ApplicationLifecycleStages.RuntimeHost, "Awaiting supervised RuntimeHost readiness.");
+					if (_options.RequireAI)
+						_lifecycle.StartStage(ApplicationLifecycleStages.AIHost, "Awaiting supervised AIHost readiness.");
 					ready = await WaitForReadinessAsync(cancellationToken).ConfigureAwait(false);
 				}
 			}
@@ -462,8 +490,17 @@ public sealed class UnifiedApplicationHost
 			}
 
 			var qualifiedReadiness = ready ?? throw new InvalidOperationException("Engine startup completed without qualified readiness evidence.");
+			_lifecycle.CompleteStage(
+				ApplicationLifecycleStages.ControlHost,
+				_adopted ? "Existing qualified ControlHost adopted." : "ControlHost is qualified and ready.");
+			_lifecycle.CompleteStage(ApplicationLifecycleStages.RuntimeHost, "RuntimeHost supervision is healthy and qualified.");
+			_lifecycle.CompleteStage(
+				ApplicationLifecycleStages.AIHost,
+				_options.RequireAI ? "AIHost supervision is healthy and qualified." : "AIHost is not required by the selected startup profile.");
+			_lifecycle.StartStage(ApplicationLifecycleStages.ProductionReadiness, "Qualifying the complete production runtime.");
 			TrackReadiness(qualifiedReadiness);
 			Transition(ApplicationLifecycleState.Healthy);
+			_lifecycle.CompleteStage(ApplicationLifecycleStages.ProductionReadiness, "Production runtime is qualified and ready.");
 
 			if (_options.Profile == ApplicationStartupProfile.HeadlessEngine)
 			{
@@ -471,7 +508,8 @@ public sealed class UnifiedApplicationHost
 			}
 			else
 			{
-				var operatorProcessId = StartOperator();
+				var operatorProcessId = _operatorProcessId
+					?? throw new InvalidOperationException("Operator process was not started for an interactive profile.");
 				await ObserveOperatorAsync(operatorProcessId, cancellationToken).ConfigureAwait(false);
 				if (_options.Ownership == ApplicationLifecycleOwnership.EphemeralLocal)
 					await StopOwnedControlAsync(CancellationToken.None).ConfigureAwait(false);
@@ -487,8 +525,9 @@ public sealed class UnifiedApplicationHost
 			Transition(ApplicationLifecycleState.Stopped);
 			return new ApplicationHostRunResult(true, _options.Profile, _adopted, _controlProcessId ?? 0);
 		}
-		catch
+		catch (Exception exception)
 		{
+			_lifecycle.FailActiveStages(exception.Message);
 			if (State == ApplicationLifecycleState.Starting || ShouldStopOwnedControlOnHostExit())
 				await StopOwnedControlAsync(CancellationToken.None).ConfigureAwait(false);
 			Transition(ApplicationLifecycleState.Failed);
@@ -545,7 +584,8 @@ public sealed class UnifiedApplicationHost
 			["RTAIME_CONTROL_ENDPOINT"] = endpoints.Control,
 			["RTAIME_RUNTIME_ENDPOINT"] = endpoints.Runtime,
 			["RTAIME_AI_ENDPOINT"] = endpoints.AI,
-			["RTAIME_MONITOR_ENDPOINT"] = endpoints.Runtime + ".monitor"
+			["RTAIME_MONITOR_ENDPOINT"] = endpoints.Runtime + ".monitor",
+			["RTAIME_APPHOST_LIFECYCLE_FILE"] = _options.LifecycleEvidencePath
 		};
 		return _platform.StartProcess(new ApplicationProcessSpec(
 			operatorArtifact,
@@ -661,6 +701,10 @@ public sealed class UnifiedApplicationHost
 			{
 				degradedSince ??= _platform.UtcNow;
 				_platform.DeleteFile(_options.ServiceReadinessEvidencePath);
+				_lifecycle.DegradeStage(
+					ApplicationLifecycleStages.ProductionReadiness,
+					"Production readiness was lost; recovery is active.",
+					"Qualified engine readiness is currently unavailable.");
 				Transition(ApplicationLifecycleState.Degraded);
 				if (_platform.UtcNow - degradedSince >= _options.Policy.StartupTimeout)
 					throw new TimeoutException("Engine readiness did not recover within the configured recovery window.");
@@ -671,8 +715,10 @@ public sealed class UnifiedApplicationHost
 				if (degradedSince is not null)
 				{
 					Transition(ApplicationLifecycleState.Recovering);
+					_lifecycle.StartStage(ApplicationLifecycleStages.ProductionReadiness, "Requalifying recovered engine readiness.");
 					degradedSince = null;
 					Transition(ApplicationLifecycleState.Healthy);
+					_lifecycle.CompleteStage(ApplicationLifecycleStages.ProductionReadiness, "Production runtime recovered and is qualified.");
 				}
 			}
 			await _platform.DelayAsync(_options.Policy.ProbeInterval, cancellationToken).ConfigureAwait(false);
@@ -693,6 +739,10 @@ public sealed class UnifiedApplicationHost
 			{
 				degradedSince ??= _platform.UtcNow;
 				_platform.DeleteFile(_options.ServiceReadinessEvidencePath);
+				_lifecycle.DegradeStage(
+					ApplicationLifecycleStages.ProductionReadiness,
+					"Production readiness was lost; recovery is active.",
+					"Qualified engine readiness is currently unavailable.");
 				Transition(ApplicationLifecycleState.Degraded);
 				if (_platform.UtcNow - degradedSince >= _options.Policy.StartupTimeout)
 					throw new TimeoutException("Engine readiness did not recover within the configured recovery window.");
@@ -703,9 +753,11 @@ public sealed class UnifiedApplicationHost
 				if (degradedSince is not null)
 				{
 					Transition(ApplicationLifecycleState.Recovering);
+					_lifecycle.StartStage(ApplicationLifecycleStages.ProductionReadiness, "Requalifying recovered engine readiness.");
 					degradedSince = null;
 				}
 				Transition(ApplicationLifecycleState.Healthy);
+				_lifecycle.CompleteStage(ApplicationLifecycleStages.ProductionReadiness, "Production runtime is qualified and ready.");
 			}
 
 			await _platform.DelayAsync(_options.Policy.ProbeInterval, cancellationToken).ConfigureAwait(false);
