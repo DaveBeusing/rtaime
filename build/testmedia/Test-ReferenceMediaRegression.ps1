@@ -2,7 +2,8 @@
 
 [CmdletBinding()]
 param(
-	[string]$OutputDirectory = "artifacts/testmedia/reference-regression"
+	[string]$OutputDirectory = "artifacts/testmedia/reference-regression",
+	[string]$FfmpegPath = ""
 )
 
 Set-StrictMode -Version Latest
@@ -12,19 +13,31 @@ $repositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "../.."
 $outputRoot = [System.IO.Path]::GetFullPath((Join-Path $repositoryRoot $OutputDirectory))
 New-Item -ItemType Directory -Path $outputRoot -Force | Out-Null
 
-$ffmpeg = Get-Command ffmpeg -ErrorAction SilentlyContinue
-if ($null -eq $ffmpeg) {
-	throw "FFmpeg is required for reference-media regression. Install the pinned CI test encoder or set PATH accordingly."
+$resolvedFfmpeg = if (-not [string]::IsNullOrWhiteSpace($FfmpegPath)) {
+	[System.IO.Path]::GetFullPath($FfmpegPath)
+}
+elseif (-not [string]::IsNullOrWhiteSpace($env:RTAIME_FFMPEG_PATH)) {
+	[System.IO.Path]::GetFullPath($env:RTAIME_FFMPEG_PATH)
+}
+else {
+	$command = Get-Command ffmpeg -ErrorAction SilentlyContinue
+	if ($null -eq $command) { $null } else { $command.Source }
 }
 
-Write-Host "FFmpeg: $($ffmpeg.Source)"
-& $ffmpeg.Source -version | Select-Object -First 1
+if ([string]::IsNullOrWhiteSpace($resolvedFfmpeg) -or -not (Test-Path -LiteralPath $resolvedFfmpeg -PathType Leaf)) {
+	throw "FFmpeg is required for reference-media regression. Install the pinned CI test encoder, set RTAIME_FFMPEG_PATH, or pass -FfmpegPath."
+}
+
+Write-Host "FFmpeg: $resolvedFfmpeg"
+& $resolvedFfmpeg -version | Select-Object -First 1
 
 $previousRegression = $env:RTAIME_REFERENCE_MEDIA_REGRESSION
 $previousOutput = $env:RTAIME_REFERENCE_MEDIA_OUTPUT
+$previousFfmpeg = $env:RTAIME_FFMPEG_PATH
 try {
 	$env:RTAIME_REFERENCE_MEDIA_REGRESSION = "1"
 	$env:RTAIME_REFERENCE_MEDIA_OUTPUT = $outputRoot
+	$env:RTAIME_FFMPEG_PATH = $resolvedFfmpeg
 
 	Push-Location $repositoryRoot
 	try {
@@ -48,6 +61,7 @@ try {
 finally {
 	$env:RTAIME_REFERENCE_MEDIA_REGRESSION = $previousRegression
 	$env:RTAIME_REFERENCE_MEDIA_OUTPUT = $previousOutput
+	$env:RTAIME_FFMPEG_PATH = $previousFfmpeg
 }
 
 $media = @(Get-ChildItem -LiteralPath $outputRoot -Filter "rtaime-reference-*.mp4" -File)
