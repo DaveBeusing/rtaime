@@ -41,6 +41,52 @@ public class RtaimeButton : Button
 	}
 }
 
+public class RtaimeGlobalStatusButton : RtaimeButton
+{
+	public static readonly DependencyProperty StateProperty = DependencyProperty.Register(
+		nameof(State),
+		typeof(string),
+		typeof(RtaimeGlobalStatusButton),
+		new FrameworkPropertyMetadata("INITIALIZING"));
+
+	public static readonly DependencyProperty StatusTextProperty = DependencyProperty.Register(
+		nameof(StatusText),
+		typeof(string),
+		typeof(RtaimeGlobalStatusButton),
+		new FrameworkPropertyMetadata("INITIALIZING"));
+
+	public static readonly DependencyProperty DetailProperty = DependencyProperty.Register(
+		nameof(Detail),
+		typeof(string),
+		typeof(RtaimeGlobalStatusButton),
+		new FrameworkPropertyMetadata(string.Empty));
+
+	static RtaimeGlobalStatusButton()
+	{
+		DefaultStyleKeyProperty.OverrideMetadata(
+			typeof(RtaimeGlobalStatusButton),
+			new FrameworkPropertyMetadata(typeof(RtaimeGlobalStatusButton)));
+	}
+
+	public string State
+	{
+		get => (string)GetValue(StateProperty);
+		set => SetValue(StateProperty, value);
+	}
+
+	public string StatusText
+	{
+		get => (string)GetValue(StatusTextProperty);
+		set => SetValue(StatusTextProperty, value);
+	}
+
+	public string Detail
+	{
+		get => (string)GetValue(DetailProperty);
+		set => SetValue(DetailProperty, value);
+	}
+}
+
 public class RtaimeIconButton : RtaimeButton
 {
 	public static readonly DependencyProperty IconDataProperty = DependencyProperty.Register(
