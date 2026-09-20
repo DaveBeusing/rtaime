@@ -282,22 +282,12 @@
 		BorderBrush="{DynamicResource OperatorBorderBrush}"
 		BorderThickness="1,0,0,0">
 		<Grid>
-
 			<controls:RtaimeStatePlaceholder
-				State="EMPTY"
-				Title="Nothing selected"
-				Detail="Select media, a timeline item, cue or compositing node to inspect."
-				Panel.ZIndex="50"
-				Margin="10">
-				<controls:RtaimeStatePlaceholder.Style>
-					<Style TargetType="{x:Type controls:RtaimeStatePlaceholder}" BasedOn="{StaticResource {x:Type controls:RtaimeStatePlaceholder}}">
-						<Setter Property="Visibility" Value="Collapsed" />
-						<Style.Triggers>
-							<DataTrigger Binding="{Binding Inspector.HasSelection, ElementName=Root}" Value="False"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
-						</Style.Triggers>
-					</Style>
-				</controls:RtaimeStatePlaceholder.Style>
-			</controls:RtaimeStatePlaceholder>
+							State="{Binding WorkspaceStates.Inspector.State, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							Title="{Binding WorkspaceStates.Inspector.Title, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							Detail="{Binding WorkspaceStates.Inspector.Detail, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							Panel.ZIndex="60"
+							Margin="10" />
 			<controls:RtaimeTabControl
 				x:Name="InspectorTopTabs"
 				Background="{DynamicResource OperatorSurfaceBrush}"

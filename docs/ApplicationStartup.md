@@ -15,8 +15,9 @@ rtaime.exe / AppHost
     ├── supervises RuntimeHost
     └── supervises AIHost
 
-Operator production workspace opens only after qualified engine readiness
-and the first authoritative Control synchronization.
+Operator shell becomes available after the Critical startup stages are ready.
+Required-for-production and Optional stages may continue initializing while
+Production Readiness remains independently authoritative.
 ```
 
 The AppHost is lifecycle orchestration only. It is not a production authority and does not own media execution, inference semantics or Runtime state.
@@ -45,7 +46,7 @@ A monolithic all-in-one process is not introduced.
 
 Interactive is the default profile and uses `EphemeralLocal` lifecycle ownership by default.
 
-The AppHost opens the Operator startup experience first, then starts or adopts the engine lifecycle and waits for qualified readiness. The startup surface reads AppHost lifecycle evidence and remains over the production shell until the existing Operator readiness projection confirms the first authoritative Control synchronization. When this AppHost starts the local engine itself, closing Operator or terminating the local AppHost requests a graceful shutdown of that owned ControlHost lifecycle. An already-running engine that is merely adopted is never terminated implicitly.
+The AppHost opens the Operator startup experience first, then starts or adopts the engine lifecycle and waits for qualified readiness. The startup surface reads AppHost lifecycle evidence and yields to the production shell as soon as all Critical stages are Ready. ControlHost, RuntimeHost, Production Readiness and any profile-required AIHost may continue initializing behind the shell; production mutations remain governed by the existing Runtime readiness and mutation gates. When this AppHost starts the local engine itself, closing Operator or terminating the local AppHost requests a graceful shutdown of that owned ControlHost lifecycle. An already-running engine that is merely adopted is never terminated implicitly.
 
 ### Showcase
 
@@ -129,15 +130,15 @@ Interactive AppHost startup publishes `apphost-lifecycle.json` below the selecte
 6. AIHost
 7. Production Readiness
 
-Each stage is `Pending`, `Starting`, `Ready`, `Degraded` or `Failed` and carries timestamps, status detail and optional failure detail. The Operator observes this file for presentation only; it does not supervise processes, infer missing states or generate percentage progress. CPU, memory and GPU metrics remain Runtime-published health observations and are therefore not represented as independent startup stages until the runtime exposes authoritative lifecycle boundaries for them.
+Each stage is `Pending`, `Starting`, `Ready`, `Degraded` or `Failed` and carries timestamps, status detail, optional failure detail and a requirement classification: `Critical`, `RequiredForProduction` or `Optional`. Application Bootstrap, Configuration and Operator Interface are Critical. ControlHost, RuntimeHost and Production Readiness are RequiredForProduction. AIHost is Optional unless the selected startup profile requires AI, in which case it is RequiredForProduction. The Operator observes this file for presentation only; it does not supervise processes, infer missing states or generate percentage progress. CPU, memory and GPU metrics remain Runtime-published health observations and are therefore not represented as independent startup stages until the runtime exposes authoritative lifecycle boundaries for them.
 
 The startup overlay may animate presentation opacity when Windows client-area animations are enabled. Reduced-motion settings disable that animation, and the animation never gates startup completion.
 
 No current application-startup stage exposes a safe standalone retry operation. Consequently the evidence contract carries `canRetry`, but the Operator does not offer a retry action until a real idempotent retry path exists.
 
-## Readiness contract
+## Production readiness contract
 
-Production workspace handoff is gated on positive evidence. AppHost requires:
+Production readiness and production mutations remain gated on positive evidence even after the Operator shell becomes available. AppHost requires:
 
 1. the ControlHost process identity in readiness evidence to be live;
 2. ControlHost lifecycle state `READY`;

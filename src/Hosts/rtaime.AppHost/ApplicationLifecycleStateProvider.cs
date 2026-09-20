@@ -13,6 +13,13 @@ public enum LifecycleStageStatus
 	Failed
 }
 
+public enum LifecycleStageRequirement
+{
+	Critical,
+	RequiredForProduction,
+	Optional
+}
+
 public static class ApplicationLifecycleStages
 {
 	public const string ApplicationBootstrap = "application-bootstrap";
@@ -27,6 +34,7 @@ public static class ApplicationLifecycleStages
 public sealed record LifecycleStageSnapshot(
 	string Id,
 	string DisplayName,
+	LifecycleStageRequirement Requirement,
 	LifecycleStageStatus Status,
 	DateTimeOffset? StartedAt,
 	DateTimeOffset? CompletedAt,
@@ -198,23 +206,47 @@ public sealed class ApplicationLifecycleStateProvider : IApplicationLifecycleSta
 	{
 		_stages =
 		[
-			Pending(ApplicationLifecycleStages.ApplicationBootstrap, "Application Bootstrap"),
-			Pending(ApplicationLifecycleStages.Configuration, "Configuration"),
-			Pending(ApplicationLifecycleStages.OperatorInterface, "Operator Interface"),
-			Pending(ApplicationLifecycleStages.ControlHost, "ControlHost"),
-			Pending(ApplicationLifecycleStages.RuntimeHost, "RuntimeHost"),
+			Pending(
+				ApplicationLifecycleStages.ApplicationBootstrap,
+				"Application Bootstrap",
+				LifecycleStageRequirement.Critical),
+			Pending(
+				ApplicationLifecycleStages.Configuration,
+				"Configuration",
+				LifecycleStageRequirement.Critical),
+			Pending(
+				ApplicationLifecycleStages.OperatorInterface,
+				"Operator Interface",
+				LifecycleStageRequirement.Critical),
+			Pending(
+				ApplicationLifecycleStages.ControlHost,
+				"ControlHost",
+				LifecycleStageRequirement.RequiredForProduction),
+			Pending(
+				ApplicationLifecycleStages.RuntimeHost,
+				"RuntimeHost",
+				LifecycleStageRequirement.RequiredForProduction),
 			Pending(
 				ApplicationLifecycleStages.AIHost,
 				"AIHost",
+				_requireAI ? LifecycleStageRequirement.RequiredForProduction : LifecycleStageRequirement.Optional,
 				_requireAI ? "Waiting for startup." : "Not required by the selected startup profile."),
-			Pending(ApplicationLifecycleStages.ProductionReadiness, "Production Readiness")
+			Pending(
+				ApplicationLifecycleStages.ProductionReadiness,
+				"Production Readiness",
+				LifecycleStageRequirement.RequiredForProduction)
 		];
 	}
 
-	private static LifecycleStageSnapshot Pending(string id, string displayName, string statusText = "Waiting for startup.") =>
+	private static LifecycleStageSnapshot Pending(
+		string id,
+		string displayName,
+		LifecycleStageRequirement requirement,
+		string statusText = "Waiting for startup.") =>
 		new(
 			id,
 			displayName,
+			requirement,
 			LifecycleStageStatus.Pending,
 			null,
 			null,
@@ -236,6 +268,7 @@ public sealed class ApplicationLifecycleStateProvider : IApplicationLifecycleSta
 				{
 					id = stage.Id,
 					displayName = stage.DisplayName,
+					requirement = stage.Requirement.ToString(),
 					status = stage.Status.ToString(),
 					startedAtUtc = stage.StartedAt,
 					completedAtUtc = stage.CompletedAt,

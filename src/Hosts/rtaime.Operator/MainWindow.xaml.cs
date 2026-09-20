@@ -90,8 +90,17 @@ public partial class MainWindow : Window
 		Startup = new StartupLifecycleViewModel(
 			Environment.GetEnvironmentVariable("RTAIME_APPHOST_LIFECYCLE_FILE"),
 			new DispatcherSynchronizationContext(Dispatcher));
+		WorkspaceStates = new OperatorWorkspaceStateViewModel(
+			viewModel,
+			MediaPool,
+			MediaDeck,
+			Timeline,
+			CompositingGraph,
+			OutputHealth,
+			HealthCenter,
+			Startup);
 		InitializeComponent();
-		viewModel.PropertyChanged += OnOperatorPropertyChanged;
+		WorkspaceStates.PropertyChanged += OnWorkspaceStatesPropertyChanged;
 		StartStartupBrandAnimation();
 		ApplyWindowPlacement();
 		Shell.UpdateViewportWidth(ActualWidth > 0 ? ActualWidth : Width);
@@ -143,8 +152,17 @@ public partial class MainWindow : Window
 		Startup = new StartupLifecycleViewModel(
 			Environment.GetEnvironmentVariable("RTAIME_APPHOST_LIFECYCLE_FILE"),
 			new DispatcherSynchronizationContext(Dispatcher));
+		WorkspaceStates = new OperatorWorkspaceStateViewModel(
+			viewModel,
+			MediaPool,
+			MediaDeck,
+			Timeline,
+			CompositingGraph,
+			OutputHealth,
+			HealthCenter,
+			Startup);
 		InitializeComponent();
-		viewModel.PropertyChanged += OnOperatorPropertyChanged;
+		WorkspaceStates.PropertyChanged += OnWorkspaceStatesPropertyChanged;
 		StartStartupBrandAnimation();
 		ApplyWindowPlacement();
 		Shell.UpdateViewportWidth(ActualWidth > 0 ? ActualWidth : Width);
@@ -157,6 +175,7 @@ public partial class MainWindow : Window
 	}
 
 	public StartupLifecycleViewModel Startup { get; }
+	public OperatorWorkspaceStateViewModel WorkspaceStates { get; }
 	public OperatorMonitoringViewModel Monitoring { get; }
 	public ProgramOutputController ProgramOutput { get; }
 	public OutputRoutingHealthViewModel OutputHealth { get; }
@@ -229,10 +248,10 @@ public partial class MainWindow : Window
 		StartupBrandPulse.BeginAnimation(UIElement.OpacityProperty, animation);
 	}
 
-	private void OnOperatorPropertyChanged(object? sender, PropertyChangedEventArgs e)
+	private void OnWorkspaceStatesPropertyChanged(object? sender, PropertyChangedEventArgs e)
 	{
-		if (e.PropertyName != nameof(OperatorViewModel.StartupComplete) ||
-			sender is not OperatorViewModel { StartupComplete: true })
+		if (e.PropertyName != nameof(OperatorWorkspaceStateViewModel.IsShellAvailable) ||
+			sender is not OperatorWorkspaceStateViewModel { IsShellAvailable: true })
 		{
 			return;
 		}
@@ -316,6 +335,8 @@ public partial class MainWindow : Window
 		IsEnabled = false;
 		try
 		{
+			WorkspaceStates.PropertyChanged -= OnWorkspaceStatesPropertyChanged;
+			WorkspaceStates.Dispose();
 			Startup.Dispose();
 			StartupBrandPulse.BeginAnimation(UIElement.OpacityProperty, null);
 			HealthCenter.Dispose();
@@ -325,7 +346,6 @@ public partial class MainWindow : Window
 			ProgramOutput.Dispose();
 			if (DataContext is OperatorViewModel viewModel)
 			{
-				viewModel.PropertyChanged -= OnOperatorPropertyChanged;
 				MediaDeck.SnapshotChanged -= viewModel.ApplyMediaDeckSnapshot;
 				viewModel.ConfirmedMediaDeckSnapshot -= MediaDeck.ApplyConfirmedSnapshot;
 				Timeline.SelectionChanged -= OnTimelineSelectionChanged;

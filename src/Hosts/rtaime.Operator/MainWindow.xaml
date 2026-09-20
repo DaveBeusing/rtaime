@@ -319,22 +319,11 @@
 
 						<Grid Grid.Row="3" Margin="0,10,0,0">
 							<controls:RtaimeStatePlaceholder
-								State="EMPTY"
-								Title="No media loaded"
-								Detail="Import media to begin."
-								Panel.ZIndex="50"
-								Margin="0">
-								<controls:RtaimeStatePlaceholder.Style>
-									<Style TargetType="{x:Type controls:RtaimeStatePlaceholder}" BasedOn="{StaticResource {x:Type controls:RtaimeStatePlaceholder}}">
-										<Setter Property="Visibility" Value="Collapsed" />
-										<Style.Triggers>
-											<DataTrigger Binding="{Binding MediaPool.HasItems, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="False">
-												<Setter Property="Visibility" Value="Visible" />
-											</DataTrigger>
-										</Style.Triggers>
-									</Style>
-								</controls:RtaimeStatePlaceholder.Style>
-							</controls:RtaimeStatePlaceholder>
+											State="{Binding WorkspaceStates.MediaLibrary.State, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+											Title="{Binding WorkspaceStates.MediaLibrary.Title, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+											Detail="{Binding WorkspaceStates.MediaLibrary.Detail, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+											Panel.ZIndex="60"
+											Margin="0" />
 							<controls:RtaimeListBox
 								x:Name="MediaAssetGrid"
 								ItemsSource="{Binding MediaPool.FilteredItems, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
@@ -1549,7 +1538,7 @@
 				<Style TargetType="Border">
 					<Setter Property="Visibility" Value="Visible" />
 					<Style.Triggers>
-						<DataTrigger Binding="{Binding StartupComplete}" Value="True">
+						<DataTrigger Binding="{Binding WorkspaceStates.IsShellAvailable, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="True">
 							<Setter Property="Visibility" Value="Collapsed" />
 						</DataTrigger>
 					</Style.Triggers>

@@ -174,6 +174,19 @@ public sealed class UnifiedApplicationHostTests
 
 		provider.Initialize();
 		Assert.All(provider.Stages, stage => Assert.Equal(LifecycleStageStatus.Pending, stage.Status));
+		Assert.All(
+			provider.Stages.Where(stage => stage.Id is
+				ApplicationLifecycleStages.ApplicationBootstrap or
+				ApplicationLifecycleStages.Configuration or
+				ApplicationLifecycleStages.OperatorInterface),
+			stage => Assert.Equal(LifecycleStageRequirement.Critical, stage.Requirement));
+		Assert.All(
+			provider.Stages.Where(stage => stage.Id is
+				ApplicationLifecycleStages.ControlHost or
+				ApplicationLifecycleStages.RuntimeHost or
+				ApplicationLifecycleStages.AIHost or
+				ApplicationLifecycleStages.ProductionReadiness),
+			stage => Assert.Equal(LifecycleStageRequirement.RequiredForProduction, stage.Requirement));
 		provider.StartStage(ApplicationLifecycleStages.ControlHost, "Starting.", canRetry: true);
 		Assert.Equal(LifecycleStageStatus.Starting, provider.ActiveStage?.Status);
 		Assert.True(provider.ActiveStage?.CanRetry == true);
@@ -191,6 +204,35 @@ public sealed class UnifiedApplicationHostTests
 		Assert.True(provider.ActiveStage?.CanRetry == true);
 		Assert.True(updates >= 5);
 	}
+
+
+	[Fact]
+	public void Optional_ai_is_classified_without_blocking_critical_shell_startup()
+	{
+		var options = CreateOptions(ApplicationStartupProfile.Interactive);
+		var platform = new FakeApplicationHostPlatform(options);
+		var provider = new ApplicationLifecycleStateProvider(options.LifecycleEvidencePath, requireAI: false, platform);
+
+		provider.Initialize();
+
+		Assert.Equal(
+			LifecycleStageRequirement.Optional,
+			provider.Stages.Single(stage => stage.Id == ApplicationLifecycleStages.AIHost).Requirement);
+		Assert.Equal(
+			LifecycleStageRequirement.Critical,
+			provider.Stages.Single(stage => stage.Id == ApplicationLifecycleStages.OperatorInterface).Requirement);
+		Assert.Equal(
+			LifecycleStageRequirement.RequiredForProduction,
+			provider.Stages.Single(stage => stage.Id == ApplicationLifecycleStages.RuntimeHost).Requirement);
+
+		using var evidence = JsonDocument.Parse(platform.ReadAllText(options.LifecycleEvidencePath));
+		var aiStage = evidence.RootElement
+			.GetProperty("stages")
+			.EnumerateArray()
+			.Single(stage => stage.GetProperty("id").GetString() == ApplicationLifecycleStages.AIHost);
+		Assert.Equal("Optional", aiStage.GetProperty("requirement").GetString());
+	}
+
 
 	[Fact]
 	public async Task Showcase_stops_only_control_lifecycle_it_owns()

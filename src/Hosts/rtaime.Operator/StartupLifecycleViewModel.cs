@@ -9,6 +9,13 @@ using System.Windows.Input;
 
 namespace rtaime.Operator;
 
+public enum StartupLifecycleRequirement
+{
+	Critical,
+	RequiredForProduction,
+	Optional
+}
+
 public sealed class StartupLifecycleViewModel : INotifyPropertyChanged, IDisposable
 {
 	private readonly SynchronizationContext _synchronizationContext;
@@ -51,6 +58,31 @@ public sealed class StartupLifecycleViewModel : INotifyPropertyChanged, IDisposa
 	public ICommand ToggleDetailsCommand { get; }
 	public string EvidencePath => _evidencePath ?? "Direct Operator startup; AppHost lifecycle evidence is unavailable.";
 	public bool HasEvidence => _evidencePath is not null;
+	public bool IsShellAvailable
+	{
+		get
+		{
+			if (!HasEvidence)
+				return true;
+
+			var criticalStages = Stages
+				.Where(stage => stage.Requirement == StartupLifecycleRequirement.Critical)
+				.ToArray();
+			return criticalStages.Length > 0 &&
+				criticalStages.All(stage => string.Equals(stage.Status, "READY", StringComparison.Ordinal));
+		}
+	}
+	public bool HasCriticalFailure =>
+		HasEvidence &&
+		Stages.Any(stage =>
+			stage.Requirement == StartupLifecycleRequirement.Critical &&
+			string.Equals(stage.Status, "FAILED", StringComparison.Ordinal));
+	public bool HasDeferredInitialization =>
+		HasEvidence &&
+		IsShellAvailable &&
+		Stages.Any(stage =>
+			stage.Requirement != StartupLifecycleRequirement.Critical &&
+			!string.Equals(stage.Status, "READY", StringComparison.Ordinal));
 	public string ActiveStageName { get => _activeStageName; private set => Set(ref _activeStageName, value); }
 	public string Summary { get => _summary; private set => Set(ref _summary, value); }
 	public string ObservedAt { get => _observedAt; private set => Set(ref _observedAt, value); }
@@ -170,9 +202,13 @@ public sealed class StartupLifecycleViewModel : INotifyPropertyChanged, IDisposa
 				var id = ReadString(stage, "id", "unknown");
 				var displayName = ReadString(stage, "displayName", id);
 				var status = ReadString(stage, "status", "Pending");
+				var statusText = ReadNullableString(stage, "statusText");
+				var requirement = ResolveRequirement(
+					id,
+					ReadNullableString(stage, "requirement"),
+					statusText);
 				var startedAt = ReadTimestamp(stage, "startedAtUtc");
 				var completedAt = ReadTimestamp(stage, "completedAtUtc");
-				var statusText = ReadNullableString(stage, "statusText");
 				var failureReason = ReadNullableString(stage, "failureReason");
 				var canRetry = stage.TryGetProperty("canRetry", out var retry) &&
 					retry.ValueKind is JsonValueKind.True or JsonValueKind.False &&
@@ -180,6 +216,7 @@ public sealed class StartupLifecycleViewModel : INotifyPropertyChanged, IDisposa
 				parsed.Add(new StartupLifecycleStageViewModel(
 					id,
 					displayName,
+					requirement,
 					status.ToUpperInvariant(),
 					statusText,
 					failureReason,
@@ -215,6 +252,7 @@ public sealed class StartupLifecycleViewModel : INotifyPropertyChanged, IDisposa
 					? activeStage.StatusText ?? $"{activeStage.DisplayName} is starting."
 					: "All published startup stages are complete.";
 		ObservedAt = observedAt?.ToLocalTime().ToString("HH:mm:ss.fff") ?? "—";
+		RaiseProgressiveStateProperties();
 	}
 
 	private void ApplyFallback()
@@ -223,6 +261,7 @@ public sealed class StartupLifecycleViewModel : INotifyPropertyChanged, IDisposa
 		Stages.Add(new StartupLifecycleStageViewModel(
 			"operator-interface",
 			"Operator Interface",
+			StartupLifecycleRequirement.Critical,
 			"STARTING",
 			"Waiting for AppHost lifecycle evidence.",
 			null,
@@ -232,6 +271,41 @@ public sealed class StartupLifecycleViewModel : INotifyPropertyChanged, IDisposa
 			true));
 		ActiveStageName = "Operator Interface";
 		Summary = "Waiting for AppHost lifecycle evidence.";
+		RaiseProgressiveStateProperties();
+	}
+
+	private void RaiseProgressiveStateProperties()
+	{
+		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsShellAvailable)));
+		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasCriticalFailure)));
+		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasDeferredInitialization)));
+	}
+
+	private static StartupLifecycleRequirement ResolveRequirement(
+		string id,
+		string? value,
+		string? statusText)
+	{
+		if (!string.IsNullOrWhiteSpace(value) &&
+			Enum.TryParse<StartupLifecycleRequirement>(value, ignoreCase: true, out var parsed))
+		{
+			return parsed;
+		}
+
+		if (string.Equals(id, "application-bootstrap", StringComparison.Ordinal) ||
+			string.Equals(id, "configuration", StringComparison.Ordinal) ||
+			string.Equals(id, "operator-interface", StringComparison.Ordinal))
+		{
+			return StartupLifecycleRequirement.Critical;
+		}
+
+		if (string.Equals(id, "ai-host", StringComparison.Ordinal) &&
+			statusText?.Contains("not required", StringComparison.OrdinalIgnoreCase) == true)
+		{
+			return StartupLifecycleRequirement.Optional;
+		}
+
+		return StartupLifecycleRequirement.RequiredForProduction;
 	}
 
 	private static string ReadString(JsonElement element, string name, string fallback) =>
@@ -271,6 +345,7 @@ public sealed class StartupLifecycleViewModel : INotifyPropertyChanged, IDisposa
 public sealed record StartupLifecycleStageViewModel(
 	string Id,
 	string DisplayName,
+	StartupLifecycleRequirement Requirement,
 	string Status,
 	string? StatusText,
 	string? FailureReason,
@@ -296,7 +371,7 @@ public sealed record StartupLifecycleStageViewModel(
 		{
 			var started = StartedAt?.ToLocalTime().ToString("HH:mm:ss.fff") ?? "—";
 			var completed = CompletedAt?.ToLocalTime().ToString("HH:mm:ss.fff") ?? "—";
-			return $"Id {Id} · started {started} · completed {completed}";
+			return $"Id {Id} · {Requirement} · started {started} · completed {completed}";
 		}
 	}
 

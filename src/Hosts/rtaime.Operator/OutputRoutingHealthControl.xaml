@@ -42,22 +42,12 @@
 	</UserControl.Resources>
 
 	<Grid>
-
-		<controls:RtaimeStatePlaceholder
-			State="UNAVAILABLE"
-			Title="Output not configured"
-			Detail="Configure an output to enable Program."
-			Panel.ZIndex="60"
-			Margin="10">
-			<controls:RtaimeStatePlaceholder.Style>
-				<Style TargetType="{x:Type controls:RtaimeStatePlaceholder}" BasedOn="{StaticResource {x:Type controls:RtaimeStatePlaceholder}}">
-					<Setter Property="Visibility" Value="Collapsed" />
-					<Style.Triggers>
-						<DataTrigger Binding="{Binding Outputs.Count}" Value="0"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
-					</Style.Triggers>
-				</Style>
-			</controls:RtaimeStatePlaceholder.Style>
-		</controls:RtaimeStatePlaceholder>
+			<controls:RtaimeStatePlaceholder
+							State="{Binding WorkspaceStates.Output.State, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							Title="{Binding WorkspaceStates.Output.Title, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							Detail="{Binding WorkspaceStates.Output.Detail, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							Panel.ZIndex="60"
+							Margin="10" />
 		<Grid x:Name="CompactLiveOutput" Height="270" Background="{DynamicResource OperatorPanelBrush}">
 			<Grid.Style>
 				<Style TargetType="Grid">
