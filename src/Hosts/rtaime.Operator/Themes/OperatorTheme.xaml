@@ -133,6 +133,8 @@
 	<Style x:Key="OperatorLifecycleBadge" TargetType="Border" BasedOn="{StaticResource OperatorStatusBadge}">
 		<Style.Triggers>
 			<Trigger Property="Tag" Value="HEALTHY"><Setter Property="BorderBrush" Value="{DynamicResource OperatorHealthyBrush}" /></Trigger>
+			<Trigger Property="Tag" Value="READY"><Setter Property="BorderBrush" Value="{DynamicResource OperatorHealthyBrush}" /></Trigger>
+			<Trigger Property="Tag" Value="PENDING"><Setter Property="BorderBrush" Value="{DynamicResource OperatorBorderBrush}" /></Trigger>
 			<Trigger Property="Tag" Value="STARTING"><Setter Property="BorderBrush" Value="{DynamicResource OperatorWarningBrush}" /></Trigger>
 			<Trigger Property="Tag" Value="DEGRADED"><Setter Property="BorderBrush" Value="{DynamicResource OperatorWarningBrush}" /></Trigger>
 			<Trigger Property="Tag" Value="RECOVERING"><Setter Property="BorderBrush" Value="{DynamicResource OperatorWarningBrush}" /></Trigger>
