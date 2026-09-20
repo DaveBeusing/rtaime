@@ -219,7 +219,9 @@ public static class OperatorHealthProjection
 			return "UNVERIFIED";
 		if (!string.IsNullOrWhiteSpace(performance.PhysicalGpuDeviceName) && performance.PhysicalGpuDeviceName != "UNVERIFIED")
 			return performance.PhysicalGpuDeviceName;
-		return string.IsNullOrWhiteSpace(performance.GpuDeviceName) ? "UNVERIFIED" : performance.GpuDeviceName;
+		if (performance.GpuHardwareAccelerated && !string.IsNullOrWhiteSpace(performance.GpuDeviceName))
+			return performance.GpuDeviceName;
+		return "UNVERIFIED";
 	}
 
 	private static string FormatVram(RuntimePerformanceSnapshot? performance)
