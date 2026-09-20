@@ -20,7 +20,11 @@ On Windows, the Media Foundation Source Reader uses advanced video processing to
 - 1920x1080 progressive at 50/1; or
 - 1920x1080 progressive at 60000/1001.
 
-Decoded video is converted to the existing RGBA8 Runtime representation. When an AAC track is present, it is requested as 48 kHz stereo PCM and then converted to the existing interleaved Float32 representation. When no supported AAC track is available, decoded frames carry no audio buffer or audio payload.
+Media Foundation now performs decode, scaling, frame-rate normalization and color conversion into RGB32 before the managed Runtime boundary. The decoder owns one reusable full-frame RGBA scratch buffer, copies RGB32 rows using the actual 2D-buffer pitch, normalizes channel order in place and reuses the same storage for the next decoded frame. The RuntimeHost then copies that payload into the already allocated source framebuffer instead of constructing another full-frame `RgbaFrameBuffer` for every boundary. A decoded video payload is therefore decoder-owned scratch data and is valid until the next decoder read; consumers must copy it if they need longer retention.
+
+This removes the former steady-state NV12 managed per-pixel conversion plus repeated 1080p full-frame LOH allocations that could stall sustained playback. A single transient decoder read exception receives one bounded retry; repeated failures still fail closed and enter the normal media-deck error state.
+
+When an audio track is present, it is requested as 48 kHz stereo PCM and then converted to the existing interleaved Float32 representation. When no supported audio track is available, decoded frames carry no audio buffer or audio payload.
 
 This normalization keeps the existing Runtime/GPU production format invariant intact while allowing ordinary MP4 files with different native dimensions, frame rates and supported codecs to be imported. Decoder availability is determined by the Windows Media Foundation installation on the host. If Media Foundation cannot decode or normalize the selected stream, the file fails closed with an explicit `Failure` value.
 
@@ -79,6 +83,7 @@ Video and decoded audio use the Media Foundation 100-nanosecond timebase (`1/100
 
 Coverage includes:
 
+- sustained multi-cycle decoding of at least 250 normalized frames without entering decoder failure;
 - contract metadata validation, including video-only probes;
 - MP4/H.264/AAC reference probing;
 - contract and policy coverage for HEVC, AV1, VP9, MPEG-4 Part 2, VC-1 and Motion JPEG;
