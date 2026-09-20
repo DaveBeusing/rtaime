@@ -406,6 +406,12 @@ public interface IOperatorControlTransport
         CancellationToken cancellationToken = default) =>
         ValueTask.FromException<OperatorAudioInputDescriptor>(new NotSupportedException("Operator transport does not expose audio input control."));
 
+    ValueTask<bool> SetBroadcastTestPatternAsync(
+        string sourceId,
+        bool enabled,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<bool>(new NotSupportedException("Operator transport does not expose broadcast test pattern control."));
+
     ValueTask<OperatorGraphicsOverlayDescriptor> LoadGraphicsOverlayAsync(
         OperatorGraphicsAsset asset,
         CancellationToken cancellationToken = default) =>
@@ -542,6 +548,22 @@ public sealed class OperatorControlClient
         RequireSnapshot();
         var result = await _transport
             .SetAudioInputStateAsync(sourceId.Trim(), gain, muted, cancellationToken)
+            .ConfigureAwait(false);
+        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+
+    public async ValueTask<bool> SetBroadcastTestPatternAsync(
+        string sourceId,
+        bool enabled,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(sourceId))
+            throw new ArgumentException("Broadcast test pattern source id is required.", nameof(sourceId));
+
+        RequireSnapshot();
+        var result = await _transport
+            .SetBroadcastTestPatternAsync(sourceId.Trim(), enabled, cancellationToken)
             .ConfigureAwait(false);
         await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
         return result;
