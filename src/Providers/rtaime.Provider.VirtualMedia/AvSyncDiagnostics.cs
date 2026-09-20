@@ -70,6 +70,8 @@ public sealed class AvSyncEventTimeline
 	{
 		if (periodNumerator <= 0)
 			throw new ArgumentOutOfRangeException(nameof(periodNumerator), "A/V sync event period must be greater than zero.");
+		if (periodDenominator <= 0)
+			throw new ArgumentOutOfRangeException(nameof(periodDenominator), "A/V sync event period denominator must be greater than zero.");
 		_periodSeconds = new Rational(periodNumerator, periodDenominator);
 	}
 
