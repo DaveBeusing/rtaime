@@ -55,9 +55,11 @@ public sealed class MotionTimingTestSignalGenerator
 			['F'] = [31, 16, 16, 30, 16, 16, 16],
 			['I'] = [14, 4, 4, 4, 4, 4, 14],
 			['M'] = [17, 27, 21, 21, 17, 17, 17],
+			['N'] = [17, 25, 25, 21, 19, 19, 17],
 			['R'] = [30, 17, 17, 30, 20, 18, 17],
 			['S'] = [15, 16, 16, 14, 1, 1, 30],
-			['T'] = [31, 4, 4, 4, 4, 4, 4]
+			['T'] = [31, 4, 4, 4, 4, 4, 4],
+			['V'] = [17, 17, 17, 17, 17, 10, 4]
 		});
 
 	private readonly VideoFormat _format;
@@ -69,9 +71,13 @@ public sealed class MotionTimingTestSignalGenerator
 	private readonly int _margin;
 	private readonly int _trackLeft;
 	private readonly int _trackRight;
+	private readonly uint _syncAudioSampleRate;
+	private readonly AvSyncEventTimeline _syncTimeline;
 
-	public MotionTimingTestSignalGenerator(VideoFormat format)
+	public MotionTimingTestSignalGenerator(VideoFormat format, uint syncAudioSampleRate = 48_000)
 	{
+		if (syncAudioSampleRate == 0)
+			throw new ArgumentOutOfRangeException(nameof(syncAudioSampleRate));
 		if (format.PixelFormat != PixelFormat.Rgba8)
 			throw new NotSupportedException("Motion/timing test signal generation currently supports RGBA8 only.");
 
@@ -84,6 +90,8 @@ public sealed class MotionTimingTestSignalGenerator
 		_margin = Math.Max(16, _width / 40);
 		_trackLeft = _margin;
 		_trackRight = Math.Max(_trackLeft + 1, _width - _margin - 1);
+		_syncAudioSampleRate = syncAudioSampleRate;
+		_syncTimeline = new AvSyncEventTimeline();
 		_pixels = new byte[checked(_width * _height * 4)];
 	}
 
@@ -98,11 +106,13 @@ public sealed class MotionTimingTestSignalGenerator
 		if (timing.PresentationTimestamp < 0)
 			throw new ArgumentOutOfRangeException(nameof(timing), "Generated test-signal media time must not be negative.");
 
-		Fill(Panel);
+		var sync = InspectSyncEvent(timing);
+		Fill(sync.IsFlashFrame ? Warning : Panel);
 		DrawFrameCounter(timing.SequenceNumber);
 		DrawTimecode(CalculateTimecode(timing.SequenceNumber, _format.FrameRate));
 		DrawMotionTrack(timing);
 		DrawFrameIndicator(timing.SequenceNumber);
+		DrawSyncEvent(sync);
 
 		return new MotionTimingTestSignalRegion(
 			0,
@@ -111,6 +121,9 @@ public sealed class MotionTimingTestSignalGenerator
 			_height,
 			_pixels);
 	}
+
+	public AvSyncVideoEventObservation InspectSyncEvent(FrameTiming timing) =>
+		_syncTimeline.InspectVideo(timing, _format.FrameRate, _syncAudioSampleRate);
 
 	public int GetMarkerX(FrameTiming timing)
 	{
@@ -196,6 +209,22 @@ public sealed class MotionTimingTestSignalGenerator
 		FillRect(markerX - Math.Max(1, _scale / 2), centerY - markerHeight, Math.Max(1, _scale), markerHeight * 2, Warning);
 
 		DrawText("1S", _trackRight - 13 * _scale, centerY - 12 * _scale, _scale, White);
+	}
+
+	private void DrawSyncEvent(AvSyncVideoEventObservation observation)
+	{
+		var scale = Math.Max(2, _scale);
+		var labelY = Math.Max(8, _height / 12);
+		var labelX = Math.Max(_margin, _width / 3);
+		var boxWidth = Math.Min(_width - labelX - _margin, 165 * scale);
+		var boxHeight = 11 * scale;
+		FillRect(labelX - 4 * scale, labelY - 2 * scale, boxWidth, boxHeight, observation.IsFlashFrame ? Dark : PanelMuted);
+		DrawText("EVENT", labelX, labelY, scale, observation.IsFlashFrame ? Warning : White);
+
+		Span<char> digits = stackalloc char[20];
+		if (!observation.Event.EventId.TryFormat(digits, out var written))
+			throw new InvalidOperationException("A/V sync event identifier formatting failed.");
+		DrawText(digits[..written], labelX + 34 * scale, labelY, scale, Accent);
 	}
 
 	private void DrawFrameIndicator(ulong sequenceNumber)
