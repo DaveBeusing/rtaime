@@ -205,6 +205,19 @@ public sealed class AvSyncDiagnosticsTracker
 		}
 	}
 
+	public void Reset()
+	{
+		lock (_gate)
+		{
+			_pendingEventId = null;
+			_pendingEvent = default;
+			_videoSubmitTimestamp = null;
+			_audioSubmitTimestamp = null;
+			_baselineSubmitOffsetMilliseconds = null;
+			_snapshot = AvSyncDiagnosticsSnapshot.Unavailable;
+		}
+	}
+
 	public AvSyncDiagnosticsSnapshot RecordVideoSubmit(
 		AvSyncVideoEventObservation observation,
 		long stopwatchTimestamp)
