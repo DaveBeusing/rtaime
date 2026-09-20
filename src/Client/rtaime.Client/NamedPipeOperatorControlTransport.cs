@@ -99,6 +99,7 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 	public async ValueTask<bool> SetBroadcastTestPatternAsync(
 		string sourceId,
 		bool enabled,
+		bool motionTiming = false,
 		CancellationToken cancellationToken = default)
 	{
 		if (string.IsNullOrWhiteSpace(sourceId))
@@ -106,7 +107,7 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 
 		var response = await ExchangeAsync(
 			"control.test_pattern.set",
-			new WireTestPatternState(sourceId.Trim(), enabled),
+			new WireTestPatternState(sourceId.Trim(), enabled, motionTiming),
 			cancellationToken).ConfigureAwait(false);
 		var wire = response.Payload.Deserialize<WireTestPatternState>(Wire.JsonOptions)
 			?? throw new InvalidDataException("ControlHost broadcast test pattern payload is required.");
@@ -608,7 +609,7 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 	private sealed record WireGraphicsOverlayState(bool Visible, double PositionX, double PositionY, double Scale);
 	private sealed record WireGraphicsOverlay(bool AssetLoaded, string? AssetName, uint AssetWidth, uint AssetHeight, bool Visible, double PositionX, double PositionY, double Scale);
 	private sealed record WireAudioInputState(string SourceId, double Gain, bool Muted);
-	private sealed record WireTestPatternState(string SourceId, bool Enabled);
+	private sealed record WireTestPatternState(string SourceId, bool Enabled, bool MotionTiming = false);
 	private sealed record WireAudioInput(string SourceId, string StreamId, double Gain, bool Muted, double LeftPeak, double RightPeak, double MasterPeak, bool Clipping, string Health);
 	private sealed record WireAudioProgram(string ActiveVideoSourceId, string ActiveStreamId, double Gain, bool Muted, double LeftPeak, double RightPeak, double MasterPeak, bool Clipping, string Health);
 	private sealed record WireRecordingStart(string DestinationDirectory, string FileName);
