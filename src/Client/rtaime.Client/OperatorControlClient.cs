@@ -409,9 +409,17 @@ public interface IOperatorControlTransport
     ValueTask<bool> SetBroadcastTestPatternAsync(
         string sourceId,
         bool enabled,
-        bool motionTiming = false,
         CancellationToken cancellationToken = default) =>
         ValueTask.FromException<bool>(new NotSupportedException("Operator transport does not expose broadcast test pattern control."));
+
+    ValueTask<bool> SetBroadcastTestPatternAsync(
+        string sourceId,
+        bool enabled,
+        bool motionTiming,
+        CancellationToken cancellationToken = default) =>
+        motionTiming
+            ? ValueTask.FromException<bool>(new NotSupportedException("Operator transport does not expose motion/timing test pattern control."))
+            : SetBroadcastTestPatternAsync(sourceId, enabled, cancellationToken);
 
     ValueTask<OperatorGraphicsOverlayDescriptor> LoadGraphicsOverlayAsync(
         OperatorGraphicsAsset asset,
@@ -554,10 +562,16 @@ public sealed class OperatorControlClient
         return result;
     }
 
+    public ValueTask<bool> SetBroadcastTestPatternAsync(
+        string sourceId,
+        bool enabled,
+        CancellationToken cancellationToken = default) =>
+        SetBroadcastTestPatternAsync(sourceId, enabled, false, cancellationToken);
+
     public async ValueTask<bool> SetBroadcastTestPatternAsync(
         string sourceId,
         bool enabled,
-        bool motionTiming = false,
+        bool motionTiming,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(sourceId))
