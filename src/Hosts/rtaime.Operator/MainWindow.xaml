@@ -101,6 +101,21 @@
 					</StackPanel>
 				</controls:RtaimeButton>
 
+				<controls:RtaimeGlobalStatusButton
+					Grid.Column="4"
+					State="{Binding GlobalReadinessState}"
+					StatusText="{Binding GlobalReadinessLabel}"
+					Detail="{Binding GlobalReadinessSummary}"
+					Command="{Binding Shell.SelectWorkspaceCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+					CommandParameter="SETTINGS"
+					ToolTip="{Binding GlobalReadinessTooltip}"
+					HorizontalAlignment="Right"
+					VerticalAlignment="Center"
+					MinWidth="220"
+					MaxWidth="340"
+					Margin="8,0"
+					AutomationProperties.Name="Global runtime readiness and diagnostics" />
+
 				<Border Grid.Column="5" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1,0,0,0" Padding="10,6" ToolTip="{Binding CpuDeviceName}">
 					<StackPanel VerticalAlignment="Center">
 						<TextBlock Text="CPU" Style="{StaticResource OperatorLabel}" />
