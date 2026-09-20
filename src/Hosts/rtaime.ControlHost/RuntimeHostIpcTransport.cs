@@ -220,7 +220,7 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 			FromWire(snapshot.Recording),
 			FromWire(snapshot.Performance),
 			FromWire(snapshot.AIShowcase),
-			Array.AsReadOnly(snapshot.BroadcastTestPatternSourceIds
+			Array.AsReadOnly((snapshot.BroadcastTestPatternSourceIds ?? Array.Empty<string>())
 				.Select(sourceId => new MediaSourceId(Identity.Parse(sourceId)))
 				.ToArray()));
 	}
@@ -809,7 +809,7 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 		int ActiveGpuSurfaces,
 		WireVideoFormat Format,
 		WireInputSignal[] InputSignals,
-		string[] BroadcastTestPatternSourceIds,
+		string[]? BroadcastTestPatternSourceIds,
 		WireGraphicsOverlay GraphicsOverlay,
 		WireAudioInput[] AudioInputs,
 		WireAudioProgram AudioProgram,
