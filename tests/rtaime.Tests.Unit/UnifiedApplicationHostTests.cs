@@ -2,6 +2,7 @@
 
 using System.Text.Json;
 using rtaime.AppHost;
+using rtaime.Core;
 
 namespace rtaime.Tests.Unit;
 
@@ -93,6 +94,18 @@ public sealed class UnifiedApplicationHostTests
 
 		Assert.False(result.AdoptedControlHost);
 		Assert.Equal(new[] { "rtaime.Operator", "rtaime.ControlHost" }, platform.StartedBaseNames);
+	}
+
+	[Fact]
+	public void System_platform_observes_core_endpoint_lease_contract()
+	{
+		var endpoint = $"rtaime.test.control.{Guid.NewGuid():N}";
+		var platform = new SystemApplicationHostPlatform();
+
+		Assert.False(platform.IsEndpointLeaseHeld(endpoint));
+		using (LocalEndpointLease.Acquire(endpoint))
+			Assert.True(platform.IsEndpointLeaseHeld(endpoint));
+		Assert.False(platform.IsEndpointLeaseHeld(endpoint));
 	}
 
 	[Fact]
