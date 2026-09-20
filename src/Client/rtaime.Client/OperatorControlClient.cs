@@ -241,7 +241,11 @@ public sealed record OperatorHealthDescriptor(
     TimeSpan Uptime,
     string GpuUtilization,
     string Vram,
-    DateTimeOffset ObservedAtUtc)
+    DateTimeOffset ObservedAtUtc,
+    string CpuDeviceName = "UNVERIFIED",
+    string CpuUtilization = "UNVERIFIED",
+    string SystemMemory = "UNVERIFIED",
+    string GpuDeviceName = "UNVERIFIED")
 {
     public static OperatorHealthDescriptor Unavailable { get; } = new(
         OperatorHealthMetricDescriptor.Unverified("Health snapshot unavailable."),
@@ -257,7 +261,11 @@ public sealed record OperatorHealthDescriptor(
         TimeSpan.Zero,
         "UNVERIFIED",
         "UNVERIFIED",
-        DateTimeOffset.MinValue);
+        DateTimeOffset.MinValue,
+        "UNVERIFIED",
+        "UNVERIFIED",
+        "UNVERIFIED",
+        "UNVERIFIED");
 }
 
 public sealed record OperatorAIShowcaseDescriptor(
