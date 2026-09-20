@@ -79,7 +79,7 @@ Operator-facing messages:
 - `control.media_deck.marker`
 - `control.media_deck.close`
 
-The `control.test_pattern.set` message validates that the selected slot belongs to the authoritative production, then delegates the generated-source state change to RuntimeHost. The Operator never addresses RuntimeHost directly.
+The `control.test_pattern.set` message validates that the selected slot belongs to the authoritative production, then delegates the generated-source state change to RuntimeHost. Its bounded payload carries source identity, enabled state and the optional motion/timing mode flag. The Operator never addresses RuntimeHost directly.
 
 The media-deck messages preserve the same authority direction. Operator intent enters ControlHost, which validates the selected production source slot, owns persisted IN/OUT and cue metadata, and proxies decode/transport execution to RuntimeHost. The Operator does not obtain direct RuntimeHost access.
 
@@ -110,7 +110,7 @@ Control-facing messages:
 - `runtime.media_deck.transport`
 - `runtime.media_deck.close`
 
-The server delegates normal production execution to `V1RuntimeHostService`. The media-deck slice delegates local-file decode and transport to the RuntimeHost-owned single-deck service, using a ControlHost-supplied `PreparedExecutionContract`. Raw video/audio payloads never cross this management IPC boundary.
+The server delegates normal production execution to `V1RuntimeHostService`. The `runtime.test_pattern.set` request selects static or motion/timing generation for an existing source slot; snapshots separately identify active generated sources and those currently using motion/timing diagnostics. The media-deck slice delegates local-file decode and transport to the RuntimeHost-owned single-deck service, using a ControlHost-supplied `PreparedExecutionContract`. Raw video/audio payloads never cross this management IPC boundary.
 
 A Runtime snapshot exposes two deliberately separate revision domains:
 
