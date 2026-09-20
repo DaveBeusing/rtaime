@@ -885,7 +885,7 @@ foreach ($workspace in @("MEDIA", "EDIT", "LIVE", "SCENES", "COMPOSITING", "OUTP
 	Assert-Condition ($shell -match ('const string [A-Za-z]+ = "' + $workspace + '"')) "Canonical workspace '$workspace' must be defined."
 	Assert-Condition ($window -match ('CommandParameter="' + $workspace + '"')) "Canonical workspace '$workspace' must be selectable from the Operator."
 }
-Assert-Condition ($shell -match 'CurrentVersion = 4' -and $shell -match 'Dictionary<string, OperatorWorkspaceLayoutSettings>' -and $shell -match 'Version < CurrentVersion') "Workspace layout persistence must be versioned and migrate pre-mockup geometry to reference defaults."
+Assert-Condition ($shell -match 'CurrentVersion = 5' -and $shell -match 'Dictionary<string, OperatorWorkspaceLayoutSettings>' -and $shell -match 'Version < 4') "Workspace layout persistence must be versioned, preserve version-4 layouts and migrate pre-mockup geometry to reference defaults."
 Assert-Condition ($shell -match '"GRAPHICS".+Compositing' -and $shell -match '"SYSTEM".+Settings') "Legacy workspace names must migrate to the canonical seven-workspace shell."
 Assert-Condition ($shell -match 'stableLeftPanelWidth' -and $shell -match 'stableRightPanelWidth' -and $shell -match 'stableLowerPanelHeight' -and $shell -match 'ApplyWorkspaceLayout') "Workspace switching must preserve macro shell geometry while changing presentation content."
 Assert-Condition ($shell -notmatch 'OperatorControlClient|NamedPipe|RuntimeHost|ControlHost|AIHost') "Workspace switching must remain presentation-only."
