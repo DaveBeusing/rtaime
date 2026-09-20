@@ -295,6 +295,12 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	{
 		var wire = request.Payload.Deserialize<WireAudioTestSignalState>(Wire.JsonOptions)
 			?? throw new InvalidDataException("Generated audio test signal payload is required.");
+		if (wire.Mode is < 1 or > 5)
+			return Error(request, "control.audio.test_signal.mode.invalid", "Generated audio test signal mode must be in the supported range 1..5.");
+		if (!double.IsFinite(wire.FrequencyHz) || wire.FrequencyHz <= 0)
+			return Error(request, "control.audio.test_signal.frequency.invalid", "Generated audio frequency must be finite and greater than zero.");
+		if (!double.IsFinite(wire.PeakLevel) || wire.PeakLevel is < 0 or > 0.5)
+			return Error(request, "control.audio.test_signal.level.invalid", "Generated audio peak level must be finite and in the inclusive range 0..0.5.");
 
 		await _mutationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
 		try
