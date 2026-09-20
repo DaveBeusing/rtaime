@@ -16,7 +16,7 @@ internal sealed record ReferenceMediaProfile(
 	FrameRate NativeFrameRate,
 	TimeSpan Duration)
 {
-	public static ReferenceMediaProfile Hd25 { get; } = new("hd25", FrameRate.Fps25, TimeSpan.FromSeconds(6));
+	public static ReferenceMediaProfile Hd25 { get; } = new("hd25", new FrameRate(25, 1), TimeSpan.FromSeconds(6));
 	public static ReferenceMediaProfile Hd50 { get; } = new("hd50", FrameRate.Fps50, TimeSpan.FromSeconds(6));
 	public static ReferenceMediaProfile Hd5994 { get; } = new("hd5994", FrameRate.Fps59_94, TimeSpan.FromSeconds(6));
 
