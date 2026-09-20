@@ -44,6 +44,7 @@ $timelineViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Me
 $markerControllerPath = Join-Path $repositoryRoot "src/Client/rtaime.Client/MediaTimelineMarkerController.cs"
 $timelineDocumentationPath = Join-Path $repositoryRoot "docs/LayeredTimeline.md"
 $viewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorViewModel.cs"
+$startupViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/StartupLifecycleViewModel.cs"
 $monitorViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorMonitoringViewModel.cs"
 $programOutputControllerPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/ProgramOutputController.cs"
 $programOutputWindowPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/ProgramOutputWindow.xaml"
@@ -81,7 +82,7 @@ $workspaceDocumentationPath = Join-Path $repositoryRoot "docs/OperatorWorkspaces
 $outputHealthDocumentationPath = Join-Path $repositoryRoot "docs/OutputRoutingHealth.md"
 $mediaLibraryDocumentationPath = Join-Path $repositoryRoot "docs/MediaLibraryAssetBrowser.md"
 
-foreach ($path in @($appPath, $appCodePath, $windowPath, $windowCodePath, $shellPath, $keyboardPath, $quickControlsPath, $multiviewPath, $multiviewCodePath, $liveSceneCuePath, $liveControlsPath, $liveDocumentationPath, $compositingGraphPath, $compositingGraphCodePath, $compositingGraphViewModelPath, $compositingGraphProjectionPath, $compositingGraphDocumentationPath, $mediaPoolPath, $inspectorHostPath, $virtualizingWrapPanelPath, $deckPath, $deckViewModelPath, $timelinePath, $timelineCodePath, $timelineViewModelPath, $markerControllerPath, $timelineDocumentationPath, $viewModelPath, $monitorViewModelPath, $programOutputControllerPath, $programOutputWindowPath, $outputHealthControlPath, $outputHealthViewModelPath, $previewViewerPath, $previewViewerCodePath, $programViewerPath, $programViewerCodePath, $monitorViewPath, $sourceTileViewModelPath, $audioInputViewModelPath, $graphicsLoaderPath, $demoControllerPath, $demoManifestPath, $demoProductPath, $demoGraphicsPath, $demoDocumentationPath, $tokensPath, $themePath, $customControlsPath, $outputHealthControlsPath, $customInputControlsPath, $customMediaControlsPath, $customControlThemePath, $outputHealthControlThemePath, $customInputThemePath, $customMediaThemePath, $monitorWorkspaceThemePath, $customIconThemePath, $manifestPath, $projectPath, $documentationPath, $workspaceDocumentationPath, $outputHealthDocumentationPath, $mediaLibraryDocumentationPath)) {
+foreach ($path in @($appPath, $appCodePath, $windowPath, $windowCodePath, $shellPath, $keyboardPath, $quickControlsPath, $multiviewPath, $multiviewCodePath, $liveSceneCuePath, $liveControlsPath, $liveDocumentationPath, $compositingGraphPath, $compositingGraphCodePath, $compositingGraphViewModelPath, $compositingGraphProjectionPath, $compositingGraphDocumentationPath, $mediaPoolPath, $inspectorHostPath, $virtualizingWrapPanelPath, $deckPath, $deckViewModelPath, $timelinePath, $timelineCodePath, $timelineViewModelPath, $markerControllerPath, $timelineDocumentationPath, $viewModelPath, $startupViewModelPath, $monitorViewModelPath, $programOutputControllerPath, $programOutputWindowPath, $outputHealthControlPath, $outputHealthViewModelPath, $previewViewerPath, $previewViewerCodePath, $programViewerPath, $programViewerCodePath, $monitorViewPath, $sourceTileViewModelPath, $audioInputViewModelPath, $graphicsLoaderPath, $demoControllerPath, $demoManifestPath, $demoProductPath, $demoGraphicsPath, $demoDocumentationPath, $tokensPath, $themePath, $customControlsPath, $outputHealthControlsPath, $customInputControlsPath, $customMediaControlsPath, $customControlThemePath, $outputHealthControlThemePath, $customInputThemePath, $customMediaThemePath, $monitorWorkspaceThemePath, $customIconThemePath, $manifestPath, $projectPath, $documentationPath, $workspaceDocumentationPath, $outputHealthDocumentationPath, $mediaLibraryDocumentationPath)) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required Operator UI artifact is missing: '$path'."
 }
 
@@ -118,6 +119,7 @@ $timelineViewModel = Get-Content -LiteralPath $timelineViewModelPath -Raw
 $markerController = Get-Content -LiteralPath $markerControllerPath -Raw
 $timelineDocumentation = Get-Content -LiteralPath $timelineDocumentationPath -Raw
 $viewModel = Get-Content -LiteralPath $viewModelPath -Raw
+$startupViewModel = Get-Content -LiteralPath $startupViewModelPath -Raw
 $monitorViewModel = Get-Content -LiteralPath $monitorViewModelPath -Raw
 $programOutputController = Get-Content -LiteralPath $programOutputControllerPath -Raw
 $programOutputWindow = Get-Content -LiteralPath $programOutputWindowPath -Raw
@@ -646,6 +648,12 @@ Assert-Condition ($documentation -match 'Demo Production Package') "Operator UI 
 
 
 Assert-Condition ($window -match 'Binding StartupComplete') "Startup presentation must remain visible until the first qualified authoritative synchronization completes."
+Assert-Condition ($window -match 'Binding Startup\.Stages' -and $window -match 'Startup\.ActiveStageName' -and $window -match 'Startup\.Summary') "Startup presentation must expose the AppHost lifecycle stage projection and active-stage detail."
+Assert-Condition ($window -match 'RtaimeBrandHeroLockupTemplate' -and $window -match 'StartupBrandPulse') "Startup presentation must retain the shared rtaime brand lockup and lightweight animation target."
+Assert-Condition ($window -match 'Startup\.ToggleDetailsCommand' -and $window -match 'Startup\.EvidencePath') "Startup presentation must provide collapsible technical lifecycle evidence."
+Assert-Condition ($windowCode -match 'RTAIME_APPHOST_LIFECYCLE_FILE' -and $startupViewModel -match 'FileSystemWatcher') "Operator startup must observe AppHost lifecycle evidence instead of creating an independent polling lifecycle."
+Assert-Condition ($startupViewModel -notmatch 'PeriodicTimer|Task\.Delay|ProgressBar|percent|Percentage') "Startup lifecycle projection must not synthesize timer-driven or percentage progress."
+Assert-Condition ($windowCode -match 'SystemParameters\.ClientAreaAnimation' -and $windowCode -match 'DoubleAnimation' -and $windowCode -match 'UIElement\.OpacityProperty') "Startup branding animation must be opacity-only and honor the Windows reduced-motion/client-animation setting."
 Assert-Condition ($window -match 'Binding EngineLifecycleState' -and $window -match 'ENGINE ') "Engine lifecycle state must stay persistently visible with text, not color alone."
 Assert-Condition ($window -match 'Binding ProgramSafety') "System Status must expose whether Program mutations are currently safe."
 Assert-Condition ($window -match 'Binding RecoveryAction') "System Status must provide a concise recovery/operator action."
