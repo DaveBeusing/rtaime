@@ -44,6 +44,7 @@ $timelineViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Me
 $markerControllerPath = Join-Path $repositoryRoot "src/Client/rtaime.Client/MediaTimelineMarkerController.cs"
 $timelineDocumentationPath = Join-Path $repositoryRoot "docs/LayeredTimeline.md"
 $viewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorViewModel.cs"
+$runtimeReadinessPath = Join-Path $repositoryRoot "src/Client/rtaime.Client/RuntimeReadinessService.cs"
 $startupViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/StartupLifecycleViewModel.cs"
 $monitorViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorMonitoringViewModel.cs"
 $programOutputControllerPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/ProgramOutputController.cs"
@@ -82,7 +83,7 @@ $workspaceDocumentationPath = Join-Path $repositoryRoot "docs/OperatorWorkspaces
 $outputHealthDocumentationPath = Join-Path $repositoryRoot "docs/OutputRoutingHealth.md"
 $mediaLibraryDocumentationPath = Join-Path $repositoryRoot "docs/MediaLibraryAssetBrowser.md"
 
-foreach ($path in @($appPath, $appCodePath, $windowPath, $windowCodePath, $shellPath, $keyboardPath, $quickControlsPath, $multiviewPath, $multiviewCodePath, $liveSceneCuePath, $liveControlsPath, $liveDocumentationPath, $compositingGraphPath, $compositingGraphCodePath, $compositingGraphViewModelPath, $compositingGraphProjectionPath, $compositingGraphDocumentationPath, $mediaPoolPath, $inspectorHostPath, $virtualizingWrapPanelPath, $deckPath, $deckViewModelPath, $timelinePath, $timelineCodePath, $timelineViewModelPath, $markerControllerPath, $timelineDocumentationPath, $viewModelPath, $startupViewModelPath, $monitorViewModelPath, $programOutputControllerPath, $programOutputWindowPath, $outputHealthControlPath, $outputHealthViewModelPath, $previewViewerPath, $previewViewerCodePath, $programViewerPath, $programViewerCodePath, $monitorViewPath, $sourceTileViewModelPath, $audioInputViewModelPath, $graphicsLoaderPath, $demoControllerPath, $demoManifestPath, $demoProductPath, $demoGraphicsPath, $demoDocumentationPath, $tokensPath, $themePath, $customControlsPath, $outputHealthControlsPath, $customInputControlsPath, $customMediaControlsPath, $customControlThemePath, $outputHealthControlThemePath, $customInputThemePath, $customMediaThemePath, $monitorWorkspaceThemePath, $customIconThemePath, $manifestPath, $projectPath, $documentationPath, $workspaceDocumentationPath, $outputHealthDocumentationPath, $mediaLibraryDocumentationPath)) {
+foreach ($path in @($appPath, $appCodePath, $windowPath, $windowCodePath, $shellPath, $keyboardPath, $quickControlsPath, $multiviewPath, $multiviewCodePath, $liveSceneCuePath, $liveControlsPath, $liveDocumentationPath, $compositingGraphPath, $compositingGraphCodePath, $compositingGraphViewModelPath, $compositingGraphProjectionPath, $compositingGraphDocumentationPath, $mediaPoolPath, $inspectorHostPath, $virtualizingWrapPanelPath, $deckPath, $deckViewModelPath, $timelinePath, $timelineCodePath, $timelineViewModelPath, $markerControllerPath, $timelineDocumentationPath, $viewModelPath, $runtimeReadinessPath, $startupViewModelPath, $monitorViewModelPath, $programOutputControllerPath, $programOutputWindowPath, $outputHealthControlPath, $outputHealthViewModelPath, $previewViewerPath, $previewViewerCodePath, $programViewerPath, $programViewerCodePath, $monitorViewPath, $sourceTileViewModelPath, $audioInputViewModelPath, $graphicsLoaderPath, $demoControllerPath, $demoManifestPath, $demoProductPath, $demoGraphicsPath, $demoDocumentationPath, $tokensPath, $themePath, $customControlsPath, $outputHealthControlsPath, $customInputControlsPath, $customMediaControlsPath, $customControlThemePath, $outputHealthControlThemePath, $customInputThemePath, $customMediaThemePath, $monitorWorkspaceThemePath, $customIconThemePath, $manifestPath, $projectPath, $documentationPath, $workspaceDocumentationPath, $outputHealthDocumentationPath, $mediaLibraryDocumentationPath)) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required Operator UI artifact is missing: '$path'."
 }
 
@@ -119,6 +120,7 @@ $timelineViewModel = Get-Content -LiteralPath $timelineViewModelPath -Raw
 $markerController = Get-Content -LiteralPath $markerControllerPath -Raw
 $timelineDocumentation = Get-Content -LiteralPath $timelineDocumentationPath -Raw
 $viewModel = Get-Content -LiteralPath $viewModelPath -Raw
+$runtimeReadiness = Get-Content -LiteralPath $runtimeReadinessPath -Raw
 $startupViewModel = Get-Content -LiteralPath $startupViewModelPath -Raw
 $monitorViewModel = Get-Content -LiteralPath $monitorViewModelPath -Raw
 $programOutputController = Get-Content -LiteralPath $programOutputControllerPath -Raw
@@ -598,6 +600,16 @@ Assert-Condition ($viewModel -notmatch 'ManagedReferencePersonSegmentationProvid
 $aiShowcasePollCount = [Regex]::Matches($viewModel, 'PeriodicTimer\(TimeSpan\.FromMilliseconds\(200\)\)').Count
 Assert-Condition ($aiShowcasePollCount -eq 1) "Visible AI Showcase must reuse the existing bounded management poll rather than add an AI UI polling loop."
 Assert-Condition ($window -match 'Text="SYSTEM STATUS"') "Operator must expose a compact System Status surface that includes Runtime health/performance evidence."
+Assert-Condition ($customControls -match 'class RtaimeGlobalStatusButton' -and $customControlTheme -match 'controls:RtaimeGlobalStatusButton') "Global readiness must use an own rtaime titlebar control."
+Assert-Condition ($topBarSurface -match 'controls:RtaimeGlobalStatusButton' -and $topBarSurface -match 'State="\{Binding GlobalReadinessState\}"' -and $topBarSurface -match 'StatusText="\{Binding GlobalReadinessLabel\}"') "Global Runtime readiness must remain permanently visible in the titlebar."
+Assert-Condition ($topBarSurface -match 'CommandParameter="SETTINGS"' -and $topBarSurface -match 'ToolTip="\{Binding GlobalReadinessTooltip\}"') "Global readiness must navigate to diagnostics and expose reasons without a second state source."
+Assert-Condition ($viewModel -match 'IRuntimeReadinessService _runtimeReadiness' -and $viewModel -match 'RuntimeReadinessObservation') "Operator must consume the centralized Runtime readiness service."
+Assert-Condition ($viewModel -notmatch 'OperatorSystemLifecycleProjection\.Evaluate') "Operator must not retain a parallel global lifecycle evaluator beside RuntimeReadinessService."
+Assert-Condition ($runtimeReadiness -match 'public sealed class RuntimeReadinessService') "Runtime readiness must be implemented outside the WPF presentation layer."
+Assert-Condition ($outputHealthViewModel -match 'PerformanceVerificationState' -and $outputHealthViewModel -match 'PerformanceVerificationDetail') "Performance HUD must reuse centralized verification state instead of recomputing verification from view refresh."
+foreach ($binding in @("GlobalReadinessState", "GlobalReadinessLabel", "GlobalReadinessSummary", "PerformanceVerificationState", "PerformanceVerificationDetail")) {
+	Assert-Condition ($window -match "Binding $binding") "Global Runtime readiness UI binding '$binding' is required."
+}
 foreach ($binding in @("EngineHealth", "ControlHealth", "RuntimeHealth", "MediaHealth", "ProviderHealth", "GpuProviderHealth", "CurrentFormat", "FrameTime", "DroppedFrames", "Uptime", "CpuDeviceName", "CpuUtilization", "SystemMemory", "GpuDeviceName", "GpuUtilization", "Vram")) {
 	Assert-Condition ($window -match "Binding $binding") "Runtime Health & Performance HUD HUD binding '$binding' is required."
 }
@@ -664,7 +676,7 @@ Assert-Condition ($viewModel -match 'Automatic full-snapshot recovery is active'
 Assert-Condition ($viewModel -match 'Apply\(snapshot\)' -and $viewModel -match 'Automatic recovery restored a full authoritative Control snapshot') "Automatic recovery must restore a complete authoritative snapshot before normal operation resumes."
 Assert-Condition ($viewModel -notmatch '_client is null \|\| !IsConnected \|\| IsStale \|\| IsBusy') "The bounded management refresh must continue attempting synchronization while stale/disconnected."
 Assert-Condition ($viewModel -match 'ProgramSafety != OperatorProgramSafetyStates\.Blocked') "Unsafe lifecycle states must participate in the shared mutation gate."
-Assert-Condition ($viewModel -match 'if \(!StartupComplete && projection\.MainUiReady\)') "Startup completion must latch after initial readiness so later recovery remains visible in the main Operator."
+Assert-Condition ($viewModel -match 'if \(!StartupComplete && snapshot\.IsProductionReady\)') "Startup completion must latch from centralized production readiness so later recovery remains visible in the main Operator."
 
 
 # Media Pool and context-sensitive Inspector.
