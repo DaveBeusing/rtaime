@@ -86,6 +86,54 @@ public sealed class BroadcastTestPatternRuntimeIntegrationTests
 	}
 
 	[Fact]
+	public async Task Motion_timing_with_pulse_audio_reports_one_synchronized_event_and_resets_cleanly()
+	{
+		await using var fixture = await Fixture.CreateAsync();
+		var motion = new MotionTimingTestSignalGenerator(fixture.Format);
+
+		fixture.Runtime.SetGeneratedAudioTestSignal(
+			fixture.MediaSourceA,
+			true,
+			GeneratedAudioTestSignalMode.Pulse);
+		fixture.Runtime.SetBroadcastTestPattern(
+			fixture.MediaSourceA,
+			true,
+			V1BroadcastTestPatternMode.MotionTiming);
+
+		var first = fixture.Runtime.ProcessNextBoundary();
+		var firstDiagnostics = fixture.Runtime.Snapshot.AvSyncDiagnostics;
+		var flashPixel = Pixel(first.ProgramPixels, fixture.Format, 0, motion.RegionY);
+
+		Assert.NotNull(firstDiagnostics);
+		Assert.True(firstDiagnostics!.Enabled);
+		Assert.Equal("MEASURED", firstDiagnostics.State);
+		Assert.Equal(0UL, firstDiagnostics.EventId);
+		Assert.Equal("0/1", firstDiagnostics.ExpectedMediaTime);
+		Assert.Equal(0UL, firstDiagnostics.TargetVideoFrameSequence);
+		Assert.Equal(0UL, firstDiagnostics.TargetAudioSamplePosition);
+		Assert.NotNull(firstDiagnostics.SubmitOffsetMilliseconds);
+		Assert.NotNull(firstDiagnostics.DriftFromBaselineMilliseconds);
+		Assert.Equal(new PixelValue(255, 196, 64, 255), flashPixel);
+
+		for (var index = 0; index < 50; index++)
+			fixture.Runtime.ProcessNextBoundary();
+
+		var secondDiagnostics = fixture.Runtime.Snapshot.AvSyncDiagnostics;
+		Assert.NotNull(secondDiagnostics);
+		Assert.Equal(1UL, secondDiagnostics!.EventId);
+		Assert.Equal("1/1", secondDiagnostics.ExpectedMediaTime);
+		Assert.Equal(50UL, secondDiagnostics.TargetVideoFrameSequence);
+		Assert.Equal(48_000UL, secondDiagnostics.TargetAudioSamplePosition);
+
+		fixture.Runtime.SetGeneratedAudioTestSignal(fixture.MediaSourceA, false);
+		var stopped = fixture.Runtime.Snapshot.AvSyncDiagnostics;
+		Assert.NotNull(stopped);
+		Assert.False(stopped!.Enabled);
+		Assert.Equal("UNAVAILABLE", stopped.State);
+		Assert.Null(stopped.EventId);
+	}
+
+	[Fact]
 	public async Task Switching_between_static_and_motion_modes_preserves_static_reference_and_input_health()
 	{
 		await using var fixture = await Fixture.CreateAsync();

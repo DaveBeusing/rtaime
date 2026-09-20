@@ -80,6 +80,18 @@ public sealed record RuntimePerformanceSnapshot(
 	string PhysicalGpuDeviceName = "UNVERIFIED",
 	double? OutputFramesPerSecond = null);
 
+public sealed record RuntimeAvSyncDiagnosticsSnapshot(
+	bool Enabled,
+	string State,
+	ulong? EventId,
+	string? ExpectedMediaTime,
+	ulong? TargetVideoFrameSequence,
+	ulong? TargetAudioSamplePosition,
+	double? ScheduledVideoOffsetMilliseconds,
+	double? SubmitOffsetMilliseconds,
+	double? DriftFromBaselineMilliseconds,
+	string Detail);
+
 public sealed record RuntimeAIShowcaseRemoteSnapshot(
 	bool Enabled,
 	string Feature,
@@ -117,7 +129,8 @@ public sealed record RuntimeRemoteSnapshot(
 	RuntimePerformanceSnapshot? Performance = null,
 	RuntimeAIShowcaseRemoteSnapshot? AIShowcase = null,
 	IReadOnlyCollection<MediaSourceId>? BroadcastTestPatternSources = null,
-	IReadOnlyCollection<MediaSourceId>? MotionTimingTestPatternSources = null);
+	IReadOnlyCollection<MediaSourceId>? MotionTimingTestPatternSources = null,
+	RuntimeAvSyncDiagnosticsSnapshot? AvSyncDiagnostics = null);
 
 public sealed record RuntimeRemoteApplyResult(
 	string HostInstanceId,
@@ -231,7 +244,8 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 				.ToArray()),
 			Array.AsReadOnly((snapshot.MotionTimingTestPatternSourceIds ?? Array.Empty<string>())
 				.Select(sourceId => new MediaSourceId(Identity.Parse(sourceId)))
-				.ToArray()));
+				.ToArray()),
+			snapshot.AvSyncDiagnostics is null ? null : FromWire(snapshot.AvSyncDiagnostics));
 	}
 
 	public async ValueTask<RuntimeRemoteApplyResult> ApplyExecutionAsync(
@@ -649,6 +663,18 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 			? framesPerSecond
 			: null);
 
+	private static RuntimeAvSyncDiagnosticsSnapshot FromWire(WireAvSyncDiagnostics snapshot) => new(
+		snapshot.Enabled,
+		string.IsNullOrWhiteSpace(snapshot.State) ? "UNAVAILABLE" : snapshot.State.Trim().ToUpperInvariant(),
+		snapshot.EventId,
+		snapshot.ExpectedMediaTime,
+		snapshot.TargetVideoFrameSequence,
+		snapshot.TargetAudioSamplePosition,
+		snapshot.ScheduledVideoOffsetMilliseconds,
+		snapshot.SubmitOffsetMilliseconds,
+		snapshot.DriftFromBaselineMilliseconds,
+		string.IsNullOrWhiteSpace(snapshot.Detail) ? "A/V sync diagnostics detail is unavailable." : snapshot.Detail.Trim());
+
 	private static RuntimeAIShowcaseRemoteSnapshot FromWire(WireAIShowcase snapshot) => new(
 		snapshot.Enabled,
 		snapshot.Feature,
@@ -841,6 +867,7 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 	private sealed record WireRuntimePerformance(long UptimeTicks, long FrameBudgetTicks, long LastFrameProcessingTicks, ulong DroppedFrames, string GpuDeviceName, bool GpuHardwareAccelerated, double? GpuUtilizationPercent, ulong? GpuVramUsedBytes, ulong? GpuVramTotalBytes, string GpuTelemetryEvidence, string CpuDeviceName, int CpuLogicalProcessorCount, double? CpuUtilizationPercent, ulong? SystemMemoryUsedBytes, ulong? SystemMemoryTotalBytes, string SystemTelemetryEvidence, string PhysicalGpuDeviceName, double? OutputFramesPerSecond);
 	private sealed record WireAIShowcaseState(bool Enabled);
 	private sealed record WireAIShowcase(bool Enabled, string Feature, string Status, string Provider, long InferenceTimeTicks, uint PersonRegionCount, ulong? SourceSequence, ulong? AppliedSequence, double? Confidence, bool EffectVisible, WireFailure? Failure, DateTimeOffset? UpdatedAtUtc);
+	private sealed record WireAvSyncDiagnostics(bool Enabled, string State, ulong? EventId, string? ExpectedMediaTime, ulong? TargetVideoFrameSequence, ulong? TargetAudioSamplePosition, double? ScheduledVideoOffsetMilliseconds, double? SubmitOffsetMilliseconds, double? DriftFromBaselineMilliseconds, string Detail);
 	private sealed record WireRecordingCommandResult(bool Succeeded, WireRecordingSnapshot Snapshot, WireFailure? Failure);
 	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path, WirePreparedExecution PreparedExecution);
 	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame, bool? AutoPlayOnProgram, int? EndBehavior, long? InPointFrame, long? OutPointFrame);
@@ -869,7 +896,8 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 		WireAudioProgram AudioProgram,
 		WireRecordingSnapshot Recording,
 		WireRuntimePerformance Performance,
-		WireAIShowcase AIShowcase);
+		WireAIShowcase AIShowcase,
+		WireAvSyncDiagnostics? AvSyncDiagnostics = null);
 
 	private static class Wire
 	{

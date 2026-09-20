@@ -489,7 +489,20 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		ToWire(snapshot.AudioProgram),
 		ToWire(snapshot.RecordingOperator),
 		ToWire(snapshot.Performance),
-		ToWire(aiShowcase));
+		ToWire(aiShowcase),
+		snapshot.AvSyncDiagnostics is null ? null : ToWire(snapshot.AvSyncDiagnostics));
+
+	private static WireAvSyncDiagnostics ToWire(V1AvSyncDiagnosticsSnapshot snapshot) => new(
+		snapshot.Enabled,
+		snapshot.State,
+		snapshot.EventId,
+		snapshot.ExpectedMediaTime,
+		snapshot.TargetVideoFrameSequence,
+		snapshot.TargetAudioSamplePosition,
+		snapshot.ScheduledVideoOffsetMilliseconds,
+		snapshot.SubmitOffsetMilliseconds,
+		snapshot.DriftFromBaselineMilliseconds,
+		snapshot.Detail);
 
 	private static WireGraphicsOverlay ToWire(V1GraphicsOverlaySnapshot snapshot) => new(
 		snapshot.AssetLoaded,
@@ -695,6 +708,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 	private sealed record WireRuntimePerformance(long UptimeTicks, long FrameBudgetTicks, long LastFrameProcessingTicks, ulong DroppedFrames, string GpuDeviceName, bool GpuHardwareAccelerated, double? GpuUtilizationPercent, ulong? GpuVramUsedBytes, ulong? GpuVramTotalBytes, string GpuTelemetryEvidence, string CpuDeviceName, int CpuLogicalProcessorCount, double? CpuUtilizationPercent, ulong? SystemMemoryUsedBytes, ulong? SystemMemoryTotalBytes, string SystemTelemetryEvidence, string PhysicalGpuDeviceName, double? OutputFramesPerSecond);
 	private sealed record WireAIShowcaseState(bool Enabled);
 	private sealed record WireAIShowcase(bool Enabled, string Feature, string Status, string Provider, long InferenceTimeTicks, uint PersonRegionCount, ulong? SourceSequence, ulong? AppliedSequence, double? Confidence, bool EffectVisible, WireFailure? Failure, DateTimeOffset? UpdatedAtUtc);
+	private sealed record WireAvSyncDiagnostics(bool Enabled, string State, ulong? EventId, string? ExpectedMediaTime, ulong? TargetVideoFrameSequence, ulong? TargetAudioSamplePosition, double? ScheduledVideoOffsetMilliseconds, double? SubmitOffsetMilliseconds, double? DriftFromBaselineMilliseconds, string Detail);
 	private sealed record WireRecordingCommandResult(bool Succeeded, WireRecordingSnapshot Snapshot, WireFailure? Failure);
 	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path, WirePreparedExecution PreparedExecution);
 	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame, bool? AutoPlayOnProgram, int? EndBehavior, long? InPointFrame, long? OutPointFrame);
@@ -723,7 +737,8 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		WireAudioProgram AudioProgram,
 		WireRecordingSnapshot Recording,
 		WireRuntimePerformance Performance,
-		WireAIShowcase AIShowcase);
+		WireAIShowcase AIShowcase,
+		WireAvSyncDiagnostics? AvSyncDiagnostics = null);
 
 	private sealed class BoundedRequestCache
 	{

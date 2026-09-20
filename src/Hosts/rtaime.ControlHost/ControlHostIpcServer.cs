@@ -972,7 +972,13 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		snapshot.CpuUtilization,
 		snapshot.SystemMemory,
 		snapshot.GpuDeviceName,
-		snapshot.OutputFramesPerSecond);
+		snapshot.OutputFramesPerSecond,
+		snapshot.AvSyncState,
+		snapshot.AvSyncEvent,
+		snapshot.AvSyncScheduledOffset,
+		snapshot.AvSyncSubmitOffset,
+		snapshot.AvSyncDrift,
+		snapshot.AvSyncDetail);
 
 	private static WireHealthMetric ToWire(OperatorHealthMetric metric) =>
 		new(metric.State, metric.Detail);
@@ -1060,7 +1066,13 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		string CpuUtilization,
 		string SystemMemory,
 		string GpuDeviceName,
-		double? OutputFramesPerSecond);
+		double? OutputFramesPerSecond,
+		string AvSyncState = "UNAVAILABLE",
+		string AvSyncEvent = "UNAVAILABLE",
+		string AvSyncScheduledOffset = "UNAVAILABLE",
+		string AvSyncSubmitOffset = "UNAVAILABLE",
+		string AvSyncDrift = "UNAVAILABLE",
+		string AvSyncDetail = "A/V sync diagnostics are unavailable.");
 	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, WireRecordingSnapshot Recording, WireHealthSnapshot Health, WireAIShowcase AIShowcase, WireMediaDeckSnapshot MediaDeck, ulong StateVersion);
 	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path);
 	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame, bool? AutoPlayOnProgram, int? EndBehavior, long? InPointFrame, long? OutPointFrame);

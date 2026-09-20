@@ -10,7 +10,13 @@ public sealed class OperatorHealthSnapshotProvider : IHealthSnapshotProvider, ID
 	private static readonly HashSet<string> RelevantOperatorProperties = new(StringComparer.Ordinal)
 	{
 		nameof(OperatorViewModel.HealthObserved),
-		nameof(OperatorViewModel.GlobalReadinessState)
+		nameof(OperatorViewModel.GlobalReadinessState),
+		nameof(OperatorViewModel.AvSyncState),
+		nameof(OperatorViewModel.AvSyncEvent),
+		nameof(OperatorViewModel.AvSyncScheduledOffset),
+		nameof(OperatorViewModel.AvSyncSubmitOffset),
+		nameof(OperatorViewModel.AvSyncDrift),
+		nameof(OperatorViewModel.AvSyncDetail)
 	};
 
 	private static readonly HashSet<string> RelevantDeckProperties = new(StringComparer.Ordinal)
@@ -229,18 +235,25 @@ public sealed class OperatorHealthSnapshotProvider : IHealthSnapshotProvider, ID
 				"Frame Timing",
 				"Performance",
 				PerformanceState(),
-				_operator.PerformanceVerificationDetail,
+				_operator.AvSyncState == "UNAVAILABLE"
+					? _operator.PerformanceVerificationDetail
+					: $"{_operator.PerformanceVerificationDetail} A/V sync: {_operator.AvSyncDetail}",
 				now,
 				[
 					new("Frame time / budget", Availability(_operator.FrameTime)),
 					new("Output FPS", Availability(_operator.OutputFps)),
 					new("Dropped frames", Availability(_operator.DroppedFrames)),
-					new("Verification", _operator.PerformanceVerificationState)
+					new("Verification", _operator.PerformanceVerificationState),
+					new("A/V sync", _operator.AvSyncState),
+					new("A/V event", _operator.AvSyncEvent),
+					new("Scheduled offset", _operator.AvSyncScheduledOffset),
+					new("Internal submit offset", _operator.AvSyncSubmitOffset),
+					new("Drift", _operator.AvSyncDrift)
 				],
 				_operator.PerformanceVerificationState == "VERIFIED"
 					? "Current qualified performance evidence is valid."
 					: "Awaiting or requalifying Runtime performance evidence.",
-				$"Format={_operator.CurrentFormat}; Uptime={_operator.Uptime}; Observed={_operator.HealthObserved}"),
+				$"Format={_operator.CurrentFormat}; Uptime={_operator.Uptime}; Observed={_operator.HealthObserved}; AvSyncState={_operator.AvSyncState}; AvSyncEvent={_operator.AvSyncEvent}; AvSyncScheduled={_operator.AvSyncScheduledOffset}; AvSyncSubmit={_operator.AvSyncSubmitOffset}; AvSyncDrift={_operator.AvSyncDrift}"),
 			Create(
 				existing,
 				"control",

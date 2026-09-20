@@ -49,7 +49,13 @@ public sealed record OperatorHealthProjectionSnapshot(
 	string CpuUtilization = "UNVERIFIED",
 	string SystemMemory = "UNVERIFIED",
 	string GpuDeviceName = "UNVERIFIED",
-	double? OutputFramesPerSecond = null);
+	double? OutputFramesPerSecond = null,
+	string AvSyncState = "UNAVAILABLE",
+	string AvSyncEvent = "UNAVAILABLE",
+	string AvSyncScheduledOffset = "UNAVAILABLE",
+	string AvSyncSubmitOffset = "UNAVAILABLE",
+	string AvSyncDrift = "UNAVAILABLE",
+	string AvSyncDetail = "A/V sync diagnostics are unavailable.");
 
 public static class OperatorHealthProjection
 {
@@ -72,6 +78,7 @@ public static class OperatorHealthProjection
 		var gpuProvider = EvaluateGpuProvider(providers, runtime is not null, runtimeObservationFresh);
 		var engine = Combine(control, runtimeHealth, media, provider, gpuProvider);
 		var performance = runtime?.Performance;
+		var avSync = runtimeObservationFresh ? runtime?.AvSyncDiagnostics : null;
 
 		return new OperatorHealthProjectionSnapshot(
 			engine,
@@ -92,7 +99,15 @@ public static class OperatorHealthProjection
 			FormatCpuUtilization(performance),
 			FormatSystemMemory(performance),
 			FormatGpuDeviceName(performance),
-			performance?.OutputFramesPerSecond);
+			performance?.OutputFramesPerSecond,
+			FormatAvSyncState(avSync),
+			FormatAvSyncEvent(avSync),
+			FormatAvSyncValue(avSync?.ScheduledVideoOffsetMilliseconds),
+			FormatAvSyncValue(avSync?.SubmitOffsetMilliseconds),
+			FormatAvSyncValue(avSync?.DriftFromBaselineMilliseconds),
+			runtimeObservationFresh
+				? avSync?.Detail ?? "A/V sync diagnostics are unavailable."
+				: "A/V sync diagnostics are unavailable while the Runtime observation is stale.");
 	}
 
 	private static OperatorHealthMetric EvaluateRuntime(RuntimeRemoteSnapshot? runtime, bool observationFresh)
@@ -194,6 +209,23 @@ public static class OperatorHealthProjection
 
 		return Pass("Control, Runtime, Media and required providers all have PASS evidence.");
 	}
+
+	private static string FormatAvSyncState(RuntimeAvSyncDiagnosticsSnapshot? diagnostics) =>
+		diagnostics is { Enabled: true }
+			? diagnostics.State
+			: "UNAVAILABLE";
+
+	private static string FormatAvSyncEvent(RuntimeAvSyncDiagnosticsSnapshot? diagnostics) =>
+		diagnostics is { Enabled: true, EventId: { } eventId }
+			? diagnostics.ExpectedMediaTime is { Length: > 0 } mediaTime
+				? $"{eventId} @ {mediaTime} s"
+				: eventId.ToString()
+			: "UNAVAILABLE";
+
+	private static string FormatAvSyncValue(double? milliseconds) =>
+		milliseconds is { } value && double.IsFinite(value)
+			? $"{value:0.###} ms"
+			: "UNAVAILABLE";
 
 	private static string FormatGpuUtilization(RuntimePerformanceSnapshot? performance) =>
 		performance?.GpuUtilizationPercent is { } utilization

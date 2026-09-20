@@ -107,6 +107,23 @@ public static class RuntimeHostDiagnostics
 				.Counter("recording.rejected", ToCounter(recording.Statistics.Rejected))
 				.Counter("recording.writerFailures", ToCounter(recording.Statistics.WriterFailures));
 
+			if (snapshot.AvSyncDiagnostics is { } avSync)
+			{
+				builder.Status("avSync.enabled", avSync.Enabled.ToString())
+					.Status("avSync.state", avSync.State)
+					.Status("avSync.expectedMediaTime", avSync.ExpectedMediaTime ?? "UNAVAILABLE")
+					.Status("avSync.scheduledVideoOffsetMs", avSync.ScheduledVideoOffsetMilliseconds?.ToString("F6", CultureInfo.InvariantCulture) ?? "UNAVAILABLE")
+					.Status("avSync.submitOffsetMs", avSync.SubmitOffsetMilliseconds?.ToString("F6", CultureInfo.InvariantCulture) ?? "UNAVAILABLE")
+					.Status("avSync.driftFromBaselineMs", avSync.DriftFromBaselineMilliseconds?.ToString("F6", CultureInfo.InvariantCulture) ?? "UNAVAILABLE")
+					.Status("avSync.detail", avSync.Detail);
+				if (avSync.EventId is { } eventId)
+					builder.Counter("avSync.eventId", ToCounter(eventId));
+				if (avSync.TargetVideoFrameSequence is { } targetFrame)
+					builder.Counter("avSync.targetVideoFrame", ToCounter(targetFrame));
+				if (avSync.TargetAudioSamplePosition is { } targetSample)
+					builder.Counter("avSync.targetAudioSample", ToCounter(targetSample));
+			}
+
 			foreach (var signal in snapshot.InputSignals.OrderBy(pair => pair.Key.ToString(), StringComparer.Ordinal))
 				builder.Status($"input.{signal.Key}.signal", signal.Value.ToString());
 

@@ -149,6 +149,18 @@ public sealed record V1RuntimePerformanceSnapshot(
 	string PhysicalGpuDeviceName = "UNVERIFIED",
 	double? OutputFramesPerSecond = null);
 
+public sealed record V1AvSyncDiagnosticsSnapshot(
+	bool Enabled,
+	string State,
+	ulong? EventId,
+	string? ExpectedMediaTime,
+	ulong? TargetVideoFrameSequence,
+	ulong? TargetAudioSamplePosition,
+	double? ScheduledVideoOffsetMilliseconds,
+	double? SubmitOffsetMilliseconds,
+	double? DriftFromBaselineMilliseconds,
+	string Detail);
+
 public sealed record V1RuntimeHostSnapshot(
 	RuntimeExecutionState Runtime,
 	ulong NextSequenceNumber,
@@ -164,7 +176,8 @@ public sealed record V1RuntimeHostSnapshot(
 	RecordingSnapshot Recording,
 	V1RecordingOperatorSnapshot RecordingOperator,
 	V1RuntimePerformanceSnapshot Performance,
-	int ActiveGpuSurfaces);
+	int ActiveGpuSurfaces,
+	V1AvSyncDiagnosticsSnapshot? AvSyncDiagnostics = null);
 
 /// <summary>
 /// Windows V1 reference composition root for committed execution, timed media, GPU composition,
@@ -192,6 +205,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private readonly RgbaFrameBuffer _broadcastTestPattern;
 	private readonly RgbaFrameBuffer _motionTimingTestPattern;
 	private readonly MotionTimingTestSignalGenerator _motionTimingTestSignal;
+	private readonly AvSyncEventTimeline _avSyncTimeline = new();
+	private readonly AvSyncDiagnosticsTracker _avSyncDiagnostics = new();
 	private readonly HashSet<MediaSourceId> _broadcastTestPatternSources = [];
 	private readonly Dictionary<MediaSourceId, V1BroadcastTestPatternMode> _broadcastTestPatternModes = [];
 	private readonly Dictionary<MediaSourceId, V1InputSignalState> _inputSignals;
@@ -230,6 +245,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private DateTimeOffset? _recordingCompletedAtUtc;
 	private string? _recordingDestination;
 	private string? _recordingFileName;
+	private MediaSourceId? _avSyncDiagnosticsSourceId;
 	private bool _disposed;
 
 	public V1RuntimeHostService(
@@ -267,7 +283,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		var broadcastTestPattern = new BroadcastTestPatternGenerator(new BroadcastTestPatternConfiguration(format));
 		_broadcastTestPattern = new RgbaFrameBuffer(format, broadcastTestPattern.Pixels.Span);
 		_motionTimingTestPattern = new RgbaFrameBuffer(format, broadcastTestPattern.Pixels.Span);
-		_motionTimingTestSignal = new MotionTimingTestSignalGenerator(format);
+		var syncAudioSampleRate = _audioStreams.Values.Select(stream => stream.Format.SampleRate).Distinct().Single();
+		_motionTimingTestSignal = new MotionTimingTestSignalGenerator(format, syncAudioSampleRate, _avSyncTimeline);
 		_inputSignals = new Dictionary<MediaSourceId, V1InputSignalState>
 		{
 			[sourceAId] = V1InputSignalState.Valid,
@@ -365,7 +382,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 					_recorder.Snapshot,
 					RecordingOperatorSnapshotUnsafe(),
 					PerformanceSnapshotUnsafe(hardware),
-					_gpu.ActiveSurfaceCount);
+					_gpu.ActiveSurfaceCount,
+					AvSyncDiagnosticsSnapshotUnsafe());
 			}
 		}
 	}
@@ -421,6 +439,17 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				?? throw new InvalidOperationException("Committed execution must contain exactly one Program binding.");
 			var committedSource = programBinding.MediaSourceId
 				?? throw new InvalidOperationException("Committed Program binding must contain a media source.");
+			var avSyncEnabled = IsAvSyncDiagnosticsEnabledUnsafe(committedSource);
+			if (!avSyncEnabled)
+			{
+				if (_avSyncDiagnosticsSourceId is not null)
+					ResetAvSyncDiagnosticsUnsafe();
+			}
+			else if (_avSyncDiagnosticsSourceId != committedSource)
+			{
+				ResetAvSyncDiagnosticsUnsafe();
+				_avSyncDiagnosticsSourceId = committedSource;
+			}
 
 			var sequence = _nextSequenceNumber;
 			var frameA = ProcessTimedInput(_virtualMedia.SourceA, _sourceAPipeline, sequence);
@@ -466,6 +495,12 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			var pixels = _gpu.Readback(output);
 			var probe = ProbeCenter(pixels, _format);
 			_programOutput!.WriteFrame(output.Descriptor);
+			if (avSyncEnabled)
+			{
+				var videoEvent = _motionTimingTestSignal.InspectSyncEvent(output.Descriptor.Timing);
+				if (videoEvent.IsFlashFrame)
+					_avSyncDiagnostics.RecordVideoSubmit(videoEvent, Stopwatch.GetTimestamp());
+			}
 			_monitoringTap.TryCapture(
 				frameA.SourceId,
 				contentA.Pixels,
@@ -481,6 +516,9 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			var audioObservation = _audioMeters[committedSource];
 			var audioBuffer = audioPacket.Descriptor;
 			var hasGeneratedSignal = _audioTestSignals.TryGetValue(committedSource, out var audioTestSignal);
+			AvSyncAudioEventObservation? audioSyncEvent = avSyncEnabled
+				? _avSyncTimeline.InspectAudio(audioBuffer.Timing, _format.FrameRate, audioBuffer.Format.SampleRate)
+				: null;
 			GeneratedAudioTestSignalFrameInfo generatedFrame = default;
 			var generatedAudioPayload = hasGeneratedSignal
 				? MaterializeGeneratedAudioPayload(audioBuffer, audioTestSignal!, out generatedFrame)
@@ -511,6 +549,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				: externalAudioPayload is { Length: > 0 }
 					? ApplyAudioStateToPayload(externalAudioPayload, audio)
 					: MaterializeReferenceAudioPayload(audioBuffer, audio);
+			if (audioSyncEvent is { ContainsPulse: true } pulseEvent)
+				_avSyncDiagnostics.RecordAudioSubmit(pulseEvent, Stopwatch.GetTimestamp());
 
 			RecordingEnqueueResult? recording = null;
 			if (_recorder.Snapshot.State == RecordingLifecycleState.Recording)
@@ -747,7 +787,10 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				var removed = _audioTestSignals.Remove(sourceId);
 				_audioTestSignalFrames.Remove(sourceId);
 				if (removed)
+				{
+					ResetAvSyncDiagnosticsUnsafe();
 					Observe($"audio.test_signal:{sourceId}:disabled");
+				}
 				return AudioInputSnapshotUnsafe(sourceId);
 			}
 
@@ -759,6 +802,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			var generator = new GeneratedAudioTestSignalGenerator(configuration);
 			_audioTestSignals[sourceId] = generator;
 			_audioTestSignalFrames[sourceId] = generator.Inspect(CreateAudioBuffer(sourceId, _nextSequenceNumber).Timing);
+			ResetAvSyncDiagnosticsUnsafe();
 			Observe($"audio.test_signal:{sourceId}:enabled:{mode}:{frequencyHz:0.###}:{peakLevel:0.###}");
 			return AudioInputSnapshotUnsafe(sourceId);
 		}
@@ -860,6 +904,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				if (!removed)
 					return false;
 
+				ResetAvSyncDiagnosticsUnsafe();
 				Observe($"input.test_pattern:{sourceId}:disabled");
 				return true;
 			}
@@ -870,6 +915,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			if (!added && !modeChanged)
 				return false;
 
+			ResetAvSyncDiagnosticsUnsafe();
 			Observe($"input.test_pattern:{sourceId}:enabled:{mode}");
 			return true;
 		}
@@ -1183,6 +1229,51 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			testSignal?.Configuration.FrequencyHz,
 			testSignal?.Configuration.PeakLevel);
 	}
+
+	private V1AvSyncDiagnosticsSnapshot AvSyncDiagnosticsSnapshotUnsafe()
+	{
+		var activeSource = _audio.ActiveVideoSourceId;
+		if (!IsAvSyncDiagnosticsEnabledUnsafe(activeSource))
+		{
+			return new V1AvSyncDiagnosticsSnapshot(
+				false,
+				"UNAVAILABLE",
+				null,
+				null,
+				null,
+				null,
+				null,
+				null,
+				null,
+				"Enable Motion/Timing video and Pulse audio on the active Program source to run synchronized A/V diagnostics.");
+		}
+
+		var snapshot = _avSyncDiagnostics.Snapshot;
+		return new V1AvSyncDiagnosticsSnapshot(
+			true,
+			snapshot.State.ToString().ToUpperInvariant(),
+			snapshot.EventId,
+			snapshot.ExpectedMediaTime?.ToString(),
+			snapshot.TargetVideoFrameSequence,
+			snapshot.TargetAudioSamplePosition,
+			snapshot.ScheduledVideoOffsetMilliseconds,
+			snapshot.SubmitOffsetMilliseconds,
+			snapshot.DriftFromBaselineMilliseconds,
+			snapshot.Detail);
+	}
+
+	private void ResetAvSyncDiagnosticsUnsafe()
+	{
+		_avSyncDiagnostics.Reset();
+		_avSyncDiagnosticsSourceId = null;
+	}
+
+	private bool IsAvSyncDiagnosticsEnabledUnsafe(MediaSourceId sourceId) =>
+		_broadcastTestPatternSources.Contains(sourceId) &&
+		_broadcastTestPatternModes.TryGetValue(sourceId, out var patternMode) &&
+		patternMode == V1BroadcastTestPatternMode.MotionTiming &&
+		_audioTestSignals.TryGetValue(sourceId, out var audioSignal) &&
+		audioSignal.Configuration.Mode == GeneratedAudioTestSignalMode.Pulse;
 
 	private V1AudioProgramSnapshot AudioProgramSnapshotUnsafe()
 	{
