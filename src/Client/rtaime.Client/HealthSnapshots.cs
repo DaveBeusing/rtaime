@@ -45,6 +45,25 @@ public sealed record SubsystemHealthSnapshot(
 	bool CanRecover = false,
 	string? RecoveryActionLabel = null);
 
+public static class HealthSnapshotAnalysis
+{
+	public static bool RequiresAttention(SubsystemHealthState state) =>
+		state is SubsystemHealthState.Warning
+			or SubsystemHealthState.Degraded
+			or SubsystemHealthState.Recovering
+			or SubsystemHealthState.Failed;
+
+	public static int Severity(SubsystemHealthState state) => state switch
+	{
+		SubsystemHealthState.Failed => 5,
+		SubsystemHealthState.Recovering => 4,
+		SubsystemHealthState.Degraded => 3,
+		SubsystemHealthState.Warning => 2,
+		SubsystemHealthState.Unknown => 1,
+		_ => 0
+	};
+}
+
 public static class HealthSnapshotHistory
 {
 	public static SubsystemHealthSnapshot Retain(
