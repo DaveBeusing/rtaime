@@ -361,7 +361,10 @@ public sealed class SystemApplicationHostPlatform : IApplicationHostPlatform
 
 		processWithDiagnostics.OutputDataReceived += (_, eventArgs) => AppendDiagnostic("stdout", eventArgs.Data);
 		processWithDiagnostics.ErrorDataReceived += (_, eventArgs) => AppendDiagnostic("stderr", eventArgs.Data);
-		processWithDiagnostics.Exited += (_, _) => FinalizeDiagnostic();
+		processWithDiagnostics.Exited += (_, _) =>
+		{
+			_ = Task.Run(FinalizeDiagnostic);
+		};
 
 		try
 		{
