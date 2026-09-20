@@ -47,7 +47,7 @@ The current Runtime health contract provides:
 - VRAM evidence when available;
 - configured video format.
 
-The current contract does not provide authoritative CPU utilization, system memory utilization, disk telemetry, network telemetry, temperature telemetry or measured Output FPS. Those metrics therefore remain `UNAVAILABLE`. The configured frame rate is shown as context but is not presented as measured Output FPS.
+Runtime performance snapshots now provide bounded measured CPU utilization and system-memory usage/capacity on the qualified Windows platform. NVIDIA GPU utilization and VRAM usage are published through driver-provided NVML telemetry when available; unsupported or unavailable GPU telemetry remains explicitly `UNVERIFIED`. Disk, network, temperature and measured Output FPS telemetry remain `UNAVAILABLE`. The configured frame rate is shown as context but is not presented as measured Output FPS.
 
 Color space is likewise `UNAVAILABLE` until it is published by an authoritative output contract. Recording state reuses the existing recording projection. Streaming remains `UNAVAILABLE` while no authoritative streaming state exists.
 
