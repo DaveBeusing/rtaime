@@ -9,6 +9,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using Microsoft.Win32;
 using rtaime.Client;
@@ -79,7 +80,12 @@ public partial class MainWindow : Window
 			Shell,
 			new AsyncRelayCommand(FocusMediaSearchAsync));
 		Timeline.SelectionChanged += OnTimelineSelectionChanged;
+		Startup = new StartupLifecycleViewModel(
+			Environment.GetEnvironmentVariable("RTAIME_APPHOST_LIFECYCLE_FILE"),
+			new DispatcherSynchronizationContext(Dispatcher));
 		InitializeComponent();
+		viewModel.PropertyChanged += OnOperatorPropertyChanged;
+		StartStartupBrandAnimation();
 		ApplyWindowPlacement();
 		Shell.UpdateViewportWidth(ActualWidth > 0 ? ActualWidth : Width);
 		SizeChanged += OnShellSizeChanged;
@@ -120,7 +126,12 @@ public partial class MainWindow : Window
 			Shell,
 			new AsyncRelayCommand(FocusMediaSearchAsync));
 		Timeline.SelectionChanged += OnTimelineSelectionChanged;
+		Startup = new StartupLifecycleViewModel(
+			Environment.GetEnvironmentVariable("RTAIME_APPHOST_LIFECYCLE_FILE"),
+			new DispatcherSynchronizationContext(Dispatcher));
 		InitializeComponent();
+		viewModel.PropertyChanged += OnOperatorPropertyChanged;
+		StartStartupBrandAnimation();
 		ApplyWindowPlacement();
 		Shell.UpdateViewportWidth(ActualWidth > 0 ? ActualWidth : Width);
 		SizeChanged += OnShellSizeChanged;
@@ -131,6 +142,7 @@ public partial class MainWindow : Window
 		Closing += OnClosingAsync;
 	}
 
+	public StartupLifecycleViewModel Startup { get; }
 	public OperatorMonitoringViewModel Monitoring { get; }
 	public ProgramOutputController ProgramOutput { get; }
 	public OutputRoutingHealthViewModel OutputHealth { get; }
@@ -183,6 +195,34 @@ public partial class MainWindow : Window
 		int attribute,
 		ref int attributeValue,
 		int attributeSize);
+
+	private void StartStartupBrandAnimation()
+	{
+		if (!SystemParameters.ClientAreaAnimation)
+			return;
+
+		var animation = new DoubleAnimation
+		{
+			From = 0.78,
+			To = 1.0,
+			Duration = TimeSpan.FromMilliseconds(900),
+			AutoReverse = true,
+			RepeatBehavior = RepeatBehavior.Forever
+		};
+		StartupBrandPulse.BeginAnimation(OpacityProperty, animation);
+	}
+
+	private void OnOperatorPropertyChanged(object? sender, PropertyChangedEventArgs e)
+	{
+		if (e.PropertyName != nameof(OperatorViewModel.StartupComplete) ||
+			sender is not OperatorViewModel { StartupComplete: true })
+		{
+			return;
+		}
+
+		StartupBrandPulse.BeginAnimation(OpacityProperty, null);
+		StartupBrandPulse.Opacity = 1.0;
+	}
 
 	private Task FocusMediaSearchAsync()
 	{
@@ -259,10 +299,13 @@ public partial class MainWindow : Window
 		IsEnabled = false;
 		try
 		{
+			Startup.Dispose();
+			StartupBrandPulse.BeginAnimation(OpacityProperty, null);
 			OutputHealth.Dispose();
 			ProgramOutput.Dispose();
 			if (DataContext is OperatorViewModel viewModel)
 			{
+				viewModel.PropertyChanged -= OnOperatorPropertyChanged;
 				MediaDeck.SnapshotChanged -= viewModel.ApplyMediaDeckSnapshot;
 				viewModel.ConfirmedMediaDeckSnapshot -= MediaDeck.ApplyConfirmedSnapshot;
 				Timeline.SelectionChanged -= OnTimelineSelectionChanged;
