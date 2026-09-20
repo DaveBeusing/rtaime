@@ -266,10 +266,16 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 		return FromWire(wire);
 	}
 
+	public ValueTask<bool> SetBroadcastTestPatternAsync(
+		MediaSourceId sourceId,
+		bool enabled,
+		CancellationToken cancellationToken = default) =>
+		SetBroadcastTestPatternAsync(sourceId, enabled, false, cancellationToken);
+
 	public async ValueTask<bool> SetBroadcastTestPatternAsync(
 		MediaSourceId sourceId,
 		bool enabled,
-		bool motionTiming = false,
+		bool motionTiming,
 		CancellationToken cancellationToken = default)
 	{
 		var response = await ExchangeAsync(
