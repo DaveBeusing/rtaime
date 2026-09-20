@@ -171,6 +171,24 @@ public sealed class UnifiedApplicationHostTests
 	}
 
 	[Fact]
+	public async Task Adopts_competing_control_when_endpoint_is_won_after_local_start_decision()
+	{
+		var options = CreateOptions(ApplicationStartupProfile.Interactive);
+		var platform = new FakeApplicationHostPlatform(options)
+		{
+			ControlHostExitOnStart = true,
+			LeaseEndpointWhenControlStarts = true
+		};
+		platform.OnDelay = () => platform.PublishReadiness(42);
+
+		var result = await new UnifiedApplicationHost(options, platform).RunAsync();
+
+		Assert.True(result.AdoptedControlHost);
+		Assert.Equal(42, result.ControlProcessId);
+		Assert.Equal(new[] { "rtaime.Operator", "rtaime.ControlHost" }, platform.StartedBaseNames);
+	}
+
+	[Fact]
 	public async Task ControlHost_process_diagnostic_is_included_in_startup_failure()
 	{
 		var options = CreateOptions(ApplicationStartupProfile.Interactive);
@@ -546,6 +564,7 @@ public sealed class UnifiedApplicationHostTests
 		public bool PipeReachable { get; set; } = true;
 		public bool EndpointLeaseHeld { get; set; }
 		public bool ControlHostExitOnStart { get; set; }
+		public bool LeaseEndpointWhenControlStarts { get; set; }
 		public string ControlHostDiagnosticLine { get; set; } = string.Empty;
 		public HashSet<string> UnreachableEndpoints { get; } = new(StringComparer.Ordinal);
 		public bool StopSignalWritten { get; private set; }
@@ -573,6 +592,7 @@ public sealed class UnifiedApplicationHostTests
 
 			if (baseName == "rtaime.ControlHost" && ControlHostExitOnStart)
 			{
+				if (LeaseEndpointWhenControlStarts) EndpointLeaseHeld = true;
 				if (!string.IsNullOrWhiteSpace(spec.DiagnosticLogPath))
 					_files[Path.GetFullPath(spec.DiagnosticLogPath)] = ControlHostDiagnosticLine + Environment.NewLine;
 				return processId;
