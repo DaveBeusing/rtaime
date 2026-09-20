@@ -84,6 +84,8 @@ The reference backend performs RGBA processing in managed memory and is used to 
 
 `CudaGpuProcessingBackend` is the hardware-accelerated implementation candidate for the Windows V1 reference platform.
 
+The executable RuntimeHost now performs fail-closed CUDA capability detection during composition. When CUDA is available and reports hardware acceleration, the production RuntimeHost selects `CudaGpuProcessingBackend`. Environments without CUDA continue with `ManagedReferenceGpuBackend`, whose provider availability remains explicitly `Degraded`; that fallback is functional evidence only and must never be presented as production GPU qualification. Direct `V1RuntimeHostService` construction keeps the managed reference default so deterministic tests remain hardware-independent.
+
 Capability detection is fail-closed:
 
 - missing `nvcuda.dll` → unavailable,
@@ -104,11 +106,13 @@ The backend owns:
 
 - CUDA context creation/destruction,
 - PTX module loading,
-- device-memory allocation/free,
-- host-to-device upload,
-- device-to-host diagnostic readback,
+- bounded device-memory allocation reuse for frame surfaces,
+- direct host-buffer-to-device upload without an intermediate full-frame managed copy,
+- device-to-host Program readback,
 - deterministic RGBA composite kernel launch,
 - synchronization at the GPU Processing Foundation processing boundary.
+
+Released frame surfaces are returned to a bounded per-size device-memory pool and reused by subsequent frame boundaries. This removes repeated `cuMemAlloc/cuMemFree` operations from the steady-state frame path while preserving provider-visible surface ownership and release semantics.
 
 The current hosted Windows CI environment does not provide qualified NVIDIA GPU evidence. Therefore CUDA execution remains `UNVERIFIED` unless a run on an approved GPU environment is explicitly captured.
 

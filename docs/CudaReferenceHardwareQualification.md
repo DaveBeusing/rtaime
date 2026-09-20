@@ -56,10 +56,10 @@ Qualification measures synchronous `Composite + Readback`, matching the current 
 For every case:
 
 - P50, P95 and maximum elapsed milliseconds are recorded;
-- P95 must be within one frame period for the tested format;
-- maximum latency must be within two frame periods.
+- P95 must be at or below 5 ms;
+- maximum synchronous Composite + Readback latency must be at or below 10 ms.
 
-These limits are qualification guards, not a claim that all future media I/O, scheduling or end-to-end latency work is complete.
+The engineering target for the qualified production path is approximately 3 ms core render latency, with 5 ms treated as the hard P95 qualification ceiling. These limits qualify the current synchronous compositor/readback path; media I/O, scheduling and true end-to-end signal latency remain separate timing domains.
 
 ## Running locally
 

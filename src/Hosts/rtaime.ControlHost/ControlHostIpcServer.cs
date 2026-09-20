@@ -22,7 +22,11 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	private readonly CancellationTokenSource _stop = new();
 	private readonly SemaphoreSlim _mutationGate = new(1, 1);
 	private readonly BoundedRequestCache _requestCache = new(256);
+	private static readonly TimeSpan RuntimeObservationRetention = TimeSpan.FromSeconds(2);
 	private readonly string _hostInstanceId = Identity.New().ToString();
+	private readonly object _runtimeObservationGate = new();
+	private RuntimeRemoteSnapshot? _lastRuntimeSnapshot;
+	private DateTimeOffset _lastRuntimeSnapshotAtUtc;
 	private Task? _acceptLoop;
 	private long _stateVersion = 1;
 	private long _sequence;
@@ -481,9 +485,10 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		if (control is null || !control.HasAuthoritativeState)
 			return Error(request, "control.not_ready", "ControlHost has no committed authoritative state yet.");
 
-		RuntimeRemoteSnapshot? runtime = null;
-		try { runtime = await _runtimeTransport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false); }
-		catch { runtime = null; }
+		var runtimeObservation = await ObserveRuntimeAsync(cancellationToken).ConfigureAwait(false);
+		var runtime = runtimeObservation.Snapshot;
+		var runtimeFresh = runtimeObservation.Fresh;
+		var runtimeObservedAtUtc = runtimeObservation.ObservedAtUtc;
 
 		MediaDeckSnapshot? mediaDeck = null;
 		if (_mediaDeck is not null)
@@ -516,13 +521,14 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			runtime is null ? Array.Empty<ProviderDescriptor>() : _runtimeTransport.ProviderDescriptors,
 			mediaDeck,
 			control.HasAuthoritativeState,
-			DateTimeOffset.UtcNow);
+			runtimeObservedAtUtc,
+			runtimeFresh);
 		var payload = new WireOperatorSnapshot(
 			ToWire(state),
 			sources,
-			runtime is null ? "DEGRADED" : "READY",
-			runtime is null ? "UNKNOWN" : runtime.TimingHealth.ToString(),
-			runtime is null ? "UNKNOWN" : "VALID",
+			runtime is null || !runtimeFresh ? "DEGRADED" : "READY",
+			runtime is null ? "UNKNOWN" : runtimeFresh ? runtime.TimingHealth.ToString() : "STALE",
+			runtime is null ? "UNKNOWN" : runtimeFresh ? "VALID" : "STALE",
 			aiShowcase.Status,
 			recording.State,
 			runtime?.GraphicsOverlay.Visible == true,
@@ -537,6 +543,39 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		return Success(request, "control.snapshot.response", payload);
 	}
 
+
+	private async ValueTask<RuntimeObservation> ObserveRuntimeAsync(CancellationToken cancellationToken)
+	{
+		try
+		{
+			var snapshot = await _runtimeTransport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
+			var observedAtUtc = DateTimeOffset.UtcNow;
+			lock (_runtimeObservationGate)
+			{
+				_lastRuntimeSnapshot = snapshot;
+				_lastRuntimeSnapshotAtUtc = observedAtUtc;
+			}
+			return new RuntimeObservation(snapshot, true, observedAtUtc);
+		}
+		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+		{
+			throw;
+		}
+		catch
+		{
+			lock (_runtimeObservationGate)
+			{
+				var now = DateTimeOffset.UtcNow;
+				if (_lastRuntimeSnapshot is not null &&
+					_lastRuntimeSnapshotAtUtc != default &&
+					now - _lastRuntimeSnapshotAtUtc <= RuntimeObservationRetention)
+				{
+					return new RuntimeObservation(_lastRuntimeSnapshot, false, _lastRuntimeSnapshotAtUtc);
+				}
+			}
+			return new RuntimeObservation(null, false, DateTimeOffset.UtcNow);
+		}
+	}
 
 	private static WireSource ToWireSource(
 		ProductionSourceSpecification source,
@@ -825,6 +864,11 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		state.Revision.Value,
 		state.Routing.PreviewSourceId.ToString(),
 		state.Routing.ProgramSourceId.ToString());
+
+	private readonly record struct RuntimeObservation(
+		RuntimeRemoteSnapshot? Snapshot,
+		bool Fresh,
+		DateTimeOffset ObservedAtUtc);
 
 	private enum MutationKind
 	{

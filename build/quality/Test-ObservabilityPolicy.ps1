@@ -23,11 +23,12 @@ $runtimeServicePath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/V1
 $hardwareTelemetryPath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/SystemHardwareTelemetry.cs"
 $frameDropPath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/RuntimeFrameDropCounter.cs"
 $healthProjectionPath = Join-Path $repositoryRoot "src/Hosts/rtaime.ControlHost/OperatorHealthProjection.cs"
+$controlIpcPath = Join-Path $repositoryRoot "src/Hosts/rtaime.ControlHost/ControlHostIpcServer.cs"
 $aiPath = Join-Path $repositoryRoot "src/Hosts/rtaime.AIHost/AIHostDiagnostics.cs"
 $testsPath = Join-Path $repositoryRoot "tests/rtaime.Tests.Unit/DiagnosticsTests.cs"
 $documentationPath = Join-Path $repositoryRoot "docs/ObservabilityDiagnostics.md"
 
-foreach ($path in @($corePath, $controlPath, $runtimePath, $runtimeServicePath, $hardwareTelemetryPath, $frameDropPath, $healthProjectionPath, $aiPath, $testsPath, $documentationPath)) {
+foreach ($path in @($corePath, $controlPath, $runtimePath, $runtimeServicePath, $hardwareTelemetryPath, $frameDropPath, $healthProjectionPath, $controlIpcPath, $aiPath, $testsPath, $documentationPath)) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required observability artifact is missing: '$path'."
 }
 
@@ -38,6 +39,7 @@ $runtimeService = Get-Content -LiteralPath $runtimeServicePath -Raw
 $hardwareTelemetry = Get-Content -LiteralPath $hardwareTelemetryPath -Raw
 $frameDrop = Get-Content -LiteralPath $frameDropPath -Raw
 $healthProjection = Get-Content -LiteralPath $healthProjectionPath -Raw
+$controlIpc = Get-Content -LiteralPath $controlIpcPath -Raw
 $ai = Get-Content -LiteralPath $aiPath -Raw
 $tests = Get-Content -LiteralPath $testsPath -Raw
 $documentation = Get-Content -LiteralPath $documentationPath -Raw
@@ -62,7 +64,10 @@ Assert-Condition ($runtimeService -match 'V1RuntimePerformanceSnapshot') "Runtim
 Assert-Condition ($runtimeService -match 'GpuUtilizationPercent[\s\S]*GpuVramUsedBytes') "Runtime performance telemetry must keep optional GPU utilization and VRAM fields explicit."
 Assert-Condition ($runtimeService -match 'CpuUtilizationPercent[\s\S]*SystemMemoryUsedBytes[\s\S]*SystemMemoryTotalBytes') "Runtime performance telemetry must expose optional CPU and system-memory measurements explicitly."
 Assert-Condition ($hardwareTelemetry -match 'SampleInterval\s*=\s*TimeSpan\.FromMilliseconds\(500\)') "Hardware telemetry sampling must remain bounded and cached."
+Assert-Condition ($hardwareTelemetry -match 'SampleRetentionInterval\s*=\s*TimeSpan\.FromSeconds\(3\)') "Transient hardware read misses must retain recent qualified samples for a bounded three-second window."
 Assert-Condition ($hardwareTelemetry -notmatch 'PeriodicTimer|Task\.Run|new Thread') "Hardware telemetry must remain snapshot-driven and must not create an independent polling loop."
+Assert-Condition ($controlIpc -match 'RuntimeObservationRetention\s*=\s*TimeSpan\.FromSeconds\(2\)' -and $controlIpc -match 'RuntimeObservation\(_lastRuntimeSnapshot, false\)') "ControlHost must retain recent Runtime observations briefly instead of clearing operator performance state on one IPC miss."
+Assert-Condition ($healthProjection -match 'runtimeObservationFresh' -and $healthProjection -match 'recent retained Runtime observation') "Retained Runtime telemetry must remain explicitly non-fresh in health projection."
 Assert-Condition ($runtimeService -match 'var hardware = _hardwareTelemetry\.Sample\(\);\s*lock \(_gate\)') "Hardware probes must run before the Runtime state lock so management telemetry cannot block Program processing through the shared gate."
 Assert-Condition ($hardwareTelemetry -match 'GetSystemTimes' -and $hardwareTelemetry -match 'GlobalMemoryStatusEx') "Windows CPU and system-memory telemetry must use bounded OS measurements."
 Assert-Condition ($hardwareTelemetry -match 'nvmlDeviceGetUtilizationRates' -and $hardwareTelemetry -match 'nvmlDeviceGetMemoryInfo') "NVIDIA telemetry must use driver-provided NVML measurements."

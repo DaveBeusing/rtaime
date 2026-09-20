@@ -163,7 +163,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private readonly VirtualMediaReferenceProvider _virtualMedia;
 	private readonly MediaFramePipeline _sourceAPipeline;
 	private readonly MediaFramePipeline _sourceBPipeline;
-	private readonly ManagedReferenceGpuBackend _gpuBackend;
+	private readonly IGpuProcessingBackend _gpuBackend;
 	private readonly GpuProcessingProvider _gpu;
 	private readonly TransactionalRuntime _runtime;
 	private readonly VirtualEmbeddedAudioReferenceProvider _virtualAudio;
@@ -214,13 +214,14 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		MediaSourceId sourceAId,
 		MediaSourceId sourceBId,
 		VideoFormat format,
-		IProgramRecordingWriter recordingWriter)
+		IProgramRecordingWriter recordingWriter,
+		IGpuProcessingBackend? gpuBackend = null)
 	{
 		_format = format;
 		_virtualMedia = new VirtualMediaReferenceProvider(sourceAId, sourceBId, format);
 		_sourceAPipeline = CreatePipeline();
 		_sourceBPipeline = CreatePipeline();
-		_gpuBackend = new ManagedReferenceGpuBackend();
+		_gpuBackend = gpuBackend ?? new ManagedReferenceGpuBackend();
 		_gpu = new GpuProcessingProvider(_gpuBackend);
 		_gpu.Start();
 		_runtime = new TransactionalRuntime(new InMemoryRuntimeResourceReservationManager());
@@ -400,13 +401,17 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 
 			var contentA = ResolveInputContent(frameA);
 			var contentB = ResolveInputContent(frameB);
-			using var gpuA = MaterializeInput(frameA, contentA);
-			using var gpuB = MaterializeInput(frameB, contentB);
-			var gpuFrames = new Dictionary<MediaSourceId, GpuFrame>
-			{
-				[frameA.SourceId] = gpuA,
-				[frameB.SourceId] = gpuB
-			};
+			using var gpuA = RequiresGpuSourceUnsafe(frameA.SourceId, committedSource)
+				? MaterializeInput(frameA, contentA)
+				: null;
+			using var gpuB = RequiresGpuSourceUnsafe(frameB.SourceId, committedSource)
+				? MaterializeInput(frameB, contentB)
+				: null;
+			var gpuFrames = new Dictionary<MediaSourceId, GpuFrame>();
+			if (gpuA is not null)
+				gpuFrames.Add(frameA.SourceId, gpuA);
+			if (gpuB is not null)
+				gpuFrames.Add(frameB.SourceId, gpuB);
 
 			var transitionKind = _transition?.Intent.Kind;
 			var (fromFrame, toFrame, gpuTransition, blendWeight, transitionComplete) = ResolveTransition(committedSource, sequence, gpuFrames);
@@ -1107,6 +1112,15 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		}
 
 		_operatorGraphicsLayer.Update(new RgbaFrameBuffer(_format, output));
+	}
+
+	private bool RequiresGpuSourceUnsafe(MediaSourceId sourceId, MediaSourceId committedSource)
+	{
+		if (_transition is null)
+			return sourceId == committedSource;
+
+		return sourceId == _transition.Intent.FromSourceId ||
+			sourceId == _transition.Intent.ToSourceId;
 	}
 
 	private (GpuFrame From, GpuFrame To, GpuTransition Transition, byte BlendWeight, bool Complete) ResolveTransition(

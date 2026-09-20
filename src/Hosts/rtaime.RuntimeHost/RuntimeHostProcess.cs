@@ -210,11 +210,7 @@ public sealed class RuntimeHostProcess
 				Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
 				"rtaime",
 				"recordings")));
-		_runtimeFactory = runtimeFactory ?? ((processOptions, writer) => new V1RuntimeHostService(
-			processOptions.SourceAId,
-			processOptions.SourceBId,
-			processOptions.Format,
-			writer));
+		_runtimeFactory = runtimeFactory ?? CreateProductionRuntime;
 		_aiShowcaseFactory = aiShowcaseFactory ?? ((runtime, processOptions) => new RuntimeAIShowcaseService(
 			runtime,
 			new NamedPipeRuntimeAIHostTransport(processOptions.AIEndpoint)));
@@ -330,6 +326,23 @@ public sealed class RuntimeHostProcess
 		return await StopAsync().ConfigureAwait(false);
 	}
 
+	private static V1RuntimeHostService CreateProductionRuntime(
+		RuntimeHostProcessOptions processOptions,
+		IProgramRecordingWriter writer)
+	{
+		var cuda = CudaGpuProcessingBackend.Detect();
+		IGpuProcessingBackend backend = cuda.Available && cuda.HardwareAccelerated
+			? new CudaGpuProcessingBackend()
+			: new ManagedReferenceGpuBackend();
+
+		return new V1RuntimeHostService(
+			processOptions.SourceAId,
+			processOptions.SourceBId,
+			processOptions.Format,
+			writer,
+			backend);
+	}
+
 	private async Task RunMediaLoopAsync(
 		V1RuntimeHostService runtime,
 		RuntimeMediaIoVerticalSlice? mediaIo,
@@ -346,17 +359,18 @@ public sealed class RuntimeHostProcess
 
 			var processingStartedAt = _timingClock.Elapsed;
 			var boundary = runtime.ProcessNextBoundary();
+			var renderDuration = _timingClock.Elapsed - processingStartedAt;
 			mediaIo?.SubmitProgram(boundary);
 			aiShowcase.ObserveProgramBoundary(boundary.ProgramFrame);
-			var processingDuration = _timingClock.Elapsed - processingStartedAt;
-			var timing = _timingProbe.RecordBoundary(boundary.SequenceNumber, boundaryObservedAt, processingDuration);
+			var pipelineDuration = _timingClock.Elapsed - processingStartedAt;
+			var timing = _timingProbe.RecordBoundary(boundary.SequenceNumber, boundaryObservedAt, pipelineDuration);
 			var mediaIoStatistics = mediaIo?.Statistics;
 			var droppedFrames = _frameDropCounter.Observe(
 				boundaryObservedAt,
 				framePeriod,
 				mediaIoStatistics?.OutputBackpressure ?? 0,
 				mediaIoStatistics?.OutputRejected ?? 0);
-			runtime.SetPerformanceObservations(processingDuration, droppedFrames);
+			runtime.SetPerformanceObservations(renderDuration, droppedFrames);
 			runtime.SetTimingHealth(MapTimingHealth(timing.State));
 		}
 	}

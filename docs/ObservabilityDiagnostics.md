@@ -94,7 +94,7 @@ The existing Required Gates remain authoritative for architecture, contracts, un
 
 ## Runtime Health & Performance HUD Runtime health and performance projection
 
-Runtime Health & Performance HUD extends the existing observational plane rather than introducing a separate metrics system. RuntimeHost exposes one bounded `V1RuntimePerformanceSnapshot` containing Runtime uptime, the active frame budget, the most recently observed Program-boundary processing duration, cumulative dropped-frame evidence, CPU identity/utilization, system-memory usage/capacity and GPU identity/utilization/VRAM evidence. Windows CPU and memory measurements use OS APIs; qualified NVIDIA measurements use NVML. Hardware sampling is cached for 500 ms and is read only from the management snapshot path, never from Program frame processing.
+Runtime Health & Performance HUD extends the existing observational plane rather than introducing a separate metrics system. RuntimeHost exposes one bounded `V1RuntimePerformanceSnapshot` containing Runtime uptime, the active frame budget, the most recently observed core render duration, cumulative dropped-frame evidence, CPU identity/utilization, system-memory usage/capacity and GPU identity/utilization/VRAM evidence. Windows CPU and memory measurements use OS APIs; qualified NVIDIA measurements use NVML. Hardware sampling is cached for 500 ms and is read only from the management snapshot path, never from Program frame processing. A transient hardware read miss retains the most recent qualified sample for up to three seconds instead of clearing the UI immediately; expired or never-qualified evidence still resolves to `UNVERIFIED`.
 
 The dropped-frame counter is intentionally O(1). It retains only the previous scheduler-boundary timestamp and one cumulative count. It does not retain per-frame history, allocate a diagnostic collection, write files, call a remote endpoint or otherwise change Program scheduling.
 
@@ -103,7 +103,7 @@ Dropped-frame evidence combines missed scheduler frame periods with native Progr
 The Runtime support snapshot reuses this same performance snapshot and adds:
 
 - `performance.frameBudgetMs`;
-- `performance.lastFrameProcessingMs`;
+- `performance.lastFrameProcessingMs` (core Runtime render/composite duration; full pipeline timing remains owned by the timing qualification probe);
 - `performance.uptime`;
 - `runtime.droppedFrames`;
 - GPU device/hardware-acceleration evidence;

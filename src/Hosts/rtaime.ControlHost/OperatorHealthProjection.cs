@@ -57,17 +57,18 @@ public static class OperatorHealthProjection
 		IReadOnlyList<ProviderDescriptor> providers,
 		MediaDeckSnapshot? mediaDeck,
 		bool controlAuthorityAvailable,
-		DateTimeOffset observedAtUtc)
+		DateTimeOffset observedAtUtc,
+		bool runtimeObservationFresh = true)
 	{
 		ArgumentNullException.ThrowIfNull(providers);
 
 		var control = controlAuthorityAvailable
 			? Pass("Authoritative Control state is available.")
 			: Fail("Authoritative Control state is unavailable.");
-		var runtimeHealth = EvaluateRuntime(runtime);
-		var media = EvaluateMedia(runtime, mediaDeck);
-		var provider = EvaluateProviders(providers, runtime is not null);
-		var gpuProvider = EvaluateGpuProvider(providers, runtime is not null);
+		var runtimeHealth = EvaluateRuntime(runtime, runtimeObservationFresh);
+		var media = EvaluateMedia(runtime, mediaDeck, runtimeObservationFresh);
+		var provider = EvaluateProviders(providers, runtime is not null, runtimeObservationFresh);
+		var gpuProvider = EvaluateGpuProvider(providers, runtime is not null, runtimeObservationFresh);
 		var engine = Combine(control, runtimeHealth, media, provider, gpuProvider);
 		var performance = runtime?.Performance;
 
@@ -92,10 +93,12 @@ public static class OperatorHealthProjection
 			FormatGpuDeviceName(performance));
 	}
 
-	private static OperatorHealthMetric EvaluateRuntime(RuntimeRemoteSnapshot? runtime)
+	private static OperatorHealthMetric EvaluateRuntime(RuntimeRemoteSnapshot? runtime, bool observationFresh)
 	{
 		if (runtime is null)
 			return Fail("RuntimeHost is disconnected or its snapshot is unavailable.");
+		if (!observationFresh)
+			return Unverified("RuntimeHost refresh missed; recent runtime observations are being retained temporarily.");
 		if (runtime.Runtime.Status != RuntimeExecutionStatus.Committed)
 			return Fail($"Runtime execution state is {runtime.Runtime.Status}.");
 
@@ -110,10 +113,12 @@ public static class OperatorHealthProjection
 		};
 	}
 
-	private static OperatorHealthMetric EvaluateMedia(RuntimeRemoteSnapshot? runtime, MediaDeckSnapshot? mediaDeck)
+	private static OperatorHealthMetric EvaluateMedia(RuntimeRemoteSnapshot? runtime, MediaDeckSnapshot? mediaDeck, bool observationFresh)
 	{
 		if (runtime is null)
 			return Fail("Media health cannot be observed while RuntimeHost is unavailable.");
+		if (!observationFresh)
+			return Unverified("Media health is based on a recent retained Runtime observation.");
 
 		var signals = runtime.InputSignals.Values.Select(value => value.Trim().ToUpperInvariant()).ToArray();
 		if (signals.Any(value => value == "LOST"))
@@ -133,10 +138,12 @@ public static class OperatorHealthProjection
 		return Pass("Runtime media inputs and Program audio observations are healthy.");
 	}
 
-	private static OperatorHealthMetric EvaluateProviders(IReadOnlyList<ProviderDescriptor> providers, bool runtimeAvailable)
+	private static OperatorHealthMetric EvaluateProviders(IReadOnlyList<ProviderDescriptor> providers, bool runtimeAvailable, bool observationFresh)
 	{
 		if (!runtimeAvailable)
 			return Fail("Provider health cannot be refreshed while RuntimeHost is unavailable.");
+		if (!observationFresh)
+			return Unverified("Provider health is based on a recent retained Runtime observation.");
 		if (providers.Count == 0)
 			return Unverified("Runtime provider inventory has not been synchronized.");
 
@@ -151,10 +158,12 @@ public static class OperatorHealthProjection
 		return Pass($"{providers.Count} Runtime provider(s) report Available.");
 	}
 
-	private static OperatorHealthMetric EvaluateGpuProvider(IReadOnlyList<ProviderDescriptor> providers, bool runtimeAvailable)
+	private static OperatorHealthMetric EvaluateGpuProvider(IReadOnlyList<ProviderDescriptor> providers, bool runtimeAvailable, bool observationFresh)
 	{
 		if (!runtimeAvailable)
 			return Fail("GPU provider health cannot be refreshed while RuntimeHost is unavailable.");
+		if (!observationFresh)
+			return Unverified("GPU provider health is based on a recent retained Runtime observation.");
 
 		var gpu = providers.FirstOrDefault(provider =>
 			provider.Capabilities.Any(capability => capability.Kind.StartsWith("gpu.", StringComparison.OrdinalIgnoreCase)) ||

@@ -235,6 +235,7 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 		var hasRuntimePerformance = NormalizeAvailability(_control.CurrentFormat) != Unavailable &&
 			NormalizeAvailability(_control.FrameTime) != Unavailable;
 		var renderSample = hasRuntimePerformance ? TryParseLeadingDouble(_control.FrameTime) : null;
+		var frameBudgetSample = hasRuntimePerformance ? TryParseFrameBudget(_control.FrameTime) : null;
 		var droppedSample = hasRuntimePerformance ? TryParseUnsigned(_control.DroppedFrames) : null;
 		var cpuSample = TryParsePercentage(_control.CpuUtilization);
 		var gpuSample = TryParsePercentage(_control.GpuUtilization);
@@ -272,13 +273,12 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 			"Runtime-published GPU memory evidence.",
 			null,
 			sampleHistory);
-		UpdateMetric(
-			"render",
+		_metrics["render"].Update(
 			NormalizeRenderTime(_control.FrameTime),
 			runtimeEvidence,
-			$"Authoritative frame processing time and budget: {NormalizeAvailability(_control.FrameTime)}.",
-			renderSample,
-			sampleHistory);
+			ResolveRenderStatus(renderSample, frameBudgetSample, runtimeEvidence),
+			$"Core render time. Engineering target is ≤ 3.00 ms; the hardware P95 qualification ceiling is 5.00 ms; full pipeline timing still uses the frame budget. Current render/budget: {NormalizeAvailability(_control.FrameTime)}.",
+			sampleHistory ? renderSample : null);
 		UpdateMetric(
 			"dropped",
 			hasRuntimePerformance ? NormalizeAvailability(_control.DroppedFrames) : Unavailable,
@@ -347,8 +347,15 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 	{
 		if (!_control.IsConnected || _control.IsStale)
 			return "UNVERIFIED";
-		if (NormalizeEvidence(_control.GpuProviderHealth) == "FAIL")
-			return "FAIL";
+
+		var runtimeEvidence = NormalizeEvidence(_control.RuntimeHealth);
+		if (runtimeEvidence != "PASS")
+			return runtimeEvidence;
+
+		var gpuEvidence = NormalizeEvidence(_control.GpuProviderHealth);
+		if (gpuEvidence != "PASS")
+			return gpuEvidence;
+
 		if (NormalizeAvailability(_control.CpuUtilization) == Unavailable ||
 			NormalizeAvailability(_control.SystemMemory) == Unavailable ||
 			NormalizeAvailability(_control.GpuUtilization) == Unavailable)
@@ -360,8 +367,18 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 	{
 		if (!_control.IsConnected || _control.IsStale || value == Unavailable || value.Contains("UNVERIFIED", StringComparison.OrdinalIgnoreCase))
 			return "UNVERIFIED";
-		if (providerEvidence is not null && NormalizeEvidence(providerEvidence) == "FAIL")
-			return "FAIL";
+
+		var runtimeEvidence = NormalizeEvidence(_control.RuntimeHealth);
+		if (runtimeEvidence != "PASS")
+			return runtimeEvidence;
+
+		if (providerEvidence is not null)
+		{
+			var normalizedProvider = NormalizeEvidence(providerEvidence);
+			if (normalizedProvider != "PASS")
+				return normalizedProvider;
+		}
+
 		return "PASS";
 	}
 
@@ -458,6 +475,32 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 		return double.TryParse(token, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
 			? parsed
 			: null;
+	}
+
+	private static double? TryParseFrameBudget(string? value)
+	{
+		var normalized = NormalizeAvailability(value);
+		if (normalized == Unavailable)
+			return null;
+
+		var separator = normalized.IndexOf('/');
+		if (separator < 0 || separator + 1 >= normalized.Length)
+			return null;
+
+		return TryParseLeadingDouble(normalized[(separator + 1)..].Trim());
+	}
+
+	private static string ResolveRenderStatus(double? renderMilliseconds, double? frameBudgetMilliseconds, string runtimeEvidence)
+	{
+		if (runtimeEvidence == "FAIL")
+			return "FAULTED";
+		if (runtimeEvidence != "PASS")
+			return "WARNING";
+		if (renderMilliseconds is not { } render || !double.IsFinite(render))
+			return "WARNING";
+		if (frameBudgetMilliseconds is { } budget && double.IsFinite(budget) && render > budget)
+			return "FAULTED";
+		return render <= 3.0 ? "HEALTHY" : "WARNING";
 	}
 
 	private static double? TryParseUnsigned(string? value) =>
