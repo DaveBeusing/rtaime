@@ -1253,10 +1253,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			true,
 			snapshot.State.ToString().ToUpperInvariant(),
 			snapshot.EventId,
-			snapshot.EventId is { } eventId ? _avSyncTimeline.PeriodSeconds.Numerator == 1 && _avSyncTimeline.PeriodSeconds.Denominator == 1
-				? $"{eventId}/1"
-				: snapshot.EventId.ToString()
-				: null,
+			snapshot.ExpectedMediaTime?.ToString(),
 			snapshot.TargetVideoFrameSequence,
 			snapshot.TargetAudioSamplePosition,
 			snapshot.ScheduledVideoOffsetMilliseconds,
