@@ -1,5 +1,6 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO.Pipes;
 using System.Security.Cryptography;
@@ -98,6 +99,7 @@ public sealed record ApplicationHostOptions(
 	public string ReadinessPath => Path.Combine(WorkRoot, "control-readiness.json");
 	public string StopPath => Path.Combine(WorkRoot, "control-stop.signal");
 	public string ShutdownEvidencePath => Path.Combine(WorkRoot, "apphost-shutdown.json");
+	public string ControlHostDiagnosticPath => Path.Combine(WorkRoot, "controlhost-process.log");
 	public string ServiceReadinessEvidencePath => Path.Combine(WorkRoot, "apphost-readiness.json");
 	public string LifecycleEvidencePath => Path.Combine(WorkRoot, "apphost-lifecycle.json");
 	public string LegacyLifecycleStatePath => Path.Combine($"{InstallRoot}.host-lifecycle", "lifecycle-state.json");
@@ -184,7 +186,10 @@ public sealed record ApplicationProcessSpec(
 	string WorkingDirectory,
 	IReadOnlyList<string> Arguments,
 	IReadOnlyDictionary<string, string> Environment,
-	bool CreateNoWindow);
+	bool CreateNoWindow)
+{
+	public string? DiagnosticLogPath { get; init; }
+}
 
 public interface IApplicationHostPlatform
 {
@@ -205,6 +210,8 @@ public interface IApplicationHostPlatform
 
 public sealed class SystemApplicationHostPlatform : IApplicationHostPlatform
 {
+	private readonly ConcurrentDictionary<int, Process> _diagnosticProcesses = new();
+
 	public DateTimeOffset UtcNow => DateTimeOffset.UtcNow;
 
 	public string FindProductArtifact(string installRoot, string baseName)
@@ -288,8 +295,75 @@ public sealed class SystemApplicationHostPlatform : IApplicationHostPlatform
 		foreach (var argument in spec.Arguments) startInfo.ArgumentList.Add(argument);
 		foreach (var pair in spec.Environment) startInfo.Environment[pair.Key] = pair.Value;
 
-		using var process = Process.Start(startInfo) ?? throw new InvalidOperationException($"Failed to start '{spec.ArtifactPath}'.");
-		return process.Id;
+		if (string.IsNullOrWhiteSpace(spec.DiagnosticLogPath))
+		{
+			using var process = Process.Start(startInfo) ?? throw new InvalidOperationException($"Failed to start '{spec.ArtifactPath}'.");
+			return process.Id;
+		}
+
+		var diagnosticPath = Path.GetFullPath(spec.DiagnosticLogPath);
+		var diagnosticDirectory = Path.GetDirectoryName(diagnosticPath);
+		if (!string.IsNullOrWhiteSpace(diagnosticDirectory)) Directory.CreateDirectory(diagnosticDirectory);
+		try { if (File.Exists(diagnosticPath)) File.Delete(diagnosticPath); }
+		catch (IOException) { }
+
+		startInfo.RedirectStandardOutput = true;
+		startInfo.RedirectStandardError = true;
+		var writeGate = new object();
+		var processWithDiagnostics = new Process { StartInfo = startInfo };
+		var processId = 0;
+		var finalized = 0;
+
+		void AppendDiagnostic(string stream, string? line)
+		{
+			if (line is null) return;
+			try
+			{
+				lock (writeGate)
+					File.AppendAllText(diagnosticPath, $"{DateTimeOffset.UtcNow:O} stream={stream} {line}{Environment.NewLine}");
+			}
+			catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+			{
+			}
+		}
+
+		void FinalizeDiagnostic()
+		{
+			if (Interlocked.Exchange(ref finalized, 1) != 0) return;
+			try
+			{
+				AppendDiagnostic("process", $"exitCode={processWithDiagnostics.ExitCode}");
+			}
+			catch (InvalidOperationException)
+			{
+				AppendDiagnostic("process", "exitCode=unavailable");
+			}
+			if (processId != 0) _diagnosticProcesses.TryRemove(processId, out _);
+			processWithDiagnostics.Dispose();
+		}
+
+		processWithDiagnostics.OutputDataReceived += (_, eventArgs) => AppendDiagnostic("stdout", eventArgs.Data);
+		processWithDiagnostics.ErrorDataReceived += (_, eventArgs) => AppendDiagnostic("stderr", eventArgs.Data);
+		processWithDiagnostics.Exited += (_, _) => FinalizeDiagnostic();
+
+		try
+		{
+			if (!processWithDiagnostics.Start())
+				throw new InvalidOperationException($"Failed to start '{spec.ArtifactPath}'.");
+			processId = processWithDiagnostics.Id;
+			_diagnosticProcesses[processId] = processWithDiagnostics;
+			processWithDiagnostics.BeginOutputReadLine();
+			processWithDiagnostics.BeginErrorReadLine();
+			processWithDiagnostics.EnableRaisingEvents = true;
+			if (processWithDiagnostics.HasExited) FinalizeDiagnostic();
+			return processId;
+		}
+		catch
+		{
+			if (processId != 0) _diagnosticProcesses.TryRemove(processId, out _);
+			processWithDiagnostics.Dispose();
+			throw;
+		}
 	}
 
 	public bool IsProcessAlive(int processId)
@@ -578,6 +652,7 @@ public sealed class UnifiedApplicationHost
 
 		_platform.DeleteFile(_options.ReadinessPath);
 		_platform.DeleteFile(_options.StopPath);
+		_platform.DeleteFile(_options.ControlHostDiagnosticPath);
 
 		var environment = new Dictionary<string, string>(StringComparer.Ordinal)
 		{
@@ -602,7 +677,10 @@ public sealed class UnifiedApplicationHost
 			Path.GetDirectoryName(controlArtifact) ?? _options.InstallRoot,
 			Array.Empty<string>(),
 			environment,
-			true));
+			true)
+		{
+			DiagnosticLogPath = _options.ControlHostDiagnosticPath
+		});
 
 		_ownedControlProcessId = processId;
 		_controlProcessId = processId;
@@ -660,7 +738,7 @@ public sealed class UnifiedApplicationHost
 		{
 			cancellationToken.ThrowIfCancellationRequested();
 			if (_controlProcessId is { } controlPid && !_platform.IsProcessAlive(controlPid))
-				throw new InvalidOperationException("ControlHost exited before qualified readiness.");
+				throw new InvalidOperationException(BuildControlHostExitDetail("ControlHost exited before qualified readiness."));
 
 			var ready = await FindHealthyReadinessAsync(cancellationToken).ConfigureAwait(false);
 			if (ready is not null)
@@ -790,7 +868,7 @@ public sealed class UnifiedApplicationHost
 		{
 			cancellationToken.ThrowIfCancellationRequested();
 			if (_controlProcessId is { } controlPid && !_platform.IsProcessAlive(controlPid))
-				throw new InvalidOperationException("ControlHost stopped while HeadlessEngine profile was active.");
+				throw new InvalidOperationException(BuildControlHostExitDetail("ControlHost stopped while HeadlessEngine profile was active."));
 
 			var readiness = await FindHealthyReadinessAsync(cancellationToken).ConfigureAwait(false);
 			if (readiness is null)
@@ -819,6 +897,24 @@ public sealed class UnifiedApplicationHost
 			}
 
 			await _platform.DelayAsync(_options.Policy.ProbeInterval, cancellationToken).ConfigureAwait(false);
+		}
+	}
+
+	private string BuildControlHostExitDetail(string prefix)
+	{
+		if (!_platform.FileExists(_options.ControlHostDiagnosticPath)) return prefix;
+		try
+		{
+			var diagnostic = _platform.ReadAllText(_options.ControlHostDiagnosticPath).Trim();
+			if (diagnostic.Length == 0) return prefix;
+			const int maximumDetailLength = 4096;
+			if (diagnostic.Length > maximumDetailLength)
+				diagnostic = diagnostic[^maximumDetailLength..];
+			return $"{prefix} ControlHost diagnostic: {diagnostic}";
+		}
+		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+		{
+			return prefix;
 		}
 	}
 
