@@ -15,6 +15,8 @@ namespace rtaime.Operator;
 public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 {
 	private readonly OperatorControlClient? _client;
+	private readonly IRuntimeReadinessService _runtimeReadiness;
+	private readonly bool _ownsRuntimeReadiness;
 	private SynchronizationContext? _synchronizationContext;
 	private readonly CancellationTokenSource _audioPollingStop = new();
 	private Func<OperatorGraphicsAsset?>? _graphicsAssetPicker;
@@ -109,11 +111,15 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	public OperatorViewModel(
 		OperatorControlClient? client = null,
 		Func<OperatorGraphicsAsset?>? graphicsAssetPicker = null,
-		SynchronizationContext? synchronizationContext = null)
+		SynchronizationContext? synchronizationContext = null,
+		IRuntimeReadinessService? runtimeReadiness = null)
 	{
 		_client = client;
 		_graphicsAssetPicker = graphicsAssetPicker;
 		_synchronizationContext = synchronizationContext ?? SynchronizationContext.Current;
+		_runtimeReadiness = runtimeReadiness ?? new RuntimeReadinessService();
+		_ownsRuntimeReadiness = runtimeReadiness is null;
+		_runtimeReadiness.Changed += OnRuntimeReadinessChanged;
 		Sources = new ObservableCollection<OperatorSourceTileViewModel>();
 		AudioInputs = new ObservableCollection<OperatorAudioInputViewModel>();
 		SynchronizeCommand = new AsyncRelayCommand(SynchronizeAsync, () => _client is not null && !IsBusy);
@@ -130,9 +136,11 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		StopRecordingCommand = new AsyncRelayCommand(StopRecordingAsync, CanStopRecording);
 		EnableAIShowcaseCommand = new AsyncRelayCommand(() => SetAIShowcaseAsync(true), () => CanControl() && !AIEnabled);
 		DisableAIShowcaseCommand = new AsyncRelayCommand(() => SetAIShowcaseAsync(false), () => CanControl() && AIEnabled);
+		ApplyRuntimeReadiness(_runtimeReadiness.Current);
 	}
 
 	internal OperatorControlClient? Client => _client;
+	public IRuntimeReadinessService RuntimeReadiness => _runtimeReadiness;
 
 	public event PropertyChangedEventHandler? PropertyChanged;
 	internal event Action<MediaDeckSnapshot>? ConfirmedMediaDeckSnapshot;
@@ -316,6 +324,13 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	public string RecoveryAction { get => _recoveryAction; private set => Set(ref _recoveryAction, value); }
 	public string AffectedComponent { get => _affectedComponent; private set => Set(ref _affectedComponent, value); }
 	public bool StartupComplete { get => _startupComplete; private set => Set(ref _startupComplete, value); }
+	public string GlobalReadinessState => _runtimeReadiness.Current.State.ToString().ToUpperInvariant();
+	public string GlobalReadinessLabel => FormatGlobalReadinessLabel(_runtimeReadiness.Current);
+	public string GlobalReadinessSummary => ResolveGlobalReadinessSummary(_runtimeReadiness.Current);
+	public string GlobalReadinessTooltip => FormatGlobalReadinessTooltip(_runtimeReadiness.Current);
+	public bool IsProductionReady => _runtimeReadiness.Current.IsProductionReady;
+	public string PerformanceVerificationState => _runtimeReadiness.Current.Performance.State.ToString().ToUpperInvariant();
+	public string PerformanceVerificationDetail => _runtimeReadiness.Current.Performance.Detail;
 	public string PreviewViewerState { get => _previewViewerState; private set => Set(ref _previewViewerState, value); }
 	public string ProgramViewerState { get => _programViewerState; private set => Set(ref _programViewerState, value); }
 
@@ -373,6 +388,9 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 			catch (OperationCanceledException) { }
 		}
 		_audioPollingStop.Dispose();
+		_runtimeReadiness.Changed -= OnRuntimeReadinessChanged;
+		if (_ownsRuntimeReadiness && _runtimeReadiness is IDisposable disposableReadiness)
+			disposableReadiness.Dispose();
 	}
 
 	private async Task PollAudioAsync(CancellationToken cancellationToken)
@@ -427,6 +445,10 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 							MarkStale("Control synchronization is stale. Automatic full-snapshot recovery is active.");
 							CommandStatus = "RECOVERING";
 							LastEvent = "Control connection was lost; automatic recovery is running.";
+						}
+						else
+						{
+							ApplyLifecycle(_client?.Snapshot);
 						}
 					}
 					else
@@ -1133,21 +1155,96 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 
 	private void ApplyLifecycle(OperatorStatusSnapshot? snapshot)
 	{
-		var projection = OperatorSystemLifecycleProjection.Evaluate(
+		_runtimeReadiness.Observe(new RuntimeReadinessObservation(
 			snapshot?.Health ?? OperatorHealthDescriptor.Unavailable,
 			snapshot?.RuntimeStatus ?? RuntimeStatus,
 			snapshot?.AIShowcase ?? OperatorAIShowcaseDescriptor.Unavailable,
 			IsConnected,
-			IsStale);
+			IsStale));
+		ApplyRuntimeReadiness(_runtimeReadiness.Current);
+	}
 
-		EngineLifecycleState = projection.State;
-		EngineLifecycleDetail = projection.Detail;
-		ProgramSafety = projection.ProgramSafety;
-		RecoveryAction = projection.RequiredAction;
-		AffectedComponent = projection.AffectedComponent ?? "—";
-		if (!StartupComplete && projection.MainUiReady)
+	private void OnRuntimeReadinessChanged(object? sender, RuntimeReadinessChangedEventArgs e) =>
+		Post(() => ApplyRuntimeReadiness(_runtimeReadiness.Current));
+
+	private void ApplyRuntimeReadiness(RuntimeReadinessSnapshot snapshot)
+	{
+		EngineLifecycleState = snapshot.State switch
+		{
+			RuntimeReadinessState.Initializing => OperatorLifecycleStates.Starting,
+			RuntimeReadinessState.Ready => OperatorLifecycleStates.Healthy,
+			RuntimeReadinessState.Degraded => OperatorLifecycleStates.Degraded,
+			RuntimeReadinessState.NotReady => OperatorLifecycleStates.Degraded,
+			RuntimeReadinessState.Recovering => OperatorLifecycleStates.Recovering,
+			RuntimeReadinessState.Failed => OperatorLifecycleStates.Failed,
+			_ => OperatorLifecycleStates.Degraded
+		};
+		EngineLifecycleDetail = ResolveGlobalReadinessSummary(snapshot);
+		ProgramSafety = snapshot.State switch
+		{
+			RuntimeReadinessState.Ready => OperatorProgramSafetyStates.Safe,
+			RuntimeReadinessState.Degraded => OperatorProgramSafetyStates.Caution,
+			RuntimeReadinessState.Initializing => OperatorProgramSafetyStates.Unknown,
+			_ => OperatorProgramSafetyStates.Blocked
+		};
+		RecoveryAction = snapshot.State switch
+		{
+			RuntimeReadinessState.Initializing => "Startup is automatic; no operator action is required.",
+			RuntimeReadinessState.Ready => "No operator action is required.",
+			RuntimeReadinessState.Degraded => "Review the named degradation while production remains available.",
+			RuntimeReadinessState.NotReady => "Keep production mutations blocked until required components recover.",
+			RuntimeReadinessState.Recovering => "Automatic recovery is active; wait for fresh authoritative state.",
+			RuntimeReadinessState.Failed => "Review diagnostics before attempting another production session.",
+			_ => "Review diagnostics."
+		};
+		AffectedComponent = snapshot.Reasons.FirstOrDefault()?.Component ?? "—";
+		if (!StartupComplete && snapshot.IsProductionReady)
 			StartupComplete = true;
+
+		foreach (var propertyName in new[]
+		{
+			nameof(GlobalReadinessState),
+			nameof(GlobalReadinessLabel),
+			nameof(GlobalReadinessSummary),
+			nameof(GlobalReadinessTooltip),
+			nameof(IsProductionReady),
+			nameof(PerformanceVerificationState),
+			nameof(PerformanceVerificationDetail)
+		})
+		{
+			PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+		}
 		RaiseCommandState();
+	}
+
+	private static string FormatGlobalReadinessLabel(RuntimeReadinessSnapshot snapshot)
+	{
+		var state = snapshot.State switch
+		{
+			RuntimeReadinessState.Initializing => "INITIALIZING",
+			RuntimeReadinessState.Ready => "PRODUCTION READY",
+			RuntimeReadinessState.Degraded => "DEGRADED",
+			RuntimeReadinessState.NotReady => "NOT READY",
+			RuntimeReadinessState.Recovering => "RECOVERING",
+			RuntimeReadinessState.Failed => "FAILED",
+			_ => "UNKNOWN"
+		};
+		var reason = snapshot.Reasons.FirstOrDefault();
+		return reason is null || snapshot.State == RuntimeReadinessState.Ready
+			? state
+			: $"{state} · {reason.Component}";
+	}
+
+	private static string ResolveGlobalReadinessSummary(RuntimeReadinessSnapshot snapshot) =>
+		snapshot.Reasons.FirstOrDefault()?.Detail ??
+		"All required Runtime readiness, health and performance evidence is qualified.";
+
+	private static string FormatGlobalReadinessTooltip(RuntimeReadinessSnapshot snapshot)
+	{
+		var reasons = snapshot.Reasons.Count == 0
+			? "No active readiness reasons."
+			: string.Join(Environment.NewLine, snapshot.Reasons.Select(reason => $"{reason.Component}: {reason.Detail}"));
+		return $"{reasons}{Environment.NewLine}Performance: {snapshot.Performance.State.ToString().ToUpperInvariant()} · {snapshot.Performance.Detail}";
 	}
 
 	private static string ResolveSourceName(OperatorStatusSnapshot snapshot, string sourceId) =>

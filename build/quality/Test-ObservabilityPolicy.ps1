@@ -23,12 +23,15 @@ $runtimeServicePath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/V1
 $hardwareTelemetryPath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/SystemHardwareTelemetry.cs"
 $frameDropPath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/RuntimeFrameDropCounter.cs"
 $healthProjectionPath = Join-Path $repositoryRoot "src/Hosts/rtaime.ControlHost/OperatorHealthProjection.cs"
+$runtimeReadinessPath = Join-Path $repositoryRoot "src/Client/rtaime.Client/RuntimeReadinessService.cs"
 $controlIpcPath = Join-Path $repositoryRoot "src/Hosts/rtaime.ControlHost/ControlHostIpcServer.cs"
 $aiPath = Join-Path $repositoryRoot "src/Hosts/rtaime.AIHost/AIHostDiagnostics.cs"
 $testsPath = Join-Path $repositoryRoot "tests/rtaime.Tests.Unit/DiagnosticsTests.cs"
+$runtimeReadinessTestsPath = Join-Path $repositoryRoot "tests/rtaime.Tests.Unit/RuntimeReadinessServiceTests.cs"
 $documentationPath = Join-Path $repositoryRoot "docs/ObservabilityDiagnostics.md"
+$runtimeReadinessDocumentationPath = Join-Path $repositoryRoot "docs/RuntimeReadiness.md"
 
-foreach ($path in @($corePath, $controlPath, $runtimePath, $runtimeServicePath, $hardwareTelemetryPath, $frameDropPath, $healthProjectionPath, $controlIpcPath, $aiPath, $testsPath, $documentationPath)) {
+foreach ($path in @($corePath, $controlPath, $runtimePath, $runtimeServicePath, $hardwareTelemetryPath, $frameDropPath, $healthProjectionPath, $runtimeReadinessPath, $controlIpcPath, $aiPath, $testsPath, $runtimeReadinessTestsPath, $documentationPath, $runtimeReadinessDocumentationPath)) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required observability artifact is missing: '$path'."
 }
 
@@ -39,10 +42,13 @@ $runtimeService = Get-Content -LiteralPath $runtimeServicePath -Raw
 $hardwareTelemetry = Get-Content -LiteralPath $hardwareTelemetryPath -Raw
 $frameDrop = Get-Content -LiteralPath $frameDropPath -Raw
 $healthProjection = Get-Content -LiteralPath $healthProjectionPath -Raw
+$runtimeReadiness = Get-Content -LiteralPath $runtimeReadinessPath -Raw
 $controlIpc = Get-Content -LiteralPath $controlIpcPath -Raw
 $ai = Get-Content -LiteralPath $aiPath -Raw
 $tests = Get-Content -LiteralPath $testsPath -Raw
+$runtimeReadinessTests = Get-Content -LiteralPath $runtimeReadinessTestsPath -Raw
 $documentation = Get-Content -LiteralPath $documentationPath -Raw
+$runtimeReadinessDocumentation = Get-Content -LiteralPath $runtimeReadinessDocumentationPath -Raw
 
 Assert-Condition ($core -match 'public sealed class BoundedDiagnosticBuffer') "Diagnostics must provide a bounded in-memory event buffer."
 Assert-Condition ($core -match 'CurrentSchemaVersion\s*=\s*"1\.0"') "Support snapshots must have an explicit 1.0 schema marker."
@@ -76,6 +82,26 @@ Assert-Condition ($frameDrop -notmatch 'List<|Queue<|Dictionary<|File\.|Stream')
 Assert-Condition ($healthProjection -match 'Pass[\s\S]*Fail[\s\S]*Unverified') "Runtime health projection must preserve PASS/FAIL/UNVERIFIED semantics."
 Assert-Condition ($healthProjection -match 'GpuUtilizationPercent is') "Runtime health projection must expose GPU utilization only when a measured value exists."
 Assert-Condition ($healthProjection -match 'CpuUtilizationPercent is' -and $healthProjection -match 'SystemMemoryUsedBytes is') "Runtime health projection must expose CPU and system-memory values only from measured evidence."
+Assert-Condition ($runtimeReadiness -match 'public interface IRuntimeReadinessService' -and $runtimeReadiness -match 'RuntimeReadinessSnapshot Current' -and $runtimeReadiness -match 'RuntimeReadinessChangedEventArgs') "Global Runtime readiness must expose one observable Current snapshot source."
+foreach ($state in @("Initializing", "Ready", "Degraded", "NotReady", "Recovering", "Failed")) {
+	Assert-Condition ($runtimeReadiness -match [Regex]::Escape($state)) "Global Runtime readiness is missing state '$state'."
+}
+Assert-Condition ($runtimeReadiness -match 'DefaultPerformanceValidity\s*=\s*TimeSpan\.FromSeconds\(2\)') "Performance verification validity must remain aligned with the two-second retained Runtime observation window."
+foreach ($reason in @("HardwareChanged", "PipelineChanged", "MeasurementExpired", "RuntimeFault", "Explicit")) {
+	Assert-Condition ($runtimeReadiness -match [Regex]::Escape($reason)) "Performance verification is missing invalidation reason '$reason'."
+}
+Assert-Condition ($runtimeReadiness -match 'lock \(_gate\)' -and $runtimeReadiness -match 'Changed\?\.Invoke') "Global Runtime readiness transitions must be serialized and observable."
+Assert-Condition ($runtimeReadiness -notmatch 'PeriodicTimer|DispatcherTimer|Task\.Run|new Thread') "Global Runtime readiness must reuse existing observations and must not create a polling loop or background thread."
+Assert-Condition ($runtimeReadiness -match 'RuntimePerformanceVerificationState\.Verified' -and $runtimeReadiness -match 'retainedUntil') "A still-valid verified performance result must survive transient retained Runtime observations."
+Assert-Condition ($runtimeReadinessTests -match 'Global_states_cover_initializing_ready_degraded_not_ready_recovering_and_failed') "Runtime readiness must test all global states."
+Assert-Condition ($runtimeReadinessTests -match 'Multiple_degradation_reasons_are_retained_together') "Runtime readiness must test simultaneous degradation reasons."
+Assert-Condition ($runtimeReadinessTests -match 'Recovered_required_subsystem_returns_automatically_to_ready') "Runtime readiness must test automatic recovery to Ready."
+Assert-Condition ($runtimeReadinessTests -match 'Verified_performance_survives_transient_retained_runtime_observation') "Runtime readiness must test persistent performance verification."
+Assert-Condition ($runtimeReadinessTests -match 'Explicit_invalidation_requires_a_newer_measurement_before_reverification') "Runtime readiness must test explicit invalidation."
+Assert-Condition ($runtimeReadinessTests -match 'Rebinding_subscribers_does_not_reset_current_verification') "Runtime readiness must test UI subscriber rebinding without state loss."
+Assert-Condition ($runtimeReadinessTests -match 'Parallel_state_observations_are_thread_safe') "Runtime readiness must test concurrent state events."
+Assert-Condition ($runtimeReadinessTests -match 'Disposed_service_rejects_late_state_updates') "Runtime readiness must test disposal behavior."
+Assert-Condition ($runtimeReadinessDocumentation -match 'one persistent application-level view' -and $runtimeReadinessDocumentation -match 'No independent polling loop') "Runtime readiness documentation must describe the single persistent state source and polling boundary."
 Assert-Condition ($ai -match 'ReservedVramBytes') "AIHost support snapshots must include governed resource admission state."
 Assert-Condition ($ai -match 'providerCount') "AIHost support snapshots must include provider inventory counts."
 

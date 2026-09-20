@@ -36,20 +36,20 @@
 			SnapsToDevicePixels="True">
 			<Grid>
 				<Grid.ColumnDefinitions>
-					<ColumnDefinition Width="118" />
+					<ColumnDefinition Width="105" />
 					<ColumnDefinition Width="1" />
-					<ColumnDefinition Width="240" />
-					<ColumnDefinition Width="250" />
+					<ColumnDefinition Width="185" />
+					<ColumnDefinition Width="190" />
 					<ColumnDefinition Width="*" />
-					<ColumnDefinition Width="120" />
-					<ColumnDefinition Width="120" />
-					<ColumnDefinition Width="150" />
-					<ColumnDefinition Width="120" />
+					<ColumnDefinition Width="82" />
+					<ColumnDefinition Width="82" />
+					<ColumnDefinition Width="110" />
+					<ColumnDefinition Width="100" />
 					<ColumnDefinition Width="1" />
-					<ColumnDefinition Width="150" />
-					<ColumnDefinition Width="86" />
-					<ColumnDefinition Width="180" />
-					<ColumnDefinition Width="54" />
+					<ColumnDefinition Width="120" />
+					<ColumnDefinition Width="70" />
+					<ColumnDefinition Width="140" />
+					<ColumnDefinition Width="46" />
 				</Grid.ColumnDefinitions>
 
 				<StackPanel Grid.Column="0"
@@ -100,6 +100,21 @@
 						</StackPanel>
 					</StackPanel>
 				</controls:RtaimeButton>
+
+				<controls:RtaimeGlobalStatusButton
+					Grid.Column="4"
+					State="{Binding GlobalReadinessState}"
+					StatusText="{Binding GlobalReadinessLabel}"
+					Detail="{Binding GlobalReadinessSummary}"
+					Command="{Binding Shell.SelectWorkspaceCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+					CommandParameter="SETTINGS"
+					ToolTip="{Binding GlobalReadinessTooltip}"
+					HorizontalAlignment="Right"
+					VerticalAlignment="Center"
+					MinWidth="0"
+					MaxWidth="360"
+					Margin="6,0"
+					AutomationProperties.Name="Global runtime readiness and diagnostics" />
 
 				<Border Grid.Column="5" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1,0,0,0" Padding="10,6" ToolTip="{Binding CpuDeviceName}">
 					<StackPanel VerticalAlignment="Center">
@@ -606,9 +621,9 @@
 									<controls:RtaimeStatusBadge
 										DockPanel.Dock="Right"
 										Status="{x:Static controls:RtaimeStatusKind.Neutral}"
-										Content="{Binding EngineLifecycleState}"
+										Content="{Binding GlobalReadinessState}"
 										ShowIndicator="True"
-										ToolTip="{Binding EngineLifecycleDetail}" />
+										ToolTip="{Binding GlobalReadinessTooltip}" />
 								</DockPanel>
 
 								<Grid Grid.Row="1" Margin="0,4,0,4">
@@ -1167,6 +1182,9 @@
 								<controls:RtaimeButton Grid.Column="2" Content="{Binding Shell.CenterModeLabel, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Command="{Binding Shell.ToggleCenterMaximizeCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" IsCompact="True" />
 								<controls:RtaimeButton Grid.Column="4" Content="RESET LAYOUT" Command="{Binding Shell.ResetLayoutCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" IsCompact="True" ToolTip="Restore the 1920x1080 mockup reference dimensions." />
 							</Grid>
+							<DockPanel Margin="0,0,0,6"><TextBlock Text="Global Readiness" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding GlobalReadinessLabel}" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" DockPanel.Dock="Right" /></DockPanel>
+							<DockPanel Margin="0,0,0,6"><TextBlock Text="Performance Verification" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding PerformanceVerificationState}" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" DockPanel.Dock="Right" /></DockPanel>
+							<TextBlock Text="{Binding GlobalReadinessSummary}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,0,0,8" />
 							<DockPanel Margin="0,0,0,6"><TextBlock Text="Engine" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding EngineHealth}" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" DockPanel.Dock="Right" /></DockPanel>
 							<DockPanel Margin="0,0,0,6"><TextBlock Text="Control" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding ControlHealth}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
 							<DockPanel Margin="0,0,0,6"><TextBlock Text="Runtime" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding RuntimeHealth}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
@@ -1187,7 +1205,10 @@
 									<TextBlock Text="{Binding EngineHealth}" FontWeight="Bold" />
 								</Border>
 							</DockPanel>
-							<TextBlock Text="{Binding EngineHealthDetail}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,0,0,12" />
+							<TextBlock Text="{Binding GlobalReadinessSummary}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,0,0,8" />
+							<TextBlock Text="{Binding PerformanceVerificationDetail}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,0,0,12" />
+							<DockPanel Margin="0,0,0,6"><TextBlock Text="Global Readiness" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding GlobalReadinessLabel}" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" DockPanel.Dock="Right" /></DockPanel>
+							<DockPanel Margin="0,0,0,6"><TextBlock Text="Performance Verification" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding PerformanceVerificationState}" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" DockPanel.Dock="Right" /></DockPanel>
 							<DockPanel Margin="0,0,0,6"><TextBlock Text="Lifecycle" Style="{StaticResource OperatorLabel}" /><Border Style="{StaticResource OperatorLifecycleBadge}" Tag="{Binding EngineLifecycleState}" DockPanel.Dock="Right"><TextBlock Text="{Binding EngineLifecycleState}" FontWeight="Bold" /></Border></DockPanel>
 							<DockPanel Margin="0,0,0,6"><TextBlock Text="Program Safety" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding ProgramSafety}" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" DockPanel.Dock="Right" /></DockPanel>
 							<DockPanel Margin="0,0,0,12"><TextBlock Text="Affected" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding AffectedComponent}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>

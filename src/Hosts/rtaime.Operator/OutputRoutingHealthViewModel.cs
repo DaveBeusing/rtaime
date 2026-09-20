@@ -41,7 +41,10 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 		nameof(OperatorViewModel.IsStale),
 		nameof(OperatorViewModel.IsBusy),
 		nameof(OperatorViewModel.ProgramSafety),
-		nameof(OperatorViewModel.RuntimeStatus)
+		nameof(OperatorViewModel.RuntimeStatus),
+		nameof(OperatorViewModel.GlobalReadinessState),
+		nameof(OperatorViewModel.PerformanceVerificationState),
+		nameof(OperatorViewModel.PerformanceVerificationDetail)
 	};
 
 	private readonly OperatorViewModel _control;
@@ -166,6 +169,7 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 	{
 		var format = ParseFormat(_control.CurrentFormat);
 		var runtimeEvidence = NormalizeEvidence(_control.RuntimeHealth);
+		var performanceEvidence = ResolvePerformanceEvidence(runtimeEvidence);
 		var runtimeStatus = ToOperatorStatus(runtimeEvidence);
 		var runtimeDetail = runtimeEvidence == "PASS"
 			? "Program routing reflects the authoritative Runtime state."
@@ -275,9 +279,9 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 			sampleHistory);
 		_metrics["render"].Update(
 			NormalizeRenderTime(_control.FrameTime),
-			runtimeEvidence,
-			ResolveRenderStatus(renderSample, frameBudgetSample, runtimeEvidence),
-			$"Core render time. Engineering target is ≤ 3.00 ms; the hardware P95 qualification ceiling is 5.00 ms; full pipeline timing still uses the frame budget. Current render/budget: {NormalizeAvailability(_control.FrameTime)}.",
+			performanceEvidence,
+			ResolveRenderStatus(renderSample, frameBudgetSample, performanceEvidence),
+			$"Core render time. Engineering target is ≤ 3.00 ms; the hardware P95 qualification ceiling is 5.00 ms; full pipeline timing still uses the frame budget. {_control.PerformanceVerificationDetail} Current render/budget: {NormalizeAvailability(_control.FrameTime)}.",
 			sampleHistory ? renderSample : null);
 		UpdateMetric(
 			"dropped",
@@ -348,19 +352,25 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 		if (!_control.IsConnected || _control.IsStale)
 			return "UNVERIFIED";
 
-		var runtimeEvidence = NormalizeEvidence(_control.RuntimeHealth);
-		if (runtimeEvidence != "PASS")
-			return runtimeEvidence;
-
-		var gpuEvidence = NormalizeEvidence(_control.GpuProviderHealth);
-		if (gpuEvidence != "PASS")
-			return gpuEvidence;
-
 		if (NormalizeAvailability(_control.CpuUtilization) == Unavailable ||
 			NormalizeAvailability(_control.SystemMemory) == Unavailable ||
 			NormalizeAvailability(_control.GpuUtilization) == Unavailable)
 			return "UNVERIFIED";
-		return "PASS";
+
+		var runtimeEvidence = NormalizeEvidence(_control.RuntimeHealth);
+		if (runtimeEvidence == "FAIL")
+			return "FAIL";
+
+		var gpuEvidence = NormalizeEvidence(_control.GpuProviderHealth);
+		if (gpuEvidence == "FAIL")
+			return "FAIL";
+
+		if (string.Equals(_control.PerformanceVerificationState, "VERIFIED", StringComparison.Ordinal))
+			return "PASS";
+
+		return runtimeEvidence == "PASS" && gpuEvidence == "PASS"
+			? "PASS"
+			: "UNVERIFIED";
 	}
 
 	private string ResolveHardwareMetricEvidence(string value, string? providerEvidence = null)
@@ -369,17 +379,32 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 			return "UNVERIFIED";
 
 		var runtimeEvidence = NormalizeEvidence(_control.RuntimeHealth);
-		if (runtimeEvidence != "PASS")
-			return runtimeEvidence;
+		if (runtimeEvidence == "FAIL")
+			return "FAIL";
 
 		if (providerEvidence is not null)
 		{
 			var normalizedProvider = NormalizeEvidence(providerEvidence);
-			if (normalizedProvider != "PASS")
-				return normalizedProvider;
+			if (normalizedProvider == "FAIL")
+				return "FAIL";
+			if (normalizedProvider != "PASS" &&
+				!string.Equals(_control.PerformanceVerificationState, "VERIFIED", StringComparison.Ordinal))
+				return "UNVERIFIED";
 		}
 
-		return "PASS";
+		if (string.Equals(_control.PerformanceVerificationState, "VERIFIED", StringComparison.Ordinal))
+			return "PASS";
+
+		return runtimeEvidence;
+	}
+
+	private string ResolvePerformanceEvidence(string runtimeEvidence)
+	{
+		if (runtimeEvidence == "FAIL")
+			return "FAIL";
+		return string.Equals(_control.PerformanceVerificationState, "VERIFIED", StringComparison.Ordinal)
+			? "PASS"
+			: "UNVERIFIED";
 	}
 
 	private string ResolveAccessDetail()
