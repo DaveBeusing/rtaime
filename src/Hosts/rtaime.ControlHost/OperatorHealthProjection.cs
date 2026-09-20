@@ -48,7 +48,8 @@ public sealed record OperatorHealthProjectionSnapshot(
 	string CpuDeviceName = "UNVERIFIED",
 	string CpuUtilization = "UNVERIFIED",
 	string SystemMemory = "UNVERIFIED",
-	string GpuDeviceName = "UNVERIFIED");
+	string GpuDeviceName = "UNVERIFIED",
+	double? OutputFramesPerSecond = null);
 
 public static class OperatorHealthProjection
 {
@@ -90,7 +91,8 @@ public static class OperatorHealthProjection
 			FormatCpuDeviceName(performance),
 			FormatCpuUtilization(performance),
 			FormatSystemMemory(performance),
-			FormatGpuDeviceName(performance));
+			FormatGpuDeviceName(performance),
+			performance?.OutputFramesPerSecond);
 	}
 
 	private static OperatorHealthMetric EvaluateRuntime(RuntimeRemoteSnapshot? runtime, bool observationFresh)
