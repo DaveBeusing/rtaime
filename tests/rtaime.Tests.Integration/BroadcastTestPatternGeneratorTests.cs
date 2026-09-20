@@ -44,7 +44,7 @@ public sealed class BroadcastTestPatternGeneratorTests
 		Assert.Equal((byte)235, cyanBar.Green);
 		Assert.Equal((byte)235, cyanBar.Blue);
 
-		var nearBlack = generator.GetPixel(384, 750);
+		var nearBlack = generator.GetPixel(384, 820);
 		Assert.Equal((byte)16, nearBlack.Red);
 		Assert.Equal((byte)16, nearBlack.Green);
 		Assert.Equal((byte)16, nearBlack.Blue);
