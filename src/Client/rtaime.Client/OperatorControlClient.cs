@@ -261,7 +261,13 @@ public sealed record OperatorHealthDescriptor(
     string CpuUtilization = "UNVERIFIED",
     string SystemMemory = "UNVERIFIED",
     string GpuDeviceName = "UNVERIFIED",
-    double? OutputFramesPerSecond = null)
+    double? OutputFramesPerSecond = null,
+    string AvSyncState = "UNAVAILABLE",
+    string AvSyncEvent = "UNAVAILABLE",
+    string AvSyncScheduledOffset = "UNAVAILABLE",
+    string AvSyncSubmitOffset = "UNAVAILABLE",
+    string AvSyncDrift = "UNAVAILABLE",
+    string AvSyncDetail = "A/V sync diagnostics are unavailable.")
 {
     public static OperatorHealthDescriptor Unavailable { get; } = new(
         OperatorHealthMetricDescriptor.Unverified("Health snapshot unavailable."),
