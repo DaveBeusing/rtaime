@@ -10,29 +10,8 @@ public sealed class OperatorHealthSnapshotProvider : IHealthSnapshotProvider, ID
 {
 	private static readonly HashSet<string> RelevantOperatorProperties = new(StringComparer.Ordinal)
 	{
-		nameof(OperatorViewModel.EngineHealth),
-		nameof(OperatorViewModel.EngineHealthDetail),
-		nameof(OperatorViewModel.ControlHealth),
-		nameof(OperatorViewModel.RuntimeHealth),
-		nameof(OperatorViewModel.MediaHealth),
-		nameof(OperatorViewModel.ProviderHealth),
-		nameof(OperatorViewModel.GpuProviderHealth),
-		nameof(OperatorViewModel.CurrentFormat),
-		nameof(OperatorViewModel.FrameTime),
-		nameof(OperatorViewModel.DroppedFrames),
-		nameof(OperatorViewModel.Uptime),
-		nameof(OperatorViewModel.CpuDeviceName),
-		nameof(OperatorViewModel.CpuUtilization),
-		nameof(OperatorViewModel.SystemMemory),
-		nameof(OperatorViewModel.GpuDeviceName),
-		nameof(OperatorViewModel.GpuUtilization),
-		nameof(OperatorViewModel.Vram),
 		nameof(OperatorViewModel.HealthObserved),
-		nameof(OperatorViewModel.IsConnected),
-		nameof(OperatorViewModel.IsStale),
-		nameof(OperatorViewModel.GlobalReadinessState),
-		nameof(OperatorViewModel.PerformanceVerificationState),
-		nameof(OperatorViewModel.PerformanceVerificationDetail)
+		nameof(OperatorViewModel.GlobalReadinessState)
 	};
 
 	private static readonly HashSet<string> RelevantDeckProperties = new(StringComparer.Ordinal)
@@ -93,7 +72,6 @@ public sealed class OperatorHealthSnapshotProvider : IHealthSnapshotProvider, ID
 		_mediaDeck.PropertyChanged += MediaDeckPropertyChanged;
 		_monitoring.PropertyChanged += MonitoringPropertyChanged;
 		_output.PropertyChanged += OutputPropertyChanged;
-		_compositing.PropertyChanged += CompositingPropertyChanged;
 		_compositing.Nodes.CollectionChanged += CompositingNodesChanged;
 		Refresh();
 	}
@@ -115,7 +93,6 @@ public sealed class OperatorHealthSnapshotProvider : IHealthSnapshotProvider, ID
 		_mediaDeck.PropertyChanged -= MediaDeckPropertyChanged;
 		_monitoring.PropertyChanged -= MonitoringPropertyChanged;
 		_output.PropertyChanged -= OutputPropertyChanged;
-		_compositing.PropertyChanged -= CompositingPropertyChanged;
 		_compositing.Nodes.CollectionChanged -= CompositingNodesChanged;
 	}
 
@@ -151,13 +128,6 @@ public sealed class OperatorHealthSnapshotProvider : IHealthSnapshotProvider, ID
 		if (_disposed)
 			return;
 		if (!string.IsNullOrEmpty(e.PropertyName) && !RelevantOutputProperties.Contains(e.PropertyName))
-			return;
-		Refresh();
-	}
-
-	private void CompositingPropertyChanged(object? sender, PropertyChangedEventArgs e)
-	{
-		if (_disposed)
 			return;
 		Refresh();
 	}
