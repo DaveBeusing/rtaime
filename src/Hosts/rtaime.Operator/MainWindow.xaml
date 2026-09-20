@@ -6,6 +6,7 @@
 	xmlns:controls="clr-namespace:rtaime.Operator.Controls"
 	xmlns:local="clr-namespace:rtaime.Operator"
 	Title="rtaime Operator"
+	Icon="{StaticResource RtaimeBrandAppIconImage}"
 	Width="1600"
 	Height="900"
 	MinWidth="960"
@@ -51,12 +52,20 @@
 					<ColumnDefinition Width="54" />
 				</Grid.ColumnDefinitions>
 
-				<TextBlock Grid.Column="0"
-					Text="rtaime"
-					FontSize="{StaticResource OperatorFontSizeProduct}"
-					FontWeight="SemiBold"
+				<StackPanel Grid.Column="0"
+					Orientation="Horizontal"
 					HorizontalAlignment="Center"
-					VerticalAlignment="Center" />
+					VerticalAlignment="Center">
+					<Image Source="{StaticResource RtaimeBrandEmblemImage}"
+						Width="28"
+						Height="28"
+						Stretch="Uniform"
+						Margin="0,0,5,0" />
+					<TextBlock Text="rtaime"
+						FontSize="{StaticResource OperatorFontSizeProduct}"
+						FontWeight="SemiBold"
+						VerticalAlignment="Center" />
+				</StackPanel>
 				<Border Grid.Column="1" Background="{DynamicResource OperatorBorderBrush}" Margin="0,12" />
 
 				<controls:RtaimeButton Grid.Column="2"
@@ -1521,8 +1530,8 @@
 					<RowDefinition Height="Auto" />
 				</Grid.RowDefinitions>
 				<StackPanel>
-					<TextBlock Text="rtaime" FontSize="36" FontWeight="SemiBold" HorizontalAlignment="Center" />
-					<TextBlock Text="Production-grade real-time AI media platform." Style="{StaticResource OperatorLabel}" HorizontalAlignment="Center" Margin="0,6,0,24" />
+					<ContentControl ContentTemplate="{StaticResource RtaimeBrandHeroLockupTemplate}" HorizontalAlignment="Center" />
+					<TextBlock Text="Production-grade real-time AI media platform." Style="{StaticResource OperatorLabel}" HorizontalAlignment="Center" Margin="0,10,0,24" />
 					<Border Style="{StaticResource OperatorLifecycleBadge}" Tag="{Binding EngineLifecycleState}" HorizontalAlignment="Center" Margin="0,0,0,14">
 						<StackPanel Orientation="Horizontal">
 							<TextBlock Text="ENGINE " FontWeight="SemiBold" />

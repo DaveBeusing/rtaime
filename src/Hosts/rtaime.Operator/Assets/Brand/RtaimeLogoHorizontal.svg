@@ -1,0 +1,23 @@
+<!-- Copyright (c) Dave Beusing <david.beusing@gmail.com>. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 180" role="img" aria-label="rtaime Real Time AI Media Engine">
+	<defs>
+		<linearGradient id="silver" x1="0" y1="0" x2="1" y2="1">
+			<stop offset="0" stop-color="#ffffff"/>
+			<stop offset=".48" stop-color="#dce4f0"/>
+			<stop offset="1" stop-color="#8fa2bb"/>
+		</linearGradient>
+		<linearGradient id="blue" x1="0" y1="0" x2="1" y2="1">
+			<stop offset="0" stop-color="#77d9ff"/>
+			<stop offset=".5" stop-color="#00a3ff"/>
+			<stop offset="1" stop-color="#0059c7"/>
+		</linearGradient>
+	</defs>
+	<g transform="translate(18 18) scale(1.42)">
+		<path fill="url(#blue)" d="M12 14h46c19 0 32 11 32 29 0 14-8 24-21 28l23 20H72L51 70l9-9c8-4 12-10 12-18 0-10-7-15-19-15H27z"/>
+		<path fill="url(#silver)" d="M12 87V53l33 34z"/>
+		<path fill="url(#blue)" d="M42 35v25l21-12.5z"/>
+	</g>
+	<text x="175" y="100" fill="url(#silver)" font-family="Segoe UI,Arial,sans-serif" font-size="76" font-weight="600" letter-spacing="-3">rtaime</text>
+	<rect x="337" y="34" width="9" height="9" fill="#00a3ff"/>
+	<text x="180" y="136" fill="#aeb8c8" font-family="Segoe UI,Arial,sans-serif" font-size="14" font-weight="600" letter-spacing="8">REAL TIME AI MEDIA ENGINE</text>
+</svg>

@@ -6,6 +6,7 @@
 		<ResourceDictionary>
 			<ResourceDictionary.MergedDictionaries>
 				<ResourceDictionary Source="Themes/OperatorTheme.xaml" />
+				<ResourceDictionary Source="Themes/Brand/RtaimeBrand.xaml" />
 				<ResourceDictionary Source="Themes/Controls/RtaimeIcons.xaml" />
 				<ResourceDictionary Source="Themes/Controls/RtaimeControls.xaml" />
 				<ResourceDictionary Source="Themes/Controls/RtaimeOutputHealthControls.xaml" />
