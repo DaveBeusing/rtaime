@@ -167,6 +167,10 @@ public sealed class RuntimeHealthPerformanceHudIntegrationTests
 			Assert.Equal(RuntimeHostExitCode.Success, await runtimeRun);
 			await WaitUntilAsync(() => control.Lifecycle.State == ControlHostProcessState.Degraded);
 
+			var duringGrace = await SynchronizeWithRetryAsync(client);
+			Assert.NotEqual(ClientHealthStates.Pass, duringGrace.Health.Runtime.State);
+
+			await Task.Delay(TimeSpan.FromMilliseconds(2200));
 			var disconnected = await SynchronizeWithRetryAsync(client);
 			Assert.Equal(ClientHealthStates.Fail, disconnected.Health.Runtime.State);
 			Assert.Equal(ClientHealthStates.Fail, disconnected.Health.Media.State);
