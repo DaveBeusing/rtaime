@@ -128,7 +128,14 @@ public sealed record V1RuntimePerformanceSnapshot(
 	double? GpuUtilizationPercent,
 	ulong? GpuVramUsedBytes,
 	ulong? GpuVramTotalBytes,
-	string GpuTelemetryEvidence);
+	string GpuTelemetryEvidence,
+	string CpuDeviceName = "UNVERIFIED",
+	int CpuLogicalProcessorCount = 0,
+	double? CpuUtilizationPercent = null,
+	ulong? SystemMemoryUsedBytes = null,
+	ulong? SystemMemoryTotalBytes = null,
+	string SystemTelemetryEvidence = "UNVERIFIED",
+	string PhysicalGpuDeviceName = "UNVERIFIED");
 
 public sealed record V1RuntimeHostSnapshot(
 	RuntimeExecutionState Runtime,
@@ -177,6 +184,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private readonly RuntimeMonitoringHub _monitoringHub;
 	private readonly RuntimeMonitoringTap _monitoringTap;
 	private readonly Stopwatch _uptimeClock = Stopwatch.StartNew();
+	private readonly SystemHardwareTelemetry _hardwareTelemetry = new();
 	private readonly List<string> _observations = new();
 
 	private VirtualVideoOutput? _programOutput;
@@ -857,6 +865,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		_sourceAPipeline.Dispose();
 		_sourceBPipeline.Dispose();
 		_gpu.Dispose();
+		_hardwareTelemetry.Dispose();
 	}
 
 	private MediaFramePipeline CreatePipeline() =>
@@ -918,6 +927,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private V1RuntimePerformanceSnapshot PerformanceSnapshotUnsafe()
 	{
 		var backend = _gpu.BackendInfo;
+		var hardware = _hardwareTelemetry.Sample();
 		var frameBudget = TimeSpan.FromSeconds(_format.FrameRate.Denominator / (double)_format.FrameRate.Numerator);
 		return new V1RuntimePerformanceSnapshot(
 			_uptimeClock.Elapsed,
@@ -926,10 +936,17 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			_droppedFrames,
 			backend.DeviceName,
 			backend.HardwareAccelerated,
-			null,
-			null,
-			backend.TotalMemoryBytes,
-			"UNVERIFIED: active GPU backend exposes no qualified utilization or used-VRAM telemetry source.");
+			hardware.GpuUtilizationPercent,
+			hardware.GpuVramUsedBytes,
+			hardware.GpuVramTotalBytes ?? backend.TotalMemoryBytes,
+			hardware.GpuTelemetryEvidence,
+			hardware.CpuDeviceName,
+			hardware.CpuLogicalProcessorCount,
+			hardware.CpuUtilizationPercent,
+			hardware.SystemMemoryUsedBytes,
+			hardware.SystemMemoryTotalBytes,
+			hardware.SystemTelemetryEvidence,
+			hardware.GpuDeviceName ?? "UNVERIFIED");
 	}
 
 	private V1RecordingOperatorSnapshot RecordingOperatorSnapshotUnsafe()
