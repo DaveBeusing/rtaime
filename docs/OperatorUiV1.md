@@ -81,6 +81,12 @@ The Operator uses `Themes/OperatorTheme.xaml` for reusable dark-surface, typogra
 
 Operator UI Design System formalizes the Operator presentation layer as a reusable production-console design system. `Themes/OperatorTokens.xaml` owns typography, spacing, geometry and semantic color tokens. `Themes/OperatorTheme.xaml` consumes those tokens and provides panels, toolbars, buttons, armed toggles, source tiles, status badges, Preview/Program tallies, meters, text inputs, timecode typography and a timeline seeker style.
 
+### Token ownership and feature presentation
+
+The visual contract has three layers. Reference geometry tokens describe the 1920×1080 qualification baseline and shared shell proportions; they are reference values, not a fixed render size. Semantic tokens and common styles own cross-workspace typography, spacing, radii, media/thumbnail canvases, diagnostic surfaces, timeline surfaces, monitor overlays, scrims and guide presentation. Productive feature XAML consumes those resources instead of redefining the global palette or shared typography locally.
+
+Feature-specific presentation remains local only when the shape or metric expresses a real workspace-specific requirement and is not repeated as a cross-workspace convention. Literal visible colors and numeric font sizes are not permitted in productive feature XAML; reusable presentation values are promoted to `OperatorTokens.xaml` or shared theme resources. This keeps visual consolidation independent from Runtime, Control, Media and monitoring authority.
+
 Production semantics are deliberate rather than decorative:
 
 - Preview uses the green Preview semantic only.
@@ -109,6 +115,7 @@ At 125%, 150% and 200%, the minimum workspace remains within the available logic
 - primary Operator views use the shared dark production theme instead of bootstrap/default styling;
 - Preview and Program monitors use distinct tally and panel semantics;
 - buttons, toggles, text inputs, source tiles, meters and the timeline use reusable styles;
+- media canvases, overlays, guides, thumbnails, diagnostic surfaces and repeated typography consume semantic shared resources rather than feature-local palette values;
 - keyboard focus is visible;
 - the Operator declares per-monitor DPI awareness;
 - the Quality gate checks 1920 x 1080 reference-layout constraints and 125%/150% scaling invariants;
