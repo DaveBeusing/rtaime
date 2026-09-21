@@ -206,12 +206,12 @@ public sealed class OperatorVisualQualificationTests : IDisposable
 		shell.FullscreenPreviewCommand.Execute(null);
 		Assert.True(shell.IsCenterMaximized);
 		Assert.Equal("PREVIEW", shell.ViewerMode);
-		Assert.Equal(true, fullscreenRequests[^1]);
+		Assert.True(fullscreenRequests[^1]);
 
 		shell.ExitFullscreenCommand.Execute(null);
 		Assert.False(shell.IsCenterMaximized);
 		Assert.Equal("DUAL", shell.ViewerMode);
-		Assert.Equal(false, fullscreenRequests[^1]);
+		Assert.False(fullscreenRequests[^1]);
 		Assert.Equal(baselineLeft, shell.LeftColumnWidth.Value, 3);
 		Assert.Equal(baselineRight, shell.RightColumnWidth.Value, 3);
 	}
