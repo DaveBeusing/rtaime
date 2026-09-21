@@ -90,6 +90,8 @@
 	<!-- Shared media, monitor and overlay presentation. -->
 	<Color x:Key="OperatorColorMediaCanvas">#05080B</Color>
 	<Color x:Key="OperatorColorThumbnailCanvas">#090C10</Color>
+	<Color x:Key="OperatorColorMediaDurationOverlay">#D9071017</Color>
+	<Color x:Key="OperatorColorMediaOfflineOverlay">#C9071017</Color>
 	<Color x:Key="OperatorColorDiagnosticSurface">#0A141C</Color>
 	<Color x:Key="OperatorColorTimelineSurface">#0C151D</Color>
 	<Color x:Key="OperatorColorTimelineTrack">#111D26</Color>
