@@ -10,10 +10,10 @@
 	UseLayoutRounding="True"
 	SnapsToDevicePixels="True">
 	<UserControl.Resources>
-		<SolidColorBrush x:Key="GraphBackgroundBrush" Color="#0A141C" />
-		<SolidColorBrush x:Key="GraphMinorGridBrush" Color="#13222C" />
-		<SolidColorBrush x:Key="GraphMajorGridBrush" Color="#1B303C" />
-		<SolidColorBrush x:Key="GraphConnectionBrush" Color="#314553" />
+		<SolidColorBrush x:Key="GraphBackgroundBrush" Color="{StaticResource OperatorColorDiagnosticSurface}" />
+		<SolidColorBrush x:Key="GraphMinorGridBrush" Color="{StaticResource OperatorColorGraphSurface}" />
+		<SolidColorBrush x:Key="GraphMajorGridBrush" Color="{StaticResource OperatorColorGraphSurfaceRaised}" />
+		<SolidColorBrush x:Key="GraphConnectionBrush" Color="{StaticResource OperatorColorBorderStrong}" />
 		<SolidColorBrush x:Key="GraphSourceBrush" Color="{StaticResource OperatorColorTimeline}" />
 		<SolidColorBrush x:Key="GraphRoutingBrush" Color="{StaticResource OperatorColorAccent}" />
 		<SolidColorBrush x:Key="GraphTransformBrush" Color="{StaticResource OperatorColorWarning}" />
@@ -273,15 +273,15 @@
 													ShowIndicator="False"
 													Margin="6,0,0,0" />
 												<StackPanel>
-													<TextBlock Text="{Binding RoleLabel}" Style="{StaticResource OperatorLabel}" FontSize="9" FontWeight="Bold" />
-													<TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="12" TextTrimming="CharacterEllipsis" MaxWidth="116" />
+													<TextBlock Text="{Binding RoleLabel}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" FontWeight="Bold" />
+													<TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="{StaticResource OperatorFontSizeBody}" TextTrimming="CharacterEllipsis" MaxWidth="116" />
 												</StackPanel>
 											</DockPanel>
 
 											<TextBlock Grid.Row="1"
 												Text="{Binding Detail}"
 												Style="{StaticResource OperatorLabel}"
-												FontSize="10"
+												FontSize="{StaticResource OperatorFontSizeCompact}"
 												TextWrapping="Wrap"
 												TextTrimming="CharacterEllipsis"
 												MaxHeight="30"
@@ -296,16 +296,16 @@
 												<StackPanel>
 													<StackPanel Orientation="Horizontal">
 														<Ellipse Width="7" Height="7" Fill="{DynamicResource OperatorSecondaryTextBrush}" Margin="-3,1,5,0" />
-														<TextBlock Text="IN" Style="{StaticResource OperatorLabel}" FontSize="8" />
+														<TextBlock Text="IN" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeFinePrint}" />
 													</StackPanel>
-													<TextBlock Text="{Binding InputPorts}" FontSize="9" TextTrimming="CharacterEllipsis" />
+													<TextBlock Text="{Binding InputPorts}" FontSize="{StaticResource OperatorFontSizeMicro}" TextTrimming="CharacterEllipsis" />
 												</StackPanel>
 												<StackPanel Grid.Column="2" HorizontalAlignment="Right">
 													<StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-														<TextBlock Text="OUT" Style="{StaticResource OperatorLabel}" FontSize="8" Margin="0,0,5,0" />
+														<TextBlock Text="OUT" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeFinePrint}" Margin="0,0,5,0" />
 														<Ellipse Width="7" Height="7" Fill="{DynamicResource OperatorSecondaryTextBrush}" Margin="0,1,-3,0" />
 													</StackPanel>
-													<TextBlock Text="{Binding OutputPorts}" FontSize="9" TextTrimming="CharacterEllipsis" HorizontalAlignment="Right" />
+													<TextBlock Text="{Binding OutputPorts}" FontSize="{StaticResource OperatorFontSizeMicro}" TextTrimming="CharacterEllipsis" HorizontalAlignment="Right" />
 												</StackPanel>
 											</Grid>
 										</Grid>
@@ -320,12 +320,8 @@
 			<Border HorizontalAlignment="Left"
 				VerticalAlignment="Bottom"
 				Margin="10"
-				Padding="7,4"
-				Background="#D00A141C"
-				BorderBrush="{DynamicResource OperatorBorderBrush}"
-				BorderThickness="1"
-				CornerRadius="3">
-				<TextBlock Text="Wheel: zoom · Pan mode / middle mouse: move · Node click: inspect" Style="{StaticResource OperatorLabel}" FontSize="9" />
+				Style="{StaticResource OperatorGraphOverlay}">
+				<TextBlock Text="Wheel: zoom · Pan mode / middle mouse: move · Node click: inspect" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" />
 			</Border>
 		</Grid>
 	</Grid>
