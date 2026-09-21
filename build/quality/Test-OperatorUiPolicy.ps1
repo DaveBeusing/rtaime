@@ -478,6 +478,7 @@ $referenceHeight = [double]([Regex]::Match($shell, 'ReferenceViewportHeight = (?
 $minimumWorkspaceScale = [double]([Regex]::Match($shell, 'MinimumWorkspaceScale = (?<value>\d+(?:\.\d+)?)').Groups["value"].Value)
 $compactViewportWidth = [double]([Regex]::Match($shell, 'CompactViewportWidth = (?<value>\d+(?:\.\d+)?)').Groups["value"].Value)
 $compactViewportHeight = [double]([Regex]::Match($shell, 'CompactViewportHeight = (?<value>\d+(?:\.\d+)?)').Groups["value"].Value)
+$compactLowerPanelHeight = [double]([Regex]::Match($shell, 'CompactLowerPanelHeight = (?<value>\d+(?:\.\d+)?)').Groups["value"].Value)
 
 function Resolve-WorkspaceScale([double] $viewportWidth, [double] $viewportHeight) {
 	$rawScale = [Math]::Min($viewportWidth / $referenceWidth, $viewportHeight / $referenceHeight)
@@ -487,7 +488,7 @@ function Resolve-WorkspaceScale([double] $viewportWidth, [double] $viewportHeigh
 function Resolve-ProductionWorkspaceHeight([double] $viewportWidth, [double] $viewportHeight) {
 	$isCompact = $viewportWidth -lt $compactViewportWidth -or $viewportHeight -lt $compactViewportHeight
 	if ($isCompact) {
-		return [Math]::Max(260.0, [Math]::Min(520.0, $viewportHeight - 200.0 - 90.0))
+		return [Math]::Max(260.0, [Math]::Min(520.0, $viewportHeight - $compactLowerPanelHeight - 90.0))
 	}
 	return 700.0 * (Resolve-WorkspaceScale $viewportWidth $viewportHeight)
 }
