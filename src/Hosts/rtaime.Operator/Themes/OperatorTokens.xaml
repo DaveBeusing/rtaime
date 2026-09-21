@@ -11,6 +11,7 @@
 	<sys:Double x:Key="OperatorFontSizeCaption">11</sys:Double>
 	<sys:Double x:Key="OperatorFontSizeBody">12</sys:Double>
 	<sys:Double x:Key="OperatorFontSizeControl">12</sys:Double>
+	<sys:Double x:Key="OperatorFontSizeMetadata">13</sys:Double>
 	<sys:Double x:Key="OperatorFontSizeSection">14</sys:Double>
 	<sys:Double x:Key="OperatorFontSizeWorkspaceHeader">15</sys:Double>
 	<sys:Double x:Key="OperatorFontSizeSubheading">16</sys:Double>
