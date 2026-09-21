@@ -79,9 +79,11 @@ function Invoke-BootstrapFailureProbe {
 
 	$diagnosticPath = Join-Path $WorkRoot "apphost-startup.log"
 	Assert-Condition (Test-Path -LiteralPath $diagnosticPath -PathType Leaf) "Bootstrap failure did not persist '$diagnosticPath'."
-	$diagnostics = Get-Content -LiteralPath $diagnosticPath -Raw
-	Assert-Condition ($diagnostics -match '"state":"FAILED"') "Bootstrap diagnostic evidence does not contain FAILED state."
-	Assert-Condition ($diagnostics -match [Regex]::Escape($ExpectedDetail)) "Bootstrap diagnostic evidence does not contain expected failure detail '$ExpectedDetail'."
+	$diagnosticLines = @(Get-Content -LiteralPath $diagnosticPath | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+	Assert-Condition ($diagnosticLines.Count -gt 0) "Bootstrap diagnostic evidence is empty."
+	$diagnosticRecord = $diagnosticLines[-1] | ConvertFrom-Json
+	Assert-Condition ([string]$diagnosticRecord.state -eq "FAILED") "Bootstrap diagnostic evidence does not contain FAILED state."
+	Assert-Condition ([string]$diagnosticRecord.message -match [Regex]::Escape($ExpectedDetail)) "Bootstrap diagnostic evidence does not contain expected failure detail '$ExpectedDetail'."
 }
 
 try {
