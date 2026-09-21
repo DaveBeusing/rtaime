@@ -20,6 +20,9 @@ $appProjectPath = Join-Path $repositoryRoot "src/Hosts/rtaime.AppHost/rtaime.App
 $appCodePath = Join-Path $repositoryRoot "src/Hosts/rtaime.AppHost/ApplicationHost.cs"
 $lifecycleProviderPath = Join-Path $repositoryRoot "src/Hosts/rtaime.AppHost/ApplicationLifecycleStateProvider.cs"
 $appProgramPath = Join-Path $repositoryRoot "src/Hosts/rtaime.AppHost/Program.cs"
+$windowsBootstrapPath = Join-Path $repositoryRoot "src/Hosts/rtaime.AppHost/WindowsConsoleBootstrap.cs"
+$startupDiagnosticsPath = Join-Path $repositoryRoot "src/Hosts/rtaime.AppHost/ApplicationStartupDiagnostics.cs"
+$windowsBootstrapQualificationPath = Join-Path $repositoryRoot "build/operations/Test-WindowsApplicationBootstrap.ps1"
 $solutionPath = Join-Path $repositoryRoot "rtaime.slnx"
 $releasePolicyPath = Join-Path $repositoryRoot "build/release/release-policy.json"
 $bundlePolicyPath = Join-Path $repositoryRoot "build/release/offline-bundle-policy.json"
@@ -34,6 +37,9 @@ foreach ($path in @(
 	$appCodePath,
 	$lifecycleProviderPath,
 	$appProgramPath,
+	$windowsBootstrapPath,
+	$startupDiagnosticsPath,
+	$windowsBootstrapQualificationPath,
 	$solutionPath,
 	$releasePolicyPath,
 	$bundlePolicyPath,
@@ -50,6 +56,9 @@ $appProject = Get-Content -LiteralPath $appProjectPath -Raw
 $appCode = Get-Content -LiteralPath $appCodePath -Raw
 $lifecycleProvider = Get-Content -LiteralPath $lifecycleProviderPath -Raw
 $appProgram = Get-Content -LiteralPath $appProgramPath -Raw
+$windowsBootstrap = Get-Content -LiteralPath $windowsBootstrapPath -Raw
+$startupDiagnostics = Get-Content -LiteralPath $startupDiagnosticsPath -Raw
+$windowsBootstrapQualification = Get-Content -LiteralPath $windowsBootstrapQualificationPath -Raw
 $solution = Get-Content -LiteralPath $solutionPath -Raw
 $releasePolicy = Get-Content -LiteralPath $releasePolicyPath -Raw | ConvertFrom-Json
 $bundlePolicy = Get-Content -LiteralPath $bundlePolicyPath -Raw | ConvertFrom-Json
@@ -60,6 +69,7 @@ $developerBuild = Get-Content -LiteralPath $developerBuildPath -Raw
 $buildDocumentation = Get-Content -LiteralPath $buildDocumentationPath -Raw
 
 Assert-Condition ($appProject -match '<AssemblyName>rtaime</AssemblyName>') "AppHost must build the canonical rtaime executable name."
+Assert-Condition ($appProject -match '<OutputType>WinExe</OutputType>') "Canonical Windows AppHost must use the GUI subsystem so interactive launch cannot flash a console window."
 Assert-Condition ($appProject -notmatch '<ProjectReference') "AppHost must not take direct project references to service hosts or production implementations."
 Assert-Condition ($solution -match 'src/Hosts/rtaime\.AppHost/rtaime\.AppHost\.csproj') "Primary solution must contain rtaime.AppHost."
 
@@ -106,7 +116,12 @@ Assert-Condition ($appCode -match 'WaitForLeasedControlReadinessAsync' -and $app
 Assert-Condition ($appCode -match 'RedirectStandardOutput = true' -and $appCode -match 'RedirectStandardError = true' -and $appCode -match 'exitCode=') "AppHost must persist ControlHost stdout, stderr and exit-code diagnostics."
 
 Assert-Condition ($appCode -match 'RTAIME_APPHOST_LIFECYCLE_FILE' -and $appCode -match 'LifecycleEvidencePath') "Interactive startup must expose AppHost lifecycle evidence to the Operator."
-Assert-Condition ($appProgram -match '--show-console' -and $appProgram -match 'OperatorInterface' -and $appProgram -match 'GetConsoleWindow' -and $appProgram -match 'ShowWindow') "Interactive Windows startup must hand visible presentation to the Operator while retaining an explicit console diagnostics path."
+Assert-Condition ($appProgram -match 'WindowsConsoleBootstrap\.Initialize' -and $appProgram -match 'ApplicationStartupDiagnostics\.TryPersistFailure') "Canonical entry point must configure Windows console behavior before lifecycle startup and persist bootstrap failures."
+Assert-Condition ($windowsBootstrap -match '--show-console' -and $windowsBootstrap -match 'HeadlessEngine' -and $windowsBootstrap -match 'AttachConsole' -and $windowsBootstrap -match 'AllocConsole') "Windows bootstrap must keep explicit and headless console paths while interactive startup remains GUI-native."
+Assert-Condition ($windowsBootstrap -match '--windows-service' -and $windowsBootstrap -match 'ConsoleAvailable: false') "Windows service startup must remain non-interactive and must not allocate a console."
+Assert-Condition ($startupDiagnostics -match 'apphost-startup\.log' -and $startupDiagnostics -match 'File\.AppendAllText') "Bootstrap failures must persist deterministic local diagnostics."
+Assert-Condition ($appProgram -notmatch 'ShowWindow|HideConsoleWindow') "Interactive startup must not rely on hiding an already-created console window."
+Assert-Condition ($windowsBootstrapQualification -match 'WINDOWS_GUI' -and $windowsBootstrapQualification -match 'RedirectStandardError' -and $windowsBootstrapQualification -match 'QualifySingleFile') "Windows bootstrap qualification must cover GUI subsystem, redirected diagnostics and single-file publishing."
 foreach ($stage in @("ApplicationBootstrap", "Configuration", "OperatorInterface", "ControlHost", "RuntimeHost", "AIHost", "ProductionReadiness")) {
 	Assert-Condition ($lifecycleProvider -match [Regex]::Escape($stage)) "AppHost lifecycle evidence is missing stage '$stage'."
 }
@@ -125,6 +140,11 @@ $parseTokens = $null
 $parseErrors = $null
 [void][System.Management.Automation.Language.Parser]::ParseFile($developerBuildPath, [ref]$parseTokens, [ref]$parseErrors)
 Assert-Condition (@($parseErrors).Count -eq 0) "Developer build script must parse as valid PowerShell."
+
+$bootstrapParseTokens = $null
+$bootstrapParseErrors = $null
+[void][System.Management.Automation.Language.Parser]::ParseFile($windowsBootstrapQualificationPath, [ref]$bootstrapParseTokens, [ref]$bootstrapParseErrors)
+Assert-Condition (@($bootstrapParseErrors).Count -eq 0) "Windows bootstrap qualification script must parse as valid PowerShell."
 
 foreach ($processName in @("rtaime", "rtaime.Operator", "rtaime.ControlHost", "rtaime.RuntimeHost", "rtaime.AIHost")) {
 	Assert-Condition ($developerBuild -match [Regex]::Escape('"' + $processName + '"')) "Developer build cleanup is missing repository process '$processName'."
