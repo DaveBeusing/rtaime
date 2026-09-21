@@ -92,6 +92,7 @@
 	<Color x:Key="OperatorColorTimelineSurface">#0C151D</Color>
 	<Color x:Key="OperatorColorTimelineTrack">#111D26</Color>
 	<Color x:Key="OperatorColorTimelineTrackOverlay">#E0111D26</Color>
+	<Color x:Key="OperatorColorOverlayScrimSoft">#B0000000</Color>
 	<Color x:Key="OperatorColorOverlayScrim">#C0000000</Color>
 	<Color x:Key="OperatorColorOverlayText">#FFFFFFFF</Color>
 	<Color x:Key="OperatorColorGuideSubtle">#55FFFFFF</Color>
