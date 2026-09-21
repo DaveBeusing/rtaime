@@ -245,7 +245,9 @@ Lifecycle ownership is explicit:
 - PersistentEngine
 - ExternalManaged
 
-Normal local Interactive startup defaults to EphemeralLocal. When rtaime.exe starts the local engine, closing Operator shuts down that owned lifecycle so development binaries are not left locked by background hosts.
+Normal local Interactive startup defaults to EphemeralLocal. On Windows, `rtaime.exe` is built as a GUI-subsystem application, so normal Interactive and Showcase launches do not create or flash an AppHost console before the branded Operator startup surface. When rtaime.exe starts the local engine, closing Operator shuts down that owned lifecycle so development binaries are not left locked by background hosts.
+
+Use `--show-console` for an explicit diagnostic console. HeadlessEngine requests console semantics automatically, redirected stdout/stderr remain usable for automation, and early bootstrap failures are persisted to `apphost-startup.log` below the selected AppHost work root.
 
 PersistentEngine is used by the supported Windows-service production path. ExternalManaged desktop startup adopts an existing engine without lifecycle authority.
 
@@ -261,7 +263,7 @@ dotnet publish src/Hosts/rtaime.AppHost/rtaime.AppHost.csproj --configuration Re
 
 This does not collapse the V1 architecture into one process. ControlHost, RuntimeHost, AIHost and Operator remain separate executable artifacts internally.
 
-Single-file publishing is a development/distribution option until the authoritative release evidence explicitly qualifies that artifact shape.
+Single-file publishing is a development/distribution option until the authoritative release evidence explicitly qualifies that artifact shape. Required Gates nevertheless exercise the self-contained AppHost publish and verify that its `rtaime.exe` retains the Windows GUI subsystem and bootstrap diagnostic behavior.
 
 ## Tests
 
