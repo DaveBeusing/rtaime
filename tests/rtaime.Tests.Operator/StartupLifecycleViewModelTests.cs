@@ -58,6 +58,29 @@ public sealed class StartupLifecycleViewModelTests : IDisposable
 	}
 
 	[Fact]
+	public async Task First_startup_failure_stays_latched_when_another_stage_fails_during_recovery()
+	{
+		WriteEvidence(
+			CreateStages(runtimeStatus: "FAILED", runtimeFailure: "Runtime qualification failed."),
+			ApplicationLifecycleStages.RuntimeHost);
+		using var viewModel = new StartupLifecycleViewModel(EvidencePath, new SynchronizationContext());
+
+		WriteEvidence(
+			CreateStages(
+				runtimeStatus: "STARTING",
+				productionReadinessStatus: "FAILED",
+				productionReadinessFailure: "Production readiness failed."),
+			ApplicationLifecycleStages.ProductionReadiness);
+		await WaitUntilAsync(() =>
+			viewModel.Stages.Single(stage => stage.Id == ApplicationLifecycleStages.ProductionReadiness).Status == "FAILED");
+
+		Assert.True(viewModel.HasStartupFailure);
+		Assert.Equal("RuntimeHost", viewModel.ActiveStageName);
+		Assert.Contains("Runtime qualification failed.", viewModel.Summary, StringComparison.Ordinal);
+		Assert.DoesNotContain("Production readiness failed.", viewModel.Summary, StringComparison.Ordinal);
+	}
+
+	[Fact]
 	public void Complete_initial_qualification_latches_startup_complete()
 	{
 		WriteEvidence(CreateStages(), activeStageId: null);
@@ -166,7 +189,8 @@ public sealed class StartupLifecycleViewModelTests : IDisposable
 		string? runtimeFailure = null,
 		string aiStatus = "READY",
 		string? aiFailure = null,
-		string productionReadinessStatus = "READY")
+		string productionReadinessStatus = "READY",
+		string? productionReadinessFailure = null)
 	{
 		return
 		[
@@ -194,7 +218,7 @@ public sealed class StartupLifecycleViewModelTests : IDisposable
 				"RequiredForProduction",
 				productionReadinessStatus,
 				productionReadinessStatus == "DEGRADED" ? "Production readiness is degraded." : "Production ready.",
-				null)
+				productionReadinessFailure)
 		];
 	}
 
