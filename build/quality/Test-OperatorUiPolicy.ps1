@@ -487,7 +487,7 @@ function Resolve-WorkspaceScale([double] $viewportWidth, [double] $viewportHeigh
 function Resolve-ProductionWorkspaceHeight([double] $viewportWidth, [double] $viewportHeight) {
 	$isCompact = $viewportWidth -lt $compactViewportWidth -or $viewportHeight -lt $compactViewportHeight
 	if ($isCompact) {
-		return [Math]::Max(320.0, [Math]::Min(520.0, $viewportHeight - 120.0))
+		return [Math]::Max(260.0, [Math]::Min(520.0, $viewportHeight - 200.0 - 90.0))
 	}
 	return 700.0 * (Resolve-WorkspaceScale $viewportWidth $viewportHeight)
 }
@@ -497,7 +497,7 @@ foreach ($layoutCase in @(
 	@{ Width = 1600.0; Height = 900.0; Scale = (5.0 / 6.0); ProductionHeight = (700.0 * 5.0 / 6.0) },
 	@{ Width = 1536.0; Height = 864.0; Scale = 0.8; ProductionHeight = 560.0 },
 	@{ Width = 1280.0; Height = 720.0; Scale = (2.0 / 3.0); ProductionHeight = (700.0 * 2.0 / 3.0) },
-	@{ Width = 960.0; Height = 540.0; Scale = 0.6; ProductionHeight = 420.0 }
+	@{ Width = 960.0; Height = 540.0; Scale = 0.6; ProductionHeight = 260.0 }
 )) {
 	$resolvedScale = Resolve-WorkspaceScale $layoutCase.Width $layoutCase.Height
 	$resolvedProductionHeight = Resolve-ProductionWorkspaceHeight $layoutCase.Width $layoutCase.Height
@@ -573,6 +573,7 @@ Assert-Condition ($timeline -match 'ItemsSource="\{Binding VisibleCues\}"' -and 
 Assert-Condition ($timeline -match 'Binding ScrollValue' -and $timeline -match 'controls:RtaimeScrollBar' -and $timeline -match 'Binding ZoomInCommand' -and $timeline -match 'Binding ZoomOutCommand' -and $timeline -match 'Binding FitCommand') "Timeline must expose own-control horizontal scrolling, zoom and fit controls."
 Assert-Condition ($timeline -match 'Shell\.ToggleFullscreenCommand' -and $timeline -match 'RtaimeIconFullscreenGeometry') "Timeline toolbar must reuse the existing Operator fullscreen command."
 Assert-Condition ($timeline -match 'CURRENT MEDIA' -and $timeline -match 'LINK N/A' -and $timeline -match 'Content="SELECT"' -and $timeline -match 'Content="SNAP"') "Timeline toolbar must expose current sequence context, selection mode, unavailable linking and snapping without inventing edit authority."
+Assert-Condition ($timeline -match 'DataContext\.Shell\.IsCompactViewport' -and $timeline -match 'Value="V2  VIDEO"' -and $timeline -match 'Value="A2  SFX"' -and $timeline -match 'Value="A3  VO"') "Compact timeline presentation must collapse only reserved V2/A2/A3 reference lanes while retaining governed V3/V1/A1 roles."
 Assert-Condition ($timeline -notmatch 'CutClipCommand|BladeCommand') "Timeline must not invent Blade/Cut editing commands while no governed edit command exists."
 Assert-Condition ($timeline -notmatch '<(Button|ToggleButton|CheckBox|RadioButton|TextBox|ComboBox|TabControl|TabItem|ListBox|ListView|TreeView|DataGrid|Slider|ProgressBar|ScrollBar|ScrollViewer|GridSplitter|Menu|MenuItem|ContextMenu|ToolBar)(\s|/|>)') "Timeline feature XAML must expose no directly visible stock WPF interactive chrome."
 Assert-Condition ($timelineViewModel -match 'MediaTimelineVisibleRange' -and $timelineViewModel -match 'FrameFromVisiblePosition' -and $timelineViewModel -match 'SnapFrame') "Timeline viewport and snapping must remain frame-based."
