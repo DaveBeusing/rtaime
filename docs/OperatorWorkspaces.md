@@ -240,7 +240,7 @@ The same underlying production state remains active across every workspace.
 
 ## Production monitor operation
 
-EDIT composes the shared Preview and Program monitor components in the fixed 532 / 6 / 532 reference split. MEDIA and the other standard-viewer workspaces reuse the same components where applicable. Viewer changes therefore preserve production state across workspace switches instead of instantiating another playback path.
+EDIT composes the separate Preview and Program role controls in the fixed 532 / 6 / 532 reference split. Both role controls delegate their common monitor structure to `RtaimeMonitorPresentation`, which owns the shared header, frame canvas, guides, timecode, unavailable-frame chrome and overlay controls. Preview- and Program-specific header/status/footer content remains outside that shared structure, so presentation reuse does not merge command or state authority. MEDIA and the other standard-viewer workspaces reuse the same role controls where applicable. Viewer changes therefore preserve production state across workspace switches instead of instantiating another playback path.
 
 Preview is the only monitor that exposes Media Deck transport controls. The control row and the corresponding Space/K/S/I/O/M/Up/Down shortcuts are active only when the loaded Media Deck source is the confirmed Preview source. Program intentionally exposes no Preview transport commands.
 
