@@ -1,6 +1,5 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
-using System.Runtime.InteropServices;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -13,13 +12,23 @@ internal static class Program
 
 	private static async Task<int> Main(string[] args)
 	{
-		if (args.Contains(WindowsServiceArgument, StringComparer.OrdinalIgnoreCase))
-			return await RunWindowsServiceAsync(args).ConfigureAwait(false);
+		try
+		{
+			var consoleState = WindowsConsoleBootstrap.Initialize(args);
+			if (args.Contains(WindowsServiceArgument, StringComparer.OrdinalIgnoreCase))
+				return await RunWindowsServiceAsync(args).ConfigureAwait(false);
 
-		return await RunConsoleApplicationAsync(args).ConfigureAwait(false);
+			return await RunApplicationAsync(args, consoleState.ConsoleAvailable).ConfigureAwait(false);
+		}
+		catch (Exception exception)
+		{
+			var diagnosticPath = ApplicationStartupDiagnostics.TryPersistFailure(args, exception);
+			WriteFailureToStandardError(exception, diagnosticPath);
+			return 1;
+		}
 	}
 
-	private static async Task<int> RunConsoleApplicationAsync(string[] args)
+	private static async Task<int> RunApplicationAsync(string[] args, bool consoleAvailable)
 	{
 		using var shutdown = new CancellationTokenSource();
 		ConsoleCancelEventHandler cancelHandler = (_, eventArgs) =>
@@ -28,37 +37,13 @@ internal static class Program
 			shutdown.Cancel();
 		};
 
-		Console.CancelKeyPress += cancelHandler;
+		if (consoleAvailable)
+			Console.CancelKeyPress += cancelHandler;
+
 		try
 		{
 			var options = ApplicationHostOptions.Load(args);
 			var host = new UnifiedApplicationHost(options, new SystemApplicationHostPlatform());
-			var hideInteractiveConsole =
-				OperatingSystem.IsWindows() &&
-				options.Profile != ApplicationStartupProfile.HeadlessEngine &&
-				!args.Contains("--show-console", StringComparer.OrdinalIgnoreCase) &&
-				!Console.IsOutputRedirected &&
-				!Console.IsErrorRedirected;
-			var consoleHidden = 0;
-
-			if (hideInteractiveConsole)
-			{
-				host.Lifecycle.StateChanged += (_, eventArgs) =>
-				{
-					if (Interlocked.CompareExchange(ref consoleHidden, 1, 0) != 0)
-						return;
-					if (!eventArgs.Stages.Any(stage =>
-						string.Equals(stage.Id, ApplicationLifecycleStages.OperatorInterface, StringComparison.Ordinal) &&
-						stage.Status == LifecycleStageStatus.Ready))
-					{
-						Interlocked.Exchange(ref consoleHidden, 0);
-						return;
-					}
-
-					HideConsoleWindow();
-				};
-			}
-
 			host.StateChanged += state => Console.WriteLine($"app=rtaime state={state}");
 			var result = await host.RunAsync(shutdown.Token).ConfigureAwait(false);
 			return result.Success ? 0 : 1;
@@ -67,14 +52,10 @@ internal static class Program
 		{
 			return 0;
 		}
-		catch (Exception exception)
-		{
-			Console.Error.WriteLine($"app=rtaime state=FAILED detail=\"{exception.Message}\"");
-			return 1;
-		}
 		finally
 		{
-			Console.CancelKeyPress -= cancelHandler;
+			if (consoleAvailable)
+				Console.CancelKeyPress -= cancelHandler;
 		}
 	}
 
@@ -94,6 +75,21 @@ internal static class Program
 		using var serviceHost = builder.Build();
 		await serviceHost.RunAsync().ConfigureAwait(false);
 		return Environment.ExitCode;
+	}
+
+	private static void WriteFailureToStandardError(Exception exception, string? diagnosticPath)
+	{
+		try
+		{
+			var diagnosticSuffix = string.IsNullOrWhiteSpace(diagnosticPath)
+				? string.Empty
+				: $" diagnostics=\"{diagnosticPath}\"";
+			Console.Error.WriteLine(
+				$"app=rtaime state=FAILED detail=\"{exception.Message}\"{diagnosticSuffix}");
+		}
+		catch
+		{
+		}
 	}
 
 	private sealed class WindowsEngineBackgroundService(
@@ -132,22 +128,4 @@ internal static class Program
 			}
 		}
 	}
-
-	private static void HideConsoleWindow()
-	{
-		if (!OperatingSystem.IsWindows())
-			return;
-
-		var consoleWindow = GetConsoleWindow();
-		if (consoleWindow != IntPtr.Zero)
-			ShowWindow(consoleWindow, 0);
-	}
-
-	[DllImport("kernel32.dll")]
-	private static extern IntPtr GetConsoleWindow();
-
-	[DllImport("user32.dll")]
-	[return: MarshalAs(UnmanagedType.Bool)]
-	private static extern bool ShowWindow(IntPtr windowHandle, int command);
-
 }
