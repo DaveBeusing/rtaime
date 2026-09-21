@@ -1558,9 +1558,9 @@
 			BorderThickness="0">
 			<Border.Background>
 				<LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-					<GradientStop Color="#05070B" Offset="0" />
-					<GradientStop Color="#071017" Offset="0.55" />
-					<GradientStop Color="#0B1722" Offset="1" />
+					<GradientStop Color="{StaticResource OperatorColorStartupGradientStart}" Offset="0" />
+					<GradientStop Color="{StaticResource OperatorColorStartupGradientMiddle}" Offset="0.55" />
+					<GradientStop Color="{StaticResource OperatorColorStartupGradientEnd}" Offset="1" />
 				</LinearGradientBrush>
 			</Border.Background>
 			<Border.Style>

@@ -50,6 +50,9 @@
 
 	<!-- Binding mockup palette. -->
 	<Color x:Key="OperatorColorBackground">#071017</Color>
+	<Color x:Key="OperatorColorStartupGradientStart">#05070B</Color>
+	<Color x:Key="OperatorColorStartupGradientMiddle">#071017</Color>
+	<Color x:Key="OperatorColorStartupGradientEnd">#0B1722</Color>
 	<Color x:Key="OperatorColorTopBar">#09131B</Color>
 	<Color x:Key="OperatorColorNavigation">#0B151E</Color>
 	<Color x:Key="OperatorColorSurface">#101B24</Color>
