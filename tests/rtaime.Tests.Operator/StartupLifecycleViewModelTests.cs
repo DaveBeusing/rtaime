@@ -4,6 +4,7 @@ using System.Reflection;
 using System.Text.Json;
 using rtaime.AppHost;
 using rtaime.Operator;
+using Xunit;
 
 namespace rtaime.Tests.Operator;
 
