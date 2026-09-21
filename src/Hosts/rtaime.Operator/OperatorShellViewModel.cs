@@ -437,7 +437,7 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 		set
 		{
 			if (!IsLiveWorkspace && !IsCompactViewport && !IsCenterMaximized && !IsLeftCollapsed && value.IsAbsolute && value.Value > 0)
-				LeftPanelWidth = value.Value;
+				LeftPanelWidth = value.Value / WorkspaceScale;
 		}
 	}
 
@@ -447,7 +447,7 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 		set
 		{
 			if (!IsLiveWorkspace && !IsCompactViewport && !IsCenterMaximized && !IsRightCollapsed && value.IsAbsolute && value.Value > 0)
-				RightPanelWidth = value.Value;
+				RightPanelWidth = value.Value / WorkspaceScale;
 		}
 	}
 
@@ -462,7 +462,7 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 		set
 		{
 			if (!IsCompactViewport && !IsCenterMaximized && value.IsAbsolute && value.Value > 0)
-				LowerPanelHeight = value.Value;
+				LowerPanelHeight = value.Value / WorkspaceScale;
 		}
 	}
 
