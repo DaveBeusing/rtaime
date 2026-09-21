@@ -30,6 +30,154 @@
 		<Setter Property="SnapsToDevicePixels" Value="True" />
 	</Style>
 
+	<Style x:Key="RtaimeMonitorPresentation" TargetType="{x:Type controls:RtaimeMonitorPresentation}">
+		<Setter Property="Focusable" Value="False" />
+		<Setter Property="Template">
+			<Setter.Value>
+				<ControlTemplate TargetType="{x:Type controls:RtaimeMonitorPresentation}">
+					<Border Style="{StaticResource RtaimeMonitorPanel}">
+						<Grid>
+							<Grid.RowDefinitions>
+								<RowDefinition Height="40" />
+								<RowDefinition Height="*" />
+								<RowDefinition Height="42" />
+							</Grid.RowDefinitions>
+
+							<Border Grid.Row="0" Style="{StaticResource RtaimeMonitorHeader}">
+								<Grid>
+									<Grid.ColumnDefinitions>
+										<ColumnDefinition Width="Auto" />
+										<ColumnDefinition Width="*" />
+										<ColumnDefinition Width="Auto" />
+									</Grid.ColumnDefinitions>
+									<StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+										<TextBlock Text="{TemplateBinding RoleText}" Foreground="{TemplateBinding RoleBrush}" FontSize="{StaticResource OperatorFontSizeBody}" FontWeight="Bold" />
+										<TextBlock Text="{Binding Monitor.SourceName, RelativeSource={RelativeSource TemplatedParent}}" Margin="10,0,0,0" FontSize="{StaticResource OperatorFontSizeBody}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" MaxWidth="190" />
+									</StackPanel>
+									<StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="8,0">
+										<TextBlock Text="{Binding Monitor.ProductionFormat, RelativeSource={RelativeSource TemplatedParent}}" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" />
+										<TextBlock Text=" · " Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" />
+										<TextBlock Text="{Binding Monitor.ZoomMode, RelativeSource={RelativeSource TemplatedParent}}" Style="{StaticResource OperatorLabel}" FontWeight="SemiBold" VerticalAlignment="Center" />
+									</StackPanel>
+									<ContentPresenter Grid.Column="2" Content="{TemplateBinding HeaderContent}" VerticalAlignment="Center" />
+								</Grid>
+							</Border>
+
+							<Grid Grid.Row="1" Style="{StaticResource OperatorMediaCanvas}">
+								<controls:RtaimeStatePlaceholder
+									State="{TemplateBinding PlaceholderState}"
+									Title="{TemplateBinding PlaceholderTitle}"
+									Detail="{TemplateBinding PlaceholderDetail}"
+									Panel.ZIndex="60"
+									Margin="10" />
+
+								<Viewbox Stretch="{Binding Monitor.ImageStretch, RelativeSource={RelativeSource TemplatedParent}}" StretchDirection="Both" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+									<Image Source="{Binding Monitor.Frame, RelativeSource={RelativeSource TemplatedParent}}" SnapsToDevicePixels="True">
+										<Image.LayoutTransform>
+											<ScaleTransform
+												ScaleX="{Binding Monitor.ImageScale, RelativeSource={RelativeSource TemplatedParent}}"
+												ScaleY="{Binding Monitor.ImageScale, RelativeSource={RelativeSource TemplatedParent}}" />
+										</Image.LayoutTransform>
+									</Image>
+								</Viewbox>
+
+								<Grid IsHitTestVisible="False">
+									<Grid.Style>
+										<Style TargetType="Grid">
+											<Setter Property="Visibility" Value="Collapsed" />
+											<Style.Triggers>
+												<DataTrigger Binding="{Binding Monitor.ShowGrid, RelativeSource={RelativeSource TemplatedParent}}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
+											</Style.Triggers>
+										</Style>
+									</Grid.Style>
+									<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+									<Grid.RowDefinitions><RowDefinition Height="*" /><RowDefinition Height="*" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+									<Border Grid.Column="0" Grid.RowSpan="3" BorderBrush="{DynamicResource OperatorGuideSubtleBrush}" BorderThickness="0,0,1,0" />
+									<Border Grid.Column="1" Grid.RowSpan="3" BorderBrush="{DynamicResource OperatorGuideSubtleBrush}" BorderThickness="0,0,1,0" />
+									<Border Grid.Row="0" Grid.ColumnSpan="3" BorderBrush="{DynamicResource OperatorGuideSubtleBrush}" BorderThickness="0,0,0,1" />
+									<Border Grid.Row="1" Grid.ColumnSpan="3" BorderBrush="{DynamicResource OperatorGuideSubtleBrush}" BorderThickness="0,0,0,1" />
+								</Grid>
+
+								<Grid IsHitTestVisible="False">
+									<Grid.Style>
+										<Style TargetType="Grid">
+											<Setter Property="Visibility" Value="Collapsed" />
+											<Style.Triggers>
+												<DataTrigger Binding="{Binding Monitor.ShowSafeArea, RelativeSource={RelativeSource TemplatedParent}}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
+											</Style.Triggers>
+										</Style>
+									</Grid.Style>
+									<Border Margin="22" BorderBrush="{DynamicResource OperatorGuideStrongBrush}" BorderThickness="1" />
+									<Border Margin="44" BorderBrush="{DynamicResource OperatorGuideMediumBrush}" BorderThickness="1" />
+								</Grid>
+
+								<Grid IsHitTestVisible="False">
+									<Grid.Style>
+										<Style TargetType="Grid">
+											<Setter Property="Visibility" Value="Collapsed" />
+											<Style.Triggers>
+												<DataTrigger Binding="{Binding Monitor.ShowCenterMark, RelativeSource={RelativeSource TemplatedParent}}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
+											</Style.Triggers>
+										</Style>
+									</Grid.Style>
+									<Border Width="1" Height="28" Style="{StaticResource OperatorMonitorGuide}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+									<Border Width="28" Height="1" Style="{StaticResource OperatorMonitorGuide}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+								</Grid>
+
+								<StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8">
+									<controls:RtaimeStatusBadge Status="{TemplateBinding RoleStatus}" Content="{Binding Monitor.State, RelativeSource={RelativeSource TemplatedParent}}" />
+									<ContentPresenter Content="{TemplateBinding StatusContent}" Margin="4,0,0,0" />
+								</StackPanel>
+
+								<Border VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="8" Padding="5,2" Style="{StaticResource OperatorMonitorHeaderOverlay}" CornerRadius="{StaticResource OperatorRadiusOverlay}">
+									<controls:RtaimeTimecode Content="{Binding Monitor.DisplayTimecode, RelativeSource={RelativeSource TemplatedParent}}" FontSize="{StaticResource OperatorFontSizeMetadata}" />
+								</Border>
+
+								<Border VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="8" Padding="5,2" Style="{StaticResource OperatorMonitorHeaderOverlay}" CornerRadius="{StaticResource OperatorRadiusOverlay}">
+									<StackPanel Orientation="Horizontal">
+										<TextBlock Text="{Binding Monitor.Format, RelativeSource={RelativeSource TemplatedParent}}" FontSize="{StaticResource OperatorFontSizeCompact}" Foreground="{DynamicResource OperatorOverlayTextBrush}" MaxWidth="180" TextTrimming="CharacterEllipsis" />
+										<TextBlock Text=" · " FontSize="{StaticResource OperatorFontSizeCompact}" Foreground="{DynamicResource OperatorOverlayTextBrush}" />
+										<TextBlock Text="{Binding Monitor.ZoomMode, RelativeSource={RelativeSource TemplatedParent}}" FontSize="{StaticResource OperatorFontSizeCompact}" Foreground="{DynamicResource OperatorOverlayTextBrush}" />
+									</StackPanel>
+								</Border>
+
+								<Border Background="{DynamicResource OperatorMonitorFooterOverlayBrush}">
+									<Border.Style>
+										<Style TargetType="Border">
+											<Setter Property="Visibility" Value="Collapsed" />
+											<Style.Triggers>
+												<DataTrigger Binding="{Binding Monitor.Frame, RelativeSource={RelativeSource TemplatedParent}}" Value="{x:Null}"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
+											</Style.Triggers>
+										</Style>
+									</Border.Style>
+									<StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+										<TextBlock Text="{Binding Monitor.State, RelativeSource={RelativeSource TemplatedParent}}" FontSize="{StaticResource OperatorFontSizeSection}" FontWeight="SemiBold" HorizontalAlignment="Center" />
+										<TextBlock Text="{TemplateBinding FrameUnavailableText}" Style="{StaticResource OperatorLabel}" Margin="0,3,0,0" />
+									</StackPanel>
+								</Border>
+							</Grid>
+
+							<Border Grid.Row="2" Style="{StaticResource RtaimeMonitorTransport}">
+								<Grid>
+									<Grid.ColumnDefinitions>
+										<ColumnDefinition Width="*" />
+										<ColumnDefinition Width="Auto" />
+									</Grid.ColumnDefinitions>
+									<ContentPresenter Content="{TemplateBinding Content}" VerticalAlignment="Center" />
+									<StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" IsEnabled="{TemplateBinding OverlayControlsEnabled}">
+										<controls:RtaimeToggleButton Content="SAFE" IsChecked="{Binding Monitor.ShowSafeArea, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}" IsCompact="True" Margin="0,0,3,0" ToolTip="Safe area" />
+										<controls:RtaimeToggleButton Content="CTR" IsChecked="{Binding Monitor.ShowCenterMark, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}" IsCompact="True" Margin="0,0,3,0" ToolTip="Center mark" />
+										<controls:RtaimeToggleButton Content="GRID" IsChecked="{Binding Monitor.ShowGrid, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}" IsCompact="True" ToolTip="Thirds grid" />
+									</StackPanel>
+								</Grid>
+							</Border>
+						</Grid>
+					</Border>
+				</ControlTemplate>
+			</Setter.Value>
+		</Setter>
+	</Style>
+
 	<Style x:Key="RtaimeProductionLowerPanel" TargetType="Border">
 		<Setter Property="Background" Value="{DynamicResource OperatorSurfaceBrush}" />
 		<Setter Property="BorderBrush" Value="{DynamicResource OperatorBorderBrush}" />
