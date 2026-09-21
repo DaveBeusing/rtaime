@@ -24,8 +24,8 @@
 						<ColumnDefinition Width="Auto" />
 					</Grid.ColumnDefinitions>
 					<StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-						<TextBlock Text="PREVIEW" Foreground="{DynamicResource OperatorPreviewBrush}" FontSize="12" FontWeight="Bold" />
-						<TextBlock Text="{Binding SourceName, ElementName=Root}" Margin="10,0,0,0" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" MaxWidth="190" />
+						<TextBlock Text="PREVIEW" Foreground="{DynamicResource OperatorPreviewBrush}" FontSize="{StaticResource OperatorFontSizeBody}" FontWeight="Bold" />
+						<TextBlock Text="{Binding SourceName, ElementName=Root}" Margin="10,0,0,0" FontSize="{StaticResource OperatorFontSizeBody}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" MaxWidth="190" />
 					</StackPanel>
 					<StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="8,0">
 						<TextBlock Text="{Binding ProductionFormat, ElementName=Root}" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" />
@@ -40,7 +40,7 @@
 				</Grid>
 			</Border>
 
-			<Grid Grid.Row="1" Background="#05080B" ClipToBounds="True">
+			<Grid Grid.Row="1" Style="{StaticResource OperatorMediaCanvas}">
 			<controls:RtaimeStatePlaceholder
 							State="{Binding WorkspaceStates.Preview.State, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 							Title="{Binding WorkspaceStates.Preview.Title, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
@@ -67,10 +67,10 @@
 					</Grid.Style>
 					<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
 					<Grid.RowDefinitions><RowDefinition Height="*" /><RowDefinition Height="*" /><RowDefinition Height="*" /></Grid.RowDefinitions>
-					<Border Grid.Column="0" Grid.RowSpan="3" BorderBrush="#55FFFFFF" BorderThickness="0,0,1,0" />
-					<Border Grid.Column="1" Grid.RowSpan="3" BorderBrush="#55FFFFFF" BorderThickness="0,0,1,0" />
-					<Border Grid.Row="0" Grid.ColumnSpan="3" BorderBrush="#55FFFFFF" BorderThickness="0,0,0,1" />
-					<Border Grid.Row="1" Grid.ColumnSpan="3" BorderBrush="#55FFFFFF" BorderThickness="0,0,0,1" />
+					<Border Grid.Column="0" Grid.RowSpan="3" BorderBrush="{DynamicResource OperatorGuideSubtleBrush}" BorderThickness="0,0,1,0" />
+					<Border Grid.Column="1" Grid.RowSpan="3" BorderBrush="{DynamicResource OperatorGuideSubtleBrush}" BorderThickness="0,0,1,0" />
+					<Border Grid.Row="0" Grid.ColumnSpan="3" BorderBrush="{DynamicResource OperatorGuideSubtleBrush}" BorderThickness="0,0,0,1" />
+					<Border Grid.Row="1" Grid.ColumnSpan="3" BorderBrush="{DynamicResource OperatorGuideSubtleBrush}" BorderThickness="0,0,0,1" />
 				</Grid>
 
 				<Grid IsHitTestVisible="False">
@@ -82,8 +82,8 @@
 							</Style.Triggers>
 						</Style>
 					</Grid.Style>
-					<Border Margin="22" BorderBrush="#B0FFFFFF" BorderThickness="1" />
-					<Border Margin="44" BorderBrush="#70FFFFFF" BorderThickness="1" />
+					<Border Margin="22" BorderBrush="{DynamicResource OperatorGuideStrongBrush}" BorderThickness="1" />
+					<Border Margin="44" BorderBrush="{DynamicResource OperatorGuideMediumBrush}" BorderThickness="1" />
 				</Grid>
 
 				<Grid IsHitTestVisible="False">
@@ -95,8 +95,8 @@
 							</Style.Triggers>
 						</Style>
 					</Grid.Style>
-					<Border Width="1" Height="28" Background="#C0FFFFFF" HorizontalAlignment="Center" VerticalAlignment="Center" />
-					<Border Width="28" Height="1" Background="#C0FFFFFF" HorizontalAlignment="Center" VerticalAlignment="Center" />
+					<Border Width="1" Height="28" Style="{StaticResource OperatorMonitorGuide}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+					<Border Width="28" Height="1" Style="{StaticResource OperatorMonitorGuide}" HorizontalAlignment="Center" VerticalAlignment="Center" />
 				</Grid>
 
 				<controls:RtaimeStatusBadge
@@ -106,19 +106,19 @@
 					HorizontalAlignment="Left"
 					VerticalAlignment="Top" />
 
-				<Border VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="8" Padding="5,2" Background="#CC071017" CornerRadius="2">
-					<controls:RtaimeTimecode Content="{Binding DisplayTimecode, ElementName=Root}" FontSize="13" />
+				<Border VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="8" Padding="5,2" Style="{StaticResource OperatorMonitorHeaderOverlay}" CornerRadius="{StaticResource OperatorRadiusOverlay}">
+					<controls:RtaimeTimecode Content="{Binding DisplayTimecode, ElementName=Root}" FontSize="{StaticResource OperatorFontSizeMetadata}" />
 				</Border>
 
-				<Border VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="8" Padding="5,2" Background="#CC071017" CornerRadius="2">
+				<Border VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="8" Padding="5,2" Style="{StaticResource OperatorMonitorHeaderOverlay}" CornerRadius="{StaticResource OperatorRadiusOverlay}">
 					<StackPanel Orientation="Horizontal">
-						<TextBlock Text="{Binding Format, ElementName=Root}" FontSize="10" Foreground="White" MaxWidth="180" TextTrimming="CharacterEllipsis" />
-						<TextBlock Text=" · " FontSize="10" Foreground="White" />
-						<TextBlock Text="{Binding ZoomMode, ElementName=Root}" FontSize="10" Foreground="White" />
+						<TextBlock Text="{Binding Format, ElementName=Root}" FontSize="{StaticResource OperatorFontSizeCompact}" Foreground="{DynamicResource OperatorOverlayTextBrush}" MaxWidth="180" TextTrimming="CharacterEllipsis" />
+						<TextBlock Text=" · " FontSize="{StaticResource OperatorFontSizeCompact}" Foreground="{DynamicResource OperatorOverlayTextBrush}" />
+						<TextBlock Text="{Binding ZoomMode, ElementName=Root}" FontSize="{StaticResource OperatorFontSizeCompact}" Foreground="{DynamicResource OperatorOverlayTextBrush}" />
 					</StackPanel>
 				</Border>
 
-				<Border Background="#D0071017">
+				<Border Background="{DynamicResource OperatorMonitorFooterOverlayBrush}">
 					<Border.Style>
 						<Style TargetType="Border">
 							<Setter Property="Visibility" Value="Collapsed" />
@@ -128,7 +128,7 @@
 						</Style>
 					</Border.Style>
 					<StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-						<TextBlock Text="{Binding State, ElementName=Root}" FontSize="14" FontWeight="SemiBold" HorizontalAlignment="Center" />
+						<TextBlock Text="{Binding State, ElementName=Root}" FontSize="{StaticResource OperatorFontSizeSection}" FontWeight="SemiBold" HorizontalAlignment="Center" />
 						<TextBlock Text="Preview frame unavailable" Style="{StaticResource OperatorLabel}" Margin="0,3,0,0" />
 					</StackPanel>
 				</Border>
