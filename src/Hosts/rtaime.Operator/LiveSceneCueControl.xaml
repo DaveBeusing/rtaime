@@ -135,7 +135,7 @@
 						<TextBlock Text="{Binding DisplayIndex, StringFormat={}{0:00}}"
 							Style="{StaticResource OperatorLabel}"
 							FontFamily="{DynamicResource OperatorTimecodeFontFamily}"
-							FontSize="10"
+							FontSize="{StaticResource OperatorFontSizeCompact}"
 							VerticalAlignment="Center" />
 
 						<Border Grid.Column="1"
@@ -144,18 +144,18 @@
 							Background="Black"
 							BorderBrush="{DynamicResource OperatorBorderBrush}"
 							BorderThickness="1"
-							CornerRadius="2"
+							CornerRadius="{StaticResource OperatorRadiusOverlay}"
 							VerticalAlignment="Center"
 							ClipToBounds="True">
 							<Image Source="{Binding Thumbnail}" Stretch="UniformToFill" />
 						</Border>
 
 						<StackPanel Grid.Column="3" VerticalAlignment="Center">
-							<TextBlock Text="{Binding Name}" FontSize="11" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+							<TextBlock Text="{Binding Name}" FontSize="{StaticResource OperatorFontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
 							<StackPanel Orientation="Horizontal" Margin="0,3,0,0">
-								<TextBlock Text="{Binding Type}" Style="{StaticResource OperatorLabel}" FontSize="9" />
-								<TextBlock Text=" · " Style="{StaticResource OperatorLabel}" FontSize="9" />
-								<TextBlock Text="{Binding Remaining}" Style="{StaticResource OperatorTimecode}" FontSize="9" />
+								<TextBlock Text="{Binding Type}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" />
+								<TextBlock Text=" · " Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" />
+								<TextBlock Text="{Binding Remaining}" Style="{StaticResource OperatorTimecode}" FontSize="{StaticResource OperatorFontSizeMicro}" />
 							</StackPanel>
 						</StackPanel>
 
@@ -244,8 +244,8 @@
 					<DataTemplate>
 						<Grid>
 							<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-							<TextBlock Text="{Binding Name}" FontSize="10" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-							<TextBlock Grid.Column="1" Text="{Binding Timecode}" Style="{StaticResource OperatorTimecode}" FontSize="9" Margin="8,0,0,0" VerticalAlignment="Center" />
+							<TextBlock Text="{Binding Name}" FontSize="{StaticResource OperatorFontSizeCompact}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+							<TextBlock Grid.Column="1" Text="{Binding Timecode}" Style="{StaticResource OperatorTimecode}" FontSize="{StaticResource OperatorFontSizeMicro}" Margin="8,0,0,0" VerticalAlignment="Center" />
 						</Grid>
 					</DataTemplate>
 				</controls:RtaimeListBox.ItemTemplate>
@@ -268,7 +268,7 @@
 			Margin="0,8,0,0">
 			<StackPanel>
 				<TextBlock Text="SCENE ACTIVATION · NOT AVAILABLE IN V1 CONTRACT" Style="{StaticResource OperatorLabel}" FontWeight="SemiBold" />
-				<TextBlock Text="Selection is non-destructive; explicit Preview/Take and cue commands remain the only actions here." Style="{StaticResource OperatorLabel}" FontSize="9" TextWrapping="Wrap" Margin="0,2,0,0" />
+				<TextBlock Text="Selection is non-destructive; explicit Preview/Take and cue commands remain the only actions here." Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextWrapping="Wrap" Margin="0,2,0,0" />
 			</StackPanel>
 		</Border>
 	</Grid>

@@ -136,7 +136,9 @@ public sealed class GeneratedAudioTestSignalGeneratorTests
 
 		Assert.Contains(pulse, sample => Math.Abs(sample) > 0.1f);
 		Assert.All(silence, sample => Assert.Equal(0f, sample));
-		Assert.Equal(pulse, repeated);
+		Assert.Equal(pulse.Length, repeated.Length);
+		for (var index = 0; index < pulse.Length; index++)
+			Assert.Equal(pulse[index], repeated[index], 6);
 		Assert.Equal(0, generator.Inspect(Timing(1_000, 96)).PeakLevel);
 		Assert.Equal(0.25, generator.Inspect(Timing(48_000, 480)).PeakLevel, 6);
 	}

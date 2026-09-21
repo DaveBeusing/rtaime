@@ -26,6 +26,29 @@
 	<SolidColorBrush x:Key="OperatorTimelineBrush" Color="{StaticResource OperatorColorTimeline}" />
 	<SolidColorBrush x:Key="OperatorGraphicsBrush" Color="{StaticResource OperatorColorGraphics}" />
 	<SolidColorBrush x:Key="OperatorAudioBrush" Color="{StaticResource OperatorColorAudio}" />
+	<SolidColorBrush x:Key="OperatorMediaCanvasBrush" Color="{StaticResource OperatorColorMediaCanvas}" />
+	<SolidColorBrush x:Key="OperatorThumbnailCanvasBrush" Color="{StaticResource OperatorColorThumbnailCanvas}" />
+	<SolidColorBrush x:Key="OperatorDiagnosticSurfaceBrush" Color="{StaticResource OperatorColorDiagnosticSurface}" />
+	<SolidColorBrush x:Key="OperatorTimelineSurfaceBrush" Color="{StaticResource OperatorColorTimelineSurface}" />
+	<SolidColorBrush x:Key="OperatorTimelineTrackBrush" Color="{StaticResource OperatorColorTimelineTrack}" />
+	<SolidColorBrush x:Key="OperatorTimelineTrackOverlayBrush" Color="{StaticResource OperatorColorTimelineTrackOverlay}" />
+	<SolidColorBrush x:Key="OperatorOverlayScrimSoftBrush" Color="{StaticResource OperatorColorOverlayScrimSoft}" />
+	<SolidColorBrush x:Key="OperatorOverlayScrimBrush" Color="{StaticResource OperatorColorOverlayScrim}" />
+	<SolidColorBrush x:Key="OperatorOverlayTextBrush" Color="{StaticResource OperatorColorOverlayText}" />
+	<SolidColorBrush x:Key="OperatorGuideSubtleBrush" Color="{StaticResource OperatorColorGuideSubtle}" />
+	<SolidColorBrush x:Key="OperatorGuideMediumBrush" Color="{StaticResource OperatorColorGuideMedium}" />
+	<SolidColorBrush x:Key="OperatorGuideStrongBrush" Color="{StaticResource OperatorColorGuideStrong}" />
+	<SolidColorBrush x:Key="OperatorGuidePrimaryBrush" Color="{StaticResource OperatorColorGuidePrimary}" />
+	<SolidColorBrush x:Key="OperatorMonitorHeaderOverlayBrush" Color="{StaticResource OperatorColorMonitorHeaderOverlay}" />
+	<SolidColorBrush x:Key="OperatorMonitorFooterOverlayBrush" Color="{StaticResource OperatorColorMonitorFooterOverlay}" />
+	<SolidColorBrush x:Key="OperatorMultiviewHeaderOverlayBrush" Color="{StaticResource OperatorColorMultiviewHeaderOverlay}" />
+	<SolidColorBrush x:Key="OperatorMultiviewOverlayBrush" Color="{StaticResource OperatorColorMultiviewOverlay}" />
+	<SolidColorBrush x:Key="OperatorMultiviewOverlayMutedBrush" Color="{StaticResource OperatorColorMultiviewOverlayMuted}" />
+	<SolidColorBrush x:Key="OperatorMultiviewOverlayStrongBrush" Color="{StaticResource OperatorColorMultiviewOverlayStrong}" />
+	<SolidColorBrush x:Key="OperatorGraphSurfaceBrush" Color="{StaticResource OperatorColorGraphSurface}" />
+	<SolidColorBrush x:Key="OperatorGraphSurfaceRaisedBrush" Color="{StaticResource OperatorColorGraphSurfaceRaised}" />
+	<SolidColorBrush x:Key="OperatorGraphOverlayBrush" Color="{StaticResource OperatorColorGraphOverlay}" />
+	<SolidColorBrush x:Key="OperatorTimelineStatusTextBrush" Color="{StaticResource OperatorColorTimelineStatusText}" />
 	<SolidColorBrush x:Key="OperatorPreviewBrush" Color="{StaticResource OperatorColorPreview}" />
 	<SolidColorBrush x:Key="OperatorPreviewSurfaceBrush" Color="{StaticResource OperatorColorPreviewSurface}" />
 	<SolidColorBrush x:Key="OperatorProgramBrush" Color="{StaticResource OperatorColorProgram}" />
@@ -38,6 +61,54 @@
 	<SolidColorBrush x:Key="OperatorMeterSafeBrush" Color="{StaticResource OperatorColorMeterSafe}" />
 	<SolidColorBrush x:Key="OperatorMeterWarningBrush" Color="{StaticResource OperatorColorMeterWarning}" />
 	<SolidColorBrush x:Key="OperatorMeterClipBrush" Color="{StaticResource OperatorColorMeterClip}" />
+
+
+	<!-- Shared media and monitor presentation. -->
+	<Style x:Key="OperatorMediaCanvas" TargetType="Grid">
+		<Setter Property="Background" Value="{DynamicResource OperatorMediaCanvasBrush}" />
+		<Setter Property="ClipToBounds" Value="True" />
+		<Setter Property="SnapsToDevicePixels" Value="True" />
+	</Style>
+
+	<Style x:Key="OperatorMonitorGuide" TargetType="Border">
+		<Setter Property="Background" Value="{DynamicResource OperatorGuidePrimaryBrush}" />
+		<Setter Property="SnapsToDevicePixels" Value="True" />
+	</Style>
+
+	<Style x:Key="OperatorMonitorHeaderOverlay" TargetType="Border">
+		<Setter Property="Background" Value="{DynamicResource OperatorMonitorHeaderOverlayBrush}" />
+		<Setter Property="SnapsToDevicePixels" Value="True" />
+	</Style>
+
+	<Style x:Key="OperatorMonitorFooterOverlay" TargetType="Border">
+		<Setter Property="Background" Value="{DynamicResource OperatorMonitorFooterOverlayBrush}" />
+		<Setter Property="SnapsToDevicePixels" Value="True" />
+	</Style>
+
+	<Style x:Key="OperatorOverlayScrim" TargetType="Border">
+		<Setter Property="Background" Value="{DynamicResource OperatorOverlayScrimBrush}" />
+		<Setter Property="SnapsToDevicePixels" Value="True" />
+	</Style>
+
+	<Style x:Key="OperatorThumbnailFrame" TargetType="Border">
+		<Setter Property="Background" Value="{DynamicResource OperatorThumbnailCanvasBrush}" />
+		<Setter Property="BorderBrush" Value="{DynamicResource OperatorBorderBrush}" />
+		<Setter Property="BorderThickness" Value="1" />
+		<Setter Property="SnapsToDevicePixels" Value="True" />
+	</Style>
+
+	<Style x:Key="OperatorDiagnosticPanel" TargetType="Border" BasedOn="{StaticResource OperatorPanel}">
+		<Setter Property="Background" Value="{DynamicResource OperatorDiagnosticSurfaceBrush}" />
+	</Style>
+
+	<Style x:Key="OperatorGraphOverlay" TargetType="Border">
+		<Setter Property="Background" Value="{DynamicResource OperatorGraphOverlayBrush}" />
+		<Setter Property="BorderBrush" Value="{DynamicResource OperatorBorderBrush}" />
+		<Setter Property="BorderThickness" Value="1" />
+		<Setter Property="CornerRadius" Value="{StaticResource OperatorRadiusControl}" />
+		<Setter Property="Padding" Value="{StaticResource OperatorCompactOverlayPadding}" />
+		<Setter Property="SnapsToDevicePixels" Value="True" />
+	</Style>
 
 	<Style x:Key="OperatorFocusVisual" TargetType="{x:Type Control}">
 		<Setter Property="Template">

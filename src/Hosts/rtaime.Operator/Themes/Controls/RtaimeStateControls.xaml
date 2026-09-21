@@ -59,13 +59,13 @@
 								x:Name="StateLabel"
 								Text="STATE"
 								Style="{StaticResource OperatorLabel}"
-								FontSize="9"
+								FontSize="{DynamicResource OperatorFontSizeMicro}"
 								FontWeight="SemiBold"
 								HorizontalAlignment="Center"
 								Margin="0,0,0,5" />
 							<TextBlock
 								Text="{TemplateBinding Title}"
-								FontSize="15"
+								FontSize="{DynamicResource OperatorFontSizeWorkspaceHeader}"
 								FontWeight="SemiBold"
 								TextAlignment="Center"
 								TextWrapping="Wrap"
@@ -146,7 +146,7 @@
 								Grid.Column="1"
 								Text="STATE"
 								Style="{StaticResource OperatorLabel}"
-								FontSize="9"
+								FontSize="{DynamicResource OperatorFontSizeMicro}"
 								FontWeight="Bold"
 								VerticalAlignment="Center"
 								Margin="0,0,8,0" />

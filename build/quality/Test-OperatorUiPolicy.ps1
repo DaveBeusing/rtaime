@@ -218,6 +218,31 @@ $globalPaletteTokens = @{
 	"#3478D4" = "OperatorColorTimeline"
 	"#7259D7" = "OperatorColorGraphics"
 	"#22A977" = "OperatorColorAudio"
+	"#05080B" = "OperatorColorMediaCanvas"
+	"#090C10" = "OperatorColorThumbnailCanvas"
+	"#D9071017" = "OperatorColorMediaDurationOverlay"
+	"#C9071017" = "OperatorColorMediaOfflineOverlay"
+	"#0A141C" = "OperatorColorDiagnosticSurface"
+	"#0C151D" = "OperatorColorTimelineSurface"
+	"#111D26" = "OperatorColorTimelineTrack"
+	"#E0111D26" = "OperatorColorTimelineTrackOverlay"
+	"#B0000000" = "OperatorColorOverlayScrimSoft"
+	"#C0000000" = "OperatorColorOverlayScrim"
+	"#FFFFFFFF" = "OperatorColorOverlayText"
+	"#55FFFFFF" = "OperatorColorGuideSubtle"
+	"#70FFFFFF" = "OperatorColorGuideMedium"
+	"#B0FFFFFF" = "OperatorColorGuideStrong"
+	"#C0FFFFFF" = "OperatorColorGuidePrimary"
+	"#CC071017" = "OperatorColorMonitorHeaderOverlay"
+	"#D0071017" = "OperatorColorMonitorFooterOverlay"
+	"#DC071017" = "OperatorColorMultiviewHeaderOverlay"
+	"#D8071017" = "OperatorColorMultiviewOverlay"
+	"#C8071017" = "OperatorColorMultiviewOverlayMuted"
+	"#F2071017" = "OperatorColorMultiviewOverlayStrong"
+	"#13222C" = "OperatorColorGraphSurface"
+	"#1B303C" = "OperatorColorGraphSurfaceRaised"
+	"#D00A141C" = "OperatorColorGraphOverlay"
+	"#D8FFFFFF" = "OperatorColorTimelineStatusText"
 }
 
 $featureAuditViolations = [System.Collections.Generic.List[string]]::new()
@@ -251,10 +276,20 @@ foreach ($featureFile in $featureXamlFiles) {
 			}
 		}
 
+		if ($node.HasAttribute("FontSize")) {
+			$fontSizeValue = $node.GetAttribute("FontSize")
+			if ($fontSizeValue -match '^\d+(?:\.\d+)?$') {
+				$featureAuditViolations.Add("$relativePath contains numeric FontSize '$fontSizeValue'; shared Operator typography must use semantic font-size tokens.")
+			}
+		}
+
 		foreach ($attribute in $node.Attributes) {
 			$value = $attribute.Value.ToUpperInvariant()
 			if ($globalPaletteTokens.ContainsKey($value)) {
 				$featureAuditViolations.Add("$relativePath hardcodes global palette value '$value'; use token '$($globalPaletteTokens[$value])'.")
+			}
+			elseif ($value -match '^#(?:[0-9A-F]{6}|[0-9A-F]{8})$') {
+				$featureAuditViolations.Add("$relativePath contains hardcoded color literal '$value'; visible colors belong in semantic Operator tokens or theme resources.")
 			}
 		}
 	}
@@ -312,7 +347,7 @@ foreach ($controlName in @("RtaimeOutputRow", "RtaimeHealthRow", "RtaimeMetricDi
 Assert-Condition ($customControls -match 'class RtaimeMetricBar[\s\S]+HasValueProperty' -and $customControlTheme -match 'Property="HasValue" Value="False"[\s\S]+PART_Indicator') "Metric bars must preserve unavailable evidence without rendering a synthetic zero indicator."
 Assert-Condition ($outputHealthControlTheme -match 'Property="Height" Value="54"' -and $outputHealthControlTheme -match 'Width="56" Height="32"' -and $outputHealthControlTheme -match 'Width="8" Height="8"') "Shared output rows must retain 54px density, 56x32 thumbnails and 8px status dots."
 Assert-Condition ($outputHealthControlTheme -match 'RtaimeHealthRow[\s\S]+Property="Height" Value="29"' -and $outputHealthControlTheme -match 'RtaimeAlertRow[\s\S]+Property="Height" Value="38"') "Shared health and alert rows must retain compact flat density."
-Assert-Condition ($outputHealthControlTheme -match 'RtaimeSparkline[\s\S]+LineThickness' -and $outputHealthControlTheme -match '#0A141C') "Shared sparkline must retain the flat dark graph treatment."
+Assert-Condition ($outputHealthControlTheme -match 'RtaimeSparkline[\s\S]+LineThickness' -and $outputHealthControlTheme -match 'OperatorDiagnosticSurfaceBrush' -and $outputHealthControlTheme -match 'OperatorThumbnailCanvasBrush') "Output health thumbnails and sparklines must consume shared thumbnail and diagnostic surfaces."
 
 Assert-Condition ($customControls -match 'enum RtaimeStatusKind') "Custom status visuals must use explicit semantic states."
 foreach ($statusKind in @("Selection", "Action", "Healthy", "Ready", "Warning", "Armed", "Preview", "Program", "OnAir")) {
@@ -359,15 +394,17 @@ foreach ($controlName in @("RtaimeSearchBox", "RtaimeMediaTile", "RtaimeContextM
 Assert-Condition ($customMediaTheme -match 'RtaimeMediaOverlayScrollViewer' -and $customMediaTheme -match 'PART_VerticalScrollBar' -and $customMediaTheme -match 'controls:RtaimeScrollBar') "Media Library scrolling must use the custom overlay scrollbar."
 Assert-Condition ($customMediaTheme -match 'Property="IsSelected" Value="True"' -and $customMediaTheme -match 'OperatorAccentBrush' -and $customMediaTheme -match 'SelectionAccent') "Media tile selection must use the cyan border/accent treatment."
 Assert-Condition ($customMediaTheme -match 'Property="IsMouseOver" Value="True"' -and $customMediaTheme -match 'OperatorRaisedHoverBrush') "Media tile hover must remain dark and distinct from cyan selection."
-Assert-Condition ($customMediaTheme -match '<RowDefinition Height="68" />' -and $customMediaTheme -match 'FontSize="11"' -and $customMediaTheme -match 'OperatorTimecodeFontFamily') "Media tiles must retain the approximately 120x68 thumbnail, 11px filename and compact mono duration treatment."
+Assert-Condition ($customMediaTheme -match '<RowDefinition Height="68" />' -and $customMediaTheme -match 'OperatorFontSizeCaption' -and $customMediaTheme -match 'OperatorFontSizeCompact' -and $customMediaTheme -match 'OperatorTimecodeFontFamily') "Media tiles must retain the approximately 120x68 thumbnail, semantic caption filename and compact mono duration treatment."
 Assert-Condition ($customMediaTheme -match 'OfflineOverlay' -and $customMediaTheme -match 'Text="OFFLINE"' -and $customMediaTheme -match 'IsOnline') "Offline/missing presentation must overlay the thumbnail without changing tile geometry."
+Assert-Condition ("$customControlTheme`n$outputHealthControlTheme`n$customMediaTheme`n$stateControlTheme" -notmatch 'FontSize="\d+(?:\.\d+)?"') "Shared control-theme typography must use Operator font-size tokens instead of numeric FontSize literals."
+Assert-Condition ("$customControlTheme`n$outputHealthControlTheme`n$customMediaTheme`n$stateControlTheme" -notmatch '#(?:[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})') "Shared control themes must consume semantic Operator color resources instead of local color literals."
 
 Assert-Condition ($monitorWorkspaceTheme -match 'x:Key="RtaimeMonitorPanel"' -and $monitorWorkspaceTheme -match 'x:Key="RtaimeMonitorHeader"' -and $monitorWorkspaceTheme -match 'x:Key="RtaimeMonitorTransport"') "Preview and Program must share the custom monitor chrome."
 Assert-Condition ($monitorWorkspaceTheme -match 'Height" Value="40"' -and $monitorWorkspaceTheme -match 'Height" Value="42"') "Shared monitor chrome must retain the 40px header and 42px transport metrics."
 Assert-Condition ($monitorWorkspaceTheme -match 'x:Key="RtaimeProductionLowerPanel"' -and $monitorWorkspaceTheme -match 'x:Key="RtaimeProductionSceneItem"' -and $monitorWorkspaceTheme -match 'x:Key="RtaimeProductionOutputItem"' -and $monitorWorkspaceTheme -match 'RtaimeProductionStatusDot') "Lower production panels must use the shared compact mockup chrome."
 
 Assert-Condition ($theme -match 'Source="OperatorTokens\.xaml"') "Operator theme must load the shared design-token dictionary."
-foreach ($token in @("OperatorFontFamily", "OperatorTimecodeFontFamily", "OperatorTopBarHeight", "OperatorTopBarGridLength", "OperatorNavigationWidth", "OperatorMediaPanelWidth", "OperatorInspectorWidth", "OperatorTimelineHeight", "OperatorRegionGap", "OperatorRegionGapGridLength", "OperatorControlHeight", "OperatorCompactControlHeight", "OperatorRadiusPanel", "OperatorRadiusControl", "OperatorColorTopBar", "OperatorColorNavigation", "OperatorColorSurface", "OperatorColorAlternateSurface", "OperatorColorRaisedSurface", "OperatorColorRaisedHover", "OperatorColorBorder", "OperatorColorBorderStrong", "OperatorColorText", "OperatorColorSecondaryText", "OperatorColorMutedText", "OperatorColorAccent", "OperatorColorPreview", "OperatorColorProgram", "OperatorColorHealthy", "OperatorColorWarning", "OperatorColorError", "OperatorColorTimeline", "OperatorColorGraphics", "OperatorColorAudio")) {
+foreach ($token in @("OperatorFontFamily", "OperatorTimecodeFontFamily", "OperatorTopBarHeight", "OperatorTopBarGridLength", "OperatorNavigationWidth", "OperatorMediaPanelWidth", "OperatorInspectorWidth", "OperatorTimelineHeight", "OperatorRegionGap", "OperatorRegionGapGridLength", "OperatorControlHeight", "OperatorCompactControlHeight", "OperatorRadiusPanel", "OperatorRadiusControl", "OperatorColorTopBar", "OperatorColorNavigation", "OperatorColorSurface", "OperatorColorAlternateSurface", "OperatorColorRaisedSurface", "OperatorColorRaisedHover", "OperatorColorBorder", "OperatorColorBorderStrong", "OperatorColorText", "OperatorColorSecondaryText", "OperatorColorMutedText", "OperatorColorAccent", "OperatorColorPreview", "OperatorColorProgram", "OperatorColorHealthy", "OperatorColorWarning", "OperatorColorError", "OperatorColorTimeline", "OperatorColorGraphics", "OperatorColorAudio", "OperatorFontSizeFinePrint", "OperatorFontSizeMicro", "OperatorFontSizeCompact", "OperatorFontSizeCaption", "OperatorFontSizeWorkspaceHeader", "OperatorFontSizeMetadata", "OperatorFontSizeDisplay", "OperatorFontSizeHero", "OperatorCompactOverlayPadding", "OperatorMonitorLabelPadding", "OperatorMonitorFooterPadding", "OperatorRadiusOverlay", "OperatorColorMediaCanvas", "OperatorColorThumbnailCanvas", "OperatorColorMediaDurationOverlay", "OperatorColorMediaOfflineOverlay", "OperatorColorDiagnosticSurface", "OperatorColorTimelineSurface", "OperatorColorTimelineTrackOverlay", "OperatorColorOverlayScrim", "OperatorColorOverlayText", "OperatorColorGuidePrimary", "OperatorColorMonitorHeaderOverlay", "OperatorColorMonitorFooterOverlay", "OperatorColorMultiviewOverlay", "OperatorColorGraphSurface", "OperatorColorGraphOverlay", "OperatorColorTimelineStatusText")) {
 	Assert-Condition ($tokens -match [Regex]::Escape($token)) "Operator design token '$token' is required."
 }
 
@@ -406,7 +443,7 @@ foreach ($contractValue in @(
 )) {
 	Assert-Condition ($tokens -match [Regex]::Escape($contractValue)) "Operator mockup contract value is required: $contractValue"
 }
-foreach ($resource in @("OperatorPreviewBrush", "OperatorProgramBrush", "OperatorArmedBrush", "OperatorHealthyBrush", "OperatorWarningBrush", "OperatorErrorBrush", "OperatorEvidenceBadge", "OperatorFocusVisual", "OperatorToolbar", "OperatorToggleButton", "OperatorSourceItem", "OperatorMeter", "OperatorTimelineSlider", "OperatorPreviewTally", "OperatorProgramTally", "OperatorTopBar", "OperatorShellRegion", "OperatorTransportBar", "StatusPill", "MetricMeter", "WorkspaceNavItem", "PanelHeader", "SectionDivider", "OperatorVerticalSplitter", "OperatorHorizontalSplitter", "OperatorLoadingState", "OperatorErrorState")) {
+foreach ($resource in @("OperatorPreviewBrush", "OperatorProgramBrush", "OperatorArmedBrush", "OperatorHealthyBrush", "OperatorWarningBrush", "OperatorErrorBrush", "OperatorEvidenceBadge", "OperatorFocusVisual", "OperatorToolbar", "OperatorToggleButton", "OperatorSourceItem", "OperatorMeter", "OperatorTimelineSlider", "OperatorPreviewTally", "OperatorProgramTally", "OperatorTopBar", "OperatorShellRegion", "OperatorTransportBar", "StatusPill", "MetricMeter", "WorkspaceNavItem", "PanelHeader", "SectionDivider", "OperatorVerticalSplitter", "OperatorHorizontalSplitter", "OperatorLoadingState", "OperatorErrorState", "OperatorMediaCanvas", "OperatorMonitorGuide", "OperatorMonitorHeaderOverlay", "OperatorMonitorFooterOverlay", "OperatorOverlayScrim", "OperatorThumbnailFrame", "OperatorDiagnosticPanel", "OperatorGraphOverlay")) {
 	Assert-Condition ($theme -match [Regex]::Escape($resource)) "Operator theme resource '$resource' is required."
 }
 
@@ -487,7 +524,7 @@ foreach ($trackLabel in @("V3  GRAPHICS", "V2  VIDEO", "V1  VIDEO", "A1  MUSIC",
 Assert-Condition ($timelineViewModel -match 'RowHeight => IsVideoLane \? 42\.0 : 40\.0' -and $timelineViewModel -match 'IsVideoLane' -and $timelineViewModel -match 'IsAudioLane') "Timeline rows must retain approximately 42px video/graphics and 40px audio density."
 Assert-Condition ($timeline -match '<RowDefinition Height="44" />' -and $timeline -match '<RowDefinition Height="30" />' -and $timeline -match '<ColumnDefinition Width="238" />') "Timeline must retain the 44px toolbar, 30px ruler and 238px track-header reference geometry."
 Assert-Condition ($tokens -match '<sys:Double x:Key="OperatorTimelineHeight">320</sys:Double>' -and $shell -match 'DefaultLowerPanelHeight = 320') "Timeline default shell height must remain exactly 320px."
-Assert-Condition ($timeline -match '#0C151D' -and $timeline -match '#111D26' -and $timeline -match 'OperatorColorTimeline' -and $timeline -match 'OperatorColorGraphics' -and $timeline -match 'OperatorColorAudio' -and $timeline -match 'OperatorColorWarning') "Timeline must retain local background/ruler colors while shared semantic colors come from the global token palette."
+Assert-Condition ($timeline -match 'OperatorColorTimelineSurface' -and $timeline -match 'OperatorColorTimelineTrack' -and $timeline -match 'OperatorTimelineTrackOverlayBrush' -and $timeline -match 'OperatorColorTimeline' -and $timeline -match 'OperatorColorGraphics' -and $timeline -match 'OperatorColorAudio' -and $timeline -match 'OperatorColorWarning') "Timeline background, ruler and cue overlays must consume shared semantic design resources."
 Assert-Condition ($timeline -match 'ItemsSource="\{Binding RulerTicks\}"' -and $timelineViewModel -match 'TimelineRulerTickViewModel') "Timeline must expose a frame-derived time ruler."
 Assert-Condition ($timeline -match 'Path="DisplayFrame"' -and $timeline -match 'Width="2"' -and $timeline -match 'OperatorAccentBrush' -and $timeline -match '<Polygon Points="0,0 10,0 5,7"') "Timeline playhead must use the cyan 2px line and cyan head treatment."
 Assert-Condition ($timeline -match 'ItemsSource="\{Binding VisibleCues\}"' -and $timeline -match 'TimelineCueMarker' -and $timeline -match 'Cue_PreviewMouseLeftButtonDown') "Cue markers must render above the tracks through the existing cue projection."
@@ -506,7 +543,7 @@ Assert-Condition ($timelineViewModel -match '_projectionInitialized && hash == _
 Assert-Condition ($timeline -match 'ItemsSource="\{Binding VisibleItems\}"' -and $timeline -match 'ItemsSource="\{Binding VisibleCues\}"' -and $timelineViewModel -match 'RefreshVisibleItems' -and $timelineViewModel -match 'RefreshViewportProjection') "Timeline rendering must project only viewport-visible clips and cues."
 Assert-Condition ($timelineViewModel -match 'SelectedItems' -and $timelineViewModel -match 'HasMultipleItemSelection' -and $timelineCode -match 'ModifierKeys\.Control' -and $timelineCode -match 'ModifierKeys\.Shift') "Timeline clip selection must support explicit multi-selection without a second state-management layer."
 Assert-Condition ($timelineViewModel -match 'TimelineTrackViewModel : INotifyPropertyChanged' -and $timelineViewModel -match 'TimelineCueViewModel[\s\S]+INotifyPropertyChanged' -and $timeline -match 'Binding IsActive' -and $timeline -match 'Binding IsSelected') "Timeline must visually distinguish the active track, selected items and focused cue."
-Assert-Condition ($timeline -match 'TimelineClip' -and $timeline -match 'BorderBrush" Value="\{DynamicResource OperatorAccentBrush\}"' -and $timeline -match 'FontSize="11"') "Selected clips must use a cyan outline and compact 11px clip text."
+Assert-Condition ($timeline -match 'TimelineClip' -and $timeline -match 'BorderBrush" Value="\{DynamicResource OperatorAccentBrush\}"' -and $timeline -match 'OperatorFontSizeCaption') "Selected clips must use a cyan outline and shared compact caption typography."
 Assert-Condition ($timelineViewModel -match 'RestoreSelection' -and $timelineViewModel -match 'selectedItemIds' -and $timelineViewModel -match 'selectedCueId') "Timeline selection/focus must survive projection rebuilds when stable identities remain available."
 Assert-Condition ($windowCode -match 'MediaPool\.SelectTimelineItems\(selection\.Items, selection\.Item\)' -and $mediaPool -match 'BuildTimelineMultiSelectionInspector' -and $mediaPool -match 'timeline\.selection\.' -and $mediaPool -match 'MIXED') "Timeline multi-selection must project into the existing shared Inspector with common/MIXED semantics."
 Assert-Condition ($timelineViewModel -match 'BeginTrimPreview' -and $timelineViewModel -match 'PreviewTrim' -and $timelineViewModel -match 'CancelTrimPreview' -and $timeline -match 'EffectiveInPointFrame' -and $timeline -match 'EffectiveOutPointFrame' -and $timeline -match 'HasTrimPreview') "Timeline trim drag must render a local preview before committing through the existing marker commands."
@@ -873,7 +910,7 @@ Assert-Condition ($navigationSurface -match 'controls:RtaimeNavigationItem' -and
 foreach ($workspace in @("MEDIA", "EDIT", "LIVE", "SCENES", "COMPOSITING", "OUTPUTS", "HEALTH", "SETTINGS")) {
 	Assert-Condition ($navigationSurface -match ('CommandParameter="' + $workspace + '"')) "Mockup navigation must retain workspace '$workspace'."
 }
-Assert-Condition ($window -match 'Grid\.RowSpan="3"[\s\S]{0,80}Panel\.ZIndex="100"' -and $window -match 'WorkspaceStates\.IsShellAvailable') "Startup/recovery presentation must overlay the top bar, workspace and permanent Runtime status bar rather than reflow shell geometry."
+Assert-Condition ($window -match 'Grid\.RowSpan="3"[\s\S]{0,80}Panel\.ZIndex="100"' -and $window -match 'Startup\.HasCompletedInitialStartup') "Initial startup presentation must overlay the top bar, workspace and permanent Runtime status bar rather than reflow shell geometry."
 Assert-Condition ($shell -match 'public bool IsFullscreen \{ get; init; \} = true;' -and $windowCode -match 'WindowStyle = WindowStyle\.None') "Fresh layouts must prefer production fullscreen while preserving the existing borderless/windowed implementation."
 Assert-Condition ($keyboard -match 'new\("preview-view".+Key\.D1.+shell\.MaximizePreviewCommand') "Preview maximize must be keyboard-accessible through Ctrl+1."
 Assert-Condition ($keyboard -match 'new\("program-view".+Key\.D2.+shell\.MaximizeProgramCommand') "Program maximize must be keyboard-accessible through Ctrl+2."
@@ -933,7 +970,7 @@ foreach ($workspace in @("MEDIA", "EDIT", "LIVE", "SCENES", "COMPOSITING", "OUTP
 	Assert-Condition ($shell -match ('const string [A-Za-z]+ = "' + $workspace + '"')) "Canonical workspace '$workspace' must be defined."
 	Assert-Condition ($window -match ('CommandParameter="' + $workspace + '"')) "Canonical workspace '$workspace' must be selectable from the Operator."
 }
-Assert-Condition ($shell -match 'CurrentVersion = 5' -and $shell -match 'Dictionary<string, OperatorWorkspaceLayoutSettings>' -and $shell -match 'Version < 4') "Workspace layout persistence must be versioned, preserve version-4 layouts and migrate pre-mockup geometry to reference defaults."
+Assert-Condition ($shell -match 'CurrentVersion = 6' -and $shell -match 'Dictionary<string, OperatorWorkspaceLayoutSettings>' -and $shell -match 'Version < 4') "Workspace layout persistence must be versioned, preserve version-4 layouts and migrate pre-mockup geometry to reference defaults."
 Assert-Condition ($shell -match '"GRAPHICS".+Compositing' -and $shell -match '"SYSTEM".+Settings') "Legacy workspace names must migrate to the canonical eight-workspace shell."
 Assert-Condition ($shell -match 'stableLeftPanelWidth' -and $shell -match 'stableRightPanelWidth' -and $shell -match 'stableLowerPanelHeight' -and $shell -match 'ApplyWorkspaceLayout') "Workspace switching must preserve macro shell geometry while changing presentation content."
 Assert-Condition ($shell -notmatch 'OperatorControlClient|NamedPipe|RuntimeHost|ControlHost|AIHost') "Workspace switching must remain presentation-only."
@@ -967,7 +1004,7 @@ Assert-Condition ($shell -match 'CompositingGraphVisibility' -and $shell -match 
 Assert-Condition ($compositingWorkspaceSurface -match '<ColumnDefinition Width="64\*" />' -and $compositingWorkspaceSurface -match '<ColumnDefinition Width="6" />' -and $compositingWorkspaceSurface -match '<ColumnDefinition Width="36\*" />') "COMPOSITING center must retain the approximately 64/36 graph-to-preview split with a 6px gap."
 Assert-Condition ($compositingWorkspaceSurface -match '<local:CompositingGraphControl' -and $compositingWorkspaceSurface -match 'DataContext="\{Binding CompositingGraph') "COMPOSITING must render the dedicated node graph through the existing Operator shell."
 Assert-Condition ($windowCode -match 'CompositingGraphViewModel' -and $windowCode -match 'CompositingGraph\.Dispose\(\)') "The Operator window must own and dispose the graph presentation lifecycle."
-Assert-Condition ($compositingGraph -match '#0A141C' -and $compositingGraph -match '#13222C' -and $compositingGraph -match '#1B303C') "Compositing graph must retain the mockup background, minor-grid and major-grid colors."
+Assert-Condition ($compositingGraph -match 'OperatorColorDiagnosticSurface' -and $compositingGraph -match 'OperatorColorGraphSurface' -and $compositingGraph -match 'OperatorColorGraphSurfaceRaised') "Compositing graph background and grids must consume shared semantic graph resources."
 Assert-Condition ($compositingGraph -match 'Property="CornerRadius" Value="4"' -and $compositingGraph -match 'Property="Padding" Value="10"') "Compositing nodes must retain 4px radius and 10px padding."
 Assert-Condition ($compositingGraph -match 'ItemsSource="\{Binding Connections\}"' -and $compositingGraph -match 'ItemsSource="\{Binding Nodes\}"') "Graph connections and node controls must render in separate presentation layers."
 Assert-Condition ($compositingGraph -match 'GraphConnectionBrush' -and $compositingGraph -match 'StrokeThickness="2"' -and $compositingGraph -match 'Binding IsActive' -and $compositingGraph -match 'OperatorAccentBrush') "Connections must be 2px neutral by default and cyan when active."

@@ -117,7 +117,7 @@
 						<ColumnDefinition Width="*" />
 						<ColumnDefinition Width="Auto" />
 					</Grid.ColumnDefinitions>
-					<TextBlock Text="{Binding AccessDetail}" Style="{StaticResource OperatorLabel}" FontSize="9" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+					<TextBlock Text="{Binding AccessDetail}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
 					<controls:RtaimeButton Grid.Column="1"
 						Content="TAKE PVW → PGM"
 						Command="{Binding RoutePreviewToProgramCommand}"
@@ -211,7 +211,7 @@
 							DockPanel.Dock="Right" />
 					</DockPanel>
 
-					<TextBlock Text="{Binding SelectedOutput.Name}" FontSize="15" FontWeight="SemiBold" />
+					<TextBlock Text="{Binding SelectedOutput.Name}" FontSize="{StaticResource OperatorFontSizeWorkspaceHeader}" FontWeight="SemiBold" />
 					<TextBlock Text="{Binding SelectedOutput.Detail}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,2,0,9" />
 
 					<Grid>
@@ -265,8 +265,8 @@
 									</Grid.ColumnDefinitions>
 									<TextBlock Text="{Binding Name}" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" />
 									<StackPanel Grid.Column="1" VerticalAlignment="Center">
-										<TextBlock Text="{Binding Value}" Style="{StaticResource OperatorValue}" FontSize="10" FontWeight="SemiBold" />
-										<TextBlock Text="{Binding Status}" Style="{StaticResource OperatorLabel}" FontSize="8" />
+										<TextBlock Text="{Binding Value}" Style="{StaticResource OperatorValue}" FontSize="{StaticResource OperatorFontSizeCompact}" FontWeight="SemiBold" />
+										<TextBlock Text="{Binding Status}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeFinePrint}" />
 									</StackPanel>
 									<controls:RtaimeMetricBar
 										Grid.Column="2"

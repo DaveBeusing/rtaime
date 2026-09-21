@@ -95,7 +95,7 @@
 							<TextBlock
 								Text="{Binding [0].ErrorContent}"
 								Foreground="{DynamicResource OperatorErrorBrush}"
-								FontSize="9"
+								FontSize="{StaticResource OperatorFontSizeMicro}"
 								TextWrapping="Wrap"
 								Margin="0,2,0,0" />
 						</StackPanel>
@@ -126,29 +126,27 @@
 					<Border
 						Width="72"
 						Height="42"
-						Background="#05080B"
-						BorderBrush="{DynamicResource OperatorBorderBrush}"
-						BorderThickness="1"
+						Style="{StaticResource OperatorThumbnailFrame}"
 						VerticalAlignment="Center">
 						<Image Source="{Binding SelectedItem.Thumbnail}" Stretch="UniformToFill" />
 					</Border>
 					<StackPanel Grid.Column="2" VerticalAlignment="Center">
 						<TextBlock
 							Text="{Binding InspectorTitle}"
-							FontSize="12"
+							FontSize="{StaticResource OperatorFontSizeBody}"
 							FontWeight="SemiBold"
 							TextTrimming="CharacterEllipsis" />
 						<TextBlock
 							Text="{Binding InspectorDetail}"
 							Style="{StaticResource OperatorLabel}"
-							FontSize="10"
+							FontSize="{StaticResource OperatorFontSizeCompact}"
 							TextTrimming="CharacterEllipsis"
 							Margin="0,2,0,0" />
 						<TextBlock
 							Text="{Binding SelectedItem.LocalPath}"
 							Style="{StaticResource OperatorLabel}"
 							Foreground="{DynamicResource OperatorMutedTextBrush}"
-							FontSize="9"
+							FontSize="{StaticResource OperatorFontSizeMicro}"
 							TextTrimming="CharacterEllipsis"
 							Margin="0,1,0,0" />
 					</StackPanel>
@@ -205,7 +203,7 @@
 						Grid.Column="2"
 						Text="{Binding State}"
 						Style="{StaticResource OperatorLabel}"
-						FontSize="9"
+						FontSize="{StaticResource OperatorFontSizeMicro}"
 						HorizontalAlignment="Right"
 						VerticalAlignment="Center"
 						TextTrimming="CharacterEllipsis" />
@@ -254,14 +252,14 @@
 						HorizontalAlignment="Center"
 						VerticalAlignment="Center" />
 					<StackPanel Grid.Column="1" VerticalAlignment="Center">
-						<TextBlock Text="{Binding Label}" FontSize="10" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-						<TextBlock Text="{Binding Value}" Style="{StaticResource OperatorLabel}" FontSize="9" TextTrimming="CharacterEllipsis" />
+						<TextBlock Text="{Binding Label}" FontSize="{StaticResource OperatorFontSizeCompact}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+						<TextBlock Text="{Binding Value}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextTrimming="CharacterEllipsis" />
 					</StackPanel>
 					<TextBlock
 						Grid.Column="2"
 						Text="{Binding State}"
 						Style="{StaticResource OperatorLabel}"
-						FontSize="9"
+						FontSize="{StaticResource OperatorFontSizeMicro}"
 						HorizontalAlignment="Right"
 						VerticalAlignment="Center" />
 					<controls:RtaimeIconButton

@@ -124,8 +124,8 @@
 					VerticalAlignment="Center"
 					ToolTip="External transmission/on-air state is not authoritative in the current V1 contract.">
 					<StackPanel HorizontalAlignment="Center">
-						<TextBlock Text="LIVE" FontSize="10" FontWeight="Bold" HorizontalAlignment="Center" />
-						<TextBlock Text="UNVERIFIED" FontSize="8" HorizontalAlignment="Center" />
+						<TextBlock Text="LIVE" FontSize="{StaticResource OperatorFontSizeCompact}" FontWeight="Bold" HorizontalAlignment="Center" />
+						<TextBlock Text="UNVERIFIED" FontSize="{StaticResource OperatorFontSizeFinePrint}" HorizontalAlignment="Center" />
 					</StackPanel>
 				</controls:RtaimeStatusBadge>
 				<controls:RtaimeStatusBadge Grid.Column="8"
@@ -236,7 +236,7 @@
 								<TextBlock
 									Text="{Binding MediaPool.SelectionSummary, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 									Style="{StaticResource OperatorLabel}"
-									FontSize="10"
+									FontSize="{StaticResource OperatorFontSizeCompact}"
 									TextTrimming="CharacterEllipsis" />
 							</StackPanel>
 							<StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
@@ -456,12 +456,12 @@
 												<ColumnDefinition Width="Auto" />
 											</Grid.ColumnDefinitions>
 											<StackPanel>
-												<TextBlock Text="{Binding Name}" FontSize="11" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-												<TextBlock Text="{Binding Detail}" Style="{StaticResource OperatorLabel}" FontSize="10" TextTrimming="CharacterEllipsis" />
+												<TextBlock Text="{Binding Name}" FontSize="{StaticResource OperatorFontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+												<TextBlock Text="{Binding Detail}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeCompact}" TextTrimming="CharacterEllipsis" />
 											</StackPanel>
 											<StackPanel Grid.Column="1" HorizontalAlignment="Right">
-												<TextBlock Text="{Binding FileTypeLabel}" Style="{StaticResource OperatorLabel}" FontSize="10" HorizontalAlignment="Right" />
-												<TextBlock Text="{Binding AvailabilityLabel}" Style="{StaticResource OperatorLabel}" FontSize="10" HorizontalAlignment="Right" />
+												<TextBlock Text="{Binding FileTypeLabel}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeCompact}" HorizontalAlignment="Right" />
+												<TextBlock Text="{Binding AvailabilityLabel}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeCompact}" HorizontalAlignment="Right" />
 											</StackPanel>
 										</Grid>
 									</DataTemplate>
@@ -597,7 +597,7 @@
 							Background="{DynamicResource OperatorSurfaceBrush}"
 							BorderBrush="{DynamicResource OperatorBorderBrush}"
 							BorderThickness="1"
-							CornerRadius="4"
+							CornerRadius="{StaticResource OperatorRadiusPanel}"
 							Padding="10">
 							<Grid>
 								<Grid.RowDefinitions>
@@ -637,8 +637,8 @@
 											Value="{Binding OutputHealth.CpuMetric.GaugeValue, RelativeSource={RelativeSource AncestorType={x:Type Window}}, Mode=OneWay}"
 											HasValue="{Binding OutputHealth.CpuMetric.HasGaugeSample, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
 										<StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-											<TextBlock Text="CPU" Style="{StaticResource OperatorLabel}" FontSize="9" HorizontalAlignment="Center" />
-											<TextBlock Text="{Binding OutputHealth.CpuMetric.Value, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" FontSize="10" FontWeight="SemiBold" HorizontalAlignment="Center" />
+											<TextBlock Text="CPU" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" HorizontalAlignment="Center" />
+											<TextBlock Text="{Binding OutputHealth.CpuMetric.Value, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" FontSize="{StaticResource OperatorFontSizeCompact}" FontWeight="SemiBold" HorizontalAlignment="Center" />
 										</StackPanel>
 									</Grid>
 
@@ -653,8 +653,8 @@
 											Value="{Binding OutputHealth.GpuMetric.GaugeValue, RelativeSource={RelativeSource AncestorType={x:Type Window}}, Mode=OneWay}"
 											HasValue="{Binding OutputHealth.GpuMetric.HasGaugeSample, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
 										<StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-											<TextBlock Text="GPU" Style="{StaticResource OperatorLabel}" FontSize="9" HorizontalAlignment="Center" />
-											<TextBlock Text="{Binding OutputHealth.GpuMetric.Value, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" FontSize="10" FontWeight="SemiBold" HorizontalAlignment="Center" />
+											<TextBlock Text="GPU" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" HorizontalAlignment="Center" />
+											<TextBlock Text="{Binding OutputHealth.GpuMetric.Value, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" FontSize="{StaticResource OperatorFontSizeCompact}" FontWeight="SemiBold" HorizontalAlignment="Center" />
 										</StackPanel>
 									</Grid>
 
@@ -669,8 +669,8 @@
 											Value="{Binding OutputHealth.MemoryMetric.GaugeValue, RelativeSource={RelativeSource AncestorType={x:Type Window}}, Mode=OneWay}"
 											HasValue="{Binding OutputHealth.MemoryMetric.HasGaugeSample, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
 										<StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-											<TextBlock Text="MEM" Style="{StaticResource OperatorLabel}" FontSize="9" HorizontalAlignment="Center" />
-											<TextBlock Text="{Binding OutputHealth.MemoryMetric.Value, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" FontSize="10" FontWeight="SemiBold" HorizontalAlignment="Center" />
+											<TextBlock Text="MEM" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" HorizontalAlignment="Center" />
+											<TextBlock Text="{Binding OutputHealth.MemoryMetric.Value, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" FontSize="{StaticResource OperatorFontSizeCompact}" FontWeight="SemiBold" HorizontalAlignment="Center" />
 										</StackPanel>
 									</Grid>
 								</Grid>
@@ -681,29 +681,29 @@
 										<ColumnDefinition Width="6" />
 										<ColumnDefinition Width="*" />
 									</Grid.ColumnDefinitions>
-									<Border Grid.Column="0" Background="{DynamicResource OperatorRaisedSurfaceBrush}" CornerRadius="3" Padding="7,4">
+									<Border Grid.Column="0" Background="{DynamicResource OperatorRaisedSurfaceBrush}" CornerRadius="{StaticResource OperatorRadiusControl}" Padding="7,4">
 										<DockPanel>
 											<TextBlock Text="VRAM" Style="{StaticResource OperatorLabel}" />
-											<TextBlock Text="{Binding OutputHealth.VramMetric.Value, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" DockPanel.Dock="Right" FontSize="10" FontWeight="SemiBold" />
+											<TextBlock Text="{Binding OutputHealth.VramMetric.Value, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" DockPanel.Dock="Right" FontSize="{StaticResource OperatorFontSizeCompact}" FontWeight="SemiBold" />
 										</DockPanel>
 									</Border>
-									<Border Grid.Column="2" Background="{DynamicResource OperatorRaisedSurfaceBrush}" CornerRadius="3" Padding="7,4">
+									<Border Grid.Column="2" Background="{DynamicResource OperatorRaisedSurfaceBrush}" CornerRadius="{StaticResource OperatorRadiusControl}" Padding="7,4">
 										<DockPanel>
 											<TextBlock Text="RENDER" Style="{StaticResource OperatorLabel}" />
-											<TextBlock Text="{Binding OutputHealth.RenderMetric.Value, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" DockPanel.Dock="Right" FontSize="10" FontWeight="SemiBold" />
+											<TextBlock Text="{Binding OutputHealth.RenderMetric.Value, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" DockPanel.Dock="Right" FontSize="{StaticResource OperatorFontSizeCompact}" FontWeight="SemiBold" />
 										</DockPanel>
 									</Border>
 								</Grid>
 
 								<Border Grid.Row="3"
 									Margin="0,6,0,0"
-									Background="#0A141C"
+									Background="{DynamicResource OperatorDiagnosticSurfaceBrush}"
 									BorderBrush="{DynamicResource OperatorBorderBrush}"
 									BorderThickness="1"
-									CornerRadius="3"
+									CornerRadius="{StaticResource OperatorRadiusControl}"
 									Padding="7,5">
 									<Grid>
-										<TextBlock Text="GPU HISTORY · RUNTIME SAMPLES" Style="{StaticResource OperatorLabel}" FontSize="8" VerticalAlignment="Top" />
+										<TextBlock Text="GPU HISTORY · RUNTIME SAMPLES" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeFinePrint}" VerticalAlignment="Top" />
 										<controls:RtaimeSparkline
 											Margin="0,14,0,0"
 											Points="{Binding OutputHealth.GpuMetric.HistoryPoints, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
@@ -948,8 +948,8 @@
 														<Image Source="{Binding Thumbnail}" Stretch="UniformToFill" />
 													</Border>
 													<StackPanel Grid.Column="3" VerticalAlignment="Center">
-														<TextBlock Text="{Binding Name}" FontSize="11" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-														<StackPanel Orientation="Horizontal"><TextBlock Text="REM " Style="{StaticResource OperatorLabel}" FontSize="10" /><TextBlock Text="{Binding Remaining}" Style="{StaticResource OperatorLabel}" FontSize="10" /></StackPanel>
+														<TextBlock Text="{Binding Name}" FontSize="{StaticResource OperatorFontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+														<StackPanel Orientation="Horizontal"><TextBlock Text="REM " Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeCompact}" /><TextBlock Text="{Binding Remaining}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeCompact}" /></StackPanel>
 													</StackPanel>
 													<StackPanel Grid.Column="4" VerticalAlignment="Center">
 														<controls:RtaimeStatusBadge Status="{x:Static controls:RtaimeStatusKind.Program}" Content="ON AIR" ShowIndicator="True">
@@ -1073,10 +1073,10 @@
 												<ColumnDefinition Width="14" />
 												<ColumnDefinition Width="*" />
 											</Grid.ColumnDefinitions>
-											<Grid Grid.Column="0" Background="#090C10" ClipToBounds="True">
+											<Grid Grid.Column="0" Background="{DynamicResource OperatorThumbnailCanvasBrush}" ClipToBounds="True">
 												<Image Source="{Binding Thumbnail}" Stretch="Uniform" SnapsToDevicePixels="True" />
-												<Border VerticalAlignment="Bottom" Background="#B0000000" Padding="7,4">
-													<TextBlock Text="{Binding ThumbnailFormat}" FontSize="10" Foreground="White" TextTrimming="CharacterEllipsis" />
+												<Border VerticalAlignment="Bottom" Background="{DynamicResource OperatorOverlayScrimSoftBrush}" Padding="7,4">
+													<TextBlock Text="{Binding ThumbnailFormat}" FontSize="{StaticResource OperatorFontSizeCompact}" Foreground="{DynamicResource OperatorOverlayTextBrush}" TextTrimming="CharacterEllipsis" />
 												</Border>
 											</Grid>
 											<Grid Grid.Column="2">
@@ -1091,7 +1091,7 @@
 														<ColumnDefinition Width="*" />
 														<ColumnDefinition Width="Auto" />
 													</Grid.ColumnDefinitions>
-													<TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="17" TextTrimming="CharacterEllipsis" />
+													<TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="{StaticResource OperatorFontSizeProminent}" TextTrimming="CharacterEllipsis" />
 													<StackPanel Grid.Column="1" Orientation="Horizontal">
 														<Border Margin="0,0,6,0">
 															<Border.Style>
@@ -1296,7 +1296,7 @@
 								<TextBlock Text="GRAPHICS / OVERLAY" Style="{StaticResource OperatorSectionTitle}" />
 								<Border Style="{StaticResource OperatorStatusBadge}" DockPanel.Dock="Right"><TextBlock Text="{Binding GraphicsState}" FontWeight="Bold" /></Border>
 							</DockPanel>
-							<TextBlock Text="{Binding GraphicsAssetName}" FontSize="16" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+							<TextBlock Text="{Binding GraphicsAssetName}" FontSize="{StaticResource OperatorFontSizeSubheading}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
 							<DockPanel Margin="0,3,0,12">
 								<TextBlock Text="PNG / RGBA asset" Style="{StaticResource OperatorLabel}" />
 								<TextBlock Text="{Binding GraphicsDimensions}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" />
@@ -1445,7 +1445,7 @@
 									</StackPanel>
 								</Border>
 							</DockPanel>
-							<TextBlock Text="{Binding RecordingElapsed}" Style="{StaticResource OperatorTimecode}" FontSize="24" FontWeight="Bold" Margin="0,0,0,12" />
+							<TextBlock Text="{Binding RecordingElapsed}" Style="{StaticResource OperatorTimecode}" FontSize="{StaticResource OperatorFontSizeTitle}" FontWeight="Bold" Margin="0,0,0,12" />
 							<TextBlock Text="DESTINATION" Style="{StaticResource OperatorLabel}" />
 							<controls:RtaimeTextBox Text="{Binding RecordingDestination, UpdateSourceTrigger=PropertyChanged}"  Margin="0,4,0,10" />
 							<TextBlock Text="FILE NAME" Style="{StaticResource OperatorLabel}" />
@@ -1474,7 +1474,7 @@
 									<TextBlock Text="{Binding AIStatus}" FontWeight="Bold" />
 								</Border>
 							</DockPanel>
-							<TextBlock Text="{Binding AIFeature}" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,10" />
+							<TextBlock Text="{Binding AIFeature}" FontSize="{StaticResource OperatorFontSizeSubheading}" FontWeight="SemiBold" Margin="0,0,0,10" />
 							<DockPanel Margin="0,0,0,6"><TextBlock Text="Enabled" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding AIEnabled}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
 							<DockPanel Margin="0,0,0,6"><TextBlock Text="Provider" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding AIProvider}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" TextTrimming="CharacterEllipsis" MaxWidth="230" /></DockPanel>
 							<DockPanel Margin="0,0,0,6"><TextBlock Text="Inference Time" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding AIInferenceTime}" Style="{StaticResource OperatorTimecode}" DockPanel.Dock="Right" /></DockPanel>
@@ -1632,14 +1632,14 @@
 
 						<TextBlock
 							Text="rtaime"
-							FontSize="40"
+							FontSize="{StaticResource OperatorFontSizeHero}"
 							FontWeight="SemiBold"
 							Foreground="{DynamicResource OperatorTextBrush}"
 							HorizontalAlignment="Center"
 							Margin="0,4,0,0" />
 						<TextBlock
 							Text="REAL TIME AI MEDIA ENGINE"
-							FontSize="9"
+							FontSize="{StaticResource OperatorFontSizeMicro}"
 							FontWeight="SemiBold"
 							Foreground="{DynamicResource OperatorMutedTextBrush}"
 							HorizontalAlignment="Center"
@@ -1647,13 +1647,13 @@
 						<TextBlock
 							Text="{Binding Startup.StartupPhaseLabel, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 							Foreground="{DynamicResource OperatorAccentBrush}"
-							FontSize="11"
+							FontSize="{StaticResource OperatorFontSizeCaption}"
 							FontWeight="Bold"
 							HorizontalAlignment="Center"
 							Margin="0,18,0,0" />
 						<TextBlock
 							Text="{Binding Startup.ActiveStageName, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-							FontSize="22"
+							FontSize="{StaticResource OperatorFontSizeDisplayLarge}"
 							FontWeight="SemiBold"
 							TextAlignment="Center"
 							HorizontalAlignment="Center"
@@ -1698,7 +1698,7 @@
 										<TextBlock
 											Text="{Binding DisplayName}"
 											Foreground="{DynamicResource OperatorTextBrush}"
-											FontSize="10"
+											FontSize="{StaticResource OperatorFontSizeCompact}"
 											FontWeight="SemiBold"
 											TextAlignment="Center"
 											TextWrapping="Wrap"
@@ -1706,7 +1706,7 @@
 										<TextBlock
 											Text="{Binding Status}"
 											Style="{StaticResource OperatorLabel}"
-											FontSize="8"
+											FontSize="{StaticResource OperatorFontSizeFinePrint}"
 											HorizontalAlignment="Center"
 											Margin="0,4,0,0" />
 									</StackPanel>
@@ -1787,11 +1787,11 @@
 												<ColumnDefinition Width="90" />
 												<ColumnDefinition Width="*" />
 											</Grid.ColumnDefinitions>
-											<TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" FontSize="10" />
-											<TextBlock Grid.Column="1" Text="{Binding Status}" Style="{StaticResource OperatorLabel}" FontSize="9" />
+											<TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" FontSize="{StaticResource OperatorFontSizeCompact}" />
+											<TextBlock Grid.Column="1" Text="{Binding Status}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" />
 											<StackPanel Grid.Column="2">
-												<TextBlock Text="{Binding StatusText}" Style="{StaticResource OperatorLabel}" FontSize="9" TextWrapping="Wrap" />
-												<TextBlock Text="{Binding FailureReason}" Foreground="{DynamicResource OperatorErrorBrush}" FontSize="9" TextWrapping="Wrap" />
+												<TextBlock Text="{Binding StatusText}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextWrapping="Wrap" />
+												<TextBlock Text="{Binding FailureReason}" Foreground="{DynamicResource OperatorErrorBrush}" FontSize="{StaticResource OperatorFontSizeMicro}" TextWrapping="Wrap" />
 											</StackPanel>
 										</Grid>
 									</DataTemplate>
@@ -1832,7 +1832,7 @@
 								<TextBlock
 									Text="{Binding Category}"
 									Foreground="{DynamicResource OperatorAccentBrush}"
-									FontSize="9"
+									FontSize="{StaticResource OperatorFontSizeMicro}"
 									FontWeight="Bold"
 									DockPanel.Dock="Left" />
 								<TextBlock
@@ -1844,7 +1844,7 @@
 							<TextBlock
 								Grid.Row="1"
 								Text="{Binding Title}"
-								FontSize="12"
+								FontSize="{StaticResource OperatorFontSizeBody}"
 								FontWeight="SemiBold"
 								TextWrapping="Wrap" />
 							<TextBlock

@@ -94,13 +94,13 @@
 							<StackPanel Grid.Column="1" VerticalAlignment="Center">
 								<TextBlock
 									Text="{TemplateBinding StatusText}"
-									FontSize="11"
+									FontSize="{DynamicResource OperatorFontSizeCaption}"
 									FontWeight="Bold"
 									Foreground="{TemplateBinding Foreground}"
 									TextTrimming="CharacterEllipsis" />
 								<TextBlock
 									Text="{TemplateBinding Detail}"
-									FontSize="8"
+									FontSize="{DynamicResource OperatorFontSizeFinePrint}"
 									Foreground="{DynamicResource OperatorSecondaryTextBrush}"
 									TextTrimming="CharacterEllipsis"
 									MaxWidth="300" />

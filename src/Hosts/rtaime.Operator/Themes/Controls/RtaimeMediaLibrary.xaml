@@ -2,8 +2,8 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
 	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 	xmlns:controls="clr-namespace:rtaime.Operator.Controls">
-	<SolidColorBrush x:Key="RtaimeMediaDurationOverlayBrush" Color="#D9071017" />
-	<SolidColorBrush x:Key="RtaimeMediaOfflineOverlayBrush" Color="#C9071017" />
+	<SolidColorBrush x:Key="RtaimeMediaDurationOverlayBrush" Color="{StaticResource OperatorColorMediaDurationOverlay}" />
+	<SolidColorBrush x:Key="RtaimeMediaOfflineOverlayBrush" Color="{StaticResource OperatorColorMediaOfflineOverlay}" />
 
 	<ControlTemplate x:Key="RtaimeMediaTextContentHostTemplate" TargetType="{x:Type ScrollViewer}">
 		<ScrollContentPresenter />
@@ -118,7 +118,7 @@
 									<TextBlock
 										Text="{TemplateBinding Duration}"
 										FontFamily="{DynamicResource OperatorTimecodeFontFamily}"
-										FontSize="10"
+										FontSize="{DynamicResource OperatorFontSizeCompact}"
 										FontWeight="SemiBold" />
 								</Border>
 								<Border x:Name="OfflineOverlay"
@@ -133,7 +133,7 @@
 										<TextBlock
 											Text="OFFLINE"
 											Foreground="{DynamicResource OperatorWarningBrush}"
-											FontSize="10"
+											FontSize="{DynamicResource OperatorFontSizeCompact}"
 											FontWeight="Bold"
 											Margin="0,3,0,0"
 											HorizontalAlignment="Center" />
@@ -150,7 +150,7 @@
 							<TextBlock Grid.Row="1"
 								Text="{TemplateBinding AssetName}"
 								Foreground="{TemplateBinding Foreground}"
-								FontSize="11"
+								FontSize="{DynamicResource OperatorFontSizeCaption}"
 								FontWeight="SemiBold"
 								Margin="5,2,5,0"
 								TextTrimming="CharacterEllipsis"
@@ -163,12 +163,12 @@
 								<TextBlock
 									Text="{TemplateBinding FileType}"
 									Style="{StaticResource OperatorLabel}"
-									FontSize="10"
+									FontSize="{DynamicResource OperatorFontSizeCompact}"
 									VerticalAlignment="Center" />
 								<TextBlock Grid.Column="1"
 									Text="{TemplateBinding Availability}"
 									Style="{StaticResource OperatorLabel}"
-									FontSize="10"
+									FontSize="{DynamicResource OperatorFontSizeCompact}"
 									VerticalAlignment="Center" />
 							</Grid>
 							<Border x:Name="SelectionAccent"

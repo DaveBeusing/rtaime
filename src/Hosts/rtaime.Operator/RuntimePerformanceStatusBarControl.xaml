@@ -37,7 +37,7 @@
 				Grid.Column="0"
 				Orientation="Horizontal"
 				VerticalAlignment="Center">
-				<TextBlock Text="RUNTIME" Style="{StaticResource OperatorSectionTitle}" FontSize="9" />
+				<TextBlock Text="RUNTIME" Style="{StaticResource OperatorSectionTitle}" FontSize="{StaticResource OperatorFontSizeMicro}" />
 			</StackPanel>
 
 			<ItemsControl
@@ -61,7 +61,7 @@
 								<TextBlock
 									Text="{Binding Label}"
 									Style="{StaticResource OperatorLabel}"
-									FontSize="8"
+									FontSize="{StaticResource OperatorFontSizeFinePrint}"
 									VerticalAlignment="Center" />
 								<TextBlock
 									Text="{Binding Value}"
