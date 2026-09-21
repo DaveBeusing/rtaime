@@ -8,161 +8,46 @@
 	UseLayoutRounding="True"
 	SnapsToDevicePixels="True"
 	Focusable="True">
-	<Border Style="{StaticResource RtaimeMonitorPanel}">
-		<Grid>
-			<Grid.RowDefinitions>
-				<RowDefinition Height="40" />
-				<RowDefinition Height="*" />
-				<RowDefinition Height="42" />
-			</Grid.RowDefinitions>
+	<controls:RtaimeMonitorPresentation
+		Style="{StaticResource RtaimeMonitorPresentation}"
+		Monitor="{Binding ElementName=Root}"
+		RoleText="PREVIEW"
+		RoleBrush="{DynamicResource OperatorPreviewBrush}"
+		RoleStatus="{x:Static controls:RtaimeStatusKind.Preview}"
+		PlaceholderState="{Binding WorkspaceStates.Preview.State, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+		PlaceholderTitle="{Binding WorkspaceStates.Preview.Title, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+		PlaceholderDetail="{Binding WorkspaceStates.Preview.Detail, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+		FrameUnavailableText="Preview frame unavailable"
+		OverlayControlsEnabled="{Binding IsTransportSource, ElementName=Root}">
 
-			<Border Grid.Row="0" Style="{StaticResource RtaimeMonitorHeader}">
-				<Grid>
-					<Grid.ColumnDefinitions>
-						<ColumnDefinition Width="Auto" />
-						<ColumnDefinition Width="*" />
-						<ColumnDefinition Width="Auto" />
-					</Grid.ColumnDefinitions>
-					<StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-						<TextBlock Text="PREVIEW" Foreground="{DynamicResource OperatorPreviewBrush}" FontSize="{StaticResource OperatorFontSizeBody}" FontWeight="Bold" />
-						<TextBlock Text="{Binding SourceName, ElementName=Root}" Margin="10,0,0,0" FontSize="{StaticResource OperatorFontSizeBody}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" MaxWidth="190" />
-					</StackPanel>
-					<StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="8,0">
-						<TextBlock Text="{Binding ProductionFormat, ElementName=Root}" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" />
-						<TextBlock Text=" · " Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" />
-						<TextBlock Text="{Binding ZoomMode, ElementName=Root}" Style="{StaticResource OperatorLabel}" FontWeight="SemiBold" VerticalAlignment="Center" />
-					</StackPanel>
-					<StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-						<controls:RtaimeIconButton IconData="{StaticResource RtaimeIconFitGeometry}" Command="{Binding FitCommand, ElementName=Root}" Width="26" Height="26" Margin="0,0,3,0" ToolTip="Fit Preview" AutomationProperties.Name="Fit Preview" />
-						<controls:RtaimeIconButton IconData="{StaticResource RtaimeIconMaximizeGeometry}" Command="{Binding MaximizeCommand, ElementName=Root}" Width="26" Height="26" Margin="0,0,3,0" ToolTip="Maximize Preview" AutomationProperties.Name="Maximize Preview" />
-						<controls:RtaimeIconButton IconData="{StaticResource RtaimeIconFullscreenGeometry}" Command="{Binding FullscreenCommand, ElementName=Root}" Width="26" Height="26" ToolTip="Fullscreen Preview" AutomationProperties.Name="Fullscreen Preview" />
-					</StackPanel>
-				</Grid>
-			</Border>
+		<controls:RtaimeMonitorPresentation.HeaderContent>
+			<StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+				<controls:RtaimeIconButton IconData="{StaticResource RtaimeIconFitGeometry}" Command="{Binding FitCommand, ElementName=Root}" Width="26" Height="26" Margin="0,0,3,0" ToolTip="Fit Preview" AutomationProperties.Name="Fit Preview" />
+				<controls:RtaimeIconButton IconData="{StaticResource RtaimeIconMaximizeGeometry}" Command="{Binding MaximizeCommand, ElementName=Root}" Width="26" Height="26" Margin="0,0,3,0" ToolTip="Maximize Preview" AutomationProperties.Name="Maximize Preview" />
+				<controls:RtaimeIconButton IconData="{StaticResource RtaimeIconFullscreenGeometry}" Command="{Binding FullscreenCommand, ElementName=Root}" Width="26" Height="26" ToolTip="Fullscreen Preview" AutomationProperties.Name="Fullscreen Preview" />
+			</StackPanel>
+		</controls:RtaimeMonitorPresentation.HeaderContent>
 
-			<Grid Grid.Row="1" Style="{StaticResource OperatorMediaCanvas}">
-			<controls:RtaimeStatePlaceholder
-							State="{Binding WorkspaceStates.Preview.State, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-							Title="{Binding WorkspaceStates.Preview.Title, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-							Detail="{Binding WorkspaceStates.Preview.Detail, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-							Panel.ZIndex="60"
-							Margin="10" />
-
-				<Viewbox Stretch="{Binding ImageStretch, ElementName=Root}" StretchDirection="Both" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
-					<Image Source="{Binding Frame, ElementName=Root}" SnapsToDevicePixels="True">
-						<Image.LayoutTransform>
-							<ScaleTransform ScaleX="{Binding ImageScale, ElementName=Root}" ScaleY="{Binding ImageScale, ElementName=Root}" />
-						</Image.LayoutTransform>
-					</Image>
-				</Viewbox>
-
-				<Grid IsHitTestVisible="False">
-					<Grid.Style>
-						<Style TargetType="Grid">
-							<Setter Property="Visibility" Value="Collapsed" />
-							<Style.Triggers>
-								<DataTrigger Binding="{Binding ShowGrid, ElementName=Root}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
-							</Style.Triggers>
-						</Style>
-					</Grid.Style>
-					<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-					<Grid.RowDefinitions><RowDefinition Height="*" /><RowDefinition Height="*" /><RowDefinition Height="*" /></Grid.RowDefinitions>
-					<Border Grid.Column="0" Grid.RowSpan="3" BorderBrush="{DynamicResource OperatorGuideSubtleBrush}" BorderThickness="0,0,1,0" />
-					<Border Grid.Column="1" Grid.RowSpan="3" BorderBrush="{DynamicResource OperatorGuideSubtleBrush}" BorderThickness="0,0,1,0" />
-					<Border Grid.Row="0" Grid.ColumnSpan="3" BorderBrush="{DynamicResource OperatorGuideSubtleBrush}" BorderThickness="0,0,0,1" />
-					<Border Grid.Row="1" Grid.ColumnSpan="3" BorderBrush="{DynamicResource OperatorGuideSubtleBrush}" BorderThickness="0,0,0,1" />
-				</Grid>
-
-				<Grid IsHitTestVisible="False">
-					<Grid.Style>
-						<Style TargetType="Grid">
-							<Setter Property="Visibility" Value="Collapsed" />
-							<Style.Triggers>
-								<DataTrigger Binding="{Binding ShowSafeArea, ElementName=Root}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
-							</Style.Triggers>
-						</Style>
-					</Grid.Style>
-					<Border Margin="22" BorderBrush="{DynamicResource OperatorGuideStrongBrush}" BorderThickness="1" />
-					<Border Margin="44" BorderBrush="{DynamicResource OperatorGuideMediumBrush}" BorderThickness="1" />
-				</Grid>
-
-				<Grid IsHitTestVisible="False">
-					<Grid.Style>
-						<Style TargetType="Grid">
-							<Setter Property="Visibility" Value="Collapsed" />
-							<Style.Triggers>
-								<DataTrigger Binding="{Binding ShowCenterMark, ElementName=Root}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
-							</Style.Triggers>
-						</Style>
-					</Grid.Style>
-					<Border Width="1" Height="28" Style="{StaticResource OperatorMonitorGuide}" HorizontalAlignment="Center" VerticalAlignment="Center" />
-					<Border Width="28" Height="1" Style="{StaticResource OperatorMonitorGuide}" HorizontalAlignment="Center" VerticalAlignment="Center" />
-				</Grid>
-
-				<controls:RtaimeStatusBadge
-					Status="{x:Static controls:RtaimeStatusKind.Preview}"
-					Content="{Binding State, ElementName=Root}"
-					Margin="8"
-					HorizontalAlignment="Left"
-					VerticalAlignment="Top" />
-
-				<Border VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="8" Padding="5,2" Style="{StaticResource OperatorMonitorHeaderOverlay}" CornerRadius="{StaticResource OperatorRadiusOverlay}">
-					<controls:RtaimeTimecode Content="{Binding DisplayTimecode, ElementName=Root}" FontSize="{StaticResource OperatorFontSizeMetadata}" />
-				</Border>
-
-				<Border VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="8" Padding="5,2" Style="{StaticResource OperatorMonitorHeaderOverlay}" CornerRadius="{StaticResource OperatorRadiusOverlay}">
-					<StackPanel Orientation="Horizontal">
-						<TextBlock Text="{Binding Format, ElementName=Root}" FontSize="{StaticResource OperatorFontSizeCompact}" Foreground="{DynamicResource OperatorOverlayTextBrush}" MaxWidth="180" TextTrimming="CharacterEllipsis" />
-						<TextBlock Text=" · " FontSize="{StaticResource OperatorFontSizeCompact}" Foreground="{DynamicResource OperatorOverlayTextBrush}" />
-						<TextBlock Text="{Binding ZoomMode, ElementName=Root}" FontSize="{StaticResource OperatorFontSizeCompact}" Foreground="{DynamicResource OperatorOverlayTextBrush}" />
-					</StackPanel>
-				</Border>
-
-				<Border Background="{DynamicResource OperatorMonitorFooterOverlayBrush}">
-					<Border.Style>
-						<Style TargetType="Border">
-							<Setter Property="Visibility" Value="Collapsed" />
-							<Style.Triggers>
-								<DataTrigger Binding="{Binding Frame, ElementName=Root}" Value="{x:Null}"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
-							</Style.Triggers>
-						</Style>
-					</Border.Style>
-					<StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-						<TextBlock Text="{Binding State, ElementName=Root}" FontSize="{StaticResource OperatorFontSizeSection}" FontWeight="SemiBold" HorizontalAlignment="Center" />
-						<TextBlock Text="Preview frame unavailable" Style="{StaticResource OperatorLabel}" Margin="0,3,0,0" />
-					</StackPanel>
-				</Border>
-			</Grid>
-
-			<Border Grid.Row="2" Style="{StaticResource RtaimeMonitorTransport}">
-				<Grid IsEnabled="{Binding IsTransportSource, ElementName=Root}">
-					<Grid.ColumnDefinitions>
-						<ColumnDefinition Width="Auto" />
-						<ColumnDefinition Width="Auto" />
-						<ColumnDefinition Width="Auto" />
-						<ColumnDefinition Width="Auto" />
-						<ColumnDefinition Width="Auto" />
-						<ColumnDefinition Width="Auto" />
-						<ColumnDefinition Width="Auto" />
-						<ColumnDefinition Width="Auto" />
-						<ColumnDefinition Width="*" />
-						<ColumnDefinition Width="Auto" />
-					</Grid.ColumnDefinitions>
-					<controls:RtaimeIconButton Grid.Column="0" IconData="{StaticResource RtaimeIconPreviousGeometry}" Command="{Binding PreviousCueCommand, ElementName=Root}" Width="28" Height="28" Margin="0,0,3,0" ToolTip="Previous cue" AutomationProperties.Name="Previous cue" />
-					<controls:RtaimeIconButton Grid.Column="1" IconData="{StaticResource RtaimeIconChevronLeftGeometry}" Command="{Binding JumpInCommand, ElementName=Root}" Width="28" Height="28" Margin="0,0,3,0" ToolTip="Jump to IN" AutomationProperties.Name="Jump to IN" />
-					<controls:RtaimeIconButton Grid.Column="2" IconData="{StaticResource RtaimeIconMarkInGeometry}" Command="{Binding SetInCommand, ElementName=Root}" Width="28" Height="28" Margin="0,0,3,0" ToolTip="Set IN" AutomationProperties.Name="Set IN" />
-					<controls:RtaimeIconButton Grid.Column="3" IconData="{StaticResource RtaimeIconPlayGeometry}" Command="{Binding PlayPauseCommand, ElementName=Root}" Width="30" Height="28" Margin="0,0,3,0" ToolTip="Play or pause" AutomationProperties.Name="Play or pause" />
-					<controls:RtaimeIconButton Grid.Column="4" IconData="{StaticResource RtaimeIconStopGeometry}" Command="{Binding StopCommand, ElementName=Root}" Width="28" Height="28" Margin="0,0,3,0" ToolTip="Stop" AutomationProperties.Name="Stop Preview" />
-					<controls:RtaimeIconButton Grid.Column="5" IconData="{StaticResource RtaimeIconMarkOutGeometry}" Command="{Binding SetOutCommand, ElementName=Root}" Width="28" Height="28" Margin="0,0,3,0" ToolTip="Set OUT" AutomationProperties.Name="Set OUT" />
-					<controls:RtaimeIconButton Grid.Column="6" IconData="{StaticResource RtaimeIconChevronRightGeometry}" Command="{Binding JumpOutCommand, ElementName=Root}" Width="28" Height="28" Margin="0,0,3,0" ToolTip="Jump to OUT" AutomationProperties.Name="Jump to OUT" />
-					<controls:RtaimeIconButton Grid.Column="7" IconData="{StaticResource RtaimeIconNextGeometry}" Command="{Binding NextCueCommand, ElementName=Root}" Width="28" Height="28" ToolTip="Next cue" AutomationProperties.Name="Next cue" />
-					<StackPanel Grid.Column="9" Orientation="Horizontal" VerticalAlignment="Center">
-						<controls:RtaimeToggleButton Content="SAFE" IsChecked="{Binding ShowSafeArea, ElementName=Root, Mode=TwoWay}" IsCompact="True" Margin="0,0,3,0" ToolTip="Safe area" />
-						<controls:RtaimeToggleButton Content="CTR" IsChecked="{Binding ShowCenterMark, ElementName=Root, Mode=TwoWay}" IsCompact="True" Margin="0,0,3,0" ToolTip="Center mark" />
-						<controls:RtaimeToggleButton Content="GRID" IsChecked="{Binding ShowGrid, ElementName=Root, Mode=TwoWay}" IsCompact="True" ToolTip="Thirds grid" />
-					</StackPanel>
-				</Grid>
-			</Border>
+		<Grid IsEnabled="{Binding IsTransportSource, ElementName=Root}">
+			<Grid.ColumnDefinitions>
+				<ColumnDefinition Width="Auto" />
+				<ColumnDefinition Width="Auto" />
+				<ColumnDefinition Width="Auto" />
+				<ColumnDefinition Width="Auto" />
+				<ColumnDefinition Width="Auto" />
+				<ColumnDefinition Width="Auto" />
+				<ColumnDefinition Width="Auto" />
+				<ColumnDefinition Width="Auto" />
+				<ColumnDefinition Width="*" />
+			</Grid.ColumnDefinitions>
+			<controls:RtaimeIconButton Grid.Column="0" IconData="{StaticResource RtaimeIconPreviousGeometry}" Command="{Binding PreviousCueCommand, ElementName=Root}" Width="28" Height="28" Margin="0,0,3,0" ToolTip="Previous cue" AutomationProperties.Name="Previous cue" />
+			<controls:RtaimeIconButton Grid.Column="1" IconData="{StaticResource RtaimeIconChevronLeftGeometry}" Command="{Binding JumpInCommand, ElementName=Root}" Width="28" Height="28" Margin="0,0,3,0" ToolTip="Jump to IN" AutomationProperties.Name="Jump to IN" />
+			<controls:RtaimeIconButton Grid.Column="2" IconData="{StaticResource RtaimeIconMarkInGeometry}" Command="{Binding SetInCommand, ElementName=Root}" Width="28" Height="28" Margin="0,0,3,0" ToolTip="Set IN" AutomationProperties.Name="Set IN" />
+			<controls:RtaimeIconButton Grid.Column="3" IconData="{StaticResource RtaimeIconPlayGeometry}" Command="{Binding PlayPauseCommand, ElementName=Root}" Width="30" Height="28" Margin="0,0,3,0" ToolTip="Play or pause" AutomationProperties.Name="Play or pause" />
+			<controls:RtaimeIconButton Grid.Column="4" IconData="{StaticResource RtaimeIconStopGeometry}" Command="{Binding StopCommand, ElementName=Root}" Width="28" Height="28" Margin="0,0,3,0" ToolTip="Stop" AutomationProperties.Name="Stop Preview" />
+			<controls:RtaimeIconButton Grid.Column="5" IconData="{StaticResource RtaimeIconMarkOutGeometry}" Command="{Binding SetOutCommand, ElementName=Root}" Width="28" Height="28" Margin="0,0,3,0" ToolTip="Set OUT" AutomationProperties.Name="Set OUT" />
+			<controls:RtaimeIconButton Grid.Column="6" IconData="{StaticResource RtaimeIconChevronRightGeometry}" Command="{Binding JumpOutCommand, ElementName=Root}" Width="28" Height="28" Margin="0,0,3,0" ToolTip="Jump to OUT" AutomationProperties.Name="Jump to OUT" />
+			<controls:RtaimeIconButton Grid.Column="7" IconData="{StaticResource RtaimeIconNextGeometry}" Command="{Binding NextCueCommand, ElementName=Root}" Width="28" Height="28" ToolTip="Next cue" AutomationProperties.Name="Next cue" />
 		</Grid>
-	</Border>
+	</controls:RtaimeMonitorPresentation>
 </local:MonitorView>
