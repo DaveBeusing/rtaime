@@ -113,6 +113,8 @@ WPF device-independent layout, `UseLayoutRounding`, device-pixel snapping and an
 
 At 125%, 150% and 200%, the minimum workspace remains within the available logical bounds. Vertical scrolling plus compact panel allocation preserves access to the central production surface without changing authoritative state or persisted workspace dimensions. Operator UI Design System does not claim pixel-identical rendering across GPU drivers, Windows text-rendering settings or monitor profiles; screenshot-based visual review remains a manual showcase check.
 
+Automated responsive qualification is implemented by the Windows Operator test suite rather than by reproducing the same viewport arithmetic in the static PowerShell policy. The matrix exercises every workspace, Compact collapse, viewer/fullscreen restore, persistence stability and the bounded Startup surface. See [Operator Visual Qualification](OperatorVisualQualification.md) for the supported matrix, regression contract and rendering limits.
+
 ### Operator UI Design System acceptance evidence
 
 - primary Operator views use the shared dark production theme instead of bootstrap/default styling;
