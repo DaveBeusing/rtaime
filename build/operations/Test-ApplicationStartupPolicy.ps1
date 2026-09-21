@@ -114,6 +114,7 @@ foreach ($status in @("Pending", "Starting", "Ready", "Degraded", "Failed")) {
 	Assert-Condition ($lifecycleProvider -match [Regex]::Escape($status)) "AppHost lifecycle evidence is missing stage status '$status'."
 }
 Assert-Condition ($lifecycleProvider -match 'StartedAt' -and $lifecycleProvider -match 'CompletedAt' -and $lifecycleProvider -match 'CanRetry') "Lifecycle stage evidence must retain timing and retry metadata."
+Assert-Condition ($lifecycleProvider -match 'diagnosticPath = _diagnosticPath' -and $appCode -match '_options\.ControlHostDiagnosticPath') "AppHost lifecycle evidence must publish the stable ControlHost diagnostic path for read-only Operator diagnostics."
 Assert-Condition ($lifecycleProvider -match 'enum LifecycleStageRequirement' -and $lifecycleProvider -match 'Critical' -and $lifecycleProvider -match 'RequiredForProduction' -and $lifecycleProvider -match 'Optional') "Lifecycle evidence must classify startup dependencies by operational requirement."
 Assert-Condition ($lifecycleProvider -match 'requirement = stage\.Requirement\.ToString\(\)') "Published lifecycle evidence must include dependency requirement classification."
 Assert-Condition ($lifecycleProvider -match '_requireAI \? LifecycleStageRequirement\.RequiredForProduction : LifecycleStageRequirement\.Optional') "AIHost must be optional unless the selected startup profile explicitly requires it."
