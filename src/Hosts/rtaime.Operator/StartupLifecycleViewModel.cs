@@ -2,8 +2,11 @@
 
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.Json;
 using System.Windows.Input;
 
@@ -20,12 +23,20 @@ public sealed class StartupLifecycleViewModel : INotifyPropertyChanged, IDisposa
 {
 	private readonly SynchronizationContext _synchronizationContext;
 	private readonly string? _evidencePath;
+	private readonly AsyncRelayCommand _copyDiagnosticsCommand;
+	private readonly AsyncRelayCommand _openDiagnosticsCommand;
 	private FileSystemWatcher? _watcher;
 	private bool _detailsVisible;
 	private bool _initialStartupCompleted;
 	private string _activeStageName = "Application Bootstrap";
 	private string _summary = "Waiting for application lifecycle evidence.";
+	private string _nextStep = "Waiting for authoritative AppHost lifecycle evidence.";
 	private string _observedAt = "—";
+	private string? _diagnosticPath;
+	private string _diagnosticActionStatus = string.Empty;
+	private string? _latchedFailureStageId;
+	private string? _latchedFailureStageName;
+	private string? _latchedFailureReason;
 	private bool _disposed;
 
 	public StartupLifecycleViewModel(
@@ -42,6 +53,14 @@ public sealed class StartupLifecycleViewModel : INotifyPropertyChanged, IDisposa
 				return Task.CompletedTask;
 			},
 			() => true);
+		_copyDiagnosticsCommand = new AsyncRelayCommand(
+			CopyDiagnosticsAsync,
+			() => HasEvidence || Stages.Count > 0);
+		_openDiagnosticsCommand = new AsyncRelayCommand(
+			OpenDiagnosticsAsync,
+			() => CanOpenDiagnostics);
+		CopyDiagnosticsCommand = _copyDiagnosticsCommand;
+		OpenDiagnosticsCommand = _openDiagnosticsCommand;
 
 		if (_evidencePath is null)
 		{
@@ -57,8 +76,16 @@ public sealed class StartupLifecycleViewModel : INotifyPropertyChanged, IDisposa
 
 	public ObservableCollection<StartupLifecycleStageViewModel> Stages { get; }
 	public ICommand ToggleDetailsCommand { get; }
+	public ICommand CopyDiagnosticsCommand { get; }
+	public ICommand OpenDiagnosticsCommand { get; }
 	public string EvidencePath => _evidencePath ?? "Direct Operator startup; AppHost lifecycle evidence is unavailable.";
+	public string DiagnosticPath => _diagnosticPath ?? "Not published by AppHost.";
 	public bool HasEvidence => _evidencePath is not null;
+	public bool HasDiagnosticPath => !string.IsNullOrWhiteSpace(_diagnosticPath);
+	public bool CanOpenDiagnostics => ResolveDiagnosticOpenTarget() is not null;
+	public string DiagnosticActionLabel => File.Exists(_diagnosticPath) ? "OPEN DIAGNOSTIC LOG" : "OPEN DIAGNOSTICS FOLDER";
+	public string DiagnosticActionStatus { get => _diagnosticActionStatus; private set => Set(ref _diagnosticActionStatus, value); }
+	public string NextStep { get => _nextStep; private set => Set(ref _nextStep, value); }
 	public bool IsShellAvailable
 	{
 		get
@@ -80,15 +107,36 @@ public sealed class StartupLifecycleViewModel : INotifyPropertyChanged, IDisposa
 			string.Equals(stage.Status, "FAILED", StringComparison.Ordinal));
 	public bool HasStartupFailure =>
 		HasEvidence &&
-		Stages.Any(stage =>
+		!_initialStartupCompleted &&
+		(_latchedFailureStageId is not null ||
+		 Stages.Any(stage =>
 			stage.Requirement != StartupLifecycleRequirement.Optional &&
-			string.Equals(stage.Status, "FAILED", StringComparison.Ordinal));
+			string.Equals(stage.Status, "FAILED", StringComparison.Ordinal)));
+	public bool HasStartupDegradation =>
+		HasEvidence &&
+		!_initialStartupCompleted &&
+		!HasStartupFailure &&
+		Stages.Any(stage =>
+			string.Equals(stage.Status, "DEGRADED", StringComparison.Ordinal) ||
+			(stage.Requirement == StartupLifecycleRequirement.Optional &&
+			 string.Equals(stage.Status, "FAILED", StringComparison.Ordinal)));
 	public bool HasCompletedInitialStartup => !HasEvidence || _initialStartupCompleted;
 	public string StartupPhaseLabel => HasStartupFailure
 		? "STARTUP ATTENTION REQUIRED"
-		: HasCompletedInitialStartup
-			? "PRODUCTION RUNTIME READY"
-			: "STARTING PRODUCTION RUNTIME";
+		: HasStartupDegradation
+			? "STARTUP DEGRADED"
+			: HasCompletedInitialStartup
+				? "PRODUCTION RUNTIME READY"
+				: "STARTING PRODUCTION RUNTIME";
+	public string StartupVisualState => HasStartupFailure
+		? "FAILED"
+		: HasStartupDegradation
+			? "DEGRADED"
+			: HasCompletedInitialStartup
+				? "READY"
+				: Stages.Any(stage => string.Equals(stage.Status, "STARTING", StringComparison.Ordinal))
+					? "STARTING"
+					: "PENDING";
 	public string ReadinessSummary
 	{
 		get
@@ -101,7 +149,12 @@ public sealed class StartupLifecycleViewModel : INotifyPropertyChanged, IDisposa
 				.ToArray();
 			var readyStages = requiredStages.Count(stage =>
 				string.Equals(stage.Status, "READY", StringComparison.Ordinal));
-			return $"{readyStages} / {requiredStages.Length} REQUIRED STAGES READY";
+			var prefix = HasStartupFailure
+				? "FAILED · "
+				: HasStartupDegradation
+					? "DEGRADED · "
+					: string.Empty;
+			return $"{prefix}{readyStages} / {requiredStages.Length} REQUIRED STAGES READY";
 		}
 	}
 	public bool HasDeferredInitialization =>
@@ -220,6 +273,7 @@ public sealed class StartupLifecycleViewModel : INotifyPropertyChanged, IDisposa
 				? active.GetString()
 				: null;
 		var observedAt = ReadTimestamp(root, "observedAtUtc");
+		_diagnosticPath = ReadNullableString(root, "diagnosticPath");
 		var parsed = new List<StartupLifecycleStageViewModel>();
 
 		if (root.TryGetProperty("stages", out var stages) && stages.ValueKind == JsonValueKind.Array)
@@ -260,25 +314,11 @@ public sealed class StartupLifecycleViewModel : INotifyPropertyChanged, IDisposa
 			return;
 		}
 
+		UpdateFailureLatch(parsed);
+
 		Stages.Clear();
 		foreach (var stage in parsed)
 			Stages.Add(stage);
-
-		var activeStage = parsed.FirstOrDefault(stage => stage.IsActive);
-		var failedStage = parsed.FirstOrDefault(stage => string.Equals(stage.Status, "FAILED", StringComparison.Ordinal));
-		var degradedStage = parsed.FirstOrDefault(stage => string.Equals(stage.Status, "DEGRADED", StringComparison.Ordinal));
-		ActiveStageName = activeStage?.DisplayName ??
-			failedStage?.DisplayName ??
-			degradedStage?.DisplayName ??
-			"Production Readiness";
-		Summary = failedStage is not null
-			? failedStage.FailureReason ?? $"{failedStage.DisplayName} failed."
-			: degradedStage is not null
-				? degradedStage.StatusText ?? $"{degradedStage.DisplayName} is degraded."
-				: activeStage is not null
-					? activeStage.StatusText ?? $"{activeStage.DisplayName} is starting."
-					: "All published startup stages are complete.";
-		ObservedAt = observedAt?.ToLocalTime().ToString("HH:mm:ss.fff") ?? "—";
 
 		if (!_initialStartupCompleted)
 		{
@@ -286,9 +326,41 @@ public sealed class StartupLifecycleViewModel : INotifyPropertyChanged, IDisposa
 				.Where(stage => stage.Requirement != StartupLifecycleRequirement.Optional)
 				.ToArray();
 			_initialStartupCompleted =
+				_latchedFailureStageId is null &&
 				requiredStages.Length > 0 &&
 				requiredStages.All(stage => string.Equals(stage.Status, "READY", StringComparison.Ordinal));
 		}
+
+		var activeStage = parsed.FirstOrDefault(stage => stage.IsActive);
+		var failedStage = parsed.FirstOrDefault(stage =>
+			stage.Requirement != StartupLifecycleRequirement.Optional &&
+			string.Equals(stage.Status, "FAILED", StringComparison.Ordinal));
+		var degradedStage = parsed.FirstOrDefault(stage =>
+			string.Equals(stage.Status, "DEGRADED", StringComparison.Ordinal) ||
+			(stage.Requirement == StartupLifecycleRequirement.Optional &&
+			 string.Equals(stage.Status, "FAILED", StringComparison.Ordinal)));
+		var latchedStage = _latchedFailureStageId is null
+			? null
+			: parsed.FirstOrDefault(stage => string.Equals(stage.Id, _latchedFailureStageId, StringComparison.Ordinal));
+
+		ActiveStageName = _latchedFailureStageId is not null
+			? _latchedFailureStageName ?? latchedStage?.DisplayName ?? "Startup Failure"
+			: activeStage?.DisplayName ??
+				failedStage?.DisplayName ??
+				degradedStage?.DisplayName ??
+				"Production Readiness";
+		Summary = _latchedFailureStageId is not null
+			? ResolveLatchedFailureSummary(latchedStage)
+			: failedStage is not null
+				? failedStage.FailureReason ?? $"{failedStage.DisplayName} failed."
+				: degradedStage is not null
+					? degradedStage.FailureReason ?? degradedStage.StatusText ?? $"{degradedStage.DisplayName} is degraded."
+					: activeStage is not null
+						? activeStage.StatusText ?? $"{activeStage.DisplayName} is starting."
+						: "All published startup stages are complete.";
+		ObservedAt = observedAt?.ToLocalTime().ToString("HH:mm:ss.fff") ?? "—";
+		NextStep = ResolveNextStep(activeStage, degradedStage, latchedStage);
+		DiagnosticActionStatus = string.Empty;
 
 		RaiseProgressiveStateProperties();
 	}
@@ -309,6 +381,9 @@ public sealed class StartupLifecycleViewModel : INotifyPropertyChanged, IDisposa
 			true));
 		ActiveStageName = "Operator Interface";
 		Summary = "Waiting for AppHost lifecycle evidence.";
+		NextStep = HasEvidence
+			? "Waiting for authoritative AppHost lifecycle evidence."
+			: "Direct Operator startup has no AppHost startup evidence; runtime recovery remains available through the normal workspace surfaces.";
 		RaiseProgressiveStateProperties();
 	}
 
@@ -317,10 +392,170 @@ public sealed class StartupLifecycleViewModel : INotifyPropertyChanged, IDisposa
 		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsShellAvailable)));
 		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasCriticalFailure)));
 		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasStartupFailure)));
+		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasStartupDegradation)));
 		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasCompletedInitialStartup)));
 		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(StartupPhaseLabel)));
+		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(StartupVisualState)));
 		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ReadinessSummary)));
 		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasDeferredInitialization)));
+		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DiagnosticPath)));
+		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasDiagnosticPath)));
+		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanOpenDiagnostics)));
+		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DiagnosticActionLabel)));
+		_copyDiagnosticsCommand.RaiseCanExecuteChanged();
+		_openDiagnosticsCommand.RaiseCanExecuteChanged();
+	}
+
+	private void UpdateFailureLatch(IReadOnlyList<StartupLifecycleStageViewModel> stages)
+	{
+		if (_initialStartupCompleted)
+			return;
+
+		var failedStage = stages.FirstOrDefault(stage =>
+			stage.Requirement != StartupLifecycleRequirement.Optional &&
+			string.Equals(stage.Status, "FAILED", StringComparison.Ordinal));
+		if (failedStage is not null)
+		{
+			_latchedFailureStageId = failedStage.Id;
+			_latchedFailureStageName = failedStage.DisplayName;
+			_latchedFailureReason = failedStage.FailureReason ?? failedStage.StatusText ?? $"{failedStage.DisplayName} failed.";
+			return;
+		}
+
+		if (_latchedFailureStageId is null)
+			return;
+
+		var recoveryStage = stages.FirstOrDefault(stage =>
+			string.Equals(stage.Id, _latchedFailureStageId, StringComparison.Ordinal));
+		if (recoveryStage is not null &&
+			string.Equals(recoveryStage.Status, "READY", StringComparison.Ordinal))
+		{
+			_latchedFailureStageId = null;
+			_latchedFailureStageName = null;
+			_latchedFailureReason = null;
+		}
+	}
+
+	private string ResolveLatchedFailureSummary(StartupLifecycleStageViewModel? stage)
+	{
+		if (stage is not null &&
+			(string.Equals(stage.Status, "STARTING", StringComparison.Ordinal) ||
+			 string.Equals(stage.Status, "DEGRADED", StringComparison.Ordinal)))
+		{
+			return $"{stage.DisplayName} recovery is in progress. Original failure: {_latchedFailureReason ?? "Startup stage failed."}";
+		}
+
+		return _latchedFailureReason ?? $"{_latchedFailureStageName ?? "Startup stage"} failed.";
+	}
+
+	private string ResolveNextStep(
+		StartupLifecycleStageViewModel? activeStage,
+		StartupLifecycleStageViewModel? degradedStage,
+		StartupLifecycleStageViewModel? latchedStage)
+	{
+		if (_initialStartupCompleted)
+			return "Initial production qualification completed. Later runtime changes stay in the workspace recovery surfaces.";
+
+		if (_latchedFailureStageId is not null)
+		{
+			if (latchedStage is not null &&
+				(string.Equals(latchedStage.Status, "STARTING", StringComparison.Ordinal) ||
+				 string.Equals(latchedStage.Status, "DEGRADED", StringComparison.Ordinal)))
+			{
+				return "Recovery is being driven by the existing AppHost/ControlHost lifecycle. Keep this screen open and review diagnostics if readiness does not return.";
+			}
+
+			return "Review technical details and diagnostics, correct the reported cause, then recover through the supported application lifecycle. No Operator retry is exposed without a safe recovery command.";
+		}
+
+		if (degradedStage is not null)
+		{
+			return degradedStage.Requirement == StartupLifecycleRequirement.Optional
+				? "An optional startup stage is unavailable. Required startup can continue; review diagnostics if that capability is needed."
+				: "Wait for authoritative AppHost/ControlHost recovery. The Operator does not start a second supervisory recovery path.";
+		}
+
+		return activeStage is not null
+			? $"Waiting for {activeStage.DisplayName} to publish authoritative readiness."
+			: "Waiting for complete production readiness evidence.";
+	}
+
+	private Task CopyDiagnosticsAsync()
+	{
+		try
+		{
+			System.Windows.Clipboard.SetText(BuildDiagnosticsText());
+			DiagnosticActionStatus = "Diagnostics copied to clipboard.";
+		}
+		catch (ExternalException exception)
+		{
+			DiagnosticActionStatus = $"Unable to copy diagnostics: {exception.Message}";
+		}
+
+		return Task.CompletedTask;
+	}
+
+	private Task OpenDiagnosticsAsync()
+	{
+		var target = ResolveDiagnosticOpenTarget();
+		if (target is null)
+		{
+			DiagnosticActionStatus = "Published diagnostics are not available on this machine.";
+			return Task.CompletedTask;
+		}
+
+		try
+		{
+			Process.Start(new ProcessStartInfo(target) { UseShellExecute = true });
+			DiagnosticActionStatus = File.Exists(target)
+				? "Diagnostic log opened."
+				: "Diagnostics folder opened.";
+		}
+		catch (Exception exception) when (exception is InvalidOperationException or Win32Exception)
+		{
+			DiagnosticActionStatus = $"Unable to open diagnostics: {exception.Message}";
+		}
+
+		return Task.CompletedTask;
+	}
+
+	private string? ResolveDiagnosticOpenTarget()
+	{
+		if (string.IsNullOrWhiteSpace(_diagnosticPath))
+			return null;
+		if (File.Exists(_diagnosticPath))
+			return _diagnosticPath;
+
+		var directory = Path.GetDirectoryName(_diagnosticPath);
+		return !string.IsNullOrWhiteSpace(directory) && Directory.Exists(directory)
+			? directory
+			: null;
+	}
+
+	private string BuildDiagnosticsText()
+	{
+		var builder = new StringBuilder();
+		builder.AppendLine("rtaime startup diagnostics");
+		builder.AppendLine($"Phase: {StartupPhaseLabel}");
+		builder.AppendLine($"Observed: {ObservedAt}");
+		builder.AppendLine($"Evidence: {EvidencePath}");
+		builder.AppendLine($"Diagnostics: {DiagnosticPath}");
+		builder.AppendLine($"Active stage: {ActiveStageName}");
+		builder.AppendLine($"Summary: {Summary}");
+		builder.AppendLine($"Next step: {NextStep}");
+		builder.AppendLine();
+
+		foreach (var stage in Stages)
+		{
+			builder.AppendLine($"[{stage.Status}] {stage.DisplayName}");
+			builder.AppendLine($"  {stage.TechnicalDetail}");
+			if (!string.IsNullOrWhiteSpace(stage.StatusText))
+				builder.AppendLine($"  Status: {stage.StatusText}");
+			if (!string.IsNullOrWhiteSpace(stage.FailureReason))
+				builder.AppendLine($"  Failure: {stage.FailureReason}");
+		}
+
+		return builder.ToString().TrimEnd();
 	}
 
 	private static StartupLifecycleRequirement ResolveRequirement(
