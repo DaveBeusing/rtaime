@@ -60,6 +60,7 @@
 	<CornerRadius x:Key="OperatorRadiusControl">3</CornerRadius>
 	<CornerRadius x:Key="OperatorRadiusStatus">3</CornerRadius>
 	<CornerRadius x:Key="OperatorRadiusMeter">2</CornerRadius>
+	<CornerRadius x:Key="OperatorRadiusOverlay">2</CornerRadius>
 
 	<!-- Binding mockup palette. -->
 	<Color x:Key="OperatorColorBackground">#071017</Color>
