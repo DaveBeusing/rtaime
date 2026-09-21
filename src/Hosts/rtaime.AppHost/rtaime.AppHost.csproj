@@ -11,6 +11,10 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<InternalsVisibleTo Include="rtaime.Tests.Unit" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<None Include="..\..\..\build\operations\host-lifecycle-policy.json" Link="host-lifecycle-policy.json">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 			<CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
