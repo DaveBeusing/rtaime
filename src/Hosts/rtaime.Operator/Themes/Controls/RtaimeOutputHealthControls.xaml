@@ -26,7 +26,7 @@
 
 							<Ellipse x:Name="StatusDot" Width="8" Height="8" Fill="{DynamicResource OperatorWarningBrush}" VerticalAlignment="Center" />
 
-							<Border Grid.Column="1" Width="56" Height="32" Background="#090C10" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" VerticalAlignment="Center">
+							<Border Grid.Column="1" Width="56" Height="32" Background="{DynamicResource OperatorThumbnailCanvasBrush}" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" VerticalAlignment="Center">
 								<Image Source="{TemplateBinding Thumbnail}" Stretch="UniformToFill" SnapsToDevicePixels="True" />
 							</Border>
 
@@ -36,21 +36,21 @@
 									<RowDefinition Height="Auto" />
 								</Grid.RowDefinitions>
 								<DockPanel>
-									<TextBlock Text="{TemplateBinding OutputName}" FontSize="10" FontWeight="Bold" VerticalAlignment="Center" />
-									<TextBlock Text="{TemplateBinding AssignedSource}" FontSize="10" FontWeight="SemiBold" DockPanel.Dock="Right" TextTrimming="CharacterEllipsis" MaxWidth="150" />
+									<TextBlock Text="{TemplateBinding OutputName}" FontSize="{DynamicResource OperatorFontSizeCompact}" FontWeight="Bold" VerticalAlignment="Center" />
+									<TextBlock Text="{TemplateBinding AssignedSource}" FontSize="{DynamicResource OperatorFontSizeCompact}" FontWeight="SemiBold" DockPanel.Dock="Right" TextTrimming="CharacterEllipsis" MaxWidth="150" />
 								</DockPanel>
 								<StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,2,0,0">
-									<TextBlock Text="{TemplateBinding Target}" Style="{StaticResource OperatorLabel}" FontSize="9" TextTrimming="CharacterEllipsis" MaxWidth="96" />
-									<TextBlock Text=" · " Style="{StaticResource OperatorLabel}" FontSize="9" />
-									<TextBlock Text="{TemplateBinding Resolution}" Style="{StaticResource OperatorLabel}" FontSize="9" />
-									<TextBlock Text=" · " Style="{StaticResource OperatorLabel}" FontSize="9" />
-									<TextBlock Text="{TemplateBinding FrameRate}" Style="{StaticResource OperatorLabel}" FontSize="9" />
-									<TextBlock Text=" · " Style="{StaticResource OperatorLabel}" FontSize="9" />
-									<TextBlock Text="{TemplateBinding ColorSpace}" Style="{StaticResource OperatorLabel}" FontSize="9" />
+									<TextBlock Text="{TemplateBinding Target}" Style="{StaticResource OperatorLabel}" FontSize="{DynamicResource OperatorFontSizeMicro}" TextTrimming="CharacterEllipsis" MaxWidth="96" />
+									<TextBlock Text=" · " Style="{StaticResource OperatorLabel}" FontSize="{DynamicResource OperatorFontSizeMicro}" />
+									<TextBlock Text="{TemplateBinding Resolution}" Style="{StaticResource OperatorLabel}" FontSize="{DynamicResource OperatorFontSizeMicro}" />
+									<TextBlock Text=" · " Style="{StaticResource OperatorLabel}" FontSize="{DynamicResource OperatorFontSizeMicro}" />
+									<TextBlock Text="{TemplateBinding FrameRate}" Style="{StaticResource OperatorLabel}" FontSize="{DynamicResource OperatorFontSizeMicro}" />
+									<TextBlock Text=" · " Style="{StaticResource OperatorLabel}" FontSize="{DynamicResource OperatorFontSizeMicro}" />
+									<TextBlock Text="{TemplateBinding ColorSpace}" Style="{StaticResource OperatorLabel}" FontSize="{DynamicResource OperatorFontSizeMicro}" />
 								</StackPanel>
 							</Grid>
 
-							<TextBlock Grid.Column="3" Text="{TemplateBinding RouteState}" Style="{StaticResource OperatorValue}" FontSize="10" FontWeight="Bold" HorizontalAlignment="Right" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+							<TextBlock Grid.Column="3" Text="{TemplateBinding RouteState}" Style="{StaticResource OperatorValue}" FontSize="{DynamicResource OperatorFontSizeCompact}" FontWeight="Bold" HorizontalAlignment="Right" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
 
 							<controls:RtaimeIconButton x:Name="OverflowButton"
 								Grid.Column="4"
@@ -90,7 +90,7 @@
 							</Grid.ColumnDefinitions>
 							<Ellipse x:Name="StatusDot" Width="8" Height="8" Fill="{DynamicResource OperatorWarningBrush}" VerticalAlignment="Center" />
 							<TextBlock Grid.Column="1" Text="{TemplateBinding SubsystemName}" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" />
-							<TextBlock Grid.Column="2" Text="{TemplateBinding State}" Style="{StaticResource OperatorValue}" FontSize="10" FontWeight="SemiBold" VerticalAlignment="Center" />
+							<TextBlock Grid.Column="2" Text="{TemplateBinding State}" Style="{StaticResource OperatorValue}" FontSize="{DynamicResource OperatorFontSizeCompact}" FontWeight="SemiBold" VerticalAlignment="Center" />
 						</Grid>
 					</Border>
 					<ControlTemplate.Triggers>
@@ -119,10 +119,10 @@
 							</Grid.ColumnDefinitions>
 							<Ellipse x:Name="StatusDot" Width="8" Height="8" Fill="{DynamicResource OperatorWarningBrush}" VerticalAlignment="Center" />
 							<StackPanel Grid.Column="1" VerticalAlignment="Center">
-								<TextBlock Text="{TemplateBinding SubsystemName}" FontSize="10" FontWeight="SemiBold" />
-								<TextBlock Text="{TemplateBinding Detail}" Style="{StaticResource OperatorLabel}" FontSize="9" TextTrimming="CharacterEllipsis" />
+								<TextBlock Text="{TemplateBinding SubsystemName}" FontSize="{DynamicResource OperatorFontSizeCompact}" FontWeight="SemiBold" />
+								<TextBlock Text="{TemplateBinding Detail}" Style="{StaticResource OperatorLabel}" FontSize="{DynamicResource OperatorFontSizeMicro}" TextTrimming="CharacterEllipsis" />
 							</StackPanel>
-							<TextBlock Grid.Column="2" Text="{TemplateBinding State}" Style="{StaticResource OperatorValue}" FontSize="10" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Right" />
+							<TextBlock Grid.Column="2" Text="{TemplateBinding State}" Style="{StaticResource OperatorValue}" FontSize="{DynamicResource OperatorFontSizeCompact}" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Right" />
 						</Grid>
 					</Border>
 					<ControlTemplate.Triggers>
@@ -148,7 +148,7 @@
 		<Setter Property="Height" Value="24" />
 		<Setter Property="MinWidth" Value="92" />
 		<Setter Property="Foreground" Value="{DynamicResource OperatorAccentBrush}" />
-		<Setter Property="Background" Value="#0A141C" />
+		<Setter Property="Background" Value="{DynamicResource OperatorDiagnosticSurfaceBrush}" />
 		<Setter Property="LineThickness" Value="1" />
 	</Style>
 </ResourceDictionary>
