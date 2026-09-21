@@ -97,8 +97,10 @@ $documentationPath = Join-Path $repositoryRoot "docs/OperatorUiV1.md"
 $workspaceDocumentationPath = Join-Path $repositoryRoot "docs/OperatorWorkspaces.md"
 $outputHealthDocumentationPath = Join-Path $repositoryRoot "docs/OutputRoutingHealth.md"
 $mediaLibraryDocumentationPath = Join-Path $repositoryRoot "docs/MediaLibraryAssetBrowser.md"
+$visualQualificationDocumentationPath = Join-Path $repositoryRoot "docs/OperatorVisualQualification.md"
+$visualQualificationTestsPath = Join-Path $repositoryRoot "tests/rtaime.Tests.Operator/OperatorVisualQualificationTests.cs"
 
-foreach ($path in @($appPath, $appCodePath, $windowPath, $windowCodePath, $shellPath, $keyboardPath, $quickControlsPath, $multiviewPath, $multiviewCodePath, $liveSceneCuePath, $liveControlsPath, $liveDocumentationPath, $compositingGraphPath, $compositingGraphCodePath, $compositingGraphViewModelPath, $compositingGraphProjectionPath, $compositingGraphDocumentationPath, $mediaPoolPath, $inspectorHostPath, $virtualizingWrapPanelPath, $deckPath, $deckViewModelPath, $timelinePath, $timelineCodePath, $timelineViewModelPath, $markerControllerPath, $timelineDocumentationPath, $viewModelPath, $runtimeReadinessPath, $startupViewModelPath, $monitorViewModelPath, $programOutputControllerPath, $programOutputWindowPath, $outputHealthControlPath, $outputHealthViewModelPath, $runtimeStatusBarPath, $runtimeStatusBarCodePath, $runtimeStatusBarViewModelPath, $runtimeStatusBarDocumentationPath, $healthContractPath, $healthProviderPath, $healthViewModelPath, $healthControlPath, $healthControlCodePath, $healthDocumentationPath, $previewViewerPath, $previewViewerCodePath, $programViewerPath, $programViewerCodePath, $monitorViewPath, $monitorPresentationControlPath, $sourceTileViewModelPath, $audioInputViewModelPath, $graphicsLoaderPath, $demoControllerPath, $demoManifestPath, $demoProductPath, $demoGraphicsPath, $demoDocumentationPath, $tokensPath, $themePath, $customControlsPath, $outputHealthControlsPath, $customInputControlsPath, $customMediaControlsPath, $customControlThemePath, $outputHealthControlThemePath, $customInputThemePath, $customMediaThemePath, $monitorWorkspaceThemePath, $customIconThemePath, $manifestPath, $projectPath, $documentationPath, $workspaceDocumentationPath, $outputHealthDocumentationPath, $mediaLibraryDocumentationPath)) {
+foreach ($path in @($appPath, $appCodePath, $windowPath, $windowCodePath, $shellPath, $keyboardPath, $quickControlsPath, $multiviewPath, $multiviewCodePath, $liveSceneCuePath, $liveControlsPath, $liveDocumentationPath, $compositingGraphPath, $compositingGraphCodePath, $compositingGraphViewModelPath, $compositingGraphProjectionPath, $compositingGraphDocumentationPath, $mediaPoolPath, $inspectorHostPath, $virtualizingWrapPanelPath, $deckPath, $deckViewModelPath, $timelinePath, $timelineCodePath, $timelineViewModelPath, $markerControllerPath, $timelineDocumentationPath, $viewModelPath, $runtimeReadinessPath, $startupViewModelPath, $monitorViewModelPath, $programOutputControllerPath, $programOutputWindowPath, $outputHealthControlPath, $outputHealthViewModelPath, $runtimeStatusBarPath, $runtimeStatusBarCodePath, $runtimeStatusBarViewModelPath, $runtimeStatusBarDocumentationPath, $healthContractPath, $healthProviderPath, $healthViewModelPath, $healthControlPath, $healthControlCodePath, $healthDocumentationPath, $previewViewerPath, $previewViewerCodePath, $programViewerPath, $programViewerCodePath, $monitorViewPath, $monitorPresentationControlPath, $sourceTileViewModelPath, $audioInputViewModelPath, $graphicsLoaderPath, $demoControllerPath, $demoManifestPath, $demoProductPath, $demoGraphicsPath, $demoDocumentationPath, $tokensPath, $themePath, $customControlsPath, $outputHealthControlsPath, $customInputControlsPath, $customMediaControlsPath, $customControlThemePath, $outputHealthControlThemePath, $customInputThemePath, $customMediaThemePath, $monitorWorkspaceThemePath, $customIconThemePath, $manifestPath, $projectPath, $documentationPath, $workspaceDocumentationPath, $outputHealthDocumentationPath, $mediaLibraryDocumentationPath, $visualQualificationDocumentationPath, $visualQualificationTestsPath)) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required Operator UI artifact is missing: '$path'."
 }
 
@@ -473,38 +475,10 @@ Assert-Condition ($minHeight -le [Math]::Floor(1080 / 2.0)) "Operator minimum he
 Assert-Condition ($shell -match 'CompactViewportWidth' -and $shell -match 'IsCompactViewport' -and $shell -match 'CompactLowerPanelHeight') "Operator shell must provide a presentation-only compact workspace mode for constrained high-DPI viewports."
 Assert-Condition ($window -match '<controls:RtaimeScrollViewer[^>]+VerticalScrollBarVisibility="Auto"') "Operator must preserve vertical access through the custom scroll surface when DPI scaling reduces logical workspace height."
 
-$referenceWidth = [double]([Regex]::Match($shell, 'ReferenceViewportWidth = (?<value>\d+(?:\.\d+)?)').Groups["value"].Value)
-$referenceHeight = [double]([Regex]::Match($shell, 'ReferenceViewportHeight = (?<value>\d+(?:\.\d+)?)').Groups["value"].Value)
-$minimumWorkspaceScale = [double]([Regex]::Match($shell, 'MinimumWorkspaceScale = (?<value>\d+(?:\.\d+)?)').Groups["value"].Value)
-$compactViewportWidth = [double]([Regex]::Match($shell, 'CompactViewportWidth = (?<value>\d+(?:\.\d+)?)').Groups["value"].Value)
-$compactViewportHeight = [double]([Regex]::Match($shell, 'CompactViewportHeight = (?<value>\d+(?:\.\d+)?)').Groups["value"].Value)
-$compactLowerPanelHeight = [double]([Regex]::Match($shell, 'CompactLowerPanelHeight = (?<value>\d+(?:\.\d+)?)').Groups["value"].Value)
+Assert-Condition ($visualQualificationTestsPath -match 'OperatorVisualQualificationTests\.cs$') "Operator visual qualification must remain a dedicated executable test seam."
+Assert-Condition ($shell -match 'ReferenceViewportWidth' -and $shell -match 'ReferenceViewportHeight' -and $shell -match 'MinimumWorkspaceScale') "Operator shell must retain centralized reference-viewport scaling inputs."
+Assert-Condition ($shell -match 'CompactViewportWidth' -and $shell -match 'CompactViewportHeight' -and $shell -match 'IsCompactViewport') "Operator shell must retain centralized compact-viewport behavior."
 
-function Resolve-WorkspaceScale([double] $viewportWidth, [double] $viewportHeight) {
-	$rawScale = [Math]::Min($viewportWidth / $referenceWidth, $viewportHeight / $referenceHeight)
-	return [Math]::Max($minimumWorkspaceScale, [Math]::Min(1.0, $rawScale))
-}
-
-function Resolve-ProductionWorkspaceHeight([double] $viewportWidth, [double] $viewportHeight) {
-	$isCompact = $viewportWidth -lt $compactViewportWidth -or $viewportHeight -lt $compactViewportHeight
-	if ($isCompact) {
-		return [Math]::Max(260.0, [Math]::Min(520.0, $viewportHeight - $compactLowerPanelHeight - 90.0))
-	}
-	return 700.0 * (Resolve-WorkspaceScale $viewportWidth $viewportHeight)
-}
-
-foreach ($layoutCase in @(
-	@{ Width = 1920.0; Height = 1080.0; Scale = 1.0; ProductionHeight = 700.0 },
-	@{ Width = 1600.0; Height = 900.0; Scale = (5.0 / 6.0); ProductionHeight = (700.0 * 5.0 / 6.0) },
-	@{ Width = 1536.0; Height = 864.0; Scale = 0.8; ProductionHeight = 560.0 },
-	@{ Width = 1280.0; Height = 720.0; Scale = (2.0 / 3.0); ProductionHeight = (700.0 * 2.0 / 3.0) },
-	@{ Width = 960.0; Height = 540.0; Scale = 0.6; ProductionHeight = 260.0 }
-)) {
-	$resolvedScale = Resolve-WorkspaceScale $layoutCase.Width $layoutCase.Height
-	$resolvedProductionHeight = Resolve-ProductionWorkspaceHeight $layoutCase.Width $layoutCase.Height
-	Assert-Condition ([Math]::Abs($resolvedScale - $layoutCase.Scale) -lt 0.002) "Workspace scale must remain stable at $($layoutCase.Width)x$($layoutCase.Height)."
-	Assert-Condition ([Math]::Abs($resolvedProductionHeight - $layoutCase.ProductionHeight) -lt 0.5) "Production workspace height must remain container-derived at $($layoutCase.Width)x$($layoutCase.Height)."
-}
 
 Assert-Condition ($shell -match 'CurrentVersion = 6') "Render-only responsive layout completion must not bump the persisted Operator layout schema."
 Assert-Condition ($shell -match 'CenterWorkspacePrimaryMinWidth' -and $shell -match 'MediaDeckPreviewHeight' -and $shell -match 'LiveLowerPanelHeight' -and $shell -match 'CompositingPreviewHeight' -and $shell -match 'HealthSidebarWidth' -and $shell -match 'TimelineHeaderColumnWidth') "Responsive feature geometry must be derived centrally from the Operator shell viewport."

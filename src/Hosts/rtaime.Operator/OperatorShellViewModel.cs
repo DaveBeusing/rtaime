@@ -444,10 +444,10 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 
 	public GridLength LeftColumnWidth
 	{
-		get => new(IsCenterMaximized || IsLeftCollapsed || IsCompactViewport ? 0 : (IsLiveWorkspace ? 360 : LeftPanelWidth) * WorkspaceScale);
+		get => new(!HasLeftRegion || IsCenterMaximized || IsLeftCollapsed || IsCompactViewport ? 0 : (IsLiveWorkspace ? 360 : LeftPanelWidth) * WorkspaceScale);
 		set
 		{
-			if (!IsLiveWorkspace && !IsCompactViewport && !IsCenterMaximized && !IsLeftCollapsed && value.IsAbsolute && value.Value > 0)
+			if (HasLeftRegion && !IsLiveWorkspace && !IsCompactViewport && !IsCenterMaximized && !IsLeftCollapsed && value.IsAbsolute && value.Value > 0)
 				LeftPanelWidth = value.Value / WorkspaceScale;
 		}
 	}
@@ -477,7 +477,7 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 		}
 	}
 
-	public double LeftSplitterWidth => IsCenterMaximized || IsLeftCollapsed || IsCompactViewport ? 0 : 6;
+	public double LeftSplitterWidth => !HasLeftRegion || IsCenterMaximized || IsLeftCollapsed || IsCompactViewport ? 0 : 6;
 	public double RightSplitterWidth => IsCenterMaximized || IsRightCollapsed || IsCompactViewport || IsHealthWorkspace ? 0 : 6;
 	public double LowerSplitterHeight => IsCenterMaximized || !HasTimelineRegion || IsCompactViewport ? 0 : 6;
 
