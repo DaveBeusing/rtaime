@@ -393,6 +393,7 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 	public double HealthOverviewCardWidth => Math.Max(150, 178 * WorkspaceScale);
 	public double SourceBinThumbnailWidth => Math.Max(140, 200 * WorkspaceScale);
 	public double QuickControlCardWidth => Math.Max(176, 218 * WorkspaceScale);
+	public GridLength TimelineHeaderColumnWidth => new(Math.Max(170, 238 * WorkspaceScale));
 
 	public ICommand ToggleLeftPanelCommand { get; }
 	public ICommand ToggleRightPanelCommand { get; }
@@ -675,6 +676,7 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 		OnPropertyChanged(nameof(HealthOverviewCardWidth));
 		OnPropertyChanged(nameof(SourceBinThumbnailWidth));
 		OnPropertyChanged(nameof(QuickControlCardWidth));
+		OnPropertyChanged(nameof(TimelineHeaderColumnWidth));
 		OnPropertyChanged(nameof(ProductionWorkspaceHeight));
 
 		if (previousCompactNavigation != (_viewportWidth < OperatorLayoutSettings.CompactNavigationWidth))
@@ -915,6 +917,7 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 		OnPropertyChanged(nameof(HealthOverviewCardWidth));
 		OnPropertyChanged(nameof(SourceBinThumbnailWidth));
 		OnPropertyChanged(nameof(QuickControlCardWidth));
+		OnPropertyChanged(nameof(TimelineHeaderColumnWidth));
 		OnPropertyChanged(nameof(ProductionWorkspaceHeight));
 	}
 
