@@ -1,7 +1,7 @@
 <!-- Copyright (c) Dave Beusing <david.beusing@gmail.com>. -->
 <Project Sdk="Microsoft.NET.Sdk">
 	<PropertyGroup>
-		<OutputType>Exe</OutputType>
+		<OutputType>WinExe</OutputType>
 		<AssemblyName>rtaime</AssemblyName>
 		<RootNamespace>rtaime.AppHost</RootNamespace>
 	</PropertyGroup>
