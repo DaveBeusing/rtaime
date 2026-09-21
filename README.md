@@ -103,6 +103,8 @@ rtaime.exe / AppHost
 └── starts Operator after qualified readiness
 ~~~
 
+On Windows, the canonical `rtaime.exe` uses the GUI subsystem for normal Interactive and Showcase startup, so no AppHost console window is created or briefly flashed before the branded Operator startup experience. Operational console behavior remains explicit through `--show-console`, `HeadlessEngine`, redirected stdout/stderr and the Windows-service path. Early bootstrap failures are persisted as `apphost-startup.log` under the selected AppHost work root.
+
 The production authority path is intentionally separate from execution:
 
 ~~~text
