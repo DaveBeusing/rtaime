@@ -14,8 +14,8 @@
 	<UserControl.Resources>
 		<local:TimelineFrameToCanvasLeftConverter x:Key="TimelineFrameToCanvasLeftConverter" />
 		<local:TimelineItemWidthConverter x:Key="TimelineItemWidthConverter" />
-		<SolidColorBrush x:Key="TimelineBackgroundBrush" Color="#0C151D" />
-		<SolidColorBrush x:Key="TimelineRulerBrush" Color="#111D26" />
+		<SolidColorBrush x:Key="TimelineBackgroundBrush" Color="{StaticResource OperatorColorTimelineSurface}" />
+		<SolidColorBrush x:Key="TimelineRulerBrush" Color="{StaticResource OperatorColorTimelineTrack}" />
 		<SolidColorBrush x:Key="TimelineVideoBrush" Color="{StaticResource OperatorColorTimeline}" />
 		<SolidColorBrush x:Key="TimelineGraphicsBrush" Color="{StaticResource OperatorColorGraphics}" />
 		<SolidColorBrush x:Key="TimelineAudioBrush" Color="{StaticResource OperatorColorAudio}" />
@@ -265,7 +265,7 @@
 								</Style>
 							</controls:RtaimeStatusBadge.Style>
 						</controls:RtaimeStatusBadge>
-						<controls:RtaimeTimecode Content="{Binding CurrentTimecode}" FontSize="14" Margin="8,0,8,0" />
+						<controls:RtaimeTimecode Content="{Binding CurrentTimecode}" FontSize="{StaticResource OperatorFontSizeSection}" Margin="8,0,8,0" />
 						<controls:RtaimeTextBox
 							Width="94"
 							Height="26"
@@ -297,11 +297,11 @@
 						<TextBlock
 							Text="{Binding VisibleRangeLabel}"
 							Style="{StaticResource OperatorLabel}"
-							FontSize="10"
+							FontSize="{StaticResource OperatorFontSizeCompact}"
 							VerticalAlignment="Center"
 							TextTrimming="CharacterEllipsis" />
 						<StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-							<TextBlock Text="{Binding SelectionStatus}" Style="{StaticResource OperatorLabel}" FontSize="9" />
+							<TextBlock Text="{Binding SelectionStatus}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" />
 						</StackPanel>
 					</Grid>
 				</Border>
@@ -340,7 +340,7 @@
 											Text="{Binding Timecode}"
 											Style="{StaticResource OperatorLabel}"
 											FontFamily="{DynamicResource OperatorTimecodeFontFamily}"
-											FontSize="9"
+											FontSize="{StaticResource OperatorFontSizeMicro}"
 											Margin="-18,1,0,0" />
 									</StackPanel>
 								</DataTemplate>
@@ -375,7 +375,7 @@
 										ToolTip="{Binding Timecode}">
 										<StackPanel Orientation="Horizontal">
 											<Polygon Points="0,0 7,0 3.5,5" Fill="{StaticResource TimelineCueBrush}" Width="7" Height="5" VerticalAlignment="Center" Margin="0,0,4,0" />
-											<TextBlock Text="{Binding Name}" Foreground="{DynamicResource OperatorTextBrush}" FontSize="9" TextTrimming="CharacterEllipsis" MaxWidth="78" VerticalAlignment="Center" />
+											<TextBlock Text="{Binding Name}" Foreground="{DynamicResource OperatorTextBrush}" FontSize="{StaticResource OperatorFontSizeMicro}" TextTrimming="CharacterEllipsis" MaxWidth="78" VerticalAlignment="Center" />
 										</StackPanel>
 									</Border>
 								</DataTemplate>
@@ -461,7 +461,7 @@
 										<TextBlock Grid.Column="1"
 											Text="{Binding Label}"
 											Foreground="{DynamicResource OperatorTextBrush}"
-											FontSize="11"
+											FontSize="{StaticResource OperatorFontSizeCaption}"
 											FontWeight="SemiBold"
 											Margin="8,0,0,0"
 											VerticalAlignment="Center" />
@@ -469,7 +469,7 @@
 											Text="{Binding VisibleItems.Count}"
 											Style="{StaticResource OperatorLabel}"
 											FontFamily="{DynamicResource OperatorTimecodeFontFamily}"
-											FontSize="9"
+											FontSize="{StaticResource OperatorFontSizeMicro}"
 											VerticalAlignment="Center" />
 									</Grid>
 								</Border>
@@ -524,15 +524,15 @@
 															</Grid.ColumnDefinitions>
 															<TextBlock
 																Text="{Binding Label}"
-																Foreground="White"
-																FontSize="11"
+																Foreground="{DynamicResource OperatorOverlayTextBrush}"
+																FontSize="{StaticResource OperatorFontSizeCaption}"
 																FontWeight="SemiBold"
 																VerticalAlignment="Center"
 																TextTrimming="CharacterEllipsis" />
 															<TextBlock Grid.Column="1"
 																Text="{Binding Status}"
-																Foreground="#D8FFFFFF"
-																FontSize="9"
+																Foreground="{DynamicResource OperatorTimelineStatusTextBrush}"
+																FontSize="{StaticResource OperatorFontSizeMicro}"
 																Margin="8,0,0,0"
 																VerticalAlignment="Center"
 																TextTrimming="CharacterEllipsis"
