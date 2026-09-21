@@ -839,12 +839,12 @@
 					</Grid>
 
 					<Grid x:Name="PreviewProgramProductionWorkspace"
-						Height="700"
+						Height="{Binding Shell.ProductionWorkspaceHeight, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 						Visibility="{Binding Shell.ProductionControlsVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
 						<Grid.RowDefinitions>
-							<RowDefinition Height="390" />
+							<RowDefinition Height="390*" />
 							<RowDefinition Height="6" />
-							<RowDefinition Height="304" />
+							<RowDefinition Height="304*" />
 						</Grid.RowDefinitions>
 
 						<Grid Grid.Row="0">
@@ -855,7 +855,6 @@
 							</Grid.ColumnDefinitions>
 
 							<local:PreviewViewer Grid.Column="0"
-								Height="390"
 								Visibility="{Binding Shell.PreviewViewerVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 								AllowDrop="True"
 								DragOver="OnPreviewDragOver"
@@ -882,7 +881,6 @@
 								FullscreenCommand="{Binding Shell.FullscreenPreviewCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
 
 							<local:ProgramViewer Grid.Column="2"
-								Height="390"
 								Visibility="{Binding Shell.ProgramViewerVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 								Frame="{Binding Monitoring.ProgramImage, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 								SourceName="{Binding ProgramSourceName}"
@@ -908,11 +906,11 @@
 
 						<Grid Grid.Row="2">
 							<Grid.ColumnDefinitions>
-								<ColumnDefinition Width="320" />
+								<ColumnDefinition Width="320*" />
 								<ColumnDefinition Width="6" />
-								<ColumnDefinition Width="462" />
+								<ColumnDefinition Width="462*" />
 								<ColumnDefinition Width="6" />
-								<ColumnDefinition Width="276" />
+								<ColumnDefinition Width="276*" />
 							</Grid.ColumnDefinitions>
 
 							<Border Grid.Column="0" Style="{StaticResource RtaimeProductionLowerPanel}">

@@ -612,6 +612,7 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 		string.Equals(ViewerMode, "PREVIEW", StringComparison.Ordinal) ? Visibility.Collapsed : Visibility.Visible;
 
 	public double ViewerGapWidth => string.Equals(ViewerMode, "DUAL", StringComparison.Ordinal) ? 6 : 0;
+	public double ProductionWorkspaceHeight => 700 * WorkspaceScale;
 	public string ViewerModeLabel => ViewerMode switch
 	{
 		"PREVIEW" => "PREVIEW MAXIMIZED",
@@ -884,6 +885,7 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 		OnPropertyChanged(nameof(LeftSplitterWidth));
 		OnPropertyChanged(nameof(RightSplitterWidth));
 		OnPropertyChanged(nameof(LowerSplitterHeight));
+		OnPropertyChanged(nameof(ProductionWorkspaceHeight));
 	}
 
 	private bool Set<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
