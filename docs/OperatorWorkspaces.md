@@ -39,9 +39,9 @@ Persisted workspace geometry remains in the 1920×1080 reference coordinate syst
 | 1600×900 | 0.83 | ~583 px | Standard window |
 | 1536×864 | 0.80 | 560 px | Scaled |
 | 1280×720 | 0.67 | ~467 px | Scaled |
-| 960×540 | 0.60 floor | 420 px | Compact |
+| 960×540 | 0.60 floor | 260 px | Compact |
 
-The shell owns responsive feature geometry that must track the container rather than force reference pixels. This includes the Media Deck preview, LIVE lower output region, Compositing preview, Health sidebar/cards, Source Bin thumbnail width, Quick Control cards and Timeline track-header width. Feature-local control density such as button heights, status rows and aspect-ratio thumbnails may remain fixed where it expresses an interaction or content requirement. Compact mode removes optional side/auxiliary presentation and optional timeline context badges before core production identity or commands are sacrificed.
+The shell owns responsive feature geometry that must track the container rather than force reference pixels. This includes the Media Deck preview, LIVE lower output region, Compositing preview, Health sidebar/cards, Source Bin thumbnail width, Quick Control cards and Timeline track-header width. Feature-local control density such as button heights, status rows and aspect-ratio thumbnails may remain fixed where it expresses an interaction or content requirement. Compact mode removes optional side/auxiliary presentation, optional timeline context badges and the reserved empty V2/A2/A3 reference lanes before core production identity or commands are sacrificed. The governed V3 Graphics, V1 Video and A1 Music roles remain visible.
 
 ## LIVE
 
