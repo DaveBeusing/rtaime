@@ -434,6 +434,34 @@
 					<ItemsControl.ItemTemplate>
 						<DataTemplate>
 							<Grid Height="{Binding RowHeight}">
+								<Grid.Style>
+									<Style TargetType="Grid">
+										<Setter Property="Visibility" Value="Visible" />
+										<Style.Triggers>
+											<MultiDataTrigger>
+												<MultiDataTrigger.Conditions>
+													<Condition Binding="{Binding Label}" Value="V2  VIDEO" />
+													<Condition Binding="{Binding DataContext.Shell.IsCompactViewport, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="True" />
+												</MultiDataTrigger.Conditions>
+												<Setter Property="Visibility" Value="Collapsed" />
+											</MultiDataTrigger>
+											<MultiDataTrigger>
+												<MultiDataTrigger.Conditions>
+													<Condition Binding="{Binding Label}" Value="A2  SFX" />
+													<Condition Binding="{Binding DataContext.Shell.IsCompactViewport, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="True" />
+												</MultiDataTrigger.Conditions>
+												<Setter Property="Visibility" Value="Collapsed" />
+											</MultiDataTrigger>
+											<MultiDataTrigger>
+												<MultiDataTrigger.Conditions>
+													<Condition Binding="{Binding Label}" Value="A3  VO" />
+													<Condition Binding="{Binding DataContext.Shell.IsCompactViewport, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="True" />
+												</MultiDataTrigger.Conditions>
+												<Setter Property="Visibility" Value="Collapsed" />
+											</MultiDataTrigger>
+										</Style.Triggers>
+									</Style>
+								</Grid.Style>
 								<Grid.ColumnDefinitions>
 									<ColumnDefinition Width="{Binding Shell.TimelineHeaderColumnWidth, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
 									<ColumnDefinition Width="*" />
