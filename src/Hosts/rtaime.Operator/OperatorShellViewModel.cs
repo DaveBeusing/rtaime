@@ -624,7 +624,10 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 
 	public double ViewerGapWidth => string.Equals(ViewerMode, "DUAL", StringComparison.Ordinal) ? 6 : 0;
 	public double ProductionWorkspaceHeight => IsCompactViewport
-		? Math.Max(320, Math.Min(520, _viewportHeight - 120))
+		? Math.Clamp(
+			_viewportHeight - OperatorLayoutSettings.CompactLowerPanelHeight - 90,
+			260,
+			520)
 		: 700 * WorkspaceScale;
 	public string ViewerModeLabel => ViewerMode switch
 	{
