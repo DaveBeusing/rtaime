@@ -12,9 +12,9 @@ The COMPOSITING workspace presents the observable production path as a compact, 
 
 ## Reference composition
 
-The global production shell is preserved. Media Library remains on the left, the existing 340 px Inspector remains on the far right and the existing 320 px Timeline remains in the lower shell region.
+The global production shell is preserved. At the 1920×1080 reference viewport, Media Library uses the 400 px reference left region, Inspector uses the 340 px reference right region and Timeline uses the 320 px reference lower region. Their rendered allocations continue to follow the shared responsive shell rather than forcing those reference pixels.
 
-Inside the 1070×700 center surface, COMPOSITING uses the reference **64 / 6 / 36** horizontal split:
+Inside the 1070×700 reference center surface, COMPOSITING uses the reference **64 / 6 / 36** horizontal split. The graph/preview split remains proportional while the Preview reference height is rendered from the current viewport:
 
 - approximately 64% for the node graph;
 - 6 px gap;
