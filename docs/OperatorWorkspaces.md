@@ -29,6 +29,20 @@ All workspaces consume the shared Operator design system for typography, media a
 
 Preview and Program remain visually and semantically distinct even when they share monitor chrome. Workspace-local geometry may remain local when it expresses a one-off functional layout, but repeated visual values belong in `OperatorTokens.xaml` or shared theme styles. Workspace styling never changes routing, playback, monitoring, health or output authority.
 
+### Responsive render geometry
+
+Persisted workspace geometry remains in the 1920×1080 reference coordinate system. Rendering derives from the current view container and does not write scaled values back to the layout store. Layout schema version 6 therefore remains unchanged.
+
+| Logical viewport | Presentation scale | EDIT render height | Mode |
+| --- | ---: | ---: | --- |
+| 1920×1080 | 1.00 | 700 px | Reference |
+| 1600×900 | 0.83 | ~583 px | Standard window |
+| 1536×864 | 0.80 | 560 px | Scaled |
+| 1280×720 | 0.67 | ~467 px | Scaled |
+| 960×540 | 0.60 floor | 420 px | Compact |
+
+The shell owns responsive feature geometry that must track the container rather than force reference pixels. This includes the Media Deck preview, LIVE lower output region, Compositing preview, Health sidebar/cards, Source Bin thumbnail width, Quick Control cards and Timeline track-header width. Feature-local control density such as button heights, status rows and aspect-ratio thumbnails may remain fixed where it expresses an interaction or content requirement. Compact mode removes optional side/auxiliary presentation and optional timeline context badges before core production identity or commands are sacrificed.
+
 ## LIVE
 
 LIVE is the primary fast production workspace. It is arranged as a three-zone operator surface: source/cue selection on the left, adaptive multiview plus Quick Controls in the center, and explicit Live Controls on the right.
@@ -201,7 +215,7 @@ Canonical workspace defaults use the same mockup macro geometry and differ only 
 | HEALTH | 400 | 340 | 320 | none | PROGRAM |
 | SETTINGS | 400 | 340 | 320 | none | PROGRAM |
 
-At constrained logical width or height the shell enters a presentation-only compact viewport mode. It temporarily removes the left and right side regions plus any auxiliary workspace column from the grid allocation, reduces the lower region allocation and suppresses optional top-bar telemetry without modifying the persisted per-workspace dimensions. Between compact and reference size, panel and EDIT production-workspace geometry is derived from the current view container while persistence remains in reference coordinates. The central production surface, Program identity, connection/lifecycle state and core shell actions remain visible. Returning to a larger viewport restores the stored presentation values.
+At constrained logical width or height the shell enters a presentation-only compact viewport mode. It temporarily removes the left and right side regions plus any auxiliary workspace column from the grid allocation, reduces the lower region allocation and suppresses optional top-bar and timeline context telemetry without modifying the persisted per-workspace dimensions. Between compact and reference size, panel, feature and EDIT production-workspace geometry is derived from the current view container while persistence remains in reference coordinates. The central production surface, Program identity, connection/lifecycle state and core shell actions remain visible. Returning to a larger viewport restores the stored presentation values.
 
 ## Docking, focus and visual polish
 
