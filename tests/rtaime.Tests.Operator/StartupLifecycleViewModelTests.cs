@@ -1,5 +1,6 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
+using System.Reflection;
 using System.Text.Json;
 using rtaime.AppHost;
 using rtaime.Operator;
@@ -21,7 +22,7 @@ public sealed class StartupLifecycleViewModelTests : IDisposable
 	public void Required_degraded_stage_keeps_startup_visible_and_reports_degraded_state()
 	{
 		WriteEvidence(CreateStages(productionReadinessStatus: "DEGRADED"), ApplicationLifecycleStages.ProductionReadiness);
-		using var viewModel = new StartupLifecycleViewModel(EvidencePath, new SynchronizationContext());
+		using var viewModel = new StartupLifecycleViewModel(EvidencePath, new PassiveSynchronizationContext());
 
 		Assert.False(viewModel.HasCompletedInitialStartup);
 		Assert.True(viewModel.HasStartupDegradation);
@@ -31,39 +32,42 @@ public sealed class StartupLifecycleViewModelTests : IDisposable
 	}
 
 	[Fact]
-	public async Task Failure_remains_latched_until_failed_stage_explicitly_recovers()
+	public void Failure_remains_latched_until_failed_stage_explicitly_recovers()
 	{
 		WriteEvidence(
 			CreateStages(runtimeStatus: "FAILED", runtimeFailure: "Runtime qualification failed."),
 			ApplicationLifecycleStages.RuntimeHost);
-		using var viewModel = new StartupLifecycleViewModel(EvidencePath, new SynchronizationContext());
+		using var viewModel = new StartupLifecycleViewModel(EvidencePath, new PassiveSynchronizationContext());
 
 		Assert.True(viewModel.HasStartupFailure);
 		Assert.Equal("RuntimeHost", viewModel.ActiveStageName);
 		Assert.Contains("Runtime qualification failed.", viewModel.Summary, StringComparison.Ordinal);
 
 		WriteEvidence(CreateStages(runtimeStatus: "STARTING"), ApplicationLifecycleStages.RuntimeHost);
-		await WaitUntilAsync(() =>
-			viewModel.Stages.Single(stage => stage.Id == ApplicationLifecycleStages.RuntimeHost).Status == "STARTING");
+		Refresh(viewModel);
+		Assert.Equal(
+			"STARTING",
+			viewModel.Stages.Single(stage => stage.Id == ApplicationLifecycleStages.RuntimeHost).Status);
 
 		Assert.True(viewModel.HasStartupFailure);
 		Assert.False(viewModel.HasCompletedInitialStartup);
 		Assert.Contains("Original failure", viewModel.Summary, StringComparison.Ordinal);
 
 		WriteEvidence(CreateStages(), activeStageId: null);
-		await WaitUntilAsync(() => viewModel.HasCompletedInitialStartup);
+		Refresh(viewModel);
+		Assert.True(viewModel.HasCompletedInitialStartup);
 
 		Assert.False(viewModel.HasStartupFailure);
 		Assert.Equal("READY", viewModel.StartupVisualState);
 	}
 
 	[Fact]
-	public async Task First_startup_failure_stays_latched_when_another_stage_fails_during_recovery()
+	public void First_startup_failure_stays_latched_when_another_stage_fails_during_recovery()
 	{
 		WriteEvidence(
 			CreateStages(runtimeStatus: "FAILED", runtimeFailure: "Runtime qualification failed."),
 			ApplicationLifecycleStages.RuntimeHost);
-		using var viewModel = new StartupLifecycleViewModel(EvidencePath, new SynchronizationContext());
+		using var viewModel = new StartupLifecycleViewModel(EvidencePath, new PassiveSynchronizationContext());
 
 		WriteEvidence(
 			CreateStages(
@@ -71,8 +75,10 @@ public sealed class StartupLifecycleViewModelTests : IDisposable
 				productionReadinessStatus: "FAILED",
 				productionReadinessFailure: "Production readiness failed."),
 			ApplicationLifecycleStages.ProductionReadiness);
-		await WaitUntilAsync(() =>
-			viewModel.Stages.Single(stage => stage.Id == ApplicationLifecycleStages.ProductionReadiness).Status == "FAILED");
+		Refresh(viewModel);
+		Assert.Equal(
+			"FAILED",
+			viewModel.Stages.Single(stage => stage.Id == ApplicationLifecycleStages.ProductionReadiness).Status);
 
 		Assert.True(viewModel.HasStartupFailure);
 		Assert.Equal("RuntimeHost", viewModel.ActiveStageName);
@@ -84,7 +90,7 @@ public sealed class StartupLifecycleViewModelTests : IDisposable
 	public void Complete_initial_qualification_latches_startup_complete()
 	{
 		WriteEvidence(CreateStages(), activeStageId: null);
-		using var viewModel = new StartupLifecycleViewModel(EvidencePath, new SynchronizationContext());
+		using var viewModel = new StartupLifecycleViewModel(EvidencePath, new PassiveSynchronizationContext());
 
 		Assert.True(viewModel.HasCompletedInitialStartup);
 		Assert.False(viewModel.HasStartupFailure);
@@ -92,17 +98,19 @@ public sealed class StartupLifecycleViewModelTests : IDisposable
 	}
 
 	[Fact]
-	public async Task Later_runtime_failure_does_not_reopen_initial_startup_failure()
+	public void Later_runtime_failure_does_not_reopen_initial_startup_failure()
 	{
 		WriteEvidence(CreateStages(), activeStageId: null);
-		using var viewModel = new StartupLifecycleViewModel(EvidencePath, new SynchronizationContext());
+		using var viewModel = new StartupLifecycleViewModel(EvidencePath, new PassiveSynchronizationContext());
 		Assert.True(viewModel.HasCompletedInitialStartup);
 
 		WriteEvidence(
 			CreateStages(runtimeStatus: "FAILED", runtimeFailure: "Runtime lost after startup."),
 			ApplicationLifecycleStages.RuntimeHost);
-		await WaitUntilAsync(() =>
-			viewModel.Stages.Single(stage => stage.Id == ApplicationLifecycleStages.RuntimeHost).Status == "FAILED");
+		Refresh(viewModel);
+		Assert.Equal(
+			"FAILED",
+			viewModel.Stages.Single(stage => stage.Id == ApplicationLifecycleStages.RuntimeHost).Status);
 
 		Assert.True(viewModel.HasCompletedInitialStartup);
 		Assert.False(viewModel.HasStartupFailure);
@@ -115,7 +123,7 @@ public sealed class StartupLifecycleViewModelTests : IDisposable
 		WriteEvidence(
 			CreateStages(aiStatus: "FAILED", aiFailure: "Optional AI capability unavailable."),
 			ApplicationLifecycleStages.AIHost);
-		using var viewModel = new StartupLifecycleViewModel(EvidencePath, new SynchronizationContext());
+		using var viewModel = new StartupLifecycleViewModel(EvidencePath, new PassiveSynchronizationContext());
 
 		Assert.True(viewModel.HasCompletedInitialStartup);
 		Assert.False(viewModel.HasStartupFailure);
@@ -131,7 +139,7 @@ public sealed class StartupLifecycleViewModelTests : IDisposable
 		WriteEvidence(
 			CreateStages(runtimeStatus: "FAILED", runtimeFailure: "Runtime qualification failed."),
 			ApplicationLifecycleStages.RuntimeHost);
-		using var viewModel = new StartupLifecycleViewModel(EvidencePath, new SynchronizationContext());
+		using var viewModel = new StartupLifecycleViewModel(EvidencePath, new PassiveSynchronizationContext());
 
 		Assert.Equal(DiagnosticPath, viewModel.DiagnosticPath);
 		Assert.True(viewModel.HasDiagnosticPath);
@@ -222,13 +230,21 @@ public sealed class StartupLifecycleViewModelTests : IDisposable
 		];
 	}
 
-	private static async Task WaitUntilAsync(Func<bool> condition)
+	private static void Refresh(StartupLifecycleViewModel viewModel)
 	{
-		var deadline = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(3);
-		while (!condition() && DateTimeOffset.UtcNow < deadline)
-			await Task.Delay(20);
+		var method = typeof(StartupLifecycleViewModel).GetMethod(
+			"TryRefresh",
+			BindingFlags.Instance | BindingFlags.NonPublic);
+		Assert.NotNull(method);
+		method.Invoke(viewModel, null);
+	}
 
-		Assert.True(condition());
+	private sealed class PassiveSynchronizationContext : SynchronizationContext
+	{
+		public override void Post(SendOrPostCallback d, object? state)
+		{
+			// File watcher delivery is deliberately suppressed so tests control evidence refresh deterministically.
+		}
 	}
 
 	private sealed record TestStage(
