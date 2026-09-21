@@ -1,5 +1,6 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
+using System.Runtime.InteropServices;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -32,6 +33,32 @@ internal static class Program
 		{
 			var options = ApplicationHostOptions.Load(args);
 			var host = new UnifiedApplicationHost(options, new SystemApplicationHostPlatform());
+			var hideInteractiveConsole =
+				OperatingSystem.IsWindows() &&
+				options.Profile != ApplicationStartupProfile.HeadlessEngine &&
+				!args.Contains("--show-console", StringComparer.OrdinalIgnoreCase) &&
+				!Console.IsOutputRedirected &&
+				!Console.IsErrorRedirected;
+			var consoleHidden = 0;
+
+			if (hideInteractiveConsole)
+			{
+				host.Lifecycle.StateChanged += (_, eventArgs) =>
+				{
+					if (Interlocked.CompareExchange(ref consoleHidden, 1, 0) != 0)
+						return;
+					if (!eventArgs.Stages.Any(stage =>
+						string.Equals(stage.Id, ApplicationLifecycleStages.OperatorInterface, StringComparison.Ordinal) &&
+						stage.Status == LifecycleStageStatus.Ready))
+					{
+						Interlocked.Exchange(ref consoleHidden, 0);
+						return;
+					}
+
+					HideConsoleWindow();
+				};
+			}
+
 			host.StateChanged += state => Console.WriteLine($"app=rtaime state={state}");
 			var result = await host.RunAsync(shutdown.Token).ConfigureAwait(false);
 			return result.Success ? 0 : 1;
@@ -105,4 +132,22 @@ internal static class Program
 			}
 		}
 	}
+
+	private static void HideConsoleWindow()
+	{
+		if (!OperatingSystem.IsWindows())
+			return;
+
+		var consoleWindow = GetConsoleWindow();
+		if (consoleWindow != IntPtr.Zero)
+			ShowWindow(consoleWindow, 0);
+	}
+
+	[DllImport("kernel32.dll")]
+	private static extern IntPtr GetConsoleWindow();
+
+	[DllImport("user32.dll")]
+	[return: MarshalAs(UnmanagedType.Bool)]
+	private static extern bool ShowWindow(IntPtr windowHandle, int command);
+
 }

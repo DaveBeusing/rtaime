@@ -44,15 +44,15 @@ The multiview does not subscribe to another monitoring transport, decode media o
 
 ## EDIT
 
-EDIT is the reference Preview / Program production workspace. At 1920×1080 the center region is fixed to 1070×700 pixels:
+EDIT is the reference Preview / Program production workspace. At 1920×1080 the center region resolves to the 1070×700 reference composition. At smaller logical viewports its rendered height follows the shared viewport scale instead of forcing the reference pixels:
 
-- upper monitor row: 390 px with equal 532 px Preview and Program viewers separated by 6 px;
+- upper monitor row preserves the 390 reference weight with equal Preview and Program viewers separated by 6 px;
 - shared monitor chrome: 40 px header, aspect-safe image region and 42 px custom transport;
-- lower row: 320 px Scene Stack, 6 px gap, 462 px Output Routing, 6 px gap and 276 px System Status;
+- lower row preserves the 320:462:276 Scene Stack / Output Routing / System Status proportions with 6 px gaps;
 - Scene Stack reuses the existing source projection and explicit Set Preview / CUT / AUTO commands; it does not synthesize scene activation;
 - Output Routing reuses confirmed Program/Preview state and the existing Clean Feed presentation; Aux is explicitly unavailable when no governed role exists;
 - System Status reuses existing health evidence and displays unavailable Disk/Network/Temperature metrics without local probing;
-- persistent 320 px timeline region remains below the 700 px upper workspace.
+- the timeline retains a 320 px reference height and scales with the same view-container presentation model outside compact mode.
 
 Viewer maximize/restore and fullscreen remain presentation-only. All seeking, IN/OUT changes, cue operations and take commands continue through the existing Media Deck, Timeline and authoritative Control paths.
 
@@ -168,7 +168,7 @@ It is monitoring presentation, not output authority.
 
 ## Per-workspace layout persistence
 
-Operator layout storage uses schema version 5. Each canonical workspace persists only presentation fields:
+Operator layout storage uses schema version 6. Each canonical workspace persists only presentation fields:
 
 - left and right panel width;
 - timeline/lower region height;
@@ -176,7 +176,7 @@ Operator layout storage uses schema version 5. Each canonical workspace persists
 - center-maximized state;
 - viewer presentation mode.
 
-Fullscreen preference, selected workspace and normalized window placement remain top-level Operator UI preferences. Legacy workspace names migrate to the canonical presentation destinations without carrying production state. Pre-v4 persisted geometry is reset to the binding 400 / 340 / 320 reference shell dimensions while fullscreen preference, selected workspace and normalized window placement are retained. Version-4 layouts migrate in place and receive only the new HEALTH workspace defaults.
+Fullscreen preference, selected workspace and normalized window placement remain top-level Operator UI preferences. Legacy workspace names migrate to the canonical presentation destinations without carrying production state. Pre-v4 persisted geometry is reset to the binding 400 / 340 / 320 reference shell dimensions while fullscreen preference, selected workspace and normalized window placement are retained. Version-4 and version-5 layouts migrate in place; their stored reference widths, heights, viewer modes and window placement are retained while schema version 6 adds viewport-dependent presentation scaling only at render time.
 
 SAVE LAYOUT persists the active workspace presentation. LAYOUT RESET restores only that workspace's canonical defaults. Missing, corrupt, non-finite, out-of-range or incompatible persisted data recovers to safe canonical layouts.
 
@@ -195,7 +195,7 @@ Canonical workspace defaults use the same mockup macro geometry and differ only 
 | HEALTH | 400 | 340 | 320 | none | PROGRAM |
 | SETTINGS | 400 | 340 | 320 | none | PROGRAM |
 
-At constrained logical widths the shell enters a presentation-only compact viewport mode. It temporarily removes the left and right side regions plus any auxiliary workspace column from the grid allocation, reduces the lower region allocation and suppresses optional top-bar telemetry without modifying the persisted per-workspace dimensions. The central production surface, Program identity, connection/lifecycle state and core shell actions remain visible. Returning to a larger viewport restores the stored presentation values.
+At constrained logical width or height the shell enters a presentation-only compact viewport mode. It temporarily removes the left and right side regions plus any auxiliary workspace column from the grid allocation, reduces the lower region allocation and suppresses optional top-bar telemetry without modifying the persisted per-workspace dimensions. Between compact and reference size, panel and EDIT production-workspace geometry is derived from the current view container while persistence remains in reference coordinates. The central production surface, Program identity, connection/lifecycle state and core shell actions remain visible. Returning to a larger viewport restores the stored presentation values.
 
 ## Docking, focus and visual polish
 

@@ -5,7 +5,11 @@
 	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 	xmlns:controls="clr-namespace:rtaime.Operator.Controls"
 	xmlns:local="clr-namespace:rtaime.Operator"
-	MinHeight="320"
+	MinHeight="180"
+	HorizontalContentAlignment="Stretch"
+	VerticalContentAlignment="Stretch"
+	UseLayoutRounding="True"
+	SnapsToDevicePixels="True"
 	AutomationProperties.Name="Live production multiview">
 	<UserControl.Resources>
 		<Style x:Key="LiveMultiviewItem" TargetType="{x:Type controls:RtaimeListBoxItem}">

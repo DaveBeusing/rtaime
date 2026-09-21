@@ -9,6 +9,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using Microsoft.Win32;
@@ -111,10 +112,12 @@ public partial class MainWindow : Window
 		Notifications.NotifySessionRecovery(_sessionRecovery);
 		Shell.PropertyChanged += OnShellPropertyChanged;
 		InitializeComponent();
-		WorkspaceStates.PropertyChanged += OnWorkspaceStatesPropertyChanged;
+		Startup.PropertyChanged += OnStartupPropertyChanged;
 		StartStartupBrandAnimation();
 		ApplyWindowPlacement();
-		Shell.UpdateViewportWidth(ActualWidth > 0 ? ActualWidth : Width);
+		Shell.UpdateViewportSize(
+			ActualWidth > 0 ? ActualWidth : Width,
+			ActualHeight > 0 ? ActualHeight : Height);
 		SizeChanged += OnShellSizeChanged;
 		ApplyProductionFullscreen(Shell.IsFullscreen, updateShell: false);
 		DataContext = viewModel;
@@ -182,10 +185,12 @@ public partial class MainWindow : Window
 		Notifications.NotifySessionRecovery(_sessionRecovery);
 		Shell.PropertyChanged += OnShellPropertyChanged;
 		InitializeComponent();
-		WorkspaceStates.PropertyChanged += OnWorkspaceStatesPropertyChanged;
+		Startup.PropertyChanged += OnStartupPropertyChanged;
 		StartStartupBrandAnimation();
 		ApplyWindowPlacement();
-		Shell.UpdateViewportWidth(ActualWidth > 0 ? ActualWidth : Width);
+		Shell.UpdateViewportSize(
+			ActualWidth > 0 ? ActualWidth : Width,
+			ActualHeight > 0 ? ActualHeight : Height);
 		SizeChanged += OnShellSizeChanged;
 		ApplyProductionFullscreen(Shell.IsFullscreen, updateShell: false);
 		DataContext = viewModel;
@@ -255,30 +260,59 @@ public partial class MainWindow : Window
 
 	private void StartStartupBrandAnimation()
 	{
-		if (!SystemParameters.ClientAreaAnimation)
+		if (Startup.HasCompletedInitialStartup || !SystemParameters.ClientAreaAnimation)
 			return;
 
-		var animation = new DoubleAnimation
+		var orbitAnimation = new DoubleAnimation
 		{
-			From = 0.78,
-			To = 1.0,
-			Duration = TimeSpan.FromMilliseconds(900),
+			From = 0,
+			To = 360,
+			Duration = TimeSpan.FromMilliseconds(2200),
+			RepeatBehavior = RepeatBehavior.Forever
+		};
+		StartupOrbitRotation.BeginAnimation(RotateTransform.AngleProperty, orbitAnimation);
+
+		var scaleAnimation = new DoubleAnimation
+		{
+			From = 0.96,
+			To = 1.03,
+			Duration = TimeSpan.FromMilliseconds(1050),
 			AutoReverse = true,
 			RepeatBehavior = RepeatBehavior.Forever
 		};
-		StartupBrandPulse.BeginAnimation(UIElement.OpacityProperty, animation);
+		StartupBrandScale.BeginAnimation(ScaleTransform.ScaleXProperty, scaleAnimation);
+		StartupBrandScale.BeginAnimation(ScaleTransform.ScaleYProperty, scaleAnimation);
+
+		var opacityAnimation = new DoubleAnimation
+		{
+			From = 0.86,
+			To = 1.0,
+			Duration = TimeSpan.FromMilliseconds(1050),
+			AutoReverse = true,
+			RepeatBehavior = RepeatBehavior.Forever
+		};
+		StartupBrandPulse.BeginAnimation(UIElement.OpacityProperty, opacityAnimation);
 	}
 
-	private void OnWorkspaceStatesPropertyChanged(object? sender, PropertyChangedEventArgs e)
+	private void StopStartupBrandAnimation()
 	{
-		if (e.PropertyName != nameof(OperatorWorkspaceStateViewModel.IsShellAvailable) ||
-			sender is not OperatorWorkspaceStateViewModel { IsShellAvailable: true })
-		{
-			return;
-		}
-
+		StartupOrbitRotation.BeginAnimation(RotateTransform.AngleProperty, null);
+		StartupOrbitRotation.Angle = 0;
+		StartupBrandScale.BeginAnimation(ScaleTransform.ScaleXProperty, null);
+		StartupBrandScale.BeginAnimation(ScaleTransform.ScaleYProperty, null);
+		StartupBrandScale.ScaleX = 1;
+		StartupBrandScale.ScaleY = 1;
 		StartupBrandPulse.BeginAnimation(UIElement.OpacityProperty, null);
 		StartupBrandPulse.Opacity = 1.0;
+	}
+
+	private void OnStartupPropertyChanged(object? sender, PropertyChangedEventArgs e)
+	{
+		if (e.PropertyName == nameof(StartupLifecycleViewModel.HasCompletedInitialStartup) &&
+			Startup.HasCompletedInitialStartup)
+		{
+			StopStartupBrandAnimation();
+		}
 	}
 
 	private void OnShellPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -367,10 +401,10 @@ public partial class MainWindow : Window
 		try
 		{
 			Shell.PropertyChanged -= OnShellPropertyChanged;
-			WorkspaceStates.PropertyChanged -= OnWorkspaceStatesPropertyChanged;
+			Startup.PropertyChanged -= OnStartupPropertyChanged;
 			WorkspaceStates.Dispose();
+			StopStartupBrandAnimation();
 			Startup.Dispose();
-			StartupBrandPulse.BeginAnimation(UIElement.OpacityProperty, null);
 			HealthCenter.Dispose();
 			HealthProvider.Dispose();
 			RuntimePerformanceStatus.Dispose();
@@ -721,7 +755,7 @@ public partial class MainWindow : Window
 	}
 
 	private void OnShellSizeChanged(object sender, SizeChangedEventArgs e) =>
-		Shell.UpdateViewportWidth(e.NewSize.Width);
+		Shell.UpdateViewportSize(e.NewSize.Width, e.NewSize.Height);
 
 	private void ApplyProductionFullscreen(bool fullscreen, bool updateShell)
 	{
