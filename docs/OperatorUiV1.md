@@ -710,7 +710,7 @@ See docs/OperatorWorkspaces.md for the complete workspace, Quick Controls, short
 
 ## Preview / Program production monitors
 
-Preview and Program share the reusable `MonitorView` presentation base while retaining separate semantic surfaces and authority. Both monitors consume the existing independent monitoring bitmap projection; neither creates a decoder, playback session or frame transport.
+Preview and Program retain separate `PreviewViewer` and `ProgramViewer` role controls over the reusable `MonitorView` state contract. Their structural presentation is centralized in `RtaimeMonitorPresentation`: header geometry, monitoring frame surface, format/zoom chrome, Safe Area/Center Mark/Grid overlays, timecode, unavailable-frame presentation and shared overlay toggles are defined once. Role-specific header/status/footer content is supplied through explicit presentation slots, so common visual changes do not require parallel Preview/Program XAML edits. Both monitors consume the existing independent monitoring bitmap projection; neither creates a decoder, playback session or frame transport.
 
 Each monitor presents the confirmed source identity, the authoritative Runtime video format, monitoring-surface status and the current presentation zoom. The Runtime health contract currently exposes resolution, frame rate and pixel format but no verified color-space value, so the monitor header shows color space explicitly as `N/A` rather than synthesizing metadata.
 
