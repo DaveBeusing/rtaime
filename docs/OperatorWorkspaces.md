@@ -52,7 +52,7 @@ EDIT is the reference Preview / Program production workspace. At 1920×1080 the 
 - Scene Stack reuses the existing source projection and explicit Set Preview / CUT / AUTO commands; it does not synthesize scene activation;
 - Output Routing reuses confirmed Program/Preview state and the existing Clean Feed presentation; Aux is explicitly unavailable when no governed role exists;
 - System Status reuses existing health evidence and displays unavailable Disk/Network/Temperature metrics without local probing;
-- persistent 320 px timeline region remains below the 700 px upper workspace.
+- the timeline retains a 320 px reference height and scales with the same view-container presentation model outside compact mode.
 
 Viewer maximize/restore and fullscreen remain presentation-only. All seeking, IN/OUT changes, cue operations and take commands continue through the existing Media Deck, Timeline and authoritative Control paths.
 
