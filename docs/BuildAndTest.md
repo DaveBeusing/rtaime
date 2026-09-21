@@ -109,6 +109,10 @@ Release example:
 
 Build the complete `rtaime.slnx` before using this direct development startup path.
 
+On Windows, the canonical AppHost is a `WinExe`/WINDOWS_GUI executable. Normal Interactive and Showcase startup therefore opens no AppHost console window; the branded Operator startup experience is the first visible product surface. Use `--show-console` when an explicit diagnostic console is wanted. `HeadlessEngine` also requests console semantics unless both stdout and stderr are already redirected. Windows-service startup remains non-interactive.
+
+For automation that needs deterministic terminal output, redirect stdout/stderr or invoke the process with `--show-console` and an explicit wait primitive. Bootstrap failures are also persisted to `apphost-startup.log` below the selected AppHost work root, so an early GUI-start failure does not depend on terminal visibility.
+
 ## Single-file Windows publish
 
 ### Architecture boundary
@@ -129,6 +133,14 @@ dotnet publish src/Hosts/rtaime.AppHost/rtaime.AppHost.csproj `
 ```
 
 The AppHost resolves the installed product payload, starts or adopts ControlHost, waits for qualified readiness, and starts Operator only for profiles that require it.
+
+Required Gates qualify the generated Windows bootstrap with:
+
+```powershell
+./build/operations/Test-WindowsApplicationBootstrap.ps1 -Configuration Release -QualifySingleFile
+```
+
+The qualification inspects the built and self-contained single-file `rtaime.exe` PE subsystem, verifies redirected startup diagnostics, exercises an explicit `--show-console` failure path, and verifies a HeadlessEngine failure path without changing lifecycle authority.
 
 ### Operator-only single-file EXE
 
