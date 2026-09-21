@@ -1555,196 +1555,254 @@
 		<Border x:Name="StartupOverlay"
 			Grid.RowSpan="3"
 			Panel.ZIndex="100"
-			Background="{DynamicResource OperatorSurfaceBrush}"
-			BorderBrush="{DynamicResource OperatorBorderBrush}"
-			BorderThickness="1">
+			BorderThickness="0">
+			<Border.Background>
+				<LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+					<GradientStop Color="#05070B" Offset="0" />
+					<GradientStop Color="#071017" Offset="0.55" />
+					<GradientStop Color="#0B1722" Offset="1" />
+				</LinearGradientBrush>
+			</Border.Background>
 			<Border.Style>
 				<Style TargetType="Border">
-					<Setter Property="Visibility" Value="Visible" />
+					<Setter Property="Visibility" Value="Collapsed" />
 					<Style.Triggers>
-						<DataTrigger Binding="{Binding WorkspaceStates.IsShellAvailable, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="True">
-							<Setter Property="Visibility" Value="Collapsed" />
+						<DataTrigger Binding="{Binding Startup.HasCompletedInitialStartup, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="False">
+							<Setter Property="Visibility" Value="Visible" />
 						</DataTrigger>
 					</Style.Triggers>
 				</Style>
 			</Border.Style>
-			<Grid MaxWidth="820"
-				HorizontalAlignment="Center"
+
+			<Border
+				Style="{StaticResource OperatorStartupPanel}"
+				MaxWidth="980"
+				HorizontalAlignment="Stretch"
 				VerticalAlignment="Center"
 				Margin="36">
-				<Grid.RowDefinitions>
-					<RowDefinition Height="Auto" />
-					<RowDefinition Height="Auto" />
-					<RowDefinition Height="Auto" />
-					<RowDefinition Height="Auto" />
-				</Grid.RowDefinitions>
+				<Grid>
+					<Grid.RowDefinitions>
+						<RowDefinition Height="Auto" />
+						<RowDefinition Height="Auto" />
+						<RowDefinition Height="Auto" />
+						<RowDefinition Height="Auto" />
+						<RowDefinition Height="Auto" />
+					</Grid.RowDefinitions>
 
-				<StackPanel>
-					<Border x:Name="StartupBrandPulse"
+					<StackPanel Grid.Row="0" HorizontalAlignment="Center">
+						<Grid Width="156" Height="156" HorizontalAlignment="Center">
+							<Ellipse
+								Width="146"
+								Height="146"
+								Stroke="{DynamicResource OperatorBorderBrush}"
+								StrokeThickness="1"
+								Opacity="0.65" />
+							<Ellipse x:Name="StartupOrbitRing"
+								Width="146"
+								Height="146"
+								Stroke="{DynamicResource OperatorAccentBrush}"
+								StrokeThickness="2"
+								StrokeDashArray="1.5,7"
+								StrokeDashCap="Round"
+								RenderTransformOrigin="0.5,0.5">
+								<Ellipse.RenderTransform>
+									<RotateTransform x:Name="StartupOrbitRotation" />
+								</Ellipse.RenderTransform>
+							</Ellipse>
+							<Border x:Name="StartupBrandPulse"
+								Width="112"
+								Height="112"
+								CornerRadius="56"
+								Background="{DynamicResource OperatorBackgroundBrush}"
+								BorderBrush="{DynamicResource OperatorBorderStrongBrush}"
+								BorderThickness="1"
+								HorizontalAlignment="Center"
+								VerticalAlignment="Center"
+								RenderTransformOrigin="0.5,0.5">
+								<Border.RenderTransform>
+									<ScaleTransform x:Name="StartupBrandScale" ScaleX="1" ScaleY="1" />
+								</Border.RenderTransform>
+								<Image
+									Source="{StaticResource RtaimeBrandEmblemImage}"
+									Width="78"
+									Height="78"
+									Stretch="Uniform"
+									HorizontalAlignment="Center"
+									VerticalAlignment="Center" />
+							</Border>
+						</Grid>
+
+						<TextBlock
+							Text="rtaime"
+							FontSize="40"
+							FontWeight="SemiBold"
+							Foreground="{DynamicResource OperatorTextBrush}"
+							HorizontalAlignment="Center"
+							Margin="0,4,0,0" />
+						<TextBlock
+							Text="REAL TIME AI MEDIA ENGINE"
+							FontSize="9"
+							FontWeight="SemiBold"
+							Foreground="{DynamicResource OperatorMutedTextBrush}"
+							HorizontalAlignment="Center"
+							Margin="0,2,0,0" />
+						<TextBlock
+							Text="{Binding Startup.StartupPhaseLabel, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							Foreground="{DynamicResource OperatorAccentBrush}"
+							FontSize="11"
+							FontWeight="Bold"
+							HorizontalAlignment="Center"
+							Margin="0,18,0,0" />
+						<TextBlock
+							Text="{Binding Startup.ActiveStageName, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							FontSize="22"
+							FontWeight="SemiBold"
+							TextAlignment="Center"
+							HorizontalAlignment="Center"
+							Margin="0,7,0,0" />
+						<TextBlock
+							Text="{Binding Startup.Summary, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							Style="{StaticResource OperatorLabel}"
+							TextAlignment="Center"
+							TextWrapping="Wrap"
+							MaxWidth="720"
+							HorizontalAlignment="Center"
+							Margin="0,5,0,20" />
+					</StackPanel>
+
+					<controls:RtaimeListBox
+						Grid.Row="1"
+						ItemsSource="{Binding Startup.Stages, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 						Background="Transparent"
-						HorizontalAlignment="Center">
-						<ContentControl ContentTemplate="{StaticResource RtaimeBrandHeroLockupTemplate}" />
-					</Border>
+						BorderThickness="0"
+						IsHitTestVisible="False"
+						Focusable="False"
+						HorizontalContentAlignment="Stretch"
+						ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+						ScrollViewer.VerticalScrollBarVisibility="Disabled"
+						AutomationProperties.Name="Application startup lifecycle">
+						<controls:RtaimeListBox.ItemsPanel>
+							<ItemsPanelTemplate>
+								<UniformGrid Rows="1" Columns="7" />
+							</ItemsPanelTemplate>
+						</controls:RtaimeListBox.ItemsPanel>
+						<controls:RtaimeListBox.ItemTemplate>
+							<DataTemplate>
+								<Border
+									Style="{StaticResource OperatorStartupStageTile}"
+									Tag="{Binding Status}">
+									<StackPanel HorizontalAlignment="Center">
+										<Ellipse
+											Style="{StaticResource OperatorStartupStageIndicator}"
+											Tag="{Binding Status}"
+											HorizontalAlignment="Center"
+											Margin="0,0,0,7" />
+										<TextBlock
+											Text="{Binding DisplayName}"
+											Foreground="{DynamicResource OperatorTextBrush}"
+											FontSize="10"
+											FontWeight="SemiBold"
+											TextAlignment="Center"
+											TextWrapping="Wrap"
+											MinHeight="28" />
+										<TextBlock
+											Text="{Binding Status}"
+											Style="{StaticResource OperatorLabel}"
+											FontSize="8"
+											HorizontalAlignment="Center"
+											Margin="0,4,0,0" />
+									</StackPanel>
+								</Border>
+							</DataTemplate>
+						</controls:RtaimeListBox.ItemTemplate>
+					</controls:RtaimeListBox>
+
 					<TextBlock
-						Text="Production-grade real-time AI media platform."
+						Grid.Row="2"
+						Text="{Binding Startup.ReadinessSummary, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 						Style="{StaticResource OperatorLabel}"
 						HorizontalAlignment="Center"
-						Margin="0,10,0,20" />
-					<TextBlock
-						Text="{Binding Startup.ActiveStageName, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-						FontSize="18"
-						FontWeight="SemiBold"
-						TextAlignment="Center"
-						HorizontalAlignment="Center" />
-					<TextBlock
-						Text="{Binding Startup.Summary, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-						Style="{StaticResource OperatorLabel}"
-						TextAlignment="Center"
-						TextWrapping="Wrap"
-						MaxWidth="690"
-						Margin="0,5,0,18" />
-				</StackPanel>
+						Margin="0,12,0,0" />
 
-				<controls:RtaimeListBox
-					Grid.Row="1"
-					ItemsSource="{Binding Startup.Stages, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-					Background="Transparent"
-					BorderThickness="0"
-					IsHitTestVisible="False"
-					Focusable="False"
-					ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-					ScrollViewer.VerticalScrollBarVisibility="Auto"
-					MaxHeight="390"
-					AutomationProperties.Name="Application startup lifecycle">
-					<controls:RtaimeListBox.ItemTemplate>
-						<DataTemplate>
-							<Border Padding="10,8"
-								Margin="0,0,0,5"
-								BorderThickness="1">
-								<Border.Style>
-									<Style TargetType="Border">
-										<Setter Property="BorderBrush" Value="{DynamicResource OperatorBorderBrush}" />
-										<Setter Property="Background" Value="{DynamicResource OperatorBackgroundBrush}" />
-										<Style.Triggers>
-											<DataTrigger Binding="{Binding IsActive}" Value="True">
-												<Setter Property="BorderBrush" Value="{DynamicResource OperatorAccentBrush}" />
-												<Setter Property="Background" Value="{DynamicResource OperatorAccentSurfaceBrush}" />
-											</DataTrigger>
-										</Style.Triggers>
-									</Style>
-								</Border.Style>
-								<Grid>
-									<Grid.ColumnDefinitions>
-										<ColumnDefinition Width="112" />
-										<ColumnDefinition Width="*" />
-										<ColumnDefinition Width="150" />
-									</Grid.ColumnDefinitions>
-									<Grid.RowDefinitions>
-										<RowDefinition Height="Auto" />
-										<RowDefinition Height="Auto" />
-										<RowDefinition Height="Auto" />
-									</Grid.RowDefinitions>
-									<Border
-										Grid.RowSpan="2"
-										Style="{StaticResource OperatorLifecycleBadge}"
-										Tag="{Binding Status}"
-										HorizontalAlignment="Left"
-										VerticalAlignment="Center"
-										MinWidth="92">
-										<TextBlock Text="{Binding Status}" FontSize="10" FontWeight="Bold" TextAlignment="Center" />
-									</Border>
-									<TextBlock
-										Grid.Column="1"
-										Text="{Binding DisplayName}"
-										FontWeight="SemiBold"
-										FontSize="13" />
-									<TextBlock
-										Grid.Column="2"
-										Text="{Binding StatusSummary}"
-										Style="{StaticResource OperatorLabel}"
-										HorizontalAlignment="Right" />
-									<TextBlock
-										Grid.Row="1"
-										Grid.Column="1"
-										Grid.ColumnSpan="2"
-										Text="{Binding StatusText}"
-										Style="{StaticResource OperatorLabel}"
-										TextWrapping="Wrap"
-										Margin="0,2,0,0" />
-									<StackPanel
-										Grid.Row="2"
-										Grid.Column="1"
-										Grid.ColumnSpan="2"
-										Margin="0,5,0,0">
-										<StackPanel.Style>
-											<Style TargetType="StackPanel">
-												<Setter Property="Visibility" Value="Collapsed" />
-												<Style.Triggers>
-													<DataTrigger
-														Binding="{Binding Startup.DetailsVisible, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-														Value="True">
-														<Setter Property="Visibility" Value="Visible" />
-													</DataTrigger>
-												</Style.Triggers>
-											</Style>
-										</StackPanel.Style>
-										<TextBlock Text="{Binding TechnicalDetail}" Style="{StaticResource OperatorLabel}" FontSize="9" TextWrapping="Wrap" />
-										<TextBlock Text="{Binding FailureReason}" Foreground="{DynamicResource OperatorErrorBrush}" FontSize="10" TextWrapping="Wrap" />
-									</StackPanel>
-								</Grid>
-							</Border>
-						</DataTemplate>
-					</controls:RtaimeListBox.ItemTemplate>
-				</controls:RtaimeListBox>
+					<Grid Grid.Row="3" Margin="0,14,0,0">
+						<Grid.ColumnDefinitions>
+							<ColumnDefinition Width="*" />
+							<ColumnDefinition Width="Auto" />
+							<ColumnDefinition Width="*" />
+						</Grid.ColumnDefinitions>
+						<controls:RtaimeButton
+							Grid.Column="1"
+							Content="{Binding Startup.DetailsAction, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							Command="{Binding Startup.ToggleDetailsCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							MinHeight="28"
+							Padding="12,3"
+							AutomationProperties.Name="Toggle startup technical details" />
+					</Grid>
 
-				<Grid Grid.Row="2" Margin="0,12,0,0">
-					<Grid.ColumnDefinitions>
-						<ColumnDefinition Width="Auto" />
-						<ColumnDefinition Width="*" />
-						<ColumnDefinition Width="Auto" />
-					</Grid.ColumnDefinitions>
-					<controls:RtaimeButton
-						Grid.Column="0"
-						Content="{Binding Startup.DetailsAction, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-						Command="{Binding Startup.ToggleDetailsCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-						MinHeight="28"
-						Padding="10,3"
-						AutomationProperties.Name="Toggle startup technical details" />
-					<StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-						<TextBlock Text="Observed " Style="{StaticResource OperatorLabel}" />
-						<TextBlock
-							Text="{Binding Startup.ObservedAt, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-							Style="{StaticResource OperatorLabel}" />
-					</StackPanel>
+					<Border Grid.Row="4" Margin="0,12,0,0">
+						<Border.Style>
+							<Style TargetType="Border" BasedOn="{StaticResource OperatorPanel}">
+								<Setter Property="Visibility" Value="Collapsed" />
+								<Setter Property="Padding" Value="12" />
+								<Setter Property="Background" Value="{DynamicResource OperatorBackgroundBrush}" />
+								<Style.Triggers>
+									<DataTrigger
+										Binding="{Binding Startup.DetailsVisible, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+										Value="True">
+										<Setter Property="Visibility" Value="Visible" />
+									</DataTrigger>
+								</Style.Triggers>
+							</Style>
+						</Border.Style>
+						<Grid>
+							<Grid.RowDefinitions>
+								<RowDefinition Height="Auto" />
+								<RowDefinition Height="Auto" />
+								<RowDefinition Height="Auto" />
+							</Grid.RowDefinitions>
+							<DockPanel Grid.Row="0" Margin="0,0,0,8">
+								<TextBlock Text="APPHOST LIFECYCLE EVIDENCE" Style="{StaticResource OperatorSectionTitle}" DockPanel.Dock="Left" />
+								<StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+									<TextBlock Text="Observed " Style="{StaticResource OperatorLabel}" />
+									<TextBlock Text="{Binding Startup.ObservedAt, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorLabel}" />
+								</StackPanel>
+							</DockPanel>
+							<TextBlock
+								Grid.Row="1"
+								Text="{Binding Startup.EvidencePath, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+								Style="{StaticResource OperatorLabel}"
+								TextWrapping="Wrap"
+								Margin="0,0,0,8" />
+							<controls:RtaimeListBox
+								Grid.Row="2"
+								ItemsSource="{Binding Startup.Stages, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+								MaxHeight="220"
+								Background="Transparent"
+								BorderThickness="0"
+								ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+								ScrollViewer.VerticalScrollBarVisibility="Auto">
+								<controls:RtaimeListBox.ItemTemplate>
+									<DataTemplate>
+										<Grid Margin="0,3">
+											<Grid.ColumnDefinitions>
+												<ColumnDefinition Width="145" />
+												<ColumnDefinition Width="90" />
+												<ColumnDefinition Width="*" />
+											</Grid.ColumnDefinitions>
+											<TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" FontSize="10" />
+											<TextBlock Grid.Column="1" Text="{Binding Status}" Style="{StaticResource OperatorLabel}" FontSize="9" />
+											<StackPanel Grid.Column="2">
+												<TextBlock Text="{Binding StatusText}" Style="{StaticResource OperatorLabel}" FontSize="9" TextWrapping="Wrap" />
+												<TextBlock Text="{Binding FailureReason}" Foreground="{DynamicResource OperatorErrorBrush}" FontSize="9" TextWrapping="Wrap" />
+											</StackPanel>
+										</Grid>
+									</DataTemplate>
+								</controls:RtaimeListBox.ItemTemplate>
+							</controls:RtaimeListBox>
+						</Grid>
+					</Border>
 				</Grid>
-
-				<Border Grid.Row="3" Margin="0,8,0,0" Padding="10,8" BorderThickness="1" BorderBrush="{DynamicResource OperatorBorderBrush}">
-					<Border.Style>
-						<Style TargetType="Border">
-							<Setter Property="Visibility" Value="Collapsed" />
-							<Style.Triggers>
-								<DataTrigger
-									Binding="{Binding Startup.DetailsVisible, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-									Value="True">
-									<Setter Property="Visibility" Value="Visible" />
-								</DataTrigger>
-							</Style.Triggers>
-						</Style>
-					</Border.Style>
-					<StackPanel>
-						<TextBlock Text="APPHOST LIFECYCLE EVIDENCE" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,4" />
-						<TextBlock
-							Text="{Binding Startup.EvidencePath, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-							Style="{StaticResource OperatorLabel}"
-							TextWrapping="Wrap" />
-						<TextBlock
-							Text="Visible startup states are projections of AppHost and qualified host readiness. No synthetic percentage progress is generated."
-							Style="{StaticResource OperatorLabel}"
-							TextWrapping="Wrap"
-							Margin="0,5,0,0" />
-					</StackPanel>
-				</Border>
-			</Grid>
+			</Border>
 		</Border>
 		<ItemsControl
 			Grid.RowSpan="3"

@@ -142,6 +142,40 @@
 		</Style.Triggers>
 	</Style>
 
+	<Style x:Key="OperatorStartupPanel" TargetType="Border" BasedOn="{StaticResource OperatorPanel}">
+		<Setter Property="Background" Value="{DynamicResource OperatorSurfaceBrush}" />
+		<Setter Property="BorderBrush" Value="{DynamicResource OperatorBorderStrongBrush}" />
+		<Setter Property="BorderThickness" Value="1" />
+		<Setter Property="CornerRadius" Value="8" />
+		<Setter Property="Padding" Value="28" />
+	</Style>
+
+	<Style x:Key="OperatorStartupStageTile" TargetType="Border" BasedOn="{StaticResource OperatorStatusBadge}">
+		<Setter Property="Background" Value="{DynamicResource OperatorBackgroundBrush}" />
+		<Setter Property="Padding" Value="8,9" />
+		<Setter Property="Margin" Value="3" />
+		<Setter Property="MinHeight" Value="82" />
+		<Style.Triggers>
+			<Trigger Property="Tag" Value="READY"><Setter Property="BorderBrush" Value="{DynamicResource OperatorHealthyBrush}" /></Trigger>
+			<Trigger Property="Tag" Value="STARTING"><Setter Property="BorderBrush" Value="{DynamicResource OperatorAccentBrush}" /><Setter Property="Background" Value="{DynamicResource OperatorAccentSurfaceBrush}" /></Trigger>
+			<Trigger Property="Tag" Value="DEGRADED"><Setter Property="BorderBrush" Value="{DynamicResource OperatorWarningBrush}" /></Trigger>
+			<Trigger Property="Tag" Value="FAILED"><Setter Property="BorderBrush" Value="{DynamicResource OperatorErrorBrush}" /></Trigger>
+		</Style.Triggers>
+	</Style>
+
+	<Style x:Key="OperatorStartupStageIndicator" TargetType="Ellipse">
+		<Setter Property="Width" Value="10" />
+		<Setter Property="Height" Value="10" />
+		<Setter Property="Fill" Value="{DynamicResource OperatorBorderStrongBrush}" />
+		<Setter Property="StrokeThickness" Value="0" />
+		<Style.Triggers>
+			<Trigger Property="Tag" Value="READY"><Setter Property="Fill" Value="{DynamicResource OperatorHealthyBrush}" /></Trigger>
+			<Trigger Property="Tag" Value="STARTING"><Setter Property="Fill" Value="{DynamicResource OperatorAccentBrush}" /></Trigger>
+			<Trigger Property="Tag" Value="DEGRADED"><Setter Property="Fill" Value="{DynamicResource OperatorWarningBrush}" /></Trigger>
+			<Trigger Property="Tag" Value="FAILED"><Setter Property="Fill" Value="{DynamicResource OperatorErrorBrush}" /></Trigger>
+		</Style.Triggers>
+	</Style>
+
 	<Style x:Key="OperatorWarningBadge" TargetType="Border" BasedOn="{StaticResource OperatorStatusBadge}">
 		<Setter Property="BorderBrush" Value="{DynamicResource OperatorWarningBrush}" />
 	</Style>

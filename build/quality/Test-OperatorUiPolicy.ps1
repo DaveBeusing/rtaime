@@ -725,11 +725,11 @@ Assert-Condition ($demoDocumentation -match 'pre-rendered' -and $demoDocumentati
 Assert-Condition ($documentation -match 'Demo Production Package') "Operator UI documentation must record the Demo Production Package."
 
 
-Assert-Condition ($window -match 'WorkspaceStates\.IsShellAvailable') "Startup presentation must yield to the Operator shell as soon as critical shell startup is available."
+Assert-Condition ($window -match 'Startup\\.HasCompletedInitialStartup') "Startup presentation must remain visible through initial production qualification and must not reappear after the first complete startup."
 Assert-Condition ($window -match 'Binding Startup\.Stages' -and $window -match 'Startup\.ActiveStageName' -and $window -match 'Startup\.Summary') "Startup presentation must expose the AppHost lifecycle stage projection and active-stage detail."
-Assert-Condition ($window -match 'RtaimeBrandHeroLockupTemplate' -and $window -match 'StartupBrandPulse') "Startup presentation must retain the shared rtaime brand lockup and lightweight animation target."
+Assert-Condition ($window -match 'RtaimeBrandEmblemImage' -and $window -match 'StartupOrbitRing' -and $window -match 'StartupBrandPulse') "Startup presentation must use the shared rtaime emblem with lightweight motion targets."
 Assert-Condition ($window -match 'Startup\.ToggleDetailsCommand' -and $window -match 'Startup\.EvidencePath') "Startup presentation must provide collapsible technical lifecycle evidence."
-Assert-Condition ($windowCode -match 'RTAIME_APPHOST_LIFECYCLE_FILE' -and $startupViewModel -match 'FileSystemWatcher') "Operator startup must observe AppHost lifecycle evidence instead of creating an independent polling lifecycle."
+Assert-Condition ($windowCode -match 'RTAIME_APPHOST_LIFECYCLE_FILE' -and $startupViewModel -match 'FileSystemWatcher' -and $startupViewModel -match 'HasCompletedInitialStartup') "Operator startup must observe AppHost lifecycle evidence, latch initial completion, and avoid an independent polling lifecycle."
 Assert-Condition ($startupViewModel -notmatch 'PeriodicTimer|Task\.Delay|ProgressBar|percent|Percentage') "Startup lifecycle projection must not synthesize timer-driven or percentage progress."
 Assert-Condition ($startupViewModel -match 'IsShellAvailable' -and $startupViewModel -match 'HasCriticalFailure' -and $startupViewModel -match 'HasDeferredInitialization') "Startup lifecycle projection must expose progressive shell activation independently from production readiness."
 Assert-Condition ($windowCode -match 'OperatorWorkspaceStateViewModel' -and $windowCode -match 'WorkspaceStates = new') "Operator shell must own one consolidated workspace-state coordinator."

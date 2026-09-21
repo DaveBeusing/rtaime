@@ -22,6 +22,7 @@ public sealed class StartupLifecycleViewModel : INotifyPropertyChanged, IDisposa
 	private readonly string? _evidencePath;
 	private FileSystemWatcher? _watcher;
 	private bool _detailsVisible;
+	private bool _initialStartupCompleted;
 	private string _activeStageName = "Application Bootstrap";
 	private string _summary = "Waiting for application lifecycle evidence.";
 	private string _observedAt = "—";
@@ -77,6 +78,32 @@ public sealed class StartupLifecycleViewModel : INotifyPropertyChanged, IDisposa
 		Stages.Any(stage =>
 			stage.Requirement == StartupLifecycleRequirement.Critical &&
 			string.Equals(stage.Status, "FAILED", StringComparison.Ordinal));
+	public bool HasStartupFailure =>
+		HasEvidence &&
+		Stages.Any(stage =>
+			stage.Requirement != StartupLifecycleRequirement.Optional &&
+			string.Equals(stage.Status, "FAILED", StringComparison.Ordinal));
+	public bool HasCompletedInitialStartup => !HasEvidence || _initialStartupCompleted;
+	public string StartupPhaseLabel => HasStartupFailure
+		? "STARTUP ATTENTION REQUIRED"
+		: HasCompletedInitialStartup
+			? "PRODUCTION RUNTIME READY"
+			: "STARTING PRODUCTION RUNTIME";
+	public string ReadinessSummary
+	{
+		get
+		{
+			if (!HasEvidence)
+				return "DIRECT OPERATOR SESSION";
+
+			var requiredStages = Stages
+				.Where(stage => stage.Requirement != StartupLifecycleRequirement.Optional)
+				.ToArray();
+			var readyStages = requiredStages.Count(stage =>
+				string.Equals(stage.Status, "READY", StringComparison.Ordinal));
+			return $"{readyStages} / {requiredStages.Length} REQUIRED STAGES READY";
+		}
+	}
 	public bool HasDeferredInitialization =>
 		HasEvidence &&
 		IsShellAvailable &&
@@ -252,6 +279,17 @@ public sealed class StartupLifecycleViewModel : INotifyPropertyChanged, IDisposa
 					? activeStage.StatusText ?? $"{activeStage.DisplayName} is starting."
 					: "All published startup stages are complete.";
 		ObservedAt = observedAt?.ToLocalTime().ToString("HH:mm:ss.fff") ?? "—";
+
+		if (!_initialStartupCompleted)
+		{
+			var requiredStages = parsed
+				.Where(stage => stage.Requirement != StartupLifecycleRequirement.Optional)
+				.ToArray();
+			_initialStartupCompleted =
+				requiredStages.Length > 0 &&
+				requiredStages.All(stage => string.Equals(stage.Status, "READY", StringComparison.Ordinal));
+		}
+
 		RaiseProgressiveStateProperties();
 	}
 
@@ -278,6 +316,10 @@ public sealed class StartupLifecycleViewModel : INotifyPropertyChanged, IDisposa
 	{
 		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsShellAvailable)));
 		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasCriticalFailure)));
+		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasStartupFailure)));
+		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasCompletedInitialStartup)));
+		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(StartupPhaseLabel)));
+		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ReadinessSummary)));
 		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasDeferredInitialization)));
 	}
 
