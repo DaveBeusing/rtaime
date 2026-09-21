@@ -9,7 +9,7 @@ public sealed class RepositoryArchitectureTests
     {
         var repo = RepositorySnapshot.Load();
 
-        Assert.Equal(29, repo.Projects.Count);
+        Assert.Equal(30, repo.Projects.Count);
         Assert.Equal(
             ArchitectureSpec.AllProjects.OrderBy(x => x, StringComparer.Ordinal),
             repo.Projects.Keys.OrderBy(x => x, StringComparer.Ordinal));
@@ -25,7 +25,7 @@ public sealed class RepositoryArchitectureTests
             .OrderBy(x => x, StringComparer.Ordinal)
             .ToArray();
 
-        Assert.Equal(29, entries.Length);
+        Assert.Equal(30, entries.Length);
         Assert.Equal(
             ArchitectureSpec.AllProjects.OrderBy(x => x, StringComparer.Ordinal),
             entries);
@@ -400,6 +400,7 @@ internal static class ArchitectureSpec
         "src/Hosts/rtaime.Operator/rtaime.Operator.csproj",
         "tests/rtaime.TestInfrastructure/rtaime.TestInfrastructure.csproj",
         "tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj",
+        "tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj",
         "tests/rtaime.Tests.Contracts/rtaime.Tests.Contracts.csproj",
         "tests/rtaime.Tests.Architecture/rtaime.Tests.Architecture.csproj",
         "tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj",

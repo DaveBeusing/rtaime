@@ -46,6 +46,10 @@ jobs:
       - name: Build
         run: dotnet build rtaime.slnx --configuration Release --no-restore
 
+      - name: Qualify Windows application bootstrap
+        shell: pwsh
+        run: ./build/operations/Test-WindowsApplicationBootstrap.ps1 -Configuration Release -QualifySingleFile
+
       - name: Test
         run: dotnet test rtaime.slnx --configuration Release --no-build -m:1
 

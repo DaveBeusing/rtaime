@@ -138,7 +138,11 @@ Each stage is `Pending`, `Starting`, `Ready`, `Degraded` or `Failed` and carries
 
 The startup overlay remains visible through the first complete production qualification, then yields permanently to the Operator shell for that session. It presents the real AppHost lifecycle as a compact stage chain with the active stage and its status detail, while technical evidence stays collapsed by default. The shared rtaime emblem uses a lightweight orbit and pulse animation when Windows client-area animations are enabled. Reduced-motion settings disable that motion, and presentation animation never gates startup completion or fabricates percentage progress.
 
-On Windows interactive and showcase profiles, `rtaime.exe` hands visible startup presentation to the Operator after the Operator Interface lifecycle stage is confirmed Ready. The AppHost console is then hidden so the canonical product entry point behaves like an application rather than a persistent command window. HeadlessEngine execution, redirected stdout/stderr and explicit `--show-console` launches retain console visibility for operations and diagnostics.
+On Windows, the canonical AppHost is built with the native GUI PE subsystem. Interactive and Showcase launches therefore do not create a console window in the first place; the Operator splash is the visible startup surface from the beginning rather than a later replacement for a script-like host console.
+
+Operational modes remain explicit. `--show-console` and `HeadlessEngine` request console semantics before lifecycle startup. The bootstrap first attaches to an existing parent console when one is available and otherwise allocates a console when terminal output is required. A HeadlessEngine process with redirected stdout and stderr preserves those redirected streams without requiring a visible console window. The Windows-service path never allocates an interactive console.
+
+Failures that occur before the Operator can present lifecycle evidence are persisted to `apphost-startup.log`. An explicit `--work-root` owns that file directly. Otherwise interactive startup uses `%LOCALAPPDATA%\rtaime\apphost\<instance>\apphost-startup.log`, while service/external-managed startup uses the deterministic service work root. Redirected stderr and `--show-console` continue to emit the compact `app=rtaime state=FAILED` diagnostic line in addition to the persisted file.
 
 No current application-startup stage exposes a safe standalone retry operation. Consequently the evidence contract carries `canRetry`, but the Operator does not offer a retry action until a real idempotent retry path exists.
 
@@ -264,6 +268,7 @@ Supported application arguments include:
 --instance-id=<id>
 --service-name=<windows-service-id>
 --windows-service
+--show-console
 --disposable
 --no-ai
 ```
@@ -271,6 +276,18 @@ Supported application arguments include:
 The default requires AI readiness. `--no-ai` is an explicit reduced startup configuration and does not change the default qualified release topology.
 
 `--windows-service` requires `HeadlessEngine` and `PersistentEngine`.
+
+### Windows console and diagnostics modes
+
+| Start mode | Console behavior | Diagnostic behavior |
+| --- | --- | --- |
+| Interactive / Showcase | no console is created | Operator splash + lifecycle evidence; early failures persist to `apphost-startup.log` |
+| Interactive / Showcase + `--show-console` | attach parent console or allocate one | console/stdout/stderr plus persisted bootstrap failures |
+| HeadlessEngine | attach parent console; allocate when terminal output is needed | console/stdout/stderr plus persisted bootstrap failures |
+| HeadlessEngine with redirected stdout + stderr | no visible console required | redirected streams remain authoritative for terminal output |
+| Windows service | no interactive console | service logging + deterministic service work-root diagnostics |
+
+The GUI subsystem is selected at build time, so normal Explorer startup cannot briefly create a console before managed code runs. Console availability for operational modes is established explicitly at process bootstrap and does not change AppHost lifecycle ownership or supervision.
 
 ## Windows production lifecycle
 
