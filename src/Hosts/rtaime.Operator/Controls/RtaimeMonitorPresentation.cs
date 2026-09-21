@@ -68,6 +68,12 @@ public sealed class RtaimeMonitorPresentation : ContentControl
 		typeof(RtaimeMonitorPresentation),
 		new FrameworkPropertyMetadata(null));
 
+	public static readonly DependencyProperty OverlayControlsEnabledProperty = DependencyProperty.Register(
+		nameof(OverlayControlsEnabled),
+		typeof(bool),
+		typeof(RtaimeMonitorPresentation),
+		new FrameworkPropertyMetadata(true));
+
 	public MonitorView? Monitor
 	{
 		get => (MonitorView?)GetValue(MonitorProperty);
@@ -126,5 +132,11 @@ public sealed class RtaimeMonitorPresentation : ContentControl
 	{
 		get => GetValue(StatusContentProperty);
 		set => SetValue(StatusContentProperty, value);
+	}
+
+	public bool OverlayControlsEnabled
+	{
+		get => (bool)GetValue(OverlayControlsEnabledProperty);
+		set => SetValue(OverlayControlsEnabledProperty, value);
 	}
 }
