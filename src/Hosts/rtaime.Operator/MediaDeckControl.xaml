@@ -32,7 +32,7 @@
 							<TextBlock Text="{Binding State}" Style="{StaticResource OperatorLabel}" />
 						</Border>
 					</StackPanel>
-					<TextBlock Text="{Binding FileName}" FontSize="19" FontWeight="SemiBold" Margin="0,7,0,0"
+					<TextBlock Text="{Binding FileName}" FontSize="{StaticResource OperatorFontSizeMediaTitle}" FontWeight="SemiBold" Margin="0,7,0,0"
 						TextTrimming="CharacterEllipsis" />
 					<TextBlock Text="{Binding SourceId, StringFormat=Source slot: {0}}" Style="{StaticResource OperatorLabel}"
 						Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />
@@ -57,11 +57,11 @@
 					<Grid Height="260" ClipToBounds="True">
 						<Image Source="{Binding Monitoring.PreviewImage, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 							Stretch="Uniform" SnapsToDevicePixels="True" />
-						<Border VerticalAlignment="Top" HorizontalAlignment="Left" Background="#C0000000" Padding="8,5" Margin="8">
+						<Border VerticalAlignment="Top" HorizontalAlignment="Left" Style="{StaticResource OperatorOverlayScrim}" Padding="{StaticResource OperatorMonitorLabelPadding}" Margin="8">
 							<TextBlock Text="PRODUCTION PREVIEW MONITOR" Foreground="{DynamicResource OperatorPreviewBrush}"
-								FontSize="11" FontWeight="Bold" />
+								FontSize="{StaticResource OperatorFontSizeCaption}" FontWeight="Bold" />
 						</Border>
-						<Border VerticalAlignment="Bottom" Background="#C0000000" Padding="10,7">
+						<Border VerticalAlignment="Bottom" Style="{StaticResource OperatorOverlayScrim}" Padding="{StaticResource OperatorMonitorFooterPadding}">
 							<Grid>
 								<Grid.ColumnDefinitions>
 									<ColumnDefinition Width="*" />
@@ -113,7 +113,7 @@
 						<TextBlock Text="{Binding EffectiveRange, StringFormat=Effective range: {0}}" Style="{StaticResource OperatorLabel}" Margin="0,4,0,0" />
 					</StackPanel>
 					<StackPanel Grid.Column="5" Orientation="Horizontal" VerticalAlignment="Center">
-						<TextBlock Text="{Binding Countdown}" Style="{StaticResource OperatorTimecode}" FontSize="20" FontWeight="Bold" Margin="0,0,12,0" />
+						<TextBlock Text="{Binding Countdown}" Style="{StaticResource OperatorTimecode}" FontSize="{StaticResource OperatorFontSizeDisplay}" FontWeight="Bold" Margin="0,0,12,0" />
 						<controls:RtaimeButton Content="APPLY POLICY" Command="{Binding ApplyPlaybackPolicyCommand}" Background="{DynamicResource OperatorAccentSurfaceBrush}" BorderBrush="{DynamicResource OperatorAccentBrush}" />
 					</StackPanel>
 				</Grid>
@@ -128,7 +128,7 @@
 					<ColumnDefinition Width="*" />
 				</Grid.ColumnDefinitions>
 				<controls:RtaimeButton Grid.Column="0" Content="PLAY / PAUSE&#x0a;Space" Command="{Binding TogglePlayPauseCommand}"
-					Background="{DynamicResource OperatorAccentSurfaceBrush}" BorderBrush="{DynamicResource OperatorAccentBrush}" FontSize="15" />
+					Background="{DynamicResource OperatorAccentSurfaceBrush}" BorderBrush="{DynamicResource OperatorAccentBrush}" FontSize="{StaticResource OperatorFontSizeWorkspaceHeader}" />
 				<controls:RtaimeButton Grid.Column="2" Content="STOP&#x0a;K / S" Command="{Binding StopCommand}"  />
 				<controls:RtaimeButton Grid.Column="4" Content="REFRESH STATE" Command="{Binding RefreshCommand}"  />
 			</Grid>
@@ -155,7 +155,7 @@
 								<ColumnDefinition Width="Auto" />
 							</Grid.ColumnDefinitions>
 							<TextBlock Text="IN" Foreground="{DynamicResource OperatorPreviewBrush}" FontWeight="Bold" VerticalAlignment="Center" />
-							<TextBlock Grid.Column="1" Text="{Binding InTimecode}" FontFamily="Consolas" FontSize="15" FontWeight="SemiBold" Margin="12,0" VerticalAlignment="Center" />
+							<TextBlock Grid.Column="1" Text="{Binding InTimecode}" FontFamily="Consolas" FontSize="{StaticResource OperatorFontSizeWorkspaceHeader}" FontWeight="SemiBold" Margin="12,0" VerticalAlignment="Center" />
 							<controls:RtaimeButton Grid.Column="2" Content="SET  I" Command="{Binding SetInCommand}"  Padding="9,5" Margin="0,0,6,0" />
 							<controls:RtaimeButton Grid.Column="3" Content="JUMP" Command="{Binding JumpInCommand}"  Padding="9,5" />
 						</Grid>
@@ -168,7 +168,7 @@
 								<ColumnDefinition Width="Auto" />
 							</Grid.ColumnDefinitions>
 							<TextBlock Text="OUT" Foreground="{DynamicResource OperatorProgramBrush}" FontWeight="Bold" VerticalAlignment="Center" />
-							<TextBlock Grid.Column="1" Text="{Binding OutTimecode}" FontFamily="Consolas" FontSize="15" FontWeight="SemiBold" Margin="12,0" VerticalAlignment="Center" />
+							<TextBlock Grid.Column="1" Text="{Binding OutTimecode}" FontFamily="Consolas" FontSize="{StaticResource OperatorFontSizeWorkspaceHeader}" FontWeight="SemiBold" Margin="12,0" VerticalAlignment="Center" />
 							<controls:RtaimeButton Grid.Column="2" Content="SET  O" Command="{Binding SetOutCommand}"  Padding="9,5" Margin="0,0,6,0" />
 							<controls:RtaimeButton Grid.Column="3" Content="JUMP" Command="{Binding JumpOutCommand}"  Padding="9,5" />
 						</Grid>
