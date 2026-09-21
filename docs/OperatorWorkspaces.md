@@ -43,6 +43,17 @@ Persisted workspace geometry remains in the 1920×1080 reference coordinate syst
 
 The shell owns responsive feature geometry that must track the container rather than force reference pixels. This includes the Media Deck preview, LIVE lower output region, Compositing preview, Health sidebar/cards, Source Bin thumbnail width, Quick Control cards and Timeline track-header width. Feature-local control density such as button heights, status rows and aspect-ratio thumbnails may remain fixed where it expresses an interaction or content requirement. Compact mode removes optional side/auxiliary presentation, optional timeline context badges and the reserved empty V2/A2/A3 reference lanes before core production identity or commands are sacrificed. The governed V3 Graphics, V1 Video and A1 Music roles remain visible.
 
+### Fixed-geometry audit classification
+
+The productive Operator XAML audit distinguishes four geometry classes:
+
+- **reference geometry** — 1920×1080 shell values such as 60 px top bar, 92 px navigation, 400 / 340 / 320 persisted panel defaults and EDIT 390:304 plus 320:462:276 proportions remain the qualification composition and are not treated as mandatory render pixels;
+- **interaction/content geometry** — compact buttons, toolbar rows, 54 px output rows, monitor chrome, metric tracks and bounded aspect-ratio thumbnails remain fixed where changing them would reduce legibility or alter the content contract;
+- **container-derived geometry** — Media Deck preview, central workspace minimum, LIVE lower output, Compositing preview, Health sidebar/cards, Source Bin thumbnail, Quick Control cards and Timeline track-header width derive from the current viewport;
+- **removed container constraints** — the former Media Deck 430 px root minimum, 610 px center-column minimum, feature-root Inspector/LIVE/Output minimum widths and Multiview minimum height are no longer allowed to override their host allocation.
+
+Scrolling remains local to surfaces with real overflow semantics such as Inspector properties, LIVE controls, output lists and the central stacked preparation workspace. It is not used merely to conceal a feature-root minimum-size requirement.
+
 ## LIVE
 
 LIVE is the primary fast production workspace. It is arranged as a three-zone operator surface: source/cue selection on the left, adaptive multiview plus Quick Controls in the center, and explicit Live Controls on the right.
