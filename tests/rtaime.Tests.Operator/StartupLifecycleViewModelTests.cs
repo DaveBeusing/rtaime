@@ -19,6 +19,53 @@ public sealed class StartupLifecycleViewModelTests : IDisposable
 	}
 
 	[Fact]
+	public void ControlHost_failure_names_the_affected_stage_and_blocks_initial_completion()
+	{
+		WriteEvidence(
+			CreateStages(controlStatus: "FAILED", controlFailure: "ControlHost failed to start."),
+			ApplicationLifecycleStages.ControlHost);
+		using var viewModel = new StartupLifecycleViewModel(EvidencePath, new PassiveSynchronizationContext());
+
+		Assert.True(viewModel.HasStartupFailure);
+		Assert.False(viewModel.HasCompletedInitialStartup);
+		Assert.Equal("ControlHost", viewModel.ActiveStageName);
+		Assert.Contains("ControlHost failed to start.", viewModel.Summary, StringComparison.Ordinal);
+	}
+
+	[Fact]
+	public void Required_ai_failure_blocks_initial_completion()
+	{
+		WriteEvidence(
+			CreateStages(
+				aiStatus: "FAILED",
+				aiFailure: "Required AIHost failed.",
+				aiRequirement: "RequiredForProduction"),
+			ApplicationLifecycleStages.AIHost);
+		using var viewModel = new StartupLifecycleViewModel(EvidencePath, new PassiveSynchronizationContext());
+
+		Assert.True(viewModel.HasStartupFailure);
+		Assert.False(viewModel.HasCompletedInitialStartup);
+		Assert.Equal("AIHost", viewModel.ActiveStageName);
+		Assert.Contains("Required AIHost failed.", viewModel.Summary, StringComparison.Ordinal);
+	}
+
+	[Fact]
+	public void Production_readiness_timeout_is_presented_as_startup_failure()
+	{
+		WriteEvidence(
+			CreateStages(
+				productionReadinessStatus: "FAILED",
+				productionReadinessFailure: "Production readiness timed out."),
+			ApplicationLifecycleStages.ProductionReadiness);
+		using var viewModel = new StartupLifecycleViewModel(EvidencePath, new PassiveSynchronizationContext());
+
+		Assert.True(viewModel.HasStartupFailure);
+		Assert.False(viewModel.HasCompletedInitialStartup);
+		Assert.Equal("Production Readiness", viewModel.ActiveStageName);
+		Assert.Contains("Production readiness timed out.", viewModel.Summary, StringComparison.Ordinal);
+	}
+
+	[Fact]
 	public void Required_degraded_stage_keeps_startup_visible_and_reports_degraded_state()
 	{
 		WriteEvidence(CreateStages(productionReadinessStatus: "DEGRADED"), ApplicationLifecycleStages.ProductionReadiness);
@@ -193,10 +240,13 @@ public sealed class StartupLifecycleViewModelTests : IDisposable
 	}
 
 	private static IReadOnlyList<TestStage> CreateStages(
+		string controlStatus = "READY",
+		string? controlFailure = null,
 		string runtimeStatus = "READY",
 		string? runtimeFailure = null,
 		string aiStatus = "READY",
 		string? aiFailure = null,
+		string aiRequirement = "Optional",
 		string productionReadinessStatus = "READY",
 		string? productionReadinessFailure = null)
 	{
@@ -205,7 +255,13 @@ public sealed class StartupLifecycleViewModelTests : IDisposable
 			new(ApplicationLifecycleStages.ApplicationBootstrap, "Application Bootstrap", "Critical", "READY", "Bootstrap ready.", null),
 			new(ApplicationLifecycleStages.Configuration, "Configuration", "Critical", "READY", "Configuration ready.", null),
 			new(ApplicationLifecycleStages.OperatorInterface, "Operator Interface", "Critical", "READY", "Operator ready.", null),
-			new(ApplicationLifecycleStages.ControlHost, "ControlHost", "RequiredForProduction", "READY", "ControlHost ready.", null),
+			new(
+				ApplicationLifecycleStages.ControlHost,
+				"ControlHost",
+				"RequiredForProduction",
+				controlStatus,
+				controlStatus == "FAILED" ? "ControlHost startup failed." : "ControlHost ready.",
+				controlFailure),
 			new(
 				ApplicationLifecycleStages.RuntimeHost,
 				"RuntimeHost",
@@ -216,7 +272,7 @@ public sealed class StartupLifecycleViewModelTests : IDisposable
 			new(
 				ApplicationLifecycleStages.AIHost,
 				"AIHost",
-				"Optional",
+				aiRequirement,
 				aiStatus,
 				aiStatus == "FAILED" ? "Optional AI unavailable." : "AI state published.",
 				aiFailure),
