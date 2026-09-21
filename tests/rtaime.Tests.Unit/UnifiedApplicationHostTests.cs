@@ -256,6 +256,7 @@ public sealed class UnifiedApplicationHostTests
 		Assert.Null(host.Lifecycle.ActiveStage);
 		using var evidence = JsonDocument.Parse(platform.ReadAllText(options.LifecycleEvidencePath));
 		Assert.Equal("1.0", evidence.RootElement.GetProperty("schemaVersion").GetString());
+		Assert.Equal(options.ControlHostDiagnosticPath, evidence.RootElement.GetProperty("diagnosticPath").GetString());
 		Assert.Equal(7, evidence.RootElement.GetProperty("stages").GetArrayLength());
 	}
 

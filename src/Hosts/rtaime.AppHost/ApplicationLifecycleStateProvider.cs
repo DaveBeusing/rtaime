@@ -62,19 +62,22 @@ public sealed class ApplicationLifecycleStateProvider : IApplicationLifecycleSta
 	private readonly object _gate = new();
 	private readonly IApplicationHostPlatform _platform;
 	private readonly string _evidencePath;
+	private readonly string? _diagnosticPath;
 	private readonly bool _requireAI;
 	private List<LifecycleStageSnapshot> _stages = [];
 
 	public ApplicationLifecycleStateProvider(
 		string evidencePath,
 		bool requireAI,
-		IApplicationHostPlatform platform)
+		IApplicationHostPlatform platform,
+		string? diagnosticPath = null)
 	{
 		if (string.IsNullOrWhiteSpace(evidencePath))
 			throw new ArgumentException("Lifecycle evidence path is required.", nameof(evidencePath));
 
 		_platform = platform ?? throw new ArgumentNullException(nameof(platform));
 		_evidencePath = Path.GetFullPath(evidencePath);
+		_diagnosticPath = string.IsNullOrWhiteSpace(diagnosticPath) ? null : Path.GetFullPath(diagnosticPath);
 		_requireAI = requireAI;
 		ResetStages();
 	}
@@ -263,6 +266,7 @@ public sealed class ApplicationLifecycleStateProvider : IApplicationLifecycleSta
 				copyright = "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
 				schemaVersion = "1.0",
 				observedAtUtc = _platform.UtcNow,
+				diagnosticPath = _diagnosticPath,
 				activeStageId = activeStage?.Id,
 				stages = _stages.Select(stage => new
 				{

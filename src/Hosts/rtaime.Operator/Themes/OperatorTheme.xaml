@@ -219,6 +219,20 @@
 		<Setter Property="BorderThickness" Value="1" />
 		<Setter Property="CornerRadius" Value="8" />
 		<Setter Property="Padding" Value="28" />
+		<Style.Triggers>
+			<Trigger Property="Tag" Value="DEGRADED"><Setter Property="BorderBrush" Value="{DynamicResource OperatorWarningBrush}" /></Trigger>
+			<Trigger Property="Tag" Value="FAILED"><Setter Property="BorderBrush" Value="{DynamicResource OperatorErrorBrush}" /></Trigger>
+		</Style.Triggers>
+	</Style>
+
+	<Style x:Key="OperatorStartupStateText" TargetType="TextBlock">
+		<Setter Property="Foreground" Value="{DynamicResource OperatorAccentBrush}" />
+		<Style.Triggers>
+			<Trigger Property="Tag" Value="PENDING"><Setter Property="Foreground" Value="{DynamicResource OperatorMutedTextBrush}" /></Trigger>
+			<Trigger Property="Tag" Value="READY"><Setter Property="Foreground" Value="{DynamicResource OperatorHealthyBrush}" /></Trigger>
+			<Trigger Property="Tag" Value="DEGRADED"><Setter Property="Foreground" Value="{DynamicResource OperatorWarningBrush}" /></Trigger>
+			<Trigger Property="Tag" Value="FAILED"><Setter Property="Foreground" Value="{DynamicResource OperatorErrorBrush}" /></Trigger>
+		</Style.Triggers>
 	</Style>
 
 	<Style x:Key="OperatorStartupStageTile" TargetType="Border" BasedOn="{StaticResource OperatorStatusBadge}">

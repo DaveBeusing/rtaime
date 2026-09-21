@@ -548,7 +548,11 @@ public sealed class UnifiedApplicationHost
 	{
 		_options = options ?? throw new ArgumentNullException(nameof(options));
 		_platform = platform ?? throw new ArgumentNullException(nameof(platform));
-		_lifecycle = new ApplicationLifecycleStateProvider(_options.LifecycleEvidencePath, _options.RequireAI, _platform);
+		_lifecycle = new ApplicationLifecycleStateProvider(
+			_options.LifecycleEvidencePath,
+			_options.RequireAI,
+			_platform,
+			_options.ControlHostDiagnosticPath);
 	}
 
 	public ApplicationLifecycleState State { get; private set; } = ApplicationLifecycleState.Stopped;

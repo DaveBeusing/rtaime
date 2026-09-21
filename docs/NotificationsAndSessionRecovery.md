@@ -50,6 +50,14 @@ Error -> Recovery -> Success
 
 The same notification therefore changes condition instead of leaving stale recovery messages behind.
 
+## Initial startup boundary
+
+Initial AppHost startup failure is deliberately separate from post-start notification and session-recovery behavior. Before the first complete production qualification, the branded startup surface owns presentation of the AppHost lifecycle evidence, affected stage, failure reason, next safe step and read-only diagnostic actions.
+
+A non-optional startup failure stays latched on that surface until the same lifecycle stage explicitly returns to `Ready`. The Operator does not create a second recovery path and does not expose retry or restart commands unless a safe lifecycle command is added to the authoritative contract.
+
+After initial production qualification completes, the startup surface is permanently latched off for that Operator session. Later ControlHost, RuntimeHost or AIHost degradation is handled through the existing health, notification and recovery surfaces described here. A later runtime outage therefore cannot obscure the production workspace by re-opening the initial splash.
+
 ## Session marker
 
 The Operator stores session evidence below the local rtaime application-data directory.

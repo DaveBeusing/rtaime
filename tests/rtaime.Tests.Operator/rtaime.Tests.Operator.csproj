@@ -1,0 +1,21 @@
+<!-- Copyright (c) Dave Beusing <david.beusing@gmail.com>. -->
+<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<RtaimeIsTestProject>true</RtaimeIsTestProject>
+		<TargetFramework>$(RtaimeWindowsTargetFramework)</TargetFramework>
+		<UseWPF>true</UseWPF>
+		<IsTestProject>true</IsTestProject>
+		<IsPackable>false</IsPackable>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\..\src\Hosts\rtaime.AppHost\rtaime.AppHost.csproj" />
+		<ProjectReference Include="..\..\src\Hosts\rtaime.Operator\rtaime.Operator.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.NET.Test.Sdk" />
+		<PackageReference Include="xunit" />
+		<PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" />
+	</ItemGroup>
+</Project>

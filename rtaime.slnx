@@ -43,6 +43,7 @@
   <Folder Name="/Tests/">
     <Project Path="tests/rtaime.TestInfrastructure/rtaime.TestInfrastructure.csproj" />
     <Project Path="tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj" />
+    <Project Path="tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj" />
     <Project Path="tests/rtaime.Tests.Contracts/rtaime.Tests.Contracts.csproj" />
     <Project Path="tests/rtaime.Tests.Architecture/rtaime.Tests.Architecture.csproj" />
     <Project Path="tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj" />

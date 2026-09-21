@@ -187,6 +187,9 @@ jobs:
       - name: Unit tests
         run: dotnet test tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj --configuration Release --no-build
 
+      - name: Operator startup tests
+        run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build
+
   security:
     name: Security
     runs-on: windows-latest

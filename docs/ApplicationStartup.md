@@ -142,6 +142,24 @@ On Windows interactive and showcase profiles, `rtaime.exe` hands visible startup
 
 No current application-startup stage exposes a safe standalone retry operation. Consequently the evidence contract carries `canRetry`, but the Operator does not offer a retry action until a real idempotent retry path exists.
 
+### Startup failure, degraded and diagnostic presentation
+
+The initial startup surface treats AppHost evidence as observation, not authority. Its operator-facing behavior is:
+
+| Evidence state | Primary presentation | Supported operator action |
+| --- | --- | --- |
+| `Pending` | stage is waiting for authoritative lifecycle work | display only |
+| `Starting` | stage and current status text remain visible | display only |
+| `Ready` | stage is positively qualified | display only |
+| `Degraded` | warning presentation plus the next safe lifecycle expectation | inspect/copy diagnostics; wait for existing AppHost/ControlHost recovery |
+| `Failed` | affected stage, failure reason and next safe step remain visible | inspect/copy diagnostics and open the published local diagnostic path when available |
+
+A non-optional `Failed` stage is latched by the Operator during initial startup. Transient evidence updates cannot make the failure disappear while the same stage is merely `Starting` or `Degraded`; the latch clears only after that stage explicitly publishes `Ready`. Initial startup completes only when every non-optional stage is `Ready` and no startup failure remains latched.
+
+The lifecycle evidence publishes the stable ControlHost diagnostic path when AppHost owns that path. The Operator may copy a compact diagnostic bundle containing the observed timestamp, evidence path, diagnostic path, stage states, status text and failure details. When the published path exists locally, the Operator may open that log or its existing containing folder. These actions are presentation-only and do not manipulate lifecycle state.
+
+Once the first complete production qualification succeeds, the startup completion latch is permanent for the Operator session. Later RuntimeHost, AIHost or ControlHost loss is therefore represented by the normal workspace health, notification and recovery surfaces; it does not re-open the initial startup splash.
+
 ## Production readiness contract
 
 Production readiness and production mutations remain gated on positive evidence even after the Operator shell becomes available. AppHost requires:
@@ -197,7 +215,7 @@ Healthy
 
 If readiness does not recover within the configured recovery window, the application lifecycle becomes `Failed`.
 
-For a ControlHost started by AppHost, process stdout, stderr and the eventual exit code are persisted in `controlhost-process.log` below the selected AppHost work root. When ControlHost exits before qualified readiness, the bounded diagnostic tail is included in the AppHost lifecycle failure detail so endpoint collisions, persistence startup failures and unhandled process failures are visible from the startup experience instead of collapsing into a generic engine failure.
+For a ControlHost started by AppHost, process stdout, stderr and the eventual exit code are persisted in `controlhost-process.log` below the selected AppHost work root. AppHost publishes that stable local path as `diagnosticPath` in `apphost-lifecycle.json`. When ControlHost exits before qualified readiness, the bounded diagnostic tail is included in the AppHost lifecycle failure detail so endpoint collisions, persistence startup failures and unhandled process failures are visible from the startup experience instead of collapsing into a generic engine failure.
 
 For an interactive client, ControlHost replacement can recover through new qualified readiness and full snapshot resynchronization.
 
