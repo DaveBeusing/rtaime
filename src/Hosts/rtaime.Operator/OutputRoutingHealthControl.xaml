@@ -4,8 +4,7 @@
 	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
 	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 	xmlns:controls="clr-namespace:rtaime.Operator.Controls"
-	xmlns:local="clr-namespace:rtaime.Operator"
-	MinWidth="320">
+	xmlns:local="clr-namespace:rtaime.Operator">
 	<UserControl.Resources>
 		<Style x:Key="OutputRowStyle" TargetType="{x:Type controls:RtaimeOutputRow}" BasedOn="{StaticResource {x:Type controls:RtaimeOutputRow}}">
 			<Setter Property="Thumbnail" Value="{Binding ProgramImage, RelativeSource={RelativeSource AncestorType={x:Type local:OutputRoutingHealthControl}}}" />
