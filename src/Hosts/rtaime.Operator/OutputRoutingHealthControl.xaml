@@ -47,7 +47,7 @@
 							Detail="{Binding WorkspaceStates.Output.Detail, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 							Panel.ZIndex="60"
 							Margin="10" />
-		<Grid x:Name="CompactLiveOutput" Height="270" Background="{DynamicResource OperatorPanelBrush}">
+		<Grid x:Name="CompactLiveOutput" Background="{DynamicResource OperatorPanelBrush}">
 			<Grid.Style>
 				<Style TargetType="Grid">
 					<Setter Property="Visibility" Value="Collapsed" />
@@ -60,7 +60,7 @@
 			</Grid.Style>
 			<Grid.RowDefinitions>
 				<RowDefinition Height="27" />
-				<RowDefinition Height="216" />
+				<RowDefinition Height="*" />
 				<RowDefinition Height="27" />
 			</Grid.RowDefinitions>
 
@@ -91,7 +91,7 @@
 				BorderBrush="{DynamicResource OperatorBorderBrush}"
 				BorderThickness="1,0,1,0"
 				ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-				ScrollViewer.VerticalScrollBarVisibility="Disabled"
+				ScrollViewer.VerticalScrollBarVisibility="Auto"
 				AutomationProperties.Name="Compact output routing">
 				<controls:RtaimeListBox.ItemContainerStyle>
 					<Style TargetType="{x:Type controls:RtaimeListBoxItem}">
