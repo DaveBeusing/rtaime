@@ -2,8 +2,8 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
 	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 	xmlns:controls="clr-namespace:rtaime.Operator.Controls">
-	<SolidColorBrush x:Key="RtaimeMediaDurationOverlayBrush" Color="#D9071017" />
-	<SolidColorBrush x:Key="RtaimeMediaOfflineOverlayBrush" Color="#C9071017" />
+	<SolidColorBrush x:Key="RtaimeMediaDurationOverlayBrush" Color="{StaticResource OperatorColorMediaDurationOverlay}" />
+	<SolidColorBrush x:Key="RtaimeMediaOfflineOverlayBrush" Color="{StaticResource OperatorColorMediaOfflineOverlay}" />
 
 	<ControlTemplate x:Key="RtaimeMediaTextContentHostTemplate" TargetType="{x:Type ScrollViewer}">
 		<ScrollContentPresenter />
