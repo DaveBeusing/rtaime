@@ -5,14 +5,23 @@
 	<!-- Typography -->
 	<FontFamily x:Key="OperatorFontFamily">Segoe UI Variable Text, Segoe UI</FontFamily>
 	<FontFamily x:Key="OperatorTimecodeFontFamily">Cascadia Mono, Consolas</FontFamily>
+	<sys:Double x:Key="OperatorFontSizeFinePrint">8</sys:Double>
+	<sys:Double x:Key="OperatorFontSizeMicro">9</sys:Double>
+	<sys:Double x:Key="OperatorFontSizeCompact">10</sys:Double>
 	<sys:Double x:Key="OperatorFontSizeCaption">11</sys:Double>
 	<sys:Double x:Key="OperatorFontSizeBody">12</sys:Double>
 	<sys:Double x:Key="OperatorFontSizeControl">12</sys:Double>
 	<sys:Double x:Key="OperatorFontSizeSection">14</sys:Double>
 	<sys:Double x:Key="OperatorFontSizeWorkspaceHeader">15</sys:Double>
+	<sys:Double x:Key="OperatorFontSizeSubheading">16</sys:Double>
+	<sys:Double x:Key="OperatorFontSizeProminent">17</sys:Double>
 	<sys:Double x:Key="OperatorFontSizeLargeTimecode">18</sys:Double>
+	<sys:Double x:Key="OperatorFontSizeMediaTitle">19</sys:Double>
+	<sys:Double x:Key="OperatorFontSizeDisplay">20</sys:Double>
+	<sys:Double x:Key="OperatorFontSizeDisplayLarge">22</sys:Double>
 	<sys:Double x:Key="OperatorFontSizeProduct">24</sys:Double>
 	<sys:Double x:Key="OperatorFontSizeTitle">24</sys:Double>
+	<sys:Double x:Key="OperatorFontSizeHero">40</sys:Double>
 
 	<!-- Reference geometry: 1920x1080 at 100 percent. -->
 	<sys:Double x:Key="OperatorReferenceWidth">1920</sys:Double>
@@ -43,6 +52,9 @@
 	<Thickness x:Key="OperatorControlPadding">8,4</Thickness>
 	<Thickness x:Key="OperatorCompactControlPadding">6,3</Thickness>
 	<Thickness x:Key="OperatorStatusPadding">8,4</Thickness>
+	<Thickness x:Key="OperatorCompactOverlayPadding">7,4</Thickness>
+	<Thickness x:Key="OperatorMonitorLabelPadding">8,5</Thickness>
+	<Thickness x:Key="OperatorMonitorFooterPadding">10,7</Thickness>
 	<CornerRadius x:Key="OperatorRadiusPanel">4</CornerRadius>
 	<CornerRadius x:Key="OperatorRadiusControl">3</CornerRadius>
 	<CornerRadius x:Key="OperatorRadiusStatus">3</CornerRadius>
@@ -72,6 +84,30 @@
 	<Color x:Key="OperatorColorTimeline">#3478D4</Color>
 	<Color x:Key="OperatorColorGraphics">#7259D7</Color>
 	<Color x:Key="OperatorColorAudio">#22A977</Color>
+
+	<!-- Shared media, monitor and overlay presentation. -->
+	<Color x:Key="OperatorColorMediaCanvas">#05080B</Color>
+	<Color x:Key="OperatorColorThumbnailCanvas">#090C10</Color>
+	<Color x:Key="OperatorColorDiagnosticSurface">#0A141C</Color>
+	<Color x:Key="OperatorColorTimelineSurface">#0C151D</Color>
+	<Color x:Key="OperatorColorTimelineTrack">#111D26</Color>
+	<Color x:Key="OperatorColorTimelineTrackOverlay">#E0111D26</Color>
+	<Color x:Key="OperatorColorOverlayScrim">#C0000000</Color>
+	<Color x:Key="OperatorColorOverlayText">#FFFFFFFF</Color>
+	<Color x:Key="OperatorColorGuideSubtle">#55FFFFFF</Color>
+	<Color x:Key="OperatorColorGuideMedium">#70FFFFFF</Color>
+	<Color x:Key="OperatorColorGuideStrong">#B0FFFFFF</Color>
+	<Color x:Key="OperatorColorGuidePrimary">#C0FFFFFF</Color>
+	<Color x:Key="OperatorColorMonitorHeaderOverlay">#CC071017</Color>
+	<Color x:Key="OperatorColorMonitorFooterOverlay">#D0071017</Color>
+	<Color x:Key="OperatorColorMultiviewHeaderOverlay">#DC071017</Color>
+	<Color x:Key="OperatorColorMultiviewOverlay">#D8071017</Color>
+	<Color x:Key="OperatorColorMultiviewOverlayMuted">#C8071017</Color>
+	<Color x:Key="OperatorColorMultiviewOverlayStrong">#F2071017</Color>
+	<Color x:Key="OperatorColorGraphSurface">#13222C</Color>
+	<Color x:Key="OperatorColorGraphSurfaceRaised">#1B303C</Color>
+	<Color x:Key="OperatorColorGraphOverlay">#D00A141C</Color>
+	<Color x:Key="OperatorColorTimelineStatusText">#D8FFFFFF</Color>
 
 	<!-- Production semantics. Program and Preview remain intentionally distinct. -->
 	<Color x:Key="OperatorColorPreview">#29D38B</Color>
