@@ -22,8 +22,7 @@ internal static class WindowsConsoleBootstrap
 
 		var explicitConsole = args.Contains("--show-console", StringComparer.OrdinalIgnoreCase);
 		var windowsService = args.Contains("--windows-service", StringComparer.OrdinalIgnoreCase);
-		var headlessEngine = IsHeadlessEngine(args);
-		var consoleRequested = explicitConsole || headlessEngine;
+		var consoleRequested = ShouldRequestConsole(args);
 
 		if (!OperatingSystem.IsWindows())
 			return new ApplicationConsoleBootstrapState(ConsoleAvailable: true, consoleRequested);
@@ -50,6 +49,15 @@ internal static class WindowsConsoleBootstrap
 		}
 
 		return new ApplicationConsoleBootstrapState(ConsoleAvailable: true, ConsoleRequested: true);
+	}
+
+	internal static bool ShouldRequestConsole(IReadOnlyList<string> args)
+	{
+		if (args.Contains("--windows-service", StringComparer.OrdinalIgnoreCase))
+			return false;
+
+		return args.Contains("--show-console", StringComparer.OrdinalIgnoreCase) ||
+			IsHeadlessEngine(args);
 	}
 
 	private static bool IsHeadlessEngine(IReadOnlyList<string> args)
