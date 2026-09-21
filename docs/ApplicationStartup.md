@@ -138,6 +138,8 @@ Each stage is `Pending`, `Starting`, `Ready`, `Degraded` or `Failed` and carries
 
 The startup overlay remains visible through the first complete production qualification, then yields permanently to the Operator shell for that session. It presents the real AppHost lifecycle as a compact stage chain with the active stage and its status detail, while technical evidence stays collapsed by default. The shared rtaime emblem uses a lightweight orbit and pulse animation when Windows client-area animations are enabled. Reduced-motion settings disable that motion, and presentation animation never gates startup completion or fabricates percentage progress.
 
+On Windows interactive and showcase profiles, `rtaime.exe` hands visible startup presentation to the Operator after the Operator Interface lifecycle stage is confirmed Ready. The AppHost console is then hidden so the canonical product entry point behaves like an application rather than a persistent command window. HeadlessEngine execution, redirected stdout/stderr and explicit `--show-console` launches retain console visibility for operations and diagnostics.
+
 No current application-startup stage exposes a safe standalone retry operation. Consequently the evidence contract carries `canRetry`, but the Operator does not offer a retry action until a real idempotent retry path exists.
 
 ## Production readiness contract

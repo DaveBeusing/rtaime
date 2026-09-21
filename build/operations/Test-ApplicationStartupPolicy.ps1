@@ -106,6 +106,7 @@ Assert-Condition ($appCode -match 'WaitForLeasedControlReadinessAsync' -and $app
 Assert-Condition ($appCode -match 'RedirectStandardOutput = true' -and $appCode -match 'RedirectStandardError = true' -and $appCode -match 'exitCode=') "AppHost must persist ControlHost stdout, stderr and exit-code diagnostics."
 
 Assert-Condition ($appCode -match 'RTAIME_APPHOST_LIFECYCLE_FILE' -and $appCode -match 'LifecycleEvidencePath') "Interactive startup must expose AppHost lifecycle evidence to the Operator."
+Assert-Condition ($program -match '--show-console' -and $program -match 'OperatorInterface' -and $program -match 'GetConsoleWindow' -and $program -match 'ShowWindow') "Interactive Windows startup must hand visible presentation to the Operator while retaining an explicit console diagnostics path."
 foreach ($stage in @("ApplicationBootstrap", "Configuration", "OperatorInterface", "ControlHost", "RuntimeHost", "AIHost", "ProductionReadiness")) {
 	Assert-Condition ($lifecycleProvider -match [Regex]::Escape($stage)) "AppHost lifecycle evidence is missing stage '$stage'."
 }
