@@ -82,7 +82,7 @@
 			</Grid>
 		</Border>
 
-		<Grid Grid.Row="1" Background="#05080B" ClipToBounds="True">
+		<Grid Grid.Row="1" Style="{StaticResource OperatorMediaCanvas}">
 			<controls:RtaimeListBox
 				ItemsSource="{Binding DisplayedSources, ElementName=Root}"
 				SelectedItem="{Binding SelectedSource, ElementName=Root, Mode=TwoWay}"
@@ -108,7 +108,7 @@
 								Background="Black"
 								BorderBrush="{DynamicResource OperatorBorderBrush}"
 								BorderThickness="1"
-								CornerRadius="3"
+								CornerRadius="{StaticResource OperatorRadiusControl}"
 								ClipToBounds="True"
 								PreviewMouseLeftButtonDown="SourceTile_MouseDoubleClick"
 								ToolTip="{Binding ThumbnailFormat}">
@@ -131,7 +131,7 @@
 								<Grid>
 									<Image Source="{Binding Thumbnail}" Stretch="UniformToFill" SnapsToDevicePixels="True" />
 
-									<Border Height="26" VerticalAlignment="Top" Background="#DC071017" Padding="5,0">
+									<Border Height="26" VerticalAlignment="Top" Background="{DynamicResource OperatorMultiviewHeaderOverlayBrush}" Padding="5,0">
 										<Grid>
 											<Grid.ColumnDefinitions>
 												<ColumnDefinition Width="22" />
@@ -141,9 +141,9 @@
 												<ColumnDefinition Width="Auto" />
 											</Grid.ColumnDefinitions>
 											<TextBlock Text="{Binding DisplayIndex, StringFormat={}{0:00}}"
-												Foreground="White"
+												Foreground="{DynamicResource OperatorOverlayTextBrush}"
 												FontFamily="{DynamicResource OperatorTimecodeFontFamily}"
-												FontSize="10"
+												FontSize="{StaticResource OperatorFontSizeCompact}"
 												FontWeight="Bold"
 												VerticalAlignment="Center" />
 											<Ellipse Grid.Column="1" Width="6" Height="6" VerticalAlignment="Center">
@@ -165,8 +165,8 @@
 											</Ellipse>
 											<TextBlock Grid.Column="2"
 												Text="{Binding Name}"
-												Foreground="White"
-												FontSize="10"
+												Foreground="{DynamicResource OperatorOverlayTextBrush}"
+												FontSize="{StaticResource OperatorFontSizeCompact}"
 												FontWeight="SemiBold"
 												Margin="4,0"
 												VerticalAlignment="Center"
@@ -174,13 +174,13 @@
 											<TextBlock Grid.Column="3"
 												Text="{Binding FrameRateLabel}"
 												Foreground="{DynamicResource OperatorSecondaryTextBrush}"
-												FontSize="9"
+												FontSize="{StaticResource OperatorFontSizeMicro}"
 												VerticalAlignment="Center"
 												Margin="4,0" />
 											<Border Grid.Column="4"
 												Padding="4,1"
 												Background="{DynamicResource OperatorProgramBrush}"
-												CornerRadius="2"
+												CornerRadius="{StaticResource OperatorRadiusOverlay}"
 												Visibility="Collapsed">
 												<Border.Style>
 													<Style TargetType="Border">
@@ -190,12 +190,12 @@
 														</Style.Triggers>
 													</Style>
 												</Border.Style>
-												<TextBlock Text="PGM" Foreground="White" FontSize="8" FontWeight="Bold" />
+												<TextBlock Text="PGM" Foreground="{DynamicResource OperatorOverlayTextBrush}" FontSize="{StaticResource OperatorFontSizeFinePrint}" FontWeight="Bold" />
 											</Border>
 										</Grid>
 									</Border>
 
-									<Border HorizontalAlignment="Center" VerticalAlignment="Center" Background="#D8071017" Padding="8,5">
+									<Border HorizontalAlignment="Center" VerticalAlignment="Center" Background="{DynamicResource OperatorMultiviewOverlayBrush}" Padding="8,5">
 										<Border.Style>
 											<Style TargetType="Border">
 												<Setter Property="Visibility" Value="Collapsed" />
@@ -208,19 +208,19 @@
 											</Style>
 										</Border.Style>
 										<StackPanel>
-											<TextBlock Text="INPUT UNAVAILABLE" Foreground="{DynamicResource OperatorErrorBrush}" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center" />
-											<TextBlock Text="{Binding Health}" Foreground="White" FontSize="8" HorizontalAlignment="Center" />
+											<TextBlock Text="INPUT UNAVAILABLE" Foreground="{DynamicResource OperatorErrorBrush}" FontSize="{StaticResource OperatorFontSizeMicro}" FontWeight="Bold" HorizontalAlignment="Center" />
+											<TextBlock Text="{Binding Health}" Foreground="{DynamicResource OperatorOverlayTextBrush}" FontSize="{StaticResource OperatorFontSizeFinePrint}" HorizontalAlignment="Center" />
 										</StackPanel>
 									</Border>
 
-									<Border VerticalAlignment="Bottom" Background="#C8071017" Height="18" Padding="5,0">
+									<Border VerticalAlignment="Bottom" Background="{DynamicResource OperatorMultiviewOverlayMutedBrush}" Height="18" Padding="5,0">
 										<Grid>
 											<Grid.ColumnDefinitions>
 												<ColumnDefinition Width="*" />
 												<ColumnDefinition Width="Auto" />
 											</Grid.ColumnDefinitions>
 											<StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-												<controls:RtaimeTimecode Content="{Binding TimecodeLabel}" FontSize="9" Foreground="White" />
+												<controls:RtaimeTimecode Content="{Binding TimecodeLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" Foreground="{DynamicResource OperatorOverlayTextBrush}" />
 												<controls:RtaimeStatusBadge
 													Status="{x:Static controls:RtaimeStatusKind.Preview}"
 													Content="PVW"
@@ -251,7 +251,7 @@
 
 			<Border x:Name="ExpandedPreviewOverlay"
 				Visibility="Collapsed"
-				Background="#F2071017"
+				Background="{DynamicResource OperatorMultiviewOverlayStrongBrush}"
 				BorderBrush="{DynamicResource OperatorAccentBrush}"
 				BorderThickness="1"
 				Panel.ZIndex="20"
