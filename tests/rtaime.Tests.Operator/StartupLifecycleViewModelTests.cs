@@ -1,5 +1,6 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
+using System.IO;
 using System.Reflection;
 using System.Text.Json;
 using rtaime.AppHost;
@@ -226,8 +227,8 @@ public sealed class StartupLifecycleViewModelTests : IDisposable
 					displayName = stage.DisplayName,
 					requirement = stage.Requirement,
 					status = stage.Status,
-					startedAtUtc = stage.Status == "PENDING" ? null : DateTimeOffset.UtcNow.AddSeconds(-1),
-					completedAtUtc = stage.Status is "READY" or "FAILED" ? DateTimeOffset.UtcNow : null,
+					startedAtUtc = stage.Status == "PENDING" ? (DateTimeOffset?)null : DateTimeOffset.UtcNow.AddSeconds(-1),
+					completedAtUtc = stage.Status is "READY" or "FAILED" ? DateTimeOffset.UtcNow : (DateTimeOffset?)null,
 					statusText = stage.StatusText,
 					failureReason = stage.FailureReason,
 					canRetry = false
