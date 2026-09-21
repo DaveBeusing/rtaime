@@ -9,6 +9,7 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+		<ProjectReference Include="..\..\src\Hosts\rtaime.AppHost\rtaime.AppHost.csproj" />
 		<ProjectReference Include="..\..\src\Hosts\rtaime.Operator\rtaime.Operator.csproj" />
 	</ItemGroup>
 
