@@ -1574,10 +1574,13 @@
 
 			<Border
 				Style="{StaticResource OperatorStartupPanel}"
+				Tag="{Binding Startup.StartupVisualState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 				MaxWidth="980"
 				HorizontalAlignment="Stretch"
 				VerticalAlignment="Center"
-				Margin="36">
+				Margin="36"
+				FocusManager.IsFocusScope="True"
+				KeyboardNavigation.TabNavigation="Cycle">
 				<Grid>
 					<Grid.RowDefinitions>
 						<RowDefinition Height="Auto" />
@@ -1646,7 +1649,8 @@
 							Margin="0,2,0,0" />
 						<TextBlock
 							Text="{Binding Startup.StartupPhaseLabel, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-							Foreground="{DynamicResource OperatorAccentBrush}"
+							Style="{StaticResource OperatorStartupStateText}"
+							Tag="{Binding Startup.StartupVisualState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 							FontSize="{StaticResource OperatorFontSizeCaption}"
 							FontWeight="Bold"
 							HorizontalAlignment="Center"
@@ -1665,7 +1669,25 @@
 							TextWrapping="Wrap"
 							MaxWidth="720"
 							HorizontalAlignment="Center"
-							Margin="0,5,0,20" />
+							Margin="0,5,0,12" />
+						<Border
+							Style="{StaticResource OperatorLifecycleBadge}"
+							Tag="{Binding Startup.StartupVisualState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+							Padding="12,8"
+							MaxWidth="760"
+							HorizontalAlignment="Center"
+							Margin="0,0,0,20">
+							<StackPanel>
+								<TextBlock Text="NEXT STEP" Style="{StaticResource OperatorLabel}" HorizontalAlignment="Center" />
+								<TextBlock
+									Text="{Binding Startup.NextStep, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+									Foreground="{DynamicResource OperatorTextBrush}"
+									FontSize="{StaticResource OperatorFontSizeCompact}"
+									TextAlignment="Center"
+									TextWrapping="Wrap"
+									Margin="0,3,0,0" />
+							</StackPanel>
+						</Border>
 					</StackPanel>
 
 					<controls:RtaimeListBox
@@ -1757,6 +1779,8 @@
 								<RowDefinition Height="Auto" />
 								<RowDefinition Height="Auto" />
 								<RowDefinition Height="Auto" />
+								<RowDefinition Height="Auto" />
+								<RowDefinition Height="Auto" />
 							</Grid.RowDefinitions>
 							<DockPanel Grid.Row="0" Margin="0,0,0,8">
 								<TextBlock Text="APPHOST LIFECYCLE EVIDENCE" Style="{StaticResource OperatorSectionTitle}" DockPanel.Dock="Left" />
@@ -1765,14 +1789,24 @@
 									<TextBlock Text="{Binding Startup.ObservedAt, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorLabel}" />
 								</StackPanel>
 							</DockPanel>
-							<TextBlock
-								Grid.Row="1"
-								Text="{Binding Startup.EvidencePath, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-								Style="{StaticResource OperatorLabel}"
-								TextWrapping="Wrap"
-								Margin="0,0,0,8" />
+							<StackPanel Grid.Row="1" Margin="0,0,0,8">
+								<TextBlock Text="Evidence file" Style="{StaticResource OperatorLabel}" />
+								<TextBlock
+									Text="{Binding Startup.EvidencePath, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+									Foreground="{DynamicResource OperatorTextBrush}"
+									FontSize="{StaticResource OperatorFontSizeMicro}"
+									TextWrapping="Wrap" />
+							</StackPanel>
+							<StackPanel Grid.Row="2" Margin="0,0,0,8">
+								<TextBlock Text="Diagnostic path" Style="{StaticResource OperatorLabel}" />
+								<TextBlock
+									Text="{Binding Startup.DiagnosticPath, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+									Foreground="{DynamicResource OperatorTextBrush}"
+									FontSize="{StaticResource OperatorFontSizeMicro}"
+									TextWrapping="Wrap" />
+							</StackPanel>
 							<controls:RtaimeListBox
-								Grid.Row="2"
+								Grid.Row="3"
 								ItemsSource="{Binding Startup.Stages, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 								MaxHeight="220"
 								Background="Transparent"
@@ -1797,6 +1831,46 @@
 									</DataTemplate>
 								</controls:RtaimeListBox.ItemTemplate>
 							</controls:RtaimeListBox>
+							<Grid Grid.Row="4" Margin="0,10,0,0">
+								<Grid.ColumnDefinitions>
+									<ColumnDefinition Width="Auto" />
+									<ColumnDefinition Width="Auto" />
+									<ColumnDefinition Width="*" />
+								</Grid.ColumnDefinitions>
+								<controls:RtaimeButton
+									Grid.Column="0"
+									Content="COPY DIAGNOSTICS"
+									Command="{Binding Startup.CopyDiagnosticsCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+									MinHeight="28"
+									Padding="10,3"
+									Margin="0,0,6,0"
+									AutomationProperties.Name="Copy startup diagnostics" />
+								<controls:RtaimeButton
+									Grid.Column="1"
+									Content="{Binding Startup.DiagnosticActionLabel, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+									Command="{Binding Startup.OpenDiagnosticsCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+									MinHeight="28"
+									Padding="10,3"
+									Margin="0,0,8,0"
+									AutomationProperties.Name="Open startup diagnostics">
+									<controls:RtaimeButton.Style>
+										<Style TargetType="{x:Type controls:RtaimeButton}" BasedOn="{StaticResource {x:Type controls:RtaimeButton}}">
+											<Setter Property="Visibility" Value="Visible" />
+											<Style.Triggers>
+												<DataTrigger Binding="{Binding Startup.CanOpenDiagnostics, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="False">
+													<Setter Property="Visibility" Value="Collapsed" />
+												</DataTrigger>
+											</Style.Triggers>
+										</Style>
+									</controls:RtaimeButton.Style>
+								</controls:RtaimeButton>
+								<TextBlock
+									Grid.Column="2"
+									Text="{Binding Startup.DiagnosticActionStatus, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+									Style="{StaticResource OperatorLabel}"
+									VerticalAlignment="Center"
+									TextWrapping="Wrap" />
+							</Grid>
 						</Grid>
 					</Border>
 				</Grid>
