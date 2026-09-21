@@ -268,6 +268,7 @@ Supported application arguments include:
 --instance-id=<id>
 --service-name=<windows-service-id>
 --windows-service
+--show-console
 --disposable
 --no-ai
 ```
@@ -275,6 +276,18 @@ Supported application arguments include:
 The default requires AI readiness. `--no-ai` is an explicit reduced startup configuration and does not change the default qualified release topology.
 
 `--windows-service` requires `HeadlessEngine` and `PersistentEngine`.
+
+### Windows console and diagnostics modes
+
+| Start mode | Console behavior | Diagnostic behavior |
+| --- | --- | --- |
+| Interactive / Showcase | no console is created | Operator splash + lifecycle evidence; early failures persist to `apphost-startup.log` |
+| Interactive / Showcase + `--show-console` | attach parent console or allocate one | console/stdout/stderr plus persisted bootstrap failures |
+| HeadlessEngine | attach parent console; allocate when terminal output is needed | console/stdout/stderr plus persisted bootstrap failures |
+| HeadlessEngine with redirected stdout + stderr | no visible console required | redirected streams remain authoritative for terminal output |
+| Windows service | no interactive console | service logging + deterministic service work-root diagnostics |
+
+The GUI subsystem is selected at build time, so normal Explorer startup cannot briefly create a console before managed code runs. Console availability for operational modes is established explicitly at process bootstrap and does not change AppHost lifecycle ownership or supervision.
 
 ## Windows production lifecycle
 
