@@ -118,9 +118,9 @@ At 125%, 150% and 200%, the minimum workspace remains within the available logic
 
 Preview / Program Production Workspace formalizes the switcher workflow as **Selected Source → confirmed Preview → confirmed Program**. The local source selection is operator intent for `Set Preview`; it is never treated as Program authority.
 
-At the 1920×1080 reference viewport, EDIT uses a fixed 1070×700 production surface. The upper 390-pixel monitor row is split into equal 532-pixel Preview and Program viewers with a 6-pixel gap. Both viewers reuse the existing `MonitorView` presentation contract, a shared 40-pixel header and a 42-pixel custom transport strip. FIT remains aspect-safe through `Stretch.Uniform`; 50% and 100% remain local presentation modes.
+At the 1920×1080 reference viewport, EDIT uses a 1070×700 reference composition. The rendered production-workspace height follows the shared viewport scale at smaller logical sizes, while the upper and lower rows retain the 390:304 reference proportion around the 6-pixel separator. At reference size, the upper monitor row resolves to 390 pixels and is split into equal Preview and Program viewers with a 6-pixel gap. Both viewers reuse the existing `MonitorView` presentation contract, a shared 40-pixel header and a 42-pixel custom transport strip. FIT remains aspect-safe through `Stretch.Uniform`; 50% and 100% remain local presentation modes.
 
-The lower 304-pixel row is split into:
+At reference size, the lower row uses the following 320:462:276 proportions:
 
 - **Scene Stack — 320 px**: a compact four-row source projection using existing source thumbnails, stable display indices, remaining time and authoritative PVW/PGM routing state. A Program row receives the cyan selected-row treatment plus a red `ON AIR` badge. Dedicated multi-scene activation remains unavailable because the current V1 contract exposes no governed scene command.
 - **Output Routing — 462 px**: four presentation roles using the existing output and monitoring projections: Program, Preview, Aux and Clean Feed. Program and Preview reflect confirmed routing state, Clean Feed reflects the existing local Program monitor, and Aux remains explicitly `UNAVAILABLE / UNVERIFIED` because no governed Aux output role exists.
