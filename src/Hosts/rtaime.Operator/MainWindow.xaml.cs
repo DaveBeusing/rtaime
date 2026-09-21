@@ -114,7 +114,9 @@ public partial class MainWindow : Window
 		WorkspaceStates.PropertyChanged += OnWorkspaceStatesPropertyChanged;
 		StartStartupBrandAnimation();
 		ApplyWindowPlacement();
-		Shell.UpdateViewportWidth(ActualWidth > 0 ? ActualWidth : Width);
+		Shell.UpdateViewportSize(
+			ActualWidth > 0 ? ActualWidth : Width,
+			ActualHeight > 0 ? ActualHeight : Height);
 		SizeChanged += OnShellSizeChanged;
 		ApplyProductionFullscreen(Shell.IsFullscreen, updateShell: false);
 		DataContext = viewModel;
@@ -185,7 +187,9 @@ public partial class MainWindow : Window
 		WorkspaceStates.PropertyChanged += OnWorkspaceStatesPropertyChanged;
 		StartStartupBrandAnimation();
 		ApplyWindowPlacement();
-		Shell.UpdateViewportWidth(ActualWidth > 0 ? ActualWidth : Width);
+		Shell.UpdateViewportSize(
+			ActualWidth > 0 ? ActualWidth : Width,
+			ActualHeight > 0 ? ActualHeight : Height);
 		SizeChanged += OnShellSizeChanged;
 		ApplyProductionFullscreen(Shell.IsFullscreen, updateShell: false);
 		DataContext = viewModel;
@@ -721,7 +725,7 @@ public partial class MainWindow : Window
 	}
 
 	private void OnShellSizeChanged(object sender, SizeChangedEventArgs e) =>
-		Shell.UpdateViewportWidth(e.NewSize.Width);
+		Shell.UpdateViewportSize(e.NewSize.Width, e.NewSize.Height);
 
 	private void ApplyProductionFullscreen(bool fullscreen, bool updateShell)
 	{

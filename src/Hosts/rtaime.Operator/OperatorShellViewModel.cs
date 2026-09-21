@@ -85,7 +85,7 @@ public sealed record OperatorWindowPlacementSettings(
 
 public sealed record OperatorLayoutSettings
 {
-	public const int CurrentVersion = 5;
+	public const int CurrentVersion = 6;
 	public const double DefaultLeftPanelWidth = 400;
 	public const double DefaultRightPanelWidth = 340;
 	public const double DefaultLowerPanelHeight = 320;
@@ -95,8 +95,13 @@ public sealed record OperatorLayoutSettings
 	public const double MaximumRightPanelWidth = 500;
 	public const double MinimumLowerPanelHeight = 220;
 	public const double MaximumLowerPanelHeight = 500;
-	public const double CompactLowerPanelHeight = 220;
-	public const double CompactViewportWidth = 1100;
+	public const double CompactLowerPanelHeight = 200;
+	public const double CompactViewportWidth = 1180;
+	public const double CompactViewportHeight = 650;
+	public const double CompactNavigationWidth = 1320;
+	public const double ReferenceViewportWidth = 1920;
+	public const double ReferenceViewportHeight = 1080;
+	public const double MinimumWorkspaceScale = 0.78;
 
 	public int Version { get; init; } = CurrentVersion;
 	public bool IsFullscreen { get; init; } = true;
@@ -313,6 +318,7 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 	private string _viewerMode;
 	private OperatorWindowPlacementSettings _windowPlacement;
 	private double _viewportWidth = 1600;
+	private double _viewportHeight = 900;
 
 	public OperatorShellViewModel(
 		OperatorLayoutStore store,
@@ -362,9 +368,19 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 
 	public IReadOnlyList<string> Workspaces => OperatorWorkspaceNames.All;
 	public OperatorWindowPlacementSettings WindowPlacement => _windowPlacement;
-	public bool IsCompactViewport => _viewportWidth < OperatorLayoutSettings.CompactViewportWidth;
-	public double NavigationRailWidth => 92;
-	public Visibility NavigationLabelVisibility => Visibility.Visible;
+	public bool IsCompactViewport =>
+		_viewportWidth < OperatorLayoutSettings.CompactViewportWidth ||
+		_viewportHeight < OperatorLayoutSettings.CompactViewportHeight;
+	public double WorkspaceScale => Math.Clamp(
+		Math.Min(
+			_viewportWidth / OperatorLayoutSettings.ReferenceViewportWidth,
+			_viewportHeight / OperatorLayoutSettings.ReferenceViewportHeight),
+		OperatorLayoutSettings.MinimumWorkspaceScale,
+		1.0);
+	public double NavigationRailWidth =>
+		_viewportWidth < OperatorLayoutSettings.CompactNavigationWidth ? 68 : 92;
+	public Visibility NavigationLabelVisibility =>
+		_viewportWidth < OperatorLayoutSettings.CompactNavigationWidth ? Visibility.Collapsed : Visibility.Visible;
 	public Visibility SecondaryMetricVisibility => _viewportWidth < 1480 ? Visibility.Collapsed : Visibility.Visible;
 	public Visibility CompactOptionalVisibility => IsCompactViewport ? Visibility.Collapsed : Visibility.Visible;
 
@@ -417,7 +433,7 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 
 	public GridLength LeftColumnWidth
 	{
-		get => new(IsCenterMaximized || IsLeftCollapsed || IsCompactViewport ? 0 : IsLiveWorkspace ? 360 : LeftPanelWidth);
+		get => new(IsCenterMaximized || IsLeftCollapsed || IsCompactViewport ? 0 : (IsLiveWorkspace ? 360 : LeftPanelWidth) * WorkspaceScale);
 		set
 		{
 			if (!IsLiveWorkspace && !IsCompactViewport && !IsCenterMaximized && !IsLeftCollapsed && value.IsAbsolute && value.Value > 0)
@@ -427,7 +443,7 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 
 	public GridLength RightColumnWidth
 	{
-		get => new(IsCenterMaximized || IsRightCollapsed || IsCompactViewport || IsHealthWorkspace ? 0 : IsLiveWorkspace ? 420 : RightPanelWidth);
+		get => new(IsCenterMaximized || IsRightCollapsed || IsCompactViewport || IsHealthWorkspace ? 0 : (IsLiveWorkspace ? 420 : RightPanelWidth) * WorkspaceScale);
 		set
 		{
 			if (!IsLiveWorkspace && !IsCompactViewport && !IsCenterMaximized && !IsRightCollapsed && value.IsAbsolute && value.Value > 0)
@@ -437,7 +453,12 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 
 	public GridLength LowerRowHeight
 	{
-		get => new(IsCenterMaximized || IsLiveWorkspace || IsHealthWorkspace ? 0 : IsCompactViewport ? Math.Min(LowerPanelHeight, OperatorLayoutSettings.CompactLowerPanelHeight) : LowerPanelHeight);
+		get => new(
+			IsCenterMaximized || IsLiveWorkspace || IsHealthWorkspace
+				? 0
+				: IsCompactViewport
+					? Math.Min(LowerPanelHeight, OperatorLayoutSettings.CompactLowerPanelHeight)
+					: Math.Max(OperatorLayoutSettings.MinimumLowerPanelHeight, LowerPanelHeight * WorkspaceScale));
 		set
 		{
 			if (!IsCompactViewport && !IsCenterMaximized && value.IsAbsolute && value.Value > 0)
@@ -525,7 +546,7 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 	public Visibility TimelineRegionVisibility => HasTimelineRegion ? Visibility.Visible : Visibility.Collapsed;
 	public bool HasAuxiliaryWorkspaceColumn => IsScenesWorkspace || IsOutputsWorkspace || IsSettingsWorkspace;
 	public GridLength AuxiliaryWorkspaceColumnWidth => HasAuxiliaryWorkspaceColumn && !IsCompactViewport ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
-	public double AuxiliaryWorkspaceColumnMinWidth => HasAuxiliaryWorkspaceColumn && !IsCompactViewport ? 300 : 0;
+	public double AuxiliaryWorkspaceColumnMinWidth => HasAuxiliaryWorkspaceColumn && !IsCompactViewport ? 300 * WorkspaceScale : 0;
 	public double AuxiliaryWorkspaceGapWidth => HasAuxiliaryWorkspaceColumn && !IsCompactViewport ? 14 : 0;
 
 	public Visibility MultiviewVisibility => IsLiveWorkspace ? Visibility.Visible : Visibility.Collapsed;
@@ -616,17 +637,24 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 		OnPropertyChanged(nameof(WindowPlacement));
 	}
 
-	public void UpdateViewportWidth(double width)
+	public void UpdateViewportWidth(double width) =>
+		UpdateViewportSize(width, _viewportHeight);
+
+	public void UpdateViewportSize(double width, double height)
 	{
-		if (!double.IsFinite(width) || width <= 0 || Math.Abs(_viewportWidth - width) < 0.5)
+		if (!double.IsFinite(width) || width <= 0 || !double.IsFinite(height) || height <= 0)
+			return;
+		if (Math.Abs(_viewportWidth - width) < 0.5 && Math.Abs(_viewportHeight - height) < 0.5)
 			return;
 
-		var previousCompactNavigation = _viewportWidth < 1320;
+		var previousCompactNavigation = _viewportWidth < OperatorLayoutSettings.CompactNavigationWidth;
 		var previousCompactWorkspace = IsCompactViewport;
 		var previousSecondaryMetrics = _viewportWidth < 1480;
+		var previousWorkspaceScale = WorkspaceScale;
 		_viewportWidth = width;
+		_viewportHeight = height;
 
-		if (previousCompactNavigation != (_viewportWidth < 1320))
+		if (previousCompactNavigation != (_viewportWidth < OperatorLayoutSettings.CompactNavigationWidth))
 		{
 			OnPropertyChanged(nameof(NavigationRailWidth));
 			OnPropertyChanged(nameof(NavigationLabelVisibility));
@@ -636,8 +664,12 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 			OnPropertyChanged(nameof(IsCompactViewport));
 			OnPropertyChanged(nameof(CompactOptionalVisibility));
 			OnPropertyChanged(nameof(AuxiliaryWorkspaceColumnWidth));
-			OnPropertyChanged(nameof(AuxiliaryWorkspaceColumnMinWidth));
 			OnPropertyChanged(nameof(AuxiliaryWorkspaceGapWidth));
+		}
+		if (Math.Abs(previousWorkspaceScale - WorkspaceScale) >= 0.005 || previousCompactWorkspace != IsCompactViewport)
+		{
+			OnPropertyChanged(nameof(WorkspaceScale));
+			OnPropertyChanged(nameof(AuxiliaryWorkspaceColumnMinWidth));
 			RaiseLayoutGeometryChanged();
 		}
 		if (previousSecondaryMetrics != (_viewportWidth < 1480))
