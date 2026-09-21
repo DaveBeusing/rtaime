@@ -218,6 +218,29 @@ $globalPaletteTokens = @{
 	"#3478D4" = "OperatorColorTimeline"
 	"#7259D7" = "OperatorColorGraphics"
 	"#22A977" = "OperatorColorAudio"
+	"#05080B" = "OperatorColorMediaCanvas"
+	"#090C10" = "OperatorColorThumbnailCanvas"
+	"#0A141C" = "OperatorColorDiagnosticSurface"
+	"#0C151D" = "OperatorColorTimelineSurface"
+	"#111D26" = "OperatorColorTimelineTrack"
+	"#E0111D26" = "OperatorColorTimelineTrackOverlay"
+	"#B0000000" = "OperatorColorOverlayScrimSoft"
+	"#C0000000" = "OperatorColorOverlayScrim"
+	"#FFFFFFFF" = "OperatorColorOverlayText"
+	"#55FFFFFF" = "OperatorColorGuideSubtle"
+	"#70FFFFFF" = "OperatorColorGuideMedium"
+	"#B0FFFFFF" = "OperatorColorGuideStrong"
+	"#C0FFFFFF" = "OperatorColorGuidePrimary"
+	"#CC071017" = "OperatorColorMonitorHeaderOverlay"
+	"#D0071017" = "OperatorColorMonitorFooterOverlay"
+	"#DC071017" = "OperatorColorMultiviewHeaderOverlay"
+	"#D8071017" = "OperatorColorMultiviewOverlay"
+	"#C8071017" = "OperatorColorMultiviewOverlayMuted"
+	"#F2071017" = "OperatorColorMultiviewOverlayStrong"
+	"#13222C" = "OperatorColorGraphSurface"
+	"#1B303C" = "OperatorColorGraphSurfaceRaised"
+	"#D00A141C" = "OperatorColorGraphOverlay"
+	"#D8FFFFFF" = "OperatorColorTimelineStatusText"
 }
 
 $featureAuditViolations = [System.Collections.Generic.List[string]]::new()
@@ -251,10 +274,20 @@ foreach ($featureFile in $featureXamlFiles) {
 			}
 		}
 
+		if ($node.HasAttribute("FontSize")) {
+			$fontSizeValue = $node.GetAttribute("FontSize")
+			if ($fontSizeValue -match '^\d+(?:\.\d+)?$') {
+				$featureAuditViolations.Add("$relativePath contains numeric FontSize '$fontSizeValue'; shared Operator typography must use semantic font-size tokens.")
+			}
+		}
+
 		foreach ($attribute in $node.Attributes) {
 			$value = $attribute.Value.ToUpperInvariant()
 			if ($globalPaletteTokens.ContainsKey($value)) {
 				$featureAuditViolations.Add("$relativePath hardcodes global palette value '$value'; use token '$($globalPaletteTokens[$value])'.")
+			}
+			elseif ($value -match '^#(?:[0-9A-F]{6}|[0-9A-F]{8})$') {
+				$featureAuditViolations.Add("$relativePath contains hardcoded color literal '$value'; visible colors belong in semantic Operator tokens or theme resources.")
 			}
 		}
 	}
@@ -367,7 +400,7 @@ Assert-Condition ($monitorWorkspaceTheme -match 'Height" Value="40"' -and $monit
 Assert-Condition ($monitorWorkspaceTheme -match 'x:Key="RtaimeProductionLowerPanel"' -and $monitorWorkspaceTheme -match 'x:Key="RtaimeProductionSceneItem"' -and $monitorWorkspaceTheme -match 'x:Key="RtaimeProductionOutputItem"' -and $monitorWorkspaceTheme -match 'RtaimeProductionStatusDot') "Lower production panels must use the shared compact mockup chrome."
 
 Assert-Condition ($theme -match 'Source="OperatorTokens\.xaml"') "Operator theme must load the shared design-token dictionary."
-foreach ($token in @("OperatorFontFamily", "OperatorTimecodeFontFamily", "OperatorTopBarHeight", "OperatorTopBarGridLength", "OperatorNavigationWidth", "OperatorMediaPanelWidth", "OperatorInspectorWidth", "OperatorTimelineHeight", "OperatorRegionGap", "OperatorRegionGapGridLength", "OperatorControlHeight", "OperatorCompactControlHeight", "OperatorRadiusPanel", "OperatorRadiusControl", "OperatorColorTopBar", "OperatorColorNavigation", "OperatorColorSurface", "OperatorColorAlternateSurface", "OperatorColorRaisedSurface", "OperatorColorRaisedHover", "OperatorColorBorder", "OperatorColorBorderStrong", "OperatorColorText", "OperatorColorSecondaryText", "OperatorColorMutedText", "OperatorColorAccent", "OperatorColorPreview", "OperatorColorProgram", "OperatorColorHealthy", "OperatorColorWarning", "OperatorColorError", "OperatorColorTimeline", "OperatorColorGraphics", "OperatorColorAudio")) {
+foreach ($token in @("OperatorFontFamily", "OperatorTimecodeFontFamily", "OperatorTopBarHeight", "OperatorTopBarGridLength", "OperatorNavigationWidth", "OperatorMediaPanelWidth", "OperatorInspectorWidth", "OperatorTimelineHeight", "OperatorRegionGap", "OperatorRegionGapGridLength", "OperatorControlHeight", "OperatorCompactControlHeight", "OperatorRadiusPanel", "OperatorRadiusControl", "OperatorColorTopBar", "OperatorColorNavigation", "OperatorColorSurface", "OperatorColorAlternateSurface", "OperatorColorRaisedSurface", "OperatorColorRaisedHover", "OperatorColorBorder", "OperatorColorBorderStrong", "OperatorColorText", "OperatorColorSecondaryText", "OperatorColorMutedText", "OperatorColorAccent", "OperatorColorPreview", "OperatorColorProgram", "OperatorColorHealthy", "OperatorColorWarning", "OperatorColorError", "OperatorColorTimeline", "OperatorColorGraphics", "OperatorColorAudio", "OperatorFontSizeMicro", "OperatorFontSizeMetadata", "OperatorFontSizeDisplay", "OperatorFontSizeHero", "OperatorCompactOverlayPadding", "OperatorMonitorLabelPadding", "OperatorMonitorFooterPadding", "OperatorRadiusOverlay", "OperatorColorMediaCanvas", "OperatorColorThumbnailCanvas", "OperatorColorDiagnosticSurface", "OperatorColorTimelineSurface", "OperatorColorTimelineTrackOverlay", "OperatorColorOverlayScrim", "OperatorColorOverlayText", "OperatorColorGuidePrimary", "OperatorColorMonitorHeaderOverlay", "OperatorColorMonitorFooterOverlay", "OperatorColorMultiviewOverlay", "OperatorColorGraphSurface", "OperatorColorGraphOverlay", "OperatorColorTimelineStatusText")) {
 	Assert-Condition ($tokens -match [Regex]::Escape($token)) "Operator design token '$token' is required."
 }
 
@@ -406,7 +439,7 @@ foreach ($contractValue in @(
 )) {
 	Assert-Condition ($tokens -match [Regex]::Escape($contractValue)) "Operator mockup contract value is required: $contractValue"
 }
-foreach ($resource in @("OperatorPreviewBrush", "OperatorProgramBrush", "OperatorArmedBrush", "OperatorHealthyBrush", "OperatorWarningBrush", "OperatorErrorBrush", "OperatorEvidenceBadge", "OperatorFocusVisual", "OperatorToolbar", "OperatorToggleButton", "OperatorSourceItem", "OperatorMeter", "OperatorTimelineSlider", "OperatorPreviewTally", "OperatorProgramTally", "OperatorTopBar", "OperatorShellRegion", "OperatorTransportBar", "StatusPill", "MetricMeter", "WorkspaceNavItem", "PanelHeader", "SectionDivider", "OperatorVerticalSplitter", "OperatorHorizontalSplitter", "OperatorLoadingState", "OperatorErrorState")) {
+foreach ($resource in @("OperatorPreviewBrush", "OperatorProgramBrush", "OperatorArmedBrush", "OperatorHealthyBrush", "OperatorWarningBrush", "OperatorErrorBrush", "OperatorEvidenceBadge", "OperatorFocusVisual", "OperatorToolbar", "OperatorToggleButton", "OperatorSourceItem", "OperatorMeter", "OperatorTimelineSlider", "OperatorPreviewTally", "OperatorProgramTally", "OperatorTopBar", "OperatorShellRegion", "OperatorTransportBar", "StatusPill", "MetricMeter", "WorkspaceNavItem", "PanelHeader", "SectionDivider", "OperatorVerticalSplitter", "OperatorHorizontalSplitter", "OperatorLoadingState", "OperatorErrorState", "OperatorMediaCanvas", "OperatorMonitorGuide", "OperatorMonitorHeaderOverlay", "OperatorMonitorFooterOverlay", "OperatorOverlayScrim", "OperatorThumbnailFrame", "OperatorDiagnosticPanel", "OperatorGraphOverlay")) {
 	Assert-Condition ($theme -match [Regex]::Escape($resource)) "Operator theme resource '$resource' is required."
 }
 
