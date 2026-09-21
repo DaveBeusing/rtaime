@@ -59,7 +59,7 @@
 					<ColumnDefinition Width="Auto" />
 				</Grid.ColumnDefinitions>
 				<StackPanel>
-					<TextBlock Text="HEALTH CENTER" Style="{StaticResource OperatorSectionTitle}" FontSize="16" />
+					<TextBlock Text="HEALTH CENTER" Style="{StaticResource OperatorSectionTitle}" FontSize="{StaticResource OperatorFontSizeSubheading}" />
 					<TextBlock
 						Text="{Binding OverallSummary}"
 						Style="{StaticResource OperatorLabel}"
@@ -70,7 +70,7 @@
 				<StackPanel Grid.Column="1" HorizontalAlignment="Right">
 					<TextBlock Text="PRODUCTION READINESS" Style="{StaticResource OperatorLabel}" HorizontalAlignment="Right" Margin="0,0,0,4" />
 					<Border Style="{StaticResource HealthCenterStateBadge}" Tag="{Binding OverallState}" HorizontalAlignment="Right">
-						<TextBlock Text="{Binding OverallState}" FontWeight="Bold" FontSize="12" />
+						<TextBlock Text="{Binding OverallState}" FontWeight="Bold" FontSize="{StaticResource OperatorFontSizeBody}" />
 					</Border>
 					<TextBlock Text="{Binding ProductionReadiness}" Style="{StaticResource OperatorLabel}" HorizontalAlignment="Right" Margin="0,5,0,0" />
 				</StackPanel>
@@ -105,7 +105,7 @@
 							<DockPanel>
 								<TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" />
 								<Border Style="{StaticResource HealthCenterStateBadge}" Tag="{Binding State}" DockPanel.Dock="Right" Margin="8,0,0,0">
-									<TextBlock Text="{Binding State}" FontSize="8" FontWeight="Bold" />
+									<TextBlock Text="{Binding State}" FontSize="{StaticResource OperatorFontSizeFinePrint}" FontWeight="Bold" />
 								</Border>
 							</DockPanel>
 							<TextBlock
@@ -172,10 +172,10 @@
 									</Grid.ColumnDefinitions>
 									<StackPanel>
 										<TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" />
-										<TextBlock Text="{Binding Detail}" Style="{StaticResource OperatorLabel}" FontSize="9" TextTrimming="CharacterEllipsis" MaxWidth="210" />
+										<TextBlock Text="{Binding Detail}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextTrimming="CharacterEllipsis" MaxWidth="210" />
 									</StackPanel>
 									<Border Grid.Column="1" Style="{StaticResource HealthCenterStateBadge}" Tag="{Binding State}" VerticalAlignment="Center">
-										<TextBlock Text="{Binding State}" FontSize="8" FontWeight="Bold" />
+										<TextBlock Text="{Binding State}" FontSize="{StaticResource OperatorFontSizeFinePrint}" FontWeight="Bold" />
 									</Border>
 								</Grid>
 							</DataTemplate>
@@ -200,10 +200,10 @@
 									</Grid.ColumnDefinitions>
 									<StackPanel>
 										<TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" />
-										<TextBlock Text="{Binding Category}" Style="{StaticResource OperatorLabel}" FontSize="9" />
+										<TextBlock Text="{Binding Category}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" />
 									</StackPanel>
 									<Border Grid.Column="1" Style="{StaticResource HealthCenterStateBadge}" Tag="{Binding State}" VerticalAlignment="Center">
-										<TextBlock Text="{Binding State}" FontSize="9" FontWeight="Bold" />
+										<TextBlock Text="{Binding State}" FontSize="{StaticResource OperatorFontSizeMicro}" FontWeight="Bold" />
 									</Border>
 								</Grid>
 							</DataTemplate>
@@ -228,7 +228,7 @@
 							<ColumnDefinition Width="Auto" />
 						</Grid.ColumnDefinitions>
 						<StackPanel>
-							<TextBlock Text="{Binding SelectedSubsystem.DisplayName}" Style="{StaticResource OperatorSectionTitle}" FontSize="15" />
+							<TextBlock Text="{Binding SelectedSubsystem.DisplayName}" Style="{StaticResource OperatorSectionTitle}" FontSize="{StaticResource OperatorFontSizeWorkspaceHeader}" />
 							<TextBlock Text="{Binding SelectedSubsystem.Category}" Style="{StaticResource OperatorLabel}" Margin="0,3,0,0" />
 						</StackPanel>
 						<Border Grid.Column="1" Style="{StaticResource HealthCenterStateBadge}" Tag="{Binding SelectedSubsystem.State}" VerticalAlignment="Top">
