@@ -1,6 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 using System.Text.Json;
+using rtaime.AppHost;
 using rtaime.Operator;
 
 namespace rtaime.Tests.Operator;
