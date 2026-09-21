@@ -66,17 +66,17 @@
 						<Grid Margin="0,0,0,4">
 							<Grid.ColumnDefinitions><ColumnDefinition Width="76" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
 							<TextBlock Text="Selected" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" />
-							<TextBlock Grid.Column="1" Text="{Binding SelectedSource.Name, TargetNullValue=No selection}" FontSize="11" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+							<TextBlock Grid.Column="1" Text="{Binding SelectedSource.Name, TargetNullValue=No selection}" FontSize="{StaticResource OperatorFontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
 						</Grid>
 						<Grid Margin="0,0,0,4">
 							<Grid.ColumnDefinitions><ColumnDefinition Width="76" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-							<TextBlock Text="NEXT" Foreground="{DynamicResource OperatorPreviewBrush}" FontSize="10" FontWeight="Bold" VerticalAlignment="Center" />
-							<TextBlock Grid.Column="1" Text="{Binding PreviewSourceName}" FontSize="11" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+							<TextBlock Text="NEXT" Foreground="{DynamicResource OperatorPreviewBrush}" FontSize="{StaticResource OperatorFontSizeCompact}" FontWeight="Bold" VerticalAlignment="Center" />
+							<TextBlock Grid.Column="1" Text="{Binding PreviewSourceName}" FontSize="{StaticResource OperatorFontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
 						</Grid>
 						<Grid Margin="0,0,0,8">
 							<Grid.ColumnDefinitions><ColumnDefinition Width="76" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-							<TextBlock Text="LIVE" Foreground="{DynamicResource OperatorProgramBrush}" FontSize="10" FontWeight="Bold" VerticalAlignment="Center" />
-							<TextBlock Grid.Column="1" Text="{Binding ProgramSourceName}" FontSize="11" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+							<TextBlock Text="LIVE" Foreground="{DynamicResource OperatorProgramBrush}" FontSize="{StaticResource OperatorFontSizeCompact}" FontWeight="Bold" VerticalAlignment="Center" />
+							<TextBlock Grid.Column="1" Text="{Binding ProgramSourceName}" FontSize="{StaticResource OperatorFontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
 						</Grid>
 
 						<Grid Margin="0,0,0,6">
@@ -138,8 +138,8 @@
 								</Grid.ColumnDefinitions>
 								<TextBlock Text="01" Style="{StaticResource OperatorLabel}" FontFamily="{DynamicResource OperatorTimecodeFontFamily}" VerticalAlignment="Center" />
 								<StackPanel Grid.Column="1" VerticalAlignment="Center">
-									<TextBlock Text="{Binding GraphicsAssetName}" FontSize="11" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-									<TextBlock Text="{Binding GraphicsDimensions}" Style="{StaticResource OperatorLabel}" FontSize="9" />
+									<TextBlock Text="{Binding GraphicsAssetName}" FontSize="{StaticResource OperatorFontSizeCaption}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+									<TextBlock Text="{Binding GraphicsDimensions}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" />
 								</StackPanel>
 								<controls:RtaimeStatusBadge Grid.Column="2"
 									Status="{x:Static controls:RtaimeStatusKind.Program}"
@@ -158,7 +158,7 @@
 						<TextBlock
 							Text="Additional PGM layer rows remain unavailable until governed layer-stack semantics exist."
 							Style="{StaticResource OperatorLabel}"
-							FontSize="9"
+							FontSize="{StaticResource OperatorFontSizeMicro}"
 							TextWrapping="Wrap"
 							Margin="0,5,0,0" />
 					</StackPanel>
@@ -198,7 +198,7 @@
 								IsCompact="True"
 								Background="{DynamicResource OperatorErrorBrush}"
 								BorderBrush="{DynamicResource OperatorErrorBrush}"
-								Foreground="White"
+								Foreground="{DynamicResource OperatorOverlayTextBrush}"
 								ToolTip="Stop and finalize active Program recording." />
 						</Grid>
 						<Grid>
@@ -253,36 +253,36 @@
 											<DockPanel>
 												<TextBlock
 													Text="{Binding AffectedComponent}"
-													FontSize="10"
+													FontSize="{StaticResource OperatorFontSizeCompact}"
 													FontWeight="Bold" />
 												<StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
-													<TextBlock Text="{Binding Condition}" Style="{StaticResource OperatorLabel}" FontSize="9" />
+													<TextBlock Text="{Binding Condition}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" />
 													<TextBlock Text=" " />
-													<TextBlock Text="{Binding OccurrenceLabel}" Style="{StaticResource OperatorLabel}" FontSize="9" />
+													<TextBlock Text="{Binding OccurrenceLabel}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" />
 												</StackPanel>
 											</DockPanel>
 											<TextBlock
 												Text="{Binding Title}"
-												FontSize="11"
+												FontSize="{StaticResource OperatorFontSizeCaption}"
 												FontWeight="SemiBold"
 												TextWrapping="Wrap"
 												Margin="0,3,0,0" />
 											<TextBlock
 												Text="{Binding Detail}"
 												Style="{StaticResource OperatorLabel}"
-												FontSize="9"
+												FontSize="{StaticResource OperatorFontSizeMicro}"
 												TextWrapping="Wrap"
 												Margin="0,3,0,0" />
 											<TextBlock
 												Text="{Binding ProductionImpact}"
 												Style="{StaticResource OperatorLabel}"
-												FontSize="9"
+												FontSize="{StaticResource OperatorFontSizeMicro}"
 												TextWrapping="Wrap"
 												Margin="0,3,0,0" />
 											<TextBlock
 												Text="{Binding OperatorAction}"
 												Foreground="{DynamicResource OperatorWarningBrush}"
-												FontSize="9"
+												FontSize="{StaticResource OperatorFontSizeMicro}"
 												TextWrapping="Wrap"
 												Margin="0,3,0,0" />
 											<controls:RtaimeButton
@@ -322,7 +322,7 @@
 													Text="{Binding TechnicalDetail}"
 													Style="{StaticResource OperatorLabel}"
 													FontFamily="{DynamicResource OperatorTimecodeFontFamily}"
-													FontSize="9"
+													FontSize="{StaticResource OperatorFontSizeMicro}"
 													TextWrapping="Wrap" />
 											</Border>
 										</StackPanel>
