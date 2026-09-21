@@ -23,6 +23,12 @@ The canonical workspaces are:
 
 Switching workspaces never creates a second production snapshot or forks product state.
 
+## Shared visual contract
+
+All workspaces consume the shared Operator design system for typography, media and thumbnail canvases, diagnostic surfaces, monitor overlays, scrims, guides, badges and repeated panel chrome. The 1920×1080 dimensions documented below are qualification/reference geometry; actual presentation follows the current view container and responsive shell rules rather than forcing a fixed render size.
+
+Preview and Program remain visually and semantically distinct even when they share monitor chrome. Workspace-local geometry may remain local when it expresses a one-off functional layout, but repeated visual values belong in `OperatorTokens.xaml` or shared theme styles. Workspace styling never changes routing, playback, monitoring, health or output authority.
+
 ## LIVE
 
 LIVE is the primary fast production workspace. It is arranged as a three-zone operator surface: source/cue selection on the left, adaptive multiview plus Quick Controls in the center, and explicit Live Controls on the right.
