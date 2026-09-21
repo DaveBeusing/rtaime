@@ -411,29 +411,32 @@ public sealed class StartupLifecycleViewModel : INotifyPropertyChanged, IDisposa
 		if (_initialStartupCompleted)
 			return;
 
+		if (_latchedFailureStageId is not null)
+		{
+			var recoveryStage = stages.FirstOrDefault(stage =>
+				string.Equals(stage.Id, _latchedFailureStageId, StringComparison.Ordinal));
+			if (recoveryStage is not null &&
+				string.Equals(recoveryStage.Status, "READY", StringComparison.Ordinal))
+			{
+				_latchedFailureStageId = null;
+				_latchedFailureStageName = null;
+				_latchedFailureReason = null;
+			}
+			else
+			{
+				return;
+			}
+		}
+
 		var failedStage = stages.FirstOrDefault(stage =>
 			stage.Requirement != StartupLifecycleRequirement.Optional &&
 			string.Equals(stage.Status, "FAILED", StringComparison.Ordinal));
-		if (failedStage is not null)
-		{
-			_latchedFailureStageId = failedStage.Id;
-			_latchedFailureStageName = failedStage.DisplayName;
-			_latchedFailureReason = failedStage.FailureReason ?? failedStage.StatusText ?? $"{failedStage.DisplayName} failed.";
-			return;
-		}
-
-		if (_latchedFailureStageId is null)
+		if (failedStage is null)
 			return;
 
-		var recoveryStage = stages.FirstOrDefault(stage =>
-			string.Equals(stage.Id, _latchedFailureStageId, StringComparison.Ordinal));
-		if (recoveryStage is not null &&
-			string.Equals(recoveryStage.Status, "READY", StringComparison.Ordinal))
-		{
-			_latchedFailureStageId = null;
-			_latchedFailureStageName = null;
-			_latchedFailureReason = null;
-		}
+		_latchedFailureStageId = failedStage.Id;
+		_latchedFailureStageName = failedStage.DisplayName;
+		_latchedFailureReason = failedStage.FailureReason ?? failedStage.StatusText ?? $"{failedStage.DisplayName} failed.";
 	}
 
 	private string ResolveLatchedFailureSummary(StartupLifecycleStageViewModel? stage)
