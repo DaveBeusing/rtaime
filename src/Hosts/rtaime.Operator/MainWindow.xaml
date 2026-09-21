@@ -1580,6 +1580,7 @@
 				VerticalAlignment="Center"
 				Margin="36"
 				FocusManager.IsFocusScope="True"
+				FocusManager.FocusedElement="{Binding ElementName=StartupDetailsButton}"
 				KeyboardNavigation.TabNavigation="Cycle">
 				<Grid>
 					<Grid.RowDefinitions>
@@ -1751,6 +1752,7 @@
 							<ColumnDefinition Width="*" />
 						</Grid.ColumnDefinitions>
 						<controls:RtaimeButton
+							x:Name="StartupDetailsButton"
 							Grid.Column="1"
 							Content="{Binding Startup.DetailsAction, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 							Command="{Binding Startup.ToggleDetailsCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
