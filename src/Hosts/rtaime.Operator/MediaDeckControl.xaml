@@ -4,7 +4,6 @@
 	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 	xmlns:controls="clr-namespace:rtaime.Operator.Controls"
 	xmlns:local="clr-namespace:rtaime.Operator"
-	MinHeight="430"
 	Focusable="True"
 	UseLayoutRounding="True"
 	SnapsToDevicePixels="True">
@@ -54,7 +53,7 @@
 
 				<Border Grid.Column="0" BorderBrush="{DynamicResource OperatorPreviewBrush}" BorderThickness="1"
 					CornerRadius="{DynamicResource OperatorRadiusPanel}" Background="{DynamicResource OperatorBackgroundBrush}" Padding="1">
-					<Grid Height="260" ClipToBounds="True">
+					<Grid Height="{Binding Shell.MediaDeckPreviewHeight, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" MinHeight="0" ClipToBounds="True">
 						<Image Source="{Binding Monitoring.PreviewImage, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 							Stretch="Uniform" SnapsToDevicePixels="True" />
 						<Border VerticalAlignment="Top" HorizontalAlignment="Left" Style="{StaticResource OperatorOverlayScrim}" Padding="{StaticResource OperatorMonitorLabelPadding}" Margin="8">
@@ -93,11 +92,11 @@
 				BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" CornerRadius="{DynamicResource OperatorRadiusPanel}" Padding="12" Margin="0,0,0,14">
 				<Grid>
 					<Grid.ColumnDefinitions>
-						<ColumnDefinition Width="Auto" />
-						<ColumnDefinition Width="14" />
-						<ColumnDefinition Width="220" />
-						<ColumnDefinition Width="14" />
-						<ColumnDefinition Width="*" />
+						<ColumnDefinition Width="1*" />
+						<ColumnDefinition Width="10" />
+						<ColumnDefinition Width="0.8*" />
+						<ColumnDefinition Width="10" />
+						<ColumnDefinition Width="1.2*" />
 						<ColumnDefinition Width="Auto" />
 					</Grid.ColumnDefinitions>
 					<StackPanel>

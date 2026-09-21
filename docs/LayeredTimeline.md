@@ -43,7 +43,7 @@ The vertical contract is:
 - 40 px A2 SFX;
 - 40 px A3 VO.
 
-The track-header column is 238 pixels wide. The remaining width is the frame canvas. The ruler uses the existing frame-to-pixel converter, the Program playhead uses a 2-pixel cyan line with a cyan head, and visible named cues are projected above the tracks rather than consuming a dedicated cue row.
+The track-header column is 238 pixels wide at the reference viewport and is rendered from the shared viewport scale with a bounded 170-pixel minimum. The remaining width is the frame canvas. The ruler uses the existing frame-to-pixel converter, the Program playhead uses a 2-pixel cyan line with a cyan head, and visible named cues are projected above the tracks rather than consuming a dedicated cue row. Compact viewports collapse optional sequence/link context badges and the reserved empty V2 Video, A2 SFX and A3 VO reference lanes while retaining the governed V3 Graphics, V1 Video and A1 Music roles plus transport, timecode, cue and production-relevant controls.
 
 ## Semantic tracks
 

@@ -101,12 +101,15 @@ The design system changes presentation only. It does not add production authorit
 
 The qualified reference surface is **1920 x 1080**. The Operator opens at 1600 x 900 device-independent units, retains a 960 x 500 minimum workspace and uses vertical scrolling when the available logical height is reduced. Below the compact-workspace threshold the shell reduces presentation-only panel allocation without overwriting persisted workspace sizes.
 
+Reference geometry is converted to render geometry from the current view container. The viewport scale retains a 1.0 reference at 1920×1080, resolves to approximately 0.83 at 1600×900, 0.80 at 1536×864 and 0.67 at 1280×720, and uses a bounded 0.60 presentation floor for the 960×540 compact qualification surface. Media Deck preview height, LIVE lower output height, Compositing preview height, Health sidebar/cards, Source Bin thumbnail width, Quick Control card width and Timeline track-header width follow that render scale or a bounded compact minimum. Persisted 400 / 340 / 320 workspace dimensions remain reference coordinates; this render-only completion does not change layout schema version 6.
+
 WPF device-independent layout, `UseLayoutRounding`, device-pixel snapping and an explicit `PerMonitorV2` manifest are used together. The policy gate qualifies the layout invariants for:
 
-- 100% scaling: 1920 x 1080 logical reference surface.
-- 125% scaling: 1536 x 864 logical workspace.
-- 150% scaling: 1280 x 720 logical workspace.
-- 200% scaling: 960 x 540 logical workspace.
+- reference qualification: 1920 x 1080 logical surface.
+- standard window: 1600 x 900 logical workspace.
+- 125% qualification: 1536 x 864 logical workspace.
+- 150% qualification: 1280 x 720 logical workspace.
+- 200% qualification: 960 x 540 logical workspace.
 
 At 125%, 150% and 200%, the minimum workspace remains within the available logical bounds. Vertical scrolling plus compact panel allocation preserves access to the central production surface without changing authoritative state or persisted workspace dimensions. Operator UI Design System does not claim pixel-identical rendering across GPU drivers, Windows text-rendering settings or monitor profiles; screenshot-based visual review remains a manual showcase check.
 
@@ -118,7 +121,7 @@ At 125%, 150% and 200%, the minimum workspace remains within the available logic
 - media canvases, overlays, guides, thumbnails, diagnostic surfaces and repeated typography consume semantic shared resources rather than feature-local palette values;
 - keyboard focus is visible;
 - the Operator declares per-monitor DPI awareness;
-- the Quality gate checks 1920 x 1080 reference-layout constraints and 125%/150% scaling invariants;
+- the Quality gate checks reference geometry plus 1920×1080, 1600×900, 1536×864, 1280×720 and 960×540 responsive layout invariants;
 - Control/Runtime/Media authority boundaries are unchanged.
 
 ## Preview / Program production workspace
@@ -375,7 +378,7 @@ Detailed behavior and authority boundaries are documented in docs/LiveMultiviewA
 
 ## Layered Timeline & Cue Workspace
 
-The persistent lower workspace is a frame-accurate 1476×320 production timeline at the 1920×1080 reference surface. Its exact vertical composition is 44 pixels of toolbar, 30 pixels of ruler/marker lane and six compact reference lanes: V3 Graphics, V2 Video, V1 Video, A1 Music, A2 SFX and A3 VO. Video/graphics lanes are 42 pixels high; audio lanes are 40 pixels high. The fixed track-header column is 238 pixels wide and the remaining width is the frame canvas.
+The persistent lower workspace is a frame-accurate 1476×320 production timeline at the 1920×1080 reference surface. Its exact vertical composition is 44 pixels of toolbar, 30 pixels of ruler/marker lane and six compact reference lanes: V3 Graphics, V2 Video, V1 Video, A1 Music, A2 SFX and A3 VO. Video/graphics lanes are 42 pixels high; audio lanes are 40 pixels high. The track-header column is 238 pixels at reference size and scales down to a bounded 170-pixel compact presentation width; the remaining width is the frame canvas.
 
 The visible lane names are presentation roles only. The loaded Media Deck clip remains the authoritative V1 Video item. Existing Graphics resources project only to V3 Graphics, and existing Audio resources project only to A1 Music. V2 Video, A2 SFX and A3 VO remain empty reference lanes until matching governed product semantics exist. The underlying timeline categories and shared Inspector selection model remain unchanged.
 
@@ -394,7 +397,7 @@ The detailed operator and authority semantics are documented in docs/LayeredTime
 ### Layered timeline acceptance evidence
 
 - the shell default lower-region height remains exactly 320 pixels;
-- UI policy verifies the 44/30/238 geometry and all six reference lane labels;
+- UI policy verifies the 44/30 reference density, responsive track-header derivation and all six reference lane labels;
 - Client unit tests continue to cover frame/time conversion, zoomed visible ranges, pointer mapping and snapping;
 - marker-controller unit tests continue to cover absolute IN/OUT command generation and previous/next cue navigation;
 - UI policy verifies cyan playhead/cue markers, custom controls, zoom/scroll, trim preview/commit/cancel paths, multi-selection-to-Inspector integration and viewport-bounded projection refresh;

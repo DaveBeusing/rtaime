@@ -473,6 +473,43 @@ Assert-Condition ($minHeight -le [Math]::Floor(1080 / 2.0)) "Operator minimum he
 Assert-Condition ($shell -match 'CompactViewportWidth' -and $shell -match 'IsCompactViewport' -and $shell -match 'CompactLowerPanelHeight') "Operator shell must provide a presentation-only compact workspace mode for constrained high-DPI viewports."
 Assert-Condition ($window -match '<controls:RtaimeScrollViewer[^>]+VerticalScrollBarVisibility="Auto"') "Operator must preserve vertical access through the custom scroll surface when DPI scaling reduces logical workspace height."
 
+$referenceWidth = [double]([Regex]::Match($shell, 'ReferenceViewportWidth = (?<value>\d+(?:\.\d+)?)').Groups["value"].Value)
+$referenceHeight = [double]([Regex]::Match($shell, 'ReferenceViewportHeight = (?<value>\d+(?:\.\d+)?)').Groups["value"].Value)
+$minimumWorkspaceScale = [double]([Regex]::Match($shell, 'MinimumWorkspaceScale = (?<value>\d+(?:\.\d+)?)').Groups["value"].Value)
+$compactViewportWidth = [double]([Regex]::Match($shell, 'CompactViewportWidth = (?<value>\d+(?:\.\d+)?)').Groups["value"].Value)
+$compactViewportHeight = [double]([Regex]::Match($shell, 'CompactViewportHeight = (?<value>\d+(?:\.\d+)?)').Groups["value"].Value)
+$compactLowerPanelHeight = [double]([Regex]::Match($shell, 'CompactLowerPanelHeight = (?<value>\d+(?:\.\d+)?)').Groups["value"].Value)
+
+function Resolve-WorkspaceScale([double] $viewportWidth, [double] $viewportHeight) {
+	$rawScale = [Math]::Min($viewportWidth / $referenceWidth, $viewportHeight / $referenceHeight)
+	return [Math]::Max($minimumWorkspaceScale, [Math]::Min(1.0, $rawScale))
+}
+
+function Resolve-ProductionWorkspaceHeight([double] $viewportWidth, [double] $viewportHeight) {
+	$isCompact = $viewportWidth -lt $compactViewportWidth -or $viewportHeight -lt $compactViewportHeight
+	if ($isCompact) {
+		return [Math]::Max(260.0, [Math]::Min(520.0, $viewportHeight - $compactLowerPanelHeight - 90.0))
+	}
+	return 700.0 * (Resolve-WorkspaceScale $viewportWidth $viewportHeight)
+}
+
+foreach ($layoutCase in @(
+	@{ Width = 1920.0; Height = 1080.0; Scale = 1.0; ProductionHeight = 700.0 },
+	@{ Width = 1600.0; Height = 900.0; Scale = (5.0 / 6.0); ProductionHeight = (700.0 * 5.0 / 6.0) },
+	@{ Width = 1536.0; Height = 864.0; Scale = 0.8; ProductionHeight = 560.0 },
+	@{ Width = 1280.0; Height = 720.0; Scale = (2.0 / 3.0); ProductionHeight = (700.0 * 2.0 / 3.0) },
+	@{ Width = 960.0; Height = 540.0; Scale = 0.6; ProductionHeight = 260.0 }
+)) {
+	$resolvedScale = Resolve-WorkspaceScale $layoutCase.Width $layoutCase.Height
+	$resolvedProductionHeight = Resolve-ProductionWorkspaceHeight $layoutCase.Width $layoutCase.Height
+	Assert-Condition ([Math]::Abs($resolvedScale - $layoutCase.Scale) -lt 0.002) "Workspace scale must remain stable at $($layoutCase.Width)x$($layoutCase.Height)."
+	Assert-Condition ([Math]::Abs($resolvedProductionHeight - $layoutCase.ProductionHeight) -lt 0.5) "Production workspace height must remain container-derived at $($layoutCase.Width)x$($layoutCase.Height)."
+}
+
+Assert-Condition ($shell -match 'CurrentVersion = 6') "Render-only responsive layout completion must not bump the persisted Operator layout schema."
+Assert-Condition ($shell -match 'CenterWorkspacePrimaryMinWidth' -and $shell -match 'MediaDeckPreviewHeight' -and $shell -match 'LiveLowerPanelHeight' -and $shell -match 'CompositingPreviewHeight' -and $shell -match 'HealthSidebarWidth' -and $shell -match 'TimelineHeaderColumnWidth') "Responsive feature geometry must be derived centrally from the Operator shell viewport."
+Assert-Condition ($window -notmatch 'MinWidth="610"' -and $deck -notmatch 'MinHeight="430"' -and $inspectorHost -notmatch 'MinWidth="260"' -and $liveSceneCue -notmatch 'MinWidth="280"' -and $liveControls -notmatch 'MinWidth="320"' -and $outputHealthControl -notmatch 'MinWidth="320"' -and $multiview -notmatch 'MinHeight="180"') "Feature surfaces must not reintroduce global minimum geometry that overrides their view containers."
+
 Assert-Condition ($window -match 'ItemsSource="\{Binding Sources\}"') "Operator must expose the source bank as a bound collection."
 Assert-Condition ($window -match 'Style="\{StaticResource RtaimeSourceBank\}"' -and $customInputTheme -match 'x:Key="RtaimeSourceBank"') "Source bank must use the shared custom rtaime collection style."
 Assert-Condition ($window -match 'ItemContainerStyle="\{StaticResource OperatorSourceItem\}"') "Source tiles must use the shared tile style."
@@ -528,7 +565,7 @@ foreach ($trackLabel in @("V3  GRAPHICS", "V2  VIDEO", "V1  VIDEO", "A1  MUSIC",
 	Assert-Condition ($timelineViewModel -match [Regex]::Escape($trackLabel)) "Timeline reference track '$trackLabel' is required."
 }
 Assert-Condition ($timelineViewModel -match 'RowHeight => IsVideoLane \? 42\.0 : 40\.0' -and $timelineViewModel -match 'IsVideoLane' -and $timelineViewModel -match 'IsAudioLane') "Timeline rows must retain approximately 42px video/graphics and 40px audio density."
-Assert-Condition ($timeline -match '<RowDefinition Height="44" />' -and $timeline -match '<RowDefinition Height="30" />' -and $timeline -match '<ColumnDefinition Width="238" />') "Timeline must retain the 44px toolbar, 30px ruler and 238px track-header reference geometry."
+Assert-Condition ($timeline -match '<RowDefinition Height="44" />' -and $timeline -match '<RowDefinition Height="30" />' -and $timeline -match 'Shell\.TimelineHeaderColumnWidth') "Timeline must retain the 44px toolbar and 30px ruler while deriving track-header render width from the reference geometry."
 Assert-Condition ($tokens -match '<sys:Double x:Key="OperatorTimelineHeight">320</sys:Double>' -and $shell -match 'DefaultLowerPanelHeight = 320') "Timeline default shell height must remain exactly 320px."
 Assert-Condition ($timeline -match 'OperatorColorTimelineSurface' -and $timeline -match 'OperatorColorTimelineTrack' -and $timeline -match 'OperatorTimelineTrackOverlayBrush' -and $timeline -match 'OperatorColorTimeline' -and $timeline -match 'OperatorColorGraphics' -and $timeline -match 'OperatorColorAudio' -and $timeline -match 'OperatorColorWarning') "Timeline background, ruler and cue overlays must consume shared semantic design resources."
 Assert-Condition ($timeline -match 'ItemsSource="\{Binding RulerTicks\}"' -and $timelineViewModel -match 'TimelineRulerTickViewModel') "Timeline must expose a frame-derived time ruler."
@@ -537,6 +574,7 @@ Assert-Condition ($timeline -match 'ItemsSource="\{Binding VisibleCues\}"' -and 
 Assert-Condition ($timeline -match 'Binding ScrollValue' -and $timeline -match 'controls:RtaimeScrollBar' -and $timeline -match 'Binding ZoomInCommand' -and $timeline -match 'Binding ZoomOutCommand' -and $timeline -match 'Binding FitCommand') "Timeline must expose own-control horizontal scrolling, zoom and fit controls."
 Assert-Condition ($timeline -match 'Shell\.ToggleFullscreenCommand' -and $timeline -match 'RtaimeIconFullscreenGeometry') "Timeline toolbar must reuse the existing Operator fullscreen command."
 Assert-Condition ($timeline -match 'CURRENT MEDIA' -and $timeline -match 'LINK N/A' -and $timeline -match 'Content="SELECT"' -and $timeline -match 'Content="SNAP"') "Timeline toolbar must expose current sequence context, selection mode, unavailable linking and snapping without inventing edit authority."
+Assert-Condition ($timeline -match 'DataContext\.Shell\.IsCompactViewport' -and $timeline -match 'Value="V2  VIDEO"' -and $timeline -match 'Value="A2  SFX"' -and $timeline -match 'Value="A3  VO"') "Compact timeline presentation must collapse only reserved V2/A2/A3 reference lanes while retaining governed V3/V1/A1 roles."
 Assert-Condition ($timeline -notmatch 'CutClipCommand|BladeCommand') "Timeline must not invent Blade/Cut editing commands while no governed edit command exists."
 Assert-Condition ($timeline -notmatch '<(Button|ToggleButton|CheckBox|RadioButton|TextBox|ComboBox|TabControl|TabItem|ListBox|ListView|TreeView|DataGrid|Slider|ProgressBar|ScrollBar|ScrollViewer|GridSplitter|Menu|MenuItem|ContextMenu|ToolBar)(\s|/|>)') "Timeline feature XAML must expose no directly visible stock WPF interactive chrome."
 Assert-Condition ($timelineViewModel -match 'MediaTimelineVisibleRange' -and $timelineViewModel -match 'FrameFromVisiblePosition' -and $timelineViewModel -match 'SnapFrame') "Timeline viewport and snapping must remain frame-based."
@@ -925,7 +963,7 @@ Assert-Condition ($shell -match 'PreviewViewerWidth' -and $shell -match 'Program
 Assert-Condition ($shell -match 'MaximizePreviewCommand' -and $shell -match 'MaximizeProgramCommand' -and $shell -match 'RestoreViewersCommand') "Viewer maximize/restore must remain local presentation commands."
 Assert-Condition ($shell -match 'FullscreenPreviewCommand' -and $shell -match 'FullscreenProgramCommand' -and $shell -match '_monitorFullscreenRestoreViewerMode' -and $window -match 'Shell\.FullscreenPreviewCommand' -and $window -match 'Shell\.FullscreenProgramCommand') "Monitor fullscreen must remain transient shell presentation state and restore the prior viewer layout."
 Assert-Condition ($shell -match 'PreviewViewerVisibility' -and $shell -match 'ProgramViewerVisibility' -and $productionWorkspaceSurface -match 'Shell\.PreviewViewerVisibility' -and $productionWorkspaceSurface -match 'Shell\.ProgramViewerVisibility') "Maximized production viewers must collapse the inactive viewer and restore it in dual mode."
-Assert-Condition ($shell -match 'ProductionWorkspaceHeight => 700 \* WorkspaceScale' -and $productionWorkspaceSurface -match 'Shell\.ProductionWorkspaceHeight' -and $productionWorkspaceSurface -match '<RowDefinition Height="390\*" />' -and $productionWorkspaceSurface -match '<RowDefinition Height="304\*" />') "Edit production workspace must preserve the 700/390/304 reference composition while adapting its rendered height to the current view container."
+Assert-Condition ($shell -match 'ProductionWorkspaceHeight => IsCompactViewport' -and $shell -match '700 \* WorkspaceScale' -and $productionWorkspaceSurface -match 'Shell\.ProductionWorkspaceHeight' -and $productionWorkspaceSurface -match '<RowDefinition Height="390\*" />' -and $productionWorkspaceSurface -match '<RowDefinition Height="304\*" />') "Edit production workspace must preserve the 700/390/304 reference composition while adapting its rendered height to the current view container."
 Assert-Condition ($productionWorkspaceSurface -match '<ColumnDefinition Width="320\*" />' -and $productionWorkspaceSurface -match '<ColumnDefinition Width="462\*" />' -and $productionWorkspaceSurface -match '<ColumnDefinition Width="276\*" />') "Lower production row must preserve the 320/462/276 reference proportions while adapting to the available view container."
 Assert-Condition ($productionWorkspaceSurface -match 'Text="SCENE STACK"' -and $productionWorkspaceSurface -match '<local:OutputRoutingHealthControl' -and $productionWorkspaceSurface -match 'Text="SYSTEM STATUS"') "Lower production row must expose Scene Stack, shared Output Routing and System Status."
 Assert-Condition ($productionWorkspaceSurface -match 'Width="62" Height="36"' -and $productionWorkspaceSurface -match 'Binding DisplayIndex' -and $productionWorkspaceSurface -match 'Binding Remaining') "Scene Stack must retain the compact 62x36 thumbnail, stable index and duration projection."
@@ -1044,7 +1082,7 @@ Assert-Condition ($mediaPool -match '"production\.transition\.frames"' -and $med
 
 Assert-Condition ($window -match '<local:OperatorMultiviewControl' -and $window -match 'Monitoring\.PreviewImage' -and $window -match 'Monitoring\.ProgramImage') "LIVE multiview must consume the existing Preview/Program monitoring projection."
 Assert-Condition ($shell -match 'IsLiveWorkspace \? 360 : LeftPanelWidth' -and $shell -match 'IsLiveWorkspace \? 420 : RightPanelWidth' -and $shell -match 'LeftSplitterWidth.+: 6' -and $shell -match 'RightSplitterWidth.+: 6') "LIVE shell must retain the 360 / 6 / flexible / 6 / 420 reference body split."
-Assert-Condition ($window -match 'x:Name="LiveWorkspaceSurface"' -and $window -match '<RowDefinition Height="6" />' -and $window -match '<RowDefinition Height="270" />' -and $window -match 'CompactMode="True"') "LIVE center must place compact Output Routing below the multiview with a 6px gap and 270px block."
+Assert-Condition ($window -match 'x:Name="LiveWorkspaceSurface"' -and $window -match '<RowDefinition Height="6" />' -and $window -match 'Shell\.LiveLowerPanelHeight' -and $window -match 'CompactMode="True"') "LIVE center must preserve the 270px reference Output Routing region while deriving its rendered height from the current viewport."
 Assert-Condition ($window -match 'PreviewImage="\{Binding Monitoring\.PreviewImage' -and $window -match 'ProgramImage="\{Binding Monitoring\.ProgramImage' -and $window -match 'Sources="\{Binding Sources\}"' -and $multiview -match 'Source="\{Binding Thumbnail\}"') "Reusable multiview must project supported monitoring feeds and source thumbnails."
 Assert-Condition ($multiviewCode -notmatch 'NamedPipe|MediaElement|VideoDrawing|OperatorControlClient') "Multiview must not create another transport, player or authority path."
 Assert-Condition ($multiviewCode -match '_sourceGridColumns = 3' -and $multiviewCode -match '_sourceGridPreset = "3×3"' -and $multiviewCode -match 'SetGridPreset\(2\)' -and $multiviewCode -match 'SetGridPreset\(3\)' -and $multiviewCode -match 'SetGridPreset\(4\)' -and $multiviewCode -match 'MaximumDisplayedSources = 16') "LIVE multiview must default to 3x3, support explicit 2x2/3x3/4x4 presets and remain bounded to 16 source tiles."
@@ -1065,7 +1103,7 @@ Assert-Condition ($liveSceneCue -match 'SelectedItem="\{Binding SelectedSource, 
 Assert-Condition ($liveSceneCue -match 'MediaDeck\.SelectedCue' -and $liveSceneCue -match 'MediaDeck\.JumpCueCommand' -and $liveSceneCue -notmatch 'SelectionChanged=') "LIVE cue selection must not auto-execute cue activation."
 Assert-Condition ($liveSceneCue -match 'NOT AVAILABLE IN V1 CONTRACT') "LIVE scene controls must fail closed while no governed scene activation contract exists."
 Assert-Condition ($outputHealthViewModel -match 'new OutputStatusViewModel\("program", "PROGRAM"\)' -and $outputHealthViewModel -match 'new OutputStatusViewModel\("preview", "PREVIEW"\)' -and $outputHealthViewModel -match 'new OutputStatusViewModel\("aux", "AUX"\)' -and $outputHealthViewModel -match 'new OutputStatusViewModel\("clean-program", "CLEAN FEED"\)') "LIVE compact Output Routing must project exactly the four existing output roles."
-Assert-Condition ($outputHealthControl -match 'Height="270"' -and $outputHealthControl -match 'Property="Height" Value="54"' -and $outputHealthControl -match 'AssignedSource="\{Binding AssignedSource\}"' -and $outputHealthControl -match 'RouteState="\{Binding Status\}"' -and $outputHealthControl -match 'FrameRate="\{Binding FrameRate\}"') "LIVE Output Routing must retain four 54px shared rows with assigned source and status/fps."
+Assert-Condition ($outputHealthControl -notmatch 'x:Name="CompactLiveOutput" Height="270"' -and $outputHealthControl -match '<RowDefinition Height="\*" />' -and $outputHealthControl -match 'VerticalScrollBarVisibility="Auto"' -and $outputHealthControl -match 'Property="Height" Value="54"' -and $outputHealthControl -match 'AssignedSource="\{Binding AssignedSource\}"' -and $outputHealthControl -match 'RouteState="\{Binding Status\}"' -and $outputHealthControl -match 'FrameRate="\{Binding FrameRate\}"') "LIVE Output Routing must keep 54px reference row density while filling and scrolling within its responsive host height."
 Assert-Condition ($liveControls -match 'Text="TRANSITIONS"' -and $liveControls -match 'Text="LAYER STACK \(PGM\)"' -and $liveControls -match 'Text="STREAM &amp; RECORD"' -and $liveControls -match 'Text="ALERTS &amp; NOTIFICATIONS"') "LIVE Controls must expose Transitions, Layer Stack, Stream & Record and Alerts & Notifications sections."
 Assert-Condition ($liveControls -match 'Binding SetPreviewCommand' -and $liveControls -match 'Binding CutCommand' -and $liveControls -match 'Binding DissolveCommand' -and $liveControls -match 'Binding TransitionFrames') "LIVE controls must reuse existing routing and transition commands."
 Assert-Condition ($liveControls -match 'Content="TAKE"' -and $liveControls -match 'OperatorAccentBrush' -and $liveControls -notmatch 'Content="TAKE"[\s\S]{0,240}OperatorProgramBrush') "LIVE TAKE must use the cyan primary treatment rather than Program red."

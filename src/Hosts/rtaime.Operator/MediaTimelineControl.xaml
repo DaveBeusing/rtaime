@@ -118,7 +118,7 @@
 				BorderThickness="0,0,0,1">
 				<Grid Margin="8,0">
 					<Grid.ColumnDefinitions>
-						<ColumnDefinition Width="220" />
+						<ColumnDefinition Width="Auto" />
 						<ColumnDefinition Width="*" />
 						<ColumnDefinition Width="Auto" />
 					</Grid.ColumnDefinitions>
@@ -137,18 +137,21 @@
 						<controls:RtaimeStatusBadge
 							Status="{x:Static controls:RtaimeStatusKind.Neutral}"
 							Content="SEQ · CURRENT MEDIA"
+							Visibility="{Binding Shell.CompactOptionalVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 							ShowIndicator="False"
 							Margin="0,0,5,0"
 							ToolTip="The current V1 contract exposes one governed media timeline; sequence switching is unavailable." />
 						<controls:RtaimeStatusBadge
 							Status="{x:Static controls:RtaimeStatusKind.Selection}"
 							Content="SELECT"
+							Visibility="{Binding Shell.CompactOptionalVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 							ShowIndicator="False"
 							Margin="0,0,5,0"
 							ToolTip="Selection is the governed edit mode. Blade/cut editing is not exposed by the current timeline contract." />
 						<controls:RtaimeStatusBadge
 							Status="{x:Static controls:RtaimeStatusKind.Neutral}"
 							Content="LINK N/A"
+							Visibility="{Binding Shell.CompactOptionalVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 							ShowIndicator="False"
 							Margin="0,0,5,0"
 							ToolTip="Clip linking is not exposed by the current timeline contract." />
@@ -285,7 +288,7 @@
 
 			<Grid Grid.Row="1">
 				<Grid.ColumnDefinitions>
-					<ColumnDefinition Width="238" />
+					<ColumnDefinition Width="{Binding Shell.TimelineHeaderColumnWidth, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
 					<ColumnDefinition Width="*" />
 				</Grid.ColumnDefinitions>
 				<Border Grid.Column="0"
@@ -423,7 +426,7 @@
 				automation:AutomationProperties.Name="Layered media timeline"
 				automation:AutomationProperties.HelpText="{Binding AccessibilityDescription}">
 				<Grid.ColumnDefinitions>
-					<ColumnDefinition Width="238" />
+					<ColumnDefinition Width="{Binding Shell.TimelineHeaderColumnWidth, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
 					<ColumnDefinition Width="*" />
 				</Grid.ColumnDefinitions>
 
@@ -431,8 +434,36 @@
 					<ItemsControl.ItemTemplate>
 						<DataTemplate>
 							<Grid Height="{Binding RowHeight}">
+								<Grid.Style>
+									<Style TargetType="Grid">
+										<Setter Property="Visibility" Value="Visible" />
+										<Style.Triggers>
+											<MultiDataTrigger>
+												<MultiDataTrigger.Conditions>
+													<Condition Binding="{Binding Label}" Value="V2  VIDEO" />
+													<Condition Binding="{Binding DataContext.Shell.IsCompactViewport, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="True" />
+												</MultiDataTrigger.Conditions>
+												<Setter Property="Visibility" Value="Collapsed" />
+											</MultiDataTrigger>
+											<MultiDataTrigger>
+												<MultiDataTrigger.Conditions>
+													<Condition Binding="{Binding Label}" Value="A2  SFX" />
+													<Condition Binding="{Binding DataContext.Shell.IsCompactViewport, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="True" />
+												</MultiDataTrigger.Conditions>
+												<Setter Property="Visibility" Value="Collapsed" />
+											</MultiDataTrigger>
+											<MultiDataTrigger>
+												<MultiDataTrigger.Conditions>
+													<Condition Binding="{Binding Label}" Value="A3  VO" />
+													<Condition Binding="{Binding DataContext.Shell.IsCompactViewport, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="True" />
+												</MultiDataTrigger.Conditions>
+												<Setter Property="Visibility" Value="Collapsed" />
+											</MultiDataTrigger>
+										</Style.Triggers>
+									</Style>
+								</Grid.Style>
 								<Grid.ColumnDefinitions>
-									<ColumnDefinition Width="238" />
+									<ColumnDefinition Width="{Binding Shell.TimelineHeaderColumnWidth, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
 									<ColumnDefinition Width="*" />
 								</Grid.ColumnDefinitions>
 

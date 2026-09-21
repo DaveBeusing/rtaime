@@ -528,7 +528,7 @@
 					<Grid.RowDefinitions>
 						<RowDefinition Height="*" />
 						<RowDefinition Height="6" />
-						<RowDefinition Height="270" />
+						<RowDefinition Height="{Binding Shell.LiveLowerPanelHeight, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
 					</Grid.RowDefinitions>
 
 					<local:OperatorMultiviewControl
@@ -562,7 +562,7 @@
 
 					<Grid Grid.Column="2">
 						<Grid.RowDefinitions>
-							<RowDefinition Height="390" />
+							<RowDefinition Height="{Binding Shell.CompositingPreviewHeight, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
 							<RowDefinition Height="6" />
 							<RowDefinition Height="*" />
 						</Grid.RowDefinitions>
@@ -731,7 +731,7 @@
 					Visibility="{Binding Shell.NonLiveCenterVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
 			<Grid>
 				<Grid.ColumnDefinitions>
-					<ColumnDefinition Width="2.2*" MinWidth="610" />
+					<ColumnDefinition Width="2.2*" MinWidth="{Binding Shell.CenterWorkspacePrimaryMinWidth, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
 					<ColumnDefinition Width="{Binding Shell.AuxiliaryWorkspaceGapWidth, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
 					<ColumnDefinition Width="{Binding Shell.AuxiliaryWorkspaceColumnWidth, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 						MinWidth="{Binding Shell.AuxiliaryWorkspaceColumnMinWidth, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
@@ -749,7 +749,7 @@
 								<ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
 								<ItemsControl.ItemTemplate>
 									<DataTemplate>
-										<Border Width="218" MinHeight="88" Padding="8" Margin="0,0,7,7" BorderThickness="1" BorderBrush="{DynamicResource OperatorBorderBrush}">
+										<Border Width="{Binding Shell.QuickControlCardWidth, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" MinHeight="88" Padding="8" Margin="0,0,7,7" BorderThickness="1" BorderBrush="{DynamicResource OperatorBorderBrush}">
 											<StackPanel>
 												<DockPanel>
 													<TextBlock Text="{Binding Label}" FontWeight="SemiBold" />
@@ -1069,11 +1069,11 @@
 									<DataTemplate>
 										<Grid MinHeight="138">
 											<Grid.ColumnDefinitions>
-												<ColumnDefinition Width="200" />
+												<ColumnDefinition Width="Auto" />
 												<ColumnDefinition Width="14" />
 												<ColumnDefinition Width="*" />
 											</Grid.ColumnDefinitions>
-											<Grid Grid.Column="0" Background="{DynamicResource OperatorThumbnailCanvasBrush}" ClipToBounds="True">
+											<Grid Grid.Column="0" Width="{Binding Shell.SourceBinThumbnailWidth, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Background="{DynamicResource OperatorThumbnailCanvasBrush}" ClipToBounds="True">
 												<Image Source="{Binding Thumbnail}" Stretch="Uniform" SnapsToDevicePixels="True" />
 												<Border VerticalAlignment="Bottom" Background="{DynamicResource OperatorOverlayScrimSoftBrush}" Padding="7,4">
 													<TextBlock Text="{Binding ThumbnailFormat}" FontSize="{StaticResource OperatorFontSizeCompact}" Foreground="{DynamicResource OperatorOverlayTextBrush}" TextTrimming="CharacterEllipsis" />

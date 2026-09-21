@@ -3,7 +3,6 @@
 	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
 	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 	xmlns:controls="clr-namespace:rtaime.Operator.Controls"
-	MinWidth="320"
 	AutomationProperties.Name="Live production controls">
 	<UserControl.Resources>
 		<Style x:Key="LiveSection" TargetType="Border">

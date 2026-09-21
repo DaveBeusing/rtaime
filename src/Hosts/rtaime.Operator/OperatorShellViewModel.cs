@@ -101,7 +101,7 @@ public sealed record OperatorLayoutSettings
 	public const double CompactNavigationWidth = 1320;
 	public const double ReferenceViewportWidth = 1920;
 	public const double ReferenceViewportHeight = 1080;
-	public const double MinimumWorkspaceScale = 0.78;
+	public const double MinimumWorkspaceScale = 0.60;
 
 	public int Version { get; init; } = CurrentVersion;
 	public bool IsFullscreen { get; init; } = true;
@@ -383,6 +383,17 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 		_viewportWidth < OperatorLayoutSettings.CompactNavigationWidth ? Visibility.Collapsed : Visibility.Visible;
 	public Visibility SecondaryMetricVisibility => _viewportWidth < 1480 ? Visibility.Collapsed : Visibility.Visible;
 	public Visibility CompactOptionalVisibility => IsCompactViewport ? Visibility.Collapsed : Visibility.Visible;
+	public double CenterWorkspacePrimaryMinWidth => IsCompactViewport ? 0 : Math.Max(260, 420 * WorkspaceScale);
+	public double MediaDeckPreviewHeight => IsCompactViewport
+		? Math.Max(150, 220 * WorkspaceScale)
+		: Math.Max(180, 260 * WorkspaceScale);
+	public double LiveLowerPanelHeight => Math.Max(180, 270 * WorkspaceScale);
+	public double CompositingPreviewHeight => Math.Max(220, 390 * WorkspaceScale);
+	public double HealthSidebarWidth => Math.Max(220, 320 * WorkspaceScale);
+	public double HealthOverviewCardWidth => Math.Max(150, 178 * WorkspaceScale);
+	public double SourceBinThumbnailWidth => Math.Max(140, 200 * WorkspaceScale);
+	public double QuickControlCardWidth => Math.Max(176, 218 * WorkspaceScale);
+	public GridLength TimelineHeaderColumnWidth => new(Math.Max(170, 238 * WorkspaceScale));
 
 	public ICommand ToggleLeftPanelCommand { get; }
 	public ICommand ToggleRightPanelCommand { get; }
@@ -546,7 +557,7 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 	public Visibility TimelineRegionVisibility => HasTimelineRegion ? Visibility.Visible : Visibility.Collapsed;
 	public bool HasAuxiliaryWorkspaceColumn => IsScenesWorkspace || IsOutputsWorkspace || IsSettingsWorkspace;
 	public GridLength AuxiliaryWorkspaceColumnWidth => HasAuxiliaryWorkspaceColumn && !IsCompactViewport ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
-	public double AuxiliaryWorkspaceColumnMinWidth => HasAuxiliaryWorkspaceColumn && !IsCompactViewport ? 300 * WorkspaceScale : 0;
+	public double AuxiliaryWorkspaceColumnMinWidth => HasAuxiliaryWorkspaceColumn && !IsCompactViewport ? Math.Max(170, 240 * WorkspaceScale) : 0;
 	public double AuxiliaryWorkspaceGapWidth => HasAuxiliaryWorkspaceColumn && !IsCompactViewport ? 14 : 0;
 
 	public Visibility MultiviewVisibility => IsLiveWorkspace ? Visibility.Visible : Visibility.Collapsed;
@@ -612,7 +623,12 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 		string.Equals(ViewerMode, "PREVIEW", StringComparison.Ordinal) ? Visibility.Collapsed : Visibility.Visible;
 
 	public double ViewerGapWidth => string.Equals(ViewerMode, "DUAL", StringComparison.Ordinal) ? 6 : 0;
-	public double ProductionWorkspaceHeight => 700 * WorkspaceScale;
+	public double ProductionWorkspaceHeight => IsCompactViewport
+		? Math.Clamp(
+			_viewportHeight - OperatorLayoutSettings.CompactLowerPanelHeight - 90,
+			260,
+			520)
+		: 700 * WorkspaceScale;
 	public string ViewerModeLabel => ViewerMode switch
 	{
 		"PREVIEW" => "PREVIEW MAXIMIZED",
@@ -654,6 +670,17 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 		var previousWorkspaceScale = WorkspaceScale;
 		_viewportWidth = width;
 		_viewportHeight = height;
+
+		OnPropertyChanged(nameof(CenterWorkspacePrimaryMinWidth));
+		OnPropertyChanged(nameof(MediaDeckPreviewHeight));
+		OnPropertyChanged(nameof(LiveLowerPanelHeight));
+		OnPropertyChanged(nameof(CompositingPreviewHeight));
+		OnPropertyChanged(nameof(HealthSidebarWidth));
+		OnPropertyChanged(nameof(HealthOverviewCardWidth));
+		OnPropertyChanged(nameof(SourceBinThumbnailWidth));
+		OnPropertyChanged(nameof(QuickControlCardWidth));
+		OnPropertyChanged(nameof(TimelineHeaderColumnWidth));
+		OnPropertyChanged(nameof(ProductionWorkspaceHeight));
 
 		if (previousCompactNavigation != (_viewportWidth < OperatorLayoutSettings.CompactNavigationWidth))
 		{
@@ -885,6 +912,15 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 		OnPropertyChanged(nameof(LeftSplitterWidth));
 		OnPropertyChanged(nameof(RightSplitterWidth));
 		OnPropertyChanged(nameof(LowerSplitterHeight));
+		OnPropertyChanged(nameof(CenterWorkspacePrimaryMinWidth));
+		OnPropertyChanged(nameof(MediaDeckPreviewHeight));
+		OnPropertyChanged(nameof(LiveLowerPanelHeight));
+		OnPropertyChanged(nameof(CompositingPreviewHeight));
+		OnPropertyChanged(nameof(HealthSidebarWidth));
+		OnPropertyChanged(nameof(HealthOverviewCardWidth));
+		OnPropertyChanged(nameof(SourceBinThumbnailWidth));
+		OnPropertyChanged(nameof(QuickControlCardWidth));
+		OnPropertyChanged(nameof(TimelineHeaderColumnWidth));
 		OnPropertyChanged(nameof(ProductionWorkspaceHeight));
 	}
 

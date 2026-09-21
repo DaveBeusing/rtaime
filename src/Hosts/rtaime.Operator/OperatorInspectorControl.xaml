@@ -5,7 +5,6 @@
 	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 	xmlns:controls="clr-namespace:rtaime.Operator.Controls"
 	xmlns:local="clr-namespace:rtaime.Operator"
-	MinWidth="260"
 	Focusable="False"
 	UseLayoutRounding="True"
 	SnapsToDevicePixels="True">

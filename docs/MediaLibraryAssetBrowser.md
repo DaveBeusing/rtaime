@@ -38,7 +38,7 @@ Search reacts directly to changes in the search field and matches the projected 
 
 ## Grid and list presentation
 
-At the 1920×1080 reference viewport, the Media Library occupies the fixed 400-pixel left shell region. The visible inset is 12 pixels from the region edge. Its control stack is 34 pixels for the header, 34 pixels for search/category selection and 32 pixels for the filter row.
+At the 1920×1080 reference viewport, the Media Library occupies the 400-pixel reference left shell region. Its rendered width follows the responsive shell and the region is removed from compact allocation rather than forcing 400 pixels into a constrained viewport. The visible inset is 12 pixels from the region edge. Its control stack retains 34-pixel header and search/category rows plus the 32-pixel filter row as local interaction-density geometry.
 
 The default Grid presents exactly three `RtaimeMediaTile` controls per row. Each tile occupies 120×104 pixels with a 120×68 reference thumbnail surface, 8-pixel horizontal spacing and 10-pixel vertical spacing. The filename is a single 11-pixel ellipsized line. Duration is rendered in a compact monospaced overlay. Offline state overlays the thumbnail without resizing the tile and is always expressed in text as well as color.
 

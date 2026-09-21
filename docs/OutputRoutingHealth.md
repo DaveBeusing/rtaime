@@ -75,7 +75,7 @@ Output, health and performance presentation now uses one reusable Operator contr
 
 EDIT and LIVE reuse the compact `OutputRoutingHealthControl` rather than maintaining separate output-row implementations. OUTPUTS uses the same row controls in its full diagnostic surface. COMPOSITING reuses the metric dial and sparkline for its performance panel.
 
-The 1920×1080 reference shell remains unchanged: Top 60 px, navigation 92 px, media 400 px, center 1070 px, inspector 340 px, upper workspace 700 px and timeline 320 px. The compact LIVE output block remains 270 px: 27 px header, four 54 px output rows and a 27 px action footer.
+The 1920×1080 reference shell remains unchanged: Top 60 px, navigation 92 px, media 400 px, center 1070 px, inspector 340 px, upper workspace 700 px and timeline 320 px. The LIVE output region is 270 px at reference size, but its rendered host height follows the responsive shell. The 27 px header/footer and four 54 px row-density targets remain reference control geometry; when the host is shorter, the output list scrolls inside the available region instead of forcing or clipping the surrounding workspace.
 
 No presentation component increases the Runtime health observation cadence. Metric histories remain bounded to the existing 48 samples and are updated only from the existing health observation stream.
 
