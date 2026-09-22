@@ -70,6 +70,67 @@ public sealed record OperatorSceneDescriptor
     public string ProgramSourceId { get; }
 }
 
+public sealed record OperatorOutputRoleDescriptor
+{
+    public OperatorOutputRoleDescriptor(
+        string roleId,
+        string roleKind,
+        string sourceId,
+        string targetId,
+        string providerId,
+        uint? width,
+        uint? height,
+        string? frameRate,
+        string? pixelFormat,
+        string? timing,
+        string lifecycleState,
+        bool authoritativeActive,
+        string healthState,
+        string evidence,
+        Failure? error)
+    {
+        if (string.IsNullOrWhiteSpace(roleId)) throw new ArgumentException("Output role id is required.", nameof(roleId));
+        if (string.IsNullOrWhiteSpace(roleKind)) throw new ArgumentException("Output role kind is required.", nameof(roleKind));
+        if (string.IsNullOrWhiteSpace(sourceId)) throw new ArgumentException("Output role source id is required.", nameof(sourceId));
+        if (string.IsNullOrWhiteSpace(targetId)) throw new ArgumentException("Output role target id is required.", nameof(targetId));
+        if (string.IsNullOrWhiteSpace(providerId)) throw new ArgumentException("Output role provider id is required.", nameof(providerId));
+        if (string.IsNullOrWhiteSpace(lifecycleState)) throw new ArgumentException("Output role lifecycle state is required.", nameof(lifecycleState));
+        if (healthState is not ("PASS" or "FAIL" or "UNVERIFIED")) throw new ArgumentException("Output role health must be PASS, FAIL or UNVERIFIED.", nameof(healthState));
+        if (string.IsNullOrWhiteSpace(evidence)) throw new ArgumentException("Output role evidence is required.", nameof(evidence));
+        if (healthState == "FAIL" && error is null) throw new ArgumentException("Failed output roles require an error reason.", nameof(error));
+        RoleId = roleId.Trim().ToLowerInvariant();
+        RoleKind = roleKind.Trim().ToUpperInvariant();
+        SourceId = sourceId.Trim();
+        TargetId = targetId.Trim();
+        ProviderId = providerId.Trim();
+        Width = width;
+        Height = height;
+        FrameRate = string.IsNullOrWhiteSpace(frameRate) ? null : frameRate.Trim();
+        PixelFormat = string.IsNullOrWhiteSpace(pixelFormat) ? null : pixelFormat.Trim().ToUpperInvariant();
+        Timing = string.IsNullOrWhiteSpace(timing) ? null : timing.Trim();
+        LifecycleState = lifecycleState.Trim().ToUpperInvariant();
+        AuthoritativeActive = authoritativeActive;
+        HealthState = healthState;
+        Evidence = evidence.Trim();
+        Error = error;
+    }
+    public string RoleId { get; }
+    public string RoleKind { get; }
+    public string SourceId { get; }
+    public string TargetId { get; }
+    public string ProviderId { get; }
+    public uint? Width { get; }
+    public uint? Height { get; }
+    public string? FrameRate { get; }
+    public string? PixelFormat { get; }
+    public string? Timing { get; }
+    public string LifecycleState { get; }
+    public bool AuthoritativeActive { get; }
+    public string HealthState { get; }
+    public string Evidence { get; }
+    public Failure? Error { get; }
+}
+
 public sealed record OperatorGraphicsAsset
 {
     public OperatorGraphicsAsset(string name, uint width, uint height, byte[] rgbaPixels)
@@ -368,6 +429,7 @@ public sealed record OperatorStatusSnapshot
 {
     private readonly ReadOnlyCollection<OperatorSourceDescriptor> _sources;
     private readonly ReadOnlyCollection<OperatorSceneDescriptor> _scenes;
+    private readonly ReadOnlyCollection<OperatorOutputRoleDescriptor> _outputRoles;
     private readonly ReadOnlyCollection<OperatorAudioInputDescriptor> _audioInputs;
 
     public OperatorStatusSnapshot(
@@ -388,7 +450,8 @@ public sealed record OperatorStatusSnapshot
         OperatorAIShowcaseDescriptor? aiShowcase = null,
         MediaDeckSnapshot? mediaDeck = null,
         OperatorProductionCgTextDescriptor? productionCgText = null,
-        IReadOnlyList<OperatorSceneDescriptor>? scenes = null)
+        IReadOnlyList<OperatorSceneDescriptor>? scenes = null,
+        IReadOnlyList<OperatorOutputRoleDescriptor>? outputRoles = null)
     {
         Production = production ?? throw new ArgumentNullException(nameof(production));
         ArgumentNullException.ThrowIfNull(sources);
@@ -404,6 +467,7 @@ public sealed record OperatorStatusSnapshot
 
         _sources = Array.AsReadOnly(sources.ToArray());
         _scenes = Array.AsReadOnly((scenes ?? Array.Empty<OperatorSceneDescriptor>()).ToArray());
+        _outputRoles = Array.AsReadOnly((outputRoles ?? Array.Empty<OperatorOutputRoleDescriptor>()).ToArray());
         _audioInputs = Array.AsReadOnly((audioInputs ?? Array.Empty<OperatorAudioInputDescriptor>()).ToArray());
         RuntimeStatus = runtimeStatus.Trim();
         TimingStatus = timingStatus.Trim();
@@ -424,6 +488,7 @@ public sealed record OperatorStatusSnapshot
     public AuthoritativeProductionState Production { get; }
     public IReadOnlyList<OperatorSourceDescriptor> Sources => _sources;
     public IReadOnlyList<OperatorSceneDescriptor> Scenes => _scenes;
+    public IReadOnlyList<OperatorOutputRoleDescriptor> OutputRoles => _outputRoles;
     public string RuntimeStatus { get; }
     public string TimingStatus { get; }
     public string InputStatus { get; }
@@ -453,6 +518,8 @@ public interface IOperatorControlTransport
     ValueTask<OperatorMutationResponse> DissolveProgramAsync(DissolveProgramCommand command, CancellationToken cancellationToken = default);
     ValueTask<OperatorMutationResponse> ActivateSceneAsync(ActivateSceneCommand command, CancellationToken cancellationToken = default) =>
         ValueTask.FromException<OperatorMutationResponse>(new NotSupportedException("Operator transport does not expose scene activation."));
+    ValueTask<OperatorMutationResponse> RouteOutputRoleAsync(RouteOutputRoleCommand command, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<OperatorMutationResponse>(new NotSupportedException("Operator transport does not expose output-role routing."));
 
     ValueTask<OperatorAudioInputDescriptor> SetAudioInputStateAsync(
         string sourceId,
@@ -580,6 +647,22 @@ public sealed class OperatorControlClient
         var current = RequireSnapshot();
         var command = new ActivateSceneCommand(Metadata(current.Production), sceneId);
         var result = await _transport.ActivateSceneAsync(command, cancellationToken).ConfigureAwait(false);
+        if (result.Accepted)
+            await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+
+    public ValueTask<OperatorMutationResponse> RouteOutputRoleAsync(string roleId, string sourceId, CancellationToken cancellationToken = default) =>
+        RouteOutputRoleAsync(new OutputRoleId(roleId), ParseSourceId(sourceId), cancellationToken);
+
+    public async ValueTask<OperatorMutationResponse> RouteOutputRoleAsync(
+        OutputRoleId roleId,
+        ProductionSourceId sourceId,
+        CancellationToken cancellationToken = default)
+    {
+        var current = RequireSnapshot();
+        var command = new RouteOutputRoleCommand(Metadata(current.Production), roleId, sourceId);
+        var result = await _transport.RouteOutputRoleAsync(command, cancellationToken).ConfigureAwait(false);
         if (result.Accepted)
             await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
         return result;
