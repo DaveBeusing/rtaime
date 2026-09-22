@@ -105,9 +105,13 @@ public sealed class ControlHostService
 				throw new InvalidDataException("Recovered Preview source is not present in the production specification.");
 			if (!_specification.Sources.Any(source => source.SourceId == state.Routing.ProgramSourceId))
 				throw new InvalidDataException("Recovered Program source is not present in the production specification.");
-			if (state.ActiveSceneId is { } activeSceneId &&
-				!_specification.Scenes.Any(scene => scene.SceneId == activeSceneId))
-				throw new InvalidDataException("Recovered active scene is not present in the production specification.");
+			if (state.ActiveSceneId is { } activeSceneId)
+			{
+				var activeScene = _specification.Scenes.FirstOrDefault(scene => scene.SceneId == activeSceneId)
+					?? throw new InvalidDataException("Recovered active scene is not present in the production specification.");
+				if (activeScene.Routing != state.Routing)
+					throw new InvalidDataException("Recovered active scene does not match recovered production routing.");
+			}
 
 			_authoritative = state;
 			Journal(state.Revision, "recovery", "control.authoritative.restored", $"Authoritative production revision {state.Revision} was restored from a durable checkpoint.", null, null);
