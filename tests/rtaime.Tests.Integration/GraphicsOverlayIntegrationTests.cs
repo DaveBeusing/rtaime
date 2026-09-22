@@ -68,6 +68,87 @@ public sealed class GraphicsOverlayIntegrationTests
 	}
 
 	[Fact]
+	public async Task Production_CG_text_is_runtime_rendered_composited_and_cached()
+	{
+		if (!OperatingSystem.IsWindows())
+			return;
+
+		await using var fixture = await Fixture.CreateAsync(new CollectingRecordingWriter());
+		var baseline = fixture.Runtime.ProcessNextBoundary();
+		var definition = LowerThird("RTAIME PRODUCTION CG");
+
+		var first = fixture.Runtime.ApplyProductionCgText(definition);
+		Assert.True(first.AssetLoaded);
+		Assert.True(first.Visible);
+		Assert.Equal("production-cg-text", first.AssetName);
+		Assert.NotNull(fixture.Runtime.Snapshot.ProductionCgText);
+		Assert.True(fixture.Runtime.Snapshot.ProductionCgText!.Active);
+		Assert.False(fixture.Runtime.Snapshot.ProductionCgText.CacheHit);
+		Assert.Equal(1, fixture.Runtime.ProductionCgCachedSurfaceCount);
+
+		var program = fixture.Runtime.ProcessNextBoundary();
+		var originX = (int)Math.Round(definition.PositionX * (fixture.Format.Width - 1));
+		var originY = (int)Math.Round(definition.PositionY * (fixture.Format.Height - 1)) - (int)definition.BoxHeight;
+		Assert.NotEqual(
+			Pixel(baseline.ProgramPixels, fixture.Format, originX + 2, originY + 2),
+			Pixel(program.ProgramPixels, fixture.Format, originX + 2, originY + 2));
+
+		fixture.Runtime.ApplyProductionCgText(definition);
+		Assert.True(fixture.Runtime.Snapshot.ProductionCgText!.CacheHit);
+		Assert.Equal(1, fixture.Runtime.ProductionCgCachedSurfaceCount);
+
+		var overlay = fixture.Runtime.Snapshot.GraphicsOverlay;
+		fixture.Runtime.SetGraphicsOverlay(false, overlay.PositionX, overlay.PositionY, overlay.Scale);
+		var hidden = fixture.Runtime.ProcessNextBoundary();
+		Assert.False(fixture.Runtime.Snapshot.ProductionCgText!.Visible);
+		Assert.Equal(
+			Pixel(baseline.ProgramPixels, fixture.Format, originX + 2, originY + 2),
+			Pixel(hidden.ProgramPixels, fixture.Format, originX + 2, originY + 2));
+	}
+
+	[Fact]
+	public async Task Production_CG_font_resolution_uses_only_explicit_fallback_and_fails_closed()
+	{
+		if (!OperatingSystem.IsWindows())
+			return;
+
+		await using var fixture = await Fixture.CreateAsync(new CollectingRecordingWriter());
+		var fallbackDefinition = LowerThird("EXPLICIT FALLBACK") with
+		{
+			Typeface = "rtaime-font-that-does-not-exist",
+			FallbackTypeface = "Arial"
+		};
+
+		fixture.Runtime.ApplyProductionCgText(fallbackDefinition);
+		Assert.Equal("Arial", fixture.Runtime.Snapshot.ProductionCgText!.ResolvedTypeface, ignoreCase: true);
+
+		var before = fixture.Runtime.Snapshot.GraphicsOverlay;
+		var missingDefinition = fallbackDefinition with
+		{
+			Text = "MISSING FONT",
+			FallbackTypeface = "rtaime-fallback-that-does-not-exist"
+		};
+		var exception = Assert.Throws<InvalidOperationException>(() => fixture.Runtime.ApplyProductionCgText(missingDefinition));
+		Assert.Contains("unavailable", exception.Message, StringComparison.OrdinalIgnoreCase);
+		Assert.Equal(before, fixture.Runtime.Snapshot.GraphicsOverlay);
+		Assert.Equal("EXPLICIT FALLBACK", fixture.Runtime.Snapshot.ProductionCgText!.Text);
+	}
+
+	[Fact]
+	public async Task Production_CG_surface_cache_is_bounded_under_repeated_text_updates()
+	{
+		if (!OperatingSystem.IsWindows())
+			return;
+
+		await using var fixture = await Fixture.CreateAsync(new CollectingRecordingWriter());
+		for (var index = 0; index < 24; index++)
+			fixture.Runtime.ApplyProductionCgText(LowerThird($"CACHE ENTRY {index:00}"));
+
+		Assert.InRange(fixture.Runtime.ProductionCgCachedSurfaceCount, 1, 16);
+		Assert.Equal("CACHE ENTRY 23", fixture.Runtime.Snapshot.ProductionCgText!.Text);
+	}
+
+	[Fact]
 	public async Task Recording_payload_uses_the_same_post_graphics_program_pixels()
 	{
 		var root = Path.Combine(Path.GetTempPath(), "rtaime-graphics-recording", Guid.NewGuid().ToString("N"));
@@ -101,6 +182,23 @@ public sealed class GraphicsOverlayIntegrationTests
 				Directory.Delete(root, recursive: true);
 		}
 	}
+
+	private static V1ProductionCgTextDefinition LowerThird(string text) => new(
+		text,
+		"Segoe UI",
+		"Arial",
+		48,
+		new V1CgColor(255, 255, 255, 255),
+		0.05,
+		0.90,
+		640,
+		120,
+		V1CgTextAlignment.Left,
+		V1CgAnchor.BottomLeft,
+		new V1CgPanelStyle(true, new V1CgColor(18, 23, 32, 224), 12, 24),
+		true,
+		V1CgLayer.ProgramGraphics,
+		0);
 
 	private static ControlCommandMetadata Metadata(Fixture fixture) =>
 		new(
