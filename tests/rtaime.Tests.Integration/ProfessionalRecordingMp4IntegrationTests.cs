@@ -130,6 +130,61 @@ public sealed class ProfessionalRecordingMp4IntegrationTests
 	}
 
 	[Fact]
+	public async Task Mp4_recording_sustains_five_seconds_of_program_timeline_with_bounded_backlog()
+	{
+		if (!OperatingSystem.IsWindows())
+			return;
+
+		const int targetFrames = 250;
+		var root = CreateTemporaryRoot();
+		try
+		{
+			var writer = new WindowsMediaFoundationMp4RecordingWriter(root);
+			await using var fixture = await RuntimeFixture.CreateAsync(VideoFormat.Hd1080p50Rgba8, writer);
+
+			var start = await fixture.Runtime.StartRecordingAsync(
+				RecordingSessionId.New(),
+				RecordingOutputId.New(),
+				root,
+				"sustained");
+			Assert.True(start.Succeeded, start.Failure?.ToString());
+
+			for (var index = 0; index < targetFrames; index++)
+			{
+				var boundary = fixture.Runtime.ProcessNextBoundary();
+				Assert.NotNull(boundary.Recording);
+				Assert.True(boundary.Recording!.Accepted, boundary.Recording.Failure?.ToString());
+
+				if (fixture.Runtime.Snapshot.Recording.Statistics.Accepted -
+					fixture.Runtime.Snapshot.Recording.Statistics.Written >= 8)
+				{
+					await WaitForRecordingBacklogAsync(fixture.Runtime, maximumBacklog: 4);
+				}
+			}
+
+			var stop = await fixture.Runtime.StopRecordingAsync();
+			Assert.Equal(RecordingStopStatus.Stopped, stop.Status);
+
+			var statistics = fixture.Runtime.Snapshot.Recording.Statistics;
+			Assert.Equal((ulong)targetFrames, statistics.Accepted);
+			Assert.Equal((ulong)targetFrames, statistics.Written);
+			Assert.Equal(0UL, statistics.Dropped);
+			Assert.Equal(0UL, statistics.WriterFailures);
+
+			var path = Path.Combine(root, "sustained.mp4");
+			Assert.True(File.Exists(path));
+			using var decoded = OpenIndependently(path, VideoFormat.Hd1080p50Rgba8);
+			Assert.Equal(MediaVideoCodec.H264, decoded.Probe.VideoCodec);
+			Assert.Equal(MediaAudioCodec.Aac, decoded.Probe.AudioCodec);
+			Assert.True(decoded.Probe.Duration >= TimeSpan.FromSeconds(4.9));
+		}
+		finally
+		{
+			DeleteTemporaryRoot(root);
+		}
+	}
+
+	[Fact]
 	public async Task Mp4_storage_failure_is_isolated_from_committed_program_execution()
 	{
 		if (!OperatingSystem.IsWindows())
@@ -176,6 +231,24 @@ public sealed class ProfessionalRecordingMp4IntegrationTests
 		{
 			DeleteTemporaryRoot(root);
 		}
+	}
+
+	private static async Task WaitForRecordingBacklogAsync(
+		V1RuntimeHostService runtime,
+		ulong maximumBacklog)
+	{
+		for (var attempt = 0; attempt < 1_000; attempt++)
+		{
+			var snapshot = runtime.Snapshot.Recording;
+			Assert.NotEqual(RecordingLifecycleState.Failed, snapshot.State);
+			var backlog = snapshot.Statistics.Accepted - snapshot.Statistics.Written;
+			if (backlog <= maximumBacklog)
+				return;
+
+			await Task.Delay(10);
+		}
+
+		throw new TimeoutException("Professional recording writer did not drain its bounded sustained-test backlog.");
 	}
 
 	private static LocalMediaFileSource OpenIndependently(string path, VideoFormat outputFormat)
