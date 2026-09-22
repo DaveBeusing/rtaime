@@ -99,6 +99,27 @@ public static class ProductionOutputRoleValidator
 					$"Configured V1 output role '{role.RoleId}' must be enabled.",
 					$"{pathPrefix}.{role.RoleId}.enabled"));
 			}
+			if (!string.Equals(role.ProviderSelector, "auto", StringComparison.OrdinalIgnoreCase))
+			{
+				issues.Add(new ValidationIssue(
+					"control.output_roles.provider_selector_unsupported",
+					$"Output role '{role.RoleId}' uses unsupported provider selector '{role.ProviderSelector}'. V1 supports only deterministic automatic provider admission.",
+					$"{pathPrefix}.{role.RoleId}.providerSelector"));
+			}
+			if (!string.Equals(role.FormatPolicy, "production", StringComparison.OrdinalIgnoreCase))
+			{
+				issues.Add(new ValidationIssue(
+					"control.output_roles.format_policy_unsupported",
+					$"Output role '{role.RoleId}' uses unsupported format policy '{role.FormatPolicy}'. V1 output roles inherit the production format.",
+					$"{pathPrefix}.{role.RoleId}.formatPolicy"));
+			}
+			if (!string.Equals(role.TimingPolicy, "production", StringComparison.OrdinalIgnoreCase))
+			{
+				issues.Add(new ValidationIssue(
+					"control.output_roles.timing_policy_unsupported",
+					$"Output role '{role.RoleId}' uses unsupported timing policy '{role.TimingPolicy}'. V1 output roles inherit production timing.",
+					$"{pathPrefix}.{role.RoleId}.timingPolicy"));
+			}
 		}
 
 		return new ControlValidationReport(issues);
