@@ -140,6 +140,8 @@ public sealed class OutputRoleControlTests
 		Assert.True(planning.Succeeded);
 		var program = Assert.Single(planning.PreparedExecution!.Bindings, binding => binding.OutputRoleId == "program");
 		var aux = Assert.Single(planning.PreparedExecution.Bindings, binding => binding.OutputRoleId == "aux");
+		var preview = Assert.Single(planning.PreparedExecution.Bindings, binding => binding.OutputRoleId is null);
+		Assert.NotNull(preview.MediaSinkId);
 		Assert.Equal(new MediaSourceId(fixture.SourceA.Value), program.MediaSourceId);
 		Assert.Equal(new MediaSourceId(fixture.SourceB.Value), aux.MediaSourceId);
 		Assert.NotNull(aux.MediaSinkId);
