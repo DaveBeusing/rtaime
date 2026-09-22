@@ -70,9 +70,9 @@ public sealed class GovernedInferenceRuntimeTests
     [Fact]
     public async Task Provider_execution_timeout_releases_admitted_resources()
     {
-        var provider = new ManagedReferencePersonSegmentationProvider(executionDelay: TimeSpan.FromMilliseconds(200));
+        var provider = new BlockingProvider();
         var runtime = Runtime(provider);
-        var request = Request(3, Now.Value.AddMilliseconds(25));
+        var request = Request(3, Now.Value.AddMilliseconds(25), provider.CapabilityId);
 
         var result = await runtime.ExecuteAsync(request);
 
