@@ -168,6 +168,33 @@ public sealed class ControlDomainTests
     }
 
     [Fact]
+    public void Contradictory_active_scene_evidence_is_rejected_before_next_mutation()
+    {
+        var fixture = CreateFixture();
+        var initial = InitializedState(fixture.Specification);
+        var scene = fixture.Specification.Scenes[0];
+        var contradictory = new AuthoritativeProductionState(
+            fixture.Specification.Version,
+            fixture.Specification.ProductionId,
+            initial.Authoritative.Revision,
+            new ProductionRoutingState(fixture.SourceB.SourceId, fixture.SourceB.SourceId),
+            scene.SceneId);
+        Assert.NotEqual(scene.Routing, contradictory.Routing);
+
+        var command = new SelectPreviewCommand(
+            Metadata(fixture.Specification, contradictory.Revision),
+            fixture.SourceA.SourceId);
+
+        var result = ControlDomainEngine.Apply(fixture.Specification, contradictory, command);
+
+        Assert.False(result.Committed);
+        Assert.Null(result.DesiredState);
+        Assert.Same(contradictory, result.AuthoritativeState);
+        Assert.Contains(result.Validation.Issues, issue =>
+            issue.Code == "control.state.active_scene_routing_mismatch");
+    }
+
+    [Fact]
     public void Scene_activation_with_competing_revision_is_rejected()
     {
         var fixture = CreateFixture();
