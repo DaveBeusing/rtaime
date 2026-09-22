@@ -168,6 +168,24 @@ public sealed class ControlDomainTests
     }
 
     [Fact]
+    public void Scene_activation_with_competing_revision_is_rejected()
+    {
+        var fixture = CreateFixture();
+        var initial = InitializedState(fixture.Specification);
+        var scene = fixture.Specification.Scenes[0];
+        var command = new ActivateSceneCommand(
+            Metadata(fixture.Specification, initial.Authoritative.Revision.Next()),
+            scene.SceneId);
+
+        var result = ControlDomainEngine.Apply(fixture.Specification, initial.Authoritative, command);
+
+        Assert.False(result.Committed);
+        Assert.Same(initial.Authoritative, result.AuthoritativeState);
+        Assert.Null(result.DesiredState);
+        Assert.Contains(result.Validation.Issues, issue => issue.Code == "control.command.revision_conflict");
+    }
+
+    [Fact]
     public void Stale_revision_is_rejected_without_authoritative_mutation()
     {
         var fixture = CreateFixture();
