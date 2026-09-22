@@ -106,6 +106,12 @@ public interface IControlRuntimeTransportSeam
 		ValueTask.FromException<RuntimeGraphicsOverlaySnapshot>(
 			new NotSupportedException("Runtime transport does not expose graphics overlay control."));
 
+	ValueTask<RuntimeGraphicsOverlaySnapshot> ApplyProductionCgTextAsync(
+		RuntimeProductionCgTextDefinition definition,
+		CancellationToken cancellationToken = default) =>
+		ValueTask.FromException<RuntimeGraphicsOverlaySnapshot>(
+			new NotSupportedException("Runtime transport does not expose Production CG text control."));
+
 	ValueTask<RuntimeGraphicsOverlaySnapshot> SetGraphicsOverlayAsync(
 		bool visible,
 		double positionX,
