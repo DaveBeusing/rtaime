@@ -108,6 +108,13 @@ try {
 	if ([int]$evidence.telemetry.completeSampleCount -ne [int]$evidence.telemetry.sampleCount) { throw "Telemetry continuity contains incomplete samples." }
 	if ($testExitCode -ne 0) { throw "Physical timing hardware test failed with exit code $testExitCode despite emitting evidence." }
 
+	$nvidiaDriverOutput = @(& nvidia-smi --query-gpu=driver_version --format=csv,noheader -i 0 2>$null)
+	if ($LASTEXITCODE -ne 0 -or $nvidiaDriverOutput.Count -ne 1 -or [string]::IsNullOrWhiteSpace([string]$nvidiaDriverOutput[0])) {
+		throw "Unable to identify the NVIDIA driver version for the physical GPU reported by runtime telemetry."
+	}
+	$gpuDriverVersion = ([string]$nvidiaDriverOutput[0]).Trim()
+	$evidence.telemetry | Add-Member -NotePropertyName gpuDriverVersion -NotePropertyValue $gpuDriverVersion -Force
+
 	$evidence | Add-Member -NotePropertyName physicalEndToEndLatency -NotePropertyValue ([pscustomobject]@{
 		status = "PASSED"
 		measurementMethod = [string]$externalLatency.measurementMethod
