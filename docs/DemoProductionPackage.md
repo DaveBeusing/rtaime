@@ -31,7 +31,7 @@ The ready state is Program = Input A, Preview = Product Clip/Input B, media cued
 
 ## Lower-third boundary
 
-Graphics & Overlay Operator Workflow intentionally did not introduce a general text/CG renderer. Demo Production Package does not reverse that decision. The bundled lower third is a pre-rendered RGBA/PNG asset containing the rtaime logo and lower-third design and uses the existing RuntimeHost graphics overlay path.
+The governed Production CG text renderer is now available for dynamic lower thirds, but Demo Production Package intentionally keeps its existing pre-rendered RGBA/PNG lower-third asset. The asset remains a valid deterministic bitmap overlay and is not migrated merely because a text renderer exists. Dynamic lower thirds can be created independently through the Operator Graphics workspace and use the same RuntimeHost graphics compositor.
 
 The current V1 compositor gives the explicit Operator graphics overlay precedence over the Visible AI Showcase Integration dynamic AI highlight. The package therefore loads the lower third but starts it hidden while AI is enabled. It is immediately ready for SHOW/HIDE, but Demo Production Package does not claim simultaneous lower-third and AI-highlight visibility.
 
@@ -61,6 +61,6 @@ Activation reports FAILED instead of READY when a required source, asset/hash, m
 - arbitrary package import/export;
 - package persistence/migrations;
 - automatically starting or installing service hosts;
-- a new CG/text renderer;
+- migration of the bundled deterministic bitmap lower third into a dynamic CG template;
 - playlists, rundown automation or macros;
 - autonomous TAKE decisions.
