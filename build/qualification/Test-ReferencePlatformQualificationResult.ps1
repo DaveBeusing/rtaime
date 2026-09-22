@@ -71,9 +71,22 @@ foreach ($scenario in $scenarios) {
 }
 
 $hardware = @($result.hardwareRequirements)
-$expectedHardware = @("REFERENCE_GPU", "PROFESSIONAL_MEDIA_IO", "GENLOCK", "PHYSICAL_END_TO_END_LATENCY", "LONG_SOAK")
-Assert-Condition ($hardware.Count -eq 5) "Reference-platform qualification must contain exactly five physical requirements."
-Assert-Condition (@($hardware.requirement | Sort-Object -Unique).Count -eq 5) "Physical requirement names must be unique."
+$expectedHardware = @(
+	"CUDA_GPU_EXECUTION",
+	"GPU_FRAME_LATENCY",
+	"GPU_SURFACE_LIFETIME",
+	"PROFESSIONAL_MEDIA_IO",
+	"SUSTAINED_FRAME_CADENCE",
+	"DROPPED_FRAME_BEHAVIOR",
+	"SYSTEM_TELEMETRY_CONTINUITY",
+	"TIMING_REFERENCE_LOCK",
+	"AUDIO_VIDEO_SYNCHRONIZATION",
+	"RECOVERY_UNDER_LOAD",
+	"PHYSICAL_END_TO_END_LATENCY",
+	"LONG_SOAK_STABILITY"
+)
+Assert-Condition ($hardware.Count -eq $expectedHardware.Count) "Reference-platform qualification must contain every explicit physical evidence requirement."
+Assert-Condition (@($hardware.requirement | Sort-Object -Unique).Count -eq $expectedHardware.Count) "Physical requirement names must be unique."
 foreach ($requirement in $expectedHardware) {
 	Assert-Condition (@($hardware | Where-Object { [string]$_.requirement -eq $requirement }).Count -eq 1) "Reference-platform qualification is missing physical requirement '$requirement'."
 }
