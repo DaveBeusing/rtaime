@@ -139,13 +139,7 @@ if ([string]$performance.status -eq "PASS") {
 foreach ($measurement in @($performance.measurements)) {
 	Assert-Condition (-not [string]::IsNullOrWhiteSpace([string]$measurement.metric)) "Supported-performance measurement metric is required."
 	Assert-Condition ([double]::IsFinite([double]$measurement.value)) "Supported-performance measurement value must be finite."
-	Assert-Condition ([string]$measurement.payloadSha256 -match '^[0-9a-f]{64}
-
-Write-Host "Reference-platform qualification result verification PASS"
-Write-Host "Overall: $($result.status)"
-Write-Host "Software: $($result.softwareStatus)"
-Write-Host "Hardware: $($result.hardwareStatus)"
-) "Supported-performance measurement must identify its verified payload hash."
+	Assert-Condition ([string]$measurement.payloadSha256 -match '^[0-9a-f]{64}$') "Supported-performance measurement must identify its verified payload hash."
 }
 
 Write-Host "Reference-platform qualification result verification PASS"
