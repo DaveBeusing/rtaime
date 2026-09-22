@@ -208,7 +208,7 @@ The repository currently contains production-shaped software paths for:
 - graphics/compositing;
 - Audio Follow Video;
 - recording;
-- Program output and monitoring;
+- governed Program/Aux output roles and monitoring;
 - governed AI showcase integration;
 - hardware/runtime health and performance visibility;
 - recovery and session-state handling;
@@ -342,12 +342,13 @@ Marketing priority:
 
 ### 3. Output, streaming and scene-control breadth
 
-Aux output, authoritative external streaming/on-air state and dedicated governed scene activation remain unavailable or unverified in the current V1 contracts.
+Program and Aux now have governed backend output-role contracts with Runtime/provider evidence. Authoritative external streaming/on-air state and additional physical/network output providers remain unavailable or unverified in the current V1 scope.
 
 Marketing priority:
 
-- sell the current Preview/Program, Program Output and monitoring path as implemented;
-- treat additional output roles, streaming and scene activation as roadmap capabilities until governed contracts exist;
+- sell the current Preview/Program workflow plus governed Program/Aux output roles and monitoring as implemented software capabilities;
+- distinguish the local Clean Program monitoring window from governed physical/output-provider state;
+- treat streaming protocols, additional physical/network providers and external on-air state as roadmap capabilities until corresponding provider contracts and qualification evidence exist;
 - do not create decorative UI claims to imply unavailable backend capability.
 
 ### 4. Remote and ecosystem integration
