@@ -221,6 +221,28 @@ V1 Functional Gap Closure adds verification for:
 - finalize failure;
 - later-session recovery.
 
+Professional MP4 qualification additionally verifies:
+
+- exact machine-readable container/codec/profile/audio/input-format capability;
+- writer-authoritative safe `.mp4` target normalization;
+- both 1080p50 and 1080p59.94 Program formats;
+- finalized MP4 readability through the independent local-media decoder;
+- decoded H.264/AAC identity and A/V timestamp alignment;
+- repeated MP4 recordings in one RuntimeHost lifecycle;
+- controlled writer/storage failure while committed Program continues;
+- a 250-frame / five-second 1080p50 Program timeline with bounded recording backlog and zero recording drops/writer failures.
+
+The sustained software sequence validates writer lifecycle/resource behavior; it is deliberately not a physical storage-throughput or hardware-encoder benchmark.
+
+Targeted qualification commands:
+
+```powershell
+dotnet test tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj -c Release --filter FullyQualifiedName~ProfessionalRecordingFormatTests
+dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj -c Release --filter FullyQualifiedName~ProfessionalRecordingMp4IntegrationTests
+```
+
+The repository Required Gates remain the authoritative broader build/test/packaging validation.
+
 Physical hardware-encoder, sustained storage-throughput and long-duration platform qualification remain `UNVERIFIED` unless executed on the declared production environment. The software MP4/H.264/AAC path is qualified separately by Windows integration tests and independent Media Foundation decode evidence.
 
 
