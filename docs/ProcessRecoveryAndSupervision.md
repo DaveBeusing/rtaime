@@ -45,12 +45,13 @@ management SQLite integrity check
 -> Control contract version validation
 -> checkpoint/payload revision equality
 -> Preview/Program source validation
+-> optional ActiveSceneId validation against the current production specification
 -> Production Journal SQLite + hash-chain integrity check
 -> authoritative state restore
 -> Runtime query/reconciliation
 ```
 
-Any malformed, unsupported or contradictory checkpoint fails startup instead of falling back to a fresh revision.
+Any malformed, unsupported or contradictory checkpoint fails startup instead of falling back to a fresh revision. A recovered `ActiveSceneId` is accepted only when that Scene still exists in the current specification; recovery never infers an active Scene from routing coincidence.
 
 ### Runtime reconciliation
 
