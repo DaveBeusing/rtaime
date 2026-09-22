@@ -678,7 +678,6 @@ public static class CapabilityPlanningEngine
                 node.MediaSinkId,
                 node.Kind switch
                 {
-                    LogicalProductionNodeKind.PreviewRoute => "preview",
                     LogicalProductionNodeKind.ProgramRoute => OutputRoleIds.Program.ToString(),
                     LogicalProductionNodeKind.AuxRoute => OutputRoleIds.Aux.ToString(),
                     _ => null
