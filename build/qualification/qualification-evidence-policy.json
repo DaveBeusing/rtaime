@@ -7,7 +7,9 @@
 			"qualificationType": "CUDA_REFERENCE",
 			"payloadSchemaVersion": "1.0",
 			"releaseRequirements": [
-				"REFERENCE_GPU"
+				"CUDA_GPU_EXECUTION",
+				"GPU_FRAME_LATENCY",
+				"GPU_SURFACE_LIFETIME"
 			]
 		},
 		{
@@ -21,9 +23,14 @@
 			"qualificationType": "TIMING_REFERENCE_SOAK",
 			"payloadSchemaVersion": "1.0",
 			"releaseRequirements": [
-				"GENLOCK",
+				"SUSTAINED_FRAME_CADENCE",
+				"DROPPED_FRAME_BEHAVIOR",
+				"SYSTEM_TELEMETRY_CONTINUITY",
+				"TIMING_REFERENCE_LOCK",
+				"AUDIO_VIDEO_SYNCHRONIZATION",
+				"RECOVERY_UNDER_LOAD",
 				"PHYSICAL_END_TO_END_LATENCY",
-				"LONG_SOAK"
+				"LONG_SOAK_STABILITY"
 			]
 		}
 	]
