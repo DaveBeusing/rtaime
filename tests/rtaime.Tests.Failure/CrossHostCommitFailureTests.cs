@@ -162,4 +162,62 @@ public sealed class CrossHostCommitFailureTests
         Assert.Equal(sourceA, control.State.Routing.ProgramSourceId);
         Assert.False(control.HasPendingExecution);
     }
+
+
+    [Fact]
+    public async Task Scene_activation_with_unavailable_provider_dependency_preserves_authority()
+    {
+        var productionId = ProductionId.New();
+        var sourceA = ProductionSourceId.New();
+        var sourceB = ProductionSourceId.New();
+        var scene = new ProductionSceneSpecification(
+            SceneId.New(),
+            "Input 2 full frame",
+            new ProductionRoutingState(sourceB, sourceB));
+        var specification = new ProductionSpecification(
+            ControlContractVersion.Current,
+            productionId,
+            "Scene provider failure proof",
+            new[]
+            {
+                new ProductionSourceSpecification(sourceA, "Input 1"),
+                new ProductionSourceSpecification(sourceB, "Input 2")
+            },
+            new ProductionRoutingState(sourceA, sourceA),
+            new[] { scene });
+        var virtualMedia = new VirtualMediaReferenceProvider(
+            new MediaSourceId(sourceA.Value),
+            new MediaSourceId(sourceB.Value),
+            VideoFormat.Hd1080p50Rgba8);
+
+        await using var journal = new BoundedProductionJournal(64);
+        var control = new ControlHostService(specification, new[] { virtualMedia.Descriptor }, journal);
+        var initial = control.Initialize();
+        var initialExecution = Assert.IsType<ControlHostExecutionPackage>(initial.Execution);
+        Assert.True(control.ConfirmRuntimeCommit(
+            initialExecution.PreparedExecution.PreparedExecutionId,
+            new RuntimeCommitResult(
+                RuntimeContractVersion.Current,
+                RuntimeCommitStatus.Committed,
+                ExecutionInstanceId.New(),
+                new Revision(1),
+                null)).Committed);
+
+        var before = control.State;
+        control.RefreshProviderSnapshot([]);
+
+        var result = control.ActivateScene(new ActivateSceneCommand(
+            new ControlCommandMetadata(
+                ControlContractVersion.Current,
+                CommandId.New(),
+                productionId,
+                before.Revision),
+            scene.SceneId));
+
+        Assert.False(result.Accepted);
+        Assert.Equal("control.command.planning_rejected", result.Failure?.Code);
+        Assert.Equal(before, result.State);
+        Assert.Equal(before, control.State);
+        Assert.False(control.HasPendingExecution);
+    }
 }
