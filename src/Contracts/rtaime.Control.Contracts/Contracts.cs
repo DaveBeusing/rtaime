@@ -110,7 +110,7 @@ public sealed class ProductionSpecification
 {
     private readonly ReadOnlyCollection<ProductionSourceSpecification> _sources;
     private readonly ReadOnlyCollection<ProductionSceneSpecification> _scenes;
-    private readonly ReadOnlyCollection<ProductionOutputRoleState> _initialOutputRoles;
+    private readonly OutputRoleStateCollection _initialOutputRoles;
 
     public ProductionSpecification(
         CompatibilityVersion version,
@@ -152,7 +152,7 @@ public sealed class ProductionSpecification
         Name = name.Trim();
         _sources = Array.AsReadOnly(snapshot);
         _scenes = Array.AsReadOnly(sceneSnapshot);
-        _initialOutputRoles = Array.AsReadOnly(OutputRoleStateCollection.Normalize(initialOutputRoles, initialRouting.ProgramSourceId));
+        _initialOutputRoles = OutputRoleStateCollection.Normalize(initialOutputRoles, initialRouting.ProgramSourceId);
         InitialRouting = initialRouting;
     }
 
@@ -167,7 +167,7 @@ public sealed class ProductionSpecification
 
 public sealed record DesiredProductionState
 {
-    private readonly ReadOnlyCollection<ProductionOutputRoleState> _outputRoles;
+    private readonly OutputRoleStateCollection _outputRoles;
 
     public DesiredProductionState(
         CompatibilityVersion version,
@@ -183,7 +183,7 @@ public sealed record DesiredProductionState
         BasedOnAuthoritativeRevision = basedOnAuthoritativeRevision;
         Routing = routing ?? throw new ArgumentNullException(nameof(routing));
         ActiveSceneId = activeSceneId;
-        _outputRoles = Array.AsReadOnly(OutputRoleStateCollection.Normalize(outputRoles, Routing.ProgramSourceId));
+        _outputRoles = OutputRoleStateCollection.Normalize(outputRoles, Routing.ProgramSourceId);
     }
 
     public CompatibilityVersion Version { get; }
