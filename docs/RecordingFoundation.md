@@ -141,7 +141,7 @@ Both protected local artifact paths use the same lifecycle concept:
 
 `ReferenceRecordingPayloadReader` validates the file magic/version, sample structure, payload lengths, footer counts, trailing-data absence and SHA-256 integrity.
 
-The V1 Functional Gap Closure reference container is intentionally uncompressed and CI-verifiable. It is **not** a qualified professional codec/container. Professional storage throughput, DMA/device-surface resolution, codec interoperability, hardware encoding and long-duration media integrity remain `UNVERIFIED` until measured on the declared production environment.
+The V1 Functional Gap Closure reference container is intentionally uncompressed and CI-verifiable. It is **not** a qualified professional codec/container. Professional sustained-storage throughput, DMA/device-surface resolution, hardware-encoder behavior and long-duration physical-platform media integrity remain `UNVERIFIED` until measured on the declared production environment.
 
 ## Professional MP4 delivery path
 
@@ -151,7 +151,7 @@ The qualified software delivery contract is exposed through `ProfessionalRecordi
 
 - container: ISO Base Media File Format (MP4);
 - file extension: `.mp4`;
-- video codec: H.264/AVC at 20 Mbit/s;
+- video codec: H.264/AVC Main Profile at 20 Mbit/s;
 - audio codec: AAC-LC at 192 kbit/s;
 - accepted Program video: 1920x1080 progressive RGBA8 at 50 fps or 60000/1001 fps;
 - accepted Program audio: stereo 48 kHz Float32;
@@ -249,7 +249,7 @@ Recording writers implement the optional `IConfigurableProgramRecordingWriter` c
 
 The default RuntimeHost process composes `WindowsMediaFoundationMp4RecordingWriter` under the current user's local application-data `rtaime/recordings` directory. Operator-selected destinations override that default per recording. Tests and deterministic evidence workflows may explicitly inject `ReferenceRecordingPayloadWriter`.
 
-Final publication retains create-new semantics. An existing target is rejected rather than overwritten, and the `.partial` artifact is promoted only after the asynchronous queue drains and footer/hash finalization succeeds.
+Final publication retains create-new semantics. An existing target is rejected rather than overwritten. The professional writer promotes `.partial.mp4` only after Media Foundation finalization succeeds; the reference writer independently retains its deterministic footer/hash finalization.
 
 ### Validation and evidence boundary
 
