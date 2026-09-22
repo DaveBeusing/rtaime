@@ -60,14 +60,14 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 
 	public async ValueTask RestoreProductionCgTextAsync(CancellationToken cancellationToken = default)
 	{
-		var definition = _productionCgText;
-		if (definition is null || !_runtimeTransport.IsConnected)
+		if (!_runtimeTransport.IsConnected)
 			return;
 
 		await _mutationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
 		try
 		{
-			if (!_runtimeTransport.IsConnected)
+			var definition = _productionCgText;
+			if (definition is null || !_runtimeTransport.IsConnected)
 				return;
 			await _runtimeTransport.ApplyProductionCgTextAsync(definition, cancellationToken).ConfigureAwait(false);
 			NotifyObservableStateChanged();
