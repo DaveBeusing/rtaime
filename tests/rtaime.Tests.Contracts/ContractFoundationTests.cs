@@ -67,21 +67,30 @@ public sealed class ContractFoundationTests
         var sourceA = new ProductionSourceSpecification(ProductionSourceId.New(), "Camera A");
         var sourceB = new ProductionSourceSpecification(ProductionSourceId.New(), "Camera B");
         var mutableSources = new List<ProductionSourceSpecification> { sourceA, sourceB };
+        var scene = new ProductionSceneSpecification(
+            SceneId.New(),
+            "Camera B full frame",
+            new ProductionRoutingState(sourceA.SourceId, sourceB.SourceId));
+        var mutableScenes = new List<ProductionSceneSpecification> { scene };
         var specification = new ProductionSpecification(
             ControlContractVersion.Current,
             ProductionId.New(),
             "Reference production",
             mutableSources,
-            new ProductionRoutingState(sourceA.SourceId, sourceB.SourceId));
+            new ProductionRoutingState(sourceA.SourceId, sourceB.SourceId),
+            mutableScenes);
 
         mutableSources.Clear();
+        mutableScenes.Clear();
 
         Assert.Equal(2, specification.Sources.Count);
+        Assert.Single(specification.Scenes);
         var copy = RoundTrip(specification);
         Assert.Equal(specification.Version, copy.Version);
         Assert.Equal(specification.ProductionId, copy.ProductionId);
         Assert.Equal(specification.Name, copy.Name);
         Assert.Equal(specification.Sources, copy.Sources);
+        Assert.Equal(specification.Scenes, copy.Scenes);
         Assert.Equal(specification.InitialRouting, copy.InitialRouting);
     }
 
@@ -102,6 +111,37 @@ public sealed class ContractFoundationTests
         Assert.Equal(command.Metadata.ProductionId, copy.Metadata.ProductionId);
         Assert.Equal(command.Metadata.ExpectedRevision, copy.Metadata.ExpectedRevision);
         Assert.Equal(command.SourceId, copy.SourceId);
+    }
+
+    [Fact]
+    public void Scene_activation_contract_round_trips_stable_identity_and_authoritative_evidence()
+    {
+        var productionId = ProductionId.New();
+        var sceneId = SceneId.New();
+        var sourceA = ProductionSourceId.New();
+        var sourceB = ProductionSourceId.New();
+        var command = new ActivateSceneCommand(
+            new ControlCommandMetadata(
+                ControlContractVersion.Current,
+                CommandId.New(),
+                productionId,
+                new Revision(12)),
+            sceneId);
+        var state = new AuthoritativeProductionState(
+            ControlContractVersion.Current,
+            productionId,
+            new Revision(13),
+            new ProductionRoutingState(sourceA, sourceB),
+            sceneId);
+
+        var commandCopy = RoundTrip(command);
+        var stateCopy = RoundTrip(state);
+
+        Assert.Equal(sceneId, commandCopy.SceneId);
+        Assert.Equal(command.Metadata, commandCopy.Metadata);
+        Assert.Equal(sceneId, stateCopy.ActiveSceneId);
+        Assert.Equal(state.Routing, stateCopy.Routing);
+        Assert.Equal(state.Revision, stateCopy.Revision);
     }
 
     [Fact]
@@ -336,6 +376,7 @@ internal sealed class ContractScalarJsonConverterFactory : JsonConverterFactory
     {
         typeof(ProductionId),
         typeof(ProductionSourceId),
+        typeof(SceneId),
         typeof(CommandId),
         typeof(MediaSourceId),
         typeof(MediaSinkId),
