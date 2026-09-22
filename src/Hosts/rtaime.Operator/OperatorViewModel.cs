@@ -30,12 +30,16 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	private Func<OperatorGraphicsAsset?>? _graphicsAssetPicker;
 	private Task? _audioPollingTask;
 	private OperatorSourceTileViewModel? _selectedSource;
+	private OperatorSceneViewModel? _selectedScene;
 	private OperatorAudioInputViewModel? _selectedAudioInput;
 	private string? _mediaDeckSourceId;
 	private string _previewSourceName = "—";
 	private string _previewSourceId = "—";
 	private string _programSourceName = "—";
 	private string _programSourceId = "—";
+	private string _activeSceneName = "NO CONFIRMED SCENE";
+	private string _activeSceneId = "—";
+	private string _sceneFailureReason = "No confirmed scene is active.";
 	private string _runtimeStatus = "DISCONNECTED";
 	private string _timingStatus = "UNKNOWN";
 	private string _inputStatus = "UNKNOWN";
@@ -141,9 +145,11 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		_ownsRuntimeReadiness = runtimeReadiness is null;
 		_runtimeReadiness.Changed += OnRuntimeReadinessChanged;
 		Sources = new ObservableCollection<OperatorSourceTileViewModel>();
+		Scenes = new ObservableCollection<OperatorSceneViewModel>();
 		AudioInputs = new ObservableCollection<OperatorAudioInputViewModel>();
 		SynchronizeCommand = new AsyncRelayCommand(SynchronizeAsync, () => _client is not null && !IsBusy);
 		SetPreviewCommand = new AsyncRelayCommand(SetPreviewAsync, CanSetPreview);
+		ActivateSceneCommand = new AsyncRelayCommand(ActivateSceneAsync, CanActivateScene);
 		ToggleTestPatternCommand = new AsyncRelayCommand(ToggleTestPatternAsync, CanToggleTestPattern);
 		CutCommand = new AsyncRelayCommand(CutAsync, CanTakePreview);
 		DissolveCommand = new AsyncRelayCommand(DissolveAsync, () => CanTakePreview() && TransitionFrames >= 2);
@@ -169,9 +175,11 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	internal event Action<MediaDeckSnapshot>? ConfirmedMediaDeckSnapshot;
 
 	public ObservableCollection<OperatorSourceTileViewModel> Sources { get; }
+	public ObservableCollection<OperatorSceneViewModel> Scenes { get; }
 	public ObservableCollection<OperatorAudioInputViewModel> AudioInputs { get; }
 	public ICommand SynchronizeCommand { get; }
 	public ICommand SetPreviewCommand { get; }
+	public ICommand ActivateSceneCommand { get; }
 	public ICommand ToggleTestPatternCommand { get; }
 	public ICommand CutCommand { get; }
 	public ICommand DissolveCommand { get; }
@@ -201,6 +209,16 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		}
 	}
 
+	public OperatorSceneViewModel? SelectedScene
+	{
+		get => _selectedScene;
+		set
+		{
+			if (Set(ref _selectedScene, value))
+				RaiseCommandState();
+		}
+	}
+
 	public OperatorAudioInputViewModel? SelectedAudioInput
 	{
 		get => _selectedAudioInput;
@@ -215,6 +233,9 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	public string PreviewSourceId { get => _previewSourceId; private set => Set(ref _previewSourceId, value); }
 	public string ProgramSourceName { get => _programSourceName; private set => Set(ref _programSourceName, value); }
 	public string ProgramSourceId { get => _programSourceId; private set => Set(ref _programSourceId, value); }
+	public string ActiveSceneName { get => _activeSceneName; private set => Set(ref _activeSceneName, value); }
+	public string ActiveSceneId { get => _activeSceneId; private set => Set(ref _activeSceneId, value); }
+	public string SceneFailureReason { get => _sceneFailureReason; private set => Set(ref _sceneFailureReason, value); }
 	public string RuntimeStatus { get => _runtimeStatus; private set => Set(ref _runtimeStatus, value); }
 	public string TimingStatus { get => _timingStatus; private set => Set(ref _timingStatus, value); }
 	public string InputStatus { get => _inputStatus; private set => Set(ref _inputStatus, value); }
@@ -424,6 +445,8 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 
 	private bool CanSetPreview() => CanControl() && SelectedSource is not null;
 
+	private bool CanActivateScene() => CanControl() && SelectedScene is not null;
+
 	private bool CanToggleTestPattern() => CanControl() && SelectedSource is not null;
 
 	private bool CanTakePreview() => CanControl() && _client?.Snapshot is not null;
@@ -575,6 +598,29 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 			CommandStatus = "APPLIED";
 			TransitionStatus = "PREVIEW CONFIRMED";
 			LastEvent = $"Preview source changed to {source.Name} and confirmed by authoritative control.";
+		});
+	}
+
+	private async Task ActivateSceneAsync()
+	{
+		if (_client is null || SelectedScene is null)
+			return;
+
+		var scene = SelectedScene;
+		await ExecuteAsync("TAKE SCENE", async () =>
+		{
+			var response = await _client.ActivateSceneAsync(scene.Id);
+			if (!Accept(response, "Scene Activation"))
+			{
+				SceneFailureReason = response.Failure?.Message ?? "Scene activation was rejected.";
+				return;
+			}
+
+			Apply(_client.Snapshot!);
+			SceneFailureReason = "NONE";
+			CommandStatus = "SCENE APPLIED";
+			TransitionStatus = "SCENE CONFIRMED";
+			LastEvent = $"Scene {scene.Name} committed as the authoritative production state.";
 		});
 	}
 
@@ -987,6 +1033,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	private void Apply(OperatorStatusSnapshot snapshot)
 	{
 		var previousSelectionId = SelectedSource?.Id;
+		var previousSceneSelectionId = SelectedScene?.Id;
 		var existing = Sources.ToDictionary(source => source.Id, StringComparer.Ordinal);
 		Sources.Clear();
 		var displayIndex = 1;
@@ -1007,6 +1054,39 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		SelectedSource = Sources.FirstOrDefault(source => string.Equals(source.Id, previousSelectionId, StringComparison.Ordinal))
 			?? Sources.FirstOrDefault(source => string.Equals(source.Id, previewId, StringComparison.Ordinal))
 			?? Sources.FirstOrDefault();
+
+		var existingScenes = Scenes.ToDictionary(scene => scene.Id, StringComparer.Ordinal);
+		Scenes.Clear();
+		var sceneDisplayIndex = 1;
+		foreach (var descriptor in snapshot.Scenes)
+		{
+			var programSource = Sources.FirstOrDefault(source =>
+				string.Equals(source.Id, descriptor.ProgramSourceId, StringComparison.Ordinal));
+			if (programSource is null)
+				continue;
+
+			if (!existingScenes.TryGetValue(descriptor.Id, out var scene))
+				scene = new OperatorSceneViewModel(descriptor, programSource, sceneDisplayIndex);
+			else
+				scene.Apply(descriptor, programSource, sceneDisplayIndex);
+			scene.ApplyEvidence(previewId, snapshot.Production.ActiveSceneId?.ToString());
+			Scenes.Add(scene);
+			sceneDisplayIndex++;
+		}
+
+		SelectedScene = Scenes.FirstOrDefault(scene => string.Equals(scene.Id, previousSceneSelectionId, StringComparison.Ordinal))
+			?? Scenes.FirstOrDefault(scene => scene.IsPreview)
+			?? Scenes.FirstOrDefault();
+
+		var activeSceneId = snapshot.Production.ActiveSceneId?.ToString();
+		var activeScene = string.IsNullOrWhiteSpace(activeSceneId)
+			? null
+			: Scenes.FirstOrDefault(scene => string.Equals(scene.Id, activeSceneId, StringComparison.Ordinal));
+		ActiveSceneId = activeSceneId ?? "—";
+		ActiveSceneName = activeScene?.Name ?? "NO CONFIRMED SCENE";
+		SceneFailureReason = activeScene is null
+			? "Current Program state was not committed by a Scene activation."
+			: "NONE";
 
 		PreviewSourceId = previewId;
 		ProgramSourceId = programId;
@@ -1489,6 +1569,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	{
 		(SynchronizeCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 		(SetPreviewCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+		(ActivateSceneCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 		(ToggleTestPatternCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 		(CutCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 		(DissolveCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
