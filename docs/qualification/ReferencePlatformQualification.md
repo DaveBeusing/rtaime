@@ -6,7 +6,6 @@
 
 # Reference Platform Qualification
 
-**Work package:** Reference Platform Qualification  
 **Profile:** `rtaime-v1-reference-platform`
 
 ## Purpose
