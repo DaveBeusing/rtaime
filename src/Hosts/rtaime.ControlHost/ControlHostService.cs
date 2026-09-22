@@ -105,6 +105,9 @@ public sealed class ControlHostService
 				throw new InvalidDataException("Recovered Preview source is not present in the production specification.");
 			if (!_specification.Sources.Any(source => source.SourceId == state.Routing.ProgramSourceId))
 				throw new InvalidDataException("Recovered Program source is not present in the production specification.");
+			if (state.ActiveSceneId is { } activeSceneId &&
+				!_specification.Scenes.Any(scene => scene.SceneId == activeSceneId))
+				throw new InvalidDataException("Recovered active scene is not present in the production specification.");
 
 			_authoritative = state;
 			Journal(state.Revision, "recovery", "control.authoritative.restored", $"Authoritative production revision {state.Revision} was restored from a durable checkpoint.", null, null);
@@ -181,6 +184,26 @@ public sealed class ControlHostService
 		{
 			EnsureNoPending();
 			return Stage(ControlDomainEngine.Apply(_specification, Current(), command), command.Metadata.CommandId.Value, null);
+		}
+	}
+
+	public ControlHostOperationResult ActivateScene(ActivateSceneCommand command)
+	{
+		ArgumentNullException.ThrowIfNull(command);
+		lock (_gate)
+		{
+			EnsureNoPending();
+			var current = Current();
+			var scene = _specification.Scenes.FirstOrDefault(candidate => candidate.SceneId == command.SceneId);
+			var transition = scene is null || current.Routing.ProgramSourceId == scene.Routing.ProgramSourceId
+				? null
+				: RuntimeProgramTransitionIntent.Cut(
+					new MediaSourceId(current.Routing.ProgramSourceId.Value),
+					new MediaSourceId(scene.Routing.ProgramSourceId.Value));
+			return Stage(
+				ControlDomainEngine.Apply(_specification, current, command),
+				command.Metadata.CommandId.Value,
+				transition);
 		}
 	}
 
