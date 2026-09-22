@@ -206,7 +206,11 @@ public sealed class DurablePersistenceIntegrationTests
 			var finalRevision = control.Control!.State.Revision;
 			Assert.True(finalRevision.Value > Revision.Initial.Value);
 
-			await WaitUntilAsync(() => control.CheckpointWriter?.Statistics.Persisted >= 2);
+			var checkpointWriter = Assert.IsType<BoundedProductionCheckpointWriter>(control.CheckpointWriter);
+			await checkpointWriter.FlushAsync();
+			Assert.True(
+				checkpointWriter.Statistics.Persisted >= 2,
+				$"Expected at least two persisted checkpoints, observed {checkpointWriter.Statistics.Persisted}.");
 			await control.Journal!.FlushAsync();
 
 			controlStop.Cancel();
