@@ -332,13 +332,13 @@ Marketing priority:
 
 ### 2. Professional recording and delivery formats
 
-The current deterministic recording proof uses the rtaime reference recording artifact and does not claim qualified MP4/MOV/MXF professional delivery.
+The Windows recording path now implements MP4 delivery with H.264/AVC video and AAC-LC stereo 48 kHz audio while retaining the deterministic rtaime reference artifact as a separate evidence backend. Repository qualification independently reopens finalized MP4 output through the existing Media Foundation decoder and verifies both supported 1080p development frame rates, repeated recording, A/V timestamp alignment and controlled failure isolation.
 
 Marketing priority:
 
-- avoid presenting Recording as a finished professional interchange workflow;
-- qualify the intended production recording format before making workflow-complete claims;
-- publish codec/container compatibility only from tested evidence.
+- describe MP4/H.264/AAC only within the tested Windows/software qualification boundary;
+- do not imply MOV/MXF support, hardware-encoder guarantees, sustained professional storage throughput or long-duration physical-platform qualification;
+- publish codec/container compatibility only from retained passing evidence.
 
 ### 3. Output, streaming and scene-control breadth
 
