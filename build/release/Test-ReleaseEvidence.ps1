@@ -92,6 +92,15 @@ Assert-Condition ([string]$releaseEvidence.sourceCommit -match '^[0-9a-fA-F]{40,
 Assert-Condition ([string]$releaseEvidence.buildCommit -match '^[0-9a-fA-F]{40,64}$') "Release evidence build commit is invalid."
 Assert-Condition (-not [string]::IsNullOrWhiteSpace([string]$releaseEvidence.buildId)) "Release evidence build identity is required."
 Assert-Condition ([string]$qualificationManifest.sourceCommit -eq [string]$releaseEvidence.sourceCommit) "Qualification evidence source commit does not match release evidence."
+Assert-Condition ([string]$qualificationManifest.supportedPerformance.status -in @("PASS", "UNVERIFIED")) "Qualification supported-performance status is invalid."
+$supportedPerformancePath = Resolve-EvidencePath ([string]$qualificationManifest.supportedPerformance.path)
+Assert-Condition (Test-Path -LiteralPath $supportedPerformancePath -PathType Leaf) "Supported-performance evidence is missing from the release bundle."
+Assert-Condition ((Get-Sha256 $supportedPerformancePath) -eq [string]$qualificationManifest.supportedPerformance.sha256) "Supported-performance evidence hash mismatch."
+$supportedPerformance = Read-JsonFile $supportedPerformancePath
+Assert-Condition ([string]$supportedPerformance.schemaVersion -eq "1.0") "Supported-performance evidence schema mismatch."
+Assert-Condition ([string]$supportedPerformance.profile -eq "rtaime-v1-reference-platform") "Supported-performance evidence profile mismatch."
+Assert-Condition ([string]$supportedPerformance.sourceCommit -eq [string]$releaseEvidence.sourceCommit) "Supported-performance evidence source commit mismatch."
+Assert-Condition ([string]$supportedPerformance.status -eq [string]$qualificationManifest.supportedPerformance.status) "Supported-performance evidence status differs from qualification manifest."
 
 $identityDocuments = @($artifactManifest, $releaseEvidence)
 foreach ($document in $identityDocuments) {
@@ -173,6 +182,15 @@ Assert-Condition ([string]$compatibilityManifest.ipc.schemaSet -eq [string]$poli
 $policyHardware = @($policy.hardwareQualification)
 $qualificationRequirements = @($qualificationManifest.requirements)
 $compatibilityHardware = @($compatibilityManifest.hardwareQualification)
+$passedPayloadHashes = @($qualificationRequirements | Where-Object { [string]$_.status -eq "PASSED" } | ForEach-Object { [string]$_.payload.sha256 } | Sort-Object -Unique)
+if ([string]$supportedPerformance.status -eq "PASS") {
+	Assert-Condition (@($qualificationRequirements | Where-Object { [string]$_.status -ne "PASSED" }).Count -eq 0) "Supported-performance PASS requires every physical qualification requirement to be PASSED."
+	Assert-Condition (@($supportedPerformance.measurements).Count -gt 0) "Supported-performance PASS requires measured values."
+}
+foreach ($measurement in @($supportedPerformance.measurements)) {
+	Assert-Condition ([string]$measurement.payloadSha256 -match '^[0-9a-f]{64}$') "Supported-performance measurement payload hash is invalid."
+	Assert-Condition ($passedPayloadHashes -contains [string]$measurement.payloadSha256) "Supported-performance measurement is not derived from a PASSED physical qualification payload."
+}
 Assert-Condition ($qualificationRequirements.Count -eq $policyHardware.Count) "Qualification evidence requirement count does not match release policy."
 Assert-Condition ($compatibilityHardware.Count -eq $policyHardware.Count) "Compatibility hardware qualification count does not match release policy."
 $seenHardware = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)

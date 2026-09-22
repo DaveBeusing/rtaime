@@ -11,6 +11,7 @@ $generator = Join-Path $repositoryRoot "build/qualification/New-QualificationEvi
 $verifier = Join-Path $repositoryRoot "build/qualification/Test-QualificationEvidenceBinding.ps1"
 $manifestGenerator = Join-Path $repositoryRoot "build/qualification/New-QualificationEvidenceManifest.ps1"
 $manifestVerifier = Join-Path $repositoryRoot "build/qualification/Test-QualificationEvidenceManifest.ps1"
+$performanceGenerator = Join-Path $repositoryRoot "build/qualification/New-SupportedPerformanceEvidence.ps1"
 $policyPath = Join-Path $repositoryRoot "build/qualification/qualification-evidence-policy.json"
 $releaseApply = Join-Path $repositoryRoot "build/release/Apply-QualificationEvidence.ps1"
 $releaseGenerator = Join-Path $repositoryRoot "build/release/New-ReleaseEvidence.ps1"
@@ -21,6 +22,7 @@ $offlineGenerator = Join-Path $repositoryRoot "build/release/New-OfflineReleaseB
 $offlineVerifier = Join-Path $repositoryRoot "build/release/Test-OfflineReleaseBundle.ps1"
 $releaseSchemaPath = Join-Path $repositoryRoot "schemas/release/v1/release-evidence.schema.json"
 $qualificationSchemaPath = Join-Path $repositoryRoot "schemas/release/v1/qualification-evidence-manifest.schema.json"
+$performanceSchemaPath = Join-Path $repositoryRoot "schemas/qualification/v1/supported-performance.schema.json"
 $cudaWorkflowPath = Join-Path $repositoryRoot ".github/workflows/cuda-reference-qualification.yml"
 $mediaWorkflowPath = Join-Path $repositoryRoot ".github/workflows/media-io-reference-qualification.yml"
 $timingWorkflowPath = Join-Path $repositoryRoot ".github/workflows/timing-reference-qualification.yml"
@@ -50,6 +52,7 @@ foreach ($required in @(
 	$verifier,
 	$manifestGenerator,
 	$manifestVerifier,
+	$performanceGenerator,
 	$policyPath,
 	$releaseApply,
 	$releaseGenerator,
@@ -60,6 +63,7 @@ foreach ($required in @(
 	$offlineVerifier,
 	$releaseSchemaPath,
 	$qualificationSchemaPath,
+	$performanceSchemaPath,
 	$cudaWorkflowPath,
 	$mediaWorkflowPath,
 	$timingWorkflowPath,
@@ -72,16 +76,27 @@ Assert-Condition ([string]$policy.schemaVersion -eq "1.0") "Qualification eviden
 Assert-Condition ([string]$policy.repository -eq "DaveBeusing/rtaime") "Qualification evidence policy repository identity changed."
 $bindings = @($policy.bindings)
 Assert-Condition ($bindings.Count -eq 3) "Qualification evidence policy must declare exactly the three V1 physical qualification types."
-Assert-Condition ((@($bindings | Where-Object qualificationType -eq "CUDA_REFERENCE").releaseRequirements -contains "REFERENCE_GPU")) "CUDA qualification must map to REFERENCE_GPU."
+$cudaRequirements = @((@($bindings | Where-Object qualificationType -eq "CUDA_REFERENCE")).releaseRequirements)
+foreach ($required in @("CUDA_GPU_EXECUTION", "GPU_FRAME_LATENCY", "GPU_SURFACE_LIFETIME")) {
+	Assert-Condition ($cudaRequirements -contains $required) "CUDA qualification must map to '$required'."
+}
 Assert-Condition ((@($bindings | Where-Object qualificationType -eq "MEDIA_IO_REFERENCE").releaseRequirements -contains "PROFESSIONAL_MEDIA_IO")) "Media I/O qualification must map to PROFESSIONAL_MEDIA_IO."
 $timingRequirements = @((@($bindings | Where-Object qualificationType -eq "TIMING_REFERENCE_SOAK")).releaseRequirements)
-foreach ($required in @("GENLOCK", "PHYSICAL_END_TO_END_LATENCY", "LONG_SOAK")) {
+foreach ($required in @(
+	"SUSTAINED_FRAME_CADENCE",
+	"DROPPED_FRAME_BEHAVIOR",
+	"SYSTEM_TELEMETRY_CONTINUITY",
+	"TIMING_REFERENCE_LOCK",
+	"AUDIO_VIDEO_SYNCHRONIZATION",
+	"RECOVERY_UNDER_LOAD",
+	"PHYSICAL_END_TO_END_LATENCY",
+	"LONG_SOAK_STABILITY")) {
 	Assert-Condition ($timingRequirements -contains $required) "Timing qualification must map to '$required'."
 }
 
 $releasePolicy = Get-Content -LiteralPath $releasePolicyPath -Raw | ConvertFrom-Json
 $hardwareRequirements = @($releasePolicy.hardwareQualification)
-Assert-Condition ($hardwareRequirements.Count -eq 5) "Release policy must retain all five physical qualification requirements."
+Assert-Condition ($hardwareRequirements.Count -eq 12) "Release policy must retain all twelve explicit physical qualification requirements."
 foreach ($hardware in $hardwareRequirements) {
 	Assert-Condition ([string]$hardware.status -eq "UNVERIFIED") "Static release policy must never pre-mark '$($hardware.requirement)' as PASS."
 }
@@ -102,6 +117,8 @@ Assert-Condition ($releaseApplySource -match 'Copy-Item[\s\S]*bindingTarget') "R
 Assert-Condition ($releaseApplySource -match 'Copy-Item[\s\S]*payloadTarget') "Release binding must copy exact qualification payload bytes into the release evidence bundle."
 Assert-Condition ($releaseApplySource -match 'Get-Sha256[\s\S]*sourceBinding') "Release binding must verify source binding hashes."
 Assert-Condition ($releaseApplySource -match 'Get-Sha256[\s\S]*sourcePayload') "Release binding must verify source payload hashes."
+Assert-Condition ($releaseApplySource -match 'supported-performance\.json') "Release binding must retain supported-performance evidence in the qualification subtree."
+Assert-Condition ($releaseVerifierSource -match 'Supported-performance evidence hash mismatch') "Release verification must validate supported-performance evidence bytes."
 Assert-Condition ($releaseVerifierSource -match 'qualificationEvidenceManifest') "Release verification must require the qualification evidence manifest."
 Assert-Condition ($releaseVerifierSource -match 'Qualification binding source commit mismatch') "Release verification must fail closed on a qualification source-commit mismatch."
 
@@ -114,6 +131,7 @@ Assert-Condition ($offlineGeneratorSource -match 'releaseDirectory\s+"qualificat
 Assert-Condition ($offlineVerifierSource -match 'qualificationEvidenceManifest') "Offline verification must validate the signed qualification evidence manifest reference."
 Assert-Condition ($offlineVerifierSource -match 'Contained qualification binding source commit mismatch') "Offline verification must fail closed on a qualification source-commit mismatch."
 Assert-Condition ($offlineVerifierSource -match 'Contained qualification payload hash mismatch') "Offline verification must fail closed on qualification payload tampering."
+Assert-Condition ($offlineVerifierSource -match 'Contained supported-performance evidence hash mismatch') "Offline verification must fail closed on supported-performance evidence tampering."
 
 $testRoot = Join-Path $repositoryRoot "artifacts/quality/qualification-evidence-binding"
 if (Test-Path -LiteralPath $testRoot) { Remove-Item -LiteralPath $testRoot -Recurse -Force }
@@ -157,9 +175,17 @@ try {
 	Write-JsonFile -Value ([ordered]@{
 		schemaVersion = "1.0"
 		status = "PASSED"
+		detectedAdapter = "Synthetic AJA Reference Adapter"
+		driverVersion = "1.2.3"
 		ajaSdkRevision = "2222222222222222222222222222222222222222"
 		transferMode = "PinnedHostLease"
-		statistics = [ordered]@{ CaptureFailures = 0; OutputRejected = 0 }
+		statistics = [ordered]@{
+			CapturedA = 2000
+			CapturedB = 2000
+			OutputAccepted = 2000
+			CaptureFailures = 0
+			OutputRejected = 0
+		}
 	}) -Path $mediaPayloadPath
 	& $generator -QualificationType "MEDIA_IO_REFERENCE" -EvidencePath $mediaPayloadPath -SourceCommit $sourceCommit -RunId "synthetic-media" -RunAttempt 1 -OutputPath (Join-Path $bindingRoot "media-io-reference.binding.json")
 
@@ -167,9 +193,43 @@ try {
 	Write-JsonFile -Value ([ordered]@{
 		schemaVersion = "1.0"
 		status = "PASSED"
+		format = "1080p50"
 		soakSeconds = 1800
-		reference = [ordered]@{ referenceLossObserved = $true; referenceRelockObserved = $true; finalOutput = "Locked" }
-		physicalEndToEndLatency = [ordered]@{ status = "PASSED"; sampleCount = 30 }
+		minimumContinuityFrames = 1500
+		reference = [ordered]@{
+			referenceLossObserved = $true
+			referenceRelockObserved = $true
+			finalOutput = "Locked"
+		}
+		hostCycle = [ordered]@{
+			sampleCount = 30
+			p95Milliseconds = 4.0
+			maximumAllowedP95Milliseconds = 16.0
+		}
+		telemetry = [ordered]@{
+			status = "PASSED"
+			sampleCount = 30
+			completeSampleCount = 30
+			gpuDeviceName = "Synthetic Reference GPU"
+			gpuDriverVersion = "999.99"
+		}
+		statistics = [ordered]@{
+			CapturedA = 2000
+			CapturedB = 2000
+			OutputAccepted = 2000
+			CaptureFailures = 0
+			OutputRejected = 0
+		}
+		physicalEndToEndLatency = [ordered]@{
+			status = "PASSED"
+			sampleCount = 30
+			p95Milliseconds = 40.0
+		}
+		audioVideoSynchronization = [ordered]@{
+			status = "PASSED"
+			sampleCount = 30
+			p95AbsoluteOffsetMilliseconds = 5.0
+		}
 	}) -Path $timingPayloadPath
 	& $generator -QualificationType "TIMING_REFERENCE_SOAK" -EvidencePath $timingPayloadPath -SourceCommit $sourceCommit -RunId "synthetic-timing" -RunAttempt 1 -OutputPath (Join-Path $bindingRoot "timing-reference-soak.binding.json")
 
@@ -177,7 +237,10 @@ try {
 	& $manifestGenerator -SourceCommit $sourceCommit -BindingRoot $bindingRoot -OutputPath $manifestPath
 	& $manifestVerifier -ManifestPath $manifestPath -ExpectedSourceCommit $sourceCommit
 	$manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
-	Assert-Condition (@($manifest.requirements | Where-Object status -eq "PASSED").Count -eq 5) "Synthetic qualification manifest must satisfy all five mapped release requirements."
+	Assert-Condition (@($manifest.requirements | Where-Object status -eq "PASSED").Count -eq 12) "Synthetic qualification manifest must satisfy all twelve mapped release requirements."
+	Assert-Condition ([string]$manifest.supportedPerformance.status -eq "PASS") "Complete physical synthetic evidence must produce supported-performance PASS."
+	$supportedPerformance = Get-Content -LiteralPath (Join-Path $repositoryRoot ([string]$manifest.supportedPerformance.path)) -Raw | ConvertFrom-Json
+	Assert-Condition (@($supportedPerformance.measurements).Count -gt 0) "Supported-performance evidence must contain measured values when all physical bindings are present."
 
 	$expectedFailure = $false
 	try {

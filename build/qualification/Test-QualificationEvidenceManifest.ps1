@@ -43,6 +43,18 @@ Assert-Condition ([string]$manifest.schemaVersion -eq "1.0") "Qualification evid
 Assert-Condition ([string]$manifest.repository -eq [string]$qualificationPolicy.repository) "Qualification evidence manifest repository identity differs from policy."
 Assert-Condition ([string]$manifest.sourceCommit -eq $ExpectedSourceCommit) "Qualification evidence manifest source commit differs from the release source commit."
 
+Assert-Condition ([string]$manifest.supportedPerformance.status -in @("PASS", "UNVERIFIED")) "Qualification manifest supported-performance status is invalid."
+$supportedPerformancePath = Resolve-RepositoryPath -Path ([string]$manifest.supportedPerformance.path)
+Assert-Condition (Test-Path -LiteralPath $supportedPerformancePath -PathType Leaf) "Qualification manifest supported-performance evidence is missing."
+$supportedPerformanceHash = (Get-FileHash -LiteralPath $supportedPerformancePath -Algorithm SHA256).Hash.ToLowerInvariant()
+Assert-Condition ($supportedPerformanceHash -eq [string]$manifest.supportedPerformance.sha256) "Qualification manifest supported-performance evidence hash mismatch."
+$supportedPerformance = Get-Content -LiteralPath $supportedPerformancePath -Raw | ConvertFrom-Json
+Assert-Condition ([string]$supportedPerformance.sourceCommit -eq $ExpectedSourceCommit) "Supported-performance evidence source commit differs from the release source commit."
+Assert-Condition ([string]$supportedPerformance.status -eq [string]$manifest.supportedPerformance.status) "Supported-performance status differs from qualification manifest."
+if ([string]$supportedPerformance.status -eq "PASS") {
+	Assert-Condition (@($supportedPerformance.measurements).Count -gt 0) "Supported-performance PASS requires measured values."
+}
+
 $expectedRequirements = @($releasePolicy.hardwareQualification | ForEach-Object { [string]$_.requirement })
 $entries = @($manifest.requirements)
 Assert-Condition ($entries.Count -eq $expectedRequirements.Count) "Qualification evidence manifest requirement count differs from release policy."

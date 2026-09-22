@@ -91,6 +91,22 @@ $payloadBundleRoot = Join-Path $qualificationBundleRoot "payloads"
 New-Item -ItemType Directory -Path $bindingBundleRoot -Force | Out-Null
 New-Item -ItemType Directory -Path $payloadBundleRoot -Force | Out-Null
 
+$sourceSupportedPerformance = Resolve-RepositoryPath -Path ([string]$sourceManifest.supportedPerformance.path)
+Assert-Condition (Test-Path -LiteralPath $sourceSupportedPerformance -PathType Leaf) "Supported-performance evidence referenced by qualification manifest is missing."
+Assert-Condition ((Get-Sha256 $sourceSupportedPerformance) -eq [string]$sourceManifest.supportedPerformance.sha256) "Supported-performance evidence hash changed after manifest verification."
+$supportedPerformanceTarget = Join-Path $qualificationBundleRoot "supported-performance.json"
+Copy-Item -LiteralPath $sourceSupportedPerformance -Destination $supportedPerformanceTarget -Force
+Assert-Condition ((Get-Sha256 $supportedPerformanceTarget) -eq [string]$sourceManifest.supportedPerformance.sha256) "Copied supported-performance evidence hash mismatch."
+$sourceSupportedPerformanceMarkdown = [System.IO.Path]::ChangeExtension($sourceSupportedPerformance, ".md")
+if (Test-Path -LiteralPath $sourceSupportedPerformanceMarkdown -PathType Leaf) {
+	Copy-Item -LiteralPath $sourceSupportedPerformanceMarkdown -Destination (Join-Path $qualificationBundleRoot "supported-performance.md") -Force
+}
+$releaseSupportedPerformance = [ordered]@{
+	status = [string]$sourceManifest.supportedPerformance.status
+	path = Get-EvidenceRelativePath -EvidenceRoot $evidenceRoot -Path $supportedPerformanceTarget
+	sha256 = [string]$sourceManifest.supportedPerformance.sha256
+}
+
 $copiedTypes = @{}
 $releaseRequirements = @(
 	foreach ($entry in @($sourceManifest.requirements)) {
@@ -156,6 +172,7 @@ $releaseQualificationManifest = [ordered]@{
 	repository = [string]$sourceManifest.repository
 	sourceCommit = $SourceCommit
 	generatedAtUtc = [DateTimeOffset]::UtcNow.ToString("O")
+	supportedPerformance = $releaseSupportedPerformance
 	requirements = $releaseRequirements
 }
 $releaseQualificationManifestPath = Join-Path $evidenceRoot "qualification-evidence-manifest.json"

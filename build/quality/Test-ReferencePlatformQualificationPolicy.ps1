@@ -16,6 +16,7 @@ $documentationPath = Join-Path $repositoryRoot "docs/qualification/ReferencePlat
 $profileSchemaPath = Join-Path $repositoryRoot "schemas/qualification/v1/reference-platform.schema.json"
 $resultSchemaPath = Join-Path $repositoryRoot "schemas/qualification/v1/reference-platform-result.schema.json"
 $environmentSchemaPath = Join-Path $repositoryRoot "schemas/qualification/v1/reference-platform-environment.schema.json"
+$performanceSchemaPath = Join-Path $repositoryRoot "schemas/qualification/v1/supported-performance.schema.json"
 
 function Assert-Condition {
 	param(
@@ -56,8 +57,9 @@ foreach ($requiredPath in @(
 	$documentationPath,
 	$profileSchemaPath,
 	$resultSchemaPath,
-	$environmentSchemaPath)) {
-	Assert-Condition (Test-Path -LiteralPath $requiredPath -PathType Leaf) "Required AP-39 artifact is missing: '$requiredPath'."
+	$environmentSchemaPath,
+	$performanceSchemaPath)) {
+	Assert-Condition (Test-Path -LiteralPath $requiredPath -PathType Leaf) "Required reference-platform qualification artifact is missing: '$requiredPath'."
 }
 
 $profile = Get-Content -LiteralPath $profilePath -Raw | ConvertFrom-Json
@@ -99,13 +101,20 @@ $q10 = @($scenarios | Where-Object id -eq "Q10")[0]
 Assert-TextContains -Text ([string]$q10.filter) -Value "OperatorProcessRecoveryTests" -Message "Q10 must remain bound to real Operator process restart/resynchronization evidence."
 
 $hardware = @($profile.hardwareRequirements)
-Assert-Condition ($hardware.Count -eq 5) "Reference-platform profile must retain exactly five physical requirements."
+Assert-Condition ($hardware.Count -eq 12) "Reference-platform profile must retain exactly twelve explicit physical requirements."
 $expectedHardware = @{
-	REFERENCE_GPU = @{ Type = "CUDA_REFERENCE"; Binding = "cuda-reference.binding.json" }
+	CUDA_GPU_EXECUTION = @{ Type = "CUDA_REFERENCE"; Binding = "cuda-reference.binding.json" }
+	GPU_FRAME_LATENCY = @{ Type = "CUDA_REFERENCE"; Binding = "cuda-reference.binding.json" }
+	GPU_SURFACE_LIFETIME = @{ Type = "CUDA_REFERENCE"; Binding = "cuda-reference.binding.json" }
 	PROFESSIONAL_MEDIA_IO = @{ Type = "MEDIA_IO_REFERENCE"; Binding = "media-io-reference.binding.json" }
-	GENLOCK = @{ Type = "TIMING_REFERENCE_SOAK"; Binding = "timing-reference-soak.binding.json" }
+	SUSTAINED_FRAME_CADENCE = @{ Type = "TIMING_REFERENCE_SOAK"; Binding = "timing-reference-soak.binding.json" }
+	DROPPED_FRAME_BEHAVIOR = @{ Type = "TIMING_REFERENCE_SOAK"; Binding = "timing-reference-soak.binding.json" }
+	SYSTEM_TELEMETRY_CONTINUITY = @{ Type = "TIMING_REFERENCE_SOAK"; Binding = "timing-reference-soak.binding.json" }
+	TIMING_REFERENCE_LOCK = @{ Type = "TIMING_REFERENCE_SOAK"; Binding = "timing-reference-soak.binding.json" }
+	AUDIO_VIDEO_SYNCHRONIZATION = @{ Type = "TIMING_REFERENCE_SOAK"; Binding = "timing-reference-soak.binding.json" }
+	RECOVERY_UNDER_LOAD = @{ Type = "TIMING_REFERENCE_SOAK"; Binding = "timing-reference-soak.binding.json" }
 	PHYSICAL_END_TO_END_LATENCY = @{ Type = "TIMING_REFERENCE_SOAK"; Binding = "timing-reference-soak.binding.json" }
-	LONG_SOAK = @{ Type = "TIMING_REFERENCE_SOAK"; Binding = "timing-reference-soak.binding.json" }
+	LONG_SOAK_STABILITY = @{ Type = "TIMING_REFERENCE_SOAK"; Binding = "timing-reference-soak.binding.json" }
 }
 foreach ($name in $expectedHardware.Keys) {
 	$item = @($hardware | Where-Object { [string]$_.requirement -eq $name })
@@ -115,7 +124,7 @@ foreach ($name in $expectedHardware.Keys) {
 	Assert-Condition ([string]$item[0].bindingFile -eq [string]$expectedHardware[$name].Binding) "Physical requirement '$name' has the wrong evidence binding."
 }
 
-foreach ($schemaPath in @($profileSchemaPath, $resultSchemaPath, $environmentSchemaPath)) {
+foreach ($schemaPath in @($profileSchemaPath, $resultSchemaPath, $environmentSchemaPath, $performanceSchemaPath)) {
 	$schema = Get-Content -LiteralPath $schemaPath -Raw | ConvertFrom-Json
 	Assert-Condition ([string]$schema.'$schema' -eq "https://json-schema.org/draft/2020-12/schema") "Qualification schema '$schemaPath' must use JSON Schema 2020-12."
 	Assert-Condition (-not [string]::IsNullOrWhiteSpace([string]$schema.'$id')) "Qualification schema '$schemaPath' is missing its stable schema ID."
@@ -132,13 +141,14 @@ Assert-TextContains -Text $runner -Value "Test-QualificationEvidenceBinding.ps1"
 Assert-TextContains -Text $runner -Value "qualification-result.json" -Message "Reference-platform runner must emit a machine-readable result."
 Assert-TextContains -Text $runner -Value "qualification-summary.md" -Message "Reference-platform runner must emit a human-readable summary."
 Assert-TextContains -Text $runner -Value "environment.json" -Message "Reference-platform runner must emit environment evidence."
+Assert-TextContains -Text $runner -Value "New-SupportedPerformanceEvidence.ps1" -Message "Reference-platform runner must derive supported performance from source-bound physical evidence."
 Assert-TextContains -Text $runner -Value "UNVERIFIED" -Message "Reference-platform runner must preserve explicit UNVERIFIED semantics."
 Assert-TextContains -Text $runner -Value "RequirePass" -Message "Reference-platform runner must provide an explicit full-PASS gate without making it the CI default."
 
 $requiredGates = Get-Content -LiteralPath $requiredGatesPath -Raw
 Assert-TextContains -Text $requiredGates -Value "Invoke-ReferencePlatformQualification.ps1" -Message "Required Gates must execute the CI-safe reference-platform qualification profile."
-Assert-TextContains -Text $requiredGates -Value "Test-ReferencePlatformQualificationPolicy.ps1" -Message "Required Gates quality job must verify AP-39 qualification policy."
-Assert-TextContains -Text $requiredGates -Value "artifacts/qualification/reference-platform" -Message "Required Gates must retain AP-39 qualification evidence as a workflow artifact."
+Assert-TextContains -Text $requiredGates -Value "Test-ReferencePlatformQualificationPolicy.ps1" -Message "Required Gates quality job must verify reference-platform qualification policy."
+Assert-TextContains -Text $requiredGates -Value "artifacts/qualification/reference-platform" -Message "Required Gates must retain reference-platform qualification evidence as a workflow artifact."
 
 $testRoot = Join-Path $repositoryRoot "artifacts/quality/reference-platform-qualification"
 if (Test-Path -LiteralPath $testRoot) { Remove-Item -LiteralPath $testRoot -Recurse -Force }
@@ -146,6 +156,10 @@ New-Item -ItemType Directory -Path $testRoot -Force | Out-Null
 $environmentPath = Join-Path $testRoot "environment.json"
 $softwareLogPath = Join-Path $testRoot "software.log"
 $hardwareEvidencePath = Join-Path $testRoot "physical.binding.json"
+$unverifiedPerformancePath = Join-Path $testRoot "supported-performance-unverified.json"
+$unverifiedPerformanceMarkdownPath = Join-Path $testRoot "supported-performance-unverified.md"
+$passPerformancePath = Join-Path $testRoot "supported-performance-pass.json"
+$passPerformanceMarkdownPath = Join-Path $testRoot "supported-performance-pass.md"
 [System.IO.File]::WriteAllText($softwareLogPath, "synthetic software evidence`n", [System.Text.UTF8Encoding]::new($false))
 [System.IO.File]::WriteAllText($hardwareEvidencePath, "{}`n", [System.Text.UTF8Encoding]::new($false))
 Write-JsonFile -Value ([ordered]@{
@@ -159,6 +173,10 @@ try {
 	$relativeEnvironment = [System.IO.Path]::GetRelativePath($repositoryRoot, $environmentPath).Replace('\', '/')
 	$relativeSoftware = [System.IO.Path]::GetRelativePath($repositoryRoot, $softwareLogPath).Replace('\', '/')
 	$relativeHardware = [System.IO.Path]::GetRelativePath($repositoryRoot, $hardwareEvidencePath).Replace('\', '/')
+	$relativeUnverifiedPerformance = [System.IO.Path]::GetRelativePath($repositoryRoot, $unverifiedPerformancePath).Replace('\', '/')
+	$relativeUnverifiedPerformanceMarkdown = [System.IO.Path]::GetRelativePath($repositoryRoot, $unverifiedPerformanceMarkdownPath).Replace('\', '/')
+	$relativePassPerformance = [System.IO.Path]::GetRelativePath($repositoryRoot, $passPerformancePath).Replace('\', '/')
+	$relativePassPerformanceMarkdown = [System.IO.Path]::GetRelativePath($repositoryRoot, $passPerformanceMarkdownPath).Replace('\', '/')
 	$syntheticScenarios = @(
 		foreach ($index in 1..10) {
 			[ordered]@{
@@ -186,6 +204,40 @@ try {
 		}
 	)
 	$sourceCommit = "1111111111111111111111111111111111111111"
+	Write-JsonFile -Value ([ordered]@{
+		copyright = "Copyright (c) Dave Beusing <david.beusing@gmail.com>."
+		schemaVersion = "1.0"
+		profile = "rtaime-v1-reference-platform"
+		sourceCommit = $sourceCommit
+		product = [ordered]@{ version = "synthetic"; releaseStage = "TEST" }
+		generatedAtUtc = [DateTimeOffset]::UtcNow.ToString("O")
+		status = "UNVERIFIED"
+		hardware = [ordered]@{}
+		measurements = @()
+	}) -Path $unverifiedPerformancePath
+	[System.IO.File]::WriteAllText($unverifiedPerformanceMarkdownPath, "# Synthetic unverified performance`n", [System.Text.UTF8Encoding]::new($false))
+
+	Write-JsonFile -Value ([ordered]@{
+		copyright = "Copyright (c) Dave Beusing <david.beusing@gmail.com>."
+		schemaVersion = "1.0"
+		profile = "rtaime-v1-reference-platform"
+		sourceCommit = $sourceCommit
+		product = [ordered]@{ version = "synthetic"; releaseStage = "TEST" }
+		generatedAtUtc = [DateTimeOffset]::UtcNow.ToString("O")
+		status = "PASS"
+		hardware = [ordered]@{ gpuDevice = "Synthetic Reference GPU" }
+		measurements = @(
+			[ordered]@{
+				metric = "gpu.frame_latency.p95"
+				value = 2.0
+				unit = "ms"
+				qualificationType = "CUDA_REFERENCE"
+				payloadSha256 = ("a" * 64)
+			}
+		)
+	}) -Path $passPerformancePath
+	[System.IO.File]::WriteAllText($passPerformanceMarkdownPath, "# Synthetic supported performance`n", [System.Text.UTF8Encoding]::new($false))
+
 	$unverifiedResultPath = Join-Path $testRoot "unverified-result.json"
 	Write-JsonFile -Value ([ordered]@{
 		copyright = "Copyright (c) Dave Beusing <david.beusing@gmail.com>."
@@ -195,8 +247,13 @@ try {
 		status = "UNVERIFIED"
 		softwareStatus = "PASS"
 		hardwareStatus = "UNVERIFIED"
-		counts = [ordered]@{ PASS = 10; FAIL = 0; NOT_APPLICABLE = 0; UNVERIFIED = 5 }
+		counts = [ordered]@{ PASS = 10; FAIL = 0; NOT_APPLICABLE = 0; UNVERIFIED = 12 }
 		environmentPath = $relativeEnvironment
+		supportedPerformance = [ordered]@{
+			status = "UNVERIFIED"
+			path = $relativeUnverifiedPerformance
+			markdownPath = $relativeUnverifiedPerformanceMarkdown
+		}
 		scenarios = $syntheticScenarios
 		hardwareRequirements = $syntheticHardware
 	}) -Path $unverifiedResultPath
@@ -235,8 +292,13 @@ try {
 		status = "PASS"
 		softwareStatus = "PASS"
 		hardwareStatus = "PASS"
-		counts = [ordered]@{ PASS = 15; FAIL = 0; NOT_APPLICABLE = 0; UNVERIFIED = 0 }
+		counts = [ordered]@{ PASS = 22; FAIL = 0; NOT_APPLICABLE = 0; UNVERIFIED = 0 }
 		environmentPath = $relativeEnvironment
+		supportedPerformance = [ordered]@{
+			status = "PASS"
+			path = $relativePassPerformance
+			markdownPath = $relativePassPerformanceMarkdown
+		}
 		scenarios = $syntheticScenarios
 		hardwareRequirements = $allPassHardware
 	}) -Path $passResultPath

@@ -15,6 +15,7 @@ $ErrorActionPreference = "Stop"
 
 $repositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "../.."))
 $bindingVerifier = Join-Path $PSScriptRoot "Test-QualificationEvidenceBinding.ps1"
+$performanceGenerator = Join-Path $PSScriptRoot "New-SupportedPerformanceEvidence.ps1"
 $resultVerifier = Join-Path $PSScriptRoot "Test-ReferencePlatformQualificationResult.ps1"
 $validStatuses = @("PASS", "FAIL", "NOT_APPLICABLE", "UNVERIFIED")
 
@@ -94,13 +95,14 @@ function Get-SafeFileName {
 $resolvedProfile = Resolve-RepositoryPath -Path $ProfilePath
 if (-not (Test-Path -LiteralPath $resolvedProfile -PathType Leaf)) { throw "Reference-platform profile is missing: '$resolvedProfile'." }
 if (-not (Test-Path -LiteralPath $bindingVerifier -PathType Leaf)) { throw "Qualification binding verifier is missing." }
+if (-not (Test-Path -LiteralPath $performanceGenerator -PathType Leaf)) { throw "Supported-performance evidence generator is missing." }
 if (-not (Test-Path -LiteralPath $resultVerifier -PathType Leaf)) { throw "Reference-platform result verifier is missing." }
 
 $profile = Get-Content -LiteralPath $resolvedProfile -Raw | ConvertFrom-Json
 if ([string]$profile.schemaVersion -ne "1.0") { throw "Reference-platform profile schema must be 1.0." }
 if ([string]$profile.profile -ne "rtaime-v1-reference-platform") { throw "Unexpected reference-platform profile identity." }
 if (@($profile.softwareScenarios).Count -ne 10) { throw "Reference-platform profile must contain Q01-Q10." }
-if (@($profile.hardwareRequirements).Count -ne 5) { throw "Reference-platform profile must contain the five V1 physical requirements." }
+if (@($profile.hardwareRequirements).Count -ne 12) { throw "Reference-platform profile must contain the twelve explicit V1 physical evidence requirements." }
 
 $resolvedOutputRoot = Resolve-RepositoryPath -Path $OutputRoot
 [void](Get-RepositoryRelativePath -Path $resolvedOutputRoot)
@@ -112,6 +114,9 @@ New-Item -ItemType Directory -Path $logsRoot -Force | Out-Null
 
 $capturedAtUtc = [DateTimeOffset]::UtcNow
 $resolvedSourceCommit = Get-SourceCommit -Requested $SourceCommit
+if ($resolvedSourceCommit -notmatch '^[0-9a-f]{40}$') {
+	throw "Reference-platform qualification requires an exact 40-character source commit."
+}
 $dotnetVersion = "UNAVAILABLE"
 try {
 	$dotnetOutput = @(& dotnet --version 2>$null)
@@ -287,6 +292,15 @@ foreach ($requirement in @($profile.hardwareRequirements)) {
 	})
 }
 
+$supportedPerformancePath = Join-Path $resolvedOutputRoot "supported-performance.json"
+$supportedPerformanceMarkdownPath = Join-Path $resolvedOutputRoot "supported-performance.md"
+& $performanceGenerator `
+	-SourceCommit $resolvedSourceCommit `
+	-BindingRoot $BindingRoot `
+	-OutputPath (Get-RepositoryRelativePath -Path $supportedPerformancePath) `
+	-MarkdownPath (Get-RepositoryRelativePath -Path $supportedPerformanceMarkdownPath)
+$supportedPerformance = Get-Content -LiteralPath $supportedPerformancePath -Raw | ConvertFrom-Json
+
 $softwareStatus = Get-AggregatedStatus -Items $scenarioResults.ToArray()
 $hardwareStatus = Get-AggregatedStatus -Items $hardwareResults.ToArray()
 $combined = @($scenarioResults.ToArray()) + @($hardwareResults.ToArray())
@@ -312,6 +326,11 @@ $result = [ordered]@{
 	platformStatus = $platformStatus
 	counts = $counts
 	environmentPath = Get-RepositoryRelativePath -Path $environmentPath
+	supportedPerformance = [ordered]@{
+		status = [string]$supportedPerformance.status
+		path = Get-RepositoryRelativePath -Path $supportedPerformancePath
+		markdownPath = Get-RepositoryRelativePath -Path $supportedPerformanceMarkdownPath
+	}
 	scenarios = $scenarioResults.ToArray()
 	hardwareRequirements = $hardwareResults.ToArray()
 }
@@ -329,6 +348,8 @@ $summary.Add("- Overall: **$overallStatus**")
 $summary.Add("- Software: **$softwareStatus**")
 $summary.Add("- Hardware: **$hardwareStatus**")
 $summary.Add("- Platform checks: **$platformStatus**")
+$summary.Add("- Supported performance evidence: **$($supportedPerformance.status)**")
+$summary.Add("- Supported performance matrix: ``$(Get-RepositoryRelativePath -Path $supportedPerformanceMarkdownPath)``")
 $summary.Add("")
 $summary.Add("> `UNVERIFIED` is not `PASS`. GitHub-hosted CI may prove the software profile while the full reference platform remains UNVERIFIED until exact source-bound physical evidence exists.")
 $summary.Add("")

@@ -33,6 +33,16 @@ A physical result may affect release compatibility evidence only when all of the
 
 The static release policy intentionally keeps every physical requirement at `UNVERIFIED`. Editing `release-policy.json` cannot create a hardware `PASS`.
 
+Reference Platform Qualification projects the same three source-bound qualification types into twelve explicit physical evidence dimensions:
+
+| Qualification type | Reference-platform dimensions |
+| --- | --- |
+| `CUDA_REFERENCE` | `CUDA_GPU_EXECUTION`, `GPU_FRAME_LATENCY`, `GPU_SURFACE_LIFETIME` |
+| `MEDIA_IO_REFERENCE` | `PROFESSIONAL_MEDIA_IO` |
+| `TIMING_REFERENCE_SOAK` | `SUSTAINED_FRAME_CADENCE`, `DROPPED_FRAME_BEHAVIOR`, `SYSTEM_TELEMETRY_CONTINUITY`, `TIMING_REFERENCE_LOCK`, `AUDIO_VIDEO_SYNCHRONIZATION`, `RECOVERY_UNDER_LOAD`, `PHYSICAL_END_TO_END_LATENCY`, `LONG_SOAK_STABILITY` |
+
+A binding may satisfy multiple dimensions only because its qualification-specific verifier validates the corresponding payload fields. A binding type alone is never sufficient evidence.
+
 ## Binding format
 
 Each dedicated self-hosted physical workflow creates a schema `1.0` binding after the qualification payload has passed. The binding contains:
@@ -56,11 +66,13 @@ The application stage:
 
 1. builds and verifies a source-bound qualification evidence manifest;
 2. leaves requirements without valid bindings as `UNVERIFIED`;
-3. copies each accepted binding and payload byte-for-byte into `artifacts/release-evidence/qualification/`;
-4. rechecks SHA-256 after the copy;
-5. writes `qualification-evidence-manifest.json` into the release-evidence bundle;
-6. maps only manifest `PASSED` requirements to compatibility-manifest `PASS`;
-7. updates the release-evidence hash references.
+3. derives `supported-performance.json` exclusively from measurements in verified same-source physical payloads;
+4. records the supported-performance status, path and SHA-256 in the qualification evidence manifest;
+5. copies each accepted binding, payload and supported-performance evidence byte-for-byte into `artifacts/release-evidence/qualification/`;
+6. rechecks SHA-256 after the copy;
+7. writes `qualification-evidence-manifest.json` into the release-evidence bundle;
+8. maps only manifest `PASSED` requirements to compatibility-manifest `PASS`;
+9. updates the release-evidence hash references.
 
 `Test-ReleaseEvidence.ps1` then verifies the release-local manifest, copied bytes, hashes, source commit, workflow provenance and compatibility statuses again. The offline bundle therefore remains self-contained; it does not depend on the original GitHub artifact still being available.
 
@@ -79,6 +91,8 @@ The binding and release stages reject, among other cases:
 - timing evidence below the 30-minute soak floor;
 - timing evidence without reference loss and re-lock;
 - timing evidence without at least 30 independent physical latency samples;
+- timing evidence without required audio/video synchronization measurements;
+- timing evidence without continuous CPU/RAM/GPU/VRAM telemetry evidence;
 - a static release policy that attempts to pre-mark hardware evidence as passed.
 
 ## Evidence state
@@ -94,3 +108,5 @@ Until the dedicated reference-hardware workflows actually run and their bindings
 - long soak.
 
 Normal GitHub-hosted Required Gates validate the mechanism and fail-closed regressions. They are not physical hardware qualification evidence.
+
+The Supported Performance Matrix follows the same boundary: it lists only values extracted from verified same-source physical payloads. Missing physical evidence keeps the matrix `UNVERIFIED` and produces no substituted or configured performance claim.

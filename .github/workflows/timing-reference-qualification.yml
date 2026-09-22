@@ -37,6 +37,15 @@ on:
         default: "80.0"
         type: string
 
+      external_av_sync_evidence_path:
+        description: Runner-local JSON emitted by independent physical A/V synchronization measurement equipment
+        required: true
+        type: string
+      maximum_av_sync_p95_ms:
+        description: Maximum permitted independently measured p95 absolute A/V offset in milliseconds
+        required: true
+        type: string
+
 permissions:
   contents: read
 
@@ -121,6 +130,8 @@ jobs:
             -MaximumHostCycleP95Milliseconds ([double]"${{ inputs.maximum_host_cycle_p95_ms }}") `
             -ExternalLatencyEvidencePath "${{ inputs.external_latency_evidence_path }}" `
             -MaximumEndToEndP95Milliseconds ([double]"${{ inputs.maximum_end_to_end_p95_ms }}") `
+            -ExternalAvSyncEvidencePath "${{ inputs.external_av_sync_evidence_path }}" `
+            -MaximumAvSyncP95Milliseconds ([double]"${{ inputs.maximum_av_sync_p95_ms }}") `
             -RequireReferenceRelock `
             -EvidencePath "artifacts/qualification/timing-reference-soak.json"
 

@@ -71,9 +71,22 @@ foreach ($scenario in $scenarios) {
 }
 
 $hardware = @($result.hardwareRequirements)
-$expectedHardware = @("REFERENCE_GPU", "PROFESSIONAL_MEDIA_IO", "GENLOCK", "PHYSICAL_END_TO_END_LATENCY", "LONG_SOAK")
-Assert-Condition ($hardware.Count -eq 5) "Reference-platform qualification must contain exactly five physical requirements."
-Assert-Condition (@($hardware.requirement | Sort-Object -Unique).Count -eq 5) "Physical requirement names must be unique."
+$expectedHardware = @(
+	"CUDA_GPU_EXECUTION",
+	"GPU_FRAME_LATENCY",
+	"GPU_SURFACE_LIFETIME",
+	"PROFESSIONAL_MEDIA_IO",
+	"SUSTAINED_FRAME_CADENCE",
+	"DROPPED_FRAME_BEHAVIOR",
+	"SYSTEM_TELEMETRY_CONTINUITY",
+	"TIMING_REFERENCE_LOCK",
+	"AUDIO_VIDEO_SYNCHRONIZATION",
+	"RECOVERY_UNDER_LOAD",
+	"PHYSICAL_END_TO_END_LATENCY",
+	"LONG_SOAK_STABILITY"
+)
+Assert-Condition ($hardware.Count -eq $expectedHardware.Count) "Reference-platform qualification must contain every explicit physical evidence requirement."
+Assert-Condition (@($hardware.requirement | Sort-Object -Unique).Count -eq $expectedHardware.Count) "Physical requirement names must be unique."
 foreach ($requirement in $expectedHardware) {
 	Assert-Condition (@($hardware | Where-Object { [string]$_.requirement -eq $requirement }).Count -eq 1) "Reference-platform qualification is missing physical requirement '$requirement'."
 }
@@ -106,6 +119,28 @@ foreach ($status in $validStatuses) {
 
 Assert-Condition (-not [string]::IsNullOrWhiteSpace([string]$result.environmentPath)) "Qualification result must reference environment evidence."
 Assert-Condition (Test-Path -LiteralPath (Resolve-RepositoryPath -Path ([string]$result.environmentPath)) -PathType Leaf) "Qualification environment evidence is missing."
+
+Assert-Condition ([string]$result.supportedPerformance.status -in @("PASS", "UNVERIFIED")) "Supported-performance evidence has an invalid status."
+Assert-Condition (-not [string]::IsNullOrWhiteSpace([string]$result.supportedPerformance.path)) "Qualification result must reference supported-performance JSON evidence."
+Assert-Condition (-not [string]::IsNullOrWhiteSpace([string]$result.supportedPerformance.markdownPath)) "Qualification result must reference the supported-performance matrix."
+$performancePath = Resolve-RepositoryPath -Path ([string]$result.supportedPerformance.path)
+$performanceMarkdownPath = Resolve-RepositoryPath -Path ([string]$result.supportedPerformance.markdownPath)
+Assert-Condition (Test-Path -LiteralPath $performancePath -PathType Leaf) "Supported-performance JSON evidence is missing."
+Assert-Condition (Test-Path -LiteralPath $performanceMarkdownPath -PathType Leaf) "Supported-performance Markdown matrix is missing."
+$performance = Get-Content -LiteralPath $performancePath -Raw | ConvertFrom-Json
+Assert-Condition ([string]$performance.schemaVersion -eq "1.0") "Supported-performance evidence schemaVersion must be 1.0."
+Assert-Condition ([string]$performance.profile -eq $ExpectedProfile) "Supported-performance profile mismatch."
+Assert-Condition ([string]$performance.sourceCommit -eq [string]$result.sourceCommit) "Supported-performance evidence source commit mismatch."
+Assert-Condition ([string]$performance.status -eq [string]$result.supportedPerformance.status) "Supported-performance status differs from qualification result."
+if ([string]$performance.status -eq "PASS") {
+	Assert-Condition ([string]$result.hardwareStatus -eq "PASS") "Supported-performance PASS requires complete physical hardware qualification."
+	Assert-Condition (@($performance.measurements).Count -gt 0) "Supported-performance PASS requires measured values."
+}
+foreach ($measurement in @($performance.measurements)) {
+	Assert-Condition (-not [string]::IsNullOrWhiteSpace([string]$measurement.metric)) "Supported-performance measurement metric is required."
+	Assert-Condition ([double]::IsFinite([double]$measurement.value)) "Supported-performance measurement value must be finite."
+	Assert-Condition ([string]$measurement.payloadSha256 -match '^[0-9a-f]{64}$') "Supported-performance measurement must identify its verified payload hash."
+}
 
 Write-Host "Reference-platform qualification result verification PASS"
 Write-Host "Overall: $($result.status)"

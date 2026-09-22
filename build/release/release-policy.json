@@ -59,7 +59,15 @@
 	],
 	"hardwareQualification": [
 		{
-			"requirement": "REFERENCE_GPU",
+			"requirement": "CUDA_GPU_EXECUTION",
+			"status": "UNVERIFIED"
+		},
+		{
+			"requirement": "GPU_FRAME_LATENCY",
+			"status": "UNVERIFIED"
+		},
+		{
+			"requirement": "GPU_SURFACE_LIFETIME",
 			"status": "UNVERIFIED"
 		},
 		{
@@ -67,7 +75,27 @@
 			"status": "UNVERIFIED"
 		},
 		{
-			"requirement": "GENLOCK",
+			"requirement": "SUSTAINED_FRAME_CADENCE",
+			"status": "UNVERIFIED"
+		},
+		{
+			"requirement": "DROPPED_FRAME_BEHAVIOR",
+			"status": "UNVERIFIED"
+		},
+		{
+			"requirement": "SYSTEM_TELEMETRY_CONTINUITY",
+			"status": "UNVERIFIED"
+		},
+		{
+			"requirement": "TIMING_REFERENCE_LOCK",
+			"status": "UNVERIFIED"
+		},
+		{
+			"requirement": "AUDIO_VIDEO_SYNCHRONIZATION",
+			"status": "UNVERIFIED"
+		},
+		{
+			"requirement": "RECOVERY_UNDER_LOAD",
 			"status": "UNVERIFIED"
 		},
 		{
@@ -75,7 +103,7 @@
 			"status": "UNVERIFIED"
 		},
 		{
-			"requirement": "LONG_SOAK",
+			"requirement": "LONG_SOAK_STABILITY",
 			"status": "UNVERIFIED"
 		}
 	]

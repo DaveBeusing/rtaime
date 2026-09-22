@@ -1,0 +1,65 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://rtaime.local/schemas/qualification/v1/supported-performance.schema.json",
+	"$comment": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+	"title": "rtaime Supported Performance Evidence v1",
+	"type": "object",
+	"additionalProperties": false,
+	"required": [
+		"copyright",
+		"schemaVersion",
+		"profile",
+		"sourceCommit",
+		"product",
+		"generatedAtUtc",
+		"status",
+		"hardware",
+		"measurements"
+	],
+	"properties": {
+		"copyright": { "type": "string", "minLength": 1 },
+		"schemaVersion": { "const": "1.0" },
+		"profile": { "const": "rtaime-v1-reference-platform" },
+		"sourceCommit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+		"product": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["version", "releaseStage"],
+			"properties": {
+				"version": { "type": "string", "minLength": 1 },
+				"releaseStage": { "type": "string", "minLength": 1 }
+			}
+		},
+		"generatedAtUtc": { "type": "string", "format": "date-time" },
+		"status": { "enum": ["PASS", "UNVERIFIED"] },
+		"hardware": {
+			"type": "object",
+			"additionalProperties": false,
+			"properties": {
+				"gpuDevice": { "type": "string", "minLength": 1 },
+				"gpuDriverVersion": { "type": "string", "minLength": 1 },
+				"mediaIoAdapter": { "type": "string", "minLength": 1 },
+				"mediaIoDriverVersion": { "type": "string", "minLength": 1 },
+				"ajaSdkRevision": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
+			}
+		},
+		"measurements": {
+			"type": "array",
+			"items": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["metric", "value", "unit", "qualificationType", "payloadSha256"],
+				"properties": {
+					"metric": { "type": "string", "minLength": 1 },
+					"value": { "type": "number" },
+					"unit": { "type": "string", "minLength": 1 },
+					"format": { "type": "string", "minLength": 1 },
+					"operation": { "type": "string", "minLength": 1 },
+					"sampleCount": { "type": "integer", "minimum": 1 },
+					"qualificationType": { "enum": ["CUDA_REFERENCE", "MEDIA_IO_REFERENCE", "TIMING_REFERENCE_SOAK"] },
+					"payloadSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+				}
+			}
+		}
+	}
+}

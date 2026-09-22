@@ -96,7 +96,9 @@ artifacts/release-evidence/
 │  └─ rtaime.Operator/
 ├─ qualification/
 │  ├─ bindings/
-│  └─ payloads/
+│  ├─ payloads/
+│  ├─ supported-performance.json
+│  └─ supported-performance.md
 ├─ artifact-manifest.json
 ├─ sbom.cdx.json
 ├─ compatibility-manifest.json
@@ -160,7 +162,7 @@ PHYSICAL_END_TO_END_LATENCY
 LONG_SOAK
 ```
 
-A requirement becomes `PASSED` in the qualification manifest only when a repository-authorized binding exists for the same source commit and the exact binding/payload bytes pass their fail-closed verifier. The accepted bytes are copied into the release-evidence bundle and hashed again after the copy.
+A requirement becomes `PASSED` in the qualification manifest only when a repository-authorized binding exists for the same source commit and the exact binding/payload bytes pass their fail-closed verifier. The manifest also carries a `supportedPerformance` reference containing status, path and SHA-256 for machine-readable performance evidence derived exclusively from verified physical payloads. The accepted binding, payload and supported-performance bytes are copied into the release-evidence bundle and hashed again after the copy.
 
 The current qualification mapping is documented in `docs/QualificationEvidenceProvenance.md`.
 

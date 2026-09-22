@@ -79,8 +79,16 @@ function Assert-PassedPayload {
 			if (-not [bool]$Evidence.reference.referenceLossObserved) { throw "Timing qualification binding requires reference-loss evidence." }
 			if (-not [bool]$Evidence.reference.referenceRelockObserved) { throw "Timing qualification binding requires reference re-lock evidence." }
 			if ([string]$Evidence.reference.finalOutput -ne "Locked") { throw "Timing qualification binding requires a final locked Program output." }
+			if ([uint64]$Evidence.statistics.CaptureFailures -ne 0) { throw "Timing qualification binding rejects capture failures during soak." }
+			if ([uint64]$Evidence.statistics.OutputRejected -ne 0) { throw "Timing qualification binding rejects hard Program-output failures during soak." }
+			if ([uint64]$Evidence.statistics.CapturedA -lt [uint64]$Evidence.minimumContinuityFrames -or [uint64]$Evidence.statistics.CapturedB -lt [uint64]$Evidence.minimumContinuityFrames -or [uint64]$Evidence.statistics.OutputAccepted -lt [uint64]$Evidence.minimumContinuityFrames) { throw "Timing qualification binding requires sustained capture and Program-output cadence." }
+			if ([int]$Evidence.hostCycle.sampleCount -lt 10 -or [double]$Evidence.hostCycle.p95Milliseconds -gt [double]$Evidence.hostCycle.maximumAllowedP95Milliseconds) { throw "Timing qualification binding requires measured host-cycle timing within its declared bound." }
+			if ([string]$Evidence.telemetry.status -ne "PASSED" -or [int]$Evidence.telemetry.sampleCount -lt 30 -or [int]$Evidence.telemetry.completeSampleCount -ne [int]$Evidence.telemetry.sampleCount) { throw "Timing qualification binding requires continuous CPU/RAM/GPU/VRAM telemetry." }
+			if ([string]::IsNullOrWhiteSpace([string]$Evidence.telemetry.gpuDriverVersion)) { throw "Timing qualification binding requires NVIDIA driver identity." }
 			if ([string]$Evidence.physicalEndToEndLatency.status -ne "PASSED") { throw "Timing qualification binding requires PASSED physical end-to-end latency evidence." }
 			if ([int]$Evidence.physicalEndToEndLatency.sampleCount -lt 30) { throw "Timing qualification binding requires at least 30 physical latency samples." }
+			if ([string]$Evidence.audioVideoSynchronization.status -ne "PASSED") { throw "Timing qualification binding requires PASSED physical A/V synchronization evidence." }
+			if ([int]$Evidence.audioVideoSynchronization.sampleCount -lt 30) { throw "Timing qualification binding requires at least 30 physical A/V synchronization samples." }
 		}
 		default {
 			throw "Unsupported qualification type '$Type'."

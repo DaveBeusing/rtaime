@@ -14,6 +14,7 @@ $repositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "../.."
 $qualificationPolicyPath = Join-Path $PSScriptRoot "qualification-evidence-policy.json"
 $releasePolicyPath = Join-Path $repositoryRoot "build/release/release-policy.json"
 $bindingVerifier = Join-Path $PSScriptRoot "Test-QualificationEvidenceBinding.ps1"
+$performanceGenerator = Join-Path $PSScriptRoot "New-SupportedPerformanceEvidence.ps1"
 
 function Resolve-RepositoryPath {
 	param([Parameter(Mandatory)][string]$Path)
@@ -43,7 +44,7 @@ function Write-JsonFile {
 
 if ($SourceCommit -notmatch '^[0-9a-fA-F]{40}$') { throw "SourceCommit must be an exact 40-character Git SHA." }
 $SourceCommit = $SourceCommit.ToLowerInvariant()
-foreach ($required in @($qualificationPolicyPath, $releasePolicyPath, $bindingVerifier)) {
+foreach ($required in @($qualificationPolicyPath, $releasePolicyPath, $bindingVerifier, $performanceGenerator)) {
 	if (-not (Test-Path -LiteralPath $required -PathType Leaf)) { throw "Required qualification evidence artifact is missing: '$required'." }
 }
 
@@ -104,12 +105,28 @@ if (Test-Path -LiteralPath $bindingRootFull -PathType Container) {
 $orderedRequirements = @(
 	foreach ($requirement in $requirementOrder) { $entries[$requirement] }
 )
+
+$supportedPerformancePath = Join-Path $repositoryRoot "artifacts/qualification/supported-performance.json"
+$supportedPerformanceMarkdownPath = Join-Path $repositoryRoot "artifacts/qualification/supported-performance.md"
+& $performanceGenerator `
+	-SourceCommit $SourceCommit `
+	-BindingRoot $BindingRoot `
+	-OutputPath (Get-RepositoryRelativePath -Path $supportedPerformancePath) `
+	-MarkdownPath (Get-RepositoryRelativePath -Path $supportedPerformanceMarkdownPath)
+$supportedPerformance = Get-Content -LiteralPath $supportedPerformancePath -Raw | ConvertFrom-Json
+$supportedPerformanceHash = (Get-FileHash -LiteralPath $supportedPerformancePath -Algorithm SHA256).Hash.ToLowerInvariant()
+
 $manifest = [ordered]@{
 	copyright = "Copyright (c) Dave Beusing <david.beusing@gmail.com>."
 	schemaVersion = "1.0"
 	repository = [string]$qualificationPolicy.repository
 	sourceCommit = $SourceCommit
 	generatedAtUtc = [DateTimeOffset]::UtcNow.ToString("O")
+	supportedPerformance = [ordered]@{
+		status = [string]$supportedPerformance.status
+		path = Get-RepositoryRelativePath -Path $supportedPerformancePath
+		sha256 = $supportedPerformanceHash
+	}
 	requirements = $orderedRequirements
 }
 

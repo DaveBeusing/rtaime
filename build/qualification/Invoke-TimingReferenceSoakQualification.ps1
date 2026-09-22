@@ -9,6 +9,8 @@ param(
 	[Parameter(Mandatory)][double]$MaximumHostCycleP95Milliseconds,
 	[Parameter(Mandatory)][string]$ExternalLatencyEvidencePath,
 	[Parameter(Mandatory)][double]$MaximumEndToEndP95Milliseconds,
+	[Parameter(Mandatory)][string]$ExternalAvSyncEvidencePath,
+	[Parameter(Mandatory)][double]$MaximumAvSyncP95Milliseconds,
 	[switch]$RequireReferenceRelock,
 	[string]$EvidencePath = "artifacts/qualification/timing-reference-soak.json"
 )
@@ -16,32 +18,50 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-if (-not $IsWindows) { throw "AP-34 physical qualification requires Windows reference hardware." }
-if ([Environment]::Is64BitProcess -ne $true) { throw "AP-34 physical qualification requires an x64 process." }
+if (-not $IsWindows) { throw "Physical timing qualification requires Windows reference hardware." }
+if ([Environment]::Is64BitProcess -ne $true) { throw "Physical timing qualification requires an x64 process." }
 if ([string]::IsNullOrWhiteSpace($ExpectedAdapterName)) { throw "ExpectedAdapterName is required." }
 if ($AjaSdkRevision -notmatch '^[0-9a-f]{40}$') { throw "AjaSdkRevision must be an exact 40-character commit SHA." }
-if ($SoakSeconds -lt 1800) { throw "AP-34 long-soak qualification requires at least 1800 seconds (30 minutes)." }
+if ($SoakSeconds -lt 1800) { throw "Long-soak qualification requires at least 1800 seconds (30 minutes)." }
 if (-not [double]::IsFinite($MaximumHostCycleP95Milliseconds) -or $MaximumHostCycleP95Milliseconds -le 0) { throw "MaximumHostCycleP95Milliseconds must be positive and finite." }
 if (-not [double]::IsFinite($MaximumEndToEndP95Milliseconds) -or $MaximumEndToEndP95Milliseconds -le 0) { throw "MaximumEndToEndP95Milliseconds must be positive and finite." }
-if (-not $RequireReferenceRelock) { throw "Full AP-34 qualification requires an explicit external-reference loss/re-lock exercise." }
+if (-not [double]::IsFinite($MaximumAvSyncP95Milliseconds) -or $MaximumAvSyncP95Milliseconds -le 0) { throw "MaximumAvSyncP95Milliseconds must be positive and finite." }
+if (-not $RequireReferenceRelock) { throw "Full physical timing qualification requires an explicit external-reference loss/re-lock exercise." }
 
 $repositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "../.."))
 $evidenceFullPath = [System.IO.Path]::GetFullPath((Join-Path $repositoryRoot $EvidencePath))
-$externalFullPath = [System.IO.Path]::GetFullPath($ExternalLatencyEvidencePath)
-if (-not (Test-Path -LiteralPath $externalFullPath -PathType Leaf)) {
-	throw "Independent physical end-to-end latency evidence is missing: '$externalFullPath'."
+$externalLatencyFullPath = [System.IO.Path]::GetFullPath($ExternalLatencyEvidencePath)
+$externalAvSyncFullPath = [System.IO.Path]::GetFullPath($ExternalAvSyncEvidencePath)
+
+if (-not (Test-Path -LiteralPath $externalLatencyFullPath -PathType Leaf)) {
+	throw "Independent physical end-to-end latency evidence is missing: '$externalLatencyFullPath'."
+}
+if (-not (Test-Path -LiteralPath $externalAvSyncFullPath -PathType Leaf)) {
+	throw "Independent physical A/V synchronization evidence is missing: '$externalAvSyncFullPath'."
 }
 
-$external = Get-Content -LiteralPath $externalFullPath -Raw | ConvertFrom-Json
-if ([string]$external.schemaVersion -ne "1.0") { throw "External latency evidence schemaVersion must be 1.0." }
-if ([string]::IsNullOrWhiteSpace([string]$external.measurementMethod)) { throw "External latency evidence must name its independent measurement method." }
-if ([int]$external.sampleCount -lt 30) { throw "External latency evidence requires at least 30 samples." }
-$externalP95 = [double]$external.p95Milliseconds
-$externalMaximum = [double]$external.maximumMilliseconds
-if (-not [double]::IsFinite($externalP95) -or $externalP95 -lt 0) { throw "External latency p95 is invalid." }
-if (-not [double]::IsFinite($externalMaximum) -or $externalMaximum -lt $externalP95) { throw "External latency maximum is invalid." }
-if ($externalP95 -gt $MaximumEndToEndP95Milliseconds) {
-	throw "Physical end-to-end latency p95 $externalP95 ms exceeds the allowed $MaximumEndToEndP95Milliseconds ms."
+$externalLatency = Get-Content -LiteralPath $externalLatencyFullPath -Raw | ConvertFrom-Json
+if ([string]$externalLatency.schemaVersion -ne "1.0") { throw "External latency evidence schemaVersion must be 1.0." }
+if ([string]::IsNullOrWhiteSpace([string]$externalLatency.measurementMethod)) { throw "External latency evidence must name its independent measurement method." }
+if ([int]$externalLatency.sampleCount -lt 30) { throw "External latency evidence requires at least 30 samples." }
+$externalLatencyP95 = [double]$externalLatency.p95Milliseconds
+$externalLatencyMaximum = [double]$externalLatency.maximumMilliseconds
+if (-not [double]::IsFinite($externalLatencyP95) -or $externalLatencyP95 -lt 0) { throw "External latency p95 is invalid." }
+if (-not [double]::IsFinite($externalLatencyMaximum) -or $externalLatencyMaximum -lt $externalLatencyP95) { throw "External latency maximum is invalid." }
+if ($externalLatencyP95 -gt $MaximumEndToEndP95Milliseconds) {
+	throw "Physical end-to-end latency p95 $externalLatencyP95 ms exceeds the allowed $MaximumEndToEndP95Milliseconds ms."
+}
+
+$externalAvSync = Get-Content -LiteralPath $externalAvSyncFullPath -Raw | ConvertFrom-Json
+if ([string]$externalAvSync.schemaVersion -ne "1.0") { throw "External A/V sync evidence schemaVersion must be 1.0." }
+if ([string]::IsNullOrWhiteSpace([string]$externalAvSync.measurementMethod)) { throw "External A/V sync evidence must name its independent measurement method." }
+if ([int]$externalAvSync.sampleCount -lt 30) { throw "External A/V sync evidence requires at least 30 samples." }
+$externalAvSyncP95 = [double]$externalAvSync.p95AbsoluteOffsetMilliseconds
+$externalAvSyncMaximum = [double]$externalAvSync.maximumAbsoluteOffsetMilliseconds
+if (-not [double]::IsFinite($externalAvSyncP95) -or $externalAvSyncP95 -lt 0) { throw "External A/V sync p95 absolute offset is invalid." }
+if (-not [double]::IsFinite($externalAvSyncMaximum) -or $externalAvSyncMaximum -lt $externalAvSyncP95) { throw "External A/V sync maximum absolute offset is invalid." }
+if ($externalAvSyncP95 -gt $MaximumAvSyncP95Milliseconds) {
+	throw "Physical A/V sync p95 absolute offset $externalAvSyncP95 ms exceeds the allowed $MaximumAvSyncP95Milliseconds ms."
 }
 
 $previous = @{
@@ -71,32 +91,52 @@ try {
 	$testExitCode = $LASTEXITCODE
 
 	if (-not (Test-Path -LiteralPath $evidenceFullPath -PathType Leaf)) {
-		throw "AP-34 hardware test did not emit qualification evidence. Test exit code: $testExitCode."
+		throw "Physical timing hardware test did not emit qualification evidence. Test exit code: $testExitCode."
 	}
 
 	$evidence = Get-Content -LiteralPath $evidenceFullPath -Raw | ConvertFrom-Json
-	if ([string]$evidence.schemaVersion -ne "1.0") { throw "AP-34 evidence schemaVersion must be 1.0." }
-	if ([string]$evidence.status -ne "PASSED") { throw "AP-34 hardware evidence is '$($evidence.status)', not PASSED." }
-	if ([int]$evidence.soakSeconds -lt 1800) { throw "AP-34 evidence does not contain a qualifying long soak." }
+	if ([string]$evidence.schemaVersion -ne "1.0") { throw "Timing evidence schemaVersion must be 1.0." }
+	if ([string]$evidence.status -ne "PASSED") { throw "Timing hardware evidence is '$($evidence.status)', not PASSED." }
+	if ([int]$evidence.soakSeconds -lt 1800) { throw "Timing evidence does not contain a qualifying long soak." }
 	if (-not [bool]$evidence.reference.seenInitialReferenceLock) { throw "Initial external-reference lock was not evidenced." }
 	if (-not [bool]$evidence.reference.referenceLossObserved) { throw "External-reference loss was not evidenced." }
 	if (-not [bool]$evidence.reference.referenceRelockObserved) { throw "External-reference re-lock was not evidenced." }
 	if ([string]$evidence.reference.finalOutput -ne "Locked") { throw "Program output did not finish reference-locked." }
 	if ([double]$evidence.hostCycle.p95Milliseconds -gt $MaximumHostCycleP95Milliseconds) { throw "Host-cycle p95 exceeds the configured threshold." }
-	if ($testExitCode -ne 0) { throw "AP-34 hardware test failed with exit code $testExitCode despite emitting evidence." }
+	if ([string]$evidence.telemetry.status -ne "PASSED") { throw "CPU/RAM/GPU/VRAM telemetry continuity did not pass." }
+	if ([int]$evidence.telemetry.sampleCount -lt 30) { throw "Telemetry continuity requires at least 30 samples." }
+	if ([int]$evidence.telemetry.completeSampleCount -ne [int]$evidence.telemetry.sampleCount) { throw "Telemetry continuity contains incomplete samples." }
+	if ($testExitCode -ne 0) { throw "Physical timing hardware test failed with exit code $testExitCode despite emitting evidence." }
+
+	$nvidiaDriverOutput = @(& nvidia-smi --query-gpu=driver_version --format=csv,noheader -i 0 2>$null)
+	if ($LASTEXITCODE -ne 0 -or $nvidiaDriverOutput.Count -ne 1 -or [string]::IsNullOrWhiteSpace([string]$nvidiaDriverOutput[0])) {
+		throw "Unable to identify the NVIDIA driver version for the physical GPU reported by runtime telemetry."
+	}
+	$gpuDriverVersion = ([string]$nvidiaDriverOutput[0]).Trim()
+	$evidence.telemetry | Add-Member -NotePropertyName gpuDriverVersion -NotePropertyValue $gpuDriverVersion -Force
 
 	$evidence | Add-Member -NotePropertyName physicalEndToEndLatency -NotePropertyValue ([pscustomobject]@{
 		status = "PASSED"
-		measurementMethod = [string]$external.measurementMethod
-		sampleCount = [int]$external.sampleCount
-		p95Milliseconds = $externalP95
-		maximumMilliseconds = $externalMaximum
+		measurementMethod = [string]$externalLatency.measurementMethod
+		sampleCount = [int]$externalLatency.sampleCount
+		p95Milliseconds = $externalLatencyP95
+		maximumMilliseconds = $externalLatencyMaximum
 		maximumAllowedP95Milliseconds = $MaximumEndToEndP95Milliseconds
-		sourceEvidence = $externalFullPath
+		sourceEvidenceSha256 = (Get-FileHash -LiteralPath $externalLatencyFullPath -Algorithm SHA256).Hash.ToLowerInvariant()
+	}) -Force
+
+	$evidence | Add-Member -NotePropertyName audioVideoSynchronization -NotePropertyValue ([pscustomobject]@{
+		status = "PASSED"
+		measurementMethod = [string]$externalAvSync.measurementMethod
+		sampleCount = [int]$externalAvSync.sampleCount
+		p95AbsoluteOffsetMilliseconds = $externalAvSyncP95
+		maximumAbsoluteOffsetMilliseconds = $externalAvSyncMaximum
+		maximumAllowedP95Milliseconds = $MaximumAvSyncP95Milliseconds
+		sourceEvidenceSha256 = (Get-FileHash -LiteralPath $externalAvSyncFullPath -Algorithm SHA256).Hash.ToLowerInvariant()
 	}) -Force
 
 	$evidence | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $evidenceFullPath -Encoding utf8
-	Write-Host "AP-34 timing/reference/latency/soak qualification PASS"
+	Write-Host "Physical timing/reference/latency/A-V-sync/telemetry/soak qualification PASS"
 	Write-Host "Evidence: $evidenceFullPath"
 }
 finally {

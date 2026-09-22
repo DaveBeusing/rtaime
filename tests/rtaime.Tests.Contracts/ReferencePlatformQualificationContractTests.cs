@@ -43,9 +43,23 @@ public sealed class ReferencePlatformQualificationContractTests
 		Assert.All(scenarios, value => Assert.True(value.GetProperty("mandatory").GetBoolean()));
 
 		var hardware = root.GetProperty("hardwareRequirements").EnumerateArray().ToArray();
-		Assert.Equal(5, hardware.Length);
+		Assert.Equal(12, hardware.Length);
 		Assert.Equal(
-			new[] { "REFERENCE_GPU", "PROFESSIONAL_MEDIA_IO", "GENLOCK", "PHYSICAL_END_TO_END_LATENCY", "LONG_SOAK" },
+			new[]
+			{
+				"CUDA_GPU_EXECUTION",
+				"GPU_FRAME_LATENCY",
+				"GPU_SURFACE_LIFETIME",
+				"PROFESSIONAL_MEDIA_IO",
+				"SUSTAINED_FRAME_CADENCE",
+				"DROPPED_FRAME_BEHAVIOR",
+				"SYSTEM_TELEMETRY_CONTINUITY",
+				"TIMING_REFERENCE_LOCK",
+				"AUDIO_VIDEO_SYNCHRONIZATION",
+				"RECOVERY_UNDER_LOAD",
+				"PHYSICAL_END_TO_END_LATENCY",
+				"LONG_SOAK_STABILITY"
+			},
 			hardware.Select(value => value.GetProperty("requirement").GetString()).ToArray());
 		Assert.All(hardware, value => Assert.True(value.GetProperty("mandatory").GetBoolean()));
 	}
@@ -57,6 +71,7 @@ public sealed class ReferencePlatformQualificationContractTests
 		using var profileSchema = LoadJson(repositoryRoot, "schemas/qualification/v1/reference-platform.schema.json");
 		using var resultSchema = LoadJson(repositoryRoot, "schemas/qualification/v1/reference-platform-result.schema.json");
 		using var environmentSchema = LoadJson(repositoryRoot, "schemas/qualification/v1/reference-platform-environment.schema.json");
+		using var performanceSchema = LoadJson(repositoryRoot, "schemas/qualification/v1/supported-performance.schema.json");
 
 		AssertSchemaIdentity(
 			profileSchema.RootElement,
@@ -67,6 +82,9 @@ public sealed class ReferencePlatformQualificationContractTests
 		AssertSchemaIdentity(
 			environmentSchema.RootElement,
 			"https://rtaime.local/schemas/qualification/v1/reference-platform-environment.schema.json");
+		AssertSchemaIdentity(
+			performanceSchema.RootElement,
+			"https://rtaime.local/schemas/qualification/v1/supported-performance.schema.json");
 
 		var statuses = resultSchema.RootElement
 			.GetProperty("$defs")
@@ -119,6 +137,7 @@ public sealed class ReferencePlatformQualificationContractTests
 			"platformStatus",
 			"counts",
 			"environmentPath",
+			"supportedPerformance",
 			"scenarios",
 			"hardwareRequirements"
 		})

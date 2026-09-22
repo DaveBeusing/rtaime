@@ -17,6 +17,7 @@
 		"platformStatus",
 		"counts",
 		"environmentPath",
+		"supportedPerformance",
 		"scenarios",
 		"hardwareRequirements"
 	],
@@ -48,17 +49,37 @@
 			"$ref": "#/$defs/qualificationStatus"
 		},
 		"platformStatus": {
-			"enum": ["PASS", "FAIL"]
+			"enum": [
+				"PASS",
+				"FAIL"
+			]
 		},
 		"counts": {
 			"type": "object",
 			"additionalProperties": false,
-			"required": ["PASS", "FAIL", "NOT_APPLICABLE", "UNVERIFIED"],
+			"required": [
+				"PASS",
+				"FAIL",
+				"NOT_APPLICABLE",
+				"UNVERIFIED"
+			],
 			"properties": {
-				"PASS": { "type": "integer", "minimum": 0 },
-				"FAIL": { "type": "integer", "minimum": 0 },
-				"NOT_APPLICABLE": { "type": "integer", "minimum": 0 },
-				"UNVERIFIED": { "type": "integer", "minimum": 0 }
+				"PASS": {
+					"type": "integer",
+					"minimum": 0
+				},
+				"FAIL": {
+					"type": "integer",
+					"minimum": 0
+				},
+				"NOT_APPLICABLE": {
+					"type": "integer",
+					"minimum": 0
+				},
+				"UNVERIFIED": {
+					"type": "integer",
+					"minimum": 0
+				}
 			}
 		},
 		"environmentPath": {
@@ -75,16 +96,46 @@
 		},
 		"hardwareRequirements": {
 			"type": "array",
-			"minItems": 5,
-			"maxItems": 5,
+			"minItems": 12,
+			"maxItems": 12,
 			"items": {
 				"$ref": "#/$defs/hardwareRequirementResult"
+			}
+		},
+		"supportedPerformance": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": [
+				"status",
+				"path",
+				"markdownPath"
+			],
+			"properties": {
+				"status": {
+					"enum": [
+						"PASS",
+						"UNVERIFIED"
+					]
+				},
+				"path": {
+					"type": "string",
+					"minLength": 1
+				},
+				"markdownPath": {
+					"type": "string",
+					"minLength": 1
+				}
 			}
 		}
 	},
 	"$defs": {
 		"qualificationStatus": {
-			"enum": ["PASS", "FAIL", "NOT_APPLICABLE", "UNVERIFIED"]
+			"enum": [
+				"PASS",
+				"FAIL",
+				"NOT_APPLICABLE",
+				"UNVERIFIED"
+			]
 		},
 		"softwareScenarioResult": {
 			"type": "object",
@@ -107,47 +158,102 @@
 					"type": "string",
 					"pattern": "^Q(?:0[1-9]|10)$"
 				},
-				"name": { "type": "string", "minLength": 1 },
-				"mandatory": { "type": "boolean" },
-				"evidenceGroup": { "type": "string", "minLength": 1 },
-				"status": { "$ref": "#/$defs/qualificationStatus" },
-				"detail": { "type": "string", "minLength": 1 },
-				"testProject": { "type": "string", "minLength": 1 },
-				"filter": { "type": "string", "minLength": 1 },
-				"durationMilliseconds": { "type": "number", "minimum": 0 },
-				"evidencePath": { "type": "string" },
+				"name": {
+					"type": "string",
+					"minLength": 1
+				},
+				"mandatory": {
+					"type": "boolean"
+				},
+				"evidenceGroup": {
+					"type": "string",
+					"minLength": 1
+				},
+				"status": {
+					"$ref": "#/$defs/qualificationStatus"
+				},
+				"detail": {
+					"type": "string",
+					"minLength": 1
+				},
+				"testProject": {
+					"type": "string",
+					"minLength": 1
+				},
+				"filter": {
+					"type": "string",
+					"minLength": 1
+				},
+				"durationMilliseconds": {
+					"type": "number",
+					"minimum": 0
+				},
+				"evidencePath": {
+					"type": "string"
+				},
 				"proves": {
 					"type": "array",
 					"minItems": 1,
-					"items": { "type": "string", "minLength": 1 }
+					"items": {
+						"type": "string",
+						"minLength": 1
+					}
 				}
 			}
 		},
 		"hardwareRequirementResult": {
 			"type": "object",
 			"additionalProperties": false,
-			"required": ["id", "requirement", "mandatory", "qualificationType", "status", "detail", "evidencePath"],
+			"required": [
+				"id",
+				"requirement",
+				"mandatory",
+				"qualificationType",
+				"status",
+				"detail",
+				"evidencePath"
+			],
 			"properties": {
 				"id": {
 					"type": "string",
-					"pattern": "^H0[1-5]$"
+					"pattern": "^H(?:0[1-9]|1[0-2])$"
 				},
 				"requirement": {
 					"enum": [
-						"REFERENCE_GPU",
+						"CUDA_GPU_EXECUTION",
+						"GPU_FRAME_LATENCY",
+						"GPU_SURFACE_LIFETIME",
 						"PROFESSIONAL_MEDIA_IO",
-						"GENLOCK",
+						"SUSTAINED_FRAME_CADENCE",
+						"DROPPED_FRAME_BEHAVIOR",
+						"SYSTEM_TELEMETRY_CONTINUITY",
+						"TIMING_REFERENCE_LOCK",
+						"AUDIO_VIDEO_SYNCHRONIZATION",
+						"RECOVERY_UNDER_LOAD",
 						"PHYSICAL_END_TO_END_LATENCY",
-						"LONG_SOAK"
+						"LONG_SOAK_STABILITY"
 					]
 				},
-				"mandatory": { "type": "boolean" },
-				"qualificationType": {
-					"enum": ["CUDA_REFERENCE", "MEDIA_IO_REFERENCE", "TIMING_REFERENCE_SOAK"]
+				"mandatory": {
+					"type": "boolean"
 				},
-				"status": { "$ref": "#/$defs/qualificationStatus" },
-				"detail": { "type": "string", "minLength": 1 },
-				"evidencePath": { "type": "string" }
+				"qualificationType": {
+					"enum": [
+						"CUDA_REFERENCE",
+						"MEDIA_IO_REFERENCE",
+						"TIMING_REFERENCE_SOAK"
+					]
+				},
+				"status": {
+					"$ref": "#/$defs/qualificationStatus"
+				},
+				"detail": {
+					"type": "string",
+					"minLength": 1
+				},
+				"evidencePath": {
+					"type": "string"
+				}
 			}
 		}
 	}

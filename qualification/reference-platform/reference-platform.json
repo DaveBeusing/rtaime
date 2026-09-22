@@ -148,35 +148,84 @@
 	"hardwareRequirements": [
 		{
 			"id": "H01",
-			"requirement": "REFERENCE_GPU",
+			"requirement": "CUDA_GPU_EXECUTION",
 			"mandatory": true,
 			"qualificationType": "CUDA_REFERENCE",
 			"bindingFile": "cuda-reference.binding.json"
 		},
 		{
 			"id": "H02",
+			"requirement": "GPU_FRAME_LATENCY",
+			"mandatory": true,
+			"qualificationType": "CUDA_REFERENCE",
+			"bindingFile": "cuda-reference.binding.json"
+		},
+		{
+			"id": "H03",
+			"requirement": "GPU_SURFACE_LIFETIME",
+			"mandatory": true,
+			"qualificationType": "CUDA_REFERENCE",
+			"bindingFile": "cuda-reference.binding.json"
+		},
+		{
+			"id": "H04",
 			"requirement": "PROFESSIONAL_MEDIA_IO",
 			"mandatory": true,
 			"qualificationType": "MEDIA_IO_REFERENCE",
 			"bindingFile": "media-io-reference.binding.json"
 		},
 		{
-			"id": "H03",
-			"requirement": "GENLOCK",
+			"id": "H05",
+			"requirement": "SUSTAINED_FRAME_CADENCE",
 			"mandatory": true,
 			"qualificationType": "TIMING_REFERENCE_SOAK",
 			"bindingFile": "timing-reference-soak.binding.json"
 		},
 		{
-			"id": "H04",
+			"id": "H06",
+			"requirement": "DROPPED_FRAME_BEHAVIOR",
+			"mandatory": true,
+			"qualificationType": "TIMING_REFERENCE_SOAK",
+			"bindingFile": "timing-reference-soak.binding.json"
+		},
+		{
+			"id": "H07",
+			"requirement": "SYSTEM_TELEMETRY_CONTINUITY",
+			"mandatory": true,
+			"qualificationType": "TIMING_REFERENCE_SOAK",
+			"bindingFile": "timing-reference-soak.binding.json"
+		},
+		{
+			"id": "H08",
+			"requirement": "TIMING_REFERENCE_LOCK",
+			"mandatory": true,
+			"qualificationType": "TIMING_REFERENCE_SOAK",
+			"bindingFile": "timing-reference-soak.binding.json"
+		},
+		{
+			"id": "H09",
+			"requirement": "AUDIO_VIDEO_SYNCHRONIZATION",
+			"mandatory": true,
+			"qualificationType": "TIMING_REFERENCE_SOAK",
+			"bindingFile": "timing-reference-soak.binding.json"
+		},
+		{
+			"id": "H10",
+			"requirement": "RECOVERY_UNDER_LOAD",
+			"mandatory": true,
+			"qualificationType": "TIMING_REFERENCE_SOAK",
+			"bindingFile": "timing-reference-soak.binding.json"
+		},
+		{
+			"id": "H11",
 			"requirement": "PHYSICAL_END_TO_END_LATENCY",
 			"mandatory": true,
 			"qualificationType": "TIMING_REFERENCE_SOAK",
 			"bindingFile": "timing-reference-soak.binding.json"
 		},
 		{
-			"id": "H05",
-			"requirement": "LONG_SOAK",
+			"id": "H12",
+			"requirement": "LONG_SOAK_STABILITY",
 			"mandatory": true,
 			"qualificationType": "TIMING_REFERENCE_SOAK",
 			"bindingFile": "timing-reference-soak.binding.json"

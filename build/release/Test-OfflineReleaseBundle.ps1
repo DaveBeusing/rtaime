@@ -361,7 +361,25 @@ try {
 	Assert-Condition ([string]$qualificationManifest.schemaVersion -eq "1.0") "Contained qualification evidence manifest schema mismatch."
 	Assert-Condition ([string]$qualificationManifest.repository -eq "DaveBeusing/rtaime") "Contained qualification evidence repository identity mismatch."
 	Assert-Condition ([string]$qualificationManifest.sourceCommit -eq [string]$releaseEvidence.sourceCommit) "Contained qualification evidence source commit mismatch."
+	Assert-Condition ([string]$qualificationManifest.supportedPerformance.status -in @("PASS", "UNVERIFIED")) "Contained supported-performance status is invalid."
+	$supportedPerformancePath = Resolve-BundlePayloadPath -Root $releaseDirectory -RelativePath ([string]$qualificationManifest.supportedPerformance.path)
+	Assert-Condition (Test-Path -LiteralPath $supportedPerformancePath -PathType Leaf) "Contained supported-performance evidence is missing."
+	Assert-Condition ((Get-FileSha256Hex -Path $supportedPerformancePath) -eq [string]$qualificationManifest.supportedPerformance.sha256) "Contained supported-performance evidence hash mismatch."
+	$supportedPerformance = Read-JsonFile $supportedPerformancePath
+	Assert-Condition ([string]$supportedPerformance.schemaVersion -eq "1.0") "Contained supported-performance schema mismatch."
+	Assert-Condition ([string]$supportedPerformance.profile -eq "rtaime-v1-reference-platform") "Contained supported-performance profile mismatch."
+	Assert-Condition ([string]$supportedPerformance.sourceCommit -eq [string]$releaseEvidence.sourceCommit) "Contained supported-performance source commit mismatch."
+	Assert-Condition ([string]$supportedPerformance.status -eq [string]$qualificationManifest.supportedPerformance.status) "Contained supported-performance status differs from qualification manifest."
 	$qualificationRequirements = @($qualificationManifest.requirements)
+	$passedPayloadHashes = @($qualificationRequirements | Where-Object { [string]$_.status -eq "PASSED" } | ForEach-Object { [string]$_.payload.sha256 } | Sort-Object -Unique)
+	if ([string]$supportedPerformance.status -eq "PASS") {
+		Assert-Condition (@($qualificationRequirements | Where-Object { [string]$_.status -ne "PASSED" }).Count -eq 0) "Contained supported-performance PASS requires every physical qualification requirement to be PASSED."
+		Assert-Condition (@($supportedPerformance.measurements).Count -gt 0) "Contained supported-performance PASS requires measured values."
+	}
+	foreach ($measurement in @($supportedPerformance.measurements)) {
+		Assert-Condition ([string]$measurement.payloadSha256 -match '^[0-9a-f]{64}$') "Contained supported-performance measurement payload hash is invalid."
+		Assert-Condition ($passedPayloadHashes -contains [string]$measurement.payloadSha256) "Contained supported-performance measurement is not derived from PASSED physical qualification evidence."
+	}
 	$compatibilityHardware = @($compatibilityManifest.hardwareQualification)
 	Assert-Condition ($qualificationRequirements.Count -eq $compatibilityHardware.Count) "Contained qualification and compatibility hardware requirement counts differ."
 	foreach ($qualification in $qualificationRequirements) {
