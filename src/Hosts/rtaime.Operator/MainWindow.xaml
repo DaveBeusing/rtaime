@@ -922,7 +922,7 @@
 									</Grid.RowDefinitions>
 									<DockPanel Grid.Row="0">
 										<TextBlock Text="SCENE STACK" Style="{StaticResource OperatorSectionTitle}" VerticalAlignment="Center" />
-										<TextBlock Text="SOURCE PROJECTION" Style="{StaticResource OperatorLabel}" DockPanel.Dock="Right" VerticalAlignment="Center" ToolTip="Dedicated scene activation is not exposed by the current V1 contract." />
+										<TextBlock Text="SOURCE PROJECTION" Style="{StaticResource OperatorLabel}" DockPanel.Dock="Right" VerticalAlignment="Center" ToolTip="This EDIT panel remains a source-routing projection. Governed Scene activation is available in the LIVE workspace." />
 									</DockPanel>
 									<controls:RtaimeListBox Grid.Row="1"
 										ItemsSource="{Binding Sources}"
