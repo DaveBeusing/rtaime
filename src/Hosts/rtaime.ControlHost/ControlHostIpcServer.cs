@@ -201,6 +201,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			"control.ping" => Success(request, "control.ping.response", new { status = _runtimeTransport.IsConnected ? "ready" : "degraded" }),
 			"control.snapshot.get" => await GetSnapshotAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.preview.select" => await MutateAsync(request, MutationKind.SelectPreview, cancellationToken).ConfigureAwait(false),
+			"control.scene.activate" => await MutateAsync(request, MutationKind.ActivateScene, cancellationToken).ConfigureAwait(false),
 			"control.program.cut" => await MutateAsync(request, MutationKind.Cut, cancellationToken).ConfigureAwait(false),
 			"control.program.dissolve" => await MutateAsync(request, MutationKind.Dissolve, cancellationToken).ConfigureAwait(false),
 			"control.graphics.overlay.load" => await LoadGraphicsOverlayAsync(request, cancellationToken).ConfigureAwait(false),
@@ -704,7 +705,14 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			aiShowcase,
 			ToWire(mediaDeck ?? MediaDeckSnapshot.Unloaded),
 			StateVersion,
-			runtime?.ProductionCgText is null ? null : ToWire(runtime.ProductionCgText));
+			runtime?.ProductionCgText is null ? null : ToWire(runtime.ProductionCgText),
+			control.Specification.Scenes
+				.Select(scene => new WireScene(
+					scene.SceneId.ToString(),
+					scene.Name,
+					scene.Routing.PreviewSourceId.ToString(),
+					scene.Routing.ProgramSourceId.ToString()))
+				.ToArray());
 		return Success(request, "control.snapshot.response", payload);
 	}
 
@@ -831,15 +839,28 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 				new CommandId(Identity.Parse(command.CommandId)),
 				new ProductionId(Identity.Parse(command.ProductionId)),
 				new Revision(command.ExpectedRevision));
-			var sourceId = new ProductionSourceId(Identity.Parse(command.SourceId));
-
-			ControlHostOperationResult staged = kind switch
+			ControlHostOperationResult staged;
+			if (kind == MutationKind.ActivateScene)
 			{
-				MutationKind.SelectPreview => control.SelectPreview(new SelectPreviewCommand(metadata, sourceId)),
-				MutationKind.Cut => control.CutProgram(new CutProgramCommand(metadata, sourceId)),
-				MutationKind.Dissolve => control.DissolveProgram(new DissolveProgramCommand(metadata, sourceId, command.DurationFrames ?? throw new InvalidDataException("DISSOLVE requires durationFrames."))),
-				_ => throw new InvalidOperationException("Unknown mutation kind.")
-			};
+				if (string.IsNullOrWhiteSpace(command.SceneId))
+					throw new InvalidDataException("Scene activation requires sceneId.");
+				staged = control.ActivateScene(new ActivateSceneCommand(
+					metadata,
+					new SceneId(Identity.Parse(command.SceneId))));
+			}
+			else
+			{
+				if (string.IsNullOrWhiteSpace(command.SourceId))
+					throw new InvalidDataException("Production routing command requires sourceId.");
+				var sourceId = new ProductionSourceId(Identity.Parse(command.SourceId));
+				staged = kind switch
+				{
+					MutationKind.SelectPreview => control.SelectPreview(new SelectPreviewCommand(metadata, sourceId)),
+					MutationKind.Cut => control.CutProgram(new CutProgramCommand(metadata, sourceId)),
+					MutationKind.Dissolve => control.DissolveProgram(new DissolveProgramCommand(metadata, sourceId, command.DurationFrames ?? throw new InvalidDataException("DISSOLVE requires durationFrames."))),
+					_ => throw new InvalidOperationException("Unknown mutation kind.")
+				};
+			}
 
 			if (!staged.Accepted || staged.Execution is null)
 				return MutationResponse(request, false, staged.State, staged.Failure ?? new Failure("control.command.rejected", "Control command was rejected."));
@@ -1072,7 +1093,8 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		state.ProductionId.ToString(),
 		state.Revision.Value,
 		state.Routing.PreviewSourceId.ToString(),
-		state.Routing.ProgramSourceId.ToString());
+		state.Routing.ProgramSourceId.ToString(),
+		state.ActiveSceneId?.ToString());
 
 	private readonly record struct RuntimeObservation(
 		RuntimeRemoteSnapshot? Snapshot,
@@ -1083,14 +1105,16 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	{
 		SelectPreview = 1,
 		Cut = 2,
-		Dissolve = 3
+		Dissolve = 3,
+		ActivateScene = 4
 	}
 
 	private sealed record ClientHello(string ProtocolVersion, string Role, string HostInstanceId, Dictionary<string, string> ContractVersions);
 	private sealed record ServerHello(string ProtocolVersion, string Role, string HostInstanceId, Dictionary<string, string> ContractVersions);
 	private sealed record WireFailure(string Code, string Message);
 	private sealed record WireSource(string Id, string Name, string Type, string Format, string Health, string MediaState, long? RemainingTicks, string? MediaFileName);
-	private sealed record WireProductionState(string Version, string ProductionId, ulong Revision, string PreviewSourceId, string ProgramSourceId);
+	private sealed record WireScene(string Id, string Name, string PreviewSourceId, string ProgramSourceId);
+	private sealed record WireProductionState(string Version, string ProductionId, ulong Revision, string PreviewSourceId, string ProgramSourceId, string? ActiveSceneId = null);
 	private sealed record WireGraphicsAsset(string Name, uint Width, uint Height, byte[] RgbaPixels);
 	private sealed record WireCgColor(byte Red, byte Green, byte Blue, byte Alpha);
 	private sealed record WireCgPanel(bool Enabled, WireCgColor Color, float CornerRadiusPixels, uint PaddingPixels);
@@ -1161,7 +1185,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		string AvSyncSubmitOffset = "UNAVAILABLE",
 		string AvSyncDrift = "UNAVAILABLE",
 		string AvSyncDetail = "A/V sync diagnostics are unavailable.");
-	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, WireRecordingSnapshot Recording, WireHealthSnapshot Health, WireAIShowcase AIShowcase, WireMediaDeckSnapshot MediaDeck, ulong StateVersion, WireProductionCgTextSnapshot? ProductionCgText = null);
+	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, WireRecordingSnapshot Recording, WireHealthSnapshot Health, WireAIShowcase AIShowcase, WireMediaDeckSnapshot MediaDeck, ulong StateVersion, WireProductionCgTextSnapshot? ProductionCgText = null, WireScene[]? Scenes = null);
 	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path);
 	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame, bool? AutoPlayOnProgram, int? EndBehavior, long? InPointFrame, long? OutPointFrame);
 	private sealed record WireMediaMarkerCommand(string Version, string AssetId, int Kind, long? PositionFrame, string? CuePointId, string? Name);
@@ -1170,7 +1194,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	private sealed record WireCuePoint(string Id, string Name, long PositionFrame);
 	private sealed record WireMediaMarkerSnapshot(string Version, string AssetId, long TotalFrames, long? InPointFrame, long? OutPointFrame, WireCuePoint[] CuePoints);
 	private sealed record WireMediaDeckSnapshot(int State, string? SourceId, WireLocalMediaProbe? Probe, WireMediaTransportSnapshot? Transport, WireMediaMarkerSnapshot? Markers, WireFailure? Failure);
-	private sealed record WireControlCommand(string Version, string CommandId, string ProductionId, ulong ExpectedRevision, string SourceId, uint? DurationFrames);
+	private sealed record WireControlCommand(string Version, string CommandId, string ProductionId, ulong ExpectedRevision, string? SourceId, uint? DurationFrames, string? SceneId = null);
 	private sealed record WireMutationResponse(bool Accepted, WireProductionState State, WireFailure? Failure, ulong StateVersion);
 
 	private sealed class BoundedRequestCache
