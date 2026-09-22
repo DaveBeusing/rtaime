@@ -83,9 +83,14 @@ public sealed record ProductionOutputRoleState
 		new(OutputRoleIds.Aux, OutputRoleKind.Aux, sourceId, "auto", "aux");
 }
 
-internal static class OutputRoleStateCollection
+internal sealed class OutputRoleStateCollection : IReadOnlyList<ProductionOutputRoleState>, IEquatable<OutputRoleStateCollection>
 {
-	public static ProductionOutputRoleState[] Normalize(
+	private readonly ProductionOutputRoleState[] _roles;
+
+	private OutputRoleStateCollection(ProductionOutputRoleState[] roles) =>
+		_roles = roles;
+
+	public static OutputRoleStateCollection Normalize(
 		IReadOnlyList<ProductionOutputRoleState>? roles,
 		ProductionSourceId programSourceId)
 	{
@@ -96,7 +101,31 @@ internal static class OutputRoleStateCollection
 			throw new ArgumentException("Output roles must not contain null values.", nameof(roles));
 		if (snapshot.Select(role => role.RoleId).Distinct().Count() != snapshot.Length)
 			throw new ArgumentException("Output role identities must be unique.", nameof(roles));
-		return snapshot;
+		return new OutputRoleStateCollection(snapshot);
+	}
+
+	public int Count => _roles.Length;
+	public ProductionOutputRoleState this[int index] => _roles[index];
+
+	public IEnumerator<ProductionOutputRoleState> GetEnumerator() =>
+		((IEnumerable<ProductionOutputRoleState>)_roles).GetEnumerator();
+
+	System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() =>
+		_roles.GetEnumerator();
+
+	public bool Equals(OutputRoleStateCollection? other) =>
+		ReferenceEquals(this, other) ||
+		(other is not null && _roles.SequenceEqual(other._roles));
+
+	public override bool Equals(object? obj) =>
+		obj is OutputRoleStateCollection other && Equals(other);
+
+	public override int GetHashCode()
+	{
+		var hash = new HashCode();
+		foreach (var role in _roles)
+			hash.Add(role);
+		return hash.ToHashCode();
 	}
 }
 
