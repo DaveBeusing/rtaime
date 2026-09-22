@@ -46,7 +46,7 @@ Checkpoint records use:
 - opaque payload bytes,
 - SHA-256 payload checksum.
 
-The current authoritative checkpoint payload includes confirmed Preview/Program routing and the optional `ActiveSceneId`. Scene definitions remain part of the production specification rather than duplicated into every checkpoint. An older payload without `ActiveSceneId` is interpreted as having no confirmed active Scene.
+The current authoritative checkpoint payload includes confirmed Preview/Program routing, the optional `ActiveSceneId`, and the configured governed output-role states (stable role ID/kind, source, provider selector, target, format/timing policy and enabled state). Scene definitions remain part of the production specification rather than duplicated into every checkpoint. Older payloads without `ActiveSceneId` are interpreted as having no confirmed active Scene; older V1 payloads without `OutputRoles` recover the production specification defaults with Program synchronized to the recovered Program route.
 
 Only one checkpoint payload is accepted for a given production/revision pair. Replaying the same payload is idempotent; a different payload for the same revision fails closed.
 
@@ -109,7 +109,7 @@ latest valid checkpoint
 causal Production Journal
 ```
 
-Process Recovery & Supervision activates that basis for ControlHost process recovery. Before a persisted authority snapshot is restored, ControlHost verifies the management SQLite store, checkpoint format and identity/version/revision/source constraints, plus Production Journal SQLite/hash-chain integrity. Only then can the recovered authority participate in Runtime reconciliation.
+Process Recovery & Supervision activates that basis for ControlHost process recovery. Before a persisted authority snapshot is restored, ControlHost verifies the management SQLite store, checkpoint format and identity/version/revision/source constraints, validates recovered output roles against the current production specification and supported V1 policies, plus Production Journal SQLite/hash-chain integrity. Only then can the recovered authority participate in Runtime reconciliation.
 
 The Production Journal remains evidence and diagnostic history rather than a general event-sourcing replay engine. V1 recovery restores the latest qualified authoritative checkpoint and reconciles the Runtime execution's committed `AuthoritySnapshot` against that Control revision; Runtime-local `ExecutionRevision` is a separate counter and is not used as Control authority. Recovery does not reconstruct arbitrary domain state by replaying every journal record.
 
