@@ -100,7 +100,7 @@ $profile = Get-Content -LiteralPath $resolvedProfile -Raw | ConvertFrom-Json
 if ([string]$profile.schemaVersion -ne "1.0") { throw "Reference-platform profile schema must be 1.0." }
 if ([string]$profile.profile -ne "rtaime-v1-reference-platform") { throw "Unexpected reference-platform profile identity." }
 if (@($profile.softwareScenarios).Count -ne 10) { throw "Reference-platform profile must contain Q01-Q10." }
-if (@($profile.hardwareRequirements).Count -ne 5) { throw "Reference-platform profile must contain the five V1 physical requirements." }
+if (@($profile.hardwareRequirements).Count -ne 12) { throw "Reference-platform profile must contain the twelve explicit V1 physical evidence requirements." }
 
 $resolvedOutputRoot = Resolve-RepositoryPath -Path $OutputRoot
 [void](Get-RepositoryRelativePath -Path $resolvedOutputRoot)
