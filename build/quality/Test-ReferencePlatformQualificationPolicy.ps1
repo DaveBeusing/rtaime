@@ -59,7 +59,7 @@ foreach ($requiredPath in @(
 	$resultSchemaPath,
 	$environmentSchemaPath,
 	$performanceSchemaPath)) {
-	Assert-Condition (Test-Path -LiteralPath $requiredPath -PathType Leaf) "Required AP-39 artifact is missing: '$requiredPath'."
+	Assert-Condition (Test-Path -LiteralPath $requiredPath -PathType Leaf) "Required reference-platform qualification artifact is missing: '$requiredPath'."
 }
 
 $profile = Get-Content -LiteralPath $profilePath -Raw | ConvertFrom-Json
@@ -147,8 +147,8 @@ Assert-TextContains -Text $runner -Value "RequirePass" -Message "Reference-platf
 
 $requiredGates = Get-Content -LiteralPath $requiredGatesPath -Raw
 Assert-TextContains -Text $requiredGates -Value "Invoke-ReferencePlatformQualification.ps1" -Message "Required Gates must execute the CI-safe reference-platform qualification profile."
-Assert-TextContains -Text $requiredGates -Value "Test-ReferencePlatformQualificationPolicy.ps1" -Message "Required Gates quality job must verify AP-39 qualification policy."
-Assert-TextContains -Text $requiredGates -Value "artifacts/qualification/reference-platform" -Message "Required Gates must retain AP-39 qualification evidence as a workflow artifact."
+Assert-TextContains -Text $requiredGates -Value "Test-ReferencePlatformQualificationPolicy.ps1" -Message "Required Gates quality job must verify reference-platform qualification policy."
+Assert-TextContains -Text $requiredGates -Value "artifacts/qualification/reference-platform" -Message "Required Gates must retain reference-platform qualification evidence as a workflow artifact."
 
 $testRoot = Join-Path $repositoryRoot "artifacts/quality/reference-platform-qualification"
 if (Test-Path -LiteralPath $testRoot) { Remove-Item -LiteralPath $testRoot -Recurse -Force }
