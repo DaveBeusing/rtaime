@@ -79,6 +79,12 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 	public ValueTask<OperatorMutationResponse> DissolveProgramAsync(DissolveProgramCommand command, CancellationToken cancellationToken = default) =>
 		MutateAsync("control.program.dissolve", command.Metadata, command.SourceId, command.DurationFrames, cancellationToken);
 
+	public ValueTask<OperatorMutationResponse> ActivateSceneAsync(ActivateSceneCommand command, CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(command);
+		return MutateSceneAsync(command.Metadata, command.SceneId, cancellationToken);
+	}
+
 	public async ValueTask<OperatorAudioInputDescriptor> SetAudioInputStateAsync(
 		string sourceId,
 		double gain,
@@ -310,7 +316,7 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		CancellationToken cancellationToken)
 	{
 		ArgumentNullException.ThrowIfNull(metadata);
-		var response = await ExchangeAsync(
+		return await MutateCoreAsync(
 			messageType,
 			new WireControlCommand(
 				metadata.Version.ToString(),
@@ -320,6 +326,33 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 				sourceId.ToString(),
 				durationFrames),
 			cancellationToken).ConfigureAwait(false);
+	}
+
+	private ValueTask<OperatorMutationResponse> MutateSceneAsync(
+		ControlCommandMetadata metadata,
+		SceneId sceneId,
+		CancellationToken cancellationToken)
+	{
+		ArgumentNullException.ThrowIfNull(metadata);
+		return MutateCoreAsync(
+			"control.scene.activate",
+			new WireControlCommand(
+				metadata.Version.ToString(),
+				metadata.CommandId.ToString(),
+				metadata.ProductionId.ToString(),
+				metadata.ExpectedRevision.Value,
+				null,
+				null,
+				sceneId.ToString()),
+			cancellationToken);
+	}
+
+	private async ValueTask<OperatorMutationResponse> MutateCoreAsync(
+		string messageType,
+		WireControlCommand command,
+		CancellationToken cancellationToken)
+	{
+		var response = await ExchangeAsync(messageType, command, cancellationToken).ConfigureAwait(false);
 		var wire = response.Payload.Deserialize<WireMutationResponse>(Wire.JsonOptions)
 			?? throw new InvalidDataException("ControlHost mutation response is required.");
 		_synchronizer.AcceptFullSnapshot(response.HostInstanceId, wire.StateVersion);
@@ -534,7 +567,10 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		FromWire(wire.Health),
 		FromWire(wire.AIShowcase),
 		wire.MediaDeck is null ? MediaDeckSnapshot.Unloaded : FromWire(wire.MediaDeck),
-		wire.ProductionCgText is null ? OperatorProductionCgTextDescriptor.Empty : FromWire(wire.ProductionCgText));
+		wire.ProductionCgText is null ? OperatorProductionCgTextDescriptor.Empty : FromWire(wire.ProductionCgText),
+		(wire.Scenes ?? Array.Empty<WireScene>())
+			.Select(scene => new OperatorSceneDescriptor(scene.Id, scene.Name, scene.PreviewSourceId, scene.ProgramSourceId))
+			.ToArray());
 
 	private static OperatorProductionCgTextDescriptor FromWire(WireProductionCgTextSnapshot snapshot) => new(
 		snapshot.Active,
@@ -659,7 +695,10 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		new Revision(state.Revision),
 		new ProductionRoutingState(
 			new ProductionSourceId(Identity.Parse(state.PreviewSourceId)),
-			new ProductionSourceId(Identity.Parse(state.ProgramSourceId))));
+			new ProductionSourceId(Identity.Parse(state.ProgramSourceId))),
+		string.IsNullOrWhiteSpace(state.ActiveSceneId)
+			? null
+			: new SceneId(Identity.Parse(state.ActiveSceneId)));
 
 	private static void EnsureNotError(WireEnvelope envelope)
 	{
@@ -695,7 +734,8 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 	private sealed record ServerHello(string ProtocolVersion, string Role, string HostInstanceId, Dictionary<string, string> ContractVersions);
 	private sealed record WireFailure(string Code, string Message);
 	private sealed record WireSource(string Id, string Name, string Type, string Format, string Health, string MediaState, long? RemainingTicks, string? MediaFileName);
-	private sealed record WireProductionState(string Version, string ProductionId, ulong Revision, string PreviewSourceId, string ProgramSourceId);
+	private sealed record WireScene(string Id, string Name, string PreviewSourceId, string ProgramSourceId);
+	private sealed record WireProductionState(string Version, string ProductionId, ulong Revision, string PreviewSourceId, string ProgramSourceId, string? ActiveSceneId = null);
 	private sealed record WireGraphicsAsset(string Name, uint Width, uint Height, byte[] RgbaPixels);
 	private sealed record WireCgColor(byte Red, byte Green, byte Blue, byte Alpha);
 	private sealed record WireCgPanel(bool Enabled, WireCgColor Color, float CornerRadiusPixels, uint PaddingPixels);
@@ -754,7 +794,7 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		string AvSyncSubmitOffset = "UNAVAILABLE",
 		string AvSyncDrift = "UNAVAILABLE",
 		string AvSyncDetail = "A/V sync diagnostics are unavailable.");
-	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, WireRecordingSnapshot Recording, WireHealthSnapshot Health, WireAIShowcase AIShowcase, WireMediaDeckSnapshot? MediaDeck, ulong StateVersion, WireProductionCgTextSnapshot? ProductionCgText = null);
+	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, WireRecordingSnapshot Recording, WireHealthSnapshot Health, WireAIShowcase AIShowcase, WireMediaDeckSnapshot? MediaDeck, ulong StateVersion, WireProductionCgTextSnapshot? ProductionCgText = null, WireScene[]? Scenes = null);
 	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path);
 	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame, bool? AutoPlayOnProgram, int? EndBehavior, long? InPointFrame, long? OutPointFrame);
 	private sealed record WireMediaMarkerCommand(string Version, string AssetId, int Kind, long? PositionFrame, string? CuePointId, string? Name);
@@ -763,7 +803,7 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 	private sealed record WireCuePoint(string Id, string Name, long PositionFrame);
 	private sealed record WireMediaMarkerSnapshot(string Version, string AssetId, long TotalFrames, long? InPointFrame, long? OutPointFrame, WireCuePoint[] CuePoints);
 	private sealed record WireMediaDeckSnapshot(int State, string? SourceId, WireLocalMediaProbe? Probe, WireMediaTransportSnapshot? Transport, WireMediaMarkerSnapshot? Markers, WireFailure? Failure);
-	private sealed record WireControlCommand(string Version, string CommandId, string ProductionId, ulong ExpectedRevision, string SourceId, uint? DurationFrames);
+	private sealed record WireControlCommand(string Version, string CommandId, string ProductionId, ulong ExpectedRevision, string? SourceId, uint? DurationFrames, string? SceneId = null);
 	private sealed record WireMutationResponse(bool Accepted, WireProductionState State, WireFailure? Failure, ulong StateVersion);
 
 	private static class Wire
