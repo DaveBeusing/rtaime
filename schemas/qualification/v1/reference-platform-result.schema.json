@@ -17,6 +17,7 @@
 		"platformStatus",
 		"counts",
 		"environmentPath",
+		"supportedPerformance",
 		"scenarios",
 		"hardwareRequirements"
 	],
@@ -99,6 +100,31 @@
 			"maxItems": 12,
 			"items": {
 				"$ref": "#/$defs/hardwareRequirementResult"
+			}
+		},
+		"supportedPerformance": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": [
+				"status",
+				"path",
+				"markdownPath"
+			],
+			"properties": {
+				"status": {
+					"enum": [
+						"PASS",
+						"UNVERIFIED"
+					]
+				},
+				"path": {
+					"type": "string",
+					"minLength": 1
+				},
+				"markdownPath": {
+					"type": "string",
+					"minLength": 1
+				}
 			}
 		}
 	},
