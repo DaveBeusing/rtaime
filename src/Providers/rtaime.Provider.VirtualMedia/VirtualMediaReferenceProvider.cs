@@ -207,6 +207,12 @@ public sealed class VirtualMediaReferenceProvider
                 providerId,
                 VirtualMediaCapabilityKinds.MediaRoute,
                 1,
+                true),
+            new ProviderResourceDescriptor(
+                new ProviderResourceId(VirtualMediaIdentity.Create("virtual-resource", "media-route", "2")),
+                providerId,
+                VirtualMediaCapabilityKinds.MediaRoute,
+                1,
                 true)
         };
 

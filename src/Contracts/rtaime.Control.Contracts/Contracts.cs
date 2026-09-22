@@ -110,6 +110,7 @@ public sealed class ProductionSpecification
 {
     private readonly ReadOnlyCollection<ProductionSourceSpecification> _sources;
     private readonly ReadOnlyCollection<ProductionSceneSpecification> _scenes;
+    private readonly ReadOnlyCollection<ProductionOutputRoleState> _initialOutputRoles;
 
     public ProductionSpecification(
         CompatibilityVersion version,
@@ -117,13 +118,16 @@ public sealed class ProductionSpecification
         string name,
         IReadOnlyList<ProductionSourceSpecification> sources,
         ProductionRoutingState initialRouting,
-        IReadOnlyList<ProductionSceneSpecification>? scenes = null)
+        IReadOnlyList<ProductionSceneSpecification>? scenes = null,
+        IReadOnlyList<ProductionOutputRoleState>? initialOutputRoles = null)
     {
         ControlContractVersion.EnsureSupported(version);
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Production name is required.", nameof(name));
         if (sources is null)
             throw new ArgumentNullException(nameof(sources));
+        if (initialRouting is null)
+            throw new ArgumentNullException(nameof(initialRouting));
         if (sources.Count == 0)
             throw new ArgumentException("A production specification requires at least one logical source.", nameof(sources));
         if (sources.Any(source => source is null))
@@ -148,7 +152,8 @@ public sealed class ProductionSpecification
         Name = name.Trim();
         _sources = Array.AsReadOnly(snapshot);
         _scenes = Array.AsReadOnly(sceneSnapshot);
-        InitialRouting = initialRouting ?? throw new ArgumentNullException(nameof(initialRouting));
+        _initialOutputRoles = Array.AsReadOnly(OutputRoleStateCollection.Normalize(initialOutputRoles, initialRouting.ProgramSourceId));
+        InitialRouting = initialRouting;
     }
 
     public CompatibilityVersion Version { get; }
@@ -156,17 +161,21 @@ public sealed class ProductionSpecification
     public string Name { get; }
     public IReadOnlyList<ProductionSourceSpecification> Sources => _sources;
     public IReadOnlyList<ProductionSceneSpecification> Scenes => _scenes;
+    public IReadOnlyList<ProductionOutputRoleState> InitialOutputRoles => _initialOutputRoles;
     public ProductionRoutingState InitialRouting { get; }
 }
 
 public sealed record DesiredProductionState
 {
+    private readonly ReadOnlyCollection<ProductionOutputRoleState> _outputRoles;
+
     public DesiredProductionState(
         CompatibilityVersion version,
         ProductionId productionId,
         Revision basedOnAuthoritativeRevision,
         ProductionRoutingState routing,
-        SceneId? activeSceneId = null)
+        SceneId? activeSceneId = null,
+        IReadOnlyList<ProductionOutputRoleState>? outputRoles = null)
     {
         ControlContractVersion.EnsureSupported(version);
         Version = version;
@@ -174,6 +183,7 @@ public sealed record DesiredProductionState
         BasedOnAuthoritativeRevision = basedOnAuthoritativeRevision;
         Routing = routing ?? throw new ArgumentNullException(nameof(routing));
         ActiveSceneId = activeSceneId;
+        _outputRoles = Array.AsReadOnly(OutputRoleStateCollection.Normalize(outputRoles, Routing.ProgramSourceId));
     }
 
     public CompatibilityVersion Version { get; }
@@ -181,16 +191,20 @@ public sealed record DesiredProductionState
     public Revision BasedOnAuthoritativeRevision { get; }
     public ProductionRoutingState Routing { get; }
     public SceneId? ActiveSceneId { get; }
+    public IReadOnlyList<ProductionOutputRoleState> OutputRoles => _outputRoles;
 }
 
 public sealed record AuthoritativeProductionState
 {
+    private readonly ReadOnlyCollection<ProductionOutputRoleState> _outputRoles;
+
     public AuthoritativeProductionState(
         CompatibilityVersion version,
         ProductionId productionId,
         Revision revision,
         ProductionRoutingState routing,
-        SceneId? activeSceneId = null)
+        SceneId? activeSceneId = null,
+        IReadOnlyList<ProductionOutputRoleState>? outputRoles = null)
     {
         ControlContractVersion.EnsureSupported(version);
         Version = version;
@@ -198,6 +212,7 @@ public sealed record AuthoritativeProductionState
         Revision = revision;
         Routing = routing ?? throw new ArgumentNullException(nameof(routing));
         ActiveSceneId = activeSceneId;
+        _outputRoles = Array.AsReadOnly(OutputRoleStateCollection.Normalize(outputRoles, Routing.ProgramSourceId));
     }
 
     public CompatibilityVersion Version { get; }
@@ -205,6 +220,7 @@ public sealed record AuthoritativeProductionState
     public Revision Revision { get; }
     public ProductionRoutingState Routing { get; }
     public SceneId? ActiveSceneId { get; }
+    public IReadOnlyList<ProductionOutputRoleState> OutputRoles => _outputRoles;
 }
 
 public sealed record ControlCommandMetadata
