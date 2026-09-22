@@ -638,6 +638,119 @@ public sealed class ProductionIpcIntegrationTests
 		throw new InvalidOperationException("IPC endpoint did not become available.", last);
 	}
 
+	[Fact]
+	public async Task Production_CG_text_crosses_operator_control_and_runtime_boundaries()
+	{
+		if (!OperatingSystem.IsWindows())
+			return;
+
+		var runtimeEndpoint = Endpoint("runtime-cg");
+		var controlEndpoint = Endpoint("control-cg");
+		using var runtimeStop = new CancellationTokenSource();
+		using var controlStop = new CancellationTokenSource();
+		var runtime = new RuntimeHostProcess(RuntimeHostProcessOptions.Default with { ListenEndpoint = runtimeEndpoint });
+		var control = new ControlHostProcess(ControlHostProcessOptions.Default with
+		{
+			ListenEndpoint = controlEndpoint,
+			RuntimeEndpoint = runtimeEndpoint,
+			RuntimeRetryInterval = TimeSpan.FromMilliseconds(25)
+		});
+		var runtimeRun = runtime.RunAsync(runtimeStop.Token);
+		var controlRun = control.RunAsync(controlStop.Token);
+		try
+		{
+			await WaitUntilAsync(() => control.Lifecycle.State == ControlHostProcessState.Ready && control.Control?.HasAuthoritativeState == true);
+			var client = new OperatorControlClient(new NamedPipeOperatorControlTransport(controlEndpoint, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(5)));
+			await client.SynchronizeAsync();
+
+			var graphics = await client.ApplyProductionCgTextAsync(OperatorProductionCgText.LowerThird("END TO END CG"));
+			Assert.True(graphics.AssetLoaded);
+			Assert.True(graphics.Visible);
+			Assert.Equal("production-cg-text", graphics.AssetName);
+			Assert.NotNull(client.Snapshot);
+			Assert.True(client.Snapshot!.ProductionCgText.Active);
+			Assert.Equal("END TO END CG", client.Snapshot.ProductionCgText.Text);
+			Assert.False(string.IsNullOrWhiteSpace(client.Snapshot.ProductionCgText.ResolvedTypeface));
+			Assert.True(runtime.Runtime!.Snapshot.ProductionCgText!.Active);
+			Assert.Equal("END TO END CG", runtime.Runtime.Snapshot.ProductionCgText.Text);
+
+			await client.SetGraphicsOverlayAsync(false, graphics.PositionX, graphics.PositionY, graphics.Scale);
+			Assert.False(client.Snapshot!.ProductionCgText.Visible);
+			await client.SetGraphicsOverlayAsync(true, graphics.PositionX, graphics.PositionY, graphics.Scale);
+			Assert.True(client.Snapshot!.ProductionCgText.Visible);
+		}
+		finally
+		{
+			controlStop.Cancel();
+			Assert.Equal(ControlHostExitCode.Success, await controlRun);
+			runtimeStop.Cancel();
+			Assert.Equal(RuntimeHostExitCode.Success, await runtimeRun);
+		}
+	}
+
+	[Fact]
+	public async Task Production_CG_text_is_restored_after_RuntimeHost_restart()
+	{
+		if (!OperatingSystem.IsWindows())
+			return;
+
+		var runtimeEndpoint = Endpoint("runtime-cg-recovery");
+		var controlEndpoint = Endpoint("control-cg-recovery");
+		using var firstRuntimeStop = new CancellationTokenSource();
+		using var controlStop = new CancellationTokenSource();
+		var firstRuntime = new RuntimeHostProcess(RuntimeHostProcessOptions.Default with { ListenEndpoint = runtimeEndpoint });
+		var control = new ControlHostProcess(ControlHostProcessOptions.Default with
+		{
+			ListenEndpoint = controlEndpoint,
+			RuntimeEndpoint = runtimeEndpoint,
+			RuntimeRetryInterval = TimeSpan.FromMilliseconds(25)
+		});
+		var firstRuntimeRun = firstRuntime.RunAsync(firstRuntimeStop.Token);
+		var controlRun = control.RunAsync(controlStop.Token);
+		Task<RuntimeHostExitCode>? secondRuntimeRun = null;
+		CancellationTokenSource? secondRuntimeStop = null;
+		try
+		{
+			await WaitUntilAsync(() => control.Lifecycle.State == ControlHostProcessState.Ready && control.Control?.HasAuthoritativeState == true);
+			var client = new OperatorControlClient(new NamedPipeOperatorControlTransport(controlEndpoint, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(5)));
+			await client.SynchronizeAsync();
+			await client.ApplyProductionCgTextAsync(OperatorProductionCgText.LowerThird("RECOVERED CG"));
+			Assert.True(firstRuntime.Runtime!.Snapshot.ProductionCgText!.Visible);
+
+			firstRuntimeStop.Cancel();
+			Assert.Equal(RuntimeHostExitCode.Success, await firstRuntimeRun);
+
+			secondRuntimeStop = new CancellationTokenSource();
+			var secondRuntime = new RuntimeHostProcess(RuntimeHostProcessOptions.Default with { ListenEndpoint = runtimeEndpoint });
+			secondRuntimeRun = secondRuntime.RunAsync(secondRuntimeStop.Token);
+
+			await WaitUntilAsync(
+				() => secondRuntime.Runtime?.Snapshot.ProductionCgText is { Active: true, Visible: true, Text: "RECOVERED CG" },
+				timeoutMilliseconds: 15000);
+
+			var restored = await client.SynchronizeAsync();
+			Assert.True(restored.ProductionCgText.Active);
+			Assert.True(restored.ProductionCgText.Visible);
+			Assert.Equal("RECOVERED CG", restored.ProductionCgText.Text);
+		}
+		finally
+		{
+			controlStop.Cancel();
+			Assert.Equal(ControlHostExitCode.Success, await controlRun);
+			if (secondRuntimeStop is not null && secondRuntimeRun is not null)
+			{
+				secondRuntimeStop.Cancel();
+				Assert.Equal(RuntimeHostExitCode.Success, await secondRuntimeRun);
+				secondRuntimeStop.Dispose();
+			}
+			else if (!firstRuntimeRun.IsCompleted)
+			{
+				firstRuntimeStop.Cancel();
+				Assert.Equal(RuntimeHostExitCode.Success, await firstRuntimeRun);
+			}
+		}
+	}
+
 	private static async Task WaitUntilAsync(Func<bool> condition, int timeoutMilliseconds = 5000)
 	{
 		var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMilliseconds);
