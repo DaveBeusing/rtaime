@@ -81,7 +81,7 @@ EDIT is the reference Preview / Program production workspace. At 1920×1080 the 
 - shared monitor chrome: 40 px header, aspect-safe image region and 42 px custom transport;
 - lower row preserves the 320:462:276 Scene Stack / Output Routing / System Status proportions with 6 px gaps;
 - Scene Stack reuses the existing source projection and explicit Set Preview / CUT / AUTO commands; it does not synthesize scene activation;
-- Output Routing reuses confirmed Program/Preview state and the existing Clean Feed presentation; Aux is explicitly unavailable when no governed role exists;
+- Output Routing reuses confirmed Program/Preview state and the existing Clean Feed presentation; governed Aux projects authoritative source plus Runtime/provider evidence and remains `UNVERIFIED` when that evidence is unavailable;
 - System Status reuses existing health evidence and displays unavailable Disk/Network/Temperature metrics without local probing;
 - the timeline retains a 320 px reference height and scales with the same view-container presentation model outside compact mode.
 
@@ -118,9 +118,9 @@ No second graphics renderer or processing graph is introduced by the shell.
 
 ## OUTPUTS
 
-OUTPUTS is the production-facing routing, output-health and performance workspace. It projects the authoritative Runtime Program source and the existing clean Program monitoring presentation without creating a second output or routing authority.
+OUTPUTS is the production-facing routing, output-health and performance workspace. It projects governed Program/Aux output roles, authoritative Preview routing and the existing clean Program monitoring presentation without creating a second output or routing authority.
 
-Preview-to-Program routing reuses the existing CUT command and becomes SAFE READ-ONLY whenever the shared mutation gate is unavailable. Output detail exposes only confirmed format, target, recording and health evidence. CPU utilization, system-memory utilization/capacity, available NVIDIA GPU/VRAM measurements and measured Program output FPS are projected from the Runtime performance snapshot. Missing color-space, streaming, disk, network and temperature telemetry remains explicitly UNAVAILABLE.
+Preview-to-Program routing reuses the existing CUT/DISSOLVE path and becomes SAFE READ-ONLY whenever the shared mutation gate is unavailable. Aux source changes use the governed output-role command and never bypass ControlHost planning/commit. Output detail exposes only confirmed format, target, recording and health evidence. CPU utilization, system-memory utilization/capacity, available NVIDIA GPU/VRAM measurements and measured Program output FPS are projected from the Runtime performance snapshot. Missing color-space, streaming, disk, network and temperature telemetry remains explicitly UNAVAILABLE.
 
 Available Runtime frame-time, measured output cadence, dropped-frame and hardware evidence is presented with bounded presentation-only mini histories. The permanent Production Shell status bar reuses the same projection and adds no independent telemetry polling loop or thresholds. See [Output Routing, Health and Performance](OutputRoutingHealth.md) and [Runtime Performance Status Bar](RuntimePerformanceStatusBar.md).
 
