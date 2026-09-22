@@ -140,23 +140,37 @@ public sealed class ReferenceMediaRegressionTests
 		Assert.NotNull(open.Source);
 		using var source = open.Source!;
 
-		var visualEvents = new List<int>();
-		var audioEvents = new List<int>();
+		var visualEvents = new List<double>();
+		var audioEvents = new List<double>();
 		for (var index = 0; index < 110; index++)
 		{
 			var decoded = source.ReadNext((ulong)index);
 			Assert.True(decoded.Succeeded, decoded.Failure?.Message);
 			var frame = decoded.Frame!;
 			if (BottomPanelLuma(frame.RgbaPixels.Span, 1920, 1080) > 120)
-				visualEvents.Add(index);
-			if (Peak(frame.AudioPayload.Span) > 0.05)
-				audioEvents.Add(index);
+			{
+				visualEvents.Add(
+					frame.Video.Timing.PresentationTimestamp *
+					frame.Video.Timing.Timebase.SecondsPerTick);
+			}
+			if (Peak(frame.AudioPayload.Span) > 0.05 && frame.Audio is not null)
+			{
+				audioEvents.Add(
+					frame.Audio.Timing.PresentationTimestamp *
+					frame.Audio.Timing.Timebase.SecondsPerTick);
+			}
 		}
 
-		Assert.Contains(visualEvents, frame => Math.Abs(frame - 50) <= 1);
-		Assert.Contains(audioEvents, frame => Math.Abs(frame - 50) <= 2);
-		Assert.Contains(visualEvents, frame => Math.Abs(frame - 100) <= 1);
-		Assert.Contains(audioEvents, frame => Math.Abs(frame - 100) <= 2);
+		Assert.Contains(visualEvents, seconds => Math.Abs(seconds - 1.0) <= 0.04);
+		Assert.Contains(audioEvents, seconds => Math.Abs(seconds - 1.0) <= 0.04);
+		Assert.Contains(visualEvents, seconds => Math.Abs(seconds - 2.0) <= 0.04);
+		Assert.Contains(audioEvents, seconds => Math.Abs(seconds - 2.0) <= 0.04);
+		Assert.True(
+			NearestEventDistanceSeconds(visualEvents, audioEvents, 1.0) <= 0.04,
+			"Decoded visual and audio events around 1 second must remain within 40 ms.");
+		Assert.True(
+			NearestEventDistanceSeconds(visualEvents, audioEvents, 2.0) <= 0.04,
+			"Decoded visual and audio events around 2 seconds must remain within 40 ms.");
 	}
 
 	[Fact]
@@ -210,6 +224,20 @@ public sealed class ReferenceMediaRegressionTests
 	private static ReferenceMediaProfile Profile(string id) =>
 		ReferenceMediaProfile.Required.Single(profile =>
 			string.Equals(profile.Id, id, StringComparison.Ordinal));
+
+	private static double NearestEventDistanceSeconds(
+		IReadOnlyList<double> visualEvents,
+		IReadOnlyList<double> audioEvents,
+		double expectedSeconds)
+	{
+		var visual = visualEvents
+			.OrderBy(value => Math.Abs(value - expectedSeconds))
+			.First();
+		var audio = audioEvents
+			.OrderBy(value => Math.Abs(value - expectedSeconds))
+			.First();
+		return Math.Abs(visual - audio);
+	}
 
 	private static int BottomPanelLuma(ReadOnlySpan<byte> rgba, int width, int height)
 	{
