@@ -92,6 +92,15 @@ Assert-Condition ([string]$releaseEvidence.sourceCommit -match '^[0-9a-fA-F]{40,
 Assert-Condition ([string]$releaseEvidence.buildCommit -match '^[0-9a-fA-F]{40,64}$') "Release evidence build commit is invalid."
 Assert-Condition (-not [string]::IsNullOrWhiteSpace([string]$releaseEvidence.buildId)) "Release evidence build identity is required."
 Assert-Condition ([string]$qualificationManifest.sourceCommit -eq [string]$releaseEvidence.sourceCommit) "Qualification evidence source commit does not match release evidence."
+Assert-Condition ([string]$qualificationManifest.supportedPerformance.status -in @("PASS", "UNVERIFIED")) "Qualification supported-performance status is invalid."
+$supportedPerformancePath = Resolve-EvidencePath ([string]$qualificationManifest.supportedPerformance.path)
+Assert-Condition (Test-Path -LiteralPath $supportedPerformancePath -PathType Leaf) "Supported-performance evidence is missing from the release bundle."
+Assert-Condition ((Get-Sha256 $supportedPerformancePath) -eq [string]$qualificationManifest.supportedPerformance.sha256) "Supported-performance evidence hash mismatch."
+$supportedPerformance = Read-JsonFile $supportedPerformancePath
+Assert-Condition ([string]$supportedPerformance.schemaVersion -eq "1.0") "Supported-performance evidence schema mismatch."
+Assert-Condition ([string]$supportedPerformance.profile -eq "rtaime-v1-reference-platform") "Supported-performance evidence profile mismatch."
+Assert-Condition ([string]$supportedPerformance.sourceCommit -eq [string]$releaseEvidence.sourceCommit) "Supported-performance evidence source commit mismatch."
+Assert-Condition ([string]$supportedPerformance.status -eq [string]$qualificationManifest.supportedPerformance.status) "Supported-performance evidence status differs from qualification manifest."
 
 $identityDocuments = @($artifactManifest, $releaseEvidence)
 foreach ($document in $identityDocuments) {
@@ -173,6 +182,120 @@ Assert-Condition ([string]$compatibilityManifest.ipc.schemaSet -eq [string]$poli
 $policyHardware = @($policy.hardwareQualification)
 $qualificationRequirements = @($qualificationManifest.requirements)
 $compatibilityHardware = @($compatibilityManifest.hardwareQualification)
+$passedPayloadHashes = @($qualificationRequirements | Where-Object { [string]$_.status -eq "PASSED" } | ForEach-Object { [string]$_.payload.sha256 } | Sort-Object -Unique)
+if ([string]$supportedPerformance.status -eq "PASS") {
+	Assert-Condition (@($qualificationRequirements | Where-Object { [string]$_.status -ne "PASSED" }).Count -eq 0) "Supported-performance PASS requires every physical qualification requirement to be PASSED."
+	Assert-Condition (@($supportedPerformance.measurements).Count -gt 0) "Supported-performance PASS requires measured values."
+}
+foreach ($measurement in @($supportedPerformance.measurements)) {
+	Assert-Condition ([string]$measurement.payloadSha256 -match '^[0-9a-f]{64}
+Assert-Condition ($qualificationRequirements.Count -eq $policyHardware.Count) "Qualification evidence requirement count does not match release policy."
+Assert-Condition ($compatibilityHardware.Count -eq $policyHardware.Count) "Compatibility hardware qualification count does not match release policy."
+$seenHardware = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+foreach ($policyRequirement in $policyHardware) {
+	$name = [string]$policyRequirement.requirement
+	Assert-Condition ([string]$policyRequirement.status -eq "UNVERIFIED") "Static hardware qualification policy '$name' must remain UNVERIFIED."
+	Assert-Condition ($seenHardware.Add($name)) "Release policy contains duplicate hardware requirement '$name'."
+	$qualification = @($qualificationRequirements | Where-Object { [string]$_.requirement -eq $name })
+	$compatibility = @($compatibilityHardware | Where-Object { [string]$_.requirement -eq $name })
+	Assert-Condition ($qualification.Count -eq 1) "Qualification evidence manifest must contain exactly one '$name' requirement."
+	Assert-Condition ($compatibility.Count -eq 1) "Compatibility manifest must contain exactly one '$name' requirement."
+
+	$q = $qualification[0]
+	$c = $compatibility[0]
+	$qStatus = [string]$q.status
+	Assert-Condition ($qStatus -in @("PASSED", "UNVERIFIED")) "Qualification evidence '$name' has invalid status '$qStatus'."
+	$propertyNames = @($q.PSObject.Properties.Name)
+	if ($qStatus -eq "UNVERIFIED") {
+		Assert-Condition ([string]$c.status -eq "UNVERIFIED") "Compatibility hardware status '$name' must remain UNVERIFIED without bound physical evidence."
+		Assert-Condition (-not ($propertyNames -contains "binding")) "UNVERIFIED qualification '$name' must not carry binding evidence."
+		Assert-Condition (-not ($propertyNames -contains "payload")) "UNVERIFIED qualification '$name' must not carry payload evidence."
+		continue
+	}
+
+	Assert-Condition ([string]$c.status -eq "PASS") "Compatibility hardware status '$name' must be PASS when source-bound qualification evidence is PASSED."
+	foreach ($requiredProperty in @("qualificationType", "binding", "payload", "workflow")) {
+		Assert-Condition ($propertyNames -contains $requiredProperty) "PASSED qualification '$name' is missing '$requiredProperty'."
+	}
+	$bindingPath = Resolve-EvidencePath ([string]$q.binding.path)
+	$payloadPath = Resolve-EvidencePath ([string]$q.payload.path)
+	Assert-Condition (Test-Path -LiteralPath $bindingPath -PathType Leaf) "Qualification binding for '$name' is missing from the release bundle."
+	Assert-Condition (Test-Path -LiteralPath $payloadPath -PathType Leaf) "Qualification payload for '$name' is missing from the release bundle."
+	Assert-Condition ((Get-Sha256 $bindingPath) -eq [string]$q.binding.sha256) "Qualification binding hash mismatch for '$name'."
+	Assert-Condition ((Get-Sha256 $payloadPath) -eq [string]$q.payload.sha256) "Qualification payload hash mismatch for '$name'."
+
+	$binding = Read-JsonFile $bindingPath
+	$payload = Read-JsonFile $payloadPath
+	Assert-Condition ([string]$binding.schemaVersion -eq "1.0") "Qualification binding schema mismatch for '$name'."
+	Assert-Condition ([string]$binding.status -eq "PASSED") "Qualification binding is not PASSED for '$name'."
+	Assert-Condition ([string]$binding.sourceCommit -eq [string]$releaseEvidence.sourceCommit) "Qualification binding source commit mismatch for '$name'."
+	Assert-Condition ([string]$binding.qualificationType -eq [string]$q.qualificationType) "Qualification binding type mismatch for '$name'."
+	Assert-Condition ([string]$binding.payload.sha256 -eq [string]$q.payload.sha256) "Qualification binding payload hash mismatch for '$name'."
+	Assert-Condition ([string]$payload.schemaVersion -eq [string]$binding.payload.schemaVersion) "Qualification payload schema mismatch for '$name'."
+	Assert-Condition ([string]$payload.status -eq "PASSED") "Qualification payload is not PASSED for '$name'."
+	Assert-Condition ([string]$binding.workflow.runId -eq [string]$q.workflow.runId) "Qualification workflow runId mismatch for '$name'."
+	Assert-Condition ([int]$binding.workflow.runAttempt -eq [int]$q.workflow.runAttempt) "Qualification workflow runAttempt mismatch for '$name'."
+}
+
+foreach ($hardware in $compatibilityHardware) {
+	Assert-Condition ([string]$hardware.status -in $allowedStatuses) "Hardware qualification contains invalid status '$($hardware.status)'."
+}
+
+$domainIndex = @{}
+foreach ($evidence in @($releaseEvidence.evidenceDomains)) {
+	$domain = [string]$evidence.domain
+	$status = [string]$evidence.status
+	$severity = [string]$evidence.severity
+	Assert-Condition (-not $domainIndex.ContainsKey($domain)) "Release evidence contains duplicate domain '$domain'."
+	Assert-Condition ($status -in $allowedStatuses) "Release evidence domain '$domain' has invalid status '$status'."
+	Assert-Condition ($severity -in $allowedSeverities) "Release evidence domain '$domain' has invalid severity '$severity'."
+	Assert-Condition ($status -ne "FAIL") "Release evidence domain '$domain' is FAIL."
+	$domainIndex[$domain] = $status
+}
+foreach ($requiredDomain in $requiredDomains) {
+	Assert-Condition ($domainIndex.ContainsKey($requiredDomain)) "Release evidence is missing required domain '$requiredDomain'."
+}
+
+& (Join-Path $script:RepositoryRoot "build/security/Test-ProductSecurityAssessmentBinding.ps1") -OutputPath $outputRoot
+
+Assert-Condition ([string]$releaseEvidence.signingAttestation.status -in $allowedStatuses) "Signing/attestation status is invalid."
+if ([string]$releaseEvidence.signingAttestation.status -eq "PASS") {
+	Assert-Condition ($releaseEvidence.signingAttestation.PSObject.Properties.Name -contains "signaturePath") "Signing/attestation PASS requires signaturePath evidence."
+	$signaturePath = Resolve-EvidencePath ([string]$releaseEvidence.signingAttestation.signaturePath)
+	Assert-Condition (Test-Path -LiteralPath $signaturePath -PathType Leaf) "Signing/attestation signature evidence is missing."
+}
+
+Assert-Condition ([string]$releaseEvidence.releaseReadiness.status -in $allowedStatuses) "Release-readiness status is invalid."
+Assert-Condition ([string]$releaseEvidence.releaseReadiness.status -ne "FAIL") "Release-readiness gate is FAIL."
+$promotedStages = @("RELEASE_CANDIDATE", "STABLE", "VALIDATED", "CERTIFIED")
+if ([string]$releaseEvidence.releaseStage -in $promotedStages) {
+	Assert-Condition ([string]$releaseEvidence.releaseReadiness.status -eq "PASS") "Release stage '$($releaseEvidence.releaseStage)' requires an explicit PASS release-readiness gate."
+}
+
+$schemaFiles = @(
+	"schemas/release/v1/artifact-manifest.schema.json",
+	"schemas/release/v1/compatibility-manifest.schema.json",
+	"schemas/release/v1/qualification-evidence-manifest.schema.json",
+	"schemas/release/v1/release-evidence.schema.json",
+	"schemas/security/v1/product-security-assessment.schema.json"
+)
+foreach ($relativeSchema in $schemaFiles) {
+	Assert-Condition (Test-Path -LiteralPath (Join-Path $script:RepositoryRoot $relativeSchema) -PathType Leaf) "Required release schema '$relativeSchema' is missing."
+}
+Assert-Condition (Test-Path -LiteralPath (Join-Path $script:RepositoryRoot "docs/ReleaseEvidence.md") -PathType Leaf) "Release evidence documentation is missing."
+
+Write-Host "Release evidence verification PASS"
+Write-Host "Product: $($releaseEvidence.productName) $($releaseEvidence.productVersion) ($($releaseEvidence.releaseStage))"
+Write-Host "Source commit: $($releaseEvidence.sourceCommit)"
+Write-Host "Build commit:  $($releaseEvidence.buildCommit)"
+Write-Host "Artifacts verified: $($artifacts.Count)"
+Write-Host "CycloneDX components verified: $($components.Count)"
+Write-Host "Qualification requirements verified: $(@($qualificationRequirements | Where-Object { [string]$_.status -eq 'PASSED' }).Count) / $($qualificationRequirements.Count) PASSED"
+Write-Host "Release SECURITY domain: $($domainIndex['SECURITY'])"
+Write-Host "Release readiness: $($releaseEvidence.releaseReadiness.status)"
+) "Supported-performance measurement payload hash is invalid."
+	Assert-Condition ($passedPayloadHashes -contains [string]$measurement.payloadSha256) "Supported-performance measurement is not derived from a PASSED physical qualification payload."
+}
 Assert-Condition ($qualificationRequirements.Count -eq $policyHardware.Count) "Qualification evidence requirement count does not match release policy."
 Assert-Condition ($compatibilityHardware.Count -eq $policyHardware.Count) "Compatibility hardware qualification count does not match release policy."
 $seenHardware = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
