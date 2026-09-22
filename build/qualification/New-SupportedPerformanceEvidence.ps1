@@ -39,7 +39,7 @@ function Write-JsonFile {
 
 function Add-Measurement {
 	param(
-		[Parameter(Mandatory)][System.Collections.Generic.List[object]]$Target,
+		[Parameter(Mandatory)][AllowEmptyCollection()][System.Collections.Generic.List[object]]$Target,
 		[Parameter(Mandatory)][string]$Metric,
 		[Parameter(Mandatory)][double]$Value,
 		[Parameter(Mandatory)][string]$Unit,
