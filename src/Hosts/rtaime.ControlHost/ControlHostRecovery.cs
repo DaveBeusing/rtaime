@@ -1,6 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 using System.Text.Json;
+using rtaime.Control;
 using rtaime.Control.Contracts;
 using rtaime.Core;
 using rtaime.Persistence;
@@ -32,7 +33,16 @@ internal static class ControlHostRecovery
 			state.Revision.Value,
 			state.Routing.PreviewSourceId.ToString(),
 			state.Routing.ProgramSourceId.ToString(),
-			state.ActiveSceneId?.ToString()));
+			state.ActiveSceneId?.ToString(),
+			state.OutputRoles.Select(role => new PersistedOutputRole(
+				role.RoleId.ToString(),
+				(int)role.Kind,
+				role.SourceId.ToString(),
+				role.ProviderSelector,
+				role.TargetId,
+				role.FormatPolicy,
+				role.TimingPolicy,
+				role.Enabled)).ToArray()));
 	}
 
 	public static async ValueTask<AuthoritativeProductionState?> LoadAsync(
@@ -90,12 +100,36 @@ internal static class ControlHostRecovery
 				throw new InvalidDataException("Recovered active scene does not match recovered production routing.");
 		}
 
+		var outputRoles = snapshot.OutputRoles is { Length: > 0 }
+			? snapshot.OutputRoles.Select(role => new ProductionOutputRoleState(
+				new OutputRoleId(role.RoleId),
+				Enum.IsDefined(typeof(OutputRoleKind), role.Kind)
+					? (OutputRoleKind)role.Kind
+					: throw new InvalidDataException($"Recovered output role kind '{role.Kind}' is invalid."),
+				new ProductionSourceId(Identity.Parse(role.SourceId)),
+				role.ProviderSelector,
+				role.TargetId,
+				role.FormatPolicy,
+				role.TimingPolicy,
+				role.Enabled)).ToArray()
+			: specification.InitialOutputRoles
+				.Select(role => role.Kind == OutputRoleKind.Program ? role.WithSource(program) : role)
+				.ToArray();
+		var outputValidation = ProductionOutputRoleValidator.Validate(
+			specification,
+			outputRoles,
+			recoveredRouting,
+			"recovered.outputRoles");
+		if (!outputValidation.IsValid)
+			throw new InvalidDataException(string.Join("; ", outputValidation.Issues.Select(issue => $"{issue.Code}: {issue.Message}")));
+
 		return new AuthoritativeProductionState(
 			version,
 			productionId,
 			revision,
 			recoveredRouting,
-			activeSceneId);
+			activeSceneId,
+			outputRoles);
 	}
 
 	private sealed record PersistedAuthoritySnapshot(
@@ -104,5 +138,16 @@ internal static class ControlHostRecovery
 		ulong Revision,
 		string PreviewSourceId,
 		string ProgramSourceId,
-		string? ActiveSceneId = null);
+		string? ActiveSceneId = null,
+		PersistedOutputRole[]? OutputRoles = null);
+
+	private sealed record PersistedOutputRole(
+		string RoleId,
+		int Kind,
+		string SourceId,
+		string ProviderSelector,
+		string TargetId,
+		string FormatPolicy,
+		string TimingPolicy,
+		bool Enabled);
 }

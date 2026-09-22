@@ -105,6 +105,13 @@ public sealed class ControlHostService
 				throw new InvalidDataException("Recovered Preview source is not present in the production specification.");
 			if (!_specification.Sources.Any(source => source.SourceId == state.Routing.ProgramSourceId))
 				throw new InvalidDataException("Recovered Program source is not present in the production specification.");
+			var outputValidation = ProductionOutputRoleValidator.Validate(
+				_specification,
+				state.OutputRoles,
+				state.Routing,
+				"recovered.outputRoles");
+			if (!outputValidation.IsValid)
+				throw new InvalidDataException(string.Join("; ", outputValidation.Issues.Select(issue => $"{issue.Code}: {issue.Message}")));
 			if (state.ActiveSceneId is { } activeSceneId)
 			{
 				var activeScene = _specification.Scenes.FirstOrDefault(scene => scene.SceneId == activeSceneId)
@@ -182,6 +189,16 @@ public sealed class ControlHostService
 	}
 
 	public ControlHostOperationResult SelectPreview(SelectPreviewCommand command)
+	{
+		ArgumentNullException.ThrowIfNull(command);
+		lock (_gate)
+		{
+			EnsureNoPending();
+			return Stage(ControlDomainEngine.Apply(_specification, Current(), command), command.Metadata.CommandId.Value, null);
+		}
+	}
+
+	public ControlHostOperationResult RouteOutputRole(RouteOutputRoleCommand command)
 	{
 		ArgumentNullException.ThrowIfNull(command);
 		lock (_gate)

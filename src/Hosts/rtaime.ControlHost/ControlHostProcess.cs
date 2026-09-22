@@ -423,7 +423,13 @@ public sealed class ControlHostProcess
 				new ProductionSourceSpecification(_options.SourceAId, "Input A"),
 				new ProductionSourceSpecification(_options.SourceBId, "Input B")
 			},
-			new ProductionRoutingState(_options.SourceAId, _options.SourceAId));
+			new ProductionRoutingState(_options.SourceAId, _options.SourceAId),
+			null,
+			new[]
+			{
+				ProductionOutputRoleState.Program(_options.SourceAId),
+				ProductionOutputRoleState.Aux(_options.SourceBId)
+			});
 
 		var durabilityDirectory = ResolveDurabilityDirectory();
 		Directory.CreateDirectory(durabilityDirectory);
