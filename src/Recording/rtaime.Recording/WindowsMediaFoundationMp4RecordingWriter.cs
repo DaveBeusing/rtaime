@@ -373,6 +373,7 @@ public sealed class WindowsMediaFoundationMp4RecordingWriter :
 			SetGuid(mediaType, MediaFoundation.MfMtSubtype, MediaFoundation.MfVideoFormatH264);
 			SetUInt32(mediaType, MediaFoundation.MfMtAvgBitrate, ProfessionalRecordingFormats.Mp4H264Aac.VideoBitRate);
 			SetUInt32(mediaType, MediaFoundation.MfMtInterlaceMode, MediaFoundation.MfVideoInterlaceProgressive);
+			SetUInt32(mediaType, MediaFoundation.MfMtMpeg2Profile, MediaFoundation.H264MainProfile);
 			SetRatio(mediaType, MediaFoundation.MfMtFrameSize, format.Width, format.Height);
 			SetRatio(mediaType, MediaFoundation.MfMtFrameRate, checked((uint)format.FrameRate.Numerator), checked((uint)format.FrameRate.Denominator));
 			SetRatio(mediaType, MediaFoundation.MfMtPixelAspectRatio, 1, 1);
@@ -682,6 +683,7 @@ internal static class MediaFoundation
 	public const int MfVersion = 0x00020070;
 	public const int MfStartupFull = 0;
 	public const uint MfVideoInterlaceProgressive = 2;
+	public const uint H264MainProfile = 77;
 
 	public static readonly Guid MfMtMajorType = new("48eba18e-f8c9-4687-bf11-0a74c9f96a8f");
 	public static readonly Guid MfMtSubtype = new("f7e34c9a-42e8-4714-b74b-cb29d72c35e5");
@@ -695,6 +697,7 @@ internal static class MediaFoundation
 	public static readonly Guid MfMtAudioAvgBytesPerSecond = new("1aab75c8-cfef-451c-ab95-ac034b8e1731");
 	public static readonly Guid MfMtAudioBlockAlignment = new("322de230-9eeb-43bd-ab7a-ff412251541d");
 	public static readonly Guid MfMtAudioBitsPerSample = new("f2deb57f-40fa-4764-aa33-ed4f2d1ff669");
+	public static readonly Guid MfMtMpeg2Profile = new("ad76a80b-2d5c-4e0b-b375-64e520137036");
 
 	public static readonly Guid MfMediaTypeVideo = new("73646976-0000-0010-8000-00aa00389b71");
 	public static readonly Guid MfMediaTypeAudio = new("73647561-0000-0010-8000-00aa00389b71");
