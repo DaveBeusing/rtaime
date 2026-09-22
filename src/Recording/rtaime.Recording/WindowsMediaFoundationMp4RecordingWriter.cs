@@ -463,7 +463,7 @@ public sealed class WindowsMediaFoundationMp4RecordingWriter :
 			checked((Int128)10_000_000 * format.FrameRate.Denominator),
 			format.FrameRate.Numerator);
 
-		WriteMediaFoundationSample(_videoStream, nv12.AsSpan(), timestamp, duration);
+		WriteMediaFoundationSample(_videoStream, nv12, nv12.Length, timestamp, duration);
 		_lastVideoTimestamp = timestamp;
 	}
 
@@ -485,29 +485,37 @@ public sealed class WindowsMediaFoundationMp4RecordingWriter :
 			checked((Int128)audio.Timing.SampleCount * 10_000_000),
 			audio.Format.SampleRate);
 
-		WriteMediaFoundationSample(_audioStream, pcm, timestamp, duration);
+		WriteMediaFoundationSample(_audioStream, _pcm16Buffer!, required, timestamp, duration);
 		_lastAudioTimestamp = timestamp;
 	}
 
-	private void WriteMediaFoundationSample(uint streamIndex, ReadOnlySpan<byte> payload, long timestamp, long duration)
+	private void WriteMediaFoundationSample(
+		uint streamIndex,
+		byte[] payload,
+		int payloadLength,
+		long timestamp,
+		long duration)
 	{
+		ArgumentNullException.ThrowIfNull(payload);
+		if (payloadLength <= 0 || payloadLength > payload.Length)
+			throw new ArgumentOutOfRangeException(nameof(payloadLength));
+
 		IMFSample? sample = null;
 		IMFMediaBuffer? buffer = null;
 		try
 		{
 			MediaFoundation.ThrowIfFailed(MediaFoundation.MFCreateSample(out sample));
-			MediaFoundation.ThrowIfFailed(MediaFoundation.MFCreateMemoryBuffer(checked((uint)payload.Length), out buffer));
+			MediaFoundation.ThrowIfFailed(MediaFoundation.MFCreateMemoryBuffer(checked((uint)payloadLength), out buffer));
 			MediaFoundation.ThrowIfFailed(buffer.Lock(out var destination, out _, out _));
 			try
 			{
-				var bytes = payload.ToArray();
-				Marshal.Copy(bytes, 0, destination, bytes.Length);
+				Marshal.Copy(payload, 0, destination, payloadLength);
 			}
 			finally
 			{
 				MediaFoundation.ThrowIfFailed(buffer.Unlock());
 			}
-			MediaFoundation.ThrowIfFailed(buffer.SetCurrentLength(checked((uint)payload.Length)));
+			MediaFoundation.ThrowIfFailed(buffer.SetCurrentLength(checked((uint)payloadLength)));
 			MediaFoundation.ThrowIfFailed(sample.AddBuffer(buffer));
 			MediaFoundation.ThrowIfFailed(sample.SetSampleTime(timestamp));
 			MediaFoundation.ThrowIfFailed(sample.SetSampleDuration(duration));
