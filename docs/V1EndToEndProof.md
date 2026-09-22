@@ -325,7 +325,7 @@ Unless separate evidence exists, V1 End-to-End Proof does **not** mark the follo
 - trained Person Segmentation model accuracy,
 - TensorRT/ONNX Runtime/DirectML production inference,
 - production Model Package signing/supply-chain trust,
-- hardware recording codec/container qualification,
+- physical recording hardware-encoder and sustained-storage qualification,
 - long-duration soak qualification for release,
 - security/compliance/release-readiness gates not otherwise evidenced,
 - `rtaime 1.0.0 STABLE`, `VALIDATED` or `CERTIFIED` status.
@@ -362,10 +362,10 @@ V1 Functional Gap Closure adds `ReferenceRecordingPayloadWriter` and `ReferenceR
 
 The payload proof covers both V1 development formats, validates exact timing/format metadata and verifies SHA-256 media-payload integrity. A deterministic quota exercises storage exhaustion; separate failure evidence covers finalization failure and later-session recovery while Runtime remains committed and Program continues.
 
-This closes the software/reference payload gap only. `hardware recording codec/container qualification` remains `UNVERIFIED`, as do professional storage throughput, codec interoperability and hardware encoder evidence.
+The deterministic reference payload remains the exact software-evidence lane. A separate Windows Media Foundation MP4 writer now qualifies MP4/H.264/AAC software interoperability through independent decode evidence; physical hardware-encoder selection, professional sustained-storage throughput and long-duration platform evidence remain `UNVERIFIED`.
 
 ### Functional-scope interpretation
 
-After final latest-head V1 Functional Gap Closure Required Gates pass, no known **software-only functional allowlist gap** remains for V1. Remaining work is qualification/evidence work, including physical media I/O, timing/reference, hardware GPU deadlines, physical latency, professional recording/codec behavior, soak and release acceptance.
+After final latest-head V1 Functional Gap Closure Required Gates pass, no known **software-only functional allowlist gap** remains for V1. Remaining work is qualification/evidence work, including physical media I/O, timing/reference, hardware GPU deadlines, physical latency, physical recording throughput/encoder behavior, soak and release acceptance.
 
 The detailed V1 Functional Gap Closure audit and retained evidence boundary are documented in `V1FunctionalGapClosure.md`.
