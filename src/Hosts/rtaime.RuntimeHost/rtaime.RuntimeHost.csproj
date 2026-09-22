@@ -10,4 +10,7 @@
     <ProjectReference Include="..\..\Providers\rtaime.Provider.Gpu\rtaime.Provider.Gpu.csproj" />
     <ProjectReference Include="..\..\Contracts\rtaime.Runtime.Contracts\rtaime.Runtime.Contracts.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="System.Drawing.Common" />
+  </ItemGroup>
 </Project>
