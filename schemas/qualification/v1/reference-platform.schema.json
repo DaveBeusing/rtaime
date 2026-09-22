@@ -56,7 +56,10 @@
 					"maxItems": 2,
 					"uniqueItems": true,
 					"items": {
-						"enum": ["1080p50", "1080p59.94"]
+						"enum": [
+							"1080p50",
+							"1080p59.94"
+						]
 					}
 				},
 				"requiredHosts": {
@@ -88,8 +91,8 @@
 		},
 		"hardwareRequirements": {
 			"type": "array",
-			"minItems": 5,
-			"maxItems": 5,
+			"minItems": 12,
+			"maxItems": 12,
 			"items": {
 				"$ref": "#/$defs/hardwareRequirement"
 			}
@@ -99,7 +102,15 @@
 		"softwareScenario": {
 			"type": "object",
 			"additionalProperties": false,
-			"required": ["id", "name", "mandatory", "evidenceGroup", "testProject", "filter", "proves"],
+			"required": [
+				"id",
+				"name",
+				"mandatory",
+				"evidenceGroup",
+				"testProject",
+				"filter",
+				"proves"
+			],
 			"properties": {
 				"id": {
 					"type": "string",
@@ -137,26 +148,43 @@
 		"hardwareRequirement": {
 			"type": "object",
 			"additionalProperties": false,
-			"required": ["id", "requirement", "mandatory", "qualificationType", "bindingFile"],
+			"required": [
+				"id",
+				"requirement",
+				"mandatory",
+				"qualificationType",
+				"bindingFile"
+			],
 			"properties": {
 				"id": {
 					"type": "string",
-					"pattern": "^H0[1-5]$"
+					"pattern": "^H(?:0[1-9]|1[0-2])$"
 				},
 				"requirement": {
 					"enum": [
-						"REFERENCE_GPU",
+						"CUDA_GPU_EXECUTION",
+						"GPU_FRAME_LATENCY",
+						"GPU_SURFACE_LIFETIME",
 						"PROFESSIONAL_MEDIA_IO",
-						"GENLOCK",
+						"SUSTAINED_FRAME_CADENCE",
+						"DROPPED_FRAME_BEHAVIOR",
+						"SYSTEM_TELEMETRY_CONTINUITY",
+						"TIMING_REFERENCE_LOCK",
+						"AUDIO_VIDEO_SYNCHRONIZATION",
+						"RECOVERY_UNDER_LOAD",
 						"PHYSICAL_END_TO_END_LATENCY",
-						"LONG_SOAK"
+						"LONG_SOAK_STABILITY"
 					]
 				},
 				"mandatory": {
 					"type": "boolean"
 				},
 				"qualificationType": {
-					"enum": ["CUDA_REFERENCE", "MEDIA_IO_REFERENCE", "TIMING_REFERENCE_SOAK"]
+					"enum": [
+						"CUDA_REFERENCE",
+						"MEDIA_IO_REFERENCE",
+						"TIMING_REFERENCE_SOAK"
+					]
 				},
 				"bindingFile": {
 					"type": "string",
