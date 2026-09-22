@@ -105,6 +105,25 @@ public static class ProductionSpecificationValidator
                 "initialRouting.programSourceId"));
         }
 
+        foreach (var scene in specification.Scenes)
+        {
+            if (!knownSources.Contains(scene.Routing.PreviewSourceId))
+            {
+                issues.Add(new ValidationIssue(
+                    "control.specification.scene_preview_source_unknown",
+                    $"Scene '{scene.Name}' references an unavailable Preview source.",
+                    $"scenes[{scene.SceneId}].routing.previewSourceId"));
+            }
+
+            if (!knownSources.Contains(scene.Routing.ProgramSourceId))
+            {
+                issues.Add(new ValidationIssue(
+                    "control.specification.scene_program_source_unknown",
+                    $"Scene '{scene.Name}' references an unavailable Program source.",
+                    $"scenes[{scene.SceneId}].routing.programSourceId"));
+            }
+        }
+
         return new ControlValidationReport(issues);
     }
 }
@@ -163,6 +182,106 @@ public static class ControlDomainEngine
     {
         ArgumentNullException.ThrowIfNull(command);
         return ApplyCore(specification, current, command.Metadata, command.SourceId, MutationKind.ProgramTransition);
+    }
+
+    public static ControlCommandResult Apply(
+        ProductionSpecification specification,
+        AuthoritativeProductionState current,
+        ActivateSceneCommand command)
+    {
+        ArgumentNullException.ThrowIfNull(specification);
+        ArgumentNullException.ThrowIfNull(current);
+        ArgumentNullException.ThrowIfNull(command);
+
+        var issues = new List<ValidationIssue>();
+        issues.AddRange(ProductionSpecificationValidator.Validate(specification).Issues);
+
+        if (current.Version != specification.Version)
+        {
+            issues.Add(new ValidationIssue(
+                "control.state.version_mismatch",
+                "Authoritative state version does not match the production specification.",
+                "authoritative.version"));
+        }
+
+        if (current.ProductionId != specification.ProductionId)
+        {
+            issues.Add(new ValidationIssue(
+                "control.state.production_mismatch",
+                "Authoritative state belongs to a different production.",
+                "authoritative.productionId"));
+        }
+
+        ValidateRouting(specification, current.Routing, "authoritative.routing", issues);
+
+        if (command.Metadata.Version != specification.Version)
+        {
+            issues.Add(new ValidationIssue(
+                "control.command.version_mismatch",
+                "Command version does not match the production specification.",
+                "command.metadata.version"));
+        }
+
+        if (command.Metadata.ProductionId != specification.ProductionId)
+        {
+            issues.Add(new ValidationIssue(
+                "control.command.production_mismatch",
+                "Command targets a different production.",
+                "command.metadata.productionId"));
+        }
+
+        if (command.Metadata.ExpectedRevision != current.Revision)
+        {
+            issues.Add(new ValidationIssue(
+                "control.command.revision_conflict",
+                $"Command expected authoritative revision '{command.Metadata.ExpectedRevision}' but current revision is '{current.Revision}'.",
+                "command.metadata.expectedRevision"));
+        }
+
+        var scene = specification.Scenes.FirstOrDefault(candidate => candidate.SceneId == command.SceneId);
+        if (scene is null)
+        {
+            issues.Add(new ValidationIssue(
+                "control.command.scene_unknown",
+                "Command target scene is not declared by the production specification.",
+                "command.sceneId"));
+        }
+        else
+        {
+            ValidateRouting(specification, scene.Routing, "scene.routing", issues);
+        }
+
+        if (current.Revision.Value == ulong.MaxValue)
+        {
+            issues.Add(new ValidationIssue(
+                "control.state.revision_exhausted",
+                "Authoritative revision cannot advance beyond UInt64.MaxValue.",
+                "authoritative.revision"));
+        }
+
+        if (issues.Count > 0)
+            return ControlCommandResult.Rejected(current, new ControlValidationReport(issues));
+
+        var desired = new DesiredProductionState(
+            specification.Version,
+            specification.ProductionId,
+            current.Revision,
+            scene!.Routing,
+            scene.SceneId);
+
+        var desiredIssues = new List<ValidationIssue>();
+        ValidateRouting(specification, desired.Routing, "desired.routing", desiredIssues);
+        if (desiredIssues.Count > 0)
+            return ControlCommandResult.Rejected(current, new ControlValidationReport(desiredIssues));
+
+        var authoritative = new AuthoritativeProductionState(
+            specification.Version,
+            specification.ProductionId,
+            current.Revision.Next(),
+            desired.Routing,
+            scene.SceneId);
+
+        return ControlCommandResult.Accepted(current, desired, authoritative);
     }
 
     private static ControlCommandResult ApplyCore(
