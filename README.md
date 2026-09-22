@@ -78,7 +78,7 @@ The current V1 development repository implements production-shaped software path
 | Operator | full-screen production shell, workspaces, progressive readiness and recovery states |
 | Media | local media files, Media Pool, transport, timeline, IN/OUT, markers and Cue points |
 | Switching | authoritative Preview/Program, CUT and DISSOLVE |
-| Compositing | graphics overlays, layers and compositing workspace |
+| Compositing | RuntimeHost-owned bitmap overlays, dynamic Production CG lower thirds, layers and compositing workspace |
 | Audio | Audio Follow Video, gain/mute/metering seams, deterministic generated test signals |
 | Recording | failure-isolated Program Recording |
 | Output | Program Output, Clean Program monitoring and output health |
