@@ -31,7 +31,8 @@ internal static class ControlHostRecovery
 			state.ProductionId.ToString(),
 			state.Revision.Value,
 			state.Routing.PreviewSourceId.ToString(),
-			state.Routing.ProgramSourceId.ToString()));
+			state.Routing.ProgramSourceId.ToString(),
+			state.ActiveSceneId?.ToString()));
 	}
 
 	public static async ValueTask<AuthoritativeProductionState?> LoadAsync(
@@ -78,11 +79,20 @@ internal static class ControlHostRecovery
 		if (!specification.Sources.Any(source => source.SourceId == program))
 			throw new InvalidDataException("Recovered Program source is not present in the production specification.");
 
+		SceneId? activeSceneId = null;
+		if (!string.IsNullOrWhiteSpace(snapshot.ActiveSceneId))
+		{
+			activeSceneId = new SceneId(Identity.Parse(snapshot.ActiveSceneId));
+			if (!specification.Scenes.Any(scene => scene.SceneId == activeSceneId.Value))
+				throw new InvalidDataException("Recovered active scene is not present in the production specification.");
+		}
+
 		return new AuthoritativeProductionState(
 			version,
 			productionId,
 			revision,
-			new ProductionRoutingState(preview, program));
+			new ProductionRoutingState(preview, program),
+			activeSceneId);
 	}
 
 	private sealed record PersistedAuthoritySnapshot(
@@ -90,5 +100,6 @@ internal static class ControlHostRecovery
 		string ProductionId,
 		ulong Revision,
 		string PreviewSourceId,
-		string ProgramSourceId);
+		string ProgramSourceId,
+		string? ActiveSceneId = null);
 }
