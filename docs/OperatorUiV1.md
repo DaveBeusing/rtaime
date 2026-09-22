@@ -462,7 +462,7 @@ The panel is a Client-SDK projection only. `OperatorViewModel` calls `OperatorCo
 
 Recording commands are serialized through ControlHost and delegated to RuntimeHost. They do not alter Preview/Program routing or advance Production revision. The recorded media is the same post-transition/post-graphics Program video and post-AFV Program audio already owned by RuntimeHost.
 
-The current V1 output is the deterministic `.rtaime-recording` reference artifact. It is externally verifiable with `ReferenceRecordingPayloadReader`; it is not presented as an MP4/MOV/MXF broadcast deliverable.
+The default Windows RuntimeHost output is now `.mp4` with H.264/AVC video and AAC-LC stereo 48 kHz audio. RuntimeHost remains authoritative for the normalized target name and final path, so the Operator does not infer container or codec state. The deterministic `.rtaime-recording` artifact remains a separate injected test/evidence backend and is not presented as a delivery format. MOV/MXF are not supported recording outputs.
 
 
 ## Runtime Performance Status Bar
