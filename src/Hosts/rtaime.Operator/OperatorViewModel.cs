@@ -88,6 +88,11 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	private double _graphicsPositionX = 72.0;
 	private double _graphicsPositionY = 6.0;
 	private double _graphicsScale = 1.0;
+	private string _graphicsText = "LIVE FROM RTAIME";
+	private string _graphicsTypeface = "Segoe UI";
+	private string _graphicsFallbackTypeface = "Arial";
+	private double _graphicsFontSize = 54.0;
+	private string _graphicsCgStatus = "BITMAP";
 	private string _audioPeak = "0.000";
 	private string _audioPeakPercent = "0%";
 	private string _audioAfvSourceName = "—";
@@ -143,7 +148,8 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		CutCommand = new AsyncRelayCommand(CutAsync, CanTakePreview);
 		DissolveCommand = new AsyncRelayCommand(DissolveAsync, () => CanTakePreview() && TransitionFrames >= 2);
 		LoadGraphicsCommand = new AsyncRelayCommand(LoadGraphicsAsync, () => CanControl() && _graphicsAssetPicker is not null);
-		ApplyGraphicsCommand = new AsyncRelayCommand(ApplyGraphicsAsync, CanApplyGraphics);
+		ApplyGraphicsCommand = new AsyncRelayCommand(ApplyGraphicsAsync, CanApplyGraphicsPlacement);
+		ApplyTextGraphicsCommand = new AsyncRelayCommand(ApplyTextGraphicsAsync, CanApplyTextGraphics);
 		ToggleGraphicsCommand = new AsyncRelayCommand(ToggleGraphicsAsync, CanApplyGraphics);
 		ClearGraphicsCommand = new AsyncRelayCommand(ClearGraphicsAsync, CanApplyGraphics);
 		ApplyAudioGainCommand = new AsyncRelayCommand(ApplyAudioGainAsync, CanApplyAudio);
@@ -171,6 +177,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	public ICommand DissolveCommand { get; }
 	public ICommand LoadGraphicsCommand { get; }
 	public ICommand ApplyGraphicsCommand { get; }
+	public ICommand ApplyTextGraphicsCommand { get; }
 	public ICommand ToggleGraphicsCommand { get; }
 	public ICommand ClearGraphicsCommand { get; }
 	public ICommand ApplyAudioGainCommand { get; }
@@ -300,6 +307,43 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 				RaiseCommandState();
 		}
 	}
+	public string GraphicsText
+	{
+		get => _graphicsText;
+		set
+		{
+			if (Set(ref _graphicsText, value ?? string.Empty))
+				RaiseCommandState();
+		}
+	}
+	public string GraphicsTypeface
+	{
+		get => _graphicsTypeface;
+		set
+		{
+			if (Set(ref _graphicsTypeface, value ?? string.Empty))
+				RaiseCommandState();
+		}
+	}
+	public string GraphicsFallbackTypeface
+	{
+		get => _graphicsFallbackTypeface;
+		set
+		{
+			if (Set(ref _graphicsFallbackTypeface, value ?? string.Empty))
+				RaiseCommandState();
+		}
+	}
+	public double GraphicsFontSize
+	{
+		get => _graphicsFontSize;
+		set
+		{
+			if (Set(ref _graphicsFontSize, Math.Clamp(value, 8.0, 256.0)))
+				RaiseCommandState();
+		}
+	}
+	public string GraphicsCgStatus { get => _graphicsCgStatus; private set => Set(ref _graphicsCgStatus, value); }
 	public string AudioPeak { get => _audioPeak; private set => Set(ref _audioPeak, value); }
 	public string AudioPeakPercent { get => _audioPeakPercent; private set => Set(ref _audioPeakPercent, value); }
 	public string AudioAfvSourceName { get => _audioAfvSourceName; private set => Set(ref _audioAfvSourceName, value); }
@@ -387,6 +431,18 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	private bool CanApplyGraphics() =>
 		CanControl() &&
 		_client?.Snapshot?.GraphicsOverlay.AssetLoaded == true;
+
+	private bool CanApplyGraphicsPlacement() =>
+		CanApplyGraphics() &&
+		_client?.Snapshot?.ProductionCgText.Active != true;
+
+	private bool CanApplyTextGraphics() =>
+		CanControl() &&
+		!string.IsNullOrWhiteSpace(GraphicsText) &&
+		GraphicsText.Length <= 512 &&
+		!string.IsNullOrWhiteSpace(GraphicsTypeface) &&
+		GraphicsTypeface.Length <= 128 &&
+		GraphicsFontSize is >= 8 and <= 256;
 
 	private bool CanApplyAudio() => CanControl() && SelectedAudioInput is not null;
 
@@ -735,6 +791,36 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		});
 	}
 
+	private async Task ApplyTextGraphicsAsync()
+	{
+		if (_client is null || !CanApplyTextGraphics()) return;
+		await ExecuteAsync("APPLY LOWER THIRD", async () =>
+		{
+			var definition = new OperatorProductionCgText(
+				GraphicsText,
+				GraphicsTypeface,
+				string.IsNullOrWhiteSpace(GraphicsFallbackTypeface) ? null : GraphicsFallbackTypeface,
+				(float)GraphicsFontSize,
+				new OperatorCgColor(255, 255, 255, 255),
+				0.05,
+				0.91,
+				900,
+				144,
+				OperatorCgTextAlignment.Left,
+				OperatorCgAnchor.BottomLeft,
+				new OperatorCgPanelStyle(
+					true,
+					new OperatorCgColor(18, 23, 32, 224),
+					14,
+					28),
+				true);
+			await _client.ApplyProductionCgTextAsync(definition);
+			Apply(_client.Snapshot!);
+			CommandStatus = "LOWER THIRD ON AIR";
+			LastEvent = $"Production CG text was rendered by RuntimeHost using {GraphicsCgStatus}.";
+		});
+	}
+
 	private async Task ToggleGraphicsAsync()
 	{
 		if (_client is null || _client.Snapshot?.GraphicsOverlay.AssetLoaded != true) return;
@@ -942,6 +1028,19 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		GraphicsScale = graphics.Scale;
 		GraphicsState = graphics.Visible ? "ON AIR" : graphics.AssetLoaded ? "READY" : "EMPTY";
 		VisualLayerStatus = graphics.Visible ? "GRAPHICS ON" : snapshot.VisualLayerEnabled ? "ENABLED" : "DISABLED";
+		if (snapshot.ProductionCgText.Active)
+		{
+			GraphicsText = snapshot.ProductionCgText.Text ?? GraphicsText;
+			GraphicsTypeface = snapshot.ProductionCgText.Typeface ?? GraphicsTypeface;
+			GraphicsFontSize = snapshot.ProductionCgText.FontSizePixels;
+			var resolvedTypeface = snapshot.ProductionCgText.ResolvedTypeface ?? "UNRESOLVED";
+			var cacheState = snapshot.ProductionCgText.CacheHit ? "CACHE" : "RENDER";
+			GraphicsCgStatus = $"CG · {resolvedTypeface} · {cacheState} · {snapshot.ProductionCgText.RenderDuration.TotalMilliseconds:0.0} ms";
+		}
+		else
+		{
+			GraphicsCgStatus = graphics.AssetLoaded ? "BITMAP" : "EMPTY";
+		}
 		ApplyAudio(snapshot, preserveSelectedGainEdit: false);
 		ApplyEmbeddedMediaDeckSnapshot(snapshot.MediaDeck);
 		RevisionLabel = $"REV {snapshot.Production.Revision.Value}";
@@ -1395,6 +1494,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		(DissolveCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 		(LoadGraphicsCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 		(ApplyGraphicsCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+		(ApplyTextGraphicsCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 		(ToggleGraphicsCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 		(ClearGraphicsCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 		(ApplyAudioGainCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();

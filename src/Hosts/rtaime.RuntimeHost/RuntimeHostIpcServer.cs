@@ -187,6 +187,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 				"runtime.ai_showcase.set" => ValueTask.FromResult(SetAIShowcase(request)),
 				"runtime.execution.apply" => ValueTask.FromResult(ApplyExecution(request, runtime)),
 				"runtime.graphics.overlay.load" => ValueTask.FromResult(LoadGraphicsOverlay(request, runtime)),
+				"runtime.graphics.cg.apply" => ValueTask.FromResult(ApplyProductionCgText(request, runtime)),
 				"runtime.graphics.overlay.set" => ValueTask.FromResult(SetGraphicsOverlay(request, runtime)),
 				"runtime.graphics.overlay.clear" => ValueTask.FromResult(ClearGraphicsOverlay(request, runtime)),
 				"runtime.audio.input.set" => ValueTask.FromResult(SetAudioInputState(request, runtime)),
@@ -232,6 +233,34 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		var wire = request.Payload.Deserialize<WireGraphicsAsset>(Wire.JsonOptions)
 			?? throw new InvalidDataException("Graphics overlay asset payload is required.");
 		var snapshot = runtime.LoadGraphicsOverlay(wire.Name, wire.Width, wire.Height, wire.RgbaPixels);
+		_stateVersion++;
+		return Success(request, "runtime.graphics.overlay.response", ToWire(snapshot));
+	}
+
+	private WireEnvelope ApplyProductionCgText(WireEnvelope request, V1RuntimeHostService runtime)
+	{
+		var wire = request.Payload.Deserialize<WireProductionCgText>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Production CG text payload is required.");
+		var snapshot = runtime.ApplyProductionCgText(new V1ProductionCgTextDefinition(
+			wire.Text,
+			wire.Typeface,
+			wire.FallbackTypeface,
+			wire.FontSizePixels,
+			new V1CgColor(wire.Foreground.Red, wire.Foreground.Green, wire.Foreground.Blue, wire.Foreground.Alpha),
+			wire.PositionX,
+			wire.PositionY,
+			wire.BoxWidth,
+			wire.BoxHeight,
+			(V1CgTextAlignment)wire.Alignment,
+			(V1CgAnchor)wire.Anchor,
+			new V1CgPanelStyle(
+				wire.Panel.Enabled,
+				new V1CgColor(wire.Panel.Color.Red, wire.Panel.Color.Green, wire.Panel.Color.Blue, wire.Panel.Color.Alpha),
+				wire.Panel.CornerRadiusPixels,
+				wire.Panel.PaddingPixels),
+			wire.Visible,
+			(V1CgLayer)wire.Layer,
+			wire.ZOrder));
 		_stateVersion++;
 		return Success(request, "runtime.graphics.overlay.response", ToWire(snapshot));
 	}
@@ -490,7 +519,8 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		ToWire(snapshot.RecordingOperator),
 		ToWire(snapshot.Performance),
 		ToWire(aiShowcase),
-		snapshot.AvSyncDiagnostics is null ? null : ToWire(snapshot.AvSyncDiagnostics));
+		snapshot.AvSyncDiagnostics is null ? null : ToWire(snapshot.AvSyncDiagnostics),
+		snapshot.ProductionCgText is null ? null : ToWire(snapshot.ProductionCgText));
 
 	private static WireAvSyncDiagnostics ToWire(V1AvSyncDiagnosticsSnapshot snapshot) => new(
 		snapshot.Enabled,
@@ -503,6 +533,23 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		snapshot.SubmitOffsetMilliseconds,
 		snapshot.DriftFromBaselineMilliseconds,
 		snapshot.Detail);
+
+	private static WireProductionCgTextSnapshot ToWire(V1ProductionCgTextSnapshot snapshot) => new(
+		snapshot.Active,
+		snapshot.Text,
+		snapshot.Typeface,
+		snapshot.ResolvedTypeface,
+		snapshot.FontSizePixels,
+		snapshot.BoxWidth,
+		snapshot.BoxHeight,
+		(int)snapshot.Alignment,
+		(int)snapshot.Anchor,
+		snapshot.PanelEnabled,
+		snapshot.Visible,
+		(int)snapshot.Layer,
+		snapshot.ZOrder,
+		snapshot.CacheHit,
+		snapshot.RenderDuration.Ticks);
 
 	private static WireGraphicsOverlay ToWire(V1GraphicsOverlaySnapshot snapshot) => new(
 		snapshot.AssetLoaded,
@@ -673,6 +720,10 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 	private sealed record WireInputSignal(string SourceId, string Health);
 	private sealed record WireTestPatternState(string SourceId, bool Enabled, bool MotionTiming = false);
 	private sealed record WireGraphicsAsset(string Name, uint Width, uint Height, byte[] RgbaPixels);
+	private sealed record WireCgColor(byte Red, byte Green, byte Blue, byte Alpha);
+	private sealed record WireCgPanel(bool Enabled, WireCgColor Color, float CornerRadiusPixels, uint PaddingPixels);
+	private sealed record WireProductionCgText(string Text, string Typeface, string? FallbackTypeface, float FontSizePixels, WireCgColor Foreground, double PositionX, double PositionY, uint BoxWidth, uint BoxHeight, int Alignment, int Anchor, WireCgPanel Panel, bool Visible, int Layer, int ZOrder);
+	private sealed record WireProductionCgTextSnapshot(bool Active, string? Text, string? Typeface, string? ResolvedTypeface, float FontSizePixels, uint BoxWidth, uint BoxHeight, int Alignment, int Anchor, bool PanelEnabled, bool Visible, int Layer, int ZOrder, bool CacheHit, long RenderDurationTicks);
 	private sealed record WireGraphicsOverlayState(bool Visible, double PositionX, double PositionY, double Scale);
 	private sealed record WireGraphicsOverlay(bool AssetLoaded, string? AssetName, uint AssetWidth, uint AssetHeight, bool Visible, double PositionX, double PositionY, double Scale);
 	private sealed record WireAudioInputState(string SourceId, double Gain, bool Muted);
@@ -738,7 +789,8 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		WireRecordingSnapshot Recording,
 		WireRuntimePerformance Performance,
 		WireAIShowcase AIShowcase,
-		WireAvSyncDiagnostics? AvSyncDiagnostics = null);
+		WireAvSyncDiagnostics? AvSyncDiagnostics = null,
+		WireProductionCgTextSnapshot? ProductionCgText = null);
 
 	private sealed class BoundedRequestCache
 	{

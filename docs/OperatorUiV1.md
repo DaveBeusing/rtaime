@@ -240,20 +240,30 @@ This means Program monitoring and recording observe the same post-graphics image
 
 ### Recovery and persistence boundary
 
-Graphics & Overlay Operator Workflow does not add durable graphics rundown persistence. The current asset and placement are RuntimeHost process state and are observable through ControlHost snapshots. A RuntimeHost restart therefore clears the loaded asset and the Operator resynchronizes to the empty graphics state. Durable graphics/rundown persistence is outside the Graphics & Overlay Operator Workflow P0 scope.
+Graphics & Overlay Operator Workflow still does not add durable graphics rundown persistence. Bitmap asset and placement remain RuntimeHost process state and a RuntimeHost restart clears them.
 
-### P1 lower third decision
+Production CG text has a narrower recovery guarantee: ControlHost retains the last successfully confirmed CG definition for its current process lifetime. After a RuntimeHost restart and authority reconciliation, ControlHost reapplies that definition and Operator resynchronizes to the restored Runtime state. A ControlHost restart still does not durably restore CG rundown state.
 
-The optional P1 lower-third workflow is deliberately not implemented in Graphics & Overlay Operator Workflow. The current V1 production path has no qualified text/CG renderer. Rendering lower-third text in WPF and presenting it as production truth would violate the RuntimeHost rendering boundary. A future lower-third implementation should first introduce a governed production CG/text-rendering capability rather than simulating one in the Operator.
+### Production CG lower third
+
+The Graphics workspace now provides a governed Production CG lower-third editor. Text, primary typeface, explicit fallback typeface and font size are submitted through **Operator → rtaime.Client → ControlHost → RuntimeHost**. RuntimeHost rasterizes the bounded text surface and feeds it into the same existing Program graphics compositor used by bitmap overlays.
+
+Font resolution is fail-closed: RuntimeHost uses the requested installed family, then only the explicitly configured fallback family. Missing primary and fallback fonts reject the command rather than silently changing Production appearance.
+
+The Operator never uses WPF-rendered text as Production pixels. The confirmed Runtime snapshot exposes the resolved typeface, cache state and render duration. Bitmap overlays remain valid and are not migrated automatically.
+
+See [ProductionCgTextRendering.md](ProductionCgTextRendering.md) for the complete contract, cache bounds and recovery semantics.
 
 ### Graphics & Overlay Operator Workflow acceptance evidence
 
 - bounded graphics-asset validation covers dimensions and exact RGBA payload length;
-- Runtime integration tests cover alpha, show/hide, position, scale and persistence across DISSOLVE frames;
+- Runtime integration tests cover bitmap alpha, show/hide, position, scale and persistence across DISSOLVE frames;
+- Production CG tests cover Runtime rasterization, alpha composition, explicit font fallback, missing-font failure and bounded surface reuse;
 - recording integration evidence verifies that the recorded video payload exactly equals the post-graphics Program pixels;
-- real process-boundary integration verifies Operator/Client → ControlHost → RuntimeHost load, placement, show and clear state;
+- real process-boundary integration verifies Operator/Client → ControlHost → RuntimeHost graphics state;
+- RuntimeHost recovery reapplies the retained ControlHost CG definition;
 - graphics state changes do not advance authoritative Preview/Program routing revision;
-- Operator UI policy verifies the PNG decode path, graphics controls and Client-SDK-only authority boundary.
+- Operator UI policy verifies PNG decoding, the CG editor and the Client-SDK-only authority boundary while prohibiting local WPF Production text rendering.
 
 ## Audio Operator Workflow
 

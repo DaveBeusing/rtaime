@@ -177,7 +177,8 @@ public sealed record V1RuntimeHostSnapshot(
 	V1RecordingOperatorSnapshot RecordingOperator,
 	V1RuntimePerformanceSnapshot Performance,
 	int ActiveGpuSurfaces,
-	V1AvSyncDiagnosticsSnapshot? AvSyncDiagnostics = null);
+	V1AvSyncDiagnosticsSnapshot? AvSyncDiagnostics = null,
+	V1ProductionCgTextSnapshot? ProductionCgText = null);
 
 /// <summary>
 /// Windows V1 reference composition root for committed execution, timed media, GPU composition,
@@ -213,6 +214,9 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private readonly StaticRgbaSource _staticLayer;
 	private readonly DynamicRgbaSource _dynamicLayer;
 	private readonly DynamicRgbaSource _operatorGraphicsLayer;
+	private readonly RgbaFrameBuffer _operatorGraphicsLayerBuffer;
+	private readonly byte[] _operatorGraphicsLayerScratch;
+	private readonly ProductionCgTextRenderer _productionCgRenderer = new();
 	private readonly ProgramRecorder _recorder;
 	private readonly RuntimeRecordingBridge _recordingBridge;
 	private readonly IProgramRecordingPayloadWriter? _recordingPayloadWriter;
@@ -235,6 +239,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private double _operatorGraphicsPositionX = 0.72;
 	private double _operatorGraphicsPositionY = 0.06;
 	private double _operatorGraphicsScale = 1.0;
+	private V1ProductionCgTextDefinition? _productionCgDefinition;
+	private V1ProductionCgTextSnapshot _productionCgText = V1ProductionCgTextSnapshot.Empty;
 	private V1TimingHealthState _timingHealth = V1TimingHealthState.Recovering;
 	private TimeSpan _lastFrameProcessingTime;
 	private ulong _droppedFrames;
@@ -297,9 +303,11 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		_dynamicLayer = new DynamicRgbaSource(
 			new MediaSourceId(HostIdentity.Create("v1-layer-source", "dynamic")),
 			RgbaFrameBuffer.Solid(format, 235, 200, 24, 72));
+		_operatorGraphicsLayerBuffer = RgbaFrameBuffer.Solid(format, 0, 0, 0, 0);
+		_operatorGraphicsLayerScratch = new byte[RgbaFrameBuffer.RequiredByteLength(format)];
 		_operatorGraphicsLayer = new DynamicRgbaSource(
 			new MediaSourceId(HostIdentity.Create("v1-layer-source", "operator-graphics")),
-			RgbaFrameBuffer.Solid(format, 0, 0, 0, 0));
+			_operatorGraphicsLayerBuffer);
 
 		if (recordingWriter is null)
 			throw new ArgumentNullException(nameof(recordingWriter));
@@ -320,6 +328,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	public RuntimeMonitoringHub MonitoringHub => _monitoringHub;
 	public RuntimeMonitoringTapStatistics MonitoringStatistics => _monitoringTap.Statistics;
 	public VideoFormat Format => _format;
+	public int ProductionCgCachedSurfaceCount => _productionCgRenderer.CachedSurfaceCount;
 
 	public bool HasCommittedExecution
 	{
@@ -383,7 +392,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 					RecordingOperatorSnapshotUnsafe(),
 					PerformanceSnapshotUnsafe(hardware),
 					_gpu.ActiveSurfaceCount,
-					AvSyncDiagnosticsSnapshotUnsafe());
+					AvSyncDiagnosticsSnapshotUnsafe(),
+					_productionCgText);
 			}
 		}
 	}
@@ -635,8 +645,55 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			_operatorGraphicsAssetName = assetName.Trim();
 			_operatorGraphicsAssetWidth = width;
 			_operatorGraphicsAssetHeight = height;
+			_productionCgDefinition = null;
+			_productionCgText = V1ProductionCgTextSnapshot.Empty;
 			RebuildOperatorGraphicsLayerUnsafe();
 			Observe($"graphics.overlay.asset.loaded:{_operatorGraphicsAssetName}:{width}x{height}");
+			return GraphicsOverlaySnapshotUnsafe();
+		}
+	}
+
+	public V1GraphicsOverlaySnapshot ApplyProductionCgText(V1ProductionCgTextDefinition definition)
+	{
+		ArgumentNullException.ThrowIfNull(definition);
+		if (definition.BoxWidth > _format.Width || definition.BoxHeight > _format.Height)
+			throw new ArgumentOutOfRangeException(nameof(definition), "Production CG bounding box must fit inside the active Program format.");
+
+		lock (_gate)
+			ThrowIfDisposed();
+
+		var rendered = _productionCgRenderer.Render(definition);
+		var (originX, originY) = ResolveProductionCgOrigin(definition);
+		lock (_gate)
+		{
+			ThrowIfDisposed();
+			_operatorGraphicsAsset = rendered.RgbaPixels;
+			_operatorGraphicsAssetName = "production-cg-text";
+			_operatorGraphicsAssetWidth = rendered.Width;
+			_operatorGraphicsAssetHeight = rendered.Height;
+			_operatorGraphicsVisible = definition.Visible;
+			_operatorGraphicsPositionX = _format.Width <= 1 ? 0 : originX / (double)(_format.Width - 1);
+			_operatorGraphicsPositionY = _format.Height <= 1 ? 0 : originY / (double)(_format.Height - 1);
+			_operatorGraphicsScale = 1.0;
+			_productionCgDefinition = definition;
+			_productionCgText = new V1ProductionCgTextSnapshot(
+				true,
+				definition.Text,
+				definition.Typeface.Trim(),
+				rendered.ResolvedTypeface,
+				definition.FontSizePixels,
+				definition.BoxWidth,
+				definition.BoxHeight,
+				definition.Alignment,
+				definition.Anchor,
+				definition.Panel.Enabled,
+				definition.Visible,
+				definition.Layer,
+				definition.ZOrder,
+				rendered.CacheHit,
+				rendered.RenderDuration);
+			RebuildOperatorGraphicsLayerUnsafe();
+			Observe($"graphics.cg.rendered:{rendered.ResolvedTypeface}:{definition.BoxWidth}x{definition.BoxHeight}:cache={rendered.CacheHit}");
 			return GraphicsOverlaySnapshotUnsafe();
 		}
 	}
@@ -660,10 +717,23 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			if (visible && _operatorGraphicsAsset is null)
 				throw new InvalidOperationException("A graphics asset must be loaded before the overlay can be shown.");
 
+			if (_productionCgDefinition is not null &&
+				(Math.Abs(positionX - _operatorGraphicsPositionX) > 0.000001 ||
+				 Math.Abs(positionY - _operatorGraphicsPositionY) > 0.000001 ||
+				 Math.Abs(scale - 1.0) > 0.000001))
+			{
+				throw new NotSupportedException("Production CG placement must be changed by reapplying its CG definition.");
+			}
+
 			_operatorGraphicsVisible = visible;
 			_operatorGraphicsPositionX = positionX;
 			_operatorGraphicsPositionY = positionY;
 			_operatorGraphicsScale = scale;
+			if (_productionCgDefinition is not null)
+			{
+				_productionCgDefinition = _productionCgDefinition with { Visible = visible };
+				_productionCgText = _productionCgText with { Visible = visible };
+			}
 			if (_operatorGraphicsAsset is not null)
 				RebuildOperatorGraphicsLayerUnsafe();
 			Observe($"graphics.overlay.state:{visible}:{positionX:0.###}:{positionY:0.###}:{scale:0.###}");
@@ -681,7 +751,11 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			_operatorGraphicsAssetWidth = 0;
 			_operatorGraphicsAssetHeight = 0;
 			_operatorGraphicsVisible = false;
-			_operatorGraphicsLayer.Update(RgbaFrameBuffer.Solid(_format, 0, 0, 0, 0));
+			_productionCgDefinition = null;
+			_productionCgText = V1ProductionCgTextSnapshot.Empty;
+			_operatorGraphicsLayerScratch.AsSpan().Clear();
+			_operatorGraphicsLayerBuffer.CopyPixelsFrom(_operatorGraphicsLayerScratch);
+			_operatorGraphicsLayer.Update(_operatorGraphicsLayerBuffer);
 			Observe("graphics.overlay.cleared");
 			return GraphicsOverlaySnapshotUnsafe();
 		}
@@ -1343,10 +1417,11 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 
 	private void RebuildOperatorGraphicsLayerUnsafe()
 	{
-		var output = new byte[RgbaFrameBuffer.RequiredByteLength(_format)];
+		_operatorGraphicsLayerScratch.AsSpan().Clear();
 		if (_operatorGraphicsAsset is null)
 		{
-			_operatorGraphicsLayer.Update(new RgbaFrameBuffer(_format, output));
+			_operatorGraphicsLayerBuffer.CopyPixelsFrom(_operatorGraphicsLayerScratch);
+			_operatorGraphicsLayer.Update(_operatorGraphicsLayerBuffer);
 			return;
 		}
 
@@ -1371,14 +1446,41 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				var sourceX = Math.Min(sourceWidth - 1, (int)((long)x * sourceWidth / targetWidth));
 				var sourceOffset = checked((sourceY * sourceWidth + sourceX) * 4);
 				var destinationOffset = checked((destinationY * outputWidth + destinationX) * 4);
-				output[destinationOffset] = _operatorGraphicsAsset[sourceOffset];
-				output[destinationOffset + 1] = _operatorGraphicsAsset[sourceOffset + 1];
-				output[destinationOffset + 2] = _operatorGraphicsAsset[sourceOffset + 2];
-				output[destinationOffset + 3] = _operatorGraphicsAsset[sourceOffset + 3];
+				_operatorGraphicsLayerScratch[destinationOffset] = _operatorGraphicsAsset[sourceOffset];
+				_operatorGraphicsLayerScratch[destinationOffset + 1] = _operatorGraphicsAsset[sourceOffset + 1];
+				_operatorGraphicsLayerScratch[destinationOffset + 2] = _operatorGraphicsAsset[sourceOffset + 2];
+				_operatorGraphicsLayerScratch[destinationOffset + 3] = _operatorGraphicsAsset[sourceOffset + 3];
 			}
 		}
 
-		_operatorGraphicsLayer.Update(new RgbaFrameBuffer(_format, output));
+		_operatorGraphicsLayerBuffer.CopyPixelsFrom(_operatorGraphicsLayerScratch);
+		_operatorGraphicsLayer.Update(_operatorGraphicsLayerBuffer);
+	}
+
+	private (int X, int Y) ResolveProductionCgOrigin(V1ProductionCgTextDefinition definition)
+	{
+		var anchorX = checked((int)Math.Round(definition.PositionX * Math.Max(0, _format.Width - 1)));
+		var anchorY = checked((int)Math.Round(definition.PositionY * Math.Max(0, _format.Height - 1)));
+		var width = checked((int)definition.BoxWidth);
+		var height = checked((int)definition.BoxHeight);
+		var x = definition.Anchor switch
+		{
+			V1CgAnchor.TopLeft or V1CgAnchor.CenterLeft or V1CgAnchor.BottomLeft => anchorX,
+			V1CgAnchor.TopCenter or V1CgAnchor.Center or V1CgAnchor.BottomCenter => anchorX - (width / 2),
+			V1CgAnchor.TopRight or V1CgAnchor.CenterRight or V1CgAnchor.BottomRight => anchorX - width,
+			_ => throw new ArgumentOutOfRangeException(nameof(definition), "Production CG anchor is invalid.")
+		};
+		var y = definition.Anchor switch
+		{
+			V1CgAnchor.TopLeft or V1CgAnchor.TopCenter or V1CgAnchor.TopRight => anchorY,
+			V1CgAnchor.CenterLeft or V1CgAnchor.Center or V1CgAnchor.CenterRight => anchorY - (height / 2),
+			V1CgAnchor.BottomLeft or V1CgAnchor.BottomCenter or V1CgAnchor.BottomRight => anchorY - height,
+			_ => throw new ArgumentOutOfRangeException(nameof(definition), "Production CG anchor is invalid.")
+		};
+
+		if (x < 0 || y < 0 || x + width > _format.Width || y + height > _format.Height)
+			throw new ArgumentOutOfRangeException(nameof(definition), "Production CG anchor and bounding box must resolve fully inside the active Program frame.");
+		return (x, y);
 	}
 
 	private bool RequiresGpuSourceUnsafe(MediaSourceId sourceId, MediaSourceId committedSource)

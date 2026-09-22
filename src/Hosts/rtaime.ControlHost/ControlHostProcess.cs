@@ -106,6 +106,12 @@ public interface IControlRuntimeTransportSeam
 		ValueTask.FromException<RuntimeGraphicsOverlaySnapshot>(
 			new NotSupportedException("Runtime transport does not expose graphics overlay control."));
 
+	ValueTask<RuntimeGraphicsOverlaySnapshot> ApplyProductionCgTextAsync(
+		RuntimeProductionCgTextDefinition definition,
+		CancellationToken cancellationToken = default) =>
+		ValueTask.FromException<RuntimeGraphicsOverlaySnapshot>(
+			new NotSupportedException("Runtime transport does not expose Production CG text control."));
+
 	ValueTask<RuntimeGraphicsOverlaySnapshot> SetGraphicsOverlayAsync(
 		bool visible,
 		double positionX,
@@ -558,6 +564,8 @@ public sealed class ControlHostProcess
 		if (!confirmation.Committed || confirmation.State is null) throw new InvalidOperationException(confirmation.Failure?.Message ?? "Initial Runtime commit was not confirmed.");
 
 		_boundRuntimeHostInstanceId = runtimeHostInstanceId;
+		if (_ipcServer is not null)
+			await _ipcServer.RestoreProductionCgTextAsync(cancellationToken).ConfigureAwait(false);
 		SetRecovery(ControlHostRecoveryState.Fresh, confirmation.State.Revision, "Fresh authority was initialized and committed by RuntimeHost.");
 		SetOperationalState(ControlHostProcessState.Ready, ControlHostHealthState.Healthy, $"ControlHost is bound to RuntimeHost instance '{runtimeHostInstanceId}'.");
 	}
@@ -575,6 +583,8 @@ public sealed class ControlHostProcess
 		if (RuntimeMatchesAuthority(runtimeSnapshot, authority))
 		{
 			_boundRuntimeHostInstanceId = runtimeHostInstanceId;
+			if (_ipcServer is not null)
+				await _ipcServer.RestoreProductionCgTextAsync(cancellationToken).ConfigureAwait(false);
 			control.RecordObservation("recovery", "recovery.runtime.aligned", $"RuntimeHost instance '{runtimeHostInstanceId}' is already committed against authoritative revision {authority.Revision}.");
 			SetRecovery(ControlHostRecoveryState.Recovered, authority.Revision, "Durable Control authority and Runtime committed authority snapshot are aligned.");
 			SetOperationalState(ControlHostProcessState.Ready, ControlHostHealthState.Healthy, $"ControlHost reconciled with RuntimeHost instance '{runtimeHostInstanceId}' without execution replacement.");
@@ -596,6 +606,8 @@ public sealed class ControlHostProcess
 
 		control.RecordObservation("recovery", "recovery.runtime.reapplied", $"Authoritative revision {revisionBefore} was reapplied to RuntimeHost instance '{runtimeHostInstanceId}' at Runtime execution revision {remote.Commit.ExecutionRevision}.");
 		_boundRuntimeHostInstanceId = runtimeHostInstanceId;
+		if (_ipcServer is not null)
+			await _ipcServer.RestoreProductionCgTextAsync(cancellationToken).ConfigureAwait(false);
 		SetRecovery(ControlHostRecoveryState.Recovered, revisionBefore, "Durable Control authority was reapplied to RuntimeHost without authority revision advancement.");
 		SetOperationalState(ControlHostProcessState.Ready, ControlHostHealthState.Healthy, $"ControlHost resynchronized RuntimeHost instance '{runtimeHostInstanceId}'.");
 	}
