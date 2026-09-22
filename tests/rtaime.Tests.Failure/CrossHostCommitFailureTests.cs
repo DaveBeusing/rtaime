@@ -148,7 +148,7 @@ public sealed class CrossHostCommitFailureTests
         Assert.Equal(sourceB, staged.State.Routing.ProgramSourceId);
         Assert.Equal(before, control.State);
 
-        var prepareFailure = new Failure(
+        var prepareFailure = new rtaime.Core.Failure(
             "runtime.prepare.injected_rejection",
             "Injected Runtime prepare rejection.");
         var rejected = control.RejectRuntimeCommit(
