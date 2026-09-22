@@ -39,6 +39,7 @@ public sealed class ControlHostRecoveryIntegrationTests
 		{
 			Revision committedRevision;
 			ProductionRoutingState committedRouting;
+			ProductionSourceId committedAuxSource;
 			string committedSceneId;
 			string runtimeHostInstanceId;
 			using (var firstControlStop = new CancellationTokenSource())
@@ -52,8 +53,12 @@ public sealed class ControlHostRecoveryIntegrationTests
 				var scene = initial.Scenes[1];
 				var mutation = await client.ActivateSceneAsync(scene.Id);
 				Assert.True(mutation.Accepted, mutation.Failure?.ToString());
+				var auxSource = initial.Sources.Single(source => source.Id != scene.ProgramSourceId);
+				var auxMutation = await client.RouteOutputRoleAsync("aux", auxSource.Id);
+				Assert.True(auxMutation.Accepted, auxMutation.Failure?.ToString());
 				committedRevision = firstControl.Control!.State.Revision;
 				committedRouting = firstControl.Control.State.Routing;
+				committedAuxSource = Assert.Single(firstControl.Control.State.OutputRoles, role => role.RoleId == OutputRoleIds.Aux).SourceId;
 				committedSceneId = Assert.IsType<SceneId>(firstControl.Control.State.ActiveSceneId).ToString();
 				runtimeHostInstanceId = firstControl.RuntimeTransport!.HostInstanceId!;
 				Assert.True(committedRevision.Value > Revision.Initial.Value);
@@ -74,6 +79,7 @@ public sealed class ControlHostRecoveryIntegrationTests
 
 			Assert.Equal(committedRevision, secondControl.Control!.State.Revision);
 			Assert.Equal(committedRouting, secondControl.Control.State.Routing);
+			Assert.Equal(committedAuxSource, Assert.Single(secondControl.Control.State.OutputRoles, role => role.RoleId == OutputRoleIds.Aux).SourceId);
 			Assert.Equal(committedSceneId, secondControl.Control.State.ActiveSceneId?.ToString());
 			Assert.Equal(runtimeHostInstanceId, secondControl.RuntimeTransport!.HostInstanceId);
 			Assert.Contains("aligned", secondControl.Recovery.Detail, StringComparison.OrdinalIgnoreCase);
@@ -82,6 +88,7 @@ public sealed class ControlHostRecoveryIntegrationTests
 			var recoveredSnapshot = await reconnectedClient.SynchronizeAsync();
 			Assert.Equal(committedRevision, recoveredSnapshot.Production.Revision);
 			Assert.Equal(committedRouting, recoveredSnapshot.Production.Routing);
+			Assert.Equal(committedAuxSource, Assert.Single(recoveredSnapshot.Production.OutputRoles, role => role.RoleId == OutputRoleIds.Aux).SourceId);
 			Assert.Equal(committedSceneId, recoveredSnapshot.Production.ActiveSceneId?.ToString());
 
 			secondControlStop.Cancel();
