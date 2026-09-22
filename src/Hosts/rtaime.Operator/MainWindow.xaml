@@ -1297,10 +1297,43 @@
 								<Border Style="{StaticResource OperatorStatusBadge}" DockPanel.Dock="Right"><TextBlock Text="{Binding GraphicsState}" FontWeight="Bold" /></Border>
 							</DockPanel>
 							<TextBlock Text="{Binding GraphicsAssetName}" FontSize="{StaticResource OperatorFontSizeSubheading}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-							<DockPanel Margin="0,3,0,12">
-								<TextBlock Text="PNG / RGBA asset" Style="{StaticResource OperatorLabel}" />
+							<DockPanel Margin="0,3,0,8">
+								<TextBlock Text="Runtime graphics source" Style="{StaticResource OperatorLabel}" />
 								<TextBlock Text="{Binding GraphicsDimensions}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" />
 							</DockPanel>
+							<Border BorderBrush="{DynamicResource OperatorPanelBorderBrush}" BorderThickness="1" CornerRadius="4" Padding="10" Margin="0,0,0,10">
+								<StackPanel>
+									<DockPanel Margin="0,0,0,8">
+										<TextBlock Text="PRODUCTION LOWER THIRD" Style="{StaticResource OperatorLabel}" FontWeight="SemiBold" />
+										<TextBlock Text="{Binding GraphicsCgStatus}" Style="{StaticResource OperatorLabel}" DockPanel.Dock="Right" />
+									</DockPanel>
+									<TextBlock Text="TEXT" Style="{StaticResource OperatorLabel}" />
+									<controls:RtaimeTextBox Text="{Binding GraphicsText, UpdateSourceTrigger=PropertyChanged}" Margin="0,2,0,8" />
+									<Grid Margin="0,0,0,8">
+										<Grid.ColumnDefinitions>
+											<ColumnDefinition Width="*" />
+											<ColumnDefinition Width="8" />
+											<ColumnDefinition Width="*" />
+											<ColumnDefinition Width="8" />
+											<ColumnDefinition Width="90" />
+										</Grid.ColumnDefinitions>
+										<StackPanel Grid.Column="0">
+											<TextBlock Text="TYPEFACE" Style="{StaticResource OperatorLabel}" />
+											<controls:RtaimeTextBox Text="{Binding GraphicsTypeface, UpdateSourceTrigger=PropertyChanged}" />
+										</StackPanel>
+										<StackPanel Grid.Column="2">
+											<TextBlock Text="FALLBACK" Style="{StaticResource OperatorLabel}" />
+											<controls:RtaimeTextBox Text="{Binding GraphicsFallbackTypeface, UpdateSourceTrigger=PropertyChanged}" />
+										</StackPanel>
+										<StackPanel Grid.Column="4">
+											<TextBlock Text="SIZE PX" Style="{StaticResource OperatorLabel}" />
+											<controls:RtaimeTextBox Text="{Binding GraphicsFontSize, UpdateSourceTrigger=PropertyChanged}" />
+										</StackPanel>
+									</Grid>
+									<controls:RtaimeButton Content="RENDER / APPLY LOWER THIRD" Command="{Binding ApplyTextGraphicsCommand}" Background="{DynamicResource OperatorAccentSurfaceBrush}" BorderBrush="{DynamicResource OperatorAccentBrush}" ToolTip="Send the CG definition to ControlHost. RuntimeHost renders the authoritative Production pixels." />
+								</StackPanel>
+							</Border>
+							<TextBlock Text="BITMAP PLACEMENT" Style="{StaticResource OperatorLabel}" FontWeight="SemiBold" Margin="0,0,0,5" />
 							<Grid Margin="0,0,0,10">
 								<Grid.ColumnDefinitions>
 									<ColumnDefinition Width="*" />
@@ -1329,7 +1362,7 @@
 									<ColumnDefinition Width="*" />
 								</Grid.ColumnDefinitions>
 								<controls:RtaimeButton Grid.Column="0" Content="LOAD PNG" Command="{Binding LoadGraphicsCommand}" Background="{DynamicResource OperatorAccentSurfaceBrush}" BorderBrush="{DynamicResource OperatorAccentBrush}" />
-								<controls:RtaimeButton Grid.Column="2" Content="APPLY POSITION" Command="{Binding ApplyGraphicsCommand}"  />
+								<controls:RtaimeButton Grid.Column="2" Content="APPLY BITMAP POSITION" Command="{Binding ApplyGraphicsCommand}" ToolTip="Bitmap positioning is disabled while Production CG text is active; CG placement is defined by its anchor contract." />
 							</Grid>
 							<Grid Margin="0,6,0,0">
 								<Grid.ColumnDefinitions>
@@ -1340,7 +1373,7 @@
 								<controls:RtaimeButton Grid.Column="0" Content="SHOW / HIDE" Command="{Binding ToggleGraphicsCommand}" Background="{DynamicResource OperatorProgramSurfaceBrush}" BorderBrush="{DynamicResource OperatorProgramBrush}" />
 								<controls:RtaimeButton Grid.Column="2" Content="CLEAR" Command="{Binding ClearGraphicsCommand}"  />
 							</Grid>
-							<TextBlock Text="Graphics are composited in RuntimeHost after the transition and before Program monitoring / recording." Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,10,0,0" />
+							<TextBlock Text="Bitmap overlays and Production CG text share the same RuntimeHost-owned Program graphics compositor. Operator only edits parameters and sends commands; it never renders authoritative Production graphics." Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,10,0,0" />
 						</StackPanel>
 					</Border>
 
