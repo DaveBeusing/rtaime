@@ -20,6 +20,48 @@ public sealed record RuntimeGraphicsOverlaySnapshot(
 	double PositionY,
 	double Scale);
 
+public readonly record struct RuntimeCgColor(byte Red, byte Green, byte Blue, byte Alpha);
+
+public sealed record RuntimeCgPanel(
+	bool Enabled,
+	RuntimeCgColor Color,
+	float CornerRadiusPixels,
+	uint PaddingPixels);
+
+public sealed record RuntimeProductionCgTextDefinition(
+	string Text,
+	string Typeface,
+	string? FallbackTypeface,
+	float FontSizePixels,
+	RuntimeCgColor Foreground,
+	double PositionX,
+	double PositionY,
+	uint BoxWidth,
+	uint BoxHeight,
+	int Alignment,
+	int Anchor,
+	RuntimeCgPanel Panel,
+	bool Visible,
+	int Layer,
+	int ZOrder);
+
+public sealed record RuntimeProductionCgTextSnapshot(
+	bool Active,
+	string? Text,
+	string? Typeface,
+	string? ResolvedTypeface,
+	float FontSizePixels,
+	uint BoxWidth,
+	uint BoxHeight,
+	int Alignment,
+	int Anchor,
+	bool PanelEnabled,
+	bool Visible,
+	int Layer,
+	int ZOrder,
+	bool CacheHit,
+	TimeSpan RenderDuration);
+
 public sealed record RuntimeAudioInputSnapshot(
 	MediaSourceId SourceId,
 	AudioStreamId StreamId,
@@ -130,7 +172,8 @@ public sealed record RuntimeRemoteSnapshot(
 	RuntimeAIShowcaseRemoteSnapshot? AIShowcase = null,
 	IReadOnlyCollection<MediaSourceId>? BroadcastTestPatternSources = null,
 	IReadOnlyCollection<MediaSourceId>? MotionTimingTestPatternSources = null,
-	RuntimeAvSyncDiagnosticsSnapshot? AvSyncDiagnostics = null);
+	RuntimeAvSyncDiagnosticsSnapshot? AvSyncDiagnostics = null,
+	RuntimeProductionCgTextSnapshot? ProductionCgText = null);
 
 public sealed record RuntimeRemoteApplyResult(
 	string HostInstanceId,
@@ -245,7 +288,8 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 			Array.AsReadOnly((snapshot.MotionTimingTestPatternSourceIds ?? Array.Empty<string>())
 				.Select(sourceId => new MediaSourceId(Identity.Parse(sourceId)))
 				.ToArray()),
-			snapshot.AvSyncDiagnostics is null ? null : FromWire(snapshot.AvSyncDiagnostics));
+			snapshot.AvSyncDiagnostics is null ? null : FromWire(snapshot.AvSyncDiagnostics),
+			snapshot.ProductionCgText is null ? null : FromWire(snapshot.ProductionCgText));
 	}
 
 	public async ValueTask<RuntimeRemoteApplyResult> ApplyExecutionAsync(
@@ -337,6 +381,39 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 		var response = await ExchangeAsync(
 			"runtime.graphics.overlay.load",
 			new WireGraphicsAsset(assetName.Trim(), width, height, rgbaPixels),
+			cancellationToken).ConfigureAwait(false);
+		var wire = response.Payload.Deserialize<WireGraphicsOverlay>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Runtime graphics overlay response is required.");
+		return FromWire(wire);
+	}
+
+	public async ValueTask<RuntimeGraphicsOverlaySnapshot> ApplyProductionCgTextAsync(
+		RuntimeProductionCgTextDefinition definition,
+		CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(definition);
+		var response = await ExchangeAsync(
+			"runtime.graphics.cg.apply",
+			new WireProductionCgText(
+				definition.Text,
+				definition.Typeface,
+				definition.FallbackTypeface,
+				definition.FontSizePixels,
+				new WireCgColor(definition.Foreground.Red, definition.Foreground.Green, definition.Foreground.Blue, definition.Foreground.Alpha),
+				definition.PositionX,
+				definition.PositionY,
+				definition.BoxWidth,
+				definition.BoxHeight,
+				definition.Alignment,
+				definition.Anchor,
+				new WireCgPanel(
+					definition.Panel.Enabled,
+					new WireCgColor(definition.Panel.Color.Red, definition.Panel.Color.Green, definition.Panel.Color.Blue, definition.Panel.Color.Alpha),
+					definition.Panel.CornerRadiusPixels,
+					definition.Panel.PaddingPixels),
+				definition.Visible,
+				definition.Layer,
+				definition.ZOrder),
 			cancellationToken).ConfigureAwait(false);
 		var wire = response.Payload.Deserialize<WireGraphicsOverlay>(Wire.JsonOptions)
 			?? throw new InvalidDataException("Runtime graphics overlay response is required.");
@@ -710,6 +787,23 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 		_ => throw new InvalidDataException("Runtime audio health state is invalid.")
 	};
 
+	private static RuntimeProductionCgTextSnapshot FromWire(WireProductionCgTextSnapshot snapshot) => new(
+		snapshot.Active,
+		snapshot.Text,
+		snapshot.Typeface,
+		snapshot.ResolvedTypeface,
+		snapshot.FontSizePixels,
+		snapshot.BoxWidth,
+		snapshot.BoxHeight,
+		snapshot.Alignment,
+		snapshot.Anchor,
+		snapshot.PanelEnabled,
+		snapshot.Visible,
+		snapshot.Layer,
+		snapshot.ZOrder,
+		snapshot.CacheHit,
+		TimeSpan.FromTicks(snapshot.RenderDurationTicks));
+
 	private static RuntimeGraphicsOverlaySnapshot FromWire(WireGraphicsOverlay snapshot) => new(
 		snapshot.AssetLoaded,
 		snapshot.AssetName,
@@ -832,6 +926,10 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 	private sealed record WireInputSignal(string SourceId, string Health);
 	private sealed record WireTestPatternState(string SourceId, bool Enabled, bool MotionTiming = false);
 	private sealed record WireGraphicsAsset(string Name, uint Width, uint Height, byte[] RgbaPixels);
+	private sealed record WireCgColor(byte Red, byte Green, byte Blue, byte Alpha);
+	private sealed record WireCgPanel(bool Enabled, WireCgColor Color, float CornerRadiusPixels, uint PaddingPixels);
+	private sealed record WireProductionCgText(string Text, string Typeface, string? FallbackTypeface, float FontSizePixels, WireCgColor Foreground, double PositionX, double PositionY, uint BoxWidth, uint BoxHeight, int Alignment, int Anchor, WireCgPanel Panel, bool Visible, int Layer, int ZOrder);
+	private sealed record WireProductionCgTextSnapshot(bool Active, string? Text, string? Typeface, string? ResolvedTypeface, float FontSizePixels, uint BoxWidth, uint BoxHeight, int Alignment, int Anchor, bool PanelEnabled, bool Visible, int Layer, int ZOrder, bool CacheHit, long RenderDurationTicks);
 	private sealed record WireGraphicsOverlayState(bool Visible, double PositionX, double PositionY, double Scale);
 	private sealed record WireGraphicsOverlay(bool AssetLoaded, string? AssetName, uint AssetWidth, uint AssetHeight, bool Visible, double PositionX, double PositionY, double Scale);
 	private sealed record WireAudioInputState(string SourceId, double Gain, bool Muted);
@@ -897,7 +995,8 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 		WireRecordingSnapshot Recording,
 		WireRuntimePerformance Performance,
 		WireAIShowcase AIShowcase,
-		WireAvSyncDiagnostics? AvSyncDiagnostics = null);
+		WireAvSyncDiagnostics? AvSyncDiagnostics = null,
+		WireProductionCgTextSnapshot? ProductionCgText = null);
 
 	private static class Wire
 	{
