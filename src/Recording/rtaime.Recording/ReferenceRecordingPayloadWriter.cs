@@ -19,7 +19,7 @@ public interface IProgramRecordingPayloadWriter : IProgramRecordingWriter
 
 public interface IConfigurableProgramRecordingWriter
 {
-	void ConfigureTarget(string destinationDirectory, string fileName);
+	string ConfigureTarget(string destinationDirectory, string fileName);
 	string? FinalPath { get; }
 }
 
@@ -90,7 +90,7 @@ public sealed class ReferenceRecordingPayloadWriter : IProgramRecordingPayloadWr
 	public string? PartialPath => _partialPath;
 	public string? FinalPath => _finalPath;
 
-	public void ConfigureTarget(string destinationDirectory, string fileName)
+	public string ConfigureTarget(string destinationDirectory, string fileName)
 	{
 		if (string.IsNullOrWhiteSpace(destinationDirectory))
 			throw new ArgumentException("Recording destination directory is required.", nameof(destinationDirectory));
@@ -115,6 +115,8 @@ public sealed class ReferenceRecordingPayloadWriter : IProgramRecordingPayloadWr
 			_configuredRootDirectory = Path.GetFullPath(destinationDirectory.Trim());
 			_configuredFileName = trimmedName;
 		}
+
+		return trimmedName;
 	}
 
 	public ValueTask OpenAsync(RecordingStartRequest request, CancellationToken cancellationToken)

@@ -205,7 +205,7 @@ public sealed class RuntimeHostProcess
 		Func<V1RuntimeHostService, RuntimeHostProcessOptions, RuntimeAIShowcaseService>? aiShowcaseFactory = null)
 	{
 		_options = options ?? throw new ArgumentNullException(nameof(options));
-		_recordingWriterFactory = recordingWriterFactory ?? (() => new ReferenceRecordingPayloadWriter(
+		_recordingWriterFactory = recordingWriterFactory ?? (() => new WindowsMediaFoundationMp4RecordingWriter(
 			Path.Combine(
 				Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
 				"rtaime",

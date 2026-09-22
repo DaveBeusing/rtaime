@@ -970,10 +970,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				"Configured RuntimeHost recording writer does not support operator-selected destinations."));
 		}
 
-		_recordingTargetWriter.ConfigureTarget(destinationDirectory, fileName);
-		var normalizedFileName = fileName.Trim().EndsWith(".rtaime-recording", StringComparison.OrdinalIgnoreCase)
-			? fileName.Trim()
-			: fileName.Trim() + ".rtaime-recording";
+		var normalizedFileName = _recordingTargetWriter.ConfigureTarget(destinationDirectory, fileName);
 		return await StartRecordingCoreAsync(
 			sessionId,
 			outputId,
