@@ -52,7 +52,7 @@ The profile declares:
 - V1 development formats `1080p50` and `1080p59.94`;
 - ControlHost, RuntimeHost, AIHost and Operator as required host surfaces;
 - software qualification scenarios Q01-Q10;
-- the five mandatory physical qualification requirements and their existing evidence-binding types.
+- twelve mandatory physical evidence dimensions mapped to the existing three source-bound qualification types.
 
 The profile deliberately describes qualified platform classes and capabilities instead of machine serial numbers.
 
@@ -100,13 +100,20 @@ Q10 exercises an actual Operator operating-system process restart. Broader Runti
 
 Reference Platform Qualification consumes the source-bound evidence model introduced before this work package. It does not weaken or bypass it.
 
-| Requirement | Existing qualification type | Expected binding |
+| Dimension | Existing qualification type | Expected binding |
 | --- | --- | --- |
-| `REFERENCE_GPU` | `CUDA_REFERENCE` | `cuda-reference.binding.json` |
+| `CUDA_GPU_EXECUTION` | `CUDA_REFERENCE` | `cuda-reference.binding.json` |
+| `GPU_FRAME_LATENCY` | `CUDA_REFERENCE` | `cuda-reference.binding.json` |
+| `GPU_SURFACE_LIFETIME` | `CUDA_REFERENCE` | `cuda-reference.binding.json` |
 | `PROFESSIONAL_MEDIA_IO` | `MEDIA_IO_REFERENCE` | `media-io-reference.binding.json` |
-| `GENLOCK` | `TIMING_REFERENCE_SOAK` | `timing-reference-soak.binding.json` |
+| `SUSTAINED_FRAME_CADENCE` | `TIMING_REFERENCE_SOAK` | `timing-reference-soak.binding.json` |
+| `DROPPED_FRAME_BEHAVIOR` | `TIMING_REFERENCE_SOAK` | `timing-reference-soak.binding.json` |
+| `SYSTEM_TELEMETRY_CONTINUITY` | `TIMING_REFERENCE_SOAK` | `timing-reference-soak.binding.json` |
+| `TIMING_REFERENCE_LOCK` | `TIMING_REFERENCE_SOAK` | `timing-reference-soak.binding.json` |
+| `AUDIO_VIDEO_SYNCHRONIZATION` | `TIMING_REFERENCE_SOAK` | `timing-reference-soak.binding.json` |
+| `RECOVERY_UNDER_LOAD` | `TIMING_REFERENCE_SOAK` | `timing-reference-soak.binding.json` |
 | `PHYSICAL_END_TO_END_LATENCY` | `TIMING_REFERENCE_SOAK` | `timing-reference-soak.binding.json` |
-| `LONG_SOAK` | `TIMING_REFERENCE_SOAK` | `timing-reference-soak.binding.json` |
+| `LONG_SOAK_STABILITY` | `TIMING_REFERENCE_SOAK` | `timing-reference-soak.binding.json` |
 
 A physical requirement becomes `PASS` only when `Test-QualificationEvidenceBinding.ps1` accepts the binding for:
 
@@ -118,6 +125,8 @@ A physical requirement becomes `PASS` only when `Test-QualificationEvidenceBindi
 A missing binding is `UNVERIFIED`. A supplied binding that fails source, type, schema, payload or integrity verification is `FAIL`.
 
 Normal GitHub-hosted Required Gates therefore produce a useful software qualification result whose full platform status is normally `UNVERIFIED` until artifacts from the dedicated self-hosted physical workflows are supplied for that exact source commit.
+
+The same accepted bindings are the only input to the Supported Performance Matrix. `New-SupportedPerformanceEvidence.ps1` extracts measured values from verified CUDA, Media I/O and timing/reference payloads, binds them to the exact source commit and product identity, and emits no synthetic or configured performance values. Until all required binding types are available, the supported-performance status remains `UNVERIFIED`.
 
 ## Platform environment evidence
 
@@ -167,11 +176,13 @@ Outputs include:
 environment.json
 qualification-result.json
 qualification-summary.md
+supported-performance.json
+supported-performance.md
 logs/
 	software-*.log
 ```
 
-`qualification-result.json` is the machine-readable truth for the Reference Platform Qualification run. `qualification-summary.md` is a human-readable projection. `Test-ReferencePlatformQualificationResult.ps1` independently validates the machine-readable artifact.
+`qualification-result.json` is the machine-readable truth for the Reference Platform Qualification run. `qualification-summary.md` is a human-readable projection. `supported-performance.json` is the machine-readable, source-bound set of measured supported-performance values and `supported-performance.md` is its human-readable matrix. Missing physical evidence produces no invented measurement. `Test-ReferencePlatformQualificationResult.ps1` independently validates the machine-readable qualification artifact.
 
 Because `artifacts/*` is ignored by Git, generated qualification evidence is retained as CI/release evidence rather than committed as source.
 
@@ -186,6 +197,7 @@ The Quality job executes `Test-ReferencePlatformQualificationPolicy.ps1`, which 
 - required host/platform identity;
 - software-to-existing-test mappings;
 - physical-to-existing-binding mappings;
+- supported-performance generation from verified physical evidence only;
 - Required Gates integration;
 - fail-closed aggregation, including a regression that proves mandatory `UNVERIFIED` hardware cannot be represented as overall `PASS`.
 
@@ -196,6 +208,7 @@ Typical GitHub-hosted result after all software scenarios pass and no physical b
 ```text
 Software: PASS
 Hardware: UNVERIFIED
+Supported performance: UNVERIFIED
 Overall: UNVERIFIED
 ```
 
@@ -204,6 +217,7 @@ A self-hosted reference qualification with all valid exact source-bound physical
 ```text
 Software: PASS
 Hardware: PASS
+Supported performance: PASS
 Overall: PASS
 ```
 
