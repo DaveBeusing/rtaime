@@ -196,7 +196,7 @@ public sealed record DesiredProductionState
 
 public sealed record AuthoritativeProductionState
 {
-    private readonly ReadOnlyCollection<ProductionOutputRoleState> _outputRoles;
+    private readonly OutputRoleStateCollection _outputRoles;
 
     public AuthoritativeProductionState(
         CompatibilityVersion version,
@@ -212,7 +212,7 @@ public sealed record AuthoritativeProductionState
         Revision = revision;
         Routing = routing ?? throw new ArgumentNullException(nameof(routing));
         ActiveSceneId = activeSceneId;
-        _outputRoles = Array.AsReadOnly(OutputRoleStateCollection.Normalize(outputRoles, Routing.ProgramSourceId));
+        _outputRoles = OutputRoleStateCollection.Normalize(outputRoles, Routing.ProgramSourceId);
     }
 
     public CompatibilityVersion Version { get; }
