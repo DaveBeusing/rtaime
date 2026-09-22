@@ -18,6 +18,7 @@ public sealed class WindowsMediaFoundationMp4RecordingWriter :
 {
 	private readonly object _gate = new();
 	private readonly string _defaultRootDirectory;
+	private readonly long? _maximumPayloadBytes;
 	private readonly Dictionary<ulong, StagedPayload> _stagedPayloads = new();
 
 	private string? _configuredRootDirectory;
@@ -39,13 +40,18 @@ public sealed class WindowsMediaFoundationMp4RecordingWriter :
 	private long _lastAudioTimestamp = -1;
 	private byte[]? _nv12Buffer;
 	private byte[]? _pcm16Buffer;
+	private long _payloadBytesWritten;
 
-	public WindowsMediaFoundationMp4RecordingWriter(string rootDirectory)
+	public WindowsMediaFoundationMp4RecordingWriter(string rootDirectory, long? maximumPayloadBytes = null)
 	{
 		if (string.IsNullOrWhiteSpace(rootDirectory))
 			throw new ArgumentException("Recording root directory is required.", nameof(rootDirectory));
 
+		if (maximumPayloadBytes is <= 0)
+			throw new ArgumentOutOfRangeException(nameof(maximumPayloadBytes), "Recording payload quota must be greater than zero when specified.");
+
 		_defaultRootDirectory = Path.GetFullPath(rootDirectory);
+		_maximumPayloadBytes = maximumPayloadBytes;
 	}
 
 	public ProgramRecordingFormatAvailability FormatAvailability =>
@@ -130,6 +136,7 @@ public sealed class WindowsMediaFoundationMp4RecordingWriter :
 			_lastAudioTimestamp = -1;
 			_nv12Buffer = null;
 			_pcm16Buffer = null;
+			_payloadBytesWritten = 0;
 			_opened = true;
 		}
 
@@ -172,6 +179,15 @@ public sealed class WindowsMediaFoundationMp4RecordingWriter :
 		}
 
 		ValidateSample(sample, payload);
+		var payloadBytes = checked((long)payload.Video.Length + payload.Audio.Length);
+		lock (_gate)
+		{
+			var nextTotal = checked(_payloadBytesWritten + payloadBytes);
+			if (_maximumPayloadBytes is { } maximum && nextTotal > maximum)
+				throw new IOException($"MP4 recording payload quota of {maximum} bytes was exhausted.");
+			_payloadBytesWritten = nextTotal;
+		}
+
 		if (!_sinkStarted)
 			InitializeSink(sample);
 
