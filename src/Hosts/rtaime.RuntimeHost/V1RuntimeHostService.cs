@@ -1242,12 +1242,13 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			var programBinding = execution.PreparedExecution.Bindings.SingleOrDefault(binding => binding.MediaSinkId == programSink);
 			if (programBinding?.MediaSourceId is { } programSource)
 			{
-				var hasEvidence = _programOutput?.LastFrame is not null;
+				var programEvidence = _programOutput?.LastFrame;
+				var hasEvidence = programEvidence is not null && programEvidence.Frame.SourceId == programSource;
 				snapshots.Add(new RuntimeOutputRoleSnapshot(
 					"program", "PROGRAM", programSource, programSink, _format, _virtualMedia.Timing.FrameTimebase,
 					programBinding.Resource.ProviderId, RuntimeOutputRoleLifecycleState.Active, true,
 					hasEvidence ? RuntimeOutputRoleHealthState.Healthy : RuntimeOutputRoleHealthState.Unverified,
-					hasEvidence ? $"Program provider confirmed frame sequence {_programOutput!.LastFrame!.Frame.Timing.SequenceNumber}." : "Program output is committed; first provider frame evidence is pending."));
+					hasEvidence ? $"Program provider confirmed frame sequence {programEvidence!.Frame.Timing.SequenceNumber}." : "Program output is committed; provider evidence for the configured source is pending."));
 			}
 		}
 
@@ -1257,7 +1258,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				string.Equals(binding.OutputRoleId, "aux", StringComparison.Ordinal) && binding.MediaSinkId == auxSink);
 			if (auxBinding?.MediaSourceId is { } auxSource)
 			{
-				var hasEvidence = _auxOutput?.LastFrame is not null;
+				var auxEvidence = _auxOutput?.LastFrame;
+				var hasEvidence = auxEvidence is not null && auxEvidence.Frame.SourceId == auxSource;
 				var fault = _auxFailure;
 				snapshots.Add(new RuntimeOutputRoleSnapshot(
 					"aux", "AUX", auxSource, auxSink, _format, _virtualMedia.Timing.FrameTimebase,
@@ -1265,7 +1267,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 					fault is null ? RuntimeOutputRoleLifecycleState.Active : RuntimeOutputRoleLifecycleState.Faulted,
 					true,
 					fault is not null ? RuntimeOutputRoleHealthState.Faulted : hasEvidence ? RuntimeOutputRoleHealthState.Healthy : RuntimeOutputRoleHealthState.Unverified,
-					fault is not null ? "Aux provider reported an output failure." : hasEvidence ? $"Aux provider confirmed frame sequence {_auxOutput!.LastFrame!.Frame.Timing.SequenceNumber}." : "Aux output is committed; first provider frame evidence is pending.",
+					fault is not null ? "Aux provider reported an output failure." : hasEvidence ? $"Aux provider confirmed frame sequence {auxEvidence!.Frame.Timing.SequenceNumber}." : "Aux output is committed; provider evidence for the configured source is pending.",
 					fault));
 			}
 		}
