@@ -153,6 +153,37 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		return ReadGraphicsOverlay(response);
 	}
 
+	public async ValueTask<OperatorGraphicsOverlayDescriptor> ApplyProductionCgTextAsync(
+		OperatorProductionCgText definition,
+		CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(definition);
+		var response = await ExchangeAsync(
+			"control.graphics.cg.apply",
+			new WireProductionCgText(
+				definition.Text,
+				definition.Typeface,
+				definition.FallbackTypeface,
+				definition.FontSizePixels,
+				new WireCgColor(definition.Foreground.Red, definition.Foreground.Green, definition.Foreground.Blue, definition.Foreground.Alpha),
+				definition.PositionX,
+				definition.PositionY,
+				definition.BoxWidth,
+				definition.BoxHeight,
+				(int)definition.Alignment,
+				(int)definition.Anchor,
+				new WireCgPanel(
+					definition.Panel.Enabled,
+					new WireCgColor(definition.Panel.Color.Red, definition.Panel.Color.Green, definition.Panel.Color.Blue, definition.Panel.Color.Alpha),
+					definition.Panel.CornerRadiusPixels,
+					definition.Panel.PaddingPixels),
+				definition.Visible,
+				(int)definition.Layer,
+				definition.ZOrder),
+			cancellationToken).ConfigureAwait(false);
+		return ReadGraphicsOverlay(response);
+	}
+
 	public async ValueTask<OperatorGraphicsOverlayDescriptor> SetGraphicsOverlayAsync(
 		bool visible,
 		double positionX,
@@ -502,7 +533,31 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		FromWire(wire.Recording),
 		FromWire(wire.Health),
 		FromWire(wire.AIShowcase),
-		wire.MediaDeck is null ? MediaDeckSnapshot.Unloaded : FromWire(wire.MediaDeck));
+		wire.MediaDeck is null ? MediaDeckSnapshot.Unloaded : FromWire(wire.MediaDeck),
+		wire.ProductionCgText is null ? OperatorProductionCgTextDescriptor.Empty : FromWire(wire.ProductionCgText));
+
+	private static OperatorProductionCgTextDescriptor FromWire(WireProductionCgTextSnapshot snapshot) => new(
+		snapshot.Active,
+		snapshot.Text,
+		snapshot.Typeface,
+		snapshot.ResolvedTypeface,
+		snapshot.FontSizePixels,
+		snapshot.BoxWidth,
+		snapshot.BoxHeight,
+		Enum.IsDefined(typeof(OperatorCgTextAlignment), snapshot.Alignment)
+			? (OperatorCgTextAlignment)snapshot.Alignment
+			: throw new InvalidDataException("Production CG alignment is invalid."),
+		Enum.IsDefined(typeof(OperatorCgAnchor), snapshot.Anchor)
+			? (OperatorCgAnchor)snapshot.Anchor
+			: throw new InvalidDataException("Production CG anchor is invalid."),
+		snapshot.PanelEnabled,
+		snapshot.Visible,
+		Enum.IsDefined(typeof(OperatorCgLayer), snapshot.Layer)
+			? (OperatorCgLayer)snapshot.Layer
+			: throw new InvalidDataException("Production CG layer is invalid."),
+		snapshot.ZOrder,
+		snapshot.CacheHit,
+		TimeSpan.FromTicks(Math.Max(0, snapshot.RenderDurationTicks)));
 
 	private static OperatorAudioInputDescriptor FromWire(WireAudioInput input) => new(
 		input.SourceId,
@@ -642,6 +697,10 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 	private sealed record WireSource(string Id, string Name, string Type, string Format, string Health, string MediaState, long? RemainingTicks, string? MediaFileName);
 	private sealed record WireProductionState(string Version, string ProductionId, ulong Revision, string PreviewSourceId, string ProgramSourceId);
 	private sealed record WireGraphicsAsset(string Name, uint Width, uint Height, byte[] RgbaPixels);
+	private sealed record WireCgColor(byte Red, byte Green, byte Blue, byte Alpha);
+	private sealed record WireCgPanel(bool Enabled, WireCgColor Color, float CornerRadiusPixels, uint PaddingPixels);
+	private sealed record WireProductionCgText(string Text, string Typeface, string? FallbackTypeface, float FontSizePixels, WireCgColor Foreground, double PositionX, double PositionY, uint BoxWidth, uint BoxHeight, int Alignment, int Anchor, WireCgPanel Panel, bool Visible, int Layer, int ZOrder);
+	private sealed record WireProductionCgTextSnapshot(bool Active, string? Text, string? Typeface, string? ResolvedTypeface, float FontSizePixels, uint BoxWidth, uint BoxHeight, int Alignment, int Anchor, bool PanelEnabled, bool Visible, int Layer, int ZOrder, bool CacheHit, long RenderDurationTicks);
 	private sealed record WireGraphicsOverlayState(bool Visible, double PositionX, double PositionY, double Scale);
 	private sealed record WireGraphicsOverlay(bool AssetLoaded, string? AssetName, uint AssetWidth, uint AssetHeight, bool Visible, double PositionX, double PositionY, double Scale);
 	private sealed record WireAudioInputState(string SourceId, double Gain, bool Muted);
@@ -695,7 +754,7 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		string AvSyncSubmitOffset = "UNAVAILABLE",
 		string AvSyncDrift = "UNAVAILABLE",
 		string AvSyncDetail = "A/V sync diagnostics are unavailable.");
-	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, WireRecordingSnapshot Recording, WireHealthSnapshot Health, WireAIShowcase AIShowcase, WireMediaDeckSnapshot? MediaDeck, ulong StateVersion);
+	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, WireRecordingSnapshot Recording, WireHealthSnapshot Health, WireAIShowcase AIShowcase, WireMediaDeckSnapshot? MediaDeck, ulong StateVersion, WireProductionCgTextSnapshot? ProductionCgText = null);
 	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path);
 	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame, bool? AutoPlayOnProgram, int? EndBehavior, long? InPointFrame, long? OutPointFrame);
 	private sealed record WireMediaMarkerCommand(string Version, string AssetId, int Kind, long? PositionFrame, string? CuePointId, string? Name);
