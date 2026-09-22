@@ -40,11 +40,13 @@ The control refreshes its bounded source projection only while visible. Per-sour
 
 The left 360-pixel LIVE region is the compact Scenes & Cues surface. It uses the own rtaime search box and approximately 74-pixel source rows with a 92×52 thumbnail, source index, name, duration/remaining information, NEXT/PVW state, LIVE/PGM state, cyan selected-row treatment and the own overflow affordance.
 
-The list reuses OperatorViewModel.Sources and SelectedSource. Selecting a row changes only Operator selection. SET NEXT invokes the existing SetPreviewCommand; TAKE invokes the existing CutCommand. The selected row does not implicitly become Preview or Program.
+The list now projects the governed Scene catalog through `OperatorViewModel.Scenes` and `SelectedScene`. Selecting a row remains presentation-only and never mutates Preview or Program. **TAKE SCENE** invokes the explicit governed Scene activation command through ControlHost; **CUT PVW** keeps the established confirmed Preview-to-Program CUT workflow available.
+
+NEXT evidence is derived from the Scene's declared Preview source against authoritative Preview routing. LIVE evidence is shown only when the synchronized authoritative state explicitly reports the Scene as `ActiveSceneId`. A direct Set Preview, CUT or DISSOLVE mutation clears active-Scene evidence rather than allowing the Operator to infer that a Scene is still active.
 
 Media cues reuse MediaDeckViewModel.Cues and SelectedCue. Selecting a cue changes only the cue selection. JUMP SELECTED CUE invokes the existing JumpCueCommand through the current marker/timeline path.
 
-The current V1 product does not expose a governed multi-scene activation contract. Dedicated scene activation therefore remains explicitly unavailable rather than being synthesized in the Operator.
+The Scene contract currently bundles only Preview/Program routing already covered by the Control -> Runtime prepare/commit boundary. Graphics and output roles are not partially or implicitly mutated as part of Scene activation.
 
 ## Live Controls
 
@@ -106,8 +108,8 @@ build/quality/Test-OperatorUiPolicy.ps1 verifies:
 - failed-source visibility;
 - selection-only multiview behavior;
 - double-click large view without routing commands;
-- explicit source selection versus Preview/Take actions;
-- cue selection versus cue execution;
+- explicit Scene selection versus governed Scene activation;
+- confirmed active-Scene evidence plus cue selection versus cue execution;
 - reuse of CUT/AUTO, graphics, recording and Clean Program commands;
 - external transmission remains explicitly unverified;
 - LIVE region isolation from duplicate panels;
