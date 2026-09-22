@@ -360,7 +360,8 @@ public sealed record OperatorStatusSnapshot
         OperatorRecordingDescriptor? recording = null,
         OperatorHealthDescriptor? health = null,
         OperatorAIShowcaseDescriptor? aiShowcase = null,
-        MediaDeckSnapshot? mediaDeck = null)
+        MediaDeckSnapshot? mediaDeck = null,
+        OperatorProductionCgTextDescriptor? productionCgText = null)
     {
         Production = production ?? throw new ArgumentNullException(nameof(production));
         ArgumentNullException.ThrowIfNull(sources);
@@ -389,6 +390,7 @@ public sealed record OperatorStatusSnapshot
         Health = health ?? OperatorHealthDescriptor.Unavailable;
         AIShowcase = aiShowcase ?? OperatorAIShowcaseDescriptor.Unavailable;
         MediaDeck = mediaDeck ?? MediaDeckSnapshot.Unloaded;
+        ProductionCgText = productionCgText ?? OperatorProductionCgTextDescriptor.Empty;
     }
 
     public AuthoritativeProductionState Production { get; }
@@ -407,6 +409,7 @@ public sealed record OperatorStatusSnapshot
     public OperatorHealthDescriptor Health { get; }
     public OperatorAIShowcaseDescriptor AIShowcase { get; }
     public MediaDeckSnapshot MediaDeck { get; }
+    public OperatorProductionCgTextDescriptor ProductionCgText { get; }
 }
 
 /// <summary>
@@ -455,6 +458,11 @@ public interface IOperatorControlTransport
         OperatorGraphicsAsset asset,
         CancellationToken cancellationToken = default) =>
         ValueTask.FromException<OperatorGraphicsOverlayDescriptor>(new NotSupportedException("Operator transport does not expose graphics overlay control."));
+
+    ValueTask<OperatorGraphicsOverlayDescriptor> ApplyProductionCgTextAsync(
+        OperatorProductionCgText definition,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<OperatorGraphicsOverlayDescriptor>(new NotSupportedException("Operator transport does not expose Production CG text control."));
 
     ValueTask<OperatorGraphicsOverlayDescriptor> SetGraphicsOverlayAsync(
         bool visible,
@@ -646,6 +654,16 @@ public sealed class OperatorControlClient
     {
         ArgumentNullException.ThrowIfNull(asset);
         var result = await _transport.LoadGraphicsOverlayAsync(asset, cancellationToken).ConfigureAwait(false);
+        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+
+    public async ValueTask<OperatorGraphicsOverlayDescriptor> ApplyProductionCgTextAsync(
+        OperatorProductionCgText definition,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(definition);
+        var result = await _transport.ApplyProductionCgTextAsync(definition, cancellationToken).ConfigureAwait(false);
         await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
