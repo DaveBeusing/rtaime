@@ -6,7 +6,7 @@
 
 # Recording Foundation
 
-Status: implementation foundation, extended by reference payload closure.
+Status: implementation foundation with deterministic reference evidence and Windows Media Foundation MP4 delivery.
 
 ## Change classification
 
@@ -115,7 +115,7 @@ IProgramRecordingPayloadWriter : IProgramRecordingWriter
 
 This capability does not change `RecordingProgramSample`, Media contracts, Runtime contracts or IPC contracts. The RuntimeHost composition root may provide already-materialized Program/AFV reference bytes to a capable writer while the normal recorder queue continues to carry descriptor-level samples.
 
-A future qualified encoder/device implementation can resolve opaque media handles behind the writer boundary without changing Runtime, Control or the recording lifecycle.
+Qualified delivery writers remain behind the same writer boundary. `WindowsMediaFoundationMp4RecordingWriter` consumes the already-materialized Program payload supplied by RuntimeHost without changing Runtime, Control or the recording lifecycle.
 
 ## Local architectural-proof artifacts
 
@@ -142,6 +142,27 @@ Both protected local artifact paths use the same lifecycle concept:
 `ReferenceRecordingPayloadReader` validates the file magic/version, sample structure, payload lengths, footer counts, trailing-data absence and SHA-256 integrity.
 
 The V1 Functional Gap Closure reference container is intentionally uncompressed and CI-verifiable. It is **not** a qualified professional codec/container. Professional storage throughput, DMA/device-surface resolution, codec interoperability, hardware encoding and long-duration media integrity remain `UNVERIFIED` until measured on the declared production environment.
+
+## Professional MP4 delivery path
+
+The default Windows RuntimeHost recording writer is `WindowsMediaFoundationMp4RecordingWriter`. The deterministic `.rtaime-recording` writer remains available as a separate test/evidence lane and is not replaced.
+
+The qualified software delivery contract is exposed through `ProfessionalRecordingFormats.Mp4H264Aac` and defines:
+
+- container: ISO Base Media File Format (MP4);
+- file extension: `.mp4`;
+- video codec: H.264/AVC at 20 Mbit/s;
+- audio codec: AAC-LC at 192 kbit/s;
+- accepted Program video: 1920x1080 progressive RGBA8 at 50 fps or 60000/1001 fps;
+- accepted Program audio: stereo 48 kHz Float32;
+- encoder input conversion: RGBA8 to NV12 and Float32 to signed 16-bit PCM on the asynchronous recording worker;
+- Media Foundation clock: exact Program timestamps converted to 100 ns units with a shared A/V origin;
+- finalization: `<name>.partial.mp4` is finalized first and promoted to `<name>.mp4` only after Media Foundation finalization succeeds;
+- collision protection: an exclusive `<name>.mp4.lock` reservation prevents two sessions from publishing the same target.
+
+The writer rejects unsupported formats, missing Program audio, non-monotonic timestamps and incompatible target extensions. Abort/failure cleanup removes partial and reservation artifacts without altering committed Program execution.
+
+No third-party codec package is introduced. H.264 and AAC-LC encoding use the Windows Media Foundation components shipped with the supported Windows platform. Availability therefore fails closed outside Windows. Hardware-encoder selection, professional storage-throughput guarantees and long-duration physical-platform qualification remain separate evidence obligations and must not be inferred from the software codec/container qualification.
 
 ## Storage exhaustion and recovery
 
@@ -200,7 +221,7 @@ V1 Functional Gap Closure adds verification for:
 - finalize failure;
 - later-session recovery.
 
-Hardware/codec/storage qualification must remain `UNVERIFIED` unless executed on the declared production environment.
+Physical hardware-encoder, sustained storage-throughput and long-duration platform qualification remain `UNVERIFIED` unless executed on the declared production environment. The software MP4/H.264/AAC path is qualified separately by Windows integration tests and independent Media Foundation decode evidence.
 
 
 ## Operator recording workflow
@@ -215,7 +236,7 @@ Operator
   -> ControlHost
   -> RuntimeHost
   -> ProgramRecorder
-  -> ReferenceRecordingPayloadWriter
+  -> WindowsMediaFoundationMp4RecordingWriter
 ```
 
 The Operator exposes explicit **START REC** and **STOP REC** actions plus confirmed recording state, elapsed time, destination directory, file name, final output path, sample statistics and failure detail. Recording commands do not advance the authoritative Production revision.
@@ -224,9 +245,9 @@ RuntimeHost remains the recording execution owner. The normal Program boundary s
 
 ### Destination and naming
 
-The reference writer implements the optional `IConfigurableProgramRecordingWriter` capability. Before a recording starts, RuntimeHost may configure an explicit directory and file name. File names are restricted to a single valid file-name component and receive the `.rtaime-recording` extension when omitted. Existing output-id naming remains the fallback for callers that do not configure a target.
+Recording writers implement the optional `IConfigurableProgramRecordingWriter` capability. The writer owns target normalization and returns the authoritative file name to RuntimeHost. The production MP4 writer accepts only a single safe file-name component and appends `.mp4` when no extension is supplied; the deterministic reference writer independently retains `.rtaime-recording`. Existing output-id naming remains the fallback for callers that do not configure a target.
 
-The default RuntimeHost process composes `ReferenceRecordingPayloadWriter` under the current user's local application-data `rtaime/recordings` directory. Operator-selected destinations override that default per recording.
+The default RuntimeHost process composes `WindowsMediaFoundationMp4RecordingWriter` under the current user's local application-data `rtaime/recordings` directory. Operator-selected destinations override that default per recording. Tests and deterministic evidence workflows may explicitly inject `ReferenceRecordingPayloadWriter`.
 
 Final publication retains create-new semantics. An existing target is rejected rather than overwritten, and the `.partial` artifact is promoted only after the asynchronous queue drains and footer/hash finalization succeeds.
 
@@ -241,4 +262,4 @@ The Recording Operator Workflow result is externally readable through `Reference
 - repeated recordings with distinct names in one RuntimeHost lifecycle;
 - controlled storage failure propagated back to the Operator while Runtime Program remains committed.
 
-The V1 reference artifact remains an uncompressed architectural-proof container, not MP4/MOV/MXF and not a qualified professional codec. The current Media Deck accepts MP4 input, so Recording Operator Workflow does **not** claim direct Media Deck playback of `.rtaime-recording` files. External validation is provided by the deterministic reader. Professional encoded recording, ISO input recording, replay, segment recording and cloud upload remain outside Recording Operator Workflow.
+The `.rtaime-recording` artifact remains an uncompressed architectural-proof container and is still validated by the deterministic reader. The production Windows recording path now publishes MP4/H.264/AAC and is independently reopened through the existing Media Foundation local-media decoder in integration qualification. MOV/MXF delivery, ISO input recording, replay, segment recording, cloud upload, hardware-encoder guarantees and physical storage-throughput guarantees remain outside this capability.
