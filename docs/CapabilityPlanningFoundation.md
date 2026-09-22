@@ -58,9 +58,9 @@ Preview Source  → Preview Route  → Preview Sink
 Program Source  → Program Route  → Program Sink
 ```
 
-All declared sources remain represented as source endpoints, while only the authoritative Preview and Program selections are connected to the two active route nodes.
+All declared sources remain represented as source endpoints. Authoritative Preview and Program selections remain connected to their route nodes, and a configured enabled Aux role adds its own deterministic route/sink pair without turning local monitoring presentation into an output role.
 
-Route nodes carry both a media source identity and media sink identity. This is deliberate: the existing V1 Contract Foundation `PreparedExecutionBinding` can therefore express an executable route without extending or changing the Runtime contract in Capability Planning Foundation.
+Route nodes carry both a media source identity and media sink identity. Governed Program/Aux requirements also carry a stable output-role identifier into `ExecutionPlanBinding` and `PreparedExecutionBinding`, allowing Runtime/provider evidence to correlate execution with Control configuration while Preview remains routing/monitoring semantics.
 
 Graph validation is fail-closed for:
 
@@ -91,7 +91,7 @@ This means the same authoritative state and equivalent provider snapshot produce
 
 ## Capability requirement
 
-The current V1 route requirement kind is:
+The current V1 route requirement kind for Preview, Program and Aux is:
 
 ```text
 media.route
@@ -115,7 +115,7 @@ One planning snapshot must have unique:
 
 Conflicting identities fail planning closed.
 
-Only providers whose availability is explicitly `Available` participate in selection. `Degraded` and `Unavailable` providers are not silently promoted to usable resources by the planner.
+Only providers whose availability is explicitly `Available` participate in selection. `Degraded` and `Unavailable` providers are not silently promoted to usable resources by the planner. Governed output roles currently accept only the `auto` provider selector; unsupported selector/format/timing policy values fail Control validation rather than being silently ignored by deterministic admission.
 
 ## Deterministic capability selection
 
