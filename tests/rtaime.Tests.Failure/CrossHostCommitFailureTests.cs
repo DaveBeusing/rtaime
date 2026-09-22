@@ -93,4 +93,73 @@ public sealed class CrossHostCommitFailureTests
             journal.Entries,
             entry => entry.Event.Code == "control.authoritative.committed" && entry.Event.AuthoritativeRevision == new Revision(1));
     }
+
+
+    [Fact]
+    public async Task Scene_prepare_rejection_preserves_confirmed_program_and_scene_evidence()
+    {
+        var productionId = ProductionId.New();
+        var sourceA = ProductionSourceId.New();
+        var sourceB = ProductionSourceId.New();
+        var scene = new ProductionSceneSpecification(
+            SceneId.New(),
+            "Input 2 full frame",
+            new ProductionRoutingState(sourceB, sourceB));
+        var specification = new ProductionSpecification(
+            ControlContractVersion.Current,
+            productionId,
+            "Scene prepare failure proof",
+            new[]
+            {
+                new ProductionSourceSpecification(sourceA, "Input 1"),
+                new ProductionSourceSpecification(sourceB, "Input 2")
+            },
+            new ProductionRoutingState(sourceA, sourceA),
+            new[] { scene });
+        var virtualMedia = new VirtualMediaReferenceProvider(
+            new MediaSourceId(sourceA.Value),
+            new MediaSourceId(sourceB.Value),
+            VideoFormat.Hd1080p50Rgba8);
+
+        await using var journal = new BoundedProductionJournal(64);
+        var control = new ControlHostService(specification, new[] { virtualMedia.Descriptor }, journal);
+        var initial = control.Initialize();
+        var initialExecution = Assert.IsType<ControlHostExecutionPackage>(initial.Execution);
+        Assert.True(control.ConfirmRuntimeCommit(
+            initialExecution.PreparedExecution.PreparedExecutionId,
+            new RuntimeCommitResult(
+                RuntimeContractVersion.Current,
+                RuntimeCommitStatus.Committed,
+                ExecutionInstanceId.New(),
+                new Revision(1),
+                null)).Committed);
+
+        var before = control.State;
+        var staged = control.ActivateScene(new ActivateSceneCommand(
+            new ControlCommandMetadata(
+                ControlContractVersion.Current,
+                CommandId.New(),
+                productionId,
+                before.Revision),
+            scene.SceneId));
+
+        Assert.True(staged.Accepted);
+        Assert.Equal(scene.SceneId, staged.State.ActiveSceneId);
+        Assert.Equal(sourceB, staged.State.Routing.ProgramSourceId);
+        Assert.Equal(before, control.State);
+
+        var prepareFailure = new Failure(
+            "runtime.prepare.injected_rejection",
+            "Injected Runtime prepare rejection.");
+        var rejected = control.RejectRuntimeCommit(
+            staged.Execution!.PreparedExecution.PreparedExecutionId,
+            prepareFailure);
+
+        Assert.False(rejected.Committed);
+        Assert.Equal(prepareFailure, rejected.Failure);
+        Assert.Equal(before, control.State);
+        Assert.Null(control.State.ActiveSceneId);
+        Assert.Equal(sourceA, control.State.Routing.ProgramSourceId);
+        Assert.False(control.HasPendingExecution);
+    }
 }
