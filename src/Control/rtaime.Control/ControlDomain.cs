@@ -213,6 +213,7 @@ public static class ControlDomainEngine
         }
 
         ValidateRouting(specification, current.Routing, "authoritative.routing", issues);
+        ValidateActiveSceneEvidence(specification, current, issues);
 
         if (command.Metadata.Version != specification.Version)
         {
@@ -315,6 +316,7 @@ public static class ControlDomainEngine
         }
 
         ValidateRouting(specification, current.Routing, "authoritative.routing", issues);
+        ValidateActiveSceneEvidence(specification, current, issues);
 
         if (metadata.Version != specification.Version)
         {
@@ -384,6 +386,33 @@ public static class ControlDomainEngine
             desired.Routing);
 
         return ControlCommandResult.Accepted(current, desired, authoritative);
+    }
+
+    private static void ValidateActiveSceneEvidence(
+        ProductionSpecification specification,
+        AuthoritativeProductionState current,
+        ICollection<ValidationIssue> issues)
+    {
+        if (current.ActiveSceneId is not { } activeSceneId)
+            return;
+
+        var activeScene = specification.Scenes.FirstOrDefault(scene => scene.SceneId == activeSceneId);
+        if (activeScene is null)
+        {
+            issues.Add(new ValidationIssue(
+                "control.state.active_scene_unknown",
+                "Authoritative active Scene is not declared by the production specification.",
+                "authoritative.activeSceneId"));
+            return;
+        }
+
+        if (activeScene.Routing != current.Routing)
+        {
+            issues.Add(new ValidationIssue(
+                "control.state.active_scene_routing_mismatch",
+                "Authoritative active Scene evidence does not match authoritative production routing.",
+                "authoritative.activeSceneId"));
+        }
     }
 
     private static void ValidateRouting(
