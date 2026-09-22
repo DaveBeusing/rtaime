@@ -45,7 +45,8 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 		nameof(OperatorViewModel.RuntimeStatus),
 		nameof(OperatorViewModel.GlobalReadinessState),
 		nameof(OperatorViewModel.PerformanceVerificationState),
-		nameof(OperatorViewModel.PerformanceVerificationDetail)
+		nameof(OperatorViewModel.PerformanceVerificationDetail),
+		nameof(OperatorViewModel.OutputRoles)
 	};
 
 	private readonly OperatorViewModel _control;
@@ -211,18 +212,50 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 			recordingStatus: Unavailable,
 			streamingStatus: Unavailable);
 
-		_aux.Update(
-			target: Unavailable,
-			assignedSource: Unavailable,
-			resolution: Unavailable,
-			frameRate: Unavailable,
-			pixelFormat: Unavailable,
-			colorSpace: Unavailable,
-			status: "WARNING",
-			evidenceState: "UNVERIFIED",
-			detail: "No governed Aux output role is exposed by the current V1 contract.",
-			recordingStatus: Unavailable,
-			streamingStatus: Unavailable);
+		var aux = _control.OutputRoles.FirstOrDefault(role =>
+			string.Equals(role.RoleId, "aux", StringComparison.Ordinal));
+		if (aux is null)
+		{
+			_aux.Update(
+				target: Unavailable,
+				assignedSource: Unavailable,
+				resolution: Unavailable,
+				frameRate: Unavailable,
+				pixelFormat: Unavailable,
+				colorSpace: Unavailable,
+				status: "WARNING",
+				evidenceState: "UNVERIFIED",
+				detail: "Aux output role is not configured by authoritative Control state.",
+				recordingStatus: Unavailable,
+				streamingStatus: Unavailable);
+		}
+		else
+		{
+			var source = _control.Sources.FirstOrDefault(candidate =>
+				string.Equals(candidate.Id, aux.SourceId, StringComparison.Ordinal));
+			var evidence = NormalizeEvidence(aux.HealthState);
+			var resolution = aux.Width is { } width && aux.Height is { } height
+				? $"{width}×{height}"
+				: Unavailable;
+			var target = aux.AuthoritativeActive
+				? $"{aux.ProviderId} · {aux.TargetId}"
+				: $"{aux.TargetId} · {aux.ProviderId}";
+			var detail = aux.Error is null
+				? aux.Evidence
+				: $"{aux.Evidence} {aux.Error.Value.Code}: {aux.Error.Value.Message}";
+			_aux.Update(
+				target: target,
+				assignedSource: FormatSource(source?.Name ?? aux.SourceId, aux.SourceId),
+				resolution: resolution,
+				frameRate: NormalizeAvailability(aux.FrameRate),
+				pixelFormat: NormalizeAvailability(aux.PixelFormat),
+				colorSpace: Unavailable,
+				status: ToOperatorStatus(evidence),
+				evidenceState: evidence,
+				detail: detail,
+				recordingStatus: Unavailable,
+				streamingStatus: Unavailable);
+		}
 
 		var cleanEvidence = NormalizeOutputEvidence(_programOutput.Health);
 		var selectedDisplay = _programOutput.SelectedDisplay;

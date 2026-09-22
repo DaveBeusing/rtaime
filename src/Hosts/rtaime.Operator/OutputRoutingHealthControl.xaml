@@ -148,7 +148,7 @@
 					<DockPanel Margin="0,0,0,8">
 						<StackPanel>
 							<TextBlock Text="OUTPUT ROUTING" Style="{StaticResource OperatorSectionTitle}" />
-							<TextBlock Text="Authoritative Program state and local monitoring outputs" Style="{StaticResource OperatorLabel}" Margin="0,2,0,0" />
+							<TextBlock Text="Governed Program/Aux output state and local monitoring evidence" Style="{StaticResource OperatorLabel}" Margin="0,2,0,0" />
 						</StackPanel>
 						<controls:RtaimeStatusBadge
 							Status="{x:Static controls:RtaimeStatusKind.Neutral}"

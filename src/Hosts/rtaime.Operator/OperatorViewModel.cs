@@ -127,6 +127,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	private uint _transitionFrames = 12;
 	private string _previewViewerState = "DISCONNECTED";
 	private string _programViewerState = "DISCONNECTED";
+	private IReadOnlyList<OperatorOutputRoleDescriptor> _outputRoles = Array.Empty<OperatorOutputRoleDescriptor>();
 	private string? _lastError;
 	private bool _isBusy;
 	private bool _isConnected;
@@ -424,6 +425,15 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	public string PerformanceVerificationDetail => _runtimeReadiness.Current.Performance.Detail;
 	public string PreviewViewerState { get => _previewViewerState; private set => Set(ref _previewViewerState, value); }
 	public string ProgramViewerState { get => _programViewerState; private set => Set(ref _programViewerState, value); }
+	public IReadOnlyList<OperatorOutputRoleDescriptor> OutputRoles
+	{
+		get => _outputRoles;
+		private set
+		{
+			_outputRoles = value ?? Array.Empty<OperatorOutputRoleDescriptor>();
+			PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(OutputRoles)));
+		}
+	}
 
 	public uint TransitionFrames
 	{
@@ -528,6 +538,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 						ApplyAudio(snapshot, preserveSelectedGainEdit: true);
 						ApplyRecording(snapshot.Recording, preserveTargetEdit: true);
 						ApplyHealth(snapshot.Health);
+						ApplyOutputRoles(snapshot.OutputRoles);
 						ApplyAI(snapshot.AIShowcase);
 						ApplyEmbeddedMediaDeckSnapshot(snapshot.MediaDeck);
 						ApplyLifecycle(snapshot);
@@ -1099,6 +1110,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		ApplyAI(snapshot.AIShowcase);
 		ApplyRecording(snapshot.Recording, preserveTargetEdit: false);
 		ApplyHealth(snapshot.Health);
+		ApplyOutputRoles(snapshot.OutputRoles);
 		var graphics = snapshot.GraphicsOverlay;
 		GraphicsAssetName = graphics.AssetLoaded ? graphics.AssetName ?? "Unnamed graphics asset" : "No graphics asset loaded";
 		GraphicsDimensions = graphics.AssetLoaded ? $"{graphics.AssetWidth}×{graphics.AssetHeight}" : "—";
@@ -1199,6 +1211,11 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		if (!string.Equals(AudioMeterStatus, "STALE", StringComparison.Ordinal))
 			AudioMeterStatus = "LIVE";
 		RaiseCommandState();
+	}
+
+	private void ApplyOutputRoles(IReadOnlyList<OperatorOutputRoleDescriptor> outputRoles)
+	{
+		OutputRoles = Array.AsReadOnly((outputRoles ?? Array.Empty<OperatorOutputRoleDescriptor>()).ToArray());
 	}
 
 	private void ApplyRecording(OperatorRecordingDescriptor recording, bool preserveTargetEdit)
