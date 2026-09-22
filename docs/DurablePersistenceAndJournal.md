@@ -46,6 +46,8 @@ Checkpoint records use:
 - opaque payload bytes,
 - SHA-256 payload checksum.
 
+The current authoritative checkpoint payload includes confirmed Preview/Program routing and the optional `ActiveSceneId`. Scene definitions remain part of the production specification rather than duplicated into every checkpoint. An older payload without `ActiveSceneId` is interpreted as having no confirmed active Scene.
+
 Only one checkpoint payload is accepted for a given production/revision pair. Replaying the same payload is idempotent; a different payload for the same revision fails closed.
 
 ## Production Journal

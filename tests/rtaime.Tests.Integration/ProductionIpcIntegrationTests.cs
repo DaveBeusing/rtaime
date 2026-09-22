@@ -181,7 +181,17 @@ public sealed class ProductionIpcIntegrationTests
 
 		Assert.Equal(sourceA.Id, client.Snapshot!.Production.Routing.ProgramSourceId.ToString());
 		Assert.Equal(sourceA.Id, client.Snapshot.AudioProgram.ActiveVideoSourceId);
-		Assert.True(client.Snapshot.Production.Revision.Value >= 4);
+
+		Assert.Equal(2, client.Snapshot.Scenes.Count);
+		var sceneB = Assert.Single(client.Snapshot.Scenes, scene => scene.ProgramSourceId == sourceB.Id);
+		var sceneTake = await client.ActivateSceneAsync(sceneB.Id);
+		Assert.True(sceneTake.Accepted, sceneTake.Failure?.ToString());
+		Assert.Equal(sceneB.Id, client.Snapshot!.Production.ActiveSceneId?.ToString());
+		Assert.Equal(sourceB.Id, client.Snapshot.Production.Routing.PreviewSourceId.ToString());
+		Assert.Equal(sourceB.Id, client.Snapshot.Production.Routing.ProgramSourceId.ToString());
+		await WaitUntilAsync(() => runtime.Runtime!.Snapshot.AudioProgram.ActiveVideoSourceId.ToString() == sourceB.Id);
+
+		Assert.True(client.Snapshot.Production.Revision.Value >= 5);
 		Assert.True(transport.Connected);
 		Assert.True(transport.StateVersion > 1);
 		Assert.Equal(RuntimeExecutionStatus.Committed, runtime.Runtime!.Snapshot.Runtime.Status);

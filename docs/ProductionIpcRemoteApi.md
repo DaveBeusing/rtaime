@@ -70,6 +70,7 @@ Operator-facing messages:
 - `control.ping`
 - `control.snapshot.get`
 - `control.preview.select`
+- `control.scene.activate`
 - `control.program.cut`
 - `control.program.dissolve`
 - `control.audio.input.set`
@@ -99,6 +100,8 @@ validate command
 ```
 
 Transport failure or Runtime rejection never promotes staged state to authoritative state.
+
+`control.scene.activate` uses this same mutation pipeline. Its bounded command carries the Scene identity plus the normal Control command metadata and optimistic expected Production Revision. ControlHost resolves the Scene from the production specification, validates all declared routing dependencies, stages the complete Scene routing state, and promotes `ActiveSceneId` only after Runtime commit confirmation. The full Operator snapshot carries the Scene catalog and optional confirmed `ActiveSceneId`; local Scene selection is not transmitted as a mutation.
 
 ### RuntimeHost
 

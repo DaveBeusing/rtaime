@@ -81,6 +81,138 @@ public sealed class ControlDomainTests
     }
 
     [Fact]
+    public void Activate_scene_atomically_replaces_declared_routing_and_sets_scene_evidence()
+    {
+        var fixture = CreateFixture();
+        var initial = InitializedState(fixture.Specification);
+        var scene = Assert.Single(fixture.Specification.Scenes, candidate =>
+            candidate.Routing.ProgramSourceId == fixture.SourceA.SourceId);
+        var command = new ActivateSceneCommand(
+            Metadata(fixture.Specification, initial.Authoritative.Revision),
+            scene.SceneId);
+
+        var result = ControlDomainEngine.Apply(fixture.Specification, initial.Authoritative, command);
+
+        Assert.True(result.Committed);
+        var desired = Assert.IsType<DesiredProductionState>(result.DesiredState);
+        Assert.Equal(scene.Routing, desired.Routing);
+        Assert.Equal(scene.SceneId, desired.ActiveSceneId);
+        Assert.Equal(scene.Routing, result.AuthoritativeState.Routing);
+        Assert.Equal(scene.SceneId, result.AuthoritativeState.ActiveSceneId);
+        Assert.Equal(initial.Authoritative.Revision.Next(), result.AuthoritativeState.Revision);
+    }
+
+    [Fact]
+    public void Unknown_scene_is_rejected_without_partial_authoritative_mutation()
+    {
+        var fixture = CreateFixture();
+        var initial = InitializedState(fixture.Specification);
+        var command = new ActivateSceneCommand(
+            Metadata(fixture.Specification, initial.Authoritative.Revision),
+            SceneId.New());
+
+        var result = ControlDomainEngine.Apply(fixture.Specification, initial.Authoritative, command);
+
+        Assert.False(result.Committed);
+        Assert.Null(result.DesiredState);
+        Assert.Same(initial.Authoritative, result.AuthoritativeState);
+        Assert.Contains(result.Validation.Issues, issue => issue.Code == "control.command.scene_unknown");
+    }
+
+    [Fact]
+    public void Scene_with_missing_source_dependency_fails_specification_validation()
+    {
+        var source = new ProductionSourceSpecification(ProductionSourceId.New(), "Camera A");
+        var scene = new ProductionSceneSpecification(
+            SceneId.New(),
+            "Unavailable dependency",
+            new ProductionRoutingState(source.SourceId, ProductionSourceId.New()));
+        var specification = new ProductionSpecification(
+            ControlContractVersion.Current,
+            ProductionId.New(),
+            "Scene dependency validation",
+            new[] { source },
+            new ProductionRoutingState(source.SourceId, source.SourceId),
+            new[] { scene });
+
+        var result = ControlDomainEngine.Initialize(specification);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Validation.Issues, issue =>
+            issue.Code == "control.specification.scene_program_source_unknown");
+    }
+
+    [Fact]
+    public void Direct_routing_mutation_clears_active_scene_evidence()
+    {
+        var fixture = CreateFixture();
+        var initial = InitializedState(fixture.Specification);
+        var scene = fixture.Specification.Scenes[0];
+        var activated = ControlDomainEngine.Apply(
+            fixture.Specification,
+            initial.Authoritative,
+            new ActivateSceneCommand(
+                Metadata(fixture.Specification, initial.Authoritative.Revision),
+                scene.SceneId));
+        Assert.True(activated.Committed);
+
+        var routed = ControlDomainEngine.Apply(
+            fixture.Specification,
+            activated.AuthoritativeState,
+            new SelectPreviewCommand(
+                Metadata(fixture.Specification, activated.AuthoritativeState.Revision),
+                fixture.SourceB.SourceId));
+
+        Assert.True(routed.Committed);
+        Assert.Null(routed.AuthoritativeState.ActiveSceneId);
+    }
+
+    [Fact]
+    public void Contradictory_active_scene_evidence_is_rejected_before_next_mutation()
+    {
+        var fixture = CreateFixture();
+        var initial = InitializedState(fixture.Specification);
+        var scene = fixture.Specification.Scenes[0];
+        var contradictory = new AuthoritativeProductionState(
+            fixture.Specification.Version,
+            fixture.Specification.ProductionId,
+            initial.Authoritative.Revision,
+            new ProductionRoutingState(fixture.SourceB.SourceId, fixture.SourceB.SourceId),
+            scene.SceneId);
+        Assert.NotEqual(scene.Routing, contradictory.Routing);
+
+        var command = new SelectPreviewCommand(
+            Metadata(fixture.Specification, contradictory.Revision),
+            fixture.SourceA.SourceId);
+
+        var result = ControlDomainEngine.Apply(fixture.Specification, contradictory, command);
+
+        Assert.False(result.Committed);
+        Assert.Null(result.DesiredState);
+        Assert.Same(contradictory, result.AuthoritativeState);
+        Assert.Contains(result.Validation.Issues, issue =>
+            issue.Code == "control.state.active_scene_routing_mismatch");
+    }
+
+    [Fact]
+    public void Scene_activation_with_competing_revision_is_rejected()
+    {
+        var fixture = CreateFixture();
+        var initial = InitializedState(fixture.Specification);
+        var scene = fixture.Specification.Scenes[0];
+        var command = new ActivateSceneCommand(
+            Metadata(fixture.Specification, initial.Authoritative.Revision.Next()),
+            scene.SceneId);
+
+        var result = ControlDomainEngine.Apply(fixture.Specification, initial.Authoritative, command);
+
+        Assert.False(result.Committed);
+        Assert.Same(initial.Authoritative, result.AuthoritativeState);
+        Assert.Null(result.DesiredState);
+        Assert.Contains(result.Validation.Issues, issue => issue.Code == "control.command.revision_conflict");
+    }
+
+    [Fact]
     public void Stale_revision_is_rejected_without_authoritative_mutation()
     {
         var fixture = CreateFixture();

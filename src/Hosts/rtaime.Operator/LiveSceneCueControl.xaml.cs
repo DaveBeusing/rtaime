@@ -21,7 +21,7 @@ public partial class LiveSceneCueControl : UserControl
 
 	private void LiveSceneSourceView_Filter(object sender, FilterEventArgs e)
 	{
-		if (e.Item is not OperatorSourceTileViewModel source)
+		if (e.Item is not OperatorSceneViewModel scene)
 		{
 			e.Accepted = false;
 			return;
@@ -35,17 +35,17 @@ public partial class LiveSceneCueControl : UserControl
 		}
 
 		e.Accepted =
-			source.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-			source.Type.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-			source.Format.Contains(query, StringComparison.OrdinalIgnoreCase);
+			scene.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+			scene.Type.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+			scene.ProgramSource.Name.Contains(query, StringComparison.OrdinalIgnoreCase);
 	}
 
 	private void SceneOverflow_Click(object sender, RoutedEventArgs e)
 	{
-		if (sender is FrameworkElement { DataContext: OperatorSourceTileViewModel source } &&
+		if (sender is FrameworkElement { DataContext: OperatorSceneViewModel scene } &&
 			DataContext is OperatorViewModel viewModel)
 		{
-			viewModel.SelectedSource = source;
+			viewModel.SelectedScene = scene;
 		}
 	}
 }

@@ -39,6 +39,7 @@ public sealed class ControlHostRecoveryIntegrationTests
 		{
 			Revision committedRevision;
 			ProductionRoutingState committedRouting;
+			string committedSceneId;
 			string runtimeHostInstanceId;
 			using (var firstControlStop = new CancellationTokenSource())
 			{
@@ -48,10 +49,12 @@ public sealed class ControlHostRecoveryIntegrationTests
 
 				var client = new OperatorControlClient(new NamedPipeOperatorControlTransport(controlEndpoint, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(3)));
 				var initial = await client.SynchronizeAsync();
-				var mutation = await client.SelectPreviewAsync(initial.Sources[1].Id);
+				var scene = initial.Scenes[1];
+				var mutation = await client.ActivateSceneAsync(scene.Id);
 				Assert.True(mutation.Accepted, mutation.Failure?.ToString());
 				committedRevision = firstControl.Control!.State.Revision;
 				committedRouting = firstControl.Control.State.Routing;
+				committedSceneId = Assert.IsType<SceneId>(firstControl.Control.State.ActiveSceneId).ToString();
 				runtimeHostInstanceId = firstControl.RuntimeTransport!.HostInstanceId!;
 				Assert.True(committedRevision.Value > Revision.Initial.Value);
 				var checkpointWriter = Assert.IsType<BoundedProductionCheckpointWriter>(firstControl.CheckpointWriter);
@@ -71,6 +74,7 @@ public sealed class ControlHostRecoveryIntegrationTests
 
 			Assert.Equal(committedRevision, secondControl.Control!.State.Revision);
 			Assert.Equal(committedRouting, secondControl.Control.State.Routing);
+			Assert.Equal(committedSceneId, secondControl.Control.State.ActiveSceneId?.ToString());
 			Assert.Equal(runtimeHostInstanceId, secondControl.RuntimeTransport!.HostInstanceId);
 			Assert.Contains("aligned", secondControl.Recovery.Detail, StringComparison.OrdinalIgnoreCase);
 
@@ -78,6 +82,7 @@ public sealed class ControlHostRecoveryIntegrationTests
 			var recoveredSnapshot = await reconnectedClient.SynchronizeAsync();
 			Assert.Equal(committedRevision, recoveredSnapshot.Production.Revision);
 			Assert.Equal(committedRouting, recoveredSnapshot.Production.Routing);
+			Assert.Equal(committedSceneId, recoveredSnapshot.Production.ActiveSceneId?.ToString());
 
 			secondControlStop.Cancel();
 			Assert.Equal(ControlHostExitCode.Success, await secondControlRun);
