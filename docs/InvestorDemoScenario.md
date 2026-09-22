@@ -114,7 +114,7 @@ Show Engine, Control, Runtime, Media and Provider evidence together with frame t
 
 Stop Recording and Program Output if active, confirm the finalized recording path, then close the Operator. When the showcase launcher owns the service lifecycle, closing the Operator triggers graceful managed host shutdown with no service-stop command from the presenter.
 
-The V1 recording remains the deterministic `.rtaime-recording` reference artifact; the showcase does not claim MP4/MOV/MXF delivery.
+On the supported Windows path, the default V1 recording finalizes as `.mp4` with H.264/AVC video and AAC-LC audio. The deterministic `.rtaime-recording` artifact remains a test/evidence backend. The showcase does not claim MOV/MXF delivery, hardware-encoder guarantees or unmeasured sustained-storage performance.
 
 **Continuous-run acceptance:** all 18 steps complete without developer configuration changes, terminal commands, JSON editing, manually started services, manual process restarts or unresolved error states that require presenter explanation.
 
