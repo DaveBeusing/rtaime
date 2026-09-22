@@ -79,19 +79,22 @@ internal static class ControlHostRecovery
 		if (!specification.Sources.Any(source => source.SourceId == program))
 			throw new InvalidDataException("Recovered Program source is not present in the production specification.");
 
+		var recoveredRouting = new ProductionRoutingState(preview, program);
 		SceneId? activeSceneId = null;
 		if (!string.IsNullOrWhiteSpace(snapshot.ActiveSceneId))
 		{
 			activeSceneId = new SceneId(Identity.Parse(snapshot.ActiveSceneId));
-			if (!specification.Scenes.Any(scene => scene.SceneId == activeSceneId.Value))
-				throw new InvalidDataException("Recovered active scene is not present in the production specification.");
+			var activeScene = specification.Scenes.FirstOrDefault(scene => scene.SceneId == activeSceneId.Value)
+				?? throw new InvalidDataException("Recovered active scene is not present in the production specification.");
+			if (activeScene.Routing != recoveredRouting)
+				throw new InvalidDataException("Recovered active scene does not match recovered production routing.");
 		}
 
 		return new AuthoritativeProductionState(
 			version,
 			productionId,
 			revision,
-			new ProductionRoutingState(preview, program),
+			recoveredRouting,
 			activeSceneId);
 	}
 
