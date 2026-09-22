@@ -21,6 +21,7 @@ The professional V1 control surface provides:
 - distinct Preview and Program presentation with source identity;
 - live non-authoritative Preview and Program monitoring surfaces;
 - a source bank with explicit selection;
+- a governed Scene catalog with presentation-only selection and explicit TAKE SCENE activation;
 - Set Preview plus Preview-to-Program CUT and AUTO/DISSOLVE controls;
 - configurable DISSOLVE duration in frames;
 - Runtime, timing and input state;
@@ -134,13 +135,13 @@ At the 1920×1080 reference viewport, EDIT uses a 1070×700 reference compositio
 
 At reference size, the lower row uses the following 320:462:276 proportions:
 
-- **Scene Stack — 320 px**: a compact four-row source projection using existing source thumbnails, stable display indices, remaining time and authoritative PVW/PGM routing state. A Program row receives the cyan selected-row treatment plus a red `ON AIR` badge. Dedicated multi-scene activation remains unavailable because the current V1 contract exposes no governed scene command.
+- **Scene Stack — 320 px**: a compact source-routing projection used by the EDIT workspace. The LIVE workspace additionally exposes the governed Scene catalog. Scene row selection remains local presentation state; TAKE SCENE is the only Scene activation action. Confirmed active-Scene presentation comes only from synchronized `ActiveSceneId` evidence.
 - **Output Routing — 462 px**: four presentation roles using the existing output and monitoring projections: Program, Preview, Aux and Clean Feed. Program and Preview reflect confirmed routing state, Clean Feed reflects the existing local Program monitor, and Aux remains explicitly `UNAVAILABLE / UNVERIFIED` because no governed Aux output role exists.
 - **System Status — 276 px**: compact existing Engine, Control, Runtime, Media and GPU health rows plus thin `RtaimeMetricBar` presentation for Disk, Network and Temperature. Those three metrics remain `UNAVAILABLE` while the authoritative health contract does not publish them; the Operator performs no local probing.
 
 Preview retains the existing media transport, cue and IN/OUT command paths. Program intentionally acquires no Preview transport authority. The visible monitor controls use rtaime icon/toggle controls only.
 
-The compact Scene Stack action row reuses the existing `SetPreviewCommand`, `CutCommand` and `DissolveCommand`. CUT and AUTO still operate only on confirmed Preview through the established Client/ControlHost path.
+The compact EDIT Scene Stack continues to reuse the existing `SetPreviewCommand`, `CutCommand` and `DissolveCommand`. CUT and AUTO still operate only on confirmed Preview through the established Client/ControlHost path. LIVE Scene activation uses the separate `ActivateSceneCommand`, so Scene selection cannot implicitly invoke any production mutation.
 
 Program `ON AIR` is visible only when the existing Program monitor state is observed as `LIVE`. It describes the confirmed Program bus and does not claim that an external transmission path is on air.
 
