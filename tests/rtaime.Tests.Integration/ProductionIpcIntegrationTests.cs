@@ -7,6 +7,7 @@ using System.Text.Json;
 using rtaime.AI.Contracts;
 using rtaime.AIHost;
 using rtaime.Client;
+using rtaime.Control.Contracts;
 using rtaime.ControlHost;
 using rtaime.Core;
 using rtaime.Media.Contracts;
@@ -85,7 +86,7 @@ public sealed class ProductionIpcIntegrationTests
 		Assert.True(initialAux.AuthoritativeActive);
 		Assert.Equal("PASS", initialAux.HealthState);
 		Assert.Contains("provider confirmed frame sequence", initialAux.Evidence, StringComparison.OrdinalIgnoreCase);
-		Assert.NotEmpty(runtime.Runtime.AuxFrames);
+		Assert.NotEmpty(runtime.Runtime!.AuxFrames);
 
 		var auxRoute = await client.RouteOutputRoleAsync("aux", sourceA.Id);
 		Assert.True(auxRoute.Accepted, auxRoute.Failure?.ToString());
@@ -101,7 +102,7 @@ public sealed class ProductionIpcIntegrationTests
 		var routedAux = Assert.Single(routedOutputEvidence.OutputRoles, role => role.RoleId == "aux");
 		Assert.Equal(sourceA.Id, routedAux.SourceId);
 		Assert.Equal("PASS", routedAux.HealthState);
-		Assert.Equal(sourceA.Id, runtime.Runtime.AuxFrames[^1].Frame.SourceId.ToString());
+		Assert.Equal(sourceA.Id, runtime.Runtime!.AuxFrames[^1].Frame.SourceId.ToString());
 
 		Assert.All(initial.Sources, source =>
 		{
