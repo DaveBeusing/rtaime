@@ -1024,7 +1024,7 @@ Assert-Condition ($outputHealthViewModel -notmatch 'RuntimeHost|ControlHost') "O
 foreach ($metric in @("CPU", "GPU", "MEMORY", "VRAM", "RENDER TIME", "DROPPED FRAMES", "OUTPUT FPS", "DISK", "NETWORK", "TEMPERATURE")) {
 	Assert-Condition ($outputHealthViewModel -match [Regex]::Escape($metric)) "Output health metric '$metric' is required."
 }
-Assert-Condition ($outputHealthDocumentation -match 'existing .*CutCommand|existing `OperatorViewModel\.CutCommand`' -and $outputHealthDocumentation -match 'UNAVAILABLE' -and $outputHealthDocumentation -match 'maximum of 48 samples') "Output health documentation must describe authoritative routing, unavailable telemetry and bounded history."
+Assert-Condition ($outputHealthDocumentation -match 'CUT/DISSOLVE' -and $outputHealthDocumentation -match 'RouteOutputRoleCommand' -and $outputHealthDocumentation -match 'UNAVAILABLE' -and $outputHealthDocumentation -match 'maximum of 48 samples') "Output health documentation must describe governed Program/Aux routing, unavailable telemetry and bounded history."
 
 # Compositing node graph and mockup workspace.
 Assert-Condition ($shell -match 'CompositingGraphVisibility' -and $shell -match 'StandardViewerVisibility => IsLiveWorkspace \|\| IsCompositingWorkspace \|\| IsEditWorkspace \|\| IsHealthWorkspace' -and $shell -match 'NonLiveCenterVisibility => IsLiveWorkspace \|\| IsCompositingWorkspace \|\| IsHealthWorkspace') "COMPOSITING, EDIT and HEALTH must use dedicated center surfaces instead of duplicating the standard monitor stack."
