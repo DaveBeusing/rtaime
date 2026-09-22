@@ -45,6 +45,31 @@ public sealed record OperatorSourceDescriptor
     public string? MediaFileName { get; }
 }
 
+public sealed record OperatorSceneDescriptor
+{
+    public OperatorSceneDescriptor(
+        string id,
+        string name,
+        string previewSourceId,
+        string programSourceId)
+    {
+        if (string.IsNullOrWhiteSpace(id)) throw new ArgumentException("Scene id is required.", nameof(id));
+        if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Scene name is required.", nameof(name));
+        if (string.IsNullOrWhiteSpace(previewSourceId)) throw new ArgumentException("Scene Preview source id is required.", nameof(previewSourceId));
+        if (string.IsNullOrWhiteSpace(programSourceId)) throw new ArgumentException("Scene Program source id is required.", nameof(programSourceId));
+
+        Id = id.Trim();
+        Name = name.Trim();
+        PreviewSourceId = previewSourceId.Trim();
+        ProgramSourceId = programSourceId.Trim();
+    }
+
+    public string Id { get; }
+    public string Name { get; }
+    public string PreviewSourceId { get; }
+    public string ProgramSourceId { get; }
+}
+
 public sealed record OperatorGraphicsAsset
 {
     public OperatorGraphicsAsset(string name, uint width, uint height, byte[] rgbaPixels)
@@ -342,6 +367,7 @@ public sealed record OperatorMutationResponse
 public sealed record OperatorStatusSnapshot
 {
     private readonly ReadOnlyCollection<OperatorSourceDescriptor> _sources;
+    private readonly ReadOnlyCollection<OperatorSceneDescriptor> _scenes;
     private readonly ReadOnlyCollection<OperatorAudioInputDescriptor> _audioInputs;
 
     public OperatorStatusSnapshot(
@@ -361,7 +387,8 @@ public sealed record OperatorStatusSnapshot
         OperatorHealthDescriptor? health = null,
         OperatorAIShowcaseDescriptor? aiShowcase = null,
         MediaDeckSnapshot? mediaDeck = null,
-        OperatorProductionCgTextDescriptor? productionCgText = null)
+        OperatorProductionCgTextDescriptor? productionCgText = null,
+        IReadOnlyList<OperatorSceneDescriptor>? scenes = null)
     {
         Production = production ?? throw new ArgumentNullException(nameof(production));
         ArgumentNullException.ThrowIfNull(sources);
@@ -376,6 +403,7 @@ public sealed record OperatorStatusSnapshot
             throw new ArgumentOutOfRangeException(nameof(audioPeakLevel));
 
         _sources = Array.AsReadOnly(sources.ToArray());
+        _scenes = Array.AsReadOnly((scenes ?? Array.Empty<OperatorSceneDescriptor>()).ToArray());
         _audioInputs = Array.AsReadOnly((audioInputs ?? Array.Empty<OperatorAudioInputDescriptor>()).ToArray());
         RuntimeStatus = runtimeStatus.Trim();
         TimingStatus = timingStatus.Trim();
@@ -395,6 +423,7 @@ public sealed record OperatorStatusSnapshot
 
     public AuthoritativeProductionState Production { get; }
     public IReadOnlyList<OperatorSourceDescriptor> Sources => _sources;
+    public IReadOnlyList<OperatorSceneDescriptor> Scenes => _scenes;
     public string RuntimeStatus { get; }
     public string TimingStatus { get; }
     public string InputStatus { get; }
@@ -422,6 +451,8 @@ public interface IOperatorControlTransport
     ValueTask<OperatorMutationResponse> SelectPreviewAsync(SelectPreviewCommand command, CancellationToken cancellationToken = default);
     ValueTask<OperatorMutationResponse> CutProgramAsync(CutProgramCommand command, CancellationToken cancellationToken = default);
     ValueTask<OperatorMutationResponse> DissolveProgramAsync(DissolveProgramCommand command, CancellationToken cancellationToken = default);
+    ValueTask<OperatorMutationResponse> ActivateSceneAsync(ActivateSceneCommand command, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<OperatorMutationResponse>(new NotSupportedException("Operator transport does not expose scene activation."));
 
     ValueTask<OperatorAudioInputDescriptor> SetAudioInputStateAsync(
         string sourceId,
@@ -534,6 +565,21 @@ public sealed class OperatorControlClient
         var current = RequireSnapshot();
         var command = new SelectPreviewCommand(Metadata(current.Production), sourceId);
         var result = await _transport.SelectPreviewAsync(command, cancellationToken).ConfigureAwait(false);
+        if (result.Accepted)
+            await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+
+    public ValueTask<OperatorMutationResponse> ActivateSceneAsync(string sceneId, CancellationToken cancellationToken = default) =>
+        ActivateSceneAsync(ParseSceneId(sceneId), cancellationToken);
+
+    public async ValueTask<OperatorMutationResponse> ActivateSceneAsync(
+        SceneId sceneId,
+        CancellationToken cancellationToken = default)
+    {
+        var current = RequireSnapshot();
+        var command = new ActivateSceneCommand(Metadata(current.Production), sceneId);
+        var result = await _transport.ActivateSceneAsync(command, cancellationToken).ConfigureAwait(false);
         if (result.Accepted)
             await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
         return result;
@@ -754,6 +800,9 @@ public sealed class OperatorControlClient
 
     private static ProductionSourceId ParseSourceId(string sourceId) =>
         new(Identity.Parse(sourceId));
+
+    private static SceneId ParseSceneId(string sceneId) =>
+        new(Identity.Parse(sceneId));
 
     private static ControlCommandMetadata Metadata(AuthoritativeProductionState state) =>
         new(ControlContractVersion.Current, CommandId.New(), state.ProductionId, state.Revision);
