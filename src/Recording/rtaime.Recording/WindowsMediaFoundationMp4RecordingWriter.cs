@@ -744,7 +744,7 @@ internal static class MediaFoundation
 
 	public static void ReleaseComObject(object value)
 	{
-		if (Marshal.IsComObject(value))
+		if (OperatingSystem.IsWindows() && Marshal.IsComObject(value))
 			Marshal.FinalReleaseComObject(value);
 	}
 }
