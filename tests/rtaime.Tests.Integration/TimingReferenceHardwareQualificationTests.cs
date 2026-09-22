@@ -6,13 +6,15 @@ using System.Text.Json;
 using rtaime.Core;
 using rtaime.Media;
 using rtaime.Media.Contracts;
+using rtaime.Recording;
+using rtaime.RuntimeHost;
 
 namespace rtaime.Tests.Integration;
 
 public sealed class TimingReferenceHardwareQualificationTests
 {
 	[Fact]
-	public void Reference_loss_relock_host_cycle_and_soak_must_pass_when_explicitly_enabled()
+	public async Task Reference_loss_relock_host_cycle_and_soak_must_pass_when_explicitly_enabled()
 	{
 		if (!string.Equals(Environment.GetEnvironmentVariable("RTAIME_TIMING_REFERENCE_QUALIFICATION"), "1", StringComparison.Ordinal))
 			return;
@@ -33,10 +35,26 @@ public sealed class TimingReferenceHardwareQualificationTests
 		Assert.Equal(expectedSdkRevision, adapter.Metadata.SdkRevision);
 		Assert.False(string.IsNullOrWhiteSpace(adapter.Metadata.DriverVersion));
 
+		await using var telemetryRuntime = new V1RuntimeHostService(
+			sourceA,
+			sourceB,
+			format,
+			new NullRecordingWriter());
+
 		var hostCycleSamples = new List<double>();
 		var seenInitialReferenceLock = false;
 		var referenceLossObserved = false;
 		var referenceRelockObserved = false;
+		var telemetrySampleCount = 0;
+		var telemetryCompleteSampleCount = 0;
+		var cpuAvailableSamples = 0;
+		var memoryAvailableSamples = 0;
+		var gpuUtilizationAvailableSamples = 0;
+		var vramAvailableSamples = 0;
+		string? telemetryCpuDeviceName = null;
+		string? telemetryGpuDeviceName = null;
+		DateTimeOffset? telemetryFirstSampleAtUtc = null;
+		DateTimeOffset? telemetryLastSampleAtUtc = null;
 		MediaIoVerticalSliceStatistics statistics;
 		MediaIoSignalState finalInputA;
 		MediaIoSignalState finalInputB;
@@ -46,6 +64,7 @@ public sealed class TimingReferenceHardwareQualificationTests
 		using (var mediaIo = new MediaIoVerticalSlice(adapter, sourceA, sourceB, format, requireExternalReference: true))
 		{
 			var deadline = DateTimeOffset.UtcNow.AddSeconds(soakSeconds);
+			var nextTelemetrySampleAt = DateTimeOffset.UtcNow.AddSeconds(1);
 			while (DateTimeOffset.UtcNow < deadline)
 			{
 				var cycleStarted = Stopwatch.GetTimestamp();
@@ -93,6 +112,38 @@ public sealed class TimingReferenceHardwareQualificationTests
 					}
 				}
 
+				var now = DateTimeOffset.UtcNow;
+				if (now >= nextTelemetrySampleAt)
+				{
+					var performance = telemetryRuntime.Snapshot.Performance;
+					telemetrySampleCount++;
+					telemetryFirstSampleAtUtc ??= now;
+					telemetryLastSampleAtUtc = now;
+					telemetryCpuDeviceName ??= performance.CpuDeviceName;
+					if (!string.Equals(performance.PhysicalGpuDeviceName, "UNVERIFIED", StringComparison.OrdinalIgnoreCase))
+						telemetryGpuDeviceName ??= performance.PhysicalGpuDeviceName;
+
+					var cpuAvailable = performance.CpuUtilizationPercent is not null;
+					var memoryAvailable = performance.SystemMemoryUsedBytes is not null && performance.SystemMemoryTotalBytes is not null;
+					var gpuUtilizationAvailable = performance.GpuUtilizationPercent is not null;
+					var vramAvailable = performance.GpuVramUsedBytes is not null && performance.GpuVramTotalBytes is not null;
+					if (cpuAvailable) cpuAvailableSamples++;
+					if (memoryAvailable) memoryAvailableSamples++;
+					if (gpuUtilizationAvailable) gpuUtilizationAvailableSamples++;
+					if (vramAvailable) vramAvailableSamples++;
+
+					var systemEvidencePassed = performance.SystemTelemetryEvidence.StartsWith("PASS:", StringComparison.Ordinal);
+					var gpuEvidencePassed = performance.GpuTelemetryEvidence.StartsWith("PASS:", StringComparison.Ordinal);
+					if (cpuAvailable && memoryAvailable && gpuUtilizationAvailable && vramAvailable &&
+						systemEvidencePassed && gpuEvidencePassed &&
+						!string.Equals(performance.PhysicalGpuDeviceName, "UNVERIFIED", StringComparison.OrdinalIgnoreCase))
+					{
+						telemetryCompleteSampleCount++;
+					}
+
+					nextTelemetrySampleAt = now.AddSeconds(1);
+				}
+
 				Thread.Sleep(1);
 			}
 
@@ -114,7 +165,11 @@ public sealed class TimingReferenceHardwareQualificationTests
 		var referencePassed = seenInitialReferenceLock && finalOutput == MediaIoSignalState.Locked &&
 			(!requireRelock || (referenceLossObserved && referenceRelockObserved));
 		var hostCyclePassed = hostCycleSamples.Count >= 10 && hostCycleP95 <= maximumHostCycleP95Milliseconds;
-		var passed = continuityPassed && referencePassed && hostCyclePassed &&
+		var telemetryPassed = telemetrySampleCount >= 30 &&
+			telemetryCompleteSampleCount == telemetrySampleCount &&
+			!string.IsNullOrWhiteSpace(telemetryCpuDeviceName) &&
+			!string.IsNullOrWhiteSpace(telemetryGpuDeviceName);
+		var passed = continuityPassed && referencePassed && hostCyclePassed && telemetryPassed &&
 			finalInputA == MediaIoSignalState.Locked && finalInputB == MediaIoSignalState.Locked;
 
 		var evidence = new
@@ -147,6 +202,21 @@ public sealed class TimingReferenceHardwareQualificationTests
 				maximumMilliseconds = hostCycleMaximum,
 				maximumAllowedP95Milliseconds = maximumHostCycleP95Milliseconds
 			},
+			telemetry = new
+			{
+				status = telemetryPassed ? "PASSED" : "FAILED",
+				sampleIntervalMilliseconds = 1000,
+				sampleCount = telemetrySampleCount,
+				completeSampleCount = telemetryCompleteSampleCount,
+				cpuAvailableSamples,
+				memoryAvailableSamples,
+				gpuUtilizationAvailableSamples,
+				vramAvailableSamples,
+				cpuDeviceName = telemetryCpuDeviceName ?? "UNVERIFIED",
+				gpuDeviceName = telemetryGpuDeviceName ?? "UNVERIFIED",
+				firstSampleAtUtc = telemetryFirstSampleAtUtc,
+				lastSampleAtUtc = telemetryLastSampleAtUtc
+			},
 			inputs = new
 			{
 				finalInputA = finalInputA.ToString(),
@@ -166,6 +236,7 @@ public sealed class TimingReferenceHardwareQualificationTests
 		Assert.Equal(MediaIoSignalState.Locked, finalInputB);
 		Assert.True(referencePassed, $"Reference qualification failed. initial={seenInitialReferenceLock}, loss={referenceLossObserved}, relock={referenceRelockObserved}, final={finalOutput}.");
 		Assert.True(hostCyclePassed, $"Host-cycle p95 {hostCycleP95:F3} ms exceeded {maximumHostCycleP95Milliseconds:F3} ms or had insufficient samples.");
+		Assert.True(telemetryPassed, $"Hardware telemetry continuity failed. complete={telemetryCompleteSampleCount}/{telemetrySampleCount}, cpu={cpuAvailableSamples}, memory={memoryAvailableSamples}, gpu={gpuUtilizationAvailableSamples}, vram={vramAvailableSamples}.");
 	}
 
 	private static VideoFormat ParseFormat(string value) => value.Trim().ToLowerInvariant() switch
@@ -202,7 +273,15 @@ public sealed class TimingReferenceHardwareQualificationTests
 	{
 		var value = Environment.GetEnvironmentVariable(name);
 		if (string.IsNullOrWhiteSpace(value))
-			throw new InvalidOperationException($"Environment variable '{name}' is required for AP-34 qualification.");
+			throw new InvalidOperationException($"Environment variable '{name}' is required for physical timing qualification.");
 		return value.Trim();
+	}
+
+	private sealed class NullRecordingWriter : IProgramRecordingWriter
+	{
+		public ValueTask OpenAsync(RecordingStartRequest request, CancellationToken cancellationToken) => ValueTask.CompletedTask;
+		public ValueTask WriteAsync(RecordingProgramSample sample, CancellationToken cancellationToken) => ValueTask.CompletedTask;
+		public ValueTask FinalizeAsync(CancellationToken cancellationToken) => ValueTask.CompletedTask;
+		public ValueTask AbortAsync(CancellationToken cancellationToken) => ValueTask.CompletedTask;
 	}
 }
