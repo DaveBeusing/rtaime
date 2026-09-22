@@ -69,7 +69,7 @@ The compositing workspace does not create another monitoring or playback path.
 
 The System & Performance panel is a view over the existing `OutputRoutingHealthViewModel` and Operator lifecycle evidence.
 
-CPU, GPU and system Memory use the own `RtaimeMetricRing` presentation. A ring draws a value arc only when a real numeric sample exists. CPU and system Memory now use Runtime-published Windows measurements; GPU uses Runtime-published NVML utilization when a qualified NVIDIA driver exposes it. Missing measurements remain `UNAVAILABLE / UNVERIFIED` rather than being synthesized.
+CPU, GPU and system Memory use the own `RtaimeMetricDial` presentation built on the shared metric-ring renderer. A dial draws a value arc only when a real numeric sample exists. CPU and system Memory now use Runtime-published Windows measurements; GPU uses Runtime-published NVML utilization when a qualified NVIDIA driver exposes it. Missing measurements remain `UNAVAILABLE / UNVERIFIED` rather than being synthesized.
 
 VRAM and Render Time reuse their Runtime-derived values. The small history graph uses only the bounded existing metric history. The Operator panel adds no timer, hardware query, Performance Counter, NVML call or other telemetry probe; hardware sampling is owned and cached by RuntimeHost.
 
@@ -90,7 +90,8 @@ Selecting a graph node uses the existing shared Inspector path. Node status, det
 `build/quality/Test-OperatorUiPolicy.ps1` verifies:
 
 - the 64 / 6 / 36 center split;
-- exact graph background/grid colors;
+- exact graph background/grid colors through the shared semantic tokens;
+- absence of large node shadows;
 - 4 px node radius and 10 px padding;
 - neutral 2 px connections and cyan active connections;
 - cyan selected-node outline and category accent separation;
@@ -100,6 +101,6 @@ Selecting a graph node uses the existing shared Inspector path. Node status, det
 - existing pan/zoom/Fit/Auto Layout behavior;
 - stable node positions across status refreshes;
 - shared Inspector selection;
-- reuse of the established Preview monitor;
+- reuse of the established Preview monitor and the Preview / 6 px gap / System & Performance right stack;
 - real-only CPU/GPU/Memory evidence, VRAM/Render values and bounded GPU history;
 - no second telemetry poller or host-level authority dependency.
