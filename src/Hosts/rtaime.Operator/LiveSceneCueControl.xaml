@@ -6,7 +6,7 @@
 	xmlns:controls="clr-namespace:rtaime.Operator.Controls"
 	AutomationProperties.Name="Live scenes and cues">
 	<UserControl.Resources>
-		<CollectionViewSource x:Key="LiveSceneSourceView" Source="{Binding Sources}" Filter="LiveSceneSourceView_Filter" />
+		<CollectionViewSource x:Key="LiveSceneSourceView" Source="{Binding Scenes}" Filter="LiveSceneSourceView_Filter" />
 		<Style x:Key="LiveSceneRow" TargetType="{x:Type controls:RtaimeListBoxItem}">
 			<Setter Property="Height" Value="74" />
 			<Setter Property="Padding" Value="0" />
@@ -105,7 +105,7 @@
 			Grid.Row="1"
 			Height="30"
 			IconData="{StaticResource RtaimeIconSearchGeometry}"
-			Placeholder="Search scenes / sources…"
+			Placeholder="Search scenes…"
 			TextChanged="SceneSearchBox_TextChanged"
 			VerticalAlignment="Center"
 			AutomationProperties.Name="Search live scenes" />
@@ -113,13 +113,13 @@
 		<controls:RtaimeListBox
 			Grid.Row="2"
 			ItemsSource="{Binding Source={StaticResource LiveSceneSourceView}}"
-			SelectedItem="{Binding SelectedSource, Mode=TwoWay}"
+			SelectedItem="{Binding SelectedScene, Mode=TwoWay}"
 			ItemContainerStyle="{StaticResource LiveSceneRow}"
 			Background="Transparent"
 			BorderThickness="0"
 			ScrollViewer.HorizontalScrollBarVisibility="Disabled"
 			ScrollViewer.VerticalScrollBarVisibility="Auto"
-			AutomationProperties.Name="Live source and scene selection">
+			AutomationProperties.Name="Live scene selection">
 			<controls:RtaimeListBox.ItemTemplate>
 				<DataTemplate>
 					<Grid Margin="7,0">
@@ -146,7 +146,7 @@
 							CornerRadius="{StaticResource OperatorRadiusOverlay}"
 							VerticalAlignment="Center"
 							ClipToBounds="True">
-							<Image Source="{Binding Thumbnail}" Stretch="UniformToFill" />
+							<Image Source="{Binding ProgramSource.Thumbnail}" Stretch="UniformToFill" />
 						</Border>
 
 						<StackPanel Grid.Column="3" VerticalAlignment="Center">
@@ -154,7 +154,7 @@
 							<StackPanel Orientation="Horizontal" Margin="0,3,0,0">
 								<TextBlock Text="{Binding Type}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" />
 								<TextBlock Text=" · " Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" />
-								<TextBlock Text="{Binding Remaining}" Style="{StaticResource OperatorTimecode}" FontSize="{StaticResource OperatorFontSizeMicro}" />
+								<TextBlock Text="{Binding ProgramSource.Remaining}" Style="{StaticResource OperatorTimecode}" FontSize="{StaticResource OperatorFontSizeMicro}" />
 							</StackPanel>
 						</StackPanel>
 
@@ -181,7 +181,7 @@
 								<controls:RtaimeStatusBadge.Style>
 									<Style TargetType="{x:Type controls:RtaimeStatusBadge}" BasedOn="{StaticResource {x:Type controls:RtaimeStatusBadge}}">
 										<Setter Property="Visibility" Value="Collapsed" />
-										<Style.Triggers><DataTrigger Binding="{Binding IsProgram}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
+										<Style.Triggers><DataTrigger Binding="{Binding IsActive}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
 									</Style>
 								</controls:RtaimeStatusBadge.Style>
 							</controls:RtaimeStatusBadge>
@@ -191,7 +191,7 @@
 								Width="26"
 								Height="26"
 								Click="SceneOverflow_Click"
-								ToolTip="Select this row. Scene-specific actions are unavailable in V1."
+								ToolTip="Select this Scene without changing production state."
 								AutomationProperties.Name="Scene options" />
 						</StackPanel>
 					</Grid>
@@ -206,18 +206,18 @@
 				<ColumnDefinition Width="*" />
 			</Grid.ColumnDefinitions>
 			<controls:RtaimeButton Grid.Column="0"
-				Content="SET NEXT"
-				Command="{Binding SetPreviewCommand}"
-				IsCompact="True"
-				ToolTip="Route only the selected source to Preview. Selection alone never routes." />
-			<controls:RtaimeButton Grid.Column="2"
-				Content="TAKE"
-				Command="{Binding CutCommand}"
+				Content="TAKE SCENE"
+				Command="{Binding ActivateSceneCommand}"
 				IsCompact="True"
 				Background="{DynamicResource OperatorAccentBrush}"
 				BorderBrush="{DynamicResource OperatorAccentBrush}"
 				Foreground="{DynamicResource OperatorBackgroundBrush}"
-				ToolTip="Take the already confirmed Preview source to Program." />
+				ToolTip="Atomically activate the selected Scene through authoritative Control." />
+			<controls:RtaimeButton Grid.Column="2"
+				Content="CUT PVW"
+				Command="{Binding CutCommand}"
+				IsCompact="True"
+				ToolTip="Keep the established confirmed Preview-to-Program CUT workflow available." />
 		</Grid>
 
 		<Grid Grid.Row="4" Margin="0,8,0,0">
@@ -266,8 +266,8 @@
 			Padding="7,5"
 			Margin="0,8,0,0">
 			<StackPanel>
-				<TextBlock Text="SCENE ACTIVATION · NOT AVAILABLE IN V1 CONTRACT" Style="{StaticResource OperatorLabel}" FontWeight="SemiBold" />
-				<TextBlock Text="Selection is non-destructive; explicit Preview/Take and cue commands remain the only actions here." Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextWrapping="Wrap" Margin="0,2,0,0" />
+				<TextBlock Text="{Binding ActiveSceneName, StringFormat=ACTIVE SCENE · {0}}" Style="{StaticResource OperatorLabel}" FontWeight="SemiBold" />
+				<TextBlock Text="{Binding SceneFailureReason, StringFormat=EVIDENCE · {0}}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextWrapping="Wrap" Margin="0,2,0,0" />
 			</StackPanel>
 		</Border>
 	</Grid>
