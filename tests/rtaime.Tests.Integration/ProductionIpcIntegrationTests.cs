@@ -69,6 +69,40 @@ public sealed class ProductionIpcIntegrationTests
 		var sourceA = initial.Sources[0];
 		var sourceB = initial.Sources[1];
 
+		Assert.Equal(2, initial.Production.OutputRoles.Count);
+		Assert.Equal(sourceA.Id, Assert.Single(initial.Production.OutputRoles, role => role.RoleId == OutputRoleIds.Program).SourceId.ToString());
+		Assert.Equal(sourceB.Id, Assert.Single(initial.Production.OutputRoles, role => role.RoleId == OutputRoleIds.Aux).SourceId.ToString());
+		await WaitUntilAsync(() =>
+			runtime.Runtime!.Snapshot.OutputRoles?.Any(role =>
+				role.RoleId == "aux" &&
+				role.SourceId.ToString() == sourceB.Id &&
+				role.HealthState == RuntimeOutputRoleHealthState.Healthy &&
+				role.AuthoritativeActive) == true);
+		var initialOutputEvidence = await client.SynchronizeAsync();
+		var initialAux = Assert.Single(initialOutputEvidence.OutputRoles, role => role.RoleId == "aux");
+		Assert.Equal("AUX", initialAux.RoleKind);
+		Assert.Equal(sourceB.Id, initialAux.SourceId);
+		Assert.True(initialAux.AuthoritativeActive);
+		Assert.Equal("PASS", initialAux.HealthState);
+		Assert.Contains("provider confirmed frame sequence", initialAux.Evidence, StringComparison.OrdinalIgnoreCase);
+		Assert.NotEmpty(runtime.Runtime.AuxFrames);
+
+		var auxRoute = await client.RouteOutputRoleAsync("aux", sourceA.Id);
+		Assert.True(auxRoute.Accepted, auxRoute.Failure?.ToString());
+		Assert.Equal(sourceA.Id, Assert.Single(client.Snapshot!.Production.OutputRoles, role => role.RoleId == OutputRoleIds.Aux).SourceId.ToString());
+		Assert.Equal(sourceA.Id, client.Snapshot.Production.Routing.ProgramSourceId.ToString());
+		await WaitUntilAsync(() =>
+			runtime.Runtime!.Snapshot.OutputRoles?.Any(role =>
+				role.RoleId == "aux" &&
+				role.SourceId.ToString() == sourceA.Id &&
+				role.HealthState == RuntimeOutputRoleHealthState.Healthy &&
+				role.AuthoritativeActive) == true);
+		var routedOutputEvidence = await client.SynchronizeAsync();
+		var routedAux = Assert.Single(routedOutputEvidence.OutputRoles, role => role.RoleId == "aux");
+		Assert.Equal(sourceA.Id, routedAux.SourceId);
+		Assert.Equal("PASS", routedAux.HealthState);
+		Assert.Equal(sourceA.Id, runtime.Runtime.AuxFrames[^1].Frame.SourceId.ToString());
+
 		Assert.All(initial.Sources, source =>
 		{
 			Assert.Equal("LIVE", source.Type);
