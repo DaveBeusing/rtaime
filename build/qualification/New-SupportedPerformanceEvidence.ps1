@@ -155,9 +155,9 @@ $lines.Add("<!-- Copyright (c) Dave Beusing <david.beusing@gmail.com>. -->")
 $lines.Add("")
 $lines.Add("# Supported Performance Matrix")
 $lines.Add("")
-$lines.Add("- Profile: `rtaime-v1-reference-platform`")
-$lines.Add("- Source commit: `$SourceCommit`")
-$lines.Add("- Product: `$productVersion` / `$releaseStage`")
+$lines.Add("- Profile: ``rtaime-v1-reference-platform``")
+$lines.Add("- Source commit: ``$SourceCommit``")
+$lines.Add("- Product: ``$productVersion`` / ``$releaseStage``")
 $lines.Add("- Evidence status: **$status**")
 $lines.Add("")
 $lines.Add("> Only values measured by verified physical qualification payloads are listed. Missing physical evidence produces no performance value and never creates a supported claim.")
@@ -171,7 +171,7 @@ if ($orderedMeasurements.Count -eq 0) {
 		$format = if ($row.Contains("format")) { [string]$row.format } else { "-" }
 		$operation = if ($row.Contains("operation")) { [string]$row.operation } else { "-" }
 		$samples = if ($row.Contains("sampleCount")) { [string]$row.sampleCount } else { "-" }
-		$lines.Add("| $($row.metric) | $format | $operation | $($row.value) $($row.unit) | $samples | `$($row.qualificationType)` |")
+		$lines.Add("| $($row.metric) | $format | $operation | $($row.value) $($row.unit) | $samples | ``$($row.qualificationType)`` |")
 	}
 }
 $directory = Split-Path -Parent $markdownFull
