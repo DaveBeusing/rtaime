@@ -44,6 +44,20 @@ public readonly record struct ProductionSourceId
     public override string ToString() => Value.ToString();
 }
 
+public readonly record struct SceneId
+{
+    public SceneId(Identity value)
+    {
+        if (value.IsEmpty)
+            throw new ArgumentException("Scene identity must not be empty.", nameof(value));
+        Value = value;
+    }
+
+    public Identity Value { get; }
+    public static SceneId New() => new(Identity.New());
+    public override string ToString() => Value.ToString();
+}
+
 public readonly record struct CommandId
 {
     public CommandId(Identity value)
@@ -75,16 +89,35 @@ public sealed record ProductionSourceSpecification
 
 public sealed record ProductionRoutingState(ProductionSourceId PreviewSourceId, ProductionSourceId ProgramSourceId);
 
+public sealed record ProductionSceneSpecification
+{
+    public ProductionSceneSpecification(SceneId sceneId, string name, ProductionRoutingState routing)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Scene name is required.", nameof(name));
+
+        SceneId = sceneId;
+        Name = name.Trim();
+        Routing = routing ?? throw new ArgumentNullException(nameof(routing));
+    }
+
+    public SceneId SceneId { get; }
+    public string Name { get; }
+    public ProductionRoutingState Routing { get; }
+}
+
 public sealed class ProductionSpecification
 {
     private readonly ReadOnlyCollection<ProductionSourceSpecification> _sources;
+    private readonly ReadOnlyCollection<ProductionSceneSpecification> _scenes;
 
     public ProductionSpecification(
         CompatibilityVersion version,
         ProductionId productionId,
         string name,
         IReadOnlyList<ProductionSourceSpecification> sources,
-        ProductionRoutingState initialRouting)
+        ProductionRoutingState initialRouting,
+        IReadOnlyList<ProductionSceneSpecification>? scenes = null)
     {
         ControlContractVersion.EnsureSupported(version);
         if (string.IsNullOrWhiteSpace(name))
@@ -100,10 +133,21 @@ public sealed class ProductionSpecification
         if (snapshot.Select(source => source.SourceId).Distinct().Count() != snapshot.Length)
             throw new ArgumentException("Production source identities must be unique.", nameof(sources));
 
+        var sceneSnapshot = scenes?.ToArray()
+            ?? snapshot.Select(source => new ProductionSceneSpecification(
+                new SceneId(source.SourceId.Value),
+                source.Name,
+                new ProductionRoutingState(source.SourceId, source.SourceId))).ToArray();
+        if (sceneSnapshot.Any(scene => scene is null))
+            throw new ArgumentException("Production scenes must not contain null values.", nameof(scenes));
+        if (sceneSnapshot.Select(scene => scene.SceneId).Distinct().Count() != sceneSnapshot.Length)
+            throw new ArgumentException("Production scene identities must be unique.", nameof(scenes));
+
         Version = version;
         ProductionId = productionId;
         Name = name.Trim();
         _sources = Array.AsReadOnly(snapshot);
+        _scenes = Array.AsReadOnly(sceneSnapshot);
         InitialRouting = initialRouting ?? throw new ArgumentNullException(nameof(initialRouting));
     }
 
@@ -111,6 +155,7 @@ public sealed class ProductionSpecification
     public ProductionId ProductionId { get; }
     public string Name { get; }
     public IReadOnlyList<ProductionSourceSpecification> Sources => _sources;
+    public IReadOnlyList<ProductionSceneSpecification> Scenes => _scenes;
     public ProductionRoutingState InitialRouting { get; }
 }
 
@@ -120,19 +165,22 @@ public sealed record DesiredProductionState
         CompatibilityVersion version,
         ProductionId productionId,
         Revision basedOnAuthoritativeRevision,
-        ProductionRoutingState routing)
+        ProductionRoutingState routing,
+        SceneId? activeSceneId = null)
     {
         ControlContractVersion.EnsureSupported(version);
         Version = version;
         ProductionId = productionId;
         BasedOnAuthoritativeRevision = basedOnAuthoritativeRevision;
         Routing = routing ?? throw new ArgumentNullException(nameof(routing));
+        ActiveSceneId = activeSceneId;
     }
 
     public CompatibilityVersion Version { get; }
     public ProductionId ProductionId { get; }
     public Revision BasedOnAuthoritativeRevision { get; }
     public ProductionRoutingState Routing { get; }
+    public SceneId? ActiveSceneId { get; }
 }
 
 public sealed record AuthoritativeProductionState
@@ -141,19 +189,22 @@ public sealed record AuthoritativeProductionState
         CompatibilityVersion version,
         ProductionId productionId,
         Revision revision,
-        ProductionRoutingState routing)
+        ProductionRoutingState routing,
+        SceneId? activeSceneId = null)
     {
         ControlContractVersion.EnsureSupported(version);
         Version = version;
         ProductionId = productionId;
         Revision = revision;
         Routing = routing ?? throw new ArgumentNullException(nameof(routing));
+        ActiveSceneId = activeSceneId;
     }
 
     public CompatibilityVersion Version { get; }
     public ProductionId ProductionId { get; }
     public Revision Revision { get; }
     public ProductionRoutingState Routing { get; }
+    public SceneId? ActiveSceneId { get; }
 }
 
 public sealed record ControlCommandMetadata
@@ -187,6 +238,18 @@ public sealed record SelectPreviewCommand
 
     public ControlCommandMetadata Metadata { get; }
     public ProductionSourceId SourceId { get; }
+}
+
+public sealed record ActivateSceneCommand
+{
+    public ActivateSceneCommand(ControlCommandMetadata metadata, SceneId sceneId)
+    {
+        Metadata = metadata ?? throw new ArgumentNullException(nameof(metadata));
+        SceneId = sceneId;
+    }
+
+    public ControlCommandMetadata Metadata { get; }
+    public SceneId SceneId { get; }
 }
 
 public sealed record CutProgramCommand
