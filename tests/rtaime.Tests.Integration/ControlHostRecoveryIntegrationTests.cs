@@ -54,7 +54,11 @@ public sealed class ControlHostRecoveryIntegrationTests
 				committedRouting = firstControl.Control.State.Routing;
 				runtimeHostInstanceId = firstControl.RuntimeTransport!.HostInstanceId!;
 				Assert.True(committedRevision.Value > Revision.Initial.Value);
-				await WaitUntilAsync(() => firstControl.CheckpointWriter?.Statistics.Persisted >= 2);
+				var checkpointWriter = Assert.IsType<BoundedProductionCheckpointWriter>(firstControl.CheckpointWriter);
+				await checkpointWriter.FlushAsync();
+				Assert.True(
+					checkpointWriter.Statistics.Persisted >= 2,
+					$"Expected at least two persisted checkpoints, observed {checkpointWriter.Statistics.Persisted}.");
 
 				firstControlStop.Cancel();
 				Assert.Equal(ControlHostExitCode.Success, await firstControlRun);
