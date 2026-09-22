@@ -15,6 +15,7 @@ public sealed class ProfessionalRecordingFormatTests
 		Assert.Equal("mp4-h264-aac", capability.Id);
 		Assert.Equal("ISO Base Media File Format (MP4)", capability.Container);
 		Assert.Equal("H.264/AVC", capability.VideoCodec);
+		Assert.Equal("Main", capability.VideoProfile);
 		Assert.Equal("AAC-LC", capability.AudioCodec);
 		Assert.Equal(".mp4", capability.FileExtension);
 		Assert.Equal(20_000_000U, capability.VideoBitRate);
