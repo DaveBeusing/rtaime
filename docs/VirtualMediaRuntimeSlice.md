@@ -52,9 +52,9 @@ CutProgramCommand
 - a deterministic virtual timing provider,
 - Source A and Source B synthetic video sources,
 - deterministic frame/surface identity generation,
-- virtual video outputs used as Program/Preview inspection points,
+- virtual video outputs used for Program/Preview reference inspection and governed Aux execution,
 - capability advertisement for `media.route`,
-- two deterministic reservable route resources,
+- three deterministic reservable route resources so Preview, Program and Aux route requirements can be admitted without hidden resource sharing,
 - explicit support for the V1 development formats 1080p50 RGBA8 and 1080p59.94 RGBA8.
 
 The synthetic provider does not allocate or transport bulk pixel payloads. A frame is represented through the existing `FrameDescriptor`, deterministic `SurfaceDescriptor`, timing metadata and an opaque virtual surface handle. This preserves the contract rule that normal boundaries exchange descriptors/handles rather than large media payloads.
@@ -88,7 +88,7 @@ The runtime:
 
 - reads only the active `CommittedRuntimeExecution`,
 - captures that execution once at the start of each frame boundary,
-- resolves source/output endpoints from committed `PreparedExecutionBinding` identities,
+- resolves source/output endpoints from committed `PreparedExecutionBinding` identities and preserves governed output-role identity on Program/Aux bindings,
 - validates source/output format compatibility,
 - requests the same global sequence number from every active route,
 - stages all source frames before emitting outputs,
