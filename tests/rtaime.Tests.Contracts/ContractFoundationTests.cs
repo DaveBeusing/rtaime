@@ -465,6 +465,7 @@ internal sealed class ContractScalarJsonConverterFactory : JsonConverterFactory
         typeToConvert == typeof(FrameRate) ||
         typeToConvert == typeof(Timebase) ||
         typeToConvert == typeof(CompatibilityVersion) ||
+        typeToConvert == typeof(OutputRoleId) ||
         typeToConvert == typeof(Failure) ||
         typeToConvert == typeof(VideoFormat) ||
         typeToConvert == typeof(SurfaceLifetimeDescriptor) ||
@@ -489,6 +490,7 @@ internal sealed class ContractScalarJsonConverterFactory : JsonConverterFactory
         if (typeToConvert == typeof(FrameRate)) return new CanonicalStringJsonConverter<FrameRate>(FrameRate.Parse, value => value.ToString());
         if (typeToConvert == typeof(Timebase)) return new CanonicalStringJsonConverter<Timebase>(Timebase.Parse, value => value.ToString());
         if (typeToConvert == typeof(CompatibilityVersion)) return new CanonicalStringJsonConverter<CompatibilityVersion>(CompatibilityVersion.Parse, value => value.ToString());
+        if (typeToConvert == typeof(OutputRoleId)) return new CanonicalStringJsonConverter<OutputRoleId>(value => new OutputRoleId(value), value => value.ToString());
         if (typeToConvert == typeof(Failure)) return new FailureJsonConverter();
         if (typeToConvert == typeof(VideoFormat)) return new VideoFormatJsonConverter();
         if (typeToConvert == typeof(SurfaceLifetimeDescriptor)) return new SurfaceLifetimeDescriptorJsonConverter();
