@@ -1301,7 +1301,7 @@
 								<TextBlock Text="Runtime graphics source" Style="{StaticResource OperatorLabel}" />
 								<TextBlock Text="{Binding GraphicsDimensions}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" />
 							</DockPanel>
-							<Border BorderBrush="{DynamicResource OperatorPanelBorderBrush}" BorderThickness="1" CornerRadius="4" Padding="10" Margin="0,0,0,10">
+							<Border BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" CornerRadius="4" Padding="10" Margin="0,0,0,10">
 								<StackPanel>
 									<DockPanel Margin="0,0,0,8">
 										<TextBlock Text="PRODUCTION LOWER THIRD" Style="{StaticResource OperatorLabel}" FontWeight="SemiBold" />
