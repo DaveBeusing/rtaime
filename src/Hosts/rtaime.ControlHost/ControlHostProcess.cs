@@ -125,6 +125,20 @@ public interface IControlRuntimeTransportSeam
 		ValueTask.FromException<RuntimeGraphicsOverlaySnapshot>(
 			new NotSupportedException("Runtime transport does not expose graphics overlay control."));
 
+	ValueTask<IReadOnlyList<RuntimeCompositingLayerSnapshot>> SetCompositingLayerStateAsync(
+		string layerId,
+		bool visible,
+		byte opacity,
+		CancellationToken cancellationToken = default) =>
+		ValueTask.FromException<IReadOnlyList<RuntimeCompositingLayerSnapshot>>(
+			new NotSupportedException("Runtime transport does not expose compositing layer control."));
+
+	ValueTask<IReadOnlyList<RuntimeCompositingLayerSnapshot>> ReorderCompositingLayersAsync(
+		IReadOnlyList<string> orderedLayerIds,
+		CancellationToken cancellationToken = default) =>
+		ValueTask.FromException<IReadOnlyList<RuntimeCompositingLayerSnapshot>>(
+			new NotSupportedException("Runtime transport does not expose compositing layer reorder control."));
+
 	ValueTask<RuntimeRecordingCommandResult> StartRecordingAsync(
 		string destinationDirectory,
 		string fileName,
