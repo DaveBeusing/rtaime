@@ -248,6 +248,60 @@ public sealed class GraphicsOverlayIntegrationTests
 	}
 
 	[Fact]
+	public async Task Rejected_scene_prepare_restores_absolute_runtime_layer_order()
+	{
+		await using var fixture = await Fixture.CreateAsync(new CollectingRecordingWriter());
+		fixture.Runtime.LoadGraphicsOverlay("scene-logo.rgba", 1, 1, new byte[] { 255, 0, 0, 255 });
+		var before = Assert.Single(fixture.Runtime.Snapshot.CompositingLayers!, layer =>
+			layer.LayerId == V1RuntimeHostService.BitmapGraphicsLayerId);
+		Assert.Equal(1, before.Order);
+
+		var staleExecution = fixture.Control.PrepareCurrentExecution();
+		var advanceExecution = fixture.Control.PrepareCurrentExecution();
+		var advanced = fixture.Runtime.ApplyExecution(
+			advanceExecution.PreparedExecution,
+			advanceExecution.ProgramSinkId);
+		Assert.True(advanced.Committed);
+
+		var stagedState = new PreparedCompositingState(
+			PreparedCompositingState.CurrentVersion,
+			new[]
+			{
+				new PreparedCompositingLayerState(
+					V1RuntimeHostService.BitmapGraphicsLayerId,
+					PreparedCompositingLayerKind.BitmapGraphics,
+					0,
+					true,
+					128,
+					0.25,
+					0.20,
+					1.5,
+					"scene-logo.rgba")
+			});
+		var stale = new PreparedExecutionContract(
+			staleExecution.PreparedExecution.Version,
+			PreparedExecutionId.New(),
+			staleExecution.PreparedExecution.AuthoritySnapshot,
+			staleExecution.PreparedExecution.PlanGeneration,
+			staleExecution.PreparedExecution.Bindings,
+			stagedState);
+
+		var rejected = fixture.Runtime.ApplyExecution(stale, staleExecution.ProgramSinkId);
+
+		Assert.False(rejected.Committed);
+		Assert.Equal(RuntimePrepareStatus.Rejected, rejected.Prepare.Status);
+		Assert.Equal("runtime.prepare.stale_authority_revision", rejected.Prepare.Failure?.Code);
+		var restored = Assert.Single(fixture.Runtime.Snapshot.CompositingLayers!, layer =>
+			layer.LayerId == V1RuntimeHostService.BitmapGraphicsLayerId);
+		Assert.Equal(before.Order, restored.Order);
+		Assert.Equal(before.Visible, restored.Visible);
+		Assert.Equal(before.Opacity, restored.Opacity);
+		Assert.Equal(before.PositionX, restored.PositionX, 6);
+		Assert.Equal(before.PositionY, restored.PositionY, 6);
+		Assert.Equal(before.Scale, restored.Scale, 6);
+	}
+
+	[Fact]
 	public async Task Missing_scene_compositing_resource_rejects_prepare_without_partial_runtime_state()
 	{
 		await using var fixture = await Fixture.CreateAsync(new CollectingRecordingWriter());
