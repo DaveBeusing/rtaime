@@ -61,7 +61,7 @@ Arbitrary source/routing topology rewiring is not exposed by the current contrac
 - toggle visibility for bitmap graphics or Production CG;
 - decrease or increase opacity for bitmap graphics or Production CG.
 
-Layer selection remains presentation-only. A button press sends an explicit client command through ControlHost to RuntimeHost, displays an applying state, and refreshes the graph only from the confirmed Runtime snapshot. Legacy visual/test-layer state remains governed by its existing command rather than being silently migrated into the new controls.
+Layer selection remains presentation-only. A toolbar button press sends an explicit client command through ControlHost to RuntimeHost, displays an applying state, and refreshes the graph only from the confirmed Runtime snapshot. Selecting the confirmed bitmap graphics layer also exposes the existing Inspector X/Y/Scale editor; APPLY TRANSFORM continues through the established graphics-placement command and is projected back only after Runtime confirmation. Production CG placement remains definition-owned and is not generalized into this bitmap transform path. Legacy visual/test-layer state remains governed by its existing command rather than being silently migrated into the new controls.
 
 ## Preview
 
@@ -81,7 +81,7 @@ This is **real telemetry only**: missing data remains visibly unavailable rather
 
 ## Inspector integration
 
-Selecting a graph node uses the existing shared Inspector path. Runtime layer nodes expose their stable identity, confirmed order, visibility, opacity and transform in the graph projection. Inspector data remains a projection only; the bounded layer commands live in the COMPOSITING toolbar and do not create another editor-state model.
+Selecting a graph node uses the existing shared Inspector path. Runtime layer nodes expose their stable identity, confirmed order, visibility, opacity and transform in the graph projection. The Inspector remains a projection over confirmed state; for the bitmap graphics layer it reuses the existing graphics transform editor and command rather than adding another layer-editor state model. Reorder, visibility and opacity remain bounded COMPOSITING toolbar commands.
 
 ## Authority boundary
 
