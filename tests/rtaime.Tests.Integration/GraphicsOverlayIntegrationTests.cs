@@ -180,6 +180,74 @@ public sealed class GraphicsOverlayIntegrationTests
 	}
 
 	[Fact]
+	public async Task Stale_scene_prepare_rolls_back_staged_compositing_state()
+	{
+		await using var fixture = await Fixture.CreateAsync(new CollectingRecordingWriter());
+		fixture.Runtime.LoadGraphicsOverlay("scene-logo.rgba", 1, 1, new byte[] { 255, 0, 0, 255 });
+		var execution = fixture.Control.PrepareCurrentExecution();
+		var firstState = new PreparedCompositingState(
+			PreparedCompositingState.CurrentVersion,
+			new[]
+			{
+				new PreparedCompositingLayerState(
+					V1RuntimeHostService.BitmapGraphicsLayerId,
+					PreparedCompositingLayerKind.BitmapGraphics,
+					0,
+					true,
+					200,
+					0.15,
+					0.25,
+					1.25,
+					"scene-logo.rgba")
+			});
+		var first = new PreparedExecutionContract(
+			execution.PreparedExecution.Version,
+			PreparedExecutionId.New(),
+			execution.PreparedExecution.AuthoritySnapshot,
+			execution.PreparedExecution.PlanGeneration,
+			execution.PreparedExecution.Bindings,
+			firstState);
+		var firstApplied = fixture.Runtime.ApplyExecution(first, execution.ProgramSinkId);
+		Assert.True(firstApplied.Committed);
+
+		var staleState = new PreparedCompositingState(
+			PreparedCompositingState.CurrentVersion,
+			new[]
+			{
+				new PreparedCompositingLayerState(
+					V1RuntimeHostService.BitmapGraphicsLayerId,
+					PreparedCompositingLayerKind.BitmapGraphics,
+					0,
+					false,
+					40,
+					0.75,
+					0.65,
+					2.0,
+					"scene-logo.rgba")
+			});
+		var stale = new PreparedExecutionContract(
+			execution.PreparedExecution.Version,
+			PreparedExecutionId.New(),
+			execution.PreparedExecution.AuthoritySnapshot,
+			execution.PreparedExecution.PlanGeneration,
+			execution.PreparedExecution.Bindings,
+			staleState);
+
+		var rejected = fixture.Runtime.ApplyExecution(stale, execution.ProgramSinkId);
+
+		Assert.False(rejected.Committed);
+		Assert.Equal(RuntimePrepareStatus.Rejected, rejected.Prepare.Status);
+		Assert.Equal("runtime.prepare.stale_authority_revision", rejected.Prepare.Failure?.Code);
+		var bitmap = Assert.Single(fixture.Runtime.Snapshot.CompositingLayers!, layer =>
+			layer.LayerId == V1RuntimeHostService.BitmapGraphicsLayerId);
+		Assert.True(bitmap.Visible);
+		Assert.Equal(200, bitmap.Opacity);
+		Assert.Equal(0.15, bitmap.PositionX, 6);
+		Assert.Equal(0.25, bitmap.PositionY, 6);
+		Assert.Equal(1.25, bitmap.Scale, 6);
+	}
+
+	[Fact]
 	public async Task Missing_scene_compositing_resource_rejects_prepare_without_partial_runtime_state()
 	{
 		await using var fixture = await Fixture.CreateAsync(new CollectingRecordingWriter());
