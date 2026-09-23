@@ -100,7 +100,7 @@
 							</DockPanel>
 							<TextBlock Text="{Binding ExecutionDetail}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextWrapping="Wrap" />
 							<TextBlock FontSize="{StaticResource OperatorFontSizeMicro}" TextTrimming="CharacterEllipsis">
-								<Run Text="CUE · " /><Run Text="{Binding CurrentCue}" /><Run Text=" · ACTION · " /><Run Text="{Binding CurrentAction}" />
+								<Run Text="CUE · " /><Run Text="{Binding CurrentCue, Mode=OneWay}" /><Run Text=" · ACTION · " /><Run Text="{Binding CurrentAction, Mode=OneWay}" />
 							</TextBlock>
 							<StackPanel Orientation="Horizontal" Margin="0,4,0,0">
 								<controls:RtaimeButton Content="RESUME" Command="{Binding ResumeRecoveryCommand}" IsCompact="True" Margin="0,0,4,0" />

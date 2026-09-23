@@ -602,6 +602,14 @@ Assert-Condition ($keyboard -match 'FindConflicts' -and $keyboard -match 'Operat
 Assert-Condition ($keyboard -match 'new\("show-control-go".+Key\.F9.+showControl\.GoCommand') "Show Control GO must use the conflict-checked central F9 shortcut."
 Assert-Condition ($liveSceneCue -match 'Header="SHOW CONTROL"' -and $liveSceneCue -match 'ShowControlCueStackControl') "SCENES & CUES must host Show Control beside existing Media Cues."
 Assert-Condition ($showControl -match 'SelectedItem="{Binding SelectedCue, Mode=TwoWay}"' -and $showControl -match 'Command="{Binding GoCommand}"') "Show Control cue selection and GO must remain separate interactions."
+foreach ($binding in @("ActiveSceneName", "SceneFailureReason")) {
+	$pattern = '<Run Text="\{Binding ' + [Regex]::Escape($binding) + ', Mode=OneWay\}" />'
+	Assert-Condition ($liveSceneCue -match $pattern) "Read-only Scene evidence '$binding' must bind OneWay in Run.Text to avoid WPF source-write failures."
+}
+foreach ($binding in @("CurrentCue", "CurrentAction")) {
+	$pattern = '<Run Text="\{Binding ' + [Regex]::Escape($binding) + ', Mode=OneWay\}" />'
+	Assert-Condition ($showControl -match $pattern) "Read-only Show Control evidence '$binding' must bind OneWay in Run.Text to avoid WPF source-write failures."
+}
 Assert-Condition ($showControlViewModel -match 'ConfirmedShowControlSnapshot|ApplyConfirmedSnapshot' -and $windowCode -match 'ConfirmedShowControlSnapshot \+= ShowControl\.ApplyConfirmedSnapshot') "Show Control presentation must consume confirmed synchronized Control snapshots."
 Assert-Condition ($showControlViewModel -match 'ShowControlActionKind\.WaitFrames' -and $showControlViewModel -match 'ShowControlActionKind\.StartRecording' -and $showControlViewModel -match 'ShowControlActionKind\.SetLayerVisibility') "Show Control editor must expose the bounded supported action union."
 Assert-Condition ($showControlDocumentation -match 'ControlHost remains authoritative' -and $showControlDocumentation -match 'UI timers never advance production state') "Show Control documentation must preserve authority and deterministic timing boundaries."
