@@ -1078,6 +1078,22 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			if (!confirmation.Committed || confirmation.State is null)
 				return MutationResponse(request, false, confirmation.State ?? staged.State, confirmation.Failure ?? new Failure("control.commit.rejected", "ControlHost did not confirm the Runtime commit."));
 
+			if (staged.Execution.PreparedExecution.CompositingState is { } preparedCompositing)
+			{
+				_compositingLayers = preparedCompositing.Layers
+					.Select(layer => new RuntimeCompositingLayerSnapshot(
+						layer.LayerId,
+						(int)layer.Kind,
+						layer.Order,
+						layer.Visible,
+						layer.Opacity,
+						layer.PositionX,
+						layer.PositionY,
+						layer.Scale,
+						layer.ContentIdentity))
+					.ToArray();
+			}
+
 			NotifyObservableStateChanged();
 			return MutationResponse(request, true, confirmation.State, null);
 		}
