@@ -34,7 +34,7 @@ internal static class Program
 			catch (Exception exception) when (exception is ArgumentException or OverflowException)
 			{
 				log.Error("configuration", "runtimehost.configuration-error", "RuntimeHost configuration could not be loaded.", exception);
-				Console.Error.WriteLine($"host=RuntimeHost outcome=configuration-error detail=\"{exception.Message}\"");
+				Console.Error.WriteLine($"host=RuntimeHost outcome=configuration-error detail=\"{DiagnosticRedactor.RedactText(exception.Message)}\"");
 				return (int)RuntimeHostExitCode.ConfigurationError;
 			}
 
@@ -55,7 +55,7 @@ internal static class Program
 			catch (InvalidOperationException exception)
 			{
 				log.Error("startup", "runtimehost.endpoint-acquire-failure", "RuntimeHost endpoint acquisition failed.", exception);
-				Console.Error.WriteLine($"host=RuntimeHost outcome=startup-failure detail=\"{exception.Message}\"");
+				Console.Error.WriteLine($"host=RuntimeHost outcome=startup-failure detail=\"{DiagnosticRedactor.RedactText(exception.Message)}\"");
 				return (int)RuntimeHostExitCode.StartupFailure;
 			}
 
