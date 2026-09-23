@@ -383,7 +383,7 @@ The multiview retains the existing Preview and Program monitor images and adds a
 
 Source grid density adapts through 2, 3 and 4 columns with a maximum of 16 displayed source tiles. Double-click opens a larger view of the already-available image only. No command path is invoked by the large-view interaction.
 
-The LIVE source/cue surface separates source and cue selection from activation. Media cue execution reuses the existing Media Deck Jump Cue command. The current V1 contracts do not expose dedicated multi-scene activation, so the UI explicitly reports that capability as unavailable instead of creating local scene authority.
+The LIVE source/cue surface separates source and cue selection from activation. Media cue execution reuses the existing Media Deck Jump Cue command. Scene selection remains presentation-only, while TAKE SCENE invokes the governed `ActivateSceneCommand` through the existing Client/ControlHost/Runtime authority path. Confirmed active-Scene and failure evidence is projected back to the Operator; the UI does not create local Scene authority.
 
 The right Live Controls surface reuses existing transition, graphics visibility, recording and Clean Program monitoring commands. Compact alert presentation is derived from the existing lifecycle, health, Operator error and recording error projections. External stream/on-air transmission remains explicitly UNVERIFIED.
 
