@@ -1,0 +1,210 @@
+<!-- Copyright (c) Dave Beusing <david.beusing@gmail.com>. -->
+<UserControl x:Class="rtaime.Operator.ShowControlCueStackControl"
+	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	xmlns:controls="clr-namespace:rtaime.Operator.Controls"
+	DataContext="{Binding ShowControl, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+	AutomationProperties.Name="Show control cue stack">
+	<Grid>
+		<controls:RtaimeTabControl Background="Transparent" BorderThickness="0">
+			<controls:RtaimeTabItem Header="RUN">
+				<Grid Margin="0,6,0,0">
+					<Grid.RowDefinitions>
+						<RowDefinition Height="30" />
+						<RowDefinition Height="*" />
+						<RowDefinition Height="30" />
+						<RowDefinition Height="Auto" />
+					</Grid.RowDefinitions>
+
+					<Grid Grid.Row="0">
+						<Grid.ColumnDefinitions>
+							<ColumnDefinition Width="*" />
+							<ColumnDefinition Width="4" />
+							<ColumnDefinition Width="72" />
+						</Grid.ColumnDefinitions>
+						<controls:RtaimeComboBox
+							ItemsSource="{Binding CueLists}"
+							SelectedItem="{Binding SelectedCueList, Mode=TwoWay}"
+							DisplayMemberPath="Name"
+							AutomationProperties.Name="Show control cue list" />
+						<controls:RtaimeButton Grid.Column="2"
+							Content="SELECT"
+							Command="{Binding SelectCueListCommand}"
+							IsCompact="True"
+							ToolTip="Select this cue list without executing production actions." />
+					</Grid>
+
+					<controls:RtaimeListBox Grid.Row="1"
+						ItemsSource="{Binding SelectedCueList.Cues}"
+						SelectedItem="{Binding SelectedCue, Mode=TwoWay}"
+						Background="Transparent"
+						BorderThickness="0"
+						ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+						ScrollViewer.VerticalScrollBarVisibility="Auto"
+						AutomationProperties.Name="Show control cues">
+						<controls:RtaimeListBox.ItemTemplate>
+							<DataTemplate>
+								<Grid Height="34" Margin="4,1">
+									<Grid.ColumnDefinitions>
+										<ColumnDefinition Width="34" />
+										<ColumnDefinition Width="*" />
+										<ColumnDefinition Width="Auto" />
+									</Grid.ColumnDefinitions>
+									<TextBlock Text="{Binding RelativeSource={RelativeSource AncestorType={x:Type controls:RtaimeListBoxItem}}, Path=(ItemsControl.AlternationIndex)}"
+										Style="{StaticResource OperatorTimecode}"
+										VerticalAlignment="Center" />
+									<StackPanel Grid.Column="1" VerticalAlignment="Center">
+										<TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="{StaticResource OperatorFontSizeCompact}" TextTrimming="CharacterEllipsis" />
+										<TextBlock Text="{Binding Summary}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" />
+									</StackPanel>
+									<TextBlock Grid.Column="2" Text="SELECT"
+										Style="{StaticResource OperatorLabel}"
+										FontSize="{StaticResource OperatorFontSizeMicro}"
+										VerticalAlignment="Center" />
+								</Grid>
+							</DataTemplate>
+						</controls:RtaimeListBox.ItemTemplate>
+					</controls:RtaimeListBox>
+
+					<Grid Grid.Row="2" Margin="0,4,0,0">
+						<Grid.ColumnDefinitions>
+							<ColumnDefinition Width="*" />
+							<ColumnDefinition Width="4" />
+							<ColumnDefinition Width="*" />
+							<ColumnDefinition Width="4" />
+							<ColumnDefinition Width="*" />
+						</Grid.ColumnDefinitions>
+						<controls:RtaimeButton Content="ARM" Command="{Binding ArmCommand}" IsCompact="True" />
+						<controls:RtaimeButton Grid.Column="2"
+							Content="GO · F9"
+							Command="{Binding GoCommand}"
+							IsCompact="True"
+							Background="{DynamicResource OperatorAccentBrush}"
+							BorderBrush="{DynamicResource OperatorAccentBrush}"
+							Foreground="{DynamicResource OperatorBackgroundBrush}"
+							ToolTip="Execute the armed cue through governed Control commands." />
+						<controls:RtaimeButton Grid.Column="4" Content="CANCEL" Command="{Binding CancelCommand}" IsCompact="True" />
+					</Grid>
+
+					<Border Grid.Row="3"
+						Margin="0,6,0,0"
+						Padding="6,4"
+						Background="{DynamicResource OperatorAlternateSurfaceBrush}"
+						BorderBrush="{DynamicResource OperatorBorderBrush}"
+						BorderThickness="1"
+						CornerRadius="{DynamicResource OperatorRadiusControl}">
+						<StackPanel>
+							<DockPanel>
+								<TextBlock Text="{Binding ExecutionState}" FontWeight="SemiBold" FontSize="{StaticResource OperatorFontSizeCompact}" />
+								<TextBlock Text="{Binding Status}" DockPanel.Dock="Right" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" />
+							</DockPanel>
+							<TextBlock Text="{Binding ExecutionDetail}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextWrapping="Wrap" />
+							<TextBlock FontSize="{StaticResource OperatorFontSizeMicro}" TextTrimming="CharacterEllipsis">
+								<Run Text="CUE · " /><Run Text="{Binding CurrentCue}" /><Run Text=" · ACTION · " /><Run Text="{Binding CurrentAction}" />
+							</TextBlock>
+							<StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+								<controls:RtaimeButton Content="RESUME" Command="{Binding ResumeRecoveryCommand}" IsCompact="True" Margin="0,0,4,0" />
+								<controls:RtaimeButton Content="CANCEL RECOVERY" Command="{Binding CancelRecoveryCommand}" IsCompact="True" />
+							</StackPanel>
+							<TextBlock Text="{Binding Failure}" Foreground="{DynamicResource OperatorWarningBrush}" FontSize="{StaticResource OperatorFontSizeMicro}" TextWrapping="Wrap" />
+						</StackPanel>
+					</Border>
+				</Grid>
+			</controls:RtaimeTabItem>
+
+			<controls:RtaimeTabItem Header="EDIT">
+				<controls:RtaimeScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+					<StackPanel Margin="0,6,2,0">
+						<TextBlock Text="CUE LIST" Style="{StaticResource OperatorLabel}" />
+						<Grid Margin="0,2,0,4">
+							<Grid.ColumnDefinitions>
+								<ColumnDefinition Width="*" />
+								<ColumnDefinition Width="4" />
+								<ColumnDefinition Width="64" />
+							</Grid.ColumnDefinitions>
+							<controls:RtaimeTextBox Text="{Binding SelectedCueList.Name, UpdateSourceTrigger=PropertyChanged}" IsCompact="True" />
+							<controls:RtaimeButton Grid.Column="2" Content="NEW" Command="{Binding NewCueListCommand}" IsCompact="True" />
+						</Grid>
+
+						<TextBlock Text="SELECTED CUE" Style="{StaticResource OperatorLabel}" />
+						<controls:RtaimeTextBox
+							Text="{Binding SelectedCue.Name, UpdateSourceTrigger=PropertyChanged}"
+							IsCompact="True"
+							Margin="0,2,0,4" />
+						<Grid Margin="0,0,0,6">
+							<Grid.ColumnDefinitions>
+								<ColumnDefinition Width="*" />
+								<ColumnDefinition Width="3" />
+								<ColumnDefinition Width="*" />
+								<ColumnDefinition Width="3" />
+								<ColumnDefinition Width="*" />
+								<ColumnDefinition Width="3" />
+								<ColumnDefinition Width="*" />
+							</Grid.ColumnDefinitions>
+							<controls:RtaimeButton Content="+ CUE" Command="{Binding AddCueCommand}" IsCompact="True" />
+							<controls:RtaimeButton Grid.Column="2" Content="REMOVE" Command="{Binding RemoveCueCommand}" IsCompact="True" />
+							<controls:RtaimeButton Grid.Column="4" Content="↑" Command="{Binding MoveCueUpCommand}" IsCompact="True" />
+							<controls:RtaimeButton Grid.Column="6" Content="↓" Command="{Binding MoveCueDownCommand}" IsCompact="True" />
+						</Grid>
+
+						<TextBlock Text="ACTIONS" Style="{StaticResource OperatorLabel}" />
+						<controls:RtaimeListBox
+							Height="74"
+							ItemsSource="{Binding SelectedCue.Actions}"
+							SelectedItem="{Binding SelectedAction, Mode=TwoWay}"
+							Background="Transparent"
+							BorderBrush="{DynamicResource OperatorBorderBrush}"
+							BorderThickness="1"
+							ScrollViewer.VerticalScrollBarVisibility="Auto">
+							<controls:RtaimeListBox.ItemTemplate>
+								<DataTemplate>
+									<TextBlock Text="{Binding Summary}" Margin="5,2" FontSize="{StaticResource OperatorFontSizeMicro}" TextTrimming="CharacterEllipsis" />
+								</DataTemplate>
+							</controls:RtaimeListBox.ItemTemplate>
+						</controls:RtaimeListBox>
+
+						<controls:RtaimeComboBox
+							Margin="0,4,0,0"
+							ItemsSource="{Binding ActionKinds}"
+							SelectedItem="{Binding NewActionKind, Mode=TwoWay}"
+							AutomationProperties.Name="Show control action type" />
+						<TextBlock Text="{Binding ActionInputHint}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" Margin="0,2,0,0" TextWrapping="Wrap" />
+						<controls:RtaimeTextBox Text="{Binding PrimaryReference, UpdateSourceTrigger=PropertyChanged}" IsCompact="True" Margin="0,3,0,0" AutomationProperties.Name="Primary action reference" />
+						<controls:RtaimeTextBox Text="{Binding SecondaryReference, UpdateSourceTrigger=PropertyChanged}" IsCompact="True" Margin="0,3,0,0" AutomationProperties.Name="Secondary action reference" />
+						<Grid Margin="0,3,0,0">
+							<Grid.ColumnDefinitions>
+								<ColumnDefinition Width="*" />
+								<ColumnDefinition Width="6" />
+								<ColumnDefinition Width="Auto" />
+							</Grid.ColumnDefinitions>
+							<controls:RtaimeTextBox Text="{Binding FrameValue, UpdateSourceTrigger=PropertyChanged}" IsCompact="True" AutomationProperties.Name="Action frame value" />
+							<controls:RtaimeCheckBox Grid.Column="2" Content="VISIBLE" IsChecked="{Binding VisibilityValue, Mode=TwoWay}" VerticalAlignment="Center" />
+						</Grid>
+
+						<Grid Margin="0,4,0,0">
+							<Grid.ColumnDefinitions>
+								<ColumnDefinition Width="*" />
+								<ColumnDefinition Width="3" />
+								<ColumnDefinition Width="*" />
+								<ColumnDefinition Width="3" />
+								<ColumnDefinition Width="*" />
+								<ColumnDefinition Width="3" />
+								<ColumnDefinition Width="*" />
+							</Grid.ColumnDefinitions>
+							<controls:RtaimeButton Content="+ ACTION" Command="{Binding AddActionCommand}" IsCompact="True" />
+							<controls:RtaimeButton Grid.Column="2" Content="REMOVE" Command="{Binding RemoveActionCommand}" IsCompact="True" />
+							<controls:RtaimeButton Grid.Column="4" Content="↑" Command="{Binding MoveActionUpCommand}" IsCompact="True" />
+							<controls:RtaimeButton Grid.Column="6" Content="↓" Command="{Binding MoveActionDownCommand}" IsCompact="True" />
+						</Grid>
+						<controls:RtaimeButton
+							Content="SAVE CUE LIST"
+							Command="{Binding SaveCueListCommand}"
+							IsCompact="True"
+							Margin="0,5,0,0"
+							ToolTip="Validate and persist the bounded cue list in ControlHost." />
+					</StackPanel>
+				</controls:RtaimeScrollViewer>
+			</controls:RtaimeTabItem>
+		</controls:RtaimeTabControl>
+	</Grid>
+</UserControl>

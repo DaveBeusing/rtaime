@@ -4,6 +4,7 @@
 	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
 	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 	xmlns:controls="clr-namespace:rtaime.Operator.Controls"
+	xmlns:local="clr-namespace:rtaime.Operator"
 	AutomationProperties.Name="Live scenes and cues">
 	<UserControl.Resources>
 		<CollectionViewSource x:Key="LiveSceneSourceView" Source="{Binding Scenes}" Filter="LiveSceneSourceView_Filter" />
@@ -222,59 +223,62 @@
 				ToolTip="Keep the established confirmed Preview-to-Program CUT workflow available." />
 		</Grid>
 
-		<Grid Grid.Row="4" Margin="0,8,0,0">
-			<Grid.RowDefinitions>
-				<RowDefinition Height="26" />
-				<RowDefinition Height="*" />
-			</Grid.RowDefinitions>
-			<DockPanel Grid.Row="0">
-				<TextBlock Text="MEDIA CUES" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" />
-				<TextBlock Text="selection only" Style="{StaticResource OperatorLabel}" DockPanel.Dock="Right" VerticalAlignment="Center" />
-			</DockPanel>
-			<controls:RtaimeListBox
-				Grid.Row="1"
-				ItemsSource="{Binding MediaDeck.Cues, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-				SelectedItem="{Binding MediaDeck.SelectedCue, RelativeSource={RelativeSource AncestorType={x:Type Window}}, Mode=TwoWay}"
-				ItemContainerStyle="{StaticResource LiveCueRow}"
-				Background="Transparent"
-				BorderThickness="0"
-				ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-				ScrollViewer.VerticalScrollBarVisibility="Auto"
-				AutomationProperties.Name="Live media cue selection">
-				<controls:RtaimeListBox.ItemTemplate>
-					<DataTemplate>
-						<Grid>
-							<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-							<TextBlock Text="{Binding Name}" FontSize="{StaticResource OperatorFontSizeCompact}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-							<TextBlock Grid.Column="1" Text="{Binding Timecode}" Style="{StaticResource OperatorTimecode}" FontSize="{StaticResource OperatorFontSizeMicro}" Margin="8,0,0,0" VerticalAlignment="Center" />
-						</Grid>
-					</DataTemplate>
-				</controls:RtaimeListBox.ItemTemplate>
-			</controls:RtaimeListBox>
-		</Grid>
+		<controls:RtaimeTabControl Grid.Row="4" Grid.RowSpan="3" Margin="0,8,0,0" Background="Transparent" BorderThickness="0">
+			<controls:RtaimeTabItem Header="MEDIA CUES">
+				<Grid Margin="0,5,0,0">
+					<Grid.RowDefinitions>
+						<RowDefinition Height="*" />
+						<RowDefinition Height="32" />
+						<RowDefinition Height="64" />
+					</Grid.RowDefinitions>
+					<controls:RtaimeListBox
+						ItemsSource="{Binding MediaDeck.Cues, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+						SelectedItem="{Binding MediaDeck.SelectedCue, RelativeSource={RelativeSource AncestorType={x:Type Window}}, Mode=TwoWay}"
+						ItemContainerStyle="{StaticResource LiveCueRow}"
+						Background="Transparent"
+						BorderThickness="0"
+						ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+						ScrollViewer.VerticalScrollBarVisibility="Auto"
+						AutomationProperties.Name="Live media cue selection">
+						<controls:RtaimeListBox.ItemTemplate>
+							<DataTemplate>
+								<Grid>
+									<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+									<TextBlock Text="{Binding Name}" FontSize="{StaticResource OperatorFontSizeCompact}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+									<TextBlock Grid.Column="1" Text="{Binding Timecode}" Style="{StaticResource OperatorTimecode}" FontSize="{StaticResource OperatorFontSizeMicro}" Margin="8,0,0,0" VerticalAlignment="Center" />
+								</Grid>
+							</DataTemplate>
+						</controls:RtaimeListBox.ItemTemplate>
+					</controls:RtaimeListBox>
 
-		<controls:RtaimeButton Grid.Row="5"
-			Content="JUMP SELECTED CUE"
-			Command="{Binding MediaDeck.JumpCueCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-			IsCompact="True"
-			Margin="0,4,0,0"
-			ToolTip="Execute the selected media cue through the existing marker/timeline command path." />
+					<controls:RtaimeButton Grid.Row="1"
+						Content="JUMP SELECTED CUE"
+						Command="{Binding MediaDeck.JumpCueCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+						IsCompact="True"
+						Margin="0,4,0,0"
+						ToolTip="Execute the selected media cue through the existing marker/timeline command path." />
 
-		<Border Grid.Row="6"
-			Background="{DynamicResource OperatorAlternateSurfaceBrush}"
-			BorderBrush="{DynamicResource OperatorBorderBrush}"
-			BorderThickness="1"
-			CornerRadius="{DynamicResource OperatorRadiusControl}"
-			Padding="7,5"
-			Margin="0,8,0,0">
-			<StackPanel>
-				<TextBlock Style="{StaticResource OperatorLabel}" FontWeight="SemiBold">
-					<Run Text="ACTIVE SCENE · " /><Run Text="{Binding ActiveSceneName}" />
-				</TextBlock>
-				<TextBlock Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextWrapping="Wrap" Margin="0,2,0,0">
-					<Run Text="EVIDENCE · " /><Run Text="{Binding SceneFailureReason}" />
-				</TextBlock>
-			</StackPanel>
-		</Border>
+					<Border Grid.Row="2"
+						Background="{DynamicResource OperatorAlternateSurfaceBrush}"
+						BorderBrush="{DynamicResource OperatorBorderBrush}"
+						BorderThickness="1"
+						CornerRadius="{DynamicResource OperatorRadiusControl}"
+						Padding="7,5"
+						Margin="0,8,0,0">
+						<StackPanel>
+							<TextBlock Style="{StaticResource OperatorLabel}" FontWeight="SemiBold">
+								<Run Text="ACTIVE SCENE · " /><Run Text="{Binding ActiveSceneName}" />
+							</TextBlock>
+							<TextBlock Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextWrapping="Wrap" Margin="0,2,0,0">
+								<Run Text="EVIDENCE · " /><Run Text="{Binding SceneFailureReason}" />
+							</TextBlock>
+						</StackPanel>
+					</Border>
+				</Grid>
+			</controls:RtaimeTabItem>
+			<controls:RtaimeTabItem Header="SHOW CONTROL">
+				<local:ShowControlCueStackControl />
+			</controls:RtaimeTabItem>
+		</controls:RtaimeTabControl>
 	</Grid>
 </UserControl>

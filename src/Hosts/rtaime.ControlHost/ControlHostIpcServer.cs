@@ -19,6 +19,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	private readonly Func<ControlHostService?> _controlAccessor;
 	private readonly IControlRuntimeTransportSeam _runtimeTransport;
 	private readonly MediaDeckControlService? _mediaDeck;
+	private readonly ShowControlCoordinator? _showControl;
 	private readonly CancellationTokenSource _stop = new();
 	private readonly SemaphoreSlim _mutationGate = new(1, 1);
 	private readonly BoundedRequestCache _requestCache = new(256);
@@ -39,13 +40,22 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		string endpoint,
 		Func<ControlHostService?> controlAccessor,
 		IControlRuntimeTransportSeam runtimeTransport,
-		MediaDeckControlService? mediaDeck = null)
+		MediaDeckControlService? mediaDeck = null,
+		ShowControlPersistenceStore? showControlPersistence = null)
 	{
 		if (string.IsNullOrWhiteSpace(endpoint)) throw new ArgumentException("ControlHost IPC endpoint is required.", nameof(endpoint));
 		_endpoint = endpoint.Trim();
 		_controlAccessor = controlAccessor ?? throw new ArgumentNullException(nameof(controlAccessor));
 		_runtimeTransport = runtimeTransport ?? throw new ArgumentNullException(nameof(runtimeTransport));
 		_mediaDeck = mediaDeck;
+		_showControl = showControlPersistence is null
+			? null
+			: new ShowControlCoordinator(
+				_controlAccessor,
+				showControlPersistence,
+				ExecuteShowControlActionAsync,
+				ObserveShowControlFrameAsync,
+				NotifyObservableStateChanged);
 	}
 
 	public string Endpoint => _endpoint;
@@ -139,6 +149,8 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			try { await _acceptLoop.ConfigureAwait(false); }
 			catch (OperationCanceledException) { }
 		}
+		if (_showControl is not null)
+			await _showControl.DisposeAsync().ConfigureAwait(false);
 		_mutationGate.Dispose();
 		_stop.Dispose();
 	}
@@ -268,6 +280,13 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			"control.media_deck.transport" => await ApplyMediaDeckTransportAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.media_deck.marker" => await ApplyMediaDeckMarkerAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.media_deck.close" => await CloseMediaDeckAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.show_control.snapshot.get" => await GetShowControlSnapshotAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.show_control.cue_list.save" => await SaveShowControlCueListAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.show_control.cue_list.select" => await SelectShowControlCueListAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.show_control.arm" => await ArmShowControlAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.show_control.go" => await GoShowControlAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.show_control.cancel" => await CancelShowControlAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.show_control.recovery.acknowledge" => await AcknowledgeShowControlRecoveryAsync(request, cancellationToken).ConfigureAwait(false),
 			_ => Error(request, "ipc.message.unknown", $"Unknown ControlHost message type '{request.MessageType}'.")
 		};
 	}
@@ -574,15 +593,6 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		}
 	}
 
-	private async ValueTask ConfirmRuntimeCompositingAuthorityAsync(
-		ControlHostService control,
-		CancellationToken cancellationToken)
-	{
-		var runtime = await _runtimeTransport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
-		_compositingLayers = runtime.CompositingLayers ?? Array.Empty<RuntimeCompositingLayerSnapshot>();
-		control.ConfirmCompositingMutation(ToProductionCompositingState(_compositingLayers));
-	}
-
 	private static ProductionCompositingState ToProductionCompositingState(
 		IReadOnlyList<RuntimeCompositingLayerSnapshot> layers)
 	{
@@ -592,12 +602,12 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			layers
 				.OrderBy(layer => layer.Order)
 				.ThenBy(layer => layer.LayerId, StringComparer.Ordinal)
-				.Select(layer => new ProductionCompositingLayerState(
+				.Select((layer, order) => new ProductionCompositingLayerState(
 					layer.LayerId,
 					Enum.IsDefined(typeof(ProductionCompositingLayerKind), layer.Kind)
 						? (ProductionCompositingLayerKind)layer.Kind
 						: throw new InvalidDataException($"Runtime compositing layer kind '{layer.Kind}' is invalid."),
-					layer.Order,
+					order,
 					layer.Visible,
 					layer.Opacity,
 					layer.PositionX,
@@ -624,7 +634,8 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			try
 			{
 				var snapshot = await mutation(cancellationToken).ConfigureAwait(false);
-				await ConfirmRuntimeCompositingAuthorityAsync(control, cancellationToken).ConfigureAwait(false);
+				var runtime = await _runtimeTransport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
+				_compositingLayers = runtime.CompositingLayers ?? Array.Empty<RuntimeCompositingLayerSnapshot>();
 				NotifyObservableStateChanged();
 				return Success(request, "control.graphics.overlay.response", ToWire(snapshot));
 			}
@@ -818,6 +829,274 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		return Success(request, "control.media_deck.snapshot.response", ToWire(snapshot));
 	}
 
+	private ValueTask<WireEnvelope> GetShowControlSnapshotAsync(WireEnvelope request, CancellationToken cancellationToken) =>
+		RunShowControlAsync(request, coordinator => coordinator.GetSnapshotAsync(cancellationToken), cancellationToken);
+
+	private ValueTask<WireEnvelope> SaveShowControlCueListAsync(WireEnvelope request, CancellationToken cancellationToken)
+	{
+		var wire = request.Payload.Deserialize<WireShowControlCueList>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Show-control cue-list payload is required.");
+		var cueList = ShowControlCanonicalSerializer.Deserialize(wire.CueListJson);
+		return RunShowControlAsync(request, coordinator => coordinator.SaveCueListAsync(cueList, cancellationToken), cancellationToken);
+	}
+
+	private ValueTask<WireEnvelope> SelectShowControlCueListAsync(WireEnvelope request, CancellationToken cancellationToken)
+	{
+		var wire = request.Payload.Deserialize<WireShowControlSelection>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Show-control cue-list selection payload is required.");
+		var cueListId = new ShowControlCueListId(Identity.Parse(wire.CueListId));
+		return RunShowControlAsync(request, coordinator => coordinator.SelectCueListAsync(cueListId, cancellationToken), cancellationToken);
+	}
+
+	private ValueTask<WireEnvelope> ArmShowControlAsync(WireEnvelope request, CancellationToken cancellationToken) =>
+		RunShowControlAsync(request, coordinator => coordinator.ArmAsync(cancellationToken), cancellationToken);
+
+	private ValueTask<WireEnvelope> GoShowControlAsync(WireEnvelope request, CancellationToken cancellationToken) =>
+		RunShowControlAsync(request, coordinator => coordinator.GoAsync(cancellationToken), cancellationToken);
+
+	private ValueTask<WireEnvelope> CancelShowControlAsync(WireEnvelope request, CancellationToken cancellationToken) =>
+		RunShowControlAsync(request, coordinator => coordinator.CancelAsync(cancellationToken), cancellationToken);
+
+	private ValueTask<WireEnvelope> AcknowledgeShowControlRecoveryAsync(WireEnvelope request, CancellationToken cancellationToken)
+	{
+		var wire = request.Payload.Deserialize<WireShowControlRecovery>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Show-control recovery payload is required.");
+		return RunShowControlAsync(request, coordinator => coordinator.AcknowledgeRecoveryAsync(wire.Resume, cancellationToken), cancellationToken);
+	}
+
+	private async ValueTask<WireEnvelope> RunShowControlAsync(
+		WireEnvelope request,
+		Func<ShowControlCoordinator, ValueTask<ShowControlWorkspaceSnapshot>> operation,
+		CancellationToken cancellationToken)
+	{
+		_ = cancellationToken;
+		if (_showControl is null)
+			return Error(request, "control.show_control.unavailable", "Show-control persistence and coordination are not configured.");
+
+		try
+		{
+			var snapshot = await operation(_showControl).ConfigureAwait(false);
+			return Success(request, "control.show_control.snapshot.response", ToWire(snapshot));
+		}
+		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+		{
+			throw;
+		}
+		catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or NotSupportedException or FormatException or InvalidDataException or IOException or KeyNotFoundException)
+		{
+			return Error(request, "control.show_control.rejected", exception.Message);
+		}
+	}
+
+	private async ValueTask<Failure?> ExecuteShowControlActionAsync(
+		ShowControlAction action,
+		CancellationToken cancellationToken)
+	{
+		var control = _controlAccessor();
+		if (control is null || !control.HasAuthoritativeState)
+			return new Failure("control.not_ready", "ControlHost has no committed authoritative state yet.");
+
+		switch (action.Kind)
+		{
+			case ShowControlActionKind.ActivateScene:
+				return await ExecuteShowControlMutationAsync(
+					MutationKind.ActivateScene,
+					null,
+					action.SceneId,
+					null,
+					cancellationToken).ConfigureAwait(false);
+			case ShowControlActionKind.SetPreview:
+				return await ExecuteShowControlMutationAsync(
+					MutationKind.SelectPreview,
+					action.SourceId,
+					null,
+					null,
+					cancellationToken).ConfigureAwait(false);
+			case ShowControlActionKind.Cut:
+				return await ExecuteShowControlMutationAsync(
+					MutationKind.Cut,
+					control.State.Routing.PreviewSourceId.ToString(),
+					null,
+					null,
+					cancellationToken).ConfigureAwait(false);
+			case ShowControlActionKind.Dissolve:
+				return await ExecuteShowControlMutationAsync(
+					MutationKind.Dissolve,
+					control.State.Routing.PreviewSourceId.ToString(),
+					null,
+					action.DurationFrames,
+					cancellationToken).ConfigureAwait(false);
+			case ShowControlActionKind.JumpMediaCue:
+				return await ExecuteShowControlMediaCueJumpAsync(action, cancellationToken).ConfigureAwait(false);
+			case ShowControlActionKind.MediaPlay:
+				return await ExecuteShowControlMediaTransportAsync(action, MediaTransportCommandKind.Play, cancellationToken).ConfigureAwait(false);
+			case ShowControlActionKind.MediaPause:
+				return await ExecuteShowControlMediaTransportAsync(action, MediaTransportCommandKind.Pause, cancellationToken).ConfigureAwait(false);
+			case ShowControlActionKind.MediaStop:
+				return await ExecuteShowControlMediaTransportAsync(action, MediaTransportCommandKind.Stop, cancellationToken).ConfigureAwait(false);
+			case ShowControlActionKind.SetLayerVisibility:
+				return await ExecuteShowControlLayerVisibilityAsync(action, cancellationToken).ConfigureAwait(false);
+			case ShowControlActionKind.StartRecording:
+			{
+				var response = await StartRecordingAsync(
+					InternalRequest("control.recording.start", new WireRecordingStart(action.RecordingDestinationDirectory!, action.RecordingFileName!)),
+					cancellationToken).ConfigureAwait(false);
+				return ReadRecordingFailure(response);
+			}
+			case ShowControlActionKind.StopRecording:
+			{
+				var response = await StopRecordingAsync(
+					InternalRequest("control.recording.stop", new { }),
+					cancellationToken).ConfigureAwait(false);
+				return ReadRecordingFailure(response);
+			}
+			case ShowControlActionKind.WaitFrames:
+				return new Failure("control.show_control.wait.dispatch_invalid", "Frame waits are owned by the show-control coordinator and must not enter the production action executor.");
+			default:
+				return new Failure("control.show_control.action.unsupported", $"Show-control action '{action.Kind}' is not supported.");
+		}
+	}
+
+	private async ValueTask<Failure?> ExecuteShowControlMutationAsync(
+		MutationKind kind,
+		string? sourceId,
+		string? sceneId,
+		uint? durationFrames,
+		CancellationToken cancellationToken)
+	{
+		var control = _controlAccessor();
+		if (control is null || !control.HasAuthoritativeState)
+			return new Failure("control.not_ready", "ControlHost has no committed authoritative state yet.");
+		var state = control.State;
+		var command = new WireControlCommand(
+			ControlContractVersion.Current.ToString(),
+			CommandId.New().ToString(),
+			state.ProductionId.ToString(),
+			state.Revision.Value,
+			sourceId,
+			durationFrames,
+			sceneId);
+		var response = await MutateAsync(
+			InternalRequest("control.show_control.production_action", command),
+			kind,
+			cancellationToken).ConfigureAwait(false);
+		return ReadMutationFailure(response);
+	}
+
+	private async ValueTask<Failure?> ExecuteShowControlMediaCueJumpAsync(
+		ShowControlAction action,
+		CancellationToken cancellationToken)
+	{
+		if (_mediaDeck is null)
+			return new Failure("control.media_deck.unavailable", "Media-deck control service is not configured.");
+		var assetId = new MediaAssetId(Identity.Parse(action.MediaAssetId!));
+		var cueId = new MediaCuePointId(Identity.Parse(action.MediaCuePointId!));
+		var current = await _mediaDeck.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
+		if (current.Probe is null || current.Transport is null || current.Markers is null)
+			return new Failure("control.media_deck.unloaded", "Media deck has no loaded asset.");
+		if (current.Probe.AssetId != assetId)
+			return new Failure("control.media_deck.asset_mismatch", "Show-control media action does not match the loaded deck asset.");
+		var cue = current.Markers.CuePoints.FirstOrDefault(candidate => candidate.Id == cueId);
+		if (cue is null)
+			return new Failure("control.media_deck.cue_not_found", $"Media cue '{cueId}' does not exist in the loaded asset.");
+		var result = await _mediaDeck.ApplyTransportAsync(
+			new MediaTransportCommand(MediaContractVersion.Current, assetId, MediaTransportCommandKind.Seek, cue.PositionFrame),
+			cancellationToken).ConfigureAwait(false);
+		NotifyObservableStateChanged();
+		return MediaDeckFailure(result);
+	}
+
+	private async ValueTask<Failure?> ExecuteShowControlMediaTransportAsync(
+		ShowControlAction action,
+		MediaTransportCommandKind kind,
+		CancellationToken cancellationToken)
+	{
+		if (_mediaDeck is null)
+			return new Failure("control.media_deck.unavailable", "Media-deck control service is not configured.");
+		var assetId = new MediaAssetId(Identity.Parse(action.MediaAssetId!));
+		var result = await _mediaDeck.ApplyTransportAsync(
+			new MediaTransportCommand(MediaContractVersion.Current, assetId, kind),
+			cancellationToken).ConfigureAwait(false);
+		NotifyObservableStateChanged();
+		return MediaDeckFailure(result);
+	}
+
+	private async ValueTask<Failure?> ExecuteShowControlLayerVisibilityAsync(
+		ShowControlAction action,
+		CancellationToken cancellationToken)
+	{
+		var runtime = await _runtimeTransport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
+		var layer = runtime.CompositingLayers?.FirstOrDefault(candidate =>
+			string.Equals(candidate.LayerId, action.LayerId, StringComparison.Ordinal));
+		if (layer is null)
+			return new Failure("control.compositing.layer.unknown", $"Compositing layer '{action.LayerId}' is unavailable.");
+		var response = await SetCompositingLayerStateAsync(
+			InternalRequest(
+				"control.compositing.layer.set",
+				new WireCompositingLayerState(layer.LayerId, action.Visible!.Value, layer.Opacity)),
+			cancellationToken).ConfigureAwait(false);
+		return ReadErrorFailure(response);
+	}
+
+	private async ValueTask<ShowControlFrameObservation> ObserveShowControlFrameAsync(CancellationToken cancellationToken)
+	{
+		if (!_runtimeTransport.IsConnected)
+			throw new InvalidOperationException("RuntimeHost is not connected.");
+		var runtime = await _runtimeTransport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
+		var frameBudget = runtime.Performance?.FrameBudget ?? TimeSpan.Zero;
+		return new ShowControlFrameObservation(runtime.HostInstanceId, runtime.NextSequenceNumber, frameBudget);
+	}
+
+	private WireEnvelope InternalRequest(string messageType, object payload)
+	{
+		var requestId = Identity.New().ToString();
+		return Wire.Create(messageType, requestId, requestId, _hostInstanceId, StateVersion, NextSequence(), payload);
+	}
+
+	private static Failure? ReadMutationFailure(WireEnvelope response)
+	{
+		var transportFailure = ReadErrorFailure(response);
+		if (transportFailure is not null)
+			return transportFailure;
+		var wire = response.Payload.Deserialize<WireMutationResponse>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Internal Control mutation response is invalid.");
+		return wire.Accepted
+			? null
+			: wire.Failure is null
+				? new Failure("control.command.rejected", "Control command was rejected.")
+				: new Failure(wire.Failure.Code, wire.Failure.Message);
+	}
+
+	private static Failure? ReadRecordingFailure(WireEnvelope response)
+	{
+		var transportFailure = ReadErrorFailure(response);
+		if (transportFailure is not null)
+			return transportFailure;
+		var wire = response.Payload.Deserialize<WireRecordingCommandResult>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Internal recording response is invalid.");
+		if (wire.Succeeded)
+			return null;
+		return wire.Failure is null
+			? new Failure("control.recording.rejected", "Recording command was rejected.")
+			: new Failure(wire.Failure.Code, wire.Failure.Message);
+	}
+
+	private static Failure? ReadErrorFailure(WireEnvelope response)
+	{
+		if (!string.Equals(response.MessageType, "error", StringComparison.Ordinal))
+			return null;
+		var wire = response.Payload.Deserialize<WireFailure>(Wire.JsonOptions);
+		return wire is null
+			? new Failure("control.show_control.internal_error", "Internal Control command failed without failure detail.")
+			: new Failure(wire.Code, wire.Message);
+	}
+
+	private static Failure? MediaDeckFailure(MediaDeckSnapshot snapshot) =>
+		snapshot.Failure ??
+		(snapshot.State == MediaDeckState.Error
+			? new Failure("control.media_deck.failed", "Media-deck command failed.")
+			: null);
+
 	private async ValueTask<WireEnvelope> GetSnapshotAsync(WireEnvelope request, CancellationToken cancellationToken)
 	{
 		var control = _controlAccessor();
@@ -855,6 +1134,13 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		var aiShowcase = runtime?.AIShowcase is { } runtimeAI
 			? ToWire(runtimeAI)
 			: WireAIShowcase.Unavailable;
+		WireShowControlWorkspace? showControl = null;
+		if (_showControl is not null)
+		{
+			try { showControl = ToWire(await _showControl.GetSnapshotAsync(cancellationToken).ConfigureAwait(false)); }
+			catch { showControl = null; }
+		}
+
 		var health = OperatorHealthProjection.Evaluate(
 			runtime,
 			runtime is null ? Array.Empty<ProviderDescriptor>() : _runtimeTransport.ProviderDescriptors,
@@ -894,7 +1180,8 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 				.OrderBy(layer => layer.Order)
 				.ThenBy(layer => layer.LayerId, StringComparer.Ordinal)
 				.Select(ToWire)
-				.ToArray());
+				.ToArray(),
+			showControl);
 		return Success(request, "control.snapshot.response", payload);
 	}
 
@@ -1239,6 +1526,24 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			snapshot.Markers.CuePoints.Select(cue => new WireCuePoint(cue.Id.ToString(), cue.Name, cue.PositionFrame)).ToArray()),
 		snapshot.Failure is { } failure ? new WireFailure(failure.Code, failure.Message) : null);
 
+	private static WireShowControlWorkspace ToWire(ShowControlWorkspaceSnapshot snapshot) => new(
+		snapshot.CueLists.Select(ShowControlCanonicalSerializer.Serialize).ToArray(),
+		snapshot.SelectedCueListId?.ToString(),
+		new WireShowControlExecution(
+			snapshot.Execution.Version.ToString(),
+			snapshot.Execution.ExecutionId?.ToString(),
+			snapshot.Execution.CueListId?.ToString(),
+			(int)snapshot.Execution.State,
+			snapshot.Execution.CueIndex,
+			snapshot.Execution.ActionIndex,
+			snapshot.Execution.CurrentCueId?.ToString(),
+			snapshot.Execution.CurrentActionId?.ToString(),
+			snapshot.Execution.ExecutionRevision,
+			snapshot.Execution.WaitTargetFrameSequence,
+			snapshot.Execution.RuntimeHostInstanceId,
+			snapshot.Execution.RequiresAcknowledgement,
+			snapshot.Execution.Failure is { } failure ? new WireFailure(failure.Code, failure.Message) : null));
+
 	private static WireRecordingSnapshot ToWire(RuntimeRecordingSnapshot snapshot) => new(
 		snapshot.State,
 		snapshot.Elapsed.Ticks,
@@ -1487,7 +1792,25 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		string AvSyncSubmitOffset = "UNAVAILABLE",
 		string AvSyncDrift = "UNAVAILABLE",
 		string AvSyncDetail = "A/V sync diagnostics are unavailable.");
-	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, WireRecordingSnapshot Recording, WireHealthSnapshot Health, WireAIShowcase AIShowcase, WireMediaDeckSnapshot MediaDeck, ulong StateVersion, WireProductionCgTextSnapshot? ProductionCgText = null, WireScene[]? Scenes = null, WireOutputRole[]? OutputRoles = null, WireCompositingLayer[]? CompositingLayers = null);
+	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, WireRecordingSnapshot Recording, WireHealthSnapshot Health, WireAIShowcase AIShowcase, WireMediaDeckSnapshot MediaDeck, ulong StateVersion, WireProductionCgTextSnapshot? ProductionCgText = null, WireScene[]? Scenes = null, WireOutputRole[]? OutputRoles = null, WireCompositingLayer[]? CompositingLayers = null, WireShowControlWorkspace? ShowControl = null);
+	private sealed record WireShowControlCueList(string CueListJson);
+	private sealed record WireShowControlSelection(string CueListId);
+	private sealed record WireShowControlRecovery(bool Resume);
+	private sealed record WireShowControlExecution(
+		string Version,
+		string? ExecutionId,
+		string? CueListId,
+		int State,
+		int? CueIndex,
+		int? ActionIndex,
+		string? CurrentCueId,
+		string? CurrentActionId,
+		ulong ExecutionRevision,
+		ulong? WaitTargetFrameSequence,
+		string? RuntimeHostInstanceId,
+		bool RequiresAcknowledgement,
+		WireFailure? Failure);
+	private sealed record WireShowControlWorkspace(string[] CueLists, string? SelectedCueListId, WireShowControlExecution Execution);
 	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path);
 	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame, bool? AutoPlayOnProgram, int? EndBehavior, long? InPointFrame, long? OutPointFrame);
 	private sealed record WireMediaMarkerCommand(string Version, string AssetId, int Kind, long? PositionFrame, string? CuePointId, string? Name);

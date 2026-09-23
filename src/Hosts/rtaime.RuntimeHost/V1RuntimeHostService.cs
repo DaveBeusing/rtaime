@@ -893,7 +893,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		lock (_gate)
 		{
 			ThrowIfDisposed();
-			if (visible && _operatorGraphicsAsset is null)
+			if (visible && _operatorGraphicsAsset is null && _productionCgDefinition is null)
 				throw new InvalidOperationException("A graphics asset must be loaded before the overlay can be shown.");
 
 			if (_operatorGraphicsAsset is not null)

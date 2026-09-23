@@ -76,12 +76,14 @@ public sealed class OperatorKeyboardCommandRegistry
 		MediaDeckViewModel mediaDeck,
 		MediaTimelineViewModel timeline,
 		OperatorShellViewModel shell,
+		ShowControlViewModel showControl,
 		ICommand focusMediaSearchCommand)
 	{
 		ArgumentNullException.ThrowIfNull(@operator);
 		ArgumentNullException.ThrowIfNull(mediaDeck);
 		ArgumentNullException.ThrowIfNull(timeline);
 		ArgumentNullException.ThrowIfNull(shell);
+		ArgumentNullException.ThrowIfNull(showControl);
 		ArgumentNullException.ThrowIfNull(focusMediaSearchCommand);
 
 		var recording = new ContextSwitchCommand(
@@ -109,6 +111,7 @@ public sealed class OperatorKeyboardCommandRegistry
 			new("auto", "AUTO Preview to Program", Key.Return, ModifierKeys.None, @operator.DissolveCommand),
 			new("cut", "CUT Preview to Program", Key.Return, ModifierKeys.Control, @operator.CutCommand),
 			new("record", "Start / Stop Program recording", Key.R, ModifierKeys.None, recording),
+			new("show-control-go", "Show Control GO", Key.F9, ModifierKeys.None, showControl.GoCommand),
 			new("fullscreen", "Fullscreen / windowed Operator", Key.F11, ModifierKeys.None, shell.ToggleFullscreenCommand, true),
 			new("exit-fullscreen", "Exit fullscreen", Key.Escape, ModifierKeys.None, shell.ExitFullscreenCommand, true),
 			new("preview-view", "Maximize Preview viewer", Key.D1, ModifierKeys.Control, shell.MaximizePreviewCommand, true),

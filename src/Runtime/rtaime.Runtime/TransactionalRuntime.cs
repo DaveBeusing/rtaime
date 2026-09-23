@@ -495,7 +495,9 @@ public sealed class TransactionalRuntime
                 "Prepared execution belongs to a different authoritative state identity than the committed execution.");
         }
 
-        if (incomingAuthority.Revision.CompareTo(activeAuthority.Revision) <= 0)
+        var revisionComparison = incomingAuthority.Revision.CompareTo(activeAuthority.Revision);
+        if (revisionComparison < 0 ||
+            revisionComparison == 0 && !IsCompositingEnrichmentOfActiveExecution(preparedExecution))
         {
             return new Failure(
                 "runtime.prepare.stale_authority_revision",
@@ -503,6 +505,17 @@ public sealed class TransactionalRuntime
         }
 
         return null;
+    }
+
+    private bool IsCompositingEnrichmentOfActiveExecution(PreparedExecutionContract preparedExecution)
+    {
+        var active = _activeExecution?.PreparedExecution;
+        return active is not null &&
+            active.CompositingState is null &&
+            preparedExecution.CompositingState is not null &&
+            preparedExecution.Version == active.Version &&
+            preparedExecution.PlanGeneration == active.PlanGeneration &&
+            preparedExecution.Bindings.SequenceEqual(active.Bindings);
     }
 
     private bool ReservationIdentityInUse(Identity reservationId) =>

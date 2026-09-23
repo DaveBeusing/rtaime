@@ -485,7 +485,8 @@ public sealed class ControlHostProcess
 				_options.ListenEndpoint,
 				() => _control,
 				_runtimeTransport,
-				_mediaDeckControl);
+				_mediaDeckControl,
+				new ShowControlPersistenceStore(_managementStore));
 		}
 		catch
 		{

@@ -26,6 +26,9 @@ $quickControlsPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Operat
 $multiviewPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorMultiviewControl.xaml"
 $multiviewCodePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorMultiviewControl.xaml.cs"
 $liveSceneCuePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/LiveSceneCueControl.xaml"
+$showControlPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/ShowControlCueStackControl.xaml"
+$showControlViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/ShowControlViewModel.cs"
+$showControlDocumentationPath = Join-Path $repositoryRoot "docs/ShowControlCueSequencing.md"
 $liveControlsPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/LiveControlsControl.xaml"
 $liveDocumentationPath = Join-Path $repositoryRoot "docs/LiveMultiviewAndSceneControl.md"
 $compositingGraphPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/CompositingGraphControl.xaml"
@@ -100,7 +103,7 @@ $mediaLibraryDocumentationPath = Join-Path $repositoryRoot "docs/MediaLibraryAss
 $visualQualificationDocumentationPath = Join-Path $repositoryRoot "docs/OperatorVisualQualification.md"
 $visualQualificationTestsPath = Join-Path $repositoryRoot "tests/rtaime.Tests.Operator/OperatorVisualQualificationTests.cs"
 
-foreach ($path in @($appPath, $appCodePath, $windowPath, $windowCodePath, $shellPath, $keyboardPath, $quickControlsPath, $multiviewPath, $multiviewCodePath, $liveSceneCuePath, $liveControlsPath, $liveDocumentationPath, $compositingGraphPath, $compositingGraphCodePath, $compositingGraphViewModelPath, $compositingGraphProjectionPath, $compositingGraphDocumentationPath, $mediaPoolPath, $inspectorHostPath, $virtualizingWrapPanelPath, $deckPath, $deckViewModelPath, $timelinePath, $timelineCodePath, $timelineViewModelPath, $markerControllerPath, $timelineDocumentationPath, $viewModelPath, $runtimeReadinessPath, $startupViewModelPath, $monitorViewModelPath, $programOutputControllerPath, $programOutputWindowPath, $outputHealthControlPath, $outputHealthViewModelPath, $runtimeStatusBarPath, $runtimeStatusBarCodePath, $runtimeStatusBarViewModelPath, $runtimeStatusBarDocumentationPath, $healthContractPath, $healthProviderPath, $healthViewModelPath, $healthControlPath, $healthControlCodePath, $healthDocumentationPath, $previewViewerPath, $previewViewerCodePath, $programViewerPath, $programViewerCodePath, $monitorViewPath, $monitorPresentationControlPath, $sourceTileViewModelPath, $audioInputViewModelPath, $graphicsLoaderPath, $demoControllerPath, $demoManifestPath, $demoProductPath, $demoGraphicsPath, $demoDocumentationPath, $tokensPath, $themePath, $customControlsPath, $outputHealthControlsPath, $customInputControlsPath, $customMediaControlsPath, $customControlThemePath, $outputHealthControlThemePath, $customInputThemePath, $customMediaThemePath, $monitorWorkspaceThemePath, $customIconThemePath, $manifestPath, $projectPath, $documentationPath, $workspaceDocumentationPath, $outputHealthDocumentationPath, $mediaLibraryDocumentationPath, $visualQualificationDocumentationPath, $visualQualificationTestsPath)) {
+foreach ($path in @($appPath, $appCodePath, $windowPath, $windowCodePath, $shellPath, $keyboardPath, $quickControlsPath, $multiviewPath, $multiviewCodePath, $liveSceneCuePath, $showControlPath, $showControlViewModelPath, $showControlDocumentationPath, $liveControlsPath, $liveDocumentationPath, $compositingGraphPath, $compositingGraphCodePath, $compositingGraphViewModelPath, $compositingGraphProjectionPath, $compositingGraphDocumentationPath, $mediaPoolPath, $inspectorHostPath, $virtualizingWrapPanelPath, $deckPath, $deckViewModelPath, $timelinePath, $timelineCodePath, $timelineViewModelPath, $markerControllerPath, $timelineDocumentationPath, $viewModelPath, $runtimeReadinessPath, $startupViewModelPath, $monitorViewModelPath, $programOutputControllerPath, $programOutputWindowPath, $outputHealthControlPath, $outputHealthViewModelPath, $runtimeStatusBarPath, $runtimeStatusBarCodePath, $runtimeStatusBarViewModelPath, $runtimeStatusBarDocumentationPath, $healthContractPath, $healthProviderPath, $healthViewModelPath, $healthControlPath, $healthControlCodePath, $healthDocumentationPath, $previewViewerPath, $previewViewerCodePath, $programViewerPath, $programViewerCodePath, $monitorViewPath, $monitorPresentationControlPath, $sourceTileViewModelPath, $audioInputViewModelPath, $graphicsLoaderPath, $demoControllerPath, $demoManifestPath, $demoProductPath, $demoGraphicsPath, $demoDocumentationPath, $tokensPath, $themePath, $customControlsPath, $outputHealthControlsPath, $customInputControlsPath, $customMediaControlsPath, $customControlThemePath, $outputHealthControlThemePath, $customInputThemePath, $customMediaThemePath, $monitorWorkspaceThemePath, $customIconThemePath, $manifestPath, $projectPath, $documentationPath, $workspaceDocumentationPath, $outputHealthDocumentationPath, $mediaLibraryDocumentationPath, $visualQualificationDocumentationPath, $visualQualificationTestsPath)) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required Operator UI artifact is missing: '$path'."
 }
 
@@ -127,6 +130,9 @@ $quickControls = Get-Content -LiteralPath $quickControlsPath -Raw
 $multiview = Get-Content -LiteralPath $multiviewPath -Raw
 $multiviewCode = Get-Content -LiteralPath $multiviewCodePath -Raw
 $liveSceneCue = Get-Content -LiteralPath $liveSceneCuePath -Raw
+$showControl = Get-Content -LiteralPath $showControlPath -Raw
+$showControlViewModel = Get-Content -LiteralPath $showControlViewModelPath -Raw
+$showControlDocumentation = Get-Content -LiteralPath $showControlDocumentationPath -Raw
 $liveControls = Get-Content -LiteralPath $liveControlsPath -Raw
 $liveDocumentation = Get-Content -LiteralPath $liveDocumentationPath -Raw
 $compositingGraph = Get-Content -LiteralPath $compositingGraphPath -Raw
@@ -141,7 +147,7 @@ $virtualizingWrapPanel = Get-Content -LiteralPath $virtualizingWrapPanelPath -Ra
 $deck = Get-Content -LiteralPath $deckPath -Raw
 $deckViewModel = Get-Content -LiteralPath $deckViewModelPath -Raw
 $timeline = Get-Content -LiteralPath $timelinePath -Raw
-$inputSurface = "$window`n$inspectorHost`n$deck`n$timeline`n$liveControls`n$liveSceneCue`n$multiview`n$outputHealthControl"
+$inputSurface = "$window`n$inspectorHost`n$deck`n$timeline`n$liveControls`n$liveSceneCue`n$showControl`n$multiview`n$outputHealthControl"
 $timelineCode = Get-Content -LiteralPath $timelineCodePath -Raw
 $timelineViewModel = Get-Content -LiteralPath $timelineViewModelPath -Raw
 $markerController = Get-Content -LiteralPath $markerControllerPath -Raw
@@ -593,6 +599,12 @@ Assert-Condition ($keyboard -match 'previewTransportContext' -and $keyboard -mat
 Assert-Condition ($keyboard -match 'new\("auto".+Key\.Return, ModifierKeys\.None, @operator\.DissolveCommand' -and $keyboard -match 'new\("cut".+Key\.Return, ModifierKeys\.Control, @operator\.CutCommand') "Central keyboard registry must expose Enter=AUTO and Ctrl+Enter=CUT."
 Assert-Condition ($keyboard -match 'new\("delete-cue".+Key\.Delete' -and $deck -notmatch '<KeyBinding Key="Delete"') "Delete must route through the central shortcut registry rather than a Media Deck-local binding."
 Assert-Condition ($keyboard -match 'FindConflicts' -and $keyboard -match 'Operator keyboard shortcut conflict') "Central keyboard registry must reject conflicting bindings."
+Assert-Condition ($keyboard -match 'new\("show-control-go".+Key\.F9.+showControl\.GoCommand') "Show Control GO must use the conflict-checked central F9 shortcut."
+Assert-Condition ($liveSceneCue -match 'Header="SHOW CONTROL"' -and $liveSceneCue -match 'ShowControlCueStackControl') "SCENES & CUES must host Show Control beside existing Media Cues."
+Assert-Condition ($showControl -match 'SelectedItem="{Binding SelectedCue, Mode=TwoWay}"' -and $showControl -match 'Command="{Binding GoCommand}"') "Show Control cue selection and GO must remain separate interactions."
+Assert-Condition ($showControlViewModel -match 'ConfirmedShowControlSnapshot|ApplyConfirmedSnapshot' -and $windowCode -match 'ConfirmedShowControlSnapshot \+= ShowControl\.ApplyConfirmedSnapshot') "Show Control presentation must consume confirmed synchronized Control snapshots."
+Assert-Condition ($showControlViewModel -match 'ShowControlActionKind\.WaitFrames' -and $showControlViewModel -match 'ShowControlActionKind\.StartRecording' -and $showControlViewModel -match 'ShowControlActionKind\.SetLayerVisibility') "Show Control editor must expose the bounded supported action union."
+Assert-Condition ($showControlDocumentation -match 'ControlHost remains authoritative' -and $showControlDocumentation -match 'UI timers never advance production state') "Show Control documentation must preserve authority and deterministic timing boundaries."
 Assert-Condition ($keyboard -match 'TryHandle\(KeyEventArgs args\)' -and $windowCode -match 'OnPreviewKeyDown\(KeyEventArgs e\)' -and $windowCode -match 'Shortcuts\.TryHandle\(e\)') "Window-level shortcuts must route through PreviewKeyDown so unmodified production keys do not depend on WPF KeyGesture validation."
 Assert-Condition ($keyboard -notmatch 'new KeyBinding\(' -and $keyboard -notmatch 'KeyGesture' -and $windowCode -notmatch 'Shortcuts\.Apply\(InputBindings\)') "Central shortcut routing must not construct unsupported WPF KeyGesture bindings."
 Assert-Condition ($keyboard -match 'args\.IsRepeat') "Production shortcut routing must suppress key-repeat command storms."

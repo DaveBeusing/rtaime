@@ -749,3 +749,12 @@ Program contains no Preview transport bindings. Its `ON AIR` presentation is der
 Monitor fullscreen is transient Shell presentation state. It maximizes the selected monitor, collapses surrounding presentation regions and uses the existing Operator fullscreen window mode. Exiting fullscreen restores the prior viewer mode and center-layout state. No second playback or monitoring instance is created.
 
 Timecode is displayed only when the loaded Media Deck source identity matches the source currently shown by that monitor. Other sources show an explicit unavailable timecode rather than borrowing unrelated transport state.
+## Show Control
+
+The existing SCENES & CUES region includes a Show Control tab beside Media Cues. Its RUN view presents cue-list selection, the compact cue stack, authoritative execution state, current cue/action evidence, ARM, GO, CANCEL and recovery acknowledgement. Cue row selection is intentionally non-destructive.
+
+The EDIT view provides bounded cue-list/cue/action authoring for the closed Show Control action union. It uses rtaime input/list/button controls and preserves stable identities during rename and reorder. Unsupported action types cannot be authored through the surface.
+
+`F9` is registered through the centralized shortcut registry as Show Control GO. It is active only when the synchronized execution state is `Armed`; existing Enter/Ctrl+Enter AUTO/CUT bindings remain unchanged.
+
+See `docs/ShowControlCueSequencing.md` for authority, timing and recovery behavior.

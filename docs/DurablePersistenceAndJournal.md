@@ -143,3 +143,10 @@ Persistence acceptance evidence includes:
 - full managed build/test suite remains green.
 
 Process Recovery & Supervision adds recovery evidence for valid checkpoint restore, Runtime reconciliation without authority revision advancement, recovery conflicts, process replacement and stale client/session behavior.
+## Show Control durable execution cursor
+
+Show Control persists cue-list definitions plus only the execution cursor required for safe recovery. Persisted `Executing` or `Waiting` state is never treated as proof that the in-flight action completed; ControlHost restores it as `RecoveryRequired` and requires explicit operator acknowledgement.
+
+Show Control uses the existing management document store with optimistic storage versioning. Structured production-journal entries cover cue-list save/selection, arm, GO, action start/completion, waits, failures, cancellation and recovery acknowledgement. Stable list/cue/action identities provide bounded causation evidence without turning the Production Journal into an execution replay engine.
+
+See `docs/ShowControlCueSequencing.md` for the complete state and recovery semantics.
