@@ -89,6 +89,8 @@ public sealed class GraphicsOverlayIntegrationTests
 
 		var program = fixture.Runtime.ProcessNextBoundary();
 		AssertPixel(program.ProgramPixels, fixture.Format, 0, 0, 255, 0, 0, 255);
+		Assert.Equal(2, fixture.Runtime.Snapshot.Performance.ActiveCompositingLayerCount);
+		Assert.True(fixture.Runtime.Snapshot.Performance.LastCompositionDuration >= TimeSpan.Zero);
 		var originX = (int)Math.Round(definition.PositionX * (fixture.Format.Width - 1));
 		var originY = (int)Math.Round(definition.PositionY * (fixture.Format.Height - 1)) - (int)definition.BoxHeight;
 		var sampleX = originX + checked((int)(definition.BoxWidth / 2));
@@ -102,6 +104,10 @@ public sealed class GraphicsOverlayIntegrationTests
 			visible: true,
 			opacity: 128);
 		Assert.Equal(128, Assert.Single(updated, layer => layer.LayerId == V1RuntimeHostService.BitmapGraphicsLayerId).Opacity);
+
+		var invalidOrder = updated.Select(layer => layer.LayerId).ToArray();
+		invalidOrder[0] = invalidOrder[^1];
+		Assert.Throws<ArgumentException>(() => fixture.Runtime.ReorderCompositingLayers(invalidOrder));
 
 		var orderedIds = updated
 			.OrderBy(layer => layer.Order)
