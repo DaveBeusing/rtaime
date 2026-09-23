@@ -1,6 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 using System.Text;
+using System.Text.Json;
 using rtaime.Core;
 
 namespace rtaime.Tests.Unit;
