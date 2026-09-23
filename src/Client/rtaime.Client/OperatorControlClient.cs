@@ -623,6 +623,18 @@ public interface IOperatorControlTransport
     ValueTask<OperatorGraphicsOverlayDescriptor> ClearGraphicsOverlayAsync(CancellationToken cancellationToken = default) =>
         ValueTask.FromException<OperatorGraphicsOverlayDescriptor>(new NotSupportedException("Operator transport does not expose graphics overlay control."));
 
+    ValueTask<IReadOnlyList<OperatorCompositingLayerDescriptor>> SetCompositingLayerStateAsync(
+        string layerId,
+        bool visible,
+        byte opacity,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<IReadOnlyList<OperatorCompositingLayerDescriptor>>(new NotSupportedException("Operator transport does not expose compositing layer control."));
+
+    ValueTask<IReadOnlyList<OperatorCompositingLayerDescriptor>> ReorderCompositingLayersAsync(
+        IReadOnlyList<string> orderedLayerIds,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<IReadOnlyList<OperatorCompositingLayerDescriptor>>(new NotSupportedException("Operator transport does not expose compositing layer reorder control."));
+
     ValueTask<OperatorRecordingCommandResult> StartRecordingAsync(
         string destinationDirectory,
         string fileName,
@@ -862,6 +874,35 @@ public sealed class OperatorControlClient
     public async ValueTask<OperatorGraphicsOverlayDescriptor> ClearGraphicsOverlayAsync(CancellationToken cancellationToken = default)
     {
         var result = await _transport.ClearGraphicsOverlayAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+
+    public async ValueTask<IReadOnlyList<OperatorCompositingLayerDescriptor>> SetCompositingLayerStateAsync(
+        string layerId,
+        bool visible,
+        byte opacity,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(layerId))
+            throw new ArgumentException("Compositing layer identity is required.", nameof(layerId));
+        RequireSnapshot();
+        var result = await _transport
+            .SetCompositingLayerStateAsync(layerId.Trim(), visible, opacity, cancellationToken)
+            .ConfigureAwait(false);
+        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+
+    public async ValueTask<IReadOnlyList<OperatorCompositingLayerDescriptor>> ReorderCompositingLayersAsync(
+        IReadOnlyList<string> orderedLayerIds,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(orderedLayerIds);
+        RequireSnapshot();
+        var result = await _transport
+            .ReorderCompositingLayersAsync(orderedLayerIds, cancellationToken)
+            .ConfigureAwait(false);
         await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
