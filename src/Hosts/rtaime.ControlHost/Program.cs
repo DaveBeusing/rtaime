@@ -111,7 +111,7 @@ internal static class Program
 		catch (Exception exception)
 		{
 			log.Critical("lifecycle", "controlhost.unexpected-failure", "ControlHost terminated after an unexpected failure.", exception);
-			return (int)ControlHostExitCode.StartupFailure;
+			return (int)ControlHostExitCode.UnexpectedFailure;
 		}
 		finally
 		{
