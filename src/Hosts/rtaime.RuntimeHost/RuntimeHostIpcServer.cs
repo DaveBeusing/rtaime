@@ -190,6 +190,8 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 				"runtime.graphics.cg.apply" => ValueTask.FromResult(ApplyProductionCgText(request, runtime)),
 				"runtime.graphics.overlay.set" => ValueTask.FromResult(SetGraphicsOverlay(request, runtime)),
 				"runtime.graphics.overlay.clear" => ValueTask.FromResult(ClearGraphicsOverlay(request, runtime)),
+				"runtime.compositing.layer.set" => ValueTask.FromResult(SetCompositingLayerState(request, runtime)),
+				"runtime.compositing.layers.reorder" => ValueTask.FromResult(ReorderCompositingLayers(request, runtime)),
 				"runtime.audio.input.set" => ValueTask.FromResult(SetAudioInputState(request, runtime)),
 				"runtime.audio.test_signal.set" => ValueTask.FromResult(SetAudioTestSignal(request, runtime)),
 				"runtime.test_pattern.set" => ValueTask.FromResult(SetBroadcastTestPattern(request, runtime)),
@@ -279,6 +281,24 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		var snapshot = runtime.ClearGraphicsOverlay();
 		_stateVersion++;
 		return Success(request, "runtime.graphics.overlay.response", ToWire(snapshot));
+	}
+
+	private WireEnvelope SetCompositingLayerState(WireEnvelope request, V1RuntimeHostService runtime)
+	{
+		var wire = request.Payload.Deserialize<WireCompositingLayerState>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Compositing layer state payload is required.");
+		var layers = runtime.SetCompositingLayerState(wire.LayerId, wire.Visible, wire.Opacity);
+		_stateVersion++;
+		return Success(request, "runtime.compositing.layers.response", layers.Select(ToWire).ToArray());
+	}
+
+	private WireEnvelope ReorderCompositingLayers(WireEnvelope request, V1RuntimeHostService runtime)
+	{
+		var wire = request.Payload.Deserialize<WireCompositingLayerOrder>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Compositing layer order payload is required.");
+		var layers = runtime.ReorderCompositingLayers(wire.LayerIds);
+		_stateVersion++;
+		return Success(request, "runtime.compositing.layers.response", layers.Select(ToWire).ToArray());
 	}
 
 	private WireEnvelope SetBroadcastTestPattern(WireEnvelope request, V1RuntimeHostService runtime)
@@ -754,6 +774,8 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 	private sealed record WireProductionCgText(string Text, string Typeface, string? FallbackTypeface, float FontSizePixels, WireCgColor Foreground, double PositionX, double PositionY, uint BoxWidth, uint BoxHeight, int Alignment, int Anchor, WireCgPanel Panel, bool Visible, int Layer, int ZOrder);
 	private sealed record WireProductionCgTextSnapshot(bool Active, string? Text, string? Typeface, string? ResolvedTypeface, float FontSizePixels, uint BoxWidth, uint BoxHeight, int Alignment, int Anchor, bool PanelEnabled, bool Visible, int Layer, int ZOrder, bool CacheHit, long RenderDurationTicks);
 	private sealed record WireGraphicsOverlayState(bool Visible, double PositionX, double PositionY, double Scale);
+	private sealed record WireCompositingLayerState(string LayerId, bool Visible, byte Opacity);
+	private sealed record WireCompositingLayerOrder(string[] LayerIds);
 	private sealed record WireGraphicsOverlay(bool AssetLoaded, string? AssetName, uint AssetWidth, uint AssetHeight, bool Visible, double PositionX, double PositionY, double Scale);
 	private sealed record WireCompositingLayer(string LayerId, int Kind, int Order, bool Visible, byte Opacity, double PositionX, double PositionY, double Scale, string ContentIdentity);
 	private sealed record WireAudioInputState(string SourceId, double Gain, bool Muted);
