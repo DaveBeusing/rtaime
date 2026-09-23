@@ -62,17 +62,19 @@ The V1 reference lower-third workflow uses `Segoe UI` with explicit `Arial` fall
 
 ## Rendering and compositing
 
-RuntimeHost rasterizes the bounded CG rectangle into straight RGBA pixels. The result is assigned to the same Runtime-owned dynamic RGBA graphics source already used by bitmap overlays.
+RuntimeHost rasterizes the bounded CG rectangle into straight RGBA pixels and owns a dedicated reusable dynamic RGBA source for that CG surface. Bitmap graphics retain their own Runtime-owned source. Both participate in the same bounded ordered compositor rather than overwriting one another.
 
-The existing render order remains:
+The render order is:
 
 1. resolve the Program CUT/DISSOLVE result;
-2. composite the active Runtime graphics layer;
-3. read the final Program pixels;
-4. publish Program monitoring;
-5. provide the same post-graphics pixels to recording.
+2. materialize the currently visible governed layers;
+3. sort them by confirmed Runtime order and stable layer identity;
+4. composite the ordered layers over the transitioned background;
+5. read the final Program pixels;
+6. publish Program monitoring;
+7. provide the same post-graphics pixels to recording.
 
-Dynamic CG text therefore uses the same graphics/compositing truth as existing PNG/RGBA overlays.
+The stable Production CG layer identity is `production-cg`; the bitmap graphics identity is `bitmap-graphics`. Dynamic CG text therefore shares the same Runtime/provider compositing truth as bitmap graphics while remaining independently visible and independently opaque.
 
 Existing bitmap overlays remain fully supported and are not converted to text templates.
 
@@ -82,9 +84,10 @@ Text rasterization occurs only when a CG definition is applied or changed. It is
 
 RuntimeHost maintains:
 
-- a reusable full-frame graphics buffer;
-- a reusable full-frame scratch buffer;
-- a bounded least-recently-used cache of at most 16 rendered CG surfaces.
+- reusable full-frame bitmap and Production CG buffers;
+- reusable full-frame scratch storage for each prepared graphics source;
+- a bounded least-recently-used cache of at most 16 rendered CG surfaces;
+- a bounded compositing stack whose current maximum is eight active layers.
 
 The cache key contains only rasterization-affecting values. Visibility and placement changes do not force text rasterization.
 
@@ -104,19 +107,17 @@ The initial V1 layout uses a bounded 900 x 144 pixel lower-third rectangle, bott
 
 Applying the lower third sends only the definition through the governed command path. RuntimeHost renders the pixels and the Operator refreshes the confirmed snapshot.
 
-Show / Hide and Clear continue to use the existing graphics commands.
+When Production CG is the only graphics source, the compatibility Show / Hide command continues to operate on it. When bitmap and CG are active concurrently, the COMPOSITING workspace exposes confirmed per-layer visibility, opacity and bounded ordering through the governed ControlHost/RuntimeHost path. Global Clear retains its historical meaning and clears the active graphics content.
 
-Bitmap free-placement controls are disabled while Production CG is active. CG placement is changed by reapplying the CG definition so anchor semantics remain deterministic.
+Bitmap free-placement controls remain scoped to the bitmap layer. CG placement is changed by reapplying the CG definition so anchor semantics remain deterministic.
 
 ## Recovery and resynchronization
 
-ControlHost retains the last successfully confirmed CG definition for the lifetime of the ControlHost process.
+ControlHost retains the successfully confirmed graphics recovery state for the lifetime of the ControlHost process: bitmap RGBA content and placement, Production CG definition, per-layer visibility/opacity and confirmed layer order.
 
-When RuntimeHost is replaced or restarted and ControlHost reconciles production execution, ControlHost reapplies the retained CG definition after Runtime authority is aligned. Operator then receives the restored Runtime snapshot through normal resynchronization.
+When RuntimeHost is replaced or restarted and ControlHost reconciles production execution, ControlHost reloads the retained bitmap, reapplies the CG definition, restores bounded layer state and finally reapplies the retained order against the layers that actually exist in the new Runtime. Operator then receives only the restored Runtime-confirmed snapshot through normal resynchronization.
 
-This is bounded RuntimeHost recovery, not durable rundown persistence. A ControlHost restart does not currently persist or restore the CG definition from durable storage.
-
-Bitmap overlays retain their existing behavior and are not newly persisted by this capability.
+This is bounded RuntimeHost recovery, not durable rundown persistence. A ControlHost restart does not currently persist or restore the graphics stack from durable storage.
 
 ## Validation
 
@@ -127,9 +128,9 @@ The qualified path is covered by:
 - deterministic explicit font-fallback and missing-font negative tests;
 - bounded-cache regression coverage;
 - real process-boundary Operator -> ControlHost -> RuntimeHost CG command/state projection;
-- RuntimeHost restart recovery coverage;
+- RuntimeHost restart recovery coverage for concurrent bitmap + CG state and layer order;
 - Operator UI policy checks that require the CG editor and prohibit local WPF production text rendering;
-- existing bitmap-overlay and recording regressions.
+- existing bitmap-overlay and recording regressions plus concurrent bitmap/CG composition coverage.
 
 ## Boundaries
 
