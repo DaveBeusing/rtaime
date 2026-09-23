@@ -795,7 +795,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				rendered.RenderDuration);
 			RebuildProductionCgLayerUnsafe();
 			Observe($"graphics.cg.rendered:{rendered.ResolvedTypeface}:{definition.BoxWidth}x{definition.BoxHeight}:cache={rendered.CacheHit}");
-			return GraphicsOverlaySnapshotUnsafe();
+			return ProductionCgOverlaySnapshotUnsafe();
 		}
 	}
 
@@ -852,9 +852,23 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			_operatorGraphicsAssetWidth = 0;
 			_operatorGraphicsAssetHeight = 0;
 			_operatorGraphicsVisible = false;
+			_operatorGraphicsOpacity = byte.MaxValue;
 			_operatorGraphicsLayerScratch.AsSpan().Clear();
 			_operatorGraphicsLayerBuffer.CopyPixelsFrom(_operatorGraphicsLayerScratch);
 			_operatorGraphicsLayer.Update(_operatorGraphicsLayerBuffer);
+
+			_productionCgAsset = null;
+			_productionCgAssetWidth = 0;
+			_productionCgAssetHeight = 0;
+			_productionCgPositionX = 0;
+			_productionCgPositionY = 0;
+			_productionCgOpacity = byte.MaxValue;
+			_productionCgDefinition = null;
+			_productionCgText = V1ProductionCgTextSnapshot.Empty;
+			_productionCgLayerScratch.AsSpan().Clear();
+			_productionCgLayerBuffer.CopyPixelsFrom(_productionCgLayerScratch);
+			_productionCgLayer.Update(_productionCgLayerBuffer);
+
 			Observe("graphics.overlay.cleared");
 			return GraphicsOverlaySnapshotUnsafe();
 		}
@@ -1444,48 +1458,56 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private IReadOnlyList<MaterializedCompositingLayer> MaterializeLayers(FrameTiming timing)
 	{
 		var layers = new List<MaterializedCompositingLayer>(3);
-
-		if (_visualLayerMode != V1VisualLayerMode.Disabled)
+		try
 		{
-			var frame = _visualLayerMode switch
+			if (_visualLayerMode != V1VisualLayerMode.Disabled)
 			{
-				V1VisualLayerMode.Static => _staticLayer.Materialize(_gpu, timing),
-				V1VisualLayerMode.Dynamic => _dynamicLayer.Materialize(_gpu, timing),
-				_ => throw new InvalidOperationException($"Unsupported visual layer mode '{_visualLayerMode}'.")
-			};
-			layers.Add(new MaterializedCompositingLayer(
-				LegacyVisualLayerId,
-				_legacyVisualLayerOrder,
-				frame,
-				new GpuKeyLayer(frame, _legacyVisualLayerOpacity)));
-		}
+				var frame = _visualLayerMode switch
+				{
+					V1VisualLayerMode.Static => _staticLayer.Materialize(_gpu, timing),
+					V1VisualLayerMode.Dynamic => _dynamicLayer.Materialize(_gpu, timing),
+					_ => throw new InvalidOperationException($"Unsupported visual layer mode '{_visualLayerMode}'.")
+				};
+				layers.Add(new MaterializedCompositingLayer(
+					LegacyVisualLayerId,
+					_legacyVisualLayerOrder,
+					frame,
+					new GpuKeyLayer(frame, _legacyVisualLayerOpacity)));
+			}
 
-		if (_operatorGraphicsVisible && _operatorGraphicsAsset is not null)
-		{
-			var frame = _operatorGraphicsLayer.Materialize(_gpu, timing);
-			layers.Add(new MaterializedCompositingLayer(
-				BitmapGraphicsLayerId,
-				_operatorGraphicsLayerOrder,
-				frame,
-				new GpuKeyLayer(frame, _operatorGraphicsOpacity)));
-		}
+			if (_operatorGraphicsVisible && _operatorGraphicsAsset is not null)
+			{
+				var frame = _operatorGraphicsLayer.Materialize(_gpu, timing);
+				layers.Add(new MaterializedCompositingLayer(
+					BitmapGraphicsLayerId,
+					_operatorGraphicsLayerOrder,
+					frame,
+					new GpuKeyLayer(frame, _operatorGraphicsOpacity)));
+			}
 
-		if (_productionCgText.Visible && _productionCgAsset is not null)
-		{
-			var frame = _productionCgLayer.Materialize(_gpu, timing);
-			layers.Add(new MaterializedCompositingLayer(
-				ProductionCgLayerId,
-				_productionCgLayerOrder,
-				frame,
-				new GpuKeyLayer(frame, _productionCgOpacity)));
-		}
+			if (_productionCgText.Visible && _productionCgAsset is not null)
+			{
+				var frame = _productionCgLayer.Materialize(_gpu, timing);
+				layers.Add(new MaterializedCompositingLayer(
+					ProductionCgLayerId,
+					_productionCgLayerOrder,
+					frame,
+					new GpuKeyLayer(frame, _productionCgOpacity)));
+			}
 
-		layers.Sort(static (left, right) =>
+			layers.Sort(static (left, right) =>
+			{
+				var order = left.Order.CompareTo(right.Order);
+				return order != 0 ? order : string.Compare(left.LayerId, right.LayerId, StringComparison.Ordinal);
+			});
+			return layers;
+		}
+		catch
 		{
-			var order = left.Order.CompareTo(right.Order);
-			return order != 0 ? order : string.Compare(left.LayerId, right.LayerId, StringComparison.Ordinal);
-		});
-		return layers;
+			foreach (var layer in layers)
+				layer.Frame.Dispose();
+			throw;
+		}
 	}
 
 	private V1RuntimePerformanceSnapshot PerformanceSnapshotUnsafe(SystemHardwareTelemetrySnapshot hardware)
@@ -1721,6 +1743,16 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			_productionCgPositionY,
 			1.0);
 	}
+
+	private V1GraphicsOverlaySnapshot ProductionCgOverlaySnapshotUnsafe() => new(
+		_productionCgAsset is not null,
+		_productionCgAsset is null ? null : "production-cg-text",
+		_productionCgAssetWidth,
+		_productionCgAssetHeight,
+		_productionCgText.Visible,
+		_productionCgPositionX,
+		_productionCgPositionY,
+		1.0);
 
 	private IReadOnlyList<V1CompositingLayerSnapshot> CompositingLayerSnapshotsUnsafe()
 	{
