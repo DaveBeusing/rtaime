@@ -517,6 +517,9 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		await _mutationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
 		try
 		{
+			var control = _controlAccessor();
+			if (control is null || !control.HasAuthoritativeState)
+				return Error(request, "control.not_ready", "ControlHost has no committed authoritative state yet.");
 			if (!_runtimeTransport.IsConnected)
 				return Error(request, "runtime.unavailable", "RuntimeHost is not connected.");
 			var layers = await _runtimeTransport.SetCompositingLayerStateAsync(
@@ -525,6 +528,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 				wire.Opacity,
 				cancellationToken).ConfigureAwait(false);
 			_compositingLayers = layers;
+			control.ConfirmCompositingMutation(ToProductionCompositingState(layers));
 			if (string.Equals(wire.LayerId, "bitmap-graphics", StringComparison.Ordinal))
 				_graphicsOverlayState = _graphicsOverlayState with { Visible = wire.Visible };
 			else if (string.Equals(wire.LayerId, "production-cg", StringComparison.Ordinal) && _productionCgText is not null)
@@ -549,10 +553,14 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		await _mutationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
 		try
 		{
+			var control = _controlAccessor();
+			if (control is null || !control.HasAuthoritativeState)
+				return Error(request, "control.not_ready", "ControlHost has no committed authoritative state yet.");
 			if (!_runtimeTransport.IsConnected)
 				return Error(request, "runtime.unavailable", "RuntimeHost is not connected.");
 			var layers = await _runtimeTransport.ReorderCompositingLayersAsync(wire.LayerIds, cancellationToken).ConfigureAwait(false);
 			_compositingLayers = layers;
+			control.ConfirmCompositingMutation(ToProductionCompositingState(layers));
 			NotifyObservableStateChanged();
 			return Success(request, "control.compositing.layers.response", layers.Select(ToWire).ToArray());
 		}
@@ -564,6 +572,39 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		{
 			_mutationGate.Release();
 		}
+	}
+
+	private async ValueTask ConfirmRuntimeCompositingAuthorityAsync(
+		ControlHostService control,
+		CancellationToken cancellationToken)
+	{
+		var runtime = await _runtimeTransport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
+		_compositingLayers = runtime.CompositingLayers ?? Array.Empty<RuntimeCompositingLayerSnapshot>();
+		control.ConfirmCompositingMutation(ToProductionCompositingState(_compositingLayers));
+	}
+
+	private static ProductionCompositingState ToProductionCompositingState(
+		IReadOnlyList<RuntimeCompositingLayerSnapshot> layers)
+	{
+		ArgumentNullException.ThrowIfNull(layers);
+		return new ProductionCompositingState(
+			ProductionCompositingState.CurrentVersion,
+			layers
+				.OrderBy(layer => layer.Order)
+				.ThenBy(layer => layer.LayerId, StringComparer.Ordinal)
+				.Select(layer => new ProductionCompositingLayerState(
+					layer.LayerId,
+					Enum.IsDefined(typeof(ProductionCompositingLayerKind), layer.Kind)
+						? (ProductionCompositingLayerKind)layer.Kind
+						: throw new InvalidDataException($"Runtime compositing layer kind '{layer.Kind}' is invalid."),
+					layer.Order,
+					layer.Visible,
+					layer.Opacity,
+					layer.PositionX,
+					layer.PositionY,
+					layer.Scale,
+					layer.ContentIdentity))
+				.ToArray());
 	}
 
 	private async ValueTask<WireEnvelope> MutateGraphicsAsync(
@@ -583,6 +624,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			try
 			{
 				var snapshot = await mutation(cancellationToken).ConfigureAwait(false);
+				await ConfirmRuntimeCompositingAuthorityAsync(control, cancellationToken).ConfigureAwait(false);
 				NotifyObservableStateChanged();
 				return Success(request, "control.graphics.overlay.response", ToWire(snapshot));
 			}
