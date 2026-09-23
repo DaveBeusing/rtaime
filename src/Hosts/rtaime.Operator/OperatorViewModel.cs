@@ -480,6 +480,8 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		CanApplyGraphics() &&
 		_client?.Snapshot?.ProductionCgText.Active != true;
 
+	internal bool CanManageCompositingLayers() => CanControl() && CompositingLayers.Count > 0;
+
 	private bool CanApplyTextGraphics() =>
 		CanControl() &&
 		!string.IsNullOrWhiteSpace(GraphicsText) &&
@@ -918,6 +920,37 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 			Apply(_client.Snapshot!);
 			CommandStatus = "GRAPHICS CLEARED";
 			LastEvent = "Graphics overlay asset was cleared from RuntimeHost.";
+		});
+	}
+
+	internal async Task SetCompositingLayerStateAsync(
+		string layerId,
+		bool visible,
+		byte opacity)
+	{
+		if (_client is null || !CanManageCompositingLayers()) return;
+		if (string.IsNullOrWhiteSpace(layerId)) throw new ArgumentException("Compositing layer identity is required.", nameof(layerId));
+
+		await ExecuteAsync("LAYER STATE", async () =>
+		{
+			await _client.SetCompositingLayerStateAsync(layerId.Trim(), visible, opacity);
+			Apply(_client.Snapshot!);
+			CommandStatus = "LAYER CONFIRMED";
+			LastEvent = $"Compositing layer {layerId.Trim()} state was confirmed by RuntimeHost.";
+		});
+	}
+
+	internal async Task ReorderCompositingLayersAsync(IReadOnlyList<string> orderedLayerIds)
+	{
+		if (_client is null || !CanManageCompositingLayers()) return;
+		ArgumentNullException.ThrowIfNull(orderedLayerIds);
+
+		await ExecuteAsync("LAYER ORDER", async () =>
+		{
+			await _client.ReorderCompositingLayersAsync(orderedLayerIds);
+			Apply(_client.Snapshot!);
+			CommandStatus = "LAYER ORDER CONFIRMED";
+			LastEvent = "Compositing layer order was confirmed by RuntimeHost.";
 		});
 	}
 
