@@ -8,6 +8,7 @@ using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using System.Windows.Media;
 using rtaime.Client;
+using rtaime.Control.Contracts;
 using rtaime.Media.Contracts;
 
 namespace rtaime.Operator;
