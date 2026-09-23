@@ -164,6 +164,7 @@ foreach ($hostProjection in @($control, $runtime, $ai)) {
 Assert-Condition ($tests -match 'Bounded_buffer_retains_only_the_newest_events') "Diagnostics boundedness regression coverage is required."
 Assert-Condition ($tests -match 'Redaction_removes_secret_dimensions') "Diagnostics secret-redaction regression coverage is required."
 Assert-Condition ($tests -match 'Support_snapshot_serialization_is_deterministic') "Deterministic support serialization regression coverage is required."
+Assert-Condition ($tests -match 'Exception_detail_redaction_is_bounded_and_removes_inline_secrets') "Shared exception redaction must have bounded secret-removal regression coverage."
 Assert-Condition ($tests -match 'Host_log_writes_structured_redacted_json_lines') "Structured host log serialization/redaction regression coverage is required."
 Assert-Condition ($tests -match 'Host_log_keeps_process_failures_best_effort') "Structured host process-failure regression coverage is required."
 Assert-Condition ($tests -match 'Host_log_file_failure_does_not_fail_the_calling_host') "Structured host log storage failures must be regression-tested as non-fatal."
