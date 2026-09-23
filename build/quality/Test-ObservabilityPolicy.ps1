@@ -167,6 +167,8 @@ Assert-Condition ($documentation -match 'raw video/audio payloads') "Observabili
 Assert-Condition ($documentation -match 'Runtime Health & Performance HUD') "Observability documentation must record the runtime health/performance projection."
 Assert-Condition ($documentation -match 'performance\.outputFramesPerSecond' -and $documentation -match 'exponentially smoothed Output-FPS scalar') "Observability documentation must record the measured output-cadence path and constant-space smoothing boundary."
 Assert-Condition ($documentation -match 'UNVERIFIED') "Observability documentation must explicitly preserve UNVERIFIED evidence for unavailable GPU telemetry."
+Assert-Condition ($documentation -match '## Structured host logs' -and $documentation -match 'RTAIME_LOG_SESSION_ID' -and $documentation -match '16 MiB' -and $documentation -match '14 days') "Observability documentation must describe host-log correlation, rotation and retention."
+Assert-Condition ($documentation -match 'AppHost' -and $documentation -match 'ControlHost' -and $documentation -match 'RuntimeHost' -and $documentation -match 'AIHost' -and $documentation -match 'Operator') "Observability documentation must cover every executable host."
 
 Write-Host "Observability diagnostics policy verification PASS"
 Write-Host "Support snapshot schema: 1.0"
