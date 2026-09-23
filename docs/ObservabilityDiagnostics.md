@@ -55,6 +55,24 @@ Structured host logs remain outside the real-time execution path. Runtime frame 
 
 For a local debugging session, start with the newest session directory, inspect `AppHost` for launch/lifecycle context, then correlate `ControlHost`, `RuntimeHost`, `AIHost` and `Operator` records by `timestampUtc`, `sessionId`, process ID and stable event code. Exceptions retain bounded stack detail after redaction, so the original process and failure boundary can be identified without relying only on a final crash file.
 
+## Diagnostics support bundle export
+
+The Operator technical-details surface provides an explicit **EXPORT SUPPORT BUNDLE** action. Export is on demand and observational only; creating a bundle does not issue production commands, restart a host, alter Runtime state or introduce a new polling loop.
+
+The exported ZIP contains the currently available diagnostic evidence for the active correlated logging session:
+
+- `Manifest.json` with capture timestamp, product version/release stage, Operator process identity, .NET runtime, operating system, OS/process architecture, processor count, session identifier, content counts and collection warnings;
+- `health/OperatorHealth.json` with the current shared subsystem-health projection already used by the Health Center;
+- `startup/AppHostLifecycle.json` when AppHost lifecycle evidence is available;
+- `logs/*.jsonl` from the active `RTAIME_LOG_SESSION_ID`, covering AppHost, ControlHost, RuntimeHost, AIHost and Operator files that are present;
+- `logs/operator-crash-*.log` when an Operator crash report exists in the same session.
+
+Active log files are opened with shared read access and copied only up to the length observed when collection begins. The exporter therefore remains compatible with live host logging and cannot wait indefinitely on a file that continues to grow.
+
+Collection is bounded to **256 MiB of source diagnostic files**. Session files are considered newest-first; files that would cross the limit are omitted and reported as warnings in the manifest/export result. Health, lifecycle metadata and the manifest are small metadata entries outside that source-file budget. The ZIP is first written to a unique temporary file and moved into place only after the archive closes successfully, so a failed export does not leave a partially valid final bundle.
+
+Support-bundle metadata and lifecycle JSON pass through the shared `DiagnosticRedactor`. Structured host logs and Operator crash reports are already redacted at their original write boundary and are preserved byte-for-byte for debugging fidelity. Raw video/audio payloads, monitoring images, GPU surfaces, credentials, signing material and other production media are never collected.
+
 ## Host projections
 
 ### ControlHost
