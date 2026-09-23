@@ -521,7 +521,8 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		ToWire(aiShowcase),
 		snapshot.AvSyncDiagnostics is null ? null : ToWire(snapshot.AvSyncDiagnostics),
 		snapshot.ProductionCgText is null ? null : ToWire(snapshot.ProductionCgText),
-		(snapshot.OutputRoles ?? Array.Empty<RuntimeOutputRoleSnapshot>()).Select(ToWire).ToArray());
+		(snapshot.OutputRoles ?? Array.Empty<RuntimeOutputRoleSnapshot>()).Select(ToWire).ToArray(),
+		(snapshot.CompositingLayers ?? Array.Empty<V1CompositingLayerSnapshot>()).Select(ToWire).ToArray());
 
 	private static WireAvSyncDiagnostics ToWire(V1AvSyncDiagnosticsSnapshot snapshot) => new(
 		snapshot.Enabled,
@@ -566,6 +567,17 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		snapshot.ZOrder,
 		snapshot.CacheHit,
 		snapshot.RenderDuration.Ticks);
+
+	private static WireCompositingLayer ToWire(V1CompositingLayerSnapshot snapshot) => new(
+		snapshot.LayerId,
+		(int)snapshot.Kind,
+		snapshot.Order,
+		snapshot.Visible,
+		snapshot.Opacity,
+		snapshot.PositionX,
+		snapshot.PositionY,
+		snapshot.Scale,
+		snapshot.ContentIdentity);
 
 	private static WireGraphicsOverlay ToWire(V1GraphicsOverlaySnapshot snapshot) => new(
 		snapshot.AssetLoaded,
@@ -743,6 +755,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 	private sealed record WireProductionCgTextSnapshot(bool Active, string? Text, string? Typeface, string? ResolvedTypeface, float FontSizePixels, uint BoxWidth, uint BoxHeight, int Alignment, int Anchor, bool PanelEnabled, bool Visible, int Layer, int ZOrder, bool CacheHit, long RenderDurationTicks);
 	private sealed record WireGraphicsOverlayState(bool Visible, double PositionX, double PositionY, double Scale);
 	private sealed record WireGraphicsOverlay(bool AssetLoaded, string? AssetName, uint AssetWidth, uint AssetHeight, bool Visible, double PositionX, double PositionY, double Scale);
+	private sealed record WireCompositingLayer(string LayerId, int Kind, int Order, bool Visible, byte Opacity, double PositionX, double PositionY, double Scale, string ContentIdentity);
 	private sealed record WireAudioInputState(string SourceId, double Gain, bool Muted);
 	private sealed record WireAudioTestSignalState(string SourceId, bool Enabled, int Mode, double FrequencyHz, double PeakLevel);
 	private sealed record WireAudioInput(
@@ -809,7 +822,8 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		WireAIShowcase AIShowcase,
 		WireAvSyncDiagnostics? AvSyncDiagnostics = null,
 		WireProductionCgTextSnapshot? ProductionCgText = null,
-		WireOutputRole[]? OutputRoles = null);
+		WireOutputRole[]? OutputRoles = null,
+		WireCompositingLayer[]? CompositingLayers = null);
 
 	private sealed class BoundedRequestCache
 	{
