@@ -56,6 +56,7 @@
 			<Setter Property="Background" Value="{StaticResource GraphSourceBrush}" />
 			<Style.Triggers>
 				<DataTrigger Binding="{Binding KindLabel}" Value="ROUTING"><Setter Property="Background" Value="{StaticResource GraphRoutingBrush}" /></DataTrigger>
+				<DataTrigger Binding="{Binding KindLabel}" Value="LAYER"><Setter Property="Background" Value="{StaticResource GraphCompositeBrush}" /></DataTrigger>
 				<DataTrigger Binding="{Binding KindLabel}" Value="TRANSFORM"><Setter Property="Background" Value="{StaticResource GraphTransformBrush}" /></DataTrigger>
 				<DataTrigger Binding="{Binding KindLabel}" Value="COMPOSITE"><Setter Property="Background" Value="{StaticResource GraphCompositeBrush}" /></DataTrigger>
 				<DataTrigger Binding="{Binding KindLabel}" Value="OUTPUT"><Setter Property="Background" Value="{StaticResource GraphOutputBrush}" /></DataTrigger>
@@ -139,6 +140,12 @@
 					<controls:RtaimeButton Content="FIT" Command="{Binding FitCommand}" Style="{StaticResource GraphToolbarButton}" ToolTip="Fit the complete graph into the current viewport." />
 					<controls:RtaimeButton Content="100%" Command="{Binding ResetViewCommand}" Style="{StaticResource GraphToolbarButton}" ToolTip="Reset presentation zoom to 100 percent." />
 					<controls:RtaimeButton Content="AUTO LAYOUT" Command="{Binding AutoLayoutCommand}" Style="{StaticResource GraphToolbarButton}" ToolTip="Restore the deterministic presentation layout without changing Runtime routing." />
+					<Border Width="1" Height="18" Background="{DynamicResource OperatorBorderBrush}" Margin="1,0,7,0" />
+					<controls:RtaimeButton Content="LAYER ↓" Command="{Binding MoveSelectedLayerDownCommand}" Style="{StaticResource GraphToolbarButton}" ToolTip="Move the selected confirmed layer one position lower in the Runtime stack." />
+					<controls:RtaimeButton Content="LAYER ↑" Command="{Binding MoveSelectedLayerUpCommand}" Style="{StaticResource GraphToolbarButton}" ToolTip="Move the selected confirmed layer one position higher in the Runtime stack." />
+					<controls:RtaimeButton Content="VISIBILITY" Command="{Binding ToggleSelectedLayerCommand}" Style="{StaticResource GraphToolbarButton}" ToolTip="Toggle visibility for the selected bitmap or Production CG layer and wait for Runtime confirmation." />
+					<controls:RtaimeButton Content="OPACITY −" Command="{Binding DecreaseSelectedLayerOpacityCommand}" Style="{StaticResource GraphToolbarButton}" ToolTip="Decrease selected layer opacity through the governed Runtime path." />
+					<controls:RtaimeButton Content="OPACITY +" Command="{Binding IncreaseSelectedLayerOpacityCommand}" Style="{StaticResource GraphToolbarButton}" ToolTip="Increase selected layer opacity through the governed Runtime path." />
 				</StackPanel>
 
 				<TextBlock Grid.Column="1"
@@ -150,10 +157,15 @@
 				<StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
 					<controls:RtaimeStatusBadge
 						Status="{x:Static controls:RtaimeStatusKind.Neutral}"
-						Content="READ-ONLY TOPOLOGY"
+						Content="CONFIRMED LAYER STACK"
 						ShowIndicator="False"
 						Margin="0,0,6,0"
-						ToolTip="Runtime topology rewiring is not exposed by the current authoritative capability." />
+						ToolTip="Source topology remains read-only; bounded layer state and order changes are committed through ControlHost and confirmed by RuntimeHost." />
+					<controls:RtaimeStatusBadge
+						Status="{x:Static controls:RtaimeStatusKind.Selection}"
+						Content="{Binding LayerCommandStatus}"
+						ShowIndicator="False"
+						Margin="0,0,6,0" />
 					<controls:RtaimeStatusBadge
 						Status="{x:Static controls:RtaimeStatusKind.Selection}"
 						Content="{Binding ZoomLabel}"
