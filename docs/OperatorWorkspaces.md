@@ -102,7 +102,9 @@ It does not introduce another ingest or media-management subsystem.
 
 ## SCENES
 
-SCENES is a shell destination for scene/layer operation. In the current V1 implementation it reuses the existing graphics projection and Inspector surfaces; it does not create a second Scene authority or renderer. LIVE exposes the governed Scene catalog, presentation-only selection, confirmed active-Scene evidence and explicit TAKE SCENE activation through `ActivateSceneCommand`. The SCENES presentation consumes the same authoritative state rather than introducing another activation model.
+SCENES is a shell destination for scene/layer operation. It reuses the existing graphics projection and Inspector surfaces; it does not create a second Scene authority or renderer. LIVE exposes the governed Scene catalog, presentation-only selection, declared routing plus optional Scene compositing-state inspection, confirmed active-Scene evidence and explicit TAKE SCENE activation through `ActivateSceneCommand`. The declared Scene layer stack is desired content, while COMPOSITING continues to project Runtime-confirmed layer state. The two must not be conflated in the UI.
+
+TAKE SCENE submits the selected Scene only through the existing Client/ControlHost/Runtime transaction. A Scene with a declared layer stack recalls that stack together with Preview/Program routing; a legacy Scene without one remains routing-only. Direct confirmed layer mutations may invalidate `ActiveSceneId` when they make current production state differ from the activated Scene. Selection itself never activates or rewrites a Scene.
 
 ## COMPOSITING
 
