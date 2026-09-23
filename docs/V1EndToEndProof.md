@@ -105,7 +105,7 @@ The client:
 - contains no Runtime implementation dependency,
 - contains no production authority.
 
-The WPF Operator is an MVVM presentation client over that seam. Its production project dependency remains `Operator -> Client` only.
+The WPF Operator is an MVVM presentation client over that seam. Production access remains `Operator -> Client` only; the Operator also references dependency-neutral `rtaime.Core` exclusively for shared cross-cutting diagnostics.
 
 The V1 End-to-End Proof automated end-to-end tests use an **in-process test adapter** to compose ControlHost, RuntimeHost and AIHost. That adapter is test infrastructure and is not evidence for a production network/IPC implementation.
 

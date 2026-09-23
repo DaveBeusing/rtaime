@@ -2,6 +2,7 @@
 
 using System.Text;
 using System.Text.Json;
+using rtaime.Core;
 
 namespace rtaime.AppHost;
 
@@ -25,8 +26,8 @@ internal static class ApplicationStartupDiagnostics
 				observedAtUtc = DateTimeOffset.UtcNow,
 				state = "FAILED",
 				exceptionType = exception.GetType().FullName,
-				message = exception.Message,
-				detail = exception.ToString()
+				message = DiagnosticRedactor.RedactText(exception.Message),
+				detail = DiagnosticRedactor.RedactExceptionDetail(exception.ToString())
 			});
 			File.AppendAllText(path, payload + Environment.NewLine, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
 			return path;
@@ -92,4 +93,5 @@ internal static class ApplicationStartupDiagnostics
 
 		return Environment.GetEnvironmentVariable(environmentName);
 	}
+
 }

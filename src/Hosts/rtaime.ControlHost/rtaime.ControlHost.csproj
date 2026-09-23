@@ -3,6 +3,10 @@
     <OutputType>Exe</OutputType>
   </PropertyGroup>
   <ItemGroup>
+		<ProjectReference Include="..\..\rtaime.Core\rtaime.Core.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
     <ProjectReference Include="..\..\Control\rtaime.Control\rtaime.Control.csproj" />
     <ProjectReference Include="..\..\Persistence\rtaime.Persistence\rtaime.Persistence.csproj" />
     <ProjectReference Include="..\..\Contracts\rtaime.Control.Contracts\rtaime.Control.Contracts.csproj" />

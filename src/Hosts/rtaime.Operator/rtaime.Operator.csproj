@@ -7,6 +7,10 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+		<ProjectReference Include="..\..\rtaime.Core\rtaime.Core.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<ProjectReference Include="..\..\Client\rtaime.Client\rtaime.Client.csproj" />
 	</ItemGroup>
 

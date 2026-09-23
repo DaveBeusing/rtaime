@@ -1,6 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 using System.Text;
+using System.Text.Json;
 using rtaime.Core;
 
 namespace rtaime.Tests.Unit;
@@ -75,6 +76,195 @@ public sealed class DiagnosticsTests
 		Assert.True(first.IndexOf("\"alpha\"", StringComparison.Ordinal) < first.IndexOf("\"zeta\"", StringComparison.Ordinal));
 		Assert.DoesNotContain("pixels", first, StringComparison.OrdinalIgnoreCase);
 		Assert.DoesNotContain("payload", first, StringComparison.OrdinalIgnoreCase);
+	}
+
+
+	[Fact]
+	public void Exception_detail_redaction_is_bounded_and_removes_inline_secrets()
+	{
+		var detail = string.Join("\n", Enumerable.Range(0, 120).Select(index => $"line {index} token=secret-{index}"));
+		var redacted = DiagnosticRedactor.RedactExceptionDetail(detail);
+
+		Assert.DoesNotContain("secret-", redacted, StringComparison.Ordinal);
+		Assert.Contains("token=[REDACTED]", redacted, StringComparison.Ordinal);
+		Assert.Contains("[TRUNCATED]", redacted, StringComparison.Ordinal);
+		Assert.True(redacted.Split(Environment.NewLine).Length <= 97);
+	}
+
+	[Fact]
+	public void Host_log_writes_structured_redacted_json_lines()
+	{
+		var root = Path.Combine(Path.GetTempPath(), "rtaime-host-log-tests", Guid.NewGuid().ToString("N"));
+		try
+		{
+			using (var log = HostLog.Open(
+				"RuntimeHost",
+				new[]
+				{
+					$"--log-root={root}",
+					"--log-session-id=session-test",
+					"--instance-id=runtime-1",
+					"--log-level=Trace"
+				},
+				publishEnvironment: false))
+			{
+				log.Error(
+					"ipc",
+					"ipc.failure",
+					"Runtime IPC failed token=abc123.",
+					new InvalidOperationException("password=hunter2"),
+					new Dictionary<string, string>
+					{
+						["endpoint"] = "rtaime.v1.runtime.default",
+						["apiKey"] = "visible-secret"
+					});
+			}
+
+			var sessionDirectory = Path.Combine(root, "session-test");
+			var file = Assert.Single(Directory.GetFiles(sessionDirectory, "*.jsonl"));
+			var lines = File.ReadAllLines(file);
+			Assert.True(lines.Length >= 2);
+
+			using var document = JsonDocument.Parse(lines[^1]);
+			var record = document.RootElement;
+			Assert.Equal(HostLog.CurrentSchemaVersion, record.GetProperty("schemaVersion").GetString());
+			Assert.Equal("RuntimeHost", record.GetProperty("host").GetString());
+			Assert.Equal("session-test", record.GetProperty("sessionId").GetString());
+			Assert.Equal("runtime-1", record.GetProperty("instanceId").GetString());
+			Assert.Equal("Error", record.GetProperty("level").GetString());
+			Assert.Equal("ipc.failure", record.GetProperty("code").GetString());
+			Assert.DoesNotContain("abc123", lines[^1], StringComparison.Ordinal);
+			Assert.DoesNotContain("hunter2", lines[^1], StringComparison.Ordinal);
+			Assert.DoesNotContain("visible-secret", lines[^1], StringComparison.Ordinal);
+			Assert.Equal("[REDACTED]", record.GetProperty("dimensions").GetProperty("apiKey").GetString());
+			Assert.Equal("System.InvalidOperationException", record.GetProperty("exception").GetProperty("type").GetString());
+		}
+		finally
+		{
+			try { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); } catch (IOException) { }
+		}
+	}
+
+	[Fact]
+	public void Host_log_keeps_process_failures_best_effort_and_never_exposes_raw_exception_secrets()
+	{
+		var root = Path.Combine(Path.GetTempPath(), "rtaime-host-log-tests", Guid.NewGuid().ToString("N"));
+		try
+		{
+			using (var log = HostLog.Open(
+				"ControlHost",
+				new[] { $"--log-root={root}", "--log-session-id=failure-test" },
+				publishEnvironment: false))
+			using (var subscription = log.AttachProcessFailureHandlers())
+			{
+				log.Critical(
+					"process",
+					"process.test-failure",
+					"Test failure secret=top-secret.",
+					new ApplicationException("Authorization:Bearer secret-value"));
+				log.Flush();
+			}
+
+			var file = Assert.Single(Directory.GetFiles(Path.Combine(root, "failure-test"), "*.jsonl"));
+			var content = File.ReadAllText(file);
+			Assert.Contains("process.test-failure", content, StringComparison.Ordinal);
+			Assert.DoesNotContain("top-secret", content, StringComparison.Ordinal);
+			Assert.DoesNotContain("secret-value", content, StringComparison.Ordinal);
+		}
+		finally
+		{
+			try { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); } catch (IOException) { }
+		}
+	}
+
+	[Fact]
+	public void Host_log_file_failure_does_not_fail_the_calling_host()
+	{
+		var root = Path.Combine(Path.GetTempPath(), "rtaime-host-log-tests", Guid.NewGuid().ToString("N"));
+		Directory.CreateDirectory(root);
+		var fileInsteadOfDirectory = Path.Combine(root, "blocked-root");
+		File.WriteAllText(fileInsteadOfDirectory, "not-a-directory");
+
+		try
+		{
+			using var log = HostLog.Open(
+				"AIHost",
+				new[] { $"--log-root={fileInsteadOfDirectory}", "--log-session-id=file-failure-test" },
+				publishEnvironment: false);
+
+			var exception = Record.Exception(() =>
+				log.Error("storage", "logging.path-unavailable", "Logging path is unavailable."));
+
+			Assert.Null(exception);
+			Assert.Null(log.CurrentFilePath);
+		}
+		finally
+		{
+			try { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); } catch (IOException) { }
+		}
+	}
+
+	[Fact]
+	public void Host_log_rotates_before_exceeding_configured_segment_limit()
+	{
+		var root = Path.Combine(Path.GetTempPath(), "rtaime-host-log-tests", Guid.NewGuid().ToString("N"));
+		try
+		{
+			using (var log = HostLog.Open(
+				"RuntimeHost",
+				new[]
+				{
+					$"--log-root={root}",
+					"--log-session-id=rotation-test",
+					"--log-max-file-mb=1"
+				},
+				publishEnvironment: false))
+			{
+				var dimensions = Enumerable.Range(0, 32)
+					.ToDictionary(index => $"field-{index:00}", _ => new string('x', 512), StringComparer.Ordinal);
+				for (var index = 0; index < 96; index++)
+					log.Information("rotation", "rotation.test", $"Rotation record {index}.", dimensions);
+			}
+
+			var files = Directory.GetFiles(Path.Combine(root, "rotation-test"), "*.jsonl");
+			Assert.True(files.Length >= 2);
+			Assert.All(files, file => Assert.True(new FileInfo(file).Length <= 1024L * 1024L));
+		}
+		finally
+		{
+			try { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); } catch (IOException) { }
+		}
+	}
+
+	[Fact]
+	public void Host_log_prunes_expired_inactive_sessions()
+	{
+		var root = Path.Combine(Path.GetTempPath(), "rtaime-host-log-tests", Guid.NewGuid().ToString("N"));
+		var expiredSession = Path.Combine(root, "expired-session");
+		Directory.CreateDirectory(expiredSession);
+		var expiredFile = Path.Combine(expiredSession, "rtaime-runtimehost-expired-000.jsonl");
+		File.WriteAllText(expiredFile, "{}");
+		File.SetLastWriteTimeUtc(expiredFile, DateTime.UtcNow.AddDays(-10));
+
+		try
+		{
+			using var log = HostLog.Open(
+				"ControlHost",
+				new[]
+				{
+					$"--log-root={root}",
+					"--log-session-id=current-session",
+					"--log-retention-days=1"
+				},
+				publishEnvironment: false);
+
+			Assert.False(Directory.Exists(expiredSession));
+			Assert.True(Directory.Exists(log.SessionDirectory));
+		}
+		finally
+		{
+			try { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); } catch (IOException) { }
+		}
 	}
 
 	[Fact]

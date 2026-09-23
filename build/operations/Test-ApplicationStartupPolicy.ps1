@@ -70,7 +70,9 @@ $buildDocumentation = Get-Content -LiteralPath $buildDocumentationPath -Raw
 
 Assert-Condition ($appProject -match '<AssemblyName>rtaime</AssemblyName>') "AppHost must build the canonical rtaime executable name."
 Assert-Condition ($appProject -match '<OutputType>WinExe</OutputType>') "Canonical Windows AppHost must use the GUI subsystem so interactive launch cannot flash a console window."
-Assert-Condition ($appProject -notmatch '<ProjectReference') "AppHost must not take direct project references to service hosts or production implementations."
+$appHostReferences = [Regex]::Matches($appProject, '<ProjectReference Include="([^"]+)"')
+Assert-Condition ($appHostReferences.Count -eq 1) "AppHost must have exactly one direct project reference for dependency-neutral shared diagnostics."
+Assert-Condition ($appHostReferences[0].Groups[1].Value -match 'rtaime\.Core\\rtaime\.Core\.csproj$') "AppHost may reference only dependency-neutral rtaime.Core; service hosts and production implementations remain forbidden."
 Assert-Condition ($solution -match 'src/Hosts/rtaime\.AppHost/rtaime\.AppHost\.csproj') "Primary solution must contain rtaime.AppHost."
 
 foreach ($profile in @("Interactive", "Showcase", "HeadlessEngine")) {
@@ -120,6 +122,7 @@ Assert-Condition ($appProgram -match 'WindowsConsoleBootstrap\.Initialize' -and 
 Assert-Condition ($windowsBootstrap -match '--show-console' -and $windowsBootstrap -match 'HeadlessEngine' -and $windowsBootstrap -match 'AttachConsole' -and $windowsBootstrap -match 'AllocConsole') "Windows bootstrap must keep explicit and headless console paths while interactive startup remains GUI-native."
 Assert-Condition ($windowsBootstrap -match '--windows-service' -and $windowsBootstrap -match 'ConsoleAvailable: false') "Windows service startup must remain non-interactive and must not allocate a console."
 Assert-Condition ($startupDiagnostics -match 'apphost-startup\.log' -and $startupDiagnostics -match 'File\.AppendAllText') "Bootstrap failures must persist deterministic local diagnostics."
+Assert-Condition ($startupDiagnostics -match 'DiagnosticRedactor\.RedactText' -and $startupDiagnostics -match 'DiagnosticRedactor\.RedactExceptionDetail') "Persisted bootstrap failures must use the shared diagnostics redaction policy."
 Assert-Condition ($appProgram -notmatch 'ShowWindow|HideConsoleWindow') "Interactive startup must not rely on hiding an already-created console window."
 Assert-Condition ($windowsBootstrapQualification -match 'WINDOWS_GUI' -and $windowsBootstrapQualification -match 'RedirectStandardError' -and $windowsBootstrapQualification -match 'QualifySingleFile') "Windows bootstrap qualification must cover GUI subsystem, redirected diagnostics and single-file publishing."
 foreach ($stage in @("ApplicationBootstrap", "Configuration", "OperatorInterface", "ControlHost", "RuntimeHost", "AIHost", "ProductionReadiness")) {
