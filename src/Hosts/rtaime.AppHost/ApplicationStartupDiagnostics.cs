@@ -27,7 +27,7 @@ internal static class ApplicationStartupDiagnostics
 				state = "FAILED",
 				exceptionType = exception.GetType().FullName,
 				message = DiagnosticRedactor.RedactText(exception.Message),
-				detail = SanitizeExceptionDetail(exception.ToString())
+				detail = DiagnosticRedactor.RedactExceptionDetail(exception.ToString())
 			});
 			File.AppendAllText(path, payload + Environment.NewLine, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
 			return path;
@@ -94,15 +94,4 @@ internal static class ApplicationStartupDiagnostics
 		return Environment.GetEnvironmentVariable(environmentName);
 	}
 
-	private static string SanitizeExceptionDetail(string value)
-	{
-		const int maximumLines = 96;
-		var normalized = value.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n');
-		var lines = normalized.Split('\n');
-		var retained = lines.Take(maximumLines).Select(DiagnosticRedactor.RedactText);
-		var result = string.Join(Environment.NewLine, retained);
-		return lines.Length <= maximumLines
-			? result
-			: result + Environment.NewLine + "[TRUNCATED]";
-	}
 }
