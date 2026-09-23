@@ -644,7 +644,7 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 				scene.PreviewSourceId,
 				scene.ProgramSourceId,
 				(scene.CompositingState?.Layers ?? Array.Empty<WireCompositingLayer>())
-					.Select(FromWire)
+					.Select(layer => FromWire(layer))
 					.ToArray()))
 			.ToArray(),
 		(wire.OutputRoles ?? Array.Empty<WireOutputRole>())
