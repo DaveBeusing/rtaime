@@ -268,6 +268,8 @@ See [ProductionCgTextRendering.md](ProductionCgTextRendering.md) for the complet
 - bitmap + Production CG integration proves concurrent composition in one Runtime-owned ordered stack;
 - recording integration evidence verifies that the recorded video payload exactly equals the post-graphics Program pixels;
 - real process-boundary integration verifies Operator/Client → ControlHost → RuntimeHost graphics state and bounded layer mutations;
+- COMPOSITING selection reuses the existing bitmap X/Y/Scale Inspector path while Production CG placement remains definition-owned;
+- managed-reference performance coverage records 0 / 1 / 2 / 4 / 8 layer composition at both V1 reference frame rates and verifies active-surface return to baseline;
 - RuntimeHost restart recovery restores retained bitmap + CG content, layer state and ordering;
 - graphics state changes do not advance authoritative Preview/Program routing revision;
 - Operator UI policy verifies custom-control layer operations and the Client-SDK-only authority boundary while prohibiting local WPF Production rendering.
