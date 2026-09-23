@@ -35,6 +35,12 @@ public sealed class OperatorSceneViewModel : INotifyPropertyChanged
 	public string PreviewSourceId => _descriptor.PreviewSourceId;
 	public string ProgramSourceId => _descriptor.ProgramSourceId;
 	public string Type => "SCENE";
+	public IReadOnlyList<OperatorCompositingLayerDescriptor> DesiredCompositingLayers => _descriptor.CompositingLayers;
+	public int DesiredLayerCount => _descriptor.CompositingLayers.Count;
+	public bool HasDesiredCompositingState => DesiredLayerCount > 0;
+	public string DesiredStateSummary => HasDesiredCompositingState
+		? $"{DesiredLayerCount} LAYER{(DesiredLayerCount == 1 ? string.Empty : "S")}"
+		: "ROUTING ONLY";
 	public int DisplayIndex { get => _displayIndex; private set => Set(ref _displayIndex, value); }
 	public OperatorSourceTileViewModel ProgramSource { get => _programSource; private set => Set(ref _programSource, value); }
 	public bool IsPreview { get => _isPreview; private set => Set(ref _isPreview, value); }
@@ -57,6 +63,10 @@ public sealed class OperatorSceneViewModel : INotifyPropertyChanged
 		OnPropertyChanged(nameof(Name));
 		OnPropertyChanged(nameof(PreviewSourceId));
 		OnPropertyChanged(nameof(ProgramSourceId));
+		OnPropertyChanged(nameof(DesiredCompositingLayers));
+		OnPropertyChanged(nameof(DesiredLayerCount));
+		OnPropertyChanged(nameof(HasDesiredCompositingState));
+		OnPropertyChanged(nameof(DesiredStateSummary));
 	}
 
 	public void ApplyEvidence(string previewSourceId, string? activeSceneId)
