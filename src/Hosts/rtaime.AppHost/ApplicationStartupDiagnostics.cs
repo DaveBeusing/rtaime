@@ -2,6 +2,7 @@
 
 using System.Text;
 using System.Text.Json;
+using rtaime.Core;
 
 namespace rtaime.AppHost;
 
@@ -25,8 +26,8 @@ internal static class ApplicationStartupDiagnostics
 				observedAtUtc = DateTimeOffset.UtcNow,
 				state = "FAILED",
 				exceptionType = exception.GetType().FullName,
-				message = exception.Message,
-				detail = exception.ToString()
+				message = DiagnosticRedactor.RedactText(exception.Message),
+				detail = SanitizeExceptionDetail(exception.ToString())
 			});
 			File.AppendAllText(path, payload + Environment.NewLine, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
 			return path;
@@ -91,5 +92,17 @@ internal static class ApplicationStartupDiagnostics
 			return argument[prefix.Length..];
 
 		return Environment.GetEnvironmentVariable(environmentName);
+	}
+
+	private static string SanitizeExceptionDetail(string value)
+	{
+		const int maximumLines = 96;
+		var normalized = value.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n');
+		var lines = normalized.Split('\n');
+		var retained = lines.Take(maximumLines).Select(DiagnosticRedactor.RedactText);
+		var result = string.Join(Environment.NewLine, retained);
+		return lines.Length <= maximumLines
+			? result
+			: result + Environment.NewLine + "[TRUNCATED]";
 	}
 }
