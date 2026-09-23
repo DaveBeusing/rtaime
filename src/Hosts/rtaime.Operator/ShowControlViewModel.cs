@@ -183,7 +183,7 @@ public sealed class ShowControlViewModel : INotifyPropertyChanged
 	}
 
 	private async Task RefreshAsync() =>
-		await RunAsync(async () => ApplyConfirmedSnapshot(await _client.GetShowControlSnapshotAsync().ConfigureAwait(false))).ConfigureAwait(false);
+		await RunAsync(async () => ApplyConfirmedSnapshot(await _client.GetShowControlSnapshotAsync()));
 
 	private Task NewCueListAsync()
 	{
@@ -206,9 +206,9 @@ public sealed class ShowControlViewModel : INotifyPropertyChanged
 			return;
 		await RunAsync(async () =>
 		{
-			var snapshot = await _client.SelectShowControlCueListAsync(selected.CueListId).ConfigureAwait(false);
+			var snapshot = await _client.SelectShowControlCueListAsync(selected.CueListId);
 			ApplyConfirmedSnapshot(snapshot);
-		}).ConfigureAwait(false);
+		});
 	}
 
 	private async Task SaveCueListAsync()
@@ -218,9 +218,9 @@ public sealed class ShowControlViewModel : INotifyPropertyChanged
 			return;
 		await RunAsync(async () =>
 		{
-			var snapshot = await _client.SaveShowControlCueListAsync(selected.ToContract()).ConfigureAwait(false);
+			var snapshot = await _client.SaveShowControlCueListAsync(selected.ToContract());
 			ApplyConfirmedSnapshot(snapshot);
-		}).ConfigureAwait(false);
+		});
 	}
 
 	private Task AddCueAsync()
@@ -321,16 +321,16 @@ public sealed class ShowControlViewModel : INotifyPropertyChanged
 	}
 
 	private async Task ArmAsync() =>
-		await RunAsync(async () => ApplyConfirmedSnapshot(await _client.ArmShowControlAsync().ConfigureAwait(false))).ConfigureAwait(false);
+		await RunAsync(async () => ApplyConfirmedSnapshot(await _client.ArmShowControlAsync()));
 
 	private async Task GoAsync() =>
-		await RunAsync(async () => ApplyConfirmedSnapshot(await _client.GoShowControlAsync().ConfigureAwait(false))).ConfigureAwait(false);
+		await RunAsync(async () => ApplyConfirmedSnapshot(await _client.GoShowControlAsync()));
 
 	private async Task CancelAsync() =>
-		await RunAsync(async () => ApplyConfirmedSnapshot(await _client.CancelShowControlAsync().ConfigureAwait(false))).ConfigureAwait(false);
+		await RunAsync(async () => ApplyConfirmedSnapshot(await _client.CancelShowControlAsync()));
 
 	private async Task AcknowledgeRecoveryAsync(bool resume) =>
-		await RunAsync(async () => ApplyConfirmedSnapshot(await _client.AcknowledgeShowControlRecoveryAsync(resume).ConfigureAwait(false))).ConfigureAwait(false);
+		await RunAsync(async () => ApplyConfirmedSnapshot(await _client.AcknowledgeShowControlRecoveryAsync(resume)));
 
 	private async Task RunAsync(Func<Task> operation)
 	{
@@ -341,7 +341,7 @@ public sealed class ShowControlViewModel : INotifyPropertyChanged
 		RaiseCommandState();
 		try
 		{
-			await operation().ConfigureAwait(false);
+			await operation();
 			Status = "READY";
 			if (_serverExecutionState != ShowControlExecutionState.Failed)
 				Failure = "NONE";
@@ -368,12 +368,12 @@ public sealed class ShowControlViewModel : INotifyPropertyChanged
 		var list = execution.CueListId.HasValue
 			? snapshot.CueLists.FirstOrDefault(candidate => candidate.CueListId == execution.CueListId.Value)
 			: null;
-		var cue = list is not null && execution.CueIndex is >= 0 && execution.CueIndex < list.Cues.Count
-			? list.Cues[execution.CueIndex.Value]
-			: null;
-		var action = cue is not null && execution.ActionIndex is >= 0 && execution.ActionIndex < cue.Actions.Count
-			? cue.Actions[execution.ActionIndex.Value]
-			: null;
+		ShowControlCue? cue = null;
+		if (list is not null && execution.CueIndex is { } cueIndex && cueIndex >= 0 && cueIndex < list.Cues.Count)
+			cue = list.Cues[cueIndex];
+		ShowControlAction? action = null;
+		if (cue is not null && execution.ActionIndex is { } actionIndex && actionIndex >= 0 && actionIndex < cue.Actions.Count)
+			action = cue.Actions[actionIndex];
 		CurrentCue = cue?.Name ?? "—";
 		CurrentAction = action is null ? "—" : ShowControlActionEditorItem.Summarize(action);
 		Failure = execution.Failure?.Message ?? "NONE";
