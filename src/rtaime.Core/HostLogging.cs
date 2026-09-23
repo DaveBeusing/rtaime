@@ -106,8 +106,15 @@ public sealed class HostLog : IDisposable
 
 		if (publishEnvironment)
 		{
-			Environment.SetEnvironmentVariable("RTAIME_LOG_ROOT", logRoot);
-			Environment.SetEnvironmentVariable("RTAIME_LOG_SESSION_ID", sessionId);
+			try
+			{
+				Environment.SetEnvironmentVariable("RTAIME_LOG_ROOT", logRoot);
+				Environment.SetEnvironmentVariable("RTAIME_LOG_SESSION_ID", sessionId);
+			}
+			catch
+			{
+				// Environment propagation is best-effort; file logging remains process-local.
+			}
 		}
 
 		return new HostLog(
@@ -378,13 +385,28 @@ public sealed class HostLog : IDisposable
 	{
 		var explicitRoot = ResolveArgumentOrEnvironment(args, "log-root", "RTAIME_LOG_ROOT");
 		if (!string.IsNullOrWhiteSpace(explicitRoot))
-			return Path.GetFullPath(explicitRoot);
+		{
+			try { return Path.GetFullPath(explicitRoot); }
+			catch { }
+		}
+
+		var serviceMode = args.Any(argument =>
+			string.Equals(argument, "--windows-service", StringComparison.OrdinalIgnoreCase));
+		var ownership = ResolveArgumentOrEnvironment(args, "ownership", "RTAIME_LIFECYCLE_OWNERSHIP");
+		if (serviceMode || string.Equals(ownership, "ExternalManaged", StringComparison.OrdinalIgnoreCase))
+		{
+			var stateRoot = ResolveArgumentOrEnvironment(args, "state-root", "RTAIME_STATE_ROOT");
+			if (string.IsNullOrWhiteSpace(stateRoot))
+				stateRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "rtaime");
+			try { return Path.Combine(Path.GetFullPath(stateRoot), "logs"); } catch { }
+		}
 
 		var localApplicationData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
 		if (string.IsNullOrWhiteSpace(localApplicationData))
 			localApplicationData = Path.GetTempPath();
 
-		return Path.Combine(Path.GetFullPath(localApplicationData), "rtaime", "logs");
+		try { return Path.Combine(Path.GetFullPath(localApplicationData), "rtaime", "logs"); }
+		catch { return Path.Combine(Path.GetTempPath(), "rtaime", "logs"); }
 	}
 
 	private static string ResolveSessionId(IReadOnlyList<string> args)
