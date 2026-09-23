@@ -175,6 +175,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 
 	public event PropertyChangedEventHandler? PropertyChanged;
 	internal event Action<MediaDeckSnapshot>? ConfirmedMediaDeckSnapshot;
+	internal event Action<ShowControlWorkspaceSnapshot>? ConfirmedShowControlSnapshot;
 
 	public ObservableCollection<OperatorSourceTileViewModel> Sources { get; }
 	public ObservableCollection<OperatorSceneViewModel> Scenes { get; }
@@ -1182,6 +1183,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		}
 		ApplyAudio(snapshot, preserveSelectedGainEdit: false);
 		ApplyEmbeddedMediaDeckSnapshot(snapshot.MediaDeck);
+		ConfirmedShowControlSnapshot?.Invoke(snapshot.ShowControl);
 		RevisionLabel = $"REV {snapshot.Production.Revision.Value}";
 		CommitStatus = string.Equals(snapshot.RuntimeStatus, "READY", StringComparison.OrdinalIgnoreCase)
 			? $"CONFIRMED · REV {snapshot.Production.Revision.Value}"
