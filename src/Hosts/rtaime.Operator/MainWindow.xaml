@@ -1870,6 +1870,7 @@
 								<Grid.ColumnDefinitions>
 									<ColumnDefinition Width="Auto" />
 									<ColumnDefinition Width="Auto" />
+									<ColumnDefinition Width="Auto" />
 									<ColumnDefinition Width="*" />
 								</Grid.ColumnDefinitions>
 								<controls:RtaimeButton
@@ -1899,8 +1900,16 @@
 										</Style>
 									</controls:RtaimeButton.Style>
 								</controls:RtaimeButton>
-								<TextBlock
+								<controls:RtaimeButton
 									Grid.Column="2"
+									Content="{Binding Startup.SupportBundleActionLabel, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+									Command="{Binding Startup.ExportSupportBundleCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+									MinHeight="28"
+									Padding="10,3"
+									Margin="0,0,8,0"
+									AutomationProperties.Name="Export diagnostics support bundle" />
+								<TextBlock
+									Grid.Column="3"
 									Text="{Binding Startup.DiagnosticActionStatus, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 									Style="{StaticResource OperatorLabel}"
 									VerticalAlignment="Center"
