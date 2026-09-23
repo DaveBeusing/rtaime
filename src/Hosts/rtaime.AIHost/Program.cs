@@ -92,7 +92,7 @@ internal static class Program
 		catch (Exception exception)
 		{
 			log.Critical("lifecycle", "aihost.unexpected-failure", "AIHost terminated after an unexpected failure.", exception);
-			return (int)AIHostExitCode.StartupFailure;
+			return (int)AIHostExitCode.UnexpectedFailure;
 		}
 		finally
 		{
