@@ -67,7 +67,7 @@ The multiview consumes only existing Operator monitoring and Runtime audio proje
 
 The source bank adapts from 2 to 3 to 4 columns and is bounded to 16 displayed source tiles. Failed sources remain visible with their failure state. Double-clicking a source or monitor tile opens a larger presentation of the same image and does not route or take the source.
 
-Selection is deliberately separate from production mutation. Selecting a source changes only SelectedSource; Set Preview, CUT and AUTO remain explicit existing commands. Media cue selection is likewise separate from Jump Selected Cue. Dedicated scene activation remains unavailable because the current V1 contracts expose no governed scene command; the LIVE workspace does not synthesize one.
+Selection is deliberately separate from production mutation. Selecting a source changes only SelectedSource; Set Preview, CUT and AUTO remain explicit existing commands. Media cue selection is likewise separate from Jump Selected Cue. Scene selection is presentation-only; TAKE SCENE invokes the governed `ActivateSceneCommand` through the existing Client/ControlHost/Runtime path, and confirmed active-Scene or failure evidence is projected back to the Operator. The LIVE workspace does not create local Scene authority.
 
 The right Live Controls surface reuses existing transition, graphics/layer, recording and Clean Program commands and projects compact existing health/error evidence. External stream/on-air state remains UNVERIFIED until an authoritative contract exists.
 
@@ -80,7 +80,7 @@ EDIT is the reference Preview / Program production workspace. At 1920×1080 the 
 - upper monitor row preserves the 390 reference weight with equal Preview and Program viewers separated by 6 px;
 - shared monitor chrome: 40 px header, aspect-safe image region and 42 px custom transport;
 - lower row preserves the 320:462:276 Scene Stack / Output Routing / System Status proportions with 6 px gaps;
-- Scene Stack reuses the existing source projection and explicit Set Preview / CUT / AUTO commands; it does not synthesize scene activation;
+- Scene Stack reuses the existing source projection and explicit Set Preview / CUT / AUTO commands; governed Scene activation remains a separate explicit command path and is never triggered implicitly by EDIT selection;
 - Output Routing reuses confirmed Program/Preview state and the existing Clean Feed presentation; governed Aux projects authoritative source plus Runtime/provider evidence and remains `UNVERIFIED` when that evidence is unavailable;
 - System Status reuses existing health evidence and displays unavailable Disk/Network/Temperature metrics without local probing;
 - the timeline retains a 320 px reference height and scales with the same view-container presentation model outside compact mode.
@@ -102,7 +102,7 @@ It does not introduce another ingest or media-management subsystem.
 
 ## SCENES
 
-SCENES is a shell destination for scene/layer operation. In the current V1 implementation it reuses the existing graphics projection and Inspector surfaces; it does not create a second scene authority or renderer. LIVE also exposes the current governed layer state and source/cue selection, but dedicated multi-scene activation remains unavailable until a scene command contract exists.
+SCENES is a shell destination for scene/layer operation. In the current V1 implementation it reuses the existing graphics projection and Inspector surfaces; it does not create a second Scene authority or renderer. LIVE exposes the governed Scene catalog, presentation-only selection, confirmed active-Scene evidence and explicit TAKE SCENE activation through `ActivateSceneCommand`. The SCENES presentation consumes the same authoritative state rather than introducing another activation model.
 
 ## COMPOSITING
 
