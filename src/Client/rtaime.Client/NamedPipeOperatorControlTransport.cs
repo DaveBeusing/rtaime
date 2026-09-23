@@ -340,6 +340,64 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		return ReadMediaDeckSnapshot(response);
 	}
 
+	public async ValueTask<ShowControlWorkspaceSnapshot> GetShowControlSnapshotAsync(CancellationToken cancellationToken = default)
+	{
+		var response = await ExchangeAsync("control.show_control.snapshot.get", new { }, cancellationToken).ConfigureAwait(false);
+		return ReadShowControlWorkspace(response);
+	}
+
+	public async ValueTask<ShowControlWorkspaceSnapshot> SaveShowControlCueListAsync(
+		ShowControlCueList cueList,
+		CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(cueList);
+		var response = await ExchangeAsync(
+			"control.show_control.cue_list.save",
+			new WireShowControlCueList(ShowControlCanonicalSerializer.Serialize(cueList)),
+			cancellationToken).ConfigureAwait(false);
+		return ReadShowControlWorkspace(response);
+	}
+
+	public async ValueTask<ShowControlWorkspaceSnapshot> SelectShowControlCueListAsync(
+		ShowControlCueListId cueListId,
+		CancellationToken cancellationToken = default)
+	{
+		var response = await ExchangeAsync(
+			"control.show_control.cue_list.select",
+			new WireShowControlSelection(cueListId.ToString()),
+			cancellationToken).ConfigureAwait(false);
+		return ReadShowControlWorkspace(response);
+	}
+
+	public async ValueTask<ShowControlWorkspaceSnapshot> ArmShowControlAsync(CancellationToken cancellationToken = default)
+	{
+		var response = await ExchangeAsync("control.show_control.arm", new { }, cancellationToken).ConfigureAwait(false);
+		return ReadShowControlWorkspace(response);
+	}
+
+	public async ValueTask<ShowControlWorkspaceSnapshot> GoShowControlAsync(CancellationToken cancellationToken = default)
+	{
+		var response = await ExchangeAsync("control.show_control.go", new { }, cancellationToken).ConfigureAwait(false);
+		return ReadShowControlWorkspace(response);
+	}
+
+	public async ValueTask<ShowControlWorkspaceSnapshot> CancelShowControlAsync(CancellationToken cancellationToken = default)
+	{
+		var response = await ExchangeAsync("control.show_control.cancel", new { }, cancellationToken).ConfigureAwait(false);
+		return ReadShowControlWorkspace(response);
+	}
+
+	public async ValueTask<ShowControlWorkspaceSnapshot> AcknowledgeShowControlRecoveryAsync(
+		bool resume,
+		CancellationToken cancellationToken = default)
+	{
+		var response = await ExchangeAsync(
+			"control.show_control.recovery.acknowledge",
+			new WireShowControlRecovery(resume),
+			cancellationToken).ConfigureAwait(false);
+		return ReadShowControlWorkspace(response);
+	}
+
 	private async ValueTask<OperatorMutationResponse> MutateAsync(
 		string messageType,
 		ControlCommandMetadata metadata,
@@ -526,6 +584,39 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		return FromWire(wire);
 	}
 
+	private static ShowControlWorkspaceSnapshot ReadShowControlWorkspace(WireEnvelope response)
+	{
+		var wire = response.Payload.Deserialize<WireShowControlWorkspace>(Wire.JsonOptions)
+			?? throw new InvalidDataException("ControlHost show-control workspace payload is required.");
+		return FromWire(wire);
+	}
+
+	private static ShowControlWorkspaceSnapshot FromWire(WireShowControlWorkspace wire)
+	{
+		var cueLists = wire.CueLists.Select(ShowControlCanonicalSerializer.Deserialize).ToArray();
+		var executionWire = wire.Execution;
+		if (!Enum.IsDefined(typeof(ShowControlExecutionState), executionWire.State))
+			throw new InvalidDataException("Show-control execution state is invalid.");
+		var execution = new ShowControlExecutionSnapshot(
+			CompatibilityVersion.Parse(executionWire.Version),
+			string.IsNullOrWhiteSpace(executionWire.ExecutionId) ? null : new ShowControlExecutionId(Identity.Parse(executionWire.ExecutionId)),
+			string.IsNullOrWhiteSpace(executionWire.CueListId) ? null : new ShowControlCueListId(Identity.Parse(executionWire.CueListId)),
+			(ShowControlExecutionState)executionWire.State,
+			executionWire.CueIndex,
+			executionWire.ActionIndex,
+			string.IsNullOrWhiteSpace(executionWire.CurrentCueId) ? null : new ShowControlCueId(Identity.Parse(executionWire.CurrentCueId)),
+			string.IsNullOrWhiteSpace(executionWire.CurrentActionId) ? null : new ShowControlActionId(Identity.Parse(executionWire.CurrentActionId)),
+			executionWire.ExecutionRevision,
+			executionWire.WaitTargetFrameSequence,
+			executionWire.RuntimeHostInstanceId,
+			executionWire.RequiresAcknowledgement,
+			executionWire.Failure is null ? null : new Failure(executionWire.Failure.Code, executionWire.Failure.Message));
+		return new ShowControlWorkspaceSnapshot(
+			cueLists,
+			string.IsNullOrWhiteSpace(wire.SelectedCueListId) ? null : new ShowControlCueListId(Identity.Parse(wire.SelectedCueListId)),
+			execution);
+	}
+
 	private static MediaDeckSnapshot ReadMediaDeckSnapshot(WireEnvelope response)
 	{
 		var wire = response.Payload.Deserialize<WireMediaDeckSnapshot>(Wire.JsonOptions)
@@ -665,7 +756,10 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 				layer.PositionY,
 				layer.Scale,
 				layer.ContentIdentity))
-			.ToArray());
+			.ToArray(),
+		wire.ShowControl is null
+			? new ShowControlWorkspaceSnapshot(Array.Empty<ShowControlCueList>(), null, ShowControlExecutionSnapshot.Idle)
+			: FromWire(wire.ShowControl));
 
 	private static OperatorProductionCgTextDescriptor FromWire(WireProductionCgTextSnapshot snapshot) => new(
 		snapshot.Active,
@@ -918,7 +1012,25 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		string AvSyncSubmitOffset = "UNAVAILABLE",
 		string AvSyncDrift = "UNAVAILABLE",
 		string AvSyncDetail = "A/V sync diagnostics are unavailable.");
-	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, WireRecordingSnapshot Recording, WireHealthSnapshot Health, WireAIShowcase AIShowcase, WireMediaDeckSnapshot? MediaDeck, ulong StateVersion, WireProductionCgTextSnapshot? ProductionCgText = null, WireScene[]? Scenes = null, WireOutputRole[]? OutputRoles = null, WireCompositingLayer[]? CompositingLayers = null);
+	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, WireRecordingSnapshot Recording, WireHealthSnapshot Health, WireAIShowcase AIShowcase, WireMediaDeckSnapshot? MediaDeck, ulong StateVersion, WireProductionCgTextSnapshot? ProductionCgText = null, WireScene[]? Scenes = null, WireOutputRole[]? OutputRoles = null, WireCompositingLayer[]? CompositingLayers = null, WireShowControlWorkspace? ShowControl = null);
+	private sealed record WireShowControlCueList(string CueListJson);
+	private sealed record WireShowControlSelection(string CueListId);
+	private sealed record WireShowControlRecovery(bool Resume);
+	private sealed record WireShowControlExecution(
+		string Version,
+		string? ExecutionId,
+		string? CueListId,
+		int State,
+		int? CueIndex,
+		int? ActionIndex,
+		string? CurrentCueId,
+		string? CurrentActionId,
+		ulong ExecutionRevision,
+		ulong? WaitTargetFrameSequence,
+		string? RuntimeHostInstanceId,
+		bool RequiresAcknowledgement,
+		WireFailure? Failure);
+	private sealed record WireShowControlWorkspace(string[] CueLists, string? SelectedCueListId, WireShowControlExecution Execution);
 	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path);
 	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame, bool? AutoPlayOnProgram, int? EndBehavior, long? InPointFrame, long? OutPointFrame);
 	private sealed record WireMediaMarkerCommand(string Version, string AssetId, int Kind, long? PositionFrame, string? CuePointId, string? Name);
