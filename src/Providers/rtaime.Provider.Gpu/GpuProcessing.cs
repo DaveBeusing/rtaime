@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using rtaime.Core;
@@ -310,27 +311,67 @@ public sealed record GpuKeyLayer
     public bool Visible { get; }
 }
 
+public static class GpuCompositeLimits
+{
+    public const int MaxActiveLayers = 8;
+}
+
 public sealed record GpuCompositeRequest
 {
+    private GpuCompositeRequest(
+        MediaSourceId outputSourceId,
+        GpuFrame backgroundA,
+        GpuFrame backgroundB,
+        GpuTransition transition,
+        IReadOnlyList<GpuKeyLayer> layers)
+    {
+        OutputSourceId = outputSourceId;
+        BackgroundA = backgroundA ?? throw new ArgumentNullException(nameof(backgroundA));
+        BackgroundB = backgroundB ?? throw new ArgumentNullException(nameof(backgroundB));
+        Transition = transition;
+        Layers = layers ?? throw new ArgumentNullException(nameof(layers));
+    }
+
     public GpuCompositeRequest(
         MediaSourceId outputSourceId,
         GpuFrame backgroundA,
         GpuFrame backgroundB,
         GpuTransition transition,
         GpuKeyLayer? layer = null)
+        : this(
+            outputSourceId,
+            backgroundA,
+            backgroundB,
+            transition,
+            layer is null
+                ? Array.Empty<GpuKeyLayer>()
+                : Array.AsReadOnly(new[] { layer }))
     {
-        OutputSourceId = outputSourceId;
-        BackgroundA = backgroundA ?? throw new ArgumentNullException(nameof(backgroundA));
-        BackgroundB = backgroundB ?? throw new ArgumentNullException(nameof(backgroundB));
-        Transition = transition;
-        Layer = layer;
     }
 
     public MediaSourceId OutputSourceId { get; }
     public GpuFrame BackgroundA { get; }
     public GpuFrame BackgroundB { get; }
     public GpuTransition Transition { get; }
-    public GpuKeyLayer? Layer { get; }
+    public IReadOnlyList<GpuKeyLayer> Layers { get; }
+    public GpuKeyLayer? Layer => Layers.Count == 1 ? Layers[0] : null;
+
+    public static GpuCompositeRequest WithLayers(
+        MediaSourceId outputSourceId,
+        GpuFrame backgroundA,
+        GpuFrame backgroundB,
+        GpuTransition transition,
+        IEnumerable<GpuKeyLayer> layers)
+    {
+        ArgumentNullException.ThrowIfNull(layers);
+        var bounded = layers.ToArray();
+        return new GpuCompositeRequest(
+            outputSourceId,
+            backgroundA,
+            backgroundB,
+            transition,
+            Array.AsReadOnly(bounded));
+    }
 }
 
 public enum GpuProviderState
@@ -348,21 +389,32 @@ public sealed record GpuObservation(
 
 public sealed class GpuProcessingResult
 {
-    private GpuProcessingResult(GpuFrame? frame, Failure? failure)
+    private GpuProcessingResult(GpuFrame? frame, Failure? failure, TimeSpan duration, int layerCount)
     {
         if ((frame is null) == (failure is null))
             throw new ArgumentException("GPU processing result requires exactly one of frame or failure.");
+        if (duration < TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(duration));
+        if (layerCount < 0 || layerCount > GpuCompositeLimits.MaxActiveLayers)
+            throw new ArgumentOutOfRangeException(nameof(layerCount));
 
         Frame = frame;
         Failure = failure;
+        Duration = duration;
+        LayerCount = layerCount;
     }
 
     public GpuFrame? Frame { get; }
     public Failure? Failure { get; }
+    public TimeSpan Duration { get; }
+    public int LayerCount { get; }
     public bool Succeeded => Frame is not null;
 
-    internal static GpuProcessingResult Success(GpuFrame frame) => new(frame, null);
-    internal static GpuProcessingResult Rejected(Failure failure) => new(null, failure);
+    internal static GpuProcessingResult Success(GpuFrame frame, TimeSpan duration, int layerCount) =>
+        new(frame, null, duration, layerCount);
+
+    internal static GpuProcessingResult Rejected(Failure failure, TimeSpan duration, int layerCount) =>
+        new(null, failure, duration, layerCount);
 }
 
 public sealed class GpuProcessingProvider : IDisposable
@@ -522,12 +574,14 @@ public sealed class GpuProcessingProvider : IDisposable
         lock (_gate)
         {
             EnsureRunning();
+            var stopwatch = Stopwatch.StartNew();
 
             var validationFailure = ValidateCompositeRequest(request);
             if (validationFailure is not null)
             {
+                stopwatch.Stop();
                 Observe("gpu.composite.rejected", request.BackgroundA.Descriptor.Timing.SequenceNumber, validationFailure.Value);
-                return GpuProcessingResult.Rejected(validationFailure.Value);
+                return GpuProcessingResult.Rejected(validationFailure.Value, stopwatch.Elapsed, request.Layers.Count);
             }
 
             var format = request.BackgroundA.Descriptor.Surface.Format;
@@ -539,20 +593,61 @@ public sealed class GpuProcessingProvider : IDisposable
                 timing.SequenceNumber.ToString(),
                 request.Transition.Kind.ToString(),
                 request.Transition.BlendWeight.ToString(),
+                request.Layers.Count.ToString(),
                 ordinal.ToString()));
 
-            var operation = new GpuCompositeOperation(
-                request.BackgroundA.SurfaceId,
-                request.BackgroundB.SurfaceId,
-                request.Transition,
-                request.Layer?.Frame.SurfaceId,
-                request.Layer?.Opacity ?? byte.MaxValue,
-                request.Layer?.Visible == true);
-
+            SurfaceId? intermediateSurfaceId = null;
             try
             {
-                _backend.Composite(outputSurfaceId, format, operation);
+                if (request.Layers.Count == 0)
+                {
+                    _backend.Composite(
+                        outputSurfaceId,
+                        format,
+                        new GpuCompositeOperation(
+                            request.BackgroundA.SurfaceId,
+                            request.BackgroundB.SurfaceId,
+                            request.Transition,
+                            null,
+                            byte.MaxValue,
+                            false));
+                }
+                else
+                {
+                    for (var index = 0; index < request.Layers.Count; index++)
+                    {
+                        var layer = request.Layers[index];
+                        var isFirst = index == 0;
+                        var isFinal = index == request.Layers.Count - 1;
+                        var targetSurfaceId = isFinal
+                            ? outputSurfaceId
+                            : new SurfaceId(GpuIdentity.Create(
+                                "gpu-composite-intermediate",
+                                _backend.Info.Kind.ToString(),
+                                timing.SequenceNumber.ToString(),
+                                ordinal.ToString(),
+                                index.ToString()));
 
+                        var previousSurfaceId = intermediateSurfaceId;
+                        _backend.Composite(
+                            targetSurfaceId,
+                            format,
+                            new GpuCompositeOperation(
+                                isFirst ? request.BackgroundA.SurfaceId : previousSurfaceId!.Value,
+                                isFirst ? request.BackgroundB.SurfaceId : previousSurfaceId!.Value,
+                                isFirst ? request.Transition : GpuTransition.CutToA,
+                                layer.Frame.SurfaceId,
+                                layer.Opacity,
+                                layer.Visible));
+
+                        if (previousSurfaceId is { } previous)
+                            TryReleaseBackendSurface(previous);
+
+                        intermediateSurfaceId = isFinal ? null : targetSurfaceId;
+                    }
+                }
+
+                stopwatch.Stop();
                 var surface = new SurfaceDescriptor(
                     outputSurfaceId,
                     format,
@@ -575,16 +670,20 @@ public sealed class GpuProcessingProvider : IDisposable
                     request.Transition.Kind == GpuTransitionKind.Cut ? "gpu.composite.cut" : "gpu.composite.dissolve",
                     timing.SequenceNumber,
                     null);
-                return GpuProcessingResult.Success(frame);
+                Observe($"gpu.composite.layers:{request.Layers.Count}", timing.SequenceNumber, null);
+                return GpuProcessingResult.Success(frame, stopwatch.Elapsed, request.Layers.Count);
             }
             catch (Exception exception)
             {
+                stopwatch.Stop();
+                if (intermediateSurfaceId is { } intermediate)
+                    TryReleaseBackendSurface(intermediate);
                 TryReleaseBackendSurface(outputSurfaceId);
                 var failure = new Failure(
                     "gpu.composite.backend_failure",
                     $"GPU composite operation failed: {exception.GetType().Name}.");
                 Observe("gpu.composite.failed", timing.SequenceNumber, failure);
-                return GpuProcessingResult.Rejected(failure);
+                return GpuProcessingResult.Rejected(failure, stopwatch.Elapsed, request.Layers.Count);
             }
         }
     }
@@ -620,25 +719,44 @@ public sealed class GpuProcessingProvider : IDisposable
 
     private Failure? ValidateCompositeRequest(GpuCompositeRequest request)
     {
-        if (request.BackgroundA.IsDisposed || request.BackgroundB.IsDisposed || request.Layer?.Frame.IsDisposed == true)
+        if (request.Layers.Count > GpuCompositeLimits.MaxActiveLayers)
+        {
+            return new Failure(
+                "gpu.composite.layer_limit",
+                $"GPU composite requests support at most '{GpuCompositeLimits.MaxActiveLayers}' ordered layers.");
+        }
+
+        if (request.Layers
+            .Select(layer => layer.Frame.SurfaceId)
+            .Distinct()
+            .Count() != request.Layers.Count)
+        {
+            return new Failure("gpu.composite.layer_duplicate", "GPU composite layer surfaces must be unique within one request.");
+        }
+
+        if (request.BackgroundA.IsDisposed ||
+            request.BackgroundB.IsDisposed ||
+            request.Layers.Any(layer => layer.Frame.IsDisposed))
+        {
             return new Failure("gpu.composite.surface_disposed", "GPU composite inputs must still own live surfaces.");
+        }
 
         if (!_activeFrames.ContainsKey(request.BackgroundA.SurfaceId) || !_activeFrames.ContainsKey(request.BackgroundB.SurfaceId))
             return new Failure("gpu.composite.surface_foreign", "GPU composite backgrounds must belong to this provider instance.");
 
-        if (request.Layer is not null && !_activeFrames.ContainsKey(request.Layer.Frame.SurfaceId))
-            return new Failure("gpu.composite.layer_foreign", "GPU composite layer must belong to this provider instance.");
+        if (request.Layers.Any(layer => !_activeFrames.ContainsKey(layer.Frame.SurfaceId)))
+            return new Failure("gpu.composite.layer_foreign", "GPU composite layers must belong to this provider instance.");
 
         var format = request.BackgroundA.Descriptor.Surface.Format;
         if (request.BackgroundB.Descriptor.Surface.Format != format ||
-            (request.Layer is not null && request.Layer.Frame.Descriptor.Surface.Format != format))
+            request.Layers.Any(layer => layer.Frame.Descriptor.Surface.Format != format))
         {
             return new Failure("gpu.composite.format_mismatch", "GPU composite inputs must use the same video format.");
         }
 
         var timing = request.BackgroundA.Descriptor.Timing;
         if (request.BackgroundB.Descriptor.Timing != timing ||
-            (request.Layer is not null && request.Layer.Frame.Descriptor.Timing != timing))
+            request.Layers.Any(layer => layer.Frame.Descriptor.Timing != timing))
         {
             return new Failure("gpu.composite.timing_mismatch", "GPU composite inputs must share the same frame timing.");
         }
