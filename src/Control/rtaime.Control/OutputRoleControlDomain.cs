@@ -189,14 +189,16 @@ public static partial class ControlDomainEngine
 			current.Revision,
 			current.Routing,
 			current.ActiveSceneId,
-			outputRoles);
+			outputRoles,
+			current.CompositingState);
 		var authoritative = new AuthoritativeProductionState(
 			specification.Version,
 			specification.ProductionId,
 			current.Revision.Next(),
 			current.Routing,
 			current.ActiveSceneId,
-			outputRoles);
+			outputRoles,
+			current.CompositingState);
 		return ControlCommandResult.Accepted(current, desired, authoritative);
 	}
 
