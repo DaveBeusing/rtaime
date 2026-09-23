@@ -80,6 +80,18 @@ public sealed class DiagnosticsTests
 
 
 	[Fact]
+	public void Exception_detail_redaction_is_bounded_and_removes_inline_secrets()
+	{
+		var detail = string.Join("\n", Enumerable.Range(0, 120).Select(index => $"line {index} token=secret-{index}"));
+		var redacted = DiagnosticRedactor.RedactExceptionDetail(detail);
+
+		Assert.DoesNotContain("secret-", redacted, StringComparison.Ordinal);
+		Assert.Contains("token=[REDACTED]", redacted, StringComparison.Ordinal);
+		Assert.Contains("[TRUNCATED]", redacted, StringComparison.Ordinal);
+		Assert.True(redacted.Split(Environment.NewLine).Length <= 97);
+	}
+
+	[Fact]
 	public void Host_log_writes_structured_redacted_json_lines()
 	{
 		var root = Path.Combine(Path.GetTempPath(), "rtaime-host-log-tests", Guid.NewGuid().ToString("N"));
