@@ -116,3 +116,10 @@ build/quality/Test-OperatorUiPolicy.ps1 verifies:
 - reuse of existing monitoring and audio update paths.
 
 Required Windows gates remain authoritative for WPF compilation, architecture, integration and regression qualification.
+## Show Control cue stack
+
+The SCENES & CUES region now keeps Media Cues and governed Show Control as separate operator surfaces in the same production workflow. Show Control selection is presentation-only; selecting a cue never executes it.
+
+The Show Control RUN surface exposes explicit SELECT, ARM, GO and CANCEL operations plus recovery acknowledgement. `F9` is the centralized, conflict-checked GO shortcut. Execution evidence is projected from confirmed Control snapshots and shows the authoritative execution state, current cue/action and failure detail.
+
+The EDIT surface is bounded to the supported action union and preserves stable list/cue/action identities across rename and reorder. Server-side validation remains authoritative. See `docs/ShowControlCueSequencing.md` for the execution, timing and recovery model.
