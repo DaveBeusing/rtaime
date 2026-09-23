@@ -196,7 +196,8 @@ internal static class Program
 						{
 							["state"] = runtime?.State.ToString() ?? "DISABLED",
 							["processId"] = runtime?.OwnedProcessId?.ToString() ?? "none",
-							["startAttempts"] = runtime?.StartAttempts.ToString() ?? "0"
+							["startAttempts"] = runtime?.StartAttempts.ToString() ?? "0",
+							["detail"] = runtime?.Detail ?? "RuntimeHost supervision is disabled."
 						});
 					lastRuntimeState = runtime?.State;
 				}
@@ -211,7 +212,8 @@ internal static class Program
 						{
 							["state"] = ai?.State.ToString() ?? "DISABLED",
 							["processId"] = ai?.OwnedProcessId?.ToString() ?? "none",
-							["startAttempts"] = ai?.StartAttempts.ToString() ?? "0"
+							["startAttempts"] = ai?.StartAttempts.ToString() ?? "0",
+							["detail"] = ai?.Detail ?? "AIHost supervision is disabled."
 						});
 					lastAIState = ai?.State;
 				}
