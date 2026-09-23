@@ -34,6 +34,40 @@ public sealed class GovernedSceneOperatorTests
 	}
 
 	[Fact]
+	public void Scene_projection_exposes_declared_desired_layer_state_without_claiming_live_evidence()
+	{
+		var sourceId = ProductionSourceId.New().ToString();
+		var source = new OperatorSourceTileViewModel(new OperatorSourceDescriptor(sourceId, "Camera A"));
+		var descriptor = new OperatorSceneDescriptor(
+			SceneId.New().ToString(),
+			"Camera A with logo",
+			sourceId,
+			sourceId,
+			new[]
+			{
+				new OperatorCompositingLayerDescriptor(
+					"bitmap-graphics",
+					2,
+					0,
+					true,
+					192,
+					0.1,
+					0.2,
+					1.25,
+					"logo.rgba")
+			});
+		var scene = new OperatorSceneViewModel(descriptor, source, 1);
+
+		scene.ApplyEvidence(sourceId, activeSceneId: null);
+
+		Assert.True(scene.HasDesiredCompositingState);
+		Assert.Equal(1, scene.DesiredLayerCount);
+		Assert.Equal("1 LAYER", scene.DesiredStateSummary);
+		Assert.False(scene.IsActive);
+		Assert.Equal("PREVIEW", scene.Evidence);
+	}
+
+	[Fact]
 	public void Scene_live_evidence_requires_explicit_authoritative_active_scene_identity()
 	{
 		var sourceId = ProductionSourceId.New().ToString();
