@@ -78,6 +78,7 @@ foreach ($environmentName in @("RTAIME_LOG_ROOT", "RTAIME_LOG_SESSION_ID", "RTAI
 	Assert-Condition ($hostLog -match [Regex]::Escape($environmentName)) "Structured host logging is missing configuration '$environmentName'."
 }
 Assert-Condition ($hostLog -match 'DiagnosticRedactor\.RedactText' -and $hostLog -match 'DiagnosticRedactor\.Sanitize') "Structured host logs must use the shared redaction policy."
+Assert-Condition ($core -match 'public static string RedactExceptionDetail' -and $hostLog -match 'DiagnosticRedactor\.RedactExceptionDetail' -and $appHostProgram -match 'DiagnosticRedactor\.RedactText\(exception\.Message\)' -and $operatorApp -match 'DiagnosticRedactor\.RedactExceptionDetail') "Structured and human-readable crash diagnostics must share bounded exception redaction."
 Assert-Condition ($hostLog -match 'UnhandledException' -and $hostLog -match 'UnobservedTaskException') "Structured host logs must capture process and unobserved-task failures."
 Assert-Condition ($hostLog -match 'FileShare\.ReadWrite' -and $hostLog -notmatch 'FileShare\.Delete' -and $hostLog -match 'FileOptions\.SequentialScan') "Structured host logs must remain readable while running and active files must resist retention deletion."
 Assert-Condition ($hostLog -notmatch 'PeriodicTimer|Task\.Run|new Thread') "Structured host logging must not add polling loops or background threads."
