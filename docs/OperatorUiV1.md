@@ -227,7 +227,7 @@ The V1 asset boundary is intentionally narrow: PNG input only, maximum 384 x 384
 
 Graphics commands follow **Operator → rtaime.Client → ControlHost → RuntimeHost**. ControlHost serializes the commands through its existing mutation gate, requires an authoritative production state plus a connected RuntimeHost, and reports success only after RuntimeHost accepts the requested graphics state. The Operator then refreshes the confirmed snapshot; it never marks an overlay on-air locally.
 
-The graphics mutation seam is intentionally separate from production routing revisions. Loading or positioning a logo does not invent a new Preview/Program routing revision, while RuntimeHost remains the execution owner of the confirmed graphics state.
+Graphics execution remains Runtime-owned, but confirmed graphics/compositing changes now update the same Control-owned Production evidence because that state can be governed by an active Scene. A successful direct graphics/layer mutation therefore advances Production Revision after Runtime confirmation and clears `ActiveSceneId` when the resulting authoritative compositing state no longer exactly matches the active Scene. Preview/Program routing itself is unchanged by that graphics command.
 
 RuntimeHost materializes bitmap and Production CG content into independent transparent full-frame RGBA sources when their prepared content or placement changes. The frame hot path materializes only currently visible sources and submits them as one bounded ordered layer request. Existing GPU alpha compositing remains the single render path for both managed-reference and CUDA backends.
 
@@ -247,7 +247,7 @@ This means Program monitoring and recording observe the same post-graphics image
 
 ### Recovery and persistence boundary
 
-Graphics & Overlay Operator Workflow still does not add durable graphics rundown persistence across a ControlHost restart.
+Graphics & Overlay Operator Workflow retains Runtime resource content in-process, while authoritative compositing state is now included in durable Control checkpoints. A ControlHost restart can therefore recover the authoritative layer evidence; actual bitmap/CG resource payload continuity still depends on the existing retained/configured resource path and is not a general durable graphics-rundown store.
 
 For RuntimeHost replacement/restart, ControlHost now retains the confirmed in-process recovery state for bitmap content/placement, Production CG definition, layer visibility/opacity and layer order. After authority reconciliation it restores available graphics content and then reapplies the retained order against the new Runtime layer set. Operator resynchronizes from the resulting Runtime-confirmed snapshot; it does not infer restoration locally.
 
