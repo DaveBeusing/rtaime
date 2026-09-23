@@ -294,7 +294,7 @@ public sealed class HostLog : IDisposable
 				path,
 				FileMode.Append,
 				FileAccess.Write,
-				FileShare.ReadWrite | FileShare.Delete,
+				FileShare.ReadWrite,
 				16 * 1024,
 				FileOptions.SequentialScan);
 			_writer = new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), 16 * 1024)
