@@ -42,11 +42,11 @@ The left 360-pixel LIVE region is the compact Scenes & Cues surface. It uses the
 
 The list now projects the governed Scene catalog through `OperatorViewModel.Scenes` and `SelectedScene`. Selecting a row remains presentation-only and never mutates Preview or Program. **TAKE SCENE** invokes the explicit governed Scene activation command through ControlHost; **CUT PVW** keeps the established confirmed Preview-to-Program CUT workflow available.
 
-NEXT evidence is derived from the Scene's declared Preview source against authoritative Preview routing. LIVE evidence is shown only when the synchronized authoritative state explicitly reports the Scene as `ActiveSceneId`. A direct Set Preview, CUT or DISSOLVE mutation clears active-Scene evidence rather than allowing the Operator to infer that a Scene is still active.
+NEXT evidence is derived from the Scene's declared Preview source against authoritative Preview routing. Scene rows also expose whether the desired Scene definition is routing-only or carries a declared compositing layer stack. LIVE evidence is shown only when the synchronized authoritative state explicitly reports the Scene as `ActiveSceneId`. Direct routing mutations clear active-Scene evidence, and confirmed direct graphics/layer mutations also clear it whenever they make the governed production state differ from the activated Scene.
 
 Media cues reuse MediaDeckViewModel.Cues and SelectedCue. Selecting a cue changes only the cue selection. JUMP SELECTED CUE invokes the existing JumpCueCommand through the current marker/timeline path.
 
-The Scene contract currently bundles only Preview/Program routing already covered by the Control -> Runtime prepare/commit boundary. Graphics and output roles are not partially or implicitly mutated as part of Scene activation.
+The Scene contract may bundle Preview/Program routing with the bounded versioned multi-layer compositing state already covered by the same Control → Runtime prepared-execution boundary. TAKE SCENE submits that complete desired state as one mutation. Runtime rejects missing or mismatched required layer resources before commit, so routing and graphics cannot become partially confirmed. Output roles remain outside Scene recall.
 
 ## Live Controls
 
