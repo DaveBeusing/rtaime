@@ -14,27 +14,55 @@ function Assert-Condition {
 	if (-not $Condition) { throw $Message }
 }
 
-function Wait-ForManagedStatus {
+function Wait-ForStableManagedReadiness {
 	param(
-		[Parameter(Mandatory)][string]$LifecyclePath,
-		[Parameter(Mandatory)][string]$InstallRoot,
 		[Parameter(Mandatory)][string]$LifecycleWorkRoot,
-		[Parameter(Mandatory)][string]$ManagedInstanceId,
+		[Parameter(Mandatory)][int]$ExpectedControlProcessId,
 		[int]$TimeoutMs = 5000,
-		[int]$PollIntervalMs = 200
+		[int]$StableDurationMs = 1000,
+		[int]$PollIntervalMs = 100
 	)
 
+	$statePath = Join-Path $LifecycleWorkRoot 'lifecycle-state.json'
 	$deadline = [DateTimeOffset]::UtcNow.AddMilliseconds($TimeoutMs)
-	$lastStatus = $null
+	$stableSince = $null
+	$lastEvidence = 'unavailable'
+
 	do {
-		$lastStatus = & $LifecyclePath -Action Status -InstallPath $InstallRoot -WorkPath $LifecycleWorkRoot -InstanceId $ManagedInstanceId -QualificationMode
-		if ([string]$lastStatus.status -eq 'PASS' -and [string]$lastStatus.runtimeReadiness -eq 'PASS') {
-			return $lastStatus
+		$valid = $false
+		if (Test-Path -LiteralPath $statePath -PathType Leaf) {
+			try {
+				$state = Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json
+				$readinessPath = [string]$state.readinessPath
+				if (Test-Path -LiteralPath $readinessPath -PathType Leaf) {
+					$readiness = Get-Content -LiteralPath $readinessPath -Raw | ConvertFrom-Json
+					$lastEvidence = $readiness | ConvertTo-Json -Compress -Depth 8
+					$valid =
+						[int]$state.controlProcessId -eq $ExpectedControlProcessId -and
+						[int]$readiness.processId -eq $ExpectedControlProcessId -and
+						[string]$readiness.state -eq 'READY' -and
+						[string]$readiness.health -eq 'HEALTHY' -and
+						[string]$readiness.runtimeSupervision.state -eq 'HEALTHY' -and
+						[string]$readiness.aiSupervision.state -eq 'HEALTHY'
+				}
+			} catch {
+				$lastEvidence = "invalid readiness evidence: $($_.Exception.Message)"
+			}
 		}
+
+		if ($valid) {
+			$stableSince ??= [DateTimeOffset]::UtcNow
+			if (([DateTimeOffset]::UtcNow - $stableSince).TotalMilliseconds -ge $StableDurationMs) {
+				return
+			}
+		} else {
+			$stableSince = $null
+		}
+
 		Start-Sleep -Milliseconds $PollIntervalMs
 	} while ([DateTimeOffset]::UtcNow -lt $deadline)
 
-	return $lastStatus
+	throw "Managed lifecycle readiness evidence did not remain stable for $StableDurationMs ms within the bounded settle window. Last evidence: $lastEvidence"
 }
 
 $repositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
@@ -68,9 +96,10 @@ try {
 	Assert-Condition ([string]$restart.runtimeReadiness -eq 'PASS') "Managed lifecycle Restart did not re-qualify runtime readiness."
 	Assert-Condition ([int]$restart.controlProcessId -ne [int]$start.controlProcessId) "Managed lifecycle Restart did not create a new ControlHost process identity."
 
-	$statusAfterRestart = Wait-ForManagedStatus -LifecyclePath $lifecycle -InstallRoot $install -LifecycleWorkRoot $workRoot -ManagedInstanceId $instanceId
-	Assert-Condition ([string]$statusAfterRestart.status -eq 'PASS') "Managed lifecycle Status after restart did not return PASS within the bounded settle window. Last checks: $($statusAfterRestart.checks | ConvertTo-Json -Compress)."
-	Assert-Condition ([string]$statusAfterRestart.runtimeReadiness -eq 'PASS') "Managed lifecycle Status after restart did not return runtimeReadiness PASS within the bounded settle window."
+	Wait-ForStableManagedReadiness -LifecycleWorkRoot $workRoot -ExpectedControlProcessId ([int]$restart.controlProcessId)
+	$statusAfterRestart = & $lifecycle -Action Status -InstallPath $install -WorkPath $workRoot -InstanceId $instanceId -QualificationMode
+	Assert-Condition ([string]$statusAfterRestart.status -eq 'PASS') "Managed lifecycle Status after restart did not return PASS after stable readiness evidence. Last checks: $($statusAfterRestart.checks | ConvertTo-Json -Compress)."
+	Assert-Condition ([string]$statusAfterRestart.runtimeReadiness -eq 'PASS') "Managed lifecycle Status after restart did not return runtimeReadiness PASS after stable readiness evidence."
 
 	$stop = & $lifecycle -Action Stop -InstallPath $install -WorkPath $workRoot -InstanceId $instanceId -QualificationMode
 	Assert-Condition ([string]$stop.status -eq 'PASS') "Managed lifecycle Stop did not return PASS."
