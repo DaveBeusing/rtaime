@@ -696,7 +696,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			runtime is null ? "UNKNOWN" : runtimeFresh ? "VALID" : "STALE",
 			aiShowcase.Status,
 			recording.State,
-			runtime?.GraphicsOverlay.Visible == true,
+			runtime?.CompositingLayers?.Any(layer => layer.Visible) == true,
 			audioProgram.MasterPeak,
 			runtime is null ? WireGraphicsOverlay.Empty : ToWire(runtime.GraphicsOverlay),
 			audioInputs,
@@ -714,7 +714,12 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 					scene.Routing.PreviewSourceId.ToString(),
 					scene.Routing.ProgramSourceId.ToString()))
 				.ToArray(),
-			ProjectOutputRoles(state, runtime, runtimeFresh));
+			ProjectOutputRoles(state, runtime, runtimeFresh),
+			(runtime?.CompositingLayers ?? Array.Empty<RuntimeCompositingLayerSnapshot>())
+				.OrderBy(layer => layer.Order)
+				.ThenBy(layer => layer.LayerId, StringComparer.Ordinal)
+				.Select(ToWire)
+				.ToArray());
 		return Success(request, "control.snapshot.response", payload);
 	}
 
@@ -979,6 +984,17 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		snapshot.CacheHit,
 		snapshot.RenderDuration.Ticks);
 
+	private static WireCompositingLayer ToWire(RuntimeCompositingLayerSnapshot snapshot) => new(
+		snapshot.LayerId,
+		snapshot.Kind,
+		snapshot.Order,
+		snapshot.Visible,
+		snapshot.Opacity,
+		snapshot.PositionX,
+		snapshot.PositionY,
+		snapshot.Scale,
+		snapshot.ContentIdentity);
+
 	private static WireGraphicsOverlay ToWire(RuntimeGraphicsOverlaySnapshot snapshot) => new(
 		snapshot.AssetLoaded,
 		snapshot.AssetName,
@@ -1195,6 +1211,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	private sealed record WireProductionCgText(string Text, string Typeface, string? FallbackTypeface, float FontSizePixels, WireCgColor Foreground, double PositionX, double PositionY, uint BoxWidth, uint BoxHeight, int Alignment, int Anchor, WireCgPanel Panel, bool Visible, int Layer, int ZOrder);
 	private sealed record WireProductionCgTextSnapshot(bool Active, string? Text, string? Typeface, string? ResolvedTypeface, float FontSizePixels, uint BoxWidth, uint BoxHeight, int Alignment, int Anchor, bool PanelEnabled, bool Visible, int Layer, int ZOrder, bool CacheHit, long RenderDurationTicks);
 	private sealed record WireGraphicsOverlayState(bool Visible, double PositionX, double PositionY, double Scale);
+	private sealed record WireCompositingLayer(string LayerId, int Kind, int Order, bool Visible, byte Opacity, double PositionX, double PositionY, double Scale, string ContentIdentity);
 	private sealed record WireGraphicsOverlay(bool AssetLoaded, string? AssetName, uint AssetWidth, uint AssetHeight, bool Visible, double PositionX, double PositionY, double Scale)
 	{
 		public static WireGraphicsOverlay Empty { get; } = new(false, null, 0, 0, false, 0.72, 0.06, 1.0);
@@ -1259,7 +1276,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		string AvSyncSubmitOffset = "UNAVAILABLE",
 		string AvSyncDrift = "UNAVAILABLE",
 		string AvSyncDetail = "A/V sync diagnostics are unavailable.");
-	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, WireRecordingSnapshot Recording, WireHealthSnapshot Health, WireAIShowcase AIShowcase, WireMediaDeckSnapshot MediaDeck, ulong StateVersion, WireProductionCgTextSnapshot? ProductionCgText = null, WireScene[]? Scenes = null, WireOutputRole[]? OutputRoles = null);
+	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, WireRecordingSnapshot Recording, WireHealthSnapshot Health, WireAIShowcase AIShowcase, WireMediaDeckSnapshot MediaDeck, ulong StateVersion, WireProductionCgTextSnapshot? ProductionCgText = null, WireScene[]? Scenes = null, WireOutputRole[]? OutputRoles = null, WireCompositingLayer[]? CompositingLayers = null);
 	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path);
 	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame, bool? AutoPlayOnProgram, int? EndBehavior, long? InPointFrame, long? OutPointFrame);
 	private sealed record WireMediaMarkerCommand(string Version, string AssetId, int Kind, long? PositionFrame, string? CuePointId, string? Name);
