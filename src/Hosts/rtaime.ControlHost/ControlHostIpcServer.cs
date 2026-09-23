@@ -19,6 +19,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	private readonly Func<ControlHostService?> _controlAccessor;
 	private readonly IControlRuntimeTransportSeam _runtimeTransport;
 	private readonly MediaDeckControlService? _mediaDeck;
+	private readonly ShowControlCoordinator? _showControl;
 	private readonly CancellationTokenSource _stop = new();
 	private readonly SemaphoreSlim _mutationGate = new(1, 1);
 	private readonly BoundedRequestCache _requestCache = new(256);
@@ -39,13 +40,22 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		string endpoint,
 		Func<ControlHostService?> controlAccessor,
 		IControlRuntimeTransportSeam runtimeTransport,
-		MediaDeckControlService? mediaDeck = null)
+		MediaDeckControlService? mediaDeck = null,
+		ShowControlPersistenceStore? showControlPersistence = null)
 	{
 		if (string.IsNullOrWhiteSpace(endpoint)) throw new ArgumentException("ControlHost IPC endpoint is required.", nameof(endpoint));
 		_endpoint = endpoint.Trim();
 		_controlAccessor = controlAccessor ?? throw new ArgumentNullException(nameof(controlAccessor));
 		_runtimeTransport = runtimeTransport ?? throw new ArgumentNullException(nameof(runtimeTransport));
 		_mediaDeck = mediaDeck;
+		_showControl = showControlPersistence is null
+			? null
+			: new ShowControlCoordinator(
+				_controlAccessor,
+				showControlPersistence,
+				ExecuteShowControlActionAsync,
+				ObserveShowControlFrameAsync,
+				NotifyObservableStateChanged);
 	}
 
 	public string Endpoint => _endpoint;
@@ -139,6 +149,8 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			try { await _acceptLoop.ConfigureAwait(false); }
 			catch (OperationCanceledException) { }
 		}
+		if (_showControl is not null)
+			await _showControl.DisposeAsync().ConfigureAwait(false);
 		_mutationGate.Dispose();
 		_stop.Dispose();
 	}
@@ -268,6 +280,13 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			"control.media_deck.transport" => await ApplyMediaDeckTransportAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.media_deck.marker" => await ApplyMediaDeckMarkerAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.media_deck.close" => await CloseMediaDeckAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.show_control.snapshot.get" => await GetShowControlSnapshotAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.show_control.cue_list.save" => await SaveShowControlCueListAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.show_control.cue_list.select" => await SelectShowControlCueListAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.show_control.arm" => await ArmShowControlAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.show_control.go" => await GoShowControlAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.show_control.cancel" => await CancelShowControlAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.show_control.recovery.acknowledge" => await AcknowledgeShowControlRecoveryAsync(request, cancellationToken).ConfigureAwait(false),
 			_ => Error(request, "ipc.message.unknown", $"Unknown ControlHost message type '{request.MessageType}'.")
 		};
 	}
