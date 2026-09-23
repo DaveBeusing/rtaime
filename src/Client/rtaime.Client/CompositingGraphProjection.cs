@@ -206,8 +206,7 @@ public static class CompositingGraphProjector
 					$"ORDER {layer.Order} · {opacity:0}% · X {layer.PositionX * 100:0.#}% · Y {layer.PositionY * 100:0.#}% · {layer.Scale:0.##}x",
 					layer.Visible ? "CONFIRMED VISIBLE" : "CONFIRMED HIDDEN",
 					CompositingGraphHealth.Normal,
-					[new("rgba", "RGBA", CompositingGraphPortDirection.Output)],
-					CanRewire: true));
+					[new("rgba", "RGBA", CompositingGraphPortDirection.Output)]));
 				connections.Add(new CompositingGraphConnectionProjection(
 					$"{layerNodeId}->composite",
 					layerNodeId,
