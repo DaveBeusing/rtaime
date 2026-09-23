@@ -173,6 +173,17 @@ public sealed class ControlHostService
 		}
 	}
 
+	public void RecordShowControlEvent(string code, string detail, Identity? causationId = null, Failure? failure = null)
+	{
+		if (string.IsNullOrWhiteSpace(code)) throw new ArgumentException("Show-control journal code is required.", nameof(code));
+		if (string.IsNullOrWhiteSpace(detail)) throw new ArgumentException("Show-control journal detail is required.", nameof(detail));
+		lock (_gate)
+		{
+			var revision = _authoritative?.Revision ?? Revision.Initial;
+			Journal(revision, "show_control", code.Trim(), detail.Trim(), causationId, failure);
+		}
+	}
+
 	public ControlHostOperationResult Initialize()
 	{
 		lock (_gate)
