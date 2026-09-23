@@ -266,7 +266,7 @@ Control and Planning still resolve `media.route` through the VirtualMedia provid
 
 The committed Runtime Program binding selects which background is used for GPU CUT processing.
 
-DISSOLVE and the RGBA layer are proven as GPU-provider processing primitives in GPU Processing Foundation. Their future authoritative production-control representation must be introduced only through an explicit later contract/product integration step; GPU Processing Foundation does not silently extend the Control contract.
+DISSOLVE and ordered RGBA layers remain GPU-provider processing primitives. Governed Scene activation now has an explicit later integration above this provider boundary: Control may carry a bounded, versioned Scene compositing snapshot through the existing Prepared Execution transaction, while RuntimeHost maps that snapshot onto the already established stable layer identities. The GPU provider itself remains unaware of Scene identity and gains no Control authority.
 
 ## Failure and recovery
 
