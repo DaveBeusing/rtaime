@@ -1142,6 +1142,13 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		var aiShowcase = runtime?.AIShowcase is { } runtimeAI
 			? ToWire(runtimeAI)
 			: WireAIShowcase.Unavailable;
+		WireShowControlWorkspace? showControl = null;
+		if (_showControl is not null)
+		{
+			try { showControl = ToWire(await _showControl.GetSnapshotAsync(cancellationToken).ConfigureAwait(false)); }
+			catch { showControl = null; }
+		}
+
 		var health = OperatorHealthProjection.Evaluate(
 			runtime,
 			runtime is null ? Array.Empty<ProviderDescriptor>() : _runtimeTransport.ProviderDescriptors,
@@ -1181,7 +1188,8 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 				.OrderBy(layer => layer.Order)
 				.ThenBy(layer => layer.LayerId, StringComparer.Ordinal)
 				.Select(ToWire)
-				.ToArray());
+				.ToArray(),
+			showControl);
 		return Success(request, "control.snapshot.response", payload);
 	}
 
@@ -1526,6 +1534,24 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			snapshot.Markers.CuePoints.Select(cue => new WireCuePoint(cue.Id.ToString(), cue.Name, cue.PositionFrame)).ToArray()),
 		snapshot.Failure is { } failure ? new WireFailure(failure.Code, failure.Message) : null);
 
+	private static WireShowControlWorkspace ToWire(ShowControlWorkspaceSnapshot snapshot) => new(
+		snapshot.CueLists.Select(ShowControlCanonicalSerializer.Serialize).ToArray(),
+		snapshot.SelectedCueListId?.ToString(),
+		new WireShowControlExecution(
+			snapshot.Execution.Version.ToString(),
+			snapshot.Execution.ExecutionId?.ToString(),
+			snapshot.Execution.CueListId?.ToString(),
+			(int)snapshot.Execution.State,
+			snapshot.Execution.CueIndex,
+			snapshot.Execution.ActionIndex,
+			snapshot.Execution.CurrentCueId?.ToString(),
+			snapshot.Execution.CurrentActionId?.ToString(),
+			snapshot.Execution.ExecutionRevision,
+			snapshot.Execution.WaitTargetFrameSequence,
+			snapshot.Execution.RuntimeHostInstanceId,
+			snapshot.Execution.RequiresAcknowledgement,
+			snapshot.Execution.Failure is { } failure ? new WireFailure(failure.Code, failure.Message) : null));
+
 	private static WireRecordingSnapshot ToWire(RuntimeRecordingSnapshot snapshot) => new(
 		snapshot.State,
 		snapshot.Elapsed.Ticks,
@@ -1774,7 +1800,25 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		string AvSyncSubmitOffset = "UNAVAILABLE",
 		string AvSyncDrift = "UNAVAILABLE",
 		string AvSyncDetail = "A/V sync diagnostics are unavailable.");
-	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, WireRecordingSnapshot Recording, WireHealthSnapshot Health, WireAIShowcase AIShowcase, WireMediaDeckSnapshot MediaDeck, ulong StateVersion, WireProductionCgTextSnapshot? ProductionCgText = null, WireScene[]? Scenes = null, WireOutputRole[]? OutputRoles = null, WireCompositingLayer[]? CompositingLayers = null);
+	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, WireRecordingSnapshot Recording, WireHealthSnapshot Health, WireAIShowcase AIShowcase, WireMediaDeckSnapshot MediaDeck, ulong StateVersion, WireProductionCgTextSnapshot? ProductionCgText = null, WireScene[]? Scenes = null, WireOutputRole[]? OutputRoles = null, WireCompositingLayer[]? CompositingLayers = null, WireShowControlWorkspace? ShowControl = null);
+	private sealed record WireShowControlCueList(string CueListJson);
+	private sealed record WireShowControlSelection(string CueListId);
+	private sealed record WireShowControlRecovery(bool Resume);
+	private sealed record WireShowControlExecution(
+		string Version,
+		string? ExecutionId,
+		string? CueListId,
+		int State,
+		int? CueIndex,
+		int? ActionIndex,
+		string? CurrentCueId,
+		string? CurrentActionId,
+		ulong ExecutionRevision,
+		ulong? WaitTargetFrameSequence,
+		string? RuntimeHostInstanceId,
+		bool RequiresAcknowledgement,
+		WireFailure? Failure);
+	private sealed record WireShowControlWorkspace(string[] CueLists, string? SelectedCueListId, WireShowControlExecution Execution);
 	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path);
 	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame, bool? AutoPlayOnProgram, int? EndBehavior, long? InPointFrame, long? OutPointFrame);
 	private sealed record WireMediaMarkerCommand(string Version, string AssetId, int Kind, long? PositionFrame, string? CuePointId, string? Name);
