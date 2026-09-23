@@ -77,6 +77,91 @@ public sealed class DiagnosticsTests
 		Assert.DoesNotContain("payload", first, StringComparison.OrdinalIgnoreCase);
 	}
 
+
+	[Fact]
+	public void Host_log_writes_structured_redacted_json_lines()
+	{
+		var root = Path.Combine(Path.GetTempPath(), "rtaime-host-log-tests", Guid.NewGuid().ToString("N"));
+		try
+		{
+			using (var log = HostLog.Open(
+				"RuntimeHost",
+				new[]
+				{
+					$"--log-root={root}",
+					"--log-session-id=session-test",
+					"--instance-id=runtime-1",
+					"--log-level=Trace"
+				},
+				publishEnvironment: false))
+			{
+				log.Error(
+					"ipc",
+					"ipc.failure",
+					"Runtime IPC failed token=abc123.",
+					new InvalidOperationException("password=hunter2"),
+					new Dictionary<string, string>
+					{
+						["endpoint"] = "rtaime.v1.runtime.default",
+						["apiKey"] = "visible-secret"
+					});
+			}
+
+			var sessionDirectory = Path.Combine(root, "session-test");
+			var file = Assert.Single(Directory.GetFiles(sessionDirectory, "*.jsonl"));
+			var lines = File.ReadAllLines(file);
+			Assert.True(lines.Length >= 2);
+
+			using var document = JsonDocument.Parse(lines[^1]);
+			var record = document.RootElement;
+			Assert.Equal(HostLog.CurrentSchemaVersion, record.GetProperty("schemaVersion").GetString());
+			Assert.Equal("RuntimeHost", record.GetProperty("host").GetString());
+			Assert.Equal("session-test", record.GetProperty("sessionId").GetString());
+			Assert.Equal("runtime-1", record.GetProperty("instanceId").GetString());
+			Assert.Equal("Error", record.GetProperty("level").GetString());
+			Assert.Equal("ipc.failure", record.GetProperty("code").GetString());
+			Assert.DoesNotContain("abc123", lines[^1], StringComparison.Ordinal);
+			Assert.DoesNotContain("hunter2", lines[^1], StringComparison.Ordinal);
+			Assert.DoesNotContain("visible-secret", lines[^1], StringComparison.Ordinal);
+			Assert.Equal("[REDACTED]", record.GetProperty("dimensions").GetProperty("apiKey").GetString());
+			Assert.Equal("System.InvalidOperationException", record.GetProperty("exception").GetProperty("type").GetString());
+		}
+		finally
+		{
+			try { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); } catch (IOException) { }
+		}
+	}
+
+	[Fact]
+	public void Host_log_keeps_process_failures_best_effort_and_never_exposes_raw_exception_secrets()
+	{
+		var root = Path.Combine(Path.GetTempPath(), "rtaime-host-log-tests", Guid.NewGuid().ToString("N"));
+		try
+		{
+			using var log = HostLog.Open(
+				"ControlHost",
+				new[] { $"--log-root={root}", "--log-session-id=failure-test" },
+				publishEnvironment: false);
+			using var subscription = log.AttachProcessFailureHandlers();
+			log.Critical(
+				"process",
+				"process.test-failure",
+				"Test failure secret=top-secret.",
+				new ApplicationException("Authorization:Bearer secret-value"));
+			log.Flush();
+
+			var file = Assert.Single(Directory.GetFiles(Path.Combine(root, "failure-test"), "*.jsonl"));
+			var content = File.ReadAllText(file);
+			Assert.Contains("process.test-failure", content, StringComparison.Ordinal);
+			Assert.DoesNotContain("top-secret", content, StringComparison.Ordinal);
+			Assert.DoesNotContain("secret-value", content, StringComparison.Ordinal);
+		}
+		finally
+		{
+			try { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); } catch (IOException) { }
+		}
+	}
+
 	[Fact]
 	public void Product_build_info_uses_informational_version_without_source_revision_suffix()
 	{
