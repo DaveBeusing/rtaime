@@ -837,6 +837,274 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		return Success(request, "control.media_deck.snapshot.response", ToWire(snapshot));
 	}
 
+	private ValueTask<WireEnvelope> GetShowControlSnapshotAsync(WireEnvelope request, CancellationToken cancellationToken) =>
+		RunShowControlAsync(request, coordinator => coordinator.GetSnapshotAsync(cancellationToken), cancellationToken);
+
+	private ValueTask<WireEnvelope> SaveShowControlCueListAsync(WireEnvelope request, CancellationToken cancellationToken)
+	{
+		var wire = request.Payload.Deserialize<WireShowControlCueList>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Show-control cue-list payload is required.");
+		var cueList = ShowControlCanonicalSerializer.Deserialize(wire.CueListJson);
+		return RunShowControlAsync(request, coordinator => coordinator.SaveCueListAsync(cueList, cancellationToken), cancellationToken);
+	}
+
+	private ValueTask<WireEnvelope> SelectShowControlCueListAsync(WireEnvelope request, CancellationToken cancellationToken)
+	{
+		var wire = request.Payload.Deserialize<WireShowControlSelection>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Show-control cue-list selection payload is required.");
+		var cueListId = new ShowControlCueListId(Identity.Parse(wire.CueListId));
+		return RunShowControlAsync(request, coordinator => coordinator.SelectCueListAsync(cueListId, cancellationToken), cancellationToken);
+	}
+
+	private ValueTask<WireEnvelope> ArmShowControlAsync(WireEnvelope request, CancellationToken cancellationToken) =>
+		RunShowControlAsync(request, coordinator => coordinator.ArmAsync(cancellationToken), cancellationToken);
+
+	private ValueTask<WireEnvelope> GoShowControlAsync(WireEnvelope request, CancellationToken cancellationToken) =>
+		RunShowControlAsync(request, coordinator => coordinator.GoAsync(cancellationToken), cancellationToken);
+
+	private ValueTask<WireEnvelope> CancelShowControlAsync(WireEnvelope request, CancellationToken cancellationToken) =>
+		RunShowControlAsync(request, coordinator => coordinator.CancelAsync(cancellationToken), cancellationToken);
+
+	private ValueTask<WireEnvelope> AcknowledgeShowControlRecoveryAsync(WireEnvelope request, CancellationToken cancellationToken)
+	{
+		var wire = request.Payload.Deserialize<WireShowControlRecovery>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Show-control recovery payload is required.");
+		return RunShowControlAsync(request, coordinator => coordinator.AcknowledgeRecoveryAsync(wire.Resume, cancellationToken), cancellationToken);
+	}
+
+	private async ValueTask<WireEnvelope> RunShowControlAsync(
+		WireEnvelope request,
+		Func<ShowControlCoordinator, ValueTask<ShowControlWorkspaceSnapshot>> operation,
+		CancellationToken cancellationToken)
+	{
+		_ = cancellationToken;
+		if (_showControl is null)
+			return Error(request, "control.show_control.unavailable", "Show-control persistence and coordination are not configured.");
+
+		try
+		{
+			var snapshot = await operation(_showControl).ConfigureAwait(false);
+			return Success(request, "control.show_control.snapshot.response", ToWire(snapshot));
+		}
+		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+		{
+			throw;
+		}
+		catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or NotSupportedException or FormatException or InvalidDataException or IOException or KeyNotFoundException)
+		{
+			return Error(request, "control.show_control.rejected", exception.Message);
+		}
+	}
+
+	private async ValueTask<Failure?> ExecuteShowControlActionAsync(
+		ShowControlAction action,
+		CancellationToken cancellationToken)
+	{
+		var control = _controlAccessor();
+		if (control is null || !control.HasAuthoritativeState)
+			return new Failure("control.not_ready", "ControlHost has no committed authoritative state yet.");
+
+		switch (action.Kind)
+		{
+			case ShowControlActionKind.ActivateScene:
+				return await ExecuteShowControlMutationAsync(
+					MutationKind.ActivateScene,
+					null,
+					action.SceneId,
+					null,
+					cancellationToken).ConfigureAwait(false);
+			case ShowControlActionKind.SetPreview:
+				return await ExecuteShowControlMutationAsync(
+					MutationKind.SelectPreview,
+					action.SourceId,
+					null,
+					null,
+					cancellationToken).ConfigureAwait(false);
+			case ShowControlActionKind.Cut:
+				return await ExecuteShowControlMutationAsync(
+					MutationKind.Cut,
+					control.State.Routing.PreviewSourceId.ToString(),
+					null,
+					null,
+					cancellationToken).ConfigureAwait(false);
+			case ShowControlActionKind.Dissolve:
+				return await ExecuteShowControlMutationAsync(
+					MutationKind.Dissolve,
+					control.State.Routing.PreviewSourceId.ToString(),
+					null,
+					action.DurationFrames,
+					cancellationToken).ConfigureAwait(false);
+			case ShowControlActionKind.JumpMediaCue:
+				return await ExecuteShowControlMediaCueJumpAsync(action, cancellationToken).ConfigureAwait(false);
+			case ShowControlActionKind.MediaPlay:
+				return await ExecuteShowControlMediaTransportAsync(action, MediaTransportCommandKind.Play, cancellationToken).ConfigureAwait(false);
+			case ShowControlActionKind.MediaPause:
+				return await ExecuteShowControlMediaTransportAsync(action, MediaTransportCommandKind.Pause, cancellationToken).ConfigureAwait(false);
+			case ShowControlActionKind.MediaStop:
+				return await ExecuteShowControlMediaTransportAsync(action, MediaTransportCommandKind.Stop, cancellationToken).ConfigureAwait(false);
+			case ShowControlActionKind.SetLayerVisibility:
+				return await ExecuteShowControlLayerVisibilityAsync(action, cancellationToken).ConfigureAwait(false);
+			case ShowControlActionKind.StartRecording:
+			{
+				var response = await StartRecordingAsync(
+					InternalRequest("control.recording.start", new WireRecordingStart(action.RecordingDestinationDirectory!, action.RecordingFileName!)),
+					cancellationToken).ConfigureAwait(false);
+				return ReadRecordingFailure(response);
+			}
+			case ShowControlActionKind.StopRecording:
+			{
+				var response = await StopRecordingAsync(
+					InternalRequest("control.recording.stop", new { }),
+					cancellationToken).ConfigureAwait(false);
+				return ReadRecordingFailure(response);
+			}
+			case ShowControlActionKind.WaitFrames:
+				return new Failure("control.show_control.wait.dispatch_invalid", "Frame waits are owned by the show-control coordinator and must not enter the production action executor.");
+			default:
+				return new Failure("control.show_control.action.unsupported", $"Show-control action '{action.Kind}' is not supported.");
+		}
+	}
+
+	private async ValueTask<Failure?> ExecuteShowControlMutationAsync(
+		MutationKind kind,
+		string? sourceId,
+		string? sceneId,
+		uint? durationFrames,
+		CancellationToken cancellationToken)
+	{
+		var control = _controlAccessor();
+		if (control is null || !control.HasAuthoritativeState)
+			return new Failure("control.not_ready", "ControlHost has no committed authoritative state yet.");
+		var state = control.State;
+		var command = new WireControlCommand(
+			ControlContractVersion.Current.ToString(),
+			CommandId.New().ToString(),
+			state.ProductionId.ToString(),
+			state.Revision.Value,
+			sourceId,
+			durationFrames,
+			sceneId);
+		var response = await MutateAsync(
+			InternalRequest("control.show_control.production_action", command),
+			kind,
+			cancellationToken).ConfigureAwait(false);
+		return ReadMutationFailure(response);
+	}
+
+	private async ValueTask<Failure?> ExecuteShowControlMediaCueJumpAsync(
+		ShowControlAction action,
+		CancellationToken cancellationToken)
+	{
+		if (_mediaDeck is null)
+			return new Failure("control.media_deck.unavailable", "Media-deck control service is not configured.");
+		var assetId = new MediaAssetId(Identity.Parse(action.MediaAssetId!));
+		var cueId = new MediaCuePointId(Identity.Parse(action.MediaCuePointId!));
+		var current = await _mediaDeck.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
+		if (current.Probe is null || current.Transport is null || current.Markers is null)
+			return new Failure("control.media_deck.unloaded", "Media deck has no loaded asset.");
+		if (current.Probe.AssetId != assetId)
+			return new Failure("control.media_deck.asset_mismatch", "Show-control media action does not match the loaded deck asset.");
+		var cue = current.Markers.CuePoints.FirstOrDefault(candidate => candidate.Id == cueId);
+		if (cue is null)
+			return new Failure("control.media_deck.cue_not_found", $"Media cue '{cueId}' does not exist in the loaded asset.");
+		var result = await _mediaDeck.ApplyTransportAsync(
+			new MediaTransportCommand(MediaContractVersion.Current, assetId, MediaTransportCommandKind.Seek, cue.PositionFrame),
+			cancellationToken).ConfigureAwait(false);
+		NotifyObservableStateChanged();
+		return MediaDeckFailure(result);
+	}
+
+	private async ValueTask<Failure?> ExecuteShowControlMediaTransportAsync(
+		ShowControlAction action,
+		MediaTransportCommandKind kind,
+		CancellationToken cancellationToken)
+	{
+		if (_mediaDeck is null)
+			return new Failure("control.media_deck.unavailable", "Media-deck control service is not configured.");
+		var assetId = new MediaAssetId(Identity.Parse(action.MediaAssetId!));
+		var result = await _mediaDeck.ApplyTransportAsync(
+			new MediaTransportCommand(MediaContractVersion.Current, assetId, kind),
+			cancellationToken).ConfigureAwait(false);
+		NotifyObservableStateChanged();
+		return MediaDeckFailure(result);
+	}
+
+	private async ValueTask<Failure?> ExecuteShowControlLayerVisibilityAsync(
+		ShowControlAction action,
+		CancellationToken cancellationToken)
+	{
+		var runtime = await _runtimeTransport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
+		var layer = runtime.CompositingLayers?.FirstOrDefault(candidate =>
+			string.Equals(candidate.LayerId, action.LayerId, StringComparison.Ordinal));
+		if (layer is null)
+			return new Failure("control.compositing.layer.unknown", $"Compositing layer '{action.LayerId}' is unavailable.");
+		var response = await SetCompositingLayerStateAsync(
+			InternalRequest(
+				"control.compositing.layer.set",
+				new WireCompositingLayerState(layer.LayerId, action.Visible!.Value, layer.Opacity)),
+			cancellationToken).ConfigureAwait(false);
+		return ReadErrorFailure(response);
+	}
+
+	private async ValueTask<ShowControlFrameObservation> ObserveShowControlFrameAsync(CancellationToken cancellationToken)
+	{
+		if (!_runtimeTransport.IsConnected)
+			throw new InvalidOperationException("RuntimeHost is not connected.");
+		var runtime = await _runtimeTransport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
+		var frameBudget = runtime.Performance?.FrameBudget ?? TimeSpan.Zero;
+		return new ShowControlFrameObservation(runtime.HostInstanceId, runtime.NextSequenceNumber, frameBudget);
+	}
+
+	private WireEnvelope InternalRequest(string messageType, object payload)
+	{
+		var requestId = Identity.New().ToString();
+		return Wire.Create(messageType, requestId, requestId, _hostInstanceId, StateVersion, NextSequence(), payload);
+	}
+
+	private static Failure? ReadMutationFailure(WireEnvelope response)
+	{
+		var transportFailure = ReadErrorFailure(response);
+		if (transportFailure is not null)
+			return transportFailure;
+		var wire = response.Payload.Deserialize<WireMutationResponse>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Internal Control mutation response is invalid.");
+		return wire.Accepted
+			? null
+			: wire.Failure is null
+				? new Failure("control.command.rejected", "Control command was rejected.")
+				: new Failure(wire.Failure.Code, wire.Failure.Message);
+	}
+
+	private static Failure? ReadRecordingFailure(WireEnvelope response)
+	{
+		var transportFailure = ReadErrorFailure(response);
+		if (transportFailure is not null)
+			return transportFailure;
+		var wire = response.Payload.Deserialize<WireRecordingCommandResult>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Internal recording response is invalid.");
+		if (wire.Succeeded)
+			return null;
+		return wire.Failure is null
+			? new Failure("control.recording.rejected", "Recording command was rejected.")
+			: new Failure(wire.Failure.Code, wire.Failure.Message);
+	}
+
+	private static Failure? ReadErrorFailure(WireEnvelope response)
+	{
+		if (!string.Equals(response.MessageType, "error", StringComparison.Ordinal))
+			return null;
+		var wire = response.Payload.Deserialize<WireFailure>(Wire.JsonOptions);
+		return wire is null
+			? new Failure("control.show_control.internal_error", "Internal Control command failed without failure detail.")
+			: new Failure(wire.Code, wire.Message);
+	}
+
+	private static Failure? MediaDeckFailure(MediaDeckSnapshot snapshot) =>
+		snapshot.Failure ??
+		(snapshot.State == MediaDeckState.Error
+			? new Failure("control.media_deck.failed", "Media-deck command failed.")
+			: null);
+
 	private async ValueTask<WireEnvelope> GetSnapshotAsync(WireEnvelope request, CancellationToken cancellationToken)
 	{
 		var control = _controlAccessor();
