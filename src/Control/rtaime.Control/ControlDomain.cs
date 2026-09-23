@@ -274,13 +274,15 @@ public static partial class ControlDomainEngine
             return ControlCommandResult.Rejected(current, new ControlValidationReport(issues));
 
         var sceneOutputRoles = SynchronizeProgramOutputRole(current.OutputRoles, scene!.Routing.ProgramSourceId);
+        var sceneCompositingState = scene.CompositingState ?? current.CompositingState;
         var desired = new DesiredProductionState(
             specification.Version,
             specification.ProductionId,
             current.Revision,
             scene.Routing,
             scene.SceneId,
-            sceneOutputRoles);
+            sceneOutputRoles,
+            sceneCompositingState);
 
         var desiredIssues = new List<ValidationIssue>();
         ValidateRouting(specification, desired.Routing, "desired.routing", desiredIssues);
@@ -293,7 +295,8 @@ public static partial class ControlDomainEngine
             current.Revision.Next(),
             desired.Routing,
             scene.SceneId,
-            sceneOutputRoles);
+            sceneOutputRoles,
+            sceneCompositingState);
 
         return ControlCommandResult.Accepted(current, desired, authoritative);
     }
@@ -390,7 +393,8 @@ public static partial class ControlDomainEngine
             current.Revision,
             desiredRouting,
             null,
-            desiredOutputRoles);
+            desiredOutputRoles,
+            current.CompositingState);
 
         var desiredIssues = new List<ValidationIssue>();
         ValidateRouting(specification, desired.Routing, "desired.routing", desiredIssues);
@@ -403,7 +407,8 @@ public static partial class ControlDomainEngine
             current.Revision.Next(),
             desired.Routing,
             null,
-            desiredOutputRoles);
+            desiredOutputRoles,
+            current.CompositingState);
 
         return ControlCommandResult.Accepted(current, desired, authoritative);
     }
@@ -431,6 +436,15 @@ public static partial class ControlDomainEngine
             issues.Add(new ValidationIssue(
                 "control.state.active_scene_routing_mismatch",
                 "Authoritative active Scene evidence does not match authoritative production routing.",
+                "authoritative.activeSceneId"));
+        }
+
+        if (activeScene.CompositingState is not null &&
+            !activeScene.CompositingState.Equals(current.CompositingState))
+        {
+            issues.Add(new ValidationIssue(
+                "control.state.active_scene_compositing_mismatch",
+                "Authoritative active Scene evidence does not match authoritative compositing state.",
                 "authoritative.activeSceneId"));
         }
     }
