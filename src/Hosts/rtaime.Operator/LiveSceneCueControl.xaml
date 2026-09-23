@@ -267,10 +267,10 @@
 						Margin="0,8,0,0">
 						<StackPanel>
 							<TextBlock Style="{StaticResource OperatorLabel}" FontWeight="SemiBold">
-								<Run Text="ACTIVE SCENE · " /><Run Text="{Binding ActiveSceneName}" />
+								<Run Text="ACTIVE SCENE · " /><Run Text="{Binding ActiveSceneName, Mode=OneWay}" />
 							</TextBlock>
 							<TextBlock Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextWrapping="Wrap" Margin="0,2,0,0">
-								<Run Text="EVIDENCE · " /><Run Text="{Binding SceneFailureReason}" />
+								<Run Text="EVIDENCE · " /><Run Text="{Binding SceneFailureReason, Mode=OneWay}" />
 							</TextBlock>
 						</StackPanel>
 					</Border>
