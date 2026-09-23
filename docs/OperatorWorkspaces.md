@@ -113,10 +113,10 @@ COMPOSITING emphasizes composition using the existing Runtime-owned graphics pat
 - the confirmed ordered Runtime layer stack;
 - stable bitmap, Production CG and existing visual-layer identities;
 - bounded selected-layer reorder, visibility and opacity controls;
-- selection-driven Inspector;
+- selection-driven Inspector, including the existing X/Y/Scale editor for the confirmed bitmap graphics layer;
 - current AI composition control where supported.
 
-Source/routing topology remains read-only. Local selection, pan, zoom and layout are presentation state only. Layer mutations travel through rtaime.Client → ControlHost → RuntimeHost and remain pending until confirmed Runtime state returns. The Operator never renders authoritative Production pixels and no second graphics renderer, compositor or production-state store is introduced by the shell.
+Source/routing topology remains read-only. Local selection, pan, zoom and layout are presentation state only. Layer reorder/visibility/opacity mutations travel through rtaime.Client → ControlHost → RuntimeHost and remain pending until confirmed Runtime state returns. Bitmap X/Y/Scale continues through the existing governed graphics-placement command; Production CG placement remains owned by its CG definition and is not exposed as a generic layer transform. The Operator never renders authoritative Production pixels and no second graphics renderer, compositor or production-state store is introduced by the shell.
 
 ## OUTPUTS
 
