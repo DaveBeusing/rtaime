@@ -502,7 +502,7 @@ public static class CapabilityPlanningEngine
                     binding.LogicalRequirement.OutputRoleId))
                 .ToArray());
 
-        var preparedExecution = CreatePreparedExecution(plan);
+        var preparedExecution = CreatePreparedExecution(plan, authoritativeState.CompositingState);
         return ExecutionPlanningResult.Accepted(graph, admission, plan, preparedExecution);
     }
 
@@ -807,7 +807,9 @@ public static class CapabilityPlanningEngine
         return ResourceAdmissionResult.Accepted(bindings);
     }
 
-    private static PreparedExecutionContract CreatePreparedExecution(ExecutionPlan plan)
+    private static PreparedExecutionContract CreatePreparedExecution(
+        ExecutionPlan plan,
+        ProductionCompositingState? compositingState)
     {
         var canonicalBindings = plan.Bindings
             .Select(binding => string.Join(
@@ -821,12 +823,43 @@ public static class CapabilityPlanningEngine
                 binding.OutputRoleId ?? "-"))
             .ToArray();
 
+        var preparedCompositing = compositingState is null
+            ? null
+            : new PreparedCompositingState(
+                PreparedCompositingState.CurrentVersion,
+                compositingState.Layers.Select(layer => new PreparedCompositingLayerState(
+                    layer.LayerId,
+                    (PreparedCompositingLayerKind)(int)layer.Kind,
+                    layer.Order,
+                    layer.Visible,
+                    layer.Opacity,
+                    layer.PositionX,
+                    layer.PositionY,
+                    layer.Scale,
+                    layer.ContentIdentity)).ToArray());
+        var canonicalCompositing = preparedCompositing is null
+            ? "-"
+            : string.Join(
+                ";",
+                preparedCompositing.Layers.Select(layer => string.Join(
+                    "|",
+                    layer.LayerId,
+                    (int)layer.Kind,
+                    layer.Order,
+                    layer.Visible ? "1" : "0",
+                    layer.Opacity,
+                    layer.PositionX.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
+                    layer.PositionY.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
+                    layer.Scale.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
+                    layer.ContentIdentity)));
+
         var preparedExecutionId = new PreparedExecutionId(PlanningIdentity.Create(
             "prepared-execution",
             plan.AuthoritySnapshot.StateId.ToString(),
             plan.AuthoritySnapshot.Revision.ToString(),
             plan.PlanGeneration.ToString(),
-            string.Join(";", canonicalBindings)));
+            string.Join(";", canonicalBindings),
+            canonicalCompositing));
 
         return new PreparedExecutionContract(
             RuntimeContractVersion.Current,
@@ -841,7 +874,8 @@ public static class CapabilityPlanningEngine
                     binding.MediaSourceId,
                     binding.MediaSinkId,
                     binding.OutputRoleId))
-                .ToArray());
+                .ToArray(),
+            preparedCompositing);
     }
 
     private static bool ContainsSource(ProductionSpecification specification, ProductionSourceId sourceId) =>
