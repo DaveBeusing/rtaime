@@ -520,7 +520,8 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		ToWire(snapshot.Performance),
 		ToWire(aiShowcase),
 		snapshot.AvSyncDiagnostics is null ? null : ToWire(snapshot.AvSyncDiagnostics),
-		snapshot.ProductionCgText is null ? null : ToWire(snapshot.ProductionCgText));
+		snapshot.ProductionCgText is null ? null : ToWire(snapshot.ProductionCgText),
+		(snapshot.OutputRoles ?? Array.Empty<RuntimeOutputRoleSnapshot>()).Select(ToWire).ToArray());
 
 	private static WireAvSyncDiagnostics ToWire(V1AvSyncDiagnosticsSnapshot snapshot) => new(
 		snapshot.Enabled,
@@ -533,6 +534,21 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		snapshot.SubmitOffsetMilliseconds,
 		snapshot.DriftFromBaselineMilliseconds,
 		snapshot.Detail);
+
+	private static WireOutputRole ToWire(RuntimeOutputRoleSnapshot snapshot) => new(
+		snapshot.RoleId,
+		snapshot.RoleKind,
+		snapshot.SourceId.ToString(),
+		snapshot.TargetId.ToString(),
+		new WireVideoFormat(snapshot.Format.Width, snapshot.Format.Height, snapshot.Format.FrameRate.ToString(), (int)snapshot.Format.PixelFormat, (int)snapshot.Format.ScanMode),
+		snapshot.Timing.Numerator,
+		snapshot.Timing.Denominator,
+		snapshot.ProviderId.ToString(),
+		(int)snapshot.LifecycleState,
+		snapshot.AuthoritativeActive,
+		(int)snapshot.HealthState,
+		snapshot.Evidence,
+		snapshot.Error is { } error ? new WireFailure(error.Code, error.Message) : null);
 
 	private static WireProductionCgTextSnapshot ToWire(V1ProductionCgTextSnapshot snapshot) => new(
 		snapshot.Active,
@@ -711,7 +727,8 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 				binding.Resource.CapacityUnits,
 				binding.Resource.Reservable),
 			string.IsNullOrWhiteSpace(binding.MediaSourceId) ? null : new MediaSourceId(Identity.Parse(binding.MediaSourceId)),
-			string.IsNullOrWhiteSpace(binding.MediaSinkId) ? null : new MediaSinkId(Identity.Parse(binding.MediaSinkId)))).ToArray());
+			string.IsNullOrWhiteSpace(binding.MediaSinkId) ? null : new MediaSinkId(Identity.Parse(binding.MediaSinkId)),
+			binding.OutputRoleId)).ToArray());
 
 	private sealed record ClientHello(string ProtocolVersion, string Role, string HostInstanceId, Dictionary<string, string> ContractVersions);
 	private sealed record ServerHello(string ProtocolVersion, string Role, string HostInstanceId, Dictionary<string, string> ContractVersions);
@@ -747,7 +764,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 	private sealed record WireCapability(string CapabilityId, string Kind, WireVideoFormat[] VideoFormats);
 	private sealed record WireResource(string ResourceId, string ProviderId, string Kind, uint CapacityUnits, bool Reservable);
 	private sealed record WireProvider(string Version, string ProviderId, string Name, int AvailabilityState, WireFailure? Failure, WireCapability[] Capabilities, WireResource[] Resources);
-	private sealed record WirePreparedBinding(string LogicalNodeId, string CapabilityId, WireResource Resource, string? MediaSourceId, string? MediaSinkId);
+	private sealed record WirePreparedBinding(string LogicalNodeId, string CapabilityId, WireResource Resource, string? MediaSourceId, string? MediaSinkId, string? OutputRoleId = null);
 	private sealed record WirePreparedExecution(string Version, string PreparedExecutionId, string AuthorityStateId, ulong AuthorityRevision, ulong PlanGeneration, WirePreparedBinding[] Bindings);
 	private sealed record WireTransition(int Kind, string FromSourceId, string ToSourceId, uint DurationFrames);
 	private sealed record WireApplyRequest(WirePreparedExecution PreparedExecution, string ProgramSinkId, WireTransition? Transition);
@@ -760,6 +777,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 	private sealed record WireAIShowcaseState(bool Enabled);
 	private sealed record WireAIShowcase(bool Enabled, string Feature, string Status, string Provider, long InferenceTimeTicks, uint PersonRegionCount, ulong? SourceSequence, ulong? AppliedSequence, double? Confidence, bool EffectVisible, WireFailure? Failure, DateTimeOffset? UpdatedAtUtc);
 	private sealed record WireAvSyncDiagnostics(bool Enabled, string State, ulong? EventId, string? ExpectedMediaTime, ulong? TargetVideoFrameSequence, ulong? TargetAudioSamplePosition, double? ScheduledVideoOffsetMilliseconds, double? SubmitOffsetMilliseconds, double? DriftFromBaselineMilliseconds, string Detail);
+	private sealed record WireOutputRole(string RoleId, string RoleKind, string SourceId, string TargetId, WireVideoFormat Format, long TimingNumerator, long TimingDenominator, string ProviderId, int LifecycleState, bool AuthoritativeActive, int HealthState, string Evidence, WireFailure? Error);
 	private sealed record WireRecordingCommandResult(bool Succeeded, WireRecordingSnapshot Snapshot, WireFailure? Failure);
 	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path, WirePreparedExecution PreparedExecution);
 	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame, bool? AutoPlayOnProgram, int? EndBehavior, long? InPointFrame, long? OutPointFrame);
@@ -790,7 +808,8 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		WireRuntimePerformance Performance,
 		WireAIShowcase AIShowcase,
 		WireAvSyncDiagnostics? AvSyncDiagnostics = null,
-		WireProductionCgTextSnapshot? ProductionCgText = null);
+		WireProductionCgTextSnapshot? ProductionCgText = null,
+		WireOutputRole[]? OutputRoles = null);
 
 	private sealed class BoundedRequestCache
 	{

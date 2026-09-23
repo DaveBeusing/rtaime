@@ -72,19 +72,27 @@ public sealed class ContractFoundationTests
             "Camera B full frame",
             new ProductionRoutingState(sourceA.SourceId, sourceB.SourceId));
         var mutableScenes = new List<ProductionSceneSpecification> { scene };
+        var mutableOutputRoles = new List<ProductionOutputRoleState>
+        {
+            ProductionOutputRoleState.Program(sourceB.SourceId),
+            ProductionOutputRoleState.Aux(sourceA.SourceId)
+        };
         var specification = new ProductionSpecification(
             ControlContractVersion.Current,
             ProductionId.New(),
             "Reference production",
             mutableSources,
             new ProductionRoutingState(sourceA.SourceId, sourceB.SourceId),
-            mutableScenes);
+            mutableScenes,
+            mutableOutputRoles);
 
         mutableSources.Clear();
         mutableScenes.Clear();
+        mutableOutputRoles.Clear();
 
         Assert.Equal(2, specification.Sources.Count);
         Assert.Single(specification.Scenes);
+        Assert.Equal(2, specification.InitialOutputRoles.Count);
         var copy = RoundTrip(specification);
         Assert.Equal(specification.Version, copy.Version);
         Assert.Equal(specification.ProductionId, copy.ProductionId);
@@ -92,6 +100,7 @@ public sealed class ContractFoundationTests
         Assert.Equal(specification.Sources, copy.Sources);
         Assert.Equal(specification.Scenes, copy.Scenes);
         Assert.Equal(specification.InitialRouting, copy.InitialRouting);
+        Assert.Equal(specification.InitialOutputRoles, copy.InitialOutputRoles);
     }
 
     [Fact]
@@ -266,6 +275,62 @@ public sealed class ContractFoundationTests
     }
 
     [Fact]
+    public void Runtime_output_role_snapshot_round_trips_health_evidence_and_failure_reason()
+    {
+        var healthy = new RuntimeOutputRoleSnapshot(
+            "AUX",
+            "aux",
+            MediaSourceId.New(),
+            MediaSinkId.New(),
+            VideoFormat.Hd1080p50Rgba8,
+            new Timebase(1, 50),
+            ProviderId.New(),
+            RuntimeOutputRoleLifecycleState.Active,
+            true,
+            RuntimeOutputRoleHealthState.Healthy,
+            "Provider confirmed output frame.");
+
+        var healthyCopy = RoundTrip(healthy);
+
+        Assert.Equal("aux", healthyCopy.RoleId);
+        Assert.Equal("AUX", healthyCopy.RoleKind);
+        Assert.Equal(healthy.SourceId, healthyCopy.SourceId);
+        Assert.Equal(healthy.TargetId, healthyCopy.TargetId);
+        Assert.Equal(healthy.Format, healthyCopy.Format);
+        Assert.Equal(healthy.Timing, healthyCopy.Timing);
+        Assert.Equal(healthy.ProviderId, healthyCopy.ProviderId);
+        Assert.Equal(healthy.LifecycleState, healthyCopy.LifecycleState);
+        Assert.True(healthyCopy.AuthoritativeActive);
+        Assert.Equal(healthy.HealthState, healthyCopy.HealthState);
+        Assert.Equal(healthy.Evidence, healthyCopy.Evidence);
+        Assert.Null(healthyCopy.Error);
+
+        var failure = new Failure("provider.output.failed", "Provider rejected output.");
+        var faulted = new RuntimeOutputRoleSnapshot(
+            "aux",
+            "AUX",
+            healthy.SourceId,
+            healthy.TargetId,
+            healthy.Format,
+            healthy.Timing,
+            healthy.ProviderId,
+            RuntimeOutputRoleLifecycleState.Faulted,
+            true,
+            RuntimeOutputRoleHealthState.Faulted,
+            "Provider reported an output failure.",
+            failure);
+
+        var faultedCopy = RoundTrip(faulted);
+        Assert.Equal(failure, faultedCopy.Error);
+        Assert.Throws<ArgumentException>(() => new RuntimeOutputRoleSnapshot(
+            "aux", "AUX", healthy.SourceId, healthy.TargetId, healthy.Format, healthy.Timing, healthy.ProviderId,
+            RuntimeOutputRoleLifecycleState.Faulted, true, RuntimeOutputRoleHealthState.Faulted, "Faulted without reason."));
+        Assert.Throws<ArgumentException>(() => new RuntimeOutputRoleSnapshot(
+            "aux", "AUX", healthy.SourceId, healthy.TargetId, healthy.Format, healthy.Timing, healthy.ProviderId,
+            RuntimeOutputRoleLifecycleState.Active, true, RuntimeOutputRoleHealthState.Healthy, "Healthy with failure.", failure));
+    }
+
+    [Fact]
     public void Runtime_prepare_and_commit_results_enforce_structural_outcomes()
     {
         var preparedId = PreparedExecutionId.New();
@@ -400,6 +465,7 @@ internal sealed class ContractScalarJsonConverterFactory : JsonConverterFactory
         typeToConvert == typeof(FrameRate) ||
         typeToConvert == typeof(Timebase) ||
         typeToConvert == typeof(CompatibilityVersion) ||
+        typeToConvert == typeof(OutputRoleId) ||
         typeToConvert == typeof(Failure) ||
         typeToConvert == typeof(VideoFormat) ||
         typeToConvert == typeof(SurfaceLifetimeDescriptor) ||
@@ -424,6 +490,7 @@ internal sealed class ContractScalarJsonConverterFactory : JsonConverterFactory
         if (typeToConvert == typeof(FrameRate)) return new CanonicalStringJsonConverter<FrameRate>(FrameRate.Parse, value => value.ToString());
         if (typeToConvert == typeof(Timebase)) return new CanonicalStringJsonConverter<Timebase>(Timebase.Parse, value => value.ToString());
         if (typeToConvert == typeof(CompatibilityVersion)) return new CanonicalStringJsonConverter<CompatibilityVersion>(CompatibilityVersion.Parse, value => value.ToString());
+        if (typeToConvert == typeof(OutputRoleId)) return new CanonicalStringJsonConverter<OutputRoleId>(value => new OutputRoleId(value), value => value.ToString());
         if (typeToConvert == typeof(Failure)) return new FailureJsonConverter();
         if (typeToConvert == typeof(VideoFormat)) return new VideoFormatJsonConverter();
         if (typeToConvert == typeof(SurfaceLifetimeDescriptor)) return new SurfaceLifetimeDescriptorJsonConverter();
@@ -687,7 +754,8 @@ internal static class ContractFixtures
             capability.CapabilityId,
             provider.Resources[0],
             MediaSourceId.New(),
-            null);
+            null,
+            "aux");
 
         return new PreparedExecutionContract(
             RuntimeContractVersion.Current,

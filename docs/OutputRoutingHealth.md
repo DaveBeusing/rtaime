@@ -14,28 +14,31 @@ The OUTPUTS workspace is the production-facing view for Program routing, output 
 
 Four presentation roles are represented in the compact production workspace:
 
-- **PROGRAM** reflects the authoritative Runtime Program state and confirmed Program source.
-- **PREVIEW** reflects the authoritative Control Preview routing snapshot.
-- **AUX** is an explicit placeholder only. The current V1 contracts expose no governed Aux output role, so its target, source and format remain `UNAVAILABLE` with `UNVERIFIED` evidence.
+- **PROGRAM** is a governed output role whose authoritative source is synchronized with the existing Program transition path. Runtime/provider evidence confirms the committed target, format, timing and health.
+- **PREVIEW** reflects the authoritative Control Preview routing snapshot for operator monitoring and switching; it is not promoted to a physical output role merely because it is displayed in OUTPUTS.
+- **AUX** is a governed output role with its own stable role identity, authoritative source, provider/target selection, lifecycle and Runtime/provider evidence. The V1 reference configuration initializes Aux from Input B and allows deterministic source changes through the governed output-role command path.
 - **CLEAN FEED** reflects the existing local Windows presentation managed by `ProgramOutputController`. It displays the Runtime-derived Program monitoring image and is not a physical Program output path.
 
-The full OUTPUTS workspace and the compact Edit presentation consume this same projection; neither creates another routing model.
+Program and Aux therefore share the governed output-role state model, while Preview and Clean Feed retain their correct monitoring/presentation semantics. The full OUTPUTS workspace and the compact Edit presentation consume this same projection; neither creates another routing model.
 
 The workspace also shows the existing Engine, Control, Runtime, Media and GPU-provider health states as a compact system-health surface. The selected-output details expose target, assigned source, resolution, frame rate, pixel format, color-space evidence, recording state and streaming evidence. A field is shown as `UNAVAILABLE` when no authoritative value exists.
 
 ## Routing
 
-The workspace does not define a routing engine. The only exposed Program-routing mutation is Preview to Program through the existing `OperatorViewModel.CutCommand`.
+The workspace does not define a routing engine. Program continues to move through the existing Preview-to-Program CUT/DISSOLVE and governed Scene paths; the generic output-role command is deliberately rejected for Program so transition semantics cannot be bypassed. Aux source changes use the governed `RouteOutputRoleCommand` path through Operator/Client, ControlHost planning and Runtime commit.
 
-When that command cannot execute, the workspace enters `SAFE READ-ONLY`. The reason is derived from existing connection, stale-state, Program-safety and Runtime-readiness state. No local override bypasses the shared mutation gate.
+ControlHost owns output-role configuration authority. RuntimeHost executes the prepared bindings and the selected provider supplies output evidence. Invalid source identities, duplicate/unsupported roles and unsupported V1 provider/format/timing policies are rejected before execution. V1 currently supports deterministic `auto` provider admission with `production` format and timing policies; future provider selectors or policies must become explicit supported contract behavior before they are accepted.
+
+When production mutations cannot execute, the workspace enters `SAFE READ-ONLY`. The reason is derived from existing connection, stale-state, Program-safety and Runtime-readiness state. No local override bypasses the shared mutation gate.
 
 ## Health semantics
 
-Runtime output health reuses the existing health projection:
+Governed Program/Aux output health is projected from Runtime/provider evidence and reconciled against authoritative Control configuration:
 
-- `PASS` is presented as `HEALTHY`.
-- `UNVERIFIED` is presented as `WARNING`.
-- `FAIL` is presented as `FAULTED`.
+- `PASS` is presented as `HEALTHY` only when Runtime confirms the configured role/source and provider output evidence is healthy.
+- `UNVERIFIED` is presented as `WARNING` while committed provider evidence is missing, stale or unavailable.
+- `FAIL` is presented as `FAULTED` for Runtime/provider failure or when Runtime output evidence does not match authoritative Control configuration.
+- failure evidence retains the structured error code/reason so the operator can diagnose the affected role without inferring success from configuration alone.
 
 The clean Program monitor reuses the existing `ProgramOutputController.Health` state. `LIVE` is presented as healthy, `ERROR` as faulted, and states without confirmed healthy/faulted evidence remain warning-level. The existing monitoring panel remains available in OUTPUTS so display selection, start, stop and fullscreen controls are preserved. The workspace defines no independent warning thresholds.
 
@@ -54,7 +57,7 @@ The current Runtime health contract provides:
 
 Runtime performance snapshots provide bounded measured CPU utilization and system-memory usage/capacity on the qualified Windows platform. NVIDIA GPU utilization and VRAM usage are published through driver-provided NVML telemetry when available; unsupported or unavailable GPU telemetry remains explicitly `UNVERIFIED`. The Render metric is the core Runtime render/composite duration, while full pipeline timing remains owned by Runtime timing qualification. The engineering target is at or below 3 ms Runtime render latency, with 5 ms retained as the hardware P95 qualification ceiling. Values at or below 3 ms are healthy, values above the engineering target are warnings, and values beyond the active frame budget are faulted. Measured Output FPS is derived from the existing Program scheduler-boundary cadence using a constant-space smoothed observation and is transported in the same Runtime performance snapshot. Disk, network and temperature telemetry remain `UNAVAILABLE`; the configured frame rate remains context and is not substituted for measured Output FPS.
 
-Color space is likewise `UNAVAILABLE` until it is published by an authoritative output contract. Recording state reuses the existing recording projection. Streaming remains `UNAVAILABLE` while no authoritative streaming state exists.
+Color space is likewise `UNAVAILABLE` until it is published by an authoritative output contract. Recording state reuses the existing recording projection. Streaming remains `UNAVAILABLE` while no authoritative streaming provider/state exists; the generalized output-role model is an extension point, not evidence that a streaming protocol is implemented.
 
 The Operator does not probe Performance Counters, driver utilities or hardware APIs to fill missing values. The compact System Status surface may render Disk, Network and Temperature as thin metric bars, but unavailable evidence remains visually empty rather than being converted into synthetic telemetry.
 
@@ -81,4 +84,6 @@ No presentation component increases the Runtime health observation cadence. Metr
 
 ## Lifecycle
 
-`OutputRoutingHealthViewModel` subscribes only to the existing `OperatorViewModel` and `ProgramOutputController` presentation state. `MainWindow` owns and disposes the projection together with the other Operator presentation components.
+`OutputRoutingHealthViewModel` subscribes only to the existing `OperatorViewModel` and `ProgramOutputController` presentation state. Governed Aux rows are derived from the synchronized output-role evidence already carried by `OperatorViewModel`; the view model does not probe providers or create production truth. `MainWindow` owns and disposes the projection together with the other Operator presentation components.
+
+Output-role configuration is persisted with the authoritative Control checkpoint. On ControlHost restart the configured Program/Aux roles are reconstructed, validated against the current production specification and reconciled with Runtime. Legacy checkpoints without the optional role payload recover through the specification defaults, preserving the existing V1 checkpoint format while remaining fail-closed for invalid recovered role state.

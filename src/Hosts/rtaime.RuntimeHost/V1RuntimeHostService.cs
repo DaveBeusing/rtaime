@@ -178,7 +178,8 @@ public sealed record V1RuntimeHostSnapshot(
 	V1RuntimePerformanceSnapshot Performance,
 	int ActiveGpuSurfaces,
 	V1AvSyncDiagnosticsSnapshot? AvSyncDiagnostics = null,
-	V1ProductionCgTextSnapshot? ProductionCgText = null);
+	V1ProductionCgTextSnapshot? ProductionCgText = null,
+	IReadOnlyList<RuntimeOutputRoleSnapshot>? OutputRoles = null);
 
 /// <summary>
 /// Windows V1 reference composition root for committed execution, timed media, GPU composition,
@@ -229,6 +230,9 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 
 	private VirtualVideoOutput? _programOutput;
 	private MediaSinkId? _programSinkId;
+	private VirtualVideoOutput? _auxOutput;
+	private MediaSinkId? _auxSinkId;
+	private Failure? _auxFailure;
 	private AnchoredTransition? _transition;
 	private V1VisualLayerMode _visualLayerMode = V1VisualLayerMode.Disabled;
 	private byte[]? _operatorGraphicsAsset;
@@ -325,6 +329,9 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	public IReadOnlyList<VirtualOutputFrame> ProgramFrames =>
 		_programOutput?.Frames ?? Array.Empty<VirtualOutputFrame>();
 
+	public IReadOnlyList<VirtualOutputFrame> AuxFrames =>
+		_auxOutput?.Frames ?? Array.Empty<VirtualOutputFrame>();
+
 	public RuntimeMonitoringHub MonitoringHub => _monitoringHub;
 	public RuntimeMonitoringTapStatistics MonitoringStatistics => _monitoringTap.Statistics;
 	public VideoFormat Format => _format;
@@ -351,6 +358,22 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 					return null;
 				return execution.PreparedExecution.Bindings
 					.FirstOrDefault(binding => binding.MediaSinkId == sink.Value)
+					?.MediaSourceId;
+			}
+		}
+	}
+
+	public MediaSourceId? CommittedAuxSourceId
+	{
+		get
+		{
+			lock (_gate)
+			{
+				var execution = _runtime.ActiveExecution;
+				if (execution is null || _auxSinkId is null)
+					return null;
+				return execution.PreparedExecution.Bindings
+					.SingleOrDefault(binding => string.Equals(binding.OutputRoleId, "aux", StringComparison.Ordinal) && binding.MediaSinkId == _auxSinkId)
 					?.MediaSourceId;
 			}
 		}
@@ -393,7 +416,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 					PerformanceSnapshotUnsafe(hardware),
 					_gpu.ActiveSurfaceCount,
 					AvSyncDiagnosticsSnapshotUnsafe(),
-					_productionCgText);
+					_productionCgText,
+					OutputRoleSnapshotsUnsafe());
 			}
 		}
 	}
@@ -407,6 +431,22 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		lock (_gate)
 		{
 			ThrowIfDisposed();
+
+			var programBinding = preparedExecution.Bindings.SingleOrDefault(binding => binding.MediaSinkId == programSinkId)
+				?? throw new InvalidOperationException("Prepared execution does not contain the requested Program sink.");
+			if (programBinding.OutputRoleId is { Length: > 0 } programRoleId &&
+				!string.Equals(programRoleId, "program", StringComparison.Ordinal))
+			{
+				throw new InvalidOperationException("Requested Program sink is bound to a different output role.");
+			}
+
+			var auxBindings = preparedExecution.Bindings
+				.Where(binding => string.Equals(binding.OutputRoleId, "aux", StringComparison.Ordinal))
+				.ToArray();
+			if (auxBindings.Length > 1)
+				throw new InvalidOperationException("Prepared execution contains more than one Aux output binding.");
+			if (auxBindings.Length == 1 && (auxBindings[0].MediaSourceId is null || auxBindings[0].MediaSinkId is null))
+				throw new InvalidOperationException("Aux output binding requires both source and sink identities.");
 
 			var prepare = _runtime.Prepare(preparedExecution);
 			if (prepare.Status != RuntimePrepareStatus.Prepared)
@@ -429,6 +469,21 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 
 			_programSinkId = programSinkId;
 			_programOutput ??= _virtualMedia.CreateOutput(programSinkId);
+			var auxBinding = auxBindings.SingleOrDefault();
+			if (auxBinding is null)
+			{
+				_auxSinkId = null;
+				_auxOutput = null;
+				_auxFailure = null;
+			}
+			else
+			{
+				var auxSinkId = auxBinding.MediaSinkId!.Value;
+				if (_auxSinkId != auxSinkId || _auxOutput is null)
+					_auxOutput = _virtualMedia.CreateOutput(auxSinkId);
+				_auxSinkId = auxSinkId;
+				_auxFailure = null;
+			}
 			_transition = transition is null ? null : new AnchoredTransition(transition, _nextSequenceNumber);
 			Observe($"runtime.commit.committed:{commit.ExecutionRevision}");
 			if (transition is not null)
@@ -469,6 +524,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				[frameA.SourceId] = frameA,
 				[frameB.SourceId] = frameB
 			};
+			WriteAuxFrameUnsafe(execution.PreparedExecution, frames);
 
 			var contentA = ResolveInputContent(frameA);
 			var contentB = ResolveInputContent(frameB);
@@ -1136,6 +1192,86 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		if (!result.Consumed || consumed is null)
 			throw new InvalidOperationException(result.Failure?.Message ?? "Timed media input was not consumed.");
 		return consumed;
+	}
+
+	private void WriteAuxFrameUnsafe(
+		PreparedExecutionContract preparedExecution,
+		IReadOnlyDictionary<MediaSourceId, FrameDescriptor> frames)
+	{
+		if (_auxSinkId is null || _auxOutput is null)
+			return;
+
+		var binding = preparedExecution.Bindings.SingleOrDefault(candidate =>
+			string.Equals(candidate.OutputRoleId, "aux", StringComparison.Ordinal) &&
+			candidate.MediaSinkId == _auxSinkId);
+		if (binding?.MediaSourceId is not { } sourceId)
+		{
+			_auxFailure = new Failure("runtime.output.aux_binding_missing", "Committed Aux output binding is unavailable.");
+			Observe($"runtime.output.aux.failed:{_auxFailure.Value.Code}");
+			return;
+		}
+
+		if (!frames.TryGetValue(sourceId, out var frame))
+		{
+			_auxFailure = new Failure("runtime.output.aux_source_unavailable", "Committed Aux output source did not produce a frame at this boundary.");
+			Observe($"runtime.output.aux.failed:{_auxFailure.Value.Code}");
+			return;
+		}
+
+		try
+		{
+			_auxOutput.WriteFrame(frame);
+			_auxFailure = null;
+		}
+		catch (Exception exception) when (exception is InvalidOperationException or ArgumentException)
+		{
+			_auxFailure = new Failure("runtime.output.aux_write_failed", $"Aux output provider rejected the frame: {exception.Message}");
+			Observe($"runtime.output.aux.failed:{_auxFailure.Value.Code}");
+		}
+	}
+
+	private IReadOnlyList<RuntimeOutputRoleSnapshot> OutputRoleSnapshotsUnsafe()
+	{
+		var execution = _runtime.ActiveExecution;
+		if (execution is null)
+			return Array.Empty<RuntimeOutputRoleSnapshot>();
+
+		var snapshots = new List<RuntimeOutputRoleSnapshot>();
+		if (_programSinkId is { } programSink)
+		{
+			var programBinding = execution.PreparedExecution.Bindings.SingleOrDefault(binding => binding.MediaSinkId == programSink);
+			if (programBinding?.MediaSourceId is { } programSource)
+			{
+				var programEvidence = _programOutput?.LastFrame;
+				var hasEvidence = programEvidence is not null && programEvidence.Frame.SourceId == programSource;
+				snapshots.Add(new RuntimeOutputRoleSnapshot(
+					"program", "PROGRAM", programSource, programSink, _format, _virtualMedia.Timing.FrameTimebase,
+					programBinding.Resource.ProviderId, RuntimeOutputRoleLifecycleState.Active, true,
+					hasEvidence ? RuntimeOutputRoleHealthState.Healthy : RuntimeOutputRoleHealthState.Unverified,
+					hasEvidence ? $"Program provider confirmed frame sequence {programEvidence!.Frame.Timing.SequenceNumber}." : "Program output is committed; provider evidence for the configured source is pending."));
+			}
+		}
+
+		if (_auxSinkId is { } auxSink)
+		{
+			var auxBinding = execution.PreparedExecution.Bindings.SingleOrDefault(binding =>
+				string.Equals(binding.OutputRoleId, "aux", StringComparison.Ordinal) && binding.MediaSinkId == auxSink);
+			if (auxBinding?.MediaSourceId is { } auxSource)
+			{
+				var auxEvidence = _auxOutput?.LastFrame;
+				var hasEvidence = auxEvidence is not null && auxEvidence.Frame.SourceId == auxSource;
+				var fault = _auxFailure;
+				snapshots.Add(new RuntimeOutputRoleSnapshot(
+					"aux", "AUX", auxSource, auxSink, _format, _virtualMedia.Timing.FrameTimebase,
+					auxBinding.Resource.ProviderId,
+					fault is null ? RuntimeOutputRoleLifecycleState.Active : RuntimeOutputRoleLifecycleState.Faulted,
+					true,
+					fault is not null ? RuntimeOutputRoleHealthState.Faulted : hasEvidence ? RuntimeOutputRoleHealthState.Healthy : RuntimeOutputRoleHealthState.Unverified,
+					fault is not null ? "Aux provider reported an output failure." : hasEvidence ? $"Aux provider confirmed frame sequence {auxEvidence!.Frame.Timing.SequenceNumber}." : "Aux output is committed; provider evidence for the configured source is pending.",
+					fault));
+			}
+		}
+		return snapshots.AsReadOnly();
 	}
 
 	private RgbaFrameBuffer ResolveInputContent(FrameDescriptor frame)

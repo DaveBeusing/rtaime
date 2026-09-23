@@ -124,6 +124,12 @@ public static class ProductionSpecificationValidator
             }
         }
 
+        issues.AddRange(ProductionOutputRoleValidator.Validate(
+            specification,
+            specification.InitialOutputRoles,
+            specification.InitialRouting,
+            "initialOutputRoles").Issues);
+
         return new ControlValidationReport(issues);
     }
 }
@@ -132,7 +138,7 @@ public static class ProductionSpecificationValidator
 /// Pure V1 Control-domain state transition engine. CUT and DISSOLVE use the same
 /// validation and authoritative commit path; transition timing remains a Runtime concern.
 /// </summary>
-public static class ControlDomainEngine
+public static partial class ControlDomainEngine
 {
     public static ControlInitializationResult Initialize(ProductionSpecification specification)
     {
@@ -146,13 +152,17 @@ public static class ControlDomainEngine
             specification.Version,
             specification.ProductionId,
             Revision.Initial,
-            specification.InitialRouting);
+            specification.InitialRouting,
+            null,
+            specification.InitialOutputRoles);
 
         var desired = new DesiredProductionState(
             specification.Version,
             specification.ProductionId,
             authoritative.Revision,
-            specification.InitialRouting);
+            specification.InitialRouting,
+            null,
+            specification.InitialOutputRoles);
 
         return ControlInitializationResult.Accepted(new ControlStateSnapshot(desired, authoritative));
     }
@@ -263,12 +273,14 @@ public static class ControlDomainEngine
         if (issues.Count > 0)
             return ControlCommandResult.Rejected(current, new ControlValidationReport(issues));
 
+        var sceneOutputRoles = SynchronizeProgramOutputRole(current.OutputRoles, scene!.Routing.ProgramSourceId);
         var desired = new DesiredProductionState(
             specification.Version,
             specification.ProductionId,
             current.Revision,
-            scene!.Routing,
-            scene.SceneId);
+            scene.Routing,
+            scene.SceneId,
+            sceneOutputRoles);
 
         var desiredIssues = new List<ValidationIssue>();
         ValidateRouting(specification, desired.Routing, "desired.routing", desiredIssues);
@@ -280,7 +292,8 @@ public static class ControlDomainEngine
             specification.ProductionId,
             current.Revision.Next(),
             desired.Routing,
-            scene.SceneId);
+            scene.SceneId,
+            sceneOutputRoles);
 
         return ControlCommandResult.Accepted(current, desired, authoritative);
     }
@@ -368,11 +381,16 @@ public static class ControlDomainEngine
             _ => throw new InvalidOperationException($"Unsupported mutation kind '{mutationKind}'.")
         };
 
+        var desiredOutputRoles = mutationKind == MutationKind.ProgramTransition
+            ? SynchronizeProgramOutputRole(current.OutputRoles, desiredRouting.ProgramSourceId)
+            : current.OutputRoles;
         var desired = new DesiredProductionState(
             specification.Version,
             specification.ProductionId,
             current.Revision,
-            desiredRouting);
+            desiredRouting,
+            null,
+            desiredOutputRoles);
 
         var desiredIssues = new List<ValidationIssue>();
         ValidateRouting(specification, desired.Routing, "desired.routing", desiredIssues);
@@ -383,7 +401,9 @@ public static class ControlDomainEngine
             specification.Version,
             specification.ProductionId,
             current.Revision.Next(),
-            desired.Routing);
+            desired.Routing,
+            null,
+            desiredOutputRoles);
 
         return ControlCommandResult.Accepted(current, desired, authoritative);
     }

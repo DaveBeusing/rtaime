@@ -70,6 +70,7 @@ Operator-facing messages:
 - `control.ping`
 - `control.snapshot.get`
 - `control.preview.select`
+- `control.output.route`
 - `control.scene.activate`
 - `control.program.cut`
 - `control.program.dissolve`
@@ -103,6 +104,8 @@ Transport failure or Runtime rejection never promotes staged state to authoritat
 
 `control.scene.activate` uses this same mutation pipeline. Its bounded command carries the Scene identity plus the normal Control command metadata and optimistic expected Production Revision. ControlHost resolves the Scene from the production specification, validates all declared routing dependencies, stages the complete Scene routing state, and promotes `ActiveSceneId` only after Runtime commit confirmation. The full Operator snapshot carries the Scene catalog and optional confirmed `ActiveSceneId`; local Scene selection is not transmitted as a mutation.
 
+`control.output.route` also uses the same stage/plan/apply/confirm pipeline. V1 accepts it for governed non-Program roles such as Aux; Program continues to require the transition-aware CUT/DISSOLVE/Scene paths. The command carries only role identity and source identity in addition to normal optimistic Control metadata. Control snapshots carry authoritative role configuration, while Runtime snapshots carry bounded role-specific provider/target/format/timing/lifecycle/health evidence. ControlHost reconciles the two before publishing Operator evidence; stale, missing or source-mismatched Runtime evidence never becomes confirmed output truth.
+
 ### RuntimeHost
 
 Control-facing messages:
@@ -119,7 +122,7 @@ Control-facing messages:
 - `runtime.media_deck.transport`
 - `runtime.media_deck.close`
 
-The server delegates normal production execution to `V1RuntimeHostService`. The `runtime.audio.test_signal.set` request configures the generated audio source for an existing audio input and returns the Runtime-confirmed mode, active identification channel, frequency and peak level through the normal audio-input snapshot. The `runtime.test_pattern.set` request selects static or motion/timing video generation for an existing source slot; snapshots separately identify active generated sources and those currently using motion/timing diagnostics. The media-deck slice delegates local-file decode and transport to the RuntimeHost-owned single-deck service, using a ControlHost-supplied `PreparedExecutionContract`. Raw video/audio payloads never cross this management IPC boundary.
+The server delegates normal production execution to `V1RuntimeHostService`. Prepared execution bindings may carry a stable output-role identifier; RuntimeHost uses those bindings to execute governed Program/Aux routes through the admitted provider resources and returns bounded output-role evidence in the normal Runtime snapshot. The `runtime.audio.test_signal.set` request configures the generated audio source for an existing audio input and returns the Runtime-confirmed mode, active identification channel, frequency and peak level through the normal audio-input snapshot. The `runtime.test_pattern.set` request selects static or motion/timing video generation for an existing source slot; snapshots separately identify active generated sources and those currently using motion/timing diagnostics. The media-deck slice delegates local-file decode and transport to the RuntimeHost-owned single-deck service, using a ControlHost-supplied `PreparedExecutionContract`. Raw video/audio payloads never cross this management IPC boundary.
 
 A Runtime snapshot exposes two deliberately separate revision domains:
 

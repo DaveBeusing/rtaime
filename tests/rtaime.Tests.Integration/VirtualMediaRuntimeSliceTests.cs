@@ -147,7 +147,7 @@ public sealed class VirtualMediaRuntimeSliceTests
         Assert.Equal(VirtualMediaCapabilityKinds.MediaRoute, capability.Kind);
         Assert.Contains(VideoFormat.Hd1080p50Rgba8, capability.VideoFormats);
         Assert.Contains(VideoFormat.Hd1080p59_94Rgba8, capability.VideoFormats);
-        Assert.Equal(2, descriptor.Resources.Count);
+        Assert.Equal(3, descriptor.Resources.Count);
         Assert.All(descriptor.Resources, resource =>
         {
             Assert.True(resource.Reservable);

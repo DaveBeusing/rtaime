@@ -173,7 +173,8 @@ public sealed record RuntimeRemoteSnapshot(
 	IReadOnlyCollection<MediaSourceId>? BroadcastTestPatternSources = null,
 	IReadOnlyCollection<MediaSourceId>? MotionTimingTestPatternSources = null,
 	RuntimeAvSyncDiagnosticsSnapshot? AvSyncDiagnostics = null,
-	RuntimeProductionCgTextSnapshot? ProductionCgText = null);
+	RuntimeProductionCgTextSnapshot? ProductionCgText = null,
+	IReadOnlyList<RuntimeOutputRoleSnapshot>? OutputRoles = null);
 
 public sealed record RuntimeRemoteApplyResult(
 	string HostInstanceId,
@@ -289,7 +290,8 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 				.Select(sourceId => new MediaSourceId(Identity.Parse(sourceId)))
 				.ToArray()),
 			snapshot.AvSyncDiagnostics is null ? null : FromWire(snapshot.AvSyncDiagnostics),
-			snapshot.ProductionCgText is null ? null : FromWire(snapshot.ProductionCgText));
+			snapshot.ProductionCgText is null ? null : FromWire(snapshot.ProductionCgText),
+			Array.AsReadOnly((snapshot.OutputRoles ?? Array.Empty<WireOutputRole>()).Select(FromWire).ToArray()));
 	}
 
 	public async ValueTask<RuntimeRemoteApplyResult> ApplyExecutionAsync(
@@ -787,6 +789,20 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 		_ => throw new InvalidDataException("Runtime audio health state is invalid.")
 	};
 
+	private static RuntimeOutputRoleSnapshot FromWire(WireOutputRole snapshot) => new(
+		snapshot.RoleId,
+		snapshot.RoleKind,
+		new MediaSourceId(Identity.Parse(snapshot.SourceId)),
+		new MediaSinkId(Identity.Parse(snapshot.TargetId)),
+		new VideoFormat(snapshot.Format.Width, snapshot.Format.Height, FrameRate.Parse(snapshot.Format.FrameRate), Enum.IsDefined(typeof(PixelFormat), snapshot.Format.PixelFormat) ? (PixelFormat)snapshot.Format.PixelFormat : throw new InvalidDataException("Output role pixel format is invalid."), Enum.IsDefined(typeof(ScanMode), snapshot.Format.ScanMode) ? (ScanMode)snapshot.Format.ScanMode : throw new InvalidDataException("Output role scan mode is invalid.")),
+		new Timebase(snapshot.TimingNumerator, snapshot.TimingDenominator),
+		new ProviderId(Identity.Parse(snapshot.ProviderId)),
+		Enum.IsDefined(typeof(RuntimeOutputRoleLifecycleState), snapshot.LifecycleState) ? (RuntimeOutputRoleLifecycleState)snapshot.LifecycleState : throw new InvalidDataException("Output role lifecycle state is invalid."),
+		snapshot.AuthoritativeActive,
+		Enum.IsDefined(typeof(RuntimeOutputRoleHealthState), snapshot.HealthState) ? (RuntimeOutputRoleHealthState)snapshot.HealthState : throw new InvalidDataException("Output role health state is invalid."),
+		snapshot.Evidence,
+		snapshot.Error is null ? null : new Failure(snapshot.Error.Code, snapshot.Error.Message));
+
 	private static RuntimeProductionCgTextSnapshot FromWire(WireProductionCgTextSnapshot snapshot) => new(
 		snapshot.Active,
 		snapshot.Text,
@@ -917,7 +933,8 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 			binding.CapabilityId.ToString(),
 			new WireResource(binding.Resource.ResourceId.ToString(), binding.Resource.ProviderId.ToString(), binding.Resource.Kind, binding.Resource.CapacityUnits, binding.Resource.Reservable),
 			binding.MediaSourceId?.ToString(),
-			binding.MediaSinkId?.ToString())).ToArray());
+			binding.MediaSinkId?.ToString(),
+			binding.OutputRoleId)).ToArray());
 
 	private sealed record ClientHello(string ProtocolVersion, string Role, string HostInstanceId, Dictionary<string, string> ContractVersions);
 	private sealed record ServerHello(string ProtocolVersion, string Role, string HostInstanceId, Dictionary<string, string> ContractVersions);
@@ -953,7 +970,7 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 	private sealed record WireCapability(string CapabilityId, string Kind, WireVideoFormat[] VideoFormats);
 	private sealed record WireResource(string ResourceId, string ProviderId, string Kind, uint CapacityUnits, bool Reservable);
 	private sealed record WireProvider(string Version, string ProviderId, string Name, int AvailabilityState, WireFailure? Failure, WireCapability[] Capabilities, WireResource[] Resources);
-	private sealed record WirePreparedBinding(string LogicalNodeId, string CapabilityId, WireResource Resource, string? MediaSourceId, string? MediaSinkId);
+	private sealed record WirePreparedBinding(string LogicalNodeId, string CapabilityId, WireResource Resource, string? MediaSourceId, string? MediaSinkId, string? OutputRoleId = null);
 	private sealed record WirePreparedExecution(string Version, string PreparedExecutionId, string AuthorityStateId, ulong AuthorityRevision, ulong PlanGeneration, WirePreparedBinding[] Bindings);
 	private sealed record WireTransition(int Kind, string FromSourceId, string ToSourceId, uint DurationFrames);
 	private sealed record WireApplyRequest(WirePreparedExecution PreparedExecution, string ProgramSinkId, WireTransition? Transition);
@@ -966,6 +983,7 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 	private sealed record WireAIShowcaseState(bool Enabled);
 	private sealed record WireAIShowcase(bool Enabled, string Feature, string Status, string Provider, long InferenceTimeTicks, uint PersonRegionCount, ulong? SourceSequence, ulong? AppliedSequence, double? Confidence, bool EffectVisible, WireFailure? Failure, DateTimeOffset? UpdatedAtUtc);
 	private sealed record WireAvSyncDiagnostics(bool Enabled, string State, ulong? EventId, string? ExpectedMediaTime, ulong? TargetVideoFrameSequence, ulong? TargetAudioSamplePosition, double? ScheduledVideoOffsetMilliseconds, double? SubmitOffsetMilliseconds, double? DriftFromBaselineMilliseconds, string Detail);
+	private sealed record WireOutputRole(string RoleId, string RoleKind, string SourceId, string TargetId, WireVideoFormat Format, long TimingNumerator, long TimingDenominator, string ProviderId, int LifecycleState, bool AuthoritativeActive, int HealthState, string Evidence, WireFailure? Error);
 	private sealed record WireRecordingCommandResult(bool Succeeded, WireRecordingSnapshot Snapshot, WireFailure? Failure);
 	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path, WirePreparedExecution PreparedExecution);
 	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame, bool? AutoPlayOnProgram, int? EndBehavior, long? InPointFrame, long? OutPointFrame);
@@ -996,7 +1014,8 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 		WireRuntimePerformance Performance,
 		WireAIShowcase AIShowcase,
 		WireAvSyncDiagnostics? AvSyncDiagnostics = null,
-		WireProductionCgTextSnapshot? ProductionCgText = null);
+		WireProductionCgTextSnapshot? ProductionCgText = null,
+		WireOutputRole[]? OutputRoles = null);
 
 	private static class Wire
 	{

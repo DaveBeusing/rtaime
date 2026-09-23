@@ -15,7 +15,9 @@ public enum LogicalProductionNodeKind
     PreviewRoute = 2,
     ProgramRoute = 3,
     PreviewSink = 4,
-    ProgramSink = 5
+    ProgramSink = 5,
+    AuxRoute = 6,
+    AuxSink = 7
 }
 
 public static class PlanningCapabilityKinds
@@ -155,6 +157,7 @@ public static class LogicalProductionGraphValidator
 
                 case LogicalProductionNodeKind.PreviewRoute:
                 case LogicalProductionNodeKind.ProgramRoute:
+                case LogicalProductionNodeKind.AuxRoute:
                     if (node.MediaSourceId is null || node.MediaSinkId is null)
                     {
                         issues.Add(new ValidationIssue(
@@ -166,6 +169,7 @@ public static class LogicalProductionGraphValidator
 
                 case LogicalProductionNodeKind.PreviewSink:
                 case LogicalProductionNodeKind.ProgramSink:
+                case LogicalProductionNodeKind.AuxSink:
                     if (node.MediaSinkId is null || node.MediaSourceId is not null)
                     {
                         issues.Add(new ValidationIssue(
@@ -208,8 +212,26 @@ public static class LogicalProductionGraphValidator
         RequireExactlyOne(graph, LogicalProductionNodeKind.ProgramRoute, issues);
         RequireExactlyOne(graph, LogicalProductionNodeKind.PreviewSink, issues);
         RequireExactlyOne(graph, LogicalProductionNodeKind.ProgramSink, issues);
+        RequireOptionalPair(graph, LogicalProductionNodeKind.AuxRoute, LogicalProductionNodeKind.AuxSink, issues);
 
         return new ControlValidationReport(issues);
+    }
+
+    private static void RequireOptionalPair(
+        LogicalProductionGraph graph,
+        LogicalProductionNodeKind routeKind,
+        LogicalProductionNodeKind sinkKind,
+        ICollection<ValidationIssue> issues)
+    {
+        var routeCount = graph.Nodes.Count(node => node.Kind == routeKind);
+        var sinkCount = graph.Nodes.Count(node => node.Kind == sinkKind);
+        if (routeCount > 1 || sinkCount > 1 || routeCount != sinkCount)
+        {
+            issues.Add(new ValidationIssue(
+                "planning.graph.optional_output_cardinality",
+                $"Optional output role nodes '{routeKind}' and '{sinkKind}' must be absent or appear exactly once as a pair.",
+                "graph.nodes"));
+        }
     }
 
     private static void RequireExactlyOne(
@@ -233,7 +255,8 @@ public sealed record LogicalCapabilityRequirement
         Identity logicalNodeId,
         CapabilityRequirement requirement,
         MediaSourceId? mediaSourceId,
-        MediaSinkId? mediaSinkId)
+        MediaSinkId? mediaSinkId,
+        string? outputRoleId = null)
     {
         if (logicalNodeId.IsEmpty)
             throw new ArgumentException("Logical node identity must not be empty.", nameof(logicalNodeId));
@@ -242,12 +265,14 @@ public sealed record LogicalCapabilityRequirement
         Requirement = requirement ?? throw new ArgumentNullException(nameof(requirement));
         MediaSourceId = mediaSourceId;
         MediaSinkId = mediaSinkId;
+        OutputRoleId = string.IsNullOrWhiteSpace(outputRoleId) ? null : outputRoleId.Trim().ToLowerInvariant();
     }
 
     public Identity LogicalNodeId { get; }
     public CapabilityRequirement Requirement { get; }
     public MediaSourceId? MediaSourceId { get; }
     public MediaSinkId? MediaSinkId { get; }
+    public string? OutputRoleId { get; }
 }
 
 public interface IProviderCapabilityRegistry
@@ -333,7 +358,8 @@ public sealed record ExecutionPlanBinding
         CapabilityId capabilityId,
         ProviderResourceDescriptor resource,
         MediaSourceId? mediaSourceId,
-        MediaSinkId? mediaSinkId)
+        MediaSinkId? mediaSinkId,
+        string? outputRoleId = null)
     {
         if (logicalNodeId.IsEmpty)
             throw new ArgumentException("Logical node identity must not be empty.", nameof(logicalNodeId));
@@ -343,6 +369,7 @@ public sealed record ExecutionPlanBinding
         Resource = resource ?? throw new ArgumentNullException(nameof(resource));
         MediaSourceId = mediaSourceId;
         MediaSinkId = mediaSinkId;
+        OutputRoleId = string.IsNullOrWhiteSpace(outputRoleId) ? null : outputRoleId.Trim().ToLowerInvariant();
     }
 
     public Identity LogicalNodeId { get; }
@@ -350,6 +377,7 @@ public sealed record ExecutionPlanBinding
     public ProviderResourceDescriptor Resource { get; }
     public MediaSourceId? MediaSourceId { get; }
     public MediaSinkId? MediaSinkId { get; }
+    public string? OutputRoleId { get; }
 }
 
 public sealed class ExecutionPlan
@@ -470,7 +498,8 @@ public static class CapabilityPlanningEngine
                     binding.CapabilityId,
                     binding.Resource,
                     binding.LogicalRequirement.MediaSourceId,
-                    binding.LogicalRequirement.MediaSinkId))
+                    binding.LogicalRequirement.MediaSinkId,
+                    binding.LogicalRequirement.OutputRoleId))
                 .ToArray());
 
         var preparedExecution = CreatePreparedExecution(plan);
@@ -515,6 +544,12 @@ public static class CapabilityPlanningEngine
                 "Authoritative program source is not declared by the production specification.",
                 "authoritative.routing.programSourceId"));
         }
+
+        issues.AddRange(ProductionOutputRoleValidator.Validate(
+            specification,
+            authoritativeState.OutputRoles,
+            authoritativeState.Routing,
+            "authoritative.outputRoles").Issues);
 
         return new ControlValidationReport(issues);
     }
@@ -574,11 +609,8 @@ public static class CapabilityPlanningEngine
             null,
             programSinkId);
 
-        var nodes = sourceNodes
-            .Concat(new[] { previewRoute, programRoute, previewSink, programSink })
-            .ToArray();
-
-        var edges = new[]
+        var roleNodes = new List<LogicalProductionNode> { previewRoute, programRoute, previewSink, programSink };
+        var edges = new List<LogicalProductionEdge>
         {
             CreateEdge(productionKey, previewSource.NodeId, previewRoute.NodeId, "preview-source-to-route"),
             CreateEdge(productionKey, previewRoute.NodeId, previewSink.NodeId, "preview-route-to-sink"),
@@ -586,6 +618,32 @@ public static class CapabilityPlanningEngine
             CreateEdge(productionKey, programRoute.NodeId, programSink.NodeId, "program-route-to-sink")
         };
 
+        var auxRole = authoritativeState.OutputRoles.SingleOrDefault(role => role.Kind == OutputRoleKind.Aux && role.Enabled);
+        if (auxRole is not null)
+        {
+            var auxSource = sourceById[auxRole.SourceId];
+            var auxSinkId = new MediaSinkId(PlanningIdentity.Create("media-sink", productionKey, auxRole.TargetId));
+            var auxRoute = new LogicalProductionNode(
+                PlanningIdentity.Create("logical-node", productionKey, "aux-route"),
+                LogicalProductionNodeKind.AuxRoute,
+                "Aux Route",
+                null,
+                auxSource.MediaSourceId,
+                auxSinkId);
+            var auxSink = new LogicalProductionNode(
+                PlanningIdentity.Create("logical-node", productionKey, "aux-sink"),
+                LogicalProductionNodeKind.AuxSink,
+                "Aux Sink",
+                null,
+                null,
+                auxSinkId);
+            roleNodes.Add(auxRoute);
+            roleNodes.Add(auxSink);
+            edges.Add(CreateEdge(productionKey, auxSource.NodeId, auxRoute.NodeId, "aux-source-to-route"));
+            edges.Add(CreateEdge(productionKey, auxRoute.NodeId, auxSink.NodeId, "aux-route-to-sink"));
+        }
+
+        var nodes = sourceNodes.Concat(roleNodes).ToArray();
         return new LogicalProductionGraph(
             specification.ProductionId,
             authoritativeState.Revision,
@@ -606,7 +664,7 @@ public static class CapabilityPlanningEngine
 
     private static IReadOnlyList<LogicalCapabilityRequirement> CompileRequirements(LogicalProductionGraph graph) =>
         graph.Nodes
-            .Where(node => node.Kind is LogicalProductionNodeKind.PreviewRoute or LogicalProductionNodeKind.ProgramRoute)
+            .Where(node => node.Kind is LogicalProductionNodeKind.PreviewRoute or LogicalProductionNodeKind.ProgramRoute or LogicalProductionNodeKind.AuxRoute)
             .OrderBy(node => node.NodeId.ToString(), StringComparer.Ordinal)
             .Select(node => new LogicalCapabilityRequirement(
                 node.NodeId,
@@ -617,7 +675,13 @@ public static class CapabilityPlanningEngine
                     1,
                     Array.Empty<VideoFormat>()),
                 node.MediaSourceId,
-                node.MediaSinkId))
+                node.MediaSinkId,
+                node.Kind switch
+                {
+                    LogicalProductionNodeKind.ProgramRoute => OutputRoleIds.Program.ToString(),
+                    LogicalProductionNodeKind.AuxRoute => OutputRoleIds.Aux.ToString(),
+                    _ => null
+                }))
             .ToArray();
 
     private static ControlValidationReport ValidateProviderSnapshot(IReadOnlyList<ProviderDescriptor>? providers)
@@ -753,7 +817,8 @@ public static class CapabilityPlanningEngine
                 binding.Resource.ProviderId,
                 binding.Resource.ResourceId,
                 binding.MediaSourceId?.ToString() ?? "-",
-                binding.MediaSinkId?.ToString() ?? "-"))
+                binding.MediaSinkId?.ToString() ?? "-",
+                binding.OutputRoleId ?? "-"))
             .ToArray();
 
         var preparedExecutionId = new PreparedExecutionId(PlanningIdentity.Create(
@@ -774,7 +839,8 @@ public static class CapabilityPlanningEngine
                     binding.CapabilityId,
                     binding.Resource,
                     binding.MediaSourceId,
-                    binding.MediaSinkId))
+                    binding.MediaSinkId,
+                    binding.OutputRoleId))
                 .ToArray());
     }
 

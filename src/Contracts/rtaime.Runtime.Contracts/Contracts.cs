@@ -68,7 +68,8 @@ public sealed record PreparedExecutionBinding
         CapabilityId capabilityId,
         ProviderResourceDescriptor resource,
         MediaSourceId? mediaSourceId,
-        MediaSinkId? mediaSinkId)
+        MediaSinkId? mediaSinkId,
+        string? outputRoleId = null)
     {
         if (logicalNodeId.IsEmpty)
             throw new ArgumentException("Logical node identity must not be empty.", nameof(logicalNodeId));
@@ -78,6 +79,7 @@ public sealed record PreparedExecutionBinding
         Resource = resource ?? throw new ArgumentNullException(nameof(resource));
         MediaSourceId = mediaSourceId;
         MediaSinkId = mediaSinkId;
+        OutputRoleId = string.IsNullOrWhiteSpace(outputRoleId) ? null : outputRoleId.Trim().ToLowerInvariant();
     }
 
     public Identity LogicalNodeId { get; }
@@ -85,6 +87,80 @@ public sealed record PreparedExecutionBinding
     public ProviderResourceDescriptor Resource { get; }
     public MediaSourceId? MediaSourceId { get; }
     public MediaSinkId? MediaSinkId { get; }
+    public string? OutputRoleId { get; }
+}
+
+public enum RuntimeOutputRoleLifecycleState
+{
+    Inactive = 1,
+    Active = 2,
+    Faulted = 3
+}
+
+public enum RuntimeOutputRoleHealthState
+{
+    Unverified = 1,
+    Healthy = 2,
+    Faulted = 3
+}
+
+public sealed record RuntimeOutputRoleSnapshot
+{
+    public RuntimeOutputRoleSnapshot(
+        string roleId,
+        string roleKind,
+        MediaSourceId sourceId,
+        MediaSinkId targetId,
+        VideoFormat format,
+        Timebase timing,
+        ProviderId providerId,
+        RuntimeOutputRoleLifecycleState lifecycleState,
+        bool authoritativeActive,
+        RuntimeOutputRoleHealthState healthState,
+        string evidence,
+        Failure? error = null)
+    {
+        if (string.IsNullOrWhiteSpace(roleId))
+            throw new ArgumentException("Output role identity is required.", nameof(roleId));
+        if (string.IsNullOrWhiteSpace(roleKind))
+            throw new ArgumentException("Output role kind is required.", nameof(roleKind));
+        if (!Enum.IsDefined(typeof(RuntimeOutputRoleLifecycleState), lifecycleState))
+            throw new ArgumentOutOfRangeException(nameof(lifecycleState));
+        if (!Enum.IsDefined(typeof(RuntimeOutputRoleHealthState), healthState))
+            throw new ArgumentOutOfRangeException(nameof(healthState));
+        if (string.IsNullOrWhiteSpace(evidence))
+            throw new ArgumentException("Output role evidence is required.", nameof(evidence));
+        if (healthState == RuntimeOutputRoleHealthState.Faulted && error is null)
+            throw new ArgumentException("Faulted output roles require an error reason.", nameof(error));
+        if (healthState != RuntimeOutputRoleHealthState.Faulted && error is not null)
+            throw new ArgumentException("Only faulted output roles may carry an error reason.", nameof(error));
+
+        RoleId = roleId.Trim().ToLowerInvariant();
+        RoleKind = roleKind.Trim().ToUpperInvariant();
+        SourceId = sourceId;
+        TargetId = targetId;
+        Format = format;
+        Timing = timing;
+        ProviderId = providerId;
+        LifecycleState = lifecycleState;
+        AuthoritativeActive = authoritativeActive;
+        HealthState = healthState;
+        Evidence = evidence.Trim();
+        Error = error;
+    }
+
+    public string RoleId { get; }
+    public string RoleKind { get; }
+    public MediaSourceId SourceId { get; }
+    public MediaSinkId TargetId { get; }
+    public VideoFormat Format { get; }
+    public Timebase Timing { get; }
+    public ProviderId ProviderId { get; }
+    public RuntimeOutputRoleLifecycleState LifecycleState { get; }
+    public bool AuthoritativeActive { get; }
+    public RuntimeOutputRoleHealthState HealthState { get; }
+    public string Evidence { get; }
+    public Failure? Error { get; }
 }
 
 public sealed class PreparedExecutionContract

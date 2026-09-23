@@ -14,7 +14,7 @@ A Scene has:
 - a human-readable name;
 - a reproducible desired `ProductionRoutingState`.
 
-The current contract intentionally includes only state already governed by the authoritative Control -> Runtime transaction path. In this revision that means Preview and Program routing. Graphics, auxiliary outputs and other Runtime-managed presentation state are not silently bundled into a Scene because they do not yet participate in the same atomic production-state contract.
+The Scene contract intentionally includes only Preview and Program routing. Governed Aux output is owned by the separate output-role contract and command path, so Scene activation does not silently change Aux routing. Graphics and other Runtime-managed presentation state are likewise not bundled into Scene activation without an explicit atomic contract.
 
 A production without explicitly supplied Scene definitions receives a deterministic one-source Scene projection for each declared production source. This preserves existing production bootstraps while making Scene identity available through the Operator snapshot.
 
