@@ -109,14 +109,7 @@ public partial class App : Application
 				"logs");
 			Directory.CreateDirectory(root);
 			var path = Path.Combine(root, $"operator-crash-{DateTimeOffset.UtcNow:yyyyMMdd-HHmmssfff}.log");
-			var detail = string.Join(
-				Environment.NewLine,
-				exception.ToString()
-					.Replace("\r\n", "\n", StringComparison.Ordinal)
-					.Replace('\r', '\n')
-					.Split('\n')
-					.Take(96)
-					.Select(DiagnosticRedactor.RedactText));
+			var detail = DiagnosticRedactor.RedactExceptionDetail(exception.ToString());
 			File.WriteAllText(
 				path,
 				$"UTC: {DateTimeOffset.UtcNow:O}{Environment.NewLine}Session: {_log?.SessionId ?? "unavailable"}{Environment.NewLine}{detail}");
