@@ -130,6 +130,20 @@ public static class DiagnosticRedactor
 		return Truncate(redacted);
 	}
 
+	public static string RedactExceptionDetail(string value, int maximumLines = 96)
+	{
+		ArgumentNullException.ThrowIfNull(value);
+		if (maximumLines <= 0) throw new ArgumentOutOfRangeException(nameof(maximumLines));
+
+		var normalized = value.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n');
+		var lines = normalized.Split('\n');
+		var retained = lines.Take(maximumLines).Select(RedactText);
+		var result = string.Join(Environment.NewLine, retained);
+		return lines.Length <= maximumLines
+			? result
+			: result + Environment.NewLine + "[TRUNCATED]";
+	}
+
 	private static string NormalizeKey(string key) =>
 		new(key.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
 
