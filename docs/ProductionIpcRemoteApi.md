@@ -255,3 +255,12 @@ ControlHost-facing RuntimeHost adds:
 The Runtime snapshot and Operator snapshot carry the bounded Person Segmentation Highlight state: enable flag, feature/status/provider, measured inference time, Person Regions count, source/application sequence, confidence, visible-effect flag and optional failure.
 
 RuntimeHost communicates with AIHost using the existing `client.hello`, `ai.capabilities.get` and `ai.inference.execute` protocol as role `RuntimeHost`. No host project reference is introduced. The handoff contains the Program `FrameDescriptor` and inference metadata only; no Program RGBA payload crosses the management IPC path.
+## Show Control management IPC
+
+The existing ControlHost Operator management session exposes bounded Show Control commands for snapshot retrieval, cue-list save/selection, arm, GO, cancel and recovery acknowledgement.
+
+Show Control uses the existing protocol negotiation, request-id idempotency cache and synchronized Operator snapshot. Cue-list definitions and execution metadata cross management IPC; media payloads do not.
+
+Production-changing cue actions are dispatched through established ControlHost command paths. The Show Control IPC surface does not provide direct Runtime or provider mutation. Frame-wait progression observes Runtime frame sequence and host identity through ControlHost while authoritative action dispatch remains unchanged.
+
+See `docs/ShowControlCueSequencing.md`.
