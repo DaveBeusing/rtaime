@@ -615,6 +615,8 @@ public sealed class ControlHostProcess
 		var providers = await transport.GetProviderDescriptorsAsync(cancellationToken).ConfigureAwait(false);
 		control.RefreshProviderSnapshot(providers);
 		var revisionBefore = authority.Revision;
+		if (_ipcServer is not null && authority.CompositingState is not null)
+			await _ipcServer.RestoreGraphicsStateAsync(cancellationToken).ConfigureAwait(false);
 		var execution = control.PrepareCurrentExecution();
 		var remote = await transport.ApplyExecutionAsync(execution.PreparedExecution, execution.ProgramSinkId, null, cancellationToken).ConfigureAwait(false);
 		if (!remote.Committed || remote.Commit is null) throw new InvalidOperationException(remote.Commit?.Failure?.Message ?? remote.Prepare.Failure?.Message ?? "Runtime reconciliation was rejected.");
@@ -626,8 +628,6 @@ public sealed class ControlHostProcess
 
 		control.RecordObservation("recovery", "recovery.runtime.reapplied", $"Authoritative revision {revisionBefore} was reapplied to RuntimeHost instance '{runtimeHostInstanceId}' at Runtime execution revision {remote.Commit.ExecutionRevision}.");
 		_boundRuntimeHostInstanceId = runtimeHostInstanceId;
-		if (_ipcServer is not null)
-			await _ipcServer.RestoreGraphicsStateAsync(cancellationToken).ConfigureAwait(false);
 		SetRecovery(ControlHostRecoveryState.Recovered, revisionBefore, "Durable Control authority was reapplied to RuntimeHost without authority revision advancement.");
 		SetOperationalState(ControlHostProcessState.Ready, ControlHostHealthState.Healthy, $"ControlHost resynchronized RuntimeHost instance '{runtimeHostInstanceId}'.");
 	}
@@ -667,7 +667,44 @@ public sealed class ControlHostProcess
 	private static bool RuntimeMatchesAuthority(RuntimeRemoteSnapshot runtimeSnapshot, AuthoritativeProductionState authority) =>
 		runtimeSnapshot.Runtime.Status == RuntimeExecutionStatus.Committed &&
 		runtimeSnapshot.AuthorityStateId == authority.ProductionId.Value &&
-		runtimeSnapshot.AuthorityRevision == authority.Revision;
+		runtimeSnapshot.AuthorityRevision == authority.Revision &&
+		RuntimeCompositingMatchesAuthority(runtimeSnapshot, authority);
+
+	private static bool RuntimeCompositingMatchesAuthority(
+		RuntimeRemoteSnapshot runtimeSnapshot,
+		AuthoritativeProductionState authority)
+	{
+		if (authority.CompositingState is null)
+			return true;
+
+		var runtimeLayers = (runtimeSnapshot.CompositingLayers ?? Array.Empty<RuntimeCompositingLayerSnapshot>())
+			.OrderBy(layer => layer.Order)
+			.ThenBy(layer => layer.LayerId, StringComparer.Ordinal)
+			.ToArray();
+		var authoritativeLayers = authority.CompositingState.Layers;
+		if (runtimeLayers.Length != authoritativeLayers.Count)
+			return false;
+
+		for (var index = 0; index < authoritativeLayers.Count; index++)
+		{
+			var expected = authoritativeLayers[index];
+			var actual = runtimeLayers[index];
+			if (!string.Equals(expected.LayerId, actual.LayerId, StringComparison.Ordinal) ||
+				(int)expected.Kind != actual.Kind ||
+				expected.Order != actual.Order ||
+				expected.Visible != actual.Visible ||
+				expected.Opacity != actual.Opacity ||
+				expected.PositionX != actual.PositionX ||
+				expected.PositionY != actual.PositionY ||
+				expected.Scale != actual.Scale ||
+				!string.Equals(expected.ContentIdentity, actual.ContentIdentity, StringComparison.Ordinal))
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
 
 	private string ResolveDurabilityDirectory()
 	{
