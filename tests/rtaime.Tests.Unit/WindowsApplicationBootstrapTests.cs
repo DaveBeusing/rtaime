@@ -42,17 +42,19 @@ public sealed class WindowsApplicationBootstrapTests : IDisposable
 
 		var actualPath = ApplicationStartupDiagnostics.TryPersistFailure(
 			args,
-			new InvalidOperationException("bootstrap qualification failure"));
+			new InvalidOperationException("bootstrap qualification failure token=top-secret"));
 
 		Assert.Equal(expectedPath, actualPath);
 		Assert.True(File.Exists(expectedPath));
 
-		using var document = JsonDocument.Parse(File.ReadAllText(expectedPath).Trim());
+		var content = File.ReadAllText(expectedPath).Trim();
+		using var document = JsonDocument.Parse(content);
 		Assert.Equal("1.0", document.RootElement.GetProperty("schemaVersion").GetString());
 		Assert.Equal("FAILED", document.RootElement.GetProperty("state").GetString());
 		Assert.Equal(
-			"bootstrap qualification failure",
+			"bootstrap qualification failure token=[REDACTED]",
 			document.RootElement.GetProperty("message").GetString());
+		Assert.DoesNotContain("top-secret", content, StringComparison.Ordinal);
 	}
 
 	public void Dispose()
