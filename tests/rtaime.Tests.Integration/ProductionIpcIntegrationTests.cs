@@ -777,7 +777,7 @@ public sealed class ProductionIpcIntegrationTests
 				beforeRestart.CompositingLayers!.Select(layer => layer.LayerId));
 			Assert.Equal(
 				128,
-				Assert.Single(beforeRestart.CompositingLayers, layer => layer.LayerId == "bitmap-graphics").Opacity);
+				Assert.Single(beforeRestart.CompositingLayers!, layer => layer.LayerId == "bitmap-graphics").Opacity);
 
 			firstRuntimeStop.Cancel();
 			Assert.Equal(RuntimeHostExitCode.Success, await firstRuntimeRun);
