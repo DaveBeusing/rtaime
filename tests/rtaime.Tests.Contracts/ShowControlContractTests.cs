@@ -26,6 +26,32 @@ public sealed class ShowControlContractTests
 	}
 
 	[Fact]
+	public void Canonical_serialization_is_deterministic_and_uses_named_action_kinds()
+	{
+		var cueList = Fixture();
+
+		var first = ShowControlCanonicalSerializer.Serialize(cueList);
+		var second = ShowControlCanonicalSerializer.Serialize(cueList);
+
+		Assert.Equal(first, second);
+		Assert.Contains("\"kind\":\"ActivateScene\"", first, StringComparison.Ordinal);
+		Assert.Contains("\"kind\":\"WaitFrames\"", first, StringComparison.Ordinal);
+	}
+
+	[Fact]
+	public void Unknown_serialized_action_kind_is_rejected()
+	{
+		var json = ShowControlCanonicalSerializer.Serialize(Fixture());
+		var invalid = json.Replace(
+			"\"kind\":\"ActivateScene\"",
+			"\"kind\":\"UnsupportedAction\"",
+			StringComparison.Ordinal);
+
+		Assert.NotEqual(json, invalid);
+		Assert.Throws<InvalidDataException>(() => ShowControlCanonicalSerializer.Deserialize(invalid));
+	}
+
+	[Fact]
 	public void Unsupported_version_and_invalid_action_shapes_fail_closed()
 	{
 		Assert.Throws<NotSupportedException>(() => new ShowControlCueList(
