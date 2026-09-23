@@ -597,10 +597,12 @@ public sealed class GpuProcessingProvider : IDisposable
                 ordinal.ToString()));
 
             SurfaceId? intermediateSurfaceId = null;
+            SurfaceId? pendingSurfaceId = null;
             try
             {
                 if (request.Layers.Count == 0)
                 {
+                    pendingSurfaceId = outputSurfaceId;
                     _backend.Composite(
                         outputSurfaceId,
                         format,
@@ -611,6 +613,7 @@ public sealed class GpuProcessingProvider : IDisposable
                             null,
                             byte.MaxValue,
                             false));
+                    pendingSurfaceId = null;
                 }
                 else
                 {
@@ -629,6 +632,7 @@ public sealed class GpuProcessingProvider : IDisposable
                                 index.ToString()));
 
                         var previousSurfaceId = intermediateSurfaceId;
+                        pendingSurfaceId = targetSurfaceId;
                         _backend.Composite(
                             targetSurfaceId,
                             format,
@@ -639,6 +643,7 @@ public sealed class GpuProcessingProvider : IDisposable
                                 layer.Frame.SurfaceId,
                                 layer.Opacity,
                                 layer.Visible));
+                        pendingSurfaceId = null;
 
                         if (previousSurfaceId is { } previous)
                             TryReleaseBackendSurface(previous);
@@ -676,9 +681,12 @@ public sealed class GpuProcessingProvider : IDisposable
             catch (Exception exception)
             {
                 stopwatch.Stop();
-                if (intermediateSurfaceId is { } intermediate)
+                if (pendingSurfaceId is { } pending)
+                    TryReleaseBackendSurface(pending);
+                if (intermediateSurfaceId is { } intermediate && intermediate != pendingSurfaceId)
                     TryReleaseBackendSurface(intermediate);
-                TryReleaseBackendSurface(outputSurfaceId);
+                if (outputSurfaceId != pendingSurfaceId && outputSurfaceId != intermediateSurfaceId)
+                    TryReleaseBackendSurface(outputSurfaceId);
                 var failure = new Failure(
                     "gpu.composite.backend_failure",
                     $"GPU composite operation failed: {exception.GetType().Name}.");
