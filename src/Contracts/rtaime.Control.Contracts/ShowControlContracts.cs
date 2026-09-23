@@ -368,6 +368,32 @@ public sealed record ShowControlExecutionSnapshot(
 		null);
 }
 
+public sealed record ShowControlWorkspaceSnapshot
+{
+	private readonly ReadOnlyCollection<ShowControlCueList> _cueLists;
+
+	public ShowControlWorkspaceSnapshot(
+		IReadOnlyList<ShowControlCueList> cueLists,
+		ShowControlCueListId? selectedCueListId,
+		ShowControlExecutionSnapshot execution)
+	{
+		ArgumentNullException.ThrowIfNull(cueLists);
+		ArgumentNullException.ThrowIfNull(execution);
+		if (cueLists.Select(list => list.CueListId).Distinct().Count() != cueLists.Count)
+			throw new ArgumentException("Show-control workspace contains duplicate cue-list identities.", nameof(cueLists));
+		if (selectedCueListId.HasValue && !cueLists.Any(list => list.CueListId == selectedCueListId.Value))
+			throw new ArgumentException("Selected show-control cue list is unavailable.", nameof(selectedCueListId));
+
+		_cueLists = Array.AsReadOnly(cueLists.ToArray());
+		SelectedCueListId = selectedCueListId;
+		Execution = execution;
+	}
+
+	public IReadOnlyList<ShowControlCueList> CueLists => _cueLists;
+	public ShowControlCueListId? SelectedCueListId { get; }
+	public ShowControlExecutionSnapshot Execution { get; }
+}
+
 public static class ShowControlCanonicalSerializer
 {
 	private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web)
