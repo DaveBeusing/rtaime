@@ -9,13 +9,27 @@ internal static class Program
 {
 	private static async Task<int> Main(string[] args)
 	{
+		using var log = HostLog.Open("ControlHost", args);
+		using var failureHooks = log.AttachProcessFailureHandlers();
+		log.Information("lifecycle", "controlhost.start", "ControlHost process starting.");
+
 		if (StateMaintenanceCli.IsRequested(args))
-			return await StateMaintenanceCli.RunAsync(args[1..], CancellationToken.None).ConfigureAwait(false);
+		{
+			log.Information("maintenance", "controlhost.maintenance-start", "State maintenance command requested.");
+			var maintenanceExitCode = await StateMaintenanceCli.RunAsync(args[1..], CancellationToken.None).ConfigureAwait(false);
+			log.Information(
+				"maintenance",
+				"controlhost.maintenance-stop",
+				"State maintenance command completed.",
+				new Dictionary<string, string> { ["exitCode"] = maintenanceExitCode.ToString() });
+			return maintenanceExitCode;
+		}
 
 		using var shutdown = new CancellationTokenSource();
 		ConsoleCancelEventHandler consoleHandler = (_, eventArgs) =>
 		{
 			eventArgs.Cancel = true;
+			log.Information("lifecycle", "controlhost.cancel-requested", "Console cancellation requested.");
 			shutdown.Cancel();
 		};
 		EventHandler processExitHandler = (_, _) => shutdown.Cancel();
@@ -33,9 +47,20 @@ internal static class Program
 			}
 			catch (Exception exception) when (exception is ArgumentException or OverflowException or FileNotFoundException)
 			{
+				log.Error("configuration", "controlhost.configuration-error", "ControlHost configuration could not be loaded.", exception);
 				Console.Error.WriteLine($"host=ControlHost outcome=configuration-error detail=\"{exception.Message}\"");
 				return (int)ControlHostExitCode.ConfigurationError;
 			}
+
+			log.Information(
+				"configuration",
+				"controlhost.configuration-loaded",
+				"ControlHost configuration loaded.",
+				new Dictionary<string, string>
+				{
+					["controlEndpoint"] = options.ListenEndpoint,
+					["runtimeEndpoint"] = options.RuntimeEndpoint
+				});
 
 			LocalEndpointLease endpointLease;
 			try
@@ -45,6 +70,7 @@ internal static class Program
 			catch (InvalidOperationException exception)
 			{
 				await supervision.DisposeAsync().ConfigureAwait(false);
+				log.Error("startup", "controlhost.endpoint-acquire-failure", "ControlHost endpoint acquisition failed.", exception);
 				Console.Error.WriteLine($"host=ControlHost outcome=startup-failure detail=\"{exception.Message}\"");
 				return (int)ControlHostExitCode.StartupFailure;
 			}
@@ -53,13 +79,25 @@ internal static class Program
 			await using (supervision.ConfigureAwait(false))
 			{
 				await supervision.StartAsync(shutdown.Token).ConfigureAwait(false);
+				log.Information("supervision", "controlhost.supervision-started", "Managed child supervision started.");
 				var process = new ControlHostProcess(options);
 				using var monitorStop = new CancellationTokenSource();
-				var monitor = MonitorManagedLifecycleAsync(process, supervision, options, shutdown, monitorStop.Token);
+				var monitor = MonitorManagedLifecycleAsync(process, supervision, options, shutdown, log, monitorStop.Token);
 				try
 				{
 					var exitCode = await process.RunAsync(shutdown.Token).ConfigureAwait(false);
 					var lifecycle = process.Lifecycle;
+					log.Information(
+						"lifecycle",
+						"controlhost.completed",
+						"ControlHost process completed.",
+						new Dictionary<string, string>
+						{
+							["state"] = lifecycle.State.ToString(),
+							["health"] = lifecycle.Health.ToString(),
+							["exitCode"] = ((int)exitCode).ToString(),
+							["detail"] = lifecycle.Detail
+						});
 					Console.WriteLine($"host=ControlHost state={lifecycle.State} health={lifecycle.Health} exit={(int)exitCode} detail=\"{lifecycle.Detail}\"");
 					return (int)exitCode;
 				}
@@ -70,10 +108,17 @@ internal static class Program
 				}
 			}
 		}
+		catch (Exception exception)
+		{
+			log.Critical("lifecycle", "controlhost.unexpected-failure", "ControlHost terminated after an unexpected failure.", exception);
+			return (int)ControlHostExitCode.StartupFailure;
+		}
 		finally
 		{
 			Console.CancelKeyPress -= consoleHandler;
 			AppDomain.CurrentDomain.ProcessExit -= processExitHandler;
+			log.Information("lifecycle", "controlhost.exit", "ControlHost main loop exited.");
+			log.Flush();
 		}
 	}
 
@@ -82,6 +127,7 @@ internal static class Program
 		ControlHostChildSupervision supervision,
 		ControlHostProcessOptions options,
 		CancellationTokenSource shutdown,
+		HostLog log,
 		CancellationToken cancellationToken)
 	{
 		var readinessValue = Environment.GetEnvironmentVariable("RTAIME_HOST_READINESS_FILE");
@@ -96,6 +142,11 @@ internal static class Program
 		}
 
 		var publishedReady = false;
+		var lastReady = false;
+		ControlHostProcessState? lastState = null;
+		ControlHostHealthState? lastHealth = null;
+		LocalProcessSupervisionState? lastRuntimeState = null;
+		LocalProcessSupervisionState? lastAIState = null;
 		LocalEndpointReadinessLease? endpointReadiness = null;
 		try
 		{
@@ -103,6 +154,7 @@ internal static class Program
 			{
 				if (stopPath is not null && File.Exists(stopPath))
 				{
+					log.Information("lifecycle", "controlhost.stop-signal", "Managed stop signal detected.");
 					shutdown.Cancel();
 					break;
 				}
@@ -118,14 +170,70 @@ internal static class Program
 					runtimeReady &&
 					aiReady;
 
+				if (lifecycle.State != lastState || lifecycle.Health != lastHealth)
+				{
+					log.Information(
+						"lifecycle",
+						"controlhost.state-changed",
+						$"ControlHost lifecycle changed to {lifecycle.State}/{lifecycle.Health}.",
+						new Dictionary<string, string>
+						{
+							["state"] = lifecycle.State.ToString(),
+							["health"] = lifecycle.Health.ToString(),
+							["detail"] = lifecycle.Detail
+						});
+					lastState = lifecycle.State;
+					lastHealth = lifecycle.Health;
+				}
+
+				if (runtime?.State != lastRuntimeState)
+				{
+					log.Information(
+						"supervision",
+						"controlhost.runtime-supervision-changed",
+						"RuntimeHost supervision state changed.",
+						new Dictionary<string, string>
+						{
+							["state"] = runtime?.State.ToString() ?? "DISABLED",
+							["processId"] = runtime?.OwnedProcessId?.ToString() ?? "none",
+							["startAttempts"] = runtime?.StartAttempts.ToString() ?? "0"
+						});
+					lastRuntimeState = runtime?.State;
+				}
+
+				if (ai?.State != lastAIState)
+				{
+					log.Information(
+						"supervision",
+						"controlhost.ai-supervision-changed",
+						"AIHost supervision state changed.",
+						new Dictionary<string, string>
+						{
+							["state"] = ai?.State.ToString() ?? "DISABLED",
+							["processId"] = ai?.OwnedProcessId?.ToString() ?? "none",
+							["startAttempts"] = ai?.StartAttempts.ToString() ?? "0"
+						});
+					lastAIState = ai?.State;
+				}
+
+				if (ready != lastReady)
+				{
+					log.Information(
+						"readiness",
+						ready ? "controlhost.ready" : "controlhost.not-ready",
+						ready ? "ControlHost became ready." : "ControlHost is no longer ready.");
+					lastReady = ready;
+				}
+
 				if (ready && endpointReadiness is null)
 				{
 					try
 					{
 						endpointReadiness = LocalEndpointReadinessLease.Acquire(options.ListenEndpoint);
 					}
-					catch (InvalidOperationException)
+					catch (InvalidOperationException exception)
 					{
+						log.Error("readiness", "controlhost.readiness-lease-failure", "ControlHost readiness lease acquisition failed.", exception);
 						shutdown.Cancel();
 						throw;
 					}
