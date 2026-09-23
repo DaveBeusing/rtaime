@@ -278,3 +278,20 @@ Both monitors support Fit, 50 percent and 100 percent presentation plus Safe Are
 The Program monitor shows `ON AIR` while the existing Program monitor state reports `LIVE`. The local Clean Program Output state remains a separate indicator, and external transmission is not inferred from either state.
 
 The monitor-specific FULL action uses transient Shell state: it selects the requested viewer, maximizes the center region and enters the existing fullscreen window presentation. Escape or the fullscreen toggle restores the previous viewer mode and center-layout state without restarting media decoding, monitoring or Runtime execution.
+## Show Control workflow
+
+SCENES is the primary authoring and preparation location for Show Control, while the same SCENES & CUES region is available in the production workflow for execution.
+
+A bounded workflow is:
+
+1. Prepare or select a cue list in Show Control EDIT.
+2. Save and explicitly select the list in ControlHost.
+3. ARM the selected list.
+4. Confirm the displayed current cue/action.
+5. Execute one cue with GO or `F9`.
+6. Continue with explicit GO progression until completion.
+7. CANCEL on unexpected state or acknowledge recovery when ControlHost reports `RecoveryRequired`.
+
+Cue selection alone never changes Program state. The Operator does not own cue timing or infer completion locally; it presents synchronized Control state.
+
+See `docs/ShowControlCueSequencing.md`.
