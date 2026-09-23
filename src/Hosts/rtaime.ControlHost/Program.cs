@@ -48,7 +48,7 @@ internal static class Program
 			catch (Exception exception) when (exception is ArgumentException or OverflowException or FileNotFoundException)
 			{
 				log.Error("configuration", "controlhost.configuration-error", "ControlHost configuration could not be loaded.", exception);
-				Console.Error.WriteLine($"host=ControlHost outcome=configuration-error detail=\"{exception.Message}\"");
+				Console.Error.WriteLine($"host=ControlHost outcome=configuration-error detail=\"{DiagnosticRedactor.RedactText(exception.Message)}\"");
 				return (int)ControlHostExitCode.ConfigurationError;
 			}
 
@@ -71,7 +71,7 @@ internal static class Program
 			{
 				await supervision.DisposeAsync().ConfigureAwait(false);
 				log.Error("startup", "controlhost.endpoint-acquire-failure", "ControlHost endpoint acquisition failed.", exception);
-				Console.Error.WriteLine($"host=ControlHost outcome=startup-failure detail=\"{exception.Message}\"");
+				Console.Error.WriteLine($"host=ControlHost outcome=startup-failure detail=\"{DiagnosticRedactor.RedactText(exception.Message)}\"");
 				return (int)ControlHostExitCode.StartupFailure;
 			}
 
