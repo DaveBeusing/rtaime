@@ -1986,6 +1986,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		return snapshots
 			.OrderBy(layer => layer.Order)
 			.ThenBy(layer => layer.LayerId, StringComparer.Ordinal)
+			.Select((layer, index) => layer with { Order = index })
 			.ToArray();
 	}
 
