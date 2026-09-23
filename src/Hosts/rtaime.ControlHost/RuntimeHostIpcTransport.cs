@@ -20,6 +20,17 @@ public sealed record RuntimeGraphicsOverlaySnapshot(
 	double PositionY,
 	double Scale);
 
+public sealed record RuntimeCompositingLayerSnapshot(
+	string LayerId,
+	int Kind,
+	int Order,
+	bool Visible,
+	byte Opacity,
+	double PositionX,
+	double PositionY,
+	double Scale,
+	string ContentIdentity);
+
 public readonly record struct RuntimeCgColor(byte Red, byte Green, byte Blue, byte Alpha);
 
 public sealed record RuntimeCgPanel(
@@ -174,7 +185,8 @@ public sealed record RuntimeRemoteSnapshot(
 	IReadOnlyCollection<MediaSourceId>? MotionTimingTestPatternSources = null,
 	RuntimeAvSyncDiagnosticsSnapshot? AvSyncDiagnostics = null,
 	RuntimeProductionCgTextSnapshot? ProductionCgText = null,
-	IReadOnlyList<RuntimeOutputRoleSnapshot>? OutputRoles = null);
+	IReadOnlyList<RuntimeOutputRoleSnapshot>? OutputRoles = null,
+	IReadOnlyList<RuntimeCompositingLayerSnapshot>? CompositingLayers = null);
 
 public sealed record RuntimeRemoteApplyResult(
 	string HostInstanceId,
@@ -291,7 +303,8 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 				.ToArray()),
 			snapshot.AvSyncDiagnostics is null ? null : FromWire(snapshot.AvSyncDiagnostics),
 			snapshot.ProductionCgText is null ? null : FromWire(snapshot.ProductionCgText),
-			Array.AsReadOnly((snapshot.OutputRoles ?? Array.Empty<WireOutputRole>()).Select(FromWire).ToArray()));
+			Array.AsReadOnly((snapshot.OutputRoles ?? Array.Empty<WireOutputRole>()).Select(FromWire).ToArray()),
+			Array.AsReadOnly((snapshot.CompositingLayers ?? Array.Empty<WireCompositingLayer>()).Select(FromWire).ToArray()));
 	}
 
 	public async ValueTask<RuntimeRemoteApplyResult> ApplyExecutionAsync(
@@ -820,6 +833,34 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 		snapshot.CacheHit,
 		TimeSpan.FromTicks(snapshot.RenderDurationTicks));
 
+	private static RuntimeCompositingLayerSnapshot FromWire(WireCompositingLayer snapshot)
+	{
+		if (string.IsNullOrWhiteSpace(snapshot.LayerId))
+			throw new InvalidDataException("Runtime compositing layer identity is required.");
+		if (snapshot.Kind is < 1 or > 3)
+			throw new InvalidDataException("Runtime compositing layer kind is invalid.");
+		if (snapshot.Order is < 0 or >= 8)
+			throw new InvalidDataException("Runtime compositing layer order is outside the supported bound.");
+		if (!double.IsFinite(snapshot.PositionX) || snapshot.PositionX is < 0 or > 1 ||
+			!double.IsFinite(snapshot.PositionY) || snapshot.PositionY is < 0 or > 1 ||
+			!double.IsFinite(snapshot.Scale) || snapshot.Scale is < 0.05 or > 4.0)
+		{
+			throw new InvalidDataException("Runtime compositing layer transform is invalid.");
+		}
+		if (string.IsNullOrWhiteSpace(snapshot.ContentIdentity))
+			throw new InvalidDataException("Runtime compositing layer content identity is required.");
+		return new RuntimeCompositingLayerSnapshot(
+			snapshot.LayerId.Trim(),
+			snapshot.Kind,
+			snapshot.Order,
+			snapshot.Visible,
+			snapshot.Opacity,
+			snapshot.PositionX,
+			snapshot.PositionY,
+			snapshot.Scale,
+			snapshot.ContentIdentity.Trim());
+	}
+
 	private static RuntimeGraphicsOverlaySnapshot FromWire(WireGraphicsOverlay snapshot) => new(
 		snapshot.AssetLoaded,
 		snapshot.AssetName,
@@ -949,6 +990,7 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 	private sealed record WireProductionCgTextSnapshot(bool Active, string? Text, string? Typeface, string? ResolvedTypeface, float FontSizePixels, uint BoxWidth, uint BoxHeight, int Alignment, int Anchor, bool PanelEnabled, bool Visible, int Layer, int ZOrder, bool CacheHit, long RenderDurationTicks);
 	private sealed record WireGraphicsOverlayState(bool Visible, double PositionX, double PositionY, double Scale);
 	private sealed record WireGraphicsOverlay(bool AssetLoaded, string? AssetName, uint AssetWidth, uint AssetHeight, bool Visible, double PositionX, double PositionY, double Scale);
+	private sealed record WireCompositingLayer(string LayerId, int Kind, int Order, bool Visible, byte Opacity, double PositionX, double PositionY, double Scale, string ContentIdentity);
 	private sealed record WireAudioInputState(string SourceId, double Gain, bool Muted);
 	private sealed record WireAudioTestSignalState(string SourceId, bool Enabled, int Mode, double FrequencyHz, double PeakLevel);
 	private sealed record WireAudioInput(
@@ -1015,7 +1057,8 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 		WireAIShowcase AIShowcase,
 		WireAvSyncDiagnostics? AvSyncDiagnostics = null,
 		WireProductionCgTextSnapshot? ProductionCgText = null,
-		WireOutputRole[]? OutputRoles = null);
+		WireOutputRole[]? OutputRoles = null,
+		WireCompositingLayer[]? CompositingLayers = null);
 
 	private static class Wire
 	{
