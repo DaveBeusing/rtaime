@@ -37,15 +37,21 @@ public sealed class SupportBundleExporter : ISupportBundleExporter
 
 	private readonly IHealthSnapshotProvider _healthProvider;
 	private readonly Func<DateTimeOffset> _clock;
+	private readonly Func<string?> _sessionIdProvider;
+	private readonly Func<string> _logRootProvider;
 	private readonly long _maximumSourceBytes;
 
 	public SupportBundleExporter(
 		IHealthSnapshotProvider healthProvider,
 		Func<DateTimeOffset>? clock = null,
-		long maximumSourceBytes = DefaultMaximumSourceBytes)
+		long maximumSourceBytes = DefaultMaximumSourceBytes,
+		Func<string?>? sessionIdProvider = null,
+		Func<string>? logRootProvider = null)
 	{
 		_healthProvider = healthProvider ?? throw new ArgumentNullException(nameof(healthProvider));
 		_clock = clock ?? (() => DateTimeOffset.UtcNow);
+		_sessionIdProvider = sessionIdProvider ?? (() => Environment.GetEnvironmentVariable("RTAIME_LOG_SESSION_ID"));
+		_logRootProvider = logRootProvider ?? ResolveLogRoot;
 		if (maximumSourceBytes <= 0)
 			throw new ArgumentOutOfRangeException(nameof(maximumSourceBytes));
 		_maximumSourceBytes = maximumSourceBytes;
@@ -70,8 +76,8 @@ public sealed class SupportBundleExporter : ISupportBundleExporter
 		var includedFileCount = 0;
 		long includedSourceBytes = 0;
 		var capturedAtUtc = _clock().ToUniversalTime();
-		var sessionId = ResolveOptionalIdentifier(Environment.GetEnvironmentVariable("RTAIME_LOG_SESSION_ID"));
-		var logRoot = ResolveLogRoot();
+		var sessionId = ResolveOptionalIdentifier(_sessionIdProvider());
+		var logRoot = Path.GetFullPath(_logRootProvider());
 		var sessionDirectory = sessionId is null ? null : Path.Combine(logRoot, sessionId);
 		var health = CaptureHealth();
 		var assembly = Assembly.GetEntryAssembly() ?? typeof(SupportBundleExporter).Assembly;
@@ -282,7 +288,7 @@ public sealed class SupportBundleExporter : ISupportBundleExporter
 			using var document = await JsonDocument.ParseAsync(source, cancellationToken: cancellationToken).ConfigureAwait(false);
 			var entry = archive.CreateEntry(entryName, CompressionLevel.Fastest);
 			await using var target = entry.Open();
-			await using var writer = new Utf8JsonWriter(target, new JsonWriterOptions { Indented = true });
+			using var writer = new Utf8JsonWriter(target, new JsonWriterOptions { Indented = true });
 			WriteSanitizedElement(writer, document.RootElement, null);
 			await writer.FlushAsync(cancellationToken).ConfigureAwait(false);
 			return 1;
