@@ -457,7 +457,7 @@ DPI/layout qualification keeps the same structure at 2560×1440 at 100 percent, 
 - PNG/RGBA graphics load, placement, scale and confirmed show/hide controls;
 - AFV source, stereo/master audio meters, gain, mute, clipping/health and clip-audio state;
 - media autoplay/end-behavior controls with effective-range countdown;
-- retained Client-only Operator project dependency.
+- retained Client-only Operator production access, with `rtaime.Core` permitted only for dependency-neutral diagnostics.
 
 `build/quality/Test-OperatorMonitoringPolicy.ps1` verifies the monitoring-plane separation, bounded/loss-tolerant behavior and prohibition on management-IPC pixel transport.
 
