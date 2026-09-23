@@ -47,7 +47,7 @@ The default file limit is 16 MiB per segment. A new segment is opened before the
 - `RTAIME_LOG_SESSION_ID` / `--log-session-id`: optional stable session identifier;
 - `RTAIME_LOG_ROOT` / `--log-root`: explicit log root.
 
-Logging is best-effort. A directory, permission or file-system failure does not become a production failure; the logger disables the file writer temporarily, emits a minimal stderr diagnostic where possible and retries later. Unhandled process exceptions and unobserved task exceptions are captured through common process-level hooks. Host entry points additionally log configuration admission, lifecycle/readiness transitions, managed-child supervision where applicable, graceful stop signals and terminal failures.
+Logging is best-effort. A directory, permission or file-system failure does not become a production failure; the logger disables the file writer temporarily, emits a minimal redacted stderr diagnostic where possible and retries later. Host startup/configuration fallback messages sent directly to stderr use the same redaction policy. Unhandled process exceptions and unobserved task exceptions are captured through common process-level hooks. Host entry points additionally log configuration admission, lifecycle/readiness transitions, managed-child supervision where applicable, graceful stop signals and terminal failures.
 
 The Operator keeps its human-readable crash report for immediate support workflows, but stores it in the active structured-log session directory and applies the shared redaction policy. The structured `operator.dispatcher-unhandled-exception` record is the machine-readable correlate.
 
