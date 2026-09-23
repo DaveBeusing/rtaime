@@ -603,11 +603,11 @@ Assert-Condition ($keyboard -match 'new\("show-control-go".+Key\.F9.+showControl
 Assert-Condition ($liveSceneCue -match 'Header="SHOW CONTROL"' -and $liveSceneCue -match 'ShowControlCueStackControl') "SCENES & CUES must host Show Control beside existing Media Cues."
 Assert-Condition ($showControl -match 'SelectedItem="{Binding SelectedCue, Mode=TwoWay}"' -and $showControl -match 'Command="{Binding GoCommand}"') "Show Control cue selection and GO must remain separate interactions."
 foreach ($binding in @("ActiveSceneName", "SceneFailureReason")) {
-	$pattern = '<Run Text="\\{Binding ' + [Regex]::Escape($binding) + ', Mode=OneWay\\}" />'
+	$pattern = '<Run Text="\{Binding ' + [Regex]::Escape($binding) + ', Mode=OneWay\}" />'
 	Assert-Condition ($liveSceneCue -match $pattern) "Read-only Scene evidence '$binding' must bind OneWay in Run.Text to avoid WPF source-write failures."
 }
 foreach ($binding in @("CurrentCue", "CurrentAction")) {
-	$pattern = '<Run Text="\\{Binding ' + [Regex]::Escape($binding) + ', Mode=OneWay\\}" />'
+	$pattern = '<Run Text="\{Binding ' + [Regex]::Escape($binding) + ', Mode=OneWay\}" />'
 	Assert-Condition ($showControl -match $pattern) "Read-only Show Control evidence '$binding' must bind OneWay in Run.Text to avoid WPF source-write failures."
 }
 Assert-Condition ($showControlViewModel -match 'ConfirmedShowControlSnapshot|ApplyConfirmedSnapshot' -and $windowCode -match 'ConfirmedShowControlSnapshot \+= ShowControl\.ApplyConfirmedSnapshot') "Show Control presentation must consume confirmed synchronized Control snapshots."
