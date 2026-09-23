@@ -209,6 +209,24 @@ public sealed class ShowControlExecutionMachine
 		return _snapshot;
 	}
 
+	public ShowControlExecutionSnapshot RequireRecovery(Failure failure)
+	{
+		ArgumentNullException.ThrowIfNull(failure);
+		if (_snapshot.State is not (ShowControlExecutionState.Executing or ShowControlExecutionState.Waiting))
+			throw new InvalidOperationException("Recovery can be required only for active show-control execution.");
+
+		_snapshot = _snapshot with
+		{
+			State = ShowControlExecutionState.RecoveryRequired,
+			ExecutionRevision = NextRevision(),
+			WaitTargetFrameSequence = null,
+			RuntimeHostInstanceId = null,
+			RequiresAcknowledgement = true,
+			Failure = failure
+		};
+		return _snapshot;
+	}
+
 	public ShowControlExecutionSnapshot AcknowledgeRecovery(bool resume)
 	{
 		var cueList = RequireCueList();
