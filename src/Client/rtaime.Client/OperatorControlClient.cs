@@ -505,7 +505,8 @@ public sealed record OperatorStatusSnapshot
         OperatorProductionCgTextDescriptor? productionCgText = null,
         IReadOnlyList<OperatorSceneDescriptor>? scenes = null,
         IReadOnlyList<OperatorOutputRoleDescriptor>? outputRoles = null,
-        IReadOnlyList<OperatorCompositingLayerDescriptor>? compositingLayers = null)
+        IReadOnlyList<OperatorCompositingLayerDescriptor>? compositingLayers = null,
+        ShowControlWorkspaceSnapshot? showControl = null)
     {
         Production = production ?? throw new ArgumentNullException(nameof(production));
         ArgumentNullException.ThrowIfNull(sources);
@@ -541,6 +542,7 @@ public sealed record OperatorStatusSnapshot
         AIShowcase = aiShowcase ?? OperatorAIShowcaseDescriptor.Unavailable;
         MediaDeck = mediaDeck ?? MediaDeckSnapshot.Unloaded;
         ProductionCgText = productionCgText ?? OperatorProductionCgTextDescriptor.Empty;
+        ShowControl = showControl ?? new ShowControlWorkspaceSnapshot(Array.Empty<ShowControlCueList>(), null, ShowControlExecutionSnapshot.Idle);
     }
 
     public AuthoritativeProductionState Production { get; }
@@ -563,6 +565,7 @@ public sealed record OperatorStatusSnapshot
     public OperatorAIShowcaseDescriptor AIShowcase { get; }
     public MediaDeckSnapshot MediaDeck { get; }
     public OperatorProductionCgTextDescriptor ProductionCgText { get; }
+    public ShowControlWorkspaceSnapshot ShowControl { get; }
 }
 
 /// <summary>
@@ -672,6 +675,27 @@ public interface IOperatorControlTransport
 
     ValueTask<MediaDeckSnapshot> CloseMediaDeckAsync(CancellationToken cancellationToken = default) =>
         ValueTask.FromException<MediaDeckSnapshot>(new NotSupportedException("Operator transport does not expose media-deck control."));
+
+    ValueTask<ShowControlWorkspaceSnapshot> GetShowControlSnapshotAsync(CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<ShowControlWorkspaceSnapshot>(new NotSupportedException("Operator transport does not expose show-control state."));
+
+    ValueTask<ShowControlWorkspaceSnapshot> SaveShowControlCueListAsync(ShowControlCueList cueList, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<ShowControlWorkspaceSnapshot>(new NotSupportedException("Operator transport does not expose show-control authoring."));
+
+    ValueTask<ShowControlWorkspaceSnapshot> SelectShowControlCueListAsync(ShowControlCueListId cueListId, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<ShowControlWorkspaceSnapshot>(new NotSupportedException("Operator transport does not expose show-control selection."));
+
+    ValueTask<ShowControlWorkspaceSnapshot> ArmShowControlAsync(CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<ShowControlWorkspaceSnapshot>(new NotSupportedException("Operator transport does not expose show-control arming."));
+
+    ValueTask<ShowControlWorkspaceSnapshot> GoShowControlAsync(CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<ShowControlWorkspaceSnapshot>(new NotSupportedException("Operator transport does not expose show-control GO."));
+
+    ValueTask<ShowControlWorkspaceSnapshot> CancelShowControlAsync(CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<ShowControlWorkspaceSnapshot>(new NotSupportedException("Operator transport does not expose show-control cancellation."));
+
+    ValueTask<ShowControlWorkspaceSnapshot> AcknowledgeShowControlRecoveryAsync(bool resume, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<ShowControlWorkspaceSnapshot>(new NotSupportedException("Operator transport does not expose show-control recovery."));
 }
 
 public sealed class OperatorControlClient
@@ -975,6 +999,64 @@ public sealed class OperatorControlClient
 
     public ValueTask<MediaDeckSnapshot> CloseMediaDeckAsync(CancellationToken cancellationToken = default) =>
         _transport.CloseMediaDeckAsync(cancellationToken);
+
+    public ValueTask<ShowControlWorkspaceSnapshot> GetShowControlSnapshotAsync(CancellationToken cancellationToken = default) =>
+        _transport.GetShowControlSnapshotAsync(cancellationToken);
+
+    public async ValueTask<ShowControlWorkspaceSnapshot> SaveShowControlCueListAsync(
+        ShowControlCueList cueList,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(cueList);
+        RequireSnapshot();
+        var result = await _transport.SaveShowControlCueListAsync(cueList, cancellationToken).ConfigureAwait(false);
+        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+
+    public async ValueTask<ShowControlWorkspaceSnapshot> SelectShowControlCueListAsync(
+        ShowControlCueListId cueListId,
+        CancellationToken cancellationToken = default)
+    {
+        RequireSnapshot();
+        var result = await _transport.SelectShowControlCueListAsync(cueListId, cancellationToken).ConfigureAwait(false);
+        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+
+    public async ValueTask<ShowControlWorkspaceSnapshot> ArmShowControlAsync(CancellationToken cancellationToken = default)
+    {
+        RequireSnapshot();
+        var result = await _transport.ArmShowControlAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+
+    public async ValueTask<ShowControlWorkspaceSnapshot> GoShowControlAsync(CancellationToken cancellationToken = default)
+    {
+        RequireSnapshot();
+        var result = await _transport.GoShowControlAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+
+    public async ValueTask<ShowControlWorkspaceSnapshot> CancelShowControlAsync(CancellationToken cancellationToken = default)
+    {
+        RequireSnapshot();
+        var result = await _transport.CancelShowControlAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+
+    public async ValueTask<ShowControlWorkspaceSnapshot> AcknowledgeShowControlRecoveryAsync(
+        bool resume,
+        CancellationToken cancellationToken = default)
+    {
+        RequireSnapshot();
+        var result = await _transport.AcknowledgeShowControlRecoveryAsync(resume, cancellationToken).ConfigureAwait(false);
+        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        return result;
+    }
 
     public void Disconnect() => _snapshot = null;
 
