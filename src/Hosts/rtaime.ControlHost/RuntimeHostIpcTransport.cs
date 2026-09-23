@@ -459,6 +459,36 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 		return FromWire(wire);
 	}
 
+	public async ValueTask<IReadOnlyList<RuntimeCompositingLayerSnapshot>> SetCompositingLayerStateAsync(
+		string layerId,
+		bool visible,
+		byte opacity,
+		CancellationToken cancellationToken = default)
+	{
+		if (string.IsNullOrWhiteSpace(layerId)) throw new ArgumentException("Compositing layer identity is required.", nameof(layerId));
+		var response = await ExchangeAsync(
+			"runtime.compositing.layer.set",
+			new WireCompositingLayerState(layerId.Trim(), visible, opacity),
+			cancellationToken).ConfigureAwait(false);
+		var wire = response.Payload.Deserialize<WireCompositingLayer[]>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Runtime compositing layer response is required.");
+		return Array.AsReadOnly(wire.Select(FromWire).ToArray());
+	}
+
+	public async ValueTask<IReadOnlyList<RuntimeCompositingLayerSnapshot>> ReorderCompositingLayersAsync(
+		IReadOnlyList<string> orderedLayerIds,
+		CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(orderedLayerIds);
+		var response = await ExchangeAsync(
+			"runtime.compositing.layers.reorder",
+			new WireCompositingLayerOrder(orderedLayerIds.ToArray()),
+			cancellationToken).ConfigureAwait(false);
+		var wire = response.Payload.Deserialize<WireCompositingLayer[]>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Runtime compositing layer response is required.");
+		return Array.AsReadOnly(wire.Select(FromWire).ToArray());
+	}
+
 	public async ValueTask<RuntimeRecordingCommandResult> StartRecordingAsync(
 		string destinationDirectory,
 		string fileName,
@@ -989,6 +1019,8 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 	private sealed record WireProductionCgText(string Text, string Typeface, string? FallbackTypeface, float FontSizePixels, WireCgColor Foreground, double PositionX, double PositionY, uint BoxWidth, uint BoxHeight, int Alignment, int Anchor, WireCgPanel Panel, bool Visible, int Layer, int ZOrder);
 	private sealed record WireProductionCgTextSnapshot(bool Active, string? Text, string? Typeface, string? ResolvedTypeface, float FontSizePixels, uint BoxWidth, uint BoxHeight, int Alignment, int Anchor, bool PanelEnabled, bool Visible, int Layer, int ZOrder, bool CacheHit, long RenderDurationTicks);
 	private sealed record WireGraphicsOverlayState(bool Visible, double PositionX, double PositionY, double Scale);
+	private sealed record WireCompositingLayerState(string LayerId, bool Visible, byte Opacity);
+	private sealed record WireCompositingLayerOrder(string[] LayerIds);
 	private sealed record WireGraphicsOverlay(bool AssetLoaded, string? AssetName, uint AssetWidth, uint AssetHeight, bool Visible, double PositionX, double PositionY, double Scale);
 	private sealed record WireCompositingLayer(string LayerId, int Kind, int Order, bool Visible, byte Opacity, double PositionX, double PositionY, double Scale, string ContentIdentity);
 	private sealed record WireAudioInputState(string SourceId, double Gain, bool Muted);
