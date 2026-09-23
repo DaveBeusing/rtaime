@@ -118,10 +118,58 @@ public sealed class ControlHostService
 					?? throw new InvalidDataException("Recovered active scene is not present in the production specification.");
 				if (activeScene.Routing != state.Routing)
 					throw new InvalidDataException("Recovered active scene does not match recovered production routing.");
+				if (activeScene.CompositingState is not null &&
+					!activeScene.CompositingState.Equals(state.CompositingState))
+				{
+					throw new InvalidDataException("Recovered active scene does not match recovered production compositing state.");
+				}
 			}
 
 			_authoritative = state;
 			Journal(state.Revision, "recovery", "control.authoritative.restored", $"Authoritative production revision {state.Revision} was restored from a durable checkpoint.", null, null);
+		}
+	}
+
+	public AuthoritativeProductionState ConfirmCompositingMutation(ProductionCompositingState compositingState)
+	{
+		ArgumentNullException.ThrowIfNull(compositingState);
+		lock (_gate)
+		{
+			EnsureNoPending();
+			var current = Current();
+			var activeSceneId = current.ActiveSceneId;
+			if (activeSceneId is { } sceneId)
+			{
+				var scene = _specification.Scenes.FirstOrDefault(candidate => candidate.SceneId == sceneId);
+				if (scene is null || (scene.CompositingState is not null && !scene.CompositingState.Equals(compositingState)))
+					activeSceneId = null;
+			}
+
+			if (current.CompositingState?.Equals(compositingState) == true &&
+				activeSceneId == current.ActiveSceneId)
+			{
+				return current;
+			}
+			if (current.Revision.Value == ulong.MaxValue)
+				throw new InvalidOperationException("Authoritative revision cannot advance beyond UInt64.MaxValue.");
+
+			_authoritative = new AuthoritativeProductionState(
+				current.Version,
+				current.ProductionId,
+				current.Revision.Next(),
+				current.Routing,
+				activeSceneId,
+				current.OutputRoles,
+				compositingState);
+			Journal(
+				_authoritative.Revision,
+				"control",
+				"control.compositing.confirmed",
+				"Confirmed Runtime compositing state was incorporated into authoritative Production state.",
+				null,
+				null);
+			_authoritativeCommitted?.Invoke(_authoritative);
+			return _authoritative;
 		}
 	}
 
