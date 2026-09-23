@@ -68,6 +68,12 @@ public sealed record RuntimeHostApplyResult(
 	public bool Committed => Commit?.Status == RuntimeCommitStatus.Committed;
 }
 
+internal sealed record CompositingRollbackState(
+	PreparedCompositingState State,
+	int LegacyVisualLayerOrder,
+	int BitmapGraphicsLayerOrder,
+	int ProductionCgLayerOrder);
+
 public sealed record V1ProgramBoundaryResult(
 	ulong SequenceNumber,
 	MediaSourceId CommittedProgramSourceId,
@@ -512,7 +518,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 
 			var rollbackCompositing = preparedExecution.CompositingState is null
 				? null
-				: CapturePreparedCompositingStateUnsafe();
+				: CaptureCompositingRollbackStateUnsafe();
 			var compositingStaged = false;
 			if (preparedExecution.CompositingState is not null)
 			{
@@ -523,7 +529,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				}
 				catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or OverflowException)
 				{
-					RestorePreparedCompositingStateUnsafe(rollbackCompositing);
+					RestoreCompositingRollbackStateUnsafe(rollbackCompositing);
 					var failure = new Failure(
 						"runtime.compositing.stage_failed",
 						$"Prepared compositing state could not be staged: {exception.GetType().Name}.");
@@ -548,13 +554,13 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			catch
 			{
 				if (compositingStaged)
-					RestorePreparedCompositingStateUnsafe(rollbackCompositing);
+					RestoreCompositingRollbackStateUnsafe(rollbackCompositing);
 				throw;
 			}
 			if (prepare.Status != RuntimePrepareStatus.Prepared)
 			{
 				if (compositingStaged)
-					RestorePreparedCompositingStateUnsafe(rollbackCompositing);
+					RestoreCompositingRollbackStateUnsafe(rollbackCompositing);
 				Observe($"runtime.prepare.rejected:{prepare.Failure?.Code}");
 				return new RuntimeHostApplyResult(prepare, null, null);
 			}
@@ -571,14 +577,14 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			catch
 			{
 				if (compositingStaged)
-					RestorePreparedCompositingStateUnsafe(rollbackCompositing);
+					RestoreCompositingRollbackStateUnsafe(rollbackCompositing);
 				throw;
 			}
 
 			if (commit.Status != RuntimeCommitStatus.Committed)
 			{
 				if (compositingStaged)
-					RestorePreparedCompositingStateUnsafe(rollbackCompositing);
+					RestoreCompositingRollbackStateUnsafe(rollbackCompositing);
 				Observe($"runtime.commit.rejected:{commit.Failure?.Code}");
 				return new RuntimeHostApplyResult(prepare, commit, null);
 			}
@@ -1078,26 +1084,35 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		return null;
 	}
 
-	private PreparedCompositingState CapturePreparedCompositingStateUnsafe() =>
+	private CompositingRollbackState CaptureCompositingRollbackStateUnsafe() =>
 		new(
-			PreparedCompositingState.CurrentVersion,
-			CompositingLayerSnapshotsUnsafe()
-				.Select(layer => new PreparedCompositingLayerState(
-					layer.LayerId,
-					(PreparedCompositingLayerKind)(int)layer.Kind,
-					layer.Order,
-					layer.Visible,
-					layer.Opacity,
-					layer.PositionX,
-					layer.PositionY,
-					layer.Scale,
-					layer.ContentIdentity))
-				.ToArray());
+			new PreparedCompositingState(
+				PreparedCompositingState.CurrentVersion,
+				CompositingLayerSnapshotsUnsafe()
+					.Select((layer, order) => new PreparedCompositingLayerState(
+						layer.LayerId,
+						(PreparedCompositingLayerKind)(int)layer.Kind,
+						order,
+						layer.Visible,
+						layer.Opacity,
+						layer.PositionX,
+						layer.PositionY,
+						layer.Scale,
+						layer.ContentIdentity))
+					.ToArray()),
+			_legacyVisualLayerOrder,
+			_operatorGraphicsLayerOrder,
+			_productionCgLayerOrder);
 
-	private void RestorePreparedCompositingStateUnsafe(PreparedCompositingState? state)
+	private void RestoreCompositingRollbackStateUnsafe(CompositingRollbackState? rollback)
 	{
-		if (state is not null)
-			ApplyPreparedCompositingStateUnsafe(state, observe: false);
+		if (rollback is null)
+			return;
+
+		ApplyPreparedCompositingStateUnsafe(rollback.State, observe: false);
+		_legacyVisualLayerOrder = rollback.LegacyVisualLayerOrder;
+		_operatorGraphicsLayerOrder = rollback.BitmapGraphicsLayerOrder;
+		_productionCgLayerOrder = rollback.ProductionCgLayerOrder;
 	}
 
 	private void ApplyPreparedCompositingStateUnsafe(PreparedCompositingState? state, bool observe = true)
