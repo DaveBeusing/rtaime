@@ -12,9 +12,12 @@ A Scene has:
 
 - a stable `SceneId`;
 - a human-readable name;
-- a reproducible desired `ProductionRoutingState`.
+- a reproducible desired `ProductionRoutingState`;
+- an optional versioned `ProductionCompositingState` containing the bounded ordered graphics/compositing layer state governed by the Scene.
 
-The Scene contract intentionally includes only Preview and Program routing. Governed Aux output is owned by the separate output-role contract and command path, so Scene activation does not silently change Aux routing. Graphics and other Runtime-managed presentation state are likewise not bundled into Scene activation without an explicit atomic contract.
+The compositing state reuses the stable layer identities and property model already exposed by the multi-layer compositor: layer kind, order, visibility, opacity, transform and content identity. It is bounded to eight layers, requires unique contiguous ordering, validates the layer-id/kind pairing and rejects unsupported versions before planning.
+
+A Scene without `CompositingState` remains a compatible routing-only Scene and preserves the currently authoritative compositing state when activated. A Scene with `CompositingState` recalls routing and the declared layer state in one authoritative transaction. Governed Aux output remains owned by the separate output-role contract and command path, so Scene activation does not silently change Aux routing.
 
 A production without explicitly supplied Scene definitions receives a deterministic one-source Scene projection for each declared production source. This preserves existing production bootstraps while making Scene identity available through the Operator snapshot.
 
@@ -53,19 +56,26 @@ The activation validates:
 - optimistic expected Production Revision;
 - Scene identity;
 - every Scene routing dependency;
+- the optional compositing contract version and canonical layer ordering;
+- stable layer identities, kinds, transforms and content/resource identities;
+- Runtime admission of every required active layer resource;
 - revision exhaustion;
 - existing provider/capability planning requirements.
 
+The complete desired routing plus compositing state is included in the deterministic `PreparedExecutionContract` identity. RuntimeHost validates required compositing resources before its ordinary prepare/commit boundary. A missing layer, kind mismatch, content-identity mismatch or unsupported layer property rejects prepare before any Scene layer mutation is applied. After a successful Runtime commit the prevalidated layer state is applied inside the same host commit operation; Control promotes the staged authority and `ActiveSceneId` only after that commit is confirmed.
+
 Unknown Scenes, stale revisions, invalid dependencies, Runtime prepare rejection, Runtime transport failure and Runtime commit rejection all fail closed.
 
-Direct routing commands such as Set Preview, CUT or DISSOLVE remain valid. Because they create production state outside a Scene activation, they clear `ActiveSceneId`; the Operator must not continue presenting a Scene as active when its exact governed state is no longer the source of the confirmed authority.
+Direct routing commands such as Set Preview, CUT or DISSOLVE remain valid and preserve the authoritative compositing snapshot while clearing `ActiveSceneId`. Confirmed direct graphics, CG, visibility, opacity, transform and layer-order mutations are incorporated into Control-owned production state and advance Production Revision. If a direct mutation changes any compositing property governed by the active Scene, `ActiveSceneId` is cleared. Scene identity is never inferred from similarity.
 
 ## Operator evidence
 
 The Operator snapshot carries:
 
-- the Scene catalog;
+- the Scene catalog, including each Scene's optional declared compositing state;
 - authoritative Preview and Program routing;
+- authoritative compositing state;
+- Runtime-confirmed compositing layer evidence;
 - optional confirmed `ActiveSceneId`.
 
 The LIVE Scene list therefore distinguishes:
@@ -78,21 +88,23 @@ Only the last state is presented as ACTIVE/LIVE Scene evidence.
 
 ## Durability and recovery
 
-The durable authoritative checkpoint stores `ActiveSceneId` alongside the committed routing state. Older checkpoints without that field remain readable as having no confirmed active Scene.
+The durable authoritative checkpoint stores `ActiveSceneId`, routing, output-role state and the optional versioned compositing snapshot. The existing V1 checkpoint format remains readable because the compositing field is additive and optional. An older checkpoint that cannot prove the compositing portion of a Scene that now declares one recovers the routing authority but drops the unprovable active-Scene evidence.
 
-Recovery validates the recovered Scene identity against the current production specification before accepting the checkpoint. Runtime restart/reconciliation continues to use the existing committed authority reference. Recovery does not synthesize Scene activation or advance Production Revision.
+Recovery validates the recovered Scene identity and, where declared, its exact compositing snapshot against the current production specification before accepting active-Scene evidence. On RuntimeHost replacement, retained graphics/CG resources are re-admitted first and the already committed authoritative execution is then reapplied without advancing Production Revision. Runtime alignment requires both the ordinary authority reference and exact authoritative compositing evidence whenever compositing is governed.
 
 ## Compatibility boundary
 
-Existing Set Preview, CUT, DISSOLVE/AUTO, cue, recording and graphics workflows remain independent and functional.
+Existing Set Preview, CUT, DISSOLVE/AUTO, cue, recording and graphics workflows remain functional. Graphics operations that affect Scene-governed layer state now update the same Control-owned compositing evidence after Runtime confirmation rather than leaving `ActiveSceneId` stale.
 
 This contract does not introduce:
 
 - a show-control sequencer;
 - timed Scene playback;
+- macros or scripting;
 - activation from a selection-changed event;
-- a new output-routing authority;
-- partial graphics/output mutation presented as an atomic Scene;
+- audio mixer/breakaway recall;
+- generalized output-role recall;
+- a second Scene, graphics or Runtime authority;
 - Operator-owned production truth.
 
-Future Scene expansion must first bring additional production state into the same authoritative transactional contract before that state can be included in an atomic Scene.
+Additional production state may enter Scene recall only after it can be represented, validated, prepared, committed, persisted and recovered under the same authoritative transaction boundary.

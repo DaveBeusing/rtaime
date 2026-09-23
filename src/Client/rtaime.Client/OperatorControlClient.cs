@@ -47,27 +47,36 @@ public sealed record OperatorSourceDescriptor
 
 public sealed record OperatorSceneDescriptor
 {
+    private readonly ReadOnlyCollection<OperatorCompositingLayerDescriptor> _compositingLayers;
+
     public OperatorSceneDescriptor(
         string id,
         string name,
         string previewSourceId,
-        string programSourceId)
+        string programSourceId,
+        IReadOnlyList<OperatorCompositingLayerDescriptor>? compositingLayers = null)
     {
         if (string.IsNullOrWhiteSpace(id)) throw new ArgumentException("Scene id is required.", nameof(id));
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Scene name is required.", nameof(name));
         if (string.IsNullOrWhiteSpace(previewSourceId)) throw new ArgumentException("Scene Preview source id is required.", nameof(previewSourceId));
         if (string.IsNullOrWhiteSpace(programSourceId)) throw new ArgumentException("Scene Program source id is required.", nameof(programSourceId));
+        if (compositingLayers is { Count: > 8 }) throw new ArgumentException("Scene compositing state supports at most eight layers.", nameof(compositingLayers));
 
         Id = id.Trim();
         Name = name.Trim();
         PreviewSourceId = previewSourceId.Trim();
         ProgramSourceId = programSourceId.Trim();
+        _compositingLayers = Array.AsReadOnly((compositingLayers ?? Array.Empty<OperatorCompositingLayerDescriptor>())
+            .OrderBy(layer => layer.Order)
+            .ThenBy(layer => layer.LayerId, StringComparer.Ordinal)
+            .ToArray());
     }
 
     public string Id { get; }
     public string Name { get; }
     public string PreviewSourceId { get; }
     public string ProgramSourceId { get; }
+    public IReadOnlyList<OperatorCompositingLayerDescriptor> CompositingLayers => _compositingLayers;
 }
 
 public sealed record OperatorOutputRoleDescriptor

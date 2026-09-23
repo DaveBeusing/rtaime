@@ -762,7 +762,23 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 				binding.Resource.Reservable),
 			string.IsNullOrWhiteSpace(binding.MediaSourceId) ? null : new MediaSourceId(Identity.Parse(binding.MediaSourceId)),
 			string.IsNullOrWhiteSpace(binding.MediaSinkId) ? null : new MediaSinkId(Identity.Parse(binding.MediaSinkId)),
-			binding.OutputRoleId)).ToArray());
+			binding.OutputRoleId)).ToArray(),
+		prepared.CompositingState is null
+			? null
+			: new PreparedCompositingState(
+				CompatibilityVersion.Parse(prepared.CompositingState.Version),
+				prepared.CompositingState.Layers.Select(layer => new PreparedCompositingLayerState(
+					layer.LayerId,
+					Enum.IsDefined(typeof(PreparedCompositingLayerKind), layer.Kind)
+						? (PreparedCompositingLayerKind)layer.Kind
+						: throw new InvalidDataException("Prepared compositing layer kind is invalid."),
+					layer.Order,
+					layer.Visible,
+					layer.Opacity,
+					layer.PositionX,
+					layer.PositionY,
+					layer.Scale,
+					layer.ContentIdentity)).ToArray()));
 
 	private sealed record ClientHello(string ProtocolVersion, string Role, string HostInstanceId, Dictionary<string, string> ContractVersions);
 	private sealed record ServerHello(string ProtocolVersion, string Role, string HostInstanceId, Dictionary<string, string> ContractVersions);
@@ -802,7 +818,9 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 	private sealed record WireResource(string ResourceId, string ProviderId, string Kind, uint CapacityUnits, bool Reservable);
 	private sealed record WireProvider(string Version, string ProviderId, string Name, int AvailabilityState, WireFailure? Failure, WireCapability[] Capabilities, WireResource[] Resources);
 	private sealed record WirePreparedBinding(string LogicalNodeId, string CapabilityId, WireResource Resource, string? MediaSourceId, string? MediaSinkId, string? OutputRoleId = null);
-	private sealed record WirePreparedExecution(string Version, string PreparedExecutionId, string AuthorityStateId, ulong AuthorityRevision, ulong PlanGeneration, WirePreparedBinding[] Bindings);
+	private sealed record WirePreparedCompositingLayer(string LayerId, int Kind, int Order, bool Visible, byte Opacity, double PositionX, double PositionY, double Scale, string ContentIdentity);
+	private sealed record WirePreparedCompositingState(string Version, WirePreparedCompositingLayer[] Layers);
+	private sealed record WirePreparedExecution(string Version, string PreparedExecutionId, string AuthorityStateId, ulong AuthorityRevision, ulong PlanGeneration, WirePreparedBinding[] Bindings, WirePreparedCompositingState? CompositingState = null);
 	private sealed record WireTransition(int Kind, string FromSourceId, string ToSourceId, uint DurationFrames);
 	private sealed record WireApplyRequest(WirePreparedExecution PreparedExecution, string ProgramSinkId, WireTransition? Transition);
 	private sealed record WirePrepareResult(string Version, string PreparedExecutionId, int Status, string? ReservationId, WireFailure? Failure);

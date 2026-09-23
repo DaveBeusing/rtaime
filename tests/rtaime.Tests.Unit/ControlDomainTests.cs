@@ -322,6 +322,122 @@ public sealed class ControlDomainTests
         Assert.Equal(first.AuthoritativeState, second.AuthoritativeState);
     }
 
+    [Fact]
+    public void Scene_activation_carries_declared_compositing_state_atomically()
+    {
+        var sourceA = new ProductionSourceSpecification(ProductionSourceId.New(), "Camera A");
+        var sourceB = new ProductionSourceSpecification(ProductionSourceId.New(), "Camera B");
+        var compositing = new ProductionCompositingState(
+            ProductionCompositingState.CurrentVersion,
+            new[]
+            {
+                new ProductionCompositingLayerState(
+                    ProductionCompositingLayerIds.BitmapGraphics,
+                    ProductionCompositingLayerKind.BitmapGraphics,
+                    0,
+                    true,
+                    192,
+                    0.10,
+                    0.20,
+                    1.25,
+                    "logo.rgba")
+            });
+        var scene = new ProductionSceneSpecification(
+            SceneId.New(),
+            "Camera B with logo",
+            new ProductionRoutingState(sourceB.SourceId, sourceB.SourceId),
+            compositing);
+        var specification = new ProductionSpecification(
+            ControlContractVersion.Current,
+            ProductionId.New(),
+            "Transactional scene",
+            new[] { sourceA, sourceB },
+            new ProductionRoutingState(sourceA.SourceId, sourceA.SourceId),
+            new[] { scene });
+        var initial = InitializedState(specification);
+
+        var result = ControlDomainEngine.Apply(
+            specification,
+            initial.Authoritative,
+            new ActivateSceneCommand(
+                Metadata(specification, initial.Authoritative.Revision),
+                scene.SceneId));
+
+        Assert.True(result.Committed);
+        Assert.Equal(scene.SceneId, result.AuthoritativeState.ActiveSceneId);
+        Assert.Equal(compositing, result.AuthoritativeState.CompositingState);
+        Assert.Equal(compositing, result.DesiredState!.CompositingState);
+        Assert.Equal(initial.Authoritative.Revision.Next(), result.AuthoritativeState.Revision);
+    }
+
+    [Fact]
+    public void Contradictory_active_scene_compositing_evidence_fails_closed()
+    {
+        var source = new ProductionSourceSpecification(ProductionSourceId.New(), "Camera A");
+        var expected = new ProductionCompositingState(
+            ProductionCompositingState.CurrentVersion,
+            new[]
+            {
+                new ProductionCompositingLayerState(
+                    ProductionCompositingLayerIds.BitmapGraphics,
+                    ProductionCompositingLayerKind.BitmapGraphics,
+                    0,
+                    true,
+                    255,
+                    0.10,
+                    0.20,
+                    1.0,
+                    "logo.rgba")
+            });
+        var scene = new ProductionSceneSpecification(
+            SceneId.New(),
+            "Logo",
+            new ProductionRoutingState(source.SourceId, source.SourceId),
+            expected);
+        var specification = new ProductionSpecification(
+            ControlContractVersion.Current,
+            ProductionId.New(),
+            "Evidence validation",
+            new[] { source },
+            scene.Routing,
+            new[] { scene });
+        var contradictoryState = new ProductionCompositingState(
+            ProductionCompositingState.CurrentVersion,
+            new[]
+            {
+                new ProductionCompositingLayerState(
+                    ProductionCompositingLayerIds.BitmapGraphics,
+                    ProductionCompositingLayerKind.BitmapGraphics,
+                    0,
+                    false,
+                    255,
+                    0.10,
+                    0.20,
+                    1.0,
+                    "logo.rgba")
+            });
+        var authority = new AuthoritativeProductionState(
+            specification.Version,
+            specification.ProductionId,
+            Revision.Initial,
+            scene.Routing,
+            scene.SceneId,
+            specification.InitialOutputRoles,
+            contradictoryState);
+
+        var result = ControlDomainEngine.Apply(
+            specification,
+            authority,
+            new SelectPreviewCommand(
+                Metadata(specification, authority.Revision),
+                source.SourceId));
+
+        Assert.False(result.Committed);
+        Assert.Same(authority, result.AuthoritativeState);
+        Assert.Contains(result.Validation.Issues, issue =>
+            issue.Code == "control.state.active_scene_compositing_mismatch");
+    }
+
     private static ControlStateSnapshot InitializedState(ProductionSpecification specification)
     {
         var result = ControlDomainEngine.Initialize(specification);

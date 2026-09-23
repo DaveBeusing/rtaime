@@ -154,6 +154,8 @@
 							<StackPanel Orientation="Horizontal" Margin="0,3,0,0">
 								<TextBlock Text="{Binding Type}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" />
 								<TextBlock Text=" · " Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" />
+								<TextBlock Text="{Binding DesiredStateSummary}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" />
+								<TextBlock Text=" · " Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" />
 								<TextBlock Text="{Binding ProgramSource.Remaining}" Style="{StaticResource OperatorTimecode}" FontSize="{StaticResource OperatorFontSizeMicro}" />
 							</StackPanel>
 						</StackPanel>

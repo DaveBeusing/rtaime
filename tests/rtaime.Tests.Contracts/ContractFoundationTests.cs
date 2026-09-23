@@ -136,12 +136,29 @@ public sealed class ContractFoundationTests
                 productionId,
                 new Revision(12)),
             sceneId);
+        var compositing = new ProductionCompositingState(
+            ProductionCompositingState.CurrentVersion,
+            new[]
+            {
+                new ProductionCompositingLayerState(
+                    ProductionCompositingLayerIds.BitmapGraphics,
+                    ProductionCompositingLayerKind.BitmapGraphics,
+                    0,
+                    true,
+                    192,
+                    0.15,
+                    0.25,
+                    1.25,
+                    "logo.rgba")
+            });
         var state = new AuthoritativeProductionState(
             ControlContractVersion.Current,
             productionId,
             new Revision(13),
             new ProductionRoutingState(sourceA, sourceB),
-            sceneId);
+            sceneId,
+            null,
+            compositing);
 
         var commandCopy = RoundTrip(command);
         var stateCopy = RoundTrip(state);
@@ -151,6 +168,7 @@ public sealed class ContractFoundationTests
         Assert.Equal(sceneId, stateCopy.ActiveSceneId);
         Assert.Equal(state.Routing, stateCopy.Routing);
         Assert.Equal(state.Revision, stateCopy.Revision);
+        Assert.Equal(state.CompositingState, stateCopy.CompositingState);
     }
 
     [Fact]
@@ -272,6 +290,9 @@ public sealed class ContractFoundationTests
         Assert.Equal(prepared.AuthoritySnapshot, copy.AuthoritySnapshot);
         Assert.Equal(prepared.PlanGeneration, copy.PlanGeneration);
         Assert.Equal(prepared.Bindings, copy.Bindings);
+        Assert.NotNull(copy.CompositingState);
+        Assert.Equal(prepared.CompositingState!.Version, copy.CompositingState!.Version);
+        Assert.Equal(prepared.CompositingState.Layers, copy.CompositingState.Layers);
     }
 
     [Fact]
@@ -757,11 +778,28 @@ internal static class ContractFixtures
             null,
             "aux");
 
+        var compositing = new PreparedCompositingState(
+            PreparedCompositingState.CurrentVersion,
+            new[]
+            {
+                new PreparedCompositingLayerState(
+                    "bitmap-graphics",
+                    PreparedCompositingLayerKind.BitmapGraphics,
+                    0,
+                    true,
+                    255,
+                    0.10,
+                    0.20,
+                    1.0,
+                    "fixture-logo.rgba")
+            });
+
         return new PreparedExecutionContract(
             RuntimeContractVersion.Current,
             PreparedExecutionId.New(),
             new AuthoritySnapshotReference(Identity.New(), new Revision(3)),
             new Generation(2),
-            new[] { binding });
+            new[] { binding },
+            compositing);
     }
 }

@@ -95,6 +95,14 @@ or committed execution lacks an AuthoritySnapshot reference
 
 The Runtime-authority-ahead/foreign case is intentionally fail-closed because Process Recovery & Supervision has no evidence that an automatically chosen side would preserve production truth.
 
+### Scene compositing recovery
+
+When authoritative Production state contains a versioned Scene compositing snapshot, Runtime alignment requires more than a matching authority revision. The confirmed Runtime layer set must also match the authoritative layer identities, kinds, order, visibility, opacity, transforms and content identities.
+
+A replacement RuntimeHost starts without the retained bitmap/CG resources. ControlHost therefore restores the resource content retained for the current ControlHost process before reapplying the already committed `PreparedExecutionContract`. The reapply uses the same authoritative revision and must not create a new Scene activation or Production Revision. Missing required resources reject prepare and leave Control authority unchanged.
+
+Legacy checkpoints without compositing state remain compatible. When an older checkpoint cannot prove a Scene's newly declared compositing state, recovery keeps the valid routing authority but does not restore `ActiveSceneId` evidence for that Scene.
+
 ## Local process supervision
 
 ControlHost can optionally supervise RuntimeHost and AIHost by endpoint without taking a project reference on either host.

@@ -495,21 +495,90 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			if (auxBindings.Length == 1 && (auxBindings[0].MediaSourceId is null || auxBindings[0].MediaSinkId is null))
 				throw new InvalidOperationException("Aux output binding requires both source and sink identities.");
 
-			var prepare = _runtime.Prepare(preparedExecution);
+			var compositingFailure = ValidatePreparedCompositingStateUnsafe(preparedExecution.CompositingState);
+			if (compositingFailure is not null)
+			{
+				Observe($"runtime.prepare.rejected:{compositingFailure.Value.Code}");
+				return new RuntimeHostApplyResult(
+					new RuntimePrepareResult(
+						RuntimeContractVersion.Current,
+						preparedExecution.PreparedExecutionId,
+						RuntimePrepareStatus.Rejected,
+						null,
+						compositingFailure),
+					null,
+					null);
+			}
+
+			var rollbackCompositing = preparedExecution.CompositingState is null
+				? null
+				: CapturePreparedCompositingStateUnsafe();
+			var compositingStaged = false;
+			if (preparedExecution.CompositingState is not null)
+			{
+				try
+				{
+					compositingStaged = true;
+					ApplyPreparedCompositingStateUnsafe(preparedExecution.CompositingState, observe: false);
+				}
+				catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or OverflowException)
+				{
+					RestorePreparedCompositingStateUnsafe(rollbackCompositing);
+					var failure = new Failure(
+						"runtime.compositing.stage_failed",
+						$"Prepared compositing state could not be staged: {exception.GetType().Name}.");
+					Observe($"runtime.prepare.rejected:{failure.Code}");
+					return new RuntimeHostApplyResult(
+						new RuntimePrepareResult(
+							RuntimeContractVersion.Current,
+							preparedExecution.PreparedExecutionId,
+							RuntimePrepareStatus.Rejected,
+							null,
+							failure),
+						null,
+						null);
+				}
+			}
+
+			RuntimePrepareResult prepare;
+			try
+			{
+				prepare = _runtime.Prepare(preparedExecution);
+			}
+			catch
+			{
+				if (compositingStaged)
+					RestorePreparedCompositingStateUnsafe(rollbackCompositing);
+				throw;
+			}
 			if (prepare.Status != RuntimePrepareStatus.Prepared)
 			{
+				if (compositingStaged)
+					RestorePreparedCompositingStateUnsafe(rollbackCompositing);
 				Observe($"runtime.prepare.rejected:{prepare.Failure?.Code}");
 				return new RuntimeHostApplyResult(prepare, null, null);
 			}
 
-			var commit = _runtime.Commit(new RuntimeCommitRequest(
-				RuntimeContractVersion.Current,
-				preparedExecution.PreparedExecutionId,
-				prepare.ReservationId!.Value,
-				_runtime.State.ExecutionRevision));
+			RuntimeCommitResult commit;
+			try
+			{
+				commit = _runtime.Commit(new RuntimeCommitRequest(
+					RuntimeContractVersion.Current,
+					preparedExecution.PreparedExecutionId,
+					prepare.ReservationId!.Value,
+					_runtime.State.ExecutionRevision));
+			}
+			catch
+			{
+				if (compositingStaged)
+					RestorePreparedCompositingStateUnsafe(rollbackCompositing);
+				throw;
+			}
 
 			if (commit.Status != RuntimeCommitStatus.Committed)
 			{
+				if (compositingStaged)
+					RestorePreparedCompositingStateUnsafe(rollbackCompositing);
 				Observe($"runtime.commit.rejected:{commit.Failure?.Code}");
 				return new RuntimeHostApplyResult(prepare, commit, null);
 			}
@@ -532,6 +601,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				_auxFailure = null;
 			}
 			_transition = transition is null ? null : new AnchoredTransition(transition, _nextSequenceNumber);
+			if (compositingStaged)
+				Observe($"compositing.scene.applied:{string.Join(",", preparedExecution.CompositingState!.Layers.Select(layer => layer.LayerId))}");
 			Observe($"runtime.commit.committed:{commit.ExecutionRevision}");
 			if (transition is not null)
 				Observe($"runtime.transition.anchored:{transition.Kind}:{_nextSequenceNumber}:{transition.DurationFrames}");
@@ -958,6 +1029,113 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			Observe($"compositing.layers.reordered:{string.Join(",", normalized)}");
 			return CompositingLayerSnapshotsUnsafe();
 		}
+	}
+
+	private Failure? ValidatePreparedCompositingStateUnsafe(PreparedCompositingState? state)
+	{
+		if (state is null)
+			return null;
+
+		var active = CompositingLayerSnapshotsUnsafe();
+		if (state.Layers.Count != active.Count)
+		{
+			return new Failure(
+				"runtime.compositing.resource_set_mismatch",
+				"Prepared compositing state must reference every currently admitted layer resource exactly once.");
+		}
+
+		var activeById = active.ToDictionary(layer => layer.LayerId, StringComparer.Ordinal);
+		foreach (var layer in state.Layers)
+		{
+			if (!activeById.TryGetValue(layer.LayerId, out var admitted))
+				return new Failure("runtime.compositing.resource_missing", $"Prepared compositing layer '{layer.LayerId}' is not admitted.");
+			if ((int)layer.Kind != (int)admitted.Kind)
+				return new Failure("runtime.compositing.kind_mismatch", $"Prepared compositing layer '{layer.LayerId}' kind does not match the admitted resource.");
+			if (!string.Equals(layer.ContentIdentity, admitted.ContentIdentity, StringComparison.Ordinal))
+				return new Failure("runtime.compositing.content_mismatch", $"Prepared compositing layer '{layer.LayerId}' content identity does not match the admitted resource.");
+
+			switch (layer.LayerId)
+			{
+				case LegacyVisualLayerId:
+					if (!layer.Visible || layer.PositionX != 0 || layer.PositionY != 0 || layer.Scale != 1)
+						return new Failure("runtime.compositing.legacy_state_unsupported", "Legacy visual layer Scene recall supports order and opacity only.");
+					break;
+				case BitmapGraphicsLayerId:
+					if (_operatorGraphicsAsset is null)
+						return new Failure("runtime.compositing.bitmap_missing", "Prepared bitmap graphics resource is not loaded.");
+					break;
+				case ProductionCgLayerId:
+					if (_productionCgAsset is null || _productionCgDefinition is null)
+						return new Failure("runtime.compositing.cg_missing", "Prepared Production CG resource is not loaded.");
+					if (layer.Scale != 1)
+						return new Failure("runtime.compositing.cg_scale_unsupported", "Production CG Scene recall does not support scale independently of its CG definition.");
+					break;
+				default:
+					return new Failure("runtime.compositing.layer_unknown", $"Prepared compositing layer '{layer.LayerId}' is not supported.");
+			}
+		}
+
+		return null;
+	}
+
+	private PreparedCompositingState CapturePreparedCompositingStateUnsafe() =>
+		new(
+			PreparedCompositingState.CurrentVersion,
+			CompositingLayerSnapshotsUnsafe()
+				.Select(layer => new PreparedCompositingLayerState(
+					layer.LayerId,
+					(PreparedCompositingLayerKind)(int)layer.Kind,
+					layer.Order,
+					layer.Visible,
+					layer.Opacity,
+					layer.PositionX,
+					layer.PositionY,
+					layer.Scale,
+					layer.ContentIdentity))
+				.ToArray());
+
+	private void RestorePreparedCompositingStateUnsafe(PreparedCompositingState? state)
+	{
+		if (state is not null)
+			ApplyPreparedCompositingStateUnsafe(state, observe: false);
+	}
+
+	private void ApplyPreparedCompositingStateUnsafe(PreparedCompositingState? state, bool observe = true)
+	{
+		if (state is null)
+			return;
+
+		foreach (var layer in state.Layers)
+		{
+			switch (layer.LayerId)
+			{
+				case LegacyVisualLayerId:
+					_legacyVisualLayerOrder = layer.Order;
+					_legacyVisualLayerOpacity = layer.Opacity;
+					break;
+				case BitmapGraphicsLayerId:
+					_operatorGraphicsLayerOrder = layer.Order;
+					_operatorGraphicsVisible = layer.Visible;
+					_operatorGraphicsOpacity = layer.Opacity;
+					_operatorGraphicsPositionX = layer.PositionX;
+					_operatorGraphicsPositionY = layer.PositionY;
+					_operatorGraphicsScale = layer.Scale;
+					RebuildOperatorGraphicsLayerUnsafe();
+					break;
+				case ProductionCgLayerId:
+					_productionCgLayerOrder = layer.Order;
+					_productionCgText = _productionCgText with { Visible = layer.Visible };
+					_productionCgDefinition = _productionCgDefinition! with { Visible = layer.Visible };
+					_productionCgOpacity = layer.Opacity;
+					_productionCgPositionX = layer.PositionX;
+					_productionCgPositionY = layer.PositionY;
+					RebuildProductionCgLayerUnsafe();
+					break;
+			}
+		}
+
+		if (observe)
+			Observe($"compositing.scene.applied:{string.Join(",", state.Layers.Select(layer => layer.LayerId))}");
 	}
 
 	public void SetTimingHealth(V1TimingHealthState state)

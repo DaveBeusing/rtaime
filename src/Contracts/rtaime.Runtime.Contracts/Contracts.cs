@@ -163,6 +163,99 @@ public sealed record RuntimeOutputRoleSnapshot
     public Failure? Error { get; }
 }
 
+public enum PreparedCompositingLayerKind
+{
+    LegacyVisual = 1,
+    BitmapGraphics = 2,
+    ProductionCg = 3
+}
+
+public sealed record PreparedCompositingLayerState
+{
+    public PreparedCompositingLayerState(
+        string layerId,
+        PreparedCompositingLayerKind kind,
+        int order,
+        bool visible,
+        byte opacity,
+        double positionX,
+        double positionY,
+        double scale,
+        string contentIdentity)
+    {
+        if (string.IsNullOrWhiteSpace(layerId))
+            throw new ArgumentException("Prepared compositing layer identity is required.", nameof(layerId));
+        if (!Enum.IsDefined(kind))
+            throw new ArgumentOutOfRangeException(nameof(kind));
+        if (order is < 0 or >= 8)
+            throw new ArgumentOutOfRangeException(nameof(order));
+        if (!double.IsFinite(positionX) || positionX is < 0 or > 1)
+            throw new ArgumentOutOfRangeException(nameof(positionX));
+        if (!double.IsFinite(positionY) || positionY is < 0 or > 1)
+            throw new ArgumentOutOfRangeException(nameof(positionY));
+        if (!double.IsFinite(scale) || scale is < 0.05 or > 4.0)
+            throw new ArgumentOutOfRangeException(nameof(scale));
+        if (string.IsNullOrWhiteSpace(contentIdentity) || contentIdentity.Length > 512)
+            throw new ArgumentException("Prepared compositing content identity is required and must not exceed 512 characters.", nameof(contentIdentity));
+
+        LayerId = layerId.Trim();
+        Kind = kind;
+        Order = order;
+        Visible = visible;
+        Opacity = opacity;
+        PositionX = positionX;
+        PositionY = positionY;
+        Scale = scale;
+        ContentIdentity = contentIdentity.Trim();
+    }
+
+    public string LayerId { get; }
+    public PreparedCompositingLayerKind Kind { get; }
+    public int Order { get; }
+    public bool Visible { get; }
+    public byte Opacity { get; }
+    public double PositionX { get; }
+    public double PositionY { get; }
+    public double Scale { get; }
+    public string ContentIdentity { get; }
+}
+
+public sealed class PreparedCompositingState
+{
+    public static CompatibilityVersion CurrentVersion { get; } = new(1, 0);
+    private readonly ReadOnlyCollection<PreparedCompositingLayerState> _layers;
+
+    public PreparedCompositingState(
+        CompatibilityVersion version,
+        IReadOnlyList<PreparedCompositingLayerState> layers)
+    {
+        if (version != CurrentVersion)
+            throw new NotSupportedException($"Unsupported prepared compositing state version '{version}'. Supported version is '{CurrentVersion}'.");
+        ArgumentNullException.ThrowIfNull(layers);
+        if (layers.Count > 8)
+            throw new ArgumentException("Prepared compositing state supports at most eight layers.", nameof(layers));
+        if (layers.Any(layer => layer is null))
+            throw new ArgumentException("Prepared compositing state must not contain null layers.", nameof(layers));
+
+        var ordered = layers
+            .OrderBy(layer => layer.Order)
+            .ThenBy(layer => layer.LayerId, StringComparer.Ordinal)
+            .ToArray();
+        if (ordered.Select(layer => layer.LayerId).Distinct(StringComparer.Ordinal).Count() != ordered.Length)
+            throw new ArgumentException("Prepared compositing layer identities must be unique.", nameof(layers));
+        if (ordered.Select(layer => layer.Order).Distinct().Count() != ordered.Length)
+            throw new ArgumentException("Prepared compositing layer order values must be unique.", nameof(layers));
+        if (ordered.Select((layer, index) => layer.Order == index).Any(matches => !matches))
+            throw new ArgumentException("Prepared compositing layer order must be contiguous and start at zero.", nameof(layers));
+
+        Version = version;
+        _layers = Array.AsReadOnly(ordered);
+    }
+
+    public CompatibilityVersion Version { get; }
+    public IReadOnlyList<PreparedCompositingLayerState> Layers => _layers;
+}
+
 public sealed class PreparedExecutionContract
 {
     private readonly ReadOnlyCollection<PreparedExecutionBinding> _bindings;
@@ -172,7 +265,8 @@ public sealed class PreparedExecutionContract
         PreparedExecutionId preparedExecutionId,
         AuthoritySnapshotReference authoritySnapshot,
         Generation planGeneration,
-        IReadOnlyList<PreparedExecutionBinding> bindings)
+        IReadOnlyList<PreparedExecutionBinding> bindings,
+        PreparedCompositingState? compositingState = null)
     {
         RuntimeContractVersion.EnsureSupported(version);
         if (bindings is null)
@@ -185,6 +279,7 @@ public sealed class PreparedExecutionContract
         AuthoritySnapshot = authoritySnapshot ?? throw new ArgumentNullException(nameof(authoritySnapshot));
         PlanGeneration = planGeneration;
         _bindings = Array.AsReadOnly(bindings.ToArray());
+        CompositingState = compositingState;
     }
 
     public CompatibilityVersion Version { get; }
@@ -192,6 +287,7 @@ public sealed class PreparedExecutionContract
     public AuthoritySnapshotReference AuthoritySnapshot { get; }
     public Generation PlanGeneration { get; }
     public IReadOnlyList<PreparedExecutionBinding> Bindings => _bindings;
+    public PreparedCompositingState? CompositingState { get; }
 }
 
 public enum RuntimePrepareStatus
