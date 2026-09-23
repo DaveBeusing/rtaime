@@ -17,6 +17,12 @@ function Assert-Condition {
 }
 
 $corePath = Join-Path $repositoryRoot "src/rtaime.Core/Diagnostics.cs"
+$hostLogPath = Join-Path $repositoryRoot "src/rtaime.Core/HostLogging.cs"
+$appHostProgramPath = Join-Path $repositoryRoot "src/Hosts/rtaime.AppHost/Program.cs"
+$controlProgramPath = Join-Path $repositoryRoot "src/Hosts/rtaime.ControlHost/Program.cs"
+$runtimeProgramPath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/Program.cs"
+$aiProgramPath = Join-Path $repositoryRoot "src/Hosts/rtaime.AIHost/Program.cs"
+$operatorAppPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/App.xaml.cs"
 $controlPath = Join-Path $repositoryRoot "src/Hosts/rtaime.ControlHost/ControlHostDiagnostics.cs"
 $runtimePath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/RuntimeHostDiagnostics.cs"
 $runtimeServicePath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/V1RuntimeHostService.cs"
@@ -32,11 +38,17 @@ $runtimeReadinessTestsPath = Join-Path $repositoryRoot "tests/rtaime.Tests.Unit/
 $documentationPath = Join-Path $repositoryRoot "docs/ObservabilityDiagnostics.md"
 $runtimeReadinessDocumentationPath = Join-Path $repositoryRoot "docs/RuntimeReadiness.md"
 
-foreach ($path in @($corePath, $controlPath, $runtimePath, $runtimeServicePath, $runtimeProcessPath, $hardwareTelemetryPath, $frameDropPath, $healthProjectionPath, $runtimeReadinessPath, $controlIpcPath, $aiPath, $testsPath, $runtimeReadinessTestsPath, $documentationPath, $runtimeReadinessDocumentationPath)) {
+foreach ($path in @($corePath, $hostLogPath, $appHostProgramPath, $controlProgramPath, $runtimeProgramPath, $aiProgramPath, $operatorAppPath, $controlPath, $runtimePath, $runtimeServicePath, $runtimeProcessPath, $hardwareTelemetryPath, $frameDropPath, $healthProjectionPath, $runtimeReadinessPath, $controlIpcPath, $aiPath, $testsPath, $runtimeReadinessTestsPath, $documentationPath, $runtimeReadinessDocumentationPath)) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required observability artifact is missing: '$path'."
 }
 
 $core = Get-Content -LiteralPath $corePath -Raw
+$hostLog = Get-Content -LiteralPath $hostLogPath -Raw
+$appHostProgram = Get-Content -LiteralPath $appHostProgramPath -Raw
+$controlProgram = Get-Content -LiteralPath $controlProgramPath -Raw
+$runtimeProgram = Get-Content -LiteralPath $runtimeProgramPath -Raw
+$aiProgram = Get-Content -LiteralPath $aiProgramPath -Raw
+$operatorApp = Get-Content -LiteralPath $operatorAppPath -Raw
 $control = Get-Content -LiteralPath $controlPath -Raw
 $runtime = Get-Content -LiteralPath $runtimePath -Raw
 $runtimeService = Get-Content -LiteralPath $runtimeServicePath -Raw
@@ -57,6 +69,35 @@ Assert-Condition ($core -match 'CurrentSchemaVersion\s*=\s*"1\.0"') "Support sna
 Assert-Condition ($core -match 'DiagnosticRedactor') "Support diagnostics must pass through the shared redaction policy."
 Assert-Condition ($core -match 'SortedDictionary<string, string>') "Support snapshot string maps must have deterministic key ordering."
 Assert-Condition ($core -match 'SupportSnapshotSerializer') "Support snapshots require deterministic JSON serialization."
+
+Assert-Condition ($hostLog -match 'public sealed class HostLog') "Diagnostics must expose the shared structured host logger."
+Assert-Condition ($hostLog -match 'CurrentSchemaVersion\s*=\s*"1\.0"') "Structured host logs must carry an explicit schema version."
+Assert-Condition ($hostLog -match 'DefaultMaxFileBytes\s*=\s*16L \* 1024L \* 1024L') "Structured host log rotation must default to 16 MiB."
+Assert-Condition ($hostLog -match 'DefaultRetentionDays\s*=\s*14') "Structured host log retention must default to 14 days."
+foreach ($environmentName in @("RTAIME_LOG_ROOT", "RTAIME_LOG_SESSION_ID", "RTAIME_LOG_LEVEL", "RTAIME_LOG_MAX_FILE_MB", "RTAIME_LOG_RETENTION_DAYS")) {
+	Assert-Condition ($hostLog -match [Regex]::Escape($environmentName)) "Structured host logging is missing configuration '$environmentName'."
+}
+Assert-Condition ($hostLog -match 'DiagnosticRedactor\.RedactText' -and $hostLog -match 'DiagnosticRedactor\.Sanitize') "Structured host logs must use the shared redaction policy."
+Assert-Condition ($hostLog -match 'UnhandledException' -and $hostLog -match 'UnobservedTaskException') "Structured host logs must capture process and unobserved-task failures."
+Assert-Condition ($hostLog -match 'FileShare\.ReadWrite \| FileShare\.Delete' -and $hostLog -match 'FileOptions\.SequentialScan') "Structured host logs must remain readable while hosts are running."
+Assert-Condition ($hostLog -notmatch 'PeriodicTimer|Task\.Run|new Thread') "Structured host logging must not add polling loops or background threads."
+
+$hostEntryPoints = @{
+	"AppHost" = $appHostProgram
+	"ControlHost" = $controlProgram
+	"RuntimeHost" = $runtimeProgram
+	"AIHost" = $aiProgram
+	"Operator" = $operatorApp
+}
+foreach ($hostName in $hostEntryPoints.Keys) {
+	$entryPoint = $hostEntryPoints[$hostName]
+	Assert-Condition ($entryPoint -match ('HostLog\.Open\("' + [Regex]::Escape($hostName) + '"')) "Host '$hostName' must initialize the shared structured host log."
+	Assert-Condition ($entryPoint -match 'AttachProcessFailureHandlers') "Host '$hostName' must attach common process-failure logging."
+}
+Assert-Condition ($controlProgram -match 'controlhost\.runtime-supervision-changed' -and $controlProgram -match 'controlhost\.ai-supervision-changed') "ControlHost logging must expose managed child supervision transitions."
+Assert-Condition ($runtimeProgram -match 'runtimehost\.state-changed' -and $runtimeProgram -match 'runtimehost\.ready') "RuntimeHost logging must expose lifecycle and readiness transitions."
+Assert-Condition ($aiProgram -match 'aihost\.state-changed' -and $aiProgram -match 'aihost\.ready') "AIHost logging must expose lifecycle and readiness transitions."
+Assert-Condition ($operatorApp -match 'operator\.dispatcher-unhandled-exception' -and $operatorApp -match 'operator\.reconnect-failure') "Operator logging must capture UI failures and reconnect transitions."
 
 $snapshotDeclaration = [Regex]::Match($core, 'public sealed record SupportSnapshot\((?s:.*?)\);')
 Assert-Condition $snapshotDeclaration.Success "SupportSnapshot declaration could not be located."
@@ -119,6 +160,8 @@ foreach ($hostProjection in @($control, $runtime, $ai)) {
 Assert-Condition ($tests -match 'Bounded_buffer_retains_only_the_newest_events') "Diagnostics boundedness regression coverage is required."
 Assert-Condition ($tests -match 'Redaction_removes_secret_dimensions') "Diagnostics secret-redaction regression coverage is required."
 Assert-Condition ($tests -match 'Support_snapshot_serialization_is_deterministic') "Deterministic support serialization regression coverage is required."
+Assert-Condition ($tests -match 'Host_log_writes_structured_redacted_json_lines') "Structured host log serialization/redaction regression coverage is required."
+Assert-Condition ($tests -match 'Host_log_keeps_process_failures_best_effort') "Structured host process-failure regression coverage is required."
 Assert-Condition ($documentation -match 'No per-frame disk write') "Observability documentation must explicitly prohibit per-frame diagnostic disk writes."
 Assert-Condition ($documentation -match 'raw video/audio payloads') "Observability documentation must explicitly prohibit bulk media in support snapshots."
 Assert-Condition ($documentation -match 'Runtime Health & Performance HUD') "Observability documentation must record the runtime health/performance projection."
@@ -128,5 +171,6 @@ Assert-Condition ($documentation -match 'UNVERIFIED') "Observability documentati
 Write-Host "Observability diagnostics policy verification PASS"
 Write-Host "Support snapshot schema: 1.0"
 Write-Host "Bounded diagnostics: required"
+Write-Host "Structured host logs: AppHost, ControlHost, RuntimeHost, AIHost, Operator"
 Write-Host "Secrets and bulk media: excluded"
 Write-Host "Runtime health telemetry: bounded frame metrics and explicit GPU UNVERIFIED evidence"
