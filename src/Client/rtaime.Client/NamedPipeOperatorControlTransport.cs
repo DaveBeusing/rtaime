@@ -638,7 +638,14 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		wire.MediaDeck is null ? MediaDeckSnapshot.Unloaded : FromWire(wire.MediaDeck),
 		wire.ProductionCgText is null ? OperatorProductionCgTextDescriptor.Empty : FromWire(wire.ProductionCgText),
 		(wire.Scenes ?? Array.Empty<WireScene>())
-			.Select(scene => new OperatorSceneDescriptor(scene.Id, scene.Name, scene.PreviewSourceId, scene.ProgramSourceId))
+			.Select(scene => new OperatorSceneDescriptor(
+				scene.Id,
+				scene.Name,
+				scene.PreviewSourceId,
+				scene.ProgramSourceId,
+				(scene.CompositingState?.Layers ?? Array.Empty<WireCompositingLayer>())
+					.Select(FromWire)
+					.ToArray()))
 			.ToArray(),
 		(wire.OutputRoles ?? Array.Empty<WireOutputRole>())
 			.Select(output => new OperatorOutputRoleDescriptor(
@@ -793,7 +800,23 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 				Enum.IsDefined(typeof(OutputRoleKind), role.Kind) ? (OutputRoleKind)role.Kind : throw new InvalidDataException("Output role kind is invalid."),
 				new ProductionSourceId(Identity.Parse(role.SourceId)),
 				role.ProviderSelector, role.TargetId, role.FormatPolicy, role.TimingPolicy, role.Enabled))
-			.ToArray());
+			.ToArray(),
+		state.CompositingState is null
+			? null
+			: new ProductionCompositingState(
+				CompatibilityVersion.Parse(state.CompositingState.Version),
+				state.CompositingState.Layers.Select(layer => new ProductionCompositingLayerState(
+					layer.LayerId,
+					Enum.IsDefined(typeof(ProductionCompositingLayerKind), layer.Kind)
+						? (ProductionCompositingLayerKind)layer.Kind
+						: throw new InvalidDataException("Compositing layer kind is invalid."),
+					layer.Order,
+					layer.Visible,
+					layer.Opacity,
+					layer.PositionX,
+					layer.PositionY,
+					layer.Scale,
+					layer.ContentIdentity)).ToArray()));
 
 	private static void EnsureNotError(WireEnvelope envelope)
 	{
@@ -829,10 +852,10 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 	private sealed record ServerHello(string ProtocolVersion, string Role, string HostInstanceId, Dictionary<string, string> ContractVersions);
 	private sealed record WireFailure(string Code, string Message);
 	private sealed record WireSource(string Id, string Name, string Type, string Format, string Health, string MediaState, long? RemainingTicks, string? MediaFileName);
-	private sealed record WireScene(string Id, string Name, string PreviewSourceId, string ProgramSourceId);
+	private sealed record WireScene(string Id, string Name, string PreviewSourceId, string ProgramSourceId, WireCompositingState? CompositingState = null);
 	private sealed record WireOutputRoleAuthority(string RoleId, int Kind, string SourceId, string ProviderSelector, string TargetId, string FormatPolicy, string TimingPolicy, bool Enabled);
 	private sealed record WireOutputRole(string RoleId, string RoleKind, string SourceId, string TargetId, string ProviderId, uint? Width, uint? Height, string? FrameRate, string? PixelFormat, string? Timing, string LifecycleState, bool AuthoritativeActive, string HealthState, string Evidence, WireFailure? Error);
-	private sealed record WireProductionState(string Version, string ProductionId, ulong Revision, string PreviewSourceId, string ProgramSourceId, string? ActiveSceneId = null, WireOutputRoleAuthority[]? OutputRoles = null);
+	private sealed record WireProductionState(string Version, string ProductionId, ulong Revision, string PreviewSourceId, string ProgramSourceId, string? ActiveSceneId = null, WireOutputRoleAuthority[]? OutputRoles = null, WireCompositingState? CompositingState = null);
 	private sealed record WireGraphicsAsset(string Name, uint Width, uint Height, byte[] RgbaPixels);
 	private sealed record WireCgColor(byte Red, byte Green, byte Blue, byte Alpha);
 	private sealed record WireCgPanel(bool Enabled, WireCgColor Color, float CornerRadiusPixels, uint PaddingPixels);
@@ -843,6 +866,7 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 	private sealed record WireCompositingLayerOrder(string[] LayerIds);
 	private sealed record WireGraphicsOverlay(bool AssetLoaded, string? AssetName, uint AssetWidth, uint AssetHeight, bool Visible, double PositionX, double PositionY, double Scale);
 	private sealed record WireCompositingLayer(string LayerId, int Kind, int Order, bool Visible, byte Opacity, double PositionX, double PositionY, double Scale, string ContentIdentity);
+	private sealed record WireCompositingState(string Version, WireCompositingLayer[] Layers);
 	private sealed record WireAudioInputState(string SourceId, double Gain, bool Muted);
 	private sealed record WireAudioTestSignalState(string SourceId, bool Enabled, int Mode, double FrequencyHz, double PeakLevel);
 	private sealed record WireTestPatternState(string SourceId, bool Enabled, bool MotionTiming = false);
