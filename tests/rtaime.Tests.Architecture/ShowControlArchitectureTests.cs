@@ -33,8 +33,8 @@ public sealed class ShowControlArchitectureTests
 
 		Assert.Contains("public ShowControlCueEditorItem? SelectedCue", viewModel, StringComparison.Ordinal);
 		Assert.DoesNotContain("GoAsync();", ExtractSelectionSetter(viewModel), StringComparison.Ordinal);
-		Assert.Contains("SelectedItem="{Binding SelectedCue, Mode=TwoWay}"", surface, StringComparison.Ordinal);
-		Assert.Contains("Command="{Binding GoCommand}"", surface, StringComparison.Ordinal);
+		Assert.Contains("SelectedItem=\"{Binding SelectedCue, Mode=TwoWay}\"", surface, StringComparison.Ordinal);
+		Assert.Contains("Command=\"{Binding GoCommand}\"", surface, StringComparison.Ordinal);
 	}
 
 	[Fact]
