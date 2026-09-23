@@ -777,8 +777,9 @@ Assert-Condition ($monitorViewModel -match 'MonitoringStreamKind\.Program') "Ope
 Assert-Condition ($monitorViewModel -match 'PreviewSourceId') "Preview monitoring must follow authoritative Preview routing rather than own routing state."
 
 $projectReferenceCount = [Regex]::Matches($project, '<ProjectReference\s+Include=').Count
-Assert-Condition ($projectReferenceCount -eq 1) "Operator must retain exactly one project dependency."
-Assert-Condition ($project -match 'Client\\rtaime\.Client\\rtaime\.Client\.csproj') "Operator may depend only on the Client SDK seam."
+Assert-Condition ($projectReferenceCount -eq 2) "Operator must retain exactly two project dependencies: Client for production access and Core for dependency-neutral diagnostics."
+Assert-Condition ($project -match 'Client\\rtaime\.Client\\rtaime\.Client\.csproj') "Operator production access must remain behind the Client SDK seam."
+Assert-Condition ($project -match 'rtaime\.Core\\rtaime\.Core\.csproj') "Operator may use dependency-neutral rtaime.Core cross-cutting diagnostics."
 Assert-Condition ($project -notmatch 'ControlHost|RuntimeHost|AIHost') "Operator must not reference production host implementations."
 
 Assert-Condition ($documentation -match '1920.?x.?1080') "Operator UI documentation must record the reference resolution."
