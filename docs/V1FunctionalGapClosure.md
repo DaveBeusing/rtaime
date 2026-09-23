@@ -162,6 +162,12 @@ V1 Functional Gap Closure does not provide evidence for:
 - broader release-security/compliance acceptance not otherwise evidenced;
 - `1.0.0 STABLE`, `VALIDATED` or `CERTIFIED` status.
 
+### Later professional MP4 software qualification addendum
+
+The `Explicitly UNVERIFIED after V1 Functional Gap Closure` list above remains the historical evidence boundary of that milestone. Subsequent work on `master` added the Windows Media Foundation MP4 path with H.264/AVC video and AAC-LC stereo audio and repository qualification that reopens the finalized MP4 through the existing decoder, exercises both supported 1080p development frame rates, repeated recording and A/V timestamp alignment.
+
+Professional codec/container **software interoperability is therefore no longer a current software-functional gap on `master`**. This later evidence does not qualify hardware encoder behavior, sustained professional storage performance, long-duration recording, physical I/O or reference-platform behavior; those dimensions remain `UNVERIFIED` until their dedicated evidence exists.
+
 The `.rtaime-recording` artifact introduced here is a deterministic reference container for software proof only. It must not be described as a qualified broadcast recording format.
 
 ## Architecture result
