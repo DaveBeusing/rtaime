@@ -667,7 +667,6 @@ public sealed class CompositingGraphViewModel : INotifyPropertyChanged, IDisposa
 			nameof(OperatorViewModel.IsConnected) or
 			nameof(OperatorViewModel.IsStale) or
 			nameof(OperatorViewModel.IsBusy) or
-			nameof(OperatorViewModel.RuntimeStatus) or
 			nameof(OperatorViewModel.RecordingStatus) or
 			nameof(OperatorViewModel.RecordingError))
 		{
