@@ -99,6 +99,18 @@ public sealed class GraphicsOverlayIntegrationTests
 			Pixel(baseline.ProgramPixels, fixture.Format, sampleX, sampleY),
 			Pixel(program.ProgramPixels, fixture.Format, sampleX, sampleY));
 
+		var transformed = fixture.Runtime.SetGraphicsOverlay(true, 0.25, 0.20, 1.5);
+		Assert.Equal(0.25, transformed.PositionX, 6);
+		Assert.Equal(0.20, transformed.PositionY, 6);
+		Assert.Equal(1.5, transformed.Scale, 6);
+		var transformedLayers = fixture.Runtime.Snapshot.CompositingLayers ?? Array.Empty<V1CompositingLayerSnapshot>();
+		var transformedBitmap = Assert.Single(transformedLayers, layer => layer.LayerId == V1RuntimeHostService.BitmapGraphicsLayerId);
+		Assert.Equal(0.25, transformedBitmap.PositionX, 6);
+		Assert.Equal(0.20, transformedBitmap.PositionY, 6);
+		Assert.Equal(1.5, transformedBitmap.Scale, 6);
+		Assert.True(Assert.Single(transformedLayers, layer => layer.LayerId == V1RuntimeHostService.ProductionCgLayerId).Visible);
+		Assert.Equal(2, fixture.Runtime.ProcessNextBoundary().ActiveGpuSurfacesAfterBoundary);
+
 		var updated = fixture.Runtime.SetCompositingLayerState(
 			V1RuntimeHostService.BitmapGraphicsLayerId,
 			visible: true,
