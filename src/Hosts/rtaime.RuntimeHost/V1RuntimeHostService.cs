@@ -1082,10 +1082,10 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		new(
 			PreparedCompositingState.CurrentVersion,
 			CompositingLayerSnapshotsUnsafe()
-				.Select(layer => new PreparedCompositingLayerState(
+				.Select((layer, order) => new PreparedCompositingLayerState(
 					layer.LayerId,
 					(PreparedCompositingLayerKind)(int)layer.Kind,
-					layer.Order,
+					order,
 					layer.Visible,
 					layer.Opacity,
 					layer.PositionX,
@@ -1986,7 +1986,6 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		return snapshots
 			.OrderBy(layer => layer.Order)
 			.ThenBy(layer => layer.LayerId, StringComparer.Ordinal)
-			.Select((layer, index) => layer with { Order = index })
 			.ToArray();
 	}
 
