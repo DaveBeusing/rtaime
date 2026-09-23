@@ -147,3 +147,8 @@ The V1 timeline does not claim:
 The current governed contracts also expose no clip-move edit operation, timeline undo/redo history, section/show-marker domain, transition-domain projection or reusable audio-waveform projection. The Operator therefore does not synthesize those capabilities. The mockup palette reserves quieter waveform and transition treatments for a future governed projection, but no fake waveform or transition graphic is rendered today.
 
 Unavailable edit capabilities are presented only as explicit N/A/context state where the mockup requires their location; no disabled button is wired to a synthetic production command.
+## Relationship to Show Control
+
+Media timeline cues remain media-domain markers and retain their existing seek/jump semantics. Show Control may reference a named media cue through the existing Media Deck path, but it does not turn the timeline into a second automation authority or NLE scheduler.
+
+Show Control sequencing, GO progression, frame-domain waits and recovery are owned by ControlHost and documented in `docs/ShowControlCueSequencing.md`. Timeline row selection and Show Control cue selection remain presentation-only until their explicit execution command is invoked.
