@@ -79,7 +79,7 @@ public sealed class SupportBundleExporter : ISupportBundleExporter
 		var sessionId = ResolveOptionalIdentifier(_sessionIdProvider());
 		var logRoot = Path.GetFullPath(_logRootProvider());
 		var sessionDirectory = sessionId is null ? null : Path.Combine(logRoot, sessionId);
-		var health = CaptureHealth();
+		var health = CaptureHealth(warnings);
 		var assembly = Assembly.GetEntryAssembly() ?? typeof(SupportBundleExporter).Assembly;
 		var build = ProductBuildInfo.FromAssembly(assembly);
 
@@ -182,33 +182,43 @@ public sealed class SupportBundleExporter : ISupportBundleExporter
 		}
 	}
 
-	private IReadOnlyList<object> CaptureHealth() =>
-		_healthProvider.GetCurrent()
-			.OrderBy(snapshot => snapshot.Category, StringComparer.Ordinal)
-			.ThenBy(snapshot => snapshot.Id, StringComparer.Ordinal)
-			.Select(snapshot => (object)new
-			{
-				id = DiagnosticRedactor.RedactText(snapshot.Id),
-				displayName = DiagnosticRedactor.RedactText(snapshot.DisplayName),
-				category = DiagnosticRedactor.RedactText(snapshot.Category),
-				state = snapshot.State.ToString(),
-				detail = DiagnosticRedactor.RedactText(snapshot.Detail),
-				statusSinceUtc = snapshot.StatusSince.ToUniversalTime(),
-				lastSuccessfulCheckUtc = snapshot.LastSuccessfulCheck?.ToUniversalTime(),
-				metrics = snapshot.Metrics.Select(metric => new
+	private IReadOnlyList<object> CaptureHealth(List<string> warnings)
+	{
+		try
+		{
+			return _healthProvider.GetCurrent()
+				.OrderBy(snapshot => snapshot.Category, StringComparer.Ordinal)
+				.ThenBy(snapshot => snapshot.Id, StringComparer.Ordinal)
+				.Select(snapshot => (object)new
 				{
-					label = DiagnosticRedactor.RedactText(metric.Label),
-					value = DiagnosticRedactor.SanitizeValue(metric.Label, metric.Value),
-					unit = metric.Unit is null ? null : DiagnosticRedactor.RedactText(metric.Unit)
-				}).ToArray(),
-				recoveryStatus = DiagnosticRedactor.RedactText(snapshot.RecoveryStatus),
-				technicalDetail = DiagnosticRedactor.RedactText(snapshot.TechnicalDetail),
-				canRecover = snapshot.CanRecover,
-				recoveryActionLabel = snapshot.RecoveryActionLabel is null
-					? null
-					: DiagnosticRedactor.RedactText(snapshot.RecoveryActionLabel)
-			})
-			.ToArray();
+					id = DiagnosticRedactor.RedactText(snapshot.Id),
+					displayName = DiagnosticRedactor.RedactText(snapshot.DisplayName),
+					category = DiagnosticRedactor.RedactText(snapshot.Category),
+					state = snapshot.State.ToString(),
+					detail = DiagnosticRedactor.RedactText(snapshot.Detail),
+					statusSinceUtc = snapshot.StatusSince.ToUniversalTime(),
+					lastSuccessfulCheckUtc = snapshot.LastSuccessfulCheck?.ToUniversalTime(),
+					metrics = snapshot.Metrics.Select(metric => new
+					{
+						label = DiagnosticRedactor.RedactText(metric.Label),
+						value = DiagnosticRedactor.SanitizeValue(metric.Label, metric.Value),
+						unit = metric.Unit is null ? null : DiagnosticRedactor.RedactText(metric.Unit)
+					}).ToArray(),
+					recoveryStatus = DiagnosticRedactor.RedactText(snapshot.RecoveryStatus),
+					technicalDetail = DiagnosticRedactor.RedactText(snapshot.TechnicalDetail),
+					canRecover = snapshot.CanRecover,
+					recoveryActionLabel = snapshot.RecoveryActionLabel is null
+						? null
+						: DiagnosticRedactor.RedactText(snapshot.RecoveryActionLabel)
+				})
+				.ToArray();
+		}
+		catch (Exception exception)
+		{
+			warnings.Add($"Unable to capture Operator health evidence: {exception.Message}");
+			return Array.Empty<object>();
+		}
+	}
 
 	private async Task<int> AddSessionFilesAsync(
 		ZipArchive archive,
@@ -218,14 +228,23 @@ public sealed class SupportBundleExporter : ISupportBundleExporter
 		Action<long> addBytes,
 		Func<long> currentBytes)
 	{
-		var files = Directory.EnumerateFiles(sessionDirectory, "*", SearchOption.TopDirectoryOnly)
-			.Where(path =>
-				path.EndsWith(".jsonl", StringComparison.OrdinalIgnoreCase) ||
-				Path.GetFileName(path).StartsWith("operator-crash-", StringComparison.OrdinalIgnoreCase))
-			.Select(path => new FileInfo(path))
-			.OrderByDescending(file => file.LastWriteTimeUtc)
-			.ThenBy(file => file.Name, StringComparer.Ordinal)
-			.ToArray();
+		FileInfo[] files;
+		try
+		{
+			files = Directory.EnumerateFiles(sessionDirectory, "*", SearchOption.TopDirectoryOnly)
+				.Where(path =>
+					path.EndsWith(".jsonl", StringComparison.OrdinalIgnoreCase) ||
+					Path.GetFileName(path).StartsWith("operator-crash-", StringComparison.OrdinalIgnoreCase))
+				.Select(path => new FileInfo(path))
+				.OrderByDescending(file => file.LastWriteTimeUtc)
+				.ThenBy(file => file.Name, StringComparer.Ordinal)
+				.ToArray();
+		}
+		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+		{
+			warnings.Add($"Unable to enumerate the active log session: {exception.Message}");
+			return 0;
+		}
 		var included = 0;
 
 		foreach (var file in files)
@@ -426,6 +445,8 @@ public sealed class SupportBundleExporter : ISupportBundleExporter
 		if (string.IsNullOrWhiteSpace(value))
 			return null;
 		var trimmed = value.Trim();
+		if (trimmed.Length > 64)
+			return null;
 		return trimmed.All(character =>
 			char.IsLetterOrDigit(character) ||
 			character is '.' or '_' or '-')
