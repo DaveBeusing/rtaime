@@ -14,6 +14,29 @@ function Assert-Condition {
 	if (-not $Condition) { throw $Message }
 }
 
+function Wait-ForManagedStatus {
+	param(
+		[Parameter(Mandatory)][string]$LifecyclePath,
+		[Parameter(Mandatory)][string]$InstallRoot,
+		[Parameter(Mandatory)][string]$LifecycleWorkRoot,
+		[Parameter(Mandatory)][string]$ManagedInstanceId,
+		[int]$TimeoutMs = 5000,
+		[int]$PollIntervalMs = 200
+	)
+
+	$deadline = [DateTimeOffset]::UtcNow.AddMilliseconds($TimeoutMs)
+	$lastStatus = $null
+	do {
+		$lastStatus = & $LifecyclePath -Action Status -InstallPath $InstallRoot -WorkPath $LifecycleWorkRoot -InstanceId $ManagedInstanceId -QualificationMode
+		if ([string]$lastStatus.status -eq 'PASS' -and [string]$lastStatus.runtimeReadiness -eq 'PASS') {
+			return $lastStatus
+		}
+		Start-Sleep -Milliseconds $PollIntervalMs
+	} while ([DateTimeOffset]::UtcNow -lt $deadline)
+
+	return $lastStatus
+}
+
 $repositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 $bundle = [System.IO.Path]::GetFullPath($BundlePath)
 Assert-Condition ((Test-Path -LiteralPath $bundle -PathType Leaf) -or (Test-Path -LiteralPath $bundle -PathType Container)) "Qualification bundle was not found at '$bundle'."
@@ -45,9 +68,9 @@ try {
 	Assert-Condition ([string]$restart.runtimeReadiness -eq 'PASS') "Managed lifecycle Restart did not re-qualify runtime readiness."
 	Assert-Condition ([int]$restart.controlProcessId -ne [int]$start.controlProcessId) "Managed lifecycle Restart did not create a new ControlHost process identity."
 
-	$statusAfterRestart = & $lifecycle -Action Status -InstallPath $install -WorkPath $workRoot -InstanceId $instanceId -QualificationMode
-	Assert-Condition ([string]$statusAfterRestart.status -eq 'PASS') "Managed lifecycle Status after restart did not return PASS."
-	Assert-Condition ([string]$statusAfterRestart.runtimeReadiness -eq 'PASS') "Managed lifecycle Status after restart did not return runtimeReadiness PASS."
+	$statusAfterRestart = Wait-ForManagedStatus -LifecyclePath $lifecycle -InstallRoot $install -LifecycleWorkRoot $workRoot -ManagedInstanceId $instanceId
+	Assert-Condition ([string]$statusAfterRestart.status -eq 'PASS') "Managed lifecycle Status after restart did not return PASS within the bounded settle window. Last checks: $($statusAfterRestart.checks | ConvertTo-Json -Compress)."
+	Assert-Condition ([string]$statusAfterRestart.runtimeReadiness -eq 'PASS') "Managed lifecycle Status after restart did not return runtimeReadiness PASS within the bounded settle window."
 
 	$stop = & $lifecycle -Action Stop -InstallPath $install -WorkPath $workRoot -InstanceId $instanceId -QualificationMode
 	Assert-Condition ([string]$stop.status -eq 'PASS') "Managed lifecycle Stop did not return PASS."
