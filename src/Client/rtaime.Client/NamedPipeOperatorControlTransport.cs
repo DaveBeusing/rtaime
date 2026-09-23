@@ -216,6 +216,32 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		return ReadGraphicsOverlay(response);
 	}
 
+	public async ValueTask<IReadOnlyList<OperatorCompositingLayerDescriptor>> SetCompositingLayerStateAsync(
+		string layerId,
+		bool visible,
+		byte opacity,
+		CancellationToken cancellationToken = default)
+	{
+		if (string.IsNullOrWhiteSpace(layerId)) throw new ArgumentException("Compositing layer identity is required.", nameof(layerId));
+		var response = await ExchangeAsync(
+			"control.compositing.layer.set",
+			new WireCompositingLayerState(layerId.Trim(), visible, opacity),
+			cancellationToken).ConfigureAwait(false);
+		return ReadCompositingLayers(response);
+	}
+
+	public async ValueTask<IReadOnlyList<OperatorCompositingLayerDescriptor>> ReorderCompositingLayersAsync(
+		IReadOnlyList<string> orderedLayerIds,
+		CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(orderedLayerIds);
+		var response = await ExchangeAsync(
+			"control.compositing.layers.reorder",
+			new WireCompositingLayerOrder(orderedLayerIds.ToArray()),
+			cancellationToken).ConfigureAwait(false);
+		return ReadCompositingLayers(response);
+	}
+
 	public async ValueTask<OperatorRecordingCommandResult> StartRecordingAsync(
 		string destinationDirectory,
 		string fileName,
@@ -475,6 +501,22 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 			wire.Succeeded,
 			FromWire(wire.Snapshot),
 			wire.Failure is null ? null : new Failure(wire.Failure.Code, wire.Failure.Message));
+	}
+
+	private static IReadOnlyList<OperatorCompositingLayerDescriptor> ReadCompositingLayers(WireEnvelope response)
+	{
+		var wire = response.Payload.Deserialize<WireCompositingLayer[]>(Wire.JsonOptions)
+			?? throw new InvalidDataException("ControlHost compositing layer payload is required.");
+		return Array.AsReadOnly(wire.Select(layer => new OperatorCompositingLayerDescriptor(
+			layer.LayerId,
+			layer.Kind,
+			layer.Order,
+			layer.Visible,
+			layer.Opacity,
+			layer.PositionX,
+			layer.PositionY,
+			layer.Scale,
+			layer.ContentIdentity)).ToArray());
 	}
 
 	private static OperatorGraphicsOverlayDescriptor ReadGraphicsOverlay(WireEnvelope response)
@@ -797,6 +839,8 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 	private sealed record WireProductionCgText(string Text, string Typeface, string? FallbackTypeface, float FontSizePixels, WireCgColor Foreground, double PositionX, double PositionY, uint BoxWidth, uint BoxHeight, int Alignment, int Anchor, WireCgPanel Panel, bool Visible, int Layer, int ZOrder);
 	private sealed record WireProductionCgTextSnapshot(bool Active, string? Text, string? Typeface, string? ResolvedTypeface, float FontSizePixels, uint BoxWidth, uint BoxHeight, int Alignment, int Anchor, bool PanelEnabled, bool Visible, int Layer, int ZOrder, bool CacheHit, long RenderDurationTicks);
 	private sealed record WireGraphicsOverlayState(bool Visible, double PositionX, double PositionY, double Scale);
+	private sealed record WireCompositingLayerState(string LayerId, bool Visible, byte Opacity);
+	private sealed record WireCompositingLayerOrder(string[] LayerIds);
 	private sealed record WireGraphicsOverlay(bool AssetLoaded, string? AssetName, uint AssetWidth, uint AssetHeight, bool Visible, double PositionX, double PositionY, double Scale);
 	private sealed record WireCompositingLayer(string LayerId, int Kind, int Order, bool Visible, byte Opacity, double PositionX, double PositionY, double Scale, string ContentIdentity);
 	private sealed record WireAudioInputState(string SourceId, double Gain, bool Muted);
