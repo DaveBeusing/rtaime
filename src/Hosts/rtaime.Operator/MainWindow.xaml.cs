@@ -86,11 +86,14 @@ public partial class MainWindow : Window
 			viewModel.SynchronizeCommand,
 			new DispatcherSynchronizationContext(Dispatcher));
 		QuickControls = new OperatorQuickControlsViewModel(viewModel, MediaDeck, MediaPool, new OperatorQuickControlStore());
+		ShowControl = new ShowControlViewModel(client);
+		viewModel.ConfirmedShowControlSnapshot += ShowControl.ApplyConfirmedSnapshot;
 		Shortcuts = OperatorKeyboardCommandRegistry.Create(
 			viewModel,
 			MediaDeck,
 			Timeline,
 			Shell,
+			ShowControl,
 			new AsyncRelayCommand(FocusMediaSearchAsync));
 		Timeline.SelectionChanged += OnTimelineSelectionChanged;
 		Startup = new StartupLifecycleViewModel(
@@ -159,11 +162,14 @@ public partial class MainWindow : Window
 			viewModel.SynchronizeCommand,
 			new DispatcherSynchronizationContext(Dispatcher));
 		QuickControls = new OperatorQuickControlsViewModel(viewModel, MediaDeck, MediaPool, new OperatorQuickControlStore());
+		ShowControl = new ShowControlViewModel(client);
+		viewModel.ConfirmedShowControlSnapshot += ShowControl.ApplyConfirmedSnapshot;
 		Shortcuts = OperatorKeyboardCommandRegistry.Create(
 			viewModel,
 			MediaDeck,
 			Timeline,
 			Shell,
+			ShowControl,
 			new AsyncRelayCommand(FocusMediaSearchAsync));
 		Timeline.SelectionChanged += OnTimelineSelectionChanged;
 		Startup = new StartupLifecycleViewModel(
@@ -214,6 +220,7 @@ public partial class MainWindow : Window
 	public MediaPoolInspectorViewModel MediaPool { get; }
 	public CompositingGraphViewModel CompositingGraph { get; }
 	public OperatorQuickControlsViewModel QuickControls { get; }
+	public ShowControlViewModel ShowControl { get; }
 	public OperatorKeyboardCommandRegistry Shortcuts { get; }
 	public MediaTimelineViewModel Timeline => MediaDeck.Timeline;
 
