@@ -94,6 +94,7 @@ public sealed class CompositingGraphNodeViewModel : INotifyPropertyChanged
 			"composite" => "MERGE",
 			"recorder" => "RECORDER",
 			"preview-output" or "program-output" => "OUTPUT",
+			_ when projection.Kind == CompositingGraphNodeKind.Layer => "COMPOSITING LAYER",
 			_ when projection.Kind == CompositingGraphNodeKind.Source => "MEDIA INPUT",
 			_ => projection.Kind.ToString().ToUpperInvariant()
 		};
@@ -374,13 +375,25 @@ public sealed class CompositingGraphViewModel : INotifyPropertyChanged, IDisposa
 		Position("graphics", 40, graphicsY);
 		Position("routing", 330, 130);
 		Position("graphics-transform", 330, graphicsY);
+		var layerNodes = Nodes
+			.Where(node => node.Projection.Kind == CompositingGraphNodeKind.Layer)
+			.OrderBy(node => node.Id, StringComparer.Ordinal)
+			.ToArray();
+		for (var index = 0; index < layerNodes.Length; index++)
+		{
+			layerNodes[index].X = 330;
+			layerNodes[index].Y = Math.Max(280, graphicsY) + (index * 132);
+		}
 		Position("preview-output", 635, 60);
-		Position("composite", 635, Math.Max(250, graphicsY - 40));
-		Position("program-output", 940, Math.Max(250, graphicsY - 40));
-		Position("recorder", 1230, Math.Max(250, graphicsY - 40));
+		var compositeY = layerNodes.Length == 0
+			? Math.Max(250, graphicsY - 40)
+			: Math.Max(250, Math.Max(280, graphicsY) + ((layerNodes.Length - 1) * 66));
+		Position("composite", 635, compositeY);
+		Position("program-output", 940, compositeY);
+		Position("recorder", 1230, compositeY);
 
 		CanvasWidth = 1490;
-		CanvasHeight = Math.Max(650, graphicsY + 190);
+		CanvasHeight = Math.Max(650, graphicsY + 190 + Math.Max(0, layerNodes.Length - 1) * 132);
 		UpdateConnections();
 	}
 
@@ -486,7 +499,8 @@ public sealed class CompositingGraphViewModel : INotifyPropertyChanged, IDisposa
 			_operator.GraphicsPositionY,
 			_operator.GraphicsScale,
 			_operator.RecordingStatus,
-			_operator.RecordingError);
+			_operator.RecordingError,
+			_operator.CompositingLayers);
 
 	private void SelectNode(CompositingGraphNodeViewModel node)
 	{
@@ -545,6 +559,7 @@ public sealed class CompositingGraphViewModel : INotifyPropertyChanged, IDisposa
 			nameof(OperatorViewModel.GraphicsPositionX) or
 			nameof(OperatorViewModel.GraphicsPositionY) or
 			nameof(OperatorViewModel.GraphicsScale) or
+			nameof(OperatorViewModel.CompositingLayers) or
 			nameof(OperatorViewModel.RecordingStatus) or
 			nameof(OperatorViewModel.RecordingError))
 		{
