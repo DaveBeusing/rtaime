@@ -510,21 +510,75 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 					null);
 			}
 
-			var prepare = _runtime.Prepare(preparedExecution);
+			var rollbackCompositing = preparedExecution.CompositingState is null
+				? null
+				: CapturePreparedCompositingStateUnsafe();
+			var compositingStaged = false;
+			if (preparedExecution.CompositingState is not null)
+			{
+				try
+				{
+					compositingStaged = true;
+					ApplyPreparedCompositingStateUnsafe(preparedExecution.CompositingState, observe: false);
+				}
+				catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or OverflowException)
+				{
+					RestorePreparedCompositingStateUnsafe(rollbackCompositing);
+					var failure = new Failure(
+						"runtime.compositing.stage_failed",
+						$"Prepared compositing state could not be staged: {exception.GetType().Name}.");
+					Observe($"runtime.prepare.rejected:{failure.Code}");
+					return new RuntimeHostApplyResult(
+						new RuntimePrepareResult(
+							RuntimeContractVersion.Current,
+							preparedExecution.PreparedExecutionId,
+							RuntimePrepareStatus.Rejected,
+							null,
+							failure),
+						null,
+						null);
+				}
+			}
+
+			RuntimePrepareResult prepare;
+			try
+			{
+				prepare = _runtime.Prepare(preparedExecution);
+			}
+			catch
+			{
+				if (compositingStaged)
+					RestorePreparedCompositingStateUnsafe(rollbackCompositing);
+				throw;
+			}
 			if (prepare.Status != RuntimePrepareStatus.Prepared)
 			{
+				if (compositingStaged)
+					RestorePreparedCompositingStateUnsafe(rollbackCompositing);
 				Observe($"runtime.prepare.rejected:{prepare.Failure?.Code}");
 				return new RuntimeHostApplyResult(prepare, null, null);
 			}
 
-			var commit = _runtime.Commit(new RuntimeCommitRequest(
-				RuntimeContractVersion.Current,
-				preparedExecution.PreparedExecutionId,
-				prepare.ReservationId!.Value,
-				_runtime.State.ExecutionRevision));
+			RuntimeCommitResult commit;
+			try
+			{
+				commit = _runtime.Commit(new RuntimeCommitRequest(
+					RuntimeContractVersion.Current,
+					preparedExecution.PreparedExecutionId,
+					prepare.ReservationId!.Value,
+					_runtime.State.ExecutionRevision));
+			}
+			catch
+			{
+				if (compositingStaged)
+					RestorePreparedCompositingStateUnsafe(rollbackCompositing);
+				throw;
+			}
 
 			if (commit.Status != RuntimeCommitStatus.Committed)
 			{
+				if (compositingStaged)
+					RestorePreparedCompositingStateUnsafe(rollbackCompositing);
 				Observe($"runtime.commit.rejected:{commit.Failure?.Code}");
 				return new RuntimeHostApplyResult(prepare, commit, null);
 			}
@@ -547,7 +601,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				_auxFailure = null;
 			}
 			_transition = transition is null ? null : new AnchoredTransition(transition, _nextSequenceNumber);
-			ApplyPreparedCompositingStateUnsafe(preparedExecution.CompositingState);
+			if (compositingStaged)
+				Observe($"compositing.scene.applied:{string.Join(",", preparedExecution.CompositingState!.Layers.Select(layer => layer.LayerId))}");
 			Observe($"runtime.commit.committed:{commit.ExecutionRevision}");
 			if (transition is not null)
 				Observe($"runtime.transition.anchored:{transition.Kind}:{_nextSequenceNumber}:{transition.DurationFrames}");
@@ -1023,7 +1078,29 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		return null;
 	}
 
-	private void ApplyPreparedCompositingStateUnsafe(PreparedCompositingState? state)
+	private PreparedCompositingState CapturePreparedCompositingStateUnsafe() =>
+		new(
+			PreparedCompositingState.CurrentVersion,
+			CompositingLayerSnapshotsUnsafe()
+				.Select(layer => new PreparedCompositingLayerState(
+					layer.LayerId,
+					(PreparedCompositingLayerKind)(int)layer.Kind,
+					layer.Order,
+					layer.Visible,
+					layer.Opacity,
+					layer.PositionX,
+					layer.PositionY,
+					layer.Scale,
+					layer.ContentIdentity))
+				.ToArray());
+
+	private void RestorePreparedCompositingStateUnsafe(PreparedCompositingState? state)
+	{
+		if (state is not null)
+			ApplyPreparedCompositingStateUnsafe(state, observe: false);
+	}
+
+	private void ApplyPreparedCompositingStateUnsafe(PreparedCompositingState? state, bool observe = true)
 	{
 		if (state is null)
 			return;
@@ -1057,7 +1134,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			}
 		}
 
-		Observe($"compositing.scene.applied:{string.Join(",", state.Layers.Select(layer => layer.LayerId))}");
+		if (observe)
+			Observe($"compositing.scene.applied:{string.Join(",", state.Layers.Select(layer => layer.LayerId))}");
 	}
 
 	public void SetTimingHealth(V1TimingHealthState state)
