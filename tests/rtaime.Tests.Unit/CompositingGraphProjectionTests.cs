@@ -96,13 +96,13 @@ public sealed class CompositingGraphProjectionTests
 
 		Assert.Equal(
 			CompositingGraphHealth.Error,
-			Assert.Single(graph.Nodes.Where(node => node.Id == "source:camera-a")).Health);
+			Assert.Single(graph.Nodes, node => node.Id == "source:camera-a").Health);
 		Assert.Equal(
 			CompositingGraphHealth.Error,
-			Assert.Single(graph.Nodes.Where(node => node.Id == "composite")).Health);
+			Assert.Single(graph.Nodes, node => node.Id == "composite").Health);
 		Assert.Equal(
 			CompositingGraphHealth.Error,
-			Assert.Single(graph.Nodes.Where(node => node.Id == "program-output")).Health);
+			Assert.Single(graph.Nodes, node => node.Id == "program-output").Health);
 	}
 
 	[Fact]
