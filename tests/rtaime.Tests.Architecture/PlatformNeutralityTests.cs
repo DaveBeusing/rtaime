@@ -27,6 +27,10 @@ public sealed class PlatformNeutralityTests
 			["rtaime.AppHost"] = new HashSet<string>(StringComparer.Ordinal)
 			{
 				"Microsoft.Extensions.Hosting.WindowsServices"
+			},
+			["rtaime.RuntimeHost"] = new HashSet<string>(StringComparer.Ordinal)
+			{
+				"System.Drawing.Common"
 			}
 		};
 

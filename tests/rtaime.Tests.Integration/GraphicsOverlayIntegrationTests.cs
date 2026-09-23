@@ -89,9 +89,11 @@ public sealed class GraphicsOverlayIntegrationTests
 		var program = fixture.Runtime.ProcessNextBoundary();
 		var originX = (int)Math.Round(definition.PositionX * (fixture.Format.Width - 1));
 		var originY = (int)Math.Round(definition.PositionY * (fixture.Format.Height - 1)) - (int)definition.BoxHeight;
+		var sampleX = originX + checked((int)(definition.BoxWidth / 2));
+		var sampleY = originY + checked((int)(definition.BoxHeight / 2));
 		Assert.NotEqual(
-			Pixel(baseline.ProgramPixels, fixture.Format, originX + 2, originY + 2),
-			Pixel(program.ProgramPixels, fixture.Format, originX + 2, originY + 2));
+			Pixel(baseline.ProgramPixels, fixture.Format, sampleX, sampleY),
+			Pixel(program.ProgramPixels, fixture.Format, sampleX, sampleY));
 
 		fixture.Runtime.ApplyProductionCgText(definition);
 		Assert.True(fixture.Runtime.Snapshot.ProductionCgText!.CacheHit);
@@ -102,8 +104,8 @@ public sealed class GraphicsOverlayIntegrationTests
 		var hidden = fixture.Runtime.ProcessNextBoundary();
 		Assert.False(fixture.Runtime.Snapshot.ProductionCgText!.Visible);
 		Assert.Equal(
-			Pixel(baseline.ProgramPixels, fixture.Format, originX + 2, originY + 2),
-			Pixel(hidden.ProgramPixels, fixture.Format, originX + 2, originY + 2));
+			Pixel(baseline.ProgramPixels, fixture.Format, sampleX, sampleY),
+			Pixel(hidden.ProgramPixels, fixture.Format, sampleX, sampleY));
 	}
 
 	[Fact]
