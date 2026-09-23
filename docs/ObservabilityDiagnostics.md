@@ -57,7 +57,7 @@ For a local debugging session, start with the newest session directory, inspect 
 
 ## Diagnostics support bundle export
 
-The Operator technical-details surface provides an explicit **EXPORT SUPPORT BUNDLE** action. Export is on demand and observational only; creating a bundle does not issue production commands, restart a host, alter Runtime state or introduce a new polling loop.
+The Operator provides an explicit **EXPORT SUPPORT BUNDLE** action both in startup technical details and in the steady-state System workspace, so support collection remains available after normal startup completes. Export is on demand and observational only; creating a bundle does not issue production commands, restart a host, alter Runtime state or introduce a new polling loop.
 
 The exported ZIP contains the currently available diagnostic evidence for the active correlated logging session:
 
