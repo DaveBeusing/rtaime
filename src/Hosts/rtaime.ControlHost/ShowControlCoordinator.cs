@@ -502,6 +502,7 @@ public sealed class ShowControlCoordinator : IAsyncDisposable
 				if (action.Kind == ShowControlActionKind.JumpMediaCue)
 					_ = Identity.Parse(action.MediaCuePointId!);
 				break;
+			}
 		}
 	}
 
