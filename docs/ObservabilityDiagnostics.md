@@ -23,6 +23,38 @@ The support snapshot format is intentionally metadata-only. It must never contai
 
 Snapshot creation is on demand. No per-frame disk write is introduced.
 
+## Structured host logs
+
+All executable hosts write the same structured JSON Lines format through `rtaime.Core.HostLog`:
+
+- `AppHost`
+- `ControlHost`
+- `RuntimeHost`
+- `AIHost`
+- `Operator`
+
+A normal AppHost launch creates one log session and publishes `RTAIME_LOG_SESSION_ID` plus `RTAIME_LOG_ROOT` to the child-process environment. ControlHost-supervised RuntimeHost and AIHost processes therefore inherit the same session identifier. The Operator started by AppHost does the same. A single application run can consequently be reconstructed across process boundaries by sorting all records in the session directory by `timestampUtc`.
+
+Interactive runs default to `%LOCALAPPDATA%\rtaime\logs\<session-id>\`. Windows service or externally managed engine runs default to `<state-root>\logs\<session-id>\`, where the default state root is under `%PROGRAMDATA%\rtaime`. `--log-root` or `RTAIME_LOG_ROOT` can override the root explicitly.
+
+Each `.jsonl` record carries schema version, UTC timestamp, per-process sequence, severity, host, process ID, managed thread ID, session ID, optional instance ID, category, stable event code, message, sanitized dimensions and optional sanitized exception type/message/detail. Files remain readable while the process is running.
+
+The default file limit is 16 MiB per segment. A new segment is opened before the next record would exceed that limit. Session directories whose newest JSONL file is older than 14 days are removed on a later host start. Both values are bounded and configurable:
+
+- `RTAIME_LOG_LEVEL` / `--log-level`: `Trace`, `Information`, `Warning`, `Error`, `Critical`;
+- `RTAIME_LOG_MAX_FILE_MB` / `--log-max-file-mb`: 1–256 MiB;
+- `RTAIME_LOG_RETENTION_DAYS` / `--log-retention-days`: 1–90 days;
+- `RTAIME_LOG_SESSION_ID` / `--log-session-id`: optional stable session identifier;
+- `RTAIME_LOG_ROOT` / `--log-root`: explicit log root.
+
+Logging is best-effort. A directory, permission or file-system failure does not become a production failure; the logger disables the file writer temporarily, emits a minimal stderr diagnostic where possible and retries later. Unhandled process exceptions and unobserved task exceptions are captured through common process-level hooks. Host entry points additionally log configuration admission, lifecycle/readiness transitions, managed-child supervision where applicable, graceful stop signals and terminal failures.
+
+The Operator keeps its human-readable crash report for immediate support workflows, but stores it in the active structured-log session directory and applies the shared redaction policy. The structured `operator.dispatcher-unhandled-exception` record is the machine-readable correlate.
+
+Structured host logs remain outside the real-time execution path. Runtime frame processing, media callbacks, GPU work and inference execution must never write a file log per frame. High-rate state remains in existing bounded counters/snapshots; host files record lifecycle, configuration, transition, recovery and failure evidence only.
+
+For a local debugging session, start with the newest session directory, inspect `AppHost` for launch/lifecycle context, then correlate `ControlHost`, `RuntimeHost`, `AIHost` and `Operator` records by `timestampUtc`, `sessionId`, process ID and stable event code. Exceptions retain bounded stack detail after redaction, so the original process and failure boundary can be identified without relying only on a final crash file.
+
 ## Host projections
 
 ### ControlHost
