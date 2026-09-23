@@ -193,6 +193,69 @@ public sealed class DiagnosticsTests
 	}
 
 	[Fact]
+	public void Host_log_rotates_before_exceeding_configured_segment_limit()
+	{
+		var root = Path.Combine(Path.GetTempPath(), "rtaime-host-log-tests", Guid.NewGuid().ToString("N"));
+		try
+		{
+			using (var log = HostLog.Open(
+				"RuntimeHost",
+				new[]
+				{
+					$"--log-root={root}",
+					"--log-session-id=rotation-test",
+					"--log-max-file-mb=1"
+				},
+				publishEnvironment: false))
+			{
+				var dimensions = Enumerable.Range(0, 32)
+					.ToDictionary(index => $"field-{index:00}", _ => new string('x', 512), StringComparer.Ordinal);
+				for (var index = 0; index < 96; index++)
+					log.Information("rotation", "rotation.test", $"Rotation record {index}.", dimensions);
+			}
+
+			var files = Directory.GetFiles(Path.Combine(root, "rotation-test"), "*.jsonl");
+			Assert.True(files.Length >= 2);
+			Assert.All(files, file => Assert.True(new FileInfo(file).Length <= 1024L * 1024L));
+		}
+		finally
+		{
+			try { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); } catch (IOException) { }
+		}
+	}
+
+	[Fact]
+	public void Host_log_prunes_expired_inactive_sessions()
+	{
+		var root = Path.Combine(Path.GetTempPath(), "rtaime-host-log-tests", Guid.NewGuid().ToString("N"));
+		var expiredSession = Path.Combine(root, "expired-session");
+		Directory.CreateDirectory(expiredSession);
+		var expiredFile = Path.Combine(expiredSession, "rtaime-runtimehost-expired-000.jsonl");
+		File.WriteAllText(expiredFile, "{}");
+		File.SetLastWriteTimeUtc(expiredFile, DateTime.UtcNow.AddDays(-10));
+
+		try
+		{
+			using var log = HostLog.Open(
+				"ControlHost",
+				new[]
+				{
+					$"--log-root={root}",
+					"--log-session-id=current-session",
+					"--log-retention-days=1"
+				},
+				publishEnvironment: false);
+
+			Assert.False(Directory.Exists(expiredSession));
+			Assert.True(Directory.Exists(log.SessionDirectory));
+		}
+		finally
+		{
+			try { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); } catch (IOException) { }
+		}
+	}
+
+	[Fact]
 	public void Product_build_info_uses_informational_version_without_source_revision_suffix()
 	{
 		var build = ProductBuildInfo.FromAssembly(typeof(DiagnosticsTests).Assembly);
