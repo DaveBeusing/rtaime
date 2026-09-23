@@ -227,27 +227,31 @@ Graphics commands follow **Operator → rtaime.Client → ControlHost → Runtim
 
 The graphics mutation seam is intentionally separate from production routing revisions. Loading or positioning a logo does not invent a new Preview/Program routing revision, while RuntimeHost remains the execution owner of the confirmed graphics state.
 
-RuntimeHost materializes the selected asset into a transparent full-frame RGBA layer when the asset or placement changes. The frame hot path only materializes the already-prepared GPU layer. Existing GPU alpha compositing therefore remains the single render path for both managed-reference and CUDA backends.
+RuntimeHost materializes bitmap and Production CG content into independent transparent full-frame RGBA sources when their prepared content or placement changes. The frame hot path materializes only currently visible sources and submits them as one bounded ordered layer request. Existing GPU alpha compositing remains the single render path for both managed-reference and CUDA backends.
 
-The render order remains:
+The render order is:
 
 1. resolve CUT/DISSOLVE;
-2. composite the active graphics layer over the transitioned background;
-3. read the final Program pixels;
-4. publish Program monitoring;
-5. stage those same Program pixels for recording.
+2. materialize visible governed layers;
+3. sort by confirmed layer order and stable identity;
+4. composite each layer over the transitioned background;
+5. read the final Program pixels;
+6. publish Program monitoring;
+7. stage those same Program pixels for recording.
+
+The current layer budget is eight active provider layers. Stable Runtime evidence exposes layer identity, kind, order, visibility, opacity, transform and content identity. The Runtime performance snapshot additionally reports the last measured composition duration and active composition layer count; these observations are evidence, not hardware qualification.
 
 This means Program monitoring and recording observe the same post-graphics image rather than independent approximations.
 
 ### Recovery and persistence boundary
 
-Graphics & Overlay Operator Workflow still does not add durable graphics rundown persistence. Bitmap asset and placement remain RuntimeHost process state and a RuntimeHost restart clears them.
+Graphics & Overlay Operator Workflow still does not add durable graphics rundown persistence across a ControlHost restart.
 
-Production CG text has a narrower recovery guarantee: ControlHost retains the last successfully confirmed CG definition for its current process lifetime. After a RuntimeHost restart and authority reconciliation, ControlHost reapplies that definition and Operator resynchronizes to the restored Runtime state. A ControlHost restart still does not durably restore CG rundown state.
+For RuntimeHost replacement/restart, ControlHost now retains the confirmed in-process recovery state for bitmap content/placement, Production CG definition, layer visibility/opacity and layer order. After authority reconciliation it restores available graphics content and then reapplies the retained order against the new Runtime layer set. Operator resynchronizes from the resulting Runtime-confirmed snapshot; it does not infer restoration locally.
 
 ### Production CG lower third
 
-The Graphics workspace now provides a governed Production CG lower-third editor. Text, primary typeface, explicit fallback typeface and font size are submitted through **Operator → rtaime.Client → ControlHost → RuntimeHost**. RuntimeHost rasterizes the bounded text surface and feeds it into the same existing Program graphics compositor used by bitmap overlays.
+The Graphics workspace provides a governed Production CG lower-third editor. Text, primary typeface, explicit fallback typeface and font size are submitted through **Operator → rtaime.Client → ControlHost → RuntimeHost**. RuntimeHost rasterizes the bounded text surface into its dedicated CG source and feeds it into the same ordered Program compositor used by bitmap overlays. Bitmap and CG can therefore coexist concurrently rather than replacing one another.
 
 Font resolution is fail-closed: RuntimeHost uses the requested installed family, then only the explicitly configured fallback family. Missing primary and fallback fonts reject the command rather than silently changing Production appearance.
 
@@ -259,12 +263,14 @@ See [ProductionCgTextRendering.md](ProductionCgTextRendering.md) for the complet
 
 - bounded graphics-asset validation covers dimensions and exact RGBA payload length;
 - Runtime integration tests cover bitmap alpha, show/hide, position, scale and persistence across DISSOLVE frames;
+- managed-reference tests prove deterministic ordered multi-layer alpha composition, bounded layer count, invalid duplicate rejection and intermediate-surface cleanup;
 - Production CG tests cover Runtime rasterization, alpha composition, explicit font fallback, missing-font failure and bounded surface reuse;
+- bitmap + Production CG integration proves concurrent composition in one Runtime-owned ordered stack;
 - recording integration evidence verifies that the recorded video payload exactly equals the post-graphics Program pixels;
-- real process-boundary integration verifies Operator/Client → ControlHost → RuntimeHost graphics state;
-- RuntimeHost recovery reapplies the retained ControlHost CG definition;
+- real process-boundary integration verifies Operator/Client → ControlHost → RuntimeHost graphics state and bounded layer mutations;
+- RuntimeHost restart recovery restores retained bitmap + CG content, layer state and ordering;
 - graphics state changes do not advance authoritative Preview/Program routing revision;
-- Operator UI policy verifies PNG decoding, the CG editor and the Client-SDK-only authority boundary while prohibiting local WPF Production text rendering.
+- Operator UI policy verifies custom-control layer operations and the Client-SDK-only authority boundary while prohibiting local WPF Production rendering.
 
 ## Audio Operator Workflow
 
