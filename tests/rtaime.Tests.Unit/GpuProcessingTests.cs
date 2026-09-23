@@ -172,9 +172,32 @@ public sealed class GpuProcessingTests
         Assert.True(result.Succeeded, result.Failure?.ToString());
         Assert.Equal(2, result.LayerCount);
         Assert.True(result.Duration >= TimeSpan.Zero);
-        using var output = result.Frame!;
+        var output = result.Frame!;
         AssertPixel(provider.Readback(output), red: 64, green: 128, blue: 0, alpha: 255);
         Assert.Equal(5, backend.ActiveAllocationCount);
+        output.Dispose();
+        Assert.Equal(4, backend.ActiveAllocationCount);
+    }
+
+    [Fact]
+    public void Compositor_rejects_duplicate_layer_surfaces()
+    {
+        using var provider = new GpuProcessingProvider(new ManagedReferenceGpuBackend());
+        provider.Start();
+
+        using var backgroundA = Upload(provider, SourceA, Solid(0, 0, 0, 255), 0);
+        using var backgroundB = Upload(provider, SourceB, Solid(0, 0, 0, 255), 0);
+        using var layer = Upload(provider, LayerSource, Solid(255, 255, 255, 255), 0);
+
+        var result = provider.Composite(GpuCompositeRequest.WithLayers(
+            OutputSource,
+            backgroundA,
+            backgroundB,
+            GpuTransition.CutToA,
+            new[] { new GpuKeyLayer(layer), new GpuKeyLayer(layer) }));
+
+        Assert.False(result.Succeeded);
+        Assert.Equal("gpu.composite.layer_duplicate", result.Failure?.Code);
     }
 
     [Fact]
