@@ -139,6 +139,94 @@ public sealed class GraphicsOverlayIntegrationTests
 	}
 
 	[Fact]
+	public async Task Prepared_scene_compositing_is_applied_with_the_runtime_commit()
+	{
+		await using var fixture = await Fixture.CreateAsync(new CollectingRecordingWriter());
+		fixture.Runtime.LoadGraphicsOverlay("scene-logo.rgba", 1, 1, new byte[] { 255, 0, 0, 255 });
+		var execution = fixture.Control.PrepareCurrentExecution();
+		var compositing = new PreparedCompositingState(
+			PreparedCompositingState.CurrentVersion,
+			new[]
+			{
+				new PreparedCompositingLayerState(
+					V1RuntimeHostService.BitmapGraphicsLayerId,
+					PreparedCompositingLayerKind.BitmapGraphics,
+					0,
+					true,
+					128,
+					0.25,
+					0.20,
+					1.5,
+					"scene-logo.rgba")
+			});
+		var prepared = new PreparedExecutionContract(
+			execution.PreparedExecution.Version,
+			PreparedExecutionId.New(),
+			execution.PreparedExecution.AuthoritySnapshot,
+			execution.PreparedExecution.PlanGeneration,
+			execution.PreparedExecution.Bindings,
+			compositing);
+
+		var applied = fixture.Runtime.ApplyExecution(prepared, execution.ProgramSinkId);
+
+		Assert.True(applied.Committed, applied.Commit?.Failure?.ToString() ?? applied.Prepare.Failure?.ToString());
+		var bitmap = Assert.Single(fixture.Runtime.Snapshot.CompositingLayers!, layer =>
+			layer.LayerId == V1RuntimeHostService.BitmapGraphicsLayerId);
+		Assert.True(bitmap.Visible);
+		Assert.Equal(128, bitmap.Opacity);
+		Assert.Equal(0.25, bitmap.PositionX, 6);
+		Assert.Equal(0.20, bitmap.PositionY, 6);
+		Assert.Equal(1.5, bitmap.Scale, 6);
+	}
+
+	[Fact]
+	public async Task Missing_scene_compositing_resource_rejects_prepare_without_partial_runtime_state()
+	{
+		await using var fixture = await Fixture.CreateAsync(new CollectingRecordingWriter());
+		fixture.Runtime.LoadGraphicsOverlay("loaded-logo.rgba", 1, 1, new byte[] { 255, 0, 0, 255 });
+		fixture.Runtime.SetGraphicsOverlay(true, 0.10, 0.20, 1.25);
+		fixture.Runtime.SetCompositingLayerState(V1RuntimeHostService.BitmapGraphicsLayerId, true, 192);
+		var before = fixture.Runtime.Snapshot;
+		var execution = fixture.Control.PrepareCurrentExecution();
+		var compositing = new PreparedCompositingState(
+			PreparedCompositingState.CurrentVersion,
+			new[]
+			{
+				new PreparedCompositingLayerState(
+					V1RuntimeHostService.BitmapGraphicsLayerId,
+					PreparedCompositingLayerKind.BitmapGraphics,
+					0,
+					false,
+					64,
+					0.80,
+					0.70,
+					2.0,
+					"different-logo.rgba")
+			});
+		var prepared = new PreparedExecutionContract(
+			execution.PreparedExecution.Version,
+			PreparedExecutionId.New(),
+			execution.PreparedExecution.AuthoritySnapshot,
+			execution.PreparedExecution.PlanGeneration,
+			execution.PreparedExecution.Bindings,
+			compositing);
+
+		var applied = fixture.Runtime.ApplyExecution(prepared, execution.ProgramSinkId);
+
+		Assert.False(applied.Committed);
+		Assert.Equal(RuntimePrepareStatus.Rejected, applied.Prepare.Status);
+		Assert.Null(applied.Commit);
+		Assert.Equal(before.Runtime.ExecutionRevision, fixture.Runtime.Snapshot.Runtime.ExecutionRevision);
+		var bitmap = Assert.Single(fixture.Runtime.Snapshot.CompositingLayers!, layer =>
+			layer.LayerId == V1RuntimeHostService.BitmapGraphicsLayerId);
+		Assert.True(bitmap.Visible);
+		Assert.Equal(192, bitmap.Opacity);
+		Assert.Equal(0.10, bitmap.PositionX, 6);
+		Assert.Equal(0.20, bitmap.PositionY, 6);
+		Assert.Equal(1.25, bitmap.Scale, 6);
+	}
+
+	[Fact]
 	public async Task Production_CG_text_is_runtime_rendered_composited_and_cached()
 	{
 		if (!OperatingSystem.IsWindows())
