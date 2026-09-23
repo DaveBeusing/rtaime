@@ -143,7 +143,6 @@ public sealed class ShowControlExecutionMachine
 
 	public ShowControlExecutionSnapshot Fail(Failure failure)
 	{
-		ArgumentNullException.ThrowIfNull(failure);
 		if (_snapshot.State is not (ShowControlExecutionState.Executing or ShowControlExecutionState.Waiting))
 			throw new InvalidOperationException("Only active show-control execution can fail.");
 
