@@ -366,20 +366,9 @@ public sealed class HostLog : IDisposable
 		return new HostLogException(
 			exception.GetType().FullName ?? exception.GetType().Name,
 			DiagnosticRedactor.RedactText(exception.Message),
-			SanitizeExceptionDetail(exception.ToString()));
+			DiagnosticRedactor.RedactExceptionDetail(exception.ToString()));
 	}
 
-	private static string SanitizeExceptionDetail(string value)
-	{
-		const int maximumLines = 96;
-		var normalized = value.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n');
-		var lines = normalized.Split('\n');
-		var retained = lines.Take(maximumLines).Select(DiagnosticRedactor.RedactText);
-		var result = string.Join(Environment.NewLine, retained);
-		return lines.Length <= maximumLines
-			? result
-			: result + Environment.NewLine + "[TRUNCATED]";
-	}
 
 	private static string ResolveLogRoot(IReadOnlyList<string> args)
 	{
