@@ -860,6 +860,85 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		}
 	}
 
+	public IReadOnlyList<V1CompositingLayerSnapshot> SetCompositingLayerState(
+		string layerId,
+		bool visible,
+		byte opacity)
+	{
+		if (string.IsNullOrWhiteSpace(layerId))
+			throw new ArgumentException("Compositing layer identity is required.", nameof(layerId));
+
+		lock (_gate)
+		{
+			ThrowIfDisposed();
+			switch (layerId.Trim())
+			{
+				case BitmapGraphicsLayerId:
+					if (_operatorGraphicsAsset is null)
+						throw new InvalidOperationException("Bitmap graphics layer is not loaded.");
+					_operatorGraphicsVisible = visible;
+					_operatorGraphicsOpacity = opacity;
+					break;
+				case ProductionCgLayerId:
+					if (_productionCgDefinition is null || _productionCgAsset is null)
+						throw new InvalidOperationException("Production CG layer is not active.");
+					_productionCgDefinition = _productionCgDefinition with { Visible = visible };
+					_productionCgText = _productionCgText with { Visible = visible };
+					_productionCgOpacity = opacity;
+					break;
+				case LegacyVisualLayerId:
+					throw new NotSupportedException("Legacy visual layer state remains governed by the existing visual-layer command.");
+				default:
+					throw new ArgumentOutOfRangeException(nameof(layerId), "Unknown compositing layer identity.");
+			}
+			Observe($"compositing.layer.state:{layerId.Trim()}:{visible}:{opacity}");
+			return CompositingLayerSnapshotsUnsafe();
+		}
+	}
+
+	public IReadOnlyList<V1CompositingLayerSnapshot> ReorderCompositingLayers(IReadOnlyList<string> orderedLayerIds)
+	{
+		ArgumentNullException.ThrowIfNull(orderedLayerIds);
+		lock (_gate)
+		{
+			ThrowIfDisposed();
+			var active = CompositingLayerSnapshotsUnsafe().Select(layer => layer.LayerId).ToArray();
+			if (orderedLayerIds.Count != active.Length || orderedLayerIds.Count > GpuCompositeLimits.MaxActiveLayers)
+				throw new ArgumentException("Compositing reorder must contain every active layer exactly once.", nameof(orderedLayerIds));
+
+			var normalized = orderedLayerIds.Select(layerId =>
+			{
+				if (string.IsNullOrWhiteSpace(layerId))
+					throw new ArgumentException("Compositing reorder contains an empty layer identity.", nameof(orderedLayerIds));
+				return layerId.Trim();
+			}).ToArray();
+			if (normalized.Distinct(StringComparer.Ordinal).Count() != normalized.Length ||
+				active.Except(normalized, StringComparer.Ordinal).Any() ||
+				normalized.Except(active, StringComparer.Ordinal).Any())
+			{
+				throw new ArgumentException("Compositing reorder contains duplicate, missing, or unknown layers.", nameof(orderedLayerIds));
+			}
+
+			for (var index = 0; index < normalized.Length; index++)
+			{
+				switch (normalized[index])
+				{
+					case LegacyVisualLayerId:
+						_legacyVisualLayerOrder = index;
+						break;
+					case BitmapGraphicsLayerId:
+						_operatorGraphicsLayerOrder = index;
+						break;
+					case ProductionCgLayerId:
+						_productionCgLayerOrder = index;
+						break;
+				}
+			}
+			Observe($"compositing.layers.reordered:{string.Join(",", normalized)}");
+			return CompositingLayerSnapshotsUnsafe();
+		}
+	}
+
 	public void SetTimingHealth(V1TimingHealthState state)
 	{
 		if (!Enum.IsDefined(typeof(V1TimingHealthState), state)) throw new ArgumentOutOfRangeException(nameof(state));
