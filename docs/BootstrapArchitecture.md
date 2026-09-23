@@ -83,7 +83,7 @@ Key rules include:
 - Contracts depend only on approved inward semantics.
 - Control does not reference Runtime/Media/AI implementations, Persistence, Operator, or concrete providers.
 - Runtime does not reference Control, Persistence, Operator, or concrete providers.
-- Operator reaches production only through `rtaime.Client`.
+- Operator reaches production only through `rtaime.Client`; a direct `rtaime.Core` reference is permitted only for dependency-neutral cross-cutting diagnostics.
 - Production projects cannot reference tests.
 - Hosts cannot reference other hosts.
 - Core/contracts remain package-neutral in the bootstrap.
@@ -109,7 +109,7 @@ These checks complement, rather than replace, the architecture test suite.
 - production-to-test prohibition;
 - Core/contract boundaries;
 - Control and Runtime implementation boundaries;
-- Operator-through-Client boundary;
+- Operator-through-Client production boundary with Core-only cross-cutting diagnostics;
 - host-to-host prohibition;
 - Core/contract package neutrality;
 - initial production package neutrality;
