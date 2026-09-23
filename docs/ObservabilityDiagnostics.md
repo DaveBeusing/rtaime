@@ -37,7 +37,7 @@ A normal AppHost launch creates one log session and publishes `RTAIME_LOG_SESSIO
 
 Interactive runs default to `%LOCALAPPDATA%\rtaime\logs\<session-id>\`. Windows service or externally managed engine runs default to `<state-root>\logs\<session-id>\`, where the default state root is under `%PROGRAMDATA%\rtaime`. `--log-root` or `RTAIME_LOG_ROOT` can override the root explicitly.
 
-Each `.jsonl` record carries schema version, UTC timestamp, per-process sequence, severity, host, process ID, managed thread ID, session ID, optional instance ID, category, stable event code, message, sanitized dimensions and optional sanitized exception type/message/detail. Files remain readable while the process is running.
+Each `.jsonl` record carries schema version, UTC timestamp, per-process sequence, severity, host, process ID, managed thread ID, session ID, optional instance ID, category, stable event code, message, sanitized dimensions and optional sanitized exception type/message/detail. Files remain live-tail readable while the process is running, and active writer handles deliberately deny delete-sharing so retention cannot remove an in-use session.
 
 The default file limit is 16 MiB per segment. A new segment is opened before the next record would exceed that limit. Session directories whose newest JSONL file is older than 14 days are removed on a later host start. Both values are bounded and configurable:
 
