@@ -334,7 +334,11 @@ public sealed class HostLog : IDisposable
 
 				try
 				{
-					if (Directory.GetLastWriteTimeUtc(directory) < cutoffUtc)
+					var newestWriteUtc = Directory.EnumerateFiles(directory, "*.jsonl", SearchOption.TopDirectoryOnly)
+						.Select(File.GetLastWriteTimeUtc)
+						.DefaultIfEmpty(Directory.GetLastWriteTimeUtc(directory))
+						.Max();
+					if (newestWriteUtc < cutoffUtc)
 						Directory.Delete(directory, recursive: true);
 				}
 				catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
