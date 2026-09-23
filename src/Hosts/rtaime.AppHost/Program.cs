@@ -153,7 +153,7 @@ internal static class Program
 				? string.Empty
 				: $" diagnostics=\"{diagnosticPath}\"";
 			Console.Error.WriteLine(
-				$"app=rtaime state=FAILED detail=\"{exception.Message}\"{diagnosticSuffix}");
+				$"app=rtaime state=FAILED detail=\"{DiagnosticRedactor.RedactText(exception.Message)}\"{diagnosticSuffix}");
 		}
 		catch
 		{
