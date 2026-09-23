@@ -478,7 +478,8 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 
 	private bool CanApplyGraphicsPlacement() =>
 		CanApplyGraphics() &&
-		_client?.Snapshot?.ProductionCgText.Active != true;
+		(_client?.Snapshot?.ProductionCgText.Active != true ||
+			CompositingLayers.Any(layer => string.Equals(layer.LayerId, "bitmap-graphics", StringComparison.Ordinal)));
 
 	internal bool CanManageCompositingLayers() => CanControl() && CompositingLayers.Count > 0;
 
