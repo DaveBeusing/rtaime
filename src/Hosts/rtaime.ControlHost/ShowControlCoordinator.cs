@@ -241,11 +241,11 @@ public sealed class ShowControlCoordinator : IAsyncDisposable
 				failure = new Failure("show_control.action.exception", exception.Message);
 			}
 
-			if (failure is not null)
+			if (failure is { } actionFailure)
 			{
-				_machine.Fail(failure);
+				_machine.Fail(actionFailure);
 				await PersistAsync(cancellationToken).ConfigureAwait(false);
-				Journal("show_control.action.failed", CurrentCursorDetail(failure.Message), action.ActionId.Value, failure);
+				Journal("show_control.action.failed", CurrentCursorDetail(actionFailure.Message), action.ActionId.Value, actionFailure);
 				_stateChanged();
 				return;
 			}
