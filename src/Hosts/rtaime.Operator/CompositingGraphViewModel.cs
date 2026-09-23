@@ -94,6 +94,7 @@ public sealed class CompositingGraphNodeViewModel : INotifyPropertyChanged
 			"composite" => "MERGE",
 			"recorder" => "RECORDER",
 			"preview-output" or "program-output" => "OUTPUT",
+			_ when projection.Kind == CompositingGraphNodeKind.Layer => "COMPOSITING LAYER",
 			_ when projection.Kind == CompositingGraphNodeKind.Source => "MEDIA INPUT",
 			_ => projection.Kind.ToString().ToUpperInvariant()
 		};
@@ -209,6 +210,7 @@ public sealed class CompositingGraphViewModel : INotifyPropertyChanged, IDisposa
 	private int _healthFingerprint;
 	private bool _hasHealthFingerprint;
 	private long _healthRevision;
+	private string _layerCommandStatus = "CONFIRMED";
 
 	public CompositingGraphViewModel(
 		OperatorViewModel @operator,
@@ -229,6 +231,11 @@ public sealed class CompositingGraphViewModel : INotifyPropertyChanged, IDisposa
 		ResetViewCommand = new CompositingGraphCommand(_ => ResetView());
 		FitCommand = new CompositingGraphCommand(_ => Fit());
 		AutoLayoutCommand = new CompositingGraphCommand(_ => AutoLayout());
+		ToggleSelectedLayerCommand = new AsyncRelayCommand(ToggleSelectedLayerAsync, CanEditSelectedLayer);
+		MoveSelectedLayerUpCommand = new AsyncRelayCommand(() => MoveSelectedLayerAsync(1), () => CanMoveSelectedLayer(1));
+		MoveSelectedLayerDownCommand = new AsyncRelayCommand(() => MoveSelectedLayerAsync(-1), () => CanMoveSelectedLayer(-1));
+		DecreaseSelectedLayerOpacityCommand = new AsyncRelayCommand(() => AdjustSelectedLayerOpacityAsync(-16), CanEditSelectedLayer);
+		IncreaseSelectedLayerOpacityCommand = new AsyncRelayCommand(() => AdjustSelectedLayerOpacityAsync(16), CanEditSelectedLayer);
 
 		_operator.PropertyChanged += OnOperatorPropertyChanged;
 		_operator.Sources.CollectionChanged += OnSourcesChanged;
@@ -248,6 +255,16 @@ public sealed class CompositingGraphViewModel : INotifyPropertyChanged, IDisposa
 	public ICommand ResetViewCommand { get; }
 	public ICommand FitCommand { get; }
 	public ICommand AutoLayoutCommand { get; }
+	public ICommand ToggleSelectedLayerCommand { get; }
+	public ICommand MoveSelectedLayerUpCommand { get; }
+	public ICommand MoveSelectedLayerDownCommand { get; }
+	public ICommand DecreaseSelectedLayerOpacityCommand { get; }
+	public ICommand IncreaseSelectedLayerOpacityCommand { get; }
+	public string LayerCommandStatus
+	{
+		get => _layerCommandStatus;
+		private set => Set(ref _layerCommandStatus, value);
+	}
 
 	public CompositingGraphNodeViewModel? SelectedNode
 	{
@@ -374,13 +391,25 @@ public sealed class CompositingGraphViewModel : INotifyPropertyChanged, IDisposa
 		Position("graphics", 40, graphicsY);
 		Position("routing", 330, 130);
 		Position("graphics-transform", 330, graphicsY);
+		var layerNodes = Nodes
+			.Where(node => node.Projection.Kind == CompositingGraphNodeKind.Layer)
+			.OrderBy(node => node.Id, StringComparer.Ordinal)
+			.ToArray();
+		for (var index = 0; index < layerNodes.Length; index++)
+		{
+			layerNodes[index].X = 330;
+			layerNodes[index].Y = Math.Max(280, graphicsY) + (index * 132);
+		}
 		Position("preview-output", 635, 60);
-		Position("composite", 635, Math.Max(250, graphicsY - 40));
-		Position("program-output", 940, Math.Max(250, graphicsY - 40));
-		Position("recorder", 1230, Math.Max(250, graphicsY - 40));
+		var compositeY = layerNodes.Length == 0
+			? Math.Max(250, graphicsY - 40)
+			: Math.Max(250, Math.Max(280, graphicsY) + ((layerNodes.Length - 1) * 66));
+		Position("composite", 635, compositeY);
+		Position("program-output", 940, compositeY);
+		Position("recorder", 1230, compositeY);
 
 		CanvasWidth = 1490;
-		CanvasHeight = Math.Max(650, graphicsY + 190);
+		CanvasHeight = Math.Max(650, graphicsY + 190 + Math.Max(0, layerNodes.Length - 1) * 132);
 		UpdateConnections();
 	}
 
@@ -446,6 +475,93 @@ public sealed class CompositingGraphViewModel : INotifyPropertyChanged, IDisposa
 
 		UpdateConnections();
 		PublishHealthRevision(graph.Nodes);
+		RefreshLayerCommandState();
+	}
+
+	private OperatorCompositingLayerDescriptor? SelectedLayer()
+	{
+		if (SelectedNode is null || !SelectedNode.Id.StartsWith("layer:", StringComparison.Ordinal))
+			return null;
+		var layerId = SelectedNode.Id["layer:".Length..];
+		return _operator.CompositingLayers.FirstOrDefault(layer =>
+			string.Equals(layer.LayerId, layerId, StringComparison.Ordinal));
+	}
+
+	private bool CanEditSelectedLayer()
+	{
+		var layer = SelectedLayer();
+		return layer is not null &&
+			layer.Kind is 2 or 3 &&
+			_operator.CanManageCompositingLayers();
+	}
+
+	private bool CanMoveSelectedLayer(int delta)
+	{
+		if (!_operator.CanManageCompositingLayers())
+			return false;
+		var selected = SelectedLayer();
+		if (selected is null)
+			return false;
+		var ordered = _operator.CompositingLayers
+			.OrderBy(layer => layer.Order)
+			.ThenBy(layer => layer.LayerId, StringComparer.Ordinal)
+			.ToArray();
+		var index = Array.FindIndex(ordered, layer => string.Equals(layer.LayerId, selected.LayerId, StringComparison.Ordinal));
+		var target = index + delta;
+		return index >= 0 && target >= 0 && target < ordered.Length;
+	}
+
+	private async Task ToggleSelectedLayerAsync()
+	{
+		var layer = SelectedLayer();
+		if (layer is null || !CanEditSelectedLayer())
+			return;
+		LayerCommandStatus = "APPLYING";
+		await _operator.SetCompositingLayerStateAsync(layer.LayerId, !layer.Visible, layer.Opacity);
+		LayerCommandStatus = _operator.LastError is null ? "CONFIRMED" : "REJECTED";
+		RefreshLayerCommandState();
+	}
+
+	private async Task AdjustSelectedLayerOpacityAsync(int delta)
+	{
+		var layer = SelectedLayer();
+		if (layer is null || !CanEditSelectedLayer())
+			return;
+		var opacity = checked((byte)Math.Clamp(layer.Opacity + delta, byte.MinValue, byte.MaxValue));
+		if (opacity == layer.Opacity)
+			return;
+		LayerCommandStatus = "APPLYING";
+		await _operator.SetCompositingLayerStateAsync(layer.LayerId, layer.Visible, opacity);
+		LayerCommandStatus = _operator.LastError is null ? "CONFIRMED" : "REJECTED";
+		RefreshLayerCommandState();
+	}
+
+	private async Task MoveSelectedLayerAsync(int delta)
+	{
+		var selected = SelectedLayer();
+		if (selected is null || !CanMoveSelectedLayer(delta))
+			return;
+		var ordered = _operator.CompositingLayers
+			.OrderBy(layer => layer.Order)
+			.ThenBy(layer => layer.LayerId, StringComparer.Ordinal)
+			.Select(layer => layer.LayerId)
+			.ToList();
+		var index = ordered.FindIndex(layerId => string.Equals(layerId, selected.LayerId, StringComparison.Ordinal));
+		var target = index + delta;
+		(ordered[index], ordered[target]) = (ordered[target], ordered[index]);
+		LayerCommandStatus = "APPLYING";
+		await _operator.ReorderCompositingLayersAsync(ordered);
+		LayerCommandStatus = _operator.LastError is null ? "CONFIRMED" : "REJECTED";
+		RefreshLayerCommandState();
+	}
+
+	private void RefreshLayerCommandState()
+	{
+		(ToggleSelectedLayerCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+		(MoveSelectedLayerUpCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+		(MoveSelectedLayerDownCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+		(DecreaseSelectedLayerOpacityCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+		(IncreaseSelectedLayerOpacityCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 	}
 
 	public void Dispose()
@@ -486,7 +602,8 @@ public sealed class CompositingGraphViewModel : INotifyPropertyChanged, IDisposa
 			_operator.GraphicsPositionY,
 			_operator.GraphicsScale,
 			_operator.RecordingStatus,
-			_operator.RecordingError);
+			_operator.RecordingError,
+			_operator.CompositingLayers);
 
 	private void SelectNode(CompositingGraphNodeViewModel node)
 	{
@@ -495,6 +612,7 @@ public sealed class CompositingGraphViewModel : INotifyPropertyChanged, IDisposa
 		node.IsSelected = true;
 		SelectedNode = node;
 		_inspector.SelectCompositingNode(node.Projection);
+		RefreshLayerCommandState();
 	}
 
 	private void Position(string id, double x, double y)
@@ -545,6 +663,10 @@ public sealed class CompositingGraphViewModel : INotifyPropertyChanged, IDisposa
 			nameof(OperatorViewModel.GraphicsPositionX) or
 			nameof(OperatorViewModel.GraphicsPositionY) or
 			nameof(OperatorViewModel.GraphicsScale) or
+			nameof(OperatorViewModel.CompositingLayers) or
+			nameof(OperatorViewModel.IsConnected) or
+			nameof(OperatorViewModel.IsStale) or
+			nameof(OperatorViewModel.IsBusy) or
 			nameof(OperatorViewModel.RecordingStatus) or
 			nameof(OperatorViewModel.RecordingError))
 		{

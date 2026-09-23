@@ -5,6 +5,7 @@ namespace rtaime.Client;
 public enum CompositingGraphNodeKind
 {
 	Source,
+	Layer,
 	Routing,
 	Transform,
 	Composite,
@@ -76,7 +77,8 @@ public sealed record CompositingGraphProjectionInput(
 	double GraphicsPositionY,
 	double GraphicsScale,
 	string RecordingStatus,
-	string? RecordingError);
+	string? RecordingError,
+	IReadOnlyList<OperatorCompositingLayerDescriptor>? CompositingLayers = null);
 
 public sealed record CompositingGraphProjection(
 	IReadOnlyList<CompositingGraphNodeProjection> Nodes,
@@ -155,36 +157,65 @@ public static class CompositingGraphProjector
 			"preview-output",
 			"video"));
 
-		var graphicsTitle = IsMeaningful(input.GraphicsAssetName)
-			? input.GraphicsAssetName.Trim()
-			: "Graphics Layer";
-		nodes.Add(new CompositingGraphNodeProjection(
-			"graphics",
-			CompositingGraphNodeKind.Source,
-			graphicsTitle,
-			IsMeaningful(input.GraphicsDimensions) ? input.GraphicsDimensions.Trim() : "RGBA overlay",
-			ValueOrDash(input.GraphicsState),
-			EvaluateHealth(input.GraphicsState),
-			[new("rgba", "RGBA", CompositingGraphPortDirection.Output)]));
+		var compositingLayers = input.CompositingLayers ?? Array.Empty<OperatorCompositingLayerDescriptor>();
+		if (compositingLayers.Count == 0)
+		{
+			var graphicsTitle = IsMeaningful(input.GraphicsAssetName)
+				? input.GraphicsAssetName.Trim()
+				: "Graphics Layer";
+			nodes.Add(new CompositingGraphNodeProjection(
+				"graphics",
+				CompositingGraphNodeKind.Source,
+				graphicsTitle,
+				IsMeaningful(input.GraphicsDimensions) ? input.GraphicsDimensions.Trim() : "RGBA overlay",
+				ValueOrDash(input.GraphicsState),
+				EvaluateHealth(input.GraphicsState),
+				[new("rgba", "RGBA", CompositingGraphPortDirection.Output)]));
 
-		nodes.Add(new CompositingGraphNodeProjection(
-			"graphics-transform",
-			CompositingGraphNodeKind.Transform,
-			"Graphics Transform",
-			$"X {Finite(input.GraphicsPositionX):0.##}% · Y {Finite(input.GraphicsPositionY):0.##}% · {Finite(input.GraphicsScale, 1):0.##}x",
-			input.GraphicsVisible ? "VISIBLE" : "READY",
-			EvaluateHealth(input.GraphicsState),
-			[
-				new("input", "Layer", CompositingGraphPortDirection.Input),
-				new("output", "Transformed", CompositingGraphPortDirection.Output)
-			]));
-		connections.Add(new CompositingGraphConnectionProjection(
-			"graphics->transform",
-			"graphics",
-			"rgba",
-			"graphics-transform",
-			"input",
-			input.GraphicsVisible));
+			nodes.Add(new CompositingGraphNodeProjection(
+				"graphics-transform",
+				CompositingGraphNodeKind.Transform,
+				"Graphics Transform",
+				$"X {Finite(input.GraphicsPositionX):0.##}% · Y {Finite(input.GraphicsPositionY):0.##}% · {Finite(input.GraphicsScale, 1):0.##}x",
+				input.GraphicsVisible ? "VISIBLE" : "READY",
+				EvaluateHealth(input.GraphicsState),
+				[
+					new("input", "Layer", CompositingGraphPortDirection.Input),
+					new("output", "Transformed", CompositingGraphPortDirection.Output)
+				]));
+			connections.Add(new CompositingGraphConnectionProjection(
+				"graphics->transform",
+				"graphics",
+				"rgba",
+				"graphics-transform",
+				"input",
+				input.GraphicsVisible));
+		}
+		else
+		{
+			foreach (var layer in compositingLayers
+				.OrderBy(layer => layer.Order)
+				.ThenBy(layer => layer.LayerId, StringComparer.Ordinal))
+			{
+				var layerNodeId = $"layer:{layer.LayerId}";
+				var opacity = layer.Opacity / 255.0 * 100.0;
+				nodes.Add(new CompositingGraphNodeProjection(
+					layerNodeId,
+					CompositingGraphNodeKind.Layer,
+					layer.ContentIdentity,
+					$"ORDER {layer.Order} · {opacity:0}% · X {layer.PositionX * 100:0.#}% · Y {layer.PositionY * 100:0.#}% · {layer.Scale:0.##}x",
+					layer.Visible ? "CONFIRMED VISIBLE" : "CONFIRMED HIDDEN",
+					CompositingGraphHealth.Normal,
+					[new("rgba", "RGBA", CompositingGraphPortDirection.Output)]));
+				connections.Add(new CompositingGraphConnectionProjection(
+					$"{layerNodeId}->composite",
+					layerNodeId,
+					"rgba",
+					"composite",
+					"layer",
+					layer.Visible));
+			}
+		}
 
 		nodes.Add(new CompositingGraphNodeProjection(
 			"composite",
@@ -204,13 +235,16 @@ public static class CompositingGraphProjector
 			"program",
 			"composite",
 			"background"));
-		connections.Add(new CompositingGraphConnectionProjection(
-			"transform->composite",
-			"graphics-transform",
-			"output",
-			"composite",
-			"layer",
-			input.GraphicsVisible));
+		if (compositingLayers.Count == 0)
+		{
+			connections.Add(new CompositingGraphConnectionProjection(
+				"transform->composite",
+				"graphics-transform",
+				"output",
+				"composite",
+				"layer",
+				input.GraphicsVisible));
+		}
 
 		nodes.Add(new CompositingGraphNodeProjection(
 			"program-output",

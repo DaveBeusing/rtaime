@@ -145,6 +145,86 @@ public sealed class GpuProcessingTests
     }
 
     [Fact]
+    public void Compositor_applies_multiple_rgba_layers_in_declared_order()
+    {
+        var backend = new ManagedReferenceGpuBackend();
+        using var provider = new GpuProcessingProvider(backend);
+        provider.Start();
+
+        using var backgroundA = Upload(provider, SourceA, Solid(0, 0, 0, 255), 0);
+        using var backgroundB = Upload(provider, SourceB, Solid(0, 0, 0, 255), 0);
+        using var red = Upload(provider, new MediaSourceId(Identity.Parse("53000000-0000-0000-0000-000000000010")), Solid(255, 0, 0, 128), 0);
+        using var green = Upload(provider, new MediaSourceId(Identity.Parse("53000000-0000-0000-0000-000000000011")), Solid(0, 255, 0, 128), 0);
+
+        var request = GpuCompositeRequest.WithLayers(
+            OutputSource,
+            backgroundA,
+            backgroundB,
+            GpuTransition.CutToA,
+            new[]
+            {
+                new GpuKeyLayer(red),
+                new GpuKeyLayer(green)
+            });
+
+        var result = provider.Composite(request);
+
+        Assert.True(result.Succeeded, result.Failure?.ToString());
+        Assert.Equal(2, result.LayerCount);
+        Assert.True(result.Duration >= TimeSpan.Zero);
+        var output = result.Frame!;
+        AssertPixel(provider.Readback(output), red: 64, green: 128, blue: 0, alpha: 255);
+        Assert.Equal(5, backend.ActiveAllocationCount);
+        output.Dispose();
+        Assert.Equal(4, backend.ActiveAllocationCount);
+    }
+
+    [Fact]
+    public void Compositor_rejects_duplicate_layer_surfaces()
+    {
+        using var provider = new GpuProcessingProvider(new ManagedReferenceGpuBackend());
+        provider.Start();
+
+        using var backgroundA = Upload(provider, SourceA, Solid(0, 0, 0, 255), 0);
+        using var backgroundB = Upload(provider, SourceB, Solid(0, 0, 0, 255), 0);
+        using var layer = Upload(provider, LayerSource, Solid(255, 255, 255, 255), 0);
+
+        var result = provider.Composite(GpuCompositeRequest.WithLayers(
+            OutputSource,
+            backgroundA,
+            backgroundB,
+            GpuTransition.CutToA,
+            new[] { new GpuKeyLayer(layer), new GpuKeyLayer(layer) }));
+
+        Assert.False(result.Succeeded);
+        Assert.Equal("gpu.composite.layer_duplicate", result.Failure?.Code);
+    }
+
+    [Fact]
+    public void Compositor_rejects_layer_counts_above_the_bounded_limit()
+    {
+        using var provider = new GpuProcessingProvider(new ManagedReferenceGpuBackend());
+        provider.Start();
+
+        using var backgroundA = Upload(provider, SourceA, Solid(0, 0, 0, 255), 0);
+        using var backgroundB = Upload(provider, SourceB, Solid(0, 0, 0, 255), 0);
+        using var layer = Upload(provider, LayerSource, Solid(255, 255, 255, 255), 0);
+
+        var request = GpuCompositeRequest.WithLayers(
+            OutputSource,
+            backgroundA,
+            backgroundB,
+            GpuTransition.CutToA,
+            Enumerable.Repeat(new GpuKeyLayer(layer), GpuCompositeLimits.MaxActiveLayers + 1));
+
+        var result = provider.Composite(request);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal("gpu.composite.layer_limit", result.Failure?.Code);
+        Assert.Equal(GpuCompositeLimits.MaxActiveLayers + 1, result.LayerCount);
+    }
+
+    [Fact]
     public void Cut_selects_target_background_without_blending()
     {
         using var provider = new GpuProcessingProvider(new ManagedReferenceGpuBackend());

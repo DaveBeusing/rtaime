@@ -169,6 +169,49 @@ public sealed record OperatorGraphicsOverlayDescriptor(
         new(false, null, 0, 0, false, 0.72, 0.06, 1.0);
 }
 
+public sealed record OperatorCompositingLayerDescriptor
+{
+    public OperatorCompositingLayerDescriptor(
+        string layerId,
+        int kind,
+        int order,
+        bool visible,
+        byte opacity,
+        double positionX,
+        double positionY,
+        double scale,
+        string contentIdentity)
+    {
+        if (string.IsNullOrWhiteSpace(layerId)) throw new ArgumentException("Compositing layer identity is required.", nameof(layerId));
+        if (kind is < 1 or > 3) throw new ArgumentOutOfRangeException(nameof(kind));
+        if (order is < 0 or >= 8) throw new ArgumentOutOfRangeException(nameof(order));
+        if (!double.IsFinite(positionX) || positionX is < 0 or > 1) throw new ArgumentOutOfRangeException(nameof(positionX));
+        if (!double.IsFinite(positionY) || positionY is < 0 or > 1) throw new ArgumentOutOfRangeException(nameof(positionY));
+        if (!double.IsFinite(scale) || scale is < 0.05 or > 4.0) throw new ArgumentOutOfRangeException(nameof(scale));
+        if (string.IsNullOrWhiteSpace(contentIdentity)) throw new ArgumentException("Compositing layer content identity is required.", nameof(contentIdentity));
+
+        LayerId = layerId.Trim();
+        Kind = kind;
+        Order = order;
+        Visible = visible;
+        Opacity = opacity;
+        PositionX = positionX;
+        PositionY = positionY;
+        Scale = scale;
+        ContentIdentity = contentIdentity.Trim();
+    }
+
+    public string LayerId { get; }
+    public int Kind { get; }
+    public int Order { get; }
+    public bool Visible { get; }
+    public byte Opacity { get; }
+    public double PositionX { get; }
+    public double PositionY { get; }
+    public double Scale { get; }
+    public string ContentIdentity { get; }
+}
+
 public sealed record OperatorAudioInputDescriptor
 {
     public OperatorAudioInputDescriptor(
@@ -431,6 +474,7 @@ public sealed record OperatorStatusSnapshot
     private readonly ReadOnlyCollection<OperatorSceneDescriptor> _scenes;
     private readonly ReadOnlyCollection<OperatorOutputRoleDescriptor> _outputRoles;
     private readonly ReadOnlyCollection<OperatorAudioInputDescriptor> _audioInputs;
+    private readonly ReadOnlyCollection<OperatorCompositingLayerDescriptor> _compositingLayers;
 
     public OperatorStatusSnapshot(
         AuthoritativeProductionState production,
@@ -451,7 +495,8 @@ public sealed record OperatorStatusSnapshot
         MediaDeckSnapshot? mediaDeck = null,
         OperatorProductionCgTextDescriptor? productionCgText = null,
         IReadOnlyList<OperatorSceneDescriptor>? scenes = null,
-        IReadOnlyList<OperatorOutputRoleDescriptor>? outputRoles = null)
+        IReadOnlyList<OperatorOutputRoleDescriptor>? outputRoles = null,
+        IReadOnlyList<OperatorCompositingLayerDescriptor>? compositingLayers = null)
     {
         Production = production ?? throw new ArgumentNullException(nameof(production));
         ArgumentNullException.ThrowIfNull(sources);
@@ -469,6 +514,10 @@ public sealed record OperatorStatusSnapshot
         _scenes = Array.AsReadOnly((scenes ?? Array.Empty<OperatorSceneDescriptor>()).ToArray());
         _outputRoles = Array.AsReadOnly((outputRoles ?? Array.Empty<OperatorOutputRoleDescriptor>()).ToArray());
         _audioInputs = Array.AsReadOnly((audioInputs ?? Array.Empty<OperatorAudioInputDescriptor>()).ToArray());
+        _compositingLayers = Array.AsReadOnly((compositingLayers ?? Array.Empty<OperatorCompositingLayerDescriptor>())
+            .OrderBy(layer => layer.Order)
+            .ThenBy(layer => layer.LayerId, StringComparer.Ordinal)
+            .ToArray());
         RuntimeStatus = runtimeStatus.Trim();
         TimingStatus = timingStatus.Trim();
         InputStatus = inputStatus.Trim();
@@ -489,6 +538,7 @@ public sealed record OperatorStatusSnapshot
     public IReadOnlyList<OperatorSourceDescriptor> Sources => _sources;
     public IReadOnlyList<OperatorSceneDescriptor> Scenes => _scenes;
     public IReadOnlyList<OperatorOutputRoleDescriptor> OutputRoles => _outputRoles;
+    public IReadOnlyList<OperatorCompositingLayerDescriptor> CompositingLayers => _compositingLayers;
     public string RuntimeStatus { get; }
     public string TimingStatus { get; }
     public string InputStatus { get; }
@@ -572,6 +622,18 @@ public interface IOperatorControlTransport
 
     ValueTask<OperatorGraphicsOverlayDescriptor> ClearGraphicsOverlayAsync(CancellationToken cancellationToken = default) =>
         ValueTask.FromException<OperatorGraphicsOverlayDescriptor>(new NotSupportedException("Operator transport does not expose graphics overlay control."));
+
+    ValueTask<IReadOnlyList<OperatorCompositingLayerDescriptor>> SetCompositingLayerStateAsync(
+        string layerId,
+        bool visible,
+        byte opacity,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<IReadOnlyList<OperatorCompositingLayerDescriptor>>(new NotSupportedException("Operator transport does not expose compositing layer control."));
+
+    ValueTask<IReadOnlyList<OperatorCompositingLayerDescriptor>> ReorderCompositingLayersAsync(
+        IReadOnlyList<string> orderedLayerIds,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<IReadOnlyList<OperatorCompositingLayerDescriptor>>(new NotSupportedException("Operator transport does not expose compositing layer reorder control."));
 
     ValueTask<OperatorRecordingCommandResult> StartRecordingAsync(
         string destinationDirectory,
@@ -812,6 +874,35 @@ public sealed class OperatorControlClient
     public async ValueTask<OperatorGraphicsOverlayDescriptor> ClearGraphicsOverlayAsync(CancellationToken cancellationToken = default)
     {
         var result = await _transport.ClearGraphicsOverlayAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+
+    public async ValueTask<IReadOnlyList<OperatorCompositingLayerDescriptor>> SetCompositingLayerStateAsync(
+        string layerId,
+        bool visible,
+        byte opacity,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(layerId))
+            throw new ArgumentException("Compositing layer identity is required.", nameof(layerId));
+        RequireSnapshot();
+        var result = await _transport
+            .SetCompositingLayerStateAsync(layerId.Trim(), visible, opacity, cancellationToken)
+            .ConfigureAwait(false);
+        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+
+    public async ValueTask<IReadOnlyList<OperatorCompositingLayerDescriptor>> ReorderCompositingLayersAsync(
+        IReadOnlyList<string> orderedLayerIds,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(orderedLayerIds);
+        RequireSnapshot();
+        var result = await _transport
+            .ReorderCompositingLayersAsync(orderedLayerIds, cancellationToken)
+            .ConfigureAwait(false);
         await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }

@@ -20,6 +20,17 @@ public sealed record RuntimeGraphicsOverlaySnapshot(
 	double PositionY,
 	double Scale);
 
+public sealed record RuntimeCompositingLayerSnapshot(
+	string LayerId,
+	int Kind,
+	int Order,
+	bool Visible,
+	byte Opacity,
+	double PositionX,
+	double PositionY,
+	double Scale,
+	string ContentIdentity);
+
 public readonly record struct RuntimeCgColor(byte Red, byte Green, byte Blue, byte Alpha);
 
 public sealed record RuntimeCgPanel(
@@ -120,7 +131,9 @@ public sealed record RuntimePerformanceSnapshot(
 	ulong? SystemMemoryTotalBytes = null,
 	string SystemTelemetryEvidence = "UNVERIFIED",
 	string PhysicalGpuDeviceName = "UNVERIFIED",
-	double? OutputFramesPerSecond = null);
+	double? OutputFramesPerSecond = null,
+	TimeSpan LastCompositionDuration = default,
+	int ActiveCompositingLayerCount = 0);
 
 public sealed record RuntimeAvSyncDiagnosticsSnapshot(
 	bool Enabled,
@@ -174,7 +187,8 @@ public sealed record RuntimeRemoteSnapshot(
 	IReadOnlyCollection<MediaSourceId>? MotionTimingTestPatternSources = null,
 	RuntimeAvSyncDiagnosticsSnapshot? AvSyncDiagnostics = null,
 	RuntimeProductionCgTextSnapshot? ProductionCgText = null,
-	IReadOnlyList<RuntimeOutputRoleSnapshot>? OutputRoles = null);
+	IReadOnlyList<RuntimeOutputRoleSnapshot>? OutputRoles = null,
+	IReadOnlyList<RuntimeCompositingLayerSnapshot>? CompositingLayers = null);
 
 public sealed record RuntimeRemoteApplyResult(
 	string HostInstanceId,
@@ -291,7 +305,8 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 				.ToArray()),
 			snapshot.AvSyncDiagnostics is null ? null : FromWire(snapshot.AvSyncDiagnostics),
 			snapshot.ProductionCgText is null ? null : FromWire(snapshot.ProductionCgText),
-			Array.AsReadOnly((snapshot.OutputRoles ?? Array.Empty<WireOutputRole>()).Select(FromWire).ToArray()));
+			Array.AsReadOnly((snapshot.OutputRoles ?? Array.Empty<WireOutputRole>()).Select(FromWire).ToArray()),
+			Array.AsReadOnly((snapshot.CompositingLayers ?? Array.Empty<WireCompositingLayer>()).Select(FromWire).ToArray()));
 	}
 
 	public async ValueTask<RuntimeRemoteApplyResult> ApplyExecutionAsync(
@@ -444,6 +459,36 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 		var wire = response.Payload.Deserialize<WireGraphicsOverlay>(Wire.JsonOptions)
 			?? throw new InvalidDataException("Runtime graphics overlay response is required.");
 		return FromWire(wire);
+	}
+
+	public async ValueTask<IReadOnlyList<RuntimeCompositingLayerSnapshot>> SetCompositingLayerStateAsync(
+		string layerId,
+		bool visible,
+		byte opacity,
+		CancellationToken cancellationToken = default)
+	{
+		if (string.IsNullOrWhiteSpace(layerId)) throw new ArgumentException("Compositing layer identity is required.", nameof(layerId));
+		var response = await ExchangeAsync(
+			"runtime.compositing.layer.set",
+			new WireCompositingLayerState(layerId.Trim(), visible, opacity),
+			cancellationToken).ConfigureAwait(false);
+		var wire = response.Payload.Deserialize<WireCompositingLayer[]>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Runtime compositing layer response is required.");
+		return Array.AsReadOnly(wire.Select(FromWire).ToArray());
+	}
+
+	public async ValueTask<IReadOnlyList<RuntimeCompositingLayerSnapshot>> ReorderCompositingLayersAsync(
+		IReadOnlyList<string> orderedLayerIds,
+		CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(orderedLayerIds);
+		var response = await ExchangeAsync(
+			"runtime.compositing.layers.reorder",
+			new WireCompositingLayerOrder(orderedLayerIds.ToArray()),
+			cancellationToken).ConfigureAwait(false);
+		var wire = response.Payload.Deserialize<WireCompositingLayer[]>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Runtime compositing layer response is required.");
+		return Array.AsReadOnly(wire.Select(FromWire).ToArray());
 	}
 
 	public async ValueTask<RuntimeRecordingCommandResult> StartRecordingAsync(
@@ -740,7 +785,9 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 		string.IsNullOrWhiteSpace(snapshot.PhysicalGpuDeviceName) ? "UNVERIFIED" : snapshot.PhysicalGpuDeviceName.Trim(),
 		snapshot.OutputFramesPerSecond is { } framesPerSecond && double.IsFinite(framesPerSecond) && framesPerSecond > 0
 			? framesPerSecond
-			: null);
+			: null,
+		TimeSpan.FromTicks(Math.Max(0, snapshot.LastCompositionDurationTicks)),
+		Math.Max(0, snapshot.ActiveCompositingLayerCount));
 
 	private static RuntimeAvSyncDiagnosticsSnapshot FromWire(WireAvSyncDiagnostics snapshot) => new(
 		snapshot.Enabled,
@@ -819,6 +866,34 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 		snapshot.ZOrder,
 		snapshot.CacheHit,
 		TimeSpan.FromTicks(snapshot.RenderDurationTicks));
+
+	private static RuntimeCompositingLayerSnapshot FromWire(WireCompositingLayer snapshot)
+	{
+		if (string.IsNullOrWhiteSpace(snapshot.LayerId))
+			throw new InvalidDataException("Runtime compositing layer identity is required.");
+		if (snapshot.Kind is < 1 or > 3)
+			throw new InvalidDataException("Runtime compositing layer kind is invalid.");
+		if (snapshot.Order is < 0 or >= 8)
+			throw new InvalidDataException("Runtime compositing layer order is outside the supported bound.");
+		if (!double.IsFinite(snapshot.PositionX) || snapshot.PositionX is < 0 or > 1 ||
+			!double.IsFinite(snapshot.PositionY) || snapshot.PositionY is < 0 or > 1 ||
+			!double.IsFinite(snapshot.Scale) || snapshot.Scale is < 0.05 or > 4.0)
+		{
+			throw new InvalidDataException("Runtime compositing layer transform is invalid.");
+		}
+		if (string.IsNullOrWhiteSpace(snapshot.ContentIdentity))
+			throw new InvalidDataException("Runtime compositing layer content identity is required.");
+		return new RuntimeCompositingLayerSnapshot(
+			snapshot.LayerId.Trim(),
+			snapshot.Kind,
+			snapshot.Order,
+			snapshot.Visible,
+			snapshot.Opacity,
+			snapshot.PositionX,
+			snapshot.PositionY,
+			snapshot.Scale,
+			snapshot.ContentIdentity.Trim());
+	}
 
 	private static RuntimeGraphicsOverlaySnapshot FromWire(WireGraphicsOverlay snapshot) => new(
 		snapshot.AssetLoaded,
@@ -948,7 +1023,10 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 	private sealed record WireProductionCgText(string Text, string Typeface, string? FallbackTypeface, float FontSizePixels, WireCgColor Foreground, double PositionX, double PositionY, uint BoxWidth, uint BoxHeight, int Alignment, int Anchor, WireCgPanel Panel, bool Visible, int Layer, int ZOrder);
 	private sealed record WireProductionCgTextSnapshot(bool Active, string? Text, string? Typeface, string? ResolvedTypeface, float FontSizePixels, uint BoxWidth, uint BoxHeight, int Alignment, int Anchor, bool PanelEnabled, bool Visible, int Layer, int ZOrder, bool CacheHit, long RenderDurationTicks);
 	private sealed record WireGraphicsOverlayState(bool Visible, double PositionX, double PositionY, double Scale);
+	private sealed record WireCompositingLayerState(string LayerId, bool Visible, byte Opacity);
+	private sealed record WireCompositingLayerOrder(string[] LayerIds);
 	private sealed record WireGraphicsOverlay(bool AssetLoaded, string? AssetName, uint AssetWidth, uint AssetHeight, bool Visible, double PositionX, double PositionY, double Scale);
+	private sealed record WireCompositingLayer(string LayerId, int Kind, int Order, bool Visible, byte Opacity, double PositionX, double PositionY, double Scale, string ContentIdentity);
 	private sealed record WireAudioInputState(string SourceId, double Gain, bool Muted);
 	private sealed record WireAudioTestSignalState(string SourceId, bool Enabled, int Mode, double FrequencyHz, double PeakLevel);
 	private sealed record WireAudioInput(
@@ -979,7 +1057,7 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 	private sealed record WireApplyResponse(WirePrepareResult Prepare, WireCommitResult? Commit, ulong? ActivationSequence);
 	private sealed record WireRecordingStart(string SessionId, string OutputId, string DestinationDirectory, string FileName);
 	private sealed record WireRecordingSnapshot(string State, long ElapsedTicks, string? Destination, string? FileName, string? FinalPath, ulong Accepted, ulong Written, ulong Dropped, ulong Rejected, ulong WriterFailures, WireFailure? Failure);
-	private sealed record WireRuntimePerformance(long UptimeTicks, long FrameBudgetTicks, long LastFrameProcessingTicks, ulong DroppedFrames, string GpuDeviceName, bool GpuHardwareAccelerated, double? GpuUtilizationPercent, ulong? GpuVramUsedBytes, ulong? GpuVramTotalBytes, string GpuTelemetryEvidence, string CpuDeviceName, int CpuLogicalProcessorCount, double? CpuUtilizationPercent, ulong? SystemMemoryUsedBytes, ulong? SystemMemoryTotalBytes, string SystemTelemetryEvidence, string PhysicalGpuDeviceName, double? OutputFramesPerSecond);
+	private sealed record WireRuntimePerformance(long UptimeTicks, long FrameBudgetTicks, long LastFrameProcessingTicks, ulong DroppedFrames, string GpuDeviceName, bool GpuHardwareAccelerated, double? GpuUtilizationPercent, ulong? GpuVramUsedBytes, ulong? GpuVramTotalBytes, string GpuTelemetryEvidence, string CpuDeviceName, int CpuLogicalProcessorCount, double? CpuUtilizationPercent, ulong? SystemMemoryUsedBytes, ulong? SystemMemoryTotalBytes, string SystemTelemetryEvidence, string PhysicalGpuDeviceName, double? OutputFramesPerSecond, long LastCompositionDurationTicks = 0, int ActiveCompositingLayerCount = 0);
 	private sealed record WireAIShowcaseState(bool Enabled);
 	private sealed record WireAIShowcase(bool Enabled, string Feature, string Status, string Provider, long InferenceTimeTicks, uint PersonRegionCount, ulong? SourceSequence, ulong? AppliedSequence, double? Confidence, bool EffectVisible, WireFailure? Failure, DateTimeOffset? UpdatedAtUtc);
 	private sealed record WireAvSyncDiagnostics(bool Enabled, string State, ulong? EventId, string? ExpectedMediaTime, ulong? TargetVideoFrameSequence, ulong? TargetAudioSamplePosition, double? ScheduledVideoOffsetMilliseconds, double? SubmitOffsetMilliseconds, double? DriftFromBaselineMilliseconds, string Detail);
@@ -1015,7 +1093,8 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 		WireAIShowcase AIShowcase,
 		WireAvSyncDiagnostics? AvSyncDiagnostics = null,
 		WireProductionCgTextSnapshot? ProductionCgText = null,
-		WireOutputRole[]? OutputRoles = null);
+		WireOutputRole[]? OutputRoles = null,
+		WireCompositingLayer[]? CompositingLayers = null);
 
 	private static class Wire
 	{

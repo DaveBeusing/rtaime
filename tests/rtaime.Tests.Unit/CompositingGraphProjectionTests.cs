@@ -27,6 +27,38 @@ public sealed class CompositingGraphProjectionTests
 	}
 
 	[Fact]
+	public void Projection_maps_confirmed_runtime_layers_in_deterministic_order()
+	{
+		var input = CreateInput() with
+		{
+			CompositingLayers =
+			[
+				new OperatorCompositingLayerDescriptor("bitmap-graphics", 2, 0, true, 128, 0.10, 0.20, 1.5, "LowerThird.png"),
+				new OperatorCompositingLayerDescriptor("production-cg", 3, 1, false, 255, 0.05, 0.90, 1.0, "LOWER THIRD")
+			]
+		};
+
+		var graph = CompositingGraphProjector.Project(input);
+
+		var bitmap = Assert.Single(graph.Nodes, node => node.Id == "layer:bitmap-graphics");
+		var cg = Assert.Single(graph.Nodes, node => node.Id == "layer:production-cg");
+		Assert.Equal(CompositingGraphNodeKind.Layer, bitmap.Kind);
+		Assert.Equal(CompositingGraphNodeKind.Layer, cg.Kind);
+		Assert.Contains("ORDER 0", bitmap.Detail, StringComparison.Ordinal);
+		Assert.Contains("50%", bitmap.Detail, StringComparison.Ordinal);
+		Assert.Equal("CONFIRMED HIDDEN", cg.Status);
+		Assert.DoesNotContain(graph.Nodes, node => node.Id == "graphics-transform");
+		Assert.Contains(graph.Connections, connection =>
+			connection.FromNodeId == "layer:bitmap-graphics" &&
+			connection.ToNodeId == "composite" &&
+			connection.IsActive);
+		Assert.Contains(graph.Connections, connection =>
+			connection.FromNodeId == "layer:production-cg" &&
+			connection.ToNodeId == "composite" &&
+			!connection.IsActive);
+	}
+
+	[Fact]
 	public void Projection_preserves_stable_ids_across_status_updates()
 	{
 		var first = CompositingGraphProjector.Project(CreateInput());
@@ -64,13 +96,13 @@ public sealed class CompositingGraphProjectionTests
 
 		Assert.Equal(
 			CompositingGraphHealth.Error,
-			Assert.Single(graph.Nodes.Where(node => node.Id == "source:camera-a")).Health);
+			Assert.Single(graph.Nodes, node => node.Id == "source:camera-a").Health);
 		Assert.Equal(
 			CompositingGraphHealth.Error,
-			Assert.Single(graph.Nodes.Where(node => node.Id == "composite")).Health);
+			Assert.Single(graph.Nodes, node => node.Id == "composite").Health);
 		Assert.Equal(
 			CompositingGraphHealth.Error,
-			Assert.Single(graph.Nodes.Where(node => node.Id == "program-output")).Health);
+			Assert.Single(graph.Nodes, node => node.Id == "program-output").Health);
 	}
 
 	[Fact]

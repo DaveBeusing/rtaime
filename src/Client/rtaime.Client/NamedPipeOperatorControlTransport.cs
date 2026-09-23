@@ -216,6 +216,32 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		return ReadGraphicsOverlay(response);
 	}
 
+	public async ValueTask<IReadOnlyList<OperatorCompositingLayerDescriptor>> SetCompositingLayerStateAsync(
+		string layerId,
+		bool visible,
+		byte opacity,
+		CancellationToken cancellationToken = default)
+	{
+		if (string.IsNullOrWhiteSpace(layerId)) throw new ArgumentException("Compositing layer identity is required.", nameof(layerId));
+		var response = await ExchangeAsync(
+			"control.compositing.layer.set",
+			new WireCompositingLayerState(layerId.Trim(), visible, opacity),
+			cancellationToken).ConfigureAwait(false);
+		return ReadCompositingLayers(response);
+	}
+
+	public async ValueTask<IReadOnlyList<OperatorCompositingLayerDescriptor>> ReorderCompositingLayersAsync(
+		IReadOnlyList<string> orderedLayerIds,
+		CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(orderedLayerIds);
+		var response = await ExchangeAsync(
+			"control.compositing.layers.reorder",
+			new WireCompositingLayerOrder(orderedLayerIds.ToArray()),
+			cancellationToken).ConfigureAwait(false);
+		return ReadCompositingLayers(response);
+	}
+
 	public async ValueTask<OperatorRecordingCommandResult> StartRecordingAsync(
 		string destinationDirectory,
 		string fileName,
@@ -477,6 +503,22 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 			wire.Failure is null ? null : new Failure(wire.Failure.Code, wire.Failure.Message));
 	}
 
+	private static IReadOnlyList<OperatorCompositingLayerDescriptor> ReadCompositingLayers(WireEnvelope response)
+	{
+		var wire = response.Payload.Deserialize<WireCompositingLayer[]>(Wire.JsonOptions)
+			?? throw new InvalidDataException("ControlHost compositing layer payload is required.");
+		return Array.AsReadOnly(wire.Select(layer => new OperatorCompositingLayerDescriptor(
+			layer.LayerId,
+			layer.Kind,
+			layer.Order,
+			layer.Visible,
+			layer.Opacity,
+			layer.PositionX,
+			layer.PositionY,
+			layer.Scale,
+			layer.ContentIdentity)).ToArray());
+	}
+
 	private static OperatorGraphicsOverlayDescriptor ReadGraphicsOverlay(WireEnvelope response)
 	{
 		var wire = response.Payload.Deserialize<WireGraphicsOverlay>(Wire.JsonOptions)
@@ -604,6 +646,18 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 				output.Width, output.Height, output.FrameRate, output.PixelFormat, output.Timing,
 				output.LifecycleState, output.AuthoritativeActive, output.HealthState, output.Evidence,
 				output.Error is null ? null : new Failure(output.Error.Code, output.Error.Message)))
+			.ToArray(),
+		(wire.CompositingLayers ?? Array.Empty<WireCompositingLayer>())
+			.Select(layer => new OperatorCompositingLayerDescriptor(
+				layer.LayerId,
+				layer.Kind,
+				layer.Order,
+				layer.Visible,
+				layer.Opacity,
+				layer.PositionX,
+				layer.PositionY,
+				layer.Scale,
+				layer.ContentIdentity))
 			.ToArray());
 
 	private static OperatorProductionCgTextDescriptor FromWire(WireProductionCgTextSnapshot snapshot) => new(
@@ -785,7 +839,10 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 	private sealed record WireProductionCgText(string Text, string Typeface, string? FallbackTypeface, float FontSizePixels, WireCgColor Foreground, double PositionX, double PositionY, uint BoxWidth, uint BoxHeight, int Alignment, int Anchor, WireCgPanel Panel, bool Visible, int Layer, int ZOrder);
 	private sealed record WireProductionCgTextSnapshot(bool Active, string? Text, string? Typeface, string? ResolvedTypeface, float FontSizePixels, uint BoxWidth, uint BoxHeight, int Alignment, int Anchor, bool PanelEnabled, bool Visible, int Layer, int ZOrder, bool CacheHit, long RenderDurationTicks);
 	private sealed record WireGraphicsOverlayState(bool Visible, double PositionX, double PositionY, double Scale);
+	private sealed record WireCompositingLayerState(string LayerId, bool Visible, byte Opacity);
+	private sealed record WireCompositingLayerOrder(string[] LayerIds);
 	private sealed record WireGraphicsOverlay(bool AssetLoaded, string? AssetName, uint AssetWidth, uint AssetHeight, bool Visible, double PositionX, double PositionY, double Scale);
+	private sealed record WireCompositingLayer(string LayerId, int Kind, int Order, bool Visible, byte Opacity, double PositionX, double PositionY, double Scale, string ContentIdentity);
 	private sealed record WireAudioInputState(string SourceId, double Gain, bool Muted);
 	private sealed record WireAudioTestSignalState(string SourceId, bool Enabled, int Mode, double FrequencyHz, double PeakLevel);
 	private sealed record WireTestPatternState(string SourceId, bool Enabled, bool MotionTiming = false);
@@ -837,7 +894,7 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		string AvSyncSubmitOffset = "UNAVAILABLE",
 		string AvSyncDrift = "UNAVAILABLE",
 		string AvSyncDetail = "A/V sync diagnostics are unavailable.");
-	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, WireRecordingSnapshot Recording, WireHealthSnapshot Health, WireAIShowcase AIShowcase, WireMediaDeckSnapshot? MediaDeck, ulong StateVersion, WireProductionCgTextSnapshot? ProductionCgText = null, WireScene[]? Scenes = null, WireOutputRole[]? OutputRoles = null);
+	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, WireRecordingSnapshot Recording, WireHealthSnapshot Health, WireAIShowcase AIShowcase, WireMediaDeckSnapshot? MediaDeck, ulong StateVersion, WireProductionCgTextSnapshot? ProductionCgText = null, WireScene[]? Scenes = null, WireOutputRole[]? OutputRoles = null, WireCompositingLayer[]? CompositingLayers = null);
 	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path);
 	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame, bool? AutoPlayOnProgram, int? EndBehavior, long? InPointFrame, long? OutPointFrame);
 	private sealed record WireMediaMarkerCommand(string Version, string AssetId, int Kind, long? PositionFrame, string? CuePointId, string? Name);

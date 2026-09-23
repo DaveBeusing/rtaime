@@ -734,13 +734,13 @@ public sealed class ProductionIpcIntegrationTests
 	}
 
 	[Fact]
-	public async Task Production_CG_text_is_restored_after_RuntimeHost_restart()
+	public async Task Graphics_layer_stack_is_restored_after_RuntimeHost_restart()
 	{
 		if (!OperatingSystem.IsWindows())
 			return;
 
-		var runtimeEndpoint = Endpoint("runtime-cg-recovery");
-		var controlEndpoint = Endpoint("control-cg-recovery");
+		var runtimeEndpoint = Endpoint("runtime-graphics-recovery");
+		var controlEndpoint = Endpoint("control-graphics-recovery");
 		using var firstRuntimeStop = new CancellationTokenSource();
 		using var controlStop = new CancellationTokenSource();
 		var firstRuntime = new RuntimeHostProcess(RuntimeHostProcessOptions.Default with { ListenEndpoint = runtimeEndpoint });
@@ -759,8 +759,25 @@ public sealed class ProductionIpcIntegrationTests
 			await WaitUntilAsync(() => control.Lifecycle.State == ControlHostProcessState.Ready && control.Control?.HasAuthoritativeState == true);
 			var client = new OperatorControlClient(new NamedPipeOperatorControlTransport(controlEndpoint, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(5)));
 			await client.SynchronizeAsync();
+			await client.LoadGraphicsOverlayAsync(new OperatorGraphicsAsset(
+				"recovered-logo.rgba",
+				1,
+				1,
+				new byte[] { 255, 0, 0, 255 }));
+			await client.SetGraphicsOverlayAsync(true, 0.10, 0.20, 1.25);
 			await client.ApplyProductionCgTextAsync(OperatorProductionCgText.LowerThird("RECOVERED CG"));
-			Assert.True(firstRuntime.Runtime!.Snapshot.ProductionCgText!.Visible);
+			await client.SetCompositingLayerStateAsync("bitmap-graphics", visible: true, opacity: 128);
+			await client.ReorderCompositingLayersAsync(new[] { "production-cg", "bitmap-graphics" });
+
+			var beforeRestart = firstRuntime.Runtime!.Snapshot;
+			Assert.Equal("recovered-logo.rgba", beforeRestart.GraphicsOverlay.AssetName);
+			Assert.True(beforeRestart.ProductionCgText!.Visible);
+			Assert.Equal(
+				new[] { "production-cg", "bitmap-graphics" },
+				beforeRestart.CompositingLayers!.Select(layer => layer.LayerId));
+			Assert.Equal(
+				128,
+				Assert.Single(beforeRestart.CompositingLayers!, layer => layer.LayerId == "bitmap-graphics").Opacity);
 
 			firstRuntimeStop.Cancel();
 			Assert.Equal(RuntimeHostExitCode.Success, await firstRuntimeRun);
@@ -770,13 +787,30 @@ public sealed class ProductionIpcIntegrationTests
 			secondRuntimeRun = secondRuntime.RunAsync(secondRuntimeStop.Token);
 
 			await WaitUntilAsync(
-				() => secondRuntime.Runtime?.Snapshot.ProductionCgText is { Active: true, Visible: true, Text: "RECOVERED CG" },
+				() =>
+					secondRuntime.Runtime?.Snapshot is { } snapshot &&
+					snapshot.GraphicsOverlay is { AssetLoaded: true, AssetName: "recovered-logo.rgba", Visible: true } &&
+					snapshot.ProductionCgText is { Active: true, Visible: true, Text: "RECOVERED CG" } &&
+					snapshot.CompositingLayers?.Count == 2 &&
+					snapshot.CompositingLayers[0].LayerId == "production-cg" &&
+					snapshot.CompositingLayers[1].LayerId == "bitmap-graphics" &&
+					snapshot.CompositingLayers[1].Opacity == 128,
 				timeoutMilliseconds: 15000);
 
 			var restored = await client.SynchronizeAsync();
 			Assert.True(restored.ProductionCgText.Active);
 			Assert.True(restored.ProductionCgText.Visible);
 			Assert.Equal("RECOVERED CG", restored.ProductionCgText.Text);
+			Assert.Equal("recovered-logo.rgba", restored.GraphicsOverlay.AssetName);
+			Assert.Equal(0.10, restored.GraphicsOverlay.PositionX, 6);
+			Assert.Equal(0.20, restored.GraphicsOverlay.PositionY, 6);
+			Assert.Equal(1.25, restored.GraphicsOverlay.Scale, 6);
+			Assert.Equal(
+				new[] { "production-cg", "bitmap-graphics" },
+				restored.CompositingLayers.Select(layer => layer.LayerId));
+			Assert.Equal(
+				128,
+				Assert.Single(restored.CompositingLayers, layer => layer.LayerId == "bitmap-graphics").Opacity);
 		}
 		finally
 		{

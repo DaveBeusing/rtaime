@@ -28,6 +28,9 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	private RuntimeRemoteSnapshot? _lastRuntimeSnapshot;
 	private DateTimeOffset _lastRuntimeSnapshotAtUtc;
 	private RuntimeProductionCgTextDefinition? _productionCgText;
+	private RetainedGraphicsAsset? _graphicsAsset;
+	private RuntimeGraphicsOverlaySnapshot _graphicsOverlayState = new(false, null, 0, 0, false, 0.72, 0.06, 1.0);
+	private IReadOnlyList<RuntimeCompositingLayerSnapshot> _compositingLayers = Array.Empty<RuntimeCompositingLayerSnapshot>();
 	private Task? _acceptLoop;
 	private long _stateVersion = 1;
 	private long _sequence;
@@ -58,7 +61,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		return Task.CompletedTask;
 	}
 
-	public async ValueTask RestoreProductionCgTextAsync(CancellationToken cancellationToken = default)
+	public async ValueTask RestoreGraphicsStateAsync(CancellationToken cancellationToken = default)
 	{
 		if (!_runtimeTransport.IsConnected)
 			return;
@@ -66,10 +69,53 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		await _mutationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
 		try
 		{
-			var definition = _productionCgText;
-			if (definition is null || !_runtimeTransport.IsConnected)
+			if (!_runtimeTransport.IsConnected)
 				return;
-			await _runtimeTransport.ApplyProductionCgTextAsync(definition, cancellationToken).ConfigureAwait(false);
+
+			if (_graphicsAsset is { } asset)
+			{
+				await _runtimeTransport.LoadGraphicsOverlayAsync(
+					asset.Name,
+					asset.Width,
+					asset.Height,
+					asset.RgbaPixels,
+					cancellationToken).ConfigureAwait(false);
+				await _runtimeTransport.SetGraphicsOverlayAsync(
+					_graphicsOverlayState.Visible,
+					_graphicsOverlayState.PositionX,
+					_graphicsOverlayState.PositionY,
+					_graphicsOverlayState.Scale,
+					cancellationToken).ConfigureAwait(false);
+			}
+
+			if (_productionCgText is { } definition)
+				await _runtimeTransport.ApplyProductionCgTextAsync(definition, cancellationToken).ConfigureAwait(false);
+
+			if (_compositingLayers.Count > 0)
+			{
+				foreach (var layer in _compositingLayers.Where(layer =>
+					layer.LayerId is "bitmap-graphics" or "production-cg"))
+				{
+					await _runtimeTransport.SetCompositingLayerStateAsync(
+						layer.LayerId,
+						layer.Visible,
+						layer.Opacity,
+						cancellationToken).ConfigureAwait(false);
+				}
+				var current = await _runtimeTransport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
+				var retainedOrder = _compositingLayers
+					.OrderBy(layer => layer.Order)
+					.Select(layer => layer.LayerId)
+					.Where(layerId => current.CompositingLayers?.Any(layer => string.Equals(layer.LayerId, layerId, StringComparison.Ordinal)) == true)
+					.ToArray();
+				var missing = (current.CompositingLayers ?? Array.Empty<RuntimeCompositingLayerSnapshot>())
+					.Select(layer => layer.LayerId)
+					.Where(layerId => !retainedOrder.Contains(layerId, StringComparer.Ordinal))
+					.ToArray();
+				var order = retainedOrder.Concat(missing).ToArray();
+				if (order.Length > 0)
+					_compositingLayers = await _runtimeTransport.ReorderCompositingLayersAsync(order, cancellationToken).ConfigureAwait(false);
+			}
 			NotifyObservableStateChanged();
 		}
 		finally
@@ -209,6 +255,8 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			"control.graphics.cg.apply" => await ApplyProductionCgTextAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.graphics.overlay.set" => await SetGraphicsOverlayAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.graphics.overlay.clear" => await ClearGraphicsOverlayAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.compositing.layer.set" => await SetCompositingLayerStateAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.compositing.layers.reorder" => await ReorderCompositingLayersAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.audio.input.set" => await SetAudioInputStateAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.audio.test_signal.set" => await SetAudioTestSignalAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.test_pattern.set" => await SetBroadcastTestPatternAsync(request, cancellationToken).ConfigureAwait(false),
@@ -373,7 +421,13 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			token => _runtimeTransport.LoadGraphicsOverlayAsync(wire.Name, wire.Width, wire.Height, wire.RgbaPixels, token),
 			cancellationToken).ConfigureAwait(false);
 		if (!string.Equals(response.MessageType, "error", StringComparison.Ordinal))
-			_productionCgText = null;
+		{
+			_graphicsAsset = new RetainedGraphicsAsset(wire.Name.Trim(), wire.Width, wire.Height, wire.RgbaPixels.ToArray());
+			if (!_graphicsOverlayState.AssetLoaded)
+				_graphicsOverlayState = new RuntimeGraphicsOverlaySnapshot(true, wire.Name.Trim(), wire.Width, wire.Height, false, 0.72, 0.06, 1.0);
+			else
+				_graphicsOverlayState = _graphicsOverlayState with { AssetLoaded = true, AssetName = wire.Name.Trim(), AssetWidth = wire.Width, AssetHeight = wire.Height };
+		}
 		return response;
 	}
 
@@ -418,8 +472,23 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			request,
 			token => _runtimeTransport.SetGraphicsOverlayAsync(wire.Visible, wire.PositionX, wire.PositionY, wire.Scale, token),
 			cancellationToken).ConfigureAwait(false);
-		if (!string.Equals(response.MessageType, "error", StringComparison.Ordinal) && _productionCgText is not null)
-			_productionCgText = _productionCgText with { Visible = wire.Visible };
+		if (!string.Equals(response.MessageType, "error", StringComparison.Ordinal))
+		{
+			if (_graphicsAsset is not null)
+			{
+				_graphicsOverlayState = _graphicsOverlayState with
+				{
+					Visible = wire.Visible,
+					PositionX = wire.PositionX,
+					PositionY = wire.PositionY,
+					Scale = wire.Scale
+				};
+			}
+			else if (_productionCgText is not null)
+			{
+				_productionCgText = _productionCgText with { Visible = wire.Visible };
+			}
+		}
 		return response;
 	}
 
@@ -430,8 +499,71 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			token => _runtimeTransport.ClearGraphicsOverlayAsync(token),
 			cancellationToken).ConfigureAwait(false);
 		if (!string.Equals(response.MessageType, "error", StringComparison.Ordinal))
+		{
+			_graphicsAsset = null;
+			_graphicsOverlayState = new RuntimeGraphicsOverlaySnapshot(false, null, 0, 0, false, 0.72, 0.06, 1.0);
 			_productionCgText = null;
+			_compositingLayers = _compositingLayers
+				.Where(layer => layer.LayerId is not "bitmap-graphics" and not "production-cg")
+				.ToArray();
+		}
 		return response;
+	}
+
+	private async ValueTask<WireEnvelope> SetCompositingLayerStateAsync(WireEnvelope request, CancellationToken cancellationToken)
+	{
+		var wire = request.Payload.Deserialize<WireCompositingLayerState>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Compositing layer state payload is required.");
+		await _mutationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+		try
+		{
+			if (!_runtimeTransport.IsConnected)
+				return Error(request, "runtime.unavailable", "RuntimeHost is not connected.");
+			var layers = await _runtimeTransport.SetCompositingLayerStateAsync(
+				wire.LayerId,
+				wire.Visible,
+				wire.Opacity,
+				cancellationToken).ConfigureAwait(false);
+			_compositingLayers = layers;
+			if (string.Equals(wire.LayerId, "bitmap-graphics", StringComparison.Ordinal))
+				_graphicsOverlayState = _graphicsOverlayState with { Visible = wire.Visible };
+			else if (string.Equals(wire.LayerId, "production-cg", StringComparison.Ordinal) && _productionCgText is not null)
+				_productionCgText = _productionCgText with { Visible = wire.Visible };
+			NotifyObservableStateChanged();
+			return Success(request, "control.compositing.layers.response", layers.Select(ToWire).ToArray());
+		}
+		catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or NotSupportedException or FormatException or InvalidDataException or IOException)
+		{
+			return Error(request, "control.compositing.layer.rejected", exception.Message);
+		}
+		finally
+		{
+			_mutationGate.Release();
+		}
+	}
+
+	private async ValueTask<WireEnvelope> ReorderCompositingLayersAsync(WireEnvelope request, CancellationToken cancellationToken)
+	{
+		var wire = request.Payload.Deserialize<WireCompositingLayerOrder>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Compositing layer order payload is required.");
+		await _mutationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+		try
+		{
+			if (!_runtimeTransport.IsConnected)
+				return Error(request, "runtime.unavailable", "RuntimeHost is not connected.");
+			var layers = await _runtimeTransport.ReorderCompositingLayersAsync(wire.LayerIds, cancellationToken).ConfigureAwait(false);
+			_compositingLayers = layers;
+			NotifyObservableStateChanged();
+			return Success(request, "control.compositing.layers.response", layers.Select(ToWire).ToArray());
+		}
+		catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or NotSupportedException or FormatException or InvalidDataException or IOException)
+		{
+			return Error(request, "control.compositing.reorder.rejected", exception.Message);
+		}
+		finally
+		{
+			_mutationGate.Release();
+		}
 	}
 
 	private async ValueTask<WireEnvelope> MutateGraphicsAsync(
@@ -696,7 +828,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			runtime is null ? "UNKNOWN" : runtimeFresh ? "VALID" : "STALE",
 			aiShowcase.Status,
 			recording.State,
-			runtime?.GraphicsOverlay.Visible == true,
+			runtime?.CompositingLayers?.Any(layer => layer.Visible) == true,
 			audioProgram.MasterPeak,
 			runtime is null ? WireGraphicsOverlay.Empty : ToWire(runtime.GraphicsOverlay),
 			audioInputs,
@@ -714,7 +846,12 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 					scene.Routing.PreviewSourceId.ToString(),
 					scene.Routing.ProgramSourceId.ToString()))
 				.ToArray(),
-			ProjectOutputRoles(state, runtime, runtimeFresh));
+			ProjectOutputRoles(state, runtime, runtimeFresh),
+			(runtime?.CompositingLayers ?? Array.Empty<RuntimeCompositingLayerSnapshot>())
+				.OrderBy(layer => layer.Order)
+				.ThenBy(layer => layer.LayerId, StringComparer.Ordinal)
+				.Select(ToWire)
+				.ToArray());
 		return Success(request, "control.snapshot.response", payload);
 	}
 
@@ -979,6 +1116,17 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		snapshot.CacheHit,
 		snapshot.RenderDuration.Ticks);
 
+	private static WireCompositingLayer ToWire(RuntimeCompositingLayerSnapshot snapshot) => new(
+		snapshot.LayerId,
+		snapshot.Kind,
+		snapshot.Order,
+		snapshot.Visible,
+		snapshot.Opacity,
+		snapshot.PositionX,
+		snapshot.PositionY,
+		snapshot.Scale,
+		snapshot.ContentIdentity);
+
 	private static WireGraphicsOverlay ToWire(RuntimeGraphicsOverlaySnapshot snapshot) => new(
 		snapshot.AssetLoaded,
 		snapshot.AssetName,
@@ -1195,6 +1343,9 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	private sealed record WireProductionCgText(string Text, string Typeface, string? FallbackTypeface, float FontSizePixels, WireCgColor Foreground, double PositionX, double PositionY, uint BoxWidth, uint BoxHeight, int Alignment, int Anchor, WireCgPanel Panel, bool Visible, int Layer, int ZOrder);
 	private sealed record WireProductionCgTextSnapshot(bool Active, string? Text, string? Typeface, string? ResolvedTypeface, float FontSizePixels, uint BoxWidth, uint BoxHeight, int Alignment, int Anchor, bool PanelEnabled, bool Visible, int Layer, int ZOrder, bool CacheHit, long RenderDurationTicks);
 	private sealed record WireGraphicsOverlayState(bool Visible, double PositionX, double PositionY, double Scale);
+	private sealed record WireCompositingLayerState(string LayerId, bool Visible, byte Opacity);
+	private sealed record WireCompositingLayerOrder(string[] LayerIds);
+	private sealed record WireCompositingLayer(string LayerId, int Kind, int Order, bool Visible, byte Opacity, double PositionX, double PositionY, double Scale, string ContentIdentity);
 	private sealed record WireGraphicsOverlay(bool AssetLoaded, string? AssetName, uint AssetWidth, uint AssetHeight, bool Visible, double PositionX, double PositionY, double Scale)
 	{
 		public static WireGraphicsOverlay Empty { get; } = new(false, null, 0, 0, false, 0.72, 0.06, 1.0);
@@ -1259,7 +1410,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		string AvSyncSubmitOffset = "UNAVAILABLE",
 		string AvSyncDrift = "UNAVAILABLE",
 		string AvSyncDetail = "A/V sync diagnostics are unavailable.");
-	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, WireRecordingSnapshot Recording, WireHealthSnapshot Health, WireAIShowcase AIShowcase, WireMediaDeckSnapshot MediaDeck, ulong StateVersion, WireProductionCgTextSnapshot? ProductionCgText = null, WireScene[]? Scenes = null, WireOutputRole[]? OutputRoles = null);
+	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, WireRecordingSnapshot Recording, WireHealthSnapshot Health, WireAIShowcase AIShowcase, WireMediaDeckSnapshot MediaDeck, ulong StateVersion, WireProductionCgTextSnapshot? ProductionCgText = null, WireScene[]? Scenes = null, WireOutputRole[]? OutputRoles = null, WireCompositingLayer[]? CompositingLayers = null);
 	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path);
 	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame, bool? AutoPlayOnProgram, int? EndBehavior, long? InPointFrame, long? OutPointFrame);
 	private sealed record WireMediaMarkerCommand(string Version, string AssetId, int Kind, long? PositionFrame, string? CuePointId, string? Name);
@@ -1270,6 +1421,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	private sealed record WireMediaDeckSnapshot(int State, string? SourceId, WireLocalMediaProbe? Probe, WireMediaTransportSnapshot? Transport, WireMediaMarkerSnapshot? Markers, WireFailure? Failure);
 	private sealed record WireControlCommand(string Version, string CommandId, string ProductionId, ulong ExpectedRevision, string? SourceId, uint? DurationFrames, string? SceneId = null, string? OutputRoleId = null);
 	private sealed record WireMutationResponse(bool Accepted, WireProductionState State, WireFailure? Failure, ulong StateVersion);
+	private sealed record RetainedGraphicsAsset(string Name, uint Width, uint Height, byte[] RgbaPixels);
 
 	private sealed class BoundedRequestCache
 	{

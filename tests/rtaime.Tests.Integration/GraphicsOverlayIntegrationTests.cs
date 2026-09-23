@@ -68,6 +68,77 @@ public sealed class GraphicsOverlayIntegrationTests
 	}
 
 	[Fact]
+	public async Task Bitmap_and_production_CG_share_one_ordered_runtime_layer_stack()
+	{
+		if (!OperatingSystem.IsWindows())
+			return;
+
+		await using var fixture = await Fixture.CreateAsync(new CollectingRecordingWriter());
+		var baseline = fixture.Runtime.ProcessNextBoundary();
+		fixture.Runtime.LoadGraphicsOverlay("stacked-logo.rgba", 1, 1, new byte[] { 255, 0, 0, 255 });
+		fixture.Runtime.SetGraphicsOverlay(true, 0.0, 0.0, 1.0);
+		var definition = LowerThird("STACKED CG");
+		fixture.Runtime.ApplyProductionCgText(definition);
+
+		var layers = fixture.Runtime.Snapshot.CompositingLayers ?? Array.Empty<V1CompositingLayerSnapshot>();
+		var bitmap = Assert.Single(layers, layer => layer.LayerId == V1RuntimeHostService.BitmapGraphicsLayerId);
+		var cg = Assert.Single(layers, layer => layer.LayerId == V1RuntimeHostService.ProductionCgLayerId);
+		Assert.True(bitmap.Visible);
+		Assert.True(cg.Visible);
+		Assert.True(bitmap.Order < cg.Order);
+
+		var program = fixture.Runtime.ProcessNextBoundary();
+		AssertPixel(program.ProgramPixels, fixture.Format, 0, 0, 255, 0, 0, 255);
+		Assert.Equal(2, fixture.Runtime.Snapshot.Performance.ActiveCompositingLayerCount);
+		Assert.True(fixture.Runtime.Snapshot.Performance.LastCompositionDuration >= TimeSpan.Zero);
+		var originX = (int)Math.Round(definition.PositionX * (fixture.Format.Width - 1));
+		var originY = (int)Math.Round(definition.PositionY * (fixture.Format.Height - 1)) - (int)definition.BoxHeight;
+		var sampleX = originX + checked((int)(definition.BoxWidth / 2));
+		var sampleY = originY + checked((int)(definition.BoxHeight / 2));
+		Assert.NotEqual(
+			Pixel(baseline.ProgramPixels, fixture.Format, sampleX, sampleY),
+			Pixel(program.ProgramPixels, fixture.Format, sampleX, sampleY));
+
+		var transformed = fixture.Runtime.SetGraphicsOverlay(true, 0.25, 0.20, 1.5);
+		Assert.Equal(0.25, transformed.PositionX, 6);
+		Assert.Equal(0.20, transformed.PositionY, 6);
+		Assert.Equal(1.5, transformed.Scale, 6);
+		var transformedLayers = fixture.Runtime.Snapshot.CompositingLayers ?? Array.Empty<V1CompositingLayerSnapshot>();
+		var transformedBitmap = Assert.Single(transformedLayers, layer => layer.LayerId == V1RuntimeHostService.BitmapGraphicsLayerId);
+		Assert.Equal(0.25, transformedBitmap.PositionX, 6);
+		Assert.Equal(0.20, transformedBitmap.PositionY, 6);
+		Assert.Equal(1.5, transformedBitmap.Scale, 6);
+		Assert.True(Assert.Single(transformedLayers, layer => layer.LayerId == V1RuntimeHostService.ProductionCgLayerId).Visible);
+		fixture.Runtime.ProcessNextBoundary();
+		Assert.Equal(2, fixture.Runtime.Snapshot.Performance.ActiveCompositingLayerCount);
+
+		var updated = fixture.Runtime.SetCompositingLayerState(
+			V1RuntimeHostService.BitmapGraphicsLayerId,
+			visible: true,
+			opacity: 128);
+		Assert.Equal(128, Assert.Single(updated, layer => layer.LayerId == V1RuntimeHostService.BitmapGraphicsLayerId).Opacity);
+
+		var invalidOrder = updated.Select(layer => layer.LayerId).ToArray();
+		invalidOrder[0] = invalidOrder[^1];
+		Assert.Throws<ArgumentException>(() => fixture.Runtime.ReorderCompositingLayers(invalidOrder));
+
+		var orderedIds = updated
+			.OrderBy(layer => layer.Order)
+			.ThenBy(layer => layer.LayerId, StringComparer.Ordinal)
+			.Select(layer => layer.LayerId)
+			.Reverse()
+			.ToArray();
+		var reordered = fixture.Runtime.ReorderCompositingLayers(orderedIds);
+		Assert.Equal(orderedIds, reordered.Select(layer => layer.LayerId));
+
+		var hiddenCg = fixture.Runtime.SetCompositingLayerState(
+			V1RuntimeHostService.ProductionCgLayerId,
+			visible: false,
+			opacity: byte.MaxValue);
+		Assert.False(Assert.Single(hiddenCg, layer => layer.LayerId == V1RuntimeHostService.ProductionCgLayerId).Visible);
+	}
+
+	[Fact]
 	public async Task Production_CG_text_is_runtime_rendered_composited_and_cached()
 	{
 		if (!OperatingSystem.IsWindows())

@@ -312,9 +312,13 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 	public bool IsAudioSelection => _timelineItems.Count <= 1 && _timelineCue is null &&
 		(_timelineItem?.Category == TimelineTrackCategory.Audio ||
 			(_timelineItem is null && SelectedItem?.Kind == MediaPoolItemKind.Audio));
-	public bool IsGraphicsSelection => _timelineItems.Count <= 1 && _timelineCue is null &&
-		(_timelineItem?.Category is TimelineTrackCategory.Graphics or TimelineTrackCategory.Overlay ||
-			(_timelineItem is null && SelectedItem?.Kind == MediaPoolItemKind.Graphics));
+	public bool IsGraphicsSelection =>
+		string.Equals(_compositingNode?.Id, "layer:bitmap-graphics", StringComparison.Ordinal) ||
+		(_compositingNode is null &&
+			_timelineItems.Count <= 1 &&
+			_timelineCue is null &&
+			(_timelineItem?.Category is TimelineTrackCategory.Graphics or TimelineTrackCategory.Overlay ||
+				(_timelineItem is null && SelectedItem?.Kind == MediaPoolItemKind.Graphics)));
 	public bool IsCompositionSelection => _timelineItems.Count <= 1 && _timelineItem is null && _timelineCue is null && SelectedItem?.Kind == MediaPoolItemKind.Composition;
 	public bool IsCueSelection => _timelineCue is not null;
 	public string InspectorTitle => _compositingNode?.Title ?? (_timelineItems.Count > 1

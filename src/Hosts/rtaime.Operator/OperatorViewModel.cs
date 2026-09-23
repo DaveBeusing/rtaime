@@ -128,6 +128,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	private string _previewViewerState = "DISCONNECTED";
 	private string _programViewerState = "DISCONNECTED";
 	private IReadOnlyList<OperatorOutputRoleDescriptor> _outputRoles = Array.Empty<OperatorOutputRoleDescriptor>();
+	private IReadOnlyList<OperatorCompositingLayerDescriptor> _compositingLayers = Array.Empty<OperatorCompositingLayerDescriptor>();
 	private string? _lastError;
 	private bool _isBusy;
 	private bool _isConnected;
@@ -435,6 +436,16 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		}
 	}
 
+	public IReadOnlyList<OperatorCompositingLayerDescriptor> CompositingLayers
+	{
+		get => _compositingLayers;
+		private set
+		{
+			_compositingLayers = value ?? Array.Empty<OperatorCompositingLayerDescriptor>();
+			PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CompositingLayers)));
+		}
+	}
+
 	public uint TransitionFrames
 	{
 		get => _transitionFrames;
@@ -467,7 +478,10 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 
 	private bool CanApplyGraphicsPlacement() =>
 		CanApplyGraphics() &&
-		_client?.Snapshot?.ProductionCgText.Active != true;
+		(_client?.Snapshot?.ProductionCgText.Active != true ||
+			CompositingLayers.Any(layer => string.Equals(layer.LayerId, "bitmap-graphics", StringComparison.Ordinal)));
+
+	internal bool CanManageCompositingLayers() => CanControl() && CompositingLayers.Count > 0;
 
 	private bool CanApplyTextGraphics() =>
 		CanControl() &&
@@ -539,6 +553,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 						ApplyRecording(snapshot.Recording, preserveTargetEdit: true);
 						ApplyHealth(snapshot.Health);
 						ApplyOutputRoles(snapshot.OutputRoles);
+						CompositingLayers = snapshot.CompositingLayers;
 						ApplyAI(snapshot.AIShowcase);
 						ApplyEmbeddedMediaDeckSnapshot(snapshot.MediaDeck);
 						ApplyLifecycle(snapshot);
@@ -909,6 +924,37 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		});
 	}
 
+	internal async Task SetCompositingLayerStateAsync(
+		string layerId,
+		bool visible,
+		byte opacity)
+	{
+		if (_client is null || !CanManageCompositingLayers()) return;
+		if (string.IsNullOrWhiteSpace(layerId)) throw new ArgumentException("Compositing layer identity is required.", nameof(layerId));
+
+		await ExecuteAsync("LAYER STATE", async () =>
+		{
+			await _client.SetCompositingLayerStateAsync(layerId.Trim(), visible, opacity);
+			Apply(_client.Snapshot!);
+			CommandStatus = "LAYER CONFIRMED";
+			LastEvent = $"Compositing layer {layerId.Trim()} state was confirmed by RuntimeHost.";
+		});
+	}
+
+	internal async Task ReorderCompositingLayersAsync(IReadOnlyList<string> orderedLayerIds)
+	{
+		if (_client is null || !CanManageCompositingLayers()) return;
+		ArgumentNullException.ThrowIfNull(orderedLayerIds);
+
+		await ExecuteAsync("LAYER ORDER", async () =>
+		{
+			await _client.ReorderCompositingLayersAsync(orderedLayerIds);
+			Apply(_client.Snapshot!);
+			CommandStatus = "LAYER ORDER CONFIRMED";
+			LastEvent = "Compositing layer order was confirmed by RuntimeHost.";
+		});
+	}
+
 	private async Task ApplyAudioGainAsync()
 	{
 		if (_client is null || SelectedAudioInput is null) return;
@@ -1111,6 +1157,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		ApplyRecording(snapshot.Recording, preserveTargetEdit: false);
 		ApplyHealth(snapshot.Health);
 		ApplyOutputRoles(snapshot.OutputRoles);
+		CompositingLayers = snapshot.CompositingLayers;
 		var graphics = snapshot.GraphicsOverlay;
 		GraphicsAssetName = graphics.AssetLoaded ? graphics.AssetName ?? "Unnamed graphics asset" : "No graphics asset loaded";
 		GraphicsDimensions = graphics.AssetLoaded ? $"{graphics.AssetWidth}×{graphics.AssetHeight}" : "—";

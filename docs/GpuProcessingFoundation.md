@@ -213,18 +213,20 @@ This avoids wall-clock dependence and keeps reference and hardware backend seman
 
 ### Key/compositing layer
 
-One RGBA layer is supported.
+The provider accepts a bounded ordered list of RGBA layers. The current production bound is `GpuCompositeLimits.MaxActiveLayers = 8`. The legacy one-layer request constructor remains supported for compatibility.
 
-The layer has:
+Each layer has:
 
 - source surface,
 - visibility,
 - opacity `0..255`,
 - source alpha.
 
-Effective alpha is source alpha multiplied by layer opacity, followed by deterministic straight-alpha composition over the transitioned background.
+The request order is authoritative for provider execution. CUT/DISSOLVE resolves the background first; visible layers are then composed in declared order, so later layers are visually above earlier layers. Effective alpha is source alpha multiplied by layer opacity, followed by deterministic straight-alpha composition.
 
-GPU Processing Foundation does not introduce a graphics authoring system, browser graphics, multi-layer scene graph, or UI-timer animation.
+The provider reuses the established backend primitive for every layer. Managed-reference and CUDA therefore share the same ordered execution model without introducing a second compositor or exposing vendor types outside the provider boundary. Intermediate surfaces are bounded to the active request and released after each pass or on failure.
+
+GPU Processing Foundation does not introduce a graphics authoring system, arbitrary scene graph, browser graphics, or UI-timer animation.
 
 ## GPU observations
 
@@ -237,6 +239,8 @@ GPU Processing Foundation does not introduce a graphics authoring system, browse
 - CUT,
 - DISSOLVE,
 - rejected composite input,
+- active composite layer count,
+- measured composite duration,
 - backend processing failure,
 - backend release failure.
 
@@ -272,6 +276,8 @@ The provider fails closed for:
 - disposed/foreign surfaces,
 - format mismatch,
 - timing mismatch,
+- more than eight active layers,
+- duplicate layer surfaces in one request,
 - backend exceptions.
 
 A backend exception is observed as:
@@ -306,11 +312,14 @@ These measurements exercise:
 
 - full 1920×1080 RGBA buffers,
 - background blending,
-- one RGBA layer,
-- output allocation/release,
+- ordered RGBA layer composition,
+- explicit 0 / 1 / 2 / 4 / 8 layer-count cases,
+- provider-reported composition duration and wall-clock comparison,
+- layer-count-dependent output/intermediate allocation and release,
+- active-surface return to the persistent input baseline after each case,
 - provider lifecycle.
 
-The threshold is intentionally broad and is a managed semantic/performance regression guard only.
+The threshold is intentionally broad and is a managed semantic/performance regression guard only. The layer-scaling cases record measurements without introducing a new physical hardware PASS threshold.
 
 It is **not**:
 
@@ -354,7 +363,7 @@ GPU Processing Foundation does not implement:
 - GPU-specific Planning branches,
 - multi-GPU scheduling,
 - arbitrary graphics scene graphs,
-- multiple key layers,
+- unbounded layer counts,
 - native C++ adapter code,
 - professional media capture/output hardware,
 - DMA/import of external vendor surfaces,

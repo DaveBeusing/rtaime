@@ -55,9 +55,13 @@ The graph uses stable node identities. Ordinary status refreshes update the exis
 
 SELECT projects the chosen node into the existing Inspector. PAN, mouse-wheel zoom, FIT, 100% reset and AUTO LAYOUT remain presentation-only operations. Middle-mouse panning remains available independently of the active interaction mode.
 
-Arbitrary Runtime topology rewiring is not exposed by the current contracts. The toolbar therefore states **READ-ONLY TOPOLOGY** and does not provide a decorative REWIRE action.
+Arbitrary source/routing topology rewiring is not exposed by the current contracts and the graph still provides no decorative REWIRE action. The toolbar identifies the **CONFIRMED LAYER STACK** and adds only bounded layer operations that are backed by the existing authority path:
 
-Node selection never performs Set Preview, CUT, AUTO, graphics mutation, recording mutation or another production command.
+- move the selected active layer one position lower or higher;
+- toggle visibility for bitmap graphics or Production CG;
+- decrease or increase opacity for bitmap graphics or Production CG.
+
+Layer selection remains presentation-only. A toolbar button press sends an explicit client command through ControlHost to RuntimeHost, displays an applying state, and refreshes the graph only from the confirmed Runtime snapshot. Selecting the confirmed bitmap graphics layer also exposes the existing Inspector X/Y/Scale editor; APPLY TRANSFORM continues through the established graphics-placement command and is projected back only after Runtime confirmation. Production CG placement remains definition-owned and is not generalized into this bitmap transform path. Legacy visual/test-layer state remains governed by its existing command rather than being silently migrated into the new controls.
 
 ## Preview
 
@@ -77,7 +81,7 @@ This is **real telemetry only**: missing data remains visibly unavailable rather
 
 ## Inspector integration
 
-Selecting a graph node uses the existing shared Inspector path. Node status, detail, ports, health and read-only rewiring capability remain Inspector projection data rather than a separate editor model.
+Selecting a graph node uses the existing shared Inspector path. Runtime layer nodes expose their stable identity, confirmed order, visibility, opacity and transform in the graph projection. The Inspector remains a projection over confirmed state; for the bitmap graphics layer it reuses the existing graphics transform editor and command rather than adding another layer-editor state model. Reorder, visibility and opacity remain bounded COMPOSITING toolbar commands.
 
 ## Authority boundary
 
@@ -99,6 +103,8 @@ Selecting a graph node uses the existing shared Inspector path. Node status, det
 - only currently backed mockup role labels;
 - own rtaime controls with no directly visible stock WPF controls;
 - existing pan/zoom/Fit/Auto Layout behavior;
+- bounded layer order, visibility and opacity controls through the client boundary;
+- pending-versus-confirmed layer mutation feedback;
 - stable node positions across status refreshes;
 - shared Inspector selection;
 - reuse of the established Preview monitor and the Preview / 6 px gap / System & Performance right stack;

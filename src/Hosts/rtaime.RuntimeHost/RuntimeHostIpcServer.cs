@@ -190,6 +190,8 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 				"runtime.graphics.cg.apply" => ValueTask.FromResult(ApplyProductionCgText(request, runtime)),
 				"runtime.graphics.overlay.set" => ValueTask.FromResult(SetGraphicsOverlay(request, runtime)),
 				"runtime.graphics.overlay.clear" => ValueTask.FromResult(ClearGraphicsOverlay(request, runtime)),
+				"runtime.compositing.layer.set" => ValueTask.FromResult(SetCompositingLayerState(request, runtime)),
+				"runtime.compositing.layers.reorder" => ValueTask.FromResult(ReorderCompositingLayers(request, runtime)),
 				"runtime.audio.input.set" => ValueTask.FromResult(SetAudioInputState(request, runtime)),
 				"runtime.audio.test_signal.set" => ValueTask.FromResult(SetAudioTestSignal(request, runtime)),
 				"runtime.test_pattern.set" => ValueTask.FromResult(SetBroadcastTestPattern(request, runtime)),
@@ -279,6 +281,24 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		var snapshot = runtime.ClearGraphicsOverlay();
 		_stateVersion++;
 		return Success(request, "runtime.graphics.overlay.response", ToWire(snapshot));
+	}
+
+	private WireEnvelope SetCompositingLayerState(WireEnvelope request, V1RuntimeHostService runtime)
+	{
+		var wire = request.Payload.Deserialize<WireCompositingLayerState>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Compositing layer state payload is required.");
+		var layers = runtime.SetCompositingLayerState(wire.LayerId, wire.Visible, wire.Opacity);
+		_stateVersion++;
+		return Success(request, "runtime.compositing.layers.response", layers.Select(ToWire).ToArray());
+	}
+
+	private WireEnvelope ReorderCompositingLayers(WireEnvelope request, V1RuntimeHostService runtime)
+	{
+		var wire = request.Payload.Deserialize<WireCompositingLayerOrder>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Compositing layer order payload is required.");
+		var layers = runtime.ReorderCompositingLayers(wire.LayerIds);
+		_stateVersion++;
+		return Success(request, "runtime.compositing.layers.response", layers.Select(ToWire).ToArray());
 	}
 
 	private WireEnvelope SetBroadcastTestPattern(WireEnvelope request, V1RuntimeHostService runtime)
@@ -521,7 +541,8 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		ToWire(aiShowcase),
 		snapshot.AvSyncDiagnostics is null ? null : ToWire(snapshot.AvSyncDiagnostics),
 		snapshot.ProductionCgText is null ? null : ToWire(snapshot.ProductionCgText),
-		(snapshot.OutputRoles ?? Array.Empty<RuntimeOutputRoleSnapshot>()).Select(ToWire).ToArray());
+		(snapshot.OutputRoles ?? Array.Empty<RuntimeOutputRoleSnapshot>()).Select(ToWire).ToArray(),
+		(snapshot.CompositingLayers ?? Array.Empty<V1CompositingLayerSnapshot>()).Select(ToWire).ToArray());
 
 	private static WireAvSyncDiagnostics ToWire(V1AvSyncDiagnosticsSnapshot snapshot) => new(
 		snapshot.Enabled,
@@ -566,6 +587,17 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		snapshot.ZOrder,
 		snapshot.CacheHit,
 		snapshot.RenderDuration.Ticks);
+
+	private static WireCompositingLayer ToWire(V1CompositingLayerSnapshot snapshot) => new(
+		snapshot.LayerId,
+		(int)snapshot.Kind,
+		snapshot.Order,
+		snapshot.Visible,
+		snapshot.Opacity,
+		snapshot.PositionX,
+		snapshot.PositionY,
+		snapshot.Scale,
+		snapshot.ContentIdentity);
 
 	private static WireGraphicsOverlay ToWire(V1GraphicsOverlaySnapshot snapshot) => new(
 		snapshot.AssetLoaded,
@@ -636,7 +668,9 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		snapshot.SystemMemoryTotalBytes,
 		snapshot.SystemTelemetryEvidence,
 		snapshot.PhysicalGpuDeviceName,
-		snapshot.OutputFramesPerSecond);
+		snapshot.OutputFramesPerSecond,
+		snapshot.LastCompositionDuration.Ticks,
+		snapshot.ActiveCompositingLayerCount);
 
 	private static WireAIShowcase ToWire(RuntimeAIShowcaseSnapshot snapshot) => new(
 		snapshot.Enabled,
@@ -742,7 +776,10 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 	private sealed record WireProductionCgText(string Text, string Typeface, string? FallbackTypeface, float FontSizePixels, WireCgColor Foreground, double PositionX, double PositionY, uint BoxWidth, uint BoxHeight, int Alignment, int Anchor, WireCgPanel Panel, bool Visible, int Layer, int ZOrder);
 	private sealed record WireProductionCgTextSnapshot(bool Active, string? Text, string? Typeface, string? ResolvedTypeface, float FontSizePixels, uint BoxWidth, uint BoxHeight, int Alignment, int Anchor, bool PanelEnabled, bool Visible, int Layer, int ZOrder, bool CacheHit, long RenderDurationTicks);
 	private sealed record WireGraphicsOverlayState(bool Visible, double PositionX, double PositionY, double Scale);
+	private sealed record WireCompositingLayerState(string LayerId, bool Visible, byte Opacity);
+	private sealed record WireCompositingLayerOrder(string[] LayerIds);
 	private sealed record WireGraphicsOverlay(bool AssetLoaded, string? AssetName, uint AssetWidth, uint AssetHeight, bool Visible, double PositionX, double PositionY, double Scale);
+	private sealed record WireCompositingLayer(string LayerId, int Kind, int Order, bool Visible, byte Opacity, double PositionX, double PositionY, double Scale, string ContentIdentity);
 	private sealed record WireAudioInputState(string SourceId, double Gain, bool Muted);
 	private sealed record WireAudioTestSignalState(string SourceId, bool Enabled, int Mode, double FrequencyHz, double PeakLevel);
 	private sealed record WireAudioInput(
@@ -773,7 +810,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 	private sealed record WireApplyResponse(WirePrepareResult Prepare, WireCommitResult? Commit, ulong? ActivationSequence);
 	private sealed record WireRecordingStart(string SessionId, string OutputId, string DestinationDirectory, string FileName);
 	private sealed record WireRecordingSnapshot(string State, long ElapsedTicks, string? Destination, string? FileName, string? FinalPath, ulong Accepted, ulong Written, ulong Dropped, ulong Rejected, ulong WriterFailures, WireFailure? Failure);
-	private sealed record WireRuntimePerformance(long UptimeTicks, long FrameBudgetTicks, long LastFrameProcessingTicks, ulong DroppedFrames, string GpuDeviceName, bool GpuHardwareAccelerated, double? GpuUtilizationPercent, ulong? GpuVramUsedBytes, ulong? GpuVramTotalBytes, string GpuTelemetryEvidence, string CpuDeviceName, int CpuLogicalProcessorCount, double? CpuUtilizationPercent, ulong? SystemMemoryUsedBytes, ulong? SystemMemoryTotalBytes, string SystemTelemetryEvidence, string PhysicalGpuDeviceName, double? OutputFramesPerSecond);
+	private sealed record WireRuntimePerformance(long UptimeTicks, long FrameBudgetTicks, long LastFrameProcessingTicks, ulong DroppedFrames, string GpuDeviceName, bool GpuHardwareAccelerated, double? GpuUtilizationPercent, ulong? GpuVramUsedBytes, ulong? GpuVramTotalBytes, string GpuTelemetryEvidence, string CpuDeviceName, int CpuLogicalProcessorCount, double? CpuUtilizationPercent, ulong? SystemMemoryUsedBytes, ulong? SystemMemoryTotalBytes, string SystemTelemetryEvidence, string PhysicalGpuDeviceName, double? OutputFramesPerSecond, long LastCompositionDurationTicks = 0, int ActiveCompositingLayerCount = 0);
 	private sealed record WireAIShowcaseState(bool Enabled);
 	private sealed record WireAIShowcase(bool Enabled, string Feature, string Status, string Provider, long InferenceTimeTicks, uint PersonRegionCount, ulong? SourceSequence, ulong? AppliedSequence, double? Confidence, bool EffectVisible, WireFailure? Failure, DateTimeOffset? UpdatedAtUtc);
 	private sealed record WireAvSyncDiagnostics(bool Enabled, string State, ulong? EventId, string? ExpectedMediaTime, ulong? TargetVideoFrameSequence, ulong? TargetAudioSamplePosition, double? ScheduledVideoOffsetMilliseconds, double? SubmitOffsetMilliseconds, double? DriftFromBaselineMilliseconds, string Detail);
@@ -809,7 +846,8 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		WireAIShowcase AIShowcase,
 		WireAvSyncDiagnostics? AvSyncDiagnostics = null,
 		WireProductionCgTextSnapshot? ProductionCgText = null,
-		WireOutputRole[]? OutputRoles = null);
+		WireOutputRole[]? OutputRoles = null,
+		WireCompositingLayer[]? CompositingLayers = null);
 
 	private sealed class BoundedRequestCache
 	{
