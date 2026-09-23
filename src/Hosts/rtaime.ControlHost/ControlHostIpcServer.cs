@@ -844,7 +844,8 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 					scene.SceneId.ToString(),
 					scene.Name,
 					scene.Routing.PreviewSourceId.ToString(),
-					scene.Routing.ProgramSourceId.ToString()))
+					scene.Routing.ProgramSourceId.ToString(),
+					ToWire(scene.CompositingState)))
 				.ToArray(),
 			ProjectOutputRoles(state, runtime, runtimeFresh),
 			(runtime?.CompositingLayers ?? Array.Empty<RuntimeCompositingLayerSnapshot>())
@@ -1257,7 +1258,24 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			role.TargetId,
 			role.FormatPolicy,
 			role.TimingPolicy,
-			role.Enabled)).ToArray());
+			role.Enabled)).ToArray(),
+		ToWire(state.CompositingState));
+
+	private static WireCompositingState? ToWire(ProductionCompositingState? state) =>
+		state is null
+			? null
+			: new WireCompositingState(
+				state.Version.ToString(),
+				state.Layers.Select(layer => new WireCompositingLayer(
+					layer.LayerId,
+					(int)layer.Kind,
+					layer.Order,
+					layer.Visible,
+					layer.Opacity,
+					layer.PositionX,
+					layer.PositionY,
+					layer.Scale,
+					layer.ContentIdentity)).ToArray());
 
 	private static WireOutputRole[] ProjectOutputRoles(
 		AuthoritativeProductionState state,
@@ -1333,10 +1351,10 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	private sealed record ServerHello(string ProtocolVersion, string Role, string HostInstanceId, Dictionary<string, string> ContractVersions);
 	private sealed record WireFailure(string Code, string Message);
 	private sealed record WireSource(string Id, string Name, string Type, string Format, string Health, string MediaState, long? RemainingTicks, string? MediaFileName);
-	private sealed record WireScene(string Id, string Name, string PreviewSourceId, string ProgramSourceId);
+	private sealed record WireScene(string Id, string Name, string PreviewSourceId, string ProgramSourceId, WireCompositingState? CompositingState = null);
 	private sealed record WireOutputRoleAuthority(string RoleId, int Kind, string SourceId, string ProviderSelector, string TargetId, string FormatPolicy, string TimingPolicy, bool Enabled);
 	private sealed record WireOutputRole(string RoleId, string RoleKind, string SourceId, string TargetId, string ProviderId, uint? Width, uint? Height, string? FrameRate, string? PixelFormat, string? Timing, string LifecycleState, bool AuthoritativeActive, string HealthState, string Evidence, WireFailure? Error);
-	private sealed record WireProductionState(string Version, string ProductionId, ulong Revision, string PreviewSourceId, string ProgramSourceId, string? ActiveSceneId = null, WireOutputRoleAuthority[]? OutputRoles = null);
+	private sealed record WireProductionState(string Version, string ProductionId, ulong Revision, string PreviewSourceId, string ProgramSourceId, string? ActiveSceneId = null, WireOutputRoleAuthority[]? OutputRoles = null, WireCompositingState? CompositingState = null);
 	private sealed record WireGraphicsAsset(string Name, uint Width, uint Height, byte[] RgbaPixels);
 	private sealed record WireCgColor(byte Red, byte Green, byte Blue, byte Alpha);
 	private sealed record WireCgPanel(bool Enabled, WireCgColor Color, float CornerRadiusPixels, uint PaddingPixels);
@@ -1346,6 +1364,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	private sealed record WireCompositingLayerState(string LayerId, bool Visible, byte Opacity);
 	private sealed record WireCompositingLayerOrder(string[] LayerIds);
 	private sealed record WireCompositingLayer(string LayerId, int Kind, int Order, bool Visible, byte Opacity, double PositionX, double PositionY, double Scale, string ContentIdentity);
+	private sealed record WireCompositingState(string Version, WireCompositingLayer[] Layers);
 	private sealed record WireGraphicsOverlay(bool AssetLoaded, string? AssetName, uint AssetWidth, uint AssetHeight, bool Visible, double PositionX, double PositionY, double Scale)
 	{
 		public static WireGraphicsOverlay Empty { get; } = new(false, null, 0, 0, false, 0.72, 0.06, 1.0);
