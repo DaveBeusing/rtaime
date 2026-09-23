@@ -92,7 +92,7 @@ internal static class Program
 		catch (Exception exception)
 		{
 			log.Critical("lifecycle", "runtimehost.unexpected-failure", "RuntimeHost terminated after an unexpected failure.", exception);
-			return (int)RuntimeHostExitCode.StartupFailure;
+			return (int)RuntimeHostExitCode.UnexpectedFailure;
 		}
 		finally
 		{
