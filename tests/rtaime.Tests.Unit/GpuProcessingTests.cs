@@ -221,6 +221,7 @@ public sealed class GpuProcessingTests
 
         Assert.False(result.Succeeded);
         Assert.Equal("gpu.composite.layer_limit", result.Failure?.Code);
+        Assert.Equal(GpuCompositeLimits.MaxActiveLayers + 1, result.LayerCount);
     }
 
     [Fact]
