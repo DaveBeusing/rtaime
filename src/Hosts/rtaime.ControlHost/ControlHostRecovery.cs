@@ -42,7 +42,21 @@ internal static class ControlHostRecovery
 				role.TargetId,
 				role.FormatPolicy,
 				role.TimingPolicy,
-				role.Enabled)).ToArray()));
+				role.Enabled)).ToArray(),
+			state.CompositingState is null
+				? null
+				: new PersistedCompositingState(
+					state.CompositingState.Version.ToString(),
+					state.CompositingState.Layers.Select(layer => new PersistedCompositingLayer(
+						layer.LayerId,
+						(int)layer.Kind,
+						layer.Order,
+						layer.Visible,
+						layer.Opacity,
+						layer.PositionX,
+						layer.PositionY,
+						layer.Scale,
+						layer.ContentIdentity)).ToArray())));
 	}
 
 	public static async ValueTask<AuthoritativeProductionState?> LoadAsync(
@@ -100,6 +114,42 @@ internal static class ControlHostRecovery
 				throw new InvalidDataException("Recovered active scene does not match recovered production routing.");
 		}
 
+		ProductionCompositingState? recoveredCompositingState = null;
+		if (snapshot.CompositingState is not null)
+		{
+			var compositingVersion = CompatibilityVersion.Parse(snapshot.CompositingState.Version);
+			recoveredCompositingState = new ProductionCompositingState(
+				compositingVersion,
+				snapshot.CompositingState.Layers.Select(layer => new ProductionCompositingLayerState(
+					layer.LayerId,
+					Enum.IsDefined(typeof(ProductionCompositingLayerKind), layer.Kind)
+						? (ProductionCompositingLayerKind)layer.Kind
+						: throw new InvalidDataException($"Recovered compositing layer kind '{layer.Kind}' is invalid."),
+					layer.Order,
+					layer.Visible,
+					layer.Opacity,
+					layer.PositionX,
+					layer.PositionY,
+					layer.Scale,
+					layer.ContentIdentity)).ToArray());
+		}
+
+		if (activeSceneId is { } recoveredActiveSceneId)
+		{
+			var activeScene = specification.Scenes.Single(scene => scene.SceneId == recoveredActiveSceneId);
+			if (activeScene.CompositingState is not null)
+			{
+				if (recoveredCompositingState is null)
+				{
+					activeSceneId = null;
+				}
+				else if (!activeScene.CompositingState.Equals(recoveredCompositingState))
+				{
+					throw new InvalidDataException("Recovered active scene does not match recovered compositing state.");
+				}
+			}
+		}
+
 		var outputRoles = snapshot.OutputRoles is { Length: > 0 }
 			? snapshot.OutputRoles.Select(role => new ProductionOutputRoleState(
 				new OutputRoleId(role.RoleId),
@@ -129,7 +179,8 @@ internal static class ControlHostRecovery
 			revision,
 			recoveredRouting,
 			activeSceneId,
-			outputRoles);
+			outputRoles,
+			recoveredCompositingState);
 	}
 
 	private sealed record PersistedAuthoritySnapshot(
@@ -139,7 +190,23 @@ internal static class ControlHostRecovery
 		string PreviewSourceId,
 		string ProgramSourceId,
 		string? ActiveSceneId = null,
-		PersistedOutputRole[]? OutputRoles = null);
+		PersistedOutputRole[]? OutputRoles = null,
+		PersistedCompositingState? CompositingState = null);
+
+	private sealed record PersistedCompositingState(
+		string Version,
+		PersistedCompositingLayer[] Layers);
+
+	private sealed record PersistedCompositingLayer(
+		string LayerId,
+		int Kind,
+		int Order,
+		bool Visible,
+		byte Opacity,
+		double PositionX,
+		double PositionY,
+		double Scale,
+		string ContentIdentity);
 
 	private sealed record PersistedOutputRole(
 		string RoleId,
