@@ -115,7 +115,7 @@ Assert-Condition ($supportBundle -match 'DiagnosticRedactor\.SanitizeValue' -and
 Assert-Condition ($supportBundle -notmatch 'PreviewImage|ProgramImage|MonitoringFrame|MediaFrame|GpuSurface') "Support bundle export must not collect media payloads or GPU surfaces."
 Assert-Condition ($supportBundle -notmatch 'PeriodicTimer|DispatcherTimer|Task\.Run|new Thread') "Support bundle export must remain on-demand and must not introduce another polling/background path."
 Assert-Condition ($startupViewModel -match 'ExportSupportBundleCommand' -and $startupViewModel -match 'SupportBundleActionLabel') "Startup diagnostics must expose the support bundle export command."
-Assert-Condition ($operatorWindow -match 'Export diagnostics support bundle' -and $operatorWindow -match 'ExportSupportBundleCommand') "Operator diagnostics UI must expose the support bundle export action."
+Assert-Condition ($operatorWindow -match 'Export diagnostics support bundle' -and $operatorWindow -match 'Export system diagnostics support bundle' -and $operatorWindow -match 'ExportSupportBundleCommand') "Operator must expose support bundle export during startup diagnostics and in the steady-state System workspace."
 foreach ($entryPoint in @($appHostProgram, $controlProgram, $runtimeProgram, $aiProgram)) {
 	Assert-Condition ($entryPoint -match 'DiagnosticRedactor\.RedactText\(exception\.Message\)') "Host fallback stderr diagnostics must redact exception messages."
 }
