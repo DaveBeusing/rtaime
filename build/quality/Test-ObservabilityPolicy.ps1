@@ -162,6 +162,7 @@ Assert-Condition ($tests -match 'Redaction_removes_secret_dimensions') "Diagnost
 Assert-Condition ($tests -match 'Support_snapshot_serialization_is_deterministic') "Deterministic support serialization regression coverage is required."
 Assert-Condition ($tests -match 'Host_log_writes_structured_redacted_json_lines') "Structured host log serialization/redaction regression coverage is required."
 Assert-Condition ($tests -match 'Host_log_keeps_process_failures_best_effort') "Structured host process-failure regression coverage is required."
+Assert-Condition ($tests -match 'Host_log_file_failure_does_not_fail_the_calling_host') "Structured host log storage failures must be regression-tested as non-fatal."
 Assert-Condition ($documentation -match 'No per-frame disk write') "Observability documentation must explicitly prohibit per-frame diagnostic disk writes."
 Assert-Condition ($documentation -match 'raw video/audio payloads') "Observability documentation must explicitly prohibit bulk media in support snapshots."
 Assert-Condition ($documentation -match 'Runtime Health & Performance HUD') "Observability documentation must record the runtime health/performance projection."
