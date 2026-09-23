@@ -593,15 +593,6 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		}
 	}
 
-	private async ValueTask ConfirmRuntimeCompositingAuthorityAsync(
-		ControlHostService control,
-		CancellationToken cancellationToken)
-	{
-		var runtime = await _runtimeTransport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
-		_compositingLayers = runtime.CompositingLayers ?? Array.Empty<RuntimeCompositingLayerSnapshot>();
-		control.ConfirmCompositingMutation(ToProductionCompositingState(_compositingLayers));
-	}
-
 	private static ProductionCompositingState ToProductionCompositingState(
 		IReadOnlyList<RuntimeCompositingLayerSnapshot> layers)
 	{
@@ -611,12 +602,12 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			layers
 				.OrderBy(layer => layer.Order)
 				.ThenBy(layer => layer.LayerId, StringComparer.Ordinal)
-				.Select(layer => new ProductionCompositingLayerState(
+				.Select((layer, order) => new ProductionCompositingLayerState(
 					layer.LayerId,
 					Enum.IsDefined(typeof(ProductionCompositingLayerKind), layer.Kind)
 						? (ProductionCompositingLayerKind)layer.Kind
 						: throw new InvalidDataException($"Runtime compositing layer kind '{layer.Kind}' is invalid."),
-					layer.Order,
+					order,
 					layer.Visible,
 					layer.Opacity,
 					layer.PositionX,
@@ -643,7 +634,8 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			try
 			{
 				var snapshot = await mutation(cancellationToken).ConfigureAwait(false);
-				await ConfirmRuntimeCompositingAuthorityAsync(control, cancellationToken).ConfigureAwait(false);
+				var runtime = await _runtimeTransport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
+				_compositingLayers = runtime.CompositingLayers ?? Array.Empty<RuntimeCompositingLayerSnapshot>();
 				NotifyObservableStateChanged();
 				return Success(request, "control.graphics.overlay.response", ToWire(snapshot));
 			}
