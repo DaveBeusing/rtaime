@@ -3,6 +3,10 @@
     <OutputType>Exe</OutputType>
   </PropertyGroup>
   <ItemGroup>
+		<ProjectReference Include="..\..\rtaime.Core\rtaime.Core.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
     <ProjectReference Include="..\..\Runtime\rtaime.Runtime\rtaime.Runtime.csproj" />
     <ProjectReference Include="..\..\Media\rtaime.Media\rtaime.Media.csproj" />
     <ProjectReference Include="..\..\Recording\rtaime.Recording\rtaime.Recording.csproj" />
