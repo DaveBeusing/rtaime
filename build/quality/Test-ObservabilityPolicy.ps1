@@ -98,6 +98,9 @@ Assert-Condition ($controlProgram -match 'controlhost\.runtime-supervision-chang
 Assert-Condition ($runtimeProgram -match 'runtimehost\.state-changed' -and $runtimeProgram -match 'runtimehost\.ready') "RuntimeHost logging must expose lifecycle and readiness transitions."
 Assert-Condition ($aiProgram -match 'aihost\.state-changed' -and $aiProgram -match 'aihost\.ready') "AIHost logging must expose lifecycle and readiness transitions."
 Assert-Condition ($operatorApp -match 'operator\.dispatcher-unhandled-exception' -and $operatorApp -match 'operator\.reconnect-failure') "Operator logging must capture UI failures and reconnect transitions."
+foreach ($entryPoint in @($appHostProgram, $controlProgram, $runtimeProgram, $aiProgram)) {
+	Assert-Condition ($entryPoint -match 'DiagnosticRedactor\.RedactText\(exception\.Message\)') "Host fallback stderr diagnostics must redact exception messages."
+}
 
 $snapshotDeclaration = [Regex]::Match($core, 'public sealed record SupportSnapshot\((?s:.*?)\);')
 Assert-Condition $snapshotDeclaration.Success "SupportSnapshot declaration could not be located."
