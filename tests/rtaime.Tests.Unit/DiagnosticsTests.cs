@@ -164,6 +164,33 @@ public sealed class DiagnosticsTests
 	}
 
 	[Fact]
+	public void Host_log_file_failure_does_not_fail_the_calling_host()
+	{
+		var root = Path.Combine(Path.GetTempPath(), "rtaime-host-log-tests", Guid.NewGuid().ToString("N"));
+		Directory.CreateDirectory(root);
+		var fileInsteadOfDirectory = Path.Combine(root, "blocked-root");
+		File.WriteAllText(fileInsteadOfDirectory, "not-a-directory");
+
+		try
+		{
+			using var log = HostLog.Open(
+				"AIHost",
+				new[] { $"--log-root={fileInsteadOfDirectory}", "--log-session-id=file-failure-test" },
+				publishEnvironment: false);
+
+			var exception = Record.Exception(() =>
+				log.Error("storage", "logging.path-unavailable", "Logging path is unavailable."));
+
+			Assert.Null(exception);
+			Assert.Null(log.CurrentFilePath);
+		}
+		finally
+		{
+			try { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); } catch (IOException) { }
+		}
+	}
+
+	[Fact]
 	public void Product_build_info_uses_informational_version_without_source_revision_suffix()
 	{
 		var build = ProductBuildInfo.FromAssembly(typeof(DiagnosticsTests).Assembly);
