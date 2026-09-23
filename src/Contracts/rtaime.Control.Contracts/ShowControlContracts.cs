@@ -404,14 +404,105 @@ public static class ShowControlCanonicalSerializer
 	public static string Serialize(ShowControlCueList cueList)
 	{
 		ArgumentNullException.ThrowIfNull(cueList);
-		return JsonSerializer.Serialize(cueList, Options);
+		return JsonSerializer.Serialize(ToDocument(cueList), Options);
 	}
 
 	public static ShowControlCueList Deserialize(string json)
 	{
 		if (string.IsNullOrWhiteSpace(json))
 			throw new ArgumentException("Show-control cue-list JSON is required.", nameof(json));
-		return JsonSerializer.Deserialize<ShowControlCueList>(json, Options)
+
+		var document = JsonSerializer.Deserialize<CueListDocument>(json, Options)
 			?? throw new InvalidDataException("Show-control cue-list JSON did not contain a cue list.");
+		if (document.Cues is null)
+			throw new InvalidDataException("Show-control cue-list JSON requires a cue collection.");
+
+		var version = CompatibilityVersion.Parse(document.Version);
+		ShowControlContractVersion.EnsureSupported(version);
+		return new ShowControlCueList(
+			version,
+			new ShowControlCueListId(Identity.Parse(document.CueListId)),
+			document.Name,
+			document.Cues.Select(FromDocument).ToArray());
 	}
+
+	private static CueListDocument ToDocument(ShowControlCueList cueList) => new(
+		cueList.Version.ToString(),
+		cueList.CueListId.ToString(),
+		cueList.Name,
+		cueList.Cues.Select(cue => new CueDocument(
+			cue.CueId.ToString(),
+			cue.Name,
+			cue.Actions.Select(action => new ActionDocument(
+				action.ActionId.ToString(),
+				action.Kind.ToString(),
+				action.SceneId,
+				action.SourceId,
+				action.DurationFrames,
+				action.MediaAssetId,
+				action.MediaCuePointId,
+				action.LayerId,
+				action.Visible,
+				action.RecordingDestinationDirectory,
+				action.RecordingFileName,
+				action.WaitFrames)).ToArray())).ToArray());
+
+	private static ShowControlCue FromDocument(CueDocument document)
+	{
+		if (document.Actions is null)
+			throw new InvalidDataException("Show-control cue JSON requires an action collection.");
+
+		return new ShowControlCue(
+			new ShowControlCueId(Identity.Parse(document.CueId)),
+			document.Name,
+			document.Actions.Select(FromDocument).ToArray());
+	}
+
+	private static ShowControlAction FromDocument(ActionDocument document)
+	{
+		if (!Enum.TryParse<ShowControlActionKind>(document.Kind, ignoreCase: false, out var kind) ||
+			!Enum.IsDefined(kind))
+		{
+			throw new InvalidDataException($"Show-control action kind '{document.Kind}' is unsupported.");
+		}
+
+		return new ShowControlAction(
+			new ShowControlActionId(Identity.Parse(document.ActionId)),
+			kind,
+			document.SceneId,
+			document.SourceId,
+			document.DurationFrames,
+			document.MediaAssetId,
+			document.MediaCuePointId,
+			document.LayerId,
+			document.Visible,
+			document.RecordingDestinationDirectory,
+			document.RecordingFileName,
+			document.WaitFrames);
+	}
+
+	private sealed record CueListDocument(
+		string Version,
+		string CueListId,
+		string Name,
+		CueDocument[] Cues);
+
+	private sealed record CueDocument(
+		string CueId,
+		string Name,
+		ActionDocument[] Actions);
+
+	private sealed record ActionDocument(
+		string ActionId,
+		string Kind,
+		string? SceneId,
+		string? SourceId,
+		uint? DurationFrames,
+		string? MediaAssetId,
+		string? MediaCuePointId,
+		string? LayerId,
+		bool? Visible,
+		string? RecordingDestinationDirectory,
+		string? RecordingFileName,
+		uint? WaitFrames);
 }
