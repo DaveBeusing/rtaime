@@ -210,7 +210,6 @@ public sealed class ShowControlExecutionMachine
 
 	public ShowControlExecutionSnapshot RequireRecovery(Failure failure)
 	{
-		ArgumentNullException.ThrowIfNull(failure);
 		if (_snapshot.State is not (ShowControlExecutionState.Executing or ShowControlExecutionState.Waiting))
 			throw new InvalidOperationException("Recovery can be required only for active show-control execution.");
 
