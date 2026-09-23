@@ -165,7 +165,9 @@ public sealed record V1RuntimePerformanceSnapshot(
 	ulong? SystemMemoryTotalBytes = null,
 	string SystemTelemetryEvidence = "UNVERIFIED",
 	string PhysicalGpuDeviceName = "UNVERIFIED",
-	double? OutputFramesPerSecond = null);
+	double? OutputFramesPerSecond = null,
+	TimeSpan LastCompositionDuration = default,
+	int ActiveCompositingLayerCount = 0);
 
 public sealed record V1AvSyncDiagnosticsSnapshot(
 	bool Enabled,
@@ -284,6 +286,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private V1ProductionCgTextSnapshot _productionCgText = V1ProductionCgTextSnapshot.Empty;
 	private V1TimingHealthState _timingHealth = V1TimingHealthState.Recovering;
 	private TimeSpan _lastFrameProcessingTime;
+	private TimeSpan _lastCompositionDuration;
+	private int _lastCompositingLayerCount;
 	private ulong _droppedFrames;
 	private double? _outputFramesPerSecond;
 	private ulong _nextSequenceNumber;
@@ -601,6 +605,9 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				foreach (var materialized in materializedLayers)
 					materialized.Frame.Dispose();
 			}
+			_lastCompositionDuration = composite.Duration;
+			_lastCompositingLayerCount = composite.LayerCount;
+			Observe($"gpu.composite.completed:layers={composite.LayerCount}:durationTicks={composite.Duration.Ticks}:surfaces={_gpu.ActiveSurfaceCount}");
 			if (!composite.Succeeded)
 			{
 				Observe($"gpu.composite.failed:{composite.Failure?.Code}");
@@ -1532,7 +1539,9 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			hardware.SystemMemoryTotalBytes,
 			hardware.SystemTelemetryEvidence,
 			hardware.GpuDeviceName ?? "UNVERIFIED",
-			_outputFramesPerSecond);
+			_outputFramesPerSecond,
+			_lastCompositionDuration,
+			_lastCompositingLayerCount);
 	}
 
 	private V1RecordingOperatorSnapshot RecordingOperatorSnapshotUnsafe()
