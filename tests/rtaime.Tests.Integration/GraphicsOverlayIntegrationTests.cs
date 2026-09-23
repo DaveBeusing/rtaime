@@ -109,7 +109,8 @@ public sealed class GraphicsOverlayIntegrationTests
 		Assert.Equal(0.20, transformedBitmap.PositionY, 6);
 		Assert.Equal(1.5, transformedBitmap.Scale, 6);
 		Assert.True(Assert.Single(transformedLayers, layer => layer.LayerId == V1RuntimeHostService.ProductionCgLayerId).Visible);
-		Assert.Equal(2, fixture.Runtime.ProcessNextBoundary().ActiveGpuSurfacesAfterBoundary);
+		fixture.Runtime.ProcessNextBoundary();
+		Assert.Equal(2, fixture.Runtime.Snapshot.Performance.ActiveCompositingLayerCount);
 
 		var updated = fixture.Runtime.SetCompositingLayerState(
 			V1RuntimeHostService.BitmapGraphicsLayerId,
