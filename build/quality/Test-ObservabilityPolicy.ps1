@@ -112,7 +112,7 @@ Assert-Condition ($supportBundle -match 'DefaultMaximumSourceBytes\s*=\s*256L \*
 Assert-Condition ($supportBundle -match 'RTAIME_LOG_SESSION_ID' -and $supportBundle -match 'RTAIME_LOG_ROOT' -and $supportBundle -match 'logs/') "Support bundles must collect only the active correlated host-log session."
 Assert-Condition ($supportBundle -match 'OperatorHealth\.json' -and $supportBundle -match 'AppHostLifecycle\.json' -and $supportBundle -match 'Manifest\.json') "Support bundles must include health, startup evidence and environment manifest metadata."
 Assert-Condition ($supportBundle -match 'DiagnosticRedactor\.SanitizeValue' -and $supportBundle -match 'DiagnosticRedactor\.RedactText') "Support bundle metadata must reuse the shared redaction boundary."
-Assert-Condition ($supportBundle -notmatch 'PreviewImage|ProgramImage|byte\[\]|ReadOnlyMemory<byte>|MediaFrame') "Support bundle export must not collect media payloads."
+Assert-Condition ($supportBundle -notmatch 'PreviewImage|ProgramImage|MonitoringFrame|MediaFrame|GpuSurface') "Support bundle export must not collect media payloads or GPU surfaces."
 Assert-Condition ($supportBundle -notmatch 'PeriodicTimer|DispatcherTimer|Task\.Run|new Thread') "Support bundle export must remain on-demand and must not introduce another polling/background path."
 Assert-Condition ($startupViewModel -match 'ExportSupportBundleCommand' -and $startupViewModel -match 'SupportBundleActionLabel') "Startup diagnostics must expose the support bundle export command."
 Assert-Condition ($operatorWindow -match 'Export diagnostics support bundle' -and $operatorWindow -match 'ExportSupportBundleCommand') "Operator diagnostics UI must expose the support bundle export action."
