@@ -42,11 +42,12 @@ The V1 path brings together:
 - media library and local media playback;
 - Preview and Program;
 - CUT and DISSOLVE;
+- governed Scene activation;
 - timeline, IN/OUT, markers and Cue points;
-- graphics and compositing;
+- graphics and compositing, including Production CG text rendering;
 - Audio Follow Video and deterministic generated audio diagnostics;
-- Program Recording;
-- Program Output and monitoring;
+- failure-isolated Program Recording with a Windows MP4 H.264/AAC software-interoperability path;
+- governed Program/Aux output roles plus monitoring;
 - system health and performance visibility.
 
 ### AI without surrendering control
@@ -77,11 +78,11 @@ The current V1 development repository implements production-shaped software path
 | Application lifecycle | unified rtaime.exe AppHost, managed ControlHost/RuntimeHost/AIHost lifecycle |
 | Operator | full-screen production shell, workspaces, progressive readiness and recovery states |
 | Media | local media files, Media Pool, transport, timeline, IN/OUT, markers and Cue points |
-| Switching | authoritative Preview/Program, CUT and DISSOLVE |
+| Switching | authoritative Preview/Program, CUT, DISSOLVE and governed Scene activation |
 | Compositing | RuntimeHost-owned bitmap overlays, dynamic Production CG lower thirds, layers and compositing workspace |
 | Audio | Audio Follow Video, gain/mute/metering seams, deterministic generated test signals |
-| Recording | failure-isolated Program Recording |
-| Output | Program Output, Clean Program monitoring and output health |
+| Recording | failure-isolated Program Recording plus Windows MP4 H.264/AAC software interoperability |
+| Output | governed Program/Aux output roles, Clean Program monitoring and output health |
 | AI | governed inference showcase with bounded fallback |
 | Health | CPU/GPU/memory telemetry, Runtime performance, alerts and health center |
 | Recovery | process supervision, Runtime resynchronization and safe session recovery |

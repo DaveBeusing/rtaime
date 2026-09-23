@@ -20,6 +20,6 @@
 	"administrativeEnforcement": {
 		"required": true,
 		"evidenceStatus": "UNVERIFIED",
-		"details": "Repository-side policy and required checks are version-controlled. GitHub ruleset activation must be proven separately through repository administration evidence."
+		"details": "Repository-side policy and required checks are version-controlled. Live GitHub evidence on 2026-09-23 reports master unprotected with protection enforcement off and no active repository rulesets. The connected integration cannot mutate administrative branch protection or rulesets, so enforcement remains UNVERIFIED until repository administration activates and re-verifies the required ruleset."
 	}
 }

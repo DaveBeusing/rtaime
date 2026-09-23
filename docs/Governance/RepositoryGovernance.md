@@ -177,16 +177,17 @@ UNVERIFIED
 
 until live repository settings provide direct evidence.
 
-At the most recent repository check before Release Pipeline & Channels implementation, GitHub still reported:
+At the repository baseline check on 2026-09-23, live GitHub state reported:
 
 ```text
 master protected = false
+master protection enforcement = off
 repository rulesets = []
 ```
 
 That state must not be represented as governance PASS.
 
-The connected repository automation can read rulesets but does not expose administrative ruleset mutation. Live activation remains an explicit repository-administration action and evidence obligation.
+The connected GitHub integration can read the public branch state and repository ruleset collection, but the dedicated branch-protection administration endpoint is not accessible to the integration and no administrative ruleset mutation action is exposed. Live activation therefore remains an explicit repository-administration action and evidence obligation.
 
 ## Required live GitHub state
 
