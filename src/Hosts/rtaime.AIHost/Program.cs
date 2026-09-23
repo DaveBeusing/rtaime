@@ -34,7 +34,7 @@ internal static class Program
 			catch (Exception exception) when (exception is ArgumentException or OverflowException)
 			{
 				log.Error("configuration", "aihost.configuration-error", "AIHost configuration could not be loaded.", exception);
-				Console.Error.WriteLine($"host=AIHost outcome=configuration-error detail=\"{exception.Message}\"");
+				Console.Error.WriteLine($"host=AIHost outcome=configuration-error detail=\"{DiagnosticRedactor.RedactText(exception.Message)}\"");
 				return (int)AIHostExitCode.ConfigurationError;
 			}
 
@@ -55,7 +55,7 @@ internal static class Program
 			catch (InvalidOperationException exception)
 			{
 				log.Error("startup", "aihost.endpoint-acquire-failure", "AIHost endpoint acquisition failed.", exception);
-				Console.Error.WriteLine($"host=AIHost outcome=startup-failure detail=\"{exception.Message}\"");
+				Console.Error.WriteLine($"host=AIHost outcome=startup-failure detail=\"{DiagnosticRedactor.RedactText(exception.Message)}\"");
 				return (int)AIHostExitCode.StartupFailure;
 			}
 
