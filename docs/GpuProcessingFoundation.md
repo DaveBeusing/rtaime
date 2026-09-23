@@ -313,10 +313,13 @@ These measurements exercise:
 - full 1920×1080 RGBA buffers,
 - background blending,
 - ordered RGBA layer composition,
+- explicit 0 / 1 / 2 / 4 / 8 layer-count cases,
+- provider-reported composition duration and wall-clock comparison,
 - layer-count-dependent output/intermediate allocation and release,
+- active-surface return to the persistent input baseline after each case,
 - provider lifecycle.
 
-The threshold is intentionally broad and is a managed semantic/performance regression guard only.
+The threshold is intentionally broad and is a managed semantic/performance regression guard only. The layer-scaling cases record measurements without introducing a new physical hardware PASS threshold.
 
 It is **not**:
 
