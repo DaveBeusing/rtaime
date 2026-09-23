@@ -139,17 +139,19 @@ public sealed class DiagnosticsTests
 		var root = Path.Combine(Path.GetTempPath(), "rtaime-host-log-tests", Guid.NewGuid().ToString("N"));
 		try
 		{
-			using var log = HostLog.Open(
+			using (var log = HostLog.Open(
 				"ControlHost",
 				new[] { $"--log-root={root}", "--log-session-id=failure-test" },
-				publishEnvironment: false);
-			using var subscription = log.AttachProcessFailureHandlers();
-			log.Critical(
-				"process",
-				"process.test-failure",
-				"Test failure secret=top-secret.",
-				new ApplicationException("Authorization:Bearer secret-value"));
-			log.Flush();
+				publishEnvironment: false))
+			using (var subscription = log.AttachProcessFailureHandlers())
+			{
+				log.Critical(
+					"process",
+					"process.test-failure",
+					"Test failure secret=top-secret.",
+					new ApplicationException("Authorization:Bearer secret-value"));
+				log.Flush();
+			}
 
 			var file = Assert.Single(Directory.GetFiles(Path.Combine(root, "failure-test"), "*.jsonl"));
 			var content = File.ReadAllText(file);
