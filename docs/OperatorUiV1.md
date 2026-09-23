@@ -21,7 +21,7 @@ The professional V1 control surface provides:
 - distinct Preview and Program presentation with source identity;
 - live non-authoritative Preview and Program monitoring surfaces;
 - a source bank with explicit selection;
-- a governed Scene catalog with presentation-only selection and explicit TAKE SCENE activation;
+- a governed Scene catalog with presentation-only selection, declared routing/layer-state inspection and explicit TAKE SCENE activation;
 - Set Preview plus Preview-to-Program CUT and AUTO/DISSOLVE controls;
 - configurable DISSOLVE duration in frames;
 - Runtime, timing and input state;
@@ -142,6 +142,8 @@ At reference size, the lower row uses the following 320:462:276 proportions:
 Preview retains the existing media transport, cue and IN/OUT command paths. Program intentionally acquires no Preview transport authority. The visible monitor controls use rtaime icon/toggle controls only.
 
 The compact EDIT Scene Stack continues to reuse the existing `SetPreviewCommand`, `CutCommand` and `DissolveCommand`. CUT and AUTO still operate only on confirmed Preview through the established Client/ControlHost path. LIVE Scene activation uses the separate `ActivateSceneCommand`, so Scene selection cannot implicitly invoke any production mutation.
+
+Scene rows may additionally project the Scene's declared compositing layer snapshot received from ControlHost. That declaration is desired Scene content, not Runtime confirmation. The COMPOSITING workspace continues to show Runtime-confirmed layer order/visibility/opacity/transform/content evidence. `ActiveSceneId` is shown only when Control confirms that the full governed Scene state remains exact; direct graphics/layer changes that diverge from that Scene remove the active marker. TAKE SCENE remains the only activation action and local selection never mutates Production state.
 
 Program `ON AIR` is visible only when the existing Program monitor state is observed as `LIVE`. It describes the confirmed Program bus and does not claim that an external transmission path is on air.
 
