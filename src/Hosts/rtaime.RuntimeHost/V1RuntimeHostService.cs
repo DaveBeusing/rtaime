@@ -93,6 +93,24 @@ public sealed record V1GraphicsOverlaySnapshot(
 	double PositionY,
 	double Scale);
 
+public enum V1CompositingLayerKind
+{
+	LegacyVisual = 1,
+	BitmapGraphics = 2,
+	ProductionCg = 3
+}
+
+public sealed record V1CompositingLayerSnapshot(
+	string LayerId,
+	V1CompositingLayerKind Kind,
+	int Order,
+	bool Visible,
+	byte Opacity,
+	double PositionX,
+	double PositionY,
+	double Scale,
+	string ContentIdentity);
+
 public sealed record V1AudioInputSnapshot(
 	MediaSourceId SourceId,
 	AudioStreamId StreamId,
@@ -179,7 +197,8 @@ public sealed record V1RuntimeHostSnapshot(
 	int ActiveGpuSurfaces,
 	V1AvSyncDiagnosticsSnapshot? AvSyncDiagnostics = null,
 	V1ProductionCgTextSnapshot? ProductionCgText = null,
-	IReadOnlyList<RuntimeOutputRoleSnapshot>? OutputRoles = null);
+	IReadOnlyList<RuntimeOutputRoleSnapshot>? OutputRoles = null,
+	IReadOnlyList<V1CompositingLayerSnapshot>? CompositingLayers = null);
 
 /// <summary>
 /// Windows V1 reference composition root for committed execution, timed media, GPU composition,
@@ -187,6 +206,10 @@ public sealed record V1RuntimeHostSnapshot(
 /// </summary>
 public sealed class V1RuntimeHostService : IAsyncDisposable
 {
+	public const string LegacyVisualLayerId = "legacy-visual";
+	public const string BitmapGraphicsLayerId = "bitmap-graphics";
+	public const string ProductionCgLayerId = "production-cg";
+
 	private readonly object _gate = new();
 	private readonly VideoFormat _format;
 	private readonly VirtualMediaReferenceProvider _virtualMedia;
@@ -217,6 +240,9 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private readonly DynamicRgbaSource _operatorGraphicsLayer;
 	private readonly RgbaFrameBuffer _operatorGraphicsLayerBuffer;
 	private readonly byte[] _operatorGraphicsLayerScratch;
+	private readonly DynamicRgbaSource _productionCgLayer;
+	private readonly RgbaFrameBuffer _productionCgLayerBuffer;
+	private readonly byte[] _productionCgLayerScratch;
 	private readonly ProductionCgTextRenderer _productionCgRenderer = new();
 	private readonly ProgramRecorder _recorder;
 	private readonly RuntimeRecordingBridge _recordingBridge;
@@ -243,6 +269,17 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private double _operatorGraphicsPositionX = 0.72;
 	private double _operatorGraphicsPositionY = 0.06;
 	private double _operatorGraphicsScale = 1.0;
+	private byte _operatorGraphicsOpacity = byte.MaxValue;
+	private int _operatorGraphicsLayerOrder = 1;
+	private byte[]? _productionCgAsset;
+	private uint _productionCgAssetWidth;
+	private uint _productionCgAssetHeight;
+	private double _productionCgPositionX;
+	private double _productionCgPositionY;
+	private byte _productionCgOpacity = byte.MaxValue;
+	private int _productionCgLayerOrder = 2;
+	private int _legacyVisualLayerOrder;
+	private byte _legacyVisualLayerOpacity = byte.MaxValue;
 	private V1ProductionCgTextDefinition? _productionCgDefinition;
 	private V1ProductionCgTextSnapshot _productionCgText = V1ProductionCgTextSnapshot.Empty;
 	private V1TimingHealthState _timingHealth = V1TimingHealthState.Recovering;
@@ -312,6 +349,11 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		_operatorGraphicsLayer = new DynamicRgbaSource(
 			new MediaSourceId(HostIdentity.Create("v1-layer-source", "operator-graphics")),
 			_operatorGraphicsLayerBuffer);
+		_productionCgLayerBuffer = RgbaFrameBuffer.Solid(format, 0, 0, 0, 0);
+		_productionCgLayerScratch = new byte[RgbaFrameBuffer.RequiredByteLength(format)];
+		_productionCgLayer = new DynamicRgbaSource(
+			new MediaSourceId(HostIdentity.Create("v1-layer-source", "production-cg")),
+			_productionCgLayerBuffer);
 
 		if (recordingWriter is null)
 			throw new ArgumentNullException(nameof(recordingWriter));
@@ -417,7 +459,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 					_gpu.ActiveSurfaceCount,
 					AvSyncDiagnosticsSnapshotUnsafe(),
 					_productionCgText,
-					OutputRoleSnapshotsUnsafe());
+					OutputRoleSnapshotsUnsafe(),
+					CompositingLayerSnapshotsUnsafe());
 			}
 		}
 	}
@@ -542,15 +585,22 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 
 			var transitionKind = _transition?.Intent.Kind;
 			var (fromFrame, toFrame, gpuTransition, blendWeight, transitionComplete) = ResolveTransition(committedSource, sequence, gpuFrames);
-			using var layerFrame = MaterializeLayer(fromFrame.Descriptor.Timing);
-			var layer = layerFrame is null ? null : new GpuKeyLayer(layerFrame);
-
-			var composite = _gpu.Composite(new GpuCompositeRequest(
-				committedSource,
-				fromFrame,
-				toFrame,
-				gpuTransition,
-				layer));
+			var materializedLayers = MaterializeLayers(fromFrame.Descriptor.Timing);
+			GpuProcessingResult composite;
+			try
+			{
+				composite = _gpu.Composite(GpuCompositeRequest.WithLayers(
+					committedSource,
+					fromFrame,
+					toFrame,
+					gpuTransition,
+					materializedLayers.Select(layer => layer.Layer)));
+			}
+			finally
+			{
+				foreach (var materialized in materializedLayers)
+					materialized.Frame.Dispose();
+			}
 			if (!composite.Succeeded)
 			{
 				Observe($"gpu.composite.failed:{composite.Failure?.Code}");
@@ -664,7 +714,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				recording,
 				transitionKind,
 				blendWeight,
-				_operatorGraphicsVisible ? V1VisualLayerMode.Static : _visualLayerMode,
+				(_operatorGraphicsVisible || _productionCgText.Visible) ? V1VisualLayerMode.Static : _visualLayerMode,
 				_gpu.ActiveSurfaceCount - 1);
 		}
 	}
@@ -701,8 +751,6 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			_operatorGraphicsAssetName = assetName.Trim();
 			_operatorGraphicsAssetWidth = width;
 			_operatorGraphicsAssetHeight = height;
-			_productionCgDefinition = null;
-			_productionCgText = V1ProductionCgTextSnapshot.Empty;
 			RebuildOperatorGraphicsLayerUnsafe();
 			Observe($"graphics.overlay.asset.loaded:{_operatorGraphicsAssetName}:{width}x{height}");
 			return GraphicsOverlaySnapshotUnsafe();
@@ -723,14 +771,11 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		lock (_gate)
 		{
 			ThrowIfDisposed();
-			_operatorGraphicsAsset = rendered.RgbaPixels;
-			_operatorGraphicsAssetName = "production-cg-text";
-			_operatorGraphicsAssetWidth = rendered.Width;
-			_operatorGraphicsAssetHeight = rendered.Height;
-			_operatorGraphicsVisible = definition.Visible;
-			_operatorGraphicsPositionX = _format.Width <= 1 ? 0 : originX / (double)(_format.Width - 1);
-			_operatorGraphicsPositionY = _format.Height <= 1 ? 0 : originY / (double)(_format.Height - 1);
-			_operatorGraphicsScale = 1.0;
+			_productionCgAsset = rendered.RgbaPixels;
+			_productionCgAssetWidth = rendered.Width;
+			_productionCgAssetHeight = rendered.Height;
+			_productionCgPositionX = _format.Width <= 1 ? 0 : originX / (double)(_format.Width - 1);
+			_productionCgPositionY = _format.Height <= 1 ? 0 : originY / (double)(_format.Height - 1);
 			_productionCgDefinition = definition;
 			_productionCgText = new V1ProductionCgTextSnapshot(
 				true,
@@ -748,7 +793,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				definition.ZOrder,
 				rendered.CacheHit,
 				rendered.RenderDuration);
-			RebuildOperatorGraphicsLayerUnsafe();
+			RebuildProductionCgLayerUnsafe();
 			Observe($"graphics.cg.rendered:{rendered.ResolvedTypeface}:{definition.BoxWidth}x{definition.BoxHeight}:cache={rendered.CacheHit}");
 			return GraphicsOverlaySnapshotUnsafe();
 		}
@@ -773,25 +818,25 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			if (visible && _operatorGraphicsAsset is null)
 				throw new InvalidOperationException("A graphics asset must be loaded before the overlay can be shown.");
 
-			if (_productionCgDefinition is not null &&
-				(Math.Abs(positionX - _operatorGraphicsPositionX) > 0.000001 ||
-				 Math.Abs(positionY - _operatorGraphicsPositionY) > 0.000001 ||
-				 Math.Abs(scale - 1.0) > 0.000001))
+			if (_operatorGraphicsAsset is not null)
 			{
-				throw new NotSupportedException("Production CG placement must be changed by reapplying its CG definition.");
+				_operatorGraphicsVisible = visible;
+				_operatorGraphicsPositionX = positionX;
+				_operatorGraphicsPositionY = positionY;
+				_operatorGraphicsScale = scale;
+				RebuildOperatorGraphicsLayerUnsafe();
 			}
-
-			_operatorGraphicsVisible = visible;
-			_operatorGraphicsPositionX = positionX;
-			_operatorGraphicsPositionY = positionY;
-			_operatorGraphicsScale = scale;
-			if (_productionCgDefinition is not null)
+			else if (_productionCgDefinition is not null)
 			{
+				if (Math.Abs(positionX - _productionCgPositionX) > 0.000001 ||
+					Math.Abs(positionY - _productionCgPositionY) > 0.000001 ||
+					Math.Abs(scale - 1.0) > 0.000001)
+				{
+					throw new NotSupportedException("Production CG placement must be changed by reapplying its CG definition.");
+				}
 				_productionCgDefinition = _productionCgDefinition with { Visible = visible };
 				_productionCgText = _productionCgText with { Visible = visible };
 			}
-			if (_operatorGraphicsAsset is not null)
-				RebuildOperatorGraphicsLayerUnsafe();
 			Observe($"graphics.overlay.state:{visible}:{positionX:0.###}:{positionY:0.###}:{scale:0.###}");
 			return GraphicsOverlaySnapshotUnsafe();
 		}
@@ -807,8 +852,6 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			_operatorGraphicsAssetWidth = 0;
 			_operatorGraphicsAssetHeight = 0;
 			_operatorGraphicsVisible = false;
-			_productionCgDefinition = null;
-			_productionCgText = V1ProductionCgTextSnapshot.Empty;
 			_operatorGraphicsLayerScratch.AsSpan().Clear();
 			_operatorGraphicsLayerBuffer.CopyPixelsFrom(_operatorGraphicsLayerScratch);
 			_operatorGraphicsLayer.Update(_operatorGraphicsLayerBuffer);
@@ -1319,18 +1362,51 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				: state == V1InputSignalState.Lost ? "input-fallback" : "runtime-input");
 	}
 
-	private GpuFrame? MaterializeLayer(FrameTiming timing)
+	private IReadOnlyList<MaterializedCompositingLayer> MaterializeLayers(FrameTiming timing)
 	{
-		if (_operatorGraphicsVisible && _operatorGraphicsAsset is not null)
-			return _operatorGraphicsLayer.Materialize(_gpu, timing);
+		var layers = new List<MaterializedCompositingLayer>(3);
 
-		return _visualLayerMode switch
+		if (_visualLayerMode != V1VisualLayerMode.Disabled)
 		{
-			V1VisualLayerMode.Disabled => null,
-			V1VisualLayerMode.Static => _staticLayer.Materialize(_gpu, timing),
-			V1VisualLayerMode.Dynamic => _dynamicLayer.Materialize(_gpu, timing),
-			_ => throw new InvalidOperationException($"Unsupported visual layer mode '{_visualLayerMode}'.")
-		};
+			var frame = _visualLayerMode switch
+			{
+				V1VisualLayerMode.Static => _staticLayer.Materialize(_gpu, timing),
+				V1VisualLayerMode.Dynamic => _dynamicLayer.Materialize(_gpu, timing),
+				_ => throw new InvalidOperationException($"Unsupported visual layer mode '{_visualLayerMode}'.")
+			};
+			layers.Add(new MaterializedCompositingLayer(
+				LegacyVisualLayerId,
+				_legacyVisualLayerOrder,
+				frame,
+				new GpuKeyLayer(frame, _legacyVisualLayerOpacity)));
+		}
+
+		if (_operatorGraphicsVisible && _operatorGraphicsAsset is not null)
+		{
+			var frame = _operatorGraphicsLayer.Materialize(_gpu, timing);
+			layers.Add(new MaterializedCompositingLayer(
+				BitmapGraphicsLayerId,
+				_operatorGraphicsLayerOrder,
+				frame,
+				new GpuKeyLayer(frame, _operatorGraphicsOpacity)));
+		}
+
+		if (_productionCgText.Visible && _productionCgAsset is not null)
+		{
+			var frame = _productionCgLayer.Materialize(_gpu, timing);
+			layers.Add(new MaterializedCompositingLayer(
+				ProductionCgLayerId,
+				_productionCgLayerOrder,
+				frame,
+				new GpuKeyLayer(frame, _productionCgOpacity)));
+		}
+
+		layers.Sort(static (left, right) =>
+		{
+			var order = left.Order.CompareTo(right.Order);
+			return order != 0 ? order : string.Compare(left.LayerId, right.LayerId, StringComparison.Ordinal);
+		});
+		return layers;
 	}
 
 	private V1RuntimePerformanceSnapshot PerformanceSnapshotUnsafe(SystemHardwareTelemetrySnapshot hardware)
@@ -1541,15 +1617,79 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		}
 	}
 
-	private V1GraphicsOverlaySnapshot GraphicsOverlaySnapshotUnsafe() => new(
-		_operatorGraphicsAsset is not null,
-		_operatorGraphicsAssetName,
-		_operatorGraphicsAssetWidth,
-		_operatorGraphicsAssetHeight,
-		_operatorGraphicsVisible,
-		_operatorGraphicsPositionX,
-		_operatorGraphicsPositionY,
-		_operatorGraphicsScale);
+	private V1GraphicsOverlaySnapshot GraphicsOverlaySnapshotUnsafe()
+	{
+		if (_operatorGraphicsAsset is not null)
+		{
+			return new V1GraphicsOverlaySnapshot(
+				true,
+				_operatorGraphicsAssetName,
+				_operatorGraphicsAssetWidth,
+				_operatorGraphicsAssetHeight,
+				_operatorGraphicsVisible,
+				_operatorGraphicsPositionX,
+				_operatorGraphicsPositionY,
+				_operatorGraphicsScale);
+		}
+
+		return new V1GraphicsOverlaySnapshot(
+			_productionCgAsset is not null,
+			_productionCgAsset is null ? null : "production-cg-text",
+			_productionCgAssetWidth,
+			_productionCgAssetHeight,
+			_productionCgText.Visible,
+			_productionCgPositionX,
+			_productionCgPositionY,
+			1.0);
+	}
+
+	private IReadOnlyList<V1CompositingLayerSnapshot> CompositingLayerSnapshotsUnsafe()
+	{
+		var snapshots = new List<V1CompositingLayerSnapshot>(3);
+		if (_visualLayerMode != V1VisualLayerMode.Disabled)
+		{
+			snapshots.Add(new V1CompositingLayerSnapshot(
+				LegacyVisualLayerId,
+				V1CompositingLayerKind.LegacyVisual,
+				_legacyVisualLayerOrder,
+				true,
+				_legacyVisualLayerOpacity,
+				0,
+				0,
+				1,
+				_visualLayerMode.ToString()));
+		}
+		if (_operatorGraphicsAsset is not null)
+		{
+			snapshots.Add(new V1CompositingLayerSnapshot(
+				BitmapGraphicsLayerId,
+				V1CompositingLayerKind.BitmapGraphics,
+				_operatorGraphicsLayerOrder,
+				_operatorGraphicsVisible,
+				_operatorGraphicsOpacity,
+				_operatorGraphicsPositionX,
+				_operatorGraphicsPositionY,
+				_operatorGraphicsScale,
+				_operatorGraphicsAssetName ?? "bitmap"));
+		}
+		if (_productionCgAsset is not null)
+		{
+			snapshots.Add(new V1CompositingLayerSnapshot(
+				ProductionCgLayerId,
+				V1CompositingLayerKind.ProductionCg,
+				_productionCgLayerOrder,
+				_productionCgText.Visible,
+				_productionCgOpacity,
+				_productionCgPositionX,
+				_productionCgPositionY,
+				1,
+				_productionCgText.Text ?? "production-cg-text"));
+		}
+		return snapshots
+			.OrderBy(layer => layer.Order)
+			.ThenBy(layer => layer.LayerId, StringComparer.Ordinal)
+			.ToArray();
+	}
 
 	private void RebuildOperatorGraphicsLayerUnsafe()
 	{
@@ -1593,6 +1733,44 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		_operatorGraphicsLayer.Update(_operatorGraphicsLayerBuffer);
 	}
 
+	private void RebuildProductionCgLayerUnsafe()
+	{
+		_productionCgLayerScratch.AsSpan().Clear();
+		if (_productionCgAsset is null)
+		{
+			_productionCgLayerBuffer.CopyPixelsFrom(_productionCgLayerScratch);
+			_productionCgLayer.Update(_productionCgLayerBuffer);
+			return;
+		}
+
+		var sourceWidth = checked((int)_productionCgAssetWidth);
+		var sourceHeight = checked((int)_productionCgAssetHeight);
+		var outputWidth = checked((int)_format.Width);
+		var outputHeight = checked((int)_format.Height);
+		var originX = checked((int)Math.Round(_productionCgPositionX * Math.Max(0, outputWidth - 1)));
+		var originY = checked((int)Math.Round(_productionCgPositionY * Math.Max(0, outputHeight - 1)));
+
+		for (var y = 0; y < sourceHeight; y++)
+		{
+			var destinationY = originY + y;
+			if ((uint)destinationY >= (uint)outputHeight) continue;
+			for (var x = 0; x < sourceWidth; x++)
+			{
+				var destinationX = originX + x;
+				if ((uint)destinationX >= (uint)outputWidth) continue;
+				var sourceOffset = checked((y * sourceWidth + x) * 4);
+				var destinationOffset = checked((destinationY * outputWidth + destinationX) * 4);
+				_productionCgLayerScratch[destinationOffset] = _productionCgAsset[sourceOffset];
+				_productionCgLayerScratch[destinationOffset + 1] = _productionCgAsset[sourceOffset + 1];
+				_productionCgLayerScratch[destinationOffset + 2] = _productionCgAsset[sourceOffset + 2];
+				_productionCgLayerScratch[destinationOffset + 3] = _productionCgAsset[sourceOffset + 3];
+			}
+		}
+
+		_productionCgLayerBuffer.CopyPixelsFrom(_productionCgLayerScratch);
+		_productionCgLayer.Update(_productionCgLayerBuffer);
+	}
+
 	private (int X, int Y) ResolveProductionCgOrigin(V1ProductionCgTextDefinition definition)
 	{
 		var anchorX = checked((int)Math.Round(definition.PositionX * Math.Max(0, _format.Width - 1)));
@@ -1618,6 +1796,12 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			throw new ArgumentOutOfRangeException(nameof(definition), "Production CG anchor and bounding box must resolve fully inside the active Program frame.");
 		return (x, y);
 	}
+
+	private sealed record MaterializedCompositingLayer(
+		string LayerId,
+		int Order,
+		GpuFrame Frame,
+		GpuKeyLayer Layer);
 
 	private bool RequiresGpuSourceUnsafe(MediaSourceId sourceId, MediaSourceId committedSource)
 	{
