@@ -395,7 +395,7 @@ public sealed class GpuProcessingResult
             throw new ArgumentException("GPU processing result requires exactly one of frame or failure.");
         if (duration < TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(duration));
-        if (layerCount < 0 || layerCount > GpuCompositeLimits.MaxActiveLayers)
+        if (layerCount < 0 || (frame is not null && layerCount > GpuCompositeLimits.MaxActiveLayers))
             throw new ArgumentOutOfRangeException(nameof(layerCount));
 
         Frame = frame;
