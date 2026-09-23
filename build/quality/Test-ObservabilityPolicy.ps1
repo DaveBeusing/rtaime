@@ -23,6 +23,9 @@ $controlProgramPath = Join-Path $repositoryRoot "src/Hosts/rtaime.ControlHost/Pr
 $runtimeProgramPath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/Program.cs"
 $aiProgramPath = Join-Path $repositoryRoot "src/Hosts/rtaime.AIHost/Program.cs"
 $operatorAppPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/App.xaml.cs"
+$supportBundlePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/SupportBundleExporter.cs"
+$startupViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/StartupLifecycleViewModel.cs"
+$operatorWindowPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MainWindow.xaml"
 $controlPath = Join-Path $repositoryRoot "src/Hosts/rtaime.ControlHost/ControlHostDiagnostics.cs"
 $runtimePath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/RuntimeHostDiagnostics.cs"
 $runtimeServicePath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/V1RuntimeHostService.cs"
@@ -35,10 +38,11 @@ $controlIpcPath = Join-Path $repositoryRoot "src/Hosts/rtaime.ControlHost/Contro
 $aiPath = Join-Path $repositoryRoot "src/Hosts/rtaime.AIHost/AIHostDiagnostics.cs"
 $testsPath = Join-Path $repositoryRoot "tests/rtaime.Tests.Unit/DiagnosticsTests.cs"
 $runtimeReadinessTestsPath = Join-Path $repositoryRoot "tests/rtaime.Tests.Unit/RuntimeReadinessServiceTests.cs"
+$supportBundleTestsPath = Join-Path $repositoryRoot "tests/rtaime.Tests.Operator/SupportBundleExporterTests.cs"
 $documentationPath = Join-Path $repositoryRoot "docs/ObservabilityDiagnostics.md"
 $runtimeReadinessDocumentationPath = Join-Path $repositoryRoot "docs/RuntimeReadiness.md"
 
-foreach ($path in @($corePath, $hostLogPath, $appHostProgramPath, $controlProgramPath, $runtimeProgramPath, $aiProgramPath, $operatorAppPath, $controlPath, $runtimePath, $runtimeServicePath, $runtimeProcessPath, $hardwareTelemetryPath, $frameDropPath, $healthProjectionPath, $runtimeReadinessPath, $controlIpcPath, $aiPath, $testsPath, $runtimeReadinessTestsPath, $documentationPath, $runtimeReadinessDocumentationPath)) {
+foreach ($path in @($corePath, $hostLogPath, $appHostProgramPath, $controlProgramPath, $runtimeProgramPath, $aiProgramPath, $operatorAppPath, $supportBundlePath, $startupViewModelPath, $operatorWindowPath, $controlPath, $runtimePath, $runtimeServicePath, $runtimeProcessPath, $hardwareTelemetryPath, $frameDropPath, $healthProjectionPath, $runtimeReadinessPath, $controlIpcPath, $aiPath, $testsPath, $runtimeReadinessTestsPath, $supportBundleTestsPath, $documentationPath, $runtimeReadinessDocumentationPath)) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required observability artifact is missing: '$path'."
 }
 
@@ -49,6 +53,9 @@ $controlProgram = Get-Content -LiteralPath $controlProgramPath -Raw
 $runtimeProgram = Get-Content -LiteralPath $runtimeProgramPath -Raw
 $aiProgram = Get-Content -LiteralPath $aiProgramPath -Raw
 $operatorApp = Get-Content -LiteralPath $operatorAppPath -Raw
+$supportBundle = Get-Content -LiteralPath $supportBundlePath -Raw
+$startupViewModel = Get-Content -LiteralPath $startupViewModelPath -Raw
+$operatorWindow = Get-Content -LiteralPath $operatorWindowPath -Raw
 $control = Get-Content -LiteralPath $controlPath -Raw
 $runtime = Get-Content -LiteralPath $runtimePath -Raw
 $runtimeService = Get-Content -LiteralPath $runtimeServicePath -Raw
@@ -61,6 +68,7 @@ $controlIpc = Get-Content -LiteralPath $controlIpcPath -Raw
 $ai = Get-Content -LiteralPath $aiPath -Raw
 $tests = Get-Content -LiteralPath $testsPath -Raw
 $runtimeReadinessTests = Get-Content -LiteralPath $runtimeReadinessTestsPath -Raw
+$supportBundleTests = Get-Content -LiteralPath $supportBundleTestsPath -Raw
 $documentation = Get-Content -LiteralPath $documentationPath -Raw
 $runtimeReadinessDocumentation = Get-Content -LiteralPath $runtimeReadinessDocumentationPath -Raw
 
@@ -99,6 +107,15 @@ Assert-Condition ($controlProgram -match 'controlhost\.runtime-supervision-chang
 Assert-Condition ($runtimeProgram -match 'runtimehost\.state-changed' -and $runtimeProgram -match 'runtimehost\.ready') "RuntimeHost logging must expose lifecycle and readiness transitions."
 Assert-Condition ($aiProgram -match 'aihost\.state-changed' -and $aiProgram -match 'aihost\.ready') "AIHost logging must expose lifecycle and readiness transitions."
 Assert-Condition ($operatorApp -match 'operator\.dispatcher-unhandled-exception' -and $operatorApp -match 'operator\.reconnect-failure') "Operator logging must capture UI failures and reconnect transitions."
+Assert-Condition ($supportBundle -match 'public sealed class SupportBundleExporter' -and $supportBundle -match 'ZipArchiveMode\.Create') "Operator diagnostics must provide an on-demand ZIP support bundle exporter."
+Assert-Condition ($supportBundle -match 'DefaultMaximumSourceBytes\s*=\s*256L \* 1024L \* 1024L') "Support bundle collection must keep a bounded source-size limit."
+Assert-Condition ($supportBundle -match 'RTAIME_LOG_SESSION_ID' -and $supportBundle -match 'RTAIME_LOG_ROOT' -and $supportBundle -match 'logs/') "Support bundles must collect only the active correlated host-log session."
+Assert-Condition ($supportBundle -match 'OperatorHealth\.json' -and $supportBundle -match 'AppHostLifecycle\.json' -and $supportBundle -match 'Manifest\.json') "Support bundles must include health, startup evidence and environment manifest metadata."
+Assert-Condition ($supportBundle -match 'DiagnosticRedactor\.SanitizeValue' -and $supportBundle -match 'DiagnosticRedactor\.RedactText') "Support bundle metadata must reuse the shared redaction boundary."
+Assert-Condition ($supportBundle -notmatch 'PreviewImage|ProgramImage|MonitoringFrame|MediaFrame|GpuSurface') "Support bundle export must not collect media payloads or GPU surfaces."
+Assert-Condition ($supportBundle -notmatch 'PeriodicTimer|DispatcherTimer|Task\.Run|new Thread') "Support bundle export must remain on-demand and must not introduce another polling/background path."
+Assert-Condition ($startupViewModel -match 'ExportSupportBundleCommand' -and $startupViewModel -match 'SupportBundleActionLabel') "Startup diagnostics must expose the support bundle export command."
+Assert-Condition ($operatorWindow -match 'Export diagnostics support bundle' -and $operatorWindow -match 'Export system diagnostics support bundle' -and $operatorWindow -match 'ExportSupportBundleCommand') "Operator must expose support bundle export during startup diagnostics and in the steady-state System workspace."
 foreach ($entryPoint in @($appHostProgram, $controlProgram, $runtimeProgram, $aiProgram)) {
 	Assert-Condition ($entryPoint -match 'DiagnosticRedactor\.RedactText\(exception\.Message\)') "Host fallback stderr diagnostics must redact exception messages."
 }
@@ -170,12 +187,15 @@ Assert-Condition ($tests -match 'Host_log_keeps_process_failures_best_effort') "
 Assert-Condition ($tests -match 'Host_log_file_failure_does_not_fail_the_calling_host') "Structured host log storage failures must be regression-tested as non-fatal."
 Assert-Condition ($tests -match 'Host_log_rotates_before_exceeding_configured_segment_limit') "Structured host log rotation must have executable regression coverage."
 Assert-Condition ($tests -match 'Host_log_prunes_expired_inactive_sessions') "Structured host log retention must have executable regression coverage."
+Assert-Condition ($supportBundleTests -match 'Export_includes_correlated_logs_health_lifecycle_and_redacts_support_metadata') "Support bundle content and redaction must have executable regression coverage."
+Assert-Condition ($supportBundleTests -match 'Export_omits_session_files_after_bounded_source_limit') "Support bundle boundedness must have executable regression coverage."
 Assert-Condition ($documentation -match 'No per-frame disk write') "Observability documentation must explicitly prohibit per-frame diagnostic disk writes."
 Assert-Condition ($documentation -match 'raw video/audio payloads') "Observability documentation must explicitly prohibit bulk media in support snapshots."
 Assert-Condition ($documentation -match 'Runtime Health & Performance HUD') "Observability documentation must record the runtime health/performance projection."
 Assert-Condition ($documentation -match 'performance\.outputFramesPerSecond' -and $documentation -match 'exponentially smoothed Output-FPS scalar') "Observability documentation must record the measured output-cadence path and constant-space smoothing boundary."
 Assert-Condition ($documentation -match 'UNVERIFIED') "Observability documentation must explicitly preserve UNVERIFIED evidence for unavailable GPU telemetry."
 Assert-Condition ($documentation -match '## Structured host logs' -and $documentation -match 'RTAIME_LOG_SESSION_ID' -and $documentation -match '16 MiB' -and $documentation -match '14 days') "Observability documentation must describe host-log correlation, rotation and retention."
+Assert-Condition ($documentation -match '## Diagnostics support bundle export' -and $documentation -match '256 MiB' -and $documentation -match 'OperatorHealth\.json' -and $documentation -match 'Manifest\.json') "Observability documentation must describe bounded support bundle export content and limits."
 Assert-Condition ($documentation -match 'AppHost' -and $documentation -match 'ControlHost' -and $documentation -match 'RuntimeHost' -and $documentation -match 'AIHost' -and $documentation -match 'Operator') "Observability documentation must cover every executable host."
 
 Write-Host "Observability diagnostics policy verification PASS"

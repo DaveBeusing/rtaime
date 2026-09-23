@@ -23,11 +23,15 @@ public sealed class StartupLifecycleViewModel : INotifyPropertyChanged, IDisposa
 {
 	private readonly SynchronizationContext _synchronizationContext;
 	private readonly string? _evidencePath;
+	private readonly ISupportBundleExporter? _supportBundleExporter;
+	private readonly Func<string?>? _supportBundleDestinationPicker;
 	private readonly AsyncRelayCommand _copyDiagnosticsCommand;
 	private readonly AsyncRelayCommand _openDiagnosticsCommand;
+	private readonly AsyncRelayCommand _exportSupportBundleCommand;
 	private FileSystemWatcher? _watcher;
 	private bool _detailsVisible;
 	private bool _initialStartupCompleted;
+	private bool _isExportingSupportBundle;
 	private string _activeStageName = "Application Bootstrap";
 	private string _summary = "Waiting for application lifecycle evidence.";
 	private string _nextStep = "Waiting for authoritative AppHost lifecycle evidence.";
@@ -41,10 +45,14 @@ public sealed class StartupLifecycleViewModel : INotifyPropertyChanged, IDisposa
 
 	public StartupLifecycleViewModel(
 		string? evidencePath,
-		SynchronizationContext? synchronizationContext = null)
+		SynchronizationContext? synchronizationContext = null,
+		ISupportBundleExporter? supportBundleExporter = null,
+		Func<string?>? supportBundleDestinationPicker = null)
 	{
 		_synchronizationContext = synchronizationContext ?? SynchronizationContext.Current ?? new SynchronizationContext();
 		_evidencePath = string.IsNullOrWhiteSpace(evidencePath) ? null : Path.GetFullPath(evidencePath);
+		_supportBundleExporter = supportBundleExporter;
+		_supportBundleDestinationPicker = supportBundleDestinationPicker;
 		Stages = new ObservableCollection<StartupLifecycleStageViewModel>();
 		ToggleDetailsCommand = new AsyncRelayCommand(
 			() =>
@@ -59,8 +67,12 @@ public sealed class StartupLifecycleViewModel : INotifyPropertyChanged, IDisposa
 		_openDiagnosticsCommand = new AsyncRelayCommand(
 			OpenDiagnosticsAsync,
 			() => CanOpenDiagnostics);
+		_exportSupportBundleCommand = new AsyncRelayCommand(
+			ExportSupportBundleAsync,
+			() => CanExportSupportBundle);
 		CopyDiagnosticsCommand = _copyDiagnosticsCommand;
 		OpenDiagnosticsCommand = _openDiagnosticsCommand;
+		ExportSupportBundleCommand = _exportSupportBundleCommand;
 
 		if (_evidencePath is null)
 		{
@@ -78,11 +90,17 @@ public sealed class StartupLifecycleViewModel : INotifyPropertyChanged, IDisposa
 	public ICommand ToggleDetailsCommand { get; }
 	public ICommand CopyDiagnosticsCommand { get; }
 	public ICommand OpenDiagnosticsCommand { get; }
+	public ICommand ExportSupportBundleCommand { get; }
 	public string EvidencePath => _evidencePath ?? "Direct Operator startup; AppHost lifecycle evidence is unavailable.";
 	public string DiagnosticPath => _diagnosticPath ?? "Not published by AppHost.";
 	public bool HasEvidence => _evidencePath is not null;
 	public bool HasDiagnosticPath => !string.IsNullOrWhiteSpace(_diagnosticPath);
 	public bool CanOpenDiagnostics => ResolveDiagnosticOpenTarget() is not null;
+	public bool CanExportSupportBundle =>
+		_supportBundleExporter is not null &&
+		_supportBundleDestinationPicker is not null &&
+		!_isExportingSupportBundle;
+	public string SupportBundleActionLabel => _isExportingSupportBundle ? "EXPORTING SUPPORT BUNDLE..." : "EXPORT SUPPORT BUNDLE";
 	public string DiagnosticActionLabel => File.Exists(_diagnosticPath) ? "OPEN DIAGNOSTIC LOG" : "OPEN DIAGNOSTICS FOLDER";
 	public string DiagnosticActionStatus { get => _diagnosticActionStatus; private set => Set(ref _diagnosticActionStatus, value); }
 	public string NextStep { get => _nextStep; private set => Set(ref _nextStep, value); }
@@ -402,8 +420,11 @@ public sealed class StartupLifecycleViewModel : INotifyPropertyChanged, IDisposa
 		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasDiagnosticPath)));
 		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanOpenDiagnostics)));
 		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DiagnosticActionLabel)));
+		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanExportSupportBundle)));
+		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SupportBundleActionLabel)));
 		_copyDiagnosticsCommand.RaiseCanExecuteChanged();
 		_openDiagnosticsCommand.RaiseCanExecuteChanged();
+		_exportSupportBundleCommand.RaiseCanExecuteChanged();
 	}
 
 	private void UpdateFailureLatch(IReadOnlyList<StartupLifecycleStageViewModel> stages)
@@ -496,6 +517,63 @@ public sealed class StartupLifecycleViewModel : INotifyPropertyChanged, IDisposa
 		}
 
 		return Task.CompletedTask;
+	}
+
+	private async Task ExportSupportBundleAsync()
+	{
+		if (_supportBundleExporter is null || _supportBundleDestinationPicker is null)
+		{
+			DiagnosticActionStatus = "Support bundle export is not available in this session.";
+			return;
+		}
+
+		string? destinationPath;
+		try
+		{
+			destinationPath = _supportBundleDestinationPicker();
+		}
+		catch (Exception exception) when (exception is InvalidOperationException or ExternalException)
+		{
+			DiagnosticActionStatus = $"Unable to select support bundle destination: {exception.Message}";
+			return;
+		}
+
+		if (string.IsNullOrWhiteSpace(destinationPath))
+		{
+			DiagnosticActionStatus = "Support bundle export cancelled.";
+			return;
+		}
+
+		_isExportingSupportBundle = true;
+		RaiseProgressiveStateProperties();
+		DiagnosticActionStatus = "Exporting support bundle...";
+		try
+		{
+			var result = await _supportBundleExporter
+				.ExportAsync(destinationPath, _evidencePath)
+				.ConfigureAwait(true);
+			DiagnosticActionStatus = result.Warnings.Count == 0
+				? $"Support bundle exported: {result.Path}"
+				: $"Support bundle exported with {result.Warnings.Count} warning(s): {result.Path}";
+		}
+		catch (OperationCanceledException)
+		{
+			DiagnosticActionStatus = "Support bundle export cancelled.";
+		}
+		catch (Exception exception) when (
+			exception is IOException or
+			UnauthorizedAccessException or
+			InvalidOperationException or
+			NotSupportedException or
+			ArgumentException)
+		{
+			DiagnosticActionStatus = $"Unable to export support bundle: {exception.Message}";
+		}
+		finally
+		{
+			_isExportingSupportBundle = false;
+			RaiseProgressiveStateProperties();
+		}
 	}
 
 	private Task OpenDiagnosticsAsync()

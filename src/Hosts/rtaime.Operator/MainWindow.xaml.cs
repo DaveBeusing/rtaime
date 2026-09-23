@@ -98,7 +98,9 @@ public partial class MainWindow : Window
 		Timeline.SelectionChanged += OnTimelineSelectionChanged;
 		Startup = new StartupLifecycleViewModel(
 			Environment.GetEnvironmentVariable("RTAIME_APPHOST_LIFECYCLE_FILE"),
-			new DispatcherSynchronizationContext(Dispatcher));
+			new DispatcherSynchronizationContext(Dispatcher),
+			new SupportBundleExporter(HealthProvider),
+			PickSupportBundleDestination);
 		WorkspaceStates = new OperatorWorkspaceStateViewModel(
 			viewModel,
 			MediaPool,
@@ -174,7 +176,9 @@ public partial class MainWindow : Window
 		Timeline.SelectionChanged += OnTimelineSelectionChanged;
 		Startup = new StartupLifecycleViewModel(
 			Environment.GetEnvironmentVariable("RTAIME_APPHOST_LIFECYCLE_FILE"),
-			new DispatcherSynchronizationContext(Dispatcher));
+			new DispatcherSynchronizationContext(Dispatcher),
+			new SupportBundleExporter(HealthProvider),
+			PickSupportBundleDestination);
 		WorkspaceStates = new OperatorWorkspaceStateViewModel(
 			viewModel,
 			MediaPool,
@@ -365,6 +369,24 @@ public partial class MainWindow : Window
 		return dialog.ShowDialog() == true
 			? GraphicsOverlayAssetLoader.LoadPng(dialog.FileName)
 			: null;
+	}
+
+	private static string? PickSupportBundleDestination()
+	{
+		var sessionId = Environment.GetEnvironmentVariable("RTAIME_LOG_SESSION_ID");
+		var sessionSuffix = string.IsNullOrWhiteSpace(sessionId)
+			? string.Empty
+			: "-" + sessionId.Trim()[..Math.Min(8, sessionId.Trim().Length)];
+		var dialog = new SaveFileDialog
+		{
+			Title = "Export rtaime support bundle",
+			Filter = "rtaime Support Bundle (*.zip)|*.zip",
+			DefaultExt = ".zip",
+			AddExtension = true,
+			OverwritePrompt = true,
+			FileName = $"rtaime-support-{DateTimeOffset.Now:yyyyMMdd-HHmmss}{sessionSuffix}.zip"
+		};
+		return dialog.ShowDialog() == true ? dialog.FileName : null;
 	}
 
 	private static string? PickLocalMediaFile()

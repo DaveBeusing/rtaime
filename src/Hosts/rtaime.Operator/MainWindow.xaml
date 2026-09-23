@@ -1196,6 +1196,26 @@
 							<DockPanel Margin="0,0,0,6"><TextBlock Text="Recording" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding RecordingStatus}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
 							<DockPanel Margin="0,0,0,6"><TextBlock Text="Outputs" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding ProgramOutput.RunState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
 							<DockPanel><TextBlock Text="Diagnostics" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding Monitoring.State, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
+							<Border Height="1" Background="{DynamicResource OperatorBorderBrush}" Margin="0,12,0,10" />
+							<Grid>
+								<Grid.ColumnDefinitions>
+									<ColumnDefinition Width="Auto" />
+									<ColumnDefinition Width="*" />
+								</Grid.ColumnDefinitions>
+								<controls:RtaimeButton
+									Grid.Column="0"
+									Content="{Binding Startup.SupportBundleActionLabel, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+									Command="{Binding Startup.ExportSupportBundleCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+									IsCompact="True"
+									Margin="0,0,10,0"
+									AutomationProperties.Name="Export system diagnostics support bundle" />
+								<TextBlock
+									Grid.Column="1"
+									Text="{Binding Startup.DiagnosticActionStatus, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+									Style="{StaticResource OperatorLabel}"
+									VerticalAlignment="Center"
+									TextWrapping="Wrap" />
+							</Grid>
 						</StackPanel>
 					</Border>
 <Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14"
@@ -1870,6 +1890,7 @@
 								<Grid.ColumnDefinitions>
 									<ColumnDefinition Width="Auto" />
 									<ColumnDefinition Width="Auto" />
+									<ColumnDefinition Width="Auto" />
 									<ColumnDefinition Width="*" />
 								</Grid.ColumnDefinitions>
 								<controls:RtaimeButton
@@ -1899,8 +1920,16 @@
 										</Style>
 									</controls:RtaimeButton.Style>
 								</controls:RtaimeButton>
-								<TextBlock
+								<controls:RtaimeButton
 									Grid.Column="2"
+									Content="{Binding Startup.SupportBundleActionLabel, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+									Command="{Binding Startup.ExportSupportBundleCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+									MinHeight="28"
+									Padding="10,3"
+									Margin="0,0,8,0"
+									AutomationProperties.Name="Export diagnostics support bundle" />
+								<TextBlock
+									Grid.Column="3"
 									Text="{Binding Startup.DiagnosticActionStatus, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
 									Style="{StaticResource OperatorLabel}"
 									VerticalAlignment="Center"
