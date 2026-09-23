@@ -248,6 +248,75 @@ public sealed class CapabilityPlanningTests
         Assert.Equal(transition.AuthoritativeState.Revision.Value, second.PreparedExecution.PlanGeneration.Value);
     }
 
+    [Fact]
+    public void Prepared_execution_identity_includes_authoritative_compositing_state()
+    {
+        var specification = CreateSpecification();
+        var baseline = CreateAuthoritative(specification);
+        var provider = CreateProvider(100, 2);
+        var firstCompositing = new ProductionCompositingState(
+            ProductionCompositingState.CurrentVersion,
+            new[]
+            {
+                new ProductionCompositingLayerState(
+                    ProductionCompositingLayerIds.BitmapGraphics,
+                    ProductionCompositingLayerKind.BitmapGraphics,
+                    0,
+                    true,
+                    255,
+                    0.1,
+                    0.2,
+                    1.0,
+                    "logo.rgba")
+            });
+        var secondCompositing = new ProductionCompositingState(
+            ProductionCompositingState.CurrentVersion,
+            new[]
+            {
+                new ProductionCompositingLayerState(
+                    ProductionCompositingLayerIds.BitmapGraphics,
+                    ProductionCompositingLayerKind.BitmapGraphics,
+                    0,
+                    false,
+                    128,
+                    0.1,
+                    0.2,
+                    1.0,
+                    "logo.rgba")
+            });
+        var firstAuthority = new AuthoritativeProductionState(
+            baseline.Version,
+            baseline.ProductionId,
+            baseline.Revision,
+            baseline.Routing,
+            null,
+            baseline.OutputRoles,
+            firstCompositing);
+        var secondAuthority = new AuthoritativeProductionState(
+            baseline.Version,
+            baseline.ProductionId,
+            baseline.Revision,
+            baseline.Routing,
+            null,
+            baseline.OutputRoles,
+            secondCompositing);
+
+        var first = CapabilityPlanningEngine.Plan(
+            specification,
+            firstAuthority,
+            new StaticProviderRegistry(provider));
+        var second = CapabilityPlanningEngine.Plan(
+            specification,
+            secondAuthority,
+            new StaticProviderRegistry(provider));
+
+        Assert.True(first.Succeeded);
+        Assert.True(second.Succeeded);
+        Assert.NotNull(first.PreparedExecution!.CompositingState);
+        Assert.Equal(firstCompositing.Layers[0].Opacity, first.PreparedExecution.CompositingState!.Layers[0].Opacity);
+        Assert.NotEqual(first.PreparedExecution.PreparedExecutionId, second.PreparedExecution!.PreparedExecutionId);
+    }
+
     private static ProductionSpecification CreateSpecification()
     {
         var sourceA = new ProductionSourceId(Id(1));
