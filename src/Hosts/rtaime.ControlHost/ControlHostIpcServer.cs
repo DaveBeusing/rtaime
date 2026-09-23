@@ -502,7 +502,10 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		{
 			_graphicsAsset = null;
 			_graphicsOverlayState = new RuntimeGraphicsOverlaySnapshot(false, null, 0, 0, false, 0.72, 0.06, 1.0);
-			_compositingLayers = _compositingLayers.Where(layer => layer.LayerId != "bitmap-graphics").ToArray();
+			_productionCgText = null;
+			_compositingLayers = _compositingLayers
+				.Where(layer => layer.LayerId is not "bitmap-graphics" and not "production-cg")
+				.ToArray();
 		}
 		return response;
 	}
