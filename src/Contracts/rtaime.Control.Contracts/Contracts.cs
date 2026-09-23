@@ -89,9 +89,141 @@ public sealed record ProductionSourceSpecification
 
 public sealed record ProductionRoutingState(ProductionSourceId PreviewSourceId, ProductionSourceId ProgramSourceId);
 
+public enum ProductionCompositingLayerKind
+{
+    LegacyVisual = 1,
+    BitmapGraphics = 2,
+    ProductionCg = 3
+}
+
+public static class ProductionCompositingLayerIds
+{
+    public const string LegacyVisual = "legacy-visual";
+    public const string BitmapGraphics = "bitmap-graphics";
+    public const string ProductionCg = "production-cg";
+    public const int MaximumLayerCount = 8;
+
+    public static bool MatchesKind(string layerId, ProductionCompositingLayerKind kind) =>
+        (layerId, kind) switch
+        {
+            (LegacyVisual, ProductionCompositingLayerKind.LegacyVisual) => true,
+            (BitmapGraphics, ProductionCompositingLayerKind.BitmapGraphics) => true,
+            (ProductionCg, ProductionCompositingLayerKind.ProductionCg) => true,
+            _ => false
+        };
+}
+
+public sealed record ProductionCompositingLayerState
+{
+    public ProductionCompositingLayerState(
+        string layerId,
+        ProductionCompositingLayerKind kind,
+        int order,
+        bool visible,
+        byte opacity,
+        double positionX,
+        double positionY,
+        double scale,
+        string contentIdentity)
+    {
+        if (string.IsNullOrWhiteSpace(layerId))
+            throw new ArgumentException("Compositing layer identity is required.", nameof(layerId));
+        if (!Enum.IsDefined(kind))
+            throw new ArgumentOutOfRangeException(nameof(kind));
+        if (!ProductionCompositingLayerIds.MatchesKind(layerId.Trim(), kind))
+            throw new ArgumentException("Compositing layer identity does not match its declared kind.", nameof(layerId));
+        if (order is < 0 or >= ProductionCompositingLayerIds.MaximumLayerCount)
+            throw new ArgumentOutOfRangeException(nameof(order));
+        if (!double.IsFinite(positionX) || positionX is < 0 or > 1)
+            throw new ArgumentOutOfRangeException(nameof(positionX));
+        if (!double.IsFinite(positionY) || positionY is < 0 or > 1)
+            throw new ArgumentOutOfRangeException(nameof(positionY));
+        if (!double.IsFinite(scale) || scale is < 0.05 or > 4.0)
+            throw new ArgumentOutOfRangeException(nameof(scale));
+        if (string.IsNullOrWhiteSpace(contentIdentity) || contentIdentity.Length > 512)
+            throw new ArgumentException("Compositing layer content identity is required and must not exceed 512 characters.", nameof(contentIdentity));
+
+        LayerId = layerId.Trim();
+        Kind = kind;
+        Order = order;
+        Visible = visible;
+        Opacity = opacity;
+        PositionX = positionX;
+        PositionY = positionY;
+        Scale = scale;
+        ContentIdentity = contentIdentity.Trim();
+    }
+
+    public string LayerId { get; }
+    public ProductionCompositingLayerKind Kind { get; }
+    public int Order { get; }
+    public bool Visible { get; }
+    public byte Opacity { get; }
+    public double PositionX { get; }
+    public double PositionY { get; }
+    public double Scale { get; }
+    public string ContentIdentity { get; }
+}
+
+public sealed class ProductionCompositingState : IEquatable<ProductionCompositingState>
+{
+    public static CompatibilityVersion CurrentVersion { get; } = new(1, 0);
+    private readonly ReadOnlyCollection<ProductionCompositingLayerState> _layers;
+
+    public ProductionCompositingState(
+        CompatibilityVersion version,
+        IReadOnlyList<ProductionCompositingLayerState> layers)
+    {
+        if (version != CurrentVersion)
+            throw new NotSupportedException($"Unsupported compositing state version '{version}'. Supported version is '{CurrentVersion}'.");
+        ArgumentNullException.ThrowIfNull(layers);
+        if (layers.Count > ProductionCompositingLayerIds.MaximumLayerCount)
+            throw new ArgumentException($"Compositing state supports at most {ProductionCompositingLayerIds.MaximumLayerCount} layers.", nameof(layers));
+        if (layers.Any(layer => layer is null))
+            throw new ArgumentException("Compositing state must not contain null layers.", nameof(layers));
+
+        var ordered = layers
+            .OrderBy(layer => layer.Order)
+            .ThenBy(layer => layer.LayerId, StringComparer.Ordinal)
+            .ToArray();
+        if (ordered.Select(layer => layer.LayerId).Distinct(StringComparer.Ordinal).Count() != ordered.Length)
+            throw new ArgumentException("Compositing layer identities must be unique.", nameof(layers));
+        if (ordered.Select(layer => layer.Order).Distinct().Count() != ordered.Length)
+            throw new ArgumentException("Compositing layer order values must be unique.", nameof(layers));
+        if (ordered.Select((layer, index) => layer.Order == index).Any(matches => !matches))
+            throw new ArgumentException("Compositing layer order must be contiguous and start at zero.", nameof(layers));
+
+        Version = version;
+        _layers = Array.AsReadOnly(ordered);
+    }
+
+    public CompatibilityVersion Version { get; }
+    public IReadOnlyList<ProductionCompositingLayerState> Layers => _layers;
+
+    public bool Equals(ProductionCompositingState? other) =>
+        other is not null &&
+        Version == other.Version &&
+        _layers.SequenceEqual(other._layers);
+
+    public override bool Equals(object? obj) => obj is ProductionCompositingState other && Equals(other);
+
+    public override int GetHashCode()
+    {
+        var hash = new HashCode();
+        hash.Add(Version);
+        foreach (var layer in _layers)
+            hash.Add(layer);
+        return hash.ToHashCode();
+    }
+}
+
 public sealed record ProductionSceneSpecification
 {
-    public ProductionSceneSpecification(SceneId sceneId, string name, ProductionRoutingState routing)
+    public ProductionSceneSpecification(
+        SceneId sceneId,
+        string name,
+        ProductionRoutingState routing,
+        ProductionCompositingState? compositingState = null)
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Scene name is required.", nameof(name));
@@ -99,11 +231,13 @@ public sealed record ProductionSceneSpecification
         SceneId = sceneId;
         Name = name.Trim();
         Routing = routing ?? throw new ArgumentNullException(nameof(routing));
+        CompositingState = compositingState;
     }
 
     public SceneId SceneId { get; }
     public string Name { get; }
     public ProductionRoutingState Routing { get; }
+    public ProductionCompositingState? CompositingState { get; }
 }
 
 public sealed class ProductionSpecification
@@ -175,7 +309,8 @@ public sealed record DesiredProductionState
         Revision basedOnAuthoritativeRevision,
         ProductionRoutingState routing,
         SceneId? activeSceneId = null,
-        IReadOnlyList<ProductionOutputRoleState>? outputRoles = null)
+        IReadOnlyList<ProductionOutputRoleState>? outputRoles = null,
+        ProductionCompositingState? compositingState = null)
     {
         ControlContractVersion.EnsureSupported(version);
         Version = version;
@@ -184,6 +319,7 @@ public sealed record DesiredProductionState
         Routing = routing ?? throw new ArgumentNullException(nameof(routing));
         ActiveSceneId = activeSceneId;
         _outputRoles = OutputRoleStateCollection.Normalize(outputRoles, Routing.ProgramSourceId);
+        CompositingState = compositingState;
     }
 
     public CompatibilityVersion Version { get; }
@@ -192,6 +328,7 @@ public sealed record DesiredProductionState
     public ProductionRoutingState Routing { get; }
     public SceneId? ActiveSceneId { get; }
     public IReadOnlyList<ProductionOutputRoleState> OutputRoles => _outputRoles;
+    public ProductionCompositingState? CompositingState { get; }
 }
 
 public sealed record AuthoritativeProductionState
@@ -204,7 +341,8 @@ public sealed record AuthoritativeProductionState
         Revision revision,
         ProductionRoutingState routing,
         SceneId? activeSceneId = null,
-        IReadOnlyList<ProductionOutputRoleState>? outputRoles = null)
+        IReadOnlyList<ProductionOutputRoleState>? outputRoles = null,
+        ProductionCompositingState? compositingState = null)
     {
         ControlContractVersion.EnsureSupported(version);
         Version = version;
@@ -213,6 +351,7 @@ public sealed record AuthoritativeProductionState
         Routing = routing ?? throw new ArgumentNullException(nameof(routing));
         ActiveSceneId = activeSceneId;
         _outputRoles = OutputRoleStateCollection.Normalize(outputRoles, Routing.ProgramSourceId);
+        CompositingState = compositingState;
     }
 
     public CompatibilityVersion Version { get; }
@@ -221,6 +360,7 @@ public sealed record AuthoritativeProductionState
     public ProductionRoutingState Routing { get; }
     public SceneId? ActiveSceneId { get; }
     public IReadOnlyList<ProductionOutputRoleState> OutputRoles => _outputRoles;
+    public ProductionCompositingState? CompositingState { get; }
 }
 
 public sealed record ControlCommandMetadata
