@@ -3,7 +3,9 @@
 	"$comment": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
 	"title": "rtaime Control Remote API V1",
 	"type": "object",
-	"required": ["messages"],
+	"required": [
+		"messages"
+	],
 	"properties": {
 		"messages": {
 			"type": "array",
@@ -21,6 +23,11 @@
 					"control.audio.input.set",
 					"control.audio.test_signal.set",
 					"control.test_pattern.set",
+					"control.media_asset_catalog.snapshot.get",
+					"control.media_asset_catalog.import",
+					"control.media_asset_catalog.relink",
+					"control.media_asset_catalog.remove",
+					"control.media_asset_catalog.availability.refresh",
 					"control.media_deck.snapshot.get",
 					"control.media_deck.open",
 					"control.media_deck.transport",

@@ -77,6 +77,11 @@ Operator-facing messages:
 - `control.audio.input.set`
 - `control.audio.test_signal.set`
 - `control.test_pattern.set`
+- `control.media_asset_catalog.snapshot.get`
+- `control.media_asset_catalog.import`
+- `control.media_asset_catalog.relink`
+- `control.media_asset_catalog.remove`
+- `control.media_asset_catalog.availability.refresh`
 - `control.media_deck.snapshot.get`
 - `control.media_deck.open`
 - `control.media_deck.transport`
@@ -87,7 +92,9 @@ The `control.audio.input.set` and `control.audio.test_signal.set` messages valid
 
 The `control.test_pattern.set` message validates that the selected slot belongs to the authoritative production, then delegates the generated-source state change to RuntimeHost. Its bounded payload carries source identity, enabled state and the optional motion/timing mode flag. The Operator never addresses RuntimeHost directly.
 
-The media-deck messages preserve the same authority direction. Operator intent enters ControlHost, which validates the selected production source slot, owns persisted IN/OUT and cue metadata, and proxies decode/transport execution to RuntimeHost. The Operator does not obtain direct RuntimeHost access.
+The media-asset-catalogue messages preserve the same authority direction. ControlHost owns durable catalogue mutation and persists the catalogue through the existing SQLite management-document store. Snapshot reads are paged at no more than 256 asset descriptors per response under the existing 1 MiB Control frame limit. Import, relink and remove carry paths, stable identities and bounded result metadata only. Catalogue mutations never transfer source-media bytes over management IPC.
+
+The media-deck messages preserve the same authority direction. Operator intent enters ControlHost, which validates the selected production source slot, owns persisted IN/OUT and cue metadata, and proxies decode/transport execution to RuntimeHost. A catalogue asset may supply its stable `MediaAssetId` when opened so Runtime/Media Deck execution preserves the catalogue identity. The Operator does not obtain direct RuntimeHost access.
 
 A successful production-routing mutation crosses the existing boundary:
 
@@ -119,12 +126,13 @@ Control-facing messages:
 - `runtime.audio.input.set`
 - `runtime.audio.test_signal.set`
 - `runtime.test_pattern.set`
+- `runtime.media_asset.probe`
 - `runtime.media_deck.snapshot.get`
 - `runtime.media_deck.open`
 - `runtime.media_deck.transport`
 - `runtime.media_deck.close`
 
-The server delegates normal production execution to `V1RuntimeHostService`. Prepared execution bindings may carry a stable output-role identifier; RuntimeHost uses those bindings to execute governed Program/Aux routes through the admitted provider resources and returns bounded output-role evidence in the normal Runtime snapshot. The `runtime.audio.test_signal.set` request configures the generated audio source for an existing audio input and returns the Runtime-confirmed mode, active identification channel, frequency and peak level through the normal audio-input snapshot. The `runtime.test_pattern.set` request selects static or motion/timing video generation for an existing source slot; snapshots separately identify active generated sources and those currently using motion/timing diagnostics. The media-deck slice delegates local-file decode and transport to the RuntimeHost-owned single-deck service, using a ControlHost-supplied `PreparedExecutionContract`. Raw video/audio payloads never cross this management IPC boundary.
+The server delegates normal production execution to `V1RuntimeHostService`. `runtime.media_asset.probe` reuses the existing local-media provider/decoder capability to return bounded technical metadata for an explicitly selected local file and a ControlHost-supplied `MediaAssetId`; it does not open a second decoder stack or transfer decoded media over IPC. Prepared execution bindings may carry a stable output-role identifier; RuntimeHost uses those bindings to execute governed Program/Aux routes through the admitted provider resources and returns bounded output-role evidence in the normal Runtime snapshot. The `runtime.audio.test_signal.set` request configures the generated audio source for an existing audio input and returns the Runtime-confirmed mode, active identification channel, frequency and peak level through the normal audio-input snapshot. The `runtime.test_pattern.set` request selects static or motion/timing video generation for an existing source slot; snapshots separately identify active generated sources and those currently using motion/timing diagnostics. The media-deck slice delegates local-file decode and transport to the RuntimeHost-owned single-deck service, using a ControlHost-supplied `PreparedExecutionContract`. Raw video/audio payloads never cross this management IPC boundary.
 
 A Runtime snapshot exposes two deliberately separate revision domains:
 
@@ -183,7 +191,7 @@ The cache is intentionally not durable. After a server process restart, clients 
 
 ## Payload boundary
 
-Management IPC may carry commands, state, provider descriptors, `PreparedExecutionContract`, media-deck metadata, frame/surface descriptors, opaque handles and governed AI metadata.
+Management IPC may carry commands, state, provider descriptors, `PreparedExecutionContract`, paged media-catalogue descriptors, media-deck metadata, frame/surface descriptors, opaque handles and governed AI metadata.
 
 It must not carry raw video frames, RGBA byte arrays, audio sample arrays, segmentation mask pixels or GPU memory payloads. Bulk media remains on Media/Provider resource paths.
 
