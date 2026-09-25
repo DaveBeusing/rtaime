@@ -130,7 +130,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	private async ValueTask RestoreGraphicsStateCoreAsync(CancellationToken cancellationToken)
 	{
 		if (!_runtimeTransport.IsConnected)
-		return;
+			return;
 
 		if (_graphicsAsset is null && _durableBitmapReference is { } durableBitmap && _showProjectStore is not null)
 		{
