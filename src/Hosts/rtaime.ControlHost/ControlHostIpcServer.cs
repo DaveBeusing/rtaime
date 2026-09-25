@@ -617,7 +617,11 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			_compositingLayers = layers;
 			control.ConfirmCompositingMutation(ToProductionCompositingState(layers));
 			if (string.Equals(wire.LayerId, "bitmap-graphics", StringComparison.Ordinal))
+			{
 				_graphicsOverlayState = _graphicsOverlayState with { Visible = wire.Visible };
+				if (_durableBitmapReference is { } bitmap)
+					_durableBitmapReference = bitmap with { Visible = wire.Visible };
+			}
 			else if (string.Equals(wire.LayerId, "production-cg", StringComparison.Ordinal) && _productionCgText is not null)
 				_productionCgText = _productionCgText with { Visible = wire.Visible };
 			await TryPersistDurableGraphicsAsync(cancellationToken).ConfigureAwait(false);
@@ -823,6 +827,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 				var snapshot = await mutation(cancellationToken).ConfigureAwait(false);
 				var runtime = await _runtimeTransport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
 				_compositingLayers = runtime.CompositingLayers ?? Array.Empty<RuntimeCompositingLayerSnapshot>();
+				control.ConfirmCompositingMutation(ToProductionCompositingState(_compositingLayers));
 				await confirmedMutation(snapshot, runtime, cancellationToken).ConfigureAwait(false);
 				NotifyObservableStateChanged();
 				return Success(request, "control.graphics.overlay.response", ToWire(snapshot));
