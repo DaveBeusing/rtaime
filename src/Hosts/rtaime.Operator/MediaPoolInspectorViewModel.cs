@@ -320,7 +320,7 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 	public bool SupportsTransformCrop => HasAuthoritativeCompositingSelection;
 	public bool SupportsEffectOrdering => false;
 	public string UnsupportedTransformCapabilityText => HasAuthoritativeCompositingSelection
-		? "Transform values are committed through authoritative Control and confirmed by RuntimeHost."
+		? "Transform values are committed through authoritative Control and confirmed by Runtime state."
 		: "Rotation, Anchor and Crop require an authoritative bitmap or Production CG compositing layer selection.";
 	public string UnsupportedEffectOrderingText => HasAuthoritativeCompositingSelection
 		? "V1 supports one bounded authoritative Color Grade node per layer; effect stacking and reordering remain out of scope."
