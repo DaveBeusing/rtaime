@@ -159,6 +159,23 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 						layer.Visible,
 						layer.Opacity,
 						cancellationToken).ConfigureAwait(false);
+					await _runtimeTransport.SetCompositingLayerTransformAsync(
+						layer.LayerId,
+						layer.PositionX,
+						layer.PositionY,
+						layer.Scale,
+						layer.RotationDegrees,
+						layer.AnchorX,
+						layer.AnchorY,
+						layer.CropLeft,
+						layer.CropTop,
+						layer.CropRight,
+						layer.CropBottom,
+						cancellationToken).ConfigureAwait(false);
+					await _runtimeTransport.SetCompositingLayerProcessingNodeAsync(
+						layer.LayerId,
+						layer.ProcessingNode,
+						cancellationToken).ConfigureAwait(false);
 				}
 				var current = await _runtimeTransport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
 				var retainedOrder = _compositingLayers
@@ -322,6 +339,8 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			"control.graphics.overlay.set" => await SetGraphicsOverlayAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.graphics.overlay.clear" => await ClearGraphicsOverlayAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.compositing.layer.set" => await SetCompositingLayerStateAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.compositing.layer.transform" => await SetCompositingLayerTransformAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.compositing.layer.processing" => await SetCompositingLayerProcessingAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.compositing.layers.reorder" => await ReorderCompositingLayersAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.audio.input.set" => await SetAudioInputStateAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.audio.test_signal.set" => await SetAudioTestSignalAsync(request, cancellationToken).ConfigureAwait(false),
@@ -638,6 +657,113 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		}
 	}
 
+	private async ValueTask<WireEnvelope> SetCompositingLayerTransformAsync(WireEnvelope request, CancellationToken cancellationToken)
+	{
+		var wire = request.Payload.Deserialize<WireCompositingLayerTransform>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Compositing layer transform payload is required.");
+		await _mutationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+		try
+		{
+			var control = _controlAccessor();
+			if (control is null || !control.HasAuthoritativeState)
+				return Error(request, "control.not_ready", "ControlHost has no committed authoritative state yet.");
+			if (!_runtimeTransport.IsConnected)
+				return Error(request, "runtime.unavailable", "RuntimeHost is not connected.");
+
+			var layers = await _runtimeTransport.SetCompositingLayerTransformAsync(
+				wire.LayerId,
+				wire.PositionX,
+				wire.PositionY,
+				wire.Scale,
+				wire.RotationDegrees,
+				wire.AnchorX,
+				wire.AnchorY,
+				wire.CropLeft,
+				wire.CropTop,
+				wire.CropRight,
+				wire.CropBottom,
+				cancellationToken).ConfigureAwait(false);
+			_compositingLayers = layers;
+			control.ConfirmCompositingMutation(ToProductionCompositingState(layers));
+
+			if (string.Equals(wire.LayerId, "bitmap-graphics", StringComparison.Ordinal))
+			{
+				_graphicsOverlayState = _graphicsOverlayState with
+				{
+					PositionX = wire.PositionX,
+					PositionY = wire.PositionY,
+					Scale = wire.Scale
+				};
+				if (_durableBitmapReference is { } bitmap)
+				{
+					_durableBitmapReference = bitmap with
+					{
+						PositionX = wire.PositionX,
+						PositionY = wire.PositionY,
+						Scale = wire.Scale
+					};
+				}
+			}
+
+			await TryPersistDurableGraphicsAsync(cancellationToken).ConfigureAwait(false);
+			NotifyObservableStateChanged();
+			return Success(request, "control.compositing.layers.response", layers.Select(ToWire).ToArray());
+		}
+		catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or NotSupportedException or FormatException or InvalidDataException or IOException)
+		{
+			return Error(request, "control.compositing.transform.rejected", exception.Message);
+		}
+		finally
+		{
+			_mutationGate.Release();
+		}
+	}
+
+	private async ValueTask<WireEnvelope> SetCompositingLayerProcessingAsync(WireEnvelope request, CancellationToken cancellationToken)
+	{
+		var wire = request.Payload.Deserialize<WireCompositingLayerProcessing>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Compositing layer processing payload is required.");
+		await _mutationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+		try
+		{
+			var control = _controlAccessor();
+			if (control is null || !control.HasAuthoritativeState)
+				return Error(request, "control.not_ready", "ControlHost has no committed authoritative state yet.");
+			if (!_runtimeTransport.IsConnected)
+				return Error(request, "runtime.unavailable", "RuntimeHost is not connected.");
+
+			PreparedCompositingProcessingNodeState? node = wire.ProcessingNode is null
+				? null
+				: new PreparedCompositingProcessingNodeState(
+					wire.ProcessingNode.NodeId,
+					Enum.IsDefined(typeof(PreparedCompositingProcessingNodeKind), wire.ProcessingNode.Kind)
+						? (PreparedCompositingProcessingNodeKind)wire.ProcessingNode.Kind
+						: throw new InvalidDataException("Compositing processing node kind is invalid."),
+					wire.ProcessingNode.Enabled,
+					new PreparedColorGradeSettings(
+						wire.ProcessingNode.ColorGrade.Brightness,
+						wire.ProcessingNode.ColorGrade.Contrast,
+						wire.ProcessingNode.ColorGrade.Saturation));
+
+			var layers = await _runtimeTransport
+				.SetCompositingLayerProcessingNodeAsync(wire.LayerId, node, cancellationToken)
+				.ConfigureAwait(false);
+			_compositingLayers = layers;
+			control.ConfirmCompositingMutation(ToProductionCompositingState(layers));
+			await TryPersistDurableGraphicsAsync(cancellationToken).ConfigureAwait(false);
+			NotifyObservableStateChanged();
+			return Success(request, "control.compositing.layers.response", layers.Select(ToWire).ToArray());
+		}
+		catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or NotSupportedException or FormatException or InvalidDataException or IOException)
+		{
+			return Error(request, "control.compositing.processing.rejected", exception.Message);
+		}
+		finally
+		{
+			_mutationGate.Release();
+		}
+	}
+
 	private async ValueTask<WireEnvelope> ReorderCompositingLayersAsync(WireEnvelope request, CancellationToken cancellationToken)
 	{
 		var wire = request.Payload.Deserialize<WireCompositingLayerOrder>(Wire.JsonOptions)
@@ -687,7 +813,24 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 					layer.PositionX,
 					layer.PositionY,
 					layer.Scale,
-					layer.ContentIdentity))
+					layer.ContentIdentity,
+					layer.RotationDegrees,
+					layer.AnchorX,
+					layer.AnchorY,
+					layer.CropLeft,
+					layer.CropTop,
+					layer.CropRight,
+					layer.CropBottom,
+					layer.ProcessingNode is null
+						? null
+						: new ProductionCompositingProcessingNodeState(
+							layer.ProcessingNode.NodeId,
+							(ProductionCompositingProcessingNodeKind)(int)layer.ProcessingNode.Kind,
+							layer.ProcessingNode.Enabled,
+							new ProductionColorGradeSettings(
+								layer.ProcessingNode.ColorGrade.Brightness,
+								layer.ProcessingNode.ColorGrade.Contrast,
+								layer.ProcessingNode.ColorGrade.Saturation))))
 				.ToArray());
 	}
 
@@ -804,7 +947,24 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 					layer.PositionX,
 					layer.PositionY,
 					layer.Scale,
-					layer.ContentIdentity))
+					layer.ContentIdentity,
+					layer.RotationDegrees,
+					layer.AnchorX,
+					layer.AnchorY,
+					layer.CropLeft,
+					layer.CropTop,
+					layer.CropRight,
+					layer.CropBottom,
+					layer.ProcessingNode is null
+						? null
+						: new PreparedCompositingProcessingNodeState(
+							layer.ProcessingNode.NodeId,
+							(PreparedCompositingProcessingNodeKind)(int)layer.ProcessingNode.Kind,
+							layer.ProcessingNode.Enabled,
+							new PreparedColorGradeSettings(
+								layer.ProcessingNode.ColorGrade.Brightness,
+								layer.ProcessingNode.ColorGrade.Contrast,
+								layer.ProcessingNode.ColorGrade.Saturation))))
 				.ToArray());
 
 	private async ValueTask<WireEnvelope> MutateGraphicsAsync(
@@ -1781,7 +1941,24 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		snapshot.PositionX,
 		snapshot.PositionY,
 		snapshot.Scale,
-		snapshot.ContentIdentity);
+		snapshot.ContentIdentity,
+		snapshot.RotationDegrees,
+		snapshot.AnchorX,
+		snapshot.AnchorY,
+		snapshot.CropLeft,
+		snapshot.CropTop,
+		snapshot.CropRight,
+		snapshot.CropBottom,
+		snapshot.ProcessingNode is null
+			? null
+			: new WireProcessingNode(
+				snapshot.ProcessingNode.NodeId,
+				(int)snapshot.ProcessingNode.Kind,
+				snapshot.ProcessingNode.Enabled,
+				new WireColorGrade(
+					snapshot.ProcessingNode.ColorGrade.Brightness,
+					snapshot.ProcessingNode.ColorGrade.Contrast,
+					snapshot.ProcessingNode.ColorGrade.Saturation)));
 
 	private static WireGraphicsOverlay ToWire(RuntimeGraphicsOverlaySnapshot snapshot) => new(
 		snapshot.AssetLoaded,
@@ -1981,7 +2158,24 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 					layer.PositionX,
 					layer.PositionY,
 					layer.Scale,
-					layer.ContentIdentity)).ToArray());
+					layer.ContentIdentity,
+					layer.RotationDegrees,
+					layer.AnchorX,
+					layer.AnchorY,
+					layer.CropLeft,
+					layer.CropTop,
+					layer.CropRight,
+					layer.CropBottom,
+					layer.ProcessingNode is null
+						? null
+						: new WireProcessingNode(
+							layer.ProcessingNode.NodeId,
+							(int)layer.ProcessingNode.Kind,
+							layer.ProcessingNode.Enabled,
+							new WireColorGrade(
+								layer.ProcessingNode.ColorGrade.Brightness,
+								layer.ProcessingNode.ColorGrade.Contrast,
+								layer.ProcessingNode.ColorGrade.Saturation)))).ToArray());
 
 	private static WireOutputRole[] ProjectOutputRoles(
 		AuthoritativeProductionState state,
@@ -2068,8 +2262,12 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	private sealed record WireProductionCgTextSnapshot(bool Active, string? Text, string? Typeface, string? ResolvedTypeface, float FontSizePixels, uint BoxWidth, uint BoxHeight, int Alignment, int Anchor, bool PanelEnabled, bool Visible, int Layer, int ZOrder, bool CacheHit, long RenderDurationTicks);
 	private sealed record WireGraphicsOverlayState(bool Visible, double PositionX, double PositionY, double Scale);
 	private sealed record WireCompositingLayerState(string LayerId, bool Visible, byte Opacity);
+	private sealed record WireCompositingLayerTransform(string LayerId, double PositionX, double PositionY, double Scale, double RotationDegrees, double AnchorX, double AnchorY, double CropLeft, double CropTop, double CropRight, double CropBottom);
+	private sealed record WireColorGrade(double Brightness, double Contrast, double Saturation);
+	private sealed record WireProcessingNode(string NodeId, int Kind, bool Enabled, WireColorGrade ColorGrade);
+	private sealed record WireCompositingLayerProcessing(string LayerId, WireProcessingNode? ProcessingNode);
 	private sealed record WireCompositingLayerOrder(string[] LayerIds);
-	private sealed record WireCompositingLayer(string LayerId, int Kind, int Order, bool Visible, byte Opacity, double PositionX, double PositionY, double Scale, string ContentIdentity);
+	private sealed record WireCompositingLayer(string LayerId, int Kind, int Order, bool Visible, byte Opacity, double PositionX, double PositionY, double Scale, string ContentIdentity, double RotationDegrees = 0, double AnchorX = 0, double AnchorY = 0, double CropLeft = 0, double CropTop = 0, double CropRight = 0, double CropBottom = 0, WireProcessingNode? ProcessingNode = null);
 	private sealed record WireCompositingState(string Version, WireCompositingLayer[] Layers);
 	private sealed record WireGraphicsOverlay(bool AssetLoaded, string? AssetName, uint AssetWidth, uint AssetHeight, bool Visible, double PositionX, double PositionY, double Scale)
 	{

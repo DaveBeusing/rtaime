@@ -534,7 +534,24 @@ public sealed class ShowProjectPersistenceStore
 			layer.PositionX,
 			layer.PositionY,
 			layer.Scale,
-			layer.ContentIdentity)).ToArray());
+			layer.ContentIdentity,
+			layer.RotationDegrees,
+			layer.AnchorX,
+			layer.AnchorY,
+			layer.CropLeft,
+			layer.CropTop,
+			layer.CropRight,
+			layer.CropBottom,
+			layer.ProcessingNode is null
+				? null
+				: new ProcessingNodeDocument(
+					layer.ProcessingNode.NodeId,
+					(int)layer.ProcessingNode.Kind,
+					layer.ProcessingNode.Enabled,
+					new ColorGradeDocument(
+						layer.ProcessingNode.ColorGrade.Brightness,
+						layer.ProcessingNode.ColorGrade.Contrast,
+						layer.ProcessingNode.ColorGrade.Saturation)))).ToArray());
 
 	private static ProductionCompositingState FromDocument(CompositingDocument state)
 	{
@@ -554,7 +571,26 @@ public sealed class ShowProjectPersistenceStore
 				layer.PositionX,
 				layer.PositionY,
 				layer.Scale,
-				layer.ContentIdentity)).ToArray());
+				layer.ContentIdentity,
+				layer.RotationDegrees,
+				layer.AnchorX,
+				layer.AnchorY,
+				layer.CropLeft,
+				layer.CropTop,
+				layer.CropRight,
+				layer.CropBottom,
+				layer.ProcessingNode is null
+					? null
+					: new ProductionCompositingProcessingNodeState(
+						layer.ProcessingNode.NodeId,
+						Enum.IsDefined(typeof(ProductionCompositingProcessingNodeKind), layer.ProcessingNode.Kind)
+							? (ProductionCompositingProcessingNodeKind)layer.ProcessingNode.Kind
+							: throw new InvalidDataException($"Persisted processing node kind '{layer.ProcessingNode.Kind}' is invalid."),
+						layer.ProcessingNode.Enabled,
+						new ProductionColorGradeSettings(
+							layer.ProcessingNode.ColorGrade.Brightness,
+							layer.ProcessingNode.ColorGrade.Contrast,
+							layer.ProcessingNode.ColorGrade.Saturation)))).ToArray());
 	}
 
 	private static GraphicsDocument ToDocument(DurableGraphicsState graphics) => new(
@@ -702,5 +738,24 @@ public sealed class ShowProjectPersistenceStore
 		double PositionX,
 		double PositionY,
 		double Scale,
-		string ContentIdentity);
+		string ContentIdentity,
+		double RotationDegrees = 0,
+		double AnchorX = 0,
+		double AnchorY = 0,
+		double CropLeft = 0,
+		double CropTop = 0,
+		double CropRight = 0,
+		double CropBottom = 0,
+		ProcessingNodeDocument? ProcessingNode = null);
+
+	private sealed record ProcessingNodeDocument(
+		string NodeId,
+		int Kind,
+		bool Enabled,
+		ColorGradeDocument ColorGrade);
+
+	private sealed record ColorGradeDocument(
+		double Brightness,
+		double Contrast,
+		double Saturation);
 }
