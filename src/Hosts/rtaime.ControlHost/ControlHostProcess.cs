@@ -156,6 +156,13 @@ public interface IControlRuntimeTransportSeam
 		ValueTask.FromException<RuntimeAIShowcaseRemoteSnapshot>(
 			new NotSupportedException("Runtime transport does not expose AI showcase control."));
 
+	ValueTask<MediaAssetProbeResult> ProbeMediaAssetAsync(
+		string path,
+		MediaAssetId assetId,
+		CancellationToken cancellationToken = default) =>
+		ValueTask.FromException<MediaAssetProbeResult>(
+			new NotSupportedException("Runtime transport does not expose media-asset probing."));
+
 	ValueTask<MediaDeckRuntimeSnapshot> GetMediaDeckSnapshotAsync(CancellationToken cancellationToken = default) =>
 		ValueTask.FromException<MediaDeckRuntimeSnapshot>(
 			new NotSupportedException("Runtime transport does not expose media-deck control."));

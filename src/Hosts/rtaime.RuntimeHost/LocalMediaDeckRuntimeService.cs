@@ -38,6 +38,22 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
 
 	public ProviderDescriptor ProviderDescriptor => _provider.Descriptor;
 
+	public MediaAssetProbeResult Probe(string path, MediaAssetId assetId)
+	{
+		ObjectDisposedException.ThrowIf(_disposed, this);
+		var open = _provider.TryOpen(path, new MediaSourceId(Identity.New()), assetId);
+		if (!open.Succeeded || open.Source is null)
+		{
+			var failure = open.Failure ?? new Failure(
+				"runtime.media_asset.probe_failed",
+				"Local media could not be probed.");
+			return MediaAssetProbeResult.Rejected(failure.Code, failure.Message);
+		}
+
+		using var source = open.Source;
+		return MediaAssetProbeResult.Ready(source.Probe);
+	}
+
 	public LocalMediaRuntimeBoundaryResult? LatestBoundary
 	{
 		get
@@ -73,7 +89,7 @@ public sealed class LocalMediaDeckRuntimeService : IDisposable
 			_outPointFrame = null;
 			_isOnProgram = false;
 
-			var open = _provider.TryOpen(request.Path, request.SourceId);
+			var open = _provider.TryOpen(request.Path, request.SourceId, request.AssetId);
 			if (!open.Succeeded || open.Source is null)
 			{
 				_failure = open.Failure ?? new Failure(

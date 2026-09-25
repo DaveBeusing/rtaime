@@ -51,13 +51,20 @@ public sealed class MediaDeckController : IAsyncDisposable
 		return snapshot;
 	}
 
+	public ValueTask<MediaDeckSnapshot> OpenAsync(
+		string path,
+		MediaSourceId sourceId,
+		CancellationToken cancellationToken = default) =>
+		OpenAsync(path, sourceId, null, cancellationToken);
+
 	public async ValueTask<MediaDeckSnapshot> OpenAsync(
 		string path,
 		MediaSourceId sourceId,
+		MediaAssetId? assetId,
 		CancellationToken cancellationToken = default)
 	{
 		ThrowIfDisposed();
-		var snapshot = await _client.OpenMediaDeckAsync(path, sourceId, cancellationToken).ConfigureAwait(false);
+		var snapshot = await _client.OpenMediaDeckAsync(path, sourceId, assetId, cancellationToken).ConfigureAwait(false);
 		ApplySnapshot(snapshot);
 		return snapshot;
 	}

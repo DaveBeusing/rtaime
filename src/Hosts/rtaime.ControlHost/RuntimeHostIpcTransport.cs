@@ -531,6 +531,26 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 		return FromWire(wire);
 	}
 
+	public async ValueTask<MediaAssetProbeResult> ProbeMediaAssetAsync(
+		string path,
+		MediaAssetId assetId,
+		CancellationToken cancellationToken = default)
+	{
+		if (string.IsNullOrWhiteSpace(path))
+			throw new ArgumentException("Media asset path is required.", nameof(path));
+		var response = await ExchangeAsync(
+			"runtime.media_asset.probe",
+			new WireMediaAssetProbe(path.Trim(), assetId.ToString()),
+			cancellationToken).ConfigureAwait(false);
+		var wire = response.Payload.Deserialize<WireMediaAssetProbeResult>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Runtime media-asset probe response is required.");
+		if ((wire.Probe is null) == (wire.Failure is null))
+			throw new InvalidDataException("Runtime media-asset probe response must contain exactly one of probe or failure.");
+		return wire.Probe is not null
+			? MediaAssetProbeResult.Ready(FromWire(wire.Probe))
+			: MediaAssetProbeResult.Rejected(wire.Failure!.Code, wire.Failure.Message);
+	}
+
 	public async ValueTask<MediaDeckRuntimeSnapshot> GetMediaDeckSnapshotAsync(CancellationToken cancellationToken = default)
 	{
 		var response = await ExchangeAsync("runtime.media_deck.snapshot.get", new { }, cancellationToken).ConfigureAwait(false);
@@ -550,6 +570,7 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 			request.Version.ToString(),
 			request.SourceId.ToString(),
 			request.Path,
+			request.AssetId?.ToString(),
 			ToWire(preparedExecution));
 		var response = await ExchangeAsync("runtime.media_deck.open", payload, cancellationToken).ConfigureAwait(false);
 		var wire = response.Payload.Deserialize<WireMediaDeckRuntimeSnapshot>(Wire.JsonOptions)
@@ -1079,7 +1100,9 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 	private sealed record WireAvSyncDiagnostics(bool Enabled, string State, ulong? EventId, string? ExpectedMediaTime, ulong? TargetVideoFrameSequence, ulong? TargetAudioSamplePosition, double? ScheduledVideoOffsetMilliseconds, double? SubmitOffsetMilliseconds, double? DriftFromBaselineMilliseconds, string Detail);
 	private sealed record WireOutputRole(string RoleId, string RoleKind, string SourceId, string TargetId, WireVideoFormat Format, long TimingNumerator, long TimingDenominator, string ProviderId, int LifecycleState, bool AuthoritativeActive, int HealthState, string Evidence, WireFailure? Error);
 	private sealed record WireRecordingCommandResult(bool Succeeded, WireRecordingSnapshot Snapshot, WireFailure? Failure);
-	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path, WirePreparedExecution PreparedExecution);
+	private sealed record WireMediaAssetProbe(string Path, string AssetId);
+	private sealed record WireMediaAssetProbeResult(WireLocalMediaProbe? Probe, WireFailure? Failure);
+	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path, string? AssetId, WirePreparedExecution PreparedExecution);
 	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame, bool? AutoPlayOnProgram, int? EndBehavior, long? InPointFrame, long? OutPointFrame);
 	private sealed record WireLocalMediaProbe(string Version, string AssetId, string SourceId, string FileName, int Container, int VideoCodec, int AudioCodec, uint Width, uint Height, string FrameRate, long DurationTicks);
 	private sealed record WireMediaTransportSnapshot(string Version, string AssetId, string SourceId, int State, long CurrentFrame, long TotalFrames, long PositionTicks, long DurationTicks, long RemainingTicks, string FrameRate, WireFailure? Failure, bool AutoPlayOnProgram, int EndBehavior, bool IsOnProgram, long EffectiveStartFrame, long EffectiveEndFrame, long EffectiveRemainingFrames, long EffectiveRemainingTicks);

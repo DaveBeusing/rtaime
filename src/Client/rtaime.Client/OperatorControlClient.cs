@@ -983,8 +983,15 @@ public sealed class OperatorControlClient
         string path,
         MediaSourceId sourceId,
         CancellationToken cancellationToken = default) =>
+        OpenMediaDeckAsync(path, sourceId, null, cancellationToken);
+
+    public ValueTask<MediaDeckSnapshot> OpenMediaDeckAsync(
+        string path,
+        MediaSourceId sourceId,
+        MediaAssetId? assetId,
+        CancellationToken cancellationToken = default) =>
         _transport.OpenMediaDeckAsync(
-            new MediaDeckOpenRequest(MediaContractVersion.Current, sourceId, path),
+            new MediaDeckOpenRequest(MediaContractVersion.Current, sourceId, path, assetId),
             cancellationToken);
 
     public ValueTask<MediaDeckSnapshot> ApplyMediaDeckTransportAsync(

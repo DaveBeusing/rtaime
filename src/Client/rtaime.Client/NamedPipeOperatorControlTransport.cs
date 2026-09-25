@@ -291,7 +291,7 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		ArgumentNullException.ThrowIfNull(request);
 		var response = await ExchangeAsync(
 			"control.media_deck.open",
-			new WireMediaDeckOpen(request.Version.ToString(), request.SourceId.ToString(), request.Path),
+			new WireMediaDeckOpen(request.Version.ToString(), request.SourceId.ToString(), request.Path, request.AssetId?.ToString()),
 			cancellationToken).ConfigureAwait(false);
 		return ReadMediaDeckSnapshot(response);
 	}
@@ -1040,7 +1040,7 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		bool RequiresAcknowledgement,
 		WireFailure? Failure);
 	private sealed record WireShowControlWorkspace(string[] CueLists, string? SelectedCueListId, WireShowControlExecution Execution);
-	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path);
+	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path, string? AssetId);
 	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame, bool? AutoPlayOnProgram, int? EndBehavior, long? InPointFrame, long? OutPointFrame);
 	private sealed record WireMediaMarkerCommand(string Version, string AssetId, int Kind, long? PositionFrame, string? CuePointId, string? Name);
 	private sealed record WireLocalMediaProbe(string Version, string AssetId, string SourceId, string FileName, int Container, int VideoCodec, int AudioCodec, uint Width, uint Height, string FrameRate, long DurationTicks);

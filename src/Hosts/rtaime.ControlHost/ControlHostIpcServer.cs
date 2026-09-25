@@ -764,7 +764,10 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			new MediaDeckOpenRequest(
 				CompatibilityVersion.Parse(wire.Version),
 				new MediaSourceId(Identity.Parse(wire.SourceId)),
-				wire.Path),
+				wire.Path,
+				string.IsNullOrWhiteSpace(wire.AssetId)
+					? null
+					: new MediaAssetId(Identity.Parse(wire.AssetId))),
 			cancellationToken).ConfigureAwait(false);
 		NotifyObservableStateChanged();
 		return Success(request, "control.media_deck.snapshot.response", ToWire(snapshot));
@@ -1811,7 +1814,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		bool RequiresAcknowledgement,
 		WireFailure? Failure);
 	private sealed record WireShowControlWorkspace(string[] CueLists, string? SelectedCueListId, WireShowControlExecution Execution);
-	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path);
+	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path, string? AssetId);
 	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame, bool? AutoPlayOnProgram, int? EndBehavior, long? InPointFrame, long? OutPointFrame);
 	private sealed record WireMediaMarkerCommand(string Version, string AssetId, int Kind, long? PositionFrame, string? CuePointId, string? Name);
 	private sealed record WireLocalMediaProbe(string Version, string AssetId, string SourceId, string FileName, int Container, int VideoCodec, int AudioCodec, uint Width, uint Height, string FrameRate, long DurationTicks);

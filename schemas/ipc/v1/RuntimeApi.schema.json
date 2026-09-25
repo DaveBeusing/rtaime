@@ -17,6 +17,7 @@
 					"runtime.audio.input.set",
 					"runtime.audio.test_signal.set",
 					"runtime.test_pattern.set",
+					"runtime.media_asset.probe",
 					"runtime.media_deck.snapshot.get",
 					"runtime.media_deck.open",
 					"runtime.media_deck.transport",
