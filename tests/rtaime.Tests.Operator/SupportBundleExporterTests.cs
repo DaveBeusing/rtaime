@@ -1,9 +1,11 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
+using System.IO;
 using System.IO.Compression;
 using System.Text.Json;
 using rtaime.Client;
 using rtaime.Operator;
+using Xunit;
 
 namespace rtaime.Tests.Operator;
 
