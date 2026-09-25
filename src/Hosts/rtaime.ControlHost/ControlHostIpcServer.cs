@@ -488,19 +488,17 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	{
 		var wire = request.Payload.Deserialize<WireGraphicsAsset>(Wire.JsonOptions)
 			?? throw new InvalidDataException("Graphics overlay asset payload is required.");
-		var response = await MutateGraphicsAsync(
+		var retained = new RetainedGraphicsAsset(wire.Name.Trim(), wire.Width, wire.Height, wire.RgbaPixels.ToArray());
+		return await MutateGraphicsAsync(
 			request,
 			token => _runtimeTransport.LoadGraphicsOverlayAsync(wire.Name, wire.Width, wire.Height, wire.RgbaPixels, token),
+			async (snapshot, _, token) =>
+			{
+				_graphicsAsset = retained;
+				_graphicsOverlayState = snapshot;
+				await StoreBitmapAndPersistAsync(retained, snapshot, token).ConfigureAwait(false);
+			},
 			cancellationToken).ConfigureAwait(false);
-		if (!string.Equals(response.MessageType, "error", StringComparison.Ordinal))
-		{
-			_graphicsAsset = new RetainedGraphicsAsset(wire.Name.Trim(), wire.Width, wire.Height, wire.RgbaPixels.ToArray());
-			if (!_graphicsOverlayState.AssetLoaded)
-				_graphicsOverlayState = new RuntimeGraphicsOverlaySnapshot(true, wire.Name.Trim(), wire.Width, wire.Height, false, 0.72, 0.06, 1.0);
-			else
-				_graphicsOverlayState = _graphicsOverlayState with { AssetLoaded = true, AssetName = wire.Name.Trim(), AssetWidth = wire.Width, AssetHeight = wire.Height };
-		}
-		return response;
 	}
 
 	private async ValueTask<WireEnvelope> ApplyProductionCgTextAsync(WireEnvelope request, CancellationToken cancellationToken)
@@ -527,59 +525,70 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			wire.Visible,
 			wire.Layer,
 			wire.ZOrder);
-		var response = await MutateGraphicsAsync(
+		return await MutateGraphicsAsync(
 			request,
 			token => _runtimeTransport.ApplyProductionCgTextAsync(definition, token),
+			async (_, _, token) =>
+			{
+				_productionCgText = definition;
+				await TryPersistDurableGraphicsAsync(token).ConfigureAwait(false);
+			},
 			cancellationToken).ConfigureAwait(false);
-		if (!string.Equals(response.MessageType, "error", StringComparison.Ordinal))
-			_productionCgText = definition;
-		return response;
 	}
 
 	private async ValueTask<WireEnvelope> SetGraphicsOverlayAsync(WireEnvelope request, CancellationToken cancellationToken)
 	{
 		var wire = request.Payload.Deserialize<WireGraphicsOverlayState>(Wire.JsonOptions)
 			?? throw new InvalidDataException("Graphics overlay state payload is required.");
-		var response = await MutateGraphicsAsync(
+		return await MutateGraphicsAsync(
 			request,
 			token => _runtimeTransport.SetGraphicsOverlayAsync(wire.Visible, wire.PositionX, wire.PositionY, wire.Scale, token),
-			cancellationToken).ConfigureAwait(false);
-		if (!string.Equals(response.MessageType, "error", StringComparison.Ordinal))
-		{
-			if (_graphicsAsset is not null)
+			async (snapshot, _, token) =>
 			{
-				_graphicsOverlayState = _graphicsOverlayState with
+				if (_graphicsAsset is not null)
 				{
-					Visible = wire.Visible,
-					PositionX = wire.PositionX,
-					PositionY = wire.PositionY,
-					Scale = wire.Scale
-				};
-			}
-			else if (_productionCgText is not null)
-			{
-				_productionCgText = _productionCgText with { Visible = wire.Visible };
-			}
-		}
-		return response;
+					_graphicsOverlayState = snapshot;
+					if (_durableBitmapReference is { } bitmap)
+					{
+						_durableBitmapReference = bitmap with
+						{
+							Visible = snapshot.Visible,
+							PositionX = snapshot.PositionX,
+							PositionY = snapshot.PositionY,
+							Scale = snapshot.Scale
+						};
+					}
+				}
+				else if (_productionCgText is not null)
+				{
+					_productionCgText = _productionCgText with { Visible = wire.Visible };
+				}
+				await TryPersistDurableGraphicsAsync(token).ConfigureAwait(false);
+			},
+			cancellationToken).ConfigureAwait(false);
 	}
 
 	private async ValueTask<WireEnvelope> ClearGraphicsOverlayAsync(WireEnvelope request, CancellationToken cancellationToken)
 	{
-		var response = await MutateGraphicsAsync(
+		return await MutateGraphicsAsync(
 			request,
 			token => _runtimeTransport.ClearGraphicsOverlayAsync(token),
+			async (_, _, token) =>
+			{
+				var previousBitmap = _durableBitmapReference;
+				_graphicsAsset = null;
+				_durableBitmapReference = null;
+				_graphicsOverlayState = new RuntimeGraphicsOverlaySnapshot(false, null, 0, 0, false, 0.72, 0.06, 1.0);
+				_productionCgText = null;
+				_compositingLayers = _compositingLayers
+					.Where(layer => layer.LayerId is not "bitmap-graphics" and not "production-cg")
+					.Select((layer, order) => layer with { Order = order })
+					.ToArray();
+				var persisted = await TryPersistDurableGraphicsAsync(token).ConfigureAwait(false);
+				if (persisted && _showProjectStore is not null)
+					await _showProjectStore.DeleteBitmapAssetAsync(previousBitmap, token).ConfigureAwait(false);
+			},
 			cancellationToken).ConfigureAwait(false);
-		if (!string.Equals(response.MessageType, "error", StringComparison.Ordinal))
-		{
-			_graphicsAsset = null;
-			_graphicsOverlayState = new RuntimeGraphicsOverlaySnapshot(false, null, 0, 0, false, 0.72, 0.06, 1.0);
-			_productionCgText = null;
-			_compositingLayers = _compositingLayers
-				.Where(layer => layer.LayerId is not "bitmap-graphics" and not "production-cg")
-				.ToArray();
-		}
-		return response;
 	}
 
 	private async ValueTask<WireEnvelope> SetCompositingLayerStateAsync(WireEnvelope request, CancellationToken cancellationToken)
@@ -605,6 +614,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 				_graphicsOverlayState = _graphicsOverlayState with { Visible = wire.Visible };
 			else if (string.Equals(wire.LayerId, "production-cg", StringComparison.Ordinal) && _productionCgText is not null)
 				_productionCgText = _productionCgText with { Visible = wire.Visible };
+			await TryPersistDurableGraphicsAsync(cancellationToken).ConfigureAwait(false);
 			NotifyObservableStateChanged();
 			return Success(request, "control.compositing.layers.response", layers.Select(ToWire).ToArray());
 		}
@@ -633,6 +643,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			var layers = await _runtimeTransport.ReorderCompositingLayersAsync(wire.LayerIds, cancellationToken).ConfigureAwait(false);
 			_compositingLayers = layers;
 			control.ConfirmCompositingMutation(ToProductionCompositingState(layers));
+			await TryPersistDurableGraphicsAsync(cancellationToken).ConfigureAwait(false);
 			NotifyObservableStateChanged();
 			return Success(request, "control.compositing.layers.response", layers.Select(ToWire).ToArray());
 		}
@@ -673,6 +684,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	private async ValueTask<WireEnvelope> MutateGraphicsAsync(
 		WireEnvelope request,
 		Func<CancellationToken, ValueTask<RuntimeGraphicsOverlaySnapshot>> mutation,
+		Func<RuntimeGraphicsOverlaySnapshot, RuntimeRemoteSnapshot, CancellationToken, ValueTask> confirmedMutation,
 		CancellationToken cancellationToken)
 	{
 		await _mutationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -689,6 +701,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 				var snapshot = await mutation(cancellationToken).ConfigureAwait(false);
 				var runtime = await _runtimeTransport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
 				_compositingLayers = runtime.CompositingLayers ?? Array.Empty<RuntimeCompositingLayerSnapshot>();
+				await confirmedMutation(snapshot, runtime, cancellationToken).ConfigureAwait(false);
 				NotifyObservableStateChanged();
 				return Success(request, "control.graphics.overlay.response", ToWire(snapshot));
 			}
