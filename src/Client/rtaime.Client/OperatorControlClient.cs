@@ -661,6 +661,28 @@ public interface IOperatorControlTransport
         CancellationToken cancellationToken = default) =>
         ValueTask.FromException<OperatorAIShowcaseDescriptor>(new NotSupportedException("Operator transport does not expose AI showcase control."));
 
+    ValueTask<MediaAssetCatalogSnapshot> GetMediaAssetCatalogAsync(CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<MediaAssetCatalogSnapshot>(new NotSupportedException("Operator transport does not expose the media asset catalogue."));
+
+    ValueTask<MediaAssetCatalogMutationResult> ImportMediaAssetsAsync(
+        IReadOnlyList<string> sourceLocations,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<MediaAssetCatalogMutationResult>(new NotSupportedException("Operator transport does not expose media asset import."));
+
+    ValueTask<MediaAssetCatalogMutationResult> RelinkMediaAssetAsync(
+        MediaAssetId assetId,
+        string sourceLocation,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<MediaAssetCatalogMutationResult>(new NotSupportedException("Operator transport does not expose media asset relink."));
+
+    ValueTask<MediaAssetCatalogMutationResult> RemoveMediaAssetAsync(
+        MediaAssetId assetId,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<MediaAssetCatalogMutationResult>(new NotSupportedException("Operator transport does not expose media asset removal."));
+
+    ValueTask<MediaAssetCatalogSnapshot> RefreshMediaAssetAvailabilityAsync(CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<MediaAssetCatalogSnapshot>(new NotSupportedException("Operator transport does not expose media asset availability refresh."));
+
     ValueTask<MediaDeckSnapshot> GetMediaDeckSnapshotAsync(CancellationToken cancellationToken = default) =>
         ValueTask.FromException<MediaDeckSnapshot>(new NotSupportedException("Operator transport does not expose media-deck control."));
 
@@ -975,6 +997,35 @@ public sealed class OperatorControlClient
         await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
+
+    public ValueTask<MediaAssetCatalogSnapshot> GetMediaAssetCatalogAsync(CancellationToken cancellationToken = default) =>
+        _transport.GetMediaAssetCatalogAsync(cancellationToken);
+
+    public ValueTask<MediaAssetCatalogMutationResult> ImportMediaAssetsAsync(
+        IReadOnlyList<string> sourceLocations,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(sourceLocations);
+        return _transport.ImportMediaAssetsAsync(sourceLocations, cancellationToken);
+    }
+
+    public ValueTask<MediaAssetCatalogMutationResult> RelinkMediaAssetAsync(
+        MediaAssetId assetId,
+        string sourceLocation,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(sourceLocation))
+            throw new ArgumentException("Media asset source location is required.", nameof(sourceLocation));
+        return _transport.RelinkMediaAssetAsync(assetId, sourceLocation, cancellationToken);
+    }
+
+    public ValueTask<MediaAssetCatalogMutationResult> RemoveMediaAssetAsync(
+        MediaAssetId assetId,
+        CancellationToken cancellationToken = default) =>
+        _transport.RemoveMediaAssetAsync(assetId, cancellationToken);
+
+    public ValueTask<MediaAssetCatalogSnapshot> RefreshMediaAssetAvailabilityAsync(CancellationToken cancellationToken = default) =>
+        _transport.RefreshMediaAssetAvailabilityAsync(cancellationToken);
 
     public ValueTask<MediaDeckSnapshot> GetMediaDeckSnapshotAsync(CancellationToken cancellationToken = default) =>
         _transport.GetMediaDeckSnapshotAsync(cancellationToken);

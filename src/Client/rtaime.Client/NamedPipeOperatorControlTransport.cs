@@ -278,6 +278,53 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		return FromWire(wire);
 	}
 
+	public async ValueTask<MediaAssetCatalogSnapshot> GetMediaAssetCatalogAsync(CancellationToken cancellationToken = default)
+	{
+		var response = await ExchangeAsync("control.media_asset_catalog.snapshot.get", new { }, cancellationToken).ConfigureAwait(false);
+		return ReadMediaAssetCatalogSnapshot(response);
+	}
+
+	public async ValueTask<MediaAssetCatalogMutationResult> ImportMediaAssetsAsync(
+		IReadOnlyList<string> sourceLocations,
+		CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(sourceLocations);
+		var response = await ExchangeAsync(
+			"control.media_asset_catalog.import",
+			new WireMediaAssetImport(sourceLocations.ToArray()),
+			cancellationToken).ConfigureAwait(false);
+		return ReadMediaAssetCatalogMutationResult(response);
+	}
+
+	public async ValueTask<MediaAssetCatalogMutationResult> RelinkMediaAssetAsync(
+		MediaAssetId assetId,
+		string sourceLocation,
+		CancellationToken cancellationToken = default)
+	{
+		var response = await ExchangeAsync(
+			"control.media_asset_catalog.relink",
+			new WireMediaAssetRelink(assetId.ToString(), sourceLocation),
+			cancellationToken).ConfigureAwait(false);
+		return ReadMediaAssetCatalogMutationResult(response);
+	}
+
+	public async ValueTask<MediaAssetCatalogMutationResult> RemoveMediaAssetAsync(
+		MediaAssetId assetId,
+		CancellationToken cancellationToken = default)
+	{
+		var response = await ExchangeAsync(
+			"control.media_asset_catalog.remove",
+			new WireMediaAssetRemove(assetId.ToString()),
+			cancellationToken).ConfigureAwait(false);
+		return ReadMediaAssetCatalogMutationResult(response);
+	}
+
+	public async ValueTask<MediaAssetCatalogSnapshot> RefreshMediaAssetAvailabilityAsync(CancellationToken cancellationToken = default)
+	{
+		var response = await ExchangeAsync("control.media_asset_catalog.availability.refresh", new { }, cancellationToken).ConfigureAwait(false);
+		return ReadMediaAssetCatalogSnapshot(response);
+	}
+
 	public async ValueTask<MediaDeckSnapshot> GetMediaDeckSnapshotAsync(CancellationToken cancellationToken = default)
 	{
 		var response = await ExchangeAsync("control.media_deck.snapshot.get", new { }, cancellationToken).ConfigureAwait(false);
@@ -615,6 +662,82 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 			cueLists,
 			string.IsNullOrWhiteSpace(wire.SelectedCueListId) ? null : new ShowControlCueListId(Identity.Parse(wire.SelectedCueListId)),
 			execution);
+	}
+
+	private static MediaAssetCatalogSnapshot ReadMediaAssetCatalogSnapshot(WireEnvelope response)
+	{
+		var wire = response.Payload.Deserialize<WireMediaAssetCatalogSnapshot>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Media asset catalogue snapshot payload is required.");
+		return FromWire(wire);
+	}
+
+	private static MediaAssetCatalogMutationResult ReadMediaAssetCatalogMutationResult(WireEnvelope response)
+	{
+		var wire = response.Payload.Deserialize<WireMediaAssetCatalogMutationResult>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Media asset catalogue mutation payload is required.");
+		return new MediaAssetCatalogMutationResult(
+			FromWire(wire.Snapshot),
+			wire.Items.Select(item => new MediaAssetMutationItem(
+				item.SourceLocation,
+				string.IsNullOrWhiteSpace(item.AssetId) ? null : new MediaAssetId(Identity.Parse(item.AssetId)),
+				Enum.IsDefined(typeof(MediaAssetMutationDisposition), item.Disposition)
+					? (MediaAssetMutationDisposition)item.Disposition
+					: throw new InvalidDataException("Media asset mutation disposition is invalid."),
+				item.Failure is null ? null : new Failure(item.Failure.Code, item.Failure.Message))).ToArray());
+	}
+
+	private static MediaAssetCatalogSnapshot FromWire(WireMediaAssetCatalogSnapshot snapshot) =>
+		new(
+			CompatibilityVersion.Parse(snapshot.Version),
+			snapshot.Revision,
+			snapshot.Assets.Select(FromWire).ToArray());
+
+	private static MediaAssetDescriptor FromWire(WireMediaAssetDescriptor asset)
+	{
+		if (!Enum.IsDefined(typeof(MediaAssetOriginKind), asset.Origin))
+			throw new InvalidDataException("Media asset origin is invalid.");
+		if (!Enum.IsDefined(typeof(MediaContainerFormat), asset.Container))
+			throw new InvalidDataException("Media asset container is invalid.");
+		if (!Enum.IsDefined(typeof(MediaVideoCodec), asset.VideoCodec))
+			throw new InvalidDataException("Media asset video codec is invalid.");
+		if (!Enum.IsDefined(typeof(MediaAudioCodec), asset.AudioCodec))
+			throw new InvalidDataException("Media asset audio codec is invalid.");
+		if (!Enum.IsDefined(typeof(PixelFormat), asset.PixelFormat))
+			throw new InvalidDataException("Media asset pixel format is invalid.");
+		if (!Enum.IsDefined(typeof(ScanMode), asset.ScanMode))
+			throw new InvalidDataException("Media asset scan mode is invalid.");
+		if (!Enum.IsDefined(typeof(AudioChannelLayout), asset.AudioChannelLayout))
+			throw new InvalidDataException("Media asset audio channel layout is invalid.");
+		if (!Enum.IsDefined(typeof(AudioSampleFormat), asset.AudioSampleFormat))
+			throw new InvalidDataException("Media asset audio sample format is invalid.");
+		if (!Enum.IsDefined(typeof(MediaAssetAvailability), asset.Availability))
+			throw new InvalidDataException("Media asset availability is invalid.");
+
+		return new MediaAssetDescriptor(
+			new MediaAssetId(Identity.Parse(asset.AssetId)),
+			(MediaAssetOriginKind)asset.Origin,
+			asset.SourceLocation,
+			asset.DisplayName,
+			(MediaContainerFormat)asset.Container,
+			(MediaVideoCodec)asset.VideoCodec,
+			(MediaAudioCodec)asset.AudioCodec,
+			new VideoFormat(
+				asset.Width,
+				asset.Height,
+				FrameRate.Parse(asset.FrameRate),
+				(PixelFormat)asset.PixelFormat,
+				(ScanMode)asset.ScanMode),
+			new AudioFormat(
+				asset.AudioSampleRate,
+				(AudioChannelLayout)asset.AudioChannelLayout,
+				(AudioSampleFormat)asset.AudioSampleFormat,
+				asset.AudioChannelCount),
+			TimeSpan.FromTicks(asset.DurationTicks),
+			asset.LengthBytes,
+			asset.FingerprintSha256,
+			UtcTimestamp.Parse(asset.ImportedAt),
+			UtcTimestamp.Parse(asset.UpdatedAt),
+			(MediaAssetAvailability)asset.Availability);
 	}
 
 	private static MediaDeckSnapshot ReadMediaDeckSnapshot(WireEnvelope response)
@@ -1040,6 +1163,35 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		bool RequiresAcknowledgement,
 		WireFailure? Failure);
 	private sealed record WireShowControlWorkspace(string[] CueLists, string? SelectedCueListId, WireShowControlExecution Execution);
+	private sealed record WireMediaAssetImport(string[] SourceLocations);
+	private sealed record WireMediaAssetRelink(string AssetId, string SourceLocation);
+	private sealed record WireMediaAssetRemove(string AssetId);
+	private sealed record WireMediaAssetDescriptor(
+		string AssetId,
+		int Origin,
+		string SourceLocation,
+		string DisplayName,
+		int Container,
+		int VideoCodec,
+		int AudioCodec,
+		uint Width,
+		uint Height,
+		string FrameRate,
+		int PixelFormat,
+		int ScanMode,
+		uint AudioSampleRate,
+		int AudioChannelLayout,
+		int AudioSampleFormat,
+		uint AudioChannelCount,
+		long DurationTicks,
+		long LengthBytes,
+		string FingerprintSha256,
+		string ImportedAt,
+		string UpdatedAt,
+		int Availability);
+	private sealed record WireMediaAssetCatalogSnapshot(string Version, ulong Revision, WireMediaAssetDescriptor[] Assets);
+	private sealed record WireMediaAssetMutationItem(string SourceLocation, string? AssetId, int Disposition, WireFailure? Failure);
+	private sealed record WireMediaAssetCatalogMutationResult(WireMediaAssetCatalogSnapshot Snapshot, WireMediaAssetMutationItem[] Items);
 	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path, string? AssetId);
 	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame, bool? AutoPlayOnProgram, int? EndBehavior, long? InPointFrame, long? OutPointFrame);
 	private sealed record WireMediaMarkerCommand(string Version, string AssetId, int Kind, long? PositionFrame, string? CuePointId, string? Name);
