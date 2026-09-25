@@ -172,6 +172,57 @@ public sealed class ContractFoundationTests
     }
 
     [Fact]
+    public void Compositing_transform_and_color_grade_contracts_validate_and_round_trip()
+    {
+        var node = new ProductionCompositingProcessingNodeState(
+            "grade-primary",
+            ProductionCompositingProcessingNodeKind.ColorGrade,
+            true,
+            new ProductionColorGradeSettings(0.1, 1.2, 0.8));
+        var layer = new ProductionCompositingLayerState(
+            ProductionCompositingLayerIds.BitmapGraphics,
+            ProductionCompositingLayerKind.BitmapGraphics,
+            0,
+            true,
+            224,
+            0.25,
+            0.30,
+            1.25,
+            "graded-logo.rgba",
+            rotationDegrees: 15,
+            anchorX: 0.5,
+            anchorY: 0.5,
+            cropLeft: 0.1,
+            cropTop: 0.05,
+            cropRight: 0.2,
+            cropBottom: 0.1,
+            processingNode: node);
+        var state = new ProductionCompositingState(
+            ProductionCompositingState.CurrentVersion,
+            new[] { layer });
+
+        var copy = RoundTrip(state);
+
+        Assert.Equal(state, copy);
+        Assert.Equal(15, copy.Layers[0].RotationDegrees);
+        Assert.Equal(0.5, copy.Layers[0].AnchorX);
+        Assert.Equal(node, copy.Layers[0].ProcessingNode);
+        Assert.Throws<ArgumentOutOfRangeException>(() => new ProductionColorGradeSettings(1.1, 1, 1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new ProductionCompositingLayerState(
+            ProductionCompositingLayerIds.BitmapGraphics,
+            ProductionCompositingLayerKind.BitmapGraphics,
+            0,
+            true,
+            255,
+            0,
+            0,
+            1,
+            "logo.rgba",
+            cropLeft: 0.6,
+            cropRight: 0.4));
+    }
+
+    [Fact]
     public void Control_validation_report_is_immutable_and_transportable()
     {
         var issues = new List<ValidationIssue> { new("control.invalid", "Invalid state", "routing.program") };
