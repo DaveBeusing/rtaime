@@ -196,6 +196,9 @@ public sealed class ProductionIpcIntegrationTests
 		Assert.False(client.Snapshot!.GraphicsOverlay.Visible);
 		Assert.False(runtime.Runtime.Snapshot.GraphicsOverlay.AssetLoaded);
 		Assert.True(client.Snapshot.Production.Revision.CompareTo(revisionAfterGraphicsSet) > 0);
+		var runtimeAuthority = await control.RuntimeTransport!.GetSnapshotAsync();
+		Assert.Equal(client.Snapshot.Production.ProductionId.Value, runtimeAuthority.AuthorityStateId);
+		Assert.Equal(client.Snapshot.Production.Revision, runtimeAuthority.AuthorityRevision);
 
 		var preview = await client.SelectPreviewAsync(sourceB.Id);
 		Assert.True(preview.Accepted, preview.Failure?.ToString());
