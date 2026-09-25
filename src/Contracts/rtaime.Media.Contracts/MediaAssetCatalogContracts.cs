@@ -61,8 +61,12 @@ public sealed record MediaAssetDescriptor
 			throw new ArgumentOutOfRangeException(nameof(duration));
 		if (lengthBytes <= 0)
 			throw new ArgumentOutOfRangeException(nameof(lengthBytes));
-		if (fingerprintSha256.Length != 64 || fingerprintSha256.Any(character => !Uri.IsHexDigit(character)))
+		if (string.IsNullOrWhiteSpace(fingerprintSha256) ||
+			fingerprintSha256.Length != 64 ||
+			fingerprintSha256.Any(character => !Uri.IsHexDigit(character)))
+		{
 			throw new ArgumentException("Media asset fingerprint must be a SHA-256 hex digest.", nameof(fingerprintSha256));
+		}
 		if (updatedAt.Value < importedAt.Value)
 			throw new ArgumentException("Media asset update timestamp cannot precede import timestamp.", nameof(updatedAt));
 		if (!Enum.IsDefined(typeof(MediaAssetAvailability), availability))
@@ -117,6 +121,10 @@ public sealed class MediaAssetCatalogSnapshot
 			throw new ArgumentException("Media asset catalogue cannot contain null assets.", nameof(assets));
 		if (assets.Select(asset => asset.AssetId).Distinct().Count() != assets.Count)
 			throw new ArgumentException("Media asset catalogue contains duplicate asset identities.", nameof(assets));
+		if (assets.Select(asset => asset.SourceLocation).Distinct(StringComparer.OrdinalIgnoreCase).Count() != assets.Count)
+			throw new ArgumentException("Media asset catalogue contains duplicate source locations.", nameof(assets));
+		if (assets.Select(asset => asset.FingerprintSha256).Distinct(StringComparer.Ordinal).Count() != assets.Count)
+			throw new ArgumentException("Media asset catalogue contains duplicate content fingerprints.", nameof(assets));
 
 		Version = version;
 		Revision = revision;

@@ -1,5 +1,6 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
+using rtaime.Client;
 using rtaime.ControlHost;
 using rtaime.Core;
 using rtaime.Media.Contracts;
@@ -182,6 +183,59 @@ public sealed class MediaAssetCatalogIntegrationTests
 			var loaded = await store.LoadAsync();
 			Assert.Equal(1UL, loaded.Snapshot.Revision);
 			Assert.Equal(asset.AssetId, Assert.Single(loaded.Snapshot.Assets).AssetId);
+		}
+		finally
+		{
+			if (Directory.Exists(root))
+				Directory.Delete(root, recursive: true);
+		}
+	}
+
+
+	[Fact]
+	public async Task Catalogue_client_reads_large_snapshot_through_bounded_pages()
+	{
+		var root = Path.Combine(Path.GetTempPath(), "rtaime-media-catalog-tests", Guid.NewGuid().ToString("N"));
+		Directory.CreateDirectory(root);
+		try
+		{
+			var database = Path.Combine(root, "management.db");
+			await using var management = new SqliteManagementStore(database);
+			var store = new MediaAssetCatalogPersistenceStore(management);
+			var assets = Enumerable.Range(1, 600)
+				.Select(index => Descriptor(
+					new MediaAssetId(Id(index)),
+					Path.Combine(root, $"asset-{index:D4}.mp4"),
+					index.ToString("X64")))
+				.ToArray();
+			var written = await store.SaveAsync(
+				new MediaAssetCatalogSnapshot(MediaContractVersion.Current, 1, assets),
+				expectedStorageVersion: 0);
+			Assert.True(written.Written, written.Failure?.Message);
+
+			var runtime = new ProbeRuntimeTransport();
+			var service = new MediaAssetCatalogService(runtime, store);
+			var endpoint = $"rtaime.test.media-catalog.{Guid.NewGuid():N}";
+			await using var server = new ControlHostIpcServer(
+				endpoint,
+				() => null,
+				runtime,
+				mediaAssetCatalog: service);
+			await server.StartAsync();
+
+			var client = new OperatorControlClient(
+				new NamedPipeOperatorControlTransport(
+					endpoint,
+					TimeSpan.FromSeconds(1),
+					TimeSpan.FromSeconds(10)));
+			var snapshot = await client.GetMediaAssetCatalogAsync();
+
+			Assert.Equal(600, snapshot.Assets.Count);
+			Assert.Equal(2UL, snapshot.Revision);
+			Assert.All(snapshot.Assets, asset => Assert.Equal(MediaAssetAvailability.Missing, asset.Availability));
+			Assert.Equal(
+				assets.Select(asset => asset.AssetId).OrderBy(id => id.ToString(), StringComparer.Ordinal),
+				snapshot.Assets.Select(asset => asset.AssetId).OrderBy(id => id.ToString(), StringComparer.Ordinal));
 		}
 		finally
 		{
