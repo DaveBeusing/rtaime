@@ -1134,7 +1134,26 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 					layer.PositionX,
 					layer.PositionY,
 					layer.Scale,
-					layer.ContentIdentity)).ToArray()));
+					layer.ContentIdentity,
+					layer.RotationDegrees,
+					layer.AnchorX,
+					layer.AnchorY,
+					layer.CropLeft,
+					layer.CropTop,
+					layer.CropRight,
+					layer.CropBottom,
+					layer.ProcessingNode is null
+						? null
+						: new ProductionCompositingProcessingNodeState(
+							layer.ProcessingNode.NodeId,
+							Enum.IsDefined(typeof(ProductionCompositingProcessingNodeKind), layer.ProcessingNode.Kind)
+								? (ProductionCompositingProcessingNodeKind)layer.ProcessingNode.Kind
+								: throw new InvalidDataException("Compositing processing node kind is invalid."),
+							layer.ProcessingNode.Enabled,
+							new ProductionColorGradeSettings(
+								layer.ProcessingNode.ColorGrade.Brightness,
+								layer.ProcessingNode.ColorGrade.Contrast,
+								layer.ProcessingNode.ColorGrade.Saturation)))).ToArray()));
 
 	private static void EnsureNotError(WireEnvelope envelope)
 	{
