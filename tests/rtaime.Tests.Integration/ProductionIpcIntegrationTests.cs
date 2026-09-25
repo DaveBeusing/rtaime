@@ -174,7 +174,11 @@ public sealed class ProductionIpcIntegrationTests
 		Assert.True(loadedGraphics.AssetLoaded);
 		Assert.False(loadedGraphics.Visible);
 		Assert.Equal("operator-logo.rgba", client.Snapshot!.GraphicsOverlay.AssetName);
-		Assert.Equal(revisionBeforeGraphics, client.Snapshot.Production.Revision);
+		Assert.True(client.Snapshot.Production.Revision.CompareTo(revisionBeforeGraphics) > 0);
+		Assert.NotNull(client.Snapshot.Production.CompositingState);
+		Assert.Contains(
+			client.Snapshot.Production.CompositingState!.Layers,
+			layer => layer.LayerId == ProductionCompositingLayerIds.BitmapGraphics);
 
 		var onAirGraphics = await client.SetGraphicsOverlayAsync(true, 0.25, 0.10, 1.5);
 		Assert.True(onAirGraphics.Visible);
