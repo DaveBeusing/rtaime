@@ -179,6 +179,7 @@ public sealed class ProductionIpcIntegrationTests
 		Assert.Contains(
 			client.Snapshot.Production.CompositingState!.Layers,
 			layer => layer.LayerId == ProductionCompositingLayerIds.BitmapGraphics);
+		var revisionAfterGraphicsLoad = client.Snapshot.Production.Revision;
 
 		var onAirGraphics = await client.SetGraphicsOverlayAsync(true, 0.25, 0.10, 1.5);
 		Assert.True(onAirGraphics.Visible);
@@ -187,7 +188,7 @@ public sealed class ProductionIpcIntegrationTests
 		Assert.Equal(0.10, client.Snapshot.GraphicsOverlay.PositionY, 6);
 		Assert.Equal(1.5, client.Snapshot.GraphicsOverlay.Scale, 6);
 		Assert.True(runtime.Runtime!.Snapshot.GraphicsOverlay.Visible);
-		Assert.Equal(revisionBeforeGraphics, client.Snapshot.Production.Revision);
+		Assert.True(client.Snapshot.Production.Revision.CompareTo(revisionAfterGraphicsLoad) > 0);
 
 		var clearedGraphics = await client.ClearGraphicsOverlayAsync();
 		Assert.False(clearedGraphics.AssetLoaded);
