@@ -151,10 +151,32 @@ Persistence acceptance evidence includes:
 - full managed build/test suite remains green.
 
 Process Recovery & Supervision adds recovery evidence for valid checkpoint restore, Runtime reconciliation without authority revision advancement, recovery conflicts, process replacement and stale client/session behavior.
+## Durable show/project authoring state
+
+ControlHost owns one versioned durable show/project document per production under management area `show.project`. The current payload format is `rtaime.show-project.v1`.
+
+The document contains:
+
+- a stable project identity and production identity;
+- the ordered authored Scene catalog with stable Scene IDs;
+- Production CG definition and confirmed authored compositing configuration;
+- a stable reference to retained bitmap graphics when present;
+- the Show Control workspace payload and its own optimistic subdocument version.
+
+Scene definitions are loaded from this project before authoritative checkpoint recovery. They remain part of the reconstructed `ProductionSpecification` rather than being duplicated into every production checkpoint. Renaming or reordering authored Scenes therefore does not change their stable Scene IDs.
+
+Existing installations that still contain the former `show-control.workspace` management document are migrated when the show project is first created. The legacy JSON and logical storage version are copied into the show project before ControlHost starts using the new owner, preserving cue-list, cue, action and execution identities.
+
+The complete show-project JSON is replaced atomically using the existing optimistic `management_documents` transaction. Show Control retains a logical subdocument version so unrelated graphics/project updates do not create false cue-editor version conflicts.
+
+Bitmap RGBA bytes are not stored in SQLite JSON. ControlHost writes them to a bounded sidecar under the production durability root, records a stable graphics-asset identity plus SHA-256 checksum in the show project, and validates dimensions, byte length and checksum before recovery. New sidecars are written before the project reference is committed; a failed project write leaves the previously valid project state intact. Obsolete sidecars are deleted only after the new project reference is durable.
+
+Malformed or unsupported future project formats fail closed. A missing or corrupted referenced bitmap cannot be promoted as restored graphics state.
+
 ## Show Control durable execution cursor
 
 Show Control persists cue-list definitions plus only the execution cursor required for safe recovery. Persisted `Executing` or `Waiting` state is never treated as proof that the in-flight action completed; ControlHost restores it as `RecoveryRequired` and requires explicit operator acknowledgement.
 
-Show Control uses the existing management document store with optimistic storage versioning. Structured production-journal entries cover cue-list save/selection, arm, GO, action start/completion, waits, failures, cancellation and recovery acknowledgement. Stable list/cue/action identities provide bounded causation evidence without turning the Production Journal into an execution replay engine.
+Show Control uses the show project's management-document owner with optimistic logical subdocument versioning. Structured production-journal entries cover cue-list save/selection, arm, GO, action start/completion, waits, failures, cancellation and recovery acknowledgement. Stable list/cue/action identities provide bounded causation evidence without turning the Production Journal into an execution replay engine.
 
 See `docs/ShowControlCueSequencing.md` for the complete state and recovery semantics.
