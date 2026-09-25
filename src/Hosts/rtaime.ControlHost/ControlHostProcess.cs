@@ -709,11 +709,38 @@ public sealed class ControlHostProcess
 		}
 	}
 
-	private static bool RuntimeMatchesAuthority(RuntimeRemoteSnapshot runtimeSnapshot, AuthoritativeProductionState authority) =>
-		runtimeSnapshot.Runtime.Status == RuntimeExecutionStatus.Committed &&
-		runtimeSnapshot.AuthorityStateId == authority.ProductionId.Value &&
-		runtimeSnapshot.AuthorityRevision == authority.Revision &&
-		RuntimeCompositingMatchesAuthority(runtimeSnapshot, authority);
+	private static bool RuntimeMatchesAuthority(RuntimeRemoteSnapshot runtimeSnapshot, AuthoritativeProductionState authority)
+	{
+		if (runtimeSnapshot.Runtime.Status != RuntimeExecutionStatus.Committed ||
+			runtimeSnapshot.AuthorityStateId != authority.ProductionId.Value ||
+			runtimeSnapshot.AuthorityRevision is not { } runtimeRevision ||
+			runtimeRevision.CompareTo(authority.Revision) > 0 ||
+			!RuntimeCompositingMatchesAuthority(runtimeSnapshot, authority))
+		{
+			return false;
+		}
+
+		if (runtimeRevision == authority.Revision)
+			return true;
+
+		return RuntimeOutputRolesMatchAuthority(runtimeSnapshot, authority);
+	}
+
+	private static bool RuntimeOutputRolesMatchAuthority(
+		RuntimeRemoteSnapshot runtimeSnapshot,
+		AuthoritativeProductionState authority)
+	{
+		var runtimeRoles = runtimeSnapshot.OutputRoles ?? Array.Empty<RuntimeOutputRoleSnapshot>();
+		foreach (var expected in authority.OutputRoles.Where(role => role.Enabled))
+		{
+			var actual = runtimeRoles.FirstOrDefault(role =>
+				string.Equals(role.RoleId, expected.RoleId.ToString(), StringComparison.Ordinal));
+			if (actual is null || actual.SourceId.Value != expected.SourceId.Value)
+				return false;
+		}
+
+		return true;
+	}
 
 	private static bool RuntimeCompositingMatchesAuthority(
 		RuntimeRemoteSnapshot runtimeSnapshot,
