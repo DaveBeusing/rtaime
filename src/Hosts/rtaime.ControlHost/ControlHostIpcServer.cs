@@ -21,6 +21,8 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	private readonly MediaDeckControlService? _mediaDeck;
 	private readonly ShowControlCoordinator? _showControl;
 	private readonly MediaAssetCatalogService? _mediaAssetCatalog;
+	private readonly ShowProjectPersistenceStore? _showProjectStore;
+	private PersistedShowProject? _showProject;
 	private readonly CancellationTokenSource _stop = new();
 	private readonly SemaphoreSlim _mutationGate = new(1, 1);
 	private readonly BoundedRequestCache _requestCache = new(256);
@@ -31,8 +33,11 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	private DateTimeOffset _lastRuntimeSnapshotAtUtc;
 	private RuntimeProductionCgTextDefinition? _productionCgText;
 	private RetainedGraphicsAsset? _graphicsAsset;
+	private DurableBitmapGraphicsReference? _durableBitmapReference;
 	private RuntimeGraphicsOverlaySnapshot _graphicsOverlayState = new(false, null, 0, 0, false, 0.72, 0.06, 1.0);
 	private IReadOnlyList<RuntimeCompositingLayerSnapshot> _compositingLayers = Array.Empty<RuntimeCompositingLayerSnapshot>();
+	private string _showProjectState = "UNAVAILABLE";
+	private string _showProjectDetail = "Durable show project persistence is not configured.";
 	private Task? _acceptLoop;
 	private long _stateVersion = 1;
 	private long _sequence;
@@ -43,7 +48,9 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		IControlRuntimeTransportSeam runtimeTransport,
 		MediaDeckControlService? mediaDeck = null,
 		ShowControlPersistenceStore? showControlPersistence = null,
-		MediaAssetCatalogService? mediaAssetCatalog = null)
+		MediaAssetCatalogService? mediaAssetCatalog = null,
+		ShowProjectPersistenceStore? showProjectStore = null,
+		PersistedShowProject? showProject = null)
 	{
 		if (string.IsNullOrWhiteSpace(endpoint)) throw new ArgumentException("ControlHost IPC endpoint is required.", nameof(endpoint));
 		_endpoint = endpoint.Trim();
@@ -51,6 +58,30 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		_runtimeTransport = runtimeTransport ?? throw new ArgumentNullException(nameof(runtimeTransport));
 		_mediaDeck = mediaDeck;
 		_mediaAssetCatalog = mediaAssetCatalog;
+		if ((showProjectStore is null) != (showProject is null))
+			throw new ArgumentException("Durable show-project store and snapshot must be configured together.");
+		_showProjectStore = showProjectStore;
+		_showProject = showProject;
+		if (showProject is not null)
+		{
+			_productionCgText = showProject.Graphics.ProductionCgText;
+			_durableBitmapReference = showProject.Graphics.Bitmap;
+			if (_durableBitmapReference is { } bitmap)
+			{
+				_graphicsOverlayState = new RuntimeGraphicsOverlaySnapshot(
+					true,
+					bitmap.Name,
+					bitmap.Width,
+					bitmap.Height,
+					bitmap.Visible,
+					bitmap.PositionX,
+					bitmap.PositionY,
+					bitmap.Scale);
+			}
+			_compositingLayers = ToRuntimeCompositingLayers(showProject.Graphics.CompositingState);
+			_showProjectState = "LOADED";
+			_showProjectDetail = $"Durable show project '{showProject.Name}' ({showProject.ProjectId}) is loaded.";
+		}
 		_showControl = showControlPersistence is null
 			? null
 			: new ShowControlCoordinator(
@@ -84,6 +115,20 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		{
 			if (!_runtimeTransport.IsConnected)
 				return;
+
+			if (_graphicsAsset is null && _durableBitmapReference is { } durableBitmap && _showProjectStore is not null)
+			{
+				try
+				{
+					var rgbaPixels = await _showProjectStore.LoadBitmapAssetAsync(durableBitmap, cancellationToken).ConfigureAwait(false);
+					_graphicsAsset = new RetainedGraphicsAsset(durableBitmap.Name, durableBitmap.Width, durableBitmap.Height, rgbaPixels);
+				}
+				catch (Exception exception) when (exception is IOException or InvalidDataException or UnauthorizedAccessException)
+				{
+					SetShowProjectState("RECOVERY_REQUIRED", $"Durable bitmap graphics could not be restored: {exception.Message}");
+					throw;
+				}
+			}
 
 			if (_graphicsAsset is { } asset)
 			{
