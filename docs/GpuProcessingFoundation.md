@@ -356,7 +356,7 @@ It is **not**:
 
 Hardware performance remains `UNVERIFIED` until measured on the qualified reference GPU/driver configuration.
 
-The existing managed compositor performance cases continue to measure GPU-provider composition itself. They do not by themselves qualify the mutation-time transform/Color Grade materialization cost. That cost must remain part of reference-platform performance qualification before a hardware latency claim is made; no new hardware PASS claim is inferred from hosted CI.
+The Performance test project also measures authoritative transform plus Color Grade materialization at both supported 1080p50 and 1080p59.94 development formats. The regression guard uses a full-frame RGBA bitmap, retains one typed Color Grade node, alternates bounded rotation updates, records total/per-mutation wall-clock cost and verifies that reconfiguration leaves the GPU active-surface baseline unchanged. The threshold is deliberately broad and protects against runaway managed materialization cost rather than asserting a real-time hardware budget. Reference-platform execution is still required before any hardware latency claim is made; no new hardware PASS claim is inferred from hosted CI.
 
 ## Explicit evidence boundary
 
