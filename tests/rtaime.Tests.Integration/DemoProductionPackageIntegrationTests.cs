@@ -106,8 +106,10 @@ public sealed class DemoProductionPackageIntegrationTests
 
 		var latest = await client.SynchronizeAsync();
 		if (latest.Production.Routing.PreviewSourceId.ToString() != inputB.Id)
+		{
 			var previewSelection = await client.SelectPreviewAsync(inputB.Id);
 			Assert.True(previewSelection.Accepted, previewSelection.Failure?.ToString());
+		}
 
 		return await client.SynchronizeAsync();
 	}
