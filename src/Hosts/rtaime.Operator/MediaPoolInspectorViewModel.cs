@@ -3,6 +3,7 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
+using System.IO;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -554,7 +555,7 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 	{
 		var failures = result.Items
 			.Where(item => item.Failure is not null)
-			.Select(item => item.Failure!.Message)
+			.Select(item => item.Failure!.Value.Message)
 			.Distinct(StringComparer.Ordinal)
 			.Take(3)
 			.ToArray();
