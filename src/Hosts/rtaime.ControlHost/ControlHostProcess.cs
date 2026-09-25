@@ -642,6 +642,41 @@ public sealed class ControlHostProcess
 		RuntimeRemoteSnapshot runtimeSnapshot,
 		CancellationToken cancellationToken)
 	{
+		if (_ipcServer is null)
+		{
+			await ReconcileRuntimeCoreAsync(
+				control,
+				transport,
+				runtimeHostInstanceId,
+				runtimeSnapshot,
+				restoreWithinMutationGate: false,
+				cancellationToken).ConfigureAwait(false);
+			return;
+		}
+
+		await _ipcServer.RunSerializedMutationAsync(
+			async token =>
+			{
+				var currentSnapshot = await transport.GetSnapshotAsync(token).ConfigureAwait(false);
+				await ReconcileRuntimeCoreAsync(
+					control,
+					transport,
+					runtimeHostInstanceId,
+					currentSnapshot,
+					restoreWithinMutationGate: true,
+					token).ConfigureAwait(false);
+			},
+			cancellationToken).ConfigureAwait(false);
+	}
+
+	private async ValueTask ReconcileRuntimeCoreAsync(
+		ControlHostService control,
+		IControlRuntimeTransportSeam transport,
+		string runtimeHostInstanceId,
+		RuntimeRemoteSnapshot runtimeSnapshot,
+		bool restoreWithinMutationGate,
+		CancellationToken cancellationToken)
+	{
 		var authority = control.State;
 		ValidateRuntimeAuthority(runtimeSnapshot, authority);
 
@@ -649,7 +684,12 @@ public sealed class ControlHostProcess
 		{
 			_boundRuntimeHostInstanceId = runtimeHostInstanceId;
 			if (_ipcServer is not null)
-				await _ipcServer.RestoreGraphicsStateAsync(cancellationToken).ConfigureAwait(false);
+			{
+				if (restoreWithinMutationGate)
+					await _ipcServer.RestoreGraphicsStateWithinMutationAsync(cancellationToken).ConfigureAwait(false);
+				else
+					await _ipcServer.RestoreGraphicsStateAsync(cancellationToken).ConfigureAwait(false);
+			}
 			control.RecordObservation("recovery", "recovery.runtime.aligned", $"RuntimeHost instance '{runtimeHostInstanceId}' is already committed against authoritative revision {authority.Revision}.");
 			SetRecovery(ControlHostRecoveryState.Recovered, authority.Revision, "Durable Control authority and Runtime committed authority snapshot are aligned.");
 			SetOperationalState(ControlHostProcessState.Ready, ControlHostHealthState.Healthy, $"ControlHost reconciled with RuntimeHost instance '{runtimeHostInstanceId}' without execution replacement.");
@@ -661,7 +701,12 @@ public sealed class ControlHostProcess
 		control.RefreshProviderSnapshot(providers);
 		var revisionBefore = authority.Revision;
 		if (_ipcServer is not null && authority.CompositingState is not null)
-			await _ipcServer.RestoreGraphicsStateAsync(cancellationToken).ConfigureAwait(false);
+		{
+			if (restoreWithinMutationGate)
+				await _ipcServer.RestoreGraphicsStateWithinMutationAsync(cancellationToken).ConfigureAwait(false);
+			else
+				await _ipcServer.RestoreGraphicsStateAsync(cancellationToken).ConfigureAwait(false);
+		}
 		var execution = control.PrepareCurrentExecution();
 		var remote = await transport.ApplyExecutionAsync(execution.PreparedExecution, execution.ProgramSinkId, null, cancellationToken).ConfigureAwait(false);
 		if (!remote.Committed || remote.Commit is null) throw new InvalidOperationException(remote.Commit?.Failure?.Message ?? remote.Prepare.Failure?.Message ?? "Runtime reconciliation was rejected.");
@@ -709,38 +754,11 @@ public sealed class ControlHostProcess
 		}
 	}
 
-	private static bool RuntimeMatchesAuthority(RuntimeRemoteSnapshot runtimeSnapshot, AuthoritativeProductionState authority)
-	{
-		if (runtimeSnapshot.Runtime.Status != RuntimeExecutionStatus.Committed ||
-			runtimeSnapshot.AuthorityStateId != authority.ProductionId.Value ||
-			runtimeSnapshot.AuthorityRevision is not { } runtimeRevision ||
-			runtimeRevision.CompareTo(authority.Revision) > 0 ||
-			!RuntimeCompositingMatchesAuthority(runtimeSnapshot, authority))
-		{
-			return false;
-		}
-
-		if (runtimeRevision == authority.Revision)
-			return true;
-
-		return RuntimeOutputRolesMatchAuthority(runtimeSnapshot, authority);
-	}
-
-	private static bool RuntimeOutputRolesMatchAuthority(
-		RuntimeRemoteSnapshot runtimeSnapshot,
-		AuthoritativeProductionState authority)
-	{
-		var runtimeRoles = runtimeSnapshot.OutputRoles ?? Array.Empty<RuntimeOutputRoleSnapshot>();
-		foreach (var expected in authority.OutputRoles.Where(role => role.Enabled))
-		{
-			var actual = runtimeRoles.FirstOrDefault(role =>
-				string.Equals(role.RoleId, expected.RoleId.ToString(), StringComparison.Ordinal));
-			if (actual is null || actual.SourceId.Value != expected.SourceId.Value)
-				return false;
-		}
-
-		return true;
-	}
+	private static bool RuntimeMatchesAuthority(RuntimeRemoteSnapshot runtimeSnapshot, AuthoritativeProductionState authority) =>
+		runtimeSnapshot.Runtime.Status == RuntimeExecutionStatus.Committed &&
+		runtimeSnapshot.AuthorityStateId == authority.ProductionId.Value &&
+		runtimeSnapshot.AuthorityRevision == authority.Revision &&
+		RuntimeCompositingMatchesAuthority(runtimeSnapshot, authority);
 
 	private static bool RuntimeCompositingMatchesAuthority(
 		RuntimeRemoteSnapshot runtimeSnapshot,
