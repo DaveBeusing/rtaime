@@ -340,11 +340,19 @@ public sealed class GraphicsOverlayIntegrationTests
 		Assert.Equal(1, before.Order);
 
 		var staleExecution = fixture.Control.PrepareCurrentExecution();
-		var advanceExecution = fixture.Control.PrepareCurrentExecution();
+		var advanceExecution = new PreparedExecutionContract(
+			staleExecution.PreparedExecution.Version,
+			PreparedExecutionId.New(),
+			new AuthoritySnapshotReference(
+				staleExecution.PreparedExecution.AuthoritySnapshot.StateId,
+				staleExecution.PreparedExecution.AuthoritySnapshot.Revision.Next()),
+			staleExecution.PreparedExecution.PlanGeneration,
+			staleExecution.PreparedExecution.Bindings,
+			staleExecution.PreparedExecution.CompositingState);
 		var advanced = fixture.Runtime.ApplyExecution(
-			advanceExecution.PreparedExecution,
-			advanceExecution.ProgramSinkId);
-		Assert.True(advanced.Committed);
+			advanceExecution,
+			staleExecution.ProgramSinkId);
+		Assert.True(advanced.Committed, advanced.Commit?.Failure?.ToString() ?? advanced.Prepare.Failure?.ToString());
 
 		var stagedState = new PreparedCompositingState(
 			PreparedCompositingState.CurrentVersion,
