@@ -88,7 +88,9 @@ Cancellation clears active wait state and prevents later wait completion from ad
 
 ## Persistence and journal
 
-Cue-list definitions and the minimum execution cursor required for safe recovery are stored using the established durable management-state infrastructure.
+Cue-list definitions and the minimum execution cursor required for safe recovery are stored inside the versioned durable show project using the established management-state infrastructure. Show Control keeps its own optimistic logical storage version within that project, so graphics or Scene persistence changes do not create false editor conflicts.
+
+On first project creation, an existing legacy `show-control.workspace` document is imported with its logical storage version intact. Cue-list, cue, action and execution identities are preserved. After migration, the show project is the canonical durable owner; the legacy document is no longer the active writer.
 
 Structured production-journal events cover:
 
