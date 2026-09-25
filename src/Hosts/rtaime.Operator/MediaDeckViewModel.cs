@@ -143,6 +143,7 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 	}
 
 	public string FileName => _snapshot.Probe?.FileName ?? "No local media loaded";
+	public string AssetId => _snapshot.Probe?.AssetId.ToString() ?? "—";
 	public string? LocalPath => _localPath;
 	public bool HasLocalPath => !string.IsNullOrWhiteSpace(_localPath);
 	public string SourceId => _snapshot.SourceId?.ToString() ?? "—";
@@ -297,6 +298,48 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 		await Timeline.DisposeAsync().ConfigureAwait(false);
 		await _controller.DisposeAsync().ConfigureAwait(false);
 		_dispose.Dispose();
+	}
+
+
+	public async Task<bool> OpenCatalogAssetAsync(
+		string path,
+		MediaAssetId assetId)
+	{
+		if (string.IsNullOrWhiteSpace(path))
+			throw new ArgumentException("Media asset path is required.", nameof(path));
+		var sourceIdText = _sourceIdSelector();
+		if (string.IsNullOrWhiteSpace(sourceIdText))
+		{
+			LastError = "Select a production source slot before opening a library asset.";
+			return false;
+		}
+
+		try
+		{
+			IsBusy = true;
+			LastError = null;
+			var opened = await _controller.OpenAsync(
+				path,
+				new MediaSourceId(Identity.Parse(sourceIdText)),
+				assetId,
+				_dispose.Token);
+			_localPath = opened.IsLoaded ? path : null;
+			Post(() =>
+			{
+				RefreshState();
+				LastError = opened.Failure?.Message;
+			});
+			return opened.IsLoaded && opened.Probe?.AssetId == assetId;
+		}
+		catch (Exception exception) when (exception is IOException or InvalidOperationException or ArgumentException or FormatException)
+		{
+			Post(() => LastError = exception.Message);
+			return false;
+		}
+		finally
+		{
+			Post(() => IsBusy = false);
+		}
 	}
 
 	private async Task OpenAsync()
@@ -530,6 +573,7 @@ public sealed class MediaDeckViewModel : INotifyPropertyChanged, IAsyncDisposabl
 		OnPropertyChanged(nameof(HasIn));
 		OnPropertyChanged(nameof(HasOut));
 		OnPropertyChanged(nameof(FileName));
+		OnPropertyChanged(nameof(AssetId));
 		OnPropertyChanged(nameof(LocalPath));
 		OnPropertyChanged(nameof(HasLocalPath));
 		OnPropertyChanged(nameof(SourceId));

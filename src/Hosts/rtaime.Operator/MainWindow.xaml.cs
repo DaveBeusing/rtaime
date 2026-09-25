@@ -77,7 +77,7 @@ public partial class MainWindow : Window
 		_sessionRecovery = _sessionRecoveryStore.BeginSession(new OperatorSafeSessionState(Shell.SelectedWorkspace));
 		if (_sessionRecovery.PreviousSessionEndedUnexpectedly)
 			Shell.SelectWorkspace(_sessionRecovery.SafeState.SelectedWorkspace);
-		MediaPool = new MediaPoolInspectorViewModel(viewModel, MediaDeck);
+		MediaPool = new MediaPoolInspectorViewModel(viewModel, MediaDeck, client, PickLocalMediaFiles);
 		CompositingGraph = new CompositingGraphViewModel(viewModel, MediaPool);
 		HealthProvider = new OperatorHealthSnapshotProvider(viewModel, MediaDeck, Monitoring, ProgramOutput, CompositingGraph);
 		HealthCenter = new HealthCenterViewModel(
@@ -401,10 +401,35 @@ public partial class MainWindow : Window
 		return dialog.ShowDialog() == true ? dialog.FileName : null;
 	}
 
+	private static IReadOnlyList<string> PickLocalMediaFiles()
+	{
+		var dialog = new OpenFileDialog
+		{
+			Title = "Import media into library",
+			Filter = "MP4 Video (*.mp4)|*.mp4",
+			CheckFileExists = true,
+			Multiselect = true
+		};
+		return dialog.ShowDialog() == true ? dialog.FileNames : Array.Empty<string>();
+	}
+
+	private static string? PickRelinkMediaFile()
+	{
+		var dialog = new OpenFileDialog
+		{
+			Title = "Relink media asset",
+			Filter = "MP4 Video (*.mp4)|*.mp4",
+			CheckFileExists = true,
+			Multiselect = false
+		};
+		return dialog.ShowDialog() == true ? dialog.FileName : null;
+	}
+
 	private void OnContentRendered(object? sender, EventArgs e)
 	{
 		ContentRendered -= OnContentRendered;
 		SynchronizeButton.Focus();
+		_ = MediaPool.LoadCatalogAsync();
 		if (DataContext is OperatorViewModel viewModel &&
 			viewModel.SynchronizeCommand.CanExecute(null))
 		{
@@ -641,7 +666,9 @@ public partial class MainWindow : Window
 		if (item is not null && target is not null && Timeline.CanAcceptMediaPoolDrop(item, target))
 		{
 			MediaPool.SelectedItem = item;
-			if (item.Kind == MediaPoolItemKind.Clip && MediaDeck.RefreshCommand.CanExecute(null))
+			if (item.Kind == MediaPoolItemKind.Clip &&
+				string.Equals(item.ReferenceId, MediaDeck.AssetId, StringComparison.Ordinal) &&
+				MediaDeck.RefreshCommand.CanExecute(null))
 				MediaDeck.RefreshCommand.Execute(null);
 			Timeline.ProjectMediaPoolDrop(item, target.Value);
 		}
@@ -652,12 +679,32 @@ public partial class MainWindow : Window
 	{
 		var item = GetMediaPoolItemFromSender(sender);
 		if (item?.Kind == MediaPoolItemKind.Clip &&
-			string.Equals(item.ReferenceId, MediaDeck.SourceId, StringComparison.Ordinal) &&
+			string.Equals(item.ReferenceId, MediaDeck.AssetId, StringComparison.Ordinal) &&
 			MediaDeck.AddCueCommand.CanExecute(null))
 		{
 			MediaPool.SelectedItem = item;
 			MediaDeck.AddCueCommand.Execute(null);
 		}
+		e.Handled = true;
+	}
+
+	private async void OnMediaPoolRelinkActionClick(object sender, RoutedEventArgs e)
+	{
+		var item = GetMediaPoolItemFromSender(sender);
+		if (item?.Kind == MediaPoolItemKind.Clip)
+		{
+			var path = PickRelinkMediaFile();
+			if (!string.IsNullOrWhiteSpace(path))
+				await MediaPool.RelinkAssetAsync(item, path);
+		}
+		e.Handled = true;
+	}
+
+	private async void OnMediaPoolRemoveActionClick(object sender, RoutedEventArgs e)
+	{
+		var item = GetMediaPoolItemFromSender(sender);
+		if (item?.Kind == MediaPoolItemKind.Clip)
+			await MediaPool.RemoveAssetAsync(item);
 		e.Handled = true;
 	}
 
