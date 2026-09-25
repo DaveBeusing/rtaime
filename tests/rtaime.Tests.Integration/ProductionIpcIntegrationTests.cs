@@ -189,12 +189,13 @@ public sealed class ProductionIpcIntegrationTests
 		Assert.Equal(1.5, client.Snapshot.GraphicsOverlay.Scale, 6);
 		Assert.True(runtime.Runtime!.Snapshot.GraphicsOverlay.Visible);
 		Assert.True(client.Snapshot.Production.Revision.CompareTo(revisionAfterGraphicsLoad) > 0);
+		var revisionAfterGraphicsSet = client.Snapshot.Production.Revision;
 
 		var clearedGraphics = await client.ClearGraphicsOverlayAsync();
 		Assert.False(clearedGraphics.AssetLoaded);
 		Assert.False(client.Snapshot!.GraphicsOverlay.Visible);
 		Assert.False(runtime.Runtime.Snapshot.GraphicsOverlay.AssetLoaded);
-		Assert.Equal(revisionBeforeGraphics, client.Snapshot.Production.Revision);
+		Assert.True(client.Snapshot.Production.Revision.CompareTo(revisionAfterGraphicsSet) > 0);
 
 		var preview = await client.SelectPreviewAsync(sourceB.Id);
 		Assert.True(preview.Accepted, preview.Failure?.ToString());
