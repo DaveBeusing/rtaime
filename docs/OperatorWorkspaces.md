@@ -115,10 +115,15 @@ COMPOSITING emphasizes composition using the existing Runtime-owned graphics pat
 - the confirmed ordered Runtime layer stack;
 - stable bitmap, Production CG and existing visual-layer identities;
 - bounded selected-layer reorder, visibility and opacity controls;
-- selection-driven Inspector, including the existing X/Y/Scale editor for the confirmed bitmap graphics layer;
-- current AI composition control where supported.
+- one authoritative Transform node per supported bitmap graphics or Production CG layer;
+- Rotation, Anchor/Pivot and Crop in addition to Position and Scale;
+- one optional bounded typed Color Grade processing node per supported layer;
+- selection-driven Inspector that edits the selected Layer, Transform or Processing node through the same authority path;
+- current AI composition control where independently supported.
 
-Source/routing topology remains read-only. Local selection, pan, zoom and layout are presentation state only. Layer reorder/visibility/opacity mutations travel through rtaime.Client → ControlHost → RuntimeHost and remain pending until confirmed Runtime state returns. Bitmap X/Y/Scale continues through the existing governed graphics-placement command; Production CG placement remains owned by its CG definition and is not exposed as a generic layer transform. The Operator never renders authoritative Production pixels and no second graphics renderer, compositor or production-state store is introduced by the shell.
+Source/routing topology remains read-only. Local selection, pan, zoom, editable Inspector drafts and layout are presentation state only. Layer reorder/visibility/opacity, transform and Color Grade mutations travel through rtaime.Client → ControlHost → RuntimeHost and remain pending until confirmed state returns. The Operator disables these mutations when state is stale/unready and never treats the draft values as production truth.
+
+The graph projects the actual chain as Layer → Transform → Composite or Layer → Transform → Color Grade → Composite. Keying, arbitrary processing stacks and arbitrary shaders are not exposed as production features. The Operator never renders authoritative Production pixels and no second graphics renderer, compositor or production-state store is introduced by the shell.
 
 ## OUTPUTS
 

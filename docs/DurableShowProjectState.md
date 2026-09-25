@@ -16,7 +16,7 @@ The durable show project owns:
 - stable project identity;
 - ordered Scene definitions with stable Scene IDs;
 - Production CG definition;
-- confirmed authored compositing configuration;
+- confirmed authored compositing configuration, including bounded layer transform and typed processing-node state;
 - retained bitmap graphics reference and checksum;
 - Show Control workspace content and its logical storage version.
 
@@ -73,7 +73,9 @@ verify management persistence
 
 This ordering is important. A checkpoint containing an `ActiveSceneId` is validated against the persisted Scene catalog that belongs to the show, not against a newly derived process-local Scene set.
 
-When authoritative compositing state is recovered against a fresh RuntimeHost, retained graphics resources are restored before the authoritative execution is prepared and committed. This preserves normal Runtime admission rules and avoids bypassing the existing commit boundary.
+When authoritative compositing state is recovered against a fresh RuntimeHost, retained graphics resources are restored before the authoritative execution is prepared and committed. Rotation, Anchor/Pivot, Crop and the optional Color Grade node are carried in that same versioned compositing state and are reapplied before confirmed layer order is restored. This preserves normal Runtime admission rules and avoids bypassing the existing commit boundary.
+
+The project document keeps these fields additive within `rtaime.show-project.v1`: older documents that omit them deserialize to Rotation 0, Anchor 0/0, Crop 0/0/0/0 and no processing node, reproducing the previous rendering defaults.
 
 ## Authored state versus live state
 
@@ -116,7 +118,8 @@ The implementation fails closed for:
 - mismatched production identity;
 - duplicate or invalid Scene identity;
 - Scene references to unavailable production sources;
-- invalid compositing schema;
+- invalid compositing schema or non-finite/out-of-range transform values;
+- invalid processing-node kind or Color Grade parameters;
 - invalid retained bitmap metadata;
 - missing bitmap sidecar during required recovery;
 - bitmap byte-length mismatch;

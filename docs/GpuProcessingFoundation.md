@@ -1,3 +1,8 @@
+<!--
+Copyright (c) 2026 Dave Beusing
+david.beusing@gmail.com
+-->
+
 <p align="right">
 	<img src="../src/Hosts/rtaime.Operator/Assets/Brand/RtaimeLogoHorizontal.svg" alt="rtaime — Real Time AI Media Engine" width="180" />
 </p>
@@ -12,7 +17,7 @@ Change classification: `REALTIME_CRITICAL`.
 
 The package implements the first GPU-processing provider boundary while preserving the existing architecture rule that Control and Planning remain capability-based and vendor-neutral.
 
-No serialized Control, Runtime, Media, AI, or Provider contract is changed by this package.
+The later authoritative compositor-control extension adds additive Control and Runtime compositing fields for Rotation, Anchor/Pivot, Crop and one bounded typed processing node. Those fields remain provider-neutral and do not expose CUDA or backend identities.
 
 ## Boundary
 
@@ -228,6 +233,25 @@ The provider reuses the established backend primitive for every layer. Managed-r
 
 GPU Processing Foundation does not introduce a graphics authoring system, arbitrary scene graph, browser graphics, or UI-timer animation.
 
+### Authoritative transform and processing preparation
+
+RuntimeHost now materializes supported bitmap and Production CG layers into the existing preallocated full-frame dynamic layer surfaces before the established GPU composite call. The deterministic operation order is:
+
+```text
+source crop
+→ scale
+→ rotation around explicit anchor/pivot
+→ translation
+→ bounded Color Grade when configured
+→ existing GPU ordered RGBA composite
+```
+
+Crop, transform and Color Grade do not create a second Program renderer. They prepare the same Runtime-owned dynamic layer surface that the existing `GpuProcessingProvider` consumes. Program, monitoring and recording therefore continue to observe the same post-composite Program pixels.
+
+The initial processing-node implementation is deliberately bounded to one typed Color Grade node per supported layer. It exposes Brightness, Contrast and Saturation only; arbitrary shader blobs, arbitrary stacks and Keying are not implemented. Processing-node configuration is validated before execution and is carried through the normal prepared/transactional Control path.
+
+Layer materialization reuses the existing Runtime scratch arrays and dynamic frame buffers. Reconfiguration performs bounded work when an authoritative transform or processing mutation is applied; it does not introduce a new per-frame allocation queue or a high-rate logging path.
+
 ## GPU observations
 
 `GpuProcessingProvider` records ordered observations for significant processing events, including:
@@ -331,6 +355,8 @@ It is **not**:
 - hard-real-time certification.
 
 Hardware performance remains `UNVERIFIED` until measured on the qualified reference GPU/driver configuration.
+
+The existing managed compositor performance cases continue to measure GPU-provider composition itself. They do not by themselves qualify the mutation-time transform/Color Grade materialization cost. That cost must remain part of reference-platform performance qualification before a hardware latency claim is made; no new hardware PASS claim is inferred from hosted CI.
 
 ## Explicit evidence boundary
 

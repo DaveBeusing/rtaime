@@ -42,12 +42,13 @@ The current product data supports these mockup-facing roles:
 
 - **Media Input** — current source and graphics-source projections;
 - **Output Router** — current Preview / Program routing;
-- **Transform** — the existing graphics X / Y / Scale transform;
+- **Transform** — one authoritative transform node per confirmed bitmap or Production CG layer, including Position, Scale, Rotation, Anchor/Pivot and Crop;
+- **Processing** — a typed Color Grade node when that authoritative layer actually owns one;
 - **Merge** — the current GPU composite stage;
 - **Output** — Preview and Program output projections;
 - **Recorder** — the current Program recorder.
 
-Processing/Enhance, Color Grade and Keying are not rendered because the current projection does not expose authoritative nodes for those roles.
+The authoritative layer chain is projected as `Layer → Transform → Composite` or `Layer → Transform → Color Grade → Composite`. A processing node is never shown merely as a placeholder. Keying is not currently implemented and is therefore not presented as a production capability.
 
 ## Stable topology and interaction
 
@@ -61,7 +62,11 @@ Arbitrary source/routing topology rewiring is not exposed by the current contrac
 - toggle visibility for bitmap graphics or Production CG;
 - decrease or increase opacity for bitmap graphics or Production CG.
 
-Layer selection remains presentation-only. A toolbar button press sends an explicit client command through ControlHost to RuntimeHost, displays an applying state, and refreshes the graph only from the confirmed Runtime snapshot. Selecting the confirmed bitmap graphics layer also exposes the existing Inspector X/Y/Scale editor; APPLY TRANSFORM continues through the established graphics-placement command and is projected back only after Runtime confirmation. Production CG placement remains definition-owned and is not generalized into this bitmap transform path. Legacy visual/test-layer state remains governed by its existing command rather than being silently migrated into the new controls.
+Layer selection remains presentation-only. A toolbar or Inspector mutation sends an explicit client command through ControlHost to RuntimeHost, displays the existing in-flight state and refreshes the graph only from confirmed authoritative state. Bitmap graphics and Production CG layers expose the bounded transform model: normalized Position X/Y, Scale, Rotation in degrees, normalized Anchor/Pivot and normalized Crop edges. The transform is deterministic and defaults reproduce the previous output exactly.
+
+The Inspector additionally exposes one bounded typed Color Grade node per supported layer. Brightness is bounded to -1..1 and Contrast/Saturation to 0..2. APPLY COLOR GRADE and REMOVE travel through the same Client → ControlHost → RuntimeHost authority path. Disabled, missing or rejected state is never replaced by local-only production truth. Effect stacking, arbitrary shader configuration, Keying and reordering of processing nodes remain unsupported.
+
+Legacy visual/test-layer state remains governed by its existing command and does not acquire unsupported transform or processing semantics.
 
 ## Preview
 
@@ -81,7 +86,9 @@ This is **real telemetry only**: missing data remains visibly unavailable rather
 
 ## Inspector integration
 
-Selecting a graph node uses the existing shared Inspector path. Runtime layer nodes expose their stable identity, confirmed order, visibility, opacity and transform in the graph projection. The Inspector remains a projection over confirmed state; for the bitmap graphics layer it reuses the existing graphics transform editor and command rather than adding another layer-editor state model. Reorder, visibility and opacity remain bounded COMPOSITING toolbar commands.
+Selecting a Layer, Transform or Processing graph node uses the existing shared Inspector path and resolves back to the same authoritative layer identity. Runtime layer projections expose stable identity, confirmed order, visibility, opacity, transform and, when present, typed processing state.
+
+The Inspector keeps editable draft values only as interaction state. APPLY commits through Operator → Client → ControlHost → RuntimeHost; the subsequent confirmed snapshot is the value projected back into the Inspector. Mutations are unavailable while the Operator is stale, busy, disconnected or Runtime is not ready. Reorder, visibility and opacity remain bounded COMPOSITING toolbar commands.
 
 ## Authority boundary
 
