@@ -67,14 +67,14 @@ public sealed class MediaAssetCatalogService
 				var normalized = TryNormalizePath(requestedLocation, out var pathFailure);
 				if (normalized is null)
 				{
-					results.Add(Rejected(requestedLocation ?? string.Empty, pathFailure!));
+					results.Add(Rejected(requestedLocation ?? string.Empty, pathFailure!.Value));
 					continue;
 				}
 
 				var file = TryOpenFile(normalized, out var fileFailure);
 				if (file is null)
 				{
-					results.Add(Rejected(normalized, fileFailure!));
+					results.Add(Rejected(normalized, fileFailure!.Value));
 					continue;
 				}
 
@@ -185,7 +185,7 @@ public sealed class MediaAssetCatalogService
 
 			var normalized = TryNormalizePath(sourceLocation, out var pathFailure);
 			if (normalized is null)
-				return RejectedResult(sourceLocation, assetId, pathFailure!);
+				return RejectedResult(sourceLocation, assetId, pathFailure!.Value);
 
 			var conflict = assets.FirstOrDefault(asset =>
 				asset.AssetId != assetId &&
@@ -200,7 +200,7 @@ public sealed class MediaAssetCatalogService
 
 			var file = TryOpenFile(normalized, out var fileFailure);
 			if (file is null)
-				return RejectedResult(normalized, assetId, fileFailure!);
+				return RejectedResult(normalized, assetId, fileFailure!.Value);
 
 			string fingerprint;
 			await using (file.ConfigureAwait(false))
