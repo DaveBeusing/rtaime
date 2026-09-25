@@ -720,7 +720,23 @@ public interface IOperatorControlTransport
         ValueTask.FromException<ShowControlWorkspaceSnapshot>(new NotSupportedException("Operator transport does not expose show-control recovery."));
 }
 
-public sealed class OperatorControlClient
+public interface IMediaAssetCatalogClient
+{
+    ValueTask<MediaAssetCatalogSnapshot> GetMediaAssetCatalogAsync(CancellationToken cancellationToken = default);
+    ValueTask<MediaAssetCatalogMutationResult> ImportMediaAssetsAsync(
+        IReadOnlyList<string> sourceLocations,
+        CancellationToken cancellationToken = default);
+    ValueTask<MediaAssetCatalogMutationResult> RelinkMediaAssetAsync(
+        MediaAssetId assetId,
+        string sourceLocation,
+        CancellationToken cancellationToken = default);
+    ValueTask<MediaAssetCatalogMutationResult> RemoveMediaAssetAsync(
+        MediaAssetId assetId,
+        CancellationToken cancellationToken = default);
+    ValueTask<MediaAssetCatalogSnapshot> RefreshMediaAssetAvailabilityAsync(CancellationToken cancellationToken = default);
+}
+
+public sealed class OperatorControlClient : IMediaAssetCatalogClient
 {
     private readonly IOperatorControlTransport _transport;
     private OperatorStatusSnapshot? _snapshot;
