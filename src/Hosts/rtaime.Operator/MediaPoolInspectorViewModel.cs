@@ -107,6 +107,20 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 	private readonly List<TimelineTrackItemViewModel> _timelineItems = [];
 	private TimelineCueViewModel? _timelineCue;
 	private CompositingGraphNodeProjection? _compositingNode;
+	private double _selectedLayerPositionX;
+	private double _selectedLayerPositionY;
+	private double _selectedLayerScale = 1.0;
+	private double _selectedLayerRotationDegrees;
+	private double _selectedLayerAnchorX;
+	private double _selectedLayerAnchorY;
+	private double _selectedLayerCropLeft;
+	private double _selectedLayerCropTop;
+	private double _selectedLayerCropRight;
+	private double _selectedLayerCropBottom;
+	private bool _selectedColorGradeEnabled;
+	private double _selectedColorGradeBrightness;
+	private double _selectedColorGradeContrast = 1.0;
+	private double _selectedColorGradeSaturation = 1.0;
 	private string _emptyState = "No assets are available.";
 	private MediaAssetCatalogSnapshot _catalogSnapshot = MediaAssetCatalogSnapshot.Empty;
 	private bool _catalogBusy;
@@ -159,6 +173,20 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 			_operator.GraphicsScale = 1.0;
 			return Task.CompletedTask;
 		});
+		ApplyCompositingTransformCommand = new AsyncRelayCommand(
+			ApplySelectedCompositingTransformAsync,
+			CanEditAuthoritativeCompositingSelection);
+		ResetCompositingTransformCommand = new AsyncRelayCommand(() =>
+		{
+			ResetSelectedCompositingTransformDraft();
+			return Task.CompletedTask;
+		}, () => HasAuthoritativeCompositingSelection);
+		ApplyColorGradeCommand = new AsyncRelayCommand(
+			ApplySelectedColorGradeAsync,
+			CanEditAuthoritativeCompositingSelection);
+		RemoveProcessingNodeCommand = new AsyncRelayCommand(
+			RemoveSelectedProcessingNodeAsync,
+			() => CanEditAuthoritativeCompositingSelection() && SelectedCompositingLayer?.ProcessingNode is not null);
 		GridViewCommand = new AsyncRelayCommand(() =>
 		{
 			IsGridView = true;
@@ -202,6 +230,10 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 	public ICommand ResetGraphicsPositionXCommand { get; }
 	public ICommand ResetGraphicsPositionYCommand { get; }
 	public ICommand ResetGraphicsScaleCommand { get; }
+	public ICommand ApplyCompositingTransformCommand { get; }
+	public ICommand ResetCompositingTransformCommand { get; }
+	public ICommand ApplyColorGradeCommand { get; }
+	public ICommand RemoveProcessingNodeCommand { get; }
 	public ICommand ImportCommand { get; }
 	public ICommand RefreshCatalogCommand { get; }
 	public ICommand AddTestSignalCommand { get; }
@@ -279,15 +311,20 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 
 	public bool HasItems => FilteredItems.Count > 0;
 	public bool HasSelection => _compositingNode is not null || SelectedItem is not null || _timelineItem is not null || _timelineItems.Count > 0 || _timelineCue is not null;
-	public bool CanEditSelection => HasSelection && !HasMultipleSelection && _compositingNode is null;
+	public bool HasAuthoritativeCompositingSelection => SelectedCompositingLayer is { Kind: 2 or 3 };
+	public bool CanEditSelection => HasSelection && !HasMultipleSelection && (_compositingNode is null || CanEditAuthoritativeCompositingSelection());
 	public bool HasMetadata => InspectorMetadataProperties.Count > 0;
 	public bool HasEffects => InspectorEffectProperties.Count > 0;
-	public bool SupportsTransformRotation => false;
-	public bool SupportsTransformAnchor => false;
-	public bool SupportsTransformCrop => false;
+	public bool SupportsTransformRotation => HasAuthoritativeCompositingSelection;
+	public bool SupportsTransformAnchor => HasAuthoritativeCompositingSelection;
+	public bool SupportsTransformCrop => HasAuthoritativeCompositingSelection;
 	public bool SupportsEffectOrdering => false;
-	public string UnsupportedTransformCapabilityText => "Rotation, Anchor and Crop are not exposed by the current graphics capability.";
-	public string UnsupportedEffectOrderingText => "Effect ordering is not exposed by the current processing capability.";
+	public string UnsupportedTransformCapabilityText => HasAuthoritativeCompositingSelection
+		? "Transform values are committed through authoritative Control and confirmed by RuntimeHost."
+		: "Rotation, Anchor and Crop require an authoritative bitmap or Production CG compositing layer selection.";
+	public string UnsupportedEffectOrderingText => HasAuthoritativeCompositingSelection
+		? "V1 supports one bounded authoritative Color Grade node per layer; effect stacking and reordering remain out of scope."
+		: "Effect ordering is not exposed by the current processing capability.";
 	public bool IsSourceSelection => _timelineItems.Count <= 1 && _timelineItem is null && _timelineCue is null && SelectedItem?.Kind == MediaPoolItemKind.Source;
 	public bool IsTestSignalSelection => SelectedTestSignalSource?.IsTestPattern == true;
 	public string TestSignalPresetLabel
@@ -331,12 +368,82 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 		(_timelineItem?.Category == TimelineTrackCategory.Audio ||
 			(_timelineItem is null && SelectedItem?.Kind == MediaPoolItemKind.Audio));
 	public bool IsGraphicsSelection =>
-		string.Equals(_compositingNode?.Id, "layer:bitmap-graphics", StringComparison.Ordinal) ||
-		(_compositingNode is null &&
-			_timelineItems.Count <= 1 &&
-			_timelineCue is null &&
-			(_timelineItem?.Category is TimelineTrackCategory.Graphics or TimelineTrackCategory.Overlay ||
-				(_timelineItem is null && SelectedItem?.Kind == MediaPoolItemKind.Graphics)));
+		_compositingNode is null &&
+		_timelineItems.Count <= 1 &&
+		_timelineCue is null &&
+		(_timelineItem?.Category is TimelineTrackCategory.Graphics or TimelineTrackCategory.Overlay ||
+			(_timelineItem is null && SelectedItem?.Kind == MediaPoolItemKind.Graphics));
+	public double SelectedLayerPositionX
+	{
+		get => _selectedLayerPositionX;
+		set => SetValidated(ref _selectedLayerPositionX, value, 0, 1);
+	}
+	public double SelectedLayerPositionY
+	{
+		get => _selectedLayerPositionY;
+		set => SetValidated(ref _selectedLayerPositionY, value, 0, 1);
+	}
+	public double SelectedLayerScale
+	{
+		get => _selectedLayerScale;
+		set => SetValidated(ref _selectedLayerScale, value, 0.05, 4);
+	}
+	public double SelectedLayerRotationDegrees
+	{
+		get => _selectedLayerRotationDegrees;
+		set => SetValidated(ref _selectedLayerRotationDegrees, value, -180, 180);
+	}
+	public double SelectedLayerAnchorX
+	{
+		get => _selectedLayerAnchorX;
+		set => SetValidated(ref _selectedLayerAnchorX, value, 0, 1);
+	}
+	public double SelectedLayerAnchorY
+	{
+		get => _selectedLayerAnchorY;
+		set => SetValidated(ref _selectedLayerAnchorY, value, 0, 1);
+	}
+	public double SelectedLayerCropLeft
+	{
+		get => _selectedLayerCropLeft;
+		set => SetValidated(ref _selectedLayerCropLeft, value, 0, 1);
+	}
+	public double SelectedLayerCropTop
+	{
+		get => _selectedLayerCropTop;
+		set => SetValidated(ref _selectedLayerCropTop, value, 0, 1);
+	}
+	public double SelectedLayerCropRight
+	{
+		get => _selectedLayerCropRight;
+		set => SetValidated(ref _selectedLayerCropRight, value, 0, 1);
+	}
+	public double SelectedLayerCropBottom
+	{
+		get => _selectedLayerCropBottom;
+		set => SetValidated(ref _selectedLayerCropBottom, value, 0, 1);
+	}
+	public bool SelectedColorGradeEnabled
+	{
+		get => _selectedColorGradeEnabled;
+		set => Set(ref _selectedColorGradeEnabled, value);
+	}
+	public double SelectedColorGradeBrightness
+	{
+		get => _selectedColorGradeBrightness;
+		set => SetValidated(ref _selectedColorGradeBrightness, value, -1, 1);
+	}
+	public double SelectedColorGradeContrast
+	{
+		get => _selectedColorGradeContrast;
+		set => SetValidated(ref _selectedColorGradeContrast, value, 0, 2);
+	}
+	public double SelectedColorGradeSaturation
+	{
+		get => _selectedColorGradeSaturation;
+		set => SetValidated(ref _selectedColorGradeSaturation, value, 0, 2);
+	}
+
 	public bool IsCompositionSelection => _timelineItems.Count <= 1 && _timelineItem is null && _timelineCue is null && SelectedItem?.Kind == MediaPoolItemKind.Composition;
 	public bool IsCueSelection => _timelineCue is not null;
 	public string InspectorTitle => _compositingNode?.Title ?? (_timelineItems.Count > 1
@@ -675,6 +782,7 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 		}
 
 		OnPropertyChanged(nameof(SelectedItem));
+		SynchronizeCompositingDraft();
 		BuildInspector();
 		RaiseSelectionState();
 	}
@@ -952,6 +1060,22 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 			Add("graph.node.inputs", "Inputs", FormatGraphPorts(graphNode, CompositingGraphPortDirection.Input), "METADATA");
 			Add("graph.node.outputs", "Outputs", FormatGraphPorts(graphNode, CompositingGraphPortDirection.Output), "METADATA");
 			Add("graph.node.rewire", "Rewire", graphNode.CanRewire ? "AVAILABLE" : "READ ONLY", "CAPABILITY");
+			if (SelectedCompositingLayer is { } layer)
+			{
+				Add("compositor.transform.position", "Position", $"{layer.PositionX:0.###}, {layer.PositionY:0.###}", "COMMITTED", true);
+				Add("compositor.transform.scale", "Scale", $"{layer.Scale:0.###}x", "COMMITTED", true);
+				Add("compositor.transform.rotation", "Rotation", $"{layer.RotationDegrees:0.###}°", "COMMITTED", true);
+				Add("compositor.transform.anchor", "Anchor", $"{layer.AnchorX:0.###}, {layer.AnchorY:0.###}", "COMMITTED", true);
+				Add("compositor.transform.crop", "Crop L/T/R/B", $"{layer.CropLeft:0.###} / {layer.CropTop:0.###} / {layer.CropRight:0.###} / {layer.CropBottom:0.###}", "COMMITTED", true);
+				if (layer.ProcessingNode is { } processing)
+				{
+					Add("processing.node", "Processing", "Color Grade", "COMMITTED", true);
+					Add("processing.enabled", "Enabled", processing.Enabled ? "ON" : "OFF", "COMMITTED", true);
+					Add("processing.brightness", "Brightness", processing.ColorGrade.Brightness.ToString("0.###"), "COMMITTED", true);
+					Add("processing.contrast", "Contrast", processing.ColorGrade.Contrast.ToString("0.###"), "COMMITTED", true);
+					Add("processing.saturation", "Saturation", processing.ColorGrade.Saturation.ToString("0.###"), "COMMITTED", true);
+				}
+			}
 			RaiseInspectorProjectionState();
 			return;
 		}
@@ -1141,7 +1265,7 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 		InspectorProperties.Add(property);
 		if (string.Equals(state, "METADATA", StringComparison.Ordinal) || string.Equals(state, "CAPABILITY", StringComparison.Ordinal))
 			InspectorMetadataProperties.Add(property);
-		if (id.StartsWith("ai.", StringComparison.Ordinal))
+		if (id.StartsWith("ai.", StringComparison.Ordinal) || id.StartsWith("processing.", StringComparison.Ordinal))
 			InspectorEffectProperties.Add(property);
 	}
 
@@ -1254,6 +1378,11 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 			nameof(OperatorViewModel.GraphicsPositionX) or
 			nameof(OperatorViewModel.GraphicsPositionY) or
 			nameof(OperatorViewModel.GraphicsScale) or
+			nameof(OperatorViewModel.CompositingLayers) or
+			nameof(OperatorViewModel.IsConnected) or
+			nameof(OperatorViewModel.IsStale) or
+			nameof(OperatorViewModel.IsBusy) or
+			nameof(OperatorViewModel.RuntimeStatus) or
 			nameof(OperatorViewModel.AIEnabled) or
 			nameof(OperatorViewModel.AIFeature) or
 			nameof(OperatorViewModel.AIProvider) or
@@ -1264,7 +1393,16 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 			nameof(OperatorViewModel.PreviewSourceId) or
 			nameof(OperatorViewModel.ProgramSourceId))
 		{
-			Refresh();
+			if (_compositingNode is not null)
+			{
+				SynchronizeCompositingDraft();
+				BuildInspector();
+				RaiseSelectionState();
+			}
+			else
+			{
+				Refresh();
+			}
 		}
 	}
 
@@ -1294,9 +1432,173 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 		OnPropertyChanged(nameof(HasMultipleSelection));
 		OnPropertyChanged(nameof(SelectionSummary));
 		OnPropertyChanged(nameof(CanEditSelection));
+		OnPropertyChanged(nameof(HasAuthoritativeCompositingSelection));
+		OnPropertyChanged(nameof(SupportsTransformRotation));
+		OnPropertyChanged(nameof(SupportsTransformAnchor));
+		OnPropertyChanged(nameof(SupportsTransformCrop));
+		OnPropertyChanged(nameof(UnsupportedTransformCapabilityText));
+		OnPropertyChanged(nameof(UnsupportedEffectOrderingText));
 		OnPropertyChanged(nameof(HasMetadata));
 		OnPropertyChanged(nameof(HasEffects));
+		(ApplyCompositingTransformCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+		(ResetCompositingTransformCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+		(ApplyColorGradeCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+		(RemoveProcessingNodeCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 		RaiseGroupExpansionState();
+	}
+
+	private OperatorCompositingLayerDescriptor? SelectedCompositingLayer
+	{
+		get
+		{
+			var layerId = ResolveSelectedCompositingLayerId();
+			return layerId is null
+				? null
+				: _operator.CompositingLayers.FirstOrDefault(layer =>
+					string.Equals(layer.LayerId, layerId, StringComparison.Ordinal));
+		}
+	}
+
+	private string? ResolveSelectedCompositingLayerId()
+	{
+		var nodeId = _compositingNode?.Id;
+		if (string.IsNullOrWhiteSpace(nodeId))
+			return null;
+		if (nodeId.StartsWith("layer:", StringComparison.Ordinal))
+			return nodeId["layer:".Length..];
+		if (nodeId.StartsWith("transform:", StringComparison.Ordinal))
+			return nodeId["transform:".Length..];
+		if (nodeId.StartsWith("processing:", StringComparison.Ordinal))
+		{
+			var remainder = nodeId["processing:".Length..];
+			var separator = remainder.IndexOf(':');
+			return separator > 0 ? remainder[..separator] : null;
+		}
+		return null;
+	}
+
+	private bool CanEditAuthoritativeCompositingSelection() =>
+		HasAuthoritativeCompositingSelection && _operator.CanManageCompositingLayers();
+
+	private async Task ApplySelectedCompositingTransformAsync()
+	{
+		var layer = SelectedCompositingLayer;
+		if (layer is null || !CanEditAuthoritativeCompositingSelection())
+			return;
+		if (SelectedLayerCropLeft + SelectedLayerCropRight >= 1 ||
+			SelectedLayerCropTop + SelectedLayerCropBottom >= 1)
+		{
+			throw new InvalidOperationException("Crop edges must leave a non-empty source region.");
+		}
+
+		await _operator.SetCompositingLayerTransformAsync(
+			layer.LayerId,
+			SelectedLayerPositionX,
+			SelectedLayerPositionY,
+			SelectedLayerScale,
+			SelectedLayerRotationDegrees,
+			SelectedLayerAnchorX,
+			SelectedLayerAnchorY,
+			SelectedLayerCropLeft,
+			SelectedLayerCropTop,
+			SelectedLayerCropRight,
+			SelectedLayerCropBottom);
+		SynchronizeCompositingDraft();
+		BuildInspector();
+	}
+
+	private void ResetSelectedCompositingTransformDraft()
+	{
+		SelectedLayerPositionX = 0;
+		SelectedLayerPositionY = 0;
+		SelectedLayerScale = 1;
+		SelectedLayerRotationDegrees = 0;
+		SelectedLayerAnchorX = 0;
+		SelectedLayerAnchorY = 0;
+		SelectedLayerCropLeft = 0;
+		SelectedLayerCropTop = 0;
+		SelectedLayerCropRight = 0;
+		SelectedLayerCropBottom = 0;
+	}
+
+	private async Task ApplySelectedColorGradeAsync()
+	{
+		var layer = SelectedCompositingLayer;
+		if (layer is null || !CanEditAuthoritativeCompositingSelection())
+			return;
+
+		var node = new OperatorCompositingProcessingNodeDescriptor(
+			layer.ProcessingNode?.NodeId ?? "color-grade",
+			1,
+			SelectedColorGradeEnabled,
+			new OperatorColorGradeDescriptor(
+				SelectedColorGradeBrightness,
+				SelectedColorGradeContrast,
+				SelectedColorGradeSaturation));
+		await _operator.SetCompositingLayerProcessingNodeAsync(layer.LayerId, node);
+		SynchronizeCompositingDraft();
+		BuildInspector();
+	}
+
+	private async Task RemoveSelectedProcessingNodeAsync()
+	{
+		var layer = SelectedCompositingLayer;
+		if (layer is null || !CanEditAuthoritativeCompositingSelection())
+			return;
+		await _operator.SetCompositingLayerProcessingNodeAsync(layer.LayerId, null);
+		SynchronizeCompositingDraft();
+		BuildInspector();
+	}
+
+	private void SynchronizeCompositingDraft()
+	{
+		var layer = SelectedCompositingLayer;
+		if (layer is null)
+			return;
+
+		_selectedLayerPositionX = layer.PositionX;
+		_selectedLayerPositionY = layer.PositionY;
+		_selectedLayerScale = layer.Scale;
+		_selectedLayerRotationDegrees = layer.RotationDegrees;
+		_selectedLayerAnchorX = layer.AnchorX;
+		_selectedLayerAnchorY = layer.AnchorY;
+		_selectedLayerCropLeft = layer.CropLeft;
+		_selectedLayerCropTop = layer.CropTop;
+		_selectedLayerCropRight = layer.CropRight;
+		_selectedLayerCropBottom = layer.CropBottom;
+		_selectedColorGradeEnabled = layer.ProcessingNode?.Enabled ?? false;
+		_selectedColorGradeBrightness = layer.ProcessingNode?.ColorGrade.Brightness ?? 0;
+		_selectedColorGradeContrast = layer.ProcessingNode?.ColorGrade.Contrast ?? 1;
+		_selectedColorGradeSaturation = layer.ProcessingNode?.ColorGrade.Saturation ?? 1;
+
+		foreach (var propertyName in new[]
+		{
+			nameof(SelectedLayerPositionX),
+			nameof(SelectedLayerPositionY),
+			nameof(SelectedLayerScale),
+			nameof(SelectedLayerRotationDegrees),
+			nameof(SelectedLayerAnchorX),
+			nameof(SelectedLayerAnchorY),
+			nameof(SelectedLayerCropLeft),
+			nameof(SelectedLayerCropTop),
+			nameof(SelectedLayerCropRight),
+			nameof(SelectedLayerCropBottom),
+			nameof(SelectedColorGradeEnabled),
+			nameof(SelectedColorGradeBrightness),
+			nameof(SelectedColorGradeContrast),
+			nameof(SelectedColorGradeSaturation),
+			nameof(HasAuthoritativeCompositingSelection)
+		})
+		{
+			OnPropertyChanged(propertyName);
+		}
+	}
+
+	private bool SetValidated(ref double field, double value, double minimum, double maximum, [CallerMemberName] string? propertyName = null)
+	{
+		if (!double.IsFinite(value) || value < minimum || value > maximum)
+			throw new ArgumentOutOfRangeException(propertyName, $"Value must be finite and in the inclusive range {minimum}..{maximum}.");
+		return Set(ref field, value, propertyName);
 	}
 
 	private OperatorSourceTileViewModel? SelectedTestSignalSource

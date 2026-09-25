@@ -949,6 +949,60 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		});
 	}
 
+	internal async Task SetCompositingLayerTransformAsync(
+		string layerId,
+		double positionX,
+		double positionY,
+		double scale,
+		double rotationDegrees,
+		double anchorX,
+		double anchorY,
+		double cropLeft,
+		double cropTop,
+		double cropRight,
+		double cropBottom)
+	{
+		if (_client is null || !CanManageCompositingLayers()) return;
+		if (string.IsNullOrWhiteSpace(layerId)) throw new ArgumentException("Compositing layer identity is required.", nameof(layerId));
+
+		await ExecuteAsync("LAYER TRANSFORM", async () =>
+		{
+			await _client.SetCompositingLayerTransformAsync(
+				layerId.Trim(),
+				positionX,
+				positionY,
+				scale,
+				rotationDegrees,
+				anchorX,
+				anchorY,
+				cropLeft,
+				cropTop,
+				cropRight,
+				cropBottom);
+			Apply(_client.Snapshot!);
+			CommandStatus = "LAYER TRANSFORM CONFIRMED";
+			LastEvent = $"Compositing layer {layerId.Trim()} transform was confirmed by RuntimeHost.";
+		});
+	}
+
+	internal async Task SetCompositingLayerProcessingNodeAsync(
+		string layerId,
+		OperatorCompositingProcessingNodeDescriptor? processingNode)
+	{
+		if (_client is null || !CanManageCompositingLayers()) return;
+		if (string.IsNullOrWhiteSpace(layerId)) throw new ArgumentException("Compositing layer identity is required.", nameof(layerId));
+
+		await ExecuteAsync("LAYER PROCESSING", async () =>
+		{
+			await _client.SetCompositingLayerProcessingNodeAsync(layerId.Trim(), processingNode);
+			Apply(_client.Snapshot!);
+			CommandStatus = "LAYER PROCESSING CONFIRMED";
+			LastEvent = processingNode is null
+				? $"Compositing layer {layerId.Trim()} processing node was removed and confirmed by RuntimeHost."
+				: $"Compositing layer {layerId.Trim()} processing node {processingNode.NodeId} was confirmed by RuntimeHost.";
+		});
+	}
+
 	internal async Task ReorderCompositingLayersAsync(IReadOnlyList<string> orderedLayerIds)
 	{
 		if (_client is null || !CanManageCompositingLayers()) return;
