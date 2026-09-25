@@ -105,16 +105,32 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		return Task.CompletedTask;
 	}
 
-	public async ValueTask RestoreGraphicsStateAsync(CancellationToken cancellationToken = default)
-	{
-		if (!_runtimeTransport.IsConnected)
-			return;
+	public ValueTask RestoreGraphicsStateAsync(CancellationToken cancellationToken = default) =>
+		RunSerializedMutationAsync(RestoreGraphicsStateCoreAsync, cancellationToken);
 
+	internal async ValueTask RunSerializedMutationAsync(
+		Func<CancellationToken, ValueTask> operation,
+		CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(operation);
 		await _mutationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
 		try
 		{
-			if (!_runtimeTransport.IsConnected)
-				return;
+			await operation(cancellationToken).ConfigureAwait(false);
+		}
+		finally
+		{
+			_mutationGate.Release();
+		}
+	}
+
+	internal ValueTask RestoreGraphicsStateWithinMutationAsync(CancellationToken cancellationToken = default) =>
+		RestoreGraphicsStateCoreAsync(cancellationToken);
+
+	private async ValueTask RestoreGraphicsStateCoreAsync(CancellationToken cancellationToken)
+	{
+		if (!_runtimeTransport.IsConnected)
+			return;
 
 			if (_graphicsAsset is null && _durableBitmapReference is { } durableBitmap && _showProjectStore is not null)
 			{
@@ -198,11 +214,6 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 					$"Durable show project '{_showProject.Name}' was restored through Runtime confirmation paths.");
 			}
 			NotifyObservableStateChanged();
-		}
-		finally
-		{
-			_mutationGate.Release();
-		}
 	}
 
 	public void NotifyObservableStateChanged()
