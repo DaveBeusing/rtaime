@@ -27,6 +27,7 @@ The professional V1 control surface provides:
 - Runtime, timing and input state;
 - AI, recording, audio peak and visual-layer state;
 - command in-flight, rejected, failed and resynchronized presentation states;
+- durable show-project lifecycle evidence (`LOADED`, `SAVED`, `RESTORED`, `STALE`, `RECOVERY_REQUIRED`) in the System workspace;
 - a persistent last-event and error/rejection footer.
 
 Production mutations are disabled whenever the presentation snapshot is stale, synchronization is in flight, or Runtime is not `READY`. `Set Preview` additionally requires a locally selected source. CUT/AUTO do not take the local selection directly; they take the confirmed authoritative Preview source.
@@ -63,6 +64,8 @@ A `RemoteHostSessionChangedException` marks the current presentation snapshot st
 Transport loss and timeout conditions on the control path also mark the presentation stale. Existing source and status information may remain visible for operator context, but it is explicitly non-commandable until synchronization succeeds again.
 
 Monitoring state is independent. A lost or stale monitoring stream affects visual observation only and does not invalidate an otherwise current authoritative ControlHost snapshot.
+
+The System workspace also projects the current durable show-project name and persistence/recovery state supplied by ControlHost. `STALE` means a live authored mutation was confirmed but its subsequent durable synchronization failed; `RECOVERY_REQUIRED` means retained project content could not be safely restored. Both conditions surface the ControlHost-provided diagnostic detail. These states do not cause the Operator to invent rollback or live Runtime confirmation.
 
 ## Visual monitoring boundary
 
