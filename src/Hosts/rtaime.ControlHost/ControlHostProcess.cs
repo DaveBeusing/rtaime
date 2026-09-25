@@ -742,6 +742,14 @@ public sealed class ControlHostProcess
 				expected.PositionX != actual.PositionX ||
 				expected.PositionY != actual.PositionY ||
 				expected.Scale != actual.Scale ||
+				expected.RotationDegrees != actual.RotationDegrees ||
+				expected.AnchorX != actual.AnchorX ||
+				expected.AnchorY != actual.AnchorY ||
+				expected.CropLeft != actual.CropLeft ||
+				expected.CropTop != actual.CropTop ||
+				expected.CropRight != actual.CropRight ||
+				expected.CropBottom != actual.CropBottom ||
+				!ProcessingNodeMatches(expected.ProcessingNode, actual.ProcessingNode) ||
 				!string.Equals(expected.ContentIdentity, actual.ContentIdentity, StringComparison.Ordinal))
 			{
 				return false;
@@ -749,6 +757,21 @@ public sealed class ControlHostProcess
 		}
 
 		return true;
+	}
+
+	private static bool ProcessingNodeMatches(
+		ProductionCompositingProcessingNodeState? expected,
+		PreparedCompositingProcessingNodeState? actual)
+	{
+		if (expected is null || actual is null)
+			return expected is null && actual is null;
+
+		return expected.NodeId == actual.NodeId &&
+			(int)expected.Kind == (int)actual.Kind &&
+			expected.Enabled == actual.Enabled &&
+			expected.ColorGrade.Brightness == actual.ColorGrade.Brightness &&
+			expected.ColorGrade.Contrast == actual.ColorGrade.Contrast &&
+			expected.ColorGrade.Saturation == actual.ColorGrade.Saturation;
 	}
 
 	private string ResolveDurabilityDirectory()
