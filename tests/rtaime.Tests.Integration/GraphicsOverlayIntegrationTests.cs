@@ -139,6 +139,89 @@ public sealed class GraphicsOverlayIntegrationTests
 	}
 
 	[Fact]
+	public async Task Bitmap_transform_applies_rotation_anchor_and_crop_deterministically()
+	{
+		await using var fixture = await Fixture.CreateAsync(new CollectingRecordingWriter());
+		fixture.Runtime.LoadGraphicsOverlay(
+			"transform.rgba",
+			2,
+			2,
+			new byte[]
+			{
+				255, 0, 0, 255,
+				0, 255, 0, 255,
+				0, 0, 255, 255,
+				255, 255, 0, 255
+			});
+		fixture.Runtime.SetGraphicsOverlay(true, 0.25, 0.25, 1.0);
+		var transformed = fixture.Runtime.SetCompositingLayerTransform(
+			V1RuntimeHostService.BitmapGraphicsLayerId,
+			0.25,
+			0.25,
+			1.0,
+			90,
+			0,
+			0,
+			0,
+			0,
+			0,
+			0);
+
+		var bitmap = Assert.Single(transformed, layer => layer.LayerId == V1RuntimeHostService.BitmapGraphicsLayerId);
+		Assert.Equal(90, bitmap.RotationDegrees);
+		Assert.Equal(0, bitmap.AnchorX);
+		var program = fixture.Runtime.ProcessNextBoundary();
+		var originX = (int)Math.Round(0.25 * (fixture.Format.Width - 1));
+		var originY = (int)Math.Round(0.25 * (fixture.Format.Height - 1));
+		AssertPixel(program.ProgramPixels, fixture.Format, originX, originY, 255, 0, 0, 255);
+		AssertPixel(program.ProgramPixels, fixture.Format, originX, originY + 1, 0, 255, 0, 255);
+
+		fixture.Runtime.SetCompositingLayerTransform(
+			V1RuntimeHostService.BitmapGraphicsLayerId,
+			0.25,
+			0.25,
+			1.0,
+			0,
+			0,
+			0,
+			0,
+			0,
+			0.5,
+			0);
+		var cropped = fixture.Runtime.ProcessNextBoundary();
+		AssertPixel(cropped.ProgramPixels, fixture.Format, originX, originY, 255, 0, 0, 255);
+		Assert.Equal(
+			Pixel(cropped.ProgramPixels, fixture.Format, originX + 1, originY),
+			Pixel(fixture.Runtime.ProcessNextBoundary().ProgramPixels, fixture.Format, originX + 1, originY));
+	}
+
+	[Fact]
+	public async Task Color_grade_processing_node_executes_before_gpu_composite_and_preserves_alpha()
+	{
+		await using var fixture = await Fixture.CreateAsync(new CollectingRecordingWriter());
+		fixture.Runtime.LoadGraphicsOverlay("grade.rgba", 1, 1, new byte[] { 255, 0, 0, 255 });
+		fixture.Runtime.SetGraphicsOverlay(true, 0, 0, 1);
+		var node = new PreparedCompositingProcessingNodeState(
+			"grade-primary",
+			PreparedCompositingProcessingNodeKind.ColorGrade,
+			true,
+			new PreparedColorGradeSettings(0, 1, 0));
+
+		var layers = fixture.Runtime.SetCompositingLayerProcessingNode(
+			V1RuntimeHostService.BitmapGraphicsLayerId,
+			node);
+		var bitmap = Assert.Single(layers, layer => layer.LayerId == V1RuntimeHostService.BitmapGraphicsLayerId);
+		Assert.Equal(node, bitmap.ProcessingNode);
+
+		var program = fixture.Runtime.ProcessNextBoundary();
+		AssertPixel(program.ProgramPixels, fixture.Format, 0, 0, 54, 54, 54, 255);
+
+		fixture.Runtime.SetCompositingLayerProcessingNode(V1RuntimeHostService.BitmapGraphicsLayerId, null);
+		var restored = fixture.Runtime.ProcessNextBoundary();
+		AssertPixel(restored.ProgramPixels, fixture.Format, 0, 0, 255, 0, 0, 255);
+	}
+
+	[Fact]
 	public async Task Prepared_scene_compositing_is_applied_with_the_runtime_commit()
 	{
 		await using var fixture = await Fixture.CreateAsync(new CollectingRecordingWriter());
