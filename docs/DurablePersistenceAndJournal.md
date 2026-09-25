@@ -36,6 +36,10 @@ Management documents use:
 - JSON payload,
 - SHA-256 payload checksum.
 
+The persistent media catalogue uses the same management-document lane rather than a new schema or persistence stack. ControlHost stores the catalogue under area `media.asset.catalog`, key `catalog`, with document format `rtaime.media-asset-catalog.v1`. The checksummed document contains stable `MediaAssetId` values, local source locations, technical media metadata, SHA-256 source fingerprints, timestamps and availability state. Optimistic document versions prevent stale catalogue writers from silently replacing newer state. Because the existing `management_documents` table is reused, no persistence schema-version increment is required for this capability.
+
+Media catalogue persistence is management-plane state only. Import hashing, availability checks and catalogue writes are not part of the Runtime media/render hot path. Existing management-database backup, integrity verification and recovery tooling naturally includes the catalogue document.
+
 Checkpoint records use:
 
 - stable checkpoint identity,
@@ -133,6 +137,10 @@ Persistence acceptance evidence includes:
 
 - persistence survives store close/reopen,
 - optimistic management version conflicts fail closed,
+- media catalogue identity and metadata survive store close/reopen,
+- missing catalogue sources remain durable and relinkable,
+- catalogue relink preserves stable asset identity,
+- removing a catalogue entry does not delete its source media,
 - checkpoints survive reopen and enforce one payload per production revision,
 - journal order survives reopen,
 - EventId replay is idempotent,

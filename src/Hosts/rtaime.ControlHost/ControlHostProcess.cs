@@ -156,6 +156,13 @@ public interface IControlRuntimeTransportSeam
 		ValueTask.FromException<RuntimeAIShowcaseRemoteSnapshot>(
 			new NotSupportedException("Runtime transport does not expose AI showcase control."));
 
+	ValueTask<MediaAssetProbeResult> ProbeMediaAssetAsync(
+		string path,
+		MediaAssetId assetId,
+		CancellationToken cancellationToken = default) =>
+		ValueTask.FromException<MediaAssetProbeResult>(
+			new NotSupportedException("Runtime transport does not expose media-asset probing."));
+
 	ValueTask<MediaDeckRuntimeSnapshot> GetMediaDeckSnapshotAsync(CancellationToken cancellationToken = default) =>
 		ValueTask.FromException<MediaDeckRuntimeSnapshot>(
 			new NotSupportedException("Runtime transport does not expose media-deck control."));
@@ -355,6 +362,7 @@ public sealed class ControlHostProcess
 	private ControlHostService? _control;
 	private IControlRuntimeTransportSeam? _runtimeTransport;
 	private MediaDeckControlService? _mediaDeckControl;
+	private MediaAssetCatalogService? _mediaAssetCatalog;
 	private ControlHostIpcServer? _ipcServer;
 	private Task? _runtimeBindingTask;
 	private string? _boundRuntimeHostInstanceId;
@@ -373,6 +381,7 @@ public sealed class ControlHostProcess
 	public BoundedProductionCheckpointWriter? CheckpointWriter => _checkpointWriter;
 	public IControlRuntimeTransportSeam? RuntimeTransport => _runtimeTransport;
 	public MediaDeckControlService? MediaDeckControl => _mediaDeckControl;
+	public MediaAssetCatalogService? MediaAssetCatalog => _mediaAssetCatalog;
 	public ControlHostIpcServer? IpcServer => _ipcServer;
 
 	public async Task<ControlHostExitCode> RunAsync(CancellationToken cancellationToken)
@@ -481,12 +490,16 @@ public sealed class ControlHostProcess
 				() => _control,
 				_runtimeTransport,
 				new MediaMarkerPersistenceStore(_managementStore));
+			_mediaAssetCatalog = new MediaAssetCatalogService(
+				_runtimeTransport,
+				new MediaAssetCatalogPersistenceStore(_managementStore));
 			_ipcServer = new ControlHostIpcServer(
 				_options.ListenEndpoint,
 				() => _control,
 				_runtimeTransport,
 				_mediaDeckControl,
-				new ShowControlPersistenceStore(_managementStore));
+				new ShowControlPersistenceStore(_managementStore),
+				_mediaAssetCatalog);
 		}
 		catch
 		{

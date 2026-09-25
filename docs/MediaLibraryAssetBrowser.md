@@ -4,110 +4,114 @@ david.beusing@gmail.com
 All rights reserved.
 -->
 
-<p align="right">
-	<img src="../src/Hosts/rtaime.Operator/Assets/Brand/RtaimeLogoHorizontal.svg" alt="rtaime — Real Time AI Media Engine" width="180" />
+<p align='right'>
+	<img src='../src/Hosts/rtaime.Operator/Assets/Brand/RtaimeLogoHorizontal.svg' alt='rtaime — Real Time AI Media Engine' width='180' />
 </p>
 
 # Media Library & Asset Browser
 
 ## Purpose
 
-The Operator Media Library is the fast visual browser for media resources already exposed by the existing rtaime production state. It remains a presentation and interaction surface only: Runtime, Media, routing and playback services remain authoritative.
+The Operator Media Library is a persistent, production-usable catalogue for explicitly imported local media assets. Catalogue identity survives application and ControlHost restart, while the Operator remains a presentation and interaction surface only.
 
-The browser deliberately introduces no second media index, directory crawler, metadata probe, decoder path or persistent DAM/MAM store.
+This capability is a deliberate post-V1 product expansion. It does not retroactively change the documented V1 software-closure or hardware-qualification claims.
 
-## Asset projection
+Runtime remains authoritative for decoder capability and media execution. ControlHost owns catalogue mutation and persistence orchestration. The Client carries bounded catalogue metadata. The Operator owns only local selection, filtering and interaction state.
 
-The browser projects existing Operator data into `MediaPoolItemViewModel` entries for:
+## Stable asset identity
 
-- production Sources;
-- the currently loaded local Clip;
-- Audio inputs;
-- the currently loaded Graphics asset;
-- the current Composition / AI feature.
+Every catalogue entry has an immutable `MediaAssetId`.
 
-The presentation projection is bounded to 4096 entries. Search and filtering remain deterministic and client-side over that already available projection. This is a UI scalability bound, not an ingest or media-library database.
+The identity is independent of current Operator selection, production source slot, filename, source path and Media Deck runtime lifetime. A relink changes the source location while preserving the same `MediaAssetId`. Later Scene, Show Control and Timeline persistence can therefore reference catalogue assets by stable identity rather than by path or transient UI objects.
 
-The current product model does not expose persistent folders or collections. The UI therefore uses existing resource categories and does not invent folder, collection or asset-management semantics.
+The catalogue stores stable `AssetId`, local-file origin, canonical source path, display name, container/codec/format metadata, duration, source file length, SHA-256 content fingerprint, import/update timestamps and availability state.
 
-## Search and filters
+## Ownership and persistence
 
-Search reacts directly to changes in the search field and matches the projected name, detail, format, state, reference and known local path. Category selection remains separate from type / availability filter chips.
+The catalogue reuses `SqliteManagementStore`; no second persistence stack or DAM/MAM database is introduced.
 
-`Ctrl+F` is registered through the centralized `OperatorKeyboardCommandRegistry`. It switches to the MEDIA workspace, focuses the Media Library search field and selects the current query. Text-entry safeguards from the shared shortcut system remain in effect.
+ControlHost stores one versioned, checksummed management document under area `media.asset.catalog`, key `catalog`, format `rtaime.media-asset-catalog.v1`.
 
-## Grid and list presentation
+Writes use the existing optimistic document-version mechanism. A failed or stale write cannot partially replace the persisted catalogue document. The catalogue is outside production-critical media execution; Runtime decode, rendering, audio and output paths do not synchronously depend on SQLite catalogue access.
 
-At the 1920×1080 reference viewport, the Media Library occupies the 400-pixel reference left shell region. Its rendered width follows the responsive shell and the region is removed from compact allocation rather than forcing 400 pixels into a constrained viewport. The visible inset is 12 pixels from the region edge. Its control stack retains 34-pixel header and search/category rows plus the 32-pixel filter row as local interaction-density geometry.
+## Import
 
-The default Grid presents exactly three `RtaimeMediaTile` controls per row. Each tile occupies 120×104 pixels with a 120×68 reference thumbnail surface, 8-pixel horizontal spacing and 10-pixel vertical spacing. The filename is a single 11-pixel ellipsized line. Duration is rendered in a compact monospaced overlay. Offline state overlays the thumbnail without resizing the tile and is always expressed in text as well as color.
+**Import Media** opens a bounded multi-file picker. The current Operator workflow selects MP4 files and sends only their local paths to ControlHost. A single request accepts at most 128 selected files.
 
-The Grid continues to use the existing `VirtualizingWrapPanel`. The panel now includes horizontal and vertical spacing in its realization and scrolling calculations while retaining recycling and bounded visible-row realization. The Media Library uses an overlay `RtaimeScrollBar`, so scrollbar visibility does not reduce the three-column reference viewport. The List continues to use recycling virtualization.
+For each candidate ControlHost canonicalizes the path, verifies readability, computes a SHA-256 fingerprint, applies deterministic duplicate/conflict rules, asks RuntimeHost to probe through the existing local-media decoder path, creates a new immutable `MediaAssetId` only for a new accepted asset, and persists the resulting catalogue atomically after the bounded batch is evaluated.
 
-Search uses `RtaimeSearchBox`; filters use the shared rtaime selection controls; asset actions use `RtaimeContextMenu` / `RtaimeMenuItem`. Existing source thumbnails are reused. The Media Library does not add a parallel thumbnail extraction or media-analysis pipeline.
+Unsupported, corrupt, unreadable or missing candidates are returned as explicit failures and are not inserted as partial catalogue records. No recursive drive indexing, directory crawler, remote transfer, proxy generation or transcoding is performed.
 
-## Selection
+## Duplicate policy
 
-Grid and List both use Extended selection:
+- Same canonical source path and same fingerprint returns the existing asset as `Duplicate`.
+- The same fingerprint at a different path also returns the existing asset as `Duplicate`.
+- An existing source path whose content fingerprint changed is rejected as a source conflict rather than silently changing asset identity.
 
-- click selects one asset;
-- Ctrl-click adds or removes individual assets;
-- Shift-click selects ranges.
+Independent catalogue records for byte-identical content are therefore not created implicitly.
 
-`MediaPoolInspectorViewModel.SelectedItems` keeps the current UI selection while `SelectedItem` remains the primary Inspector context. Multi-select is local Operator state only and never becomes production authority.
+## Availability
 
-Typed drag operations use `MediaAssetDragPayload`, carrying the primary asset plus the current selected set. Existing drop targets continue to validate and act on the primary asset through their established command paths.
+Catalogue assets remain visible when their source file becomes unavailable. Availability is `ONLINE` when the local file can be opened for reading, `MISSING` when the file or containing directory no longer exists, and `OFFLINE` for other controlled access/I/O failures.
+
+Availability is evaluated only at controlled catalogue read/refresh points. No background hot polling loop is introduced. A missing/offline asset remains searchable and inspectable and can be recovered through **Relink Media…**.
+
+## Relink
+
+Relink preserves `MediaAssetId`. The replacement must be readable, not already assigned as another asset source, not collide with another catalogue fingerprint, have the same SHA-256 fingerprint as the original asset, and still pass the existing Runtime media probe.
+
+The strict fingerprint requirement prevents a different or modified file from silently inheriting references intended for the original asset.
+
+## Remove from Library
+
+**Remove from Library** deletes only the catalogue record. It never deletes, modifies or moves the underlying media file.
+
+## Operator projection
+
+The Media Library projects authoritative production Sources, persistent catalogue Clips, Audio inputs, the currently loaded Graphics asset and the current Composition / AI feature.
+
+A currently loaded non-catalogued clip, such as an existing demo path, remains visible as a compatibility fallback. Persistent catalogue clips use `AssetId` as their reference identity.
+
+The presentation projection remains bounded to 4096 entries. Grid and List retain recycling/virtualization, deterministic search/filter ordering and local extended multi-selection. Search matches projected name, detail, format, state, stable reference and known local path.
+
+## Preview and existing workflows
+
+For a persistent Clip, **Open in Preview** requires an online catalogue entry and selected production source slot, opens the catalogue source through the existing Media Deck command path while supplying the stable `AssetId`, verifies the loaded identity, then uses the existing Preview command.
+
+The catalogue therefore does not create a second playback path or routing authority. Existing Timeline and Cue behavior remains on established command paths. Cue actions apply only when the selected catalogue `AssetId` is the currently loaded Media Deck asset.
 
 ## Context actions
 
-Asset cards and list rows expose the same bounded actions:
+Catalogue Clip cards and list rows expose **Open in Preview**, **Add to Timeline**, **Add Cue at Playhead**, **Reveal in Explorer**, **Relink Media…**, **Remove from Library** and **Properties**.
 
-- **Open in Preview** reuses the existing Preview selection / command path.
-- **Add to Timeline** reuses `MediaTimelineViewModel.CanAcceptMediaPoolDrop` and `ProjectMediaPoolDrop`; unsupported track semantics remain rejected.
-- **Add Cue at Playhead** reuses the current Media Deck cue command and is valid only for the loaded Clip.
-- **Reveal in Explorer** is available only when the Operator already knows the local Clip path; it performs no media mutation.
-- **Properties** makes the asset the current selection so the existing context Inspector presents its metadata and controls.
-
-The current Scene model exposes no existing asset-assignment mutation path. The Media Library therefore does not invent a Scene command. Scene integration should be added only when a governed Scene asset action exists.
-
-Hover quick actions expose Preview and Timeline only, keeping the card surface compact. Selection is rendered with the shared cyan border and left accent while ordinary hover remains on the dark raised-hover surface.
+The current Scene model has no governed media-assignment mutation path. Scene assignment remains out of scope until that authority path exists.
 
 ## Loading, empty and error states
 
-The browser presents:
+The existing Media Library loading/error surfaces now include catalogue operations as well as Media Deck activity. Explicit failures are preserved for missing/unreadable files, unsupported media, duplicate/source conflicts, relink conflicts, relink content mismatch, persistence and IPC failures.
 
-- a loading indicator while the existing Media Deck is busy;
-- an explicit error surface using the existing Media Deck error;
-- no-assets and filtered-empty messages;
-- assets that are known but offline instead of silently removing them.
+A catalogue failure does not make the Operator authoritative and does not alter already committed production execution.
 
-Unknown or unavailable resources remain governed by the state already projected by their owning subsystem.
+## Metadata transport
 
-## Local media path
+Operator/Client/ControlHost transport carries catalogue metadata only. Catalogue snapshots are paged in bounded groups of at most 256 assets while retaining the existing 1 MiB Control IPC frame limit.
 
-The Operator retains the path of a successfully opened local Clip only for UI convenience such as **Reveal in Explorer**. The path is cleared when the Media Deck unloads or when the authoritative loaded filename no longer matches the known path.
+The Client restarts a paged read if catalogue revision changes between pages, preventing a mixed-revision snapshot. Mutation responses carry bounded result metadata; the Client then reads the resulting catalogue through the same paged snapshot path. Raw media bytes are never sent through management/control IPC.
 
-The local path is not persisted as production state and does not change Media, ControlHost or RuntimeHost contracts.
+## Thumbnails
+
+The persistent catalogue does not introduce a second decoder or thumbnail-extraction stack. When the currently loaded catalogue asset already has an Operator source thumbnail, that existing presentation image can be reused.
+
+Persistent asynchronous thumbnail extraction/cache generation is not currently claimed and can be added later only through the established media capability without entering production-critical paths.
 
 ## Performance and authority boundaries
 
-The browser keeps filtering in process and performs no blocking media I/O during search, selection or scrolling. Visual virtualization is independent from the bounded presentation projection: both constraints work together to keep large asset sets responsive.
+Search, filtering, selection and scrolling remain in-process Operator projection work and perform no blocking media reads. File hashing and Runtime probing occur only during explicit catalogue operations and are outside production-critical media/render paths.
 
-Preview, Timeline and Cue actions still use the existing Operator / Client / Media Deck paths. No second playback authority, media index, thumbnail extractor, timeline or scene model is introduced.
+There is no recursive automatic indexing, bulk-media management IPC, second media decoder, second production scheduler, UI-owned catalogue truth or implicit source-file deletion.
 
 ## Verification
 
-The Operator UI policy gate verifies:
+Regression coverage verifies stable `AssetId` across store close/reopen, duplicate import identity, unsupported-media rejection, missing-file projection, relink preserving identity, relink conflict rejection, remove-from-library without source-file deletion, optimistic persistence conflict behavior, bounded import size and cancellation without partial catalogue records.
 
-- Grid and List presentation;
-- Extended multi-select;
-- typed drag payloads;
-- Grid virtualization and List recycling;
-- duration, file-type and textual offline presentation;
-- loading and error states;
-- Preview / Timeline / Cue / Explorer / Properties action wiring;
-- centralized `Ctrl+F` search focus;
-- the bounded 4096-entry UI projection;
-- absence of a second directory/media indexing path.
-
-The repository build and existing Operator gates remain responsible for XAML compilation, architecture constraints and regression coverage.
+The Operator UI policy gate verifies persistent catalogue projection, bounded/virtualized presentation, multi-file import, Relink and Remove workflow wiring, and the existing production interaction paths.

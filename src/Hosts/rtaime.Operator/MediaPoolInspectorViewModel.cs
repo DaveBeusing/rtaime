@@ -3,10 +3,12 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
+using System.IO;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using System.Windows.Media;
 using rtaime.Client;
+using rtaime.Core;
 using rtaime.Media.Contracts;
 
 namespace rtaime.Operator;
@@ -57,7 +59,9 @@ public sealed record MediaPoolItemViewModel(
 		_ => Kind.ToString().ToUpperInvariant()
 	};
 
-	public string AvailabilityLabel => IsOnline ? "ONLINE" : "OFFLINE";
+	public string AvailabilityLabel => State.Contains("MISSING", StringComparison.OrdinalIgnoreCase)
+		? "MISSING"
+		: IsOnline ? "ONLINE" : "OFFLINE";
 	public bool CanRevealInExplorer => Kind == MediaPoolItemKind.Clip && !string.IsNullOrWhiteSpace(LocalPath);
 }
 
@@ -88,6 +92,8 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 
 	private readonly OperatorViewModel _operator;
 	private readonly MediaDeckViewModel _mediaDeck;
+	private readonly IMediaAssetCatalogClient? _catalogClient;
+	private readonly Func<IReadOnlyList<string>>? _importFilePicker;
 	private readonly List<OperatorSourceTileViewModel> _sourceSubscriptions = [];
 	private readonly List<OperatorAudioInputViewModel> _audioSubscriptions = [];
 	private readonly List<MediaPoolItemViewModel> _allItems = [];
@@ -102,11 +108,20 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 	private TimelineCueViewModel? _timelineCue;
 	private CompositingGraphNodeProjection? _compositingNode;
 	private string _emptyState = "No assets are available.";
+	private MediaAssetCatalogSnapshot _catalogSnapshot = MediaAssetCatalogSnapshot.Empty;
+	private bool _catalogBusy;
+	private string? _catalogError;
 
-	public MediaPoolInspectorViewModel(OperatorViewModel @operator, MediaDeckViewModel mediaDeck)
+	public MediaPoolInspectorViewModel(
+		OperatorViewModel @operator,
+		MediaDeckViewModel mediaDeck,
+		IMediaAssetCatalogClient? catalogClient = null,
+		Func<IReadOnlyList<string>>? importFilePicker = null)
 	{
 		_operator = @operator ?? throw new ArgumentNullException(nameof(@operator));
 		_mediaDeck = mediaDeck ?? throw new ArgumentNullException(nameof(mediaDeck));
+		_catalogClient = catalogClient;
+		_importFilePicker = importFilePicker;
 
 		FilteredItems = [];
 		SelectedItems = [];
@@ -159,6 +174,8 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 		SetMotionTestSignalCommand = new AsyncRelayCommand(() => ApplyTestSignalPresetAsync(OperatorTestSignalPreset.Motion));
 		SetAvSyncTestSignalCommand = new AsyncRelayCommand(() => ApplyTestSignalPresetAsync(OperatorTestSignalPreset.AvSync));
 		DisableTestSignalCommand = new AsyncRelayCommand(() => ApplyTestSignalPresetAsync(OperatorTestSignalPreset.Off));
+		ImportCommand = new AsyncRelayCommand(ImportMediaAssetsAsync);
+		RefreshCatalogCommand = new AsyncRelayCommand(RefreshCatalogAsync);
 
 		_operator.PropertyChanged += OnOperatorPropertyChanged;
 		_mediaDeck.PropertyChanged += OnMediaDeckPropertyChanged;
@@ -185,7 +202,8 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 	public ICommand ResetGraphicsPositionXCommand { get; }
 	public ICommand ResetGraphicsPositionYCommand { get; }
 	public ICommand ResetGraphicsScaleCommand { get; }
-	public ICommand ImportCommand => _mediaDeck.OpenCommand;
+	public ICommand ImportCommand { get; }
+	public ICommand RefreshCatalogCommand { get; }
 	public ICommand AddTestSignalCommand { get; }
 	public ICommand SetStaticTestSignalCommand { get; }
 	public ICommand SetMotionTestSignalCommand { get; }
@@ -339,9 +357,9 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 		private set => Set(ref _emptyState, value);
 	}
 
-	public bool IsLoading => _mediaDeck.IsBusy;
-	public bool HasError => _mediaDeck.HasError;
-	public string ErrorState => _mediaDeck.LastError ?? string.Empty;
+	public bool IsLoading => _mediaDeck.IsBusy || _catalogBusy;
+	public bool HasError => _mediaDeck.HasError || !string.IsNullOrWhiteSpace(_catalogError);
+	public string ErrorState => _mediaDeck.LastError ?? _catalogError ?? string.Empty;
 	public int SelectionCount => _compositingNode is not null ? 1 : _timelineItems.Count > 0 ? _timelineItems.Count : SelectedItems.Count;
 	public bool HasMultipleSelection => _compositingNode is null && (_timelineItems.Count > 1 ||
 		(_timelineItem is null && _timelineCue is null && SelectedItems.Count > 1));
@@ -427,6 +445,130 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 		OnPropertyChanged(nameof(CanEditSelection));
 	}
 
+
+	public async Task LoadCatalogAsync()
+	{
+		if (_catalogClient is null)
+			return;
+		await RunCatalogOperationAsync(async () =>
+		{
+			_catalogSnapshot = await _catalogClient.GetMediaAssetCatalogAsync();
+		});
+	}
+
+	public async Task RelinkAssetAsync(MediaPoolItemViewModel item, string sourceLocation)
+	{
+		ArgumentNullException.ThrowIfNull(item);
+		if (_catalogClient is null ||
+			item.Kind != MediaPoolItemKind.Clip ||
+			string.IsNullOrWhiteSpace(item.ReferenceId) ||
+			string.IsNullOrWhiteSpace(sourceLocation))
+		{
+			return;
+		}
+
+		await RunCatalogOperationAsync(async () =>
+		{
+			var result = await _catalogClient.RelinkMediaAssetAsync(
+				new MediaAssetId(Identity.Parse(item.ReferenceId)),
+				sourceLocation);
+			_catalogSnapshot = result.Snapshot;
+			_catalogError = FormatMutationFailures(result);
+		});
+	}
+
+	public async Task RemoveAssetAsync(MediaPoolItemViewModel item)
+	{
+		ArgumentNullException.ThrowIfNull(item);
+		if (_catalogClient is null ||
+			item.Kind != MediaPoolItemKind.Clip ||
+			string.IsNullOrWhiteSpace(item.ReferenceId))
+		{
+			return;
+		}
+
+		await RunCatalogOperationAsync(async () =>
+		{
+			var result = await _catalogClient.RemoveMediaAssetAsync(
+				new MediaAssetId(Identity.Parse(item.ReferenceId)));
+			_catalogSnapshot = result.Snapshot;
+			_catalogError = FormatMutationFailures(result);
+		});
+	}
+
+	private async Task ImportMediaAssetsAsync()
+	{
+		if (_catalogClient is null || _importFilePicker is null)
+			return;
+		var paths = _importFilePicker();
+		if (paths.Count == 0)
+			return;
+
+		await RunCatalogOperationAsync(async () =>
+		{
+			var result = await _catalogClient.ImportMediaAssetsAsync(paths);
+			_catalogSnapshot = result.Snapshot;
+			_catalogError = FormatMutationFailures(result);
+		});
+	}
+
+	private async Task RefreshCatalogAsync()
+	{
+		if (_catalogClient is null)
+			return;
+		await RunCatalogOperationAsync(async () =>
+		{
+			_catalogSnapshot = await _catalogClient.RefreshMediaAssetAvailabilityAsync();
+		});
+	}
+
+	private async Task RunCatalogOperationAsync(Func<Task> operation)
+	{
+		if (_catalogBusy)
+			return;
+		_catalogBusy = true;
+		_catalogError = null;
+		RaiseCatalogState();
+		try
+		{
+			await operation();
+		}
+		catch (Exception exception) when (
+			exception is IOException or
+			InvalidOperationException or
+			InvalidDataException or
+			ArgumentException or
+			FormatException or
+			NotSupportedException)
+		{
+			_catalogError = exception.Message;
+		}
+		finally
+		{
+			_catalogBusy = false;
+			Refresh();
+			RaiseCatalogState();
+		}
+	}
+
+	private static string? FormatMutationFailures(MediaAssetCatalogMutationResult result)
+	{
+		var failures = result.Items
+			.Where(item => item.Failure is not null)
+			.Select(item => item.Failure!.Value.Message)
+			.Distinct(StringComparer.Ordinal)
+			.Take(3)
+			.ToArray();
+		return failures.Length == 0 ? null : string.Join(Environment.NewLine, failures);
+	}
+
+	private void RaiseCatalogState()
+	{
+		OnPropertyChanged(nameof(IsLoading));
+		OnPropertyChanged(nameof(HasError));
+		OnPropertyChanged(nameof(ErrorState));
+	}
+
 	public bool CanDropToPreview(MediaPoolItemViewModel? item)
 	{
 		if (item is null || item.Kind is not (MediaPoolItemKind.Source or MediaPoolItemKind.Clip))
@@ -434,24 +576,48 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 		if (string.IsNullOrWhiteSpace(item.ReferenceId))
 			return false;
 
+		if (item.Kind == MediaPoolItemKind.Clip)
+		{
+			return item.IsOnline &&
+				!string.IsNullOrWhiteSpace(item.LocalPath) &&
+				_operator.SelectedSource is not null &&
+				!_mediaDeck.IsBusy &&
+				_operator.SetPreviewCommand.CanExecute(null);
+		}
+
 		var source = _operator.Sources.FirstOrDefault(candidate =>
 			string.Equals(candidate.Id, item.ReferenceId, StringComparison.Ordinal));
 		return source is not null && _operator.SetPreviewCommand.CanExecute(null);
 	}
 
-	public Task DropToPreviewAsync(MediaPoolItemViewModel item)
+	public async Task DropToPreviewAsync(MediaPoolItemViewModel item)
 	{
 		ArgumentNullException.ThrowIfNull(item);
 		if (!CanDropToPreview(item))
-			return Task.CompletedTask;
+			return;
 
-		var source = _operator.Sources.First(candidate =>
-			string.Equals(candidate.Id, item.ReferenceId, StringComparison.Ordinal));
 		SelectedItem = item;
-		_operator.SelectedSource = source;
+		if (item.Kind == MediaPoolItemKind.Clip)
+		{
+			var source = _operator.SelectedSource;
+			if (source is null || item.LocalPath is null || item.ReferenceId is null)
+				return;
+			var opened = await _mediaDeck.OpenCatalogAssetAsync(
+				item.LocalPath,
+				new MediaAssetId(Identity.Parse(item.ReferenceId)));
+			if (!opened)
+				return;
+			_operator.SelectedSource = source;
+			if (_operator.SetPreviewCommand.CanExecute(null))
+				_operator.SetPreviewCommand.Execute(null);
+			return;
+		}
+
+		var sourceItem = _operator.Sources.First(candidate =>
+			string.Equals(candidate.Id, item.ReferenceId, StringComparison.Ordinal));
+		_operator.SelectedSource = sourceItem;
 		if (_operator.SetPreviewCommand.CanExecute(null))
 			_operator.SetPreviewCommand.Execute(null);
-		return Task.CompletedTask;
 	}
 
 	public void SelectTimelineItem(TimelineTrackItemViewModel item) =>
@@ -546,11 +712,33 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 				online));
 		}
 
-		if (_mediaDeck.IsLoaded)
+		foreach (var asset in _catalogSnapshot.Assets.Take(Math.Max(0, MaxProjectedItems - _allItems.Count)))
+		{
+			var online = asset.Availability == MediaAssetAvailability.Online;
+			var active = string.Equals(_mediaDeck.AssetId, asset.AssetId.ToString(), StringComparison.Ordinal);
+			_allItems.Add(new MediaPoolItemViewModel(
+				$"clip:{asset.AssetId}",
+				"Clips",
+				MediaPoolItemKind.Clip,
+				asset.DisplayName,
+				$"{FormatDuration(asset.Duration)} · {asset.VideoCodec.ToString().ToUpperInvariant()}",
+				$"{asset.VideoFormat.Width}×{asset.VideoFormat.Height} · {asset.VideoFormat.FrameRate}",
+				asset.Availability.ToString().ToUpperInvariant(),
+				asset.AssetId.ToString(),
+				active
+					? _operator.Sources.FirstOrDefault(source => string.Equals(source.Id, _mediaDeck.SourceId, StringComparison.Ordinal))?.Thumbnail
+					: null,
+				online,
+				online && !_catalogBusy,
+				asset.SourceLocation));
+		}
+
+		if (_mediaDeck.IsLoaded &&
+			_catalogSnapshot.Assets.All(asset => !string.Equals(asset.AssetId.ToString(), _mediaDeck.AssetId, StringComparison.Ordinal)))
 		{
 			var mediaOnline = !_mediaDeck.HasError;
 			_allItems.Add(new MediaPoolItemViewModel(
-				$"clip:{_mediaDeck.SourceId}",
+				$"clip:{_mediaDeck.AssetId}",
 				"Clips",
 				MediaPoolItemKind.Clip,
 				_mediaDeck.FileName,
@@ -559,7 +747,7 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 				mediaOnline
 					? _mediaDeck.State
 					: $"OFFLINE · {(_mediaDeck.LastError ?? _mediaDeck.State)}",
-				_mediaDeck.SourceId,
+				_mediaDeck.AssetId,
 				_operator.Sources.FirstOrDefault(source => string.Equals(source.Id, _mediaDeck.SourceId, StringComparison.Ordinal))?.Thumbnail,
 				mediaOnline,
 				mediaOnline && !_mediaDeck.IsBusy,
@@ -709,6 +897,12 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 			Contains(item.LocalPath, query);
 	}
 
+
+	private static string FormatDuration(TimeSpan duration) =>
+		duration.TotalHours >= 1
+			? duration.ToString(@"hh\:mm\:ss")
+			: duration.ToString(@"mm\:ss");
+
 	private static bool Contains(string? value, string query) =>
 		value?.Contains(query, StringComparison.OrdinalIgnoreCase) == true;
 
@@ -722,7 +916,7 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 		if (item is null)
 			return;
 
-		if (item.Kind is MediaPoolItemKind.Source or MediaPoolItemKind.Clip)
+		if (item.Kind == MediaPoolItemKind.Source)
 		{
 			var source = _operator.Sources.FirstOrDefault(candidate =>
 				string.Equals(candidate.Id, item.ReferenceId, StringComparison.Ordinal));
@@ -730,6 +924,9 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 				_operator.SelectedSource = source;
 			return;
 		}
+
+		if (item.Kind == MediaPoolItemKind.Clip)
+			return;
 
 		if (item.Kind == MediaPoolItemKind.Audio)
 		{
@@ -831,15 +1028,20 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 				break;
 
 			case MediaPoolItemKind.Clip:
-				Add("clip.source", "Source", _mediaDeck.SourceId, "METADATA");
-				Add("clip.duration", "Duration", _mediaDeck.Duration, "METADATA");
-				Add("clip.format", "Format", $"{_mediaDeck.Resolution} · {_mediaDeck.VideoCodec}", "METADATA");
-				Add("clip.framerate", "Frame rate", _mediaDeck.FrameRate, "METADATA");
-				Add("clip.audio", "Audio", _mediaDeck.AudioCodec, "METADATA");
-				Add("clip.playback.state", "Playback", _mediaDeck.State, "COMMITTED");
-				Add("clip.trim.range", "IN / OUT", _mediaDeck.EffectiveRange, "COMMITTED");
-				Add("clip.playback.autoplay", "Auto Play on Program", _mediaDeck.AutoPlayOnProgram ? "ON" : "OFF", "DESIRED", true);
-				Add("clip.playback.end", "End behavior", _mediaDeck.EndBehavior.ToString(), "DESIRED", true);
+				Add("clip.asset", "Asset ID", item.ReferenceId ?? "—", "METADATA");
+				Add("clip.location", "Location", item.LocalPath ?? "—", "METADATA");
+				Add("clip.duration", "Duration", item.DurationLabel, "METADATA");
+				Add("clip.format", "Format", item.Format, "METADATA");
+				Add("clip.availability", "Availability", item.AvailabilityLabel, "COMMITTED");
+				if (string.Equals(item.ReferenceId, _mediaDeck.AssetId, StringComparison.Ordinal))
+				{
+					Add("clip.source", "Source", _mediaDeck.SourceId, "COMMITTED");
+					Add("clip.audio", "Audio", _mediaDeck.AudioCodec, "METADATA");
+					Add("clip.playback.state", "Playback", _mediaDeck.State, "COMMITTED");
+					Add("clip.trim.range", "IN / OUT", _mediaDeck.EffectiveRange, "COMMITTED");
+					Add("clip.playback.autoplay", "Auto Play on Program", _mediaDeck.AutoPlayOnProgram ? "ON" : "OFF", "DESIRED", true);
+					Add("clip.playback.end", "End behavior", _mediaDeck.EndBehavior.ToString(), "DESIRED", true);
+				}
 				break;
 
 			case MediaPoolItemKind.Audio:

@@ -384,6 +384,8 @@
 													<controls:RtaimeMenuItem Header="Add Cue at Playhead" Click="OnMediaPoolCueActionClick" />
 													<controls:RtaimeMenuSeparator />
 													<controls:RtaimeMenuItem Header="Reveal in Explorer" Click="OnMediaPoolRevealActionClick" />
+													<controls:RtaimeMenuItem Header="Relink Media…" Click="OnMediaPoolRelinkActionClick" />
+													<controls:RtaimeMenuItem Header="Remove from Library" Click="OnMediaPoolRemoveActionClick" />
 													<controls:RtaimeMenuItem Header="Properties" Click="OnMediaPoolPropertiesActionClick" />
 												</controls:RtaimeContextMenu>
 											</controls:RtaimeMediaTile.ContextMenu>
@@ -448,6 +450,8 @@
 													<controls:RtaimeMenuItem Header="Add Cue at Playhead" Click="OnMediaPoolCueActionClick" />
 													<controls:RtaimeMenuSeparator />
 													<controls:RtaimeMenuItem Header="Reveal in Explorer" Click="OnMediaPoolRevealActionClick" />
+													<controls:RtaimeMenuItem Header="Relink Media…" Click="OnMediaPoolRelinkActionClick" />
+													<controls:RtaimeMenuItem Header="Remove from Library" Click="OnMediaPoolRemoveActionClick" />
 													<controls:RtaimeMenuItem Header="Properties" Click="OnMediaPoolPropertiesActionClick" />
 												</controls:RtaimeContextMenu>
 											</Grid.ContextMenu>

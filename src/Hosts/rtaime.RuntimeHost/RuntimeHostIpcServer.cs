@@ -197,6 +197,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 				"runtime.test_pattern.set" => ValueTask.FromResult(SetBroadcastTestPattern(request, runtime)),
 				"runtime.recording.start" => StartRecordingAsync(request, runtime, cancellationToken),
 				"runtime.recording.stop" => StopRecordingAsync(request, runtime, cancellationToken),
+				"runtime.media_asset.probe" => ValueTask.FromResult(ProbeMediaAsset(request)),
 				"runtime.media_deck.snapshot.get" => ValueTask.FromResult(MediaDeckSnapshot(request)),
 				"runtime.media_deck.open" => ValueTask.FromResult(OpenMediaDeck(request)),
 				"runtime.media_deck.transport" => ValueTask.FromResult(ApplyMediaDeckTransport(request)),
@@ -391,6 +392,23 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 				result.Failure is { } failure ? new WireFailure(failure.Code, failure.Message) : null));
 	}
 
+	private WireEnvelope ProbeMediaAsset(WireEnvelope request)
+	{
+		var deck = _mediaDeckAccessor();
+		if (deck is null)
+			return Error(request, "runtime.media_asset.unavailable", "Local media service is not available.");
+
+		var wire = request.Payload.Deserialize<WireMediaAssetProbe>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Media-asset probe payload is required.");
+		var result = deck.Probe(wire.Path, new MediaAssetId(Identity.Parse(wire.AssetId)));
+		return Success(
+			request,
+			"runtime.media_asset.probe.response",
+			new WireMediaAssetProbeResult(
+				result.Probe is null ? null : ToWire(result.Probe),
+				result.Failure is { } failure ? new WireFailure(failure.Code, failure.Message) : null));
+	}
+
 	private WireEnvelope MediaDeckSnapshot(WireEnvelope request)
 	{
 		var deck = _mediaDeckAccessor();
@@ -410,7 +428,10 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		var open = new MediaDeckOpenRequest(
 			CompatibilityVersion.Parse(wire.Version),
 			new MediaSourceId(Identity.Parse(wire.SourceId)),
-			wire.Path);
+			wire.Path,
+			string.IsNullOrWhiteSpace(wire.AssetId)
+				? null
+				: new MediaAssetId(Identity.Parse(wire.AssetId)));
 		var prepared = FromWire(wire.PreparedExecution);
 		var snapshot = deck.Open(open, prepared);
 		_stateVersion++;
@@ -834,7 +855,9 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 	private sealed record WireAvSyncDiagnostics(bool Enabled, string State, ulong? EventId, string? ExpectedMediaTime, ulong? TargetVideoFrameSequence, ulong? TargetAudioSamplePosition, double? ScheduledVideoOffsetMilliseconds, double? SubmitOffsetMilliseconds, double? DriftFromBaselineMilliseconds, string Detail);
 	private sealed record WireOutputRole(string RoleId, string RoleKind, string SourceId, string TargetId, WireVideoFormat Format, long TimingNumerator, long TimingDenominator, string ProviderId, int LifecycleState, bool AuthoritativeActive, int HealthState, string Evidence, WireFailure? Error);
 	private sealed record WireRecordingCommandResult(bool Succeeded, WireRecordingSnapshot Snapshot, WireFailure? Failure);
-	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path, WirePreparedExecution PreparedExecution);
+	private sealed record WireMediaAssetProbe(string Path, string AssetId);
+	private sealed record WireMediaAssetProbeResult(WireLocalMediaProbe? Probe, WireFailure? Failure);
+	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path, string? AssetId, WirePreparedExecution PreparedExecution);
 	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame, bool? AutoPlayOnProgram, int? EndBehavior, long? InPointFrame, long? OutPointFrame);
 	private sealed record WireLocalMediaProbe(string Version, string AssetId, string SourceId, string FileName, int Container, int VideoCodec, int AudioCodec, uint Width, uint Height, string FrameRate, long DurationTicks);
 	private sealed record WireMediaTransportSnapshot(string Version, string AssetId, string SourceId, int State, long CurrentFrame, long TotalFrames, long PositionTicks, long DurationTicks, long RemainingTicks, string FrameRate, WireFailure? Failure, bool AutoPlayOnProgram, int EndBehavior, bool IsOnProgram, long EffectiveStartFrame, long EffectiveEndFrame, long EffectiveRemainingFrames, long EffectiveRemainingTicks);

@@ -115,7 +115,8 @@ public sealed record MediaDeckOpenRequest
 	public MediaDeckOpenRequest(
 		CompatibilityVersion version,
 		MediaSourceId sourceId,
-		string path)
+		string path,
+		MediaAssetId? assetId = null)
 	{
 		MediaContractVersion.EnsureSupported(version);
 		if (string.IsNullOrWhiteSpace(path))
@@ -124,9 +125,11 @@ public sealed record MediaDeckOpenRequest
 		Version = version;
 		SourceId = sourceId;
 		Path = path.Trim();
+		AssetId = assetId;
 	}
 
 	public CompatibilityVersion Version { get; }
 	public MediaSourceId SourceId { get; }
 	public string Path { get; }
+	public MediaAssetId? AssetId { get; }
 }
