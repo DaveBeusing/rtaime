@@ -144,7 +144,7 @@ public sealed class ControlHostRecoveryIntegrationTests
 				await client.ApplyProductionCgTextAsync(OperatorProductionCgText.LowerThird("DURABLE SHOW STATE"));
 				await client.SetCompositingLayerStateAsync("bitmap-graphics", visible: true, opacity: 160);
 				await client.SetCompositingLayerStateAsync("production-cg", visible: true, opacity: 224);
-				await client.SetCompositingLayerTransformAsync(
+				var transformedLayers = await client.SetCompositingLayerTransformAsync(
 					"bitmap-graphics",
 					0.12,
 					0.18,
@@ -156,13 +156,21 @@ public sealed class ControlHostRecoveryIntegrationTests
 					0.10,
 					0.15,
 					0.20);
-				await client.SetCompositingLayerProcessingNodeAsync(
+				var transformedBitmap = Assert.Single(transformedLayers, layer => layer.LayerId == "bitmap-graphics");
+				Assert.Equal(22.5, transformedBitmap.RotationDegrees, 6);
+				Assert.Equal(0.5, transformedBitmap.AnchorX, 6);
+				Assert.Equal(0.15, transformedBitmap.CropRight, 6);
+
+				var processedLayers = await client.SetCompositingLayerProcessingNodeAsync(
 					"bitmap-graphics",
 					new OperatorCompositingProcessingNodeDescriptor(
 						"grade-primary",
 						1,
 						true,
 						new OperatorColorGradeDescriptor(0.1, 1.1, 0.9)));
+				var processedBitmap = Assert.Single(processedLayers, layer => layer.LayerId == "bitmap-graphics");
+				Assert.Equal(22.5, processedBitmap.RotationDegrees, 6);
+				Assert.NotNull(processedBitmap.ProcessingNode);
 
 				var beforeRestart = await client.SynchronizeAsync();
 				var requestedOrder = beforeRestart.CompositingLayers
@@ -170,7 +178,10 @@ public sealed class ControlHostRecoveryIntegrationTests
 					.ThenBy(layer => layer.Order)
 					.Select(layer => layer.LayerId)
 					.ToArray();
-				await client.ReorderCompositingLayersAsync(requestedOrder);
+				var reorderedLayers = await client.ReorderCompositingLayersAsync(requestedOrder);
+				var reorderedBitmap = Assert.Single(reorderedLayers, layer => layer.LayerId == "bitmap-graphics");
+				Assert.Equal(22.5, reorderedBitmap.RotationDegrees, 6);
+				Assert.NotNull(reorderedBitmap.ProcessingNode);
 				beforeRestart = await client.SynchronizeAsync();
 
 				Assert.Equal("durable-logo.rgba", beforeRestart.GraphicsOverlay.AssetName);
