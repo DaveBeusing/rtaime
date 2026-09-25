@@ -133,6 +133,29 @@ public interface IControlRuntimeTransportSeam
 		ValueTask.FromException<IReadOnlyList<RuntimeCompositingLayerSnapshot>>(
 			new NotSupportedException("Runtime transport does not expose compositing layer control."));
 
+	ValueTask<IReadOnlyList<RuntimeCompositingLayerSnapshot>> SetCompositingLayerTransformAsync(
+		string layerId,
+		double positionX,
+		double positionY,
+		double scale,
+		double rotationDegrees,
+		double anchorX,
+		double anchorY,
+		double cropLeft,
+		double cropTop,
+		double cropRight,
+		double cropBottom,
+		CancellationToken cancellationToken = default) =>
+		ValueTask.FromException<IReadOnlyList<RuntimeCompositingLayerSnapshot>>(
+			new NotSupportedException("Runtime transport does not expose compositing layer transform control."));
+
+	ValueTask<IReadOnlyList<RuntimeCompositingLayerSnapshot>> SetCompositingLayerProcessingNodeAsync(
+		string layerId,
+		PreparedCompositingProcessingNodeState? processingNode,
+		CancellationToken cancellationToken = default) =>
+		ValueTask.FromException<IReadOnlyList<RuntimeCompositingLayerSnapshot>>(
+			new NotSupportedException("Runtime transport does not expose compositing layer processing control."));
+
 	ValueTask<IReadOnlyList<RuntimeCompositingLayerSnapshot>> ReorderCompositingLayersAsync(
 		IReadOnlyList<string> orderedLayerIds,
 		CancellationToken cancellationToken = default) =>

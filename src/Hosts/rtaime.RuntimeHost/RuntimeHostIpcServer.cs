@@ -191,6 +191,8 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 				"runtime.graphics.overlay.set" => ValueTask.FromResult(SetGraphicsOverlay(request, runtime)),
 				"runtime.graphics.overlay.clear" => ValueTask.FromResult(ClearGraphicsOverlay(request, runtime)),
 				"runtime.compositing.layer.set" => ValueTask.FromResult(SetCompositingLayerState(request, runtime)),
+				"runtime.compositing.layer.transform" => ValueTask.FromResult(SetCompositingLayerTransform(request, runtime)),
+				"runtime.compositing.layer.processing" => ValueTask.FromResult(SetCompositingLayerProcessing(request, runtime)),
 				"runtime.compositing.layers.reorder" => ValueTask.FromResult(ReorderCompositingLayers(request, runtime)),
 				"runtime.audio.input.set" => ValueTask.FromResult(SetAudioInputState(request, runtime)),
 				"runtime.audio.test_signal.set" => ValueTask.FromResult(SetAudioTestSignal(request, runtime)),
@@ -289,6 +291,36 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		var wire = request.Payload.Deserialize<WireCompositingLayerState>(Wire.JsonOptions)
 			?? throw new InvalidDataException("Compositing layer state payload is required.");
 		var layers = runtime.SetCompositingLayerState(wire.LayerId, wire.Visible, wire.Opacity);
+		_stateVersion++;
+		return Success(request, "runtime.compositing.layers.response", layers.Select(ToWire).ToArray());
+	}
+
+	private WireEnvelope SetCompositingLayerTransform(WireEnvelope request, V1RuntimeHostService runtime)
+	{
+		var wire = request.Payload.Deserialize<WireCompositingLayerTransform>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Compositing layer transform payload is required.");
+		var layers = runtime.SetCompositingLayerTransform(
+			wire.LayerId,
+			wire.PositionX,
+			wire.PositionY,
+			wire.Scale,
+			wire.RotationDegrees,
+			wire.AnchorX,
+			wire.AnchorY,
+			wire.CropLeft,
+			wire.CropTop,
+			wire.CropRight,
+			wire.CropBottom);
+		_stateVersion++;
+		return Success(request, "runtime.compositing.layers.response", layers.Select(ToWire).ToArray());
+	}
+
+	private WireEnvelope SetCompositingLayerProcessing(WireEnvelope request, V1RuntimeHostService runtime)
+	{
+		var wire = request.Payload.Deserialize<WireCompositingLayerProcessing>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Compositing layer processing payload is required.");
+		var node = wire.ProcessingNode is null ? null : FromWire(wire.ProcessingNode);
+		var layers = runtime.SetCompositingLayerProcessingNode(wire.LayerId, node);
 		_stateVersion++;
 		return Success(request, "runtime.compositing.layers.response", layers.Select(ToWire).ToArray());
 	}
@@ -618,7 +650,15 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		snapshot.PositionX,
 		snapshot.PositionY,
 		snapshot.Scale,
-		snapshot.ContentIdentity);
+		snapshot.ContentIdentity,
+		snapshot.RotationDegrees,
+		snapshot.AnchorX,
+		snapshot.AnchorY,
+		snapshot.CropLeft,
+		snapshot.CropTop,
+		snapshot.CropRight,
+		snapshot.CropBottom,
+		snapshot.ProcessingNode is null ? null : ToWire(snapshot.ProcessingNode));
 
 	private static WireGraphicsOverlay ToWire(V1GraphicsOverlaySnapshot snapshot) => new(
 		snapshot.AssetLoaded,
@@ -767,6 +807,29 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		ToWire(result.Snapshot),
 		result.Failure is { } failure ? new WireFailure(failure.Code, failure.Message) : null);
 
+	private static PreparedCompositingProcessingNodeState FromWire(WireProcessingNode node)
+	{
+		if (!Enum.IsDefined(typeof(PreparedCompositingProcessingNodeKind), node.Kind))
+			throw new InvalidDataException("Prepared processing node kind is invalid.");
+		return new PreparedCompositingProcessingNodeState(
+			node.NodeId,
+			(PreparedCompositingProcessingNodeKind)node.Kind,
+			node.Enabled,
+			new PreparedColorGradeSettings(
+				node.ColorGrade.Brightness,
+				node.ColorGrade.Contrast,
+				node.ColorGrade.Saturation));
+	}
+
+	private static WireProcessingNode ToWire(PreparedCompositingProcessingNodeState node) => new(
+		node.NodeId,
+		(int)node.Kind,
+		node.Enabled,
+		new WireColorGrade(
+			node.ColorGrade.Brightness,
+			node.ColorGrade.Contrast,
+			node.ColorGrade.Saturation));
+
 	private static PreparedExecutionContract FromWire(WirePreparedExecution prepared) => new(
 		CompatibilityVersion.Parse(prepared.Version),
 		new PreparedExecutionId(Identity.Parse(prepared.PreparedExecutionId)),
@@ -799,7 +862,15 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 					layer.PositionX,
 					layer.PositionY,
 					layer.Scale,
-					layer.ContentIdentity)).ToArray()));
+					layer.ContentIdentity,
+					layer.RotationDegrees,
+					layer.AnchorX,
+					layer.AnchorY,
+					layer.CropLeft,
+					layer.CropTop,
+					layer.CropRight,
+					layer.CropBottom,
+					layer.ProcessingNode is null ? null : FromWire(layer.ProcessingNode))).ToArray()));
 
 	private sealed record ClientHello(string ProtocolVersion, string Role, string HostInstanceId, Dictionary<string, string> ContractVersions);
 	private sealed record ServerHello(string ProtocolVersion, string Role, string HostInstanceId, Dictionary<string, string> ContractVersions);
@@ -814,9 +885,13 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 	private sealed record WireProductionCgTextSnapshot(bool Active, string? Text, string? Typeface, string? ResolvedTypeface, float FontSizePixels, uint BoxWidth, uint BoxHeight, int Alignment, int Anchor, bool PanelEnabled, bool Visible, int Layer, int ZOrder, bool CacheHit, long RenderDurationTicks);
 	private sealed record WireGraphicsOverlayState(bool Visible, double PositionX, double PositionY, double Scale);
 	private sealed record WireCompositingLayerState(string LayerId, bool Visible, byte Opacity);
+	private sealed record WireCompositingLayerTransform(string LayerId, double PositionX, double PositionY, double Scale, double RotationDegrees, double AnchorX, double AnchorY, double CropLeft, double CropTop, double CropRight, double CropBottom);
+	private sealed record WireColorGrade(double Brightness, double Contrast, double Saturation);
+	private sealed record WireProcessingNode(string NodeId, int Kind, bool Enabled, WireColorGrade ColorGrade);
+	private sealed record WireCompositingLayerProcessing(string LayerId, WireProcessingNode? ProcessingNode);
 	private sealed record WireCompositingLayerOrder(string[] LayerIds);
 	private sealed record WireGraphicsOverlay(bool AssetLoaded, string? AssetName, uint AssetWidth, uint AssetHeight, bool Visible, double PositionX, double PositionY, double Scale);
-	private sealed record WireCompositingLayer(string LayerId, int Kind, int Order, bool Visible, byte Opacity, double PositionX, double PositionY, double Scale, string ContentIdentity);
+	private sealed record WireCompositingLayer(string LayerId, int Kind, int Order, bool Visible, byte Opacity, double PositionX, double PositionY, double Scale, string ContentIdentity, double RotationDegrees = 0, double AnchorX = 0, double AnchorY = 0, double CropLeft = 0, double CropTop = 0, double CropRight = 0, double CropBottom = 0, WireProcessingNode? ProcessingNode = null);
 	private sealed record WireAudioInputState(string SourceId, double Gain, bool Muted);
 	private sealed record WireAudioTestSignalState(string SourceId, bool Enabled, int Mode, double FrequencyHz, double PeakLevel);
 	private sealed record WireAudioInput(
@@ -839,7 +914,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 	private sealed record WireResource(string ResourceId, string ProviderId, string Kind, uint CapacityUnits, bool Reservable);
 	private sealed record WireProvider(string Version, string ProviderId, string Name, int AvailabilityState, WireFailure? Failure, WireCapability[] Capabilities, WireResource[] Resources);
 	private sealed record WirePreparedBinding(string LogicalNodeId, string CapabilityId, WireResource Resource, string? MediaSourceId, string? MediaSinkId, string? OutputRoleId = null);
-	private sealed record WirePreparedCompositingLayer(string LayerId, int Kind, int Order, bool Visible, byte Opacity, double PositionX, double PositionY, double Scale, string ContentIdentity);
+	private sealed record WirePreparedCompositingLayer(string LayerId, int Kind, int Order, bool Visible, byte Opacity, double PositionX, double PositionY, double Scale, string ContentIdentity, double RotationDegrees = 0, double AnchorX = 0, double AnchorY = 0, double CropLeft = 0, double CropTop = 0, double CropRight = 0, double CropBottom = 0, WireProcessingNode? ProcessingNode = null);
 	private sealed record WirePreparedCompositingState(string Version, WirePreparedCompositingLayer[] Layers);
 	private sealed record WirePreparedExecution(string Version, string PreparedExecutionId, string AuthorityStateId, ulong AuthorityRevision, ulong PlanGeneration, WirePreparedBinding[] Bindings, WirePreparedCompositingState? CompositingState = null);
 	private sealed record WireTransition(int Kind, string FromSourceId, string ToSourceId, uint DurationFrames);
