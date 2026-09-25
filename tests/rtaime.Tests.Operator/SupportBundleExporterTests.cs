@@ -4,6 +4,7 @@ using System.IO.Compression;
 using System.Text.Json;
 using rtaime.Client;
 using rtaime.Operator;
+using Xunit;
 
 namespace rtaime.Tests.Operator;
 
