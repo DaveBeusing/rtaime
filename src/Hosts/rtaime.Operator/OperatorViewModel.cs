@@ -120,6 +120,9 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	private bool _hasSynchronized;
 	private string _connectionState = "DISCONNECTED";
 	private string _connectionDetail = "Synchronize to load authoritative state.";
+	private string _showProjectName = "Unavailable";
+	private string _showProjectState = "UNAVAILABLE";
+	private string _showProjectDetail = "Durable show project state is unavailable.";
 	private string _commandStatus = "IDLE";
 	private string _commitStatus = "UNCONFIRMED";
 	private string _transitionStatus = "IDLE";
@@ -241,6 +244,9 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	public string ActiveSceneId { get => _activeSceneId; private set => Set(ref _activeSceneId, value); }
 	public string SceneFailureReason { get => _sceneFailureReason; private set => Set(ref _sceneFailureReason, value); }
 	public string RuntimeStatus { get => _runtimeStatus; private set => Set(ref _runtimeStatus, value); }
+	public string ShowProjectName { get => _showProjectName; private set => Set(ref _showProjectName, value); }
+	public string ShowProjectState { get => _showProjectState; private set => Set(ref _showProjectState, value); }
+	public string ShowProjectDetail { get => _showProjectDetail; private set => Set(ref _showProjectDetail, value); }
 	public string TimingStatus { get => _timingStatus; private set => Set(ref _timingStatus, value); }
 	public string InputStatus { get => _inputStatus; private set => Set(ref _inputStatus, value); }
 	public string AIStatus { get => _aiStatus; private set => Set(ref _aiStatus, value); }
@@ -1185,6 +1191,11 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		ApplyAudio(snapshot, preserveSelectedGainEdit: false);
 		ApplyEmbeddedMediaDeckSnapshot(snapshot.MediaDeck);
 		ConfirmedShowControlSnapshot?.Invoke(snapshot.ShowControl);
+		ShowProjectName = snapshot.ShowProject.Name;
+		ShowProjectState = snapshot.ShowProject.State;
+		ShowProjectDetail = snapshot.ShowProject.Detail;
+		if (snapshot.ShowProject.State is "STALE" or "RECOVERY_REQUIRED" && string.IsNullOrWhiteSpace(LastError))
+			LastError = snapshot.ShowProject.Detail;
 		RevisionLabel = $"REV {snapshot.Production.Revision.Value}";
 		CommitStatus = string.Equals(snapshot.RuntimeStatus, "READY", StringComparison.OrdinalIgnoreCase)
 			? $"CONFIRMED · REV {snapshot.Production.Revision.Value}"

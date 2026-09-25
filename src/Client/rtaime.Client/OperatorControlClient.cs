@@ -458,6 +458,31 @@ public sealed record OperatorAIShowcaseDescriptor(
         null);
 }
 
+public sealed record OperatorShowProjectDescriptor
+{
+    public OperatorShowProjectDescriptor(string projectId, string name, string state, string detail)
+    {
+        if (string.IsNullOrWhiteSpace(projectId)) throw new ArgumentException("Show project id is required.", nameof(projectId));
+        if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Show project name is required.", nameof(name));
+        if (state is not ("LOADED" or "SAVED" or "RESTORED" or "STALE" or "RECOVERY_REQUIRED" or "UNAVAILABLE"))
+            throw new ArgumentException("Show project state is invalid.", nameof(state));
+        if (string.IsNullOrWhiteSpace(detail)) throw new ArgumentException("Show project detail is required.", nameof(detail));
+
+        ProjectId = projectId.Trim();
+        Name = name.Trim();
+        State = state;
+        Detail = detail.Trim();
+    }
+
+    public string ProjectId { get; }
+    public string Name { get; }
+    public string State { get; }
+    public string Detail { get; }
+
+    public static OperatorShowProjectDescriptor Unavailable { get; } =
+        new("unavailable", "Unavailable", "UNAVAILABLE", "Durable show project state is unavailable.");
+}
+
 public sealed record OperatorMutationResponse
 {
     public OperatorMutationResponse(bool accepted, AuthoritativeProductionState state, Failure? failure)
@@ -506,7 +531,8 @@ public sealed record OperatorStatusSnapshot
         IReadOnlyList<OperatorSceneDescriptor>? scenes = null,
         IReadOnlyList<OperatorOutputRoleDescriptor>? outputRoles = null,
         IReadOnlyList<OperatorCompositingLayerDescriptor>? compositingLayers = null,
-        ShowControlWorkspaceSnapshot? showControl = null)
+        ShowControlWorkspaceSnapshot? showControl = null,
+        OperatorShowProjectDescriptor? showProject = null)
     {
         Production = production ?? throw new ArgumentNullException(nameof(production));
         ArgumentNullException.ThrowIfNull(sources);
@@ -543,6 +569,7 @@ public sealed record OperatorStatusSnapshot
         MediaDeck = mediaDeck ?? MediaDeckSnapshot.Unloaded;
         ProductionCgText = productionCgText ?? OperatorProductionCgTextDescriptor.Empty;
         ShowControl = showControl ?? new ShowControlWorkspaceSnapshot(Array.Empty<ShowControlCueList>(), null, ShowControlExecutionSnapshot.Idle);
+        ShowProject = showProject ?? OperatorShowProjectDescriptor.Unavailable;
     }
 
     public AuthoritativeProductionState Production { get; }
@@ -566,6 +593,7 @@ public sealed record OperatorStatusSnapshot
     public MediaDeckSnapshot MediaDeck { get; }
     public OperatorProductionCgTextDescriptor ProductionCgText { get; }
     public ShowControlWorkspaceSnapshot ShowControl { get; }
+    public OperatorShowProjectDescriptor ShowProject { get; }
 }
 
 /// <summary>

@@ -88,9 +88,13 @@ Only the last state is presented as ACTIVE/LIVE Scene evidence.
 
 ## Durability and recovery
 
-The durable authoritative checkpoint stores `ActiveSceneId`, routing, output-role state and the optional versioned compositing snapshot. The existing V1 checkpoint format remains readable because the compositing field is additive and optional. An older checkpoint that cannot prove the compositing portion of a Scene that now declares one recovers the routing authority but drops the unprovable active-Scene evidence.
+Authored Scene definitions are now owned by the versioned durable show project. ControlHost loads that project first and rebuilds the production specification with the persisted ordered Scene catalog before authoritative checkpoint recovery begins. Scene IDs therefore survive full application restart and remain stable across rename/reorder operations.
 
-Recovery validates the recovered Scene identity and, where declared, its exact compositing snapshot against the current production specification before accepting active-Scene evidence. On RuntimeHost replacement, retained graphics/CG resources are re-admitted first and the already committed authoritative execution is then reapplied without advancing Production Revision. Runtime alignment requires both the ordinary authority reference and exact authoritative compositing evidence whenever compositing is governed.
+The durable authoritative checkpoint continues to store only confirmed live authority: `ActiveSceneId`, routing, output-role state and the optional versioned compositing snapshot. Scene definitions are not duplicated into every checkpoint. The existing checkpoint format remains readable because the compositing field is additive and optional. An older checkpoint that cannot prove the compositing portion of a Scene that now declares one recovers the routing authority but drops the unprovable active-Scene evidence.
+
+Recovery validates the checkpoint's Scene identity and, where declared, its exact compositing snapshot against the Scene definitions loaded from the durable show project before accepting active-Scene evidence. On RuntimeHost replacement or full ControlHost/RuntimeHost restart, durable graphics/CG resources are re-admitted first and the already committed authoritative execution is then reapplied without advancing Production Revision. Runtime alignment requires both the ordinary authority reference and exact authoritative compositing evidence whenever compositing is governed.
+
+The separation remains explicit: a Scene existing in the durable project is authored intent, while `ActiveSceneId` is confirmed live evidence only after the normal Control/Runtime commit path succeeds.
 
 ## Compatibility boundary
 

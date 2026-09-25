@@ -437,7 +437,7 @@ public sealed class ControlHostProcess
 		_runtimeTransport = _transportFactory() ?? throw new InvalidOperationException("Runtime transport factory returned null.");
 		if (_runtimeTransport.ProviderDescriptors is null) throw new InvalidOperationException("Runtime transport provider snapshot must not be null.");
 
-		var specification = new ProductionSpecification(
+		var baselineSpecification = new ProductionSpecification(
 			ControlContractVersion.Current,
 			_options.ProductionId,
 			_options.ProductionName,
@@ -459,6 +459,12 @@ public sealed class ControlHostProcess
 		_managementStore = new SqliteManagementStore(Path.Combine(durabilityDirectory, "management.db"));
 		var managementIntegrity = await _managementStore.VerifyIntegrityAsync(cancellationToken).ConfigureAwait(false);
 		if (!managementIntegrity.Healthy) throw new InvalidDataException($"Management persistence integrity failed: {managementIntegrity.Detail}");
+
+		var showProjectStore = new ShowProjectPersistenceStore(_managementStore);
+		var showProject = await showProjectStore
+			.LoadOrCreateAsync(baselineSpecification, cancellationToken)
+			.ConfigureAwait(false);
+		var specification = showProject.ApplyTo(baselineSpecification);
 
 		var recoveredState = await ControlHostRecovery.LoadAsync(_managementStore, specification, cancellationToken).ConfigureAwait(false);
 		var journalStore = new SqliteProductionJournalStore(Path.Combine(durabilityDirectory, "production-journal.db"));
@@ -498,8 +504,10 @@ public sealed class ControlHostProcess
 				() => _control,
 				_runtimeTransport,
 				_mediaDeckControl,
-				new ShowControlPersistenceStore(_managementStore),
-				_mediaAssetCatalog);
+				new ShowControlPersistenceStore(_managementStore, showProjectStore, specification),
+				_mediaAssetCatalog,
+				showProjectStore,
+				showProject);
 		}
 		catch
 		{

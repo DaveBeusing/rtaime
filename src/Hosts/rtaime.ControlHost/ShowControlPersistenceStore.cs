@@ -25,23 +25,51 @@ public sealed class ShowControlPersistenceStore
 	private const int MaximumCueLists = 32;
 	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 	private readonly SqliteManagementStore _managementStore;
+	private readonly ShowProjectPersistenceStore? _showProjectStore;
+	private readonly ProductionSpecification? _productionSpecification;
 
 	public ShowControlPersistenceStore(SqliteManagementStore managementStore)
 	{
 		_managementStore = managementStore ?? throw new ArgumentNullException(nameof(managementStore));
 	}
 
+	public ShowControlPersistenceStore(
+		SqliteManagementStore managementStore,
+		ShowProjectPersistenceStore showProjectStore,
+		ProductionSpecification productionSpecification)
+	{
+		_managementStore = managementStore ?? throw new ArgumentNullException(nameof(managementStore));
+		_showProjectStore = showProjectStore ?? throw new ArgumentNullException(nameof(showProjectStore));
+		_productionSpecification = productionSpecification ?? throw new ArgumentNullException(nameof(productionSpecification));
+	}
+
 	public async ValueTask<PersistedShowControlWorkspace> LoadAsync(
 		ProductionId productionId,
 		CancellationToken cancellationToken = default)
 	{
-		var document = await _managementStore
-			.GetDocumentAsync(Area, productionId.ToString(), cancellationToken)
-			.ConfigureAwait(false);
-		if (document is null)
-			return new PersistedShowControlWorkspace(Array.Empty<ShowControlCueList>(), null, ShowControlExecutionSnapshot.Idle, 0);
+		string json;
+		ulong storageVersion;
+		if (_showProjectStore is not null)
+		{
+			var specification = RequireProjectSpecification(productionId);
+			var persisted = await _showProjectStore.LoadShowControlAsync(specification, cancellationToken).ConfigureAwait(false);
+			if (persisted.Json is null)
+				return new PersistedShowControlWorkspace(Array.Empty<ShowControlCueList>(), null, ShowControlExecutionSnapshot.Idle, 0);
+			json = persisted.Json;
+			storageVersion = persisted.Version;
+		}
+		else
+		{
+			var document = await _managementStore
+				.GetDocumentAsync(Area, productionId.ToString(), cancellationToken)
+				.ConfigureAwait(false);
+			if (document is null)
+				return new PersistedShowControlWorkspace(Array.Empty<ShowControlCueList>(), null, ShowControlExecutionSnapshot.Idle, 0);
+			json = document.Json;
+			storageVersion = document.Version;
+		}
 
-		var dto = JsonSerializer.Deserialize<WorkspaceDocument>(document.Json, JsonOptions)
+		var dto = JsonSerializer.Deserialize<WorkspaceDocument>(json, JsonOptions)
 			?? throw new InvalidDataException("Persisted show-control workspace is empty.");
 		if (!string.Equals(dto.Format, DocumentFormat, StringComparison.Ordinal))
 			throw new InvalidDataException($"Unsupported show-control workspace format '{dto.Format}'.");
@@ -73,7 +101,7 @@ public sealed class ShowControlPersistenceStore
 			throw new InvalidDataException("Persisted show-control execution references an unavailable cue list.");
 		}
 
-		return new PersistedShowControlWorkspace(cueLists, selected, execution, document.Version);
+		return new PersistedShowControlWorkspace(cueLists, selected, execution, storageVersion);
 	}
 
 	public async ValueTask<ShowControlPersistenceWriteResult> SaveAsync(
@@ -102,21 +130,48 @@ public sealed class ShowControlPersistenceStore
 			selectedCueListId?.ToString(),
 			ToDocument(execution));
 		var json = JsonSerializer.Serialize(dto, JsonOptions);
-		var write = await _managementStore
-			.PutDocumentAsync(
-				Area,
-				productionId.ToString(),
-				json,
-				expectedStorageVersion,
-				cancellationToken)
-			.ConfigureAwait(false);
-		if (!write.Written || write.Document is null)
-			return new ShowControlPersistenceWriteResult(false, null, write.Failure);
+		ulong nextStorageVersion;
+		Failure? failure;
+		if (_showProjectStore is not null)
+		{
+			var specification = RequireProjectSpecification(productionId);
+			var write = await _showProjectStore
+				.UpdateShowControlAsync(specification, json, expectedStorageVersion, cancellationToken)
+				.ConfigureAwait(false);
+			if (!write.Written || write.Snapshot is null)
+				return new ShowControlPersistenceWriteResult(false, null, write.Failure);
+			nextStorageVersion = write.Snapshot.Version;
+			failure = write.Failure;
+		}
+		else
+		{
+			var write = await _managementStore
+				.PutDocumentAsync(
+					Area,
+					productionId.ToString(),
+					json,
+					expectedStorageVersion,
+					cancellationToken)
+				.ConfigureAwait(false);
+			if (!write.Written || write.Document is null)
+				return new ShowControlPersistenceWriteResult(false, null, write.Failure);
+			nextStorageVersion = write.Document.Version;
+			failure = write.Failure;
+		}
 
 		return new ShowControlPersistenceWriteResult(
 			true,
-			new PersistedShowControlWorkspace(cueLists.ToArray(), selectedCueListId, execution, write.Document.Version),
-			null);
+			new PersistedShowControlWorkspace(cueLists.ToArray(), selectedCueListId, execution, nextStorageVersion),
+			failure);
+	}
+
+	private ProductionSpecification RequireProjectSpecification(ProductionId productionId)
+	{
+		var specification = _productionSpecification
+			?? throw new InvalidOperationException("Durable show-project specification is not configured.");
+		if (specification.ProductionId != productionId)
+			throw new InvalidOperationException("Show-control workspace belongs to a different durable show project.");
+		return specification;
 	}
 
 	private static ExecutionDocument ToDocument(ShowControlExecutionSnapshot snapshot) => new(

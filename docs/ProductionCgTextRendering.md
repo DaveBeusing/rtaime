@@ -113,11 +113,13 @@ Bitmap free-placement controls remain scoped to the bitmap layer. CG placement i
 
 ## Recovery and resynchronization
 
-ControlHost retains the successfully confirmed graphics recovery state for the lifetime of the ControlHost process: bitmap RGBA content and placement, Production CG definition, per-layer visibility/opacity and confirmed layer order.
+Confirmed authored graphics state is part of the durable show project owned by ControlHost. The management document stores the Production CG definition, bitmap reference and confirmed compositing configuration. Raw bitmap RGBA bytes are deliberately not embedded in management JSON; they are stored in a bounded checksummed sidecar and referenced by stable identity, dimensions, filename and SHA-256 checksum.
 
-When RuntimeHost is replaced or restarted and ControlHost reconciles production execution, ControlHost reloads the retained bitmap, reapplies the CG definition, restores bounded layer state and finally reapplies the retained order against the layers that actually exist in the new Runtime. Operator then receives only the restored Runtime-confirmed snapshot through normal resynchronization.
+When RuntimeHost is replaced or restarted, ControlHost reloads the retained bitmap payload, reapplies the CG definition, restores bounded layer state and finally reapplies the retained order against the layers that actually exist in the new Runtime. The same recovery state is loaded after a full ControlHost/application restart. If durable Control authority contains compositing state, graphics resources are re-admitted before that authority is prepared and committed to a fresh RuntimeHost.
 
-This is bounded RuntimeHost recovery, not durable rundown persistence. A ControlHost restart does not currently persist or restore the graphics stack from durable storage.
+A missing or checksum-invalid graphics sidecar is a recovery failure rather than permission to invent live state. The show project reports `RECOVERY_REQUIRED` and Runtime reconciliation remains degraded until the retained resource problem is corrected. A persistence failure after an already confirmed live graphics mutation reports the project as `STALE`; it does not roll back or falsely reinterpret the Runtime-confirmed live result.
+
+Operator clients continue to receive graphics truth from Runtime snapshots. Durable authored state is therefore recovery input, not a substitute for Runtime confirmation.
 
 ## Validation
 

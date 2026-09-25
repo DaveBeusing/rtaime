@@ -21,6 +21,8 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	private readonly MediaDeckControlService? _mediaDeck;
 	private readonly ShowControlCoordinator? _showControl;
 	private readonly MediaAssetCatalogService? _mediaAssetCatalog;
+	private readonly ShowProjectPersistenceStore? _showProjectStore;
+	private PersistedShowProject? _showProject;
 	private readonly CancellationTokenSource _stop = new();
 	private readonly SemaphoreSlim _mutationGate = new(1, 1);
 	private readonly BoundedRequestCache _requestCache = new(256);
@@ -31,8 +33,11 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	private DateTimeOffset _lastRuntimeSnapshotAtUtc;
 	private RuntimeProductionCgTextDefinition? _productionCgText;
 	private RetainedGraphicsAsset? _graphicsAsset;
+	private DurableBitmapGraphicsReference? _durableBitmapReference;
 	private RuntimeGraphicsOverlaySnapshot _graphicsOverlayState = new(false, null, 0, 0, false, 0.72, 0.06, 1.0);
 	private IReadOnlyList<RuntimeCompositingLayerSnapshot> _compositingLayers = Array.Empty<RuntimeCompositingLayerSnapshot>();
+	private string _showProjectState = "UNAVAILABLE";
+	private string _showProjectDetail = "Durable show project persistence is not configured.";
 	private Task? _acceptLoop;
 	private long _stateVersion = 1;
 	private long _sequence;
@@ -43,7 +48,9 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		IControlRuntimeTransportSeam runtimeTransport,
 		MediaDeckControlService? mediaDeck = null,
 		ShowControlPersistenceStore? showControlPersistence = null,
-		MediaAssetCatalogService? mediaAssetCatalog = null)
+		MediaAssetCatalogService? mediaAssetCatalog = null,
+		ShowProjectPersistenceStore? showProjectStore = null,
+		PersistedShowProject? showProject = null)
 	{
 		if (string.IsNullOrWhiteSpace(endpoint)) throw new ArgumentException("ControlHost IPC endpoint is required.", nameof(endpoint));
 		_endpoint = endpoint.Trim();
@@ -51,6 +58,30 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		_runtimeTransport = runtimeTransport ?? throw new ArgumentNullException(nameof(runtimeTransport));
 		_mediaDeck = mediaDeck;
 		_mediaAssetCatalog = mediaAssetCatalog;
+		if ((showProjectStore is null) != (showProject is null))
+			throw new ArgumentException("Durable show-project store and snapshot must be configured together.");
+		_showProjectStore = showProjectStore;
+		_showProject = showProject;
+		if (showProject is not null)
+		{
+			_productionCgText = showProject.Graphics.ProductionCgText;
+			_durableBitmapReference = showProject.Graphics.Bitmap;
+			if (_durableBitmapReference is { } bitmap)
+			{
+				_graphicsOverlayState = new RuntimeGraphicsOverlaySnapshot(
+					true,
+					bitmap.Name,
+					bitmap.Width,
+					bitmap.Height,
+					bitmap.Visible,
+					bitmap.PositionX,
+					bitmap.PositionY,
+					bitmap.Scale);
+			}
+			_compositingLayers = ToRuntimeCompositingLayers(showProject.Graphics.CompositingState);
+			_showProjectState = "LOADED";
+			_showProjectDetail = $"Durable show project '{showProject.Name}' ({showProject.ProjectId}) is loaded.";
+		}
 		_showControl = showControlPersistence is null
 			? null
 			: new ShowControlCoordinator(
@@ -84,6 +115,20 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		{
 			if (!_runtimeTransport.IsConnected)
 				return;
+
+			if (_graphicsAsset is null && _durableBitmapReference is { } durableBitmap && _showProjectStore is not null)
+			{
+				try
+				{
+					var rgbaPixels = await _showProjectStore.LoadBitmapAssetAsync(durableBitmap, cancellationToken).ConfigureAwait(false);
+					_graphicsAsset = new RetainedGraphicsAsset(durableBitmap.Name, durableBitmap.Width, durableBitmap.Height, rgbaPixels);
+				}
+				catch (Exception exception) when (exception is IOException or InvalidDataException or UnauthorizedAccessException)
+				{
+					SetShowProjectState("RECOVERY_REQUIRED", $"Durable bitmap graphics could not be restored: {exception.Message}");
+					throw;
+				}
+			}
 
 			if (_graphicsAsset is { } asset)
 			{
@@ -128,6 +173,12 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 				var order = retainedOrder.Concat(missing).ToArray();
 				if (order.Length > 0)
 					_compositingLayers = await _runtimeTransport.ReorderCompositingLayersAsync(order, cancellationToken).ConfigureAwait(false);
+			}
+			if (_showProject is not null && _showProjectState != "RECOVERY_REQUIRED")
+			{
+				SetShowProjectState(
+					"RESTORED",
+					$"Durable show project '{_showProject.Name}' was restored through Runtime confirmation paths.");
 			}
 			NotifyObservableStateChanged();
 		}
@@ -443,19 +494,17 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	{
 		var wire = request.Payload.Deserialize<WireGraphicsAsset>(Wire.JsonOptions)
 			?? throw new InvalidDataException("Graphics overlay asset payload is required.");
-		var response = await MutateGraphicsAsync(
+		var retained = new RetainedGraphicsAsset(wire.Name.Trim(), wire.Width, wire.Height, wire.RgbaPixels.ToArray());
+		return await MutateGraphicsAsync(
 			request,
 			token => _runtimeTransport.LoadGraphicsOverlayAsync(wire.Name, wire.Width, wire.Height, wire.RgbaPixels, token),
+			async (snapshot, _, token) =>
+			{
+				_graphicsAsset = retained;
+				_graphicsOverlayState = snapshot;
+				await StoreBitmapAndPersistAsync(retained, snapshot, token).ConfigureAwait(false);
+			},
 			cancellationToken).ConfigureAwait(false);
-		if (!string.Equals(response.MessageType, "error", StringComparison.Ordinal))
-		{
-			_graphicsAsset = new RetainedGraphicsAsset(wire.Name.Trim(), wire.Width, wire.Height, wire.RgbaPixels.ToArray());
-			if (!_graphicsOverlayState.AssetLoaded)
-				_graphicsOverlayState = new RuntimeGraphicsOverlaySnapshot(true, wire.Name.Trim(), wire.Width, wire.Height, false, 0.72, 0.06, 1.0);
-			else
-				_graphicsOverlayState = _graphicsOverlayState with { AssetLoaded = true, AssetName = wire.Name.Trim(), AssetWidth = wire.Width, AssetHeight = wire.Height };
-		}
-		return response;
 	}
 
 	private async ValueTask<WireEnvelope> ApplyProductionCgTextAsync(WireEnvelope request, CancellationToken cancellationToken)
@@ -482,59 +531,70 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			wire.Visible,
 			wire.Layer,
 			wire.ZOrder);
-		var response = await MutateGraphicsAsync(
+		return await MutateGraphicsAsync(
 			request,
 			token => _runtimeTransport.ApplyProductionCgTextAsync(definition, token),
+			async (_, _, token) =>
+			{
+				_productionCgText = definition;
+				await TryPersistDurableGraphicsAsync(token).ConfigureAwait(false);
+			},
 			cancellationToken).ConfigureAwait(false);
-		if (!string.Equals(response.MessageType, "error", StringComparison.Ordinal))
-			_productionCgText = definition;
-		return response;
 	}
 
 	private async ValueTask<WireEnvelope> SetGraphicsOverlayAsync(WireEnvelope request, CancellationToken cancellationToken)
 	{
 		var wire = request.Payload.Deserialize<WireGraphicsOverlayState>(Wire.JsonOptions)
 			?? throw new InvalidDataException("Graphics overlay state payload is required.");
-		var response = await MutateGraphicsAsync(
+		return await MutateGraphicsAsync(
 			request,
 			token => _runtimeTransport.SetGraphicsOverlayAsync(wire.Visible, wire.PositionX, wire.PositionY, wire.Scale, token),
-			cancellationToken).ConfigureAwait(false);
-		if (!string.Equals(response.MessageType, "error", StringComparison.Ordinal))
-		{
-			if (_graphicsAsset is not null)
+			async (snapshot, _, token) =>
 			{
-				_graphicsOverlayState = _graphicsOverlayState with
+				if (_graphicsAsset is not null)
 				{
-					Visible = wire.Visible,
-					PositionX = wire.PositionX,
-					PositionY = wire.PositionY,
-					Scale = wire.Scale
-				};
-			}
-			else if (_productionCgText is not null)
-			{
-				_productionCgText = _productionCgText with { Visible = wire.Visible };
-			}
-		}
-		return response;
+					_graphicsOverlayState = snapshot;
+					if (_durableBitmapReference is { } bitmap)
+					{
+						_durableBitmapReference = bitmap with
+						{
+							Visible = snapshot.Visible,
+							PositionX = snapshot.PositionX,
+							PositionY = snapshot.PositionY,
+							Scale = snapshot.Scale
+						};
+					}
+				}
+				else if (_productionCgText is not null)
+				{
+					_productionCgText = _productionCgText with { Visible = wire.Visible };
+				}
+				await TryPersistDurableGraphicsAsync(token).ConfigureAwait(false);
+			},
+			cancellationToken).ConfigureAwait(false);
 	}
 
 	private async ValueTask<WireEnvelope> ClearGraphicsOverlayAsync(WireEnvelope request, CancellationToken cancellationToken)
 	{
-		var response = await MutateGraphicsAsync(
+		return await MutateGraphicsAsync(
 			request,
 			token => _runtimeTransport.ClearGraphicsOverlayAsync(token),
+			async (_, _, token) =>
+			{
+				var previousBitmap = _durableBitmapReference;
+				_graphicsAsset = null;
+				_durableBitmapReference = null;
+				_graphicsOverlayState = new RuntimeGraphicsOverlaySnapshot(false, null, 0, 0, false, 0.72, 0.06, 1.0);
+				_productionCgText = null;
+				_compositingLayers = _compositingLayers
+					.Where(layer => layer.LayerId is not "bitmap-graphics" and not "production-cg")
+					.Select((layer, order) => layer with { Order = order })
+					.ToArray();
+				var persisted = await TryPersistDurableGraphicsAsync(token).ConfigureAwait(false);
+				if (persisted && _showProjectStore is not null)
+					await _showProjectStore.DeleteBitmapAssetAsync(previousBitmap, token).ConfigureAwait(false);
+			},
 			cancellationToken).ConfigureAwait(false);
-		if (!string.Equals(response.MessageType, "error", StringComparison.Ordinal))
-		{
-			_graphicsAsset = null;
-			_graphicsOverlayState = new RuntimeGraphicsOverlaySnapshot(false, null, 0, 0, false, 0.72, 0.06, 1.0);
-			_productionCgText = null;
-			_compositingLayers = _compositingLayers
-				.Where(layer => layer.LayerId is not "bitmap-graphics" and not "production-cg")
-				.ToArray();
-		}
-		return response;
 	}
 
 	private async ValueTask<WireEnvelope> SetCompositingLayerStateAsync(WireEnvelope request, CancellationToken cancellationToken)
@@ -557,9 +617,14 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			_compositingLayers = layers;
 			control.ConfirmCompositingMutation(ToProductionCompositingState(layers));
 			if (string.Equals(wire.LayerId, "bitmap-graphics", StringComparison.Ordinal))
+			{
 				_graphicsOverlayState = _graphicsOverlayState with { Visible = wire.Visible };
+				if (_durableBitmapReference is { } bitmap)
+					_durableBitmapReference = bitmap with { Visible = wire.Visible };
+			}
 			else if (string.Equals(wire.LayerId, "production-cg", StringComparison.Ordinal) && _productionCgText is not null)
 				_productionCgText = _productionCgText with { Visible = wire.Visible };
+			await TryPersistDurableGraphicsAsync(cancellationToken).ConfigureAwait(false);
 			NotifyObservableStateChanged();
 			return Success(request, "control.compositing.layers.response", layers.Select(ToWire).ToArray());
 		}
@@ -588,6 +653,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			var layers = await _runtimeTransport.ReorderCompositingLayersAsync(wire.LayerIds, cancellationToken).ConfigureAwait(false);
 			_compositingLayers = layers;
 			control.ConfirmCompositingMutation(ToProductionCompositingState(layers));
+			await TryPersistDurableGraphicsAsync(cancellationToken).ConfigureAwait(false);
 			NotifyObservableStateChanged();
 			return Success(request, "control.compositing.layers.response", layers.Select(ToWire).ToArray());
 		}
@@ -625,9 +691,126 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 				.ToArray());
 	}
 
+	private async ValueTask StoreBitmapAndPersistAsync(
+		RetainedGraphicsAsset asset,
+		RuntimeGraphicsOverlaySnapshot snapshot,
+		CancellationToken cancellationToken)
+	{
+		if (_showProjectStore is null || _showProject is null)
+			return;
+
+		var previous = _durableBitmapReference;
+		DurableBitmapGraphicsReference? candidate = null;
+		try
+		{
+			candidate = await _showProjectStore.StoreBitmapAssetAsync(
+				asset.Name,
+				asset.Width,
+				asset.Height,
+				asset.RgbaPixels,
+				snapshot.Visible,
+				snapshot.PositionX,
+				snapshot.PositionY,
+				snapshot.Scale,
+				cancellationToken).ConfigureAwait(false);
+			_durableBitmapReference = candidate;
+			var persisted = await TryPersistDurableGraphicsAsync(cancellationToken).ConfigureAwait(false);
+			if (!persisted)
+			{
+				_durableBitmapReference = previous;
+				await _showProjectStore.DeleteBitmapAssetAsync(candidate, CancellationToken.None).ConfigureAwait(false);
+				return;
+			}
+
+			if (previous is not null && previous.AssetId != candidate.AssetId)
+				await _showProjectStore.DeleteBitmapAssetAsync(previous, CancellationToken.None).ConfigureAwait(false);
+		}
+		catch (Exception exception)
+		{
+			_durableBitmapReference = previous;
+			if (candidate is not null)
+			{
+				try { await _showProjectStore.DeleteBitmapAssetAsync(candidate, CancellationToken.None).ConfigureAwait(false); }
+				catch { }
+			}
+			MarkShowProjectPersistenceStale(exception);
+		}
+	}
+
+	private async ValueTask<bool> TryPersistDurableGraphicsAsync(CancellationToken cancellationToken)
+	{
+		if (_showProjectStore is null || _showProject is null)
+			return true;
+
+		try
+		{
+			var control = _controlAccessor()
+				?? throw new InvalidOperationException("ControlHost service is unavailable while persisting durable graphics.");
+			var compositing = _compositingLayers.Count == 0
+				? null
+				: ToProductionCompositingState(_compositingLayers);
+			_showProject = await _showProjectStore
+				.UpdateGraphicsAsync(
+					control.Specification,
+					new DurableGraphicsState(_durableBitmapReference, _productionCgText, compositing),
+					cancellationToken)
+				.ConfigureAwait(false);
+			SetShowProjectState(
+				"SAVED",
+				$"Durable show project '{_showProject.Name}' is synchronized at storage version {_showProject.StorageVersion}.");
+			return true;
+		}
+		catch (Exception exception)
+		{
+			MarkShowProjectPersistenceStale(exception);
+			return false;
+		}
+	}
+
+	private void MarkShowProjectPersistenceStale(Exception exception)
+	{
+		SetShowProjectState("STALE", $"Live authored state changed but durable show-project persistence failed: {exception.Message}");
+		try
+		{
+			_controlAccessor()?.RecordObservation(
+				"persistence",
+				"show_project.persistence.stale",
+				_showProjectDetail,
+				new Failure("show_project.persistence.failed", exception.Message));
+		}
+		catch
+		{
+		}
+	}
+
+	private void SetShowProjectState(string state, string detail)
+	{
+		_showProjectState = state;
+		_showProjectDetail = detail;
+	}
+
+	private static IReadOnlyList<RuntimeCompositingLayerSnapshot> ToRuntimeCompositingLayers(
+		ProductionCompositingState? state) =>
+		state is null
+			? Array.Empty<RuntimeCompositingLayerSnapshot>()
+			: Array.AsReadOnly(state.Layers
+				.OrderBy(layer => layer.Order)
+				.Select(layer => new RuntimeCompositingLayerSnapshot(
+					layer.LayerId,
+					(int)layer.Kind,
+					layer.Order,
+					layer.Visible,
+					layer.Opacity,
+					layer.PositionX,
+					layer.PositionY,
+					layer.Scale,
+					layer.ContentIdentity))
+				.ToArray());
+
 	private async ValueTask<WireEnvelope> MutateGraphicsAsync(
 		WireEnvelope request,
 		Func<CancellationToken, ValueTask<RuntimeGraphicsOverlaySnapshot>> mutation,
+		Func<RuntimeGraphicsOverlaySnapshot, RuntimeRemoteSnapshot, CancellationToken, ValueTask> confirmedMutation,
 		CancellationToken cancellationToken)
 	{
 		await _mutationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -644,6 +827,8 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 				var snapshot = await mutation(cancellationToken).ConfigureAwait(false);
 				var runtime = await _runtimeTransport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
 				_compositingLayers = runtime.CompositingLayers ?? Array.Empty<RuntimeCompositingLayerSnapshot>();
+				control.ConfirmCompositingMutation(ToProductionCompositingState(_compositingLayers));
+				await confirmedMutation(snapshot, runtime, cancellationToken).ConfigureAwait(false);
 				NotifyObservableStateChanged();
 				return Success(request, "control.graphics.overlay.response", ToWire(snapshot));
 			}
@@ -1301,7 +1486,12 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 				.ThenBy(layer => layer.LayerId, StringComparer.Ordinal)
 				.Select(ToWire)
 				.ToArray(),
-			showControl);
+			showControl,
+			new WireShowProject(
+				_showProject?.ProjectId.ToString() ?? "unavailable",
+				_showProject?.Name ?? "Unavailable",
+				_showProjectState,
+				_showProjectDetail));
 		return Success(request, "control.snapshot.response", payload);
 	}
 
@@ -1945,7 +2135,8 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		string AvSyncSubmitOffset = "UNAVAILABLE",
 		string AvSyncDrift = "UNAVAILABLE",
 		string AvSyncDetail = "A/V sync diagnostics are unavailable.");
-	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, WireRecordingSnapshot Recording, WireHealthSnapshot Health, WireAIShowcase AIShowcase, WireMediaDeckSnapshot MediaDeck, ulong StateVersion, WireProductionCgTextSnapshot? ProductionCgText = null, WireScene[]? Scenes = null, WireOutputRole[]? OutputRoles = null, WireCompositingLayer[]? CompositingLayers = null, WireShowControlWorkspace? ShowControl = null);
+	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, WireRecordingSnapshot Recording, WireHealthSnapshot Health, WireAIShowcase AIShowcase, WireMediaDeckSnapshot MediaDeck, ulong StateVersion, WireProductionCgTextSnapshot? ProductionCgText = null, WireScene[]? Scenes = null, WireOutputRole[]? OutputRoles = null, WireCompositingLayer[]? CompositingLayers = null, WireShowControlWorkspace? ShowControl = null, WireShowProject? ShowProject = null);
+	private sealed record WireShowProject(string ProjectId, string Name, string State, string Detail);
 	private sealed record WireShowControlCueList(string CueListJson);
 	private sealed record WireShowControlSelection(string CueListId);
 	private sealed record WireShowControlRecovery(bool Resume);
