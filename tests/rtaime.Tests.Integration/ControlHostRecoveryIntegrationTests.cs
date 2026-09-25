@@ -103,6 +103,103 @@ public sealed class ControlHostRecoveryIntegrationTests
 	}
 
 	[Fact]
+	public async Task Control_and_Runtime_restart_restore_durable_show_graphics_before_authority_reapply()
+	{
+		if (!OperatingSystem.IsWindows())
+			return;
+
+		var root = TempDirectory();
+		var runtimeEndpoint = Endpoint("runtime-durable-show");
+		var controlEndpoint = Endpoint("control-durable-show");
+		var options = ControlHostProcessOptions.Default with
+		{
+			ListenEndpoint = controlEndpoint,
+			RuntimeEndpoint = runtimeEndpoint,
+			DurabilityRoot = root,
+			ConnectTimeout = TimeSpan.FromMilliseconds(150),
+			RequestTimeout = TimeSpan.FromSeconds(3),
+			RuntimeRetryInterval = TimeSpan.FromMilliseconds(25)
+		};
+
+		Revision committedRevision;
+		try
+		{
+			using (var firstRuntimeStop = new CancellationTokenSource())
+			using (var firstControlStop = new CancellationTokenSource())
+			{
+				var firstRuntime = new RuntimeHostProcess(RuntimeHostProcessOptions.Default with { ListenEndpoint = runtimeEndpoint });
+				var firstRuntimeRun = firstRuntime.RunAsync(firstRuntimeStop.Token);
+				var firstControl = new ControlHostProcess(options);
+				var firstControlRun = firstControl.RunAsync(firstControlStop.Token);
+				await WaitUntilAsync(() => firstControl.Lifecycle.State == ControlHostProcessState.Ready && firstControl.Control?.HasAuthoritativeState == true);
+
+				var client = new OperatorControlClient(new NamedPipeOperatorControlTransport(controlEndpoint, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(5)));
+				await client.SynchronizeAsync();
+				await client.LoadGraphicsOverlayAsync(new OperatorGraphicsAsset(
+					"durable-logo.rgba",
+					1,
+					1,
+					new byte[] { 255, 32, 16, 255 }));
+				await client.SetGraphicsOverlayAsync(true, 0.12, 0.18, 1.25);
+				await client.ApplyProductionCgTextAsync(OperatorProductionCgText.LowerThird("DURABLE SHOW STATE"));
+				await client.SetCompositingLayerStateAsync("bitmap-graphics", visible: true, opacity: 160);
+				await client.SetCompositingLayerStateAsync("production-cg", visible: true, opacity: 224);
+
+				var beforeRestart = await client.SynchronizeAsync();
+				var requestedOrder = beforeRestart.CompositingLayers
+					.OrderBy(layer => layer.LayerId == "production-cg" ? 0 : layer.LayerId == "bitmap-graphics" ? 1 : 2)
+					.ThenBy(layer => layer.Order)
+					.Select(layer => layer.LayerId)
+					.ToArray();
+				await client.ReorderCompositingLayersAsync(requestedOrder);
+				beforeRestart = await client.SynchronizeAsync();
+
+				Assert.Equal("durable-logo.rgba", beforeRestart.GraphicsOverlay.AssetName);
+				Assert.True(beforeRestart.GraphicsOverlay.Visible);
+				Assert.Equal("DURABLE SHOW STATE", beforeRestart.ProductionCgText.Text);
+				Assert.Equal("SAVED", beforeRestart.ShowProject.State);
+				committedRevision = firstControl.Control!.State.Revision;
+
+				var checkpointWriter = Assert.IsType<BoundedProductionCheckpointWriter>(firstControl.CheckpointWriter);
+				await checkpointWriter.FlushAsync();
+
+				firstControlStop.Cancel();
+				Assert.Equal(ControlHostExitCode.Success, await firstControlRun);
+				firstRuntimeStop.Cancel();
+				Assert.Equal(RuntimeHostExitCode.Success, await firstRuntimeRun);
+			}
+
+			using var secondRuntimeStop = new CancellationTokenSource();
+			using var secondControlStop = new CancellationTokenSource();
+			var secondRuntime = new RuntimeHostProcess(RuntimeHostProcessOptions.Default with { ListenEndpoint = runtimeEndpoint });
+			var secondRuntimeRun = secondRuntime.RunAsync(secondRuntimeStop.Token);
+			var secondControl = new ControlHostProcess(options);
+			var secondControlRun = secondControl.RunAsync(secondControlStop.Token);
+			await WaitForRecoveredReadyAsync(secondControl, secondControlRun);
+
+			var restoredClient = new OperatorControlClient(new NamedPipeOperatorControlTransport(controlEndpoint, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(5)));
+			var restored = await restoredClient.SynchronizeAsync();
+			Assert.Equal(committedRevision, restored.Production.Revision);
+			Assert.Equal("durable-logo.rgba", restored.GraphicsOverlay.AssetName);
+			Assert.True(restored.GraphicsOverlay.Visible);
+			Assert.Equal("DURABLE SHOW STATE", restored.ProductionCgText.Text);
+			Assert.True(restored.ProductionCgText.Visible);
+			Assert.Contains(restored.CompositingLayers, layer => layer.LayerId == "bitmap-graphics" && layer.Visible && layer.Opacity == 160);
+			Assert.Contains(restored.CompositingLayers, layer => layer.LayerId == "production-cg" && layer.Visible && layer.Opacity == 224);
+			Assert.Equal("RESTORED", restored.ShowProject.State);
+
+			secondControlStop.Cancel();
+			Assert.Equal(ControlHostExitCode.Success, await secondControlRun);
+			secondRuntimeStop.Cancel();
+			Assert.Equal(RuntimeHostExitCode.Success, await secondRuntimeRun);
+		}
+		finally
+		{
+			DeleteDirectory(root);
+		}
+	}
+
+	[Fact]
 	public async Task Runtime_authority_ahead_of_durable_Control_authority_fails_closed_without_reapply()
 	{
 		var root = TempDirectory();
