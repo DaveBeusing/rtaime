@@ -230,6 +230,52 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		return ReadCompositingLayers(response);
 	}
 
+	public async ValueTask<IReadOnlyList<OperatorCompositingLayerDescriptor>> SetCompositingLayerTransformAsync(
+		string layerId,
+		double positionX,
+		double positionY,
+		double scale,
+		double rotationDegrees,
+		double anchorX,
+		double anchorY,
+		double cropLeft,
+		double cropTop,
+		double cropRight,
+		double cropBottom,
+		CancellationToken cancellationToken = default)
+	{
+		if (string.IsNullOrWhiteSpace(layerId)) throw new ArgumentException("Compositing layer identity is required.", nameof(layerId));
+		var response = await ExchangeAsync(
+			"control.compositing.layer.transform",
+			new WireCompositingLayerTransform(layerId.Trim(), positionX, positionY, scale, rotationDegrees, anchorX, anchorY, cropLeft, cropTop, cropRight, cropBottom),
+			cancellationToken).ConfigureAwait(false);
+		return ReadCompositingLayers(response);
+	}
+
+	public async ValueTask<IReadOnlyList<OperatorCompositingLayerDescriptor>> SetCompositingLayerProcessingNodeAsync(
+		string layerId,
+		OperatorCompositingProcessingNodeDescriptor? processingNode,
+		CancellationToken cancellationToken = default)
+	{
+		if (string.IsNullOrWhiteSpace(layerId)) throw new ArgumentException("Compositing layer identity is required.", nameof(layerId));
+		var response = await ExchangeAsync(
+			"control.compositing.layer.processing",
+			new WireCompositingLayerProcessing(
+				layerId.Trim(),
+				processingNode is null
+					? null
+					: new WireProcessingNode(
+						processingNode.NodeId,
+						processingNode.Kind,
+						processingNode.Enabled,
+						new WireColorGrade(
+							processingNode.ColorGrade.Brightness,
+							processingNode.ColorGrade.Contrast,
+							processingNode.ColorGrade.Saturation))),
+			cancellationToken).ConfigureAwait(false);
+		return ReadCompositingLayers(response);
+	}
+
 	public async ValueTask<IReadOnlyList<OperatorCompositingLayerDescriptor>> ReorderCompositingLayersAsync(
 		IReadOnlyList<string> orderedLayerIds,
 		CancellationToken cancellationToken = default)
@@ -652,16 +698,7 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 	{
 		var wire = response.Payload.Deserialize<WireCompositingLayer[]>(Wire.JsonOptions)
 			?? throw new InvalidDataException("ControlHost compositing layer payload is required.");
-		return Array.AsReadOnly(wire.Select(layer => new OperatorCompositingLayerDescriptor(
-			layer.LayerId,
-			layer.Kind,
-			layer.Order,
-			layer.Visible,
-			layer.Opacity,
-			layer.PositionX,
-			layer.PositionY,
-			layer.Scale,
-			layer.ContentIdentity)).ToArray());
+		return Array.AsReadOnly(wire.Select(FromWire).ToArray());
 	}
 
 	private static OperatorGraphicsOverlayDescriptor ReadGraphicsOverlay(WireEnvelope response)
@@ -896,16 +933,7 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 				scene.PreviewSourceId,
 				scene.ProgramSourceId,
 				(scene.CompositingState?.Layers ?? Array.Empty<WireCompositingLayer>())
-					.Select(layer => new OperatorCompositingLayerDescriptor(
-						layer.LayerId,
-						layer.Kind,
-						layer.Order,
-						layer.Visible,
-						layer.Opacity,
-						layer.PositionX,
-						layer.PositionY,
-						layer.Scale,
-						layer.ContentIdentity))
+					.Select(FromWire)
 					.ToArray()))
 			.ToArray(),
 		(wire.OutputRoles ?? Array.Empty<WireOutputRole>())
@@ -916,16 +944,7 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 				output.Error is null ? null : new Failure(output.Error.Code, output.Error.Message)))
 			.ToArray(),
 		(wire.CompositingLayers ?? Array.Empty<WireCompositingLayer>())
-			.Select(layer => new OperatorCompositingLayerDescriptor(
-				layer.LayerId,
-				layer.Kind,
-				layer.Order,
-				layer.Visible,
-				layer.Opacity,
-				layer.PositionX,
-				layer.PositionY,
-				layer.Scale,
-				layer.ContentIdentity))
+			.Select(FromWire)
 			.ToArray(),
 		wire.ShowControl is null
 			? new ShowControlWorkspaceSnapshot(Array.Empty<ShowControlCueList>(), null, ShowControlExecutionSnapshot.Idle)
@@ -1045,6 +1064,34 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 	private static OperatorHealthMetricDescriptor FromWire(WireHealthMetric metric) =>
 		new(metric.State, metric.Detail);
 
+	private static OperatorCompositingLayerDescriptor FromWire(WireCompositingLayer layer) => new(
+		layer.LayerId,
+		layer.Kind,
+		layer.Order,
+		layer.Visible,
+		layer.Opacity,
+		layer.PositionX,
+		layer.PositionY,
+		layer.Scale,
+		layer.ContentIdentity,
+		layer.RotationDegrees,
+		layer.AnchorX,
+		layer.AnchorY,
+		layer.CropLeft,
+		layer.CropTop,
+		layer.CropRight,
+		layer.CropBottom,
+		layer.ProcessingNode is null ? null : FromWire(layer.ProcessingNode));
+
+	private static OperatorCompositingProcessingNodeDescriptor FromWire(WireProcessingNode node) => new(
+		node.NodeId,
+		node.Kind,
+		node.Enabled,
+		new OperatorColorGradeDescriptor(
+			node.ColorGrade.Brightness,
+			node.ColorGrade.Contrast,
+			node.ColorGrade.Saturation));
+
 	private static OperatorGraphicsOverlayDescriptor FromWire(WireGraphicsOverlay overlay) => new(
 		overlay.AssetLoaded,
 		overlay.AssetName,
@@ -1134,9 +1181,13 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 	private sealed record WireProductionCgTextSnapshot(bool Active, string? Text, string? Typeface, string? ResolvedTypeface, float FontSizePixels, uint BoxWidth, uint BoxHeight, int Alignment, int Anchor, bool PanelEnabled, bool Visible, int Layer, int ZOrder, bool CacheHit, long RenderDurationTicks);
 	private sealed record WireGraphicsOverlayState(bool Visible, double PositionX, double PositionY, double Scale);
 	private sealed record WireCompositingLayerState(string LayerId, bool Visible, byte Opacity);
+	private sealed record WireCompositingLayerTransform(string LayerId, double PositionX, double PositionY, double Scale, double RotationDegrees, double AnchorX, double AnchorY, double CropLeft, double CropTop, double CropRight, double CropBottom);
+	private sealed record WireColorGrade(double Brightness, double Contrast, double Saturation);
+	private sealed record WireProcessingNode(string NodeId, int Kind, bool Enabled, WireColorGrade ColorGrade);
+	private sealed record WireCompositingLayerProcessing(string LayerId, WireProcessingNode? ProcessingNode);
 	private sealed record WireCompositingLayerOrder(string[] LayerIds);
 	private sealed record WireGraphicsOverlay(bool AssetLoaded, string? AssetName, uint AssetWidth, uint AssetHeight, bool Visible, double PositionX, double PositionY, double Scale);
-	private sealed record WireCompositingLayer(string LayerId, int Kind, int Order, bool Visible, byte Opacity, double PositionX, double PositionY, double Scale, string ContentIdentity);
+	private sealed record WireCompositingLayer(string LayerId, int Kind, int Order, bool Visible, byte Opacity, double PositionX, double PositionY, double Scale, string ContentIdentity, double RotationDegrees = 0, double AnchorX = 0, double AnchorY = 0, double CropLeft = 0, double CropTop = 0, double CropRight = 0, double CropBottom = 0, WireProcessingNode? ProcessingNode = null);
 	private sealed record WireCompositingState(string Version, WireCompositingLayer[] Layers);
 	private sealed record WireAudioInputState(string SourceId, double Gain, bool Muted);
 	private sealed record WireAudioTestSignalState(string SourceId, bool Enabled, int Mode, double FrequencyHz, double PeakLevel);
