@@ -1634,7 +1634,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			item.SourceLocation,
 			item.AssetId?.ToString(),
 			(int)item.Disposition,
-			item.Failure is null ? null : new WireFailure(item.Failure.Code, item.Failure.Message))).ToArray());
+			item.Failure is { } failure ? new WireFailure(failure.Code, failure.Message) : null)).ToArray());
 
 	private static WireMediaDeckSnapshot ToWire(MediaDeckSnapshot snapshot) => new(
 		(int)snapshot.State,
