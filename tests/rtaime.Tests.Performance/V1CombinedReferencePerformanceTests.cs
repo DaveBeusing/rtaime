@@ -136,9 +136,11 @@ public sealed class V1CombinedReferencePerformanceTests
         var programSink = initialPlan.Graph!.Nodes.Single(node => node.Kind == LogicalProductionNodeKind.ProgramSink).MediaSinkId!.Value;
         Assert.True(runtime.ApplyExecution(initialPlan.PreparedExecution!, programSink).Committed);
 
-        var pixels = new byte[checked((int)(format.Width * format.Height * 4u))];
+        const uint assetWidth = 384;
+        const uint assetHeight = 384;
+        var pixels = new byte[checked((int)(assetWidth * assetHeight * 4u))];
         Array.Fill(pixels, (byte)128);
-        runtime.LoadGraphicsOverlay("performance-full-frame.rgba", format.Width, format.Height, pixels);
+        runtime.LoadGraphicsOverlay("performance-transform.rgba", assetWidth, assetHeight, pixels);
         runtime.SetGraphicsOverlay(true, 0, 0, 1);
         runtime.SetCompositingLayerProcessingNode(
             V1RuntimeHostService.BitmapGraphicsLayerId,
