@@ -92,7 +92,7 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 
 	private readonly OperatorViewModel _operator;
 	private readonly MediaDeckViewModel _mediaDeck;
-	private readonly OperatorControlClient? _catalogClient;
+	private readonly IMediaAssetCatalogClient? _catalogClient;
 	private readonly Func<IReadOnlyList<string>>? _importFilePicker;
 	private readonly List<OperatorSourceTileViewModel> _sourceSubscriptions = [];
 	private readonly List<OperatorAudioInputViewModel> _audioSubscriptions = [];
@@ -115,7 +115,7 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 	public MediaPoolInspectorViewModel(
 		OperatorViewModel @operator,
 		MediaDeckViewModel mediaDeck,
-		OperatorControlClient? catalogClient = null,
+		IMediaAssetCatalogClient? catalogClient = null,
 		Func<IReadOnlyList<string>>? importFilePicker = null)
 	{
 		_operator = @operator ?? throw new ArgumentNullException(nameof(@operator));
