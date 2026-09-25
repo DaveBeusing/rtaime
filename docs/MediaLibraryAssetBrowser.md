@@ -72,7 +72,7 @@ The Media Library projects authoritative production Sources, persistent catalogu
 
 A currently loaded non-catalogued clip, such as an existing demo path, remains visible as a compatibility fallback. Persistent catalogue clips use `AssetId` as their reference identity.
 
-The presentation projection remains bounded to 4096 entries. Grid and List retain recycling/virtualization, deterministic search/filter ordering and local extended multi-selection. Search matches projected name, detail, format, state, stable reference and known local path.
+The presentation projection remains bounded to 4096 entries. Grid and List retain recycling/virtualization, deterministic search/filter ordering and local extended multi-selection. `Ctrl+F` focuses Media Library search. Search matches projected name, detail, format, state, stable reference and known local path.
 
 ## Preview and existing workflows
 
@@ -108,7 +108,7 @@ Persistent asynchronous thumbnail extraction/cache generation is not currently c
 
 Search, filtering, selection and scrolling remain in-process Operator projection work and perform no blocking media reads. File hashing and Runtime probing occur only during explicit catalogue operations and are outside production-critical media/render paths.
 
-There is no recursive automatic indexing, bulk-media management IPC, second media decoder, second production scheduler, UI-owned catalogue truth or implicit source-file deletion.
+There is no recursive automatic indexing and no second media index. There is also no bulk-media management IPC, second media decoder, second production scheduler, UI-owned catalogue truth or implicit source-file deletion.
 
 ## Verification
 
