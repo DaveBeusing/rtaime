@@ -759,10 +759,25 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	{
 		if (_mediaAssetCatalog is null)
 			return Error(request, "control.media_asset_catalog.unavailable", "Media asset catalogue service is not configured.");
+		var wire = request.Payload.Deserialize<WireMediaAssetCatalogRequest>(Wire.JsonOptions)
+			?? new WireMediaAssetCatalogRequest(0, 0);
+		var offset = Math.Max(0, wire.Offset);
+		var limit = wire.Limit <= 0 ? 256 : Math.Min(wire.Limit, 256);
 		try
 		{
-			var snapshot = await _mediaAssetCatalog.GetSnapshotAsync(refreshAvailability: true, cancellationToken).ConfigureAwait(false);
-			return Success(request, "control.media_asset_catalog.snapshot.response", ToWire(snapshot));
+			var snapshot = await _mediaAssetCatalog.GetSnapshotAsync(refreshAvailability: offset == 0, cancellationToken).ConfigureAwait(false);
+			var page = new MediaAssetCatalogSnapshot(
+				snapshot.Version,
+				snapshot.Revision,
+				snapshot.Assets.Skip(offset).Take(limit).ToArray());
+			return Success(
+				request,
+				"control.media_asset_catalog.snapshot.response",
+				new WireMediaAssetCatalogPage(
+					page.Version.ToString(),
+					page.Revision,
+					snapshot.Assets.Count,
+					page.Assets.Select(ToWire).ToArray()));
 		}
 		catch (Exception exception) when (exception is IOException or InvalidOperationException or InvalidDataException or UnauthorizedAccessException)
 		{
@@ -780,7 +795,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		{
 			var result = await _mediaAssetCatalog.ImportAsync(wire.SourceLocations, cancellationToken).ConfigureAwait(false);
 			NotifyObservableStateChanged();
-			return Success(request, "control.media_asset_catalog.mutation.response", ToWire(result));
+			return Success(request, "control.media_asset_catalog.mutation.response", ToWireMutation(result));
 		}
 		catch (Exception exception) when (exception is IOException or InvalidOperationException or InvalidDataException or ArgumentException or UnauthorizedAccessException)
 		{
@@ -801,7 +816,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 				wire.SourceLocation,
 				cancellationToken).ConfigureAwait(false);
 			NotifyObservableStateChanged();
-			return Success(request, "control.media_asset_catalog.mutation.response", ToWire(result));
+			return Success(request, "control.media_asset_catalog.mutation.response", ToWireMutation(result));
 		}
 		catch (Exception exception) when (exception is IOException or InvalidOperationException or InvalidDataException or ArgumentException or FormatException or UnauthorizedAccessException)
 		{
@@ -821,7 +836,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 				new MediaAssetId(Identity.Parse(wire.AssetId)),
 				cancellationToken).ConfigureAwait(false);
 			NotifyObservableStateChanged();
-			return Success(request, "control.media_asset_catalog.mutation.response", ToWire(result));
+			return Success(request, "control.media_asset_catalog.mutation.response", ToWireMutation(result));
 		}
 		catch (Exception exception) when (exception is IOException or InvalidOperationException or InvalidDataException or ArgumentException or FormatException)
 		{
@@ -837,7 +852,10 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		{
 			var snapshot = await _mediaAssetCatalog.RefreshAvailabilityAsync(cancellationToken).ConfigureAwait(false);
 			NotifyObservableStateChanged();
-			return Success(request, "control.media_asset_catalog.snapshot.response", ToWire(snapshot));
+			return Success(
+				request,
+				"control.media_asset_catalog.refresh.response",
+				new WireMediaAssetCatalogRefresh(snapshot.Revision));
 		}
 		catch (Exception exception) when (exception is IOException or InvalidOperationException or InvalidDataException or UnauthorizedAccessException)
 		{
@@ -1586,35 +1604,32 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		snapshot.Scale);
 
 
-	private static WireMediaAssetCatalogSnapshot ToWire(MediaAssetCatalogSnapshot snapshot) => new(
-		snapshot.Version.ToString(),
-		snapshot.Revision,
-		snapshot.Assets.Select(asset => new WireMediaAssetDescriptor(
-			asset.AssetId.ToString(),
-			(int)asset.Origin,
-			asset.SourceLocation,
-			asset.DisplayName,
-			(int)asset.Container,
-			(int)asset.VideoCodec,
-			(int)asset.AudioCodec,
-			asset.VideoFormat.Width,
-			asset.VideoFormat.Height,
-			asset.VideoFormat.FrameRate.ToString(),
-			(int)asset.VideoFormat.PixelFormat,
-			(int)asset.VideoFormat.ScanMode,
-			asset.AudioFormat.SampleRate,
-			(int)asset.AudioFormat.ChannelLayout,
-			(int)asset.AudioFormat.SampleFormat,
-			asset.AudioFormat.ChannelCount,
-			asset.Duration.Ticks,
-			asset.LengthBytes,
-			asset.FingerprintSha256,
-			asset.ImportedAt.ToString(),
-			asset.UpdatedAt.ToString(),
-			(int)asset.Availability)).ToArray());
+	private static WireMediaAssetDescriptor ToWire(MediaAssetDescriptor asset) => new(
+		asset.AssetId.ToString(),
+		(int)asset.Origin,
+		asset.SourceLocation,
+		asset.DisplayName,
+		(int)asset.Container,
+		(int)asset.VideoCodec,
+		(int)asset.AudioCodec,
+		asset.VideoFormat.Width,
+		asset.VideoFormat.Height,
+		asset.VideoFormat.FrameRate.ToString(),
+		(int)asset.VideoFormat.PixelFormat,
+		(int)asset.VideoFormat.ScanMode,
+		asset.AudioFormat.SampleRate,
+		(int)asset.AudioFormat.ChannelLayout,
+		(int)asset.AudioFormat.SampleFormat,
+		asset.AudioFormat.ChannelCount,
+		asset.Duration.Ticks,
+		asset.LengthBytes,
+		asset.FingerprintSha256,
+		asset.ImportedAt.ToString(),
+		asset.UpdatedAt.ToString(),
+		(int)asset.Availability);
 
-	private static WireMediaAssetCatalogMutationResult ToWire(MediaAssetCatalogMutationResult result) => new(
-		ToWire(result.Snapshot),
+	private static WireMediaAssetCatalogMutationResult ToWireMutation(MediaAssetCatalogMutationResult result) => new(
+		result.Snapshot.Revision,
 		result.Items.Select(item => new WireMediaAssetMutationItem(
 			item.SourceLocation,
 			item.AssetId?.ToString(),
@@ -1949,6 +1964,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		bool RequiresAcknowledgement,
 		WireFailure? Failure);
 	private sealed record WireShowControlWorkspace(string[] CueLists, string? SelectedCueListId, WireShowControlExecution Execution);
+	private sealed record WireMediaAssetCatalogRequest(int Offset, int Limit);
 	private sealed record WireMediaAssetImport(string[] SourceLocations);
 	private sealed record WireMediaAssetRelink(string AssetId, string SourceLocation);
 	private sealed record WireMediaAssetRemove(string AssetId);
@@ -1975,9 +1991,10 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		string ImportedAt,
 		string UpdatedAt,
 		int Availability);
-	private sealed record WireMediaAssetCatalogSnapshot(string Version, ulong Revision, WireMediaAssetDescriptor[] Assets);
+	private sealed record WireMediaAssetCatalogPage(string Version, ulong Revision, int TotalCount, WireMediaAssetDescriptor[] Assets);
 	private sealed record WireMediaAssetMutationItem(string SourceLocation, string? AssetId, int Disposition, WireFailure? Failure);
-	private sealed record WireMediaAssetCatalogMutationResult(WireMediaAssetCatalogSnapshot Snapshot, WireMediaAssetMutationItem[] Items);
+	private sealed record WireMediaAssetCatalogMutationResult(ulong Revision, WireMediaAssetMutationItem[] Items);
+	private sealed record WireMediaAssetCatalogRefresh(ulong Revision);
 	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path, string? AssetId);
 	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame, bool? AutoPlayOnProgram, int? EndBehavior, long? InPointFrame, long? OutPointFrame);
 	private sealed record WireMediaMarkerCommand(string Version, string AssetId, int Kind, long? PositionFrame, string? CuePointId, string? Name);

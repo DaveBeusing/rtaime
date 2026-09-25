@@ -280,8 +280,42 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 
 	public async ValueTask<MediaAssetCatalogSnapshot> GetMediaAssetCatalogAsync(CancellationToken cancellationToken = default)
 	{
-		var response = await ExchangeAsync("control.media_asset_catalog.snapshot.get", new { }, cancellationToken).ConfigureAwait(false);
-		return ReadMediaAssetCatalogSnapshot(response);
+		const int pageSize = 256;
+		for (var attempt = 0; attempt < 3; attempt++)
+		{
+			var assets = new List<MediaAssetDescriptor>();
+			ulong? revision = null;
+			CompatibilityVersion? version = null;
+			var offset = 0;
+			var restart = false;
+
+			while (true)
+			{
+				var response = await ExchangeAsync(
+					"control.media_asset_catalog.snapshot.get",
+					new WireMediaAssetCatalogRequest(offset, pageSize),
+					cancellationToken).ConfigureAwait(false);
+				var page = ReadMediaAssetCatalogPage(response);
+				if (revision is not null && page.Revision != revision.Value)
+				{
+					restart = true;
+					break;
+				}
+				revision ??= page.Revision;
+				version ??= page.Version;
+				assets.AddRange(page.Assets);
+				offset += page.Assets.Count;
+				if (offset >= page.TotalCount)
+					return new MediaAssetCatalogSnapshot(version.Value, revision.Value, assets);
+				if (page.Assets.Count == 0)
+					throw new InvalidDataException("Media asset catalogue paging made no forward progress.");
+			}
+
+			if (!restart)
+				break;
+		}
+
+		throw new InvalidOperationException("Media asset catalogue changed repeatedly while a consistent snapshot was being read.");
 	}
 
 	public async ValueTask<MediaAssetCatalogMutationResult> ImportMediaAssetsAsync(
@@ -293,7 +327,9 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 			"control.media_asset_catalog.import",
 			new WireMediaAssetImport(sourceLocations.ToArray()),
 			cancellationToken).ConfigureAwait(false);
-		return ReadMediaAssetCatalogMutationResult(response);
+		var items = ReadMediaAssetMutationItems(response);
+		var snapshot = await GetMediaAssetCatalogAsync(cancellationToken).ConfigureAwait(false);
+		return new MediaAssetCatalogMutationResult(snapshot, items);
 	}
 
 	public async ValueTask<MediaAssetCatalogMutationResult> RelinkMediaAssetAsync(
@@ -305,7 +341,9 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 			"control.media_asset_catalog.relink",
 			new WireMediaAssetRelink(assetId.ToString(), sourceLocation),
 			cancellationToken).ConfigureAwait(false);
-		return ReadMediaAssetCatalogMutationResult(response);
+		var items = ReadMediaAssetMutationItems(response);
+		var snapshot = await GetMediaAssetCatalogAsync(cancellationToken).ConfigureAwait(false);
+		return new MediaAssetCatalogMutationResult(snapshot, items);
 	}
 
 	public async ValueTask<MediaAssetCatalogMutationResult> RemoveMediaAssetAsync(
@@ -316,13 +354,15 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 			"control.media_asset_catalog.remove",
 			new WireMediaAssetRemove(assetId.ToString()),
 			cancellationToken).ConfigureAwait(false);
-		return ReadMediaAssetCatalogMutationResult(response);
+		var items = ReadMediaAssetMutationItems(response);
+		var snapshot = await GetMediaAssetCatalogAsync(cancellationToken).ConfigureAwait(false);
+		return new MediaAssetCatalogMutationResult(snapshot, items);
 	}
 
 	public async ValueTask<MediaAssetCatalogSnapshot> RefreshMediaAssetAvailabilityAsync(CancellationToken cancellationToken = default)
 	{
-		var response = await ExchangeAsync("control.media_asset_catalog.availability.refresh", new { }, cancellationToken).ConfigureAwait(false);
-		return ReadMediaAssetCatalogSnapshot(response);
+		_ = await ExchangeAsync("control.media_asset_catalog.availability.refresh", new { }, cancellationToken).ConfigureAwait(false);
+		return await GetMediaAssetCatalogAsync(cancellationToken).ConfigureAwait(false);
 	}
 
 	public async ValueTask<MediaDeckSnapshot> GetMediaDeckSnapshotAsync(CancellationToken cancellationToken = default)
@@ -664,33 +704,31 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 			execution);
 	}
 
-	private static MediaAssetCatalogSnapshot ReadMediaAssetCatalogSnapshot(WireEnvelope response)
+	private static MediaAssetCatalogPage ReadMediaAssetCatalogPage(WireEnvelope response)
 	{
-		var wire = response.Payload.Deserialize<WireMediaAssetCatalogSnapshot>(Wire.JsonOptions)
-			?? throw new InvalidDataException("Media asset catalogue snapshot payload is required.");
-		return FromWire(wire);
+		var wire = response.Payload.Deserialize<WireMediaAssetCatalogPage>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Media asset catalogue page payload is required.");
+		if (wire.TotalCount < 0)
+			throw new InvalidDataException("Media asset catalogue total count is invalid.");
+		return new MediaAssetCatalogPage(
+			CompatibilityVersion.Parse(wire.Version),
+			wire.Revision,
+			wire.TotalCount,
+			wire.Assets.Select(FromWire).ToArray());
 	}
 
-	private static MediaAssetCatalogMutationResult ReadMediaAssetCatalogMutationResult(WireEnvelope response)
+	private static IReadOnlyList<MediaAssetMutationItem> ReadMediaAssetMutationItems(WireEnvelope response)
 	{
 		var wire = response.Payload.Deserialize<WireMediaAssetCatalogMutationResult>(Wire.JsonOptions)
 			?? throw new InvalidDataException("Media asset catalogue mutation payload is required.");
-		return new MediaAssetCatalogMutationResult(
-			FromWire(wire.Snapshot),
-			wire.Items.Select(item => new MediaAssetMutationItem(
-				item.SourceLocation,
-				string.IsNullOrWhiteSpace(item.AssetId) ? null : new MediaAssetId(Identity.Parse(item.AssetId)),
-				Enum.IsDefined(typeof(MediaAssetMutationDisposition), item.Disposition)
-					? (MediaAssetMutationDisposition)item.Disposition
-					: throw new InvalidDataException("Media asset mutation disposition is invalid."),
-				item.Failure is null ? null : new Failure(item.Failure.Code, item.Failure.Message))).ToArray());
+		return wire.Items.Select(item => new MediaAssetMutationItem(
+			item.SourceLocation,
+			string.IsNullOrWhiteSpace(item.AssetId) ? null : new MediaAssetId(Identity.Parse(item.AssetId)),
+			Enum.IsDefined(typeof(MediaAssetMutationDisposition), item.Disposition)
+				? (MediaAssetMutationDisposition)item.Disposition
+				: throw new InvalidDataException("Media asset mutation disposition is invalid."),
+			item.Failure is null ? null : new Failure(item.Failure.Code, item.Failure.Message))).ToArray();
 	}
-
-	private static MediaAssetCatalogSnapshot FromWire(WireMediaAssetCatalogSnapshot snapshot) =>
-		new(
-			CompatibilityVersion.Parse(snapshot.Version),
-			snapshot.Revision,
-			snapshot.Assets.Select(FromWire).ToArray());
 
 	private static MediaAssetDescriptor FromWire(WireMediaAssetDescriptor asset)
 	{
@@ -1163,6 +1201,12 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		bool RequiresAcknowledgement,
 		WireFailure? Failure);
 	private sealed record WireShowControlWorkspace(string[] CueLists, string? SelectedCueListId, WireShowControlExecution Execution);
+	private sealed record MediaAssetCatalogPage(
+		CompatibilityVersion Version,
+		ulong Revision,
+		int TotalCount,
+		IReadOnlyList<MediaAssetDescriptor> Assets);
+	private sealed record WireMediaAssetCatalogRequest(int Offset, int Limit);
 	private sealed record WireMediaAssetImport(string[] SourceLocations);
 	private sealed record WireMediaAssetRelink(string AssetId, string SourceLocation);
 	private sealed record WireMediaAssetRemove(string AssetId);
@@ -1189,9 +1233,10 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		string ImportedAt,
 		string UpdatedAt,
 		int Availability);
-	private sealed record WireMediaAssetCatalogSnapshot(string Version, ulong Revision, WireMediaAssetDescriptor[] Assets);
+	private sealed record WireMediaAssetCatalogPage(string Version, ulong Revision, int TotalCount, WireMediaAssetDescriptor[] Assets);
 	private sealed record WireMediaAssetMutationItem(string SourceLocation, string? AssetId, int Disposition, WireFailure? Failure);
-	private sealed record WireMediaAssetCatalogMutationResult(WireMediaAssetCatalogSnapshot Snapshot, WireMediaAssetMutationItem[] Items);
+	private sealed record WireMediaAssetCatalogMutationResult(ulong Revision, WireMediaAssetMutationItem[] Items);
+	private sealed record WireMediaAssetCatalogRefresh(ulong Revision);
 	private sealed record WireMediaDeckOpen(string Version, string SourceId, string Path, string? AssetId);
 	private sealed record WireMediaTransportCommand(string Version, string AssetId, int Kind, long? TargetFrame, bool? AutoPlayOnProgram, int? EndBehavior, long? InPointFrame, long? OutPointFrame);
 	private sealed record WireMediaMarkerCommand(string Version, string AssetId, int Kind, long? PositionFrame, string? CuePointId, string? Name);
