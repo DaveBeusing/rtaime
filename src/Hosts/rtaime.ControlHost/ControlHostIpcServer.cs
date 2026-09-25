@@ -130,90 +130,90 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	private async ValueTask RestoreGraphicsStateCoreAsync(CancellationToken cancellationToken)
 	{
 		if (!_runtimeTransport.IsConnected)
-			return;
+		return;
 
-			if (_graphicsAsset is null && _durableBitmapReference is { } durableBitmap && _showProjectStore is not null)
+		if (_graphicsAsset is null && _durableBitmapReference is { } durableBitmap && _showProjectStore is not null)
+		{
+			try
 			{
-				try
-				{
-					var rgbaPixels = await _showProjectStore.LoadBitmapAssetAsync(durableBitmap, cancellationToken).ConfigureAwait(false);
-					_graphicsAsset = new RetainedGraphicsAsset(durableBitmap.Name, durableBitmap.Width, durableBitmap.Height, rgbaPixels);
-				}
-				catch (Exception exception) when (exception is IOException or InvalidDataException or UnauthorizedAccessException)
-				{
-					SetShowProjectState("RECOVERY_REQUIRED", $"Durable bitmap graphics could not be restored: {exception.Message}");
-					throw;
-				}
+				var rgbaPixels = await _showProjectStore.LoadBitmapAssetAsync(durableBitmap, cancellationToken).ConfigureAwait(false);
+				_graphicsAsset = new RetainedGraphicsAsset(durableBitmap.Name, durableBitmap.Width, durableBitmap.Height, rgbaPixels);
 			}
-
-			if (_graphicsAsset is { } asset)
+			catch (Exception exception) when (exception is IOException or InvalidDataException or UnauthorizedAccessException)
 			{
-				await _runtimeTransport.LoadGraphicsOverlayAsync(
-					asset.Name,
-					asset.Width,
-					asset.Height,
-					asset.RgbaPixels,
+				SetShowProjectState("RECOVERY_REQUIRED", $"Durable bitmap graphics could not be restored: {exception.Message}");
+				throw;
+			}
+		}
+
+		if (_graphicsAsset is { } asset)
+		{
+			await _runtimeTransport.LoadGraphicsOverlayAsync(
+				asset.Name,
+				asset.Width,
+				asset.Height,
+				asset.RgbaPixels,
+				cancellationToken).ConfigureAwait(false);
+			await _runtimeTransport.SetGraphicsOverlayAsync(
+				_graphicsOverlayState.Visible,
+				_graphicsOverlayState.PositionX,
+				_graphicsOverlayState.PositionY,
+				_graphicsOverlayState.Scale,
+				cancellationToken).ConfigureAwait(false);
+		}
+
+		if (_productionCgText is { } definition)
+			await _runtimeTransport.ApplyProductionCgTextAsync(definition, cancellationToken).ConfigureAwait(false);
+
+		if (_compositingLayers.Count > 0)
+		{
+			foreach (var layer in _compositingLayers.Where(layer =>
+				layer.LayerId is "bitmap-graphics" or "production-cg"))
+			{
+				await _runtimeTransport.SetCompositingLayerStateAsync(
+					layer.LayerId,
+					layer.Visible,
+					layer.Opacity,
 					cancellationToken).ConfigureAwait(false);
-				await _runtimeTransport.SetGraphicsOverlayAsync(
-					_graphicsOverlayState.Visible,
-					_graphicsOverlayState.PositionX,
-					_graphicsOverlayState.PositionY,
-					_graphicsOverlayState.Scale,
+				await _runtimeTransport.SetCompositingLayerTransformAsync(
+					layer.LayerId,
+					layer.PositionX,
+					layer.PositionY,
+					layer.Scale,
+					layer.RotationDegrees,
+					layer.AnchorX,
+					layer.AnchorY,
+					layer.CropLeft,
+					layer.CropTop,
+					layer.CropRight,
+					layer.CropBottom,
+					cancellationToken).ConfigureAwait(false);
+				await _runtimeTransport.SetCompositingLayerProcessingNodeAsync(
+					layer.LayerId,
+					layer.ProcessingNode,
 					cancellationToken).ConfigureAwait(false);
 			}
-
-			if (_productionCgText is { } definition)
-				await _runtimeTransport.ApplyProductionCgTextAsync(definition, cancellationToken).ConfigureAwait(false);
-
-			if (_compositingLayers.Count > 0)
-			{
-				foreach (var layer in _compositingLayers.Where(layer =>
-					layer.LayerId is "bitmap-graphics" or "production-cg"))
-				{
-					await _runtimeTransport.SetCompositingLayerStateAsync(
-						layer.LayerId,
-						layer.Visible,
-						layer.Opacity,
-						cancellationToken).ConfigureAwait(false);
-					await _runtimeTransport.SetCompositingLayerTransformAsync(
-						layer.LayerId,
-						layer.PositionX,
-						layer.PositionY,
-						layer.Scale,
-						layer.RotationDegrees,
-						layer.AnchorX,
-						layer.AnchorY,
-						layer.CropLeft,
-						layer.CropTop,
-						layer.CropRight,
-						layer.CropBottom,
-						cancellationToken).ConfigureAwait(false);
-					await _runtimeTransport.SetCompositingLayerProcessingNodeAsync(
-						layer.LayerId,
-						layer.ProcessingNode,
-						cancellationToken).ConfigureAwait(false);
-				}
-				var current = await _runtimeTransport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
-				var retainedOrder = _compositingLayers
-					.OrderBy(layer => layer.Order)
-					.Select(layer => layer.LayerId)
-					.Where(layerId => current.CompositingLayers?.Any(layer => string.Equals(layer.LayerId, layerId, StringComparison.Ordinal)) == true)
-					.ToArray();
-				var missing = (current.CompositingLayers ?? Array.Empty<RuntimeCompositingLayerSnapshot>())
-					.Select(layer => layer.LayerId)
-					.Where(layerId => !retainedOrder.Contains(layerId, StringComparer.Ordinal))
-					.ToArray();
-				var order = retainedOrder.Concat(missing).ToArray();
-				if (order.Length > 0)
-					_compositingLayers = await _runtimeTransport.ReorderCompositingLayersAsync(order, cancellationToken).ConfigureAwait(false);
-			}
-			if (_showProject is not null && _showProjectState != "RECOVERY_REQUIRED")
-			{
-				SetShowProjectState(
-					"RESTORED",
-					$"Durable show project '{_showProject.Name}' was restored through Runtime confirmation paths.");
-			}
-			NotifyObservableStateChanged();
+			var current = await _runtimeTransport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
+			var retainedOrder = _compositingLayers
+				.OrderBy(layer => layer.Order)
+				.Select(layer => layer.LayerId)
+				.Where(layerId => current.CompositingLayers?.Any(layer => string.Equals(layer.LayerId, layerId, StringComparison.Ordinal)) == true)
+				.ToArray();
+			var missing = (current.CompositingLayers ?? Array.Empty<RuntimeCompositingLayerSnapshot>())
+				.Select(layer => layer.LayerId)
+				.Where(layerId => !retainedOrder.Contains(layerId, StringComparer.Ordinal))
+				.ToArray();
+			var order = retainedOrder.Concat(missing).ToArray();
+			if (order.Length > 0)
+				_compositingLayers = await _runtimeTransport.ReorderCompositingLayersAsync(order, cancellationToken).ConfigureAwait(false);
+		}
+		if (_showProject is not null && _showProjectState != "RECOVERY_REQUIRED")
+		{
+			SetShowProjectState(
+				"RESTORED",
+				$"Durable show project '{_showProject.Name}' was restored through Runtime confirmation paths.");
+		}
+		NotifyObservableStateChanged();
 	}
 
 	public void NotifyObservableStateChanged()
