@@ -1847,7 +1847,15 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 						layer.PositionX,
 						layer.PositionY,
 						layer.Scale,
-						layer.ContentIdentity))
+						layer.ContentIdentity,
+						layer.RotationDegrees,
+						layer.AnchorX,
+						layer.AnchorY,
+						layer.CropLeft,
+						layer.CropTop,
+						layer.CropRight,
+						layer.CropBottom,
+						layer.ProcessingNode))
 					.ToArray();
 			}
 
