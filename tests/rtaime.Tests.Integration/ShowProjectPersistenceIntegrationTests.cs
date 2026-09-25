@@ -100,7 +100,19 @@ public sealed class ShowProjectPersistenceIntegrationTests
 							0.1,
 							0.2,
 							1.5,
-							"durable.rgba"),
+							"durable.rgba",
+							rotationDegrees: 17.5,
+							anchorX: 0.5,
+							anchorY: 0.25,
+							cropLeft: 0.05,
+							cropTop: 0.10,
+							cropRight: 0.15,
+							cropBottom: 0.20,
+							processingNode: new ProductionCompositingProcessingNodeState(
+								"grade-primary",
+								ProductionCompositingProcessingNodeKind.ColorGrade,
+								true,
+								new ProductionColorGradeSettings(0.1, 1.2, 0.8))),
 						new ProductionCompositingLayerState(
 							ProductionCompositingLayerIds.ProductionCg,
 							ProductionCompositingLayerKind.ProductionCg,
@@ -140,6 +152,21 @@ public sealed class ShowProjectPersistenceIntegrationTests
 				Assert.Equal(bitmap.AssetId, reopened.Graphics.Bitmap?.AssetId);
 				Assert.Equal("Durable", reopened.Graphics.ProductionCgText?.Text);
 				Assert.Equal(2, reopened.Graphics.CompositingState?.Layers.Count);
+				var reopenedBitmapLayer = Assert.Single(
+					reopened.Graphics.CompositingState!.Layers,
+					layer => layer.LayerId == ProductionCompositingLayerIds.BitmapGraphics);
+				Assert.Equal(17.5, reopenedBitmapLayer.RotationDegrees, 6);
+				Assert.Equal(0.5, reopenedBitmapLayer.AnchorX, 6);
+				Assert.Equal(0.25, reopenedBitmapLayer.AnchorY, 6);
+				Assert.Equal(0.05, reopenedBitmapLayer.CropLeft, 6);
+				Assert.Equal(0.10, reopenedBitmapLayer.CropTop, 6);
+				Assert.Equal(0.15, reopenedBitmapLayer.CropRight, 6);
+				Assert.Equal(0.20, reopenedBitmapLayer.CropBottom, 6);
+				Assert.NotNull(reopenedBitmapLayer.ProcessingNode);
+				Assert.Equal("grade-primary", reopenedBitmapLayer.ProcessingNode!.NodeId);
+				Assert.Equal(0.1, reopenedBitmapLayer.ProcessingNode.ColorGrade.Brightness, 6);
+				Assert.Equal(1.2, reopenedBitmapLayer.ProcessingNode.ColorGrade.Contrast, 6);
+				Assert.Equal(0.8, reopenedBitmapLayer.ProcessingNode.ColorGrade.Saturation, 6);
 
 				var bytes = await reopenedStore.LoadBitmapAssetAsync(Assert.IsType<DurableBitmapGraphicsReference>(reopened.Graphics.Bitmap));
 				Assert.Equal(new byte[] { 12, 34, 56, 255 }, bytes);

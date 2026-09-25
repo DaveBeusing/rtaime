@@ -170,6 +170,59 @@ public enum PreparedCompositingLayerKind
     ProductionCg = 3
 }
 
+public enum PreparedCompositingProcessingNodeKind
+{
+    ColorGrade = 1
+}
+
+public sealed record PreparedColorGradeSettings
+{
+    public PreparedColorGradeSettings(double brightness, double contrast, double saturation)
+    {
+        if (!double.IsFinite(brightness) || brightness is < -1.0 or > 1.0)
+            throw new ArgumentOutOfRangeException(nameof(brightness));
+        if (!double.IsFinite(contrast) || contrast is < 0.0 or > 2.0)
+            throw new ArgumentOutOfRangeException(nameof(contrast));
+        if (!double.IsFinite(saturation) || saturation is < 0.0 or > 2.0)
+            throw new ArgumentOutOfRangeException(nameof(saturation));
+
+        Brightness = brightness;
+        Contrast = contrast;
+        Saturation = saturation;
+    }
+
+    public double Brightness { get; }
+    public double Contrast { get; }
+    public double Saturation { get; }
+}
+
+public sealed record PreparedCompositingProcessingNodeState
+{
+    public PreparedCompositingProcessingNodeState(
+        string nodeId,
+        PreparedCompositingProcessingNodeKind kind,
+        bool enabled,
+        PreparedColorGradeSettings colorGrade)
+    {
+        if (string.IsNullOrWhiteSpace(nodeId) || nodeId.Length > 64)
+            throw new ArgumentException("Prepared processing node identity is required and must not exceed 64 characters.", nameof(nodeId));
+        if (!Enum.IsDefined(kind))
+            throw new ArgumentOutOfRangeException(nameof(kind));
+        if (kind != PreparedCompositingProcessingNodeKind.ColorGrade)
+            throw new NotSupportedException($"Prepared processing node kind '{kind}' is not supported.");
+
+        NodeId = nodeId.Trim();
+        Kind = kind;
+        Enabled = enabled;
+        ColorGrade = colorGrade ?? throw new ArgumentNullException(nameof(colorGrade));
+    }
+
+    public string NodeId { get; }
+    public PreparedCompositingProcessingNodeKind Kind { get; }
+    public bool Enabled { get; }
+    public PreparedColorGradeSettings ColorGrade { get; }
+}
+
 public sealed record PreparedCompositingLayerState
 {
     public PreparedCompositingLayerState(
@@ -181,7 +234,15 @@ public sealed record PreparedCompositingLayerState
         double positionX,
         double positionY,
         double scale,
-        string contentIdentity)
+        string contentIdentity,
+        double rotationDegrees = 0.0,
+        double anchorX = 0.0,
+        double anchorY = 0.0,
+        double cropLeft = 0.0,
+        double cropTop = 0.0,
+        double cropRight = 0.0,
+        double cropBottom = 0.0,
+        PreparedCompositingProcessingNodeState? processingNode = null)
     {
         if (string.IsNullOrWhiteSpace(layerId))
             throw new ArgumentException("Prepared compositing layer identity is required.", nameof(layerId));
@@ -189,12 +250,22 @@ public sealed record PreparedCompositingLayerState
             throw new ArgumentOutOfRangeException(nameof(kind));
         if (order is < 0 or >= 8)
             throw new ArgumentOutOfRangeException(nameof(order));
-        if (!double.IsFinite(positionX) || positionX is < 0 or > 1)
-            throw new ArgumentOutOfRangeException(nameof(positionX));
-        if (!double.IsFinite(positionY) || positionY is < 0 or > 1)
-            throw new ArgumentOutOfRangeException(nameof(positionY));
+        ValidateNormalized(positionX, nameof(positionX));
+        ValidateNormalized(positionY, nameof(positionY));
         if (!double.IsFinite(scale) || scale is < 0.05 or > 4.0)
             throw new ArgumentOutOfRangeException(nameof(scale));
+        if (!double.IsFinite(rotationDegrees) || rotationDegrees is < -180.0 or > 180.0)
+            throw new ArgumentOutOfRangeException(nameof(rotationDegrees));
+        ValidateNormalized(anchorX, nameof(anchorX));
+        ValidateNormalized(anchorY, nameof(anchorY));
+        ValidateCrop(cropLeft, cropTop, cropRight, cropBottom);
+        if (kind == PreparedCompositingLayerKind.LegacyVisual &&
+            (rotationDegrees != 0.0 || anchorX != 0.0 || anchorY != 0.0 ||
+             cropLeft != 0.0 || cropTop != 0.0 || cropRight != 0.0 || cropBottom != 0.0 ||
+             processingNode is not null))
+        {
+            throw new ArgumentException("Legacy visual layers do not expose transform extensions or processing nodes.");
+        }
         if (string.IsNullOrWhiteSpace(contentIdentity) || contentIdentity.Length > 512)
             throw new ArgumentException("Prepared compositing content identity is required and must not exceed 512 characters.", nameof(contentIdentity));
 
@@ -206,7 +277,15 @@ public sealed record PreparedCompositingLayerState
         PositionX = positionX;
         PositionY = positionY;
         Scale = scale;
+        RotationDegrees = rotationDegrees;
+        AnchorX = anchorX;
+        AnchorY = anchorY;
+        CropLeft = cropLeft;
+        CropTop = cropTop;
+        CropRight = cropRight;
+        CropBottom = cropBottom;
         ContentIdentity = contentIdentity.Trim();
+        ProcessingNode = processingNode;
     }
 
     public string LayerId { get; }
@@ -217,7 +296,33 @@ public sealed record PreparedCompositingLayerState
     public double PositionX { get; }
     public double PositionY { get; }
     public double Scale { get; }
+    public double RotationDegrees { get; }
+    public double AnchorX { get; }
+    public double AnchorY { get; }
+    public double CropLeft { get; }
+    public double CropTop { get; }
+    public double CropRight { get; }
+    public double CropBottom { get; }
     public string ContentIdentity { get; }
+    public PreparedCompositingProcessingNodeState? ProcessingNode { get; }
+
+    private static void ValidateNormalized(double value, string parameterName)
+    {
+        if (!double.IsFinite(value) || value is < 0.0 or > 1.0)
+            throw new ArgumentOutOfRangeException(parameterName);
+    }
+
+    private static void ValidateCrop(double left, double top, double right, double bottom)
+    {
+        ValidateNormalized(left, nameof(left));
+        ValidateNormalized(top, nameof(top));
+        ValidateNormalized(right, nameof(right));
+        ValidateNormalized(bottom, nameof(bottom));
+        if (left + right >= 1.0)
+            throw new ArgumentOutOfRangeException(nameof(right));
+        if (top + bottom >= 1.0)
+            throw new ArgumentOutOfRangeException(nameof(bottom));
+    }
 }
 
 public sealed class PreparedCompositingState

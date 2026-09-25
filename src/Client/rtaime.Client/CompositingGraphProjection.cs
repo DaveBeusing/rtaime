@@ -8,6 +8,7 @@ public enum CompositingGraphNodeKind
 	Layer,
 	Routing,
 	Transform,
+	Processing,
 	Composite,
 	Output,
 	Recorder
@@ -198,19 +199,68 @@ public static class CompositingGraphProjector
 				.ThenBy(layer => layer.LayerId, StringComparer.Ordinal))
 			{
 				var layerNodeId = $"layer:{layer.LayerId}";
+				var transformNodeId = $"transform:{layer.LayerId}";
 				var opacity = layer.Opacity / 255.0 * 100.0;
 				nodes.Add(new CompositingGraphNodeProjection(
 					layerNodeId,
 					CompositingGraphNodeKind.Layer,
 					layer.ContentIdentity,
-					$"ORDER {layer.Order} · {opacity:0}% · X {layer.PositionX * 100:0.#}% · Y {layer.PositionY * 100:0.#}% · {layer.Scale:0.##}x",
+					$"ORDER {layer.Order} · {opacity:0}%",
 					layer.Visible ? "CONFIRMED VISIBLE" : "CONFIRMED HIDDEN",
 					CompositingGraphHealth.Normal,
 					[new("rgba", "RGBA", CompositingGraphPortDirection.Output)]));
+
+				nodes.Add(new CompositingGraphNodeProjection(
+					transformNodeId,
+					CompositingGraphNodeKind.Transform,
+					$"{layer.ContentIdentity} Transform",
+					$"X {layer.PositionX * 100:0.#}% · Y {layer.PositionY * 100:0.#}% · {layer.Scale:0.##}x · R {layer.RotationDegrees:0.##}° · A {layer.AnchorX:0.##},{layer.AnchorY:0.##} · C {layer.CropLeft:0.##}/{layer.CropTop:0.##}/{layer.CropRight:0.##}/{layer.CropBottom:0.##}",
+					"CONFIRMED",
+					CompositingGraphHealth.Normal,
+					[
+						new("input", "Layer", CompositingGraphPortDirection.Input),
+						new("output", "Transformed", CompositingGraphPortDirection.Output)
+					]));
 				connections.Add(new CompositingGraphConnectionProjection(
-					$"{layerNodeId}->composite",
+					$"{layerNodeId}->{transformNodeId}",
 					layerNodeId,
 					"rgba",
+					transformNodeId,
+					"input",
+					layer.Visible));
+
+				var tailNodeId = transformNodeId;
+				var tailPortId = "output";
+				if (layer.ProcessingNode is { } processingNode)
+				{
+					var processingNodeId = $"processing:{layer.LayerId}:{processingNode.NodeId}";
+					var grade = processingNode.ColorGrade;
+					nodes.Add(new CompositingGraphNodeProjection(
+						processingNodeId,
+						CompositingGraphNodeKind.Processing,
+						"Color Grade",
+						$"Brightness {grade.Brightness:0.##} · Contrast {grade.Contrast:0.##} · Saturation {grade.Saturation:0.##}",
+						processingNode.Enabled ? "CONFIRMED ENABLED" : "CONFIRMED DISABLED",
+						CompositingGraphHealth.Normal,
+						[
+							new("input", "Transformed", CompositingGraphPortDirection.Input),
+							new("output", "Processed", CompositingGraphPortDirection.Output)
+						]));
+					connections.Add(new CompositingGraphConnectionProjection(
+						$"{transformNodeId}->{processingNodeId}",
+						transformNodeId,
+						"output",
+						processingNodeId,
+						"input",
+						layer.Visible));
+					tailNodeId = processingNodeId;
+					tailPortId = "output";
+				}
+
+				connections.Add(new CompositingGraphConnectionProjection(
+					$"{tailNodeId}->composite",
+					tailNodeId,
+					tailPortId,
 					"composite",
 					"layer",
 					layer.Visible));

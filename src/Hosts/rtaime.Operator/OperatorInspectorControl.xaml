@@ -739,6 +739,45 @@
 												</StackPanel>
 											</Border>
 										</StackPanel>
+										<StackPanel>
+											<StackPanel.Style>
+												<Style TargetType="StackPanel">
+													<Setter Property="Visibility" Value="Collapsed" />
+													<Style.Triggers>
+														<DataTrigger Binding="{Binding Inspector.HasAuthoritativeCompositingSelection, ElementName=Root}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
+													</Style.Triggers>
+												</Style>
+											</StackPanel.Style>
+											<controls:RtaimeToggleButton Content="AUTHORITATIVE TRANSFORM" Style="{StaticResource InspectorSectionToggle}" IsChecked="{Binding Inspector.IsTransformExpanded, ElementName=Root, Mode=TwoWay}" />
+											<Border>
+												<Border.Style>
+													<Style TargetType="Border" BasedOn="{StaticResource InspectorPropertySectionContent}">
+														<Setter Property="Visibility" Value="Collapsed" />
+														<Style.Triggers>
+															<DataTrigger Binding="{Binding Inspector.IsTransformExpanded, ElementName=Root}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
+														</Style.Triggers>
+													</Style>
+												</Border.Style>
+												<StackPanel>
+													<Grid Height="32"><Grid.ColumnDefinitions><ColumnDefinition Width="96" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><TextBlock Text="Position X" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" /><controls:RtaimeTextBox Grid.Column="1" Text="{Binding Inspector.SelectedLayerPositionX, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}" Style="{StaticResource InspectorNumericTextBox}" /></Grid>
+													<Grid Height="32"><Grid.ColumnDefinitions><ColumnDefinition Width="96" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><TextBlock Text="Position Y" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" /><controls:RtaimeTextBox Grid.Column="1" Text="{Binding Inspector.SelectedLayerPositionY, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}" Style="{StaticResource InspectorNumericTextBox}" /></Grid>
+													<Grid Height="32"><Grid.ColumnDefinitions><ColumnDefinition Width="96" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><TextBlock Text="Scale" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" /><controls:RtaimeTextBox Grid.Column="1" Text="{Binding Inspector.SelectedLayerScale, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}" Style="{StaticResource InspectorNumericTextBox}" /></Grid>
+													<Grid Height="32"><Grid.ColumnDefinitions><ColumnDefinition Width="96" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><TextBlock Text="Rotation °" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" /><controls:RtaimeTextBox Grid.Column="1" Text="{Binding Inspector.SelectedLayerRotationDegrees, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}" Style="{StaticResource InspectorNumericTextBox}" /></Grid>
+													<Grid Height="32"><Grid.ColumnDefinitions><ColumnDefinition Width="96" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><TextBlock Text="Anchor X" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" /><controls:RtaimeTextBox Grid.Column="1" Text="{Binding Inspector.SelectedLayerAnchorX, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}" Style="{StaticResource InspectorNumericTextBox}" /></Grid>
+													<Grid Height="32"><Grid.ColumnDefinitions><ColumnDefinition Width="96" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><TextBlock Text="Anchor Y" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" /><controls:RtaimeTextBox Grid.Column="1" Text="{Binding Inspector.SelectedLayerAnchorY, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}" Style="{StaticResource InspectorNumericTextBox}" /></Grid>
+													<Grid Height="32"><Grid.ColumnDefinitions><ColumnDefinition Width="96" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><TextBlock Text="Crop Left" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" /><controls:RtaimeTextBox Grid.Column="1" Text="{Binding Inspector.SelectedLayerCropLeft, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}" Style="{StaticResource InspectorNumericTextBox}" /></Grid>
+													<Grid Height="32"><Grid.ColumnDefinitions><ColumnDefinition Width="96" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><TextBlock Text="Crop Top" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" /><controls:RtaimeTextBox Grid.Column="1" Text="{Binding Inspector.SelectedLayerCropTop, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}" Style="{StaticResource InspectorNumericTextBox}" /></Grid>
+													<Grid Height="32"><Grid.ColumnDefinitions><ColumnDefinition Width="96" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><TextBlock Text="Crop Right" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" /><controls:RtaimeTextBox Grid.Column="1" Text="{Binding Inspector.SelectedLayerCropRight, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}" Style="{StaticResource InspectorNumericTextBox}" /></Grid>
+													<Grid Height="32"><Grid.ColumnDefinitions><ColumnDefinition Width="96" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><TextBlock Text="Crop Bottom" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" /><controls:RtaimeTextBox Grid.Column="1" Text="{Binding Inspector.SelectedLayerCropBottom, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}" Style="{StaticResource InspectorNumericTextBox}" /></Grid>
+													<Grid Margin="96,6,0,2">
+														<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="4" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+														<controls:RtaimeButton Grid.Column="0" Content="APPLY" Command="{Binding Inspector.ApplyCompositingTransformCommand, ElementName=Root}" IsCompact="True" />
+														<controls:RtaimeButton Grid.Column="2" Content="RESET DRAFT" Command="{Binding Inspector.ResetCompositingTransformCommand, ElementName=Root}" IsCompact="True" />
+													</Grid>
+													<TextBlock Text="{Binding Inspector.UnsupportedTransformCapabilityText, ElementName=Root}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="96,4,0,4" />
+												</StackPanel>
+											</Border>
+										</StackPanel>
 									</StackPanel>
 								</controls:RtaimeScrollViewer>
 							</controls:RtaimeTabItem>
@@ -768,18 +807,41 @@
 													</TextBlock.Style>
 												</TextBlock>
 												<ItemsControl ItemsSource="{Binding Inspector.InspectorEffectProperties, ElementName=Root}" ItemTemplate="{StaticResource InspectorEffectTemplate}" />
-												<Grid Margin="0,6,0,0">
-													<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="4" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-													<controls:RtaimeButton Grid.Column="0" Content="ENABLE" Command="{Binding ControlState.EnableAIShowcaseCommand, ElementName=Root}" IsCompact="True" />
-													<controls:RtaimeButton Grid.Column="2" Content="DISABLE" Command="{Binding ControlState.DisableAIShowcaseCommand, ElementName=Root}" IsCompact="True" />
-												</Grid>
-												<controls:RtaimeButton
-													Content="+ Add Effect"
-													IsCompact="True"
-													IsEnabled="False"
-													HorizontalAlignment="Left"
-													Margin="0,6,0,0"
-													ToolTip="Effect insertion is not exposed by the current V1 processing capability." />
+												<StackPanel>
+													<StackPanel.Style>
+														<Style TargetType="StackPanel">
+															<Setter Property="Visibility" Value="Collapsed" />
+															<Style.Triggers>
+																<DataTrigger Binding="{Binding Inspector.HasAuthoritativeCompositingSelection, ElementName=Root}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
+															</Style.Triggers>
+														</Style>
+													</StackPanel.Style>
+													<controls:RtaimeToggleButton Content="COLOR GRADE ENABLED" IsChecked="{Binding Inspector.SelectedColorGradeEnabled, ElementName=Root, Mode=TwoWay}" Margin="0,6,0,6" />
+													<Grid Height="32"><Grid.ColumnDefinitions><ColumnDefinition Width="96" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><TextBlock Text="Brightness" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" /><controls:RtaimeTextBox Grid.Column="1" Text="{Binding Inspector.SelectedColorGradeBrightness, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}" Style="{StaticResource InspectorNumericTextBox}" /></Grid>
+													<Grid Height="32"><Grid.ColumnDefinitions><ColumnDefinition Width="96" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><TextBlock Text="Contrast" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" /><controls:RtaimeTextBox Grid.Column="1" Text="{Binding Inspector.SelectedColorGradeContrast, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}" Style="{StaticResource InspectorNumericTextBox}" /></Grid>
+													<Grid Height="32"><Grid.ColumnDefinitions><ColumnDefinition Width="96" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><TextBlock Text="Saturation" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" /><controls:RtaimeTextBox Grid.Column="1" Text="{Binding Inspector.SelectedColorGradeSaturation, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}" Style="{StaticResource InspectorNumericTextBox}" /></Grid>
+													<Grid Margin="0,6,0,0">
+														<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="4" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+														<controls:RtaimeButton Grid.Column="0" Content="APPLY COLOR GRADE" Command="{Binding Inspector.ApplyColorGradeCommand, ElementName=Root}" IsCompact="True" />
+														<controls:RtaimeButton Grid.Column="2" Content="REMOVE" Command="{Binding Inspector.RemoveProcessingNodeCommand, ElementName=Root}" IsCompact="True" />
+													</Grid>
+												</StackPanel>
+												<StackPanel>
+													<StackPanel.Style>
+														<Style TargetType="StackPanel">
+															<Setter Property="Visibility" Value="Visible" />
+															<Style.Triggers>
+																<DataTrigger Binding="{Binding Inspector.HasAuthoritativeCompositingSelection, ElementName=Root}" Value="True"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
+															</Style.Triggers>
+														</Style>
+													</StackPanel.Style>
+													<Grid Margin="0,6,0,0">
+														<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="4" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+														<controls:RtaimeButton Grid.Column="0" Content="ENABLE" Command="{Binding ControlState.EnableAIShowcaseCommand, ElementName=Root}" IsCompact="True" />
+														<controls:RtaimeButton Grid.Column="2" Content="DISABLE" Command="{Binding ControlState.DisableAIShowcaseCommand, ElementName=Root}" IsCompact="True" />
+													</Grid>
+													<controls:RtaimeButton Content="+ Add Effect" IsCompact="True" IsEnabled="False" HorizontalAlignment="Left" Margin="0,6,0,0" ToolTip="Effect insertion is not exposed by the current V1 processing capability." />
+												</StackPanel>
 												<TextBlock Text="{Binding Inspector.UnsupportedEffectOrderingText, ElementName=Root}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,6,0,0" />
 											</StackPanel>
 										</Border>
@@ -800,12 +862,25 @@
 								<Border Style="{StaticResource InspectorPropertySectionContent}">
 									<StackPanel>
 										<ItemsControl ItemsSource="{Binding Inspector.InspectorEffectProperties, ElementName=Root}" ItemTemplate="{StaticResource InspectorEffectTemplate}" />
-										<Grid Margin="0,6,0,0">
-											<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="4" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-											<controls:RtaimeButton Grid.Column="0" Content="ENABLE" Command="{Binding ControlState.EnableAIShowcaseCommand, ElementName=Root}" IsCompact="True" />
-											<controls:RtaimeButton Grid.Column="2" Content="DISABLE" Command="{Binding ControlState.DisableAIShowcaseCommand, ElementName=Root}" IsCompact="True" />
-										</Grid>
-										<controls:RtaimeButton Content="+ Add Effect" IsCompact="True" IsEnabled="False" HorizontalAlignment="Left" Margin="0,6,0,0" />
+										<StackPanel>
+											<StackPanel.Style>
+												<Style TargetType="StackPanel">
+													<Setter Property="Visibility" Value="Collapsed" />
+													<Style.Triggers>
+														<DataTrigger Binding="{Binding Inspector.HasAuthoritativeCompositingSelection, ElementName=Root}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
+													</Style.Triggers>
+												</Style>
+											</StackPanel.Style>
+											<controls:RtaimeToggleButton Content="COLOR GRADE ENABLED" IsChecked="{Binding Inspector.SelectedColorGradeEnabled, ElementName=Root, Mode=TwoWay}" Margin="0,6,0,6" />
+											<Grid Height="32"><Grid.ColumnDefinitions><ColumnDefinition Width="96" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><TextBlock Text="Brightness" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" /><controls:RtaimeTextBox Grid.Column="1" Text="{Binding Inspector.SelectedColorGradeBrightness, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}" Style="{StaticResource InspectorNumericTextBox}" /></Grid>
+											<Grid Height="32"><Grid.ColumnDefinitions><ColumnDefinition Width="96" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><TextBlock Text="Contrast" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" /><controls:RtaimeTextBox Grid.Column="1" Text="{Binding Inspector.SelectedColorGradeContrast, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}" Style="{StaticResource InspectorNumericTextBox}" /></Grid>
+											<Grid Height="32"><Grid.ColumnDefinitions><ColumnDefinition Width="96" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><TextBlock Text="Saturation" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" /><controls:RtaimeTextBox Grid.Column="1" Text="{Binding Inspector.SelectedColorGradeSaturation, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}" Style="{StaticResource InspectorNumericTextBox}" /></Grid>
+											<Grid Margin="0,6,0,0">
+												<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="4" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+												<controls:RtaimeButton Grid.Column="0" Content="APPLY COLOR GRADE" Command="{Binding Inspector.ApplyColorGradeCommand, ElementName=Root}" IsCompact="True" />
+												<controls:RtaimeButton Grid.Column="2" Content="REMOVE" Command="{Binding Inspector.RemoveProcessingNodeCommand, ElementName=Root}" IsCompact="True" />
+											</Grid>
+										</StackPanel>
 										<TextBlock Text="{Binding Inspector.UnsupportedEffectOrderingText, ElementName=Root}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,6,0,0" />
 									</StackPanel>
 								</Border>

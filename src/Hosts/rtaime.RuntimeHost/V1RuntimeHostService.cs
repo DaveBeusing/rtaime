@@ -115,7 +115,15 @@ public sealed record V1CompositingLayerSnapshot(
 	double PositionX,
 	double PositionY,
 	double Scale,
-	string ContentIdentity);
+	string ContentIdentity,
+	double RotationDegrees = 0.0,
+	double AnchorX = 0.0,
+	double AnchorY = 0.0,
+	double CropLeft = 0.0,
+	double CropTop = 0.0,
+	double CropRight = 0.0,
+	double CropBottom = 0.0,
+	PreparedCompositingProcessingNodeState? ProcessingNode = null);
 
 public sealed record V1AudioInputSnapshot(
 	MediaSourceId SourceId,
@@ -277,6 +285,14 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private double _operatorGraphicsPositionX = 0.72;
 	private double _operatorGraphicsPositionY = 0.06;
 	private double _operatorGraphicsScale = 1.0;
+	private double _operatorGraphicsRotationDegrees;
+	private double _operatorGraphicsAnchorX;
+	private double _operatorGraphicsAnchorY;
+	private double _operatorGraphicsCropLeft;
+	private double _operatorGraphicsCropTop;
+	private double _operatorGraphicsCropRight;
+	private double _operatorGraphicsCropBottom;
+	private PreparedCompositingProcessingNodeState? _operatorGraphicsProcessingNode;
 	private byte _operatorGraphicsOpacity = byte.MaxValue;
 	private int _operatorGraphicsLayerOrder = 1;
 	private byte[]? _productionCgAsset;
@@ -284,6 +300,15 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private uint _productionCgAssetHeight;
 	private double _productionCgPositionX;
 	private double _productionCgPositionY;
+	private double _productionCgScale = 1.0;
+	private double _productionCgRotationDegrees;
+	private double _productionCgAnchorX;
+	private double _productionCgAnchorY;
+	private double _productionCgCropLeft;
+	private double _productionCgCropTop;
+	private double _productionCgCropRight;
+	private double _productionCgCropBottom;
+	private PreparedCompositingProcessingNodeState? _productionCgProcessingNode;
 	private byte _productionCgOpacity = byte.MaxValue;
 	private int _productionCgLayerOrder = 2;
 	private int _legacyVisualLayerOrder;
@@ -835,6 +860,14 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			_operatorGraphicsAssetName = assetName.Trim();
 			_operatorGraphicsAssetWidth = width;
 			_operatorGraphicsAssetHeight = height;
+			_operatorGraphicsRotationDegrees = 0;
+			_operatorGraphicsAnchorX = 0;
+			_operatorGraphicsAnchorY = 0;
+			_operatorGraphicsCropLeft = 0;
+			_operatorGraphicsCropTop = 0;
+			_operatorGraphicsCropRight = 0;
+			_operatorGraphicsCropBottom = 0;
+			_operatorGraphicsProcessingNode = null;
 			RebuildOperatorGraphicsLayerUnsafe();
 			Observe($"graphics.overlay.asset.loaded:{_operatorGraphicsAssetName}:{width}x{height}");
 			return GraphicsOverlaySnapshotUnsafe();
@@ -860,6 +893,15 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			_productionCgAssetHeight = rendered.Height;
 			_productionCgPositionX = _format.Width <= 1 ? 0 : originX / (double)(_format.Width - 1);
 			_productionCgPositionY = _format.Height <= 1 ? 0 : originY / (double)(_format.Height - 1);
+			_productionCgScale = 1.0;
+			_productionCgRotationDegrees = 0;
+			_productionCgAnchorX = 0;
+			_productionCgAnchorY = 0;
+			_productionCgCropLeft = 0;
+			_productionCgCropTop = 0;
+			_productionCgCropRight = 0;
+			_productionCgCropBottom = 0;
+			_productionCgProcessingNode = null;
 			_productionCgDefinition = definition;
 			_productionCgText = new V1ProductionCgTextSnapshot(
 				true,
@@ -937,6 +979,14 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			_operatorGraphicsAssetHeight = 0;
 			_operatorGraphicsVisible = false;
 			_operatorGraphicsOpacity = byte.MaxValue;
+			_operatorGraphicsRotationDegrees = 0;
+			_operatorGraphicsAnchorX = 0;
+			_operatorGraphicsAnchorY = 0;
+			_operatorGraphicsCropLeft = 0;
+			_operatorGraphicsCropTop = 0;
+			_operatorGraphicsCropRight = 0;
+			_operatorGraphicsCropBottom = 0;
+			_operatorGraphicsProcessingNode = null;
 			_operatorGraphicsLayerScratch.AsSpan().Clear();
 			_operatorGraphicsLayerBuffer.CopyPixelsFrom(_operatorGraphicsLayerScratch);
 			_operatorGraphicsLayer.Update(_operatorGraphicsLayerBuffer);
@@ -946,6 +996,15 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			_productionCgAssetHeight = 0;
 			_productionCgPositionX = 0;
 			_productionCgPositionY = 0;
+			_productionCgScale = 1.0;
+			_productionCgRotationDegrees = 0;
+			_productionCgAnchorX = 0;
+			_productionCgAnchorY = 0;
+			_productionCgCropLeft = 0;
+			_productionCgCropTop = 0;
+			_productionCgCropRight = 0;
+			_productionCgCropBottom = 0;
+			_productionCgProcessingNode = null;
 			_productionCgOpacity = byte.MaxValue;
 			_productionCgDefinition = null;
 			_productionCgText = V1ProductionCgTextSnapshot.Empty;
@@ -990,6 +1049,130 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 					throw new ArgumentOutOfRangeException(nameof(layerId), "Unknown compositing layer identity.");
 			}
 			Observe($"compositing.layer.state:{layerId.Trim()}:{visible}:{opacity}");
+			return CompositingLayerSnapshotsUnsafe();
+		}
+	}
+
+	public IReadOnlyList<V1CompositingLayerSnapshot> SetCompositingLayerTransform(
+		string layerId,
+		double positionX,
+		double positionY,
+		double scale,
+		double rotationDegrees,
+		double anchorX,
+		double anchorY,
+		double cropLeft,
+		double cropTop,
+		double cropRight,
+		double cropBottom)
+	{
+		if (string.IsNullOrWhiteSpace(layerId))
+			throw new ArgumentException("Compositing layer identity is required.", nameof(layerId));
+
+		var normalizedLayerId = layerId.Trim();
+		_ = new PreparedCompositingLayerState(
+			normalizedLayerId,
+			normalizedLayerId switch
+			{
+				BitmapGraphicsLayerId => PreparedCompositingLayerKind.BitmapGraphics,
+				ProductionCgLayerId => PreparedCompositingLayerKind.ProductionCg,
+				LegacyVisualLayerId => PreparedCompositingLayerKind.LegacyVisual,
+				_ => throw new ArgumentOutOfRangeException(nameof(layerId), "Unknown compositing layer identity.")
+			},
+			0,
+			true,
+			byte.MaxValue,
+			positionX,
+			positionY,
+			scale,
+			"validation",
+			rotationDegrees,
+			anchorX,
+			anchorY,
+			cropLeft,
+			cropTop,
+			cropRight,
+			cropBottom);
+
+		lock (_gate)
+		{
+			ThrowIfDisposed();
+			switch (normalizedLayerId)
+			{
+				case BitmapGraphicsLayerId:
+					if (_operatorGraphicsAsset is null)
+						throw new InvalidOperationException("Bitmap graphics layer is not loaded.");
+					_operatorGraphicsPositionX = positionX;
+					_operatorGraphicsPositionY = positionY;
+					_operatorGraphicsScale = scale;
+					_operatorGraphicsRotationDegrees = rotationDegrees;
+					_operatorGraphicsAnchorX = anchorX;
+					_operatorGraphicsAnchorY = anchorY;
+					_operatorGraphicsCropLeft = cropLeft;
+					_operatorGraphicsCropTop = cropTop;
+					_operatorGraphicsCropRight = cropRight;
+					_operatorGraphicsCropBottom = cropBottom;
+					RebuildOperatorGraphicsLayerUnsafe();
+					break;
+				case ProductionCgLayerId:
+					if (_productionCgDefinition is null || _productionCgAsset is null)
+						throw new InvalidOperationException("Production CG layer is not active.");
+					_productionCgPositionX = positionX;
+					_productionCgPositionY = positionY;
+					_productionCgScale = scale;
+					_productionCgRotationDegrees = rotationDegrees;
+					_productionCgAnchorX = anchorX;
+					_productionCgAnchorY = anchorY;
+					_productionCgCropLeft = cropLeft;
+					_productionCgCropTop = cropTop;
+					_productionCgCropRight = cropRight;
+					_productionCgCropBottom = cropBottom;
+					RebuildProductionCgLayerUnsafe();
+					break;
+				case LegacyVisualLayerId:
+					throw new NotSupportedException("Legacy visual layer transform remains governed by its existing fixed semantics.");
+			}
+
+			Observe($"compositing.layer.transform:{normalizedLayerId}");
+			return CompositingLayerSnapshotsUnsafe();
+		}
+	}
+
+	public IReadOnlyList<V1CompositingLayerSnapshot> SetCompositingLayerProcessingNode(
+		string layerId,
+		PreparedCompositingProcessingNodeState? processingNode)
+	{
+		if (string.IsNullOrWhiteSpace(layerId))
+			throw new ArgumentException("Compositing layer identity is required.", nameof(layerId));
+
+		var normalizedLayerId = layerId.Trim();
+		if (processingNode is not null && processingNode.Kind != PreparedCompositingProcessingNodeKind.ColorGrade)
+			throw new NotSupportedException($"Processing node kind '{processingNode.Kind}' is not supported.");
+
+		lock (_gate)
+		{
+			ThrowIfDisposed();
+			switch (normalizedLayerId)
+			{
+				case BitmapGraphicsLayerId:
+					if (_operatorGraphicsAsset is null)
+						throw new InvalidOperationException("Bitmap graphics layer is not loaded.");
+					_operatorGraphicsProcessingNode = processingNode;
+					RebuildOperatorGraphicsLayerUnsafe();
+					break;
+				case ProductionCgLayerId:
+					if (_productionCgDefinition is null || _productionCgAsset is null)
+						throw new InvalidOperationException("Production CG layer is not active.");
+					_productionCgProcessingNode = processingNode;
+					RebuildProductionCgLayerUnsafe();
+					break;
+				case LegacyVisualLayerId:
+					throw new NotSupportedException("Legacy visual layer does not expose processing nodes.");
+				default:
+					throw new ArgumentOutOfRangeException(nameof(layerId), "Unknown compositing layer identity.");
+			}
+
+			Observe($"compositing.layer.processing:{normalizedLayerId}:{processingNode?.NodeId ?? "none"}");
 			return CompositingLayerSnapshotsUnsafe();
 		}
 	}
@@ -1063,8 +1246,21 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			switch (layer.LayerId)
 			{
 				case LegacyVisualLayerId:
-					if (!layer.Visible || layer.PositionX != 0 || layer.PositionY != 0 || layer.Scale != 1)
+					if (!layer.Visible ||
+						layer.PositionX != 0 ||
+						layer.PositionY != 0 ||
+						layer.Scale != 1 ||
+						layer.RotationDegrees != 0 ||
+						layer.AnchorX != 0 ||
+						layer.AnchorY != 0 ||
+						layer.CropLeft != 0 ||
+						layer.CropTop != 0 ||
+						layer.CropRight != 0 ||
+						layer.CropBottom != 0 ||
+						layer.ProcessingNode is not null)
+					{
 						return new Failure("runtime.compositing.legacy_state_unsupported", "Legacy visual layer Scene recall supports order and opacity only.");
+					}
 					break;
 				case BitmapGraphicsLayerId:
 					if (_operatorGraphicsAsset is null)
@@ -1073,8 +1269,6 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				case ProductionCgLayerId:
 					if (_productionCgAsset is null || _productionCgDefinition is null)
 						return new Failure("runtime.compositing.cg_missing", "Prepared Production CG resource is not loaded.");
-					if (layer.Scale != 1)
-						return new Failure("runtime.compositing.cg_scale_unsupported", "Production CG Scene recall does not support scale independently of its CG definition.");
 					break;
 				default:
 					return new Failure("runtime.compositing.layer_unknown", $"Prepared compositing layer '{layer.LayerId}' is not supported.");
@@ -1098,7 +1292,15 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 						layer.PositionX,
 						layer.PositionY,
 						layer.Scale,
-						layer.ContentIdentity))
+						layer.ContentIdentity,
+						layer.RotationDegrees,
+						layer.AnchorX,
+						layer.AnchorY,
+						layer.CropLeft,
+						layer.CropTop,
+						layer.CropRight,
+						layer.CropBottom,
+						layer.ProcessingNode))
 					.ToArray()),
 			_legacyVisualLayerOrder,
 			_operatorGraphicsLayerOrder,
@@ -1135,6 +1337,14 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 					_operatorGraphicsPositionX = layer.PositionX;
 					_operatorGraphicsPositionY = layer.PositionY;
 					_operatorGraphicsScale = layer.Scale;
+					_operatorGraphicsRotationDegrees = layer.RotationDegrees;
+					_operatorGraphicsAnchorX = layer.AnchorX;
+					_operatorGraphicsAnchorY = layer.AnchorY;
+					_operatorGraphicsCropLeft = layer.CropLeft;
+					_operatorGraphicsCropTop = layer.CropTop;
+					_operatorGraphicsCropRight = layer.CropRight;
+					_operatorGraphicsCropBottom = layer.CropBottom;
+					_operatorGraphicsProcessingNode = layer.ProcessingNode;
 					RebuildOperatorGraphicsLayerUnsafe();
 					break;
 				case ProductionCgLayerId:
@@ -1144,6 +1354,15 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 					_productionCgOpacity = layer.Opacity;
 					_productionCgPositionX = layer.PositionX;
 					_productionCgPositionY = layer.PositionY;
+					_productionCgScale = layer.Scale;
+					_productionCgRotationDegrees = layer.RotationDegrees;
+					_productionCgAnchorX = layer.AnchorX;
+					_productionCgAnchorY = layer.AnchorY;
+					_productionCgCropLeft = layer.CropLeft;
+					_productionCgCropTop = layer.CropTop;
+					_productionCgCropRight = layer.CropRight;
+					_productionCgCropBottom = layer.CropBottom;
+					_productionCgProcessingNode = layer.ProcessingNode;
 					RebuildProductionCgLayerUnsafe();
 					break;
 			}
@@ -1983,7 +2202,15 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				_operatorGraphicsPositionX,
 				_operatorGraphicsPositionY,
 				_operatorGraphicsScale,
-				_operatorGraphicsAssetName ?? "bitmap"));
+				_operatorGraphicsAssetName ?? "bitmap",
+				_operatorGraphicsRotationDegrees,
+				_operatorGraphicsAnchorX,
+				_operatorGraphicsAnchorY,
+				_operatorGraphicsCropLeft,
+				_operatorGraphicsCropTop,
+				_operatorGraphicsCropRight,
+				_operatorGraphicsCropBottom,
+				_operatorGraphicsProcessingNode));
 		}
 		if (_productionCgAsset is not null)
 		{
@@ -1995,8 +2222,16 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				_productionCgOpacity,
 				_productionCgPositionX,
 				_productionCgPositionY,
-				1,
-				_productionCgText.Text ?? "production-cg-text"));
+				_productionCgScale,
+				_productionCgText.Text ?? "production-cg-text",
+				_productionCgRotationDegrees,
+				_productionCgAnchorX,
+				_productionCgAnchorY,
+				_productionCgCropLeft,
+				_productionCgCropTop,
+				_productionCgCropRight,
+				_productionCgCropBottom,
+				_productionCgProcessingNode));
 		}
 		return snapshots
 			.OrderBy(layer => layer.Order)
@@ -2006,83 +2241,172 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 
 	private void RebuildOperatorGraphicsLayerUnsafe()
 	{
-		_operatorGraphicsLayerScratch.AsSpan().Clear();
-		if (_operatorGraphicsAsset is null)
-		{
-			_operatorGraphicsLayerBuffer.CopyPixelsFrom(_operatorGraphicsLayerScratch);
-			_operatorGraphicsLayer.Update(_operatorGraphicsLayerBuffer);
-			return;
-		}
-
-		var sourceWidth = checked((int)_operatorGraphicsAssetWidth);
-		var sourceHeight = checked((int)_operatorGraphicsAssetHeight);
-		var targetWidth = Math.Max(1, checked((int)Math.Round(sourceWidth * _operatorGraphicsScale)));
-		var targetHeight = Math.Max(1, checked((int)Math.Round(sourceHeight * _operatorGraphicsScale)));
-		var outputWidth = checked((int)_format.Width);
-		var outputHeight = checked((int)_format.Height);
-		var originX = checked((int)Math.Round(_operatorGraphicsPositionX * Math.Max(0, outputWidth - 1)));
-		var originY = checked((int)Math.Round(_operatorGraphicsPositionY * Math.Max(0, outputHeight - 1)));
-
-		for (var y = 0; y < targetHeight; y++)
-		{
-			var destinationY = originY + y;
-			if ((uint)destinationY >= (uint)outputHeight) continue;
-			var sourceY = Math.Min(sourceHeight - 1, (int)((long)y * sourceHeight / targetHeight));
-			for (var x = 0; x < targetWidth; x++)
-			{
-				var destinationX = originX + x;
-				if ((uint)destinationX >= (uint)outputWidth) continue;
-				var sourceX = Math.Min(sourceWidth - 1, (int)((long)x * sourceWidth / targetWidth));
-				var sourceOffset = checked((sourceY * sourceWidth + sourceX) * 4);
-				var destinationOffset = checked((destinationY * outputWidth + destinationX) * 4);
-				_operatorGraphicsLayerScratch[destinationOffset] = _operatorGraphicsAsset[sourceOffset];
-				_operatorGraphicsLayerScratch[destinationOffset + 1] = _operatorGraphicsAsset[sourceOffset + 1];
-				_operatorGraphicsLayerScratch[destinationOffset + 2] = _operatorGraphicsAsset[sourceOffset + 2];
-				_operatorGraphicsLayerScratch[destinationOffset + 3] = _operatorGraphicsAsset[sourceOffset + 3];
-			}
-		}
-
-		_operatorGraphicsLayerBuffer.CopyPixelsFrom(_operatorGraphicsLayerScratch);
-		_operatorGraphicsLayer.Update(_operatorGraphicsLayerBuffer);
+		RebuildCompositingLayerUnsafe(
+			_operatorGraphicsAsset,
+			_operatorGraphicsAssetWidth,
+			_operatorGraphicsAssetHeight,
+			_operatorGraphicsLayerScratch,
+			_operatorGraphicsLayerBuffer,
+			_operatorGraphicsLayer,
+			_operatorGraphicsPositionX,
+			_operatorGraphicsPositionY,
+			_operatorGraphicsScale,
+			_operatorGraphicsRotationDegrees,
+			_operatorGraphicsAnchorX,
+			_operatorGraphicsAnchorY,
+			_operatorGraphicsCropLeft,
+			_operatorGraphicsCropTop,
+			_operatorGraphicsCropRight,
+			_operatorGraphicsCropBottom,
+			_operatorGraphicsProcessingNode);
 	}
 
 	private void RebuildProductionCgLayerUnsafe()
 	{
-		_productionCgLayerScratch.AsSpan().Clear();
-		if (_productionCgAsset is null)
+		RebuildCompositingLayerUnsafe(
+			_productionCgAsset,
+			_productionCgAssetWidth,
+			_productionCgAssetHeight,
+			_productionCgLayerScratch,
+			_productionCgLayerBuffer,
+			_productionCgLayer,
+			_productionCgPositionX,
+			_productionCgPositionY,
+			_productionCgScale,
+			_productionCgRotationDegrees,
+			_productionCgAnchorX,
+			_productionCgAnchorY,
+			_productionCgCropLeft,
+			_productionCgCropTop,
+			_productionCgCropRight,
+			_productionCgCropBottom,
+			_productionCgProcessingNode);
+	}
+
+	private void RebuildCompositingLayerUnsafe(
+		byte[]? sourcePixels,
+		uint sourceWidthValue,
+		uint sourceHeightValue,
+		byte[] targetPixels,
+		RgbaFrameBuffer targetBuffer,
+		DynamicRgbaSource targetSource,
+		double positionX,
+		double positionY,
+		double scale,
+		double rotationDegrees,
+		double anchorX,
+		double anchorY,
+		double cropLeft,
+		double cropTop,
+		double cropRight,
+		double cropBottom,
+		PreparedCompositingProcessingNodeState? processingNode)
+	{
+		targetPixels.AsSpan().Clear();
+		if (sourcePixels is null)
 		{
-			_productionCgLayerBuffer.CopyPixelsFrom(_productionCgLayerScratch);
-			_productionCgLayer.Update(_productionCgLayerBuffer);
+			targetBuffer.CopyPixelsFrom(targetPixels);
+			targetSource.Update(targetBuffer);
 			return;
 		}
 
-		var sourceWidth = checked((int)_productionCgAssetWidth);
-		var sourceHeight = checked((int)_productionCgAssetHeight);
+		var sourceWidth = checked((int)sourceWidthValue);
+		var sourceHeight = checked((int)sourceHeightValue);
+		var sourceLeft = Math.Min(sourceWidth - 1, (int)Math.Floor(cropLeft * sourceWidth));
+		var sourceTop = Math.Min(sourceHeight - 1, (int)Math.Floor(cropTop * sourceHeight));
+		var sourceRightExclusive = Math.Max(sourceLeft + 1, Math.Min(sourceWidth, (int)Math.Ceiling((1.0 - cropRight) * sourceWidth)));
+		var sourceBottomExclusive = Math.Max(sourceTop + 1, Math.Min(sourceHeight, (int)Math.Ceiling((1.0 - cropBottom) * sourceHeight)));
+		var croppedWidth = sourceRightExclusive - sourceLeft;
+		var croppedHeight = sourceBottomExclusive - sourceTop;
+		var targetWidth = Math.Max(1, checked((int)Math.Round(croppedWidth * scale)));
+		var targetHeight = Math.Max(1, checked((int)Math.Round(croppedHeight * scale)));
 		var outputWidth = checked((int)_format.Width);
 		var outputHeight = checked((int)_format.Height);
-		var originX = checked((int)Math.Round(_productionCgPositionX * Math.Max(0, outputWidth - 1)));
-		var originY = checked((int)Math.Round(_productionCgPositionY * Math.Max(0, outputHeight - 1)));
+		var originX = checked((int)Math.Round(positionX * Math.Max(0, outputWidth - 1)));
+		var originY = checked((int)Math.Round(positionY * Math.Max(0, outputHeight - 1)));
+		var pivotX = anchorX * Math.Max(0, targetWidth - 1);
+		var pivotY = anchorY * Math.Max(0, targetHeight - 1);
+		var radians = rotationDegrees * (Math.PI / 180.0);
+		var cos = Math.Cos(radians);
+		var sin = Math.Sin(radians);
 
-		for (var y = 0; y < sourceHeight; y++)
+		var left = -pivotX;
+		var right = Math.Max(0, targetWidth - 1) - pivotX;
+		var top = -pivotY;
+		var bottom = Math.Max(0, targetHeight - 1) - pivotY;
+		var corner0X = (cos * left) - (sin * top);
+		var corner0Y = (sin * left) + (cos * top);
+		var corner1X = (cos * right) - (sin * top);
+		var corner1Y = (sin * right) + (cos * top);
+		var corner2X = (cos * left) - (sin * bottom);
+		var corner2Y = (sin * left) + (cos * bottom);
+		var corner3X = (cos * right) - (sin * bottom);
+		var corner3Y = (sin * right) + (cos * bottom);
+		var minX = Math.Max(0, checked((int)Math.Floor(originX + Math.Min(Math.Min(corner0X, corner1X), Math.Min(corner2X, corner3X)))));
+		var maxX = Math.Min(outputWidth - 1, checked((int)Math.Ceiling(originX + Math.Max(Math.Max(corner0X, corner1X), Math.Max(corner2X, corner3X)))));
+		var minY = Math.Max(0, checked((int)Math.Floor(originY + Math.Min(Math.Min(corner0Y, corner1Y), Math.Min(corner2Y, corner3Y)))));
+		var maxY = Math.Min(outputHeight - 1, checked((int)Math.Ceiling(originY + Math.Max(Math.Max(corner0Y, corner1Y), Math.Max(corner2Y, corner3Y)))));
+
+		for (var destinationY = minY; destinationY <= maxY; destinationY++)
 		{
-			var destinationY = originY + y;
-			if ((uint)destinationY >= (uint)outputHeight) continue;
-			for (var x = 0; x < sourceWidth; x++)
+			for (var destinationX = minX; destinationX <= maxX; destinationX++)
 			{
-				var destinationX = originX + x;
-				if ((uint)destinationX >= (uint)outputWidth) continue;
-				var sourceOffset = checked((y * sourceWidth + x) * 4);
+				var deltaX = destinationX - originX;
+				var deltaY = destinationY - originY;
+				var localX = (cos * deltaX) + (sin * deltaY) + pivotX;
+				var localY = (-sin * deltaX) + (cos * deltaY) + pivotY;
+				if (localX < -0.000001 || localY < -0.000001 ||
+					localX > targetWidth - 1 + 0.000001 ||
+					localY > targetHeight - 1 + 0.000001)
+				{
+					continue;
+				}
+
+				var scaledX = Math.Clamp(localX, 0, Math.Max(0, targetWidth - 1));
+				var scaledY = Math.Clamp(localY, 0, Math.Max(0, targetHeight - 1));
+				var sourceX = sourceLeft + Math.Min(croppedWidth - 1, (int)((long)Math.Floor(scaledX) * croppedWidth / targetWidth));
+				var sourceY = sourceTop + Math.Min(croppedHeight - 1, (int)((long)Math.Floor(scaledY) * croppedHeight / targetHeight));
+				var sourceOffset = checked((sourceY * sourceWidth + sourceX) * 4);
 				var destinationOffset = checked((destinationY * outputWidth + destinationX) * 4);
-				_productionCgLayerScratch[destinationOffset] = _productionCgAsset[sourceOffset];
-				_productionCgLayerScratch[destinationOffset + 1] = _productionCgAsset[sourceOffset + 1];
-				_productionCgLayerScratch[destinationOffset + 2] = _productionCgAsset[sourceOffset + 2];
-				_productionCgLayerScratch[destinationOffset + 3] = _productionCgAsset[sourceOffset + 3];
+				var red = sourcePixels[sourceOffset];
+				var green = sourcePixels[sourceOffset + 1];
+				var blue = sourcePixels[sourceOffset + 2];
+				ApplyColorGrade(processingNode, ref red, ref green, ref blue);
+				targetPixels[destinationOffset] = red;
+				targetPixels[destinationOffset + 1] = green;
+				targetPixels[destinationOffset + 2] = blue;
+				targetPixels[destinationOffset + 3] = sourcePixels[sourceOffset + 3];
 			}
 		}
 
-		_productionCgLayerBuffer.CopyPixelsFrom(_productionCgLayerScratch);
-		_productionCgLayer.Update(_productionCgLayerBuffer);
+		targetBuffer.CopyPixelsFrom(targetPixels);
+		targetSource.Update(targetBuffer);
 	}
+
+	private static void ApplyColorGrade(
+		PreparedCompositingProcessingNodeState? processingNode,
+		ref byte red,
+		ref byte green,
+		ref byte blue)
+	{
+		if (processingNode is null || !processingNode.Enabled)
+			return;
+
+		var grade = processingNode.ColorGrade;
+		var r = ((red - 127.5) * grade.Contrast) + 127.5 + (grade.Brightness * 255.0);
+		var g = ((green - 127.5) * grade.Contrast) + 127.5 + (grade.Brightness * 255.0);
+		var b = ((blue - 127.5) * grade.Contrast) + 127.5 + (grade.Brightness * 255.0);
+		var luma = (0.2126 * r) + (0.7152 * g) + (0.0722 * b);
+		r = luma + ((r - luma) * grade.Saturation);
+		g = luma + ((g - luma) * grade.Saturation);
+		b = luma + ((b - luma) * grade.Saturation);
+		red = ClampByte(r);
+		green = ClampByte(g);
+		blue = ClampByte(b);
+	}
+
+	private static byte ClampByte(double value) =>
+		(byte)Math.Clamp((int)Math.Round(value, MidpointRounding.AwayFromZero), 0, 255);
 
 	private (int X, int Y) ResolveProductionCgOrigin(V1ProductionCgTextDefinition definition)
 	{

@@ -836,7 +836,24 @@ public static class CapabilityPlanningEngine
                     layer.PositionX,
                     layer.PositionY,
                     layer.Scale,
-                    layer.ContentIdentity)).ToArray());
+                    layer.ContentIdentity,
+                    layer.RotationDegrees,
+                    layer.AnchorX,
+                    layer.AnchorY,
+                    layer.CropLeft,
+                    layer.CropTop,
+                    layer.CropRight,
+                    layer.CropBottom,
+                    layer.ProcessingNode is null
+                        ? null
+                        : new PreparedCompositingProcessingNodeState(
+                            layer.ProcessingNode.NodeId,
+                            (PreparedCompositingProcessingNodeKind)(int)layer.ProcessingNode.Kind,
+                            layer.ProcessingNode.Enabled,
+                            new PreparedColorGradeSettings(
+                                layer.ProcessingNode.ColorGrade.Brightness,
+                                layer.ProcessingNode.ColorGrade.Contrast,
+                                layer.ProcessingNode.ColorGrade.Saturation)))).ToArray());
         var canonicalCompositing = preparedCompositing is null
             ? "-"
             : string.Join(
@@ -851,6 +868,23 @@ public static class CapabilityPlanningEngine
                     layer.PositionX.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
                     layer.PositionY.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
                     layer.Scale.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
+                    layer.RotationDegrees.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
+                    layer.AnchorX.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
+                    layer.AnchorY.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
+                    layer.CropLeft.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
+                    layer.CropTop.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
+                    layer.CropRight.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
+                    layer.CropBottom.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
+                    layer.ProcessingNode is null
+                        ? "-"
+                        : string.Join(
+                            ",",
+                            layer.ProcessingNode.NodeId,
+                            (int)layer.ProcessingNode.Kind,
+                            layer.ProcessingNode.Enabled ? "1" : "0",
+                            layer.ProcessingNode.ColorGrade.Brightness.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
+                            layer.ProcessingNode.ColorGrade.Contrast.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
+                            layer.ProcessingNode.ColorGrade.Saturation.ToString("R", System.Globalization.CultureInfo.InvariantCulture)),
                     layer.ContentIdentity)));
 
         var preparedExecutionId = new PreparedExecutionId(PlanningIdentity.Create(

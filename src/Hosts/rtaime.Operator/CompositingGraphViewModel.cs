@@ -95,6 +95,8 @@ public sealed class CompositingGraphNodeViewModel : INotifyPropertyChanged
 			"recorder" => "RECORDER",
 			"preview-output" or "program-output" => "OUTPUT",
 			_ when projection.Kind == CompositingGraphNodeKind.Layer => "COMPOSITING LAYER",
+			_ when projection.Kind == CompositingGraphNodeKind.Transform => "TRANSFORM",
+			_ when projection.Kind == CompositingGraphNodeKind.Processing => "PROCESSING",
 			_ when projection.Kind == CompositingGraphNodeKind.Source => "MEDIA INPUT",
 			_ => projection.Kind.ToString().ToUpperInvariant()
 		};
@@ -397,18 +399,32 @@ public sealed class CompositingGraphViewModel : INotifyPropertyChanged, IDisposa
 			.ToArray();
 		for (var index = 0; index < layerNodes.Length; index++)
 		{
-			layerNodes[index].X = 330;
-			layerNodes[index].Y = Math.Max(280, graphicsY) + (index * 132);
+			var layer = layerNodes[index];
+			var rowY = Math.Max(280, graphicsY) + (index * 132);
+			layer.X = 330;
+			layer.Y = rowY;
+			var layerId = layer.Id["layer:".Length..];
+			Position($"transform:{layerId}", 620, rowY);
+			var processing = Nodes.FirstOrDefault(node =>
+				node.Projection.Kind == CompositingGraphNodeKind.Processing &&
+				node.Id.StartsWith($"processing:{layerId}:", StringComparison.Ordinal));
+			if (processing is not null)
+			{
+				processing.X = 910;
+				processing.Y = rowY;
+			}
 		}
-		Position("preview-output", 635, 60);
+		Position("preview-output", 620, 60);
 		var compositeY = layerNodes.Length == 0
 			? Math.Max(250, graphicsY - 40)
 			: Math.Max(250, Math.Max(280, graphicsY) + ((layerNodes.Length - 1) * 66));
-		Position("composite", 635, compositeY);
-		Position("program-output", 940, compositeY);
-		Position("recorder", 1230, compositeY);
+		var hasProcessing = Nodes.Any(node => node.Projection.Kind == CompositingGraphNodeKind.Processing);
+		var compositeX = layerNodes.Length == 0 ? 620 : hasProcessing ? 1200 : 910;
+		Position("composite", compositeX, compositeY);
+		Position("program-output", compositeX + 290, compositeY);
+		Position("recorder", compositeX + 580, compositeY);
 
-		CanvasWidth = 1490;
+		CanvasWidth = Math.Max(1490, compositeX + 840);
 		CanvasHeight = Math.Max(650, graphicsY + 190 + Math.Max(0, layerNodes.Length - 1) * 132);
 		UpdateConnections();
 	}
@@ -480,11 +496,28 @@ public sealed class CompositingGraphViewModel : INotifyPropertyChanged, IDisposa
 
 	private OperatorCompositingLayerDescriptor? SelectedLayer()
 	{
-		if (SelectedNode is null || !SelectedNode.Id.StartsWith("layer:", StringComparison.Ordinal))
+		if (SelectedNode is null)
 			return null;
-		var layerId = SelectedNode.Id["layer:".Length..];
+		var layerId = ResolveLayerId(SelectedNode.Id);
+		if (layerId is null)
+			return null;
 		return _operator.CompositingLayers.FirstOrDefault(layer =>
 			string.Equals(layer.LayerId, layerId, StringComparison.Ordinal));
+	}
+
+	private static string? ResolveLayerId(string nodeId)
+	{
+		if (nodeId.StartsWith("layer:", StringComparison.Ordinal))
+			return nodeId["layer:".Length..];
+		if (nodeId.StartsWith("transform:", StringComparison.Ordinal))
+			return nodeId["transform:".Length..];
+		if (nodeId.StartsWith("processing:", StringComparison.Ordinal))
+		{
+			var remainder = nodeId["processing:".Length..];
+			var separator = remainder.IndexOf(':');
+			return separator > 0 ? remainder[..separator] : null;
+		}
+		return null;
 	}
 
 	private bool CanEditSelectedLayer()

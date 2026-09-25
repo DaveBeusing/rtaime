@@ -174,7 +174,12 @@ public sealed class ProductionIpcIntegrationTests
 		Assert.True(loadedGraphics.AssetLoaded);
 		Assert.False(loadedGraphics.Visible);
 		Assert.Equal("operator-logo.rgba", client.Snapshot!.GraphicsOverlay.AssetName);
-		Assert.Equal(revisionBeforeGraphics, client.Snapshot.Production.Revision);
+		Assert.True(client.Snapshot.Production.Revision.CompareTo(revisionBeforeGraphics) > 0);
+		Assert.NotNull(client.Snapshot.Production.CompositingState);
+		Assert.Contains(
+			client.Snapshot.Production.CompositingState!.Layers,
+			layer => layer.LayerId == ProductionCompositingLayerIds.BitmapGraphics);
+		var revisionAfterGraphicsLoad = client.Snapshot.Production.Revision;
 
 		var onAirGraphics = await client.SetGraphicsOverlayAsync(true, 0.25, 0.10, 1.5);
 		Assert.True(onAirGraphics.Visible);
@@ -183,13 +188,17 @@ public sealed class ProductionIpcIntegrationTests
 		Assert.Equal(0.10, client.Snapshot.GraphicsOverlay.PositionY, 6);
 		Assert.Equal(1.5, client.Snapshot.GraphicsOverlay.Scale, 6);
 		Assert.True(runtime.Runtime!.Snapshot.GraphicsOverlay.Visible);
-		Assert.Equal(revisionBeforeGraphics, client.Snapshot.Production.Revision);
+		Assert.True(client.Snapshot.Production.Revision.CompareTo(revisionAfterGraphicsLoad) > 0);
+		var revisionAfterGraphicsSet = client.Snapshot.Production.Revision;
 
 		var clearedGraphics = await client.ClearGraphicsOverlayAsync();
 		Assert.False(clearedGraphics.AssetLoaded);
 		Assert.False(client.Snapshot!.GraphicsOverlay.Visible);
 		Assert.False(runtime.Runtime.Snapshot.GraphicsOverlay.AssetLoaded);
-		Assert.Equal(revisionBeforeGraphics, client.Snapshot.Production.Revision);
+		Assert.True(client.Snapshot.Production.Revision.CompareTo(revisionAfterGraphicsSet) > 0);
+		var runtimeAuthority = await control.RuntimeTransport!.GetSnapshotAsync();
+		Assert.Equal(client.Snapshot.Production.ProductionId.Value, runtimeAuthority.AuthorityStateId);
+		Assert.Equal(client.Snapshot.Production.Revision, runtimeAuthority.AuthorityRevision);
 
 		var preview = await client.SelectPreviewAsync(sourceB.Id);
 		Assert.True(preview.Accepted, preview.Failure?.ToString());

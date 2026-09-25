@@ -144,6 +144,33 @@ public sealed class ControlHostRecoveryIntegrationTests
 				await client.ApplyProductionCgTextAsync(OperatorProductionCgText.LowerThird("DURABLE SHOW STATE"));
 				await client.SetCompositingLayerStateAsync("bitmap-graphics", visible: true, opacity: 160);
 				await client.SetCompositingLayerStateAsync("production-cg", visible: true, opacity: 224);
+				var transformedLayers = await client.SetCompositingLayerTransformAsync(
+					"bitmap-graphics",
+					0.12,
+					0.18,
+					1.25,
+					22.5,
+					0.5,
+					0.5,
+					0.05,
+					0.10,
+					0.15,
+					0.20);
+				var transformedBitmap = Assert.Single(transformedLayers, layer => layer.LayerId == "bitmap-graphics");
+				Assert.Equal(22.5, transformedBitmap.RotationDegrees, 6);
+				Assert.Equal(0.5, transformedBitmap.AnchorX, 6);
+				Assert.Equal(0.15, transformedBitmap.CropRight, 6);
+
+				var processedLayers = await client.SetCompositingLayerProcessingNodeAsync(
+					"bitmap-graphics",
+					new OperatorCompositingProcessingNodeDescriptor(
+						"grade-primary",
+						1,
+						true,
+						new OperatorColorGradeDescriptor(0.1, 1.1, 0.9)));
+				var processedBitmap = Assert.Single(processedLayers, layer => layer.LayerId == "bitmap-graphics");
+				Assert.Equal(22.5, processedBitmap.RotationDegrees, 6);
+				Assert.NotNull(processedBitmap.ProcessingNode);
 
 				var beforeRestart = await client.SynchronizeAsync();
 				var requestedOrder = beforeRestart.CompositingLayers
@@ -151,12 +178,21 @@ public sealed class ControlHostRecoveryIntegrationTests
 					.ThenBy(layer => layer.Order)
 					.Select(layer => layer.LayerId)
 					.ToArray();
-				await client.ReorderCompositingLayersAsync(requestedOrder);
+				var reorderedLayers = await client.ReorderCompositingLayersAsync(requestedOrder);
+				var reorderedBitmap = Assert.Single(reorderedLayers, layer => layer.LayerId == "bitmap-graphics");
+				Assert.Equal(22.5, reorderedBitmap.RotationDegrees, 6);
+				Assert.NotNull(reorderedBitmap.ProcessingNode);
 				beforeRestart = await client.SynchronizeAsync();
 
 				Assert.Equal("durable-logo.rgba", beforeRestart.GraphicsOverlay.AssetName);
 				Assert.True(beforeRestart.GraphicsOverlay.Visible);
 				Assert.Equal("DURABLE SHOW STATE", beforeRestart.ProductionCgText.Text);
+				var beforeBitmap = Assert.Single(beforeRestart.CompositingLayers, layer => layer.LayerId == "bitmap-graphics");
+				Assert.Equal(22.5, beforeBitmap.RotationDegrees, 6);
+				Assert.Equal(0.5, beforeBitmap.AnchorX, 6);
+				Assert.Equal(0.15, beforeBitmap.CropRight, 6);
+				Assert.NotNull(beforeBitmap.ProcessingNode);
+				Assert.Equal(0.1, beforeBitmap.ProcessingNode!.ColorGrade.Brightness, 6);
 				Assert.Equal("SAVED", beforeRestart.ShowProject.State);
 				committedRevision = firstControl.Control!.State.Revision;
 
@@ -184,7 +220,21 @@ public sealed class ControlHostRecoveryIntegrationTests
 			Assert.True(restored.GraphicsOverlay.Visible);
 			Assert.Equal("DURABLE SHOW STATE", restored.ProductionCgText.Text);
 			Assert.True(restored.ProductionCgText.Visible);
-			Assert.Contains(restored.CompositingLayers, layer => layer.LayerId == "bitmap-graphics" && layer.Visible && layer.Opacity == 160);
+			var restoredBitmap = Assert.Single(restored.CompositingLayers, layer => layer.LayerId == "bitmap-graphics");
+			Assert.True(restoredBitmap.Visible);
+			Assert.Equal((byte)160, restoredBitmap.Opacity);
+			Assert.Equal(22.5, restoredBitmap.RotationDegrees, 6);
+			Assert.Equal(0.5, restoredBitmap.AnchorX, 6);
+			Assert.Equal(0.5, restoredBitmap.AnchorY, 6);
+			Assert.Equal(0.05, restoredBitmap.CropLeft, 6);
+			Assert.Equal(0.10, restoredBitmap.CropTop, 6);
+			Assert.Equal(0.15, restoredBitmap.CropRight, 6);
+			Assert.Equal(0.20, restoredBitmap.CropBottom, 6);
+			Assert.NotNull(restoredBitmap.ProcessingNode);
+			Assert.Equal("grade-primary", restoredBitmap.ProcessingNode!.NodeId);
+			Assert.Equal(0.1, restoredBitmap.ProcessingNode.ColorGrade.Brightness, 6);
+			Assert.Equal(1.1, restoredBitmap.ProcessingNode.ColorGrade.Contrast, 6);
+			Assert.Equal(0.9, restoredBitmap.ProcessingNode.ColorGrade.Saturation, 6);
 			Assert.Contains(restored.CompositingLayers, layer => layer.LayerId == "production-cg" && layer.Visible && layer.Opacity == 224);
 			Assert.Equal("RESTORED", restored.ShowProject.State);
 

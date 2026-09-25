@@ -178,6 +178,46 @@ public sealed record OperatorGraphicsOverlayDescriptor(
         new(false, null, 0, 0, false, 0.72, 0.06, 1.0);
 }
 
+public sealed record OperatorColorGradeDescriptor
+{
+    public OperatorColorGradeDescriptor(double brightness, double contrast, double saturation)
+    {
+        if (!double.IsFinite(brightness) || brightness is < -1 or > 1) throw new ArgumentOutOfRangeException(nameof(brightness));
+        if (!double.IsFinite(contrast) || contrast is < 0 or > 2) throw new ArgumentOutOfRangeException(nameof(contrast));
+        if (!double.IsFinite(saturation) || saturation is < 0 or > 2) throw new ArgumentOutOfRangeException(nameof(saturation));
+        Brightness = brightness;
+        Contrast = contrast;
+        Saturation = saturation;
+    }
+
+    public double Brightness { get; }
+    public double Contrast { get; }
+    public double Saturation { get; }
+}
+
+public sealed record OperatorCompositingProcessingNodeDescriptor
+{
+    public OperatorCompositingProcessingNodeDescriptor(
+        string nodeId,
+        int kind,
+        bool enabled,
+        OperatorColorGradeDescriptor colorGrade)
+    {
+        if (string.IsNullOrWhiteSpace(nodeId) || nodeId.Length > 64)
+            throw new ArgumentException("Processing node identity is required and must not exceed 64 characters.", nameof(nodeId));
+        if (kind != 1) throw new ArgumentOutOfRangeException(nameof(kind));
+        NodeId = nodeId.Trim();
+        Kind = kind;
+        Enabled = enabled;
+        ColorGrade = colorGrade ?? throw new ArgumentNullException(nameof(colorGrade));
+    }
+
+    public string NodeId { get; }
+    public int Kind { get; }
+    public bool Enabled { get; }
+    public OperatorColorGradeDescriptor ColorGrade { get; }
+}
+
 public sealed record OperatorCompositingLayerDescriptor
 {
     public OperatorCompositingLayerDescriptor(
@@ -189,7 +229,15 @@ public sealed record OperatorCompositingLayerDescriptor
         double positionX,
         double positionY,
         double scale,
-        string contentIdentity)
+        string contentIdentity,
+        double rotationDegrees = 0,
+        double anchorX = 0,
+        double anchorY = 0,
+        double cropLeft = 0,
+        double cropTop = 0,
+        double cropRight = 0,
+        double cropBottom = 0,
+        OperatorCompositingProcessingNodeDescriptor? processingNode = null)
     {
         if (string.IsNullOrWhiteSpace(layerId)) throw new ArgumentException("Compositing layer identity is required.", nameof(layerId));
         if (kind is < 1 or > 3) throw new ArgumentOutOfRangeException(nameof(kind));
@@ -197,6 +245,15 @@ public sealed record OperatorCompositingLayerDescriptor
         if (!double.IsFinite(positionX) || positionX is < 0 or > 1) throw new ArgumentOutOfRangeException(nameof(positionX));
         if (!double.IsFinite(positionY) || positionY is < 0 or > 1) throw new ArgumentOutOfRangeException(nameof(positionY));
         if (!double.IsFinite(scale) || scale is < 0.05 or > 4.0) throw new ArgumentOutOfRangeException(nameof(scale));
+        if (!double.IsFinite(rotationDegrees) || rotationDegrees is < -180 or > 180) throw new ArgumentOutOfRangeException(nameof(rotationDegrees));
+        if (!double.IsFinite(anchorX) || anchorX is < 0 or > 1) throw new ArgumentOutOfRangeException(nameof(anchorX));
+        if (!double.IsFinite(anchorY) || anchorY is < 0 or > 1) throw new ArgumentOutOfRangeException(nameof(anchorY));
+        if (!double.IsFinite(cropLeft) || cropLeft is < 0 or > 1) throw new ArgumentOutOfRangeException(nameof(cropLeft));
+        if (!double.IsFinite(cropTop) || cropTop is < 0 or > 1) throw new ArgumentOutOfRangeException(nameof(cropTop));
+        if (!double.IsFinite(cropRight) || cropRight is < 0 or > 1) throw new ArgumentOutOfRangeException(nameof(cropRight));
+        if (!double.IsFinite(cropBottom) || cropBottom is < 0 or > 1) throw new ArgumentOutOfRangeException(nameof(cropBottom));
+        if (cropLeft + cropRight >= 1) throw new ArgumentOutOfRangeException(nameof(cropRight));
+        if (cropTop + cropBottom >= 1) throw new ArgumentOutOfRangeException(nameof(cropBottom));
         if (string.IsNullOrWhiteSpace(contentIdentity)) throw new ArgumentException("Compositing layer content identity is required.", nameof(contentIdentity));
 
         LayerId = layerId.Trim();
@@ -208,6 +265,14 @@ public sealed record OperatorCompositingLayerDescriptor
         PositionY = positionY;
         Scale = scale;
         ContentIdentity = contentIdentity.Trim();
+        RotationDegrees = rotationDegrees;
+        AnchorX = anchorX;
+        AnchorY = anchorY;
+        CropLeft = cropLeft;
+        CropTop = cropTop;
+        CropRight = cropRight;
+        CropBottom = cropBottom;
+        ProcessingNode = processingNode;
     }
 
     public string LayerId { get; }
@@ -219,6 +284,14 @@ public sealed record OperatorCompositingLayerDescriptor
     public double PositionY { get; }
     public double Scale { get; }
     public string ContentIdentity { get; }
+    public double RotationDegrees { get; }
+    public double AnchorX { get; }
+    public double AnchorY { get; }
+    public double CropLeft { get; }
+    public double CropTop { get; }
+    public double CropRight { get; }
+    public double CropBottom { get; }
+    public OperatorCompositingProcessingNodeDescriptor? ProcessingNode { get; }
 }
 
 public sealed record OperatorAudioInputDescriptor
@@ -670,6 +743,27 @@ public interface IOperatorControlTransport
         CancellationToken cancellationToken = default) =>
         ValueTask.FromException<IReadOnlyList<OperatorCompositingLayerDescriptor>>(new NotSupportedException("Operator transport does not expose compositing layer control."));
 
+    ValueTask<IReadOnlyList<OperatorCompositingLayerDescriptor>> SetCompositingLayerTransformAsync(
+        string layerId,
+        double positionX,
+        double positionY,
+        double scale,
+        double rotationDegrees,
+        double anchorX,
+        double anchorY,
+        double cropLeft,
+        double cropTop,
+        double cropRight,
+        double cropBottom,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<IReadOnlyList<OperatorCompositingLayerDescriptor>>(new NotSupportedException("Operator transport does not expose compositing layer transform control."));
+
+    ValueTask<IReadOnlyList<OperatorCompositingLayerDescriptor>> SetCompositingLayerProcessingNodeAsync(
+        string layerId,
+        OperatorCompositingProcessingNodeDescriptor? processingNode,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<IReadOnlyList<OperatorCompositingLayerDescriptor>>(new NotSupportedException("Operator transport does not expose compositing layer processing control."));
+
     ValueTask<IReadOnlyList<OperatorCompositingLayerDescriptor>> ReorderCompositingLayersAsync(
         IReadOnlyList<string> orderedLayerIds,
         CancellationToken cancellationToken = default) =>
@@ -988,6 +1082,55 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
         RequireSnapshot();
         var result = await _transport
             .SetCompositingLayerStateAsync(layerId.Trim(), visible, opacity, cancellationToken)
+            .ConfigureAwait(false);
+        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+
+    public async ValueTask<IReadOnlyList<OperatorCompositingLayerDescriptor>> SetCompositingLayerTransformAsync(
+        string layerId,
+        double positionX,
+        double positionY,
+        double scale,
+        double rotationDegrees,
+        double anchorX,
+        double anchorY,
+        double cropLeft,
+        double cropTop,
+        double cropRight,
+        double cropBottom,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(layerId))
+            throw new ArgumentException("Compositing layer identity is required.", nameof(layerId));
+        RequireSnapshot();
+        var result = await _transport.SetCompositingLayerTransformAsync(
+            layerId.Trim(),
+            positionX,
+            positionY,
+            scale,
+            rotationDegrees,
+            anchorX,
+            anchorY,
+            cropLeft,
+            cropTop,
+            cropRight,
+            cropBottom,
+            cancellationToken).ConfigureAwait(false);
+        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+
+    public async ValueTask<IReadOnlyList<OperatorCompositingLayerDescriptor>> SetCompositingLayerProcessingNodeAsync(
+        string layerId,
+        OperatorCompositingProcessingNodeDescriptor? processingNode,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(layerId))
+            throw new ArgumentException("Compositing layer identity is required.", nameof(layerId));
+        RequireSnapshot();
+        var result = await _transport
+            .SetCompositingLayerProcessingNodeAsync(layerId.Trim(), processingNode, cancellationToken)
             .ConfigureAwait(false);
         await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
         return result;

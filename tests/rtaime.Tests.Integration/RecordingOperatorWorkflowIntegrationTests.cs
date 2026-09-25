@@ -47,8 +47,7 @@ public sealed class RecordingOperatorWorkflowIntegrationTests
 				controlEndpoint,
 				TimeSpan.FromSeconds(1),
 				TimeSpan.FromSeconds(5)));
-			var initial = await client.SynchronizeAsync();
-			var revisionBeforeRecording = initial.Production.Revision;
+			await client.SynchronizeAsync();
 
 			var graphics = await client.LoadGraphicsOverlayAsync(new OperatorGraphicsAsset(
 				"ap53-recording-red.rgba",
@@ -58,6 +57,7 @@ public sealed class RecordingOperatorWorkflowIntegrationTests
 			Assert.True(graphics.AssetLoaded);
 			graphics = await client.SetGraphicsOverlayAsync(true, 0, 0, 1);
 			Assert.True(graphics.Visible);
+			var revisionBeforeRecording = client.Snapshot!.Production.Revision;
 
 			var firstPath = await RecordOneAsync(client, runtime, destination, "ap53-program-01");
 			var first = ReferenceRecordingPayloadReader.Read(firstPath);

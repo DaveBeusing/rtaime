@@ -96,6 +96,59 @@ public enum ProductionCompositingLayerKind
     ProductionCg = 3
 }
 
+public enum ProductionCompositingProcessingNodeKind
+{
+    ColorGrade = 1
+}
+
+public sealed record ProductionColorGradeSettings
+{
+    public ProductionColorGradeSettings(double brightness, double contrast, double saturation)
+    {
+        if (!double.IsFinite(brightness) || brightness is < -1.0 or > 1.0)
+            throw new ArgumentOutOfRangeException(nameof(brightness), "Brightness must be finite and in the inclusive range -1..1.");
+        if (!double.IsFinite(contrast) || contrast is < 0.0 or > 2.0)
+            throw new ArgumentOutOfRangeException(nameof(contrast), "Contrast must be finite and in the inclusive range 0..2.");
+        if (!double.IsFinite(saturation) || saturation is < 0.0 or > 2.0)
+            throw new ArgumentOutOfRangeException(nameof(saturation), "Saturation must be finite and in the inclusive range 0..2.");
+
+        Brightness = brightness;
+        Contrast = contrast;
+        Saturation = saturation;
+    }
+
+    public double Brightness { get; }
+    public double Contrast { get; }
+    public double Saturation { get; }
+}
+
+public sealed record ProductionCompositingProcessingNodeState
+{
+    public ProductionCompositingProcessingNodeState(
+        string nodeId,
+        ProductionCompositingProcessingNodeKind kind,
+        bool enabled,
+        ProductionColorGradeSettings colorGrade)
+    {
+        if (string.IsNullOrWhiteSpace(nodeId) || nodeId.Length > 64)
+            throw new ArgumentException("Processing node identity is required and must not exceed 64 characters.", nameof(nodeId));
+        if (!Enum.IsDefined(kind))
+            throw new ArgumentOutOfRangeException(nameof(kind));
+        if (kind != ProductionCompositingProcessingNodeKind.ColorGrade)
+            throw new NotSupportedException($"Processing node kind '{kind}' is not supported.");
+
+        NodeId = nodeId.Trim();
+        Kind = kind;
+        Enabled = enabled;
+        ColorGrade = colorGrade ?? throw new ArgumentNullException(nameof(colorGrade));
+    }
+
+    public string NodeId { get; }
+    public ProductionCompositingProcessingNodeKind Kind { get; }
+    public bool Enabled { get; }
+    public ProductionColorGradeSettings ColorGrade { get; }
+}
+
 public static class ProductionCompositingLayerIds
 {
     public const string LegacyVisual = "legacy-visual";
@@ -124,7 +177,15 @@ public sealed record ProductionCompositingLayerState
         double positionX,
         double positionY,
         double scale,
-        string contentIdentity)
+        string contentIdentity,
+        double rotationDegrees = 0.0,
+        double anchorX = 0.0,
+        double anchorY = 0.0,
+        double cropLeft = 0.0,
+        double cropTop = 0.0,
+        double cropRight = 0.0,
+        double cropBottom = 0.0,
+        ProductionCompositingProcessingNodeState? processingNode = null)
     {
         if (string.IsNullOrWhiteSpace(layerId))
             throw new ArgumentException("Compositing layer identity is required.", nameof(layerId));
@@ -134,12 +195,22 @@ public sealed record ProductionCompositingLayerState
             throw new ArgumentException("Compositing layer identity does not match its declared kind.", nameof(layerId));
         if (order is < 0 or >= ProductionCompositingLayerIds.MaximumLayerCount)
             throw new ArgumentOutOfRangeException(nameof(order));
-        if (!double.IsFinite(positionX) || positionX is < 0 or > 1)
-            throw new ArgumentOutOfRangeException(nameof(positionX));
-        if (!double.IsFinite(positionY) || positionY is < 0 or > 1)
-            throw new ArgumentOutOfRangeException(nameof(positionY));
+        ValidateNormalized(positionX, nameof(positionX));
+        ValidateNormalized(positionY, nameof(positionY));
         if (!double.IsFinite(scale) || scale is < 0.05 or > 4.0)
             throw new ArgumentOutOfRangeException(nameof(scale));
+        if (!double.IsFinite(rotationDegrees) || rotationDegrees is < -180.0 or > 180.0)
+            throw new ArgumentOutOfRangeException(nameof(rotationDegrees), "Rotation must be finite and in the inclusive range -180..180 degrees.");
+        ValidateNormalized(anchorX, nameof(anchorX));
+        ValidateNormalized(anchorY, nameof(anchorY));
+        ValidateCrop(cropLeft, cropTop, cropRight, cropBottom);
+        if (kind == ProductionCompositingLayerKind.LegacyVisual &&
+            (rotationDegrees != 0.0 || anchorX != 0.0 || anchorY != 0.0 ||
+             cropLeft != 0.0 || cropTop != 0.0 || cropRight != 0.0 || cropBottom != 0.0 ||
+             processingNode is not null))
+        {
+            throw new ArgumentException("Legacy visual layers do not expose transform extensions or processing nodes.");
+        }
         if (string.IsNullOrWhiteSpace(contentIdentity) || contentIdentity.Length > 512)
             throw new ArgumentException("Compositing layer content identity is required and must not exceed 512 characters.", nameof(contentIdentity));
 
@@ -151,7 +222,15 @@ public sealed record ProductionCompositingLayerState
         PositionX = positionX;
         PositionY = positionY;
         Scale = scale;
+        RotationDegrees = rotationDegrees;
+        AnchorX = anchorX;
+        AnchorY = anchorY;
+        CropLeft = cropLeft;
+        CropTop = cropTop;
+        CropRight = cropRight;
+        CropBottom = cropBottom;
         ContentIdentity = contentIdentity.Trim();
+        ProcessingNode = processingNode;
     }
 
     public string LayerId { get; }
@@ -162,7 +241,33 @@ public sealed record ProductionCompositingLayerState
     public double PositionX { get; }
     public double PositionY { get; }
     public double Scale { get; }
+    public double RotationDegrees { get; }
+    public double AnchorX { get; }
+    public double AnchorY { get; }
+    public double CropLeft { get; }
+    public double CropTop { get; }
+    public double CropRight { get; }
+    public double CropBottom { get; }
     public string ContentIdentity { get; }
+    public ProductionCompositingProcessingNodeState? ProcessingNode { get; }
+
+    private static void ValidateNormalized(double value, string parameterName)
+    {
+        if (!double.IsFinite(value) || value is < 0.0 or > 1.0)
+            throw new ArgumentOutOfRangeException(parameterName, "Normalized values must be finite and in the inclusive range 0..1.");
+    }
+
+    private static void ValidateCrop(double left, double top, double right, double bottom)
+    {
+        ValidateNormalized(left, nameof(left));
+        ValidateNormalized(top, nameof(top));
+        ValidateNormalized(right, nameof(right));
+        ValidateNormalized(bottom, nameof(bottom));
+        if (left + right >= 1.0)
+            throw new ArgumentOutOfRangeException(nameof(right), "Horizontal crop edges must leave a non-empty source region.");
+        if (top + bottom >= 1.0)
+            throw new ArgumentOutOfRangeException(nameof(bottom), "Vertical crop edges must leave a non-empty source region.");
+    }
 }
 
 public sealed class ProductionCompositingState : IEquatable<ProductionCompositingState>

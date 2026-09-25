@@ -133,6 +133,29 @@ public interface IControlRuntimeTransportSeam
 		ValueTask.FromException<IReadOnlyList<RuntimeCompositingLayerSnapshot>>(
 			new NotSupportedException("Runtime transport does not expose compositing layer control."));
 
+	ValueTask<IReadOnlyList<RuntimeCompositingLayerSnapshot>> SetCompositingLayerTransformAsync(
+		string layerId,
+		double positionX,
+		double positionY,
+		double scale,
+		double rotationDegrees,
+		double anchorX,
+		double anchorY,
+		double cropLeft,
+		double cropTop,
+		double cropRight,
+		double cropBottom,
+		CancellationToken cancellationToken = default) =>
+		ValueTask.FromException<IReadOnlyList<RuntimeCompositingLayerSnapshot>>(
+			new NotSupportedException("Runtime transport does not expose compositing layer transform control."));
+
+	ValueTask<IReadOnlyList<RuntimeCompositingLayerSnapshot>> SetCompositingLayerProcessingNodeAsync(
+		string layerId,
+		PreparedCompositingProcessingNodeState? processingNode,
+		CancellationToken cancellationToken = default) =>
+		ValueTask.FromException<IReadOnlyList<RuntimeCompositingLayerSnapshot>>(
+			new NotSupportedException("Runtime transport does not expose compositing layer processing control."));
+
 	ValueTask<IReadOnlyList<RuntimeCompositingLayerSnapshot>> ReorderCompositingLayersAsync(
 		IReadOnlyList<string> orderedLayerIds,
 		CancellationToken cancellationToken = default) =>
@@ -619,6 +642,41 @@ public sealed class ControlHostProcess
 		RuntimeRemoteSnapshot runtimeSnapshot,
 		CancellationToken cancellationToken)
 	{
+		if (_ipcServer is null)
+		{
+			await ReconcileRuntimeCoreAsync(
+				control,
+				transport,
+				runtimeHostInstanceId,
+				runtimeSnapshot,
+				restoreWithinMutationGate: false,
+				cancellationToken).ConfigureAwait(false);
+			return;
+		}
+
+		await _ipcServer.RunSerializedMutationAsync(
+			async token =>
+			{
+				var currentSnapshot = await transport.GetSnapshotAsync(token).ConfigureAwait(false);
+				await ReconcileRuntimeCoreAsync(
+					control,
+					transport,
+					runtimeHostInstanceId,
+					currentSnapshot,
+					restoreWithinMutationGate: true,
+					token).ConfigureAwait(false);
+			},
+			cancellationToken).ConfigureAwait(false);
+	}
+
+	private async ValueTask ReconcileRuntimeCoreAsync(
+		ControlHostService control,
+		IControlRuntimeTransportSeam transport,
+		string runtimeHostInstanceId,
+		RuntimeRemoteSnapshot runtimeSnapshot,
+		bool restoreWithinMutationGate,
+		CancellationToken cancellationToken)
+	{
 		var authority = control.State;
 		ValidateRuntimeAuthority(runtimeSnapshot, authority);
 
@@ -626,7 +684,12 @@ public sealed class ControlHostProcess
 		{
 			_boundRuntimeHostInstanceId = runtimeHostInstanceId;
 			if (_ipcServer is not null)
-				await _ipcServer.RestoreGraphicsStateAsync(cancellationToken).ConfigureAwait(false);
+			{
+				if (restoreWithinMutationGate)
+					await _ipcServer.RestoreGraphicsStateWithinMutationAsync(cancellationToken).ConfigureAwait(false);
+				else
+					await _ipcServer.RestoreGraphicsStateAsync(cancellationToken).ConfigureAwait(false);
+			}
 			control.RecordObservation("recovery", "recovery.runtime.aligned", $"RuntimeHost instance '{runtimeHostInstanceId}' is already committed against authoritative revision {authority.Revision}.");
 			SetRecovery(ControlHostRecoveryState.Recovered, authority.Revision, "Durable Control authority and Runtime committed authority snapshot are aligned.");
 			SetOperationalState(ControlHostProcessState.Ready, ControlHostHealthState.Healthy, $"ControlHost reconciled with RuntimeHost instance '{runtimeHostInstanceId}' without execution replacement.");
@@ -638,7 +701,12 @@ public sealed class ControlHostProcess
 		control.RefreshProviderSnapshot(providers);
 		var revisionBefore = authority.Revision;
 		if (_ipcServer is not null && authority.CompositingState is not null)
-			await _ipcServer.RestoreGraphicsStateAsync(cancellationToken).ConfigureAwait(false);
+		{
+			if (restoreWithinMutationGate)
+				await _ipcServer.RestoreGraphicsStateWithinMutationAsync(cancellationToken).ConfigureAwait(false);
+			else
+				await _ipcServer.RestoreGraphicsStateAsync(cancellationToken).ConfigureAwait(false);
+		}
 		var execution = control.PrepareCurrentExecution();
 		var remote = await transport.ApplyExecutionAsync(execution.PreparedExecution, execution.ProgramSinkId, null, cancellationToken).ConfigureAwait(false);
 		if (!remote.Committed || remote.Commit is null) throw new InvalidOperationException(remote.Commit?.Failure?.Message ?? remote.Prepare.Failure?.Message ?? "Runtime reconciliation was rejected.");
@@ -719,6 +787,14 @@ public sealed class ControlHostProcess
 				expected.PositionX != actual.PositionX ||
 				expected.PositionY != actual.PositionY ||
 				expected.Scale != actual.Scale ||
+				expected.RotationDegrees != actual.RotationDegrees ||
+				expected.AnchorX != actual.AnchorX ||
+				expected.AnchorY != actual.AnchorY ||
+				expected.CropLeft != actual.CropLeft ||
+				expected.CropTop != actual.CropTop ||
+				expected.CropRight != actual.CropRight ||
+				expected.CropBottom != actual.CropBottom ||
+				!ProcessingNodeMatches(expected.ProcessingNode, actual.ProcessingNode) ||
 				!string.Equals(expected.ContentIdentity, actual.ContentIdentity, StringComparison.Ordinal))
 			{
 				return false;
@@ -726,6 +802,21 @@ public sealed class ControlHostProcess
 		}
 
 		return true;
+	}
+
+	private static bool ProcessingNodeMatches(
+		ProductionCompositingProcessingNodeState? expected,
+		PreparedCompositingProcessingNodeState? actual)
+	{
+		if (expected is null || actual is null)
+			return expected is null && actual is null;
+
+		return expected.NodeId == actual.NodeId &&
+			(int)expected.Kind == (int)actual.Kind &&
+			expected.Enabled == actual.Enabled &&
+			expected.ColorGrade.Brightness == actual.ColorGrade.Brightness &&
+			expected.ColorGrade.Contrast == actual.ColorGrade.Contrast &&
+			expected.ColorGrade.Saturation == actual.ColorGrade.Saturation;
 	}
 
 	private string ResolveDurabilityDirectory()

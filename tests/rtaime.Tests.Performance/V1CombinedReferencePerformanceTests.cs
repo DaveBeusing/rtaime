@@ -107,6 +107,83 @@ public sealed class V1CombinedReferencePerformanceTests
         Assert.InRange(metrics.NominalFrameBudgetExceedances, 0UL, 12UL);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Authoritative_transform_and_color_grade_materialization_has_bounded_1080p_regression_guard(bool fractionalRate)
+    {
+        var format = fractionalRate ? VideoFormat.Hd1080p59_94Rgba8 : VideoFormat.Hd1080p50Rgba8;
+        var sourceA = new ProductionSourceId(Identity.Parse("94000000-0000-0000-0000-00000000000a"));
+        var sourceB = new ProductionSourceId(Identity.Parse("94000000-0000-0000-0000-00000000000b"));
+        var mediaA = new MediaSourceId(sourceA.Value);
+        var mediaB = new MediaSourceId(sourceB.Value);
+        var specification = new ProductionSpecification(
+            ControlContractVersion.Current,
+            new ProductionId(Identity.Parse("94000000-0000-0000-0000-000000000001")),
+            "V1 compositor materialization performance guard",
+            new[]
+            {
+                new ProductionSourceSpecification(sourceA, "Input 1"),
+                new ProductionSourceSpecification(sourceB, "Input 2")
+            },
+            new ProductionRoutingState(sourceB, sourceA));
+
+        await using var runtime = new V1RuntimeHostService(mediaA, mediaB, format, new CountingWriter());
+        var providerRegistry = new ProviderRegistry(runtime.ProviderDescriptors);
+        var initialState = Assert.IsType<ControlStateSnapshot>(ControlDomainEngine.Initialize(specification).State).Authoritative;
+        var initialPlan = CapabilityPlanningEngine.Plan(specification, initialState, providerRegistry);
+        Assert.True(initialPlan.Succeeded);
+        var programSink = initialPlan.Graph!.Nodes.Single(node => node.Kind == LogicalProductionNodeKind.ProgramSink).MediaSinkId!.Value;
+        Assert.True(runtime.ApplyExecution(initialPlan.PreparedExecution!, programSink).Committed);
+
+        const uint assetWidth = 384;
+        const uint assetHeight = 384;
+        var pixels = new byte[checked((int)(assetWidth * assetHeight * 4u))];
+        Array.Fill(pixels, (byte)128);
+        runtime.LoadGraphicsOverlay("performance-transform.rgba", assetWidth, assetHeight, pixels);
+        runtime.SetGraphicsOverlay(true, 0, 0, 1);
+        runtime.SetCompositingLayerProcessingNode(
+            V1RuntimeHostService.BitmapGraphicsLayerId,
+            new PreparedCompositingProcessingNodeState(
+                "performance-grade",
+                PreparedCompositingProcessingNodeKind.ColorGrade,
+                true,
+                new PreparedColorGradeSettings(0.05, 1.05, 0.95)));
+
+        const int iterations = 4;
+        var stopwatch = Stopwatch.StartNew();
+        for (var index = 0; index < iterations; index++)
+        {
+            runtime.SetCompositingLayerTransform(
+                V1RuntimeHostService.BitmapGraphicsLayerId,
+                0,
+                0,
+                1,
+                index % 2 == 0 ? 2.5 : -2.5,
+                0.5,
+                0.5,
+                0,
+                0,
+                0,
+                0);
+        }
+        stopwatch.Stop();
+
+        var bitmapLayer = Assert.Single(
+            runtime.Snapshot.CompositingLayers,
+            layer => layer.LayerId == V1RuntimeHostService.BitmapGraphicsLayerId);
+        Assert.Equal(-2.5, bitmapLayer.RotationDegrees, 6);
+        Assert.NotNull(bitmapLayer.ProcessingNode);
+        Assert.Equal(0, runtime.Snapshot.ActiveGpuSurfaces);
+        Assert.True(
+            stopwatch.Elapsed < TimeSpan.FromSeconds(15),
+            $"Managed 1080p transform/Color Grade materialization exceeded regression guard: {stopwatch.Elapsed}.");
+        Console.WriteLine(
+            $"Managed {format.Width}x{format.Height} {format.FrameRate} transform+grade " +
+            $"iterations={iterations} total={stopwatch.Elapsed.TotalMilliseconds:0.###}ms " +
+            $"perMutation={stopwatch.Elapsed.TotalMilliseconds / iterations:0.###}ms");
+    }
+
     private static GovernedInferenceExecutionRequest CreateInferenceRequest(FrameDescriptor frame)
     {
         var request = new GovernedInferenceRequest(

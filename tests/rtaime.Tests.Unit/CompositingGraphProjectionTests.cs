@@ -33,7 +33,25 @@ public sealed class CompositingGraphProjectionTests
 		{
 			CompositingLayers =
 			[
-				new OperatorCompositingLayerDescriptor("bitmap-graphics", 2, 0, true, 128, 0.10, 0.20, 1.5, "LowerThird.png"),
+				new OperatorCompositingLayerDescriptor(
+					"bitmap-graphics",
+					2,
+					0,
+					true,
+					128,
+					0.10,
+					0.20,
+					1.5,
+					"LowerThird.png",
+					rotationDegrees: 12.5,
+					anchorX: 0.5,
+					anchorY: 0.5,
+					cropLeft: 0.1,
+					processingNode: new OperatorCompositingProcessingNodeDescriptor(
+						"grade-primary",
+						1,
+						true,
+						new OperatorColorGradeDescriptor(0.1, 1.1, 0.9))),
 				new OperatorCompositingLayerDescriptor("production-cg", 3, 1, false, 255, 0.05, 0.90, 1.0, "LOWER THIRD")
 			]
 		};
@@ -48,12 +66,31 @@ public sealed class CompositingGraphProjectionTests
 		Assert.Contains("50%", bitmap.Detail, StringComparison.Ordinal);
 		Assert.Equal("CONFIRMED HIDDEN", cg.Status);
 		Assert.DoesNotContain(graph.Nodes, node => node.Id == "graphics-transform");
+
+		var bitmapTransform = Assert.Single(graph.Nodes, node => node.Id == "transform:bitmap-graphics");
+		Assert.Equal(CompositingGraphNodeKind.Transform, bitmapTransform.Kind);
+		Assert.Contains("R 12.5°", bitmapTransform.Detail, StringComparison.Ordinal);
+		Assert.Contains("A 0.5,0.5", bitmapTransform.Detail, StringComparison.Ordinal);
+
+		var grade = Assert.Single(graph.Nodes, node => node.Id == "processing:bitmap-graphics:grade-primary");
+		Assert.Equal(CompositingGraphNodeKind.Processing, grade.Kind);
+		Assert.Equal("CONFIRMED ENABLED", grade.Status);
+		Assert.Contains("Contrast 1.1", grade.Detail, StringComparison.Ordinal);
+
 		Assert.Contains(graph.Connections, connection =>
 			connection.FromNodeId == "layer:bitmap-graphics" &&
+			connection.ToNodeId == "transform:bitmap-graphics" &&
+			connection.IsActive);
+		Assert.Contains(graph.Connections, connection =>
+			connection.FromNodeId == "transform:bitmap-graphics" &&
+			connection.ToNodeId == "processing:bitmap-graphics:grade-primary" &&
+			connection.IsActive);
+		Assert.Contains(graph.Connections, connection =>
+			connection.FromNodeId == "processing:bitmap-graphics:grade-primary" &&
 			connection.ToNodeId == "composite" &&
 			connection.IsActive);
 		Assert.Contains(graph.Connections, connection =>
-			connection.FromNodeId == "layer:production-cg" &&
+			connection.FromNodeId == "transform:production-cg" &&
 			connection.ToNodeId == "composite" &&
 			!connection.IsActive);
 	}
