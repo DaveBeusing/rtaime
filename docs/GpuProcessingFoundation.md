@@ -250,6 +250,8 @@ Crop, transform and Color Grade do not create a second Program renderer. They pr
 
 The initial processing-node implementation is deliberately bounded to one typed Color Grade node per supported layer. It exposes Brightness, Contrast and Saturation only; arbitrary shader blobs, arbitrary stacks and Keying are not implemented. Processing-node configuration is validated before execution and is carried through the normal prepared/transactional Control path.
 
+A confirmed direct graphics or compositing mutation is not acknowledged as synchronized while Runtime still carries an older Control `AuthoritySnapshot`. ControlHost reapplies the current prepared execution within the same serialized mutation boundary when the authoritative Production Revision advances, then verifies that Runtime reports the same Production identity and revision. This prevents routine Inspector/graphics edits from being mistaken for recovery drift by the Runtime binding loop.
+
 Layer materialization reuses the existing Runtime scratch arrays and dynamic frame buffers. Reconfiguration performs bounded work when an authoritative transform or processing mutation is applied; it does not introduce a new per-frame allocation queue or a high-rate logging path.
 
 ## GPU observations
