@@ -174,6 +174,12 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 				if (order.Length > 0)
 					_compositingLayers = await _runtimeTransport.ReorderCompositingLayersAsync(order, cancellationToken).ConfigureAwait(false);
 			}
+			if (_showProject is not null && _showProjectState != "RECOVERY_REQUIRED")
+			{
+				SetShowProjectState(
+					"RESTORED",
+					$"Durable show project '{_showProject.Name}' was restored through Runtime confirmation paths.");
+			}
 			NotifyObservableStateChanged();
 		}
 		finally
@@ -680,6 +686,122 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 					layer.ContentIdentity))
 				.ToArray());
 	}
+
+	private async ValueTask StoreBitmapAndPersistAsync(
+		RetainedGraphicsAsset asset,
+		RuntimeGraphicsOverlaySnapshot snapshot,
+		CancellationToken cancellationToken)
+	{
+		if (_showProjectStore is null || _showProject is null)
+			return;
+
+		var previous = _durableBitmapReference;
+		DurableBitmapGraphicsReference? candidate = null;
+		try
+		{
+			candidate = await _showProjectStore.StoreBitmapAssetAsync(
+				asset.Name,
+				asset.Width,
+				asset.Height,
+				asset.RgbaPixels,
+				snapshot.Visible,
+				snapshot.PositionX,
+				snapshot.PositionY,
+				snapshot.Scale,
+				cancellationToken).ConfigureAwait(false);
+			_durableBitmapReference = candidate;
+			var persisted = await TryPersistDurableGraphicsAsync(cancellationToken).ConfigureAwait(false);
+			if (!persisted)
+			{
+				_durableBitmapReference = previous;
+				await _showProjectStore.DeleteBitmapAssetAsync(candidate, CancellationToken.None).ConfigureAwait(false);
+				return;
+			}
+
+			if (previous is not null && previous.AssetId != candidate.AssetId)
+				await _showProjectStore.DeleteBitmapAssetAsync(previous, CancellationToken.None).ConfigureAwait(false);
+		}
+		catch (Exception exception)
+		{
+			_durableBitmapReference = previous;
+			if (candidate is not null)
+			{
+				try { await _showProjectStore.DeleteBitmapAssetAsync(candidate, CancellationToken.None).ConfigureAwait(false); }
+				catch { }
+			}
+			MarkShowProjectPersistenceStale(exception);
+		}
+	}
+
+	private async ValueTask<bool> TryPersistDurableGraphicsAsync(CancellationToken cancellationToken)
+	{
+		if (_showProjectStore is null || _showProject is null)
+			return true;
+
+		try
+		{
+			var control = _controlAccessor()
+				?? throw new InvalidOperationException("ControlHost service is unavailable while persisting durable graphics.");
+			var compositing = _compositingLayers.Count == 0
+				? null
+				: ToProductionCompositingState(_compositingLayers);
+			_showProject = await _showProjectStore
+				.UpdateGraphicsAsync(
+					control.Specification,
+					new DurableGraphicsState(_durableBitmapReference, _productionCgText, compositing),
+					cancellationToken)
+				.ConfigureAwait(false);
+			SetShowProjectState(
+				"SAVED",
+				$"Durable show project '{_showProject.Name}' is synchronized at storage version {_showProject.StorageVersion}.");
+			return true;
+		}
+		catch (Exception exception)
+		{
+			MarkShowProjectPersistenceStale(exception);
+			return false;
+		}
+	}
+
+	private void MarkShowProjectPersistenceStale(Exception exception)
+	{
+		SetShowProjectState("STALE", $"Live authored state changed but durable show-project persistence failed: {exception.Message}");
+		try
+		{
+			_controlAccessor()?.RecordObservation(
+				"persistence",
+				"show_project.persistence.stale",
+				_showProjectDetail,
+				new Failure("show_project.persistence.failed", exception.Message));
+		}
+		catch
+		{
+		}
+	}
+
+	private void SetShowProjectState(string state, string detail)
+	{
+		_showProjectState = state;
+		_showProjectDetail = detail;
+	}
+
+	private static IReadOnlyList<RuntimeCompositingLayerSnapshot> ToRuntimeCompositingLayers(
+		ProductionCompositingState? state) =>
+		state is null
+			? Array.Empty<RuntimeCompositingLayerSnapshot>()
+			: Array.AsReadOnly(state.Layers
+				.OrderBy(layer => layer.Order)
+				.Select(layer => new RuntimeCompositingLayerSnapshot(
+					layer.LayerId,
+					(int)layer.Kind,
+					layer.Order,
+					layer.Visible,
+					layer.Opacity,
+					layer.PositionX,
+					layer.PositionY,
+					layer.Scale,
+					layer.ContentIdentity))
+				.ToArray());
 
 	private async ValueTask<WireEnvelope> MutateGraphicsAsync(
 		WireEnvelope request,
