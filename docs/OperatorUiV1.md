@@ -285,7 +285,9 @@ Audio Operator Workflow adds a production-facing audio panel while preserving th
 
 The panel exposes:
 
-- the confirmed AFV source that follows Program;
+- the confirmed `FOLLOW_VIDEO` source that follows Program video;
+- the confirmed Program audio routing mode and actual routed audio source;
+- explicit FOLLOW VIDEO and BREAKAWAY SELECTED actions;
 - Runtime-owned stereo L/R Program meters and a master peak meter;
 - per-input Runtime health and AFV/PGM indication;
 - per-input linear gain from 0.0x to 4.0x;
@@ -297,7 +299,7 @@ The panel exposes:
 
 Audio control follows **Operator → rtaime.Client → ControlHost → RuntimeHost**. ControlHost accepts audio commands only for authoritative production sources and serializes them through the management mutation gate. RuntimeHost remains the execution owner and the Operator refreshes the confirmed snapshot after each command.
 
-Audio state changes do not advance the authoritative Preview/Program production revision. AFV follows the confirmed Program source only after Runtime execution has switched to that source.
+Audio state changes do not advance the authoritative Preview/Program production revision. `FOLLOW_VIDEO` follows the confirmed Program video source only after Runtime execution has switched to that source. `BREAKAWAY` pins audio to the explicitly confirmed selected source and survives later video CUT/DISSOLVE operations until the operator explicitly returns to `FOLLOW_VIDEO`. The panel never presents the local selection as confirmed Program audio before the synchronized Runtime snapshot arrives.
 
 ### Live meters and hot-path isolation
 
@@ -314,7 +316,9 @@ RuntimeHost keeps external sample buffering bounded and consumes one exact Progr
 - process-boundary integration covers Operator audio commands and generated test-signal control without changing production revision;
 - generated-audio tests cover phase continuity, safe level bounds, channel identification, pulse timing and hot-path allocations;
 - AFV integration verifies that the Runtime audio source follows confirmed Program after source changes;
-- Operator UI policy verifies stereo/master meters, AFV source, health, clip-audio state, gain/mute/test-signal commands, active-channel projection and the absence of WPF meter synthesis;
+- governed-routing integration verifies breakaway survives Program video changes and explicit return to `FOLLOW_VIDEO` is boundary exact;
+- recovery integration verifies durable breakaway state is restored only after Runtime reconfirmation;
+- Operator UI policy verifies routing mode/source, FOLLOW VIDEO/BREAKAWAY controls, stereo/master meters, health, clip-audio state, gain/mute/test-signal commands, active-channel projection and the absence of WPF meter synthesis;
 - Operator remains dependent only on `rtaime.Client`.
 
 ## Program Output / Clean Feed
@@ -484,7 +488,7 @@ It exposes:
 
 The panel is a Client-SDK projection only. `OperatorViewModel` calls `OperatorControlClient.StartRecordingAsync` and `StopRecordingAsync`; it never creates a recorder, recording writer, encoder or file stream. The existing bounded 200 ms management refresh also projects recording observations so elapsed time and asynchronous writer failures become visible without inventing local state.
 
-Recording commands are serialized through ControlHost and delegated to RuntimeHost. They do not alter Preview/Program routing or advance Production revision. The recorded media is the same post-transition/post-graphics Program video and post-AFV Program audio already owned by RuntimeHost.
+Recording commands are serialized through ControlHost and delegated to RuntimeHost. They do not alter Preview/Program routing or advance Production revision. The recorded media is the same post-transition/post-graphics Program video and post-routing Program audio already owned by RuntimeHost.
 
 The default Windows RuntimeHost output is now `.mp4` with H.264/AVC video and AAC-LC stereo 48 kHz audio. RuntimeHost remains authoritative for the normalized target name and final path, so the Operator does not infer container or codec state. The deterministic `.rtaime-recording` artifact remains a separate injected test/evidence backend and is not presented as a delivery format. MOV/MXF are not supported recording outputs.
 
