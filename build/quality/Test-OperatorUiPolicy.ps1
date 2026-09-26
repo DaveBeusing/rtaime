@@ -665,7 +665,7 @@ Assert-Condition ($viewModel -match 'ClearGraphicsOverlayAsync') "Operator graph
 Assert-Condition ($graphicsLoader -match 'PngBitmapDecoder') "Graphics asset loader must use the bounded PNG decode path."
 Assert-Condition ($graphicsLoader -match 'PixelFormats\.Bgra32') "Graphics asset loader must normalize PNG pixels before RGBA conversion."
 Assert-Condition ($graphicsLoader -match 'rgba\[offset\] = bgra\[offset \+ 2\]') "Graphics asset loader must preserve RGBA channel order for RuntimeHost."
-Assert-Condition ($window -match 'Text="AUDIO / AFV"') "Operator must expose the Audio Operator Workflow audio/AFV workflow."
+Assert-Condition ($window -match 'Text="AUDIO / ROUTING"') "Operator must expose the governed Program audio-routing workflow."
 Assert-Condition ($window -match 'ItemsSource="\{Binding AudioInputs\}"') "Audio workflow must expose Runtime-observed inputs."
 Assert-Condition ($window -match 'Binding AudioLeftPeak') "Audio workflow must expose left Program meter."
 Assert-Condition ($window -match 'Binding AudioRightPeak') "Audio workflow must expose right Program meter."
@@ -675,6 +675,9 @@ foreach ($readOnlyMeter in @("AudioLeftPeak", "AudioRightPeak", "AudioMasterPeak
 	Assert-Condition ($window -match $pattern) "Read-only audio meter '$readOnlyMeter' must bind OneWay to avoid WPF source-write failures."
 }
 Assert-Condition ($window -match 'Binding AudioAfvSourceName') "Audio workflow must identify the Program-followed AFV source."
+Assert-Condition ($window -match 'Binding AudioRoutingMode' -and $window -match 'Binding AudioRoutingSourceName') "Audio workflow must expose confirmed routing mode and Program audio source."
+Assert-Condition ($window -match 'Binding SetAudioFollowVideoCommand' -and $window -match 'Binding SetAudioBreakawayCommand') "Audio workflow must expose explicit FOLLOW_VIDEO and selected-source BREAKAWAY controls."
+Assert-Condition ($viewModel -match '_client\.SetAudioRoutingAsync') "Audio routing mutations must cross the Client SDK seam."
 Assert-Condition ($window -match 'Binding AudioHealth') "Audio workflow must expose audio health/clipping state."
 Assert-Condition ($window -match 'Binding ClipAudioStatus') "Audio workflow must expose local clip audio metadata/state."
 Assert-Condition ($window -match 'Binding ApplyAudioGainCommand') "Audio workflow must expose gain control."
