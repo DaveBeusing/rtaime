@@ -2006,7 +2006,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				fault is not null
 					? fault.Value.Message
 					: hasEvidence
-						? $"Program provider confirmed sink '{programSink}' and frame sequence {programEvidence!.Frame.Timing.SequenceNumber}."
+						? $"Program provider confirmed frame sequence {programEvidence!.Frame.Timing.SequenceNumber} for sink '{programSink}'."
 						: $"Program output is committed to sink '{programSink}'; matching source/frame evidence is pending.",
 				fault));
 		}
@@ -2056,7 +2056,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				fault is not null
 					? fault.Value.Message
 					: hasEvidence
-						? $"Aux provider confirmed sink '{auxSink}' and frame sequence {auxEvidence!.Frame.Timing.SequenceNumber}."
+						? $"Aux provider confirmed frame sequence {auxEvidence!.Frame.Timing.SequenceNumber} for sink '{auxSink}'."
 						: $"Aux output is committed to sink '{auxSink}'; matching source/frame evidence is pending.",
 				fault));
 		}
