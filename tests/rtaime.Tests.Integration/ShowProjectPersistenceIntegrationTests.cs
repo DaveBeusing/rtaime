@@ -3,6 +3,7 @@
 using rtaime.Control.Contracts;
 using rtaime.ControlHost;
 using rtaime.Core;
+using rtaime.Media.Contracts;
 using rtaime.Persistence;
 
 namespace rtaime.Tests.Integration;
@@ -127,6 +128,10 @@ public sealed class ShowProjectPersistenceIntegrationTests
 				project = await store.UpdateGraphicsAsync(
 					specification,
 					new DurableGraphicsState(bitmap, cg, compositing));
+				var breakawaySource = new MediaSourceId(specification.Sources[1].SourceId.Value);
+				project = await store.UpdateAudioRoutingAsync(
+					specification,
+					new DurableAudioRoutingState(DurableAudioRoutingState.BreakawayMode, breakawaySource));
 
 				var migratedShowControl = await store.LoadShowControlAsync(specification);
 				var conflict = await store.UpdateShowControlAsync(
@@ -167,6 +172,9 @@ public sealed class ShowProjectPersistenceIntegrationTests
 				Assert.Equal(0.1, reopenedBitmapLayer.ProcessingNode.ColorGrade.Brightness, 6);
 				Assert.Equal(1.2, reopenedBitmapLayer.ProcessingNode.ColorGrade.Contrast, 6);
 				Assert.Equal(0.8, reopenedBitmapLayer.ProcessingNode.ColorGrade.Saturation, 6);
+				Assert.NotNull(reopened.AudioRouting);
+				Assert.Equal(DurableAudioRoutingState.BreakawayMode, reopened.AudioRouting!.Mode);
+				Assert.Equal(new MediaSourceId(specification.Sources[1].SourceId.Value), reopened.AudioRouting.BreakawaySourceId);
 
 				var bytes = await reopenedStore.LoadBitmapAssetAsync(Assert.IsType<DurableBitmapGraphicsReference>(reopened.Graphics.Bitmap));
 				Assert.Equal(new byte[] { 12, 34, 56, 255 }, bytes);
