@@ -29,6 +29,7 @@ $operatorWindowPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MainW
 $controlPath = Join-Path $repositoryRoot "src/Hosts/rtaime.ControlHost/ControlHostDiagnostics.cs"
 $runtimePath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/RuntimeHostDiagnostics.cs"
 $runtimeServicePath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/V1RuntimeHostService.cs"
+$virtualMediaPath = Join-Path $repositoryRoot "src/Providers/rtaime.Provider.VirtualMedia/VirtualMediaReferenceProvider.cs"
 $runtimeProcessPath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/RuntimeHostProcess.cs"
 $hardwareTelemetryPath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/SystemHardwareTelemetry.cs"
 $frameDropPath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/RuntimeFrameDropCounter.cs"
@@ -42,7 +43,7 @@ $supportBundleTestsPath = Join-Path $repositoryRoot "tests/rtaime.Tests.Operator
 $documentationPath = Join-Path $repositoryRoot "docs/ObservabilityDiagnostics.md"
 $runtimeReadinessDocumentationPath = Join-Path $repositoryRoot "docs/RuntimeReadiness.md"
 
-foreach ($path in @($corePath, $hostLogPath, $appHostProgramPath, $controlProgramPath, $runtimeProgramPath, $aiProgramPath, $operatorAppPath, $supportBundlePath, $startupViewModelPath, $operatorWindowPath, $controlPath, $runtimePath, $runtimeServicePath, $runtimeProcessPath, $hardwareTelemetryPath, $frameDropPath, $healthProjectionPath, $runtimeReadinessPath, $controlIpcPath, $aiPath, $testsPath, $runtimeReadinessTestsPath, $supportBundleTestsPath, $documentationPath, $runtimeReadinessDocumentationPath)) {
+foreach ($path in @($corePath, $hostLogPath, $appHostProgramPath, $controlProgramPath, $runtimeProgramPath, $aiProgramPath, $operatorAppPath, $supportBundlePath, $startupViewModelPath, $operatorWindowPath, $controlPath, $runtimePath, $runtimeServicePath, $virtualMediaPath, $runtimeProcessPath, $hardwareTelemetryPath, $frameDropPath, $healthProjectionPath, $runtimeReadinessPath, $controlIpcPath, $aiPath, $testsPath, $runtimeReadinessTestsPath, $supportBundleTestsPath, $documentationPath, $runtimeReadinessDocumentationPath)) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required observability artifact is missing: '$path'."
 }
 
@@ -59,6 +60,7 @@ $operatorWindow = Get-Content -LiteralPath $operatorWindowPath -Raw
 $control = Get-Content -LiteralPath $controlPath -Raw
 $runtime = Get-Content -LiteralPath $runtimePath -Raw
 $runtimeService = Get-Content -LiteralPath $runtimeServicePath -Raw
+$virtualMedia = Get-Content -LiteralPath $virtualMediaPath -Raw
 $runtimeProcess = Get-Content -LiteralPath $runtimeProcessPath -Raw
 $hardwareTelemetry = Get-Content -LiteralPath $hardwareTelemetryPath -Raw
 $frameDrop = Get-Content -LiteralPath $frameDropPath -Raw
@@ -73,6 +75,7 @@ $documentation = Get-Content -LiteralPath $documentationPath -Raw
 $runtimeReadinessDocumentation = Get-Content -LiteralPath $runtimeReadinessDocumentationPath -Raw
 
 Assert-Condition ($core -match 'public sealed class BoundedDiagnosticBuffer') "Diagnostics must provide a bounded in-memory event buffer."
+Assert-Condition ($core -match 'public sealed class BoundedDiagnosticHistory<T>' -and $core -match 'SnapshotNewest') "Diagnostics must provide reusable fixed-capacity newest-history snapshots."
 Assert-Condition ($core -match 'CurrentSchemaVersion\s*=\s*"1\.0"') "Support snapshots must have an explicit 1.0 schema marker."
 Assert-Condition ($core -match 'DiagnosticRedactor') "Support diagnostics must pass through the shared redaction policy."
 Assert-Condition ($core -match 'SortedDictionary<string, string>') "Support snapshot string maps must have deterministic key ordering."
@@ -133,6 +136,9 @@ Assert-Condition ($runtime -match 'snapshot\.Performance') "RuntimeHost support 
 Assert-Condition ($runtime -match 'runtime\.droppedFrames') "Runtime support diagnostics must include the bounded dropped-frame counter."
 Assert-Condition ($runtime -match 'gpu\.utilizationPercent' -and $runtime -match 'UNVERIFIED') "GPU utilization diagnostics must remain UNVERIFIED when no measured value exists."
 Assert-Condition ($runtimeService -match 'V1RuntimePerformanceSnapshot') "RuntimeHost must expose a bounded runtime performance snapshot."
+Assert-Condition ($runtimeService -match 'RetainedObservationCapacity\s*=\s*512' -and $runtimeService -match 'BoundedDiagnosticHistory<string>') "RuntimeHost observation retention must remain explicitly bounded."
+Assert-Condition ($runtime -match 'RecentObservations\(RetainedSupportEvents\)' -and $runtime -notmatch 'Observations\.TakeLast') "Runtime support snapshots must request only the bounded newest observation subset."
+Assert-Condition ($virtualMedia -match 'RetainedFrameCapacity\s*=\s*128' -and $virtualMedia -match 'BoundedDiagnosticHistory<VirtualOutputFrame>' -and $virtualMedia -match 'OverwrittenFrameCount') "Virtual Program/Aux output history must remain fixed-capacity with overwrite accounting."
 Assert-Condition ($runtimeService -match 'GpuUtilizationPercent[\s\S]*GpuVramUsedBytes') "Runtime performance telemetry must keep optional GPU utilization and VRAM fields explicit."
 Assert-Condition ($runtimeService -match 'CpuUtilizationPercent[\s\S]*SystemMemoryUsedBytes[\s\S]*SystemMemoryTotalBytes') "Runtime performance telemetry must expose optional CPU and system-memory measurements explicitly."
 Assert-Condition ($runtimeService -match 'OutputFramesPerSecond') "Runtime performance telemetry must expose measured Program output cadence explicitly."
@@ -175,12 +181,14 @@ Assert-Condition ($runtimeReadinessTests -match 'Disposed_service_rejects_late_s
 Assert-Condition ($runtimeReadinessDocumentation -match 'one persistent application-level view' -and $runtimeReadinessDocumentation -match 'No independent polling loop') "Runtime readiness documentation must describe the single persistent state source and polling boundary."
 Assert-Condition ($ai -match 'ReservedVramBytes') "AIHost support snapshots must include governed resource admission state."
 Assert-Condition ($ai -match 'providerCount') "AIHost support snapshots must include provider inventory counts."
+Assert-Condition ($ai -match 'RecentObservations\(RetainedSupportEvents\)' -and $ai -notmatch 'Observations\.TakeLast') "AIHost support snapshots must request only the bounded newest observation subset."
 
 foreach ($hostProjection in @($control, $runtime, $ai)) {
 	Assert-Condition ($hostProjection -notmatch 'File\.(Write|Append)|WriteAll(Bytes|Text)|FileStream') "Host snapshot projection must not perform synchronous disk writes."
 }
 
 Assert-Condition ($tests -match 'Bounded_buffer_retains_only_the_newest_events') "Diagnostics boundedness regression coverage is required."
+Assert-Condition ($tests -match 'Bounded_history_retains_only_newest_items_and_counts_overwrites' -and $tests -match 'Bounded_history_supports_concurrent_writers_and_snapshots') "Generic bounded diagnostic history must have overwrite and concurrency regression coverage."
 Assert-Condition ($tests -match 'Redaction_removes_secret_dimensions') "Diagnostics secret-redaction regression coverage is required."
 Assert-Condition ($tests -match 'Support_snapshot_serialization_is_deterministic') "Deterministic support serialization regression coverage is required."
 Assert-Condition ($tests -match 'Exception_detail_redaction_is_bounded_and_removes_inline_secrets') "Shared exception redaction must have bounded secret-removal regression coverage."
