@@ -494,8 +494,11 @@ public sealed class UnifiedApplicationHostTests
 		platform.OnDelay = platform.KillControlProcess;
 		var host = new UnifiedApplicationHost(options, platform);
 
-		await Assert.ThrowsAsync<InvalidOperationException>(() => host.RunAsync());
+		var exception = await Assert.ThrowsAsync<ApplicationHostLifecycleException>(() => host.RunAsync());
 
+		Assert.Equal(ApplicationHostFailureKind.LifecycleFailure, exception.FailureKind);
+		Assert.Equal(ApplicationLifecycleState.Healthy, exception.StateAtFailure);
+		Assert.IsType<InvalidOperationException>(exception.InnerException);
 		using var evidence = JsonDocument.Parse(platform.ReadAllText(options.ShutdownEvidencePath));
 		Assert.Equal("FAIL", evidence.RootElement.GetProperty("status").GetString());
 		Assert.False(evidence.RootElement.GetProperty("graceful").GetBoolean());
