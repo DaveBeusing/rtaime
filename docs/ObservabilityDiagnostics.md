@@ -124,6 +124,28 @@ Configuration and event data passes through `DiagnosticRedactor`. Keys containin
 
 Support snapshots are not a secret-storage mechanism. New diagnostic fields must be reviewed under the same fail-closed assumption: if a value might contain credentials or media payloads, do not add it unless a deterministic sanitizer and regression test exist.
 
+## Runtime in-memory history retention
+
+High-rate runtime evidence uses fixed-capacity in-memory ring histories. The limits are implementation diagnostics budgets, not durable audit retention, and there is deliberately no switch that restores unlimited retention.
+
+| Owner | Retained entries |
+| --- | ---: |
+| RuntimeHost observations | 512 |
+| Media frame queue observations | 256 |
+| Media pipeline observations | 512 |
+| Audio Follow Video observations | 512 |
+| GPU processing observations | 512 |
+| Governed inference observations | 256 |
+| Program recorder observations | 256 |
+| Transactional Runtime observations | 256 |
+| Virtual Program/Aux recent frame descriptors | 128 |
+
+All retained histories preserve chronological ordering of the newest entries. Once a history reaches capacity, the oldest diagnostic entry is overwritten and an overwrite counter advances. Runtime behavior continues to use dedicated current state and monotonic operational counters; retained diagnostics are never authoritative.
+
+`VirtualVideoOutput` keeps the current/last frame descriptor separately from its recent-frame evidence, counts total writes, and retains only the newest 128 descriptors for diagnostics and regression tests. It never retains historical pixel payloads.
+
+RuntimeHost and AIHost support snapshots request only their newest 64 observations directly from the bounded history. Snapshot collection therefore copies at most the requested count instead of first materializing the component's complete retained history.
+
 ## Realtime and boundedness rules
 
 Diagnostics must remain subordinate to production continuity:
