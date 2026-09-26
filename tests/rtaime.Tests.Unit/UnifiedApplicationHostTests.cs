@@ -156,6 +156,7 @@ public sealed class UnifiedApplicationHostTests
 			startup = new
 			{
 				timeoutMs = 30000,
+				runtimeRecoveryTimeoutMs = 31000,
 				probeTimeoutMs = 500,
 				probeIntervalMs = 200,
 				childRestartBackoffMs = 500,
@@ -176,6 +177,8 @@ public sealed class UnifiedApplicationHostTests
 			});
 
 			Assert.Equal(expectedOwnership, options.Ownership);
+			Assert.Equal(TimeSpan.FromSeconds(30), options.Policy.StartupTimeout);
+			Assert.Equal(TimeSpan.FromSeconds(31), options.Policy.RuntimeRecoveryTimeout);
 		}
 		finally
 		{
@@ -389,13 +392,16 @@ public sealed class UnifiedApplicationHostTests
 	[Fact]
 	public async Task Headless_engine_fails_when_readiness_does_not_recover()
 	{
-		var options = CreateOptions(ApplicationStartupProfile.HeadlessEngine);
+		var options = CreateOptions(
+			ApplicationStartupProfile.HeadlessEngine,
+			runtimeRecoveryTimeout: TimeSpan.FromMilliseconds(40));
 		var platform = new FakeApplicationHostPlatform(options) { PublishReadinessOnControlStart = true };
-		platform.OnDelay = () => platform.PipeReachable = false;
+		platform.OnDelay = platform.RemoveReadiness;
 		var host = new UnifiedApplicationHost(options, platform);
 
-		await Assert.ThrowsAsync<TimeoutException>(() => host.RunAsync());
+		var exception = await Assert.ThrowsAsync<ApplicationHostLifecycleException>(() => host.RunAsync());
 
+		Assert.Equal(ApplicationHostFailureKind.RuntimeRecoveryTimeout, exception.FailureKind);
 		Assert.Equal(ApplicationLifecycleState.Failed, host.State);
 		Assert.True(platform.StopSignalWritten);
 	}
@@ -525,10 +531,168 @@ public sealed class UnifiedApplicationHostTests
 		Assert.False(platform.StopSignalWritten);
 	}
 
+	[Fact]
+	public async Task Startup_and_runtime_recovery_timeouts_are_independent()
+	{
+		var startupOptions = CreateOptions(
+			ApplicationStartupProfile.Interactive,
+			startupTimeout: TimeSpan.FromMilliseconds(20),
+			runtimeRecoveryTimeout: TimeSpan.FromMilliseconds(80));
+		var startupPlatform = new FakeApplicationHostPlatform(startupOptions);
+		var startupStartedAt = startupPlatform.UtcNow;
+
+		await Assert.ThrowsAsync<TimeoutException>(() => new UnifiedApplicationHost(startupOptions, startupPlatform).RunAsync());
+
+		var startupElapsed = startupPlatform.UtcNow - startupStartedAt;
+		Assert.True(startupElapsed >= startupOptions.Policy.StartupTimeout);
+		Assert.True(startupElapsed < startupOptions.Policy.RuntimeRecoveryTimeout);
+
+		var recoveryOptions = CreateOptions(
+			ApplicationStartupProfile.Interactive,
+			ApplicationLifecycleOwnership.EphemeralLocal,
+			startupTimeout: TimeSpan.FromMilliseconds(20),
+			runtimeRecoveryTimeout: TimeSpan.FromMilliseconds(80));
+		var recoveryPlatform = new FakeApplicationHostPlatform(recoveryOptions)
+		{
+			PublishReadinessOnControlStart = true,
+			OperatorDelayBudget = 100
+		};
+		var delayCount = 0;
+		recoveryPlatform.OnDelay = () =>
+		{
+			delayCount++;
+			if (delayCount == 1) recoveryPlatform.RemoveReadiness();
+		};
+		var recoveryHost = new UnifiedApplicationHost(recoveryOptions, recoveryPlatform);
+
+		var exception = await Assert.ThrowsAsync<ApplicationHostLifecycleException>(() => recoveryHost.RunAsync());
+
+		Assert.Equal(ApplicationHostFailureKind.RuntimeRecoveryTimeout, exception.FailureKind);
+		Assert.NotNull(exception.RecoveryDuration);
+		Assert.True(exception.RecoveryDuration >= recoveryOptions.Policy.RuntimeRecoveryTimeout);
+	}
+
+	[Fact]
+	public async Task Post_start_recovery_timeout_is_typed_and_stops_owned_ephemeral_control()
+	{
+		var options = CreateOptions(
+			ApplicationStartupProfile.Interactive,
+			ApplicationLifecycleOwnership.EphemeralLocal,
+			runtimeRecoveryTimeout: TimeSpan.FromMilliseconds(40));
+		var platform = new FakeApplicationHostPlatform(options)
+		{
+			PublishReadinessOnControlStart = true,
+			OperatorDelayBudget = 100
+		};
+		var delayCount = 0;
+		platform.OnDelay = () =>
+		{
+			delayCount++;
+			if (delayCount == 1) platform.RemoveReadiness();
+		};
+		var host = new UnifiedApplicationHost(options, platform);
+
+		var exception = await Assert.ThrowsAsync<ApplicationHostLifecycleException>(() => host.RunAsync());
+
+		Assert.Equal(ApplicationHostFailureKind.RuntimeRecoveryTimeout, exception.FailureKind);
+		Assert.Equal(ApplicationLifecycleState.Degraded, exception.StateAtFailure);
+		Assert.Equal(ApplicationStartupProfile.Interactive, exception.Profile);
+		Assert.Equal(ApplicationLifecycleOwnership.EphemeralLocal, exception.Ownership);
+		Assert.True(exception.RecoveryDuration >= options.Policy.RuntimeRecoveryTimeout);
+		Assert.Equal(ApplicationLifecycleState.Failed, host.State);
+		Assert.True(platform.StopSignalWritten);
+	}
+
+	[Fact]
+	public async Task Runtime_readiness_recovers_before_deadline_without_engine_shutdown()
+	{
+		var options = CreateOptions(
+			ApplicationStartupProfile.Interactive,
+			ApplicationLifecycleOwnership.PersistentEngine,
+			runtimeRecoveryTimeout: TimeSpan.FromMilliseconds(80));
+		var platform = new FakeApplicationHostPlatform(options)
+		{
+			PublishReadinessOnControlStart = true,
+			OperatorDelayBudget = 5
+		};
+		var host = new UnifiedApplicationHost(options, platform);
+		var states = new List<ApplicationLifecycleState>();
+		host.StateChanged += states.Add;
+		var delayCount = 0;
+		platform.OnDelay = () =>
+		{
+			delayCount++;
+			if (delayCount == 1)
+				platform.RemoveReadiness();
+			else if (delayCount == 2)
+				platform.PublishReadiness(platform.LastControlProcessId!.Value);
+		};
+
+		var result = await host.RunAsync();
+
+		Assert.True(result.Success);
+		var degradedIndex = states.IndexOf(ApplicationLifecycleState.Degraded);
+		var recoveringIndex = states.IndexOf(ApplicationLifecycleState.Recovering);
+		var recoveredHealthyIndex = states.FindIndex(recoveringIndex + 1, state => state == ApplicationLifecycleState.Healthy);
+		Assert.True(degradedIndex >= 0);
+		Assert.True(recoveringIndex > degradedIndex);
+		Assert.True(recoveredHealthyIndex > recoveringIndex);
+		Assert.False(platform.StopSignalWritten);
+	}
+
+	[Fact]
+	public async Task Steady_state_authoritative_readiness_does_not_repeat_pipe_probes()
+	{
+		var options = CreateOptions(
+			ApplicationStartupProfile.Interactive,
+			ApplicationLifecycleOwnership.PersistentEngine);
+		var platform = new FakeApplicationHostPlatform(options)
+		{
+			PublishReadinessOnControlStart = true,
+			OperatorDelayBudget = 6
+		};
+
+		var result = await new UnifiedApplicationHost(options, platform).RunAsync();
+
+		Assert.True(result.Success);
+		Assert.Equal(3, platform.PipeProbeCount);
+		Assert.Equal(
+			new[] { options.Endpoints.Control, options.Endpoints.Runtime, options.Endpoints.AI },
+			platform.ProbedEndpoints);
+	}
+
+	[Fact]
+	public async Task External_managed_recovery_timeout_never_stops_adopted_engine()
+	{
+		var options = CreateOptions(
+			ApplicationStartupProfile.Interactive,
+			ApplicationLifecycleOwnership.ExternalManaged,
+			runtimeRecoveryTimeout: TimeSpan.FromMilliseconds(40));
+		var platform = new FakeApplicationHostPlatform(options) { OperatorDelayBudget = 100 };
+		platform.PublishReadiness(42);
+		var delayCount = 0;
+		platform.OnDelay = () =>
+		{
+			delayCount++;
+			if (delayCount == 1) platform.RemoveReadiness();
+		};
+
+		var exception = await Assert.ThrowsAsync<ApplicationHostLifecycleException>(
+			() => new UnifiedApplicationHost(options, platform).RunAsync());
+
+		Assert.Equal(ApplicationHostFailureKind.RuntimeRecoveryTimeout, exception.FailureKind);
+		Assert.Equal(ApplicationLifecycleOwnership.ExternalManaged, exception.Ownership);
+		Assert.False(platform.StopSignalWritten);
+		Assert.True(platform.IsProcessAlive(42));
+		Assert.Equal(1, platform.PipeProbeCount);
+	}
+
 	private static ApplicationHostOptions CreateOptions(
 		ApplicationStartupProfile profile,
 		ApplicationLifecycleOwnership? ownership = null,
-		bool windowsService = false)
+		bool windowsService = false,
+		TimeSpan? startupTimeout = null,
+		TimeSpan? runtimeRecoveryTimeout = null)
 	{
 		var root = Path.Combine(Path.GetTempPath(), "rtaime-apphost-tests", Guid.NewGuid().ToString("N"));
 		var resolvedOwnership = ownership ??
@@ -549,7 +713,8 @@ public sealed class UnifiedApplicationHostTests
 			false,
 			new ApplicationLifecyclePolicy(
 				new ApplicationEndpointSet("rtaime.test.control", "rtaime.test.runtime", "rtaime.test.ai"),
-				TimeSpan.FromMilliseconds(30),
+				startupTimeout ?? TimeSpan.FromMilliseconds(30),
+				runtimeRecoveryTimeout ?? TimeSpan.FromMilliseconds(30),
 				TimeSpan.FromMilliseconds(1),
 				TimeSpan.FromMilliseconds(10),
 				TimeSpan.FromMilliseconds(1),
@@ -584,9 +749,12 @@ public sealed class UnifiedApplicationHostTests
 		public bool StopSignalWritten { get; private set; }
 		public bool IgnoreStopSignal { get; set; }
 		public int OperatorDelayBudget { get; set; }
+		public int PipeProbeCount { get; private set; }
+		public int? LastControlProcessId { get; private set; }
 		public Action? OnDelay { get; set; }
 		public List<string> StartedBaseNames { get; } = new();
 		public List<string> Events { get; } = new();
+		public List<string> ProbedEndpoints { get; } = new();
 
 		public string FindProductArtifact(string installRoot, string baseName) => Path.Combine(installRoot, "product", baseName + ".dll");
 
@@ -613,8 +781,12 @@ public sealed class UnifiedApplicationHostTests
 			}
 
 			_alive.Add(processId);
-			if (baseName == "rtaime.ControlHost" && PublishReadinessOnControlStart)
-				PublishReadiness(processId);
+			if (baseName == "rtaime.ControlHost")
+			{
+				LastControlProcessId = processId;
+				if (PublishReadinessOnControlStart)
+					PublishReadiness(processId);
+			}
 			return processId;
 		}
 
@@ -650,8 +822,12 @@ public sealed class UnifiedApplicationHostTests
 		{
 		}
 
-		public Task<bool> ProbePipeAsync(string endpoint, TimeSpan timeout, CancellationToken cancellationToken) =>
-			Task.FromResult(PipeReachable && !UnreachableEndpoints.Contains(endpoint));
+		public Task<bool> ProbePipeAsync(string endpoint, TimeSpan timeout, CancellationToken cancellationToken)
+		{
+			PipeProbeCount++;
+			ProbedEndpoints.Add(endpoint);
+			return Task.FromResult(PipeReachable && !UnreachableEndpoints.Contains(endpoint));
+		}
 
 		public Task DelayAsync(TimeSpan delay, CancellationToken cancellationToken)
 		{
@@ -672,6 +848,8 @@ public sealed class UnifiedApplicationHostTests
 			}
 			return Task.CompletedTask;
 		}
+
+		public void RemoveReadiness() => _files.Remove(Path.GetFullPath(_options.ReadinessPath));
 
 		public void PublishReadiness(int controlProcessId, bool includeChildProcessIds = true)
 		{
