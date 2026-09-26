@@ -166,6 +166,29 @@ public sealed class VirtualMediaRuntimeSliceTests
             second.Descriptor.Resources.Select(resource => resource.ResourceId));
     }
 
+
+    [Fact]
+    public void Virtual_output_retains_only_recent_frames_during_long_running_operation()
+    {
+        var provider = new VirtualMediaReferenceProvider(
+            new MediaSourceId(SourceAId.Value),
+            new MediaSourceId(SourceBId.Value),
+            VideoFormat.Hd1080p50Rgba8);
+        var output = provider.CreateOutput(MediaSinkId.New());
+        var totalFrames = VirtualVideoOutput.RetainedFrameCapacity * 4;
+
+        for (var index = 0; index < totalFrames; index++)
+            output.WriteFrame(provider.SourceA.GenerateFrame((ulong)index));
+
+        var retained = output.Frames;
+        Assert.Equal(VirtualVideoOutput.RetainedFrameCapacity, retained.Count);
+        Assert.Equal((ulong)totalFrames, output.TotalFramesWritten);
+        Assert.Equal((ulong)(totalFrames - VirtualVideoOutput.RetainedFrameCapacity), output.OverwrittenFrameCount);
+        Assert.Equal((ulong)(totalFrames - VirtualVideoOutput.RetainedFrameCapacity), retained[0].Frame.Timing.SequenceNumber);
+        Assert.Equal((ulong)(totalFrames - 1), retained[^1].Frame.Timing.SequenceNumber);
+        Assert.Equal((ulong)(totalFrames - 1), output.LastFrame!.Frame.Timing.SequenceNumber);
+    }
+
     private static readonly ProductionId ProductionId =
         new(Identity.Parse("10000000-0000-0000-0000-000000000001"));
 
