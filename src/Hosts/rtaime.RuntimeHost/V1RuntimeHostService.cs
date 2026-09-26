@@ -270,7 +270,7 @@ public sealed record V1RuntimeHostSnapshot(
 /// </summary>
 public sealed class V1RuntimeHostService : IAsyncDisposable
 {
-	public const int ProgramReadbackBufferCapacity = ProgramRecorder.DefaultQueueCapacity + 2;
+	public const int ProgramReadbackBufferCapacity = ProgramRecorder.DefaultQueueCapacity + 3;
 	public const int RetainedObservationCapacity = 512;
 	public const string LegacyVisualLayerId = "legacy-visual";
 	public const string BitmapGraphicsLayerId = "bitmap-graphics";
