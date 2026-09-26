@@ -685,11 +685,11 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 
 	private async Task<WireEnvelope> ExchangeAsync(string messageType, object payload, CancellationToken cancellationToken)
 	{
-		using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-		timeout.CancelAfter(_requestTimeout);
-		await _requestGate.WaitAsync(timeout.Token).ConfigureAwait(false);
+		await _requestGate.WaitAsync(cancellationToken).ConfigureAwait(false);
 		try
 		{
+			using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+			timeout.CancelAfter(_requestTimeout);
 			await using var pipe = new NamedPipeClientStream(".", _endpoint, PipeDirection.InOut, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
 			try
 			{
