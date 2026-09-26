@@ -270,6 +270,7 @@ public sealed record V1RuntimeHostSnapshot(
 /// </summary>
 public sealed class V1RuntimeHostService : IAsyncDisposable
 {
+	public const int ProgramReadbackBufferCapacity = ProgramRecorder.DefaultQueueCapacity + 2;
 	public const int RetainedObservationCapacity = 512;
 	public const string LegacyVisualLayerId = "legacy-visual";
 	public const string BitmapGraphicsLayerId = "bitmap-graphics";
@@ -391,7 +392,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		_sourceAPipeline = CreatePipeline();
 		_sourceBPipeline = CreatePipeline();
 		_gpuBackend = gpuBackend ?? new ManagedReferenceGpuBackend();
-		_gpu = new GpuProcessingProvider(_gpuBackend);
+		_gpu = new GpuProcessingProvider(_gpuBackend, ProgramReadbackBufferCapacity);
 		_gpu.Start();
 		_runtime = new TransactionalRuntime(new InMemoryRuntimeResourceReservationManager());
 
