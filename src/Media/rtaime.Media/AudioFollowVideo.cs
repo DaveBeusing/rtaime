@@ -171,11 +171,13 @@ public sealed record AudioFollowVideoObservation(
 
 public sealed class AudioFollowVideoEngine
 {
+    public const int RetainedObservationCapacity = 512;
+
     private readonly object _gate = new();
     private readonly FrameRate _videoFrameRate;
     private readonly Dictionary<MediaSourceId, AudioStreamDescriptor> _streamByVideoSource;
     private readonly Dictionary<AudioStreamId, AudioInputState> _inputStateByStream;
-    private readonly List<AudioFollowVideoObservation> _observations = new();
+    private readonly BoundedDiagnosticHistory<AudioFollowVideoObservation> _observations = new(RetainedObservationCapacity);
 
     private MediaSourceId _activeVideoSourceId;
     private MediaSourceId _activeAudioSourceId;
@@ -288,14 +290,8 @@ public sealed class AudioFollowVideoEngine
         }
     }
 
-    public IReadOnlyList<AudioFollowVideoObservation> Observations
-    {
-        get
-        {
-            lock (_gate)
-                return new ReadOnlyCollection<AudioFollowVideoObservation>(_observations.ToArray());
-        }
-    }
+    public IReadOnlyList<AudioFollowVideoObservation> Observations => _observations.Snapshot();
+    public ulong OverwrittenObservationCount => _observations.OverwrittenCount;
 
     public AudioInputState GetInputState(AudioStreamId streamId)
     {

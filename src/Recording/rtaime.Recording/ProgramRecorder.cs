@@ -30,11 +30,13 @@ public sealed class RecordingOutputUnavailableException : Exception
 
 public sealed class ProgramRecorder : IAsyncDisposable
 {
+    public const int RetainedObservationCapacity = 256;
+
     private readonly object _gate = new();
     private readonly SemaphoreSlim _lifecycleGate = new(1, 1);
     private readonly SemaphoreSlim _queueSignal = new(0);
     private readonly Queue<RecordingProgramSample> _queue = new();
-    private readonly List<RecordingObservation> _observations = new();
+    private readonly BoundedDiagnosticHistory<RecordingObservation> _observations = new(RetainedObservationCapacity);
     private readonly IProgramRecordingWriter _writer;
     private readonly IRecordingClock _clock;
     private readonly int _capacity;
@@ -76,14 +78,8 @@ public sealed class ProgramRecorder : IAsyncDisposable
         }
     }
 
-    public IReadOnlyList<RecordingObservation> Observations
-    {
-        get
-        {
-            lock (_gate)
-                return _observations.ToArray();
-        }
-    }
+    public IReadOnlyList<RecordingObservation> Observations => _observations.Snapshot();
+    public ulong OverwrittenObservationCount => _observations.OverwrittenCount;
 
     public async ValueTask<RecordingStartResult> StartAsync(
         RecordingStartRequest request,
