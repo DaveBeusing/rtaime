@@ -19,6 +19,7 @@
 	},
 	"startup": {
 		"timeoutMs": 30000,
+		"runtimeRecoveryTimeoutMs": 30000,
 		"probeTimeoutMs": 500,
 		"probeIntervalMs": 200,
 		"childRestartBackoffMs": 500,
