@@ -14,7 +14,8 @@ public enum LocalProcessSupervisionState
 	Healthy = 4,
 	RestartBackoff = 5,
 	Failed = 6,
-	Stopped = 7
+	Stopped = 7,
+	Recovering = 8
 }
 
 public sealed record LocalProcessSupervisionSnapshot(
@@ -74,6 +75,7 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 	private string? _ownedStopFilePath;
 	private string? _ownedReadinessFilePath;
 	private bool _ownedProcessReady;
+	private TimeSpan? _ownedReadinessLostSince;
 	private TimeSpan? _initialEndpointAbsentSince;
 	private int _startAttempts;
 	private LocalProcessSupervisionSnapshot _snapshot;
@@ -135,6 +137,7 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 			_ownedStopFilePath = null;
 			_ownedReadinessFilePath = null;
 			_ownedProcessReady = false;
+			_ownedReadinessLostSince = null;
 		}
 		if (owned is not null)
 		{
@@ -170,6 +173,7 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 			DisposeExitedOwnedProcess();
 			if (OwnedProcessIsReadyAndRunning())
 			{
+				ClearOwnedReadinessLoss();
 				Update(LocalProcessSupervisionState.Healthy, "Owned process is running with explicit managed readiness.");
 				await Task.Delay(_options.ProbeInterval, cancellationToken).ConfigureAwait(false);
 				continue;
@@ -179,8 +183,21 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 			{
 				if (OwnedProcessReadinessObserved())
 				{
+					var recoveredWithoutRestart = OwnedProcessHadReadinessLoss();
 					MarkOwnedProcessReadyIfRunning();
-					Update(LocalProcessSupervisionState.Healthy, "Owned process published explicit managed readiness.");
+					ClearOwnedReadinessLoss();
+					Update(
+						LocalProcessSupervisionState.Healthy,
+						recoveredWithoutRestart
+							? "Owned process restored explicit managed readiness within the recovery grace period; restart was not required."
+							: "Owned process published explicit managed readiness.");
+				}
+				else if (OwnedProcessWasPreviouslyReady())
+				{
+					MarkOwnedReadinessLost();
+					Update(
+						LocalProcessSupervisionState.Recovering,
+						"Owned process lost explicit managed readiness after previously becoming healthy; waiting for the bounded recovery grace period.");
 				}
 				else
 				{
@@ -336,6 +353,7 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 			_ownedStopFilePath = stopFile;
 			_ownedReadinessFilePath = readinessFile;
 			_ownedProcessReady = false;
+			_ownedReadinessLostSince = null;
 		}
 	}
 
@@ -391,6 +409,30 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 		}
 	}
 
+	private bool OwnedProcessWasPreviouslyReady()
+	{
+		lock (_gate)
+			return _ownedProcessReady;
+	}
+
+	private bool OwnedProcessHadReadinessLoss()
+	{
+		lock (_gate)
+			return _ownedReadinessLostSince is not null;
+	}
+
+	private void MarkOwnedReadinessLost()
+	{
+		lock (_gate)
+			_ownedReadinessLostSince ??= _lifetime.Elapsed;
+	}
+
+	private void ClearOwnedReadinessLoss()
+	{
+		lock (_gate)
+			_ownedReadinessLostSince = null;
+	}
+
 	private void MarkOwnedProcessReadyIfRunning()
 	{
 		lock (_gate)
@@ -428,6 +470,7 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 			_ownedStopFilePath = null;
 			_ownedReadinessFilePath = null;
 			_ownedProcessReady = false;
+			_ownedReadinessLostSince = null;
 		}
 		process.Dispose();
 		CleanupManagedFile(stopFile);
