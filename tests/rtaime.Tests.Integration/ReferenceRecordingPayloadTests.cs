@@ -85,8 +85,9 @@ public sealed class ReferenceRecordingPayloadTests
 			Assert.NotEmpty(sample.AudioPayload);
 			Assert.Equal(checked((int)(boundary.Audio.SampleCount * 2U * sizeof(float))), sample.AudioPayload.Length);
 			Assert.Equal(boundary.ProgramAudioPayload, sample.AudioPayload);
-			var firstAudioSample = BinaryPrimitives.ReadSingleLittleEndian(sample.AudioPayload.AsSpan(0, sizeof(float)));
-			Assert.Equal((float)boundary.Audio.PeakLevel, Math.Abs(firstAudioSample), 5);
+			var audioSamples = MemoryMarshal.Cast<byte, float>(sample.AudioPayload);
+			var recordedPeak = audioSamples.ToArray().Max(value => Math.Abs(value));
+			Assert.Equal((float)boundary.Audio.PeakLevel, recordedPeak, 5);
 		}
 		finally
 		{
