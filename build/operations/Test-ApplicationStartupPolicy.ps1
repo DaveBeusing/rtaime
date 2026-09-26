@@ -29,6 +29,9 @@ $bundlePolicyPath = Join-Path $repositoryRoot "build/release/offline-bundle-poli
 $bundleBuilderPath = Join-Path $repositoryRoot "build/release/New-OfflineReleaseBundle.ps1"
 $readmePath = Join-Path $repositoryRoot "README.md"
 $startupDocumentationPath = Join-Path $repositoryRoot "docs/ApplicationStartup.md"
+$hostLifecyclePolicyPath = Join-Path $repositoryRoot "build/operations/host-lifecycle-policy.json"
+$hostLifecycleSchemaPath = Join-Path $repositoryRoot "schemas/operations/v1/host-lifecycle-policy.schema.json"
+$unitTestsPath = Join-Path $repositoryRoot "tests/rtaime.Tests.Unit/UnifiedApplicationHostTests.cs"
 $developerBuildPath = Join-Path $repositoryRoot "build/development/Invoke-DeveloperBuild.ps1"
 $buildDocumentationPath = Join-Path $repositoryRoot "docs/BuildAndTest.md"
 
@@ -46,6 +49,9 @@ foreach ($path in @(
 	$bundleBuilderPath,
 	$readmePath,
 	$startupDocumentationPath,
+	$hostLifecyclePolicyPath,
+	$hostLifecycleSchemaPath,
+	$unitTestsPath,
 	$developerBuildPath,
 	$buildDocumentationPath
 )) {
@@ -65,6 +71,9 @@ $bundlePolicy = Get-Content -LiteralPath $bundlePolicyPath -Raw | ConvertFrom-Js
 $bundleBuilder = Get-Content -LiteralPath $bundleBuilderPath -Raw
 $readme = Get-Content -LiteralPath $readmePath -Raw
 $startupDocumentation = Get-Content -LiteralPath $startupDocumentationPath -Raw
+$hostLifecyclePolicy = Get-Content -LiteralPath $hostLifecyclePolicyPath -Raw | ConvertFrom-Json
+$hostLifecycleSchema = Get-Content -LiteralPath $hostLifecycleSchemaPath -Raw
+$unitTests = Get-Content -LiteralPath $unitTestsPath -Raw
 $developerBuild = Get-Content -LiteralPath $developerBuildPath -Raw
 $buildDocumentation = Get-Content -LiteralPath $buildDocumentationPath -Raw
 
@@ -93,7 +102,10 @@ foreach ($state in @("Stopped", "Starting", "Healthy", "Degraded", "Recovering",
 }
 
 foreach ($token in @(
-	"FindHealthyReadinessAsync",
+	"FindQualifiedReadinessAsync",
+	"FindObservedReadiness",
+	"IsAuthoritativeReadinessValid",
+	"IsInitiallyQualifiedAsync",
 	"StartControlHost",
 	"StartOperator",
 	"RTAIME_RUNTIME_EXECUTABLE",
@@ -110,6 +122,22 @@ foreach ($token in @(
 	"AISupervision"
 )) {
 	Assert-Condition ($appCode -match [Regex]::Escape($token)) "AppHost is missing required startup/readiness behavior '$token'."
+}
+
+Assert-Condition ([int]$hostLifecyclePolicy.startup.runtimeRecoveryTimeoutMs -eq 30000) "Canonical lifecycle policy must define the 30-second AppHost runtime recovery timeout explicitly."
+Assert-Condition ($hostLifecycleSchema -match '"runtimeRecoveryTimeoutMs"' -and $hostLifecycleSchema -match '"minimum": 1000') "Lifecycle policy schema must require and validate runtimeRecoveryTimeoutMs."
+Assert-Condition ($appCode -match 'TimeSpan RuntimeRecoveryTimeout' -and $appCode -match 'ReadRuntimeRecoveryTimeout') "AppHost policy parsing must expose and validate a dedicated runtime recovery timeout."
+Assert-Condition ($appCode -match 'ApplicationHostLifecycleException' -and $appCode -match 'RuntimeRecoveryTimeout' -and $appCode -match 'LifecycleFailure') "AppHost must use typed post-start lifecycle failure classification."
+Assert-Condition ($appCode -match 'FindObservedReadiness\(\)' -and $appCode -match 'FindQualifiedReadinessAsync') "AppHost must separate startup qualification from steady-state readiness observation."
+Assert-Condition ($appProgram -match 'apphost\.runtime-recovery-timeout' -and $appProgram -match 'apphost\.lifecycle-failure') "AppHost logging must distinguish runtime recovery timeout from other post-start lifecycle failures."
+foreach ($test in @(
+	'Startup_and_runtime_recovery_timeouts_are_independent',
+	'Post_start_recovery_timeout_is_typed_and_stops_owned_ephemeral_control',
+	'Runtime_readiness_recovers_before_deadline_without_engine_shutdown',
+	'Steady_state_authoritative_readiness_does_not_repeat_pipe_probes',
+	'External_managed_recovery_timeout_never_stops_adopted_engine'
+)) {
+	Assert-Condition ($unitTests -match [Regex]::Escape($test)) "Unified AppHost regression coverage is missing '$test'."
 }
 
 Assert-Condition ($appCode -notmatch 'StartRuntimeHost') "AppHost must not directly launch RuntimeHost."
@@ -175,3 +203,5 @@ Write-Host "Canonical entry point: rtaime.exe"
 Write-Host "Service supervision owner: ControlHost"
 Write-Host "Startup profiles: Interactive, Showcase, HeadlessEngine"
 Write-Host "Lifecycle ownership: EphemeralLocal, PersistentEngine, ExternalManaged"
+Write-Host "Readiness: strict initial pipe qualification + authoritative steady-state evidence"
+Write-Host "Runtime recovery timeout: explicit and distinct from startup timeout"
