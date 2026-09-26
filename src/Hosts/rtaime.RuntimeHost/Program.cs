@@ -62,6 +62,20 @@ internal static class Program
 			using (endpointLease)
 			{
 				var process = new RuntimeHostProcess(options);
+				process.PrimaryIpcListenerFaulted += (listener, exception) =>
+					log.Error(
+						"ipc",
+						"runtimehost.ipc.listener-faulted",
+						"RuntimeHost primary IPC listener failed.",
+						exception,
+						ListenerFailureDimensions(process, listener, exception));
+				process.MonitoringIpcListenerFaulted += (listener, exception) =>
+					log.Warning(
+						"ipc",
+						"runtimehost.ipc.monitoring-listener-faulted",
+						"RuntimeHost monitoring IPC listener failed; production authority remains unchanged.",
+						exception,
+						ListenerFailureDimensions(process, listener, exception));
 				using var monitorStop = new CancellationTokenSource();
 				var monitor = MonitorManagedLifecycleAsync(process, options, shutdown, log, monitorStop.Token);
 				try
@@ -101,6 +115,24 @@ internal static class Program
 			log.Information("lifecycle", "runtimehost.exit", "RuntimeHost main loop exited.");
 			log.Flush();
 		}
+	}
+
+
+	private static IReadOnlyDictionary<string, string> ListenerFailureDimensions(
+		RuntimeHostProcess process,
+		RuntimePipeListenerSnapshot listener,
+		Exception exception)
+	{
+		var lifecycle = process.Lifecycle;
+		return new Dictionary<string, string>
+		{
+			["endpoint"] = listener.Endpoint,
+			["listenerRole"] = listener.Role,
+			["listenerState"] = listener.State.ToString(),
+			["lifecycleState"] = lifecycle.State.ToString(),
+			["exceptionType"] = exception.GetType().FullName ?? exception.GetType().Name,
+			["detail"] = listener.FailureDetail ?? DiagnosticRedactor.RedactText(exception.Message)
+		};
 	}
 
 	private static async Task MonitorManagedLifecycleAsync(
