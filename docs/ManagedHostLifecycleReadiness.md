@@ -113,13 +113,25 @@ ControlHost does not publish readiness evidence while it is `Degraded`. Because 
 
 The transient readiness document is removed again when ControlHost drops out of Ready/Healthy or begins shutdown. Process identity is recorded in the evidence so a stale file cannot qualify a replacement process.
 
-## Child restart semantics
+## Child restart and readiness-recovery semantics
 
 RuntimeHost and AIHost continue to use `LocalProcessSupervisor`.
 
-A child can be adopted when its configured endpoint is already reachable, or launched when unavailable. Launched children receive bounded restart attempts with configured probe interval and restart backoff.
+A child can be adopted when its configured endpoint is already ready, or launched when unavailable. Launched children receive bounded restart attempts with the configured probe interval and restart backoff. The start-attempt counter is lifetime-scoped to the supervisor instance and is not reset when the failure mode changes from process exit to readiness loss.
 
-The supervisor does not continuously inject probe traffic after an owned child has reached readiness; the process handle becomes its liveness signal until exit. If the child exits, endpoint probing and the bounded restart policy resume.
+Owned and adopted children have deliberately different recovery rights:
+
+- an **owned** child must first publish its unique managed readiness file before it can become `Healthy`;
+- after an owned child has been healthy, loss of that readiness while its process remains alive enters `ReadinessGrace`;
+- the grace duration reuses the existing bounded supervision timing and is at least one probe interval, preventing a single transient file-system observation from forcing a restart;
+- if readiness returns within the grace period, the same PID returns to `Healthy` and no additional start attempt is consumed;
+- if readiness remains absent, supervision enters `Recovering`, requests the existing managed stop sentinel, waits the existing graceful-stop timeout, and uses process-tree termination only as the existing emergency fallback;
+- after the old owned process is cleared, the normal restart backoff and the same remaining `MaxStartAttempts` budget govern replacement;
+- the replacement is not healthy merely because a process exists: it must publish explicit readiness and RuntimeHost must complete the existing Control/Runtime reconciliation before ControlHost can publish readiness again.
+
+For an **adopted/external** endpoint, the supervisor owns no process handle and therefore never writes a stop sentinel, never kills the external process and never restarts it. If the endpoint lifetime lease remains present while explicit readiness disappears, supervision becomes non-healthy and continues observation while managed launch remains suppressed. Readiness restoration can return the adopted endpoint to `Healthy` without changing ownership.
+
+The supervisor still avoids continuous Named Pipe probe traffic after an owned child has reached readiness. Owned liveness is observed through the process handle while the managed readiness file remains the explicit health signal.
 
 Managed Host Lifecycle Readiness does not add a second supervisor implementation.
 
@@ -146,7 +158,7 @@ Emergency cleanup may therefore prevent orphaned processes, but a forced shutdow
 
 ## Restart semantics
 
-Restart is an explicit operator action:
+A **top-level product restart** remains an explicit operator action:
 
 ```text
 Stop must PASS
@@ -160,9 +172,9 @@ full readiness qualification repeated
 
 There is no implicit unattended top-level ControlHost restart scheduler inside the non-service Managed Host Lifecycle Readiness controller.
 
-Persistent Windows production operation is a separate outer layer: Windows Service Control Manager may restart the AppHost service process after top-level failure, while ControlHost continues to own bounded RuntimeHost/AIHost child recovery.
+This is separate from **owned child recovery** inside ControlHost. RuntimeHost and AIHost may be restarted automatically by their existing bounded supervisor after process exit or persistent post-healthy readiness loss. That automatic child recovery is ownership-limited, uses graceful stop before emergency termination, consumes the existing lifetime start-attempt budget, and cannot restart an adopted external endpoint.
 
-RuntimeHost and AIHost continue to have bounded child restart semantics inside ControlHost supervision.
+Persistent Windows production operation is a separate outer layer: Windows Service Control Manager may restart the AppHost service process after top-level failure, while ControlHost continues to own bounded RuntimeHost/AIHost child recovery.
 
 ## Operational evidence
 
