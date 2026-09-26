@@ -150,7 +150,10 @@ public sealed record V1AudioProgramSnapshot(
 	double RightPeak,
 	double MasterPeak,
 	bool Clipping,
-	V1AudioHealthState Health);
+	V1AudioHealthState Health,
+	AudioRoutingMode RoutingMode = AudioRoutingMode.FollowVideo,
+	ulong RoutingRevision = 0,
+	MediaSourceId? ActiveAudioSourceId = null);
 
 public sealed record V1RecordingOperatorSnapshot(
 	RecordingLifecycleState State,
@@ -653,7 +656,9 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				?? throw new InvalidOperationException("Committed execution must contain exactly one Program binding.");
 			var committedSource = programBinding.MediaSourceId
 				?? throw new InvalidOperationException("Committed Program binding must contain a media source.");
-			var avSyncEnabled = IsAvSyncDiagnosticsEnabledUnsafe(committedSource);
+			var routedAudioSource = _audio.ResolveAudioSource(committedSource);
+			var avSyncEnabled = _audio.RoutingState.Mode == AudioRoutingMode.FollowVideo &&
+				IsAvSyncDiagnosticsEnabledUnsafe(committedSource);
 			if (!avSyncEnabled)
 			{
 				if (_avSyncDiagnosticsSourceId is not null)
@@ -737,10 +742,10 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				output.Descriptor.Timing);
 
 			RefreshVirtualAudioMetersUnsafe(sequence);
-			var audioPacket = _virtualAudio.GetSource(committedSource).GeneratePacket(sequence);
-			var audioObservation = _audioMeters[committedSource];
+			var audioPacket = _virtualAudio.GetSource(routedAudioSource).GeneratePacket(sequence);
+			var audioObservation = _audioMeters[routedAudioSource];
 			var audioBuffer = audioPacket.Descriptor;
-			var hasGeneratedSignal = _audioTestSignals.TryGetValue(committedSource, out var audioTestSignal);
+			var hasGeneratedSignal = _audioTestSignals.TryGetValue(routedAudioSource, out var audioTestSignal);
 			AvSyncAudioEventObservation? audioSyncEvent = avSyncEnabled
 				? _avSyncTimeline.InspectAudio(audioBuffer.Timing, _format.FrameRate, audioBuffer.Format.SampleRate)
 				: null;
@@ -749,9 +754,9 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				? MaterializeGeneratedAudioPayload(audioBuffer, audioTestSignal!, out generatedFrame)
 				: null;
 			if (hasGeneratedSignal)
-				_audioTestSignalFrames[committedSource] = generatedFrame;
+				_audioTestSignalFrames[routedAudioSource] = generatedFrame;
 			var externalAudioPayload = !hasGeneratedSignal && audioObservation.External
-				? ConsumeExternalAudioPayloadUnsafe(committedSource, audioBuffer)
+				? ConsumeExternalAudioPayloadUnsafe(routedAudioSource, audioBuffer)
 				: null;
 			var measuredAudio = generatedAudioPayload is not null
 				? new AudioStereoMeter(generatedFrame.LeftPeakLevel, generatedFrame.RightPeakLevel)
@@ -1454,6 +1459,18 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		}
 	}
 
+	public V1AudioProgramSnapshot SetAudioRouting(AudioRoutingMode mode, MediaSourceId? breakawaySourceId = null)
+	{
+		lock (_gate)
+		{
+			ThrowIfDisposed();
+			var state = _audio.SetRouting(mode, breakawaySourceId);
+			Observe($"audio.routing.state:{state.Revision}:{state.Mode}:{state.BreakawaySourceId?.ToString() ?? "follow-video"}");
+			ResetAvSyncDiagnosticsUnsafe();
+			return AudioProgramSnapshotUnsafe();
+		}
+	}
+
 	public V1AudioInputSnapshot SetGeneratedAudioTestSignal(
 		MediaSourceId sourceId,
 		bool enabled,
@@ -2038,6 +2055,20 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private V1AvSyncDiagnosticsSnapshot AvSyncDiagnosticsSnapshotUnsafe()
 	{
 		var activeSource = _audio.ActiveVideoSourceId;
+		if (_audio.RoutingState.Mode != AudioRoutingMode.FollowVideo)
+		{
+			return new V1AvSyncDiagnosticsSnapshot(
+				false,
+				"UNAVAILABLE",
+				null,
+				null,
+				null,
+				null,
+				null,
+				null,
+				null,
+				"A/V sync diagnostics require FOLLOW_VIDEO routing.");
+		}
 		if (!IsAvSyncDiagnosticsEnabledUnsafe(activeSource))
 		{
 			return new V1AvSyncDiagnosticsSnapshot(
@@ -2083,20 +2114,27 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private V1AudioProgramSnapshot AudioProgramSnapshotUnsafe()
 	{
 		var activeSource = _audio.ActiveVideoSourceId;
-		var activeStream = _audio.ActiveStreamId;
-		var state = _audio.GetInputState(activeStream);
-		if (_lastAudioResult is not { } result)
+		var routing = _audio.RoutingState;
+		var routedAudioSource = _audio.ResolveAudioSource(activeSource);
+		var routedStream = _audioStreams[routedAudioSource].StreamId;
+		var routedState = _audio.GetInputState(routedStream);
+		if (_lastAudioResult is not { } result ||
+			result.RoutingRevision != routing.Revision ||
+			result.AudioSourceId != routedAudioSource)
 		{
 			return new V1AudioProgramSnapshot(
 				activeSource,
-				activeStream,
-				state.Gain.Linear,
-				state.Muted,
+				routedStream,
+				routedState.Gain.Linear,
+				routedState.Muted,
 				0,
 				0,
 				0,
 				false,
-				state.Muted ? V1AudioHealthState.Muted : V1AudioHealthState.Silence);
+				routedState.Muted ? V1AudioHealthState.Muted : V1AudioHealthState.Silence,
+				routing.Mode,
+				routing.Revision,
+				routedAudioSource);
 		}
 
 		var health = result.Status switch
@@ -2110,14 +2148,17 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		};
 		return new V1AudioProgramSnapshot(
 			result.VideoSourceId,
-			result.StreamId ?? activeStream,
+			result.StreamId ?? routedStream,
 			result.Gain.Linear,
 			result.Muted,
 			result.LeftPeakLevel,
 			result.RightPeakLevel,
 			result.PeakLevel,
 			result.Clipping,
-			health);
+			health,
+			routing.Mode,
+			routing.Revision,
+			routedAudioSource);
 	}
 
 	private void RefreshVirtualAudioMetersUnsafe(ulong sequence)

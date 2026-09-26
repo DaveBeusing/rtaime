@@ -113,7 +113,7 @@ IProgramRecordingPayloadWriter : IProgramRecordingWriter
 	DiscardPayload
 ```
 
-This capability does not change `RecordingProgramSample`, Media contracts, Runtime contracts or IPC contracts. The RuntimeHost composition root may provide already-materialized Program/AFV reference bytes to a capable writer while the normal recorder queue continues to carry descriptor-level samples.
+This capability does not change `RecordingProgramSample`, Media contracts, Runtime contracts or IPC contracts. The RuntimeHost composition root may provide already-materialized Program audio reference bytes to a capable writer while the normal recorder queue continues to carry descriptor-level samples. Program audio is taken after governed `FOLLOW_VIDEO`/`BREAKAWAY` route selection and the existing per-input gain/mute stage, so recording observes the same confirmed audio result as Program output.
 
 Qualified delivery writers remain behind the same writer boundary. `WindowsMediaFoundationMp4RecordingWriter` consumes the already-materialized Program payload supplied by RuntimeHost without changing Runtime, Control or the recording lifecycle.
 
@@ -213,7 +213,7 @@ Recording Foundation verifies at minimum:
 V1 Functional Gap Closure adds verification for:
 
 - actual reference Program video payload bytes;
-- actual reference AFV audio payload bytes;
+- actual reference governed Program audio payload bytes;
 - both 1080p50 and 1080p59.94 development formats;
 - deterministic reference-container parsing and integrity validation;
 - storage quota exhaustion;

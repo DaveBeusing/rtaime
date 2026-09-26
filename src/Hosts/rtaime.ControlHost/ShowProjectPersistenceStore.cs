@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using rtaime.Control.Contracts;
 using rtaime.Core;
+using rtaime.Media.Contracts;
 using rtaime.Persistence;
 
 namespace rtaime.ControlHost;
@@ -28,6 +29,15 @@ public sealed record DurableGraphicsState(
 	public static DurableGraphicsState Empty { get; } = new(null, null, null);
 }
 
+public sealed record DurableAudioRoutingState(
+	int Mode,
+	MediaSourceId? BreakawaySourceId)
+{
+	public const int FollowVideoMode = 1;
+	public const int BreakawayMode = 2;
+	public static DurableAudioRoutingState FollowVideo { get; } = new(FollowVideoMode, null);
+}
+
 public sealed record PersistedShowProject(
 	Identity ProjectId,
 	ProductionId ProductionId,
@@ -36,7 +46,8 @@ public sealed record PersistedShowProject(
 	DurableGraphicsState Graphics,
 	string? ShowControlWorkspaceJson,
 	ulong ShowControlStorageVersion,
-	ulong StorageVersion)
+	ulong StorageVersion,
+	DurableAudioRoutingState? AudioRouting = null)
 {
 	public ProductionSpecification ApplyTo(ProductionSpecification baseline)
 	{
@@ -193,6 +204,29 @@ public sealed class ShowProjectPersistenceStore
 			var current = await RequireDocumentAsync(baseline.ProductionId, cancellationToken).ConfigureAwait(false);
 			var project = Deserialize(current, baseline);
 			var updated = project with { Graphics = graphics };
+			return await WriteAsync(updated, current.Version, baseline, cancellationToken).ConfigureAwait(false);
+		}
+		finally
+		{
+			_gate.Release();
+		}
+	}
+
+	public async ValueTask<PersistedShowProject> UpdateAudioRoutingAsync(
+		ProductionSpecification baseline,
+		DurableAudioRoutingState audioRouting,
+		CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(baseline);
+		ArgumentNullException.ThrowIfNull(audioRouting);
+		ValidateAudioRouting(audioRouting, baseline);
+
+		await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+		try
+		{
+			var current = await RequireDocumentAsync(baseline.ProductionId, cancellationToken).ConfigureAwait(false);
+			var project = Deserialize(current, baseline);
+			var updated = project with { AudioRouting = audioRouting };
 			return await WriteAsync(updated, current.Version, baseline, cancellationToken).ConfigureAwait(false);
 		}
 		finally
@@ -391,7 +425,8 @@ public sealed class ShowProjectPersistenceStore
 			project.Scenes.Select(ToDocument).ToArray(),
 			ToDocument(project.Graphics),
 			project.ShowControlWorkspaceJson,
-			project.ShowControlStorageVersion);
+			project.ShowControlStorageVersion,
+			ToDocument(project.AudioRouting ?? DurableAudioRoutingState.FollowVideo));
 		return JsonSerializer.Serialize(document, JsonOptions);
 	}
 
@@ -408,6 +443,7 @@ public sealed class ShowProjectPersistenceStore
 
 		var scenes = document.Scenes.Select(FromDocument).ToArray();
 		var graphics = FromDocument(document.Graphics);
+		var audioRouting = FromDocument(document.AudioRouting, baseline);
 		var project = new PersistedShowProject(
 			Identity.Parse(document.ProjectId),
 			baseline.ProductionId,
@@ -416,7 +452,8 @@ public sealed class ShowProjectPersistenceStore
 			graphics,
 			document.ShowControlWorkspaceJson,
 			document.ShowControlStorageVersion,
-			persisted.Version);
+			persisted.Version,
+			audioRouting);
 		ValidateProject(project, baseline);
 		return project;
 	}
@@ -431,6 +468,7 @@ public sealed class ShowProjectPersistenceStore
 			throw new InvalidDataException($"Durable show project name must contain 1-{MaximumProjectNameLength} characters.");
 		ValidateScenes(baseline, project.Scenes);
 		ValidateGraphics(project.Graphics);
+		ValidateAudioRouting(project.AudioRouting ?? DurableAudioRoutingState.FollowVideo, baseline);
 		if (project.ShowControlWorkspaceJson is null && project.ShowControlStorageVersion != 0)
 			throw new InvalidDataException("Durable show project has a show-control version without a show-control payload.");
 		if (project.ShowControlWorkspaceJson is { } json &&
@@ -468,6 +506,50 @@ public sealed class ShowProjectPersistenceStore
 		{
 			throw new InvalidDataException($"Unsupported durable graphics compositing version '{compositing.Version}'.");
 		}
+	}
+
+	private static void ValidateAudioRouting(DurableAudioRoutingState audioRouting, ProductionSpecification baseline)
+	{
+		if (audioRouting.Mode == DurableAudioRoutingState.FollowVideoMode)
+		{
+			if (audioRouting.BreakawaySourceId is not null)
+				throw new InvalidDataException("FOLLOW_VIDEO audio routing must not declare a breakaway source.");
+			return;
+		}
+
+		if (audioRouting.Mode != DurableAudioRoutingState.BreakawayMode)
+			throw new InvalidDataException($"Unsupported durable audio routing mode '{audioRouting.Mode}'.");
+		if (audioRouting.BreakawaySourceId is not { } breakawaySourceId)
+			throw new InvalidDataException("Breakaway audio routing requires a source.");
+		if (!baseline.Sources.Any(source => source.SourceId.Value == breakawaySourceId.Value))
+			throw new InvalidDataException("Breakaway audio routing source is not present in the active production specification.");
+	}
+
+	private static AudioRoutingDocument ToDocument(DurableAudioRoutingState audioRouting) =>
+		new(audioRouting.Mode, audioRouting.BreakawaySourceId?.ToString());
+
+	private static DurableAudioRoutingState FromDocument(AudioRoutingDocument? document, ProductionSpecification baseline)
+	{
+		if (document is null)
+			return DurableAudioRoutingState.FollowVideo;
+		if (document.Mode == DurableAudioRoutingState.FollowVideoMode)
+			return DurableAudioRoutingState.FollowVideo;
+		if (document.Mode != DurableAudioRoutingState.BreakawayMode || string.IsNullOrWhiteSpace(document.BreakawaySourceId))
+			throw new InvalidDataException("Persisted audio routing state is invalid.");
+
+		MediaSourceId sourceId;
+		try
+		{
+			sourceId = new MediaSourceId(Identity.Parse(document.BreakawaySourceId));
+		}
+		catch (Exception exception) when (exception is FormatException or ArgumentException)
+		{
+			throw new InvalidDataException("Persisted breakaway audio source identity is invalid.", exception);
+		}
+
+		return baseline.Sources.Any(source => source.SourceId.Value == sourceId.Value)
+			? new DurableAudioRoutingState(DurableAudioRoutingState.BreakawayMode, sourceId)
+			: DurableAudioRoutingState.FollowVideo;
 	}
 
 	private static void ValidateBitmapReference(DurableBitmapGraphicsReference asset)
@@ -681,7 +763,10 @@ public sealed class ShowProjectPersistenceStore
 		SceneDocument[] Scenes,
 		GraphicsDocument? Graphics,
 		string? ShowControlWorkspaceJson,
-		ulong ShowControlStorageVersion);
+		ulong ShowControlStorageVersion,
+		AudioRoutingDocument? AudioRouting = null);
+
+	private sealed record AudioRoutingDocument(int Mode, string? BreakawaySourceId);
 
 	private sealed record SceneDocument(
 		string SceneId,

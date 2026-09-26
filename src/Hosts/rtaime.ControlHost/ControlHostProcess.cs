@@ -70,6 +70,13 @@ public interface IControlRuntimeTransportSeam
 		ValueTask.FromException<RuntimeAudioInputSnapshot>(
 			new NotSupportedException("Runtime transport does not expose audio input control."));
 
+	ValueTask<RuntimeAudioProgramSnapshot> SetAudioRoutingAsync(
+		int mode,
+		MediaSourceId? breakawaySourceId,
+		CancellationToken cancellationToken = default) =>
+		ValueTask.FromException<RuntimeAudioProgramSnapshot>(
+			new NotSupportedException("Runtime transport does not expose audio routing control."));
+
 	ValueTask<RuntimeAudioInputSnapshot> SetAudioTestSignalAsync(
 		MediaSourceId sourceId,
 		bool enabled,
@@ -630,7 +637,10 @@ public sealed class ControlHostProcess
 
 		_boundRuntimeHostInstanceId = runtimeHostInstanceId;
 		if (_ipcServer is not null)
+		{
 			await _ipcServer.RestoreGraphicsStateAsync(cancellationToken).ConfigureAwait(false);
+			await _ipcServer.RestoreAudioRoutingStateAsync(cancellationToken).ConfigureAwait(false);
+		}
 		SetRecovery(ControlHostRecoveryState.Fresh, confirmation.State.Revision, "Fresh authority was initialized and committed by RuntimeHost.");
 		SetOperationalState(ControlHostProcessState.Ready, ControlHostHealthState.Healthy, $"ControlHost is bound to RuntimeHost instance '{runtimeHostInstanceId}'.");
 	}
@@ -686,9 +696,15 @@ public sealed class ControlHostProcess
 			if (_ipcServer is not null)
 			{
 				if (restoreWithinMutationGate)
+				{
 					await _ipcServer.RestoreGraphicsStateWithinMutationAsync(cancellationToken).ConfigureAwait(false);
+					await _ipcServer.RestoreAudioRoutingStateWithinMutationAsync(cancellationToken).ConfigureAwait(false);
+				}
 				else
+				{
 					await _ipcServer.RestoreGraphicsStateAsync(cancellationToken).ConfigureAwait(false);
+					await _ipcServer.RestoreAudioRoutingStateAsync(cancellationToken).ConfigureAwait(false);
+				}
 			}
 			control.RecordObservation("recovery", "recovery.runtime.aligned", $"RuntimeHost instance '{runtimeHostInstanceId}' is already committed against authoritative revision {authority.Revision}.");
 			SetRecovery(ControlHostRecoveryState.Recovered, authority.Revision, "Durable Control authority and Runtime committed authority snapshot are aligned.");
@@ -711,6 +727,14 @@ public sealed class ControlHostProcess
 		var remote = await transport.ApplyExecutionAsync(execution.PreparedExecution, execution.ProgramSinkId, null, cancellationToken).ConfigureAwait(false);
 		if (!remote.Committed || remote.Commit is null) throw new InvalidOperationException(remote.Commit?.Failure?.Message ?? remote.Prepare.Failure?.Message ?? "Runtime reconciliation was rejected.");
 		if (control.State.Revision != revisionBefore) throw new InvalidOperationException("Runtime reconciliation must not advance authoritative revision.");
+
+		if (_ipcServer is not null)
+		{
+			if (restoreWithinMutationGate)
+				await _ipcServer.RestoreAudioRoutingStateWithinMutationAsync(cancellationToken).ConfigureAwait(false);
+			else
+				await _ipcServer.RestoreAudioRoutingStateAsync(cancellationToken).ConfigureAwait(false);
+		}
 
 		var reconciledSnapshot = await transport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
 		if (!RuntimeMatchesAuthority(reconciledSnapshot, control.State))

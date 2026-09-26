@@ -195,6 +195,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 				"runtime.compositing.layer.processing" => ValueTask.FromResult(SetCompositingLayerProcessing(request, runtime)),
 				"runtime.compositing.layers.reorder" => ValueTask.FromResult(ReorderCompositingLayers(request, runtime)),
 				"runtime.audio.input.set" => ValueTask.FromResult(SetAudioInputState(request, runtime)),
+				"runtime.audio.routing.set" => ValueTask.FromResult(SetAudioRouting(request, runtime)),
 				"runtime.audio.test_signal.set" => ValueTask.FromResult(SetAudioTestSignal(request, runtime)),
 				"runtime.test_pattern.set" => ValueTask.FromResult(SetBroadcastTestPattern(request, runtime)),
 				"runtime.recording.start" => StartRecordingAsync(request, runtime, cancellationToken),
@@ -366,6 +367,21 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 			wire.Muted);
 		_stateVersion++;
 		return Success(request, "runtime.audio.input.response", ToWire(snapshot));
+	}
+
+	private WireEnvelope SetAudioRouting(WireEnvelope request, V1RuntimeHostService runtime)
+	{
+		var wire = request.Payload.Deserialize<WireAudioRoutingState>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Audio routing state payload is required.");
+		if (!Enum.IsDefined(typeof(AudioRoutingMode), wire.Mode))
+			throw new ArgumentOutOfRangeException(nameof(wire.Mode), "Audio routing mode is invalid.");
+
+		MediaSourceId? breakawaySourceId = string.IsNullOrWhiteSpace(wire.BreakawaySourceId)
+			? null
+			: new MediaSourceId(Identity.Parse(wire.BreakawaySourceId));
+		var snapshot = runtime.SetAudioRouting((AudioRoutingMode)wire.Mode, breakawaySourceId);
+		_stateVersion++;
+		return Success(request, "runtime.audio.routing.response", ToWire(snapshot));
 	}
 
 	private WireEnvelope SetAudioTestSignal(WireEnvelope request, V1RuntimeHostService runtime)
@@ -695,7 +711,10 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		snapshot.RightPeak,
 		snapshot.MasterPeak,
 		snapshot.Clipping,
-		(int)snapshot.Health);
+		(int)snapshot.Health,
+		(int)snapshot.RoutingMode,
+		snapshot.RoutingRevision,
+		snapshot.ActiveAudioSourceId?.ToString());
 
 
 	private static WireRecordingSnapshot ToWire(V1RecordingOperatorSnapshot snapshot) => new(
@@ -893,6 +912,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 	private sealed record WireGraphicsOverlay(bool AssetLoaded, string? AssetName, uint AssetWidth, uint AssetHeight, bool Visible, double PositionX, double PositionY, double Scale);
 	private sealed record WireCompositingLayer(string LayerId, int Kind, int Order, bool Visible, byte Opacity, double PositionX, double PositionY, double Scale, string ContentIdentity, double RotationDegrees = 0, double AnchorX = 0, double AnchorY = 0, double CropLeft = 0, double CropTop = 0, double CropRight = 0, double CropBottom = 0, WireProcessingNode? ProcessingNode = null);
 	private sealed record WireAudioInputState(string SourceId, double Gain, bool Muted);
+	private sealed record WireAudioRoutingState(int Mode, string? BreakawaySourceId);
 	private sealed record WireAudioTestSignalState(string SourceId, bool Enabled, int Mode, double FrequencyHz, double PeakLevel);
 	private sealed record WireAudioInput(
 		string SourceId,
@@ -909,7 +929,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		string? TestSignalActiveChannel = null,
 		double? TestSignalFrequencyHz = null,
 		double? TestSignalPeakLevel = null);
-	private sealed record WireAudioProgram(string ActiveVideoSourceId, string ActiveStreamId, double Gain, bool Muted, double LeftPeak, double RightPeak, double MasterPeak, bool Clipping, int Health);
+	private sealed record WireAudioProgram(string ActiveVideoSourceId, string ActiveStreamId, double Gain, bool Muted, double LeftPeak, double RightPeak, double MasterPeak, bool Clipping, int Health, int RoutingMode = 1, ulong RoutingRevision = 0, string? ActiveAudioSourceId = null);
 	private sealed record WireCapability(string CapabilityId, string Kind, WireVideoFormat[] VideoFormats);
 	private sealed record WireResource(string ResourceId, string ProviderId, string Kind, uint CapacityUnits, bool Reservable);
 	private sealed record WireProvider(string Version, string ProviderId, string Name, int AvailabilityState, WireFailure? Failure, WireCapability[] Capabilities, WireResource[] Resources);

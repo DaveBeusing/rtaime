@@ -4,7 +4,7 @@
 
 # Audio Follow Video
 
-Status: foundation + operator workflow
+Status: governed routing foundation + operator workflow
 
 Change classification:
 
@@ -20,8 +20,12 @@ Implemented:
 - independent audio stream contracts
 - exact audio/video timing relationship
 - embedded virtual audio for Input 1 and Input 2
-- Audio Follow Video
-- deterministic CUT follow behaviour
+- Audio Follow Video as explicit `FOLLOW_VIDEO` routing mode
+- explicit single-source `BREAKAWAY` routing
+- deterministic return from breakaway to `FOLLOW_VIDEO`
+- deterministic CUT follow behaviour in `FOLLOW_VIDEO`
+- breakaway persistence across video CUT/DISSOLVE source changes
+- durable show-project routing state and Runtime recovery
 - per-input gain
 - per-input mute
 - basic peak-level state
@@ -33,11 +37,10 @@ Implemented:
 Not implemented:
 
 - full audio mixing console
-- independent routing
-- MIX
+- arbitrary routing graph or bus matrix
+- bounded multi-source MIX
 - CROSSFADE
 - DUCK
-- BREAKAWAY
 - dynamics processing
 - EQ
 - network audio
@@ -143,6 +146,21 @@ Program audio result is emitted or a failure is observed
 
 The media engine does not create new production authority. It follows the committed video source supplied by the Runtime/host composition path.
 
+## Governed routing modes
+
+Program audio has one explicit confirmed routing state with a monotonically increasing routing revision:
+
+- `FOLLOW_VIDEO` resolves the audio stream from the confirmed Program video source at each Program boundary.
+- `BREAKAWAY` pins Program audio to one explicitly selected authoritative production source while Program video may continue to CUT or DISSOLVE independently.
+
+Routing changes cross Operator → `rtaime.Client` → ControlHost → RuntimeHost. ControlHost validates the selected source against the authoritative production, rejects stale mutations whose expected routing revision no longer matches RuntimeHost, RuntimeHost confirms the execution state, and the confirmed route is persisted in the durable show project. A persisted breakaway whose source no longer exists is normalized to `FOLLOW_VIDEO` during restore rather than inventing a replacement source.
+
+The actual audio packet, external sample queue, generated test signal, gain/mute state, meter observation and recording payload are all selected from the same routed audio source. A route change therefore cannot leave recording or metering on a different source from Program audio.
+
+A/V sync diagnostics remain qualified for `FOLLOW_VIDEO`. While explicit breakaway is active the diagnostic is reported unavailable rather than attributing the independent audio source to the Program video timing relationship.
+
+Multi-source mix, crossfade and ducking remain deferred. They are not exposed as partial controls because the current implementation does not yet carry fully qualified bounded mix math, transition timing and sustained real-time evidence.
+
 ## Gain and mute
 
 Each followed input has minimal processing state:
@@ -197,6 +215,9 @@ Representative stable observation codes:
 - `audio.afv.sequence_rejected`
 - `audio.afv.video_source_rejected`
 - `audio.input.state_changed`
+- `audio.routing.follow_video`
+- `audio.routing.breakaway`
+- `audio.routing.switched`
 
 Observed state is not promoted to production authority.
 

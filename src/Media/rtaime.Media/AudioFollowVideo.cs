@@ -119,6 +119,20 @@ public enum AudioFollowVideoStatus
     RejectedSequence = 5
 }
 
+public enum AudioRoutingMode
+{
+    FollowVideo = 1,
+    Breakaway = 2
+}
+
+public sealed record AudioRoutingState(
+    ulong Revision,
+    AudioRoutingMode Mode,
+    MediaSourceId? BreakawaySourceId)
+{
+    public static AudioRoutingState FollowVideo { get; } = new(0, AudioRoutingMode.FollowVideo, null);
+}
+
 public sealed record AudioFollowVideoResult(
     AudioFollowVideoStatus Status,
     MediaSourceId VideoSourceId,
@@ -135,6 +149,9 @@ public sealed record AudioFollowVideoResult(
     public double LeftPeakLevel { get; init; }
     public double RightPeakLevel { get; init; }
     public bool Clipping { get; init; }
+    public MediaSourceId AudioSourceId { get; init; } = VideoSourceId;
+    public AudioRoutingMode RoutingMode { get; init; } = AudioRoutingMode.FollowVideo;
+    public ulong RoutingRevision { get; init; }
 }
 
 public readonly record struct AudioFollowVideoStatistics(
@@ -161,7 +178,9 @@ public sealed class AudioFollowVideoEngine
     private readonly List<AudioFollowVideoObservation> _observations = new();
 
     private MediaSourceId _activeVideoSourceId;
+    private MediaSourceId _activeAudioSourceId;
     private AudioStreamId _activeStreamId;
+    private AudioRoutingState _routingState = AudioRoutingState.FollowVideo;
     private ulong _nextVideoFrameSequence;
     private ulong _boundaries;
     private ulong _switches;
@@ -210,6 +229,7 @@ public sealed class AudioFollowVideoEngine
             throw new ArgumentException("Initial video source has no FOLLOW_VIDEO audio stream.", nameof(initialVideoSourceId));
 
         _activeVideoSourceId = initialVideoSourceId;
+        _activeAudioSourceId = initialVideoSourceId;
         _activeStreamId = initialStream.StreamId;
         _nextVideoFrameSequence = initialVideoFrameSequence;
         Observe("audio.afv.initialized", initialVideoFrameSequence, _activeStreamId, null);
@@ -224,12 +244,30 @@ public sealed class AudioFollowVideoEngine
         }
     }
 
+    public MediaSourceId ActiveAudioSourceId
+    {
+        get
+        {
+            lock (_gate)
+                return _activeAudioSourceId;
+        }
+    }
+
     public AudioStreamId ActiveStreamId
     {
         get
         {
             lock (_gate)
                 return _activeStreamId;
+        }
+    }
+
+    public AudioRoutingState RoutingState
+    {
+        get
+        {
+            lock (_gate)
+                return _routingState;
         }
     }
 
@@ -282,6 +320,51 @@ public sealed class AudioFollowVideoEngine
         }
     }
 
+    public AudioRoutingState SetRouting(AudioRoutingMode mode, MediaSourceId? breakawaySourceId = null)
+    {
+        lock (_gate)
+        {
+            if (!Enum.IsDefined(mode))
+                throw new ArgumentOutOfRangeException(nameof(mode));
+
+            MediaSourceId? normalizedSource = null;
+            if (mode == AudioRoutingMode.Breakaway)
+            {
+                normalizedSource = breakawaySourceId
+                    ?? throw new ArgumentException("Breakaway routing requires an explicit audio source.", nameof(breakawaySourceId));
+                if (!_streamByVideoSource.ContainsKey(normalizedSource.Value))
+                    throw new KeyNotFoundException($"Unknown breakaway audio source '{normalizedSource.Value}'.");
+            }
+            else if (breakawaySourceId is not null)
+            {
+                throw new ArgumentException("FOLLOW_VIDEO routing must not declare a breakaway source.", nameof(breakawaySourceId));
+            }
+
+            if (_routingState.Mode == mode && _routingState.BreakawaySourceId == normalizedSource)
+                return _routingState;
+            if (_routingState.Revision == ulong.MaxValue)
+                throw new InvalidOperationException("Audio routing revision cannot advance beyond UInt64.MaxValue.");
+
+            _routingState = new AudioRoutingState(_routingState.Revision + 1, mode, normalizedSource);
+            Observe(
+                mode == AudioRoutingMode.FollowVideo ? "audio.routing.follow_video" : "audio.routing.breakaway",
+                null,
+                normalizedSource is { } source ? _streamByVideoSource[source].StreamId : null,
+                null);
+            return _routingState;
+        }
+    }
+
+    public MediaSourceId ResolveAudioSource(MediaSourceId committedVideoSourceId)
+    {
+        lock (_gate)
+        {
+            if (!_streamByVideoSource.ContainsKey(committedVideoSourceId))
+                throw new KeyNotFoundException($"Video source '{committedVideoSourceId}' has no audio stream.");
+            return ResolveAudioSourceUnsafe(committedVideoSourceId);
+        }
+    }
+
     public AudioFollowVideoResult ProcessBoundary(
         MediaSourceId committedVideoSourceId,
         ulong videoFrameSequence,
@@ -315,12 +398,12 @@ public sealed class AudioFollowVideoEngine
                     failure);
             }
 
-            if (!_streamByVideoSource.TryGetValue(committedVideoSourceId, out var expectedStream))
+            if (!_streamByVideoSource.ContainsKey(committedVideoSourceId))
             {
                 _rejected++;
                 var failure = new Failure(
                     "audio.afv.video_source_unmapped",
-                    $"Video source '{committedVideoSourceId}' has no FOLLOW_VIDEO audio stream.");
+                    $"Video source '{committedVideoSourceId}' has no audio stream.");
                 Observe("audio.afv.video_source_rejected", videoFrameSequence, null, failure);
                 return Rejected(
                     AudioFollowVideoStatus.RejectedVideoSource,
@@ -329,12 +412,19 @@ public sealed class AudioFollowVideoEngine
                     failure);
             }
 
-            if (committedVideoSourceId != _activeVideoSourceId)
+            var routedAudioSourceId = ResolveAudioSourceUnsafe(committedVideoSourceId);
+            var expectedStream = _streamByVideoSource[routedAudioSourceId];
+            _activeVideoSourceId = committedVideoSourceId;
+            if (routedAudioSourceId != _activeAudioSourceId || expectedStream.StreamId != _activeStreamId)
             {
-                _activeVideoSourceId = committedVideoSourceId;
+                _activeAudioSourceId = routedAudioSourceId;
                 _activeStreamId = expectedStream.StreamId;
                 _switches++;
-                Observe("audio.afv.switched", videoFrameSequence, _activeStreamId, null);
+                Observe(
+                    _routingState.Mode == AudioRoutingMode.FollowVideo ? "audio.afv.switched" : "audio.routing.switched",
+                    videoFrameSequence,
+                    _activeStreamId,
+                    null);
             }
 
             var inputState = _inputStateByStream[_activeStreamId];
@@ -364,7 +454,12 @@ public sealed class AudioFollowVideoEngine
                     inputState.Gain,
                     inputState.Muted,
                     0,
-                    failure);
+                    failure)
+                {
+                    AudioSourceId = routedAudioSourceId,
+                    RoutingMode = _routingState.Mode,
+                    RoutingRevision = _routingState.Revision
+                };
             }
 
             var validationFailure = ValidateBuffer(expectedStream, expectedWindow, buffer);
@@ -383,7 +478,12 @@ public sealed class AudioFollowVideoEngine
                     inputState.Gain,
                     inputState.Muted,
                     0,
-                    validationFailure);
+                    validationFailure)
+                {
+                    AudioSourceId = routedAudioSourceId,
+                    RoutingMode = _routingState.Mode,
+                    RoutingRevision = _routingState.Revision
+                };
             }
 
             var leftUnclamped = inputState.Muted ? 0 : observedMeter.LeftPeakLevel * inputState.Gain.Linear;
@@ -411,7 +511,10 @@ public sealed class AudioFollowVideoEngine
             {
                 LeftPeakLevel = effectiveLeft,
                 RightPeakLevel = effectiveRight,
-                Clipping = clipping
+                Clipping = clipping,
+                AudioSourceId = routedAudioSourceId,
+                RoutingMode = _routingState.Mode,
+                RoutingRevision = _routingState.Revision
             };
         }
     }
@@ -457,8 +560,21 @@ public sealed class AudioFollowVideoEngine
             state.Gain,
             state.Muted,
             0,
-            failure);
+            failure)
+        {
+            AudioSourceId = _activeAudioSourceId,
+            RoutingMode = _routingState.Mode,
+            RoutingRevision = _routingState.Revision
+        };
     }
+
+    private MediaSourceId ResolveAudioSourceUnsafe(MediaSourceId committedVideoSourceId) =>
+        _routingState.Mode switch
+        {
+            AudioRoutingMode.FollowVideo => committedVideoSourceId,
+            AudioRoutingMode.Breakaway when _routingState.BreakawaySourceId is { } sourceId => sourceId,
+            _ => throw new InvalidOperationException("Audio routing state is invalid.")
+        };
 
     private void AdvanceSequence()
     {

@@ -108,6 +108,21 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		return FromWire(wire);
 	}
 
+	public async ValueTask<OperatorAudioProgramDescriptor> SetAudioRoutingAsync(
+		OperatorAudioRoutingMode mode,
+		string? breakawaySourceId,
+		ulong expectedRoutingRevision,
+		CancellationToken cancellationToken = default)
+	{
+		var response = await ExchangeAsync(
+			"control.audio.routing.set",
+			new WireAudioRoutingState((int)mode, breakawaySourceId, expectedRoutingRevision),
+			cancellationToken).ConfigureAwait(false);
+		var wire = response.Payload.Deserialize<WireAudioProgram>(Wire.JsonOptions)
+			?? throw new InvalidDataException("ControlHost audio routing payload is required.");
+		return FromWire(wire);
+	}
+
 	public async ValueTask<OperatorAudioInputDescriptor> SetAudioTestSignalAsync(
 		string sourceId,
 		bool enabled,
@@ -1005,7 +1020,12 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		program.RightPeak,
 		program.MasterPeak,
 		program.Clipping,
-		program.Health);
+		program.Health,
+		Enum.IsDefined(typeof(OperatorAudioRoutingMode), program.RoutingMode)
+			? (OperatorAudioRoutingMode)program.RoutingMode
+			: throw new InvalidDataException("ControlHost audio routing mode is invalid."),
+		program.RoutingRevision,
+		program.ActiveAudioSourceId);
 
 	private static OperatorRecordingDescriptor FromWire(WireRecordingSnapshot recording) => new(
 		recording.State,
@@ -1209,6 +1229,7 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 	private sealed record WireCompositingLayer(string LayerId, int Kind, int Order, bool Visible, byte Opacity, double PositionX, double PositionY, double Scale, string ContentIdentity, double RotationDegrees = 0, double AnchorX = 0, double AnchorY = 0, double CropLeft = 0, double CropTop = 0, double CropRight = 0, double CropBottom = 0, WireProcessingNode? ProcessingNode = null);
 	private sealed record WireCompositingState(string Version, WireCompositingLayer[] Layers);
 	private sealed record WireAudioInputState(string SourceId, double Gain, bool Muted);
+	private sealed record WireAudioRoutingState(int Mode, string? BreakawaySourceId, ulong ExpectedRoutingRevision);
 	private sealed record WireAudioTestSignalState(string SourceId, bool Enabled, int Mode, double FrequencyHz, double PeakLevel);
 	private sealed record WireTestPatternState(string SourceId, bool Enabled, bool MotionTiming = false);
 	private sealed record WireAudioInput(
@@ -1226,7 +1247,7 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		string? TestSignalActiveChannel = null,
 		double? TestSignalFrequencyHz = null,
 		double? TestSignalPeakLevel = null);
-	private sealed record WireAudioProgram(string ActiveVideoSourceId, string ActiveStreamId, double Gain, bool Muted, double LeftPeak, double RightPeak, double MasterPeak, bool Clipping, string Health);
+	private sealed record WireAudioProgram(string ActiveVideoSourceId, string ActiveStreamId, double Gain, bool Muted, double LeftPeak, double RightPeak, double MasterPeak, bool Clipping, string Health, int RoutingMode = 1, ulong RoutingRevision = 0, string? ActiveAudioSourceId = null);
 	private sealed record WireRecordingStart(string DestinationDirectory, string FileName);
 	private sealed record WireRecordingSnapshot(string State, long ElapsedTicks, string? Destination, string? FileName, string? FinalPath, ulong Accepted, ulong Written, ulong Dropped, ulong Rejected, ulong WriterFailures, WireFailure? Failure);
 	private sealed record WireRecordingCommandResult(bool Succeeded, WireRecordingSnapshot Snapshot, WireFailure? Failure);

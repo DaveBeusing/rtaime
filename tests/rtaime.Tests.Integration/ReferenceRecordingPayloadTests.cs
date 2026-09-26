@@ -1,11 +1,14 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 using System.Buffers.Binary;
+using System.Runtime.InteropServices;
 using rtaime.Control.Contracts;
 using rtaime.ControlHost;
 using rtaime.Core;
+using rtaime.Media;
 using rtaime.Media.Contracts;
 using rtaime.Persistence;
+using rtaime.Provider.VirtualMedia;
 using rtaime.Recording;
 using rtaime.RuntimeHost;
 
@@ -35,6 +38,14 @@ public sealed class ReferenceRecordingPayloadTests
 			await using var journal = new BoundedProductionJournal(64);
 			var control = new ControlHostService(specification, runtime.ProviderDescriptors, journal);
 			CommitInitialization(control, runtime);
+			var breakawaySource = new MediaSourceId(sourceB.Value);
+			runtime.SetAudioRouting(AudioRoutingMode.Breakaway, breakawaySource);
+			runtime.SetGeneratedAudioTestSignal(
+				breakawaySource,
+				true,
+				GeneratedAudioTestSignalMode.Tone,
+				750,
+				0.2);
 
 			var outputId = RecordingOutputId.New();
 			var start = await runtime.StartRecordingAsync(RecordingSessionId.New(), outputId);
@@ -44,6 +55,9 @@ public sealed class ReferenceRecordingPayloadTests
 			Assert.NotNull(boundary.Recording);
 			Assert.True(boundary.Recording!.Accepted, boundary.Recording.Failure?.ToString());
 			Assert.True(boundary.Audio.Emitted, boundary.Audio.Failure?.ToString());
+			Assert.Equal(new MediaSourceId(sourceA.Value), boundary.CommittedProgramSourceId);
+			Assert.Equal(AudioRoutingMode.Breakaway, boundary.Audio.RoutingMode);
+			Assert.Equal(breakawaySource, boundary.Audio.AudioSourceId);
 
 			var stop = await runtime.StopRecordingAsync();
 			Assert.Equal(RecordingStopStatus.Stopped, stop.Status);
@@ -71,8 +85,10 @@ public sealed class ReferenceRecordingPayloadTests
 			Assert.Equal(boundary.Audio.SampleCount, sample.AudioSampleCount);
 			Assert.NotEmpty(sample.AudioPayload);
 			Assert.Equal(checked((int)(boundary.Audio.SampleCount * 2U * sizeof(float))), sample.AudioPayload.Length);
-			var firstAudioSample = BinaryPrimitives.ReadSingleLittleEndian(sample.AudioPayload.AsSpan(0, sizeof(float)));
-			Assert.Equal((float)boundary.Audio.PeakLevel, Math.Abs(firstAudioSample), 5);
+			Assert.Equal(boundary.ProgramAudioPayload, sample.AudioPayload);
+			var audioSamples = MemoryMarshal.Cast<byte, float>(sample.AudioPayload);
+			var recordedPeak = audioSamples.ToArray().Max(value => Math.Abs(value));
+			Assert.Equal((float)boundary.Audio.PeakLevel, recordedPeak, 5);
 		}
 		finally
 		{

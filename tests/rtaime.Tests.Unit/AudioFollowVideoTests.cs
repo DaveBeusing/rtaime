@@ -64,6 +64,67 @@ public sealed class AudioFollowVideoTests
             observation.Code == "audio.afv.switched" && observation.VideoFrameSequence == 1);
     }
 
+
+    [Fact]
+    public void Breakaway_pins_audio_across_video_cuts_until_explicit_return_to_follow_video()
+    {
+        var engine = CreateEngine(FrameRate.Fps50);
+        var routing = engine.SetRouting(AudioRoutingMode.Breakaway, SourceA);
+
+        var first = engine.ProcessBoundary(SourceA, 0, Buffer(StreamA, FrameRate.Fps50, 0), 0.25);
+        var cut = engine.ProcessBoundary(SourceB, 1, Buffer(StreamA, FrameRate.Fps50, 1), 0.75);
+
+        Assert.Equal(AudioRoutingMode.Breakaway, routing.Mode);
+        Assert.Equal(SourceA, cut.AudioSourceId);
+        Assert.Equal(SourceB, cut.VideoSourceId);
+        Assert.Equal(StreamA, cut.StreamId);
+        Assert.Equal(StreamA, engine.ActiveStreamId);
+        Assert.Equal(SourceA, engine.ActiveAudioSourceId);
+
+        var follow = engine.SetRouting(AudioRoutingMode.FollowVideo);
+        var returned = engine.ProcessBoundary(SourceB, 2, Buffer(StreamB, FrameRate.Fps50, 2), 0.5);
+
+        Assert.Equal(AudioRoutingMode.FollowVideo, follow.Mode);
+        Assert.Equal(SourceB, returned.AudioSourceId);
+        Assert.Equal(StreamB, returned.StreamId);
+        Assert.True(returned.RoutingRevision > cut.RoutingRevision);
+    }
+
+    [Fact]
+    public void Breakaway_source_loss_reports_underrun_and_recovers_without_changing_route()
+    {
+        var engine = CreateEngine(FrameRate.Fps50);
+        var routing = engine.SetRouting(AudioRoutingMode.Breakaway, SourceA);
+
+        var lost = engine.ProcessBoundary(SourceB, 0, null, 0);
+
+        Assert.Equal(AudioFollowVideoStatus.Underrun, lost.Status);
+        Assert.Equal(SourceA, lost.AudioSourceId);
+        Assert.Equal(SourceB, lost.VideoSourceId);
+        Assert.Equal(AudioRoutingMode.Breakaway, engine.RoutingState.Mode);
+        Assert.Equal(SourceA, engine.RoutingState.BreakawaySourceId);
+        Assert.Equal(routing.Revision, engine.RoutingState.Revision);
+
+        var recovered = engine.ProcessBoundary(SourceB, 1, Buffer(StreamA, FrameRate.Fps50, 1), 0.4);
+
+        Assert.True(recovered.Emitted);
+        Assert.Equal(SourceA, recovered.AudioSourceId);
+        Assert.Equal(StreamA, recovered.StreamId);
+        Assert.Equal(routing.Revision, recovered.RoutingRevision);
+    }
+
+    [Fact]
+    public void Breakaway_rejects_unknown_source_without_changing_confirmed_routing()
+    {
+        var engine = CreateEngine(FrameRate.Fps50);
+        var initial = engine.RoutingState;
+
+        Assert.Throws<KeyNotFoundException>(() =>
+            engine.SetRouting(AudioRoutingMode.Breakaway, MediaSourceId.New()));
+
+        Assert.Equal(initial, engine.RoutingState);
+    }
+
     [Fact]
     public void Gain_and_mute_are_applied_per_input_without_changing_follow_policy()
     {

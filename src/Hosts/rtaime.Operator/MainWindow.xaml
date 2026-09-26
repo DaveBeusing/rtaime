@@ -1407,7 +1407,7 @@
 						Visibility="{Binding Shell.AudioVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
 						<StackPanel>
 							<DockPanel Margin="0,0,0,12">
-								<TextBlock Text="AUDIO / AFV" Style="{StaticResource OperatorSectionTitle}" />
+								<TextBlock Text="AUDIO / ROUTING" Style="{StaticResource OperatorSectionTitle}" />
 								<Border Style="{StaticResource OperatorStatusBadge}" DockPanel.Dock="Right">
 									<TextBlock Text="{Binding AudioHealth}" FontWeight="Bold" />
 								</Border>
@@ -1416,6 +1416,19 @@
 								<TextBlock Text="AFV follows Program" Style="{StaticResource OperatorLabel}" />
 								<TextBlock Text="{Binding AudioAfvSourceName}" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" DockPanel.Dock="Right" TextTrimming="CharacterEllipsis" />
 							</DockPanel>
+							<DockPanel Margin="0,0,0,6">
+								<TextBlock Text="Routing mode" Style="{StaticResource OperatorLabel}" />
+								<TextBlock Text="{Binding AudioRoutingMode}" Style="{StaticResource OperatorValue}" FontWeight="SemiBold" DockPanel.Dock="Right" />
+							</DockPanel>
+							<DockPanel Margin="0,0,0,8">
+								<TextBlock Text="Confirmed audio source" Style="{StaticResource OperatorLabel}" />
+								<TextBlock Text="{Binding AudioRoutingSourceName}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" TextTrimming="CharacterEllipsis" MaxWidth="210" />
+							</DockPanel>
+							<Grid Margin="0,0,0,10">
+								<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="6" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+								<controls:RtaimeButton Grid.Column="0" Content="FOLLOW VIDEO" Command="{Binding SetAudioFollowVideoCommand}" IsCompact="True" />
+								<controls:RtaimeButton Grid.Column="2" Content="BREAKAWAY SELECTED" Command="{Binding SetAudioBreakawayCommand}" IsCompact="True" Background="{DynamicResource OperatorAccentSurfaceBrush}" BorderBrush="{DynamicResource OperatorAccentBrush}" />
+							</Grid>
 							<DockPanel Margin="0,0,0,10">
 								<TextBlock Text="Meter transport" Style="{StaticResource OperatorLabel}" />
 								<TextBlock Text="{Binding AudioMeterStatus}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" />

@@ -106,7 +106,10 @@ public sealed record RuntimeAudioProgramSnapshot(
 	double RightPeak,
 	double MasterPeak,
 	bool Clipping,
-	string Health);
+	string Health,
+	int RoutingMode = 1,
+	ulong RoutingRevision = 0,
+	MediaSourceId? ActiveAudioSourceId = null);
 
 public sealed record RuntimeRecordingSnapshot(
 	string State,
@@ -351,6 +354,20 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 			cancellationToken).ConfigureAwait(false);
 		var wire = response.Payload.Deserialize<WireAudioInput>(Wire.JsonOptions)
 			?? throw new InvalidDataException("Runtime audio input response is required.");
+		return FromWire(wire);
+	}
+
+	public async ValueTask<RuntimeAudioProgramSnapshot> SetAudioRoutingAsync(
+		int mode,
+		MediaSourceId? breakawaySourceId,
+		CancellationToken cancellationToken = default)
+	{
+		var response = await ExchangeAsync(
+			"runtime.audio.routing.set",
+			new WireAudioRoutingState(mode, breakawaySourceId?.ToString()),
+			cancellationToken).ConfigureAwait(false);
+		var wire = response.Payload.Deserialize<WireAudioProgram>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Runtime audio routing response is required.");
 		return FromWire(wire);
 	}
 
@@ -820,7 +837,12 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 		snapshot.RightPeak,
 		snapshot.MasterPeak,
 		snapshot.Clipping,
-		AudioHealth(snapshot.Health));
+		AudioHealth(snapshot.Health),
+		snapshot.RoutingMode,
+		snapshot.RoutingRevision,
+		string.IsNullOrWhiteSpace(snapshot.ActiveAudioSourceId)
+			? null
+			: new MediaSourceId(Identity.Parse(snapshot.ActiveAudioSourceId)));
 
 	private static RuntimeRecordingSnapshot FromWire(WireRecordingSnapshot snapshot) => new(
 		string.IsNullOrWhiteSpace(snapshot.State) ? "UNKNOWN" : snapshot.State.Trim().ToUpperInvariant(),
@@ -1161,6 +1183,7 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 	private sealed record WireGraphicsOverlay(bool AssetLoaded, string? AssetName, uint AssetWidth, uint AssetHeight, bool Visible, double PositionX, double PositionY, double Scale);
 	private sealed record WireCompositingLayer(string LayerId, int Kind, int Order, bool Visible, byte Opacity, double PositionX, double PositionY, double Scale, string ContentIdentity, double RotationDegrees = 0, double AnchorX = 0, double AnchorY = 0, double CropLeft = 0, double CropTop = 0, double CropRight = 0, double CropBottom = 0, WireProcessingNode? ProcessingNode = null);
 	private sealed record WireAudioInputState(string SourceId, double Gain, bool Muted);
+	private sealed record WireAudioRoutingState(int Mode, string? BreakawaySourceId);
 	private sealed record WireAudioTestSignalState(string SourceId, bool Enabled, int Mode, double FrequencyHz, double PeakLevel);
 	private sealed record WireAudioInput(
 		string SourceId,
@@ -1177,7 +1200,7 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 		string? TestSignalActiveChannel = null,
 		double? TestSignalFrequencyHz = null,
 		double? TestSignalPeakLevel = null);
-	private sealed record WireAudioProgram(string ActiveVideoSourceId, string ActiveStreamId, double Gain, bool Muted, double LeftPeak, double RightPeak, double MasterPeak, bool Clipping, int Health);
+	private sealed record WireAudioProgram(string ActiveVideoSourceId, string ActiveStreamId, double Gain, bool Muted, double LeftPeak, double RightPeak, double MasterPeak, bool Clipping, int Health, int RoutingMode = 1, ulong RoutingRevision = 0, string? ActiveAudioSourceId = null);
 	private sealed record WireCapability(string CapabilityId, string Kind, WireVideoFormat[] VideoFormats);
 	private sealed record WireResource(string ResourceId, string ProviderId, string Kind, uint CapacityUnits, bool Reservable);
 	private sealed record WireProvider(string Version, string ProviderId, string Name, int AvailabilityState, WireFailure? Failure, WireCapability[] Capabilities, WireResource[] Resources);

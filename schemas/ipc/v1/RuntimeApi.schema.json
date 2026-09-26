@@ -15,6 +15,7 @@
 					"runtime.ai_showcase.set",
 					"runtime.execution.apply",
 					"runtime.audio.input.set",
+					"runtime.audio.routing.set",
 					"runtime.audio.test_signal.set",
 					"runtime.test_pattern.set",
 					"runtime.media_asset.probe",

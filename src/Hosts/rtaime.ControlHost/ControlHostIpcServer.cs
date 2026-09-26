@@ -36,6 +36,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	private DurableBitmapGraphicsReference? _durableBitmapReference;
 	private RuntimeGraphicsOverlaySnapshot _graphicsOverlayState = new(false, null, 0, 0, false, 0.72, 0.06, 1.0);
 	private IReadOnlyList<RuntimeCompositingLayerSnapshot> _compositingLayers = Array.Empty<RuntimeCompositingLayerSnapshot>();
+	private DurableAudioRoutingState _durableAudioRouting = DurableAudioRoutingState.FollowVideo;
 	private string _showProjectState = "UNAVAILABLE";
 	private string _showProjectDetail = "Durable show project persistence is not configured.";
 	private Task? _acceptLoop;
@@ -79,6 +80,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 					bitmap.Scale);
 			}
 			_compositingLayers = ToRuntimeCompositingLayers(showProject.Graphics.CompositingState);
+			_durableAudioRouting = showProject.AudioRouting ?? DurableAudioRoutingState.FollowVideo;
 			_showProjectState = "LOADED";
 			_showProjectDetail = $"Durable show project '{showProject.Name}' ({showProject.ProjectId}) is loaded.";
 		}
@@ -108,6 +110,9 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	public ValueTask RestoreGraphicsStateAsync(CancellationToken cancellationToken = default) =>
 		RunSerializedMutationAsync(RestoreGraphicsStateCoreAsync, cancellationToken);
 
+	public ValueTask RestoreAudioRoutingStateAsync(CancellationToken cancellationToken = default) =>
+		RunSerializedMutationAsync(RestoreAudioRoutingStateCoreAsync, cancellationToken);
+
 	internal async ValueTask RunSerializedMutationAsync(
 		Func<CancellationToken, ValueTask> operation,
 		CancellationToken cancellationToken = default)
@@ -126,6 +131,21 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 
 	internal ValueTask RestoreGraphicsStateWithinMutationAsync(CancellationToken cancellationToken = default) =>
 		RestoreGraphicsStateCoreAsync(cancellationToken);
+
+	internal ValueTask RestoreAudioRoutingStateWithinMutationAsync(CancellationToken cancellationToken = default) =>
+		RestoreAudioRoutingStateCoreAsync(cancellationToken);
+
+	private async ValueTask RestoreAudioRoutingStateCoreAsync(CancellationToken cancellationToken)
+	{
+		if (!_runtimeTransport.IsConnected)
+			return;
+
+		await _runtimeTransport.SetAudioRoutingAsync(
+			_durableAudioRouting.Mode,
+			_durableAudioRouting.BreakawaySourceId,
+			cancellationToken).ConfigureAwait(false);
+		NotifyObservableStateChanged();
+	}
 
 	private async ValueTask RestoreGraphicsStateCoreAsync(CancellationToken cancellationToken)
 	{
@@ -354,6 +374,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			"control.compositing.layer.processing" => await SetCompositingLayerProcessingAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.compositing.layers.reorder" => await ReorderCompositingLayersAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.audio.input.set" => await SetAudioInputStateAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.audio.routing.set" => await SetAudioRoutingAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.audio.test_signal.set" => await SetAudioTestSignalAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.test_pattern.set" => await SetBroadcastTestPatternAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.recording.start" => await StartRecordingAsync(request, cancellationToken).ConfigureAwait(false),
@@ -463,6 +484,97 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or NotSupportedException or FormatException or InvalidDataException or IOException)
 			{
 				return Error(request, "control.audio.input.rejected", exception.Message);
+			}
+		}
+		finally
+		{
+			_mutationGate.Release();
+		}
+	}
+
+	private async ValueTask<WireEnvelope> SetAudioRoutingAsync(WireEnvelope request, CancellationToken cancellationToken)
+	{
+		var wire = request.Payload.Deserialize<WireAudioRoutingState>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Audio routing state payload is required.");
+		if (wire.Mode is not (DurableAudioRoutingState.FollowVideoMode or DurableAudioRoutingState.BreakawayMode))
+			return Error(request, "control.audio.routing.mode.invalid", "Audio routing mode must be FOLLOW_VIDEO or BREAKAWAY.");
+
+		await _mutationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+		try
+		{
+			var control = _controlAccessor();
+			if (control is null || !control.HasAuthoritativeState)
+				return Error(request, "control.not_ready", "ControlHost has no committed authoritative state yet.");
+			if (!_runtimeTransport.IsConnected)
+				return Error(request, "runtime.unavailable", "RuntimeHost is not connected.");
+
+			MediaSourceId? breakawaySourceId = null;
+			if (wire.Mode == DurableAudioRoutingState.BreakawayMode)
+			{
+				if (string.IsNullOrWhiteSpace(wire.BreakawaySourceId))
+					return Error(request, "control.audio.routing.source.required", "Breakaway audio routing requires an explicit source.");
+				try { breakawaySourceId = new MediaSourceId(Identity.Parse(wire.BreakawaySourceId)); }
+				catch (Exception exception) when (exception is FormatException or ArgumentException)
+				{
+					return Error(request, "control.audio.routing.source.invalid", exception.Message);
+				}
+				if (!control.Specification.Sources.Any(source => source.SourceId.Value == breakawaySourceId.Value.Value))
+					return Error(request, "control.audio.routing.source.unknown", "Breakaway audio source must belong to the authoritative production.");
+			}
+			else if (!string.IsNullOrWhiteSpace(wire.BreakawaySourceId))
+			{
+				return Error(request, "control.audio.routing.source.unexpected", "FOLLOW_VIDEO routing must not declare a breakaway source.");
+			}
+
+			RuntimeRemoteSnapshot currentRuntime;
+			try
+			{
+				currentRuntime = await _runtimeTransport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
+			}
+			catch (Exception exception) when (exception is InvalidOperationException or NotSupportedException or FormatException or InvalidDataException or IOException)
+			{
+				return Error(request, "control.audio.routing.snapshot.unavailable", exception.Message);
+			}
+			if (currentRuntime.AudioProgram.RoutingRevision != wire.ExpectedRoutingRevision)
+			{
+				return Error(
+					request,
+					"control.audio.routing.revision_conflict",
+					$"Expected audio routing revision {wire.ExpectedRoutingRevision}, current revision is {currentRuntime.AudioProgram.RoutingRevision}.");
+			}
+
+			var requested = new DurableAudioRoutingState(wire.Mode, breakawaySourceId);
+			var previous = _durableAudioRouting;
+			try
+			{
+				var snapshot = await _runtimeTransport
+					.SetAudioRoutingAsync(requested.Mode, requested.BreakawaySourceId, cancellationToken)
+					.ConfigureAwait(false);
+
+				if (_showProjectStore is not null && _showProject is not null)
+				{
+					_showProject = await _showProjectStore
+						.UpdateAudioRoutingAsync(control.Specification, requested, cancellationToken)
+						.ConfigureAwait(false);
+					_showProjectState = "SAVED";
+					_showProjectDetail = $"Audio routing is persisted at show-project storage version {_showProject.StorageVersion}.";
+				}
+				_durableAudioRouting = requested;
+				NotifyObservableStateChanged();
+				return Success(request, "control.audio.routing.response", ToWire(snapshot));
+			}
+			catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or NotSupportedException or FormatException or InvalidDataException or IOException)
+			{
+				try
+				{
+					await _runtimeTransport.SetAudioRoutingAsync(previous.Mode, previous.BreakawaySourceId, cancellationToken).ConfigureAwait(false);
+				}
+				catch
+				{
+					_showProjectState = "DEGRADED";
+					_showProjectDetail = "Audio routing mutation failed and Runtime rollback could not be confirmed.";
+				}
+				return Error(request, "control.audio.routing.rejected", exception.Message);
 			}
 		}
 		finally
@@ -1975,7 +2087,10 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		snapshot.RightPeak,
 		snapshot.MasterPeak,
 		snapshot.Clipping,
-		snapshot.Health);
+		snapshot.Health,
+		snapshot.RoutingMode,
+		snapshot.RoutingRevision,
+		snapshot.ActiveAudioSourceId?.ToString());
 
 	private static WireProductionCgTextSnapshot ToWire(RuntimeProductionCgTextSnapshot snapshot) => new(
 		snapshot.Active,
@@ -2336,6 +2451,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		public static WireGraphicsOverlay Empty { get; } = new(false, null, 0, 0, false, 0.72, 0.06, 1.0);
 	}
 	private sealed record WireAudioInputState(string SourceId, double Gain, bool Muted);
+	private sealed record WireAudioRoutingState(int Mode, string? BreakawaySourceId, ulong ExpectedRoutingRevision);
 	private sealed record WireAudioTestSignalState(string SourceId, bool Enabled, int Mode, double FrequencyHz, double PeakLevel);
 	private sealed record WireTestPatternState(string SourceId, bool Enabled, bool MotionTiming = false);
 	private sealed record WireAudioInput(
@@ -2353,7 +2469,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		string? TestSignalActiveChannel = null,
 		double? TestSignalFrequencyHz = null,
 		double? TestSignalPeakLevel = null);
-	private sealed record WireAudioProgram(string ActiveVideoSourceId, string ActiveStreamId, double Gain, bool Muted, double LeftPeak, double RightPeak, double MasterPeak, bool Clipping, string Health)
+	private sealed record WireAudioProgram(string ActiveVideoSourceId, string ActiveStreamId, double Gain, bool Muted, double LeftPeak, double RightPeak, double MasterPeak, bool Clipping, string Health, int RoutingMode = 1, ulong RoutingRevision = 0, string? ActiveAudioSourceId = null)
 	{
 		public static WireAudioProgram Empty { get; } = new(string.Empty, string.Empty, 1, false, 0, 0, 0, false, "UNKNOWN");
 	}
