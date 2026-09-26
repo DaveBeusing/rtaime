@@ -1,6 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 using System.Buffers.Binary;
+using System.Runtime.InteropServices;
 using rtaime.Control.Contracts;
 using rtaime.ControlHost;
 using rtaime.Core;
