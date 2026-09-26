@@ -28,6 +28,8 @@ public sealed class RundownViewModel : INotifyPropertyChanged
 	private bool _useDissolve;
 	private uint _transitionFrames = 12;
 	private uint _holdFrames = 50;
+	private bool _repeatItem;
+	private ushort _repeatCount = 1;
 	private bool _requiresAcknowledgement;
 
 	public RundownViewModel(
@@ -90,6 +92,8 @@ public sealed class RundownViewModel : INotifyPropertyChanged
 	public bool UseDissolve { get => _useDissolve; set => Set(ref _useDissolve, value); }
 	public uint TransitionFrames { get => _transitionFrames; set => Set(ref _transitionFrames, Math.Clamp(value, 2, RundownTransition.MaximumDissolveFrames)); }
 	public uint HoldFrames { get => _holdFrames; set => Set(ref _holdFrames, Math.Clamp(value, 1, RundownHoldItem.MaximumHoldFrames)); }
+	public bool RepeatItem { get => _repeatItem; set => Set(ref _repeatItem, value); }
+	public ushort RepeatCount { get => _repeatCount; set => Set(ref _repeatCount, (ushort)Math.Clamp(value, 1, RundownRepeatPolicy.MaximumRepeatCount)); }
 	public bool RequiresAcknowledgement { get => _requiresAcknowledgement; private set { if (Set(ref _requiresAcknowledgement, value)) RaiseCommandState(); } }
 	public bool HasItems => Items.Count > 0;
 	public string StorageLabel => $"SAVED V{_storageVersion}";
@@ -126,7 +130,8 @@ public sealed class RundownViewModel : INotifyPropertyChanged
 			Identity.Parse(asset.ReferenceId!),
 			new ProductionSourceId(Identity.Parse(source.Id)),
 			transition,
-			AutoAdvanceMedia ? RundownAdvanceMode.AutoOnMediaEnd : RundownAdvanceMode.Manual);
+			AutoAdvanceMedia ? RundownAdvanceMode.AutoOnMediaEnd : RundownAdvanceMode.Manual,
+			CurrentRepeatPolicy());
 		AddDraft(item);
 		return Task.CompletedTask;
 	}
@@ -137,7 +142,8 @@ public sealed class RundownViewModel : INotifyPropertyChanged
 		AddDraft(new RundownSceneItem(
 			RundownItemId.New(),
 			scene.Name,
-			new SceneId(Identity.Parse(scene.Id))));
+			new SceneId(Identity.Parse(scene.Id)),
+			repeat: CurrentRepeatPolicy()));
 		return Task.CompletedTask;
 	}
 
@@ -148,7 +154,8 @@ public sealed class RundownViewModel : INotifyPropertyChanged
 			RundownItemId.New(),
 			$"Audio · {input.SourceName}",
 			RundownAudioRoutingItem.BreakawayMode,
-			new ProductionSourceId(Identity.Parse(input.SourceId))));
+			new ProductionSourceId(Identity.Parse(input.SourceId)),
+			CurrentRepeatPolicy()));
 		return Task.CompletedTask;
 	}
 
@@ -157,7 +164,8 @@ public sealed class RundownViewModel : INotifyPropertyChanged
 		AddDraft(new RundownAudioRoutingItem(
 			RundownItemId.New(),
 			"Audio · Follow Video",
-			RundownAudioRoutingItem.FollowVideoMode));
+			RundownAudioRoutingItem.FollowVideoMode,
+			repeat: CurrentRepeatPolicy()));
 		return Task.CompletedTask;
 	}
 
@@ -167,13 +175,14 @@ public sealed class RundownViewModel : INotifyPropertyChanged
 			RundownItemId.New(),
 			"Graphics · Bitmap",
 			"bitmap-graphics",
-			visible: true));
+			visible: true,
+			CurrentRepeatPolicy()));
 		return Task.CompletedTask;
 	}
 
 	private Task AddHoldAsync()
 	{
-		AddDraft(new RundownHoldItem(RundownItemId.New(), $"Hold · {HoldFrames}f", HoldFrames));
+		AddDraft(new RundownHoldItem(RundownItemId.New(), $"Hold · {HoldFrames}f", HoldFrames, CurrentRepeatPolicy()));
 		return Task.CompletedTask;
 	}
 
@@ -223,6 +232,11 @@ public sealed class RundownViewModel : INotifyPropertyChanged
 
 	private async Task AcknowledgeRecoveryAsync(bool resume) =>
 		await RunAsync(async () => ApplySnapshot(await _client.AcknowledgeRundownRecoveryAsync(resume)));
+
+	private RundownRepeatPolicy CurrentRepeatPolicy() =>
+		RepeatItem
+			? new RundownRepeatPolicy(RundownRepeatMode.RepeatItem, RepeatCount)
+			: RundownRepeatPolicy.None;
 
 	private void AddDraft(RundownItem item)
 	{
@@ -336,8 +350,8 @@ public sealed class RundownViewModel : INotifyPropertyChanged
 	private bool CanAddGraphics() => !IsBusy &&
 		!string.IsNullOrWhiteSpace(_operator.GraphicsAssetName) &&
 		!string.Equals(_operator.GraphicsAssetName, "No graphics asset loaded", StringComparison.Ordinal);
-	private bool CanPrepare() => !IsBusy && SelectedItem is not null && State is not "EXECUTING" and not "RECOVERYREQUIRED";
-	private bool CanNavigate() => !IsBusy && Items.Count > 0 && State is not "EXECUTING" and not "RECOVERYREQUIRED";
+	private bool CanPrepare() => !IsBusy && SelectedItem is not null && State is not "DRAFT" and not "EXECUTING" and not "RECOVERYREQUIRED";
+	private bool CanNavigate() => !IsBusy && Items.Count > 0 && State is not "DRAFT" and not "EXECUTING" and not "RECOVERYREQUIRED";
 
 	private bool CanMove(int offset)
 	{
