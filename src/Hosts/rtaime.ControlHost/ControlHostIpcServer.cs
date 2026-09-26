@@ -1753,6 +1753,19 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 
 	private async ValueTask<WireEnvelope> GetSnapshotAsync(WireEnvelope request, CancellationToken cancellationToken)
 	{
+		await _mutationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+		try
+		{
+			return await GetSnapshotWithinMutationAsync(request, cancellationToken).ConfigureAwait(false);
+		}
+		finally
+		{
+			_mutationGate.Release();
+		}
+	}
+
+	private async ValueTask<WireEnvelope> GetSnapshotWithinMutationAsync(WireEnvelope request, CancellationToken cancellationToken)
+	{
 		var control = _controlAccessor();
 		if (control is null || !control.HasAuthoritativeState)
 			return Error(request, "control.not_ready", "ControlHost has no committed authoritative state yet.");
