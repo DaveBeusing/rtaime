@@ -46,7 +46,7 @@ public sealed class RuntimeOutputBindingHealthTests
 		var pendingB = ProgramRole(fixture.Runtime);
 		Assert.Equal(sinkB, pendingB.TargetId);
 		Assert.Equal(RuntimeOutputRoleHealthState.Unverified, pendingB.HealthState);
-		Assert.Equal(0, fixture.Runtime.ProgramFrames.Count);
+		Assert.Empty(fixture.Runtime.ProgramFrames);
 
 		using (fixture.Runtime.ProcessNextBoundary())
 		{
