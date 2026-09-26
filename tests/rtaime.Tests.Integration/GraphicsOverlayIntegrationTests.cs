@@ -190,9 +190,10 @@ public sealed class GraphicsOverlayIntegrationTests
 			0);
 		using var cropped = fixture.Runtime.ProcessNextBoundary();
 		AssertPixel(cropped.ProgramPixels, fixture.Format, originX, originY, 255, 0, 0, 255);
+		using var nextBoundary = fixture.Runtime.ProcessNextBoundary();
 		Assert.Equal(
 			Pixel(cropped.ProgramPixels, fixture.Format, originX + 1, originY),
-			Pixel(fixture.Runtime.ProcessNextBoundary().ProgramPixels, fixture.Format, originX + 1, originY));
+			Pixel(nextBoundary.ProgramPixels, fixture.Format, originX + 1, originY));
 	}
 
 	[Fact]
@@ -547,7 +548,7 @@ public sealed class GraphicsOverlayIntegrationTests
 
 			var artifact = ReferenceRecordingPayloadReader.Read(writer.FinalPath!);
 			var sample = Assert.Single(artifact.Samples);
-			Assert.Equal(program.ProgramPixels, sample.VideoPayload);
+			Assert.True(program.ProgramPixels.Span.SequenceEqual(sample.VideoPayload));
 			AssertPixel(sample.VideoPayload, fixture.Format, 0, 0, 255, 0, 0, 255);
 		}
 		finally
@@ -598,14 +599,15 @@ public sealed class GraphicsOverlayIntegrationTests
 		Assert.True(confirmed.Committed, confirmed.Failure?.ToString());
 	}
 
-	private static PixelValue Pixel(byte[] pixels, VideoFormat format, int x, int y)
+	private static PixelValue Pixel(ReadOnlyMemory<byte> pixels, VideoFormat format, int x, int y)
 	{
+		var span = pixels.Span;
 		var offset = checked((y * (int)format.Width + x) * 4);
-		return new PixelValue(pixels[offset], pixels[offset + 1], pixels[offset + 2], pixels[offset + 3]);
+		return new PixelValue(span[offset], span[offset + 1], span[offset + 2], span[offset + 3]);
 	}
 
 	private static void AssertPixel(
-		byte[] pixels,
+		ReadOnlyMemory<byte> pixels,
 		VideoFormat format,
 		int x,
 		int y,
