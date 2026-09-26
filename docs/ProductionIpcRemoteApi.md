@@ -213,7 +213,11 @@ Network authentication, TLS/PKI and RBAC are outside this local V1 IPC baseline.
 
 ## Failure behavior
 
-Malformed, oversized, unknown, role-incompatible and version-incompatible requests fail closed. Runtime transport loss leaves Control authority unchanged and places ControlHost in `Degraded` until a successful resynchronization. A committed Runtime snapshot with a missing authority reference, a foreign AuthorityStateId or an AuthorityRevision ahead of durable Control authority is not overwritten automatically. AI transport loss cannot gain production authority.
+Malformed, oversized, unknown, role-incompatible and version-incompatible requests fail closed. A client that connects and disconnects before completing the handshake affects only that connection; RuntimeHost keeps accepting subsequent clients. Normal connection teardown and malformed per-connection input do not terminate the primary RuntimeHost listener.
+
+RuntimeHost models the primary Named Pipe listener independently from individual client sessions. Recoverable listener-level I/O failures recreate the affected server stream with bounded retry/backoff. Unknown listener failures, or repeated listener-level I/O failures that exceed the bounded retry policy, are terminal. A terminal primary-listener failure immediately invalidates RuntimeHost `Ready/Healthy`, transitions the host to `Failed/Unhealthy`, and completes the process with `UnexpectedFailure` rather than surfacing later as a shutdown-only failure. The monitoring listener follows the same resource/lifetime discipline, but a monitoring-listener failure remains an observability-plane failure and does not acquire or change Runtime production authority.
+
+Runtime transport loss leaves Control authority unchanged and places ControlHost in `Degraded` until a successful resynchronization. A committed Runtime snapshot with a missing authority reference, a foreign AuthorityStateId or an AuthorityRevision ahead of durable Control authority is not overwritten automatically. AI transport loss cannot gain production authority.
 
 ## Evidence boundary
 

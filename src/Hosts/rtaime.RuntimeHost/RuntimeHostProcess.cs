@@ -171,6 +171,12 @@ public sealed record RuntimeHostProcessOptions(
 /// Executable RuntimeHost composition root. It owns lifecycle only; committed runtime execution,
 /// media processing, GPU processing, monitoring and recording remain implemented by dedicated runtime services.
 /// </summary>
+internal delegate RuntimeHostIpcServer RuntimeHostIpcServerFactory(
+	string endpoint,
+	Func<V1RuntimeHostService?> runtimeAccessor,
+	Func<LocalMediaDeckRuntimeService?> mediaDeckAccessor,
+	Func<RuntimeAIShowcaseService?> aiShowcaseAccessor);
+
 public sealed class RuntimeHostProcess
 {
 	private readonly object _gate = new();
@@ -178,6 +184,7 @@ public sealed class RuntimeHostProcess
 	private readonly Func<IProgramRecordingWriter> _recordingWriterFactory;
 	private readonly Func<RuntimeHostProcessOptions, IProgramRecordingWriter, V1RuntimeHostService> _runtimeFactory;
 	private readonly Func<V1RuntimeHostService, RuntimeHostProcessOptions, RuntimeAIShowcaseService> _aiShowcaseFactory;
+	private readonly RuntimeHostIpcServerFactory _ipcServerFactory;
 	private readonly Stopwatch _timingClock = Stopwatch.StartNew();
 	private readonly RuntimeTimingQualificationProbe _timingProbe;
 	private readonly RuntimeFrameDropCounter _frameDropCounter = new();
@@ -203,6 +210,16 @@ public sealed class RuntimeHostProcess
 		Func<IProgramRecordingWriter>? recordingWriterFactory = null,
 		Func<RuntimeHostProcessOptions, IProgramRecordingWriter, V1RuntimeHostService>? runtimeFactory = null,
 		Func<V1RuntimeHostService, RuntimeHostProcessOptions, RuntimeAIShowcaseService>? aiShowcaseFactory = null)
+		: this(options, recordingWriterFactory, runtimeFactory, aiShowcaseFactory, null)
+	{
+	}
+
+	internal RuntimeHostProcess(
+		RuntimeHostProcessOptions options,
+		Func<IProgramRecordingWriter>? recordingWriterFactory,
+		Func<RuntimeHostProcessOptions, IProgramRecordingWriter, V1RuntimeHostService>? runtimeFactory,
+		Func<V1RuntimeHostService, RuntimeHostProcessOptions, RuntimeAIShowcaseService>? aiShowcaseFactory,
+		RuntimeHostIpcServerFactory? ipcServerFactory)
 	{
 		_options = options ?? throw new ArgumentNullException(nameof(options));
 		_recordingWriterFactory = recordingWriterFactory ?? (() => new WindowsMediaFoundationMp4RecordingWriter(
@@ -214,6 +231,8 @@ public sealed class RuntimeHostProcess
 		_aiShowcaseFactory = aiShowcaseFactory ?? ((runtime, processOptions) => new RuntimeAIShowcaseService(
 			runtime,
 			new NamedPipeRuntimeAIHostTransport(processOptions.AIEndpoint)));
+		_ipcServerFactory = ipcServerFactory ?? ((endpoint, runtimeAccessor, mediaDeckAccessor, aiShowcaseAccessor) =>
+			new RuntimeHostIpcServer(endpoint, runtimeAccessor, mediaDeckAccessor, aiShowcaseAccessor));
 
 		var framePeriod = TimeSpan.FromSeconds(options.Format.FrameRate.Denominator / (double)options.Format.FrameRate.Numerator);
 		_timingProbe = new RuntimeTimingQualificationProbe(new TimingQualificationThresholds(
@@ -246,10 +265,17 @@ public sealed class RuntimeHostProcess
 	public MediaIoPortStatus? MediaIoProgramOutputStatus => _mediaIo?.ProgramOutputStatus;
 	public TimingQualificationSnapshot TimingQualification => _timingProbe.Snapshot(_timingClock.Elapsed);
 
+	internal event Action<RuntimePipeListenerSnapshot, Exception>? PrimaryIpcListenerFaulted;
+	internal event Action<RuntimePipeListenerSnapshot, Exception>? MonitoringIpcListenerFaulted;
+
 	public async Task<RuntimeHostExitCode> RunAsync(CancellationToken cancellationToken)
 	{
 		if (Interlocked.Exchange(ref _runStarted, 1) != 0)
 			throw new InvalidOperationException("A RuntimeHostProcess instance can be run only once.");
+
+		using var runStop = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+		Exception? primaryIpcFailure = null;
+		Exception? runtimeFailure = null;
 
 		Update(RuntimeHostProcessState.Starting, RuntimeHostHealthState.Unknown, "Composing RuntimeHost dependencies.");
 		try
@@ -282,12 +308,32 @@ public sealed class RuntimeHostProcess
 				}
 			}
 
-			_ipcServer = new RuntimeHostIpcServer(_options.ListenEndpoint, () => _runtime, () => _mediaDeck, () => _aiShowcase);
+			_ipcServer = _ipcServerFactory(_options.ListenEndpoint, () => _runtime, () => _mediaDeck, () => _aiShowcase)
+				?? throw new InvalidOperationException("RuntimeHost IPC server factory returned null.");
 			_monitoringServer = new RuntimeHostMonitoringServer(MonitoringEndpoint, _runtime.MonitoringHub);
-			await _ipcServer.StartAsync(cancellationToken).ConfigureAwait(false);
-			await _monitoringServer.StartAsync(cancellationToken).ConfigureAwait(false);
-			_mediaLoop = RunMediaLoopAsync(_runtime, _mediaIo, _aiShowcase, cancellationToken);
-			_mediaDeckLoop = RunMediaDeckLoopAsync(_runtime, _mediaDeck, cancellationToken);
+
+			_ipcServer.ListenerFaulted += (snapshot, exception) =>
+			{
+				if (Interlocked.CompareExchange(ref primaryIpcFailure, exception, null) is not null)
+					return;
+
+				Update(
+					RuntimeHostProcessState.Failed,
+					RuntimeHostHealthState.Unhealthy,
+					$"Primary RuntimeHost IPC listener failed: {snapshot.FailureDetail ?? exception.GetType().Name}");
+				NotifyListenerFault(PrimaryIpcListenerFaulted, snapshot, exception);
+				runStop.Cancel();
+			};
+			_monitoringServer.ListenerFaulted += (snapshot, exception) =>
+				NotifyListenerFault(MonitoringIpcListenerFaulted, snapshot, exception);
+
+			await _ipcServer.StartAsync(runStop.Token).ConfigureAwait(false);
+			if (_ipcServer.ListenerTerminalFault is { } startupListenerFailure)
+				throw new InvalidOperationException("RuntimeHost primary IPC listener failed during startup.", startupListenerFailure);
+
+			await _monitoringServer.StartAsync(runStop.Token).ConfigureAwait(false);
+			_mediaLoop = RunMediaLoopAsync(_runtime, _mediaIo, _aiShowcase, runStop.Token);
+			_mediaDeckLoop = RunMediaDeckLoopAsync(_runtime, _mediaDeck, runStop.Token);
 		}
 		catch (ArgumentException exception)
 		{
@@ -302,6 +348,14 @@ public sealed class RuntimeHostProcess
 			return RuntimeHostExitCode.StartupFailure;
 		}
 
+		if (primaryIpcFailure is not null || _ipcServer is not { Running: true })
+		{
+			var exception = primaryIpcFailure ?? _ipcServer?.ListenerTerminalFault ??
+				new InvalidOperationException("RuntimeHost primary IPC listener is unavailable after startup.");
+			Update(RuntimeHostProcessState.Failed, RuntimeHostHealthState.Unhealthy, $"Primary RuntimeHost IPC listener failed: {DiagnosticRedactor.RedactText(exception.Message)}");
+			return await StopAsync(RuntimeHostExitCode.UnexpectedFailure, preserveFailureState: true).ConfigureAwait(false);
+		}
+
 		Update(
 			RuntimeHostProcessState.Ready,
 			RuntimeHostHealthState.Healthy,
@@ -311,17 +365,22 @@ public sealed class RuntimeHostProcess
 		{
 			await Task.WhenAll(
 				_mediaLoop,
-				_mediaDeckLoop ?? Task.CompletedTask).ConfigureAwait(false);
+				_mediaDeckLoop ?? Task.CompletedTask,
+				_ipcServer.ListenerCompletion).ConfigureAwait(false);
 		}
-		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+		catch (OperationCanceledException) when (runStop.IsCancellationRequested)
 		{
-			// Expected process stop signal.
+			// Expected external stop or controlled cancellation after a recorded runtime failure.
 		}
 		catch (Exception exception)
 		{
-			Update(RuntimeHostProcessState.Failed, RuntimeHostHealthState.Unhealthy, $"Run loop failed: {exception.Message}");
-			return RuntimeHostExitCode.UnexpectedFailure;
+			runtimeFailure = exception;
+			Update(RuntimeHostProcessState.Failed, RuntimeHostHealthState.Unhealthy, $"Run loop failed: {DiagnosticRedactor.RedactText(exception.Message)}");
+			runStop.Cancel();
 		}
+
+		if (primaryIpcFailure is not null || runtimeFailure is not null)
+			return await StopAsync(RuntimeHostExitCode.UnexpectedFailure, preserveFailureState: true).ConfigureAwait(false);
 
 		return await StopAsync().ConfigureAwait(false);
 	}
@@ -432,9 +491,13 @@ public sealed class RuntimeHostProcess
 		}
 	}
 
-	private async Task<RuntimeHostExitCode> StopAsync()
+	private async Task<RuntimeHostExitCode> StopAsync(
+		RuntimeHostExitCode preservedExitCode = RuntimeHostExitCode.Success,
+		bool preserveFailureState = false)
 	{
-		Update(RuntimeHostProcessState.Draining, RuntimeHostHealthState.Degraded, "Draining RuntimeHost IPC, monitoring and runtime resources.");
+		if (!preserveFailureState)
+			Update(RuntimeHostProcessState.Draining, RuntimeHostHealthState.Degraded, "Draining RuntimeHost IPC, monitoring and runtime resources.");
+
 		using var timeout = new CancellationTokenSource(_options.ShutdownTimeout);
 		try
 		{
@@ -462,16 +525,25 @@ public sealed class RuntimeHostProcess
 					throw new InvalidOperationException("RuntimeHost retained GPU surfaces after shutdown.");
 			}
 
+			if (preserveFailureState)
+				return preservedExitCode;
+
 			Update(RuntimeHostProcessState.Stopped, RuntimeHostHealthState.Stopped, "RuntimeHost stopped cleanly and released IPC/monitoring/media/GPU/recording resources.");
 			return RuntimeHostExitCode.Success;
 		}
 		catch (Exception exception) when (exception is OperationCanceledException or TimeoutException)
 		{
+			if (preserveFailureState)
+				return preservedExitCode;
+
 			Update(RuntimeHostProcessState.Failed, RuntimeHostHealthState.Unhealthy, "RuntimeHost shutdown exceeded the configured timeout.");
 			return RuntimeHostExitCode.ShutdownFailure;
 		}
 		catch (Exception exception)
 		{
+			if (preserveFailureState)
+				return preservedExitCode;
+
 			Update(RuntimeHostProcessState.Failed, RuntimeHostHealthState.Unhealthy, $"RuntimeHost shutdown failed: {exception.Message}");
 			return RuntimeHostExitCode.ShutdownFailure;
 		}
@@ -527,6 +599,27 @@ public sealed class RuntimeHostProcess
 		catch
 		{
 			// Preserve the original startup failure as the process outcome.
+		}
+	}
+
+	private static void NotifyListenerFault(
+		Action<RuntimePipeListenerSnapshot, Exception>? handlers,
+		RuntimePipeListenerSnapshot snapshot,
+		Exception exception)
+	{
+		if (handlers is null)
+			return;
+
+		foreach (var subscriber in handlers.GetInvocationList())
+		{
+			try
+			{
+				((Action<RuntimePipeListenerSnapshot, Exception>)subscriber)(snapshot, exception);
+			}
+			catch
+			{
+				// Diagnostic subscribers must not replace RuntimeHost lifecycle ownership.
+			}
 		}
 	}
 

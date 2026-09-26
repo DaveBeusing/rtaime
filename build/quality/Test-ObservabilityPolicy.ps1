@@ -105,6 +105,7 @@ foreach ($hostName in $hostEntryPoints.Keys) {
 }
 Assert-Condition ($controlProgram -match 'controlhost\.runtime-supervision-changed' -and $controlProgram -match 'controlhost\.ai-supervision-changed') "ControlHost logging must expose managed child supervision transitions."
 Assert-Condition ($runtimeProgram -match 'runtimehost\.state-changed' -and $runtimeProgram -match 'runtimehost\.ready') "RuntimeHost logging must expose lifecycle and readiness transitions."
+Assert-Condition ($runtimeProgram -match 'runtimehost\.ipc\.listener-faulted' -and $runtimeProgram -match 'runtimehost\.ipc\.monitoring-listener-faulted') "RuntimeHost logging must expose terminal primary and monitoring listener failures at the listener failure boundary."
 Assert-Condition ($aiProgram -match 'aihost\.state-changed' -and $aiProgram -match 'aihost\.ready') "AIHost logging must expose lifecycle and readiness transitions."
 Assert-Condition ($operatorApp -match 'operator\.dispatcher-unhandled-exception' -and $operatorApp -match 'operator\.reconnect-failure') "Operator logging must capture UI failures and reconnect transitions."
 Assert-Condition ($supportBundle -match 'public sealed class SupportBundleExporter' -and $supportBundle -match 'ZipArchiveMode\.Create') "Operator diagnostics must provide an on-demand ZIP support bundle exporter."
@@ -126,6 +127,7 @@ Assert-Condition ($snapshotDeclaration.Value -notmatch 'byte\[\]|ReadOnlyMemory<
 
 Assert-Condition ($control -match 'journal\.Entries\.TakeLast') "ControlHost support snapshots must reuse the bounded production journal rather than inventing a parallel authority log."
 Assert-Condition ($runtime -match 'MonitoringStatistics') "RuntimeHost support snapshots must include monitoring capture/drop diagnostics."
+Assert-Condition ($runtime -match 'ipc\.listenerState' -and $runtime -match 'ipc\.listenerFailure' -and $runtime -match 'monitoring\.listenerState' -and $runtime -match 'monitoring\.listenerFailure') "RuntimeHost support snapshots must expose primary and monitoring listener lifecycle/failure state."
 Assert-Condition ($runtime -match 'recording\.Statistics') "RuntimeHost support snapshots must include recording counters."
 Assert-Condition ($runtime -match 'snapshot\.Performance') "RuntimeHost support snapshots must reuse the live performance snapshot."
 Assert-Condition ($runtime -match 'runtime\.droppedFrames') "Runtime support diagnostics must include the bounded dropped-frame counter."

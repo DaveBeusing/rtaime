@@ -1,5 +1,6 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
+using System.IO.Pipes;
 using rtaime.AI;
 using rtaime.AI.Contracts;
 using rtaime.AIHost;
@@ -76,6 +77,60 @@ public sealed class ExecutableHostLifecycleTests
 			Assert.True(process.RuntimeDisposed);
 			Assert.Equal(0, process.FinalRuntimeSnapshot!.ActiveGpuSurfaces);
 		}
+	}
+
+	[Fact]
+	public async Task RuntimeHost_terminal_primary_listener_failure_preserves_runtime_failure_semantics()
+	{
+		var endpoint = $"rtaime.test.lifecycle.listener.{Guid.NewGuid():N}";
+		var pipeCreations = 0;
+		var failureObserved = new TaskCompletionSource<RuntimePipeListenerSnapshot>(TaskCreationOptions.RunContinuationsAsynchronously);
+		var process = new RuntimeHostProcess(
+			RuntimeHostProcessOptions.Default with { ListenEndpoint = endpoint },
+			recordingWriterFactory: null,
+			runtimeFactory: null,
+			aiShowcaseFactory: null,
+			ipcServerFactory: (listenerEndpoint, runtimeAccessor, mediaDeckAccessor, aiShowcaseAccessor) =>
+				new RuntimeHostIpcServer(
+					listenerEndpoint,
+					runtimeAccessor,
+					mediaDeckAccessor,
+					aiShowcaseAccessor,
+					() =>
+					{
+						if (Interlocked.Increment(ref pipeCreations) == 1)
+							return CreateServerPipe(listenerEndpoint);
+						throw new InvalidOperationException("Synthetic terminal accept failure.");
+					}));
+
+		process.PrimaryIpcListenerFaulted += (snapshot, _) => failureObserved.TrySetResult(snapshot);
+		var run = process.RunAsync(CancellationToken.None);
+
+		Assert.Equal(RuntimeHostProcessState.Ready, process.Lifecycle.State);
+		Assert.Equal(RuntimeHostHealthState.Healthy, process.Lifecycle.Health);
+
+		await using (var client = new NamedPipeClientStream(
+			".",
+			endpoint,
+			PipeDirection.InOut,
+			PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly))
+		{
+			await client.ConnectAsync(3000);
+		}
+
+		var listener = await failureObserved.Task.WaitAsync(TimeSpan.FromSeconds(3));
+		var exit = await run.WaitAsync(TimeSpan.FromSeconds(5));
+
+		Assert.Equal(RuntimePipeListenerState.Faulted, listener.State);
+		Assert.Equal("primary-control", listener.Role);
+		Assert.Contains("Synthetic terminal accept failure", listener.FailureDetail, StringComparison.Ordinal);
+		Assert.Equal(RuntimeHostExitCode.UnexpectedFailure, exit);
+		Assert.Equal(RuntimeHostProcessState.Failed, process.Lifecycle.State);
+		Assert.Equal(RuntimeHostHealthState.Unhealthy, process.Lifecycle.Health);
+		Assert.Contains("Primary RuntimeHost IPC listener failed", process.Lifecycle.Detail, StringComparison.Ordinal);
+		Assert.DoesNotContain("shutdown", process.Lifecycle.Detail, StringComparison.OrdinalIgnoreCase);
+		Assert.True(process.RuntimeDisposed);
+		Assert.Equal(RuntimePipeListenerState.Faulted, process.IpcServer?.Listener.State);
 	}
 
 	[Fact]
@@ -175,6 +230,14 @@ public sealed class ExecutableHostLifecycleTests
 		stop.Cancel();
 		Assert.Equal(AIHostExitCode.Success, await run);
 	}
+
+	private static NamedPipeServerStream CreateServerPipe(string endpoint) =>
+		new(
+			endpoint,
+			PipeDirection.InOut,
+			NamedPipeServerStream.MaxAllowedServerInstances,
+			PipeTransmissionMode.Byte,
+			PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
 
 	private static GovernedInferenceExecutionRequest CreateInferenceRequest(FrameDescriptor frame)
 	{

@@ -15,6 +15,62 @@ public sealed class ProductionIpcProtocolFailureTests
 	private const int MaxFrameBytes = 1024 * 1024;
 	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
+
+	[Fact]
+	public async Task Bare_connect_disconnect_stress_keeps_RuntimeHost_ready_and_accepting()
+	{
+		var endpoint = Endpoint();
+		using var stop = new CancellationTokenSource();
+		var runtime = new RuntimeHostProcess(RuntimeHostProcessOptions.Default with { ListenEndpoint = endpoint });
+		var run = runtime.RunAsync(stop.Token);
+
+		for (var attempt = 0; attempt < 200; attempt++)
+		{
+			await using var pipe = new NamedPipeClientStream(
+				".",
+				endpoint,
+				PipeDirection.InOut,
+				PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+			await pipe.ConnectAsync(3000);
+		}
+
+		Assert.Equal(RuntimeHostProcessState.Ready, runtime.Lifecycle.State);
+		Assert.Equal(RuntimeHostHealthState.Healthy, runtime.Lifecycle.Health);
+		Assert.True(runtime.IpcServer?.Running);
+		Assert.Equal(RuntimePipeListenerState.Running, runtime.IpcServer?.Listener.State);
+
+		await AssertValidPingAsync(endpoint);
+
+		stop.Cancel();
+		Assert.Equal(RuntimeHostExitCode.Success, await run);
+	}
+
+	[Fact]
+	public async Task Recoverable_accept_IO_failures_recreate_listener_and_preserve_availability()
+	{
+		var endpoint = Endpoint();
+		var attempts = 0;
+		await using var server = new RuntimeHostIpcServer(
+			endpoint,
+			() => null,
+			null,
+			null,
+			() =>
+			{
+				if (Interlocked.Increment(ref attempts) <= 2)
+					throw new IOException("Synthetic recoverable accept failure.");
+				return CreateServerPipe(endpoint);
+			});
+
+		await server.StartAsync();
+		await using var connection = await ConnectRuntimeAsync(endpoint);
+
+		Assert.True(attempts >= 3);
+		Assert.True(server.Running);
+		Assert.Equal(RuntimePipeListenerState.Running, server.Listener.State);
+		Assert.Null(server.Listener.FailureDetail);
+	}
+
 	[Fact]
 	public async Task Duplicate_RequestId_replays_same_response_and_conflicting_reuse_fails_closed()
 	{
@@ -65,6 +121,7 @@ public sealed class ProductionIpcProtocolFailureTests
 		var buffer = new byte[1];
 		var read = await pipe.ReadAsync(buffer, deadline.Token);
 		Assert.Equal(0, read);
+		await AssertValidPingAsync(endpoint);
 
 		stop.Cancel();
 		Assert.Equal(RuntimeHostExitCode.Success, await run);
@@ -108,10 +165,32 @@ public sealed class ProductionIpcProtocolFailureTests
 		var buffer = new byte[1];
 		var read = await pipe.ReadAsync(buffer, deadline.Token);
 		Assert.Equal(0, read);
+		await AssertValidPingAsync(endpoint);
 
 		stop.Cancel();
 		Assert.Equal(RuntimeHostExitCode.Success, await run);
 	}
+
+	private static async Task AssertValidPingAsync(string endpoint)
+	{
+		await using var pipe = await ConnectRuntimeAsync(endpoint);
+		await WriteEnvelopeAsync(
+			pipe,
+			"runtime.ping",
+			Identity.New().ToString(),
+			Identity.New().ToString(),
+			new { });
+		using var response = await ReadEnvelopeAsync(pipe);
+		Assert.Equal("runtime.ping.response", response.RootElement.GetProperty("messageType").GetString());
+	}
+
+	private static NamedPipeServerStream CreateServerPipe(string endpoint) =>
+		new(
+			endpoint,
+			PipeDirection.InOut,
+			NamedPipeServerStream.MaxAllowedServerInstances,
+			PipeTransmissionMode.Byte,
+			PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
 
 	private static async Task<NamedPipeClientStream> ConnectRuntimeAsync(string endpoint)
 	{

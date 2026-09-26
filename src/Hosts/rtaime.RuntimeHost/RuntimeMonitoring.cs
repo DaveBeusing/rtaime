@@ -328,55 +328,42 @@ public sealed class RuntimeHostMonitoringServer : IAsyncDisposable
 {
 	private readonly string _endpoint;
 	private readonly RuntimeMonitoringHub _hub;
-	private readonly CancellationTokenSource _stop = new();
-	private Task? _acceptLoop;
+	private readonly RuntimePipeListener _listener;
 
 	public RuntimeHostMonitoringServer(string endpoint, RuntimeMonitoringHub hub)
+		: this(endpoint, hub, null)
+	{
+	}
+
+	internal RuntimeHostMonitoringServer(
+		string endpoint,
+		RuntimeMonitoringHub hub,
+		Func<NamedPipeServerStream>? pipeFactory)
 	{
 		if (string.IsNullOrWhiteSpace(endpoint)) throw new ArgumentException("Monitoring endpoint is required.", nameof(endpoint));
 		_endpoint = endpoint.Trim();
 		_hub = hub ?? throw new ArgumentNullException(nameof(hub));
+		_listener = new RuntimePipeListener(
+			_endpoint,
+			"monitoring-output",
+			pipeFactory ?? (() => OperatorPipeServerFactory.Create(_endpoint, PipeDirection.Out)),
+			StreamAsync);
 	}
 
 	public string Endpoint => _endpoint;
-	public bool Running => _acceptLoop is { IsCompleted: false };
-
-	public Task StartAsync(CancellationToken cancellationToken = default)
+	public bool Running => _listener.Running;
+	public RuntimePipeListenerSnapshot Listener => _listener.Snapshot;
+	internal Task ListenerCompletion => _listener.Completion;
+	internal event Action<RuntimePipeListenerSnapshot, Exception>? ListenerFaulted
 	{
-		if (_acceptLoop is not null) throw new InvalidOperationException("Monitoring server has already been started.");
-		var linked = CancellationTokenSource.CreateLinkedTokenSource(_stop.Token, cancellationToken);
-		_acceptLoop = AcceptLoopAsync(linked.Token);
-		return Task.CompletedTask;
+		add => _listener.TerminalFaulted += value;
+		remove => _listener.TerminalFaulted -= value;
 	}
 
-	public async ValueTask DisposeAsync()
-	{
-		_stop.Cancel();
-		if (_acceptLoop is not null)
-		{
-			try { await _acceptLoop.ConfigureAwait(false); }
-			catch (OperationCanceledException) { }
-		}
-		_stop.Dispose();
-	}
+	public Task StartAsync(CancellationToken cancellationToken = default) =>
+		_listener.StartAsync(cancellationToken);
 
-	private async Task AcceptLoopAsync(CancellationToken cancellationToken)
-	{
-		while (!cancellationToken.IsCancellationRequested)
-		{
-			var pipe = OperatorPipeServerFactory.Create(_endpoint, PipeDirection.Out);
-			try
-			{
-				await pipe.WaitForConnectionAsync(cancellationToken).ConfigureAwait(false);
-				_ = StreamAsync(pipe, cancellationToken);
-			}
-			catch
-			{
-				pipe.Dispose();
-				if (!cancellationToken.IsCancellationRequested) throw;
-			}
-		}
-	}
+	public ValueTask DisposeAsync() => _listener.DisposeAsync();
 
 	private async Task StreamAsync(NamedPipeServerStream pipe, CancellationToken cancellationToken)
 	{
