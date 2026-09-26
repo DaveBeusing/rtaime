@@ -86,7 +86,7 @@ public sealed class RundownCoordinatorIntegrationTests
 		Assert.Equal(secondItem.ItemId, nextPrepared.Execution.PreparedItemId);
 		Assert.Null(nextPrepared.Execution.CurrentItemId);
 		Assert.True(nextPrepared.Execution.Revision > firstRevision);
-		Assert.Equal(0, fixture.ExecutedActions.Count);
+		Assert.Empty(fixture.ExecutedActions);
 	}
 
 	private sealed class Fixture : IAsyncDisposable
