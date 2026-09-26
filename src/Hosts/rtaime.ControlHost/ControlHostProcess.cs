@@ -577,7 +577,7 @@ public sealed class ControlHostProcess
 					var hostChanged = !string.Equals(_boundRuntimeHostInstanceId, runtimeHostInstanceId, StringComparison.Ordinal);
 					var aligned = RuntimeMatchesAuthority(runtimeSnapshot, control.State);
 					if (hostChanged || !aligned)
-						await ReconcileRuntimeAsync(control, transport, runtimeHostInstanceId, runtimeSnapshot, operationToken).ConfigureAwait(false);
+						await ReconcileRuntimeAsync(control, transport, runtimeHostInstanceId, runtimeSnapshot, cancellationToken).ConfigureAwait(false);
 					else
 						SetOperationalState(ControlHostProcessState.Ready, ControlHostHealthState.Healthy, $"ControlHost is connected to RuntimeHost instance '{runtimeHostInstanceId}'.");
 				}
