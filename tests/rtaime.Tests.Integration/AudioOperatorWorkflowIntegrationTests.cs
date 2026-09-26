@@ -97,7 +97,6 @@ public sealed class AudioOperatorWorkflowIntegrationTests
 			fixture);
 
 		fixture.Runtime.SetExternalAudioInput(fixture.SourceA, StereoSamples(960, 0.25f, -0.50f));
-		fixture.Runtime.SetExternalAudioInput(fixture.SourceB, StereoSamples(960, 0.90f, 0.90f));
 		var breakaway = fixture.Runtime.ProcessNextBoundary();
 
 		Assert.Equal(fixture.SourceB, breakaway.CommittedProgramSourceId);
