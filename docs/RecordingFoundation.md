@@ -47,6 +47,8 @@ No 29th managed project is introduced. The contract intentionally remains in the
 
 A `RecordingOutputDescriptor` explicitly ties a stable recording output identity to one Program `MediaSinkId`.
 
+That target is stable for the lifetime of an active recording session. RuntimeHost therefore rejects a committed Program-sink rebind while Recording is `Recording` or `Finalizing`; the active execution and actual Program output remain on the existing sink until recording stops. Source/routing changes that continue to target the same Program sink remain valid and recording follows the committed Program frame normally. This avoids silently retargeting an already-open recording output or allowing the recorder to drift away from its configured Program sink.
+
 ## Lifecycle
 
 Normal lifecycle:
