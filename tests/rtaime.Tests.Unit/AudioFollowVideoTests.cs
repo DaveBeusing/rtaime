@@ -91,6 +91,29 @@ public sealed class AudioFollowVideoTests
     }
 
     [Fact]
+    public void Breakaway_source_loss_reports_underrun_and_recovers_without_changing_route()
+    {
+        var engine = CreateEngine(FrameRate.Fps50);
+        var routing = engine.SetRouting(AudioRoutingMode.Breakaway, SourceA);
+
+        var lost = engine.ProcessBoundary(SourceB, 0, null, 0);
+
+        Assert.Equal(AudioFollowVideoStatus.Underrun, lost.Status);
+        Assert.Equal(SourceA, lost.AudioSourceId);
+        Assert.Equal(SourceB, lost.VideoSourceId);
+        Assert.Equal(AudioRoutingMode.Breakaway, engine.RoutingState.Mode);
+        Assert.Equal(SourceA, engine.RoutingState.BreakawaySourceId);
+        Assert.Equal(routing.Revision, engine.RoutingState.Revision);
+
+        var recovered = engine.ProcessBoundary(SourceB, 1, Buffer(StreamA, FrameRate.Fps50, 1), 0.4);
+
+        Assert.True(recovered.Emitted);
+        Assert.Equal(SourceA, recovered.AudioSourceId);
+        Assert.Equal(StreamA, recovered.StreamId);
+        Assert.Equal(routing.Revision, recovered.RoutingRevision);
+    }
+
+    [Fact]
     public void Breakaway_rejects_unknown_source_without_changing_confirmed_routing()
     {
         var engine = CreateEngine(FrameRate.Fps50);
