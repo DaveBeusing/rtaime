@@ -366,6 +366,9 @@ public sealed class ControlHostRecoveryIntegrationTests
 		private readonly Revision _executionRevision;
 		private readonly Revision _authorityRevision;
 		private bool _connected;
+		private int _audioRoutingMode = DurableAudioRoutingState.FollowVideoMode;
+		private ulong _audioRoutingRevision;
+		private MediaSourceId? _breakawayAudioSourceId;
 
 		public RuntimeSnapshotTransport(Identity authorityStateId, Revision executionRevision, Revision authorityRevision)
 		{
@@ -406,17 +409,47 @@ public sealed class ControlHostRecoveryIntegrationTests
 				new Dictionary<MediaSourceId, string>(),
 				new RuntimeGraphicsOverlaySnapshot(false, null, 0, 0, false, 0.72, 0.06, 1.0),
 				new Dictionary<MediaSourceId, RuntimeAudioInputSnapshot>(),
-				new RuntimeAudioProgramSnapshot(
-					new MediaSourceId(Identity.Parse("7f000000-0000-0000-0000-00000000000a")),
-					new AudioStreamId(Identity.Parse("7f000000-0000-0000-0000-00000000000b")),
-					1,
-					false,
-					0,
-					0,
-					0,
-					false,
-					"SILENCE"),
+				CreateAudioProgramSnapshot(),
 				1));
+
+		public ValueTask<RuntimeAudioProgramSnapshot> SetAudioRoutingAsync(
+			int mode,
+			MediaSourceId? breakawaySourceId,
+			CancellationToken cancellationToken = default)
+		{
+			if (mode is not (DurableAudioRoutingState.FollowVideoMode or DurableAudioRoutingState.BreakawayMode))
+				throw new ArgumentOutOfRangeException(nameof(mode));
+			if (mode == DurableAudioRoutingState.BreakawayMode && breakawaySourceId is null)
+				throw new ArgumentException("Breakaway audio routing requires a source.", nameof(breakawaySourceId));
+			if (mode == DurableAudioRoutingState.FollowVideoMode && breakawaySourceId is not null)
+				throw new ArgumentException("FOLLOW_VIDEO audio routing must not declare a breakaway source.", nameof(breakawaySourceId));
+
+			if (_audioRoutingMode != mode || _breakawayAudioSourceId != breakawaySourceId)
+			{
+				_audioRoutingMode = mode;
+				_breakawayAudioSourceId = breakawaySourceId;
+				_audioRoutingRevision = checked(_audioRoutingRevision + 1);
+			}
+			return ValueTask.FromResult(CreateAudioProgramSnapshot());
+		}
+
+		private RuntimeAudioProgramSnapshot CreateAudioProgramSnapshot()
+		{
+			var followedSource = new MediaSourceId(Identity.Parse("7f000000-0000-0000-0000-00000000000a"));
+			return new RuntimeAudioProgramSnapshot(
+				followedSource,
+				new AudioStreamId(Identity.Parse("7f000000-0000-0000-0000-00000000000b")),
+				1,
+				false,
+				0,
+				0,
+				0,
+				false,
+				"SILENCE",
+				_audioRoutingMode,
+				_audioRoutingRevision,
+				_audioRoutingMode == DurableAudioRoutingState.BreakawayMode ? _breakawayAudioSourceId : followedSource);
+		}
 
 		public ValueTask<RuntimeRemoteApplyResult> ApplyExecutionAsync(
 			PreparedExecutionContract preparedExecution,
