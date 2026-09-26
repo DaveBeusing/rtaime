@@ -199,6 +199,24 @@ public sealed class TransactionalRuntimeTests
         Assert.Single(runtime.PreparedExecutionIds);
     }
 
+
+    [Fact]
+    public void Observation_history_remains_bounded_after_repeated_rejected_prepares()
+    {
+        var runtime = CreateRuntime(new FakeReservationManager());
+        var prepared = CreatePreparedExecution(1, 1);
+        var prepare = runtime.Prepare(prepared);
+        runtime.Abort(prepared.PreparedExecutionId, AssertReservation(prepare));
+
+        for (var index = 0; index < TransactionalRuntime.RetainedObservationCapacity + 64; index++)
+            Assert.Equal(RuntimePrepareStatus.Rejected, runtime.Prepare(prepared).Status);
+
+        var observations = runtime.Observations;
+        Assert.Equal(TransactionalRuntime.RetainedObservationCapacity, observations.Count);
+        Assert.True(runtime.OverwrittenObservationCount > 0);
+        Assert.Equal("runtime.prepare.rejected", observations[^1].Code);
+    }
+
     private static TransactionalRuntime CreateRuntime(FakeReservationManager reservations) =>
         new(reservations, new FakeClock());
 
