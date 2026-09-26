@@ -175,8 +175,13 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 			DisposeExitedOwnedProcess();
 			if (OwnedProcessIsReadyAndRunning())
 			{
+				var recoveredWithoutRestart = OwnedProcessHadReadinessLoss();
 				ClearOwnedReadinessLoss();
-				Update(LocalProcessSupervisionState.Healthy, "Owned process is running with explicit managed readiness.");
+				Update(
+					LocalProcessSupervisionState.Healthy,
+					recoveredWithoutRestart
+						? "Owned process restored explicit managed readiness within the recovery grace period; restart was not required."
+						: "Owned process is running with explicit managed readiness.");
 				await Task.Delay(_options.ProbeInterval, cancellationToken).ConfigureAwait(false);
 				continue;
 			}
