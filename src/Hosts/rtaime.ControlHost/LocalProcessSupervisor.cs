@@ -471,7 +471,7 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 
 	private async Task RecoverUnreadyOwnedProcessAsync()
 	{
-		Process? process;
+		Process process;
 		string? stopFile;
 		string? readinessFile;
 		lock (_gate)
