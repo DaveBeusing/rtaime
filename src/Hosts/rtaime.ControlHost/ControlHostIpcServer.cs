@@ -1123,6 +1123,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		}
 
 		var confirmed = await _runtimeTransport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
+		RememberRuntimeObservation(confirmed);
 		if (confirmed.AuthorityStateId != authority.ProductionId.Value ||
 			confirmed.AuthorityRevision != authority.Revision)
 		{
@@ -1848,12 +1849,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		try
 		{
 			var snapshot = await _runtimeTransport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
-			var observedAtUtc = DateTimeOffset.UtcNow;
-			lock (_runtimeObservationGate)
-			{
-				_lastRuntimeSnapshot = snapshot;
-				_lastRuntimeSnapshotAtUtc = observedAtUtc;
-			}
+			var observedAtUtc = RememberRuntimeObservation(snapshot);
 			return new RuntimeObservation(snapshot, true, observedAtUtc);
 		}
 		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -1874,6 +1870,18 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			}
 			return new RuntimeObservation(null, false, DateTimeOffset.UtcNow);
 		}
+	}
+
+	private DateTimeOffset RememberRuntimeObservation(RuntimeRemoteSnapshot snapshot)
+	{
+		ArgumentNullException.ThrowIfNull(snapshot);
+		var observedAtUtc = DateTimeOffset.UtcNow;
+		lock (_runtimeObservationGate)
+		{
+			_lastRuntimeSnapshot = snapshot;
+			_lastRuntimeSnapshotAtUtc = observedAtUtc;
+		}
+		return observedAtUtc;
 	}
 
 	private static WireSource ToWireSource(
