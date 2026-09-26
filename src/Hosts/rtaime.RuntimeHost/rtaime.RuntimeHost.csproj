@@ -17,4 +17,7 @@
   <ItemGroup>
     <PackageReference Include="System.Drawing.Common" />
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="rtaime.Tests.Integration" />
+  </ItemGroup>
 </Project>
