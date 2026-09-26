@@ -15,7 +15,8 @@ public enum LocalProcessSupervisionState
 	RestartBackoff = 5,
 	Failed = 6,
 	Stopped = 7,
-	Recovering = 8
+	ReadinessGrace = 8,
+	Recovering = 9
 }
 
 public sealed record LocalProcessSupervisionSnapshot(
@@ -199,7 +200,7 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 					if (OwnedReadinessLossDuration() < RecoveryGracePeriod)
 					{
 						Update(
-							LocalProcessSupervisionState.Recovering,
+							LocalProcessSupervisionState.ReadinessGrace,
 							"Owned process lost explicit managed readiness after previously becoming healthy; waiting for the bounded recovery grace period.");
 					}
 					else
