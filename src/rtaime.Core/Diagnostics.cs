@@ -26,6 +26,69 @@ public sealed record DiagnosticEvent(
 	Failure? Failure,
 	IReadOnlyDictionary<string, string> Dimensions);
 
+public sealed class BoundedDiagnosticHistory<T>
+{
+	private readonly object _gate = new();
+	private readonly T[] _items;
+	private int _nextIndex;
+	private int _count;
+	private ulong _overwritten;
+
+	public BoundedDiagnosticHistory(int capacity)
+	{
+		if (capacity <= 0) throw new ArgumentOutOfRangeException(nameof(capacity));
+		_items = new T[capacity];
+	}
+
+	public int Capacity => _items.Length;
+	public int Count { get { lock (_gate) return _count; } }
+	public ulong OverwrittenCount { get { lock (_gate) return _overwritten; } }
+
+	public void Add(T item)
+	{
+		lock (_gate)
+		{
+			if (_count == _items.Length)
+			{
+				if (_overwritten < ulong.MaxValue)
+					_overwritten++;
+			}
+			else
+			{
+				_count++;
+			}
+
+			_items[_nextIndex] = item;
+			_nextIndex = (_nextIndex + 1) % _items.Length;
+		}
+	}
+
+	public IReadOnlyList<T> Snapshot()
+	{
+		lock (_gate)
+			return CreateSnapshot(_count);
+	}
+
+	public IReadOnlyList<T> SnapshotNewest(int maximumCount)
+	{
+		if (maximumCount < 0) throw new ArgumentOutOfRangeException(nameof(maximumCount));
+		lock (_gate)
+			return CreateSnapshot(Math.Min(maximumCount, _count));
+	}
+
+	private IReadOnlyList<T> CreateSnapshot(int retainedCount)
+	{
+		if (retainedCount == 0)
+			return Array.Empty<T>();
+
+		var result = new T[retainedCount];
+		var start = (_nextIndex - retainedCount + _items.Length) % _items.Length;
+		for (var offset = 0; offset < retainedCount; offset++)
+			result[offset] = _items[(start + offset) % _items.Length];
+		return Array.AsReadOnly(result);
+	}
+}
+
 public sealed class BoundedDiagnosticBuffer
 {
 	private readonly object _gate = new();
