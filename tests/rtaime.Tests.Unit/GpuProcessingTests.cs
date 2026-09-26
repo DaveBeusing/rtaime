@@ -323,6 +323,70 @@ public sealed class GpuProcessingTests
 
 
     [Fact]
+    public void Readback_lease_reuses_a_bounded_buffer_after_release()
+    {
+        using var provider = new GpuProcessingProvider(new ManagedReferenceGpuBackend(), readbackBufferCapacity: 1);
+        provider.Start();
+        using var frame = Upload(provider, SourceA, Solid(10, 20, 30, 255), 0);
+
+        for (var index = 0; index < 16; index++)
+        {
+            using var lease = provider.RentReadback(frame);
+            Assert.Equal(10, lease.Memory.Span[0]);
+            Assert.Equal(20, lease.Memory.Span[1]);
+            Assert.Equal(30, lease.Memory.Span[2]);
+            Assert.Equal(255, lease.Memory.Span[3]);
+        }
+
+        var statistics = provider.ReadbackPoolStatistics;
+        Assert.Equal(1, statistics.Capacity);
+        Assert.Equal(1, statistics.AllocatedBuffers);
+        Assert.Equal(1, statistics.AvailableBuffers);
+        Assert.Equal(0, statistics.ActiveBuffers);
+        Assert.Equal(16UL, statistics.TotalRents);
+        Assert.Equal(0UL, statistics.ExhaustedRents);
+    }
+
+    [Fact]
+    public void Retained_readback_memory_is_not_reused_or_mutated_by_a_later_frame()
+    {
+        using var provider = new GpuProcessingProvider(new ManagedReferenceGpuBackend(), readbackBufferCapacity: 2);
+        provider.Start();
+        using var firstFrame = Upload(provider, SourceA, Solid(10, 20, 30, 255), 0);
+        using var first = provider.RentReadback(firstFrame);
+        using var retained = first.Retain();
+
+        using var secondFrame = Upload(provider, SourceB, Solid(90, 80, 70, 255), 1);
+        using var second = provider.RentReadback(secondFrame);
+
+        Assert.Equal(new byte[] { 10, 20, 30, 255 }, retained.Memory.Span[..4].ToArray());
+        Assert.Equal(new byte[] { 90, 80, 70, 255 }, second.Memory.Span[..4].ToArray());
+        Assert.Equal(new byte[] { 10, 20, 30, 255 }, retained.Memory.Span[..4].ToArray());
+        Assert.Equal(2, provider.ReadbackPoolStatistics.AllocatedBuffers);
+        Assert.Equal(2, provider.ReadbackPoolStatistics.ActiveBuffers);
+    }
+
+    [Fact]
+    public void Readback_failure_returns_the_rented_buffer_to_the_pool()
+    {
+        using var backend = new FailOnceReadbackBackend(new ManagedReferenceGpuBackend());
+        using var provider = new GpuProcessingProvider(backend, readbackBufferCapacity: 1);
+        provider.Start();
+        using var frame = Upload(provider, SourceA, Solid(1, 2, 3, 255), 0);
+
+        Assert.Throws<InvalidOperationException>(() => provider.RentReadback(frame));
+
+        var afterFailure = provider.ReadbackPoolStatistics;
+        Assert.Equal(0, afterFailure.ActiveBuffers);
+        Assert.Equal(1, afterFailure.AvailableBuffers);
+        Assert.Equal(1, afterFailure.AllocatedBuffers);
+
+        using var recovered = provider.RentReadback(frame);
+        Assert.Equal(1, recovered.Memory.Span[0]);
+        Assert.Equal(1, provider.ReadbackPoolStatistics.ActiveBuffers);
+    }
+
+    [Fact]
     public void Observation_history_remains_bounded_across_repeated_provider_cycles()
     {
         using var provider = new GpuProcessingProvider(new ManagedReferenceGpuBackend());
@@ -363,6 +427,41 @@ public sealed class GpuProcessingTests
             Assert.Equal(blue, pixels[offset + 2]);
             Assert.Equal(alpha, pixels[offset + 3]);
         }
+    }
+
+    private sealed class FailOnceReadbackBackend : IGpuProcessingBackend
+    {
+        private readonly IGpuProcessingBackend _inner;
+        private bool _failNext = true;
+
+        public FailOnceReadbackBackend(IGpuProcessingBackend inner)
+        {
+            _inner = inner;
+        }
+
+        public GpuBackendInfo Info => _inner.Info;
+        public SurfaceStorageDomain StorageDomain => _inner.StorageDomain;
+        public void Start() => _inner.Start();
+        public void Stop() => _inner.Stop();
+        public void Allocate(SurfaceId surfaceId, VideoFormat format, ReadOnlySpan<byte> rgbaPixels) =>
+            _inner.Allocate(surfaceId, format, rgbaPixels);
+        public void Composite(SurfaceId outputSurfaceId, VideoFormat format, GpuCompositeOperation operation) =>
+            _inner.Composite(outputSurfaceId, format, operation);
+        public byte[] Readback(SurfaceId surfaceId, VideoFormat format) => _inner.Readback(surfaceId, format);
+
+        public void ReadbackInto(SurfaceId surfaceId, VideoFormat format, Span<byte> destination)
+        {
+            if (_failNext)
+            {
+                _failNext = false;
+                throw new InvalidOperationException("Injected GPU readback failure.");
+            }
+
+            _inner.ReadbackInto(surfaceId, format, destination);
+        }
+
+        public void Release(SurfaceId surfaceId) => _inner.Release(surfaceId);
+        public void Dispose() => _inner.Dispose();
     }
 
     private sealed class FailOnceCompositeBackend : IGpuProcessingBackend
