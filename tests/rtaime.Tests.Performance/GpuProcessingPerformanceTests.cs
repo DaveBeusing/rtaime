@@ -63,6 +63,44 @@ public sealed class GpuProcessingPerformanceTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public void Reusable_1080p_readback_has_no_full_frame_per_iteration_managed_allocation(bool use5994)
+    {
+        var format = use5994 ? VideoFormat.Hd1080p59_94Rgba8 : VideoFormat.Hd1080p50Rgba8;
+        using var provider = new GpuProcessingProvider(new ManagedReferenceGpuBackend(), readbackBufferCapacity: 2);
+        provider.Start();
+
+        var source = new StaticRgbaSource(SourceA, RgbaFrameBuffer.Solid(format, 16, 32, 64));
+        var timebase = new Timebase(format.FrameRate.Denominator, format.FrameRate.Numerator);
+        using var frame = source.Materialize(provider, new FrameTiming(0, 0, timebase));
+
+        for (var index = 0; index < 8; index++)
+        {
+            using var warmup = provider.RentReadback(frame);
+            Assert.Equal(RgbaFrameBuffer.RequiredByteLength(format), warmup.Length);
+        }
+
+        const int iterations = 64;
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        for (var index = 0; index < iterations; index++)
+        {
+            using var readback = provider.RentReadback(frame);
+            _ = readback.Memory.Span[0];
+        }
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        var fullFrameBytes = RgbaFrameBuffer.RequiredByteLength(format);
+
+        Assert.True(
+            allocated < 1_048_576,
+            $"Reusable {format.Width}x{format.Height} readback allocated {allocated:N0} bytes across {iterations} iterations; one full RGBA frame is {fullFrameBytes:N0} bytes.");
+        Assert.True(allocated < fullFrameBytes);
+        Assert.Equal(1, provider.ReadbackPoolStatistics.AllocatedBuffers);
+        Assert.Equal(0, provider.ReadbackPoolStatistics.ActiveBuffers);
+        Assert.Equal(1, provider.ReadbackPoolStatistics.AvailableBuffers);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public void Managed_reference_1080p_multi_layer_compositor_reports_scaling_and_preserves_surface_lifetime(bool use5994)
     {
         var format = use5994 ? VideoFormat.Hd1080p59_94Rgba8 : VideoFormat.Hd1080p50Rgba8;
