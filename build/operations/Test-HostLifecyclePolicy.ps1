@@ -22,8 +22,9 @@ $aiProgramPath = Join-Path $repositoryRoot 'src/Hosts/rtaime.AIHost/Program.cs'
 $supervisorPath = Join-Path $repositoryRoot 'src/Hosts/rtaime.ControlHost/LocalProcessSupervisor.cs'
 $bundlePolicyPath = Join-Path $repositoryRoot 'build/release/offline-bundle-policy.json'
 $workflowPath = Join-Path $repositoryRoot '.github/workflows/required-gates.yml'
+$recoveryTestsPath = Join-Path $repositoryRoot 'tests/rtaime.Tests.Integration/ProcessSupervisionRecoveryTests.cs'
 
-foreach ($path in @($policyPath, $controllerPath, $qualificationPath, $controlProgramPath, $runtimeProgramPath, $aiProgramPath, $supervisorPath, $bundlePolicyPath, $workflowPath)) {
+foreach ($path in @($policyPath, $controllerPath, $qualificationPath, $controlProgramPath, $runtimeProgramPath, $aiProgramPath, $supervisorPath, $bundlePolicyPath, $workflowPath, $recoveryTestsPath)) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required managed-host lifecycle file is missing: '$path'."
 }
 
@@ -59,6 +60,7 @@ $controlProgram = Get-Content -LiteralPath $controlProgramPath -Raw
 foreach ($token in @('RTAIME_HOST_READINESS_FILE', 'RTAIME_HOST_STOP_FILE', 'runtimeSupervision', 'aiSupervision', 'ControlHostProcessState.Ready')) {
 	Assert-Condition ($controlProgram -match [Regex]::Escape($token)) "ControlHost managed lifecycle bridge is missing '$token'."
 }
+Assert-Condition ($controlProgram -match 'runtime\.State\s*==\s*LocalProcessSupervisionState\.Healthy' -and $controlProgram -match 'ai\.State\s*==\s*LocalProcessSupervisionState\.Healthy') "ControlHost readiness must remain fail-closed while either required child supervisor is non-Healthy."
 foreach ($hostProgramPath in @($runtimeProgramPath, $aiProgramPath)) {
 	$hostProgram = Get-Content -LiteralPath $hostProgramPath -Raw
 	Assert-Condition ($hostProgram -match 'RTAIME_HOST_STOP_FILE') "Managed child host does not observe the graceful stop sentinel: '$hostProgramPath'."
@@ -68,6 +70,21 @@ foreach ($hostProgramPath in @($runtimeProgramPath, $aiProgramPath)) {
 $supervisor = Get-Content -LiteralPath $supervisorPath -Raw
 foreach ($token in @('GracefulStopTimeout', 'RTAIME_HOST_STOP_FILE', 'WaitForExitAsync', 'Kill(entireProcessTree: true)')) {
 	Assert-Condition ($supervisor -match [Regex]::Escape($token)) "LocalProcessSupervisor is missing managed shutdown behavior '$token'."
+}
+foreach ($token in @('ReadinessGrace', 'Recovering', '_ownedReadinessLostSince', 'RecoveryGracePeriod', 'RecoverUnreadyOwnedProcessAsync')) {
+	Assert-Condition ($supervisor -match [Regex]::Escape($token)) "LocalProcessSupervisor is missing owned post-healthy readiness recovery behavior '$token'."
+}
+Assert-Condition ($supervisor -match '_options\.RestartBackoff\s*>=\s*_options\.ProbeInterval') "Owned readiness recovery grace must reuse bounded existing supervision timing rather than add an independent unbounded timer."
+Assert-Condition ($supervisor -match '_startAttempts\s*>=\s*_options\.MaxStartAttempts') "Owned readiness recovery must remain constrained by the lifetime start-attempt budget."
+
+$recoveryTests = Get-Content -LiteralPath $recoveryTestsPath -Raw
+foreach ($test in @(
+	'Owned_child_persistent_readiness_loss_triggers_graceful_bounded_restart',
+	'Owned_child_transient_readiness_loss_recovers_without_restart',
+	'Adopted_external_readiness_loss_is_non_destructive',
+	'Repeated_post_healthy_readiness_loss_stops_at_existing_start_budget'
+)) {
+	Assert-Condition ($recoveryTests -match [Regex]::Escape($test)) "Process supervision recovery coverage is missing '$test'."
 }
 
 $bundlePolicy = Get-Content -LiteralPath $bundlePolicyPath -Raw | ConvertFrom-Json
@@ -83,6 +100,8 @@ Write-Host 'Managed host lifecycle policy PASS'
 Write-Host 'Top-level host: ControlHost'
 Write-Host 'Managed children: RuntimeHost, AIHost'
 Write-Host 'Readiness: lifecycle + supervision + Named Pipes'
-Write-Host 'Restart: explicit operator action'
+Write-Host 'Owned child readiness loss: bounded grace + graceful recovery + bounded restart'
+Write-Host 'Adopted child readiness loss: non-destructive observation only'
+Write-Host 'Restart: explicit top-level operator action; owned child recovery remains supervisor-bounded'
 Write-Host 'Forced shutdown: FAIL'
 Write-Host 'Automatic Windows service registration: disabled'

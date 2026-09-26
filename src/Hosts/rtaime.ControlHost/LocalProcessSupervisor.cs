@@ -14,7 +14,9 @@ public enum LocalProcessSupervisionState
 	Healthy = 4,
 	RestartBackoff = 5,
 	Failed = 6,
-	Stopped = 7
+	Stopped = 7,
+	ReadinessGrace = 8,
+	Recovering = 9
 }
 
 public sealed record LocalProcessSupervisionSnapshot(
@@ -58,9 +60,10 @@ public sealed record LocalProcessSupervisionOptions(
 /// Local process supervision uses process-shared endpoint lifetime and readiness leases to adopt current rtaime hosts without
 /// destructively probing their Named Pipe listener. A lifetime lease suppresses competing child starts while a distinct readiness
 /// lease proves that the external host lifecycle is healthy and its IPC server is running. Processes launched by this supervisor
-/// still require their unique managed readiness file before becoming Healthy. Bare endpoint probing remains only as a bounded
-/// compatibility fallback for legacy endpoints that publish neither lease. Only processes launched by this instance are terminated
-/// during orderly disposal. Start attempts are bounded for the lifetime of this supervisor instance.
+/// still require their unique managed readiness file before becoming Healthy. A previously healthy owned child that remains alive
+/// without that readiness receives a bounded grace period, then the existing graceful-stop and bounded restart path. Bare endpoint
+/// probing remains only as a compatibility fallback for legacy endpoints that publish neither lease. Only processes launched by this
+/// instance are terminated. Start attempts are bounded for the lifetime of this supervisor instance.
 /// </summary>
 public sealed class LocalProcessSupervisor : IAsyncDisposable
 {
@@ -74,6 +77,7 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 	private string? _ownedStopFilePath;
 	private string? _ownedReadinessFilePath;
 	private bool _ownedProcessReady;
+	private TimeSpan? _ownedReadinessLostSince;
 	private TimeSpan? _initialEndpointAbsentSince;
 	private int _startAttempts;
 	private LocalProcessSupervisionSnapshot _snapshot;
@@ -135,13 +139,14 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 			_ownedStopFilePath = null;
 			_ownedReadinessFilePath = null;
 			_ownedProcessReady = false;
+			_ownedReadinessLostSince = null;
 		}
 		if (owned is not null)
 		{
 			try
 			{
 				if (_options.StopOwnedProcessOnDispose && !owned.HasExited)
-					await StopOwnedProcessAsync(owned, stopFile).ConfigureAwait(false);
+					_ = await StopOwnedProcessAsync(owned, stopFile).ConfigureAwait(false);
 			}
 			catch (InvalidOperationException) { }
 			finally
@@ -170,7 +175,13 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 			DisposeExitedOwnedProcess();
 			if (OwnedProcessIsReadyAndRunning())
 			{
-				Update(LocalProcessSupervisionState.Healthy, "Owned process is running with explicit managed readiness.");
+				var recoveredWithoutRestart = OwnedProcessHadReadinessLoss();
+				ClearOwnedReadinessLoss();
+				Update(
+					LocalProcessSupervisionState.Healthy,
+					recoveredWithoutRestart
+						? "Owned process restored explicit managed readiness within the recovery grace period; restart was not required."
+						: "Owned process is running with explicit managed readiness.");
 				await Task.Delay(_options.ProbeInterval, cancellationToken).ConfigureAwait(false);
 				continue;
 			}
@@ -179,8 +190,28 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 			{
 				if (OwnedProcessReadinessObserved())
 				{
+					var recoveredWithoutRestart = OwnedProcessHadReadinessLoss();
 					MarkOwnedProcessReadyIfRunning();
-					Update(LocalProcessSupervisionState.Healthy, "Owned process published explicit managed readiness.");
+					ClearOwnedReadinessLoss();
+					Update(
+						LocalProcessSupervisionState.Healthy,
+						recoveredWithoutRestart
+							? "Owned process restored explicit managed readiness within the recovery grace period; restart was not required."
+							: "Owned process published explicit managed readiness.");
+				}
+				else if (OwnedProcessWasPreviouslyReady())
+				{
+					MarkOwnedReadinessLost();
+					if (OwnedReadinessLossDuration() < RecoveryGracePeriod)
+					{
+						Update(
+							LocalProcessSupervisionState.ReadinessGrace,
+							"Owned process lost explicit managed readiness after previously becoming healthy; waiting for the bounded recovery grace period.");
+					}
+					else
+					{
+						await RecoverUnreadyOwnedProcessAsync().ConfigureAwait(false);
+					}
 				}
 				else
 				{
@@ -336,21 +367,35 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 			_ownedStopFilePath = stopFile;
 			_ownedReadinessFilePath = readinessFile;
 			_ownedProcessReady = false;
+			_ownedReadinessLostSince = null;
 		}
 	}
 
-	private async Task StopOwnedProcessAsync(Process process, string? stopFile)
+	private async Task<bool> StopOwnedProcessAsync(Process process, string? stopFile)
 	{
+		var gracefulStopRequested = false;
 		if (!string.IsNullOrWhiteSpace(stopFile))
 		{
-			var directory = Path.GetDirectoryName(stopFile);
-			if (!string.IsNullOrWhiteSpace(directory)) Directory.CreateDirectory(directory);
-			File.WriteAllText(stopFile, $"stopRequestedAtUtc={DateTimeOffset.UtcNow:O}{Environment.NewLine}");
+			try
+			{
+				var directory = Path.GetDirectoryName(stopFile);
+				if (!string.IsNullOrWhiteSpace(directory)) Directory.CreateDirectory(directory);
+				File.WriteAllText(stopFile, $"stopRequestedAtUtc={DateTimeOffset.UtcNow:O}{Environment.NewLine}");
+				gracefulStopRequested = true;
+			}
+			catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+			{
+				// Fall through to the existing emergency process-tree termination path.
+			}
+		}
+
+		if (gracefulStopRequested)
+		{
 			using var timeout = new CancellationTokenSource(_options.GracefulStopTimeout);
 			try
 			{
 				await process.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
-				return;
+				return false;
 			}
 			catch (OperationCanceledException) when (timeout.IsCancellationRequested) { }
 		}
@@ -359,7 +404,10 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 		{
 			process.Kill(entireProcessTree: true);
 			await process.WaitForExitAsync().ConfigureAwait(false);
+			return true;
 		}
+
+		return false;
 	}
 
 	private bool OwnedProcessIsReadyAndRunning()
@@ -389,6 +437,111 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 			try { return _ownedProcess is { HasExited: false }; }
 			catch (InvalidOperationException) { return false; }
 		}
+	}
+
+	private TimeSpan RecoveryGracePeriod =>
+		_options.RestartBackoff >= _options.ProbeInterval
+			? _options.RestartBackoff
+			: _options.ProbeInterval;
+
+	private TimeSpan OwnedReadinessLossDuration()
+	{
+		lock (_gate)
+			return _ownedReadinessLostSince is { } since ? _lifetime.Elapsed - since : TimeSpan.Zero;
+	}
+
+	private bool OwnedProcessWasPreviouslyReady()
+	{
+		lock (_gate)
+			return _ownedProcessReady;
+	}
+
+	private bool OwnedProcessHadReadinessLoss()
+	{
+		lock (_gate)
+			return _ownedReadinessLostSince is not null;
+	}
+
+	private void MarkOwnedReadinessLost()
+	{
+		lock (_gate)
+			_ownedReadinessLostSince ??= _lifetime.Elapsed;
+	}
+
+	private void ClearOwnedReadinessLoss()
+	{
+		lock (_gate)
+			_ownedReadinessLostSince = null;
+	}
+
+	private async Task RecoverUnreadyOwnedProcessAsync()
+	{
+		Process process;
+		string? stopFile;
+		string? readinessFile;
+		lock (_gate)
+		{
+			if (_ownedProcess is null || !_ownedProcessReady || _ownedReadinessLostSince is null)
+				return;
+			try
+			{
+				if (_ownedProcess.HasExited)
+					return;
+			}
+			catch (InvalidOperationException)
+			{
+				return;
+			}
+			if (!string.IsNullOrWhiteSpace(_ownedReadinessFilePath) && File.Exists(_ownedReadinessFilePath))
+				return;
+
+			process = _ownedProcess;
+			stopFile = _ownedStopFilePath;
+			readinessFile = _ownedReadinessFilePath;
+		}
+
+		Update(
+			LocalProcessSupervisionState.Recovering,
+			"Owned process remained alive without explicit managed readiness beyond the recovery grace period; requesting graceful recovery stop.");
+
+		var forcedTermination = false;
+		try
+		{
+			forcedTermination = await StopOwnedProcessAsync(process, stopFile).ConfigureAwait(false);
+		}
+		finally
+		{
+			lock (_gate)
+			{
+				if (ReferenceEquals(_ownedProcess, process))
+				{
+					_ownedProcess = null;
+					_ownedStopFilePath = null;
+					_ownedReadinessFilePath = null;
+					_ownedProcessReady = false;
+					_ownedReadinessLostSince = null;
+				}
+			}
+			process.Dispose();
+			CleanupManagedFile(stopFile);
+			CleanupManagedFile(readinessFile);
+		}
+
+		if (_startAttempts >= _options.MaxStartAttempts)
+		{
+			Update(
+				LocalProcessSupervisionState.Failed,
+				forcedTermination
+					? $"Owned process readiness recovery required forced process-tree termination; start budget exhausted after {_startAttempts} attempt(s)."
+					: $"Owned process stopped gracefully after persistent readiness loss; start budget exhausted after {_startAttempts} attempt(s).");
+			return;
+		}
+
+		Update(
+			LocalProcessSupervisionState.RestartBackoff,
+			forcedTermination
+				? "Owned process readiness recovery required forced process-tree termination; waiting before the next bounded supervised start attempt."
+				: "Owned process stopped gracefully after persistent readiness loss; waiting before the next bounded supervised start attempt.");
 	}
 
 	private void MarkOwnedProcessReadyIfRunning()
@@ -428,6 +581,7 @@ public sealed class LocalProcessSupervisor : IAsyncDisposable
 			_ownedStopFilePath = null;
 			_ownedReadinessFilePath = null;
 			_ownedProcessReady = false;
+			_ownedReadinessLostSince = null;
 		}
 		process.Dispose();
 		CleanupManagedFile(stopFile);
