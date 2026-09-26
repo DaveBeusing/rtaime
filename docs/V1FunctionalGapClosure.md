@@ -51,7 +51,7 @@ A competing headless client cannot commit a mutation against an obsolete revisio
 
 The stable `RecordingProgramSample` contract remains descriptor-only. Bulk video/audio bytes are not added to normal Media, Runtime or cross-process contracts.
 
-V1 Functional Gap Closure adds the optional subsystem-local `IProgramRecordingPayloadWriter` capability. `V1RuntimeHostService` detects that capability at composition time and supplies media payload only while recording is active.
+V1 Functional Gap Closure adds the optional subsystem-local `IProgramRecordingPayloadWriter` capability. `V1RuntimeHostService` detects that capability at composition time and supplies media payload only while recording is active. Program video is transferred as an owned `IProgramRecordingPayloadLease`; the asynchronous writer must dispose that lease after write, discard, abort, or cleanup. This keeps the stable descriptor contracts unchanged while preventing recording from observing a readback buffer after it has been returned for reuse.
 
 The software-only reference path persists:
 
@@ -90,7 +90,7 @@ The final artifact is promoted only after footer counts and the payload integrit
 
 ## Failure isolation and storage exhaustion
 
-The synchronous Program path still performs no storage I/O. Runtime only stages already-materialized reference payload into bounded recording-side state and then uses the existing `ProgramRecorder.TryEnqueue` path.
+The synchronous Program path still performs no storage I/O. Runtime retains the already-materialized Program readback through explicit bounded ownership, stages that lease into recording-side state, and then uses the existing `ProgramRecorder.TryEnqueue` path. No full-frame recording copy is required at the handoff boundary.
 
 Payload staging failure is observed but not thrown into Program execution. Storage writing remains on the recorder worker.
 
