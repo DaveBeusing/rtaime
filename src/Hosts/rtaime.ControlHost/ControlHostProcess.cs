@@ -693,19 +693,6 @@ public sealed class ControlHostProcess
 		if (RuntimeMatchesAuthority(runtimeSnapshot, authority))
 		{
 			_boundRuntimeHostInstanceId = runtimeHostInstanceId;
-			if (_ipcServer is not null)
-			{
-				if (restoreWithinMutationGate)
-				{
-					await _ipcServer.RestoreGraphicsStateWithinMutationAsync(cancellationToken).ConfigureAwait(false);
-					await _ipcServer.RestoreAudioRoutingStateWithinMutationAsync(cancellationToken).ConfigureAwait(false);
-				}
-				else
-				{
-					await _ipcServer.RestoreGraphicsStateAsync(cancellationToken).ConfigureAwait(false);
-					await _ipcServer.RestoreAudioRoutingStateAsync(cancellationToken).ConfigureAwait(false);
-				}
-			}
 			control.RecordObservation("recovery", "recovery.runtime.aligned", $"RuntimeHost instance '{runtimeHostInstanceId}' is already committed against authoritative revision {authority.Revision}.");
 			SetRecovery(ControlHostRecoveryState.Recovered, authority.Revision, "Durable Control authority and Runtime committed authority snapshot are aligned.");
 			SetOperationalState(ControlHostProcessState.Ready, ControlHostHealthState.Healthy, $"ControlHost reconciled with RuntimeHost instance '{runtimeHostInstanceId}' without execution replacement.");

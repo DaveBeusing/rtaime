@@ -2219,7 +2219,9 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private IReadOnlyList<V1CompositingLayerSnapshot> CompositingLayerSnapshotsUnsafe()
 	{
 		var snapshots = new List<V1CompositingLayerSnapshot>(3);
-		if (_visualLayerMode != V1VisualLayerMode.Disabled)
+		// Dynamic visual state is a Runtime-local observational effect (for example the AI showcase)
+		// and must not be promoted into Control's authoritative compositing resource set.
+		if (_visualLayerMode == V1VisualLayerMode.Static)
 		{
 			snapshots.Add(new V1CompositingLayerSnapshot(
 				LegacyVisualLayerId,

@@ -749,7 +749,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			var control = _controlAccessor();
 			if (control is null || !control.HasAuthoritativeState)
 				return Error(request, "control.not_ready", "ControlHost has no committed authoritative state yet.");
-			if (!_runtimeTransport.IsConnected)
+			if (!await EnsureRuntimeConnectedAsync(cancellationToken).ConfigureAwait(false))
 				return Error(request, "runtime.unavailable", "RuntimeHost is not connected.");
 			var layers = await _runtimeTransport.SetCompositingLayerStateAsync(
 				wire.LayerId,
@@ -790,7 +790,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			var control = _controlAccessor();
 			if (control is null || !control.HasAuthoritativeState)
 				return Error(request, "control.not_ready", "ControlHost has no committed authoritative state yet.");
-			if (!_runtimeTransport.IsConnected)
+			if (!await EnsureRuntimeConnectedAsync(cancellationToken).ConfigureAwait(false))
 				return Error(request, "runtime.unavailable", "RuntimeHost is not connected.");
 
 			var layers = await _runtimeTransport.SetCompositingLayerTransformAsync(
@@ -852,7 +852,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			var control = _controlAccessor();
 			if (control is null || !control.HasAuthoritativeState)
 				return Error(request, "control.not_ready", "ControlHost has no committed authoritative state yet.");
-			if (!_runtimeTransport.IsConnected)
+			if (!await EnsureRuntimeConnectedAsync(cancellationToken).ConfigureAwait(false))
 				return Error(request, "runtime.unavailable", "RuntimeHost is not connected.");
 
 			PreparedCompositingProcessingNodeState? node = wire.ProcessingNode is null
@@ -897,7 +897,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			var control = _controlAccessor();
 			if (control is null || !control.HasAuthoritativeState)
 				return Error(request, "control.not_ready", "ControlHost has no committed authoritative state yet.");
-			if (!_runtimeTransport.IsConnected)
+			if (!await EnsureRuntimeConnectedAsync(cancellationToken).ConfigureAwait(false))
 				return Error(request, "runtime.unavailable", "RuntimeHost is not connected.");
 			var layers = await _runtimeTransport.ReorderCompositingLayersAsync(wire.LayerIds, cancellationToken).ConfigureAwait(false);
 			_compositingLayers = layers;
@@ -1100,6 +1100,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 
 		var authority = control.ConfirmCompositingMutation(ToProductionCompositingState(layers));
 		var runtime = await _runtimeTransport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
+		RememberRuntimeObservation(runtime);
 		if (runtime.AuthorityStateId == authority.ProductionId.Value &&
 			runtime.AuthorityRevision == authority.Revision)
 		{
@@ -1123,6 +1124,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		}
 
 		var confirmed = await _runtimeTransport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
+		RememberRuntimeObservation(confirmed);
 		if (confirmed.AuthorityStateId != authority.ProductionId.Value ||
 			confirmed.AuthorityRevision != authority.Revision)
 		{
@@ -1132,6 +1134,27 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 
 		return authority;
 	}
+
+	private async ValueTask<bool> EnsureRuntimeConnectedAsync(CancellationToken cancellationToken)
+	{
+		if (_runtimeTransport.IsConnected)
+			return true;
+
+		try
+		{
+			await _runtimeTransport.ConnectAsync(cancellationToken).ConfigureAwait(false);
+			return _runtimeTransport.IsConnected;
+		}
+		catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+		{
+			return false;
+		}
+		catch (Exception exception) when (exception is IOException or InvalidDataException or InvalidOperationException or TimeoutException)
+		{
+			return false;
+		}
+	}
+
 
 	private async ValueTask<WireEnvelope> MutateGraphicsAsync(
 		WireEnvelope request,
@@ -1145,7 +1168,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			var control = _controlAccessor();
 			if (control is null || !control.HasAuthoritativeState)
 				return Error(request, "control.not_ready", "ControlHost has no committed authoritative state yet.");
-			if (!_runtimeTransport.IsConnected)
+			if (!await EnsureRuntimeConnectedAsync(cancellationToken).ConfigureAwait(false))
 				return Error(request, "runtime.unavailable", "RuntimeHost is not connected.");
 
 			try
@@ -1180,7 +1203,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			var control = _controlAccessor();
 			if (control is null || !control.HasAuthoritativeState)
 				return Error(request, "control.not_ready", "ControlHost has no committed authoritative state yet.");
-			if (!_runtimeTransport.IsConnected)
+			if (!await EnsureRuntimeConnectedAsync(cancellationToken).ConfigureAwait(false))
 				return Error(request, "runtime.unavailable", "RuntimeHost is not connected.");
 
 			try
@@ -1730,6 +1753,19 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 
 	private async ValueTask<WireEnvelope> GetSnapshotAsync(WireEnvelope request, CancellationToken cancellationToken)
 	{
+		await _mutationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+		try
+		{
+			return await GetSnapshotWithinMutationAsync(request, cancellationToken).ConfigureAwait(false);
+		}
+		finally
+		{
+			_mutationGate.Release();
+		}
+	}
+
+	private async ValueTask<WireEnvelope> GetSnapshotWithinMutationAsync(WireEnvelope request, CancellationToken cancellationToken)
+	{
 		var control = _controlAccessor();
 		if (control is null || !control.HasAuthoritativeState)
 			return Error(request, "control.not_ready", "ControlHost has no committed authoritative state yet.");
@@ -1827,12 +1863,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		try
 		{
 			var snapshot = await _runtimeTransport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
-			var observedAtUtc = DateTimeOffset.UtcNow;
-			lock (_runtimeObservationGate)
-			{
-				_lastRuntimeSnapshot = snapshot;
-				_lastRuntimeSnapshotAtUtc = observedAtUtc;
-			}
+			var observedAtUtc = RememberRuntimeObservation(snapshot);
 			return new RuntimeObservation(snapshot, true, observedAtUtc);
 		}
 		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -1853,6 +1884,18 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			}
 			return new RuntimeObservation(null, false, DateTimeOffset.UtcNow);
 		}
+	}
+
+	private DateTimeOffset RememberRuntimeObservation(RuntimeRemoteSnapshot snapshot)
+	{
+		ArgumentNullException.ThrowIfNull(snapshot);
+		var observedAtUtc = DateTimeOffset.UtcNow;
+		lock (_runtimeObservationGate)
+		{
+			_lastRuntimeSnapshot = snapshot;
+			_lastRuntimeSnapshotAtUtc = observedAtUtc;
+		}
+		return observedAtUtc;
 	}
 
 	private static WireSource ToWireSource(
