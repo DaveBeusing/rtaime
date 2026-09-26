@@ -160,9 +160,9 @@ public sealed class BroadcastTestPatternRuntimeIntegrationTests
 		using var staticAfter = fixture.Runtime.ProcessNextBoundary();
 
 		Assert.NotEqual(
-			System.Security.Cryptography.SHA256.HashData(staticBefore.ProgramPixels),
-			System.Security.Cryptography.SHA256.HashData(motion.ProgramPixels));
-		Assert.Equal(staticBefore.ProgramPixels, staticAfter.ProgramPixels);
+			System.Security.Cryptography.SHA256.HashData(staticBefore.ProgramPixels.Span),
+			System.Security.Cryptography.SHA256.HashData(motion.ProgramPixels.Span));
+		Assert.True(staticBefore.ProgramPixels.Span.SequenceEqual(staticAfter.ProgramPixels.Span));
 		Assert.Equal(V1InputSignalState.Valid, fixture.Runtime.Snapshot.InputSignals[fixture.MediaSourceA]);
 
 		fixture.Runtime.SetBroadcastTestPattern(fixture.MediaSourceA, false);
@@ -171,7 +171,7 @@ public sealed class BroadcastTestPatternRuntimeIntegrationTests
 
 	private static void AssertPixelMatches(
 		BroadcastTestPatternGenerator pattern,
-		byte[] actualPixels,
+		ReadOnlyMemory<byte> actualPixels,
 		VideoFormat format,
 		int x,
 		int y)
@@ -182,10 +182,11 @@ public sealed class BroadcastTestPatternRuntimeIntegrationTests
 			Pixel(actualPixels, format, x, y));
 	}
 
-	private static PixelValue Pixel(byte[] pixels, VideoFormat format, int x, int y)
+	private static PixelValue Pixel(ReadOnlyMemory<byte> pixels, VideoFormat format, int x, int y)
 	{
+		var span = pixels.Span;
 		var offset = checked((y * (int)format.Width + x) * 4);
-		return new PixelValue(pixels[offset], pixels[offset + 1], pixels[offset + 2], pixels[offset + 3]);
+		return new PixelValue(span[offset], span[offset + 1], span[offset + 2], span[offset + 3]);
 	}
 
 	private readonly record struct PixelValue(byte Red, byte Green, byte Blue, byte Alpha);
