@@ -1096,8 +1096,11 @@ public sealed class GpuProcessingProvider : IDisposable
 
 public sealed class ManagedReferenceGpuBackend : IGpuProcessingBackend
 {
+    private const int MaxPooledAllocationsPerSize = 8;
+
     private readonly object _gate = new();
     private readonly Dictionary<SurfaceId, Allocation> _surfaces = new();
+    private readonly Dictionary<int, Stack<byte[]>> _freeAllocations = new();
     private bool _running;
     private bool _disposed;
 
@@ -1133,7 +1136,11 @@ public sealed class ManagedReferenceGpuBackend : IGpuProcessingBackend
         {
             if (_disposed)
                 return;
+
+            foreach (var allocation in _surfaces.Values)
+                ReturnBuffer(allocation.Pixels);
             _surfaces.Clear();
+            _freeAllocations.Clear();
             _running = false;
         }
     }
@@ -1148,7 +1155,17 @@ public sealed class ManagedReferenceGpuBackend : IGpuProcessingBackend
             if (rgbaPixels.Length != RgbaFrameBuffer.RequiredByteLength(format))
                 throw new ArgumentException("RGBA allocation payload length does not match the target format.", nameof(rgbaPixels));
 
-            _surfaces.Add(surfaceId, new Allocation(format, rgbaPixels.ToArray()));
+            var pixels = RentBuffer(rgbaPixels.Length);
+            try
+            {
+                rgbaPixels.CopyTo(pixels);
+                _surfaces.Add(surfaceId, new Allocation(format, pixels));
+            }
+            catch
+            {
+                ReturnBuffer(pixels);
+                throw;
+            }
         }
     }
 
@@ -1163,34 +1180,42 @@ public sealed class ManagedReferenceGpuBackend : IGpuProcessingBackend
             var a = Get(operation.BackgroundA, format);
             var b = Get(operation.BackgroundB, format);
             var layer = operation.Layer is { } layerId ? Get(layerId, format) : null;
-            var output = new byte[a.Pixels.Length];
+            var output = RentBuffer(a.Pixels.Length);
             var weight = operation.Transition.BlendWeight;
 
-            for (var offset = 0; offset < output.Length; offset += 4)
+            try
             {
-                var baseR = Blend(a.Pixels[offset], b.Pixels[offset], weight);
-                var baseG = Blend(a.Pixels[offset + 1], b.Pixels[offset + 1], weight);
-                var baseB = Blend(a.Pixels[offset + 2], b.Pixels[offset + 2], weight);
-                var baseA = Blend(a.Pixels[offset + 3], b.Pixels[offset + 3], weight);
+                for (var offset = 0; offset < output.Length; offset += 4)
+                {
+                    var baseR = Blend(a.Pixels[offset], b.Pixels[offset], weight);
+                    var baseG = Blend(a.Pixels[offset + 1], b.Pixels[offset + 1], weight);
+                    var baseB = Blend(a.Pixels[offset + 2], b.Pixels[offset + 2], weight);
+                    var baseA = Blend(a.Pixels[offset + 3], b.Pixels[offset + 3], weight);
 
-                if (operation.LayerVisible && layer is not null)
-                {
-                    var effectiveAlpha = ScaleAlpha(layer.Pixels[offset + 3], operation.LayerOpacity);
-                    output[offset] = AlphaComposite(baseR, layer.Pixels[offset], effectiveAlpha);
-                    output[offset + 1] = AlphaComposite(baseG, layer.Pixels[offset + 1], effectiveAlpha);
-                    output[offset + 2] = AlphaComposite(baseB, layer.Pixels[offset + 2], effectiveAlpha);
-                    output[offset + 3] = CompositeAlpha(baseA, effectiveAlpha);
+                    if (operation.LayerVisible && layer is not null)
+                    {
+                        var effectiveAlpha = ScaleAlpha(layer.Pixels[offset + 3], operation.LayerOpacity);
+                        output[offset] = AlphaComposite(baseR, layer.Pixels[offset], effectiveAlpha);
+                        output[offset + 1] = AlphaComposite(baseG, layer.Pixels[offset + 1], effectiveAlpha);
+                        output[offset + 2] = AlphaComposite(baseB, layer.Pixels[offset + 2], effectiveAlpha);
+                        output[offset + 3] = CompositeAlpha(baseA, effectiveAlpha);
+                    }
+                    else
+                    {
+                        output[offset] = baseR;
+                        output[offset + 1] = baseG;
+                        output[offset + 2] = baseB;
+                        output[offset + 3] = baseA;
+                    }
                 }
-                else
-                {
-                    output[offset] = baseR;
-                    output[offset + 1] = baseG;
-                    output[offset + 2] = baseB;
-                    output[offset + 3] = baseA;
-                }
+
+                _surfaces.Add(outputSurfaceId, new Allocation(format, output));
             }
-
-            _surfaces.Add(outputSurfaceId, new Allocation(format, output));
+            catch
+            {
+                ReturnBuffer(output);
+                throw;
+            }
         }
     }
 
@@ -1219,7 +1244,8 @@ public sealed class ManagedReferenceGpuBackend : IGpuProcessingBackend
         {
             if (_disposed)
                 return;
-            _surfaces.Remove(surfaceId);
+            if (_surfaces.Remove(surfaceId, out var allocation))
+                ReturnBuffer(allocation.Pixels);
         }
     }
 
@@ -1229,7 +1255,11 @@ public sealed class ManagedReferenceGpuBackend : IGpuProcessingBackend
         {
             if (_disposed)
                 return;
+
+            foreach (var allocation in _surfaces.Values)
+                ReturnBuffer(allocation.Pixels);
             _surfaces.Clear();
+            _freeAllocations.Clear();
             _running = false;
             _disposed = true;
         }
@@ -1242,6 +1272,25 @@ public sealed class ManagedReferenceGpuBackend : IGpuProcessingBackend
         if (allocation.Format != format)
             throw new InvalidOperationException("GPU surface format does not match the composite target format.");
         return allocation;
+    }
+
+    private byte[] RentBuffer(int length)
+    {
+        if (_freeAllocations.TryGetValue(length, out var pool) && pool.TryPop(out var buffer))
+            return buffer;
+        return new byte[length];
+    }
+
+    private void ReturnBuffer(byte[] buffer)
+    {
+        if (!_freeAllocations.TryGetValue(buffer.Length, out var pool))
+        {
+            pool = new Stack<byte[]>();
+            _freeAllocations.Add(buffer.Length, pool);
+        }
+
+        if (pool.Count < MaxPooledAllocationsPerSize)
+            pool.Push(buffer);
     }
 
     private static byte Blend(byte a, byte b, byte weight) =>
