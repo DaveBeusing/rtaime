@@ -34,7 +34,7 @@ public sealed class V1EndToEndProofTests
             new RecordingOutputId(Identity.Parse("72000000-0000-0000-0000-000000000001")));
         Assert.True(recordingStart.Succeeded);
 
-        var baseline = harness.Runtime.ProcessNextBoundary();
+        using var baseline = harness.Runtime.ProcessNextBoundary();
         Assert.Equal(0UL, baseline.SequenceNumber);
         Assert.Equal(harness.SourceAMediaId, baseline.CommittedProgramSourceId);
         Assert.True(baseline.Audio.Emitted);
@@ -47,12 +47,12 @@ public sealed class V1EndToEndProofTests
         Assert.Equal(harness.SourceBProductionId, harness.Client.Snapshot!.Production.Routing.PreviewSourceId);
         Assert.Equal(harness.SourceAProductionId, harness.Client.Snapshot.Production.Routing.ProgramSourceId);
 
-        var beforeCut = harness.Runtime.ProcessNextBoundary();
+        using var beforeCut = harness.Runtime.ProcessNextBoundary();
         Assert.Equal(harness.SourceAMediaId, beforeCut.CommittedProgramSourceId);
 
         var cut = await harness.Client.CutPreviewAsync();
         Assert.True(cut.Accepted);
-        var cutFrame = harness.Runtime.ProcessNextBoundary();
+        using var cutFrame = harness.Runtime.ProcessNextBoundary();
         Assert.Equal(RuntimeProgramTransitionKind.Cut, cutFrame.TransitionKind);
         Assert.Equal(byte.MaxValue, cutFrame.BlendWeight);
         Assert.Equal(harness.SourceBMediaId, cutFrame.CommittedProgramSourceId);
@@ -60,7 +60,7 @@ public sealed class V1EndToEndProofTests
         Assert.NotEqual(beforeCut.PixelProbe, cutFrame.PixelProbe);
 
         harness.Runtime.SetVisualLayerMode(V1VisualLayerMode.Static);
-        var staticLayerFrame = harness.Runtime.ProcessNextBoundary();
+        using var staticLayerFrame = harness.Runtime.ProcessNextBoundary();
         Assert.Equal(V1VisualLayerMode.Static, staticLayerFrame.VisualLayerMode);
         Assert.NotEqual(cutFrame.PixelProbe, staticLayerFrame.PixelProbe);
 
@@ -70,9 +70,9 @@ public sealed class V1EndToEndProofTests
         var dissolve = await harness.Client.DissolvePreviewAsync(3);
         Assert.True(dissolve.Accepted);
 
-        var dissolve1 = harness.Runtime.ProcessNextBoundary();
-        var dissolve2 = harness.Runtime.ProcessNextBoundary();
-        var dissolve3 = harness.Runtime.ProcessNextBoundary();
+        using var dissolve1 = harness.Runtime.ProcessNextBoundary();
+        using var dissolve2 = harness.Runtime.ProcessNextBoundary();
+        using var dissolve3 = harness.Runtime.ProcessNextBoundary();
         Assert.Equal(RuntimeProgramTransitionKind.Dissolve, dissolve1.TransitionKind);
         Assert.Equal(RuntimeProgramTransitionKind.Dissolve, dissolve2.TransitionKind);
         Assert.Equal(RuntimeProgramTransitionKind.Dissolve, dissolve3.TransitionKind);
@@ -86,7 +86,7 @@ public sealed class V1EndToEndProofTests
         Assert.True(dissolve1.PixelProbe.Blue < dissolve2.PixelProbe.Blue);
         Assert.True(dissolve2.PixelProbe.Blue < dissolve3.PixelProbe.Blue);
 
-        var cleanForAI = harness.Runtime.ProcessNextBoundary();
+        using var cleanForAI = harness.Runtime.ProcessNextBoundary();
         var aiResult = await harness.AI.ExecuteAsync(CreateInferenceRequest(cleanForAI.ProgramFrame));
         var useDecision = AIResultUsePolicy.Evaluate(
             aiResult,
@@ -96,7 +96,7 @@ public sealed class V1EndToEndProofTests
         Assert.True(useDecision.Usable);
         ApplyReferenceSegmentationEffect(harness.Runtime, aiResult);
 
-        var aiVisible = harness.Runtime.ProcessNextBoundary();
+        using var aiVisible = harness.Runtime.ProcessNextBoundary();
         Assert.Equal(V1VisualLayerMode.Dynamic, aiVisible.VisualLayerMode);
         Assert.NotEqual(cleanForAI.PixelProbe, aiVisible.PixelProbe);
 
@@ -112,7 +112,7 @@ public sealed class V1EndToEndProofTests
         Assert.False(fallback.Usable);
         harness.Runtime.SetVisualLayerMode(V1VisualLayerMode.Disabled);
 
-        var cleanFallback = harness.Runtime.ProcessNextBoundary();
+        using var cleanFallback = harness.Runtime.ProcessNextBoundary();
         Assert.Equal(harness.SourceAMediaId, cleanFallback.CommittedProgramSourceId);
         Assert.True(cleanFallback.Audio.Emitted);
         Assert.Equal(V1VisualLayerMode.Disabled, cleanFallback.VisualLayerMode);
@@ -125,7 +125,7 @@ public sealed class V1EndToEndProofTests
         var sequenceBeforeDisconnect = harness.Runtime.Snapshot.NextSequenceNumber;
         harness.Client.Disconnect();
         Assert.False(harness.Client.Connected);
-        var withoutOperator = harness.Runtime.ProcessNextBoundary();
+        using var withoutOperator = harness.Runtime.ProcessNextBoundary();
         Assert.Equal(sequenceBeforeDisconnect, withoutOperator.SequenceNumber);
         Assert.True(withoutOperator.Audio.Emitted);
         await harness.Client.SynchronizeAsync();
@@ -147,11 +147,11 @@ public sealed class V1EndToEndProofTests
     public async Task Lost_input_has_defined_black_fallback_and_program_continues()
     {
         await using var harness = await V1Harness.CreateAsync(VideoFormat.Hd1080p50Rgba8);
-        var healthy = harness.Runtime.ProcessNextBoundary();
+        using var healthy = harness.Runtime.ProcessNextBoundary();
         Assert.NotEqual(new ProgramPixelProbe(0, 0, 0, 255), healthy.PixelProbe);
 
         harness.Runtime.SetInputSignalState(harness.SourceAMediaId, V1InputSignalState.Lost);
-        var fallback = harness.Runtime.ProcessNextBoundary();
+        using var fallback = harness.Runtime.ProcessNextBoundary();
 
         Assert.Equal(harness.SourceAMediaId, fallback.CommittedProgramSourceId);
         Assert.Equal(new ProgramPixelProbe(0, 0, 0, 255), fallback.PixelProbe);
