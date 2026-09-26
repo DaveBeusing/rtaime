@@ -1559,6 +1559,8 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 					cancellationToken).ConfigureAwait(false);
 			case ShowControlActionKind.JumpMediaCue:
 				return await ExecuteShowControlMediaCueJumpAsync(action, cancellationToken).ConfigureAwait(false);
+			case ShowControlActionKind.MediaOpen:
+				return await ExecuteShowControlMediaOpenAsync(action, cancellationToken).ConfigureAwait(false);
 			case ShowControlActionKind.MediaPlay:
 				return await ExecuteShowControlMediaTransportAsync(action, MediaTransportCommandKind.Play, cancellationToken).ConfigureAwait(false);
 			case ShowControlActionKind.MediaPause:
@@ -1567,6 +1569,8 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 				return await ExecuteShowControlMediaTransportAsync(action, MediaTransportCommandKind.Stop, cancellationToken).ConfigureAwait(false);
 			case ShowControlActionKind.SetLayerVisibility:
 				return await ExecuteShowControlLayerVisibilityAsync(action, cancellationToken).ConfigureAwait(false);
+			case ShowControlActionKind.SetAudioRouting:
+				return await ExecuteShowControlAudioRoutingAsync(action, cancellationToken).ConfigureAwait(false);
 			case ShowControlActionKind.StartRecording:
 			{
 				var response = await StartRecordingAsync(
@@ -1612,6 +1616,54 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			kind,
 			cancellationToken).ConfigureAwait(false);
 		return ReadMutationFailure(response);
+	}
+
+	private async ValueTask<Failure?> ExecuteShowControlMediaOpenAsync(
+		ShowControlAction action,
+		CancellationToken cancellationToken)
+	{
+		if (_mediaDeck is null)
+			return new Failure("control.media_deck.unavailable", "Media-deck control service is not configured.");
+		if (_mediaAssetCatalog is null)
+			return new Failure("control.media_asset_catalog.unavailable", "Media asset catalogue service is not configured.");
+
+		var assetId = new MediaAssetId(Identity.Parse(action.MediaAssetId!));
+		var sourceId = new MediaSourceId(Identity.Parse(action.SourceId!));
+		var catalog = await _mediaAssetCatalog.GetSnapshotAsync(refreshAvailability: true, cancellationToken).ConfigureAwait(false);
+		var asset = catalog.Assets.FirstOrDefault(candidate => candidate.AssetId == assetId);
+		if (asset is null)
+			return new Failure("control.rundown.asset_missing", $"Rundown media asset '{assetId}' is not present in the persistent catalogue.");
+		if (asset.Availability != MediaAssetAvailability.Online)
+			return new Failure("control.rundown.asset_offline", $"Rundown media asset '{assetId}' is not online.");
+
+		var snapshot = await _mediaDeck.OpenAsync(
+			new MediaDeckOpenRequest(
+				MediaContractVersion.Current,
+				sourceId,
+				asset.SourceLocation,
+				asset.AssetId),
+			cancellationToken).ConfigureAwait(false);
+		NotifyObservableStateChanged();
+		return MediaDeckFailure(snapshot);
+	}
+
+	private async ValueTask<Failure?> ExecuteShowControlAudioRoutingAsync(
+		ShowControlAction action,
+		CancellationToken cancellationToken)
+	{
+		if (!_runtimeTransport.IsConnected)
+			return new Failure("runtime.unavailable", "RuntimeHost is not connected.");
+
+		var runtime = await _runtimeTransport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
+		var response = await SetAudioRoutingAsync(
+			InternalRequest(
+				"control.audio.routing.set",
+				new WireAudioRoutingState(
+					action.AudioRoutingMode!.Value,
+					action.SourceId,
+					runtime.AudioProgram.RoutingRevision)),
+			cancellationToken).ConfigureAwait(false);
+		return ReadErrorFailure(response);
 	}
 
 	private async ValueTask<Failure?> ExecuteShowControlMediaCueJumpAsync(
