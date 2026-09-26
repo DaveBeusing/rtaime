@@ -225,6 +225,7 @@ public sealed record V1RuntimeHostSnapshot(
 /// </summary>
 public sealed class V1RuntimeHostService : IAsyncDisposable
 {
+	public const int RetainedObservationCapacity = 512;
 	public const string LegacyVisualLayerId = "legacy-visual";
 	public const string BitmapGraphicsLayerId = "bitmap-graphics";
 	public const string ProductionCgLayerId = "production-cg";
@@ -271,7 +272,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private readonly RuntimeMonitoringTap _monitoringTap;
 	private readonly Stopwatch _uptimeClock = Stopwatch.StartNew();
 	private readonly SystemHardwareTelemetry _hardwareTelemetry = new();
-	private readonly List<string> _observations = new();
+	private readonly BoundedDiagnosticHistory<string> _observations = new(RetainedObservationCapacity);
 
 	private VirtualVideoOutput? _programOutput;
 	private MediaSinkId? _programSinkId;
@@ -459,12 +460,43 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		}
 	}
 
-	public IReadOnlyList<string> Observations
+	public IReadOnlyList<string> Observations => _observations.Snapshot();
+	public ulong OverwrittenObservationCount => _observations.OverwrittenCount;
+	public IReadOnlyList<string> RecentObservations(int maximumCount) => _observations.SnapshotNewest(maximumCount);
+
+	public ulong ProgramFramesWritten
 	{
 		get
 		{
 			lock (_gate)
-				return new ReadOnlyCollection<string>(_observations.ToArray());
+				return _programOutput?.TotalFramesWritten ?? 0;
+		}
+	}
+
+	public ulong ProgramFramesOverwritten
+	{
+		get
+		{
+			lock (_gate)
+				return _programOutput?.OverwrittenFrameCount ?? 0;
+		}
+	}
+
+	public ulong AuxFramesWritten
+	{
+		get
+		{
+			lock (_gate)
+				return _auxOutput?.TotalFramesWritten ?? 0;
+		}
+	}
+
+	public ulong AuxFramesOverwritten
+	{
+		get
+		{
+			lock (_gate)
+				return _auxOutput?.OverwrittenFrameCount ?? 0;
 		}
 	}
 

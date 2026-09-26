@@ -321,6 +321,26 @@ public sealed class GpuProcessingTests
         }
     }
 
+
+    [Fact]
+    public void Observation_history_remains_bounded_across_repeated_provider_cycles()
+    {
+        using var provider = new GpuProcessingProvider(new ManagedReferenceGpuBackend());
+        var cycles = (GpuProcessingProvider.RetainedObservationCapacity / 2) + 64;
+
+        for (var cycle = 0; cycle < cycles; cycle++)
+        {
+            provider.Start();
+            provider.Stop();
+        }
+
+        var observations = provider.Observations;
+        Assert.Equal(GpuProcessingProvider.RetainedObservationCapacity, observations.Count);
+        Assert.True(provider.OverwrittenObservationCount > 0);
+        Assert.Equal("gpu.provider.stopped", observations[^1].Code);
+        Assert.True(observations.Zip(observations.Skip(1), (left, right) => left.Ordinal < right.Ordinal).All(value => value));
+    }
+
     private static GpuFrame Upload(
         GpuProcessingProvider provider,
         MediaSourceId sourceId,

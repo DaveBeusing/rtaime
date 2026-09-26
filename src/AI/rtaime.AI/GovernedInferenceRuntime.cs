@@ -120,11 +120,13 @@ public static class AIResultUsePolicy
 
 public sealed class GovernedInferenceRuntime
 {
+    public const int RetainedObservationCapacity = 256;
+
     private readonly object _gate = new();
     private readonly IInferenceProvider[] _providers;
     private readonly InferenceResourceGovernor _governor;
     private readonly IAIClock _clock;
-    private readonly List<AIExecutionObservation> _observations = new();
+    private readonly BoundedDiagnosticHistory<AIExecutionObservation> _observations = new(RetainedObservationCapacity);
     private bool _executionDegraded;
     private ulong _completed;
     private ulong _rejected;
@@ -162,14 +164,9 @@ public sealed class GovernedInferenceRuntime
                 .OrderBy(capability => capability.CapabilityId.ToString(), StringComparer.Ordinal)
                 .ToArray());
 
-    public IReadOnlyList<AIExecutionObservation> Observations
-    {
-        get
-        {
-            lock (_gate)
-                return new ReadOnlyCollection<AIExecutionObservation>(_observations.ToArray());
-        }
-    }
+    public IReadOnlyList<AIExecutionObservation> Observations => _observations.Snapshot();
+    public ulong OverwrittenObservationCount => _observations.OverwrittenCount;
+    public IReadOnlyList<AIExecutionObservation> RecentObservations(int maximumCount) => _observations.SnapshotNewest(maximumCount);
 
     public AIExecutionSnapshot Snapshot
     {

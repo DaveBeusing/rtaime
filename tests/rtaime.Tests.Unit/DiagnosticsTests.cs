@@ -21,6 +21,44 @@ public sealed class DiagnosticsTests
 		Assert.Equal(new[] { "event.2", "event.3", "event.4" }, snapshot.Select(item => item.Code));
 	}
 
+
+	[Fact]
+	public void Bounded_history_retains_only_newest_items_and_counts_overwrites()
+	{
+		var history = new BoundedDiagnosticHistory<int>(3);
+		for (var index = 0; index < 5; index++)
+			history.Add(index);
+
+		Assert.Equal(3, history.Capacity);
+		Assert.Equal(3, history.Count);
+		Assert.Equal(2UL, history.OverwrittenCount);
+		Assert.Equal(new[] { 2, 3, 4 }, history.Snapshot());
+		Assert.Equal(new[] { 3, 4 }, history.SnapshotNewest(2));
+		Assert.Empty(history.SnapshotNewest(0));
+	}
+
+	[Fact]
+	public void Bounded_history_supports_concurrent_writers_and_snapshots()
+	{
+		var history = new BoundedDiagnosticHistory<int>(64);
+		var oversizedSnapshots = 0;
+
+		Parallel.For(0, 8, worker =>
+		{
+			for (var index = 0; index < 1_000; index++)
+			{
+				history.Add((worker * 1_000) + index);
+				if (history.SnapshotNewest(16).Count > 16)
+					Interlocked.Increment(ref oversizedSnapshots);
+			}
+		});
+
+		Assert.Equal(0, oversizedSnapshots);
+		Assert.Equal(64, history.Count);
+		Assert.True(history.OverwrittenCount > 0);
+		Assert.Equal(64, history.Snapshot().Count);
+	}
+
 	[Fact]
 	public void Redaction_removes_secret_dimensions_and_inline_credentials()
 	{

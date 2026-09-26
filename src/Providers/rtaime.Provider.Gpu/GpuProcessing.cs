@@ -419,6 +419,8 @@ public sealed class GpuProcessingResult
 
 public sealed class GpuProcessingProvider : IDisposable
 {
+    public const int RetainedObservationCapacity = 512;
+
     private static readonly VideoFormat[] V1Formats =
     {
         VideoFormat.Hd1080p50Rgba8,
@@ -428,7 +430,7 @@ public sealed class GpuProcessingProvider : IDisposable
     private readonly object _gate = new();
     private readonly IGpuProcessingBackend _backend;
     private readonly Dictionary<SurfaceId, GpuFrame> _activeFrames = new();
-    private readonly List<GpuObservation> _observations = new();
+    private readonly BoundedDiagnosticHistory<GpuObservation> _observations = new(RetainedObservationCapacity);
     private GpuProviderState _state = GpuProviderState.Stopped;
     private ulong _surfaceOrdinal;
     private ulong _observationOrdinal;
@@ -460,14 +462,8 @@ public sealed class GpuProcessingProvider : IDisposable
         }
     }
 
-    public IReadOnlyList<GpuObservation> Observations
-    {
-        get
-        {
-            lock (_gate)
-                return new ReadOnlyCollection<GpuObservation>(_observations.ToArray());
-        }
-    }
+    public IReadOnlyList<GpuObservation> Observations => _observations.Snapshot();
+    public ulong OverwrittenObservationCount => _observations.OverwrittenCount;
 
     public void Start()
     {

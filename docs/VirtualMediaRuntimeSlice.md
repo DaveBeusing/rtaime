@@ -59,6 +59,8 @@ CutProgramCommand
 
 The synthetic provider does not allocate or transport bulk pixel payloads. A frame is represented through the existing `FrameDescriptor`, deterministic `SurfaceDescriptor`, timing metadata and an opaque virtual surface handle. This preserves the contract rule that normal boundaries exchange descriptors/handles rather than large media payloads.
 
+Virtual Program/Aux outputs retain current/last output state plus only the newest 128 `VirtualOutputFrame` descriptors for diagnostics and deterministic regression inspection. Total written-frame and overwritten-history counters remain monotonic, while historical frame retention never grows with process lifetime. The retained evidence contains descriptors only and does not add bulk pixel storage.
+
 The virtual implementation is Reference Behaviour and a deterministic test oracle. It is not evidence for professional capture/output hardware, GPU, DMA, genlock or external device qualification.
 
 ## Internal broadcast reference signal

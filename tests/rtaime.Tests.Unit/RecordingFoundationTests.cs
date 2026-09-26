@@ -123,6 +123,26 @@ public sealed class RecordingFoundationTests
         await recorder.StopAsync();
     }
 
+
+    [Fact]
+    public async Task Observation_history_remains_bounded_during_repeated_rejections()
+    {
+        var writer = new TestWriter();
+        await using var recorder = new ProgramRecorder(writer);
+        Assert.True((await recorder.StartAsync(Request())).Succeeded);
+        Assert.True(recorder.TryEnqueue(Frame(5)).Accepted);
+
+        for (var index = 0; index < ProgramRecorder.RetainedObservationCapacity + 64; index++)
+            Assert.Equal(RecordingEnqueueStatus.Rejected, recorder.TryEnqueue(Frame(5)).Status);
+
+        Assert.Equal(RecordingStopStatus.Stopped, (await recorder.StopAsync()).Status);
+
+        var observations = recorder.Observations;
+        Assert.Equal(ProgramRecorder.RetainedObservationCapacity, observations.Count);
+        Assert.True(recorder.OverwrittenObservationCount > 0);
+        Assert.Equal("recording.finalized", observations[^1].Code);
+    }
+
     private static RecordingStartRequest Request() => new(
         RecordingContractVersion.Current,
         RecordingSessionId.New(),

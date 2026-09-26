@@ -44,7 +44,8 @@ public static class AIHostDiagnostics
 				.Counter("ai.failed", ToCounter(snapshot.Failed))
 				.Counter("ai.providerCount", service.Runtime.Providers.Count)
 				.Counter("ai.capabilityCount", service.Capabilities.Count)
-				.Events(ToDiagnosticEvents(service.Runtime.Observations.TakeLast(RetainedSupportEvents)));
+				.Counter("ai.observationsOverwritten", ToCounter(service.Runtime.OverwrittenObservationCount))
+				.Events(ToDiagnosticEvents(service.Runtime.RecentObservations(RetainedSupportEvents)));
 		}
 
 		return builder.Build(captured);

@@ -109,7 +109,12 @@ public static class RuntimeHostDiagnostics
 				.Counter("recording.written", ToCounter(recording.Statistics.Written))
 				.Counter("recording.dropped", ToCounter(recording.Statistics.Dropped))
 				.Counter("recording.rejected", ToCounter(recording.Statistics.Rejected))
-				.Counter("recording.writerFailures", ToCounter(recording.Statistics.WriterFailures));
+				.Counter("recording.writerFailures", ToCounter(recording.Statistics.WriterFailures))
+				.Counter("runtime.observationsOverwritten", ToCounter(runtime.OverwrittenObservationCount))
+				.Counter("output.program.framesWritten", ToCounter(runtime.ProgramFramesWritten))
+				.Counter("output.program.framesOverwritten", ToCounter(runtime.ProgramFramesOverwritten))
+				.Counter("output.aux.framesWritten", ToCounter(runtime.AuxFramesWritten))
+				.Counter("output.aux.framesOverwritten", ToCounter(runtime.AuxFramesOverwritten));
 
 			if (snapshot.AvSyncDiagnostics is { } avSync)
 			{
@@ -131,7 +136,7 @@ public static class RuntimeHostDiagnostics
 			foreach (var signal in snapshot.InputSignals.OrderBy(pair => pair.Key.ToString(), StringComparer.Ordinal))
 				builder.Status($"input.{signal.Key}.signal", signal.Value.ToString());
 
-			builder.Events(ToDiagnosticEvents(runtime.Observations.TakeLast(RetainedSupportEvents), captured));
+			builder.Events(ToDiagnosticEvents(runtime.RecentObservations(RetainedSupportEvents), captured));
 		}
 
 		return builder.Build(captured);

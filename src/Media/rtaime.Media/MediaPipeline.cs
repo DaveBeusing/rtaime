@@ -133,9 +133,11 @@ public sealed record MediaQueueObservation(
 
 public sealed class BoundedMediaFrameQueue : IDisposable
 {
+    public const int RetainedObservationCapacity = 256;
+
     private readonly object _gate = new();
     private readonly Queue<MediaFrameLease> _queue = new();
-    private readonly List<MediaQueueObservation> _observations = new();
+    private readonly BoundedDiagnosticHistory<MediaQueueObservation> _observations = new(RetainedObservationCapacity);
     private readonly int _capacity;
     private readonly MediaBackpressurePolicy _policy;
 
@@ -188,14 +190,8 @@ public sealed class BoundedMediaFrameQueue : IDisposable
         }
     }
 
-    public IReadOnlyList<MediaQueueObservation> Observations
-    {
-        get
-        {
-            lock (_gate)
-                return new ReadOnlyCollection<MediaQueueObservation>(_observations.ToArray());
-        }
-    }
+    public IReadOnlyList<MediaQueueObservation> Observations => _observations.Snapshot();
+    public ulong OverwrittenObservationCount => _observations.OverwrittenCount;
 
     public MediaEnqueueResult Enqueue(MediaFrameLease lease, CancellationToken cancellationToken = default)
     {
@@ -505,9 +501,11 @@ public sealed record MediaPipelineObservation(
 
 public sealed class MediaFramePipeline : IDisposable
 {
+    public const int RetainedObservationCapacity = 512;
+
     private readonly object _gate = new();
     private readonly BoundedMediaFrameQueue _queue;
-    private readonly List<MediaPipelineObservation> _observations = new();
+    private readonly BoundedDiagnosticHistory<MediaPipelineObservation> _observations = new(RetainedObservationCapacity);
     private readonly long _lateToleranceTicks;
 
     private ulong _nextExpectedSequence;
@@ -550,14 +548,8 @@ public sealed class MediaFramePipeline : IDisposable
         }
     }
 
-    public IReadOnlyList<MediaPipelineObservation> Observations
-    {
-        get
-        {
-            lock (_gate)
-                return new ReadOnlyCollection<MediaPipelineObservation>(_observations.ToArray());
-        }
-    }
+    public IReadOnlyList<MediaPipelineObservation> Observations => _observations.Snapshot();
+    public ulong OverwrittenObservationCount => _observations.OverwrittenCount;
 
     public MediaFrameSubmitResult Submit(
         FrameDescriptor frame,

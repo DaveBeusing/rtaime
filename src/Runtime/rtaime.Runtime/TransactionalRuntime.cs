@@ -163,12 +163,14 @@ public sealed record CommittedRuntimeExecution
 
 public sealed class TransactionalRuntime
 {
+    public const int RetainedObservationCapacity = 256;
+
     private readonly object _gate = new();
     private readonly IRuntimeResourceReservationManager _reservationManager;
     private readonly IRuntimeClock _clock;
     private readonly Dictionary<PreparedExecutionId, PreparedRuntimeExecution> _prepared = new();
     private readonly HashSet<PreparedExecutionId> _consumedPreparedExecutions = new();
-    private readonly List<RuntimeObservation> _observations = new();
+    private readonly BoundedDiagnosticHistory<RuntimeObservation> _observations = new(RetainedObservationCapacity);
 
     private Revision _executionRevision = Revision.Initial;
     private CommittedRuntimeExecution? _activeExecution;
@@ -199,14 +201,8 @@ public sealed class TransactionalRuntime
         }
     }
 
-    public IReadOnlyList<RuntimeObservation> Observations
-    {
-        get
-        {
-            lock (_gate)
-                return new ReadOnlyCollection<RuntimeObservation>(_observations.ToArray());
-        }
-    }
+    public IReadOnlyList<RuntimeObservation> Observations => _observations.Snapshot();
+    public ulong OverwrittenObservationCount => _observations.OverwrittenCount;
 
     public IReadOnlyList<PreparedExecutionId> PreparedExecutionIds
     {

@@ -174,6 +174,23 @@ public sealed class GovernedInferenceRuntimeTests
         Assert.Equal("ai.result.source_mismatch", wrongFrame.Failure!.Value.Code);
     }
 
+
+    [Fact]
+    public async Task Observation_history_remains_bounded_after_many_rejected_requests()
+    {
+        var runtime = Runtime(new ManagedReferencePersonSegmentationProvider());
+        var requestCount = GovernedInferenceRuntime.RetainedObservationCapacity + 64;
+
+        for (var index = 0; index < requestCount; index++)
+            await runtime.ExecuteAsync(Request((ulong)(1_000 + index), Now.Value.AddMilliseconds(-1)));
+
+        var observations = runtime.Observations;
+        Assert.Equal(GovernedInferenceRuntime.RetainedObservationCapacity, observations.Count);
+        Assert.True(runtime.OverwrittenObservationCount > 0);
+        Assert.Equal("ai.inference.admission_rejected", observations[^1].Code);
+        Assert.Equal(64, runtime.RecentObservations(64).Count);
+    }
+
     private static GovernedInferenceRuntime Runtime(IInferenceProvider provider) =>
         new(new[] { provider }, InferenceRuntimeLimits.ReferenceV1, new FixedClock(Now));
 

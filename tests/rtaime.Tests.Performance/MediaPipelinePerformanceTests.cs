@@ -71,6 +71,8 @@ public sealed class MediaPipelinePerformanceTests
         Assert.Equal((ulong)0, pipeline.Statistics.Late);
         Assert.Equal((ulong)0, pipeline.Statistics.Rejected);
         Assert.True(pipeline.Statistics.Queue.MaximumDepth <= 4);
+        Assert.Equal(MediaFramePipeline.RetainedObservationCapacity, pipeline.Observations.Count);
+        Assert.True(pipeline.OverwrittenObservationCount > 0);
 
         Assert.True(
             stopwatch.Elapsed < TimeSpan.FromSeconds(15),
