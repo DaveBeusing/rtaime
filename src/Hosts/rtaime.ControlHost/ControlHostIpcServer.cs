@@ -526,6 +526,23 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 				return Error(request, "control.audio.routing.source.unexpected", "FOLLOW_VIDEO routing must not declare a breakaway source.");
 			}
 
+			RuntimeRemoteSnapshot currentRuntime;
+			try
+			{
+				currentRuntime = await _runtimeTransport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
+			}
+			catch (Exception exception) when (exception is InvalidOperationException or NotSupportedException or FormatException or InvalidDataException or IOException)
+			{
+				return Error(request, "control.audio.routing.snapshot.unavailable", exception.Message);
+			}
+			if (currentRuntime.AudioProgram.RoutingRevision != wire.ExpectedRoutingRevision)
+			{
+				return Error(
+					request,
+					"control.audio.routing.revision_conflict",
+					$"Expected audio routing revision {wire.ExpectedRoutingRevision}, current revision is {currentRuntime.AudioProgram.RoutingRevision}.");
+			}
+
 			var requested = new DurableAudioRoutingState(wire.Mode, breakawaySourceId);
 			var previous = _durableAudioRouting;
 			try
@@ -2434,7 +2451,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		public static WireGraphicsOverlay Empty { get; } = new(false, null, 0, 0, false, 0.72, 0.06, 1.0);
 	}
 	private sealed record WireAudioInputState(string SourceId, double Gain, bool Muted);
-	private sealed record WireAudioRoutingState(int Mode, string? BreakawaySourceId);
+	private sealed record WireAudioRoutingState(int Mode, string? BreakawaySourceId, ulong ExpectedRoutingRevision);
 	private sealed record WireAudioTestSignalState(string SourceId, bool Enabled, int Mode, double FrequencyHz, double PeakLevel);
 	private sealed record WireTestPatternState(string SourceId, bool Enabled, bool MotionTiming = false);
 	private sealed record WireAudioInput(
