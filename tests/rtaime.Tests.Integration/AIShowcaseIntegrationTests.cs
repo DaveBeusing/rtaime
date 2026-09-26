@@ -39,6 +39,17 @@ public sealed class AIShowcaseIntegrationTests
 		Assert.True(running.EffectVisible);
 		Assert.Equal(RuntimeExecutionStatus.Committed, fixture.Runtime.Runtime!.Snapshot.Runtime.Status);
 		Assert.Equal(V1VisualLayerMode.Dynamic, fixture.Runtime.Runtime.Snapshot.VisualLayerMode);
+		Assert.DoesNotContain(
+			fixture.Runtime.Runtime.Snapshot.CompositingLayers ?? Array.Empty<V1CompositingLayerSnapshot>(),
+			layer => layer.LayerId == V1RuntimeHostService.LegacyVisualLayerId);
+
+		var alternatePreview = initial.Sources
+			.First(source => !string.Equals(
+				source.Id,
+				initial.Production.Routing.PreviewSourceId.ToString(),
+				StringComparison.Ordinal));
+		var previewMutation = await client.SelectPreviewAsync(alternatePreview.Id);
+		Assert.True(previewMutation.Accepted, previewMutation.Failure?.Message);
 
 		await client.SetAIShowcaseEnabledAsync(false);
 		var disabled = await WaitForAIAsync(client, snapshot => !snapshot.Enabled && snapshot.Status == RuntimeAIShowcaseStates.Disabled);
