@@ -93,7 +93,7 @@ public sealed class RundownViewModel : INotifyPropertyChanged
 	public uint TransitionFrames { get => _transitionFrames; set => Set(ref _transitionFrames, Math.Clamp(value, 2, RundownTransition.MaximumDissolveFrames)); }
 	public uint HoldFrames { get => _holdFrames; set => Set(ref _holdFrames, Math.Clamp(value, 1, RundownHoldItem.MaximumHoldFrames)); }
 	public bool RepeatItem { get => _repeatItem; set => Set(ref _repeatItem, value); }
-	public ushort RepeatCount { get => _repeatCount; set => Set(ref _repeatCount, (ushort)Math.Clamp(value, 1, RundownRepeatPolicy.MaximumRepeatCount)); }
+	public ushort RepeatCount { get => _repeatCount; set => Set(ref _repeatCount, Math.Clamp(value, (ushort)1, RundownRepeatPolicy.MaximumRepeatCount)); }
 	public bool RequiresAcknowledgement { get => _requiresAcknowledgement; private set { if (Set(ref _requiresAcknowledgement, value)) RaiseCommandState(); } }
 	public bool HasItems => Items.Count > 0;
 	public string StorageLabel => $"SAVED V{_storageVersion}";
