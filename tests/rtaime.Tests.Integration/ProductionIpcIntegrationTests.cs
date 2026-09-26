@@ -122,6 +122,28 @@ public sealed class ProductionIpcIntegrationTests
 		Assert.Equal(2, client.Snapshot.AudioInputs.Count);
 		Assert.Equal(sourceA.Id, client.Snapshot.AudioProgram.ActiveVideoSourceId);
 
+		var staleAudioClient = new OperatorControlClient(new NamedPipeOperatorControlTransport(
+			controlEndpoint,
+			TimeSpan.FromSeconds(1),
+			TimeSpan.FromSeconds(5)));
+		var staleAudioSnapshot = await staleAudioClient.SynchronizeAsync();
+		var initialRoutingRevision = staleAudioSnapshot.AudioProgram.RoutingRevision;
+
+		var breakaway = await client.SetAudioRoutingAsync(OperatorAudioRoutingMode.Breakaway, sourceB.Id);
+		Assert.Equal(OperatorAudioRoutingMode.Breakaway, breakaway.RoutingMode);
+		Assert.True(breakaway.RoutingRevision > initialRoutingRevision);
+		Assert.Equal(revisionBeforeAudio, client.Snapshot!.Production.Revision);
+
+		var staleRouting = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+			await staleAudioClient.SetAudioRoutingAsync(OperatorAudioRoutingMode.FollowVideo));
+		Assert.Contains("control.audio.routing.revision_conflict", staleRouting.Message, StringComparison.Ordinal);
+		Assert.Equal(OperatorAudioRoutingMode.Breakaway, client.Snapshot.AudioProgram.RoutingMode);
+
+		var followVideo = await client.SetAudioRoutingAsync(OperatorAudioRoutingMode.FollowVideo);
+		Assert.Equal(OperatorAudioRoutingMode.FollowVideo, followVideo.RoutingMode);
+		Assert.True(followVideo.RoutingRevision > breakaway.RoutingRevision);
+		Assert.Equal(revisionBeforeAudio, client.Snapshot!.Production.Revision);
+
 		var gainedAudio = await client.SetAudioInputStateAsync(sourceA.Id, 0.5, muted: false);
 		Assert.Equal(sourceA.Id, gainedAudio.SourceId);
 		Assert.Equal(0.5, gainedAudio.Gain, 6);
