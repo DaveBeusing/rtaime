@@ -704,6 +704,7 @@ public interface IOperatorControlTransport
     ValueTask<OperatorAudioProgramDescriptor> SetAudioRoutingAsync(
         OperatorAudioRoutingMode mode,
         string? breakawaySourceId,
+        ulong expectedRoutingRevision,
         CancellationToken cancellationToken = default) =>
         ValueTask.FromException<OperatorAudioProgramDescriptor>(new NotSupportedException("Operator transport does not expose audio routing control."));
 
@@ -1012,9 +1013,13 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
         if (mode == OperatorAudioRoutingMode.FollowVideo && !string.IsNullOrWhiteSpace(breakawaySourceId))
             throw new ArgumentException("FOLLOW_VIDEO audio routing must not declare a breakaway source.", nameof(breakawaySourceId));
 
-        RequireSnapshot();
+        var current = RequireSnapshot();
         var result = await _transport
-            .SetAudioRoutingAsync(mode, string.IsNullOrWhiteSpace(breakawaySourceId) ? null : breakawaySourceId.Trim(), cancellationToken)
+            .SetAudioRoutingAsync(
+                mode,
+                string.IsNullOrWhiteSpace(breakawaySourceId) ? null : breakawaySourceId.Trim(),
+                current.AudioProgram.RoutingRevision,
+                cancellationToken)
             .ConfigureAwait(false);
         await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
         return result;
