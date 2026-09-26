@@ -34,11 +34,47 @@ public enum ApplicationLifecycleState
 	Stopping
 }
 
+public enum ApplicationHostFailureKind
+{
+	RuntimeRecoveryTimeout,
+	LifecycleFailure
+}
+
+public sealed class ApplicationHostLifecycleException : Exception
+{
+	public ApplicationHostLifecycleException(
+		ApplicationHostFailureKind failureKind,
+		string message,
+		ApplicationLifecycleState stateAtFailure,
+		ApplicationStartupProfile profile,
+		ApplicationLifecycleOwnership ownership,
+		TimeSpan? recoveryDuration = null,
+		string? diagnosticPath = null,
+		Exception? innerException = null)
+		: base(message, innerException)
+	{
+		FailureKind = failureKind;
+		StateAtFailure = stateAtFailure;
+		Profile = profile;
+		Ownership = ownership;
+		RecoveryDuration = recoveryDuration;
+		DiagnosticPath = diagnosticPath;
+	}
+
+	public ApplicationHostFailureKind FailureKind { get; }
+	public ApplicationLifecycleState StateAtFailure { get; }
+	public ApplicationStartupProfile Profile { get; }
+	public ApplicationLifecycleOwnership Ownership { get; }
+	public TimeSpan? RecoveryDuration { get; }
+	public string? DiagnosticPath { get; }
+}
+
 public sealed record ApplicationEndpointSet(string Control, string Runtime, string AI);
 
 public sealed record ApplicationLifecyclePolicy(
 	ApplicationEndpointSet Endpoints,
 	TimeSpan StartupTimeout,
+	TimeSpan RuntimeRecoveryTimeout,
 	TimeSpan ProbeTimeout,
 	TimeSpan ProbeInterval,
 	TimeSpan ChildRestartBackoff,
@@ -71,6 +107,7 @@ public sealed record ApplicationLifecyclePolicy(
 				endpoints.GetProperty("runtime").GetString() ?? throw new InvalidDataException("Runtime endpoint is missing."),
 				endpoints.GetProperty("ai").GetString() ?? throw new InvalidDataException("AI endpoint is missing.")),
 			TimeSpan.FromMilliseconds(ReadInt(startup, "timeoutMs", 30000)),
+			TimeSpan.FromMilliseconds(ReadRuntimeRecoveryTimeout(startup)),
 			TimeSpan.FromMilliseconds(ReadInt(startup, "probeTimeoutMs", 500)),
 			TimeSpan.FromMilliseconds(ReadInt(startup, "probeIntervalMs", 200)),
 			TimeSpan.FromMilliseconds(ReadInt(startup, "childRestartBackoffMs", 500)),
@@ -80,6 +117,16 @@ public sealed record ApplicationLifecyclePolicy(
 
 	private static int ReadInt(JsonElement element, string name, int fallback) =>
 		element.TryGetProperty(name, out var value) && value.TryGetInt32(out var result) ? result : fallback;
+
+	private static int ReadRuntimeRecoveryTimeout(JsonElement startup)
+	{
+		const int defaultTimeoutMs = 30000;
+		if (!startup.TryGetProperty("runtimeRecoveryTimeoutMs", out var value))
+			return defaultTimeoutMs;
+		if (!value.TryGetInt32(out var result) || result < 1000)
+			throw new InvalidDataException("startup.runtimeRecoveryTimeoutMs must be an integer greater than or equal to 1000.");
+		return result;
+	}
 }
 
 public sealed record ApplicationHostOptions(
@@ -543,6 +590,7 @@ public sealed class UnifiedApplicationHost
 	private int? _operatorProcessId;
 	private string? _activeReadinessPath;
 	private bool _adopted;
+	private bool _initialQualificationCompleted;
 
 	public UnifiedApplicationHost(ApplicationHostOptions options, IApplicationHostPlatform platform)
 	{
@@ -588,7 +636,7 @@ public sealed class UnifiedApplicationHost
 			}
 
 			_lifecycle.StartStage(ApplicationLifecycleStages.ControlHost, "Discovering qualified ControlHost readiness.");
-			var ready = await FindHealthyReadinessAsync(cancellationToken).ConfigureAwait(false);
+			var ready = await FindQualifiedReadinessAsync(cancellationToken).ConfigureAwait(false);
 			if (ready is null)
 			{
 				if (_options.Ownership == ApplicationLifecycleOwnership.ExternalManaged)
@@ -643,6 +691,7 @@ public sealed class UnifiedApplicationHost
 			_lifecycle.StartStage(ApplicationLifecycleStages.ProductionReadiness, "Qualifying the complete production runtime.");
 			TrackReadiness(qualifiedReadiness);
 			Transition(ApplicationLifecycleState.Healthy);
+			_initialQualificationCompleted = true;
 			_lifecycle.CompleteStage(ApplicationLifecycleStages.ProductionReadiness, "Production runtime is qualified and ready.");
 
 			if (_options.Profile == ApplicationStartupProfile.HeadlessEngine)
@@ -670,11 +719,14 @@ public sealed class UnifiedApplicationHost
 		}
 		catch (Exception exception)
 		{
-			_lifecycle.FailActiveStages(exception.Message);
+			var classified = ClassifyFailure(exception);
+			_lifecycle.FailActiveStages(classified.Message);
 			if (State == ApplicationLifecycleState.Starting || ShouldStopOwnedControlOnHostExit())
 				await StopOwnedControlAsync(CancellationToken.None).ConfigureAwait(false);
 			Transition(ApplicationLifecycleState.Failed);
-			throw;
+			if (ReferenceEquals(classified, exception))
+				throw;
+			throw classified;
 		}
 	}
 
@@ -755,7 +807,7 @@ public sealed class UnifiedApplicationHost
 		while (_platform.UtcNow < deadline)
 		{
 			cancellationToken.ThrowIfCancellationRequested();
-			var ready = await FindHealthyReadinessAsync(cancellationToken).ConfigureAwait(false);
+			var ready = await FindQualifiedReadinessAsync(cancellationToken).ConfigureAwait(false);
 			if (ready is not null) return ready;
 			if (!_platform.IsEndpointLeaseHeld(endpoint)) return null;
 			await _platform.DelayAsync(_options.Policy.ProbeInterval, cancellationToken).ConfigureAwait(false);
@@ -790,7 +842,7 @@ public sealed class UnifiedApplicationHost
 				throw new InvalidOperationException(BuildControlHostExitDetail("ControlHost exited before qualified readiness."));
 			}
 
-			var ready = await FindHealthyReadinessAsync(cancellationToken).ConfigureAwait(false);
+			var ready = await FindQualifiedReadinessAsync(cancellationToken).ConfigureAwait(false);
 			if (ready is not null)
 			{
 				_controlProcessId = ready.Value.Evidence.ProcessId;
@@ -809,7 +861,7 @@ public sealed class UnifiedApplicationHost
 		while (_platform.UtcNow < deadline)
 		{
 			cancellationToken.ThrowIfCancellationRequested();
-			var ready = await FindHealthyReadinessAsync(cancellationToken).ConfigureAwait(false);
+			var ready = await FindQualifiedReadinessAsync(cancellationToken).ConfigureAwait(false);
 			if (ready is not null) return ready.Value;
 			await _platform.DelayAsync(_options.Policy.ProbeInterval, cancellationToken).ConfigureAwait(false);
 		}
@@ -817,13 +869,24 @@ public sealed class UnifiedApplicationHost
 		throw new TimeoutException("Externally managed rtaime engine did not reach qualified readiness before the configured startup timeout.");
 	}
 
-	private async Task<(string Path, ApplicationReadinessEvidence Evidence)?> FindHealthyReadinessAsync(CancellationToken cancellationToken)
+	private async Task<(string Path, ApplicationReadinessEvidence Evidence)?> FindQualifiedReadinessAsync(CancellationToken cancellationToken)
 	{
 		foreach (var path in GetReadinessCandidates())
 		{
 			if (!_platform.FileExists(path)) continue;
 			if (!ApplicationReadinessEvidence.TryParse(_platform.ReadAllText(path), out var evidence) || evidence is null) continue;
-			if (await IsHealthyAsync(evidence, cancellationToken).ConfigureAwait(false)) return (path, evidence);
+			if (await IsInitiallyQualifiedAsync(evidence, cancellationToken).ConfigureAwait(false)) return (path, evidence);
+		}
+		return null;
+	}
+
+	private (string Path, ApplicationReadinessEvidence Evidence)? FindObservedReadiness()
+	{
+		foreach (var path in GetReadinessCandidates())
+		{
+			if (!_platform.FileExists(path)) continue;
+			if (!ApplicationReadinessEvidence.TryParse(_platform.ReadAllText(path), out var evidence) || evidence is null) continue;
+			if (IsAuthoritativeReadinessValid(evidence)) return (path, evidence);
 		}
 		return null;
 	}
@@ -848,7 +911,7 @@ public sealed class UnifiedApplicationHost
 			yield return Path.GetFullPath(legacyReadiness);
 	}
 
-	private async Task<bool> IsHealthyAsync(ApplicationReadinessEvidence evidence, CancellationToken cancellationToken)
+	private bool IsAuthoritativeReadinessValid(ApplicationReadinessEvidence evidence)
 	{
 		var endpoints = _options.Endpoints;
 		if (!_platform.IsProcessAlive(evidence.ProcessId)) return false;
@@ -866,7 +929,14 @@ public sealed class UnifiedApplicationHost
 				!string.Equals(evidence.AISupervision.State, "HEALTHY", StringComparison.OrdinalIgnoreCase)) return false;
 			if (evidence.AISupervision.ProcessId is { } aiPid && !_platform.IsProcessAlive(aiPid)) return false;
 		}
+		return true;
+	}
 
+	private async Task<bool> IsInitiallyQualifiedAsync(ApplicationReadinessEvidence evidence, CancellationToken cancellationToken)
+	{
+		if (!IsAuthoritativeReadinessValid(evidence)) return false;
+
+		var endpoints = _options.Endpoints;
 		if (!await _platform.ProbePipeAsync(endpoints.Control, _options.Policy.ProbeTimeout, cancellationToken).ConfigureAwait(false)) return false;
 		if (_options.Ownership == ApplicationLifecycleOwnership.ExternalManaged)
 			return true;
@@ -882,7 +952,7 @@ public sealed class UnifiedApplicationHost
 		while (_platform.IsProcessAlive(operatorProcessId))
 		{
 			cancellationToken.ThrowIfCancellationRequested();
-			var readiness = await FindHealthyReadinessAsync(cancellationToken).ConfigureAwait(false);
+			var readiness = FindObservedReadiness();
 			if (readiness is null)
 			{
 				degradedSince ??= _platform.UtcNow;
@@ -892,8 +962,9 @@ public sealed class UnifiedApplicationHost
 					"Production readiness was lost; recovery is active.",
 					"Qualified engine readiness is currently unavailable.");
 				Transition(ApplicationLifecycleState.Degraded);
-				if (_platform.UtcNow - degradedSince >= _options.Policy.StartupTimeout)
-					throw new TimeoutException("Engine readiness did not recover within the configured recovery window.");
+				var recoveryDuration = _platform.UtcNow - degradedSince.Value;
+				if (recoveryDuration >= _options.Policy.RuntimeRecoveryTimeout)
+					throw CreateRuntimeRecoveryTimeout(recoveryDuration);
 			}
 			else
 			{
@@ -923,7 +994,7 @@ public sealed class UnifiedApplicationHost
 				throw new InvalidOperationException(BuildControlHostExitDetail("ControlHost stopped while HeadlessEngine profile was active."));
 			}
 
-			var readiness = await FindHealthyReadinessAsync(cancellationToken).ConfigureAwait(false);
+			var readiness = FindObservedReadiness();
 			if (readiness is null)
 			{
 				degradedSince ??= _platform.UtcNow;
@@ -933,8 +1004,9 @@ public sealed class UnifiedApplicationHost
 					"Production readiness was lost; recovery is active.",
 					"Qualified engine readiness is currently unavailable.");
 				Transition(ApplicationLifecycleState.Degraded);
-				if (_platform.UtcNow - degradedSince >= _options.Policy.StartupTimeout)
-					throw new TimeoutException("Engine readiness did not recover within the configured recovery window.");
+				var recoveryDuration = _platform.UtcNow - degradedSince.Value;
+				if (recoveryDuration >= _options.Policy.RuntimeRecoveryTimeout)
+					throw CreateRuntimeRecoveryTimeout(recoveryDuration);
 			}
 			else
 			{
@@ -952,6 +1024,36 @@ public sealed class UnifiedApplicationHost
 			await _platform.DelayAsync(_options.Policy.ProbeInterval, cancellationToken).ConfigureAwait(false);
 		}
 	}
+
+	private ApplicationHostLifecycleException CreateRuntimeRecoveryTimeout(TimeSpan recoveryDuration) =>
+		new(
+			ApplicationHostFailureKind.RuntimeRecoveryTimeout,
+			"Engine readiness did not recover within the configured runtime recovery window.",
+			State,
+			_options.Profile,
+			_options.Ownership,
+			recoveryDuration,
+			GetDiagnosticPathIfAvailable());
+
+	private Exception ClassifyFailure(Exception exception)
+	{
+		if (!_initialQualificationCompleted || exception is ApplicationHostLifecycleException)
+			return exception;
+
+		return new ApplicationHostLifecycleException(
+			ApplicationHostFailureKind.LifecycleFailure,
+			"AppHost lifecycle failed after initial production readiness was established.",
+			State,
+			_options.Profile,
+			_options.Ownership,
+			diagnosticPath: GetDiagnosticPathIfAvailable(),
+			innerException: exception);
+	}
+
+	private string? GetDiagnosticPathIfAvailable() =>
+		_platform.FileExists(_options.ControlHostDiagnosticPath)
+			? _options.ControlHostDiagnosticPath
+			: null;
 
 	private string BuildControlHostExitDetail(string prefix)
 	{

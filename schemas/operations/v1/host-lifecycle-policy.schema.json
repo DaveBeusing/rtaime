@@ -49,9 +49,10 @@
 		"startup": {
 			"type": "object",
 			"additionalProperties": false,
-			"required": ["timeoutMs", "probeTimeoutMs", "probeIntervalMs", "childRestartBackoffMs", "childMaxStartAttempts", "requireControlReadyHealthy", "requireRuntimeSupervisorHealthy", "requireAiSupervisorHealthy", "requireAllNamedPipesReachable"],
+			"required": ["timeoutMs", "runtimeRecoveryTimeoutMs", "probeTimeoutMs", "probeIntervalMs", "childRestartBackoffMs", "childMaxStartAttempts", "requireControlReadyHealthy", "requireRuntimeSupervisorHealthy", "requireAiSupervisorHealthy", "requireAllNamedPipesReachable"],
 			"properties": {
 				"timeoutMs": { "type": "integer", "minimum": 1000 },
+				"runtimeRecoveryTimeoutMs": { "type": "integer", "minimum": 1000 },
 				"probeTimeoutMs": { "type": "integer", "minimum": 1 },
 				"probeIntervalMs": { "type": "integer", "minimum": 1 },
 				"childRestartBackoffMs": { "type": "integer", "minimum": 0 },

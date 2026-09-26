@@ -166,21 +166,27 @@ Once the first complete production qualification succeeds, the startup completio
 
 ## Production readiness contract
 
-Production readiness and production mutations remain gated on positive evidence even after the Operator shell becomes available. AppHost requires:
+Production readiness and production mutations remain gated on positive evidence even after the Operator shell becomes available. AppHost deliberately separates **initial production qualification** from **steady-state readiness observation**.
+
+Initial production qualification remains strict and fail-closed. AppHost requires:
 
 1. the ControlHost process identity in readiness evidence to be live;
 2. ControlHost lifecycle state `READY`;
 3. ControlHost health `HEALTHY`;
 4. RuntimeHost supervision state `HEALTHY`; when the supervisor owns a RuntimeHost process identity, that process must be live;
 5. AIHost supervision state `HEALTHY` when AI is required; when the supervisor owns an AIHost process identity, that process must be live;
-6. Control Named Pipe connectivity;
-7. Runtime Named Pipe connectivity;
-8. AI Named Pipe connectivity when AI is required;
-9. endpoint identities matching the selected application instance.
+6. endpoint identities matching the selected application instance;
+7. bounded Control Named Pipe connectivity;
+8. bounded Runtime Named Pipe connectivity for locally managed engine ownership;
+9. bounded AI Named Pipe connectivity when AI is required for locally managed engine ownership.
+
+For `ExternalManaged`, initial qualification retains the existing operator-facing Control connectivity check while RuntimeHost and AIHost remain behind the external management boundary.
+
+After initial qualification, AppHost does **not** continuously connect and immediately disconnect from production protocol pipes merely to prove liveness. Steady-state observation uses the authoritative ControlHost readiness document together with live process identities, lifecycle/health state, child-supervision state and endpoint identity. Loss or invalidation of that evidence fails closed and enters the normal degradation/recovery path. Raw pipe probes remain an initial/fallback qualification mechanism rather than a 5 Hz-style steady-state health poll.
 
 ControlHost only reaches Ready/Healthy after its existing Runtime authority initialization/reconciliation path succeeds. AppHost therefore treats ControlHost readiness as reconciliation evidence rather than implementing a second reconciliation path.
 
-A running process or Windows service state alone is never treated as engine readiness.
+A running process or Windows service state alone is never treated as engine readiness, and a stale readiness document cannot qualify dead process identities or mismatched endpoints.
 
 ## Adoption and ControlHost replacement
 
@@ -208,7 +214,7 @@ RuntimeHost and AIHost shutdown/recovery remain consequences of ControlHost-owne
 
 ## Failure and recovery observation
 
-RuntimeHost or AIHost degradation causes ControlHost readiness evidence to disappear while child supervision performs its bounded recovery behavior. AppHost exposes this as:
+RuntimeHost or AIHost degradation causes ControlHost readiness evidence to disappear while child supervision performs its bounded recovery behavior. AppHost exposes successful recovery as:
 
 ```text
 Healthy
@@ -217,7 +223,17 @@ Healthy
 → Healthy
 ```
 
-If readiness does not recover within the configured recovery window, the application lifecycle becomes `Failed`.
+The recovery deadline is configured independently through `startup.runtimeRecoveryTimeoutMs`. It is not the initial `startup.timeoutMs`; the canonical policy keeps both at 30 seconds today so existing operational timing remains unchanged while their meanings are explicit.
+
+If authoritative readiness does not recover before that runtime deadline, the application lifecycle becomes `Failed`. A failure after initial production qualification is not reclassified as startup failure. AppHost uses stable failure categories and logging codes:
+
+- `apphost.startup-failure` for configuration/startup/initial-qualification failure;
+- `apphost.runtime-recovery-timeout` for a post-start readiness recovery deadline;
+- `apphost.lifecycle-failure` for another unexpected post-start lifecycle failure.
+
+Runtime recovery timeout diagnostics include the lifecycle state at failure, recovery duration, startup profile, lifecycle ownership and the safe ControlHost diagnostic path when available. Cancellation and normal stop remain separate successful shutdown paths.
+
+For `EphemeralLocal`, a terminal post-start lifecycle failure may stop only the ControlHost lifecycle owned by that AppHost. `ExternalManaged` never stops its adopted engine, and interactive `PersistentEngine` preserves its documented independent engine lifetime. AppHost never directly terminates RuntimeHost or AIHost.
 
 For a ControlHost started by AppHost, process stdout, stderr and the eventual exit code are persisted in `controlhost-process.log` below the selected AppHost work root. AppHost publishes that stable local path as `diagnosticPath` in `apphost-lifecycle.json`. When ControlHost exits before qualified readiness, the bounded diagnostic tail is included in the AppHost lifecycle failure detail so endpoint collisions, persistence startup failures and unhandled process failures are visible from the startup experience instead of collapsing into a generic engine failure.
 
@@ -274,6 +290,8 @@ Supported application arguments include:
 ```
 
 The default requires AI readiness. `--no-ai` is an explicit reduced startup configuration and does not change the default qualified release topology.
+
+Lifecycle timing is defined by the managed host lifecycle policy. `startup.timeoutMs` bounds initial production qualification; `startup.runtimeRecoveryTimeoutMs` independently bounds recovery after the AppHost has already reached `Healthy`. Invalid configured recovery-timeout values fail policy loading rather than silently falling back to another deadline.
 
 `--windows-service` requires `HeadlessEngine` and `PersistentEngine`.
 
