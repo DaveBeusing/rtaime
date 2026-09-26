@@ -36,6 +36,7 @@ public sealed class ShowProjectPersistenceIntegrationTests
 		{
 			Identity projectId;
 			DurableBitmapGraphicsReference bitmap;
+			RundownItemId rundownItemId;
 			await using (var management = new SqliteManagementStore(databasePath))
 			{
 				await management.InitializeAsync();
@@ -133,7 +134,7 @@ public sealed class ShowProjectPersistenceIntegrationTests
 					specification,
 					new DurableAudioRoutingState(DurableAudioRoutingState.BreakawayMode, breakawaySource));
 
-				var rundownItemId = RundownItemId.New();
+				rundownItemId = RundownItemId.New();
 				var rundown = new RundownDefinition(
 					RundownContractVersion.Current,
 					RundownId.New(),
