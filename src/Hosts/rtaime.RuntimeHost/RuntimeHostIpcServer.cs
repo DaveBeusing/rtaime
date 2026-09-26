@@ -21,10 +21,9 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 	private readonly Func<V1RuntimeHostService?> _runtimeAccessor;
 	private readonly Func<LocalMediaDeckRuntimeService?> _mediaDeckAccessor;
 	private readonly Func<RuntimeAIShowcaseService?> _aiShowcaseAccessor;
-	private readonly CancellationTokenSource _stop = new();
 	private readonly BoundedRequestCache _requestCache = new(256);
 	private readonly string _hostInstanceId = Identity.New().ToString();
-	private Task? _acceptLoop;
+	private readonly RuntimePipeListener _listener;
 	private ulong _stateVersion = 1;
 	private ulong _sequence;
 	private Identity? _committedAuthorityStateId;
@@ -35,59 +34,53 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		Func<V1RuntimeHostService?> runtimeAccessor,
 		Func<LocalMediaDeckRuntimeService?>? mediaDeckAccessor = null,
 		Func<RuntimeAIShowcaseService?>? aiShowcaseAccessor = null)
+		: this(endpoint, runtimeAccessor, mediaDeckAccessor, aiShowcaseAccessor, null)
+	{
+	}
+
+	internal RuntimeHostIpcServer(
+		string endpoint,
+		Func<V1RuntimeHostService?> runtimeAccessor,
+		Func<LocalMediaDeckRuntimeService?>? mediaDeckAccessor,
+		Func<RuntimeAIShowcaseService?>? aiShowcaseAccessor,
+		Func<NamedPipeServerStream>? pipeFactory)
 	{
 		if (string.IsNullOrWhiteSpace(endpoint)) throw new ArgumentException("RuntimeHost IPC endpoint is required.", nameof(endpoint));
 		_endpoint = endpoint.Trim();
 		_runtimeAccessor = runtimeAccessor ?? throw new ArgumentNullException(nameof(runtimeAccessor));
 		_mediaDeckAccessor = mediaDeckAccessor ?? (() => null);
 		_aiShowcaseAccessor = aiShowcaseAccessor ?? (() => null);
+		_listener = new RuntimePipeListener(
+			_endpoint,
+			"primary-control",
+			pipeFactory ?? CreatePipe,
+			HandleConnectionAsync);
 	}
 
 	public string Endpoint => _endpoint;
 	public string HostInstanceId => _hostInstanceId;
-	public bool Running => _acceptLoop is { IsCompleted: false };
-
-	public Task StartAsync(CancellationToken cancellationToken = default)
+	public bool Running => _listener.Running;
+	public RuntimePipeListenerSnapshot Listener => _listener.Snapshot;
+	internal Task ListenerCompletion => _listener.Completion;
+	internal Exception? ListenerTerminalFault => _listener.TerminalFault;
+	internal event Action<RuntimePipeListenerSnapshot, Exception>? ListenerFaulted
 	{
-		if (_acceptLoop is not null) throw new InvalidOperationException("RuntimeHost IPC server has already been started.");
-		var linked = CancellationTokenSource.CreateLinkedTokenSource(_stop.Token, cancellationToken);
-		_acceptLoop = AcceptLoopAsync(linked.Token);
-		return Task.CompletedTask;
+		add => _listener.TerminalFaulted += value;
+		remove => _listener.TerminalFaulted -= value;
 	}
 
-	public async ValueTask DisposeAsync()
-	{
-		_stop.Cancel();
-		if (_acceptLoop is not null)
-		{
-			try { await _acceptLoop.ConfigureAwait(false); }
-			catch (OperationCanceledException) { }
-		}
-		_stop.Dispose();
-	}
+	public Task StartAsync(CancellationToken cancellationToken = default) =>
+		_listener.StartAsync(cancellationToken);
 
-	private async Task AcceptLoopAsync(CancellationToken cancellationToken)
-	{
-		while (!cancellationToken.IsCancellationRequested)
-		{
-			var pipe = new NamedPipeServerStream(
-				_endpoint,
-				PipeDirection.InOut,
-				NamedPipeServerStream.MaxAllowedServerInstances,
-				PipeTransmissionMode.Byte,
-				PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
-			try
-			{
-				await pipe.WaitForConnectionAsync(cancellationToken).ConfigureAwait(false);
-				_ = HandleConnectionAsync(pipe, cancellationToken);
-			}
-			catch
-			{
-				pipe.Dispose();
-				if (!cancellationToken.IsCancellationRequested) throw;
-			}
-		}
-	}
+	public ValueTask DisposeAsync() => _listener.DisposeAsync();
+
+	private NamedPipeServerStream CreatePipe() =>
+		new(
+			_endpoint,
+			PipeDirection.InOut,
+			NamedPipeServerStream.MaxAllowedServerInstances,
+			PipeTransmissionMode.Byte,
+			PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
 
 	private async Task HandleConnectionAsync(NamedPipeServerStream pipe, CancellationToken cancellationToken)
 	{
@@ -167,6 +160,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 			catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
 			catch (IOException) { }
 			catch (InvalidDataException) { }
+			catch (JsonException) { }
 		}
 	}
 
