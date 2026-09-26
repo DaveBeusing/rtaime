@@ -112,7 +112,11 @@ Environment variables:
 - `RTAIME_RUNTIME_ENDPOINT`
 - `RTAIME_RUNTIME_SHUTDOWN_TIMEOUT_MS`
 
-RuntimeHost composes the existing transactional runtime, virtual media reference provider, managed GPU provider path, Audio Follow Video, Program output, recording integration and a Control-facing Named Pipe server. Shutdown stops IPC before disposing recording, media pipelines and GPU resources and rejects a clean exit if GPU surfaces remain retained.
+RuntimeHost composes the existing transactional runtime, virtual media reference provider, managed GPU provider path, Audio Follow Video, Program output, recording integration and a Control-facing Named Pipe server. The primary Control-facing listener is a first-class RuntimeHost dependency: `Ready/Healthy` is valid only while that listener remains actively accepting. A terminal primary-listener failure immediately transitions RuntimeHost to `Failed/Unhealthy`, cancels the controlled runtime path and returns `UnexpectedFailure` (`10`). The original listener failure remains the primary outcome even when later resource cleanup observes the already-faulted listener; it is not reclassified as `ShutdownFailure` (`4`).
+
+Short-lived clients, disconnects before handshake completion, malformed per-connection protocol input and normal connection teardown are isolated to the affected connection. Recoverable listener-level I/O failures recreate the server stream with bounded retry/backoff; an unknown failure or repeated listener-level I/O failure is terminal and observable. Normal cancellation still drains IPC before disposing recording, media pipelines and GPU resources and rejects a clean exit if GPU surfaces remain retained.
+
+The monitoring listener uses the same bounded listener lifecycle implementation. Monitoring-plane listener failure is reported as observability degradation only and does not take Runtime authority or independently fail the production RuntimeHost process.
 
 If RuntimeHost is killed, ControlHost retains the last committed authoritative revision but becomes degraded and pauses authoritative mutations until a Runtime instance is available and reconciled. Process Recovery & Supervision does not claim zero-frame output continuity while RuntimeHost itself is absent.
 

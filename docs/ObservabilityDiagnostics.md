@@ -53,6 +53,8 @@ The Operator keeps its human-readable crash report for immediate support workflo
 
 Structured host logs remain outside the real-time execution path. Runtime frame processing, media callbacks, GPU work and inference execution must never write a file log per frame. High-rate state remains in existing bounded counters/snapshots; host files record lifecycle, configuration, transition, recovery and failure evidence only.
 
+RuntimeHost emits `runtimehost.ipc.listener-faulted` at the actual failure boundary when its primary Control-facing listener becomes terminally unavailable. The event carries bounded/redacted endpoint, listener role/state, RuntimeHost lifecycle state, exception type and failure detail. The separate `runtimehost.ipc.monitoring-listener-faulted` event records a terminal monitoring-listener failure without implying a transfer of production authority. RuntimeHost support snapshots expose both listener lifecycle states and their bounded failure detail so a missing listener is diagnosable without waiting for process shutdown.
+
 For a local debugging session, start with the newest session directory, inspect `AppHost` for launch/lifecycle context, then correlate `ControlHost`, `RuntimeHost`, `AIHost` and `Operator` records by `timestampUtc`, `sessionId`, process ID and stable event code. Exceptions retain bounded stack detail after redaction, so the original process and failure boundary can be identified without relying only on a final crash file.
 
 ## Diagnostics support bundle export
