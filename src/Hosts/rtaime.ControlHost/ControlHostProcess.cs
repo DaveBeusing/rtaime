@@ -554,42 +554,32 @@ public sealed class ControlHostProcess
 			{
 				var transport = _runtimeTransport ?? throw new InvalidOperationException("Runtime transport was not composed.");
 				var control = _control ?? throw new InvalidOperationException("Control service was not composed.");
+				using var operationTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+				operationTimeout.CancelAfter(_options.ConnectTimeout + _options.RequestTimeout);
+				var operationToken = operationTimeout.Token;
 
-				if (control.HasAuthoritativeState && _ipcServer is not null)
+				await transport.ConnectAsync(operationToken).ConfigureAwait(false);
+				if (!transport.IsConnected) throw new IOException("Runtime transport did not report a connected state after a successful probe.");
+				if (control.HasPendingExecution)
 				{
-					await _ipcServer.RunSerializedMutationAsync(
-						token => BindAuthoritativeRuntimeWithinMutationAsync(control, transport, token),
-						cancellationToken).ConfigureAwait(false);
+					await Task.Delay(_options.RuntimeRetryInterval, cancellationToken).ConfigureAwait(false);
+					continue;
+				}
+
+				var runtimeHostInstanceId = transport.HostInstanceId ?? throw new InvalidDataException("Connected RuntimeHost did not expose a host instance identity.");
+				if (!control.HasAuthoritativeState)
+				{
+					await InitializeFreshAuthorityAsync(control, transport, runtimeHostInstanceId, operationToken).ConfigureAwait(false);
 				}
 				else
 				{
-					using var operationTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-					operationTimeout.CancelAfter(_options.ConnectTimeout + _options.RequestTimeout);
-					var operationToken = operationTimeout.Token;
-
-					await transport.ConnectAsync(operationToken).ConfigureAwait(false);
-					if (!transport.IsConnected) throw new IOException("Runtime transport did not report a connected state after a successful probe.");
-					if (control.HasPendingExecution)
-					{
-						await Task.Delay(_options.RuntimeRetryInterval, cancellationToken).ConfigureAwait(false);
-						continue;
-					}
-
-					var runtimeHostInstanceId = transport.HostInstanceId ?? throw new InvalidDataException("Connected RuntimeHost did not expose a host instance identity.");
-					if (!control.HasAuthoritativeState)
-					{
-						await InitializeFreshAuthorityAsync(control, transport, runtimeHostInstanceId, operationToken).ConfigureAwait(false);
-					}
+					var runtimeSnapshot = await transport.GetSnapshotAsync(operationToken).ConfigureAwait(false);
+					var hostChanged = !string.Equals(_boundRuntimeHostInstanceId, runtimeHostInstanceId, StringComparison.Ordinal);
+					var aligned = RuntimeMatchesAuthority(runtimeSnapshot, control.State);
+					if (hostChanged || !aligned)
+						await ReconcileRuntimeAsync(control, transport, runtimeHostInstanceId, runtimeSnapshot, operationToken).ConfigureAwait(false);
 					else
-					{
-						var runtimeSnapshot = await transport.GetSnapshotAsync(operationToken).ConfigureAwait(false);
-						var hostChanged = !string.Equals(_boundRuntimeHostInstanceId, runtimeHostInstanceId, StringComparison.Ordinal);
-						var aligned = RuntimeMatchesAuthority(runtimeSnapshot, control.State);
-						if (hostChanged || !aligned)
-							await ReconcileRuntimeAsync(control, transport, runtimeHostInstanceId, runtimeSnapshot, operationToken).ConfigureAwait(false);
-						else
-							SetOperationalState(ControlHostProcessState.Ready, ControlHostHealthState.Healthy, $"ControlHost is connected to RuntimeHost instance '{runtimeHostInstanceId}'.");
-					}
+						SetOperationalState(ControlHostProcessState.Ready, ControlHostHealthState.Healthy, $"ControlHost is connected to RuntimeHost instance '{runtimeHostInstanceId}'.");
 				}
 			}
 			catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -619,44 +609,8 @@ public sealed class ControlHostProcess
 				}
 			}
 
-			var nextObservationInterval = Lifecycle.State == ControlHostProcessState.Ready
-				? TimeSpan.FromMilliseconds(Math.Max(250, _options.RuntimeRetryInterval.TotalMilliseconds))
-				: _options.RuntimeRetryInterval;
-			await Task.Delay(nextObservationInterval, cancellationToken).ConfigureAwait(false);
+			await Task.Delay(_options.RuntimeRetryInterval, cancellationToken).ConfigureAwait(false);
 		}
-	}
-
-	private async ValueTask BindAuthoritativeRuntimeWithinMutationAsync(
-		ControlHostService control,
-		IControlRuntimeTransportSeam transport,
-		CancellationToken cancellationToken)
-	{
-		var runtimeSnapshot = await transport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
-		if (!transport.IsConnected)
-			throw new IOException("Runtime transport did not report a connected state after a successful snapshot.");
-		if (control.HasPendingExecution)
-			return;
-
-		var runtimeHostInstanceId = runtimeSnapshot.HostInstanceId;
-		if (string.IsNullOrWhiteSpace(runtimeHostInstanceId))
-			throw new InvalidDataException("Connected RuntimeHost did not expose a host instance identity.");
-		var hostChanged = !string.Equals(_boundRuntimeHostInstanceId, runtimeHostInstanceId, StringComparison.Ordinal);
-		if (hostChanged || !RuntimeMatchesAuthority(runtimeSnapshot, control.State))
-		{
-			await ReconcileRuntimeCoreAsync(
-				control,
-				transport,
-				runtimeHostInstanceId,
-				runtimeSnapshot,
-				restoreWithinMutationGate: true,
-				cancellationToken).ConfigureAwait(false);
-			return;
-		}
-
-		SetOperationalState(
-			ControlHostProcessState.Ready,
-			ControlHostHealthState.Healthy,
-			$"ControlHost is connected to RuntimeHost instance '{runtimeHostInstanceId}'.");
 	}
 
 	private async Task InitializeFreshAuthorityAsync(
@@ -739,19 +693,6 @@ public sealed class ControlHostProcess
 		if (RuntimeMatchesAuthority(runtimeSnapshot, authority))
 		{
 			_boundRuntimeHostInstanceId = runtimeHostInstanceId;
-			if (_ipcServer is not null)
-			{
-				if (restoreWithinMutationGate)
-				{
-					await _ipcServer.RestoreGraphicsStateWithinMutationAsync(cancellationToken).ConfigureAwait(false);
-					await _ipcServer.RestoreAudioRoutingStateWithinMutationAsync(cancellationToken).ConfigureAwait(false);
-				}
-				else
-				{
-					await _ipcServer.RestoreGraphicsStateAsync(cancellationToken).ConfigureAwait(false);
-					await _ipcServer.RestoreAudioRoutingStateAsync(cancellationToken).ConfigureAwait(false);
-				}
-			}
 			control.RecordObservation("recovery", "recovery.runtime.aligned", $"RuntimeHost instance '{runtimeHostInstanceId}' is already committed against authoritative revision {authority.Revision}.");
 			SetRecovery(ControlHostRecoveryState.Recovered, authority.Revision, "Durable Control authority and Runtime committed authority snapshot are aligned.");
 			SetOperationalState(ControlHostProcessState.Ready, ControlHostHealthState.Healthy, $"ControlHost reconciled with RuntimeHost instance '{runtimeHostInstanceId}' without execution replacement.");

@@ -1231,19 +1231,14 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			return null;
 
 		var active = CompositingLayerSnapshotsUnsafe();
-		var activeById = active.ToDictionary(layer => layer.LayerId, StringComparer.Ordinal);
-		var preparedLayerIds = state.Layers
-			.Select(layer => layer.LayerId)
-			.ToHashSet(StringComparer.Ordinal);
-		if (active.Any(layer =>
-			layer.LayerId != LegacyVisualLayerId &&
-			!preparedLayerIds.Contains(layer.LayerId)))
+		if (state.Layers.Count != active.Count)
 		{
 			return new Failure(
 				"runtime.compositing.resource_set_mismatch",
-				"Prepared compositing state must reference every authoritative bitmap and Production CG layer resource exactly once.");
+				"Prepared compositing state must reference every currently admitted layer resource exactly once.");
 		}
 
+		var activeById = active.ToDictionary(layer => layer.LayerId, StringComparer.Ordinal);
 		foreach (var layer in state.Layers)
 		{
 			if (!activeById.TryGetValue(layer.LayerId, out var admitted))
@@ -2224,7 +2219,9 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private IReadOnlyList<V1CompositingLayerSnapshot> CompositingLayerSnapshotsUnsafe()
 	{
 		var snapshots = new List<V1CompositingLayerSnapshot>(3);
-		if (_visualLayerMode != V1VisualLayerMode.Disabled)
+		// Dynamic visual state is a Runtime-local observational effect (for example the AI showcase)
+		// and must not be promoted into Control's authoritative compositing resource set.
+		if (_visualLayerMode == V1VisualLayerMode.Static)
 		{
 			snapshots.Add(new V1CompositingLayerSnapshot(
 				LegacyVisualLayerId,

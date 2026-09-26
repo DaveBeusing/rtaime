@@ -165,6 +165,11 @@ public sealed class ControlHostRecoveryIntegrationTests
 				Assert.Equal(22.5, transformedBitmap.RotationDegrees, 6);
 				Assert.Equal(0.5, transformedBitmap.AnchorX, 6);
 				Assert.Equal(0.15, transformedBitmap.CropRight, 6);
+				Assert.NotNull(client.Snapshot);
+				var synchronizedTransformedBitmap = Assert.Single(
+					client.Snapshot!.CompositingLayers,
+					layer => layer.LayerId == "bitmap-graphics");
+				Assert.Equal(22.5, synchronizedTransformedBitmap.RotationDegrees, 6);
 
 				var processedLayers = await client.SetCompositingLayerProcessingNodeAsync(
 					"bitmap-graphics",
@@ -176,6 +181,12 @@ public sealed class ControlHostRecoveryIntegrationTests
 				var processedBitmap = Assert.Single(processedLayers, layer => layer.LayerId == "bitmap-graphics");
 				Assert.Equal(22.5, processedBitmap.RotationDegrees, 6);
 				Assert.NotNull(processedBitmap.ProcessingNode);
+				Assert.NotNull(client.Snapshot);
+				var synchronizedProcessedBitmap = Assert.Single(
+					client.Snapshot!.CompositingLayers,
+					layer => layer.LayerId == "bitmap-graphics");
+				Assert.Equal(22.5, synchronizedProcessedBitmap.RotationDegrees, 6);
+				Assert.NotNull(synchronizedProcessedBitmap.ProcessingNode);
 
 				var beforeRestart = await client.SynchronizeAsync();
 				var requestedOrder = beforeRestart.CompositingLayers
