@@ -2,6 +2,7 @@
 
 using System.IO.Pipes;
 using rtaime.Media.Contracts;
+using rtaime.Provider.Gpu;
 
 namespace rtaime.RuntimeHost;
 
@@ -205,43 +206,58 @@ public sealed class RuntimeMonitoringTap : IAsyncDisposable
 		MediaSourceId sourceBId,
 		ReadOnlyMemory<byte> sourceB,
 		MediaSourceId committedProgramSourceId,
-		ReadOnlyMemory<byte> program,
+		GpuReadbackLease program,
 		VideoFormat sourceFormat,
 		FrameTiming timing)
 	{
 		if (!_hub.HasSubscribers || timing.SequenceNumber % SampleStride != 0) return false;
+		var retainedProgram = program.Retain();
+		MonitoringBoundarySample? replaced = null;
 		var sample = new MonitoringBoundarySample(
 			sourceAId,
 			sourceA,
 			sourceBId,
 			sourceB,
 			committedProgramSourceId,
-			program,
+			retainedProgram,
 			sourceFormat,
 			timing);
 		var signal = false;
 		lock (_gate)
 		{
-			if (_disposed) return false;
+			if (_disposed)
+			{
+				retainedProgram.Dispose();
+				return false;
+			}
 			_captured++;
 			if (_pending is not null)
+			{
 				_dropped++;
+				replaced = _pending;
+			}
 			else
+			{
 				signal = true;
+			}
 			_pending = sample;
 		}
+		replaced?.Program.Dispose();
 		if (signal) _available.Release();
 		return true;
 	}
 
 	public async ValueTask DisposeAsync()
 	{
+		MonitoringBoundarySample? pending;
 		lock (_gate)
 		{
 			if (_disposed) return;
 			_disposed = true;
+			pending = _pending;
 			_pending = null;
 		}
+		pending?.Program.Dispose();
 		_stop.Cancel();
 		try { await _worker.ConfigureAwait(false); }
 		catch (OperationCanceledException) { }
@@ -260,12 +276,16 @@ public sealed class RuntimeMonitoringTap : IAsyncDisposable
 				sample = _pending;
 				_pending = null;
 			}
-			if (sample is null || !_hub.HasSubscribers) continue;
+			if (sample is null) continue;
 
-			Publish(sample.SourceAId, MonitoringStreamKind.Source, sample.SourceA.Span, sample.Format, sample.Timing);
-			Publish(sample.SourceBId, MonitoringStreamKind.Source, sample.SourceB.Span, sample.Format, sample.Timing);
-			Publish(sample.ProgramSourceId, MonitoringStreamKind.Program, sample.Program.Span, sample.Format, sample.Timing);
-			lock (_gate) _processed++;
+			using (sample.Program)
+			{
+				if (!_hub.HasSubscribers) continue;
+				Publish(sample.SourceAId, MonitoringStreamKind.Source, sample.SourceA.Span, sample.Format, sample.Timing);
+				Publish(sample.SourceBId, MonitoringStreamKind.Source, sample.SourceB.Span, sample.Format, sample.Timing);
+				Publish(sample.ProgramSourceId, MonitoringStreamKind.Program, sample.Program.Memory.Span, sample.Format, sample.Timing);
+				lock (_gate) _processed++;
+			}
 		}
 	}
 
@@ -319,7 +339,7 @@ public sealed class RuntimeMonitoringTap : IAsyncDisposable
 		MediaSourceId SourceBId,
 		ReadOnlyMemory<byte> SourceB,
 		MediaSourceId ProgramSourceId,
-		ReadOnlyMemory<byte> Program,
+		GpuReadbackLease Program,
 		VideoFormat Format,
 		FrameTiming Timing);
 }

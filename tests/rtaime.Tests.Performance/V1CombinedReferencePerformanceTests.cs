@@ -76,7 +76,7 @@ public sealed class V1CombinedReferencePerformanceTests
             }
 
             var stopwatch = Stopwatch.StartNew();
-            var boundary = runtime.ProcessNextBoundary();
+            using var boundary = runtime.ProcessNextBoundary();
             if (index % 3 == 0)
             {
                 var inference = await ai.ExecuteAsync(CreateInferenceRequest(boundary.ProgramFrame));

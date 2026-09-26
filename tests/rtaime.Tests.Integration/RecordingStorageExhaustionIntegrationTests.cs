@@ -45,7 +45,7 @@ public sealed class RecordingStorageExhaustionIntegrationTests
 
 			var start = await runtime.StartRecordingAsync(RecordingSessionId.New(), RecordingOutputId.New());
 			Assert.True(start.Succeeded, start.Failure?.ToString());
-			var first = runtime.ProcessNextBoundary();
+			using var first = runtime.ProcessNextBoundary();
 			Assert.NotNull(first.Recording);
 			Assert.True(first.Recording!.Accepted, first.Recording.Failure?.ToString());
 
@@ -57,7 +57,7 @@ public sealed class RecordingStorageExhaustionIntegrationTests
 			Assert.False(File.Exists(writer.FinalPath));
 			Assert.False(File.Exists(writer.PartialPath));
 
-			var second = runtime.ProcessNextBoundary();
+			using var second = runtime.ProcessNextBoundary();
 			Assert.Equal(first.SequenceNumber + 1, second.SequenceNumber);
 			Assert.Equal(first.CommittedProgramSourceId, second.CommittedProgramSourceId);
 			Assert.True(second.Audio.Emitted, second.Audio.Failure?.ToString());

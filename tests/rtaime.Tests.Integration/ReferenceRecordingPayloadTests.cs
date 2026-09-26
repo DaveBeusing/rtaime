@@ -51,7 +51,7 @@ public sealed class ReferenceRecordingPayloadTests
 			var start = await runtime.StartRecordingAsync(RecordingSessionId.New(), outputId);
 			Assert.True(start.Succeeded, start.Failure?.ToString());
 
-			var boundary = runtime.ProcessNextBoundary();
+			using var boundary = runtime.ProcessNextBoundary();
 			Assert.NotNull(boundary.Recording);
 			Assert.True(boundary.Recording!.Accepted, boundary.Recording.Failure?.ToString());
 			Assert.True(boundary.Audio.Emitted, boundary.Audio.Failure?.ToString());
@@ -77,7 +77,7 @@ public sealed class ReferenceRecordingPayloadTests
 			Assert.Equal(format, sample.VideoFormat);
 			Assert.Equal(boundary.ProgramFrame.Timing.PresentationTimestamp, sample.VideoPresentationTimestamp);
 			Assert.Equal(boundary.ProgramFrame.Timing.Timebase, sample.VideoTimebase);
-			Assert.Equal(boundary.ProgramPixels, sample.VideoPayload);
+			Assert.True(boundary.ProgramPixels.Span.SequenceEqual(sample.VideoPayload));
 			Assert.Equal(checked((int)((long)format.Width * format.Height * 4)), sample.VideoPayload.Length);
 
 			Assert.Equal(AudioFormat.Stereo48kFloat32, sample.AudioFormat);

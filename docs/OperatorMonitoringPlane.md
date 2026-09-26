@@ -38,6 +38,8 @@ The RuntimeHost monitoring tap is fed from the committed execution path after ti
 
 Operator Monitoring Plane does not add an additional Program GPU readback. It reuses the readback already required by the managed V1 reference pipeline.
 
+Because monitoring processing is asynchronous, the tap retains the Program `GpuReadbackLease` while a sampled boundary is pending or being downscaled. Replacing a pending sample releases the older retained lease, and the worker releases its lease after producing the independent 320x180 monitoring payload. The primary Runtime boundary may therefore be disposed immediately without allowing later Program frames to mutate memory still being observed by monitoring. See [ProgramFrameMemoryOwnership.md](ProgramFrameMemoryOwnership.md).
+
 ## Bounded and loss-tolerant behavior
 
 Monitoring is subordinate to Program continuity.

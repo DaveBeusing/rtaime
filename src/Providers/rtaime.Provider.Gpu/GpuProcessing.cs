@@ -208,7 +208,193 @@ public interface IGpuProcessingBackend : IDisposable
     void Allocate(SurfaceId surfaceId, VideoFormat format, ReadOnlySpan<byte> rgbaPixels);
     void Composite(SurfaceId outputSurfaceId, VideoFormat format, GpuCompositeOperation operation);
     byte[] Readback(SurfaceId surfaceId, VideoFormat format);
+
+    void ReadbackInto(SurfaceId surfaceId, VideoFormat format, Span<byte> destination)
+    {
+        var copy = Readback(surfaceId, format);
+        if (copy.Length != destination.Length)
+            throw new InvalidOperationException("GPU readback payload length does not match the supplied destination.");
+        copy.AsSpan().CopyTo(destination);
+    }
+
     void Release(SurfaceId surfaceId);
+}
+
+public readonly record struct GpuReadbackPoolStatistics(
+    int Capacity,
+    int AllocatedBuffers,
+    int AvailableBuffers,
+    int ActiveBuffers,
+    ulong TotalRents,
+    ulong ExhaustedRents);
+
+public sealed class GpuReadbackLease : IDisposable
+{
+    private GpuReadbackBufferOwner? _owner;
+
+    internal GpuReadbackLease(GpuReadbackBufferOwner owner)
+    {
+        _owner = owner ?? throw new ArgumentNullException(nameof(owner));
+    }
+
+    public int Length => Owner.Length;
+    public ReadOnlyMemory<byte> Memory => Owner.Buffer.AsMemory(0, Owner.Length);
+    public bool IsDisposed => Volatile.Read(ref _owner) is null;
+
+    public GpuReadbackLease Retain()
+    {
+        var owner = Owner;
+        owner.Retain();
+        return new GpuReadbackLease(owner);
+    }
+
+    internal Span<byte> WritableSpan => Owner.Buffer.AsSpan(0, Owner.Length);
+
+    public void Dispose()
+    {
+        Interlocked.Exchange(ref _owner, null)?.Release();
+    }
+
+    private GpuReadbackBufferOwner Owner =>
+        Volatile.Read(ref _owner) ?? throw new ObjectDisposedException(nameof(GpuReadbackLease));
+}
+
+internal sealed class GpuReadbackBufferOwner
+{
+    private readonly GpuReadbackBufferPool _pool;
+    private int _references = 1;
+
+    public GpuReadbackBufferOwner(GpuReadbackBufferPool pool, byte[] buffer, int length)
+    {
+        _pool = pool;
+        Buffer = buffer;
+        Length = length;
+    }
+
+    public byte[] Buffer { get; }
+    public int Length { get; }
+
+    public void Retain()
+    {
+        while (true)
+        {
+            var current = Volatile.Read(ref _references);
+            if (current <= 0)
+                throw new ObjectDisposedException(nameof(GpuReadbackLease));
+            if (Interlocked.CompareExchange(ref _references, current + 1, current) == current)
+                return;
+        }
+    }
+
+    public void Release()
+    {
+        if (Interlocked.Decrement(ref _references) == 0)
+            _pool.Return(Buffer);
+    }
+}
+
+internal sealed class GpuReadbackBufferPool : IDisposable
+{
+    private readonly object _gate = new();
+    private readonly int _capacity;
+    private readonly Dictionary<int, Stack<byte[]>> _available = new();
+    private int _allocated;
+    private int _active;
+    private ulong _totalRents;
+    private ulong _exhaustedRents;
+    private bool _disposed;
+
+    public GpuReadbackBufferPool(int capacity)
+    {
+        if (capacity <= 0) throw new ArgumentOutOfRangeException(nameof(capacity));
+        _capacity = capacity;
+    }
+
+    public GpuReadbackPoolStatistics Statistics
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return new GpuReadbackPoolStatistics(
+                    _capacity,
+                    _allocated,
+                    _available.Values.Sum(stack => stack.Count),
+                    _active,
+                    _totalRents,
+                    _exhaustedRents);
+            }
+        }
+    }
+
+    public GpuReadbackLease Rent(int length)
+    {
+        if (length <= 0) throw new ArgumentOutOfRangeException(nameof(length));
+
+        lock (_gate)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            byte[] buffer;
+            if (_available.TryGetValue(length, out var buffers) && buffers.TryPop(out var pooled))
+            {
+                buffer = pooled;
+                if (buffers.Count == 0)
+                    _available.Remove(length);
+            }
+            else if (_allocated < _capacity)
+            {
+                buffer = new byte[length];
+                _allocated++;
+            }
+            else
+            {
+                if (_exhaustedRents < ulong.MaxValue)
+                    _exhaustedRents++;
+                throw new InvalidOperationException(
+                    $"GPU readback buffer pool capacity '{_capacity}' is exhausted. All reusable Program buffers are still leased.");
+            }
+
+            _active++;
+            if (_totalRents < ulong.MaxValue)
+                _totalRents++;
+            return new GpuReadbackLease(new GpuReadbackBufferOwner(this, buffer, length));
+        }
+    }
+
+    public void Dispose()
+    {
+        lock (_gate)
+        {
+            if (_disposed) return;
+            _disposed = true;
+            var availableCount = _available.Values.Sum(stack => stack.Count);
+            _available.Clear();
+            _allocated -= availableCount;
+        }
+    }
+
+    internal void Return(byte[] buffer)
+    {
+        lock (_gate)
+        {
+            if (_active <= 0)
+                throw new InvalidOperationException("GPU readback buffer pool release accounting underflow.");
+            _active--;
+
+            if (_disposed)
+            {
+                _allocated--;
+                return;
+            }
+
+            if (!_available.TryGetValue(buffer.Length, out var buffers))
+            {
+                buffers = new Stack<byte[]>();
+                _available.Add(buffer.Length, buffers);
+            }
+            buffers.Push(buffer);
+        }
+    }
 }
 
 public sealed class GpuFrame : IDisposable
@@ -429,15 +615,17 @@ public sealed class GpuProcessingProvider : IDisposable
 
     private readonly object _gate = new();
     private readonly IGpuProcessingBackend _backend;
+    private readonly GpuReadbackBufferPool _readbackPool;
     private readonly Dictionary<SurfaceId, GpuFrame> _activeFrames = new();
     private readonly BoundedDiagnosticHistory<GpuObservation> _observations = new(RetainedObservationCapacity);
     private GpuProviderState _state = GpuProviderState.Stopped;
     private ulong _surfaceOrdinal;
     private ulong _observationOrdinal;
 
-    public GpuProcessingProvider(IGpuProcessingBackend backend)
+    public GpuProcessingProvider(IGpuProcessingBackend backend, int readbackBufferCapacity = 4)
     {
         _backend = backend ?? throw new ArgumentNullException(nameof(backend));
+        _readbackPool = new GpuReadbackBufferPool(readbackBufferCapacity);
         Descriptor = CreateDescriptor(backend.Info);
     }
 
@@ -464,6 +652,7 @@ public sealed class GpuProcessingProvider : IDisposable
 
     public IReadOnlyList<GpuObservation> Observations => _observations.Snapshot();
     public ulong OverwrittenObservationCount => _observations.OverwrittenCount;
+    public GpuReadbackPoolStatistics ReadbackPoolStatistics => _readbackPool.Statistics;
 
     public void Start()
     {
@@ -692,7 +881,7 @@ public sealed class GpuProcessingProvider : IDisposable
         }
     }
 
-    public byte[] Readback(GpuFrame frame)
+    public GpuReadbackLease RentReadback(GpuFrame frame)
     {
         ArgumentNullException.ThrowIfNull(frame);
 
@@ -702,8 +891,25 @@ public sealed class GpuProcessingProvider : IDisposable
             if (frame.IsDisposed || !_activeFrames.ContainsKey(frame.SurfaceId))
                 throw new ObjectDisposedException(nameof(frame));
 
-            return _backend.Readback(frame.SurfaceId, frame.Descriptor.Surface.Format);
+            var byteLength = RgbaFrameBuffer.RequiredByteLength(frame.Descriptor.Surface.Format);
+            var lease = _readbackPool.Rent(byteLength);
+            try
+            {
+                _backend.ReadbackInto(frame.SurfaceId, frame.Descriptor.Surface.Format, lease.WritableSpan);
+                return lease;
+            }
+            catch
+            {
+                lease.Dispose();
+                throw;
+            }
         }
+    }
+
+    public byte[] Readback(GpuFrame frame)
+    {
+        using var lease = RentReadback(frame);
+        return lease.Memory.ToArray();
     }
 
     public void Dispose()
@@ -717,6 +923,7 @@ public sealed class GpuProcessingProvider : IDisposable
                 Stop();
 
             _backend.Dispose();
+            _readbackPool.Dispose();
             _state = GpuProviderState.Disposed;
         }
     }
@@ -891,8 +1098,12 @@ public sealed class GpuProcessingProvider : IDisposable
 
 public sealed class ManagedReferenceGpuBackend : IGpuProcessingBackend
 {
+    private const int MaxPooledAllocations = 8;
+
     private readonly object _gate = new();
     private readonly Dictionary<SurfaceId, Allocation> _surfaces = new();
+    private readonly Dictionary<int, Stack<byte[]>> _freeAllocations = new();
+    private int _pooledAllocationCount;
     private bool _running;
     private bool _disposed;
 
@@ -928,7 +1139,12 @@ public sealed class ManagedReferenceGpuBackend : IGpuProcessingBackend
         {
             if (_disposed)
                 return;
+
+            foreach (var allocation in _surfaces.Values)
+                ReturnBuffer(allocation.Pixels);
             _surfaces.Clear();
+            _freeAllocations.Clear();
+            _pooledAllocationCount = 0;
             _running = false;
         }
     }
@@ -943,7 +1159,17 @@ public sealed class ManagedReferenceGpuBackend : IGpuProcessingBackend
             if (rgbaPixels.Length != RgbaFrameBuffer.RequiredByteLength(format))
                 throw new ArgumentException("RGBA allocation payload length does not match the target format.", nameof(rgbaPixels));
 
-            _surfaces.Add(surfaceId, new Allocation(format, rgbaPixels.ToArray()));
+            var pixels = RentBuffer(rgbaPixels.Length);
+            try
+            {
+                rgbaPixels.CopyTo(pixels);
+                _surfaces.Add(surfaceId, new Allocation(format, pixels));
+            }
+            catch
+            {
+                ReturnBuffer(pixels);
+                throw;
+            }
         }
     }
 
@@ -958,43 +1184,61 @@ public sealed class ManagedReferenceGpuBackend : IGpuProcessingBackend
             var a = Get(operation.BackgroundA, format);
             var b = Get(operation.BackgroundB, format);
             var layer = operation.Layer is { } layerId ? Get(layerId, format) : null;
-            var output = new byte[a.Pixels.Length];
+            var output = RentBuffer(a.Pixels.Length);
             var weight = operation.Transition.BlendWeight;
 
-            for (var offset = 0; offset < output.Length; offset += 4)
+            try
             {
-                var baseR = Blend(a.Pixels[offset], b.Pixels[offset], weight);
-                var baseG = Blend(a.Pixels[offset + 1], b.Pixels[offset + 1], weight);
-                var baseB = Blend(a.Pixels[offset + 2], b.Pixels[offset + 2], weight);
-                var baseA = Blend(a.Pixels[offset + 3], b.Pixels[offset + 3], weight);
+                for (var offset = 0; offset < output.Length; offset += 4)
+                {
+                    var baseR = Blend(a.Pixels[offset], b.Pixels[offset], weight);
+                    var baseG = Blend(a.Pixels[offset + 1], b.Pixels[offset + 1], weight);
+                    var baseB = Blend(a.Pixels[offset + 2], b.Pixels[offset + 2], weight);
+                    var baseA = Blend(a.Pixels[offset + 3], b.Pixels[offset + 3], weight);
 
-                if (operation.LayerVisible && layer is not null)
-                {
-                    var effectiveAlpha = ScaleAlpha(layer.Pixels[offset + 3], operation.LayerOpacity);
-                    output[offset] = AlphaComposite(baseR, layer.Pixels[offset], effectiveAlpha);
-                    output[offset + 1] = AlphaComposite(baseG, layer.Pixels[offset + 1], effectiveAlpha);
-                    output[offset + 2] = AlphaComposite(baseB, layer.Pixels[offset + 2], effectiveAlpha);
-                    output[offset + 3] = CompositeAlpha(baseA, effectiveAlpha);
+                    if (operation.LayerVisible && layer is not null)
+                    {
+                        var effectiveAlpha = ScaleAlpha(layer.Pixels[offset + 3], operation.LayerOpacity);
+                        output[offset] = AlphaComposite(baseR, layer.Pixels[offset], effectiveAlpha);
+                        output[offset + 1] = AlphaComposite(baseG, layer.Pixels[offset + 1], effectiveAlpha);
+                        output[offset + 2] = AlphaComposite(baseB, layer.Pixels[offset + 2], effectiveAlpha);
+                        output[offset + 3] = CompositeAlpha(baseA, effectiveAlpha);
+                    }
+                    else
+                    {
+                        output[offset] = baseR;
+                        output[offset + 1] = baseG;
+                        output[offset + 2] = baseB;
+                        output[offset + 3] = baseA;
+                    }
                 }
-                else
-                {
-                    output[offset] = baseR;
-                    output[offset + 1] = baseG;
-                    output[offset + 2] = baseB;
-                    output[offset + 3] = baseA;
-                }
+
+                _surfaces.Add(outputSurfaceId, new Allocation(format, output));
             }
-
-            _surfaces.Add(outputSurfaceId, new Allocation(format, output));
+            catch
+            {
+                ReturnBuffer(output);
+                throw;
+            }
         }
     }
 
     public byte[] Readback(SurfaceId surfaceId, VideoFormat format)
     {
+        var result = new byte[RgbaFrameBuffer.RequiredByteLength(format)];
+        ReadbackInto(surfaceId, format, result);
+        return result;
+    }
+
+    public void ReadbackInto(SurfaceId surfaceId, VideoFormat format, Span<byte> destination)
+    {
         lock (_gate)
         {
             EnsureRunning();
-            return Get(surfaceId, format).Pixels.ToArray();
+            var allocation = Get(surfaceId, format);
+            if (destination.Length != allocation.Pixels.Length)
+                throw new ArgumentException("GPU readback destination length does not match the surface.", nameof(destination));
+            allocation.Pixels.AsSpan().CopyTo(destination);
         }
     }
 
@@ -1004,7 +1248,8 @@ public sealed class ManagedReferenceGpuBackend : IGpuProcessingBackend
         {
             if (_disposed)
                 return;
-            _surfaces.Remove(surfaceId);
+            if (_surfaces.Remove(surfaceId, out var allocation))
+                ReturnBuffer(allocation.Pixels);
         }
     }
 
@@ -1014,7 +1259,12 @@ public sealed class ManagedReferenceGpuBackend : IGpuProcessingBackend
         {
             if (_disposed)
                 return;
+
+            foreach (var allocation in _surfaces.Values)
+                ReturnBuffer(allocation.Pixels);
             _surfaces.Clear();
+            _freeAllocations.Clear();
+            _pooledAllocationCount = 0;
             _running = false;
             _disposed = true;
         }
@@ -1027,6 +1277,34 @@ public sealed class ManagedReferenceGpuBackend : IGpuProcessingBackend
         if (allocation.Format != format)
             throw new InvalidOperationException("GPU surface format does not match the composite target format.");
         return allocation;
+    }
+
+    private byte[] RentBuffer(int length)
+    {
+        if (_freeAllocations.TryGetValue(length, out var pool) && pool.TryPop(out var buffer))
+        {
+            _pooledAllocationCount--;
+            if (pool.Count == 0)
+                _freeAllocations.Remove(length);
+            return buffer;
+        }
+
+        return new byte[length];
+    }
+
+    private void ReturnBuffer(byte[] buffer)
+    {
+        if (_pooledAllocationCount >= MaxPooledAllocations)
+            return;
+
+        if (!_freeAllocations.TryGetValue(buffer.Length, out var pool))
+        {
+            pool = new Stack<byte[]>();
+            _freeAllocations.Add(buffer.Length, pool);
+        }
+
+        pool.Push(buffer);
+        _pooledAllocationCount++;
     }
 
     private static byte Blend(byte a, byte b, byte weight) =>

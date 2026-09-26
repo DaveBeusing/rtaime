@@ -150,6 +150,10 @@ The opaque handle contains an rtaime surface identity, not a raw CUDA device poi
 
 This keeps raw GPU allocations inside the backend implementation and prevents vendor pointers from becoming transport contracts.
 
+Program host readback now has a separate explicit lifetime. `GpuProcessingProvider.RentReadback` fills a fixed-capacity reusable host buffer and returns a reference-counted `GpuReadbackLease`. CUDA implements the path through `ReadbackInto`, copying device memory directly into the caller-supplied reusable buffer. RuntimeHost, monitoring and recording release retained references deterministically; the buffer returns to the readback pool only after the last consumer releases it.
+
+The legacy allocating `Readback` API remains for compatibility and focused semantic tests. It is not used by the RuntimeHost Program hot path. Detailed ownership rules are recorded in [ProgramFrameMemoryOwnership.md](ProgramFrameMemoryOwnership.md).
+
 ## Static RGBA source
 
 `StaticRgbaSource` owns immutable RGBA source content.

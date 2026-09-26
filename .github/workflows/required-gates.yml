@@ -148,6 +148,10 @@ jobs:
         shell: pwsh
         run: ./build/quality/Test-ObservabilityPolicy.ps1
 
+      - name: Verify Program frame memory ownership policy
+        shell: pwsh
+        run: ./build/quality/Test-ProgramFrameMemoryOwnershipPolicy.ps1
+
       - name: Verify CUDA qualification policy
         shell: pwsh
         run: ./build/quality/Test-CudaQualificationPolicy.ps1

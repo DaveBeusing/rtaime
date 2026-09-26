@@ -57,7 +57,7 @@ public sealed class OutputRoleRuntimeFailureTests
 
 		var initialApply = runtime.ApplyExecution(prepared, programBinding.MediaSinkId!.Value);
 		Assert.Equal(RuntimeCommitStatus.Committed, initialApply.Commit!.Status);
-		runtime.ProcessNextBoundary();
+		runtime.ProcessNextBoundary().Dispose();
 		var healthyAux = Assert.Single(runtime.Snapshot.OutputRoles!, role => role.RoleId == "aux");
 		Assert.Equal(RuntimeOutputRoleHealthState.Healthy, healthyAux.HealthState);
 		Assert.True(healthyAux.AuthoritativeActive);
@@ -85,7 +85,7 @@ public sealed class OutputRoleRuntimeFailureTests
 
 		var brokenApply = runtime.ApplyExecution(brokenPrepared, programBinding.MediaSinkId.Value);
 		Assert.Equal(RuntimeCommitStatus.Committed, brokenApply.Commit!.Status);
-		runtime.ProcessNextBoundary();
+		runtime.ProcessNextBoundary().Dispose();
 
 		var faultedAux = Assert.Single(runtime.Snapshot.OutputRoles!, role => role.RoleId == "aux");
 		Assert.Equal(unknownAuxSource, faultedAux.SourceId);

@@ -48,7 +48,8 @@ Assert-Condition ($runtimeMonitoring -match 'PipeDirection\.Out') "RuntimeHost m
 Assert-Condition ($runtimeMonitoring -match 'RuntimeHostMonitoringServer') "RuntimeHost must expose a dedicated monitoring server."
 
 Assert-Condition ($runtimeService -match '_monitoringTap\.TryCapture') "Committed Runtime frames must feed the monitoring tap."
-Assert-Condition ($runtimeService -match '_gpu\.Readback\(output\)') "Program monitoring must derive from the actual post-composite Program output."
+Assert-Condition ($runtimeService -match '_gpu\.RentReadback\(output\)') "Program monitoring must derive from the actual post-composite Program output through reusable owned readback memory."
+Assert-Condition ($runtimeMonitoring -match 'GpuReadbackLease program' -and $runtimeMonitoring -match 'program\.Retain\(\)') "Asynchronous Program monitoring must retain explicit readback ownership before the Runtime boundary can release it."
 Assert-Condition ($runtimeIpc -notmatch 'MonitoringFrameWire|MonitoringFrameDescriptor|monitor\.frame') "Management Runtime IPC must not carry monitoring pixel payloads."
 
 Assert-Condition ($client -match 'NamedPipeOperatorMonitoringTransport') "Client SDK must expose the independent monitoring transport."

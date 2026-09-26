@@ -37,7 +37,7 @@ public sealed class ProfessionalRecordingMp4IntegrationTests
 
 			for (var index = 0; index < 12; index++)
 			{
-				var boundary = fixture.Runtime.ProcessNextBoundary();
+				using var boundary = fixture.Runtime.ProcessNextBoundary();
 				Assert.True(boundary.Audio.Emitted, boundary.Audio.Failure?.ToString());
 				await Task.Delay(5);
 			}
@@ -109,7 +109,7 @@ public sealed class ProfessionalRecordingMp4IntegrationTests
 
 				for (var index = 0; index < 6; index++)
 				{
-					fixture.Runtime.ProcessNextBoundary();
+					fixture.Runtime.ProcessNextBoundary().Dispose();
 					await Task.Delay(5);
 				}
 
@@ -151,7 +151,7 @@ public sealed class ProfessionalRecordingMp4IntegrationTests
 
 			for (var index = 0; index < targetFrames; index++)
 			{
-				var boundary = fixture.Runtime.ProcessNextBoundary();
+				using var boundary = fixture.Runtime.ProcessNextBoundary();
 				Assert.NotNull(boundary.Recording);
 				Assert.True(boundary.Recording!.Accepted, boundary.Recording.Failure?.ToString());
 
@@ -203,7 +203,7 @@ public sealed class ProfessionalRecordingMp4IntegrationTests
 				"quota-failure");
 			Assert.True(start.Succeeded, start.Failure?.ToString());
 
-			var failedBoundary = fixture.Runtime.ProcessNextBoundary();
+			using var failedBoundary = fixture.Runtime.ProcessNextBoundary();
 			Assert.NotNull(failedBoundary.Recording);
 			Assert.True(failedBoundary.Recording!.Accepted);
 
@@ -217,7 +217,7 @@ public sealed class ProfessionalRecordingMp4IntegrationTests
 			Assert.Equal(RecordingLifecycleState.Failed, fixture.Runtime.Snapshot.Recording.State);
 			Assert.True(fixture.Runtime.HasCommittedExecution);
 
-			var laterBoundary = fixture.Runtime.ProcessNextBoundary();
+			using var laterBoundary = fixture.Runtime.ProcessNextBoundary();
 			Assert.True(laterBoundary.Audio.Emitted, laterBoundary.Audio.Failure?.ToString());
 			Assert.True(fixture.Runtime.HasCommittedExecution);
 

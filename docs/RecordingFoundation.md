@@ -108,12 +108,15 @@ IProgramRecordingWriter
 V1 Functional Gap Closure adds an optional subsystem-local capability:
 
 ```text
+IProgramRecordingPayloadLease : IDisposable
+	Memory
+
 IProgramRecordingPayloadWriter : IProgramRecordingWriter
-	StagePayload
+	StagePayload(sequence, ownedVideoLease, audioPayload)
 	DiscardPayload
 ```
 
-This capability does not change `RecordingProgramSample`, Media contracts, Runtime contracts or IPC contracts. The RuntimeHost composition root may provide already-materialized Program audio reference bytes to a capable writer while the normal recorder queue continues to carry descriptor-level samples. Program audio is taken after governed `FOLLOW_VIDEO`/`BREAKAWAY` route selection and the existing per-input gain/mute stage, so recording observes the same confirmed audio result as Program output.
+This capability does not change `RecordingProgramSample`, Media contracts, Runtime contracts or IPC contracts. RuntimeHost transfers an explicit retained Program-video lease to payload-capable writers. The writer releases that lease after write completion/failure, explicit discard, abort, or session cleanup, so the asynchronous worker cannot observe a Program buffer after it has returned to the GPU readback pool. The complete lifetime is documented in [ProgramFrameMemoryOwnership.md](ProgramFrameMemoryOwnership.md). The RuntimeHost composition root may provide already-materialized Program audio reference bytes to a capable writer while the normal recorder queue continues to carry descriptor-level samples. Program audio is taken after governed `FOLLOW_VIDEO`/`BREAKAWAY` route selection and the existing per-input gain/mute stage, so recording observes the same confirmed audio result as Program output.
 
 Qualified delivery writers remain behind the same writer boundary. `WindowsMediaFoundationMp4RecordingWriter` consumes the already-materialized Program payload supplied by RuntimeHost without changing Runtime, Control or the recording lifecycle.
 

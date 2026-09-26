@@ -74,20 +74,65 @@ internal sealed record CompositingRollbackState(
 	int BitmapGraphicsLayerOrder,
 	int ProductionCgLayerOrder);
 
-public sealed record V1ProgramBoundaryResult(
-	ulong SequenceNumber,
-	MediaSourceId CommittedProgramSourceId,
-	FrameDescriptor ProgramFrame,
-	byte[] ProgramPixels,
-	ProgramPixelProbe PixelProbe,
-	AudioFollowVideoResult Audio,
-	AudioBufferDescriptor ProgramAudioBuffer,
-	byte[] ProgramAudioPayload,
-	RecordingEnqueueResult? Recording,
-	RuntimeProgramTransitionKind? TransitionKind,
-	byte BlendWeight,
-	V1VisualLayerMode VisualLayerMode,
-	int ActiveGpuSurfacesAfterBoundary);
+public sealed class V1ProgramBoundaryResult : IDisposable
+{
+	private GpuReadbackLease? _programPixels;
+
+	internal V1ProgramBoundaryResult(
+		ulong sequenceNumber,
+		MediaSourceId committedProgramSourceId,
+		FrameDescriptor programFrame,
+		GpuReadbackLease programPixels,
+		ProgramPixelProbe pixelProbe,
+		AudioFollowVideoResult audio,
+		AudioBufferDescriptor programAudioBuffer,
+		byte[] programAudioPayload,
+		RecordingEnqueueResult? recording,
+		RuntimeProgramTransitionKind? transitionKind,
+		byte blendWeight,
+		V1VisualLayerMode visualLayerMode,
+		int activeGpuSurfacesAfterBoundary)
+	{
+		SequenceNumber = sequenceNumber;
+		CommittedProgramSourceId = committedProgramSourceId;
+		ProgramFrame = programFrame ?? throw new ArgumentNullException(nameof(programFrame));
+		_programPixels = programPixels ?? throw new ArgumentNullException(nameof(programPixels));
+		PixelProbe = pixelProbe;
+		Audio = audio ?? throw new ArgumentNullException(nameof(audio));
+		ProgramAudioBuffer = programAudioBuffer ?? throw new ArgumentNullException(nameof(programAudioBuffer));
+		ProgramAudioPayload = programAudioPayload ?? throw new ArgumentNullException(nameof(programAudioPayload));
+		Recording = recording;
+		TransitionKind = transitionKind;
+		BlendWeight = blendWeight;
+		VisualLayerMode = visualLayerMode;
+		ActiveGpuSurfacesAfterBoundary = activeGpuSurfacesAfterBoundary;
+	}
+
+	public ulong SequenceNumber { get; }
+	public MediaSourceId CommittedProgramSourceId { get; }
+	public FrameDescriptor ProgramFrame { get; }
+	public ReadOnlyMemory<byte> ProgramPixels => ProgramPixelsLease.Memory;
+	public ProgramPixelProbe PixelProbe { get; }
+	public AudioFollowVideoResult Audio { get; }
+	public AudioBufferDescriptor ProgramAudioBuffer { get; }
+	public byte[] ProgramAudioPayload { get; }
+	public RecordingEnqueueResult? Recording { get; }
+	public RuntimeProgramTransitionKind? TransitionKind { get; }
+	public byte BlendWeight { get; }
+	public V1VisualLayerMode VisualLayerMode { get; }
+	public int ActiveGpuSurfacesAfterBoundary { get; }
+	public bool IsDisposed => Volatile.Read(ref _programPixels) is null;
+
+	internal GpuReadbackLease RetainProgramPixels() => ProgramPixelsLease.Retain();
+
+	public void Dispose()
+	{
+		Interlocked.Exchange(ref _programPixels, null)?.Dispose();
+	}
+
+	private GpuReadbackLease ProgramPixelsLease =>
+		Volatile.Read(ref _programPixels) ?? throw new ObjectDisposedException(nameof(V1ProgramBoundaryResult));
+}
 
 public sealed record V1GraphicsOverlaySnapshot(
 	bool AssetLoaded,
@@ -225,6 +270,7 @@ public sealed record V1RuntimeHostSnapshot(
 /// </summary>
 public sealed class V1RuntimeHostService : IAsyncDisposable
 {
+	public const int ProgramReadbackBufferCapacity = ProgramRecorder.DefaultQueueCapacity + 3;
 	public const int RetainedObservationCapacity = 512;
 	public const string LegacyVisualLayerId = "legacy-visual";
 	public const string BitmapGraphicsLayerId = "bitmap-graphics";
@@ -346,7 +392,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		_sourceAPipeline = CreatePipeline();
 		_sourceBPipeline = CreatePipeline();
 		_gpuBackend = gpuBackend ?? new ManagedReferenceGpuBackend();
-		_gpu = new GpuProcessingProvider(_gpuBackend);
+		_gpu = new GpuProcessingProvider(_gpuBackend, ProgramReadbackBufferCapacity);
 		_gpu.Start();
 		_runtime = new TransactionalRuntime(new InMemoryRuntimeResourceReservationManager());
 
@@ -463,6 +509,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	public IReadOnlyList<string> Observations => _observations.Snapshot();
 	public ulong OverwrittenObservationCount => _observations.OverwrittenCount;
 	public IReadOnlyList<string> RecentObservations(int maximumCount) => _observations.SnapshotNewest(maximumCount);
+	public GpuReadbackPoolStatistics ProgramReadbackPoolStatistics => _gpu.ReadbackPoolStatistics;
 
 	public ulong ProgramFramesWritten
 	{
@@ -754,24 +801,26 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			}
 
 			using var output = composite.Frame!;
-			var pixels = _gpu.Readback(output);
-			var probe = ProbeCenter(pixels, _format);
-			_programOutput!.WriteFrame(output.Descriptor);
+			var pixels = _gpu.RentReadback(output);
+			try
+			{
+				var probe = ProbeCenter(pixels.Memory.Span, _format);
+				_programOutput!.WriteFrame(output.Descriptor);
 			if (avSyncEnabled)
 			{
 				var videoEvent = _motionTimingTestSignal.InspectSyncEvent(output.Descriptor.Timing);
 				if (videoEvent.IsFlashFrame)
 					_avSyncDiagnostics.RecordVideoSubmit(videoEvent, Stopwatch.GetTimestamp());
 			}
-			_monitoringTap.TryCapture(
-				frameA.SourceId,
-				contentA.Pixels,
-				frameB.SourceId,
-				contentB.Pixels,
-				committedSource,
-				pixels,
-				_format,
-				output.Descriptor.Timing);
+				_monitoringTap.TryCapture(
+					frameA.SourceId,
+					contentA.Pixels,
+					frameB.SourceId,
+					contentB.Pixels,
+					committedSource,
+					pixels,
+					_format,
+					output.Descriptor.Timing);
 
 			RefreshVirtualAudioMetersUnsafe(sequence);
 			var audioPacket = _virtualAudio.GetSource(routedAudioSource).GeneratePacket(sequence);
@@ -817,14 +866,25 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			RecordingEnqueueResult? recording = null;
 			if (_recorder.Snapshot.State == RecordingLifecycleState.Recording)
 			{
+				var payloadStaged = false;
 				if (_recordingPayloadWriter is not null)
 				{
 					try
 					{
-						_recordingPayloadWriter.StagePayload(
-							sequence,
-							pixels,
-							programAudioPayload);
+						GpuRecordingPayloadLease? recordingPayload = new GpuRecordingPayloadLease(pixels.Retain());
+						try
+						{
+							_recordingPayloadWriter.StagePayload(
+								sequence,
+								recordingPayload,
+								programAudioPayload);
+							recordingPayload = null;
+							payloadStaged = true;
+						}
+						finally
+						{
+							recordingPayload?.Dispose();
+						}
 					}
 					catch (Exception exception)
 					{
@@ -832,8 +892,18 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 					}
 				}
 
-				recording = _recordingBridge.TryRecordCommittedProgram(execution, output.Descriptor, audioBuffer);
-				if (recording is { Accepted: false })
+				try
+				{
+					recording = _recordingBridge.TryRecordCommittedProgram(execution, output.Descriptor, audioBuffer);
+				}
+				catch
+				{
+					if (payloadStaged)
+						_recordingPayloadWriter?.DiscardPayload(sequence);
+					throw;
+				}
+
+				if (payloadStaged && recording is { Accepted: false })
 					_recordingPayloadWriter?.DiscardPayload(sequence);
 			}
 
@@ -848,20 +918,26 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			_nextSequenceNumber++;
 			Observe($"program.frame:{sequence}:{committedSource}");
 
-			return new V1ProgramBoundaryResult(
-				sequence,
-				committedSource,
-				output.Descriptor,
-				pixels,
-				probe,
-				audio,
-				audioBuffer,
-				programAudioPayload,
-				recording,
-				transitionKind,
-				blendWeight,
-				(_operatorGraphicsVisible || _productionCgText.Visible) ? V1VisualLayerMode.Static : _visualLayerMode,
-				_gpu.ActiveSurfaceCount - 1);
+				return new V1ProgramBoundaryResult(
+					sequence,
+					committedSource,
+					output.Descriptor,
+					pixels,
+					probe,
+					audio,
+					audioBuffer,
+					programAudioPayload,
+					recording,
+					transitionKind,
+					blendWeight,
+					(_operatorGraphicsVisible || _productionCgText.Visible) ? V1VisualLayerMode.Static : _visualLayerMode,
+					_gpu.ActiveSurfaceCount - 1);
+			}
+			catch
+			{
+				pixels.Dispose();
+				throw;
+			}
 		}
 	}
 
@@ -1773,6 +1849,9 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		await _recorder.DisposeAsync().ConfigureAwait(false);
 		_sourceAPipeline.Dispose();
 		_sourceBPipeline.Dispose();
+		var readback = _gpu.ReadbackPoolStatistics;
+		if (readback.ActiveBuffers != 0)
+			throw new InvalidOperationException($"RuntimeHost shutdown retained '{readback.ActiveBuffers}' active Program readback buffer lease(s).");
 		_gpu.Dispose();
 		_hardwareTelemetry.Dispose();
 	}
@@ -2651,7 +2730,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		return payload;
 	}
 
-	private static ProgramPixelProbe ProbeCenter(byte[] pixels, VideoFormat format)
+	private static ProgramPixelProbe ProbeCenter(ReadOnlySpan<byte> pixels, VideoFormat format)
 	{
 		var width = checked((int)format.Width);
 		var height = checked((int)format.Height);
@@ -2662,6 +2741,24 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private void Observe(string value) => _observations.Add(value);
 
 	private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(_disposed, this);
+
+	private sealed class GpuRecordingPayloadLease : IProgramRecordingPayloadLease
+	{
+		private GpuReadbackLease? _lease;
+
+		public GpuRecordingPayloadLease(GpuReadbackLease lease)
+		{
+			_lease = lease ?? throw new ArgumentNullException(nameof(lease));
+		}
+
+		public ReadOnlyMemory<byte> Memory =>
+			(Volatile.Read(ref _lease) ?? throw new ObjectDisposedException(nameof(GpuRecordingPayloadLease))).Memory;
+
+		public void Dispose()
+		{
+			Interlocked.Exchange(ref _lease, null)?.Dispose();
+		}
+	}
 
 	private sealed record AudioMeterObservation(AudioStereoMeter Meter, bool Available, bool External);
 	private sealed record AnchoredTransition(RuntimeProgramTransitionIntent Intent, ulong StartSequence);

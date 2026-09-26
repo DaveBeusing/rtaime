@@ -30,6 +30,7 @@ public sealed class RecordingOutputUnavailableException : Exception
 
 public sealed class ProgramRecorder : IAsyncDisposable
 {
+    public const int DefaultQueueCapacity = 64;
     public const int RetainedObservationCapacity = 256;
 
     private readonly object _gate = new();
@@ -56,7 +57,7 @@ public sealed class ProgramRecorder : IAsyncDisposable
 
     public ProgramRecorder(
         IProgramRecordingWriter writer,
-        int capacity = 64,
+        int capacity = DefaultQueueCapacity,
         IRecordingClock? clock = null)
     {
         if (capacity <= 0)

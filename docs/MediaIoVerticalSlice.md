@@ -45,7 +45,7 @@ The physical bridge wraps the existing committed execution boundary:
 4. the already existing Program GPU readback is reused for monitoring and physical Program output;
 5. the followed capture audio window is submitted with the existing AFV gain/mute result.
 
-No additional Program GPU readback is introduced by Media I/O Vertical Slice.
+No additional Program GPU readback is introduced by Media I/O Vertical Slice. The reusable host-buffer lifetime is documented in [ProgramFrameMemoryOwnership.md](ProgramFrameMemoryOwnership.md).
 
 ## Transfer mode
 
@@ -58,7 +58,7 @@ The path is:
 3. `NativeMediaIoProviderAdapter` materializes that as `SharedLease`.
 4. `MediaIoVerticalSlice` copies the current leased RGBA frame into the runtime working frame while the lease is valid.
 5. The capture lease is released before another frame can be acquired.
-6. Program output is pinned only for the synchronous `TrySubmit` call and passed back to AutoCirculate.
+6. Program output borrows the existing leased Program readback memory, pins the array-backed segment only for the synchronous `TrySubmit` call, and releases the pin before returning. It does not retain the Program lease or make another full-frame copy.
 
 There is no unbounded managed media queue. A capture session permits at most one outstanding lease. Output uses `CanAcceptMoreOutputFrames`; lack of room becomes explicit backpressure rather than hidden buffering.
 

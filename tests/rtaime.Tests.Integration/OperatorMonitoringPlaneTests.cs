@@ -3,6 +3,7 @@
 using rtaime.Client;
 using rtaime.Core;
 using rtaime.Media.Contracts;
+using rtaime.Provider.Gpu;
 using rtaime.RuntimeHost;
 
 namespace rtaime.Tests.Integration;
@@ -42,17 +43,28 @@ public sealed class OperatorMonitoringPlaneTests
 		var format = new VideoFormat(4, 2, FrameRate.Fps50, PixelFormat.Rgba8, ScanMode.Progressive);
 		var timing = new FrameTiming(0, 0, new Timebase(1, 50));
 
+		using var gpu = new GpuProcessingProvider(new ManagedReferenceGpuBackend());
+		gpu.Start();
+		using var programFrame = gpu.Upload(
+			SourceB,
+			new RgbaFrameBuffer(format, Solid(format, 70, 80, 90)),
+			timing,
+			Generation.Initial,
+			"monitoring-test");
+		var programPixels = gpu.RentReadback(programFrame);
+
 		var captured = tap.TryCapture(
 			SourceA,
 			Solid(format, 10, 20, 30),
 			SourceB,
 			Solid(format, 40, 50, 60),
 			SourceB,
-			Solid(format, 70, 80, 90),
+			programPixels,
 			format,
 			timing);
 
 		Assert.True(captured);
+		programPixels.Dispose();
 		using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
 		var first = await subscription.ReadAsync(timeout.Token);
 		var second = await subscription.ReadAsync(timeout.Token);
@@ -67,6 +79,7 @@ public sealed class OperatorMonitoringPlaneTests
 		Assert.Equal((byte)70, program.Pixels.Span[0]);
 		Assert.Equal(1UL, tap.Statistics.Captured);
 		Assert.Equal(1UL, tap.Statistics.Processed);
+		Assert.Equal(0, gpu.ReadbackPoolStatistics.ActiveBuffers);
 	}
 
 	[Fact]

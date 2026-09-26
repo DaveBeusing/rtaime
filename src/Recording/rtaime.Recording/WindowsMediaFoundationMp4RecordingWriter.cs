@@ -124,7 +124,7 @@ public sealed class WindowsMediaFoundationMp4RecordingWriter :
 
 		lock (_gate)
 		{
-			_stagedPayloads.Clear();
+			ReleaseStagedPayloadsUnsafe();
 			_partialPath = partialPath;
 			_finalPath = finalPath;
 			_reservationPath = reservationPath;
@@ -145,10 +145,11 @@ public sealed class WindowsMediaFoundationMp4RecordingWriter :
 
 	public void StagePayload(
 		ulong sequenceNumber,
-		ReadOnlyMemory<byte> videoPayload,
+		IProgramRecordingPayloadLease videoPayload,
 		ReadOnlyMemory<byte> audioPayload)
 	{
-		if (videoPayload.IsEmpty)
+		ArgumentNullException.ThrowIfNull(videoPayload);
+		if (videoPayload.Memory.IsEmpty)
 			throw new ArgumentException("MP4 recording requires a non-empty Program video payload.", nameof(videoPayload));
 
 		lock (_gate)
@@ -161,8 +162,13 @@ public sealed class WindowsMediaFoundationMp4RecordingWriter :
 
 	public void DiscardPayload(ulong sequenceNumber)
 	{
+		IProgramRecordingPayloadLease? lease = null;
 		lock (_gate)
-			_stagedPayloads.Remove(sequenceNumber);
+		{
+			if (_stagedPayloads.Remove(sequenceNumber, out var payload))
+				lease = payload.VideoLease;
+		}
+		lease?.Dispose();
 	}
 
 	public ValueTask WriteAsync(RecordingProgramSample sample, CancellationToken cancellationToken)
@@ -178,22 +184,29 @@ public sealed class WindowsMediaFoundationMp4RecordingWriter :
 				throw new InvalidDataException($"MP4 recording payload for sequence '{sample.SequenceNumber}' was not staged.");
 		}
 
-		ValidateSample(sample, payload);
-		var payloadBytes = checked((long)payload.Video.Length + payload.Audio.Length);
-		lock (_gate)
+		try
 		{
-			var nextTotal = checked(_payloadBytesWritten + payloadBytes);
-			if (_maximumPayloadBytes is { } maximum && nextTotal > maximum)
-				throw new IOException($"MP4 recording payload quota of {maximum} bytes was exhausted.");
-			_payloadBytesWritten = nextTotal;
+			ValidateSample(sample, payload);
+			var payloadBytes = checked((long)payload.Video.Length + payload.Audio.Length);
+			lock (_gate)
+			{
+				var nextTotal = checked(_payloadBytesWritten + payloadBytes);
+				if (_maximumPayloadBytes is { } maximum && nextTotal > maximum)
+					throw new IOException($"MP4 recording payload quota of {maximum} bytes was exhausted.");
+				_payloadBytesWritten = nextTotal;
+			}
+
+			if (!_sinkStarted)
+				InitializeSink(sample);
+
+			WriteVideo(sample, payload.Video.Span);
+			WriteAudio(sample, payload.Audio.Span);
+			return ValueTask.CompletedTask;
 		}
-
-		if (!_sinkStarted)
-			InitializeSink(sample);
-
-		WriteVideo(sample, payload.Video.Span);
-		WriteAudio(sample, payload.Audio.Span);
-		return ValueTask.CompletedTask;
+		finally
+		{
+			payload.VideoLease.Dispose();
+		}
 	}
 
 	public ValueTask FinalizeAsync(CancellationToken cancellationToken)
@@ -237,7 +250,7 @@ public sealed class WindowsMediaFoundationMp4RecordingWriter :
 		lock (_gate)
 		{
 			partialPath = _partialPath;
-			_stagedPayloads.Clear();
+			ReleaseStagedPayloadsUnsafe();
 			_opened = false;
 		}
 
@@ -683,7 +696,17 @@ public sealed class WindowsMediaFoundationMp4RecordingWriter :
 		}
 	}
 
-	private readonly record struct StagedPayload(ReadOnlyMemory<byte> Video, ReadOnlyMemory<byte> Audio);
+	private void ReleaseStagedPayloadsUnsafe()
+	{
+		foreach (var payload in _stagedPayloads.Values)
+			payload.VideoLease.Dispose();
+		_stagedPayloads.Clear();
+	}
+
+	private sealed record StagedPayload(IProgramRecordingPayloadLease VideoLease, ReadOnlyMemory<byte> Audio)
+	{
+		public ReadOnlyMemory<byte> Video => VideoLease.Memory;
+	}
 }
 
 internal static class MediaFoundation

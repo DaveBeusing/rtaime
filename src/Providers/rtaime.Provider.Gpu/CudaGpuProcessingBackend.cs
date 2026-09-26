@@ -261,15 +261,23 @@ public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend
 
     public byte[] Readback(SurfaceId surfaceId, VideoFormat format)
     {
+        var host = new byte[RgbaFrameBuffer.RequiredByteLength(format)];
+        ReadbackInto(surfaceId, format, host);
+        return host;
+    }
+
+    public void ReadbackInto(SurfaceId surfaceId, VideoFormat format, Span<byte> destination)
+    {
         lock (_gate)
         {
             EnsureRunning();
             var allocation = Get(surfaceId, format);
-            SetCurrentContext();
+            if (destination.Length != checked((int)allocation.ByteLength))
+                throw new ArgumentException("CUDA readback destination length does not match the surface.", nameof(destination));
 
-            var host = new byte[checked((int)allocation.ByteLength)];
-            Check(CudaNative.cuMemcpyDtoH_v2(host, allocation.DevicePointer, allocation.ByteLength), "cuMemcpyDtoH_v2");
-            return host;
+            SetCurrentContext();
+            ref var destinationReference = ref MemoryMarshal.GetReference(destination);
+            Check(CudaNative.cuMemcpyDtoH_v2(ref destinationReference, allocation.DevicePointer, allocation.ByteLength), "cuMemcpyDtoH_v2");
         }
     }
 
@@ -499,7 +507,7 @@ public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend
         internal static extern CudaResult cuMemcpyHtoD_v2(ulong destination, ref byte source, nuint bytes);
 
         [DllImport(Library, EntryPoint = "cuMemcpyDtoH_v2", CallingConvention = CallingConvention.Winapi)]
-        internal static extern CudaResult cuMemcpyDtoH_v2([Out] byte[] destination, ulong source, nuint bytes);
+        internal static extern CudaResult cuMemcpyDtoH_v2(ref byte destination, ulong source, nuint bytes);
 
         [DllImport(Library, CallingConvention = CallingConvention.Winapi)]
         internal static extern CudaResult cuLaunchKernel(

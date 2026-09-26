@@ -178,15 +178,16 @@ public sealed class MediaIoVerticalSlice : IDisposable
 	public MediaIoOutputSubmitResult TrySubmitProgram(
 		MediaSourceId programSourceId,
 		FrameTiming timing,
-		byte[] rgbaPixels,
+		ReadOnlyMemory<byte> rgbaPixels,
 		float[]? audioSamples = null,
 		AudioBufferTiming? audioTiming = null,
 		AudioGain? gain = null,
 		bool muted = false)
 	{
-		ArgumentNullException.ThrowIfNull(rgbaPixels);
 		if (rgbaPixels.Length != MediaIoRgbaFrame.RequiredByteLength(_format))
 			throw new ArgumentException("Program RGBA payload does not match the configured Media I/O format.", nameof(rgbaPixels));
+		if (!MemoryMarshal.TryGetArray(rgbaPixels, out ArraySegment<byte> videoSegment) || videoSegment.Array is null)
+			throw new ArgumentException("Program RGBA payload must use array-backed host memory for synchronous Media I/O submission.", nameof(rgbaPixels));
 		if ((audioSamples is null) != (audioTiming is null))
 			throw new ArgumentException("Program audio samples and timing must either both be supplied or both be omitted.");
 
@@ -194,12 +195,12 @@ public sealed class MediaIoVerticalSlice : IDisposable
 		{
 			ThrowIfDisposed();
 			var adjustedAudio = audioSamples is null ? null : ApplyAudioState(audioSamples, gain ?? AudioGain.Unity, muted);
-			var videoPin = GCHandle.Alloc(rgbaPixels, GCHandleType.Pinned);
+			var videoPin = GCHandle.Alloc(videoSegment.Array, GCHandleType.Pinned);
 			GCHandle audioPin = default;
 			try
 			{
 				var surfaceId = SurfaceId.New();
-				var videoAddress = checked((ulong)videoPin.AddrOfPinnedObject().ToInt64());
+				var videoAddress = checked((ulong)(videoPin.AddrOfPinnedObject().ToInt64() + videoSegment.Offset));
 				var surface = new SurfaceDescriptor(
 					surfaceId,
 					_format,
