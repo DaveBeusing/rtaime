@@ -46,7 +46,7 @@ The pool:
 - never grows beyond its configured capacity;
 - fails closed if every reusable buffer is still leased.
 
-The generic provider default is four readback buffers. V1RuntimeHostService configures the Program pool to ProgramRecorder.DefaultQueueCapacity + 2. The current recording queue capacity is 64, so the V1 bound is 66 buffers. The extra headroom covers the active Program boundary and monitoring ownership while recording may retain its already bounded backlog.
+The generic provider default is four readback buffers. V1RuntimeHostService configures the Program pool to ProgramRecorder.DefaultQueueCapacity + 3. The current recording queue capacity is 64, so the V1 bound is 67 buffers. The extra headroom covers one sample actively owned by the recording writer, the current Program boundary, and one independent monitoring sample while the recording queue may retain its already bounded backlog.
 
 The capacity is an upper bound, not an eager reservation. Normal steady-state execution typically allocates one or a small number of full-frame buffers and then reuses them.
 
@@ -64,7 +64,7 @@ CUDA device-surface pooling remains independent from host readback pooling. Surf
 
 The managed reference backend also implements ReadbackInto.
 
-Its temporary full-frame surface arrays are reused through a bounded per-size free list where practical. This makes software-only allocation regression meaningful without presenting managed-reference results as hardware evidence.
+Its temporary full-frame surface arrays are reused through a globally bounded free list of at most eight arrays across all observed frame sizes. This makes software-only allocation regression meaningful without presenting managed-reference results as hardware evidence.
 
 The managed backend remains reference behavior and is not CUDA qualification.
 
