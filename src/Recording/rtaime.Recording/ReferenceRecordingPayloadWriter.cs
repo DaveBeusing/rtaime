@@ -11,9 +11,14 @@ namespace rtaime.Recording;
 /// Optional in-process recording capability used by reference backends that can persist actual media payload bytes
 /// while the stable RecordingProgramSample continues to carry descriptor-level media contracts only.
 /// </summary>
+public interface IProgramRecordingPayloadLease : IDisposable
+{
+	ReadOnlyMemory<byte> Memory { get; }
+}
+
 public interface IProgramRecordingPayloadWriter : IProgramRecordingWriter
 {
-	void StagePayload(ulong sequenceNumber, ReadOnlyMemory<byte> videoPayload, ReadOnlyMemory<byte> audioPayload);
+	void StagePayload(ulong sequenceNumber, IProgramRecordingPayloadLease videoPayload, ReadOnlyMemory<byte> audioPayload);
 	void DiscardPayload(ulong sequenceNumber);
 }
 
@@ -128,7 +133,7 @@ public sealed class ReferenceRecordingPayloadWriter : IProgramRecordingPayloadWr
 		{
 			if (_opened)
 				throw new InvalidOperationException("Reference recording writer is already open.");
-			_stagedPayloads.Clear();
+			ReleaseStagedPayloadsUnsafe();
 			_payloadBytesWritten = 0;
 			_videoSamples = 0;
 			_audioSamples = 0;
@@ -187,9 +192,13 @@ public sealed class ReferenceRecordingPayloadWriter : IProgramRecordingPayloadWr
 		return ValueTask.CompletedTask;
 	}
 
-	public void StagePayload(ulong sequenceNumber, ReadOnlyMemory<byte> videoPayload, ReadOnlyMemory<byte> audioPayload)
+	public void StagePayload(
+		ulong sequenceNumber,
+		IProgramRecordingPayloadLease videoPayload,
+		ReadOnlyMemory<byte> audioPayload)
 	{
-		if (videoPayload.IsEmpty)
+		ArgumentNullException.ThrowIfNull(videoPayload);
+		if (videoPayload.Memory.IsEmpty)
 			throw new ArgumentException("Reference recording requires a non-empty video payload.", nameof(videoPayload));
 
 		lock (_gate)
@@ -202,8 +211,13 @@ public sealed class ReferenceRecordingPayloadWriter : IProgramRecordingPayloadWr
 
 	public void DiscardPayload(ulong sequenceNumber)
 	{
+		IProgramRecordingPayloadLease? lease = null;
 		lock (_gate)
-			_stagedPayloads.Remove(sequenceNumber);
+		{
+			if (_stagedPayloads.Remove(sequenceNumber, out var payload))
+				lease = payload.VideoLease;
+		}
+		lease?.Dispose();
 	}
 
 	public ValueTask WriteAsync(RecordingProgramSample sample, CancellationToken cancellationToken)
@@ -223,29 +237,36 @@ public sealed class ReferenceRecordingPayloadWriter : IProgramRecordingPayloadWr
 				throw new InvalidDataException($"Reference recording payload for sequence '{sample.SequenceNumber}' was not staged.");
 		}
 
-		ValidatePayload(sample, payload);
-		var payloadBytes = checked((long)payload.Video.Length + payload.Audio.Length);
-		lock (_gate)
+		try
 		{
-			var nextTotal = checked(_payloadBytesWritten + payloadBytes);
-			if (_maximumPayloadBytes is { } maximum && nextTotal > maximum)
-				throw new IOException($"Reference recording payload quota of {maximum} bytes was exhausted.");
-			_payloadBytesWritten = nextTotal;
+			ValidatePayload(sample, payload);
+			var payloadBytes = checked((long)payload.Video.Length + payload.Audio.Length);
+			lock (_gate)
+			{
+				var nextTotal = checked(_payloadBytesWritten + payloadBytes);
+				if (_maximumPayloadBytes is { } maximum && nextTotal > maximum)
+					throw new IOException($"Reference recording payload quota of {maximum} bytes was exhausted.");
+				_payloadBytesWritten = nextTotal;
+			}
+
+			WriteSample(writer, sample, payload);
+			payloadHash.AppendData(payload.Video.Span);
+			if (!payload.Audio.IsEmpty)
+				payloadHash.AppendData(payload.Audio.Span);
+
+			lock (_gate)
+			{
+				_videoSamples++;
+				if (sample.Audio is not null)
+					_audioSamples++;
+			}
+
+			return ValueTask.CompletedTask;
 		}
-
-		WriteSample(writer, sample, payload);
-		payloadHash.AppendData(payload.Video.Span);
-		if (!payload.Audio.IsEmpty)
-			payloadHash.AppendData(payload.Audio.Span);
-
-		lock (_gate)
+		finally
 		{
-			_videoSamples++;
-			if (sample.Audio is not null)
-				_audioSamples++;
+			payload.VideoLease.Dispose();
 		}
-
-		return ValueTask.CompletedTask;
 	}
 
 	public async ValueTask FinalizeAsync(CancellationToken cancellationToken)
@@ -295,7 +316,7 @@ public sealed class ReferenceRecordingPayloadWriter : IProgramRecordingPayloadWr
 		lock (_gate)
 		{
 			partialPath = _partialPath;
-			_stagedPayloads.Clear();
+			ReleaseStagedPayloadsUnsafe();
 			_opened = false;
 		}
 
@@ -407,7 +428,17 @@ public sealed class ReferenceRecordingPayloadWriter : IProgramRecordingPayloadWr
 		payloadHash?.Dispose();
 	}
 
-	private readonly record struct StagedPayload(ReadOnlyMemory<byte> Video, ReadOnlyMemory<byte> Audio);
+	private void ReleaseStagedPayloadsUnsafe()
+	{
+		foreach (var payload in _stagedPayloads.Values)
+			payload.VideoLease.Dispose();
+		_stagedPayloads.Clear();
+	}
+
+	private sealed record StagedPayload(IProgramRecordingPayloadLease VideoLease, ReadOnlyMemory<byte> Audio)
+	{
+		public ReadOnlyMemory<byte> Video => VideoLease.Memory;
+	}
 
 	internal static ReadOnlySpan<byte> FileMagic => Magic;
 	internal const byte FileSampleMarker = SampleMarker;
