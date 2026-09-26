@@ -2114,25 +2114,27 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private V1AudioProgramSnapshot AudioProgramSnapshotUnsafe()
 	{
 		var activeSource = _audio.ActiveVideoSourceId;
-		var activeAudioSource = _audio.ActiveAudioSourceId;
-		var activeStream = _audio.ActiveStreamId;
 		var routing = _audio.RoutingState;
-		var state = _audio.GetInputState(activeStream);
-		if (_lastAudioResult is not { } result)
+		var routedAudioSource = _audio.ResolveAudioSource(activeSource);
+		var routedStream = _audioStreams[routedAudioSource].StreamId;
+		var routedState = _audio.GetInputState(routedStream);
+		if (_lastAudioResult is not { } result ||
+			result.RoutingRevision != routing.Revision ||
+			result.AudioSourceId != routedAudioSource)
 		{
 			return new V1AudioProgramSnapshot(
 				activeSource,
-				activeStream,
-				state.Gain.Linear,
-				state.Muted,
+				routedStream,
+				routedState.Gain.Linear,
+				routedState.Muted,
 				0,
 				0,
 				0,
 				false,
-				state.Muted ? V1AudioHealthState.Muted : V1AudioHealthState.Silence,
+				routedState.Muted ? V1AudioHealthState.Muted : V1AudioHealthState.Silence,
 				routing.Mode,
 				routing.Revision,
-				activeAudioSource);
+				routedAudioSource);
 		}
 
 		var health = result.Status switch
@@ -2146,7 +2148,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		};
 		return new V1AudioProgramSnapshot(
 			result.VideoSourceId,
-			result.StreamId ?? activeStream,
+			result.StreamId ?? routedStream,
 			result.Gain.Linear,
 			result.Muted,
 			result.LeftPeakLevel,
@@ -2154,9 +2156,9 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			result.PeakLevel,
 			result.Clipping,
 			health,
-			result.RoutingMode,
-			result.RoutingRevision,
-			result.AudioSourceId);
+			routing.Mode,
+			routing.Revision,
+			routedAudioSource);
 	}
 
 	private void RefreshVirtualAudioMetersUnsafe(ulong sequence)
