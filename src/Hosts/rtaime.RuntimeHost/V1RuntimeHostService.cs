@@ -608,6 +608,26 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			if (auxBindings.Length == 1 && (auxBindings[0].MediaSourceId is null || auxBindings[0].MediaSinkId is null))
 				throw new InvalidOperationException("Aux output binding requires both source and sink identities.");
 
+			var recording = _recorder.Snapshot;
+			if (recording.State is RecordingLifecycleState.Recording or RecordingLifecycleState.Finalizing &&
+				recording.Output is { } recordingOutput &&
+				recordingOutput.ProgramSinkId != programSinkId)
+			{
+				var failure = new Failure(
+					"runtime.output.program_rebind_recording_active",
+					"Program sink cannot change while the active recording session is bound to the current Program sink.");
+				Observe($"runtime.prepare.rejected:{failure.Code}");
+				return new RuntimeHostApplyResult(
+					new RuntimePrepareResult(
+						RuntimeContractVersion.Current,
+						preparedExecution.PreparedExecutionId,
+						RuntimePrepareStatus.Rejected,
+						null,
+						failure),
+					null,
+					null);
+			}
+
 			var compositingFailure = ValidatePreparedCompositingStateUnsafe(preparedExecution.CompositingState);
 			if (compositingFailure is not null)
 			{
@@ -696,8 +716,9 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				return new RuntimeHostApplyResult(prepare, commit, null);
 			}
 
+			if (_programSinkId != programSinkId || _programOutput is null)
+				_programOutput = _virtualMedia.CreateOutput(programSinkId);
 			_programSinkId = programSinkId;
-			_programOutput ??= _virtualMedia.CreateOutput(programSinkId);
 			var auxBinding = auxBindings.SingleOrDefault();
 			if (auxBinding is null)
 			{
