@@ -162,7 +162,8 @@ internal static class Program
 			: "AppHost lifecycle failed after initial production readiness.";
 		var dimensions = new Dictionary<string, string>
 		{
-			["state"] = exception.StateAtFailure.ToString(),
+			["state"] = ApplicationLifecycleState.Failed.ToString(),
+			["stateAtFailure"] = exception.StateAtFailure.ToString(),
 			["profile"] = exception.Profile.ToString(),
 			["ownership"] = exception.Ownership.ToString()
 		};
