@@ -27,18 +27,35 @@
 			<controls:RtaimeButton Grid.Column="2" Content="SAVE" Command="{Binding SaveCommand}" IsCompact="True" VerticalAlignment="Bottom" />
 		</Grid>
 
-		<Grid Grid.Row="1" Margin="0,6,0,6">
-			<Grid.ColumnDefinitions>
-				<ColumnDefinition Width="*" />
-				<ColumnDefinition Width="3" />
-				<ColumnDefinition Width="*" />
-				<ColumnDefinition Width="3" />
-				<ColumnDefinition Width="*" />
-			</Grid.ColumnDefinitions>
-			<controls:RtaimeButton Content="+ MEDIA" Command="{Binding AddMediaCommand}" IsCompact="True" ToolTip="Add the selected persistent media asset using the selected production source." />
-			<controls:RtaimeButton Grid.Column="2" Content="+ SCENE" Command="{Binding AddSceneCommand}" IsCompact="True" />
-			<controls:RtaimeButton Grid.Column="4" Content="+ HOLD" Command="{Binding AddHoldCommand}" IsCompact="True" />
-		</Grid>
+		<StackPanel Grid.Row="1" Margin="0,6,0,6">
+			<Grid>
+				<Grid.ColumnDefinitions>
+					<ColumnDefinition Width="*" />
+					<ColumnDefinition Width="3" />
+					<ColumnDefinition Width="*" />
+					<ColumnDefinition Width="3" />
+					<ColumnDefinition Width="*" />
+				</Grid.ColumnDefinitions>
+				<controls:RtaimeButton Content="+ MEDIA" Command="{Binding AddMediaCommand}" IsCompact="True" ToolTip="Add the selected persistent media asset using the selected production source." />
+				<controls:RtaimeButton Grid.Column="2" Content="+ SCENE" Command="{Binding AddSceneCommand}" IsCompact="True" />
+				<controls:RtaimeButton Grid.Column="4" Content="+ HOLD" Command="{Binding AddHoldCommand}" IsCompact="True" />
+			</Grid>
+			<Grid Margin="0,4,0,0">
+				<Grid.ColumnDefinitions>
+					<ColumnDefinition Width="Auto" />
+					<ColumnDefinition Width="8" />
+					<ColumnDefinition Width="Auto" />
+					<ColumnDefinition Width="*" />
+				</Grid.ColumnDefinitions>
+				<controls:RtaimeCheckBox Content="AUTO MEDIA" IsChecked="{Binding AutoAdvanceMedia, Mode=TwoWay}" VerticalAlignment="Center" />
+				<controls:RtaimeCheckBox Grid.Column="2" Content="DISSOLVE" IsChecked="{Binding UseDissolve, Mode=TwoWay}" VerticalAlignment="Center" />
+				<controls:RtaimeTextBox Grid.Column="3"
+					Margin="6,0,0,0"
+					Text="{Binding TransitionFrames, UpdateSourceTrigger=PropertyChanged}"
+					IsCompact="True"
+					ToolTip="Dissolve duration in production frames." />
+			</Grid>
+		</StackPanel>
 
 		<controls:RtaimeListBox Grid.Row="2"
 			ItemsSource="{Binding Items}"
@@ -100,17 +117,20 @@
 					<ColumnDefinition Width="*" />
 					<ColumnDefinition Width="3" />
 					<ColumnDefinition Width="*" />
+					<ColumnDefinition Width="3" />
+					<ColumnDefinition Width="*" />
 				</Grid.ColumnDefinitions>
-				<controls:RtaimeButton Content="PREPARE" Command="{Binding PrepareCommand}" IsCompact="True" />
-				<controls:RtaimeButton Grid.Column="2"
+				<controls:RtaimeButton Content="PREV" Command="{Binding PreviousCommand}" IsCompact="True" />
+				<controls:RtaimeButton Grid.Column="2" Content="PREPARE" Command="{Binding PrepareCommand}" IsCompact="True" />
+				<controls:RtaimeButton Grid.Column="4"
 					Content="GO"
 					Command="{Binding GoCommand}"
 					IsCompact="True"
 					Background="{DynamicResource OperatorAccentBrush}"
 					BorderBrush="{DynamicResource OperatorAccentBrush}"
 					Foreground="{DynamicResource OperatorBackgroundBrush}" />
-				<controls:RtaimeButton Grid.Column="4" Content="NEXT" Command="{Binding NextCommand}" IsCompact="True" />
-				<controls:RtaimeButton Grid.Column="6" Content="HOLD" Command="{Binding HoldCommand}" IsCompact="True" />
+				<controls:RtaimeButton Grid.Column="6" Content="NEXT" Command="{Binding NextCommand}" IsCompact="True" />
+				<controls:RtaimeButton Grid.Column="8" Content="HOLD" Command="{Binding HoldCommand}" IsCompact="True" />
 			</Grid>
 			<Grid Margin="0,4,0,0">
 				<Grid.ColumnDefinitions>
