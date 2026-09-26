@@ -153,7 +153,7 @@ Program audio has one explicit confirmed routing state with a monotonically incr
 - `FOLLOW_VIDEO` resolves the audio stream from the confirmed Program video source at each Program boundary.
 - `BREAKAWAY` pins Program audio to one explicitly selected authoritative production source while Program video may continue to CUT or DISSOLVE independently.
 
-Routing changes cross Operator → `rtaime.Client` → ControlHost → RuntimeHost. ControlHost validates the selected source against the authoritative production, RuntimeHost confirms the execution state, and the confirmed route is persisted in the durable show project. A persisted breakaway whose source no longer exists is normalized to `FOLLOW_VIDEO` during restore rather than inventing a replacement source.
+Routing changes cross Operator → `rtaime.Client` → ControlHost → RuntimeHost. ControlHost validates the selected source against the authoritative production, rejects stale mutations whose expected routing revision no longer matches RuntimeHost, RuntimeHost confirms the execution state, and the confirmed route is persisted in the durable show project. A persisted breakaway whose source no longer exists is normalized to `FOLLOW_VIDEO` during restore rather than inventing a replacement source.
 
 The actual audio packet, external sample queue, generated test signal, gain/mute state, meter observation and recording payload are all selected from the same routed audio source. A route change therefore cannot leave recording or metering on a different source from Program audio.
 
