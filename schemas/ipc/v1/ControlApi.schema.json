@@ -21,6 +21,7 @@
 					"control.program.dissolve",
 					"control.mutation.response",
 					"control.audio.input.set",
+					"control.audio.routing.set",
 					"control.audio.test_signal.set",
 					"control.test_pattern.set",
 					"control.media_asset_catalog.snapshot.get",
