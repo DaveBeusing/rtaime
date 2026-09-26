@@ -122,6 +122,7 @@ public sealed class ControlHostRecoveryIntegrationTests
 		};
 
 		Revision committedRevision;
+		string breakawaySourceId = string.Empty;
 		try
 		{
 			using (var firstRuntimeStop = new CancellationTokenSource())
@@ -134,7 +135,11 @@ public sealed class ControlHostRecoveryIntegrationTests
 				await WaitUntilAsync(() => firstControl.Lifecycle.State == ControlHostProcessState.Ready && firstControl.Control?.HasAuthoritativeState == true);
 
 				var client = new OperatorControlClient(new NamedPipeOperatorControlTransport(controlEndpoint, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(5)));
-				await client.SynchronizeAsync();
+				var initialSnapshot = await client.SynchronizeAsync();
+				breakawaySourceId = initialSnapshot.Sources
+					.First(source => !string.Equals(source.Id, initialSnapshot.Production.Routing.ProgramSourceId.ToString(), StringComparison.Ordinal))
+					.Id;
+				await client.SetAudioRoutingAsync(OperatorAudioRoutingMode.Breakaway, breakawaySourceId);
 				await client.LoadGraphicsOverlayAsync(new OperatorGraphicsAsset(
 					"durable-logo.rgba",
 					1,
@@ -193,6 +198,8 @@ public sealed class ControlHostRecoveryIntegrationTests
 				Assert.Equal(0.15, beforeBitmap.CropRight, 6);
 				Assert.NotNull(beforeBitmap.ProcessingNode);
 				Assert.Equal(0.1, beforeBitmap.ProcessingNode!.ColorGrade.Brightness, 6);
+				Assert.Equal(OperatorAudioRoutingMode.Breakaway, beforeRestart.AudioProgram.RoutingMode);
+				Assert.Equal(breakawaySourceId, beforeRestart.AudioProgram.ActiveAudioSourceId);
 				Assert.Equal("SAVED", beforeRestart.ShowProject.State);
 				committedRevision = firstControl.Control!.State.Revision;
 
@@ -220,6 +227,8 @@ public sealed class ControlHostRecoveryIntegrationTests
 			Assert.True(restored.GraphicsOverlay.Visible);
 			Assert.Equal("DURABLE SHOW STATE", restored.ProductionCgText.Text);
 			Assert.True(restored.ProductionCgText.Visible);
+			Assert.Equal(OperatorAudioRoutingMode.Breakaway, restored.AudioProgram.RoutingMode);
+			Assert.Equal(breakawaySourceId, restored.AudioProgram.ActiveAudioSourceId);
 			var restoredBitmap = Assert.Single(restored.CompositingLayers, layer => layer.LayerId == "bitmap-graphics");
 			Assert.True(restoredBitmap.Visible);
 			Assert.Equal((byte)160, restoredBitmap.Opacity);
