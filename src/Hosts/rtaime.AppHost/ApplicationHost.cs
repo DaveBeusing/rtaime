@@ -588,7 +588,7 @@ public sealed class UnifiedApplicationHost
 			}
 
 			_lifecycle.StartStage(ApplicationLifecycleStages.ControlHost, "Discovering qualified ControlHost readiness.");
-			var ready = await FindHealthyReadinessAsync(cancellationToken).ConfigureAwait(false);
+			var ready = await FindQualifiedReadinessAsync(cancellationToken).ConfigureAwait(false);
 			if (ready is null)
 			{
 				if (_options.Ownership == ApplicationLifecycleOwnership.ExternalManaged)
@@ -755,7 +755,7 @@ public sealed class UnifiedApplicationHost
 		while (_platform.UtcNow < deadline)
 		{
 			cancellationToken.ThrowIfCancellationRequested();
-			var ready = await FindHealthyReadinessAsync(cancellationToken).ConfigureAwait(false);
+			var ready = await FindQualifiedReadinessAsync(cancellationToken).ConfigureAwait(false);
 			if (ready is not null) return ready;
 			if (!_platform.IsEndpointLeaseHeld(endpoint)) return null;
 			await _platform.DelayAsync(_options.Policy.ProbeInterval, cancellationToken).ConfigureAwait(false);
@@ -790,7 +790,7 @@ public sealed class UnifiedApplicationHost
 				throw new InvalidOperationException(BuildControlHostExitDetail("ControlHost exited before qualified readiness."));
 			}
 
-			var ready = await FindHealthyReadinessAsync(cancellationToken).ConfigureAwait(false);
+			var ready = await FindQualifiedReadinessAsync(cancellationToken).ConfigureAwait(false);
 			if (ready is not null)
 			{
 				_controlProcessId = ready.Value.Evidence.ProcessId;
@@ -809,7 +809,7 @@ public sealed class UnifiedApplicationHost
 		while (_platform.UtcNow < deadline)
 		{
 			cancellationToken.ThrowIfCancellationRequested();
-			var ready = await FindHealthyReadinessAsync(cancellationToken).ConfigureAwait(false);
+			var ready = await FindQualifiedReadinessAsync(cancellationToken).ConfigureAwait(false);
 			if (ready is not null) return ready.Value;
 			await _platform.DelayAsync(_options.Policy.ProbeInterval, cancellationToken).ConfigureAwait(false);
 		}
@@ -817,13 +817,24 @@ public sealed class UnifiedApplicationHost
 		throw new TimeoutException("Externally managed rtaime engine did not reach qualified readiness before the configured startup timeout.");
 	}
 
-	private async Task<(string Path, ApplicationReadinessEvidence Evidence)?> FindHealthyReadinessAsync(CancellationToken cancellationToken)
+	private async Task<(string Path, ApplicationReadinessEvidence Evidence)?> FindQualifiedReadinessAsync(CancellationToken cancellationToken)
 	{
 		foreach (var path in GetReadinessCandidates())
 		{
 			if (!_platform.FileExists(path)) continue;
 			if (!ApplicationReadinessEvidence.TryParse(_platform.ReadAllText(path), out var evidence) || evidence is null) continue;
-			if (await IsHealthyAsync(evidence, cancellationToken).ConfigureAwait(false)) return (path, evidence);
+			if (await IsInitiallyQualifiedAsync(evidence, cancellationToken).ConfigureAwait(false)) return (path, evidence);
+		}
+		return null;
+	}
+
+	private (string Path, ApplicationReadinessEvidence Evidence)? FindObservedReadiness()
+	{
+		foreach (var path in GetReadinessCandidates())
+		{
+			if (!_platform.FileExists(path)) continue;
+			if (!ApplicationReadinessEvidence.TryParse(_platform.ReadAllText(path), out var evidence) || evidence is null) continue;
+			if (IsAuthoritativeReadinessValid(evidence)) return (path, evidence);
 		}
 		return null;
 	}
@@ -848,7 +859,7 @@ public sealed class UnifiedApplicationHost
 			yield return Path.GetFullPath(legacyReadiness);
 	}
 
-	private async Task<bool> IsHealthyAsync(ApplicationReadinessEvidence evidence, CancellationToken cancellationToken)
+	private bool IsAuthoritativeReadinessValid(ApplicationReadinessEvidence evidence)
 	{
 		var endpoints = _options.Endpoints;
 		if (!_platform.IsProcessAlive(evidence.ProcessId)) return false;
@@ -866,7 +877,14 @@ public sealed class UnifiedApplicationHost
 				!string.Equals(evidence.AISupervision.State, "HEALTHY", StringComparison.OrdinalIgnoreCase)) return false;
 			if (evidence.AISupervision.ProcessId is { } aiPid && !_platform.IsProcessAlive(aiPid)) return false;
 		}
+		return true;
+	}
 
+	private async Task<bool> IsInitiallyQualifiedAsync(ApplicationReadinessEvidence evidence, CancellationToken cancellationToken)
+	{
+		if (!IsAuthoritativeReadinessValid(evidence)) return false;
+
+		var endpoints = _options.Endpoints;
 		if (!await _platform.ProbePipeAsync(endpoints.Control, _options.Policy.ProbeTimeout, cancellationToken).ConfigureAwait(false)) return false;
 		if (_options.Ownership == ApplicationLifecycleOwnership.ExternalManaged)
 			return true;
@@ -882,7 +900,7 @@ public sealed class UnifiedApplicationHost
 		while (_platform.IsProcessAlive(operatorProcessId))
 		{
 			cancellationToken.ThrowIfCancellationRequested();
-			var readiness = await FindHealthyReadinessAsync(cancellationToken).ConfigureAwait(false);
+			var readiness = FindObservedReadiness();
 			if (readiness is null)
 			{
 				degradedSince ??= _platform.UtcNow;
@@ -923,7 +941,7 @@ public sealed class UnifiedApplicationHost
 				throw new InvalidOperationException(BuildControlHostExitDetail("ControlHost stopped while HeadlessEngine profile was active."));
 			}
 
-			var readiness = await FindHealthyReadinessAsync(cancellationToken).ConfigureAwait(false);
+			var readiness = FindObservedReadiness();
 			if (readiness is null)
 			{
 				degradedSince ??= _platform.UtcNow;
