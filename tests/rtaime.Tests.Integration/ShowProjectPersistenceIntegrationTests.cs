@@ -133,6 +133,29 @@ public sealed class ShowProjectPersistenceIntegrationTests
 					specification,
 					new DurableAudioRoutingState(DurableAudioRoutingState.BreakawayMode, breakawaySource));
 
+				var rundownItemId = RundownItemId.New();
+				var rundown = new RundownDefinition(
+					RundownContractVersion.Current,
+					RundownId.New(),
+					"Main rundown",
+					[
+						new RundownSceneItem(rundownItemId, "Scene A", sceneId),
+						new RundownHoldItem(RundownItemId.New(), "Hold", 25)
+					]);
+				var rundownWrite = await store.UpdateRundownAsync(
+					specification,
+					RundownCanonicalSerializer.Serialize(rundown),
+					expectedVersion: 0);
+				Assert.True(rundownWrite.Written, rundownWrite.Failure?.Message);
+				Assert.Equal(1UL, rundownWrite.Snapshot?.Version);
+
+				var rundownConflict = await store.UpdateRundownAsync(
+					specification,
+					RundownCanonicalSerializer.Serialize(rundown),
+					expectedVersion: 0);
+				Assert.False(rundownConflict.Written);
+				Assert.Equal("persistence.version_conflict", rundownConflict.Failure?.Code);
+
 				var migratedShowControl = await store.LoadShowControlAsync(specification);
 				var conflict = await store.UpdateShowControlAsync(
 					specification,
@@ -175,6 +198,11 @@ public sealed class ShowProjectPersistenceIntegrationTests
 				Assert.NotNull(reopened.AudioRouting);
 				Assert.Equal(DurableAudioRoutingState.BreakawayMode, reopened.AudioRouting!.Mode);
 				Assert.Equal(new MediaSourceId(specification.Sources[1].SourceId.Value), reopened.AudioRouting.BreakawaySourceId);
+				Assert.NotNull(reopened.RundownJson);
+				Assert.Equal(1UL, reopened.RundownStorageVersion);
+				var restoredRundown = RundownCanonicalSerializer.Deserialize(reopened.RundownJson!);
+				Assert.Equal("Main rundown", restoredRundown.Name);
+				Assert.Equal(rundownItemId, restoredRundown.Items[0].ItemId);
 
 				var bytes = await reopenedStore.LoadBitmapAssetAsync(Assert.IsType<DurableBitmapGraphicsReference>(reopened.Graphics.Bitmap));
 				Assert.Equal(new byte[] { 12, 34, 56, 255 }, bytes);
