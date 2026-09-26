@@ -80,7 +80,7 @@ public sealed class ProgramFrameMemoryOwnershipTests
 
 			var first = fixture.Runtime.ProcessNextBoundary();
 			var firstHash = SHA256.HashData(first.ProgramPixels.Span);
-			Assert.True(first.Recording?.Accepted);
+			Assert.True(first.Recording is { Accepted: true });
 			first.Dispose();
 
 			await writer.WriteStarted.WaitAsync(TimeSpan.FromSeconds(3));
@@ -232,8 +232,9 @@ public sealed class ProgramFrameMemoryOwnershipTests
 			IProgramRecordingPayloadLease lease;
 			lock (_gate)
 			{
-				if (!_staged.Remove(sample.SequenceNumber, out lease!))
+				if (!_staged.Remove(sample.SequenceNumber, out var staged))
 					throw new InvalidOperationException($"Missing staged payload '{sample.SequenceNumber}'.");
+				lease = staged;
 			}
 
 			try
