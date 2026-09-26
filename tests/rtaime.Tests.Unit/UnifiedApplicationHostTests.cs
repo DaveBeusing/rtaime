@@ -187,6 +187,44 @@ public sealed class UnifiedApplicationHostTests
 	}
 
 	[Fact]
+	public void Invalid_runtime_recovery_timeout_is_rejected()
+	{
+		var root = Path.Combine(Path.GetTempPath(), "rtaime-apphost-policy-tests", Guid.NewGuid().ToString("N"));
+		Directory.CreateDirectory(root);
+		var policyPath = Path.Combine(root, "host-lifecycle-policy.json");
+		File.WriteAllText(policyPath, JsonSerializer.Serialize(new
+		{
+			schemaVersion = "1.0",
+			endpoints = new
+			{
+				control = "rtaime.test.control",
+				runtime = "rtaime.test.runtime",
+				ai = "rtaime.test.ai"
+			},
+			startup = new
+			{
+				timeoutMs = 30000,
+				runtimeRecoveryTimeoutMs = 999,
+				probeTimeoutMs = 500,
+				probeIntervalMs = 200,
+				childRestartBackoffMs = 500,
+				childMaxStartAttempts = 5
+			},
+			shutdown = new { timeoutMs = 15000 }
+		}));
+
+		try
+		{
+			var exception = Assert.Throws<InvalidDataException>(() => ApplicationLifecyclePolicy.Load(root, policyPath));
+			Assert.Contains("runtimeRecoveryTimeoutMs", exception.Message, StringComparison.Ordinal);
+		}
+		finally
+		{
+			Directory.Delete(root, recursive: true);
+		}
+	}
+
+	[Fact]
 	public async Task Adopts_competing_control_when_endpoint_is_won_after_local_start_decision()
 	{
 		var options = CreateOptions(ApplicationStartupProfile.Interactive);
