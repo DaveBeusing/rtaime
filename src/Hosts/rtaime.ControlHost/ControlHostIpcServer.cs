@@ -20,6 +20,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	private readonly IControlRuntimeTransportSeam _runtimeTransport;
 	private readonly MediaDeckControlService? _mediaDeck;
 	private readonly ShowControlCoordinator? _showControl;
+	private readonly RundownCoordinator? _rundown;
 	private readonly MediaAssetCatalogService? _mediaAssetCatalog;
 	private readonly ShowProjectPersistenceStore? _showProjectStore;
 	private PersistedShowProject? _showProject;
@@ -92,6 +93,15 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 				ExecuteShowControlActionAsync,
 				ObserveShowControlFrameAsync,
 				NotifyObservableStateChanged);
+		_rundown = _showControl is not null && _showProjectStore is not null
+			? new RundownCoordinator(
+				_controlAccessor,
+				_showProjectStore,
+				_showControl,
+				_mediaAssetCatalog,
+				_mediaDeck,
+				NotifyObservableStateChanged)
+			: null;
 	}
 
 	public string Endpoint => _endpoint;
@@ -251,6 +261,8 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			try { await _acceptLoop.ConfigureAwait(false); }
 			catch (OperationCanceledException) { }
 		}
+		if (_rundown is not null)
+			await _rundown.DisposeAsync().ConfigureAwait(false);
 		if (_showControl is not null)
 			await _showControl.DisposeAsync().ConfigureAwait(false);
 		_mutationGate.Dispose();
@@ -397,9 +409,130 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			"control.show_control.go" => await GoShowControlAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.show_control.cancel" => await CancelShowControlAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.show_control.recovery.acknowledge" => await AcknowledgeShowControlRecoveryAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.rundown.snapshot.get" => await GetRundownSnapshotAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.rundown.save" => await SaveRundownAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.rundown.prepare" => await PrepareRundownAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.rundown.go" => await GoRundownAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.rundown.next" => await NextRundownAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.rundown.previous" => await PreviousRundownAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.rundown.hold" => await HoldRundownAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.rundown.recovery.acknowledge" => await AcknowledgeRundownRecoveryAsync(request, cancellationToken).ConfigureAwait(false),
 			_ => Error(request, "ipc.message.unknown", $"Unknown ControlHost message type '{request.MessageType}'.")
 		};
 	}
+
+	private async ValueTask<WireEnvelope> GetRundownSnapshotAsync(WireEnvelope request, CancellationToken cancellationToken)
+	{
+		if (_rundown is null)
+			return Error(request, "control.rundown.unavailable", "Rundown persistence and Show Control must be configured.");
+		try
+		{
+			return Success(request, "control.rundown.snapshot.response", ToWire(await _rundown.GetSnapshotAsync(cancellationToken).ConfigureAwait(false)));
+		}
+		catch (Exception exception) when (exception is InvalidOperationException or InvalidDataException or IOException or FormatException or NotSupportedException)
+		{
+			return Error(request, "control.rundown.snapshot.rejected", exception.Message);
+		}
+	}
+
+	private async ValueTask<WireEnvelope> SaveRundownAsync(WireEnvelope request, CancellationToken cancellationToken)
+	{
+		if (_rundown is null)
+			return Error(request, "control.rundown.unavailable", "Rundown persistence and Show Control must be configured.");
+		var wire = request.Payload.Deserialize<WireRundownSave>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Rundown save payload is required.");
+		try
+		{
+			var rundown = RundownCanonicalSerializer.Deserialize(wire.RundownJson);
+			var snapshot = await _rundown.SaveAsync(rundown, wire.ExpectedStorageVersion, cancellationToken).ConfigureAwait(false);
+			return Success(request, "control.rundown.snapshot.response", ToWire(snapshot));
+		}
+		catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or InvalidDataException or IOException or FormatException or NotSupportedException)
+		{
+			return Error(request, "control.rundown.save.rejected", exception.Message);
+		}
+	}
+
+	private async ValueTask<WireEnvelope> PrepareRundownAsync(WireEnvelope request, CancellationToken cancellationToken)
+	{
+		if (_rundown is null)
+			return Error(request, "control.rundown.unavailable", "Rundown persistence and Show Control must be configured.");
+		var wire = request.Payload.Deserialize<WireRundownItemRequest>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Rundown item payload is required.");
+		try
+		{
+			var itemId = new RundownItemId(Identity.Parse(wire.ItemId));
+			return Success(request, "control.rundown.snapshot.response", ToWire(await _rundown.PrepareAsync(itemId, cancellationToken).ConfigureAwait(false)));
+		}
+		catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or InvalidDataException or IOException or FormatException or KeyNotFoundException or NotSupportedException)
+		{
+			return Error(request, "control.rundown.prepare.rejected", exception.Message);
+		}
+	}
+
+	private ValueTask<WireEnvelope> GoRundownAsync(WireEnvelope request, CancellationToken cancellationToken) =>
+		ApplyRundownOperationAsync(request, "go", coordinator => coordinator.GoAsync(cancellationToken));
+
+	private ValueTask<WireEnvelope> NextRundownAsync(WireEnvelope request, CancellationToken cancellationToken) =>
+		ApplyRundownOperationAsync(request, "next", coordinator => coordinator.NextAsync(cancellationToken));
+
+	private ValueTask<WireEnvelope> PreviousRundownAsync(WireEnvelope request, CancellationToken cancellationToken) =>
+		ApplyRundownOperationAsync(request, "previous", coordinator => coordinator.PreviousAsync(cancellationToken));
+
+	private ValueTask<WireEnvelope> HoldRundownAsync(WireEnvelope request, CancellationToken cancellationToken) =>
+		ApplyRundownOperationAsync(request, "hold", coordinator => coordinator.HoldAsync(cancellationToken));
+
+	private async ValueTask<WireEnvelope> AcknowledgeRundownRecoveryAsync(WireEnvelope request, CancellationToken cancellationToken)
+	{
+		if (_rundown is null)
+			return Error(request, "control.rundown.unavailable", "Rundown persistence and Show Control must be configured.");
+		var wire = request.Payload.Deserialize<WireRundownRecoveryAcknowledge>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Rundown recovery acknowledgement payload is required.");
+		try
+		{
+			return Success(
+				request,
+				"control.rundown.snapshot.response",
+				ToWire(await _rundown.AcknowledgeRecoveryAsync(wire.Resume, cancellationToken).ConfigureAwait(false)));
+		}
+		catch (Exception exception) when (exception is InvalidOperationException or InvalidDataException or IOException or FormatException or NotSupportedException)
+		{
+			return Error(request, "control.rundown.recovery.rejected", exception.Message);
+		}
+	}
+
+	private async ValueTask<WireEnvelope> ApplyRundownOperationAsync(
+		WireEnvelope request,
+		string operation,
+		Func<RundownCoordinator, ValueTask<RundownWorkspaceSnapshot>> action)
+	{
+		if (_rundown is null)
+			return Error(request, "control.rundown.unavailable", "Rundown persistence and Show Control must be configured.");
+		try
+		{
+			return Success(request, "control.rundown.snapshot.response", ToWire(await action(_rundown).ConfigureAwait(false)));
+		}
+		catch (Exception exception) when (exception is InvalidOperationException or InvalidDataException or IOException or FormatException or KeyNotFoundException or NotSupportedException)
+		{
+			return Error(request, $"control.rundown.{operation}.rejected", exception.Message);
+		}
+	}
+
+	private static WireRundownWorkspace ToWire(RundownWorkspaceSnapshot snapshot) => new(
+		snapshot.Rundown is null ? null : RundownCanonicalSerializer.Serialize(snapshot.Rundown),
+		(int)snapshot.Execution.State,
+		snapshot.Execution.RundownId?.ToString(),
+		snapshot.Execution.SelectedItemId?.ToString(),
+		snapshot.Execution.PreparedItemId?.ToString(),
+		snapshot.Execution.CurrentItemId?.ToString(),
+		snapshot.Execution.NextItemId?.ToString(),
+		snapshot.Execution.Revision,
+		snapshot.Execution.CausalActionId?.ToString(),
+		snapshot.Execution.AutoAdvanceArmed,
+		snapshot.Execution.RequiresAcknowledgement,
+		snapshot.Execution.Failure?.Code,
+		snapshot.Execution.Failure?.Message,
+		snapshot.StorageVersion);
 
 	private async ValueTask<WireEnvelope> SetBroadcastTestPatternAsync(WireEnvelope request, CancellationToken cancellationToken)
 	{
@@ -1582,6 +1715,8 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 					cancellationToken).ConfigureAwait(false);
 			case ShowControlActionKind.JumpMediaCue:
 				return await ExecuteShowControlMediaCueJumpAsync(action, cancellationToken).ConfigureAwait(false);
+			case ShowControlActionKind.MediaOpen:
+				return await ExecuteShowControlMediaOpenAsync(action, cancellationToken).ConfigureAwait(false);
 			case ShowControlActionKind.MediaPlay:
 				return await ExecuteShowControlMediaTransportAsync(action, MediaTransportCommandKind.Play, cancellationToken).ConfigureAwait(false);
 			case ShowControlActionKind.MediaPause:
@@ -1590,6 +1725,8 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 				return await ExecuteShowControlMediaTransportAsync(action, MediaTransportCommandKind.Stop, cancellationToken).ConfigureAwait(false);
 			case ShowControlActionKind.SetLayerVisibility:
 				return await ExecuteShowControlLayerVisibilityAsync(action, cancellationToken).ConfigureAwait(false);
+			case ShowControlActionKind.SetAudioRouting:
+				return await ExecuteShowControlAudioRoutingAsync(action, cancellationToken).ConfigureAwait(false);
 			case ShowControlActionKind.StartRecording:
 			{
 				var response = await StartRecordingAsync(
@@ -1635,6 +1772,54 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			kind,
 			cancellationToken).ConfigureAwait(false);
 		return ReadMutationFailure(response);
+	}
+
+	private async ValueTask<Failure?> ExecuteShowControlMediaOpenAsync(
+		ShowControlAction action,
+		CancellationToken cancellationToken)
+	{
+		if (_mediaDeck is null)
+			return new Failure("control.media_deck.unavailable", "Media-deck control service is not configured.");
+		if (_mediaAssetCatalog is null)
+			return new Failure("control.media_asset_catalog.unavailable", "Media asset catalogue service is not configured.");
+
+		var assetId = new MediaAssetId(Identity.Parse(action.MediaAssetId!));
+		var sourceId = new MediaSourceId(Identity.Parse(action.SourceId!));
+		var catalog = await _mediaAssetCatalog.GetSnapshotAsync(refreshAvailability: true, cancellationToken).ConfigureAwait(false);
+		var asset = catalog.Assets.FirstOrDefault(candidate => candidate.AssetId == assetId);
+		if (asset is null)
+			return new Failure("control.rundown.asset_missing", $"Rundown media asset '{assetId}' is not present in the persistent catalogue.");
+		if (asset.Availability != MediaAssetAvailability.Online)
+			return new Failure("control.rundown.asset_offline", $"Rundown media asset '{assetId}' is not online.");
+
+		var snapshot = await _mediaDeck.OpenAsync(
+			new MediaDeckOpenRequest(
+				MediaContractVersion.Current,
+				sourceId,
+				asset.SourceLocation,
+				asset.AssetId),
+			cancellationToken).ConfigureAwait(false);
+		NotifyObservableStateChanged();
+		return MediaDeckFailure(snapshot);
+	}
+
+	private async ValueTask<Failure?> ExecuteShowControlAudioRoutingAsync(
+		ShowControlAction action,
+		CancellationToken cancellationToken)
+	{
+		if (!_runtimeTransport.IsConnected)
+			return new Failure("runtime.unavailable", "RuntimeHost is not connected.");
+
+		var runtime = await _runtimeTransport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
+		var response = await SetAudioRoutingAsync(
+			InternalRequest(
+				"control.audio.routing.set",
+				new WireAudioRoutingState(
+					action.AudioRoutingMode!.Value,
+					action.SourceId,
+					runtime.AudioProgram.RoutingRevision)),
+			cancellationToken).ConfigureAwait(false);
+		return ReadErrorFailure(response);
 	}
 
 	private async ValueTask<Failure?> ExecuteShowControlMediaCueJumpAsync(
@@ -2493,6 +2678,24 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	{
 		public static WireGraphicsOverlay Empty { get; } = new(false, null, 0, 0, false, 0.72, 0.06, 1.0);
 	}
+	private sealed record WireRundownSave(string RundownJson, ulong ExpectedStorageVersion);
+	private sealed record WireRundownItemRequest(string ItemId);
+	private sealed record WireRundownRecoveryAcknowledge(bool Resume);
+	private sealed record WireRundownWorkspace(
+		string? RundownJson,
+		int State,
+		string? RundownId,
+		string? SelectedItemId,
+		string? PreparedItemId,
+		string? CurrentItemId,
+		string? NextItemId,
+		ulong Revision,
+		string? CausalActionId,
+		bool AutoAdvanceArmed,
+		bool RequiresAcknowledgement,
+		string? FailureCode,
+		string? FailureMessage,
+		ulong StorageVersion);
 	private sealed record WireAudioInputState(string SourceId, double Gain, bool Muted);
 	private sealed record WireAudioRoutingState(int Mode, string? BreakawaySourceId, ulong ExpectedRoutingRevision);
 	private sealed record WireAudioTestSignalState(string SourceId, bool Enabled, int Mode, double FrequencyHz, double PeakLevel);

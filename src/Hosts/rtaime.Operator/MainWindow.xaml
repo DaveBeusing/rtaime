@@ -1601,11 +1601,20 @@
 			Margin="0"
 			ClipToBounds="True"
 			Visibility="{Binding Shell.TimelineRegionVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
-			<local:MediaTimelineControl
-				AllowDrop="True"
-				DragOver="OnTimelineDragOver"
-				Drop="OnTimelineDrop"
-				DataContext="{Binding Timeline, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
+			<Grid>
+				<Grid.ColumnDefinitions>
+					<ColumnDefinition Width="320" />
+					<ColumnDefinition Width="1" />
+					<ColumnDefinition Width="*" />
+				</Grid.ColumnDefinitions>
+				<local:RundownControl Grid.Column="0" />
+				<Border Grid.Column="1" Background="{DynamicResource OperatorBorderBrush}" />
+				<local:MediaTimelineControl Grid.Column="2"
+					AllowDrop="True"
+					DragOver="OnTimelineDragOver"
+					Drop="OnTimelineDrop"
+					DataContext="{Binding Timeline, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
+			</Grid>
 		</Border>
 
 		<Border x:Name="BottomTransportRegion"

@@ -257,6 +257,48 @@ public sealed class ProductionIpcIntegrationTests
 		Assert.Equal(sourceB.Id, client.Snapshot.Production.Routing.ProgramSourceId.ToString());
 		await WaitUntilAsync(() => runtime.Runtime!.Snapshot.AudioProgram.ActiveVideoSourceId.ToString() == sourceB.Id);
 
+		var emptyRundown = await client.GetRundownSnapshotAsync();
+		Assert.Null(emptyRundown.Rundown);
+		Assert.Equal(0UL, emptyRundown.StorageVersion);
+
+		var sceneA = Assert.Single(client.Snapshot.Scenes, scene => scene.ProgramSourceId == sourceA.Id);
+		var rundownSceneAId = RundownItemId.New();
+		var rundownSceneBId = RundownItemId.New();
+		var rundown = new RundownDefinition(
+			RundownContractVersion.Current,
+			RundownId.New(),
+			"IPC production rundown",
+			[
+				new RundownSceneItem(rundownSceneAId, "Take A", new SceneId(Identity.Parse(sceneA.Id))),
+				new RundownSceneItem(rundownSceneBId, "Take B", new SceneId(Identity.Parse(sceneB.Id)))
+			]);
+		var savedRundown = await client.SaveRundownAsync(rundown, expectedStorageVersion: 0);
+		Assert.Equal(1UL, savedRundown.StorageVersion);
+		Assert.Equal(rundown.RundownId, savedRundown.Rundown?.RundownId);
+		Assert.Equal(rundownSceneAId, savedRundown.Rundown?.Items[0].ItemId);
+
+		var preparedRundown = await client.PrepareRundownItemAsync(rundownSceneAId);
+		Assert.Equal(RundownExecutionState.Prepared, preparedRundown.Execution.State);
+		Assert.Equal(rundownSceneAId, preparedRundown.Execution.PreparedItemId);
+
+		var firstGo = await client.GoRundownAsync();
+		Assert.Equal(RundownExecutionState.Held, firstGo.Execution.State);
+		Assert.Equal(rundownSceneAId, firstGo.Execution.CurrentItemId);
+		Assert.Equal(sourceA.Id, client.Snapshot!.Production.Routing.ProgramSourceId.ToString());
+
+		var nextRundown = await client.NextRundownAsync();
+		Assert.Equal(RundownExecutionState.Prepared, nextRundown.Execution.State);
+		Assert.Equal(rundownSceneBId, nextRundown.Execution.PreparedItemId);
+
+		var secondGo = await client.GoRundownAsync();
+		Assert.Equal(RundownExecutionState.Held, secondGo.Execution.State);
+		Assert.Equal(rundownSceneBId, secondGo.Execution.CurrentItemId);
+		Assert.Equal(sourceB.Id, client.Snapshot!.Production.Routing.ProgramSourceId.ToString());
+
+		var completedRundown = await client.NextRundownAsync();
+		Assert.Equal(RundownExecutionState.Completed, completedRundown.Execution.State);
+		Assert.Null(completedRundown.Execution.NextItemId);
+
 		Assert.True(client.Snapshot.Production.Revision.Value >= 5);
 		Assert.True(transport.Connected);
 		Assert.True(transport.StateVersion > 1);

@@ -33,7 +33,15 @@
 					"control.media_deck.open",
 					"control.media_deck.transport",
 					"control.media_deck.marker",
-					"control.media_deck.close"
+					"control.media_deck.close",
+					"control.rundown.snapshot.get",
+					"control.rundown.save",
+					"control.rundown.prepare",
+					"control.rundown.go",
+					"control.rundown.next",
+					"control.rundown.previous",
+					"control.rundown.hold",
+					"control.rundown.recovery.acknowledge"
 				]
 			}
 		}

@@ -172,3 +172,9 @@ Required validation includes:
 - architecture checks preventing direct Runtime/provider production bypass.
 
 Show Control must not materially affect the real-time media path.
+
+## Production rundown integration
+
+The Production Rundown reuses Show Control as its bounded execution primitive. ControlHost prepares one rundown item as a typed Show Control cue/action sequence, then ARM/GO and recovery continue through the existing Show Control authority path. The rundown therefore does not create a second scheduler or direct Runtime mutation path.
+
+Rundown navigation and media completion decisions are owned by the ControlHost RundownCoordinator. Show Control remains responsible for executing the generated governed action sequence, frame-domain waits, failures and ambiguous-restart recovery evidence. See `docs/ProductionRundown.md`.

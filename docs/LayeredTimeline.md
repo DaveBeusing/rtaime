@@ -152,3 +152,11 @@ Unavailable edit capabilities are presented only as explicit N/A/context state w
 Media timeline cues remain media-domain markers and retain their existing seek/jump semantics. Show Control may reference a named media cue through the existing Media Deck path, but it does not turn the timeline into a second automation authority or NLE scheduler.
 
 Show Control sequencing, GO progression, frame-domain waits and recovery are owned by ControlHost and documented in `docs/ShowControlCueSequencing.md`. Timeline row selection and Show Control cue selection remain presentation-only until their explicit execution command is invoked.
+
+## Production rundown integration
+
+The persistent lower workspace now hosts the governed Production Rundown beside the existing layered timeline. The rundown owns ordered show/playlist preparation and playout semantics while the timeline remains the frame-oriented Media Deck and cue presentation surface.
+
+Rundown Media items reference persistent Media Library asset identity and a governed production source. Scene, graphics and audio-routing entries reuse their established production models. Reserved V2/A2/A3 lanes remain non-authoritative unless a real backing execution model exists; the Operator does not turn those rows into synthetic NLE tracks.
+
+Rundown selection is local presentation state. PREPARE, GO, NEXT, PREVIOUS and HOLD cross `rtaime.Client` into ControlHost and reuse Show Control execution primitives. Deterministic media auto-advance is based on confirmed Media Deck completion, never on a UI timer. See `docs/ProductionRundown.md`.

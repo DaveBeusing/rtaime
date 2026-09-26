@@ -546,6 +546,59 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		return ReadShowControlWorkspace(response);
 	}
 
+	public async ValueTask<RundownWorkspaceSnapshot> GetRundownSnapshotAsync(CancellationToken cancellationToken = default)
+	{
+		var response = await ExchangeAsync("control.rundown.snapshot.get", new { }, cancellationToken).ConfigureAwait(false);
+		return ReadRundownWorkspace(response);
+	}
+
+	public async ValueTask<RundownWorkspaceSnapshot> SaveRundownAsync(
+		RundownDefinition rundown,
+		ulong expectedStorageVersion,
+		CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(rundown);
+		var response = await ExchangeAsync(
+			"control.rundown.save",
+			new WireRundownSave(RundownCanonicalSerializer.Serialize(rundown), expectedStorageVersion),
+			cancellationToken).ConfigureAwait(false);
+		return ReadRundownWorkspace(response);
+	}
+
+	public async ValueTask<RundownWorkspaceSnapshot> PrepareRundownItemAsync(
+		RundownItemId itemId,
+		CancellationToken cancellationToken = default)
+	{
+		var response = await ExchangeAsync(
+			"control.rundown.prepare",
+			new WireRundownItemRequest(itemId.ToString()),
+			cancellationToken).ConfigureAwait(false);
+		return ReadRundownWorkspace(response);
+	}
+
+	public async ValueTask<RundownWorkspaceSnapshot> GoRundownAsync(CancellationToken cancellationToken = default) =>
+		ReadRundownWorkspace(await ExchangeAsync("control.rundown.go", new { }, cancellationToken).ConfigureAwait(false));
+
+	public async ValueTask<RundownWorkspaceSnapshot> NextRundownAsync(CancellationToken cancellationToken = default) =>
+		ReadRundownWorkspace(await ExchangeAsync("control.rundown.next", new { }, cancellationToken).ConfigureAwait(false));
+
+	public async ValueTask<RundownWorkspaceSnapshot> PreviousRundownAsync(CancellationToken cancellationToken = default) =>
+		ReadRundownWorkspace(await ExchangeAsync("control.rundown.previous", new { }, cancellationToken).ConfigureAwait(false));
+
+	public async ValueTask<RundownWorkspaceSnapshot> HoldRundownAsync(CancellationToken cancellationToken = default) =>
+		ReadRundownWorkspace(await ExchangeAsync("control.rundown.hold", new { }, cancellationToken).ConfigureAwait(false));
+
+	public async ValueTask<RundownWorkspaceSnapshot> AcknowledgeRundownRecoveryAsync(
+		bool resume,
+		CancellationToken cancellationToken = default)
+	{
+		var response = await ExchangeAsync(
+			"control.rundown.recovery.acknowledge",
+			new WireRundownRecovery(resume),
+			cancellationToken).ConfigureAwait(false);
+		return ReadRundownWorkspace(response);
+	}
+
 	private async ValueTask<OperatorMutationResponse> MutateAsync(
 		string messageType,
 		ControlCommandMetadata metadata,
@@ -721,6 +774,32 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		var wire = response.Payload.Deserialize<WireGraphicsOverlay>(Wire.JsonOptions)
 			?? throw new InvalidDataException("ControlHost graphics overlay payload is required.");
 		return FromWire(wire);
+	}
+
+	private static RundownWorkspaceSnapshot ReadRundownWorkspace(WireEnvelope response)
+	{
+		var wire = response.Payload.Deserialize<WireRundownWorkspace>(Wire.JsonOptions)
+			?? throw new InvalidDataException("ControlHost rundown workspace payload is required.");
+		if (!Enum.IsDefined(typeof(RundownExecutionState), wire.State))
+			throw new InvalidDataException("Rundown execution state is invalid.");
+		var rundown = string.IsNullOrWhiteSpace(wire.RundownJson)
+			? null
+			: RundownCanonicalSerializer.Deserialize(wire.RundownJson);
+		var execution = new RundownExecutionSnapshot(
+			(RundownExecutionState)wire.State,
+			string.IsNullOrWhiteSpace(wire.RundownId) ? null : new RundownId(Identity.Parse(wire.RundownId)),
+			string.IsNullOrWhiteSpace(wire.SelectedItemId) ? null : new RundownItemId(Identity.Parse(wire.SelectedItemId)),
+			string.IsNullOrWhiteSpace(wire.PreparedItemId) ? null : new RundownItemId(Identity.Parse(wire.PreparedItemId)),
+			string.IsNullOrWhiteSpace(wire.CurrentItemId) ? null : new RundownItemId(Identity.Parse(wire.CurrentItemId)),
+			string.IsNullOrWhiteSpace(wire.NextItemId) ? null : new RundownItemId(Identity.Parse(wire.NextItemId)),
+			wire.Revision,
+			string.IsNullOrWhiteSpace(wire.CausalActionId) ? null : Identity.Parse(wire.CausalActionId),
+			wire.AutoAdvanceArmed,
+			wire.RequiresAcknowledgement,
+			string.IsNullOrWhiteSpace(wire.FailureCode)
+				? null
+				: new Failure(wire.FailureCode, wire.FailureMessage ?? "Rundown operation failed."));
+		return new RundownWorkspaceSnapshot(rundown, execution, wire.StorageVersion);
 	}
 
 	private static ShowControlWorkspaceSnapshot ReadShowControlWorkspace(WireEnvelope response)
@@ -1228,6 +1307,24 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 	private sealed record WireGraphicsOverlay(bool AssetLoaded, string? AssetName, uint AssetWidth, uint AssetHeight, bool Visible, double PositionX, double PositionY, double Scale);
 	private sealed record WireCompositingLayer(string LayerId, int Kind, int Order, bool Visible, byte Opacity, double PositionX, double PositionY, double Scale, string ContentIdentity, double RotationDegrees = 0, double AnchorX = 0, double AnchorY = 0, double CropLeft = 0, double CropTop = 0, double CropRight = 0, double CropBottom = 0, WireProcessingNode? ProcessingNode = null);
 	private sealed record WireCompositingState(string Version, WireCompositingLayer[] Layers);
+	private sealed record WireRundownSave(string RundownJson, ulong ExpectedStorageVersion);
+	private sealed record WireRundownItemRequest(string ItemId);
+	private sealed record WireRundownRecovery(bool Resume);
+	private sealed record WireRundownWorkspace(
+		string? RundownJson,
+		int State,
+		string? RundownId,
+		string? SelectedItemId,
+		string? PreparedItemId,
+		string? CurrentItemId,
+		string? NextItemId,
+		ulong Revision,
+		string? CausalActionId,
+		bool AutoAdvanceArmed,
+		bool RequiresAcknowledgement,
+		string? FailureCode,
+		string? FailureMessage,
+		ulong StorageVersion);
 	private sealed record WireAudioInputState(string SourceId, double Gain, bool Muted);
 	private sealed record WireAudioRoutingState(int Mode, string? BreakawaySourceId, ulong ExpectedRoutingRevision);
 	private sealed record WireAudioTestSignalState(string SourceId, bool Enabled, int Mode, double FrequencyHz, double PeakLevel);

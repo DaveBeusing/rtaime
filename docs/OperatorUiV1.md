@@ -765,3 +765,11 @@ The EDIT view provides bounded cue-list/cue/action authoring for the closed Show
 `F9` is registered through the centralized shortcut registry as Show Control GO. It is active only when the synchronized execution state is `Armed`; existing Enter/Ctrl+Enter AUTO/CUT bindings remain unchanged.
 
 See `docs/ShowControlCueSequencing.md` for authority, timing and recovery behavior.
+
+## Production Rundown
+
+The persistent lower production workspace presents a compact Rundown surface beside the existing layered timeline. The surface supports bounded authoring from persistent Media Library clips, Scenes, supported graphics state, governed audio routing and frame holds, plus PREPARE, GO, PREVIOUS, NEXT, HOLD and explicit recovery acknowledgement.
+
+Rundown row selection and unsaved reorder/edit operations are local presentation state. SAVE and execution commands cross `rtaime.Client` into ControlHost; confirmed PREPARED/CURRENT/NEXT/FAILED/RECOVERY states are projected back from the governed rundown coordinator. Media auto-advance is driven by confirmed Media Deck completion rather than WPF timing.
+
+The integration does not claim full NLE editing. The existing timeline retains its current Media Deck/cue semantics, and reserved lanes remain non-authoritative where no backing production model exists. See `docs/ProductionRundown.md`.
