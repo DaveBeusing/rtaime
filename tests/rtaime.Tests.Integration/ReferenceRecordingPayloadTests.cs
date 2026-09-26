@@ -77,7 +77,7 @@ public sealed class ReferenceRecordingPayloadTests
 			Assert.Equal(format, sample.VideoFormat);
 			Assert.Equal(boundary.ProgramFrame.Timing.PresentationTimestamp, sample.VideoPresentationTimestamp);
 			Assert.Equal(boundary.ProgramFrame.Timing.Timebase, sample.VideoTimebase);
-			Assert.Equal(boundary.ProgramPixels, sample.VideoPayload);
+			Assert.True(boundary.ProgramPixels.Span.SequenceEqual(sample.VideoPayload));
 			Assert.Equal(checked((int)((long)format.Width * format.Height * 4)), sample.VideoPayload.Length);
 
 			Assert.Equal(AudioFormat.Stereo48kFloat32, sample.AudioFormat);
