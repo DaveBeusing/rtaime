@@ -1,6 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 using System.Diagnostics;
+using System.Text.Json;
 using rtaime.Client;
 using rtaime.Control.Contracts;
 using rtaime.ControlHost;
@@ -197,6 +198,155 @@ public sealed class ProcessSupervisionRecoveryTests
 	}
 
 	[Fact]
+	public async Task Owned_child_persistent_readiness_loss_triggers_graceful_bounded_restart()
+	{
+		var endpoint = Endpoint("runtime-readiness-loss");
+		var assembly = HostAssembly("rtaime.RuntimeHost");
+		var options = ReadinessRecoverySupervisorOptions("RuntimeHost", endpoint, assembly, maxStartAttempts: 3);
+		await using var supervisor = new LocalProcessSupervisor(options);
+		await supervisor.StartAsync();
+
+		await WaitUntilAsync(
+			() => supervisor.Snapshot is { State: LocalProcessSupervisionState.Healthy, OwnedProcessId: not null },
+			ProcessRecoveryTimeoutMilliseconds);
+		var firstPid = supervisor.Snapshot.OwnedProcessId!.Value;
+		var readiness = await ReadOwnedReadinessFileAsync("RuntimeHost", firstPid, ProcessRecoveryTimeoutMilliseconds);
+
+		File.Delete(readiness.Path);
+
+		await WaitUntilAsync(
+			() => supervisor.Snapshot is
+			{
+				State: LocalProcessSupervisionState.ReadinessGrace,
+				OwnedProcessId: not null,
+				StartAttempts: 1
+			} snapshot && snapshot.OwnedProcessId == firstPid,
+			ProcessRecoveryTimeoutMilliseconds);
+		await WaitUntilAsync(
+			() => supervisor.Snapshot is { State: LocalProcessSupervisionState.RestartBackoff, StartAttempts: 1 } snapshot &&
+				snapshot.Detail.Contains("stopped gracefully", StringComparison.OrdinalIgnoreCase),
+			ProcessRecoveryTimeoutMilliseconds);
+		await WaitUntilAsync(
+			() => supervisor.Snapshot is { State: LocalProcessSupervisionState.Healthy, OwnedProcessId: not null, StartAttempts: 2 } snapshot &&
+				snapshot.OwnedProcessId != firstPid,
+			ProcessRecoveryTimeoutMilliseconds);
+
+		Assert.False(ProcessIsAlive(firstPid));
+		Assert.NotEqual(firstPid, supervisor.Snapshot.OwnedProcessId);
+		Assert.Equal(2, supervisor.Snapshot.StartAttempts);
+	}
+
+	[Fact]
+	public async Task Owned_child_transient_readiness_loss_recovers_without_restart()
+	{
+		var endpoint = Endpoint("runtime-readiness-transient");
+		var assembly = HostAssembly("rtaime.RuntimeHost");
+		var options = ReadinessRecoverySupervisorOptions("RuntimeHost", endpoint, assembly, maxStartAttempts: 3);
+		await using var supervisor = new LocalProcessSupervisor(options);
+		await supervisor.StartAsync();
+
+		await WaitUntilAsync(
+			() => supervisor.Snapshot is { State: LocalProcessSupervisionState.Healthy, OwnedProcessId: not null, StartAttempts: 1 },
+			ProcessRecoveryTimeoutMilliseconds);
+		var firstPid = supervisor.Snapshot.OwnedProcessId!.Value;
+		var readiness = await ReadOwnedReadinessFileAsync("RuntimeHost", firstPid, ProcessRecoveryTimeoutMilliseconds);
+
+		File.Delete(readiness.Path);
+		await WaitUntilAsync(
+			() => supervisor.Snapshot is { State: LocalProcessSupervisionState.ReadinessGrace, OwnedProcessId: not null } snapshot &&
+				snapshot.OwnedProcessId == firstPid,
+			ProcessRecoveryTimeoutMilliseconds);
+
+		File.WriteAllText(readiness.Path, readiness.Content);
+		await WaitUntilAsync(
+			() => supervisor.Snapshot is { State: LocalProcessSupervisionState.Healthy, OwnedProcessId: not null, StartAttempts: 1 } snapshot &&
+				snapshot.OwnedProcessId == firstPid &&
+				snapshot.Detail.Contains("restart was not required", StringComparison.OrdinalIgnoreCase),
+			ProcessRecoveryTimeoutMilliseconds);
+
+		Assert.True(ProcessIsAlive(firstPid));
+		Assert.Equal(1, supervisor.Snapshot.StartAttempts);
+		Assert.Equal(firstPid, supervisor.Snapshot.OwnedProcessId);
+	}
+
+	[Fact]
+	public async Task Adopted_external_readiness_loss_is_non_destructive()
+	{
+		var endpoint = Endpoint("external-readiness-loss");
+		var assembly = HostAssembly("rtaime.RuntimeHost");
+		using var endpointLease = LocalEndpointLease.Acquire(endpoint);
+		var readinessLease = LocalEndpointReadinessLease.Acquire(endpoint);
+		await using var supervisor = new LocalProcessSupervisor(
+			ReadinessRecoverySupervisorOptions("RuntimeHost", endpoint, assembly, maxStartAttempts: 3));
+		try
+		{
+			await supervisor.StartAsync();
+			await WaitUntilAsync(
+				() => supervisor.Snapshot is { State: LocalProcessSupervisionState.Healthy, OwnedProcessId: null, StartAttempts: 0 },
+				ProcessRecoveryTimeoutMilliseconds);
+
+			readinessLease.Dispose();
+			await WaitUntilAsync(
+				() => supervisor.Snapshot is { State: LocalProcessSupervisionState.Waiting, OwnedProcessId: null, StartAttempts: 0 },
+				ProcessRecoveryTimeoutMilliseconds);
+			await Task.Delay(TimeSpan.FromMilliseconds(900));
+
+			Assert.True(LocalEndpointLease.IsHeld(endpoint));
+			Assert.False(LocalEndpointReadinessLease.IsHeld(endpoint));
+			Assert.Null(supervisor.Snapshot.OwnedProcessId);
+			Assert.Equal(0, supervisor.Snapshot.StartAttempts);
+
+			using var restoredReadiness = LocalEndpointReadinessLease.Acquire(endpoint);
+			await WaitUntilAsync(
+				() => supervisor.Snapshot is { State: LocalProcessSupervisionState.Healthy, OwnedProcessId: null, StartAttempts: 0 },
+				ProcessRecoveryTimeoutMilliseconds);
+		}
+		finally
+		{
+			readinessLease.Dispose();
+		}
+	}
+
+	[Fact]
+	public async Task Repeated_post_healthy_readiness_loss_stops_at_existing_start_budget()
+	{
+		var endpoint = Endpoint("runtime-readiness-budget");
+		var assembly = HostAssembly("rtaime.RuntimeHost");
+		var options = ReadinessRecoverySupervisorOptions("RuntimeHost", endpoint, assembly, maxStartAttempts: 2);
+		await using var supervisor = new LocalProcessSupervisor(options);
+		await supervisor.StartAsync();
+
+		await WaitUntilAsync(
+			() => supervisor.Snapshot is { State: LocalProcessSupervisionState.Healthy, OwnedProcessId: not null, StartAttempts: 1 },
+			ProcessRecoveryTimeoutMilliseconds);
+		var firstPid = supervisor.Snapshot.OwnedProcessId!.Value;
+		var firstReadiness = await ReadOwnedReadinessFileAsync("RuntimeHost", firstPid, ProcessRecoveryTimeoutMilliseconds);
+		File.Delete(firstReadiness.Path);
+
+		await WaitUntilAsync(
+			() => supervisor.Snapshot is { State: LocalProcessSupervisionState.Healthy, OwnedProcessId: not null, StartAttempts: 2 } snapshot &&
+				snapshot.OwnedProcessId != firstPid,
+			ProcessRecoveryTimeoutMilliseconds);
+		var secondPid = supervisor.Snapshot.OwnedProcessId!.Value;
+		var secondReadiness = await ReadOwnedReadinessFileAsync("RuntimeHost", secondPid, ProcessRecoveryTimeoutMilliseconds);
+		File.Delete(secondReadiness.Path);
+
+		await WaitUntilAsync(
+			() => supervisor.Snapshot is { State: LocalProcessSupervisionState.Failed, OwnedProcessId: null, StartAttempts: 2 } snapshot &&
+				snapshot.Detail.Contains("start budget exhausted", StringComparison.OrdinalIgnoreCase),
+			ProcessRecoveryTimeoutMilliseconds);
+
+		var attemptsAfterFailure = supervisor.Snapshot.StartAttempts;
+		await Task.Delay(TimeSpan.FromMilliseconds(900));
+
+		Assert.False(ProcessIsAlive(firstPid));
+		Assert.False(ProcessIsAlive(secondPid));
+		Assert.Equal(2, attemptsAfterFailure);
+		Assert.Equal(attemptsAfterFailure, supervisor.Snapshot.StartAttempts);
+		Assert.Null(supervisor.Snapshot.OwnedProcessId);
+	}
+
+	[Fact]
 	public async Task Supervisor_exhausts_start_budget_without_unbounded_crash_loop()
 	{
 		var endpoint = Endpoint("runtime-start-budget");
@@ -224,6 +374,71 @@ public sealed class ProcessSupervisionRecoveryTests
 		Assert.Equal(attemptsAfterFailure, supervisor.Snapshot.StartAttempts);
 		Assert.Equal(LocalProcessSupervisionState.Failed, supervisor.Snapshot.State);
 		Assert.Null(supervisor.Snapshot.OwnedProcessId);
+	}
+
+	private static LocalProcessSupervisionOptions ReadinessRecoverySupervisorOptions(
+		string name,
+		string endpoint,
+		string assembly,
+		int maxStartAttempts) =>
+		new(
+			name,
+			endpoint,
+			assembly,
+			TimeSpan.FromMilliseconds(100),
+			TimeSpan.FromMilliseconds(150),
+			TimeSpan.FromMilliseconds(600),
+			maxStartAttempts)
+		{
+			GracefulStopTimeout = TimeSpan.FromSeconds(5),
+			InitialAdoptionWindow = TimeSpan.FromMilliseconds(150)
+		};
+
+	private static async Task<(string Path, string Content)> ReadOwnedReadinessFileAsync(
+		string hostName,
+		int processId,
+		int timeoutMilliseconds)
+	{
+		var directory = Path.Combine(Path.GetTempPath(), "rtaime", "supervision");
+		var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMilliseconds);
+		while (DateTime.UtcNow < deadline)
+		{
+			if (Directory.Exists(directory))
+			{
+				foreach (var path in Directory.EnumerateFiles(directory, $"{hostName}-*.ready.json"))
+				{
+					try
+					{
+						var content = await File.ReadAllTextAsync(path);
+						using var document = JsonDocument.Parse(content);
+						if (document.RootElement.TryGetProperty("processId", out var processIdElement) &&
+							processIdElement.GetInt32() == processId)
+						{
+							return (path, content);
+						}
+					}
+					catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException)
+					{
+						// Readiness publication is atomic but directory enumeration can race replacement cleanup.
+					}
+				}
+			}
+			await Task.Delay(25);
+		}
+		throw new TimeoutException($"Managed readiness file for {hostName} process {processId} was not found.");
+	}
+
+	private static bool ProcessIsAlive(int processId)
+	{
+		try
+		{
+			using var process = Process.GetProcessById(processId);
+			return !process.HasExited;
+		}
+		catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception)
+		{
+			return false;
+		}
 	}
 
 	private static LocalProcessSupervisor Supervisor(string name, string endpoint, string assembly) =>
