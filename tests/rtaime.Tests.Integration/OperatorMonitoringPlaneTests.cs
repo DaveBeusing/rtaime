@@ -51,7 +51,7 @@ public sealed class OperatorMonitoringPlaneTests
 			timing,
 			Generation.Initial,
 			"monitoring-test");
-		using var programPixels = gpu.RentReadback(programFrame);
+		var programPixels = gpu.RentReadback(programFrame);
 
 		var captured = tap.TryCapture(
 			SourceA,
@@ -64,6 +64,7 @@ public sealed class OperatorMonitoringPlaneTests
 			timing);
 
 		Assert.True(captured);
+		programPixels.Dispose();
 		using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
 		var first = await subscription.ReadAsync(timeout.Token);
 		var second = await subscription.ReadAsync(timeout.Token);
@@ -78,6 +79,7 @@ public sealed class OperatorMonitoringPlaneTests
 		Assert.Equal((byte)70, program.Pixels.Span[0]);
 		Assert.Equal(1UL, tap.Statistics.Captured);
 		Assert.Equal(1UL, tap.Statistics.Processed);
+		Assert.Equal(0, gpu.ReadbackPoolStatistics.ActiveBuffers);
 	}
 
 	[Fact]
