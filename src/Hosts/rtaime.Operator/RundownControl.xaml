@@ -1,0 +1,150 @@
+<!-- Copyright (c) Dave Beusing <david.beusing@gmail.com>. -->
+<UserControl x:Class="rtaime.Operator.RundownControl"
+	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	xmlns:controls="clr-namespace:rtaime.Operator.Controls"
+	DataContext="{Binding Rundown, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+	AutomationProperties.Name="Production rundown">
+	<Grid Margin="8">
+		<Grid.RowDefinitions>
+			<RowDefinition Height="Auto" />
+			<RowDefinition Height="Auto" />
+			<RowDefinition Height="*" />
+			<RowDefinition Height="Auto" />
+			<RowDefinition Height="Auto" />
+		</Grid.RowDefinitions>
+
+		<Grid>
+			<Grid.ColumnDefinitions>
+				<ColumnDefinition Width="*" />
+				<ColumnDefinition Width="6" />
+				<ColumnDefinition Width="64" />
+			</Grid.ColumnDefinitions>
+			<StackPanel>
+				<TextBlock Text="RUNDOWN" Style="{StaticResource OperatorLabel}" />
+				<controls:RtaimeTextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" IsCompact="True" Margin="0,2,0,0" />
+			</StackPanel>
+			<controls:RtaimeButton Grid.Column="2" Content="SAVE" Command="{Binding SaveCommand}" IsCompact="True" VerticalAlignment="Bottom" />
+		</Grid>
+
+		<Grid Grid.Row="1" Margin="0,6,0,6">
+			<Grid.ColumnDefinitions>
+				<ColumnDefinition Width="*" />
+				<ColumnDefinition Width="3" />
+				<ColumnDefinition Width="*" />
+				<ColumnDefinition Width="3" />
+				<ColumnDefinition Width="*" />
+			</Grid.ColumnDefinitions>
+			<controls:RtaimeButton Content="+ MEDIA" Command="{Binding AddMediaCommand}" IsCompact="True" ToolTip="Add the selected persistent media asset using the selected production source." />
+			<controls:RtaimeButton Grid.Column="2" Content="+ SCENE" Command="{Binding AddSceneCommand}" IsCompact="True" />
+			<controls:RtaimeButton Grid.Column="4" Content="+ HOLD" Command="{Binding AddHoldCommand}" IsCompact="True" />
+		</Grid>
+
+		<controls:RtaimeListBox Grid.Row="2"
+			ItemsSource="{Binding Items}"
+			SelectedItem="{Binding SelectedItem, Mode=TwoWay}"
+			Background="Transparent"
+			BorderBrush="{DynamicResource OperatorBorderBrush}"
+			BorderThickness="1"
+			ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+			ScrollViewer.VerticalScrollBarVisibility="Auto"
+			AutomationProperties.Name="Rundown items">
+			<controls:RtaimeListBox.ItemTemplate>
+				<DataTemplate>
+					<Grid Margin="6,4">
+						<Grid.ColumnDefinitions>
+							<ColumnDefinition Width="*" />
+							<ColumnDefinition Width="Auto" />
+						</Grid.ColumnDefinitions>
+						<StackPanel>
+							<TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="{StaticResource OperatorFontSizeCompact}" TextTrimming="CharacterEllipsis" />
+							<TextBlock Text="{Binding Detail}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextTrimming="CharacterEllipsis" />
+						</StackPanel>
+						<Border Grid.Column="1"
+							Margin="6,0,0,0"
+							Padding="5,2"
+							Background="{DynamicResource OperatorAlternateSurfaceBrush}"
+							BorderBrush="{DynamicResource OperatorBorderBrush}"
+							BorderThickness="1"
+							CornerRadius="{DynamicResource OperatorRadiusControl}"
+							VerticalAlignment="Center">
+							<TextBlock Text="{Binding ExecutionState}" FontSize="{StaticResource OperatorFontSizeMicro}" FontWeight="SemiBold" />
+						</Border>
+					</Grid>
+				</DataTemplate>
+			</controls:RtaimeListBox.ItemTemplate>
+		</controls:RtaimeListBox>
+
+		<StackPanel Grid.Row="3" Margin="0,6,0,0">
+			<Grid>
+				<Grid.ColumnDefinitions>
+					<ColumnDefinition Width="*" />
+					<ColumnDefinition Width="3" />
+					<ColumnDefinition Width="*" />
+					<ColumnDefinition Width="3" />
+					<ColumnDefinition Width="*" />
+					<ColumnDefinition Width="3" />
+					<ColumnDefinition Width="*" />
+				</Grid.ColumnDefinitions>
+				<controls:RtaimeButton Content="↑" Command="{Binding MoveUpCommand}" IsCompact="True" />
+				<controls:RtaimeButton Grid.Column="2" Content="↓" Command="{Binding MoveDownCommand}" IsCompact="True" />
+				<controls:RtaimeButton Grid.Column="4" Content="REMOVE" Command="{Binding RemoveCommand}" IsCompact="True" />
+				<controls:RtaimeButton Grid.Column="6" Content="REFRESH" Command="{Binding RefreshCommand}" IsCompact="True" />
+			</Grid>
+			<Grid Margin="0,4,0,0">
+				<Grid.ColumnDefinitions>
+					<ColumnDefinition Width="*" />
+					<ColumnDefinition Width="3" />
+					<ColumnDefinition Width="*" />
+					<ColumnDefinition Width="3" />
+					<ColumnDefinition Width="*" />
+					<ColumnDefinition Width="3" />
+					<ColumnDefinition Width="*" />
+				</Grid.ColumnDefinitions>
+				<controls:RtaimeButton Content="PREPARE" Command="{Binding PrepareCommand}" IsCompact="True" />
+				<controls:RtaimeButton Grid.Column="2"
+					Content="GO"
+					Command="{Binding GoCommand}"
+					IsCompact="True"
+					Background="{DynamicResource OperatorAccentBrush}"
+					BorderBrush="{DynamicResource OperatorAccentBrush}"
+					Foreground="{DynamicResource OperatorBackgroundBrush}" />
+				<controls:RtaimeButton Grid.Column="4" Content="NEXT" Command="{Binding NextCommand}" IsCompact="True" />
+				<controls:RtaimeButton Grid.Column="6" Content="HOLD" Command="{Binding HoldCommand}" IsCompact="True" />
+			</Grid>
+			<Grid Margin="0,4,0,0">
+				<Grid.ColumnDefinitions>
+					<ColumnDefinition Width="*" />
+					<ColumnDefinition Width="3" />
+					<ColumnDefinition Width="*" />
+					<ColumnDefinition Width="3" />
+					<ColumnDefinition Width="*" />
+				</Grid.ColumnDefinitions>
+				<controls:RtaimeButton Content="+ AFV" Command="{Binding AddFollowVideoCommand}" IsCompact="True" />
+				<controls:RtaimeButton Grid.Column="2" Content="+ BREAKAWAY" Command="{Binding AddAudioBreakawayCommand}" IsCompact="True" />
+				<controls:RtaimeButton Grid.Column="4" Content="+ GRAPHICS" Command="{Binding AddGraphicsCommand}" IsCompact="True" />
+			</Grid>
+		</StackPanel>
+
+		<Border Grid.Row="4"
+			Margin="0,6,0,0"
+			Padding="6,4"
+			Background="{DynamicResource OperatorAlternateSurfaceBrush}"
+			BorderBrush="{DynamicResource OperatorBorderBrush}"
+			BorderThickness="1"
+			CornerRadius="{DynamicResource OperatorRadiusControl}">
+			<StackPanel>
+				<DockPanel>
+					<TextBlock Text="{Binding State}" FontWeight="SemiBold" FontSize="{StaticResource OperatorFontSizeCompact}" />
+					<TextBlock Text="{Binding StorageLabel}" DockPanel.Dock="Right" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" />
+				</DockPanel>
+				<TextBlock Text="{Binding Detail}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextWrapping="Wrap" />
+				<TextBlock Text="{Binding Failure}" Foreground="{DynamicResource OperatorWarningBrush}" FontSize="{StaticResource OperatorFontSizeMicro}" TextWrapping="Wrap" />
+				<StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+					<controls:RtaimeButton Content="RESUME" Command="{Binding ResumeRecoveryCommand}" IsCompact="True" Margin="0,0,4,0" />
+					<controls:RtaimeButton Content="CANCEL RECOVERY" Command="{Binding CancelRecoveryCommand}" IsCompact="True" />
+				</StackPanel>
+			</StackPanel>
+		</Border>
+	</Grid>
+</UserControl>
