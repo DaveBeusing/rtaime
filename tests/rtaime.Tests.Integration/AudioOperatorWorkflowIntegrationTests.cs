@@ -84,6 +84,41 @@ public sealed class AudioOperatorWorkflowIntegrationTests
 	}
 
 	[Fact]
+	public async Task Breakaway_routes_selected_audio_across_video_cut_and_return_to_afv_is_boundary_exact()
+	{
+		await using var fixture = await Fixture.CreateAsync();
+
+		fixture.Runtime.SetAudioRouting(AudioRoutingMode.Breakaway, fixture.SourceA);
+		Commit(
+			fixture.Control.SelectPreview(new SelectPreviewCommand(Metadata(fixture), new ProductionSourceId(fixture.SourceB.Value))),
+			fixture);
+		Commit(
+			fixture.Control.CutProgram(new CutProgramCommand(Metadata(fixture), new ProductionSourceId(fixture.SourceB.Value))),
+			fixture);
+
+		fixture.Runtime.SetExternalAudioInput(fixture.SourceA, StereoSamples(960, 0.25f, -0.50f));
+		fixture.Runtime.SetExternalAudioInput(fixture.SourceB, StereoSamples(960, 0.90f, 0.90f));
+		var breakaway = fixture.Runtime.ProcessNextBoundary();
+
+		Assert.Equal(fixture.SourceB, breakaway.CommittedProgramSourceId);
+		Assert.Equal(AudioRoutingMode.Breakaway, breakaway.Audio.RoutingMode);
+		Assert.Equal(fixture.SourceA, breakaway.Audio.AudioSourceId);
+		Assert.Equal(0.25f, ReadFloat(breakaway.ProgramAudioPayload, 0), 5);
+		Assert.Equal(-0.50f, ReadFloat(breakaway.ProgramAudioPayload, 1), 5);
+		Assert.Equal(fixture.SourceA, fixture.Runtime.Snapshot.AudioProgram.ActiveAudioSourceId);
+
+		fixture.Runtime.SetAudioRouting(AudioRoutingMode.FollowVideo);
+		fixture.Runtime.SetExternalAudioInput(fixture.SourceB, StereoSamples(960, 0.30f, -0.40f));
+		var followed = fixture.Runtime.ProcessNextBoundary();
+
+		Assert.Equal(AudioRoutingMode.FollowVideo, followed.Audio.RoutingMode);
+		Assert.Equal(fixture.SourceB, followed.Audio.AudioSourceId);
+		Assert.Equal(0.30f, ReadFloat(followed.ProgramAudioPayload, 0), 5);
+		Assert.Equal(-0.40f, ReadFloat(followed.ProgramAudioPayload, 1), 5);
+		Assert.True(followed.Audio.RoutingRevision > breakaway.Audio.RoutingRevision);
+	}
+
+	[Fact]
 	public async Task Generated_audio_test_signal_uses_regular_afv_path_and_restores_preserved_external_input()
 	{
 		await using var fixture = await Fixture.CreateAsync();
