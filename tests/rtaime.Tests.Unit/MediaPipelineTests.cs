@@ -203,6 +203,45 @@ public sealed class MediaPipelineTests
         Assert.Same(frame.Surface.Handle, observed!.Surface.Handle);
     }
 
+
+    [Fact]
+    public void Queue_and_pipeline_observation_histories_remain_bounded_and_chronological()
+    {
+        using (var queue = new BoundedMediaFrameQueue(1, MediaBackpressurePolicy.RejectIncoming))
+        {
+            var frameCount = BoundedMediaFrameQueue.RetainedObservationCapacity + 64;
+            for (var index = 0; index < frameCount; index++)
+            {
+                var lease = new MediaFrameLease(CreateFrame((ulong)index));
+                Assert.True(queue.Enqueue(lease).Enqueued);
+                Assert.True(queue.TryDequeue(out var dequeued));
+                dequeued!.Release();
+            }
+
+            var observations = queue.Observations;
+            Assert.Equal(BoundedMediaFrameQueue.RetainedObservationCapacity, observations.Count);
+            Assert.True(queue.OverwrittenObservationCount > 0);
+            Assert.Equal((ulong)(frameCount - 1), observations[^1].SequenceNumber!.Value);
+            Assert.True(observations.Zip(observations.Skip(1), (left, right) => left.Ordinal < right.Ordinal).All(value => value));
+        }
+
+        using var pipeline = new MediaFramePipeline(new MediaPipelineOptions(1, MediaBackpressurePolicy.RejectIncoming));
+        var pipelineFrameCount = MediaFramePipeline.RetainedObservationCapacity + 64;
+        for (var index = 0; index < pipelineFrameCount; index++)
+        {
+            var frame = CreateFrame((ulong)index);
+            var position = new MediaClockPosition(frame.Timing.PresentationTimestamp, frame.Timing.Timebase);
+            Assert.True(pipeline.Submit(frame, position).Accepted);
+            Assert.True(pipeline.ConsumeNext(position, _ => { }).Consumed);
+        }
+
+        var pipelineObservations = pipeline.Observations;
+        Assert.Equal(MediaFramePipeline.RetainedObservationCapacity, pipelineObservations.Count);
+        Assert.True(pipeline.OverwrittenObservationCount > 0);
+        Assert.Equal((ulong)(pipelineFrameCount - 1), pipelineObservations[^1].SequenceNumber!.Value);
+        Assert.True(pipelineObservations.Zip(pipelineObservations.Skip(1), (left, right) => left.Ordinal < right.Ordinal).All(value => value));
+    }
+
     private static FrameDescriptor CreateFrame(
         ulong sequenceNumber,
         SurfaceOwnership ownership = SurfaceOwnership.ProducerOwned)

@@ -268,6 +268,23 @@ public sealed class AudioFollowVideoTests
         Assert.Equal(1, AudioGain.Unity.Linear);
     }
 
+
+    [Fact]
+    public void Observation_history_remains_bounded_under_repeated_audio_state_changes()
+    {
+        var engine = CreateEngine(FrameRate.Fps50);
+        var writes = AudioFollowVideoEngine.RetainedObservationCapacity + 64;
+
+        for (var index = 0; index < writes; index++)
+            engine.SetInputState(StreamA, index % 2 == 0 ? AudioGain.Unity : new AudioGain(0.5), muted: false);
+
+        var observations = engine.Observations;
+        Assert.Equal(AudioFollowVideoEngine.RetainedObservationCapacity, observations.Count);
+        Assert.True(engine.OverwrittenObservationCount > 0);
+        Assert.Equal("audio.input.state_changed", observations[^1].Code);
+        Assert.True(observations.Zip(observations.Skip(1), (left, right) => left.Ordinal < right.Ordinal).All(value => value));
+    }
+
     private static AudioFollowVideoEngine CreateEngine(FrameRate frameRate) => new(
         new[] { Stream(StreamA, SourceA), Stream(StreamB, SourceB) },
         frameRate,
