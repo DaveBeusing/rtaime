@@ -111,11 +111,12 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 	public async ValueTask<OperatorAudioProgramDescriptor> SetAudioRoutingAsync(
 		OperatorAudioRoutingMode mode,
 		string? breakawaySourceId,
+		ulong expectedRoutingRevision,
 		CancellationToken cancellationToken = default)
 	{
 		var response = await ExchangeAsync(
 			"control.audio.routing.set",
-			new WireAudioRoutingState((int)mode, breakawaySourceId),
+			new WireAudioRoutingState((int)mode, breakawaySourceId, expectedRoutingRevision),
 			cancellationToken).ConfigureAwait(false);
 		var wire = response.Payload.Deserialize<WireAudioProgram>(Wire.JsonOptions)
 			?? throw new InvalidDataException("ControlHost audio routing payload is required.");
@@ -1228,7 +1229,7 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 	private sealed record WireCompositingLayer(string LayerId, int Kind, int Order, bool Visible, byte Opacity, double PositionX, double PositionY, double Scale, string ContentIdentity, double RotationDegrees = 0, double AnchorX = 0, double AnchorY = 0, double CropLeft = 0, double CropTop = 0, double CropRight = 0, double CropBottom = 0, WireProcessingNode? ProcessingNode = null);
 	private sealed record WireCompositingState(string Version, WireCompositingLayer[] Layers);
 	private sealed record WireAudioInputState(string SourceId, double Gain, bool Muted);
-	private sealed record WireAudioRoutingState(int Mode, string? BreakawaySourceId);
+	private sealed record WireAudioRoutingState(int Mode, string? BreakawaySourceId, ulong ExpectedRoutingRevision);
 	private sealed record WireAudioTestSignalState(string SourceId, bool Enabled, int Mode, double FrequencyHz, double PeakLevel);
 	private sealed record WireTestPatternState(string SourceId, bool Enabled, bool MotionTiming = false);
 	private sealed record WireAudioInput(
