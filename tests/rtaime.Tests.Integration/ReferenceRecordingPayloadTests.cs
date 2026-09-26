@@ -51,7 +51,7 @@ public sealed class ReferenceRecordingPayloadTests
 			var start = await runtime.StartRecordingAsync(RecordingSessionId.New(), outputId);
 			Assert.True(start.Succeeded, start.Failure?.ToString());
 
-			var boundary = runtime.ProcessNextBoundary();
+			using var boundary = runtime.ProcessNextBoundary();
 			Assert.NotNull(boundary.Recording);
 			Assert.True(boundary.Recording!.Accepted, boundary.Recording.Failure?.ToString());
 			Assert.True(boundary.Audio.Emitted, boundary.Audio.Failure?.ToString());
