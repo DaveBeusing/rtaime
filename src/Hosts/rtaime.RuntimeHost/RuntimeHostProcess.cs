@@ -417,7 +417,7 @@ public sealed class RuntimeHostProcess
 			if (!runtime.HasCommittedExecution) continue;
 
 			var processingStartedAt = _timingClock.Elapsed;
-			var boundary = runtime.ProcessNextBoundary();
+			using var boundary = runtime.ProcessNextBoundary();
 			var renderDuration = _timingClock.Elapsed - processingStartedAt;
 			mediaIo?.SubmitProgram(boundary);
 			aiShowcase.ObserveProgramBoundary(boundary.ProgramFrame);
