@@ -866,11 +866,12 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			RecordingEnqueueResult? recording = null;
 			if (_recorder.Snapshot.State == RecordingLifecycleState.Recording)
 			{
+				var payloadStaged = false;
 				if (_recordingPayloadWriter is not null)
 				{
 					try
 					{
-						var recordingPayload = new GpuRecordingPayloadLease(pixels.Retain());
+						GpuRecordingPayloadLease? recordingPayload = new(pixels.Retain());
 						try
 						{
 							_recordingPayloadWriter.StagePayload(
@@ -878,6 +879,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 								recordingPayload,
 								programAudioPayload);
 							recordingPayload = null;
+							payloadStaged = true;
 						}
 						finally
 						{
@@ -890,8 +892,18 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 					}
 				}
 
-				recording = _recordingBridge.TryRecordCommittedProgram(execution, output.Descriptor, audioBuffer);
-				if (recording is { Accepted: false })
+				try
+				{
+					recording = _recordingBridge.TryRecordCommittedProgram(execution, output.Descriptor, audioBuffer);
+				}
+				catch
+				{
+					if (payloadStaged)
+						_recordingPayloadWriter?.DiscardPayload(sequence);
+					throw;
+				}
+
+				if (payloadStaged && recording is { Accepted: false })
 					_recordingPayloadWriter?.DiscardPayload(sequence);
 			}
 
