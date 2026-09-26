@@ -99,6 +99,12 @@ internal static class Program
 				new Dictionary<string, string> { ["success"] = result.Success.ToString() });
 			return result.Success ? 0 : 1;
 		}
+		catch (ApplicationHostLifecycleException exception)
+		{
+			LogLifecycleFailure(log, exception);
+			WriteFailureToStandardError(exception, exception.DiagnosticPath);
+			return 1;
+		}
 		catch (OperationCanceledException) when (shutdown.IsCancellationRequested)
 		{
 			log.Information("lifecycle", "apphost.cancelled", "Application host stopped after cancellation.");
@@ -143,6 +149,29 @@ internal static class Program
 			"Windows service host stopped.",
 			new Dictionary<string, string> { ["exitCode"] = Environment.ExitCode.ToString() });
 		return Environment.ExitCode;
+	}
+
+	private static void LogLifecycleFailure(HostLog log, ApplicationHostLifecycleException exception)
+	{
+		var runtimeRecoveryTimeout = exception.FailureKind == ApplicationHostFailureKind.RuntimeRecoveryTimeout;
+		var code = runtimeRecoveryTimeout
+			? "apphost.runtime-recovery-timeout"
+			: "apphost.lifecycle-failure";
+		var message = runtimeRecoveryTimeout
+			? "AppHost runtime readiness recovery timed out."
+			: "AppHost lifecycle failed after initial production readiness.";
+		var dimensions = new Dictionary<string, string>
+		{
+			["state"] = exception.StateAtFailure.ToString(),
+			["profile"] = exception.Profile.ToString(),
+			["ownership"] = exception.Ownership.ToString()
+		};
+		if (exception.RecoveryDuration is { } recoveryDuration)
+			dimensions["recoveryDurationMs"] = Math.Round(recoveryDuration.TotalMilliseconds).ToString(System.Globalization.CultureInfo.InvariantCulture);
+		if (!string.IsNullOrWhiteSpace(exception.DiagnosticPath))
+			dimensions["diagnosticPath"] = exception.DiagnosticPath;
+
+		log.Critical("lifecycle", code, message, exception, dimensions);
 	}
 
 	private static void WriteFailureToStandardError(Exception exception, string? diagnosticPath)
@@ -197,6 +226,13 @@ internal static class Program
 			catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
 			{
 				hostLog.Information("lifecycle", "apphost.service-cancelled", "Persistent engine lifecycle cancelled.");
+			}
+			catch (ApplicationHostLifecycleException exception)
+			{
+				Environment.ExitCode = 1;
+				logger.LogCritical(exception, "Persistent engine lifecycle failed after initial production readiness.");
+				LogLifecycleFailure(hostLog, exception);
+				applicationLifetime.StopApplication();
 			}
 			catch (Exception exception)
 			{
