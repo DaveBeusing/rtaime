@@ -619,7 +619,10 @@ public sealed class ControlHostProcess
 				}
 			}
 
-			await Task.Delay(_options.RuntimeRetryInterval, cancellationToken).ConfigureAwait(false);
+			var nextObservationInterval = Lifecycle.State == ControlHostProcessState.Ready
+				? TimeSpan.FromMilliseconds(Math.Max(250, _options.RuntimeRetryInterval.TotalMilliseconds))
+				: _options.RuntimeRetryInterval;
+			await Task.Delay(nextObservationInterval, cancellationToken).ConfigureAwait(false);
 		}
 	}
 
@@ -628,15 +631,15 @@ public sealed class ControlHostProcess
 		IControlRuntimeTransportSeam transport,
 		CancellationToken cancellationToken)
 	{
-		await transport.ConnectAsync(cancellationToken).ConfigureAwait(false);
+		var runtimeSnapshot = await transport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
 		if (!transport.IsConnected)
-			throw new IOException("Runtime transport did not report a connected state after a successful probe.");
+			throw new IOException("Runtime transport did not report a connected state after a successful snapshot.");
 		if (control.HasPendingExecution)
 			return;
 
-		var runtimeHostInstanceId = transport.HostInstanceId
-			?? throw new InvalidDataException("Connected RuntimeHost did not expose a host instance identity.");
-		var runtimeSnapshot = await transport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
+		var runtimeHostInstanceId = runtimeSnapshot.HostInstanceId;
+		if (string.IsNullOrWhiteSpace(runtimeHostInstanceId))
+			throw new InvalidDataException("Connected RuntimeHost did not expose a host instance identity.");
 		var hostChanged = !string.Equals(_boundRuntimeHostInstanceId, runtimeHostInstanceId, StringComparison.Ordinal);
 		if (hostChanged || !RuntimeMatchesAuthority(runtimeSnapshot, control.State))
 		{
