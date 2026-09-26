@@ -45,7 +45,7 @@
 					<ColumnDefinition Width="Auto" />
 					<ColumnDefinition Width="8" />
 					<ColumnDefinition Width="Auto" />
-					<ColumnDefinition Width="*" />
+					<ColumnDefinition Width="52" />
 				</Grid.ColumnDefinitions>
 				<controls:RtaimeCheckBox Content="AUTO MEDIA" IsChecked="{Binding AutoAdvanceMedia, Mode=TwoWay}" VerticalAlignment="Center" />
 				<controls:RtaimeCheckBox Grid.Column="2" Content="DISSOLVE" IsChecked="{Binding UseDissolve, Mode=TwoWay}" VerticalAlignment="Center" />
@@ -54,6 +54,27 @@
 					Text="{Binding TransitionFrames, UpdateSourceTrigger=PropertyChanged}"
 					IsCompact="True"
 					ToolTip="Dissolve duration in production frames." />
+			</Grid>
+			<Grid Margin="0,4,0,0">
+				<Grid.ColumnDefinitions>
+					<ColumnDefinition Width="Auto" />
+					<ColumnDefinition Width="52" />
+					<ColumnDefinition Width="8" />
+					<ColumnDefinition Width="Auto" />
+					<ColumnDefinition Width="*" />
+				</Grid.ColumnDefinitions>
+				<controls:RtaimeCheckBox Content="REPEAT ITEM" IsChecked="{Binding RepeatItem, Mode=TwoWay}" VerticalAlignment="Center" />
+				<controls:RtaimeTextBox Grid.Column="1"
+					Margin="6,0,0,0"
+					Text="{Binding RepeatCount, UpdateSourceTrigger=PropertyChanged}"
+					IsCompact="True"
+					ToolTip="Bounded repeat count (1..100)." />
+				<TextBlock Grid.Column="3" Text="HOLD f" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" />
+				<controls:RtaimeTextBox Grid.Column="4"
+					Margin="6,0,0,0"
+					Text="{Binding HoldFrames, UpdateSourceTrigger=PropertyChanged}"
+					IsCompact="True"
+					ToolTip="Bounded hold duration in production frames." />
 			</Grid>
 		</StackPanel>
 
