@@ -74,9 +74,9 @@ public sealed class BroadcastTestPatternRuntimeIntegrationTests
 			V1BroadcastTestPatternMode.MotionTiming));
 
 		using var first = fixture.Runtime.ProcessNextBoundary();
-		var firstHash = System.Security.Cryptography.SHA256.HashData(first.ProgramPixels);
+		var firstHash = System.Security.Cryptography.SHA256.HashData(first.ProgramPixels.Span);
 		using var second = fixture.Runtime.ProcessNextBoundary();
-		var secondHash = System.Security.Cryptography.SHA256.HashData(second.ProgramPixels);
+		var secondHash = System.Security.Cryptography.SHA256.HashData(second.ProgramPixels.Span);
 
 		Assert.NotEqual(firstHash, secondHash);
 		Assert.Equal(
