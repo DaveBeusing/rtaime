@@ -102,6 +102,10 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	private string _audioPeakPercent = "0%";
 	private string _audioAfvSourceName = "—";
 	private string _audioAfvSourceId = "—";
+	private string _audioRoutingMode = "FOLLOW_VIDEO";
+	private string _audioRoutingSourceName = "—";
+	private string _audioRoutingSourceId = "—";
+	private ulong _audioRoutingRevision;
 	private string _audioHealth = "UNKNOWN";
 	private string _audioMeterStatus = "IDLE";
 	private double _audioLeftPeak;
@@ -165,6 +169,8 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		ToggleGraphicsCommand = new AsyncRelayCommand(ToggleGraphicsAsync, CanApplyGraphics);
 		ClearGraphicsCommand = new AsyncRelayCommand(ClearGraphicsAsync, CanApplyGraphics);
 		ApplyAudioGainCommand = new AsyncRelayCommand(ApplyAudioGainAsync, CanApplyAudio);
+		SetAudioFollowVideoCommand = new AsyncRelayCommand(SetAudioFollowVideoAsync, CanSetAudioFollowVideo);
+		SetAudioBreakawayCommand = new AsyncRelayCommand(SetAudioBreakawayAsync, CanApplyAudio);
 		ToggleAudioMuteCommand = new AsyncRelayCommand(ToggleAudioMuteAsync, CanApplyAudio);
 		CycleAudioTestSignalCommand = new AsyncRelayCommand(CycleAudioTestSignalAsync, CanApplyAudio);
 		StartRecordingCommand = new AsyncRelayCommand(StartRecordingAsync, CanStartRecording);
@@ -196,6 +202,8 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	public ICommand ToggleGraphicsCommand { get; }
 	public ICommand ClearGraphicsCommand { get; }
 	public ICommand ApplyAudioGainCommand { get; }
+	public ICommand SetAudioFollowVideoCommand { get; }
+	public ICommand SetAudioBreakawayCommand { get; }
 	public ICommand ToggleAudioMuteCommand { get; }
 	public ICommand CycleAudioTestSignalCommand { get; }
 	public ICommand StartRecordingCommand { get; }
@@ -379,6 +387,10 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	public string AudioPeakPercent { get => _audioPeakPercent; private set => Set(ref _audioPeakPercent, value); }
 	public string AudioAfvSourceName { get => _audioAfvSourceName; private set => Set(ref _audioAfvSourceName, value); }
 	public string AudioAfvSourceId { get => _audioAfvSourceId; private set => Set(ref _audioAfvSourceId, value); }
+	public string AudioRoutingMode { get => _audioRoutingMode; private set => Set(ref _audioRoutingMode, value); }
+	public string AudioRoutingSourceName { get => _audioRoutingSourceName; private set => Set(ref _audioRoutingSourceName, value); }
+	public string AudioRoutingSourceId { get => _audioRoutingSourceId; private set => Set(ref _audioRoutingSourceId, value); }
+	public ulong AudioRoutingRevision { get => _audioRoutingRevision; private set => Set(ref _audioRoutingRevision, value); }
 	public string AudioHealth { get => _audioHealth; private set => Set(ref _audioHealth, value); }
 	public string AudioMeterStatus { get => _audioMeterStatus; private set => Set(ref _audioMeterStatus, value); }
 	public double AudioLeftPeak
@@ -500,6 +512,10 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		GraphicsFontSize is >= 8 and <= 256;
 
 	private bool CanApplyAudio() => CanControl() && SelectedAudioInput is not null;
+
+	private bool CanSetAudioFollowVideo() =>
+		CanControl() &&
+		_client?.Snapshot?.AudioProgram.RoutingMode != OperatorAudioRoutingMode.FollowVideo;
 
 	private bool CanStartRecording() =>
 		CanControl() &&
@@ -1030,6 +1046,31 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		});
 	}
 
+	private async Task SetAudioFollowVideoAsync()
+	{
+		if (_client is null) return;
+		await ExecuteAsync("AUDIO ROUTING", async () =>
+		{
+			await _client.SetAudioRoutingAsync(OperatorAudioRoutingMode.FollowVideo);
+			ApplyAudio(_client.Snapshot!, preserveSelectedGainEdit: true);
+			CommandStatus = "AFV CONFIRMED";
+			LastEvent = "Program audio returned to FOLLOW_VIDEO and was confirmed by RuntimeHost.";
+		});
+	}
+
+	private async Task SetAudioBreakawayAsync()
+	{
+		if (_client is null || SelectedAudioInput is null) return;
+		var input = SelectedAudioInput;
+		await ExecuteAsync("AUDIO ROUTING", async () =>
+		{
+			await _client.SetAudioRoutingAsync(OperatorAudioRoutingMode.Breakaway, input.SourceId);
+			ApplyAudio(_client.Snapshot!, preserveSelectedGainEdit: true);
+			CommandStatus = "BREAKAWAY CONFIRMED";
+			LastEvent = $"Program audio breakaway to {input.SourceName} was confirmed by RuntimeHost.";
+		});
+	}
+
 	private async Task ToggleAudioMuteAsync()
 	{
 		if (_client is null || SelectedAudioInput is null) return;
@@ -1277,7 +1318,10 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		foreach (var descriptor in snapshot.AudioInputs)
 		{
 			var source = snapshot.Sources.FirstOrDefault(candidate => string.Equals(candidate.Id, descriptor.SourceId, StringComparison.Ordinal));
-			var isAfv = string.Equals(descriptor.SourceId, snapshot.AudioProgram.ActiveVideoSourceId, StringComparison.Ordinal);
+			var programAudioSourceId = snapshot.AudioProgram.ActiveAudioSourceId ?? snapshot.AudioProgram.ActiveVideoSourceId;
+			var isAfv =
+				snapshot.AudioProgram.RoutingMode == OperatorAudioRoutingMode.FollowVideo &&
+				string.Equals(descriptor.SourceId, programAudioSourceId, StringComparison.Ordinal);
 			if (!existing.TryGetValue(descriptor.SourceId, out var input))
 			{
 				input = new OperatorAudioInputViewModel(
@@ -1314,6 +1358,10 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		var program = snapshot.AudioProgram;
 		AudioAfvSourceId = program.ActiveVideoSourceId;
 		AudioAfvSourceName = ResolveSourceName(snapshot, program.ActiveVideoSourceId);
+		AudioRoutingMode = program.RoutingMode == OperatorAudioRoutingMode.Breakaway ? "BREAKAWAY" : "FOLLOW_VIDEO";
+		AudioRoutingSourceId = program.ActiveAudioSourceId ?? program.ActiveVideoSourceId;
+		AudioRoutingSourceName = ResolveSourceName(snapshot, AudioRoutingSourceId);
+		AudioRoutingRevision = program.RoutingRevision;
 		AudioHealth = program.Health;
 		AudioLeftPeak = program.LeftPeak;
 		AudioRightPeak = program.RightPeak;
@@ -1711,6 +1759,8 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		(ToggleGraphicsCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 		(ClearGraphicsCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 		(ApplyAudioGainCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+		(SetAudioFollowVideoCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+		(SetAudioBreakawayCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 		(ToggleAudioMuteCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 		(CycleAudioTestSignalCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 		(StartRecordingCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
