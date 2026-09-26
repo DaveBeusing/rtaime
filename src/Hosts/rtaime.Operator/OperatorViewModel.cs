@@ -30,6 +30,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	private readonly CancellationTokenSource _audioPollingStop = new();
 	private Func<OperatorGraphicsAsset?>? _graphicsAssetPicker;
 	private Task? _audioPollingTask;
+	private int _disposeState;
 	private OperatorSourceTileViewModel? _selectedSource;
 	private OperatorSceneViewModel? _selectedScene;
 	private OperatorAudioInputViewModel? _selectedAudioInput;
@@ -530,22 +531,34 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 
 	public void StartAudioMetering()
 	{
+		if (Volatile.Read(ref _disposeState) != 0)
+			return;
+
 		if (_audioPollingTask is null && _client is not null)
 			_audioPollingTask = PollAudioAsync(_audioPollingStop.Token);
 	}
 
 	public async ValueTask DisposeAsync()
 	{
-		_audioPollingStop.Cancel();
-		if (_audioPollingTask is not null)
-		{
-			try { await _audioPollingTask.ConfigureAwait(false); }
-			catch (OperationCanceledException) { }
-		}
-		_audioPollingStop.Dispose();
+		if (Interlocked.Exchange(ref _disposeState, 1) != 0)
+			return;
+
 		_runtimeReadiness.Changed -= OnRuntimeReadinessChanged;
-		if (_ownsRuntimeReadiness && _runtimeReadiness is IDisposable disposableReadiness)
-			disposableReadiness.Dispose();
+		_audioPollingStop.Cancel();
+		try
+		{
+			if (_audioPollingTask is not null)
+			{
+				try { await _audioPollingTask.ConfigureAwait(false); }
+				catch (OperationCanceledException) { }
+			}
+		}
+		finally
+		{
+			_audioPollingStop.Dispose();
+			if (_ownsRuntimeReadiness && _runtimeReadiness is IDisposable disposableReadiness)
+				disposableReadiness.Dispose();
+		}
 	}
 
 	private async Task PollAudioAsync(CancellationToken cancellationToken)
@@ -1527,12 +1540,22 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 
 	private void Post(Action action)
 	{
+		if (Volatile.Read(ref _disposeState) != 0)
+			return;
+
+		void InvokeIfActive()
+		{
+			if (Volatile.Read(ref _disposeState) == 0)
+				action();
+		}
+
 		if (_synchronizationContext is null)
 		{
-			action();
+			InvokeIfActive();
 			return;
 		}
-		_synchronizationContext.Post(static state => ((Action)state!).Invoke(), action);
+
+		_synchronizationContext.Post(static state => ((Action)state!).Invoke(), (Action)InvokeIfActive);
 	}
 
 	internal void SetSynchronizationContext(SynchronizationContext synchronizationContext) =>
@@ -1650,6 +1673,9 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 
 	private void ApplyLifecycle(OperatorStatusSnapshot? snapshot)
 	{
+		if (Volatile.Read(ref _disposeState) != 0)
+			return;
+
 		_runtimeReadiness.Observe(new RuntimeReadinessObservation(
 			snapshot?.Health ?? OperatorHealthDescriptor.Unavailable,
 			snapshot?.RuntimeStatus ?? RuntimeStatus,
