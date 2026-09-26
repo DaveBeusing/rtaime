@@ -857,6 +857,37 @@ public interface IOperatorControlTransport
 
     ValueTask<ShowControlWorkspaceSnapshot> AcknowledgeShowControlRecoveryAsync(bool resume, CancellationToken cancellationToken = default) =>
         ValueTask.FromException<ShowControlWorkspaceSnapshot>(new NotSupportedException("Operator transport does not expose show-control recovery."));
+
+    ValueTask<RundownWorkspaceSnapshot> GetRundownSnapshotAsync(CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<RundownWorkspaceSnapshot>(new NotSupportedException("Operator transport does not expose rundown state."));
+
+    ValueTask<RundownWorkspaceSnapshot> SaveRundownAsync(
+        RundownDefinition rundown,
+        ulong expectedStorageVersion,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<RundownWorkspaceSnapshot>(new NotSupportedException("Operator transport does not expose rundown authoring."));
+
+    ValueTask<RundownWorkspaceSnapshot> PrepareRundownItemAsync(
+        RundownItemId itemId,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<RundownWorkspaceSnapshot>(new NotSupportedException("Operator transport does not expose rundown preparation."));
+
+    ValueTask<RundownWorkspaceSnapshot> GoRundownAsync(CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<RundownWorkspaceSnapshot>(new NotSupportedException("Operator transport does not expose rundown GO."));
+
+    ValueTask<RundownWorkspaceSnapshot> NextRundownAsync(CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<RundownWorkspaceSnapshot>(new NotSupportedException("Operator transport does not expose rundown navigation."));
+
+    ValueTask<RundownWorkspaceSnapshot> PreviousRundownAsync(CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<RundownWorkspaceSnapshot>(new NotSupportedException("Operator transport does not expose rundown navigation."));
+
+    ValueTask<RundownWorkspaceSnapshot> HoldRundownAsync(CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<RundownWorkspaceSnapshot>(new NotSupportedException("Operator transport does not expose rundown hold."));
+
+    ValueTask<RundownWorkspaceSnapshot> AcknowledgeRundownRecoveryAsync(
+        bool resume,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<RundownWorkspaceSnapshot>(new NotSupportedException("Operator transport does not expose rundown recovery."));
 }
 
 public interface IMediaAssetCatalogClient
@@ -1340,6 +1371,73 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
     {
         RequireSnapshot();
         var result = await _transport.AcknowledgeShowControlRecoveryAsync(resume, cancellationToken).ConfigureAwait(false);
+        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+
+    public ValueTask<RundownWorkspaceSnapshot> GetRundownSnapshotAsync(CancellationToken cancellationToken = default) =>
+        _transport.GetRundownSnapshotAsync(cancellationToken);
+
+    public async ValueTask<RundownWorkspaceSnapshot> SaveRundownAsync(
+        RundownDefinition rundown,
+        ulong expectedStorageVersion,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(rundown);
+        RequireSnapshot();
+        var result = await _transport.SaveRundownAsync(rundown, expectedStorageVersion, cancellationToken).ConfigureAwait(false);
+        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+
+    public async ValueTask<RundownWorkspaceSnapshot> PrepareRundownItemAsync(
+        RundownItemId itemId,
+        CancellationToken cancellationToken = default)
+    {
+        RequireSnapshot();
+        var result = await _transport.PrepareRundownItemAsync(itemId, cancellationToken).ConfigureAwait(false);
+        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+
+    public async ValueTask<RundownWorkspaceSnapshot> GoRundownAsync(CancellationToken cancellationToken = default)
+    {
+        RequireSnapshot();
+        var result = await _transport.GoRundownAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+
+    public async ValueTask<RundownWorkspaceSnapshot> NextRundownAsync(CancellationToken cancellationToken = default)
+    {
+        RequireSnapshot();
+        var result = await _transport.NextRundownAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+
+    public async ValueTask<RundownWorkspaceSnapshot> PreviousRundownAsync(CancellationToken cancellationToken = default)
+    {
+        RequireSnapshot();
+        var result = await _transport.PreviousRundownAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+
+    public async ValueTask<RundownWorkspaceSnapshot> HoldRundownAsync(CancellationToken cancellationToken = default)
+    {
+        RequireSnapshot();
+        var result = await _transport.HoldRundownAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+
+    public async ValueTask<RundownWorkspaceSnapshot> AcknowledgeRundownRecoveryAsync(
+        bool resume,
+        CancellationToken cancellationToken = default)
+    {
+        RequireSnapshot();
+        var result = await _transport.AcknowledgeRundownRecoveryAsync(resume, cancellationToken).ConfigureAwait(false);
         await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
