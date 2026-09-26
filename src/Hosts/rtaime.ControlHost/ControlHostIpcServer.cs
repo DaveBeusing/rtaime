@@ -749,7 +749,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			var control = _controlAccessor();
 			if (control is null || !control.HasAuthoritativeState)
 				return Error(request, "control.not_ready", "ControlHost has no committed authoritative state yet.");
-			if (!_runtimeTransport.IsConnected)
+			if (!await EnsureRuntimeConnectedAsync(cancellationToken).ConfigureAwait(false))
 				return Error(request, "runtime.unavailable", "RuntimeHost is not connected.");
 			var layers = await _runtimeTransport.SetCompositingLayerStateAsync(
 				wire.LayerId,
@@ -790,7 +790,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			var control = _controlAccessor();
 			if (control is null || !control.HasAuthoritativeState)
 				return Error(request, "control.not_ready", "ControlHost has no committed authoritative state yet.");
-			if (!_runtimeTransport.IsConnected)
+			if (!await EnsureRuntimeConnectedAsync(cancellationToken).ConfigureAwait(false))
 				return Error(request, "runtime.unavailable", "RuntimeHost is not connected.");
 
 			var layers = await _runtimeTransport.SetCompositingLayerTransformAsync(
@@ -852,7 +852,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			var control = _controlAccessor();
 			if (control is null || !control.HasAuthoritativeState)
 				return Error(request, "control.not_ready", "ControlHost has no committed authoritative state yet.");
-			if (!_runtimeTransport.IsConnected)
+			if (!await EnsureRuntimeConnectedAsync(cancellationToken).ConfigureAwait(false))
 				return Error(request, "runtime.unavailable", "RuntimeHost is not connected.");
 
 			PreparedCompositingProcessingNodeState? node = wire.ProcessingNode is null
@@ -897,7 +897,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			var control = _controlAccessor();
 			if (control is null || !control.HasAuthoritativeState)
 				return Error(request, "control.not_ready", "ControlHost has no committed authoritative state yet.");
-			if (!_runtimeTransport.IsConnected)
+			if (!await EnsureRuntimeConnectedAsync(cancellationToken).ConfigureAwait(false))
 				return Error(request, "runtime.unavailable", "RuntimeHost is not connected.");
 			var layers = await _runtimeTransport.ReorderCompositingLayersAsync(wire.LayerIds, cancellationToken).ConfigureAwait(false);
 			_compositingLayers = layers;
@@ -1133,6 +1133,27 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		return authority;
 	}
 
+	private async ValueTask<bool> EnsureRuntimeConnectedAsync(CancellationToken cancellationToken)
+	{
+		if (_runtimeTransport.IsConnected)
+			return true;
+
+		try
+		{
+			await _runtimeTransport.ConnectAsync(cancellationToken).ConfigureAwait(false);
+			return _runtimeTransport.IsConnected;
+		}
+		catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+		{
+			return false;
+		}
+		catch (Exception exception) when (exception is IOException or InvalidDataException or InvalidOperationException or TimeoutException)
+		{
+			return false;
+		}
+	}
+
+
 	private async ValueTask<WireEnvelope> MutateGraphicsAsync(
 		WireEnvelope request,
 		Func<CancellationToken, ValueTask<RuntimeGraphicsOverlaySnapshot>> mutation,
@@ -1145,7 +1166,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			var control = _controlAccessor();
 			if (control is null || !control.HasAuthoritativeState)
 				return Error(request, "control.not_ready", "ControlHost has no committed authoritative state yet.");
-			if (!_runtimeTransport.IsConnected)
+			if (!await EnsureRuntimeConnectedAsync(cancellationToken).ConfigureAwait(false))
 				return Error(request, "runtime.unavailable", "RuntimeHost is not connected.");
 
 			try
@@ -1180,7 +1201,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			var control = _controlAccessor();
 			if (control is null || !control.HasAuthoritativeState)
 				return Error(request, "control.not_ready", "ControlHost has no committed authoritative state yet.");
-			if (!_runtimeTransport.IsConnected)
+			if (!await EnsureRuntimeConnectedAsync(cancellationToken).ConfigureAwait(false))
 				return Error(request, "runtime.unavailable", "RuntimeHost is not connected.");
 
 			try
