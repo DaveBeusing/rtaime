@@ -338,6 +338,8 @@ internal sealed class GpuReadbackBufferPool : IDisposable
             if (_available.TryGetValue(length, out var buffers) && buffers.TryPop(out var pooled))
             {
                 buffer = pooled;
+                if (buffers.Count == 0)
+                    _available.Remove(length);
             }
             else if (_allocated < _capacity)
             {
@@ -1096,11 +1098,12 @@ public sealed class GpuProcessingProvider : IDisposable
 
 public sealed class ManagedReferenceGpuBackend : IGpuProcessingBackend
 {
-    private const int MaxPooledAllocationsPerSize = 8;
+    private const int MaxPooledAllocations = 8;
 
     private readonly object _gate = new();
     private readonly Dictionary<SurfaceId, Allocation> _surfaces = new();
     private readonly Dictionary<int, Stack<byte[]>> _freeAllocations = new();
+    private int _pooledAllocationCount;
     private bool _running;
     private bool _disposed;
 
@@ -1141,6 +1144,7 @@ public sealed class ManagedReferenceGpuBackend : IGpuProcessingBackend
                 ReturnBuffer(allocation.Pixels);
             _surfaces.Clear();
             _freeAllocations.Clear();
+            _pooledAllocationCount = 0;
             _running = false;
         }
     }
@@ -1260,6 +1264,7 @@ public sealed class ManagedReferenceGpuBackend : IGpuProcessingBackend
                 ReturnBuffer(allocation.Pixels);
             _surfaces.Clear();
             _freeAllocations.Clear();
+            _pooledAllocationCount = 0;
             _running = false;
             _disposed = true;
         }
@@ -1277,20 +1282,29 @@ public sealed class ManagedReferenceGpuBackend : IGpuProcessingBackend
     private byte[] RentBuffer(int length)
     {
         if (_freeAllocations.TryGetValue(length, out var pool) && pool.TryPop(out var buffer))
+        {
+            _pooledAllocationCount--;
+            if (pool.Count == 0)
+                _freeAllocations.Remove(length);
             return buffer;
+        }
+
         return new byte[length];
     }
 
     private void ReturnBuffer(byte[] buffer)
     {
+        if (_pooledAllocationCount >= MaxPooledAllocations)
+            return;
+
         if (!_freeAllocations.TryGetValue(buffer.Length, out var pool))
         {
             pool = new Stack<byte[]>();
             _freeAllocations.Add(buffer.Length, pool);
         }
 
-        if (pool.Count < MaxPooledAllocationsPerSize)
-            pool.Push(buffer);
+        pool.Push(buffer);
+        _pooledAllocationCount++;
     }
 
     private static byte Blend(byte a, byte b, byte weight) =>
