@@ -1231,14 +1231,19 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			return null;
 
 		var active = CompositingLayerSnapshotsUnsafe();
-		if (state.Layers.Count != active.Count)
+		var activeById = active.ToDictionary(layer => layer.LayerId, StringComparer.Ordinal);
+		var preparedLayerIds = state.Layers
+			.Select(layer => layer.LayerId)
+			.ToHashSet(StringComparer.Ordinal);
+		if (active.Any(layer =>
+			layer.LayerId != LegacyVisualLayerId &&
+			!preparedLayerIds.Contains(layer.LayerId)))
 		{
 			return new Failure(
 				"runtime.compositing.resource_set_mismatch",
-				"Prepared compositing state must reference every currently admitted layer resource exactly once.");
+				"Prepared compositing state must reference every authoritative bitmap and Production CG layer resource exactly once.");
 		}
 
-		var activeById = active.ToDictionary(layer => layer.LayerId, StringComparer.Ordinal);
 		foreach (var layer in state.Layers)
 		{
 			if (!activeById.TryGetValue(layer.LayerId, out var admitted))
