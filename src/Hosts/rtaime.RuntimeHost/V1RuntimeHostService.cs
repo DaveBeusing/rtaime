@@ -871,7 +871,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				{
 					try
 					{
-						GpuRecordingPayloadLease? recordingPayload = new(pixels.Retain());
+						GpuRecordingPayloadLease? recordingPayload = new GpuRecordingPayloadLease(pixels.Retain());
 						try
 						{
 							_recordingPayloadWriter.StagePayload(
