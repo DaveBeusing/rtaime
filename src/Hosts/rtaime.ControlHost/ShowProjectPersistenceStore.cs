@@ -47,7 +47,9 @@ public sealed record PersistedShowProject(
 	string? ShowControlWorkspaceJson,
 	ulong ShowControlStorageVersion,
 	ulong StorageVersion,
-	DurableAudioRoutingState? AudioRouting = null)
+	DurableAudioRoutingState? AudioRouting = null,
+	string? RundownJson = null,
+	ulong RundownStorageVersion = 0)
 {
 	public ProductionSpecification ApplyTo(ProductionSpecification baseline)
 	{
@@ -86,6 +88,7 @@ public sealed class ShowProjectPersistenceStore
 	private const int MaximumScenes = 128;
 	private const int MaximumProjectNameLength = 200;
 	private const int MaximumShowControlJsonBytes = 4 * 1024 * 1024;
+	private const int MaximumRundownJsonBytes = 4 * 1024 * 1024;
 	private const uint MaximumBitmapDimension = 384;
 	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 	private readonly SqliteManagementStore _managementStore;
@@ -241,6 +244,61 @@ public sealed class ShowProjectPersistenceStore
 	{
 		var project = await LoadAsync(baseline, cancellationToken).ConfigureAwait(false);
 		return new ShowProjectSubdocumentSnapshot(project.ShowControlWorkspaceJson, project.ShowControlStorageVersion);
+	}
+
+	public async ValueTask<ShowProjectSubdocumentSnapshot> LoadRundownAsync(
+		ProductionSpecification baseline,
+		CancellationToken cancellationToken = default)
+	{
+		var project = await LoadAsync(baseline, cancellationToken).ConfigureAwait(false);
+		return new ShowProjectSubdocumentSnapshot(project.RundownJson, project.RundownStorageVersion);
+	}
+
+	public async ValueTask<ShowProjectSubdocumentWriteResult> UpdateRundownAsync(
+		ProductionSpecification baseline,
+		string json,
+		ulong expectedVersion,
+		CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(baseline);
+		if (string.IsNullOrWhiteSpace(json))
+			throw new ArgumentException("Rundown JSON is required.", nameof(json));
+		if (System.Text.Encoding.UTF8.GetByteCount(json) > MaximumRundownJsonBytes)
+			throw new ArgumentOutOfRangeException(nameof(json), $"Rundown JSON must not exceed {MaximumRundownJsonBytes} bytes.");
+
+		_ = RundownCanonicalSerializer.Deserialize(json);
+
+		await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+		try
+		{
+			var current = await RequireDocumentAsync(baseline.ProductionId, cancellationToken).ConfigureAwait(false);
+			var project = Deserialize(current, baseline);
+			if (project.RundownStorageVersion != expectedVersion)
+			{
+				return new ShowProjectSubdocumentWriteResult(
+					false,
+					null,
+					new Failure(
+						"persistence.version_conflict",
+						$"Expected rundown storage version {expectedVersion}, current version is {project.RundownStorageVersion}."));
+			}
+
+			var nextVersion = checked(project.RundownStorageVersion + 1);
+			var updated = project with
+			{
+				RundownJson = json,
+				RundownStorageVersion = nextVersion
+			};
+			var persisted = await WriteAsync(updated, current.Version, baseline, cancellationToken).ConfigureAwait(false);
+			return new ShowProjectSubdocumentWriteResult(
+				true,
+				new ShowProjectSubdocumentSnapshot(persisted.RundownJson, persisted.RundownStorageVersion),
+				null);
+		}
+		finally
+		{
+			_gate.Release();
+		}
 	}
 
 	public async ValueTask<ShowProjectSubdocumentWriteResult> UpdateShowControlAsync(
@@ -426,7 +484,9 @@ public sealed class ShowProjectPersistenceStore
 			ToDocument(project.Graphics),
 			project.ShowControlWorkspaceJson,
 			project.ShowControlStorageVersion,
-			ToDocument(project.AudioRouting ?? DurableAudioRoutingState.FollowVideo));
+			ToDocument(project.AudioRouting ?? DurableAudioRoutingState.FollowVideo),
+			project.RundownJson,
+			project.RundownStorageVersion);
 		return JsonSerializer.Serialize(document, JsonOptions);
 	}
 
@@ -453,7 +513,9 @@ public sealed class ShowProjectPersistenceStore
 			document.ShowControlWorkspaceJson,
 			document.ShowControlStorageVersion,
 			persisted.Version,
-			audioRouting);
+			audioRouting,
+			document.RundownJson,
+			document.RundownStorageVersion);
 		ValidateProject(project, baseline);
 		return project;
 	}
@@ -475,6 +537,14 @@ public sealed class ShowProjectPersistenceStore
 			System.Text.Encoding.UTF8.GetByteCount(json) > MaximumShowControlJsonBytes)
 		{
 			throw new InvalidDataException($"Persisted show-control workspace exceeds {MaximumShowControlJsonBytes} bytes.");
+		}
+		if (project.RundownJson is null && project.RundownStorageVersion != 0)
+			throw new InvalidDataException("Durable show project has a rundown version without a rundown payload.");
+		if (project.RundownJson is { } rundownJson)
+		{
+			if (System.Text.Encoding.UTF8.GetByteCount(rundownJson) > MaximumRundownJsonBytes)
+				throw new InvalidDataException($"Persisted rundown exceeds {MaximumRundownJsonBytes} bytes.");
+			_ = RundownCanonicalSerializer.Deserialize(rundownJson);
 		}
 	}
 
@@ -764,7 +834,9 @@ public sealed class ShowProjectPersistenceStore
 		GraphicsDocument? Graphics,
 		string? ShowControlWorkspaceJson,
 		ulong ShowControlStorageVersion,
-		AudioRoutingDocument? AudioRouting = null);
+		AudioRoutingDocument? AudioRouting = null,
+		string? RundownJson = null,
+		ulong RundownStorageVersion = 0);
 
 	private sealed record AudioRoutingDocument(int Mode, string? BreakawaySourceId);
 
