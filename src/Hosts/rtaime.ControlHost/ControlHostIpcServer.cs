@@ -1100,6 +1100,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 
 		var authority = control.ConfirmCompositingMutation(ToProductionCompositingState(layers));
 		var runtime = await _runtimeTransport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
+		RememberRuntimeObservation(runtime);
 		if (runtime.AuthorityStateId == authority.ProductionId.Value &&
 			runtime.AuthorityRevision == authority.Revision)
 		{
