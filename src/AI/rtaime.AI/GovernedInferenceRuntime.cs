@@ -166,6 +166,7 @@ public sealed class GovernedInferenceRuntime
 
     public IReadOnlyList<AIExecutionObservation> Observations => _observations.Snapshot();
     public ulong OverwrittenObservationCount => _observations.OverwrittenCount;
+    public IReadOnlyList<AIExecutionObservation> RecentObservations(int maximumCount) => _observations.SnapshotNewest(maximumCount);
 
     public AIExecutionSnapshot Snapshot
     {

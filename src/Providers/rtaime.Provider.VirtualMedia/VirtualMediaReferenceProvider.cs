@@ -91,8 +91,12 @@ public sealed record VirtualOutputFrame(MediaSinkId SinkId, FrameDescriptor Fram
 
 public sealed class VirtualVideoOutput
 {
+    public const int RetainedFrameCapacity = 128;
+
     private readonly object _gate = new();
-    private readonly List<VirtualOutputFrame> _frames = new();
+    private readonly BoundedDiagnosticHistory<VirtualOutputFrame> _frames = new(RetainedFrameCapacity);
+    private VirtualOutputFrame? _lastFrame;
+    private ulong _totalFramesWritten;
 
     internal VirtualVideoOutput(MediaSinkId sinkId, VideoFormat format)
     {
@@ -102,13 +106,16 @@ public sealed class VirtualVideoOutput
 
     public MediaSinkId SinkId { get; }
     public VideoFormat Format { get; }
+    public IReadOnlyList<VirtualOutputFrame> Frames => _frames.Snapshot();
+    public int RetainedFrameCount => _frames.Count;
+    public ulong OverwrittenFrameCount => _frames.OverwrittenCount;
 
-    public IReadOnlyList<VirtualOutputFrame> Frames
+    public ulong TotalFramesWritten
     {
         get
         {
             lock (_gate)
-                return new ReadOnlyCollection<VirtualOutputFrame>(_frames.ToArray());
+                return _totalFramesWritten;
         }
     }
 
@@ -117,7 +124,7 @@ public sealed class VirtualVideoOutput
         get
         {
             lock (_gate)
-                return _frames.Count == 0 ? null : _frames[^1];
+                return _lastFrame;
         }
     }
 
@@ -130,9 +137,9 @@ public sealed class VirtualVideoOutput
             if (frame.Surface.Format != Format)
                 throw new InvalidOperationException("Virtual output frame format does not match the configured output format.");
 
-            if (_frames.Count > 0)
+            if (_lastFrame is { } lastFrame)
             {
-                var previous = _frames[^1].Frame.Timing.SequenceNumber;
+                var previous = lastFrame.Frame.Timing.SequenceNumber;
                 if (frame.Timing.SequenceNumber <= previous)
                 {
                     throw new InvalidOperationException(
@@ -140,7 +147,11 @@ public sealed class VirtualVideoOutput
                 }
             }
 
-            _frames.Add(new VirtualOutputFrame(SinkId, frame));
+            var outputFrame = new VirtualOutputFrame(SinkId, frame);
+            _frames.Add(outputFrame);
+            _lastFrame = outputFrame;
+            if (_totalFramesWritten < ulong.MaxValue)
+                _totalFramesWritten++;
         }
     }
 }
