@@ -17,7 +17,7 @@ public sealed class GraphicsOverlayIntegrationTests
 	public async Task Graphics_overlay_preserves_alpha_position_scale_visibility_and_survives_dissolve()
 	{
 		await using var fixture = await Fixture.CreateAsync(new CollectingRecordingWriter());
-		var baseline = fixture.Runtime.ProcessNextBoundary();
+		using var baseline = fixture.Runtime.ProcessNextBoundary();
 
 		var rgba = new byte[]
 		{
@@ -31,7 +31,7 @@ public sealed class GraphicsOverlayIntegrationTests
 		Assert.False(loaded.Visible);
 
 		fixture.Runtime.SetGraphicsOverlay(true, 0.0, 0.0, 1.0);
-		var visible = fixture.Runtime.ProcessNextBoundary();
+		using var visible = fixture.Runtime.ProcessNextBoundary();
 		Assert.Equal(V1VisualLayerMode.Static, visible.VisualLayerMode);
 		AssertPixel(visible.ProgramPixels, fixture.Format, 0, 0, 255, 0, 0, 255);
 		var blended = Pixel(visible.ProgramPixels, fixture.Format, 1, 0);
@@ -40,11 +40,11 @@ public sealed class GraphicsOverlayIntegrationTests
 		Assert.True(blended.Blue < baselineBlended.Blue);
 
 		fixture.Runtime.SetGraphicsOverlay(false, 0.0, 0.0, 1.0);
-		var hidden = fixture.Runtime.ProcessNextBoundary();
+		using var hidden = fixture.Runtime.ProcessNextBoundary();
 		Assert.Equal(Pixel(baseline.ProgramPixels, fixture.Format, 0, 0), Pixel(hidden.ProgramPixels, fixture.Format, 0, 0));
 
 		fixture.Runtime.SetGraphicsOverlay(true, 0.5, 0.5, 2.0);
-		var positioned = fixture.Runtime.ProcessNextBoundary();
+		using var positioned = fixture.Runtime.ProcessNextBoundary();
 		Assert.Equal(Pixel(baseline.ProgramPixels, fixture.Format, 0, 0), Pixel(positioned.ProgramPixels, fixture.Format, 0, 0));
 		var originX = (int)Math.Round(0.5 * (fixture.Format.Width - 1));
 		var originY = (int)Math.Round(0.5 * (fixture.Format.Height - 1));
@@ -56,7 +56,7 @@ public sealed class GraphicsOverlayIntegrationTests
 
 		for (var index = 0; index < 3; index++)
 		{
-			var dissolve = fixture.Runtime.ProcessNextBoundary();
+			using var dissolve = fixture.Runtime.ProcessNextBoundary();
 			Assert.Equal(RuntimeProgramTransitionKind.Dissolve, dissolve.TransitionKind);
 			AssertPixel(dissolve.ProgramPixels, fixture.Format, originX, originY, 255, 0, 0, 255);
 		}
@@ -74,7 +74,7 @@ public sealed class GraphicsOverlayIntegrationTests
 			return;
 
 		await using var fixture = await Fixture.CreateAsync(new CollectingRecordingWriter());
-		var baseline = fixture.Runtime.ProcessNextBoundary();
+		using var baseline = fixture.Runtime.ProcessNextBoundary();
 		fixture.Runtime.LoadGraphicsOverlay("stacked-logo.rgba", 1, 1, new byte[] { 255, 0, 0, 255 });
 		fixture.Runtime.SetGraphicsOverlay(true, 0.0, 0.0, 1.0);
 		var definition = LowerThird("STACKED CG");
@@ -87,7 +87,7 @@ public sealed class GraphicsOverlayIntegrationTests
 		Assert.True(cg.Visible);
 		Assert.True(bitmap.Order < cg.Order);
 
-		var program = fixture.Runtime.ProcessNextBoundary();
+		using var program = fixture.Runtime.ProcessNextBoundary();
 		AssertPixel(program.ProgramPixels, fixture.Format, 0, 0, 255, 0, 0, 255);
 		Assert.Equal(2, fixture.Runtime.Snapshot.Performance.ActiveCompositingLayerCount);
 		Assert.True(fixture.Runtime.Snapshot.Performance.LastCompositionDuration >= TimeSpan.Zero);
@@ -109,7 +109,7 @@ public sealed class GraphicsOverlayIntegrationTests
 		Assert.Equal(0.20, transformedBitmap.PositionY, 6);
 		Assert.Equal(1.5, transformedBitmap.Scale, 6);
 		Assert.True(Assert.Single(transformedLayers, layer => layer.LayerId == V1RuntimeHostService.ProductionCgLayerId).Visible);
-		fixture.Runtime.ProcessNextBoundary();
+		fixture.Runtime.ProcessNextBoundary().Dispose();
 		Assert.Equal(2, fixture.Runtime.Snapshot.Performance.ActiveCompositingLayerCount);
 
 		var updated = fixture.Runtime.SetCompositingLayerState(
@@ -170,7 +170,7 @@ public sealed class GraphicsOverlayIntegrationTests
 		var bitmap = Assert.Single(transformed, layer => layer.LayerId == V1RuntimeHostService.BitmapGraphicsLayerId);
 		Assert.Equal(90, bitmap.RotationDegrees);
 		Assert.Equal(0, bitmap.AnchorX);
-		var program = fixture.Runtime.ProcessNextBoundary();
+		using var program = fixture.Runtime.ProcessNextBoundary();
 		var originX = (int)Math.Round(0.25 * (fixture.Format.Width - 1));
 		var originY = (int)Math.Round(0.25 * (fixture.Format.Height - 1));
 		AssertPixel(program.ProgramPixels, fixture.Format, originX, originY, 255, 0, 0, 255);
@@ -188,7 +188,7 @@ public sealed class GraphicsOverlayIntegrationTests
 			0,
 			0.5,
 			0);
-		var cropped = fixture.Runtime.ProcessNextBoundary();
+		using var cropped = fixture.Runtime.ProcessNextBoundary();
 		AssertPixel(cropped.ProgramPixels, fixture.Format, originX, originY, 255, 0, 0, 255);
 		Assert.Equal(
 			Pixel(cropped.ProgramPixels, fixture.Format, originX + 1, originY),
@@ -213,11 +213,11 @@ public sealed class GraphicsOverlayIntegrationTests
 		var bitmap = Assert.Single(layers, layer => layer.LayerId == V1RuntimeHostService.BitmapGraphicsLayerId);
 		Assert.Equal(node, bitmap.ProcessingNode);
 
-		var program = fixture.Runtime.ProcessNextBoundary();
+		using var program = fixture.Runtime.ProcessNextBoundary();
 		AssertPixel(program.ProgramPixels, fixture.Format, 0, 0, 54, 54, 54, 255);
 
 		fixture.Runtime.SetCompositingLayerProcessingNode(V1RuntimeHostService.BitmapGraphicsLayerId, null);
-		var restored = fixture.Runtime.ProcessNextBoundary();
+		using var restored = fixture.Runtime.ProcessNextBoundary();
 		AssertPixel(restored.ProgramPixels, fixture.Format, 0, 0, 255, 0, 0, 255);
 	}
 
@@ -446,7 +446,7 @@ public sealed class GraphicsOverlayIntegrationTests
 			return;
 
 		await using var fixture = await Fixture.CreateAsync(new CollectingRecordingWriter());
-		var baseline = fixture.Runtime.ProcessNextBoundary();
+		using var baseline = fixture.Runtime.ProcessNextBoundary();
 		var definition = LowerThird("RTAIME PRODUCTION CG");
 
 		var first = fixture.Runtime.ApplyProductionCgText(definition);
@@ -458,7 +458,7 @@ public sealed class GraphicsOverlayIntegrationTests
 		Assert.False(fixture.Runtime.Snapshot.ProductionCgText.CacheHit);
 		Assert.Equal(1, fixture.Runtime.ProductionCgCachedSurfaceCount);
 
-		var program = fixture.Runtime.ProcessNextBoundary();
+		using var program = fixture.Runtime.ProcessNextBoundary();
 		var originX = (int)Math.Round(definition.PositionX * (fixture.Format.Width - 1));
 		var originY = (int)Math.Round(definition.PositionY * (fixture.Format.Height - 1)) - (int)definition.BoxHeight;
 		var sampleX = originX + checked((int)(definition.BoxWidth / 2));
@@ -473,7 +473,7 @@ public sealed class GraphicsOverlayIntegrationTests
 
 		var overlay = fixture.Runtime.Snapshot.GraphicsOverlay;
 		fixture.Runtime.SetGraphicsOverlay(false, overlay.PositionX, overlay.PositionY, overlay.Scale);
-		var hidden = fixture.Runtime.ProcessNextBoundary();
+		using var hidden = fixture.Runtime.ProcessNextBoundary();
 		Assert.False(fixture.Runtime.Snapshot.ProductionCgText!.Visible);
 		Assert.Equal(
 			Pixel(baseline.ProgramPixels, fixture.Format, sampleX, sampleY),
@@ -538,7 +538,7 @@ public sealed class GraphicsOverlayIntegrationTests
 			var start = await fixture.Runtime.StartRecordingAsync(RecordingSessionId.New(), outputId);
 			Assert.True(start.Succeeded, start.Failure?.ToString());
 
-			var program = fixture.Runtime.ProcessNextBoundary();
+			using var program = fixture.Runtime.ProcessNextBoundary();
 			AssertPixel(program.ProgramPixels, fixture.Format, 0, 0, 255, 0, 0, 255);
 
 			var stop = await fixture.Runtime.StopRecordingAsync();
