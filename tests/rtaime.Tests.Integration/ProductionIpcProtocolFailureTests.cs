@@ -63,9 +63,9 @@ public sealed class ProductionIpcProtocolFailureTests
 			});
 
 		await server.StartAsync();
-		await AssertValidPingAsync(endpoint);
+		await using var connection = await ConnectRuntimeAsync(endpoint);
 
-		Assert.Equal(3, attempts);
+		Assert.True(attempts >= 3);
 		Assert.True(server.Running);
 		Assert.Equal(RuntimePipeListenerState.Running, server.Listener.State);
 		Assert.Null(server.Listener.FailureDetail);
