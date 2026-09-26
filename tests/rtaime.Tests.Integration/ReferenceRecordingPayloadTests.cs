@@ -7,6 +7,7 @@ using rtaime.Core;
 using rtaime.Media;
 using rtaime.Media.Contracts;
 using rtaime.Persistence;
+using rtaime.Provider.VirtualMedia;
 using rtaime.Recording;
 using rtaime.RuntimeHost;
 
