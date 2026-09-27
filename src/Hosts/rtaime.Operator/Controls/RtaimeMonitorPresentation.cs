@@ -163,7 +163,6 @@ public sealed class RtaimeMonitorPresentation : ContentControl
 
 		_mediaViewport.SizeChanged += OnViewportSizeChanged;
 		_mediaViewport.MouseWheel += OnViewportMouseWheel;
-		_mediaViewport.MouseLeftButtonDown += OnViewportMouseDoubleClick;
 		_mediaViewport.PreviewKeyDown += OnViewportPreviewKeyDown;
 		_mediaViewport.Focusable = true;
 		_mediaViewport.MouseLeftButtonDown += OnViewportMouseLeftButtonDown;
@@ -200,15 +199,6 @@ public sealed class RtaimeMonitorPresentation : ContentControl
 		e.Handled = true;
 	}
 
-	private void OnViewportMouseDoubleClick(object sender, MouseButtonEventArgs e)
-	{
-		if (Monitor is null || e.ClickCount != 2)
-			return;
-
-		Monitor.ToggleFitPixelPerfect();
-		e.Handled = true;
-	}
-
 	private void OnViewportPreviewKeyDown(object sender, KeyEventArgs e)
 	{
 		if (Monitor is null || Keyboard.Modifiers != ModifierKeys.None)
@@ -228,10 +218,20 @@ public sealed class RtaimeMonitorPresentation : ContentControl
 
 	private void OnViewportMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
 	{
-		if (Monitor is null || Monitor.ZoomMode is "FIT" or "FILL")
+		if (Monitor is null)
 			return;
 
 		_mediaViewport?.Focus();
+		if (e.ClickCount == 2)
+		{
+			Monitor.ToggleFitPixelPerfect();
+			e.Handled = true;
+			return;
+		}
+
+		if (Monitor.ZoomMode is "FIT" or "FILL")
+			return;
+
 		_panOrigin = e.GetPosition(_mediaViewport);
 		_mediaViewport?.CaptureMouse();
 		e.Handled = true;
@@ -275,7 +275,6 @@ public sealed class RtaimeMonitorPresentation : ContentControl
 
 		_mediaViewport.SizeChanged -= OnViewportSizeChanged;
 		_mediaViewport.MouseWheel -= OnViewportMouseWheel;
-		_mediaViewport.MouseLeftButtonDown -= OnViewportMouseDoubleClick;
 		_mediaViewport.PreviewKeyDown -= OnViewportPreviewKeyDown;
 		_mediaViewport.MouseLeftButtonDown -= OnViewportMouseLeftButtonDown;
 		_mediaViewport.MouseLeftButtonUp -= OnViewportMouseLeftButtonUp;
