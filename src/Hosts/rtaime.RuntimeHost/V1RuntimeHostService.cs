@@ -2393,7 +2393,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 
 	private V1AvSyncDiagnosticsSnapshot AvSyncDiagnosticsSnapshotUnsafe()
 	{
-		var activeSource = _audio.ActiveVideoSourceId;
+		var activeSource = _lastAudioResult?.VideoSourceId ?? _audio.ActiveVideoSourceId;
 		if (_audio.RoutingState.Mode != AudioRoutingMode.FollowVideo)
 		{
 			return new V1AvSyncDiagnosticsSnapshot(
@@ -2452,7 +2452,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 
 	private V1AudioProgramSnapshot AudioProgramSnapshotUnsafe()
 	{
-		var activeSource = _audio.ActiveVideoSourceId;
+		var activeSource = _lastAudioResult?.VideoSourceId ?? _audio.ActiveVideoSourceId;
 		var routing = _audio.RoutingState;
 		var routedAudioSource = _audio.ResolveAudioSource(activeSource);
 		var routedStream = _audioStreams[routedAudioSource].StreamId;
