@@ -151,11 +151,25 @@ Expected normal states are:
 
 Generated audio availability is independent of the underlying external input while the test source is active. Disabling the generated source exposes the underlying input health again.
 
+## Combined A/V test workflow
+
+The generated audio subsystem also supplies the audio side of the current synchronized A/V test workflow.
+
+When the Operator selects **A/V SYNC** for a Source, RuntimeHost combines the existing `MotionTiming` video signal with generated `Pulse` audio on that same Source. Both sides are correlated against the shared `AvSyncEventTimeline`:
+
+- the video side renders a one-frame synchronization flash and event identifier;
+- the audio side emits the corresponding short pulse in the authoritative sample window;
+- frame and sample targets are derived from the same exact rational media-time event;
+- the normal video, AFV, gain/mute, metering, recording and output paths remain authoritative.
+
+The combined mode therefore tests video and audio concurrently and provides deterministic internal A/V synchronization evidence without creating a second media clock, audio engine, renderer or routing authority. For standalone audio validation, the existing Tone, Stereo Identification, Channel Identification, Pulse and Silence modes remain independently selectable.
+
+Physical display/speaker latency is outside this internal diagnostic and still requires external measurement equipment when end-to-end output timing must be certified.
+
 ## Boundaries
 
 This feature does not provide:
 
-- A/V synchronization coupling;
 - audio codec encoding;
 - file export;
 - loudness certification;
@@ -164,4 +178,4 @@ This feature does not provide:
 - professional hardware audio qualification;
 - new surround channel-layout contracts.
 
-The periodic pulse is intentionally only a deterministic basis for later A/V synchronization diagnostics.
+The periodic pulse is the audio event used by the synchronized A/V diagnostic workflow described above.
