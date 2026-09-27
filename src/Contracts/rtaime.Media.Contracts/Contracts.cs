@@ -85,6 +85,7 @@ public readonly record struct VideoFormat
         FrameRate = frameRate;
         PixelFormat = pixelFormat;
         ScanMode = scanMode;
+        Color = color ?? ColorDescription.UnknownRgba8;
     }
 
     public uint Width { get; }
