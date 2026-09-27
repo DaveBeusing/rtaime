@@ -41,11 +41,11 @@ public enum V1BroadcastTestPatternMode
 
 public enum V1TimingHealthState
 {
-	Healthy = 1,
-	Degraded = 2,
-	Unstable = 3,
-	Lost = 4,
-	Recovering = 5
+	Healthy = (int)RuntimeTimingHealthState.Healthy,
+	Degraded = (int)RuntimeTimingHealthState.Degraded,
+	Unstable = (int)RuntimeTimingHealthState.Unstable,
+	Lost = (int)RuntimeTimingHealthState.Lost,
+	Recovering = (int)RuntimeTimingHealthState.Recovering
 }
 
 public enum V1AudioHealthState

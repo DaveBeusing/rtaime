@@ -18,6 +18,15 @@ public static class RuntimeContractVersion
     }
 }
 
+public enum RuntimeTimingHealthState
+{
+    Healthy = 1,
+    Degraded = 2,
+    Unstable = 3,
+    Lost = 4,
+    Recovering = 5
+}
+
 public readonly record struct PreparedExecutionId
 {
     public PreparedExecutionId(Identity value)

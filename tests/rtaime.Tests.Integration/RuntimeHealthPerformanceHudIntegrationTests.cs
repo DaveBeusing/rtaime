@@ -42,6 +42,27 @@ public sealed class RuntimeHealthPerformanceHudIntegrationTests
 		Assert.Equal(49.75, health.OutputFramesPerSecond.Value, 6);
 	}
 
+	[Theory]
+	[InlineData(RuntimeTimingHealthState.Healthy, "PASS")]
+	[InlineData(RuntimeTimingHealthState.Recovering, "UNVERIFIED")]
+	[InlineData(RuntimeTimingHealthState.Degraded, "FAIL")]
+	[InlineData(RuntimeTimingHealthState.Unstable, "FAIL")]
+	[InlineData(RuntimeTimingHealthState.Lost, "FAIL")]
+	public void Runtime_timing_health_preserves_wire_semantics(
+		RuntimeTimingHealthState timingHealth,
+		string expectedState)
+	{
+		var health = OperatorHealthProjection.Evaluate(
+			CreateRuntimeSnapshot() with { TimingHealth = (int)timingHealth },
+			new[] { CreateGpuProvider(ProviderAvailabilityState.Available) },
+			null,
+			controlAuthorityAvailable: true,
+			DateTimeOffset.UtcNow);
+
+		Assert.Equal(expectedState, health.Runtime.State);
+		Assert.Equal(expectedState, health.Engine.State);
+	}
+
 	[Fact]
 	public void Measured_hardware_telemetry_is_projected_without_estimation()
 	{
@@ -295,7 +316,7 @@ public sealed class RuntimeHealthPerformanceHudIntegrationTests
 			Identity.Parse("74000000-0000-0000-0000-000000000002"),
 			new Revision(1),
 			100,
-			2,
+			(int)RuntimeTimingHealthState.Healthy,
 			0,
 			format,
 			new Dictionary<MediaSourceId, string> { [sourceId] = "VALID" },
