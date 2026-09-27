@@ -71,15 +71,20 @@
 									Panel.ZIndex="60"
 									Margin="10" />
 
-								<Viewbox Stretch="{Binding Monitor.ImageStretch, RelativeSource={RelativeSource TemplatedParent}}" StretchDirection="Both" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
-									<Image Source="{Binding Monitor.Frame, RelativeSource={RelativeSource TemplatedParent}}" SnapsToDevicePixels="True" RenderOptions.BitmapScalingMode="HighQuality">
-										<Image.LayoutTransform>
-											<ScaleTransform
-												ScaleX="{Binding Monitor.ImageScale, RelativeSource={RelativeSource TemplatedParent}}"
-												ScaleY="{Binding Monitor.ImageScale, RelativeSource={RelativeSource TemplatedParent}}" />
-										</Image.LayoutTransform>
-									</Image>
-								</Viewbox>
+								<Image
+									Source="{Binding Monitor.Frame, RelativeSource={RelativeSource TemplatedParent}}"
+									Stretch="{Binding Monitor.ImageStretch, RelativeSource={RelativeSource TemplatedParent}}"
+									HorizontalAlignment="Center"
+									VerticalAlignment="Center"
+									ClipToBounds="True"
+									SnapsToDevicePixels="True"
+									RenderOptions.BitmapScalingMode="HighQuality">
+									<Image.LayoutTransform>
+										<ScaleTransform
+											ScaleX="{Binding Monitor.ImageScale, RelativeSource={RelativeSource TemplatedParent}}"
+											ScaleY="{Binding Monitor.ImageScale, RelativeSource={RelativeSource TemplatedParent}}" />
+									</Image.LayoutTransform>
+								</Image>
 
 								<Grid IsHitTestVisible="False">
 									<Grid.Style>
