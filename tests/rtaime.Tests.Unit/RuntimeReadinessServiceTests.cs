@@ -98,7 +98,7 @@ public sealed class RuntimeReadinessServiceTests
 	}
 
 	[Fact]
-	public void Transient_retained_runtime_observation_does_not_flap_global_readiness()
+	public void Verified_performance_survives_transient_retained_runtime_observation()
 	{
 		var now = new DateTimeOffset(2026, 9, 20, 10, 0, 0, TimeSpan.Zero);
 		using var service = new RuntimeReadinessService(() => now);
