@@ -107,7 +107,7 @@ public sealed class MediaPresentationGeometryTests
 		var target = MediaRenderTarget.Create(widthDip, heightDip, dpi, dpi);
 		Assert.Equal(expectedWidth, target.PixelWidth);
 		Assert.Equal(expectedHeight, target.PixelHeight);
-		Assert.Equal(MediaScalingQuality.Bicubic, target.Quality);
+		Assert.Equal(MediaScalingQuality.HighQuality, target.Quality);
 		Assert.Equal(MediaScalingPath.WpfFallback, target.Path);
 		Assert.True(target.RequiresPresentationRescale);
 	}
