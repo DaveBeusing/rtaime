@@ -16,6 +16,7 @@ public class MonitorView : UserControl
 	private double _dpiScaleY = 1.0;
 	private double _panXPhysical;
 	private double _panYPhysical;
+	private double _freeZoom = 1.0;
 	private readonly MediaRenderTargetStabilizer _renderTargetStabilizer = new();
 
 	private static readonly DependencyPropertyKey PresentationWidthPropertyKey = DependencyProperty.RegisterReadOnly(
@@ -173,6 +174,8 @@ public class MonitorView : UserControl
 		Zoom100Command = new MonitorPresentationCommand(() => ZoomMode = "100%");
 		Zoom200Command = new MonitorPresentationCommand(() => ZoomMode = "200%");
 		Zoom400Command = new MonitorPresentationCommand(() => ZoomMode = "400%");
+		Zoom800Command = new MonitorPresentationCommand(() => ZoomMode = "800%");
+		ToggleFitPixelPerfectCommand = new MonitorPresentationCommand(ToggleFitPixelPerfect);
 		ToggleTechnicalOverlayCommand = new MonitorPresentationCommand(() => ShowTechnicalOverlay = !ShowTechnicalOverlay);
 	}
 
@@ -287,6 +290,8 @@ public class MonitorView : UserControl
 	public ICommand Zoom100Command { get; }
 	public ICommand Zoom200Command { get; }
 	public ICommand Zoom400Command { get; }
+	public ICommand Zoom800Command { get; }
+	public ICommand ToggleFitPixelPerfectCommand { get; }
 	public ICommand ToggleTechnicalOverlayCommand { get; }
 
 	private static void OnZoomModeChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs eventArgs)
@@ -339,14 +344,34 @@ public class MonitorView : UserControl
 		RefreshPresentation();
 	}
 
-	internal void StepPresentationZoom(int direction)
+	internal void StepPresentationZoom(int direction) => ZoomPresentationAt(direction, _viewportWidthDip / 2.0, _viewportHeightDip / 2.0);
+
+	internal void ZoomPresentationAt(int direction, double anchorXDip, double anchorYDip)
 	{
-		var modes = new[] { "25%", "50%", "100%", "200%", "400%" };
-		var current = Array.IndexOf(modes, ZoomMode);
-		if (current < 0)
-			current = direction > 0 ? 1 : 3;
-		ZoomMode = modes[Math.Clamp(current + Math.Sign(direction), 0, modes.Length - 1)];
+		if (Frame is null || direction == 0 || _viewportWidthDip <= 0 || _viewportHeightDip <= 0)
+			return;
+
+		var (sourceWidth, sourceHeight) = ResolveSourcePixels(Frame);
+		var physical = MediaPresentationGeometry.ToPhysicalPixels(_viewportWidthDip, _viewportHeightDip, _dpiScaleX, _dpiScaleY);
+		var (currentMode, currentScale) = ResolvePresentationPolicy(ZoomMode);
+		if (currentMode == MediaPresentationMode.Fit)
+			currentScale = Math.Min(physical.Width / sourceWidth, physical.Height / sourceHeight);
+		else if (currentMode == MediaPresentationMode.Fill)
+			currentScale = Math.Max(physical.Width / sourceWidth, physical.Height / sourceHeight);
+
+		var nextScale = MediaInspectionPolicy.StepZoom(currentScale, direction);
+		var anchor = MediaInspectionPolicy.AnchorZoom(
+			sourceWidth, sourceHeight, physical.Width, physical.Height,
+			currentScale, nextScale, _panXPhysical, _panYPhysical,
+			anchorXDip * _dpiScaleX, anchorYDip * _dpiScaleY);
+		_panXPhysical = anchor.PanX;
+		_panYPhysical = anchor.PanY;
+		_freeZoom = nextScale;
+		SetCurrentValue(ZoomModeProperty, "FREE");
+		RefreshPresentation();
 	}
+
+	internal void ToggleFitPixelPerfect() => ZoomMode = ZoomMode == "100%" ? "FIT" : "100%";
 
 	private void RefreshPresentation()
 	{
@@ -399,7 +424,7 @@ public class MonitorView : UserControl
 		return (width, height);
 	}
 
-	private static (MediaPresentationMode Mode, double Zoom) ResolvePresentationPolicy(string zoomMode) => zoomMode switch
+	private (MediaPresentationMode Mode, double Zoom) ResolvePresentationPolicy(string zoomMode) => zoomMode switch
 	{
 		"FILL" => (MediaPresentationMode.Fill, 1.0),
 		"25%" => (MediaPresentationMode.CustomZoom, 0.25),
@@ -407,6 +432,8 @@ public class MonitorView : UserControl
 		"100%" => (MediaPresentationMode.PixelPerfect, 1.0),
 		"200%" => (MediaPresentationMode.CustomZoom, 2.0),
 		"400%" => (MediaPresentationMode.CustomZoom, 4.0),
+		"800%" => (MediaPresentationMode.CustomZoom, 8.0),
+		"FREE" => (MediaPresentationMode.CustomZoom, _freeZoom),
 		_ => (MediaPresentationMode.Fit, 1.0)
 	};
 
@@ -435,6 +462,8 @@ public class MonitorView : UserControl
 		"100%" => "100%",
 		"200%" => "200%",
 		"400%" => "400%",
+		"800%" => "800%",
+		"FREE" => "FREE",
 		_ => "FIT"
 	};
 
