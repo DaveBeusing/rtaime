@@ -18,6 +18,8 @@ public class MonitorView : UserControl
 	private double _panYPhysical;
 	private double _freeZoom = 1.0;
 	private readonly MediaRenderTargetStabilizer _renderTargetStabilizer = new();
+	private MediaPresentationRect _presentationRect;
+	private DateTimeOffset _lastInspectionAt;
 
 	private static readonly DependencyPropertyKey PresentationWidthPropertyKey = DependencyProperty.RegisterReadOnly(
 		nameof(PresentationWidth),
@@ -60,6 +62,14 @@ public class MonitorView : UserControl
 		typeof(string),
 		typeof(MonitorView),
 		new PropertyMetadata("—"));
+
+	private static readonly DependencyPropertyKey InspectionReadoutPropertyKey = DependencyProperty.RegisterReadOnly(
+		nameof(InspectionReadout), typeof(string), typeof(MonitorView), new PropertyMetadata("PIXEL —"));
+	private static readonly DependencyPropertyKey IsPixelGridVisiblePropertyKey = DependencyProperty.RegisterReadOnly(
+		nameof(IsPixelGridVisible), typeof(bool), typeof(MonitorView), new PropertyMetadata(false));
+
+	public static readonly DependencyProperty InspectionReadoutProperty = InspectionReadoutPropertyKey.DependencyProperty;
+	public static readonly DependencyProperty IsPixelGridVisibleProperty = IsPixelGridVisiblePropertyKey.DependencyProperty;
 
 	public static readonly DependencyProperty FrameProperty = DependencyProperty.Register(
 		nameof(Frame),
@@ -280,6 +290,8 @@ public class MonitorView : UserControl
 	public double PresentationOffsetX => (double)GetValue(PresentationOffsetXProperty);
 	public double PresentationOffsetY => (double)GetValue(PresentationOffsetYProperty);
 	public string PresentationInfo => (string)GetValue(PresentationInfoProperty);
+	public string InspectionReadout => (string)GetValue(InspectionReadoutProperty);
+	public bool IsPixelGridVisible => (bool)GetValue(IsPixelGridVisibleProperty);
 	public bool IsTransportSource => (bool)GetValue(IsTransportSourceProperty);
 	public string DisplayTimecode => (string)GetValue(DisplayTimecodeProperty);
 
@@ -373,6 +385,30 @@ public class MonitorView : UserControl
 
 	internal void ToggleFitPixelPerfect() => ZoomMode = ZoomMode == "100%" ? "FIT" : "100%";
 
+	internal void InspectPresentationAt(double pointerXDip, double pointerYDip)
+	{
+		if (Frame is not BitmapSource bitmap)
+		{
+			SetValue(InspectionReadoutPropertyKey, "PIXEL — · SAMPLING UNSUPPORTED");
+			return;
+		}
+
+		var now = DateTimeOffset.UtcNow;
+		if (now - _lastInspectionAt < TimeSpan.FromMilliseconds(33))
+			return;
+		_lastInspectionAt = now;
+
+		if (!MediaPixelInspection.TryMapViewportToSource(
+			pointerXDip, pointerYDip, _dpiScaleX, _dpiScaleY, _presentationRect,
+			bitmap.PixelWidth, bitmap.PixelHeight, out var coordinate))
+		{
+			SetValue(InspectionReadoutPropertyKey, "PIXEL — · OUTSIDE IMAGE");
+			return;
+		}
+
+		SetValue(InspectionReadoutPropertyKey, MediaPixelInspection.Format(MediaPixelInspection.SampleDisplayPixel(bitmap, coordinate)));
+	}
+
 	private void RefreshPresentation()
 	{
 		if (Frame is null || _viewportWidthDip <= 0 || _viewportHeightDip <= 0)
@@ -400,6 +436,8 @@ public class MonitorView : UserControl
 			_panXPhysical,
 			_panYPhysical);
 
+		_presentationRect = result;
+		SetValue(IsPixelGridVisiblePropertyKey, ShowGrid && result.Scale >= MediaPixelInspection.PixelGridMinimumScale);
 		var centeredX = (physical.Width - result.Width) / 2.0;
 		var centeredY = (physical.Height - result.Height) / 2.0;
 		_panXPhysical = result.X - centeredX;
