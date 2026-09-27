@@ -387,6 +387,28 @@ public sealed class GpuProcessingTests
     }
 
     [Fact]
+    public void Failed_surface_release_remains_visible_until_stop_retries_cleanup()
+    {
+        using var backend = new FailOnceReleaseBackend(new ManagedReferenceGpuBackend());
+        using var provider = new GpuProcessingProvider(backend);
+        provider.Start();
+        using var frame = Upload(provider, SourceA, Solid(1, 2, 3, 255), 0);
+
+        frame.Dispose();
+
+        Assert.Equal(1, provider.ActiveSurfaceCount);
+        Assert.Equal(1, provider.UnreleasedBackendSurfaceCount);
+        Assert.Contains(provider.Observations, observation =>
+            observation.Code == "gpu.surface.release_failed" &&
+            observation.Failure?.Code == "gpu.surface.release_failed");
+
+        provider.Stop();
+
+        Assert.Equal(0, provider.ActiveSurfaceCount);
+        Assert.Equal(0, provider.UnreleasedBackendSurfaceCount);
+    }
+
+    [Fact]
     public void Observation_history_remains_bounded_across_repeated_provider_cycles()
     {
         using var provider = new GpuProcessingProvider(new ManagedReferenceGpuBackend());
@@ -461,6 +483,42 @@ public sealed class GpuProcessingTests
         }
 
         public void Release(SurfaceId surfaceId) => _inner.Release(surfaceId);
+        public void Dispose() => _inner.Dispose();
+    }
+
+    private sealed class FailOnceReleaseBackend : IGpuProcessingBackend
+    {
+        private readonly IGpuProcessingBackend _inner;
+        private bool _failNext = true;
+
+        public FailOnceReleaseBackend(IGpuProcessingBackend inner)
+        {
+            _inner = inner;
+        }
+
+        public GpuBackendInfo Info => _inner.Info;
+        public SurfaceStorageDomain StorageDomain => _inner.StorageDomain;
+        public void Start() => _inner.Start();
+        public void Stop() => _inner.Stop();
+        public void Allocate(SurfaceId surfaceId, VideoFormat format, ReadOnlySpan<byte> rgbaPixels) =>
+            _inner.Allocate(surfaceId, format, rgbaPixels);
+        public void Composite(SurfaceId outputSurfaceId, VideoFormat format, GpuCompositeOperation operation) =>
+            _inner.Composite(outputSurfaceId, format, operation);
+        public byte[] Readback(SurfaceId surfaceId, VideoFormat format) => _inner.Readback(surfaceId, format);
+        public void ReadbackInto(SurfaceId surfaceId, VideoFormat format, Span<byte> destination) =>
+            _inner.ReadbackInto(surfaceId, format, destination);
+
+        public void Release(SurfaceId surfaceId)
+        {
+            if (_failNext)
+            {
+                _failNext = false;
+                throw new InvalidOperationException("Injected GPU surface release failure.");
+            }
+
+            _inner.Release(surfaceId);
+        }
+
         public void Dispose() => _inner.Dispose();
     }
 
