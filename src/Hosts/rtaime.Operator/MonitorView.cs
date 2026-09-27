@@ -4,11 +4,19 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 
 namespace rtaime.Operator;
 
 public class MonitorView : UserControl
 {
+	private double _viewportWidthDip;
+	private double _viewportHeightDip;
+	private double _dpiScaleX = 1.0;
+	private double _dpiScaleY = 1.0;
+	private double _panXPhysical;
+	private double _panYPhysical;
+
 	private static readonly DependencyPropertyKey ImageStretchPropertyKey = DependencyProperty.RegisterReadOnly(
 		nameof(ImageStretch),
 		typeof(Stretch),
@@ -20,6 +28,36 @@ public class MonitorView : UserControl
 		typeof(double),
 		typeof(MonitorView),
 		new PropertyMetadata(1.0));
+
+	private static readonly DependencyPropertyKey PresentationWidthPropertyKey = DependencyProperty.RegisterReadOnly(
+		nameof(PresentationWidth),
+		typeof(double),
+		typeof(MonitorView),
+		new PropertyMetadata(0.0));
+
+	private static readonly DependencyPropertyKey PresentationHeightPropertyKey = DependencyProperty.RegisterReadOnly(
+		nameof(PresentationHeight),
+		typeof(double),
+		typeof(MonitorView),
+		new PropertyMetadata(0.0));
+
+	private static readonly DependencyPropertyKey PresentationOffsetXPropertyKey = DependencyProperty.RegisterReadOnly(
+		nameof(PresentationOffsetX),
+		typeof(double),
+		typeof(MonitorView),
+		new PropertyMetadata(0.0));
+
+	private static readonly DependencyPropertyKey PresentationOffsetYPropertyKey = DependencyProperty.RegisterReadOnly(
+		nameof(PresentationOffsetY),
+		typeof(double),
+		typeof(MonitorView),
+		new PropertyMetadata(0.0));
+
+	private static readonly DependencyPropertyKey PresentationInfoPropertyKey = DependencyProperty.RegisterReadOnly(
+		nameof(PresentationInfo),
+		typeof(string),
+		typeof(MonitorView),
+		new PropertyMetadata("View unavailable"));
 
 	private static readonly DependencyPropertyKey IsTransportSourcePropertyKey = DependencyProperty.RegisterReadOnly(
 		nameof(IsTransportSource),
@@ -37,7 +75,7 @@ public class MonitorView : UserControl
 		nameof(Frame),
 		typeof(ImageSource),
 		typeof(MonitorView),
-		new PropertyMetadata(null));
+		new PropertyMetadata(null, OnFrameChanged));
 
 	public static readonly DependencyProperty SourceNameProperty = DependencyProperty.Register(
 		nameof(SourceName),
@@ -125,6 +163,11 @@ public class MonitorView : UserControl
 
 	public static readonly DependencyProperty ImageStretchProperty = ImageStretchPropertyKey.DependencyProperty;
 	public static readonly DependencyProperty ImageScaleProperty = ImageScalePropertyKey.DependencyProperty;
+	public static readonly DependencyProperty PresentationWidthProperty = PresentationWidthPropertyKey.DependencyProperty;
+	public static readonly DependencyProperty PresentationHeightProperty = PresentationHeightPropertyKey.DependencyProperty;
+	public static readonly DependencyProperty PresentationOffsetXProperty = PresentationOffsetXPropertyKey.DependencyProperty;
+	public static readonly DependencyProperty PresentationOffsetYProperty = PresentationOffsetYPropertyKey.DependencyProperty;
+	public static readonly DependencyProperty PresentationInfoProperty = PresentationInfoPropertyKey.DependencyProperty;
 	public static readonly DependencyProperty IsTransportSourceProperty = IsTransportSourcePropertyKey.DependencyProperty;
 	public static readonly DependencyProperty DisplayTimecodeProperty = DisplayTimecodePropertyKey.DependencyProperty;
 
@@ -231,6 +274,11 @@ public class MonitorView : UserControl
 
 	public Stretch ImageStretch => (Stretch)GetValue(ImageStretchProperty);
 	public double ImageScale => (double)GetValue(ImageScaleProperty);
+	public double PresentationWidth => (double)GetValue(PresentationWidthProperty);
+	public double PresentationHeight => (double)GetValue(PresentationHeightProperty);
+	public double PresentationOffsetX => (double)GetValue(PresentationOffsetXProperty);
+	public double PresentationOffsetY => (double)GetValue(PresentationOffsetYProperty);
+	public string PresentationInfo => (string)GetValue(PresentationInfoProperty);
 	public bool IsTransportSource => (bool)GetValue(IsTransportSourceProperty);
 	public string DisplayTimecode => (string)GetValue(DisplayTimecodeProperty);
 
@@ -266,7 +314,112 @@ public class MonitorView : UserControl
 			"400%" => 4.0,
 			_ => 1.0
 		});
+		if (mode is "FIT" or "FILL")
+		{
+			view._panXPhysical = 0;
+			view._panYPhysical = 0;
+		}
+		view.RefreshPresentation();
 	}
+
+	private static void OnFrameChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs eventArgs)
+	{
+		var view = (MonitorView)dependencyObject;
+		view._panXPhysical = 0;
+		view._panYPhysical = 0;
+		view.RefreshPresentation();
+	}
+
+	internal void UpdatePresentationViewport(double widthDip, double heightDip, double dpiScaleX, double dpiScaleY)
+	{
+		if (!double.IsFinite(widthDip) || !double.IsFinite(heightDip) || widthDip <= 0 || heightDip <= 0)
+			return;
+		if (!double.IsFinite(dpiScaleX) || !double.IsFinite(dpiScaleY) || dpiScaleX <= 0 || dpiScaleY <= 0)
+			return;
+
+		_viewportWidthDip = widthDip;
+		_viewportHeightDip = heightDip;
+		_dpiScaleX = dpiScaleX;
+		_dpiScaleY = dpiScaleY;
+		RefreshPresentation();
+	}
+
+	internal void PanPresentation(double deltaXDip, double deltaYDip)
+	{
+		if (ZoomMode is "FIT" or "FILL")
+			return;
+
+		_panXPhysical += deltaXDip * _dpiScaleX;
+		_panYPhysical += deltaYDip * _dpiScaleY;
+		RefreshPresentation();
+	}
+
+	internal void StepPresentationZoom(int direction)
+	{
+		var modes = new[] { "25%", "50%", "100%", "200%", "400%" };
+		var current = Array.IndexOf(modes, ZoomMode);
+		if (current < 0)
+			current = direction > 0 ? 1 : 3;
+		ZoomMode = modes[Math.Clamp(current + Math.Sign(direction), 0, modes.Length - 1)];
+	}
+
+	private void RefreshPresentation()
+	{
+		if (Frame is null || _viewportWidthDip <= 0 || _viewportHeightDip <= 0)
+			return;
+
+		var (sourceWidth, sourceHeight) = ResolveSourcePixels(Frame);
+		if (sourceWidth <= 0 || sourceHeight <= 0)
+			return;
+
+		var physical = MediaPresentationGeometry.ToPhysicalPixels(
+			_viewportWidthDip,
+			_viewportHeightDip,
+			_dpiScaleX,
+			_dpiScaleY);
+		var (mode, zoom) = ResolvePresentationPolicy(ZoomMode);
+		var result = MediaPresentationGeometry.Calculate(
+			sourceWidth,
+			sourceHeight,
+			physical.Width,
+			physical.Height,
+			mode,
+			zoom,
+			_panXPhysical,
+			_panYPhysical);
+
+		var centeredX = (physical.Width - result.Width) / 2.0;
+		var centeredY = (physical.Height - result.Height) / 2.0;
+		_panXPhysical = result.X - centeredX;
+		_panYPhysical = result.Y - centeredY;
+
+		SetValue(PresentationWidthPropertyKey, result.Width / _dpiScaleX);
+		SetValue(PresentationHeightPropertyKey, result.Height / _dpiScaleY);
+		SetValue(PresentationOffsetXPropertyKey, _panXPhysical / _dpiScaleX);
+		SetValue(PresentationOffsetYPropertyKey, _panYPhysical / _dpiScaleY);
+		SetValue(
+			PresentationInfoPropertyKey,
+			$"{sourceWidth:0}×{sourceHeight:0} | {ZoomMode} {result.Scale * 100:0.#}% | View {physical.Width:0}×{physical.Height:0} | DPI {_dpiScaleX * 100:0}%");
+	}
+
+	private static (double Width, double Height) ResolveSourcePixels(ImageSource source)
+	{
+		if (source is BitmapSource bitmap && bitmap.PixelWidth > 0 && bitmap.PixelHeight > 0)
+			return (bitmap.PixelWidth, bitmap.PixelHeight);
+
+		return (Math.Max(1, source.Width), Math.Max(1, source.Height));
+	}
+
+	private static (MediaPresentationMode Mode, double Zoom) ResolvePresentationPolicy(string zoomMode) => zoomMode switch
+	{
+		"FILL" => (MediaPresentationMode.Fill, 1.0),
+		"25%" => (MediaPresentationMode.CustomZoom, 0.25),
+		"50%" => (MediaPresentationMode.CustomZoom, 0.5),
+		"100%" => (MediaPresentationMode.PixelPerfect, 1.0),
+		"200%" => (MediaPresentationMode.CustomZoom, 2.0),
+		"400%" => (MediaPresentationMode.CustomZoom, 4.0),
+		_ => (MediaPresentationMode.Fit, 1.0)
+	};
 
 	private static void OnTransportContextChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs eventArgs)
 	{
