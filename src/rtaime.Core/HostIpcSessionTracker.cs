@@ -25,6 +25,8 @@ public sealed record HostIpcSessionDrainResult(
 
 public sealed class HostIpcSessionTracker
 {
+	public static readonly TimeSpan MaximumDrainInterval = TimeSpan.FromSeconds(2);
+
 	private readonly object _gate = new();
 	private readonly Dictionary<long, SessionEntry> _active = new();
 	private readonly CancellationTokenSource _stop = new();
@@ -37,6 +39,15 @@ public sealed class HostIpcSessionTracker
 	private bool _drainTimedOut;
 	private string? _lastFailureType;
 	private string? _lastFailureDetail;
+
+	public static TimeSpan DrainIntervalForHost(TimeSpan hostShutdownTimeout)
+	{
+		if (hostShutdownTimeout <= TimeSpan.Zero)
+			throw new ArgumentOutOfRangeException(nameof(hostShutdownTimeout));
+
+		var halfBudget = TimeSpan.FromTicks(Math.Max(1, hostShutdownTimeout.Ticks / 2));
+		return halfBudget <= MaximumDrainInterval ? halfBudget : MaximumDrainInterval;
+	}
 
 	public HostIpcSessionSnapshot Snapshot
 	{
