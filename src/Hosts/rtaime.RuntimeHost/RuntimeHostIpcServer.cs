@@ -22,7 +22,6 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 	private readonly Func<LocalMediaDeckRuntimeService?> _mediaDeckAccessor;
 	private readonly Func<RuntimeAIShowcaseService?> _aiShowcaseAccessor;
 	private readonly BoundedRequestCache _requestCache = new(256);
-	private readonly SemaphoreSlim _mutationGate = new(1, 1);
 	private readonly string _hostInstanceId = Identity.New().ToString();
 	private readonly RuntimePipeListener _listener;
 	private readonly HostIpcProtocolCounter _stateVersion = new(1);
@@ -77,11 +76,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 	public Task StartAsync(CancellationToken cancellationToken = default) =>
 		_listener.StartAsync(cancellationToken);
 
-	public async ValueTask DisposeAsync()
-	{
-		await _listener.DisposeAsync().ConfigureAwait(false);
-		_mutationGate.Dispose();
-	}
+	public ValueTask DisposeAsync() => _listener.DisposeAsync();
 
 	private NamedPipeServerStream CreatePipe() =>
 		new(
@@ -173,20 +168,16 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		}
 	}
 
-	private async ValueTask<WireEnvelope> DispatchAsync(WireEnvelope request, CancellationToken cancellationToken)
+	private ValueTask<WireEnvelope> DispatchAsync(WireEnvelope request, CancellationToken cancellationToken)
 	{
 		cancellationToken.ThrowIfCancellationRequested();
 		var runtime = _runtimeAccessor();
 		if (runtime is null)
-			return Error(request, "runtime.unavailable", "RuntimeHost service is not available.");
-
-		var serializeMutation = IsSerializedMutation(request.MessageType);
-		if (serializeMutation)
-			await _mutationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+			return ValueTask.FromResult(Error(request, "runtime.unavailable", "RuntimeHost service is not available."));
 
 		try
 		{
-			var operation = request.MessageType switch
+			return request.MessageType switch
 			{
 				"runtime.ping" => ValueTask.FromResult(Success(request, "runtime.ping.response", new { status = "ready" })),
 				"runtime.providers.get" => ValueTask.FromResult(Success(request, "runtime.providers.response", ProviderDescriptors(runtime).Select(ToWire).ToArray())),
@@ -214,42 +205,12 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 				"runtime.media_deck.close" => ValueTask.FromResult(CloseMediaDeck(request)),
 				_ => ValueTask.FromResult(Error(request, "ipc.message.unknown", $"Unknown RuntimeHost message type '{request.MessageType}'."))
 			};
-			return await operation.ConfigureAwait(false);
 		}
 		catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or NotSupportedException or FormatException)
 		{
-			return Error(request, "runtime.request.rejected", exception.Message);
-		}
-		finally
-		{
-			if (serializeMutation)
-				_mutationGate.Release();
+			return ValueTask.FromResult(Error(request, "runtime.request.rejected", exception.Message));
 		}
 	}
-
-	private static bool IsSerializedMutation(string messageType) => messageType switch
-	{
-		"runtime.ai_showcase.set" or
-		"runtime.execution.apply" or
-		"runtime.graphics.overlay.load" or
-		"runtime.graphics.cg.apply" or
-		"runtime.graphics.overlay.set" or
-		"runtime.graphics.overlay.clear" or
-		"runtime.compositing.layer.set" or
-		"runtime.compositing.layer.transform" or
-		"runtime.compositing.layer.processing" or
-		"runtime.compositing.layers.reorder" or
-		"runtime.audio.input.set" or
-		"runtime.audio.routing.set" or
-		"runtime.audio.test_signal.set" or
-		"runtime.test_pattern.set" or
-		"runtime.recording.start" or
-		"runtime.recording.stop" or
-		"runtime.media_deck.open" or
-		"runtime.media_deck.transport" or
-		"runtime.media_deck.close" => true,
-		_ => false
-	};
 
 	private WireEnvelope SetAIShowcase(WireEnvelope request)
 	{
