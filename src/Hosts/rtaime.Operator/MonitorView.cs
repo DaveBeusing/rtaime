@@ -149,6 +149,12 @@ public class MonitorView : UserControl
 		typeof(MonitorView),
 		new PropertyMetadata(false));
 
+	public static readonly DependencyProperty ShowTechnicalOverlayProperty = DependencyProperty.Register(
+		nameof(ShowTechnicalOverlay),
+		typeof(bool),
+		typeof(MonitorView),
+		new PropertyMetadata(false));
+
 	public static readonly DependencyProperty ShowGridProperty = DependencyProperty.Register(
 		nameof(ShowGrid),
 		typeof(bool),
@@ -180,6 +186,7 @@ public class MonitorView : UserControl
 		Zoom100Command = new MonitorPresentationCommand(() => ZoomMode = "100%");
 		Zoom200Command = new MonitorPresentationCommand(() => ZoomMode = "200%");
 		Zoom400Command = new MonitorPresentationCommand(() => ZoomMode = "400%");
+		ToggleTechnicalOverlayCommand = new MonitorPresentationCommand(() => ShowTechnicalOverlay = !ShowTechnicalOverlay);
 	}
 
 	public ImageSource? Frame
@@ -260,6 +267,12 @@ public class MonitorView : UserControl
 		set => SetValue(ShowCenterMarkProperty, value);
 	}
 
+	public bool ShowTechnicalOverlay
+	{
+		get => (bool)GetValue(ShowTechnicalOverlayProperty);
+		set => SetValue(ShowTechnicalOverlayProperty, value);
+	}
+
 	public bool ShowGrid
 	{
 		get => (bool)GetValue(ShowGridProperty);
@@ -289,6 +302,7 @@ public class MonitorView : UserControl
 	public ICommand Zoom100Command { get; }
 	public ICommand Zoom200Command { get; }
 	public ICommand Zoom400Command { get; }
+	public ICommand ToggleTechnicalOverlayCommand { get; }
 
 	private static void OnZoomModeChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs eventArgs)
 	{
