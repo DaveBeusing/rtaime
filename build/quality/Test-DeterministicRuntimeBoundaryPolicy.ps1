@@ -61,7 +61,9 @@ Assert-Condition ($runtimeProcess -match "AdmitMediaDeckBoundary\(runtime, media
 Assert-Condition ($runtimeProcess -match "RunMediaLoopAsync\(_runtime, _mediaDeck, _mediaIo, _aiShowcase") "The single Program loop must own media-deck admission."
 
 Assert-Condition ($runtime -match "private readonly object _boundaryExecutionGate") "RuntimeHost must retain explicit single-writer boundary serialization."
+Assert-Condition ($runtime -match "private readonly object _boundaryCaptureGate") "RuntimeHost must retain an explicit frame-affecting mutation capture gate."
 Assert-Condition ($runtime -match "lock \(_boundaryExecutionGate\)") "Boundary execution and committed execution replacement must share the boundary serializer."
+Assert-Condition ($runtime -match "lock \(_boundaryCaptureGate\)") "Frame-affecting control mutations must serialize against boundary capture rather than heavy execution."
 Assert-Condition ($runtime -match "programEvidence\.Frame\.Timing\.SequenceNumber >= _nextSequenceNumber") "Program health must hide in-flight output evidence until boundary publication."
 Assert-Condition ($runtime -match "auxEvidence\.Frame\.Timing\.SequenceNumber >= _nextSequenceNumber") "Aux health must hide in-flight output evidence until boundary publication."
 
@@ -75,13 +77,15 @@ Assert-Condition ($gpu -match "foreach \(var surfaceId in _unreleasedBackendSurf
 
 Assert-Condition ($boundaryTests -match "Snapshot_remains_available_while_gpu_composite_is_blocked") "Boundary regression must prove snapshot responsiveness during heavy GPU work."
 Assert-Condition ($boundaryTests -match "Execution_commit_arriving_during_boundary_is_serialized_between_frames") "Boundary regression must prove execution commits cannot partially affect an in-flight frame."
+Assert-Condition ($boundaryTests -match "Control_mutation_during_heavy_execution_applies_to_the_next_boundary_only") "Boundary regression must prove frame-affecting control mutations cannot partially alter an in-flight frame."
 Assert-Condition ($monitoringTests -match "Monitoring_source_snapshot_does_not_observe_later_mutation") "Monitoring regression must prove source temporal-aliasing protection."
 Assert-Condition ($soakTests -match "Sustained_runtime_boundary_workload_keeps_resources_and_retention_bounded") "CI-sized sustained Runtime boundary qualification is required."
 Assert-Condition ($soakTests -match "RTAIME_RUNTIME_BOUNDARY_SOAK_LONG") "Sustained Runtime qualification must expose an explicit longer mode."
 Assert-Condition ($gpuTests -match "Failed_surface_release_remains_visible_until_stop_retries_cleanup") "GPU release-failure resource accounting regression is required."
 
 Assert-Condition ($documentation -match "one production cadence authority" -and $documentation -match "There is no independent media-deck production timer") "Runtime boundary documentation must define one production cadence authority."
-Assert-Condition ($documentation -match 'Heavy data-plane work then executes without holding `_gate`') "Runtime documentation must describe state capture/publication versus heavy execution."
+Assert-Condition ($documentation -match 'Heavy data-plane work executes without holding the broad Runtime state lock') "Runtime documentation must describe state capture/publication versus heavy execution."
+Assert-Condition ($documentation -match '_boundaryCaptureGate') "Runtime documentation must define the explicit control-mutation capture point."
 Assert-Condition ($documentation -match "UNVERIFIED") "Runtime boundary documentation must preserve the physical qualification boundary."
 Assert-Condition ($timingDocumentation -match "single V1 production cadence boundary") "Timing qualification documentation must describe the single Runtime cadence."
 Assert-Condition ($qualificationDocumentation -match "green deterministic-boundary or software-soak tests do not change") "Reference Platform Qualification must keep software and physical evidence separate."
