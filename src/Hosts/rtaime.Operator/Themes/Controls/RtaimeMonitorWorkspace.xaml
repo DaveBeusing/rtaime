@@ -114,8 +114,16 @@
 									SourceWidth="{Binding Monitor.SourcePixelWidth, RelativeSource={RelativeSource TemplatedParent}}"
 									SourceHeight="{Binding Monitor.SourcePixelHeight, RelativeSource={RelativeSource TemplatedParent}}"
 									LineBrush="{DynamicResource OperatorGuideSubtleBrush}"
-									Visibility="{Binding Monitor.IsPixelGridVisible, RelativeSource={RelativeSource TemplatedParent}, Converter={StaticResource BooleanToVisibilityConverter}}"
-									IsHitTestVisible="False" Panel.ZIndex="45" />
+									IsHitTestVisible="False" Panel.ZIndex="45">
+									<controls:RtaimePixelGridOverlay.Style>
+										<Style TargetType="{x:Type controls:RtaimePixelGridOverlay}">
+											<Setter Property="Visibility" Value="Collapsed" />
+											<Style.Triggers>
+												<DataTrigger Binding="{Binding Monitor.IsPixelGridVisible, RelativeSource={RelativeSource TemplatedParent}}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
+											</Style.Triggers>
+										</Style>
+									</controls:RtaimePixelGridOverlay.Style>
+								</controls:RtaimePixelGridOverlay>
 
 								<Border
 									HorizontalAlignment="Left"
