@@ -130,6 +130,18 @@ Automated responsive qualification is implemented by the Windows Operator test s
 - the Quality gate checks reference geometry plus 1920×1080, 1600×900, 1536×864, 1280×720 and 960×540 responsive layout invariants;
 - Control/Runtime/Media authority boundaries are unchanged.
 
+## High-quality monitor scaling boundary
+
+Preview and Program monitor presentation derives an explicit physical-pixel target from the live WPF viewport and per-monitor DPI scale. The target is integer pixel-sized and carries the active quality and presentation-path classification. The current monitoring transport supplies frozen WPF `ImageSource` frames, so the qualified V1 path remains the controlled `WpfFallback`: one `Image` surface performs the intentional high-quality presentation scale and no surrounding `Viewbox` or layout transform performs a second image resample.
+
+The contract deliberately distinguishes this fallback from a future `GpuProvider` path. A provider-backed path may supply an already-sized GPU-resident surface later without changing Operator presentation semantics; the Operator does not introduce a vendor-specific rendering contract to obtain it.
+
+Physical target adoption is stabilized during interactive resize. Existing content continues to present while size changes arrive, and the final target is adopted after an 80 ms presentation debounce. Stable viewport updates reuse the same target revision rather than representing per-frame resource churn.
+
+The technical overlay reports source dimensions, physical target dimensions, quality, active path, intentional scale-stage count, target revision/pending resize state and DPI. This makes the current CPU/WPF fallback explicit rather than silently presenting it as GPU-resident. The WPF boundary uses `RenderOptions.BitmapScalingMode="HighQuality"`, pixel snapping and per-monitor DPI-aware target calculation.
+
+Automated qualification covers physical target calculation across 100%, 125%, 150% and 200% DPI examples, deterministic fractional-pixel rounding, resize settling and stable-target revision reuse. The existing presentation geometry suite continues to cover aspect preservation, pixel-perfect inspection and bounded pan.
+
 ## Preview / Program production workspace
 
 Preview / Program Production Workspace formalizes the switcher workflow as **Selected Source → confirmed Preview → confirmed Program**. The local source selection is operator intent for `Set Preview`; it is never treated as Program authority.
