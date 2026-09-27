@@ -15,7 +15,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 {
 	private const string ProtocolVersion = "1.0";
 	private const int MaxFrameBytes = 1024 * 1024;
-	private static readonly TimeSpan DefaultSessionDrainTimeout = TimeSpan.FromSeconds(2);
+	private static readonly TimeSpan DefaultSessionDrainTimeout = HostIpcSessionTracker.MaximumDrainInterval;
 	private readonly string _endpoint;
 	private readonly Func<ControlHostService?> _controlAccessor;
 	private readonly IControlRuntimeTransportSeam _runtimeTransport;
