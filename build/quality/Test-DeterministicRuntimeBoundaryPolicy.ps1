@@ -81,6 +81,7 @@ Assert-Condition ($boundaryTests -match "Control_mutation_during_heavy_execution
 Assert-Condition ($monitoringTests -match "Monitoring_source_snapshot_does_not_observe_later_mutation") "Monitoring regression must prove source temporal-aliasing protection."
 Assert-Condition ($soakTests -match "Sustained_runtime_boundary_workload_keeps_resources_and_retention_bounded") "CI-sized sustained Runtime boundary qualification is required."
 Assert-Condition ($soakTests -match "RTAIME_RUNTIME_BOUNDARY_SOAK_LONG") "Sustained Runtime qualification must expose an explicit longer mode."
+Assert-Condition ($soakTests -match "GC\.GetAllocatedBytesForCurrentThread") "Sustained Runtime qualification must measure steady-state boundary allocation after warmup."
 Assert-Condition ($gpuTests -match "Failed_surface_release_remains_visible_until_stop_retries_cleanup") "GPU release-failure resource accounting regression is required."
 
 Assert-Condition ($documentation -match "one production cadence authority" -and $documentation -match "There is no independent media-deck production timer") "Runtime boundary documentation must define one production cadence authority."
