@@ -161,6 +161,10 @@
 									<controls:RtaimeTimecode Content="{Binding Monitor.DisplayTimecode, RelativeSource={RelativeSource TemplatedParent}}" FontSize="{StaticResource OperatorFontSizeMetadata}" />
 								</Border>
 
+								<Border VerticalAlignment="Top" HorizontalAlignment="Right" Margin="8,36,8,0" Padding="6,3" Style="{StaticResource OperatorMonitorHeaderOverlay}" CornerRadius="{StaticResource OperatorRadiusOverlay}" Panel.ZIndex="56" IsHitTestVisible="False">
+									<TextBlock Text="{Binding Monitor.InspectionReadout, RelativeSource={RelativeSource TemplatedParent}}" FontSize="{StaticResource OperatorFontSizeMicro}" Foreground="{DynamicResource OperatorOverlayTextBrush}" FontFamily="Consolas" />
+								</Border>
+
 								<Border VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="8" Padding="5,2" Style="{StaticResource OperatorMonitorHeaderOverlay}" CornerRadius="{StaticResource OperatorRadiusOverlay}">
 									<StackPanel Orientation="Horizontal">
 										<TextBlock Text="{Binding Monitor.Format, RelativeSource={RelativeSource TemplatedParent}}" FontSize="{StaticResource OperatorFontSizeCompact}" Foreground="{DynamicResource OperatorOverlayTextBrush}" MaxWidth="180" TextTrimming="CharacterEllipsis" />
