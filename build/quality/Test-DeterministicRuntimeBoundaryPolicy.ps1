@@ -81,7 +81,7 @@ Assert-Condition ($soakTests -match "RTAIME_RUNTIME_BOUNDARY_SOAK_LONG") "Sustai
 Assert-Condition ($gpuTests -match "Failed_surface_release_remains_visible_until_stop_retries_cleanup") "GPU release-failure resource accounting regression is required."
 
 Assert-Condition ($documentation -match "one production cadence authority" -and $documentation -match "There is no independent media-deck production timer") "Runtime boundary documentation must define one production cadence authority."
-Assert-Condition ($documentation -match "Heavy data-plane work then executes without holding `_gate`") "Runtime documentation must describe state capture/publication versus heavy execution."
+Assert-Condition ($documentation -match 'Heavy data-plane work then executes without holding `_gate`') "Runtime documentation must describe state capture/publication versus heavy execution."
 Assert-Condition ($documentation -match "UNVERIFIED") "Runtime boundary documentation must preserve the physical qualification boundary."
 Assert-Condition ($timingDocumentation -match "single V1 production cadence boundary") "Timing qualification documentation must describe the single Runtime cadence."
 Assert-Condition ($qualificationDocumentation -match "green deterministic-boundary or software-soak tests do not change") "Reference Platform Qualification must keep software and physical evidence separate."
