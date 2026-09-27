@@ -165,6 +165,8 @@ Production Revision advances only when an authoritative production mutation is c
 
 Clients establish synchronization from a full snapshot. Timed metadata deltas are valid only when their `BasedOnStateVersion` equals the client's current StateVersion. A gap or HostInstanceId change invalidates the delta stream and requires a new full snapshot.
 
+ControlHost, RuntimeHost and AIHost allocate envelope sequence values atomically across concurrent accepted sessions. RuntimeHost and AIHost also allocate remotely visible StateVersion increments atomically; the wire contract remains `ulong`, while the process-local allocator uses signed `long` atomics and fails closed at `long.MaxValue` before conversion can overflow. Atomic metadata allocation does not serialize compound host mutations: ControlHost retains its mutation gate, while RuntimeHost/AIHost subsystem state continues to rely on the existing owning-service synchronization and admission rules.
+
 ## Runtime reconnect and restart
 
 ControlHost may start before RuntimeHost and reports `Degraded`. Its binding loop retries without making an authoritative mutation.
@@ -216,6 +218,8 @@ Network authentication, TLS/PKI and RBAC are outside this local V1 IPC baseline.
 Malformed, oversized, unknown, role-incompatible and version-incompatible requests fail closed. A client that connects and disconnects before completing the handshake affects only that connection; RuntimeHost keeps accepting subsequent clients. Normal connection teardown and malformed per-connection input do not terminate the primary RuntimeHost listener.
 
 RuntimeHost models the primary Named Pipe listener independently from individual client sessions. Recoverable listener-level I/O failures recreate the affected server stream with bounded retry/backoff. Unknown listener failures, or repeated listener-level I/O failures that exceed the bounded retry policy, are terminal. A terminal primary-listener failure immediately invalidates RuntimeHost `Ready/Healthy`, transitions the host to `Failed/Unhealthy`, and completes the process with `UnexpectedFailure` rather than surfacing later as a shutdown-only failure. The monitoring listener follows the same resource/lifetime discipline, but a monitoring-listener failure remains an observability-plane failure and does not acquire or change Runtime production authority.
+
+Accepted sessions are explicitly tracked by RuntimeHost, ControlHost and AIHost. Shutdown first prevents additional accepts, then cancels tracked sessions and waits for their completion within a bounded drain interval before session dependencies are disposed. Completed sessions are removed immediately; handler exceptions are observed and retained only as bounded/redacted diagnostics. RuntimeHost monitoring subscriptions follow the same accepted-session lifecycle. A non-cooperative session that exceeds the drain bound is reported as a timeout/shutdown failure and is never described as a clean drain.
 
 Runtime transport loss leaves Control authority unchanged and places ControlHost in `Degraded` until a successful resynchronization. A committed Runtime snapshot with a missing authority reference, a foreign AuthorityStateId or an AuthorityRevision ahead of durable Control authority is not overwritten automatically. AI transport loss cannot gain production authority.
 
