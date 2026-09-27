@@ -24,8 +24,8 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 	private readonly BoundedRequestCache _requestCache = new(256);
 	private readonly string _hostInstanceId = Identity.New().ToString();
 	private readonly RuntimePipeListener _listener;
-	private ulong _stateVersion = 1;
-	private ulong _sequence;
+	private long _stateVersion = 1;
+	private long _sequence;
 	private Identity? _committedAuthorityStateId;
 	private Revision? _committedAuthorityRevision;
 
@@ -59,8 +59,10 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 
 	public string Endpoint => _endpoint;
 	public string HostInstanceId => _hostInstanceId;
+	public ulong StateVersion => checked((ulong)Interlocked.Read(ref _stateVersion));
 	public bool Running => _listener.Running;
 	public RuntimePipeListenerSnapshot Listener => _listener.Snapshot;
+	public HostIpcSessionSnapshot Sessions => _listener.Sessions;
 	internal Task ListenerCompletion => _listener.Completion;
 	internal Exception? ListenerTerminalFault => _listener.TerminalFault;
 	internal event Action<RuntimePipeListenerSnapshot, Exception>? ListenerFaulted
@@ -121,7 +123,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 						helloEnvelope.RequestId,
 						helloEnvelope.CorrelationId,
 						_hostInstanceId,
-						_stateVersion,
+						StateVersion,
 						NextSequence(),
 						new ServerHello(
 							ProtocolVersion,
@@ -216,7 +218,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		var wire = request.Payload.Deserialize<WireAIShowcaseState>(Wire.JsonOptions)
 			?? throw new InvalidDataException("AI showcase state payload is required.");
 		var snapshot = showcase.SetEnabled(wire.Enabled);
-		_stateVersion++;
+		AdvanceStateVersion();
 		return Success(request, "runtime.ai_showcase.response", ToWire(snapshot));
 	}
 
@@ -233,7 +235,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		var wire = request.Payload.Deserialize<WireGraphicsAsset>(Wire.JsonOptions)
 			?? throw new InvalidDataException("Graphics overlay asset payload is required.");
 		var snapshot = runtime.LoadGraphicsOverlay(wire.Name, wire.Width, wire.Height, wire.RgbaPixels);
-		_stateVersion++;
+		AdvanceStateVersion();
 		return Success(request, "runtime.graphics.overlay.response", ToWire(snapshot));
 	}
 
@@ -261,7 +263,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 			wire.Visible,
 			(V1CgLayer)wire.Layer,
 			wire.ZOrder));
-		_stateVersion++;
+		AdvanceStateVersion();
 		return Success(request, "runtime.graphics.overlay.response", ToWire(snapshot));
 	}
 
@@ -270,14 +272,14 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		var wire = request.Payload.Deserialize<WireGraphicsOverlayState>(Wire.JsonOptions)
 			?? throw new InvalidDataException("Graphics overlay state payload is required.");
 		var snapshot = runtime.SetGraphicsOverlay(wire.Visible, wire.PositionX, wire.PositionY, wire.Scale);
-		_stateVersion++;
+		AdvanceStateVersion();
 		return Success(request, "runtime.graphics.overlay.response", ToWire(snapshot));
 	}
 
 	private WireEnvelope ClearGraphicsOverlay(WireEnvelope request, V1RuntimeHostService runtime)
 	{
 		var snapshot = runtime.ClearGraphicsOverlay();
-		_stateVersion++;
+		AdvanceStateVersion();
 		return Success(request, "runtime.graphics.overlay.response", ToWire(snapshot));
 	}
 
@@ -286,7 +288,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		var wire = request.Payload.Deserialize<WireCompositingLayerState>(Wire.JsonOptions)
 			?? throw new InvalidDataException("Compositing layer state payload is required.");
 		var layers = runtime.SetCompositingLayerState(wire.LayerId, wire.Visible, wire.Opacity);
-		_stateVersion++;
+		AdvanceStateVersion();
 		return Success(request, "runtime.compositing.layers.response", layers.Select(ToWire).ToArray());
 	}
 
@@ -306,7 +308,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 			wire.CropTop,
 			wire.CropRight,
 			wire.CropBottom);
-		_stateVersion++;
+		AdvanceStateVersion();
 		return Success(request, "runtime.compositing.layers.response", layers.Select(ToWire).ToArray());
 	}
 
@@ -316,7 +318,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 			?? throw new InvalidDataException("Compositing layer processing payload is required.");
 		var node = wire.ProcessingNode is null ? null : FromWire(wire.ProcessingNode);
 		var layers = runtime.SetCompositingLayerProcessingNode(wire.LayerId, node);
-		_stateVersion++;
+		AdvanceStateVersion();
 		return Success(request, "runtime.compositing.layers.response", layers.Select(ToWire).ToArray());
 	}
 
@@ -325,7 +327,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		var wire = request.Payload.Deserialize<WireCompositingLayerOrder>(Wire.JsonOptions)
 			?? throw new InvalidDataException("Compositing layer order payload is required.");
 		var layers = runtime.ReorderCompositingLayers(wire.LayerIds);
-		_stateVersion++;
+		AdvanceStateVersion();
 		return Success(request, "runtime.compositing.layers.response", layers.Select(ToWire).ToArray());
 	}
 
@@ -339,7 +341,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 			: V1BroadcastTestPatternMode.Static;
 		var changed = runtime.SetBroadcastTestPattern(sourceId, wire.Enabled, requestedMode);
 		if (changed)
-			_stateVersion++;
+			AdvanceStateVersion();
 		var snapshot = runtime.Snapshot;
 		return Success(
 			request,
@@ -359,7 +361,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 			new MediaSourceId(Identity.Parse(wire.SourceId)),
 			new AudioGain(wire.Gain),
 			wire.Muted);
-		_stateVersion++;
+		AdvanceStateVersion();
 		return Success(request, "runtime.audio.input.response", ToWire(snapshot));
 	}
 
@@ -374,7 +376,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 			? null
 			: new MediaSourceId(Identity.Parse(wire.BreakawaySourceId));
 		var snapshot = runtime.SetAudioRouting((AudioRoutingMode)wire.Mode, breakawaySourceId);
-		_stateVersion++;
+		AdvanceStateVersion();
 		return Success(request, "runtime.audio.routing.response", ToWire(snapshot));
 	}
 
@@ -391,7 +393,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 			mode,
 			wire.FrequencyHz,
 			wire.PeakLevel);
-		_stateVersion++;
+		AdvanceStateVersion();
 		return Success(request, "runtime.audio.test_signal.response", ToWire(snapshot));
 	}
 
@@ -408,7 +410,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 			wire.DestinationDirectory,
 			wire.FileName,
 			cancellationToken).ConfigureAwait(false);
-		_stateVersion++;
+		AdvanceStateVersion();
 		return Success(
 			request,
 			"runtime.recording.command.response",
@@ -424,7 +426,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		CancellationToken cancellationToken)
 	{
 		var result = await runtime.StopRecordingAsync(cancellationToken).ConfigureAwait(false);
-		_stateVersion++;
+		AdvanceStateVersion();
 		return Success(
 			request,
 			"runtime.recording.command.response",
@@ -476,7 +478,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 				: new MediaAssetId(Identity.Parse(wire.AssetId)));
 		var prepared = FromWire(wire.PreparedExecution);
 		var snapshot = deck.Open(open, prepared);
-		_stateVersion++;
+		AdvanceStateVersion();
 		return Success(request, "runtime.media_deck.open.response", ToWire(snapshot));
 	}
 
@@ -504,7 +506,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 			wire.InPointFrame,
 			wire.OutPointFrame);
 		var result = deck.ApplyTransport(command);
-		_stateVersion++;
+		AdvanceStateVersion();
 		return Success(request, "runtime.media_deck.transport.response", ToWire(result));
 	}
 
@@ -514,7 +516,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		if (deck is null)
 			return Error(request, "runtime.media_deck.unavailable", "Local media deck service is not available.");
 		var snapshot = deck.Close();
-		_stateVersion++;
+		AdvanceStateVersion();
 		return Success(request, "runtime.media_deck.close.response", ToWire(snapshot));
 	}
 
@@ -540,23 +542,33 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		{
 			_committedAuthorityStateId = prepared.AuthoritySnapshot.StateId;
 			_committedAuthorityRevision = prepared.AuthoritySnapshot.Revision;
-			_stateVersion++;
+			AdvanceStateVersion();
 		}
 		return Success(request, "runtime.execution.apply.response", ToWire(result));
 	}
 
 	private WireEnvelope Success(WireEnvelope request, string messageType, object payload) =>
-		Wire.Create(messageType, request.RequestId, request.CorrelationId, _hostInstanceId, _stateVersion, NextSequence(), payload);
+		Wire.Create(messageType, request.RequestId, request.CorrelationId, _hostInstanceId, StateVersion, NextSequence(), payload);
 
 	private WireEnvelope Error(WireEnvelope request, string code, string message) =>
-		Wire.Create("error", request.RequestId, request.CorrelationId, _hostInstanceId, _stateVersion, NextSequence(), new WireFailure(code, message));
+		Wire.Create("error", request.RequestId, request.CorrelationId, _hostInstanceId, StateVersion, NextSequence(), new WireFailure(code, message));
 
 	private Task WriteErrorAsync(Stream stream, WireEnvelope request, string code, string message, CancellationToken cancellationToken) =>
 		Wire.WriteAsync(stream, Error(request, code, message), cancellationToken);
 
-	private ulong NextSequence() => _sequence == ulong.MaxValue
-		? throw new InvalidOperationException("RuntimeHost IPC sequence exhausted.")
-		: ++_sequence;
+	private ulong NextSequence()
+	{
+		if (Interlocked.Read(ref _sequence) == long.MaxValue)
+			throw new InvalidOperationException("RuntimeHost IPC sequence exhausted.");
+		return checked((ulong)Interlocked.Increment(ref _sequence));
+	}
+
+	private void AdvanceStateVersion()
+	{
+		if (Interlocked.Read(ref _stateVersion) == long.MaxValue)
+			throw new InvalidOperationException("RuntimeHost remote StateVersion is exhausted.");
+		Interlocked.Increment(ref _stateVersion);
+	}
 
 	private static WireProvider ToWire(ProviderDescriptor provider) => new(
 		provider.Version.ToString(),
