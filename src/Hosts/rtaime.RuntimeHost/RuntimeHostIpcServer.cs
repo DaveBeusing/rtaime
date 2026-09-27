@@ -25,8 +25,8 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 	private readonly SemaphoreSlim _mutationGate = new(1, 1);
 	private readonly string _hostInstanceId = Identity.New().ToString();
 	private readonly RuntimePipeListener _listener;
-	private long _stateVersion = 1;
-	private long _sequence;
+	private readonly HostIpcProtocolCounter _stateVersion = new(1);
+	private readonly HostIpcProtocolCounter _sequence = new();
 	private Identity? _committedAuthorityStateId;
 	private Revision? _committedAuthorityRevision;
 
@@ -62,7 +62,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 
 	public string Endpoint => _endpoint;
 	public string HostInstanceId => _hostInstanceId;
-	public ulong StateVersion => checked((ulong)Interlocked.Read(ref _stateVersion));
+	public ulong StateVersion => _stateVersion.Value;
 	public bool Running => _listener.Running;
 	public RuntimePipeListenerSnapshot Listener => _listener.Snapshot;
 	public HostIpcSessionSnapshot Sessions => _listener.Sessions;
@@ -599,16 +599,15 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 
 	private ulong NextSequence()
 	{
-		if (Interlocked.Read(ref _sequence) == long.MaxValue)
+		if (!_sequence.TryIncrement(out var sequence))
 			throw new InvalidOperationException("RuntimeHost IPC sequence exhausted.");
-		return checked((ulong)Interlocked.Increment(ref _sequence));
+		return sequence;
 	}
 
 	private void AdvanceStateVersion()
 	{
-		if (Interlocked.Read(ref _stateVersion) == long.MaxValue)
+		if (!_stateVersion.TryIncrement(out _))
 			throw new InvalidOperationException("RuntimeHost remote StateVersion is exhausted.");
-		Interlocked.Increment(ref _stateVersion);
 	}
 
 	private static WireProvider ToWire(ProviderDescriptor provider) => new(
