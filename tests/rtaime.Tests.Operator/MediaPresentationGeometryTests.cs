@@ -97,4 +97,55 @@ public sealed class MediaPresentationGeometryTests
 		Assert.Throws<ArgumentOutOfRangeException>(() =>
 			MediaPresentationGeometry.ToPhysicalPixels(800, 450, 0, 1));
 	}
+	[Theory]
+	[InlineData(1280, 720, 1.0, 1280, 720)]
+	[InlineData(1536, 864, 1.25, 1920, 1080)]
+	[InlineData(1280, 720, 1.5, 1920, 1080)]
+	[InlineData(960, 540, 2.0, 1920, 1080)]
+	public void Render_target_uses_physical_viewport_pixels(double widthDip, double heightDip, double dpi, int expectedWidth, int expectedHeight)
+	{
+		var target = MediaRenderTarget.Create(widthDip, heightDip, dpi, dpi);
+		Assert.Equal(expectedWidth, target.PixelWidth);
+		Assert.Equal(expectedHeight, target.PixelHeight);
+		Assert.Equal(MediaScalingQuality.Bicubic, target.Quality);
+		Assert.Equal(MediaScalingPath.WpfFallback, target.Path);
+		Assert.True(target.RequiresPresentationRescale);
+	}
+
+	[Fact]
+	public void Render_target_rounds_fractional_physical_extents_deterministically()
+	{
+		var target = MediaRenderTarget.Create(801, 451, 1.25, 1.25);
+		Assert.Equal(1001, target.PixelWidth);
+		Assert.Equal(564, target.PixelHeight);
+	}
+
+	[Fact]
+	public void Resize_stabilizer_keeps_active_target_until_requested_size_settles()
+	{
+		var stabilizer = new MediaRenderTargetStabilizer(TimeSpan.FromMilliseconds(75));
+		var now = DateTimeOffset.UnixEpoch;
+		var initial = MediaRenderTarget.Create(800, 450, 1, 1);
+		var resizing = MediaRenderTarget.Create(1000, 562.5, 1, 1);
+		Assert.Equal(initial, stabilizer.Adopt(initial, now));
+		Assert.Equal(initial, stabilizer.Adopt(resizing, now.AddMilliseconds(20)));
+		Assert.True(stabilizer.ResizePending);
+		Assert.Equal(initial, stabilizer.Adopt(resizing, now.AddMilliseconds(80)));
+		Assert.Equal(resizing, stabilizer.Adopt(resizing, now.AddMilliseconds(96)));
+		Assert.False(stabilizer.ResizePending);
+		Assert.Equal(2, stabilizer.Revision);
+	}
+
+	[Fact]
+	public void Stable_target_does_not_churn_revision()
+	{
+		var stabilizer = new MediaRenderTargetStabilizer();
+		var target = MediaRenderTarget.Create(1920, 1080, 1.5, 1.5);
+		var now = DateTimeOffset.UnixEpoch;
+		stabilizer.Adopt(target, now);
+		for (var i = 0; i < 120; i++)
+			Assert.Equal(target, stabilizer.Adopt(target, now.AddMilliseconds(i * 16)));
+		Assert.Equal(1, stabilizer.Revision);
+		Assert.False(stabilizer.ResizePending);
+	}
 }
