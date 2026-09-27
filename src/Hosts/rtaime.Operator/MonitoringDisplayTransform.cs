@@ -5,7 +5,7 @@ using rtaime.Media.Contracts;
 
 namespace rtaime.Operator;
 
-internal static class MonitoringDisplayTransform
+public static class MonitoringDisplayTransform
 {
 	private static readonly ConcurrentDictionary<ColorDescription, byte[]> Luts = new();
 
