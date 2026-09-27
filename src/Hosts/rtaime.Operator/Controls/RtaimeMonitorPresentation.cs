@@ -6,13 +6,17 @@ using System.Windows.Media;
 
 namespace rtaime.Operator.Controls;
 
+[TemplatePart(Name = MediaViewportPartName, Type = typeof(FrameworkElement))]
 public sealed class RtaimeMonitorPresentation : ContentControl
 {
+	private const string MediaViewportPartName = "PART_MediaViewport";
+	private FrameworkElement? _mediaViewport;
+	private Point? _panOrigin;
 	public static readonly DependencyProperty MonitorProperty = DependencyProperty.Register(
 		nameof(Monitor),
 		typeof(MonitorView),
 		typeof(RtaimeMonitorPresentation),
-		new FrameworkPropertyMetadata(null));
+		new FrameworkPropertyMetadata(null, OnMonitorChanged));
 
 	public static readonly DependencyProperty RoleTextProperty = DependencyProperty.Register(
 		nameof(RoleText),
@@ -139,4 +143,93 @@ public sealed class RtaimeMonitorPresentation : ContentControl
 		get => (bool)GetValue(OverlayControlsEnabledProperty);
 		set => SetValue(OverlayControlsEnabledProperty, value);
 	}
+	public override void OnApplyTemplate()
+	{
+		DetachViewport();
+		base.OnApplyTemplate();
+
+		_mediaViewport = GetTemplateChild(MediaViewportPartName) as FrameworkElement;
+		if (_mediaViewport is null)
+			return;
+
+		_mediaViewport.SizeChanged += OnViewportSizeChanged;
+		_mediaViewport.MouseWheel += OnViewportMouseWheel;
+		_mediaViewport.MouseLeftButtonDown += OnViewportMouseLeftButtonDown;
+		_mediaViewport.MouseLeftButtonUp += OnViewportMouseLeftButtonUp;
+		_mediaViewport.MouseMove += OnViewportMouseMove;
+		RefreshViewport();
+	}
+
+	private static void OnMonitorChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs eventArgs)
+	{
+		((RtaimeMonitorPresentation)dependencyObject).RefreshViewport();
+	}
+
+	private void OnViewportSizeChanged(object sender, SizeChangedEventArgs e) => RefreshViewport();
+
+	private void OnViewportMouseWheel(object sender, System.Windows.Input.MouseWheelEventArgs e)
+	{
+		if (Monitor is null)
+			return;
+
+		Monitor.StepPresentationZoom(e.Delta);
+		e.Handled = true;
+	}
+
+	private void OnViewportMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+	{
+		if (Monitor is null || Monitor.ZoomMode is "FIT" or "FILL")
+			return;
+
+		_panOrigin = e.GetPosition(_mediaViewport);
+		_mediaViewport?.CaptureMouse();
+		e.Handled = true;
+	}
+
+	private void OnViewportMouseLeftButtonUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
+	{
+		if (_panOrigin is null)
+			return;
+
+		_panOrigin = null;
+		_mediaViewport?.ReleaseMouseCapture();
+		e.Handled = true;
+	}
+
+	private void OnViewportMouseMove(object sender, System.Windows.Input.MouseEventArgs e)
+	{
+		if (_panOrigin is null || Monitor is null || _mediaViewport is null || e.LeftButton != System.Windows.Input.MouseButtonState.Pressed)
+			return;
+
+		var current = e.GetPosition(_mediaViewport);
+		var delta = current - _panOrigin.Value;
+		_panOrigin = current;
+		Monitor.PanPresentation(delta.X, delta.Y);
+		e.Handled = true;
+	}
+
+	private void RefreshViewport()
+	{
+		if (_mediaViewport is null || Monitor is null || _mediaViewport.ActualWidth <= 0 || _mediaViewport.ActualHeight <= 0)
+			return;
+
+		var dpi = VisualTreeHelper.GetDpi(_mediaViewport);
+		Monitor.UpdatePresentationViewport(_mediaViewport.ActualWidth, _mediaViewport.ActualHeight, dpi.DpiScaleX, dpi.DpiScaleY);
+	}
+
+	private void DetachViewport()
+	{
+		if (_mediaViewport is null)
+			return;
+
+		_mediaViewport.SizeChanged -= OnViewportSizeChanged;
+		_mediaViewport.MouseWheel -= OnViewportMouseWheel;
+		_mediaViewport.MouseLeftButtonDown -= OnViewportMouseLeftButtonDown;
+		_mediaViewport.MouseLeftButtonUp -= OnViewportMouseLeftButtonUp;
+		_mediaViewport.MouseMove -= OnViewportMouseMove;
+		_mediaViewport = null;
+		_panOrigin = null;
+	}
+
+
 }

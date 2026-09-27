@@ -63,7 +63,7 @@
 								</Grid>
 							</Border>
 
-							<Grid Grid.Row="1" Style="{StaticResource OperatorMediaCanvas}">
+							<Grid x:Name="PART_MediaViewport" Grid.Row="1" Style="{StaticResource OperatorMediaCanvas}" ClipToBounds="True">
 								<controls:RtaimeStatePlaceholder
 									State="{TemplateBinding PlaceholderState}"
 									Title="{TemplateBinding PlaceholderTitle}"
@@ -71,15 +71,43 @@
 									Panel.ZIndex="60"
 									Margin="10" />
 
-								<Viewbox Stretch="{Binding Monitor.ImageStretch, RelativeSource={RelativeSource TemplatedParent}}" StretchDirection="Both" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
-									<Image Source="{Binding Monitor.Frame, RelativeSource={RelativeSource TemplatedParent}}" SnapsToDevicePixels="True" RenderOptions.BitmapScalingMode="HighQuality">
-										<Image.LayoutTransform>
-											<ScaleTransform
-												ScaleX="{Binding Monitor.ImageScale, RelativeSource={RelativeSource TemplatedParent}}"
-												ScaleY="{Binding Monitor.ImageScale, RelativeSource={RelativeSource TemplatedParent}}" />
-										</Image.LayoutTransform>
-									</Image>
-								</Viewbox>
+								<Image
+									Source="{Binding Monitor.Frame, RelativeSource={RelativeSource TemplatedParent}}"
+									Width="{Binding Monitor.PresentationWidth, RelativeSource={RelativeSource TemplatedParent}}"
+									Height="{Binding Monitor.PresentationHeight, RelativeSource={RelativeSource TemplatedParent}}"
+									Stretch="Fill"
+									HorizontalAlignment="Center"
+									VerticalAlignment="Center"
+									ClipToBounds="True"
+									SnapsToDevicePixels="True"
+									RenderOptions.BitmapScalingMode="HighQuality">
+									<Image.RenderTransform>
+										<TranslateTransform
+											X="{Binding Monitor.PresentationOffsetX, RelativeSource={RelativeSource TemplatedParent}}"
+											Y="{Binding Monitor.PresentationOffsetY, RelativeSource={RelativeSource TemplatedParent}}" />
+									</Image.RenderTransform>
+								</Image>
+
+								<Border
+									HorizontalAlignment="Left"
+									VerticalAlignment="Top"
+									Margin="8"
+									Padding="6,3"
+									Background="{DynamicResource OperatorAlternateSurfaceBrush}"
+									Panel.ZIndex="55"
+									IsHitTestVisible="False">
+									<Border.Style>
+										<Style TargetType="Border">
+											<Setter Property="Visibility" Value="Collapsed" />
+											<Style.Triggers>
+												<DataTrigger Binding="{Binding Monitor.ShowTechnicalOverlay, RelativeSource={RelativeSource TemplatedParent}}" Value="True">
+													<Setter Property="Visibility" Value="Visible" />
+												</DataTrigger>
+											</Style.Triggers>
+										</Style>
+									</Border.Style>
+									<TextBlock Text="{Binding Monitor.PresentationInfo, RelativeSource={RelativeSource TemplatedParent}}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" />
+								</Border>
 
 								<Grid IsHitTestVisible="False">
 									<Grid.Style>

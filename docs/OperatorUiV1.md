@@ -773,3 +773,16 @@ The persistent lower production workspace presents a compact Rundown surface bes
 Rundown row selection and unsaved reorder/edit operations are local presentation state. SAVE and execution commands cross `rtaime.Client` into ControlHost; confirmed PREPARED/CURRENT/NEXT/FAILED/RECOVERY states are projected back from the governed rundown coordinator. Media auto-advance is driven by confirmed Media Deck completion rather than WPF timing.
 
 The integration does not claim full NLE editing. The existing timeline retains its current Media Deck/cue semantics, and reserved lanes remain non-authoritative where no backing production model exists. See `docs/ProductionRundown.md`.
+
+
+## High-fidelity media presentation
+
+Operator monitoring uses the existing `RtaimeMonitorPresentation` path as the single shared presentation surface for Preview and Program. Presentation sizing is viewport-owned and never mutates source media resolution or Runtime media state.
+
+The default mode is **FIT**: the complete source remains visible, aspect ratio is preserved, and letterbox/pillarbox space belongs to the monitor canvas. **FILL** is explicit and may crop only excess image area. Inspection zoom supports 25%, 50%, 100%, 200% and 400%; 100% represents the pixel-perfect policy basis. Presentation geometry is isolated in `MediaPresentationGeometry`, including physical-DPI conversion and bounded pan mathematics, so correctness can be qualified independently of WPF rendering or GPU availability.
+
+The shared monitor no longer nests the monitoring image in a `Viewbox`. The monitoring `ImageSource` is presented directly by one WPF image surface with `HighQuality` bitmap scaling, avoiding the previous Viewbox-plus-image scaling chain. The original monitoring bitmap remains reusable across viewport changes; resize does not reload media, restart decoding, or permanently downsample the source.
+
+DPI qualification covers 125%, 150% and 200% physical viewport conversion. The geometry seam is intentionally independent from Runtime/Media contracts so a future GPU-backed presentation adapter can consume the same Fit/Fill/PixelPerfect/zoom/pan policy without exposing WPF or vendor-specific resource types through stable contracts.
+
+Safe-area, center-mark and grid overlays remain separate layers above the media image and therefore do not cause another media resample. Existing format and zoom chrome remains presentation-only.
