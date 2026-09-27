@@ -45,8 +45,8 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	private string _showProjectDetail = "Durable show project persistence is not configured.";
 	private Task? _acceptLoop;
 	private CancellationTokenSource? _runStop;
-	private long _stateVersion = 1;
-	private long _sequence;
+	private readonly HostIpcProtocolCounter _stateVersion = new(1);
+	private readonly HostIpcProtocolCounter _sequence = new();
 
 	public ControlHostIpcServer(
 		string endpoint,
@@ -113,7 +113,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 
 	public string Endpoint => _endpoint;
 	public string HostInstanceId => _hostInstanceId;
-	public ulong StateVersion => checked((ulong)Interlocked.Read(ref _stateVersion));
+	public ulong StateVersion => _stateVersion.Value;
 	public bool Running => _acceptLoop is { IsCompleted: false };
 	public HostIpcSessionSnapshot Sessions => _sessions.Snapshot;
 
@@ -256,9 +256,8 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 
 	public void NotifyObservableStateChanged()
 	{
-		if (Interlocked.Read(ref _stateVersion) == long.MaxValue)
+		if (!_stateVersion.TryIncrement(out _))
 			throw new InvalidOperationException("ControlHost remote StateVersion is exhausted.");
-		Interlocked.Increment(ref _stateVersion);
 	}
 
 	public async ValueTask DisposeAsync()
@@ -2302,8 +2301,9 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 
 	private ulong NextSequence()
 	{
-		if (Interlocked.Read(ref _sequence) == long.MaxValue) throw new InvalidOperationException("ControlHost IPC sequence exhausted.");
-		return checked((ulong)Interlocked.Increment(ref _sequence));
+		if (!_sequence.TryIncrement(out var sequence))
+			throw new InvalidOperationException("ControlHost IPC sequence exhausted.");
+		return sequence;
 	}
 
 	private static WireAudioInput ToWire(RuntimeAudioInputSnapshot snapshot) => new(
