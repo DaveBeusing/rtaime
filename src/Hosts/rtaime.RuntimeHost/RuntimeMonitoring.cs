@@ -1,6 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 using System.IO.Pipes;
+using rtaime.Core;
 using rtaime.Media.Contracts;
 using rtaime.Provider.Gpu;
 
@@ -351,14 +352,15 @@ public sealed class RuntimeHostMonitoringServer : IAsyncDisposable
 	private readonly RuntimePipeListener _listener;
 
 	public RuntimeHostMonitoringServer(string endpoint, RuntimeMonitoringHub hub)
-		: this(endpoint, hub, null)
+		: this(endpoint, hub, null, null)
 	{
 	}
 
 	internal RuntimeHostMonitoringServer(
 		string endpoint,
 		RuntimeMonitoringHub hub,
-		Func<NamedPipeServerStream>? pipeFactory)
+		Func<NamedPipeServerStream>? pipeFactory,
+		TimeSpan? sessionDrainTimeout = null)
 	{
 		if (string.IsNullOrWhiteSpace(endpoint)) throw new ArgumentException("Monitoring endpoint is required.", nameof(endpoint));
 		_endpoint = endpoint.Trim();
@@ -367,12 +369,14 @@ public sealed class RuntimeHostMonitoringServer : IAsyncDisposable
 			_endpoint,
 			"monitoring-output",
 			pipeFactory ?? (() => OperatorPipeServerFactory.Create(_endpoint, PipeDirection.Out)),
-			StreamAsync);
+			StreamAsync,
+			sessionDrainTimeout);
 	}
 
 	public string Endpoint => _endpoint;
 	public bool Running => _listener.Running;
 	public RuntimePipeListenerSnapshot Listener => _listener.Snapshot;
+	public HostIpcSessionSnapshot Sessions => _listener.Sessions;
 	internal Task ListenerCompletion => _listener.Completion;
 	internal event Action<RuntimePipeListenerSnapshot, Exception>? ListenerFaulted
 	{

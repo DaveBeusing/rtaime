@@ -13,42 +13,60 @@ public sealed class AIHostIpcServer : IAsyncDisposable
 {
 	private const string ProtocolVersion = "1.0";
 	private const int MaxFrameBytes = 1024 * 1024;
+	private static readonly TimeSpan DefaultSessionDrainTimeout = HostIpcSessionTracker.MaximumDrainInterval;
 	private readonly string _endpoint;
 	private readonly Func<AIHostService?> _serviceAccessor;
 	private readonly CancellationTokenSource _stop = new();
+	private readonly HostIpcSessionTracker _sessions = new();
 	private readonly BoundedRequestCache _requestCache = new(256);
+	private readonly TimeSpan _sessionDrainTimeout;
 	private readonly string _hostInstanceId = Identity.New().ToString();
 	private Task? _acceptLoop;
-	private ulong _sequence;
-	private ulong _stateVersion = 1;
+	private CancellationTokenSource? _runStop;
+	private readonly HostIpcProtocolCounter _sequence = new();
+	private readonly HostIpcProtocolCounter _stateVersion = new(1);
 
-	public AIHostIpcServer(string endpoint, Func<AIHostService?> serviceAccessor)
+	public AIHostIpcServer(
+		string endpoint,
+		Func<AIHostService?> serviceAccessor,
+		TimeSpan? sessionDrainTimeout = null)
 	{
 		if (string.IsNullOrWhiteSpace(endpoint)) throw new ArgumentException("AIHost IPC endpoint is required.", nameof(endpoint));
 		_endpoint = endpoint.Trim();
 		_serviceAccessor = serviceAccessor ?? throw new ArgumentNullException(nameof(serviceAccessor));
+		_sessionDrainTimeout = sessionDrainTimeout ?? DefaultSessionDrainTimeout;
+		if (_sessionDrainTimeout <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(sessionDrainTimeout));
 	}
 
 	public string Endpoint => _endpoint;
 	public string HostInstanceId => _hostInstanceId;
+	public ulong StateVersion => _stateVersion.Value;
 	public bool Running => _acceptLoop is { IsCompleted: false };
+	public HostIpcSessionSnapshot Sessions => _sessions.Snapshot;
 
 	public Task StartAsync(CancellationToken cancellationToken = default)
 	{
 		if (_acceptLoop is not null) throw new InvalidOperationException("AIHost IPC server has already been started.");
-		var linked = CancellationTokenSource.CreateLinkedTokenSource(_stop.Token, cancellationToken);
-		_acceptLoop = AcceptLoopAsync(linked.Token);
+		_runStop = CancellationTokenSource.CreateLinkedTokenSource(_stop.Token, cancellationToken);
+		_acceptLoop = AcceptLoopAsync(_runStop.Token);
 		return Task.CompletedTask;
 	}
 
 	public async ValueTask DisposeAsync()
 	{
 		_stop.Cancel();
+		_runStop?.Cancel();
 		if (_acceptLoop is not null)
 		{
 			try { await _acceptLoop.ConfigureAwait(false); }
 			catch (OperationCanceledException) { }
 		}
+
+		var drain = await _sessions.StopAndDrainAsync(_sessionDrainTimeout).ConfigureAwait(false);
+		if (drain.Status == HostIpcSessionDrainStatus.TimedOut)
+			throw new TimeoutException($"AIHost IPC did not drain {drain.Snapshot.ActiveSessions} active session(s) within {_sessionDrainTimeout}.");
+
+		_runStop?.Dispose();
 		_stop.Dispose();
 	}
 
@@ -65,7 +83,8 @@ public sealed class AIHostIpcServer : IAsyncDisposable
 			try
 			{
 				await pipe.WaitForConnectionAsync(cancellationToken).ConfigureAwait(false);
-				_ = HandleConnectionAsync(pipe, cancellationToken);
+				if (!_sessions.TryStart(sessionToken => HandleConnectionAsync(pipe, sessionToken)))
+					pipe.Dispose();
 			}
 			catch
 			{
@@ -113,7 +132,7 @@ public sealed class AIHostIpcServer : IAsyncDisposable
 						helloEnvelope.RequestId,
 						helloEnvelope.CorrelationId,
 						_hostInstanceId,
-						_stateVersion,
+						StateVersion,
 						NextSequence(),
 						new ServerHello(
 							ProtocolVersion,
@@ -177,7 +196,7 @@ public sealed class AIHostIpcServer : IAsyncDisposable
 					var execution = request.Payload.Deserialize<WireExecutionRequest>(Wire.JsonOptions)
 						?? throw new InvalidDataException("AI execution request payload is required.");
 					var result = await service.ExecuteAsync(FromWire(execution), cancellationToken).ConfigureAwait(false);
-					_stateVersion++;
+					AdvanceStateVersion();
 					return Success(request, "ai.inference.execute.response", ToWire(result, service));
 				}
 				default:
@@ -191,17 +210,26 @@ public sealed class AIHostIpcServer : IAsyncDisposable
 	}
 
 	private WireEnvelope Success(WireEnvelope request, string messageType, object payload) =>
-		Wire.Create(messageType, request.RequestId, request.CorrelationId, _hostInstanceId, _stateVersion, NextSequence(), payload);
+		Wire.Create(messageType, request.RequestId, request.CorrelationId, _hostInstanceId, StateVersion, NextSequence(), payload);
 
 	private WireEnvelope Error(WireEnvelope request, string code, string message) =>
-		Wire.Create("error", request.RequestId, request.CorrelationId, _hostInstanceId, _stateVersion, NextSequence(), new WireFailure(code, message));
+		Wire.Create("error", request.RequestId, request.CorrelationId, _hostInstanceId, StateVersion, NextSequence(), new WireFailure(code, message));
 
 	private Task WriteErrorAsync(Stream stream, WireEnvelope request, string code, string message, CancellationToken cancellationToken) =>
 		Wire.WriteAsync(stream, Error(request, code, message), cancellationToken);
 
-	private ulong NextSequence() => _sequence == ulong.MaxValue
-		? throw new InvalidOperationException("AIHost IPC sequence exhausted.")
-		: ++_sequence;
+	private ulong NextSequence()
+	{
+		if (!_sequence.TryIncrement(out var sequence))
+			throw new InvalidOperationException("AIHost IPC sequence exhausted.");
+		return sequence;
+	}
+
+	private void AdvanceStateVersion()
+	{
+		if (!_stateVersion.TryIncrement(out _))
+			throw new InvalidOperationException("AIHost remote StateVersion is exhausted.");
+	}
 
 	private static WireCapability ToWire(InferenceCapabilityDescriptor capability) =>
 		new(capability.Version.ToString(), capability.CapabilityId.ToString(), capability.Kind, capability.AcceptsVideoFrames);

@@ -1,6 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 using rtaime.AI;
+using rtaime.Core;
 
 namespace rtaime.AIHost;
 
@@ -170,7 +171,10 @@ public sealed class AIHostProcess
 			_options.Validate();
 			_service = _serviceFactory(_options.Limits)
 				?? throw new InvalidOperationException("AI service factory returned null.");
-			_ipcServer = new AIHostIpcServer(_options.ListenEndpoint, () => _service);
+			_ipcServer = new AIHostIpcServer(
+				_options.ListenEndpoint,
+				() => _service,
+				HostIpcSessionTracker.DrainIntervalForHost(_options.ShutdownTimeout));
 			await _ipcServer.StartAsync(cancellationToken).ConfigureAwait(false);
 		}
 		catch (ArgumentException exception)

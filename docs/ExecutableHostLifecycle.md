@@ -163,4 +163,22 @@ Every connection performs Protocol/Role/Contract handshake before application me
 
 The IPC plane transports commands, descriptors, state, capabilities, opaque handles and observations only. Bulk media payloads remain outside management IPC.
 
+### Accepted-session shutdown
+
+Accepted Named Pipe connections are owned sessions, not detached background work. RuntimeHost primary control IPC, RuntimeHost monitoring IPC, ControlHost and AIHost all use the same lifecycle invariant:
+
+```text
+stop accepting new connections
+  -> cancel tracked accepted sessions
+  -> wait for cooperative session completion within a bounded drain interval
+  -> report drain timeout/failure if sessions remain
+  -> dispose services and resources used by those sessions
+```
+
+Only active sessions are retained by the tracker; a completed handler is removed immediately. Handler exceptions are observed by the session owner and exposed as bounded/redacted support evidence instead of becoming unobserved task failures. RuntimeHost monitoring subscriptions are tracked with the same rule as management sessions, so a long-lived monitoring connection is cancelled and drained before the Runtime monitoring/runtime resources it uses are disposed.
+
+The component-level session drain is bounded and remains subordinate to each process' configured shutdown timeout. Production composition assigns at most two seconds and at most half of the configured host shutdown budget to accepted-session drain, leaving the remaining host budget for dependent subsystem disposal. A cooperative drain reaches `Stopped`; a session that does not terminate before the bound produces shutdown/drain failure rather than allowing dependent service disposal to race the still-running handler. A hard process termination remains outside graceful-drain semantics.
+
+Support snapshots expose active, started, completed and faulted IPC session counts together with stop-requested and drain-timeout state. RuntimeHost reports primary and monitoring session evidence separately.
+
 Detailed wire/StateVersion/idempotency semantics are documented in `docs/ProductionIpcRemoteApi.md`. Durable storage semantics are documented in `docs/DurablePersistenceAndJournal.md`. Process-failure, reconnect and reconciliation semantics are documented in `docs/ProcessRecoveryAndSupervision.md`.

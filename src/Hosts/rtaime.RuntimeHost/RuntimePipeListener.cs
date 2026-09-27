@@ -26,12 +26,15 @@ internal sealed class RuntimePipeListener : IAsyncDisposable
 {
 	private const int MaxConsecutiveRecoverableAcceptFailures = 3;
 	private static readonly TimeSpan RecoverableAcceptRetryDelay = TimeSpan.FromMilliseconds(25);
+	private static readonly TimeSpan DefaultSessionDrainTimeout = HostIpcSessionTracker.MaximumDrainInterval;
 
 	private readonly object _gate = new();
 	private readonly string _endpoint;
 	private readonly string _role;
 	private readonly Func<NamedPipeServerStream> _pipeFactory;
 	private readonly Func<NamedPipeServerStream, CancellationToken, Task> _connectionHandler;
+	private readonly HostIpcSessionTracker _sessions = new();
+	private readonly TimeSpan _sessionDrainTimeout;
 	private readonly CancellationTokenSource _stop = new();
 	private CancellationTokenSource? _runStop;
 	private Task? _completion;
@@ -43,7 +46,8 @@ internal sealed class RuntimePipeListener : IAsyncDisposable
 		string endpoint,
 		string role,
 		Func<NamedPipeServerStream> pipeFactory,
-		Func<NamedPipeServerStream, CancellationToken, Task> connectionHandler)
+		Func<NamedPipeServerStream, CancellationToken, Task> connectionHandler,
+		TimeSpan? sessionDrainTimeout = null)
 	{
 		if (string.IsNullOrWhiteSpace(endpoint)) throw new ArgumentException("Listener endpoint is required.", nameof(endpoint));
 		if (string.IsNullOrWhiteSpace(role)) throw new ArgumentException("Listener role is required.", nameof(role));
@@ -51,6 +55,8 @@ internal sealed class RuntimePipeListener : IAsyncDisposable
 		_role = role.Trim();
 		_pipeFactory = pipeFactory ?? throw new ArgumentNullException(nameof(pipeFactory));
 		_connectionHandler = connectionHandler ?? throw new ArgumentNullException(nameof(connectionHandler));
+		_sessionDrainTimeout = sessionDrainTimeout ?? DefaultSessionDrainTimeout;
+		if (_sessionDrainTimeout <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(sessionDrainTimeout));
 		_snapshot = CreateSnapshot(RuntimePipeListenerState.Created, null);
 	}
 
@@ -93,6 +99,8 @@ internal sealed class RuntimePipeListener : IAsyncDisposable
 		}
 	}
 
+	public HostIpcSessionSnapshot Sessions => _sessions.Snapshot;
+
 	public Task StartAsync(CancellationToken cancellationToken = default)
 	{
 		lock (_gate)
@@ -125,6 +133,16 @@ internal sealed class RuntimePipeListener : IAsyncDisposable
 		_stop.Cancel();
 		_runStop?.Cancel();
 		await Completion.ConfigureAwait(false);
+
+		var drain = await _sessions.StopAndDrainAsync(_sessionDrainTimeout).ConfigureAwait(false);
+		if (drain.Status == HostIpcSessionDrainStatus.TimedOut)
+		{
+			var timeout = new TimeoutException(
+				$"Listener '{_role}' did not drain {drain.Snapshot.ActiveSessions} active IPC session(s) within {_sessionDrainTimeout}.");
+			var snapshot = SetFaulted(timeout);
+			NotifyTerminalFault(snapshot, timeout);
+			throw timeout;
+		}
 
 		lock (_gate)
 		{
@@ -170,7 +188,8 @@ internal sealed class RuntimePipeListener : IAsyncDisposable
 
 				var accepted = pipe;
 				pipe = null;
-				_ = _connectionHandler(accepted, cancellationToken);
+				if (!_sessions.TryStart(sessionToken => _connectionHandler(accepted, sessionToken)))
+					accepted.Dispose();
 			}
 			catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
 			{
