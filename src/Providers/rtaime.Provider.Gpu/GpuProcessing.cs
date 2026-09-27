@@ -619,6 +619,8 @@ public sealed class GpuProcessingProvider : IDisposable
     private readonly Dictionary<SurfaceId, GpuFrame> _activeFrames = new();
     private readonly HashSet<SurfaceId> _unreleasedBackendSurfaces = new();
     private readonly BoundedDiagnosticHistory<GpuObservation> _observations = new(RetainedObservationCapacity);
+    private int _observableActiveSurfaceCount;
+    private int _observableUnreleasedBackendSurfaceCount;
     private GpuProviderState _state = GpuProviderState.Stopped;
     private ulong _surfaceOrdinal;
     private ulong _observationOrdinal;
@@ -642,23 +644,10 @@ public sealed class GpuProcessingProvider : IDisposable
         }
     }
 
-    public int ActiveSurfaceCount
-    {
-        get
-        {
-            lock (_gate)
-                return checked(_activeFrames.Count + _unreleasedBackendSurfaces.Count);
-        }
-    }
+    public int ActiveSurfaceCount => Volatile.Read(ref _observableActiveSurfaceCount);
 
-    public int UnreleasedBackendSurfaceCount
-    {
-        get
-        {
-            lock (_gate)
-                return _unreleasedBackendSurfaces.Count;
-        }
-    }
+    public int UnreleasedBackendSurfaceCount =>
+        Volatile.Read(ref _observableUnreleasedBackendSurfaceCount);
 
     public IReadOnlyList<GpuObservation> Observations => _observations.Snapshot();
     public ulong OverwrittenObservationCount => _observations.OverwrittenCount;
@@ -705,11 +694,13 @@ public sealed class GpuProcessingProvider : IDisposable
             }
 
             _activeFrames.Clear();
+            PublishResourceCountsUnsafe();
             foreach (var surfaceId in _unreleasedBackendSurfaces.ToArray())
                 TryReleaseBackendSurface(surfaceId);
 
             _backend.Stop();
             _unreleasedBackendSurfaces.Clear();
+            PublishResourceCountsUnsafe();
             _state = GpuProviderState.Stopped;
             Observe("gpu.provider.stopped", null, null);
         }
@@ -761,6 +752,7 @@ public sealed class GpuProcessingProvider : IDisposable
 
             var frame = new GpuFrame(descriptor, ReleaseFrame);
             _activeFrames.Add(surfaceId, frame);
+            PublishResourceCountsUnsafe();
             Observe("gpu.surface.allocated", timing.SequenceNumber, null);
             return frame;
         }
@@ -870,6 +862,7 @@ public sealed class GpuProcessingProvider : IDisposable
 
                 var frame = new GpuFrame(descriptor, ReleaseFrame);
                 _activeFrames.Add(outputSurfaceId, frame);
+                PublishResourceCountsUnsafe();
                 Observe(
                     request.Transition.Kind == GpuTransitionKind.Cut ? "gpu.composite.cut" : "gpu.composite.dissolve",
                     timing.SequenceNumber,
@@ -1008,6 +1001,7 @@ public sealed class GpuProcessingProvider : IDisposable
         {
             if (_activeFrames.Remove(frame.SurfaceId))
             {
+                PublishResourceCountsUnsafe();
                 TryReleaseBackendSurface(frame.SurfaceId);
                 Observe("gpu.surface.released", frame.Descriptor.Timing.SequenceNumber, null);
             }
@@ -1020,17 +1014,29 @@ public sealed class GpuProcessingProvider : IDisposable
         {
             _backend.Release(surfaceId);
             _unreleasedBackendSurfaces.Remove(surfaceId);
+            PublishResourceCountsUnsafe();
             return true;
         }
         catch (Exception exception)
         {
             _unreleasedBackendSurfaces.Add(surfaceId);
+            PublishResourceCountsUnsafe();
             Observe(
                 "gpu.surface.release_failed",
                 null,
                 new Failure("gpu.surface.release_failed", $"GPU surface release failed: {exception.GetType().Name}."));
             return false;
         }
+    }
+
+    private void PublishResourceCountsUnsafe()
+    {
+        Volatile.Write(
+            ref _observableActiveSurfaceCount,
+            checked(_activeFrames.Count + _unreleasedBackendSurfaces.Count));
+        Volatile.Write(
+            ref _observableUnreleasedBackendSurfaceCount,
+            _unreleasedBackendSurfaces.Count);
     }
 
     private static ProviderDescriptor CreateDescriptor(GpuBackendInfo info)
