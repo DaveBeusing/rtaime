@@ -83,17 +83,16 @@ public static class MediaPixelInspection
 			bitmap.Format != System.Windows.Media.PixelFormats.Pbgra32)
 			return MediaPixelSample.Unsupported(coordinate, $"Sampling unsupported for {bitmap.Format}");
 
-		Span<byte> pixel = stackalloc byte[4];
+		var pixel = new byte[4];
 		bitmap.CopyPixels(
 			new System.Windows.Int32Rect(coordinate.X, coordinate.Y, 1, 1),
-			pixel.ToArray(),
+			pixel,
 			4,
 			0);
-		var bytes = pixel.ToArray();
-		var red = bytes[2];
-		var green = bytes[1];
-		var blue = bytes[0];
-		var alpha = bytes[3];
+		var red = pixel[2];
+		var green = pixel[1];
+		var blue = pixel[0];
+		var alpha = pixel[3];
 		var luma = 0.2126 * red + 0.7152 * green + 0.0722 * blue;
 		return new MediaPixelSample(coordinate, true, red, green, blue, alpha, luma, MediaInspectionValueSpace.DisplayCodeValues, "BGRA32 display sample");
 	}
