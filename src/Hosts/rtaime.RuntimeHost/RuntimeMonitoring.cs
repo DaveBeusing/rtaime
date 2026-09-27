@@ -173,6 +173,13 @@ public readonly record struct RuntimeMonitoringTapStatistics(
 	ulong DroppedBeforeProcessing,
 	ulong Processed);
 
+internal sealed record RuntimeMonitoringSourceSnapshot(
+	MediaSourceId SourceAId,
+	byte[] SourceA,
+	MediaSourceId SourceBId,
+	byte[] SourceB,
+	FrameTiming Timing);
+
 public sealed class RuntimeMonitoringTap : IAsyncDisposable
 {
 	public const uint MonitorWidth = 320;
@@ -201,6 +208,25 @@ public sealed class RuntimeMonitoringTap : IAsyncDisposable
 		get { lock (_gate) return new RuntimeMonitoringTapStatistics(_captured, _dropped, _processed); }
 	}
 
+	internal RuntimeMonitoringSourceSnapshot? CaptureSources(
+		MediaSourceId sourceAId,
+		ReadOnlyMemory<byte> sourceA,
+		MediaSourceId sourceBId,
+		ReadOnlyMemory<byte> sourceB,
+		VideoFormat sourceFormat,
+		FrameTiming timing)
+	{
+		if (!_hub.HasSubscribers || timing.SequenceNumber % SampleStride != 0)
+			return null;
+
+		return new RuntimeMonitoringSourceSnapshot(
+			sourceAId,
+			DownscaleRgbaNearest(sourceA.Span, sourceFormat.Width, sourceFormat.Height, MonitorWidth, MonitorHeight),
+			sourceBId,
+			DownscaleRgbaNearest(sourceB.Span, sourceFormat.Width, sourceFormat.Height, MonitorWidth, MonitorHeight),
+			timing);
+	}
+
 	public bool TryCapture(
 		MediaSourceId sourceAId,
 		ReadOnlyMemory<byte> sourceA,
@@ -211,14 +237,25 @@ public sealed class RuntimeMonitoringTap : IAsyncDisposable
 		VideoFormat sourceFormat,
 		FrameTiming timing)
 	{
-		if (!_hub.HasSubscribers || timing.SequenceNumber % SampleStride != 0) return false;
+		var sources = CaptureSources(sourceAId, sourceA, sourceBId, sourceB, sourceFormat, timing);
+		return TryCapture(sources, committedProgramSourceId, program, sourceFormat, timing);
+	}
+
+	internal bool TryCapture(
+		RuntimeMonitoringSourceSnapshot? sources,
+		MediaSourceId committedProgramSourceId,
+		GpuReadbackLease program,
+		VideoFormat sourceFormat,
+		FrameTiming timing)
+	{
+		if (sources is null) return false;
 		var retainedProgram = program.Retain();
 		MonitoringBoundarySample? replaced = null;
 		var sample = new MonitoringBoundarySample(
-			sourceAId,
-			sourceA,
-			sourceBId,
-			sourceB,
+			sources.SourceAId,
+			sources.SourceA,
+			sources.SourceBId,
+			sources.SourceB,
 			committedProgramSourceId,
 			retainedProgram,
 			sourceFormat,
@@ -282,12 +319,29 @@ public sealed class RuntimeMonitoringTap : IAsyncDisposable
 			using (sample.Program)
 			{
 				if (!_hub.HasSubscribers) continue;
-				Publish(sample.SourceAId, MonitoringStreamKind.Source, sample.SourceA.Span, sample.Format, sample.Timing);
-				Publish(sample.SourceBId, MonitoringStreamKind.Source, sample.SourceB.Span, sample.Format, sample.Timing);
+				PublishPrepared(sample.SourceAId, MonitoringStreamKind.Source, sample.SourceA, sample.Timing);
+				PublishPrepared(sample.SourceBId, MonitoringStreamKind.Source, sample.SourceB, sample.Timing);
 				Publish(sample.ProgramSourceId, MonitoringStreamKind.Program, sample.Program.Memory.Span, sample.Format, sample.Timing);
 				lock (_gate) _processed++;
 			}
 		}
+	}
+
+	private void PublishPrepared(
+		MediaSourceId sourceId,
+		MonitoringStreamKind kind,
+		byte[] pixels,
+		FrameTiming timing)
+	{
+		var descriptor = new MonitoringFrameDescriptor(
+			MonitoringContractVersion.Current,
+			kind,
+			sourceId,
+			MonitorWidth,
+			MonitorHeight,
+			PixelFormat.Rgba8,
+			timing);
+		_hub.Publish(new MonitoringFrame(descriptor, pixels));
 	}
 
 	private void Publish(
@@ -336,9 +390,9 @@ public sealed class RuntimeMonitoringTap : IAsyncDisposable
 
 	private sealed record MonitoringBoundarySample(
 		MediaSourceId SourceAId,
-		ReadOnlyMemory<byte> SourceA,
+		byte[] SourceA,
 		MediaSourceId SourceBId,
-		ReadOnlyMemory<byte> SourceB,
+		byte[] SourceB,
 		MediaSourceId ProgramSourceId,
 		GpuReadbackLease Program,
 		VideoFormat Format,

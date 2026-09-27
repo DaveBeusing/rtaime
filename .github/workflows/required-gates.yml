@@ -152,6 +152,10 @@ jobs:
         shell: pwsh
         run: ./build/quality/Test-ProgramFrameMemoryOwnershipPolicy.ps1
 
+      - name: Verify deterministic Runtime boundary policy
+        shell: pwsh
+        run: ./build/quality/Test-DeterministicRuntimeBoundaryPolicy.ps1
+
       - name: Verify CUDA qualification policy
         shell: pwsh
         run: ./build/quality/Test-CudaQualificationPolicy.ps1

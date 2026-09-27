@@ -104,6 +104,86 @@ public sealed class ProgramFrameMemoryOwnershipTests
 		}
 	}
 
+	[Fact]
+	public async Task Sustained_runtime_boundary_workload_keeps_resources_and_retention_bounded()
+	{
+		await using var fixture = CreateFixture(new NoopRecordingWriter());
+		await using var monitoring = fixture.Runtime.MonitoringHub.Subscribe(capacity: 2);
+		var longMode = string.Equals(
+			Environment.GetEnvironmentVariable("RTAIME_RUNTIME_BOUNDARY_SOAK_LONG"),
+			"1",
+			StringComparison.Ordinal);
+		var boundaryCount = longMode ? 640 : 96;
+		const int allocationWarmupBoundaries = 16;
+		long measuredAllocatedBytes = 0;
+		var measuredBoundaryCount = 0;
+
+		var recording = await fixture.Runtime.StartRecordingAsync(
+			RecordingSessionId.New(),
+			RecordingOutputId.New());
+		Assert.True(recording.Succeeded, recording.Failure?.ToString());
+
+		for (var index = 0; index < boundaryCount; index++)
+		{
+			if (index % 16 == 0)
+			{
+				fixture.Runtime.SetVisualLayerMode(
+					(index / 16) % 2 == 0
+						? V1VisualLayerMode.Static
+						: V1VisualLayerMode.Disabled);
+			}
+
+			var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+			using var boundary = fixture.Runtime.ProcessNextBoundary();
+			var allocatedAfter = GC.GetAllocatedBytesForCurrentThread();
+			if (index >= allocationWarmupBoundaries)
+			{
+				measuredAllocatedBytes += Math.Max(0, allocatedAfter - allocatedBefore);
+				measuredBoundaryCount++;
+			}
+			Assert.Equal((ulong)index, boundary.SequenceNumber);
+			Assert.InRange(
+				fixture.Runtime.ProgramReadbackPoolStatistics.ActiveBuffers,
+				0,
+				V1RuntimeHostService.ProgramReadbackBufferCapacity);
+
+			if (index == boundaryCount / 3)
+			{
+				var stopped = await fixture.Runtime.StopRecordingAsync();
+				Assert.Equal(RecordingStopStatus.Stopped, stopped.Status);
+			}
+			else if (index == boundaryCount / 2)
+			{
+				var restarted = await fixture.Runtime.StartRecordingAsync(
+					RecordingSessionId.New(),
+					RecordingOutputId.New());
+				Assert.True(restarted.Succeeded, restarted.Failure?.ToString());
+			}
+		}
+
+		if (fixture.Runtime.Snapshot.Recording.State == RecordingLifecycleState.Recording)
+		{
+			var stopped = await fixture.Runtime.StopRecordingAsync();
+			Assert.Equal(RecordingStopStatus.Stopped, stopped.Status);
+		}
+
+		var snapshot = fixture.Runtime.Snapshot;
+		Assert.Equal((ulong)boundaryCount, snapshot.NextSequenceNumber);
+		Assert.Equal(0, snapshot.ActiveGpuSurfaces);
+		Assert.True(fixture.Runtime.RecentObservations(int.MaxValue).Count <= V1RuntimeHostService.RetainedObservationCapacity);
+		Assert.Equal(0, fixture.Runtime.ProgramReadbackPoolStatistics.ActiveBuffers);
+		Assert.True(fixture.Runtime.ProgramReadbackPoolStatistics.AllocatedBuffers <= V1RuntimeHostService.ProgramReadbackBufferCapacity);
+		Assert.True(measuredBoundaryCount > 0);
+		var averageAllocatedBytesPerBoundary = measuredAllocatedBytes / measuredBoundaryCount;
+		var fullFrameBytes = RgbaFrameBuffer.RequiredByteLength(VideoFormat.Hd1080p50Rgba8);
+		Assert.True(
+			averageAllocatedBytesPerBoundary < fullFrameBytes / 2L,
+			$"Steady-state Runtime allocation averaged '{averageAllocatedBytesPerBoundary}' bytes per boundary, indicating full-frame allocation regression.");
+		Assert.Contains(snapshot.OutputRoles!, role => role.RoleId == "program");
+		Assert.Contains(snapshot.OutputRoles!, role => role.RoleId == "aux");
+		Assert.True(monitoring.DroppedFrames > 0);
+	}
+
 	private static Fixture CreateFixture(IProgramRecordingWriter writer)
 	{
 		var format = VideoFormat.Hd1080p50Rgba8;
@@ -120,7 +200,12 @@ public sealed class ProgramFrameMemoryOwnershipTests
 				new ProductionSourceSpecification(sourceA, "Input 1"),
 				new ProductionSourceSpecification(sourceB, "Input 2")
 			},
-			new ProductionRoutingState(sourceA, sourceA));
+			new ProductionRoutingState(sourceA, sourceA),
+			initialOutputRoles: new[]
+			{
+				ProductionOutputRoleState.Program(sourceA),
+				ProductionOutputRoleState.Aux(sourceB)
+			});
 
 		var runtime = new V1RuntimeHostService(mediaA, mediaB, format, writer);
 		var journal = new BoundedProductionJournal(64);

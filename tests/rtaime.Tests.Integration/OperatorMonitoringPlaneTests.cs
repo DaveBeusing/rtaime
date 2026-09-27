@@ -83,6 +83,58 @@ public sealed class OperatorMonitoringPlaneTests
 	}
 
 	[Fact]
+	public async Task Monitoring_source_snapshot_does_not_observe_later_mutation()
+	{
+		using var hub = new RuntimeMonitoringHub();
+		await using var subscription = hub.Subscribe(capacity: 4);
+		await using var tap = new RuntimeMonitoringTap(hub);
+		var format = new VideoFormat(4, 2, FrameRate.Fps50, PixelFormat.Rgba8, ScanMode.Progressive);
+		var timing = new FrameTiming(0, 0, new Timebase(1, 50));
+		var sourceA = Solid(format, 10, 20, 30);
+		var sourceB = Solid(format, 40, 50, 60);
+
+		using var gpu = new GpuProcessingProvider(new ManagedReferenceGpuBackend());
+		gpu.Start();
+		using var programFrame = gpu.Upload(
+			SourceB,
+			new RgbaFrameBuffer(format, Solid(format, 70, 80, 90)),
+			timing,
+			Generation.Initial,
+			"monitoring-aliasing-test");
+		using var programPixels = gpu.RentReadback(programFrame);
+
+		var capturedSources = tap.CaptureSources(
+			SourceA,
+			sourceA,
+			SourceB,
+			sourceB,
+			format,
+			timing);
+		Assert.NotNull(capturedSources);
+
+		Array.Fill(sourceA, (byte)255);
+		Array.Fill(sourceB, (byte)0);
+		Assert.True(tap.TryCapture(capturedSources, SourceB, programPixels, format, timing));
+
+		using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+		var frames = new[]
+		{
+			await subscription.ReadAsync(timeout.Token),
+			await subscription.ReadAsync(timeout.Token),
+			await subscription.ReadAsync(timeout.Token)
+		};
+
+		var publishedA = Assert.Single(frames, frame =>
+			frame.Descriptor.StreamKind == MonitoringStreamKind.Source &&
+			frame.Descriptor.SourceId == SourceA);
+		var publishedB = Assert.Single(frames, frame =>
+			frame.Descriptor.StreamKind == MonitoringStreamKind.Source &&
+			frame.Descriptor.SourceId == SourceB);
+		Assert.Equal((byte)10, publishedA.Pixels.Span[0]);
+		Assert.Equal((byte)40, publishedB.Pixels.Span[0]);
+	}
+
+	[Fact]
 	public async Task Dedicated_named_pipe_monitoring_transport_delivers_frames_without_control_transport()
 	{
 		using var hub = new RuntimeMonitoringHub();

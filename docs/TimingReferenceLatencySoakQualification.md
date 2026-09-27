@@ -38,7 +38,7 @@ The probe does not stop execution, change routing, mutate desired state or creat
 
 ## RuntimeHost live wiring
 
-RuntimeHost owns the live scheduler evidence because the `PeriodicTimer` is the cadence boundary. The process creates one `RuntimeTimingQualificationProbe` from the active V1 frame rate, records the scheduler observation time plus the actual committed-boundary processing duration, and maps the resulting state into `V1RuntimeHostSnapshot.TimingHealth`.
+RuntimeHost owns the live scheduler evidence because one `PeriodicTimer` is the single V1 production cadence boundary. Local media-deck admission no longer runs from an independent production timer: one coherent deck video/audio result is admitted immediately before the Program boundary driven by that cadence. The process creates one `RuntimeTimingQualificationProbe` from the active V1 frame rate, records the scheduler observation time plus the actual committed-boundary processing duration, and maps the resulting state into `V1RuntimeHostSnapshot.TimingHealth`.
 
 `V1RuntimeHostService` therefore starts timing health as `Recovering`; it is no longer hardcoded to `Healthy`. Only measured scheduler observations can move it to `Healthy`, `Degraded`, `Unstable` or `Lost`.
 
@@ -50,6 +50,14 @@ The default V1 software thresholds are intentionally conservative:
 - retained observations: 2,048 committed boundaries in the RuntimeHost process.
 
 These defaults are operational health thresholds, not a physical-platform certification claim.
+
+## Deterministic boundary software evidence
+
+Required Gates additionally protect the single-cadence Runtime architecture with focused regressions for boundary-time execution serialization, read-only snapshot responsiveness during deliberately blocked GPU composite work, monitoring source temporal aliasing, bounded Program-frame ownership and sustained Runtime resource retention.
+
+The CI-sized Runtime boundary soak exercises Program and Aux output, monitoring, recording cycles and control-state changes across repeated 1080p boundaries. Setting `RTAIME_RUNTIME_BOUNDARY_SOAK_LONG=1` expands that software lane for longer qualification runs. The generated local-media regression independently exercises sustained decoded playback and looping beyond five seconds, while executable-host and IPC lifecycle tests retain restart/recovery evidence.
+
+These software lanes prove architecture and bounded-resource behavior only. They do not qualify physical cadence, CUDA deadlines, AJA timing/reference, physical A/V synchronization, physical end-to-end latency or long-duration reference-hardware stability.
 
 ## Layer 2: external reference observation
 
