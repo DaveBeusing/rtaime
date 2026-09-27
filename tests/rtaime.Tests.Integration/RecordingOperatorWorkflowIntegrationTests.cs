@@ -76,6 +76,7 @@ public sealed class RecordingOperatorWorkflowIntegrationTests
 			Assert.Equal(firstPath, completed.FinalPath);
 			Assert.Equal(revisionBeforeRecording, client.Snapshot.Production.Revision);
 			Assert.Equal(RuntimeExecutionStatus.Committed, runtime.Runtime!.Snapshot.Runtime.Status);
+			await WaitUntilAsync(() => runtime.Runtime.Snapshot.ActiveGpuSurfaces == 0);
 			Assert.Equal(0, runtime.Runtime.Snapshot.ActiveGpuSurfaces);
 
 			var secondPath = await RecordOneAsync(client, runtime, destination, "ap53-program-02");
@@ -84,6 +85,7 @@ public sealed class RecordingOperatorWorkflowIntegrationTests
 			Assert.NotEqual(firstPath, secondPath);
 			Assert.True(File.Exists(firstPath));
 			Assert.True(File.Exists(secondPath));
+			await WaitUntilAsync(() => runtime.Runtime.Snapshot.ActiveGpuSurfaces == 0);
 			Assert.Equal(0, runtime.Runtime.Snapshot.ActiveGpuSurfaces);
 			Assert.Equal(revisionBeforeRecording, client.Snapshot!.Production.Revision);
 		}
