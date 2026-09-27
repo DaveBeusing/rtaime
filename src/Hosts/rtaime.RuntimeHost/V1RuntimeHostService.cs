@@ -796,6 +796,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				AvSyncAudioEventObservation? audioSyncEvent;
 				V1VisualLayerMode visualLayerMode;
 				RuntimeMonitoringSourceSnapshot? monitoringSources;
+				bool recordingActive;
 
 				lock (_gate)
 				{
@@ -899,6 +900,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 					visualLayerMode = (_operatorGraphicsVisible || _productionCgText.Visible)
 						? V1VisualLayerMode.Static
 						: _visualLayerMode;
+					recordingActive = _recorder.Snapshot.State == RecordingLifecycleState.Recording;
 				}
 
 				GpuProcessingResult composite;
@@ -942,7 +944,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 						output.Descriptor.Timing);
 
 					RecordingEnqueueResult? recording = null;
-					if (_recorder.Snapshot.State == RecordingLifecycleState.Recording)
+					if (recordingActive)
 					{
 						var payloadStaged = false;
 						if (_recordingPayloadWriter is not null)
