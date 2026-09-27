@@ -65,6 +65,53 @@ public sealed class BroadcastTestPatternGeneratorTests
 		Assert.Equal((byte)16, nearBlack.Blue);
 	}
 
+
+	[Fact]
+	public void Generator_preserves_exact_reference_ramp_pixels_outside_annotations()
+	{
+		var format = VideoFormat.Hd1080p50Rgba8;
+		var generator = new BroadcastTestPatternGenerator(new BroadcastTestPatternConfiguration(format));
+
+		const uint sampleX = 1000;
+		const uint sampleY = 640;
+		var expected = (byte)Math.Round(sampleX * 255d / (format.Width - 1));
+		var pixel = generator.GetPixel(sampleX, sampleY);
+
+		Assert.Equal(expected, pixel.Red);
+		Assert.Equal(expected, pixel.Green);
+		Assert.Equal(expected, pixel.Blue);
+		Assert.Equal((byte)255, pixel.Alpha);
+	}
+
+	[Fact]
+	public void Generator_uses_antialiased_annotation_coverage_without_changing_frame_format()
+	{
+		var format = VideoFormat.Hd1080p50Rgba8;
+		var generator = new BroadcastTestPatternGenerator(new BroadcastTestPatternConfiguration(format));
+
+		Assert.Equal(1920u, format.Width);
+		Assert.Equal(1080u, format.Height);
+		Assert.Equal(checked((int)(1920u * 1080u * 4u)), generator.Pixels.Length);
+
+		var hasBlendedHeaderPixel = false;
+		for (uint y = 8; y < 67 && !hasBlendedHeaderPixel; y++)
+		{
+			for (uint x = 48; x < 760; x++)
+			{
+				var pixel = generator.GetPixel(x, y);
+				var isBlack = pixel.Red == 0 && pixel.Green == 0 && pixel.Blue == 0;
+				var isWhite = pixel.Red == 235 && pixel.Green == 235 && pixel.Blue == 235;
+				if (!isBlack && !isWhite)
+				{
+					hasBlendedHeaderPixel = true;
+					break;
+				}
+			}
+		}
+
+		Assert.True(hasBlendedHeaderPixel, "Expected antialiased annotation coverage in the header.");
+	}
+
 	[Fact]
 	public void Generated_source_reuses_static_pixels_and_preserves_normal_frame_timing()
 	{
