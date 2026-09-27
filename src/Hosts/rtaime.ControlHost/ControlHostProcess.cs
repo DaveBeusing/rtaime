@@ -537,7 +537,8 @@ public sealed class ControlHostProcess
 				new ShowControlPersistenceStore(_managementStore, showProjectStore, specification),
 				_mediaAssetCatalog,
 				showProjectStore,
-				showProject);
+				showProject,
+				HostIpcSessionTracker.DrainIntervalForHost(_options.ShutdownTimeout));
 		}
 		catch
 		{
