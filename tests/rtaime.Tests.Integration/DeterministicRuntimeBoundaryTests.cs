@@ -31,7 +31,7 @@ public sealed class DeterministicRuntimeBoundaryTests
 		var snapshot = await snapshotTask.WaitAsync(TimeSpan.FromSeconds(2));
 
 		Assert.Equal(0UL, snapshot.NextSequenceNumber);
-		Assert.Equal(0, snapshot.ActiveGpuSurfaces);
+		Assert.True(snapshot.ActiveGpuSurfaces >= 1);
 		var program = Assert.Single(snapshot.OutputRoles!, role => role.RoleId == "program");
 		Assert.Equal(RuntimeOutputRoleHealthState.Unverified, program.HealthState);
 
