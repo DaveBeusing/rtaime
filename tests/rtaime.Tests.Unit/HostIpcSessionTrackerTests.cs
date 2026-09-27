@@ -6,6 +6,16 @@ namespace rtaime.Tests.Unit;
 
 public sealed class HostIpcSessionTrackerTests
 {
+	[Theory]
+	[InlineData(1000, 500)]
+	[InlineData(10000, 2000)]
+	public void Host_drain_interval_stays_inside_shutdown_budget(int hostTimeoutMilliseconds, int expectedMilliseconds)
+	{
+		var interval = HostIpcSessionTracker.DrainIntervalForHost(TimeSpan.FromMilliseconds(hostTimeoutMilliseconds));
+
+		Assert.Equal(TimeSpan.FromMilliseconds(expectedMilliseconds), interval);
+	}
+
 	[Fact]
 	public async Task Stop_and_drain_cancels_cooperative_session_and_removes_it()
 	{
