@@ -33,23 +33,27 @@ The local-media provider retains its reusable decode/output storage. Boundary sy
 `V1RuntimeHostService` uses two distinct synchronization responsibilities:
 
 - `_boundaryExecutionGate` provides single-writer boundary execution and serializes committed execution replacement between Program boundaries.
-- `_gate` protects RuntimeHost state capture, configuration state and atomic boundary-result publication.
+- `_boundaryCaptureGate` serializes frame-affecting control/configuration mutations against the finite boundary-capture phase without blocking them for the later composite/readback/output phase.
+- `_gate` protects short metadata/state reads and atomic boundary-result publication.
 
-At boundary start, RuntimeHost captures the committed execution, Program binding, transition state, input descriptors/content, compositing inputs, audio routing state and the monitoring source sample needed by that boundary.
+At boundary start, RuntimeHost captures the committed execution and Program binding under the short metadata lock. While holding only the dedicated capture gate it then materializes the exact input frames, Aux submission, GPU input/layer surfaces, monitoring source snapshot and audio payload inputs for that boundary. Frame-affecting mutations arriving after this capture point are accepted for the next boundary and cannot partially alter the already captured frame.
 
-Heavy data-plane work then executes without holding `_gate`:
+Heavy data-plane work executes without holding the broad Runtime state lock:
 
+- GPU input/layer materialization;
+- Aux provider write;
+- audio payload generation and metering;
 - GPU composite;
 - reusable Program readback;
 - Program provider write;
 - monitoring enqueue;
 - recording payload staging/enqueue.
 
-The final short `_gate` section publishes the completed composition/timing state, transition completion and next Program sequence.
+AFV state advances only after GPU composition, readback and Program provider submission have succeeded. The final short `_gate` section publishes the completed audio/composition/timing state, Aux failure evidence, transition completion and next Program sequence.
 
 An execution apply that arrives while a boundary is running waits at `_boundaryExecutionGate`. It therefore cannot partially change the currently executing frame and becomes eligible only after the preceding boundary has completed.
 
-Read-only snapshots continue to use `_gate`, but no longer wait for the heavy GPU/readback/output section.
+Ordinary frame-affecting control mutations synchronize only with `_boundaryCaptureGate`: a mutation that wins the capture point is part of the current boundary; one that arrives after capture becomes visible to the next boundary. Read-only snapshots continue to use `_gate` and do not wait for GPU uploads, composite, readback, Program output or recording work.
 
 ## Output evidence publication
 
