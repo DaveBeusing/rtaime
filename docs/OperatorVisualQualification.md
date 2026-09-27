@@ -102,6 +102,27 @@ Required Gates execute the visual qualification as a dedicated Quality step:
 
 The complete solution test run also executes the same tests through the normal test graph.
 
+
+## Media viewport visual quality qualification
+
+`MediaViewportVisualQualityQualificationTests` extends the existing Operator visual/DPI qualification without introducing a second screenshot framework. The managed qualification separates deterministic presentation geometry and physical-pixel mapping from renderer-sensitive raster evidence.
+
+The automated matrix covers 720p, 1080p, 2160p/4K and synthetic 8K sources; 16:9, 4:3, portrait, square and 2048 × 858 non-standard aspect content; smaller, native and oversized viewport relationships; Fit, Fill, 100% physical-pixel inspection and representative zoom; and 100%, 125%, 150%, 175% and 200% Windows DPI scales.
+
+The suite qualifies these invariants:
+
+- Fit remains aspect-correct and entirely contained by the physical viewport.
+- Fill remains aspect-correct, covers the physical viewport and uses centered intentional cropping.
+- 100% maps one source pixel to one physical target pixel independently of WPF DPI scale.
+- a one-physical-pixel target error and an accidental second scaling stage are independently detectable.
+- the productive monitor template contains one media `Image` surface, uses high-quality bitmap scaling and device-pixel snapping, and contains no nested `Viewbox`.
+- rapid resize/DPI changes do not repeatedly adopt transient render targets; after the settle interval the final target is adopted once.
+- a stable 60 fps-equivalent sequence of 3,600 presentation requests retains one render-target revision, providing a deterministic resource-churn regression bound.
+
+These checks intentionally avoid pixel-identical GPU golden images in normal CI. Driver-sensitive raster evidence belongs to the existing reference-platform qualification strategy; normal Required Gates prove the renderer-independent geometry, scaling-path declaration and resource-lifetime contracts.
+
+Failure messages and matrix case names expose the source class, viewport, DPI and presentation mode at the failing assertion. The underlying geometry and render-target types retain the exact source/target dimensions, scale, quality and scaling-path semantics needed for diagnosis.
+
 ## Screenshot evidence
 
 Manual screenshots may be captured for showcase or release review, but they are evidence rather than CI baselines. They must use deterministic product/test content and must not become a renderer-sensitive merge gate.
