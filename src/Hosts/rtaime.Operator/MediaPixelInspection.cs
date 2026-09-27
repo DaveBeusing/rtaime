@@ -43,6 +43,8 @@ public readonly record struct MediaPixelSample(
 
 public static class MediaPixelInspection
 {
+	[ThreadStatic]
+	private static byte[]? _pixelBuffer;
 	public const double PixelGridMinimumScale = 8.0;
 
 	public static bool TryMapViewportToSource(
@@ -83,7 +85,7 @@ public static class MediaPixelInspection
 			bitmap.Format != System.Windows.Media.PixelFormats.Pbgra32)
 			return MediaPixelSample.Unsupported(coordinate, $"Sampling unsupported for {bitmap.Format}");
 
-		var pixel = new byte[4];
+		var pixel = _pixelBuffer ??= new byte[4];
 		bitmap.CopyPixels(
 			new System.Windows.Int32Rect(coordinate.X, coordinate.Y, 1, 1),
 			pixel,
