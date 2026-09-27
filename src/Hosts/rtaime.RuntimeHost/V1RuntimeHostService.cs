@@ -278,6 +278,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 
 	private readonly object _gate = new();
 	private readonly object _boundaryExecutionGate = new();
+	private readonly object _boundaryCaptureGate = new();
 	private readonly VideoFormat _format;
 	private readonly VirtualMediaReferenceProvider _virtualMedia;
 	private readonly MediaFramePipeline _sourceAPipeline;
@@ -797,32 +798,37 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				V1VisualLayerMode visualLayerMode;
 				RuntimeMonitoringSourceSnapshot? monitoringSources;
 				bool recordingActive;
+				Failure? auxFailure;
 
-				lock (_gate)
+				lock (_boundaryCaptureGate)
 				{
-					ThrowIfDisposed();
-					execution = _runtime.ActiveExecution ?? throw new InvalidOperationException("RuntimeHost requires a committed execution before processing media.");
-					var programSink = _programSinkId ?? throw new InvalidOperationException("RuntimeHost has no committed Program sink.");
-					var programBinding = execution.PreparedExecution.Bindings.SingleOrDefault(binding => binding.MediaSinkId == programSink)
-						?? throw new InvalidOperationException("Committed execution must contain exactly one Program binding.");
-					committedSource = programBinding.MediaSourceId
-						?? throw new InvalidOperationException("Committed Program binding must contain a media source.");
-					programOutput = _programOutput ?? throw new InvalidOperationException("RuntimeHost has no bound Program output.");
-					var routedAudioSource = _audio.ResolveAudioSource(committedSource);
-					avSyncEnabled = _audio.RoutingState.Mode == AudioRoutingMode.FollowVideo &&
-						IsAvSyncDiagnosticsEnabledUnsafe(committedSource);
-					if (!avSyncEnabled)
+					MediaSourceId routedAudioSource;
+					lock (_gate)
 					{
-						if (_avSyncDiagnosticsSourceId is not null)
+						ThrowIfDisposed();
+						execution = _runtime.ActiveExecution ?? throw new InvalidOperationException("RuntimeHost requires a committed execution before processing media.");
+						var programSink = _programSinkId ?? throw new InvalidOperationException("RuntimeHost has no committed Program sink.");
+						var programBinding = execution.PreparedExecution.Bindings.SingleOrDefault(binding => binding.MediaSinkId == programSink)
+							?? throw new InvalidOperationException("Committed execution must contain exactly one Program binding.");
+						committedSource = programBinding.MediaSourceId
+							?? throw new InvalidOperationException("Committed Program binding must contain a media source.");
+						programOutput = _programOutput ?? throw new InvalidOperationException("RuntimeHost has no bound Program output.");
+						routedAudioSource = _audio.ResolveAudioSource(committedSource);
+						avSyncEnabled = _audio.RoutingState.Mode == AudioRoutingMode.FollowVideo &&
+							IsAvSyncDiagnosticsEnabledUnsafe(committedSource);
+						if (!avSyncEnabled)
+						{
+							if (_avSyncDiagnosticsSourceId is not null)
+								ResetAvSyncDiagnosticsUnsafe();
+						}
+						else if (_avSyncDiagnosticsSourceId != committedSource)
+						{
 							ResetAvSyncDiagnosticsUnsafe();
-					}
-					else if (_avSyncDiagnosticsSourceId != committedSource)
-					{
-						ResetAvSyncDiagnosticsUnsafe();
-						_avSyncDiagnosticsSourceId = committedSource;
+							_avSyncDiagnosticsSourceId = committedSource;
+						}
+						sequence = _nextSequenceNumber;
 					}
 
-					sequence = _nextSequenceNumber;
 					frameA = ProcessTimedInput(_virtualMedia.SourceA, _sourceAPipeline, sequence);
 					frameB = ProcessTimedInput(_virtualMedia.SourceB, _sourceBPipeline, sequence);
 					var frames = new Dictionary<MediaSourceId, FrameDescriptor>
@@ -830,7 +836,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 						[frameA.SourceId] = frameA,
 						[frameB.SourceId] = frameB
 					};
-					WriteAuxFrameUnsafe(execution.PreparedExecution, frames);
+					auxFailure = WriteAuxFrame(execution.PreparedExecution, frames);
 
 					var contentA = ResolveInputContent(frameA);
 					var contentB = ResolveInputContent(frameB);
@@ -859,11 +865,22 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 						_format,
 						fromFrame.Descriptor.Timing);
 
-					RefreshVirtualAudioMetersUnsafe(sequence);
+					AudioMeterObservation audioObservation;
+					bool hasGeneratedSignal;
+					GeneratedAudioTestSignalGenerator? audioTestSignal;
+					lock (_gate)
+					{
+						RefreshVirtualAudioMetersUnsafe(sequence);
+						audioObservation = _audioMeters[routedAudioSource];
+						hasGeneratedSignal = _audioTestSignals.TryGetValue(routedAudioSource, out audioTestSignal);
+						visualLayerMode = (_operatorGraphicsVisible || _productionCgText.Visible)
+							? V1VisualLayerMode.Static
+							: _visualLayerMode;
+						recordingActive = _recorder.Snapshot.State == RecordingLifecycleState.Recording;
+					}
+
 					var audioPacket = _virtualAudio.GetSource(routedAudioSource).GeneratePacket(sequence);
-					var audioObservation = _audioMeters[routedAudioSource];
 					audioBuffer = audioPacket.Descriptor;
-					var hasGeneratedSignal = _audioTestSignals.TryGetValue(routedAudioSource, out var audioTestSignal);
 					audioSyncEvent = avSyncEnabled
 						? _avSyncTimeline.InspectAudio(audioBuffer.Timing, _format.FrameRate, audioBuffer.Format.SampleRate)
 						: null;
@@ -871,8 +888,6 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 					var generatedAudioPayload = hasGeneratedSignal
 						? MaterializeGeneratedAudioPayload(audioBuffer, audioTestSignal!, out generatedFrame)
 						: null;
-					if (hasGeneratedSignal)
-						_audioTestSignalFrames[routedAudioSource] = generatedFrame;
 					var externalAudioPayload = !hasGeneratedSignal && audioObservation.External
 						? ConsumeExternalAudioPayloadUnsafe(routedAudioSource, audioBuffer)
 						: null;
@@ -891,16 +906,17 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 						sequence,
 						afvBuffer,
 						measuredAudio);
-					_lastAudioResult = audio;
 					programAudioPayload = generatedAudioPayload is not null
 						? ApplyAudioStateToPayloadInPlace(generatedAudioPayload, audio)
 						: externalAudioPayload is { Length: > 0 }
 							? ApplyAudioStateToPayload(externalAudioPayload, audio)
 							: MaterializeReferenceAudioPayload(audioBuffer, audio);
-					visualLayerMode = (_operatorGraphicsVisible || _productionCgText.Visible)
-						? V1VisualLayerMode.Static
-						: _visualLayerMode;
-					recordingActive = _recorder.Snapshot.State == RecordingLifecycleState.Recording;
+
+					if (hasGeneratedSignal)
+					{
+						lock (_gate)
+							_audioTestSignalFrames[routedAudioSource] = generatedFrame;
+					}
 				}
 
 				GpuProcessingResult composite;
@@ -996,6 +1012,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 
 					lock (_gate)
 					{
+						_auxFailure = auxFailure;
+						_lastAudioResult = audio;
 						_lastCompositionDuration = composite.Duration;
 						_lastCompositingLayerCount = composite.LayerCount;
 						if (avSyncEnabled && videoSyncEvent.IsFlashFrame)
@@ -1052,6 +1070,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	public void SetVisualLayerMode(V1VisualLayerMode mode)
 	{
 		if (!Enum.IsDefined(typeof(V1VisualLayerMode), mode)) throw new ArgumentOutOfRangeException(nameof(mode));
+		lock (_boundaryCaptureGate)
 		lock (_gate)
 		{
 			ThrowIfDisposed();
@@ -1074,6 +1093,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		if (rgbaPixels.Length != expected)
 			throw new ArgumentException($"Graphics RGBA payload requires exactly '{expected}' bytes.", nameof(rgbaPixels));
 
+		lock (_boundaryCaptureGate)
 		lock (_gate)
 		{
 			ThrowIfDisposed();
@@ -1101,6 +1121,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		if (definition.BoxWidth > _format.Width || definition.BoxHeight > _format.Height)
 			throw new ArgumentOutOfRangeException(nameof(definition), "Production CG bounding box must fit inside the active Program format.");
 
+		lock (_boundaryCaptureGate)
 		lock (_gate)
 			ThrowIfDisposed();
 
@@ -1159,6 +1180,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		if (!double.IsFinite(scale) || scale is < 0.05 or > 4.0)
 			throw new ArgumentOutOfRangeException(nameof(scale), "Graphics scale must be between 0.05 and 4.0.");
 
+		lock (_boundaryCaptureGate)
 		lock (_gate)
 		{
 			ThrowIfDisposed();
@@ -1191,6 +1213,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 
 	public V1GraphicsOverlaySnapshot ClearGraphicsOverlay()
 	{
+		lock (_boundaryCaptureGate)
 		lock (_gate)
 		{
 			ThrowIfDisposed();
@@ -1246,6 +1269,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		if (string.IsNullOrWhiteSpace(layerId))
 			throw new ArgumentException("Compositing layer identity is required.", nameof(layerId));
 
+		lock (_boundaryCaptureGate)
 		lock (_gate)
 		{
 			ThrowIfDisposed();
@@ -1315,6 +1339,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			cropRight,
 			cropBottom);
 
+		lock (_boundaryCaptureGate)
 		lock (_gate)
 		{
 			ThrowIfDisposed();
@@ -1370,6 +1395,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		if (processingNode is not null && processingNode.Kind != PreparedCompositingProcessingNodeKind.ColorGrade)
 			throw new NotSupportedException($"Processing node kind '{processingNode.Kind}' is not supported.");
 
+		lock (_boundaryCaptureGate)
 		lock (_gate)
 		{
 			ThrowIfDisposed();
@@ -1401,6 +1427,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	public IReadOnlyList<V1CompositingLayerSnapshot> ReorderCompositingLayers(IReadOnlyList<string> orderedLayerIds)
 	{
 		ArgumentNullException.ThrowIfNull(orderedLayerIds);
+		lock (_boundaryCaptureGate)
 		lock (_gate)
 		{
 			ThrowIfDisposed();
@@ -1636,6 +1663,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		if (!(left >= 0 && left < right && right <= 1 && top >= 0 && top < bottom && bottom <= 1))
 			throw new ArgumentOutOfRangeException(nameof(left), "Normalized dynamic layer region must be within 0..1 and non-empty.");
 
+		lock (_boundaryCaptureGate)
 		lock (_gate)
 		{
 			ThrowIfDisposed();
@@ -1664,6 +1692,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 
 	public V1AudioInputSnapshot SetAudioInputState(MediaSourceId sourceId, AudioGain gain, bool muted)
 	{
+		lock (_boundaryCaptureGate)
 		lock (_gate)
 		{
 			ThrowIfDisposed();
@@ -1677,6 +1706,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 
 	public V1AudioProgramSnapshot SetAudioRouting(AudioRoutingMode mode, MediaSourceId? breakawaySourceId = null)
 	{
+		lock (_boundaryCaptureGate)
 		lock (_gate)
 		{
 			ThrowIfDisposed();
@@ -1694,6 +1724,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		double frequencyHz = GeneratedAudioTestSignalConfiguration.DefaultFrequencyHz,
 		double peakLevel = GeneratedAudioTestSignalConfiguration.DefaultPeakLevel)
 	{
+		lock (_boundaryCaptureGate)
 		lock (_gate)
 		{
 			ThrowIfDisposed();
@@ -1733,6 +1764,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		bool available = true)
 	{
 		var meter = new AudioStereoMeter(leftPeak, rightPeak);
+		lock (_boundaryCaptureGate)
 		lock (_gate)
 		{
 			ThrowIfDisposed();
@@ -1748,6 +1780,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		bool available = true)
 	{
 		var meter = AudioMetering.MeasureInterleavedStereoFloat32(interleavedStereoSamples);
+		lock (_boundaryCaptureGate)
 		lock (_gate)
 		{
 			ThrowIfDisposed();
@@ -1779,6 +1812,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 
 	public void ClearExternalAudioMeter(MediaSourceId sourceId)
 	{
+		lock (_boundaryCaptureGate)
 		lock (_gate)
 		{
 			ThrowIfDisposed();
@@ -1791,6 +1825,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	public void SetInputSignalState(MediaSourceId sourceId, V1InputSignalState state)
 	{
 		if (!Enum.IsDefined(typeof(V1InputSignalState), state)) throw new ArgumentOutOfRangeException(nameof(state));
+		lock (_boundaryCaptureGate)
 		lock (_gate)
 		{
 			ThrowIfDisposed();
@@ -1809,6 +1844,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		if (!Enum.IsDefined(typeof(V1BroadcastTestPatternMode), mode))
 			throw new ArgumentOutOfRangeException(nameof(mode));
 
+		lock (_boundaryCaptureGate)
 		lock (_gate)
 		{
 			ThrowIfDisposed();
@@ -1857,6 +1893,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			throw new ArgumentException("External input payload must match the RuntimeHost video format.", nameof(rgbaPixels));
 		if (!Enum.IsDefined(typeof(V1InputSignalState), state))
 			throw new ArgumentOutOfRangeException(nameof(state));
+		lock (_boundaryCaptureGate)
 		lock (_gate)
 		{
 			ThrowIfDisposed();
@@ -1985,39 +2022,40 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		return consumed;
 	}
 
-	private void WriteAuxFrameUnsafe(
+	private Failure? WriteAuxFrame(
 		PreparedExecutionContract preparedExecution,
 		IReadOnlyDictionary<MediaSourceId, FrameDescriptor> frames)
 	{
 		if (_auxSinkId is null || _auxOutput is null)
-			return;
+			return null;
 
 		var binding = preparedExecution.Bindings.SingleOrDefault(candidate =>
 			string.Equals(candidate.OutputRoleId, "aux", StringComparison.Ordinal) &&
 			candidate.MediaSinkId == _auxSinkId);
 		if (binding?.MediaSourceId is not { } sourceId)
 		{
-			_auxFailure = new Failure("runtime.output.aux_binding_missing", "Committed Aux output binding is unavailable.");
-			Observe($"runtime.output.aux.failed:{_auxFailure.Value.Code}");
-			return;
+			var failure = new Failure("runtime.output.aux_binding_missing", "Committed Aux output binding is unavailable.");
+			Observe($"runtime.output.aux.failed:{failure.Code}");
+			return failure;
 		}
 
 		if (!frames.TryGetValue(sourceId, out var frame))
 		{
-			_auxFailure = new Failure("runtime.output.aux_source_unavailable", "Committed Aux output source did not produce a frame at this boundary.");
-			Observe($"runtime.output.aux.failed:{_auxFailure.Value.Code}");
-			return;
+			var failure = new Failure("runtime.output.aux_source_unavailable", "Committed Aux output source did not produce a frame at this boundary.");
+			Observe($"runtime.output.aux.failed:{failure.Code}");
+			return failure;
 		}
 
 		try
 		{
 			_auxOutput.WriteFrame(frame);
-			_auxFailure = null;
+			return null;
 		}
 		catch (Exception exception) when (exception is InvalidOperationException or ArgumentException)
 		{
-			_auxFailure = new Failure("runtime.output.aux_write_failed", $"Aux output provider rejected the frame: {exception.Message}");
-			Observe($"runtime.output.aux.failed:{_auxFailure.Value.Code}");
+			var failure = new Failure("runtime.output.aux_write_failed", $"Aux output provider rejected the frame: {exception.Message}");
+			Observe($"runtime.output.aux.failed:{failure.Code}");
+			return failure;
 		}
 	}
 
