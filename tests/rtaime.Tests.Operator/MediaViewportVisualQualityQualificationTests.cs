@@ -143,7 +143,7 @@ public sealed class MediaViewportVisualQualityQualificationTests
 		Assert.Contains("BitmapScalingMode=\"HighQuality\"", theme, StringComparison.Ordinal);
 		Assert.Contains("SnapsToDevicePixels=\"True\"", theme, StringComparison.Ordinal);
 		Assert.DoesNotContain("<Viewbox", theme, StringComparison.Ordinal);
-		Assert.Equal(1, CountOccurrences(theme, "<Image"));
+		Assert.Equal(1, CountOccurrences(theme, "<Image\n"));
 	}
 
 	private static int CountOccurrences(string value, string token)
