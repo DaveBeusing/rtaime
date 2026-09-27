@@ -129,11 +129,13 @@ Assert-Condition ($hostLifecycleSchema -match '"runtimeRecoveryTimeoutMs"' -and 
 Assert-Condition ($appCode -match 'TimeSpan RuntimeRecoveryTimeout' -and $appCode -match 'ReadRuntimeRecoveryTimeout') "AppHost policy parsing must expose and validate a dedicated runtime recovery timeout."
 Assert-Condition ($appCode -match 'ApplicationHostLifecycleException' -and $appCode -match 'RuntimeRecoveryTimeout' -and $appCode -match 'LifecycleFailure') "AppHost must use typed post-start lifecycle failure classification."
 Assert-Condition ($appCode -match 'FindObservedReadiness\(\)' -and $appCode -match 'FindQualifiedReadinessAsync') "AppHost must separate startup qualification from steady-state readiness observation."
+Assert-Condition ($appCode -match 'RuntimeReadinessLossGracePeriod' -and $appCode -match 'Math\.Max\(_options\.Policy\.ProbeInterval\.Ticks, _options\.Policy\.ChildRestartBackoff\.Ticks\)') "AppHost must retain bounded post-start readiness-loss grace using existing lifecycle timing."
 Assert-Condition ($appProgram -match 'apphost\.runtime-recovery-timeout' -and $appProgram -match 'apphost\.lifecycle-failure') "AppHost logging must distinguish runtime recovery timeout from other post-start lifecycle failures."
 foreach ($test in @(
 	'Startup_and_runtime_recovery_timeouts_are_independent',
 	'Post_start_recovery_timeout_is_typed_and_stops_owned_ephemeral_control',
 	'Runtime_readiness_recovers_before_deadline_without_engine_shutdown',
+	'Single_transient_readiness_miss_keeps_healthy_engine_lifecycle',
 	'Steady_state_authoritative_readiness_does_not_repeat_pipe_probes',
 	'External_managed_recovery_timeout_never_stops_adopted_engine'
 )) {

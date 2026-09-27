@@ -946,9 +946,15 @@ public sealed class UnifiedApplicationHost
 			await _platform.ProbePipeAsync(endpoints.AI, _options.Policy.ProbeTimeout, cancellationToken).ConfigureAwait(false);
 	}
 
+	private TimeSpan RuntimeReadinessLossGracePeriod =>
+		TimeSpan.FromTicks(Math.Min(
+			_options.Policy.RuntimeRecoveryTimeout.Ticks,
+			Math.Max(_options.Policy.ProbeInterval.Ticks, _options.Policy.ChildRestartBackoff.Ticks)));
+
 	private async Task ObserveOperatorAsync(int operatorProcessId, CancellationToken cancellationToken)
 	{
 		DateTimeOffset? degradedSince = null;
+		var degradationPublished = false;
 		while (_platform.IsProcessAlive(operatorProcessId))
 		{
 			cancellationToken.ThrowIfCancellationRequested();
@@ -956,13 +962,17 @@ public sealed class UnifiedApplicationHost
 			if (readiness is null)
 			{
 				degradedSince ??= _platform.UtcNow;
-				_platform.DeleteFile(_options.ServiceReadinessEvidencePath);
-				_lifecycle.DegradeStage(
-					ApplicationLifecycleStages.ProductionReadiness,
-					"Production readiness was lost; recovery is active.",
-					"Qualified engine readiness is currently unavailable.");
-				Transition(ApplicationLifecycleState.Degraded);
 				var recoveryDuration = _platform.UtcNow - degradedSince.Value;
+				if (recoveryDuration >= RuntimeReadinessLossGracePeriod && !degradationPublished)
+				{
+					_platform.DeleteFile(_options.ServiceReadinessEvidencePath);
+					_lifecycle.DegradeStage(
+						ApplicationLifecycleStages.ProductionReadiness,
+						"Production readiness was lost; recovery is active.",
+						"Qualified engine readiness is currently unavailable.");
+					Transition(ApplicationLifecycleState.Degraded);
+					degradationPublished = true;
+				}
 				if (recoveryDuration >= _options.Policy.RuntimeRecoveryTimeout)
 					throw CreateRuntimeRecoveryTimeout(recoveryDuration);
 			}
@@ -971,11 +981,15 @@ public sealed class UnifiedApplicationHost
 				TrackReadiness(readiness.Value);
 				if (degradedSince is not null)
 				{
-					Transition(ApplicationLifecycleState.Recovering);
-					_lifecycle.StartStage(ApplicationLifecycleStages.ProductionReadiness, "Requalifying recovered engine readiness.");
+					if (degradationPublished)
+					{
+						Transition(ApplicationLifecycleState.Recovering);
+						_lifecycle.StartStage(ApplicationLifecycleStages.ProductionReadiness, "Requalifying recovered engine readiness.");
+						Transition(ApplicationLifecycleState.Healthy);
+						_lifecycle.CompleteStage(ApplicationLifecycleStages.ProductionReadiness, "Production runtime recovered and is qualified.");
+					}
 					degradedSince = null;
-					Transition(ApplicationLifecycleState.Healthy);
-					_lifecycle.CompleteStage(ApplicationLifecycleStages.ProductionReadiness, "Production runtime recovered and is qualified.");
+					degradationPublished = false;
 				}
 			}
 			await _platform.DelayAsync(_options.Policy.ProbeInterval, cancellationToken).ConfigureAwait(false);
@@ -985,6 +999,7 @@ public sealed class UnifiedApplicationHost
 	private async Task ObserveHeadlessAsync(CancellationToken cancellationToken)
 	{
 		DateTimeOffset? degradedSince = null;
+		var degradationPublished = false;
 		while (true)
 		{
 			cancellationToken.ThrowIfCancellationRequested();
@@ -998,13 +1013,17 @@ public sealed class UnifiedApplicationHost
 			if (readiness is null)
 			{
 				degradedSince ??= _platform.UtcNow;
-				_platform.DeleteFile(_options.ServiceReadinessEvidencePath);
-				_lifecycle.DegradeStage(
-					ApplicationLifecycleStages.ProductionReadiness,
-					"Production readiness was lost; recovery is active.",
-					"Qualified engine readiness is currently unavailable.");
-				Transition(ApplicationLifecycleState.Degraded);
 				var recoveryDuration = _platform.UtcNow - degradedSince.Value;
+				if (recoveryDuration >= RuntimeReadinessLossGracePeriod && !degradationPublished)
+				{
+					_platform.DeleteFile(_options.ServiceReadinessEvidencePath);
+					_lifecycle.DegradeStage(
+						ApplicationLifecycleStages.ProductionReadiness,
+						"Production readiness was lost; recovery is active.",
+						"Qualified engine readiness is currently unavailable.");
+					Transition(ApplicationLifecycleState.Degraded);
+					degradationPublished = true;
+				}
 				if (recoveryDuration >= _options.Policy.RuntimeRecoveryTimeout)
 					throw CreateRuntimeRecoveryTimeout(recoveryDuration);
 			}
@@ -1013,9 +1032,13 @@ public sealed class UnifiedApplicationHost
 				TrackReadiness(readiness.Value);
 				if (degradedSince is not null)
 				{
-					Transition(ApplicationLifecycleState.Recovering);
-					_lifecycle.StartStage(ApplicationLifecycleStages.ProductionReadiness, "Requalifying recovered engine readiness.");
+					if (degradationPublished)
+					{
+						Transition(ApplicationLifecycleState.Recovering);
+						_lifecycle.StartStage(ApplicationLifecycleStages.ProductionReadiness, "Requalifying recovered engine readiness.");
+					}
 					degradedSince = null;
+					degradationPublished = false;
 				}
 				Transition(ApplicationLifecycleState.Healthy);
 				_lifecycle.CompleteStage(ApplicationLifecycleStages.ProductionReadiness, "Production runtime is qualified and ready.");
