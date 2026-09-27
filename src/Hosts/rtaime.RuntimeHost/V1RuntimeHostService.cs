@@ -1122,48 +1122,50 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			throw new ArgumentOutOfRangeException(nameof(definition), "Production CG bounding box must fit inside the active Program format.");
 
 		lock (_boundaryCaptureGate)
-		lock (_gate)
-			ThrowIfDisposed();
-
-		var rendered = _productionCgRenderer.Render(definition);
-		var (originX, originY) = ResolveProductionCgOrigin(definition);
-		lock (_gate)
 		{
-			ThrowIfDisposed();
-			_productionCgAsset = rendered.RgbaPixels;
-			_productionCgAssetWidth = rendered.Width;
-			_productionCgAssetHeight = rendered.Height;
-			_productionCgPositionX = _format.Width <= 1 ? 0 : originX / (double)(_format.Width - 1);
-			_productionCgPositionY = _format.Height <= 1 ? 0 : originY / (double)(_format.Height - 1);
-			_productionCgScale = 1.0;
-			_productionCgRotationDegrees = 0;
-			_productionCgAnchorX = 0;
-			_productionCgAnchorY = 0;
-			_productionCgCropLeft = 0;
-			_productionCgCropTop = 0;
-			_productionCgCropRight = 0;
-			_productionCgCropBottom = 0;
-			_productionCgProcessingNode = null;
-			_productionCgDefinition = definition;
-			_productionCgText = new V1ProductionCgTextSnapshot(
-				true,
-				definition.Text,
-				definition.Typeface.Trim(),
-				rendered.ResolvedTypeface,
-				definition.FontSizePixels,
-				definition.BoxWidth,
-				definition.BoxHeight,
-				definition.Alignment,
-				definition.Anchor,
-				definition.Panel.Enabled,
-				definition.Visible,
-				definition.Layer,
-				definition.ZOrder,
-				rendered.CacheHit,
-				rendered.RenderDuration);
-			RebuildProductionCgLayerUnsafe();
-			Observe($"graphics.cg.rendered:{rendered.ResolvedTypeface}:{definition.BoxWidth}x{definition.BoxHeight}:cache={rendered.CacheHit}");
-			return ProductionCgOverlaySnapshotUnsafe();
+			lock (_gate)
+				ThrowIfDisposed();
+
+			var rendered = _productionCgRenderer.Render(definition);
+			var (originX, originY) = ResolveProductionCgOrigin(definition);
+			lock (_gate)
+			{
+				ThrowIfDisposed();
+				_productionCgAsset = rendered.RgbaPixels;
+				_productionCgAssetWidth = rendered.Width;
+				_productionCgAssetHeight = rendered.Height;
+				_productionCgPositionX = _format.Width <= 1 ? 0 : originX / (double)(_format.Width - 1);
+				_productionCgPositionY = _format.Height <= 1 ? 0 : originY / (double)(_format.Height - 1);
+				_productionCgScale = 1.0;
+				_productionCgRotationDegrees = 0;
+				_productionCgAnchorX = 0;
+				_productionCgAnchorY = 0;
+				_productionCgCropLeft = 0;
+				_productionCgCropTop = 0;
+				_productionCgCropRight = 0;
+				_productionCgCropBottom = 0;
+				_productionCgProcessingNode = null;
+				_productionCgDefinition = definition;
+				_productionCgText = new V1ProductionCgTextSnapshot(
+					true,
+					definition.Text,
+					definition.Typeface.Trim(),
+					rendered.ResolvedTypeface,
+					definition.FontSizePixels,
+					definition.BoxWidth,
+					definition.BoxHeight,
+					definition.Alignment,
+					definition.Anchor,
+					definition.Panel.Enabled,
+					definition.Visible,
+					definition.Layer,
+					definition.ZOrder,
+					rendered.CacheHit,
+					rendered.RenderDuration);
+				RebuildProductionCgLayerUnsafe();
+				Observe($"graphics.cg.rendered:{rendered.ResolvedTypeface}:{definition.BoxWidth}x{definition.BoxHeight}:cache={rendered.CacheHit}");
+				return ProductionCgOverlaySnapshotUnsafe();
+			}
 		}
 	}
 
