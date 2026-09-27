@@ -4,7 +4,7 @@ namespace rtaime.Operator;
 
 public enum MediaScalingQuality
 {
-	Bicubic
+	HighQuality
 }
 
 public enum MediaScalingPath
@@ -36,7 +36,7 @@ public readonly record struct MediaRenderTarget(
 		return new MediaRenderTarget(
 			Math.Max(1, (int)Math.Round(physical.Width, MidpointRounding.AwayFromZero)),
 			Math.Max(1, (int)Math.Round(physical.Height, MidpointRounding.AwayFromZero)),
-			MediaScalingQuality.Bicubic,
+			MediaScalingQuality.HighQuality,
 			path,
 			RequiresPresentationRescale: path == MediaScalingPath.WpfFallback);
 	}
