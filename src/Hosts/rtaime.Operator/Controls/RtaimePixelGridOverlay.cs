@@ -2,6 +2,7 @@
 
 using System.Windows;
 using System.Windows.Media;
+using rtaime.Operator;
 
 namespace rtaime.Operator.Controls;
 
