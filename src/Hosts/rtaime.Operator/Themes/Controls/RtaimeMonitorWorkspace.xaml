@@ -71,6 +71,25 @@
 									Panel.ZIndex="60"
 									Margin="10" />
 
+								<Border
+									Width="{Binding Monitor.PresentationWidth, RelativeSource={RelativeSource TemplatedParent}}"
+									Height="{Binding Monitor.PresentationHeight, RelativeSource={RelativeSource TemplatedParent}}"
+									HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False">
+									<Border.Background>
+										<DrawingBrush TileMode="Tile" Viewport="0,0,12,12" ViewportUnits="Absolute">
+											<DrawingBrush.Drawing>
+												<DrawingGroup>
+													<GeometryDrawing Brush="#FF30343A" Geometry="M0,0 H12 V12 H0 Z" />
+													<GeometryDrawing Brush="#FF454A52" Geometry="M0,0 H6 V6 H0 Z M6,6 H12 V12 H6 Z" />
+												</DrawingGroup>
+											</DrawingBrush.Drawing>
+										</DrawingBrush>
+									</Border.Background>
+									<Border.RenderTransform>
+										<TranslateTransform X="{Binding Monitor.PresentationOffsetX, RelativeSource={RelativeSource TemplatedParent}}" Y="{Binding Monitor.PresentationOffsetY, RelativeSource={RelativeSource TemplatedParent}}" />
+									</Border.RenderTransform>
+								</Border>
+
 								<Image
 									Source="{Binding Monitor.Frame, RelativeSource={RelativeSource TemplatedParent}}"
 									Width="{Binding Monitor.PresentationWidth, RelativeSource={RelativeSource TemplatedParent}}"
@@ -87,6 +106,16 @@
 											Y="{Binding Monitor.PresentationOffsetY, RelativeSource={RelativeSource TemplatedParent}}" />
 									</Image.RenderTransform>
 								</Image>
+								<controls:RtaimePixelGridOverlay
+									PresentationWidth="{Binding Monitor.PresentationWidth, RelativeSource={RelativeSource TemplatedParent}}"
+									PresentationHeight="{Binding Monitor.PresentationHeight, RelativeSource={RelativeSource TemplatedParent}}"
+									OffsetX="{Binding Monitor.PresentationOffsetX, RelativeSource={RelativeSource TemplatedParent}}"
+									OffsetY="{Binding Monitor.PresentationOffsetY, RelativeSource={RelativeSource TemplatedParent}}"
+									SourceWidth="{Binding Monitor.SourcePixelWidth, RelativeSource={RelativeSource TemplatedParent}}"
+									SourceHeight="{Binding Monitor.SourcePixelHeight, RelativeSource={RelativeSource TemplatedParent}}"
+									LineBrush="{DynamicResource OperatorGuideSubtleBrush}"
+									Visibility="{Binding Monitor.IsPixelGridVisible, RelativeSource={RelativeSource TemplatedParent}, Converter={StaticResource BooleanToVisibilityConverter}}"
+									IsHitTestVisible="False" Panel.ZIndex="45" />
 
 								<Border
 									HorizontalAlignment="Left"
