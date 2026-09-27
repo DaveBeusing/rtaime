@@ -128,7 +128,7 @@
 									</Style>
 								</Border.Style>
 								<Grid>
-									<Image Source="{Binding Thumbnail}" Stretch="UniformToFill" SnapsToDevicePixels="True" />
+									<Image Source="{Binding Thumbnail}" Stretch="UniformToFill" SnapsToDevicePixels="True" RenderOptions.BitmapScalingMode="HighQuality" />
 
 									<Border Height="26" VerticalAlignment="Top" Background="{DynamicResource OperatorMultiviewHeaderOverlayBrush}" Padding="5,0">
 										<Grid>
@@ -272,7 +272,7 @@
 							ToolTip="Close expanded source" />
 					</Grid>
 					<Border Grid.Row="1" Background="Black">
-						<Image x:Name="ExpandedImage" Stretch="Uniform" SnapsToDevicePixels="True" />
+						<Image x:Name="ExpandedImage" Stretch="Uniform" SnapsToDevicePixels="True" RenderOptions.BitmapScalingMode="HighQuality" />
 					</Border>
 					<TextBlock x:Name="ExpandedDetail" Grid.Row="2" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
 				</Grid>
