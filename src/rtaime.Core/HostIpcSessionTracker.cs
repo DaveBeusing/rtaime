@@ -58,7 +58,10 @@ public sealed class HostIpcSessionTracker
 		}
 	}
 
-	public bool TryStart(Func<CancellationToken, Task> handler)
+	public bool TryStart(Func<CancellationToken, Task> handler) =>
+		TryStart(handler, out _);
+
+	public bool TryStart(Func<CancellationToken, Task> handler, out Task completion)
 	{
 		ArgumentNullException.ThrowIfNull(handler);
 
@@ -66,7 +69,10 @@ public sealed class HostIpcSessionTracker
 		lock (_gate)
 		{
 			if (!_acceptingSessions)
+			{
+				completion = Task.CompletedTask;
 				return false;
+			}
 			if (_nextSessionId == long.MaxValue)
 				throw new InvalidOperationException("Host IPC session identity space is exhausted.");
 
@@ -75,6 +81,7 @@ public sealed class HostIpcSessionTracker
 			_startedSessions++;
 		}
 
+		completion = entry.Completion.Task;
 		_ = ExecuteAsync(entry, handler);
 		return true;
 	}
