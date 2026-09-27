@@ -48,6 +48,26 @@ public sealed class DeterministicRuntimeBoundaryTests
 	}
 
 	[Fact]
+	public async Task Control_mutation_during_heavy_execution_applies_to_the_next_boundary_only()
+	{
+		using var backend = new BlockingCompositeBackend();
+		await using var fixture = CreateFixture(backend);
+		var initialBinding = Assert.Single(fixture.Prepared.Bindings, binding => binding.OutputRoleId == "program");
+		AssertCommitted(fixture.Runtime.ApplyExecution(fixture.Prepared, initialBinding.MediaSinkId!.Value));
+
+		var boundaryTask = Task.Run(() => fixture.Runtime.ProcessNextBoundary());
+		await backend.CompositeEntered.WaitAsync(TimeSpan.FromSeconds(3));
+
+		fixture.Runtime.SetVisualLayerMode(V1VisualLayerMode.Static);
+		backend.ReleaseComposite();
+		using var first = await boundaryTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+		Assert.Equal(V1VisualLayerMode.Disabled, first.VisualLayerMode);
+		using var second = fixture.Runtime.ProcessNextBoundary();
+		Assert.Equal(V1VisualLayerMode.Static, second.VisualLayerMode);
+	}
+
+	[Fact]
 	public async Task Execution_commit_arriving_during_boundary_is_serialized_between_frames()
 	{
 		using var backend = new BlockingCompositeBackend();
