@@ -16,6 +16,7 @@ public class MonitorView : UserControl
 	private double _dpiScaleY = 1.0;
 	private double _panXPhysical;
 	private double _panYPhysical;
+	private readonly MediaRenderTargetStabilizer _renderTargetStabilizer = new();
 
 	private static readonly DependencyPropertyKey PresentationWidthPropertyKey = DependencyProperty.RegisterReadOnly(
 		nameof(PresentationWidth),
@@ -356,11 +357,13 @@ public class MonitorView : UserControl
 		if (sourceWidth <= 0 || sourceHeight <= 0)
 			return;
 
-		var physical = MediaPresentationGeometry.ToPhysicalPixels(
+		var requestedTarget = MediaRenderTarget.Create(
 			_viewportWidthDip,
 			_viewportHeightDip,
 			_dpiScaleX,
 			_dpiScaleY);
+		var target = _renderTargetStabilizer.Adopt(requestedTarget, DateTimeOffset.UtcNow);
+		var physical = (Width: (double)target.PixelWidth, Height: (double)target.PixelHeight);
 		var (mode, zoom) = ResolvePresentationPolicy(ZoomMode);
 		var result = MediaPresentationGeometry.Calculate(
 			sourceWidth,
@@ -383,7 +386,7 @@ public class MonitorView : UserControl
 		SetValue(PresentationOffsetYPropertyKey, _panYPhysical / _dpiScaleY);
 		SetValue(
 			PresentationInfoPropertyKey,
-			$"{sourceWidth:0}×{sourceHeight:0} | {ZoomMode} {result.Scale * 100:0.#}% | View {physical.Width:0}×{physical.Height:0} | DPI {_dpiScaleX * 100:0}%");
+			$"{sourceWidth:0}×{sourceHeight:0} | {ZoomMode} {result.Scale * 100:0.#}% | Target {target.PixelWidth}×{target.PixelHeight} px | {target.Quality} {target.Path} | Scale stages 1 | RT #{_renderTargetStabilizer.Revision}{(_renderTargetStabilizer.ResizePending ? " pending" : string.Empty)} | DPI {_dpiScaleX * 100:0}%");
 	}
 
 	private static (double Width, double Height) ResolveSourcePixels(ImageSource source)
