@@ -781,6 +781,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			{
 				CommittedRuntimeExecution execution;
 				MediaSourceId committedSource;
+				MediaSourceId routedAudioSource;
 				ulong sequence;
 				FrameDescriptor frameA;
 				FrameDescriptor frameB;
@@ -809,7 +810,6 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 
 				lock (_boundaryCaptureGate)
 				{
-					MediaSourceId routedAudioSource;
 					lock (_gate)
 					{
 						ThrowIfDisposed();
@@ -1024,7 +1024,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 						_lastAudioResult = audio;
 						_publishedAudioStatistics = _audio.Statistics;
 						if (generatedAudioFrame is { } publishedGeneratedFrame)
-							_audioTestSignalFrames[audio.AudioSourceId ?? committedSource] = publishedGeneratedFrame;
+							_audioTestSignalFrames[routedAudioSource] = publishedGeneratedFrame;
 						_lastCompositionDuration = composite.Duration;
 						_lastCompositingLayerCount = composite.LayerCount;
 						if (avSyncEnabled && videoSyncEvent.IsFlashFrame)
