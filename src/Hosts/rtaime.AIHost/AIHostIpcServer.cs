@@ -40,7 +40,7 @@ public sealed class AIHostIpcServer : IAsyncDisposable
 
 	public string Endpoint => _endpoint;
 	public string HostInstanceId => _hostInstanceId;
-	public ulong StateVersion => checked((ulong)Interlocked.Read(ref _stateVersion));
+	public ulong StateVersion => _stateVersion.Value;
 	public bool Running => _acceptLoop is { IsCompleted: false };
 	public HostIpcSessionSnapshot Sessions => _sessions.Snapshot;
 
@@ -220,16 +220,15 @@ public sealed class AIHostIpcServer : IAsyncDisposable
 
 	private ulong NextSequence()
 	{
-		if (Interlocked.Read(ref _sequence) == long.MaxValue)
+		if (!_sequence.TryIncrement(out var sequence))
 			throw new InvalidOperationException("AIHost IPC sequence exhausted.");
-		return checked((ulong)Interlocked.Increment(ref _sequence));
+		return sequence;
 	}
 
 	private void AdvanceStateVersion()
 	{
-		if (Interlocked.Read(ref _stateVersion) == long.MaxValue)
+		if (!_stateVersion.TryIncrement(out _))
 			throw new InvalidOperationException("AIHost remote StateVersion is exhausted.");
-		Interlocked.Increment(ref _stateVersion);
 	}
 
 	private static WireCapability ToWire(InferenceCapabilityDescriptor capability) =>
