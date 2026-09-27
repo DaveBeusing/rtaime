@@ -391,7 +391,9 @@ public class MonitorView : UserControl
 		if (source is BitmapSource bitmap && bitmap.PixelWidth > 0 && bitmap.PixelHeight > 0)
 			return (bitmap.PixelWidth, bitmap.PixelHeight);
 
-		return (Math.Max(1, source.Width), Math.Max(1, source.Height));
+		var width = double.IsFinite(source.Width) && source.Width > 0 ? source.Width : 1;
+		var height = double.IsFinite(source.Height) && source.Height > 0 ? source.Height : 1;
+		return (width, height);
 	}
 
 	private static (MediaPresentationMode Mode, double Zoom) ResolvePresentationPolicy(string zoomMode) => zoomMode switch
