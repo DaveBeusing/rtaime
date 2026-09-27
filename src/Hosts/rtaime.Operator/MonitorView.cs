@@ -17,18 +17,6 @@ public class MonitorView : UserControl
 	private double _panXPhysical;
 	private double _panYPhysical;
 
-	private static readonly DependencyPropertyKey ImageStretchPropertyKey = DependencyProperty.RegisterReadOnly(
-		nameof(ImageStretch),
-		typeof(Stretch),
-		typeof(MonitorView),
-		new PropertyMetadata(Stretch.Uniform));
-
-	private static readonly DependencyPropertyKey ImageScalePropertyKey = DependencyProperty.RegisterReadOnly(
-		nameof(ImageScale),
-		typeof(double),
-		typeof(MonitorView),
-		new PropertyMetadata(1.0));
-
 	private static readonly DependencyPropertyKey PresentationWidthPropertyKey = DependencyProperty.RegisterReadOnly(
 		nameof(PresentationWidth),
 		typeof(double),
@@ -167,8 +155,6 @@ public class MonitorView : UserControl
 		typeof(MonitorView),
 		new PropertyMetadata("FIT", OnZoomModeChanged));
 
-	public static readonly DependencyProperty ImageStretchProperty = ImageStretchPropertyKey.DependencyProperty;
-	public static readonly DependencyProperty ImageScaleProperty = ImageScalePropertyKey.DependencyProperty;
 	public static readonly DependencyProperty PresentationWidthProperty = PresentationWidthPropertyKey.DependencyProperty;
 	public static readonly DependencyProperty PresentationHeightProperty = PresentationHeightPropertyKey.DependencyProperty;
 	public static readonly DependencyProperty PresentationOffsetXProperty = PresentationOffsetXPropertyKey.DependencyProperty;
@@ -285,8 +271,6 @@ public class MonitorView : UserControl
 		set => SetValue(ZoomModeProperty, NormalizeZoomMode(value));
 	}
 
-	public Stretch ImageStretch => (Stretch)GetValue(ImageStretchProperty);
-	public double ImageScale => (double)GetValue(ImageScaleProperty);
 	public double PresentationWidth => (double)GetValue(PresentationWidthProperty);
 	public double PresentationHeight => (double)GetValue(PresentationHeightProperty);
 	public double PresentationOffsetX => (double)GetValue(PresentationOffsetXProperty);
@@ -314,20 +298,6 @@ public class MonitorView : UserControl
 			return;
 		}
 
-		view.SetValue(ImageStretchPropertyKey, mode switch
-		{
-			"FIT" => Stretch.Uniform,
-			"FILL" => Stretch.UniformToFill,
-			_ => Stretch.None
-		});
-		view.SetValue(ImageScalePropertyKey, mode switch
-		{
-			"25%" => 0.25,
-			"50%" => 0.5,
-			"200%" => 2.0,
-			"400%" => 4.0,
-			_ => 1.0
-		});
 		if (mode is "FIT" or "FILL")
 		{
 			view._panXPhysical = 0;
