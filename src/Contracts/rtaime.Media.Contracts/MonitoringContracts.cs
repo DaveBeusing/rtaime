@@ -7,7 +7,7 @@ namespace rtaime.Media.Contracts;
 
 public static class MonitoringContractVersion
 {
-	public static CompatibilityVersion Current { get; } = new(1, 0);
+	public static CompatibilityVersion Current { get; } = new(1, 1);
 
 	public static bool IsSupported(CompatibilityVersion version) => version == Current;
 
@@ -33,7 +33,8 @@ public sealed record MonitoringFrameDescriptor
 		uint width,
 		uint height,
 		PixelFormat pixelFormat,
-		FrameTiming timing)
+		FrameTiming timing,
+		ColorDescription? color = null)
 	{
 		MonitoringContractVersion.EnsureSupported(version);
 		if (!Enum.IsDefined(typeof(MonitoringStreamKind), streamKind))
@@ -50,6 +51,7 @@ public sealed record MonitoringFrameDescriptor
 		Height = height;
 		PixelFormat = pixelFormat;
 		Timing = timing;
+		Color = color ?? ColorDescription.UnknownRgba8;
 	}
 
 	public CompatibilityVersion Version { get; }
@@ -59,6 +61,7 @@ public sealed record MonitoringFrameDescriptor
 	public uint Height { get; }
 	public PixelFormat PixelFormat { get; }
 	public FrameTiming Timing { get; }
+	public ColorDescription Color { get; }
 	public int RequiredPayloadBytes => checked((int)((ulong)Width * Height * 4UL));
 }
 
@@ -81,7 +84,7 @@ public sealed class MonitoringFrame
 public static class MonitoringFrameWire
 {
 	private const uint Magic = 0x314E4F4D; // MON1 in little-endian byte order.
-	public const int HeaderSize = 84;
+	public const int HeaderSize = 112;
 
 	public static void WriteHeader(Span<byte> destination, MonitoringFrameDescriptor descriptor, int payloadLength)
 	{
@@ -104,6 +107,13 @@ public static class MonitoringFrameWire
 		if (!descriptor.SourceId.Value.Value.TryWriteBytes(destination[64..80]))
 			throw new InvalidOperationException("Monitoring source identity could not be encoded.");
 		BinaryPrimitives.WriteInt32LittleEndian(destination[80..84], payloadLength);
+		BinaryPrimitives.WriteInt32LittleEndian(destination[84..88], (int)descriptor.Color.Primaries);
+		BinaryPrimitives.WriteInt32LittleEndian(destination[88..92], (int)descriptor.Color.Transfer);
+		BinaryPrimitives.WriteInt32LittleEndian(destination[92..96], (int)descriptor.Color.Matrix);
+		BinaryPrimitives.WriteInt32LittleEndian(destination[96..100], (int)descriptor.Color.Range);
+		destination[100] = descriptor.Color.BitDepth;
+		BinaryPrimitives.WriteInt32LittleEndian(destination[104..108], (int)descriptor.Color.Alpha);
+		BinaryPrimitives.WriteInt32LittleEndian(destination[108..112], (int)descriptor.Color.Authority);
 	}
 
 	public static (MonitoringFrameDescriptor Descriptor, int PayloadLength) ReadHeader(ReadOnlySpan<byte> source)
@@ -127,7 +137,15 @@ public static class MonitoringFrameWire
 				BinaryPrimitives.ReadInt64LittleEndian(source[48..56]),
 				BinaryPrimitives.ReadInt64LittleEndian(source[56..64])));
 		var sourceId = new MediaSourceId(new Identity(new Guid(source[64..80])));
-		var descriptor = new MonitoringFrameDescriptor(version, streamKind, sourceId, width, height, pixelFormat, timing);
+		var color = new ColorDescription(
+			(ColorPrimaries)BinaryPrimitives.ReadInt32LittleEndian(source[84..88]),
+			(ColorTransfer)BinaryPrimitives.ReadInt32LittleEndian(source[88..92]),
+			(ColorMatrix)BinaryPrimitives.ReadInt32LittleEndian(source[92..96]),
+			(NominalRange)BinaryPrimitives.ReadInt32LittleEndian(source[96..100]),
+			source[100],
+			(AlphaMode)BinaryPrimitives.ReadInt32LittleEndian(source[104..108]),
+			(ColorMetadataAuthority)BinaryPrimitives.ReadInt32LittleEndian(source[108..112]));
+		var descriptor = new MonitoringFrameDescriptor(version, streamKind, sourceId, width, height, pixelFormat, timing, color);
 		var payloadLength = BinaryPrimitives.ReadInt32LittleEndian(source[80..84]);
 		if (payloadLength != descriptor.RequiredPayloadBytes)
 			throw new InvalidDataException("Monitoring frame payload length does not match its descriptor.");

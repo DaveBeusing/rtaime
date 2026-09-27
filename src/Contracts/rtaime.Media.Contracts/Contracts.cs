@@ -69,7 +69,7 @@ public enum ScanMode
 
 public readonly record struct VideoFormat
 {
-    public VideoFormat(uint width, uint height, FrameRate frameRate, PixelFormat pixelFormat, ScanMode scanMode)
+    public VideoFormat(uint width, uint height, FrameRate frameRate, PixelFormat pixelFormat, ScanMode scanMode, ColorDescription? color = null)
     {
         if (width == 0)
             throw new ArgumentOutOfRangeException(nameof(width), "Video width must be greater than zero.");
@@ -85,6 +85,7 @@ public readonly record struct VideoFormat
         FrameRate = frameRate;
         PixelFormat = pixelFormat;
         ScanMode = scanMode;
+        Color = color ?? ColorDescription.UnknownRgba8;
     }
 
     public uint Width { get; }
@@ -92,6 +93,7 @@ public readonly record struct VideoFormat
     public FrameRate FrameRate { get; }
     public PixelFormat PixelFormat { get; }
     public ScanMode ScanMode { get; }
+    public ColorDescription Color { get; }
 
     public static VideoFormat Hd1080p50Rgba8 => new(1920, 1080, FrameRate.Fps50, PixelFormat.Rgba8, ScanMode.Progressive);
     public static VideoFormat Hd1080p59_94Rgba8 => new(1920, 1080, FrameRate.Fps59_94, PixelFormat.Rgba8, ScanMode.Progressive);

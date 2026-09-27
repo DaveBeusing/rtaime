@@ -140,7 +140,7 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 	{
 		State = "LIVE";
 		Detail = $"Independent monitoring endpoint {_transport.Endpoint}; monitor loss does not block Program.";
-		var format = $"{descriptor.Width}x{descriptor.Height} RGBA8 • sequence {descriptor.Timing.SequenceNumber}";
+		var format = $"{descriptor.Width}x{descriptor.Height} RGBA8 • {MonitoringDisplayTransform.Describe(descriptor.Color)} • sequence {descriptor.Timing.SequenceNumber}";
 		if (descriptor.StreamKind == MonitoringStreamKind.Program)
 		{
 			ProgramImage = bitmap;
@@ -201,13 +201,7 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 		var descriptor = frame.Descriptor;
 		var rgba = frame.Pixels.Span;
 		var bgra = new byte[rgba.Length];
-		for (var offset = 0; offset < rgba.Length; offset += 4)
-		{
-			bgra[offset] = rgba[offset + 2];
-			bgra[offset + 1] = rgba[offset + 1];
-			bgra[offset + 2] = rgba[offset];
-			bgra[offset + 3] = rgba[offset + 3];
-		}
+		MonitoringDisplayTransform.ConvertRgbaToBgra(rgba, bgra, descriptor.Color);
 
 		var width = checked((int)descriptor.Width);
 		var height = checked((int)descriptor.Height);

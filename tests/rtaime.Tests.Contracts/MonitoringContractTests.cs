@@ -18,7 +18,8 @@ public sealed class MonitoringContractTests
 			320,
 			180,
 			PixelFormat.Rgba8,
-			new FrameTiming(42, 84, new Timebase(1, 50)));
+			new FrameTiming(42, 84, new Timebase(1, 50)),
+			ColorDescription.Rec709FullRgba8);
 		var header = new byte[MonitoringFrameWire.HeaderSize];
 
 		MonitoringFrameWire.WriteHeader(header, descriptor, descriptor.RequiredPayloadBytes);
@@ -31,7 +32,17 @@ public sealed class MonitoringContractTests
 		Assert.Equal(descriptor.Height, decoded.Descriptor.Height);
 		Assert.Equal(descriptor.PixelFormat, decoded.Descriptor.PixelFormat);
 		Assert.Equal(descriptor.Timing, decoded.Descriptor.Timing);
+		Assert.Equal(descriptor.Color, decoded.Descriptor.Color);
 		Assert.Equal(descriptor.RequiredPayloadBytes, decoded.PayloadLength);
+	}
+
+	[Fact]
+	public void Unknown_color_metadata_remains_explicitly_unknown()
+	{
+		var format = new VideoFormat(1920, 1080, FrameRate.Fps50, PixelFormat.Rgba8, ScanMode.Progressive);
+		Assert.Equal(ColorMetadataAuthority.Missing, format.Color.Authority);
+		Assert.False(format.Color.IsComplete);
+		Assert.Equal(NominalRange.Unknown, format.Color.Range);
 	}
 
 	[Fact]
