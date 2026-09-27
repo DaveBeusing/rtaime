@@ -26,7 +26,7 @@ internal sealed class RuntimePipeListener : IAsyncDisposable
 {
 	private const int MaxConsecutiveRecoverableAcceptFailures = 3;
 	private static readonly TimeSpan RecoverableAcceptRetryDelay = TimeSpan.FromMilliseconds(25);
-	private static readonly TimeSpan DefaultSessionDrainTimeout = TimeSpan.FromSeconds(2);
+	private static readonly TimeSpan DefaultSessionDrainTimeout = HostIpcSessionTracker.MaximumDrainInterval;
 
 	private readonly object _gate = new();
 	private readonly string _endpoint;
