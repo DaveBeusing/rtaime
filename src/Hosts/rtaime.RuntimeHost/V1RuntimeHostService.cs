@@ -375,6 +375,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private double? _outputFramesPerSecond;
 	private ulong _nextSequenceNumber;
 	private AudioFollowVideoResult? _lastAudioResult;
+	private AudioFollowVideoStatistics _publishedAudioStatistics;
 	private DateTimeOffset? _recordingStartedAtUtc;
 	private DateTimeOffset? _recordingCompletedAtUtc;
 	private string? _recordingDestination;
@@ -401,6 +402,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		_virtualAudio = new VirtualEmbeddedAudioReferenceProvider(sourceAId, sourceBId, format);
 		_audioStreams = _virtualAudio.Streams.ToDictionary(stream => stream.FollowedVideoSourceId);
 		_audio = new AudioFollowVideoEngine(_virtualAudio.Streams, format.FrameRate, sourceAId);
+		_publishedAudioStatistics = _audio.Statistics;
 		_audioMeters = _audioStreams.Keys.ToDictionary(
 			sourceId => sourceId,
 			_ => new AudioMeterObservation(new AudioStereoMeter(0, 0), Available: false, External: false));
@@ -589,7 +591,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 					GraphicsOverlaySnapshotUnsafe(),
 					AudioInputSnapshotsUnsafe(),
 					AudioProgramSnapshotUnsafe(),
-					_audio.Statistics,
+					_publishedAudioStatistics,
 					_recorder.Snapshot,
 					RecordingOperatorSnapshotUnsafe(),
 					PerformanceSnapshotUnsafe(hardware),
@@ -794,6 +796,11 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				AudioBufferDescriptor audioBuffer;
 				AudioFollowVideoResult audio;
 				byte[] programAudioPayload;
+				byte[]? generatedAudioPayload;
+				byte[]? externalAudioPayload;
+				AudioStereoMeter measuredAudio;
+				AudioBufferDescriptor? afvBuffer;
+				GeneratedAudioTestSignalFrameInfo? generatedAudioFrame;
 				AvSyncAudioEventObservation? audioSyncEvent;
 				V1VisualLayerMode visualLayerMode;
 				RuntimeMonitoringSourceSnapshot? monitoringSources;
@@ -827,6 +834,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 							_avSyncDiagnosticsSourceId = committedSource;
 						}
 						sequence = _nextSequenceNumber;
+						if (sequence == ulong.MaxValue)
+							throw new InvalidOperationException("RuntimeHost frame sequence exhausted.");
 					}
 
 					frameA = ProcessTimedInput(_virtualMedia.SourceA, _sourceAPipeline, sequence);
@@ -885,38 +894,23 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 						? _avSyncTimeline.InspectAudio(audioBuffer.Timing, _format.FrameRate, audioBuffer.Format.SampleRate)
 						: null;
 					GeneratedAudioTestSignalFrameInfo generatedFrame = default;
-					var generatedAudioPayload = hasGeneratedSignal
+					generatedAudioPayload = hasGeneratedSignal
 						? MaterializeGeneratedAudioPayload(audioBuffer, audioTestSignal!, out generatedFrame)
 						: null;
-					var externalAudioPayload = !hasGeneratedSignal && audioObservation.External
+					generatedAudioFrame = hasGeneratedSignal ? generatedFrame : null;
+					externalAudioPayload = !hasGeneratedSignal && audioObservation.External
 						? ConsumeExternalAudioPayloadUnsafe(routedAudioSource, audioBuffer)
 						: null;
-					var measuredAudio = generatedAudioPayload is not null
+					measuredAudio = generatedAudioPayload is not null
 						? new AudioStereoMeter(generatedFrame.LeftPeakLevel, generatedFrame.RightPeakLevel)
 						: externalAudioPayload is { Length: > 0 }
 							? AudioMetering.MeasureInterleavedStereoFloat32(externalAudioPayload)
 							: audioObservation.Meter;
-					var afvBuffer = hasGeneratedSignal
+					afvBuffer = hasGeneratedSignal
 						? audioBuffer
 						: audioObservation.External && !audioObservation.Available
 							? null
 							: audioBuffer;
-					audio = _audio.ProcessBoundary(
-						committedSource,
-						sequence,
-						afvBuffer,
-						measuredAudio);
-					programAudioPayload = generatedAudioPayload is not null
-						? ApplyAudioStateToPayloadInPlace(generatedAudioPayload, audio)
-						: externalAudioPayload is { Length: > 0 }
-							? ApplyAudioStateToPayload(externalAudioPayload, audio)
-							: MaterializeReferenceAudioPayload(audioBuffer, audio);
-
-					if (hasGeneratedSignal)
-					{
-						lock (_gate)
-							_audioTestSignalFrames[routedAudioSource] = generatedFrame;
-					}
 				}
 
 				GpuProcessingResult composite;
@@ -949,6 +943,16 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				{
 					var probe = ProbeCenter(pixels.Memory.Span, _format);
 					programOutput.WriteFrame(output.Descriptor);
+					audio = _audio.ProcessBoundary(
+						committedSource,
+						sequence,
+						afvBuffer,
+						measuredAudio);
+					programAudioPayload = generatedAudioPayload is not null
+						? ApplyAudioStateToPayloadInPlace(generatedAudioPayload, audio)
+						: externalAudioPayload is { Length: > 0 }
+							? ApplyAudioStateToPayload(externalAudioPayload, audio)
+							: MaterializeReferenceAudioPayload(audioBuffer, audio);
 					var videoSyncEvent = avSyncEnabled
 						? _motionTimingTestSignal.InspectSyncEvent(output.Descriptor.Timing)
 						: default;
@@ -992,11 +996,15 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 						{
 							recording = _recordingBridge.TryRecordCommittedProgram(execution, output.Descriptor, audioBuffer);
 						}
-						catch
+						catch (Exception exception)
 						{
 							if (payloadStaged)
 								_recordingPayloadWriter?.DiscardPayload(sequence);
-							throw;
+							var failure = new Failure(
+								"recording.runtime.enqueue_failed",
+								$"Recording enqueue failed without interrupting Program execution: {exception.GetType().Name}.");
+							recording = RecordingEnqueueResult.Rejected(failure);
+							Observe($"recording.runtime.enqueue_failed:{exception.GetType().Name}");
 						}
 
 						if (payloadStaged && recording is { Accepted: false })
@@ -1014,6 +1022,9 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 					{
 						_auxFailure = auxFailure;
 						_lastAudioResult = audio;
+						_publishedAudioStatistics = _audio.Statistics;
+						if (generatedAudioFrame is { } publishedGeneratedFrame)
+							_audioTestSignalFrames[audio.AudioSourceId ?? committedSource] = publishedGeneratedFrame;
 						_lastCompositionDuration = composite.Duration;
 						_lastCompositingLayerCount = composite.LayerCount;
 						if (avSyncEnabled && videoSyncEvent.IsFlashFrame)
@@ -1027,8 +1038,6 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 							_transition = null;
 						}
 
-						if (_nextSequenceNumber == ulong.MaxValue)
-							throw new InvalidOperationException("RuntimeHost frame sequence exhausted.");
 						_nextSequenceNumber++;
 						Observe($"program.frame:{sequence}:{committedSource}");
 					}
