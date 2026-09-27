@@ -193,6 +193,7 @@ ControlHost derives the Operator health projection from existing Runtime snapsho
 
 The Operator consumes this projection on the existing bounded 200 ms management refresh. Runtime Health & Performance HUD adds no per-frame UI callback, no second telemetry polling task and no local GPU probing. No per-frame disk write is introduced.
 
+A missed Runtime refresh immediately marks retained subsystem evidence as non-fresh/`UNVERIFIED`; it is never rewritten as fresh health. The centralized Runtime readiness layer separately applies a bounded one-second lifecycle grace after an already-qualified `Ready` state, so one or a few transient 200 ms management misses do not toggle the global engine lifecycle. Continued refresh loss beyond that grace is surfaced as `Degraded`, while explicit subsystem `FAIL` evidence remains immediate and bypasses the grace.
 
 ## Operator lifecycle projection
 

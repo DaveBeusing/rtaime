@@ -42,6 +42,8 @@ RuntimeHost owns the live scheduler evidence because one `PeriodicTimer` is the 
 
 `V1RuntimeHostService` therefore starts timing health as `Recovering`; it is no longer hardcoded to `Healthy`. Only measured scheduler observations can move it to `Healthy`, `Degraded`, `Unstable` or `Lost`.
 
+The numeric management-IPC representation is anchored by the shared `RuntimeTimingHealthState` Runtime contract. RuntimeHost derives its V1 timing-health values from that contract, and ControlHost validates and projects the same contract values by semantic name rather than by an independent numeric ordering. This prevents a wire-value mismatch from inverting `Healthy` and `Degraded` evidence.
+
 The default V1 software thresholds are intentionally conservative:
 
 - expected period: exact active frame period;

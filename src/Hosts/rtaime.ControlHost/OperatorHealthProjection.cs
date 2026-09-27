@@ -119,13 +119,16 @@ public static class OperatorHealthProjection
 		if (runtime.Runtime.Status != RuntimeExecutionStatus.Committed)
 			return Fail($"Runtime execution state is {runtime.Runtime.Status}.");
 
-		return runtime.TimingHealth switch
+		if (!Enum.IsDefined(typeof(RuntimeTimingHealthState), runtime.TimingHealth))
+			return Unverified($"Runtime timing health value '{runtime.TimingHealth}' is not recognized.");
+
+		return ((RuntimeTimingHealthState)runtime.TimingHealth) switch
 		{
-			2 => Pass("Runtime execution is committed and timing qualification is healthy."),
-			1 => Unverified("Runtime timing qualification is still recovering."),
-			3 => Fail("Runtime timing qualification is degraded."),
-			4 => Fail("Runtime timing qualification is unstable."),
-			5 => Fail("Runtime timing qualification is lost."),
+			RuntimeTimingHealthState.Healthy => Pass("Runtime execution is committed and timing qualification is healthy."),
+			RuntimeTimingHealthState.Recovering => Unverified("Runtime timing qualification is still recovering."),
+			RuntimeTimingHealthState.Degraded => Fail("Runtime timing qualification is degraded."),
+			RuntimeTimingHealthState.Unstable => Fail("Runtime timing qualification is unstable."),
+			RuntimeTimingHealthState.Lost => Fail("Runtime timing qualification is lost."),
 			_ => Unverified($"Runtime timing health value '{runtime.TimingHealth}' is not recognized.")
 		};
 	}

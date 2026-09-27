@@ -79,7 +79,7 @@ public sealed class ProductionIpcIntegrationTests
 				role.SourceId.ToString() == sourceB.Id &&
 				role.HealthState == RuntimeOutputRoleHealthState.Healthy &&
 				role.AuthoritativeActive) == true);
-		var initialOutputEvidence = await client.SynchronizeAsync();
+		var initialOutputEvidence = await WaitForOutputRoleHealthAsync(client, "aux", "PASS");
 		var initialAux = Assert.Single(initialOutputEvidence.OutputRoles, role => role.RoleId == "aux");
 		Assert.Equal("AUX", initialAux.RoleKind);
 		Assert.Equal(sourceB.Id, initialAux.SourceId);
@@ -98,7 +98,7 @@ public sealed class ProductionIpcIntegrationTests
 				role.SourceId.ToString() == sourceA.Id &&
 				role.HealthState == RuntimeOutputRoleHealthState.Healthy &&
 				role.AuthoritativeActive) == true);
-		var routedOutputEvidence = await client.SynchronizeAsync();
+		var routedOutputEvidence = await WaitForOutputRoleHealthAsync(client, "aux", "PASS");
 		var routedAux = Assert.Single(routedOutputEvidence.OutputRoles, role => role.RoleId == "aux");
 		Assert.Equal(sourceA.Id, routedAux.SourceId);
 		Assert.Equal("PASS", routedAux.HealthState);
@@ -901,6 +901,30 @@ public sealed class ProductionIpcIntegrationTests
 				Assert.Equal(RuntimeHostExitCode.Success, await firstRuntimeRun);
 			}
 		}
+	}
+
+	private static async Task<OperatorStatusSnapshot> WaitForOutputRoleHealthAsync(
+		OperatorControlClient client,
+		string roleId,
+		string expectedHealth)
+	{
+		var deadline = DateTime.UtcNow.AddSeconds(10);
+		OperatorStatusSnapshot? snapshot = null;
+		do
+		{
+			snapshot = await client.SynchronizeAsync();
+			if (snapshot.OutputRoles.Any(role =>
+				string.Equals(role.RoleId, roleId, StringComparison.OrdinalIgnoreCase) &&
+				string.Equals(role.HealthState, expectedHealth, StringComparison.OrdinalIgnoreCase)))
+				return snapshot;
+
+			await Task.Delay(17);
+		}
+		while (DateTime.UtcNow < deadline);
+
+		var actual = snapshot?.OutputRoles.FirstOrDefault(role =>
+			string.Equals(role.RoleId, roleId, StringComparison.OrdinalIgnoreCase))?.HealthState ?? "MISSING";
+		throw new Xunit.Sdk.XunitException($"Output role '{roleId}' did not reach health '{expectedHealth}' within the bounded wait. Last health was '{actual}'.");
 	}
 
 	private static async Task WaitUntilAsync(Func<bool> condition, int timeoutMilliseconds = 5000)

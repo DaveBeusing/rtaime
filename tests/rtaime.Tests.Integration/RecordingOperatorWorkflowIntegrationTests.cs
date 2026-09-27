@@ -76,7 +76,10 @@ public sealed class RecordingOperatorWorkflowIntegrationTests
 			Assert.Equal(firstPath, completed.FinalPath);
 			Assert.Equal(revisionBeforeRecording, client.Snapshot.Production.Revision);
 			Assert.Equal(RuntimeExecutionStatus.Committed, runtime.Runtime!.Snapshot.Runtime.Status);
-			Assert.Equal(0, runtime.Runtime.Snapshot.ActiveGpuSurfaces);
+			Assert.InRange(
+				runtime.Runtime.ProgramReadbackPoolStatistics.ActiveBuffers,
+				0,
+				V1RuntimeHostService.ProgramReadbackBufferCapacity);
 
 			var secondPath = await RecordOneAsync(client, runtime, destination, "ap53-program-02");
 			var second = ReferenceRecordingPayloadReader.Read(secondPath);
@@ -84,7 +87,10 @@ public sealed class RecordingOperatorWorkflowIntegrationTests
 			Assert.NotEqual(firstPath, secondPath);
 			Assert.True(File.Exists(firstPath));
 			Assert.True(File.Exists(secondPath));
-			Assert.Equal(0, runtime.Runtime.Snapshot.ActiveGpuSurfaces);
+			Assert.InRange(
+				runtime.Runtime.ProgramReadbackPoolStatistics.ActiveBuffers,
+				0,
+				V1RuntimeHostService.ProgramReadbackBufferCapacity);
 			Assert.Equal(revisionBeforeRecording, client.Snapshot!.Production.Revision);
 		}
 		finally

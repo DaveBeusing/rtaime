@@ -279,6 +279,8 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 		Revision? authorityRevision = snapshot.AuthorityRevision is null
 			? null
 			: new Revision(snapshot.AuthorityRevision.Value);
+		if (!Enum.IsDefined(typeof(RuntimeTimingHealthState), snapshot.TimingHealth))
+			throw new InvalidDataException($"Runtime timing health value '{snapshot.TimingHealth}' is invalid.");
 
 		return new RuntimeRemoteSnapshot(
 			response.HostInstanceId,

@@ -46,6 +46,16 @@ public sealed class ContractFoundationTests
     }
 
     [Fact]
+    public void Runtime_timing_health_wire_values_are_stable()
+    {
+        Assert.Equal(1, (int)RuntimeTimingHealthState.Healthy);
+        Assert.Equal(2, (int)RuntimeTimingHealthState.Degraded);
+        Assert.Equal(3, (int)RuntimeTimingHealthState.Unstable);
+        Assert.Equal(4, (int)RuntimeTimingHealthState.Lost);
+        Assert.Equal(5, (int)RuntimeTimingHealthState.Recovering);
+    }
+
+    [Fact]
     public void Transport_profile_uses_canonical_scalar_forms()
     {
         var identity = new Identity(Guid.Parse("12345678-1234-1234-1234-123456789abc"));

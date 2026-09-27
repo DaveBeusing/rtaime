@@ -665,7 +665,7 @@ public sealed class UnifiedApplicationHostTests
 			delayCount++;
 			if (delayCount == 1)
 				platform.RemoveReadiness();
-			else if (delayCount == 2)
+			else if (delayCount == 3)
 				platform.PublishReadiness(platform.LastControlProcessId!.Value);
 		};
 
@@ -678,6 +678,39 @@ public sealed class UnifiedApplicationHostTests
 		Assert.True(degradedIndex >= 0);
 		Assert.True(recoveringIndex > degradedIndex);
 		Assert.True(recoveredHealthyIndex > recoveringIndex);
+		Assert.False(platform.StopSignalWritten);
+	}
+
+	[Fact]
+	public async Task Single_transient_readiness_miss_keeps_healthy_engine_lifecycle()
+	{
+		var options = CreateOptions(
+			ApplicationStartupProfile.Interactive,
+			ApplicationLifecycleOwnership.PersistentEngine,
+			runtimeRecoveryTimeout: TimeSpan.FromMilliseconds(80));
+		var platform = new FakeApplicationHostPlatform(options)
+		{
+			PublishReadinessOnControlStart = true,
+			OperatorDelayBudget = 5
+		};
+		var host = new UnifiedApplicationHost(options, platform);
+		var states = new List<ApplicationLifecycleState>();
+		host.StateChanged += states.Add;
+		var delayCount = 0;
+		platform.OnDelay = () =>
+		{
+			delayCount++;
+			if (delayCount == 1)
+				platform.RemoveReadiness();
+			else if (delayCount == 2)
+				platform.PublishReadiness(platform.LastControlProcessId!.Value);
+		};
+
+		var result = await host.RunAsync();
+
+		Assert.True(result.Success);
+		Assert.DoesNotContain(ApplicationLifecycleState.Degraded, states);
+		Assert.DoesNotContain(ApplicationLifecycleState.Recovering, states);
 		Assert.False(platform.StopSignalWritten);
 	}
 
