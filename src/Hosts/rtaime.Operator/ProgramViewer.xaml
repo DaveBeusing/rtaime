@@ -50,8 +50,12 @@
 
 			<StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
 				<controls:RtaimeIconButton IconData="{StaticResource RtaimeIconFitGeometry}" Command="{Binding FitCommand, ElementName=Root}" Width="28" Height="28" Margin="0,0,3,0" ToolTip="Fit Program" AutomationProperties.Name="Fit Program" />
+				<controls:RtaimeIconButton IconData="{StaticResource RtaimeIconFitGeometry}" Command="{Binding FillCommand, ElementName=Root}" Width="28" Height="28" Margin="0,0,3,0" ToolTip="Fill Program" AutomationProperties.Name="Fill Program" />
+				<controls:RtaimeIconButton IconData="{StaticResource RtaimeIconZoomGeometry}" Command="{Binding Zoom25Command, ElementName=Root}" Width="28" Height="28" Margin="0,0,3,0" ToolTip="Program 25 percent" AutomationProperties.Name="Program 25 percent" />
 				<controls:RtaimeIconButton IconData="{StaticResource RtaimeIconZoomGeometry}" Command="{Binding Zoom50Command, ElementName=Root}" Width="28" Height="28" Margin="0,0,3,0" ToolTip="Program 50 percent" AutomationProperties.Name="Program 50 percent" />
-				<controls:RtaimeIconButton IconData="{StaticResource RtaimeIconZoomGeometry}" Command="{Binding Zoom100Command, ElementName=Root}" Width="28" Height="28" Margin="0,0,3,0" ToolTip="Program 100 percent" AutomationProperties.Name="Program 100 percent" />
+				<controls:RtaimeIconButton IconData="{StaticResource RtaimeIconZoomGeometry}" Command="{Binding Zoom100Command, ElementName=Root}" Width="28" Height="28" Margin="0,0,3,0" ToolTip="Program 100 percent (pixel perfect)" AutomationProperties.Name="Program 100 percent" />
+				<controls:RtaimeIconButton IconData="{StaticResource RtaimeIconZoomGeometry}" Command="{Binding Zoom200Command, ElementName=Root}" Width="28" Height="28" Margin="0,0,3,0" ToolTip="Program 200 percent" AutomationProperties.Name="Program 200 percent" />
+				<controls:RtaimeIconButton IconData="{StaticResource RtaimeIconZoomGeometry}" Command="{Binding Zoom400Command, ElementName=Root}" Width="28" Height="28" Margin="0,0,3,0" ToolTip="Program 400 percent" AutomationProperties.Name="Program 400 percent" />
 				<controls:RtaimeIconButton IconData="{StaticResource RtaimeIconMaximizeGeometry}" Command="{Binding MaximizeCommand, ElementName=Root}" Width="28" Height="28" Margin="0,0,3,0" ToolTip="Maximize Program" AutomationProperties.Name="Maximize Program" />
 				<controls:RtaimeIconButton IconData="{StaticResource RtaimeIconFullscreenGeometry}" Command="{Binding FullscreenCommand, ElementName=Root}" Width="28" Height="28" ToolTip="Fullscreen Program" AutomationProperties.Name="Fullscreen Program" />
 			</StackPanel>
