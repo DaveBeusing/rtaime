@@ -459,6 +459,24 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	public IReadOnlyList<VirtualOutputFrame> AuxFrames =>
 		_auxOutput?.Frames ?? Array.Empty<VirtualOutputFrame>();
 
+	public MediaSinkId? ProgramOutputSinkId
+	{
+		get
+		{
+			lock (_gate)
+				return _programOutput?.SinkId;
+		}
+	}
+
+	public MediaSinkId? AuxOutputSinkId
+	{
+		get
+		{
+			lock (_gate)
+				return _auxOutput?.SinkId;
+		}
+	}
+
 	public RuntimeMonitoringHub MonitoringHub => _monitoringHub;
 	public RuntimeMonitoringTapStatistics MonitoringStatistics => _monitoringTap.Statistics;
 	public VideoFormat Format => _format;
@@ -608,6 +626,26 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			if (auxBindings.Length == 1 && (auxBindings[0].MediaSourceId is null || auxBindings[0].MediaSinkId is null))
 				throw new InvalidOperationException("Aux output binding requires both source and sink identities.");
 
+			var recording = _recorder.Snapshot;
+			if (recording.State is RecordingLifecycleState.Recording or RecordingLifecycleState.Finalizing &&
+				recording.Output is { } recordingOutput &&
+				recordingOutput.ProgramSinkId != programSinkId)
+			{
+				var failure = new Failure(
+					"runtime.output.program_rebind_recording_active",
+					"Program sink cannot change while the active recording session is bound to the current Program sink.");
+				Observe($"runtime.prepare.rejected:{failure.Code}");
+				return new RuntimeHostApplyResult(
+					new RuntimePrepareResult(
+						RuntimeContractVersion.Current,
+						preparedExecution.PreparedExecutionId,
+						RuntimePrepareStatus.Rejected,
+						null,
+						failure),
+					null,
+					null);
+			}
+
 			var compositingFailure = ValidatePreparedCompositingStateUnsafe(preparedExecution.CompositingState);
 			if (compositingFailure is not null)
 			{
@@ -696,8 +734,9 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				return new RuntimeHostApplyResult(prepare, commit, null);
 			}
 
+			if (_programSinkId != programSinkId || _programOutput is null)
+				_programOutput = _virtualMedia.CreateOutput(programSinkId);
 			_programSinkId = programSinkId;
-			_programOutput ??= _virtualMedia.CreateOutput(programSinkId);
 			var auxBinding = auxBindings.SingleOrDefault();
 			if (auxBinding is null)
 			{
@@ -1920,39 +1959,106 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			return Array.Empty<RuntimeOutputRoleSnapshot>();
 
 		var snapshots = new List<RuntimeOutputRoleSnapshot>();
-		if (_programSinkId is { } programSink)
+		var programBinding = execution.PreparedExecution.Bindings.SingleOrDefault(binding =>
+			string.Equals(binding.OutputRoleId, "program", StringComparison.Ordinal));
+		if (programBinding is null && _programSinkId is { } storedProgramSink)
+			programBinding = execution.PreparedExecution.Bindings.SingleOrDefault(binding => binding.MediaSinkId == storedProgramSink);
+
+		if (programBinding?.MediaSourceId is { } programSource && programBinding.MediaSinkId is { } programSink)
 		{
-			var programBinding = execution.PreparedExecution.Bindings.SingleOrDefault(binding => binding.MediaSinkId == programSink);
-			if (programBinding?.MediaSourceId is { } programSource)
+			var programOutput = _programOutput;
+			var programEvidence = programOutput?.LastFrame;
+			Failure? fault = null;
+			if (_programSinkId != programSink)
 			{
-				var programEvidence = _programOutput?.LastFrame;
-				var hasEvidence = programEvidence is not null && programEvidence.Frame.SourceId == programSource;
-				snapshots.Add(new RuntimeOutputRoleSnapshot(
-					"program", "PROGRAM", programSource, programSink, _format, _virtualMedia.Timing.FrameTimebase,
-					programBinding.Resource.ProviderId, RuntimeOutputRoleLifecycleState.Active, true,
-					hasEvidence ? RuntimeOutputRoleHealthState.Healthy : RuntimeOutputRoleHealthState.Unverified,
-					hasEvidence ? $"Program provider confirmed frame sequence {programEvidence!.Frame.Timing.SequenceNumber}." : "Program output is committed; provider evidence for the configured source is pending."));
+				fault = new Failure(
+					"runtime.output.program_stored_sink_mismatch",
+					"RuntimeHost stored Program sink does not match the committed Program target.");
 			}
+			else if (programOutput is null)
+			{
+				fault = new Failure(
+					"runtime.output.program_binding_missing",
+					"Committed Program output has no bound provider output.");
+			}
+			else if (programOutput.SinkId != programSink)
+			{
+				fault = new Failure(
+					"runtime.output.program_binding_mismatch",
+					$"Program output is bound to sink '{programOutput.SinkId}' while committed target is '{programSink}'.");
+			}
+			else if (programEvidence is not null && programEvidence.SinkId != programSink)
+			{
+				fault = new Failure(
+					"runtime.output.program_evidence_sink_mismatch",
+					$"Program output evidence targets sink '{programEvidence.SinkId}' while committed target is '{programSink}'.");
+			}
+
+			var hasEvidence = fault is null &&
+				programEvidence is not null &&
+				programEvidence.Frame.SourceId == programSource;
+			snapshots.Add(new RuntimeOutputRoleSnapshot(
+				"program", "PROGRAM", programSource, programSink, _format, _virtualMedia.Timing.FrameTimebase,
+				programBinding.Resource.ProviderId,
+				fault is null ? RuntimeOutputRoleLifecycleState.Active : RuntimeOutputRoleLifecycleState.Faulted,
+				true,
+				fault is not null ? RuntimeOutputRoleHealthState.Faulted : hasEvidence ? RuntimeOutputRoleHealthState.Healthy : RuntimeOutputRoleHealthState.Unverified,
+				fault is not null
+					? fault.Value.Message
+					: hasEvidence
+						? $"Program provider confirmed frame sequence {programEvidence!.Frame.Timing.SequenceNumber} for sink '{programSink}'."
+						: $"Program output is committed to sink '{programSink}'; matching source/frame evidence is pending.",
+				fault));
 		}
 
-		if (_auxSinkId is { } auxSink)
+		var auxBinding = execution.PreparedExecution.Bindings.SingleOrDefault(binding =>
+			string.Equals(binding.OutputRoleId, "aux", StringComparison.Ordinal));
+		if (auxBinding?.MediaSourceId is { } auxSource && auxBinding.MediaSinkId is { } auxSink)
 		{
-			var auxBinding = execution.PreparedExecution.Bindings.SingleOrDefault(binding =>
-				string.Equals(binding.OutputRoleId, "aux", StringComparison.Ordinal) && binding.MediaSinkId == auxSink);
-			if (auxBinding?.MediaSourceId is { } auxSource)
+			var auxOutput = _auxOutput;
+			var auxEvidence = auxOutput?.LastFrame;
+			Failure? bindingFault = null;
+			if (_auxSinkId != auxSink)
 			{
-				var auxEvidence = _auxOutput?.LastFrame;
-				var hasEvidence = auxEvidence is not null && auxEvidence.Frame.SourceId == auxSource;
-				var fault = _auxFailure;
-				snapshots.Add(new RuntimeOutputRoleSnapshot(
-					"aux", "AUX", auxSource, auxSink, _format, _virtualMedia.Timing.FrameTimebase,
-					auxBinding.Resource.ProviderId,
-					fault is null ? RuntimeOutputRoleLifecycleState.Active : RuntimeOutputRoleLifecycleState.Faulted,
-					true,
-					fault is not null ? RuntimeOutputRoleHealthState.Faulted : hasEvidence ? RuntimeOutputRoleHealthState.Healthy : RuntimeOutputRoleHealthState.Unverified,
-					fault is not null ? "Aux provider reported an output failure." : hasEvidence ? $"Aux provider confirmed frame sequence {auxEvidence!.Frame.Timing.SequenceNumber}." : "Aux output is committed; provider evidence for the configured source is pending.",
-					fault));
+				bindingFault = new Failure(
+					"runtime.output.aux_stored_sink_mismatch",
+					"RuntimeHost stored Aux sink does not match the committed Aux target.");
 			}
+			else if (auxOutput is null)
+			{
+				bindingFault = new Failure(
+					"runtime.output.aux_binding_missing",
+					"Committed Aux output has no bound provider output.");
+			}
+			else if (auxOutput.SinkId != auxSink)
+			{
+				bindingFault = new Failure(
+					"runtime.output.aux_binding_mismatch",
+					$"Aux output is bound to sink '{auxOutput.SinkId}' while committed target is '{auxSink}'.");
+			}
+			else if (auxEvidence is not null && auxEvidence.SinkId != auxSink)
+			{
+				bindingFault = new Failure(
+					"runtime.output.aux_evidence_sink_mismatch",
+					$"Aux output evidence targets sink '{auxEvidence.SinkId}' while committed target is '{auxSink}'.");
+			}
+
+			var fault = bindingFault ?? _auxFailure;
+			var hasEvidence = fault is null &&
+				auxEvidence is not null &&
+				auxEvidence.Frame.SourceId == auxSource;
+			snapshots.Add(new RuntimeOutputRoleSnapshot(
+				"aux", "AUX", auxSource, auxSink, _format, _virtualMedia.Timing.FrameTimebase,
+				auxBinding.Resource.ProviderId,
+				fault is null ? RuntimeOutputRoleLifecycleState.Active : RuntimeOutputRoleLifecycleState.Faulted,
+				true,
+				fault is not null ? RuntimeOutputRoleHealthState.Faulted : hasEvidence ? RuntimeOutputRoleHealthState.Healthy : RuntimeOutputRoleHealthState.Unverified,
+				fault is not null
+					? fault.Value.Message
+					: hasEvidence
+						? $"Aux provider confirmed frame sequence {auxEvidence!.Frame.Timing.SequenceNumber} for sink '{auxSink}'."
+						: $"Aux output is committed to sink '{auxSink}'; matching source/frame evidence is pending.",
+				fault));
 		}
 		return snapshots.AsReadOnly();
 	}

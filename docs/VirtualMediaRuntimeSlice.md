@@ -61,6 +61,12 @@ The synthetic provider does not allocate or transport bulk pixel payloads. A fra
 
 Virtual Program/Aux outputs retain current/last output state plus only the newest 128 `VirtualOutputFrame` descriptors for diagnostics and deterministic regression inspection. Total written-frame and overwritten-history counters remain monotonic, while historical frame retention never grows with process lifetime. The retained evidence contains descriptors only and does not add bulk pixel storage.
 
+### Output binding and health invariant
+
+After a successful Runtime commit, the RuntimeHost stored output target and the actual `VirtualVideoOutput.SinkId` must represent the same committed sink. A Program sink change creates a new Program output instance before the stored Program sink is advanced; the first boundary after that commit writes only through the newly bound output. Repeated sink changes therefore start a fresh bounded descriptor history for the current output and do not continue writing through stale output instances.
+
+Output-role health is non-authoritative evidence over the committed execution. A role may report `Healthy` only when the committed target, RuntimeHost stored sink, actual output sink and retained output-frame sink agree, and the retained frame source matches the committed source. A newly rebound output remains `Unverified` until matching frame evidence exists. A stored/output sink mismatch is `Faulted` rather than being inferred healthy from source identity alone. Aux uses the same sink-identity checks in addition to its existing provider-failure evidence.
+
 The virtual implementation is Reference Behaviour and a deterministic test oracle. It is not evidence for professional capture/output hardware, GPU, DMA, genlock or external device qualification.
 
 ## Internal broadcast reference signal
@@ -175,6 +181,9 @@ Virtual Media Runtime Slice integration evidence covers at least:
 - 1080p59.94,
 - deterministic repeated execution,
 - failed prepare leaves current Program intact,
+- Program sink rebinding writes only to the new committed target,
+- repeated Program sink rebinding remains deterministic,
+- output health validates committed/stored/actual sink identity before reporting healthy,
 - deterministic VirtualMedia capability/resource advertisement.
 
 The complete repository Architecture, Contract, Unit, Integration, Behavioral, Failure and Performance baseline must remain green.
