@@ -165,7 +165,7 @@ Production Revision advances only when an authoritative production mutation is c
 
 Clients establish synchronization from a full snapshot. Timed metadata deltas are valid only when their `BasedOnStateVersion` equals the client's current StateVersion. A gap or HostInstanceId change invalidates the delta stream and requires a new full snapshot.
 
-ControlHost, RuntimeHost and AIHost allocate envelope sequence values atomically across concurrent accepted sessions. RuntimeHost and AIHost also allocate remotely visible StateVersion increments atomically; the wire contract remains `ulong`, while the process-local allocator uses signed `long` atomics and fails closed at `long.MaxValue` before conversion can overflow. Atomic metadata allocation does not serialize compound host mutations: ControlHost retains its mutation gate, while RuntimeHost/AIHost subsystem state continues to rely on the existing owning-service synchronization and admission rules.
+ControlHost, RuntimeHost and AIHost allocate envelope sequence values atomically across concurrent accepted sessions. RuntimeHost and AIHost also allocate remotely visible StateVersion increments atomically; the wire contract remains `ulong`, while the process-local allocator uses signed `long` atomics and fails closed at `long.MaxValue` before conversion can overflow. Atomic metadata allocation does not replace compound-state synchronization: ControlHost retains its mutation gate, RuntimeHost serializes mutating IPC requests through its host-local mutation gate before advancing StateVersion, and AIHost keeps governed inference parallel under its existing admission/runtime synchronization.
 
 ## Runtime reconnect and restart
 
