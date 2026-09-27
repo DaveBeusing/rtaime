@@ -164,7 +164,7 @@ public class MonitorView : UserControl
 		nameof(ShowGrid),
 		typeof(bool),
 		typeof(MonitorView),
-		new PropertyMetadata(false));
+		new PropertyMetadata(false, OnGridChanged));
 
 	public static readonly DependencyProperty InspectionChannelProperty = DependencyProperty.Register(
 		nameof(InspectionChannel), typeof(MediaInspectionChannel), typeof(MonitorView),
@@ -334,6 +334,11 @@ public class MonitorView : UserControl
 	public ICommand ShowBlueCommand { get; }
 	public ICommand ShowAlphaCommand { get; }
 	public ICommand ShowLumaCommand { get; }
+
+	private static void OnGridChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs eventArgs)
+	{
+		((MonitorView)dependencyObject).RefreshPresentation();
+	}
 
 	private static void OnZoomModeChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs eventArgs)
 	{
