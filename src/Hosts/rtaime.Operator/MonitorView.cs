@@ -131,8 +131,12 @@ public class MonitorView : UserControl
 	public MonitorView()
 	{
 		FitCommand = new MonitorPresentationCommand(() => ZoomMode = "FIT");
+		FillCommand = new MonitorPresentationCommand(() => ZoomMode = "FILL");
+		Zoom25Command = new MonitorPresentationCommand(() => ZoomMode = "25%");
 		Zoom50Command = new MonitorPresentationCommand(() => ZoomMode = "50%");
 		Zoom100Command = new MonitorPresentationCommand(() => ZoomMode = "100%");
+		Zoom200Command = new MonitorPresentationCommand(() => ZoomMode = "200%");
+		Zoom400Command = new MonitorPresentationCommand(() => ZoomMode = "400%");
 	}
 
 	public ImageSource? Frame
@@ -231,8 +235,12 @@ public class MonitorView : UserControl
 	public string DisplayTimecode => (string)GetValue(DisplayTimecodeProperty);
 
 	public ICommand FitCommand { get; }
+	public ICommand FillCommand { get; }
+	public ICommand Zoom25Command { get; }
 	public ICommand Zoom50Command { get; }
 	public ICommand Zoom100Command { get; }
+	public ICommand Zoom200Command { get; }
+	public ICommand Zoom400Command { get; }
 
 	private static void OnZoomModeChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs eventArgs)
 	{
@@ -244,8 +252,20 @@ public class MonitorView : UserControl
 			return;
 		}
 
-		view.SetValue(ImageStretchPropertyKey, mode == "FIT" ? Stretch.Uniform : Stretch.None);
-		view.SetValue(ImageScalePropertyKey, mode == "50%" ? 0.5 : 1.0);
+		view.SetValue(ImageStretchPropertyKey, mode switch
+		{
+			"FIT" => Stretch.Uniform,
+			"FILL" => Stretch.UniformToFill,
+			_ => Stretch.None
+		});
+		view.SetValue(ImageScalePropertyKey, mode switch
+		{
+			"25%" => 0.25,
+			"50%" => 0.5,
+			"200%" => 2.0,
+			"400%" => 4.0,
+			_ => 1.0
+		});
 	}
 
 	private static void OnTransportContextChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs eventArgs)
@@ -267,8 +287,12 @@ public class MonitorView : UserControl
 
 	private static string NormalizeZoomMode(string? value) => value?.Trim().ToUpperInvariant() switch
 	{
+		"FILL" => "FILL",
+		"25%" => "25%",
 		"50%" => "50%",
 		"100%" => "100%",
+		"200%" => "200%",
+		"400%" => "400%",
 		_ => "FIT"
 	};
 
