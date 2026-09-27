@@ -41,8 +41,29 @@ public static class RuntimeHostDiagnostics
 
 		if (process.IpcServer is { } ipc)
 		{
+			var sessions = ipc.Sessions;
 			builder.Identity("hostInstanceId", ipc.HostInstanceId)
-				.Configuration("runtimeEndpoint", ipc.Endpoint);
+				.Configuration("runtimeEndpoint", ipc.Endpoint)
+				.Counter("ipc.sessions.active", sessions.ActiveSessions)
+				.Counter("ipc.sessions.started", ToCounter(sessions.StartedSessions))
+				.Counter("ipc.sessions.completed", ToCounter(sessions.CompletedSessions))
+				.Counter("ipc.sessions.faulted", ToCounter(sessions.FaultedSessions))
+				.Status("ipc.sessions.accepting", sessions.AcceptingSessions.ToString())
+				.Status("ipc.sessions.stopRequested", sessions.StopRequested.ToString())
+				.Status("ipc.sessions.drainTimedOut", sessions.DrainTimedOut.ToString())
+				.Status("ipc.sessions.lastFailureType", sessions.LastFailureType ?? "none")
+				.Status("ipc.sessions.lastFailure", sessions.LastFailureDetail ?? "none");
+		}
+
+		if (process.MonitoringServer is { } monitoring)
+		{
+			var sessions = monitoring.Sessions;
+			builder.Counter("monitoring.sessions.active", sessions.ActiveSessions)
+				.Counter("monitoring.sessions.started", ToCounter(sessions.StartedSessions))
+				.Counter("monitoring.sessions.completed", ToCounter(sessions.CompletedSessions))
+				.Counter("monitoring.sessions.faulted", ToCounter(sessions.FaultedSessions))
+				.Status("monitoring.sessions.drainTimedOut", sessions.DrainTimedOut.ToString())
+				.Status("monitoring.sessions.lastFailure", sessions.LastFailureDetail ?? "none");
 		}
 
 		if (process.MediaIoStatistics is { } mediaIo)
