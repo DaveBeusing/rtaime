@@ -63,6 +63,11 @@ public class MonitorView : UserControl
 		typeof(MonitorView),
 		new PropertyMetadata("—"));
 
+	private static readonly DependencyPropertyKey SourcePixelWidthPropertyKey = DependencyProperty.RegisterReadOnly(nameof(SourcePixelWidth), typeof(int), typeof(MonitorView), new PropertyMetadata(0));
+	private static readonly DependencyPropertyKey SourcePixelHeightPropertyKey = DependencyProperty.RegisterReadOnly(nameof(SourcePixelHeight), typeof(int), typeof(MonitorView), new PropertyMetadata(0));
+	public static readonly DependencyProperty SourcePixelWidthProperty = SourcePixelWidthPropertyKey.DependencyProperty;
+	public static readonly DependencyProperty SourcePixelHeightProperty = SourcePixelHeightPropertyKey.DependencyProperty;
+
 	private static readonly DependencyPropertyKey InspectionReadoutPropertyKey = DependencyProperty.RegisterReadOnly(
 		nameof(InspectionReadout), typeof(string), typeof(MonitorView), new PropertyMetadata("PIXEL —"));
 	private static readonly DependencyPropertyKey IsPixelGridVisiblePropertyKey = DependencyProperty.RegisterReadOnly(
@@ -306,6 +311,8 @@ public class MonitorView : UserControl
 	public double PresentationOffsetX => (double)GetValue(PresentationOffsetXProperty);
 	public double PresentationOffsetY => (double)GetValue(PresentationOffsetYProperty);
 	public string PresentationInfo => (string)GetValue(PresentationInfoProperty);
+	public int SourcePixelWidth => (int)GetValue(SourcePixelWidthProperty);
+	public int SourcePixelHeight => (int)GetValue(SourcePixelHeightProperty);
 	public string InspectionReadout => (string)GetValue(InspectionReadoutProperty);
 	public bool IsPixelGridVisible => (bool)GetValue(IsPixelGridVisibleProperty);
 	public bool IsTransportSource => (bool)GetValue(IsTransportSourceProperty);
@@ -437,6 +444,8 @@ public class MonitorView : UserControl
 			return;
 
 		var (sourceWidth, sourceHeight) = ResolveSourcePixels(Frame);
+		SetValue(SourcePixelWidthPropertyKey, checked((int)sourceWidth));
+		SetValue(SourcePixelHeightPropertyKey, checked((int)sourceHeight));
 		if (sourceWidth <= 0 || sourceHeight <= 0)
 			return;
 
