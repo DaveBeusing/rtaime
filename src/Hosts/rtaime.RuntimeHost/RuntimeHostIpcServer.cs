@@ -35,7 +35,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		Func<V1RuntimeHostService?> runtimeAccessor,
 		Func<LocalMediaDeckRuntimeService?>? mediaDeckAccessor = null,
 		Func<RuntimeAIShowcaseService?>? aiShowcaseAccessor = null)
-		: this(endpoint, runtimeAccessor, mediaDeckAccessor, aiShowcaseAccessor, null)
+		: this(endpoint, runtimeAccessor, mediaDeckAccessor, aiShowcaseAccessor, null, null)
 	{
 	}
 
@@ -44,7 +44,8 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		Func<V1RuntimeHostService?> runtimeAccessor,
 		Func<LocalMediaDeckRuntimeService?>? mediaDeckAccessor,
 		Func<RuntimeAIShowcaseService?>? aiShowcaseAccessor,
-		Func<NamedPipeServerStream>? pipeFactory)
+		Func<NamedPipeServerStream>? pipeFactory,
+		TimeSpan? sessionDrainTimeout = null)
 	{
 		if (string.IsNullOrWhiteSpace(endpoint)) throw new ArgumentException("RuntimeHost IPC endpoint is required.", nameof(endpoint));
 		_endpoint = endpoint.Trim();
@@ -55,7 +56,8 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 			_endpoint,
 			"primary-control",
 			pipeFactory ?? CreatePipe,
-			HandleConnectionAsync);
+			HandleConnectionAsync,
+			sessionDrainTimeout);
 	}
 
 	public string Endpoint => _endpoint;
