@@ -23,8 +23,8 @@ public sealed class AIHostIpcServer : IAsyncDisposable
 	private readonly string _hostInstanceId = Identity.New().ToString();
 	private Task? _acceptLoop;
 	private CancellationTokenSource? _runStop;
-	private long _sequence;
-	private long _stateVersion = 1;
+	private readonly HostIpcProtocolCounter _sequence = new();
+	private readonly HostIpcProtocolCounter _stateVersion = new(1);
 
 	public AIHostIpcServer(
 		string endpoint,
