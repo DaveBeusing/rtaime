@@ -3,6 +3,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Threading;
 
 namespace rtaime.Operator.Controls;
 
@@ -12,6 +13,10 @@ public sealed class RtaimeMonitorPresentation : ContentControl
 	private const string MediaViewportPartName = "PART_MediaViewport";
 	private FrameworkElement? _mediaViewport;
 	private Point? _panOrigin;
+	private readonly DispatcherTimer _resizeSettleTimer = new(DispatcherPriority.Render)
+	{
+		Interval = TimeSpan.FromMilliseconds(80)
+	};
 	public static readonly DependencyProperty MonitorProperty = DependencyProperty.Register(
 		nameof(Monitor),
 		typeof(MonitorView),
@@ -145,6 +150,9 @@ public sealed class RtaimeMonitorPresentation : ContentControl
 	}
 	public override void OnApplyTemplate()
 	{
+		_resizeSettleTimer.Stop();
+		_resizeSettleTimer.Tick -= OnResizeSettleTick;
+		_resizeSettleTimer.Tick += OnResizeSettleTick;
 		DetachViewport();
 		base.OnApplyTemplate();
 
@@ -165,7 +173,18 @@ public sealed class RtaimeMonitorPresentation : ContentControl
 		((RtaimeMonitorPresentation)dependencyObject).RefreshViewport();
 	}
 
-	private void OnViewportSizeChanged(object sender, SizeChangedEventArgs e) => RefreshViewport();
+	private void OnViewportSizeChanged(object sender, SizeChangedEventArgs e)
+	{
+		RefreshViewport();
+		_resizeSettleTimer.Stop();
+		_resizeSettleTimer.Start();
+	}
+
+	private void OnResizeSettleTick(object? sender, EventArgs e)
+	{
+		_resizeSettleTimer.Stop();
+		RefreshViewport();
+	}
 
 	private void OnViewportMouseWheel(object sender, System.Windows.Input.MouseWheelEventArgs e)
 	{
@@ -229,6 +248,7 @@ public sealed class RtaimeMonitorPresentation : ContentControl
 		_mediaViewport.MouseMove -= OnViewportMouseMove;
 		_mediaViewport = null;
 		_panOrigin = null;
+		_resizeSettleTimer.Stop();
 	}
 
 
