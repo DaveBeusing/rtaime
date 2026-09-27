@@ -23,6 +23,7 @@
 		<controls:RtaimeMonitorPresentation.HeaderContent>
 			<StackPanel Orientation="Horizontal" VerticalAlignment="Center">
 				<controls:RtaimeIconButton IconData="{StaticResource RtaimeIconFitGeometry}" Command="{Binding FitCommand, ElementName=Root}" Width="26" Height="26" Margin="0,0,3,0" ToolTip="Fit Preview" AutomationProperties.Name="Fit Preview" />
+				<controls:RtaimeIconButton IconData="{StaticResource RtaimeIconZoomGeometry}" Command="{Binding ToggleTechnicalOverlayCommand, ElementName=Root}" Width="26" Height="26" Margin="0,0,3,0" ToolTip="Toggle Preview technical overlay" AutomationProperties.Name="Toggle Preview technical overlay" />
 				<controls:RtaimeIconButton IconData="{StaticResource RtaimeIconMaximizeGeometry}" Command="{Binding MaximizeCommand, ElementName=Root}" Width="26" Height="26" Margin="0,0,3,0" ToolTip="Maximize Preview" AutomationProperties.Name="Maximize Preview" />
 				<controls:RtaimeIconButton IconData="{StaticResource RtaimeIconFullscreenGeometry}" Command="{Binding FullscreenCommand, ElementName=Root}" Width="26" Height="26" ToolTip="Fullscreen Preview" AutomationProperties.Name="Fullscreen Preview" />
 			</StackPanel>
