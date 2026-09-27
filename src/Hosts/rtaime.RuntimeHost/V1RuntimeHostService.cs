@@ -277,6 +277,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	public const string ProductionCgLayerId = "production-cg";
 
 	private readonly object _gate = new();
+	private readonly object _boundaryExecutionGate = new();
 	private readonly VideoFormat _format;
 	private readonly VirtualMediaReferenceProvider _virtualMedia;
 	private readonly MediaFramePipeline _sourceAPipeline;
@@ -605,9 +606,11 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		MediaSinkId programSinkId,
 		RuntimeProgramTransitionIntent? transition = null)
 	{
-		ArgumentNullException.ThrowIfNull(preparedExecution);
-		lock (_gate)
+		lock (_boundaryExecutionGate)
 		{
+			ArgumentNullException.ThrowIfNull(preparedExecution);
+			lock (_gate)
+			{
 			ThrowIfDisposed();
 
 			var programBinding = preparedExecution.Bindings.SingleOrDefault(binding => binding.MediaSinkId == programSinkId)
@@ -760,222 +763,279 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				Observe($"runtime.transition.anchored:{transition.Kind}:{_nextSequenceNumber}:{transition.DurationFrames}");
 
 			return new RuntimeHostApplyResult(prepare, commit, _nextSequenceNumber);
+			}
 		}
 	}
 
 	public V1ProgramBoundaryResult ProcessNextBoundary()
 	{
-		lock (_gate)
+		lock (_boundaryExecutionGate)
 		{
-			ThrowIfDisposed();
-			var execution = _runtime.ActiveExecution ?? throw new InvalidOperationException("RuntimeHost requires a committed execution before processing media.");
-			var programSink = _programSinkId ?? throw new InvalidOperationException("RuntimeHost has no committed Program sink.");
-			var programBinding = execution.PreparedExecution.Bindings.SingleOrDefault(binding => binding.MediaSinkId == programSink)
-				?? throw new InvalidOperationException("Committed execution must contain exactly one Program binding.");
-			var committedSource = programBinding.MediaSourceId
-				?? throw new InvalidOperationException("Committed Program binding must contain a media source.");
-			var routedAudioSource = _audio.ResolveAudioSource(committedSource);
-			var avSyncEnabled = _audio.RoutingState.Mode == AudioRoutingMode.FollowVideo &&
-				IsAvSyncDiagnosticsEnabledUnsafe(committedSource);
-			if (!avSyncEnabled)
-			{
-				if (_avSyncDiagnosticsSourceId is not null)
-					ResetAvSyncDiagnosticsUnsafe();
-			}
-			else if (_avSyncDiagnosticsSourceId != committedSource)
-			{
-				ResetAvSyncDiagnosticsUnsafe();
-				_avSyncDiagnosticsSourceId = committedSource;
-			}
-
-			var sequence = _nextSequenceNumber;
-			var frameA = ProcessTimedInput(_virtualMedia.SourceA, _sourceAPipeline, sequence);
-			var frameB = ProcessTimedInput(_virtualMedia.SourceB, _sourceBPipeline, sequence);
-			var frames = new Dictionary<MediaSourceId, FrameDescriptor>
-			{
-				[frameA.SourceId] = frameA,
-				[frameB.SourceId] = frameB
-			};
-			WriteAuxFrameUnsafe(execution.PreparedExecution, frames);
-
-			var contentA = ResolveInputContent(frameA);
-			var contentB = ResolveInputContent(frameB);
-			using var gpuA = RequiresGpuSourceUnsafe(frameA.SourceId, committedSource)
-				? MaterializeInput(frameA, contentA)
-				: null;
-			using var gpuB = RequiresGpuSourceUnsafe(frameB.SourceId, committedSource)
-				? MaterializeInput(frameB, contentB)
-				: null;
-			var gpuFrames = new Dictionary<MediaSourceId, GpuFrame>();
-			if (gpuA is not null)
-				gpuFrames.Add(frameA.SourceId, gpuA);
-			if (gpuB is not null)
-				gpuFrames.Add(frameB.SourceId, gpuB);
-
-			var transitionKind = _transition?.Intent.Kind;
-			var (fromFrame, toFrame, gpuTransition, blendWeight, transitionComplete) = ResolveTransition(committedSource, sequence, gpuFrames);
-			var materializedLayers = MaterializeLayers(fromFrame.Descriptor.Timing);
-			GpuProcessingResult composite;
+			GpuFrame? gpuA = null;
+			GpuFrame? gpuB = null;
+			IReadOnlyList<MaterializedCompositingLayer>? materializedLayers = null;
 			try
 			{
-				composite = _gpu.Composite(GpuCompositeRequest.WithLayers(
-					committedSource,
-					fromFrame,
-					toFrame,
-					gpuTransition,
-					materializedLayers.Select(layer => layer.Layer)));
-			}
-			finally
-			{
-				foreach (var materialized in materializedLayers)
-					materialized.Frame.Dispose();
-			}
-			_lastCompositionDuration = composite.Duration;
-			_lastCompositingLayerCount = composite.LayerCount;
-			Observe($"gpu.composite.completed:layers={composite.LayerCount}:durationTicks={composite.Duration.Ticks}:surfaces={_gpu.ActiveSurfaceCount}");
-			if (!composite.Succeeded)
-			{
-				Observe($"gpu.composite.failed:{composite.Failure?.Code}");
-				throw new InvalidOperationException(composite.Failure?.Message ?? "GPU composite failed.");
-			}
+				CommittedRuntimeExecution execution;
+				MediaSourceId committedSource;
+				ulong sequence;
+				FrameDescriptor frameA;
+				FrameDescriptor frameB;
+				GpuFrame fromFrame;
+				GpuFrame toFrame;
+				GpuTransition gpuTransition;
+				byte blendWeight;
+				bool transitionComplete;
+				RuntimeProgramTransitionKind? transitionKind;
+				AnchoredTransition? boundaryTransition;
+				VirtualVideoOutput programOutput;
+				bool avSyncEnabled;
+				AudioBufferDescriptor audioBuffer;
+				AudioFollowVideoResult audio;
+				byte[] programAudioPayload;
+				AvSyncAudioEventObservation? audioSyncEvent;
+				V1VisualLayerMode visualLayerMode;
+				RuntimeMonitoringSourceSnapshot? monitoringSources;
 
-			using var output = composite.Frame!;
-			var pixels = _gpu.RentReadback(output);
-			try
-			{
-				var probe = ProbeCenter(pixels.Memory.Span, _format);
-				_programOutput!.WriteFrame(output.Descriptor);
-			if (avSyncEnabled)
-			{
-				var videoEvent = _motionTimingTestSignal.InspectSyncEvent(output.Descriptor.Timing);
-				if (videoEvent.IsFlashFrame)
-					_avSyncDiagnostics.RecordVideoSubmit(videoEvent, Stopwatch.GetTimestamp());
-			}
-				_monitoringTap.TryCapture(
-					frameA.SourceId,
-					contentA.Pixels,
-					frameB.SourceId,
-					contentB.Pixels,
-					committedSource,
-					pixels,
-					_format,
-					output.Descriptor.Timing);
-
-			RefreshVirtualAudioMetersUnsafe(sequence);
-			var audioPacket = _virtualAudio.GetSource(routedAudioSource).GeneratePacket(sequence);
-			var audioObservation = _audioMeters[routedAudioSource];
-			var audioBuffer = audioPacket.Descriptor;
-			var hasGeneratedSignal = _audioTestSignals.TryGetValue(routedAudioSource, out var audioTestSignal);
-			AvSyncAudioEventObservation? audioSyncEvent = avSyncEnabled
-				? _avSyncTimeline.InspectAudio(audioBuffer.Timing, _format.FrameRate, audioBuffer.Format.SampleRate)
-				: null;
-			GeneratedAudioTestSignalFrameInfo generatedFrame = default;
-			var generatedAudioPayload = hasGeneratedSignal
-				? MaterializeGeneratedAudioPayload(audioBuffer, audioTestSignal!, out generatedFrame)
-				: null;
-			if (hasGeneratedSignal)
-				_audioTestSignalFrames[routedAudioSource] = generatedFrame;
-			var externalAudioPayload = !hasGeneratedSignal && audioObservation.External
-				? ConsumeExternalAudioPayloadUnsafe(routedAudioSource, audioBuffer)
-				: null;
-			var measuredAudio = generatedAudioPayload is not null
-				? new AudioStereoMeter(generatedFrame.LeftPeakLevel, generatedFrame.RightPeakLevel)
-				: externalAudioPayload is { Length: > 0 }
-					? AudioMetering.MeasureInterleavedStereoFloat32(externalAudioPayload)
-					: audioObservation.Meter;
-			var afvBuffer = hasGeneratedSignal
-				? audioBuffer
-				: audioObservation.External && !audioObservation.Available
-					? null
-					: audioBuffer;
-			var audio = _audio.ProcessBoundary(
-				committedSource,
-				sequence,
-				afvBuffer,
-				measuredAudio);
-			_lastAudioResult = audio;
-			var programAudioPayload = generatedAudioPayload is not null
-				? ApplyAudioStateToPayloadInPlace(generatedAudioPayload, audio)
-				: externalAudioPayload is { Length: > 0 }
-					? ApplyAudioStateToPayload(externalAudioPayload, audio)
-					: MaterializeReferenceAudioPayload(audioBuffer, audio);
-			if (audioSyncEvent is { ContainsPulse: true } pulseEvent)
-				_avSyncDiagnostics.RecordAudioSubmit(pulseEvent, Stopwatch.GetTimestamp());
-
-			RecordingEnqueueResult? recording = null;
-			if (_recorder.Snapshot.State == RecordingLifecycleState.Recording)
-			{
-				var payloadStaged = false;
-				if (_recordingPayloadWriter is not null)
+				lock (_gate)
 				{
-					try
+					ThrowIfDisposed();
+					execution = _runtime.ActiveExecution ?? throw new InvalidOperationException("RuntimeHost requires a committed execution before processing media.");
+					var programSink = _programSinkId ?? throw new InvalidOperationException("RuntimeHost has no committed Program sink.");
+					var programBinding = execution.PreparedExecution.Bindings.SingleOrDefault(binding => binding.MediaSinkId == programSink)
+						?? throw new InvalidOperationException("Committed execution must contain exactly one Program binding.");
+					committedSource = programBinding.MediaSourceId
+						?? throw new InvalidOperationException("Committed Program binding must contain a media source.");
+					programOutput = _programOutput ?? throw new InvalidOperationException("RuntimeHost has no bound Program output.");
+					var routedAudioSource = _audio.ResolveAudioSource(committedSource);
+					avSyncEnabled = _audio.RoutingState.Mode == AudioRoutingMode.FollowVideo &&
+						IsAvSyncDiagnosticsEnabledUnsafe(committedSource);
+					if (!avSyncEnabled)
 					{
-						GpuRecordingPayloadLease? recordingPayload = new GpuRecordingPayloadLease(pixels.Retain());
-						try
-						{
-							_recordingPayloadWriter.StagePayload(
-								sequence,
-								recordingPayload,
-								programAudioPayload);
-							recordingPayload = null;
-							payloadStaged = true;
-						}
-						finally
-						{
-							recordingPayload?.Dispose();
-						}
+						if (_avSyncDiagnosticsSourceId is not null)
+							ResetAvSyncDiagnosticsUnsafe();
 					}
-					catch (Exception exception)
+					else if (_avSyncDiagnosticsSourceId != committedSource)
 					{
-						Observe($"recording.payload.stage.failed:{exception.GetType().Name}");
+						ResetAvSyncDiagnosticsUnsafe();
+						_avSyncDiagnosticsSourceId = committedSource;
 					}
+
+					sequence = _nextSequenceNumber;
+					frameA = ProcessTimedInput(_virtualMedia.SourceA, _sourceAPipeline, sequence);
+					frameB = ProcessTimedInput(_virtualMedia.SourceB, _sourceBPipeline, sequence);
+					var frames = new Dictionary<MediaSourceId, FrameDescriptor>
+					{
+						[frameA.SourceId] = frameA,
+						[frameB.SourceId] = frameB
+					};
+					WriteAuxFrameUnsafe(execution.PreparedExecution, frames);
+
+					var contentA = ResolveInputContent(frameA);
+					var contentB = ResolveInputContent(frameB);
+					gpuA = RequiresGpuSourceUnsafe(frameA.SourceId, committedSource)
+						? MaterializeInput(frameA, contentA)
+						: null;
+					gpuB = RequiresGpuSourceUnsafe(frameB.SourceId, committedSource)
+						? MaterializeInput(frameB, contentB)
+						: null;
+					var gpuFrames = new Dictionary<MediaSourceId, GpuFrame>();
+					if (gpuA is not null)
+						gpuFrames.Add(frameA.SourceId, gpuA);
+					if (gpuB is not null)
+						gpuFrames.Add(frameB.SourceId, gpuB);
+
+					boundaryTransition = _transition;
+					transitionKind = boundaryTransition?.Intent.Kind;
+					(fromFrame, toFrame, gpuTransition, blendWeight, transitionComplete) =
+						ResolveTransition(committedSource, sequence, gpuFrames);
+					materializedLayers = MaterializeLayers(fromFrame.Descriptor.Timing);
+					monitoringSources = _monitoringTap.CaptureSources(
+						frameA.SourceId,
+						contentA.Pixels,
+						frameB.SourceId,
+						contentB.Pixels,
+						_format,
+						fromFrame.Descriptor.Timing);
+
+					RefreshVirtualAudioMetersUnsafe(sequence);
+					var audioPacket = _virtualAudio.GetSource(routedAudioSource).GeneratePacket(sequence);
+					var audioObservation = _audioMeters[routedAudioSource];
+					audioBuffer = audioPacket.Descriptor;
+					var hasGeneratedSignal = _audioTestSignals.TryGetValue(routedAudioSource, out var audioTestSignal);
+					audioSyncEvent = avSyncEnabled
+						? _avSyncTimeline.InspectAudio(audioBuffer.Timing, _format.FrameRate, audioBuffer.Format.SampleRate)
+						: null;
+					GeneratedAudioTestSignalFrameInfo generatedFrame = default;
+					var generatedAudioPayload = hasGeneratedSignal
+						? MaterializeGeneratedAudioPayload(audioBuffer, audioTestSignal!, out generatedFrame)
+						: null;
+					if (hasGeneratedSignal)
+						_audioTestSignalFrames[routedAudioSource] = generatedFrame;
+					var externalAudioPayload = !hasGeneratedSignal && audioObservation.External
+						? ConsumeExternalAudioPayloadUnsafe(routedAudioSource, audioBuffer)
+						: null;
+					var measuredAudio = generatedAudioPayload is not null
+						? new AudioStereoMeter(generatedFrame.LeftPeakLevel, generatedFrame.RightPeakLevel)
+						: externalAudioPayload is { Length: > 0 }
+							? AudioMetering.MeasureInterleavedStereoFloat32(externalAudioPayload)
+							: audioObservation.Meter;
+					var afvBuffer = hasGeneratedSignal
+						? audioBuffer
+						: audioObservation.External && !audioObservation.Available
+							? null
+							: audioBuffer;
+					audio = _audio.ProcessBoundary(
+						committedSource,
+						sequence,
+						afvBuffer,
+						measuredAudio);
+					_lastAudioResult = audio;
+					programAudioPayload = generatedAudioPayload is not null
+						? ApplyAudioStateToPayloadInPlace(generatedAudioPayload, audio)
+						: externalAudioPayload is { Length: > 0 }
+							? ApplyAudioStateToPayload(externalAudioPayload, audio)
+							: MaterializeReferenceAudioPayload(audioBuffer, audio);
+					visualLayerMode = (_operatorGraphicsVisible || _productionCgText.Visible)
+						? V1VisualLayerMode.Static
+						: _visualLayerMode;
 				}
 
+				GpuProcessingResult composite;
 				try
 				{
-					recording = _recordingBridge.TryRecordCommittedProgram(execution, output.Descriptor, audioBuffer);
+					composite = _gpu.Composite(GpuCompositeRequest.WithLayers(
+						committedSource,
+						fromFrame,
+						toFrame,
+						gpuTransition,
+						materializedLayers.Select(layer => layer.Layer)));
+				}
+				finally
+				{
+					foreach (var materialized in materializedLayers)
+						materialized.Frame.Dispose();
+					materializedLayers = null;
+				}
+
+				Observe($"gpu.composite.completed:layers={composite.LayerCount}:durationTicks={composite.Duration.Ticks}:surfaces={_gpu.ActiveSurfaceCount}");
+				if (!composite.Succeeded)
+				{
+					Observe($"gpu.composite.failed:{composite.Failure?.Code}");
+					throw new InvalidOperationException(composite.Failure?.Message ?? "GPU composite failed.");
+				}
+
+				using var output = composite.Frame!;
+				var pixels = _gpu.RentReadback(output);
+				try
+				{
+					var probe = ProbeCenter(pixels.Memory.Span, _format);
+					programOutput.WriteFrame(output.Descriptor);
+					var videoSyncEvent = avSyncEnabled
+						? _motionTimingTestSignal.InspectSyncEvent(output.Descriptor.Timing)
+						: default;
+					_monitoringTap.TryCapture(
+						monitoringSources,
+						committedSource,
+						pixels,
+						_format,
+						output.Descriptor.Timing);
+
+					RecordingEnqueueResult? recording = null;
+					if (_recorder.Snapshot.State == RecordingLifecycleState.Recording)
+					{
+						var payloadStaged = false;
+						if (_recordingPayloadWriter is not null)
+						{
+							try
+							{
+								GpuRecordingPayloadLease? recordingPayload = new GpuRecordingPayloadLease(pixels.Retain());
+								try
+								{
+									_recordingPayloadWriter.StagePayload(
+										sequence,
+										recordingPayload,
+										programAudioPayload);
+									recordingPayload = null;
+									payloadStaged = true;
+								}
+								finally
+								{
+									recordingPayload?.Dispose();
+								}
+							}
+							catch (Exception exception)
+							{
+								Observe($"recording.payload.stage.failed:{exception.GetType().Name}");
+							}
+						}
+
+						try
+						{
+							recording = _recordingBridge.TryRecordCommittedProgram(execution, output.Descriptor, audioBuffer);
+						}
+						catch
+						{
+							if (payloadStaged)
+								_recordingPayloadWriter?.DiscardPayload(sequence);
+							throw;
+						}
+
+						if (payloadStaged && recording is { Accepted: false })
+							_recordingPayloadWriter?.DiscardPayload(sequence);
+					}
+
+					lock (_gate)
+					{
+						_lastCompositionDuration = composite.Duration;
+						_lastCompositingLayerCount = composite.LayerCount;
+						if (avSyncEnabled && videoSyncEvent.IsFlashFrame)
+							_avSyncDiagnostics.RecordVideoSubmit(videoSyncEvent, Stopwatch.GetTimestamp());
+						if (audioSyncEvent is { ContainsPulse: true } pulseEvent)
+							_avSyncDiagnostics.RecordAudioSubmit(pulseEvent, Stopwatch.GetTimestamp());
+
+						if (transitionComplete && Equals(_transition, boundaryTransition))
+						{
+							Observe($"runtime.transition.completed:{transitionKind}:{sequence}");
+							_transition = null;
+						}
+
+						if (_nextSequenceNumber == ulong.MaxValue)
+							throw new InvalidOperationException("RuntimeHost frame sequence exhausted.");
+						_nextSequenceNumber++;
+						Observe($"program.frame:{sequence}:{committedSource}");
+					}
+
+					return new V1ProgramBoundaryResult(
+						sequence,
+						committedSource,
+						output.Descriptor,
+						pixels,
+						probe,
+						audio,
+						audioBuffer,
+						programAudioPayload,
+						recording,
+						transitionKind,
+						blendWeight,
+						visualLayerMode,
+						_gpu.ActiveSurfaceCount - 1);
 				}
 				catch
 				{
-					if (payloadStaged)
-						_recordingPayloadWriter?.DiscardPayload(sequence);
+					pixels.Dispose();
 					throw;
 				}
-
-				if (payloadStaged && recording is { Accepted: false })
-					_recordingPayloadWriter?.DiscardPayload(sequence);
 			}
-
-			if (transitionComplete)
+			finally
 			{
-				Observe($"runtime.transition.completed:{transitionKind}:{sequence}");
-				_transition = null;
-			}
-
-			if (_nextSequenceNumber == ulong.MaxValue)
-				throw new InvalidOperationException("RuntimeHost frame sequence exhausted.");
-			_nextSequenceNumber++;
-			Observe($"program.frame:{sequence}:{committedSource}");
-
-				return new V1ProgramBoundaryResult(
-					sequence,
-					committedSource,
-					output.Descriptor,
-					pixels,
-					probe,
-					audio,
-					audioBuffer,
-					programAudioPayload,
-					recording,
-					transitionKind,
-					blendWeight,
-					(_operatorGraphicsVisible || _productionCgText.Visible) ? V1VisualLayerMode.Static : _visualLayerMode,
-					_gpu.ActiveSurfaceCount - 1);
-			}
-			catch
-			{
-				pixels.Dispose();
-				throw;
+				if (materializedLayers is not null)
+				{
+					foreach (var materialized in materializedLayers)
+						materialized.Frame.Dispose();
+				}
+				gpuB?.Dispose();
+				gpuA?.Dispose();
 			}
 		}
 	}
@@ -1968,6 +2028,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		{
 			var programOutput = _programOutput;
 			var programEvidence = programOutput?.LastFrame;
+			if (programEvidence is not null && programEvidence.Frame.Timing.SequenceNumber >= _nextSequenceNumber)
+				programEvidence = null;
 			Failure? fault = null;
 			if (_programSinkId != programSink)
 			{
@@ -2017,6 +2079,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		{
 			var auxOutput = _auxOutput;
 			var auxEvidence = auxOutput?.LastFrame;
+			if (auxEvidence is not null && auxEvidence.Frame.Timing.SequenceNumber >= _nextSequenceNumber)
+				auxEvidence = null;
 			Failure? bindingFault = null;
 			if (_auxSinkId != auxSink)
 			{
