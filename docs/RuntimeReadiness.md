@@ -41,6 +41,8 @@ A fresh qualified Runtime measurement verifies performance when the Runtime perf
 
 The verification remains valid for the same bounded two-second Runtime observation-retention window used by ControlHost. A transient Runtime refresh miss therefore does not immediately erase a still-valid performance result.
 
+Global readiness applies a shorter one-second transient-observation grace when the previous state was already `Ready`, the retained Runtime observation remains within the qualified performance window, and the retained Runtime health is `UNVERIFIED` rather than failed. During that grace, detailed Runtime/Media/Provider health remains explicitly `UNVERIFIED`, but the application-level lifecycle stays `Ready` instead of flapping on an isolated management-IPC miss. If fresh Runtime evidence is still absent after the grace expires, the same retained evidence becomes a visible non-blocking `Degraded` reason. Explicit `FAIL` evidence bypasses the grace immediately.
+
 The verification is invalidated when:
 
 - the verified measurement exceeds its validity window;
