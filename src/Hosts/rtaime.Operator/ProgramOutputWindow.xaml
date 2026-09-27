@@ -18,6 +18,7 @@
 			Stretch="Uniform"
 			HorizontalAlignment="Stretch"
 			VerticalAlignment="Stretch"
-			SnapsToDevicePixels="True" />
+			SnapsToDevicePixels="True"
+			RenderOptions.BitmapScalingMode="HighQuality" />
 	</Grid>
 </Window>

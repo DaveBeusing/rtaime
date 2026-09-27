@@ -1,6 +1,5 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
-using System.Collections.ObjectModel;
 using rtaime.Media.Contracts;
 
 namespace rtaime.Provider.VirtualMedia;
@@ -82,58 +81,6 @@ public sealed class BroadcastTestPatternGenerator
 		new(235, 16, 16),
 		new(16, 16, 235)
 	];
-
-	private static readonly IReadOnlyDictionary<char, byte[]> Glyphs =
-		new ReadOnlyDictionary<char, byte[]>(new Dictionary<char, byte[]>
-		{
-			[' '] = [0, 0, 0, 0, 0, 0, 0],
-			['-'] = [0, 0, 0, 31, 0, 0, 0],
-			['/'] = [1, 2, 4, 8, 16, 0, 0],
-			['.'] = [0, 0, 0, 0, 0, 12, 12],
-			[':'] = [0, 12, 12, 0, 12, 12, 0],
-			['0'] = [14, 17, 19, 21, 25, 17, 14],
-			['1'] = [4, 12, 4, 4, 4, 4, 14],
-			['2'] = [14, 17, 1, 2, 4, 8, 31],
-			['3'] = [30, 1, 1, 14, 1, 1, 30],
-			['4'] = [2, 6, 10, 18, 31, 2, 2],
-			['5'] = [31, 16, 16, 30, 1, 1, 30],
-			['6'] = [14, 16, 16, 30, 17, 17, 14],
-			['7'] = [31, 1, 2, 4, 8, 8, 8],
-			['8'] = [14, 17, 17, 14, 17, 17, 14],
-			['9'] = [14, 17, 17, 15, 1, 1, 14],
-			['A'] = [14, 17, 17, 31, 17, 17, 17],
-			['B'] = [30, 17, 17, 30, 17, 17, 30],
-			['C'] = [14, 17, 16, 16, 16, 17, 14],
-			['D'] = [30, 17, 17, 17, 17, 17, 30],
-			['E'] = [31, 16, 16, 30, 16, 16, 31],
-			['F'] = [31, 16, 16, 30, 16, 16, 16],
-			['G'] = [14, 17, 16, 23, 17, 17, 15],
-			['H'] = [17, 17, 17, 31, 17, 17, 17],
-			['I'] = [14, 4, 4, 4, 4, 4, 14],
-			['J'] = [7, 2, 2, 2, 18, 18, 12],
-			['K'] = [17, 18, 20, 24, 20, 18, 17],
-			['L'] = [16, 16, 16, 16, 16, 16, 31],
-			['M'] = [17, 27, 21, 21, 17, 17, 17],
-			['N'] = [17, 25, 21, 19, 17, 17, 17],
-			['O'] = [14, 17, 17, 17, 17, 17, 14],
-			['P'] = [30, 17, 17, 30, 16, 16, 16],
-			['Q'] = [14, 17, 17, 17, 21, 18, 13],
-			['R'] = [30, 17, 17, 30, 20, 18, 17],
-			['S'] = [15, 16, 16, 14, 1, 1, 30],
-			['T'] = [31, 4, 4, 4, 4, 4, 4],
-			['U'] = [17, 17, 17, 17, 17, 17, 14],
-			['V'] = [17, 17, 17, 17, 17, 10, 4],
-			['W'] = [17, 17, 17, 21, 21, 21, 10],
-			['X'] = [17, 17, 10, 4, 10, 17, 17],
-			['Y'] = [17, 17, 10, 4, 4, 4, 4],
-			['Z'] = [31, 1, 2, 4, 8, 16, 31],
-			['a'] = [0, 0, 14, 1, 15, 17, 15],
-			['e'] = [0, 0, 14, 17, 31, 16, 14],
-			['i'] = [4, 0, 12, 4, 4, 4, 14],
-			['m'] = [0, 0, 26, 21, 21, 21, 21],
-			['r'] = [0, 0, 22, 25, 16, 16, 16],
-			['t'] = [4, 4, 31, 4, 4, 5, 2]
-		});
 
 	private readonly byte[] _pixels;
 
@@ -249,8 +196,6 @@ public sealed class BroadcastTestPatternGenerator
 			FillRect(x, top, 1, height, new Rgba(value, value, value));
 		}
 
-		var labelScale = Math.Max(1, height / 15);
-		DrawText("LUMA 0-255", Math.Max(8, width / 80), top + Math.Max(5, height / 10), labelScale, SignalAccent);
 	}
 
 	private void DrawRgbRamps(int width, int top, int height)
@@ -370,32 +315,22 @@ public sealed class BroadcastTestPatternGenerator
 		if (string.IsNullOrEmpty(text) || scale <= 0)
 			return;
 
-		var cursor = x;
-		foreach (var raw in text)
-		{
-			if (!Glyphs.TryGetValue(raw, out var rows) &&
-				!Glyphs.TryGetValue(char.ToUpperInvariant(raw), out rows))
-			{
-				rows = Glyphs[' '];
-			}
-
-			for (var row = 0; row < 7; row++)
-			{
-				for (var column = 0; column < 5; column++)
-				{
-					if ((rows[row] & (1 << (4 - column))) == 0)
-						continue;
-
-					FillRect(cursor + column * scale, y + row * scale, scale, scale, color);
-				}
-			}
-
-			cursor += 6 * scale;
-		}
+		DiagnosticStrokeFont.Draw(
+			_pixels,
+			checked((int)Configuration.Format.Width),
+			checked((int)Configuration.Format.Height),
+			text,
+			x,
+			y,
+			checked(scale * 7),
+			color.Red,
+			color.Green,
+			color.Blue,
+			color.Alpha);
 	}
 
 	private static int MeasureText(string text, int scale) =>
-		string.IsNullOrEmpty(text) ? 0 : Math.Max(0, text.Length * 6 * scale - scale);
+		DiagnosticStrokeFont.Measure(text, checked(scale * 7));
 
 	private void DrawRectOutline(int x, int y, int width, int height, Rgba color)
 	{

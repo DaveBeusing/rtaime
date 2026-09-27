@@ -30,6 +30,16 @@ The generated frame contains:
 
 The current video contract does not carry an authoritative color-space descriptor. The pattern therefore displays `UNVERIFIED` instead of inventing a color-space claim.
 
+## Rendering quality and scaling
+
+The reference frame is always generated at the active `VideoFormat`. A 1920x1080 signal is therefore a genuine 1920x1080 RGBA8 raster; the generator does not render at a hidden higher resolution and downsample it.
+
+Measurement-oriented regions remain source-pixel accurate. Color bars, grayscale steps, luma/RGB ramps, reference patches, borders, safe-area coordinates and center/geometry references are written directly to the RGBA8 raster without interpolation. Annotation text is deliberately treated differently: labels use a deterministic dependency-free stroke rasterizer with coverage antialiasing and are constructed once with the static pattern. Text antialiasing is confined to annotation regions and is not applied as a global filter over technical reference content.
+
+Native 1:1 presentation is the reference for judging source-pattern sharpness. Operator Preview/Program monitoring, Clean Program and directly related multiview surfaces preserve aspect ratio and use an explicit high-quality WPF bitmap scaling policy when the monitoring bitmap is fitted to a different display size. A 960x540 presentation of 1920x1080 is therefore a presentation resample of the same reference media, not a different or lower-resolution generated pattern. Fractional-size and DPI-scaled views are likewise presentation views and must not be used to infer a change to source pixels.
+
+The scaling policy is presentation-only. It does not create a second render path, alter production authority, or replace the Runtime-derived monitoring image.
+
 ## Pipeline integration
 
 The generator renders its static pixel payload once. RuntimeHost keeps one runtime-owned reference buffer and reuses it on every production boundary while the test signal is enabled.
