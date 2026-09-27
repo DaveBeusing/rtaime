@@ -372,6 +372,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private int _lastCompositingLayerCount;
 	private ulong _droppedFrames;
 	private double? _outputFramesPerSecond;
+	private int _publishedActiveGpuSurfaces;
 	private ulong _nextSequenceNumber;
 	private AudioFollowVideoResult? _lastAudioResult;
 	private DateTimeOffset? _recordingStartedAtUtc;
@@ -592,7 +593,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 					_recorder.Snapshot,
 					RecordingOperatorSnapshotUnsafe(),
 					PerformanceSnapshotUnsafe(hardware),
-					_gpu.ActiveSurfaceCount,
+					_publishedActiveGpuSurfaces,
 					AvSyncDiagnosticsSnapshotUnsafe(),
 					_productionCgText,
 					OutputRoleSnapshotsUnsafe(),
@@ -985,8 +986,16 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 							_recordingPayloadWriter?.DiscardPayload(sequence);
 					}
 
+					output.Dispose();
+					gpuB?.Dispose();
+					gpuB = null;
+					gpuA?.Dispose();
+					gpuA = null;
+					var activeGpuSurfacesAfterBoundary = _gpu.ActiveSurfaceCount;
+
 					lock (_gate)
 					{
+						_publishedActiveGpuSurfaces = activeGpuSurfacesAfterBoundary;
 						_lastCompositionDuration = composite.Duration;
 						_lastCompositingLayerCount = composite.LayerCount;
 						if (avSyncEnabled && videoSyncEvent.IsFlashFrame)
@@ -1019,7 +1028,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 						transitionKind,
 						blendWeight,
 						visualLayerMode,
-						_gpu.ActiveSurfaceCount - 1);
+						activeGpuSurfacesAfterBoundary);
 				}
 				catch
 				{
