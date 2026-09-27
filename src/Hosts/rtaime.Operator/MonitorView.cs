@@ -161,6 +161,10 @@ public class MonitorView : UserControl
 		typeof(MonitorView),
 		new PropertyMetadata(false));
 
+	public static readonly DependencyProperty InspectionChannelProperty = DependencyProperty.Register(
+		nameof(InspectionChannel), typeof(MediaInspectionChannel), typeof(MonitorView),
+		new PropertyMetadata(MediaInspectionChannel.Rgb));
+
 	public static readonly DependencyProperty ZoomModeProperty = DependencyProperty.Register(
 		nameof(ZoomMode),
 		typeof(string),
@@ -187,6 +191,12 @@ public class MonitorView : UserControl
 		Zoom800Command = new MonitorPresentationCommand(() => ZoomMode = "800%");
 		ToggleFitPixelPerfectCommand = new MonitorPresentationCommand(ToggleFitPixelPerfect);
 		ToggleTechnicalOverlayCommand = new MonitorPresentationCommand(() => ShowTechnicalOverlay = !ShowTechnicalOverlay);
+		ShowRgbCommand = new MonitorPresentationCommand(() => InspectionChannel = MediaInspectionChannel.Rgb);
+		ShowRedCommand = new MonitorPresentationCommand(() => InspectionChannel = MediaInspectionChannel.Red);
+		ShowGreenCommand = new MonitorPresentationCommand(() => InspectionChannel = MediaInspectionChannel.Green);
+		ShowBlueCommand = new MonitorPresentationCommand(() => InspectionChannel = MediaInspectionChannel.Blue);
+		ShowAlphaCommand = new MonitorPresentationCommand(() => InspectionChannel = MediaInspectionChannel.Alpha);
+		ShowLumaCommand = new MonitorPresentationCommand(() => InspectionChannel = MediaInspectionChannel.Luma);
 	}
 
 	public ImageSource? Frame
@@ -279,6 +289,12 @@ public class MonitorView : UserControl
 		set => SetValue(ShowGridProperty, value);
 	}
 
+	public MediaInspectionChannel InspectionChannel
+	{
+		get => (MediaInspectionChannel)GetValue(InspectionChannelProperty);
+		set => SetValue(InspectionChannelProperty, value);
+	}
+
 	public string ZoomMode
 	{
 		get => (string)GetValue(ZoomModeProperty);
@@ -305,6 +321,12 @@ public class MonitorView : UserControl
 	public ICommand Zoom800Command { get; }
 	public ICommand ToggleFitPixelPerfectCommand { get; }
 	public ICommand ToggleTechnicalOverlayCommand { get; }
+	public ICommand ShowRgbCommand { get; }
+	public ICommand ShowRedCommand { get; }
+	public ICommand ShowGreenCommand { get; }
+	public ICommand ShowBlueCommand { get; }
+	public ICommand ShowAlphaCommand { get; }
+	public ICommand ShowLumaCommand { get; }
 
 	private static void OnZoomModeChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs eventArgs)
 	{
