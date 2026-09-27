@@ -15,6 +15,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 {
 	private const string ProtocolVersion = "1.0";
 	private const int MaxFrameBytes = 1024 * 1024;
+	private static readonly TimeSpan DefaultSessionDrainTimeout = TimeSpan.FromSeconds(2);
 	private readonly string _endpoint;
 	private readonly Func<ControlHostService?> _controlAccessor;
 	private readonly IControlRuntimeTransportSeam _runtimeTransport;
@@ -25,7 +26,9 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	private readonly ShowProjectPersistenceStore? _showProjectStore;
 	private PersistedShowProject? _showProject;
 	private readonly CancellationTokenSource _stop = new();
+	private readonly HostIpcSessionTracker _sessions = new();
 	private readonly SemaphoreSlim _mutationGate = new(1, 1);
+	private readonly TimeSpan _sessionDrainTimeout;
 	private readonly BoundedRequestCache _requestCache = new(256);
 	private static readonly TimeSpan RuntimeObservationRetention = TimeSpan.FromSeconds(2);
 	private readonly string _hostInstanceId = Identity.New().ToString();
@@ -41,6 +44,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	private string _showProjectState = "UNAVAILABLE";
 	private string _showProjectDetail = "Durable show project persistence is not configured.";
 	private Task? _acceptLoop;
+	private CancellationTokenSource? _runStop;
 	private long _stateVersion = 1;
 	private long _sequence;
 
@@ -52,12 +56,15 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		ShowControlPersistenceStore? showControlPersistence = null,
 		MediaAssetCatalogService? mediaAssetCatalog = null,
 		ShowProjectPersistenceStore? showProjectStore = null,
-		PersistedShowProject? showProject = null)
+		PersistedShowProject? showProject = null,
+		TimeSpan? sessionDrainTimeout = null)
 	{
 		if (string.IsNullOrWhiteSpace(endpoint)) throw new ArgumentException("ControlHost IPC endpoint is required.", nameof(endpoint));
 		_endpoint = endpoint.Trim();
 		_controlAccessor = controlAccessor ?? throw new ArgumentNullException(nameof(controlAccessor));
 		_runtimeTransport = runtimeTransport ?? throw new ArgumentNullException(nameof(runtimeTransport));
+		_sessionDrainTimeout = sessionDrainTimeout ?? DefaultSessionDrainTimeout;
+		if (_sessionDrainTimeout <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(sessionDrainTimeout));
 		_mediaDeck = mediaDeck;
 		_mediaAssetCatalog = mediaAssetCatalog;
 		if ((showProjectStore is null) != (showProject is null))
@@ -108,12 +115,13 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	public string HostInstanceId => _hostInstanceId;
 	public ulong StateVersion => checked((ulong)Interlocked.Read(ref _stateVersion));
 	public bool Running => _acceptLoop is { IsCompleted: false };
+	public HostIpcSessionSnapshot Sessions => _sessions.Snapshot;
 
 	public Task StartAsync(CancellationToken cancellationToken = default)
 	{
 		if (_acceptLoop is not null) throw new InvalidOperationException("ControlHost IPC server has already been started.");
-		var linked = CancellationTokenSource.CreateLinkedTokenSource(_stop.Token, cancellationToken);
-		_acceptLoop = AcceptLoopAsync(linked.Token);
+		_runStop = CancellationTokenSource.CreateLinkedTokenSource(_stop.Token, cancellationToken);
+		_acceptLoop = AcceptLoopAsync(_runStop.Token);
 		return Task.CompletedTask;
 	}
 
@@ -256,16 +264,23 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	public async ValueTask DisposeAsync()
 	{
 		_stop.Cancel();
+		_runStop?.Cancel();
 		if (_acceptLoop is not null)
 		{
 			try { await _acceptLoop.ConfigureAwait(false); }
 			catch (OperationCanceledException) { }
 		}
+
+		var drain = await _sessions.StopAndDrainAsync(_sessionDrainTimeout).ConfigureAwait(false);
+		if (drain.Status == HostIpcSessionDrainStatus.TimedOut)
+			throw new TimeoutException($"ControlHost IPC did not drain {drain.Snapshot.ActiveSessions} active session(s) within {_sessionDrainTimeout}.");
+
 		if (_rundown is not null)
 			await _rundown.DisposeAsync().ConfigureAwait(false);
 		if (_showControl is not null)
 			await _showControl.DisposeAsync().ConfigureAwait(false);
 		_mutationGate.Dispose();
+		_runStop?.Dispose();
 		_stop.Dispose();
 	}
 
@@ -277,7 +292,8 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			try
 			{
 				await pipe.WaitForConnectionAsync(cancellationToken).ConfigureAwait(false);
-				_ = HandleConnectionAsync(pipe, cancellationToken);
+				if (!_sessions.TryStart(sessionToken => HandleConnectionAsync(pipe, sessionToken)))
+					pipe.Dispose();
 			}
 			catch
 			{
