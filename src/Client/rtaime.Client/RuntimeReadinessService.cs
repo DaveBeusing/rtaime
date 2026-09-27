@@ -114,23 +114,33 @@ public interface IRuntimeReadinessService
 public sealed class RuntimeReadinessService : IRuntimeReadinessService, IDisposable
 {
 	public static readonly TimeSpan DefaultPerformanceValidity = TimeSpan.FromSeconds(2);
+	public static readonly TimeSpan DefaultRuntimeObservationGrace = TimeSpan.FromSeconds(1);
 
 	private static readonly string[] AIDegradedStates = ["UNAVAILABLE", "TIMEOUT", "FAILED"];
 	private readonly object _gate = new();
 	private readonly Func<DateTimeOffset> _clock;
 	private readonly TimeSpan _performanceValidity;
+	private readonly TimeSpan _runtimeObservationGrace;
 	private RuntimeReadinessSnapshot _current;
 	private DateTimeOffset? _explicitPerformanceInvalidatedAt;
 	private bool _disposed;
 
 	public RuntimeReadinessService(
 		Func<DateTimeOffset>? clock = null,
-		TimeSpan? performanceValidity = null)
+		TimeSpan? performanceValidity = null,
+		TimeSpan? runtimeObservationGrace = null)
 	{
 		_clock = clock ?? (() => DateTimeOffset.UtcNow);
 		_performanceValidity = performanceValidity ?? DefaultPerformanceValidity;
 		if (_performanceValidity <= TimeSpan.Zero)
 			throw new ArgumentOutOfRangeException(nameof(performanceValidity), "Performance validity must be positive.");
+
+		_runtimeObservationGrace = runtimeObservationGrace ??
+			TimeSpan.FromTicks(Math.Min(DefaultRuntimeObservationGrace.Ticks, _performanceValidity.Ticks));
+		if (_runtimeObservationGrace <= TimeSpan.Zero || _runtimeObservationGrace > _performanceValidity)
+			throw new ArgumentOutOfRangeException(
+				nameof(runtimeObservationGrace),
+				"Runtime observation grace must be positive and must not exceed performance validity.");
 
 		var now = _clock();
 		_current = RuntimeReadinessSnapshot.Initial(now);
@@ -163,7 +173,7 @@ public sealed class RuntimeReadinessService : IRuntimeReadinessService, IDisposa
 			var now = _clock();
 			previous = _current;
 			var performance = EvaluatePerformance(previous.Performance, observation, now);
-			var evaluation = EvaluateReadiness(observation, performance);
+			var evaluation = EvaluateReadiness(previous, observation, performance, now);
 			var changedAt = previous.State == evaluation.State ? previous.ChangedAt : now;
 			next = new RuntimeReadinessSnapshot(
 				evaluation.State,
@@ -353,9 +363,11 @@ public sealed class RuntimeReadinessService : IRuntimeReadinessService, IDisposa
 			pipelineFingerprint);
 	}
 
-	private static ReadinessEvaluation EvaluateReadiness(
+	private ReadinessEvaluation EvaluateReadiness(
+		RuntimeReadinessSnapshot previous,
 		RuntimeReadinessObservation observation,
-		RuntimePerformanceVerificationSnapshot performance)
+		RuntimePerformanceVerificationSnapshot performance,
+		DateTimeOffset now)
 	{
 		if (observation.RecoveryExhausted)
 		{
@@ -408,26 +420,35 @@ public sealed class RuntimeReadinessService : IRuntimeReadinessService, IDisposa
 		var reasons = new List<ReadinessReason>();
 		var runtimeReady = string.Equals(observation.RuntimeStatus.Trim(), "READY", StringComparison.OrdinalIgnoreCase);
 		var retainedPerformance = performance.State == RuntimePerformanceVerificationState.Verified;
+		var retainedObservation = !runtimeReady &&
+			observation.Health.Runtime.State == OperatorHealthStates.Unverified &&
+			retainedPerformance;
+		var retainedObservationWithinGrace = retainedObservation &&
+			previous.State == RuntimeReadinessState.Ready &&
+			IsWithinRuntimeObservationGrace(observation.Health.ObservedAtUtc, now);
 
-		if (!runtimeReady)
+		if (!runtimeReady && !retainedObservationWithinGrace)
 		{
-			var retainedObservation = observation.Health.Runtime.State == OperatorHealthStates.Unverified &&
-				retainedPerformance;
 			reasons.Add(new ReadinessReason(
 				retainedObservation ? "runtime.observation.retained" : "runtime.not_ready",
 				"Runtime",
 				retainedObservation ? ReadinessReasonSeverity.Warning : ReadinessReasonSeverity.Critical,
 				retainedObservation
-					? "Runtime refresh missed; the last qualified Runtime performance observation remains within its validity window."
+					? "Runtime refresh missed beyond the transient observation grace; the last qualified Runtime performance observation remains within its validity window."
 					: $"Runtime readiness is {observation.RuntimeStatus.Trim().ToUpperInvariant()}.",
 				!retainedObservation));
 		}
 
 		AddHealthReason(reasons, "control", "Control", observation.Health.Control, skipUnverified: false);
-		AddHealthReason(reasons, "runtime", "Runtime", observation.Health.Runtime, skipUnverified: !runtimeReady && retainedPerformance);
-		AddHealthReason(reasons, "media", "Media", observation.Health.Media, skipUnverified: false);
-		AddHealthReason(reasons, "provider", "Provider", observation.Health.Provider, skipUnverified: false);
-		AddHealthReason(reasons, "gpu-provider", "GPU / Provider", observation.Health.GpuProvider, skipUnverified: false);
+		AddHealthReason(
+			reasons,
+			"runtime",
+			"Runtime",
+			observation.Health.Runtime,
+			skipUnverified: retainedObservationWithinGrace || (!runtimeReady && retainedPerformance));
+		AddHealthReason(reasons, "media", "Media", observation.Health.Media, skipUnverified: retainedObservationWithinGrace);
+		AddHealthReason(reasons, "provider", "Provider", observation.Health.Provider, skipUnverified: retainedObservationWithinGrace);
+		AddHealthReason(reasons, "gpu-provider", "GPU / Provider", observation.Health.GpuProvider, skipUnverified: retainedObservationWithinGrace);
 
 		if (observation.AIShowcase.Enabled &&
 			AIDegradedStates.Contains(observation.AIShowcase.Status.Trim().ToUpperInvariant(), StringComparer.Ordinal))
@@ -457,6 +478,14 @@ public sealed class RuntimeReadinessService : IRuntimeReadinessService, IDisposa
 			return new ReadinessEvaluation(RuntimeReadinessState.Degraded, reasons.ToArray(), true);
 
 		return new ReadinessEvaluation(RuntimeReadinessState.Ready, Array.Empty<ReadinessReason>(), true);
+	}
+
+	private bool IsWithinRuntimeObservationGrace(DateTimeOffset observedAtUtc, DateTimeOffset now)
+	{
+		if (observedAtUtc == DateTimeOffset.MinValue || observedAtUtc > now)
+			return false;
+
+		return now - observedAtUtc <= _runtimeObservationGrace;
 	}
 
 	private static void AddHealthReason(

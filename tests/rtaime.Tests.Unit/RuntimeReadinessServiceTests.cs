@@ -98,20 +98,32 @@ public sealed class RuntimeReadinessServiceTests
 	}
 
 	[Fact]
-	public void Verified_performance_survives_transient_retained_runtime_observation()
+	public void Transient_retained_runtime_observation_does_not_flap_global_readiness()
 	{
 		var now = new DateTimeOffset(2026, 9, 20, 10, 0, 0, TimeSpan.Zero);
 		using var service = new RuntimeReadinessService(() => now);
 
 		service.Observe(Observation(Healthy(now)));
 		Assert.Equal(RuntimePerformanceVerificationState.Verified, service.Current.Performance.State);
+		Assert.Equal(RuntimeReadinessState.Ready, service.Current.State);
 
+		var qualifiedAt = now;
 		now += TimeSpan.FromMilliseconds(500);
-		var retained = Healthy(now - TimeSpan.FromMilliseconds(500)) with
+		var retained = Healthy(qualifiedAt) with
 		{
 			Engine = Unverified("Runtime is operating with retained evidence."),
-			Runtime = Unverified("RuntimeHost refresh missed; recent runtime observations are being retained temporarily.")
+			Runtime = Unverified("RuntimeHost refresh missed; recent runtime observations are being retained temporarily."),
+			Media = Unverified("Media health is based on a recent retained Runtime observation."),
+			Provider = Unverified("Provider health is based on a recent retained Runtime observation."),
+			GpuProvider = Unverified("GPU provider health is based on a recent retained Runtime observation.")
 		};
+		service.Observe(Observation(retained, runtimeStatus: "DEGRADED"));
+
+		Assert.Equal(RuntimePerformanceVerificationState.Verified, service.Current.Performance.State);
+		Assert.Equal(RuntimeReadinessState.Ready, service.Current.State);
+		Assert.Empty(service.Current.Reasons);
+
+		now = qualifiedAt + TimeSpan.FromMilliseconds(1100);
 		service.Observe(Observation(retained, runtimeStatus: "DEGRADED"));
 
 		Assert.Equal(RuntimePerformanceVerificationState.Verified, service.Current.Performance.State);
@@ -195,6 +207,7 @@ public sealed class RuntimeReadinessServiceTests
 			Engine = Fail("Runtime execution failed."),
 			Runtime = Fail("Runtime execution failed.")
 		}, runtimeStatus: "DEGRADED"));
+		Assert.Equal(RuntimeReadinessState.NotReady, service.Current.State);
 		Assert.Equal(RuntimePerformanceInvalidationReason.RuntimeFault, service.Current.Performance.InvalidationReason);
 
 		service.Observe(Observation(healthy));
