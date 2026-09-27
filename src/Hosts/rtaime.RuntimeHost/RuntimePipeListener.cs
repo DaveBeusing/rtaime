@@ -139,7 +139,8 @@ internal sealed class RuntimePipeListener : IAsyncDisposable
 		{
 			var timeout = new TimeoutException(
 				$"Listener '{_role}' did not drain {drain.Snapshot.ActiveSessions} active IPC session(s) within {_sessionDrainTimeout}.");
-			SetFaulted(timeout);
+			var snapshot = SetFaulted(timeout);
+			NotifyTerminalFault(snapshot, timeout);
 			throw timeout;
 		}
 
