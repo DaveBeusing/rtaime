@@ -28,9 +28,19 @@ public static class ControlHostDiagnostics
 
 		if (process.IpcServer is { } ipc)
 		{
+			var sessions = ipc.Sessions;
 			builder.Identity("hostInstanceId", ipc.HostInstanceId)
 				.Configuration("controlEndpoint", ipc.Endpoint)
-				.Counter("ipc.stateVersion", ToCounter(ipc.StateVersion));
+				.Counter("ipc.stateVersion", ToCounter(ipc.StateVersion))
+				.Counter("ipc.sessions.active", sessions.ActiveSessions)
+				.Counter("ipc.sessions.started", ToCounter(sessions.StartedSessions))
+				.Counter("ipc.sessions.completed", ToCounter(sessions.CompletedSessions))
+				.Counter("ipc.sessions.faulted", ToCounter(sessions.FaultedSessions))
+				.Status("ipc.sessions.accepting", sessions.AcceptingSessions.ToString())
+				.Status("ipc.sessions.stopRequested", sessions.StopRequested.ToString())
+				.Status("ipc.sessions.drainTimedOut", sessions.DrainTimedOut.ToString())
+				.Status("ipc.sessions.lastFailureType", sessions.LastFailureType ?? "none")
+				.Status("ipc.sessions.lastFailure", sessions.LastFailureDetail ?? "none");
 		}
 
 		if (process.RuntimeTransport is { } runtime)
