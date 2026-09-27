@@ -99,4 +99,28 @@ public sealed class HostIpcSessionTrackerTests
 		Assert.Contains(nameof(InvalidOperationException), snapshot.LastFailureType, StringComparison.Ordinal);
 		Assert.Equal("synthetic session failure", snapshot.LastFailureDetail);
 	}
+	[Fact]
+	public async Task Protocol_counter_never_rolls_over_when_concurrent_callers_reach_signed_limit()
+	{
+		var counter = new HostIpcProtocolCounter(checked((ulong)(long.MaxValue - 1)));
+		using var start = new ManualResetEventSlim(false);
+		var attempts = Enumerable.Range(0, 2)
+			.Select(_ => Task.Run(() =>
+			{
+				start.Wait();
+				return counter.TryIncrement(out var value) ? value : (ulong?)null;
+			}))
+			.ToArray();
+
+		start.Set();
+		var results = await Task.WhenAll(attempts);
+
+		Assert.Single(results, value => value == checked((ulong)long.MaxValue));
+		Assert.Single(results, value => value is null);
+		Assert.Equal(checked((ulong)long.MaxValue), counter.Value);
+		Assert.False(counter.TryIncrement(out var exhaustedValue));
+		Assert.Equal(checked((ulong)long.MaxValue), exhaustedValue);
+		Assert.Equal(checked((ulong)long.MaxValue), counter.Value);
+	}
+
 }
