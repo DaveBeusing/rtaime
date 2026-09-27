@@ -3,6 +3,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Input;
 using System.Windows.Threading;
 
 namespace rtaime.Operator.Controls;
@@ -162,6 +163,9 @@ public sealed class RtaimeMonitorPresentation : ContentControl
 
 		_mediaViewport.SizeChanged += OnViewportSizeChanged;
 		_mediaViewport.MouseWheel += OnViewportMouseWheel;
+		_mediaViewport.MouseLeftButtonDown += OnViewportMouseDoubleClick;
+		_mediaViewport.PreviewKeyDown += OnViewportPreviewKeyDown;
+		_mediaViewport.Focusable = true;
 		_mediaViewport.MouseLeftButtonDown += OnViewportMouseLeftButtonDown;
 		_mediaViewport.MouseLeftButtonUp += OnViewportMouseLeftButtonUp;
 		_mediaViewport.MouseMove += OnViewportMouseMove;
@@ -186,13 +190,40 @@ public sealed class RtaimeMonitorPresentation : ContentControl
 		RefreshViewport();
 	}
 
-	private void OnViewportMouseWheel(object sender, System.Windows.Input.MouseWheelEventArgs e)
+	private void OnViewportMouseWheel(object sender, MouseWheelEventArgs e)
 	{
-		if (Monitor is null)
+		if (Monitor is null || _mediaViewport is null)
 			return;
 
-		Monitor.StepPresentationZoom(e.Delta);
+		var anchor = e.GetPosition(_mediaViewport);
+		Monitor.ZoomPresentationAt(e.Delta, anchor.X, anchor.Y);
 		e.Handled = true;
+	}
+
+	private void OnViewportMouseDoubleClick(object sender, MouseButtonEventArgs e)
+	{
+		if (Monitor is null || e.ClickCount != 2)
+			return;
+
+		Monitor.ToggleFitPixelPerfect();
+		e.Handled = true;
+	}
+
+	private void OnViewportPreviewKeyDown(object sender, KeyEventArgs e)
+	{
+		if (Monitor is null || Keyboard.Modifiers != ModifierKeys.None)
+			return;
+
+		if (e.Key == Key.D1 || e.Key == Key.NumPad1)
+		{
+			Monitor.ZoomMode = "100%";
+			e.Handled = true;
+		}
+		else if (e.Key == Key.F)
+		{
+			Monitor.ZoomMode = "FIT";
+			e.Handled = true;
+		}
 	}
 
 	private void OnViewportMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
@@ -200,6 +231,7 @@ public sealed class RtaimeMonitorPresentation : ContentControl
 		if (Monitor is null || Monitor.ZoomMode is "FIT" or "FILL")
 			return;
 
+		_mediaViewport?.Focus();
 		_panOrigin = e.GetPosition(_mediaViewport);
 		_mediaViewport?.CaptureMouse();
 		e.Handled = true;
@@ -243,6 +275,8 @@ public sealed class RtaimeMonitorPresentation : ContentControl
 
 		_mediaViewport.SizeChanged -= OnViewportSizeChanged;
 		_mediaViewport.MouseWheel -= OnViewportMouseWheel;
+		_mediaViewport.MouseLeftButtonDown -= OnViewportMouseDoubleClick;
+		_mediaViewport.PreviewKeyDown -= OnViewportPreviewKeyDown;
 		_mediaViewport.MouseLeftButtonDown -= OnViewportMouseLeftButtonDown;
 		_mediaViewport.MouseLeftButtonUp -= OnViewportMouseLeftButtonUp;
 		_mediaViewport.MouseMove -= OnViewportMouseMove;
