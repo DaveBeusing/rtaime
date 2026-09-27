@@ -119,7 +119,7 @@ public sealed class DeterministicRuntimeBoundaryTests
 			specification,
 			initialized.State!.Authoritative,
 			new ProviderRegistry(runtime.ProviderDescriptors));
-		Assert.True(planning.Succeeded, planning.Failure?.ToString());
+		Assert.True(planning.Succeeded);
 		return new Fixture(runtime, planning.PreparedExecution!);
 	}
 
