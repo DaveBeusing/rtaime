@@ -114,6 +114,9 @@ public sealed class ProgramFrameMemoryOwnershipTests
 			"1",
 			StringComparison.Ordinal);
 		var boundaryCount = longMode ? 640 : 96;
+		const int allocationWarmupBoundaries = 16;
+		long measuredAllocatedBytes = 0;
+		var measuredBoundaryCount = 0;
 
 		var recording = await fixture.Runtime.StartRecordingAsync(
 			RecordingSessionId.New(),
@@ -130,7 +133,14 @@ public sealed class ProgramFrameMemoryOwnershipTests
 						: V1VisualLayerMode.Disabled);
 			}
 
+			var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
 			using var boundary = fixture.Runtime.ProcessNextBoundary();
+			var allocatedAfter = GC.GetAllocatedBytesForCurrentThread();
+			if (index >= allocationWarmupBoundaries)
+			{
+				measuredAllocatedBytes += Math.Max(0, allocatedAfter - allocatedBefore);
+				measuredBoundaryCount++;
+			}
 			Assert.Equal((ulong)index, boundary.SequenceNumber);
 			Assert.InRange(
 				fixture.Runtime.ProgramReadbackPoolStatistics.ActiveBuffers,
@@ -163,6 +173,12 @@ public sealed class ProgramFrameMemoryOwnershipTests
 		Assert.True(fixture.Runtime.RecentObservations(int.MaxValue).Count <= V1RuntimeHostService.RetainedObservationCapacity);
 		Assert.Equal(0, fixture.Runtime.ProgramReadbackPoolStatistics.ActiveBuffers);
 		Assert.True(fixture.Runtime.ProgramReadbackPoolStatistics.AllocatedBuffers <= V1RuntimeHostService.ProgramReadbackBufferCapacity);
+		Assert.True(measuredBoundaryCount > 0);
+		var averageAllocatedBytesPerBoundary = measuredAllocatedBytes / measuredBoundaryCount;
+		var fullFrameBytes = RgbaFrameBuffer.RequiredByteLength(VideoFormat.Hd1080p50Rgba8);
+		Assert.True(
+			averageAllocatedBytesPerBoundary < fullFrameBytes / 2L,
+			$"Steady-state Runtime allocation averaged '{averageAllocatedBytesPerBoundary}' bytes per boundary, indicating full-frame allocation regression.");
 		Assert.Contains(snapshot.OutputRoles!, role => role.RoleId == "program");
 		Assert.Contains(snapshot.OutputRoles!, role => role.RoleId == "aux");
 		Assert.True(monitoring.DroppedFrames > 0);
