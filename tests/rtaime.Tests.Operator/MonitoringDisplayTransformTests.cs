@@ -1,6 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 using rtaime.Media.Contracts;
+using Xunit;
 
 namespace rtaime.Operator.Tests;
 
