@@ -319,8 +319,8 @@ public sealed class RuntimeMonitoringTap : IAsyncDisposable
 			using (sample.Program)
 			{
 				if (!_hub.HasSubscribers) continue;
-				PublishPrepared(sample.SourceAId, MonitoringStreamKind.Source, sample.SourceA, sample.Timing);
-				PublishPrepared(sample.SourceBId, MonitoringStreamKind.Source, sample.SourceB, sample.Timing);
+				PublishPrepared(sample.SourceAId, MonitoringStreamKind.Source, sample.SourceA, sample.Timing, sample.Format.Color);
+				PublishPrepared(sample.SourceBId, MonitoringStreamKind.Source, sample.SourceB, sample.Timing, sample.Format.Color);
 				Publish(sample.ProgramSourceId, MonitoringStreamKind.Program, sample.Program.Memory.Span, sample.Format, sample.Timing);
 				lock (_gate) _processed++;
 			}
@@ -331,7 +331,8 @@ public sealed class RuntimeMonitoringTap : IAsyncDisposable
 		MediaSourceId sourceId,
 		MonitoringStreamKind kind,
 		byte[] pixels,
-		FrameTiming timing)
+		FrameTiming timing,
+		ColorDescription color)
 	{
 		var descriptor = new MonitoringFrameDescriptor(
 			MonitoringContractVersion.Current,
@@ -340,7 +341,8 @@ public sealed class RuntimeMonitoringTap : IAsyncDisposable
 			MonitorWidth,
 			MonitorHeight,
 			PixelFormat.Rgba8,
-			timing);
+			timing,
+			color);
 		_hub.Publish(new MonitoringFrame(descriptor, pixels));
 	}
 
@@ -359,7 +361,8 @@ public sealed class RuntimeMonitoringTap : IAsyncDisposable
 			MonitorWidth,
 			MonitorHeight,
 			PixelFormat.Rgba8,
-			timing);
+			timing,
+			format.Color);
 		_hub.Publish(new MonitoringFrame(descriptor, downscaled));
 	}
 
