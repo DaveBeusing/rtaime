@@ -93,7 +93,7 @@
 									VerticalAlignment="Top"
 									Margin="8"
 									Padding="6,3"
-									Background="{DynamicResource OperatorOverlayBrush}"
+									Background="{DynamicResource OperatorAlternateSurfaceBrush}"
 									Panel.ZIndex="55"
 									IsHitTestVisible="False">
 									<Border.Style>
