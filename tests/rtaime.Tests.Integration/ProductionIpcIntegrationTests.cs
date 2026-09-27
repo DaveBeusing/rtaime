@@ -918,7 +918,7 @@ public sealed class ProductionIpcIntegrationTests
 				string.Equals(role.HealthState, expectedHealth, StringComparison.OrdinalIgnoreCase)))
 				return snapshot;
 
-			await Task.Delay(20);
+			await Task.Delay(17);
 		}
 		while (DateTime.UtcNow < deadline);
 
