@@ -144,14 +144,14 @@ public sealed class HostIpcSessionTracker
 				_active.Remove(entry.Id);
 				_completedSessions++;
 			}
-			entry.Completion.TrySetResult();
+			entry.Completion.TrySetResult(true);
 		}
 	}
 
 	private sealed class SessionEntry(long id)
 	{
 		public long Id { get; } = id;
-		public TaskCompletionSource Completion { get; } =
+		public TaskCompletionSource<bool> Completion { get; } =
 			new(TaskCreationOptions.RunContinuationsAsynchronously);
 	}
 }
