@@ -148,4 +148,50 @@ public sealed class MediaPresentationGeometryTests
 		Assert.Equal(1, stabilizer.Revision);
 		Assert.False(stabilizer.ResizePending);
 	}
+	[Theory]
+	[InlineData(1.0, 120, 1.25)]
+	[InlineData(1.0, -120, 0.8)]
+	[InlineData(7.5, 120, 8.0)]
+	[InlineData(0.25, -120, 0.25)]
+	public void Free_zoom_is_bounded(double current, int delta, double expected)
+	{
+		Assert.Equal(expected, MediaInspectionPolicy.StepZoom(current, delta), 6);
+	}
+
+	[Fact]
+	public void Pointer_anchor_preserves_source_point_during_zoom()
+	{
+		const double sourceWidth = 3840;
+		const double sourceHeight = 2160;
+		const double viewportWidth = 1280;
+		const double viewportHeight = 720;
+		const double oldScale = 0.5;
+		const double newScale = 1.0;
+		const double anchorX = 900;
+		const double anchorY = 500;
+		var oldX = (viewportWidth - sourceWidth * oldScale) / 2.0;
+		var oldY = (viewportHeight - sourceHeight * oldScale) / 2.0;
+		var sourceX = (anchorX - oldX) / oldScale;
+		var sourceY = (anchorY - oldY) / oldScale;
+
+		var pan = MediaInspectionPolicy.AnchorZoom(
+			sourceWidth, sourceHeight, viewportWidth, viewportHeight,
+			oldScale, newScale, 0, 0, anchorX, anchorY);
+		var newX = (viewportWidth - sourceWidth * newScale) / 2.0 + pan.PanX;
+		var newY = (viewportHeight - sourceHeight * newScale) / 2.0 + pan.PanY;
+
+		Assert.Equal(anchorX, newX + sourceX * newScale, 6);
+		Assert.Equal(anchorY, newY + sourceY * newScale, 6);
+	}
+
+	[Fact]
+	public void Four_k_fit_and_pixel_perfect_have_materially_different_geometry()
+	{
+		var fit = MediaPresentationGeometry.Calculate(3840, 2160, 1280, 720, MediaPresentationMode.Fit);
+		var inspect = MediaPresentationGeometry.Calculate(3840, 2160, 1280, 720, MediaPresentationMode.PixelPerfect);
+		Assert.Equal(1.0 / 3.0, fit.Scale, 6);
+		Assert.Equal(1.0, inspect.Scale, 6);
+		Assert.Equal(1280, fit.Width, 4);
+		Assert.Equal(3840, inspect.Width, 4);
+	}
 }
