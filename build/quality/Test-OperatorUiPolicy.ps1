@@ -1154,3 +1154,9 @@ Assert-Condition ($window -match 'CLEAN PROGRAM MONITOR' -and $window -match 'no
 Assert-Condition ($programOutputController -match 'OperatorMonitoringViewModel' -and $programOutputController -notmatch 'MediaElement|VideoDrawing') "Clean Program must reuse the existing monitoring projection."
 Assert-Condition ($window -match 'Text="SYSTEM WORKSPACE"' -and $window -match 'Text="Engine"' -and $window -match 'Text="Control"' -and $window -match 'Text="Runtime"' -and $window -match 'Text="Outputs"' -and $window -match 'Text="Diagnostics"') "OUTPUTS/HEALTH/SETTINGS must reuse existing operational evidence rather than create production authority."
 Assert-Condition ($workspaceDocumentation -match 'eight task-oriented workspaces' -and $workspaceDocumentation -match 'SCENES' -and $workspaceDocumentation -match 'COMPOSITING' -and $workspaceDocumentation -match 'OUTPUTS' -and $workspaceDocumentation -match 'HEALTH' -and $workspaceDocumentation -match 'SETTINGS' -and $workspaceDocumentation -match 'Quick Controls' -and $workspaceDocumentation -match 'Keyboard-first operation' -and $workspaceDocumentation -match 'Clean Program monitoring') "Operator workspace documentation must cover the implemented UX model."
+
+
+# High-fidelity media presentation
+Assert-Condition ($monitorView -match 'ZoomModeProperty' -and $monitorView -match '"FILL"' -and $monitorView -match '"25%"' -and $monitorView -match '"200%"' -and $monitorView -match '"400%"') "Shared monitor state must expose explicit Fit/Fill and professional inspection zoom presets."
+Assert-Condition ($monitorWorkspaceTheme -match 'RenderOptions.BitmapScalingMode="HighQuality"') "Shared monitor presentation must retain high-quality bitmap scaling."
+Assert-Condition ($monitorWorkspaceTheme -notmatch '<Viewbox[^>]+Monitor.ImageStretch') "Shared monitor media must not reintroduce a Viewbox scaling stage around the monitoring image."
