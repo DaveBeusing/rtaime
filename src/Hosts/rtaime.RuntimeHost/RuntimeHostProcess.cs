@@ -185,6 +185,7 @@ public sealed class RuntimeHostProcess
 	private readonly Func<RuntimeHostProcessOptions, IProgramRecordingWriter, V1RuntimeHostService> _runtimeFactory;
 	private readonly Func<V1RuntimeHostService, RuntimeHostProcessOptions, RuntimeAIShowcaseService> _aiShowcaseFactory;
 	private readonly RuntimeHostIpcServerFactory _ipcServerFactory;
+	private readonly TimeSpan _ipcSessionDrainTimeout;
 	private readonly Stopwatch _timingClock = Stopwatch.StartNew();
 	private readonly RuntimeTimingQualificationProbe _timingProbe;
 	private readonly RuntimeFrameDropCounter _frameDropCounter = new();
@@ -231,8 +232,15 @@ public sealed class RuntimeHostProcess
 		_aiShowcaseFactory = aiShowcaseFactory ?? ((runtime, processOptions) => new RuntimeAIShowcaseService(
 			runtime,
 			new NamedPipeRuntimeAIHostTransport(processOptions.AIEndpoint)));
+		_ipcSessionDrainTimeout = HostIpcSessionTracker.DrainIntervalForHost(options.ShutdownTimeout);
 		_ipcServerFactory = ipcServerFactory ?? ((endpoint, runtimeAccessor, mediaDeckAccessor, aiShowcaseAccessor) =>
-			new RuntimeHostIpcServer(endpoint, runtimeAccessor, mediaDeckAccessor, aiShowcaseAccessor));
+			new RuntimeHostIpcServer(
+				endpoint,
+				runtimeAccessor,
+				mediaDeckAccessor,
+				aiShowcaseAccessor,
+				null,
+				_ipcSessionDrainTimeout));
 
 		var framePeriod = TimeSpan.FromSeconds(options.Format.FrameRate.Denominator / (double)options.Format.FrameRate.Numerator);
 		_timingProbe = new RuntimeTimingQualificationProbe(new TimingQualificationThresholds(
@@ -310,7 +318,11 @@ public sealed class RuntimeHostProcess
 
 			_ipcServer = _ipcServerFactory(_options.ListenEndpoint, () => _runtime, () => _mediaDeck, () => _aiShowcase)
 				?? throw new InvalidOperationException("RuntimeHost IPC server factory returned null.");
-			_monitoringServer = new RuntimeHostMonitoringServer(MonitoringEndpoint, _runtime.MonitoringHub);
+			_monitoringServer = new RuntimeHostMonitoringServer(
+				MonitoringEndpoint,
+				_runtime.MonitoringHub,
+				null,
+				_ipcSessionDrainTimeout);
 
 			_ipcServer.ListenerFaulted += (snapshot, exception) =>
 			{
