@@ -214,7 +214,11 @@ RuntimeHost and AIHost shutdown/recovery remain consequences of ControlHost-owne
 
 ## Failure and recovery observation
 
-RuntimeHost or AIHost degradation causes ControlHost readiness evidence to disappear while child supervision performs its bounded recovery behavior. AppHost exposes successful recovery as:
+RuntimeHost or AIHost degradation causes ControlHost readiness evidence to disappear while child supervision performs its bounded recovery behavior. After AppHost has already reached `Healthy`, steady-state readiness loss first enters a short observation grace derived from existing lifecycle timing: the larger of `startup.probeIntervalMs` and `startup.childRestartBackoffMs`, capped by `startup.runtimeRecoveryTimeoutMs`. With the canonical policy this is 500 ms.
+
+If authoritative readiness returns inside that grace, AppHost keeps the engine lifecycle `Healthy` and publishes no transient `Degraded`/`Recovering` transition. This suppresses display flapping caused by an isolated readiness-file observation without changing ControlHost's fail-closed behavior: ControlHost still removes readiness immediately and pauses authoritative mutation transport when Runtime is unavailable.
+
+A sustained loss beyond the grace is exposed as:
 
 ```text
 Healthy

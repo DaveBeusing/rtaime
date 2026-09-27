@@ -135,6 +135,8 @@ The supervisor still avoids continuous Named Pipe probe traffic after an owned c
 
 Managed Host Lifecycle Readiness does not add a second supervisor implementation.
 
+The top-level AppHost applies the same bounded-timing principle to **presentation of post-start engine readiness loss**. Once the application is already `Healthy`, one missing ControlHost readiness observation does not immediately toggle the global AppHost lifecycle. AppHost waits for the larger of the configured probe interval and child restart backoff, capped by the runtime recovery timeout, before publishing `Degraded`. This is presentation hysteresis only: ControlHost readiness publication and mutation safety remain fail-closed immediately, and the AppHost runtime recovery deadline still starts at the first lost observation.
+
 ## Graceful stop
 
 Managed processes receive a unique file-sentinel path in:
