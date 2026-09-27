@@ -95,6 +95,12 @@ Q02-Q08 intentionally share one V1 end-to-end execution evidence group. The runn
 
 Q10 exercises an actual Operator operating-system process restart. Broader RuntimeHost and ControlHost supervision/recovery evidence remains in the existing Required Gates and is not duplicated inside Reference Platform Qualification.
 
+## Deterministic Runtime boundary evidence
+
+The software profile is supplemented by Required Gates that enforce one RuntimeHost Program cadence authority, coherent local-media video/audio admission, bounded Runtime boundary resource retention and nonblocking read-only Runtime snapshots during heavy GPU work.
+
+This evidence is intentionally software-scoped. It cannot satisfy any physical requirement in the table below. In particular, green deterministic-boundary or software-soak tests do not change `SUSTAINED_FRAME_CADENCE`, `TIMING_REFERENCE_LOCK`, `AUDIO_VIDEO_SYNCHRONIZATION`, `PHYSICAL_END_TO_END_LATENCY` or `LONG_SOAK_STABILITY` from `UNVERIFIED` without accepted exact-source physical evidence.
+
 ## Physical requirements
 
 Reference Platform Qualification consumes the source-bound evidence model introduced before this work package. It does not weaken or bypass it.
