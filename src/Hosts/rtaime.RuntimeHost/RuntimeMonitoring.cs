@@ -373,6 +373,7 @@ public sealed class RuntimeHostMonitoringServer : IAsyncDisposable
 	public string Endpoint => _endpoint;
 	public bool Running => _listener.Running;
 	public RuntimePipeListenerSnapshot Listener => _listener.Snapshot;
+	public HostIpcSessionSnapshot Sessions => _listener.Sessions;
 	internal Task ListenerCompletion => _listener.Completion;
 	internal event Action<RuntimePipeListenerSnapshot, Exception>? ListenerFaulted
 	{
