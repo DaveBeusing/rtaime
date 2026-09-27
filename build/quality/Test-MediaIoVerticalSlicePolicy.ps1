@@ -117,7 +117,7 @@ Assert-Condition ($pump -notmatch 'Channel<|ConcurrentQueue|Queue<') "AP-33 vert
 Assert-Condition ($runtime -match 'enum RuntimeMediaIoMode[\s\S]*Virtual[\s\S]*Native') "RuntimeHost must expose explicit virtual/native Media I/O selection."
 Assert-Condition ($runtime -match 'RTAIME_RUNTIME_MEDIA_IO') "RuntimeHost Media I/O selection must be environment-configurable."
 Assert-Condition ($runtime -match 'if \(_options\.MediaIoMode == RuntimeMediaIoMode\.Native\)[\s\S]*new NativeMediaIoProviderAdapter') "Native RuntimeHost mode must explicitly construct the native provider."
-Assert-Condition ($runtime -match 'RunMediaLoopAsync\(_runtime, _mediaIo') "RuntimeHost media loop must receive the physical bridge explicitly."
+Assert-Condition ($runtime -match 'RunMediaLoopAsync\(_runtime, _mediaDeck, _mediaIo') "RuntimeHost media loop must receive the media deck and physical bridge explicitly from the single production cadence."
 Assert-Condition ($runtime -match 'mediaIo\?\.PumpInputs\(\)[\s\S]*runtime\.ProcessNextBoundary\(\)[\s\S]*mediaIo\?\.SubmitProgram') "Physical input and Program output must wrap the existing committed runtime boundary."
 Assert-Condition ($runtime -notmatch 'catch[\s\S]{0,240}RuntimeMediaIoMode\.Virtual') "Native startup failure must not silently fall back to Virtual Media I/O."
 Assert-Condition ($runtimeBridge -match 'SetExternalInputContent') "Runtime Media I/O bridge must only update current execution media content."
