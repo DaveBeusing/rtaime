@@ -142,6 +142,16 @@ The technical overlay reports source dimensions, physical target dimensions, qua
 
 Automated qualification covers physical target calculation across 100%, 125%, 150% and 200% DPI examples, deterministic fractional-pixel rounding, resize settling and stable-target revision reuse. The existing presentation geometry suite continues to cover aspect preservation, pixel-perfect inspection and bounded pan.
 
+## Media viewport inspection controls
+
+Preview and Program viewports support a local inspection workflow that never changes playback, timeline position, source media, or authoritative production state. Fit remains the composition-oriented default. Fixed 25%, 50%, 100%, 200%, 400% and 800% inspection levels share the same presentation geometry; 100% is the physical-pixel inspection mode established by the qualified monitor render-target path.
+
+Mouse-wheel input over a viewport enters bounded free zoom between 25% and 800%. Zoom is anchored to the pointer so the inspected source location remains stable where pan bounds permit it. Dragging pans only inspection modes whose scaled media exceeds the viewport; pan remains clamped so media cannot be lost outside the inspectable region.
+
+Double-click toggles Fit and 100%. With the media viewport focused and no modifier keys held, `1` selects 100% and `F` selects Fit. The viewport takes keyboard focus when an inspection drag begins; shortcuts are intentionally local rather than global so transport and timeline input retain their established ownership.
+
+The existing monitor status reports the active presentation mode and the technical overlay exposes authoritative source/target and scaling diagnostics. It does not infer frame-rate, bit-depth, or other metadata that is not supplied authoritatively by the current monitoring contract.
+
 ## Preview / Program production workspace
 
 Preview / Program Production Workspace formalizes the switcher workflow as **Selected Source → confirmed Preview → confirmed Program**. The local source selection is operator intent for `Set Preview`; it is never treated as Program authority.
