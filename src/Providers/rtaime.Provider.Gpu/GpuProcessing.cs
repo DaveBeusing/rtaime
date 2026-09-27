@@ -617,6 +617,7 @@ public sealed class GpuProcessingProvider : IDisposable
     private readonly IGpuProcessingBackend _backend;
     private readonly GpuReadbackBufferPool _readbackPool;
     private readonly Dictionary<SurfaceId, GpuFrame> _activeFrames = new();
+    private readonly HashSet<SurfaceId> _unreleasedBackendSurfaces = new();
     private readonly BoundedDiagnosticHistory<GpuObservation> _observations = new(RetainedObservationCapacity);
     private GpuProviderState _state = GpuProviderState.Stopped;
     private ulong _surfaceOrdinal;
@@ -646,7 +647,16 @@ public sealed class GpuProcessingProvider : IDisposable
         get
         {
             lock (_gate)
-                return _activeFrames.Count;
+                return checked(_activeFrames.Count + _unreleasedBackendSurfaces.Count);
+        }
+    }
+
+    public int UnreleasedBackendSurfaceCount
+    {
+        get
+        {
+            lock (_gate)
+                return _unreleasedBackendSurfaces.Count;
         }
     }
 
@@ -695,7 +705,11 @@ public sealed class GpuProcessingProvider : IDisposable
             }
 
             _activeFrames.Clear();
+            foreach (var surfaceId in _unreleasedBackendSurfaces.ToArray())
+                TryReleaseBackendSurface(surfaceId);
+
             _backend.Stop();
+            _unreleasedBackendSurfaces.Clear();
             _state = GpuProviderState.Stopped;
             Observe("gpu.provider.stopped", null, null);
         }
@@ -1000,18 +1014,22 @@ public sealed class GpuProcessingProvider : IDisposable
         }
     }
 
-    private void TryReleaseBackendSurface(SurfaceId surfaceId)
+    private bool TryReleaseBackendSurface(SurfaceId surfaceId)
     {
         try
         {
             _backend.Release(surfaceId);
+            _unreleasedBackendSurfaces.Remove(surfaceId);
+            return true;
         }
         catch (Exception exception)
         {
+            _unreleasedBackendSurfaces.Add(surfaceId);
             Observe(
                 "gpu.surface.release_failed",
                 null,
                 new Failure("gpu.surface.release_failed", $"GPU surface release failed: {exception.GetType().Name}."));
+            return false;
         }
     }
 
