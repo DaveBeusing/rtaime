@@ -962,10 +962,10 @@ public sealed class UnifiedApplicationHost
 			if (readiness is null)
 			{
 				degradedSince ??= _platform.UtcNow;
+				_platform.DeleteFile(_options.ServiceReadinessEvidencePath);
 				var recoveryDuration = _platform.UtcNow - degradedSince.Value;
 				if (recoveryDuration >= RuntimeReadinessLossGracePeriod && !degradationPublished)
 				{
-					_platform.DeleteFile(_options.ServiceReadinessEvidencePath);
 					_lifecycle.DegradeStage(
 						ApplicationLifecycleStages.ProductionReadiness,
 						"Production readiness was lost; recovery is active.",
@@ -1013,10 +1013,10 @@ public sealed class UnifiedApplicationHost
 			if (readiness is null)
 			{
 				degradedSince ??= _platform.UtcNow;
+				_platform.DeleteFile(_options.ServiceReadinessEvidencePath);
 				var recoveryDuration = _platform.UtcNow - degradedSince.Value;
 				if (recoveryDuration >= RuntimeReadinessLossGracePeriod && !degradationPublished)
 				{
-					_platform.DeleteFile(_options.ServiceReadinessEvidencePath);
 					_lifecycle.DegradeStage(
 						ApplicationLifecycleStages.ProductionReadiness,
 						"Production readiness was lost; recovery is active.",
