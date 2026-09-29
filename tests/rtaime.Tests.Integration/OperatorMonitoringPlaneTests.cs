@@ -386,6 +386,8 @@ public sealed class OperatorMonitoringPlaneTests
 			available: true);
 
 		public SurfaceStorageDomain StorageDomain => SurfaceStorageDomain.Device;
+		public bool SupportsSharedMonitoringResources => true;
+		public bool IsSharedMonitoringExportAvailable => true;
 		public int ActiveAllocationCount => _inner.ActiveAllocationCount;
 		public int ReadbackIntoCount { get; private set; }
 		public void Start() => _inner.Start();
@@ -399,6 +401,19 @@ public sealed class OperatorMonitoringPlaneTests
 		{
 			ReadbackIntoCount++;
 			_inner.ReadbackInto(surfaceId, format, destination);
+		}
+		public bool TryExportMonitoringResource(
+			SurfaceId surfaceId,
+			VideoFormat format,
+			out GpuBackendMonitoringResource? resource)
+		{
+			resource = new GpuBackendMonitoringResource(
+				new MonitoringSharedResourceInteropDescriptor(
+					MonitoringSharedResourceInteropKind.WindowsGraphicsSharedHandle,
+					adapterLuid: 1,
+					sharedHandle: 0x2000UL + (ulong)_inner.ActiveAllocationCount),
+				static () => { });
+			return true;
 		}
 		public void Release(SurfaceId surfaceId) => _inner.Release(surfaceId);
 		public void Dispose() => _inner.Dispose();
