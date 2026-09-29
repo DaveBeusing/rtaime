@@ -1,6 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 using System.IO;
+using System.Xml.Linq;
 using rtaime.Operator;
 using Xunit;
 
@@ -143,15 +144,8 @@ public sealed class MediaViewportVisualQualityQualificationTests
 		Assert.Contains("BitmapScalingMode=\"HighQuality\"", theme, StringComparison.Ordinal);
 		Assert.Contains("SnapsToDevicePixels=\"True\"", theme, StringComparison.Ordinal);
 		Assert.DoesNotContain("<Viewbox", theme, StringComparison.Ordinal);
-		Assert.Equal(1, CountOccurrences(theme, "<Image\n"));
-	}
-
-	private static int CountOccurrences(string value, string token)
-	{
-		var count = 0;
-		for (var index = 0; (index = value.IndexOf(token, index, StringComparison.Ordinal)) >= 0; index += token.Length)
-			count++;
-		return count;
+		var document = XDocument.Parse(theme);
+		Assert.Single(document.Descendants().Where(element => element.Name.LocalName == "Image"));
 	}
 
 	private static string FindRepositoryRoot()
