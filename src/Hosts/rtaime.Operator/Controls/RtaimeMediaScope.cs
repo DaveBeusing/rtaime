@@ -6,7 +6,7 @@ using System.Windows.Media;
 
 namespace rtaime.Operator.Controls;
 
-public sealed class RtaimeMediaScope : Control
+public sealed class RtaimeMediaScope : System.Windows.Controls.Control
 {
 	public static readonly DependencyProperty SnapshotProperty = DependencyProperty.Register(
 		nameof(Snapshot), typeof(MediaScopeSnapshot), typeof(RtaimeMediaScope),
