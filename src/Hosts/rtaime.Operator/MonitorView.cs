@@ -21,6 +21,7 @@ public class MonitorView : UserControl
 	private MediaPresentationRect _presentationRect;
 	private DateTimeOffset _lastInspectionAt;
 	private DateTimeOffset _lastDiagnosticsHudUpdateAt;
+	private int _diagnosticsHudRefreshCount;
 
 	private static readonly DependencyPropertyKey PresentationWidthPropertyKey = DependencyProperty.RegisterReadOnly(
 		nameof(PresentationWidth),
@@ -340,6 +341,7 @@ public class MonitorView : UserControl
 	public string InspectionReadout => (string)GetValue(InspectionReadoutProperty);
 	public bool IsPixelGridVisible => (bool)GetValue(IsPixelGridVisibleProperty);
 	public string DiagnosticsHudText => (string)GetValue(DiagnosticsHudTextProperty);
+	internal int DiagnosticsHudRefreshCount => _diagnosticsHudRefreshCount;
 	public bool IsTransportSource => (bool)GetValue(IsTransportSourceProperty);
 	public string DisplayTimecode => (string)GetValue(DisplayTimecodeProperty);
 
@@ -371,6 +373,7 @@ public class MonitorView : UserControl
 		if (view._lastDiagnosticsHudUpdateAt != default && now - view._lastDiagnosticsHudUpdateAt < TimeSpan.FromMilliseconds(200))
 			return;
 		view._lastDiagnosticsHudUpdateAt = now;
+		view._diagnosticsHudRefreshCount++;
 		view.SetValue(DiagnosticsHudTextPropertyKey, view.FormatDiagnosticsHud());
 	}
 
@@ -388,7 +391,8 @@ public class MonitorView : UserControl
 		var scale = _presentationRect.Scale > 0 ? $"{_presentationRect.Scale * 100:0.#}%" : "UNAVAILABLE";
 		return $"FRAME {frame}  PTS {pts}  MEDIA {diagnostics.PresentationTime}  RATE {diagnostics.Rate}\n" +
 			$"SOURCE {source}  TARGET {target}  SCALE {scale}  MODE {ZoomMode}\n" +
-			$"COLOR {diagnostics.ColorPath}  TIMING {diagnostics.TimingAuthority.ToString().ToUpperInvariant()}  DISPLAY WPF HIGH QUALITY";
+			$"COLOR {diagnostics.ColorPath}  TIMING {diagnostics.TimingAuthority.ToString().ToUpperInvariant()}\n" +
+			$"DISPLAY WPF HIGH QUALITY  FALLBACK CPU/WPF  DROPPED/REPEATED/LATE/DISCONTINUITY UNAVAILABLE";
 	}
 
 	private static void OnGridChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs eventArgs)
@@ -539,6 +543,9 @@ public class MonitorView : UserControl
 		SetValue(PresentationHeightPropertyKey, result.Height / _dpiScaleY);
 		SetValue(PresentationOffsetXPropertyKey, _panXPhysical / _dpiScaleX);
 		SetValue(PresentationOffsetYPropertyKey, _panYPhysical / _dpiScaleY);
+		if (ShowDiagnosticsHud)
+			OnDiagnosticsChanged(this, new DependencyPropertyChangedEventArgs(DiagnosticsProperty, Diagnostics, Diagnostics));
+
 		SetValue(
 			PresentationInfoPropertyKey,
 			$"{sourceWidth:0}×{sourceHeight:0} | {ZoomMode} {result.Scale * 100:0.#}% | Target {target.PixelWidth}×{target.PixelHeight} px | {target.Quality} {target.Path} | Scale stages 1 | RT #{_renderTargetStabilizer.Revision}{(_renderTargetStabilizer.ResizePending ? " pending" : string.Empty)} | DPI {_dpiScaleX * 100:0}%");
