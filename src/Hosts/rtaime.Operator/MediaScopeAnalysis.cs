@@ -129,3 +129,28 @@ public sealed record MediaComparisonCompatibility(bool IsCompatible, string Deta
 		return new(true, "Difference inputs are semantically compatible.");
 	}
 }
+
+
+public static class MediaDifference
+{
+	public static byte[] CreateRgba(MonitoringFrame a, MonitoringFrame b)
+	{
+		ArgumentNullException.ThrowIfNull(a);
+		ArgumentNullException.ThrowIfNull(b);
+		var compatibility = MediaComparisonCompatibility.Evaluate(a.Descriptor, b.Descriptor);
+		if (!compatibility.IsCompatible)
+			throw new InvalidOperationException(compatibility.Detail);
+
+		var left = a.Pixels.Span;
+		var right = b.Pixels.Span;
+		var output = new byte[left.Length];
+		for (var i = 0; i < output.Length; i += 4)
+		{
+			output[i] = (byte)Math.Abs(left[i] - right[i]);
+			output[i + 1] = (byte)Math.Abs(left[i + 1] - right[i + 1]);
+			output[i + 2] = (byte)Math.Abs(left[i + 2] - right[i + 2]);
+			output[i + 3] = byte.MaxValue;
+		}
+		return output;
+	}
+}
