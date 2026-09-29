@@ -24,9 +24,13 @@ $controlRuntimeIpcPath = Join-Path $repositoryRoot "src/Hosts/rtaime.ControlHost
 $gpuProviderPath = Join-Path $repositoryRoot "src/Providers/rtaime.Provider.Gpu/GpuProcessing.cs"
 $clientPath = Join-Path $repositoryRoot "src/Client/rtaime.Client/NamedPipeOperatorMonitoringTransport.cs"
 $operatorPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorMonitoringViewModel.cs"
+$gpuPresentationPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Controls/GpuMonitorPresentationSurface.cs"
+$monitorThemePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Themes/Controls/RtaimeMonitorWorkspace.xaml"
+$cleanProgramPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/ProgramOutputWindow.xaml"
+$cudaMonitoringInteropPath = Join-Path $repositoryRoot "src/Providers/rtaime.Provider.Gpu/CudaD3D11MonitoringInterop.cs"
 $documentationPath = Join-Path $repositoryRoot "docs/OperatorMonitoringPlane.md"
 
-foreach ($path in @($contractsPath, $runtimeMonitoringPath, $runtimeServicePath, $runtimeIpcPath, $controlRuntimeIpcPath, $gpuProviderPath, $clientPath, $operatorPath, $documentationPath)) {
+foreach ($path in @($contractsPath, $runtimeMonitoringPath, $runtimeServicePath, $runtimeIpcPath, $controlRuntimeIpcPath, $gpuProviderPath, $clientPath, $operatorPath, $gpuPresentationPath, $monitorThemePath, $cleanProgramPath, $cudaMonitoringInteropPath, $documentationPath)) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required monitoring-plane artifact is missing: '$path'."
 }
 
@@ -38,6 +42,10 @@ $controlRuntimeIpc = Get-Content -LiteralPath $controlRuntimeIpcPath -Raw
 $gpuProvider = Get-Content -LiteralPath $gpuProviderPath -Raw
 $client = Get-Content -LiteralPath $clientPath -Raw
 $operator = Get-Content -LiteralPath $operatorPath -Raw
+$gpuPresentation = Get-Content -LiteralPath $gpuPresentationPath -Raw
+$monitorTheme = Get-Content -LiteralPath $monitorThemePath -Raw
+$cleanProgram = Get-Content -LiteralPath $cleanProgramPath -Raw
+$cudaMonitoringInterop = Get-Content -LiteralPath $cudaMonitoringInteropPath -Raw
 
 Assert-Condition ($contracts -match 'MonitoringContractVersion') "Monitoring must expose an explicit versioned contract."
 Assert-Condition ($contracts -match 'MonitoringStreamKind') "Monitoring must distinguish source and Program streams."
@@ -67,7 +75,14 @@ Assert-Condition ($client -match 'NamedPipeOperatorMonitoringTransport') "Client
 Assert-Condition ($client -notmatch 'SelectPreviewAsync|CutProgramAsync|DissolveProgramAsync') "Monitoring transport must not expose production mutations."
 Assert-Condition ($operator -match 'MonitoringStreamKind\.Program') "Operator must render actual Program stream frames distinctly."
 Assert-Condition ($operator -match 'PreviewSourceId') "Operator Preview must select monitoring frames using authoritative control routing."
-Assert-Condition ($operator -match 'SharedGpuMonitoringState') "Operator must expose the negotiated shared GPU monitoring state without requiring Direct3D presentation in this foundation."
+Assert-Condition ($operator -match 'SharedGpuMonitoringState') "Operator must expose the negotiated shared GPU monitoring state."
+Assert-Condition ($gpuPresentation -match 'OpenSharedResource' -and $gpuPresentation -match 'WindowsGraphicsSharedHandle') "Operator GPU presentation must open the negotiated read-only Windows graphics resource rather than materialize another frame."
+Assert-Condition ($gpuPresentation -notmatch 'BitmapSource|CopyPixels') "Operator GPU presentation must not materialize a CPU bitmap on the active GPU path."
+Assert-Condition ($monitorTheme -match 'GpuMonitorPresentationSurface' -and $monitorTheme -match 'IsGpuPresentationActive' -and $monitorTheme -match 'BitmapScalingMode="HighQuality"') "Shared monitor presentation must retain one GPU surface and the qualified WPF fallback."
+Assert-Condition ($cleanProgram -match 'GpuFrame="{Binding ProgramGpuFrame}"' -and $cleanProgram -match 'Source="{Binding ProgramImage}"') "Clean Program must reuse the existing Program GPU resource and CPU fallback projection."
+Assert-Condition ($cleanProgram -notmatch 'RtaimePixelGridOverlay|DiagnosticsHud|ShowGrid|ShowSafeArea|ShowCenterMark') "Clean Program must not add Operator diagnostic or inspection overlays."
+Assert-Condition ($cudaMonitoringInterop -match 'cuMemcpy2D_v2' -and $cudaMonitoringInterop -notmatch 'cuMemcpyDtoH|cuMemcpyDtoHAsync') "CUDA/D3D11 monitor export must remain GPU-resident and must not introduce a GPU-to-CPU readback."
+Assert-Condition ($runtimeService -match 'previewSharedMonitoringResource' -and $runtimeService -match 'programSharedMonitoringResource') "RuntimeHost must publish bounded shared Preview and post-composite Program resources through the existing monitoring tap."
 
 Write-Host "Operator monitoring plane policy verification PASS"
 Write-Host "Authority: none; output-only monitoring transport"
