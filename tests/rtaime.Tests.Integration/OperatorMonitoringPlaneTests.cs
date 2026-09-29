@@ -321,7 +321,7 @@ public sealed class OperatorMonitoringPlaneTests
 		return pixels;
 	}
 
-	private sealed class DeviceResidentMonitoringBackend : IGpuProcessingBackend
+	private sealed class DeviceResidentMonitoringBackend : IGpuProcessingBackend, IGpuSharedMonitoringBackend
 	{
 		private readonly ManagedReferenceGpuBackend _inner = new();
 
