@@ -198,7 +198,7 @@
 									<controls:RtaimeTimecode Content="{Binding Monitor.DisplayTimecode, RelativeSource={RelativeSource TemplatedParent}}" FontSize="{StaticResource OperatorFontSizeMetadata}" />
 								</Border>
 
-								<Border VerticalAlignment="Top" HorizontalAlignment="Left" Margin="8,36,8,0" Padding="7,5" Style="{StaticResource OperatorMonitorHeaderOverlay}" CornerRadius="{StaticResource OperatorRadiusOverlay}" Panel.ZIndex="56" IsHitTestVisible="False">
+								<Border VerticalAlignment="Top" HorizontalAlignment="Left" Margin="8,36,8,0" Padding="7,5" CornerRadius="{StaticResource OperatorRadiusOverlay}" Panel.ZIndex="56" IsHitTestVisible="False">
 									<Border.Style>
 										<Style TargetType="Border" BasedOn="{StaticResource OperatorMonitorHeaderOverlay}">
 											<Setter Property="Visibility" Value="Collapsed" />
