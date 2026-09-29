@@ -51,4 +51,16 @@ public sealed class FrameDiagnosticsSnapshotTests
 		Assert.Equal(FrameDiagnosticAuthority.Unavailable, snapshot.TimingAuthority);
 		Assert.Equal("No authoritative monitoring frame diagnostics are available.", snapshot.Detail);
 	}
+
+	[Fact]
+	public void Diagnostics_hud_disabled_path_does_not_refresh_for_snapshot_changes()
+	{
+		var view = new MonitorView();
+		var initial = view.DiagnosticsHudRefreshCount;
+
+		view.Diagnostics = FrameDiagnosticsSnapshot.Unavailable;
+
+		Assert.False(view.ShowDiagnosticsHud);
+		Assert.Equal(initial, view.DiagnosticsHudRefreshCount);
+	}
 }
