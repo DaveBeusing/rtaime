@@ -6,7 +6,7 @@ using System.Windows.Media;
 
 namespace rtaime.Operator.Controls;
 
-public sealed class RtaimeMediaCompareView : Control
+public sealed class RtaimeMediaCompareView : System.Windows.Controls.Control
 {
 	public static readonly DependencyProperty FrameAProperty = DependencyProperty.Register(
 		nameof(FrameA), typeof(ImageSource), typeof(RtaimeMediaCompareView),
