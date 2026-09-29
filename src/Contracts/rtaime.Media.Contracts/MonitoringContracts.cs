@@ -7,7 +7,7 @@ namespace rtaime.Media.Contracts;
 
 public static class MonitoringContractVersion
 {
-	public static CompatibilityVersion Current { get; } = new(1, 2);
+	public static CompatibilityVersion Current { get; } = new(1, 3);
 
 	public static bool IsSupported(CompatibilityVersion version) => version == Current;
 
@@ -36,6 +36,37 @@ public enum MonitoringResourceAccessMode
 	ReadOnly = 1
 }
 
+public enum MonitoringSharedResourceInteropKind
+{
+	None = 0,
+	WindowsGraphicsSharedHandle = 1
+}
+
+public readonly record struct MonitoringSharedResourceInteropDescriptor
+{
+	public MonitoringSharedResourceInteropDescriptor(
+		MonitoringSharedResourceInteropKind kind,
+		long adapterLuid,
+		ulong sharedHandle)
+	{
+		if (!Enum.IsDefined(typeof(MonitoringSharedResourceInteropKind), kind))
+			throw new ArgumentOutOfRangeException(nameof(kind));
+		if (kind == MonitoringSharedResourceInteropKind.None && (adapterLuid != 0 || sharedHandle != 0))
+			throw new ArgumentException("Unavailable monitoring interop cannot carry adapter or handle data.");
+		if (kind == MonitoringSharedResourceInteropKind.WindowsGraphicsSharedHandle && sharedHandle == 0)
+			throw new ArgumentOutOfRangeException(nameof(sharedHandle), "Windows graphics sharing requires a non-zero shared handle.");
+
+		Kind = kind;
+		AdapterLuid = adapterLuid;
+		SharedHandle = sharedHandle;
+	}
+
+	public MonitoringSharedResourceInteropKind Kind { get; }
+	public long AdapterLuid { get; }
+	public ulong SharedHandle { get; }
+	public bool IsPresentable => Kind != MonitoringSharedResourceInteropKind.None;
+}
+
 public readonly record struct MonitoringResourceId
 {
 	public MonitoringResourceId(Identity value)
@@ -59,7 +90,8 @@ public sealed record MonitoringSharedResourceDescriptor
 		VideoFormat format,
 		SurfaceStorageDomain storageDomain,
 		MonitoringResourceAccessMode accessMode,
-		SurfaceLifetimeDescriptor lifetime)
+		SurfaceLifetimeDescriptor lifetime,
+		MonitoringSharedResourceInteropDescriptor interop = default)
 	{
 		if (providerInstanceId.IsEmpty)
 			throw new ArgumentException("Monitoring resource provider identity must not be empty.", nameof(providerInstanceId));
@@ -77,6 +109,7 @@ public sealed record MonitoringSharedResourceDescriptor
 		StorageDomain = storageDomain;
 		AccessMode = accessMode;
 		Lifetime = lifetime;
+		Interop = interop;
 	}
 
 	public MonitoringResourceId ResourceId { get; }
@@ -86,6 +119,7 @@ public sealed record MonitoringSharedResourceDescriptor
 	public SurfaceStorageDomain StorageDomain { get; }
 	public MonitoringResourceAccessMode AccessMode { get; }
 	public SurfaceLifetimeDescriptor Lifetime { get; }
+	public MonitoringSharedResourceInteropDescriptor Interop { get; }
 }
 
 public sealed record MonitoringFrameDescriptor
@@ -160,7 +194,7 @@ public sealed class MonitoringFrame
 public static class MonitoringFrameWire
 {
 	private const uint Magic = 0x314E4F4D; // MON1 in little-endian byte order.
-	public const int HeaderSize = 248;
+	public const int HeaderSize = 272;
 
 	public static void WriteHeader(Span<byte> destination, MonitoringFrameDescriptor descriptor, int payloadLength)
 	{
@@ -217,6 +251,9 @@ public static class MonitoringFrameWire
 			destination[232] = resource.Format.Color.BitDepth;
 			BinaryPrimitives.WriteInt32LittleEndian(destination[236..240], (int)resource.Format.Color.Alpha);
 			BinaryPrimitives.WriteInt32LittleEndian(destination[240..244], (int)resource.Format.Color.Authority);
+			BinaryPrimitives.WriteInt32LittleEndian(destination[244..248], (int)resource.Interop.Kind);
+			BinaryPrimitives.WriteInt64LittleEndian(destination[248..256], resource.Interop.AdapterLuid);
+			BinaryPrimitives.WriteUInt64LittleEndian(destination[256..264], resource.Interop.SharedHandle);
 		}
 	}
 
@@ -282,6 +319,13 @@ public static class MonitoringFrameWire
 			var lifetime = new SurfaceLifetimeDescriptor(
 				new Generation(BinaryPrimitives.ReadUInt64LittleEndian(source[208..216])),
 				resourceId.Value);
+			var interopKind = (MonitoringSharedResourceInteropKind)BinaryPrimitives.ReadInt32LittleEndian(source[244..248]);
+			if (!Enum.IsDefined(typeof(MonitoringSharedResourceInteropKind), interopKind))
+				throw new InvalidDataException("Monitoring shared-resource interop kind is invalid.");
+			var interop = new MonitoringSharedResourceInteropDescriptor(
+				interopKind,
+				BinaryPrimitives.ReadInt64LittleEndian(source[248..256]),
+				BinaryPrimitives.ReadUInt64LittleEndian(source[256..264]));
 			sharedResource = new MonitoringSharedResourceDescriptor(
 				resourceId,
 				providerInstanceId,
@@ -289,7 +333,8 @@ public static class MonitoringFrameWire
 				resourceFormat,
 				(SurfaceStorageDomain)BinaryPrimitives.ReadInt32LittleEndian(source[200..204]),
 				(MonitoringResourceAccessMode)BinaryPrimitives.ReadInt32LittleEndian(source[204..208]),
-				lifetime);
+				lifetime,
+				interop);
 		}
 
 		var descriptor = new MonitoringFrameDescriptor(
