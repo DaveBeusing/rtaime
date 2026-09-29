@@ -1,5 +1,6 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
+using System.IO;
 using rtaime.Media.Contracts;
 using Xunit;
 
@@ -53,4 +54,35 @@ public sealed class MonitoringDisplayTransformTests
 		Assert.Equal((byte)255, target[5]);
 		Assert.Equal((byte)255, target[6]);
 	}
+	[Fact]
+	public void Gpu_shader_uses_the_same_qualified_transfer_and_range_reference_equations()
+	{
+		var root = FindRepositoryRoot();
+		var source = File.ReadAllText(Path.Combine(
+			root,
+			"src",
+			"Hosts",
+			"rtaime.Operator",
+			"Controls",
+			"GpuMonitorPresentationSurface.cs"));
+
+		Assert.Contains("(value - (16.0 / 255.0)) / (219.0 / 255.0)", source, StringComparison.Ordinal);
+		Assert.Contains("value <= 0.04045 ? value / 12.92", source, StringComparison.Ordinal);
+		Assert.Contains("value < 0.081 ? value / 4.5", source, StringComparison.Ordinal);
+		Assert.Contains("1.055 * pow(value, 1.0 / 2.4) - 0.055", source, StringComparison.Ordinal);
+		Assert.Contains("if (CompleteColor != 0)", source, StringComparison.Ordinal);
+	}
+
+	private static string FindRepositoryRoot()
+	{
+		DirectoryInfo? directory = new(AppContext.BaseDirectory);
+		while (directory is not null)
+		{
+			if (File.Exists(Path.Combine(directory.FullName, "rtaime.slnx")))
+				return directory.FullName;
+			directory = directory.Parent;
+		}
+		throw new InvalidOperationException("Repository root containing rtaime.slnx could not be located.");
+	}
+
 }
