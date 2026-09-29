@@ -556,15 +556,20 @@ public class MonitorView : UserControl
 			return;
 		_lastInspectionAt = now;
 
+		var (sourceWidthValue, sourceHeightValue) = ResolveSourcePixels();
+		var sourceWidth = Math.Max(1, checked((int)sourceWidthValue));
+		var sourceHeight = Math.Max(1, checked((int)sourceHeightValue));
 		if (!MediaPixelInspection.TryMapViewportToSource(
 			pointerXDip, pointerYDip, _dpiScaleX, _dpiScaleY, _presentationRect,
-			bitmap.PixelWidth, bitmap.PixelHeight, out var coordinate))
+			sourceWidth, sourceHeight, out var coordinate))
 		{
 			SetValue(InspectionReadoutPropertyKey, "PIXEL — · OUTSIDE IMAGE");
 			return;
 		}
 
-		SetValue(InspectionReadoutPropertyKey, MediaPixelInspection.Format(MediaPixelInspection.SampleDisplayPixel(bitmap, coordinate)));
+		SetValue(
+			InspectionReadoutPropertyKey,
+			MediaPixelInspection.Format(MediaPixelInspection.SampleDisplayPixel(bitmap, coordinate, sourceWidth, sourceHeight)));
 	}
 
 	private void RefreshPresentation()
