@@ -42,4 +42,13 @@ public sealed class FrameDiagnosticsSnapshotTests
 		Assert.Equal("UNAVAILABLE", snapshot.Rate);
 		Assert.Equal("UNAVAILABLE", snapshot.ColorPath);
 	}
+
+	[Fact]
+	public void Monitoring_snapshot_does_not_invent_unavailable_health_evidence()
+	{
+		var snapshot = FrameDiagnosticsSnapshot.Unavailable;
+
+		Assert.Equal(FrameDiagnosticAuthority.Unavailable, snapshot.TimingAuthority);
+		Assert.Equal("No authoritative monitoring frame diagnostics are available.", snapshot.Detail);
+	}
 }
