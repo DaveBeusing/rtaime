@@ -233,8 +233,9 @@ public sealed class ReferenceRecordingPayloadWriter : IProgramRecordingPayloadWr
 			EnsureOpenUnsafe();
 			writer = _writer!;
 			payloadHash = _payloadHash!;
-			if (!_stagedPayloads.Remove(sample.SequenceNumber, out payload))
+			if (!_stagedPayloads.Remove(sample.SequenceNumber, out var stagedPayload) || stagedPayload is null)
 				throw new InvalidDataException($"Reference recording payload for sequence '{sample.SequenceNumber}' was not staged.");
+			payload = stagedPayload;
 		}
 
 		try
