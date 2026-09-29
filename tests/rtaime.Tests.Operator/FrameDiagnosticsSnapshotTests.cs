@@ -56,11 +56,12 @@ public sealed class FrameDiagnosticsSnapshotTests
 	public void Diagnostics_hud_disabled_path_does_not_refresh_for_snapshot_changes()
 	{
 		var view = new MonitorView();
-		var initial = view.DiagnosticsHudRefreshCount;
+		var initial = view.DiagnosticsHudText;
 
-		view.Diagnostics = FrameDiagnosticsSnapshot.Unavailable;
+		view.Diagnostics = new FrameDiagnosticsSnapshot(
+			FrameDiagnosticAuthority.Authoritative, 42, 84, "1.680000 s", "50 fps", 1920, 1080, "sRGB", "test");
 
 		Assert.False(view.ShowDiagnosticsHud);
-		Assert.Equal(initial, view.DiagnosticsHudRefreshCount);
+		Assert.Equal(initial, view.DiagnosticsHudText);
 	}
 }
