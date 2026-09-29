@@ -1,6 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 using System.IO;
+using System.Xml.Linq;
 using rtaime.Operator;
 using Xunit;
 
@@ -101,7 +102,7 @@ public sealed class MediaViewportVisualQualityQualificationTests
 
 		for (var i = 1; i <= 40; i++)
 		{
-			var dpi = i % 5 switch { 0 => 1.0, 1 => 1.25, 2 => 1.5, 3 => 1.75, _ => 2.0 };
+			var dpi = (i % 5) switch { 0 => 1.0, 1 => 1.25, 2 => 1.5, 3 => 1.75, _ => 2.0 };
 			var requested = MediaRenderTarget.Create(1280 + i, 720 + i / 2.0, dpi, dpi);
 			stabilizer.Adopt(requested, now.AddMilliseconds(i * 10));
 		}
@@ -143,15 +144,8 @@ public sealed class MediaViewportVisualQualityQualificationTests
 		Assert.Contains("BitmapScalingMode=\"HighQuality\"", theme, StringComparison.Ordinal);
 		Assert.Contains("SnapsToDevicePixels=\"True\"", theme, StringComparison.Ordinal);
 		Assert.DoesNotContain("<Viewbox", theme, StringComparison.Ordinal);
-		Assert.Equal(1, CountOccurrences(theme, "<Image "));
-	}
-
-	private static int CountOccurrences(string value, string token)
-	{
-		var count = 0;
-		for (var index = 0; (index = value.IndexOf(token, index, StringComparison.Ordinal)) >= 0; index += token.Length)
-			count++;
-		return count;
+		var document = XDocument.Parse(theme);
+		Assert.Single(document.Descendants().Where(element => element.Name.LocalName == "Image"));
 	}
 
 	private static string FindRepositoryRoot()

@@ -249,10 +249,14 @@ public sealed class RtaimeMonitorPresentation : ContentControl
 
 	private void OnViewportMouseMove(object sender, System.Windows.Input.MouseEventArgs e)
 	{
-		if (_panOrigin is null || Monitor is null || _mediaViewport is null || e.LeftButton != System.Windows.Input.MouseButtonState.Pressed)
+		if (Monitor is null || _mediaViewport is null)
 			return;
 
 		var current = e.GetPosition(_mediaViewport);
+		Monitor.InspectPresentationAt(current.X, current.Y);
+		if (_panOrigin is null || e.LeftButton != System.Windows.Input.MouseButtonState.Pressed)
+			return;
+
 		var delta = current - _panOrigin.Value;
 		_panOrigin = current;
 		Monitor.PanPresentation(delta.X, delta.Y);
