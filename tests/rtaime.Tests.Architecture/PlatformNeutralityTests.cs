@@ -28,6 +28,18 @@ public sealed class PlatformNeutralityTests
 			{
 				"Microsoft.Extensions.Hosting.WindowsServices"
 			},
+			["rtaime.Operator"] = new HashSet<string>(StringComparer.Ordinal)
+			{
+				"Vortice.Direct3D11",
+				"Vortice.DXGI",
+				"Vortice.Wpf",
+				"Vortice.D3DCompiler"
+			},
+			["rtaime.Provider.Gpu"] = new HashSet<string>(StringComparer.Ordinal)
+			{
+				"Vortice.Direct3D11",
+				"Vortice.DXGI"
+			},
 			["rtaime.RuntimeHost"] = new HashSet<string>(StringComparer.Ordinal)
 			{
 				"System.Drawing.Common"
