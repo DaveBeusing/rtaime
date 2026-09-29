@@ -704,7 +704,11 @@ public sealed class GpuProcessingProvider : IDisposable
         _backend.Info.Available &&
         _backend.Info.HardwareAccelerated &&
         _backend.StorageDomain == SurfaceStorageDomain.Device &&
-        _backend is IGpuSharedMonitoringBackend { SupportsSharedMonitoringResources: true };
+        _backend is IGpuSharedMonitoringBackend
+        {
+            SupportsSharedMonitoringResources: true,
+            IsSharedMonitoringExportAvailable: true
+        };
     public GpuSharedMonitoringResourceStatistics SharedMonitoringResourceStatistics
     {
         get

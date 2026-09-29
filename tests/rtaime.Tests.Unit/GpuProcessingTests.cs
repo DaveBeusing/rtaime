@@ -591,6 +591,7 @@ public sealed class GpuProcessingTests
 
         public SurfaceStorageDomain StorageDomain => SurfaceStorageDomain.Device;
         public bool SupportsSharedMonitoringResources => true;
+        public bool IsSharedMonitoringExportAvailable => true;
         public int ActiveAllocationCount => _inner.ActiveAllocationCount;
         public void Start() => _inner.Start();
         public void Stop() => _inner.Stop();

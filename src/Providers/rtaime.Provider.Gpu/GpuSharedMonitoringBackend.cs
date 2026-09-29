@@ -7,6 +7,7 @@ namespace rtaime.Provider.Gpu;
 public interface IGpuSharedMonitoringBackend
 {
     bool SupportsSharedMonitoringResources { get; }
+    bool IsSharedMonitoringExportAvailable { get; }
 
     bool TryExportMonitoringResource(
         SurfaceId surfaceId,
