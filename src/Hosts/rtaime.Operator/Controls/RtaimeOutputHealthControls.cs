@@ -81,11 +81,6 @@ public class RtaimeSparkline : System.Windows.Controls.Control
 		typeof(RtaimeSparkline),
 		new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender));
 
-	public static readonly DependencyProperty BackgroundProperty = DependencyProperty.Register(
-		nameof(Background),
-		typeof(Brush),
-		typeof(RtaimeSparkline),
-		new FrameworkPropertyMetadata(Brushes.Transparent, FrameworkPropertyMetadataOptions.AffectsRender));
 
 	public static readonly DependencyProperty LineThicknessProperty = DependencyProperty.Register(
 		nameof(LineThickness),
@@ -95,7 +90,6 @@ public class RtaimeSparkline : System.Windows.Controls.Control
 
 	public PointCollection? Points { get => (PointCollection?)GetValue(PointsProperty); set => SetValue(PointsProperty, value); }
 	public bool HasValue { get => (bool)GetValue(HasValueProperty); set => SetValue(HasValueProperty, value); }
-	public Brush Background { get => (Brush)GetValue(BackgroundProperty); set => SetValue(BackgroundProperty, value); }
 	public double LineThickness { get => (double)GetValue(LineThicknessProperty); set => SetValue(LineThicknessProperty, value); }
 
 	protected override void OnRender(DrawingContext drawingContext)
