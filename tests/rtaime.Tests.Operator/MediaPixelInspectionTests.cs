@@ -45,6 +45,18 @@ public sealed class MediaPixelInspectionTests
 	}
 
 	[Fact]
+	public void Full_resolution_gpu_coordinate_maps_to_bounded_cpu_monitor_sample()
+	{
+		var center = MediaPixelInspection.MapSourceToMonitoringSample(
+			new MediaPixelCoordinate(960, 540), 1920, 1080, 320, 180);
+		var last = MediaPixelInspection.MapSourceToMonitoringSample(
+			new MediaPixelCoordinate(1919, 1079), 1920, 1080, 320, 180);
+
+		Assert.Equal(new MediaPixelCoordinate(160, 90), center);
+		Assert.Equal(new MediaPixelCoordinate(319, 179), last);
+	}
+
+	[Fact]
 	public void Pixel_grid_is_reserved_for_high_zoom()
 	{
 		Assert.Equal(8.0, MediaPixelInspection.PixelGridMinimumScale);
