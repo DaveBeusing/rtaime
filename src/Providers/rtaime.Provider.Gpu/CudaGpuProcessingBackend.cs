@@ -10,7 +10,7 @@ namespace rtaime.Provider.Gpu;
 /// no native adapter is required for the AP-08 foundation. Hardware qualification is evidence-driven and is not
 /// implied merely by the presence of this implementation.
 /// </summary>
-public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend
+public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend, IGpuSharedMonitoringBackend
 {
     private readonly object _gate = new();
     private const int MaxPooledAllocationsPerSize = 8;
@@ -21,6 +21,7 @@ public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend
     private IntPtr _context;
     private IntPtr _module;
     private IntPtr _compositeFunction;
+    private CudaD3D11MonitoringInterop? _monitoringInterop;
     private bool _running;
     private bool _disposed;
 
@@ -35,6 +36,8 @@ public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend
 
     public GpuBackendInfo Info { get; }
     public SurfaceStorageDomain StorageDomain => SurfaceStorageDomain.Device;
+    public bool SupportsSharedMonitoringResources => OperatingSystem.IsWindows() && Info.Available;
+    public bool IsSharedMonitoringExportAvailable => _monitoringInterop is not null;
 
     public static GpuBackendInfo Detect(int deviceOrdinal = 0)
     {
@@ -128,6 +131,7 @@ public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend
                 Check(
                     CudaNative.cuModuleGetFunction(out _compositeFunction, _module, "composite_rgba"),
                     "cuModuleGetFunction");
+                _ = CudaD3D11MonitoringInterop.TryCreate(device, out _monitoringInterop);
                 _running = true;
             }
             catch
@@ -144,6 +148,9 @@ public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend
         {
             if (_disposed || !_running && _context == IntPtr.Zero)
                 return;
+
+            _monitoringInterop?.Dispose();
+            _monitoringInterop = null;
 
             if (_context != IntPtr.Zero)
             {
@@ -256,6 +263,24 @@ public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend
                 ReturnAllocation(outputPointer, byteLength);
                 throw;
             }
+        }
+    }
+
+    public bool TryExportMonitoringResource(
+        SurfaceId surfaceId,
+        VideoFormat format,
+        out GpuBackendMonitoringResource? resource)
+    {
+        lock (_gate)
+        {
+            EnsureRunning();
+            resource = null;
+            if (_monitoringInterop is null)
+                return false;
+
+            var allocation = Get(surfaceId, format);
+            SetCurrentContext();
+            return _monitoringInterop.TryExport(allocation.DevicePointer, format, out resource);
         }
     }
 

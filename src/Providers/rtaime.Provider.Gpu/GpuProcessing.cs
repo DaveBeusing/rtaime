@@ -666,7 +666,7 @@ public sealed class GpuProcessingProvider : IDisposable
     {
         _backend = backend ?? throw new ArgumentNullException(nameof(backend));
         _readbackPool = new GpuReadbackBufferPool(readbackBufferCapacity);
-        Descriptor = CreateDescriptor(backend.Info);
+        Descriptor = CreateDescriptor(backend);
     }
 
     public ProviderDescriptor Descriptor { get; }
@@ -703,7 +703,12 @@ public sealed class GpuProcessingProvider : IDisposable
     public bool CanExportSharedMonitoringResources =>
         _backend.Info.Available &&
         _backend.Info.HardwareAccelerated &&
-        _backend.StorageDomain == SurfaceStorageDomain.Device;
+        _backend.StorageDomain == SurfaceStorageDomain.Device &&
+        _backend is IGpuSharedMonitoringBackend
+        {
+            SupportsSharedMonitoringResources: true,
+            IsSharedMonitoringExportAvailable: true
+        };
     public GpuSharedMonitoringResourceStatistics SharedMonitoringResourceStatistics
     {
         get
@@ -761,11 +766,13 @@ public sealed class GpuProcessingProvider : IDisposable
             }
 
             _activeFrames.Clear();
+            foreach (var entry in _sharedMonitoringResources.Values)
+                entry.BackendResource.Dispose();
+            _sharedMonitoringResources.Clear();
+            _sharedMonitoringSurfaceReferences.Clear();
             foreach (var surfaceId in _deferredMonitoringSurfaceReleases.ToArray())
                 TryReleaseBackendSurface(surfaceId);
             _deferredMonitoringSurfaceReleases.Clear();
-            _sharedMonitoringResources.Clear();
-            _sharedMonitoringSurfaceReferences.Clear();
             Volatile.Write(ref _observableActiveSharedMonitoringResourceCount, 0);
             PublishResourceCountsUnsafe();
             foreach (var surfaceId in _unreleasedBackendSurfaces.ToArray())
@@ -988,6 +995,17 @@ public sealed class GpuProcessingProvider : IDisposable
             if (_sharedMonitoringResourceOrdinal == ulong.MaxValue)
                 throw new InvalidOperationException("GPU monitoring resource ordinal is exhausted.");
 
+            var sharingBackend = (IGpuSharedMonitoringBackend)_backend;
+            if (!sharingBackend.TryExportMonitoringResource(
+                    frame.SurfaceId,
+                    frame.Descriptor.Surface.Format,
+                    out var backendResource) ||
+                backendResource is null)
+            {
+                Observe("gpu.monitoring.resource.export_unavailable", frame.Descriptor.Timing.SequenceNumber, null);
+                return false;
+            }
+
             var resourceId = new MonitoringResourceId(GpuIdentity.Create(
                 "gpu-monitoring-resource",
                 _monitoringProviderInstanceId.ToString(),
@@ -1001,15 +1019,16 @@ public sealed class GpuProcessingProvider : IDisposable
                 _monitoringProviderInstanceId,
                 frame.SurfaceId,
                 frame.Descriptor.Surface.Format,
-                frame.Descriptor.Surface.StorageDomain,
+                SurfaceStorageDomain.Shared,
                 MonitoringResourceAccessMode.ReadOnly,
                 new SurfaceLifetimeDescriptor(
                     frame.Descriptor.Surface.Lifetime.Generation,
-                    resourceId.Value));
+                    resourceId.Value),
+                backendResource.Interop);
 
             _sharedMonitoringResources.Add(
                 resourceId,
-                new SharedMonitoringResourceEntry(descriptor, frame.Descriptor.Timing.SequenceNumber));
+                new SharedMonitoringResourceEntry(descriptor, frame.Descriptor.Timing.SequenceNumber, backendResource));
             _sharedMonitoringSurfaceReferences[frame.SurfaceId] =
                 _sharedMonitoringSurfaceReferences.GetValueOrDefault(frame.SurfaceId) + 1;
             if (_totalSharedMonitoringExports < ulong.MaxValue)
@@ -1177,6 +1196,8 @@ public sealed class GpuProcessingProvider : IDisposable
             if (!_sharedMonitoringResources.Remove(resourceId, out var entry))
                 return;
 
+            entry.BackendResource.Dispose();
+
             var surfaceId = entry.Descriptor.SurfaceId;
             if (_sharedMonitoringSurfaceReferences.TryGetValue(surfaceId, out var references))
             {
@@ -1229,8 +1250,9 @@ public sealed class GpuProcessingProvider : IDisposable
             _unreleasedBackendSurfaces.Count);
     }
 
-    private static ProviderDescriptor CreateDescriptor(GpuBackendInfo info)
+    private static ProviderDescriptor CreateDescriptor(IGpuProcessingBackend backend)
     {
+        var info = backend.Info;
         var providerId = new ProviderId(GpuIdentity.Create("gpu-provider", info.Kind.ToString(), info.DeviceName));
         var formats = info.Available ? V1Formats : Array.Empty<VideoFormat>();
         var capabilities = info.Available
@@ -1243,8 +1265,12 @@ public sealed class GpuProcessingProvider : IDisposable
                 CreateCapability("dissolve", GpuCapabilityKinds.Dissolve, formats)
             }
             : new List<ProviderCapabilityDescriptor>();
-        if (info.Available && info.HardwareAccelerated)
+        if (info.Available &&
+            info.HardwareAccelerated &&
+            backend is IGpuSharedMonitoringBackend { SupportsSharedMonitoringResources: true })
+        {
             capabilities.Add(CreateCapability("monitoring-shared-resource", GpuCapabilityKinds.SharedMonitoringResource, formats));
+        }
 
         var resources = info.Available
             ? new[]
@@ -1301,7 +1327,8 @@ public sealed class GpuProcessingProvider : IDisposable
 
     private sealed record SharedMonitoringResourceEntry(
         MonitoringSharedResourceDescriptor Descriptor,
-        ulong SequenceNumber);
+        ulong SequenceNumber,
+        GpuBackendMonitoringResource BackendResource);
 
     private void EnsureRunning()
     {

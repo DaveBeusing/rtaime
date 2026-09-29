@@ -204,6 +204,60 @@ public sealed class OperatorMonitoringPlaneTests
 	}
 
 	[Fact]
+	public async Task Preview_and_program_shared_resources_are_bounded_and_released_together()
+	{
+		using var hub = new RuntimeMonitoringHub();
+		var subscription = hub.Subscribe(capacity: 8, requiresCpuFallback: true);
+		await using var tap = new RuntimeMonitoringTap(hub, MonitoringSharedResourceCapabilityState.Available);
+		var format = new VideoFormat(4, 2, FrameRate.Fps50, PixelFormat.Rgba8, ScanMode.Progressive);
+		var timing = new FrameTiming(0, 0, new Timebase(1, 50));
+
+		using var backend = new DeviceResidentMonitoringBackend();
+		using var gpu = new GpuProcessingProvider(backend);
+		gpu.Start();
+		var previewFrame = gpu.Upload(SourceA, new RgbaFrameBuffer(format, Solid(format, 10, 20, 30)), timing, Generation.Initial, "preview-shared-monitoring");
+		var programFrame = gpu.Upload(SourceB, new RgbaFrameBuffer(format, Solid(format, 70, 80, 90)), timing, Generation.Initial, "program-shared-monitoring");
+		using var programPixels = gpu.RentReadback(programFrame);
+		Assert.True(gpu.TryExportMonitoringResource(previewFrame, out var previewResource));
+		Assert.True(gpu.TryExportMonitoringResource(programFrame, out var programResource));
+
+		Assert.True(tap.TryCapture(
+			tap.CaptureSources(SourceA, Solid(format, 10, 20, 30), SourceB, Solid(format, 40, 50, 60), format, timing),
+			SourceB,
+			programPixels,
+			format,
+			timing,
+			programResource,
+			SourceA,
+			previewResource));
+		previewFrame.Dispose();
+		programFrame.Dispose();
+
+		using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+		var observations = new[]
+		{
+			await subscription.ReadAsync(timeout.Token),
+			await subscription.ReadAsync(timeout.Token),
+			await subscription.ReadAsync(timeout.Token)
+		};
+		var preview = Assert.Single(observations, item => item.Descriptor.StreamKind == MonitoringStreamKind.Source && item.Descriptor.SourceId == SourceA);
+		var program = Assert.Single(observations, item => item.Descriptor.StreamKind == MonitoringStreamKind.Program);
+
+		Assert.NotNull(preview.Descriptor.SharedResource);
+		Assert.NotNull(program.Descriptor.SharedResource);
+		Assert.True(preview.HasFallbackPayload);
+		Assert.True(program.HasFallbackPayload);
+		Assert.Equal(2, tap.Statistics.ActiveSharedResources);
+		Assert.Equal(2, gpu.SharedMonitoringResourceStatistics.ActiveResources);
+
+		await subscription.DisposeAsync();
+
+		Assert.Equal(0, tap.Statistics.ActiveSharedResources);
+		Assert.Equal(0, gpu.SharedMonitoringResourceStatistics.ActiveResources);
+		Assert.Equal(0, backend.ActiveAllocationCount);
+	}
+
+	[Fact]
 	public async Task Monitoring_source_snapshot_does_not_observe_later_mutation()
 	{
 		using var hub = new RuntimeMonitoringHub();
@@ -321,7 +375,7 @@ public sealed class OperatorMonitoringPlaneTests
 		return pixels;
 	}
 
-	private sealed class DeviceResidentMonitoringBackend : IGpuProcessingBackend
+	private sealed class DeviceResidentMonitoringBackend : IGpuProcessingBackend, IGpuSharedMonitoringBackend
 	{
 		private readonly ManagedReferenceGpuBackend _inner = new();
 
@@ -332,6 +386,8 @@ public sealed class OperatorMonitoringPlaneTests
 			available: true);
 
 		public SurfaceStorageDomain StorageDomain => SurfaceStorageDomain.Device;
+		public bool SupportsSharedMonitoringResources => true;
+		public bool IsSharedMonitoringExportAvailable => true;
 		public int ActiveAllocationCount => _inner.ActiveAllocationCount;
 		public int ReadbackIntoCount { get; private set; }
 		public void Start() => _inner.Start();
@@ -345,6 +401,19 @@ public sealed class OperatorMonitoringPlaneTests
 		{
 			ReadbackIntoCount++;
 			_inner.ReadbackInto(surfaceId, format, destination);
+		}
+		public bool TryExportMonitoringResource(
+			SurfaceId surfaceId,
+			VideoFormat format,
+			out GpuBackendMonitoringResource? resource)
+		{
+			resource = new GpuBackendMonitoringResource(
+				new MonitoringSharedResourceInteropDescriptor(
+					MonitoringSharedResourceInteropKind.WindowsGraphicsSharedHandle,
+					adapterLuid: 1,
+					sharedHandle: 0x2000UL + (ulong)_inner.ActiveAllocationCount),
+				static () => { });
+			return true;
 		}
 		public void Release(SurfaceId surfaceId) => _inner.Release(surfaceId);
 		public void Dispose() => _inner.Dispose();

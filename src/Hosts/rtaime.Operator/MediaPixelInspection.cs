@@ -75,6 +75,46 @@ public static class MediaPixelInspection
 		return true;
 	}
 
+	public static MediaPixelCoordinate MapSourceToMonitoringSample(
+		MediaPixelCoordinate sourceCoordinate,
+		int sourceWidth,
+		int sourceHeight,
+		int sampleWidth,
+		int sampleHeight)
+	{
+		if (!sourceCoordinate.IsInside(sourceWidth, sourceHeight))
+			throw new ArgumentOutOfRangeException(nameof(sourceCoordinate));
+		if (sampleWidth <= 0 || sampleHeight <= 0)
+			throw new ArgumentOutOfRangeException(nameof(sampleWidth), "Monitoring sample dimensions must be positive.");
+
+		return new MediaPixelCoordinate(
+			Math.Min(sampleWidth - 1, checked((int)((long)sourceCoordinate.X * sampleWidth / sourceWidth))),
+			Math.Min(sampleHeight - 1, checked((int)((long)sourceCoordinate.Y * sampleHeight / sourceHeight))));
+	}
+
+	public static MediaPixelSample SampleDisplayPixel(
+		System.Windows.Media.Imaging.BitmapSource bitmap,
+		MediaPixelCoordinate sourceCoordinate,
+		int sourceWidth,
+		int sourceHeight)
+	{
+		ArgumentNullException.ThrowIfNull(bitmap);
+		var sampleCoordinate = MapSourceToMonitoringSample(
+			sourceCoordinate,
+			sourceWidth,
+			sourceHeight,
+			bitmap.PixelWidth,
+			bitmap.PixelHeight);
+		var sample = SampleDisplayPixel(bitmap, sampleCoordinate);
+		return sample with
+		{
+			Coordinate = sourceCoordinate,
+			Detail = sourceWidth == bitmap.PixelWidth && sourceHeight == bitmap.PixelHeight
+				? sample.Detail
+				: "BGRA32 bounded monitoring sample"
+		};
+	}
+
 	public static MediaPixelSample SampleDisplayPixel(System.Windows.Media.Imaging.BitmapSource bitmap, MediaPixelCoordinate coordinate)
 	{
 		ArgumentNullException.ThrowIfNull(bitmap);

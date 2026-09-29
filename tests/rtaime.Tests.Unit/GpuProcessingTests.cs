@@ -337,7 +337,9 @@ public sealed class GpuProcessingTests
         Assert.True(provider.TryExportMonitoringResource(frame, out var lease));
         Assert.NotNull(lease);
         Assert.Equal(MonitoringResourceAccessMode.ReadOnly, lease!.Descriptor.AccessMode);
-        Assert.Equal(SurfaceStorageDomain.Device, lease.Descriptor.StorageDomain);
+        Assert.Equal(SurfaceStorageDomain.Shared, lease.Descriptor.StorageDomain);
+        Assert.Equal(MonitoringSharedResourceInteropKind.WindowsGraphicsSharedHandle, lease.Descriptor.Interop.Kind);
+        Assert.True(lease.Descriptor.Interop.IsPresentable);
         Assert.Equal(provider.MonitoringProviderInstanceId, lease.Descriptor.ProviderInstanceId);
         Assert.Equal(frame.SurfaceId, lease.Descriptor.SurfaceId);
         Assert.Equal(frame.Descriptor.Surface.Format, lease.Descriptor.Format);
@@ -577,7 +579,7 @@ public sealed class GpuProcessingTests
         }
     }
 
-    private sealed class DeviceResidentTestBackend : IGpuProcessingBackend
+    private sealed class DeviceResidentTestBackend : IGpuProcessingBackend, IGpuSharedMonitoringBackend
     {
         private readonly ManagedReferenceGpuBackend _inner = new();
 
@@ -588,6 +590,8 @@ public sealed class GpuProcessingTests
             available: true);
 
         public SurfaceStorageDomain StorageDomain => SurfaceStorageDomain.Device;
+        public bool SupportsSharedMonitoringResources => true;
+        public bool IsSharedMonitoringExportAvailable => true;
         public int ActiveAllocationCount => _inner.ActiveAllocationCount;
         public void Start() => _inner.Start();
         public void Stop() => _inner.Stop();
@@ -598,6 +602,20 @@ public sealed class GpuProcessingTests
         public byte[] Readback(SurfaceId surfaceId, VideoFormat format) => _inner.Readback(surfaceId, format);
         public void ReadbackInto(SurfaceId surfaceId, VideoFormat format, Span<byte> destination) =>
             _inner.ReadbackInto(surfaceId, format, destination);
+        public bool TryExportMonitoringResource(
+            SurfaceId surfaceId,
+            VideoFormat format,
+            out GpuBackendMonitoringResource? resource)
+        {
+            resource = new GpuBackendMonitoringResource(
+                new MonitoringSharedResourceInteropDescriptor(
+                    MonitoringSharedResourceInteropKind.WindowsGraphicsSharedHandle,
+                    adapterLuid: 1,
+                    sharedHandle: 0x1000UL + (ulong)_inner.ActiveAllocationCount),
+                static () => { });
+            return true;
+        }
+    
         public void Release(SurfaceId surfaceId) => _inner.Release(surfaceId);
         public void Dispose() => _inner.Dispose();
     }

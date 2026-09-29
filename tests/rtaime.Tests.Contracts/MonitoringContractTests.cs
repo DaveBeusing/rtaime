@@ -101,6 +101,55 @@ public sealed class MonitoringContractTests
 		Assert.Equal(MonitoringResourceAccessMode.ReadOnly, decodedResource.AccessMode);
 		Assert.Equal(new Generation(7), decodedResource.Lifetime.Generation);
 		Assert.Equal(resourceId.Value, decodedResource.Lifetime.LeaseId);
+		Assert.Equal(MonitoringSharedResourceInteropKind.None, decodedResource.Interop.Kind);
+	}
+
+	[Fact]
+	public void Windows_graphics_shared_handle_round_trips_without_vendor_specific_contract_data()
+	{
+		var resourceId = new MonitoringResourceId(Identity.Parse("91000000-0000-0000-0000-000000000015"));
+		var resource = new MonitoringSharedResourceDescriptor(
+			resourceId,
+			Identity.Parse("91000000-0000-0000-0000-000000000016"),
+			new SurfaceId(Identity.Parse("91000000-0000-0000-0000-000000000017")),
+			VideoFormat.Hd1080p50Rgba8,
+			SurfaceStorageDomain.Shared,
+			MonitoringResourceAccessMode.ReadOnly,
+			new SurfaceLifetimeDescriptor(new Generation(9), resourceId.Value),
+			new MonitoringSharedResourceInteropDescriptor(
+				MonitoringSharedResourceInteropKind.WindowsGraphicsSharedHandle,
+				adapterLuid: 0x0000000100000002,
+				sharedHandle: 0x1234UL));
+		var descriptor = new MonitoringFrameDescriptor(
+			MonitoringContractVersion.Current,
+			MonitoringStreamKind.Program,
+			new MediaSourceId(Identity.Parse("91000000-0000-0000-0000-000000000018")),
+			320,
+			180,
+			PixelFormat.Rgba8,
+			new FrameTiming(17, 34, new Timebase(1, 50)),
+			ColorDescription.Rec709FullRgba8,
+			MonitoringSharedResourceCapabilityState.Available,
+			resource);
+		var header = new byte[MonitoringFrameWire.HeaderSize];
+
+		MonitoringFrameWire.WriteHeader(header, descriptor, payloadLength: 0);
+		var decoded = MonitoringFrameWire.ReadHeader(header);
+		var decodedResource = Assert.IsType<MonitoringSharedResourceDescriptor>(decoded.Descriptor.SharedResource);
+
+		Assert.Equal(MonitoringSharedResourceInteropKind.WindowsGraphicsSharedHandle, decodedResource.Interop.Kind);
+		Assert.Equal(0x0000000100000002, decodedResource.Interop.AdapterLuid);
+		Assert.Equal(0x1234UL, decodedResource.Interop.SharedHandle);
+		Assert.True(decodedResource.Interop.IsPresentable);
+	}
+
+	[Fact]
+	public void Windows_graphics_shared_handle_requires_non_zero_handle()
+	{
+		Assert.Throws<ArgumentOutOfRangeException>(() => new MonitoringSharedResourceInteropDescriptor(
+			MonitoringSharedResourceInteropKind.WindowsGraphicsSharedHandle,
+			adapterLuid: 1,
+			sharedHandle: 0));
 	}
 
 	[Fact]

@@ -1,5 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
+    <PackageReference Include="Vortice.Direct3D11" />
+    <PackageReference Include="Vortice.DXGI" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\..\rtaime.Core\rtaime.Core.csproj" />
     <ProjectReference Include="..\..\Contracts\rtaime.Media.Contracts\rtaime.Media.Contracts.csproj" />
     <ProjectReference Include="..\..\Contracts\rtaime.Provider.Contracts\rtaime.Provider.Contracts.csproj" />

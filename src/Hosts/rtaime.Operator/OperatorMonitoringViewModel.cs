@@ -23,6 +23,8 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 	private DateTimeOffset _lastFrameAt;
 	private ImageSource? _previewImage;
 	private ImageSource? _programImage;
+	private OperatorGpuMonitoringFrame? _previewGpuFrame;
+	private OperatorGpuMonitoringFrame? _programGpuFrame;
 	private string _state = "WAITING";
 	private string _detail = "Waiting for the independent RuntimeHost monitoring plane.";
 	private string _previewFormat = "No Preview monitor frame received.";
@@ -79,6 +81,28 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 		}
 	}
 
+	public OperatorGpuMonitoringFrame? PreviewGpuFrame
+	{
+		get => _previewGpuFrame;
+		private set
+		{
+			if (!Set(ref _previewGpuFrame, value)) return;
+			OnPropertyChanged(nameof(HasPreview));
+			OnPropertyChanged(nameof(PreviewState));
+		}
+	}
+
+	public OperatorGpuMonitoringFrame? ProgramGpuFrame
+	{
+		get => _programGpuFrame;
+		private set
+		{
+			if (!Set(ref _programGpuFrame, value)) return;
+			OnPropertyChanged(nameof(HasProgram));
+			OnPropertyChanged(nameof(ProgramState));
+		}
+	}
+
 	public string State
 	{
 		get => _state;
@@ -110,8 +134,8 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 			if (!value) ProgramScopes = null;
 		}
 	}
-	public bool HasPreview => PreviewImage is not null;
-	public bool HasProgram => ProgramImage is not null;
+	public bool HasPreview => PreviewGpuFrame is not null || PreviewImage is not null;
+	public bool HasProgram => ProgramGpuFrame is not null || ProgramImage is not null;
 	public string PreviewState => ResolveViewerState(_controlState.PreviewViewerState, HasPreview);
 	public string ProgramState => ResolveViewerState(_controlState.ProgramViewerState, HasProgram);
 
@@ -144,6 +168,9 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 		await foreach (var frame in _transport.ReadFramesAsync(cancellationToken).ConfigureAwait(false))
 		{
 			var descriptor = frame.Descriptor;
+			var gpuFrame = descriptor.SharedResource is { Interop.IsPresentable: true }
+				? new OperatorGpuMonitoringFrame(descriptor)
+				: null;
 			var bitmap = frame.HasFallbackPayload ? CreateBitmap(frame) : null;
 			if (frame.HasFallbackPayload &&
 				descriptor.StreamKind == MonitoringStreamKind.Source &&
@@ -182,6 +209,7 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 			_uiContext.Post(_ =>
 			{
 				ApplySharedGpuMonitoringState(descriptor, frame.HasFallbackPayload);
+				ApplyGpuFrame(descriptor, gpuFrame);
 				if (bitmap is not null)
 					ApplyFrame(descriptor, bitmap, scopes);
 				else if (descriptor.StreamKind == MonitoringStreamKind.Program)
@@ -211,6 +239,21 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 				Detail = "Monitoring frames are stale. Control and Program continuity remain independent.";
 			}, null);
 		}
+	}
+
+	private void ApplyGpuFrame(MonitoringFrameDescriptor descriptor, OperatorGpuMonitoringFrame? gpuFrame)
+	{
+		if (descriptor.StreamKind == MonitoringStreamKind.Program)
+		{
+			if (gpuFrame is null || gpuFrame.IsNewerThan(ProgramGpuFrame))
+				ProgramGpuFrame = gpuFrame;
+			return;
+		}
+
+		if (!string.Equals(descriptor.SourceId.ToString(), _controlState.PreviewSourceId, StringComparison.Ordinal))
+			return;
+		if (gpuFrame is null || gpuFrame.IsNewerThan(PreviewGpuFrame))
+			PreviewGpuFrame = gpuFrame;
 	}
 
 	private void ApplyFrame(MonitoringFrameDescriptor descriptor, BitmapSource bitmap, MediaScopeSnapshot? scopes)
@@ -246,9 +289,9 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 		SharedGpuMonitoringState = descriptor.SharedResourceCapability switch
 		{
 			MonitoringSharedResourceCapabilityState.Available when descriptor.HasSharedResource && hasFallbackPayload =>
-				"GPU resource available; CPU/WPF fallback remains active for the current presentation path.",
+				"GPU resource available; D3D11 presentation is preferred with CPU/WPF fallback retained.",
 			MonitoringSharedResourceCapabilityState.Available when descriptor.HasSharedResource =>
-				"GPU resource available; this observation is resource-only and awaits the provider-backed presentation adapter.",
+				"GPU resource available; provider-backed D3D11 presentation is active when adapter/resource validation succeeds.",
 			MonitoringSharedResourceCapabilityState.Available =>
 				"GPU resource capability is available, but the current sampled frame has no active shared resource; fallback remains deterministic.",
 			MonitoringSharedResourceCapabilityState.Degraded =>
@@ -302,6 +345,7 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 		}
 
 		PreviewImage = null;
+		PreviewGpuFrame = null;
 		PreviewFormat = "No Preview monitor frame received for current source.";
 		PreviewDiagnostics = FrameDiagnosticsSnapshot.Unavailable;
 	}

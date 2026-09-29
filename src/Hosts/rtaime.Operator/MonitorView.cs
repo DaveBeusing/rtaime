@@ -75,10 +75,34 @@ public class MonitorView : UserControl
 		nameof(DiagnosticsHudText), typeof(string), typeof(MonitorView), new PropertyMetadata("FRAME DIAGNOSTICS — UNAVAILABLE"));
 	private static readonly DependencyPropertyKey IsPixelGridVisiblePropertyKey = DependencyProperty.RegisterReadOnly(
 		nameof(IsPixelGridVisible), typeof(bool), typeof(MonitorView), new PropertyMetadata(false));
+	private static readonly DependencyPropertyKey IsGpuPresentationActivePropertyKey = DependencyProperty.RegisterReadOnly(
+		nameof(IsGpuPresentationActive), typeof(bool), typeof(MonitorView), new PropertyMetadata(false));
+	private static readonly DependencyPropertyKey GpuPresentationDetailPropertyKey = DependencyProperty.RegisterReadOnly(
+		nameof(GpuPresentationDetail), typeof(string), typeof(MonitorView), new PropertyMetadata("CPU/WPF fallback"));
+	private static readonly DependencyPropertyKey ViewportPixelWidthPropertyKey = DependencyProperty.RegisterReadOnly(
+		nameof(ViewportPixelWidth), typeof(double), typeof(MonitorView), new PropertyMetadata(1.0));
+	private static readonly DependencyPropertyKey ViewportPixelHeightPropertyKey = DependencyProperty.RegisterReadOnly(
+		nameof(ViewportPixelHeight), typeof(double), typeof(MonitorView), new PropertyMetadata(1.0));
+	private static readonly DependencyPropertyKey DpiScaleXPropertyKey = DependencyProperty.RegisterReadOnly(
+		nameof(DpiScaleX), typeof(double), typeof(MonitorView), new PropertyMetadata(1.0));
+	private static readonly DependencyPropertyKey DpiScaleYPropertyKey = DependencyProperty.RegisterReadOnly(
+		nameof(DpiScaleY), typeof(double), typeof(MonitorView), new PropertyMetadata(1.0));
+	private static readonly DependencyPropertyKey InverseDpiScaleXPropertyKey = DependencyProperty.RegisterReadOnly(
+		nameof(InverseDpiScaleX), typeof(double), typeof(MonitorView), new PropertyMetadata(1.0));
+	private static readonly DependencyPropertyKey InverseDpiScaleYPropertyKey = DependencyProperty.RegisterReadOnly(
+		nameof(InverseDpiScaleY), typeof(double), typeof(MonitorView), new PropertyMetadata(1.0));
 
 	public static readonly DependencyProperty InspectionReadoutProperty = InspectionReadoutPropertyKey.DependencyProperty;
 	public static readonly DependencyProperty IsPixelGridVisibleProperty = IsPixelGridVisiblePropertyKey.DependencyProperty;
 	public static readonly DependencyProperty DiagnosticsHudTextProperty = DiagnosticsHudTextPropertyKey.DependencyProperty;
+	public static readonly DependencyProperty IsGpuPresentationActiveProperty = IsGpuPresentationActivePropertyKey.DependencyProperty;
+	public static readonly DependencyProperty GpuPresentationDetailProperty = GpuPresentationDetailPropertyKey.DependencyProperty;
+	public static readonly DependencyProperty ViewportPixelWidthProperty = ViewportPixelWidthPropertyKey.DependencyProperty;
+	public static readonly DependencyProperty ViewportPixelHeightProperty = ViewportPixelHeightPropertyKey.DependencyProperty;
+	public static readonly DependencyProperty DpiScaleXProperty = DpiScaleXPropertyKey.DependencyProperty;
+	public static readonly DependencyProperty DpiScaleYProperty = DpiScaleYPropertyKey.DependencyProperty;
+	public static readonly DependencyProperty InverseDpiScaleXProperty = InverseDpiScaleXPropertyKey.DependencyProperty;
+	public static readonly DependencyProperty InverseDpiScaleYProperty = InverseDpiScaleYPropertyKey.DependencyProperty;
 
 	public static readonly DependencyProperty DiagnosticsProperty = DependencyProperty.Register(
 		nameof(Diagnostics), typeof(FrameDiagnosticsSnapshot), typeof(MonitorView),
@@ -92,6 +116,12 @@ public class MonitorView : UserControl
 		typeof(ImageSource),
 		typeof(MonitorView),
 		new PropertyMetadata(null, OnFrameChanged));
+
+	public static readonly DependencyProperty GpuFrameProperty = DependencyProperty.Register(
+		nameof(GpuFrame),
+		typeof(OperatorGpuMonitoringFrame),
+		typeof(MonitorView),
+		new PropertyMetadata(null, OnGpuFrameChanged));
 
 	public static readonly DependencyProperty SourceNameProperty = DependencyProperty.Register(
 		nameof(SourceName),
@@ -234,6 +264,12 @@ public class MonitorView : UserControl
 		set => SetValue(FrameProperty, value);
 	}
 
+	public OperatorGpuMonitoringFrame? GpuFrame
+	{
+		get => (OperatorGpuMonitoringFrame?)GetValue(GpuFrameProperty);
+		set => SetValue(GpuFrameProperty, value);
+	}
+
 	public string SourceName
 	{
 		get => (string)GetValue(SourceNameProperty);
@@ -339,6 +375,14 @@ public class MonitorView : UserControl
 	public int SourcePixelHeight => (int)GetValue(SourcePixelHeightProperty);
 	public string InspectionReadout => (string)GetValue(InspectionReadoutProperty);
 	public bool IsPixelGridVisible => (bool)GetValue(IsPixelGridVisibleProperty);
+	public bool IsGpuPresentationActive => (bool)GetValue(IsGpuPresentationActiveProperty);
+	public string GpuPresentationDetail => (string)GetValue(GpuPresentationDetailProperty);
+	public double ViewportPixelWidth => (double)GetValue(ViewportPixelWidthProperty);
+	public double ViewportPixelHeight => (double)GetValue(ViewportPixelHeightProperty);
+	public double DpiScaleX => (double)GetValue(DpiScaleXProperty);
+	public double DpiScaleY => (double)GetValue(DpiScaleYProperty);
+	public double InverseDpiScaleX => (double)GetValue(InverseDpiScaleXProperty);
+	public double InverseDpiScaleY => (double)GetValue(InverseDpiScaleYProperty);
 	public string DiagnosticsHudText => (string)GetValue(DiagnosticsHudTextProperty);
 	public bool IsTransportSource => (bool)GetValue(IsTransportSourceProperty);
 	public string DisplayTimecode => (string)GetValue(DisplayTimecodeProperty);
@@ -393,7 +437,7 @@ public class MonitorView : UserControl
 		return $"FRAME {frame}  PTS {pts}  MEDIA {diagnostics.PresentationTime}  RATE {diagnostics.Rate}\n" +
 			$"SOURCE {source}  TARGET {target}  SCALE {scale}  MODE {ZoomMode}\n" +
 			$"COLOR {diagnostics.ColorPath}  TIMING {diagnostics.TimingAuthority.ToString().ToUpperInvariant()}\n" +
-			$"DISPLAY WPF HIGH QUALITY  FALLBACK CPU/WPF  DROPPED/REPEATED/LATE/DISCONTINUITY UNAVAILABLE";
+			$"DISPLAY {(IsGpuPresentationActive ? GpuPresentationDetail : "WPF HIGH QUALITY")}  FALLBACK CPU/WPF  DROPPED/REPEATED/LATE/DISCONTINUITY UNAVAILABLE";
 	}
 
 	private static void OnGridChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs eventArgs)
@@ -421,10 +465,23 @@ public class MonitorView : UserControl
 
 	private static void OnFrameChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs eventArgs)
 	{
+		((MonitorView)dependencyObject).RefreshPresentation();
+	}
+
+	private static void OnGpuFrameChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs eventArgs)
+	{
 		var view = (MonitorView)dependencyObject;
-		view._panXPhysical = 0;
-		view._panYPhysical = 0;
+		if (eventArgs.NewValue is null)
+			view.SetGpuPresentationState(false, "CPU/WPF fallback");
 		view.RefreshPresentation();
+	}
+
+	internal void SetGpuPresentationState(bool active, string detail)
+	{
+		SetValue(IsGpuPresentationActivePropertyKey, active);
+		SetValue(GpuPresentationDetailPropertyKey, string.IsNullOrWhiteSpace(detail) ? "CPU/WPF fallback" : detail);
+		if (ShowDiagnosticsHud)
+			RefreshDiagnosticsHud();
 	}
 
 	internal void UpdatePresentationViewport(double widthDip, double heightDip, double dpiScaleX, double dpiScaleY)
@@ -438,6 +495,12 @@ public class MonitorView : UserControl
 		_viewportHeightDip = heightDip;
 		_dpiScaleX = dpiScaleX;
 		_dpiScaleY = dpiScaleY;
+		SetValue(DpiScaleXPropertyKey, dpiScaleX);
+		SetValue(DpiScaleYPropertyKey, dpiScaleY);
+		SetValue(InverseDpiScaleXPropertyKey, 1.0 / dpiScaleX);
+		SetValue(InverseDpiScaleYPropertyKey, 1.0 / dpiScaleY);
+		SetValue(ViewportPixelWidthPropertyKey, Math.Max(1.0, Math.Round(widthDip * dpiScaleX)));
+		SetValue(ViewportPixelHeightPropertyKey, Math.Max(1.0, Math.Round(heightDip * dpiScaleY)));
 		RefreshPresentation();
 	}
 
@@ -455,10 +518,10 @@ public class MonitorView : UserControl
 
 	internal void ZoomPresentationAt(int direction, double anchorXDip, double anchorYDip)
 	{
-		if (Frame is null || direction == 0 || _viewportWidthDip <= 0 || _viewportHeightDip <= 0)
+		if ((Frame is null && GpuFrame is null) || direction == 0 || _viewportWidthDip <= 0 || _viewportHeightDip <= 0)
 			return;
 
-		var (sourceWidth, sourceHeight) = ResolveSourcePixels(Frame);
+		var (sourceWidth, sourceHeight) = ResolveSourcePixels();
 		var physical = MediaPresentationGeometry.ToPhysicalPixels(_viewportWidthDip, _viewportHeightDip, _dpiScaleX, _dpiScaleY);
 		var (currentMode, currentScale) = ResolvePresentationPolicy(ZoomMode);
 		if (currentMode == MediaPresentationMode.Fit)
@@ -493,23 +556,28 @@ public class MonitorView : UserControl
 			return;
 		_lastInspectionAt = now;
 
+		var (sourceWidthValue, sourceHeightValue) = ResolveSourcePixels();
+		var sourceWidth = Math.Max(1, checked((int)sourceWidthValue));
+		var sourceHeight = Math.Max(1, checked((int)sourceHeightValue));
 		if (!MediaPixelInspection.TryMapViewportToSource(
 			pointerXDip, pointerYDip, _dpiScaleX, _dpiScaleY, _presentationRect,
-			bitmap.PixelWidth, bitmap.PixelHeight, out var coordinate))
+			sourceWidth, sourceHeight, out var coordinate))
 		{
 			SetValue(InspectionReadoutPropertyKey, "PIXEL — · OUTSIDE IMAGE");
 			return;
 		}
 
-		SetValue(InspectionReadoutPropertyKey, MediaPixelInspection.Format(MediaPixelInspection.SampleDisplayPixel(bitmap, coordinate)));
+		SetValue(
+			InspectionReadoutPropertyKey,
+			MediaPixelInspection.Format(MediaPixelInspection.SampleDisplayPixel(bitmap, coordinate, sourceWidth, sourceHeight)));
 	}
 
 	private void RefreshPresentation()
 	{
-		if (Frame is null || _viewportWidthDip <= 0 || _viewportHeightDip <= 0)
+		if ((Frame is null && GpuFrame is null) || _viewportWidthDip <= 0 || _viewportHeightDip <= 0)
 			return;
 
-		var (sourceWidth, sourceHeight) = ResolveSourcePixels(Frame);
+		var (sourceWidth, sourceHeight) = ResolveSourcePixels();
 		SetValue(SourcePixelWidthPropertyKey, checked((int)sourceWidth));
 		SetValue(SourcePixelHeightPropertyKey, checked((int)sourceHeight));
 		if (sourceWidth <= 0 || sourceHeight <= 0)
@@ -552,14 +620,19 @@ public class MonitorView : UserControl
 			$"{sourceWidth:0}×{sourceHeight:0} | {ZoomMode} {result.Scale * 100:0.#}% | Target {target.PixelWidth}×{target.PixelHeight} px | {target.Quality} {target.Path} | Scale stages 1 | RT #{_renderTargetStabilizer.Revision}{(_renderTargetStabilizer.ResizePending ? " pending" : string.Empty)} | DPI {_dpiScaleX * 100:0}%");
 	}
 
-	private static (double Width, double Height) ResolveSourcePixels(ImageSource source)
+	private (double Width, double Height) ResolveSourcePixels()
 	{
-		if (source is BitmapSource bitmap && bitmap.PixelWidth > 0 && bitmap.PixelHeight > 0)
+		if (GpuFrame is { Resource.Interop.IsPresentable: true } gpu)
+			return (gpu.Resource.Format.Width, gpu.Resource.Format.Height);
+		if (Frame is BitmapSource bitmap && bitmap.PixelWidth > 0 && bitmap.PixelHeight > 0)
 			return (bitmap.PixelWidth, bitmap.PixelHeight);
-
-		var width = double.IsFinite(source.Width) && source.Width > 0 ? source.Width : 1;
-		var height = double.IsFinite(source.Height) && source.Height > 0 ? source.Height : 1;
-		return (width, height);
+		if (Frame is { } source)
+		{
+			var width = double.IsFinite(source.Width) && source.Width > 0 ? source.Width : 1;
+			var height = double.IsFinite(source.Height) && source.Height > 0 ? source.Height : 1;
+			return (width, height);
+		}
+		return (1, 1);
 	}
 
 	private (MediaPresentationMode Mode, double Zoom) ResolvePresentationPolicy(string zoomMode) => zoomMode switch
