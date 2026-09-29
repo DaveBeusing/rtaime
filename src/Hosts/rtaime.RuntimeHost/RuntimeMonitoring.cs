@@ -19,12 +19,23 @@ public sealed class RuntimeMonitoringHub : IDisposable
 	private ulong _published;
 	private bool _disposed;
 
+	public event Action<bool>? SubscriberAvailabilityChanged;
+
 	public bool HasSubscribers
 	{
 		get
 		{
 			lock (_gate)
 				return _subscriptions.Count != 0;
+		}
+	}
+
+	public bool RequiresCpuFallback
+	{
+		get
+		{
+			lock (_gate)
+				return _subscriptions.Any(subscription => subscription.RequiresCpuFallback);
 		}
 	}
 
@@ -40,16 +51,21 @@ public sealed class RuntimeMonitoringHub : IDisposable
 		}
 	}
 
-	public RuntimeMonitoringSubscription Subscribe(int capacity = 2)
+	public RuntimeMonitoringSubscription Subscribe(int capacity = 2, bool requiresCpuFallback = true)
 	{
 		if (capacity <= 0) throw new ArgumentOutOfRangeException(nameof(capacity));
+		RuntimeMonitoringSubscription subscription;
+		var becameAvailable = false;
 		lock (_gate)
 		{
 			ObjectDisposedException.ThrowIf(_disposed, this);
-			var subscription = new RuntimeMonitoringSubscription(this, capacity);
+			becameAvailable = _subscriptions.Count == 0;
+			subscription = new RuntimeMonitoringSubscription(this, capacity, requiresCpuFallback);
 			_subscriptions.Add(subscription);
-			return subscription;
 		}
+		if (becameAvailable)
+			SubscriberAvailabilityChanged?.Invoke(true);
+		return subscription;
 	}
 
 	public void Publish(MonitoringFrame frame)
@@ -69,8 +85,14 @@ public sealed class RuntimeMonitoringHub : IDisposable
 
 	internal void Remove(RuntimeMonitoringSubscription subscription)
 	{
+		var becameUnavailable = false;
 		lock (_gate)
-			_subscriptions.Remove(subscription);
+		{
+			if (_subscriptions.Remove(subscription))
+				becameUnavailable = _subscriptions.Count == 0;
+		}
+		if (becameUnavailable)
+			SubscriberAvailabilityChanged?.Invoke(false);
 	}
 
 	public void Dispose()
@@ -85,6 +107,8 @@ public sealed class RuntimeMonitoringHub : IDisposable
 		}
 		foreach (var subscription in subscriptions)
 			subscription.DisposeFromHub();
+		if (subscriptions.Length != 0)
+			SubscriberAvailabilityChanged?.Invoke(false);
 	}
 }
 
@@ -99,11 +123,14 @@ public sealed class RuntimeMonitoringSubscription : IAsyncDisposable
 	private ulong _dropped;
 	private bool _disposed;
 
-	internal RuntimeMonitoringSubscription(RuntimeMonitoringHub hub, int capacity)
+	internal RuntimeMonitoringSubscription(RuntimeMonitoringHub hub, int capacity, bool requiresCpuFallback)
 	{
 		_hub = hub;
 		_capacity = capacity;
+		RequiresCpuFallback = requiresCpuFallback;
 	}
+
+	public bool RequiresCpuFallback { get; }
 
 	public ulong DroppedFrames
 	{
@@ -171,7 +198,8 @@ public sealed class RuntimeMonitoringSubscription : IAsyncDisposable
 public readonly record struct RuntimeMonitoringTapStatistics(
 	ulong Captured,
 	ulong DroppedBeforeProcessing,
-	ulong Processed);
+	ulong Processed,
+	int ActiveSharedResources);
 
 internal sealed record RuntimeMonitoringSourceSnapshot(
 	MediaSourceId SourceAId,
@@ -188,24 +216,40 @@ public sealed class RuntimeMonitoringTap : IAsyncDisposable
 
 	private readonly object _gate = new();
 	private readonly RuntimeMonitoringHub _hub;
+	private readonly MonitoringSharedResourceCapabilityState _sharedResourceCapability;
 	private readonly SemaphoreSlim _available = new(0);
 	private readonly CancellationTokenSource _stop = new();
 	private readonly Task _worker;
 	private MonitoringBoundarySample? _pending;
+	private GpuSharedMonitoringResourceLease? _publishedSharedResource;
 	private ulong _captured;
 	private ulong _dropped;
 	private ulong _processed;
 	private bool _disposed;
 
-	public RuntimeMonitoringTap(RuntimeMonitoringHub hub)
+	public RuntimeMonitoringTap(
+		RuntimeMonitoringHub hub,
+		MonitoringSharedResourceCapabilityState sharedResourceCapability = MonitoringSharedResourceCapabilityState.Unavailable)
 	{
 		_hub = hub ?? throw new ArgumentNullException(nameof(hub));
+		if (!Enum.IsDefined(typeof(MonitoringSharedResourceCapabilityState), sharedResourceCapability))
+			throw new ArgumentOutOfRangeException(nameof(sharedResourceCapability));
+		_sharedResourceCapability = sharedResourceCapability;
+		_hub.SubscriberAvailabilityChanged += SubscriberAvailabilityChanged;
 		_worker = Task.Run(() => RunAsync(_stop.Token));
 	}
 
 	public RuntimeMonitoringTapStatistics Statistics
 	{
-		get { lock (_gate) return new RuntimeMonitoringTapStatistics(_captured, _dropped, _processed); }
+		get
+		{
+			lock (_gate)
+				return new RuntimeMonitoringTapStatistics(
+					_captured,
+					_dropped,
+					_processed,
+					_publishedSharedResource is null ? 0 : 1);
+		}
 	}
 
 	internal RuntimeMonitoringSourceSnapshot? CaptureSources(
@@ -235,10 +279,11 @@ public sealed class RuntimeMonitoringTap : IAsyncDisposable
 		MediaSourceId committedProgramSourceId,
 		GpuReadbackLease program,
 		VideoFormat sourceFormat,
-		FrameTiming timing)
+		FrameTiming timing,
+		GpuSharedMonitoringResourceLease? sharedResource = null)
 	{
 		var sources = CaptureSources(sourceAId, sourceA, sourceBId, sourceB, sourceFormat, timing);
-		return TryCapture(sources, committedProgramSourceId, program, sourceFormat, timing);
+		return TryCapture(sources, committedProgramSourceId, program, sourceFormat, timing, sharedResource);
 	}
 
 	internal bool TryCapture(
@@ -246,9 +291,14 @@ public sealed class RuntimeMonitoringTap : IAsyncDisposable
 		MediaSourceId committedProgramSourceId,
 		GpuReadbackLease program,
 		VideoFormat sourceFormat,
-		FrameTiming timing)
+		FrameTiming timing,
+		GpuSharedMonitoringResourceLease? sharedResource = null)
 	{
-		if (sources is null) return false;
+		if (sources is null)
+		{
+			sharedResource?.Dispose();
+			return false;
+		}
 		var retainedProgram = program.Retain();
 		MonitoringBoundarySample? replaced = null;
 		var sample = new MonitoringBoundarySample(
@@ -259,13 +309,15 @@ public sealed class RuntimeMonitoringTap : IAsyncDisposable
 			committedProgramSourceId,
 			retainedProgram,
 			sourceFormat,
-			timing);
+			timing,
+			sharedResource);
 		var signal = false;
 		lock (_gate)
 		{
 			if (_disposed)
 			{
 				retainedProgram.Dispose();
+				sharedResource?.Dispose();
 				return false;
 			}
 			_captured++;
@@ -281,6 +333,7 @@ public sealed class RuntimeMonitoringTap : IAsyncDisposable
 			_pending = sample;
 		}
 		replaced?.Program.Dispose();
+		replaced?.SharedResource?.Dispose();
 		if (signal) _available.Release();
 		return true;
 	}
@@ -288,14 +341,20 @@ public sealed class RuntimeMonitoringTap : IAsyncDisposable
 	public async ValueTask DisposeAsync()
 	{
 		MonitoringBoundarySample? pending;
+		GpuSharedMonitoringResourceLease? published;
 		lock (_gate)
 		{
 			if (_disposed) return;
 			_disposed = true;
 			pending = _pending;
 			_pending = null;
+			published = _publishedSharedResource;
+			_publishedSharedResource = null;
 		}
+		_hub.SubscriberAvailabilityChanged -= SubscriberAvailabilityChanged;
 		pending?.Program.Dispose();
+		pending?.SharedResource?.Dispose();
+		published?.Dispose();
 		_stop.Cancel();
 		try { await _worker.ConfigureAwait(false); }
 		catch (OperationCanceledException) { }
@@ -318,11 +377,42 @@ public sealed class RuntimeMonitoringTap : IAsyncDisposable
 
 			using (sample.Program)
 			{
-				if (!_hub.HasSubscribers) continue;
+				if (!_hub.HasSubscribers)
+				{
+					sample.SharedResource?.Dispose();
+					continue;
+				}
+
 				PublishPrepared(sample.SourceAId, MonitoringStreamKind.Source, sample.SourceA, sample.Timing, sample.Format.Color);
 				PublishPrepared(sample.SourceBId, MonitoringStreamKind.Source, sample.SourceB, sample.Timing, sample.Format.Color);
-				Publish(sample.ProgramSourceId, MonitoringStreamKind.Program, sample.Program.Memory.Span, sample.Format, sample.Timing);
-				lock (_gate) _processed++;
+				Publish(
+					sample.ProgramSourceId,
+					MonitoringStreamKind.Program,
+					sample.Program.Memory.Span,
+					sample.Format,
+					sample.Timing,
+					sample.SharedResource?.Descriptor);
+
+				GpuSharedMonitoringResourceLease? replacedResource;
+				var retainPublishedResource = false;
+				lock (_gate)
+				{
+					replacedResource = _publishedSharedResource;
+					if (!_disposed && _hub.HasSubscribers)
+					{
+						_publishedSharedResource = sample.SharedResource;
+						retainPublishedResource = true;
+					}
+					else
+					{
+						_publishedSharedResource = null;
+					}
+					_processed++;
+				}
+
+				replacedResource?.Dispose();
+				if (!retainPublishedResource)
+					sample.SharedResource?.Dispose();
 			}
 		}
 	}
@@ -351,9 +441,13 @@ public sealed class RuntimeMonitoringTap : IAsyncDisposable
 		MonitoringStreamKind kind,
 		ReadOnlySpan<byte> pixels,
 		VideoFormat format,
-		FrameTiming timing)
+		FrameTiming timing,
+		MonitoringSharedResourceDescriptor? sharedResource)
 	{
-		var downscaled = DownscaleRgbaNearest(pixels, format.Width, format.Height, MonitorWidth, MonitorHeight);
+		var requiresCpuFallback = _hub.RequiresCpuFallback || sharedResource is null;
+		var payload = requiresCpuFallback
+			? DownscaleRgbaNearest(pixels, format.Width, format.Height, MonitorWidth, MonitorHeight)
+			: Array.Empty<byte>();
 		var descriptor = new MonitoringFrameDescriptor(
 			MonitoringContractVersion.Current,
 			kind,
@@ -362,8 +456,30 @@ public sealed class RuntimeMonitoringTap : IAsyncDisposable
 			MonitorHeight,
 			PixelFormat.Rgba8,
 			timing,
-			format.Color);
-		_hub.Publish(new MonitoringFrame(descriptor, downscaled));
+			format.Color,
+			_sharedResourceCapability,
+			sharedResource);
+		_hub.Publish(new MonitoringFrame(descriptor, payload));
+	}
+
+	private void SubscriberAvailabilityChanged(bool available)
+	{
+		if (available) return;
+
+		MonitoringBoundarySample? pending;
+		GpuSharedMonitoringResourceLease? published;
+		lock (_gate)
+		{
+			if (_disposed) return;
+			pending = _pending;
+			_pending = null;
+			published = _publishedSharedResource;
+			_publishedSharedResource = null;
+		}
+
+		pending?.Program.Dispose();
+		pending?.SharedResource?.Dispose();
+		published?.Dispose();
 	}
 
 	internal static byte[] DownscaleRgbaNearest(
@@ -399,7 +515,8 @@ public sealed class RuntimeMonitoringTap : IAsyncDisposable
 		MediaSourceId ProgramSourceId,
 		GpuReadbackLease Program,
 		VideoFormat Format,
-		FrameTiming Timing);
+		FrameTiming Timing,
+		GpuSharedMonitoringResourceLease? SharedResource);
 }
 
 public sealed class RuntimeHostMonitoringServer : IAsyncDisposable
