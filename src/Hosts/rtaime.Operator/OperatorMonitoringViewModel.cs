@@ -2,6 +2,7 @@
 
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using rtaime.Client;
@@ -28,6 +29,9 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 	private string _programFormat = "No Program monitor frame received.";
 	private FrameDiagnosticsSnapshot _previewDiagnostics = FrameDiagnosticsSnapshot.Unavailable;
 	private FrameDiagnosticsSnapshot _programDiagnostics = FrameDiagnosticsSnapshot.Unavailable;
+	private MediaScopeSnapshot? _programScopes;
+	private DateTimeOffset _lastScopeAnalysisAt;
+	private bool _scopesEnabled;
 
 	public OperatorMonitoringViewModel(
 		OperatorViewModel controlState,
@@ -38,9 +42,11 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 		_transport = transport ?? throw new ArgumentNullException(nameof(transport));
 		_uiContext = uiContext ?? SynchronizationContext.Current ?? new SynchronizationContext();
 		_controlState.PropertyChanged += ControlStatePropertyChanged;
+		ToggleScopesCommand = new OperatorShellCommand(() => ScopesEnabled = !ScopesEnabled);
 	}
 
 	public event PropertyChangedEventHandler? PropertyChanged;
+	public ICommand ToggleScopesCommand { get; }
 
 	public ImageSource? PreviewImage
 	{
@@ -83,6 +89,16 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 	public string ProgramFormat { get => _programFormat; private set => Set(ref _programFormat, value); }
 	public FrameDiagnosticsSnapshot PreviewDiagnostics { get => _previewDiagnostics; private set => Set(ref _previewDiagnostics, value); }
 	public FrameDiagnosticsSnapshot ProgramDiagnostics { get => _programDiagnostics; private set => Set(ref _programDiagnostics, value); }
+	public MediaScopeSnapshot? ProgramScopes { get => _programScopes; private set => Set(ref _programScopes, value); }
+	public bool ScopesEnabled
+	{
+		get => _scopesEnabled;
+		set
+		{
+			if (!Set(ref _scopesEnabled, value)) return;
+			if (!value) ProgramScopes = null;
+		}
+	}
 	public bool HasPreview => PreviewImage is not null;
 	public bool HasProgram => ProgramImage is not null;
 	public string PreviewState => ResolveViewerState(_controlState.PreviewViewerState, HasPreview);
@@ -118,8 +134,18 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 		{
 			var bitmap = CreateBitmap(frame);
 			var descriptor = frame.Descriptor;
+			MediaScopeSnapshot? scopes = null;
+			if (ScopesEnabled && descriptor.StreamKind == MonitoringStreamKind.Program)
+			{
+				var now = DateTimeOffset.UtcNow;
+				if (now - _lastScopeAnalysisAt >= TimeSpan.FromMilliseconds(200))
+				{
+					scopes = MediaScopeSnapshot.Analyze(frame, sampleStride: 2);
+					_lastScopeAnalysisAt = now;
+				}
+			}
 			lock (_gate) _lastFrameAt = DateTimeOffset.UtcNow;
-			_uiContext.Post(_ => ApplyFrame(descriptor, bitmap), null);
+			_uiContext.Post(_ => ApplyFrame(descriptor, bitmap, scopes), null);
 		}
 	}
 
@@ -140,7 +166,7 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 		}
 	}
 
-	private void ApplyFrame(MonitoringFrameDescriptor descriptor, BitmapSource bitmap)
+	private void ApplyFrame(MonitoringFrameDescriptor descriptor, BitmapSource bitmap, MediaScopeSnapshot? scopes)
 	{
 		State = "LIVE";
 		Detail = $"Independent monitoring endpoint {_transport.Endpoint}; monitor loss does not block Program.";
@@ -150,6 +176,7 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 			ProgramImage = bitmap;
 			ProgramFormat = format;
 			ProgramDiagnostics = FrameDiagnosticsSnapshot.FromMonitoring(descriptor);
+			if (scopes is not null) ProgramScopes = scopes;
 			return;
 		}
 
