@@ -368,7 +368,7 @@ public class MonitorView : UserControl
 			return;
 
 		var now = DateTimeOffset.UtcNow;
-		if (now - view._lastDiagnosticsHudUpdateAt < TimeSpan.FromMilliseconds(200))
+		if (view._lastDiagnosticsHudUpdateAt != default && now - view._lastDiagnosticsHudUpdateAt < TimeSpan.FromMilliseconds(200))
 			return;
 		view._lastDiagnosticsHudUpdateAt = now;
 		view.SetValue(DiagnosticsHudTextPropertyKey, view.FormatDiagnosticsHud());
