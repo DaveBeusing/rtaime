@@ -2,6 +2,7 @@
 
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using rtaime.Client;
@@ -28,6 +29,13 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 	private string _programFormat = "No Program monitor frame received.";
 	private FrameDiagnosticsSnapshot _previewDiagnostics = FrameDiagnosticsSnapshot.Unavailable;
 	private FrameDiagnosticsSnapshot _programDiagnostics = FrameDiagnosticsSnapshot.Unavailable;
+	private MediaScopeSnapshot? _programScopes;
+	private DateTimeOffset _lastScopeAnalysisAt;
+	private bool _scopesEnabled;
+	private MediaCompareMode _compareMode;
+	private ImageSource? _differenceImage;
+	private string _comparisonDetail = "A/B comparison is off.";
+	private MonitoringFrame? _latestPreviewFrame;
 
 	public OperatorMonitoringViewModel(
 		OperatorViewModel controlState,
@@ -38,9 +46,13 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 		_transport = transport ?? throw new ArgumentNullException(nameof(transport));
 		_uiContext = uiContext ?? SynchronizationContext.Current ?? new SynchronizationContext();
 		_controlState.PropertyChanged += ControlStatePropertyChanged;
+		ToggleScopesCommand = new OperatorShellCommand(() => ScopesEnabled = !ScopesEnabled);
+		SetCompareModeCommand = new OperatorShellCommand(parameter => SetCompareMode(parameter?.ToString()));
 	}
 
 	public event PropertyChangedEventHandler? PropertyChanged;
+	public ICommand ToggleScopesCommand { get; }
+	public ICommand SetCompareModeCommand { get; }
 
 	public ImageSource? PreviewImage
 	{
@@ -83,6 +95,19 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 	public string ProgramFormat { get => _programFormat; private set => Set(ref _programFormat, value); }
 	public FrameDiagnosticsSnapshot PreviewDiagnostics { get => _previewDiagnostics; private set => Set(ref _previewDiagnostics, value); }
 	public FrameDiagnosticsSnapshot ProgramDiagnostics { get => _programDiagnostics; private set => Set(ref _programDiagnostics, value); }
+	public MediaScopeSnapshot? ProgramScopes { get => _programScopes; private set => Set(ref _programScopes, value); }
+	public MediaCompareMode CompareMode { get => _compareMode; private set => Set(ref _compareMode, value); }
+	public ImageSource? DifferenceImage { get => _differenceImage; private set => Set(ref _differenceImage, value); }
+	public string ComparisonDetail { get => _comparisonDetail; private set => Set(ref _comparisonDetail, value); }
+	public bool ScopesEnabled
+	{
+		get => _scopesEnabled;
+		set
+		{
+			if (!Set(ref _scopesEnabled, value)) return;
+			if (!value) ProgramScopes = null;
+		}
+	}
 	public bool HasPreview => PreviewImage is not null;
 	public bool HasProgram => ProgramImage is not null;
 	public string PreviewState => ResolveViewerState(_controlState.PreviewViewerState, HasPreview);
@@ -118,8 +143,37 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 		{
 			var bitmap = CreateBitmap(frame);
 			var descriptor = frame.Descriptor;
+			if (descriptor.StreamKind == MonitoringStreamKind.Source && string.Equals(descriptor.SourceId.ToString(), _controlState.PreviewSourceId, StringComparison.Ordinal))
+				_latestPreviewFrame = frame;
+			ImageSource? difference = null;
+			string? comparisonDetail = null;
+			if (CompareMode == MediaCompareMode.Difference && descriptor.StreamKind == MonitoringStreamKind.Program)
+			{
+				var compatibility = MediaComparisonCompatibility.Evaluate(frame.Descriptor, _latestPreviewFrame?.Descriptor);
+				comparisonDetail = compatibility.Detail;
+				if (compatibility.IsCompatible && _latestPreviewFrame is not null)
+				{
+					var derived = new MonitoringFrame(frame.Descriptor, MediaDifference.CreateRgba(frame, _latestPreviewFrame));
+					difference = CreateBitmap(derived);
+				}
+			}
+			MediaScopeSnapshot? scopes = null;
+			if (ScopesEnabled && descriptor.StreamKind == MonitoringStreamKind.Program)
+			{
+				var now = DateTimeOffset.UtcNow;
+				if (now - _lastScopeAnalysisAt >= TimeSpan.FromMilliseconds(200))
+				{
+					scopes = MediaScopeSnapshot.Analyze(frame, sampleStride: 2);
+					_lastScopeAnalysisAt = now;
+				}
+			}
 			lock (_gate) _lastFrameAt = DateTimeOffset.UtcNow;
-			_uiContext.Post(_ => ApplyFrame(descriptor, bitmap), null);
+			_uiContext.Post(_ =>
+			{
+				ApplyFrame(descriptor, bitmap, scopes);
+				if (comparisonDetail is not null) ComparisonDetail = comparisonDetail;
+				if (difference is not null) DifferenceImage = difference;
+			}, null);
 		}
 	}
 
@@ -140,7 +194,7 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 		}
 	}
 
-	private void ApplyFrame(MonitoringFrameDescriptor descriptor, BitmapSource bitmap)
+	private void ApplyFrame(MonitoringFrameDescriptor descriptor, BitmapSource bitmap, MediaScopeSnapshot? scopes)
 	{
 		State = "LIVE";
 		Detail = $"Independent monitoring endpoint {_transport.Endpoint}; monitor loss does not block Program.";
@@ -150,6 +204,7 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 			ProgramImage = bitmap;
 			ProgramFormat = format;
 			ProgramDiagnostics = FrameDiagnosticsSnapshot.FromMonitoring(descriptor);
+			if (scopes is not null) ProgramScopes = scopes;
 			return;
 		}
 
@@ -161,6 +216,27 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 			PreviewImage = bitmap;
 			PreviewFormat = format;
 			PreviewDiagnostics = FrameDiagnosticsSnapshot.FromMonitoring(descriptor);
+		}
+	}
+
+	private void SetCompareMode(string? value)
+	{
+		if (!Enum.TryParse<MediaCompareMode>(value, ignoreCase: true, out var mode))
+			mode = MediaCompareMode.Off;
+		CompareMode = mode;
+		if (mode == MediaCompareMode.Off)
+		{
+			DifferenceImage = null;
+			ComparisonDetail = "A/B comparison is off.";
+		}
+		else if (mode != MediaCompareMode.Difference)
+		{
+			DifferenceImage = null;
+			ComparisonDetail = "A = Program, B = confirmed Preview monitoring frame.";
+		}
+		else
+		{
+			ComparisonDetail = "Waiting for semantically compatible Program and Preview frames.";
 		}
 	}
 

@@ -112,3 +112,14 @@ Integration coverage qualifies:
 - dedicated Named Pipe delivery through `NamedPipeOperatorMonitoringTransport`.
 
 The repository Required Gates remain authoritative for CI, Quality, Security, Provider Smoke and Packaged E2E qualification.
+
+
+## technical scopes and A/B comparison
+
+The Operator can analyze the existing bounded Program monitoring frame with histogram, waveform, RGB parade and vectorscope views. Scope analysis is opt-in, samples the already downscaled RGBA8 monitoring payload at a bounded stride and refreshes at most 5 Hz. It does not create another decoder, request a full-resolution frame or add another RuntimeHost readback. When scopes are disabled, the analysis path is skipped.
+
+The current qualified monitoring transport remains a CPU/WPF fallback. Scope presentation therefore does not claim GPU-resident analysis. The scope model is provider-neutral so a future provider-backed shared GPU resource can replace the bounded fallback without changing Operator authority or scope semantics.
+
+A/B comparison uses Program as A and the confirmed Preview monitoring frame as B. Split and wipe modes reuse the existing frozen WPF images. Difference is produced only when dimensions, pixel format and color semantics match; otherwise the Operator reports why Difference is unavailable. Difference processing is derived monitoring state only and never mutates source, Runtime or Program state.
+
+Program Output / Clean Feed continues to reuse the same ProgramImage and existing display-placement controller. Technical scopes, diagnostics and comparison presentation are not injected into the clean-feed window.

@@ -1317,6 +1317,63 @@
 							</DockPanel>
 							<TextBlock Text="{Binding ProgramOutput.Detail, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
 							<TextBlock Text="Clean Program is a monitoring presentation of the existing Runtime-derived Program image; it is not the physical Program output path." Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,6,0,0" />
+							<Border Height="1" Background="{DynamicResource OperatorBorderBrush}" Margin="0,14,0,12" />
+							<DockPanel Margin="0,0,0,8">
+								<TextBlock Text="PROGRAM SCOPES" Style="{StaticResource OperatorSectionTitle}" />
+								<controls:RtaimeButton
+									DockPanel.Dock="Right"
+									Content="TOGGLE SCOPES"
+									Command="{Binding Monitoring.ToggleScopesCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+									IsCompact="True"
+									ToolTip="Enable bounded 5 Hz analysis of the existing sampled Program monitoring frame." />
+							</DockPanel>
+							<Grid Height="250">
+								<Grid.Style>
+									<Style TargetType="Grid">
+										<Setter Property="Visibility" Value="Collapsed" />
+										<Style.Triggers>
+											<DataTrigger Binding="{Binding Monitoring.ScopesEnabled, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="True">
+												<Setter Property="Visibility" Value="Visible" />
+											</DataTrigger>
+										</Style.Triggers>
+									</Style>
+								</Grid.Style>
+								<Grid.RowDefinitions><RowDefinition Height="*" /><RowDefinition Height="6" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+								<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="6" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+								<Border Grid.Row="0" Grid.Column="0" Background="{DynamicResource OperatorDiagnosticSurfaceBrush}" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" Padding="4">
+									<Grid><TextBlock Text="HISTOGRAM" Style="{StaticResource OperatorLabel}" Panel.ZIndex="2" /><controls:RtaimeMediaScope Margin="0,16,0,0" Snapshot="{Binding Monitoring.ProgramScopes, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" ScopeKind="Histogram" Foreground="{DynamicResource OperatorTextBrush}" /></Grid>
+								</Border>
+								<Border Grid.Row="0" Grid.Column="2" Background="{DynamicResource OperatorDiagnosticSurfaceBrush}" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" Padding="4">
+									<Grid><TextBlock Text="WAVEFORM" Style="{StaticResource OperatorLabel}" Panel.ZIndex="2" /><controls:RtaimeMediaScope Margin="0,16,0,0" Snapshot="{Binding Monitoring.ProgramScopes, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" ScopeKind="Waveform" Foreground="{DynamicResource OperatorTextBrush}" /></Grid>
+								</Border>
+								<Border Grid.Row="2" Grid.Column="0" Background="{DynamicResource OperatorDiagnosticSurfaceBrush}" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" Padding="4">
+									<Grid><TextBlock Text="RGB PARADE" Style="{StaticResource OperatorLabel}" Panel.ZIndex="2" /><controls:RtaimeMediaScope Margin="0,16,0,0" Snapshot="{Binding Monitoring.ProgramScopes, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" ScopeKind="RgbParade" Foreground="{DynamicResource OperatorTextBrush}" /></Grid>
+								</Border>
+								<Border Grid.Row="2" Grid.Column="2" Background="{DynamicResource OperatorDiagnosticSurfaceBrush}" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" Padding="4">
+									<Grid><TextBlock Text="VECTORSCOPE" Style="{StaticResource OperatorLabel}" Panel.ZIndex="2" /><controls:RtaimeMediaScope Margin="0,16,0,0" Snapshot="{Binding Monitoring.ProgramScopes, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" ScopeKind="Vectorscope" Foreground="{DynamicResource OperatorTextBrush}" /></Grid>
+								</Border>
+							</Grid>
+							<TextBlock Text="Scopes use the existing sampled monitoring frame, refresh at most 5 Hz and never create another decoder or full-frame readback." Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,7,0,0" />
+							<Border Height="1" Background="{DynamicResource OperatorBorderBrush}" Margin="0,14,0,12" />
+							<TextBlock Text="A/B COMPARE" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,8" />
+							<UniformGrid Rows="2" Columns="3" Margin="0,0,0,8">
+								<controls:RtaimeButton Content="OFF" Command="{Binding Monitoring.SetCompareModeCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" CommandParameter="Off" IsCompact="True" Margin="0,0,4,4" />
+								<controls:RtaimeButton Content="SPLIT V" Command="{Binding Monitoring.SetCompareModeCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" CommandParameter="SplitVertical" IsCompact="True" Margin="0,0,4,4" />
+								<controls:RtaimeButton Content="SPLIT H" Command="{Binding Monitoring.SetCompareModeCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" CommandParameter="SplitHorizontal" IsCompact="True" Margin="0,0,0,4" />
+								<controls:RtaimeButton Content="WIPE V" Command="{Binding Monitoring.SetCompareModeCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" CommandParameter="WipeVertical" IsCompact="True" Margin="0,0,4,0" />
+								<controls:RtaimeButton Content="WIPE H" Command="{Binding Monitoring.SetCompareModeCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" CommandParameter="WipeHorizontal" IsCompact="True" Margin="0,0,4,0" />
+								<controls:RtaimeButton Content="DIFFERENCE" Command="{Binding Monitoring.SetCompareModeCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" CommandParameter="Difference" IsCompact="True" />
+							</UniformGrid>
+							<Border Height="180" Background="{DynamicResource OperatorThumbnailCanvasBrush}" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" ClipToBounds="True">
+								<controls:RtaimeMediaCompareView
+									FrameA="{Binding Monitoring.ProgramImage, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+									FrameB="{Binding Monitoring.PreviewImage, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+									DifferenceFrame="{Binding Monitoring.DifferenceImage, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+									CompareMode="{Binding Monitoring.CompareMode, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+									WipePosition="0.5"
+									SnapsToDevicePixels="True" />
+							</Border>
+							<TextBlock Text="{Binding Monitoring.ComparisonDetail, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,6,0,0" />
 						</StackPanel>
 					</Border>
 
