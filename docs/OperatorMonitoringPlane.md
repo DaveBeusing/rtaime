@@ -19,7 +19,7 @@ The visual monitoring path is independent:
 
 ## Monitoring contract
 
-`rtaime.Media.Contracts` defines a dedicated `MonitoringContractVersion` and `MonitoringFrameDescriptor`. Operator Monitoring Plane uses monitoring contract version `1.0` independently from the primary Media contract version.
+`rtaime.Media.Contracts` defines a dedicated `MonitoringContractVersion` and `MonitoringFrameDescriptor`. Operator Monitoring Plane uses monitoring contract version `1.2` independently from the primary Media contract version. Version 1.2 adds provider-neutral shared-resource capability and lifetime metadata while retaining the existing bounded RGBA fallback payload.
 
 Each frame declares:
 
@@ -28,9 +28,12 @@ Each frame declares:
 - monitoring width and height;
 - RGBA8 pixel format;
 - production frame sequence and presentation timing;
-- a fixed binary wire header and exact RGBA payload length.
+- a fixed binary wire header;
+- shared-resource capability state distinct from current-frame resource availability;
+- an optional provider-neutral, read-only `MonitoringSharedResourceDescriptor` with resource/provider/surface identity, full video/color semantics, storage domain and generation/lifetime;
+- an exact RGBA fallback payload length, or zero payload bytes only when a shared GPU resource is present and the subscriber has explicitly opted out of the CPU fallback.
 
-The monitoring wire format is not embedded in ControlHost or RuntimeHost management envelopes.
+The monitoring wire format is not embedded in ControlHost or RuntimeHost management envelopes. It never carries CUDA pointers, CUDA types, provider-internal opaque handles or vendor-specific resource identities.
 
 ## Runtime capture boundary
 
@@ -39,6 +42,27 @@ The RuntimeHost monitoring tap is fed from the committed execution path after ti
 Operator Monitoring Plane does not add an additional Program GPU readback. It reuses the readback already required by the managed V1 reference pipeline.
 
 Because monitoring processing is asynchronous, the tap retains the Program `GpuReadbackLease` while a sampled boundary is pending or being downscaled. Replacing a pending sample releases the older retained lease, and the worker releases its lease after producing the independent 320x180 monitoring payload. The primary Runtime boundary may therefore be disposed immediately without allowing later Program frames to mutate memory still being observed by monitoring. See [ProgramFrameMemoryOwnership.md](ProgramFrameMemoryOwnership.md).
+
+## Shared GPU resource foundation
+
+When the active GPU provider is hardware accelerated and owns device-resident Program surfaces, `GpuProcessingProvider` can export a bounded read-only monitoring resource lease for the already materialized Program surface. Exporting the monitoring resource does not perform `Readback`, `ReadbackInto` or any additional GPU-to-CPU copy.
+
+The shared-resource descriptor is intentionally provider-neutral. RuntimeHost publishes only rtaime-owned resource, provider-instance and surface identities plus format, color, generation and read-only lifetime semantics. CUDA allocation addresses remain private to `rtaime.Provider.Gpu`.
+
+Resource lifetime is explicit and bounded:
+
+- the provider allows at most two active shared monitoring resources;
+- a monitoring lease retains the underlying Program surface after the normal `GpuFrame` owner is disposed;
+- publishing a newer sampled Program observation releases the previously published shared resource;
+- replacing a pending sample releases the replaced shared resource;
+- the last monitoring subscriber disconnect releases the published resource immediately;
+- RuntimeHost/tap shutdown releases pending and published resources before GPU provider disposal;
+- provider stop invalidates outstanding monitoring identities and releases their backing surfaces;
+- stale or foreign provider/resource identities fail closed through provider validation.
+
+Capability availability and current-frame availability are separate. A provider may report shared-resource capability while a particular sampled frame falls back because export is unavailable or bounded capacity is exhausted. Monitoring continues through the CPU/WPF fallback and Program execution is unaffected.
+
+The current Named Pipe Operator subscriber still requests the CPU fallback because the Operator does not yet implement the Direct3D/provider-backed presentation adapter. Resource-only Program observations are supported by the monitoring contract/hub for a future eligible consumer, but full Operator Direct3D rendering is outside this foundation.
 
 ## Bounded and loss-tolerant behavior
 
