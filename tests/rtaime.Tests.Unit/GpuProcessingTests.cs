@@ -36,6 +36,8 @@ public sealed class GpuProcessingTests
         Assert.Contains(provider.Descriptor.Capabilities, capability => capability.Kind == GpuCapabilityKinds.CompositeRgba);
         Assert.Contains(provider.Descriptor.Capabilities, capability => capability.Kind == GpuCapabilityKinds.Cut);
         Assert.Contains(provider.Descriptor.Capabilities, capability => capability.Kind == GpuCapabilityKinds.Dissolve);
+        Assert.DoesNotContain(provider.Descriptor.Capabilities, capability => capability.Kind == GpuCapabilityKinds.SharedMonitoringResource);
+        Assert.False(provider.CanExportSharedMonitoringResources);
 
         var resource = Assert.Single(provider.Descriptor.Resources);
         Assert.Equal(GpuCapabilityKinds.Processing, resource.Kind);
@@ -323,6 +325,130 @@ public sealed class GpuProcessingTests
 
 
     [Fact]
+    public void Shared_monitoring_resource_retains_device_surface_until_lease_release()
+    {
+        using var backend = new DeviceResidentTestBackend();
+        using var provider = new GpuProcessingProvider(backend);
+        provider.Start();
+        var frame = Upload(provider, SourceA, Solid(10, 20, 30, 255), 7);
+
+        Assert.True(provider.CanExportSharedMonitoringResources);
+        Assert.Contains(provider.Descriptor.Capabilities, capability => capability.Kind == GpuCapabilityKinds.SharedMonitoringResource);
+        Assert.True(provider.TryExportMonitoringResource(frame, out var lease));
+        Assert.NotNull(lease);
+        Assert.Equal(MonitoringResourceAccessMode.ReadOnly, lease!.Descriptor.AccessMode);
+        Assert.Equal(SurfaceStorageDomain.Device, lease.Descriptor.StorageDomain);
+        Assert.Equal(provider.MonitoringProviderInstanceId, lease.Descriptor.ProviderInstanceId);
+        Assert.Equal(frame.SurfaceId, lease.Descriptor.SurfaceId);
+        Assert.Equal(frame.Descriptor.Surface.Format, lease.Descriptor.Format);
+        Assert.Equal(frame.Descriptor.Surface.Lifetime.Generation, lease.Descriptor.Lifetime.Generation);
+        Assert.Equal(1, provider.SharedMonitoringResourceStatistics.ActiveResources);
+        Assert.True(provider.IsMonitoringResourceActive(lease.Descriptor));
+
+        frame.Dispose();
+
+        Assert.Equal(1, backend.ActiveAllocationCount);
+        Assert.Equal(1, provider.ActiveSurfaceCount);
+        Assert.True(provider.IsMonitoringResourceActive(lease.Descriptor));
+
+        lease.Dispose();
+
+        Assert.Equal(0, backend.ActiveAllocationCount);
+        Assert.Equal(0, provider.ActiveSurfaceCount);
+        Assert.Equal(0, provider.SharedMonitoringResourceStatistics.ActiveResources);
+        Assert.False(provider.IsMonitoringResourceActive(lease.Descriptor));
+    }
+
+    [Fact]
+    public void Shared_monitoring_resources_are_bounded_and_fail_open_when_capacity_is_exhausted()
+    {
+        using var backend = new DeviceResidentTestBackend();
+        using var provider = new GpuProcessingProvider(backend);
+        provider.Start();
+        using var first = Upload(provider, SourceA, Solid(1, 2, 3, 255), 1);
+        using var second = Upload(provider, SourceB, Solid(4, 5, 6, 255), 2);
+        using var third = Upload(provider, OutputSource, Solid(7, 8, 9, 255), 3);
+
+        Assert.True(provider.TryExportMonitoringResource(first, out var firstLease));
+        Assert.True(provider.TryExportMonitoringResource(second, out var secondLease));
+        Assert.False(provider.TryExportMonitoringResource(third, out var rejected));
+        Assert.Null(rejected);
+        Assert.Equal(GpuProcessingProvider.SharedMonitoringResourceCapacity, provider.SharedMonitoringResourceStatistics.ActiveResources);
+        Assert.Equal(1UL, provider.SharedMonitoringResourceStatistics.RejectedExports);
+
+        firstLease!.Dispose();
+        Assert.True(provider.TryExportMonitoringResource(third, out var recovered));
+        recovered!.Dispose();
+        secondLease!.Dispose();
+
+        Assert.Equal(0, provider.SharedMonitoringResourceStatistics.ActiveResources);
+    }
+
+    [Fact]
+    public void Shared_monitoring_resource_validation_rejects_foreign_and_stale_identities()
+    {
+        using var backend = new DeviceResidentTestBackend();
+        using var provider = new GpuProcessingProvider(backend);
+        provider.Start();
+        using var frame = Upload(provider, SourceA, Solid(1, 2, 3, 255), 1);
+        Assert.True(provider.TryExportMonitoringResource(frame, out var lease));
+        var descriptor = lease!.Descriptor;
+        var foreign = new MonitoringSharedResourceDescriptor(
+            descriptor.ResourceId,
+            Identity.Parse("81000000-0000-0000-0000-000000000099"),
+            descriptor.SurfaceId,
+            descriptor.Format,
+            descriptor.StorageDomain,
+            descriptor.AccessMode,
+            descriptor.Lifetime);
+
+        Assert.False(provider.IsMonitoringResourceActive(foreign));
+        Assert.True(provider.IsMonitoringResourceActive(descriptor));
+
+        lease.Dispose();
+
+        Assert.False(provider.IsMonitoringResourceActive(descriptor));
+    }
+
+    [Fact]
+    public void Provider_restart_rotates_monitoring_instance_identity_and_rejects_stale_resource()
+    {
+        using var backend = new DeviceResidentTestBackend();
+        using var provider = new GpuProcessingProvider(backend);
+        provider.Start();
+        var firstInstance = provider.MonitoringProviderInstanceId;
+        using var frame = Upload(provider, SourceA, Solid(1, 2, 3, 255), 1);
+        Assert.True(provider.TryExportMonitoringResource(frame, out var lease));
+        var stale = lease!.Descriptor;
+
+        provider.Stop();
+        provider.Start();
+
+        Assert.NotEqual(firstInstance, provider.MonitoringProviderInstanceId);
+        Assert.False(provider.IsMonitoringResourceActive(stale));
+        lease.Dispose();
+    }
+
+    [Fact]
+    public void Provider_stop_invalidates_and_releases_active_shared_monitoring_resources()
+    {
+        using var backend = new DeviceResidentTestBackend();
+        using var provider = new GpuProcessingProvider(backend);
+        provider.Start();
+        var frame = Upload(provider, SourceA, Solid(1, 2, 3, 255), 1);
+        Assert.True(provider.TryExportMonitoringResource(frame, out var lease));
+
+        provider.Stop();
+
+        Assert.True(frame.IsDisposed);
+        Assert.Equal(0, backend.ActiveAllocationCount);
+        Assert.Equal(0, provider.SharedMonitoringResourceStatistics.ActiveResources);
+        Assert.False(provider.IsMonitoringResourceActive(lease!.Descriptor));
+        lease.Dispose();
+    }
+
+
+    [Fact]
     public void Readback_lease_reuses_a_bounded_buffer_after_release()
     {
         using var provider = new GpuProcessingProvider(new ManagedReferenceGpuBackend(), readbackBufferCapacity: 1);
@@ -449,6 +575,31 @@ public sealed class GpuProcessingTests
             Assert.Equal(blue, pixels[offset + 2]);
             Assert.Equal(alpha, pixels[offset + 3]);
         }
+    }
+
+    private sealed class DeviceResidentTestBackend : IGpuProcessingBackend
+    {
+        private readonly ManagedReferenceGpuBackend _inner = new();
+
+        public GpuBackendInfo Info { get; } = new(
+            GpuBackendKind.ManagedReference,
+            "Device Resident Test Backend",
+            hardwareAccelerated: true,
+            available: true);
+
+        public SurfaceStorageDomain StorageDomain => SurfaceStorageDomain.Device;
+        public int ActiveAllocationCount => _inner.ActiveAllocationCount;
+        public void Start() => _inner.Start();
+        public void Stop() => _inner.Stop();
+        public void Allocate(SurfaceId surfaceId, VideoFormat format, ReadOnlySpan<byte> rgbaPixels) =>
+            _inner.Allocate(surfaceId, format, rgbaPixels);
+        public void Composite(SurfaceId outputSurfaceId, VideoFormat format, GpuCompositeOperation operation) =>
+            _inner.Composite(outputSurfaceId, format, operation);
+        public byte[] Readback(SurfaceId surfaceId, VideoFormat format) => _inner.Readback(surfaceId, format);
+        public void ReadbackInto(SurfaceId surfaceId, VideoFormat format, Span<byte> destination) =>
+            _inner.ReadbackInto(surfaceId, format, destination);
+        public void Release(SurfaceId surfaceId) => _inner.Release(surfaceId);
+        public void Dispose() => _inner.Dispose();
     }
 
     private sealed class FailOnceReadbackBackend : IGpuProcessingBackend

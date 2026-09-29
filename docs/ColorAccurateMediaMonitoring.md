@@ -4,7 +4,7 @@
 
 The monitoring plane carries an explicit `ColorDescription` alongside RGBA8 frame geometry and timing. The description represents primaries, transfer function, matrix, nominal range, bit depth, alpha semantics and metadata authority. Missing metadata remains explicitly missing; the system does not infer Rec.709, sRGB or range from resolution, file type or presentation context.
 
-Monitoring contract version 1.1 serializes the color description in the monitoring frame header. `VideoFormat` owns the source color description so the RuntimeHost monitoring tap can preserve it when producing source and Program monitoring frames.
+Monitoring contract version 1.1 introduced serialization of the color description in the monitoring frame header. Version 1.2 retains those semantics and additionally carries the full color description of an optional shared GPU monitoring resource. `VideoFormat` owns the source color description so RuntimeHost preserves the same color authority for CPU fallback and shared-resource Program observations.
 
 ## Operator display path
 

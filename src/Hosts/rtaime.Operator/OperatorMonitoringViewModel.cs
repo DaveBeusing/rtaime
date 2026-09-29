@@ -27,6 +27,7 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 	private string _detail = "Waiting for the independent RuntimeHost monitoring plane.";
 	private string _previewFormat = "No Preview monitor frame received.";
 	private string _programFormat = "No Program monitor frame received.";
+	private string _sharedGpuMonitoringState = "Shared GPU monitoring capability has not been observed.";
 	private FrameDiagnosticsSnapshot _previewDiagnostics = FrameDiagnosticsSnapshot.Unavailable;
 	private FrameDiagnosticsSnapshot _programDiagnostics = FrameDiagnosticsSnapshot.Unavailable;
 	private MediaScopeSnapshot? _programScopes;
@@ -93,6 +94,7 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 	public string Detail { get => _detail; private set => Set(ref _detail, value); }
 	public string PreviewFormat { get => _previewFormat; private set => Set(ref _previewFormat, value); }
 	public string ProgramFormat { get => _programFormat; private set => Set(ref _programFormat, value); }
+	public string SharedGpuMonitoringState { get => _sharedGpuMonitoringState; private set => Set(ref _sharedGpuMonitoringState, value); }
 	public FrameDiagnosticsSnapshot PreviewDiagnostics { get => _previewDiagnostics; private set => Set(ref _previewDiagnostics, value); }
 	public FrameDiagnosticsSnapshot ProgramDiagnostics { get => _programDiagnostics; private set => Set(ref _programDiagnostics, value); }
 	public MediaScopeSnapshot? ProgramScopes { get => _programScopes; private set => Set(ref _programScopes, value); }
@@ -141,24 +143,32 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 	{
 		await foreach (var frame in _transport.ReadFramesAsync(cancellationToken).ConfigureAwait(false))
 		{
-			var bitmap = CreateBitmap(frame);
 			var descriptor = frame.Descriptor;
-			if (descriptor.StreamKind == MonitoringStreamKind.Source && string.Equals(descriptor.SourceId.ToString(), _controlState.PreviewSourceId, StringComparison.Ordinal))
+			var bitmap = frame.HasFallbackPayload ? CreateBitmap(frame) : null;
+			if (frame.HasFallbackPayload &&
+				descriptor.StreamKind == MonitoringStreamKind.Source &&
+				string.Equals(descriptor.SourceId.ToString(), _controlState.PreviewSourceId, StringComparison.Ordinal))
+			{
 				_latestPreviewFrame = frame;
+			}
+
 			ImageSource? difference = null;
 			string? comparisonDetail = null;
-			if (CompareMode == MediaCompareMode.Difference && descriptor.StreamKind == MonitoringStreamKind.Program)
+			if (frame.HasFallbackPayload &&
+				CompareMode == MediaCompareMode.Difference &&
+				descriptor.StreamKind == MonitoringStreamKind.Program)
 			{
 				var compatibility = MediaComparisonCompatibility.Evaluate(frame.Descriptor, _latestPreviewFrame?.Descriptor);
 				comparisonDetail = compatibility.Detail;
-				if (compatibility.IsCompatible && _latestPreviewFrame is not null)
+				if (compatibility.IsCompatible && _latestPreviewFrame is { HasFallbackPayload: true })
 				{
 					var derived = new MonitoringFrame(frame.Descriptor, MediaDifference.CreateRgba(frame, _latestPreviewFrame));
 					difference = CreateBitmap(derived);
 				}
 			}
+
 			MediaScopeSnapshot? scopes = null;
-			if (ScopesEnabled && descriptor.StreamKind == MonitoringStreamKind.Program)
+			if (frame.HasFallbackPayload && ScopesEnabled && descriptor.StreamKind == MonitoringStreamKind.Program)
 			{
 				var now = DateTimeOffset.UtcNow;
 				if (now - _lastScopeAnalysisAt >= TimeSpan.FromMilliseconds(200))
@@ -167,10 +177,19 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 					_lastScopeAnalysisAt = now;
 				}
 			}
+
 			lock (_gate) _lastFrameAt = DateTimeOffset.UtcNow;
 			_uiContext.Post(_ =>
 			{
-				ApplyFrame(descriptor, bitmap, scopes);
+				ApplySharedGpuMonitoringState(descriptor, frame.HasFallbackPayload);
+				if (bitmap is not null)
+					ApplyFrame(descriptor, bitmap, scopes);
+				else if (descriptor.StreamKind == MonitoringStreamKind.Program)
+				{
+					State = "LIVE";
+					ProgramFormat = $"{descriptor.Width}x{descriptor.Height} RGBA8 • GPU resource observation • sequence {descriptor.Timing.SequenceNumber}";
+					ProgramDiagnostics = FrameDiagnosticsSnapshot.FromMonitoring(descriptor);
+				}
 				if (comparisonDetail is not null) ComparisonDetail = comparisonDetail;
 				if (difference is not null) DifferenceImage = difference;
 			}, null);
@@ -217,6 +236,26 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 			PreviewFormat = format;
 			PreviewDiagnostics = FrameDiagnosticsSnapshot.FromMonitoring(descriptor);
 		}
+	}
+
+	private void ApplySharedGpuMonitoringState(MonitoringFrameDescriptor descriptor, bool hasFallbackPayload)
+	{
+		if (descriptor.StreamKind != MonitoringStreamKind.Program)
+			return;
+
+		SharedGpuMonitoringState = descriptor.SharedResourceCapability switch
+		{
+			MonitoringSharedResourceCapabilityState.Available when descriptor.HasSharedResource && hasFallbackPayload =>
+				"GPU resource available; CPU/WPF fallback remains active for the current presentation path.",
+			MonitoringSharedResourceCapabilityState.Available when descriptor.HasSharedResource =>
+				"GPU resource available; this observation is resource-only and awaits the provider-backed presentation adapter.",
+			MonitoringSharedResourceCapabilityState.Available =>
+				"GPU resource capability is available, but the current sampled frame has no active shared resource; fallback remains deterministic.",
+			MonitoringSharedResourceCapabilityState.Degraded =>
+				"Shared GPU monitoring is degraded; CPU/WPF fallback remains active.",
+			_ =>
+				"Shared GPU monitoring is unavailable; CPU/WPF fallback remains active."
+		};
 	}
 
 	private void SetCompareMode(string? value)
