@@ -100,12 +100,37 @@
 									ClipToBounds="True"
 									SnapsToDevicePixels="True"
 									RenderOptions.BitmapScalingMode="HighQuality">
+									<Image.Style>
+										<Style TargetType="Image">
+											<Setter Property="Visibility" Value="Visible" />
+											<Style.Triggers>
+												<DataTrigger Binding="{Binding Monitor.IsGpuPresentationActive, RelativeSource={RelativeSource TemplatedParent}}" Value="True">
+													<Setter Property="Visibility" Value="Collapsed" />
+												</DataTrigger>
+											</Style.Triggers>
+										</Style>
+									</Image.Style>
 									<Image.RenderTransform>
 										<TranslateTransform
 											X="{Binding Monitor.PresentationOffsetX, RelativeSource={RelativeSource TemplatedParent}}"
 											Y="{Binding Monitor.PresentationOffsetY, RelativeSource={RelativeSource TemplatedParent}}" />
 									</Image.RenderTransform>
 								</Image>
+								<controls:GpuMonitorPresentationSurface
+									Monitor="{Binding Monitor, RelativeSource={RelativeSource TemplatedParent}}"
+									GpuFrame="{Binding Monitor.GpuFrame, RelativeSource={RelativeSource TemplatedParent}}"
+									Width="{Binding Monitor.ViewportPixelWidth, RelativeSource={RelativeSource TemplatedParent}}"
+									Height="{Binding Monitor.ViewportPixelHeight, RelativeSource={RelativeSource TemplatedParent}}"
+									HorizontalAlignment="Center"
+									VerticalAlignment="Center"
+									RenderTransformOrigin="0.5,0.5"
+									Panel.ZIndex="10">
+									<controls:GpuMonitorPresentationSurface.RenderTransform>
+										<ScaleTransform
+											ScaleX="{Binding Monitor.InverseDpiScaleX, RelativeSource={RelativeSource TemplatedParent}}"
+											ScaleY="{Binding Monitor.InverseDpiScaleY, RelativeSource={RelativeSource TemplatedParent}}" />
+									</controls:GpuMonitorPresentationSurface.RenderTransform>
+								</controls:GpuMonitorPresentationSurface>
 								<controls:RtaimePixelGridOverlay
 									PresentationWidth="{Binding Monitor.PresentationWidth, RelativeSource={RelativeSource TemplatedParent}}"
 									PresentationHeight="{Binding Monitor.PresentationHeight, RelativeSource={RelativeSource TemplatedParent}}"
