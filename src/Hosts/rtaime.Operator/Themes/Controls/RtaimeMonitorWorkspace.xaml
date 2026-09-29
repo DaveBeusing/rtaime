@@ -198,6 +198,18 @@
 									<controls:RtaimeTimecode Content="{Binding Monitor.DisplayTimecode, RelativeSource={RelativeSource TemplatedParent}}" FontSize="{StaticResource OperatorFontSizeMetadata}" />
 								</Border>
 
+								<Border VerticalAlignment="Top" HorizontalAlignment="Left" Margin="8,36,8,0" Padding="7,5" CornerRadius="{StaticResource OperatorRadiusOverlay}" Panel.ZIndex="56" IsHitTestVisible="False">
+									<Border.Style>
+										<Style TargetType="Border" BasedOn="{StaticResource OperatorMonitorHeaderOverlay}">
+											<Setter Property="Visibility" Value="Collapsed" />
+											<Style.Triggers>
+												<DataTrigger Binding="{Binding Monitor.ShowDiagnosticsHud, RelativeSource={RelativeSource TemplatedParent}}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
+											</Style.Triggers>
+										</Style>
+									</Border.Style>
+									<TextBlock Text="{Binding Monitor.DiagnosticsHudText, RelativeSource={RelativeSource TemplatedParent}}" FontSize="{StaticResource OperatorFontSizeMicro}" Foreground="{DynamicResource OperatorOverlayTextBrush}" FontFamily="Consolas" />
+								</Border>
+
 								<Border VerticalAlignment="Top" HorizontalAlignment="Right" Margin="8,36,8,0" Padding="6,3" Style="{StaticResource OperatorMonitorHeaderOverlay}" CornerRadius="{StaticResource OperatorRadiusOverlay}" Panel.ZIndex="56" IsHitTestVisible="False">
 									<TextBlock Text="{Binding Monitor.InspectionReadout, RelativeSource={RelativeSource TemplatedParent}}" FontSize="{StaticResource OperatorFontSizeMicro}" Foreground="{DynamicResource OperatorOverlayTextBrush}" FontFamily="Consolas" />
 								</Border>

@@ -26,6 +26,8 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 	private string _detail = "Waiting for the independent RuntimeHost monitoring plane.";
 	private string _previewFormat = "No Preview monitor frame received.";
 	private string _programFormat = "No Program monitor frame received.";
+	private FrameDiagnosticsSnapshot _previewDiagnostics = FrameDiagnosticsSnapshot.Unavailable;
+	private FrameDiagnosticsSnapshot _programDiagnostics = FrameDiagnosticsSnapshot.Unavailable;
 
 	public OperatorMonitoringViewModel(
 		OperatorViewModel controlState,
@@ -79,6 +81,8 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 	public string Detail { get => _detail; private set => Set(ref _detail, value); }
 	public string PreviewFormat { get => _previewFormat; private set => Set(ref _previewFormat, value); }
 	public string ProgramFormat { get => _programFormat; private set => Set(ref _programFormat, value); }
+	public FrameDiagnosticsSnapshot PreviewDiagnostics { get => _previewDiagnostics; private set => Set(ref _previewDiagnostics, value); }
+	public FrameDiagnosticsSnapshot ProgramDiagnostics { get => _programDiagnostics; private set => Set(ref _programDiagnostics, value); }
 	public bool HasPreview => PreviewImage is not null;
 	public bool HasProgram => ProgramImage is not null;
 	public string PreviewState => ResolveViewerState(_controlState.PreviewViewerState, HasPreview);
@@ -145,6 +149,7 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 		{
 			ProgramImage = bitmap;
 			ProgramFormat = format;
+			ProgramDiagnostics = FrameDiagnosticsSnapshot.FromMonitoring(descriptor);
 			return;
 		}
 
@@ -155,6 +160,7 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 		{
 			PreviewImage = bitmap;
 			PreviewFormat = format;
+			PreviewDiagnostics = FrameDiagnosticsSnapshot.FromMonitoring(descriptor);
 		}
 	}
 
@@ -182,6 +188,7 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 
 		PreviewImage = null;
 		PreviewFormat = "No Preview monitor frame received for current source.";
+		PreviewDiagnostics = FrameDiagnosticsSnapshot.Unavailable;
 	}
 
 	private string ResolveViewerState(string controlState, bool hasFrame)

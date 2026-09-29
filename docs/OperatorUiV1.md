@@ -808,3 +808,12 @@ The shared monitor no longer nests the monitoring image in a `Viewbox`. The moni
 DPI qualification covers 125%, 150% and 200% physical viewport conversion. The geometry seam is intentionally independent from Runtime/Media contracts so a future GPU-backed presentation adapter can consume the same Fit/Fill/PixelPerfect/zoom/pan policy without exposing WPF or vendor-specific resource types through stable contracts.
 
 Safe-area, center-mark and grid overlays remain separate layers above the media image and therefore do not cause another media resample. Existing format and zoom chrome remains presentation-only.
+
+
+## Frame diagnostics HUD
+
+Preview and Program provide an optional compact frame diagnostics HUD. Monitoring `FrameTiming` is the authority for sequence identity and presentation timestamp; media time and nominal rate are derived only from its declared timebase. Unknown values remain `UNAVAILABLE`.
+
+The HUD reports the monitoring source resolution, physical presentation target, presentation scale/mode, color display transform and the current `CPU/WPF` high-quality fallback presentation path. Repeated, late and discontinuity state is not inferred from sequence gaps or UI cadence because the current monitoring contract does not carry authoritative semantics for those states.
+
+The HUD presentation is rate-limited to at most 5 Hz independently of monitoring frame cadence. When disabled, diagnostics snapshot changes return before formatting or HUD dependency-property mutation. Runtime-wide output FPS, frame processing time, dropped-frame evidence and qualified CPU/GPU telemetry remain owned by the existing Runtime performance snapshot and are not duplicated by a second viewer collector.
