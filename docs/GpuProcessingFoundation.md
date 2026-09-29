@@ -157,13 +157,18 @@ The legacy allocating `Readback` API remains for compatibility and focused seman
 
 ## Shared monitoring resource leases
 
-`GpuProcessingProvider.TryExportMonitoringResource` establishes a bounded read-only monitoring lease over an already materialized GPU frame. The export path reuses the existing `SurfaceId`, `VideoFormat`, storage-domain and generation semantics but publishes a dedicated rtaime-owned `MonitoringResourceId`. Stable monitoring contracts do not expose `OpaqueSurfaceHandle`, CUDA pointers or driver-specific handle types.
+`GpuProcessingProvider.TryExportMonitoringResource` establishes a bounded read-only monitoring lease over an already materialized GPU frame. The export path reuses the existing `SurfaceId`, `VideoFormat` and generation semantics while publishing a dedicated rtaime-owned `MonitoringResourceId`. Stable monitoring contracts do not expose `OpaqueSurfaceHandle`, CUDA pointers or CUDA driver identities.
 
-The provider retains the backing surface while any exported monitoring lease references it. Disposing the original `GpuFrame` therefore defers backend release until the last monitoring lease is released. Export is bounded to two active resources; capacity exhaustion is observable and returns a normal unavailable-for-this-frame result rather than blocking or failing Program execution.
+The provider retains the backing source surface while an exported monitoring lease is active. Export remains bounded to two active resources; capacity exhaustion returns a normal unavailable-for-this-frame result rather than blocking or failing Program execution.
 
-Shared monitoring resource identity is process-neutral contract metadata, not a claim that the current Operator can already import the resource into Direct3D. The current Operator presentation remains the bounded CPU/WPF fallback. A later provider-backed presentation adapter can resolve/import an eligible resource without changing Control authority, decoding or Program composition.
+On the qualified Windows CUDA backend, `CudaD3D11MonitoringInterop` creates a shareable D3D11 RGBA8 texture on the CUDA device's adapter and performs the sampled transfer entirely on the GPU. The resulting Windows graphics shared handle and adapter LUID are narrow presentation metadata; the CUDA device pointer remains private to the backend. The resource is opened read-only by the Operator's `GpuMonitorPresentationSurface`.
 
-CUDA device allocations and all driver interop remain private to `rtaime.Provider.Gpu`. The shared-resource export operation itself performs no GPU-to-CPU readback. Hosted CI proves the contract/lifetime semantics only; physical CUDA resource interoperability remains `UNVERIFIED` until retained evidence from an approved reference system exists.
+This path is GPU-resident but is not zero-copy: the sampled monitoring boundary performs one device-to-device copy from the provider surface into the shareable presentation texture. It performs no additional GPU-to-CPU Program readback.
+
+Replacing a pending/published observation, subscriber disconnect, Runtime shutdown and provider stop all release retained presentation resources deterministically. The Operator also releases its opened D3D resource on frame replacement or graphics-surface recreation.
+
+Hosted CI qualifies contract, lifetime, fallback and software presentation policy. Physical CUDA/D3D11 interoperability remains `UNVERIFIED` until captured on an approved NVIDIA reference system.
+
 
 ## Static RGBA source
 
