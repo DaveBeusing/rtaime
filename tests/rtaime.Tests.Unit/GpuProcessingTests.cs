@@ -338,7 +338,7 @@ public sealed class GpuProcessingTests
         Assert.NotNull(lease);
         Assert.Equal(MonitoringResourceAccessMode.ReadOnly, lease!.Descriptor.AccessMode);
         Assert.Equal(SurfaceStorageDomain.Device, lease.Descriptor.StorageDomain);
-        Assert.Equal(provider.Descriptor.ProviderId.Value, lease.Descriptor.ProviderInstanceId);
+        Assert.Equal(provider.MonitoringProviderInstanceId, lease.Descriptor.ProviderInstanceId);
         Assert.Equal(frame.SurfaceId, lease.Descriptor.SurfaceId);
         Assert.Equal(frame.Descriptor.Surface.Format, lease.Descriptor.Format);
         Assert.Equal(frame.Descriptor.Surface.Lifetime.Generation, lease.Descriptor.Lifetime.Generation);
@@ -408,6 +408,25 @@ public sealed class GpuProcessingTests
         lease.Dispose();
 
         Assert.False(provider.IsMonitoringResourceActive(descriptor));
+    }
+
+    [Fact]
+    public void Provider_restart_rotates_monitoring_instance_identity_and_rejects_stale_resource()
+    {
+        using var backend = new DeviceResidentTestBackend();
+        using var provider = new GpuProcessingProvider(backend);
+        provider.Start();
+        var firstInstance = provider.MonitoringProviderInstanceId;
+        using var frame = Upload(provider, SourceA, Solid(1, 2, 3, 255), 1);
+        Assert.True(provider.TryExportMonitoringResource(frame, out var lease));
+        var stale = lease!.Descriptor;
+
+        provider.Stop();
+        provider.Start();
+
+        Assert.NotEqual(firstInstance, provider.MonitoringProviderInstanceId);
+        Assert.False(provider.IsMonitoringResourceActive(stale));
+        lease.Dispose();
     }
 
     [Fact]
