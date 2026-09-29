@@ -77,9 +77,127 @@ public sealed class OperatorMonitoringPlaneTests
 		Assert.Equal(RuntimeMonitoringTap.MonitorWidth, program.Descriptor.Width);
 		Assert.Equal(RuntimeMonitoringTap.MonitorHeight, program.Descriptor.Height);
 		Assert.Equal((byte)70, program.Pixels.Span[0]);
+		Assert.True(program.HasFallbackPayload);
+		Assert.Equal(MonitoringSharedResourceCapabilityState.Unavailable, program.Descriptor.SharedResourceCapability);
+		Assert.Null(program.Descriptor.SharedResource);
 		Assert.Equal(1UL, tap.Statistics.Captured);
 		Assert.Equal(1UL, tap.Statistics.Processed);
 		Assert.Equal(0, gpu.ReadbackPoolStatistics.ActiveBuffers);
+	}
+
+	[Fact]
+	public async Task Shared_gpu_program_observation_can_omit_cpu_payload_and_releases_on_disconnect()
+	{
+		using var hub = new RuntimeMonitoringHub();
+		var subscription = hub.Subscribe(capacity: 4, requiresCpuFallback: false);
+		await using var tap = new RuntimeMonitoringTap(hub, MonitoringSharedResourceCapabilityState.Available);
+		var format = new VideoFormat(4, 2, FrameRate.Fps50, PixelFormat.Rgba8, ScanMode.Progressive);
+		var timing = new FrameTiming(0, 0, new Timebase(1, 50));
+
+		using var backend = new DeviceResidentMonitoringBackend();
+		using var gpu = new GpuProcessingProvider(backend);
+		gpu.Start();
+		var programFrame = gpu.Upload(
+			SourceB,
+			new RgbaFrameBuffer(format, Solid(format, 70, 80, 90)),
+			timing,
+			Generation.Initial,
+			"shared-monitoring-test");
+		using var programPixels = gpu.RentReadback(programFrame);
+		var readbacksBeforeExport = backend.ReadbackIntoCount;
+		Assert.True(gpu.TryExportMonitoringResource(programFrame, out var sharedResource));
+		Assert.Equal(readbacksBeforeExport, backend.ReadbackIntoCount);
+
+		Assert.True(tap.TryCapture(
+			SourceA,
+			Solid(format, 10, 20, 30),
+			SourceB,
+			Solid(format, 40, 50, 60),
+			SourceB,
+			programPixels,
+			format,
+			timing,
+			sharedResource));
+		programFrame.Dispose();
+
+		using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+		var frames = new[]
+		{
+			await subscription.ReadAsync(timeout.Token),
+			await subscription.ReadAsync(timeout.Token),
+			await subscription.ReadAsync(timeout.Token)
+		};
+		var program = Assert.Single(frames, frame => frame.Descriptor.StreamKind == MonitoringStreamKind.Program);
+
+		Assert.False(program.HasFallbackPayload);
+		Assert.Equal(MonitoringSharedResourceCapabilityState.Available, program.Descriptor.SharedResourceCapability);
+		var descriptor = Assert.IsType<MonitoringSharedResourceDescriptor>(program.Descriptor.SharedResource);
+		Assert.True(gpu.IsMonitoringResourceActive(descriptor));
+		Assert.Equal(1, gpu.SharedMonitoringResourceStatistics.ActiveResources);
+		Assert.Equal(1, tap.Statistics.ActiveSharedResources);
+		Assert.Equal(1, backend.ActiveAllocationCount);
+
+		await subscription.DisposeAsync();
+
+		Assert.False(gpu.IsMonitoringResourceActive(descriptor));
+		Assert.Equal(0, gpu.SharedMonitoringResourceStatistics.ActiveResources);
+		Assert.Equal(0, tap.Statistics.ActiveSharedResources);
+		Assert.Equal(0, backend.ActiveAllocationCount);
+	}
+
+	[Fact]
+	public async Task Newer_sample_replaces_and_invalidates_previous_shared_gpu_resource()
+	{
+		using var hub = new RuntimeMonitoringHub();
+		await using var subscription = hub.Subscribe(capacity: 8, requiresCpuFallback: false);
+		await using var tap = new RuntimeMonitoringTap(hub, MonitoringSharedResourceCapabilityState.Available);
+		var format = new VideoFormat(4, 2, FrameRate.Fps50, PixelFormat.Rgba8, ScanMode.Progressive);
+
+		using var backend = new DeviceResidentMonitoringBackend();
+		using var gpu = new GpuProcessingProvider(backend);
+		gpu.Start();
+
+		async Task<MonitoringSharedResourceDescriptor> PublishAsync(ulong sequence, byte red)
+		{
+			var timing = new FrameTiming(sequence, checked((long)sequence), new Timebase(1, 50));
+			var frame = gpu.Upload(
+				SourceB,
+				new RgbaFrameBuffer(format, Solid(format, red, 80, 90)),
+				timing,
+				new Generation(sequence),
+				"shared-monitoring-replacement");
+			using var pixels = gpu.RentReadback(frame);
+			Assert.True(gpu.TryExportMonitoringResource(frame, out var resource));
+			Assert.True(tap.TryCapture(
+				SourceA,
+				Solid(format, 10, 20, 30),
+				SourceB,
+				Solid(format, 40, 50, 60),
+				SourceB,
+				pixels,
+				format,
+				timing,
+				resource));
+			frame.Dispose();
+
+			using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+			for (var index = 0; index < 3; index++)
+			{
+				var observation = await subscription.ReadAsync(timeout.Token);
+				if (observation.Descriptor.StreamKind == MonitoringStreamKind.Program)
+					return Assert.IsType<MonitoringSharedResourceDescriptor>(observation.Descriptor.SharedResource);
+			}
+			throw new Xunit.Sdk.XunitException("Expected Program monitoring observation was not received.");
+		}
+
+		var first = await PublishAsync(0, 70);
+		Assert.True(gpu.IsMonitoringResourceActive(first));
+		var second = await PublishAsync(RuntimeMonitoringTap.SampleStride, 90);
+
+		Assert.False(gpu.IsMonitoringResourceActive(first));
+		Assert.True(gpu.IsMonitoringResourceActive(second));
+		Assert.Equal(1, gpu.SharedMonitoringResourceStatistics.ActiveResources);
+		Assert.Equal(1, backend.ActiveAllocationCount);
 	}
 
 	[Fact]
@@ -198,5 +316,34 @@ public sealed class OperatorMonitoringPlaneTests
 			pixels[offset + 3] = byte.MaxValue;
 		}
 		return pixels;
+	}
+
+	private sealed class DeviceResidentMonitoringBackend : IGpuProcessingBackend
+	{
+		private readonly ManagedReferenceGpuBackend _inner = new();
+
+		public GpuBackendInfo Info { get; } = new(
+			GpuBackendKind.ManagedReference,
+			"Device Resident Monitoring Test Backend",
+			hardwareAccelerated: true,
+			available: true);
+
+		public SurfaceStorageDomain StorageDomain => SurfaceStorageDomain.Device;
+		public int ActiveAllocationCount => _inner.ActiveAllocationCount;
+		public int ReadbackIntoCount { get; private set; }
+		public void Start() => _inner.Start();
+		public void Stop() => _inner.Stop();
+		public void Allocate(SurfaceId surfaceId, VideoFormat format, ReadOnlySpan<byte> rgbaPixels) =>
+			_inner.Allocate(surfaceId, format, rgbaPixels);
+		public void Composite(SurfaceId outputSurfaceId, VideoFormat format, GpuCompositeOperation operation) =>
+			_inner.Composite(outputSurfaceId, format, operation);
+		public byte[] Readback(SurfaceId surfaceId, VideoFormat format) => _inner.Readback(surfaceId, format);
+		public void ReadbackInto(SurfaceId surfaceId, VideoFormat format, Span<byte> destination)
+		{
+			ReadbackIntoCount++;
+			_inner.ReadbackInto(surfaceId, format, destination);
+		}
+		public void Release(SurfaceId surfaceId) => _inner.Release(surfaceId);
+		public void Dispose() => _inner.Dispose();
 	}
 }
