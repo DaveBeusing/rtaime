@@ -657,6 +657,7 @@ public sealed class GpuProcessingProvider : IDisposable
     private ulong _sharedMonitoringResourceOrdinal;
     private ulong _totalSharedMonitoringExports;
     private ulong _rejectedSharedMonitoringExports;
+    private Identity _monitoringProviderInstanceId = Identity.New();
     private GpuProviderState _state = GpuProviderState.Stopped;
     private ulong _surfaceOrdinal;
     private ulong _observationOrdinal;
@@ -670,6 +671,14 @@ public sealed class GpuProcessingProvider : IDisposable
 
     public ProviderDescriptor Descriptor { get; }
     public GpuBackendInfo BackendInfo => _backend.Info;
+    public Identity MonitoringProviderInstanceId
+    {
+        get
+        {
+            lock (_gate)
+                return _monitoringProviderInstanceId;
+        }
+    }
 
     public GpuProviderState State
     {
@@ -723,6 +732,7 @@ public sealed class GpuProcessingProvider : IDisposable
             try
             {
                 _backend.Start();
+                _monitoringProviderInstanceId = Identity.New();
                 _state = GpuProviderState.Running;
                 Observe("gpu.provider.started", null, null);
             }
@@ -980,7 +990,7 @@ public sealed class GpuProcessingProvider : IDisposable
 
             var resourceId = new MonitoringResourceId(GpuIdentity.Create(
                 "gpu-monitoring-resource",
-                Descriptor.ProviderId.ToString(),
+                _monitoringProviderInstanceId.ToString(),
                 frame.SurfaceId.ToString(),
                 frame.Descriptor.Surface.Lifetime.Generation.ToString(),
                 frame.Descriptor.Timing.SequenceNumber.ToString(),
@@ -988,7 +998,7 @@ public sealed class GpuProcessingProvider : IDisposable
 
             var descriptor = new MonitoringSharedResourceDescriptor(
                 resourceId,
-                Descriptor.ProviderId.Value,
+                _monitoringProviderInstanceId,
                 frame.SurfaceId,
                 frame.Descriptor.Surface.Format,
                 frame.Descriptor.Surface.StorageDomain,
@@ -1019,7 +1029,7 @@ public sealed class GpuProcessingProvider : IDisposable
         lock (_gate)
         {
             if (_state != GpuProviderState.Running ||
-                descriptor.ProviderInstanceId != Descriptor.ProviderId.Value ||
+                descriptor.ProviderInstanceId != _monitoringProviderInstanceId ||
                 !_sharedMonitoringResources.TryGetValue(descriptor.ResourceId, out var entry))
             {
                 return false;
