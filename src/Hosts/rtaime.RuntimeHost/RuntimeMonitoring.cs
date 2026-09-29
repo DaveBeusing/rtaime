@@ -603,7 +603,7 @@ public sealed class RuntimeHostMonitoringServer : IAsyncDisposable
 	private async Task StreamAsync(NamedPipeServerStream pipe, CancellationToken cancellationToken)
 	{
 		await using (pipe.ConfigureAwait(false))
-		await using (var subscription = _hub.Subscribe(capacity: 2))
+		await using (var subscription = _hub.Subscribe(capacity: 4))
 		{
 			try
 			{

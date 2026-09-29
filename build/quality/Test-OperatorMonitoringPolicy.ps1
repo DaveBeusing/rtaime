@@ -51,7 +51,7 @@ Assert-Condition ($runtimeMonitoring -match 'SampleStride\s*=\s*4') "V1 monitori
 Assert-Condition ($runtimeMonitoring -match 'MonitorWidth\s*=\s*320' -and $runtimeMonitoring -match 'MonitorHeight\s*=\s*180') "V1 monitoring must use the qualified 320x180 visual payload."
 Assert-Condition ($runtimeMonitoring -match '_pending\s*=\s*sample') "Runtime monitoring must use a single pending sample that can be replaced under load."
 Assert-Condition ($runtimeMonitoring -match '_dropped\+\+') "Runtime monitoring must account for dropped monitor frames under pressure."
-Assert-Condition ($runtimeMonitoring -match 'capacity:\s*2') "Monitoring subscribers must be bounded."
+Assert-Condition ($runtimeMonitoring -match 'capacity:\s*4') "Monitoring subscribers must retain one complete bounded source/source/Program observation set."
 Assert-Condition ($runtimeMonitoring -match 'PipeDirection\.Out') "RuntimeHost monitoring must be output-only and incapable of carrying authority mutations."
 Assert-Condition ($runtimeMonitoring -match 'RuntimeHostMonitoringServer') "RuntimeHost must expose a dedicated monitoring server."
 Assert-Condition ($runtimeMonitoring -match 'RequiresCpuFallback') "Monitoring subscriptions must explicitly negotiate whether the CPU fallback payload is required."
