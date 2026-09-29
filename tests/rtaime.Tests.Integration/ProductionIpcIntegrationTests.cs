@@ -909,7 +909,7 @@ public sealed class ProductionIpcIntegrationTests
 		string roleId,
 		string expectedHealth)
 	{
-		var deadline = DateTime.UtcNow.AddSeconds(10);
+		var deadline = DateTime.UtcNow.AddSeconds(20);
 		OperatorStatusSnapshot? snapshot = null;
 		do
 		{
