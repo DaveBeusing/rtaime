@@ -3,6 +3,7 @@
 using rtaime.Core;
 using rtaime.Media.Contracts;
 using rtaime.Operator;
+using Xunit;
 
 namespace rtaime.Tests.Operator;
 
