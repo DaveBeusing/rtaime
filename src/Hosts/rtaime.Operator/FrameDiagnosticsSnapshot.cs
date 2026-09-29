@@ -27,7 +27,7 @@ public sealed record FrameDiagnosticsSnapshot(
 	{
 		ArgumentNullException.ThrowIfNull(descriptor);
 		var timing = descriptor.Timing;
-		var seconds = timing.Timebase.Denominator == 0
+		double? seconds = timing.Timebase.Denominator == 0
 			? null
 			: timing.PresentationTimestamp * (double)timing.Timebase.Numerator / timing.Timebase.Denominator;
 		var rate = timing.Timebase.Numerator > 0 && timing.Timebase.Denominator > 0
