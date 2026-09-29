@@ -3,11 +3,12 @@
 <p align="right">
 	<img src="../src/Hosts/rtaime.Operator/Assets/Brand/RtaimeLogoHorizontal.svg" alt="rtaime — Real Time AI Media Engine" width="180" />
 </p>
+
 # Operator Monitoring Plane
 
 ## Scope
 
-Operator Monitoring Plane adds non-authoritative visual Preview and Program monitoring to the V1 Operator. The monitoring plane is deliberately separate from the versioned ControlHost management path. It carries visual observation only and cannot mutate production state, commit Runtime execution, change routing, control recording or influence Program continuity.
+Operator Monitoring Plane provides non-authoritative visual Preview and Program monitoring to the V1 Operator. The monitoring plane is deliberately separate from the versioned ControlHost management path. It carries observation only and cannot mutate production state, commit Runtime execution, change routing, control recording or influence Program continuity.
 
 The authoritative control path remains:
 
@@ -15,71 +16,89 @@ The authoritative control path remains:
 
 The visual monitoring path is independent:
 
-`RuntimeHost committed media -> monitoring tap -> bounded monitor worker -> bounded subscriber -> dedicated monitoring Named Pipe -> rtaime.Client monitoring transport -> Operator bitmap presentation`
+`RuntimeHost committed media -> monitoring tap -> bounded subscriber -> dedicated monitoring Named Pipe -> rtaime.Client monitoring transport -> RtaimeMonitorPresentation`
+
+When the qualified Windows graphics path is available, `RtaimeMonitorPresentation` prefers a read-only GPU-resident shared resource. The existing frozen WPF bitmap remains the deterministic fallback and the bounded analysis source.
 
 ## Monitoring contract
 
-`rtaime.Media.Contracts` defines a dedicated `MonitoringContractVersion` and `MonitoringFrameDescriptor`. Operator Monitoring Plane uses monitoring contract version `1.2` independently from the primary Media contract version. Version 1.2 adds provider-neutral shared-resource capability and lifetime metadata while retaining the existing bounded RGBA fallback payload.
+`rtaime.Media.Contracts` defines `MonitoringContractVersion` and `MonitoringFrameDescriptor`. Operator Monitoring Plane uses monitoring contract version `1.3` independently from the primary Media contract version.
 
 Each frame declares:
 
 - stream kind (`Source` or `Program`);
 - source identity;
-- monitoring width and height;
+- bounded fallback monitoring width and height;
 - RGBA8 pixel format;
 - production frame sequence and presentation timing;
-- a fixed binary wire header;
+- explicit color metadata;
 - shared-resource capability state distinct from current-frame resource availability;
-- an optional provider-neutral, read-only `MonitoringSharedResourceDescriptor` with resource/provider/surface identity, full video/color semantics, storage domain and generation/lifetime;
-- an exact RGBA fallback payload length, or zero payload bytes only when a shared GPU resource is present and the subscriber has explicitly opted out of the CPU fallback.
+- an optional read-only `MonitoringSharedResourceDescriptor` with resource/provider/surface identity, full video format, storage domain and generation/lifetime;
+- narrow Windows graphics presentation metadata when the resource can be opened by the Operator;
+- an exact RGBA fallback payload length, or zero payload bytes only for consumers that explicitly do not require the CPU fallback.
 
-The monitoring wire format is not embedded in ControlHost or RuntimeHost management envelopes. It never carries CUDA pointers, CUDA types, provider-internal opaque handles or vendor-specific resource identities.
+The stable contract does not expose CUDA device pointers, CUDA types or provider-internal opaque surface handles. Windows graphics interop data is presentation metadata only and never grants mutation or production authority.
 
 ## Runtime capture boundary
 
-The RuntimeHost monitoring tap is fed from the committed execution path after timed input processing. Source A and Source B use the same immutable RGBA input buffers that feed GPU upload. Program monitoring uses the existing post-composite GPU readback, so CUT, DISSOLVE and V1 visual-layer results are represented by the Program monitor rather than reconstructed in the Operator.
+The RuntimeHost monitoring tap is fed from committed execution after timed input processing. Source A and Source B retain the bounded 320×180 observational payload. The source selected by authoritative Preview routing may additionally be materialized through the already selected GPU provider so the sampled Preview observation can carry a shared GPU resource.
 
-Operator Monitoring Plane does not add an additional Program GPU readback. It reuses the readback already required by the managed V1 reference pipeline.
+Program monitoring is tied to the actual post-composite output frame. RuntimeHost continues to use the existing Program readback required by the managed V1 reference pipeline; GPU monitor export does not add another Program `Readback` or `ReadbackInto`.
 
-Because monitoring processing is asynchronous, the tap retains the Program `GpuReadbackLease` while a sampled boundary is pending or being downscaled. Replacing a pending sample releases the older retained lease, and the worker releases its lease after producing the independent 320x180 monitoring payload. The primary Runtime boundary may therefore be disposed immediately without allowing later Program frames to mutate memory still being observed by monitoring. See [ProgramFrameMemoryOwnership.md](ProgramFrameMemoryOwnership.md).
+The GPU presentation export is sampled at the same monitoring boundary. On the qualified CUDA/Windows backend, the provider performs a GPU-resident copy into a shareable D3D11 texture and publishes only its bounded read-only lease metadata. This is not a second decoder, compositor or Program renderer.
 
-## Shared GPU resource foundation
+Asynchronous ownership remains explicit. Replacing a pending sample releases its Program readback retention and shared Preview/Program resources. Publishing a newer sampled observation releases the previously retained presentation resources. Subscriber disconnect, Runtime shutdown and provider stop release remaining resources deterministically.
 
-When the active GPU provider is hardware accelerated and owns device-resident Program surfaces, `GpuProcessingProvider` can export a bounded read-only monitoring resource lease for the already materialized Program surface. Exporting the monitoring resource does not perform `Readback`, `ReadbackInto` or any additional GPU-to-CPU copy.
+## GPU-resident Operator presentation
 
-The shared-resource descriptor is intentionally provider-neutral. RuntimeHost publishes only rtaime-owned resource, provider-instance and surface identities plus format, color, generation and read-only lifetime semantics. CUDA allocation addresses remain private to `rtaime.Provider.Gpu`.
+The Operator owns one presentation abstraction: `RtaimeMonitorPresentation`. Its template contains both:
 
-Resource lifetime is explicit and bounded:
+- `GpuMonitorPresentationSurface`, the preferred Windows/D3D11 presentation surface;
+- the existing high-quality WPF `Image`, retained as deterministic fallback.
 
-- the provider allows at most two active shared monitoring resources;
-- a monitoring lease retains the underlying Program surface after the normal `GpuFrame` owner is disposed;
-- publishing a newer sampled Program observation releases the previously published shared resource;
-- replacing a pending sample releases the replaced shared resource;
-- the last monitoring subscriber disconnect releases the published resource immediately;
-- RuntimeHost/tap shutdown releases pending and published resources before GPU provider disposal;
-- provider stop invalidates outstanding monitoring identities and releases their backing surfaces;
-- stale or foreign provider/resource identities fail closed through provider validation.
+The GPU surface opens only `WindowsGraphicsSharedHandle` resources whose adapter LUID matches its D3D11 device. It opens the texture read-only for shader-resource presentation, never as Runtime or Program authority.
 
-Capability availability and current-frame availability are separate. A provider may report shared-resource capability while a particular sampled frame falls back because export is unavailable or bounded capacity is exhausted. Monitoring continues through the CPU/WPF fallback and Program execution is unaffected.
+Fit, Fill, Pixel Perfect, free zoom and pan continue to use `MediaPresentationGeometry`. The viewport is measured in device-independent units and converted to physical pixels using the active WPF DPI scale. The D3D surface is sized to the physical viewport and inverse-scaled only for WPF placement, avoiding a second media scaling stage.
 
-The current Named Pipe Operator subscriber still requests the CPU fallback because the Operator does not yet implement the Direct3D/provider-backed presentation adapter. Resource-only Program observations are supported by the monitoring contract/hub for a future eligible consumer, but full Operator Direct3D rendering is outside this foundation.
+Sampling is deliberate:
+
+- normal fractional scaling uses linear sampling;
+- integral/pixel-inspection scaling uses point sampling;
+- 100% Pixel Perfect maps one full-resolution shared-resource pixel to one physical display pixel;
+- the source-aligned pixel grid remains a separate overlay and does not resample media.
+
+The GPU shader applies the same qualified source-to-sRGB transfer/range intent as `MonitoringDisplayTransform`. Incomplete color metadata remains passthrough rather than guessed. Presentation changes do not modify Runtime or Program pixels.
+
+## Fallback and recovery
+
+GPU presentation fails open to the existing WPF path. Fallback remains available when:
+
+- the provider reports no shared-resource capability;
+- a sampled frame has no shareable resource;
+- the shared handle cannot be opened;
+- the graphics device is unavailable or recreated;
+- the resource belongs to a different adapter;
+- a newer monitoring generation replaces the current resource;
+- Runtime/provider restart invalidates the previous provider generation.
+
+`OperatorMonitoringViewModel` accepts only newer resources within a provider generation and replaces the GPU projection from the ordered monitoring stream. `GpuMonitorPresentationSurface` releases opened D3D resources on frame replacement and graphics-surface unload. A failed open or draw leaves the CPU/WPF image visible; a later valid frame can retry the GPU path without affecting command/control operation.
+
+The diagnostics HUD reports the active presentation path from actual surface state rather than assuming GPU success from capability alone.
 
 ## Bounded and loss-tolerant behavior
 
-Monitoring is subordinate to Program continuity.
-
-The V1 policy is:
+Monitoring is subordinate to Program continuity:
 
 - monitoring is sampled once every four production boundaries;
-- the qualified monitoring image is 320x180 RGBA8;
-- the runtime monitoring tap retains at most one pending boundary sample;
-- a newer sample replaces an older pending sample under pressure;
-- each connected monitoring subscriber has a small bounded queue;
-- subscriber queues drop old monitor frames rather than block the publisher;
-- when no monitoring subscriber exists, Runtime does not enqueue monitor downscale work;
+- the CPU fallback/analysis image remains 320×180 RGBA8;
+- the Runtime tap retains at most one pending sampled boundary;
+- a newer sample replaces older pending work under pressure;
+- subscriber queues are bounded and drop old observations rather than block Runtime;
+- shared Preview and Program leases are bounded by the GPU provider;
+- no subscriber causes the monitoring tap to stop retaining observational resources;
 - monitoring reconnects independently from ControlHost synchronization.
 
-A slow, disconnected or failed Operator may therefore observe dropped or stale monitoring frames. That state is acceptable and must never delay Program execution.
+A slow, disconnected or failed Operator may therefore observe dropped or stale monitoring frames. That state never delays committed Program execution.
 
 ## Dedicated transport
 
@@ -93,57 +112,41 @@ For the default V1 endpoint this is:
 
 The Operator can override it with `RTAIME_MONITOR_ENDPOINT`. Otherwise it derives the endpoint from `RTAIME_RUNTIME_ENDPOINT`.
 
-The monitoring transport carries only frame observations. It exposes no Set Preview, CUT, DISSOLVE or other mutation operation.
+The transport carries frame observations only. It exposes no Set Preview, CUT, DISSOLVE or other production mutation.
 
-## Operator behavior
+## Preview and Program behavior
 
-The Operator renders two visual surfaces:
+**Preview** selects source observations by the authoritative Preview routing received from ControlHost. When the active sampled Preview source has a presentable shared resource, the existing monitor uses that GPU resource; otherwise the cached WPF source image remains available.
 
-- **Preview** selects the most recent source monitor frame whose source identity matches the Preview routing received from authoritative ControlHost state.
-- **Program** displays the actual Program monitor stream emitted from post-composite Runtime output.
+**Program** consumes the post-composite Runtime monitoring observation and prefers its GPU resource when presentable. Program presentation never reconstructs transitions, graphics or output state in the Operator.
 
-Monitoring health is presented separately from ControlHost connection health. Loss of the monitoring pipe can mark monitoring `STALE` without marking the authoritative control snapshot disconnected or stale.
+Monitoring health remains separate from ControlHost connection health. Loss of the monitoring pipe can mark monitoring `STALE` without changing authoritative control state.
 
-## Failure isolation
+## Clean Program
 
-Monitoring must fail open relative to production continuity:
+Program Output / Clean Feed reuses the same `OperatorMonitoringViewModel.ProgramGpuFrame` and `ProgramImage` as the in-workspace Program monitor. It does not create a second monitoring subscriber, decoder, compositor or frame transport.
 
-- ControlHost does not depend on the monitoring pipe.
-- Runtime execution does not wait for a monitoring consumer.
-- the monitoring tap overwrites pending samples under pressure;
-- the monitoring server uses bounded per-client queues;
-- monitor disconnects are handled as observation loss, not Runtime authority failure;
-- the Operator can continue command/control operation when visual monitoring is unavailable, subject to the existing authoritative control readiness rules.
+The clean window contains only the Program presentation surfaces. It does not add diagnostics HUD, guides, safe area, center marks, pixel grid, scopes, comparison or inspection overlays. If the shared GPU resource cannot be presented, the same Program WPF fallback remains visible.
 
+## Pixel inspection, scopes and comparison
 
-## clean-feed consumer
+Pixel inspection keeps the full-resolution GPU presentation coordinate as its source coordinate. The current inspection sampler remains intentionally bounded to the already-present 320×180 CPU monitoring bitmap; full-resolution GPU ROI readback is not introduced. The full-resolution coordinate is deterministically mapped to its bounded monitoring sample and is reported as display-code evidence, not fabricated source-code evidence.
 
-Program Output / Clean Feed adds a second WPF presentation surface for the existing Program monitoring image. It does not add a monitoring contract version, RuntimeHost render path, new subscriber, or management-IPC payload.
-
-OperatorMonitoringViewModel continues to own the single NamedPipeOperatorMonitoringTransport reader and converts each received Program frame once into a frozen WPF bitmap. Both the in-workspace Program monitor and ProgramOutputWindow bind that same ProgramImage reference.
-
-The clean feed therefore inherits the monitoring plane's bounded/loss-tolerant semantics and its current monitor-grade 320×180 / sample-stride-4 presentation profile. Production continuity remains independent of either WPF surface.
+Technical scopes and Difference analysis continue to consume the bounded CPU fallback at their existing limited cadence. They do not create another decoder, full-resolution Program readback or GPU telemetry collector. Full-frame GPU channel isolation, GPU scopes and ROI inspection remain separate capabilities.
 
 ## Verification
 
-`build/quality/Test-OperatorMonitoringPolicy.ps1` checks the architectural separation and bounded-loss behavior structurally.
+`build/quality/Test-OperatorMonitoringPolicy.ps1` checks authority separation, bounded/loss-tolerant monitoring, GPU-resident presentation, retained WPF fallback, Clean Program reuse and the absence of GPU-to-CPU copy operations in the CUDA/D3D11 export path.
 
-Integration coverage qualifies:
+Automated coverage qualifies:
 
-- monitoring wire-frame round trips;
-- bounded subscriber drop behavior;
-- sampled source and Program monitor publication;
-- dedicated Named Pipe delivery through `NamedPipeOperatorMonitoringTransport`.
+- monitoring contract and Windows graphics interop round trips;
+- bounded shared-resource ownership and provider restart identity;
+- Preview/Program resource publication and release;
+- Fit/Fill/Pixel Perfect physical geometry over qualified DPI scales;
+- full-resolution source-coordinate mapping to the bounded inspection payload;
+- one GPU monitor surface plus one WPF fallback surface without nested Viewbox scaling;
+- Clean Program reuse of `ProgramGpuFrame` with no Operator overlay layer;
+- absence of CPU bitmap materialization inside the active GPU presentation control.
 
-The repository Required Gates remain authoritative for CI, Quality, Security, Provider Smoke and Packaged E2E qualification.
-
-
-## technical scopes and A/B comparison
-
-The Operator can analyze the existing bounded Program monitoring frame with histogram, waveform, RGB parade and vectorscope views. Scope analysis is opt-in, samples the already downscaled RGBA8 monitoring payload at a bounded stride and refreshes at most 5 Hz. It does not create another decoder, request a full-resolution frame or add another RuntimeHost readback. When scopes are disabled, the analysis path is skipped.
-
-The current qualified monitoring transport remains a CPU/WPF fallback. Scope presentation therefore does not claim GPU-resident analysis. The scope model is provider-neutral so a future provider-backed shared GPU resource can replace the bounded fallback without changing Operator authority or scope semantics.
-
-A/B comparison uses Program as A and the confirmed Preview monitoring frame as B. Split and wipe modes reuse the existing frozen WPF images. Difference is produced only when dimensions, pixel format and color semantics match; otherwise the Operator reports why Difference is unavailable. Difference processing is derived monitoring state only and never mutates source, Runtime or Program state.
-
-Program Output / Clean Feed continues to reuse the same ProgramImage and existing display-placement controller. Technical scopes, diagnostics and comparison presentation are not injected into the clean-feed window.
+Physical NVIDIA/CUDA/D3D11 interop, per-monitor device-loss behavior and final color/visual equivalence still require reference-hardware qualification. Repository Required Gates remain authoritative for CI, Quality, Security, Provider Smoke and Packaged E2E.
