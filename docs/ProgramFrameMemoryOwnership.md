@@ -8,9 +8,9 @@
 
 ## Scope
 
-Program Frame Memory Ownership defines the internal host-memory lifetime used after GPU composition and before Program consumers complete their work.
+Program Frame Memory Ownership defines both the internal host-memory lifetime used after GPU composition and the bounded device-surface lifetime retained by shared monitoring observations.
 
-The ownership model is implementation-local. Bulk RGBA memory is not added to stable Media, Runtime, Provider or IPC contracts.
+The ownership model remains explicit at provider/runtime boundaries. Bulk RGBA memory is not added to stable Media, Runtime, Provider or management IPC contracts; the monitoring contract carries resource identity and lifetime metadata only.
 
 ## Ownership chain
 
@@ -18,6 +18,8 @@ The V1 Program path is:
 
 ~~~
 GPU composite surface
+	├─ GpuSharedMonitoringResourceLease — optional sampled read-only surface retention
+	│    └─ replacement / disconnect / shutdown → Dispose → provider surface release
 	↓
 GpuProcessingProvider.RentReadback
 	↓
@@ -82,7 +84,9 @@ Monitoring is asynchronous.
 
 RuntimeMonitoringTap retains the Program lease before placing a sampled boundary into its single pending slot. Replacing a pending sample releases the replaced lease. The worker releases its retained lease after Program downscale or when the sample is no longer needed.
 
-The published 320×180 monitoring image owns separate bounded payload data and has no dependency on the original full-resolution Program lease.
+The current CPU/WPF fallback publishes a separate bounded 320×180 payload and has no dependency on the original full-resolution Program lease after downscale.
+
+When the GPU provider can export a shared monitoring resource, the sampled Program boundary may additionally transfer a `GpuSharedMonitoringResourceLease` to `RuntimeMonitoringTap`. That lease retains the original provider surface independently from `GpuReadbackLease`. Replacing a pending or published sample, disconnecting the last subscriber, tap shutdown or provider stop releases it deterministically. The shared-resource path never calls a second Program readback.
 
 ### Recording
 
@@ -105,7 +109,7 @@ A V1ProgramBoundaryResult must not be used after disposal. Accessing Program pix
 
 ## Shutdown and failure behavior
 
-Runtime shutdown drains/disposes monitoring and recording before GPU shutdown. V1RuntimeHostService then verifies that the Program readback pool has zero active buffers before disposing GPU resources.
+Runtime shutdown drains/disposes monitoring and recording before GPU shutdown. V1RuntimeHostService then verifies that both the Program readback pool has zero active buffers and the shared monitoring resource set has zero active leases before disposing GPU resources.
 
 GPU readback exceptions return the rented host buffer before the exception escapes. Recording staging/enqueue failure paths discard transferred payload ownership. Monitoring replacement and cancellation paths release retained leases.
 
@@ -121,6 +125,10 @@ Software validation covers:
 - asynchronous monitoring remains correct after the primary caller releases its lease;
 - readback failure returns the buffer to the pool;
 - shutdown reaches zero active Program readback leases;
+- resource-only Program monitoring can omit the CPU payload for a subscriber that explicitly does not require it;
+- shared resources remain bounded, retain the backing surface while active and return to zero on replacement/disconnect/shutdown;
+- stale/foreign shared resource identities are rejected;
+- shared-resource export does not add another Program readback;
 - a warmed 1080p readback allocation regression remains below 1 MiB across 64 readbacks, which is far below one 8,294,400-byte RGBA frame per iteration.
 
 These tests validate managed ownership and allocation behavior. They do not establish physical CUDA timing, DMA behavior, driver qualification or sustained hardware production performance.
