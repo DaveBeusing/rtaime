@@ -169,8 +169,9 @@ public sealed class V1CombinedReferencePerformanceTests
         }
         stopwatch.Stop();
 
+        Assert.NotNull(runtime.Snapshot.CompositingLayers);
         var bitmapLayer = Assert.Single(
-            runtime.Snapshot.CompositingLayers,
+            runtime.Snapshot.CompositingLayers!,
             layer => layer.LayerId == V1RuntimeHostService.BitmapGraphicsLayerId);
         Assert.Equal(-2.5, bitmapLayer.RotationDegrees, 6);
         Assert.NotNull(bitmapLayer.ProcessingNode);
