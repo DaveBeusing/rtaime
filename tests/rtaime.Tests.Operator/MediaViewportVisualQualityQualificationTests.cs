@@ -175,6 +175,19 @@ public sealed class MediaViewportVisualQualityQualificationTests
 		Assert.Contains("OpenSharedResource", source, StringComparison.Ordinal);
 	}
 
+	[Fact]
+	public void Gpu_surface_fails_open_and_releases_resources_for_graphics_recovery()
+	{
+		var root = FindRepositoryRoot();
+		var source = File.ReadAllText(Path.Combine(root, "src", "Hosts", "rtaime.Operator", "Controls", "GpuMonitorPresentationSurface.cs"));
+
+		Assert.Contains("UnloadContent += OnUnloadContent", source, StringComparison.Ordinal);
+		Assert.Contains("CloseSharedResource();", source, StringComparison.Ordinal);
+		Assert.Contains("GPU presentation failed · CPU/WPF fallback", source, StringComparison.Ordinal);
+		Assert.Contains("VisualTreeHelper.GetDpi", source, StringComparison.Ordinal);
+		Assert.Contains("OpenSharedResource", source, StringComparison.Ordinal);
+	}
+
 	private static string FindRepositoryRoot()
 	{
 		DirectoryInfo? directory = new(AppContext.BaseDirectory);
