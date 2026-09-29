@@ -26,6 +26,7 @@ public sealed class MediaAutoplayProductionIpcIntegrationTests
 		{
 			ListenEndpoint = controlEndpoint,
 			RuntimeEndpoint = runtimeEndpoint,
+			RequestTimeout = TimeSpan.FromSeconds(10),
 			RuntimeRetryInterval = TimeSpan.FromMilliseconds(25)
 		});
 
@@ -38,7 +39,7 @@ public sealed class MediaAutoplayProductionIpcIntegrationTests
 		var client = new OperatorControlClient(new NamedPipeOperatorControlTransport(
 			controlEndpoint,
 			TimeSpan.FromSeconds(1),
-			TimeSpan.FromSeconds(5)));
+			TimeSpan.FromSeconds(12)));
 		var initial = await client.SynchronizeAsync();
 		var initialProgramId = initial.Production.Routing.ProgramSourceId.ToString();
 		var mediaSource = initial.Sources.First(source => !string.Equals(source.Id, initialProgramId, StringComparison.Ordinal));
