@@ -39,6 +39,17 @@ public sealed class MediaScopeAnalysisTests
 	}
 
 	[Fact]
+	public void Difference_is_deterministic_for_compatible_inputs()
+	{
+		var a = CreateFrame(2, 1, (_, _) => ((byte)10, (byte)40, (byte)100, (byte)255));
+		var b = CreateFrame(2, 1, (_, _) => ((byte)30, (byte)10, (byte)90, (byte)255));
+
+		var difference = MediaDifference.CreateRgba(a, b);
+
+		Assert.Equal(new byte[] { 20, 30, 10, 255, 20, 30, 10, 255 }, difference);
+	}
+
+	[Fact]
 	public void Difference_accepts_matching_authoritative_semantics()
 	{
 		var a = CreateFrame(8, 4, (_, _) => ((byte)0, (byte)0, (byte)0, (byte)255)).Descriptor;
