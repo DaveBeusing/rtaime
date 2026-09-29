@@ -48,6 +48,7 @@ The NVIDIA CUDA backend uses direct managed P/Invoke to the CUDA Driver API. It 
 - `gpu.rgba.composite`
 - `gpu.transition.cut`
 - `gpu.transition.dissolve`
+- `gpu.monitoring.shared-resource` on eligible hardware-accelerated device-resident backends
 
 A single processing resource is advertised as:
 
@@ -60,7 +61,7 @@ The capability descriptors currently advertise the two V1 development formats:
 - 1080p50 RGBA8
 - 1080p59.94 RGBA8
 
-The generic `CapabilityRequirementMatcher` can match these capabilities without any GPU-specific Control or Planning implementation.
+The generic `CapabilityRequirementMatcher` can match these capabilities without any GPU-specific Control or Planning implementation. The managed-reference backend deliberately does not advertise `gpu.monitoring.shared-resource`; it remains host-backed reference behavior and must not impersonate hardware sharing capability.
 
 ## Backend evidence model
 
@@ -153,6 +154,16 @@ This keeps raw GPU allocations inside the backend implementation and prevents ve
 Program host readback now has a separate explicit lifetime. `GpuProcessingProvider.RentReadback` fills a fixed-capacity reusable host buffer and returns a reference-counted `GpuReadbackLease`. CUDA implements the path through `ReadbackInto`, copying device memory directly into the caller-supplied reusable buffer. RuntimeHost, monitoring and recording release retained references deterministically; the buffer returns to the readback pool only after the last consumer releases it.
 
 The legacy allocating `Readback` API remains for compatibility and focused semantic tests. It is not used by the RuntimeHost Program hot path. Detailed ownership rules are recorded in [ProgramFrameMemoryOwnership.md](ProgramFrameMemoryOwnership.md).
+
+## Shared monitoring resource leases
+
+`GpuProcessingProvider.TryExportMonitoringResource` establishes a bounded read-only monitoring lease over an already materialized GPU frame. The export path reuses the existing `SurfaceId`, `VideoFormat`, storage-domain and generation semantics but publishes a dedicated rtaime-owned `MonitoringResourceId`. Stable monitoring contracts do not expose `OpaqueSurfaceHandle`, CUDA pointers or driver-specific handle types.
+
+The provider retains the backing surface while any exported monitoring lease references it. Disposing the original `GpuFrame` therefore defers backend release until the last monitoring lease is released. Export is bounded to two active resources; capacity exhaustion is observable and returns a normal unavailable-for-this-frame result rather than blocking or failing Program execution.
+
+Shared monitoring resource identity is process-neutral contract metadata, not a claim that the current Operator can already import the resource into Direct3D. The current Operator presentation remains the bounded CPU/WPF fallback. A later provider-backed presentation adapter can resolve/import an eligible resource without changing Control authority, decoding or Program composition.
+
+CUDA device allocations and all driver interop remain private to `rtaime.Provider.Gpu`. The shared-resource export operation itself performs no GPU-to-CPU readback. Hosted CI proves the contract/lifetime semantics only; physical CUDA resource interoperability remains `UNVERIFIED` until retained evidence from an approved reference system exists.
 
 ## Static RGBA source
 
