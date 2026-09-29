@@ -382,7 +382,9 @@ public class MonitorView : UserControl
 		var source = diagnostics.SourceWidth > 0 && diagnostics.SourceHeight > 0
 			? $"{diagnostics.SourceWidth}×{diagnostics.SourceHeight}"
 			: "UNAVAILABLE";
-		var target = _renderTargetStabilizer.Active is { } active ? $"{active.PixelWidth}×{active.PixelHeight}" : "UNAVAILABLE";
+		var target = _viewportWidthDip > 0 && _viewportHeightDip > 0
+			? $"{Math.Max(1, (int)Math.Round(_viewportWidthDip * _dpiScaleX))}×{Math.Max(1, (int)Math.Round(_viewportHeightDip * _dpiScaleY))}"
+			: "UNAVAILABLE";
 		var scale = _presentationRect.Scale > 0 ? $"{_presentationRect.Scale * 100:0.#}%" : "UNAVAILABLE";
 		return $"FRAME {frame}  PTS {pts}  MEDIA {diagnostics.PresentationTime}  RATE {diagnostics.Rate}\n" +
 			$"SOURCE {source}  TARGET {target}  SCALE {scale}  MODE {ZoomMode}\n" +
