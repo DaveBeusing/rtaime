@@ -336,6 +336,7 @@ internal sealed class ProductionCgTextRenderer
 	private static Color ToDrawingColor(V1CgColor color) =>
 		Color.FromArgb(color.Alpha, color.Red, color.Green, color.Blue);
 
+	[SupportedOSPlatform("windows")]
 	private static GraphicsPath RoundedRectangle(RectangleF rectangle, float radius)
 	{
 		var diameter = Math.Min(radius * 2, Math.Min(rectangle.Width, rectangle.Height));
