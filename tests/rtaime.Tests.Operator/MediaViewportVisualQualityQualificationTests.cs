@@ -146,6 +146,33 @@ public sealed class MediaViewportVisualQualityQualificationTests
 		Assert.DoesNotContain("<Viewbox", theme, StringComparison.Ordinal);
 		var document = XDocument.Parse(theme);
 		Assert.Single(document.Descendants(), element => element.Name.LocalName == "Image");
+		Assert.Single(document.Descendants(), element => element.Name.LocalName == "GpuMonitorPresentationSurface");
+	}
+
+	[Fact]
+	public void Clean_program_reuses_program_gpu_frame_without_operator_overlays()
+	{
+		var root = FindRepositoryRoot();
+		var xaml = File.ReadAllText(Path.Combine(root, "src", "Hosts", "rtaime.Operator", "ProgramOutputWindow.xaml"));
+		var document = XDocument.Parse(xaml);
+		var gpuSurface = Assert.Single(document.Descendants(), element => element.Name.LocalName == "GpuMonitorPresentationSurface");
+		var gpuFrameAttribute = Assert.Single(gpuSurface.Attributes(), attribute => attribute.Name.LocalName == "GpuFrame");
+
+		Assert.Contains("ProgramGpuFrame", gpuFrameAttribute.Value, StringComparison.Ordinal);
+		Assert.Single(document.Descendants(), element => element.Name.LocalName == "Image");
+		Assert.DoesNotContain(document.Descendants(), element => element.Name.LocalName is "RtaimePixelGridOverlay" or "RtaimeMonitorPresentation");
+		Assert.DoesNotContain("Diagnostics", xaml, StringComparison.OrdinalIgnoreCase);
+	}
+
+	[Fact]
+	public void Gpu_monitor_surface_does_not_materialize_cpu_bitmaps()
+	{
+		var root = FindRepositoryRoot();
+		var source = File.ReadAllText(Path.Combine(root, "src", "Hosts", "rtaime.Operator", "Controls", "GpuMonitorPresentationSurface.cs"));
+
+		Assert.DoesNotContain("BitmapSource", source, StringComparison.Ordinal);
+		Assert.DoesNotContain("CopyPixels", source, StringComparison.Ordinal);
+		Assert.Contains("OpenSharedResource", source, StringComparison.Ordinal);
 	}
 
 	private static string FindRepositoryRoot()
