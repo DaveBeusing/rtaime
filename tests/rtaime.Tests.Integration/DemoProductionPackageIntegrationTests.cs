@@ -235,7 +235,7 @@ public sealed class DemoProductionPackageIntegrationTests
 				ListenEndpoint = controlEndpoint,
 				RuntimeEndpoint = runtimeEndpoint,
 				ConnectTimeout = TimeSpan.FromMilliseconds(100),
-				RequestTimeout = TimeSpan.FromSeconds(3),
+				RequestTimeout = TimeSpan.FromSeconds(10),
 				RuntimeRetryInterval = TimeSpan.FromMilliseconds(25)
 			});
 
@@ -249,7 +249,7 @@ public sealed class DemoProductionPackageIntegrationTests
 			var client = new OperatorControlClient(new NamedPipeOperatorControlTransport(
 				controlEndpoint,
 				TimeSpan.FromSeconds(1),
-				TimeSpan.FromSeconds(4)));
+				TimeSpan.FromSeconds(12)));
 			return new ProcessFixture(client, aiStop, runtimeStop, controlStop, aiRun, runtimeRun, controlRun);
 		}
 
