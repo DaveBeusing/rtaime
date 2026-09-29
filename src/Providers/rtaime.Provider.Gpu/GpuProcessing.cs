@@ -685,6 +685,9 @@ public sealed class GpuProcessingProvider : IDisposable
     public int UnreleasedBackendSurfaceCount =>
         Volatile.Read(ref _observableUnreleasedBackendSurfaceCount);
 
+    public int ActiveSharedMonitoringResourceCount =>
+        Volatile.Read(ref _observableActiveSharedMonitoringResourceCount);
+
     public IReadOnlyList<GpuObservation> Observations => _observations.Snapshot();
     public ulong OverwrittenObservationCount => _observations.OverwrittenCount;
     public GpuReadbackPoolStatistics ReadbackPoolStatistics => _readbackPool.Statistics;
