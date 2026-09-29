@@ -134,7 +134,7 @@ public sealed class GpuMonitorPresentationSurface : DrawingSurface
 			},
 			vertexBytecode.Span);
 		_vertexBuffer = e.Device.CreateBuffer(
-			Marshal.SizeOf<MonitorVertex>() * 4,
+			checked((uint)(Marshal.SizeOf<MonitorVertex>() * 4)),
 			BindFlags.VertexBuffer,
 			ResourceUsage.Dynamic,
 			CpuAccessFlags.Write);
@@ -143,7 +143,7 @@ public sealed class GpuMonitorPresentationSurface : DrawingSurface
 			BindFlags.ConstantBuffer,
 			ResourceUsage.Dynamic,
 			CpuAccessFlags.Write);
-		_linearSampler = e.Device.CreateSamplerState(SamplerDescription.Default);
+		_linearSampler = e.Device.CreateSamplerState(SamplerDescription.LinearClamp);
 		_pointSampler = e.Device.CreateSamplerState(SamplerDescription.PointClamp);
 		Invalidate();
 	}
@@ -185,14 +185,14 @@ public sealed class GpuMonitorPresentationSurface : DrawingSurface
 
 			e.Context.IASetPrimitiveTopology(PrimitiveTopology.TriangleStrip);
 			e.Context.IASetInputLayout(_inputLayout);
-			e.Context.IASetVertexBuffer(0, _vertexBuffer, Marshal.SizeOf<MonitorVertex>());
+			e.Context.IASetVertexBuffer(0, _vertexBuffer, checked((uint)Marshal.SizeOf<MonitorVertex>()));
 			e.Context.VSSetShader(_vertexShader);
 			e.Context.PSSetShader(_pixelShader);
 			e.Context.PSSetShaderResource(0, _sharedView!);
 			e.Context.PSSetConstantBuffer(0, _colorBuffer);
 			e.Context.PSSetSampler(0, geometry.PointSampling ? _pointSampler : _linearSampler);
 			e.Context.Draw(4, 0);
-			e.Context.PSSetShaderResource(0, null);
+			e.Context.PSUnsetShaderResource(0);
 
 			Monitor?.SetGpuPresentationState(
 				true,
@@ -309,7 +309,7 @@ public sealed class GpuMonitorPresentationSurface : DrawingSurface
 		using var dxgiDevice = device.QueryInterface<IDXGIDevice>();
 		using var adapter = dxgiDevice.GetAdapter();
 		using var adapter1 = adapter.QueryInterface<IDXGIAdapter1>();
-		var luid = adapter1.Description1.AdapterLuid;
+		var luid = adapter1.Description1.Luid;
 		return ((long)luid.HighPart << 32) | luid.LowPart;
 	}
 
