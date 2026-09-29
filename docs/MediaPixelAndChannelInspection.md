@@ -4,26 +4,38 @@ The Operator monitor supports non-destructive per-pixel inspection on the existi
 
 ## Coordinate semantics
 
-Pointer positions are converted from WPF device-independent coordinates to physical pixels using the active DPI scale, then mapped through the same `MediaPresentationRect` used for Fit, Fill, pixel-perfect, free zoom and pan. The mapped coordinate is floored to the containing source pixel. Letterbox/pillarbox areas and coordinates outside cropped presentation bounds report `OUTSIDE IMAGE`.
+Pointer positions are converted from WPF device-independent coordinates to physical pixels using the active DPI scale, then mapped through the same `MediaPresentationRect` used for Fit, Fill, Pixel Perfect, free zoom and pan. Letterbox/pillarbox areas and coordinates outside cropped presentation bounds report `OUTSIDE IMAGE`.
+
+When a presentable shared GPU resource exists, the presentation geometry uses that resource's full video dimensions. The inspector therefore keeps the full-resolution GPU source coordinate even though its current value sampler remains bounded to the CPU monitoring payload.
 
 ## Sample semantics
 
-The current WPF monitoring fallback surface is BGRA32 after the monitoring display transform. Pixel inspection therefore reports **DISPLAY CODE** values, not fabricated source-code values. The compact readout exposes source X/Y plus R, G, B, A and Rec.709/sRGB luma coefficients (Y' = 0.2126 R + 0.7152 G + 0.0722 B).
+The existing CPU fallback surface is BGRA32 after `MonitoringDisplayTransform`. Pixel inspection reports **DISPLAY CODE** evidence, not fabricated production source-code values.
 
-Sampling reads only a 1x1 rectangle from the already-present monitoring bitmap. The four-byte sampling buffer is thread-local and reused. Pointer sampling is bounded to approximately 30 Hz. Unsupported bitmap formats fail explicitly instead of triggering a full-frame conversion.
+Sampling still reads only a 1×1 rectangle from the already-present CPU monitoring bitmap. No full-resolution GPU readback, staging texture or ROI transfer is introduced. When the visible GPU resource is higher resolution than the 320×180 fallback, the full-resolution source coordinate is deterministically mapped to the corresponding bounded monitoring sample. The readout keeps the full-resolution X/Y coordinate while the value detail identifies the bounded monitoring sample.
+
+The four-byte sampling buffer is thread-local and reused. Pointer sampling is bounded to approximately 30 Hz. Unsupported bitmap formats fail explicitly instead of triggering a full-frame conversion.
 
 ## Alpha and grid
 
-The media presentation has a checkerboard beneath the image so meaningful transparency remains visible. The source-aligned pixel grid is rendered only when the effective presentation scale reaches 8 physical display pixels per source pixel. Grid drawing is clipped to the visible source extent and does not alter the media bitmap.
+The shared monitor keeps its checkerboard beneath the media presentation so meaningful transparency remains visible. The source-aligned pixel grid is rendered only when the effective presentation scale reaches 8 physical display pixels per full-resolution source pixel. Grid drawing is clipped to the visible source extent and does not alter either the GPU resource or CPU bitmap.
 
 ## Channel modes
 
-The viewer-local model defines RGB, Red, Green, Blue, Alpha and Luma inspection modes. The current implementation exposes exact component values in the inspector. Full-frame channel-isolation rendering is intentionally not performed through a CPU bitmap conversion; it requires the GPU presentation/sampling path before it can be enabled without violating the low-copy monitoring requirement.
+The viewer-local model defines RGB, Red, Green, Blue, Alpha and Luma inspection modes. The compact inspector exposes component values from the bounded display-code sample.
 
-## Shared GPU monitoring boundary
+Full-frame channel-isolation rendering, GPU scopes and full-resolution ROI sampling are intentionally not implemented by the GPU-resident presentation path. They require separate qualified GPU processing capabilities and must not be approximated through a new CPU full-frame conversion.
 
-The monitoring contract can now carry a provider-neutral read-only shared GPU resource descriptor alongside, or for an explicitly eligible subscriber instead of, the bounded CPU Program payload. This foundation preserves source format, color semantics, frame timing, generation and resource identity without exposing CUDA pointers or vendor-specific handle types.
+## Shared GPU presentation boundary
 
-Pixel inspection, channel-isolation rendering and technical scopes do not consume that resource yet. Until the Operator provider-backed/Direct3D presentation adapter is implemented and qualified, those tools continue to operate on the existing CPU/WPF fallback payload. The presence of a shared-resource descriptor must therefore not be presented as GPU pixel-sampling or GPU scope qualification.
+Monitoring contract version 1.3 can carry a read-only shared GPU resource with Windows graphics presentation metadata alongside the bounded CPU fallback. `GpuMonitorPresentationSurface` consumes that resource for Preview and Program presentation when adapter/resource validation succeeds.
 
-A later GPU inspection path must reuse the shared monitoring resource model rather than introduce another decoder, Program renderer or full-resolution Program readback.
+The presentation surface does not expose CUDA pointers, mutate the shared resource, create a second decoder or become Program authority. The existing CPU payload remains the source for pixel values, scopes and Difference analysis; it is not used to build the visible full-resolution GPU image.
+
+Clean Program reuses the same Program GPU resource but intentionally excludes pixel inspection and diagnostic overlays.
+
+## Qualification boundary
+
+Automated tests cover physical coordinate mapping, Fit/Fill/Pixel Perfect geometry, DPI conversion, full-resolution-to-bounded-sample mapping and the absence of CPU bitmap materialization in the GPU presentation control.
+
+Exact full-resolution pixel-value inspection remains unqualified because the current package intentionally does not add GPU ROI readback. Physical NVIDIA/CUDA/D3D11 validation remains reference-hardware evidence rather than a claim inferred from software-only tests.
