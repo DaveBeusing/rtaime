@@ -765,19 +765,22 @@ See docs/OperatorWorkspaces.md for the complete workspace, Quick Controls, short
 
 ## Preview / Program production monitors
 
-Preview and Program retain separate `PreviewViewer` and `ProgramViewer` role controls over the reusable `MonitorView` state contract. Their structural presentation is centralized in `RtaimeMonitorPresentation`: header geometry, monitoring frame surface, format/zoom chrome, Safe Area/Center Mark/Grid overlays, timecode, unavailable-frame presentation and shared overlay toggles are defined once. Role-specific header/status/footer content is supplied through explicit presentation slots, so common visual changes do not require parallel Preview/Program XAML edits. Both monitors consume the existing independent monitoring bitmap projection; neither creates a decoder, playback session or frame transport.
+Preview and Program retain separate `PreviewViewer` and `ProgramViewer` role controls over the reusable `MonitorView` state contract. Their structural presentation remains centralized in `RtaimeMonitorPresentation`: header geometry, media viewport, format/zoom chrome, Safe Area/Center Mark/Grid overlays, timecode, unavailable-frame presentation and shared overlay toggles are defined once.
 
-Each monitor presents the confirmed source identity, the authoritative Runtime video format, monitoring-surface status and the current presentation zoom. The Runtime health contract currently exposes resolution, frame rate and pixel format but no verified color-space value, so the monitor header shows color space explicitly as `N/A` rather than synthesizing metadata.
+The media viewport now has two mutually compatible presentation paths. `GpuMonitorPresentationSurface` is preferred when the monitoring observation carries a presentable read-only Windows graphics resource on the same adapter. The existing frozen WPF `Image` remains underneath as the deterministic fallback. Both paths consume the same monitoring stream and `MonitorView` geometry; neither creates a decoder, playback session, second monitoring subscriber or production renderer.
 
-Fit, 50 percent and 100 percent modes affect only WPF presentation of the already received monitoring bitmap. Safe Area, Center Mark and Grid are independent overlay layers above the image surface and likewise do not mutate Runtime or media state.
+Preview resource selection remains driven by authoritative Preview routing. Program resource identity remains tied to the actual post-composite Runtime monitoring frame. A GPU capability or descriptor is never interpreted as production authority.
 
-Preview reuses the existing Media Deck and Timeline commands for play/pause, stop, IN/OUT and cue navigation. Those controls are enabled only when the loaded Media Deck source identity matches the confirmed Preview source. The centralized keyboard registry applies the same source guard, preventing Preview transport shortcuts from accidentally controlling media that is no longer on Preview. J/L remain unbound because deterministic shuttle semantics are not exposed by the existing Media Deck contract.
+Fit, Fill, 25%, 50%, 100%, 200%, 400%, 800% and free zoom/pan operate through the same physical-pixel `MediaPresentationGeometry`. At 100%, one full-resolution shared-resource source pixel maps to one physical display pixel. Normal fractional scaling uses linear GPU sampling; integral/high-zoom inspection uses point sampling. Safe Area, Center Mark, Grid and diagnostics remain independent WPF overlay layers and do not cause another media resample.
 
-Program contains no Preview transport bindings. Its `ON AIR` presentation is derived from the existing observed Program monitor state being `LIVE`, while the separate local Clean Program Output state remains visible beside it. This does not claim that an external transmission path is live; the top-bar external LIVE / ON AIR state remains explicitly unverified.
+Preview reuses the existing Media Deck and Timeline commands for play/pause, stop, IN/OUT and cue navigation. Those controls remain enabled only when the loaded Media Deck source identity matches the confirmed Preview source. Program contains no Preview transport bindings.
 
-Monitor fullscreen is transient Shell presentation state. It maximizes the selected monitor, collapses surrounding presentation regions and uses the existing Operator fullscreen window mode. Exiting fullscreen restores the prior viewer mode and center-layout state. No second playback or monitoring instance is created.
+Monitor fullscreen remains transient Shell presentation state. It maximizes the selected monitor and reuses the same monitor presentation instance/state. No second playback or monitoring instance is created.
 
 Timecode is displayed only when the loaded Media Deck source identity matches the source currently shown by that monitor. Other sources show an explicit unavailable timecode rather than borrowing unrelated transport state.
+
+Clean Program reuses `ProgramGpuFrame` and `ProgramImage` from the same `OperatorMonitoringViewModel`. Its window contains no diagnostics HUD, guides, pixel grid, scopes, comparison or inspection overlays. GPU open/device/adapter failures leave the existing Program WPF fallback visible.
+
 ## Show Control
 
 The existing SCENES & CUES region includes a Show Control tab beside Media Cues. Its RUN view presents cue-list selection, the compact cue stack, authoritative execution state, current cue/action evidence, ARM, GO, CANCEL and recovery acknowledgement. Cue row selection is intentionally non-destructive.
@@ -799,21 +802,25 @@ The integration does not claim full NLE editing. The existing timeline retains i
 
 ## High-fidelity media presentation
 
-Operator monitoring uses the existing `RtaimeMonitorPresentation` path as the single shared presentation surface for Preview and Program. Presentation sizing is viewport-owned and never mutates source media resolution or Runtime media state.
+Operator monitoring uses `RtaimeMonitorPresentation` as the single shared visual composition point for Preview and Program. Presentation sizing is viewport-owned and never mutates source media resolution or Runtime media state.
 
-The default mode is **FIT**: the complete source remains visible, aspect ratio is preserved, and letterbox/pillarbox space belongs to the monitor canvas. **FILL** is explicit and may crop only excess image area. Inspection zoom supports 25%, 50%, 100%, 200% and 400%; 100% represents the pixel-perfect policy basis. Presentation geometry is isolated in `MediaPresentationGeometry`, including physical-DPI conversion and bounded pan mathematics, so correctness can be qualified independently of WPF rendering or GPU availability.
+The default mode is **FIT**: the complete source remains visible, aspect ratio is preserved, and letterbox/pillarbox space belongs to the monitor canvas. **FILL** is explicit and may crop only excess image area. **100%** is Pixel Perfect and maps one source pixel to one physical display pixel. Free zoom/pan and the fixed zoom levels use the same bounded physical geometry.
 
-The shared monitor no longer nests the monitoring image in a `Viewbox`. The monitoring `ImageSource` is presented directly by one WPF image surface with `HighQuality` bitmap scaling, avoiding the previous Viewbox-plus-image scaling chain. The original monitoring bitmap remains reusable across viewport changes; resize does not reload media, restart decoding, or permanently downsample the source.
+When a presentable shared resource exists, source dimensions come from its full production video format rather than the 320×180 fallback payload. The D3D11 presentation surface is sized in physical pixels and placed back into WPF with the inverse DPI scale, so the media is sampled exactly once. There is no nested `Viewbox` or intermediate full-resolution bitmap scale.
 
-DPI qualification covers 125%, 150% and 200% physical viewport conversion. The geometry seam is intentionally independent from Runtime/Media contracts so a future GPU-backed presentation adapter can consume the same Fit/Fill/PixelPerfect/zoom/pan policy without exposing WPF or vendor-specific resource types through stable contracts.
+The GPU surface opens the existing read-only monitoring resource, applies the same qualified source-to-sRGB transfer/range intent as the CPU fallback and chooses linear or point sampling deliberately. Unknown/incomplete color metadata remains passthrough rather than being fabricated.
 
-Safe-area, center-mark and grid overlays remain separate layers above the media image and therefore do not cause another media resample. Existing format and zoom chrome remains presentation-only.
+The frozen WPF image remains available for unsupported sharing, resource-open failure, adapter mismatch, device recreation and resource replacement. When GPU presentation is unavailable entirely, the fallback retains the previously qualified monitor-grade behavior.
 
+DPI qualification covers the common 100%, 125%, 150%, 175% and 200% physical viewport conversions. Resize, maximize/restore and monitor presentation changes reuse the same geometry seam rather than reloading media or starting another decode path.
+
+Safe-area, center-mark, pixel grid and technical overlays remain separate layers above the media presentation. Clean Program deliberately omits those overlays while reusing the same Program GPU resource/fallback image.
 
 ## Frame diagnostics HUD
 
-Preview and Program provide an optional compact frame diagnostics HUD. Monitoring `FrameTiming` is the authority for sequence identity and presentation timestamp; media time and nominal rate are derived only from its declared timebase. Unknown values remain `UNAVAILABLE`.
+Preview and Program provide an optional compact frame diagnostics HUD. Monitoring `FrameTiming` remains the authority for sequence identity and presentation timestamp; unknown timing values remain `UNAVAILABLE`.
 
-The HUD reports the monitoring source resolution, physical presentation target, presentation scale/mode, color display transform and the current `CPU/WPF` high-quality fallback presentation path. Repeated, late and discontinuity state is not inferred from sequence gaps or UI cadence because the current monitoring contract does not carry authoritative semantics for those states.
+The HUD reports source resolution, physical presentation target, presentation scale/mode, color display transform and the **actual active presentation path**. Successful GPU rendering reports the D3D11 resource dimensions and sampler mode. Capability alone does not claim GPU presentation: failed open/draw/device state reports the CPU/WPF fallback instead.
 
-The HUD presentation is rate-limited to at most 5 Hz independently of monitoring frame cadence. When disabled, diagnostics snapshot changes return before formatting or HUD dependency-property mutation. Runtime-wide output FPS, frame processing time, dropped-frame evidence and qualified CPU/GPU telemetry remain owned by the existing Runtime performance snapshot and are not duplicated by a second viewer collector.
+The HUD remains rate-limited to at most 5 Hz independently of monitoring cadence. Runtime-wide output FPS, frame processing time, dropped-frame evidence and qualified CPU/GPU telemetry remain owned by the existing Runtime performance snapshot and are not duplicated by the viewer.
+
