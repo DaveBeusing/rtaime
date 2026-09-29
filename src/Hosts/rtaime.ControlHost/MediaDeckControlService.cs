@@ -106,6 +106,16 @@ public sealed class MediaDeckControlService
 			await EnsureMarkersLoadedAsync(runtime, cancellationToken).ConfigureAwait(false);
 			return Compose(runtime);
 		}
+		catch (TimeoutException exception)
+		{
+			return MediaDeckSnapshot.Failed("control.media_deck.open_timeout", exception.Message);
+		}
+		catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+		{
+			return MediaDeckSnapshot.Failed(
+				"control.media_deck.open_timeout",
+				"RuntimeHost media-deck open request exceeded the configured request timeout.");
+		}
 		catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or IOException or InvalidDataException)
 		{
 			return MediaDeckSnapshot.Failed("control.media_deck.open_failed", exception.Message);
