@@ -185,7 +185,7 @@ public sealed class GpuMonitorPresentationSurface : DrawingSurface
 
 			e.Context.IASetPrimitiveTopology(PrimitiveTopology.TriangleStrip);
 			e.Context.IASetInputLayout(_inputLayout);
-			e.Context.IASetVertexBuffer(0, _vertexBuffer, checked((uint)Marshal.SizeOf<MonitorVertex>()));
+			e.Context.IASetVertexBuffer(0, _vertexBuffer!, checked((uint)Marshal.SizeOf<MonitorVertex>()));
 			e.Context.VSSetShader(_vertexShader);
 			e.Context.PSSetShader(_pixelShader);
 			e.Context.PSSetShaderResource(0, _sharedView!);
