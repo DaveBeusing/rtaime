@@ -451,7 +451,11 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		_recorder = new ProgramRecorder(recordingWriter);
 		_recordingBridge = new RuntimeRecordingBridge(_recorder);
 		_monitoringHub = new RuntimeMonitoringHub();
-		_monitoringTap = new RuntimeMonitoringTap(_monitoringHub);
+		_monitoringTap = new RuntimeMonitoringTap(
+			_monitoringHub,
+			_gpu.CanExportSharedMonitoringResources
+				? MonitoringSharedResourceCapabilityState.Available
+				: MonitoringSharedResourceCapabilityState.Unavailable);
 	}
 
 	public IReadOnlyList<ProviderDescriptor> ProviderDescriptors =>
@@ -956,12 +960,36 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 					var videoSyncEvent = avSyncEnabled
 						? _motionTimingTestSignal.InspectSyncEvent(output.Descriptor.Timing)
 						: default;
-					_monitoringTap.TryCapture(
-						monitoringSources,
-						committedSource,
-						pixels,
-						_format,
-						output.Descriptor.Timing);
+					GpuSharedMonitoringResourceLease? sharedMonitoringResource = null;
+					if (monitoringSources is not null)
+					{
+						try
+						{
+							_gpu.TryExportMonitoringResource(output, out sharedMonitoringResource);
+						}
+						catch (Exception exception)
+						{
+							Observe($"monitoring.gpu_resource.export_failed:{exception.GetType().Name}");
+							sharedMonitoringResource?.Dispose();
+							sharedMonitoringResource = null;
+						}
+					}
+
+					try
+					{
+						_monitoringTap.TryCapture(
+							monitoringSources,
+							committedSource,
+							pixels,
+							_format,
+							output.Descriptor.Timing,
+							sharedMonitoringResource);
+						sharedMonitoringResource = null;
+					}
+					finally
+					{
+						sharedMonitoringResource?.Dispose();
+					}
 
 					RecordingEnqueueResult? recording = null;
 					if (recordingActive)
@@ -2018,6 +2046,9 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		var readback = _gpu.ReadbackPoolStatistics;
 		if (readback.ActiveBuffers != 0)
 			throw new InvalidOperationException($"RuntimeHost shutdown retained '{readback.ActiveBuffers}' active Program readback buffer lease(s).");
+		var sharedMonitoring = _gpu.SharedMonitoringResourceStatistics;
+		if (sharedMonitoring.ActiveResources != 0)
+			throw new InvalidOperationException($"RuntimeHost shutdown retained '{sharedMonitoring.ActiveResources}' active shared monitoring resource lease(s).");
 		_gpu.Dispose();
 		_hardwareTelemetry.Dispose();
 	}
