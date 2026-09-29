@@ -70,6 +70,8 @@ Marker writes use optimistic storage versions and remain outside the Runtime med
 
 The WPF file dialog selects an MP4 path only. Opening the selected path still crosses the full Client -> ControlHost -> RuntimeHost path.
 
+A downstream Runtime request timeout during media-deck open is returned as a failed `MediaDeckSnapshot` with `control.media_deck.open_timeout`; it does not tear down the Operator-to-ControlHost IPC session. Explicit host-lifecycle cancellation continues to propagate normally.
+
 ## Keyboard controls
 
 The existing production keys remain unchanged:

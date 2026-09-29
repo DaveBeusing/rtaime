@@ -145,7 +145,7 @@ public sealed class MediaViewportVisualQualityQualificationTests
 		Assert.Contains("SnapsToDevicePixels=\"True\"", theme, StringComparison.Ordinal);
 		Assert.DoesNotContain("<Viewbox", theme, StringComparison.Ordinal);
 		var document = XDocument.Parse(theme);
-		Assert.Single(document.Descendants().Where(element => element.Name.LocalName == "Image"));
+		Assert.Single(document.Descendants(), element => element.Name.LocalName == "Image");
 	}
 
 	private static string FindRepositoryRoot()

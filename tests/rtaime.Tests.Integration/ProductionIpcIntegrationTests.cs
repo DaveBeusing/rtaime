@@ -57,6 +57,7 @@ public sealed class ProductionIpcIntegrationTests
 		{
 			ListenEndpoint = controlEndpoint,
 			RuntimeEndpoint = runtimeEndpoint,
+			RequestTimeout = TimeSpan.FromSeconds(10),
 			RuntimeRetryInterval = TimeSpan.FromMilliseconds(25)
 		});
 
@@ -64,7 +65,7 @@ public sealed class ProductionIpcIntegrationTests
 		var controlRun = control.RunAsync(controlStop.Token);
 		await WaitUntilAsync(() => control.Lifecycle.State == ControlHostProcessState.Ready && control.Control?.HasAuthoritativeState == true);
 
-		var transport = new NamedPipeOperatorControlTransport(controlEndpoint, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(5));
+		var transport = new NamedPipeOperatorControlTransport(controlEndpoint, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(12));
 		var client = new OperatorControlClient(transport);
 		var initial = await client.SynchronizeAsync();
 		var sourceA = initial.Sources[0];
@@ -908,7 +909,7 @@ public sealed class ProductionIpcIntegrationTests
 		string roleId,
 		string expectedHealth)
 	{
-		var deadline = DateTime.UtcNow.AddSeconds(10);
+		var deadline = DateTime.UtcNow.AddSeconds(20);
 		OperatorStatusSnapshot? snapshot = null;
 		do
 		{

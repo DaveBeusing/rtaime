@@ -745,6 +745,13 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 				throw new InvalidDataException("ControlHost process identity changed within one IPC request.");
 			return response;
 		}
+		catch (OperationCanceledException exception) when (!cancellationToken.IsCancellationRequested && timeout.IsCancellationRequested)
+		{
+			MarkDisconnected();
+			throw new TimeoutException(
+				$"ControlHost IPC request '{messageType}' exceeded the configured request timeout of {_requestTimeout}.",
+				exception);
+		}
 		catch
 		{
 			MarkDisconnected();

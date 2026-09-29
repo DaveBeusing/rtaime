@@ -148,7 +148,7 @@ public sealed class SupportBundleExporterTests : IDisposable
 
 	private static async Task<string> ReadEntryAsync(ZipArchive archive, string name)
 	{
-		var entry = Assert.Single(archive.Entries.Where(candidate => candidate.FullName == name));
+		var entry = Assert.Single(archive.Entries, candidate => candidate.FullName == name);
 		await using var stream = entry.Open();
 		using var reader = new StreamReader(stream);
 		return await reader.ReadToEndAsync();
