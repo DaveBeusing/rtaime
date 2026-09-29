@@ -365,16 +365,20 @@ public class MonitorView : UserControl
 
 	private static void OnDiagnosticsChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs eventArgs)
 	{
-		var view = (MonitorView)dependencyObject;
-		if (!view.ShowDiagnosticsHud)
+		((MonitorView)dependencyObject).RefreshDiagnosticsHud();
+	}
+
+	private void RefreshDiagnosticsHud()
+	{
+		if (!ShowDiagnosticsHud)
 			return;
 
 		var now = DateTimeOffset.UtcNow;
-		if (view._lastDiagnosticsHudUpdateAt != default && now - view._lastDiagnosticsHudUpdateAt < TimeSpan.FromMilliseconds(200))
+		if (_lastDiagnosticsHudUpdateAt != default && now - _lastDiagnosticsHudUpdateAt < TimeSpan.FromMilliseconds(200))
 			return;
-		view._lastDiagnosticsHudUpdateAt = now;
-		view._diagnosticsHudRefreshCount++;
-		view.SetValue(DiagnosticsHudTextPropertyKey, view.FormatDiagnosticsHud());
+		_lastDiagnosticsHudUpdateAt = now;
+		_diagnosticsHudRefreshCount++;
+		SetValue(DiagnosticsHudTextPropertyKey, FormatDiagnosticsHud());
 	}
 
 	private string FormatDiagnosticsHud()
@@ -544,7 +548,7 @@ public class MonitorView : UserControl
 		SetValue(PresentationOffsetXPropertyKey, _panXPhysical / _dpiScaleX);
 		SetValue(PresentationOffsetYPropertyKey, _panYPhysical / _dpiScaleY);
 		if (ShowDiagnosticsHud)
-			OnDiagnosticsChanged(this, new DependencyPropertyChangedEventArgs(DiagnosticsProperty, Diagnostics, Diagnostics));
+			RefreshDiagnosticsHud();
 
 		SetValue(
 			PresentationInfoPropertyKey,
