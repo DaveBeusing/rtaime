@@ -85,10 +85,9 @@ public sealed class RtaimeMediaScope : Control
 			var count = bins[row * columns + column];
 			if (count == 0) continue;
 			var opacity = Math.Clamp((double)count / maximum, 0.12, 1.0);
-			var densityBrush = brush.Clone();
-			densityBrush.Opacity = opacity;
-			densityBrush.Freeze();
-			context.DrawRectangle(densityBrush, null, new Rect(left + column * cellWidth, row * cellHeight, Math.Max(1, cellWidth), Math.Max(1, cellHeight)));
+			context.PushOpacity(opacity);
+			context.DrawRectangle(brush, null, new Rect(left + column * cellWidth, row * cellHeight, Math.Max(1, cellWidth), Math.Max(1, cellHeight)));
+			context.Pop();
 		}
 	}
 }
