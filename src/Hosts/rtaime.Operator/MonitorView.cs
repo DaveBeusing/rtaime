@@ -21,7 +21,6 @@ public class MonitorView : UserControl
 	private MediaPresentationRect _presentationRect;
 	private DateTimeOffset _lastInspectionAt;
 	private DateTimeOffset _lastDiagnosticsHudUpdateAt;
-	private int _diagnosticsHudRefreshCount;
 
 	private static readonly DependencyPropertyKey PresentationWidthPropertyKey = DependencyProperty.RegisterReadOnly(
 		nameof(PresentationWidth),
@@ -341,7 +340,6 @@ public class MonitorView : UserControl
 	public string InspectionReadout => (string)GetValue(InspectionReadoutProperty);
 	public bool IsPixelGridVisible => (bool)GetValue(IsPixelGridVisibleProperty);
 	public string DiagnosticsHudText => (string)GetValue(DiagnosticsHudTextProperty);
-	internal int DiagnosticsHudRefreshCount => _diagnosticsHudRefreshCount;
 	public bool IsTransportSource => (bool)GetValue(IsTransportSourceProperty);
 	public string DisplayTimecode => (string)GetValue(DisplayTimecodeProperty);
 
@@ -377,7 +375,6 @@ public class MonitorView : UserControl
 		if (_lastDiagnosticsHudUpdateAt != default && now - _lastDiagnosticsHudUpdateAt < TimeSpan.FromMilliseconds(200))
 			return;
 		_lastDiagnosticsHudUpdateAt = now;
-		_diagnosticsHudRefreshCount++;
 		SetValue(DiagnosticsHudTextPropertyKey, FormatDiagnosticsHud());
 	}
 
