@@ -780,6 +780,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		{
 			GpuFrame? gpuA = null;
 			GpuFrame? gpuB = null;
+			GpuFrame? previewMonitoringFrame = null;
 			IReadOnlyList<MaterializedCompositingLayer>? materializedLayers = null;
 			try
 			{
@@ -883,6 +884,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 						gpuFrames.Add(frameA.SourceId, gpuA);
 					if (gpuB is not null)
 						gpuFrames.Add(frameB.SourceId, gpuB);
+					if (monitoringSources is not null)
+						gpuFrames.TryGetValue(committedPreviewSource, out previewMonitoringFrame);
 
 					boundaryTransition = _transition;
 					transitionKind = boundaryTransition?.Intent.Kind;
@@ -978,8 +981,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 					{
 						try
 						{
-							if (gpuFrames.TryGetValue(committedPreviewSource, out var previewFrame))
-								_gpu.TryExportMonitoringResource(previewFrame, out previewSharedMonitoringResource);
+							if (previewMonitoringFrame is not null)
+								_gpu.TryExportMonitoringResource(previewMonitoringFrame, out previewSharedMonitoringResource);
 						}
 						catch (Exception exception)
 						{
