@@ -785,6 +785,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			{
 				CommittedRuntimeExecution execution;
 				MediaSourceId committedSource;
+				MediaSourceId committedPreviewSource;
 				MediaSourceId routedAudioSource;
 				ulong sequence;
 				FrameDescriptor frameA;
@@ -823,6 +824,15 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 							?? throw new InvalidOperationException("Committed execution must contain exactly one Program binding.");
 						committedSource = programBinding.MediaSourceId
 							?? throw new InvalidOperationException("Committed Program binding must contain a media source.");
+						var previewBindings = execution.PreparedExecution.Bindings
+							.Where(binding =>
+								binding.OutputRoleId is null &&
+								binding.MediaSourceId is not null &&
+								binding.MediaSinkId is not null)
+							.ToArray();
+						if (previewBindings.Length != 1)
+							throw new InvalidOperationException("Committed execution must contain exactly one Preview route binding.");
+						committedPreviewSource = previewBindings[0].MediaSourceId!.Value;
 						programOutput = _programOutput ?? throw new InvalidOperationException("RuntimeHost has no bound Program output.");
 						routedAudioSource = _audio.ResolveAudioSource(committedSource);
 						avSyncEnabled = _audio.RoutingState.Mode == AudioRoutingMode.FollowVideo &&
@@ -853,10 +863,19 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 
 					var contentA = ResolveInputContent(frameA);
 					var contentB = ResolveInputContent(frameB);
-					gpuA = RequiresGpuSourceUnsafe(frameA.SourceId, committedSource)
+					monitoringSources = _monitoringTap.CaptureSources(
+						frameA.SourceId,
+						contentA.Pixels,
+						frameB.SourceId,
+						contentB.Pixels,
+						_format,
+						frameA.Timing);
+					gpuA = RequiresGpuSourceUnsafe(frameA.SourceId, committedSource) ||
+						(monitoringSources is not null && frameA.SourceId == committedPreviewSource)
 						? MaterializeInput(frameA, contentA)
 						: null;
-					gpuB = RequiresGpuSourceUnsafe(frameB.SourceId, committedSource)
+					gpuB = RequiresGpuSourceUnsafe(frameB.SourceId, committedSource) ||
+						(monitoringSources is not null && frameB.SourceId == committedPreviewSource)
 						? MaterializeInput(frameB, contentB)
 						: null;
 					var gpuFrames = new Dictionary<MediaSourceId, GpuFrame>();
@@ -870,13 +889,6 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 					(fromFrame, toFrame, gpuTransition, blendWeight, transitionComplete) =
 						ResolveTransition(committedSource, sequence, gpuFrames);
 					materializedLayers = MaterializeLayers(fromFrame.Descriptor.Timing);
-					monitoringSources = _monitoringTap.CaptureSources(
-						frameA.SourceId,
-						contentA.Pixels,
-						frameB.SourceId,
-						contentB.Pixels,
-						_format,
-						fromFrame.Descriptor.Timing);
 
 					AudioMeterObservation audioObservation;
 					bool hasGeneratedSignal;
@@ -960,18 +972,31 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 					var videoSyncEvent = avSyncEnabled
 						? _motionTimingTestSignal.InspectSyncEvent(output.Descriptor.Timing)
 						: default;
-					GpuSharedMonitoringResourceLease? sharedMonitoringResource = null;
+					GpuSharedMonitoringResourceLease? previewSharedMonitoringResource = null;
+					GpuSharedMonitoringResourceLease? programSharedMonitoringResource = null;
 					if (monitoringSources is not null)
 					{
 						try
 						{
-							_gpu.TryExportMonitoringResource(output, out sharedMonitoringResource);
+							if (gpuFrames.TryGetValue(committedPreviewSource, out var previewFrame))
+								_gpu.TryExportMonitoringResource(previewFrame, out previewSharedMonitoringResource);
 						}
 						catch (Exception exception)
 						{
-							Observe($"monitoring.gpu_resource.export_failed:{exception.GetType().Name}");
-							sharedMonitoringResource?.Dispose();
-							sharedMonitoringResource = null;
+							Observe($"monitoring.preview_gpu_resource.export_failed:{exception.GetType().Name}");
+							previewSharedMonitoringResource?.Dispose();
+							previewSharedMonitoringResource = null;
+						}
+
+						try
+						{
+							_gpu.TryExportMonitoringResource(output, out programSharedMonitoringResource);
+						}
+						catch (Exception exception)
+						{
+							Observe($"monitoring.program_gpu_resource.export_failed:{exception.GetType().Name}");
+							programSharedMonitoringResource?.Dispose();
+							programSharedMonitoringResource = null;
 						}
 					}
 
@@ -983,12 +1008,16 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 							pixels,
 							_format,
 							output.Descriptor.Timing,
-							sharedMonitoringResource);
-						sharedMonitoringResource = null;
+							programSharedMonitoringResource,
+							committedPreviewSource,
+							previewSharedMonitoringResource);
+						previewSharedMonitoringResource = null;
+						programSharedMonitoringResource = null;
 					}
 					finally
 					{
-						sharedMonitoringResource?.Dispose();
+						previewSharedMonitoringResource?.Dispose();
+						programSharedMonitoringResource?.Dispose();
 					}
 
 					RecordingEnqueueResult? recording = null;
