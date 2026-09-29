@@ -193,6 +193,9 @@ public sealed class OperatorMonitoringPlaneTests
 		var first = await PublishAsync(0, 70);
 		Assert.True(gpu.IsMonitoringResourceActive(first));
 		var second = await PublishAsync(RuntimeMonitoringTap.SampleStride, 90);
+		var replacementDeadline = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(1);
+		while (gpu.IsMonitoringResourceActive(first) && DateTimeOffset.UtcNow < replacementDeadline)
+			await Task.Delay(10);
 
 		Assert.False(gpu.IsMonitoringResourceActive(first));
 		Assert.True(gpu.IsMonitoringResourceActive(second));
