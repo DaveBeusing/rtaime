@@ -180,8 +180,9 @@ public sealed class WindowsMediaFoundationMp4RecordingWriter :
 		lock (_gate)
 		{
 			EnsureOpenUnsafe();
-			if (!_stagedPayloads.Remove(sample.SequenceNumber, out payload))
+			if (!_stagedPayloads.Remove(sample.SequenceNumber, out var stagedPayload) || stagedPayload is null)
 				throw new InvalidDataException($"MP4 recording payload for sequence '{sample.SequenceNumber}' was not staged.");
+			payload = stagedPayload;
 		}
 
 		try
