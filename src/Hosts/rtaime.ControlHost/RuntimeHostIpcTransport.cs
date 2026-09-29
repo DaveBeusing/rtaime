@@ -743,6 +743,13 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 				MarkConnected(response.HostInstanceId);
 				return response;
 			}
+			catch (OperationCanceledException exception) when (!cancellationToken.IsCancellationRequested && timeout.IsCancellationRequested)
+			{
+				MarkDisconnected();
+				throw new TimeoutException(
+					$"RuntimeHost IPC request '{messageType}' exceeded the configured request timeout of {_requestTimeout}.",
+					exception);
+			}
 			catch
 			{
 				MarkDisconnected();
