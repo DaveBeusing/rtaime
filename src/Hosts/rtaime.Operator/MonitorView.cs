@@ -20,6 +20,7 @@ public class MonitorView : UserControl
 	private readonly MediaRenderTargetStabilizer _renderTargetStabilizer = new();
 	private MediaPresentationRect _presentationRect;
 	private DateTimeOffset _lastInspectionAt;
+	private DateTimeOffset _lastDiagnosticsHudUpdateAt;
 
 	private static readonly DependencyPropertyKey PresentationWidthPropertyKey = DependencyProperty.RegisterReadOnly(
 		nameof(PresentationWidth),
@@ -70,11 +71,21 @@ public class MonitorView : UserControl
 
 	private static readonly DependencyPropertyKey InspectionReadoutPropertyKey = DependencyProperty.RegisterReadOnly(
 		nameof(InspectionReadout), typeof(string), typeof(MonitorView), new PropertyMetadata("PIXEL —"));
+	private static readonly DependencyPropertyKey DiagnosticsHudTextPropertyKey = DependencyProperty.RegisterReadOnly(
+		nameof(DiagnosticsHudText), typeof(string), typeof(MonitorView), new PropertyMetadata("FRAME DIAGNOSTICS — UNAVAILABLE"));
 	private static readonly DependencyPropertyKey IsPixelGridVisiblePropertyKey = DependencyProperty.RegisterReadOnly(
 		nameof(IsPixelGridVisible), typeof(bool), typeof(MonitorView), new PropertyMetadata(false));
 
 	public static readonly DependencyProperty InspectionReadoutProperty = InspectionReadoutPropertyKey.DependencyProperty;
 	public static readonly DependencyProperty IsPixelGridVisibleProperty = IsPixelGridVisiblePropertyKey.DependencyProperty;
+	public static readonly DependencyProperty DiagnosticsHudTextProperty = DiagnosticsHudTextPropertyKey.DependencyProperty;
+
+	public static readonly DependencyProperty DiagnosticsProperty = DependencyProperty.Register(
+		nameof(Diagnostics), typeof(FrameDiagnosticsSnapshot), typeof(MonitorView),
+		new PropertyMetadata(FrameDiagnosticsSnapshot.Unavailable, OnDiagnosticsChanged));
+
+	public static readonly DependencyProperty ShowDiagnosticsHudProperty = DependencyProperty.Register(
+		nameof(ShowDiagnosticsHud), typeof(bool), typeof(MonitorView), new PropertyMetadata(false, OnDiagnosticsChanged));
 
 	public static readonly DependencyProperty FrameProperty = DependencyProperty.Register(
 		nameof(Frame),
@@ -196,12 +207,25 @@ public class MonitorView : UserControl
 		Zoom800Command = new MonitorPresentationCommand(() => ZoomMode = "800%");
 		ToggleFitPixelPerfectCommand = new MonitorPresentationCommand(ToggleFitPixelPerfect);
 		ToggleTechnicalOverlayCommand = new MonitorPresentationCommand(() => ShowTechnicalOverlay = !ShowTechnicalOverlay);
+		ToggleDiagnosticsHudCommand = new MonitorPresentationCommand(() => ShowDiagnosticsHud = !ShowDiagnosticsHud);
 		ShowRgbCommand = new MonitorPresentationCommand(() => InspectionChannel = MediaInspectionChannel.Rgb);
 		ShowRedCommand = new MonitorPresentationCommand(() => InspectionChannel = MediaInspectionChannel.Red);
 		ShowGreenCommand = new MonitorPresentationCommand(() => InspectionChannel = MediaInspectionChannel.Green);
 		ShowBlueCommand = new MonitorPresentationCommand(() => InspectionChannel = MediaInspectionChannel.Blue);
 		ShowAlphaCommand = new MonitorPresentationCommand(() => InspectionChannel = MediaInspectionChannel.Alpha);
 		ShowLumaCommand = new MonitorPresentationCommand(() => InspectionChannel = MediaInspectionChannel.Luma);
+	}
+
+	public FrameDiagnosticsSnapshot Diagnostics
+	{
+		get => (FrameDiagnosticsSnapshot)GetValue(DiagnosticsProperty);
+		set => SetValue(DiagnosticsProperty, value ?? FrameDiagnosticsSnapshot.Unavailable);
+	}
+
+	public bool ShowDiagnosticsHud
+	{
+		get => (bool)GetValue(ShowDiagnosticsHudProperty);
+		set => SetValue(ShowDiagnosticsHudProperty, value);
 	}
 
 	public ImageSource? Frame
@@ -315,6 +339,7 @@ public class MonitorView : UserControl
 	public int SourcePixelHeight => (int)GetValue(SourcePixelHeightProperty);
 	public string InspectionReadout => (string)GetValue(InspectionReadoutProperty);
 	public bool IsPixelGridVisible => (bool)GetValue(IsPixelGridVisibleProperty);
+	public string DiagnosticsHudText => (string)GetValue(DiagnosticsHudTextProperty);
 	public bool IsTransportSource => (bool)GetValue(IsTransportSourceProperty);
 	public string DisplayTimecode => (string)GetValue(DisplayTimecodeProperty);
 
@@ -328,12 +353,41 @@ public class MonitorView : UserControl
 	public ICommand Zoom800Command { get; }
 	public ICommand ToggleFitPixelPerfectCommand { get; }
 	public ICommand ToggleTechnicalOverlayCommand { get; }
+	public ICommand ToggleDiagnosticsHudCommand { get; }
 	public ICommand ShowRgbCommand { get; }
 	public ICommand ShowRedCommand { get; }
 	public ICommand ShowGreenCommand { get; }
 	public ICommand ShowBlueCommand { get; }
 	public ICommand ShowAlphaCommand { get; }
 	public ICommand ShowLumaCommand { get; }
+
+	private static void OnDiagnosticsChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs eventArgs)
+	{
+		var view = (MonitorView)dependencyObject;
+		if (!view.ShowDiagnosticsHud)
+			return;
+
+		var now = DateTimeOffset.UtcNow;
+		if (now - view._lastDiagnosticsHudUpdateAt < TimeSpan.FromMilliseconds(200))
+			return;
+		view._lastDiagnosticsHudUpdateAt = now;
+		view.SetValue(DiagnosticsHudTextPropertyKey, view.FormatDiagnosticsHud());
+	}
+
+	private string FormatDiagnosticsHud()
+	{
+		var diagnostics = Diagnostics ?? FrameDiagnosticsSnapshot.Unavailable;
+		var frame = diagnostics.FrameIndex is { } index ? index.ToString() : "UNAVAILABLE";
+		var pts = diagnostics.PresentationTimestamp is { } timestamp ? timestamp.ToString() : "UNAVAILABLE";
+		var source = diagnostics.SourceWidth > 0 && diagnostics.SourceHeight > 0
+			? $"{diagnostics.SourceWidth}×{diagnostics.SourceHeight}"
+			: "UNAVAILABLE";
+		var target = _renderTargetStabilizer.Active is { } active ? $"{active.PixelWidth}×{active.PixelHeight}" : "UNAVAILABLE";
+		var scale = _presentationRect.Scale > 0 ? $"{_presentationRect.Scale * 100:0.#}%" : "UNAVAILABLE";
+		return $"FRAME {frame}  PTS {pts}  MEDIA {diagnostics.PresentationTime}  RATE {diagnostics.Rate}\n" +
+			$"SOURCE {source}  TARGET {target}  SCALE {scale}  MODE {ZoomMode}\n" +
+			$"COLOR {diagnostics.ColorPath}  TIMING {diagnostics.TimingAuthority.ToString().ToUpperInvariant()}  DISPLAY WPF HIGH QUALITY";
+	}
 
 	private static void OnGridChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs eventArgs)
 	{
