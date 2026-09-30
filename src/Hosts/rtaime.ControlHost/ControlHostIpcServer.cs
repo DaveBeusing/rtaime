@@ -2737,6 +2737,9 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 					evidence,
 					error is { } failure ? new WireFailure(failure.Code, failure.Message) : null,
 					runtimeRole?.NetworkOutput is null ? null : ToWire(runtimeRole.NetworkOutput));
+			})
+			.ToArray();
+	}
 
 	private static WireNetworkOutput ToWire(NetworkOutputHealthSnapshot snapshot) => new(
 		snapshot.TargetId,
@@ -2763,9 +2766,6 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		snapshot.Statistics.QueueDepth,
 		snapshot.LastSuccessfulSendUtc,
 		snapshot.Failure is { } failure ? new WireFailure(failure.Code, failure.Message) : null);
-			})
-			.ToArray();
-	}
 
 	private readonly record struct RuntimeObservation(
 		RuntimeRemoteSnapshot? Snapshot,
