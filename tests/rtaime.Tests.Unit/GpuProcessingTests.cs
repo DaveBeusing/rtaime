@@ -362,7 +362,7 @@ public sealed class GpuProcessingTests
     }
 
     [Fact]
-    public void Shared_monitoring_resources_are_bounded_and_fail_open_when_capacity_is_exhausted()
+    public void Shared_monitoring_resources_are_bounded_and_keep_one_atomic_replacement_pair_of_headroom()
     {
         using var backend = new DeviceResidentTestBackend();
         using var provider = new GpuProcessingProvider(backend);
@@ -370,18 +370,28 @@ public sealed class GpuProcessingTests
         using var first = Upload(provider, SourceA, Solid(1, 2, 3, 255), 1);
         using var second = Upload(provider, SourceB, Solid(4, 5, 6, 255), 2);
         using var third = Upload(provider, OutputSource, Solid(7, 8, 9, 255), 3);
+        using var fourth = Upload(provider, SourceA, Solid(10, 11, 12, 255), 4);
+        using var fifth = Upload(provider, SourceB, Solid(13, 14, 15, 255), 5);
+
+        Assert.Equal(
+            GpuProcessingProvider.PublishedMonitoringResourceSetSize * 2,
+            GpuProcessingProvider.SharedMonitoringResourceCapacity);
 
         Assert.True(provider.TryExportMonitoringResource(first, out var firstLease));
         Assert.True(provider.TryExportMonitoringResource(second, out var secondLease));
-        Assert.False(provider.TryExportMonitoringResource(third, out var rejected));
+        Assert.True(provider.TryExportMonitoringResource(third, out var thirdLease));
+        Assert.True(provider.TryExportMonitoringResource(fourth, out var fourthLease));
+        Assert.False(provider.TryExportMonitoringResource(fifth, out var rejected));
         Assert.Null(rejected);
         Assert.Equal(GpuProcessingProvider.SharedMonitoringResourceCapacity, provider.SharedMonitoringResourceStatistics.ActiveResources);
         Assert.Equal(1UL, provider.SharedMonitoringResourceStatistics.RejectedExports);
 
         firstLease!.Dispose();
-        Assert.True(provider.TryExportMonitoringResource(third, out var recovered));
+        Assert.True(provider.TryExportMonitoringResource(fifth, out var recovered));
         recovered!.Dispose();
         secondLease!.Dispose();
+        thirdLease!.Dispose();
+        fourthLease!.Dispose();
 
         Assert.Equal(0, provider.SharedMonitoringResourceStatistics.ActiveResources);
     }
