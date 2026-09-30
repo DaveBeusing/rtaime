@@ -479,6 +479,24 @@ public sealed record OperatorAudioProgramDescriptor(
         new("—", "—", 1, false, 0, 0, 0, false, "UNKNOWN");
 }
 
+public sealed record OperatorAudioProductionDescriptor(
+    AudioProductionConfiguration Configuration,
+    double LeftPeak,
+    double RightPeak,
+    double PreClipPeak,
+    bool Clipping,
+    ulong ClippedSampleValues,
+    double DuckingGain,
+    double DuckingReduction,
+    bool SidechainAvailable,
+    double? CrossfadeProgress,
+    int ActiveSourceCount,
+    int MissingSourceCount)
+{
+    public static OperatorAudioProductionDescriptor? Unavailable => null;
+}
+
+
 public sealed record OperatorRecordingDescriptor
 {
     public OperatorRecordingDescriptor(
@@ -711,7 +729,8 @@ public sealed record OperatorStatusSnapshot
         IReadOnlyList<OperatorOutputRoleDescriptor>? outputRoles = null,
         IReadOnlyList<OperatorCompositingLayerDescriptor>? compositingLayers = null,
         ShowControlWorkspaceSnapshot? showControl = null,
-        OperatorShowProjectDescriptor? showProject = null)
+        OperatorShowProjectDescriptor? showProject = null,
+        OperatorAudioProductionDescriptor? audioProduction = null)
     {
         Production = production ?? throw new ArgumentNullException(nameof(production));
         ArgumentNullException.ThrowIfNull(sources);
@@ -749,6 +768,7 @@ public sealed record OperatorStatusSnapshot
         ProductionCgText = productionCgText ?? OperatorProductionCgTextDescriptor.Empty;
         ShowControl = showControl ?? new ShowControlWorkspaceSnapshot(Array.Empty<ShowControlCueList>(), null, ShowControlExecutionSnapshot.Idle);
         ShowProject = showProject ?? OperatorShowProjectDescriptor.Unavailable;
+        AudioProduction = audioProduction;
     }
 
     public AuthoritativeProductionState Production { get; }
@@ -773,6 +793,7 @@ public sealed record OperatorStatusSnapshot
     public OperatorProductionCgTextDescriptor ProductionCgText { get; }
     public ShowControlWorkspaceSnapshot ShowControl { get; }
     public OperatorShowProjectDescriptor ShowProject { get; }
+    public OperatorAudioProductionDescriptor? AudioProduction { get; }
 }
 
 /// <summary>
@@ -803,6 +824,13 @@ public interface IOperatorControlTransport
         ulong expectedRoutingRevision,
         CancellationToken cancellationToken = default) =>
         ValueTask.FromException<OperatorAudioProgramDescriptor>(new NotSupportedException("Operator transport does not expose audio routing control."));
+
+    ValueTask<OperatorAudioProductionDescriptor> SetAudioProductionAsync(
+        AudioProductionConfiguration configuration,
+        ulong expectedRevision,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<OperatorAudioProductionDescriptor>(
+            new NotSupportedException("Operator transport does not expose advanced audio production control."));
 
     ValueTask<OperatorAudioInputDescriptor> SetAudioTestSignalAsync(
         string sourceId,
@@ -1147,6 +1175,28 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
                 string.IsNullOrWhiteSpace(breakawaySourceId) ? null : breakawaySourceId.Trim(),
                 current.AudioProgram.RoutingRevision,
                 cancellationToken)
+            .ConfigureAwait(false);
+        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+
+    public async ValueTask<OperatorAudioProductionDescriptor> SetAudioProductionAsync(
+        AudioProductionConfiguration configuration,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+        var current = RequireSnapshot();
+        var confirmed = current.AudioProduction
+            ?? throw new InvalidOperationException("Advanced audio production state is not available from Runtime.");
+        if (confirmed.Configuration.Revision == ulong.MaxValue)
+            throw new InvalidOperationException("Audio production revision cannot advance beyond UInt64.MaxValue.");
+        if (configuration.Revision != confirmed.Configuration.Revision + 1)
+            throw new ArgumentException(
+                $"Audio production configuration revision must be {confirmed.Configuration.Revision + 1}.",
+                nameof(configuration));
+
+        var result = await _transport
+            .SetAudioProductionAsync(configuration, confirmed.Configuration.Revision, cancellationToken)
             .ConfigureAwait(false);
         await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
         return result;

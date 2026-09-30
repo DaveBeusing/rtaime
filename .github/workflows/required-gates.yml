@@ -180,6 +180,10 @@ jobs:
         shell: pwsh
         run: ./build/quality/Test-NetworkOutputPolicy.ps1
 
+      - name: Verify advanced audio production policy
+        shell: pwsh
+        run: ./build/quality/Test-AdvancedAudioProductionPolicy.ps1
+
       - name: Verify timing reference latency and soak policy
         shell: pwsh
         run: ./build/quality/Test-TimingQualificationPolicy.ps1

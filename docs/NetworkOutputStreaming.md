@@ -57,7 +57,7 @@ Network output consumes the already committed Runtime media result.
 
 Video is handed to the network path through an owned Runtime readback lease. The queue owns the lease until the sample is sent, dropped, rejected or the session shuts down. No network payload is transferred through management IPC.
 
-Audio uses the existing governed Program audio result as stereo 48 kHz Float32. If the Runtime bridge has no materialized audio payload for a valid descriptor, it supplies bounded silence matching the descriptor timing rather than blocking Program continuity.
+Audio uses the final Runtime-owned governed Program audio bus as stereo 48 kHz Float32. That bus already includes AFV/breakaway routing plus any confirmed advanced source mix, crossfade, ducking and Program master state. Network output does not implement a separate mix. If the Runtime bridge has no materialized audio payload for a valid descriptor, it supplies bounded silence matching the descriptor timing rather than blocking Program continuity.
 
 The reference encoder converts:
 

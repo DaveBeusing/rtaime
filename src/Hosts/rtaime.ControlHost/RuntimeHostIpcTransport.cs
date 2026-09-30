@@ -111,6 +111,20 @@ public sealed record RuntimeAudioProgramSnapshot(
 	ulong RoutingRevision = 0,
 	MediaSourceId? ActiveAudioSourceId = null);
 
+public sealed record RuntimeAudioProductionSnapshot(
+	AudioProductionConfiguration Configuration,
+	double LeftPeak,
+	double RightPeak,
+	double PreClipPeak,
+	bool Clipping,
+	ulong ClippedSampleValues,
+	double DuckingGain,
+	double DuckingReduction,
+	bool SidechainAvailable,
+	double? CrossfadeProgress,
+	int ActiveSourceCount,
+	int MissingSourceCount);
+
 public sealed record RuntimeRecordingSnapshot(
 	string State,
 	TimeSpan Elapsed,
@@ -199,7 +213,8 @@ public sealed record RuntimeRemoteSnapshot(
 	RuntimeAvSyncDiagnosticsSnapshot? AvSyncDiagnostics = null,
 	RuntimeProductionCgTextSnapshot? ProductionCgText = null,
 	IReadOnlyList<RuntimeOutputRoleSnapshot>? OutputRoles = null,
-	IReadOnlyList<RuntimeCompositingLayerSnapshot>? CompositingLayers = null);
+	IReadOnlyList<RuntimeCompositingLayerSnapshot>? CompositingLayers = null,
+	RuntimeAudioProductionSnapshot? AudioProduction = null);
 
 public sealed record RuntimeRemoteApplyResult(
 	string HostInstanceId,
@@ -319,7 +334,8 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 			snapshot.AvSyncDiagnostics is null ? null : FromWire(snapshot.AvSyncDiagnostics),
 			snapshot.ProductionCgText is null ? null : FromWire(snapshot.ProductionCgText),
 			Array.AsReadOnly((snapshot.OutputRoles ?? Array.Empty<WireOutputRole>()).Select(FromWire).ToArray()),
-			Array.AsReadOnly((snapshot.CompositingLayers ?? Array.Empty<WireCompositingLayer>()).Select(FromWire).ToArray()));
+			Array.AsReadOnly((snapshot.CompositingLayers ?? Array.Empty<WireCompositingLayer>()).Select(FromWire).ToArray()),
+			snapshot.AudioProduction is null ? null : FromWire(snapshot.AudioProduction));
 	}
 
 	public async ValueTask<RuntimeRemoteApplyResult> ApplyExecutionAsync(
@@ -370,6 +386,20 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 			cancellationToken).ConfigureAwait(false);
 		var wire = response.Payload.Deserialize<WireAudioProgram>(Wire.JsonOptions)
 			?? throw new InvalidDataException("Runtime audio routing response is required.");
+		return FromWire(wire);
+	}
+
+	public async ValueTask<RuntimeAudioProductionSnapshot> SetAudioProductionAsync(
+		AudioProductionConfiguration configuration,
+		CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(configuration);
+		var response = await ExchangeAsync(
+			"runtime.audio.production.set",
+			ToWire(configuration),
+			cancellationToken).ConfigureAwait(false);
+		var wire = response.Payload.Deserialize<WireAudioProductionSnapshot>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Runtime audio production response is required.");
 		return FromWire(wire);
 	}
 
@@ -853,6 +883,95 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 			? null
 			: new MediaSourceId(Identity.Parse(snapshot.ActiveAudioSourceId)));
 
+	private static RuntimeAudioProductionSnapshot FromWire(WireAudioProductionSnapshot snapshot)
+	{
+		var configuration = FromWire(snapshot.Configuration);
+		return new RuntimeAudioProductionSnapshot(
+			configuration,
+			snapshot.LeftPeak,
+			snapshot.RightPeak,
+			snapshot.PreClipPeak,
+			snapshot.Clipping,
+			snapshot.ClippedSampleValues,
+			snapshot.DuckingGain,
+			snapshot.DuckingReduction,
+			snapshot.SidechainAvailable,
+			snapshot.CrossfadeProgress,
+			snapshot.ActiveSourceCount,
+			snapshot.MissingSourceCount);
+	}
+
+	private static AudioProductionConfiguration FromWire(WireAudioProductionConfiguration wire)
+	{
+		var buses = (wire.Buses ?? Array.Empty<WireAudioProductionBus>())
+			.Select(bus => new AudioProductionBusConfiguration(new AudioBusId(bus.BusId), bus.MasterGain, bus.Muted))
+			.ToArray();
+		var sources = (wire.Sources ?? Array.Empty<WireAudioProductionSource>())
+			.Select(source => new AudioProductionSourceConfiguration(
+				new MediaSourceId(Identity.Parse(source.SourceId)),
+				source.Gain,
+				source.Muted,
+				source.FollowRoutedSource,
+				(source.BusAssignments ?? Array.Empty<string>()).Select(bus => new AudioBusId(bus)).ToArray()))
+			.ToArray();
+		var crossfade = wire.Crossfade is null ? null : new AudioCrossfadeConfiguration(
+			new AudioBusId(wire.Crossfade.BusId),
+			new MediaSourceId(Identity.Parse(wire.Crossfade.FromSourceId)),
+			new MediaSourceId(Identity.Parse(wire.Crossfade.ToSourceId)),
+			wire.Crossfade.StartSamplePosition,
+			wire.Crossfade.DurationSamples,
+			Enum.IsDefined(typeof(AudioCrossfadeLaw), wire.Crossfade.Law)
+				? (AudioCrossfadeLaw)wire.Crossfade.Law
+				: throw new InvalidDataException("Audio crossfade law is invalid."));
+		var ducking = wire.Ducking is null ? null : new AudioDuckingConfiguration(
+			new AudioBusId(wire.Ducking.BusId),
+			wire.Ducking.Enabled,
+			new MediaSourceId(Identity.Parse(wire.Ducking.SidechainSourceId)),
+			(wire.Ducking.TargetSourceIds ?? Array.Empty<string>()).Select(value => new MediaSourceId(Identity.Parse(value))).ToArray(),
+			wire.Ducking.Threshold,
+			wire.Ducking.Attenuation,
+			wire.Ducking.AttackSamples,
+			wire.Ducking.HoldSamples,
+			wire.Ducking.ReleaseSamples);
+		return new AudioProductionConfiguration(
+			wire.Revision,
+			buses,
+			sources,
+			crossfade,
+			ducking,
+			Enum.IsDefined(typeof(AudioClipStrategy), wire.ClipStrategy)
+				? (AudioClipStrategy)wire.ClipStrategy
+				: throw new InvalidDataException("Audio clipping strategy is invalid."));
+	}
+
+	private static WireAudioProductionConfiguration ToWire(AudioProductionConfiguration configuration) => new(
+		configuration.Revision,
+		configuration.Buses.Select(bus => new WireAudioProductionBus(bus.BusId.Value, bus.MasterGain, bus.Muted)).ToArray(),
+		configuration.Sources.Select(source => new WireAudioProductionSource(
+			source.SourceId.ToString(),
+			source.Gain,
+			source.Muted,
+			source.FollowRoutedSource,
+			source.BusAssignments.Select(bus => bus.Value).ToArray())).ToArray(),
+		configuration.Crossfade is null ? null : new WireAudioCrossfade(
+			configuration.Crossfade.BusId.Value,
+			configuration.Crossfade.FromSourceId.ToString(),
+			configuration.Crossfade.ToSourceId.ToString(),
+			configuration.Crossfade.StartSamplePosition,
+			configuration.Crossfade.DurationSamples,
+			(int)configuration.Crossfade.Law),
+		configuration.Ducking is null ? null : new WireAudioDucking(
+			configuration.Ducking.BusId.Value,
+			configuration.Ducking.Enabled,
+			configuration.Ducking.SidechainSourceId.ToString(),
+			configuration.Ducking.TargetSourceIds.Select(source => source.ToString()).ToArray(),
+			configuration.Ducking.Threshold,
+			configuration.Ducking.Attenuation,
+			configuration.Ducking.AttackSamples,
+			configuration.Ducking.HoldSamples,
+			configuration.Ducking.ReleaseSamples),
+		(int)configuration.ClipStrategy);
+
 	private static RuntimeRecordingSnapshot FromWire(WireRecordingSnapshot snapshot) => new(
 		string.IsNullOrWhiteSpace(snapshot.State) ? "UNKNOWN" : snapshot.State.Trim().ToUpperInvariant(),
 		TimeSpan.FromTicks(Math.Max(0, snapshot.ElapsedTicks)),
@@ -1251,6 +1370,12 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 	private sealed record WireAudioInputState(string SourceId, double Gain, bool Muted);
 	private sealed record WireAudioRoutingState(int Mode, string? BreakawaySourceId);
 	private sealed record WireAudioTestSignalState(string SourceId, bool Enabled, int Mode, double FrequencyHz, double PeakLevel);
+	private sealed record WireAudioProductionBus(string BusId, double MasterGain, bool Muted);
+	private sealed record WireAudioProductionSource(string SourceId, double Gain, bool Muted, bool FollowRoutedSource, string[]? BusAssignments);
+	private sealed record WireAudioCrossfade(string BusId, string FromSourceId, string ToSourceId, ulong StartSamplePosition, uint DurationSamples, int Law);
+	private sealed record WireAudioDucking(string BusId, bool Enabled, string SidechainSourceId, string[]? TargetSourceIds, double Threshold, double Attenuation, uint AttackSamples, uint HoldSamples, uint ReleaseSamples);
+	private sealed record WireAudioProductionConfiguration(ulong Revision, WireAudioProductionBus[]? Buses, WireAudioProductionSource[]? Sources, WireAudioCrossfade? Crossfade, WireAudioDucking? Ducking, int ClipStrategy);
+	private sealed record WireAudioProductionSnapshot(WireAudioProductionConfiguration Configuration, double LeftPeak, double RightPeak, double PreClipPeak, bool Clipping, ulong ClippedSampleValues, double DuckingGain, double DuckingReduction, bool SidechainAvailable, double? CrossfadeProgress, int ActiveSourceCount, int MissingSourceCount);
 	private sealed record WireAudioInput(
 		string SourceId,
 		string StreamId,
@@ -1346,7 +1471,8 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 		WireAvSyncDiagnostics? AvSyncDiagnostics = null,
 		WireProductionCgTextSnapshot? ProductionCgText = null,
 		WireOutputRole[]? OutputRoles = null,
-		WireCompositingLayer[]? CompositingLayers = null);
+		WireCompositingLayer[]? CompositingLayers = null,
+		WireAudioProductionSnapshot? AudioProduction = null);
 
 	private static class Wire
 	{

@@ -77,6 +77,12 @@ public interface IControlRuntimeTransportSeam
 		ValueTask.FromException<RuntimeAudioProgramSnapshot>(
 			new NotSupportedException("Runtime transport does not expose audio routing control."));
 
+	ValueTask<RuntimeAudioProductionSnapshot> SetAudioProductionAsync(
+		AudioProductionConfiguration configuration,
+		CancellationToken cancellationToken = default) =>
+		ValueTask.FromException<RuntimeAudioProductionSnapshot>(
+			new NotSupportedException("Runtime transport does not expose advanced audio production control."));
+
 	ValueTask<RuntimeAudioInputSnapshot> SetAudioTestSignalAsync(
 		MediaSourceId sourceId,
 		bool enabled,

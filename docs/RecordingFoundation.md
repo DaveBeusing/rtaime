@@ -268,7 +268,7 @@ Operator
 
 The Operator exposes explicit **START REC** and **STOP REC** actions plus confirmed recording state, elapsed time, destination directory, file name, final output path, sample statistics and failure detail. Recording commands do not advance the authoritative Production revision.
 
-RuntimeHost remains the recording execution owner. The normal Program boundary stages the already-produced post-transition/post-graphics RGBA Program pixels and the post-AFV/post-gain Float32 Program audio payload before the bounded `ProgramRecorder` enqueue. Storage remains on the recorder worker and never moves into the Program hot path.
+RuntimeHost remains the recording execution owner. The normal Program boundary stages the already-produced post-transition/post-graphics RGBA Program pixels and the final Runtime-owned mixed Program Float32 stereo bus before the bounded `ProgramRecorder` enqueue. Legacy AFV/breakaway, advanced source gain/mute, crossfade, ducking and Program master gain are therefore resolved before recording sees audio. Recording does not implement a separate mix. Storage remains on the recorder worker and never moves into the Program hot path.
 
 ### Destination and naming
 

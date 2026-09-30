@@ -194,6 +194,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 				"runtime.compositing.layers.reorder" => ValueTask.FromResult(ReorderCompositingLayers(request, runtime)),
 				"runtime.audio.input.set" => ValueTask.FromResult(SetAudioInputState(request, runtime)),
 				"runtime.audio.routing.set" => ValueTask.FromResult(SetAudioRouting(request, runtime)),
+				"runtime.audio.production.set" => ValueTask.FromResult(SetAudioProduction(request, runtime)),
 				"runtime.audio.test_signal.set" => ValueTask.FromResult(SetAudioTestSignal(request, runtime)),
 				"runtime.test_pattern.set" => ValueTask.FromResult(SetBroadcastTestPattern(request, runtime)),
 				"runtime.recording.start" => StartRecordingAsync(request, runtime, cancellationToken),
@@ -380,6 +381,66 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		var snapshot = runtime.SetAudioRouting((AudioRoutingMode)wire.Mode, breakawaySourceId);
 		AdvanceStateVersion();
 		return Success(request, "runtime.audio.routing.response", ToWire(snapshot));
+	}
+
+	private WireEnvelope SetAudioProduction(WireEnvelope request, V1RuntimeHostService runtime)
+	{
+		var wire = request.Payload.Deserialize<WireAudioProductionConfiguration>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Audio production configuration payload is required.");
+		var snapshot = runtime.SetAudioProductionConfiguration(FromWire(wire));
+		AdvanceStateVersion();
+		return Success(request, "runtime.audio.production.response", ToWire(snapshot));
+	}
+
+	private static AudioProductionConfiguration FromWire(WireAudioProductionConfiguration wire)
+	{
+		var buses = (wire.Buses ?? Array.Empty<WireAudioProductionBus>())
+			.Select(bus => new AudioProductionBusConfiguration(
+				new AudioBusId(bus.BusId),
+				bus.MasterGain,
+				bus.Muted))
+			.ToArray();
+		var sources = (wire.Sources ?? Array.Empty<WireAudioProductionSource>())
+			.Select(source => new AudioProductionSourceConfiguration(
+				new MediaSourceId(Identity.Parse(source.SourceId)),
+				source.Gain,
+				source.Muted,
+				source.FollowRoutedSource,
+				(source.BusAssignments ?? Array.Empty<string>()).Select(bus => new AudioBusId(bus)).ToArray()))
+			.ToArray();
+		var crossfade = wire.Crossfade is null
+			? null
+			: new AudioCrossfadeConfiguration(
+				new AudioBusId(wire.Crossfade.BusId),
+				new MediaSourceId(Identity.Parse(wire.Crossfade.FromSourceId)),
+				new MediaSourceId(Identity.Parse(wire.Crossfade.ToSourceId)),
+				wire.Crossfade.StartSamplePosition,
+				wire.Crossfade.DurationSamples,
+				Enum.IsDefined(typeof(AudioCrossfadeLaw), wire.Crossfade.Law)
+					? (AudioCrossfadeLaw)wire.Crossfade.Law
+					: throw new InvalidDataException("Audio crossfade law is invalid."));
+		var ducking = wire.Ducking is null
+			? null
+			: new AudioDuckingConfiguration(
+				new AudioBusId(wire.Ducking.BusId),
+				wire.Ducking.Enabled,
+				new MediaSourceId(Identity.Parse(wire.Ducking.SidechainSourceId)),
+				(wire.Ducking.TargetSourceIds ?? Array.Empty<string>())
+					.Select(value => new MediaSourceId(Identity.Parse(value))).ToArray(),
+				wire.Ducking.Threshold,
+				wire.Ducking.Attenuation,
+				wire.Ducking.AttackSamples,
+				wire.Ducking.HoldSamples,
+				wire.Ducking.ReleaseSamples);
+		return new AudioProductionConfiguration(
+			wire.Revision,
+			buses,
+			sources,
+			crossfade,
+			ducking,
+			Enum.IsDefined(typeof(AudioClipStrategy), wire.ClipStrategy)
+				? (AudioClipStrategy)wire.ClipStrategy
+				: throw new InvalidDataException("Audio clipping strategy is invalid."));
 	}
 
 	private WireEnvelope SetAudioTestSignal(WireEnvelope request, V1RuntimeHostService runtime)
@@ -618,7 +679,8 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		snapshot.AvSyncDiagnostics is null ? null : ToWire(snapshot.AvSyncDiagnostics),
 		snapshot.ProductionCgText is null ? null : ToWire(snapshot.ProductionCgText),
 		(snapshot.OutputRoles ?? Array.Empty<RuntimeOutputRoleSnapshot>()).Select(ToWire).ToArray(),
-		(snapshot.CompositingLayers ?? Array.Empty<V1CompositingLayerSnapshot>()).Select(ToWire).ToArray());
+		(snapshot.CompositingLayers ?? Array.Empty<V1CompositingLayerSnapshot>()).Select(ToWire).ToArray(),
+		snapshot.AudioProduction is null ? null : ToWire(snapshot.AudioProduction));
 
 	private static WireAvSyncDiagnostics ToWire(V1AvSyncDiagnosticsSnapshot snapshot) => new(
 		snapshot.Enabled,
@@ -751,6 +813,46 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		snapshot.RoutingRevision,
 		snapshot.ActiveAudioSourceId?.ToString());
 
+
+	private static WireAudioProductionSnapshot ToWire(V1AudioProductionSnapshot snapshot) => new(
+		new WireAudioProductionConfiguration(
+			snapshot.Revision,
+			snapshot.Buses.Select(bus => new WireAudioProductionBus(bus.BusId, bus.MasterGain, bus.Muted)).ToArray(),
+			snapshot.Sources.Select(source => new WireAudioProductionSource(
+				source.SourceId.ToString(),
+				source.Gain,
+				source.Muted,
+				source.FollowRoutedSource,
+				source.BusAssignments.ToArray())).ToArray(),
+			snapshot.Crossfade is null ? null : new WireAudioCrossfade(
+				snapshot.Crossfade.BusId,
+				snapshot.Crossfade.FromSourceId.ToString(),
+				snapshot.Crossfade.ToSourceId.ToString(),
+				snapshot.Crossfade.StartSamplePosition,
+				snapshot.Crossfade.DurationSamples,
+				(int)snapshot.Crossfade.Law),
+			snapshot.Ducking is null ? null : new WireAudioDucking(
+				snapshot.Ducking.BusId,
+				snapshot.Ducking.Enabled,
+				snapshot.Ducking.SidechainSourceId.ToString(),
+				snapshot.Ducking.TargetSourceIds.Select(source => source.ToString()).ToArray(),
+				snapshot.Ducking.Threshold,
+				snapshot.Ducking.Attenuation,
+				snapshot.Ducking.AttackSamples,
+				snapshot.Ducking.HoldSamples,
+				snapshot.Ducking.ReleaseSamples),
+			(int)snapshot.ClipStrategy),
+		snapshot.LeftPeak,
+		snapshot.RightPeak,
+		snapshot.PreClipPeak,
+		snapshot.Clipping,
+		snapshot.ClippedSampleValues,
+		snapshot.DuckingGain,
+		snapshot.DuckingReduction,
+		snapshot.SidechainAvailable,
+		snapshot.CrossfadeProgress,
+		snapshot.ActiveSourceCount,
+		snapshot.MissingSourceCount);
 
 	private static WireRecordingSnapshot ToWire(V1RecordingOperatorSnapshot snapshot) => new(
 		snapshot.State.ToString().ToUpperInvariant(),
@@ -949,6 +1051,12 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 	private sealed record WireAudioInputState(string SourceId, double Gain, bool Muted);
 	private sealed record WireAudioRoutingState(int Mode, string? BreakawaySourceId);
 	private sealed record WireAudioTestSignalState(string SourceId, bool Enabled, int Mode, double FrequencyHz, double PeakLevel);
+	private sealed record WireAudioProductionBus(string BusId, double MasterGain, bool Muted);
+	private sealed record WireAudioProductionSource(string SourceId, double Gain, bool Muted, bool FollowRoutedSource, string[] BusAssignments);
+	private sealed record WireAudioCrossfade(string BusId, string FromSourceId, string ToSourceId, ulong StartSamplePosition, uint DurationSamples, int Law);
+	private sealed record WireAudioDucking(string BusId, bool Enabled, string SidechainSourceId, string[] TargetSourceIds, double Threshold, double Attenuation, uint AttackSamples, uint HoldSamples, uint ReleaseSamples);
+	private sealed record WireAudioProductionConfiguration(ulong Revision, WireAudioProductionBus[] Buses, WireAudioProductionSource[] Sources, WireAudioCrossfade? Crossfade, WireAudioDucking? Ducking, int ClipStrategy);
+	private sealed record WireAudioProductionSnapshot(WireAudioProductionConfiguration Configuration, double LeftPeak, double RightPeak, double PreClipPeak, bool Clipping, ulong ClippedSampleValues, double DuckingGain, double DuckingReduction, bool SidechainAvailable, double? CrossfadeProgress, int ActiveSourceCount, int MissingSourceCount);
 	private sealed record WireAudioInput(
 		string SourceId,
 		string StreamId,
@@ -1044,7 +1152,8 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		WireAvSyncDiagnostics? AvSyncDiagnostics = null,
 		WireProductionCgTextSnapshot? ProductionCgText = null,
 		WireOutputRole[]? OutputRoles = null,
-		WireCompositingLayer[]? CompositingLayers = null);
+		WireCompositingLayer[]? CompositingLayers = null,
+		WireAudioProductionSnapshot? AudioProduction = null);
 
 	private sealed class BoundedRequestCache
 	{

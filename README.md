@@ -80,7 +80,7 @@ The current V1 development repository implements production-shaped software path
 | Media | local media files, Media Pool, transport, timeline, IN/OUT, markers and Cue points |
 | Switching | authoritative Preview/Program, CUT, DISSOLVE and governed Scene activation |
 | Compositing | RuntimeHost-owned bitmap overlays, dynamic Production CG lower thirds, layers and compositing workspace |
-| Audio | Audio Follow Video, gain/mute/metering seams, deterministic generated test signals |
+| Audio | Audio Follow Video, explicit breakaway, bounded multi-source Program mixing, deterministic crossfade/ducking, Runtime metering and generated test signals |
 | Recording | failure-isolated Program Recording plus Windows MP4 H.264/AAC software interoperability |
 | Output | governed Program/Aux output roles, Clean Program monitoring, output health and bounded SRT network-output foundation |
 | AI | governed inference showcase with bounded fallback |

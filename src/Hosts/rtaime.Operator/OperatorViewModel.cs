@@ -9,6 +9,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using rtaime.Client;
 using rtaime.Control.Contracts;
+using rtaime.Core;
 using rtaime.Media.Contracts;
 
 namespace rtaime.Operator;
@@ -115,6 +116,22 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	private bool _audioClipping;
 	private bool _audioMuted;
 	private double _audioProgramGain = 1.0;
+	private ulong _audioProductionRevision;
+	private double _audioMixMasterGain = 1.0;
+	private bool _audioMixMasterMuted;
+	private string _audioMixStatus = "UNAVAILABLE";
+	private string _audioCrossfadeStatus = "OFF";
+	private string _audioDuckingStatus = "OFF";
+	private string _audioDuckingReduction = "0%";
+	private ulong _audioClippedSampleValues;
+	private int _audioMissingSourceCount;
+	private ulong _audioCrossfadeStartSample;
+	private uint _audioCrossfadeDurationSamples = 24_000;
+	private double _audioDuckingThreshold = 0.15;
+	private double _audioDuckingAttenuation = 0.25;
+	private uint _audioDuckingAttackSamples = 2_400;
+	private uint _audioDuckingHoldSamples = 12_000;
+	private uint _audioDuckingReleaseSamples = 14_400;
 	private string _clipAudioStatus = "NO CLIP AUDIO";
 	private string _engineLifecycleState = OperatorLifecycleStates.Starting;
 	private string _engineLifecycleDetail = "Waiting for the first authoritative Control snapshot.";
@@ -174,6 +191,11 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		SetAudioBreakawayCommand = new AsyncRelayCommand(SetAudioBreakawayAsync, CanApplyAudio);
 		ToggleAudioMuteCommand = new AsyncRelayCommand(ToggleAudioMuteAsync, CanApplyAudio);
 		CycleAudioTestSignalCommand = new AsyncRelayCommand(CycleAudioTestSignalAsync, CanApplyAudio);
+		ToggleAudioMixSourceCommand = new AsyncRelayCommand(ToggleAudioMixSourceAsync, CanApplyAdvancedAudio);
+		ApplyAudioMasterCommand = new AsyncRelayCommand(ApplyAudioMasterAsync, CanApplyAdvancedAudio);
+		ToggleAudioMasterMuteCommand = new AsyncRelayCommand(ToggleAudioMasterMuteAsync, CanApplyAdvancedAudio);
+		StartAudioCrossfadeCommand = new AsyncRelayCommand(StartAudioCrossfadeAsync, CanStartAudioCrossfade);
+		ToggleAudioDuckingCommand = new AsyncRelayCommand(ToggleAudioDuckingAsync, CanApplyAdvancedAudio);
 		StartRecordingCommand = new AsyncRelayCommand(StartRecordingAsync, CanStartRecording);
 		StopRecordingCommand = new AsyncRelayCommand(StopRecordingAsync, CanStopRecording);
 		EnableAIShowcaseCommand = new AsyncRelayCommand(() => SetAIShowcaseAsync(true), () => CanControl() && !AIEnabled);
@@ -207,6 +229,11 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	public ICommand SetAudioBreakawayCommand { get; }
 	public ICommand ToggleAudioMuteCommand { get; }
 	public ICommand CycleAudioTestSignalCommand { get; }
+	public ICommand ToggleAudioMixSourceCommand { get; }
+	public ICommand ApplyAudioMasterCommand { get; }
+	public ICommand ToggleAudioMasterMuteCommand { get; }
+	public ICommand StartAudioCrossfadeCommand { get; }
+	public ICommand ToggleAudioDuckingCommand { get; }
 	public ICommand StartRecordingCommand { get; }
 	public ICommand StopRecordingCommand { get; }
 	public ICommand EnableAIShowcaseCommand { get; }
@@ -420,6 +447,29 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	public bool AudioClipping { get => _audioClipping; private set => Set(ref _audioClipping, value); }
 	public bool AudioMuted { get => _audioMuted; private set => Set(ref _audioMuted, value); }
 	public double AudioProgramGain { get => _audioProgramGain; private set => Set(ref _audioProgramGain, value); }
+	public ulong AudioProductionRevision { get => _audioProductionRevision; private set => Set(ref _audioProductionRevision, value); }
+	public double AudioMixMasterGain
+	{
+		get => _audioMixMasterGain;
+		set { if (Set(ref _audioMixMasterGain, Math.Clamp(value, 0, 4))) RaiseCommandState(); }
+	}
+	public bool AudioMixMasterMuted { get => _audioMixMasterMuted; private set => Set(ref _audioMixMasterMuted, value); }
+	public string AudioMixStatus { get => _audioMixStatus; private set => Set(ref _audioMixStatus, value); }
+	public string AudioCrossfadeStatus { get => _audioCrossfadeStatus; private set => Set(ref _audioCrossfadeStatus, value); }
+	public string AudioDuckingStatus { get => _audioDuckingStatus; private set => Set(ref _audioDuckingStatus, value); }
+	public string AudioDuckingReduction { get => _audioDuckingReduction; private set => Set(ref _audioDuckingReduction, value); }
+	public ulong AudioClippedSampleValues { get => _audioClippedSampleValues; private set => Set(ref _audioClippedSampleValues, value); }
+	public int AudioMissingSourceCount { get => _audioMissingSourceCount; private set => Set(ref _audioMissingSourceCount, value); }
+	public ulong AudioCrossfadeStartSample { get => _audioCrossfadeStartSample; set { if (Set(ref _audioCrossfadeStartSample, value)) RaiseCommandState(); } }
+	public uint AudioCrossfadeDurationSamples { get => _audioCrossfadeDurationSamples; set { if (Set(ref _audioCrossfadeDurationSamples, Math.Max(1, value))) RaiseCommandState(); } }
+	public double AudioDuckingThreshold { get => _audioDuckingThreshold; set { if (Set(ref _audioDuckingThreshold, Math.Clamp(value, 0, 1))) RaiseCommandState(); } }
+	public double AudioDuckingAttenuation { get => _audioDuckingAttenuation; set { if (Set(ref _audioDuckingAttenuation, Math.Clamp(value, 0, 1))) RaiseCommandState(); } }
+	public uint AudioDuckingAttackSamples { get => _audioDuckingAttackSamples; set { if (Set(ref _audioDuckingAttackSamples, Math.Max(1, value))) RaiseCommandState(); } }
+	public uint AudioDuckingHoldSamples { get => _audioDuckingHoldSamples; set { if (Set(ref _audioDuckingHoldSamples, value)) RaiseCommandState(); } }
+	public uint AudioDuckingReleaseSamples { get => _audioDuckingReleaseSamples; set { if (Set(ref _audioDuckingReleaseSamples, Math.Max(1, value))) RaiseCommandState(); } }
+	public string AudioMasterMuteActionLabel => AudioMixMasterMuted ? "MASTER UNMUTE" : "MASTER MUTE";
+	public string AudioDuckingActionLabel => _client?.Snapshot?.AudioProduction?.Configuration.Ducking?.Enabled == true ? "DUCKING OFF" : "DUCKING ON";
+	public string AudioMixSourceActionLabel => SelectedAudioInput?.FollowRoutedSource == true ? "ADD TO MIX" : "FOLLOW ROUTED";
 	public string ClipAudioStatus { get => _clipAudioStatus; private set => Set(ref _clipAudioStatus, value); }
 	public string ConnectionState { get => _connectionState; private set => Set(ref _connectionState, value); }
 	public string ConnectionDetail { get => _connectionDetail; private set => Set(ref _connectionDetail, value); }
@@ -513,6 +563,12 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		GraphicsFontSize is >= 8 and <= 256;
 
 	private bool CanApplyAudio() => CanControl() && SelectedAudioInput is not null;
+	private bool CanApplyAdvancedAudio() => CanApplyAudio() && _client?.Snapshot?.AudioProduction is not null;
+	private bool CanStartAudioCrossfade() =>
+		CanApplyAdvancedAudio() &&
+		AudioCrossfadeDurationSamples > 0 &&
+		SelectedAudioInput is not null &&
+		!string.Equals(SelectedAudioInput.SourceId, AudioRoutingSourceId, StringComparison.Ordinal);
 
 	private bool CanSetAudioFollowVideo() =>
 		CanControl() &&
@@ -1098,6 +1154,177 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		});
 	}
 
+	private async Task ToggleAudioMixSourceAsync()
+	{
+		if (_client?.Snapshot?.AudioProduction is not { } production || SelectedAudioInput is null)
+			return;
+
+		var selected = SelectedAudioInput;
+		var selectedId = new MediaSourceId(Identity.Parse(selected.SourceId));
+		var sources = production.Configuration.Sources
+			.Select(source => source.SourceId == selectedId
+				? new AudioProductionSourceConfiguration(
+					source.SourceId,
+					source.Gain,
+					source.Muted,
+					!source.FollowRoutedSource,
+					source.BusAssignments)
+				: source)
+			.ToArray();
+		var next = NextAudioProductionConfiguration(production.Configuration, sources: sources);
+
+		await ExecuteAsync("AUDIO MIX SOURCE", async () =>
+		{
+			await _client.SetAudioProductionAsync(next);
+			ApplyAudio(_client.Snapshot!, preserveSelectedGainEdit: true);
+			CommandStatus = "AUDIO MIX CONFIRMED";
+			LastEvent = $"{selected.SourceName} contribution mode was confirmed by RuntimeHost.";
+		});
+	}
+
+	private async Task ApplyAudioMasterAsync()
+	{
+		if (_client?.Snapshot?.AudioProduction is not { } production)
+			return;
+
+		var buses = production.Configuration.Buses
+			.Select(bus => bus.BusId == AudioBusId.Program
+				? new AudioProductionBusConfiguration(bus.BusId, AudioMixMasterGain, bus.Muted)
+				: bus)
+			.ToArray();
+		var next = NextAudioProductionConfiguration(production.Configuration, buses: buses);
+
+		await ExecuteAsync("AUDIO MASTER", async () =>
+		{
+			await _client.SetAudioProductionAsync(next);
+			ApplyAudio(_client.Snapshot!, preserveSelectedGainEdit: true);
+			CommandStatus = "AUDIO MASTER CONFIRMED";
+			LastEvent = $"Program audio master gain {AudioMixMasterGain:0.##}x was confirmed by RuntimeHost.";
+		});
+	}
+
+	private async Task ToggleAudioMasterMuteAsync()
+	{
+		if (_client?.Snapshot?.AudioProduction is not { } production)
+			return;
+
+		var programBus = production.Configuration.GetBus(AudioBusId.Program);
+		var muted = !programBus.Muted;
+		var buses = production.Configuration.Buses
+			.Select(bus => bus.BusId == AudioBusId.Program
+				? new AudioProductionBusConfiguration(bus.BusId, bus.MasterGain, muted)
+				: bus)
+			.ToArray();
+		var next = NextAudioProductionConfiguration(production.Configuration, buses: buses);
+
+		await ExecuteAsync(muted ? "AUDIO MASTER MUTE" : "AUDIO MASTER UNMUTE", async () =>
+		{
+			await _client.SetAudioProductionAsync(next);
+			ApplyAudio(_client.Snapshot!, preserveSelectedGainEdit: true);
+			CommandStatus = muted ? "AUDIO MASTER MUTED" : "AUDIO MASTER LIVE";
+			LastEvent = $"Program audio master {(muted ? "mute" : "unmute")} was confirmed by RuntimeHost.";
+		});
+	}
+
+	private async Task StartAudioCrossfadeAsync()
+	{
+		if (_client?.Snapshot?.AudioProduction is not { } production || SelectedAudioInput is null)
+			return;
+		if (string.IsNullOrWhiteSpace(AudioRoutingSourceId) || AudioRoutingSourceId == "—")
+			return;
+
+		var fromSourceId = new MediaSourceId(Identity.Parse(AudioRoutingSourceId));
+		var toSourceId = new MediaSourceId(Identity.Parse(SelectedAudioInput.SourceId));
+		var crossfade = new AudioCrossfadeConfiguration(
+			AudioBusId.Program,
+			fromSourceId,
+			toSourceId,
+			AudioCrossfadeStartSample,
+			AudioCrossfadeDurationSamples,
+			AudioCrossfadeLaw.EqualPower);
+		var next = NextAudioProductionConfiguration(production.Configuration, crossfade: crossfade, replaceCrossfade: true);
+
+		await ExecuteAsync("AUDIO CROSSFADE", async () =>
+		{
+			await _client.SetAudioProductionAsync(next);
+			ApplyAudio(_client.Snapshot!, preserveSelectedGainEdit: true);
+			CommandStatus = "CROSSFADE CONFIRMED";
+			LastEvent = $"Equal-power Program audio crossfade to {SelectedAudioInput.SourceName} was confirmed by RuntimeHost.";
+		});
+	}
+
+	private async Task ToggleAudioDuckingAsync()
+	{
+		if (_client?.Snapshot?.AudioProduction is not { } production || SelectedAudioInput is null)
+			return;
+
+		var current = production.Configuration.Ducking;
+		var enable = current?.Enabled != true;
+		AudioDuckingConfiguration? ducking;
+		if (!enable)
+		{
+			ducking = current is null
+				? null
+				: new AudioDuckingConfiguration(
+					current.BusId,
+					false,
+					current.SidechainSourceId,
+					current.TargetSourceIds,
+					current.Threshold,
+					current.Attenuation,
+					current.AttackSamples,
+					current.HoldSamples,
+					current.ReleaseSamples);
+		}
+		else
+		{
+			var sidechain = new MediaSourceId(Identity.Parse(SelectedAudioInput.SourceId));
+			var targets = production.Configuration.Sources
+				.Where(source => source.SourceId != sidechain && source.IsAssignedTo(AudioBusId.Program))
+				.Select(source => source.SourceId)
+				.ToArray();
+			if (targets.Length == 0)
+				throw new InvalidOperationException("Ducking requires at least one other Program source to attenuate.");
+			ducking = new AudioDuckingConfiguration(
+				AudioBusId.Program,
+				true,
+				sidechain,
+				targets,
+				AudioDuckingThreshold,
+				AudioDuckingAttenuation,
+				AudioDuckingAttackSamples,
+				AudioDuckingHoldSamples,
+				AudioDuckingReleaseSamples);
+		}
+		var next = NextAudioProductionConfiguration(production.Configuration, ducking: ducking, replaceDucking: true);
+
+		await ExecuteAsync(enable ? "AUDIO DUCKING ON" : "AUDIO DUCKING OFF", async () =>
+		{
+			await _client.SetAudioProductionAsync(next);
+			ApplyAudio(_client.Snapshot!, preserveSelectedGainEdit: true);
+			CommandStatus = enable ? "DUCKING CONFIRMED" : "DUCKING OFF";
+			LastEvent = enable
+				? $"Program ducking sidechain {SelectedAudioInput.SourceName} was confirmed by RuntimeHost."
+				: "Program ducking was disabled and confirmed by RuntimeHost.";
+		});
+	}
+
+	private static AudioProductionConfiguration NextAudioProductionConfiguration(
+		AudioProductionConfiguration current,
+		IReadOnlyList<AudioProductionBusConfiguration>? buses = null,
+		IReadOnlyList<AudioProductionSourceConfiguration>? sources = null,
+		AudioCrossfadeConfiguration? crossfade = null,
+		bool replaceCrossfade = false,
+		AudioDuckingConfiguration? ducking = null,
+		bool replaceDucking = false) =>
+		new(
+			checked(current.Revision + 1),
+			buses ?? current.Buses,
+			sources ?? current.Sources,
+			replaceCrossfade ? crossfade : current.Crossfade,
+			replaceDucking ? ducking : current.Ducking,
+			current.ClipStrategy);
+
 	private async Task CycleAudioTestSignalAsync()
 	{
 		if (_client is null || SelectedAudioInput is null) return;
@@ -1384,6 +1611,48 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		AudioProgramGain = program.Gain;
 		AudioPeak = program.MasterPeak.ToString("0.000", CultureInfo.InvariantCulture);
 		AudioPeakPercent = program.MasterPeak.ToString("P0", CultureInfo.InvariantCulture);
+
+		var production = snapshot.AudioProduction;
+		if (production is null)
+		{
+			AudioProductionRevision = 0;
+			AudioMixMasterGain = 1d;
+			AudioMixMasterMuted = false;
+			AudioMixStatus = "UNAVAILABLE";
+			AudioCrossfadeStatus = "OFF";
+			AudioDuckingStatus = "OFF";
+			AudioDuckingReduction = "0%";
+			AudioClippedSampleValues = 0;
+			AudioMissingSourceCount = 0;
+			foreach (var input in AudioInputs)
+				input.ApplyProductionState(null);
+		}
+		else
+		{
+			AudioProductionRevision = production.Configuration.Revision;
+			var programBus = production.Configuration.GetBus(AudioBusId.Program);
+			AudioMixMasterGain = programBus.MasterGain;
+			AudioMixMasterMuted = programBus.Muted;
+			AudioMixStatus = production.MissingSourceCount > 0 ? "DEGRADED" : production.Clipping ? "CLIPPING" : "LIVE";
+			AudioCrossfadeStatus = production.CrossfadeProgress is { } progress
+				? $"ACTIVE {progress:P0}"
+				: production.Configuration.Crossfade is null ? "OFF" : "ARMED";
+			AudioDuckingStatus = production.Configuration.Ducking?.Enabled == true
+				? production.SidechainAvailable ? "ACTIVE" : "SIDECHAIN UNAVAILABLE"
+				: "OFF";
+			AudioDuckingReduction = production.DuckingReduction.ToString("P0", CultureInfo.InvariantCulture);
+			AudioClippedSampleValues = production.ClippedSampleValues;
+			AudioMissingSourceCount = production.MissingSourceCount;
+			foreach (var input in AudioInputs)
+			{
+				var sourceId = new MediaSourceId(Identity.Parse(input.SourceId));
+				var configured = production.Configuration.Sources.FirstOrDefault(source => source.SourceId == sourceId);
+				input.ApplyProductionState(configured);
+			}
+		}
+		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(AudioMasterMuteActionLabel)));
+		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(AudioDuckingActionLabel)));
+		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(AudioMixSourceActionLabel)));
 		if (!string.Equals(AudioMeterStatus, "STALE", StringComparison.Ordinal))
 			AudioMeterStatus = "LIVE";
 		RaiseCommandState();

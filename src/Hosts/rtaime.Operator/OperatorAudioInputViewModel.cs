@@ -3,6 +3,7 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using rtaime.Client;
+using rtaime.Media.Contracts;
 
 namespace rtaime.Operator;
 
@@ -19,6 +20,8 @@ public sealed class OperatorAudioInputViewModel : INotifyPropertyChanged
 	private bool _clipping;
 	private string _health;
 	private bool _isAfv;
+	private bool _followRoutedSource = true;
+	private string _busAssignments = "PROGRAM";
 
 	public OperatorAudioInputViewModel(
 		OperatorAudioInputDescriptor descriptor,
@@ -58,6 +61,9 @@ public sealed class OperatorAudioInputViewModel : INotifyPropertyChanged
 	public string Health { get => _health; private set => Set(ref _health, value); }
 	public bool IsAfv { get => _isAfv; private set { if (Set(ref _isAfv, value)) OnPropertyChanged(nameof(AfvLabel)); } }
 	public string AfvLabel => IsAfv ? "AFV / PGM" : "INPUT";
+	public bool FollowRoutedSource { get => _followRoutedSource; private set { if (Set(ref _followRoutedSource, value)) OnPropertyChanged(nameof(MixModeLabel)); } }
+	public string BusAssignments { get => _busAssignments; private set => Set(ref _busAssignments, value); }
+	public string MixModeLabel => FollowRoutedSource ? "AFV CONTRIBUTION" : "MIX ALWAYS";
 	public string MuteActionLabel => Muted ? "UNMUTE" : "MUTE";
 	public bool TestSignalEnabled => _descriptor.TestSignalEnabled;
 	public int? TestSignalMode => _descriptor.TestSignalMode;
@@ -108,6 +114,20 @@ public sealed class OperatorAudioInputViewModel : INotifyPropertyChanged
 		Clipping = descriptor.Clipping;
 		Health = descriptor.Health;
 		IsAfv = isAfv;
+	}
+
+	public void ApplyProductionState(AudioProductionSourceConfiguration? source)
+	{
+		if (source is null)
+		{
+			FollowRoutedSource = true;
+			BusAssignments = "PROGRAM";
+			return;
+		}
+		if (!string.Equals(SourceId, source.SourceId.ToString(), StringComparison.Ordinal))
+			throw new InvalidOperationException("Audio production source identity cannot change.");
+		FollowRoutedSource = source.FollowRoutedSource;
+		BusAssignments = string.Join(" · ", source.BusAssignments.Select(bus => bus.Value.ToUpperInvariant()));
 	}
 
 	private static string Normalize(string value, string fallback) =>

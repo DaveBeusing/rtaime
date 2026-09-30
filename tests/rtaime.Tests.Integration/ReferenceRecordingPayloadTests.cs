@@ -97,6 +97,77 @@ public sealed class ReferenceRecordingPayloadTests
 		}
 	}
 
+	[Fact]
+	public async Task Recording_persists_the_final_multi_source_Program_mix()
+	{
+		var root = Path.Combine(Path.GetTempPath(), "rtaime-advanced-audio-recording", Guid.NewGuid().ToString("N"));
+		Directory.CreateDirectory(root);
+		try
+		{
+			var sourceA = new ProductionSourceId(Identity.Parse("7b100000-0000-0000-0000-00000000000a"));
+			var sourceB = new ProductionSourceId(Identity.Parse("7b100000-0000-0000-0000-00000000000b"));
+			var mediaA = new MediaSourceId(sourceA.Value);
+			var mediaB = new MediaSourceId(sourceB.Value);
+			var specification = CreateSpecification(sourceA, sourceB);
+			var writer = new ReferenceRecordingPayloadWriter(root);
+			await using var runtime = new V1RuntimeHostService(mediaA, mediaB, VideoFormat.Hd1080p50Rgba8, writer);
+			await using var journal = new BoundedProductionJournal(64);
+			var control = new ControlHostService(specification, runtime.ProviderDescriptors, journal);
+			CommitInitialization(control, runtime);
+
+			var current = runtime.Snapshot.AudioProduction!;
+			runtime.SetAudioProductionConfiguration(new AudioProductionConfiguration(
+				checked(current.Revision + 1),
+				new[] { new AudioProductionBusConfiguration(AudioBusId.Program, 1d, muted: false) },
+				new[]
+				{
+					new AudioProductionSourceConfiguration(mediaA, 1d, muted: false, followRoutedSource: false, new[] { AudioBusId.Program }),
+					new AudioProductionSourceConfiguration(mediaB, 1d, muted: false, followRoutedSource: false, new[] { AudioBusId.Program })
+				}));
+
+			runtime.SetExternalAudioInput(mediaA, StereoSamples(960, 0.20f, -0.10f));
+			runtime.SetExternalAudioInput(mediaB, StereoSamples(960, 0.30f, -0.20f));
+
+			var outputId = RecordingOutputId.New();
+			var start = await runtime.StartRecordingAsync(RecordingSessionId.New(), outputId);
+			Assert.True(start.Succeeded, start.Failure?.ToString());
+
+			using var boundary = runtime.ProcessNextBoundary();
+			Assert.Equal(0.50f, ReadFloat(boundary.ProgramAudioPayload, 0), 5);
+			Assert.Equal(-0.30f, ReadFloat(boundary.ProgramAudioPayload, 1), 5);
+			Assert.Equal(2, runtime.Snapshot.AudioProduction!.ActiveSourceCount);
+
+			var stop = await runtime.StopRecordingAsync();
+			Assert.Equal(RecordingStopStatus.Stopped, stop.Status);
+
+			var artifact = ReferenceRecordingPayloadReader.Read(writer.FinalPath!);
+			var sample = Assert.Single(artifact.Samples);
+			Assert.Equal(boundary.ProgramAudioPayload, sample.AudioPayload);
+			Assert.Equal(0.50f, ReadFloat(sample.AudioPayload, 0), 5);
+			Assert.Equal(-0.30f, ReadFloat(sample.AudioPayload, 1), 5);
+		}
+		finally
+		{
+			if (Directory.Exists(root))
+				Directory.Delete(root, recursive: true);
+		}
+	}
+
+	private static float[] StereoSamples(int frames, float left, float right)
+	{
+		var samples = new float[checked(frames * 2)];
+		for (var frame = 0; frame < frames; frame++)
+		{
+			samples[frame * 2] = left;
+			samples[(frame * 2) + 1] = right;
+		}
+		return samples;
+	}
+
+	private static float ReadFloat(byte[] payload, int sampleIndex) =>
+		BinaryPrimitives.ReadSingleLittleEndian(
+			payload.AsSpan(checked(sampleIndex * sizeof(float)), sizeof(float)));
+
 	private static ProductionSpecification CreateSpecification(
 		ProductionSourceId sourceA,
 		ProductionSourceId sourceB) =>

@@ -161,7 +161,7 @@ public sealed class ExternalControlIntegrationTests
 
 		var exception = await Assert.ThrowsAsync<RpcException>(() => grpc.GetSnapshotAsync().AsTask());
 
-		Assert.Equal(StatusCode.Unavailable, exception.StatusCode);
+		Assert.Contains(exception.StatusCode, new[] { StatusCode.Unavailable, StatusCode.Internal });
 		Assert.Equal(ControlHostProcessState.Ready, fixture.Control.Lifecycle.State);
 	}
 

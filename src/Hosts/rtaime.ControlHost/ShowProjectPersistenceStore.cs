@@ -49,7 +49,8 @@ public sealed record PersistedShowProject(
 	ulong StorageVersion,
 	DurableAudioRoutingState? AudioRouting = null,
 	string? RundownJson = null,
-	ulong RundownStorageVersion = 0)
+	ulong RundownStorageVersion = 0,
+	AudioProductionConfiguration? AudioProduction = null)
 {
 	public ProductionSpecification ApplyTo(ProductionSpecification baseline)
 	{
@@ -129,7 +130,7 @@ public sealed class ShowProjectPersistenceStore
 				legacyShowControl?.Json,
 				legacyShowControl?.Version ?? 0,
 				0);
-			var json = Serialize(initial);
+			var json = Serialize(initial, baseline);
 			var write = await _managementStore
 				.PutDocumentAsync(
 					Area,
@@ -230,6 +231,33 @@ public sealed class ShowProjectPersistenceStore
 			var current = await RequireDocumentAsync(baseline.ProductionId, cancellationToken).ConfigureAwait(false);
 			var project = Deserialize(current, baseline);
 			var updated = project with { AudioRouting = audioRouting };
+			return await WriteAsync(updated, current.Version, baseline, cancellationToken).ConfigureAwait(false);
+		}
+		finally
+		{
+			_gate.Release();
+		}
+	}
+
+	public async ValueTask<PersistedShowProject> UpdateAudioProductionAsync(
+		ProductionSpecification baseline,
+		AudioProductionConfiguration configuration,
+		CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(baseline);
+		ArgumentNullException.ThrowIfNull(configuration);
+		ValidateAudioProduction(configuration, baseline);
+
+		await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+		try
+		{
+			var current = await RequireDocumentAsync(baseline.ProductionId, cancellationToken).ConfigureAwait(false);
+			var project = Deserialize(current, baseline);
+			var previous = project.AudioProduction ?? CreateDefaultAudioProduction(baseline);
+			if (configuration.Revision <= previous.Revision)
+				throw new InvalidOperationException(
+					$"Audio production revision must advance beyond persisted revision {previous.Revision}.");
+			var updated = project with { AudioProduction = configuration };
 			return await WriteAsync(updated, current.Version, baseline, cancellationToken).ConfigureAwait(false);
 		}
 		finally
@@ -459,7 +487,7 @@ public sealed class ShowProjectPersistenceStore
 		CancellationToken cancellationToken)
 	{
 		ValidateProject(project, baseline);
-		var json = Serialize(project);
+		var json = Serialize(project, baseline);
 		var write = await _managementStore
 			.PutDocumentAsync(
 				Area,
@@ -473,7 +501,7 @@ public sealed class ShowProjectPersistenceStore
 		return project with { StorageVersion = write.Document.Version };
 	}
 
-	private static string Serialize(PersistedShowProject project)
+	private static string Serialize(PersistedShowProject project, ProductionSpecification baseline)
 	{
 		var document = new ProjectDocument(
 			DocumentFormat,
@@ -486,7 +514,8 @@ public sealed class ShowProjectPersistenceStore
 			project.ShowControlStorageVersion,
 			ToDocument(project.AudioRouting ?? DurableAudioRoutingState.FollowVideo),
 			project.RundownJson,
-			project.RundownStorageVersion);
+			project.RundownStorageVersion,
+			ToDocument(project.AudioProduction ?? CreateDefaultAudioProduction(baseline)));
 		return JsonSerializer.Serialize(document, JsonOptions);
 	}
 
@@ -504,6 +533,7 @@ public sealed class ShowProjectPersistenceStore
 		var scenes = document.Scenes.Select(FromDocument).ToArray();
 		var graphics = FromDocument(document.Graphics);
 		var audioRouting = FromDocument(document.AudioRouting, baseline);
+		var audioProduction = FromDocument(document.AudioProduction, baseline);
 		var project = new PersistedShowProject(
 			Identity.Parse(document.ProjectId),
 			baseline.ProductionId,
@@ -515,7 +545,8 @@ public sealed class ShowProjectPersistenceStore
 			persisted.Version,
 			audioRouting,
 			document.RundownJson,
-			document.RundownStorageVersion);
+			document.RundownStorageVersion,
+			audioProduction);
 		ValidateProject(project, baseline);
 		return project;
 	}
@@ -531,6 +562,7 @@ public sealed class ShowProjectPersistenceStore
 		ValidateScenes(baseline, project.Scenes);
 		ValidateGraphics(project.Graphics);
 		ValidateAudioRouting(project.AudioRouting ?? DurableAudioRoutingState.FollowVideo, baseline);
+		ValidateAudioProduction(project.AudioProduction ?? CreateDefaultAudioProduction(baseline), baseline);
 		if (project.ShowControlWorkspaceJson is null && project.ShowControlStorageVersion != 0)
 			throw new InvalidDataException("Durable show project has a show-control version without a show-control payload.");
 		if (project.ShowControlWorkspaceJson is { } json &&
@@ -597,6 +629,109 @@ public sealed class ShowProjectPersistenceStore
 
 	private static AudioRoutingDocument ToDocument(DurableAudioRoutingState audioRouting) =>
 		new(audioRouting.Mode, audioRouting.BreakawaySourceId?.ToString());
+
+	private static AudioProductionConfiguration CreateDefaultAudioProduction(ProductionSpecification baseline) =>
+		AudioProductionConfiguration.CreateLegacyCompatible(
+			baseline.Sources
+				.Select(source => new MediaSourceId(source.SourceId.Value))
+				.ToArray());
+
+	private static void ValidateAudioProduction(
+		AudioProductionConfiguration configuration,
+		ProductionSpecification baseline)
+	{
+		var expected = baseline.Sources
+			.Select(source => new MediaSourceId(source.SourceId.Value))
+			.ToHashSet();
+		var configured = configuration.Sources.Select(source => source.SourceId).ToHashSet();
+		if (!expected.SetEquals(configured))
+			throw new InvalidDataException("Durable audio production configuration must contain every production source exactly once.");
+	}
+
+	private static AudioProductionDocument ToDocument(AudioProductionConfiguration configuration) => new(
+		configuration.Revision,
+		configuration.Buses.Select(bus => new AudioBusDocument(bus.BusId.Value, bus.MasterGain, bus.Muted)).ToArray(),
+		configuration.Sources.Select(source => new AudioSourceMixDocument(
+			source.SourceId.ToString(),
+			source.Gain,
+			source.Muted,
+			source.FollowRoutedSource,
+			source.BusAssignments.Select(bus => bus.Value).ToArray())).ToArray(),
+		configuration.Crossfade is null ? null : new AudioCrossfadeDocument(
+			configuration.Crossfade.BusId.Value,
+			configuration.Crossfade.FromSourceId.ToString(),
+			configuration.Crossfade.ToSourceId.ToString(),
+			configuration.Crossfade.StartSamplePosition,
+			configuration.Crossfade.DurationSamples,
+			(int)configuration.Crossfade.Law),
+		configuration.Ducking is null ? null : new AudioDuckingDocument(
+			configuration.Ducking.BusId.Value,
+			configuration.Ducking.Enabled,
+			configuration.Ducking.SidechainSourceId.ToString(),
+			configuration.Ducking.TargetSourceIds.Select(source => source.ToString()).ToArray(),
+			configuration.Ducking.Threshold,
+			configuration.Ducking.Attenuation,
+			configuration.Ducking.AttackSamples,
+			configuration.Ducking.HoldSamples,
+			configuration.Ducking.ReleaseSamples),
+		(int)configuration.ClipStrategy);
+
+	private static AudioProductionConfiguration FromDocument(
+		AudioProductionDocument? document,
+		ProductionSpecification baseline)
+	{
+		if (document is null)
+			return CreateDefaultAudioProduction(baseline);
+		try
+		{
+			var buses = (document.Buses ?? Array.Empty<AudioBusDocument>())
+				.Select(bus => new AudioProductionBusConfiguration(new AudioBusId(bus.BusId), bus.MasterGain, bus.Muted))
+				.ToArray();
+			var sources = (document.Sources ?? Array.Empty<AudioSourceMixDocument>())
+				.Select(source => new AudioProductionSourceConfiguration(
+					new MediaSourceId(Identity.Parse(source.SourceId)),
+					source.Gain,
+					source.Muted,
+					source.FollowRoutedSource,
+					(source.BusAssignments ?? Array.Empty<string>()).Select(bus => new AudioBusId(bus)).ToArray()))
+				.ToArray();
+			var crossfade = document.Crossfade is null ? null : new AudioCrossfadeConfiguration(
+				new AudioBusId(document.Crossfade.BusId),
+				new MediaSourceId(Identity.Parse(document.Crossfade.FromSourceId)),
+				new MediaSourceId(Identity.Parse(document.Crossfade.ToSourceId)),
+				document.Crossfade.StartSamplePosition,
+				document.Crossfade.DurationSamples,
+				Enum.IsDefined(typeof(AudioCrossfadeLaw), document.Crossfade.Law)
+					? (AudioCrossfadeLaw)document.Crossfade.Law
+					: throw new InvalidDataException("Persisted audio crossfade law is invalid."));
+			var ducking = document.Ducking is null ? null : new AudioDuckingConfiguration(
+				new AudioBusId(document.Ducking.BusId),
+				document.Ducking.Enabled,
+				new MediaSourceId(Identity.Parse(document.Ducking.SidechainSourceId)),
+				(document.Ducking.TargetSourceIds ?? Array.Empty<string>())
+					.Select(source => new MediaSourceId(Identity.Parse(source))).ToArray(),
+				document.Ducking.Threshold,
+				document.Ducking.Attenuation,
+				document.Ducking.AttackSamples,
+				document.Ducking.HoldSamples,
+				document.Ducking.ReleaseSamples);
+			var configuration = new AudioProductionConfiguration(
+				document.Revision,
+				buses,
+				sources,
+				crossfade,
+				ducking,
+				Enum.IsDefined(typeof(AudioClipStrategy), document.ClipStrategy)
+					? (AudioClipStrategy)document.ClipStrategy
+					: throw new InvalidDataException("Persisted audio clipping strategy is invalid."));
+			ValidateAudioProduction(configuration, baseline);
+			return configuration;
+		}
+		catch (Exception exception) when (exception is ArgumentException or FormatException)
+		{
+			throw new InvalidDataException("Persisted audio production configuration is invalid.", exception);
+		}
+	}
 
 	private static DurableAudioRoutingState FromDocument(AudioRoutingDocument? document, ProductionSpecification baseline)
 	{
@@ -836,9 +971,15 @@ public sealed class ShowProjectPersistenceStore
 		ulong ShowControlStorageVersion,
 		AudioRoutingDocument? AudioRouting = null,
 		string? RundownJson = null,
-		ulong RundownStorageVersion = 0);
+		ulong RundownStorageVersion = 0,
+		AudioProductionDocument? AudioProduction = null);
 
 	private sealed record AudioRoutingDocument(int Mode, string? BreakawaySourceId);
+	private sealed record AudioBusDocument(string BusId, double MasterGain, bool Muted);
+	private sealed record AudioSourceMixDocument(string SourceId, double Gain, bool Muted, bool FollowRoutedSource, string[]? BusAssignments);
+	private sealed record AudioCrossfadeDocument(string BusId, string FromSourceId, string ToSourceId, ulong StartSamplePosition, uint DurationSamples, int Law);
+	private sealed record AudioDuckingDocument(string BusId, bool Enabled, string SidechainSourceId, string[]? TargetSourceIds, double Threshold, double Attenuation, uint AttackSamples, uint HoldSamples, uint ReleaseSamples);
+	private sealed record AudioProductionDocument(ulong Revision, AudioBusDocument[]? Buses, AudioSourceMixDocument[]? Sources, AudioCrossfadeDocument? Crossfade, AudioDuckingDocument? Ducking, int ClipStrategy);
 
 	private sealed record SceneDocument(
 		string SceneId,

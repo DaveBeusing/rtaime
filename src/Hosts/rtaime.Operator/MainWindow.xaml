@@ -1589,6 +1589,80 @@
 								<controls:RtaimeButton Grid.Column="0" Content="APPLY GAIN" Command="{Binding ApplyAudioGainCommand}" Background="{DynamicResource OperatorAccentSurfaceBrush}" BorderBrush="{DynamicResource OperatorAccentBrush}" />
 								<controls:RtaimeButton Grid.Column="2" Content="{Binding SelectedAudioInput.MuteActionLabel}" Command="{Binding ToggleAudioMuteCommand}"  />
 							</Grid>
+							<Border BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="0,1,0,0" Margin="0,12,0,0" Padding="0,12,0,0">
+								<StackPanel>
+									<DockPanel Margin="0,0,0,8">
+										<TextBlock Text="ADVANCED PROGRAM MIX" Style="{StaticResource OperatorLabel}" FontWeight="SemiBold" />
+										<TextBlock Text="{Binding AudioMixStatus}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" />
+									</DockPanel>
+									<DockPanel Margin="0,0,0,5">
+										<TextBlock Text="Selected contribution" Style="{StaticResource OperatorLabel}" />
+										<TextBlock Text="{Binding SelectedAudioInput.MixModeLabel}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" />
+									</DockPanel>
+									<DockPanel Margin="0,0,0,8">
+										<TextBlock Text="Bus" Style="{StaticResource OperatorLabel}" />
+										<TextBlock Text="{Binding SelectedAudioInput.BusAssignments}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" />
+									</DockPanel>
+									<controls:RtaimeButton Content="{Binding AudioMixSourceActionLabel}" Command="{Binding ToggleAudioMixSourceCommand}" IsCompact="True" Margin="0,0,0,10" />
+									<Grid Margin="0,0,0,8">
+										<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="8" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+										<StackPanel Grid.Column="0">
+											<TextBlock Text="Master gain 0.0–4.0x" Style="{StaticResource OperatorLabel}" />
+											<controls:RtaimeTextBox Text="{Binding AudioMixMasterGain, UpdateSourceTrigger=PropertyChanged}" />
+										</StackPanel>
+										<StackPanel Grid.Column="2">
+											<TextBlock Text="Confirmed master" Style="{StaticResource OperatorLabel}" />
+											<TextBlock Text="{Binding AudioMixMasterMuted, StringFormat={}Muted: {0}}" Style="{StaticResource OperatorValue}" Margin="0,8,0,0" />
+										</StackPanel>
+									</Grid>
+									<Grid Margin="0,0,0,12">
+										<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="6" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+										<controls:RtaimeButton Grid.Column="0" Content="APPLY MASTER" Command="{Binding ApplyAudioMasterCommand}" Background="{DynamicResource OperatorAccentSurfaceBrush}" BorderBrush="{DynamicResource OperatorAccentBrush}" />
+										<controls:RtaimeButton Grid.Column="2" Content="{Binding AudioMasterMuteActionLabel}" Command="{Binding ToggleAudioMasterMuteCommand}" />
+									</Grid>
+									<DockPanel Margin="0,0,0,5">
+										<TextBlock Text="Crossfade" Style="{StaticResource OperatorLabel}" />
+										<TextBlock Text="{Binding AudioCrossfadeStatus}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" />
+									</DockPanel>
+									<Grid Margin="0,0,0,8">
+										<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="8" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+										<StackPanel Grid.Column="0">
+											<TextBlock Text="Start sample" Style="{StaticResource OperatorLabel}" />
+											<controls:RtaimeTextBox Text="{Binding AudioCrossfadeStartSample, UpdateSourceTrigger=PropertyChanged}" />
+										</StackPanel>
+										<StackPanel Grid.Column="2">
+											<TextBlock Text="Duration samples" Style="{StaticResource OperatorLabel}" />
+											<controls:RtaimeTextBox Text="{Binding AudioCrossfadeDurationSamples, UpdateSourceTrigger=PropertyChanged}" />
+										</StackPanel>
+									</Grid>
+									<controls:RtaimeButton Content="START EQUAL-POWER CROSSFADE" Command="{Binding StartAudioCrossfadeCommand}" IsCompact="True" Margin="0,0,0,12" />
+									<DockPanel Margin="0,0,0,5">
+										<TextBlock Text="Ducking" Style="{StaticResource OperatorLabel}" />
+										<TextBlock Text="{Binding AudioDuckingStatus}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" />
+									</DockPanel>
+									<Grid Margin="0,0,0,8">
+										<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="6" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+										<StackPanel Grid.Column="0">
+											<TextBlock Text="Threshold 0–1" Style="{StaticResource OperatorLabel}" />
+											<controls:RtaimeTextBox Text="{Binding AudioDuckingThreshold, UpdateSourceTrigger=PropertyChanged}" />
+										</StackPanel>
+										<StackPanel Grid.Column="2">
+											<TextBlock Text="Target gain 0–1" Style="{StaticResource OperatorLabel}" />
+											<controls:RtaimeTextBox Text="{Binding AudioDuckingAttenuation, UpdateSourceTrigger=PropertyChanged}" />
+										</StackPanel>
+									</Grid>
+									<Grid Margin="0,0,0,8">
+										<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="6" /><ColumnDefinition Width="*" /><ColumnDefinition Width="6" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+										<StackPanel Grid.Column="0"><TextBlock Text="Attack" Style="{StaticResource OperatorLabel}" /><controls:RtaimeTextBox Text="{Binding AudioDuckingAttackSamples, UpdateSourceTrigger=PropertyChanged}" /></StackPanel>
+										<StackPanel Grid.Column="2"><TextBlock Text="Hold" Style="{StaticResource OperatorLabel}" /><controls:RtaimeTextBox Text="{Binding AudioDuckingHoldSamples, UpdateSourceTrigger=PropertyChanged}" /></StackPanel>
+										<StackPanel Grid.Column="4"><TextBlock Text="Release" Style="{StaticResource OperatorLabel}" /><controls:RtaimeTextBox Text="{Binding AudioDuckingReleaseSamples, UpdateSourceTrigger=PropertyChanged}" /></StackPanel>
+									</Grid>
+									<controls:RtaimeButton Content="{Binding AudioDuckingActionLabel}" Command="{Binding ToggleAudioDuckingCommand}" IsCompact="True" />
+									<DockPanel Margin="0,8,0,0"><TextBlock Text="Gain reduction" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding AudioDuckingReduction}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
+									<DockPanel Margin="0,4,0,0"><TextBlock Text="Missing sources" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding AudioMissingSourceCount}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
+									<DockPanel Margin="0,4,0,0"><TextBlock Text="Clipped values" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding AudioClippedSampleValues}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
+								</StackPanel>
+							</Border>
 							<DockPanel Margin="0,8,0,4">
 								<TextBlock Text="Generated test signal" Style="{StaticResource OperatorLabel}" />
 								<TextBlock Text="{Binding SelectedAudioInput.TestSignalStatus}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" />
