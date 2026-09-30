@@ -24,7 +24,7 @@ The shared monitor keeps its checkerboard beneath the media presentation so mean
 
 The viewer-local model defines Combined, Red, Green, Blue, Alpha and Luma inspection modes. The existing RGB command remains the Combined-view command so the UI does not introduce a second inspection-state model.
 
-When a presentable shared GPU resource is available, full-frame channel isolation is performed in the Operator D3D11 presentation shader. Red, Green and Blue isolate the selected display channel, Alpha is shown as opaque grayscale for unambiguous transparency inspection, and Luma uses the same Rec.709 display-code weighting as the 1×1 inspector (0.2126 / 0.7152 / 0.0722). Combined retains the normal alpha-checkerboard presentation semantics.
+When a presentable shared GPU resource is available, full-frame channel isolation is performed in the Operator D3D11 presentation shader. Red, Green and Blue isolate the selected display channel, Alpha presents premultiplied white through the existing checkerboard so transparency remains directly readable, and Luma uses the same Rec.709 display-code weighting as the 1×1 inspector (0.2126 / 0.7152 / 0.0722). Combined retains the normal alpha-checkerboard presentation semantics.
 
 The channel view is derived presentation state only. It does not modify the shared monitoring texture, Runtime composition, Program output, recording or routing. If the qualified GPU path is unavailable, non-Combined channel modes report an explicit unavailable state; the implementation does not silently synthesize a full-frame CPU channel image.
 
@@ -36,7 +36,7 @@ ROI statistics execute against the read-only shared GPU resource. A compute shad
 
 Only a 16-element uint result buffer is copied to CPU-visible staging memory. No ROI pixel payload and no full-resolution frame is transferred to the Operator model. Statistics recompute only when newer frame evidence, ROI state or the inspection mode changes. GPU/resource loss reports an explicit unavailable reason and may recover on a later valid resource.
 
-ROI interaction is presentation-only. Operators can enable ROI selection, drag a rectangle, and clear it; the overlay and handles never appear in Clean Program.
+ROI interaction is presentation-only. Operators can enable ROI selection, drag a rectangle, move an existing ROI, resize it from the four visible corner handles, and clear it; the overlay and handles never appear in Clean Program.
 
 ## Shared GPU presentation boundary
 
