@@ -3167,6 +3167,138 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		return (from, to, GpuTransition.Dissolve(weight), weight, completedFrame);
 	}
 
+	private void PrepareAudioProductionBlockUnsafe(
+		ulong sequence,
+		MediaSourceId routedAudioSource,
+		out AudioBufferDescriptor routedAudioBuffer,
+		out AudioStereoMeter routedMeter,
+		out AudioBufferDescriptor? afvBuffer)
+	{
+		routedAudioBuffer = CreateAudioBuffer(routedAudioSource, sequence);
+		routedMeter = new AudioStereoMeter(0, 0);
+		var routedAvailable = false;
+
+		for (var sourceIndex = 0; sourceIndex < _audioProductionSourceOrder.Length; sourceIndex++)
+		{
+			var sourceId = _audioProductionSourceOrder[sourceIndex];
+			var descriptor = CreateAudioBuffer(sourceId, sequence);
+			var requiredValues = checked((int)(descriptor.Timing.SampleCount * descriptor.Format.ChannelCount));
+			var destination = _audioProductionSourceSamples[sourceIndex].AsSpan(0, requiredValues);
+			var available = true;
+			AudioStereoMeter meter;
+
+			if (_audioTestSignals.TryGetValue(sourceId, out var testSignal))
+			{
+				var generated = testSignal.FillInterleavedFloat32(descriptor.Timing, destination);
+				_audioTestSignalFrames[sourceId] = generated;
+				meter = new AudioStereoMeter(generated.LeftPeakLevel, generated.RightPeakLevel);
+			}
+			else
+			{
+				var observation = _audioMeters[sourceId];
+				if (observation.External)
+				{
+					if (!observation.Available)
+					{
+						destination.Clear();
+						available = false;
+						meter = new AudioStereoMeter(0, 0);
+					}
+					else if (TryConsumeExternalAudioSamplesUnsafe(sourceId, destination))
+					{
+						meter = AudioMetering.MeasureInterleavedStereoFloat32(destination);
+					}
+					else
+					{
+						FillReferenceAudioSamples(descriptor, observation.Meter, destination);
+						meter = observation.Meter;
+					}
+				}
+				else
+				{
+					var signalAvailable = !_inputSignals.TryGetValue(sourceId, out var signal) ||
+						signal != V1InputSignalState.Lost;
+					if (!signalAvailable)
+					{
+						destination.Clear();
+						available = false;
+						meter = new AudioStereoMeter(0, 0);
+					}
+					else
+					{
+						var packet = _virtualAudio.GetSource(sourceId).GeneratePacket(sequence);
+						meter = new AudioStereoMeter(packet.LeftPeakLevel, packet.RightPeakLevel);
+						FillReferenceAudioSamples(descriptor, meter, destination);
+					}
+				}
+			}
+
+			_audioProductionSourceBuffers[sourceIndex] = new AudioProductionSourceBuffer(
+				sourceId,
+				_audioProductionSourceSamples[sourceIndex].AsMemory(0, requiredValues),
+				available);
+
+			if (sourceId == routedAudioSource)
+			{
+				routedMeter = meter;
+				routedAvailable = available;
+			}
+		}
+
+		afvBuffer = routedAvailable ? routedAudioBuffer : null;
+	}
+
+	private AudioBufferDescriptor CreateProgramAudioBuffer(ulong sequence)
+	{
+		var referenceStream = _audioStreams.Values.First();
+		var window = AudioVideoTimingRelationship.GetSampleWindow(
+			_format.FrameRate,
+			referenceStream.Format.SampleRate,
+			sequence);
+		return new AudioBufferDescriptor(
+			MediaContractVersion.Current,
+			_programAudioStreamId,
+			referenceStream.Format,
+			referenceStream.TimingDomainId,
+			new AudioBufferTiming(
+				window.SamplePosition,
+				window.SampleCount,
+				window.PresentationTimestamp,
+				window.Timebase),
+			new OpaqueAudioHandle("runtime.audio.program.bus", $"{_programAudioStreamId}:{sequence}"));
+	}
+
+	private bool TryConsumeExternalAudioSamplesUnsafe(MediaSourceId sourceId, Span<float> destination)
+	{
+		var queue = _externalAudioQueues[sourceId];
+		if (queue.Count < destination.Length)
+			return false;
+
+		for (var index = 0; index < destination.Length; index++)
+			destination[index] = queue.Dequeue();
+		return true;
+	}
+
+	private static void FillReferenceAudioSamples(
+		AudioBufferDescriptor descriptor,
+		AudioStereoMeter meter,
+		Span<float> destination)
+	{
+		var requiredValues = checked((int)(descriptor.Timing.SampleCount * descriptor.Format.ChannelCount));
+		if (descriptor.Format != AudioFormat.Stereo48kFloat32 || destination.Length != requiredValues)
+			throw new InvalidOperationException("Advanced audio production currently requires an exact Stereo 48 kHz Float32 block.");
+
+		var amplitude = checked((float)meter.PeakLevel);
+		for (var sampleIndex = 0; sampleIndex < descriptor.Timing.SampleCount; sampleIndex++)
+		{
+			var absoluteSample = descriptor.Timing.SamplePosition + sampleIndex;
+			var value = (absoluteSample & 1UL) == 0 ? amplitude : -amplitude;
+			var offset = checked((int)sampleIndex * 2);
+			destination[offset] = value;
+			destination[offset + 1] = value;
+		}
+	}
+
 	private AudioBufferDescriptor CreateAudioBuffer(MediaSourceId sourceId, ulong sequence)
 	{
 		var stream = _audioStreams[sourceId];
