@@ -138,7 +138,7 @@ public sealed class GrpcOperatorControlTransport : IOperatorControlTransport, IA
 		var request = Request();
 		request.Ping = new EmptyRequest();
 		var reply = await ExecuteAsync(request, snapshot: false, cancellationToken).ConfigureAwait(false);
-		using var payload = JsonDocument.Parse(reply.PayloadJson.Span);
+		using var payload = JsonDocument.Parse(reply.PayloadJson.Memory);
 		var readiness = payload.RootElement.TryGetProperty("status", out var status)
 			? status.GetString() ?? "unknown"
 			: "unknown";
