@@ -53,8 +53,8 @@ public sealed class AudioProductionPerformanceTests
 		for (var index = 0; index < 64; index++)
 			engine.ProcessBus(AudioBusId.Program, (ulong)index * 960, 960, sources[0], payloads, output);
 
-		var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
 		var stopwatch = Stopwatch.StartNew();
+		var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
 		AudioProductionBlockResult result = default;
 		for (var index = 0; index < 1_000; index++)
 		{
