@@ -353,13 +353,15 @@ Marketing priority:
 
 ### 4. Remote and ecosystem integration
 
-Local Named Pipes are the qualified V1 control transport. TCP, HTTP, gRPC, TLS, cluster discovery, NMOS and remote-network deployment remain unverified.
+Local Named Pipes remain the default V1 control transport. A post-V1 secure ControlHost gRPC/TLS boundary is implemented for authenticated external software clients. The optional standalone IntegrationHost now adds bounded OSC, Windows MIDI, deterministic virtual GPIO/GPI reference control and authenticated Companion-style HTTP/WebSocket command/feedback integration without becoming Production Authority.
+
+The software integration claim is deliberately bounded: physical GPIO hardware drivers, device-specific MIDI quirks, public-Internet/WAN deployment and NMOS IS-04/IS-05 remain unverified until separately implemented and qualified.
 
 Marketing priority:
 
-- do not market an “open remote API” before a qualified external control boundary exists;
-- prioritize the integrations repeatedly requested by design partners;
-- publish an integration catalog only when those interfaces have stable contracts and qualification evidence.
+- describe the secure external API and IntegrationHost adapters as implemented software capabilities, not as universal interoperability certification;
+- publish the implemented/unverified integration matrix from ProductionIntegrationGateway.md;
+- keep NMOS, physical GPIO hardware qualification and WAN deployment explicitly on the roadmap until matching conformance or qualification evidence exists.
 
 ### 5. Trusted Preview and Stable release
 

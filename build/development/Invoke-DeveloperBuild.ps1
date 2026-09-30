@@ -21,7 +21,8 @@ $developmentProcessNames = @(
 	"rtaime.Operator",
 	"rtaime.ControlHost",
 	"rtaime.RuntimeHost",
-	"rtaime.AIHost"
+	"rtaime.AIHost",
+	"rtaime.IntegrationHost"
 )
 
 function Test-RepositoryProcessPath {

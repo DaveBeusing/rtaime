@@ -1,0 +1,115 @@
+{
+  "schemaVersion": "1.0",
+  "enabled": true,
+  "required": false,
+  "testMode": false,
+  "dryRun": false,
+  "queueCapacity": 256,
+  "snapshotMinimumIntervalMs": 250,
+  "upstream": {
+    "endpoint": "https://127.0.0.1:55101",
+    "trustMode": "system",
+    "bearerTokenEnvironmentVariable": "RTAIME_INTEGRATION_UPSTREAM_TOKEN",
+    "clientId": "integration-gateway",
+    "clientName": "rtaime.IntegrationHost",
+    "clientVersion": "1.0",
+    "requestTimeoutMs": 5000
+  },
+  "adapters": [
+    {
+      "id": "osc-main",
+      "kind": "osc",
+      "enabled": true,
+      "required": false,
+      "osc": {
+        "listenAddress": "127.0.0.1",
+        "listenPort": 9000,
+        "maxPacketBytes": 4096,
+        "sourceAllowlist": ["127.0.0.1"],
+        "feedbackAddress": "127.0.0.1",
+        "feedbackPort": 9001
+      }
+    },
+    {
+      "id": "midi-surface",
+      "kind": "midi",
+      "enabled": true,
+      "required": false,
+      "midi": {
+        "backend": "windows",
+        "inputDevice": "0",
+        "outputDevice": "0",
+        "reconnectIntervalMs": 1000
+      }
+    },
+    {
+      "id": "gpi-reference",
+      "kind": "discrete",
+      "enabled": true,
+      "required": false,
+      "discrete": {
+        "provider": "virtual",
+        "activeLowInputs": { "go": true },
+        "activeLowOutputs": { "record-tally": true }
+      }
+    },
+    {
+      "id": "companion",
+      "kind": "companion",
+      "enabled": true,
+      "required": false,
+      "companion": {
+        "bindAddress": "127.0.0.1",
+        "port": 55120,
+        "bearerTokenEnvironmentVariable": "RTAIME_COMPANION_TOKEN",
+        "maxRequestBytes": 16384
+      }
+    }
+  ],
+  "mappings": [
+    {
+      "id": "osc-cut-preview",
+      "adapterId": "osc-main",
+      "triggerKey": "/rtaime/cut",
+      "debounceMs": 50,
+      "minimumIntervalMs": 100,
+      "action": { "kind": "cut" }
+    },
+    {
+      "id": "midi-program-gain",
+      "adapterId": "midi-surface",
+      "triggerKey": "cc:1:7",
+      "minimumIntervalMs": 30,
+      "action": {
+        "kind": "audioInputSet",
+        "targetId": "00000000-0000-0000-0000-000000000001",
+        "useTriggerValue": true,
+        "triggerScale": 1.0,
+        "triggerMinimum": 0.0,
+        "triggerMaximum": 1.0
+      }
+    },
+    {
+      "id": "gpi-show-go",
+      "adapterId": "gpi-reference",
+      "triggerKey": "input:go",
+      "debounceMs": 75,
+      "minimumIntervalMs": 150,
+      "action": { "kind": "showControlGo" }
+    },
+    {
+      "id": "companion-cut",
+      "adapterId": "companion",
+      "triggerKey": "cut",
+      "minimumIntervalMs": 100,
+      "action": { "kind": "cut" }
+    }
+  ],
+  "feedbackMappings": [
+    { "adapterId": "osc-main", "source": "programSource", "targetKey": "/rtaime/program" },
+    { "adapterId": "midi-surface", "source": "recordingState", "targetKey": "cc:1:10" },
+    { "adapterId": "gpi-reference", "source": "recordingState", "targetKey": "record-tally" },
+    { "adapterId": "companion", "source": "runtimeReadiness", "targetKey": "runtime" },
+    { "adapterId": "companion", "source": "showControlState", "targetKey": "show-control" }
+  ]
+}

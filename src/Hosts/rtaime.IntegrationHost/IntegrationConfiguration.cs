@@ -253,8 +253,10 @@ public sealed record IntegrationActionOptions
 			throw new ArgumentOutOfRangeException(nameof(Kind));
 		if (TargetId is { Length: > 256 } || SecondaryTargetId is { Length: > 256 })
 			throw new ArgumentException("Integration action identities are bounded to 256 characters.");
-		if (Kind is IntegrationActionKind.PreviewSelect or IntegrationActionKind.SceneActivate && string.IsNullOrWhiteSpace(TargetId))
+		if ((Kind is IntegrationActionKind.PreviewSelect or IntegrationActionKind.SceneActivate or IntegrationActionKind.AudioInputSet) && string.IsNullOrWhiteSpace(TargetId))
 			throw new ArgumentException($"{Kind} requires TargetId.", nameof(TargetId));
+		if (Kind == IntegrationActionKind.MediaCueFrame && !UseTriggerValue && Frame is null)
+			throw new ArgumentException("MediaCueFrame requires Frame unless trigger-value mapping is enabled.", nameof(Frame));
 		if (Kind == IntegrationActionKind.OutputRoute && (string.IsNullOrWhiteSpace(TargetId) || string.IsNullOrWhiteSpace(SecondaryTargetId)))
 			throw new ArgumentException("OutputRoute requires role TargetId and source SecondaryTargetId.");
 		if (Kind == IntegrationActionKind.Dissolve && DurationFrames is 0 or > 10000)

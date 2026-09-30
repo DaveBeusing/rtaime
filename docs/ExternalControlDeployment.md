@@ -6,7 +6,7 @@
 
 # Secure External Control
 
-rtaime exposes one optional external control boundary on ControlHost for remote operator clients, automation systems, service tools and later ecosystem adapters.
+rtaime exposes one optional external control boundary on ControlHost for remote operator clients, automation systems, service tools and ecosystem adapters. The standalone `rtaime.IntegrationHost` consumes this boundary for OSC, MIDI, GPIO/GPI reference control and Companion-style integrations.
 
 The external boundary does not create another Production Authority and does not make RuntimeHost or AIHost remotely addressable.
 
@@ -234,3 +234,4 @@ The following remain outside the claims of this implementation unless separately
 - remote raw-media or GPU-frame transport.
 
 Those capabilities must not be inferred from a green software CI run.
+\n\n## Production integration gateway\n\nFor OSC, MIDI, GPIO/GPI reference control and Companion-style HTTP/WebSocket integration, see [ProductionIntegrationGateway.md](ProductionIntegrationGateway.md). IntegrationHost remains an external client of this secure boundary; it does not move Production Authority out of ControlHost.\n
