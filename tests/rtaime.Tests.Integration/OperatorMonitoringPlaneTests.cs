@@ -250,9 +250,6 @@ public sealed class OperatorMonitoringPlaneTests
 		Assert.Equal(2, tap.Statistics.ActiveSharedResources);
 		Assert.Equal(2, gpu.SharedMonitoringResourceStatistics.ActiveResources);
 
-		Assert.Equal(GpuProcessingProvider.SharedMonitoringResourceCapacity, peakProviderResources);
-		Assert.Equal(0UL, gpu.SharedMonitoringResourceStatistics.RejectedExports);
-
 		await subscription.DisposeAsync();
 
 		Assert.Equal(0, tap.Statistics.ActiveSharedResources);
@@ -451,6 +448,9 @@ public sealed class OperatorMonitoringPlaneTests
 			Assert.InRange(gpu.SharedMonitoringResourceStatistics.ActiveResources, 0, 2);
 			Assert.InRange(backend.ActiveAllocationCount, 0, 2);
 		}
+
+		Assert.Equal(GpuProcessingProvider.SharedMonitoringResourceCapacity, peakProviderResources);
+		Assert.Equal(0UL, gpu.SharedMonitoringResourceStatistics.RejectedExports);
 
 		await subscription.DisposeAsync();
 
