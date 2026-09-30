@@ -12,4 +12,16 @@
     <ProjectReference Include="..\..\Contracts\rtaime.Control.Contracts\rtaime.Control.Contracts.csproj" />
     <ProjectReference Include="..\..\Contracts\rtaime.Runtime.Contracts\rtaime.Runtime.Contracts.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="rtaime.Tests.Performance" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Google.Protobuf" />
+    <PackageReference Include="Grpc.AspNetCore" />
+    <PackageReference Include="Grpc.Tools" PrivateAssets="all" />
+    <Protobuf Include="..\..\..\schemas\external-control\v1\external_control.proto" GrpcServices="Server" Link="Protos\external_control.proto" />
+  </ItemGroup>
 </Project>

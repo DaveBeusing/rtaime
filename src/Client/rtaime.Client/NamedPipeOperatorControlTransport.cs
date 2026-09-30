@@ -599,6 +599,144 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		return ReadRundownWorkspace(response);
 	}
 
+	internal static OperatorStatusSnapshot DecodeExternalSnapshot(ReadOnlySpan<byte> payload)
+	{
+		var wire = JsonSerializer.Deserialize<WireOperatorSnapshot>(payload, Wire.JsonOptions)
+			?? throw new InvalidDataException("ControlHost snapshot payload is required.");
+		return FromWire(wire);
+	}
+
+	internal static OperatorMutationResponse DecodeExternalMutation(ReadOnlySpan<byte> payload)
+	{
+		var wire = JsonSerializer.Deserialize<WireMutationResponse>(payload, Wire.JsonOptions)
+			?? throw new InvalidDataException("ControlHost mutation response is required.");
+		return new OperatorMutationResponse(
+			wire.Accepted,
+			FromWire(wire.State),
+			wire.Failure is null ? null : new Failure(wire.Failure.Code, wire.Failure.Message));
+	}
+
+	internal static OperatorAudioInputDescriptor DecodeExternalAudioInput(ReadOnlySpan<byte> payload)
+	{
+		var wire = JsonSerializer.Deserialize<WireAudioInput>(payload, Wire.JsonOptions)
+			?? throw new InvalidDataException("ControlHost audio input payload is required.");
+		return FromWire(wire);
+	}
+
+	internal static OperatorAudioProgramDescriptor DecodeExternalAudioProgram(ReadOnlySpan<byte> payload)
+	{
+		var wire = JsonSerializer.Deserialize<WireAudioProgram>(payload, Wire.JsonOptions)
+			?? throw new InvalidDataException("ControlHost audio routing payload is required.");
+		return FromWire(wire);
+	}
+
+	internal static bool DecodeExternalTestPattern(ReadOnlySpan<byte> payload, string sourceId)
+	{
+		var wire = JsonSerializer.Deserialize<WireTestPatternState>(payload, Wire.JsonOptions)
+			?? throw new InvalidDataException("ControlHost broadcast test pattern payload is required.");
+		if (!string.Equals(wire.SourceId, sourceId, StringComparison.Ordinal))
+			throw new InvalidDataException("ControlHost broadcast test pattern response source does not match the request.");
+		return wire.Enabled;
+	}
+
+	internal static OperatorGraphicsOverlayDescriptor DecodeExternalGraphicsOverlay(ReadOnlySpan<byte> payload)
+	{
+		var wire = JsonSerializer.Deserialize<WireGraphicsOverlay>(payload, Wire.JsonOptions)
+			?? throw new InvalidDataException("ControlHost graphics overlay payload is required.");
+		return FromWire(wire);
+	}
+
+	internal static IReadOnlyList<OperatorCompositingLayerDescriptor> DecodeExternalCompositingLayers(ReadOnlySpan<byte> payload)
+	{
+		var wire = JsonSerializer.Deserialize<WireCompositingLayer[]>(payload, Wire.JsonOptions)
+			?? throw new InvalidDataException("ControlHost compositing layer payload is required.");
+		return Array.AsReadOnly(wire.Select(FromWire).ToArray());
+	}
+
+	internal static OperatorRecordingCommandResult DecodeExternalRecording(ReadOnlySpan<byte> payload)
+	{
+		var wire = JsonSerializer.Deserialize<WireRecordingCommandResult>(payload, Wire.JsonOptions)
+			?? throw new InvalidDataException("ControlHost recording command response is required.");
+		return new OperatorRecordingCommandResult(
+			wire.Succeeded,
+			FromWire(wire.Snapshot),
+			wire.Failure is null ? null : new Failure(wire.Failure.Code, wire.Failure.Message));
+	}
+
+	internal static OperatorAIShowcaseDescriptor DecodeExternalAIShowcase(ReadOnlySpan<byte> payload)
+	{
+		var wire = JsonSerializer.Deserialize<WireAIShowcase>(payload, Wire.JsonOptions)
+			?? throw new InvalidDataException("ControlHost AI showcase payload is required.");
+		return FromWire(wire);
+	}
+
+	internal static (CompatibilityVersion Version, ulong Revision, int TotalCount, IReadOnlyList<MediaAssetDescriptor> Assets)
+		DecodeExternalMediaAssetCatalogPage(ReadOnlySpan<byte> payload)
+	{
+		var wire = JsonSerializer.Deserialize<WireMediaAssetCatalogPage>(payload, Wire.JsonOptions)
+			?? throw new InvalidDataException("Media asset catalogue page payload is required.");
+		if (wire.TotalCount < 0)
+			throw new InvalidDataException("Media asset catalogue total count is invalid.");
+		return (
+			CompatibilityVersion.Parse(wire.Version),
+			wire.Revision,
+			wire.TotalCount,
+			wire.Assets.Select(FromWire).ToArray());
+	}
+
+	internal static IReadOnlyList<MediaAssetMutationItem> DecodeExternalMediaAssetMutationItems(ReadOnlySpan<byte> payload)
+	{
+		var wire = JsonSerializer.Deserialize<WireMediaAssetCatalogMutationResult>(payload, Wire.JsonOptions)
+			?? throw new InvalidDataException("Media asset catalogue mutation payload is required.");
+		return wire.Items.Select(item => new MediaAssetMutationItem(
+			item.SourceLocation,
+			string.IsNullOrWhiteSpace(item.AssetId) ? null : new MediaAssetId(Identity.Parse(item.AssetId)),
+			Enum.IsDefined(typeof(MediaAssetMutationDisposition), item.Disposition)
+				? (MediaAssetMutationDisposition)item.Disposition
+				: throw new InvalidDataException("Media asset mutation disposition is invalid."),
+			item.Failure is null ? null : new Failure(item.Failure.Code, item.Failure.Message))).ToArray();
+	}
+
+	internal static MediaDeckSnapshot DecodeExternalMediaDeck(ReadOnlySpan<byte> payload)
+	{
+		var wire = JsonSerializer.Deserialize<WireMediaDeckSnapshot>(payload, Wire.JsonOptions)
+			?? throw new InvalidDataException("ControlHost media-deck payload is required.");
+		return FromWire(wire);
+	}
+
+	internal static ShowControlWorkspaceSnapshot DecodeExternalShowControl(ReadOnlySpan<byte> payload)
+	{
+		var wire = JsonSerializer.Deserialize<WireShowControlWorkspace>(payload, Wire.JsonOptions)
+			?? throw new InvalidDataException("ControlHost show-control workspace payload is required.");
+		return FromWire(wire);
+	}
+
+	internal static RundownWorkspaceSnapshot DecodeExternalRundown(ReadOnlySpan<byte> payload)
+	{
+		var wire = JsonSerializer.Deserialize<WireRundownWorkspace>(payload, Wire.JsonOptions)
+			?? throw new InvalidDataException("ControlHost rundown workspace payload is required.");
+		if (!Enum.IsDefined(typeof(RundownExecutionState), wire.State))
+			throw new InvalidDataException("Rundown execution state is invalid.");
+		var rundown = string.IsNullOrWhiteSpace(wire.RundownJson)
+			? null
+			: RundownCanonicalSerializer.Deserialize(wire.RundownJson);
+		var execution = new RundownExecutionSnapshot(
+			(RundownExecutionState)wire.State,
+			string.IsNullOrWhiteSpace(wire.RundownId) ? null : new RundownId(Identity.Parse(wire.RundownId)),
+			string.IsNullOrWhiteSpace(wire.SelectedItemId) ? null : new RundownItemId(Identity.Parse(wire.SelectedItemId)),
+			string.IsNullOrWhiteSpace(wire.PreparedItemId) ? null : new RundownItemId(Identity.Parse(wire.PreparedItemId)),
+			string.IsNullOrWhiteSpace(wire.CurrentItemId) ? null : new RundownItemId(Identity.Parse(wire.CurrentItemId)),
+			string.IsNullOrWhiteSpace(wire.NextItemId) ? null : new RundownItemId(Identity.Parse(wire.NextItemId)),
+			wire.Revision,
+			string.IsNullOrWhiteSpace(wire.CausalActionId) ? null : Identity.Parse(wire.CausalActionId),
+			wire.AutoAdvanceArmed,
+			wire.RequiresAcknowledgement,
+			string.IsNullOrWhiteSpace(wire.FailureCode)
+				? null
+				: new Failure(wire.FailureCode, wire.FailureMessage ?? "Rundown operation failed."));
+		return new RundownWorkspaceSnapshot(rundown, execution, wire.StorageVersion);
+	}
+
 	private async ValueTask<OperatorMutationResponse> MutateAsync(
 		string messageType,
 		ControlCommandMetadata metadata,

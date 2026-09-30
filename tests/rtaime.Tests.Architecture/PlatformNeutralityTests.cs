@@ -20,6 +20,18 @@ public sealed class PlatformNeutralityTests
 	private static readonly IReadOnlyDictionary<string, IReadOnlySet<string>> ApprovedProductionPackages =
 		new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal)
 		{
+			["rtaime.Client"] = new HashSet<string>(StringComparer.Ordinal)
+			{
+				"Google.Protobuf",
+				"Grpc.Net.Client",
+				"Grpc.Tools"
+			},
+			["rtaime.ControlHost"] = new HashSet<string>(StringComparer.Ordinal)
+			{
+				"Google.Protobuf",
+				"Grpc.AspNetCore",
+				"Grpc.Tools"
+			},
 			["rtaime.Persistence"] = new HashSet<string>(StringComparer.Ordinal)
 			{
 				"Microsoft.Data.Sqlite"

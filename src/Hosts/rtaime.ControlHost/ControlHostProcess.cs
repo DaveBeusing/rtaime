@@ -276,6 +276,7 @@ public sealed record ControlHostProcessOptions(
 	public string DurabilityRoot { get; init; } = DefaultDurabilityRoot();
 	public int JournalRetainedCapacity { get; init; } = 256;
 	public int CheckpointQueueCapacity { get; init; } = 64;
+	public ExternalControlServerOptions ExternalControl { get; init; } = new();
 
 	public static ControlHostProcessOptions Default => new(
 		new ProductionId(Identity.Parse("70000000-0000-0000-0000-000000000001")),
@@ -313,7 +314,8 @@ public sealed record ControlHostProcessOptions(
 		{
 			DurabilityRoot = Get(args, environment, "durability-root", "RTAIME_CONTROL_DURABILITY_ROOT", defaults.DurabilityRoot),
 			JournalRetainedCapacity = ParsePositiveInt(Get(args, environment, "journal-retained-capacity", "RTAIME_CONTROL_JOURNAL_RETAINED_CAPACITY", defaults.JournalRetainedCapacity.ToString()), "journal-retained-capacity"),
-			CheckpointQueueCapacity = ParsePositiveInt(Get(args, environment, "checkpoint-capacity", "RTAIME_CONTROL_CHECKPOINT_CAPACITY", defaults.CheckpointQueueCapacity.ToString()), "checkpoint-capacity")
+			CheckpointQueueCapacity = ParsePositiveInt(Get(args, environment, "checkpoint-capacity", "RTAIME_CONTROL_CHECKPOINT_CAPACITY", defaults.CheckpointQueueCapacity.ToString()), "checkpoint-capacity"),
+			ExternalControl = ExternalControlServerOptions.Load(args, environment)
 		};
 	}
 
@@ -333,6 +335,9 @@ public sealed record ControlHostProcessOptions(
 		if (RequestTimeout <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(RequestTimeout));
 		if (RuntimeRetryInterval <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(RuntimeRetryInterval));
 		if (ShutdownTimeout <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(ShutdownTimeout));
+		ArgumentNullException.ThrowIfNull(ExternalControl);
+		if (ExternalControl.Required)
+			ExternalControl.Validate();
 	}
 
 	private static string Get(
@@ -394,6 +399,7 @@ public sealed class ControlHostProcess
 	private MediaDeckControlService? _mediaDeckControl;
 	private MediaAssetCatalogService? _mediaAssetCatalog;
 	private ControlHostIpcServer? _ipcServer;
+	private ExternalControlServer? _externalControlServer;
 	private Task? _runtimeBindingTask;
 	private string? _boundRuntimeHostInstanceId;
 
@@ -413,6 +419,7 @@ public sealed class ControlHostProcess
 	public MediaDeckControlService? MediaDeckControl => _mediaDeckControl;
 	public MediaAssetCatalogService? MediaAssetCatalog => _mediaAssetCatalog;
 	public ControlHostIpcServer? IpcServer => _ipcServer;
+	public ExternalControlServer? ExternalControlServer => _externalControlServer;
 
 	public async Task<ControlHostExitCode> RunAsync(CancellationToken cancellationToken)
 	{
@@ -423,6 +430,8 @@ public sealed class ControlHostProcess
 			_options.Validate();
 			await ComposeAsync(cancellationToken).ConfigureAwait(false);
 			await _ipcServer!.StartAsync(cancellationToken).ConfigureAwait(false);
+			if (_externalControlServer is not null)
+				await _externalControlServer.StartAsync(cancellationToken).ConfigureAwait(false);
 			SetOperationalState(ControlHostProcessState.Degraded, ControlHostHealthState.Degraded, $"ControlHost is listening on '{_options.ListenEndpoint}' while RuntimeHost reconciliation is pending.");
 			_runtimeBindingTask = RuntimeBindingLoopAsync(cancellationToken);
 		}
@@ -539,6 +548,7 @@ public sealed class ControlHostProcess
 				showProjectStore,
 				showProject,
 				HostIpcSessionTracker.DrainIntervalForHost(_options.ShutdownTimeout));
+			_externalControlServer = new ExternalControlServer(_options.ExternalControl, _ipcServer);
 		}
 		catch
 		{
@@ -867,6 +877,7 @@ public sealed class ControlHostProcess
 		using var timeout = new CancellationTokenSource(_options.ShutdownTimeout);
 		try
 		{
+			if (_externalControlServer is not null) await _externalControlServer.DisposeAsync().AsTask().WaitAsync(timeout.Token).ConfigureAwait(false);
 			if (_ipcServer is not null) await _ipcServer.DisposeAsync().AsTask().WaitAsync(timeout.Token).ConfigureAwait(false);
 			if (_runtimeTransport is not null) await _runtimeTransport.DisconnectAsync().AsTask().WaitAsync(timeout.Token).ConfigureAwait(false);
 			if (_runtimeBindingTask is not null)
@@ -910,6 +921,7 @@ public sealed class ControlHostProcess
 
 	private async Task CleanupStartupFailureAsync()
 	{
+		try { if (_externalControlServer is not null) await _externalControlServer.DisposeAsync().ConfigureAwait(false); } catch { }
 		try { if (_ipcServer is not null) await _ipcServer.DisposeAsync().ConfigureAwait(false); } catch { }
 		try { if (_runtimeTransport is not null) await _runtimeTransport.DisconnectAsync().ConfigureAwait(false); } catch { }
 		try { if (_checkpointWriter is not null) await _checkpointWriter.DisposeAsync().ConfigureAwait(false); } catch { }

@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rtaime.dev/schemas/external-control/v1/external-control-config.schema.json",
+  "title": "rtaime external control configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "enabled": { "type": "boolean", "default": false },
+    "required": { "type": "boolean", "default": false },
+    "bindAddress": { "type": "string", "default": "127.0.0.1", "minLength": 1, "maxLength": 64 },
+    "port": { "type": "integer", "default": 55101, "minimum": 1, "maximum": 65535 },
+    "certificatePath": { "type": ["string", "null"], "minLength": 1 },
+    "certificateKeyPath": { "type": ["string", "null"], "minLength": 1 },
+    "certificatePasswordEnvironmentVariable": { "type": ["string", "null"], "minLength": 1, "maxLength": 256 },
+    "certificateThumbprint": { "type": ["string", "null"], "minLength": 1, "maxLength": 256 },
+    "requireMutualTls": { "type": "boolean", "default": false },
+    "identities": {
+      "type": "array",
+      "maxItems": 128,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["clientId", "role"],
+        "properties": {
+          "clientId": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "role": { "enum": ["Observer", "Operator", "Administrator"] },
+          "certificateThumbprint": { "type": ["string", "null"], "minLength": 1, "maxLength": 256 },
+          "tokenEnvironmentVariable": { "type": ["string", "null"], "minLength": 1, "maxLength": 256 }
+        },
+        "anyOf": [
+          { "required": ["certificateThumbprint"] },
+          { "required": ["tokenEnvironmentVariable"] }
+        ]
+      }
+    },
+    "maxConcurrentConnections": { "type": "integer", "default": 32, "minimum": 1, "maximum": 1024 },
+    "maxConcurrentOperationsPerClient": { "type": "integer", "default": 8, "minimum": 1, "maximum": 128 },
+    "requestsPerSecond": { "type": "integer", "default": 30, "minimum": 1, "maximum": 10000 },
+    "requestBurst": { "type": "integer", "default": 60, "minimum": 1, "maximum": 50000 },
+    "maxRequestBytes": { "type": "integer", "default": 1048576, "minimum": 1024, "maximum": 16777216 },
+    "maxResponseBytes": { "type": "integer", "default": 4194304, "minimum": 1024, "maximum": 33554432 },
+    "requestTimeoutMilliseconds": { "type": "integer", "default": 5000, "minimum": 1, "maximum": 300000 },
+    "shutdownTimeoutMilliseconds": { "type": "integer", "default": 5000, "minimum": 1 }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "required": { "const": true } },
+        "required": ["required"]
+      },
+      "then": {
+        "properties": { "enabled": { "const": true } },
+        "required": ["enabled"]
+      }
+    },
+    {
+      "if": {
+        "properties": { "enabled": { "const": true } },
+        "required": ["enabled"]
+      },
+      "then": {
+        "required": ["identities"],
+        "oneOf": [
+          {
+            "required": ["certificatePath"],
+            "not": { "required": ["certificateThumbprint"] }
+          },
+          {
+            "required": ["certificateThumbprint"],
+            "not": { "required": ["certificatePath"] }
+          }
+        ]
+      }
+    }
+  ]
+}
