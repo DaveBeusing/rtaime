@@ -107,7 +107,7 @@ public sealed class AudioProductionEngineTests
 	{
 		var engine = new AudioProductionEngine(new AudioProductionConfiguration(
 			0,
-			new[] { new AudioProductionBusConfiguration(AudioBusId.Program, new AudioGain(2), false) },
+			new[] { new AudioProductionBusConfiguration(AudioBusId.Program, 2d, false) },
 			new[]
 			{
 				Source(SourceA, AudioGain.Unity, false),
@@ -274,7 +274,7 @@ public sealed class AudioProductionEngineTests
 		AudioDuckingConfiguration? ducking = null) =>
 		new(
 			revision,
-			new[] { new AudioProductionBusConfiguration(AudioBusId.Program, AudioGain.Unity, false) },
+			new[] { new AudioProductionBusConfiguration(AudioBusId.Program, 1d, false) },
 			new[] { first, second },
 			crossfade,
 			ducking);
@@ -285,7 +285,7 @@ public sealed class AudioProductionEngineTests
 		bool muted) =>
 		new(
 			sourceId,
-			gain,
+			gain.Linear,
 			muted,
 			followRoutedSource: false,
 			new[] { AudioBusId.Program });
