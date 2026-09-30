@@ -450,10 +450,20 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		WireEnvelope response;
 		if (_requestCache.TryGet(request.RequestId, canonical, out var cached, out var conflict))
 		{
-			response = conflict
-				? Error(request, "ipc.request_id_conflict", "RequestId was reused with a different request payload.")
-				: JsonSerializer.Deserialize<WireEnvelope>(cached!, Wire.JsonOptions)
+			if (conflict)
+			{
+				response = Error(request, "ipc.request_id_conflict", "RequestId was reused with a different request payload.");
+			}
+			else
+			{
+				var replay = JsonSerializer.Deserialize<WireEnvelope>(cached!, Wire.JsonOptions)
 					?? throw new InvalidDataException("Cached ControlHost response envelope is invalid.");
+				response = replay with
+				{
+					CorrelationId = request.CorrelationId,
+					SentAtUtc = DateTimeOffset.UtcNow
+				};
+			}
 		}
 		else
 		{
