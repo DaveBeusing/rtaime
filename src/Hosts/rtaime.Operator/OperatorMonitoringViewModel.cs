@@ -420,6 +420,7 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 			return;
 		}
 
+		var wasUnavailable = Volatile.Read(ref _gpuComparisonUnavailable);
 		IsGpuComparisonActive = active;
 		Volatile.Write(ref _gpuComparisonUnavailable, !active);
 		ComparisonDetail = detail;
@@ -429,7 +430,7 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 			return;
 		}
 
-		if (CompareMode == MediaCompareMode.Difference)
+		if (CompareMode == MediaCompareMode.Difference && (!wasUnavailable || DifferenceImage is null))
 			RefreshCpuDifferenceFallback();
 	}
 
