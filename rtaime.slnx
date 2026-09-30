@@ -29,6 +29,7 @@
     <Project Path="src/Providers/rtaime.Provider.VirtualMedia/rtaime.Provider.VirtualMedia.csproj" />
     <Project Path="src/Providers/rtaime.Provider.Gpu/rtaime.Provider.Gpu.csproj" />
     <Project Path="src/Providers/rtaime.Provider.Inference/rtaime.Provider.Inference.csproj" />
+    <Project Path="src/Providers/rtaime.Provider.Srt/rtaime.Provider.Srt.csproj" />
   </Folder>
   <Folder Name="/Client/">
     <Project Path="src/Client/rtaime.Client/rtaime.Client.csproj" />
