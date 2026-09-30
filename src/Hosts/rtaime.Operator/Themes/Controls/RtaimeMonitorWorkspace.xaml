@@ -275,7 +275,7 @@
 										<controls:RtaimeButton Content="B" Command="{Binding Monitor.ShowBlueCommand, RelativeSource={RelativeSource TemplatedParent}}" IsCompact="True" Margin="0,0,2,0" ToolTip="Blue channel view" />
 										<controls:RtaimeButton Content="A" Command="{Binding Monitor.ShowAlphaCommand, RelativeSource={RelativeSource TemplatedParent}}" IsCompact="True" Margin="0,0,2,0" ToolTip="Alpha channel view" />
 										<controls:RtaimeButton Content="Y" Command="{Binding Monitor.ShowLumaCommand, RelativeSource={RelativeSource TemplatedParent}}" IsCompact="True" Margin="0,0,4,0" ToolTip="Luma channel view" />
-										<controls:RtaimeToggleButton Content="ROI" IsChecked="{Binding Monitor.IsRoiSelectionEnabled, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}" IsCompact="True" Margin="0,0,2,0" ToolTip="Select source-space ROI (R)" />
+										<controls:RtaimeToggleButton Content="ROI" IsChecked="{Binding Monitor.IsRoiSelectionEnabled, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}" IsCompact="True" Margin="0,0,2,0" ToolTip="Select source-space ROI (Shift+R)" />
 										<controls:RtaimeButton Content="CLR" Command="{Binding Monitor.ClearRoiCommand, RelativeSource={RelativeSource TemplatedParent}}" IsCompact="True" ToolTip="Clear ROI (Esc/Delete)" />
 									</StackPanel>
 								</Border>
