@@ -36,6 +36,19 @@ public sealed class GpuScopesAndFrameComparisonTests
 	}
 
 	[Fact]
+	public void Scope_analysis_has_no_unbounded_worker_queue_and_cleans_resources()
+	{
+		var source = ReadOperatorSource("Controls", "GpuScopeAnalysisSurface.cs");
+
+		Assert.DoesNotContain("Task.Run", source, StringComparison.Ordinal);
+		Assert.DoesNotContain("Channel<", source, StringComparison.Ordinal);
+		Assert.Contains("frame.SequenceNumber == _lastAnalysisSequence", source, StringComparison.Ordinal);
+		Assert.Contains("_retryTimer.Stop();", source, StringComparison.Ordinal);
+		Assert.Contains("CloseSharedResource();", source, StringComparison.Ordinal);
+		Assert.Contains("DisposeAnalysisResources();", source, StringComparison.Ordinal);
+	}
+
+	[Fact]
 	public void Gpu_compare_is_presentation_only_and_has_no_cpu_frame_materialization()
 	{
 		var source = ReadOperatorSource("Controls", "GpuMediaCompareSurface.cs");
@@ -47,6 +60,18 @@ public sealed class GpuScopesAndFrameComparisonTests
 		Assert.DoesNotContain("BitmapSource", source, StringComparison.Ordinal);
 		Assert.DoesNotContain("CopyPixels", source, StringComparison.Ordinal);
 		Assert.DoesNotContain("CopyResource", source, StringComparison.Ordinal);
+	}
+
+	[Fact]
+	public void Gpu_compare_releases_both_shared_resources_on_replacement_or_unload()
+	{
+		var source = ReadOperatorSource("Controls", "GpuMediaCompareSurface.cs");
+
+		Assert.Contains("CloseResources();", source, StringComparison.Ordinal);
+		Assert.Contains("_viewB?.Dispose()", source, StringComparison.Ordinal);
+		Assert.Contains("_viewA?.Dispose()", source, StringComparison.Ordinal);
+		Assert.Contains("_textureB?.Dispose()", source, StringComparison.Ordinal);
+		Assert.Contains("_textureA?.Dispose()", source, StringComparison.Ordinal);
 	}
 
 	[Fact]
