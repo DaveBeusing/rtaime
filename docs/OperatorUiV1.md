@@ -785,6 +785,10 @@ Timecode is displayed only when the loaded Media Deck source identity matches th
 
 Clean Program reuses `ProgramGpuFrame` and `ProgramImage` from the same `OperatorMonitoringViewModel`. Its window contains no diagnostics HUD, guides, pixel grid, scopes, comparison or inspection overlays. GPU open/device/adapter failures leave the existing Program WPF fallback visible.
 
+The MONITORING workspace uses the same shared resources for bounded technical analysis. Histogram, waveform, RGB parade and vectorscope prefer GPU compute and refresh at most 5 Hz; the existing sampled CPU analysis is retained only as an explicit fallback. Scope diagnostics expose the active processing path, sample stride/count, measured analysis duration and result-transfer bytes.
+
+A/B compare continues to define Program as A and confirmed Preview as B. Split and wipe are GPU presentation operations when compatible shared resources are available. Difference is generated directly in the GPU compare shader in display-code space; the bounded CPU Difference bitmap is created only when GPU comparison is explicitly unavailable. Color metadata must be complete and matching for Difference.
+
 ## Show Control
 
 The existing SCENES & CUES region includes a Show Control tab beside Media Cues. Its RUN view presents cue-list selection, the compact cue stack, authoritative execution state, current cue/action evidence, ARM, GO, CANCEL and recovery acknowledgement. Cue row selection is intentionally non-destructive.

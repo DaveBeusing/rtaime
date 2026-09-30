@@ -35,10 +35,17 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 	private MediaScopeSnapshot? _programScopes;
 	private DateTimeOffset _lastScopeAnalysisAt;
 	private bool _scopesEnabled;
+	private string _scopeProcessingDetail = "Scopes are disabled.";
 	private MediaCompareMode _compareMode;
 	private ImageSource? _differenceImage;
 	private string _comparisonDetail = "A/B comparison is off.";
+	private bool _isGpuComparisonActive;
 	private MonitoringFrame? _latestPreviewFrame;
+	private MonitoringFrame? _latestProgramFrame;
+	private OperatorGpuMonitoringFrame? _latestPreviewGpuFrame;
+	private OperatorGpuMonitoringFrame? _latestProgramGpuFrame;
+	private bool _gpuScopeAnalysisUnavailable;
+	private bool _gpuComparisonUnavailable;
 
 	public OperatorMonitoringViewModel(
 		OperatorViewModel controlState,
@@ -122,16 +129,25 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 	public FrameDiagnosticsSnapshot PreviewDiagnostics { get => _previewDiagnostics; private set => Set(ref _previewDiagnostics, value); }
 	public FrameDiagnosticsSnapshot ProgramDiagnostics { get => _programDiagnostics; private set => Set(ref _programDiagnostics, value); }
 	public MediaScopeSnapshot? ProgramScopes { get => _programScopes; private set => Set(ref _programScopes, value); }
+	public string ScopeProcessingDetail { get => _scopeProcessingDetail; private set => Set(ref _scopeProcessingDetail, value); }
 	public MediaCompareMode CompareMode { get => _compareMode; private set => Set(ref _compareMode, value); }
 	public ImageSource? DifferenceImage { get => _differenceImage; private set => Set(ref _differenceImage, value); }
 	public string ComparisonDetail { get => _comparisonDetail; private set => Set(ref _comparisonDetail, value); }
+	public bool IsGpuComparisonActive { get => _isGpuComparisonActive; private set => Set(ref _isGpuComparisonActive, value); }
 	public bool ScopesEnabled
 	{
 		get => _scopesEnabled;
 		set
 		{
 			if (!Set(ref _scopesEnabled, value)) return;
-			if (!value) ProgramScopes = null;
+			if (!value)
+			{
+				ProgramScopes = null;
+				ScopeProcessingDetail = "Scopes are disabled.";
+				return;
+			}
+			Volatile.Write(ref _gpuScopeAnalysisUnavailable, false);
+			ScopeProcessingDetail = "Waiting for bounded GPU scope analysis or explicit CPU fallback.";
 		}
 	}
 	public bool HasPreview => PreviewGpuFrame is not null || PreviewImage is not null;
@@ -172,35 +188,59 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 				? new OperatorGpuMonitoringFrame(descriptor)
 				: null;
 			var bitmap = frame.HasFallbackPayload ? CreateBitmap(frame) : null;
-			if (frame.HasFallbackPayload &&
-				descriptor.StreamKind == MonitoringStreamKind.Source &&
-				string.Equals(descriptor.SourceId.ToString(), _controlState.PreviewSourceId, StringComparison.Ordinal))
+			var isConfirmedPreview = descriptor.StreamKind == MonitoringStreamKind.Source &&
+				string.Equals(descriptor.SourceId.ToString(), _controlState.PreviewSourceId, StringComparison.Ordinal);
+			if (isConfirmedPreview)
 			{
-				_latestPreviewFrame = frame;
+				_latestPreviewFrame = frame.HasFallbackPayload ? frame : null;
+				if (_latestPreviewGpuFrame?.Resource.ResourceId != gpuFrame?.Resource.ResourceId)
+					Volatile.Write(ref _gpuComparisonUnavailable, false);
+				_latestPreviewGpuFrame = gpuFrame;
+			}
+			else if (descriptor.StreamKind == MonitoringStreamKind.Program)
+			{
+				_latestProgramFrame = frame.HasFallbackPayload ? frame : null;
+				if (_latestProgramGpuFrame?.Resource.ResourceId != gpuFrame?.Resource.ResourceId)
+				{
+					Volatile.Write(ref _gpuScopeAnalysisUnavailable, false);
+					Volatile.Write(ref _gpuComparisonUnavailable, false);
+				}
+				_latestProgramGpuFrame = gpuFrame;
 			}
 
 			ImageSource? difference = null;
 			string? comparisonDetail = null;
-			if (frame.HasFallbackPayload &&
-				CompareMode == MediaCompareMode.Difference &&
-				descriptor.StreamKind == MonitoringStreamKind.Program)
+			if (CompareMode == MediaCompareMode.Difference && descriptor.StreamKind == MonitoringStreamKind.Program)
 			{
-				var compatibility = MediaComparisonCompatibility.Evaluate(frame.Descriptor, _latestPreviewFrame?.Descriptor);
-				comparisonDetail = compatibility.Detail;
-				if (compatibility.IsCompatible && _latestPreviewFrame is { HasFallbackPayload: true })
+				var gpuCompatibility = MediaComparisonCompatibility.Evaluate(gpuFrame, _latestPreviewGpuFrame);
+				if (gpuCompatibility.IsCompatible && !Volatile.Read(ref _gpuComparisonUnavailable))
 				{
-					var derived = new MonitoringFrame(frame.Descriptor, MediaDifference.CreateRgba(frame, _latestPreviewFrame));
-					difference = CreateBitmap(derived);
+					comparisonDetail = "GPU Difference selected · Program=A · confirmed Preview=B.";
+				}
+				else if (frame.HasFallbackPayload && _latestPreviewFrame is { HasFallbackPayload: true } previewFallback)
+				{
+					var cpuCompatibility = MediaComparisonCompatibility.Evaluate(frame.Descriptor, previewFallback.Descriptor);
+					comparisonDetail = cpuCompatibility.IsCompatible
+						? $"CPU fallback Difference · {gpuCompatibility.Detail}"
+						: cpuCompatibility.Detail;
+					if (cpuCompatibility.IsCompatible)
+						difference = CreateDisplayDifferenceBitmap(frame, previewFallback);
+				}
+				else
+				{
+					comparisonDetail = gpuCompatibility.Detail;
 				}
 			}
 
 			MediaScopeSnapshot? scopes = null;
-			if (frame.HasFallbackPayload && ScopesEnabled && descriptor.StreamKind == MonitoringStreamKind.Program)
+			var cpuScopesRequired = !descriptor.HasSharedResource || Volatile.Read(ref _gpuScopeAnalysisUnavailable);
+			if (frame.HasFallbackPayload && ScopesEnabled && cpuScopesRequired &&
+				descriptor.StreamKind == MonitoringStreamKind.Program)
 			{
 				var now = DateTimeOffset.UtcNow;
-				if (now - _lastScopeAnalysisAt >= TimeSpan.FromMilliseconds(200))
+				if (now - _lastScopeAnalysisAt >= GpuMonitoringAnalysisPolicy.ScopeUpdateInterval)
 				{
-					scopes = MediaScopeSnapshot.Analyze(frame, sampleStride: 2);
+					scopes = MediaScopeSnapshot.Analyze(frame, sampleStride: GpuMonitoringAnalysisPolicy.MinimumScopeSampleStride);
 					_lastScopeAnalysisAt = now;
 				}
 			}
@@ -266,7 +306,11 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 			ProgramImage = bitmap;
 			ProgramFormat = format;
 			ProgramDiagnostics = FrameDiagnosticsSnapshot.FromMonitoring(descriptor);
-			if (scopes is not null) ProgramScopes = scopes;
+			if (scopes is not null)
+			{
+				ProgramScopes = scopes;
+				ScopeProcessingDetail = FormatScopeProcessingDetail(scopes);
+			}
 			return;
 		}
 
@@ -306,6 +350,8 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 		if (!Enum.TryParse<MediaCompareMode>(value, ignoreCase: true, out var mode))
 			mode = MediaCompareMode.Off;
 		CompareMode = mode;
+		Volatile.Write(ref _gpuComparisonUnavailable, false);
+		IsGpuComparisonActive = false;
 		if (mode == MediaCompareMode.Off)
 		{
 			DifferenceImage = null;
@@ -314,7 +360,7 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 		else if (mode != MediaCompareMode.Difference)
 		{
 			DifferenceImage = null;
-			ComparisonDetail = "A = Program, B = confirmed Preview monitoring frame.";
+			ComparisonDetail = "A = Program, B = confirmed Preview monitoring frame; GPU presentation is preferred when compatible.";
 		}
 		else
 		{
@@ -326,6 +372,9 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 	{
 		if (string.Equals(eventArgs.PropertyName, nameof(OperatorViewModel.PreviewSourceId), StringComparison.Ordinal))
 		{
+			_latestPreviewFrame = null;
+			_latestPreviewGpuFrame = null;
+			Volatile.Write(ref _gpuComparisonUnavailable, false);
 			_uiContext.Post(_ => RefreshPreviewFromCache(), null);
 			return;
 		}
@@ -334,6 +383,71 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 			_uiContext.Post(_ => OnPropertyChanged(nameof(PreviewState)), null);
 		else if (string.Equals(eventArgs.PropertyName, nameof(OperatorViewModel.ProgramViewerState), StringComparison.Ordinal))
 			_uiContext.Post(_ => OnPropertyChanged(nameof(ProgramState)), null);
+	}
+
+	internal void ApplyGpuScopes(MediaScopeSnapshot snapshot)
+	{
+		ArgumentNullException.ThrowIfNull(snapshot);
+		if (!ScopesEnabled || snapshot.ProcessingPath != MediaScopeProcessingPath.GpuSharedResource)
+			return;
+
+		Volatile.Write(ref _gpuScopeAnalysisUnavailable, false);
+		ProgramScopes = snapshot;
+		ScopeProcessingDetail = FormatScopeProcessingDetail(snapshot);
+	}
+
+	internal void SetGpuScopesUnavailable(string detail)
+	{
+		if (!ScopesEnabled)
+			return;
+		Volatile.Write(ref _gpuScopeAnalysisUnavailable, true);
+		ScopeProcessingDetail = $"CPU fallback eligible · {detail}";
+	}
+
+	internal void SetGpuComparisonState(bool active, string detail)
+	{
+		if (CompareMode == MediaCompareMode.Off)
+		{
+			IsGpuComparisonActive = false;
+			return;
+		}
+
+		var wasUnavailable = Volatile.Read(ref _gpuComparisonUnavailable);
+		IsGpuComparisonActive = active;
+		Volatile.Write(ref _gpuComparisonUnavailable, !active);
+		ComparisonDetail = detail;
+		if (active)
+		{
+			DifferenceImage = null;
+			return;
+		}
+
+		if (CompareMode == MediaCompareMode.Difference && (!wasUnavailable || DifferenceImage is null))
+			RefreshCpuDifferenceFallback();
+	}
+
+	private void RefreshCpuDifferenceFallback()
+	{
+		if (_latestProgramFrame is not { HasFallbackPayload: true } program ||
+			_latestPreviewFrame is not { HasFallbackPayload: true } preview)
+			return;
+
+		var compatibility = MediaComparisonCompatibility.Evaluate(program.Descriptor, preview.Descriptor);
+		if (!compatibility.IsCompatible)
+		{
+			DifferenceImage = null;
+			ComparisonDetail = compatibility.Detail;
+			return;
+		}
+
+		DifferenceImage = CreateDisplayDifferenceBitmap(program, preview);
+		ComparisonDetail = "CPU fallback Difference · GPU compare path unavailable.";
+	}
+
+	private static string FormatScopeProcessingDetail(MediaScopeSnapshot snapshot)
+	{
+		var duration = snapshot.AnalysisDuration.TotalMilliseconds;
+		return $"{snapshot.ProcessingPath} · ≤5 Hz · stride {snapshot.SampleStride} · {snapshot.SampleCount:N0} samples · {duration:0.###} ms · {snapshot.ResultTransferBytes:N0} B transfer · {snapshot.ManagedAllocationBytes:N0} B managed alloc · {snapshot.Detail}";
 	}
 
 	private void RefreshPreviewFromCache()
@@ -360,6 +474,33 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 		if (string.Equals(controlState, "RECOVERING", StringComparison.Ordinal) || !hasFrame)
 			return "RECOVERING";
 		return "LIVE";
+	}
+
+	private static BitmapSource CreateDisplayDifferenceBitmap(MonitoringFrame program, MonitoringFrame preview)
+	{
+		var rgba = MediaDifference.CreateDisplayRgba(program, preview);
+		var bgra = new byte[rgba.Length];
+		for (var offset = 0; offset < rgba.Length; offset += 4)
+		{
+			bgra[offset] = rgba[offset + 2];
+			bgra[offset + 1] = rgba[offset + 1];
+			bgra[offset + 2] = rgba[offset];
+			bgra[offset + 3] = rgba[offset + 3];
+		}
+
+		var width = checked((int)program.Descriptor.Width);
+		var height = checked((int)program.Descriptor.Height);
+		var bitmap = BitmapSource.Create(
+			width,
+			height,
+			96,
+			96,
+			PixelFormats.Bgra32,
+			null,
+			bgra,
+			checked(width * 4));
+		bitmap.Freeze();
+		return bitmap;
 	}
 
 	private static BitmapSource CreateBitmap(MonitoringFrame frame)

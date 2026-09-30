@@ -42,7 +42,7 @@ ROI interaction is presentation-only. Operators can enable ROI selection, drag a
 
 Monitoring contract version 1.3 can carry a read-only shared GPU resource with Windows graphics presentation metadata alongside the bounded CPU fallback. `GpuMonitorPresentationSurface` consumes that resource for Preview and Program presentation when adapter/resource validation succeeds.
 
-The presentation surface does not expose CUDA pointers, mutate the shared resource, create a second decoder or become Program authority. The existing CPU payload remains the source for the legacy 1×1 pixel inspector, CPU scopes and Difference analysis; it is not used to build the visible full-resolution GPU channel image or ROI statistics.
+The presentation surface does not expose CUDA pointers, mutate the shared resource, create a second decoder or become Program authority. The existing CPU payload remains the source for the legacy 1×1 pixel inspector and the explicit fallback for scopes/A-B Difference. Healthy scope and comparison paths use the shared GPU resource and bounded derived results instead of constructing full-resolution CPU frames.
 
 Clean Program reuses the same Program GPU resource but intentionally excludes pixel inspection and diagnostic overlays.
 

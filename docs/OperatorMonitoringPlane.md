@@ -136,7 +136,13 @@ The clean window contains only the Program presentation surfaces. It does not ad
 
 Pixel inspection keeps the full-resolution GPU presentation coordinate as its source coordinate. The existing 1×1 inspection sampler remains intentionally bounded to the already-present 320×180 CPU monitoring bitmap. The full-resolution coordinate is deterministically mapped to its bounded monitoring sample and is reported as display-code evidence, not fabricated source-code evidence.
 
-Full-frame channel inspection and ROI statistics are separate GPU-resident presentation capabilities. ROI analysis returns only reduced numeric evidence; it does not transfer ROI pixels or a full-resolution frame to the CPU. Technical scopes and Difference analysis continue to consume the bounded CPU fallback at their existing limited cadence. None of these tools creates another decoder, full-resolution Program readback or production renderer.
+Full-frame channel inspection and ROI statistics are GPU-resident presentation capabilities. ROI analysis returns only reduced numeric evidence; it does not transfer ROI pixels or a full-resolution frame to the CPU.
+
+Technical scopes now prefer the same read-only Program shared resource. A bounded D3D11 compute pass produces fixed histogram, waveform, RGB-parade and vectorscope result buffers at no more than 5 Hz. At most 262,144 source samples are analyzed per update and only the fixed 86,016-byte derived result buffer is copied to CPU-visible memory for the existing custom scope controls. The existing 320×180 CPU scope analysis remains the explicit fallback when shared-GPU analysis is unavailable.
+
+A/B comparison keeps Program=A and confirmed Preview=B. Compatible shared resources use GPU presentation for split, wipe and Difference. Difference is calculated in display-code space in the compare shader and does not create a full-frame CPU difference bitmap on the healthy GPU path. Unknown color semantics are never treated as compatible. The existing CPU compare surface remains the explicit fallback.
+
+None of these tools creates another decoder, full-resolution Program readback or production renderer. See `docs/GpuScopesAndFrameComparison.md` for the exact result layout, compatibility rules and qualification boundary.
 
 ## Verification
 
@@ -151,6 +157,8 @@ Automated coverage qualifies:
 - full-resolution source-coordinate mapping to the bounded 1×1 inspection payload;
 - source-space ROI clamping and stable projection through Fit/Fill/Pixel Perfect/zoom/pan/DPI changes;
 - GPU channel-mode shader semantics and bounded 16-value ROI reduction;
+- bounded GPU scope result layout, 5 Hz scheduling, CPU/GPU result-shape parity and explicit vectorscope color availability;
+- GPU split/wipe/Difference presentation with explicit Program/Preview compatibility and CPU fallback;
 - one GPU monitor surface plus one WPF fallback surface without nested Viewbox scaling;
 - Clean Program reuse of `ProgramGpuFrame` with no Operator overlay layer;
 - absence of CPU bitmap materialization inside the active GPU presentation control.

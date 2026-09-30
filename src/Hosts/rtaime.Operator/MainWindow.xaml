@@ -1345,6 +1345,15 @@
 								</Grid.Style>
 								<Grid.RowDefinitions><RowDefinition Height="*" /><RowDefinition Height="6" /><RowDefinition Height="*" /></Grid.RowDefinitions>
 								<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="6" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+								<controls:GpuScopeAnalysisSurface
+									Width="1"
+									Height="1"
+									HorizontalAlignment="Left"
+									VerticalAlignment="Top"
+									Panel.ZIndex="-1"
+									Monitoring="{Binding Monitoring, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+									GpuFrame="{Binding Monitoring.ProgramGpuFrame, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+									AnalysisEnabled="{Binding Monitoring.ScopesEnabled, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
 								<Border Grid.Row="0" Grid.Column="0" Background="{DynamicResource OperatorDiagnosticSurfaceBrush}" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" Padding="4">
 									<Grid><TextBlock Text="HISTOGRAM" Style="{StaticResource OperatorLabel}" Panel.ZIndex="2" /><controls:RtaimeMediaScope Margin="0,16,0,0" Snapshot="{Binding Monitoring.ProgramScopes, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" ScopeKind="Histogram" Foreground="{DynamicResource OperatorTextBrush}" /></Grid>
 								</Border>
@@ -1358,7 +1367,8 @@
 									<Grid><TextBlock Text="VECTORSCOPE" Style="{StaticResource OperatorLabel}" Panel.ZIndex="2" /><controls:RtaimeMediaScope Margin="0,16,0,0" Snapshot="{Binding Monitoring.ProgramScopes, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" ScopeKind="Vectorscope" Foreground="{DynamicResource OperatorTextBrush}" /></Grid>
 								</Border>
 							</Grid>
-							<TextBlock Text="Scopes use the existing sampled monitoring frame, refresh at most 5 Hz and never create another decoder or full-frame readback." Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,7,0,0" />
+							<TextBlock Text="{Binding Monitoring.ScopeProcessingDetail, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,7,0,0" />
+							<TextBlock Text="Scopes prefer bounded shared-GPU analysis at no more than 5 Hz; the existing sampled CPU path remains the explicit fallback and never creates another decoder or Program readback." Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,3,0,0" />
 							<Border Height="1" Background="{DynamicResource OperatorBorderBrush}" Margin="0,14,0,12" />
 							<TextBlock Text="A/B COMPARE" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,8" />
 							<UniformGrid Rows="2" Columns="3" Margin="0,0,0,8">
@@ -1370,13 +1380,33 @@
 								<controls:RtaimeButton Content="DIFFERENCE" Command="{Binding Monitoring.SetCompareModeCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" CommandParameter="Difference" IsCompact="True" />
 							</UniformGrid>
 							<Border Height="180" Background="{DynamicResource OperatorThumbnailCanvasBrush}" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" ClipToBounds="True">
-								<controls:RtaimeMediaCompareView
-									FrameA="{Binding Monitoring.ProgramImage, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-									FrameB="{Binding Monitoring.PreviewImage, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-									DifferenceFrame="{Binding Monitoring.DifferenceImage, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-									CompareMode="{Binding Monitoring.CompareMode, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-									WipePosition="0.5"
-									SnapsToDevicePixels="True" />
+								<Grid>
+									<controls:RtaimeMediaCompareView
+										FrameA="{Binding Monitoring.ProgramImage, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+										FrameB="{Binding Monitoring.PreviewImage, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+										DifferenceFrame="{Binding Monitoring.DifferenceImage, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+										CompareMode="{Binding Monitoring.CompareMode, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+										WipePosition="0.5"
+										SnapsToDevicePixels="True">
+										<controls:RtaimeMediaCompareView.Style>
+											<Style TargetType="{x:Type controls:RtaimeMediaCompareView}">
+												<Setter Property="Visibility" Value="Visible" />
+												<Style.Triggers>
+													<DataTrigger Binding="{Binding Monitoring.IsGpuComparisonActive, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="True">
+														<Setter Property="Visibility" Value="Collapsed" />
+													</DataTrigger>
+												</Style.Triggers>
+											</Style>
+										</controls:RtaimeMediaCompareView.Style>
+									</controls:RtaimeMediaCompareView>
+									<controls:GpuMediaCompareSurface
+										Monitoring="{Binding Monitoring, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+										FrameA="{Binding Monitoring.ProgramGpuFrame, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+										FrameB="{Binding Monitoring.PreviewGpuFrame, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+										CompareMode="{Binding Monitoring.CompareMode, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+										WipePosition="0.5"
+										Panel.ZIndex="2" />
+								</Grid>
 							</Border>
 							<TextBlock Text="{Binding Monitoring.ComparisonDetail, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,6,0,0" />
 						</StackPanel>
