@@ -192,28 +192,20 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 				string.Equals(descriptor.SourceId.ToString(), _controlState.PreviewSourceId, StringComparison.Ordinal);
 			if (isConfirmedPreview)
 			{
-				if (frame.HasFallbackPayload)
-					_latestPreviewFrame = frame;
-				if (gpuFrame is not null)
-				{
-					if (_latestPreviewGpuFrame?.Resource.ResourceId != gpuFrame.Resource.ResourceId)
-						Volatile.Write(ref _gpuComparisonUnavailable, false);
-					_latestPreviewGpuFrame = gpuFrame;
-				}
+				_latestPreviewFrame = frame.HasFallbackPayload ? frame : null;
+				if (_latestPreviewGpuFrame?.Resource.ResourceId != gpuFrame?.Resource.ResourceId)
+					Volatile.Write(ref _gpuComparisonUnavailable, false);
+				_latestPreviewGpuFrame = gpuFrame;
 			}
 			else if (descriptor.StreamKind == MonitoringStreamKind.Program)
 			{
-				if (frame.HasFallbackPayload)
-					_latestProgramFrame = frame;
-				if (gpuFrame is not null)
+				_latestProgramFrame = frame.HasFallbackPayload ? frame : null;
+				if (_latestProgramGpuFrame?.Resource.ResourceId != gpuFrame?.Resource.ResourceId)
 				{
-					if (_latestProgramGpuFrame?.Resource.ResourceId != gpuFrame.Resource.ResourceId)
-					{
-						Volatile.Write(ref _gpuScopeAnalysisUnavailable, false);
-						Volatile.Write(ref _gpuComparisonUnavailable, false);
-					}
-					_latestProgramGpuFrame = gpuFrame;
+					Volatile.Write(ref _gpuScopeAnalysisUnavailable, false);
+					Volatile.Write(ref _gpuComparisonUnavailable, false);
 				}
+				_latestProgramGpuFrame = gpuFrame;
 			}
 
 			ImageSource? difference = null;
