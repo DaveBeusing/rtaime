@@ -2788,24 +2788,26 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				routedAudioSource);
 		}
 
-		var health = result.Status switch
-		{
-			AudioFollowVideoStatus.Underrun => V1AudioHealthState.Underrun,
-			AudioFollowVideoStatus.Emitted when result.Muted => V1AudioHealthState.Muted,
-			AudioFollowVideoStatus.Emitted when result.Clipping => V1AudioHealthState.Clipping,
-			AudioFollowVideoStatus.Emitted when result.PeakLevel <= 0.000001 => V1AudioHealthState.Silence,
-			AudioFollowVideoStatus.Emitted => V1AudioHealthState.Healthy,
-			_ => V1AudioHealthState.Error
-		};
+		var mix = _lastAudioProductionResult;
+		var programBus = _audioProduction.Configuration.GetBus(AudioBusId.Program);
+		var health = programBus.Muted
+			? V1AudioHealthState.Muted
+			: mix.MissingSourceCount > 0
+				? V1AudioHealthState.Error
+				: mix.Clipping
+					? V1AudioHealthState.Clipping
+					: mix.MasterPeak <= 0.000001
+						? V1AudioHealthState.Silence
+						: V1AudioHealthState.Healthy;
 		return new V1AudioProgramSnapshot(
 			result.VideoSourceId,
 			result.StreamId ?? routedStream,
 			result.Gain.Linear,
-			result.Muted,
-			result.LeftPeakLevel,
-			result.RightPeakLevel,
-			result.PeakLevel,
-			result.Clipping,
+			result.Muted || programBus.Muted,
+			mix.LeftPeak,
+			mix.RightPeak,
+			mix.MasterPeak,
+			mix.Clipping,
 			health,
 			routing.Mode,
 			routing.Revision,
@@ -3289,7 +3291,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			throw new InvalidOperationException("Advanced audio production currently requires an exact Stereo 48 kHz Float32 block.");
 
 		var amplitude = checked((float)meter.PeakLevel);
-		for (var sampleIndex = 0; sampleIndex < descriptor.Timing.SampleCount; sampleIndex++)
+		for (uint sampleIndex = 0; sampleIndex < descriptor.Timing.SampleCount; sampleIndex++)
 		{
 			var absoluteSample = descriptor.Timing.SamplePosition + sampleIndex;
 			var value = (absoluteSample & 1UL) == 0 ? amplitude : -amplitude;
