@@ -85,6 +85,7 @@ Assert-Condition ($process -match 'if \(ExternalControl\.Required\)' -and $proce
 Assert-Condition ($dispatcher -match 'DispatchExternalAsync' -and $dispatcher -match 'ControlHost response envelope') "External dispatch must reuse ControlHost response and idempotency semantics."
 
 Assert-Condition ($client -match 'class GrpcOperatorControlTransport : IOperatorControlTransport') "External client transport must conform to the existing Operator control abstraction."
+Assert-Condition ($client -match 'DiscoverAsync' -and $client -match 'ExternalControlCapabilitySnapshot') "External client SDK must expose capability and readiness discovery without altering the common production-control abstraction."
 Assert-Condition ($client -match 'Endpoint\.Scheme' -and $client -match 'Uri\.UriSchemeHttps') "External client configuration must reject non-HTTPS endpoints."
 Assert-Condition ($client -match 'ExternalControlTrustMode\.System' -and $client -match 'PinnedServerCertificate' -and $client -match 'TestOnlyInsecure') "Client trust modes must keep system/pinned production trust distinct from test-only bypass."
 Assert-Condition ($client -match 'RetryNetworkUncertaintyOnce' -and $client -match 'StatusCode\.Unavailable or StatusCode\.DeadlineExceeded') "External uncertain-outcome retry must remain explicitly bounded."
@@ -94,6 +95,7 @@ Assert-Condition ($localClient -match 'class NamedPipeOperatorControlTransport :
 Assert-Condition ($architectureTests -match 'External_control_schema_exposes_only_ControlHost_semantics') "Architecture regression must protect the external Production Authority boundary."
 Assert-Condition ($architectureTests -match 'ControlHost_external_transport_does_not_reference_other_host_projects') "Architecture regression must prevent direct host-project coupling."
 Assert-Condition ($integrationTests -match 'Grpc_control_reuses_ControlHost_authority_and_named_pipe_remains_available') "Integration qualification must prove shared ControlHost authority and local transport coexistence."
+Assert-Condition ($integrationTests -match 'Capability_discovery_reports_authenticated_role_and_readiness') "Integration qualification must prove authenticated capability and readiness discovery."
 Assert-Condition ($integrationTests -match 'Observer_can_read_but_server_denies_production_mutation') "Integration qualification must prove server-side authorization."
 Assert-Condition ($integrationTests -match 'Duplicate_external_mutation_is_idempotent_and_conflicting_request_id_fails_closed') "Integration qualification must prove external idempotency and conflicting request-id rejection."
 Assert-Condition ($integrationTests -match 'Mutual_tls_authentication_accepts_pinned_client_certificate') "Integration qualification must exercise mTLS."
