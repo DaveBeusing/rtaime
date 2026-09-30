@@ -650,7 +650,7 @@ float4 PSMain(PSInput input) : SV_TARGET
     if (InspectionMode == 3)
         return float4(0.0, 0.0, sample.b, 1.0);
     if (InspectionMode == 4)
-        return float4(sample.a, sample.a, sample.a, 1.0);
+        return float4(sample.a, sample.a, sample.a, sample.a);
     if (InspectionMode == 5)
     {
         float luma = dot(sample.rgb, float3(0.2126, 0.7152, 0.0722));
