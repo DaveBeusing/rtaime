@@ -1065,8 +1065,12 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 						routedAudioSource,
 						_audioProductionSourceBuffers,
 						_programAudioMixSamples.AsSpan(0, requiredProgramAudioValues));
-					programAudioPayload = MemoryMarshal.AsBytes(
-						_programAudioMixSamples.AsSpan(0, requiredProgramAudioValues)).ToArray();
+					programAudioPayload =
+						audio.Status == AudioFollowVideoStatus.Underrun &&
+						_lastAudioProductionResult.ActiveSourceCount == 0
+							? Array.Empty<byte>()
+							: MemoryMarshal.AsBytes(
+								_programAudioMixSamples.AsSpan(0, requiredProgramAudioValues)).ToArray();
 					var videoSyncEvent = avSyncEnabled
 						? _motionTimingTestSignal.InspectSyncEvent(output.Descriptor.Timing)
 						: default;
