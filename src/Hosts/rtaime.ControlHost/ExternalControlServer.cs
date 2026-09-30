@@ -181,14 +181,14 @@ public sealed record ExternalControlServerOptions
 			{
 				var keyPath = Path.GetFullPath(CertificateKeyPath);
 				if (!File.Exists(keyPath)) throw new FileNotFoundException("External TLS server private key was not found.", keyPath);
-				certificate = X509Certificate2.CreateFromPemFile(path, keyPath);
+				certificate = LoadPemCertificate(path, keyPath);
 			}
 			else
 			{
 				var password = string.IsNullOrWhiteSpace(CertificatePasswordEnvironmentVariable)
 					? null
 					: environment(CertificatePasswordEnvironmentVariable);
-				certificate = X509CertificateLoader.LoadPkcs12FromFile(path, password, X509KeyStorageFlags.EphemeralKeySet);
+				certificate = X509CertificateLoader.LoadPkcs12FromFile(path, password, TlsKeyStorageFlags);
 			}
 		}
 		else
@@ -211,6 +211,20 @@ public sealed record ExternalControlServerOptions
 		}
 		return certificate;
 	}
+
+	private static X509Certificate2 LoadPemCertificate(string certificatePath, string keyPath)
+	{
+		using var certificate = X509Certificate2.CreateFromPemFile(certificatePath, keyPath);
+		return X509CertificateLoader.LoadPkcs12(
+			certificate.Export(X509ContentType.Pkcs12),
+			password: null,
+			TlsKeyStorageFlags);
+	}
+
+	private static X509KeyStorageFlags TlsKeyStorageFlags =>
+		OperatingSystem.IsWindows()
+			? X509KeyStorageFlags.DefaultKeySet
+			: X509KeyStorageFlags.EphemeralKeySet;
 
 	internal static bool TryResolveAddress(string value, out IPAddress address)
 	{
