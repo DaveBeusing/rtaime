@@ -60,6 +60,9 @@ public sealed class GpuChannelAndRoiInspectionTests
 
 		Assert.Contains("AnalysisResultCount = 16", source, StringComparison.Ordinal);
 		Assert.Contains("new MediaInspectionRoiStatistics(", source, StringComparison.Ordinal);
+		Assert.Contains("AnalysisDuration = Stopwatch.GetElapsedTime(started)", source, StringComparison.Ordinal);
+		Assert.Contains("ResultTransferBytes = AnalysisResultCount * sizeof(uint)", source, StringComparison.Ordinal);
+		Assert.Contains("ManagedAllocationBytes = GC.GetAllocatedBytesForCurrentThread() - allocationStart", source, StringComparison.Ordinal);
 		Assert.Contains("Monitor.SetRoiStatistics(statistics)", source, StringComparison.Ordinal);
 		Assert.Contains("InterlockedAdd(AnalysisResults[0], 1)", source, StringComparison.Ordinal);
 		Assert.Contains("InterlockedMax(AnalysisResults[15]", source, StringComparison.Ordinal);
