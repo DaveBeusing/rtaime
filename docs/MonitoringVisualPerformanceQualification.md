@@ -63,7 +63,8 @@ The software qualification envelope is intentionally deterministic and hardware-
 - ROI analysis transfers only 16 `uint` values / 64 bytes of reduced numeric evidence.
 - Monitoring diagnostics HUD refresh is bounded to a 200 ms cadence.
 - Preview plus Program shared monitoring ownership is bounded to two published shared resources per active monitoring tap.
-- Replaced shared monitoring resources must be released; disconnect must return active shared-resource counts to zero.
+- The GPU provider permits at most four active monitoring leases: the current published pair plus one complete replacement pair. This fixed headroom is required so replacement does not fail merely because the previous pair is still published.
+- Replaced shared monitoring resources must be released; after replacement settles the active provider count returns to two, and disconnect returns it to zero.
 - Geometry and target-stabilization qualification uses allocation measurements after warmup and rejects material steady-state managed growth.
 - Monitoring subscriptions are bounded and latest-wins under pressure rather than blocking Program.
 
