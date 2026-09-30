@@ -41,11 +41,11 @@ public sealed class NetworkOutputArchitectureTests
 	{
 		var root = FindRepositoryRoot();
 		var controlHost = File.ReadAllText(Path.Combine(root, "src", "Hosts", "rtaime.ControlHost", "ControlHostIpcServer.cs"));
-		var runtimeHost = File.ReadAllText(Path.Combine(root, "src", "Hosts", "rtaime.RuntimeHost", "RuntimeHostProcess.cs"));
+		var runtimeService = File.ReadAllText(Path.Combine(root, "src", "Hosts", "rtaime.RuntimeHost", "V1RuntimeHostService.cs"));
 
 		Assert.DoesNotContain("NativeSrtTransport", controlHost, StringComparison.Ordinal);
 		Assert.DoesNotContain("WindowsMediaFoundationSrtEncoder", controlHost, StringComparison.Ordinal);
-		Assert.Contains("RuntimeNetworkOutputBridge", runtimeHost, StringComparison.Ordinal);
+		Assert.Contains("RuntimeNetworkOutputBridge", runtimeService, StringComparison.Ordinal);
 	}
 
 	private static string FindRepositoryRoot()
