@@ -33,7 +33,13 @@ The Windows V1 reference transport uses `System.IO.Pipes` with `PipeOptions.Curr
 - `rtaime.v1.runtime.default`
 - `rtaime.v1.ai.default`
 
-Endpoints are configuration values, not contract identities. Local Named Pipes are the qualified V1 reference transport. TCP, HTTP, gRPC, TLS, cluster discovery, NMOS and remote-network deployment remain UNVERIFIED.
+Endpoints are configuration values, not contract identities. Local Named Pipes remain the qualified V1 reference transport and the default local control path.
+
+A post-V1 optional external boundary is now implemented on ControlHost using gRPC over TLS. It reuses the existing ControlHost command/snapshot semantics and does not expose RuntimeHost or AIHost directly. The external listener is disabled by default and binds to loopback unless explicitly configured otherwise.
+
+The implemented external software boundary includes TLS 1.2/1.3, server certificate validation, optional mTLS, authenticated client identity, Observer/Operator/Administrator role mapping, bounded message/session/request-rate limits, idempotent retry behavior and state-version resynchronization. Public-Internet deployment, enterprise PKI operations, cluster discovery, NMOS and WAN qualification remain UNVERIFIED unless separately qualified.
+
+See `docs/ExternalControlDeployment.md` for deployment and security configuration.
 
 ## Framing and envelope
 
@@ -211,7 +217,7 @@ The local-process security baseline includes:
 - no serializer type-name polymorphism
 - no credential/secret payload requirement
 
-Network authentication, TLS/PKI and RBAC are outside this local V1 IPC baseline.
+Network authentication, TLS and RBAC remain outside the local Named Pipe baseline itself. They are implemented separately at the optional ControlHost external boundary described in `docs/ExternalControlDeployment.md`. That boundary does not weaken or replace the local V1 security model.
 
 ## Failure behavior
 
@@ -225,7 +231,7 @@ Runtime transport loss leaves Control authority unchanged and places ControlHost
 
 ## Evidence boundary
 
-Managed CI can prove framing, mappings, local Named Pipe behavior, cross-process command paths, cancellation, failure isolation, process restart semantics and topology invariants. It does not prove remote-network latency, broadcast hard-real-time behavior, GPU cross-process memory sharing, professional hardware timing, distributed HA or security certification.
+Managed CI can prove framing, mappings, local Named Pipe behavior, the implemented gRPC/TLS software path, authentication/authorization behavior, bounded remote-control rejection paths, cross-process command paths, cancellation, failure isolation, process restart semantics and topology invariants. It does not prove public-network deployment, enterprise PKI operations, WAN latency, broadcast hard-real-time behavior, GPU cross-process memory sharing, professional hardware timing, distributed HA or security certification.
 
 
 ## recording control extension
