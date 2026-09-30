@@ -416,7 +416,8 @@ public sealed class RuntimeHostProcess
 			processOptions.SourceBId,
 			processOptions.Format,
 			writer,
-			backend);
+			backend,
+			processOptions.NetworkOutputs);
 	}
 
 	private async Task RunMediaLoopAsync(
