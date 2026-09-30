@@ -428,7 +428,7 @@ public sealed class GpuMonitorPresentationSurface : DrawingSurface
 		var sampleHeight = (roi.Height + stride - 1) / stride;
 
 		UpdateAnalysisConstants(context, roi, stride, sourceWidth, sourceHeight);
-		context.ClearUnorderedAccessViewUint(_analysisResultsView, new uint[] { 0, 0, 0, 0 });
+		context.ClearUnorderedAccessView(_analysisResultsView, new Int4(0, 0, 0, 0));
 		context.CSSetShader(_analysisShader);
 		context.CSSetShaderResource(0, _sharedView);
 		context.CSSetConstantBuffer(0, _colorBuffer);
