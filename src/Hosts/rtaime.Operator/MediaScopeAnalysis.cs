@@ -43,8 +43,12 @@ public static class GpuMonitoringAnalysisPolicy
 		if (height == 0) throw new ArgumentOutOfRangeException(nameof(height));
 
 		var area = checked((double)width * height);
-		var bounded = Math.Max(1, (int)Math.Ceiling(Math.Sqrt(area / MaxScopeSamples)));
-		return Math.Max(MinimumScopeSampleStride, bounded);
+		var stride = Math.Max(
+			MinimumScopeSampleStride,
+			Math.Max(1, (int)Math.Ceiling(Math.Sqrt(area / MaxScopeSamples))));
+		while (checked(((long)width + stride - 1) / stride * (((long)height + stride - 1) / stride)) > MaxScopeSamples)
+			stride++;
+		return stride;
 	}
 }
 
