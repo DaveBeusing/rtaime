@@ -127,7 +127,7 @@ Software validation covers:
 - shutdown reaches zero active Program readback leases;
 - resource-only Program monitoring can omit the CPU payload for a subscriber that explicitly does not require it;
 - shared resources remain bounded, retain the backing surface while active and return to zero on replacement/disconnect/shutdown;
-- sustained Preview/Program shared-resource replacement keeps the published monitoring set bounded to two resources and returns to zero after subscriber disconnect;
+- sustained Preview/Program shared-resource replacement keeps the published monitoring set bounded to two resources after each settled update, permits only one bounded old-plus-new replacement pair (four provider leases transiently), and returns to zero after subscriber disconnect;
 - stale/foreign shared resource identities are rejected;
 - shared-resource export does not add another Program readback;
 - a warmed 1080p readback allocation regression remains below 1 MiB across 64 readbacks, which is far below one 8,294,400-byte RGBA frame per iteration.
