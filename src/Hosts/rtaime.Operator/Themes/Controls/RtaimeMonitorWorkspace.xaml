@@ -254,7 +254,7 @@
 									<TextBlock Text="{Binding Monitor.InspectionReadout, RelativeSource={RelativeSource TemplatedParent}}" FontSize="{StaticResource OperatorFontSizeMicro}" Foreground="{DynamicResource OperatorOverlayTextBrush}" FontFamily="Consolas" />
 								</Border>
 
-								<Border VerticalAlignment="Top" HorizontalAlignment="Right" Margin="8,60,8,0" Padding="6,3" Style="{StaticResource OperatorMonitorHeaderOverlay}" CornerRadius="{StaticResource OperatorRadiusOverlay}" Panel.ZIndex="56" IsHitTestVisible="False" MaxWidth="680">
+								<Border VerticalAlignment="Top" HorizontalAlignment="Right" Margin="8,60,8,0" Padding="6,3" CornerRadius="{StaticResource OperatorRadiusOverlay}" Panel.ZIndex="56" IsHitTestVisible="False" MaxWidth="680">
 									<Border.Style>
 										<Style TargetType="Border" BasedOn="{StaticResource OperatorMonitorHeaderOverlay}">
 											<Setter Property="Visibility" Value="Collapsed" />
@@ -280,7 +280,7 @@
 									</StackPanel>
 								</Border>
 
-								<Border VerticalAlignment="Center" HorizontalAlignment="Center" Padding="12,8" Style="{StaticResource OperatorMonitorHeaderOverlay}" CornerRadius="{StaticResource OperatorRadiusOverlay}" Panel.ZIndex="58" IsHitTestVisible="False">
+								<Border VerticalAlignment="Center" HorizontalAlignment="Center" Padding="12,8" CornerRadius="{StaticResource OperatorRadiusOverlay}" Panel.ZIndex="58" IsHitTestVisible="False">
 									<Border.Style>
 										<Style TargetType="Border" BasedOn="{StaticResource OperatorMonitorHeaderOverlay}">
 											<Setter Property="Visibility" Value="Collapsed" />
