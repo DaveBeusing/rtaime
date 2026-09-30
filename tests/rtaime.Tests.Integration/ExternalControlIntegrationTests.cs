@@ -243,6 +243,26 @@ public sealed class ExternalControlIntegrationTests
 	}
 
 	[Fact]
+	public async Task Client_reconnects_and_resnapshots_after_ControlHost_restart()
+	{
+		await using var fixture = await ExternalFixture.StartAsync(ExternalControlRole.Operator);
+		await using var grpc = fixture.CreateClient();
+		var before = await grpc.GetSnapshotAsync();
+		var previousHost = grpc.HostInstanceId;
+		var previousRevision = before.Production.Revision;
+
+		await fixture.RestartControlAsync();
+
+		var after = await grpc.GetSnapshotAsync();
+
+		Assert.NotNull(previousHost);
+		Assert.NotEqual(previousHost, grpc.HostInstanceId);
+		Assert.False(grpc.RequiresFullSnapshot);
+		Assert.Equal(previousRevision, after.Production.Revision);
+		Assert.Equal(ControlHostProcessState.Ready, fixture.Control.Lifecycle.State);
+	}
+
+	[Fact]
 	public async Task Rate_limit_rejects_excess_requests_without_affecting_ControlHost_continuity()
 	{
 		await using var fixture = await ExternalFixture.StartAsync(ExternalControlRole.Operator, requestsPerSecond: 1, requestBurst: 1);
@@ -279,9 +299,11 @@ public sealed class ExternalControlIntegrationTests
 	private sealed class ExternalFixture : IAsyncDisposable
 	{
 		private readonly CancellationTokenSource _runtimeStop;
-		private readonly CancellationTokenSource _controlStop;
+		private CancellationTokenSource _controlStop;
 		private readonly Task<RuntimeHostExitCode> _runtimeRun;
-		private readonly Task<ControlHostExitCode> _controlRun;
+		private Task<ControlHostExitCode> _controlRun;
+		private readonly ControlHostProcessOptions _controlOptions;
+		private ControlHostProcess _control;
 		private readonly string? _tokenEnvironment;
 		private readonly string _root;
 		private readonly CertificateMaterial _serverCertificate;
@@ -291,6 +313,7 @@ public sealed class ExternalControlIntegrationTests
 		private ExternalFixture(
 			RuntimeHostProcess runtime,
 			ControlHostProcess control,
+			ControlHostProcessOptions controlOptions,
 			string controlEndpoint,
 			int port,
 			string root,
@@ -304,7 +327,8 @@ public sealed class ExternalControlIntegrationTests
 			Task<ControlHostExitCode> controlRun)
 		{
 			Runtime = runtime;
-			Control = control;
+			_control = control;
+			_controlOptions = controlOptions;
 			ControlEndpoint = controlEndpoint;
 			Port = port;
 			_root = root;
@@ -319,7 +343,7 @@ public sealed class ExternalControlIntegrationTests
 		}
 
 		public RuntimeHostProcess Runtime { get; }
-		public ControlHostProcess Control { get; }
+		public ControlHostProcess Control => _control;
 		public string ControlEndpoint { get; }
 		public int Port { get; }
 
@@ -365,7 +389,7 @@ public sealed class ExternalControlIntegrationTests
 			var runtimeStop = new CancellationTokenSource();
 			var controlStop = new CancellationTokenSource();
 			var runtime = new RuntimeHostProcess(RuntimeHostProcessOptions.Default with { ListenEndpoint = runtimeEndpoint });
-			var control = new ControlHostProcess(ControlHostProcessOptions.Default with
+			var controlOptions = ControlHostProcessOptions.Default with
 			{
 				ListenEndpoint = controlEndpoint,
 				RuntimeEndpoint = runtimeEndpoint,
@@ -373,7 +397,8 @@ public sealed class ExternalControlIntegrationTests
 				RequestTimeout = TimeSpan.FromSeconds(10),
 				DurabilityRoot = root,
 				ExternalControl = external
-			});
+			};
+			var control = new ControlHostProcess(controlOptions);
 			var runtimeRun = runtime.RunAsync(runtimeStop.Token);
 			var controlRun = control.RunAsync(controlStop.Token);
 			await WaitUntilAsync(() =>
@@ -382,8 +407,25 @@ public sealed class ExternalControlIntegrationTests
 				control.ExternalControlServer?.Snapshot.State == ExternalControlServerState.Active);
 
 			return new ExternalFixture(
-				runtime, control, controlEndpoint, external.Port, root, serverCertificate, clientCertificate,
+				runtime, control, controlOptions, controlEndpoint, external.Port, root, serverCertificate, clientCertificate,
 				tokenEnvironment, token, runtimeStop, controlStop, runtimeRun, controlRun);
+		}
+
+		public async Task RestartControlAsync()
+		{
+			_controlStop.Cancel();
+			var exit = await _controlRun.ConfigureAwait(false);
+			if (exit != ControlHostExitCode.Success)
+				throw new InvalidOperationException($"ControlHost restart precondition failed because the previous instance exited with '{exit}'.");
+			_controlStop.Dispose();
+
+			_controlStop = new CancellationTokenSource();
+			_control = new ControlHostProcess(_controlOptions);
+			_controlRun = _control.RunAsync(_controlStop.Token);
+			await WaitUntilAsync(() =>
+				_control.Lifecycle.State == ControlHostProcessState.Ready &&
+				_control.Control?.HasAuthoritativeState == true &&
+				_control.ExternalControlServer?.Snapshot.State == ExternalControlServerState.Active);
 		}
 
 		public GrpcOperatorControlTransport CreateClient(
