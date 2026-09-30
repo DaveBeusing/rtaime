@@ -130,6 +130,8 @@ public sealed record ExternalControlServerOptions
 
 	public void Validate()
 	{
+		if (Required && !Enabled)
+			throw new ArgumentException("External control cannot be required when it is disabled.", nameof(Required));
 		if (!Enabled)
 			return;
 		if (!TryResolveAddress(BindAddress, out _))
@@ -351,14 +353,25 @@ public sealed class ExternalControlServer : IAsyncDisposable
 		catch (Exception exception) when (!_options.Required)
 		{
 			Set(ExternalControlServerState.Failed, $"Optional external control failed to start: {Redact(exception.Message)}");
-			if (_application is not null)
-			{
-				try { await _application.DisposeAsync().ConfigureAwait(false); } catch { }
-				_application = null;
-			}
-			_serverCertificate?.Dispose();
-			_serverCertificate = null;
+			await CleanupFailedStartAsync().ConfigureAwait(false);
 		}
+		catch (Exception exception)
+		{
+			Set(ExternalControlServerState.Failed, $"Required external control failed to start: {Redact(exception.Message)}");
+			await CleanupFailedStartAsync().ConfigureAwait(false);
+			throw;
+		}
+	}
+
+	private async ValueTask CleanupFailedStartAsync()
+	{
+		if (_application is not null)
+		{
+			try { await _application.DisposeAsync().ConfigureAwait(false); } catch { }
+			_application = null;
+		}
+		_serverCertificate?.Dispose();
+		_serverCertificate = null;
 	}
 
 	public async ValueTask DisposeAsync()
