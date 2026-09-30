@@ -148,6 +148,19 @@ The current registration uses the Windows `LocalSystem` account. This is a privi
 
 By default, installation resolves the current elevated Windows identity as the authorized Operator principal. Use `-OperatorPrincipal` with an explicit account name or SID when the interactive Operator runs under another identity. The resolved SID is applied only to the Operator-facing named pipes; RuntimeHost and AIHost management pipes remain service-account-local.
 
+
+### Optional external control listener
+
+A persistent Windows engine may also enable the secure external ControlHost listener. This does not change service ownership or child-host supervision.
+
+The external listener is disabled by default, binds to loopback by default and requires TLS whenever enabled. Remote binding, server-certificate provisioning, optional mTLS and client-role mappings must be configured explicitly. Certificate passwords and bearer tokens are supplied through environment variables or other deployment secret mechanisms and are not release-bundle configuration values.
+
+Only ControlHost exposes the external gRPC surface. RuntimeHost and AIHost remain on the existing local host topology and are never directly exposed by this option.
+
+If external control is optional, a failed external listener does not redefine local engine readiness as remote readiness. If the deployment explicitly sets `RTAIME_EXTERNAL_CONTROL_REQUIRED=true`, inability to establish the configured secure listener is a ControlHost startup failure.
+
+See `docs/ExternalControlDeployment.md` for endpoint, certificate, identity, authorization and limit configuration.
+
 ## State, work and diagnostics
 
 Default persistent state root:
