@@ -76,7 +76,7 @@ public sealed class SrtNetworkOutputSession : IAsyncDisposable
 
 	private ISrtTransport? _transport;
 	private ISrtPayloadEncoder? _encoder;
-	private NetworkOutputLifecycleState _lifecycle = NetworkOutputLifecycleState.Connecting;
+	private NetworkOutputLifecycleState _lifecycle = NetworkOutputLifecycleState.Disabled;
 	private bool _connected;
 	private ulong _accepted;
 	private ulong _sent;
@@ -117,6 +117,8 @@ public sealed class SrtNetworkOutputSession : IAsyncDisposable
 					_connected,
 					_configuration.VideoFormat,
 					_configuration.AudioFormat,
+					_configuration.VideoCodec,
+					_configuration.AudioCodec,
 					_configuration.VideoBitRate,
 					_configuration.AudioBitRate,
 					_configuration.LatencyMilliseconds,
