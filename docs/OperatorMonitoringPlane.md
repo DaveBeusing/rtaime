@@ -136,7 +136,7 @@ The clean window contains only the Program presentation surfaces. It does not ad
 
 Pixel inspection keeps the full-resolution GPU presentation coordinate as its source coordinate. The existing 1×1 inspection sampler remains intentionally bounded to the already-present 320×180 CPU monitoring bitmap. The full-resolution coordinate is deterministically mapped to its bounded monitoring sample and is reported as display-code evidence, not fabricated source-code evidence.
 
-Full-frame channel inspection and ROI statistics are GPU-resident presentation capabilities. ROI analysis returns only reduced numeric evidence; it does not transfer ROI pixels or a full-resolution frame to the CPU.
+Full-frame channel inspection and ROI statistics are GPU-resident presentation capabilities. ROI analysis returns only reduced numeric evidence; it does not transfer ROI pixels or a full-resolution frame to the CPU. The reduced ROI result is fixed at 16 uint values / 64 bytes, and the Operator records analysis duration, result-transfer size and managed allocation as software diagnostic evidence.
 
 Technical scopes now prefer the same read-only Program shared resource. A bounded D3D11 compute pass produces fixed histogram, waveform, RGB-parade and vectorscope result buffers at no more than 5 Hz. At most 262,144 source samples are analyzed per update and only the fixed 86,016-byte derived result buffer is copied to CPU-visible memory for the existing custom scope controls. The existing 320×180 CPU scope analysis remains the explicit fallback when shared-GPU analysis is unavailable.
 
@@ -161,6 +161,11 @@ Automated coverage qualifies:
 - GPU split/wipe/Difference presentation with explicit Program/Preview compatibility and CPU fallback;
 - one GPU monitor surface plus one WPF fallback surface without nested Viewbox scaling;
 - Clean Program reuse of `ProgramGpuFrame` with no Operator overlay layer;
-- absence of CPU bitmap materialization inside the active GPU presentation control.
+- absence of CPU bitmap materialization inside the active GPU presentation control;
+- monitoring-server disconnect/reconnect using the same loss-tolerant client;
+- sustained Preview/Program shared-resource replacement with bounded active-resource counts and return to baseline;
+- GPU/WPF physical-geometry parity and steady-state geometry allocation under representative DPI churn.
 
-Physical NVIDIA/CUDA/D3D11 interop, per-monitor device-loss behavior and final color/visual equivalence still require reference-hardware qualification. Repository Required Gates remain authoritative for CI, Quality, Security, Provider Smoke and Packaged E2E.
+The consolidated evidence matrix, software performance envelope and longer local soak mode are documented in `docs/MonitoringVisualPerformanceQualification.md`.
+
+Physical NVIDIA/CUDA/D3D11 interop, per-monitor device-loss behavior, monitor scan-out latency and final color/visual equivalence still require reference-hardware qualification. Repository Required Gates remain authoritative for CI, Quality, Security, Provider Smoke and Packaged E2E.
