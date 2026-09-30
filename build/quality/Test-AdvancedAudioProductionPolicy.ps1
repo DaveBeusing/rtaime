@@ -40,7 +40,7 @@ $documentation = Get-Content -LiteralPath $documentationPath -Raw
 
 Assert-Condition ($contracts -match 'MaximumSources\s*=\s*8') "Advanced audio source count must remain explicitly bounded."
 Assert-Condition ($contracts -match 'MaximumBuses\s*=\s*4') "Advanced audio bus count must remain explicitly bounded."
-Assert-Condition ($contracts -match 'AudioBusId Program') "Advanced audio must retain one explicit Program bus."
+Assert-Condition ($contracts -match 'public static AudioBusId Program') "Advanced audio must retain one explicit Program bus."
 Assert-Condition ($contracts -match 'AudioCrossfadeLaw' -and $contracts -match 'EqualPower') "Crossfade law must remain explicit."
 Assert-Condition ($contracts -match 'AudioDuckingConfiguration') "Ducking must remain an explicit bounded contract."
 Assert-Condition ($contracts -match 'AudioClipStrategy' -and $contracts -match 'HardClip') "Clipping policy must remain explicit."
