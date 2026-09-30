@@ -336,7 +336,8 @@ public sealed record ControlHostProcessOptions(
 		if (RuntimeRetryInterval <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(RuntimeRetryInterval));
 		if (ShutdownTimeout <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(ShutdownTimeout));
 		ArgumentNullException.ThrowIfNull(ExternalControl);
-		ExternalControl.Validate();
+		if (ExternalControl.Required)
+			ExternalControl.Validate();
 	}
 
 	private static string Get(
