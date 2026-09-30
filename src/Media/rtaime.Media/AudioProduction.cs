@@ -87,7 +87,7 @@ public sealed class AudioProductionEngine
 		lock (_gate)
 		{
 			var configuration = _configuration;
-			var bus = configuration.GetBus(busId);
+			var bus = FindBus(configuration.Buses, busId);
 			destination.Clear();
 
 			var sidechainIndex = -1;
@@ -288,6 +288,19 @@ public sealed class AudioProductionEngine
 			return -1;
 		}
 		return (float)value;
+	}
+
+	private static AudioProductionBusConfiguration FindBus(
+		IReadOnlyList<AudioProductionBusConfiguration> buses,
+		AudioBusId busId)
+	{
+		for (var index = 0; index < buses.Count; index++)
+		{
+			var bus = buses[index];
+			if (bus.BusId == busId)
+				return bus;
+		}
+		throw new KeyNotFoundException($"Unknown audio bus '{busId}'.");
 	}
 
 	private static int FindBuffer(ReadOnlySpan<AudioProductionSourceBuffer> buffers, MediaSourceId sourceId)
