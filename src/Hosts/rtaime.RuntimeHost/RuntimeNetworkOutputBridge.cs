@@ -56,12 +56,18 @@ internal sealed class RuntimeNetworkOutputBridge : IAsyncDisposable
 		var payload = new GpuNetworkOutputPayloadLease(videoLease);
 		try
 		{
+			var networkAudio = audioPayload;
+			if (networkAudio.IsEmpty)
+			{
+				var silenceLength = checked((int)((long)audio.Timing.SampleCount * audio.Format.ChannelCount * sizeof(float)));
+				networkAudio = new byte[silenceLength];
+			}
 			var sample = new NetworkOutputProgramSample(
 				videoTiming.SequenceNumber,
 				videoTiming,
 				audio.Timing,
 				payload,
-				audioPayload);
+				networkAudio);
 			payload = null!;
 			return session.TrySubmit(sample);
 		}
