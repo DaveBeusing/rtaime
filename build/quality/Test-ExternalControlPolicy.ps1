@@ -99,6 +99,7 @@ Assert-Condition ($integrationTests -match 'Duplicate_external_mutation_is_idemp
 Assert-Condition ($integrationTests -match 'Mutual_tls_authentication_accepts_pinned_client_certificate') "Integration qualification must exercise mTLS."
 Assert-Condition ($integrationTests -match 'Pinned_server_trust_rejects_an_unexpected_certificate_identity' -and $integrationTests -match 'Mutual_tls_rejects_an_unmapped_client_certificate' -and $integrationTests -match 'Expired_required_server_certificate_fails_ControlHost_startup_closed') "Integration qualification must exercise server trust failure, untrusted mTLS client rejection and expired server-certificate failure."
 Assert-Condition ($integrationTests -match 'State_version_gap_requires_full_resynchronization') "Integration qualification must exercise state-gap resynchronization."
+Assert-Condition ($integrationTests -match 'Client_reconnects_and_resnapshots_after_ControlHost_restart') "Integration qualification must prove reconnect and full resnapshot after ControlHost replacement."
 Assert-Condition ($integrationTests -match 'Rate_limit_rejects_excess_requests_without_affecting_ControlHost_continuity') "Integration qualification must prove bounded rate rejection preserves ControlHost continuity."
 Assert-Condition ($integrationTests -match 'Oversized_grpc_message_is_rejected_before_ControlHost_dispatch') "Integration qualification must reject oversized remote messages."
 
