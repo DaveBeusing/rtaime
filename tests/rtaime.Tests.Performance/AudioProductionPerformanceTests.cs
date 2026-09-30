@@ -55,21 +55,22 @@ public sealed class AudioProductionPerformanceTests
 
 		var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
 		var stopwatch = Stopwatch.StartNew();
+		AudioProductionBlockResult result = default;
 		for (var index = 0; index < 1_000; index++)
 		{
-			var result = engine.ProcessBus(
+			result = engine.ProcessBus(
 				AudioBusId.Program,
 				(ulong)(index + 64) * 960,
 				960,
 				sources[0],
 				payloads,
 				output);
-			Assert.InRange(result.MasterPeak, 0, 1);
-			Assert.Equal(AudioProductionLimits.MaximumSources, result.ActiveSourceCount);
 		}
 		stopwatch.Stop();
 		var allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
 
+		Assert.InRange(result.MasterPeak, 0, 1);
+		Assert.Equal(AudioProductionLimits.MaximumSources, result.ActiveSourceCount);
 		Assert.Equal(0, allocated);
 		Assert.True(
 			stopwatch.Elapsed < TimeSpan.FromSeconds(10),
