@@ -130,7 +130,7 @@ public sealed class ShowProjectPersistenceStore
 				legacyShowControl?.Json,
 				legacyShowControl?.Version ?? 0,
 				0);
-			var json = Serialize(initial);
+			var json = Serialize(initial, baseline);
 			var write = await _managementStore
 				.PutDocumentAsync(
 					Area,
@@ -632,13 +632,17 @@ public sealed class ShowProjectPersistenceStore
 
 	private static AudioProductionConfiguration CreateDefaultAudioProduction(ProductionSpecification baseline) =>
 		AudioProductionConfiguration.CreateLegacyCompatible(
-			baseline.Sources.Select(source => source.SourceId).ToArray());
+			baseline.Sources
+				.Select(source => new MediaSourceId(source.SourceId.Value))
+				.ToArray());
 
 	private static void ValidateAudioProduction(
 		AudioProductionConfiguration configuration,
 		ProductionSpecification baseline)
 	{
-		var expected = baseline.Sources.Select(source => source.SourceId).ToHashSet();
+		var expected = baseline.Sources
+			.Select(source => new MediaSourceId(source.SourceId.Value))
+			.ToHashSet();
 		var configured = configuration.Sources.Select(source => source.SourceId).ToHashSet();
 		if (!expected.SetEquals(configured))
 			throw new InvalidDataException("Durable audio production configuration must contain every production source exactly once.");
