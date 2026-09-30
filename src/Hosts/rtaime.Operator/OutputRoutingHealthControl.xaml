@@ -232,6 +232,32 @@
 							<DockPanel Height="24"><TextBlock Text="Target" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding SelectedOutput.Target}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" TextTrimming="CharacterEllipsis" MaxWidth="190" /></DockPanel>
 						</StackPanel>
 					</Grid>
+
+					<Border Background="{DynamicResource OperatorAlternateSurfaceBrush}"
+						BorderBrush="{DynamicResource OperatorBorderBrush}"
+						BorderThickness="1"
+						Padding="8"
+						Margin="0,10,0,0">
+						<Grid>
+							<Grid.ColumnDefinitions>
+								<ColumnDefinition Width="*" />
+								<ColumnDefinition Width="12" />
+								<ColumnDefinition Width="*" />
+							</Grid.ColumnDefinitions>
+							<StackPanel Grid.Column="0">
+								<TextBlock Text="NETWORK OUTPUT" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,4" />
+								<DockPanel Height="22"><TextBlock Text="Provider" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding SelectedOutput.StreamingProvider}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
+								<DockPanel Height="22"><TextBlock Text="Endpoint" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding SelectedOutput.StreamingTarget}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" TextTrimming="CharacterEllipsis" MaxWidth="240" /></DockPanel>
+								<DockPanel Height="22"><TextBlock Text="Bitrate" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding SelectedOutput.StreamingBitrate}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
+							</StackPanel>
+							<StackPanel Grid.Column="2">
+								<TextBlock Text="TRANSPORT EVIDENCE" Style="{StaticResource OperatorSectionTitle}" Margin="0,0,0,4" />
+								<DockPanel Height="22"><TextBlock Text="Queue" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding SelectedOutput.StreamingQueue}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
+								<DockPanel Height="22"><TextBlock Text="Backpressure" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding SelectedOutput.StreamingDrops}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
+								<DockPanel Height="22"><TextBlock Text="Reconnects" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding SelectedOutput.StreamingReconnects}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
+							</StackPanel>
+						</Grid>
+					</Border>
 				</StackPanel>
 			</Border>
 

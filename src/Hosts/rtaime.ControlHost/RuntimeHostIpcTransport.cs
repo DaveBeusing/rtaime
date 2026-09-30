@@ -949,7 +949,64 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 		snapshot.AuthoritativeActive,
 		Enum.IsDefined(typeof(RuntimeOutputRoleHealthState), snapshot.HealthState) ? (RuntimeOutputRoleHealthState)snapshot.HealthState : throw new InvalidDataException("Output role health state is invalid."),
 		snapshot.Evidence,
-		snapshot.Error is null ? null : new Failure(snapshot.Error.Code, snapshot.Error.Message));
+		snapshot.Error is null ? null : new Failure(snapshot.Error.Code, snapshot.Error.Message),
+		snapshot.NetworkOutput is null ? null : FromWire(snapshot.NetworkOutput, snapshot.Format));
+
+	private static NetworkOutputHealthSnapshot FromWire(WireNetworkOutput snapshot, WireVideoFormat videoFormat)
+	{
+		var format = new VideoFormat(
+			videoFormat.Width,
+			videoFormat.Height,
+			FrameRate.Parse(videoFormat.FrameRate),
+			Enum.IsDefined(typeof(PixelFormat), videoFormat.PixelFormat)
+				? (PixelFormat)videoFormat.PixelFormat
+				: throw new InvalidDataException("Network output pixel format is invalid."),
+			Enum.IsDefined(typeof(ScanMode), videoFormat.ScanMode)
+				? (ScanMode)videoFormat.ScanMode
+				: throw new InvalidDataException("Network output scan mode is invalid."));
+		var audioFormat = new AudioFormat(
+			snapshot.AudioSampleRate,
+			Enum.IsDefined(typeof(AudioChannelLayout), snapshot.AudioChannelLayout)
+				? (AudioChannelLayout)snapshot.AudioChannelLayout
+				: throw new InvalidDataException("Network output audio channel layout is invalid."),
+			Enum.IsDefined(typeof(AudioSampleFormat), snapshot.AudioSampleFormat)
+				? (AudioSampleFormat)snapshot.AudioSampleFormat
+				: throw new InvalidDataException("Network output audio sample format is invalid."),
+			snapshot.AudioChannelCount);
+		return new NetworkOutputHealthSnapshot(
+			snapshot.TargetId,
+			snapshot.Provider,
+			Enum.IsDefined(typeof(NetworkOutputProtocolFamily), snapshot.Protocol)
+				? (NetworkOutputProtocolFamily)snapshot.Protocol
+				: throw new InvalidDataException("Network output protocol is invalid."),
+			snapshot.SafeTargetIdentity,
+			Enum.IsDefined(typeof(NetworkOutputLifecycleState), snapshot.Lifecycle)
+				? (NetworkOutputLifecycleState)snapshot.Lifecycle
+				: throw new InvalidDataException("Network output lifecycle is invalid."),
+			snapshot.Connected,
+			format,
+			audioFormat,
+			Enum.IsDefined(typeof(NetworkOutputVideoCodec), snapshot.VideoCodec)
+				? (NetworkOutputVideoCodec)snapshot.VideoCodec
+				: throw new InvalidDataException("Network output video codec is invalid."),
+			Enum.IsDefined(typeof(NetworkOutputAudioCodec), snapshot.AudioCodec)
+				? (NetworkOutputAudioCodec)snapshot.AudioCodec
+				: throw new InvalidDataException("Network output audio codec is invalid."),
+			snapshot.VideoBitRate,
+			snapshot.AudioBitRate,
+			snapshot.LatencyMilliseconds,
+			new NetworkOutputStatistics(
+				snapshot.AcceptedSamples,
+				snapshot.SentSamples,
+				snapshot.DroppedSamples,
+				snapshot.RejectedSamples,
+				snapshot.ReconnectCount,
+				snapshot.PacketsSent,
+				snapshot.BytesSent,
+				snapshot.QueueDepth),
+			snapshot.LastSuccessfulSendUtc,
+			snapshot.Failure is null ? null : new Failure(snapshot.Failure.Code, snapshot.Failure.Message));
+	}
 
 	private static RuntimeProductionCgTextSnapshot FromWire(WireProductionCgTextSnapshot snapshot) => new(
 		snapshot.Active,
@@ -1228,7 +1285,33 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 	private sealed record WireAIShowcaseState(bool Enabled);
 	private sealed record WireAIShowcase(bool Enabled, string Feature, string Status, string Provider, long InferenceTimeTicks, uint PersonRegionCount, ulong? SourceSequence, ulong? AppliedSequence, double? Confidence, bool EffectVisible, WireFailure? Failure, DateTimeOffset? UpdatedAtUtc);
 	private sealed record WireAvSyncDiagnostics(bool Enabled, string State, ulong? EventId, string? ExpectedMediaTime, ulong? TargetVideoFrameSequence, ulong? TargetAudioSamplePosition, double? ScheduledVideoOffsetMilliseconds, double? SubmitOffsetMilliseconds, double? DriftFromBaselineMilliseconds, string Detail);
-	private sealed record WireOutputRole(string RoleId, string RoleKind, string SourceId, string TargetId, WireVideoFormat Format, long TimingNumerator, long TimingDenominator, string ProviderId, int LifecycleState, bool AuthoritativeActive, int HealthState, string Evidence, WireFailure? Error);
+	private sealed record WireNetworkOutput(
+		string TargetId,
+		string Provider,
+		int Protocol,
+		string SafeTargetIdentity,
+		int Lifecycle,
+		bool Connected,
+		int VideoCodec,
+		int AudioCodec,
+		uint AudioSampleRate,
+		int AudioChannelLayout,
+		uint AudioChannelCount,
+		int AudioSampleFormat,
+		uint VideoBitRate,
+		uint AudioBitRate,
+		int LatencyMilliseconds,
+		ulong AcceptedSamples,
+		ulong SentSamples,
+		ulong DroppedSamples,
+		ulong RejectedSamples,
+		ulong ReconnectCount,
+		ulong PacketsSent,
+		ulong BytesSent,
+		int QueueDepth,
+		DateTimeOffset? LastSuccessfulSendUtc,
+		WireFailure? Failure);
+	private sealed record WireOutputRole(string RoleId, string RoleKind, string SourceId, string TargetId, WireVideoFormat Format, long TimingNumerator, long TimingDenominator, string ProviderId, int LifecycleState, bool AuthoritativeActive, int HealthState, string Evidence, WireFailure? Error, WireNetworkOutput? NetworkOutput = null);
 	private sealed record WireRecordingCommandResult(bool Succeeded, WireRecordingSnapshot Snapshot, WireFailure? Failure);
 	private sealed record WireMediaAssetProbe(string Path, string AssetId);
 	private sealed record WireMediaAssetProbeResult(WireLocalMediaProbe? Probe, WireFailure? Failure);

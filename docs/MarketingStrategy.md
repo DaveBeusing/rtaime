@@ -342,7 +342,7 @@ Marketing priority:
 
 ### 3. Output, streaming and scene-control breadth
 
-Program and Aux now have governed backend output-role contracts with Runtime/provider evidence. Authoritative external streaming/on-air state and additional physical/network output providers remain unavailable or unverified in the current V1 scope.
+Program and Aux have governed backend output-role contracts with Runtime/provider evidence. A post-V1 SRT network-output foundation now provides a bounded Runtime-owned reference path using H.264/AAC and provider-confirmed connection/backpressure evidence. This is a software implementation claim, not physical-network or WAN certification; NDI, RIST, RTMP/RTMPS, WebRTC, SMPTE ST 2110 and additional network providers remain roadmap capabilities.
 
 Marketing priority:
 

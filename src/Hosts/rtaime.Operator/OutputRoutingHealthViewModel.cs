@@ -186,6 +186,9 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 		UpdateSystemHealth("hardware", ResolveHardwareEvidence());
 		UpdateSystemHealth("gpu", _control.GpuProviderHealth);
 
+		var programRole = _control.OutputRoles.FirstOrDefault(role =>
+			string.Equals(role.RoleId, "program", StringComparison.Ordinal));
+		var programNetwork = programRole?.NetworkOutput;
 		_program.Update(
 			target: "Runtime Program",
 			assignedSource: FormatSource(_control.ProgramSourceName, _control.ProgramSourceId),
@@ -195,9 +198,15 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 			colorSpace: Unavailable,
 			status: runtimeStatus,
 			evidenceState: runtimeEvidence,
-			detail: runtimeDetail,
+			detail: AppendNetworkDetail(runtimeDetail, programNetwork),
 			recordingStatus: NormalizeAvailability(_control.RecordingStatus),
-			streamingStatus: Unavailable);
+			streamingStatus: ResolveStreamingStatus(programNetwork),
+			streamingTarget: programNetwork?.SafeTargetIdentity ?? Unavailable,
+			streamingProvider: programNetwork is null ? Unavailable : $"{programNetwork.Provider} · {programNetwork.Protocol}",
+			streamingBitrate: FormatNetworkBitrate(programNetwork),
+			streamingQueue: FormatNetworkQueue(programNetwork),
+			streamingDrops: FormatNetworkDrops(programNetwork),
+			streamingReconnects: programNetwork?.ReconnectCount.ToString(CultureInfo.InvariantCulture) ?? Unavailable);
 
 		_preview.Update(
 			target: "Control Preview",
@@ -210,7 +219,13 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 			evidenceState: runtimeEvidence,
 			detail: "Preview role reflects the authoritative Control routing snapshot.",
 			recordingStatus: Unavailable,
-			streamingStatus: Unavailable);
+			streamingStatus: Unavailable,
+			streamingTarget: Unavailable,
+			streamingProvider: Unavailable,
+			streamingBitrate: Unavailable,
+			streamingQueue: Unavailable,
+			streamingDrops: Unavailable,
+			streamingReconnects: Unavailable);
 
 		var aux = _control.OutputRoles.FirstOrDefault(role =>
 			string.Equals(role.RoleId, "aux", StringComparison.Ordinal));
@@ -227,7 +242,13 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 				evidenceState: "UNVERIFIED",
 				detail: "Aux output role is not configured by authoritative Control state.",
 				recordingStatus: Unavailable,
-				streamingStatus: Unavailable);
+				streamingStatus: Unavailable,
+				streamingTarget: Unavailable,
+				streamingProvider: Unavailable,
+				streamingBitrate: Unavailable,
+				streamingQueue: Unavailable,
+				streamingDrops: Unavailable,
+				streamingReconnects: Unavailable);
 		}
 		else
 		{
@@ -252,9 +273,15 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 				colorSpace: Unavailable,
 				status: ToOperatorStatus(evidence),
 				evidenceState: evidence,
-				detail: detail,
+				detail: AppendNetworkDetail(detail, aux.NetworkOutput),
 				recordingStatus: Unavailable,
-				streamingStatus: Unavailable);
+				streamingStatus: ResolveStreamingStatus(aux.NetworkOutput),
+				streamingTarget: aux.NetworkOutput?.SafeTargetIdentity ?? Unavailable,
+				streamingProvider: aux.NetworkOutput is null ? Unavailable : $"{aux.NetworkOutput.Provider} · {aux.NetworkOutput.Protocol}",
+				streamingBitrate: FormatNetworkBitrate(aux.NetworkOutput),
+				streamingQueue: FormatNetworkQueue(aux.NetworkOutput),
+				streamingDrops: FormatNetworkDrops(aux.NetworkOutput),
+				streamingReconnects: aux.NetworkOutput?.ReconnectCount.ToString(CultureInfo.InvariantCulture) ?? Unavailable);
 		}
 
 		var cleanEvidence = NormalizeOutputEvidence(_programOutput.Health);
@@ -270,7 +297,13 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 			evidenceState: cleanEvidence,
 			detail: _programOutput.Detail,
 			recordingStatus: NormalizeAvailability(_control.RecordingStatus),
-			streamingStatus: Unavailable);
+			streamingStatus: Unavailable,
+			streamingTarget: Unavailable,
+			streamingProvider: Unavailable,
+			streamingBitrate: Unavailable,
+			streamingQueue: Unavailable,
+			streamingDrops: Unavailable,
+			streamingReconnects: Unavailable);
 
 		var hasRuntimePerformance = NormalizeAvailability(_control.CurrentFormat) != Unavailable &&
 			NormalizeAvailability(_control.FrameTime) != Unavailable;
@@ -347,11 +380,29 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 			"No disk telemetry is published by the current health contract.",
 			null,
 			sampleHistory);
+		var networkOutputs = _control.OutputRoles
+			.Select(role => role.NetworkOutput)
+			.Where(output => output is not null)
+			.Cast<OperatorNetworkOutputDescriptor>()
+			.ToArray();
+		var connectedNetworkOutputs = networkOutputs.Count(output => output.Connected);
+		var networkEvidence = networkOutputs.Length == 0
+			? "UNVERIFIED"
+			: networkOutputs.Any(output => output.Failure is not null)
+				? "FAIL"
+				: connectedNetworkOutputs == networkOutputs.Length
+					? "PASS"
+					: "UNVERIFIED";
+		var networkValue = networkOutputs.Length == 0
+			? Unavailable
+			: $"{connectedNetworkOutputs}/{networkOutputs.Length} LIVE";
 		UpdateMetric(
 			"network",
-			Unavailable,
-			"UNVERIFIED",
-			"No network telemetry is published by the current health contract.",
+			networkValue,
+			networkEvidence,
+			networkOutputs.Length == 0
+				? "No governed network output is configured."
+				: $"Runtime/provider evidence: {networkOutputs.Sum(output => (decimal)output.BytesSent):N0} bytes sent, {networkOutputs.Sum(output => (decimal)output.DroppedSamples):N0} dropped and {networkOutputs.Sum(output => (decimal)output.RejectedSamples):N0} rejected samples.",
 			null,
 			sampleHistory);
 		UpdateMetric(
@@ -368,6 +419,38 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 		OnPropertyChanged(nameof(AccessState));
 		OnPropertyChanged(nameof(AccessEvidenceState));
 		OnPropertyChanged(nameof(AccessDetail));
+	}
+
+	private static string ResolveStreamingStatus(OperatorNetworkOutputDescriptor? output)
+	{
+		if (output is null)
+			return Unavailable;
+		if (output.Connected && string.Equals(output.Lifecycle, "CONNECTED", StringComparison.OrdinalIgnoreCase))
+			return "LIVE";
+		return output.Failure is not null ? "FAULTED" : output.Lifecycle;
+	}
+
+	private static string FormatNetworkBitrate(OperatorNetworkOutputDescriptor? output) =>
+		output is null
+			? Unavailable
+			: $"{output.VideoBitRate / 1_000_000d:0.##} Mb/s H.264 + {output.AudioBitRate / 1_000d:0} kb/s AAC";
+
+	private static string FormatNetworkQueue(OperatorNetworkOutputDescriptor? output) =>
+		output is null ? Unavailable : $"{output.QueueDepth} queued";
+
+	private static string FormatNetworkDrops(OperatorNetworkOutputDescriptor? output) =>
+		output is null
+			? Unavailable
+			: $"{output.DroppedSamples} dropped · {output.RejectedSamples} rejected";
+
+	private static string AppendNetworkDetail(string detail, OperatorNetworkOutputDescriptor? output)
+	{
+		if (output is null)
+			return detail;
+		var transport = $"{output.Protocol} {output.Lifecycle}; {output.SafeTargetIdentity}; queue {output.QueueDepth}; {output.DroppedSamples} dropped; {output.RejectedSamples} rejected; {output.ReconnectCount} reconnects.";
+		if (output.Failure is { } failure)
+			transport += $" {failure.Code}: {failure.Message}";
+		return $"{detail} Network output: {transport}";
 	}
 
 	private void UpdateSystemHealth(string key, string evidenceState)
@@ -665,6 +748,12 @@ public sealed class OutputStatusViewModel : INotifyPropertyChanged
 	private string _detail = "Output state is unavailable.";
 	private string _recordingStatus = "UNAVAILABLE";
 	private string _streamingStatus = "UNAVAILABLE";
+	private string _streamingTarget = "UNAVAILABLE";
+	private string _streamingProvider = "UNAVAILABLE";
+	private string _streamingBitrate = "UNAVAILABLE";
+	private string _streamingQueue = "UNAVAILABLE";
+	private string _streamingDrops = "UNAVAILABLE";
+	private string _streamingReconnects = "UNAVAILABLE";
 
 	public OutputStatusViewModel(string id, string name)
 	{
@@ -687,6 +776,12 @@ public sealed class OutputStatusViewModel : INotifyPropertyChanged
 	public string Detail { get => _detail; private set => Set(ref _detail, value); }
 	public string RecordingStatus { get => _recordingStatus; private set => Set(ref _recordingStatus, value); }
 	public string StreamingStatus { get => _streamingStatus; private set => Set(ref _streamingStatus, value); }
+	public string StreamingTarget { get => _streamingTarget; private set => Set(ref _streamingTarget, value); }
+	public string StreamingProvider { get => _streamingProvider; private set => Set(ref _streamingProvider, value); }
+	public string StreamingBitrate { get => _streamingBitrate; private set => Set(ref _streamingBitrate, value); }
+	public string StreamingQueue { get => _streamingQueue; private set => Set(ref _streamingQueue, value); }
+	public string StreamingDrops { get => _streamingDrops; private set => Set(ref _streamingDrops, value); }
+	public string StreamingReconnects { get => _streamingReconnects; private set => Set(ref _streamingReconnects, value); }
 
 	internal void Update(
 		string target,
@@ -699,7 +794,13 @@ public sealed class OutputStatusViewModel : INotifyPropertyChanged
 		string evidenceState,
 		string detail,
 		string recordingStatus,
-		string streamingStatus)
+		string streamingStatus,
+		string streamingTarget,
+		string streamingProvider,
+		string streamingBitrate,
+		string streamingQueue,
+		string streamingDrops,
+		string streamingReconnects)
 	{
 		Target = target;
 		AssignedSource = assignedSource;
@@ -712,6 +813,12 @@ public sealed class OutputStatusViewModel : INotifyPropertyChanged
 		Detail = detail;
 		RecordingStatus = recordingStatus;
 		StreamingStatus = streamingStatus;
+		StreamingTarget = streamingTarget;
+		StreamingProvider = streamingProvider;
+		StreamingBitrate = streamingBitrate;
+		StreamingQueue = streamingQueue;
+		StreamingDrops = streamingDrops;
+		StreamingReconnects = streamingReconnects;
 	}
 
 	private bool Set<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
