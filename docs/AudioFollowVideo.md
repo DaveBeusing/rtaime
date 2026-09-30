@@ -34,17 +34,24 @@ Implemented:
 - invalid-buffer/timing reporting
 - long-run 50 fps and 59.94 fps timing evidence
 
-Not implemented:
+Advanced production extension:
 
-- full audio mixing console
-- arbitrary routing graph or bus matrix
-- bounded multi-source MIX
-- CROSSFADE
-- DUCK
-- dynamics processing
-- EQ
-- network audio
-- physical embedded-audio hardware qualification
+- bounded multi-source Program mix;
+- explicit Program bus master gain/mute;
+- deterministic equal-power or linear crossfade;
+- bounded ducking with attack/hold/release;
+- Runtime-owned advanced metering and clipping evidence;
+- final mixed Program-bus reuse by recording/output.
+
+See [Advanced Audio Production](AdvancedAudioProduction.md).
+
+Still not implemented:
+
+- arbitrary routing graph or bus matrix;
+- arbitrary dynamics/DSP chains;
+- EQ/reverb/plugin hosting;
+- network audio;
+- physical embedded-audio hardware qualification.
 
 ## Audio is an independent timed media domain
 
