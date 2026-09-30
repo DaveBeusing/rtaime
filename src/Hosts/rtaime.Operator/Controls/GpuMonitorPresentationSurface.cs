@@ -264,7 +264,11 @@ public sealed class GpuMonitorPresentationSurface : DrawingSurface
 			catch
 			{
 				Monitor?.SetRoiUnavailable("GPU ROI analysis failed");
-				ResetAnalysisEvidence();
+				_analysisRetryTimer.Stop();
+				_lastAnalysisAt = DateTimeOffset.UtcNow;
+				_lastAnalysisSequence = frame.SequenceNumber;
+				_lastAnalyzedRoi = Roi;
+				_lastAnalyzedChannel = InspectionChannel;
 			}
 		}
 		catch
