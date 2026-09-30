@@ -200,6 +200,52 @@ public sealed record V1AudioProgramSnapshot(
 	ulong RoutingRevision = 0,
 	MediaSourceId? ActiveAudioSourceId = null);
 
+public sealed record V1AudioProductionSourceSnapshot(
+	MediaSourceId SourceId,
+	double Gain,
+	bool Muted,
+	bool FollowRoutedSource,
+	IReadOnlyList<string> BusAssignments);
+
+public sealed record V1AudioCrossfadeSnapshot(
+	string BusId,
+	MediaSourceId FromSourceId,
+	MediaSourceId ToSourceId,
+	ulong StartSamplePosition,
+	uint DurationSamples,
+	AudioCrossfadeLaw Law);
+
+public sealed record V1AudioDuckingSnapshot(
+	string BusId,
+	bool Enabled,
+	MediaSourceId SidechainSourceId,
+	IReadOnlyList<MediaSourceId> TargetSourceIds,
+	double Threshold,
+	double Attenuation,
+	uint AttackSamples,
+	uint HoldSamples,
+	uint ReleaseSamples);
+
+public sealed record V1AudioProductionSnapshot(
+	ulong Revision,
+	double ProgramMasterGain,
+	bool ProgramMuted,
+	AudioClipStrategy ClipStrategy,
+	IReadOnlyList<V1AudioProductionSourceSnapshot> Sources,
+	V1AudioCrossfadeSnapshot? Crossfade,
+	V1AudioDuckingSnapshot? Ducking,
+	double LeftPeak,
+	double RightPeak,
+	double PreClipPeak,
+	bool Clipping,
+	ulong ClippedSampleValues,
+	double DuckingGain,
+	double DuckingReduction,
+	bool SidechainAvailable,
+	double? CrossfadeProgress,
+	int ActiveSourceCount,
+	int MissingSourceCount);
+
 public sealed record V1RecordingOperatorSnapshot(
 	RecordingLifecycleState State,
 	TimeSpan Elapsed,
@@ -262,7 +308,8 @@ public sealed record V1RuntimeHostSnapshot(
 	V1AvSyncDiagnosticsSnapshot? AvSyncDiagnostics = null,
 	V1ProductionCgTextSnapshot? ProductionCgText = null,
 	IReadOnlyList<RuntimeOutputRoleSnapshot>? OutputRoles = null,
-	IReadOnlyList<V1CompositingLayerSnapshot>? CompositingLayers = null);
+	IReadOnlyList<V1CompositingLayerSnapshot>? CompositingLayers = null,
+	V1AudioProductionSnapshot? AudioProduction = null);
 
 /// <summary>
 /// Windows V1 reference composition root for committed execution, timed media, GPU composition,
@@ -291,6 +338,12 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private readonly Dictionary<MediaSourceId, AudioStreamDescriptor> _audioStreams;
 	private readonly Dictionary<MediaSourceId, AudioMeterObservation> _audioMeters;
 	private readonly Dictionary<MediaSourceId, Queue<float>> _externalAudioQueues;
+	private readonly AudioProductionEngine _audioProduction;
+	private readonly MediaSourceId[] _audioProductionSourceOrder;
+	private readonly float[][] _audioProductionSourceSamples;
+	private readonly AudioProductionSourceBuffer[] _audioProductionSourceBuffers;
+	private readonly float[] _programAudioMixSamples;
+	private readonly AudioStreamId _programAudioStreamId;
 	private readonly Dictionary<MediaSourceId, GeneratedAudioTestSignalGenerator> _audioTestSignals = [];
 	private readonly Dictionary<MediaSourceId, GeneratedAudioTestSignalFrameInfo> _audioTestSignalFrames = [];
 	private readonly Dictionary<MediaSourceId, RgbaFrameBuffer> _backgrounds;
@@ -376,6 +429,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private double? _outputFramesPerSecond;
 	private ulong _nextSequenceNumber;
 	private AudioFollowVideoResult? _lastAudioResult;
+	private AudioProductionBlockResult _lastAudioProductionResult;
 	private AudioFollowVideoStatistics _publishedAudioStatistics;
 	private DateTimeOffset? _recordingStartedAtUtc;
 	private DateTimeOffset? _recordingCompletedAtUtc;
@@ -414,6 +468,22 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		_externalAudioQueues = _audioStreams.Keys.ToDictionary(
 			sourceId => sourceId,
 			_ => new Queue<float>());
+		_audioProductionSourceOrder = _audioStreams.Keys
+			.OrderBy(sourceId => sourceId.ToString(), StringComparer.Ordinal)
+			.ToArray();
+		_audioProduction = new AudioProductionEngine(
+			AudioProductionConfiguration.CreateLegacyCompatible(_audioProductionSourceOrder));
+		var productionAudioFormat = _audioStreams.Values.Select(stream => stream.Format).Distinct().Single();
+		var maximumAudioFramesPerBoundary = checked((int)(
+			((long)productionAudioFormat.SampleRate * format.FrameRate.Denominator + format.FrameRate.Numerator - 1) /
+			format.FrameRate.Numerator));
+		var maximumAudioValuesPerBoundary = checked(maximumAudioFramesPerBoundary * (int)productionAudioFormat.ChannelCount);
+		_audioProductionSourceSamples = _audioProductionSourceOrder
+			.Select(_ => new float[maximumAudioValuesPerBoundary])
+			.ToArray();
+		_audioProductionSourceBuffers = new AudioProductionSourceBuffer[_audioProductionSourceOrder.Length];
+		_programAudioMixSamples = new float[maximumAudioValuesPerBoundary];
+		_programAudioStreamId = new AudioStreamId(HostIdentity.Create("audio-bus", AudioBusId.Program.Value));
 
 		_backgrounds = new Dictionary<MediaSourceId, RgbaFrameBuffer>
 		{
@@ -617,7 +687,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 					AvSyncDiagnosticsSnapshotUnsafe(),
 					_productionCgText,
 					OutputRoleSnapshotsUnsafe(),
-					CompositingLayerSnapshotsUnsafe());
+					CompositingLayerSnapshotsUnsafe(),
+					AudioProductionSnapshotUnsafe());
 			}
 		}
 	}
