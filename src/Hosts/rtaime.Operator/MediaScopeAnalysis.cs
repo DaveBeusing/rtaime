@@ -80,6 +80,7 @@ public sealed record MediaScopeSnapshot(
 	public bool VectorscopeAvailable { get; init; } = true;
 	public TimeSpan AnalysisDuration { get; init; }
 	public int ResultTransferBytes { get; init; }
+	public long ManagedAllocationBytes { get; private set; }
 	public string Detail { get; init; } = "CPU fallback analysis";
 
 	public static MediaScopeSnapshot Analyze(MonitoringFrame frame, int sampleStride = 2)
@@ -88,6 +89,7 @@ public sealed record MediaScopeSnapshot(
 		if (sampleStride <= 0) throw new ArgumentOutOfRangeException(nameof(sampleStride));
 
 		var started = Stopwatch.GetTimestamp();
+		var allocationStart = GC.GetAllocatedBytesForCurrentThread();
 		var descriptor = frame.Descriptor;
 		var pixels = frame.Pixels.Span;
 		var luma = new int[HistogramBins];
@@ -134,7 +136,7 @@ public sealed record MediaScopeSnapshot(
 			}
 		}
 
-		return new MediaScopeSnapshot(
+		var snapshot = new MediaScopeSnapshot(
 			descriptor.Timing.SequenceNumber,
 			descriptor.Width,
 			descriptor.Height,
@@ -153,6 +155,8 @@ public sealed record MediaScopeSnapshot(
 				? "CPU fallback · display-code scope analysis"
 				: "CPU fallback · vectorscope unavailable because color semantics are incomplete"
 		};
+		snapshot.ManagedAllocationBytes = GC.GetAllocatedBytesForCurrentThread() - allocationStart;
+		return snapshot;
 	}
 
 	public static MediaScopeSnapshot FromGpuResultBuffer(
@@ -165,6 +169,7 @@ public sealed record MediaScopeSnapshot(
 		ReadOnlySpan<uint> results,
 		TimeSpan analysisDuration)
 	{
+		var allocationStart = GC.GetAllocatedBytesForCurrentThread();
 		if (results.Length != GpuMonitoringAnalysisPolicy.ScopeResultCount)
 			throw new ArgumentException($"GPU scope result requires exactly {GpuMonitoringAnalysisPolicy.ScopeResultCount} uint values.", nameof(results));
 		if (sampleStride <= 0) throw new ArgumentOutOfRangeException(nameof(sampleStride));
@@ -179,7 +184,7 @@ public sealed record MediaScopeSnapshot(
 		}
 
 		var vectorscopeAvailable = color.IsComplete;
-		return new MediaScopeSnapshot(
+		var snapshot = new MediaScopeSnapshot(
 			sequenceNumber,
 			sourceWidth,
 			sourceHeight,
@@ -204,6 +209,8 @@ public sealed record MediaScopeSnapshot(
 				? $"GPU shared resource · {GpuMonitoringAnalysisPolicy.ScopeResultBytes} B result transfer"
 				: "GPU shared resource · vectorscope unavailable because color semantics are incomplete"
 		};
+		snapshot.ManagedAllocationBytes = GC.GetAllocatedBytesForCurrentThread() - allocationStart;
+		return snapshot;
 	}
 
 	private static void IncrementWaveform(int[] bins, int column, byte value)
