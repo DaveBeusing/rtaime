@@ -52,6 +52,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	private RuntimeGraphicsOverlaySnapshot _graphicsOverlayState = new(false, null, 0, 0, false, 0.72, 0.06, 1.0);
 	private IReadOnlyList<RuntimeCompositingLayerSnapshot> _compositingLayers = Array.Empty<RuntimeCompositingLayerSnapshot>();
 	private DurableAudioRoutingState _durableAudioRouting = DurableAudioRoutingState.FollowVideo;
+	private AudioProductionConfiguration? _durableAudioProduction;
 	private string _showProjectState = "UNAVAILABLE";
 	private string _showProjectDetail = "Durable show project persistence is not configured.";
 	private Task? _acceptLoop;
@@ -100,6 +101,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			}
 			_compositingLayers = ToRuntimeCompositingLayers(showProject.Graphics.CompositingState);
 			_durableAudioRouting = showProject.AudioRouting ?? DurableAudioRoutingState.FollowVideo;
+			_durableAudioProduction = showProject.AudioProduction;
 			_showProjectState = "LOADED";
 			_showProjectDetail = $"Durable show project '{showProject.Name}' ({showProject.ProjectId}) is loaded.";
 		}
@@ -173,6 +175,18 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			_durableAudioRouting.Mode,
 			_durableAudioRouting.BreakawaySourceId,
 			cancellationToken).ConfigureAwait(false);
+
+		var control = _controlAccessor();
+		if (control is not null)
+		{
+			var configuration = _durableAudioProduction ??
+				AudioProductionConfiguration.CreateLegacyCompatible(
+					control.Specification.Sources.Select(source => source.SourceId).ToArray());
+			var confirmed = await _runtimeTransport
+				.SetAudioProductionAsync(configuration, cancellationToken)
+				.ConfigureAwait(false);
+			_durableAudioProduction = confirmed.Configuration;
+		}
 		NotifyObservableStateChanged();
 	}
 
@@ -488,6 +502,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			"control.compositing.layers.reorder" => await ReorderCompositingLayersAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.audio.input.set" => await SetAudioInputStateAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.audio.routing.set" => await SetAudioRoutingAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.audio.production.set" => await SetAudioProductionAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.audio.test_signal.set" => await SetAudioTestSignalAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.test_pattern.set" => await SetBroadcastTestPatternAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.recording.start" => await StartRecordingAsync(request, cancellationToken).ConfigureAwait(false),
@@ -809,6 +824,90 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 					_showProjectDetail = "Audio routing mutation failed and Runtime rollback could not be confirmed.";
 				}
 				return Error(request, "control.audio.routing.rejected", exception.Message);
+			}
+		}
+		finally
+		{
+			_mutationGate.Release();
+		}
+	}
+
+	private async ValueTask<WireEnvelope> SetAudioProductionAsync(WireEnvelope request, CancellationToken cancellationToken)
+	{
+		var mutation = request.Payload.Deserialize<WireAudioProductionMutation>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Audio production mutation payload is required.");
+
+		await _mutationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+		try
+		{
+			var control = _controlAccessor();
+			if (control is null || !control.HasAuthoritativeState)
+				return Error(request, "control.not_ready", "ControlHost has no committed authoritative state yet.");
+			if (!_runtimeTransport.IsConnected)
+				return Error(request, "runtime.unavailable", "RuntimeHost is not connected.");
+
+			RuntimeRemoteSnapshot current;
+			try
+			{
+				current = await _runtimeTransport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
+			}
+			catch (Exception exception) when (exception is InvalidOperationException or NotSupportedException or FormatException or InvalidDataException or IOException)
+			{
+				return Error(request, "control.audio.production.snapshot.unavailable", exception.Message);
+			}
+			if (current.AudioProduction is null)
+				return Error(request, "control.audio.production.unavailable", "RuntimeHost does not expose advanced audio production state.");
+			if (current.AudioProduction.Configuration.Revision != mutation.ExpectedRevision)
+				return Error(
+					request,
+					"control.audio.production.revision_conflict",
+					$"Expected audio production revision {mutation.ExpectedRevision}, current revision is {current.AudioProduction.Configuration.Revision}.");
+
+			AudioProductionConfiguration requested;
+			try
+			{
+				requested = FromWire(mutation.Configuration);
+				if (mutation.ExpectedRevision == ulong.MaxValue || requested.Revision != mutation.ExpectedRevision + 1)
+					return Error(request, "control.audio.production.revision.invalid", "Audio production mutation must advance the confirmed Runtime revision by exactly one.");
+				var expectedSources = control.Specification.Sources.Select(source => source.SourceId).ToHashSet();
+				if (!expectedSources.SetEquals(requested.Sources.Select(source => source.SourceId)))
+					return Error(request, "control.audio.production.sources.invalid", "Audio production configuration must contain every authoritative production source exactly once.");
+			}
+			catch (Exception exception) when (exception is ArgumentException or FormatException or InvalidDataException)
+			{
+				return Error(request, "control.audio.production.invalid", exception.Message);
+			}
+
+			var previous = current.AudioProduction.Configuration;
+			try
+			{
+				var confirmed = await _runtimeTransport
+					.SetAudioProductionAsync(requested, cancellationToken)
+					.ConfigureAwait(false);
+				if (confirmed.Configuration.Revision != requested.Revision)
+					throw new InvalidDataException("Runtime confirmed an unexpected audio production revision.");
+
+				if (_showProjectStore is not null && _showProject is not null)
+				{
+					_showProject = await _showProjectStore
+						.UpdateAudioProductionAsync(control.Specification, confirmed.Configuration, cancellationToken)
+						.ConfigureAwait(false);
+					_showProjectState = "SAVED";
+					_showProjectDetail = $"Audio production is persisted at show-project storage version {_showProject.StorageVersion}.";
+				}
+				_durableAudioProduction = confirmed.Configuration;
+				NotifyObservableStateChanged();
+				return Success(request, "control.audio.production.response", ToWire(confirmed));
+			}
+			catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or NotSupportedException or FormatException or InvalidDataException or IOException)
+			{
+				try { await _runtimeTransport.SetAudioProductionAsync(previous, cancellationToken).ConfigureAwait(false); }
+				catch
+				{
+					_showProjectState = "DEGRADED";
+					_showProjectDetail = "Audio production mutation failed and Runtime rollback could not be confirmed.";
+				}
+				return Error(request, "control.audio.production.rejected", exception.Message);
 			}
 		}
 		finally
@@ -2139,7 +2238,8 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 				_showProject?.ProjectId.ToString() ?? "unavailable",
 				_showProject?.Name ?? "Unavailable",
 				_showProjectState,
-				_showProjectDetail));
+				_showProjectDetail),
+			runtime?.AudioProduction is null ? null : ToWire(runtime.AudioProduction));
 		return Success(request, "control.snapshot.response", payload);
 	}
 
@@ -2421,6 +2521,89 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		snapshot.RoutingMode,
 		snapshot.RoutingRevision,
 		snapshot.ActiveAudioSourceId?.ToString());
+
+	private static WireAudioProductionSnapshot ToWire(RuntimeAudioProductionSnapshot snapshot) => new(
+		ToWire(snapshot.Configuration),
+		snapshot.LeftPeak,
+		snapshot.RightPeak,
+		snapshot.PreClipPeak,
+		snapshot.Clipping,
+		snapshot.ClippedSampleValues,
+		snapshot.DuckingGain,
+		snapshot.DuckingReduction,
+		snapshot.SidechainAvailable,
+		snapshot.CrossfadeProgress,
+		snapshot.ActiveSourceCount,
+		snapshot.MissingSourceCount);
+
+	private static WireAudioProductionConfiguration ToWire(AudioProductionConfiguration configuration) => new(
+		configuration.Revision,
+		configuration.Buses.Select(bus => new WireAudioProductionBus(bus.BusId.Value, bus.MasterGain, bus.Muted)).ToArray(),
+		configuration.Sources.Select(source => new WireAudioProductionSource(
+			source.SourceId.ToString(),
+			source.Gain,
+			source.Muted,
+			source.FollowRoutedSource,
+			source.BusAssignments.Select(bus => bus.Value).ToArray())).ToArray(),
+		configuration.Crossfade is null ? null : new WireAudioCrossfade(
+			configuration.Crossfade.BusId.Value,
+			configuration.Crossfade.FromSourceId.ToString(),
+			configuration.Crossfade.ToSourceId.ToString(),
+			configuration.Crossfade.StartSamplePosition,
+			configuration.Crossfade.DurationSamples,
+			(int)configuration.Crossfade.Law),
+		configuration.Ducking is null ? null : new WireAudioDucking(
+			configuration.Ducking.BusId.Value,
+			configuration.Ducking.Enabled,
+			configuration.Ducking.SidechainSourceId.ToString(),
+			configuration.Ducking.TargetSourceIds.Select(source => source.ToString()).ToArray(),
+			configuration.Ducking.Threshold,
+			configuration.Ducking.Attenuation,
+			configuration.Ducking.AttackSamples,
+			configuration.Ducking.HoldSamples,
+			configuration.Ducking.ReleaseSamples),
+		(int)configuration.ClipStrategy);
+
+	private static AudioProductionConfiguration FromWire(WireAudioProductionConfiguration wire)
+	{
+		var buses = (wire.Buses ?? Array.Empty<WireAudioProductionBus>())
+			.Select(bus => new AudioProductionBusConfiguration(new AudioBusId(bus.BusId), bus.MasterGain, bus.Muted)).ToArray();
+		var sources = (wire.Sources ?? Array.Empty<WireAudioProductionSource>())
+			.Select(source => new AudioProductionSourceConfiguration(
+				new MediaSourceId(Identity.Parse(source.SourceId)),
+				source.Gain,
+				source.Muted,
+				source.FollowRoutedSource,
+				(source.BusAssignments ?? Array.Empty<string>()).Select(bus => new AudioBusId(bus)).ToArray())).ToArray();
+		var crossfade = wire.Crossfade is null ? null : new AudioCrossfadeConfiguration(
+			new AudioBusId(wire.Crossfade.BusId),
+			new MediaSourceId(Identity.Parse(wire.Crossfade.FromSourceId)),
+			new MediaSourceId(Identity.Parse(wire.Crossfade.ToSourceId)),
+			wire.Crossfade.StartSamplePosition,
+			wire.Crossfade.DurationSamples,
+			Enum.IsDefined(typeof(AudioCrossfadeLaw), wire.Crossfade.Law)
+				? (AudioCrossfadeLaw)wire.Crossfade.Law
+				: throw new InvalidDataException("Audio crossfade law is invalid."));
+		var ducking = wire.Ducking is null ? null : new AudioDuckingConfiguration(
+			new AudioBusId(wire.Ducking.BusId),
+			wire.Ducking.Enabled,
+			new MediaSourceId(Identity.Parse(wire.Ducking.SidechainSourceId)),
+			(wire.Ducking.TargetSourceIds ?? Array.Empty<string>()).Select(source => new MediaSourceId(Identity.Parse(source))).ToArray(),
+			wire.Ducking.Threshold,
+			wire.Ducking.Attenuation,
+			wire.Ducking.AttackSamples,
+			wire.Ducking.HoldSamples,
+			wire.Ducking.ReleaseSamples);
+		return new AudioProductionConfiguration(
+			wire.Revision,
+			buses,
+			sources,
+			crossfade,
+			ducking,
+			Enum.IsDefined(typeof(AudioClipStrategy), wire.ClipStrategy)
+				? (AudioClipStrategy)wire.ClipStrategy
+				: throw new InvalidDataException("Audio clipping strategy is invalid."));
+	}
 
 	private static WireProductionCgTextSnapshot ToWire(RuntimeProductionCgTextSnapshot snapshot) => new(
 		snapshot.Active,
@@ -2853,6 +3036,13 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	private sealed record WireAudioInputState(string SourceId, double Gain, bool Muted);
 	private sealed record WireAudioRoutingState(int Mode, string? BreakawaySourceId, ulong ExpectedRoutingRevision);
 	private sealed record WireAudioTestSignalState(string SourceId, bool Enabled, int Mode, double FrequencyHz, double PeakLevel);
+	private sealed record WireAudioProductionBus(string BusId, double MasterGain, bool Muted);
+	private sealed record WireAudioProductionSource(string SourceId, double Gain, bool Muted, bool FollowRoutedSource, string[]? BusAssignments);
+	private sealed record WireAudioCrossfade(string BusId, string FromSourceId, string ToSourceId, ulong StartSamplePosition, uint DurationSamples, int Law);
+	private sealed record WireAudioDucking(string BusId, bool Enabled, string SidechainSourceId, string[]? TargetSourceIds, double Threshold, double Attenuation, uint AttackSamples, uint HoldSamples, uint ReleaseSamples);
+	private sealed record WireAudioProductionConfiguration(ulong Revision, WireAudioProductionBus[]? Buses, WireAudioProductionSource[]? Sources, WireAudioCrossfade? Crossfade, WireAudioDucking? Ducking, int ClipStrategy);
+	private sealed record WireAudioProductionMutation(ulong ExpectedRevision, WireAudioProductionConfiguration Configuration);
+	private sealed record WireAudioProductionSnapshot(WireAudioProductionConfiguration Configuration, double LeftPeak, double RightPeak, double PreClipPeak, bool Clipping, ulong ClippedSampleValues, double DuckingGain, double DuckingReduction, bool SidechainAvailable, double? CrossfadeProgress, int ActiveSourceCount, int MissingSourceCount);
 	private sealed record WireTestPatternState(string SourceId, bool Enabled, bool MotionTiming = false);
 	private sealed record WireAudioInput(
 		string SourceId,
@@ -2911,7 +3101,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		string AvSyncSubmitOffset = "UNAVAILABLE",
 		string AvSyncDrift = "UNAVAILABLE",
 		string AvSyncDetail = "A/V sync diagnostics are unavailable.");
-	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, WireRecordingSnapshot Recording, WireHealthSnapshot Health, WireAIShowcase AIShowcase, WireMediaDeckSnapshot MediaDeck, ulong StateVersion, WireProductionCgTextSnapshot? ProductionCgText = null, WireScene[]? Scenes = null, WireOutputRole[]? OutputRoles = null, WireCompositingLayer[]? CompositingLayers = null, WireShowControlWorkspace? ShowControl = null, WireShowProject? ShowProject = null);
+	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, WireRecordingSnapshot Recording, WireHealthSnapshot Health, WireAIShowcase AIShowcase, WireMediaDeckSnapshot MediaDeck, ulong StateVersion, WireProductionCgTextSnapshot? ProductionCgText = null, WireScene[]? Scenes = null, WireOutputRole[]? OutputRoles = null, WireCompositingLayer[]? CompositingLayers = null, WireShowControlWorkspace? ShowControl = null, WireShowProject? ShowProject = null, WireAudioProductionSnapshot? AudioProduction = null);
 	private sealed record WireShowProject(string ProjectId, string Name, string State, string Detail);
 	private sealed record WireShowControlCueList(string CueListJson);
 	private sealed record WireShowControlSelection(string CueListId);
