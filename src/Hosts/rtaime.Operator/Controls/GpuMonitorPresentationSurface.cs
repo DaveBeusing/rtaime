@@ -4,6 +4,7 @@ using System.Numerics;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Media;
+using System.Windows.Threading;
 using rtaime.Media.Contracts;
 using Vortice.D3DCompiler;
 using Vortice.Direct3D;
@@ -37,6 +38,10 @@ public sealed class GpuMonitorPresentationSurface : DrawingSurface
 	private ulong _lastAnalysisSequence;
 	private MediaInspectionRoi? _lastAnalyzedRoi;
 	private MediaInspectionChannel _lastAnalyzedChannel = MediaInspectionChannel.Combined;
+	private readonly DispatcherTimer _analysisRetryTimer = new(DispatcherPriority.Background)
+	{
+		Interval = TimeSpan.FromMilliseconds(200)
+	};
 	private const int MaxAnalysisSamples = 262_144;
 	private const int AnalysisResultCount = 16;
 
@@ -79,6 +84,7 @@ public sealed class GpuMonitorPresentationSurface : DrawingSurface
 		Draw += OnDraw;
 		UnloadContent += OnUnloadContent;
 		Loaded += OnSurfaceLoaded;
+		_analysisRetryTimer.Tick += OnAnalysisRetryTick;
 		Unloaded += OnSurfaceUnloaded;
 	}
 
@@ -129,6 +135,12 @@ public sealed class GpuMonitorPresentationSurface : DrawingSurface
 		surface.Invalidate();
 	}
 
+	private void OnAnalysisRetryTick(object? sender, EventArgs e)
+	{
+		_analysisRetryTimer.Stop();
+		Invalidate();
+	}
+
 	private void OnSurfaceLoaded(object sender, RoutedEventArgs e)
 	{
 		if (!StandaloneFit || Parent is not FrameworkElement viewport)
@@ -144,6 +156,7 @@ public sealed class GpuMonitorPresentationSurface : DrawingSurface
 		if (_standaloneViewport is not null)
 			_standaloneViewport.SizeChanged -= OnStandaloneViewportChanged;
 		_standaloneViewport = null;
+		_analysisRetryTimer.Stop();
 		Monitor?.SetGpuPresentationState(false, "CPU/WPF fallback");
 	}
 
@@ -400,8 +413,14 @@ public sealed class GpuMonitorPresentationSurface : DrawingSurface
 		var evidenceChanged = frame.SequenceNumber != _lastAnalysisSequence ||
 			_lastAnalyzedRoi != roi ||
 			_lastAnalyzedChannel != InspectionChannel;
-		if (!evidenceChanged || (_lastAnalysisAt != default && now - _lastAnalysisAt < TimeSpan.FromMilliseconds(200)))
+		if (!evidenceChanged)
 			return;
+		if (_lastAnalysisAt != default && now - _lastAnalysisAt < TimeSpan.FromMilliseconds(200))
+		{
+			if (!_analysisRetryTimer.IsEnabled)
+				_analysisRetryTimer.Start();
+			return;
+		}
 
 		var area = checked((long)roi.Width * roi.Height);
 		var stride = Math.Max(1, (int)Math.Ceiling(Math.Sqrt(area / (double)MaxAnalysisSamples)));
@@ -464,6 +483,7 @@ public sealed class GpuMonitorPresentationSurface : DrawingSurface
 			context.Unmap(_analysisReadback, 0);
 		}
 
+		_analysisRetryTimer.Stop();
 		_lastAnalysisAt = now;
 		_lastAnalysisSequence = frame.SequenceNumber;
 		_lastAnalyzedRoi = roi;
