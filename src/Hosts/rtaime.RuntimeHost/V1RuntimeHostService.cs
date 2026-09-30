@@ -318,6 +318,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private readonly IConfigurableProgramRecordingWriter? _recordingTargetWriter;
 	private readonly RuntimeMonitoringHub _monitoringHub;
 	private readonly RuntimeMonitoringTap _monitoringTap;
+	private readonly RuntimeNetworkOutputBridge _networkOutputBridge;
 	private readonly Stopwatch _uptimeClock = Stopwatch.StartNew();
 	private readonly SystemHardwareTelemetry _hardwareTelemetry = new();
 	private readonly BoundedDiagnosticHistory<string> _observations = new(RetainedObservationCapacity);
@@ -388,14 +389,19 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		MediaSourceId sourceBId,
 		VideoFormat format,
 		IProgramRecordingWriter recordingWriter,
-		IGpuProcessingBackend? gpuBackend = null)
+		IGpuProcessingBackend? gpuBackend = null,
+		IReadOnlyList<RuntimeNetworkOutputTarget>? networkOutputs = null)
 	{
 		_format = format;
+		var configuredNetworkOutputs = networkOutputs ?? Array.Empty<RuntimeNetworkOutputTarget>();
 		_virtualMedia = new VirtualMediaReferenceProvider(sourceAId, sourceBId, format);
 		_sourceAPipeline = CreatePipeline();
 		_sourceBPipeline = CreatePipeline();
 		_gpuBackend = gpuBackend ?? new ManagedReferenceGpuBackend();
-		_gpu = new GpuProcessingProvider(_gpuBackend, ProgramReadbackBufferCapacity);
+		var networkReadbackCapacity = configuredNetworkOutputs
+			.Where(target => string.Equals(target.RoleId, "program", StringComparison.Ordinal))
+			.Sum(target => target.Configuration.QueueCapacity);
+		_gpu = new GpuProcessingProvider(_gpuBackend, checked(ProgramReadbackBufferCapacity + networkReadbackCapacity));
 		_gpu.Start();
 		_runtime = new TransactionalRuntime(new InMemoryRuntimeResourceReservationManager());
 
@@ -450,6 +456,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		_recordingTargetWriter = recordingWriter as IConfigurableProgramRecordingWriter;
 		_recorder = new ProgramRecorder(recordingWriter);
 		_recordingBridge = new RuntimeRecordingBridge(_recorder);
+		_networkOutputBridge = new RuntimeNetworkOutputBridge(configuredNetworkOutputs);
 		_monitoringHub = new RuntimeMonitoringHub();
 		_monitoringTap = new RuntimeMonitoringTap(
 			_monitoringHub,
@@ -458,8 +465,16 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				: MonitoringSharedResourceCapabilityState.Unavailable);
 	}
 
-	public IReadOnlyList<ProviderDescriptor> ProviderDescriptors =>
-		Array.AsReadOnly(new[] { _virtualMedia.Descriptor, _gpu.Descriptor });
+	public IReadOnlyList<ProviderDescriptor> ProviderDescriptors
+	{
+		get
+		{
+			var providers = new List<ProviderDescriptor> { _virtualMedia.Descriptor, _gpu.Descriptor };
+			if (_networkOutputBridge.Enabled)
+				providers.Add(_networkOutputBridge.ProviderDescriptor);
+			return Array.AsReadOnly(providers.ToArray());
+		}
+	}
 
 	public IReadOnlyList<VirtualOutputFrame> ProgramFrames =>
 		_programOutput?.Frames ?? Array.Empty<VirtualOutputFrame>();
@@ -1069,6 +1084,22 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 
 						if (payloadStaged && recording is { Accepted: false })
 							_recordingPayloadWriter?.DiscardPayload(sequence);
+					}
+
+					try
+					{
+						var networkOutput = _networkOutputBridge.TrySubmit(
+							"program",
+							pixels.Retain(),
+							output.Descriptor.Timing,
+							audioBuffer,
+							programAudioPayload);
+						if (networkOutput is { Status: not NetworkOutputEnqueueStatus.Accepted })
+							Observe($"network.output.program:{networkOutput.Status}:{networkOutput.Failure?.Code}");
+					}
+					catch (Exception exception)
+					{
+						Observe($"network.output.program.enqueue_failed:{exception.GetType().Name}");
 					}
 
 					output.Dispose();
@@ -2072,6 +2103,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 
 		await _monitoringTap.DisposeAsync().ConfigureAwait(false);
 		_monitoringHub.Dispose();
+		await _networkOutputBridge.DisposeAsync().ConfigureAwait(false);
 		await _recorder.DisposeAsync().ConfigureAwait(false);
 		_sourceAPipeline.Dispose();
 		_sourceBPipeline.Dispose();
@@ -2201,7 +2233,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 					: hasEvidence
 						? $"Program provider confirmed frame sequence {programEvidence!.Frame.Timing.SequenceNumber} for sink '{programSink}'."
 						: $"Program output is committed to sink '{programSink}'; matching source/frame evidence is pending.",
-				fault));
+				fault,
+				_networkOutputBridge.SnapshotForRole("program")));
 		}
 
 		var auxBinding = execution.PreparedExecution.Bindings.SingleOrDefault(binding =>
@@ -2253,7 +2286,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 					: hasEvidence
 						? $"Aux provider confirmed frame sequence {auxEvidence!.Frame.Timing.SequenceNumber} for sink '{auxSink}'."
 						: $"Aux output is committed to sink '{auxSink}'; matching source/frame evidence is pending.",
-				fault));
+				fault,
+				_networkOutputBridge.SnapshotForRole("aux")));
 		}
 		return snapshots.AsReadOnly();
 	}
