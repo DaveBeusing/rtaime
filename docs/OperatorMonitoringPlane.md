@@ -18,7 +18,7 @@ The visual monitoring path is independent:
 
 `RuntimeHost committed media -> monitoring tap -> bounded subscriber -> dedicated monitoring Named Pipe -> rtaime.Client monitoring transport -> RtaimeMonitorPresentation`
 
-When the qualified Windows graphics path is available, `RtaimeMonitorPresentation` prefers a read-only GPU-resident shared resource. The existing frozen WPF bitmap remains the deterministic fallback and the bounded analysis source.
+When the qualified Windows graphics path is available, `RtaimeMonitorPresentation` prefers a read-only GPU-resident shared resource. The existing frozen WPF bitmap remains the deterministic fallback for Combined presentation and the bounded source for the legacy 1×1 inspector, CPU scopes and Difference analysis. Full-frame channel isolation and ROI statistics use the shared GPU resource instead of materializing another CPU frame.
 
 ## Monitoring contract
 
@@ -68,6 +68,10 @@ Sampling is deliberate:
 - the source-aligned pixel grid remains a separate overlay and does not resample media.
 
 The GPU shader applies the same qualified source-to-sRGB transfer/range intent as `MonitoringDisplayTransform`. Incomplete color metadata remains passthrough rather than guessed. Presentation changes do not modify Runtime or Program pixels.
+
+The same presentation surface also owns viewer-local full-frame channel inspection. Combined, Red, Green, Blue, Alpha and Luma are selected in the D3D11 pixel shader without changing the shared texture. Alpha is rendered as opaque grayscale; Luma uses the existing Rec.709 display-code weighting. If the GPU resource cannot be presented, non-Combined channel views become explicitly unavailable instead of synthesizing a CPU full-frame channel image.
+
+Bounded ROI statistics run in a D3D11 compute shader against the opened read-only monitoring texture. The ROI is supplied in source-pixel coordinates. Analysis is rate-limited to 200 ms and bounded to 262,144 samples; larger regions use a deterministic sample stride. The compute shader reduces count, mean, minimum and maximum values into a 16-element uint buffer. Only that reduced numeric buffer is copied to CPU-visible staging memory.
 
 ## Fallback and recovery
 
@@ -130,9 +134,9 @@ The clean window contains only the Program presentation surfaces. It does not ad
 
 ## Pixel inspection, scopes and comparison
 
-Pixel inspection keeps the full-resolution GPU presentation coordinate as its source coordinate. The current inspection sampler remains intentionally bounded to the already-present 320×180 CPU monitoring bitmap; full-resolution GPU ROI readback is not introduced. The full-resolution coordinate is deterministically mapped to its bounded monitoring sample and is reported as display-code evidence, not fabricated source-code evidence.
+Pixel inspection keeps the full-resolution GPU presentation coordinate as its source coordinate. The existing 1×1 inspection sampler remains intentionally bounded to the already-present 320×180 CPU monitoring bitmap. The full-resolution coordinate is deterministically mapped to its bounded monitoring sample and is reported as display-code evidence, not fabricated source-code evidence.
 
-Technical scopes and Difference analysis continue to consume the bounded CPU fallback at their existing limited cadence. They do not create another decoder, full-resolution Program readback or GPU telemetry collector. Full-frame GPU channel isolation, GPU scopes and ROI inspection remain separate capabilities.
+Full-frame channel inspection and ROI statistics are separate GPU-resident presentation capabilities. ROI analysis returns only reduced numeric evidence; it does not transfer ROI pixels or a full-resolution frame to the CPU. Technical scopes and Difference analysis continue to consume the bounded CPU fallback at their existing limited cadence. None of these tools creates another decoder, full-resolution Program readback or production renderer.
 
 ## Verification
 
@@ -144,7 +148,9 @@ Automated coverage qualifies:
 - bounded shared-resource ownership and provider restart identity;
 - Preview/Program resource publication and release;
 - Fit/Fill/Pixel Perfect physical geometry over qualified DPI scales;
-- full-resolution source-coordinate mapping to the bounded inspection payload;
+- full-resolution source-coordinate mapping to the bounded 1×1 inspection payload;
+- source-space ROI clamping and stable projection through Fit/Fill/Pixel Perfect/zoom/pan/DPI changes;
+- GPU channel-mode shader semantics and bounded 16-value ROI reduction;
 - one GPU monitor surface plus one WPF fallback surface without nested Viewbox scaling;
 - Clean Program reuse of `ProgramGpuFrame` with no Operator overlay layer;
 - absence of CPU bitmap materialization inside the active GPU presentation control.

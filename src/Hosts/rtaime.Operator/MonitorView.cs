@@ -21,6 +21,9 @@ public class MonitorView : UserControl
 	private MediaPresentationRect _presentationRect;
 	private DateTimeOffset _lastInspectionAt;
 	private DateTimeOffset _lastDiagnosticsHudUpdateAt;
+	private MediaPixelCoordinate? _roiAnchor;
+	private MediaInspectionRoi? _roiInteractionStartRoi;
+	private RoiInteractionMode _roiInteractionMode;
 
 	private static readonly DependencyPropertyKey PresentationWidthPropertyKey = DependencyProperty.RegisterReadOnly(
 		nameof(PresentationWidth),
@@ -71,6 +74,14 @@ public class MonitorView : UserControl
 
 	private static readonly DependencyPropertyKey InspectionReadoutPropertyKey = DependencyProperty.RegisterReadOnly(
 		nameof(InspectionReadout), typeof(string), typeof(MonitorView), new PropertyMetadata("PIXEL —"));
+	private static readonly DependencyPropertyKey RoiInspectionReadoutPropertyKey = DependencyProperty.RegisterReadOnly(
+		nameof(RoiInspectionReadout), typeof(string), typeof(MonitorView), new PropertyMetadata("ROI —"));
+	private static readonly DependencyPropertyKey IsRoiActivePropertyKey = DependencyProperty.RegisterReadOnly(
+		nameof(IsRoiActive), typeof(bool), typeof(MonitorView), new PropertyMetadata(false));
+	private static readonly DependencyPropertyKey IsChannelInspectionUnavailablePropertyKey = DependencyProperty.RegisterReadOnly(
+		nameof(IsChannelInspectionUnavailable), typeof(bool), typeof(MonitorView), new PropertyMetadata(false));
+	private static readonly DependencyPropertyKey ChannelInspectionStatusPropertyKey = DependencyProperty.RegisterReadOnly(
+		nameof(ChannelInspectionStatus), typeof(string), typeof(MonitorView), new PropertyMetadata("COMBINED"));
 	private static readonly DependencyPropertyKey DiagnosticsHudTextPropertyKey = DependencyProperty.RegisterReadOnly(
 		nameof(DiagnosticsHudText), typeof(string), typeof(MonitorView), new PropertyMetadata("FRAME DIAGNOSTICS — UNAVAILABLE"));
 	private static readonly DependencyPropertyKey IsPixelGridVisiblePropertyKey = DependencyProperty.RegisterReadOnly(
@@ -93,6 +104,10 @@ public class MonitorView : UserControl
 		nameof(InverseDpiScaleY), typeof(double), typeof(MonitorView), new PropertyMetadata(1.0));
 
 	public static readonly DependencyProperty InspectionReadoutProperty = InspectionReadoutPropertyKey.DependencyProperty;
+	public static readonly DependencyProperty RoiInspectionReadoutProperty = RoiInspectionReadoutPropertyKey.DependencyProperty;
+	public static readonly DependencyProperty IsRoiActiveProperty = IsRoiActivePropertyKey.DependencyProperty;
+	public static readonly DependencyProperty IsChannelInspectionUnavailableProperty = IsChannelInspectionUnavailablePropertyKey.DependencyProperty;
+	public static readonly DependencyProperty ChannelInspectionStatusProperty = ChannelInspectionStatusPropertyKey.DependencyProperty;
 	public static readonly DependencyProperty IsPixelGridVisibleProperty = IsPixelGridVisiblePropertyKey.DependencyProperty;
 	public static readonly DependencyProperty DiagnosticsHudTextProperty = DiagnosticsHudTextPropertyKey.DependencyProperty;
 	public static readonly DependencyProperty IsGpuPresentationActiveProperty = IsGpuPresentationActivePropertyKey.DependencyProperty;
@@ -209,7 +224,15 @@ public class MonitorView : UserControl
 
 	public static readonly DependencyProperty InspectionChannelProperty = DependencyProperty.Register(
 		nameof(InspectionChannel), typeof(MediaInspectionChannel), typeof(MonitorView),
-		new PropertyMetadata(MediaInspectionChannel.Rgb));
+		new PropertyMetadata(MediaInspectionChannel.Combined, OnInspectionStateChanged));
+
+	public static readonly DependencyProperty InspectionRoiProperty = DependencyProperty.Register(
+		nameof(InspectionRoi), typeof(MediaInspectionRoi?), typeof(MonitorView),
+		new PropertyMetadata(null, OnInspectionStateChanged));
+
+	public static readonly DependencyProperty IsRoiSelectionEnabledProperty = DependencyProperty.Register(
+		nameof(IsRoiSelectionEnabled), typeof(bool), typeof(MonitorView),
+		new PropertyMetadata(false));
 
 	public static readonly DependencyProperty ZoomModeProperty = DependencyProperty.Register(
 		nameof(ZoomMode),
@@ -238,12 +261,14 @@ public class MonitorView : UserControl
 		ToggleFitPixelPerfectCommand = new MonitorPresentationCommand(ToggleFitPixelPerfect);
 		ToggleTechnicalOverlayCommand = new MonitorPresentationCommand(() => ShowTechnicalOverlay = !ShowTechnicalOverlay);
 		ToggleDiagnosticsHudCommand = new MonitorPresentationCommand(() => ShowDiagnosticsHud = !ShowDiagnosticsHud);
-		ShowRgbCommand = new MonitorPresentationCommand(() => InspectionChannel = MediaInspectionChannel.Rgb);
+		ShowRgbCommand = new MonitorPresentationCommand(() => InspectionChannel = MediaInspectionChannel.Combined);
 		ShowRedCommand = new MonitorPresentationCommand(() => InspectionChannel = MediaInspectionChannel.Red);
 		ShowGreenCommand = new MonitorPresentationCommand(() => InspectionChannel = MediaInspectionChannel.Green);
 		ShowBlueCommand = new MonitorPresentationCommand(() => InspectionChannel = MediaInspectionChannel.Blue);
 		ShowAlphaCommand = new MonitorPresentationCommand(() => InspectionChannel = MediaInspectionChannel.Alpha);
 		ShowLumaCommand = new MonitorPresentationCommand(() => InspectionChannel = MediaInspectionChannel.Luma);
+		ToggleRoiSelectionCommand = new MonitorPresentationCommand(() => IsRoiSelectionEnabled = !IsRoiSelectionEnabled);
+		ClearRoiCommand = new MonitorPresentationCommand(ClearInspectionRoi);
 	}
 
 	public FrameDiagnosticsSnapshot Diagnostics
@@ -360,6 +385,18 @@ public class MonitorView : UserControl
 		set => SetValue(InspectionChannelProperty, value);
 	}
 
+	public MediaInspectionRoi? InspectionRoi
+	{
+		get => (MediaInspectionRoi?)GetValue(InspectionRoiProperty);
+		set => SetValue(InspectionRoiProperty, value);
+	}
+
+	public bool IsRoiSelectionEnabled
+	{
+		get => (bool)GetValue(IsRoiSelectionEnabledProperty);
+		set => SetValue(IsRoiSelectionEnabledProperty, value);
+	}
+
 	public string ZoomMode
 	{
 		get => (string)GetValue(ZoomModeProperty);
@@ -374,6 +411,10 @@ public class MonitorView : UserControl
 	public int SourcePixelWidth => (int)GetValue(SourcePixelWidthProperty);
 	public int SourcePixelHeight => (int)GetValue(SourcePixelHeightProperty);
 	public string InspectionReadout => (string)GetValue(InspectionReadoutProperty);
+	public string RoiInspectionReadout => (string)GetValue(RoiInspectionReadoutProperty);
+	public bool IsRoiActive => (bool)GetValue(IsRoiActiveProperty);
+	public bool IsChannelInspectionUnavailable => (bool)GetValue(IsChannelInspectionUnavailableProperty);
+	public string ChannelInspectionStatus => (string)GetValue(ChannelInspectionStatusProperty);
 	public bool IsPixelGridVisible => (bool)GetValue(IsPixelGridVisibleProperty);
 	public bool IsGpuPresentationActive => (bool)GetValue(IsGpuPresentationActiveProperty);
 	public string GpuPresentationDetail => (string)GetValue(GpuPresentationDetailProperty);
@@ -404,6 +445,20 @@ public class MonitorView : UserControl
 	public ICommand ShowBlueCommand { get; }
 	public ICommand ShowAlphaCommand { get; }
 	public ICommand ShowLumaCommand { get; }
+	public ICommand ToggleRoiSelectionCommand { get; }
+	public ICommand ClearRoiCommand { get; }
+
+	private static void OnInspectionStateChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs eventArgs)
+	{
+		var view = (MonitorView)dependencyObject;
+		var roi = view.InspectionRoi;
+		view.SetValue(IsRoiActivePropertyKey, roi is { IsEmpty: false });
+		if (roi is null || roi.Value.IsEmpty)
+			view.SetValue(RoiInspectionReadoutPropertyKey, "ROI —");
+		else
+			view.SetValue(RoiInspectionReadoutPropertyKey, MediaPixelInspection.Format(MediaInspectionRoiStatistics.Unavailable(roi.Value, "GPU analysis pending")));
+		view.RefreshChannelInspectionAvailability();
+	}
 
 	private static void OnDiagnosticsChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs eventArgs)
 	{
@@ -480,8 +535,21 @@ public class MonitorView : UserControl
 	{
 		SetValue(IsGpuPresentationActivePropertyKey, active);
 		SetValue(GpuPresentationDetailPropertyKey, string.IsNullOrWhiteSpace(detail) ? "CPU/WPF fallback" : detail);
+		RefreshChannelInspectionAvailability();
 		if (ShowDiagnosticsHud)
 			RefreshDiagnosticsHud();
+	}
+
+	private void RefreshChannelInspectionAvailability()
+	{
+		var requiresGpuChannelView = InspectionChannel != MediaInspectionChannel.Combined;
+		var unavailable = requiresGpuChannelView && !IsGpuPresentationActive;
+		SetValue(IsChannelInspectionUnavailablePropertyKey, unavailable);
+		SetValue(
+			ChannelInspectionStatusPropertyKey,
+			unavailable
+				? $"{InspectionChannel.ToString().ToUpperInvariant()} · GPU CHANNEL VIEW UNAVAILABLE"
+				: InspectionChannel.ToString().ToUpperInvariant());
 	}
 
 	internal void UpdatePresentationViewport(double widthDip, double heightDip, double dpiScaleX, double dpiScaleY)
@@ -543,6 +611,108 @@ public class MonitorView : UserControl
 
 	internal void ToggleFitPixelPerfect() => ZoomMode = ZoomMode == "100%" ? "FIT" : "100%";
 
+	internal bool BeginRoiSelectionAt(double pointerXDip, double pointerYDip)
+	{
+		var (sourceWidthValue, sourceHeightValue) = ResolveSourcePixels();
+		var sourceWidth = Math.Max(1, checked((int)sourceWidthValue));
+		var sourceHeight = Math.Max(1, checked((int)sourceHeightValue));
+		if (!MediaPixelInspection.TryMapViewportToSource(
+			pointerXDip, pointerYDip, _dpiScaleX, _dpiScaleY, _presentationRect,
+			sourceWidth, sourceHeight, out var coordinate))
+			return false;
+
+		_roiAnchor = coordinate;
+		_roiInteractionStartRoi = InspectionRoi;
+		if (InspectionRoi is { IsEmpty: false } roi)
+		{
+			var thresholdX = Math.Max(1, (int)Math.Ceiling(7.0 * _dpiScaleX / Math.Max(_presentationRect.Scale, 0.0001)));
+			var thresholdY = Math.Max(1, (int)Math.Ceiling(7.0 * _dpiScaleY / Math.Max(_presentationRect.Scale, 0.0001)));
+			bool Near(int x, int y) =>
+				Math.Abs(coordinate.X - x) <= thresholdX &&
+				Math.Abs(coordinate.Y - y) <= thresholdY;
+
+			if (Near(roi.X, roi.Y))
+				_roiInteractionMode = RoiInteractionMode.ResizeTopLeft;
+			else if (Near(roi.RightExclusive - 1, roi.Y))
+				_roiInteractionMode = RoiInteractionMode.ResizeTopRight;
+			else if (Near(roi.X, roi.BottomExclusive - 1))
+				_roiInteractionMode = RoiInteractionMode.ResizeBottomLeft;
+			else if (Near(roi.RightExclusive - 1, roi.BottomExclusive - 1))
+				_roiInteractionMode = RoiInteractionMode.ResizeBottomRight;
+			else if (roi.Contains(coordinate))
+				_roiInteractionMode = RoiInteractionMode.Move;
+			else
+				_roiInteractionMode = RoiInteractionMode.Create;
+		}
+		else
+		{
+			_roiInteractionMode = RoiInteractionMode.Create;
+		}
+
+		if (_roiInteractionMode == RoiInteractionMode.Create)
+		{
+			_roiInteractionStartRoi = null;
+			InspectionRoi = new MediaInspectionRoi(coordinate.X, coordinate.Y, 1, 1);
+		}
+		return true;
+	}
+
+	internal void UpdateRoiSelectionAt(double pointerXDip, double pointerYDip)
+	{
+		if (_roiAnchor is not { } anchor)
+			return;
+
+		var (sourceWidthValue, sourceHeightValue) = ResolveSourcePixels();
+		var sourceWidth = Math.Max(1, checked((int)sourceWidthValue));
+		var sourceHeight = Math.Max(1, checked((int)sourceHeightValue));
+		var coordinate = MediaPixelInspection.MapViewportToSourceClamped(
+			pointerXDip, pointerYDip, _dpiScaleX, _dpiScaleY, _presentationRect,
+			sourceWidth, sourceHeight);
+
+		InspectionRoi = _roiInteractionMode switch
+		{
+			RoiInteractionMode.Move when _roiInteractionStartRoi is { } start =>
+				start.MoveBy(coordinate.X - anchor.X, coordinate.Y - anchor.Y, sourceWidth, sourceHeight),
+			RoiInteractionMode.ResizeTopLeft when _roiInteractionStartRoi is { } start =>
+				start.ResizeFromCorner(MediaInspectionRoiCorner.TopLeft, coordinate, sourceWidth, sourceHeight),
+			RoiInteractionMode.ResizeTopRight when _roiInteractionStartRoi is { } start =>
+				start.ResizeFromCorner(MediaInspectionRoiCorner.TopRight, coordinate, sourceWidth, sourceHeight),
+			RoiInteractionMode.ResizeBottomLeft when _roiInteractionStartRoi is { } start =>
+				start.ResizeFromCorner(MediaInspectionRoiCorner.BottomLeft, coordinate, sourceWidth, sourceHeight),
+			RoiInteractionMode.ResizeBottomRight when _roiInteractionStartRoi is { } start =>
+				start.ResizeFromCorner(MediaInspectionRoiCorner.BottomRight, coordinate, sourceWidth, sourceHeight),
+			_ => MediaInspectionRoi.FromCorners(anchor, coordinate, sourceWidth, sourceHeight)
+		};
+	}
+
+	internal void EndRoiSelection()
+	{
+		_roiAnchor = null;
+		_roiInteractionStartRoi = null;
+		_roiInteractionMode = RoiInteractionMode.None;
+	}
+
+	internal void ClearInspectionRoi()
+	{
+		EndRoiSelection();
+		InspectionRoi = null;
+		SetValue(RoiInspectionReadoutPropertyKey, "ROI —");
+	}
+
+	internal void SetRoiStatistics(MediaInspectionRoiStatistics statistics)
+	{
+		if (InspectionRoi is not { } current || current != statistics.Roi)
+			return;
+		SetValue(RoiInspectionReadoutPropertyKey, MediaPixelInspection.Format(statistics));
+	}
+
+	internal void SetRoiUnavailable(string detail)
+	{
+		if (InspectionRoi is not { } roi || roi.IsEmpty)
+			return;
+		SetValue(RoiInspectionReadoutPropertyKey, MediaPixelInspection.Format(MediaInspectionRoiStatistics.Unavailable(roi, detail)));
+	}
+
 	internal void InspectPresentationAt(double pointerXDip, double pointerYDip)
 	{
 		if (Frame is not BitmapSource bitmap)
@@ -582,6 +752,14 @@ public class MonitorView : UserControl
 		SetValue(SourcePixelHeightPropertyKey, checked((int)sourceHeight));
 		if (sourceWidth <= 0 || sourceHeight <= 0)
 			return;
+		if (InspectionRoi is { } roi)
+		{
+			var clamped = roi.Clamp(checked((int)sourceWidth), checked((int)sourceHeight));
+			if (clamped.IsEmpty)
+				ClearInspectionRoi();
+			else if (clamped != roi)
+				InspectionRoi = clamped;
+		}
 
 		var requestedTarget = MediaRenderTarget.Create(
 			_viewportWidthDip,
@@ -677,6 +855,17 @@ public class MonitorView : UserControl
 		"FREE" => "FREE",
 		_ => "FIT"
 	};
+
+	private enum RoiInteractionMode
+	{
+		None,
+		Create,
+		Move,
+		ResizeTopLeft,
+		ResizeTopRight,
+		ResizeBottomLeft,
+		ResizeBottomRight
+	}
 
 	private sealed class MonitorPresentationCommand : ICommand
 	{

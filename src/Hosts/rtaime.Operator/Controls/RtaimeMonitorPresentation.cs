@@ -14,6 +14,7 @@ public sealed class RtaimeMonitorPresentation : ContentControl
 	private const string MediaViewportPartName = "PART_MediaViewport";
 	private FrameworkElement? _mediaViewport;
 	private Point? _panOrigin;
+	private bool _roiSelecting;
 	private readonly DispatcherTimer _resizeSettleTimer = new(DispatcherPriority.Render)
 	{
 		Interval = TimeSpan.FromMilliseconds(80)
@@ -201,7 +202,16 @@ public sealed class RtaimeMonitorPresentation : ContentControl
 
 	private void OnViewportPreviewKeyDown(object sender, KeyEventArgs e)
 	{
-		if (Monitor is null || Keyboard.Modifiers != ModifierKeys.None)
+		if (Monitor is null)
+			return;
+
+		if (Keyboard.Modifiers == ModifierKeys.Shift && e.Key == Key.R)
+		{
+			Monitor.IsRoiSelectionEnabled = !Monitor.IsRoiSelectionEnabled;
+			e.Handled = true;
+			return;
+		}
+		if (Keyboard.Modifiers != ModifierKeys.None)
 			return;
 
 		if (e.Key == Key.D1 || e.Key == Key.NumPad1)
@@ -214,6 +224,11 @@ public sealed class RtaimeMonitorPresentation : ContentControl
 			Monitor.ZoomMode = "FIT";
 			e.Handled = true;
 		}
+		else if (e.Key is Key.Escape or Key.Delete && Monitor.IsRoiActive)
+		{
+			Monitor.ClearInspectionRoi();
+			e.Handled = true;
+		}
 	}
 
 	private void OnViewportMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
@@ -222,6 +237,18 @@ public sealed class RtaimeMonitorPresentation : ContentControl
 			return;
 
 		_mediaViewport?.Focus();
+		var current = e.GetPosition(_mediaViewport);
+		if (Monitor.IsRoiSelectionEnabled)
+		{
+			if (Monitor.BeginRoiSelectionAt(current.X, current.Y))
+			{
+				_roiSelecting = true;
+				_mediaViewport?.CaptureMouse();
+				e.Handled = true;
+			}
+			return;
+		}
+
 		if (e.ClickCount == 2)
 		{
 			Monitor.ToggleFitPixelPerfect();
@@ -232,13 +259,22 @@ public sealed class RtaimeMonitorPresentation : ContentControl
 		if (Monitor.ZoomMode is "FIT" or "FILL")
 			return;
 
-		_panOrigin = e.GetPosition(_mediaViewport);
+		_panOrigin = current;
 		_mediaViewport?.CaptureMouse();
 		e.Handled = true;
 	}
 
 	private void OnViewportMouseLeftButtonUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
 	{
+		if (_roiSelecting)
+		{
+			_roiSelecting = false;
+			Monitor?.EndRoiSelection();
+			_mediaViewport?.ReleaseMouseCapture();
+			e.Handled = true;
+			return;
+		}
+
 		if (_panOrigin is null)
 			return;
 
@@ -254,6 +290,12 @@ public sealed class RtaimeMonitorPresentation : ContentControl
 
 		var current = e.GetPosition(_mediaViewport);
 		Monitor.InspectPresentationAt(current.X, current.Y);
+		if (_roiSelecting && e.LeftButton == System.Windows.Input.MouseButtonState.Pressed)
+		{
+			Monitor.UpdateRoiSelectionAt(current.X, current.Y);
+			e.Handled = true;
+			return;
+		}
 		if (_panOrigin is null || e.LeftButton != System.Windows.Input.MouseButtonState.Pressed)
 			return;
 
@@ -285,6 +327,8 @@ public sealed class RtaimeMonitorPresentation : ContentControl
 		_mediaViewport.MouseMove -= OnViewportMouseMove;
 		_mediaViewport = null;
 		_panOrigin = null;
+		_roiSelecting = false;
+		Monitor?.EndRoiSelection();
 		_resizeSettleTimer.Stop();
 	}
 
