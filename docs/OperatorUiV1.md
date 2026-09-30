@@ -132,13 +132,13 @@ Automated responsive qualification is implemented by the Windows Operator test s
 
 ## High-quality monitor scaling boundary
 
-Preview and Program monitor presentation derives an explicit physical-pixel target from the live WPF viewport and per-monitor DPI scale. The target is integer pixel-sized and carries the active quality and presentation-path classification. The current monitoring transport supplies frozen WPF `ImageSource` frames, so the qualified V1 path remains the controlled `WpfFallback`: one `Image` surface performs the intentional high-quality presentation scale and no surrounding `Viewbox` or layout transform performs a second image resample.
+Preview and Program monitor presentation derives an explicit physical-pixel target from the live WPF viewport and per-monitor DPI scale. The target is integer pixel-sized and carries the active quality and presentation-path classification. When the monitoring observation carries a qualified read-only shared GPU resource, `GpuMonitorPresentationSurface` is the preferred presentation path. The frozen WPF `ImageSource` remains underneath as deterministic fallback. Neither path introduces a surrounding `Viewbox` or a second media resample.
 
-The contract deliberately distinguishes this fallback from a future `GpuProvider` path. A provider-backed path may supply an already-sized GPU-resident surface later without changing Operator presentation semantics; the Operator does not introduce a vendor-specific rendering contract to obtain it.
+The GPU path is exposed through the provider-neutral monitoring resource contract and narrow Windows graphics interop metadata. The Operator does not consume CUDA pointers or vendor-specific production APIs.
 
 Physical target adoption is stabilized during interactive resize. Existing content continues to present while size changes arrive, and the final target is adopted after an 80 ms presentation debounce. Stable viewport updates reuse the same target revision rather than representing per-frame resource churn.
 
-The technical overlay reports source dimensions, physical target dimensions, quality, active path, intentional scale-stage count, target revision/pending resize state and DPI. This makes the current CPU/WPF fallback explicit rather than silently presenting it as GPU-resident. The WPF boundary uses `RenderOptions.BitmapScalingMode="HighQuality"`, pixel snapping and per-monitor DPI-aware target calculation.
+The technical overlay reports source dimensions, physical target dimensions, quality, active path, intentional scale-stage count, target revision/pending resize state and DPI. GPU success is reported only from actual surface state; otherwise the CPU/WPF fallback is explicit. The WPF boundary uses `RenderOptions.BitmapScalingMode="HighQuality"`, pixel snapping and per-monitor DPI-aware target calculation.
 
 Automated qualification covers physical target calculation across 100%, 125%, 150% and 200% DPI examples, deterministic fractional-pixel rounding, resize settling and stable-target revision reuse. The existing presentation geometry suite continues to cover aspect preservation, pixel-perfect inspection and bounded pan.
 
@@ -148,7 +148,11 @@ Preview and Program viewports support a local inspection workflow that never cha
 
 Mouse-wheel input over a viewport enters bounded free zoom between 25% and 800%. Zoom is anchored to the pointer so the inspected source location remains stable where pan bounds permit it. Dragging pans only inspection modes whose scaled media exceeds the viewport; pan remains clamped so media cannot be lost outside the inspectable region.
 
-Double-click toggles Fit and 100%. With the media viewport focused and no modifier keys held, `1` selects 100% and `F` selects Fit. The viewport takes keyboard focus when an inspection drag begins; shortcuts are intentionally local rather than global so transport and timeline input retain their established ownership.
+Double-click toggles Fit and 100%. With the media viewport focused and no modifier keys held, `1` selects 100% and `F` selects Fit. `Shift+R` toggles ROI-selection mode without conflicting with the global `R` recording shortcut. While ROI mode is active, left-drag creates a bounded source-space rectangle; `Esc` or `Delete` clears the ROI when the viewport owns focus. The viewport takes keyboard focus when an inspection drag begins; shortcuts are intentionally local rather than global so transport and timeline input retain their established ownership.
+
+The inspection toolbar exposes Combined/R/G/B/A/Luma channel modes. Full-frame isolation is performed only by the qualified GPU presentation path. When that path is unavailable, the selected channel view reports an explicit unavailable state instead of presenting a normal CPU frame as if it were isolated.
+
+ROI coordinates remain in source-pixel space across resize, Fit/Fill, Pixel Perfect, free zoom, pan and DPI changes. The visible ROI overlay is presentation-only. Its statistics expose bounded GPU-derived sample count, mean and min/max values for R/G/B/A and luma; only reduced numeric evidence is returned to the Operator model.
 
 The existing monitor status reports the active presentation mode and the technical overlay exposes authoritative source/target and scaling diagnostics. It does not infer frame-rate, bit-depth, or other metadata that is not supplied authoritatively by the current monitoring contract.
 
