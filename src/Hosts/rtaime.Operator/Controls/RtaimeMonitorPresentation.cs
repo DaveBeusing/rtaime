@@ -202,7 +202,16 @@ public sealed class RtaimeMonitorPresentation : ContentControl
 
 	private void OnViewportPreviewKeyDown(object sender, KeyEventArgs e)
 	{
-		if (Monitor is null || Keyboard.Modifiers != ModifierKeys.None)
+		if (Monitor is null)
+			return;
+
+		if (Keyboard.Modifiers == ModifierKeys.Shift && e.Key == Key.R)
+		{
+			Monitor.IsRoiSelectionEnabled = !Monitor.IsRoiSelectionEnabled;
+			e.Handled = true;
+			return;
+		}
+		if (Keyboard.Modifiers != ModifierKeys.None)
 			return;
 
 		if (e.Key == Key.D1 || e.Key == Key.NumPad1)
@@ -213,11 +222,6 @@ public sealed class RtaimeMonitorPresentation : ContentControl
 		else if (e.Key == Key.F)
 		{
 			Monitor.ZoomMode = "FIT";
-			e.Handled = true;
-		}
-		else if (e.Key == Key.R)
-		{
-			Monitor.IsRoiSelectionEnabled = !Monitor.IsRoiSelectionEnabled;
 			e.Handled = true;
 		}
 		else if (e.Key is Key.Escape or Key.Delete && Monitor.IsRoiActive)
