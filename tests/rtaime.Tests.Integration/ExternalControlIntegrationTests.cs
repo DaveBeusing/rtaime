@@ -89,6 +89,8 @@ public sealed class ExternalControlIntegrationTests
 
 		Assert.Equal(StatusCode.PermissionDenied, exception.StatusCode);
 		Assert.Equal(snapshot.Production.Revision, fixture.Control.Control!.State.Revision);
+		Assert.Contains(fixture.Control.ExternalControlServer!.AuditRecords, record =>
+			record.Event == "authorization" && record.Outcome == "denied");
 	}
 
 	[Fact]
@@ -130,6 +132,80 @@ public sealed class ExternalControlIntegrationTests
 		Assert.NotEmpty(snapshot.Sources);
 		Assert.False(grpc.RequiresFullSnapshot);
 		Assert.Equal(ExternalControlServerState.Active, fixture.Control.ExternalControlServer!.Snapshot.State);
+		Assert.Contains(fixture.Control.ExternalControlServer.AuditRecords, record =>
+			record.Event == "authentication" && record.Outcome == "accepted");
+	}
+
+	[Fact]
+	public async Task Pinned_server_trust_rejects_an_unexpected_certificate_identity()
+	{
+		await using var fixture = await ExternalFixture.StartAsync(ExternalControlRole.Observer);
+		await using var grpc = fixture.CreateClient(trustedServerThumbprint: new string('0', 40));
+
+		var exception = await Assert.ThrowsAsync<RpcException>(() => grpc.GetSnapshotAsync().AsTask());
+
+		Assert.Equal(StatusCode.Unavailable, exception.StatusCode);
+		Assert.Equal(ControlHostProcessState.Ready, fixture.Control.Lifecycle.State);
+	}
+
+	[Fact]
+	public async Task Mutual_tls_rejects_an_unmapped_client_certificate()
+	{
+		await using var fixture = await ExternalFixture.StartAsync(ExternalControlRole.Observer, mutualTls: true);
+		await using var grpc = fixture.CreateUntrustedMutualTlsClient();
+
+		var exception = await Assert.ThrowsAsync<RpcException>(() => grpc.GetSnapshotAsync().AsTask());
+
+		Assert.Equal(StatusCode.Unavailable, exception.StatusCode);
+		Assert.Equal(ControlHostProcessState.Ready, fixture.Control.Lifecycle.State);
+	}
+
+	[Fact]
+	public async Task Expired_required_server_certificate_fails_ControlHost_startup_closed()
+	{
+		var suffix = Guid.NewGuid().ToString("N");
+		var root = Path.Combine(Path.GetTempPath(), "rtaime-external-control-expired", suffix);
+		Directory.CreateDirectory(root);
+		var certificate = CreateCertificate(
+			root,
+			"expired-server",
+			client: false,
+			DateTimeOffset.UtcNow.AddDays(-3),
+			DateTimeOffset.UtcNow.AddDays(-2));
+		var passwordEnvironment = certificate.PasswordEnvironment;
+		var tokenEnvironment = "RTAIME_EXTERNAL_TEST_TOKEN_" + suffix.ToUpperInvariant();
+		Environment.SetEnvironmentVariable(passwordEnvironment, certificate.Password);
+		Environment.SetEnvironmentVariable(tokenEnvironment, Convert.ToHexString(RandomNumberGenerator.GetBytes(32)));
+		try
+		{
+			var external = new ExternalControlServerOptions
+			{
+				Enabled = true,
+				Required = true,
+				BindAddress = "127.0.0.1",
+				Port = FreePort(),
+				CertificatePath = certificate.Path,
+				CertificatePasswordEnvironmentVariable = passwordEnvironment,
+				Identities = [new ExternalControlIdentityOptions("test-client", ExternalControlRole.Observer, TokenEnvironmentVariable: tokenEnvironment)]
+			};
+			var control = new ControlHostProcess(ControlHostProcessOptions.Default with
+			{
+				ListenEndpoint = "rtaime.test.control.expired." + suffix,
+				RuntimeEndpoint = "rtaime.test.runtime.expired." + suffix,
+				DurabilityRoot = root,
+				ExternalControl = external
+			});
+
+			var exit = await control.RunAsync(CancellationToken.None);
+
+			Assert.Equal(ControlHostExitCode.StartupFailure, exit);
+		}
+		finally
+		{
+			Environment.SetEnvironmentVariable(passwordEnvironment, null);
+			Environment.SetEnvironmentVariable(tokenEnvironment, null);
+			try { Directory.Delete(root, recursive: true); } catch { }
+		}
 	}
 
 	[Fact]
@@ -181,6 +257,8 @@ public sealed class ExternalControlIntegrationTests
 
 		Assert.True(rejected);
 		Assert.Equal(ControlHostProcessState.Ready, fixture.Control.Lifecycle.State);
+		Assert.Contains(fixture.Control.ExternalControlServer!.AuditRecords, record =>
+			record.Event == "resource-limit" && record.Outcome == "rejected");
 	}
 
 	[Fact]
@@ -308,12 +386,15 @@ public sealed class ExternalControlIntegrationTests
 				tokenEnvironment, token, runtimeStop, controlStop, runtimeRun, controlRun);
 		}
 
-		public GrpcOperatorControlTransport CreateClient(bool includeClientCertificate = false, int maxRequestBytes = 1024 * 1024) =>
+		public GrpcOperatorControlTransport CreateClient(
+			bool includeClientCertificate = false,
+			int maxRequestBytes = 1024 * 1024,
+			string? trustedServerThumbprint = null) =>
 			new(new GrpcOperatorControlOptions
 			{
 				Endpoint = new Uri($"https://127.0.0.1:{Port}"),
 				TrustMode = ExternalControlTrustMode.PinnedServerCertificate,
-				TrustedServerCertificateThumbprint = _serverCertificate.Thumbprint,
+				TrustedServerCertificateThumbprint = trustedServerThumbprint ?? _serverCertificate.Thumbprint,
 				ClientId = "test-client",
 				BearerToken = _tokenEnvironment is null ? null : _token,
 				ClientCertificatePath = includeClientCertificate ? _clientCertificate?.Path : null,
@@ -321,6 +402,21 @@ public sealed class ExternalControlIntegrationTests
 				RequestTimeout = TimeSpan.FromSeconds(5),
 				MaxRequestBytes = maxRequestBytes
 			});
+
+		public GrpcOperatorControlTransport CreateUntrustedMutualTlsClient()
+		{
+			var certificate = CreateCertificate(_root, "untrusted-client-" + Guid.NewGuid().ToString("N"), client: true);
+			return new GrpcOperatorControlTransport(new GrpcOperatorControlOptions
+			{
+				Endpoint = new Uri($"https://127.0.0.1:{Port}"),
+				TrustMode = ExternalControlTrustMode.PinnedServerCertificate,
+				TrustedServerCertificateThumbprint = _serverCertificate.Thumbprint,
+				ClientId = "test-client",
+				ClientCertificatePath = certificate.Path,
+				ClientCertificatePassword = certificate.Password,
+				RequestTimeout = TimeSpan.FromSeconds(5)
+			});
+		}
 
 		public async ValueTask DisposeAsync()
 		{
@@ -338,7 +434,12 @@ public sealed class ExternalControlIntegrationTests
 
 	private sealed record CertificateMaterial(string Path, string Password, string PasswordEnvironment, string Thumbprint);
 
-	private static CertificateMaterial CreateCertificate(string root, string name, bool client)
+	private static CertificateMaterial CreateCertificate(
+		string root,
+		string name,
+		bool client,
+		DateTimeOffset? notBefore = null,
+		DateTimeOffset? notAfter = null)
 	{
 		using var rsa = RSA.Create(2048);
 		var request = new CertificateRequest($"CN=rtaime-{name}", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
@@ -353,7 +454,9 @@ public sealed class ExternalControlIntegrationTests
 			san.AddDnsName("localhost");
 			request.CertificateExtensions.Add(san.Build());
 		}
-		using var certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-5), DateTimeOffset.UtcNow.AddDays(2));
+		using var certificate = request.CreateSelfSigned(
+			notBefore ?? DateTimeOffset.UtcNow.AddMinutes(-5),
+			notAfter ?? DateTimeOffset.UtcNow.AddDays(2));
 		var password = Convert.ToHexString(RandomNumberGenerator.GetBytes(16));
 		var path = Path.Combine(root, name + ".pfx");
 		File.WriteAllBytes(path, certificate.Export(X509ContentType.Pfx, password));
