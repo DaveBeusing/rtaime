@@ -234,4 +234,8 @@ The following remain outside the claims of this implementation unless separately
 - remote raw-media or GPU-frame transport.
 
 Those capabilities must not be inferred from a green software CI run.
-\n\n## Production integration gateway\n\nFor OSC, MIDI, GPIO/GPI reference control and Companion-style HTTP/WebSocket integration, see [ProductionIntegrationGateway.md](ProductionIntegrationGateway.md). IntegrationHost remains an external client of this secure boundary; it does not move Production Authority out of ControlHost.\n
+
+
+## Production integration gateway
+
+For OSC, MIDI, GPIO/GPI reference control and Companion-style HTTP/WebSocket integration, see [ProductionIntegrationGateway.md](ProductionIntegrationGateway.md). IntegrationHost remains an external client of this secure boundary; it does not move Production Authority out of ControlHost.

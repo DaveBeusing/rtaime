@@ -23,6 +23,7 @@
 		<ProjectReference Include="..\..\src\Providers\rtaime.Provider.Srt\rtaime.Provider.Srt.csproj" />
 		<ProjectReference Include="..\..\src\Client\rtaime.Client\rtaime.Client.csproj" />
 		<ProjectReference Include="..\..\src\Hosts\rtaime.AppHost\rtaime.AppHost.csproj" />
+		<ProjectReference Include="..\..\src\Hosts\rtaime.IntegrationHost\rtaime.IntegrationHost.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>

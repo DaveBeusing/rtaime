@@ -298,4 +298,8 @@ Start-rtaime-Showcase.cmd
 ```
 
 See [Product Showcase Scenario](InvestorDemoScenario.md) for the deterministic demonstration flow and acceptance boundary.
-\n\n## Optional IntegrationHost\n\n`rtaime.IntegrationHost` is built with the primary solution and packaged as an optional host, but AppHost does not start it and ControlHost readiness does not depend on it. Configure and start it separately with `--config=<path>` or `RTAIME_INTEGRATION_CONFIG`. See [ProductionIntegrationGateway.md](ProductionIntegrationGateway.md).\n
+
+
+## Optional IntegrationHost
+
+`rtaime.IntegrationHost` is built with the primary solution and packaged as an optional host, but AppHost does not start it and ControlHost readiness does not depend on it. Configure and start it separately with `--config=<path>` or `RTAIME_INTEGRATION_CONFIG`. See [ProductionIntegrationGateway.md](ProductionIntegrationGateway.md).
