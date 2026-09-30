@@ -11,6 +11,17 @@ using rtaime.Runtime.Contracts;
 
 namespace rtaime.ControlHost;
 
+internal sealed record ExternalControlDispatchResult(
+	string ResponseType,
+	string RequestId,
+	string CorrelationId,
+	string HostInstanceId,
+	ulong StateVersion,
+	ulong Sequence,
+	string PayloadJson,
+	string? ErrorCode,
+	string? ErrorMessage);
+
 public sealed class ControlHostIpcServer : IAsyncDisposable
 {
 	private const string ProtocolVersion = "1.0";
@@ -379,6 +390,81 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			catch (IOException) { }
 			catch (InvalidDataException) { }
 		}
+	}
+
+	internal async ValueTask<ExternalControlDispatchResult> DispatchExternalAsync(
+		string messageType,
+		string requestId,
+		string correlationId,
+		string clientInstanceId,
+		string payloadJson,
+		CancellationToken cancellationToken)
+	{
+		if (string.IsNullOrWhiteSpace(messageType) || messageType.Length > 128)
+			throw new InvalidDataException("External control message type is required and must not exceed 128 characters.");
+		if (string.IsNullOrWhiteSpace(requestId) || requestId.Length > 128)
+			throw new InvalidDataException("External control RequestId is required and must not exceed 128 characters.");
+		if (string.IsNullOrWhiteSpace(correlationId) || correlationId.Length > 128)
+			throw new InvalidDataException("External control CorrelationId is required and must not exceed 128 characters.");
+		if (string.IsNullOrWhiteSpace(clientInstanceId) || clientInstanceId.Length > 128)
+			throw new InvalidDataException("External control client identity is required and must not exceed 128 characters.");
+		if (payloadJson is null)
+			throw new InvalidDataException("External control payload is required.");
+		if (System.Text.Encoding.UTF8.GetByteCount(payloadJson) > MaxFrameBytes)
+			throw new InvalidDataException("External control payload exceeds the configured maximum size.");
+
+		using var document = JsonDocument.Parse(payloadJson, new JsonDocumentOptions
+		{
+			MaxDepth = 64,
+			CommentHandling = JsonCommentHandling.Disallow,
+			AllowTrailingCommas = false
+		});
+		var request = new WireEnvelope(
+			ProtocolVersion,
+			messageType.Trim(),
+			requestId.Trim(),
+			correlationId.Trim(),
+			clientInstanceId.Trim(),
+			DateTimeOffset.UtcNow,
+			StateVersion,
+			0,
+			document.RootElement.Clone());
+
+		var canonical = request.MessageType + "\n" + request.Payload.GetRawText();
+		WireEnvelope response;
+		if (_requestCache.TryGet(request.RequestId, canonical, out var cached, out var conflict))
+		{
+			response = conflict
+				? Error(request, "ipc.request_id_conflict", "RequestId was reused with a different request payload.")
+				: JsonSerializer.Deserialize<WireEnvelope>(cached!, Wire.JsonOptions)
+					?? throw new InvalidDataException("Cached ControlHost response envelope is invalid.");
+		}
+		else
+		{
+			response = await DispatchAsync(request, cancellationToken).ConfigureAwait(false);
+			_requestCache.Add(request.RequestId, canonical, Wire.Serialize(response));
+		}
+
+		string? errorCode = null;
+		string? errorMessage = null;
+		if (string.Equals(response.MessageType, "error", StringComparison.Ordinal))
+		{
+			var failure = response.Payload.Deserialize<WireFailure>(Wire.JsonOptions)
+				?? throw new InvalidDataException("ControlHost error payload is invalid.");
+			errorCode = failure.Code;
+			errorMessage = failure.Message;
+		}
+
+		return new ExternalControlDispatchResult(
+			response.MessageType,
+			response.RequestId,
+			response.CorrelationId,
+			response.HostInstanceId,
+			response.StateVersion,
+			response.Sequence,
+			response.Payload.GetRawText(),
+			errorCode,
+			errorMessage);
 	}
 
 	private async ValueTask<WireEnvelope> DispatchAsync(WireEnvelope request, CancellationToken cancellationToken)

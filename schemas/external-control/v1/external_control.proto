@@ -206,6 +206,9 @@ message ExternalControlReply {
   uint64 sequence = 7;
   bytes payload_json = 8;
   ExternalControlError error = 9;
+  repeated string capabilities = 10;
+  string authenticated_client_id = 11;
+  string authenticated_role = 12;
 }
 
 message StateSubscriptionRequest {
