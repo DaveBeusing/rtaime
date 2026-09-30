@@ -3,6 +3,7 @@
 using System.Buffers.Binary;
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.ComTypes;
+using rtaime.Core;
 using rtaime.Media.Contracts;
 using rtaime.Provider.Contracts;
 
