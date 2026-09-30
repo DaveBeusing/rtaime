@@ -113,7 +113,6 @@ public sealed class RtaimeRoiOverlay : FrameworkElement
 		var height = roi.Height * PresentationHeight / SourceHeight;
 		var rectangle = new Rect(left, top, Math.Max(1.0, width), Math.Max(1.0, height));
 		var pen = new Pen(Stroke, 1.0);
-		pen.Freeze();
 
 		drawingContext.DrawRectangle(Fill, pen, rectangle);
 		const double handle = 6.0;
