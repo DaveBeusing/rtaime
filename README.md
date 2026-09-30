@@ -86,6 +86,7 @@ The current V1 development repository implements production-shaped software path
 | AI | governed inference showcase with bounded fallback |
 | Health | CPU/GPU/memory telemetry, Runtime performance, alerts and health center |
 | Recovery | process supervision, Runtime resynchronization and safe session recovery |
+| External control | optional ControlHost gRPC/TLS boundary with authentication, RBAC, bounded requests and resynchronization; local Named Pipe remains the default |
 | Delivery | release pipeline, offline packaging, update/rollback foundations and qualification evidence |
 
 The source-controlled product version is currently **0.1.0-dev** in the **DEV** release stage.
@@ -318,6 +319,7 @@ Core architecture and operation:
 - [Executable Host Lifecycle](docs/ExecutableHostLifecycle.md)
 - [Process Recovery & Supervision](docs/ProcessRecoveryAndSupervision.md)
 - [Production IPC / Remote API](docs/ProductionIpcRemoteApi.md)
+- [Secure External Control](docs/ExternalControlDeployment.md)
 - [Audio Test Signal Generator](docs/AudioTestSignalGenerator.md)
 - [Runtime Readiness](docs/RuntimeReadiness.md)
 - [Operator Monitoring Plane](docs/OperatorMonitoringPlane.md)
