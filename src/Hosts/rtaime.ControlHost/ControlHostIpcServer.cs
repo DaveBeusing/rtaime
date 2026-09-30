@@ -181,7 +181,9 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		{
 			var configuration = _durableAudioProduction ??
 				AudioProductionConfiguration.CreateLegacyCompatible(
-					control.Specification.Sources.Select(source => source.SourceId).ToArray());
+					control.Specification.Sources
+						.Select(source => new MediaSourceId(source.SourceId.Value))
+						.ToArray());
 			var confirmed = await _runtimeTransport
 				.SetAudioProductionAsync(configuration, cancellationToken)
 				.ConfigureAwait(false);
@@ -920,7 +922,9 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 				requested = FromWire(mutation.Configuration);
 				if (mutation.ExpectedRevision == ulong.MaxValue || requested.Revision != mutation.ExpectedRevision + 1)
 					return Error(request, "control.audio.production.revision.invalid", "Audio production mutation must advance the confirmed Runtime revision by exactly one.");
-				var expectedSources = control.Specification.Sources.Select(source => source.SourceId).ToHashSet();
+				var expectedSources = control.Specification.Sources
+					.Select(source => new MediaSourceId(source.SourceId.Value))
+					.ToHashSet();
 				if (!expectedSources.SetEquals(requested.Sources.Select(source => source.SourceId)))
 					return Error(request, "control.audio.production.sources.invalid", "Audio production configuration must contain every authoritative production source exactly once.");
 			}
