@@ -82,7 +82,7 @@ The current V1 development repository implements production-shaped software path
 | Compositing | RuntimeHost-owned bitmap overlays, dynamic Production CG lower thirds, layers and compositing workspace |
 | Audio | Audio Follow Video, gain/mute/metering seams, deterministic generated test signals |
 | Recording | failure-isolated Program Recording plus Windows MP4 H.264/AAC software interoperability |
-| Output | governed Program/Aux output roles, Clean Program monitoring and output health |
+| Output | governed Program/Aux output roles, Clean Program monitoring, output health and bounded SRT network-output foundation |
 | AI | governed inference showcase with bounded fallback |
 | Health | CPU/GPU/memory telemetry, Runtime performance, alerts and health center |
 | Recovery | process supervision, Runtime resynchronization and safe session recovery |
