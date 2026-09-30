@@ -2735,7 +2735,34 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 					confirmed,
 					health,
 					evidence,
-					error is { } failure ? new WireFailure(failure.Code, failure.Message) : null);
+					error is { } failure ? new WireFailure(failure.Code, failure.Message) : null,
+					runtimeRole?.NetworkOutput is null ? null : ToWire(runtimeRole.NetworkOutput));
+
+	private static WireNetworkOutput ToWire(NetworkOutputHealthSnapshot snapshot) => new(
+		snapshot.TargetId,
+		snapshot.Provider,
+		snapshot.Protocol.ToString().ToUpperInvariant(),
+		snapshot.SafeTargetIdentity,
+		snapshot.Lifecycle.ToString().ToUpperInvariant(),
+		snapshot.Connected,
+		snapshot.VideoCodec.ToString().ToUpperInvariant(),
+		snapshot.AudioCodec.ToString().ToUpperInvariant(),
+		snapshot.AudioFormat.SampleRate,
+		snapshot.AudioFormat.ChannelCount,
+		snapshot.AudioFormat.SampleFormat.ToString().ToUpperInvariant(),
+		snapshot.VideoBitRate,
+		snapshot.AudioBitRate,
+		snapshot.LatencyMilliseconds,
+		snapshot.Statistics.AcceptedSamples,
+		snapshot.Statistics.SentSamples,
+		snapshot.Statistics.DroppedSamples,
+		snapshot.Statistics.RejectedSamples,
+		snapshot.Statistics.ReconnectCount,
+		snapshot.Statistics.PacketsSent,
+		snapshot.Statistics.BytesSent,
+		snapshot.Statistics.QueueDepth,
+		snapshot.LastSuccessfulSendUtc,
+		snapshot.Failure is { } failure ? new WireFailure(failure.Code, failure.Message) : null);
 			})
 			.ToArray();
 	}
@@ -2760,7 +2787,32 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	private sealed record WireSource(string Id, string Name, string Type, string Format, string Health, string MediaState, long? RemainingTicks, string? MediaFileName);
 	private sealed record WireScene(string Id, string Name, string PreviewSourceId, string ProgramSourceId, WireCompositingState? CompositingState = null);
 	private sealed record WireOutputRoleAuthority(string RoleId, int Kind, string SourceId, string ProviderSelector, string TargetId, string FormatPolicy, string TimingPolicy, bool Enabled);
-	private sealed record WireOutputRole(string RoleId, string RoleKind, string SourceId, string TargetId, string ProviderId, uint? Width, uint? Height, string? FrameRate, string? PixelFormat, string? Timing, string LifecycleState, bool AuthoritativeActive, string HealthState, string Evidence, WireFailure? Error);
+	private sealed record WireNetworkOutput(
+		string TargetId,
+		string Provider,
+		string Protocol,
+		string SafeTargetIdentity,
+		string Lifecycle,
+		bool Connected,
+		string VideoCodec,
+		string AudioCodec,
+		uint AudioSampleRate,
+		uint AudioChannelCount,
+		string AudioSampleFormat,
+		uint VideoBitRate,
+		uint AudioBitRate,
+		int LatencyMilliseconds,
+		ulong AcceptedSamples,
+		ulong SentSamples,
+		ulong DroppedSamples,
+		ulong RejectedSamples,
+		ulong ReconnectCount,
+		ulong PacketsSent,
+		ulong BytesSent,
+		int QueueDepth,
+		DateTimeOffset? LastSuccessfulSendUtc,
+		WireFailure? Failure);
+	private sealed record WireOutputRole(string RoleId, string RoleKind, string SourceId, string TargetId, string ProviderId, uint? Width, uint? Height, string? FrameRate, string? PixelFormat, string? Timing, string LifecycleState, bool AuthoritativeActive, string HealthState, string Evidence, WireFailure? Error, WireNetworkOutput? NetworkOutput = null);
 	private sealed record WireProductionState(string Version, string ProductionId, ulong Revision, string PreviewSourceId, string ProgramSourceId, string? ActiveSceneId = null, WireOutputRoleAuthority[]? OutputRoles = null, WireCompositingState? CompositingState = null);
 	private sealed record WireGraphicsAsset(string Name, uint Width, uint Height, byte[] RgbaPixels);
 	private sealed record WireCgColor(byte Red, byte Green, byte Blue, byte Alpha);
