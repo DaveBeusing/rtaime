@@ -338,6 +338,142 @@ public sealed class OperatorMonitoringPlaneTests
 		Assert.Equal((byte)100, frame.Pixels.Span[0]);
 	}
 
+
+	[Fact]
+	public async Task Dedicated_named_pipe_monitoring_transport_reconnects_after_server_restart()
+	{
+		using var hub = new RuntimeMonitoringHub();
+		var endpoint = $"rtaime.test.monitor.reconnect.{Guid.NewGuid():N}";
+		var transport = new NamedPipeOperatorMonitoringTransport(
+			endpoint,
+			TimeSpan.FromMilliseconds(250),
+			TimeSpan.FromMilliseconds(20));
+		using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+		await using var enumerator = transport.ReadFramesAsync(timeout.Token).GetAsyncEnumerator();
+
+		await using (var firstServer = new RuntimeHostMonitoringServer(endpoint, hub))
+		{
+			await firstServer.StartAsync(timeout.Token);
+			var firstReceive = enumerator.MoveNextAsync().AsTask();
+			await WaitForSubscriberCountAsync(hub, expected: 1, timeout.Token);
+			hub.Publish(CreateFrame(MonitoringStreamKind.Program, SourceA, 10, 10, 20, 30));
+
+			Assert.True(await firstReceive);
+			Assert.Equal(10UL, enumerator.Current.Descriptor.Timing.SequenceNumber);
+		}
+
+		await WaitForSubscriberCountAsync(hub, expected: 0, timeout.Token);
+
+		await using (var restartedServer = new RuntimeHostMonitoringServer(endpoint, hub))
+		{
+			await restartedServer.StartAsync(timeout.Token);
+			var secondReceive = enumerator.MoveNextAsync().AsTask();
+			await WaitForSubscriberCountAsync(hub, expected: 1, timeout.Token);
+			hub.Publish(CreateFrame(MonitoringStreamKind.Program, SourceB, 11, 70, 80, 90));
+
+			Assert.True(await secondReceive);
+			Assert.Equal(11UL, enumerator.Current.Descriptor.Timing.SequenceNumber);
+			Assert.Equal(SourceB, enumerator.Current.Descriptor.SourceId);
+		}
+	}
+
+	[Fact]
+	public async Task Sustained_shared_monitoring_replacement_remains_bounded_and_returns_to_baseline()
+	{
+		using var hub = new RuntimeMonitoringHub();
+		var subscription = hub.Subscribe(capacity: 4, requiresCpuFallback: false);
+		await using var tap = new RuntimeMonitoringTap(hub, MonitoringSharedResourceCapabilityState.Available);
+		var format = new VideoFormat(4, 2, FrameRate.Fps50, PixelFormat.Rgba8, ScanMode.Progressive);
+
+		using var backend = new DeviceResidentMonitoringBackend();
+		using var gpu = new GpuProcessingProvider(backend);
+		gpu.Start();
+
+		var iterations = string.Equals(
+			Environment.GetEnvironmentVariable("RTAIME_MONITORING_QUALIFICATION_SOAK_LONG"),
+			"1",
+			StringComparison.Ordinal)
+			? 2048
+			: 128;
+
+		for (var iteration = 0; iteration < iterations; iteration++)
+		{
+			var sequence = checked((ulong)iteration * RuntimeMonitoringTap.SampleStride);
+			var timing = new FrameTiming(sequence, checked((long)sequence), new Timebase(1, 50));
+			using var previewFrame = gpu.Upload(
+				SourceA,
+				new RgbaFrameBuffer(format, Solid(format, (byte)(10 + iteration % 32), 20, 30)),
+				timing,
+				new Generation((ulong)iteration + 1),
+				"monitoring-qualification-preview");
+			using var programFrame = gpu.Upload(
+				SourceB,
+				new RgbaFrameBuffer(format, Solid(format, (byte)(70 + iteration % 32), 80, 90)),
+				timing,
+				new Generation((ulong)iteration + 1),
+				"monitoring-qualification-program");
+			using var programPixels = gpu.RentReadback(programFrame);
+
+			Assert.True(gpu.TryExportMonitoringResource(previewFrame, out var previewResource));
+			Assert.True(gpu.TryExportMonitoringResource(programFrame, out var programResource));
+			var sources = tap.CaptureSources(
+				SourceA,
+				Solid(format, 10, 20, 30),
+				SourceB,
+				Solid(format, 40, 50, 60),
+				format,
+				timing);
+			Assert.NotNull(sources);
+			Assert.True(tap.TryCapture(
+				sources,
+				SourceB,
+				programPixels,
+				format,
+				timing,
+				programResource,
+				SourceA,
+				previewResource));
+
+			await WaitForProcessedAsync(tap, checked((ulong)iteration + 1), timeout: TimeSpan.FromSeconds(3));
+
+			Assert.InRange(tap.Statistics.ActiveSharedResources, 0, 2);
+			Assert.InRange(gpu.SharedMonitoringResourceStatistics.ActiveResources, 0, 2);
+			Assert.InRange(backend.ActiveAllocationCount, 0, 2);
+		}
+
+		await subscription.DisposeAsync();
+
+		Assert.Equal(0, tap.Statistics.ActiveSharedResources);
+		Assert.Equal(0, gpu.SharedMonitoringResourceStatistics.ActiveResources);
+		Assert.Equal(0, backend.ActiveAllocationCount);
+	}
+
+	private static async Task WaitForSubscriberCountAsync(
+		RuntimeMonitoringHub hub,
+		int expected,
+		CancellationToken cancellationToken)
+	{
+		var deadline = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(3);
+		while (hub.Statistics.Subscribers != expected && DateTimeOffset.UtcNow < deadline)
+			await Task.Delay(10, cancellationToken);
+
+		Assert.Equal(expected, hub.Statistics.Subscribers);
+	}
+
+	private static async Task WaitForProcessedAsync(
+		RuntimeMonitoringTap tap,
+		ulong expected,
+		TimeSpan timeout)
+	{
+		var deadline = DateTimeOffset.UtcNow + timeout;
+		while (tap.Statistics.Processed < expected && DateTimeOffset.UtcNow < deadline)
+			await Task.Delay(1);
+
+		Assert.True(
+			tap.Statistics.Processed >= expected,
+			$"Monitoring tap processed {tap.Statistics.Processed} samples; expected at least {expected}.");
+	}
+
 	private static MonitoringFrame CreateFrame(
 		MonitoringStreamKind kind,
 		MediaSourceId sourceId,
