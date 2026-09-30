@@ -545,6 +545,19 @@ public sealed class ProductionIpcIntegrationTests
 		var client = new OperatorControlClient(new NamedPipeOperatorControlTransport(controlEndpoint, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(5)));
 		var initial = await client.SynchronizeAsync();
 		Assert.True((await client.SelectPreviewAsync(initial.Sources[1].Id)).Accepted);
+		var initialAudio = Assert.IsType<OperatorAudioProductionDescriptor>(client.Snapshot!.AudioProduction);
+		var sourceA = new MediaSourceId(Identity.Parse(initial.Sources[0].Id));
+		var sourceB = new MediaSourceId(Identity.Parse(initial.Sources[1].Id));
+		var restoredAudioConfiguration = new AudioProductionConfiguration(
+			checked(initialAudio.Configuration.Revision + 1),
+			new[] { new AudioProductionBusConfiguration(AudioBusId.Program, 0.6, muted: false) },
+			new[]
+			{
+				new AudioProductionSourceConfiguration(sourceA, 0.8, muted: false, followRoutedSource: false, new[] { AudioBusId.Program }),
+				new AudioProductionSourceConfiguration(sourceB, 0.4, muted: false, followRoutedSource: false, new[] { AudioBusId.Program })
+			});
+		await client.SetAudioProductionAsync(restoredAudioConfiguration);
+		Assert.Equal(restoredAudioConfiguration.Revision, client.Snapshot!.AudioProduction!.Configuration.Revision);
 		var revisionBeforeRestart = control.Control!.State.Revision;
 		var firstInstance = control.RuntimeTransport!.HostInstanceId;
 
@@ -560,6 +573,11 @@ public sealed class ProductionIpcIntegrationTests
 
 		Assert.Equal(revisionBeforeRestart, control.Control.State.Revision);
 		Assert.Equal(RuntimeExecutionStatus.Committed, secondRuntime.Runtime!.Snapshot.Runtime.Status);
+		await WaitUntilAsync(() =>
+			secondRuntime.Runtime.Snapshot.AudioProduction?.Revision == restoredAudioConfiguration.Revision);
+		var restoredAudio = Assert.IsType<V1AudioProductionSnapshot>(secondRuntime.Runtime.Snapshot.AudioProduction);
+		Assert.Equal(0.6, restoredAudio.ProgramMasterGain, 6);
+		Assert.All(restoredAudio.Sources, source => Assert.False(source.FollowRoutedSource));
 
 		controlStop.Cancel();
 		secondRuntimeStop.Cancel();
