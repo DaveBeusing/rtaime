@@ -120,7 +120,7 @@ public sealed class ExternalControlIntegrationTests
 				mutationBase.Production.Revision),
 			source));
 		Assert.True(result.Accepted);
-		Assert.True(result.State.Revision > observed.Production.Revision);
+		Assert.True(result.State.Revision.Value > observed.Production.Revision.Value);
 
 		using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
 		ExternalControlStateNotification? notification = null;
