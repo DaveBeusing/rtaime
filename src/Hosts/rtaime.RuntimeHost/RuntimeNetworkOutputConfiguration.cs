@@ -71,6 +71,8 @@ internal static class RuntimeNetworkOutputConfigurationLoader
 					mode,
 					format,
 					AudioFormat.Stereo48kFloat32,
+					NetworkOutputVideoCodec.H264,
+					NetworkOutputAudioCodec.AacLc,
 					descriptor.VideoBitRate ?? 12_000_000,
 					descriptor.AudioBitRate ?? 192_000,
 					descriptor.LatencyMilliseconds ?? 120,
