@@ -61,6 +61,7 @@ public sealed record RuntimeHostProcessOptions(
 	bool RequireExternalReference = false)
 {
 	public string AIEndpoint { get; init; } = "rtaime.v1.ai.default";
+	public IReadOnlyList<RuntimeNetworkOutputTarget> NetworkOutputs { get; init; } = Array.Empty<RuntimeNetworkOutputTarget>();
 
 	public static RuntimeHostProcessOptions Default => new(
 		new MediaSourceId(Identity.Parse("70000000-0000-0000-0000-00000000000a")),
@@ -77,16 +78,18 @@ public sealed record RuntimeHostProcessOptions(
 		environment ??= Environment.GetEnvironmentVariable;
 		var defaults = Default;
 
+		var format = ParseFormat(Get(args, environment, "format", "RTAIME_RUNTIME_FORMAT", "1080p50"));
 		return new RuntimeHostProcessOptions(
 			new MediaSourceId(ParseIdentity(Get(args, environment, "source-a-id", "RTAIME_RUNTIME_SOURCE_A_ID", defaults.SourceAId.ToString()), "source-a-id")),
 			new MediaSourceId(ParseIdentity(Get(args, environment, "source-b-id", "RTAIME_RUNTIME_SOURCE_B_ID", defaults.SourceBId.ToString()), "source-b-id")),
-			ParseFormat(Get(args, environment, "format", "RTAIME_RUNTIME_FORMAT", "1080p50")),
+			format,
 			Get(args, environment, "listen-endpoint", "RTAIME_RUNTIME_ENDPOINT", defaults.ListenEndpoint),
 			TimeSpan.FromMilliseconds(ParsePositiveInt(Get(args, environment, "shutdown-timeout-ms", "RTAIME_RUNTIME_SHUTDOWN_TIMEOUT_MS", ((int)defaults.ShutdownTimeout.TotalMilliseconds).ToString()), "shutdown-timeout-ms")),
 			ParseMediaIoMode(Get(args, environment, "media-io", "RTAIME_RUNTIME_MEDIA_IO", "virtual")),
 			ParseBoolean(Get(args, environment, "require-external-reference", "RTAIME_RUNTIME_REQUIRE_EXTERNAL_REFERENCE", "false"), "require-external-reference"))
 		{
-			AIEndpoint = Get(args, environment, "ai-endpoint", "RTAIME_AI_ENDPOINT", defaults.AIEndpoint)
+			AIEndpoint = Get(args, environment, "ai-endpoint", "RTAIME_AI_ENDPOINT", defaults.AIEndpoint),
+			NetworkOutputs = RuntimeNetworkOutputConfigurationLoader.Load(args, environment, format)
 		};
 	}
 
@@ -108,6 +111,10 @@ public sealed record RuntimeHostProcessOptions(
 			throw new ArgumentOutOfRangeException(nameof(MediaIoMode));
 		if (RequireExternalReference && MediaIoMode != RuntimeMediaIoMode.Native)
 			throw new ArgumentException("External reference may be required only when native Media I/O is selected.", nameof(RequireExternalReference));
+		if (NetworkOutputs is null)
+			throw new ArgumentNullException(nameof(NetworkOutputs));
+		if (NetworkOutputs.Any(target => target.Configuration.VideoFormat != Format))
+			throw new ArgumentException("Network output format must inherit the active Runtime production format.", nameof(NetworkOutputs));
 	}
 
 	private static string Get(
