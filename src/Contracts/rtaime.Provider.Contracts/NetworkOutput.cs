@@ -88,6 +88,10 @@ public sealed record NetworkOutputConfiguration
 			throw new ArgumentException("Network output currently accepts progressive RGBA8 Runtime video.", nameof(videoFormat));
 		if (audioFormat != AudioFormat.Stereo48kFloat32)
 			throw new ArgumentException("Network output currently requires 48 kHz stereo Float32 Program audio.", nameof(audioFormat));
+		if (!Enum.IsDefined(videoCodec) || videoCodec != NetworkOutputVideoCodec.H264)
+			throw new ArgumentOutOfRangeException(nameof(videoCodec), "The reference network output currently supports H.264 video only.");
+		if (!Enum.IsDefined(audioCodec) || audioCodec != NetworkOutputAudioCodec.AacLc)
+			throw new ArgumentOutOfRangeException(nameof(audioCodec), "The reference network output currently supports AAC-LC audio only.");
 		if (videoBitRate is < 500_000 or > 100_000_000)
 			throw new ArgumentOutOfRangeException(nameof(videoBitRate));
 		if (audioBitRate is < 64_000 or > 512_000)
@@ -115,8 +119,8 @@ public sealed record NetworkOutputConfiguration
 		Mode = mode;
 		VideoFormat = videoFormat;
 		AudioFormat = audioFormat;
-		VideoCodec = NetworkOutputVideoCodec.H264;
-		AudioCodec = NetworkOutputAudioCodec.AacLc;
+		VideoCodec = videoCodec;
+		AudioCodec = audioCodec;
 		VideoBitRate = videoBitRate;
 		AudioBitRate = audioBitRate;
 		LatencyMilliseconds = latencyMilliseconds;
