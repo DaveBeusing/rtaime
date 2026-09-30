@@ -14,20 +14,26 @@ public static class MonitoringDisplayTransform
 			? $"DISPLAY sRGB <- {color.TechnicalLabel}"
 			: $"DISPLAY PASSTHROUGH · COLOR {color.TechnicalLabel}";
 
+	public static byte TransformCodeValue(byte value, ColorDescription color)
+	{
+		if (!color.IsComplete)
+			return value;
+		return Luts.GetOrAdd(color, BuildLut)[value];
+	}
+
 	public static void ConvertRgbaToBgra(ReadOnlySpan<byte> source, Span<byte> destination, ColorDescription color)
 	{
 		if (source.Length != destination.Length || source.Length % 4 != 0)
 			throw new ArgumentException("RGBA/BGRA buffers must have equal four-byte pixel lengths.");
 
-		var lut = color.IsComplete ? Luts.GetOrAdd(color, BuildLut) : null;
 		for (var offset = 0; offset < source.Length; offset += 4)
 		{
-			var red = source[offset];
-			var green = source[offset + 1];
-			var blue = source[offset + 2];
-			destination[offset] = lut is null ? blue : lut[blue];
-			destination[offset + 1] = lut is null ? green : lut[green];
-			destination[offset + 2] = lut is null ? red : lut[red];
+			var red = TransformCodeValue(source[offset], color);
+			var green = TransformCodeValue(source[offset + 1], color);
+			var blue = TransformCodeValue(source[offset + 2], color);
+			destination[offset] = blue;
+			destination[offset + 1] = green;
+			destination[offset + 2] = red;
 			destination[offset + 3] = source[offset + 3];
 		}
 	}
