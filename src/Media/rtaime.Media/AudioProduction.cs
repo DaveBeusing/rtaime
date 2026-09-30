@@ -120,7 +120,7 @@ public sealed class AudioProductionEngine
 			ulong clippedValues = 0;
 			double? finalCrossfadeProgress = null;
 			var sidechainAvailable = ducking is null || (sidechainIndex >= 0 && sourceBuffers[sidechainIndex].Available);
-			var masterGain = bus.Muted ? 0d : bus.MasterGain.Linear;
+			var masterGain = bus.Muted ? 0d : bus.MasterGain;
 
 			for (var frame = 0; frame < sampleCount; frame++)
 			{
@@ -146,7 +146,7 @@ public sealed class AudioProductionEngine
 					if (buffer.Samples.Length < requiredValues)
 						throw new ArgumentException($"Audio source '{source.SourceId}' payload is shorter than the requested stereo block.", nameof(sourceBuffers));
 
-					var gain = source.Muted ? 0d : source.Gain.Linear;
+					var gain = source.Muted ? 0d : source.Gain;
 					if (configuration.Crossfade is { } crossfade && crossfade.BusId == busId)
 					{
 						var (fromGain, toGain, progress) = ResolveCrossfade(crossfade, absoluteSample);
