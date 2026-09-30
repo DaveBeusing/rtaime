@@ -6,18 +6,21 @@ using rtaime.Provider.Contracts;
 
 namespace rtaime.RuntimeHost;
 
-public sealed record RuntimeNetworkOutputTarget(string RoleId, NetworkOutputConfiguration Configuration)
+public sealed record RuntimeNetworkOutputTarget
 {
-	public RuntimeNetworkOutputTarget : this()
+	public RuntimeNetworkOutputTarget(string roleId, NetworkOutputConfiguration configuration)
 	{
-		if (!string.Equals(RoleId, "program", StringComparison.OrdinalIgnoreCase) &&
-			!string.Equals(RoleId, "aux", StringComparison.OrdinalIgnoreCase))
+		if (!string.Equals(roleId, "program", StringComparison.OrdinalIgnoreCase) &&
+			!string.Equals(roleId, "aux", StringComparison.OrdinalIgnoreCase))
 		{
-			throw new ArgumentException("Network output role must be 'program' or 'aux'.", nameof(RoleId));
+			throw new ArgumentException("Network output role must be 'program' or 'aux'.", nameof(roleId));
 		}
-		RoleId = RoleId.Trim().ToLowerInvariant();
-		Configuration = Configuration ?? throw new ArgumentNullException(nameof(Configuration));
+		RoleId = roleId.Trim().ToLowerInvariant();
+		Configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
 	}
+
+	public string RoleId { get; }
+	public NetworkOutputConfiguration Configuration { get; }
 }
 
 internal static class RuntimeNetworkOutputConfigurationLoader
