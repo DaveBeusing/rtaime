@@ -174,7 +174,7 @@ public sealed class SrtNetworkOutputSession : IAsyncDisposable
 			_queueSignal.Release();
 			return drop is null
 				? NetworkOutputEnqueueResult.AcceptedSample()
-				: NetworkOutputEnqueueResult.AcceptedAfterDroppingOldest(drop);
+				: NetworkOutputEnqueueResult.AcceptedAfterDroppingOldest(drop.Value);
 		}
 	}
 
@@ -186,11 +186,12 @@ public sealed class SrtNetworkOutputSession : IAsyncDisposable
 			while (!cancellationToken.IsCancellationRequested)
 			{
 				await _queueSignal.WaitAsync(cancellationToken).ConfigureAwait(false);
-				NetworkOutputProgramSample? sample;
+				NetworkOutputProgramSample? queuedSample;
 				lock (_gate)
-					sample = _queue.Count == 0 ? null : _queue.Dequeue();
-				if (sample is null)
+					queuedSample = _queue.Count == 0 ? null : _queue.Dequeue();
+				if (queuedSample is null)
 					continue;
+				var sample = queuedSample;
 
 				try
 				{
