@@ -24,6 +24,21 @@ public sealed class GpuChannelAndRoiInspectionTests
 	}
 
 	[Fact]
+	public void Roi_compute_capability_is_isolated_from_the_existing_presentation_shader_model()
+	{
+		var source = ReadGpuSurface();
+		var presentationStart = source.IndexOf("private const string ShaderSource", StringComparison.Ordinal);
+		var analysisStart = source.IndexOf("private const string AnalysisShaderSource", StringComparison.Ordinal);
+		Assert.True(presentationStart >= 0 && analysisStart > presentationStart);
+		var presentationShaderSection = source[presentationStart..analysisStart];
+
+		Assert.Contains("\"ps_4_0\"", source, StringComparison.Ordinal);
+		Assert.Contains("\"cs_5_0\"", source, StringComparison.Ordinal);
+		Assert.DoesNotContain("RWStructuredBuffer", presentationShaderSection, StringComparison.Ordinal);
+		Assert.Contains("RWStructuredBuffer<uint> AnalysisResults", source[analysisStart..], StringComparison.Ordinal);
+	}
+
+	[Fact]
 	public void Roi_analysis_is_gpu_reduced_rate_limited_and_bounded()
 	{
 		var source = ReadGpuSurface();
