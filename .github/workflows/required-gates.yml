@@ -132,6 +132,10 @@ jobs:
         shell: pwsh
         run: ./build/operations/Test-WindowsServiceLifecyclePolicy.ps1
 
+      - name: Verify secure external control policy
+        shell: pwsh
+        run: ./build/quality/Test-ExternalControlPolicy.ps1
+
       - name: Verify operator UI policy
         shell: pwsh
         run: ./build/quality/Test-OperatorUiPolicy.ps1
