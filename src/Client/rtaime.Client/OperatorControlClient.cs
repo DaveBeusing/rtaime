@@ -79,6 +79,99 @@ public sealed record OperatorSceneDescriptor
     public IReadOnlyList<OperatorCompositingLayerDescriptor> CompositingLayers => _compositingLayers;
 }
 
+public sealed record OperatorNetworkOutputDescriptor
+{
+    public OperatorNetworkOutputDescriptor(
+        string targetId,
+        string provider,
+        string protocol,
+        string safeTargetIdentity,
+        string lifecycle,
+        bool connected,
+        string videoCodec,
+        string audioCodec,
+        uint audioSampleRate,
+        uint audioChannelCount,
+        string audioSampleFormat,
+        uint videoBitRate,
+        uint audioBitRate,
+        int latencyMilliseconds,
+        ulong acceptedSamples,
+        ulong sentSamples,
+        ulong droppedSamples,
+        ulong rejectedSamples,
+        ulong reconnectCount,
+        ulong packetsSent,
+        ulong bytesSent,
+        int queueDepth,
+        DateTimeOffset? lastSuccessfulSendUtc,
+        Failure? failure)
+    {
+        if (string.IsNullOrWhiteSpace(targetId)) throw new ArgumentException("Network output target id is required.", nameof(targetId));
+        if (string.IsNullOrWhiteSpace(provider)) throw new ArgumentException("Network output provider is required.", nameof(provider));
+        if (string.IsNullOrWhiteSpace(protocol)) throw new ArgumentException("Network output protocol is required.", nameof(protocol));
+        if (string.IsNullOrWhiteSpace(safeTargetIdentity)) throw new ArgumentException("Network output target identity is required.", nameof(safeTargetIdentity));
+        if (string.IsNullOrWhiteSpace(lifecycle)) throw new ArgumentException("Network output lifecycle is required.", nameof(lifecycle));
+        if (string.IsNullOrWhiteSpace(videoCodec)) throw new ArgumentException("Network output video codec is required.", nameof(videoCodec));
+        if (string.IsNullOrWhiteSpace(audioCodec)) throw new ArgumentException("Network output audio codec is required.", nameof(audioCodec));
+        if (audioSampleRate == 0 || audioChannelCount == 0) throw new ArgumentOutOfRangeException(nameof(audioSampleRate));
+        if (string.IsNullOrWhiteSpace(audioSampleFormat)) throw new ArgumentException("Network output audio sample format is required.", nameof(audioSampleFormat));
+        if (videoBitRate == 0 || audioBitRate == 0) throw new ArgumentOutOfRangeException(nameof(videoBitRate));
+        if (latencyMilliseconds <= 0) throw new ArgumentOutOfRangeException(nameof(latencyMilliseconds));
+        if (queueDepth < 0) throw new ArgumentOutOfRangeException(nameof(queueDepth));
+
+        TargetId = targetId.Trim();
+        Provider = provider.Trim();
+        Protocol = protocol.Trim().ToUpperInvariant();
+        SafeTargetIdentity = safeTargetIdentity.Trim();
+        Lifecycle = lifecycle.Trim().ToUpperInvariant();
+        Connected = connected;
+        VideoCodec = videoCodec.Trim().ToUpperInvariant();
+        AudioCodec = audioCodec.Trim().ToUpperInvariant();
+        AudioSampleRate = audioSampleRate;
+        AudioChannelCount = audioChannelCount;
+        AudioSampleFormat = audioSampleFormat.Trim().ToUpperInvariant();
+        VideoBitRate = videoBitRate;
+        AudioBitRate = audioBitRate;
+        LatencyMilliseconds = latencyMilliseconds;
+        AcceptedSamples = acceptedSamples;
+        SentSamples = sentSamples;
+        DroppedSamples = droppedSamples;
+        RejectedSamples = rejectedSamples;
+        ReconnectCount = reconnectCount;
+        PacketsSent = packetsSent;
+        BytesSent = bytesSent;
+        QueueDepth = queueDepth;
+        LastSuccessfulSendUtc = lastSuccessfulSendUtc;
+        Failure = failure;
+    }
+
+    public string TargetId { get; }
+    public string Provider { get; }
+    public string Protocol { get; }
+    public string SafeTargetIdentity { get; }
+    public string Lifecycle { get; }
+    public bool Connected { get; }
+    public string VideoCodec { get; }
+    public string AudioCodec { get; }
+    public uint AudioSampleRate { get; }
+    public uint AudioChannelCount { get; }
+    public string AudioSampleFormat { get; }
+    public uint VideoBitRate { get; }
+    public uint AudioBitRate { get; }
+    public int LatencyMilliseconds { get; }
+    public ulong AcceptedSamples { get; }
+    public ulong SentSamples { get; }
+    public ulong DroppedSamples { get; }
+    public ulong RejectedSamples { get; }
+    public ulong ReconnectCount { get; }
+    public ulong PacketsSent { get; }
+    public ulong BytesSent { get; }
+    public int QueueDepth { get; }
+    public DateTimeOffset? LastSuccessfulSendUtc { get; }
+    public Failure? Failure { get; }
+}
+
 public sealed record OperatorOutputRoleDescriptor
 {
     public OperatorOutputRoleDescriptor(
@@ -96,7 +189,8 @@ public sealed record OperatorOutputRoleDescriptor
         bool authoritativeActive,
         string healthState,
         string evidence,
-        Failure? error)
+        Failure? error,
+        OperatorNetworkOutputDescriptor? networkOutput = null)
     {
         if (string.IsNullOrWhiteSpace(roleId)) throw new ArgumentException("Output role id is required.", nameof(roleId));
         if (string.IsNullOrWhiteSpace(roleKind)) throw new ArgumentException("Output role kind is required.", nameof(roleKind));
@@ -122,6 +216,7 @@ public sealed record OperatorOutputRoleDescriptor
         HealthState = healthState;
         Evidence = evidence.Trim();
         Error = error;
+        NetworkOutput = networkOutput;
     }
     public string RoleId { get; }
     public string RoleKind { get; }
@@ -138,6 +233,7 @@ public sealed record OperatorOutputRoleDescriptor
     public string HealthState { get; }
     public string Evidence { get; }
     public Failure? Error { get; }
+    public OperatorNetworkOutputDescriptor? NetworkOutput { get; }
 }
 
 public sealed record OperatorGraphicsAsset
