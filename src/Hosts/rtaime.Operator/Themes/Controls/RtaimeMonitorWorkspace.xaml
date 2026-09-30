@@ -119,6 +119,8 @@
 								<controls:GpuMonitorPresentationSurface
 									Monitor="{Binding Monitor, RelativeSource={RelativeSource TemplatedParent}}"
 									GpuFrame="{Binding Monitor.GpuFrame, RelativeSource={RelativeSource TemplatedParent}}"
+									InspectionChannel="{Binding Monitor.InspectionChannel, RelativeSource={RelativeSource TemplatedParent}}"
+									Roi="{Binding Monitor.InspectionRoi, RelativeSource={RelativeSource TemplatedParent}}"
 									Width="{Binding Monitor.ViewportPixelWidth, RelativeSource={RelativeSource TemplatedParent}}"
 									Height="{Binding Monitor.ViewportPixelHeight, RelativeSource={RelativeSource TemplatedParent}}"
 									HorizontalAlignment="Center"
@@ -131,6 +133,19 @@
 											ScaleY="{Binding Monitor.InverseDpiScaleY, RelativeSource={RelativeSource TemplatedParent}}" />
 									</controls:GpuMonitorPresentationSurface.RenderTransform>
 								</controls:GpuMonitorPresentationSurface>
+								<controls:RtaimeRoiOverlay
+									Roi="{Binding Monitor.InspectionRoi, RelativeSource={RelativeSource TemplatedParent}}"
+									PresentationWidth="{Binding Monitor.PresentationWidth, RelativeSource={RelativeSource TemplatedParent}}"
+									PresentationHeight="{Binding Monitor.PresentationHeight, RelativeSource={RelativeSource TemplatedParent}}"
+									OffsetX="{Binding Monitor.PresentationOffsetX, RelativeSource={RelativeSource TemplatedParent}}"
+									OffsetY="{Binding Monitor.PresentationOffsetY, RelativeSource={RelativeSource TemplatedParent}}"
+									SourceWidth="{Binding Monitor.SourcePixelWidth, RelativeSource={RelativeSource TemplatedParent}}"
+									SourceHeight="{Binding Monitor.SourcePixelHeight, RelativeSource={RelativeSource TemplatedParent}}"
+									Stroke="{DynamicResource OperatorAccentBrush}"
+									Fill="{DynamicResource OperatorSelectionSurfaceBrush}"
+									IsHitTestVisible="False"
+									Panel.ZIndex="46" />
+
 								<controls:RtaimePixelGridOverlay
 									PresentationWidth="{Binding Monitor.PresentationWidth, RelativeSource={RelativeSource TemplatedParent}}"
 									PresentationHeight="{Binding Monitor.PresentationHeight, RelativeSource={RelativeSource TemplatedParent}}"
@@ -237,6 +252,44 @@
 
 								<Border VerticalAlignment="Top" HorizontalAlignment="Right" Margin="8,36,8,0" Padding="6,3" Style="{StaticResource OperatorMonitorHeaderOverlay}" CornerRadius="{StaticResource OperatorRadiusOverlay}" Panel.ZIndex="56" IsHitTestVisible="False">
 									<TextBlock Text="{Binding Monitor.InspectionReadout, RelativeSource={RelativeSource TemplatedParent}}" FontSize="{StaticResource OperatorFontSizeMicro}" Foreground="{DynamicResource OperatorOverlayTextBrush}" FontFamily="Consolas" />
+								</Border>
+
+								<Border VerticalAlignment="Top" HorizontalAlignment="Right" Margin="8,60,8,0" Padding="6,3" Style="{StaticResource OperatorMonitorHeaderOverlay}" CornerRadius="{StaticResource OperatorRadiusOverlay}" Panel.ZIndex="56" IsHitTestVisible="False" MaxWidth="680">
+									<Border.Style>
+										<Style TargetType="Border" BasedOn="{StaticResource OperatorMonitorHeaderOverlay}">
+											<Setter Property="Visibility" Value="Collapsed" />
+											<Style.Triggers>
+												<DataTrigger Binding="{Binding Monitor.IsRoiActive, RelativeSource={RelativeSource TemplatedParent}}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
+											</Style.Triggers>
+										</Style>
+									</Border.Style>
+									<TextBlock Text="{Binding Monitor.RoiInspectionReadout, RelativeSource={RelativeSource TemplatedParent}}" TextWrapping="Wrap" FontSize="{StaticResource OperatorFontSizeMicro}" Foreground="{DynamicResource OperatorOverlayTextBrush}" FontFamily="Consolas" />
+								</Border>
+
+								<Border VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="8" Padding="4" Style="{StaticResource OperatorMonitorHeaderOverlay}" CornerRadius="{StaticResource OperatorRadiusOverlay}" Panel.ZIndex="57">
+									<StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+										<TextBlock Text="{Binding Monitor.ChannelInspectionStatus, RelativeSource={RelativeSource TemplatedParent}}" FontSize="{StaticResource OperatorFontSizeMicro}" Foreground="{DynamicResource OperatorOverlayTextBrush}" VerticalAlignment="Center" Margin="0,0,6,0" />
+										<controls:RtaimeButton Content="RGB" Command="{Binding Monitor.ShowRgbCommand, RelativeSource={RelativeSource TemplatedParent}}" IsCompact="True" Margin="0,0,2,0" ToolTip="Combined channel view" />
+										<controls:RtaimeButton Content="R" Command="{Binding Monitor.ShowRedCommand, RelativeSource={RelativeSource TemplatedParent}}" IsCompact="True" Margin="0,0,2,0" ToolTip="Red channel view" />
+										<controls:RtaimeButton Content="G" Command="{Binding Monitor.ShowGreenCommand, RelativeSource={RelativeSource TemplatedParent}}" IsCompact="True" Margin="0,0,2,0" ToolTip="Green channel view" />
+										<controls:RtaimeButton Content="B" Command="{Binding Monitor.ShowBlueCommand, RelativeSource={RelativeSource TemplatedParent}}" IsCompact="True" Margin="0,0,2,0" ToolTip="Blue channel view" />
+										<controls:RtaimeButton Content="A" Command="{Binding Monitor.ShowAlphaCommand, RelativeSource={RelativeSource TemplatedParent}}" IsCompact="True" Margin="0,0,2,0" ToolTip="Alpha channel view" />
+										<controls:RtaimeButton Content="Y" Command="{Binding Monitor.ShowLumaCommand, RelativeSource={RelativeSource TemplatedParent}}" IsCompact="True" Margin="0,0,4,0" ToolTip="Luma channel view" />
+										<controls:RtaimeToggleButton Content="ROI" IsChecked="{Binding Monitor.IsRoiSelectionEnabled, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}" IsCompact="True" Margin="0,0,2,0" ToolTip="Select source-space ROI (R)" />
+										<controls:RtaimeButton Content="CLR" Command="{Binding Monitor.ClearRoiCommand, RelativeSource={RelativeSource TemplatedParent}}" IsCompact="True" ToolTip="Clear ROI (Esc/Delete)" />
+									</StackPanel>
+								</Border>
+
+								<Border VerticalAlignment="Center" HorizontalAlignment="Center" Padding="12,8" Style="{StaticResource OperatorMonitorHeaderOverlay}" CornerRadius="{StaticResource OperatorRadiusOverlay}" Panel.ZIndex="58" IsHitTestVisible="False">
+									<Border.Style>
+										<Style TargetType="Border" BasedOn="{StaticResource OperatorMonitorHeaderOverlay}">
+											<Setter Property="Visibility" Value="Collapsed" />
+											<Style.Triggers>
+												<DataTrigger Binding="{Binding Monitor.IsChannelInspectionUnavailable, RelativeSource={RelativeSource TemplatedParent}}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
+											</Style.Triggers>
+										</Style>
+									</Border.Style>
+									<TextBlock Text="GPU CHANNEL VIEW UNAVAILABLE&#x0a;Combined view and 1×1 inspector remain available." TextAlignment="Center" FontSize="{StaticResource OperatorFontSizeCompact}" Foreground="{DynamicResource OperatorOverlayTextBrush}" />
 								</Border>
 
 								<Border VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="8" Padding="5,2" Style="{StaticResource OperatorMonitorHeaderOverlay}" CornerRadius="{StaticResource OperatorRadiusOverlay}">
