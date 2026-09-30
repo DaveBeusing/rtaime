@@ -2800,8 +2800,10 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		}
 
 		var mix = _lastAudioProductionResult;
-		var programBus = _audioProduction.Configuration.GetBus(AudioBusId.Program);
-		var health = programBus.Muted
+		var audioProduction = _audioProduction.Configuration;
+		var programBus = audioProduction.GetBus(AudioBusId.Program);
+		var mixMuted = programBus.Muted || IsProgramMixMuted(audioProduction, routedAudioSource);
+		var health = mixMuted
 			? V1AudioHealthState.Muted
 			: mix.MissingSourceCount > 0
 				? V1AudioHealthState.Error
@@ -2814,7 +2816,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			result.VideoSourceId,
 			result.StreamId ?? routedStream,
 			result.Gain.Linear,
-			result.Muted || programBus.Muted,
+			mixMuted,
 			mix.LeftPeak,
 			mix.RightPeak,
 			mix.MasterPeak,
@@ -2823,6 +2825,25 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			routing.Mode,
 			routing.Revision,
 			routedAudioSource);
+	}
+
+	private static bool IsProgramMixMuted(
+		AudioProductionConfiguration configuration,
+		MediaSourceId routedAudioSource)
+	{
+		var hasEligibleSource = false;
+		for (var index = 0; index < configuration.Sources.Count; index++)
+		{
+			var source = configuration.Sources[index];
+			if (!source.IsAssignedTo(AudioBusId.Program))
+				continue;
+			if (source.FollowRoutedSource && source.SourceId != routedAudioSource)
+				continue;
+			hasEligibleSource = true;
+			if (!source.Muted)
+				return false;
+		}
+		return hasEligibleSource;
 	}
 
 	private void RefreshVirtualAudioMetersUnsafe(ulong sequence)
