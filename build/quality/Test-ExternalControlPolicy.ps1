@@ -17,6 +17,7 @@ function Assert-Condition {
 }
 
 $schemaPath = Join-Path $repositoryRoot "schemas/external-control/v1/external_control.proto"
+$configSchemaPath = Join-Path $repositoryRoot "schemas/external-control/v1/external_control_config.schema.json"
 $serverPath = Join-Path $repositoryRoot "src/Hosts/rtaime.ControlHost/ExternalControlServer.cs"
 $processPath = Join-Path $repositoryRoot "src/Hosts/rtaime.ControlHost/ControlHostProcess.cs"
 $dispatcherPath = Join-Path $repositoryRoot "src/Hosts/rtaime.ControlHost/ControlHostIpcServer.cs"
@@ -30,6 +31,7 @@ $securityPath = Join-Path $repositoryRoot "SECURITY.md"
 
 foreach ($path in @(
 	$schemaPath,
+	$configSchemaPath,
 	$serverPath,
 	$processPath,
 	$dispatcherPath,
@@ -44,6 +46,7 @@ foreach ($path in @(
 }
 
 $schema = Get-Content -LiteralPath $schemaPath -Raw
+$configSchema = Get-Content -LiteralPath $configSchemaPath -Raw
 $server = Get-Content -LiteralPath $serverPath -Raw
 $process = Get-Content -LiteralPath $processPath -Raw
 $dispatcher = Get-Content -LiteralPath $dispatcherPath -Raw
@@ -59,6 +62,9 @@ Assert-Condition ($schema -match 'service ExternalControl' -and $schema -match '
 Assert-Condition ($schema -notmatch 'RuntimeHost|AIHost') "External API schema must not expose RuntimeHost or AIHost."
 Assert-Condition ($schema -match 'request_id' -and $schema -match 'correlation_id' -and $schema -match 'host_instance_id' -and $schema -match 'state_version') "External API must preserve request/correlation and remote state identity."
 Assert-Condition ($schema -match 'expected_revision' -and $schema -match 'command_id') "Production mutations must preserve optimistic concurrency and stable command identity."
+Assert-Condition ($configSchema -match '"enabled"' -and $configSchema -match '"default": false' -and $configSchema -match '"bindAddress"' -and $configSchema -match '127\.0\.0\.1') "External configuration schema must preserve disabled and loopback secure defaults."
+Assert-Condition ($configSchema -match '"Observer"' -and $configSchema -match '"Operator"' -and $configSchema -match '"Administrator"') "External configuration schema must define the supported role set."
+Assert-Condition ($configSchema -match '"maxConcurrentConnections"' -and $configSchema -match '"requestsPerSecond"' -and $configSchema -match '"maxRequestBytes"') "External configuration schema must retain explicit resource limits."
 
 Assert-Condition ($server -match 'public bool Enabled \{ get; init; \}' -and $server -match 'BindAddress \{ get; init; \} = "127\.0\.0\.1"') "External control must remain disabled by default and bind to loopback when configured without an explicit address."
 Assert-Condition ($server -match 'SslProtocols\.Tls12 \| SslProtocols\.Tls13') "External control must require modern TLS."
