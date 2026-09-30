@@ -402,7 +402,7 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 			networkEvidence,
 			networkOutputs.Length == 0
 				? "No governed network output is configured."
-				: $"Runtime/provider evidence: {networkOutputs.Sum(output => output.BytesSent):N0} bytes sent, {networkOutputs.Sum(output => output.DroppedSamples):N0} dropped and {networkOutputs.Sum(output => output.RejectedSamples):N0} rejected samples.",
+				: $"Runtime/provider evidence: {networkOutputs.Sum(output => (decimal)output.BytesSent):N0} bytes sent, {networkOutputs.Sum(output => (decimal)output.DroppedSamples):N0} dropped and {networkOutputs.Sum(output => (decimal)output.RejectedSamples):N0} rejected samples.",
 			null,
 			sampleHistory);
 		UpdateMetric(
