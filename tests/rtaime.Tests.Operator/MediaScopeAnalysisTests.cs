@@ -137,6 +137,8 @@ public sealed class MediaScopeAnalysisTests
 		Assert.Equal(cpu.BlueWaveform, gpu.BlueWaveform);
 		Assert.Equal(cpu.Vectorscope, gpu.Vectorscope);
 		Assert.Equal(GpuMonitoringAnalysisPolicy.ScopeResultBytes, gpu.ResultTransferBytes);
+		Assert.True(gpu.ManagedAllocationBytes >= GpuMonitoringAnalysisPolicy.ScopeResultBytes);
+		Assert.True(cpu.ManagedAllocationBytes > 0);
 
 		void Copy(IReadOnlyList<int> source, int offset)
 		{
