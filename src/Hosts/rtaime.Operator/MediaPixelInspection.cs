@@ -23,11 +23,58 @@ public readonly record struct MediaPixelCoordinate(int X, int Y)
 	public bool IsInside(int width, int height) => X >= 0 && Y >= 0 && X < width && Y < height;
 }
 
+public enum MediaInspectionRoiCorner
+{
+	TopLeft,
+	TopRight,
+	BottomLeft,
+	BottomRight
+}
+
 public readonly record struct MediaInspectionRoi(int X, int Y, int Width, int Height)
 {
 	public int RightExclusive => checked(X + Width);
 	public int BottomExclusive => checked(Y + Height);
 	public bool IsEmpty => Width <= 0 || Height <= 0;
+
+	public bool Contains(MediaPixelCoordinate coordinate) =>
+		!IsEmpty &&
+		coordinate.X >= X &&
+		coordinate.Y >= Y &&
+		coordinate.X < RightExclusive &&
+		coordinate.Y < BottomExclusive;
+
+	public MediaInspectionRoi MoveBy(int deltaX, int deltaY, int sourceWidth, int sourceHeight)
+	{
+		if (IsEmpty || sourceWidth <= 0 || sourceHeight <= 0)
+			return default;
+
+		var width = Math.Min(Width, sourceWidth);
+		var height = Math.Min(Height, sourceHeight);
+		var x = Math.Clamp(X + deltaX, 0, sourceWidth - width);
+		var y = Math.Clamp(Y + deltaY, 0, sourceHeight - height);
+		return new MediaInspectionRoi(x, y, width, height);
+	}
+
+	public MediaInspectionRoi ResizeFromCorner(
+		MediaInspectionRoiCorner corner,
+		MediaPixelCoordinate coordinate,
+		int sourceWidth,
+		int sourceHeight)
+	{
+		if (IsEmpty || sourceWidth <= 0 || sourceHeight <= 0)
+			return default;
+
+		var fixedCorner = corner switch
+		{
+			MediaInspectionRoiCorner.TopLeft => new MediaPixelCoordinate(RightExclusive - 1, BottomExclusive - 1),
+			MediaInspectionRoiCorner.TopRight => new MediaPixelCoordinate(X, BottomExclusive - 1),
+			MediaInspectionRoiCorner.BottomLeft => new MediaPixelCoordinate(RightExclusive - 1, Y),
+			MediaInspectionRoiCorner.BottomRight => new MediaPixelCoordinate(X, Y),
+			_ => new MediaPixelCoordinate(X, Y)
+		};
+		return FromCorners(fixedCorner, coordinate, sourceWidth, sourceHeight);
+	}
 
 	public MediaInspectionRoi Clamp(int sourceWidth, int sourceHeight)
 	{
