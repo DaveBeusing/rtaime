@@ -68,8 +68,9 @@ internal sealed class RuntimeNetworkOutputBridge : IAsyncDisposable
 				audio.Timing,
 				payload,
 				networkAudio);
+			var result = session.TrySubmit(sample);
 			payload = null!;
-			return session.TrySubmit(sample);
+			return result;
 		}
 		finally
 		{
