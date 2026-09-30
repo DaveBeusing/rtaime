@@ -33,6 +33,7 @@ internal sealed class RuntimeNetworkOutputBridge : IAsyncDisposable
 
 	public ProviderDescriptor ProviderDescriptor => _provider.Descriptor;
 	public bool Enabled => _sessions.Count > 0;
+	public bool HasRole(string roleId) => _sessions.ContainsKey(roleId);
 
 	public NetworkOutputEnqueueResult? TrySubmit(
 		string roleId,
