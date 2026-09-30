@@ -123,6 +123,10 @@ public readonly record struct MediaInspectionRoiStatistics(
 	byte MaxLuma,
 	string Detail)
 {
+	public TimeSpan AnalysisDuration { get; init; }
+	public int ResultTransferBytes { get; init; }
+	public long ManagedAllocationBytes { get; init; }
+
 	public static MediaInspectionRoiStatistics Unavailable(MediaInspectionRoi roi, string detail) =>
 		new(false, 0, roi, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, detail);
 }
@@ -278,6 +282,8 @@ public static class MediaPixelInspection
 		return $"ROI {statistics.Roi.X},{statistics.Roi.Y} {statistics.Roi.Width}×{statistics.Roi.Height} · N {statistics.SampleCount} · " +
 			$"MEAN R {statistics.MeanRed:0.0} G {statistics.MeanGreen:0.0} B {statistics.MeanBlue:0.0} A {statistics.MeanAlpha:0.0} Y' {statistics.MeanLuma:0.0} · " +
 			$"MIN R {statistics.MinRed} G {statistics.MinGreen} B {statistics.MinBlue} A {statistics.MinAlpha} Y' {statistics.MinLuma} · " +
-			$"MAX R {statistics.MaxRed} G {statistics.MaxGreen} B {statistics.MaxBlue} A {statistics.MaxAlpha} Y' {statistics.MaxLuma}";
+			$"MAX R {statistics.MaxRed} G {statistics.MaxGreen} B {statistics.MaxBlue} A {statistics.MaxAlpha} Y' {statistics.MaxLuma} · " +
+			$"{statistics.AnalysisDuration.TotalMilliseconds:0.###} ms · {statistics.ResultTransferBytes:N0} B transfer · " +
+			$"{statistics.ManagedAllocationBytes:N0} B managed alloc · {statistics.Detail.ToUpperInvariant()}";
 	}
 }

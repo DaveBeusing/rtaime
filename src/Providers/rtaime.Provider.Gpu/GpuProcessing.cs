@@ -634,7 +634,8 @@ public sealed class GpuProcessingResult
 public sealed class GpuProcessingProvider : IDisposable
 {
     public const int RetainedObservationCapacity = 512;
-    public const int SharedMonitoringResourceCapacity = 2;
+    public const int PublishedMonitoringResourceSetSize = 2;
+    public const int SharedMonitoringResourceCapacity = PublishedMonitoringResourceSetSize * 2;
 
     private static readonly VideoFormat[] V1Formats =
     {

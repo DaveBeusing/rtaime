@@ -785,7 +785,7 @@ Timecode is displayed only when the loaded Media Deck source identity matches th
 
 Clean Program reuses `ProgramGpuFrame` and `ProgramImage` from the same `OperatorMonitoringViewModel`. Its window contains no diagnostics HUD, guides, pixel grid, scopes, comparison or inspection overlays. GPU open/device/adapter failures leave the existing Program WPF fallback visible.
 
-The MONITORING workspace uses the same shared resources for bounded technical analysis. Histogram, waveform, RGB parade and vectorscope prefer GPU compute and refresh at most 5 Hz; the existing sampled CPU analysis is retained only as an explicit fallback. Scope diagnostics expose the active processing path, sample stride/count, measured analysis duration and result-transfer bytes.
+The MONITORING workspace uses the same shared resources for bounded technical analysis. Histogram, waveform, RGB parade and vectorscope prefer GPU compute and refresh at most 5 Hz; the existing sampled CPU analysis is retained only as an explicit fallback. Scope diagnostics expose the active processing path, sample stride/count, measured analysis duration and result-transfer bytes. ROI analysis uses the same 5 Hz maximum cadence and exposes its measured duration, 64-byte reduced-result transfer and managed-allocation evidence without reading ROI pixels back to the CPU.
 
 A/B compare continues to define Program as A and confirmed Preview as B. Split and wipe are GPU presentation operations when compatible shared resources are available. Difference is generated directly in the GPU compare shader in display-code space; the bounded CPU Difference bitmap is created only when GPU comparison is explicitly unavailable. Color metadata must be complete and matching for Difference.
 
@@ -831,4 +831,6 @@ Preview and Program provide an optional compact frame diagnostics HUD. Monitorin
 The HUD reports source resolution, physical presentation target, presentation scale/mode, color display transform and the **actual active presentation path**. Successful GPU rendering reports the D3D11 resource dimensions and sampler mode. Capability alone does not claim GPU presentation: failed open/draw/device state reports the CPU/WPF fallback instead.
 
 The HUD remains rate-limited to at most 5 Hz independently of monitoring cadence. Runtime-wide output FPS, frame processing time, dropped-frame evidence and qualified CPU/GPU telemetry remain owned by the existing Runtime performance snapshot and are not duplicated by the viewer.
+
+The consolidated automated visual/DPI/performance/recovery evidence and the explicit software-versus-physical qualification boundary are maintained in `docs/MonitoringVisualPerformanceQualification.md`.
 

@@ -159,7 +159,7 @@ The legacy allocating `Readback` API remains for compatibility and focused seman
 
 `GpuProcessingProvider.TryExportMonitoringResource` establishes a bounded read-only monitoring lease over an already materialized GPU frame. The export path reuses the existing `SurfaceId`, `VideoFormat` and generation semantics while publishing a dedicated rtaime-owned `MonitoringResourceId`. Stable monitoring contracts do not expose `OpaqueSurfaceHandle`, CUDA pointers or CUDA driver identities.
 
-The provider retains the backing source surface while an exported monitoring lease is active. Export remains bounded to two active resources; capacity exhaustion returns a normal unavailable-for-this-frame result rather than blocking or failing Program execution.
+The provider retains the backing source surface while an exported monitoring lease is active. The published monitoring set remains one Preview plus one Program resource. Provider capacity is four leases so one complete replacement pair can be exported before the monitoring tap atomically retires the previously published pair. Capacity exhaustion remains a normal unavailable-for-this-frame result rather than blocking or failing Program execution.
 
 On the qualified Windows CUDA backend, `CudaD3D11MonitoringInterop` creates a shareable D3D11 RGBA8 texture on the CUDA device's adapter and performs the sampled transfer entirely on the GPU. The resulting Windows graphics shared handle and adapter LUID are narrow presentation metadata; the CUDA device pointer remains private to the backend. The resource is opened read-only by the Operator's `GpuMonitorPresentationSurface`.
 
@@ -377,6 +377,8 @@ It is **not**:
 - hard-real-time certification.
 
 Hardware performance remains `UNVERIFIED` until measured on the qualified reference GPU/driver configuration.
+
+The Operator monitoring stack has a separate consolidated software qualification matrix in `docs/MonitoringVisualPerformanceQualification.md`. That matrix covers shared-resource lifetime, GPU/WPF geometry parity, bounded scope/ROI analysis, reconnect and sustained resource replacement, but it does not promote hosted-CI measurements into CUDA, driver, display or scan-out qualification.
 
 The Performance test project also measures authoritative transform plus Color Grade materialization at both supported 1080p50 and 1080p59.94 development formats. The regression guard uses a full-frame RGBA bitmap, retains one typed Color Grade node, alternates bounded rotation updates, records total/per-mutation wall-clock cost and verifies that reconfiguration leaves the GPU active-surface baseline unchanged. The threshold is deliberately broad and protects against runaway managed materialization cost rather than asserting a real-time hardware budget. Reference-platform execution is still required before any hardware latency claim is made; no new hardware PASS claim is inferred from hosted CI.
 

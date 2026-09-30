@@ -1,5 +1,6 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
+using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using System.Windows;
@@ -414,6 +415,8 @@ public sealed class GpuMonitorPresentationSurface : DrawingSurface
 		var stride = Math.Max(1, (int)Math.Ceiling(Math.Sqrt(area / (double)MaxAnalysisSamples)));
 		var sampleWidth = (roi.Width + stride - 1) / stride;
 		var sampleHeight = (roi.Height + stride - 1) / stride;
+		var allocationStart = GC.GetAllocatedBytesForCurrentThread();
+		var started = Stopwatch.GetTimestamp();
 
 		UpdateAnalysisConstants(context, roi, stride, sourceWidth, sourceHeight);
 		context.ClearUnorderedAccessView(_analysisResultsView, new Int4(0, 0, 0, 0));
@@ -463,7 +466,12 @@ public sealed class GpuMonitorPresentationSurface : DrawingSurface
 				Maximum(values, 8),
 				Maximum(values, 9),
 				Maximum(values, 10),
-				stride == 1 ? "GPU full ROI sample" : $"GPU bounded sample stride {stride}");
+				stride == 1 ? "GPU full ROI sample" : $"GPU bounded sample stride {stride}")
+			{
+				AnalysisDuration = Stopwatch.GetElapsedTime(started),
+				ResultTransferBytes = AnalysisResultCount * sizeof(uint),
+				ManagedAllocationBytes = GC.GetAllocatedBytesForCurrentThread() - allocationStart
+			};
 			Monitor.SetRoiStatistics(statistics);
 		}
 		finally

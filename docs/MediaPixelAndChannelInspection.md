@@ -34,7 +34,7 @@ ROI selection is stored in source-pixel coordinates and is clamped to the curren
 
 ROI statistics execute against the read-only shared GPU resource. A compute shader produces sample count, mean R/G/B/A/luma, and per-channel/luma minimum and maximum. Analysis is independently rate-limited to 200 ms and bounded to at most 262,144 samples; large ROIs use a deterministic sampling stride rather than increasing analysis cost without limit.
 
-Only a 16-element uint result buffer is copied to CPU-visible staging memory. No ROI pixel payload and no full-resolution frame is transferred to the Operator model. Statistics recompute only when newer frame evidence, ROI state or the inspection mode changes. GPU/resource loss reports an explicit unavailable reason and may recover on a later valid resource.
+Only a 16-element uint result buffer (64 bytes) is copied to CPU-visible staging memory. No ROI pixel payload and no full-resolution frame is transferred to the Operator model. Each completed GPU ROI analysis records Operator-side elapsed duration, fixed result-transfer bytes and managed allocation evidence together with the sample stride/detail. Statistics recompute only when newer frame evidence, ROI state or the inspection mode changes. GPU/resource loss reports an explicit unavailable reason and may recover on a later valid resource.
 
 ROI interaction is presentation-only. Operators can enable ROI selection, drag a rectangle, move an existing ROI, resize it from the four visible corner handles, and clear it; the overlay and handles never appear in Clean Program.
 
@@ -50,4 +50,4 @@ Clean Program reuses the same Program GPU resource but intentionally excludes pi
 
 Automated tests cover physical coordinate mapping, Fit/Fill/Pixel Perfect geometry, DPI conversion, full-resolution-to-bounded-sample mapping, source-space ROI clamp/mapping, channel shader semantics, bounded ROI analysis policy and the absence of CPU bitmap materialization in the GPU presentation control.
 
-The existing 1×1 inspector remains the bounded CPU monitoring-sample path and therefore retains its documented resolution limitation. ROI evidence is GPU-derived and returns only reduced numeric results. Physical NVIDIA/CUDA/D3D11 validation remains reference-hardware evidence rather than a claim inferred from software-only tests.
+The existing 1×1 inspector remains the bounded CPU monitoring-sample path and therefore retains its documented resolution limitation. ROI evidence is GPU-derived and returns only reduced numeric results. The unified matrix and performance/recovery evidence are documented in `docs/MonitoringVisualPerformanceQualification.md`. Physical NVIDIA/CUDA/D3D11 validation remains reference-hardware evidence rather than a claim inferred from software-only tests.

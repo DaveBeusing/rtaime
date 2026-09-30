@@ -28,14 +28,18 @@ $gpuPresentationPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Cont
 $gpuScopesPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Controls/GpuScopeAnalysisSurface.cs"
 $gpuComparePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Controls/GpuMediaCompareSurface.cs"
 $scopeAnalysisPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MediaScopeAnalysis.cs"
+$pixelInspectionPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MediaPixelInspection.cs"
 $roiOverlayPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Controls/RtaimeRoiOverlay.cs"
 $monitorThemePath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/Themes/Controls/RtaimeMonitorWorkspace.xaml"
 $mainWindowPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MainWindow.xaml"
 $cleanProgramPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/ProgramOutputWindow.xaml"
 $cudaMonitoringInteropPath = Join-Path $repositoryRoot "src/Providers/rtaime.Provider.Gpu/CudaD3D11MonitoringInterop.cs"
 $documentationPath = Join-Path $repositoryRoot "docs/OperatorMonitoringPlane.md"
+$qualificationDocumentationPath = Join-Path $repositoryRoot "docs/MonitoringVisualPerformanceQualification.md"
+$qualificationTestsPath = Join-Path $repositoryRoot "tests/rtaime.Tests.Operator/MonitoringVisualPerformanceQualificationTests.cs"
+$monitoringIntegrationTestsPath = Join-Path $repositoryRoot "tests/rtaime.Tests.Integration/OperatorMonitoringPlaneTests.cs"
 
-foreach ($path in @($contractsPath, $runtimeMonitoringPath, $runtimeServicePath, $runtimeIpcPath, $controlRuntimeIpcPath, $gpuProviderPath, $clientPath, $operatorPath, $gpuPresentationPath, $gpuScopesPath, $gpuComparePath, $scopeAnalysisPath, $roiOverlayPath, $monitorThemePath, $mainWindowPath, $cleanProgramPath, $cudaMonitoringInteropPath, $documentationPath)) {
+foreach ($path in @($contractsPath, $runtimeMonitoringPath, $runtimeServicePath, $runtimeIpcPath, $controlRuntimeIpcPath, $gpuProviderPath, $clientPath, $operatorPath, $gpuPresentationPath, $gpuScopesPath, $gpuComparePath, $scopeAnalysisPath, $pixelInspectionPath, $roiOverlayPath, $monitorThemePath, $mainWindowPath, $cleanProgramPath, $cudaMonitoringInteropPath, $documentationPath, $qualificationDocumentationPath, $qualificationTestsPath, $monitoringIntegrationTestsPath)) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required monitoring-plane artifact is missing: '$path'."
 }
 
@@ -51,11 +55,15 @@ $gpuPresentation = Get-Content -LiteralPath $gpuPresentationPath -Raw
 $gpuScopes = Get-Content -LiteralPath $gpuScopesPath -Raw
 $gpuCompare = Get-Content -LiteralPath $gpuComparePath -Raw
 $scopeAnalysis = Get-Content -LiteralPath $scopeAnalysisPath -Raw
+$pixelInspection = Get-Content -LiteralPath $pixelInspectionPath -Raw
 $roiOverlay = Get-Content -LiteralPath $roiOverlayPath -Raw
 $monitorTheme = Get-Content -LiteralPath $monitorThemePath -Raw
 $mainWindow = Get-Content -LiteralPath $mainWindowPath -Raw
 $cleanProgram = Get-Content -LiteralPath $cleanProgramPath -Raw
 $cudaMonitoringInterop = Get-Content -LiteralPath $cudaMonitoringInteropPath -Raw
+$qualificationDocumentation = Get-Content -LiteralPath $qualificationDocumentationPath -Raw
+$qualificationTests = Get-Content -LiteralPath $qualificationTestsPath -Raw
+$monitoringIntegrationTests = Get-Content -LiteralPath $monitoringIntegrationTestsPath -Raw
 
 Assert-Condition ($contracts -match 'MonitoringContractVersion') "Monitoring must expose an explicit versioned contract."
 Assert-Condition ($contracts -match 'MonitoringStreamKind') "Monitoring must distinguish source and Program streams."
@@ -86,10 +94,13 @@ Assert-Condition ($client -notmatch 'SelectPreviewAsync|CutProgramAsync|Dissolve
 Assert-Condition ($operator -match 'MonitoringStreamKind\.Program') "Operator must render actual Program stream frames distinctly."
 Assert-Condition ($operator -match 'PreviewSourceId') "Operator Preview must select monitoring frames using authoritative control routing."
 Assert-Condition ($operator -match 'SharedGpuMonitoringState') "Operator must expose the negotiated shared GPU monitoring state."
+Assert-Condition ($gpuProvider -match 'PublishedMonitoringResourceSetSize\s*=\s*2' -and $gpuProvider -match 'SharedMonitoringResourceCapacity\s*=\s*PublishedMonitoringResourceSetSize\s*\*\s*2') "Shared GPU monitoring must retain one bounded replacement pair of headroom while keeping the published Preview/Program set fixed at two resources."
 Assert-Condition ($gpuPresentation -match 'OpenSharedResource' -and $gpuPresentation -match 'WindowsGraphicsSharedHandle') "Operator GPU presentation must open the negotiated read-only Windows graphics resource rather than materialize another frame."
 Assert-Condition ($gpuPresentation -notmatch 'BitmapSource|CopyPixels|CopySubresourceRegion') "Operator GPU inspection must not materialize a CPU bitmap or copy ROI/full-frame pixels to CPU staging."
 Assert-Condition ($gpuPresentation -match 'CSMain' -and $gpuPresentation -match 'MaxAnalysisSamples\s*=\s*262_144' -and $gpuPresentation -match 'AnalysisResultCount\s*=\s*16') "ROI analysis must remain GPU-reduced and explicitly bounded."
 Assert-Condition ($gpuPresentation -match 'TimeSpan\.FromMilliseconds\(200\)') "ROI analysis must remain rate-limited independently from presentation cadence."
+Assert-Condition ($gpuPresentation -match 'AnalysisDuration\s*=\s*Stopwatch\.GetElapsedTime\(started\)' -and $gpuPresentation -match 'ResultTransferBytes\s*=\s*AnalysisResultCount\s*\*\s*sizeof\(uint\)' -and $gpuPresentation -match 'ManagedAllocationBytes\s*=\s*GC\.GetAllocatedBytesForCurrentThread') "ROI analysis must expose measured duration, fixed result transfer and managed-allocation qualification evidence."
+Assert-Condition ($pixelInspection -match 'TimeSpan AnalysisDuration' -and $pixelInspection -match 'int ResultTransferBytes' -and $pixelInspection -match 'long ManagedAllocationBytes') "ROI statistics must retain bounded performance evidence in the Operator model."
 Assert-Condition ($roiOverlay -match 'MediaInspectionRoi' -and $roiOverlay -match 'SourceWidth' -and $roiOverlay -match 'SourceHeight') "ROI overlay must project source-space inspection coordinates."
 Assert-Condition ($scopeAnalysis -match 'MaxScopeSamples\s*=\s*262_144' -and $scopeAnalysis -match 'ScopeUpdateInterval\s*=\s*TimeSpan\.FromMilliseconds\(200\)') "GPU scope analysis must remain bounded to the qualified sample count and at most 5 Hz."
 Assert-Condition ($scopeAnalysis -match 'MediaScopeProcessingPath\.CpuFallback' -and $scopeAnalysis -match 'MediaScopeProcessingPath\.GpuSharedResource') "Scope snapshots must identify GPU analysis versus CPU fallback explicitly."
@@ -105,6 +116,9 @@ Assert-Condition ($cleanProgram -match 'GpuFrame="{Binding ProgramGpuFrame}"' -a
 Assert-Condition ($cleanProgram -notmatch 'RtaimePixelGridOverlay|DiagnosticsHud|ShowGrid|ShowSafeArea|ShowCenterMark|GpuScopeAnalysisSurface|GpuMediaCompareSurface|RtaimeMediaScope|RtaimeMediaCompareView') "Clean Program must not add Operator diagnostic, scope, compare or inspection overlays."
 Assert-Condition ($cudaMonitoringInterop -match 'cuMemcpy2D_v2' -and $cudaMonitoringInterop -notmatch 'cuMemcpyDtoH|cuMemcpyDtoHAsync') "CUDA/D3D11 monitor export must remain GPU-resident and must not introduce a GPU-to-CPU readback."
 Assert-Condition ($runtimeService -match 'previewSharedMonitoringResource' -and $runtimeService -match 'programSharedMonitoringResource') "RuntimeHost must publish bounded shared Preview and post-composite Program resources through the existing monitoring tap."
+Assert-Condition ($qualificationTests -match 'Gpu_and_wpf_paths_share_the_same_physical_geometry' -and $qualificationTests -match 'GC\.GetAllocatedBytesForCurrentThread' -and $qualificationTests -match 'Sustained_resize_and_dpi_churn') "Unified monitoring qualification must cover GPU/WPF geometry parity, steady-state allocation and sustained DPI/resize churn."
+Assert-Condition ($monitoringIntegrationTests -match 'Dedicated_named_pipe_monitoring_transport_reconnects_after_server_restart' -and $monitoringIntegrationTests -match 'Sustained_shared_monitoring_replacement_remains_bounded_and_returns_to_baseline' -and $monitoringIntegrationTests -match 'RTAIME_MONITORING_QUALIFICATION_SOAK_LONG') "Monitoring integration qualification must cover reconnect and bounded shared-resource soak behavior."
+Assert-Condition ($qualificationDocumentation -match 'Software performance envelope' -and $qualificationDocumentation -match 'Physical.*UNVERIFIED' -and $qualificationDocumentation -match 'RTAIME_MONITORING_QUALIFICATION_SOAK_LONG') "Monitoring qualification documentation must separate software evidence from physical qualification and document sustained qualification."
 
 Write-Host "Operator monitoring plane policy verification PASS"
 Write-Host "Authority: none; output-only monitoring transport"
