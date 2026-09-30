@@ -28,7 +28,7 @@ The default analysis interval is 200 ms, so scope analysis is capped at 5 Hz ind
 
 There is no queued per-frame worker. A newer ProgramGpuFrame replaces older pending evidence. If a 200 ms window is still active, one timer invalidation later analyzes the latest frame; superseded frames are not queued for later processing.
 
-The snapshot records processing path (GpuSharedResource or CpuFallback), source dimensions, sample stride and sample count, measured analysis/result-transfer duration, result-transfer bytes, vectorscope availability and processing detail.
+The snapshot records processing path (GpuSharedResource or CpuFallback), source dimensions, sample stride and sample count, measured analysis/result-transfer duration, result-transfer bytes, managed allocation bytes for result-model materialization, vectorscope availability and processing detail.
 
 The measured GPU duration is Operator-side wall-clock evidence around dispatch, fixed-result copy and map. It is diagnostic evidence, not a hardware-performance guarantee.
 
@@ -76,6 +76,6 @@ Clean Program reuses the existing Program monitoring presentation only. It does 
 
 ## Qualification
 
-Automated qualification covers fixed GPU result shape and transfer size, bounded sampling through 1080p/4K/8K examples, CPU/GPU result-shape parity for deterministic reference bins, display-code color-transform parity, vectorscope unavailable behavior for incomplete color metadata, Difference compatibility and unknown-color rejection, GPU split/wipe/Difference shader structure, absence of full-frame CPU materialization in GPU scopes and comparison, explicit CPU fallback scheduling, and Clean Program exclusion.
+Automated qualification covers fixed GPU result shape and transfer size, exact sample bounds including non-standard resolutions, bounded managed-result allocation evidence, CPU/GPU result-shape parity for deterministic reference bins, display-code color-transform parity, vectorscope unavailable behavior for incomplete color metadata, Difference compatibility and unknown-color rejection, GPU split/wipe/Difference shader structure, absence of full-frame CPU materialization in GPU scopes and comparison, superseded-frame/no-worker-queue behavior, deterministic resource cleanup, explicit CPU fallback scheduling, and Clean Program exclusion.
 
 Physical GPU duration, driver-specific execution timing and final visual equivalence remain reference-hardware qualification evidence.
