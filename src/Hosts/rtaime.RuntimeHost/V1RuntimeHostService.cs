@@ -473,6 +473,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			.ToArray();
 		_audioProduction = new AudioProductionEngine(
 			AudioProductionConfiguration.CreateLegacyCompatible(_audioProductionSourceOrder));
+		_lastAudioProductionResult = new AudioProductionBlockResult(
+			AudioBusId.Program, 0, 0, 0, 0, 0, 1, 0, true, null, 0, 0);
 		var productionAudioFormat = _audioStreams.Values.Select(stream => stream.Format).Distinct().Single();
 		var maximumAudioFramesPerBoundary = checked((int)(
 			((long)productionAudioFormat.SampleRate * format.FrameRate.Denominator + format.FrameRate.Numerator - 1) /
@@ -1907,9 +1909,50 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			ThrowIfDisposed();
 			if (!_audioStreams.TryGetValue(sourceId, out var stream))
 				throw new KeyNotFoundException($"Unknown media source '{sourceId}'.");
+
+			var current = _audioProduction.Configuration;
+			if (current.Revision == ulong.MaxValue)
+				throw new InvalidOperationException("Audio production revision cannot advance beyond UInt64.MaxValue.");
+			var sources = current.Sources
+				.Select(source => source.SourceId == sourceId
+					? new AudioProductionSourceConfiguration(
+						source.SourceId,
+						gain.Linear,
+						muted,
+						source.FollowRoutedSource,
+						source.BusAssignments)
+					: source)
+				.ToArray();
+			var updated = new AudioProductionConfiguration(
+				current.Revision + 1,
+				current.Buses,
+				sources,
+				current.Crossfade,
+				current.Ducking,
+				current.ClipStrategy);
+			_audioProduction.ApplyConfiguration(updated);
 			_audio.SetInputState(stream.StreamId, gain, muted);
-			Observe($"audio.input.state:{sourceId}:{gain.Linear}:{muted}");
+			Observe($"audio.input.state:{sourceId}:{gain.Linear}:{muted}:mix-revision={updated.Revision}");
 			return AudioInputSnapshotUnsafe(sourceId);
+		}
+	}
+
+	public V1AudioProductionSnapshot SetAudioProductionConfiguration(AudioProductionConfiguration configuration)
+	{
+		ArgumentNullException.ThrowIfNull(configuration);
+		lock (_boundaryCaptureGate)
+		lock (_gate)
+		{
+			ThrowIfDisposed();
+			ValidateAudioProductionConfigurationUnsafe(configuration);
+			_audioProduction.ApplyConfiguration(configuration);
+			foreach (var source in configuration.Sources)
+			{
+				var stream = _audioStreams[source.SourceId];
+				_audio.SetInputState(stream.StreamId, new AudioGain(source.Gain), source.Muted);
+			}
+			Observe($"audio.production.configuration:{configuration.Revision}");
+			return AudioProductionSnapshotUnsafe();
 		}
 	}
 
@@ -2663,6 +2706,77 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		patternMode == V1BroadcastTestPatternMode.MotionTiming &&
 		_audioTestSignals.TryGetValue(sourceId, out var audioSignal) &&
 		audioSignal.Configuration.Mode == GeneratedAudioTestSignalMode.Pulse;
+
+	private V1AudioProductionSnapshot AudioProductionSnapshotUnsafe()
+	{
+		var configuration = _audioProduction.Configuration;
+		var program = configuration.GetBus(AudioBusId.Program);
+		var sources = configuration.Sources
+			.Select(source => new V1AudioProductionSourceSnapshot(
+				source.SourceId,
+				source.Gain,
+				source.Muted,
+				source.FollowRoutedSource,
+				Array.AsReadOnly(source.BusAssignments.Select(bus => bus.Value).ToArray())))
+			.ToArray();
+		var crossfade = configuration.Crossfade is { } activeCrossfade
+			? new V1AudioCrossfadeSnapshot(
+				activeCrossfade.BusId.Value,
+				activeCrossfade.FromSourceId,
+				activeCrossfade.ToSourceId,
+				activeCrossfade.StartSamplePosition,
+				activeCrossfade.DurationSamples,
+				activeCrossfade.Law)
+			: null;
+		var ducking = configuration.Ducking is { } activeDucking
+			? new V1AudioDuckingSnapshot(
+				activeDucking.BusId.Value,
+				activeDucking.Enabled,
+				activeDucking.SidechainSourceId,
+				Array.AsReadOnly(activeDucking.TargetSourceIds.ToArray()),
+				activeDucking.Threshold,
+				activeDucking.Attenuation,
+				activeDucking.AttackSamples,
+				activeDucking.HoldSamples,
+				activeDucking.ReleaseSamples)
+			: null;
+		var result = _lastAudioProductionResult;
+		return new V1AudioProductionSnapshot(
+			configuration.Revision,
+			program.MasterGain,
+			program.Muted,
+			configuration.ClipStrategy,
+			Array.AsReadOnly(sources),
+			crossfade,
+			ducking,
+			result.LeftPeak,
+			result.RightPeak,
+			result.PreClipPeak,
+			result.Clipping,
+			result.ClippedSampleValues,
+			result.DuckingGain,
+			result.DuckingReduction,
+			result.SidechainAvailable,
+			result.CrossfadeProgress,
+			result.ActiveSourceCount,
+			result.MissingSourceCount);
+	}
+
+	private void ValidateAudioProductionConfigurationUnsafe(AudioProductionConfiguration configuration)
+	{
+		var expectedSources = _audioStreams.Keys.ToHashSet();
+		var configuredSources = configuration.Sources.Select(source => source.SourceId).ToHashSet();
+		if (!expectedSources.SetEquals(configuredSources))
+			throw new ArgumentException("Audio production configuration must contain every admitted Runtime audio source exactly once.", nameof(configuration));
+		if (configuration.Crossfade is { } crossfade)
+		{
+			if (!configuration.GetSource(crossfade.FromSourceId).IsAssignedTo(crossfade.BusId) ||
+				!configuration.GetSource(crossfade.ToSourceId).IsAssignedTo(crossfade.BusId))
+			{
+				throw new ArgumentException("Audio crossfade sources must be assigned to the target bus.", nameof(configuration));
+			}
+		}
+	}
 
 	private V1AudioProgramSnapshot AudioProgramSnapshotUnsafe()
 	{
