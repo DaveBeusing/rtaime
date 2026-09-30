@@ -181,6 +181,65 @@ public sealed class ProductionIpcIntegrationTests
 		Assert.False(generatedAudioOff.TestSignalEnabled);
 		Assert.Equal(revisionBeforeAudio, client.Snapshot!.Production.Revision);
 
+		var confirmedAudioProduction = Assert.IsType<OperatorAudioProductionDescriptor>(client.Snapshot.AudioProduction);
+		var audioProductionRevisionBefore = confirmedAudioProduction.Configuration.Revision;
+		var advancedConfiguration = new AudioProductionConfiguration(
+			checked(audioProductionRevisionBefore + 1),
+			new[] { new AudioProductionBusConfiguration(AudioBusId.Program, 0.75, muted: false) },
+			new[]
+			{
+				new AudioProductionSourceConfiguration(
+					new MediaSourceId(Identity.Parse(sourceA.Id)),
+					0.5,
+					muted: false,
+					followRoutedSource: false,
+					new[] { AudioBusId.Program }),
+				new AudioProductionSourceConfiguration(
+					new MediaSourceId(Identity.Parse(sourceB.Id)),
+					0.25,
+					muted: false,
+					followRoutedSource: false,
+					new[] { AudioBusId.Program })
+			},
+			new AudioCrossfadeConfiguration(
+				AudioBusId.Program,
+				new MediaSourceId(Identity.Parse(sourceA.Id)),
+				new MediaSourceId(Identity.Parse(sourceB.Id)),
+				startSamplePosition: 48_000,
+				durationSamples: 24_000,
+				AudioCrossfadeLaw.EqualPower),
+			new AudioDuckingConfiguration(
+				AudioBusId.Program,
+				enabled: true,
+				new MediaSourceId(Identity.Parse(sourceA.Id)),
+				new[] { new MediaSourceId(Identity.Parse(sourceB.Id)) },
+				threshold: 0.2,
+				attenuation: 0.25,
+				attackSamples: 2_400,
+				holdSamples: 12_000,
+				releaseSamples: 14_400));
+
+		var advancedAudio = await client.SetAudioProductionAsync(advancedConfiguration);
+		Assert.Equal(advancedConfiguration.Revision, advancedAudio.Configuration.Revision);
+		Assert.Equal(0.75, advancedAudio.Configuration.GetBus(AudioBusId.Program).MasterGain, 6);
+		Assert.False(advancedAudio.Configuration.GetSource(new MediaSourceId(Identity.Parse(sourceA.Id))).FollowRoutedSource);
+		Assert.Equal(advancedConfiguration.Revision, runtime.Runtime!.Snapshot.AudioProduction!.Revision);
+		Assert.Equal(advancedConfiguration.Revision, client.Snapshot!.AudioProduction!.Configuration.Revision);
+		Assert.Equal(revisionBeforeAudio, client.Snapshot.Production.Revision);
+
+		var staleAudioProduction = Assert.IsType<OperatorAudioProductionDescriptor>(staleAudioClient.Snapshot!.AudioProduction);
+		var staleConfiguration = new AudioProductionConfiguration(
+			checked(staleAudioProduction.Configuration.Revision + 1),
+			staleAudioProduction.Configuration.Buses,
+			staleAudioProduction.Configuration.Sources,
+			staleAudioProduction.Configuration.Crossfade,
+			staleAudioProduction.Configuration.Ducking,
+			staleAudioProduction.Configuration.ClipStrategy);
+		var staleAudioMutation = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+			await staleAudioClient.SetAudioProductionAsync(staleConfiguration));
+		Assert.Contains("control.audio.production.revision_conflict", staleAudioMutation.Message, StringComparison.Ordinal);
+		Assert.Equal(advancedConfiguration.Revision, client.Snapshot.AudioProduction.Configuration.Revision);
+
 		var revisionBeforeGraphics = client.Snapshot!.Production.Revision;
 		var graphicsAsset = new OperatorGraphicsAsset(
 			"operator-logo.rgba",
