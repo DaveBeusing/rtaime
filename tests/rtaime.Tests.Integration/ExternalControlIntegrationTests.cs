@@ -72,6 +72,23 @@ public sealed class ExternalControlIntegrationTests
 	}
 
 	[Fact]
+	public async Task Capability_discovery_reports_authenticated_role_and_readiness()
+	{
+		await using var fixture = await ExternalFixture.StartAsync(ExternalControlRole.Observer);
+		await using var grpc = fixture.CreateClient();
+
+		var discovery = await grpc.DiscoverAsync();
+
+		Assert.Equal("1.0", discovery.ApiVersion);
+		Assert.Equal("ready", discovery.Readiness);
+		Assert.Equal("test-client", discovery.AuthenticatedClientId);
+		Assert.Equal(nameof(ExternalControlRole.Observer), discovery.AuthenticatedRole);
+		Assert.Contains("control.snapshot.get", discovery.Capabilities);
+		Assert.DoesNotContain(discovery.Capabilities, capability => capability.StartsWith("runtime.", StringComparison.Ordinal));
+		Assert.DoesNotContain(discovery.Capabilities, capability => capability.StartsWith("ai.", StringComparison.Ordinal));
+	}
+
+	[Fact]
 	public async Task Observer_can_read_but_server_denies_production_mutation()
 	{
 		await using var fixture = await ExternalFixture.StartAsync(ExternalControlRole.Observer);
