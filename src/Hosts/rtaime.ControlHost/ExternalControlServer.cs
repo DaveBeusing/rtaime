@@ -79,6 +79,7 @@ public sealed record ExternalControlServerOptions
 	public int RequestBurst { get; init; } = 60;
 	public int MaxRequestBytes { get; init; } = 1024 * 1024;
 	public int MaxResponseBytes { get; init; } = 4 * 1024 * 1024;
+	public TimeSpan RequestTimeout { get; init; } = TimeSpan.FromSeconds(5);
 	public TimeSpan ShutdownTimeout { get; init; } = TimeSpan.FromSeconds(5);
 
 	public string Endpoint => $"https://{BindAddress}:{Port}";
@@ -124,6 +125,7 @@ public sealed record ExternalControlServerOptions
 			RequestBurst = ParseInt(Get(args, environment, "external-request-burst", "RTAIME_EXTERNAL_CONTROL_REQUEST_BURST", defaults.RequestBurst.ToString()), "external-request-burst"),
 			MaxRequestBytes = ParseInt(Get(args, environment, "external-max-request-bytes", "RTAIME_EXTERNAL_CONTROL_MAX_REQUEST_BYTES", defaults.MaxRequestBytes.ToString()), "external-max-request-bytes"),
 			MaxResponseBytes = ParseInt(Get(args, environment, "external-max-response-bytes", "RTAIME_EXTERNAL_CONTROL_MAX_RESPONSE_BYTES", defaults.MaxResponseBytes.ToString()), "external-max-response-bytes"),
+			RequestTimeout = TimeSpan.FromMilliseconds(ParseInt(Get(args, environment, "external-request-timeout-ms", "RTAIME_EXTERNAL_CONTROL_REQUEST_TIMEOUT_MS", ((int)defaults.RequestTimeout.TotalMilliseconds).ToString()), "external-request-timeout-ms")),
 			ShutdownTimeout = TimeSpan.FromMilliseconds(ParseInt(Get(args, environment, "external-shutdown-timeout-ms", "RTAIME_EXTERNAL_CONTROL_SHUTDOWN_TIMEOUT_MS", ((int)defaults.ShutdownTimeout.TotalMilliseconds).ToString()), "external-shutdown-timeout-ms"))
 		};
 	}
@@ -148,6 +150,8 @@ public sealed record ExternalControlServerOptions
 			throw new ArgumentOutOfRangeException(nameof(MaxRequestBytes));
 		if (MaxResponseBytes is < 1024 or > 32 * 1024 * 1024)
 			throw new ArgumentOutOfRangeException(nameof(MaxResponseBytes));
+		if (RequestTimeout <= TimeSpan.Zero || RequestTimeout > TimeSpan.FromMinutes(5))
+			throw new ArgumentOutOfRangeException(nameof(RequestTimeout));
 		if (ShutdownTimeout <= TimeSpan.Zero)
 			throw new ArgumentOutOfRangeException(nameof(ShutdownTimeout));
 		if (string.IsNullOrWhiteSpace(CertificatePath) == string.IsNullOrWhiteSpace(CertificateThumbprint))
@@ -634,6 +638,7 @@ internal sealed class ExternalControlGrpcService : ExternalControl.ExternalContr
 	private readonly ControlHostIpcServer _dispatcher;
 	private readonly ExternalControlSecurityPolicy _security;
 	private readonly ExternalControlResourceLimiter _limiter;
+	private readonly ExternalControlServerOptions _options;
 	private readonly ExternalControlAuditBuffer _audit;
 	private long _subscriptionSequence;
 
@@ -641,11 +646,13 @@ internal sealed class ExternalControlGrpcService : ExternalControl.ExternalContr
 		ControlHostIpcServer dispatcher,
 		ExternalControlSecurityPolicy security,
 		ExternalControlResourceLimiter limiter,
+		ExternalControlServerOptions options,
 		ExternalControlAuditBuffer audit)
 	{
 		_dispatcher = dispatcher;
 		_security = security;
 		_limiter = limiter;
+		_options = options;
 		_audit = audit;
 	}
 
@@ -655,16 +662,19 @@ internal sealed class ExternalControlGrpcService : ExternalControl.ExternalContr
 		ValidateContext(request.Context, principal);
 		var (operation, payload) = MapRequest(request);
 		_security.Authorize(principal, operation);
-		using var lease = await AcquireWithAuditAsync(principal, operation, context.CancellationToken).ConfigureAwait(false);
+		using var operationTimeout = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken);
+		operationTimeout.CancelAfter(_options.RequestTimeout);
+		var operationToken = operationTimeout.Token;
 		try
 		{
+			using var lease = await AcquireWithAuditAsync(principal, operation, operationToken).ConfigureAwait(false);
 			var result = await _dispatcher.DispatchExternalAsync(
 				operation,
 				request.Context.RequestId,
 				request.Context.CorrelationId,
 				principal.ClientId,
 				payload,
-				context.CancellationToken).ConfigureAwait(false);
+				operationToken).ConfigureAwait(false);
 			var reply = new ExternalControlReply
 			{
 				ApiVersion = ExternalControlServerOptions.ApiVersion,
@@ -693,9 +703,19 @@ internal sealed class ExternalControlGrpcService : ExternalControl.ExternalContr
 			return reply;
 		}
 		catch (RpcException) { throw; }
-		catch (OperationCanceledException) when (context.CancellationToken.IsCancellationRequested)
+		catch (OperationCanceledException) when (operationToken.IsCancellationRequested)
 		{
-			throw new RpcException(new Status(StatusCode.Cancelled, "External control request was cancelled."));
+			if (context.CancellationToken.IsCancellationRequested)
+				throw new RpcException(new Status(StatusCode.Cancelled, "External control request was cancelled."));
+			_audit.Add(new ExternalControlAuditRecord(
+				DateTimeOffset.UtcNow,
+				"deadline",
+				principal.ClientId,
+				principal.Role.ToString(),
+				operation,
+				"rejected",
+				"External control server request deadline exceeded."));
+			throw new RpcException(new Status(StatusCode.DeadlineExceeded, "External control server request deadline exceeded."));
 		}
 		catch (InvalidDataException exception)
 		{
