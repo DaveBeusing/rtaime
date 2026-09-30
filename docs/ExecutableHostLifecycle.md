@@ -93,6 +93,7 @@ Optional secure external ControlHost access additionally uses:
 - `RTAIME_EXTERNAL_CONTROL_REQUEST_BURST`
 - `RTAIME_EXTERNAL_CONTROL_MAX_REQUEST_BYTES`
 - `RTAIME_EXTERNAL_CONTROL_MAX_RESPONSE_BYTES`
+- `RTAIME_EXTERNAL_CONTROL_REQUEST_TIMEOUT_MS`
 - `RTAIME_EXTERNAL_CONTROL_SHUTDOWN_TIMEOUT_MS`
 
 The external endpoint is disabled by default and uses loopback by default when enabled. It is an additional gRPC/TLS boundary on ControlHost; local Named Pipe control remains available and RuntimeHost/AIHost do not become externally addressable. See `docs/ExternalControlDeployment.md`.
