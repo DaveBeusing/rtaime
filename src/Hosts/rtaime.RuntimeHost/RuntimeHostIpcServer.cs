@@ -645,7 +645,29 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		snapshot.AuthoritativeActive,
 		(int)snapshot.HealthState,
 		snapshot.Evidence,
-		snapshot.Error is { } error ? new WireFailure(error.Code, error.Message) : null);
+		snapshot.Error is { } error ? new WireFailure(error.Code, error.Message) : null,
+		snapshot.NetworkOutput is null ? null : ToWire(snapshot.NetworkOutput));
+
+	private static WireNetworkOutput ToWire(NetworkOutputHealthSnapshot snapshot) => new(
+		snapshot.TargetId,
+		snapshot.Provider,
+		(int)snapshot.Protocol,
+		snapshot.SafeTargetIdentity,
+		(int)snapshot.Lifecycle,
+		snapshot.Connected,
+		snapshot.VideoBitRate,
+		snapshot.AudioBitRate,
+		snapshot.LatencyMilliseconds,
+		snapshot.Statistics.AcceptedSamples,
+		snapshot.Statistics.SentSamples,
+		snapshot.Statistics.DroppedSamples,
+		snapshot.Statistics.RejectedSamples,
+		snapshot.Statistics.ReconnectCount,
+		snapshot.Statistics.PacketsSent,
+		snapshot.Statistics.BytesSent,
+		snapshot.Statistics.QueueDepth,
+		snapshot.LastSuccessfulSendUtc,
+		snapshot.Failure is { } failure ? new WireFailure(failure.Code, failure.Message) : null);
 
 	private static WireProductionCgTextSnapshot ToWire(V1ProductionCgTextSnapshot snapshot) => new(
 		snapshot.Active,
@@ -955,7 +977,27 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 	private sealed record WireAIShowcaseState(bool Enabled);
 	private sealed record WireAIShowcase(bool Enabled, string Feature, string Status, string Provider, long InferenceTimeTicks, uint PersonRegionCount, ulong? SourceSequence, ulong? AppliedSequence, double? Confidence, bool EffectVisible, WireFailure? Failure, DateTimeOffset? UpdatedAtUtc);
 	private sealed record WireAvSyncDiagnostics(bool Enabled, string State, ulong? EventId, string? ExpectedMediaTime, ulong? TargetVideoFrameSequence, ulong? TargetAudioSamplePosition, double? ScheduledVideoOffsetMilliseconds, double? SubmitOffsetMilliseconds, double? DriftFromBaselineMilliseconds, string Detail);
-	private sealed record WireOutputRole(string RoleId, string RoleKind, string SourceId, string TargetId, WireVideoFormat Format, long TimingNumerator, long TimingDenominator, string ProviderId, int LifecycleState, bool AuthoritativeActive, int HealthState, string Evidence, WireFailure? Error);
+	private sealed record WireNetworkOutput(
+		string TargetId,
+		string Provider,
+		int Protocol,
+		string SafeTargetIdentity,
+		int Lifecycle,
+		bool Connected,
+		uint VideoBitRate,
+		uint AudioBitRate,
+		int LatencyMilliseconds,
+		ulong AcceptedSamples,
+		ulong SentSamples,
+		ulong DroppedSamples,
+		ulong RejectedSamples,
+		ulong ReconnectCount,
+		ulong PacketsSent,
+		ulong BytesSent,
+		int QueueDepth,
+		DateTimeOffset? LastSuccessfulSendUtc,
+		WireFailure? Failure);
+	private sealed record WireOutputRole(string RoleId, string RoleKind, string SourceId, string TargetId, WireVideoFormat Format, long TimingNumerator, long TimingDenominator, string ProviderId, int LifecycleState, bool AuthoritativeActive, int HealthState, string Evidence, WireFailure? Error, WireNetworkOutput? NetworkOutput = null);
 	private sealed record WireRecordingCommandResult(bool Succeeded, WireRecordingSnapshot Snapshot, WireFailure? Failure);
 	private sealed record WireMediaAssetProbe(string Path, string AssetId);
 	private sealed record WireMediaAssetProbeResult(WireLocalMediaProbe? Probe, WireFailure? Failure);
