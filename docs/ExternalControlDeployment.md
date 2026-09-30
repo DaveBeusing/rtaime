@@ -149,6 +149,12 @@ Supported server trust modes are:
 
 The client can also load a PFX client certificate or a PEM certificate/private-key pair for mTLS.
 
+## Client SDK discovery
+
+`GrpcOperatorControlTransport.DiscoverAsync` performs the versioned `ping` operation and returns the active API version, ControlHost instance identity, remote StateVersion, readiness projection, authenticated client identity/role and the advertised external-control capabilities.
+
+This discovery surface is intentionally specific to the gRPC transport. Production-control operations continue to use the shared `IOperatorControlTransport` abstraction so Operator production logic does not branch on local versus external transport.
+
 ## API and compatibility
 
 The first external API is `rtaime.external_control.v1`, with API version `1.0`.
