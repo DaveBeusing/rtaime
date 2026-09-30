@@ -250,6 +250,9 @@ public sealed class OperatorMonitoringPlaneTests
 		Assert.Equal(2, tap.Statistics.ActiveSharedResources);
 		Assert.Equal(2, gpu.SharedMonitoringResourceStatistics.ActiveResources);
 
+		Assert.Equal(GpuProcessingProvider.SharedMonitoringResourceCapacity, peakProviderResources);
+		Assert.Equal(0UL, gpu.SharedMonitoringResourceStatistics.RejectedExports);
+
 		await subscription.DisposeAsync();
 
 		Assert.Equal(0, tap.Statistics.ActiveSharedResources);
@@ -395,6 +398,7 @@ public sealed class OperatorMonitoringPlaneTests
 			StringComparison.Ordinal)
 			? 2048
 			: 128;
+		var peakProviderResources = 0;
 
 		for (var iteration = 0; iteration < iterations; iteration++)
 		{
@@ -416,6 +420,13 @@ public sealed class OperatorMonitoringPlaneTests
 
 			Assert.True(gpu.TryExportMonitoringResource(previewFrame, out var previewResource));
 			Assert.True(gpu.TryExportMonitoringResource(programFrame, out var programResource));
+			peakProviderResources = Math.Max(
+				peakProviderResources,
+				gpu.SharedMonitoringResourceStatistics.ActiveResources);
+			Assert.InRange(
+				gpu.SharedMonitoringResourceStatistics.ActiveResources,
+				1,
+				GpuProcessingProvider.SharedMonitoringResourceCapacity);
 			var sources = tap.CaptureSources(
 				SourceA,
 				Solid(format, 10, 20, 30),
