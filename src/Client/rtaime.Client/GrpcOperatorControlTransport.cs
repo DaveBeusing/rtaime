@@ -72,6 +72,15 @@ public sealed record ExternalControlStateNotification(
 	ulong Sequence,
 	bool RequiresResynchronization);
 
+public sealed record ExternalControlCapabilitySnapshot(
+	string ApiVersion,
+	string HostInstanceId,
+	ulong StateVersion,
+	string Readiness,
+	string AuthenticatedClientId,
+	string AuthenticatedRole,
+	IReadOnlyList<string> Capabilities);
+
 public sealed class GrpcOperatorControlTransport : IOperatorControlTransport, IAsyncDisposable
 {
 	private const string ApiVersion = "1.0";
@@ -123,6 +132,25 @@ public sealed class GrpcOperatorControlTransport : IOperatorControlTransport, IA
 	public string? HostInstanceId => _synchronizer.HostInstanceId;
 	public ulong StateVersion => _synchronizer.StateVersion;
 	public bool RequiresFullSnapshot { get { lock (_gate) return _requiresFullSnapshot; } }
+
+	public async ValueTask<ExternalControlCapabilitySnapshot> DiscoverAsync(CancellationToken cancellationToken = default)
+	{
+		var request = Request();
+		request.Ping = new EmptyRequest();
+		var reply = await ExecuteAsync(request, snapshot: false, cancellationToken).ConfigureAwait(false);
+		using var payload = JsonDocument.Parse(reply.PayloadJson.Span);
+		var readiness = payload.RootElement.TryGetProperty("status", out var status)
+			? status.GetString() ?? "unknown"
+			: "unknown";
+		return new ExternalControlCapabilitySnapshot(
+			reply.ApiVersion,
+			reply.HostInstanceId,
+			reply.StateVersion,
+			readiness,
+			reply.AuthenticatedClientId,
+			reply.AuthenticatedRole,
+			reply.Capabilities.ToArray());
+	}
 
 	public async ValueTask<OperatorStatusSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default)
 	{
