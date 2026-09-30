@@ -229,6 +229,8 @@ public sealed record NetworkOutputHealthSnapshot
 		bool connected,
 		VideoFormat videoFormat,
 		AudioFormat audioFormat,
+		NetworkOutputVideoCodec videoCodec,
+		NetworkOutputAudioCodec audioCodec,
 		uint videoBitRate,
 		uint audioBitRate,
 		int latencyMilliseconds,
