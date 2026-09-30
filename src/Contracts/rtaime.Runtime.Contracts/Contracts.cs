@@ -127,7 +127,8 @@ public sealed record RuntimeOutputRoleSnapshot
         bool authoritativeActive,
         RuntimeOutputRoleHealthState healthState,
         string evidence,
-        Failure? error = null)
+        Failure? error = null,
+        NetworkOutputHealthSnapshot? networkOutput = null)
     {
         if (string.IsNullOrWhiteSpace(roleId))
             throw new ArgumentException("Output role identity is required.", nameof(roleId));
@@ -156,6 +157,7 @@ public sealed record RuntimeOutputRoleSnapshot
         HealthState = healthState;
         Evidence = evidence.Trim();
         Error = error;
+        NetworkOutput = networkOutput;
     }
 
     public string RoleId { get; }
@@ -170,6 +172,7 @@ public sealed record RuntimeOutputRoleSnapshot
     public RuntimeOutputRoleHealthState HealthState { get; }
     public string Evidence { get; }
     public Failure? Error { get; }
+    public NetworkOutputHealthSnapshot? NetworkOutput { get; }
 }
 
 public enum PreparedCompositingLayerKind
