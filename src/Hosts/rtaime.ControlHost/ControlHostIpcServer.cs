@@ -722,16 +722,67 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			if (!control.Specification.Sources.Any(source => source.SourceId.Value == sourceId.Value))
 				return Error(request, "control.audio.source.unknown", "Audio input must belong to an authoritative production source.");
 
+			AudioProductionConfiguration? rollbackConfiguration = null;
 			try
 			{
-				var snapshot = await _runtimeTransport
-					.SetAudioInputStateAsync(sourceId, wire.Gain, wire.Muted, cancellationToken)
+				var current = await _runtimeTransport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
+				if (current.AudioProduction is null)
+				{
+					var legacySnapshot = await _runtimeTransport
+						.SetAudioInputStateAsync(sourceId, wire.Gain, wire.Muted, cancellationToken)
+						.ConfigureAwait(false);
+					NotifyObservableStateChanged();
+					return Success(request, "control.audio.input.response", ToWire(legacySnapshot));
+				}
+
+				rollbackConfiguration = current.AudioProduction.Configuration;
+				if (rollbackConfiguration.Revision == ulong.MaxValue)
+					throw new InvalidOperationException("Audio production revision cannot advance beyond UInt64.MaxValue.");
+				var sources = rollbackConfiguration.Sources
+					.Select(source => source.SourceId == sourceId
+						? new AudioProductionSourceConfiguration(
+							source.SourceId,
+							wire.Gain,
+							wire.Muted,
+							source.FollowRoutedSource,
+							source.BusAssignments)
+						: source)
+					.ToArray();
+				var requested = new AudioProductionConfiguration(
+					rollbackConfiguration.Revision + 1,
+					rollbackConfiguration.Buses,
+					sources,
+					rollbackConfiguration.Crossfade,
+					rollbackConfiguration.Ducking,
+					rollbackConfiguration.ClipStrategy);
+				var confirmed = await _runtimeTransport
+					.SetAudioProductionAsync(requested, cancellationToken)
 					.ConfigureAwait(false);
+
+				if (_showProjectStore is not null && _showProject is not null)
+				{
+					_showProject = await _showProjectStore
+						.UpdateAudioProductionAsync(control.Specification, confirmed.Configuration, cancellationToken)
+						.ConfigureAwait(false);
+				}
+				_durableAudioProduction = confirmed.Configuration;
+				var confirmedRuntime = await _runtimeTransport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
+				if (!confirmedRuntime.AudioInputs.TryGetValue(sourceId, out var snapshot))
+					throw new InvalidDataException("Runtime did not confirm the updated audio input.");
 				NotifyObservableStateChanged();
 				return Success(request, "control.audio.input.response", ToWire(snapshot));
 			}
 			catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or NotSupportedException or FormatException or InvalidDataException or IOException)
 			{
+				if (rollbackConfiguration is not null)
+				{
+					try { await _runtimeTransport.SetAudioProductionAsync(rollbackConfiguration, cancellationToken).ConfigureAwait(false); }
+					catch
+					{
+						_showProjectState = "DEGRADED";
+						_showProjectDetail = "Audio input mutation failed and Runtime mixer rollback could not be confirmed.";
+					}
+				}
 				return Error(request, "control.audio.input.rejected", exception.Message);
 			}
 		}
