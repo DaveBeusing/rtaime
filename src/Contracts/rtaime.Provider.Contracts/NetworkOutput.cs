@@ -58,6 +58,8 @@ public sealed record NetworkOutputConfiguration
 		NetworkOutputConnectionMode mode,
 		VideoFormat videoFormat,
 		AudioFormat audioFormat,
+		NetworkOutputVideoCodec videoCodec,
+		NetworkOutputAudioCodec audioCodec,
 		uint videoBitRate,
 		uint audioBitRate,
 		int latencyMilliseconds,
@@ -238,6 +240,8 @@ public sealed record NetworkOutputHealthSnapshot
 		if (string.IsNullOrWhiteSpace(provider)) throw new ArgumentException("Provider identity is required.", nameof(provider));
 		if (string.IsNullOrWhiteSpace(safeTargetIdentity)) throw new ArgumentException("Safe target identity is required.", nameof(safeTargetIdentity));
 		if (!Enum.IsDefined(lifecycle)) throw new ArgumentOutOfRangeException(nameof(lifecycle));
+		if (!Enum.IsDefined(videoCodec)) throw new ArgumentOutOfRangeException(nameof(videoCodec));
+		if (!Enum.IsDefined(audioCodec)) throw new ArgumentOutOfRangeException(nameof(audioCodec));
 		if (lifecycle == NetworkOutputLifecycleState.Connected && !connected)
 			throw new ArgumentException("Connected lifecycle requires connected transport state.", nameof(connected));
 		if (lifecycle == NetworkOutputLifecycleState.Faulted && failure is null)
@@ -251,6 +255,8 @@ public sealed record NetworkOutputHealthSnapshot
 		Connected = connected;
 		VideoFormat = videoFormat;
 		AudioFormat = audioFormat;
+		VideoCodec = videoCodec;
+		AudioCodec = audioCodec;
 		VideoBitRate = videoBitRate;
 		AudioBitRate = audioBitRate;
 		LatencyMilliseconds = latencyMilliseconds;
@@ -267,6 +273,8 @@ public sealed record NetworkOutputHealthSnapshot
 	public bool Connected { get; }
 	public VideoFormat VideoFormat { get; }
 	public AudioFormat AudioFormat { get; }
+	public NetworkOutputVideoCodec VideoCodec { get; }
+	public NetworkOutputAudioCodec AudioCodec { get; }
 	public uint VideoBitRate { get; }
 	public uint AudioBitRate { get; }
 	public int LatencyMilliseconds { get; }
