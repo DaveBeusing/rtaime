@@ -605,10 +605,24 @@ public sealed class GrpcOperatorControlTransport : IOperatorControlTransport, IA
 		{
 			var keyPath = Path.GetFullPath(options.ClientCertificateKeyPath);
 			if (!File.Exists(keyPath)) throw new FileNotFoundException("External control client certificate key was not found.", keyPath);
-			return X509Certificate2.CreateFromPemFile(path, keyPath);
+			return LoadPemCertificate(path, keyPath);
 		}
-		return X509CertificateLoader.LoadPkcs12FromFile(path, options.ClientCertificatePassword, X509KeyStorageFlags.EphemeralKeySet);
+		return X509CertificateLoader.LoadPkcs12FromFile(path, options.ClientCertificatePassword, TlsKeyStorageFlags);
 	}
+
+	private static X509Certificate2 LoadPemCertificate(string certificatePath, string keyPath)
+	{
+		using var certificate = X509Certificate2.CreateFromPemFile(certificatePath, keyPath);
+		return X509CertificateLoader.LoadPkcs12(
+			certificate.Export(X509ContentType.Pkcs12),
+			password: null,
+			TlsKeyStorageFlags);
+	}
+
+	private static X509KeyStorageFlags TlsKeyStorageFlags =>
+		OperatingSystem.IsWindows()
+			? X509KeyStorageFlags.DefaultKeySet
+			: X509KeyStorageFlags.EphemeralKeySet;
 
 	private static string NormalizeThumbprint(string? thumbprint) =>
 		(thumbprint ?? string.Empty).Replace(" ", string.Empty, StringComparison.Ordinal).ToUpperInvariant();
