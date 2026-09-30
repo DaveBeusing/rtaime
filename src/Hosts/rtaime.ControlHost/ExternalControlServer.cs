@@ -447,7 +447,7 @@ internal sealed class ExternalControlSecurityPolicy
 				string.Equals(ExternalControlServerOptions.NormalizeThumbprint(candidate.CertificateThumbprint), thumbprint, StringComparison.OrdinalIgnoreCase) &&
 				(string.IsNullOrWhiteSpace(declaredClientId) || string.Equals(candidate.ClientId, declaredClientId, StringComparison.Ordinal)));
 			if (identity is not null)
-				return new ExternalControlPrincipal(identity.ClientId, identity.Role, clientName, clientVersion);
+				return Accept(identity, clientName, clientVersion, "client-certificate");
 		}
 
 		if (!string.IsNullOrWhiteSpace(declaredClientId))
@@ -460,12 +460,29 @@ internal sealed class ExternalControlSecurityPolicy
 				var expected = _environment(identity.TokenEnvironmentVariable!);
 				var supplied = BearerToken(headers);
 				if (!string.IsNullOrEmpty(expected) && !string.IsNullOrEmpty(supplied) && FixedTimeEquals(expected, supplied))
-					return new ExternalControlPrincipal(identity.ClientId, identity.Role, clientName, clientVersion);
+					return Accept(identity, clientName, clientVersion, "bearer-token");
 			}
 		}
 
 		_audit.Add(new ExternalControlAuditRecord(DateTimeOffset.UtcNow, "authentication", declaredClientId ?? "unknown", "none", "connect", "denied", "Client authentication failed."));
 		throw new RpcException(new Status(StatusCode.Unauthenticated, "External control authentication failed."));
+	}
+
+	private ExternalControlPrincipal Accept(
+		ExternalControlIdentityOptions identity,
+		string clientName,
+		string clientVersion,
+		string mechanism)
+	{
+		_audit.Add(new ExternalControlAuditRecord(
+			DateTimeOffset.UtcNow,
+			"authentication",
+			identity.ClientId,
+			identity.Role.ToString(),
+			"connect",
+			"accepted",
+			$"Client authenticated using {mechanism}."));
+		return new ExternalControlPrincipal(identity.ClientId, identity.Role, clientName, clientVersion);
 	}
 
 	public void Authorize(ExternalControlPrincipal principal, string operation)
@@ -634,11 +651,11 @@ internal sealed class ExternalControlGrpcService : ExternalControl.ExternalContr
 
 	public override async Task<ExternalControlReply> Execute(ExternalControlRequest request, ServerCallContext context)
 	{
-		ValidateContext(request.Context);
 		var principal = _security.Authenticate(context);
+		ValidateContext(request.Context, principal);
 		var (operation, payload) = MapRequest(request);
 		_security.Authorize(principal, operation);
-		using var lease = await _limiter.AcquireAsync(principal.ClientId, context.CancellationToken).ConfigureAwait(false);
+		using var lease = await AcquireWithAuditAsync(principal, operation, context.CancellationToken).ConfigureAwait(false);
 		try
 		{
 			var result = await _dispatcher.DispatchExternalAsync(
@@ -691,10 +708,10 @@ internal sealed class ExternalControlGrpcService : ExternalControl.ExternalContr
 		IServerStreamWriter<StateNotification> responseStream,
 		ServerCallContext context)
 	{
-		ValidateContext(request.Context);
 		var principal = _security.Authenticate(context);
+		ValidateContext(request.Context, principal);
 		_security.Authorize(principal, "control.snapshot.get");
-		using var lease = await _limiter.AcquireAsync(principal.ClientId, context.CancellationToken).ConfigureAwait(false);
+		using var lease = await AcquireWithAuditAsync(principal, "control.snapshot.get", context.CancellationToken).ConfigureAwait(false);
 		var interval = TimeSpan.FromMilliseconds(Math.Clamp(request.MinimumIntervalMs == 0 ? 250u : request.MinimumIntervalMs, 100u, 5000u));
 		var lastHost = _dispatcher.HostInstanceId;
 		var lastVersion = _dispatcher.StateVersion;
@@ -828,18 +845,67 @@ internal sealed class ExternalControlGrpcService : ExternalControl.ExternalContr
 		return (operation, payload);
 	}
 
-	private static void ValidateContext(RequestContext? context)
+	private async ValueTask<IDisposable> AcquireWithAuditAsync(
+		ExternalControlPrincipal principal,
+		string operation,
+		CancellationToken cancellationToken)
 	{
-		if (context is null) throw new RpcException(new Status(StatusCode.InvalidArgument, "External control request context is required."));
-		if (!string.Equals(context.ApiVersion, ExternalControlServerOptions.ApiVersion, StringComparison.Ordinal))
-			throw new RpcException(new Status(StatusCode.FailedPrecondition, "External control API version is unsupported."));
-		if (!Guid.TryParse(context.RequestId, out _))
-			throw new RpcException(new Status(StatusCode.InvalidArgument, "External control RequestId must be a GUID."));
-		if (!Guid.TryParse(context.CorrelationId, out _))
-			throw new RpcException(new Status(StatusCode.InvalidArgument, "External control CorrelationId must be a GUID."));
-		if (context.ClientName.Length > 128 || context.ClientVersion.Length > 64)
-			throw new RpcException(new Status(StatusCode.InvalidArgument, "External control client metadata exceeds configured bounds."));
+		try
+		{
+			return await _limiter.AcquireAsync(principal.ClientId, cancellationToken).ConfigureAwait(false);
+		}
+		catch (RpcException exception) when (exception.StatusCode == StatusCode.ResourceExhausted)
+		{
+			_audit.Add(new ExternalControlAuditRecord(
+				DateTimeOffset.UtcNow,
+				"resource-limit",
+				principal.ClientId,
+				principal.Role.ToString(),
+				operation,
+				"rejected",
+				exception.Status.Detail));
+			throw;
+		}
 	}
+
+	private void ValidateContext(RequestContext? context, ExternalControlPrincipal principal)
+	{
+		if (context is null)
+		{
+			AuditContextRejection(principal, "request.context.missing", "External control request context is required.");
+			throw new RpcException(new Status(StatusCode.InvalidArgument, "External control request context is required."));
+		}
+		if (!string.Equals(context.ApiVersion, ExternalControlServerOptions.ApiVersion, StringComparison.Ordinal))
+		{
+			AuditContextRejection(principal, "api.version.unsupported", "External control API version is unsupported.");
+			throw new RpcException(new Status(StatusCode.FailedPrecondition, "External control API version is unsupported."));
+		}
+		if (!Guid.TryParse(context.RequestId, out _))
+		{
+			AuditContextRejection(principal, "request.id.invalid", "External control RequestId must be a GUID.");
+			throw new RpcException(new Status(StatusCode.InvalidArgument, "External control RequestId must be a GUID."));
+		}
+		if (!Guid.TryParse(context.CorrelationId, out _))
+		{
+			AuditContextRejection(principal, "correlation.id.invalid", "External control CorrelationId must be a GUID.");
+			throw new RpcException(new Status(StatusCode.InvalidArgument, "External control CorrelationId must be a GUID."));
+		}
+		if (context.ClientName.Length > 128 || context.ClientVersion.Length > 64)
+		{
+			AuditContextRejection(principal, "client.metadata.oversized", "External control client metadata exceeds configured bounds.");
+			throw new RpcException(new Status(StatusCode.InvalidArgument, "External control client metadata exceeds configured bounds."));
+		}
+	}
+
+	private void AuditContextRejection(ExternalControlPrincipal principal, string code, string detail) =>
+		_audit.Add(new ExternalControlAuditRecord(
+			DateTimeOffset.UtcNow,
+			"request-validation",
+			principal.ClientId,
+			principal.Role.ToString(),
+			code,
+			"rejected",
+			detail));
 
 	private static string? NullIfEmpty(string value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 	private static string Bounded(string value, int length) => value.Length <= length ? value : value[..length];
