@@ -887,14 +887,12 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				AnchoredTransition? boundaryTransition;
 				VirtualVideoOutput programOutput;
 				bool avSyncEnabled;
-				AudioBufferDescriptor audioBuffer;
+				AudioBufferDescriptor routedAudioBuffer;
+				AudioBufferDescriptor programAudioBuffer;
 				AudioFollowVideoResult audio;
 				byte[] programAudioPayload;
-				byte[]? generatedAudioPayload;
-				byte[]? externalAudioPayload;
 				AudioStereoMeter measuredAudio;
 				AudioBufferDescriptor? afvBuffer;
-				GeneratedAudioTestSignalFrameInfo? generatedAudioFrame;
 				AvSyncAudioEventObservation? audioSyncEvent;
 				V1VisualLayerMode visualLayerMode;
 				RuntimeMonitoringSourceSnapshot? monitoringSources;
@@ -995,43 +993,25 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 						ResolveTransition(committedSource, sequence, gpuFrames);
 					materializedLayers = MaterializeLayers(fromFrame.Descriptor.Timing);
 
-					AudioMeterObservation audioObservation;
-					bool hasGeneratedSignal;
-					GeneratedAudioTestSignalGenerator? audioTestSignal;
 					lock (_gate)
 					{
 						RefreshVirtualAudioMetersUnsafe(sequence);
-						audioObservation = _audioMeters[routedAudioSource];
-						hasGeneratedSignal = _audioTestSignals.TryGetValue(routedAudioSource, out audioTestSignal);
+						PrepareAudioProductionBlockUnsafe(
+							sequence,
+							routedAudioSource,
+							out routedAudioBuffer,
+							out measuredAudio,
+							out afvBuffer);
+						programAudioBuffer = CreateProgramAudioBuffer(sequence);
 						visualLayerMode = (_operatorGraphicsVisible || _productionCgText.Visible)
 							? V1VisualLayerMode.Static
 							: _visualLayerMode;
 						recordingActive = _recorder.Snapshot.State == RecordingLifecycleState.Recording;
 					}
 
-					var audioPacket = _virtualAudio.GetSource(routedAudioSource).GeneratePacket(sequence);
-					audioBuffer = audioPacket.Descriptor;
 					audioSyncEvent = avSyncEnabled
-						? _avSyncTimeline.InspectAudio(audioBuffer.Timing, _format.FrameRate, audioBuffer.Format.SampleRate)
+						? _avSyncTimeline.InspectAudio(routedAudioBuffer.Timing, _format.FrameRate, routedAudioBuffer.Format.SampleRate)
 						: null;
-					GeneratedAudioTestSignalFrameInfo generatedFrame = default;
-					generatedAudioPayload = hasGeneratedSignal
-						? MaterializeGeneratedAudioPayload(audioBuffer, audioTestSignal!, out generatedFrame)
-						: null;
-					generatedAudioFrame = hasGeneratedSignal ? generatedFrame : null;
-					externalAudioPayload = !hasGeneratedSignal && audioObservation.External
-						? ConsumeExternalAudioPayloadUnsafe(routedAudioSource, audioBuffer)
-						: null;
-					measuredAudio = generatedAudioPayload is not null
-						? new AudioStereoMeter(generatedFrame.LeftPeakLevel, generatedFrame.RightPeakLevel)
-						: externalAudioPayload is { Length: > 0 }
-							? AudioMetering.MeasureInterleavedStereoFloat32(externalAudioPayload)
-							: audioObservation.Meter;
-					afvBuffer = hasGeneratedSignal
-						? audioBuffer
-						: audioObservation.External && !audioObservation.Available
-							? null
-							: audioBuffer;
 				}
 
 				GpuProcessingResult composite;
@@ -1069,11 +1049,17 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 						sequence,
 						afvBuffer,
 						measuredAudio);
-					programAudioPayload = generatedAudioPayload is not null
-						? ApplyAudioStateToPayloadInPlace(generatedAudioPayload, audio)
-						: externalAudioPayload is { Length: > 0 }
-							? ApplyAudioStateToPayload(externalAudioPayload, audio)
-							: MaterializeReferenceAudioPayload(audioBuffer, audio);
+					var requiredProgramAudioValues = checked((int)(
+						programAudioBuffer.Timing.SampleCount * programAudioBuffer.Format.ChannelCount));
+					_lastAudioProductionResult = _audioProduction.ProcessBus(
+						AudioBusId.Program,
+						programAudioBuffer.Timing.SamplePosition,
+						programAudioBuffer.Timing.SampleCount,
+						routedAudioSource,
+						_audioProductionSourceBuffers,
+						_programAudioMixSamples.AsSpan(0, requiredProgramAudioValues));
+					programAudioPayload = MemoryMarshal.AsBytes(
+						_programAudioMixSamples.AsSpan(0, requiredProgramAudioValues)).ToArray();
 					var videoSyncEvent = avSyncEnabled
 						? _motionTimingTestSignal.InspectSyncEvent(output.Descriptor.Timing)
 						: default;
@@ -1156,7 +1142,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 
 						try
 						{
-							recording = _recordingBridge.TryRecordCommittedProgram(execution, output.Descriptor, audioBuffer);
+							recording = _recordingBridge.TryRecordCommittedProgram(execution, output.Descriptor, programAudioBuffer);
 						}
 						catch (Exception exception)
 						{
@@ -1179,7 +1165,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 							"program",
 							pixels.Retain(),
 							output.Descriptor.Timing,
-							audioBuffer,
+							programAudioBuffer,
 							programAudioPayload);
 						if (networkOutput is { Status: not NetworkOutputEnqueueStatus.Accepted })
 							Observe($"network.output.program:{networkOutput.Status}:{networkOutput.Failure?.Code}");
@@ -1200,7 +1186,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 								"aux",
 								auxPixels,
 								networkAuxFrame.Timing,
-								audioBuffer,
+								programAudioBuffer,
 								programAudioPayload);
 							if (networkOutput is { Status: not NetworkOutputEnqueueStatus.Accepted })
 								Observe($"network.output.aux:{networkOutput.Status}:{networkOutput.Failure?.Code}");
@@ -1223,8 +1209,6 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 						_auxFailure = auxFailure;
 						_lastAudioResult = audio;
 						_publishedAudioStatistics = _audio.Statistics;
-						if (generatedAudioFrame is { } publishedGeneratedFrame)
-							_audioTestSignalFrames[routedAudioSource] = publishedGeneratedFrame;
 						_lastCompositionDuration = composite.Duration;
 						_lastCompositingLayerCount = composite.LayerCount;
 						if (avSyncEnabled && videoSyncEvent.IsFlashFrame)
@@ -1249,7 +1233,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 						pixels,
 						probe,
 						audio,
-						audioBuffer,
+						programAudioBuffer,
 						programAudioPayload,
 						recording,
 						transitionKind,
