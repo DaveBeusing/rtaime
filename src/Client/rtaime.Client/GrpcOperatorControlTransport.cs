@@ -374,7 +374,7 @@ public sealed class GrpcOperatorControlTransport : IOperatorControlTransport, IA
 		return NamedPipeOperatorControlTransport.DecodeExternalMediaDeck((await ExecuteAsync(request, false, cancellationToken).ConfigureAwait(false)).PayloadJson.Span);
 	}
 
-	public async ValueTask<MediaDeckSnapshot> OpenMediaDeckAsync(MediaDeckOpenRequest command, CancellationToken cancellationToken = default)
+	public async ValueTask<MediaDeckSnapshot> OpenMediaDeckAsync(rtaime.Media.Contracts.MediaDeckOpenRequest command, CancellationToken cancellationToken = default)
 	{
 		var request = Request();
 		request.OpenMediaDeck = new Rtaime.ExternalControl.V1.MediaDeckOpenRequest { ContractVersion = command.Version.ToString(), SourceId = command.SourceId.ToString(), Path = command.Path, AssetId = command.AssetId?.ToString() ?? string.Empty };
