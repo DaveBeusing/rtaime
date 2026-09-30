@@ -53,6 +53,32 @@ Production qualification must therefore verify the service account, filesystem A
 
 Operator remains an independent client process and does not acquire service-account privileges merely by connecting to the engine.
 
+
+## Secure external control boundary
+
+ControlHost can expose an optional gRPC control listener over TLS. The listener is disabled by default and binds to loopback by default. Enabling a non-loopback listener is an explicit deployment decision and does not expose RuntimeHost or AIHost directly.
+
+The external boundary requires authenticated client identity and server-side authorization. Observer clients are read-only; Operator clients can execute normal production-control operations; administrative capability is granted only where an administrative operation is explicitly implemented. UI visibility is never treated as authorization.
+
+TLS server identity can come from a PFX/PKCS#12 file, a PEM certificate/private-key pair or the Windows certificate store. Optional mTLS binds client certificates to configured identities. Bearer-token identities reference an environment-variable name; the token value itself is not source-controlled configuration.
+
+The following material must never be committed or embedded in release artifacts:
+
+- production private keys;
+- client private keys;
+- certificate passwords;
+- bearer tokens or other external-control credentials.
+
+Repository security gates reject tracked private-key-like files and PEM private-key material. Test certificates are generated at test runtime rather than committed.
+
+The production client trust mode is normal platform validation or explicit server-certificate pinning. The `TestOnlyInsecure` trust mode is for isolated tests only and is not an accepted production deployment configuration.
+
+Request/response sizes, connection count, per-client in-flight operations and request rate are bounded. Authentication failure, authorization denial, incompatible API versions, malformed requests, oversized messages and rate-limit violations fail closed without transferring Production Authority.
+
+Public-Internet exposure, enterprise certificate lifecycle operations, external revocation infrastructure and WAN security/performance qualification remain unverified unless separate deployment evidence is recorded.
+
+See `docs/ExternalControlDeployment.md`.
+
 ## Supported versions
 
 The project has not yet established a production support-period declaration. Until such a declaration is approved and release evidence is updated, support-period status remains `UNVERIFIED`.
