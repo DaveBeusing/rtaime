@@ -92,7 +92,7 @@ public sealed record NetworkOutputConfiguration
 			throw new ArgumentOutOfRangeException(nameof(audioBitRate));
 		if (latencyMilliseconds is < 20 or > 8000)
 			throw new ArgumentOutOfRangeException(nameof(latencyMilliseconds));
-		if (queueCapacity is < 1 or > 256)
+		if (queueCapacity is < 1 or > 16)
 			throw new ArgumentOutOfRangeException(nameof(queueCapacity));
 		if (reconnectInitialDelayMilliseconds is < 50 or > 60_000)
 			throw new ArgumentOutOfRangeException(nameof(reconnectInitialDelayMilliseconds));
