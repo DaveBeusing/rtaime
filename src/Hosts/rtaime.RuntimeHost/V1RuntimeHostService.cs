@@ -200,6 +200,11 @@ public sealed record V1AudioProgramSnapshot(
 	ulong RoutingRevision = 0,
 	MediaSourceId? ActiveAudioSourceId = null);
 
+public sealed record V1AudioProductionBusSnapshot(
+	string BusId,
+	double MasterGain,
+	bool Muted);
+
 public sealed record V1AudioProductionSourceSnapshot(
 	MediaSourceId SourceId,
 	double Gain,
@@ -228,6 +233,7 @@ public sealed record V1AudioDuckingSnapshot(
 
 public sealed record V1AudioProductionSnapshot(
 	ulong Revision,
+	IReadOnlyList<V1AudioProductionBusSnapshot> Buses,
 	double ProgramMasterGain,
 	bool ProgramMuted,
 	AudioClipStrategy ClipStrategy,
@@ -2695,6 +2701,9 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	{
 		var configuration = _audioProduction.Configuration;
 		var program = configuration.GetBus(AudioBusId.Program);
+		var buses = configuration.Buses
+			.Select(bus => new V1AudioProductionBusSnapshot(bus.BusId.Value, bus.MasterGain, bus.Muted))
+			.ToArray();
 		var sources = configuration.Sources
 			.Select(source => new V1AudioProductionSourceSnapshot(
 				source.SourceId,
@@ -2727,6 +2736,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		var result = _lastAudioProductionResult;
 		return new V1AudioProductionSnapshot(
 			configuration.Revision,
+			Array.AsReadOnly(buses),
 			program.MasterGain,
 			program.Muted,
 			configuration.ClipStrategy,
