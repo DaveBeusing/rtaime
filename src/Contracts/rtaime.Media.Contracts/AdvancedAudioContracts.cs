@@ -34,15 +34,17 @@ public enum AudioClipStrategy
 
 public sealed record AudioProductionBusConfiguration
 {
-	public AudioProductionBusConfiguration(AudioBusId busId, AudioGain masterGain, bool muted)
+	public AudioProductionBusConfiguration(AudioBusId busId, double masterGain, bool muted)
 	{
+		if (!double.IsFinite(masterGain) || masterGain is < 0 or > 4)
+			throw new ArgumentOutOfRangeException(nameof(masterGain), "Audio bus master gain must be finite and in the inclusive range 0..4.");
 		BusId = busId;
 		MasterGain = masterGain;
 		Muted = muted;
 	}
 
 	public AudioBusId BusId { get; }
-	public AudioGain MasterGain { get; }
+	public double MasterGain { get; }
 	public bool Muted { get; }
 }
 
@@ -52,7 +54,7 @@ public sealed record AudioProductionSourceConfiguration
 
 	public AudioProductionSourceConfiguration(
 		MediaSourceId sourceId,
-		AudioGain gain,
+		double gain,
 		bool muted,
 		bool followRoutedSource,
 		IReadOnlyList<AudioBusId> busAssignments)
@@ -63,6 +65,9 @@ public sealed record AudioProductionSourceConfiguration
 		if (busAssignments.Distinct().Count() != busAssignments.Count)
 			throw new ArgumentException("Audio source bus assignments must be unique.", nameof(busAssignments));
 
+		if (!double.IsFinite(gain) || gain is < 0 or > 4)
+			throw new ArgumentOutOfRangeException(nameof(gain), "Audio source gain must be finite and in the inclusive range 0..4.");
+
 		SourceId = sourceId;
 		Gain = gain;
 		Muted = muted;
@@ -71,7 +76,7 @@ public sealed record AudioProductionSourceConfiguration
 	}
 
 	public MediaSourceId SourceId { get; }
-	public AudioGain Gain { get; }
+	public double Gain { get; }
 	public bool Muted { get; }
 	public bool FollowRoutedSource { get; }
 	public IReadOnlyList<AudioBusId> BusAssignments => _busAssignments;
@@ -258,11 +263,11 @@ public sealed record AudioProductionConfiguration
 
 		return new AudioProductionConfiguration(
 			0,
-			new[] { new AudioProductionBusConfiguration(AudioBusId.Program, AudioGain.Unity, muted: false) },
+			new[] { new AudioProductionBusConfiguration(AudioBusId.Program, 1d, muted: false) },
 			sources.Select(sourceId =>
 				new AudioProductionSourceConfiguration(
 					sourceId,
-					AudioGain.Unity,
+					1d,
 					muted: false,
 					followRoutedSource: true,
 					new[] { AudioBusId.Program }))
