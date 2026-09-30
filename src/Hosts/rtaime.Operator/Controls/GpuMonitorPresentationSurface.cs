@@ -180,10 +180,8 @@ public sealed class GpuMonitorPresentationSurface : DrawingSurface
 
 		var vertexBytecode = Compiler.Compile(ShaderSource, "VSMain", "GpuMonitorPresentation.hlsl", "vs_4_0");
 		var pixelBytecode = Compiler.Compile(ShaderSource, "PSMain", "GpuMonitorPresentation.hlsl", "ps_4_0");
-		var analysisBytecode = Compiler.Compile(ShaderSource, "CSMain", "GpuMonitorPresentation.hlsl", "cs_5_0");
 		_vertexShader = e.Device.CreateVertexShader(vertexBytecode.Span);
 		_pixelShader = e.Device.CreatePixelShader(pixelBytecode.Span);
-		_analysisShader = e.Device.CreateComputeShader(analysisBytecode.Span);
 		_inputLayout = e.Device.CreateInputLayout(
 			new[]
 			{
@@ -201,37 +199,16 @@ public sealed class GpuMonitorPresentationSurface : DrawingSurface
 			BindFlags.ConstantBuffer,
 			ResourceUsage.Dynamic,
 			CpuAccessFlags.Write);
-		_analysisConstants = e.Device.CreateBuffer(
-			checked((uint)Marshal.SizeOf<AnalysisConstants>()),
-			BindFlags.ConstantBuffer,
-			ResourceUsage.Dynamic,
-			CpuAccessFlags.Write);
-		_analysisResults = e.Device.CreateBuffer(
-			AnalysisResultCount * sizeof(uint),
-			BindFlags.UnorderedAccess,
-			ResourceUsage.Default,
-			CpuAccessFlags.None,
-			ResourceOptionFlags.BufferStructured,
-			sizeof(uint));
-		_analysisReadback = e.Device.CreateBuffer(
-			AnalysisResultCount * sizeof(uint),
-			BindFlags.None,
-			ResourceUsage.Staging,
-			CpuAccessFlags.Read);
-		_analysisResultsView = e.Device.CreateUnorderedAccessView(_analysisResults);
 		_linearSampler = e.Device.CreateSamplerState(SamplerDescription.LinearClamp);
 		_pointSampler = e.Device.CreateSamplerState(SamplerDescription.PointClamp);
+		InitializeAnalysisResources(e.Device);
 		Invalidate();
 	}
 
 	private void OnUnloadContent(object? sender, DrawingSurfaceEventArgs e)
 	{
 		CloseSharedResource();
-		_analysisResultsView?.Dispose();
-		_analysisReadback?.Dispose();
-		_analysisResults?.Dispose();
-		_analysisConstants?.Dispose();
-		_analysisShader?.Dispose();
+		DisposeAnalysisResources();
 		_pointSampler?.Dispose();
 		_linearSampler?.Dispose();
 		_colorBuffer?.Dispose();
@@ -239,11 +216,6 @@ public sealed class GpuMonitorPresentationSurface : DrawingSurface
 		_inputLayout?.Dispose();
 		_pixelShader?.Dispose();
 		_vertexShader?.Dispose();
-		_analysisResultsView = null;
-		_analysisReadback = null;
-		_analysisResults = null;
-		_analysisConstants = null;
-		_analysisShader = null;
 		_pointSampler = null;
 		_linearSampler = null;
 		_colorBuffer = null;
@@ -285,7 +257,15 @@ public sealed class GpuMonitorPresentationSurface : DrawingSurface
 			Monitor?.SetGpuPresentationState(
 				true,
 				$"GPU D3D11 · {frame.Resource.Format.Width}×{frame.Resource.Format.Height} · {InspectionChannel.ToString().ToUpperInvariant()} · {(geometry.PointSampling ? "POINT" : "LINEAR")}");
-			TryAnalyzeRoi(e.Context, frame);
+			try
+			{
+				TryAnalyzeRoi(e.Context, frame);
+			}
+			catch
+			{
+				Monitor?.SetRoiUnavailable("GPU ROI analysis failed");
+				ResetAnalysisEvidence();
+			}
 		}
 		catch
 		{
@@ -395,10 +375,14 @@ public sealed class GpuMonitorPresentationSurface : DrawingSurface
 
 	private void TryAnalyzeRoi(ID3D11DeviceContext1 context, OperatorGpuMonitoringFrame frame)
 	{
-		if (Monitor is null || Roi is not { IsEmpty: false } requested ||
-			_analysisShader is null || _analysisConstants is null || _analysisResults is null ||
-			_analysisReadback is null || _analysisResultsView is null || _sharedView is null)
+		if (Monitor is null || Roi is not { IsEmpty: false } requested)
 			return;
+		if (_analysisShader is null || _analysisConstants is null || _analysisResults is null ||
+			_analysisReadback is null || _analysisResultsView is null || _sharedView is null)
+		{
+			Monitor.SetRoiUnavailable("GPU ROI analysis unavailable");
+			return;
+		}
 
 		var sourceWidth = checked((int)frame.Resource.Format.Width);
 		var sourceHeight = checked((int)frame.Resource.Format.Height);
@@ -512,9 +496,56 @@ public sealed class GpuMonitorPresentationSurface : DrawingSurface
 
 	private void ResetAnalysisEvidence()
 	{
+		_analysisRetryTimer.Stop();
 		_lastAnalysisSequence = 0;
 		_lastAnalyzedRoi = null;
 		_lastAnalyzedChannel = InspectionChannel;
+	}
+
+	private void InitializeAnalysisResources(ID3D11Device1 device)
+	{
+		DisposeAnalysisResources();
+		try
+		{
+			var analysisBytecode = Compiler.Compile(AnalysisShaderSource, "CSMain", "GpuMonitorRoiAnalysis.hlsl", "cs_5_0");
+			_analysisShader = device.CreateComputeShader(analysisBytecode.Span);
+			_analysisConstants = device.CreateBuffer(
+				checked((uint)Marshal.SizeOf<AnalysisConstants>()),
+				BindFlags.ConstantBuffer,
+				ResourceUsage.Dynamic,
+				CpuAccessFlags.Write);
+			_analysisResults = device.CreateBuffer(
+				AnalysisResultCount * sizeof(uint),
+				BindFlags.UnorderedAccess,
+				ResourceUsage.Default,
+				CpuAccessFlags.None,
+				ResourceOptionFlags.BufferStructured,
+				sizeof(uint));
+			_analysisReadback = device.CreateBuffer(
+				AnalysisResultCount * sizeof(uint),
+				BindFlags.None,
+				ResourceUsage.Staging,
+				CpuAccessFlags.Read);
+			_analysisResultsView = device.CreateUnorderedAccessView(_analysisResults);
+		}
+		catch
+		{
+			DisposeAnalysisResources();
+		}
+	}
+
+	private void DisposeAnalysisResources()
+	{
+		_analysisResultsView?.Dispose();
+		_analysisReadback?.Dispose();
+		_analysisResults?.Dispose();
+		_analysisConstants?.Dispose();
+		_analysisShader?.Dispose();
+		_analysisResultsView = null;
+		_analysisReadback = null;
+		_analysisResults = null;
+		_analysisConstants = null;
+		_analysisShader = null;
 	}
 
 	private static long ResolveAdapterLuid(ID3D11Device device)
@@ -565,20 +596,6 @@ cbuffer ColorTransform : register(b0)
     int CompleteColor;
     int InspectionMode;
 };
-
-cbuffer RoiAnalysis : register(b1)
-{
-    int RoiX;
-    int RoiY;
-    int RoiWidth;
-    int RoiHeight;
-    int SampleStride;
-    int SourceWidth;
-    int SourceHeight;
-    int RoiPadding;
-};
-
-RWStructuredBuffer<uint> AnalysisResults : register(u0);
 
 struct VSInput
 {
@@ -660,6 +677,72 @@ float4 PSMain(PSInput input) : SV_TARGET
     sample.rgb *= sample.a;
     return sample;
 }
+""";
+
+	private const string AnalysisShaderSource = """
+Texture2D SourceTexture : register(t0);
+
+cbuffer ColorTransform : register(b0)
+{
+    int TransferMode;
+    int LimitedRange;
+    int CompleteColor;
+    int AnalysisPadding;
+};
+
+cbuffer RoiAnalysis : register(b1)
+{
+    int RoiX;
+    int RoiY;
+    int RoiWidth;
+    int RoiHeight;
+    int SampleStride;
+    int SourceWidth;
+    int SourceHeight;
+    int RoiPadding;
+};
+
+RWStructuredBuffer<uint> AnalysisResults : register(u0);
+
+float SrgbToLinear(float value)
+{
+    return value <= 0.04045 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4);
+}
+
+float Rec709ToLinear(float value)
+{
+    return value < 0.081 ? value / 4.5 : pow((value + 0.099) / 1.099, 1.0 / 0.45);
+}
+
+float LinearToSrgb(float value)
+{
+    return value <= 0.0031308 ? value * 12.92 : 1.055 * pow(value, 1.0 / 2.4) - 0.055;
+}
+
+float TransformComponent(float value)
+{
+    if (LimitedRange != 0)
+        value = saturate((value - (16.0 / 255.0)) / (219.0 / 255.0));
+
+    float linear = value;
+    if (TransferMode == 2)
+        linear = SrgbToLinear(value);
+    else if (TransferMode == 3)
+        linear = Rec709ToLinear(value);
+
+    return saturate(LinearToSrgb(linear));
+}
+
+float4 TransformSample(float4 sample)
+{
+    if (CompleteColor != 0)
+    {
+        sample.r = TransformComponent(sample.r);
+        sample.g = TransformComponent(sample.g);
+        sample.b = TransformComponent(sample.b);
+    }
+    return sample;
+}
 
 [numthreads(8, 8, 1)]
 void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
@@ -674,7 +757,7 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
     uint g = (uint)round(saturate(sample.g) * 255.0);
     uint b = (uint)round(saturate(sample.b) * 255.0);
     uint a = (uint)round(saturate(sample.a) * 255.0);
-    uint luma = (uint)round(saturate((0.2126 * r + 0.7152 * g + 0.0722 * b) / 255.0) * 255.0);
+    uint luma = (uint)round(0.2126 * r + 0.7152 * g + 0.0722 * b);
 
     InterlockedAdd(AnalysisResults[0], 1);
     InterlockedAdd(AnalysisResults[1], r);
