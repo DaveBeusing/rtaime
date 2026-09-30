@@ -16,6 +16,35 @@ namespace rtaime.Tests.Integration;
 public sealed class ExternalControlIntegrationTests
 {
 	[Fact]
+	public void Optional_external_control_does_not_invalidate_local_ControlHost_configuration()
+	{
+		var options = ControlHostProcessOptions.Default with
+		{
+			ExternalControl = new ExternalControlServerOptions
+			{
+				Enabled = true,
+				Required = false
+			}
+		};
+
+		options.Validate();
+	}
+
+	[Fact]
+	public void Required_external_control_must_be_enabled()
+	{
+		var options = new ExternalControlServerOptions
+		{
+			Enabled = false,
+			Required = true
+		};
+
+		var exception = Assert.Throws<ArgumentException>(options.Validate);
+
+		Assert.Contains("cannot be required", exception.Message, StringComparison.Ordinal);
+	}
+
+	[Fact]
 	public async Task Grpc_control_reuses_ControlHost_authority_and_named_pipe_remains_available()
 	{
 		await using var fixture = await ExternalFixture.StartAsync(ExternalControlRole.Operator);
