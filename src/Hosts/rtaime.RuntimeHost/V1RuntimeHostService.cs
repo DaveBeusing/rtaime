@@ -2807,15 +2807,16 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		var audioProduction = _audioProduction.Configuration;
 		var programBus = audioProduction.GetBus(AudioBusId.Program);
 		var mixMuted = programBus.Muted || IsProgramMixMuted(audioProduction, routedAudioSource);
-		var health = mixMuted
-			? V1AudioHealthState.Muted
-			: mix.MissingSourceCount > 0
-				? V1AudioHealthState.Error
-				: mix.Clipping
-					? V1AudioHealthState.Clipping
-					: mix.MasterPeak <= 0.000001
-						? V1AudioHealthState.Silence
-						: V1AudioHealthState.Healthy;
+		var health = result.Status switch
+		{
+			AudioFollowVideoStatus.Underrun => V1AudioHealthState.Underrun,
+			not AudioFollowVideoStatus.Emitted => V1AudioHealthState.Error,
+			_ when mixMuted => V1AudioHealthState.Muted,
+			_ when mix.MissingSourceCount > 0 => V1AudioHealthState.Error,
+			_ when mix.Clipping => V1AudioHealthState.Clipping,
+			_ when mix.MasterPeak <= 0.000001 => V1AudioHealthState.Silence,
+			_ => V1AudioHealthState.Healthy
+		};
 		return new V1AudioProgramSnapshot(
 			result.VideoSourceId,
 			result.StreamId ?? routedStream,
