@@ -22,6 +22,8 @@ public class MonitorView : UserControl
 	private DateTimeOffset _lastInspectionAt;
 	private DateTimeOffset _lastDiagnosticsHudUpdateAt;
 	private MediaPixelCoordinate? _roiAnchor;
+	private MediaInspectionRoi? _roiInteractionStartRoi;
+	private RoiInteractionMode _roiInteractionMode;
 
 	private static readonly DependencyPropertyKey PresentationWidthPropertyKey = DependencyProperty.RegisterReadOnly(
 		nameof(PresentationWidth),
@@ -620,7 +622,38 @@ public class MonitorView : UserControl
 			return false;
 
 		_roiAnchor = coordinate;
-		InspectionRoi = new MediaInspectionRoi(coordinate.X, coordinate.Y, 1, 1);
+		_roiInteractionStartRoi = InspectionRoi;
+		if (InspectionRoi is { IsEmpty: false } roi)
+		{
+			var thresholdX = Math.Max(1, (int)Math.Ceiling(7.0 * _dpiScaleX / Math.Max(_presentationRect.Scale, 0.0001)));
+			var thresholdY = Math.Max(1, (int)Math.Ceiling(7.0 * _dpiScaleY / Math.Max(_presentationRect.Scale, 0.0001)));
+			bool Near(int x, int y) =>
+				Math.Abs(coordinate.X - x) <= thresholdX &&
+				Math.Abs(coordinate.Y - y) <= thresholdY;
+
+			if (Near(roi.X, roi.Y))
+				_roiInteractionMode = RoiInteractionMode.ResizeTopLeft;
+			else if (Near(roi.RightExclusive - 1, roi.Y))
+				_roiInteractionMode = RoiInteractionMode.ResizeTopRight;
+			else if (Near(roi.X, roi.BottomExclusive - 1))
+				_roiInteractionMode = RoiInteractionMode.ResizeBottomLeft;
+			else if (Near(roi.RightExclusive - 1, roi.BottomExclusive - 1))
+				_roiInteractionMode = RoiInteractionMode.ResizeBottomRight;
+			else if (roi.Contains(coordinate))
+				_roiInteractionMode = RoiInteractionMode.Move;
+			else
+				_roiInteractionMode = RoiInteractionMode.Create;
+		}
+		else
+		{
+			_roiInteractionMode = RoiInteractionMode.Create;
+		}
+
+		if (_roiInteractionMode == RoiInteractionMode.Create)
+		{
+			_roiInteractionStartRoi = null;
+			InspectionRoi = new MediaInspectionRoi(coordinate.X, coordinate.Y, 1, 1);
+		}
 		return true;
 	}
 
@@ -635,17 +668,33 @@ public class MonitorView : UserControl
 		var coordinate = MediaPixelInspection.MapViewportToSourceClamped(
 			pointerXDip, pointerYDip, _dpiScaleX, _dpiScaleY, _presentationRect,
 			sourceWidth, sourceHeight);
-		InspectionRoi = MediaInspectionRoi.FromCorners(anchor, coordinate, sourceWidth, sourceHeight);
+
+		InspectionRoi = _roiInteractionMode switch
+		{
+			RoiInteractionMode.Move when _roiInteractionStartRoi is { } start =>
+				start.MoveBy(coordinate.X - anchor.X, coordinate.Y - anchor.Y, sourceWidth, sourceHeight),
+			RoiInteractionMode.ResizeTopLeft when _roiInteractionStartRoi is { } start =>
+				start.ResizeFromCorner(MediaInspectionRoiCorner.TopLeft, coordinate, sourceWidth, sourceHeight),
+			RoiInteractionMode.ResizeTopRight when _roiInteractionStartRoi is { } start =>
+				start.ResizeFromCorner(MediaInspectionRoiCorner.TopRight, coordinate, sourceWidth, sourceHeight),
+			RoiInteractionMode.ResizeBottomLeft when _roiInteractionStartRoi is { } start =>
+				start.ResizeFromCorner(MediaInspectionRoiCorner.BottomLeft, coordinate, sourceWidth, sourceHeight),
+			RoiInteractionMode.ResizeBottomRight when _roiInteractionStartRoi is { } start =>
+				start.ResizeFromCorner(MediaInspectionRoiCorner.BottomRight, coordinate, sourceWidth, sourceHeight),
+			_ => MediaInspectionRoi.FromCorners(anchor, coordinate, sourceWidth, sourceHeight)
+		};
 	}
 
 	internal void EndRoiSelection()
 	{
 		_roiAnchor = null;
+		_roiInteractionStartRoi = null;
+		_roiInteractionMode = RoiInteractionMode.None;
 	}
 
 	internal void ClearInspectionRoi()
 	{
-		_roiAnchor = null;
+		EndRoiSelection();
 		InspectionRoi = null;
 		SetValue(RoiInspectionReadoutPropertyKey, "ROI —");
 	}
@@ -806,6 +855,17 @@ public class MonitorView : UserControl
 		"FREE" => "FREE",
 		_ => "FIT"
 	};
+
+	private enum RoiInteractionMode
+	{
+		None,
+		Create,
+		Move,
+		ResizeTopLeft,
+		ResizeTopRight,
+		ResizeBottomLeft,
+		ResizeBottomRight
+	}
 
 	private sealed class MonitorPresentationCommand : ICommand
 	{
