@@ -75,9 +75,12 @@ Assert-Condition ($server -match 'MaxConcurrentConnections' -and $server -match 
 Assert-Condition ($server -match 'MaxReceiveMessageSize = _options\.MaxRequestBytes' -and $server -match 'MaxSendMessageSize = _options\.MaxResponseBytes') "gRPC request and response sizes must remain bounded."
 Assert-Condition ($server -match '_dispatcher\.DispatchExternalAsync') "External gRPC requests must terminate in the shared ControlHost dispatch seam."
 Assert-Condition ($server -notmatch '"runtime\.' -and $server -notmatch '"ai\.') "External-control transport must not dispatch directly to RuntimeHost or AIHost."
+Assert-Condition ($server -match '"authentication"' -and $server -match '"request-validation"' -and $server -match '"resource-limit"') "External security diagnostics must audit authentication, request validation and resource-limit outcomes."
+Assert-Condition ($server -match 'Required && !Enabled' -and $server -match 'Required external control failed to start') "Required external control must fail closed and expose explicit failed lifecycle state."
 
 Assert-Condition ($process -match 'await _ipcServer!\.StartAsync' -and $process -match '_externalControlServer\.StartAsync') "Local Named Pipe control must start independently before the optional external surface."
 Assert-Condition ($process -match 'ExternalControl = ExternalControlServerOptions\.Load') "External endpoint configuration must be composed through ControlHost configuration."
+Assert-Condition ($process -match 'if \(ExternalControl\.Required\)' -and $process -match 'ExternalControl\.Validate\(\)') "Optional external-control validation must remain isolated from mandatory local ControlHost configuration."
 Assert-Condition ($dispatcher -match 'DispatchExternalAsync' -and $dispatcher -match 'ControlHost response envelope') "External dispatch must reuse ControlHost response and idempotency semantics."
 
 Assert-Condition ($client -match 'class GrpcOperatorControlTransport : IOperatorControlTransport') "External client transport must conform to the existing Operator control abstraction."
@@ -93,6 +96,7 @@ Assert-Condition ($integrationTests -match 'Grpc_control_reuses_ControlHost_auth
 Assert-Condition ($integrationTests -match 'Observer_can_read_but_server_denies_production_mutation') "Integration qualification must prove server-side authorization."
 Assert-Condition ($integrationTests -match 'Duplicate_external_mutation_is_idempotent_and_conflicting_request_id_fails_closed') "Integration qualification must prove external idempotency and conflicting request-id rejection."
 Assert-Condition ($integrationTests -match 'Mutual_tls_authentication_accepts_pinned_client_certificate') "Integration qualification must exercise mTLS."
+Assert-Condition ($integrationTests -match 'Pinned_server_trust_rejects_an_unexpected_certificate_identity' -and $integrationTests -match 'Mutual_tls_rejects_an_unmapped_client_certificate' -and $integrationTests -match 'Expired_required_server_certificate_fails_ControlHost_startup_closed') "Integration qualification must exercise server trust failure, untrusted mTLS client rejection and expired server-certificate failure."
 Assert-Condition ($integrationTests -match 'State_version_gap_requires_full_resynchronization') "Integration qualification must exercise state-gap resynchronization."
 Assert-Condition ($integrationTests -match 'Rate_limit_rejects_excess_requests_without_affecting_ControlHost_continuity') "Integration qualification must prove bounded rate rejection preserves ControlHost continuity."
 Assert-Condition ($integrationTests -match 'Oversized_grpc_message_is_rejected_before_ControlHost_dispatch') "Integration qualification must reject oversized remote messages."
