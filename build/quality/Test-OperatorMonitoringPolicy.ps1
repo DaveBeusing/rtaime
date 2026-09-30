@@ -94,6 +94,7 @@ Assert-Condition ($client -notmatch 'SelectPreviewAsync|CutProgramAsync|Dissolve
 Assert-Condition ($operator -match 'MonitoringStreamKind\.Program') "Operator must render actual Program stream frames distinctly."
 Assert-Condition ($operator -match 'PreviewSourceId') "Operator Preview must select monitoring frames using authoritative control routing."
 Assert-Condition ($operator -match 'SharedGpuMonitoringState') "Operator must expose the negotiated shared GPU monitoring state."
+Assert-Condition ($gpuProvider -match 'PublishedMonitoringResourceSetSize\s*=\s*2' -and $gpuProvider -match 'SharedMonitoringResourceCapacity\s*=\s*PublishedMonitoringResourceSetSize\s*\*\s*2') "Shared GPU monitoring must retain one bounded replacement pair of headroom while keeping the published Preview/Program set fixed at two resources."
 Assert-Condition ($gpuPresentation -match 'OpenSharedResource' -and $gpuPresentation -match 'WindowsGraphicsSharedHandle') "Operator GPU presentation must open the negotiated read-only Windows graphics resource rather than materialize another frame."
 Assert-Condition ($gpuPresentation -notmatch 'BitmapSource|CopyPixels|CopySubresourceRegion') "Operator GPU inspection must not materialize a CPU bitmap or copy ROI/full-frame pixels to CPU staging."
 Assert-Condition ($gpuPresentation -match 'CSMain' -and $gpuPresentation -match 'MaxAnalysisSamples\s*=\s*262_144' -and $gpuPresentation -match 'AnalysisResultCount\s*=\s*16') "ROI analysis must remain GPU-reduced and explicitly bounded."
