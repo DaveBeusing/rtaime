@@ -399,7 +399,6 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		_sourceBPipeline = CreatePipeline();
 		_gpuBackend = gpuBackend ?? new ManagedReferenceGpuBackend();
 		var networkReadbackCapacity = configuredNetworkOutputs
-			.Where(target => string.Equals(target.RoleId, "program", StringComparison.Ordinal))
 			.Sum(target => target.Configuration.QueueCapacity);
 		_gpu = new GpuProcessingProvider(_gpuBackend, checked(ProgramReadbackBufferCapacity + networkReadbackCapacity));
 		_gpu.Start();
@@ -828,6 +827,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				RuntimeMonitoringSourceSnapshot? monitoringSources;
 				bool recordingActive;
 				Failure? auxFailure;
+				MediaSourceId? auxNetworkSource = null;
+				FrameDescriptor? auxNetworkFrame = null;
 
 				lock (_boundaryCaptureGate)
 				{
@@ -876,6 +877,17 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 						[frameB.SourceId] = frameB
 					};
 					auxFailure = WriteAuxFrame(execution.PreparedExecution, frames);
+					if (_networkOutputBridge.HasRole("aux"))
+					{
+						var auxNetworkBinding = execution.PreparedExecution.Bindings.SingleOrDefault(binding =>
+							string.Equals(binding.OutputRoleId, "aux", StringComparison.Ordinal));
+						if (auxNetworkBinding?.MediaSourceId is { } configuredAuxSource &&
+							frames.TryGetValue(configuredAuxSource, out var configuredAuxFrame))
+						{
+							auxNetworkSource = configuredAuxSource;
+							auxNetworkFrame = configuredAuxFrame;
+						}
+					}
 
 					var contentA = ResolveInputContent(frameA);
 					var contentB = ResolveInputContent(frameB);
@@ -887,11 +899,13 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 						_format,
 						frameA.Timing);
 					gpuA = RequiresGpuSourceUnsafe(frameA.SourceId, committedSource) ||
-						(monitoringSources is not null && frameA.SourceId == committedPreviewSource)
+						(monitoringSources is not null && frameA.SourceId == committedPreviewSource) ||
+						(auxNetworkSource is { } configuredAuxA && frameA.SourceId == configuredAuxA)
 						? MaterializeInput(frameA, contentA)
 						: null;
 					gpuB = RequiresGpuSourceUnsafe(frameB.SourceId, committedSource) ||
-						(monitoringSources is not null && frameB.SourceId == committedPreviewSource)
+						(monitoringSources is not null && frameB.SourceId == committedPreviewSource) ||
+						(auxNetworkSource is { } configuredAuxB && frameB.SourceId == configuredAuxB)
 						? MaterializeInput(frameB, contentB)
 						: null;
 					var gpuFrames = new Dictionary<MediaSourceId, GpuFrame>();
@@ -1100,6 +1114,28 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 					catch (Exception exception)
 					{
 						Observe($"network.output.program.enqueue_failed:{exception.GetType().Name}");
+					}
+
+					if (auxNetworkSource is { } networkAuxSource &&
+						auxNetworkFrame is { } networkAuxFrame &&
+						gpuFrames.TryGetValue(networkAuxSource, out var networkAuxGpuFrame))
+					{
+						try
+						{
+							var auxPixels = _gpu.RentReadback(networkAuxGpuFrame);
+							var networkOutput = _networkOutputBridge.TrySubmit(
+								"aux",
+								auxPixels,
+								networkAuxFrame.Timing,
+								audioBuffer,
+								programAudioPayload);
+							if (networkOutput is { Status: not NetworkOutputEnqueueStatus.Accepted })
+								Observe($"network.output.aux:{networkOutput.Status}:{networkOutput.Failure?.Code}");
+						}
+						catch (Exception exception)
+						{
+							Observe($"network.output.aux.enqueue_failed:{exception.GetType().Name}");
+						}
 					}
 
 					output.Dispose();
