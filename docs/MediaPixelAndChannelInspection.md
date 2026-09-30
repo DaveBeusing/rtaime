@@ -22,20 +22,32 @@ The shared monitor keeps its checkerboard beneath the media presentation so mean
 
 ## Channel modes
 
-The viewer-local model defines RGB, Red, Green, Blue, Alpha and Luma inspection modes. The compact inspector exposes component values from the bounded display-code sample.
+The viewer-local model defines Combined, Red, Green, Blue, Alpha and Luma inspection modes. The existing RGB command remains the Combined-view command so the UI does not introduce a second inspection-state model.
 
-Full-frame channel-isolation rendering, GPU scopes and full-resolution ROI sampling are intentionally not implemented by the GPU-resident presentation path. They require separate qualified GPU processing capabilities and must not be approximated through a new CPU full-frame conversion.
+When a presentable shared GPU resource is available, full-frame channel isolation is performed in the Operator D3D11 presentation shader. Red, Green and Blue isolate the selected display channel, Alpha is shown as opaque grayscale for unambiguous transparency inspection, and Luma uses the same Rec.709 display-code weighting as the 1×1 inspector (0.2126 / 0.7152 / 0.0722). Combined retains the normal alpha-checkerboard presentation semantics.
+
+The channel view is derived presentation state only. It does not modify the shared monitoring texture, Runtime composition, Program output, recording or routing. If the qualified GPU path is unavailable, non-Combined channel modes report an explicit unavailable state; the implementation does not silently synthesize a full-frame CPU channel image.
+
+## Region-of-Interest analysis
+
+ROI selection is stored in source-pixel coordinates and is clamped to the current source dimensions. The overlay projects that source-space rectangle through the same presentation geometry used by Fit, Fill, Pixel Perfect, free zoom, pan and DPI changes, so resizing the Operator view never rewrites the authored inspection rectangle.
+
+ROI statistics execute against the read-only shared GPU resource. A compute shader produces sample count, mean R/G/B/A/luma, and per-channel/luma minimum and maximum. Analysis is independently rate-limited to 200 ms and bounded to at most 262,144 samples; large ROIs use a deterministic sampling stride rather than increasing analysis cost without limit.
+
+Only a 16-element uint result buffer is copied to CPU-visible staging memory. No ROI pixel payload and no full-resolution frame is transferred to the Operator model. Statistics recompute only when newer frame evidence, ROI state or the inspection mode changes. GPU/resource loss reports an explicit unavailable reason and may recover on a later valid resource.
+
+ROI interaction is presentation-only. Operators can enable ROI selection, drag a rectangle, and clear it; the overlay and handles never appear in Clean Program.
 
 ## Shared GPU presentation boundary
 
 Monitoring contract version 1.3 can carry a read-only shared GPU resource with Windows graphics presentation metadata alongside the bounded CPU fallback. `GpuMonitorPresentationSurface` consumes that resource for Preview and Program presentation when adapter/resource validation succeeds.
 
-The presentation surface does not expose CUDA pointers, mutate the shared resource, create a second decoder or become Program authority. The existing CPU payload remains the source for pixel values, scopes and Difference analysis; it is not used to build the visible full-resolution GPU image.
+The presentation surface does not expose CUDA pointers, mutate the shared resource, create a second decoder or become Program authority. The existing CPU payload remains the source for the legacy 1×1 pixel inspector, CPU scopes and Difference analysis; it is not used to build the visible full-resolution GPU channel image or ROI statistics.
 
 Clean Program reuses the same Program GPU resource but intentionally excludes pixel inspection and diagnostic overlays.
 
 ## Qualification boundary
 
-Automated tests cover physical coordinate mapping, Fit/Fill/Pixel Perfect geometry, DPI conversion, full-resolution-to-bounded-sample mapping and the absence of CPU bitmap materialization in the GPU presentation control.
+Automated tests cover physical coordinate mapping, Fit/Fill/Pixel Perfect geometry, DPI conversion, full-resolution-to-bounded-sample mapping, source-space ROI clamp/mapping, channel shader semantics, bounded ROI analysis policy and the absence of CPU bitmap materialization in the GPU presentation control.
 
-Exact full-resolution pixel-value inspection remains unqualified because the current package intentionally does not add GPU ROI readback. Physical NVIDIA/CUDA/D3D11 validation remains reference-hardware evidence rather than a claim inferred from software-only tests.
+The existing 1×1 inspector remains the bounded CPU monitoring-sample path and therefore retains its documented resolution limitation. ROI evidence is GPU-derived and returns only reduced numeric results. Physical NVIDIA/CUDA/D3D11 validation remains reference-hardware evidence rather than a claim inferred from software-only tests.
