@@ -9,6 +9,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using rtaime.Client;
 using rtaime.Control.Contracts;
+using rtaime.Core;
 using rtaime.Media.Contracts;
 
 namespace rtaime.Operator;
