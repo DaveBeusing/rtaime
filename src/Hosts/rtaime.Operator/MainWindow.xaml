@@ -1333,15 +1333,6 @@
 									ToolTip="Enable bounded 5 Hz analysis of the existing sampled Program monitoring frame." />
 							</DockPanel>
 							<Grid Height="250">
-								<controls:GpuScopeAnalysisSurface
-									Width="1"
-									Height="1"
-									HorizontalAlignment="Left"
-									VerticalAlignment="Top"
-									Panel.ZIndex="-1"
-									Monitoring="{Binding Monitoring, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-									GpuFrame="{Binding Monitoring.ProgramGpuFrame, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-									AnalysisEnabled="{Binding Monitoring.ScopesEnabled, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
 								<Grid.Style>
 									<Style TargetType="Grid">
 										<Setter Property="Visibility" Value="Collapsed" />
@@ -1352,6 +1343,15 @@
 										</Style.Triggers>
 									</Style>
 								</Grid.Style>
+								<controls:GpuScopeAnalysisSurface
+									Width="1"
+									Height="1"
+									HorizontalAlignment="Left"
+									VerticalAlignment="Top"
+									Panel.ZIndex="-1"
+									Monitoring="{Binding Monitoring, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+									GpuFrame="{Binding Monitoring.ProgramGpuFrame, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+									AnalysisEnabled="{Binding Monitoring.ScopesEnabled, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
 								<Grid.RowDefinitions><RowDefinition Height="*" /><RowDefinition Height="6" /><RowDefinition Height="*" /></Grid.RowDefinitions>
 								<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="6" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
 								<Border Grid.Row="0" Grid.Column="0" Background="{DynamicResource OperatorDiagnosticSurfaceBrush}" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1" Padding="4">
