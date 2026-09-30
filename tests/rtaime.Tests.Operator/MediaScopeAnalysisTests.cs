@@ -87,6 +87,18 @@ public sealed class MediaScopeAnalysisTests
 		Assert.True((7680L + stride8k - 1) / stride8k * ((4320L + stride8k - 1) / stride8k) <= GpuMonitoringAnalysisPolicy.MaxScopeSamples);
 	}
 
+	[Theory]
+	[InlineData(5385u, 3105u)]
+	[InlineData(6246u, 2052u)]
+	[InlineData(3820u, 5558u)]
+	public void Gpu_scope_stride_never_exceeds_sample_bound_for_nonstandard_dimensions(uint width, uint height)
+	{
+		var stride = GpuMonitoringAnalysisPolicy.ResolveScopeSampleStride(width, height);
+		var samples = ((long)width + stride - 1) / stride * (((long)height + stride - 1) / stride);
+
+		Assert.True(samples <= GpuMonitoringAnalysisPolicy.MaxScopeSamples);
+	}
+
 	[Fact]
 	public void Gpu_result_shape_round_trips_cpu_reference_bins()
 	{
