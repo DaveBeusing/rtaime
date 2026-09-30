@@ -1180,7 +1180,8 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 				output.RoleId, output.RoleKind, output.SourceId, output.TargetId, output.ProviderId,
 				output.Width, output.Height, output.FrameRate, output.PixelFormat, output.Timing,
 				output.LifecycleState, output.AuthoritativeActive, output.HealthState, output.Evidence,
-				output.Error is null ? null : new Failure(output.Error.Code, output.Error.Message)))
+				output.Error is null ? null : new Failure(output.Error.Code, output.Error.Message),
+				output.NetworkOutput is null ? null : FromWire(output.NetworkOutput)))
 			.ToArray(),
 		(wire.CompositingLayers ?? Array.Empty<WireCompositingLayer>())
 			.Select(FromWire)
@@ -1195,6 +1196,34 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 				wire.ShowProject.Name,
 				wire.ShowProject.State,
 				wire.ShowProject.Detail));
+
+
+
+	private static OperatorNetworkOutputDescriptor FromWire(WireNetworkOutput output) => new(
+		output.TargetId,
+		output.Provider,
+		output.Protocol,
+		output.SafeTargetIdentity,
+		output.Lifecycle,
+		output.Connected,
+		output.VideoCodec,
+		output.AudioCodec,
+		output.AudioSampleRate,
+		output.AudioChannelCount,
+		output.AudioSampleFormat,
+		output.VideoBitRate,
+		output.AudioBitRate,
+		output.LatencyMilliseconds,
+		output.AcceptedSamples,
+		output.SentSamples,
+		output.DroppedSamples,
+		output.RejectedSamples,
+		output.ReconnectCount,
+		output.PacketsSent,
+		output.BytesSent,
+		output.QueueDepth,
+		output.LastSuccessfulSendUtc,
+		output.Failure is null ? null : new Failure(output.Failure.Code, output.Failure.Message));
 
 	private static OperatorProductionCgTextDescriptor FromWire(WireProductionCgTextSnapshot snapshot) => new(
 		snapshot.Active,
@@ -1435,7 +1464,32 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 	private sealed record WireSource(string Id, string Name, string Type, string Format, string Health, string MediaState, long? RemainingTicks, string? MediaFileName);
 	private sealed record WireScene(string Id, string Name, string PreviewSourceId, string ProgramSourceId, WireCompositingState? CompositingState = null);
 	private sealed record WireOutputRoleAuthority(string RoleId, int Kind, string SourceId, string ProviderSelector, string TargetId, string FormatPolicy, string TimingPolicy, bool Enabled);
-	private sealed record WireOutputRole(string RoleId, string RoleKind, string SourceId, string TargetId, string ProviderId, uint? Width, uint? Height, string? FrameRate, string? PixelFormat, string? Timing, string LifecycleState, bool AuthoritativeActive, string HealthState, string Evidence, WireFailure? Error);
+	private sealed record WireNetworkOutput(
+		string TargetId,
+		string Provider,
+		string Protocol,
+		string SafeTargetIdentity,
+		string Lifecycle,
+		bool Connected,
+		string VideoCodec,
+		string AudioCodec,
+		uint AudioSampleRate,
+		uint AudioChannelCount,
+		string AudioSampleFormat,
+		uint VideoBitRate,
+		uint AudioBitRate,
+		int LatencyMilliseconds,
+		ulong AcceptedSamples,
+		ulong SentSamples,
+		ulong DroppedSamples,
+		ulong RejectedSamples,
+		ulong ReconnectCount,
+		ulong PacketsSent,
+		ulong BytesSent,
+		int QueueDepth,
+		DateTimeOffset? LastSuccessfulSendUtc,
+		WireFailure? Failure);
+	private sealed record WireOutputRole(string RoleId, string RoleKind, string SourceId, string TargetId, string ProviderId, uint? Width, uint? Height, string? FrameRate, string? PixelFormat, string? Timing, string LifecycleState, bool AuthoritativeActive, string HealthState, string Evidence, WireFailure? Error, WireNetworkOutput? NetworkOutput = null);
 	private sealed record WireProductionState(string Version, string ProductionId, ulong Revision, string PreviewSourceId, string ProgramSourceId, string? ActiveSceneId = null, WireOutputRoleAuthority[]? OutputRoles = null, WireCompositingState? CompositingState = null);
 	private sealed record WireGraphicsAsset(string Name, uint Width, uint Height, byte[] RgbaPixels);
 	private sealed record WireCgColor(byte Red, byte Green, byte Blue, byte Alpha);
