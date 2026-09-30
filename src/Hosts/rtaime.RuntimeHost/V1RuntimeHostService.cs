@@ -906,6 +906,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				Failure? auxFailure;
 				MediaSourceId? auxNetworkSource = null;
 				FrameDescriptor? auxNetworkFrame = null;
+				Dictionary<MediaSourceId, GpuFrame>? gpuFrames = null;
 
 				lock (_boundaryCaptureGate)
 				{
@@ -985,7 +986,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 						(auxNetworkSource is { } configuredAuxB && frameB.SourceId == configuredAuxB)
 						? MaterializeInput(frameB, contentB)
 						: null;
-					var gpuFrames = new Dictionary<MediaSourceId, GpuFrame>();
+					gpuFrames = new Dictionary<MediaSourceId, GpuFrame>();
 					if (gpuA is not null)
 						gpuFrames.Add(frameA.SourceId, gpuA);
 					if (gpuB is not null)
@@ -1183,7 +1184,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 
 					if (auxNetworkSource is { } networkAuxSource &&
 						auxNetworkFrame is { } networkAuxFrame &&
-						gpuFrames.TryGetValue(networkAuxSource, out var networkAuxGpuFrame))
+						gpuFrames is not null && gpuFrames.TryGetValue(networkAuxSource, out var networkAuxGpuFrame))
 					{
 						try
 						{
