@@ -136,27 +136,27 @@ public sealed class GrpcOperatorControlTransport : IOperatorControlTransport, IA
 	}
 
 	public ValueTask<OperatorMutationResponse> SelectPreviewAsync(SelectPreviewCommand command, CancellationToken cancellationToken = default) =>
-		ProductionMutationAsync(command.Metadata, production => production.SourceId = command.SourceId.ToString(), request => request.SelectPreview = production, cancellationToken);
+		ProductionMutationAsync(command.Metadata, production => production.SourceId = command.SourceId.ToString(), (request, production) => request.SelectPreview = production, cancellationToken);
 
 	public ValueTask<OperatorMutationResponse> CutProgramAsync(CutProgramCommand command, CancellationToken cancellationToken = default) =>
-		ProductionMutationAsync(command.Metadata, production => production.SourceId = command.SourceId.ToString(), request => request.CutProgram = production, cancellationToken);
+		ProductionMutationAsync(command.Metadata, production => production.SourceId = command.SourceId.ToString(), (request, production) => request.CutProgram = production, cancellationToken);
 
 	public ValueTask<OperatorMutationResponse> DissolveProgramAsync(DissolveProgramCommand command, CancellationToken cancellationToken = default) =>
 		ProductionMutationAsync(command.Metadata, production =>
 		{
 			production.SourceId = command.SourceId.ToString();
 			production.DurationFrames = command.DurationFrames;
-		}, request => request.DissolveProgram = production, cancellationToken);
+		}, (request, production) => request.DissolveProgram = production, cancellationToken);
 
 	public ValueTask<OperatorMutationResponse> ActivateSceneAsync(ActivateSceneCommand command, CancellationToken cancellationToken = default) =>
-		ProductionMutationAsync(command.Metadata, production => production.SceneId = command.SceneId.ToString(), request => request.ActivateScene = production, cancellationToken);
+		ProductionMutationAsync(command.Metadata, production => production.SceneId = command.SceneId.ToString(), (request, production) => request.ActivateScene = production, cancellationToken);
 
 	public ValueTask<OperatorMutationResponse> RouteOutputRoleAsync(RouteOutputRoleCommand command, CancellationToken cancellationToken = default) =>
 		ProductionMutationAsync(command.Metadata, production =>
 		{
 			production.SourceId = command.SourceId.ToString();
 			production.OutputRoleId = command.RoleId.ToString();
-		}, request => request.RouteOutputRole = production, cancellationToken);
+		}, (request, production) => request.RouteOutputRole = production, cancellationToken);
 
 	public async ValueTask<OperatorAudioInputDescriptor> SetAudioInputStateAsync(string sourceId, double gain, bool muted, CancellationToken cancellationToken = default)
 	{
@@ -467,9 +467,11 @@ public sealed class GrpcOperatorControlTransport : IOperatorControlTransport, IA
 		{
 			var currentHost = _synchronizer.HostInstanceId;
 			var currentVersion = _synchronizer.StateVersion;
+			var sameHost = currentHost is not null && string.Equals(currentHost, notification.HostInstanceId, StringComparison.Ordinal);
 			var requires = currentHost is not null &&
-				(!string.Equals(currentHost, notification.HostInstanceId, StringComparison.Ordinal) ||
-				 (notification.BasedOnStateVersion != 0 && notification.BasedOnStateVersion != currentVersion));
+				(!sameHost ||
+				 (notification.BasedOnStateVersion != 0 && notification.BasedOnStateVersion != currentVersion) ||
+				 (notification.BasedOnStateVersion == 0 && notification.StateVersion != currentVersion));
 			if (requires)
 			{
 				lock (_gate) _requiresFullSnapshot = true;
@@ -487,7 +489,7 @@ public sealed class GrpcOperatorControlTransport : IOperatorControlTransport, IA
 	private async ValueTask<OperatorMutationResponse> ProductionMutationAsync(
 		ControlCommandMetadata metadata,
 		Action<ProductionCommand> populate,
-		Action<ExternalControlRequest> assign,
+		Action<ExternalControlRequest, ProductionCommand> assign,
 		CancellationToken cancellationToken)
 	{
 		ArgumentNullException.ThrowIfNull(metadata);
@@ -501,7 +503,7 @@ public sealed class GrpcOperatorControlTransport : IOperatorControlTransport, IA
 		};
 		populate(production);
 		var request = Request(metadata.CommandId.ToString());
-		assign(request);
+		assign(request, production);
 		return NamedPipeOperatorControlTransport.DecodeExternalMutation((await ExecuteAsync(request, false, cancellationToken).ConfigureAwait(false)).PayloadJson.Span);
 	}
 
@@ -561,7 +563,8 @@ public sealed class GrpcOperatorControlTransport : IOperatorControlTransport, IA
 				last = exception;
 			}
 		}
-		throw last ?? new IOException("External control request failed without a response.");
+		if (last is not null) throw last;
+		throw new IOException("External control request failed without a response.");
 	}
 
 	private void ValidateReply(ExternalControlRequest request, ExternalControlReply reply, bool snapshot)
