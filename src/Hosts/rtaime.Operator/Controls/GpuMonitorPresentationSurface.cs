@@ -21,6 +21,11 @@ public sealed class GpuMonitorPresentationSurface : DrawingSurface
 	private ID3D11InputLayout? _inputLayout;
 	private ID3D11Buffer? _vertexBuffer;
 	private ID3D11Buffer? _colorBuffer;
+	private ID3D11ComputeShader? _analysisShader;
+	private ID3D11Buffer? _analysisConstants;
+	private ID3D11Buffer? _analysisResults;
+	private ID3D11Buffer? _analysisReadback;
+	private ID3D11UnorderedAccessView? _analysisResultsView;
 	private ID3D11SamplerState? _linearSampler;
 	private ID3D11SamplerState? _pointSampler;
 	private ID3D11Texture2D? _sharedTexture;
@@ -28,6 +33,12 @@ public sealed class GpuMonitorPresentationSurface : DrawingSurface
 	private MonitoringResourceId? _openedResourceId;
 	private long _deviceAdapterLuid;
 	private FrameworkElement? _standaloneViewport;
+	private DateTimeOffset _lastAnalysisAt;
+	private ulong _lastAnalysisSequence;
+	private MediaInspectionRoi? _lastAnalyzedRoi;
+	private MediaInspectionChannel _lastAnalyzedChannel = MediaInspectionChannel.Combined;
+	private const int MaxAnalysisSamples = 262_144;
+	private const int AnalysisResultCount = 16;
 
 	public static readonly DependencyProperty MonitorProperty = DependencyProperty.Register(
 		nameof(Monitor),
@@ -46,6 +57,18 @@ public sealed class GpuMonitorPresentationSurface : DrawingSurface
 		typeof(bool),
 		typeof(GpuMonitorPresentationSurface),
 		new FrameworkPropertyMetadata(false, OnPresentationChanged));
+
+	public static readonly DependencyProperty InspectionChannelProperty = DependencyProperty.Register(
+		nameof(InspectionChannel),
+		typeof(MediaInspectionChannel),
+		typeof(GpuMonitorPresentationSurface),
+		new FrameworkPropertyMetadata(MediaInspectionChannel.Combined, OnInspectionChanged));
+
+	public static readonly DependencyProperty RoiProperty = DependencyProperty.Register(
+		nameof(Roi),
+		typeof(MediaInspectionRoi?),
+		typeof(GpuMonitorPresentationSurface),
+		new FrameworkPropertyMetadata(null, OnInspectionChanged));
 
 	public GpuMonitorPresentationSurface()
 	{
@@ -77,13 +100,33 @@ public sealed class GpuMonitorPresentationSurface : DrawingSurface
 		set => SetValue(StandaloneFitProperty, value);
 	}
 
+	public MediaInspectionChannel InspectionChannel
+	{
+		get => (MediaInspectionChannel)GetValue(InspectionChannelProperty);
+		set => SetValue(InspectionChannelProperty, value);
+	}
+
+	public MediaInspectionRoi? Roi
+	{
+		get => (MediaInspectionRoi?)GetValue(RoiProperty);
+		set => SetValue(RoiProperty, value);
+	}
+
 	private static void OnPresentationChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs eventArgs)
 	{
 		var surface = (GpuMonitorPresentationSurface)dependencyObject;
 		surface.CloseSharedResource();
+		surface.ResetAnalysisEvidence();
 		surface.Invalidate();
 		if (surface.GpuFrame is null)
 			surface.Monitor?.SetGpuPresentationState(false, "CPU/WPF fallback");
+	}
+
+	private static void OnInspectionChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs eventArgs)
+	{
+		var surface = (GpuMonitorPresentationSurface)dependencyObject;
+		surface.ResetAnalysisEvidence();
+		surface.Invalidate();
 	}
 
 	private void OnSurfaceLoaded(object sender, RoutedEventArgs e)
@@ -124,8 +167,10 @@ public sealed class GpuMonitorPresentationSurface : DrawingSurface
 
 		var vertexBytecode = Compiler.Compile(ShaderSource, "VSMain", "GpuMonitorPresentation.hlsl", "vs_4_0");
 		var pixelBytecode = Compiler.Compile(ShaderSource, "PSMain", "GpuMonitorPresentation.hlsl", "ps_4_0");
+		var analysisBytecode = Compiler.Compile(ShaderSource, "CSMain", "GpuMonitorPresentation.hlsl", "cs_5_0");
 		_vertexShader = e.Device.CreateVertexShader(vertexBytecode.Span);
 		_pixelShader = e.Device.CreatePixelShader(pixelBytecode.Span);
+		_analysisShader = e.Device.CreateComputeShader(analysisBytecode.Span);
 		_inputLayout = e.Device.CreateInputLayout(
 			new[]
 			{
@@ -143,6 +188,24 @@ public sealed class GpuMonitorPresentationSurface : DrawingSurface
 			BindFlags.ConstantBuffer,
 			ResourceUsage.Dynamic,
 			CpuAccessFlags.Write);
+		_analysisConstants = e.Device.CreateBuffer(
+			checked((uint)Marshal.SizeOf<AnalysisConstants>()),
+			BindFlags.ConstantBuffer,
+			ResourceUsage.Dynamic,
+			CpuAccessFlags.Write);
+		_analysisResults = e.Device.CreateBuffer(
+			AnalysisResultCount * sizeof(uint),
+			BindFlags.UnorderedAccess,
+			ResourceUsage.Default,
+			CpuAccessFlags.None,
+			ResourceOptionFlags.BufferStructured,
+			sizeof(uint));
+		_analysisReadback = e.Device.CreateBuffer(
+			AnalysisResultCount * sizeof(uint),
+			BindFlags.None,
+			ResourceUsage.Staging,
+			CpuAccessFlags.Read);
+		_analysisResultsView = e.Device.CreateUnorderedAccessView(_analysisResults);
 		_linearSampler = e.Device.CreateSamplerState(SamplerDescription.LinearClamp);
 		_pointSampler = e.Device.CreateSamplerState(SamplerDescription.PointClamp);
 		Invalidate();
@@ -151,6 +214,11 @@ public sealed class GpuMonitorPresentationSurface : DrawingSurface
 	private void OnUnloadContent(object? sender, DrawingSurfaceEventArgs e)
 	{
 		CloseSharedResource();
+		_analysisResultsView?.Dispose();
+		_analysisReadback?.Dispose();
+		_analysisResults?.Dispose();
+		_analysisConstants?.Dispose();
+		_analysisShader?.Dispose();
 		_pointSampler?.Dispose();
 		_linearSampler?.Dispose();
 		_colorBuffer?.Dispose();
@@ -158,6 +226,11 @@ public sealed class GpuMonitorPresentationSurface : DrawingSurface
 		_inputLayout?.Dispose();
 		_pixelShader?.Dispose();
 		_vertexShader?.Dispose();
+		_analysisResultsView = null;
+		_analysisReadback = null;
+		_analysisResults = null;
+		_analysisConstants = null;
+		_analysisShader = null;
 		_pointSampler = null;
 		_linearSampler = null;
 		_colorBuffer = null;
@@ -174,6 +247,8 @@ public sealed class GpuMonitorPresentationSurface : DrawingSurface
 		if (frame is null || !TryOpenSharedResource(frame, e.Device))
 		{
 			Monitor?.SetGpuPresentationState(false, "CPU/WPF fallback");
+			if (Roi is { IsEmpty: false })
+				Monitor?.SetRoiUnavailable("GPU inspection unavailable");
 			return;
 		}
 
@@ -181,7 +256,7 @@ public sealed class GpuMonitorPresentationSurface : DrawingSurface
 		{
 			var geometry = ResolveGeometry(frame, e.Surface.TextureWidth, e.Surface.TextureHeight);
 			UpdateVertices(e.Context, geometry);
-			UpdateColorConstants(e.Context, frame.Descriptor.Color);
+			UpdateColorConstants(e.Context, frame.Descriptor.Color, InspectionChannel);
 
 			e.Context.IASetPrimitiveTopology(PrimitiveTopology.TriangleStrip);
 			e.Context.IASetInputLayout(_inputLayout);
@@ -196,7 +271,8 @@ public sealed class GpuMonitorPresentationSurface : DrawingSurface
 
 			Monitor?.SetGpuPresentationState(
 				true,
-				$"GPU D3D11 · {frame.Resource.Format.Width}×{frame.Resource.Format.Height} · {(geometry.PointSampling ? "POINT" : "LINEAR")}");
+				$"GPU D3D11 · {frame.Resource.Format.Width}×{frame.Resource.Format.Height} · {InspectionChannel.ToString().ToUpperInvariant()} · {(geometry.PointSampling ? "POINT" : "LINEAR")}");
+			TryAnalyzeRoi(e.Context, frame);
 		}
 		catch
 		{
@@ -286,7 +362,7 @@ public sealed class GpuMonitorPresentationSurface : DrawingSurface
 		context.Unmap(_vertexBuffer!, 0);
 	}
 
-	private void UpdateColorConstants(ID3D11DeviceContext1 context, ColorDescription color)
+	private void UpdateColorConstants(ID3D11DeviceContext1 context, ColorDescription color, MediaInspectionChannel channel)
 	{
 		var transfer = color.Transfer switch
 		{
@@ -300,8 +376,125 @@ public sealed class GpuMonitorPresentationSurface : DrawingSurface
 			transfer,
 			color.Range == NominalRange.Limited ? 1 : 0,
 			color.IsComplete ? 1 : 0,
-			0);
+			(int)channel);
 		context.Unmap(_colorBuffer!, 0);
+	}
+
+	private void TryAnalyzeRoi(ID3D11DeviceContext1 context, OperatorGpuMonitoringFrame frame)
+	{
+		if (Monitor is null || Roi is not { IsEmpty: false } requested ||
+			_analysisShader is null || _analysisConstants is null || _analysisResults is null ||
+			_analysisReadback is null || _analysisResultsView is null || _sharedView is null)
+			return;
+
+		var sourceWidth = checked((int)frame.Resource.Format.Width);
+		var sourceHeight = checked((int)frame.Resource.Format.Height);
+		var roi = requested.Clamp(sourceWidth, sourceHeight);
+		if (roi.IsEmpty)
+		{
+			Monitor.SetRoiUnavailable("ROI outside source bounds");
+			return;
+		}
+
+		var now = DateTimeOffset.UtcNow;
+		var evidenceChanged = frame.SequenceNumber != _lastAnalysisSequence ||
+			_lastAnalyzedRoi != roi ||
+			_lastAnalyzedChannel != InspectionChannel;
+		if (!evidenceChanged || (_lastAnalysisAt != default && now - _lastAnalysisAt < TimeSpan.FromMilliseconds(200)))
+			return;
+
+		var area = checked((long)roi.Width * roi.Height);
+		var stride = Math.Max(1, (int)Math.Ceiling(Math.Sqrt(area / (double)MaxAnalysisSamples)));
+		var sampleWidth = (roi.Width + stride - 1) / stride;
+		var sampleHeight = (roi.Height + stride - 1) / stride;
+
+		UpdateAnalysisConstants(context, roi, stride, sourceWidth, sourceHeight);
+		context.ClearUnorderedAccessViewUint(_analysisResultsView, new uint[] { 0, 0, 0, 0 });
+		context.CSSetShader(_analysisShader);
+		context.CSSetShaderResource(0, _sharedView);
+		context.CSSetConstantBuffer(0, _colorBuffer);
+		context.CSSetConstantBuffer(1, _analysisConstants);
+		context.CSSetUnorderedAccessView(0, _analysisResultsView);
+		context.Dispatch(
+			checked((uint)((sampleWidth + 7) / 8)),
+			checked((uint)((sampleHeight + 7) / 8)),
+			1);
+		context.CSUnsetShaderResource(0);
+		context.CSUnsetUnorderedAccessView(0);
+		context.CopyResource(_analysisReadback, _analysisResults);
+
+		var mapped = context.Map(_analysisReadback, 0, MapMode.Read);
+		try
+		{
+			var values = mapped.AsSpan<uint>(AnalysisResultCount);
+			var count = checked((int)values[0]);
+			if (count <= 0)
+			{
+				Monitor.SetRoiUnavailable("GPU analysis returned no samples");
+				return;
+			}
+
+			static byte Minimum(ReadOnlySpan<uint> data, int index) => checked((byte)(255 - Math.Min(255u, data[index])));
+			static byte Maximum(ReadOnlySpan<uint> data, int index) => checked((byte)Math.Min(255u, data[index]));
+			var statistics = new MediaInspectionRoiStatistics(
+				true,
+				frame.SequenceNumber,
+				roi,
+				count,
+				values[1] / (double)count,
+				values[2] / (double)count,
+				values[3] / (double)count,
+				values[4] / (double)count,
+				values[5] / (double)count,
+				Minimum(values, 11),
+				Minimum(values, 12),
+				Minimum(values, 13),
+				Minimum(values, 14),
+				Minimum(values, 15),
+				Maximum(values, 6),
+				Maximum(values, 7),
+				Maximum(values, 8),
+				Maximum(values, 9),
+				Maximum(values, 10),
+				stride == 1 ? "GPU full ROI sample" : $"GPU bounded sample stride {stride}");
+			Monitor.SetRoiStatistics(statistics);
+		}
+		finally
+		{
+			context.Unmap(_analysisReadback, 0);
+		}
+
+		_lastAnalysisAt = now;
+		_lastAnalysisSequence = frame.SequenceNumber;
+		_lastAnalyzedRoi = roi;
+		_lastAnalyzedChannel = InspectionChannel;
+	}
+
+	private void UpdateAnalysisConstants(
+		ID3D11DeviceContext1 context,
+		MediaInspectionRoi roi,
+		int stride,
+		int sourceWidth,
+		int sourceHeight)
+	{
+		var mapped = context.Map(_analysisConstants!, 0, MapMode.WriteDiscard);
+		mapped.AsSpan<AnalysisConstants>(1)[0] = new AnalysisConstants(
+			roi.X,
+			roi.Y,
+			roi.Width,
+			roi.Height,
+			stride,
+			sourceWidth,
+			sourceHeight,
+			0);
+		context.Unmap(_analysisConstants!, 0);
+	}
+
+	private void ResetAnalysisEvidence()
+	{
+		_lastAnalysisSequence = 0;
+		_lastAnalyzedRoi = null;
+		_lastAnalyzedChannel = InspectionChannel;
 	}
 
 	private static long ResolveAdapterLuid(ID3D11Device device)
@@ -326,7 +519,18 @@ public sealed class GpuMonitorPresentationSurface : DrawingSurface
 	private readonly record struct MonitorVertex(Vector2 Position, Vector2 Texture);
 
 	[StructLayout(LayoutKind.Sequential)]
-	private readonly record struct ColorConstants(int Transfer, int LimitedRange, int Complete, int Padding);
+	private readonly record struct ColorConstants(int Transfer, int LimitedRange, int Complete, int InspectionMode);
+
+	[StructLayout(LayoutKind.Sequential)]
+	private readonly record struct AnalysisConstants(
+		int RoiX,
+		int RoiY,
+		int RoiWidth,
+		int RoiHeight,
+		int SampleStride,
+		int SourceWidth,
+		int SourceHeight,
+		int Padding);
 
 	private readonly record struct PresentationGeometry(double Left, double Top, double Width, double Height, bool PointSampling);
 
@@ -339,8 +543,22 @@ cbuffer ColorTransform : register(b0)
     int TransferMode;
     int LimitedRange;
     int CompleteColor;
-    int Padding;
+    int InspectionMode;
 };
+
+cbuffer RoiAnalysis : register(b1)
+{
+    int RoiX;
+    int RoiY;
+    int RoiWidth;
+    int RoiHeight;
+    int SampleStride;
+    int SourceWidth;
+    int SourceHeight;
+    int RoiPadding;
+};
+
+RWStructuredBuffer<uint> AnalysisResults : register(u0);
 
 struct VSInput
 {
@@ -391,18 +609,71 @@ float TransformComponent(float value)
     return saturate(LinearToSrgb(linear));
 }
 
-float4 PSMain(PSInput input) : SV_TARGET
+float4 TransformSample(float4 sample)
 {
-    float4 sample = SourceTexture.Sample(SourceSampler, input.Texture);
     if (CompleteColor != 0)
     {
         sample.r = TransformComponent(sample.r);
         sample.g = TransformComponent(sample.g);
         sample.b = TransformComponent(sample.b);
     }
+    return sample;
+}
+
+float4 PSMain(PSInput input) : SV_TARGET
+{
+    float4 sample = TransformSample(SourceTexture.Sample(SourceSampler, input.Texture));
+    if (InspectionMode == 1)
+        return float4(sample.r, 0.0, 0.0, 1.0);
+    if (InspectionMode == 2)
+        return float4(0.0, sample.g, 0.0, 1.0);
+    if (InspectionMode == 3)
+        return float4(0.0, 0.0, sample.b, 1.0);
+    if (InspectionMode == 4)
+        return float4(sample.a, sample.a, sample.a, 1.0);
+    if (InspectionMode == 5)
+    {
+        float luma = dot(sample.rgb, float3(0.2126, 0.7152, 0.0722));
+        return float4(luma, luma, luma, 1.0);
+    }
 
     sample.rgb *= sample.a;
     return sample;
+}
+
+[numthreads(8, 8, 1)]
+void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
+{
+    int x = RoiX + (int)dispatchThreadId.x * SampleStride;
+    int y = RoiY + (int)dispatchThreadId.y * SampleStride;
+    if (x >= RoiX + RoiWidth || y >= RoiY + RoiHeight || x >= SourceWidth || y >= SourceHeight)
+        return;
+
+    float4 sample = TransformSample(SourceTexture.Load(int3(x, y, 0)));
+    uint r = (uint)round(saturate(sample.r) * 255.0);
+    uint g = (uint)round(saturate(sample.g) * 255.0);
+    uint b = (uint)round(saturate(sample.b) * 255.0);
+    uint a = (uint)round(saturate(sample.a) * 255.0);
+    uint luma = (uint)round(saturate((0.2126 * r + 0.7152 * g + 0.0722 * b) / 255.0) * 255.0);
+
+    InterlockedAdd(AnalysisResults[0], 1);
+    InterlockedAdd(AnalysisResults[1], r);
+    InterlockedAdd(AnalysisResults[2], g);
+    InterlockedAdd(AnalysisResults[3], b);
+    InterlockedAdd(AnalysisResults[4], a);
+    InterlockedAdd(AnalysisResults[5], luma);
+
+    InterlockedMax(AnalysisResults[6], r);
+    InterlockedMax(AnalysisResults[7], g);
+    InterlockedMax(AnalysisResults[8], b);
+    InterlockedMax(AnalysisResults[9], a);
+    InterlockedMax(AnalysisResults[10], luma);
+
+    InterlockedMax(AnalysisResults[11], 255 - r);
+    InterlockedMax(AnalysisResults[12], 255 - g);
+    InterlockedMax(AnalysisResults[13], 255 - b);
+    InterlockedMax(AnalysisResults[14], 255 - a);
+    InterlockedMax(AnalysisResults[15], 255 - luma);
 }
 """;
 }
