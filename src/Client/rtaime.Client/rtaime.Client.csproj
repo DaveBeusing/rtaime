@@ -4,4 +4,11 @@
 		<ProjectReference Include="..\..\Contracts\rtaime.Control.Contracts\rtaime.Control.Contracts.csproj" />
 		<ProjectReference Include="..\..\Contracts\rtaime.Media.Contracts\rtaime.Media.Contracts.csproj" />
 	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Google.Protobuf" />
+		<PackageReference Include="Grpc.Net.Client" />
+		<PackageReference Include="Grpc.Tools" PrivateAssets="all" />
+		<Protobuf Include="..\..\..\schemas\external-control\v1\external_control.proto" GrpcServices="Client" Link="Protos\external_control.proto" />
+	</ItemGroup>
 </Project>

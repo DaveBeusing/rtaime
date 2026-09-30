@@ -1,0 +1,221 @@
+syntax = "proto3";
+
+package rtaime.external_control.v1;
+option csharp_namespace = "Rtaime.ExternalControl.V1";
+
+service ExternalControl {
+  rpc Execute (ExternalControlRequest) returns (ExternalControlReply);
+  rpc SubscribeState (StateSubscriptionRequest) returns (stream StateNotification);
+}
+
+message RequestContext {
+  string api_version = 1;
+  string request_id = 2;
+  string correlation_id = 3;
+  string client_name = 4;
+  string client_version = 5;
+}
+
+message EmptyRequest {}
+
+message ProductionCommand {
+  string contract_version = 1;
+  string command_id = 2;
+  string production_id = 3;
+  uint64 expected_revision = 4;
+  string source_id = 5;
+  optional uint32 duration_frames = 6;
+  string scene_id = 7;
+  string output_role_id = 8;
+}
+
+message AudioInputRequest {
+  string source_id = 1;
+  double gain = 2;
+  bool muted = 3;
+}
+
+message AudioRoutingRequest {
+  int32 mode = 1;
+  string breakaway_source_id = 2;
+  uint64 expected_routing_revision = 3;
+}
+
+message AudioTestSignalRequest {
+  string source_id = 1;
+  bool enabled = 2;
+  int32 mode = 3;
+  double frequency_hz = 4;
+  double peak_level = 5;
+}
+
+message TestPatternRequest {
+  string source_id = 1;
+  bool enabled = 2;
+  bool motion_timing = 3;
+}
+
+message JsonPayloadRequest {
+  bytes json = 1;
+}
+
+message RecordingStartRequest {
+  string destination_directory = 1;
+  string file_name = 2;
+}
+
+message MediaAssetCatalogRequest {
+  int32 offset = 1;
+  int32 limit = 2;
+}
+
+message MediaAssetImportRequest {
+  repeated string source_locations = 1;
+}
+
+message MediaAssetRelinkRequest {
+  string asset_id = 1;
+  string source_location = 2;
+}
+
+message MediaAssetRemoveRequest {
+  string asset_id = 1;
+}
+
+message MediaDeckOpenRequest {
+  string contract_version = 1;
+  string source_id = 2;
+  string path = 3;
+  string asset_id = 4;
+}
+
+message MediaDeckTransportRequest {
+  string contract_version = 1;
+  string asset_id = 2;
+  int32 kind = 3;
+  optional int64 target_frame = 4;
+  optional bool auto_play_on_program = 5;
+  optional int32 end_behavior = 6;
+  optional int64 in_point_frame = 7;
+  optional int64 out_point_frame = 8;
+}
+
+message MediaDeckMarkerRequest {
+  string contract_version = 1;
+  string asset_id = 2;
+  int32 kind = 3;
+  optional int64 position_frame = 4;
+  string cue_point_id = 5;
+  string name = 6;
+}
+
+message ShowControlCueListRequest {
+  string canonical_json = 1;
+}
+
+message ShowControlSelectionRequest {
+  string cue_list_id = 1;
+}
+
+message RecoveryAcknowledgementRequest {
+  bool resume = 1;
+}
+
+message RundownSaveRequest {
+  string canonical_json = 1;
+  uint64 expected_storage_version = 2;
+}
+
+message RundownItemRequest {
+  string item_id = 1;
+}
+
+message ExternalControlRequest {
+  RequestContext context = 1;
+
+  oneof operation {
+    EmptyRequest ping = 10;
+    EmptyRequest snapshot = 11;
+    ProductionCommand select_preview = 12;
+    ProductionCommand cut_program = 13;
+    ProductionCommand dissolve_program = 14;
+    ProductionCommand activate_scene = 15;
+    ProductionCommand route_output_role = 16;
+
+    AudioInputRequest set_audio_input = 20;
+    AudioRoutingRequest set_audio_routing = 21;
+    AudioTestSignalRequest set_audio_test_signal = 22;
+    TestPatternRequest set_test_pattern = 23;
+
+    JsonPayloadRequest load_graphics_overlay = 30;
+    JsonPayloadRequest apply_production_cg = 31;
+    JsonPayloadRequest set_graphics_overlay = 32;
+    EmptyRequest clear_graphics_overlay = 33;
+    JsonPayloadRequest set_compositing_layer = 34;
+    JsonPayloadRequest transform_compositing_layer = 35;
+    JsonPayloadRequest set_compositing_processing = 36;
+    JsonPayloadRequest reorder_compositing_layers = 37;
+
+    RecordingStartRequest start_recording = 40;
+    EmptyRequest stop_recording = 41;
+    JsonPayloadRequest set_ai_showcase = 42;
+
+    MediaAssetCatalogRequest get_media_asset_catalog = 50;
+    MediaAssetImportRequest import_media_assets = 51;
+    MediaAssetRelinkRequest relink_media_asset = 52;
+    MediaAssetRemoveRequest remove_media_asset = 53;
+    EmptyRequest refresh_media_assets = 54;
+
+    EmptyRequest get_media_deck = 60;
+    MediaDeckOpenRequest open_media_deck = 61;
+    MediaDeckTransportRequest apply_media_deck_transport = 62;
+    MediaDeckMarkerRequest apply_media_deck_marker = 63;
+    EmptyRequest close_media_deck = 64;
+
+    EmptyRequest get_show_control = 70;
+    ShowControlCueListRequest save_show_control_cue_list = 71;
+    ShowControlSelectionRequest select_show_control_cue_list = 72;
+    EmptyRequest arm_show_control = 73;
+    EmptyRequest go_show_control = 74;
+    EmptyRequest cancel_show_control = 75;
+    RecoveryAcknowledgementRequest acknowledge_show_control_recovery = 76;
+
+    EmptyRequest get_rundown = 80;
+    RundownSaveRequest save_rundown = 81;
+    RundownItemRequest prepare_rundown = 82;
+    EmptyRequest go_rundown = 83;
+    EmptyRequest next_rundown = 84;
+    EmptyRequest previous_rundown = 85;
+    EmptyRequest hold_rundown = 86;
+    RecoveryAcknowledgementRequest acknowledge_rundown_recovery = 87;
+  }
+}
+
+message ExternalControlError {
+  string code = 1;
+  string message = 2;
+}
+
+message ExternalControlReply {
+  string api_version = 1;
+  string response_type = 2;
+  string request_id = 3;
+  string correlation_id = 4;
+  string host_instance_id = 5;
+  uint64 state_version = 6;
+  uint64 sequence = 7;
+  bytes payload_json = 8;
+  ExternalControlError error = 9;
+}
+
+message StateSubscriptionRequest {
+  RequestContext context = 1;
+  uint32 minimum_interval_ms = 2;
+}
+
+message StateNotification {
+  string host_instance_id = 1;
+  uint64 based_on_state_version = 2;
+  uint64 state_version = 3;
+  uint64 sequence = 4;
+}
