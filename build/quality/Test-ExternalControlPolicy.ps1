@@ -64,7 +64,7 @@ Assert-Condition ($schema -match 'request_id' -and $schema -match 'correlation_i
 Assert-Condition ($schema -match 'expected_revision' -and $schema -match 'command_id') "Production mutations must preserve optimistic concurrency and stable command identity."
 Assert-Condition ($configSchema -match '"enabled"' -and $configSchema -match '"default": false' -and $configSchema -match '"bindAddress"' -and $configSchema -match '127\.0\.0\.1') "External configuration schema must preserve disabled and loopback secure defaults."
 Assert-Condition ($configSchema -match '"Observer"' -and $configSchema -match '"Operator"' -and $configSchema -match '"Administrator"') "External configuration schema must define the supported role set."
-Assert-Condition ($configSchema -match '"maxConcurrentConnections"' -and $configSchema -match '"requestsPerSecond"' -and $configSchema -match '"maxRequestBytes"') "External configuration schema must retain explicit resource limits."
+Assert-Condition ($configSchema -match '"maxConcurrentConnections"' -and $configSchema -match '"requestsPerSecond"' -and $configSchema -match '"maxRequestBytes"' -and $configSchema -match '"requestTimeoutMilliseconds"') "External configuration schema must retain explicit resource and request-time bounds."
 
 Assert-Condition ($server -match 'public bool Enabled \{ get; init; \}' -and $server -match 'BindAddress \{ get; init; \} = "127\.0\.0\.1"') "External control must remain disabled by default and bind to loopback when configured without an explicit address."
 Assert-Condition ($server -match 'SslProtocols\.Tls12 \| SslProtocols\.Tls13') "External control must require modern TLS."
@@ -73,6 +73,7 @@ Assert-Condition ($server -match 'ValidateClientCertificate' -and $server -match
 Assert-Condition ($server -match 'ExternalControlRole\.Observer' -and $server -match 'ExternalControlRole\.Operator') "Server-side RBAC must preserve Observer and Operator capability separation."
 Assert-Condition ($server -match 'MaxConcurrentConnections' -and $server -match 'MaxConcurrentOperationsPerClient' -and $server -match 'RequestsPerSecond' -and $server -match 'RequestBurst') "External control must retain explicit connection, in-flight and request-rate bounds."
 Assert-Condition ($server -match 'MaxReceiveMessageSize = _options\.MaxRequestBytes' -and $server -match 'MaxSendMessageSize = _options\.MaxResponseBytes') "gRPC request and response sizes must remain bounded."
+Assert-Condition ($server -match 'RequestTimeout' -and $server -match 'operationTimeout\.CancelAfter\(_options\.RequestTimeout\)' -and $server -match 'StatusCode\.DeadlineExceeded') "Unary external control execution must retain a server-side request deadline."
 Assert-Condition ($server -match '_dispatcher\.DispatchExternalAsync') "External gRPC requests must terminate in the shared ControlHost dispatch seam."
 Assert-Condition ($server -notmatch '"runtime\.' -and $server -notmatch '"ai\.') "External-control transport must not dispatch directly to RuntimeHost or AIHost."
 Assert-Condition ($server -match '"authentication"' -and $server -match '"request-validation"' -and $server -match '"resource-limit"') "External security diagnostics must audit authentication, request validation and resource-limit outcomes."
