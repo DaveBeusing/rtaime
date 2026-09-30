@@ -225,6 +225,7 @@ public sealed class NativeSrtTransport : ISrtTransport
 
 internal sealed class SrtNativeApi : IDisposable
 {
+	private const int SrtError = -1;
 	private readonly IntPtr _library;
 	private readonly SrtStartup _startup;
 	private readonly SrtCleanup _cleanup;
