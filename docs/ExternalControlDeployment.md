@@ -54,6 +54,7 @@ The default configuration is:
 | Burst | `60` |
 | Maximum request | `1 MiB` |
 | Maximum response | `4 MiB` |
+| Unary request timeout | `5 s` |
 | Shutdown drain timeout | `5 s` |
 
 Remote binding must be configured explicitly. Public Internet exposure is not a default or a qualified deployment profile.
@@ -80,6 +81,7 @@ External-control environment variables are:
 - `RTAIME_EXTERNAL_CONTROL_REQUEST_BURST`
 - `RTAIME_EXTERNAL_CONTROL_MAX_REQUEST_BYTES`
 - `RTAIME_EXTERNAL_CONTROL_MAX_RESPONSE_BYTES`
+- `RTAIME_EXTERNAL_CONTROL_REQUEST_TIMEOUT_MS`
 - `RTAIME_EXTERNAL_CONTROL_SHUTDOWN_TIMEOUT_MS`
 
 Equivalent command-line keys use the lower-case `--external-...` form implemented by ControlHost configuration.
@@ -183,6 +185,7 @@ ControlHost applies explicit limits to the remote surface:
 - maximum in-flight operations per authenticated client;
 - per-client token-bucket request rate and burst;
 - gRPC request and response message size;
+- server-side unary request deadline;
 - bounded identity configuration;
 - bounded audit history;
 - bounded state-subscription cadence.
