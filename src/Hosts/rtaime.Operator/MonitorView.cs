@@ -76,6 +76,10 @@ public class MonitorView : UserControl
 		nameof(RoiInspectionReadout), typeof(string), typeof(MonitorView), new PropertyMetadata("ROI —"));
 	private static readonly DependencyPropertyKey IsRoiActivePropertyKey = DependencyProperty.RegisterReadOnly(
 		nameof(IsRoiActive), typeof(bool), typeof(MonitorView), new PropertyMetadata(false));
+	private static readonly DependencyPropertyKey IsChannelInspectionUnavailablePropertyKey = DependencyProperty.RegisterReadOnly(
+		nameof(IsChannelInspectionUnavailable), typeof(bool), typeof(MonitorView), new PropertyMetadata(false));
+	private static readonly DependencyPropertyKey ChannelInspectionStatusPropertyKey = DependencyProperty.RegisterReadOnly(
+		nameof(ChannelInspectionStatus), typeof(string), typeof(MonitorView), new PropertyMetadata("COMBINED"));
 	private static readonly DependencyPropertyKey DiagnosticsHudTextPropertyKey = DependencyProperty.RegisterReadOnly(
 		nameof(DiagnosticsHudText), typeof(string), typeof(MonitorView), new PropertyMetadata("FRAME DIAGNOSTICS — UNAVAILABLE"));
 	private static readonly DependencyPropertyKey IsPixelGridVisiblePropertyKey = DependencyProperty.RegisterReadOnly(
@@ -100,6 +104,8 @@ public class MonitorView : UserControl
 	public static readonly DependencyProperty InspectionReadoutProperty = InspectionReadoutPropertyKey.DependencyProperty;
 	public static readonly DependencyProperty RoiInspectionReadoutProperty = RoiInspectionReadoutPropertyKey.DependencyProperty;
 	public static readonly DependencyProperty IsRoiActiveProperty = IsRoiActivePropertyKey.DependencyProperty;
+	public static readonly DependencyProperty IsChannelInspectionUnavailableProperty = IsChannelInspectionUnavailablePropertyKey.DependencyProperty;
+	public static readonly DependencyProperty ChannelInspectionStatusProperty = ChannelInspectionStatusPropertyKey.DependencyProperty;
 	public static readonly DependencyProperty IsPixelGridVisibleProperty = IsPixelGridVisiblePropertyKey.DependencyProperty;
 	public static readonly DependencyProperty DiagnosticsHudTextProperty = DiagnosticsHudTextPropertyKey.DependencyProperty;
 	public static readonly DependencyProperty IsGpuPresentationActiveProperty = IsGpuPresentationActivePropertyKey.DependencyProperty;
@@ -405,6 +411,8 @@ public class MonitorView : UserControl
 	public string InspectionReadout => (string)GetValue(InspectionReadoutProperty);
 	public string RoiInspectionReadout => (string)GetValue(RoiInspectionReadoutProperty);
 	public bool IsRoiActive => (bool)GetValue(IsRoiActiveProperty);
+	public bool IsChannelInspectionUnavailable => (bool)GetValue(IsChannelInspectionUnavailableProperty);
+	public string ChannelInspectionStatus => (string)GetValue(ChannelInspectionStatusProperty);
 	public bool IsPixelGridVisible => (bool)GetValue(IsPixelGridVisibleProperty);
 	public bool IsGpuPresentationActive => (bool)GetValue(IsGpuPresentationActiveProperty);
 	public string GpuPresentationDetail => (string)GetValue(GpuPresentationDetailProperty);
@@ -447,6 +455,7 @@ public class MonitorView : UserControl
 			view.SetValue(RoiInspectionReadoutPropertyKey, "ROI —");
 		else
 			view.SetValue(RoiInspectionReadoutPropertyKey, MediaPixelInspection.Format(MediaInspectionRoiStatistics.Unavailable(roi.Value, "GPU analysis pending")));
+		view.RefreshChannelInspectionAvailability();
 	}
 
 	private static void OnDiagnosticsChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs eventArgs)
@@ -524,8 +533,21 @@ public class MonitorView : UserControl
 	{
 		SetValue(IsGpuPresentationActivePropertyKey, active);
 		SetValue(GpuPresentationDetailPropertyKey, string.IsNullOrWhiteSpace(detail) ? "CPU/WPF fallback" : detail);
+		RefreshChannelInspectionAvailability();
 		if (ShowDiagnosticsHud)
 			RefreshDiagnosticsHud();
+	}
+
+	private void RefreshChannelInspectionAvailability()
+	{
+		var requiresGpuChannelView = InspectionChannel != MediaInspectionChannel.Combined;
+		var unavailable = requiresGpuChannelView && !IsGpuPresentationActive;
+		SetValue(IsChannelInspectionUnavailablePropertyKey, unavailable);
+		SetValue(
+			ChannelInspectionStatusPropertyKey,
+			unavailable
+				? $"{InspectionChannel.ToString().ToUpperInvariant()} · GPU CHANNEL VIEW UNAVAILABLE"
+				: InspectionChannel.ToString().ToUpperInvariant());
 	}
 
 	internal void UpdatePresentationViewport(double widthDip, double heightDip, double dpiScaleX, double dpiScaleY)
