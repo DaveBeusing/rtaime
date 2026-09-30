@@ -447,7 +447,7 @@ public sealed class OperatorMonitoringViewModel : INotifyPropertyChanged, IAsync
 	private static string FormatScopeProcessingDetail(MediaScopeSnapshot snapshot)
 	{
 		var duration = snapshot.AnalysisDuration.TotalMilliseconds;
-		return $"{snapshot.ProcessingPath} · stride {snapshot.SampleStride} · {snapshot.SampleCount:N0} samples · {duration:0.###} ms · {snapshot.ResultTransferBytes:N0} B transfer · {snapshot.Detail}";
+		return $"{snapshot.ProcessingPath} · ≤5 Hz · stride {snapshot.SampleStride} · {snapshot.SampleCount:N0} samples · {duration:0.###} ms · {snapshot.ResultTransferBytes:N0} B transfer · {snapshot.ManagedAllocationBytes:N0} B managed alloc · {snapshot.Detail}";
 	}
 
 	private void RefreshPreviewFromCache()
