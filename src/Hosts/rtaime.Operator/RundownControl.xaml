@@ -42,38 +42,65 @@
 			</Grid>
 			<Grid Margin="0,4,0,0">
 				<Grid.ColumnDefinitions>
-					<ColumnDefinition Width="Auto" />
-					<ColumnDefinition Width="8" />
+					<ColumnDefinition Width="*" />
+					<ColumnDefinition Width="6" />
+					<ColumnDefinition Width="80" />
+					<ColumnDefinition Width="6" />
 					<ColumnDefinition Width="Auto" />
 					<ColumnDefinition Width="52" />
 				</Grid.ColumnDefinitions>
-				<controls:RtaimeCheckBox Content="AUTO MEDIA" IsChecked="{Binding AutoAdvanceMedia, Mode=TwoWay}" VerticalAlignment="Center" />
-				<controls:RtaimeCheckBox Grid.Column="2" Content="DISSOLVE" IsChecked="{Binding UseDissolve, Mode=TwoWay}" VerticalAlignment="Center" />
-				<controls:RtaimeTextBox Grid.Column="3"
+				<StackPanel>
+					<TextBlock Text="FOLLOW ACTION" Style="{StaticResource OperatorLabel}" />
+					<controls:RtaimeComboBox
+						ItemsSource="{Binding FollowActions}"
+						SelectedItem="{Binding SelectedFollowAction, Mode=TwoWay}"
+						MinHeight="26"
+						ToolTip="Bounded follow action executed only from confirmed completion evidence." />
+				</StackPanel>
+				<StackPanel Grid.Column="2">
+					<TextBlock Text="DELAY f" Style="{StaticResource OperatorLabel}" />
+					<controls:RtaimeTextBox
+						Text="{Binding FollowDelayFrames, UpdateSourceTrigger=PropertyChanged}"
+						IsCompact="True"
+						ToolTip="Production-frame delay for AutoGoNextAfterFrames." />
+				</StackPanel>
+				<controls:RtaimeCheckBox Grid.Column="4" Content="DISSOLVE" IsChecked="{Binding UseDissolve, Mode=TwoWay}" VerticalAlignment="Bottom" Margin="0,0,0,3" />
+				<controls:RtaimeTextBox Grid.Column="5"
 					Margin="6,0,0,0"
 					Text="{Binding TransitionFrames, UpdateSourceTrigger=PropertyChanged}"
 					IsCompact="True"
+					VerticalAlignment="Bottom"
 					ToolTip="Dissolve duration in production frames." />
 			</Grid>
 			<Grid Margin="0,4,0,0">
 				<Grid.ColumnDefinitions>
-					<ColumnDefinition Width="Auto" />
-					<ColumnDefinition Width="52" />
+					<ColumnDefinition Width="*" />
+					<ColumnDefinition Width="6" />
+					<ColumnDefinition Width="60" />
 					<ColumnDefinition Width="8" />
 					<ColumnDefinition Width="Auto" />
 					<ColumnDefinition Width="*" />
 				</Grid.ColumnDefinitions>
-				<controls:RtaimeCheckBox Content="REPEAT ITEM" IsChecked="{Binding RepeatItem, Mode=TwoWay}" VerticalAlignment="Center" />
-				<controls:RtaimeTextBox Grid.Column="1"
-					Margin="6,0,0,0"
-					Text="{Binding RepeatCount, UpdateSourceTrigger=PropertyChanged}"
-					IsCompact="True"
-					ToolTip="Bounded repeat count (1..100)." />
-				<TextBlock Grid.Column="3" Text="HOLD f" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" />
-				<controls:RtaimeTextBox Grid.Column="4"
+				<StackPanel>
+					<TextBlock Text="REPEAT POLICY" Style="{StaticResource OperatorLabel}" />
+					<controls:RtaimeComboBox
+						ItemsSource="{Binding RepeatModes}"
+						SelectedItem="{Binding SelectedRepeatMode, Mode=TwoWay}"
+						MinHeight="26" />
+				</StackPanel>
+				<StackPanel Grid.Column="2">
+					<TextBlock Text="COUNT" Style="{StaticResource OperatorLabel}" />
+					<controls:RtaimeTextBox
+						Text="{Binding RepeatCount, UpdateSourceTrigger=PropertyChanged}"
+						IsCompact="True"
+						ToolTip="Finite repeat count (1..100)." />
+				</StackPanel>
+				<TextBlock Grid.Column="4" Text="HOLD f" Style="{StaticResource OperatorLabel}" VerticalAlignment="Bottom" Margin="0,0,0,6" />
+				<controls:RtaimeTextBox Grid.Column="5"
 					Margin="6,0,0,0"
 					Text="{Binding HoldFrames, UpdateSourceTrigger=PropertyChanged}"
 					IsCompact="True"
+					VerticalAlignment="Bottom"
 					ToolTip="Bounded hold duration in production frames." />
 			</Grid>
 		</StackPanel>
@@ -179,6 +206,18 @@
 					<TextBlock Text="{Binding State}" FontWeight="SemiBold" FontSize="{StaticResource OperatorFontSizeCompact}" />
 					<TextBlock Text="{Binding StorageLabel}" DockPanel.Dock="Right" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" />
 				</DockPanel>
+				<Grid Margin="0,2,0,2">
+					<Grid.ColumnDefinitions>
+						<ColumnDefinition Width="Auto" />
+						<ColumnDefinition Width="*" />
+						<ColumnDefinition Width="Auto" />
+					</Grid.ColumnDefinitions>
+					<TextBlock Text="{Binding AutomationState}" FontWeight="SemiBold" FontSize="{StaticResource OperatorFontSizeMicro}" />
+					<TextBlock Grid.Column="1" Margin="8,0" Text="{Binding FollowStatus}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextTrimming="CharacterEllipsis" />
+					<TextBlock Grid.Column="2" Text="{Binding RepeatStatus}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" />
+				</Grid>
+				<TextBlock Text="{Binding PendingNext, StringFormat=NEXT · {0}}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextTrimming="CharacterEllipsis" />
+				<TextBlock Text="{Binding FollowCountdown, StringFormat=TIMING · {0}}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextTrimming="CharacterEllipsis" />
 				<TextBlock Text="{Binding Detail}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextWrapping="Wrap" />
 				<TextBlock Text="{Binding Failure}" Foreground="{DynamicResource OperatorWarningBrush}" FontSize="{StaticResource OperatorFontSizeMicro}" TextWrapping="Wrap" />
 				<StackPanel Orientation="Horizontal" Margin="0,4,0,0">
