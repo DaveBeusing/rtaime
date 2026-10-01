@@ -614,6 +614,78 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		return ReadRundownWorkspace(response);
 	}
 
+	public async ValueTask<ProductionMacroWorkspaceSnapshot> GetProductionMacroSnapshotAsync(CancellationToken cancellationToken = default) =>
+		ReadProductionMacroWorkspace(await ExchangeAsync("control.production_macro.snapshot.get", new { }, cancellationToken).ConfigureAwait(false));
+
+	public async ValueTask<ProductionMacroWorkspaceSnapshot> SaveProductionMacroAsync(
+		ProductionMacroDefinition macro,
+		ulong expectedStorageVersion,
+		CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(macro);
+		var response = await ExchangeAsync(
+			"control.production_macro.save",
+			new WireProductionMacroSave(SerializeSingleProductionMacro(macro), expectedStorageVersion),
+			cancellationToken).ConfigureAwait(false);
+		return ReadProductionMacroWorkspace(response);
+	}
+
+	public async ValueTask<ProductionMacroWorkspaceSnapshot> DeleteProductionMacroAsync(
+		ProductionMacroId macroId,
+		ulong expectedStorageVersion,
+		CancellationToken cancellationToken = default)
+	{
+		var response = await ExchangeAsync(
+			"control.production_macro.delete",
+			new WireProductionMacroDelete(macroId.ToString(), expectedStorageVersion),
+			cancellationToken).ConfigureAwait(false);
+		return ReadProductionMacroWorkspace(response);
+	}
+
+	public async ValueTask<ProductionMacroValidationResult> ValidateProductionMacroAsync(
+		ProductionMacroDefinition macro,
+		CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(macro);
+		var response = await ExchangeAsync(
+			"control.production_macro.validate",
+			new WireProductionMacroValidationRequest(SerializeSingleProductionMacro(macro)),
+			cancellationToken).ConfigureAwait(false);
+		var wire = response.Payload.Deserialize<WireProductionMacroValidation>(Wire.JsonOptions)
+			?? throw new InvalidDataException("ControlHost Production Macro validation payload is required.");
+		return new ProductionMacroValidationResult(
+			wire.IsValid,
+			wire.Issues.Select(issue => new ProductionMacroValidationIssue(
+				issue.Code,
+				issue.Message,
+				string.IsNullOrWhiteSpace(issue.ActionId) ? null : new ProductionMacroActionId(Identity.Parse(issue.ActionId)))).ToArray());
+	}
+
+	public async ValueTask<ProductionMacroWorkspaceSnapshot> ExecuteProductionMacroAsync(
+		ProductionMacroId macroId,
+		CancellationToken cancellationToken = default)
+	{
+		var response = await ExchangeAsync(
+			"control.production_macro.execute",
+			new WireProductionMacroIdRequest(macroId.ToString()),
+			cancellationToken).ConfigureAwait(false);
+		return ReadProductionMacroWorkspace(response);
+	}
+
+	public async ValueTask<ProductionMacroWorkspaceSnapshot> CancelProductionMacroAsync(CancellationToken cancellationToken = default) =>
+		ReadProductionMacroWorkspace(await ExchangeAsync("control.production_macro.cancel", new { }, cancellationToken).ConfigureAwait(false));
+
+	public async ValueTask<ProductionMacroWorkspaceSnapshot> AcknowledgeProductionMacroRecoveryAsync(
+		bool resume,
+		CancellationToken cancellationToken = default)
+	{
+		var response = await ExchangeAsync(
+			"control.production_macro.recovery.acknowledge",
+			new WireProductionMacroRecovery(resume),
+			cancellationToken).ConfigureAwait(false);
+		return ReadProductionMacroWorkspace(response);
+	}
+
 	internal static OperatorStatusSnapshot DecodeExternalSnapshot(ReadOnlySpan<byte> payload)
 	{
 		var wire = JsonSerializer.Deserialize<WireOperatorSnapshot>(payload, Wire.JsonOptions)
@@ -765,6 +837,26 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 			wire.RemainingRundownRepeats);
 		return new RundownWorkspaceSnapshot(rundown, execution, wire.StorageVersion);
 	}
+
+	internal static ProductionMacroWorkspaceSnapshot DecodeExternalProductionMacro(ReadOnlySpan<byte> payload)
+	{
+		var wire = JsonSerializer.Deserialize<WireProductionMacroWorkspace>(payload, Wire.JsonOptions)
+			?? throw new InvalidDataException("ControlHost Production Macro workspace payload is required.");
+		return FromWire(wire);
+	}
+
+	internal static ProductionMacroValidationResult DecodeExternalProductionMacroValidation(ReadOnlySpan<byte> payload)
+	{
+		var wire = JsonSerializer.Deserialize<WireProductionMacroValidation>(payload, Wire.JsonOptions)
+			?? throw new InvalidDataException("ControlHost Production Macro validation payload is required.");
+		return new ProductionMacroValidationResult(
+			wire.IsValid,
+			wire.Issues.Select(issue => new ProductionMacroValidationIssue(
+				issue.Code,
+				issue.Message,
+				string.IsNullOrWhiteSpace(issue.ActionId) ? null : new ProductionMacroActionId(Identity.Parse(issue.ActionId)))).ToArray());
+	}
+
 
 	private async ValueTask<OperatorMutationResponse> MutateAsync(
 		string messageType,
@@ -989,6 +1081,38 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 			wire.RemainingRundownRepeats);
 		return new RundownWorkspaceSnapshot(rundown, execution, wire.StorageVersion);
 	}
+
+	private static ProductionMacroWorkspaceSnapshot ReadProductionMacroWorkspace(WireEnvelope response)
+	{
+		var wire = response.Payload.Deserialize<WireProductionMacroWorkspace>(Wire.JsonOptions)
+			?? throw new InvalidDataException("ControlHost Production Macro workspace payload is required.");
+		return FromWire(wire);
+	}
+
+	private static ProductionMacroWorkspaceSnapshot FromWire(WireProductionMacroWorkspace wire)
+	{
+		if (!Enum.IsDefined(typeof(ProductionMacroExecutionState), wire.State))
+			throw new InvalidDataException("Production Macro execution state is invalid.");
+		var macros = ProductionMacroCanonicalSerializer.Deserialize(wire.MacrosJson);
+		var execution = new ProductionMacroExecutionSnapshot(
+			(ProductionMacroExecutionState)wire.State,
+			string.IsNullOrWhiteSpace(wire.ExecutionId) ? null : new ProductionMacroExecutionId(Identity.Parse(wire.ExecutionId)),
+			string.IsNullOrWhiteSpace(wire.MacroId) ? null : new ProductionMacroId(Identity.Parse(wire.MacroId)),
+			wire.ActionIndex,
+			string.IsNullOrWhiteSpace(wire.CurrentActionId) ? null : new ProductionMacroActionId(Identity.Parse(wire.CurrentActionId)),
+			string.IsNullOrWhiteSpace(wire.LastCompletedActionId) ? null : new ProductionMacroActionId(Identity.Parse(wire.LastCompletedActionId)),
+			wire.Revision,
+			wire.WaitTargetFrameSequence,
+			wire.RuntimeHostInstanceId,
+			wire.RequiresAcknowledgement,
+			string.IsNullOrWhiteSpace(wire.FailureCode)
+				? null
+				: new Failure(wire.FailureCode, wire.FailureMessage ?? "Production Macro execution failed."));
+		return new ProductionMacroWorkspaceSnapshot(macros, wire.StorageVersion, execution);
+	}
+
+	private static string SerializeSingleProductionMacro(ProductionMacroDefinition macro) =>
+		ProductionMacroCanonicalSerializer.Serialize([macro]);
 
 	private static ShowControlWorkspaceSnapshot ReadShowControlWorkspace(WireEnvelope response)
 	{
@@ -1662,6 +1786,28 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		uint? RemainingFollowFrames = null,
 		ushort RemainingItemRepeats = 0,
 		ushort RemainingRundownRepeats = 0);
+	private sealed record WireProductionMacroSave(string MacroJson, ulong ExpectedStorageVersion);
+	private sealed record WireProductionMacroDelete(string MacroId, ulong ExpectedStorageVersion);
+	private sealed record WireProductionMacroIdRequest(string MacroId);
+	private sealed record WireProductionMacroValidationRequest(string MacroJson);
+	private sealed record WireProductionMacroRecovery(bool Resume);
+	private sealed record WireProductionMacroValidationIssue(string Code, string Message, string? ActionId);
+	private sealed record WireProductionMacroValidation(bool IsValid, WireProductionMacroValidationIssue[] Issues);
+	private sealed record WireProductionMacroWorkspace(
+		string MacrosJson,
+		ulong StorageVersion,
+		int State,
+		string? ExecutionId,
+		string? MacroId,
+		int? ActionIndex,
+		string? CurrentActionId,
+		string? LastCompletedActionId,
+		ulong Revision,
+		ulong? WaitTargetFrameSequence,
+		string? RuntimeHostInstanceId,
+		bool RequiresAcknowledgement,
+		string? FailureCode,
+		string? FailureMessage);
 	private sealed record WireAudioInputState(string SourceId, double Gain, bool Muted);
 	private sealed record WireAudioRoutingState(int Mode, string? BreakawaySourceId, ulong ExpectedRoutingRevision);
 	private sealed record WireAudioTestSignalState(string SourceId, bool Enabled, int Mode, double FrequencyHz, double PeakLevel);
