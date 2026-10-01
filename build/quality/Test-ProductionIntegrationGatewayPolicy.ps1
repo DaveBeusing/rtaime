@@ -58,7 +58,18 @@ Assert-Condition ([string]$schema.properties.schemaVersion.const -eq "1.0") "Int
 Assert-Condition ($documentation -match 'NMOS' -and $documentation -match 'UNVERIFIED') "NMOS must remain explicitly future/unverified."
 Assert-Condition ($documentation -match 'rtaime\.Client' -and $documentation -match 'ControlHost') "Integration documentation must state the governed client/ControlHost boundary."
 
-foreach ($test in @("Osc_codec_round_trips", "Midi_adapter_maps_virtual_input", "Discrete_reference_provider_applies_input_and_output_polarity", "Feedback_resolution_is_snapshot_based")) {
+foreach ($test in @(
+	"Osc_codec_round_trips",
+	"Midi_adapter_maps_virtual_input",
+	"Discrete_reference_provider_applies_input_and_output_polarity",
+	"Feedback_resolution_is_snapshot_based",
+	"Gateway_recovers_when_ControlHost_is_unavailable_during_startup",
+	"Gateway_can_stop_restart_and_resnapshot",
+	"Gateway_fans_one_snapshot_out_to_all_registered_adapters",
+	"Gateway_drops_newest_inputs_when_the_bounded_queue_is_full",
+	"Gateway_serializes_client_snapshot_refresh_with_production_commands",
+	"Companion_surface_requires_bearer_authentication"
+)) {
 	Assert-Condition ($unitTests -match [Regex]::Escape($test)) "Production integration gateway regression coverage is missing '$test'."
 }
 
