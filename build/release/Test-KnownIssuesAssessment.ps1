@@ -51,7 +51,7 @@ if (-not [string]::IsNullOrWhiteSpace($ExpectedBuildId)) {
 
 $issues = @($assessment.issues)
 $ids = @($issues | ForEach-Object { [string]$_.id })
-Assert-Condition (($ids | Sort-Object -Unique).Count -eq $ids.Count) "Known-issues assessment contains duplicate issue ids."
+Assert-Condition (@($ids | Sort-Object -Unique).Count -eq $ids.Count) "Known-issues assessment contains duplicate issue ids."
 foreach ($issue in $issues) {
 	Assert-Condition (-not [string]::IsNullOrWhiteSpace([string]$issue.id)) "Known issue id is required."
 	Assert-Condition ([string]$issue.severity -in @("BLOCKER", "CRITICAL", "MAJOR", "MINOR", "INFORMATIONAL")) "Known issue '$($issue.id)' severity is invalid."
