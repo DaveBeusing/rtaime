@@ -2192,6 +2192,8 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 				return await ExecuteShowControlLayerVisibilityAsync(action, cancellationToken).ConfigureAwait(false);
 			case ShowControlActionKind.SetAudioRouting:
 				return await ExecuteShowControlAudioRoutingAsync(action, cancellationToken).ConfigureAwait(false);
+			case ShowControlActionKind.SetAudioInputState:
+				return await ExecuteShowControlAudioInputStateAsync(action, cancellationToken).ConfigureAwait(false);
 			case ShowControlActionKind.RouteOutputRole:
 				return await ExecuteShowControlMutationAsync(
 					MutationKind.RouteOutputRole,
@@ -2276,6 +2278,21 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			cancellationToken).ConfigureAwait(false);
 		NotifyObservableStateChanged();
 		return MediaDeckFailure(snapshot);
+	}
+
+	private async ValueTask<Failure?> ExecuteShowControlAudioInputStateAsync(
+		ShowControlAction action,
+		CancellationToken cancellationToken)
+	{
+		var response = await SetAudioInputStateAsync(
+			InternalRequest(
+				"control.audio.input.set",
+				new WireAudioInputState(
+					action.SourceId!,
+					action.AudioGain!.Value,
+					action.AudioMuted!.Value)),
+			cancellationToken).ConfigureAwait(false);
+		return ReadErrorFailure(response);
 	}
 
 	private async ValueTask<Failure?> ExecuteShowControlAudioRoutingAsync(
