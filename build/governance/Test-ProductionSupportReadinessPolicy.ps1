@@ -150,6 +150,8 @@ $readinessSchemaText = Read-Text "schemas/support/v1/stable-readiness.schema.jso
 $stableVerifierText = Read-Text "build/release/Test-StableReadiness.ps1"
 $matrixGeneratorText = Read-Text "build/governance/New-SupportCompatibilityMatrix.ps1"
 $supportMatrixText = Read-Text "docs/SupportCompatibilityMatrix.md"
+$productionSupportText = Read-Text "docs/ProductionSupport.md"
+$deploymentDocumentationText = Read-Text "docs/ProductionDeploymentBaseline.md"
 $securityText = Read-Text "SECURITY.md"
 $productSecurityText = Read-Text "docs/Governance/ProductSecurityPolicy.json"
 $releaseChannelsText = Read-Text "build/release/release-channels.json"
@@ -187,6 +189,10 @@ Assert-Condition ([string]$supportPolicy.lifecycle.stableRelease.status -eq "UNV
 Assert-Condition ([string]$supportPolicy.securitySupport.remediationTargetsStatus -eq "UNVERIFIED") "Security remediation targets must remain UNVERIFIED until explicitly approved."
 Assert-Condition ([string]$supportPolicy.upgradeDeprecation.contractDeprecation.status -eq "UNVERIFIED") "Contract deprecation notice must remain UNVERIFIED until explicitly approved."
 Assert-Condition (@($supportPolicy.supportedVersions.stableLines).Count -eq 0) "No Stable version line may be invented before a Stable support commitment exists."
+
+Assert-Condition ([string]$supportPolicy.knownIssues.assessmentRequiredFromStage -eq "RELEASE_CANDIDATE") "Known-issues assessment must be required from release-candidate stage."
+Assert-Condition ($supportPolicy.knownIssues.releaseNotesRequired -eq $true) "Release notes must carry known-issues disclosure requirements."
+Assert-Condition ([string]$supportPolicy.knownIssues.currentStatus -eq "UNVERIFIED") "Current known-issues support status must remain UNVERIFIED without release-candidate evidence."
 
 Assert-Condition ([string]$platformMatrix.matrixStatus -eq "UNVERIFIED") "Platform matrix must remain UNVERIFIED until evidence-backed supported tuples exist."
 Assert-Condition (@($platformMatrix.configurations | Where-Object { [string]$_.supportStatus -eq "SUPPORTED" }).Count -eq 0) "No platform tuple may be marked SUPPORTED without approved evidence."
@@ -231,6 +237,11 @@ Assert-Condition ($securityText -match 'SupportCompatibilityMatrix\.md') "SECURI
 
 Assert-Condition ($matrixGeneratorText -match 'PlatformSupportMatrix\.json' -and $matrixGeneratorText -match 'ProductSupportPolicy\.json') "Support matrix generator must use both source-controlled policies."
 Assert-Condition ($supportMatrixText -match 'Generated from') "Human-readable support matrix must identify its generated sources."
+foreach ($term in @("policy commitment", "implementation capability", "qualification evidence", "release readiness", "legal/regulatory conformity")) {
+	Assert-Condition ($productionSupportText -match [Regex]::Escape($term)) "Production support documentation must distinguish '$term'."
+}
+Assert-Condition ($productionSupportText -match 'Release notes and known issues' -and $productionSupportText -match 'KNOWN_ISSUES') "Production support documentation must define release-note/known-issues requirements."
+Assert-Condition ($deploymentDocumentationText -match 'does not create hardware qualification' -and $deploymentDocumentationText -match 'test certificates or ephemeral release keys cannot satisfy production trust') "Deployment documentation must preserve qualification/trust evidence boundaries."
 & (Repository-Path "build/governance/New-SupportCompatibilityMatrix.ps1") -Verify
 
 Assert-Condition ($stableVerifierText -match 'releasePromotionPerformed = \$false') "Stable readiness verifier must never promote release stage."
