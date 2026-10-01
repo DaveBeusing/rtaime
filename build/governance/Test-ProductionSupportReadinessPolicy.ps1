@@ -89,7 +89,6 @@ function Get-SupportPolicyErrors {
 			if ($status -eq "SUPPORTED" -and $stableStatus -ne "PASS") {
 				$errors.Add("stableLine.supportedWithoutLifecycleCommitment")
 			}
-
 			$parsedDates = @{}
 			foreach ($property in $dateProperties) {
 				$value = [string]$line.$property
@@ -210,7 +209,7 @@ function Get-PlatformMatrixErrors {
 					}
 					if (-not $passed) { $errors.Add("supportedEvidenceNotPassed:$evidence") }
 					if (-not (@($evidenceDocument.PSObject.Properties.Name) -contains "sourceCommit") -or
-						[string]$evidenceDocument.sourceCommit -notmatch '^[0-9a-fA-F]{40,64}\z') {
+						[string]$evidenceDocument.sourceCommit -notmatch '^[0-9a-fA-F]{40,64}$') {
 						$errors.Add("supportedEvidenceMissingSourceCommit:$evidence")
 					}
 				} catch {
@@ -242,7 +241,7 @@ function Get-PlatformMatrixErrors {
 						[string]$evidenceDocument.status -in @("PASS", "PASSED")
 					if (-not $passed) { $errors.Add("supportedNetworkEvidenceNotPassed:$evidence") }
 					if (-not (@($evidenceDocument.PSObject.Properties.Name) -contains "sourceCommit") -or
-						[string]$evidenceDocument.sourceCommit -notmatch '^[0-9a-fA-F]{40,64}\z') {
+						[string]$evidenceDocument.sourceCommit -notmatch '^[0-9a-fA-F]{40,64}$') {
 						$errors.Add("supportedNetworkEvidenceMissingSourceCommit:$evidence")
 					}
 				} catch {
@@ -401,236 +400,12 @@ try {
 
 	$currentHead = (& git -C $repositoryRoot rev-parse HEAD).Trim().ToLowerInvariant()
 	$expectedSource = $currentHead
-	if ([string]$env:GITHUB_REF -match '^refs/pull/[0-9]+/merge
-
-	$sourceIdentity = @($readiness.domains | Where-Object { [string]$_.name -eq "sourceIdentity" })
-	Assert-Condition ($sourceIdentity.Count -eq 1 -and [string]$sourceIdentity[0].status -eq "PASS") "Current repository source identity must verify as PASS."
-	$correlation = @($readiness.domains | Where-Object { [string]$_.name -eq "candidateEvidenceCorrelation" })
-	Assert-Condition ($correlation.Count -eq 1 -and [string]$correlation[0].status -eq "UNVERIFIED") "Candidate/evidence correlation must remain UNVERIFIED when no release artifacts are supplied."
-	$trust = @($readiness.domains | Where-Object { [string]$_.name -eq "productionSigningTrust" })
-	$hardware = @($readiness.domains | Where-Object { [string]$_.name -eq "requiredHardwareEvidence" })
-	Assert-Condition ($trust.Count -eq 1 -and [string]$trust[0].status -eq "UNVERIFIED") "Missing production trust must keep readiness UNVERIFIED."
-	Assert-Condition ($hardware.Count -eq 1 -and [string]$hardware[0].status -eq "UNVERIFIED") "Missing physical evidence must keep readiness UNVERIFIED."
-} finally {
-	if (Test-Path -LiteralPath $tempReadiness) { Remove-Item -LiteralPath $tempReadiness -Force }
-}
-
-$wrongSource = "1111111111111111111111111111111111111111"
-if ($wrongSource -eq $expectedSource) { $wrongSource = "2222222222222222222222222222222222222222" }
-$sourceMismatchReadiness = & (Repository-Path "build/release/Test-StableReadiness.ps1") -ExpectedSourceCommit $wrongSource
-$sourceMismatchDomain = @($sourceMismatchReadiness.domains | Where-Object { [string]$_.name -eq "sourceIdentity" })
-Assert-Condition ([string]$sourceMismatchReadiness.overallStatus -eq "FAIL") "Mismatched expected source commit must fail Stable readiness."
-Assert-Condition ($sourceMismatchDomain.Count -eq 1 -and [string]$sourceMismatchDomain[0].status -eq "FAIL") "Source-identity domain must fail on an expected-source mismatch."
-
-$invalidCommitment = Clone-JsonObject $supportPolicy
-$invalidCommitment.lifecycle.stableRelease.status = "PASS"
-Assert-Condition (@(Get-SupportPolicyErrors $invalidCommitment).Count -gt 0) "Support PASS without required durations must fail validation."
-
-$invalidPreview = Clone-JsonObject $supportPolicy
-$invalidPreview.lifecycle.preview.status = "PASS"
-Assert-Condition (@(Get-SupportPolicyErrors $invalidPreview).Count -gt 0) "Preview PASS without explicit commitments must fail validation."
-
-$invalidDates = Clone-JsonObject $supportPolicy
-$invalidDates.lifecycle.stableRelease.status = "PASS"
-$invalidDates.lifecycle.stableRelease.maintenanceMonths = 12
-$invalidDates.lifecycle.stableRelease.securityMonths = 18
-$invalidDates.lifecycle.stableRelease.eolNotificationLeadDays = 90
-$invalidDates.supportedVersions.stableLines = @(
-	[pscustomobject]@{
-		versionLine = "1.0"
-		status = "SUPPORTED"
-		supportStart = "2027-06-01"
-		maintenanceEnd = "2027-05-01"
-		securityEnd = "2027-07-01"
-		eolDate = "2027-08-01"
-	}
-)
-Assert-Condition (@(Get-SupportPolicyErrors $invalidDates).Count -gt 0) "Invalid Stable support date ordering must fail validation."
-
-$invalidEol = Clone-JsonObject $supportPolicy
-$invalidEol.supportedVersions.stableLines = @(
-	[pscustomobject]@{
-		versionLine = "0.9"
-		status = "EOL"
-		supportStart = "2026-01-01"
-		maintenanceEnd = "2026-06-01"
-		securityEnd = "2026-09-01"
-		eolDate = $null
-	}
-)
-Assert-Condition (@(Get-SupportPolicyErrors $invalidEol).Count -gt 0) "EOL line without a complete date record must fail validation."
-
-$unverifiedWithDates = Clone-JsonObject $supportPolicy
-$unverifiedWithDates.supportedVersions.stableLines = @(
-	[pscustomobject]@{
-		versionLine = "1.0"
-		status = "UNVERIFIED"
-		supportStart = "2027-01-01"
-		maintenanceEnd = $null
-		securityEnd = $null
-		eolDate = $null
-	}
-)
-Assert-Condition (@(Get-SupportPolicyErrors $unverifiedWithDates).Count -gt 0) "UNVERIFIED support line must not carry implied support dates."
-
-$unsupportedWithoutEvidence = Clone-JsonObject $platformMatrix
-$unsupportedWithoutEvidence.configurations[0].supportStatus = "SUPPORTED"
-$unsupportedWithoutEvidence.configurations[0].qualificationEvidence = @()
-Assert-Condition (@(Get-PlatformMatrixErrors $unsupportedWithoutEvidence).Count -gt 0) "SUPPORTED platform without evidence must fail validation."
-
-$staleEvidence = Clone-JsonObject $platformMatrix
-$staleEvidence.configurations[0].qualificationEvidence = @("docs/qualification/does-not-exist.json")
-Assert-Condition (@(Get-PlatformMatrixErrors $staleEvidence).Count -gt 0) "Stale platform evidence references must fail validation."
-
-$matrixPassWithoutSupport = Clone-JsonObject $platformMatrix
-$matrixPassWithoutSupport.matrixStatus = "PASS"
-Assert-Condition (@(Get-PlatformMatrixErrors $matrixPassWithoutSupport).Count -gt 0) "Matrix PASS without a SUPPORTED tuple must fail validation."
-
-$nonMachineReadableEvidence = Clone-JsonObject $platformMatrix
-$nonMachineReadableEvidence.matrixStatus = "PASS"
-$nonMachineReadableEvidence.configurations[0].supportStatus = "SUPPORTED"
-$nonMachineReadableEvidence.configurations[0].platform.edition = "Example"
-$nonMachineReadableEvidence.configurations[0].platform.versionFamily = "Example"
-$nonMachineReadableEvidence.configurations[0].gpu.driverRange = "example"
-$nonMachineReadableEvidence.configurations[0].gpu.qualificationStatus = "PASS"
-$nonMachineReadableEvidence.configurations[0].mediaIo.device = "example"
-$nonMachineReadableEvidence.configurations[0].mediaIo.driverRange = "example"
-$nonMachineReadableEvidence.configurations[0].mediaIo.qualificationStatus = "PASS"
-$nonMachineReadableEvidence.configurations[0].qualificationEvidence = @("docs/QualificationEvidenceProvenance.md")
-Assert-Condition (@(Get-PlatformMatrixErrors $nonMachineReadableEvidence).Count -gt 0) "SUPPORTED platform must reject non-machine-readable qualification evidence."
-
-$networkWithoutEvidence = Clone-JsonObject $platformMatrix
-$networkWithoutEvidence.configurations[0].networkProviders[0].supportStatus = "SUPPORTED"
-$networkWithoutEvidence.configurations[0].networkProviders[0].qualificationEvidence = @()
-Assert-Condition (@(Get-PlatformMatrixErrors $networkWithoutEvidence).Count -gt 0) "SUPPORTED network provider without qualification evidence must fail validation."
-
-Assert-Condition ($buildPropsText -match '<RtaimeProductVersion>0\.1\.0-dev</RtaimeProductVersion>') "Current source version must remain 0.1.0-dev."
-Assert-Condition ($buildPropsText -match '<RtaimeReleaseStage>DEV</RtaimeReleaseStage>') "Current source release stage must remain DEV."
-
-Write-Host "Production support and Stable-readiness policy PASS"
-Write-Host "Support lifecycle commitment: UNVERIFIED"
-Write-Host "Platform support matrix: UNVERIFIED"
-Write-Host "Production signing trust: UNVERIFIED"
-Write-Host "Physical support evidence: UNVERIFIED"
-Write-Host "Current release stage: DEV"
-) {
+	if ([string]$env:GITHUB_REF -match '^refs/pull/[0-9]+/merge$') {
 		$eventPath = [string]$env:GITHUB_EVENT_PATH
 		Assert-Condition (-not [string]::IsNullOrWhiteSpace($eventPath) -and (Test-Path -LiteralPath $eventPath -PathType Leaf)) "Pull-request qualification requires the GitHub event payload."
 		$eventPayload = Get-Content -LiteralPath $eventPath -Raw | ConvertFrom-Json
 		$expectedSource = ([string]$eventPayload.pull_request.head.sha).Trim().ToLowerInvariant()
-		Assert-Condition ($expectedSource -match '^[0-9a-f]{40,64}
-
-	$sourceIdentity = @($readiness.domains | Where-Object { [string]$_.name -eq "sourceIdentity" })
-	Assert-Condition ($sourceIdentity.Count -eq 1 -and [string]$sourceIdentity[0].status -eq "PASS") "Current repository source identity must verify as PASS."
-	$correlation = @($readiness.domains | Where-Object { [string]$_.name -eq "candidateEvidenceCorrelation" })
-	Assert-Condition ($correlation.Count -eq 1 -and [string]$correlation[0].status -eq "UNVERIFIED") "Candidate/evidence correlation must remain UNVERIFIED when no release artifacts are supplied."
-	$trust = @($readiness.domains | Where-Object { [string]$_.name -eq "productionSigningTrust" })
-	$hardware = @($readiness.domains | Where-Object { [string]$_.name -eq "requiredHardwareEvidence" })
-	Assert-Condition ($trust.Count -eq 1 -and [string]$trust[0].status -eq "UNVERIFIED") "Missing production trust must keep readiness UNVERIFIED."
-	Assert-Condition ($hardware.Count -eq 1 -and [string]$hardware[0].status -eq "UNVERIFIED") "Missing physical evidence must keep readiness UNVERIFIED."
-} finally {
-	if (Test-Path -LiteralPath $tempReadiness) { Remove-Item -LiteralPath $tempReadiness -Force }
-}
-
-$wrongSource = "1111111111111111111111111111111111111111"
-if ($wrongSource -eq $expectedSource) { $wrongSource = "2222222222222222222222222222222222222222" }
-$sourceMismatchReadiness = & (Repository-Path "build/release/Test-StableReadiness.ps1") -ExpectedSourceCommit $wrongSource
-$sourceMismatchDomain = @($sourceMismatchReadiness.domains | Where-Object { [string]$_.name -eq "sourceIdentity" })
-Assert-Condition ([string]$sourceMismatchReadiness.overallStatus -eq "FAIL") "Mismatched expected source commit must fail Stable readiness."
-Assert-Condition ($sourceMismatchDomain.Count -eq 1 -and [string]$sourceMismatchDomain[0].status -eq "FAIL") "Source-identity domain must fail on an expected-source mismatch."
-
-$invalidCommitment = Clone-JsonObject $supportPolicy
-$invalidCommitment.lifecycle.stableRelease.status = "PASS"
-Assert-Condition (@(Get-SupportPolicyErrors $invalidCommitment).Count -gt 0) "Support PASS without required durations must fail validation."
-
-$invalidPreview = Clone-JsonObject $supportPolicy
-$invalidPreview.lifecycle.preview.status = "PASS"
-Assert-Condition (@(Get-SupportPolicyErrors $invalidPreview).Count -gt 0) "Preview PASS without explicit commitments must fail validation."
-
-$invalidDates = Clone-JsonObject $supportPolicy
-$invalidDates.lifecycle.stableRelease.status = "PASS"
-$invalidDates.lifecycle.stableRelease.maintenanceMonths = 12
-$invalidDates.lifecycle.stableRelease.securityMonths = 18
-$invalidDates.lifecycle.stableRelease.eolNotificationLeadDays = 90
-$invalidDates.supportedVersions.stableLines = @(
-	[pscustomobject]@{
-		versionLine = "1.0"
-		status = "SUPPORTED"
-		supportStart = "2027-06-01"
-		maintenanceEnd = "2027-05-01"
-		securityEnd = "2027-07-01"
-		eolDate = "2027-08-01"
-	}
-)
-Assert-Condition (@(Get-SupportPolicyErrors $invalidDates).Count -gt 0) "Invalid Stable support date ordering must fail validation."
-
-$invalidEol = Clone-JsonObject $supportPolicy
-$invalidEol.supportedVersions.stableLines = @(
-	[pscustomobject]@{
-		versionLine = "0.9"
-		status = "EOL"
-		supportStart = "2026-01-01"
-		maintenanceEnd = "2026-06-01"
-		securityEnd = "2026-09-01"
-		eolDate = $null
-	}
-)
-Assert-Condition (@(Get-SupportPolicyErrors $invalidEol).Count -gt 0) "EOL line without a complete date record must fail validation."
-
-$unverifiedWithDates = Clone-JsonObject $supportPolicy
-$unverifiedWithDates.supportedVersions.stableLines = @(
-	[pscustomobject]@{
-		versionLine = "1.0"
-		status = "UNVERIFIED"
-		supportStart = "2027-01-01"
-		maintenanceEnd = $null
-		securityEnd = $null
-		eolDate = $null
-	}
-)
-Assert-Condition (@(Get-SupportPolicyErrors $unverifiedWithDates).Count -gt 0) "UNVERIFIED support line must not carry implied support dates."
-
-$unsupportedWithoutEvidence = Clone-JsonObject $platformMatrix
-$unsupportedWithoutEvidence.configurations[0].supportStatus = "SUPPORTED"
-$unsupportedWithoutEvidence.configurations[0].qualificationEvidence = @()
-Assert-Condition (@(Get-PlatformMatrixErrors $unsupportedWithoutEvidence).Count -gt 0) "SUPPORTED platform without evidence must fail validation."
-
-$staleEvidence = Clone-JsonObject $platformMatrix
-$staleEvidence.configurations[0].qualificationEvidence = @("docs/qualification/does-not-exist.json")
-Assert-Condition (@(Get-PlatformMatrixErrors $staleEvidence).Count -gt 0) "Stale platform evidence references must fail validation."
-
-$matrixPassWithoutSupport = Clone-JsonObject $platformMatrix
-$matrixPassWithoutSupport.matrixStatus = "PASS"
-Assert-Condition (@(Get-PlatformMatrixErrors $matrixPassWithoutSupport).Count -gt 0) "Matrix PASS without a SUPPORTED tuple must fail validation."
-
-$nonMachineReadableEvidence = Clone-JsonObject $platformMatrix
-$nonMachineReadableEvidence.matrixStatus = "PASS"
-$nonMachineReadableEvidence.configurations[0].supportStatus = "SUPPORTED"
-$nonMachineReadableEvidence.configurations[0].platform.edition = "Example"
-$nonMachineReadableEvidence.configurations[0].platform.versionFamily = "Example"
-$nonMachineReadableEvidence.configurations[0].gpu.driverRange = "example"
-$nonMachineReadableEvidence.configurations[0].gpu.qualificationStatus = "PASS"
-$nonMachineReadableEvidence.configurations[0].mediaIo.device = "example"
-$nonMachineReadableEvidence.configurations[0].mediaIo.driverRange = "example"
-$nonMachineReadableEvidence.configurations[0].mediaIo.qualificationStatus = "PASS"
-$nonMachineReadableEvidence.configurations[0].qualificationEvidence = @("docs/QualificationEvidenceProvenance.md")
-Assert-Condition (@(Get-PlatformMatrixErrors $nonMachineReadableEvidence).Count -gt 0) "SUPPORTED platform must reject non-machine-readable qualification evidence."
-
-$networkWithoutEvidence = Clone-JsonObject $platformMatrix
-$networkWithoutEvidence.configurations[0].networkProviders[0].supportStatus = "SUPPORTED"
-$networkWithoutEvidence.configurations[0].networkProviders[0].qualificationEvidence = @()
-Assert-Condition (@(Get-PlatformMatrixErrors $networkWithoutEvidence).Count -gt 0) "SUPPORTED network provider without qualification evidence must fail validation."
-
-Assert-Condition ($buildPropsText -match '<RtaimeProductVersion>0\.1\.0-dev</RtaimeProductVersion>') "Current source version must remain 0.1.0-dev."
-Assert-Condition ($buildPropsText -match '<RtaimeReleaseStage>DEV</RtaimeReleaseStage>') "Current source release stage must remain DEV."
-
-Write-Host "Production support and Stable-readiness policy PASS"
-Write-Host "Support lifecycle commitment: UNVERIFIED"
-Write-Host "Platform support matrix: UNVERIFIED"
-Write-Host "Production signing trust: UNVERIFIED"
-Write-Host "Physical support evidence: UNVERIFIED"
-Write-Host "Current release stage: DEV"
-) "GitHub pull-request head identity is invalid."
+		Assert-Condition ($expectedSource -match '^[0-9a-f]{40,64}$') "GitHub pull-request head identity is invalid."
 	}
 	Assert-Condition ([string]$readiness.sourceCommit -eq $expectedSource) "Stable readiness must report the exact checked-out source identity."
 
