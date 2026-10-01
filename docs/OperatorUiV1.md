@@ -838,3 +838,16 @@ The HUD remains rate-limited to at most 5 Hz independently of monitoring cadence
 
 The consolidated automated visual/DPI/performance/recovery evidence and the explicit software-versus-physical qualification boundary are maintained in `docs/MonitoringVisualPerformanceQualification.md`.
 
+
+
+## Production Macros
+
+The `SCENES & CUES` workspace includes a `MACROS` tab for reusable bounded production sequences.
+
+The Operator can select/create a Macro, edit its name/description, author the closed governed action union with typed reference/frame/visibility/audio-routing fields, reorder or remove actions, request ControlHost validation, and explicitly SAVE or DELETE the durable definition.
+
+The RUN surface exposes confirmed execution state, current action, last confirmed completed action, failure evidence, cancellation and explicit recovery acknowledgement. Local selection and unsaved editing remain presentation state; RUN/CANCEL/RECOVERY always cross `rtaime.Client` into ControlHost.
+
+The surface uses only rtaime custom interaction controls and does not provide a code editor, scripts, nested Macros or arbitrary executable actions. Runtime-frame waits and restart recovery are presented from confirmed ControlHost state rather than WPF timers.
+
+See `docs/ProductionMacros.md`.
