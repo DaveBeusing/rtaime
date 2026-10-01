@@ -354,3 +354,19 @@ Update Discovery & Rollback does not implement or claim:
 - formal CRA conformity.
 
 `UNVERIFIED` remains distinct from `PASS`.
+
+## Support lifecycle and compatibility
+
+Managed update eligibility does not by itself mean that a source or target version is within an approved support period.
+
+Version-support status is governed by `docs/Governance/ProductSupportPolicy.json`, while concrete platform/driver compatibility is governed by `docs/Governance/PlatformSupportMatrix.json`.
+
+The update path continues to enforce the technical transition rules in `build/update/update-policy.json`. Support policy adds the commercial/operational boundary:
+
+- an EOL or unsupported line is not restored to supported status by a successful update check;
+- a target platform/driver tuple remains `UNVERIFIED` unless matching qualification evidence exists;
+- material provider/driver/firmware change requires requalification where it affects the supported tuple;
+- persistent-state migration and rollback remain governed by the existing coordinated upgrade policy.
+
+No support-duration or deprecation-period promise is inferred from update capability.
+
