@@ -414,7 +414,7 @@ try {
 }
 
 $wrongSource = "1111111111111111111111111111111111111111"
-if ($wrongSource -eq $expectedSource) { $wrongSource = "2222222222222222222222222222222222222222" }
+if ($wrongSource -eq $currentHead) { $wrongSource = "2222222222222222222222222222222222222222" }
 $sourceMismatchReadiness = & (Repository-Path "build/release/Test-StableReadiness.ps1") -ExpectedSourceCommit $wrongSource
 $sourceMismatchDomain = @($sourceMismatchReadiness.domains | Where-Object { [string]$_.name -eq "sourceIdentity" })
 Assert-Condition ([string]$sourceMismatchReadiness.overallStatus -eq "FAIL") "Mismatched expected source commit must fail Stable readiness."
