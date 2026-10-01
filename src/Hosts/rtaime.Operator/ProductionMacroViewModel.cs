@@ -23,6 +23,8 @@ public sealed class ProductionMacroViewModel : INotifyPropertyChanged
 	private string _frameValue = "12";
 	private bool _visibilityValue = true;
 	private int _audioRoutingMode = 1;
+	private double _audioGain = 1.0;
+	private bool _audioMuted;
 	private ulong _storageVersion;
 	private bool _isBusy;
 	private string _state = "IDLE";
@@ -114,6 +116,8 @@ public sealed class ProductionMacroViewModel : INotifyPropertyChanged
 	public string FrameValue { get => _frameValue; set => Set(ref _frameValue, value ?? string.Empty); }
 	public bool VisibilityValue { get => _visibilityValue; set => Set(ref _visibilityValue, value); }
 	public int AudioRoutingMode { get => _audioRoutingMode; set => Set(ref _audioRoutingMode, value is 1 or 2 ? value : 1); }
+	public double AudioGain { get => _audioGain; set => Set(ref _audioGain, double.IsFinite(value) ? Math.Clamp(value, 0.0, 4.0) : 1.0); }
+	public bool AudioMuted { get => _audioMuted; set => Set(ref _audioMuted, value); }
 	public bool IsBusy { get => _isBusy; private set { if (Set(ref _isBusy, value)) RaiseCommandState(); } }
 	public string State { get => _state; private set { if (Set(ref _state, value)) RaiseCommandState(); } }
 	public string Status { get => _status; private set => Set(ref _status, value); }
@@ -138,6 +142,7 @@ public sealed class ProductionMacroViewModel : INotifyPropertyChanged
 		ShowControlActionKind.WaitFrames => "Frames: bounded production-frame wait",
 		ShowControlActionKind.SetAudioRouting => "Mode 1 FOLLOW_VIDEO · Mode 2 BREAKAWAY; Primary: source for mode 2",
 		ShowControlActionKind.RouteOutputRole => "Primary: output role ID · Secondary: source ID",
+		ShowControlActionKind.SetAudioInputState => "Primary: source ID · Gain 0..4 · Muted toggle",
 		_ => "Unsupported action"
 	};
 
@@ -266,7 +271,9 @@ public sealed class ProductionMacroViewModel : INotifyPropertyChanged
 			SecondaryReference.Trim(),
 			frames,
 			VisibilityValue,
-			AudioRoutingMode);
+			AudioRoutingMode,
+			AudioGain,
+			AudioMuted);
 	}
 
 	private void LoadActionFields(ProductionMacroActionEditorItem action)
@@ -277,6 +284,8 @@ public sealed class ProductionMacroViewModel : INotifyPropertyChanged
 		FrameValue = action.Frames?.ToString(CultureInfo.InvariantCulture) ?? "12";
 		VisibilityValue = action.Visible;
 		AudioRoutingMode = action.AudioRoutingMode;
+		AudioGain = action.AudioGain;
+		AudioMuted = action.AudioMuted;
 	}
 
 	private void ApplySnapshot(ProductionMacroWorkspaceSnapshot snapshot)
@@ -437,7 +446,9 @@ public sealed class ProductionMacroActionEditorItem
 		string secondaryReference = "",
 		uint? frames = null,
 		bool visible = true,
-		int audioRoutingMode = 1)
+		int audioRoutingMode = 1,
+		double audioGain = 1.0,
+		bool audioMuted = false)
 	{
 		ActionId = actionId;
 		Kind = kind;
@@ -446,6 +457,8 @@ public sealed class ProductionMacroActionEditorItem
 		Frames = frames;
 		Visible = visible;
 		AudioRoutingMode = audioRoutingMode;
+		AudioGain = audioGain;
+		AudioMuted = audioMuted;
 	}
 
 	public ProductionMacroActionId ActionId { get; }
@@ -455,6 +468,8 @@ public sealed class ProductionMacroActionEditorItem
 	public uint? Frames { get; }
 	public bool Visible { get; }
 	public int AudioRoutingMode { get; }
+	public double AudioGain { get; }
+	public bool AudioMuted { get; }
 	public string Summary => Summarize(ToContract().Command);
 
 	public ProductionMacroAction ToContract() => Kind switch
@@ -477,6 +492,7 @@ public sealed class ProductionMacroActionEditorItem
 			sourceId: AudioRoutingMode == 2 ? PrimaryReference : null,
 			audioRoutingMode: AudioRoutingMode),
 		ShowControlActionKind.RouteOutputRole => new ProductionMacroAction(ActionId, Kind, sourceId: SecondaryReference, outputRoleId: PrimaryReference),
+		ShowControlActionKind.SetAudioInputState => new ProductionMacroAction(ActionId, Kind, sourceId: PrimaryReference, audioGain: AudioGain, audioMuted: AudioMuted),
 		_ => throw new NotSupportedException($"Unsupported Production Macro action '{Kind}'.")
 	};
 
@@ -497,6 +513,7 @@ public sealed class ProductionMacroActionEditorItem
 			ShowControlActionKind.WaitFrames => new(macroAction.ActionId, action.Kind, frames: action.WaitFrames),
 			ShowControlActionKind.SetAudioRouting => new(macroAction.ActionId, action.Kind, action.SourceId ?? string.Empty, audioRoutingMode: action.AudioRoutingMode ?? 1),
 			ShowControlActionKind.RouteOutputRole => new(macroAction.ActionId, action.Kind, action.OutputRoleId ?? string.Empty, action.SourceId ?? string.Empty),
+			ShowControlActionKind.SetAudioInputState => new(macroAction.ActionId, action.Kind, action.SourceId ?? string.Empty, audioGain: action.AudioGain ?? 1.0, audioMuted: action.AudioMuted ?? false),
 			_ => new(macroAction.ActionId, action.Kind)
 		};
 	}
@@ -518,6 +535,7 @@ public sealed class ProductionMacroActionEditorItem
 		ShowControlActionKind.WaitFrames => $"Wait · {action.WaitFrames}f",
 		ShowControlActionKind.SetAudioRouting => action.AudioRoutingMode == 1 ? "Audio · FOLLOW VIDEO" : $"Audio · BREAKAWAY {action.SourceId}",
 		ShowControlActionKind.RouteOutputRole => $"Output · {action.OutputRoleId} ← {action.SourceId}",
+		ShowControlActionKind.SetAudioInputState => $"Audio Input · {action.SourceId} · {action.AudioGain:0.##}x · {(action.AudioMuted == true ? "MUTED" : "OPEN")}",
 		_ => action.Kind.ToString()
 	};
 }
