@@ -58,6 +58,7 @@ Assert-Condition ([int]$policy.cra.activelyExploitedVulnerability.finalReportAft
 Assert-Condition ([int]$policy.cra.severeSecurityIncident.earlyWarningHours -eq 24) "CRA severe-incident early-warning window must be 24 hours."
 Assert-Condition ([int]$policy.cra.severeSecurityIncident.notificationHours -eq 72) "CRA severe-incident notification window must be 72 hours."
 Assert-Condition ([string]$policy.supportPeriod.status -eq "UNVERIFIED") "Support-period evidence must remain UNVERIFIED until explicitly approved."
+Assert-Condition ([string]$policy.supportPeriod.policy -eq "docs/Governance/ProductSupportPolicy.json") "Product-security support period must reference the source-controlled product support policy."
 Assert-Condition ([string]$policy.conformityClaim.status -eq "UNVERIFIED") "CRA conformity must remain UNVERIFIED in the foundation package."
 
 $requiredLifecycle = @("RECEIVED", "TRIAGED", "ACCEPTED", "REJECTED", "REMEDIATING", "REMEDIATED", "DISCLOSED")
@@ -69,6 +70,7 @@ Assert-Condition ($securityPolicyText -match 'coordinated vulnerability disclosu
 Assert-Condition ($securityPolicyText -match 'Do not open a public GitHub issue') "SECURITY.md must direct undisclosed vulnerabilities away from public issues."
 Assert-Condition ($securityPolicyText -match 'regulatory report') "SECURITY.md must separate regulatory reporting from public disclosure."
 Assert-Condition ($securityPolicyText -match 'UNVERIFIED') "SECURITY.md must preserve fail-closed support-period status."
+Assert-Condition ($securityPolicyText -match 'ProductSupportPolicy\.json' -and $securityPolicyText -match 'SupportCompatibilityMatrix\.md') "SECURITY.md supported versions must be projected from source-controlled support policy."
 
 $schema = $schemaText | ConvertFrom-Json
 Assert-Condition ([string]$schema.title -eq "rtaime Vulnerability Record") "Vulnerability record schema title is unexpected."
