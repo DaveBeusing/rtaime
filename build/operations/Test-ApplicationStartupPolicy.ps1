@@ -179,7 +179,7 @@ $bootstrapParseErrors = $null
 [void][System.Management.Automation.Language.Parser]::ParseFile($windowsBootstrapQualificationPath, [ref]$bootstrapParseTokens, [ref]$bootstrapParseErrors)
 Assert-Condition (@($bootstrapParseErrors).Count -eq 0) "Windows bootstrap qualification script must parse as valid PowerShell."
 
-foreach ($processName in @("rtaime", "rtaime.Operator", "rtaime.ControlHost", "rtaime.RuntimeHost", "rtaime.AIHost")) {
+foreach ($processName in @("rtaime", "rtaime.Operator", "rtaime.ControlHost", "rtaime.RuntimeHost", "rtaime.AIHost", "rtaime.IntegrationHost")) {
 	Assert-Condition ($developerBuild -match [Regex]::Escape('"' + $processName + '"')) "Developer build cleanup is missing repository process '$processName'."
 }
 Assert-Condition ($developerBuild -match '\$process\.Path' -and $developerBuild -match '\$repositoryPrefix' -and $developerBuild -match 'StartsWith\(\$repositoryPrefix') "Developer build cleanup must scope process termination to executables inside the repository."

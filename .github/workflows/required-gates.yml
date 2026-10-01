@@ -136,6 +136,10 @@ jobs:
         shell: pwsh
         run: ./build/quality/Test-ExternalControlPolicy.ps1
 
+      - name: Verify production integration gateway policy
+        shell: pwsh
+        run: ./build/quality/Test-ProductionIntegrationGatewayPolicy.ps1
+
       - name: Verify operator UI policy
         shell: pwsh
         run: ./build/quality/Test-OperatorUiPolicy.ps1

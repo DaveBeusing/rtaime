@@ -27,7 +27,7 @@ The repository pins the .NET SDK in `global.json`:
 .NET SDK 10.0.401
 ```
 
-The V1 reference development platform is Windows x64. The WPF Operator targets `net10.0-windows`; platform-neutral libraries and non-UI hosts target `net10.0`.
+The V1 reference development platform is Windows x64. The WPF Operator targets `net10.0-windows`; platform-neutral libraries and non-UI hosts, including the optional `rtaime.IntegrationHost`, target `net10.0`.
 
 Verify the SDK:
 
@@ -60,7 +60,7 @@ Debug:
 
 The developer build performs three bounded steps:
 
-1. it stops stale **repository-local** `rtaime`, Operator, ControlHost, RuntimeHost and AIHost processes that would lock the current checkout's `bin/` outputs;
+1. it stops stale **repository-local** `rtaime`, Operator, ControlHost, RuntimeHost, AIHost and optional IntegrationHost processes that would lock the current checkout's `bin/` outputs;
 2. it restores the solution unless `-NoRestore` is supplied;
 3. it builds the complete `rtaime.slnx` in the requested configuration.
 
@@ -298,3 +298,8 @@ Start-rtaime-Showcase.cmd
 ```
 
 See [Product Showcase Scenario](InvestorDemoScenario.md) for the deterministic demonstration flow and acceptance boundary.
+
+
+## Optional IntegrationHost
+
+`rtaime.IntegrationHost` is built with the primary solution and packaged as an optional host, but AppHost does not start it and ControlHost readiness does not depend on it. Configure and start it separately with `--config=<path>` or `RTAIME_INTEGRATION_CONFIG`. See [ProductionIntegrationGateway.md](ProductionIntegrationGateway.md).

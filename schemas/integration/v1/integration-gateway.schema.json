@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rtaime.dev/schemas/integration/v1/integration-gateway.schema.json",
+  "title": "rtaime production integration gateway configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "enabled", "upstream", "adapters", "mappings", "feedbackMappings"],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "enabled": { "type": "boolean" },
+    "required": { "type": "boolean" },
+    "testMode": { "type": "boolean" },
+    "dryRun": { "type": "boolean" },
+    "queueCapacity": { "type": "integer", "minimum": 8, "maximum": 4096 },
+    "snapshotMinimumIntervalMs": { "type": "integer", "minimum": 100, "maximum": 5000 },
+    "upstream": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["endpoint", "trustMode", "clientId", "clientName", "clientVersion"],
+      "properties": {
+        "endpoint": { "type": "string", "format": "uri", "pattern": "^https://" },
+        "trustMode": { "enum": ["system", "pinnedServerCertificate", "testOnlyInsecure"] },
+        "trustedServerCertificateThumbprint": { "type": ["string", "null"], "maxLength": 256 },
+        "clientCertificatePath": { "type": ["string", "null"], "maxLength": 1024 },
+        "clientCertificateKeyPath": { "type": ["string", "null"], "maxLength": 1024 },
+        "clientCertificatePasswordEnvironmentVariable": { "type": ["string", "null"], "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,127}$" },
+        "bearerTokenEnvironmentVariable": { "type": ["string", "null"], "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,127}$" },
+        "clientId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "clientName": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "clientVersion": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "requestTimeoutMs": { "type": "integer", "minimum": 100, "maximum": 300000 }
+      }
+    },
+    "adapters": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "kind", "enabled"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" },
+          "kind": { "enum": ["osc", "midi", "discrete", "companion"] },
+          "enabled": { "type": "boolean" },
+          "required": { "type": "boolean" },
+          "osc": {
+            "type": ["object", "null"],
+            "additionalProperties": false,
+            "properties": {
+              "listenAddress": { "type": "string" },
+              "listenPort": { "type": "integer", "minimum": 1, "maximum": 65535 },
+              "maxPacketBytes": { "type": "integer", "minimum": 64, "maximum": 65507 },
+              "sourceAllowlist": { "type": "array", "maxItems": 64, "items": { "type": "string" } },
+              "feedbackAddress": { "type": ["string", "null"] },
+              "feedbackPort": { "type": ["integer", "null"], "minimum": 1, "maximum": 65535 }
+            }
+          },
+          "midi": {
+            "type": ["object", "null"],
+            "additionalProperties": false,
+            "properties": {
+              "backend": { "enum": ["windows", "virtual"] },
+              "inputDevice": { "type": ["string", "null"], "maxLength": 256 },
+              "outputDevice": { "type": ["string", "null"], "maxLength": 256 },
+              "reconnectIntervalMs": { "type": "integer", "minimum": 100, "maximum": 30000 }
+            }
+          },
+          "discrete": {
+            "type": ["object", "null"],
+            "additionalProperties": false,
+            "properties": {
+              "provider": { "const": "virtual" },
+              "activeLowInputs": { "type": "object", "maxProperties": 256, "additionalProperties": { "type": "boolean" } },
+              "activeLowOutputs": { "type": "object", "maxProperties": 256, "additionalProperties": { "type": "boolean" } }
+            }
+          },
+          "companion": {
+            "type": ["object", "null"],
+            "additionalProperties": false,
+            "properties": {
+              "bindAddress": { "type": "string" },
+              "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+              "bearerTokenEnvironmentVariable": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,127}$" },
+              "maxRequestBytes": { "type": "integer", "minimum": 1024, "maximum": 1048576 }
+            }
+          }
+        }
+      }
+    },
+    "mappings": {
+      "type": "array",
+      "maxItems": 512,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "adapterId", "triggerKey", "action"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "adapterId": { "type": "string", "minLength": 1, "maxLength": 64 },
+          "triggerKey": { "type": "string", "minLength": 1, "maxLength": 256 },
+          "debounceMs": { "type": "integer", "minimum": 0, "maximum": 60000 },
+          "minimumIntervalMs": { "type": "integer", "minimum": 0, "maximum": 60000 },
+          "action": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind"],
+            "properties": {
+              "kind": { "enum": ["previewSelect", "cut", "dissolve", "sceneActivate", "showControlGo", "showControlArm", "showControlCancel", "recordingStart", "recordingStop", "outputRoute", "mediaPlay", "mediaPause", "mediaStop", "mediaCueFrame", "audioInputSet"] },
+              "targetId": { "type": ["string", "null"], "maxLength": 256 },
+              "secondaryTargetId": { "type": ["string", "null"], "maxLength": 256 },
+              "durationFrames": { "type": "integer", "minimum": 1, "maximum": 10000 },
+              "frame": { "type": ["integer", "null"], "minimum": 0 },
+              "recordingDirectory": { "type": ["string", "null"] },
+              "recordingFileName": { "type": ["string", "null"] },
+              "gain": { "type": "number", "minimum": 0, "maximum": 4 },
+              "muted": { "type": "boolean" },
+              "useTriggerValue": { "type": "boolean" },
+              "triggerScale": { "type": "number" },
+              "triggerOffset": { "type": "number" },
+              "triggerMinimum": { "type": "number" },
+              "triggerMaximum": { "type": "number" }
+            }
+          }
+        }
+      }
+    },
+    "feedbackMappings": {
+      "type": "array",
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["adapterId", "source", "targetKey"],
+        "properties": {
+          "adapterId": { "type": "string", "minLength": 1, "maxLength": 64 },
+          "source": { "enum": ["previewSource", "programSource", "activeScene", "recordingState", "runtimeReadiness", "mediaDeckState", "showControlState", "outputHealth"] },
+          "sourceParameter": { "type": ["string", "null"], "maxLength": 128 },
+          "targetKey": { "type": "string", "minLength": 1, "maxLength": 256 }
+        }
+      }
+    }
+  }
+}

@@ -52,6 +52,11 @@
 			"outputPath": "src/Hosts/rtaime.AIHost/bin/{configuration}/net10.0"
 		},
 		{
+			"name": "rtaime.IntegrationHost",
+			"targetFramework": "net10.0",
+			"outputPath": "src/Hosts/rtaime.IntegrationHost/bin/{configuration}/net10.0"
+		},
+		{
 			"name": "rtaime.Operator",
 			"targetFramework": "net10.0-windows",
 			"outputPath": "src/Hosts/rtaime.Operator/bin/{configuration}/net10.0-windows"
