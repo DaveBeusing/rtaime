@@ -43,7 +43,7 @@ Assert-Condition ($references.Count -eq 1) "IntegrationHost must have exactly on
 Assert-Condition ($references[0].Groups[1].Value -match 'rtaime\.Client\\rtaime\.Client\.csproj$') "IntegrationHost must reach production only through rtaime.Client."
 Assert-Condition ($project -notmatch 'RuntimeHost|ControlHost|Provider\.') "IntegrationHost project references must not bypass rtaime.Client."
 
-Assert-Condition ($gateway -match 'Channel\.CreateBounded' -and $gateway -match 'BoundedChannelFullMode\.DropWrite') "Gateway input must remain bounded."
+Assert-Condition ($gateway -match 'Channel\.CreateBounded' -and $gateway -match 'BoundedChannelFullMode\.Wait' -and $gateway -match 'TryWrite') "Gateway input must remain bounded and reject admission when capacity is exhausted."
 Assert-Condition ($gateway -match 'OperatorControlClient' -and $gateway -match 'SynchronizeAsync') "Gateway command and feedback paths must use the client snapshot boundary."
 Assert-Condition ($gateway -notmatch 'rtaime\.RuntimeHost|rtaime\.ControlHost|rtaime\.Provider') "Gateway implementation must not use production implementations directly."
 Assert-Condition ($config -match 'MinimumIntervalMs' -and $config -match 'DebounceMs') "Gateway mappings must retain rate/debounce controls."
