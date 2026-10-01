@@ -34,6 +34,30 @@ public sealed class ProductionMacroCoordinatorIntegrationTests
 	}
 
 	[Fact]
+	public async Task Validation_rejects_unknown_source_without_execution()
+	{
+		await using var fixture = await Fixture.CreateAsync();
+		var executed = new List<ShowControlActionKind>();
+		await using var coordinator = fixture.CreateCoordinator((action, _) =>
+		{
+			executed.Add(action.Kind);
+			return ValueTask.FromResult<Failure?>(null);
+		});
+		var macro = fixture.Macro(
+			new ProductionMacroAction(
+				ProductionMacroActionId.New(),
+				ShowControlActionKind.SetPreview,
+				sourceId: ProductionSourceId.New().ToString()));
+
+		var validation = await coordinator.ValidateAsync(macro);
+
+		Assert.False(validation.IsValid);
+		Assert.Contains(validation.Issues, issue => issue.Code == "production_macro.action.reference_invalid");
+		Assert.Empty(executed);
+		await Assert.ThrowsAsync<InvalidDataException>(() => coordinator.SaveAsync(macro, 0).AsTask());
+	}
+
+	[Fact]
 	public async Task Macro_failure_stops_before_later_actions()
 	{
 		await using var fixture = await Fixture.CreateAsync();
