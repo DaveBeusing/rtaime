@@ -51,6 +51,43 @@ public sealed class ProductionMacroContractTests
 	}
 
 	[Fact]
+	public void Macro_round_trip_covers_every_governed_action_kind()
+	{
+		var source = Identity.New().ToString();
+		var asset = Identity.New().ToString();
+		var cue = Identity.New().ToString();
+		var scene = Identity.New().ToString();
+		var actions = new[]
+		{
+			new ProductionMacroAction(ProductionMacroActionId.New(), ShowControlActionKind.ActivateScene, sceneId: scene),
+			new ProductionMacroAction(ProductionMacroActionId.New(), ShowControlActionKind.SetPreview, sourceId: source),
+			new ProductionMacroAction(ProductionMacroActionId.New(), ShowControlActionKind.Cut),
+			new ProductionMacroAction(ProductionMacroActionId.New(), ShowControlActionKind.Dissolve, durationFrames: 12),
+			new ProductionMacroAction(ProductionMacroActionId.New(), ShowControlActionKind.JumpMediaCue, mediaAssetId: asset, mediaCuePointId: cue),
+			new ProductionMacroAction(ProductionMacroActionId.New(), ShowControlActionKind.MediaPlay, mediaAssetId: asset),
+			new ProductionMacroAction(ProductionMacroActionId.New(), ShowControlActionKind.MediaPause, mediaAssetId: asset),
+			new ProductionMacroAction(ProductionMacroActionId.New(), ShowControlActionKind.MediaStop, mediaAssetId: asset),
+			new ProductionMacroAction(ProductionMacroActionId.New(), ShowControlActionKind.SetLayerVisibility, layerId: "bitmap-graphics", visible: true),
+			new ProductionMacroAction(ProductionMacroActionId.New(), ShowControlActionKind.StartRecording, recordingDestinationDirectory: "recordings", recordingFileName: "show.mov"),
+			new ProductionMacroAction(ProductionMacroActionId.New(), ShowControlActionKind.StopRecording),
+			new ProductionMacroAction(ProductionMacroActionId.New(), ShowControlActionKind.WaitFrames, waitFrames: 25),
+			new ProductionMacroAction(ProductionMacroActionId.New(), ShowControlActionKind.MediaOpen, sourceId: source, mediaAssetId: asset),
+			new ProductionMacroAction(ProductionMacroActionId.New(), ShowControlActionKind.SetAudioRouting, audioRoutingMode: 1),
+			new ProductionMacroAction(ProductionMacroActionId.New(), ShowControlActionKind.RouteOutputRole, sourceId: source, outputRoleId: "Aux")
+		};
+		var macro = new ProductionMacroDefinition(
+			ProductionMacroContractVersion.Current,
+			ProductionMacroId.New(),
+			"All actions",
+			actions);
+
+		var restored = Assert.Single(ProductionMacroCanonicalSerializer.Deserialize(
+			ProductionMacroCanonicalSerializer.Serialize([macro])));
+
+		Assert.Equal(Enum.GetValues<ShowControlActionKind>(), restored.Actions.Select(action => action.Kind));
+	}
+
+	[Fact]
 	public void Macro_definition_is_bounded_and_action_identity_is_unique()
 	{
 		var id = ProductionMacroActionId.New();
