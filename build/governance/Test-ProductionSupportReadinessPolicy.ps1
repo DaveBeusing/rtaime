@@ -148,6 +148,10 @@ $supportSchemaText = Read-Text "schemas/support/v1/product-support-policy.schema
 $platformSchemaText = Read-Text "schemas/support/v1/platform-support-matrix.schema.json"
 $readinessSchemaText = Read-Text "schemas/support/v1/stable-readiness.schema.json"
 $stableVerifierText = Read-Text "build/release/Test-StableReadiness.ps1"
+$knownIssuesVerifierText = Read-Text "build/release/Test-KnownIssuesAssessment.ps1"
+$knownIssuesBinderText = Read-Text "build/release/Bind-KnownIssuesAssessment.ps1"
+$knownIssuesBindingVerifierText = Read-Text "build/release/Test-KnownIssuesAssessmentBinding.ps1"
+$knownIssuesFailureCasesText = Read-Text "build/release/Test-KnownIssuesAssessmentFailureCases.ps1"
 $matrixGeneratorText = Read-Text "build/governance/New-SupportCompatibilityMatrix.ps1"
 $supportMatrixText = Read-Text "docs/SupportCompatibilityMatrix.md"
 $productionSupportText = Read-Text "docs/ProductionSupport.md"
@@ -248,6 +252,11 @@ Assert-Condition ($stableVerifierText -match 'releasePromotionPerformed = \$fals
 Assert-Condition ($stableVerifierText -match 'productionSigningTrust' -and $stableVerifierText -match 'requiredHardwareEvidence') "Stable readiness verifier must evaluate production trust and hardware evidence."
 Assert-Condition ($stableVerifierText -match 'KNOWN_ISSUES') "Stable readiness verifier must evaluate known-issues evidence."
 Assert-Condition ($stableVerifierText -match 'Test-ReleaseEvidence\.ps1') "Stable readiness verifier must validate supplied release evidence."
+Assert-Condition ($knownIssuesVerifierText -match 'unresolved BLOCKER or CRITICAL' -and $knownIssuesVerifierText -match 'release-note disclosure') "Known-issues assessment must reject unresolved critical blockers and undisclosed unresolved issues."
+Assert-Condition ($knownIssuesBinderText -match 'known-issues-assessment\.json' -and $knownIssuesBinderText -match 'KNOWN_ISSUES') "Known-issues binder must use the canonical assessment artifact and release evidence domain."
+Assert-Condition ($knownIssuesBindingVerifierText -match 'SHA-256 mismatch' -and $knownIssuesBindingVerifierText -match 'ExpectedSourceCommit') "Known-issues binding must be hash- and exact-source-verified."
+Assert-Condition ($knownIssuesFailureCasesText -match 'source commit mismatch' -and $knownIssuesFailureCasesText -match 'tampered bound assessment') "Known-issues failure qualification must cover source mismatch and tampering."
+& (Repository-Path "build/release/Test-KnownIssuesAssessmentFailureCases.ps1")
 
 $tempReadiness = Join-Path ([System.IO.Path]::GetTempPath()) ("rtaime-stable-readiness-{0}.json" -f [Guid]::NewGuid().ToString("N"))
 try {
