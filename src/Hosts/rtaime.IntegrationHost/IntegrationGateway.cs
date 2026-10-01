@@ -144,11 +144,13 @@ public sealed class IntegrationGateway : IAsyncDisposable
 	private readonly IntegrationGatewayOptions _options;
 	private readonly OperatorControlClient _client;
 	private readonly MediaDeckController _mediaDeck;
-	private readonly Channel<IntegrationTrigger> _inputs;
+	private readonly SemaphoreSlim _clientGate = new(1, 1);
+	private readonly SemaphoreSlim _feedbackGate = new(1, 1);
 	private readonly Dictionary<string, IIntegrationAdapter> _adapters = new(StringComparer.Ordinal);
 	private readonly IReadOnlyDictionary<string, IReadOnlyList<IntegrationMappingOptions>> _mappings;
 	private readonly Dictionary<string, MappingState> _mappingState = new(StringComparer.Ordinal);
-	private readonly CancellationTokenSource _lifetime = new();
+	private Channel<IntegrationTrigger>? _inputs;
+	private CancellationTokenSource? _lifetime;
 	private Task? _inputWorker;
 	private Task? _snapshotWorker;
 	private IntegrationFeedbackSnapshot? _feedback;
@@ -165,13 +167,6 @@ public sealed class IntegrationGateway : IAsyncDisposable
 		_client = client ?? throw new ArgumentNullException(nameof(client));
 		_options.Validate();
 		_mediaDeck = new MediaDeckController(_client);
-		_inputs = Channel.CreateBounded<IntegrationTrigger>(new BoundedChannelOptions(_options.QueueCapacity)
-		{
-			AllowSynchronousContinuations = false,
-			FullMode = BoundedChannelFullMode.Wait,
-			SingleReader = true,
-			SingleWriter = false
-		});
 		_mappings = _options.Mappings
 			.GroupBy(mapping => MappingKey(mapping.AdapterId, mapping.TriggerKey), StringComparer.Ordinal)
 			.ToDictionary(
@@ -216,19 +211,17 @@ public sealed class IntegrationGateway : IAsyncDisposable
 			return false;
 		lock (_gate)
 		{
-			if (!_started || !_adapters.ContainsKey(trigger.AdapterId))
+			if (!_started || !_adapters.ContainsKey(trigger.AdapterId) || _inputs is null)
 				return false;
-		}
-		if (_inputs.Writer.TryWrite(trigger))
-			return true;
-		lock (_gate)
-		{
+			if (_inputs.Writer.TryWrite(trigger))
+				return true;
+
 			_droppedInputs++;
 			_state = "DEGRADED";
 			_detail = "Input queue capacity was reached; newest integration input was dropped.";
 			_updatedAtUtc = DateTimeOffset.UtcNow;
+			return false;
 		}
-		return false;
 	}
 
 	public async Task RunAsync(CancellationToken cancellationToken)
@@ -249,10 +242,18 @@ public sealed class IntegrationGateway : IAsyncDisposable
 
 	public async ValueTask StartAsync(CancellationToken cancellationToken = default)
 	{
+		Channel<IntegrationTrigger> inputs;
+		CancellationTokenSource lifetime;
 		lock (_gate)
 		{
 			if (_started) return;
 			_started = true;
+			_mappingState.Clear();
+			_feedback = null;
+			inputs = CreateInputChannel();
+			lifetime = new CancellationTokenSource();
+			_inputs = inputs;
+			_lifetime = lifetime;
 			_state = "STARTING";
 			_detail = "Establishing upstream ControlHost state and integration adapters.";
 			_updatedAtUtc = DateTimeOffset.UtcNow;
@@ -260,7 +261,6 @@ public sealed class IntegrationGateway : IAsyncDisposable
 
 		try
 		{
-			var initial = await _client.SynchronizeAsync(cancellationToken).ConfigureAwait(false);
 			foreach (var adapter in SnapshotAdapters())
 			{
 				try
@@ -277,14 +277,28 @@ public sealed class IntegrationGateway : IAsyncDisposable
 			if (failedRequired is not null)
 				throw new InvalidOperationException($"Required integration adapter '{failedRequired.Id}' failed to start: {failedRequired.Health.Detail}");
 
-			await PublishFeedbackAsync(initial, cancellationToken).ConfigureAwait(false);
-			var token = _lifetime.Token;
-			_inputWorker = Task.Run(() => RunInputsAsync(token), CancellationToken.None);
+			var token = lifetime.Token;
+			_inputWorker = Task.Run(() => RunInputsAsync(inputs.Reader, token), CancellationToken.None);
 			_snapshotWorker = Task.Run(() => RunSnapshotPumpAsync(token), CancellationToken.None);
-			SetGatewayState("HEALTHY", "Integration gateway is active.");
+
+			try
+			{
+				var initial = await SynchronizeClientAsync(cancellationToken).ConfigureAwait(false);
+				await PublishFeedbackAsync(initial, cancellationToken).ConfigureAwait(false);
+				SetGatewayState("HEALTHY", "Integration gateway is active.");
+			}
+			catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+			{
+				throw;
+			}
+			catch (Exception exception)
+			{
+				SetGatewayState("DEGRADED", $"ControlHost unavailable at startup; automatic resynchronization remains active: {exception.Message}");
+			}
 		}
 		catch
 		{
+			await StopAsync(CancellationToken.None).ConfigureAwait(false);
 			SetGatewayState("FAILED", "Integration gateway failed during startup.");
 			throw;
 		}
@@ -292,22 +306,32 @@ public sealed class IntegrationGateway : IAsyncDisposable
 
 	public async ValueTask StopAsync(CancellationToken cancellationToken = default)
 	{
-		bool stop;
+		CancellationTokenSource? lifetime;
+		Channel<IntegrationTrigger>? inputs;
+		Task? inputWorker;
+		Task? snapshotWorker;
 		lock (_gate)
 		{
-			stop = _started;
+			if (!_started) return;
 			_started = false;
+			lifetime = _lifetime;
+			inputs = _inputs;
+			inputWorker = _inputWorker;
+			snapshotWorker = _snapshotWorker;
+			_lifetime = null;
+			_inputs = null;
+			_inputWorker = null;
+			_snapshotWorker = null;
 		}
-		if (!stop) return;
 
-		_lifetime.Cancel();
-		_inputs.Writer.TryComplete();
-		var workers = new[] { _inputWorker, _snapshotWorker }.Where(task => task is not null).Cast<Task>().ToArray();
+		lifetime?.Cancel();
+		inputs?.Writer.TryComplete();
+		var workers = new[] { inputWorker, snapshotWorker }.Where(task => task is not null).Cast<Task>().ToArray();
 		if (workers.Length > 0)
 		{
 			try { await Task.WhenAll(workers).WaitAsync(cancellationToken).ConfigureAwait(false); }
 			catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
-			catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
+			catch (OperationCanceledException) when (lifetime?.IsCancellationRequested == true) { }
 		}
 
 		foreach (var adapter in SnapshotAdapters().Reverse())
@@ -315,14 +339,15 @@ public sealed class IntegrationGateway : IAsyncDisposable
 			try { await adapter.StopAsync(cancellationToken).ConfigureAwait(false); }
 			catch { }
 		}
+		lifetime?.Dispose();
 		SetGatewayState("STOPPED", "Integration gateway is stopped.");
 	}
 
-	private async Task RunInputsAsync(CancellationToken cancellationToken)
+	private async Task RunInputsAsync(ChannelReader<IntegrationTrigger> reader, CancellationToken cancellationToken)
 	{
 		try
 		{
-			await foreach (var trigger in _inputs.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+			await foreach (var trigger in reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
 				await ProcessTriggerAsync(trigger, cancellationToken).ConfigureAwait(false);
 		}
 		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -365,8 +390,18 @@ public sealed class IntegrationGateway : IAsyncDisposable
 		{
 			try
 			{
-				await ExecuteActionAsync(mapping.Action, trigger, cancellationToken).ConfigureAwait(false);
-				var snapshot = await _client.SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+				OperatorStatusSnapshot snapshot;
+				await _clientGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+				try
+				{
+					await ExecuteActionAsync(mapping.Action, trigger, cancellationToken).ConfigureAwait(false);
+					snapshot = await _client.SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+				}
+				finally
+				{
+					_clientGate.Release();
+				}
+
 				await PublishFeedbackAsync(snapshot, cancellationToken).ConfigureAwait(false);
 				SetGatewayState("HEALTHY", $"Mapping '{mapping.Id}' completed through rtaime.Client.");
 				return;
@@ -377,7 +412,7 @@ public sealed class IntegrationGateway : IAsyncDisposable
 			}
 			catch (Exception exception) when (attempt == 0 && IsRetryable(exception))
 			{
-				await _client.SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+				await SynchronizeClientAsync(cancellationToken).ConfigureAwait(false);
 			}
 			catch (Exception exception)
 			{
@@ -475,8 +510,9 @@ public sealed class IntegrationGateway : IAsyncDisposable
 				await Task.Delay(TimeSpan.FromMilliseconds(_options.SnapshotMinimumIntervalMs), cancellationToken).ConfigureAwait(false);
 				try
 				{
-					var snapshot = await _client.SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+					var snapshot = await SynchronizeClientAsync(cancellationToken).ConfigureAwait(false);
 					await PublishFeedbackAsync(snapshot, cancellationToken).ConfigureAwait(false);
+					MarkControlSynchronized();
 				}
 				catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
 				{
@@ -495,8 +531,11 @@ public sealed class IntegrationGateway : IAsyncDisposable
 
 	private async ValueTask PublishFeedbackAsync(OperatorStatusSnapshot snapshot, CancellationToken cancellationToken)
 	{
-		var outputs = snapshot.OutputRoles.ToDictionary(role => role.RoleId, role => role.HealthState, StringComparer.Ordinal);
-		var feedback = new IntegrationFeedbackSnapshot(
+		await _feedbackGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+		try
+		{
+			var outputs = snapshot.OutputRoles.ToDictionary(role => role.RoleId, role => role.HealthState, StringComparer.Ordinal);
+			var feedback = new IntegrationFeedbackSnapshot(
 			checked(++_feedbackSequence),
 			DateTimeOffset.UtcNow,
 			snapshot.Production.Routing.PreviewSourceId.ToString(),
@@ -521,6 +560,39 @@ public sealed class IntegrationGateway : IAsyncDisposable
 			{
 				SetGatewayState("DEGRADED", $"Feedback to adapter '{adapter.Id}' failed: {exception.Message}");
 			}
+		}
+		}
+		finally
+		{
+			_feedbackGate.Release();
+		}
+	}
+
+	private async ValueTask<OperatorStatusSnapshot> SynchronizeClientAsync(CancellationToken cancellationToken)
+	{
+		await _clientGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+		try
+		{
+			return await _client.SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+		}
+		finally
+		{
+			_clientGate.Release();
+		}
+	}
+
+	private void MarkControlSynchronized()
+	{
+		lock (_gate)
+		{
+			if (_state != "DEGRADED" ||
+				!(_detail.StartsWith("ControlHost unavailable", StringComparison.Ordinal) ||
+				  _detail.StartsWith("ControlHost snapshot refresh failed", StringComparison.Ordinal)))
+				return;
+
+			_state = "HEALTHY";
+			_detail = "ControlHost snapshot synchronization recovered.";
+			_updatedAtUtc = DateTimeOffset.UtcNow;
 		}
 	}
 
@@ -548,6 +620,15 @@ public sealed class IntegrationGateway : IAsyncDisposable
 		exception is InvalidOperationException invalid &&
 			invalid.Message.Contains("snapshot", StringComparison.OrdinalIgnoreCase);
 
+	private Channel<IntegrationTrigger> CreateInputChannel() =>
+		Channel.CreateBounded<IntegrationTrigger>(new BoundedChannelOptions(_options.QueueCapacity)
+		{
+			AllowSynchronousContinuations = false,
+			FullMode = BoundedChannelFullMode.Wait,
+			SingleReader = true,
+			SingleWriter = false
+		});
+
 	private static string MappingKey(string adapterId, string triggerKey) => adapterId + "\n" + triggerKey;
 
 	public async ValueTask DisposeAsync()
@@ -556,7 +637,8 @@ public sealed class IntegrationGateway : IAsyncDisposable
 		foreach (var adapter in SnapshotAdapters())
 			await adapter.DisposeAsync().ConfigureAwait(false);
 		await _mediaDeck.DisposeAsync().ConfigureAwait(false);
-		_lifetime.Dispose();
+		_clientGate.Dispose();
+		_feedbackGate.Dispose();
 	}
 }
 
