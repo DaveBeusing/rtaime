@@ -30,7 +30,8 @@ public enum IntegrationActionKind
 	MediaPause = 12,
 	MediaStop = 13,
 	MediaCueFrame = 14,
-	AudioInputSet = 15
+	AudioInputSet = 15,
+	ProductionMacroExecute = 16
 }
 
 public enum IntegrationFeedbackSource
@@ -253,7 +254,7 @@ public sealed record IntegrationActionOptions
 			throw new ArgumentOutOfRangeException(nameof(Kind));
 		if (TargetId is { Length: > 256 } || SecondaryTargetId is { Length: > 256 })
 			throw new ArgumentException("Integration action identities are bounded to 256 characters.");
-		if ((Kind is IntegrationActionKind.PreviewSelect or IntegrationActionKind.SceneActivate or IntegrationActionKind.AudioInputSet) && string.IsNullOrWhiteSpace(TargetId))
+		if ((Kind is IntegrationActionKind.PreviewSelect or IntegrationActionKind.SceneActivate or IntegrationActionKind.AudioInputSet or IntegrationActionKind.ProductionMacroExecute) && string.IsNullOrWhiteSpace(TargetId))
 			throw new ArgumentException($"{Kind} requires TargetId.", nameof(TargetId));
 		if (Kind == IntegrationActionKind.MediaCueFrame && !UseTriggerValue && Frame is null)
 			throw new ArgumentException("MediaCueFrame requires Frame unless trigger-value mapping is enabled.", nameof(Frame));
