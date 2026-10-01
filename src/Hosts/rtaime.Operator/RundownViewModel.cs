@@ -54,14 +54,14 @@ public sealed class RundownViewModel : INotifyPropertyChanged
 		AddMediaCommand = new AsyncRelayCommand(AddMediaAsync, CanAddMedia);
 		AddSceneCommand = new AsyncRelayCommand(AddSceneAsync, CanAddScene);
 		AddAudioBreakawayCommand = new AsyncRelayCommand(AddAudioBreakawayAsync, CanAddAudio);
-		AddFollowVideoCommand = new AsyncRelayCommand(AddFollowVideoAsync, () => !IsBusy);
+		AddFollowVideoCommand = new AsyncRelayCommand(AddFollowVideoAsync, () => !IsBusy && CanUseSelectedFollowForNonMedia());
 		AddGraphicsCommand = new AsyncRelayCommand(AddGraphicsAsync, CanAddGraphics);
-		AddHoldCommand = new AsyncRelayCommand(AddHoldAsync, () => !IsBusy);
+		AddHoldCommand = new AsyncRelayCommand(AddHoldAsync, () => !IsBusy && CanUseSelectedFollowForNonMedia());
 		RemoveCommand = new AsyncRelayCommand(RemoveAsync, () => !IsBusy && SelectedItem is not null && Items.Count > 1);
 		MoveUpCommand = new AsyncRelayCommand(() => MoveAsync(-1), () => CanMove(-1));
 		MoveDownCommand = new AsyncRelayCommand(() => MoveAsync(1), () => CanMove(1));
 		PrepareCommand = new AsyncRelayCommand(PrepareAsync, CanPrepare);
-		GoCommand = new AsyncRelayCommand(GoAsync, () => !IsBusy && State == "PREPARED");
+		GoCommand = new AsyncRelayCommand(GoAsync, () => !IsBusy && (State == "PREPARED" || (State == "EXECUTING" && AutomationState == "AUTO" && PendingNext != "NONE")));
 		NextCommand = new AsyncRelayCommand(NextAsync, CanNavigate);
 		PreviousCommand = new AsyncRelayCommand(PreviousAsync, CanNavigate);
 		HoldCommand = new AsyncRelayCommand(HoldAsync, () => !IsBusy && State is "EXECUTING" or "PREPARED" or "HELD");
