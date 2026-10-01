@@ -1,0 +1,124 @@
+{
+  "copyright": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+  "schemaVersion": "1.0",
+  "frameworkStatus": "PASS",
+  "releaseChannelsSource": "build/release/release-channels.json",
+  "supportedVersions": {
+    "stableLines": [],
+    "preview": {
+      "status": "UNVERIFIED",
+      "supportMode": "UNVERIFIED"
+    },
+    "eol": {
+      "routineMaintenanceAfterEol": false,
+      "securityHandlingAfterEol": "CASE_BY_CASE"
+    }
+  },
+  "lifecycle": {
+    "stableRelease": {
+      "status": "UNVERIFIED",
+      "maintenanceMonths": null,
+      "securityMonths": null,
+      "eolNotificationLeadDays": null,
+      "approvalRequired": true
+    },
+    "preview": {
+      "status": "UNVERIFIED",
+      "maintenanceCommitment": false,
+      "securityCommitment": false
+    }
+  },
+  "securitySupport": {
+    "remediationTargetsStatus": "UNVERIFIED",
+    "severityTargetsDays": {
+      "CRITICAL": null,
+      "HIGH": null,
+      "MEDIUM": null,
+      "LOW": null
+    },
+    "distribution": "SIGNED_RELEASE_UPDATE_PATH",
+    "supportedVersionScope": "POLICY_BACKED_SUPPORTED_RELEASES_ONLY",
+    "emergencyPatchPolicy": "Emergency security fixes must still use the normal externally trusted signed release/update path and exact release evidence. No unsigned replacement binary becomes an accepted production remediation path."
+  },
+  "upgradeDeprecation": {
+    "versioningModel": "SEMANTIC_PRODUCT_VERSIONING",
+    "directUpgradeRulesSource": "build/update/update-policy.json",
+    "persistentStatePolicySource": "build/update/coordinated-upgrade-policy.json",
+    "contractDeprecation": {
+      "status": "UNVERIFIED",
+      "minimumNoticeDays": null,
+      "removalRequiresMigrationEvidence": true,
+      "removalRequiresReleaseNotes": true
+    }
+  },
+  "operationalSupport": {
+    "incidentSeverities": [
+      {
+        "id": "SEV1",
+        "name": "Critical production outage",
+        "description": "Program continuity, authoritative control, or recovery is unavailable with no acceptable operational workaround.",
+        "requiredEvidence": ["support bundle", "exact product version", "deployment identity", "time of incident"]
+      },
+      {
+        "id": "SEV2",
+        "name": "Major production degradation",
+        "description": "A production function is materially degraded or repeatedly recovering while Program continuity remains available.",
+        "requiredEvidence": ["support bundle", "exact product version", "reproduction or event timeline"]
+      },
+      {
+        "id": "SEV3",
+        "name": "Functional defect",
+        "description": "A bounded product function behaves incorrectly without immediate Program continuity risk.",
+        "requiredEvidence": ["exact product version", "reproduction steps", "relevant diagnostics"]
+      },
+      {
+        "id": "SEV4",
+        "name": "Question or enhancement",
+        "description": "Usage guidance, integration clarification, documentation issue, or enhancement request.",
+        "requiredEvidence": ["product version when applicable", "bounded problem statement"]
+      }
+    ],
+    "ownershipAreas": [
+      "CONTROL_AUTHORITY",
+      "RUNTIME_MEDIA",
+      "AUDIO",
+      "GPU",
+      "MEDIA_IO",
+      "RECORDING",
+      "NETWORK_OUTPUT",
+      "INTEGRATIONS",
+      "OPERATOR_UI",
+      "DEPLOYMENT_UPDATE",
+      "SECURITY"
+    ],
+    "supportBundleRequiredFor": ["SEV1", "SEV2"]
+  },
+  "supportBundle": {
+    "exporter": "src/Hosts/rtaime.Operator/SupportBundleExporter.cs",
+    "maximumSourceBytes": 268435456,
+    "requiredEntries": [
+      "Manifest.json",
+      "health/OperatorHealth.json"
+    ],
+    "forbiddenContent": [
+      "private keys",
+      "credentials",
+      "bearer tokens",
+      "raw video payloads",
+      "raw audio payloads",
+      "monitoring images",
+      "GPU surface contents"
+    ],
+    "redactionBoundary": "rtaime.Core.DiagnosticRedactor",
+    "regressionTests": [
+      "Export_includes_correlated_logs_health_lifecycle_and_redacts_support_metadata",
+      "Export_omits_session_files_after_bounded_source_limit"
+    ]
+  },
+  "deploymentBaseline": "docs/Governance/ProductionDeploymentBaseline.json",
+  "knownIssues": {
+    "assessmentRequiredFromStage": "RELEASE_CANDIDATE",
+    "currentStatus": "UNVERIFIED",
+    "releaseNotesRequired": true
+  }
+}
