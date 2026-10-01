@@ -1012,6 +1012,39 @@ public interface IOperatorControlTransport
         bool resume,
         CancellationToken cancellationToken = default) =>
         ValueTask.FromException<RundownWorkspaceSnapshot>(new NotSupportedException("Operator transport does not expose rundown recovery."));
+
+    ValueTask<ProductionMacroWorkspaceSnapshot> GetProductionMacroSnapshotAsync(CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<ProductionMacroWorkspaceSnapshot>(new NotSupportedException("Operator transport does not expose Production Macro state."));
+
+    ValueTask<ProductionMacroWorkspaceSnapshot> SaveProductionMacroAsync(
+        ProductionMacroDefinition macro,
+        ulong expectedStorageVersion,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<ProductionMacroWorkspaceSnapshot>(new NotSupportedException("Operator transport does not expose Production Macro authoring."));
+
+    ValueTask<ProductionMacroWorkspaceSnapshot> DeleteProductionMacroAsync(
+        ProductionMacroId macroId,
+        ulong expectedStorageVersion,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<ProductionMacroWorkspaceSnapshot>(new NotSupportedException("Operator transport does not expose Production Macro deletion."));
+
+    ValueTask<ProductionMacroValidationResult> ValidateProductionMacroAsync(
+        ProductionMacroDefinition macro,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<ProductionMacroValidationResult>(new NotSupportedException("Operator transport does not expose Production Macro validation."));
+
+    ValueTask<ProductionMacroWorkspaceSnapshot> ExecuteProductionMacroAsync(
+        ProductionMacroId macroId,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<ProductionMacroWorkspaceSnapshot>(new NotSupportedException("Operator transport does not expose Production Macro execution."));
+
+    ValueTask<ProductionMacroWorkspaceSnapshot> CancelProductionMacroAsync(CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<ProductionMacroWorkspaceSnapshot>(new NotSupportedException("Operator transport does not expose Production Macro cancellation."));
+
+    ValueTask<ProductionMacroWorkspaceSnapshot> AcknowledgeProductionMacroRecoveryAsync(
+        bool resume,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<ProductionMacroWorkspaceSnapshot>(new NotSupportedException("Operator transport does not expose Production Macro recovery."));
 }
 
 public interface IMediaAssetCatalogClient
@@ -1584,6 +1617,77 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
     {
         RequireSnapshot();
         var result = await _transport.AcknowledgeRundownRecoveryAsync(resume, cancellationToken).ConfigureAwait(false);
+        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+
+    public ValueTask<ProductionMacroWorkspaceSnapshot> GetProductionMacroSnapshotAsync(CancellationToken cancellationToken = default) =>
+        _transport.GetProductionMacroSnapshotAsync(cancellationToken);
+
+    public ValueTask<ProductionMacroValidationResult> ValidateProductionMacroAsync(
+        ProductionMacroDefinition macro,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(macro);
+        return _transport.ValidateProductionMacroAsync(macro, cancellationToken);
+    }
+
+    public async ValueTask<ProductionMacroWorkspaceSnapshot> SaveProductionMacroAsync(
+        ProductionMacroDefinition macro,
+        ulong expectedStorageVersion,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(macro);
+        RequireSnapshot();
+        var result = await _transport.SaveProductionMacroAsync(macro, expectedStorageVersion, cancellationToken).ConfigureAwait(false);
+        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+
+    public async ValueTask<ProductionMacroWorkspaceSnapshot> DeleteProductionMacroAsync(
+        ProductionMacroId macroId,
+        ulong expectedStorageVersion,
+        CancellationToken cancellationToken = default)
+    {
+        RequireSnapshot();
+        var result = await _transport.DeleteProductionMacroAsync(macroId, expectedStorageVersion, cancellationToken).ConfigureAwait(false);
+        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+
+    public ValueTask<ProductionMacroWorkspaceSnapshot> ExecuteProductionMacroAsync(
+        string macroId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(macroId))
+            throw new ArgumentException("Production Macro identity is required.", nameof(macroId));
+        return ExecuteProductionMacroAsync(new ProductionMacroId(Identity.Parse(macroId.Trim())), cancellationToken);
+    }
+
+    public async ValueTask<ProductionMacroWorkspaceSnapshot> ExecuteProductionMacroAsync(
+        ProductionMacroId macroId,
+        CancellationToken cancellationToken = default)
+    {
+        RequireSnapshot();
+        var result = await _transport.ExecuteProductionMacroAsync(macroId, cancellationToken).ConfigureAwait(false);
+        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+
+    public async ValueTask<ProductionMacroWorkspaceSnapshot> CancelProductionMacroAsync(CancellationToken cancellationToken = default)
+    {
+        RequireSnapshot();
+        var result = await _transport.CancelProductionMacroAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+
+    public async ValueTask<ProductionMacroWorkspaceSnapshot> AcknowledgeProductionMacroRecoveryAsync(
+        bool resume,
+        CancellationToken cancellationToken = default)
+    {
+        RequireSnapshot();
+        var result = await _transport.AcknowledgeProductionMacroRecoveryAsync(resume, cancellationToken).ConfigureAwait(false);
         await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
