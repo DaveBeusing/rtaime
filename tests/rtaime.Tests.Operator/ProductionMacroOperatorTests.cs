@@ -49,14 +49,15 @@ public sealed class ProductionMacroOperatorTests
 			"ShowControlActionKind.StopRecording",
 			"ShowControlActionKind.WaitFrames",
 			"ShowControlActionKind.SetAudioRouting",
-			"ShowControlActionKind.RouteOutputRole"
+			"ShowControlActionKind.RouteOutputRole",
+			"ShowControlActionKind.SetAudioInputState"
 		})
 		{
 			Assert.Contains(action, viewModel, StringComparison.Ordinal);
 		}
 
 		Assert.DoesNotContain("CodeEditor", surface, StringComparison.Ordinal);
-		Assert.DoesNotContain("Script", surface, StringComparison.OrdinalIgnoreCase);
+		Assert.DoesNotContain("ScriptText", surface, StringComparison.OrdinalIgnoreCase);
 		Assert.DoesNotContain("Process.Start", viewModel, StringComparison.Ordinal);
 		Assert.DoesNotContain("RuntimeHost", viewModel, StringComparison.Ordinal);
 		Assert.DoesNotContain("Provider.", viewModel, StringComparison.Ordinal);
