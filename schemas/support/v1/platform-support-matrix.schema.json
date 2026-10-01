@@ -5,17 +5,43 @@
   "title": "rtaime Platform Support Matrix",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "matrixStatus", "evidencePolicy", "compatibilityRules", "configurations"],
+  "required": [
+    "copyright",
+    "schemaVersion",
+    "matrixStatus",
+    "evidencePolicy",
+    "compatibilityRules",
+    "configurations"
+  ],
   "properties": {
-    "schemaVersion": { "const": "1.0" },
-    "matrixStatus": { "enum": ["PASS", "FAIL", "UNVERIFIED"] },
+    "copyright": {
+      "type": "string",
+      "minLength": 1
+    },
+    "schemaVersion": {
+      "const": "1.0"
+    },
+    "matrixStatus": {
+      "enum": [
+        "PASS",
+        "FAIL",
+        "UNVERIFIED"
+      ]
+    },
     "evidencePolicy": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["supportedRequiresEvidence", "materialChangeInvalidatesEvidence"],
+      "required": [
+        "supportedRequiresEvidence",
+        "materialChangeInvalidatesEvidence"
+      ],
       "properties": {
-        "supportedRequiresEvidence": { "const": true },
-        "materialChangeInvalidatesEvidence": { "const": true }
+        "supportedRequiresEvidence": {
+          "const": true
+        },
+        "materialChangeInvalidatesEvidence": {
+          "const": true
+        }
       }
     },
     "compatibilityRules": {
@@ -28,10 +54,28 @@
         "materialChangePolicy"
       ],
       "properties": {
-        "driverRangePolicy": { "enum": ["EXACT", "TESTED_RANGE", "EVIDENCE_BOUND"] },
-        "providerSdkPolicy": { "enum": ["PINNED_WHERE_REQUIRED", "EVIDENCE_BOUND"] },
-        "firmwarePolicy": { "enum": ["EVIDENCE_BOUND", "NOT_APPLICABLE"] },
-        "materialChangePolicy": { "const": "REQUALIFY" }
+        "driverRangePolicy": {
+          "enum": [
+            "EXACT",
+            "TESTED_RANGE",
+            "EVIDENCE_BOUND"
+          ]
+        },
+        "providerSdkPolicy": {
+          "enum": [
+            "PINNED_WHERE_REQUIRED",
+            "EVIDENCE_BOUND"
+          ]
+        },
+        "firmwarePolicy": {
+          "enum": [
+            "EVIDENCE_BOUND",
+            "NOT_APPLICABLE"
+          ]
+        },
+        "materialChangePolicy": {
+          "const": "REQUALIFY"
+        }
       }
     },
     "configurations": {
@@ -51,26 +95,78 @@
           "knownLimitations"
         ],
         "properties": {
-          "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$" },
-          "supportStatus": { "enum": ["SUPPORTED", "UNVERIFIED", "UNSUPPORTED", "EOL"] },
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+          },
+          "supportStatus": {
+            "enum": [
+              "SUPPORTED",
+              "UNVERIFIED",
+              "UNSUPPORTED",
+              "EOL"
+            ]
+          },
           "platform": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["osFamily", "edition", "versionFamily", "architecture", "rid"],
+            "required": [
+              "osFamily",
+              "edition",
+              "versionFamily",
+              "architecture",
+              "rid"
+            ],
             "properties": {
-              "osFamily": { "const": "Windows" },
-              "edition": { "type": ["string", "null"] },
-              "versionFamily": { "type": ["string", "null"] },
-              "architecture": { "const": "x64" },
-              "rid": { "const": "win-x64" }
+              "osFamily": {
+                "const": "Windows"
+              },
+              "edition": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "versionFamily": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "architecture": {
+                "const": "x64"
+              },
+              "rid": {
+                "const": "win-x64"
+              }
             }
           },
-          "runtimeRequirements": { "type": "array", "minItems": 1 },
-          "gpu": { "type": "object" },
-          "mediaIo": { "type": "object" },
-          "networkProviders": { "type": "array" },
-          "qualificationEvidence": { "type": "array", "items": { "type": "string", "minLength": 1 } },
-          "knownLimitations": { "type": "array", "items": { "type": "string" } }
+          "runtimeRequirements": {
+            "type": "array",
+            "minItems": 1
+          },
+          "gpu": {
+            "type": "object"
+          },
+          "mediaIo": {
+            "type": "object"
+          },
+          "networkProviders": {
+            "type": "array"
+          },
+          "qualificationEvidence": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "knownLimitations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
         }
       }
     }
