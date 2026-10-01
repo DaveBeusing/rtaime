@@ -160,3 +160,12 @@ It does not assert CRA conformity. It also does not establish:
 - `STABLE`, `VALIDATED`, or `CERTIFIED` release readiness.
 
 Those remain separate evidence domains and proof obligations. Missing evidence remains `UNVERIFIED`.
+
+## Support-policy boundary
+
+Product-security assessment remains distinct from product-support commitment.
+
+The source-controlled support framework is defined in `docs/Governance/ProductSupportPolicy.json`. A security assessment can provide the release SECURITY evidence required by its own contract, but it cannot approve Stable maintenance duration, remediation SLA, supported-version scope, production signing trust, hardware compatibility or EOL dates.
+
+Those obligations are evaluated separately by `build/release/Test-StableReadiness.ps1`. Missing support commitments remain `UNVERIFIED`.
+
