@@ -194,7 +194,7 @@ function Test-SupportedPlatformConfiguration {
 			foreach ($reference in $providerEvidence) {
 				if (-not (Test-PassedQualificationEvidence ([string]$reference))) { return $false }
 			}
-		} elseif ([string]$provider.supportStatus -notin @("UNVERIFIED", "UNSUPPORTED")) {
+		} elseif ([string]$provider.supportStatus -notin @("UNVERIFIED", "UNSUPPORTED", "EOL")) {
 			return $false
 		}
 	}
@@ -294,7 +294,7 @@ Add-Domain $domains "supportedVersionPolicy" $versionPolicyStatus "docs/Governan
 
 $supportedConfigurations = @($platformMatrix.configurations | Where-Object { [string]$_.supportStatus -eq "SUPPORTED" })
 $invalidSupportStatuses = @($platformMatrix.configurations | Where-Object {
-	[string]$_.supportStatus -notin @("SUPPORTED", "UNVERIFIED", "UNSUPPORTED")
+	[string]$_.supportStatus -notin @("SUPPORTED", "UNVERIFIED", "UNSUPPORTED", "EOL")
 })
 $platformStatus = if ($invalidSupportStatuses.Count -gt 0) {
 	"FAIL"
