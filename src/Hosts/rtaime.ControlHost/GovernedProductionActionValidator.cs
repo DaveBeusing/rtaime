@@ -52,6 +52,9 @@ internal static class GovernedProductionActionValidator
 				ValidateSource(control, action.SourceId!, "output-role");
 				break;
 			}
+			case ShowControlActionKind.SetAudioInputState:
+				ValidateSource(control, action.SourceId!, "audio-input");
+				break;
 		}
 	}
 
