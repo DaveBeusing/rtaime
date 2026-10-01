@@ -50,7 +50,11 @@ public sealed record PersistedShowProject(
 	DurableAudioRoutingState? AudioRouting = null,
 	string? RundownJson = null,
 	ulong RundownStorageVersion = 0,
-	AudioProductionConfiguration? AudioProduction = null)
+	AudioProductionConfiguration? AudioProduction = null,
+	string? ProductionMacrosJson = null,
+	ulong ProductionMacrosStorageVersion = 0,
+	string? ProductionMacroExecutionJson = null,
+	ulong ProductionMacroExecutionVersion = 0)
 {
 	public ProductionSpecification ApplyTo(ProductionSpecification baseline)
 	{
@@ -90,6 +94,8 @@ public sealed class ShowProjectPersistenceStore
 	private const int MaximumProjectNameLength = 200;
 	private const int MaximumShowControlJsonBytes = 4 * 1024 * 1024;
 	private const int MaximumRundownJsonBytes = 4 * 1024 * 1024;
+	private const int MaximumProductionMacrosJsonBytes = 4 * 1024 * 1024;
+	private const int MaximumProductionMacroExecutionJsonBytes = 256 * 1024;
 	private const uint MaximumBitmapDimension = 384;
 	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 	private readonly SqliteManagementStore _managementStore;
@@ -282,6 +288,22 @@ public sealed class ShowProjectPersistenceStore
 		return new ShowProjectSubdocumentSnapshot(project.RundownJson, project.RundownStorageVersion);
 	}
 
+	public async ValueTask<ShowProjectSubdocumentSnapshot> LoadProductionMacrosAsync(
+		ProductionSpecification baseline,
+		CancellationToken cancellationToken = default)
+	{
+		var project = await LoadAsync(baseline, cancellationToken).ConfigureAwait(false);
+		return new ShowProjectSubdocumentSnapshot(project.ProductionMacrosJson, project.ProductionMacrosStorageVersion);
+	}
+
+	public async ValueTask<ShowProjectSubdocumentSnapshot> LoadProductionMacroExecutionAsync(
+		ProductionSpecification baseline,
+		CancellationToken cancellationToken = default)
+	{
+		var project = await LoadAsync(baseline, cancellationToken).ConfigureAwait(false);
+		return new ShowProjectSubdocumentSnapshot(project.ProductionMacroExecutionJson, project.ProductionMacroExecutionVersion);
+	}
+
 	public async ValueTask<ShowProjectSubdocumentWriteResult> UpdateRundownAsync(
 		ProductionSpecification baseline,
 		string json,
@@ -321,6 +343,98 @@ public sealed class ShowProjectPersistenceStore
 			return new ShowProjectSubdocumentWriteResult(
 				true,
 				new ShowProjectSubdocumentSnapshot(persisted.RundownJson, persisted.RundownStorageVersion),
+				null);
+		}
+		finally
+		{
+			_gate.Release();
+		}
+	}
+
+	public async ValueTask<ShowProjectSubdocumentWriteResult> UpdateProductionMacrosAsync(
+		ProductionSpecification baseline,
+		string json,
+		ulong expectedVersion,
+		CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(baseline);
+		if (string.IsNullOrWhiteSpace(json))
+			throw new ArgumentException("Production Macro JSON is required.", nameof(json));
+		if (System.Text.Encoding.UTF8.GetByteCount(json) > MaximumProductionMacrosJsonBytes)
+			throw new ArgumentOutOfRangeException(nameof(json), $"Production Macro JSON must not exceed {MaximumProductionMacrosJsonBytes} bytes.");
+		_ = ProductionMacroCanonicalSerializer.Deserialize(json);
+
+		await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+		try
+		{
+			var current = await RequireDocumentAsync(baseline.ProductionId, cancellationToken).ConfigureAwait(false);
+			var project = Deserialize(current, baseline);
+			if (project.ProductionMacrosStorageVersion != expectedVersion)
+			{
+				return new ShowProjectSubdocumentWriteResult(
+					false,
+					null,
+					new Failure(
+						"persistence.version_conflict",
+						$"Expected Production Macro storage version {expectedVersion}, current version is {project.ProductionMacrosStorageVersion}."));
+			}
+
+			var nextVersion = checked(project.ProductionMacrosStorageVersion + 1);
+			var updated = project with
+			{
+				ProductionMacrosJson = json,
+				ProductionMacrosStorageVersion = nextVersion
+			};
+			var persisted = await WriteAsync(updated, current.Version, baseline, cancellationToken).ConfigureAwait(false);
+			return new ShowProjectSubdocumentWriteResult(
+				true,
+				new ShowProjectSubdocumentSnapshot(persisted.ProductionMacrosJson, persisted.ProductionMacrosStorageVersion),
+				null);
+		}
+		finally
+		{
+			_gate.Release();
+		}
+	}
+
+	public async ValueTask<ShowProjectSubdocumentWriteResult> UpdateProductionMacroExecutionAsync(
+		ProductionSpecification baseline,
+		string json,
+		ulong expectedVersion,
+		CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(baseline);
+		if (string.IsNullOrWhiteSpace(json))
+			throw new ArgumentException("Production Macro execution JSON is required.", nameof(json));
+		if (System.Text.Encoding.UTF8.GetByteCount(json) > MaximumProductionMacroExecutionJsonBytes)
+			throw new ArgumentOutOfRangeException(nameof(json), $"Production Macro execution JSON must not exceed {MaximumProductionMacroExecutionJsonBytes} bytes.");
+		_ = ProductionMacroExecutionSerializer.Deserialize(json);
+
+		await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+		try
+		{
+			var current = await RequireDocumentAsync(baseline.ProductionId, cancellationToken).ConfigureAwait(false);
+			var project = Deserialize(current, baseline);
+			if (project.ProductionMacroExecutionVersion != expectedVersion)
+			{
+				return new ShowProjectSubdocumentWriteResult(
+					false,
+					null,
+					new Failure(
+						"persistence.version_conflict",
+						$"Expected Production Macro execution version {expectedVersion}, current version is {project.ProductionMacroExecutionVersion}."));
+			}
+
+			var nextVersion = checked(project.ProductionMacroExecutionVersion + 1);
+			var updated = project with
+			{
+				ProductionMacroExecutionJson = json,
+				ProductionMacroExecutionVersion = nextVersion
+			};
+			var persisted = await WriteAsync(updated, current.Version, baseline, cancellationToken).ConfigureAwait(false);
+			return new ShowProjectSubdocumentWriteResult(
+				true,
+				new ShowProjectSubdocumentSnapshot(persisted.ProductionMacroExecutionJson, persisted.ProductionMacroExecutionVersion),
 				null);
 		}
 		finally
@@ -515,7 +629,11 @@ public sealed class ShowProjectPersistenceStore
 			ToDocument(project.AudioRouting ?? DurableAudioRoutingState.FollowVideo),
 			project.RundownJson,
 			project.RundownStorageVersion,
-			ToDocument(project.AudioProduction ?? CreateDefaultAudioProduction(baseline)));
+			ToDocument(project.AudioProduction ?? CreateDefaultAudioProduction(baseline)),
+			project.ProductionMacrosJson,
+			project.ProductionMacrosStorageVersion,
+			project.ProductionMacroExecutionJson,
+			project.ProductionMacroExecutionVersion);
 		return JsonSerializer.Serialize(document, JsonOptions);
 	}
 
@@ -546,7 +664,11 @@ public sealed class ShowProjectPersistenceStore
 			audioRouting,
 			document.RundownJson,
 			document.RundownStorageVersion,
-			audioProduction);
+			audioProduction,
+			document.ProductionMacrosJson,
+			document.ProductionMacrosStorageVersion,
+			document.ProductionMacroExecutionJson,
+			document.ProductionMacroExecutionVersion);
 		ValidateProject(project, baseline);
 		return project;
 	}
@@ -577,6 +699,23 @@ public sealed class ShowProjectPersistenceStore
 			if (System.Text.Encoding.UTF8.GetByteCount(rundownJson) > MaximumRundownJsonBytes)
 				throw new InvalidDataException($"Persisted rundown exceeds {MaximumRundownJsonBytes} bytes.");
 			_ = RundownCanonicalSerializer.Deserialize(rundownJson);
+		}
+
+		if (project.ProductionMacrosJson is null && project.ProductionMacrosStorageVersion != 0)
+			throw new InvalidDataException("Durable show project has a Production Macro version without a Macro payload.");
+		if (project.ProductionMacrosJson is { } macroJson)
+		{
+			if (System.Text.Encoding.UTF8.GetByteCount(macroJson) > MaximumProductionMacrosJsonBytes)
+				throw new InvalidDataException($"Persisted Production Macro library exceeds {MaximumProductionMacrosJsonBytes} bytes.");
+			_ = ProductionMacroCanonicalSerializer.Deserialize(macroJson);
+		}
+		if (project.ProductionMacroExecutionJson is null && project.ProductionMacroExecutionVersion != 0)
+			throw new InvalidDataException("Durable show project has a Production Macro execution version without execution state.");
+		if (project.ProductionMacroExecutionJson is { } macroExecutionJson)
+		{
+			if (System.Text.Encoding.UTF8.GetByteCount(macroExecutionJson) > MaximumProductionMacroExecutionJsonBytes)
+				throw new InvalidDataException($"Persisted Production Macro execution exceeds {MaximumProductionMacroExecutionJsonBytes} bytes.");
+			_ = ProductionMacroExecutionSerializer.Deserialize(macroExecutionJson);
 		}
 	}
 
@@ -972,7 +1111,11 @@ public sealed class ShowProjectPersistenceStore
 		AudioRoutingDocument? AudioRouting = null,
 		string? RundownJson = null,
 		ulong RundownStorageVersion = 0,
-		AudioProductionDocument? AudioProduction = null);
+		AudioProductionDocument? AudioProduction = null,
+		string? ProductionMacrosJson = null,
+		ulong ProductionMacrosStorageVersion = 0,
+		string? ProductionMacroExecutionJson = null,
+		ulong ProductionMacroExecutionVersion = 0);
 
 	private sealed record AudioRoutingDocument(int Mode, string? BreakawaySourceId);
 	private sealed record AudioBusDocument(string BusId, double MasterGain, bool Muted);
