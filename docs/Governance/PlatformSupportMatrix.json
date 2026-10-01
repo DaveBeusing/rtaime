@@ -1,0 +1,74 @@
+{
+  "copyright": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+  "schemaVersion": "1.0",
+  "matrixStatus": "UNVERIFIED",
+  "evidencePolicy": {
+    "supportedRequiresEvidence": true,
+    "materialChangeInvalidatesEvidence": true
+  },
+  "compatibilityRules": {
+    "driverRangePolicy": "EVIDENCE_BOUND",
+    "providerSdkPolicy": "PINNED_WHERE_REQUIRED",
+    "firmwarePolicy": "EVIDENCE_BOUND",
+    "materialChangePolicy": "REQUALIFY"
+  },
+  "configurations": [
+    {
+      "id": "windows-x64-reference-family",
+      "supportStatus": "UNVERIFIED",
+      "platform": {
+        "osFamily": "Windows",
+        "edition": null,
+        "versionFamily": null,
+        "architecture": "x64",
+        "rid": "win-x64"
+      },
+      "runtimeRequirements": [
+        {
+          "name": "Microsoft.NETCore.App",
+          "majorMinor": "10.0",
+          "minimumVersion": "10.0.0",
+          "source": "build/release/offline-bundle-policy.json"
+        },
+        {
+          "name": "Microsoft.WindowsDesktop.App",
+          "majorMinor": "10.0",
+          "minimumVersion": "10.0.0",
+          "source": "build/release/offline-bundle-policy.json"
+        }
+      ],
+      "gpu": {
+        "class": "NVIDIA professional GPU",
+        "driverRange": null,
+        "provider": "CUDA Driver API",
+        "qualificationStatus": "UNVERIFIED"
+      },
+      "mediaIo": {
+        "provider": "AJA NTV2",
+        "device": null,
+        "driverRange": null,
+        "providerSdkPinSource": "native/Providers/AjaNtv2/libajantv2.version.json",
+        "firmware": null,
+        "qualificationStatus": "UNVERIFIED"
+      },
+      "networkProviders": [
+        {
+          "provider": "SRT",
+          "supportStatus": "UNVERIFIED",
+          "qualificationEvidence": []
+        }
+      ],
+      "qualificationEvidence": [
+        "docs/qualification/ReferencePlatformQualification.md",
+        "docs/CudaReferenceHardwareQualification.md",
+        "docs/QualificationEvidenceProvenance.md"
+      ],
+      "knownLimitations": [
+        "No Windows edition/version/build family is yet declared SUPPORTED.",
+        "No production GPU driver range is yet declared SUPPORTED.",
+        "No physical Media I/O device/driver/firmware tuple is yet declared SUPPORTED.",
+        "Hosted CI and software-profile qualification do not promote this configuration to SUPPORTED."
+      ]
+    }
+  ]
+}
