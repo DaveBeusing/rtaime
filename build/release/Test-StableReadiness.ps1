@@ -75,7 +75,7 @@ $supportPeriodStatus = if ([string]$stableLifecycle.status -eq "PASS" -and
 } else {
 	"UNVERIFIED"
 }
-Add-Domain $domains "supportPeriodPolicy" $supportPeriodStatus "docs/Governance/ProductSupportPolicy.json" (
+Add-Domain $domains "supportPeriodPolicy" $supportPeriodStatus "docs/Governance/ProductSupportPolicy.json" $(
 	if ($supportPeriodStatus -eq "PASS") {
 		"Approved Stable maintenance, security and EOL-notification durations are declared."
 	} else {
@@ -88,7 +88,7 @@ $stableLines = @($supportPolicy.supportedVersions.stableLines)
 if ($stableLines | Where-Object { [string]$_.status -eq "SUPPORTED" -and $null -eq $_.eolDate }) {
 	$versionPolicyStatus = "FAIL"
 }
-Add-Domain $domains "supportedVersionPolicy" $versionPolicyStatus "docs/Governance/ProductSupportPolicy.json" (
+Add-Domain $domains "supportedVersionPolicy" $versionPolicyStatus "docs/Governance/ProductSupportPolicy.json" $(
 	if ($stableLines.Count -eq 0) {
 		"No Stable line is currently declared supported; that absence is explicit and policy-backed."
 	} else {
@@ -104,7 +104,7 @@ $platformStatus = if ([string]$platformMatrix.matrixStatus -eq "FAIL") {
 } else {
 	"UNVERIFIED"
 }
-Add-Domain $domains "platformCompatibilityPolicy" $platformStatus "docs/Governance/PlatformSupportMatrix.json" (
+Add-Domain $domains "platformCompatibilityPolicy" $platformStatus "docs/Governance/PlatformSupportMatrix.json" $(
 	if ($platformStatus -eq "PASS") {
 		"At least one evidence-backed platform tuple is declared SUPPORTED."
 	} else {
@@ -121,7 +121,7 @@ Add-Domain $domains "securityPolicy" $securityFrameworkStatus "docs/Governance/P
 
 $securityCommitmentStatus = [string]$supportPolicy.securitySupport.remediationTargetsStatus
 if ($securityCommitmentStatus -notin @("PASS", "FAIL", "UNVERIFIED")) { $securityCommitmentStatus = "FAIL" }
-Add-Domain $domains "securitySupportCommitment" $securityCommitmentStatus "docs/Governance/ProductSupportPolicy.json" (
+Add-Domain $domains "securitySupportCommitment" $securityCommitmentStatus "docs/Governance/ProductSupportPolicy.json" $(
 	if ($securityCommitmentStatus -eq "PASS") {
 		"Approved security remediation targets are declared."
 	} else {
@@ -135,7 +135,7 @@ $updateSourcesExist =
 	(Test-Path -LiteralPath (Resolve-RepositoryPath ([string]$supportPolicy.upgradeDeprecation.directUpgradeRulesSource)) -PathType Leaf) -and
 	(Test-Path -LiteralPath (Resolve-RepositoryPath ([string]$supportPolicy.upgradeDeprecation.persistentStatePolicySource)) -PathType Leaf)
 if (-not $updateSourcesExist) { $deprecationStatus = "FAIL" }
-Add-Domain $domains "upgradeDeprecationPolicy" $deprecationStatus "docs/Governance/ProductSupportPolicy.json" (
+Add-Domain $domains "upgradeDeprecationPolicy" $deprecationStatus "docs/Governance/ProductSupportPolicy.json" $(
 	if ($deprecationStatus -eq "PASS") {
 		"Upgrade and deprecation commitments are fully approved."
 	} elseif ($deprecationStatus -eq "UNVERIFIED") {
@@ -179,7 +179,7 @@ $releaseEvidenceStatus = if ($null -eq $releaseEvidence) {
 } else {
 	"PASS"
 }
-Add-Domain $domains "releaseEvidence" $releaseEvidenceStatus "release-evidence.json" (
+Add-Domain $domains "releaseEvidence" $releaseEvidenceStatus "release-evidence.json" $(
 	if ($releaseEvidenceStatus -eq "PASS") { "Release evidence verifies and matches the current product identity." }
 	elseif ($releaseEvidenceStatus -eq "FAIL") { "Release evidence does not match the current product identity." }
 	else { "No exact current-source release-evidence bundle was supplied to the Stable-readiness verifier." }
@@ -196,7 +196,7 @@ if ($null -ne $releaseEvidence) {
 		$knownIssuesStatus = "FAIL"
 	}
 }
-Add-Domain $domains "knownIssues" $knownIssuesStatus "release-evidence.json:KNOWN_ISSUES" (
+Add-Domain $domains "knownIssues" $knownIssuesStatus "release-evidence.json:KNOWN_ISSUES" $(
 	if ($knownIssuesStatus -eq "PASS") {
 		"Known-issues assessment is bound as PASS for the supplied release evidence."
 	} else {
@@ -224,7 +224,7 @@ if ($null -ne $releaseEvidence -and $null -ne $evidenceRoot) {
 		}
 	}
 }
-Add-Domain $domains "requiredHardwareEvidence" $hardwareStatus "compatibility-manifest.json:hardwareQualification" (
+Add-Domain $domains "requiredHardwareEvidence" $hardwareStatus "compatibility-manifest.json:hardwareQualification" $(
 	if ($hardwareStatus -eq "PASS") {
 		"All release-policy hardware requirements are PASS in exact release evidence."
 	} elseif ($hardwareStatus -eq "FAIL") {
@@ -253,7 +253,7 @@ if (-not [string]::IsNullOrWhiteSpace($ReleaseCandidatePath)) {
 		}
 	}
 }
-Add-Domain $domains "productionSigningTrust" $productionTrustStatus "release-candidate.json" (
+Add-Domain $domains "productionSigningTrust" $productionTrustStatus "release-candidate.json" $(
 	if ($productionTrustStatus -eq "PASS") {
 		"Stable candidate uses externally controlled active production signing trust and publication readiness PASS."
 	} elseif ($productionTrustStatus -eq "FAIL") {
@@ -264,7 +264,7 @@ Add-Domain $domains "productionSigningTrust" $productionTrustStatus "release-can
 )
 
 $sourceStageStatus = if ($releaseStage -eq "STABLE") { "PASS" } else { "UNVERIFIED" }
-Add-Domain $domains "sourceReleaseStage" $sourceStageStatus "Directory.Build.props" (
+Add-Domain $domains "sourceReleaseStage" $sourceStageStatus "Directory.Build.props" $(
 	if ($releaseStage -eq "STABLE") {
 		"Source declares STABLE and must still satisfy every other readiness domain."
 	} else {
