@@ -58,7 +58,7 @@ Assert-Condition ($coordinator -match 'ShowControlExecutionMachine' -and $coordi
 Assert-Condition ($coordinator -match 'ProductionMacroExecutionState\.RecoveryRequired' -or $coordinator -match 'RecoveryRequired') "Macro execution must preserve explicit ambiguous-restart recovery."
 Assert-Condition ($coordinator -notmatch 'RuntimeHost|rtaime\.Provider|Process\.Start|System\.Reflection|HttpClient|PowerShell|CSharpScript') "Production Macro coordinator must not bypass ControlHost, launch code, or add generic external execution."
 Assert-Condition ($contracts -notmatch 'NestedMacro|LoopCount|ConditionExpression|ScriptText|ExecutableCode') "Production Macro contracts must not expose nesting, loops, conditions, or executable code."
-Assert-Condition ($client -match 'ExecuteProductionMacroAsync' -and $client -match 'ValidateProductionMacroAsync') "Production Macro operations must cross rtaime.Client."
+Assert-Condition ($client -match 'GetProductionMacroAsync' -and $client -match 'ExecuteProductionMacroAsync' -and $client -match 'ValidateProductionMacroAsync') "Production Macro list/get/validate/execute operations must cross rtaime.Client."
 Assert-Condition ($integrationConfig -match 'ProductionMacroExecute' -and $integrationGateway -match 'ExecuteProductionMacroAsync\(action\.TargetId') "IntegrationHost must invoke Macros by stable identity through rtaime.Client."
 Assert-Condition ($integrationGateway -notmatch 'ProductionMacroAction|ShowControlActionKind') "IntegrationHost must not duplicate Macro action chains."
 
