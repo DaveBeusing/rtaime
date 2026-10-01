@@ -114,7 +114,7 @@ public sealed class ExternalControlIntegrationTests
 	public async Task Observer_can_read_and_validate_macro_but_cannot_execute_it()
 	{
 		await using var fixture = await ExternalFixture.StartAsync(ExternalControlRole.Observer);
-		await using var local = new NamedPipeOperatorControlTransport(
+		var local = new NamedPipeOperatorControlTransport(
 			fixture.ControlEndpoint,
 			TimeSpan.FromSeconds(1),
 			TimeSpan.FromSeconds(5));
