@@ -25,59 +25,134 @@
 		"knownIssues"
 	],
 	"properties": {
-		"copyright": { "type": "string", "minLength": 1 },
-		"schemaVersion": { "const": "1.0" },
-		"productName": { "const": "rtaime" },
-		"productVersion": { "type": "string", "minLength": 1 },
-		"releaseStage": {
-			"enum": ["DEV", "PREVIEW", "RELEASE_CANDIDATE", "STABLE", "VALIDATED", "CERTIFIED"]
+		"copyright": {
+			"type": "string",
+			"minLength": 1
 		},
-		"sourceCommit": { "type": "string", "pattern": "^[0-9a-fA-F]{40,64}$" },
-		"buildCommit": { "type": "string", "pattern": "^[0-9a-fA-F]{40,64}$" },
-		"buildId": { "type": "string", "minLength": 1 },
-		"generatedAtUtc": { "type": "string", "format": "date-time" },
-		"artifactManifest": { "$ref": "#/$defs/hashReference" },
+		"schemaVersion": {
+			"const": "1.0"
+		},
+		"productName": {
+			"const": "rtaime"
+		},
+		"productVersion": {
+			"type": "string",
+			"minLength": 1
+		},
+		"releaseStage": {
+			"enum": [
+				"DEV",
+				"PREVIEW",
+				"RELEASE_CANDIDATE",
+				"STABLE",
+				"VALIDATED",
+				"CERTIFIED"
+			]
+		},
+		"sourceCommit": {
+			"type": "string",
+			"pattern": "^[0-9a-fA-F]{40,64}$"
+		},
+		"buildCommit": {
+			"type": "string",
+			"pattern": "^[0-9a-fA-F]{40,64}$"
+		},
+		"buildId": {
+			"type": "string",
+			"minLength": 1
+		},
+		"generatedAtUtc": {
+			"type": "string",
+			"format": "date-time"
+		},
+		"artifactManifest": {
+			"$ref": "#/$defs/hashReference"
+		},
 		"sbom": {
 			"allOf": [
-				{ "$ref": "#/$defs/hashReference" },
+				{
+					"$ref": "#/$defs/hashReference"
+				},
 				{
 					"type": "object",
-					"required": ["format", "specVersion"],
+					"required": [
+						"format",
+						"specVersion"
+					],
 					"properties": {
-						"format": { "const": "CycloneDX" },
-						"specVersion": { "const": "1.6" }
+						"format": {
+							"const": "CycloneDX"
+						},
+						"specVersion": {
+							"const": "1.6"
+						}
 					}
 				}
 			]
 		},
-		"compatibilityManifest": { "$ref": "#/$defs/hashReference" },
-		"qualificationEvidenceManifest": { "$ref": "#/$defs/hashReference" },
+		"compatibilityManifest": {
+			"$ref": "#/$defs/hashReference"
+		},
+		"qualificationEvidenceManifest": {
+			"$ref": "#/$defs/hashReference"
+		},
 		"securityAssessment": {
 			"type": "object",
 			"additionalProperties": false,
-			"required": ["path", "sha256", "assessmentId"],
+			"required": [
+				"path",
+				"sha256",
+				"assessmentId"
+			],
 			"properties": {
-				"path": { "const": "security-assessment.json" },
-				"sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
-				"assessmentId": { "type": "string", "minLength": 1 }
+				"path": {
+					"const": "security-assessment.json"
+				},
+				"sha256": {
+					"type": "string",
+					"pattern": "^[0-9a-f]{64}$"
+				},
+				"assessmentId": {
+					"type": "string",
+					"minLength": 1
+				}
 			}
 		},
 		"signingAttestation": {
 			"type": "object",
-			"required": ["status", "details"],
+			"required": [
+				"status",
+				"details"
+			],
 			"properties": {
-				"status": { "$ref": "#/$defs/status" },
-				"details": { "type": "string", "minLength": 1 },
-				"signaturePath": { "type": "string", "minLength": 1 }
+				"status": {
+					"$ref": "#/$defs/status"
+				},
+				"details": {
+					"type": "string",
+					"minLength": 1
+				},
+				"signaturePath": {
+					"type": "string",
+					"minLength": 1
+				}
 			}
 		},
 		"releaseReadiness": {
 			"type": "object",
 			"additionalProperties": false,
-			"required": ["status", "details"],
+			"required": [
+				"status",
+				"details"
+			],
 			"properties": {
-				"status": { "$ref": "#/$defs/status" },
-				"details": { "type": "string", "minLength": 1 }
+				"status": {
+					"$ref": "#/$defs/status"
+				},
+				"details": {
+					"type": "string",
+					"minLength": 1
+				}
 			}
 		},
 		"evidenceDomains": {
@@ -86,7 +161,13 @@
 			"items": {
 				"type": "object",
 				"additionalProperties": false,
-				"required": ["domain", "status", "severity", "source", "details"],
+				"required": [
+					"domain",
+					"status",
+					"severity",
+					"source",
+					"details"
+				],
 				"properties": {
 					"domain": {
 						"enum": [
@@ -103,12 +184,26 @@
 							"KNOWN_ISSUES"
 						]
 					},
-					"status": { "$ref": "#/$defs/status" },
-					"severity": {
-						"enum": ["BLOCKER", "CRITICAL", "MAJOR", "MINOR", "INFORMATIONAL"]
+					"status": {
+						"$ref": "#/$defs/status"
 					},
-					"source": { "type": "string", "minLength": 1 },
-					"details": { "type": "string", "minLength": 1 }
+					"severity": {
+						"enum": [
+							"BLOCKER",
+							"CRITICAL",
+							"MAJOR",
+							"MINOR",
+							"INFORMATIONAL"
+						]
+					},
+					"source": {
+						"type": "string",
+						"minLength": 1
+					},
+					"details": {
+						"type": "string",
+						"minLength": 1
+					}
 				}
 			}
 		},
@@ -116,25 +211,79 @@
 			"type": "array",
 			"items": {
 				"type": "object",
-				"required": ["id", "severity", "summary"],
+				"required": [
+					"id",
+					"severity",
+					"summary"
+				],
 				"properties": {
-					"id": { "type": "string", "minLength": 1 },
-					"severity": { "enum": ["BLOCKER", "CRITICAL", "MAJOR", "MINOR", "INFORMATIONAL"] },
-					"summary": { "type": "string", "minLength": 1 }
+					"id": {
+						"type": "string",
+						"minLength": 1
+					},
+					"severity": {
+						"enum": [
+							"BLOCKER",
+							"CRITICAL",
+							"MAJOR",
+							"MINOR",
+							"INFORMATIONAL"
+						]
+					},
+					"summary": {
+						"type": "string",
+						"minLength": 1
+					}
+				}
+			}
+		},
+		"knownIssuesAssessment": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": [
+				"path",
+				"sha256",
+				"assessmentId"
+			],
+			"properties": {
+				"path": {
+					"const": "known-issues-assessment.json"
+				},
+				"sha256": {
+					"type": "string",
+					"pattern": "^[0-9a-f]{64}$"
+				},
+				"assessmentId": {
+					"type": "string",
+					"minLength": 1
 				}
 			}
 		}
 	},
 	"$defs": {
 		"status": {
-			"enum": ["PASS", "FAIL", "NOT_APPLICABLE", "UNVERIFIED"]
+			"enum": [
+				"PASS",
+				"FAIL",
+				"NOT_APPLICABLE",
+				"UNVERIFIED"
+			]
 		},
 		"hashReference": {
 			"type": "object",
-			"required": ["path", "sha256"],
+			"required": [
+				"path",
+				"sha256"
+			],
 			"properties": {
-				"path": { "type": "string", "minLength": 1 },
-				"sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+				"path": {
+					"type": "string",
+					"minLength": 1
+				},
+				"sha256": {
+					"type": "string",
+					"pattern": "^[0-9a-f]{64}$"
+				}
 			}
 		}
 	}
