@@ -1,0 +1,197 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rtaime.dev/schemas/support/v1/product-support-policy.schema.json",
+  "$comment": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+  "title": "rtaime Product Support Policy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "frameworkStatus",
+    "releaseChannelsSource",
+    "supportedVersions",
+    "lifecycle",
+    "securitySupport",
+    "upgradeDeprecation",
+    "operationalSupport",
+    "supportBundle",
+    "deploymentBaseline",
+    "knownIssues"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "frameworkStatus": { "enum": ["PASS", "FAIL", "UNVERIFIED"] },
+    "releaseChannelsSource": { "type": "string", "minLength": 1 },
+    "supportedVersions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stableLines", "preview", "eol"],
+      "properties": {
+        "stableLines": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["versionLine", "status", "supportStart", "maintenanceEnd", "securityEnd", "eolDate"],
+            "properties": {
+              "versionLine": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+$" },
+              "status": { "enum": ["SUPPORTED", "EOL", "UNVERIFIED"] },
+              "supportStart": { "type": ["string", "null"], "format": "date" },
+              "maintenanceEnd": { "type": ["string", "null"], "format": "date" },
+              "securityEnd": { "type": ["string", "null"], "format": "date" },
+              "eolDate": { "type": ["string", "null"], "format": "date" }
+            }
+          }
+        },
+        "preview": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "supportMode"],
+          "properties": {
+            "status": { "enum": ["PASS", "FAIL", "UNVERIFIED", "NOT_APPLICABLE"] },
+            "supportMode": { "enum": ["DEFINED", "BEST_EFFORT", "UNVERIFIED", "NOT_APPLICABLE"] }
+          }
+        },
+        "eol": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["routineMaintenanceAfterEol", "securityHandlingAfterEol"],
+          "properties": {
+            "routineMaintenanceAfterEol": { "const": false },
+            "securityHandlingAfterEol": { "enum": ["NO_COMMITMENT", "CASE_BY_CASE", "DEFINED_EXCEPTION_POLICY"] }
+          }
+        }
+      }
+    },
+    "lifecycle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stableRelease", "preview"],
+      "properties": {
+        "stableRelease": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "maintenanceMonths",
+            "securityMonths",
+            "eolNotificationLeadDays",
+            "approvalRequired"
+          ],
+          "properties": {
+            "status": { "enum": ["PASS", "FAIL", "UNVERIFIED"] },
+            "maintenanceMonths": { "type": ["integer", "null"], "minimum": 1 },
+            "securityMonths": { "type": ["integer", "null"], "minimum": 1 },
+            "eolNotificationLeadDays": { "type": ["integer", "null"], "minimum": 1 },
+            "approvalRequired": { "const": true }
+          }
+        },
+        "preview": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "maintenanceCommitment", "securityCommitment"],
+          "properties": {
+            "status": { "enum": ["PASS", "FAIL", "UNVERIFIED", "NOT_APPLICABLE"] },
+            "maintenanceCommitment": { "type": "boolean" },
+            "securityCommitment": { "type": "boolean" }
+          }
+        }
+      }
+    },
+    "securitySupport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "remediationTargetsStatus",
+        "severityTargetsDays",
+        "distribution",
+        "supportedVersionScope",
+        "emergencyPatchPolicy"
+      ],
+      "properties": {
+        "remediationTargetsStatus": { "enum": ["PASS", "FAIL", "UNVERIFIED"] },
+        "severityTargetsDays": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["CRITICAL", "HIGH", "MEDIUM", "LOW"],
+          "properties": {
+            "CRITICAL": { "type": ["integer", "null"], "minimum": 1 },
+            "HIGH": { "type": ["integer", "null"], "minimum": 1 },
+            "MEDIUM": { "type": ["integer", "null"], "minimum": 1 },
+            "LOW": { "type": ["integer", "null"], "minimum": 1 }
+          }
+        },
+        "distribution": { "const": "SIGNED_RELEASE_UPDATE_PATH" },
+        "supportedVersionScope": { "const": "POLICY_BACKED_SUPPORTED_RELEASES_ONLY" },
+        "emergencyPatchPolicy": { "type": "string", "minLength": 1 }
+      }
+    },
+    "upgradeDeprecation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "versioningModel",
+        "directUpgradeRulesSource",
+        "persistentStatePolicySource",
+        "contractDeprecation"
+      ],
+      "properties": {
+        "versioningModel": { "const": "SEMANTIC_PRODUCT_VERSIONING" },
+        "directUpgradeRulesSource": { "type": "string", "minLength": 1 },
+        "persistentStatePolicySource": { "type": "string", "minLength": 1 },
+        "contractDeprecation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "minimumNoticeDays", "removalRequiresMigrationEvidence", "removalRequiresReleaseNotes"],
+          "properties": {
+            "status": { "enum": ["PASS", "FAIL", "UNVERIFIED"] },
+            "minimumNoticeDays": { "type": ["integer", "null"], "minimum": 1 },
+            "removalRequiresMigrationEvidence": { "const": true },
+            "removalRequiresReleaseNotes": { "const": true }
+          }
+        }
+      }
+    },
+    "operationalSupport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["incidentSeverities", "ownershipAreas", "supportBundleRequiredFor"],
+      "properties": {
+        "incidentSeverities": { "type": "array", "minItems": 1 },
+        "ownershipAreas": { "type": "array", "minItems": 1 },
+        "supportBundleRequiredFor": { "type": "array" }
+      }
+    },
+    "supportBundle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "exporter",
+        "maximumSourceBytes",
+        "requiredEntries",
+        "forbiddenContent",
+        "redactionBoundary",
+        "regressionTests"
+      ],
+      "properties": {
+        "exporter": { "type": "string", "minLength": 1 },
+        "maximumSourceBytes": { "type": "integer", "minimum": 1 },
+        "requiredEntries": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "forbiddenContent": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "redactionBoundary": { "type": "string", "minLength": 1 },
+        "regressionTests": { "type": "array", "minItems": 1, "items": { "type": "string" } }
+      }
+    },
+    "deploymentBaseline": { "type": "string", "minLength": 1 },
+    "knownIssues": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["assessmentRequiredFromStage", "currentStatus", "releaseNotesRequired"],
+      "properties": {
+        "assessmentRequiredFromStage": { "const": "RELEASE_CANDIDATE" },
+        "currentStatus": { "enum": ["PASS", "FAIL", "UNVERIFIED"] },
+        "releaseNotesRequired": { "const": true }
+      }
+    }
+  }
+}
