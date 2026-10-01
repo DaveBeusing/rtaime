@@ -279,6 +279,10 @@
 			<controls:RtaimeTabItem Header="SHOW CONTROL">
 				<local:ShowControlCueStackControl />
 			</controls:RtaimeTabItem>
+			<controls:RtaimeTabItem Header="MACROS">
+				<local:ProductionMacroControl
+					DataContext="{Binding ProductionMacros, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
+			</controls:RtaimeTabItem>
 		</controls:RtaimeTabControl>
 	</Grid>
 </UserControl>
