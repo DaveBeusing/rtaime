@@ -488,6 +488,9 @@ public sealed class IntegrationGateway : IAsyncDisposable
 				var gain = action.UseTriggerValue ? ResolveNumeric(action, trigger) : action.Gain;
 				await _client.SetAudioInputStateAsync(action.TargetId!, gain, action.Muted, cancellationToken).ConfigureAwait(false);
 				break;
+			case IntegrationActionKind.ProductionMacroExecute:
+				await _client.ExecuteProductionMacroAsync(action.TargetId!, cancellationToken).ConfigureAwait(false);
+				break;
 			default:
 				throw new InvalidOperationException($"Unsupported integration action '{action.Kind}'.");
 		}
