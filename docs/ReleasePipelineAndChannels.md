@@ -150,9 +150,11 @@ Rules:
 - `EXTERNAL_CONTROLLED` signing only,
 - signing-key fingerprint must be active `SOFTWARE_RELEASE` trust,
 - offline bundle verification must pass with `-RequireTrustedProductionKey`,
-- Stable candidate publication readiness is `PASS` only after those gates pass.
+- Stable candidate publication readiness is `PASS` only after those gates pass,
+- the Stable-readiness verifier must independently return `PASS`,
+- Stable readiness must bind the repository HEAD, supplied release evidence and candidate Release Evidence SHA-256 to the same exact source/build identity.
 
-A CI-generated `TEST_EPHEMERAL` key can never create a Stable candidate.
+A CI-generated `TEST_EPHEMERAL` key can never create a Stable candidate. Candidate trust from one release cannot be combined with qualification or known-issues evidence from another release bundle.
 
 ## Release Candidate artifact
 
