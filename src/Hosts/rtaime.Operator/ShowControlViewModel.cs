@@ -153,6 +153,7 @@ public sealed class ShowControlViewModel : INotifyPropertyChanged
 		ShowControlActionKind.SetLayerVisibility => "Primary: Layer ID · Visible toggle",
 		ShowControlActionKind.StartRecording => "Primary: destination directory · Secondary: file name",
 		ShowControlActionKind.WaitFrames => "Frames: bounded production-frame wait",
+		ShowControlActionKind.RouteOutputRole => "Primary: output role ID · Secondary: source ID",
 		_ => "No action parameters required"
 	};
 
@@ -581,6 +582,7 @@ public sealed class ShowControlActionEditorItem
 		ShowControlActionKind.StartRecording => new ShowControlAction(ActionId, Kind, recordingDestinationDirectory: PrimaryReference, recordingFileName: SecondaryReference),
 		ShowControlActionKind.StopRecording => new ShowControlAction(ActionId, Kind),
 		ShowControlActionKind.WaitFrames => new ShowControlAction(ActionId, Kind, waitFrames: Frames),
+		ShowControlActionKind.RouteOutputRole => new ShowControlAction(ActionId, Kind, sourceId: SecondaryReference, outputRoleId: PrimaryReference),
 		_ => throw new NotSupportedException($"Unsupported show-control action '{Kind}'.")
 	};
 
@@ -596,6 +598,7 @@ public sealed class ShowControlActionEditorItem
 			ShowControlActionKind.SetLayerVisibility => new(action.ActionId, action.Kind, action.LayerId ?? string.Empty, visible: action.Visible ?? true),
 			ShowControlActionKind.StartRecording => new(action.ActionId, action.Kind, action.RecordingDestinationDirectory ?? string.Empty, action.RecordingFileName ?? string.Empty),
 			ShowControlActionKind.WaitFrames => new(action.ActionId, action.Kind, frames: action.WaitFrames),
+			ShowControlActionKind.RouteOutputRole => new(action.ActionId, action.Kind, action.OutputRoleId ?? string.Empty, action.SourceId ?? string.Empty),
 			_ => new(action.ActionId, action.Kind)
 		};
 
@@ -612,6 +615,7 @@ public sealed class ShowControlActionEditorItem
 		ShowControlActionKind.StartRecording => "Start Recording",
 		ShowControlActionKind.StopRecording => "Stop Recording",
 		ShowControlActionKind.WaitFrames => $"Wait · {action.WaitFrames}f",
+		ShowControlActionKind.RouteOutputRole => $"Route Output · {action.OutputRoleId} ← {action.SourceId}",
 		_ => action.Kind.ToString()
 	};
 }
