@@ -100,7 +100,72 @@
                 ],
                 "format": "date"
               }
-            }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "status": {
+                      "enum": [
+                        "SUPPORTED",
+                        "EOL"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "supportStart": {
+                      "type": "string",
+                      "format": "date"
+                    },
+                    "maintenanceEnd": {
+                      "type": "string",
+                      "format": "date"
+                    },
+                    "securityEnd": {
+                      "type": "string",
+                      "format": "date"
+                    },
+                    "eolDate": {
+                      "type": "string",
+                      "format": "date"
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "status": {
+                      "const": "UNVERIFIED"
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "supportStart": {
+                      "const": null
+                    },
+                    "maintenanceEnd": {
+                      "const": null
+                    },
+                    "securityEnd": {
+                      "const": null
+                    },
+                    "eolDate": {
+                      "const": null
+                    }
+                  }
+                }
+              }
+            ]
           }
         },
         "preview": {
@@ -127,7 +192,50 @@
                 "NOT_APPLICABLE"
               ]
             }
-          }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "status": {
+                    "const": "PASS"
+                  }
+                },
+                "required": [
+                  "status"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "supportMode": {
+                    "enum": [
+                      "DEFINED",
+                      "BEST_EFFORT"
+                    ]
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "status": {
+                    "const": "UNVERIFIED"
+                  }
+                },
+                "required": [
+                  "status"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "supportMode": {
+                    "const": "UNVERIFIED"
+                  }
+                }
+              }
+            }
+          ]
         },
         "eol": {
           "type": "object",
@@ -201,7 +309,62 @@
             "approvalRequired": {
               "const": true
             }
-          }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "status": {
+                    "const": "PASS"
+                  }
+                },
+                "required": [
+                  "status"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "maintenanceMonths": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "securityMonths": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "eolNotificationLeadDays": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "status": {
+                    "const": "UNVERIFIED"
+                  }
+                },
+                "required": [
+                  "status"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "maintenanceMonths": {
+                    "const": null
+                  },
+                  "securityMonths": {
+                    "const": null
+                  },
+                  "eolNotificationLeadDays": {
+                    "const": null
+                  }
+                }
+              }
+            }
+          ]
         },
         "preview": {
           "type": "object",
@@ -226,7 +389,53 @@
             "securityCommitment": {
               "type": "boolean"
             }
-          }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "status": {
+                    "const": "PASS"
+                  }
+                },
+                "required": [
+                  "status"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "maintenanceCommitment": {
+                    "const": true
+                  },
+                  "securityCommitment": {
+                    "const": true
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "status": {
+                    "const": "UNVERIFIED"
+                  }
+                },
+                "required": [
+                  "status"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "maintenanceCommitment": {
+                    "const": false
+                  },
+                  "securityCommitment": {
+                    "const": false
+                  }
+                }
+              }
+            }
+          ]
         }
       }
     },
@@ -298,7 +507,77 @@
           "type": "string",
           "minLength": 1
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "remediationTargetsStatus": {
+                "const": "PASS"
+              }
+            },
+            "required": [
+              "remediationTargetsStatus"
+            ]
+          },
+          "then": {
+            "properties": {
+              "severityTargetsDays": {
+                "properties": {
+                  "CRITICAL": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "HIGH": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "MEDIUM": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "LOW": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "remediationTargetsStatus": {
+                "const": "UNVERIFIED"
+              }
+            },
+            "required": [
+              "remediationTargetsStatus"
+            ]
+          },
+          "then": {
+            "properties": {
+              "severityTargetsDays": {
+                "properties": {
+                  "CRITICAL": {
+                    "const": null
+                  },
+                  "HIGH": {
+                    "const": null
+                  },
+                  "MEDIUM": {
+                    "const": null
+                  },
+                  "LOW": {
+                    "const": null
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
     },
     "upgradeDeprecation": {
       "type": "object",
@@ -351,7 +630,48 @@
             "removalRequiresReleaseNotes": {
               "const": true
             }
-          }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "status": {
+                    "const": "PASS"
+                  }
+                },
+                "required": [
+                  "status"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "minimumNoticeDays": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "status": {
+                    "const": "UNVERIFIED"
+                  }
+                },
+                "required": [
+                  "status"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "minimumNoticeDays": {
+                    "const": null
+                  }
+                }
+              }
+            }
+          ]
         }
       }
     },
