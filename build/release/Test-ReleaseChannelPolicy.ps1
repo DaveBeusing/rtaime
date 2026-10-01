@@ -79,6 +79,7 @@ $releasePipelineScript = Get-Content -LiteralPath (Join-Path $repositoryRoot "bu
 Assert-Condition ($releasePipelineScript -match 'Test-StableReadiness\.ps1') "Authoritative release pipeline must invoke Stable readiness verification."
 Assert-Condition ($releasePipelineScript -match '\$identity\.channel -eq "STABLE"') "Stable readiness verification must be scoped to STABLE candidates."
 Assert-Condition ($releasePipelineScript -match 'overallStatus -ne "PASS"') "STABLE release candidate creation must fail unless Stable readiness is PASS."
+Assert-Condition ($releasePipelineScript -match 'KnownIssuesAssessmentPath' -and $releasePipelineScript -match 'Bind-KnownIssuesAssessment\.ps1') "Authoritative release pipeline must expose exact-source known-issues assessment binding before Stable readiness."
 foreach ($workflow in @($requiredGates, $releaseWorkflow)) {
 	Assert-Condition ($workflow -match 'Invoke-ReleasePipeline\.ps1') "All packaged/release-candidate workflows must call Invoke-ReleasePipeline.ps1."
 	foreach ($forbiddenDirectCall in @(
