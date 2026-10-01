@@ -617,6 +617,17 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 	public async ValueTask<ProductionMacroWorkspaceSnapshot> GetProductionMacroSnapshotAsync(CancellationToken cancellationToken = default) =>
 		ReadProductionMacroWorkspace(await ExchangeAsync("control.production_macro.snapshot.get", new { }, cancellationToken).ConfigureAwait(false));
 
+	public async ValueTask<ProductionMacroDefinition> GetProductionMacroAsync(
+		ProductionMacroId macroId,
+		CancellationToken cancellationToken = default)
+	{
+		var response = await ExchangeAsync(
+			"control.production_macro.get",
+			new WireProductionMacroIdRequest(macroId.ToString()),
+			cancellationToken).ConfigureAwait(false);
+		return ReadProductionMacroDefinition(response);
+	}
+
 	public async ValueTask<ProductionMacroWorkspaceSnapshot> SaveProductionMacroAsync(
 		ProductionMacroDefinition macro,
 		ulong expectedStorageVersion,
@@ -843,6 +854,13 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		var wire = JsonSerializer.Deserialize<WireProductionMacroWorkspace>(payload, Wire.JsonOptions)
 			?? throw new InvalidDataException("ControlHost Production Macro workspace payload is required.");
 		return FromWire(wire);
+	}
+
+	internal static ProductionMacroDefinition DecodeExternalProductionMacroDefinition(ReadOnlySpan<byte> payload)
+	{
+		var wire = JsonSerializer.Deserialize<WireProductionMacroDefinition>(payload, Wire.JsonOptions)
+			?? throw new InvalidDataException("ControlHost Production Macro definition payload is required.");
+		return DeserializeSingleProductionMacro(wire.MacroJson);
 	}
 
 	internal static ProductionMacroValidationResult DecodeExternalProductionMacroValidation(ReadOnlySpan<byte> payload)
@@ -1089,6 +1107,13 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		return FromWire(wire);
 	}
 
+	private static ProductionMacroDefinition ReadProductionMacroDefinition(WireEnvelope response)
+	{
+		var wire = response.Payload.Deserialize<WireProductionMacroDefinition>(Wire.JsonOptions)
+			?? throw new InvalidDataException("ControlHost Production Macro definition payload is required.");
+		return DeserializeSingleProductionMacro(wire.MacroJson);
+	}
+
 	private static ProductionMacroWorkspaceSnapshot FromWire(WireProductionMacroWorkspace wire)
 	{
 		if (!Enum.IsDefined(typeof(ProductionMacroExecutionState), wire.State))
@@ -1113,6 +1138,14 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 
 	private static string SerializeSingleProductionMacro(ProductionMacroDefinition macro) =>
 		ProductionMacroCanonicalSerializer.Serialize([macro]);
+
+	private static ProductionMacroDefinition DeserializeSingleProductionMacro(string json)
+	{
+		var macros = ProductionMacroCanonicalSerializer.Deserialize(json);
+		if (macros.Count != 1)
+			throw new InvalidDataException("Production Macro definition payload must contain exactly one Macro.");
+		return macros[0];
+	}
 
 	private static ShowControlWorkspaceSnapshot ReadShowControlWorkspace(WireEnvelope response)
 	{
@@ -1786,6 +1819,7 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		uint? RemainingFollowFrames = null,
 		ushort RemainingItemRepeats = 0,
 		ushort RemainingRundownRepeats = 0);
+	private sealed record WireProductionMacroDefinition(string MacroJson);
 	private sealed record WireProductionMacroSave(string MacroJson, ulong ExpectedStorageVersion);
 	private sealed record WireProductionMacroDelete(string MacroId, ulong ExpectedStorageVersion);
 	private sealed record WireProductionMacroIdRequest(string MacroId);
