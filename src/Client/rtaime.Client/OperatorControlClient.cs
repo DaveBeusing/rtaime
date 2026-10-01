@@ -1016,6 +1016,11 @@ public interface IOperatorControlTransport
     ValueTask<ProductionMacroWorkspaceSnapshot> GetProductionMacroSnapshotAsync(CancellationToken cancellationToken = default) =>
         ValueTask.FromException<ProductionMacroWorkspaceSnapshot>(new NotSupportedException("Operator transport does not expose Production Macro state."));
 
+    ValueTask<ProductionMacroDefinition> GetProductionMacroAsync(
+        ProductionMacroId macroId,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<ProductionMacroDefinition>(new NotSupportedException("Operator transport does not expose Production Macro lookup."));
+
     ValueTask<ProductionMacroWorkspaceSnapshot> SaveProductionMacroAsync(
         ProductionMacroDefinition macro,
         ulong expectedStorageVersion,
@@ -1623,6 +1628,11 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
 
     public ValueTask<ProductionMacroWorkspaceSnapshot> GetProductionMacroSnapshotAsync(CancellationToken cancellationToken = default) =>
         _transport.GetProductionMacroSnapshotAsync(cancellationToken);
+
+    public ValueTask<ProductionMacroDefinition> GetProductionMacroAsync(
+        ProductionMacroId macroId,
+        CancellationToken cancellationToken = default) =>
+        _transport.GetProductionMacroAsync(macroId, cancellationToken);
 
     public ValueTask<ProductionMacroValidationResult> ValidateProductionMacroAsync(
         ProductionMacroDefinition macro,
