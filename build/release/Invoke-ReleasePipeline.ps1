@@ -267,6 +267,17 @@ try {
 	& (Join-Path $PSScriptRoot "Test-ReleaseCandidate.ps1") -CandidatePath $candidateRoot
 	& (Join-Path $PSScriptRoot "Test-ReleasePipelineFailureCases.ps1") -CandidatePath $candidateRoot
 
+	if ([string]$identity.channel -eq "STABLE") {
+		$stableReadinessPath = Join-Path $outputFullRoot "stable-readiness.json"
+		$stableReadiness = & (Join-Path $PSScriptRoot "Test-StableReadiness.ps1") `
+			-ReleaseEvidencePath $evidenceRoot `
+			-ReleaseCandidatePath $candidateRoot `
+			-OutputPath $stableReadinessPath
+		if ([string]$stableReadiness.overallStatus -ne "PASS") {
+			throw "STABLE release candidate failed Stable readiness with status '$($stableReadiness.overallStatus)'."
+		}
+	}
+
 	Write-Host "Single release pipeline PASS"
 	Write-Host "Channel: $($identity.channel)"
 	Write-Host "Candidate: $candidateRoot"
