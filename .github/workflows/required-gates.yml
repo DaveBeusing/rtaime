@@ -140,6 +140,10 @@ jobs:
         shell: pwsh
         run: ./build/quality/Test-ProductionIntegrationGatewayPolicy.ps1
 
+      - name: Verify production macro policy
+        shell: pwsh
+        run: ./build/quality/Test-ProductionMacroPolicy.ps1
+
       - name: Verify operator UI policy
         shell: pwsh
         run: ./build/quality/Test-OperatorUiPolicy.ps1
