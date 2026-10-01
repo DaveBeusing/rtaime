@@ -51,7 +51,7 @@ Mappings are versioned configuration, not Production state. Trigger keys resolve
 
 Mappings use stable rtaime identities, never Operator control names. There is no scripting engine, arbitrary user code or macro language.
 
-The gateway owns one bounded multi-producer/single-consumer input queue. Excess events are dropped rather than expanding memory without limit. Each mapping has independent debounce and minimum-interval controls. Production commands are serialized through `OperatorControlClient`; one deliberate resynchronization/retry is permitted only for stale-session/revision conflicts.
+The gateway owns one bounded multi-producer/single-consumer input queue. Excess events are dropped rather than expanding memory without limit. Each mapping has independent debounce and minimum-interval controls. All access to the stateful `OperatorControlClient`, including snapshot refresh, is serialized so periodic feedback refresh cannot race Production commands. One deliberate resynchronization/retry is permitted only for stale-session/revision conflicts.
 
 ## Feedback model
 
@@ -88,7 +88,8 @@ Bearer tokens and certificate passwords are referenced by environment-variable n
 - configuration validation fails closed before adapter startup;
 - protocol packets are bounded and malformed OSC is rejected;
 - adapter queues cannot grow without limit;
-- a missing ControlHost degrades IntegrationHost while Program remains owned by the engine;
+- a missing ControlHost degrades IntegrationHost while Program remains owned by the engine; the snapshot pump keeps retrying and returns the gateway to healthy state after synchronization recovers;
+- stop/start creates a fresh bounded input lifetime and performs a new authoritative snapshot synchronization before normal operation resumes;
 - optional adapter failures are isolated;
 - required adapter failures fail IntegrationHost startup only;
 - no adapter bypasses `rtaime.Client` to reach RuntimeHost or a provider.
