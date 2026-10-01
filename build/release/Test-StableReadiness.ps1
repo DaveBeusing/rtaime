@@ -38,13 +38,7 @@ function Get-Sha256 {
 	return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
 }
 
-function Resolve-SourceCommit {
-	param([string]$ExplicitCommit)
-	if (-not [string]::IsNullOrWhiteSpace($ExplicitCommit)) {
-		$normalized = $ExplicitCommit.Trim().ToLowerInvariant()
-		Assert-Condition ($normalized -match '^[0-9a-f]{40,64}$') "Expected source commit is invalid."
-		return $normalized
-	}
+function Get-RepositoryHeadCommit {
 	try {
 		$resolved = (& git -C $repositoryRoot rev-parse HEAD 2>$null | Select-Object -First 1)
 		if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace([string]$resolved)) {
@@ -54,6 +48,14 @@ function Resolve-SourceCommit {
 	} catch {
 	}
 	return $null
+}
+
+function Normalize-SourceCommit {
+	param([string]$Commit)
+	if ([string]::IsNullOrWhiteSpace($Commit)) { return $null }
+	$normalized = $Commit.Trim().ToLowerInvariant()
+	Assert-Condition ($normalized -match '^[0-9a-f]{40,64}$') "Expected source commit is invalid."
+	return $normalized
 }
 
 function Add-Domain {
@@ -78,7 +80,9 @@ Assert-Condition (Test-Path -LiteralPath $buildPropsPath -PathType Leaf) "Direct
 $productVersion = $buildProps.SelectSingleNode("//RtaimeProductVersion").InnerText.Trim()
 $releaseStage = $buildProps.SelectSingleNode("//RtaimeReleaseStage").InnerText.Trim().ToUpperInvariant()
 Assert-Condition ($releaseStage -in @("DEV", "PREVIEW", "STABLE")) "Unsupported source release stage '$releaseStage'."
-$expectedSourceCommit = Resolve-SourceCommit $ExpectedSourceCommit
+$repositoryHeadCommit = Get-RepositoryHeadCommit
+$explicitSourceCommit = Normalize-SourceCommit $ExpectedSourceCommit
+$expectedSourceCommit = if ($null -ne $explicitSourceCommit) { $explicitSourceCommit } else { $repositoryHeadCommit }
 
 $supportPolicy = Read-Json "docs/Governance/ProductSupportPolicy.json"
 $platformMatrix = Read-Json "docs/Governance/PlatformSupportMatrix.json"
@@ -89,12 +93,20 @@ $updatePolicy = Read-Json "build/update/update-policy.json"
 
 $domains = [System.Collections.Generic.List[object]]::new()
 
-$sourceIdentityStatus = if ($null -eq $expectedSourceCommit) { "UNVERIFIED" } else { "PASS" }
+$sourceIdentityStatus = if ($null -eq $repositoryHeadCommit -or $null -eq $expectedSourceCommit) {
+	"UNVERIFIED"
+} elseif ($repositoryHeadCommit -ne $expectedSourceCommit) {
+	"FAIL"
+} else {
+	"PASS"
+}
 Add-Domain $domains "sourceIdentity" $sourceIdentityStatus "repository HEAD / ExpectedSourceCommit" $(
 	if ($sourceIdentityStatus -eq "PASS") {
-		"Exact source commit '$expectedSourceCommit' is available for readiness correlation."
+		"Exact source commit '$expectedSourceCommit' matches repository HEAD."
+	} elseif ($sourceIdentityStatus -eq "FAIL") {
+		"Expected source commit '$expectedSourceCommit' does not match repository HEAD '$repositoryHeadCommit'."
 	} else {
-		"Exact source commit could not be established; Stable readiness cannot become PASS."
+		"Repository HEAD or expected source commit could not be established; Stable readiness cannot become PASS."
 	}
 )
 
@@ -133,10 +145,20 @@ Add-Domain $domains "supportedVersionPolicy" $versionPolicyStatus "docs/Governan
 $supportedConfigurations = @($platformMatrix.configurations | Where-Object { [string]$_.supportStatus -eq "SUPPORTED" })
 $platformStatus = if ([string]$platformMatrix.matrixStatus -eq "FAIL") {
 	"FAIL"
-} elseif ($supportedConfigurations.Count -gt 0 -and @($supportedConfigurations | Where-Object { @($_.qualificationEvidence).Count -eq 0 }).Count -eq 0) {
+} elseif (
+	[string]$platformMatrix.matrixStatus -eq "PASS" -and
+	$supportedConfigurations.Count -gt 0 -and
+	@($supportedConfigurations | Where-Object {
+		@($_.qualificationEvidence).Count -eq 0 -or
+		[string]$_.gpu.qualificationStatus -ne "PASS" -or
+		[string]$_.mediaIo.qualificationStatus -ne "PASS"
+	}).Count -eq 0
+) {
 	"PASS"
-} else {
+} elseif ([string]$platformMatrix.matrixStatus -eq "UNVERIFIED") {
 	"UNVERIFIED"
+} else {
+	"FAIL"
 }
 Add-Domain $domains "platformCompatibilityPolicy" $platformStatus "docs/Governance/PlatformSupportMatrix.json" $(
 	if ($platformStatus -eq "PASS") {
@@ -209,7 +231,9 @@ if (-not [string]::IsNullOrWhiteSpace($ReleaseEvidencePath)) {
 
 $releaseEvidenceStatus = if ($null -eq $releaseEvidence) {
 	"UNVERIFIED"
-} elseif ($null -eq $expectedSourceCommit) {
+} elseif ($sourceIdentityStatus -eq "FAIL") {
+	"FAIL"
+} elseif ($sourceIdentityStatus -ne "PASS") {
 	"UNVERIFIED"
 } elseif (
 	[string]$releaseEvidence.productVersion -ne $productVersion -or
