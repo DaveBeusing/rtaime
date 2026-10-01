@@ -56,6 +56,24 @@ public sealed class ProductionMacroCoordinator : IAsyncDisposable
 		}
 	}
 
+	public async ValueTask<ProductionMacroDefinition> GetAsync(
+		ProductionMacroId macroId,
+		CancellationToken cancellationToken = default)
+	{
+		await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+		try
+		{
+			await EnsureRestoredAsync(cancellationToken).ConfigureAwait(false);
+			return _macros.TryGetValue(macroId, out var macro)
+				? macro
+				: throw new KeyNotFoundException($"Production Macro '{macroId}' does not exist.");
+		}
+		finally
+		{
+			_gate.Release();
+		}
+	}
+
 	public async ValueTask<ProductionMacroValidationResult> ValidateAsync(
 		ProductionMacroDefinition macro,
 		CancellationToken cancellationToken = default)
