@@ -25,6 +25,7 @@ public sealed class ProductionMacroCoordinator : IAsyncDisposable
 	private bool _restored;
 	private CancellationTokenSource? _waitCancellation;
 	private Task? _waitWorker;
+	private CancellationTokenSource? _executionCancellation;
 
 	public ProductionMacroCoordinator(
 		Func<ControlHostService?> controlAccessor,
@@ -181,6 +182,7 @@ public sealed class ProductionMacroCoordinator : IAsyncDisposable
 				throw new InvalidDataException(string.Join(" | ", validation.Issues.Select(issue => $"{issue.Code}: {issue.Message}")));
 
 			CancelWaitWorker();
+			ResetExecutionCancellation();
 			var cueList = ProductionMacroShowControlAdapter.BuildCueList(macro);
 			_machine.Arm(cueList);
 			_executionId = ProductionMacroExecutionId.New();
@@ -201,15 +203,19 @@ public sealed class ProductionMacroCoordinator : IAsyncDisposable
 
 	public async ValueTask<ProductionMacroWorkspaceSnapshot> CancelAsync(CancellationToken cancellationToken = default)
 	{
+		SignalExecutionCancellation();
+		CancelWaitWorker();
 		await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
 		try
 		{
 			await EnsureRestoredAsync(cancellationToken).ConfigureAwait(false);
-			CancelWaitWorker();
-			_machine.Cancel();
-			await PersistExecutionAsync(cancellationToken).ConfigureAwait(false);
-			Journal("production_macro.cancelled", "Production Macro execution was cancelled; already committed Production mutations were retained.", _executionId?.Value);
-			_stateChanged();
+			if (_machine.Snapshot.State != ShowControlExecutionState.Cancelled)
+			{
+				_machine.Cancel();
+				await PersistExecutionAsync(cancellationToken).ConfigureAwait(false);
+				Journal("production_macro.cancelled", "Production Macro execution was cancelled; already committed Production mutations were retained.", _executionId?.Value);
+				_stateChanged();
+			}
 			return WorkspaceSnapshot();
 		}
 		finally
@@ -235,6 +241,7 @@ public sealed class ProductionMacroCoordinator : IAsyncDisposable
 			_stateChanged();
 			if (resume)
 			{
+				ResetExecutionCancellation();
 				_machine.BeginGo();
 				await PersistExecutionAsync(cancellationToken).ConfigureAwait(false);
 				await ExecuteActiveActionsLockedAsync(cancellationToken).ConfigureAwait(false);
@@ -249,6 +256,7 @@ public sealed class ProductionMacroCoordinator : IAsyncDisposable
 
 	public async ValueTask DisposeAsync()
 	{
+		SignalExecutionCancellation();
 		CancelWaitWorker();
 		var worker = _waitWorker;
 		if (worker is not null)
@@ -257,6 +265,7 @@ public sealed class ProductionMacroCoordinator : IAsyncDisposable
 			catch (OperationCanceledException) { }
 		}
 		_waitCancellation?.Dispose();
+		_executionCancellation?.Dispose();
 		_gate.Dispose();
 	}
 
@@ -264,6 +273,11 @@ public sealed class ProductionMacroCoordinator : IAsyncDisposable
 	{
 		while (_machine.Snapshot.State == ShowControlExecutionState.Executing)
 		{
+			if (_executionCancellation?.IsCancellationRequested == true)
+			{
+				await CancelExecutionLockedAsync(cancellationToken).ConfigureAwait(false);
+				return;
+			}
 			var action = _machine.CurrentAction();
 			if (action.Kind == ShowControlActionKind.WaitFrames)
 			{
@@ -709,6 +723,29 @@ public sealed class ProductionMacroCoordinator : IAsyncDisposable
 		if (timeout > TimeSpan.FromMinutes(30))
 			timeout = TimeSpan.FromMinutes(30);
 		return timeout;
+	}
+
+	private async ValueTask CancelExecutionLockedAsync(CancellationToken cancellationToken)
+	{
+		if (_machine.Snapshot.State is ShowControlExecutionState.Cancelled or ShowControlExecutionState.Completed or ShowControlExecutionState.Idle)
+			return;
+		_machine.Cancel();
+		await PersistExecutionAsync(cancellationToken).ConfigureAwait(false);
+		Journal("production_macro.cancelled", "Production Macro execution stopped before the next action; already committed Production mutations were retained.", _executionId?.Value);
+		_stateChanged();
+	}
+
+	private void ResetExecutionCancellation()
+	{
+		var prior = _executionCancellation;
+		_executionCancellation = new CancellationTokenSource();
+		prior?.Dispose();
+	}
+
+	private void SignalExecutionCancellation()
+	{
+		try { _executionCancellation?.Cancel(); }
+		catch (ObjectDisposedException) { }
 	}
 
 	private void CancelWaitWorker()
