@@ -395,28 +395,6 @@
               "if": {
                 "properties": {
                   "status": {
-                    "const": "PASS"
-                  }
-                },
-                "required": [
-                  "status"
-                ]
-              },
-              "then": {
-                "properties": {
-                  "maintenanceCommitment": {
-                    "const": true
-                  },
-                  "securityCommitment": {
-                    "const": true
-                  }
-                }
-              }
-            },
-            {
-              "if": {
-                "properties": {
-                  "status": {
                     "const": "UNVERIFIED"
                   }
                 },
