@@ -278,6 +278,7 @@ try {
 		$stableReadiness = & (Join-Path $PSScriptRoot "Test-StableReadiness.ps1") `
 			-ReleaseEvidencePath $evidenceRoot `
 			-ReleaseCandidatePath $candidateRoot `
+			-ExpectedSourceCommit ([string]$identity.sourceCommit) `
 			-OutputPath $stableReadinessPath
 		if ([string]$stableReadiness.overallStatus -ne "PASS") {
 			throw "STABLE release candidate failed Stable readiness with status '$($stableReadiness.overallStatus)'."
