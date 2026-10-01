@@ -66,7 +66,7 @@ Assert-Condition ($operatorSurface -match 'controls:RtaimeButton' -and $operator
 Assert-Condition ($operatorSurface -notmatch '<(Button|ToggleButton|CheckBox|RadioButton|TextBox|ComboBox|ListBox|ListView|DataGrid|Slider|ScrollBar|ScrollViewer)(\s|/|>)') "Production Macro UI must not reintroduce directly visible stock WPF controls."
 Assert-Condition ($operatorViewModel -notmatch 'RuntimeHost|Provider\.' -and $operatorViewModel -match '_client\.ExecuteProductionMacroAsync') "Production Macro Operator must remain a Client-only presentation surface."
 
-Assert-Condition ($documentation -match 'ControlHost remains Production Authority' -and $documentation -match 'does not provide arbitrary executable code') "Production Macro documentation must preserve authority and no-code boundaries."
+Assert-Condition ($documentation -match 'ControlHost remains Production Authority' -and $documentation -match 'do not provide arbitrary executable code') "Production Macro documentation must preserve authority and no-code boundaries."
 Assert-Condition ($documentation -match 'Runtime production frames' -and $documentation -match 'RecoveryRequired') "Production Macro documentation must record frame-domain timing and recovery semantics."
 
 foreach ($test in @(
