@@ -84,7 +84,9 @@ public sealed record ProductionMacroAction
 		string? recordingFileName = null,
 		uint? waitFrames = null,
 		int? audioRoutingMode = null,
-		string? outputRoleId = null)
+		string? outputRoleId = null,
+		double? audioGain = null,
+		bool? audioMuted = null)
 		: this(
 			actionId,
 			new ShowControlAction(
@@ -101,7 +103,9 @@ public sealed record ProductionMacroAction
 				recordingFileName,
 				waitFrames,
 				audioRoutingMode,
-				outputRoleId))
+				outputRoleId,
+				audioGain,
+				audioMuted))
 	{
 	}
 
@@ -304,7 +308,9 @@ public static class ProductionMacroCanonicalSerializer
 			action.RecordingFileName,
 			action.WaitFrames,
 			action.AudioRoutingMode,
-			action.OutputRoleId);
+			action.OutputRoleId,
+			action.AudioGain,
+			action.AudioMuted);
 
 	private static ProductionMacroAction FromDocument(ActionDocument document)
 	{
@@ -325,7 +331,9 @@ public static class ProductionMacroCanonicalSerializer
 			document.RecordingFileName,
 			document.WaitFrames,
 			document.AudioRoutingMode,
-			document.OutputRoleId);
+			document.OutputRoleId,
+			document.AudioGain,
+			document.AudioMuted);
 	}
 
 	private sealed record LibraryDocument(string Version, MacroDocument[] Macros);
@@ -344,7 +352,9 @@ public static class ProductionMacroCanonicalSerializer
 		string? RecordingFileName,
 		uint? WaitFrames,
 		int? AudioRoutingMode = null,
-		string? OutputRoleId = null);
+		string? OutputRoleId = null,
+		double? AudioGain = null,
+		bool? AudioMuted = null);
 }
 
 public static class ProductionMacroExecutionSerializer
