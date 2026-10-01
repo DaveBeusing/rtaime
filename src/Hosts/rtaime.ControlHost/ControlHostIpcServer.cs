@@ -2001,6 +2001,14 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 				return await ExecuteShowControlLayerVisibilityAsync(action, cancellationToken).ConfigureAwait(false);
 			case ShowControlActionKind.SetAudioRouting:
 				return await ExecuteShowControlAudioRoutingAsync(action, cancellationToken).ConfigureAwait(false);
+			case ShowControlActionKind.RouteOutputRole:
+				return await ExecuteShowControlMutationAsync(
+					MutationKind.RouteOutputRole,
+					action.SourceId,
+					null,
+					null,
+					cancellationToken,
+					action.OutputRoleId).ConfigureAwait(false);
 			case ShowControlActionKind.StartRecording:
 			{
 				var response = await StartRecordingAsync(
@@ -2027,7 +2035,8 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		string? sourceId,
 		string? sceneId,
 		uint? durationFrames,
-		CancellationToken cancellationToken)
+		CancellationToken cancellationToken,
+		string? outputRoleId = null)
 	{
 		var control = _controlAccessor();
 		if (control is null || !control.HasAuthoritativeState)
@@ -2040,7 +2049,8 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			state.Revision.Value,
 			sourceId,
 			durationFrames,
-			sceneId);
+			sceneId,
+			outputRoleId);
 		var response = await MutateAsync(
 			InternalRequest("control.show_control.production_action", command),
 			kind,
