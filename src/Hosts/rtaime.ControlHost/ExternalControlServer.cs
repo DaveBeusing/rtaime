@@ -534,7 +534,8 @@ internal static class ExternalControlOperationCatalog
 		"control.media_asset_catalog.snapshot.get", "control.media_asset_catalog.import", "control.media_asset_catalog.relink", "control.media_asset_catalog.remove", "control.media_asset_catalog.availability.refresh",
 		"control.media_deck.snapshot.get", "control.media_deck.open", "control.media_deck.transport", "control.media_deck.marker", "control.media_deck.close",
 		"control.show_control.snapshot.get", "control.show_control.cue_list.save", "control.show_control.cue_list.select", "control.show_control.arm", "control.show_control.go", "control.show_control.cancel", "control.show_control.recovery.acknowledge",
-		"control.rundown.snapshot.get", "control.rundown.save", "control.rundown.prepare", "control.rundown.go", "control.rundown.next", "control.rundown.previous", "control.rundown.hold", "control.rundown.recovery.acknowledge"
+		"control.rundown.snapshot.get", "control.rundown.save", "control.rundown.prepare", "control.rundown.go", "control.rundown.next", "control.rundown.previous", "control.rundown.hold", "control.rundown.recovery.acknowledge",
+		"control.production_macro.snapshot.get", "control.production_macro.save", "control.production_macro.delete", "control.production_macro.validate", "control.production_macro.execute", "control.production_macro.cancel", "control.production_macro.recovery.acknowledge"
 	];
 
 	public static IReadOnlyList<string> All => Capabilities;
@@ -542,7 +543,8 @@ internal static class ExternalControlOperationCatalog
 	public static ExternalControlRole RequiredRole(string operation) =>
 		operation is "control.ping" or "control.snapshot.get" or
 			"control.media_asset_catalog.snapshot.get" or "control.media_deck.snapshot.get" or
-			"control.show_control.snapshot.get" or "control.rundown.snapshot.get"
+			"control.show_control.snapshot.get" or "control.rundown.snapshot.get" or
+			"control.production_macro.snapshot.get" or "control.production_macro.validate"
 			? ExternalControlRole.Observer
 			: ExternalControlRole.Operator;
 }
@@ -839,6 +841,13 @@ internal sealed class ExternalControlGrpcService : ExternalControl.ExternalContr
 			case ExternalControlRequest.OperationOneofCase.PreviousRundown: operation = "control.rundown.previous"; payload = new { }; break;
 			case ExternalControlRequest.OperationOneofCase.HoldRundown: operation = "control.rundown.hold"; payload = new { }; break;
 			case ExternalControlRequest.OperationOneofCase.AcknowledgeRundownRecovery: operation = "control.rundown.recovery.acknowledge"; payload = new { request.AcknowledgeRundownRecovery.Resume }; break;
+			case ExternalControlRequest.OperationOneofCase.GetProductionMacros: operation = "control.production_macro.snapshot.get"; payload = new { }; break;
+			case ExternalControlRequest.OperationOneofCase.SaveProductionMacro: operation = "control.production_macro.save"; payload = new { MacroJson = request.SaveProductionMacro.CanonicalJson, ExpectedStorageVersion = request.SaveProductionMacro.ExpectedStorageVersion }; break;
+			case ExternalControlRequest.OperationOneofCase.DeleteProductionMacro: operation = "control.production_macro.delete"; payload = new { request.DeleteProductionMacro.MacroId, ExpectedStorageVersion = request.DeleteProductionMacro.ExpectedStorageVersion }; break;
+			case ExternalControlRequest.OperationOneofCase.ValidateProductionMacro: operation = "control.production_macro.validate"; payload = new { MacroJson = request.ValidateProductionMacro.CanonicalJson }; break;
+			case ExternalControlRequest.OperationOneofCase.ExecuteProductionMacro: operation = "control.production_macro.execute"; payload = new { request.ExecuteProductionMacro.MacroId }; break;
+			case ExternalControlRequest.OperationOneofCase.CancelProductionMacro: operation = "control.production_macro.cancel"; payload = new { }; break;
+			case ExternalControlRequest.OperationOneofCase.AcknowledgeProductionMacroRecovery: operation = "control.production_macro.recovery.acknowledge"; payload = new { request.AcknowledgeProductionMacroRecovery.Resume }; break;
 			default: throw new RpcException(new Status(StatusCode.InvalidArgument, "External control operation is required."));
 		}
 		return (operation, JsonSerializer.Serialize(payload, payload.GetType(), JsonOptions));
