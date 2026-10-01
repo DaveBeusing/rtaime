@@ -214,6 +214,7 @@ message ExternalControlRequest {
     ProductionMacroIdRequest execute_production_macro = 94;
     EmptyRequest cancel_production_macro = 95;
     RecoveryAcknowledgementRequest acknowledge_production_macro_recovery = 96;
+    ProductionMacroIdRequest get_production_macro = 97;
   }
 }
 
