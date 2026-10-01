@@ -85,6 +85,123 @@ function Add-Domain {
 	})
 }
 
+function Test-PositiveInteger {
+	param($Value)
+	if ($null -eq $Value) { return $false }
+	try {
+		return [int]$Value -gt 0
+	} catch {
+		return $false
+	}
+}
+
+function Test-IsoDate {
+	param($Value)
+	if ($null -eq $Value -or [string]::IsNullOrWhiteSpace([string]$Value)) { return $false }
+	$parsed = [DateTime]::MinValue
+	return [DateTime]::TryParseExact(
+		[string]$Value,
+		"yyyy-MM-dd",
+		[Globalization.CultureInfo]::InvariantCulture,
+		[Globalization.DateTimeStyles]::None,
+		[ref]$parsed)
+}
+
+function Test-StableLineRecord {
+	param([Parameter(Mandatory)]$Line)
+
+	$status = [string]$Line.status
+	if ($status -eq "UNVERIFIED") {
+		return $null -eq $Line.supportStart -and
+			$null -eq $Line.maintenanceEnd -and
+			$null -eq $Line.securityEnd -and
+			$null -eq $Line.eolDate
+	}
+	if ($status -notin @("SUPPORTED", "EOL")) { return $false }
+
+	foreach ($property in @("supportStart", "maintenanceEnd", "securityEnd", "eolDate")) {
+		if (-not (Test-IsoDate $Line.$property)) { return $false }
+	}
+
+	$supportStart = [DateTime]::ParseExact([string]$Line.supportStart, "yyyy-MM-dd", [Globalization.CultureInfo]::InvariantCulture)
+	$maintenanceEnd = [DateTime]::ParseExact([string]$Line.maintenanceEnd, "yyyy-MM-dd", [Globalization.CultureInfo]::InvariantCulture)
+	$securityEnd = [DateTime]::ParseExact([string]$Line.securityEnd, "yyyy-MM-dd", [Globalization.CultureInfo]::InvariantCulture)
+	$eolDate = [DateTime]::ParseExact([string]$Line.eolDate, "yyyy-MM-dd", [Globalization.CultureInfo]::InvariantCulture)
+	return $maintenanceEnd -ge $supportStart -and
+		$securityEnd -ge $maintenanceEnd -and
+		$eolDate -ge $securityEnd
+}
+
+function Get-StableVersionLine {
+	param([Parameter(Mandatory)][string]$Version)
+	$match = [Regex]::Match($Version, '^(?<major>\d+)\.(?<minor>\d+)\.')
+	if (-not $match.Success) { return $null }
+	return "$($match.Groups['major'].Value).$($match.Groups['minor'].Value)"
+}
+
+function Test-PassedQualificationEvidence {
+	param([Parameter(Mandatory)][string]$RelativePath)
+
+	$fullPath = Resolve-RepositoryPath $RelativePath
+	if (-not (Test-Path -LiteralPath $fullPath -PathType Leaf)) { return $false }
+	if ([System.IO.Path]::GetExtension($fullPath) -ne ".json") { return $false }
+
+	try {
+		$document = Get-Content -LiteralPath $fullPath -Raw | ConvertFrom-Json
+		$properties = @($document.PSObject.Properties.Name)
+		$passed = if ($properties -contains "status") {
+			[string]$document.status -in @("PASS", "PASSED")
+		} elseif ($properties -contains "requirements") {
+			$requirements = @($document.requirements)
+			$requirements.Count -gt 0 -and @($requirements | Where-Object { [string]$_.status -ne "PASSED" }).Count -eq 0
+		} else {
+			$false
+		}
+		return $passed -and
+			$properties -contains "sourceCommit" -and
+			[string]$document.sourceCommit -match '^[0-9a-fA-F]{40,64}$'
+	} catch {
+		return $false
+	}
+}
+
+function Test-SupportedPlatformConfiguration {
+	param([Parameter(Mandatory)]$Configuration)
+
+	if ([string]$Configuration.supportStatus -ne "SUPPORTED") { return $false }
+	foreach ($value in @(
+		$Configuration.platform.edition,
+		$Configuration.platform.versionFamily,
+		$Configuration.gpu.driverRange,
+		$Configuration.mediaIo.device,
+		$Configuration.mediaIo.driverRange
+	)) {
+		if ($null -eq $value -or [string]::IsNullOrWhiteSpace([string]$value)) { return $false }
+	}
+	if ([string]$Configuration.gpu.qualificationStatus -ne "PASS") { return $false }
+	if ([string]$Configuration.mediaIo.qualificationStatus -ne "PASS") { return $false }
+
+	$evidence = @($Configuration.qualificationEvidence)
+	if ($evidence.Count -eq 0) { return $false }
+	foreach ($reference in $evidence) {
+		if (-not (Test-PassedQualificationEvidence ([string]$reference))) { return $false }
+	}
+
+	foreach ($provider in @($Configuration.networkProviders)) {
+		if ([string]$provider.supportStatus -eq "SUPPORTED") {
+			$providerEvidence = @($provider.qualificationEvidence)
+			if ($providerEvidence.Count -eq 0) { return $false }
+			foreach ($reference in $providerEvidence) {
+				if (-not (Test-PassedQualificationEvidence ([string]$reference))) { return $false }
+			}
+		} elseif ([string]$provider.supportStatus -notin @("UNVERIFIED", "UNSUPPORTED")) {
+			return $false
+		}
+	}
+
+	return $true
+}
+
 $buildPropsPath = Join-Path $repositoryRoot "Directory.Build.props"
 Assert-Condition (Test-Path -LiteralPath $buildPropsPath -PathType Leaf) "Directory.Build.props is missing."
 [xml]$buildProps = Get-Content -LiteralPath $buildPropsPath -Raw
@@ -122,15 +239,19 @@ Add-Domain $domains "sourceIdentity" $sourceIdentityStatus "checked-out git sour
 )
 
 $stableLifecycle = $supportPolicy.lifecycle.stableRelease
-$supportPeriodStatus = if ([string]$stableLifecycle.status -eq "PASS" -and
-	$null -ne $stableLifecycle.maintenanceMonths -and
-	$null -ne $stableLifecycle.securityMonths -and
-	$null -ne $stableLifecycle.eolNotificationLeadDays) {
-	"PASS"
+$supportPeriodStatus = if ([string]$stableLifecycle.status -eq "PASS") {
+	if (
+		(Test-PositiveInteger $stableLifecycle.maintenanceMonths) -and
+		(Test-PositiveInteger $stableLifecycle.securityMonths) -and
+		(Test-PositiveInteger $stableLifecycle.eolNotificationLeadDays) -and
+		[bool]$stableLifecycle.approvalRequired
+	) { "PASS" } else { "FAIL" }
 } elseif ([string]$stableLifecycle.status -eq "FAIL") {
 	"FAIL"
-} else {
+} elseif ([string]$stableLifecycle.status -eq "UNVERIFIED") {
 	"UNVERIFIED"
+} else {
+	"FAIL"
 }
 Add-Domain $domains "supportPeriodPolicy" $supportPeriodStatus "docs/Governance/ProductSupportPolicy.json" $(
 	if ($supportPeriodStatus -eq "PASS") {
@@ -140,32 +261,50 @@ Add-Domain $domains "supportPeriodPolicy" $supportPeriodStatus "docs/Governance/
 	}
 )
 
-$versionPolicyStatus = "PASS"
 $stableLines = @($supportPolicy.supportedVersions.stableLines)
-if ($stableLines | Where-Object { [string]$_.status -eq "SUPPORTED" -and $null -eq $_.eolDate }) {
-	$versionPolicyStatus = "FAIL"
+$stableLineRecordsValid = @($stableLines | Where-Object { -not (Test-StableLineRecord $_) }).Count -eq 0
+$stableLineNames = @($stableLines | ForEach-Object { [string]$_.versionLine })
+$stableLineNamesUnique = @($stableLineNames | Sort-Object -Unique).Count -eq $stableLineNames.Count
+$versionPolicyStatus = if (-not $stableLineRecordsValid -or -not $stableLineNamesUnique) {
+	"FAIL"
+} elseif ($releaseStage -eq "STABLE") {
+	$expectedVersionLine = Get-StableVersionLine $productVersion
+	$matchingSupportedLines = @($stableLines | Where-Object {
+		[string]$_.versionLine -eq $expectedVersionLine -and [string]$_.status -eq "SUPPORTED"
+	})
+	if (
+		-not [string]::IsNullOrWhiteSpace($expectedVersionLine) -and
+		$matchingSupportedLines.Count -eq 1 -and
+		$supportPeriodStatus -eq "PASS"
+	) { "PASS" } else { "UNVERIFIED" }
+} else {
+	"PASS"
 }
 Add-Domain $domains "supportedVersionPolicy" $versionPolicyStatus "docs/Governance/ProductSupportPolicy.json" $(
-	if ($stableLines.Count -eq 0) {
-		"No Stable line is currently declared supported; that absence is explicit and policy-backed."
+	if ($versionPolicyStatus -eq "PASS" -and $releaseStage -eq "STABLE") {
+		"Current Stable product line is explicitly declared SUPPORTED with a valid lifecycle record."
+	} elseif ($versionPolicyStatus -eq "PASS") {
+		"Supported-version policy is structurally valid; current source is not Stable."
+	} elseif ($versionPolicyStatus -eq "UNVERIFIED") {
+		"Current Stable product line is not yet explicitly declared SUPPORTED with an approved lifecycle commitment."
 	} else {
-		"Stable support lines and EOL state are source-controlled."
+		"Supported-version policy contains invalid or ambiguous Stable lifecycle records."
 	}
 )
 
 $supportedConfigurations = @($platformMatrix.configurations | Where-Object { [string]$_.supportStatus -eq "SUPPORTED" })
-$platformStatus = if ([string]$platformMatrix.matrixStatus -eq "FAIL") {
+$invalidSupportStatuses = @($platformMatrix.configurations | Where-Object {
+	[string]$_.supportStatus -notin @("SUPPORTED", "UNVERIFIED", "UNSUPPORTED")
+})
+$platformStatus = if ($invalidSupportStatuses.Count -gt 0) {
 	"FAIL"
-} elseif (
-	[string]$platformMatrix.matrixStatus -eq "PASS" -and
-	$supportedConfigurations.Count -gt 0 -and
-	@($supportedConfigurations | Where-Object {
-		@($_.qualificationEvidence).Count -eq 0 -or
-		[string]$_.gpu.qualificationStatus -ne "PASS" -or
-		[string]$_.mediaIo.qualificationStatus -ne "PASS"
-	}).Count -eq 0
-) {
-	"PASS"
+} elseif ([string]$platformMatrix.matrixStatus -eq "FAIL") {
+	"FAIL"
+} elseif ([string]$platformMatrix.matrixStatus -eq "PASS") {
+	if (
+		$supportedConfigurations.Count -gt 0 -and
+		@($supportedConfigurations | Where-Object { -not (Test-SupportedPlatformConfiguration $_) }).Count -eq 0
+	) { "PASS" } else { "FAIL" }
 } elseif ([string]$platformMatrix.matrixStatus -eq "UNVERIFIED") {
 	"UNVERIFIED"
 } else {
@@ -187,7 +326,16 @@ $securityFrameworkStatus = if (
 Add-Domain $domains "securityPolicy" $securityFrameworkStatus "docs/Governance/ProductSecurityPolicy.json" "Product-security governance, disclosure and signed-update requirements are source-controlled."
 
 $securityCommitmentStatus = [string]$supportPolicy.securitySupport.remediationTargetsStatus
-if ($securityCommitmentStatus -notin @("PASS", "FAIL", "UNVERIFIED")) { $securityCommitmentStatus = "FAIL" }
+if ($securityCommitmentStatus -eq "PASS") {
+	foreach ($severity in @("CRITICAL", "HIGH", "MEDIUM", "LOW")) {
+		if (-not (Test-PositiveInteger $supportPolicy.securitySupport.severityTargetsDays.$severity)) {
+			$securityCommitmentStatus = "FAIL"
+			break
+		}
+	}
+} elseif ($securityCommitmentStatus -notin @("FAIL", "UNVERIFIED")) {
+	$securityCommitmentStatus = "FAIL"
+}
 Add-Domain $domains "securitySupportCommitment" $securityCommitmentStatus "docs/Governance/ProductSupportPolicy.json" $(
 	if ($securityCommitmentStatus -eq "PASS") {
 		"Approved security remediation targets are declared."
@@ -197,7 +345,18 @@ Add-Domain $domains "securitySupportCommitment" $securityCommitmentStatus "docs/
 )
 
 $deprecationStatus = [string]$supportPolicy.upgradeDeprecation.contractDeprecation.status
-if ($deprecationStatus -notin @("PASS", "FAIL", "UNVERIFIED")) { $deprecationStatus = "FAIL" }
+$deprecation = $supportPolicy.upgradeDeprecation.contractDeprecation
+if ($deprecationStatus -eq "PASS") {
+	if (
+		-not (Test-PositiveInteger $deprecation.minimumNoticeDays) -or
+		-not [bool]$deprecation.removalRequiresMigrationEvidence -or
+		-not [bool]$deprecation.removalRequiresReleaseNotes
+	) {
+		$deprecationStatus = "FAIL"
+	}
+} elseif ($deprecationStatus -notin @("FAIL", "UNVERIFIED")) {
+	$deprecationStatus = "FAIL"
+}
 $updateSourcesExist =
 	(Test-Path -LiteralPath (Resolve-RepositoryPath ([string]$supportPolicy.upgradeDeprecation.directUpgradeRulesSource)) -PathType Leaf) -and
 	(Test-Path -LiteralPath (Resolve-RepositoryPath ([string]$supportPolicy.upgradeDeprecation.persistentStatePolicySource)) -PathType Leaf)
@@ -212,9 +371,25 @@ Add-Domain $domains "upgradeDeprecationPolicy" $deprecationStatus "docs/Governan
 	}
 )
 
+$requiredDeploymentChecks = @(
+	"WINDOWS_PLATFORM",
+	"SERVICE_ACCOUNT",
+	"FILESYSTEM_ACLS",
+	"STORAGE",
+	"GPU_DRIVER",
+	"MEDIA_IO",
+	"NETWORK_FIREWALL",
+	"CERTIFICATE_TRUST",
+	"DIAGNOSTICS_EVENT_LOG",
+	"UPDATE_SOURCE",
+	"ROLLBACK_STATE",
+	"TIME_REFERENCE"
+)
+$deploymentIds = @($deploymentBaseline.requiredChecks | ForEach-Object { [string]$_.id })
 $deploymentStatus = if (
 	[string]$deploymentBaseline.policyStatus -eq "DEFINED" -and
-	@($deploymentBaseline.requiredChecks).Count -ge 10
+	@($requiredDeploymentChecks | Where-Object { $_ -notin $deploymentIds }).Count -eq 0 -and
+	[string]$deploymentBaseline.evidenceSemantics -match "does not create hardware qualification"
 ) { "PASS" } else { "FAIL" }
 Add-Domain $domains "deploymentPolicy" $deploymentStatus "docs/Governance/ProductionDeploymentBaseline.json" "Production deployment prerequisites are explicitly source-controlled and evidence-aware."
 
