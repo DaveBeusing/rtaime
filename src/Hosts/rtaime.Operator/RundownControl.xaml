@@ -212,7 +212,11 @@
 						<ColumnDefinition Width="*" />
 						<ColumnDefinition Width="Auto" />
 					</Grid.ColumnDefinitions>
-					<TextBlock Text="{Binding AutomationState}" FontWeight="SemiBold" FontSize="{StaticResource OperatorFontSizeMicro}" />
+					<controls:RtaimeStatusBadge
+						Status="{x:Static controls:RtaimeStatusKind.Neutral}"
+						Content="{Binding AutomationState}"
+						ShowIndicator="True"
+						VerticalAlignment="Center" />
 					<TextBlock Grid.Column="1" Margin="8,0" Text="{Binding FollowStatus}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextTrimming="CharacterEllipsis" />
 					<TextBlock Grid.Column="2" Text="{Binding RepeatStatus}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" />
 				</Grid>
