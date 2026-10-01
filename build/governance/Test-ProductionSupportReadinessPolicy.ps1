@@ -383,7 +383,7 @@ Assert-Condition ($stableVerifierText -match 'releasePromotionPerformed = \$fals
 Assert-Condition ($stableVerifierText -match 'productionSigningTrust' -and $stableVerifierText -match 'requiredHardwareEvidence') "Stable readiness verifier must evaluate production trust and hardware evidence."
 Assert-Condition ($stableVerifierText -match 'KNOWN_ISSUES') "Stable readiness verifier must evaluate known-issues evidence."
 Assert-Condition ($stableVerifierText -match 'Test-ReleaseEvidence\.ps1') "Stable readiness verifier must validate supplied release evidence."
-Assert-Condition ($stableVerifierText -match 'ExpectedSourceCommit' -and $stableVerifierText -match 'sourceIdentity' -and $stableVerifierText -match 'GITHUB_EVENT_PATH' -and $stableVerifierText -match 'pull_request\.head\.sha') "Stable readiness must bind to repository source identity and resolve the PR head from the GitHub event payload."
+Assert-Condition ($stableVerifierText -match 'ExpectedSourceCommit' -and $stableVerifierText -match 'sourceIdentity' -and $stableVerifierText -match 'git -C \$repositoryRoot rev-parse HEAD') "Stable readiness must bind to the exact checked-out Git source identity."
 Assert-Condition ($stableVerifierText -match 'candidateEvidenceCorrelation' -and $stableVerifierText -match 'releaseEvidenceSha256') "Stable readiness must bind candidate trust to the exact supplied release evidence bytes."
 Assert-Condition ($knownIssuesVerifierText -match 'unresolved BLOCKER or CRITICAL' -and $knownIssuesVerifierText -match 'release-note disclosure') "Known-issues assessment must reject unresolved critical blockers and undisclosed unresolved issues."
 Assert-Condition ($knownIssuesBinderText -match 'known-issues-assessment\.json' -and $knownIssuesBinderText -match 'KNOWN_ISSUES') "Known-issues binder must use the canonical assessment artifact and release evidence domain."
@@ -399,15 +399,7 @@ try {
 	Assert-Condition ($readiness.releasePromotionPerformed -eq $false) "Stable readiness must report no release promotion."
 
 	$currentHead = (& git -C $repositoryRoot rev-parse HEAD).Trim().ToLowerInvariant()
-	$expectedSource = $currentHead
-	if ([string]$env:GITHUB_REF -match '^refs/pull/[0-9]+/merge$') {
-		$eventPath = [string]$env:GITHUB_EVENT_PATH
-		Assert-Condition (-not [string]::IsNullOrWhiteSpace($eventPath) -and (Test-Path -LiteralPath $eventPath -PathType Leaf)) "Pull-request qualification requires the GitHub event payload."
-		$eventPayload = Get-Content -LiteralPath $eventPath -Raw | ConvertFrom-Json
-		$expectedSource = ([string]$eventPayload.pull_request.head.sha).Trim().ToLowerInvariant()
-		Assert-Condition ($expectedSource -match '^[0-9a-f]{40,64}$') "GitHub pull-request head identity is invalid."
-	}
-	Assert-Condition ([string]$readiness.sourceCommit -eq $expectedSource) "Stable readiness must report the exact checked-out source identity."
+	Assert-Condition ([string]$readiness.sourceCommit -eq $currentHead) "Stable readiness must report the exact checked-out Git commit."
 
 	$sourceIdentity = @($readiness.domains | Where-Object { [string]$_.name -eq "sourceIdentity" })
 	Assert-Condition ($sourceIdentity.Count -eq 1 -and [string]$sourceIdentity[0].status -eq "PASS") "Current repository source identity must verify as PASS."
