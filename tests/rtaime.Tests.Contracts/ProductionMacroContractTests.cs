@@ -73,7 +73,8 @@ public sealed class ProductionMacroContractTests
 			new ProductionMacroAction(ProductionMacroActionId.New(), ShowControlActionKind.WaitFrames, waitFrames: 25),
 			new ProductionMacroAction(ProductionMacroActionId.New(), ShowControlActionKind.MediaOpen, sourceId: source, mediaAssetId: asset),
 			new ProductionMacroAction(ProductionMacroActionId.New(), ShowControlActionKind.SetAudioRouting, audioRoutingMode: 1),
-			new ProductionMacroAction(ProductionMacroActionId.New(), ShowControlActionKind.RouteOutputRole, sourceId: source, outputRoleId: "Aux")
+			new ProductionMacroAction(ProductionMacroActionId.New(), ShowControlActionKind.RouteOutputRole, sourceId: source, outputRoleId: "Aux"),
+			new ProductionMacroAction(ProductionMacroActionId.New(), ShowControlActionKind.SetAudioInputState, sourceId: source, audioGain: 1.0, audioMuted: false)
 		};
 		var macro = new ProductionMacroDefinition(
 			ProductionMacroContractVersion.Current,
