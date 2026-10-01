@@ -316,3 +316,12 @@ Reference qualification procedure:
 ## Non-goals
 
 This lifecycle does not implement Windows clustering, active/active control, multi-node authority election, remote fleet management, automatic failover to another machine or frame-identical continuity across an operating-system restart.
+
+## Production deployment baseline
+
+The Windows service lifecycle is one deployment mechanism inside the broader production deployment baseline.
+
+Before a deployment is treated as supportable, use `docs/Governance/ProductionDeploymentBaseline.json` and `docs/ProductionDeploymentBaseline.md` to record the selected Windows build family, service identity, ACLs, storage, GPU/driver, Media I/O, firewall, certificate/trust, diagnostics, update source, rollback/state and timing/reference prerequisites.
+
+Checklist completion does not qualify hardware. The selected Windows/GPU/Media-I/O tuple may be called `SUPPORTED` only when the evidence-aware platform matrix contains a matching supported entry with qualification evidence.
+
