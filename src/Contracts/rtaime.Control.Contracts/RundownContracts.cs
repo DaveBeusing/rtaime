@@ -8,12 +8,13 @@ namespace rtaime.Control.Contracts;
 
 public static class RundownContractVersion
 {
-	public static CompatibilityVersion Current { get; } = new(1, 0);
+	public static CompatibilityVersion Current { get; } = new(1, 1);
+	public static CompatibilityVersion LegacyV1 { get; } = new(1, 0);
 
 	public static void EnsureSupported(CompatibilityVersion version)
 	{
-		if (version != Current)
-			throw new NotSupportedException($"Unsupported rundown contract version '{version}'. Supported version is '{Current}'.");
+		if (version != Current && version != LegacyV1)
+			throw new NotSupportedException($"Unsupported rundown contract version '{version}'. Supported versions are '{LegacyV1}' and '{Current}'.");
 	}
 }
 
@@ -90,6 +91,69 @@ public enum RundownAdvanceMode
 	AutoOnMediaEnd = 2
 }
 
+public static class RundownFollowActionVersion
+{
+	public const int Current = 1;
+}
+
+public enum RundownFollowActionKind
+{
+	Manual = 1,
+	PrepareNext = 2,
+	AutoGoNext = 3,
+	AutoGoNextAfterFrames = 4,
+	AutoOnMediaEnd = 5,
+	Hold = 6
+}
+
+public sealed record RundownFollowAction
+{
+	public const uint MaximumDelayFrames = ShowControlAction.MaximumWaitFrames;
+
+	public RundownFollowAction(
+		int version,
+		RundownFollowActionKind kind,
+		uint? delayFrames = null)
+	{
+		if (version != RundownFollowActionVersion.Current)
+			throw new NotSupportedException($"Unsupported rundown follow-action version '{version}'.");
+		if (!Enum.IsDefined(kind))
+			throw new ArgumentOutOfRangeException(nameof(kind));
+		if (kind == RundownFollowActionKind.AutoGoNextAfterFrames)
+		{
+			if (delayFrames is null or 0 or > MaximumDelayFrames)
+				throw new ArgumentOutOfRangeException(nameof(delayFrames), $"Delayed follow action must use between 1 and {MaximumDelayFrames} production frames.");
+		}
+		else if (delayFrames is not null)
+		{
+			throw new ArgumentException("Only delayed auto-GO may declare follow delay frames.", nameof(delayFrames));
+		}
+
+		Version = version;
+		Kind = kind;
+		DelayFrames = delayFrames;
+	}
+
+	public int Version { get; }
+	public RundownFollowActionKind Kind { get; }
+	public uint? DelayFrames { get; }
+
+	public static RundownFollowAction Manual { get; } = new(RundownFollowActionVersion.Current, RundownFollowActionKind.Manual);
+	public static RundownFollowAction PrepareNext { get; } = new(RundownFollowActionVersion.Current, RundownFollowActionKind.PrepareNext);
+	public static RundownFollowAction AutoGoNext { get; } = new(RundownFollowActionVersion.Current, RundownFollowActionKind.AutoGoNext);
+	public static RundownFollowAction AutoOnMediaEnd { get; } = new(RundownFollowActionVersion.Current, RundownFollowActionKind.AutoOnMediaEnd);
+	public static RundownFollowAction Hold { get; } = new(RundownFollowActionVersion.Current, RundownFollowActionKind.Hold);
+	public static RundownFollowAction AutoGoNextAfterFrames(uint frames) =>
+		new(RundownFollowActionVersion.Current, RundownFollowActionKind.AutoGoNextAfterFrames, frames);
+
+	public static RundownFollowAction FromLegacy(RundownAdvanceMode mode) => mode switch
+	{
+		RundownAdvanceMode.Manual => Manual,
+		RundownAdvanceMode.AutoOnMediaEnd => AutoOnMediaEnd,
+		_ => throw new ArgumentOutOfRangeException(nameof(mode))
+	};
+}
+
 public enum RundownRepeatMode
 {
 	None = 1,
@@ -130,7 +194,8 @@ public abstract record RundownItem
 		RundownItemKind kind,
 		RundownTransition? transition,
 		RundownAdvanceMode advanceMode,
-		RundownRepeatPolicy? repeat)
+		RundownRepeatPolicy? repeat,
+		RundownFollowAction? followAction)
 	{
 		if (string.IsNullOrWhiteSpace(name))
 			throw new ArgumentException("Rundown item name is required.", nameof(name));
@@ -142,11 +207,24 @@ public abstract record RundownItem
 		if (!Enum.IsDefined(advanceMode))
 			throw new ArgumentOutOfRangeException(nameof(advanceMode));
 
+		var resolvedFollow = followAction ?? RundownFollowAction.FromLegacy(advanceMode);
+		if (followAction is not null &&
+			advanceMode != RundownAdvanceMode.Manual &&
+			!(advanceMode == RundownAdvanceMode.AutoOnMediaEnd && resolvedFollow.Kind == RundownFollowActionKind.AutoOnMediaEnd))
+		{
+			throw new ArgumentException("Legacy advance mode conflicts with the explicit follow action.", nameof(followAction));
+		}
+		if (resolvedFollow.Kind == RundownFollowActionKind.AutoOnMediaEnd && kind != RundownItemKind.MediaClip)
+			throw new ArgumentException("Media-end follow action is valid only for media items.", nameof(followAction));
+
 		ItemId = itemId;
 		Name = normalized;
 		Kind = kind;
 		Transition = transition;
-		AdvanceMode = advanceMode;
+		FollowAction = resolvedFollow;
+		AdvanceMode = resolvedFollow.Kind == RundownFollowActionKind.AutoOnMediaEnd
+			? RundownAdvanceMode.AutoOnMediaEnd
+			: RundownAdvanceMode.Manual;
 		Repeat = repeat ?? RundownRepeatPolicy.None;
 	}
 
@@ -154,6 +232,7 @@ public abstract record RundownItem
 	public string Name { get; }
 	public RundownItemKind Kind { get; }
 	public RundownTransition? Transition { get; }
+	public RundownFollowAction FollowAction { get; }
 	public RundownAdvanceMode AdvanceMode { get; }
 	public RundownRepeatPolicy Repeat { get; }
 }
@@ -167,8 +246,9 @@ public sealed record RundownMediaItem : RundownItem
 		ProductionSourceId sourceId,
 		RundownTransition transition,
 		RundownAdvanceMode advanceMode = RundownAdvanceMode.Manual,
-		RundownRepeatPolicy? repeat = null)
-		: base(itemId, name, RundownItemKind.MediaClip, transition ?? throw new ArgumentNullException(nameof(transition)), advanceMode, repeat)
+		RundownRepeatPolicy? repeat = null,
+		RundownFollowAction? followAction = null)
+		: base(itemId, name, RundownItemKind.MediaClip, transition ?? throw new ArgumentNullException(nameof(transition)), advanceMode, repeat, followAction)
 	{
 		if (assetId.IsEmpty)
 			throw new ArgumentException("Persistent media asset identity must not be empty.", nameof(assetId));
@@ -187,11 +267,10 @@ public sealed record RundownSceneItem : RundownItem
 		string name,
 		SceneId sceneId,
 		RundownAdvanceMode advanceMode = RundownAdvanceMode.Manual,
-		RundownRepeatPolicy? repeat = null)
-		: base(itemId, name, RundownItemKind.Scene, null, advanceMode, repeat)
+		RundownRepeatPolicy? repeat = null,
+		RundownFollowAction? followAction = null)
+		: base(itemId, name, RundownItemKind.Scene, null, advanceMode, repeat, followAction)
 	{
-		if (advanceMode == RundownAdvanceMode.AutoOnMediaEnd)
-			throw new ArgumentException("Scene items cannot auto-advance on media completion.", nameof(advanceMode));
 		SceneId = sceneId;
 	}
 
@@ -207,8 +286,9 @@ public sealed record RundownGraphicsItem : RundownItem
 		string name,
 		string layerId,
 		bool visible,
-		RundownRepeatPolicy? repeat = null)
-		: base(itemId, name, RundownItemKind.Graphics, null, RundownAdvanceMode.Manual, repeat)
+		RundownRepeatPolicy? repeat = null,
+		RundownFollowAction? followAction = null)
+		: base(itemId, name, RundownItemKind.Graphics, null, RundownAdvanceMode.Manual, repeat, followAction)
 	{
 		if (string.IsNullOrWhiteSpace(layerId))
 			throw new ArgumentException("Graphics layer identity is required.", nameof(layerId));
@@ -233,8 +313,9 @@ public sealed record RundownAudioRoutingItem : RundownItem
 		string name,
 		int routingMode,
 		ProductionSourceId? breakawaySourceId = null,
-		RundownRepeatPolicy? repeat = null)
-		: base(itemId, name, RundownItemKind.AudioRouting, null, RundownAdvanceMode.Manual, repeat)
+		RundownRepeatPolicy? repeat = null,
+		RundownFollowAction? followAction = null)
+		: base(itemId, name, RundownItemKind.AudioRouting, null, RundownAdvanceMode.Manual, repeat, followAction)
 	{
 		if (routingMode is not (FollowVideoMode or BreakawayMode))
 			throw new ArgumentOutOfRangeException(nameof(routingMode));
@@ -259,8 +340,9 @@ public sealed record RundownHoldItem : RundownItem
 		RundownItemId itemId,
 		string name,
 		uint frames,
-		RundownRepeatPolicy? repeat = null)
-		: base(itemId, name, RundownItemKind.Hold, null, RundownAdvanceMode.Manual, repeat)
+		RundownRepeatPolicy? repeat = null,
+		RundownFollowAction? followAction = null)
+		: base(itemId, name, RundownItemKind.Hold, null, RundownAdvanceMode.Manual, repeat, followAction)
 	{
 		if (frames is 0 or > MaximumHoldFrames)
 			throw new ArgumentOutOfRangeException(nameof(frames), $"Hold duration must be between 1 and {MaximumHoldFrames} frames.");
@@ -364,7 +446,16 @@ public sealed record RundownExecutionSnapshot(
 	Identity? CausalActionId,
 	bool AutoAdvanceArmed,
 	bool RequiresAcknowledgement,
-	Failure? Failure)
+	Failure? Failure,
+	RundownFollowActionKind FollowActionKind = RundownFollowActionKind.Manual,
+	RundownItemId? PendingNextItemId = null,
+	uint? FollowDelayFrames = null,
+	string? RuntimeHostInstanceId = null,
+	ulong? FollowStartFrameSequence = null,
+	ulong? FollowTargetFrameSequence = null,
+	uint? RemainingFollowFrames = null,
+	ushort RemainingItemRepeats = 0,
+	ushort RemainingRundownRepeats = 0)
 {
 	public static RundownExecutionSnapshot Idle { get; } = new(
 		RundownExecutionState.Idle,
@@ -422,23 +513,23 @@ public static class RundownCanonicalSerializer
 			media.ItemId.ToString(), media.Name, media.Kind.ToString(),
 			media.AssetId.ToString(), media.SourceId.ToString(), null, null, null, null,
 			media.Transition!.Kind.ToString(), media.Transition.DurationFrames,
-			media.AdvanceMode.ToString(), media.Repeat.Mode.ToString(), media.Repeat.RepeatCount),
+			media.AdvanceMode.ToString(), media.Repeat.Mode.ToString(), media.Repeat.RepeatCount, ToDocument(media.FollowAction)),
 		RundownSceneItem scene => new(
 			scene.ItemId.ToString(), scene.Name, scene.Kind.ToString(),
 			null, null, scene.SceneId.ToString(), null, null, null,
-			null, null, scene.AdvanceMode.ToString(), scene.Repeat.Mode.ToString(), scene.Repeat.RepeatCount),
+			null, null, scene.AdvanceMode.ToString(), scene.Repeat.Mode.ToString(), scene.Repeat.RepeatCount, ToDocument(scene.FollowAction)),
 		RundownGraphicsItem graphics => new(
 			graphics.ItemId.ToString(), graphics.Name, graphics.Kind.ToString(),
 			null, null, null, graphics.LayerId, graphics.Visible, null,
-			null, null, graphics.AdvanceMode.ToString(), graphics.Repeat.Mode.ToString(), graphics.Repeat.RepeatCount),
+			null, null, graphics.AdvanceMode.ToString(), graphics.Repeat.Mode.ToString(), graphics.Repeat.RepeatCount, ToDocument(graphics.FollowAction)),
 		RundownAudioRoutingItem audio => new(
 			audio.ItemId.ToString(), audio.Name, audio.Kind.ToString(),
 			null, audio.BreakawaySourceId?.ToString(), null, null, null, audio.RoutingMode,
-			null, null, audio.AdvanceMode.ToString(), audio.Repeat.Mode.ToString(), audio.Repeat.RepeatCount),
+			null, null, audio.AdvanceMode.ToString(), audio.Repeat.Mode.ToString(), audio.Repeat.RepeatCount, ToDocument(audio.FollowAction)),
 		RundownHoldItem hold => new(
 			hold.ItemId.ToString(), hold.Name, hold.Kind.ToString(),
 			null, null, null, null, null, checked((int)hold.Frames),
-			null, null, hold.AdvanceMode.ToString(), hold.Repeat.Mode.ToString(), hold.Repeat.RepeatCount),
+			null, null, hold.AdvanceMode.ToString(), hold.Repeat.Mode.ToString(), hold.Repeat.RepeatCount, ToDocument(hold.FollowAction)),
 		_ => throw new NotSupportedException($"Unsupported rundown item type '{item.GetType().Name}'.")
 	};
 
@@ -446,11 +537,20 @@ public static class RundownCanonicalSerializer
 	{
 		if (!Enum.TryParse<RundownItemKind>(item.Kind, false, out var kind) || !Enum.IsDefined(kind))
 			throw new InvalidDataException($"Unsupported rundown item kind '{item.Kind}'.");
-		if (!Enum.TryParse<RundownAdvanceMode>(item.AdvanceMode, false, out var advance) || !Enum.IsDefined(advance))
+		var advance = RundownAdvanceMode.Manual;
+		if (!string.IsNullOrWhiteSpace(item.AdvanceMode) &&
+			(!Enum.TryParse<RundownAdvanceMode>(item.AdvanceMode, false, out advance) || !Enum.IsDefined(advance)))
+		{
 			throw new InvalidDataException($"Unsupported rundown advance mode '{item.AdvanceMode}'.");
-		if (!Enum.TryParse<RundownRepeatMode>(item.RepeatMode, false, out var repeatMode) || !Enum.IsDefined(repeatMode))
+		}
+		var repeatMode = RundownRepeatMode.None;
+		if (!string.IsNullOrWhiteSpace(item.RepeatMode) &&
+			(!Enum.TryParse<RundownRepeatMode>(item.RepeatMode, false, out repeatMode) || !Enum.IsDefined(repeatMode)))
+		{
 			throw new InvalidDataException($"Unsupported rundown repeat mode '{item.RepeatMode}'.");
+		}
 		var repeat = new RundownRepeatPolicy(repeatMode, item.RepeatCount);
+		var follow = item.FollowAction is null ? RundownFollowAction.FromLegacy(advance) : ReadFollowAction(item.FollowAction);
 		var itemId = new RundownItemId(Identity.Parse(item.ItemId));
 
 		return kind switch
@@ -462,32 +562,47 @@ public static class RundownCanonicalSerializer
 				new ProductionSourceId(Identity.Parse(Require(item.SourceId, nameof(item.SourceId)))),
 				ReadTransition(item),
 				advance,
-				repeat),
+				repeat,
+				follow),
 			RundownItemKind.Scene => new RundownSceneItem(
 				itemId,
 				item.Name,
 				new SceneId(Identity.Parse(Require(item.SceneId, nameof(item.SceneId)))),
 				advance,
-				repeat),
+				repeat,
+				follow),
 			RundownItemKind.Graphics => new RundownGraphicsItem(
 				itemId,
 				item.Name,
 				Require(item.LayerId, nameof(item.LayerId)),
 				item.Visible ?? throw new InvalidDataException("Graphics rundown item requires visibility."),
-				repeat),
+				repeat,
+				follow),
 			RundownItemKind.AudioRouting => new RundownAudioRoutingItem(
 				itemId,
 				item.Name,
 				item.NumericValue ?? throw new InvalidDataException("Audio routing rundown item requires a mode."),
 				string.IsNullOrWhiteSpace(item.SourceId) ? null : new ProductionSourceId(Identity.Parse(item.SourceId)),
-				repeat),
+				repeat,
+				follow),
 			RundownItemKind.Hold => new RundownHoldItem(
 				itemId,
 				item.Name,
 				checked((uint)(item.NumericValue ?? throw new InvalidDataException("Hold rundown item requires a frame count."))),
-				repeat),
+				repeat,
+				follow),
 			_ => throw new InvalidDataException($"Unsupported rundown item kind '{kind}'.")
 		};
+	}
+
+	private static FollowActionDocument ToDocument(RundownFollowAction follow) =>
+		new(follow.Version, follow.Kind.ToString(), follow.DelayFrames);
+
+	private static RundownFollowAction ReadFollowAction(FollowActionDocument follow)
+	{
+		if (!Enum.TryParse<RundownFollowActionKind>(follow.Kind, false, out var kind) || !Enum.IsDefined(kind))
+			throw new InvalidDataException($"Unsupported rundown follow action '{follow.Kind}'.");
+		return new RundownFollowAction(follow.Version, kind, follow.DelayFrames);
 	}
 
 	private static RundownTransition ReadTransition(ItemDocument item)
@@ -518,7 +633,13 @@ public static class RundownCanonicalSerializer
 		int? NumericValue,
 		string? TransitionKind,
 		uint? TransitionFrames,
-		string AdvanceMode,
-		string RepeatMode,
-		ushort RepeatCount);
+		string? AdvanceMode,
+		string? RepeatMode,
+		ushort RepeatCount,
+		FollowActionDocument? FollowAction = null);
+
+	private sealed record FollowActionDocument(
+		int Version,
+		string Kind,
+		uint? DelayFrames);
 }

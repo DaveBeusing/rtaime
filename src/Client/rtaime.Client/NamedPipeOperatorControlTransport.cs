@@ -735,6 +735,11 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		var rundown = string.IsNullOrWhiteSpace(wire.RundownJson)
 			? null
 			: RundownCanonicalSerializer.Deserialize(wire.RundownJson);
+		var followActionKind = wire.FollowActionKind == 0
+			? RundownFollowActionKind.Manual
+			: Enum.IsDefined(typeof(RundownFollowActionKind), wire.FollowActionKind)
+				? (RundownFollowActionKind)wire.FollowActionKind
+				: throw new InvalidDataException("Rundown follow-action state is invalid.");
 		var execution = new RundownExecutionSnapshot(
 			(RundownExecutionState)wire.State,
 			string.IsNullOrWhiteSpace(wire.RundownId) ? null : new RundownId(Identity.Parse(wire.RundownId)),
@@ -748,7 +753,16 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 			wire.RequiresAcknowledgement,
 			string.IsNullOrWhiteSpace(wire.FailureCode)
 				? null
-				: new Failure(wire.FailureCode, wire.FailureMessage ?? "Rundown operation failed."));
+				: new Failure(wire.FailureCode, wire.FailureMessage ?? "Rundown operation failed."),
+			followActionKind,
+			string.IsNullOrWhiteSpace(wire.PendingNextItemId) ? null : new RundownItemId(Identity.Parse(wire.PendingNextItemId)),
+			wire.FollowDelayFrames,
+			wire.RuntimeHostInstanceId,
+			wire.FollowStartFrameSequence,
+			wire.FollowTargetFrameSequence,
+			wire.RemainingFollowFrames,
+			wire.RemainingItemRepeats,
+			wire.RemainingRundownRepeats);
 		return new RundownWorkspaceSnapshot(rundown, execution, wire.StorageVersion);
 	}
 
@@ -945,6 +959,11 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		var rundown = string.IsNullOrWhiteSpace(wire.RundownJson)
 			? null
 			: RundownCanonicalSerializer.Deserialize(wire.RundownJson);
+		var followActionKind = wire.FollowActionKind == 0
+			? RundownFollowActionKind.Manual
+			: Enum.IsDefined(typeof(RundownFollowActionKind), wire.FollowActionKind)
+				? (RundownFollowActionKind)wire.FollowActionKind
+				: throw new InvalidDataException("Rundown follow-action state is invalid.");
 		var execution = new RundownExecutionSnapshot(
 			(RundownExecutionState)wire.State,
 			string.IsNullOrWhiteSpace(wire.RundownId) ? null : new RundownId(Identity.Parse(wire.RundownId)),
@@ -958,7 +977,16 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 			wire.RequiresAcknowledgement,
 			string.IsNullOrWhiteSpace(wire.FailureCode)
 				? null
-				: new Failure(wire.FailureCode, wire.FailureMessage ?? "Rundown operation failed."));
+				: new Failure(wire.FailureCode, wire.FailureMessage ?? "Rundown operation failed."),
+			followActionKind,
+			string.IsNullOrWhiteSpace(wire.PendingNextItemId) ? null : new RundownItemId(Identity.Parse(wire.PendingNextItemId)),
+			wire.FollowDelayFrames,
+			wire.RuntimeHostInstanceId,
+			wire.FollowStartFrameSequence,
+			wire.FollowTargetFrameSequence,
+			wire.RemainingFollowFrames,
+			wire.RemainingItemRepeats,
+			wire.RemainingRundownRepeats);
 		return new RundownWorkspaceSnapshot(rundown, execution, wire.StorageVersion);
 	}
 
@@ -1624,7 +1652,16 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		bool RequiresAcknowledgement,
 		string? FailureCode,
 		string? FailureMessage,
-		ulong StorageVersion);
+		ulong StorageVersion,
+		int FollowActionKind = (int)RundownFollowActionKind.Manual,
+		string? PendingNextItemId = null,
+		uint? FollowDelayFrames = null,
+		string? RuntimeHostInstanceId = null,
+		ulong? FollowStartFrameSequence = null,
+		ulong? FollowTargetFrameSequence = null,
+		uint? RemainingFollowFrames = null,
+		ushort RemainingItemRepeats = 0,
+		ushort RemainingRundownRepeats = 0);
 	private sealed record WireAudioInputState(string SourceId, double Gain, bool Muted);
 	private sealed record WireAudioRoutingState(int Mode, string? BreakawaySourceId, ulong ExpectedRoutingRevision);
 	private sealed record WireAudioTestSignalState(string SourceId, bool Enabled, int Mode, double FrequencyHz, double PeakLevel);

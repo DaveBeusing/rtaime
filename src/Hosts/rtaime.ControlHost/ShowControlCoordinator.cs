@@ -62,6 +62,9 @@ public sealed class ShowControlCoordinator : IAsyncDisposable
 		}
 	}
 
+	public ValueTask<ShowControlFrameObservation> ObserveFrameAsync(CancellationToken cancellationToken = default) =>
+		_frameObserver(cancellationToken);
+
 	public async ValueTask<ShowControlWorkspaceSnapshot> SaveCueListAsync(
 		ShowControlCueList cueList,
 		CancellationToken cancellationToken = default)

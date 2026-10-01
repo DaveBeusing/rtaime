@@ -41,7 +41,102 @@ public sealed class RundownContractTests
 		Assert.Equal(RundownTransitionKind.Dissolve, media.Transition!.Kind);
 		Assert.Equal(25U, media.Transition.DurationFrames);
 		Assert.Equal(RundownAdvanceMode.AutoOnMediaEnd, media.AdvanceMode);
+		Assert.Equal(RundownFollowActionKind.AutoOnMediaEnd, media.FollowAction.Kind);
 		Assert.IsType<RundownSceneItem>(restored.Items[1]);
+	}
+
+	[Fact]
+	public void Explicit_follow_action_round_trips_with_frame_delay()
+	{
+		var item = new RundownSceneItem(
+			RundownItemId.New(),
+			"Delayed scene",
+			SceneId.New(),
+			followAction: RundownFollowAction.AutoGoNextAfterFrames(37));
+		var restored = RundownCanonicalSerializer.Deserialize(RundownCanonicalSerializer.Serialize(Create(item)));
+
+		var scene = Assert.IsType<RundownSceneItem>(Assert.Single(restored.Items));
+		Assert.Equal(RundownFollowActionKind.AutoGoNextAfterFrames, scene.FollowAction.Kind);
+		Assert.Equal(37U, scene.FollowAction.DelayFrames);
+		Assert.Equal(RundownAdvanceMode.Manual, scene.AdvanceMode);
+	}
+
+	[Fact]
+	public void Legacy_v1_media_end_advance_migrates_to_explicit_follow_action()
+	{
+		const string json = """
+		{
+		  "version": "1.0",
+		  "rundownId": "81000000-0000-0000-0000-000000000010",
+		  "name": "Legacy",
+		  "items": [
+		    {
+		      "itemId": "81000000-0000-0000-0000-000000000011",
+		      "name": "Legacy clip",
+		      "kind": "MediaClip",
+		      "assetId": "81000000-0000-0000-0000-000000000012",
+		      "sourceId": "81000000-0000-0000-0000-000000000013",
+		      "transitionKind": "Cut",
+		      "advanceMode": "AutoOnMediaEnd",
+		      "repeatMode": "None",
+		      "repeatCount": 0
+		    }
+		  ]
+		}
+		""";
+
+		var restored = RundownCanonicalSerializer.Deserialize(json);
+
+		var media = Assert.IsType<RundownMediaItem>(Assert.Single(restored.Items));
+		Assert.Equal(RundownFollowActionKind.AutoOnMediaEnd, media.FollowAction.Kind);
+		Assert.Equal(RundownAdvanceMode.AutoOnMediaEnd, media.AdvanceMode);
+	}
+
+	[Fact]
+	public void Missing_follow_action_defaults_to_manual_for_legacy_manual_item()
+	{
+		const string json = """
+		{
+		  "version": "1.0",
+		  "rundownId": "81000000-0000-0000-0000-000000000020",
+		  "name": "Legacy",
+		  "items": [
+		    {
+		      "itemId": "81000000-0000-0000-0000-000000000021",
+		      "name": "Legacy scene",
+		      "kind": "Scene",
+		      "sceneId": "81000000-0000-0000-0000-000000000022",
+		      "advanceMode": "Manual",
+		      "repeatMode": "None",
+		      "repeatCount": 0
+		    }
+		  ]
+		}
+		""";
+
+		var restored = RundownCanonicalSerializer.Deserialize(json);
+
+		var scene = Assert.IsType<RundownSceneItem>(Assert.Single(restored.Items));
+		Assert.Equal(RundownFollowActionKind.Manual, scene.FollowAction.Kind);
+	}
+
+	[Fact]
+	public void Delayed_follow_requires_positive_bounded_production_frames()
+	{
+		Assert.Throws<ArgumentOutOfRangeException>(() => RundownFollowAction.AutoGoNextAfterFrames(0));
+		Assert.Throws<ArgumentOutOfRangeException>(() =>
+			RundownFollowAction.AutoGoNextAfterFrames(checked(RundownFollowAction.MaximumDelayFrames + 1)));
+	}
+
+	[Fact]
+	public void Media_end_follow_is_rejected_for_non_media_items()
+	{
+		Assert.Throws<ArgumentException>(() =>
+			new RundownSceneItem(
+				RundownItemId.New(),
+				"Scene",
+				SceneId.New(),
+				followAction: RundownFollowAction.AutoOnMediaEnd));
 	}
 
 	[Fact]

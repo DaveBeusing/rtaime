@@ -26,6 +26,7 @@ public sealed class RundownCoordinator : IAsyncDisposable
 	private bool _loaded;
 	private readonly Dictionary<RundownItemId, ushort> _itemRepeatProgress = new();
 	private ushort _rundownRepeatProgress;
+	private bool _rundownRecoveryAmbiguous;
 
 	public RundownCoordinator(
 		Func<ControlHostService?> controlAccessor,
@@ -49,6 +50,7 @@ public sealed class RundownCoordinator : IAsyncDisposable
 		try
 		{
 			await EnsureLoadedAsync(cancellationToken).ConfigureAwait(false);
+			await RefreshFrameCountdownLockedAsync(cancellationToken).ConfigureAwait(false);
 			return Snapshot();
 		}
 		finally
@@ -110,6 +112,7 @@ public sealed class RundownCoordinator : IAsyncDisposable
 		try
 		{
 			await EnsureLoadedAsync(cancellationToken).ConfigureAwait(false);
+			await CancelForManualOverrideLockedAsync("prepare another item", cancellationToken).ConfigureAwait(false);
 			await PrepareLockedAsync(itemId, cancellationToken).ConfigureAwait(false);
 			return Snapshot();
 		}
@@ -125,8 +128,23 @@ public sealed class RundownCoordinator : IAsyncDisposable
 		try
 		{
 			await EnsureLoadedAsync(cancellationToken).ConfigureAwait(false);
-			await GoPreparedLockedAsync(cancellationToken).ConfigureAwait(false);
-			return Snapshot();
+			if (_execution.State == RundownExecutionState.Prepared)
+			{
+				await GoPreparedLockedAsync(cancellationToken).ConfigureAwait(false);
+				return Snapshot();
+			}
+
+			if (_execution.State == RundownExecutionState.Executing &&
+				_execution.AutoAdvanceArmed &&
+				_execution.PendingNextItemId is { } pending)
+			{
+				await CancelForManualOverrideLockedAsync("manual GO", cancellationToken).ConfigureAwait(false);
+				await PrepareLockedAsync(pending, cancellationToken).ConfigureAwait(false);
+				await GoPreparedLockedAsync(cancellationToken).ConfigureAwait(false);
+				return Snapshot();
+			}
+
+			throw new InvalidOperationException("Rundown GO requires a prepared item or an armed pending follow target.");
 		}
 		finally
 		{
@@ -140,6 +158,7 @@ public sealed class RundownCoordinator : IAsyncDisposable
 		try
 		{
 			await EnsureLoadedAsync(cancellationToken).ConfigureAwait(false);
+			await CancelForManualOverrideLockedAsync("manual NEXT", cancellationToken).ConfigureAwait(false);
 			EnsureNavigationAllowed();
 
 			var anchor = _execution.CurrentItemId ?? _execution.PreparedItemId ?? _execution.SelectedItemId
@@ -147,15 +166,7 @@ public sealed class RundownCoordinator : IAsyncDisposable
 			var next = ResolveNext(anchor);
 			if (next is null)
 			{
-				CancelAutoAdvanceWorker();
-				_execution = _execution with
-				{
-					State = RundownExecutionState.Completed,
-					PreparedItemId = null,
-					NextItemId = null,
-					AutoAdvanceArmed = false,
-					Revision = NextRevision()
-				};
+				SetCompleted(anchor);
 				_stateChanged();
 				return Snapshot();
 			}
@@ -175,6 +186,7 @@ public sealed class RundownCoordinator : IAsyncDisposable
 		try
 		{
 			await EnsureLoadedAsync(cancellationToken).ConfigureAwait(false);
+			await CancelForManualOverrideLockedAsync("manual PREVIOUS", cancellationToken).ConfigureAwait(false);
 			EnsureNavigationAllowed();
 			var rundown = RequireRundown();
 			var anchor = _execution.PreparedItemId ?? _execution.CurrentItemId ?? _execution.SelectedItemId
@@ -200,18 +212,16 @@ public sealed class RundownCoordinator : IAsyncDisposable
 				throw new InvalidOperationException("Rundown recovery must be acknowledged before hold/cancel.");
 
 			CancelAutoAdvanceWorker();
-			if (_execution.State == RundownExecutionState.Executing)
-			{
-				var show = await _showControl.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
-				if (show.Execution.State is ShowControlExecutionState.Executing or ShowControlExecutionState.Waiting)
-					await _showControl.CancelAsync(cancellationToken).ConfigureAwait(false);
-			}
-			_execution = _execution with
+			var show = await _showControl.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
+			if (show.Execution.State is ShowControlExecutionState.Executing or ShowControlExecutionState.Waiting)
+				await _showControl.CancelAsync(cancellationToken).ConfigureAwait(false);
+
+			_execution = ClearAutomation(_execution) with
 			{
 				State = RundownExecutionState.Held,
-				AutoAdvanceArmed = false,
 				Revision = NextRevision()
 			};
+			Journal("rundown.automation.held", "Rundown automation was held by the operator.", _execution.CausalActionId);
 			_stateChanged();
 			return Snapshot();
 		}
@@ -232,15 +242,40 @@ public sealed class RundownCoordinator : IAsyncDisposable
 			if (_execution.State != RundownExecutionState.RecoveryRequired)
 				throw new InvalidOperationException("Rundown recovery acknowledgement is not required.");
 
-			var show = await _showControl.AcknowledgeRecoveryAsync(resume, cancellationToken).ConfigureAwait(false);
-			_execution = _execution with
+			if (_rundownRecoveryAmbiguous)
+			{
+				var pending = _execution.PendingNextItemId;
+				var show = await _showControl.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
+				if (show.Execution.State == ShowControlExecutionState.RecoveryRequired)
+					await _showControl.AcknowledgeRecoveryAsync(resume: false, cancellationToken).ConfigureAwait(false);
+
+				_rundownRecoveryAmbiguous = false;
+				_execution = ClearAutomation(_execution) with
+				{
+					State = RundownExecutionState.Held,
+					RequiresAcknowledgement = false,
+					Failure = null,
+					Revision = NextRevision()
+				};
+				if (resume && pending is { } next)
+				{
+					await PrepareLockedAsync(next, cancellationToken, cancelAutomationWorker: false, preserveCurrentItem: true).ConfigureAwait(false);
+				}
+				else
+				{
+					_stateChanged();
+				}
+				return Snapshot();
+			}
+
+			var recoveredShow = await _showControl.AcknowledgeRecoveryAsync(resume, cancellationToken).ConfigureAwait(false);
+			_execution = ClearAutomation(_execution) with
 			{
 				State = resume ? RundownExecutionState.Prepared : RundownExecutionState.Held,
 				PreparedItemId = resume ? _execution.CurrentItemId : null,
-				AutoAdvanceArmed = false,
 				RequiresAcknowledgement = false,
 				Failure = null,
-				CausalActionId = show.Execution.ExecutionId?.Value,
+				CausalActionId = recoveredShow.Execution.ExecutionId?.Value,
 				Revision = NextRevision()
 			};
 			_stateChanged();
@@ -283,30 +318,98 @@ public sealed class RundownCoordinator : IAsyncDisposable
 		if (_rundown is not null)
 		{
 			var show = await _showControl.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
-			var currentItem = TryMapShowControlItem(show);
+			var currentItemId = TryMapShowControlItem(show);
+			var currentItem = currentItemId is { } id
+				? _rundown.Items.FirstOrDefault(item => item.ItemId == id)
+				: null;
+
 			if (show.Execution.State == ShowControlExecutionState.RecoveryRequired && currentItem is not null)
 			{
+				var pending = PreviewResolvedNext(currentItem.ItemId);
+				_rundownRecoveryAmbiguous = IsAutomatedFollow(currentItem.FollowAction.Kind);
 				_execution = new RundownExecutionSnapshot(
 					RundownExecutionState.RecoveryRequired,
 					_rundown.RundownId,
-					currentItem,
+					currentItem.ItemId,
 					null,
-					currentItem,
-					PeekNext(currentItem.Value),
+					currentItem.ItemId,
+					pending,
 					1,
 					show.Execution.ExecutionId?.Value,
 					false,
 					true,
-					show.Execution.Failure);
+					show.Execution.Failure,
+					currentItem.FollowAction.Kind,
+					pending,
+					currentItem.FollowAction.DelayFrames,
+					show.Execution.RuntimeHostInstanceId,
+					show.Execution.WaitTargetFrameSequence.HasValue && currentItem.FollowAction.DelayFrames.HasValue
+						? show.Execution.WaitTargetFrameSequence.Value - Math.Min(show.Execution.WaitTargetFrameSequence.Value, currentItem.FollowAction.DelayFrames.Value)
+						: null,
+					show.Execution.WaitTargetFrameSequence,
+					null,
+					RemainingItemRepeats(currentItem.ItemId),
+					RemainingRundownRepeats(currentItem.ItemId));
+				Journal("rundown.recovery.required", "Rundown execution was interrupted; automatic progression will not be replayed.", show.Execution.ExecutionId?.Value, show.Execution.Failure);
+			}
+			else if (show.Execution.State == ShowControlExecutionState.Armed && currentItem is not null)
+			{
+				_execution = DecorateRepeatState(RundownExecutionSnapshot.Idle with
+				{
+					State = RundownExecutionState.Prepared,
+					RundownId = _rundown.RundownId,
+					SelectedItemId = currentItem.ItemId,
+					PreparedItemId = currentItem.ItemId,
+					NextItemId = PreviewResolvedNext(currentItem.ItemId),
+					CausalActionId = show.Execution.ExecutionId?.Value,
+					FollowActionKind = currentItem.FollowAction.Kind,
+					Revision = 1
+				}, currentItem.ItemId);
+			}
+			else if (show.Execution.State == ShowControlExecutionState.Failed && currentItem is not null)
+			{
+				_execution = Failed(
+					currentItem.ItemId,
+					show.Execution.Failure?.Code ?? "rundown.execution.failed",
+					show.Execution.Failure?.Message ?? "Show-control execution failed.") with
+				{
+					RundownId = _rundown.RundownId,
+					CausalActionId = show.Execution.ExecutionId?.Value
+				};
+			}
+			else if (show.Execution.State == ShowControlExecutionState.Completed && currentItem is not null &&
+				IsAutomatedFollow(currentItem.FollowAction.Kind) &&
+				PreviewResolvedNext(currentItem.ItemId) is { } pending)
+			{
+				_rundownRecoveryAmbiguous = true;
+				var failure = new Failure(
+					"rundown.recovery.pending_follow_ambiguous",
+					"ControlHost restarted after item completion while an automatic follow action may have been pending; automatic replay is blocked.");
+				_execution = DecorateRepeatState(new RundownExecutionSnapshot(
+					RundownExecutionState.RecoveryRequired,
+					_rundown.RundownId,
+					currentItem.ItemId,
+					null,
+					currentItem.ItemId,
+					pending,
+					1,
+					show.Execution.ExecutionId?.Value,
+					false,
+					true,
+					failure,
+					currentItem.FollowAction.Kind,
+					pending,
+					currentItem.FollowAction.DelayFrames), currentItem.ItemId);
+				Journal("rundown.recovery.required", failure.Message, show.Execution.ExecutionId?.Value, failure);
 			}
 			else
 			{
 				_execution = RundownExecutionSnapshot.Idle with
 				{
 					RundownId = _rundown.RundownId,
-					SelectedItemId = currentItem ?? _rundown.Items[0].ItemId,
-					CurrentItemId = show.Execution.State == ShowControlExecutionState.Completed ? currentItem : null,
-					NextItemId = currentItem is null ? _rundown.Items[0].ItemId : PeekNext(currentItem.Value),
+					SelectedItemId = currentItemId ?? _rundown.Items[0].ItemId,
+					CurrentItemId = show.Execution.State == ShowControlExecutionState.Completed ? currentItemId : null,
+					NextItemId = currentItemId is null ? _rundown.Items[0].ItemId : PreviewResolvedNext(currentItemId.Value),
 					Revision = 1
 				};
 			}
@@ -314,14 +417,20 @@ public sealed class RundownCoordinator : IAsyncDisposable
 		_loaded = true;
 	}
 
-	private async ValueTask PrepareLockedAsync(RundownItemId itemId, CancellationToken cancellationToken)
+	private async ValueTask PrepareLockedAsync(
+		RundownItemId itemId,
+		CancellationToken cancellationToken,
+		bool cancelAutomationWorker = true,
+		bool preserveCurrentItem = false)
 	{
 		EnsureNavigationAllowed();
 		var rundown = RequireRundown();
 		var item = rundown.Items.SingleOrDefault(candidate => candidate.ItemId == itemId)
 			?? throw new KeyNotFoundException($"Rundown item '{itemId}' does not exist.");
 
-		CancelAutoAdvanceWorker();
+		if (cancelAutomationWorker)
+			CancelAutoAdvanceWorker();
+		var priorCurrent = preserveCurrentItem ? _execution.CurrentItemId : null;
 		var singleItem = new RundownDefinition(
 			rundown.Version,
 			rundown.RundownId,
@@ -332,20 +441,20 @@ public sealed class RundownCoordinator : IAsyncDisposable
 		await _showControl.SelectCueListAsync(cueList.CueListId, cancellationToken).ConfigureAwait(false);
 		var show = await _showControl.ArmAsync(cancellationToken).ConfigureAwait(false);
 
-		_execution = _execution with
+		_execution = DecorateRepeatState(ClearAutomation(_execution) with
 		{
 			State = RundownExecutionState.Prepared,
 			RundownId = rundown.RundownId,
 			SelectedItemId = itemId,
 			PreparedItemId = itemId,
-			CurrentItemId = null,
-			NextItemId = PeekNext(itemId),
+			CurrentItemId = priorCurrent,
+			NextItemId = PreviewResolvedNext(itemId),
 			CausalActionId = show.Execution.ExecutionId?.Value,
-			AutoAdvanceArmed = false,
+			FollowActionKind = item.FollowAction.Kind,
 			RequiresAcknowledgement = false,
 			Failure = null,
 			Revision = NextRevision()
-		};
+		}, itemId);
 		_stateChanged();
 	}
 
@@ -379,43 +488,53 @@ public sealed class RundownCoordinator : IAsyncDisposable
 		}
 		if (show.Execution.State == ShowControlExecutionState.RecoveryRequired)
 		{
-			_execution = _execution with
+			_execution = DecorateRepeatState(ClearAutomation(_execution) with
 			{
 				State = RundownExecutionState.RecoveryRequired,
 				PreparedItemId = null,
 				CurrentItemId = itemId,
 				CausalActionId = show.Execution.ExecutionId?.Value,
-				AutoAdvanceArmed = false,
 				RequiresAcknowledgement = true,
 				Failure = show.Execution.Failure,
+				FollowActionKind = item.FollowAction.Kind,
 				Revision = NextRevision()
-			};
+			}, itemId);
+			Journal("rundown.recovery.required", "Show Control reported ambiguous rundown execution.", show.Execution.ExecutionId?.Value, show.Execution.Failure);
 			_stateChanged();
 			return;
 		}
 
-		var autoAdvance = item is RundownMediaItem &&
-			item.AdvanceMode == RundownAdvanceMode.AutoOnMediaEnd;
-		_execution = _execution with
+		var automated = IsAutomatedFollow(item.FollowAction.Kind);
+		var pending = automated ? PreviewResolvedNext(itemId) : null;
+		_execution = DecorateRepeatState(ClearAutomation(_execution) with
 		{
-			State = show.Execution.State == ShowControlExecutionState.Waiting || autoAdvance
+			State = show.Execution.State == ShowControlExecutionState.Waiting || automated
 				? RundownExecutionState.Executing
 				: RundownExecutionState.Held,
 			PreparedItemId = null,
 			CurrentItemId = itemId,
-			NextItemId = PeekNext(itemId),
+			NextItemId = pending ?? PreviewResolvedNext(itemId),
 			CausalActionId = show.Execution.ExecutionId?.Value,
-			AutoAdvanceArmed = autoAdvance,
+			AutoAdvanceArmed = automated,
 			RequiresAcknowledgement = false,
 			Failure = null,
+			FollowActionKind = item.FollowAction.Kind,
+			PendingNextItemId = pending,
+			FollowDelayFrames = item.FollowAction.DelayFrames,
 			Revision = NextRevision()
-		};
+		}, itemId);
+		if (automated)
+			Journal("rundown.follow.armed", $"Follow action {item.FollowAction.Kind} armed for item '{item.ItemId}'.", show.Execution.ExecutionId?.Value);
+		else if (item.FollowAction.Kind == RundownFollowActionKind.Hold)
+			Journal("rundown.automation.held", $"Follow action HOLD reached for item '{item.ItemId}'.", show.Execution.ExecutionId?.Value);
 		_stateChanged();
 
 		if (show.Execution.State == ShowControlExecutionState.Waiting)
 			StartShowControlCompletionWorker(itemId, _execution.Revision);
-		else if (autoAdvance)
+		else if (item.FollowAction.Kind == RundownFollowActionKind.AutoOnMediaEnd)
 			StartMediaAutoAdvanceWorker((RundownMediaItem)item, _execution.Revision);
+		else if (automated)
+			StartConfirmedCompletionWorker(itemId, _execution.Revision);
 	}
 
 	private void StartShowControlCompletionWorker(RundownItemId itemId, ulong revision)
@@ -496,26 +615,30 @@ public sealed class RundownCoordinator : IAsyncDisposable
 					itemId,
 					show.Execution.Failure?.Code ?? "rundown.execution.failed",
 					show.Execution.Failure?.Message ?? "Show-control execution failed.");
+				Journal("rundown.follow.cancelled", "Rundown progression stopped because Show Control failed.", show.Execution.ExecutionId?.Value, show.Execution.Failure);
 			}
 			else if (show.Execution.State == ShowControlExecutionState.RecoveryRequired)
 			{
+				_rundownRecoveryAmbiguous = _execution.AutoAdvanceArmed || _execution.FollowTargetFrameSequence.HasValue;
 				_execution = _execution with
 				{
 					State = RundownExecutionState.RecoveryRequired,
 					RequiresAcknowledgement = true,
 					AutoAdvanceArmed = false,
 					Failure = show.Execution.Failure,
+					RuntimeHostInstanceId = show.Execution.RuntimeHostInstanceId ?? _execution.RuntimeHostInstanceId,
+					FollowTargetFrameSequence = show.Execution.WaitTargetFrameSequence ?? _execution.FollowTargetFrameSequence,
 					Revision = NextRevision()
 				};
+				Journal("rundown.recovery.required", "Rundown follow execution requires operator recovery acknowledgement.", show.Execution.ExecutionId?.Value, show.Execution.Failure);
+			}
+			else if (_execution.FollowTargetFrameSequence.HasValue)
+			{
+				await FireDelayedFollowLockedAsync(itemId, cancellationToken).ConfigureAwait(false);
 			}
 			else
 			{
-				_execution = _execution with
-				{
-					State = RundownExecutionState.Held,
-					AutoAdvanceArmed = false,
-					Revision = NextRevision()
-				};
+				await HandleConfirmedCompletionLockedAsync(itemId, revision, cancellationToken).ConfigureAwait(false);
 			}
 			_stateChanged();
 		}
@@ -541,28 +664,200 @@ public sealed class RundownCoordinator : IAsyncDisposable
 				return;
 			}
 
-			var next = ResolveNext(itemId);
-			if (next is null)
-			{
-				_execution = _execution with
-				{
-					State = RundownExecutionState.Completed,
-					AutoAdvanceArmed = false,
-					NextItemId = null,
-					Revision = NextRevision()
-				};
-				_stateChanged();
-				return;
-			}
-
-			_execution = _execution with { AutoAdvanceArmed = false, Revision = NextRevision() };
-			await PrepareLockedAsync(next.Value, cancellationToken).ConfigureAwait(false);
-			await GoPreparedLockedAsync(cancellationToken).ConfigureAwait(false);
+			await HandleConfirmedCompletionLockedAsync(itemId, revision, cancellationToken).ConfigureAwait(false);
+			_stateChanged();
 		}
 		finally
 		{
 			_gate.Release();
 		}
+	}
+
+	private void StartConfirmedCompletionWorker(RundownItemId itemId, ulong revision)
+	{
+		CancelAutoAdvanceWorker();
+		_autoAdvanceCancellation = CancellationTokenSource.CreateLinkedTokenSource(_dispose.Token);
+		var token = _autoAdvanceCancellation.Token;
+		_autoAdvanceWorker = Task.Run(async () =>
+		{
+			await Task.Yield();
+			await AutoAdvanceAsync(itemId, revision, token).ConfigureAwait(false);
+		}, CancellationToken.None);
+	}
+
+	private async ValueTask HandleConfirmedCompletionLockedAsync(
+		RundownItemId itemId,
+		ulong revision,
+		CancellationToken cancellationToken)
+	{
+		if (_execution.Revision != revision ||
+			_execution.CurrentItemId != itemId ||
+			_execution.State != RundownExecutionState.Executing)
+		{
+			return;
+		}
+
+		var item = RequireRundown().Items[IndexOf(itemId)];
+		switch (item.FollowAction.Kind)
+		{
+			case RundownFollowActionKind.Manual:
+			case RundownFollowActionKind.Hold:
+				_execution = ClearAutomation(_execution) with
+				{
+					State = RundownExecutionState.Held,
+					FollowActionKind = item.FollowAction.Kind,
+					Revision = NextRevision()
+				};
+				if (item.FollowAction.Kind == RundownFollowActionKind.Hold)
+					Journal("rundown.automation.held", $"Rundown held after item '{item.ItemId}'.", _execution.CausalActionId);
+				return;
+			case RundownFollowActionKind.PrepareNext:
+				await FollowToNextLockedAsync(item, prepareOnly: true, cancellationToken).ConfigureAwait(false);
+				return;
+			case RundownFollowActionKind.AutoGoNext:
+			case RundownFollowActionKind.AutoOnMediaEnd:
+				await FollowToNextLockedAsync(item, prepareOnly: false, cancellationToken).ConfigureAwait(false);
+				return;
+			case RundownFollowActionKind.AutoGoNextAfterFrames:
+				await BeginDelayedFollowLockedAsync(item, cancellationToken).ConfigureAwait(false);
+				return;
+			default:
+				throw new InvalidDataException($"Unsupported rundown follow action '{item.FollowAction.Kind}'.");
+		}
+	}
+
+	private async ValueTask FollowToNextLockedAsync(
+		RundownItem item,
+		bool prepareOnly,
+		CancellationToken cancellationToken)
+	{
+		var expected = _execution.PendingNextItemId;
+		var next = ResolveNext(item.ItemId);
+		if (expected != next)
+		{
+			_execution = Failed(item.ItemId, "rundown.follow.stale_target", "The armed follow target no longer matches the bounded rundown sequence.");
+			Journal("rundown.follow.invalidated", "Armed follow target was invalidated before execution.", _execution.CausalActionId, _execution.Failure);
+			return;
+		}
+		if (next is null)
+		{
+			SetCompleted(item.ItemId);
+			return;
+		}
+
+		Journal("rundown.follow.fired", $"Follow action {item.FollowAction.Kind} selected item '{next.Value}'.", _execution.CausalActionId);
+		_execution = ClearAutomation(_execution) with
+		{
+			State = RundownExecutionState.Held,
+			CurrentItemId = item.ItemId,
+			Revision = NextRevision()
+		};
+		await PrepareLockedAsync(next.Value, cancellationToken, cancelAutomationWorker: false, preserveCurrentItem: true).ConfigureAwait(false);
+		if (!prepareOnly)
+			await GoPreparedLockedAsync(cancellationToken).ConfigureAwait(false);
+	}
+
+	private async ValueTask BeginDelayedFollowLockedAsync(RundownItem item, CancellationToken cancellationToken)
+	{
+		var expected = _execution.PendingNextItemId;
+		var next = ResolveNext(item.ItemId);
+		if (expected != next)
+		{
+			_execution = Failed(item.ItemId, "rundown.follow.stale_target", "The armed delayed follow target no longer matches the bounded rundown sequence.");
+			Journal("rundown.follow.invalidated", "Delayed follow target was invalidated before timing began.", _execution.CausalActionId, _execution.Failure);
+			return;
+		}
+		if (next is null)
+		{
+			SetCompleted(item.ItemId);
+			return;
+		}
+
+		var frames = item.FollowAction.DelayFrames
+			?? throw new InvalidDataException("Delayed follow action has no frame count.");
+		var rundown = RequireRundown();
+		var delayItem = new RundownHoldItem(
+			item.ItemId,
+			"Follow delay",
+			frames,
+			RundownRepeatPolicy.None,
+			RundownFollowAction.Manual);
+		var delayRundown = new RundownDefinition(rundown.Version, rundown.RundownId, rundown.Name, [delayItem]);
+		var cueList = RundownShowControlAdapter.BuildCueList(delayRundown);
+		await _showControl.SaveCueListAsync(cueList, cancellationToken).ConfigureAwait(false);
+		await _showControl.SelectCueListAsync(cueList.CueListId, cancellationToken).ConfigureAwait(false);
+		await _showControl.ArmAsync(cancellationToken).ConfigureAwait(false);
+		var show = await _showControl.GoAsync(cancellationToken).ConfigureAwait(false);
+		if (show.Execution.State == ShowControlExecutionState.Failed)
+		{
+			_execution = Failed(item.ItemId,
+				show.Execution.Failure?.Code ?? "rundown.follow.delay.failed",
+				show.Execution.Failure?.Message ?? "Delayed rundown follow failed.");
+			return;
+		}
+		if (show.Execution.State == ShowControlExecutionState.RecoveryRequired)
+		{
+			_rundownRecoveryAmbiguous = true;
+			_execution = _execution with
+			{
+				State = RundownExecutionState.RecoveryRequired,
+				AutoAdvanceArmed = false,
+				RequiresAcknowledgement = true,
+				Failure = show.Execution.Failure,
+				Revision = NextRevision()
+			};
+			return;
+		}
+		if (show.Execution.State != ShowControlExecutionState.Waiting ||
+			show.Execution.WaitTargetFrameSequence is not { } target ||
+			string.IsNullOrWhiteSpace(show.Execution.RuntimeHostInstanceId))
+		{
+			_execution = Failed(item.ItemId, "rundown.follow.delay.no_timing_evidence", "Show Control did not produce authoritative production-frame timing for the delayed follow.");
+			return;
+		}
+
+		var start = target >= frames ? target - frames : 0;
+		_execution = DecorateRepeatState(_execution with
+		{
+			State = RundownExecutionState.Executing,
+			CurrentItemId = item.ItemId,
+			NextItemId = next,
+			PendingNextItemId = next,
+			CausalActionId = show.Execution.ExecutionId?.Value,
+			AutoAdvanceArmed = true,
+			FollowActionKind = RundownFollowActionKind.AutoGoNextAfterFrames,
+			FollowDelayFrames = frames,
+			RuntimeHostInstanceId = show.Execution.RuntimeHostInstanceId,
+			FollowStartFrameSequence = start,
+			FollowTargetFrameSequence = target,
+			RemainingFollowFrames = frames,
+			Revision = NextRevision()
+		}, item.ItemId);
+		Journal("rundown.follow.delay.started", $"Delayed follow armed from Runtime frame {start} to {target} for item '{item.ItemId}'.", show.Execution.ExecutionId?.Value);
+		_stateChanged();
+		StartShowControlCompletionWorker(item.ItemId, _execution.Revision);
+	}
+
+	private async ValueTask FireDelayedFollowLockedAsync(
+		RundownItemId itemId,
+		CancellationToken cancellationToken)
+	{
+		if (_execution.PendingNextItemId is not { } next)
+		{
+			SetCompleted(itemId);
+			return;
+		}
+
+		Journal("rundown.follow.delay.completed", $"Delayed follow reached production frame {_execution.FollowTargetFrameSequence}.", _execution.CausalActionId);
+		Journal("rundown.follow.fired", $"Delayed follow selected item '{next}'.", _execution.CausalActionId);
+		_execution = ClearAutomation(_execution) with
+		{
+			State = RundownExecutionState.Held,
+			CurrentItemId = itemId,
+			Revision = NextRevision()
+		};
+		await PrepareLockedAsync(next, cancellationToken, cancelAutomationWorker: false, preserveCurrentItem: true).ConfigureAwait(false);
+		await GoPreparedLockedAsync(cancellationToken).ConfigureAwait(false);
 	}
 
 	private async Task FailObservedMediaAsync(
@@ -639,6 +934,7 @@ public sealed class RundownCoordinator : IAsyncDisposable
 			if (completed < item.Repeat.RepeatCount)
 			{
 				_itemRepeatProgress[current] = checked((ushort)(completed + 1));
+				Journal("rundown.repeat.current", $"Repeat-current iteration {_itemRepeatProgress[current]} of {item.Repeat.RepeatCount} selected for item '{current}'.", current.Value);
 				return current;
 			}
 			_itemRepeatProgress.Remove(current);
@@ -653,16 +949,32 @@ public sealed class RundownCoordinator : IAsyncDisposable
 		{
 			_rundownRepeatProgress++;
 			_itemRepeatProgress.Clear();
+			Journal("rundown.repeat.rundown", $"Rundown repeat iteration {_rundownRepeatProgress} of {item.Repeat.RepeatCount} selected.", current.Value);
 			return rundown.Items[0].ItemId;
 		}
 		return null;
 	}
 
-	private RundownItemId? PeekNext(RundownItemId current)
+	private RundownItemId? PreviewResolvedNext(RundownItemId current)
 	{
 		var rundown = RequireRundown();
+		var item = rundown.Items[IndexOf(current)];
+		if (item.Repeat.Mode == RundownRepeatMode.RepeatItem &&
+			_itemRepeatProgress.GetValueOrDefault(current) < item.Repeat.RepeatCount)
+		{
+			return current;
+		}
+
 		var index = IndexOf(current);
-		return index + 1 < rundown.Items.Count ? rundown.Items[index + 1].ItemId : null;
+		if (index + 1 < rundown.Items.Count)
+			return rundown.Items[index + 1].ItemId;
+
+		if (item.Repeat.Mode == RundownRepeatMode.RepeatRundown &&
+			_rundownRepeatProgress < item.Repeat.RepeatCount)
+		{
+			return rundown.Items[0].ItemId;
+		}
+		return null;
 	}
 
 	private RundownItemId? TryMapShowControlItem(ShowControlWorkspaceSnapshot show)
@@ -710,12 +1022,11 @@ public sealed class RundownCoordinator : IAsyncDisposable
 	}
 
 	private RundownExecutionSnapshot Failed(RundownItemId itemId, string code, string message) =>
-		_execution with
+		ClearAutomation(_execution) with
 		{
 			State = RundownExecutionState.Failed,
 			PreparedItemId = null,
 			CurrentItemId = itemId,
-			AutoAdvanceArmed = false,
 			RequiresAcknowledgement = false,
 			Failure = new Failure(code, message),
 			Revision = NextRevision()
@@ -728,6 +1039,118 @@ public sealed class RundownCoordinator : IAsyncDisposable
 
 	private RundownWorkspaceSnapshot Snapshot() =>
 		new(_rundown, _execution, _storageVersion);
+
+	private async ValueTask CancelForManualOverrideLockedAsync(string reason, CancellationToken cancellationToken)
+	{
+		if (_execution.State != RundownExecutionState.Executing)
+			return;
+
+		CancelAutoAdvanceWorker();
+		var show = await _showControl.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
+		if (show.Execution.State is ShowControlExecutionState.Executing or ShowControlExecutionState.Waiting)
+			await _showControl.CancelAsync(cancellationToken).ConfigureAwait(false);
+
+		var previousAction = _execution.FollowActionKind;
+		_execution = ClearAutomation(_execution) with
+		{
+			State = RundownExecutionState.Held,
+			Revision = NextRevision()
+		};
+		Journal("rundown.follow.invalidated", $"Pending {previousAction} automation was invalidated by {reason}.", _execution.CausalActionId);
+		_stateChanged();
+	}
+
+	private async ValueTask RefreshFrameCountdownLockedAsync(CancellationToken cancellationToken)
+	{
+		if (_execution.State != RundownExecutionState.Executing ||
+			_execution.FollowTargetFrameSequence is not { } target ||
+			string.IsNullOrWhiteSpace(_execution.RuntimeHostInstanceId))
+		{
+			return;
+		}
+
+		try
+		{
+			var observation = await _showControl.ObserveFrameAsync(cancellationToken).ConfigureAwait(false);
+			if (!string.Equals(observation.RuntimeHostInstanceId, _execution.RuntimeHostInstanceId, StringComparison.Ordinal))
+				return;
+			var remaining = observation.NextFrameSequence >= target
+				? 0U
+				: checked((uint)Math.Min(uint.MaxValue, target - observation.NextFrameSequence));
+			_execution = _execution with { RemainingFollowFrames = remaining };
+		}
+		catch (Exception exception) when (exception is InvalidOperationException or IOException or TimeoutException)
+		{
+			// Show Control owns timing failure/recovery. Snapshot enrichment must not create a second authority path.
+		}
+	}
+
+	private static bool IsAutomatedFollow(RundownFollowActionKind kind) =>
+		kind is RundownFollowActionKind.PrepareNext or
+			RundownFollowActionKind.AutoGoNext or
+			RundownFollowActionKind.AutoGoNextAfterFrames or
+			RundownFollowActionKind.AutoOnMediaEnd;
+
+	private RundownExecutionSnapshot DecorateRepeatState(RundownExecutionSnapshot snapshot, RundownItemId itemId) =>
+		snapshot with
+		{
+			RemainingItemRepeats = RemainingItemRepeats(itemId),
+			RemainingRundownRepeats = RemainingRundownRepeats(itemId)
+		};
+
+	private ushort RemainingItemRepeats(RundownItemId itemId)
+	{
+		var item = RequireRundown().Items[IndexOf(itemId)];
+		if (item.Repeat.Mode != RundownRepeatMode.RepeatItem)
+			return 0;
+		var completed = _itemRepeatProgress.GetValueOrDefault(itemId);
+		return completed >= item.Repeat.RepeatCount ? (ushort)0 : checked((ushort)(item.Repeat.RepeatCount - completed));
+	}
+
+	private ushort RemainingRundownRepeats(RundownItemId itemId)
+	{
+		_ = itemId;
+		var rundown = RequireRundown();
+		var repeat = rundown.Items[^1].Repeat;
+		if (repeat.Mode != RundownRepeatMode.RepeatRundown)
+			return 0;
+		return _rundownRepeatProgress >= repeat.RepeatCount
+			? (ushort)0
+			: checked((ushort)(repeat.RepeatCount - _rundownRepeatProgress));
+	}
+
+	private static RundownExecutionSnapshot ClearAutomation(RundownExecutionSnapshot snapshot) =>
+		snapshot with
+		{
+			AutoAdvanceArmed = false,
+			PendingNextItemId = null,
+			FollowDelayFrames = null,
+			RuntimeHostInstanceId = null,
+			FollowStartFrameSequence = null,
+			FollowTargetFrameSequence = null,
+			RemainingFollowFrames = null
+		};
+
+	private void SetCompleted(RundownItemId itemId)
+	{
+		_execution = ClearAutomation(_execution) with
+		{
+			State = RundownExecutionState.Completed,
+			CurrentItemId = itemId,
+			PreparedItemId = null,
+			NextItemId = null,
+			Revision = NextRevision()
+		};
+		Journal("rundown.follow.fired", $"Rundown reached its bounded end after item '{itemId}'.", _execution.CausalActionId);
+	}
+
+	private void Journal(string code, string detail, Identity? causationId, Failure? failure = null)
+	{
+		var control = _controlAccessor();
+		if (control is null || !control.HasAuthoritativeState)
+			return;
+		control.RecordRundownEvent(code, detail, causationId, failure);
+	}
 
 	private void CancelAutoAdvanceWorker()
 	{

@@ -184,6 +184,17 @@ public sealed class ControlHostService
 		}
 	}
 
+	public void RecordRundownEvent(string code, string detail, Identity? causationId = null, Failure? failure = null)
+	{
+		if (string.IsNullOrWhiteSpace(code)) throw new ArgumentException("Rundown journal code is required.", nameof(code));
+		if (string.IsNullOrWhiteSpace(detail)) throw new ArgumentException("Rundown journal detail is required.", nameof(detail));
+		lock (_gate)
+		{
+			var revision = _authoritative?.Revision ?? Revision.Initial;
+			Journal(revision, "rundown", code.Trim(), detail.Trim(), causationId, failure);
+		}
+	}
+
 	public ControlHostOperationResult Initialize()
 	{
 		lock (_gate)

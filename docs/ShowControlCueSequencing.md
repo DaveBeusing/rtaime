@@ -177,4 +177,8 @@ Show Control must not materially affect the real-time media path.
 
 The Production Rundown reuses Show Control as its bounded execution primitive. ControlHost prepares one rundown item as a typed Show Control cue/action sequence, then ARM/GO and recovery continue through the existing Show Control authority path. The rundown therefore does not create a second scheduler or direct Runtime mutation path.
 
-Rundown navigation and media completion decisions are owned by the ControlHost RundownCoordinator. Show Control remains responsible for executing the generated governed action sequence, frame-domain waits, failures and ambiguous-restart recovery evidence. See `docs/ProductionRundown.md`.
+Rundown navigation and completion decisions are owned by the ControlHost RundownCoordinator. Show Control remains responsible for executing every generated governed action sequence, production-frame wait, failure and ambiguous-restart recovery boundary.
+
+The versioned rundown follow model reuses these same primitives. `PrepareNext` arms a normal generated cue without GO. `AutoGoNext` re-enters normal prepare/GO serialization after confirmed completion. `AutoGoNextAfterFrames` is represented as a bounded generated `WaitFrames` cue, so the existing persisted RuntimeHost identity, target frame sequence, failure timeout and restart handling remain authoritative. `AutoOnMediaEnd` continues to use the single existing Media Deck completion observer and does not add a Show Control observer.
+
+A delayed rundown follow therefore does not create another scheduler: Show Control owns the wait; the rundown only decides what bounded item may be prepared or executed after that wait is confirmed complete. See `docs/ProductionRundown.md`.

@@ -660,7 +660,16 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		snapshot.Execution.RequiresAcknowledgement,
 		snapshot.Execution.Failure?.Code,
 		snapshot.Execution.Failure?.Message,
-		snapshot.StorageVersion);
+		snapshot.StorageVersion,
+		(int)snapshot.Execution.FollowActionKind,
+		snapshot.Execution.PendingNextItemId?.ToString(),
+		snapshot.Execution.FollowDelayFrames,
+		snapshot.Execution.RuntimeHostInstanceId,
+		snapshot.Execution.FollowStartFrameSequence,
+		snapshot.Execution.FollowTargetFrameSequence,
+		snapshot.Execution.RemainingFollowFrames,
+		snapshot.Execution.RemainingItemRepeats,
+		snapshot.Execution.RemainingRundownRepeats);
 
 	private async ValueTask<WireEnvelope> SetBroadcastTestPatternAsync(WireEnvelope request, CancellationToken cancellationToken)
 	{
@@ -3097,7 +3106,16 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		bool RequiresAcknowledgement,
 		string? FailureCode,
 		string? FailureMessage,
-		ulong StorageVersion);
+		ulong StorageVersion,
+		int FollowActionKind = (int)RundownFollowActionKind.Manual,
+		string? PendingNextItemId = null,
+		uint? FollowDelayFrames = null,
+		string? RuntimeHostInstanceId = null,
+		ulong? FollowStartFrameSequence = null,
+		ulong? FollowTargetFrameSequence = null,
+		uint? RemainingFollowFrames = null,
+		ushort RemainingItemRepeats = 0,
+		ushort RemainingRundownRepeats = 0);
 	private sealed record WireAudioInputState(string SourceId, double Gain, bool Muted);
 	private sealed record WireAudioRoutingState(int Mode, string? BreakawaySourceId, ulong ExpectedRoutingRevision);
 	private sealed record WireAudioTestSignalState(string SourceId, bool Enabled, int Mode, double FrequencyHz, double PeakLevel);
