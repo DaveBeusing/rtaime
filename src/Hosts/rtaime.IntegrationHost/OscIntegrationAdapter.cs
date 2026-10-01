@@ -18,7 +18,7 @@ internal static class OscCodec
 		{
 			var offset = 0;
 			var address = ReadString(packet, ref offset);
-			if (string.IsNullOrWhiteSpace(address) || !address.StartsWith('/', StringComparison.Ordinal))
+			if (string.IsNullOrWhiteSpace(address) || !address.StartsWith("/", StringComparison.Ordinal))
 				return false;
 			var tags = ReadString(packet, ref offset);
 			if (tags.Length == 0 || tags[0] != ',')
@@ -65,7 +65,7 @@ internal static class OscCodec
 
 	public static byte[] EncodeString(string address, string value)
 	{
-		if (string.IsNullOrWhiteSpace(address) || !address.StartsWith('/', StringComparison.Ordinal))
+		if (string.IsNullOrWhiteSpace(address) || !address.StartsWith("/", StringComparison.Ordinal))
 			throw new ArgumentException("OSC address must start with '/'.", nameof(address));
 		using var stream = new MemoryStream();
 		WriteString(stream, address);
