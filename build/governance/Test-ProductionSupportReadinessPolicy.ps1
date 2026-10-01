@@ -166,6 +166,23 @@ $supportBundleTestsText = Read-Text "tests/rtaime.Tests.Operator/SupportBundleEx
 $observabilityPolicyText = Read-Text "build/quality/Test-ObservabilityPolicy.ps1"
 $buildPropsText = Read-Text "Directory.Build.props"
 
+foreach ($scriptPath in @(
+	"build/governance/New-SupportCompatibilityMatrix.ps1",
+	"build/release/Test-StableReadiness.ps1",
+	"build/release/Test-KnownIssuesAssessment.ps1",
+	"build/release/Bind-KnownIssuesAssessment.ps1",
+	"build/release/Test-KnownIssuesAssessmentBinding.ps1",
+	"build/release/Test-KnownIssuesAssessmentFailureCases.ps1"
+)) {
+	$parseTokens = $null
+	$parseErrors = $null
+	[void][System.Management.Automation.Language.Parser]::ParseFile(
+		(Repository-Path $scriptPath),
+		[ref]$parseTokens,
+		[ref]$parseErrors)
+	Assert-Condition (@($parseErrors).Count -eq 0) "Production-support script '$scriptPath' must parse as valid PowerShell."
+}
+
 $supportPolicy = $supportPolicyText | ConvertFrom-Json
 $platformMatrix = $platformMatrixText | ConvertFrom-Json
 $deploymentBaseline = $deploymentBaselineText | ConvertFrom-Json
