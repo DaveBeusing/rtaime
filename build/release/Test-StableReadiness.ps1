@@ -240,6 +240,7 @@ if (-not [string]::IsNullOrWhiteSpace($ReleaseCandidatePath)) {
 	if (Test-Path -LiteralPath $candidateRoot -PathType Leaf) { $candidateRoot = Split-Path -Parent $candidateRoot }
 	$candidateFile = Join-Path $candidateRoot "release-candidate.json"
 	if (Test-Path -LiteralPath $candidateFile -PathType Leaf) {
+		& (Join-Path $repositoryRoot "build/release/Test-ReleaseCandidate.ps1") -CandidatePath $candidateRoot
 		$candidate = Get-Content -LiteralPath $candidateFile -Raw | ConvertFrom-Json
 		if ([string]$candidate.channel -ne "STABLE" -or [string]$candidate.product.releaseStage -ne "STABLE") {
 			$productionTrustStatus = "FAIL"
