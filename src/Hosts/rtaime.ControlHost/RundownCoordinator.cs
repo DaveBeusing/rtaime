@@ -748,6 +748,12 @@ public sealed class RundownCoordinator : IAsyncDisposable
 		}
 
 		Journal("rundown.follow.fired", $"Follow action {item.FollowAction.Kind} selected item '{next.Value}'.", _execution.CausalActionId);
+		_execution = ClearAutomation(_execution) with
+		{
+			State = RundownExecutionState.Held,
+			CurrentItemId = item.ItemId,
+			Revision = NextRevision()
+		};
 		await PrepareLockedAsync(next.Value, cancellationToken, cancelAutomationWorker: false, preserveCurrentItem: true).ConfigureAwait(false);
 		if (!prepareOnly)
 			await GoPreparedLockedAsync(cancellationToken).ConfigureAwait(false);
