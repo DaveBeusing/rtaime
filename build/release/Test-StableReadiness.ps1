@@ -40,38 +40,14 @@ function Get-Sha256 {
 
 function Get-RepositorySourceCommit {
 	try {
-		$head = (& git -C $repositoryRoot rev-parse HEAD 2>$null | Select-Object -First 1)
-		if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace([string]$head)) { return $null }
-		$head = ([string]$head).Trim().ToLowerInvariant()
-		if ($head -notmatch '^[0-9a-f]{40,64}$') { return $null }
-
-		$githubRef = [string]$env:GITHUB_REF
-		if ($githubRef -match '^refs/pull/[0-9]+/merge$') {
-			$eventPath = [string]$env:GITHUB_EVENT_PATH
-			if (-not [string]::IsNullOrWhiteSpace($eventPath) -and (Test-Path -LiteralPath $eventPath -PathType Leaf)) {
-				try {
-					$eventPayload = Get-Content -LiteralPath $eventPath -Raw | ConvertFrom-Json
-					$pullRequestHead = ([string]$eventPayload.pull_request.head.sha).Trim().ToLowerInvariant()
-					if ($pullRequestHead -match '^[0-9a-f]{40,64}$') { return $pullRequestHead }
-				} catch {
-				}
-			}
-
-			$parentsText = (& git -C $repositoryRoot show -s --format=%P HEAD 2>$null | Select-Object -First 1)
-			if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace([string]$parentsText)) {
-				$parents = @(([string]$parentsText).Trim().Split(' ', [StringSplitOptions]::RemoveEmptyEntries))
-				if ($parents.Count -eq 2) {
-					$pullRequestHead = $parents[1].Trim().ToLowerInvariant()
-					if ($pullRequestHead -match '^[0-9a-f]{40,64}$') { return $pullRequestHead }
-				}
-			}
-			return $null
+		$resolved = (& git -C $repositoryRoot rev-parse HEAD 2>$null | Select-Object -First 1)
+		if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace([string]$resolved)) {
+			$normalized = ([string]$resolved).Trim().ToLowerInvariant()
+			if ($normalized -match '^[0-9a-f]{40,64}$') { return $normalized }
 		}
-
-		return $head
 	} catch {
-		return $null
 	}
+	return $null
 }
 
 function Normalize-SourceCommit {
@@ -130,13 +106,13 @@ $sourceIdentityStatus = if ($null -eq $repositorySourceCommit -or $null -eq $exp
 } else {
 	"PASS"
 }
-Add-Domain $domains "sourceIdentity" $sourceIdentityStatus "repository source / ExpectedSourceCommit" $(
+Add-Domain $domains "sourceIdentity" $sourceIdentityStatus "checked-out git source / ExpectedSourceCommit" $(
 	if ($sourceIdentityStatus -eq "PASS") {
-		"Exact source commit '$expectedSourceCommit' matches the checked-out repository source identity."
+		"Exact source commit '$expectedSourceCommit' matches the checked-out Git commit."
 	} elseif ($sourceIdentityStatus -eq "FAIL") {
-		"Expected source commit '$expectedSourceCommit' does not match repository source '$repositorySourceCommit'."
+		"Expected source commit '$expectedSourceCommit' does not match checked-out Git commit '$repositorySourceCommit'."
 	} else {
-		"Repository source or expected source commit could not be established; Stable readiness cannot become PASS."
+		"Checked-out Git source or expected source commit could not be established; Stable readiness cannot become PASS."
 	}
 )
 
