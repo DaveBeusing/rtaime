@@ -13,14 +13,25 @@ public enum MidiMessageKind
 	ProgramChange = 4
 }
 
-public sealed record MidiMessage(MidiMessageKind Kind, int Channel, int Data1, int Data2)
+public sealed record MidiMessage
 {
-	public MidiMessage
+	public MidiMessage(MidiMessageKind kind, int channel, int data1, int data2)
 	{
-		if (!Enum.IsDefined(Kind)) throw new ArgumentOutOfRangeException(nameof(Kind));
-		if (Channel is < 1 or > 16) throw new ArgumentOutOfRangeException(nameof(Channel));
-		if (Data1 is < 0 or > 127 || Data2 is < 0 or > 127) throw new ArgumentOutOfRangeException(nameof(Data1));
+		if (!Enum.IsDefined(kind)) throw new ArgumentOutOfRangeException(nameof(kind));
+		if (channel is < 1 or > 16) throw new ArgumentOutOfRangeException(nameof(channel));
+		if (data1 is < 0 or > 127) throw new ArgumentOutOfRangeException(nameof(data1));
+		if (data2 is < 0 or > 127) throw new ArgumentOutOfRangeException(nameof(data2));
+
+		Kind = kind;
+		Channel = channel;
+		Data1 = data1;
+		Data2 = data2;
 	}
+
+	public MidiMessageKind Kind { get; }
+	public int Channel { get; }
+	public int Data1 { get; }
+	public int Data2 { get; }
 }
 
 public interface IMidiBackend : IAsyncDisposable
