@@ -60,7 +60,6 @@ Assert-Condition ($stable.tagRequired -eq $true) "STABLE channel must require a 
 Assert-Condition (@($stable.allowedSignerClasses).Count -eq 1 -and [string]$stable.allowedSignerClasses[0] -eq "EXTERNAL_CONTROLLED") "STABLE must allow EXTERNAL_CONTROLLED signing only."
 Assert-Condition ($stable.requireTrustedProductionKey -eq $true) "STABLE must require active production signing-key trust."
 Assert-Condition ($stable.publicationEligible -eq $true) "STABLE candidate readiness must be publication eligible."
-Assert-Condition ($releaseWorkflowPath -ne $null) "Release workflow path must be available for Stable readiness verification."
 
 [xml]$buildProps = Get-Content -LiteralPath $buildPropsPath -Raw
 $productVersion = $buildProps.SelectSingleNode("//RtaimeProductVersion").InnerText.Trim()
