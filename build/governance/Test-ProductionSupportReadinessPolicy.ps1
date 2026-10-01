@@ -220,8 +220,34 @@ function Get-PlatformMatrixErrors {
 		}
 
 		foreach ($networkProvider in @($configuration.networkProviders)) {
-			if ([string]$networkProvider.supportStatus -eq "SUPPORTED" -and @($networkProvider.qualificationEvidence).Count -eq 0) {
+			if ([string]$networkProvider.supportStatus -ne "SUPPORTED") { continue }
+			$networkEvidence = @($networkProvider.qualificationEvidence)
+			if ($networkEvidence.Count -eq 0) {
 				$errors.Add("supportedNetworkProviderWithoutEvidence:$($networkProvider.provider)")
+				continue
+			}
+			foreach ($evidence in $networkEvidence) {
+				$fullEvidencePath = Repository-Path ([string]$evidence)
+				if (-not (Test-Path -LiteralPath $fullEvidencePath -PathType Leaf)) {
+					$errors.Add("staleNetworkEvidence:$evidence")
+					continue
+				}
+				if ([System.IO.Path]::GetExtension($fullEvidencePath) -ne ".json") {
+					$errors.Add("supportedNetworkEvidenceNotMachineReadable:$evidence")
+					continue
+				}
+				try {
+					$evidenceDocument = Get-Content -LiteralPath $fullEvidencePath -Raw | ConvertFrom-Json
+					$passed = @($evidenceDocument.PSObject.Properties.Name) -contains "status" -and
+						[string]$evidenceDocument.status -in @("PASS", "PASSED")
+					if (-not $passed) { $errors.Add("supportedNetworkEvidenceNotPassed:$evidence") }
+					if (-not (@($evidenceDocument.PSObject.Properties.Name) -contains "sourceCommit") -or
+						[string]$evidenceDocument.sourceCommit -notmatch '^[0-9a-fA-F]{40,64}\z') {
+						$errors.Add("supportedNetworkEvidenceMissingSourceCommit:$evidence")
+					}
+				} catch {
+					$errors.Add("supportedNetworkEvidenceInvalid:$evidence")
+				}
 			}
 		}
 	}
