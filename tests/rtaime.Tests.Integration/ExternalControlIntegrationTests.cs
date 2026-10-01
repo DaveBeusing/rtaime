@@ -111,6 +111,36 @@ public sealed class ExternalControlIntegrationTests
 	}
 
 	[Fact]
+	public async Task Observer_can_read_and_validate_macro_but_cannot_execute_it()
+	{
+		await using var fixture = await ExternalFixture.StartAsync(ExternalControlRole.Observer);
+		await using var local = new NamedPipeOperatorControlTransport(
+			fixture.ControlEndpoint,
+			TimeSpan.FromSeconds(1),
+			TimeSpan.FromSeconds(5));
+		var macro = new ProductionMacroDefinition(
+			ProductionMacroContractVersion.Current,
+			ProductionMacroId.New(),
+			"Observer Macro",
+			[new ProductionMacroAction(ProductionMacroActionId.New(), ShowControlActionKind.Cut)]);
+		await local.SaveProductionMacroAsync(macro, 0);
+
+		await using var grpc = fixture.CreateClient();
+		var fetched = await grpc.GetProductionMacroAsync(macro.MacroId);
+		var validation = await grpc.ValidateProductionMacroAsync(macro);
+
+		Assert.Equal(macro.MacroId, fetched.MacroId);
+		Assert.True(validation.IsValid);
+
+		var exception = await Assert.ThrowsAsync<RpcException>(
+			() => grpc.ExecuteProductionMacroAsync(macro.MacroId).AsTask());
+
+		Assert.Equal(StatusCode.PermissionDenied, exception.StatusCode);
+		Assert.Contains(fixture.Control.ExternalControlServer!.AuditRecords, record =>
+			record.Event == "authorization" && record.Outcome == "denied");
+	}
+
+	[Fact]
 	public async Task Duplicate_external_mutation_is_idempotent_and_conflicting_request_id_fails_closed()
 	{
 		await using var fixture = await ExternalFixture.StartAsync(ExternalControlRole.Operator);
