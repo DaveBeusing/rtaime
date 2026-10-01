@@ -160,6 +160,7 @@ build/release/Test-StableReadiness.ps1 produces a machine-readable readiness res
 
 It evaluates:
 
+- exact repository source identity;
 - support-period policy;
 - supported-version policy;
 - platform compatibility policy;
@@ -172,13 +173,16 @@ It evaluates:
 - known-issues evidence;
 - required hardware evidence;
 - production signing trust;
+- release-candidate/release-evidence correlation;
 - current source release stage.
+
+The release evidence must match the exact repository source commit. When a release candidate is supplied, its product/source/build identity and bound Release Evidence SHA-256 must match the supplied release-evidence bundle; trust from one candidate cannot be combined with hardware/evidence from another bundle.
 
 Allowed states are PASS, FAIL, UNVERIFIED and NOT_APPLICABLE.
 
 Any FAIL makes the aggregate FAIL. A missing required proof remains UNVERIFIED. Aggregate PASS is possible only for a source that already declares STABLE and for which every required readiness domain is satisfied.
 
-The verifier reports releasePromotionPerformed = false. It is a verifier, not a promotion tool.
+The verifier reports the exact source commit and releasePromotionPerformed = false. It is a verifier, not a promotion tool.
 
 ## Current source boundary
 
