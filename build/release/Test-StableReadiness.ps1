@@ -376,6 +376,7 @@ $result = [ordered]@{
 	copyright = "Copyright (c) Dave Beusing <david.beusing@gmail.com>."
 	schemaVersion = "1.0"
 	generatedAtUtc = [DateTimeOffset]::UtcNow.ToString("O")
+	sourceCommit = $expectedSourceCommit
 	product = [ordered]@{
 		name = "rtaime"
 		version = $productVersion
