@@ -483,6 +483,11 @@ public sealed class GrpcOperatorControlTransport : IOperatorControlTransport, IA
 	public async ValueTask<ProductionMacroWorkspaceSnapshot> GetProductionMacroSnapshotAsync(CancellationToken cancellationToken = default) =>
 		NamedPipeOperatorControlTransport.DecodeExternalProductionMacro((await ExecuteProductionMacroRequestAsync(request => request.GetProductionMacros = new EmptyRequest(), cancellationToken).ConfigureAwait(false)).PayloadJson.Span);
 
+	public async ValueTask<ProductionMacroDefinition> GetProductionMacroAsync(ProductionMacroId macroId, CancellationToken cancellationToken = default) =>
+		NamedPipeOperatorControlTransport.DecodeExternalProductionMacroDefinition((await ExecuteProductionMacroRequestAsync(
+			request => request.GetProductionMacro = new ProductionMacroIdRequest { MacroId = macroId.ToString() },
+			cancellationToken).ConfigureAwait(false)).PayloadJson.Span);
+
 	public async ValueTask<ProductionMacroWorkspaceSnapshot> SaveProductionMacroAsync(ProductionMacroDefinition macro, ulong expectedStorageVersion, CancellationToken cancellationToken = default) =>
 		NamedPipeOperatorControlTransport.DecodeExternalProductionMacro((await ExecuteProductionMacroRequestAsync(
 			request => request.SaveProductionMacro = new ProductionMacroSaveRequest
