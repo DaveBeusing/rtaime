@@ -91,6 +91,42 @@ public sealed class ProductionMacroCoordinatorIntegrationTests
 	}
 
 	[Fact]
+	public async Task Cancel_during_action_allows_current_commit_but_stops_next_action()
+	{
+		await using var fixture = await Fixture.CreateAsync();
+		var firstStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+		var releaseFirst = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+		var executed = new List<ShowControlActionKind>();
+		await using var coordinator = fixture.CreateCoordinator(async (action, _) =>
+		{
+			if (action.Kind == ShowControlActionKind.SetPreview)
+			{
+				firstStarted.TrySetResult();
+				await releaseFirst.Task;
+			}
+			executed.Add(action.Kind);
+			return null;
+		});
+		var macro = fixture.Macro(
+			new ProductionMacroAction(ProductionMacroActionId.New(), ShowControlActionKind.SetPreview, sourceId: fixture.SourceB.ToString()),
+			new ProductionMacroAction(ProductionMacroActionId.New(), ShowControlActionKind.Cut));
+
+		await coordinator.SaveAsync(macro, 0);
+		var executeTask = coordinator.ExecuteAsync(macro.MacroId).AsTask();
+		await firstStarted.Task;
+		var cancelTask = coordinator.CancelAsync().AsTask();
+		releaseFirst.TrySetResult();
+
+		var executeResult = await executeTask;
+		var cancelResult = await cancelTask;
+
+		Assert.Equal([ShowControlActionKind.SetPreview], executed);
+		Assert.Equal(ProductionMacroExecutionState.Cancelled, executeResult.Execution.State);
+		Assert.Equal(ProductionMacroExecutionState.Cancelled, cancelResult.Execution.State);
+		Assert.Equal(macro.Actions[0].ActionId, cancelResult.Execution.LastCompletedActionId);
+	}
+
+	[Fact]
 	public async Task Cancelled_wait_cannot_fire_later_actions()
 	{
 		await using var fixture = await Fixture.CreateAsync();
