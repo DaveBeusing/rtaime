@@ -23,10 +23,13 @@ The version 1 contract supports the following explicit actions:
 - Media Play
 - Media Pause
 - Media Stop
+- Media Open
 - Set Layer Visibility
 - Start Recording
 - Stop Recording
 - bounded production-frame Wait
+- Set Audio Routing
+- Route Output Role
 
 The action union is intentionally closed. Unknown action values are rejected by contract validation and unsupported actions are never serialized as valid execution work.
 
@@ -42,6 +45,8 @@ Production-changing actions reuse the same established paths as manual operation
 - media actions use the existing Media Deck control service and marker/transport semantics.
 - compositing visibility changes use the existing compositing-layer command path.
 - recording actions use the existing recording command path.
+- audio-routing actions use the existing governed audio-routing path.
+- non-Program output-role routing uses the existing output-role mutation path; Program remains governed by Scene/Preview/CUT/DISSOLVE semantics.
 - frame waits are coordinated by Show Control but observe Runtime timing rather than issuing direct Runtime production mutations.
 
 A cue action must not bypass Control validation, transactional Runtime preparation/commit, or existing subsystem validation.
@@ -182,3 +187,10 @@ Rundown navigation and completion decisions are owned by the ControlHost Rundown
 The versioned rundown follow model reuses these same primitives. `PrepareNext` arms a normal generated cue without GO. `AutoGoNext` re-enters normal prepare/GO serialization after confirmed completion. `AutoGoNextAfterFrames` is represented as a bounded generated `WaitFrames` cue, so the existing persisted RuntimeHost identity, target frame sequence, failure timeout and restart handling remain authoritative. `AutoOnMediaEnd` continues to use the single existing Media Deck completion observer and does not add a Show Control observer.
 
 A delayed rundown follow therefore does not create another scheduler: Show Control owns the wait; the rundown only decides what bounded item may be prepared or executed after that wait is confirmed complete. See `docs/ProductionRundown.md`.
+
+
+## Production Macro integration
+
+Bounded Production Macros reuse the same closed `ShowControlAction` union, execution cursor semantics and production-frame observation seam. The Macro layer adds stable Macro identities, its own durable authoring/execution state and operator/integration entry points, but it does not introduce another generic action framework.
+
+Macro execution remains ControlHost-owned and calls the same governed action executor used by Show Control. Nested Macros, scripts, arbitrary conditions and unbounded loops are not part of the action union. See `docs/ProductionMacros.md`.
