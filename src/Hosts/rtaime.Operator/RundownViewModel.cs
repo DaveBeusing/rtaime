@@ -284,9 +284,13 @@ public sealed class RundownViewModel : INotifyPropertyChanged
 	}
 
 	private RundownRepeatPolicy CurrentRepeatPolicy() =>
-		SelectedRepeatMode == RundownRepeatMode.None
-			? RundownRepeatPolicy.None
-			: new RundownRepeatPolicy(SelectedRepeatMode, RepeatCount);
+		SelectedRepeatMode switch
+		{
+			RundownRepeatMode.None => RundownRepeatPolicy.None,
+			RundownRepeatMode.RepeatItem => new RundownRepeatPolicy(RundownRepeatMode.RepeatItem, RepeatCount),
+			RundownRepeatMode.RepeatRundown => new RundownRepeatPolicy(RundownRepeatMode.RepeatRundown, RepeatCount),
+			_ => throw new InvalidOperationException($"Unsupported repeat mode '{SelectedRepeatMode}'.")
+		};
 
 	private void AddDraft(RundownItem item)
 	{
