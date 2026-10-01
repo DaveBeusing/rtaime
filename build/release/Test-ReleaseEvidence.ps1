@@ -259,6 +259,7 @@ foreach ($requiredDomain in $requiredDomains) {
 }
 
 & (Join-Path $script:RepositoryRoot "build/security/Test-ProductSecurityAssessmentBinding.ps1") -OutputPath $outputRoot
+& (Join-Path $script:RepositoryRoot "build/release/Test-KnownIssuesAssessmentBinding.ps1") -OutputPath $outputRoot
 
 Assert-Condition ([string]$releaseEvidence.signingAttestation.status -in $allowedStatuses) "Signing/attestation status is invalid."
 if ([string]$releaseEvidence.signingAttestation.status -eq "PASS") {
@@ -279,7 +280,8 @@ $schemaFiles = @(
 	"schemas/release/v1/compatibility-manifest.schema.json",
 	"schemas/release/v1/qualification-evidence-manifest.schema.json",
 	"schemas/release/v1/release-evidence.schema.json",
-	"schemas/security/v1/product-security-assessment.schema.json"
+	"schemas/security/v1/product-security-assessment.schema.json",
+	"schemas/release/v1/known-issues-assessment.schema.json"
 )
 foreach ($relativeSchema in $schemaFiles) {
 	Assert-Condition (Test-Path -LiteralPath (Join-Path $script:RepositoryRoot $relativeSchema) -PathType Leaf) "Required release schema '$relativeSchema' is missing."
