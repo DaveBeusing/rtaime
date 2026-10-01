@@ -286,3 +286,22 @@ Show Control uses the existing protocol negotiation, request-id idempotency cach
 Production-changing cue actions are dispatched through established ControlHost command paths. The Show Control IPC surface does not provide direct Runtime or provider mutation. Frame-wait progression observes Runtime frame sequence and host identity through ControlHost while authoritative action dispatch remains unchanged.
 
 See `docs/ShowControlCueSequencing.md`.
+
+
+## Production Macro management IPC
+
+The existing ControlHost Operator management session and secure external-control boundary expose bounded Production Macro operations:
+
+- `control.production_macro.snapshot.get`
+- `control.production_macro.save`
+- `control.production_macro.delete`
+- `control.production_macro.validate`
+- `control.production_macro.execute`
+- `control.production_macro.cancel`
+- `control.production_macro.recovery.acknowledge`
+
+Macro definitions cross the transport as versioned canonical JSON containing only the closed governed action union. Execution snapshots carry bounded metadata such as Macro/action identity, current action index, last confirmed action, Runtime frame-wait target, RuntimeHost identity and failure/recovery evidence.
+
+Local Named Pipe behavior and external gRPC/TLS map into the same ControlHost operations. External snapshot/validation follows Observer admission; definition mutation and execution require Operator authorization. No media pixels, audio samples, arbitrary code or direct Runtime/provider command surface is introduced.
+
+See `docs/ProductionMacros.md`.
