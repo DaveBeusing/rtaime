@@ -54,7 +54,7 @@ function Get-SupportPolicyErrors {
 	if (-not [bool]$stable.approvalRequired) { $errors.Add("stable.approvalRequired") }
 
 	$preview = $Policy.lifecycle.preview
-	if ([string]$preview.status -notin @("PASS", "FAIL", "UNVERIFIED")) {
+	if ([string]$preview.status -notin @("PASS", "FAIL", "UNVERIFIED", "NOT_APPLICABLE")) {
 		$errors.Add("preview.status")
 	}
 
@@ -143,7 +143,7 @@ function Get-SupportPolicyErrors {
 		}
 	} elseif ([string]$previewVersion.status -eq "UNVERIFIED" -and [string]$previewVersion.supportMode -ne "UNVERIFIED") {
 		$errors.Add("preview.unverifiedSupportMode")
-	} elseif ([string]$previewVersion.status -notin @("FAIL", "UNVERIFIED")) {
+	} elseif ([string]$previewVersion.status -notin @("FAIL", "UNVERIFIED", "NOT_APPLICABLE")) {
 		$errors.Add("preview.versionStatus")
 	}
 	if ([string]$preview.status -eq "PASS" -and [string]$previewVersion.status -ne "PASS") {
@@ -151,6 +151,12 @@ function Get-SupportPolicyErrors {
 	}
 	if ([string]$preview.status -eq "UNVERIFIED" -and ([bool]$preview.maintenanceCommitment -or [bool]$preview.securityCommitment)) {
 		$errors.Add("preview.unverifiedCommitment")
+	}
+	if ([string]$preview.status -eq "NOT_APPLICABLE" -and ([bool]$preview.maintenanceCommitment -or [bool]$preview.securityCommitment)) {
+		$errors.Add("preview.notApplicableCommitment")
+	}
+	if ([string]$previewVersion.status -eq "NOT_APPLICABLE" -and [string]$previewVersion.supportMode -ne "NOT_APPLICABLE") {
+		$errors.Add("preview.notApplicableSupportMode")
 	}
 
 	return @($errors)
@@ -176,7 +182,7 @@ function Get-PlatformMatrixErrors {
 	}
 
 	foreach ($configuration in $configurations) {
-		if ([string]$configuration.supportStatus -notin @("SUPPORTED", "UNVERIFIED", "UNSUPPORTED")) {
+		if ([string]$configuration.supportStatus -notin @("SUPPORTED", "UNVERIFIED", "UNSUPPORTED", "EOL")) {
 			$errors.Add("configuration.supportStatus")
 		}
 		if ([string]$configuration.gpu.qualificationStatus -notin @("PASS", "FAIL", "UNVERIFIED")) {
@@ -240,7 +246,7 @@ function Get-PlatformMatrixErrors {
 		}
 
 		foreach ($networkProvider in @($configuration.networkProviders)) {
-			if ([string]$networkProvider.supportStatus -notin @("SUPPORTED", "UNVERIFIED", "UNSUPPORTED")) {
+			if ([string]$networkProvider.supportStatus -notin @("SUPPORTED", "UNVERIFIED", "UNSUPPORTED", "EOL")) {
 				$errors.Add("networkProvider.supportStatus:$($networkProvider.provider)")
 				continue
 			}
