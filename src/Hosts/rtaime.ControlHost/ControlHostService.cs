@@ -195,6 +195,17 @@ public sealed class ControlHostService
 		}
 	}
 
+	public void RecordProductionMacroEvent(string code, string detail, Identity? causationId = null, Failure? failure = null)
+	{
+		if (string.IsNullOrWhiteSpace(code)) throw new ArgumentException("Production Macro journal code is required.", nameof(code));
+		if (string.IsNullOrWhiteSpace(detail)) throw new ArgumentException("Production Macro journal detail is required.", nameof(detail));
+		lock (_gate)
+		{
+			var revision = _authoritative?.Revision ?? Revision.Initial;
+			Journal(revision, "production_macro", code.Trim(), detail.Trim(), causationId, failure);
+		}
+	}
+
 	public ControlHostOperationResult Initialize()
 	{
 		lock (_gate)
