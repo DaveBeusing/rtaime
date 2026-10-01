@@ -168,7 +168,7 @@ public sealed class IntegrationGateway : IAsyncDisposable
 		_inputs = Channel.CreateBounded<IntegrationTrigger>(new BoundedChannelOptions(_options.QueueCapacity)
 		{
 			AllowSynchronousContinuations = false,
-			FullMode = BoundedChannelFullMode.DropWrite,
+			FullMode = BoundedChannelFullMode.Wait,
 			SingleReader = true,
 			SingleWriter = false
 		});
