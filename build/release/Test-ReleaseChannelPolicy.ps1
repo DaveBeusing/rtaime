@@ -60,6 +60,7 @@ Assert-Condition ($stable.tagRequired -eq $true) "STABLE channel must require a 
 Assert-Condition (@($stable.allowedSignerClasses).Count -eq 1 -and [string]$stable.allowedSignerClasses[0] -eq "EXTERNAL_CONTROLLED") "STABLE must allow EXTERNAL_CONTROLLED signing only."
 Assert-Condition ($stable.requireTrustedProductionKey -eq $true) "STABLE must require active production signing-key trust."
 Assert-Condition ($stable.publicationEligible -eq $true) "STABLE candidate readiness must be publication eligible."
+Assert-Condition ($releaseWorkflowPath -ne $null) "Release workflow path must be available for Stable readiness verification."
 
 [xml]$buildProps = Get-Content -LiteralPath $buildPropsPath -Raw
 $productVersion = $buildProps.SelectSingleNode("//RtaimeProductVersion").InnerText.Trim()
@@ -75,6 +76,10 @@ if ($releaseStage -eq "DEV") {
 
 $requiredGates = Get-Content -LiteralPath $requiredGatesPath -Raw
 $releaseWorkflow = Get-Content -LiteralPath $releaseWorkflowPath -Raw
+$releasePipelineScript = Get-Content -LiteralPath (Join-Path $repositoryRoot "build/release/Invoke-ReleasePipeline.ps1") -Raw
+Assert-Condition ($releasePipelineScript -match 'Test-StableReadiness\.ps1') "Authoritative release pipeline must invoke Stable readiness verification."
+Assert-Condition ($releasePipelineScript -match '\$identity\.channel -eq "STABLE"') "Stable readiness verification must be scoped to STABLE candidates."
+Assert-Condition ($releasePipelineScript -match 'overallStatus -ne "PASS"') "STABLE release candidate creation must fail unless Stable readiness is PASS."
 foreach ($workflow in @($requiredGates, $releaseWorkflow)) {
 	Assert-Condition ($workflow -match 'Invoke-ReleasePipeline\.ps1') "All packaged/release-candidate workflows must call Invoke-ReleasePipeline.ps1."
 	foreach ($forbiddenDirectCall in @(
