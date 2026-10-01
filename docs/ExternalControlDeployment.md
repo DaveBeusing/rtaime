@@ -165,6 +165,8 @@ Production mutations additionally retain the existing Control contract version, 
 
 Unsupported API versions fail closed. The transport does not silently downgrade to a different command model.
 
+Rundown automation continues to use the existing bounded rundown operations and JSON payload carried by the external-control request union. The synchronized rundown workspace now projects confirmed follow-action kind, pending next item, frame-delay/RuntimeHost timing evidence and remaining bounded repeat state. No separate remote automation protocol or scheduler is introduced.
+
 ## Idempotency and optimistic concurrency
 
 External mutations reuse the same stable request/command identity and ControlHost request-result cache as local control.
