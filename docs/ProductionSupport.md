@@ -140,6 +140,20 @@ A missing assessment remains UNVERIFIED; an empty issue list does not become PAS
 
 Release notes must identify the exact product/release identity they describe and must not convert unresolved hardware, signing, support-policy or conformity gaps into supported claims.
 
+## Known-issues assessment binding
+
+A future release candidate can bind an exact-source known-issues assessment through build/release/Bind-KnownIssuesAssessment.ps1.
+
+The assessment is bound before release attestation and is accepted as PASS only when:
+
+- product version, release stage, source commit, build commit and build id match the release evidence;
+- unresolved BLOCKER or CRITICAL issues are absent;
+- every unresolved accepted/open issue is explicitly marked for release-note disclosure;
+- the assessment hash is bound into release evidence;
+- the projected release knownIssues list matches the unresolved assessment issues.
+
+Tampering, source mismatch or missing disclosure fails closed.
+
 ## Stable readiness
 
 build/release/Test-StableReadiness.ps1 produces a machine-readable readiness result without changing product version or release stage.
