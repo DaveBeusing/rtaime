@@ -88,7 +88,8 @@ public enum ShowControlActionKind
 	StopRecording = 11,
 	WaitFrames = 12,
 	MediaOpen = 13,
-	SetAudioRouting = 14
+	SetAudioRouting = 14,
+	RouteOutputRole = 15
 }
 
 public sealed record ShowControlAction
@@ -110,7 +111,8 @@ public sealed record ShowControlAction
 		string? recordingDestinationDirectory = null,
 		string? recordingFileName = null,
 		uint? waitFrames = null,
-		int? audioRoutingMode = null)
+		int? audioRoutingMode = null,
+		string? outputRoleId = null)
 	{
 		if (!Enum.IsDefined(kind))
 			throw new ArgumentOutOfRangeException(nameof(kind));
@@ -122,6 +124,7 @@ public sealed record ShowControlAction
 		LayerId = Normalize(layerId, nameof(layerId));
 		RecordingDestinationDirectory = Normalize(recordingDestinationDirectory, nameof(recordingDestinationDirectory));
 		RecordingFileName = Normalize(recordingFileName, nameof(recordingFileName));
+		OutputRoleId = Normalize(outputRoleId, nameof(outputRoleId));
 		ActionId = actionId;
 		Kind = kind;
 		DurationFrames = durationFrames;
@@ -145,6 +148,7 @@ public sealed record ShowControlAction
 	public string? RecordingFileName { get; }
 	public uint? WaitFrames { get; }
 	public int? AudioRoutingMode { get; }
+	public string? OutputRoleId { get; }
 
 	public bool ReplaySafeAfterUncertainCompletion => Kind is
 		ShowControlActionKind.ActivateScene or
@@ -156,6 +160,7 @@ public sealed record ShowControlAction
 		ShowControlActionKind.MediaOpen or
 		ShowControlActionKind.SetLayerVisibility or
 		ShowControlActionKind.SetAudioRouting or
+		ShowControlActionKind.RouteOutputRole or
 		ShowControlActionKind.StopRecording or
 		ShowControlActionKind.WaitFrames;
 
@@ -223,6 +228,11 @@ public sealed record ShowControlAction
 					Require(SourceId, nameof(SourceId));
 				RequireOnly(source: AudioRoutingMode == 2, audioRouting: true);
 				break;
+			case ShowControlActionKind.RouteOutputRole:
+				Require(OutputRoleId, nameof(OutputRoleId));
+				Require(SourceId, nameof(SourceId));
+				RequireOnly(source: true, outputRole: true);
+				break;
 			default:
 				throw new ArgumentOutOfRangeException(nameof(Kind));
 		}
@@ -239,7 +249,8 @@ public sealed record ShowControlAction
 		bool recordingDestination = false,
 		bool recordingFile = false,
 		bool wait = false,
-		bool audioRouting = false)
+		bool audioRouting = false,
+		bool outputRole = false)
 	{
 		if ((!scene && SceneId is not null) ||
 			(!source && SourceId is not null) ||
@@ -251,7 +262,8 @@ public sealed record ShowControlAction
 			(!recordingDestination && RecordingDestinationDirectory is not null) ||
 			(!recordingFile && RecordingFileName is not null) ||
 			(!wait && WaitFrames.HasValue) ||
-			(!audioRouting && AudioRoutingMode.HasValue))
+			(!audioRouting && AudioRoutingMode.HasValue) ||
+			(!outputRole && OutputRoleId is not null))
 		{
 			throw new ArgumentException($"Show-control action '{Kind}' contains fields that do not belong to that action kind.");
 		}
@@ -469,7 +481,8 @@ public static class ShowControlCanonicalSerializer
 				action.RecordingDestinationDirectory,
 				action.RecordingFileName,
 				action.WaitFrames,
-				action.AudioRoutingMode)).ToArray())).ToArray());
+				action.AudioRoutingMode,
+				action.OutputRoleId)).ToArray())).ToArray());
 
 	private static ShowControlCue FromDocument(CueDocument document)
 	{
@@ -503,7 +516,8 @@ public static class ShowControlCanonicalSerializer
 			document.RecordingDestinationDirectory,
 			document.RecordingFileName,
 			document.WaitFrames,
-			document.AudioRoutingMode);
+			document.AudioRoutingMode,
+			document.OutputRoleId);
 	}
 
 	private sealed record CueListDocument(
@@ -530,5 +544,6 @@ public static class ShowControlCanonicalSerializer
 		string? RecordingDestinationDirectory,
 		string? RecordingFileName,
 		uint? WaitFrames,
-		int? AudioRoutingMode = null);
+		int? AudioRoutingMode = null,
+		string? OutputRoleId = null);
 }
