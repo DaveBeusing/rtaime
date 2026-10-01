@@ -162,6 +162,7 @@ Stable Macro/action/execution identities are retained as causation evidence wher
 The local Named Pipe and optional secure gRPC/TLS external boundary expose:
 
 - snapshot/list;
+- get by stable Macro identity;
 - save;
 - delete;
 - validate;
