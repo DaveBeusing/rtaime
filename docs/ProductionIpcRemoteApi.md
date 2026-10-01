@@ -293,6 +293,7 @@ See `docs/ShowControlCueSequencing.md`.
 The existing ControlHost Operator management session and secure external-control boundary expose bounded Production Macro operations:
 
 - `control.production_macro.snapshot.get`
+- `control.production_macro.get`
 - `control.production_macro.save`
 - `control.production_macro.delete`
 - `control.production_macro.validate`
