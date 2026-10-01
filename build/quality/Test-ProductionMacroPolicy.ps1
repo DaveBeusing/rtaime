@@ -52,7 +52,7 @@ $operatorTests = Get-Content -LiteralPath $operatorTestsPath -Raw
 
 Assert-Condition ($contracts -match 'ProductionMacroContractVersion' -and $contracts -match 'ProductionMacroId' -and $contracts -match 'ProductionMacroActionId') "Production Macro contracts must be versioned and retain stable identities."
 Assert-Condition ($contracts -match 'MaximumActions = ShowControlCue\.MaximumActions' -and $contracts -match 'MaximumMacros = 128') "Production Macro definitions and libraries must remain explicitly bounded."
-Assert-Condition ($adapter -match 'ShowControlAction' -and $adapter -match 'ShowControlCueList') "Production Macros must reuse the governed Show Control action union."
+Assert-Condition ($contracts -match 'ShowControlAction' -and $adapter -match 'action => action\.Command' -and $adapter -match 'ShowControlCueList') "Production Macros must reuse the governed Show Control action union."
 Assert-Condition ($showContracts -match 'RouteOutputRole = 15' -and $validator -match 'ShowControlActionKind\.RouteOutputRole') "Governed output-role routing must remain a closed Show Control action."
 Assert-Condition ($coordinator -match 'ShowControlExecutionMachine' -and $coordinator -match 'ShowControlActionExecutor' -and $coordinator -match 'ShowControlFrameObserver') "Macro execution must reuse Show Control execution and Runtime-frame timing seams."
 Assert-Condition ($coordinator -match 'ProductionMacroExecutionState\.RecoveryRequired' -or $coordinator -match 'RecoveryRequired') "Macro execution must preserve explicit ambiguous-restart recovery."
