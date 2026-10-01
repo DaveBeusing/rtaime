@@ -132,6 +132,14 @@ Material GPU driver, Media-I/O driver, provider SDK or firmware changes invalida
 
 Pinned provider SDKs remain governed by their existing source-controlled pin where applicable.
 
+## Release notes and known issues
+
+From RELEASE_CANDIDATE stage onward, the support policy requires an explicit known-issues assessment and release-note disclosure.
+
+A missing assessment remains UNVERIFIED; an empty issue list does not become PASS merely because no issue was entered. Stable readiness consumes the KNOWN_ISSUES release-evidence domain and cannot reach PASS while that domain is missing, failed or unverified.
+
+Release notes must identify the exact product/release identity they describe and must not convert unresolved hardware, signing, support-policy or conformity gaps into supported claims.
+
 ## Stable readiness
 
 build/release/Test-StableReadiness.ps1 produces a machine-readable readiness result without changing product version or release stage.
