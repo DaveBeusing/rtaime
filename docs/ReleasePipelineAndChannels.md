@@ -329,6 +329,14 @@ The release pipeline and publication foundation do not claim:
 
 `UNVERIFIED` remains distinct from `PASS`.
 
+## Known-issues input for release candidates
+
+The authoritative release orchestrator accepts an optional KnownIssuesAssessmentPath beside the existing product-security assessment input.
+
+The known-issues assessment is exact-source/build-bound and is applied before release attestation. A STABLE candidate cannot reach Stable-readiness PASS while KNOWN_ISSUES remains UNVERIFIED.
+
+This input is evidence, not a source-code declaration of quality. The assessment must independently pass its verifier and cannot hide unresolved BLOCKER/CRITICAL issues.
+
 ## Stable support/readiness boundary
 
 The STABLE channel remains a release-channel mechanism, not an automatic commercial support promise.
