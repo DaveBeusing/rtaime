@@ -48,15 +48,12 @@ function Get-SupportPolicyErrors {
 		foreach ($property in @("maintenanceMonths", "securityMonths", "eolNotificationLeadDays")) {
 			if ($null -ne $stable.$property) { $errors.Add("unapproved-stable.$property") }
 		}
-	} else {
+	} elseif ($stableStatus -ne "FAIL") {
 		$errors.Add("stable.status")
 	}
+	if (-not [bool]$stable.approvalRequired) { $errors.Add("stable.approvalRequired") }
 
 	$preview = $Policy.lifecycle.preview
-	if ([string]$preview.status -eq "PASS" -and
-		(-not [bool]$preview.maintenanceCommitment -or -not [bool]$preview.securityCommitment)) {
-		$errors.Add("preview.commitment")
-	}
 
 	$security = $Policy.securitySupport
 	if ([string]$security.remediationTargetsStatus -eq "PASS") {
@@ -127,7 +124,15 @@ function Get-SupportPolicyErrors {
 	$previewVersion = $Policy.supportedVersions.preview
 	if ([string]$previewVersion.status -eq "PASS") {
 		if ([string]$preview.status -ne "PASS") { $errors.Add("preview.versionWithoutLifecycleCommitment") }
-		if ([string]$previewVersion.supportMode -notin @("DEFINED", "BEST_EFFORT")) { $errors.Add("preview.supportMode") }
+		if ([string]$previewVersion.supportMode -notin @("DEFINED", "BEST_EFFORT")) {
+			$errors.Add("preview.supportMode")
+		} elseif ([string]$previewVersion.supportMode -eq "DEFINED") {
+			if (-not [bool]$preview.maintenanceCommitment -or -not [bool]$preview.securityCommitment) {
+				$errors.Add("preview.definedCommitment")
+			}
+		} elseif ([bool]$preview.maintenanceCommitment -or [bool]$preview.securityCommitment) {
+			$errors.Add("preview.bestEffortMustNotPromiseCommitments")
+		}
 	} elseif ([string]$previewVersion.status -eq "UNVERIFIED" -and [string]$previewVersion.supportMode -ne "UNVERIFIED") {
 		$errors.Add("preview.unverifiedSupportMode")
 	}
