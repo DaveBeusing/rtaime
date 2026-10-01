@@ -34,7 +34,7 @@ function Read-Json {
 
 function Add-Domain {
 	param(
-		[Parameter(Mandatory)][System.Collections.Generic.List[object]]$Domains,
+		[Parameter(Mandatory)][AllowEmptyCollection()][System.Collections.Generic.List[object]]$Domains,
 		[Parameter(Mandatory)][string]$Name,
 		[Parameter(Mandatory)][ValidateSet("PASS", "FAIL", "UNVERIFIED", "NOT_APPLICABLE")][string]$Status,
 		[Parameter(Mandatory)][string]$Source,
