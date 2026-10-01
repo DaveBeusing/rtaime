@@ -125,13 +125,15 @@
                 "type": [
                   "string",
                   "null"
-                ]
+                ],
+                "minLength": 1
               },
               "versionFamily": {
                 "type": [
                   "string",
                   "null"
-                ]
+                ],
+                "minLength": 1
               },
               "architecture": {
                 "const": "x64"
@@ -143,16 +145,173 @@
           },
           "runtimeRequirements": {
             "type": "array",
-            "minItems": 1
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "name",
+                "majorMinor",
+                "minimumVersion",
+                "source"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "majorMinor": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+$"
+                },
+                "minimumVersion": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][A-Za-z0-9.-]+)?$"
+                },
+                "source": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
           },
           "gpu": {
-            "type": "object"
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "class",
+              "driverRange",
+              "provider",
+              "qualificationStatus"
+            ],
+            "properties": {
+              "class": {
+                "type": "string",
+                "minLength": 1
+              },
+              "driverRange": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1
+              },
+              "provider": {
+                "type": "string",
+                "minLength": 1
+              },
+              "qualificationStatus": {
+                "enum": [
+                  "PASS",
+                  "FAIL",
+                  "UNVERIFIED"
+                ]
+              }
+            }
           },
           "mediaIo": {
-            "type": "object"
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "provider",
+              "device",
+              "driverRange",
+              "providerSdkPinSource",
+              "firmware",
+              "qualificationStatus"
+            ],
+            "properties": {
+              "provider": {
+                "type": "string",
+                "minLength": 1
+              },
+              "device": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1
+              },
+              "driverRange": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1
+              },
+              "providerSdkPinSource": {
+                "type": "string",
+                "minLength": 1
+              },
+              "firmware": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1
+              },
+              "qualificationStatus": {
+                "enum": [
+                  "PASS",
+                  "FAIL",
+                  "UNVERIFIED"
+                ]
+              }
+            }
           },
           "networkProviders": {
-            "type": "array"
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "provider",
+                "supportStatus",
+                "qualificationEvidence"
+              ],
+              "properties": {
+                "provider": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "supportStatus": {
+                  "enum": [
+                    "SUPPORTED",
+                    "UNVERIFIED",
+                    "UNSUPPORTED",
+                    "EOL"
+                  ]
+                },
+                "qualificationEvidence": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              },
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "supportStatus": {
+                        "const": "SUPPORTED"
+                      }
+                    },
+                    "required": [
+                      "supportStatus"
+                    ]
+                  },
+                  "then": {
+                    "properties": {
+                      "qualificationEvidence": {
+                        "minItems": 1
+                      }
+                    }
+                  }
+                }
+              ]
+            }
           },
           "qualificationEvidence": {
             "type": "array",
@@ -167,8 +326,126 @@
               "type": "string"
             }
           }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "supportStatus": {
+                  "const": "SUPPORTED"
+                }
+              },
+              "required": [
+                "supportStatus"
+              ]
+            },
+            "then": {
+              "properties": {
+                "platform": {
+                  "properties": {
+                    "edition": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "versionFamily": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  }
+                },
+                "gpu": {
+                  "properties": {
+                    "driverRange": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "qualificationStatus": {
+                      "const": "PASS"
+                    }
+                  }
+                },
+                "mediaIo": {
+                  "properties": {
+                    "device": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "driverRange": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "qualificationStatus": {
+                      "const": "PASS"
+                    }
+                  }
+                },
+                "qualificationEvidence": {
+                  "minItems": 1
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "matrixStatus": {
+            "const": "PASS"
+          }
+        },
+        "required": [
+          "matrixStatus"
+        ]
+      },
+      "then": {
+        "properties": {
+          "configurations": {
+            "contains": {
+              "properties": {
+                "supportStatus": {
+                  "const": "SUPPORTED"
+                }
+              },
+              "required": [
+                "supportStatus"
+              ]
+            },
+            "minContains": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "configurations": {
+            "contains": {
+              "properties": {
+                "supportStatus": {
+                  "const": "SUPPORTED"
+                }
+              },
+              "required": [
+                "supportStatus"
+              ]
+            }
+          }
+        },
+        "required": [
+          "configurations"
+        ]
+      },
+      "then": {
+        "properties": {
+          "matrixStatus": {
+            "const": "PASS"
+          }
         }
       }
     }
-  }
+  ]
 }
