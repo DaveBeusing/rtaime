@@ -558,6 +558,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			"control.rundown.hold" => await HoldRundownAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.rundown.recovery.acknowledge" => await AcknowledgeRundownRecoveryAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.production_macro.snapshot.get" => await GetProductionMacroSnapshotAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.production_macro.get" => await GetProductionMacroAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.production_macro.save" => await SaveProductionMacroAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.production_macro.delete" => await DeleteProductionMacroAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.production_macro.validate" => await ValidateProductionMacroAsync(request, cancellationToken).ConfigureAwait(false),
@@ -701,6 +702,28 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		catch (Exception exception) when (exception is InvalidOperationException or InvalidDataException or IOException or FormatException or NotSupportedException)
 		{
 			return Error(request, "control.production_macro.snapshot.rejected", exception.Message);
+		}
+	}
+
+	private async ValueTask<WireEnvelope> GetProductionMacroAsync(WireEnvelope request, CancellationToken cancellationToken)
+	{
+		if (_productionMacros is null)
+			return Error(request, "control.production_macro.unavailable", "Production Macro persistence is not configured.");
+		var wire = request.Payload.Deserialize<WireProductionMacroIdRequest>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Production Macro identity payload is required.");
+		try
+		{
+			var macro = await _productionMacros.GetAsync(
+				new ProductionMacroId(Identity.Parse(wire.MacroId)),
+				cancellationToken).ConfigureAwait(false);
+			return Success(
+				request,
+				"control.production_macro.definition.response",
+				new WireProductionMacroDefinition(ProductionMacroCanonicalSerializer.Serialize([macro])));
+		}
+		catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or InvalidDataException or IOException or FormatException or KeyNotFoundException or NotSupportedException)
+		{
+			return Error(request, "control.production_macro.get.rejected", exception.Message);
 		}
 	}
 
@@ -3294,6 +3317,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		uint? RemainingFollowFrames = null,
 		ushort RemainingItemRepeats = 0,
 		ushort RemainingRundownRepeats = 0);
+	private sealed record WireProductionMacroDefinition(string MacroJson);
 	private sealed record WireProductionMacroSave(string MacroJson, ulong ExpectedStorageVersion);
 	private sealed record WireProductionMacroDelete(string MacroId, ulong ExpectedStorageVersion);
 	private sealed record WireProductionMacroIdRequest(string MacroId);
