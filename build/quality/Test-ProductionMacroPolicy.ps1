@@ -67,7 +67,7 @@ Assert-Condition ($operatorSurface -notmatch '<(Button|ToggleButton|CheckBox|Rad
 Assert-Condition ($operatorViewModel -notmatch 'RuntimeHost|Provider\.' -and $operatorViewModel -match '_client\.ExecuteProductionMacroAsync') "Production Macro Operator must remain a Client-only presentation surface."
 
 Assert-Condition ($documentation -match 'ControlHost remains Production Authority' -and $documentation -match 'do not provide arbitrary executable code') "Production Macro documentation must preserve authority and no-code boundaries."
-Assert-Condition ($documentation -match 'Runtime production frames' -and $documentation -match 'RecoveryRequired') "Production Macro documentation must record frame-domain timing and recovery semantics."
+Assert-Condition ($documentation -match 'Runtime production frame' -and $documentation -match 'RecoveryRequired') "Production Macro documentation must record frame-domain timing and recovery semantics."
 
 foreach ($test in @(
 	"Macro_library_round_trips_stable_identity_order_and_governed_payloads",
