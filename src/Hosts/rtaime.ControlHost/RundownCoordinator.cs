@@ -326,9 +326,7 @@ public sealed class RundownCoordinator : IAsyncDisposable
 			if (show.Execution.State == ShowControlExecutionState.RecoveryRequired && currentItem is not null)
 			{
 				var pending = PreviewResolvedNext(currentItem.ItemId);
-				_rundownRecoveryAmbiguous =
-					IsAutomatedFollow(currentItem.FollowAction.Kind) ||
-					show.Execution.WaitTargetFrameSequence.HasValue;
+				_rundownRecoveryAmbiguous = IsAutomatedFollow(currentItem.FollowAction.Kind);
 				_execution = new RundownExecutionSnapshot(
 					RundownExecutionState.RecoveryRequired,
 					_rundown.RundownId,
@@ -819,7 +817,7 @@ public sealed class RundownCoordinator : IAsyncDisposable
 		}
 
 		var start = target >= frames ? target - frames : 0;
-		_execution = _execution with
+		_execution = DecorateRepeatState(_execution with
 		{
 			State = RundownExecutionState.Executing,
 			CurrentItemId = item.ItemId,
@@ -834,7 +832,7 @@ public sealed class RundownCoordinator : IAsyncDisposable
 			FollowTargetFrameSequence = target,
 			RemainingFollowFrames = frames,
 			Revision = NextRevision()
-		};
+		}, item.ItemId);
 		Journal("rundown.follow.delay.started", $"Delayed follow armed from Runtime frame {start} to {target} for item '{item.ItemId}'.", show.Execution.ExecutionId?.Value);
 		_stateChanged();
 		StartShowControlCompletionWorker(item.ItemId, _execution.Revision);
@@ -1111,12 +1109,14 @@ public sealed class RundownCoordinator : IAsyncDisposable
 
 	private ushort RemainingRundownRepeats(RundownItemId itemId)
 	{
-		var item = RequireRundown().Items[IndexOf(itemId)];
-		if (item.Repeat.Mode != RundownRepeatMode.RepeatRundown)
+		_ = itemId;
+		var rundown = RequireRundown();
+		var repeat = rundown.Items[^1].Repeat;
+		if (repeat.Mode != RundownRepeatMode.RepeatRundown)
 			return 0;
-		return _rundownRepeatProgress >= item.Repeat.RepeatCount
+		return _rundownRepeatProgress >= repeat.RepeatCount
 			? (ushort)0
-			: checked((ushort)(item.Repeat.RepeatCount - _rundownRepeatProgress));
+			: checked((ushort)(repeat.RepeatCount - _rundownRepeatProgress));
 	}
 
 	private static RundownExecutionSnapshot ClearAutomation(RundownExecutionSnapshot snapshot) =>
