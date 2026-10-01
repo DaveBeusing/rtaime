@@ -322,3 +322,22 @@ The release evidence and signing foundations do not claim:
 - byte-for-byte reproducible builds across independent environments.
 
 Those remain separate proof obligations and must receive their own evidence before their status can change.
+
+## Known-issues assessment evidence
+
+Release evidence starts with the KNOWN_ISSUES domain as UNVERIFIED.
+
+An optional exact-source known-issues assessment can be supplied to the authoritative release pipeline with KnownIssuesAssessmentPath. The pipeline verifies and binds it before signing, stores the canonical known-issues-assessment.json hash/reference in release-evidence.json, projects unresolved disclosed issues into the release knownIssues list, and promotes the KNOWN_ISSUES domain to PASS only when the assessment itself passes.
+
+Unresolved BLOCKER or CRITICAL issues cannot produce a PASS assessment. Unresolved lower-severity issues must be explicitly designated for release-note disclosure.
+
+## Stable readiness policy bridge
+
+Release evidence and Stable readiness are deliberately separate.
+
+`build/release/Test-StableReadiness.ps1` may consume exact release evidence and a release candidate to evaluate support commitments, known issues, hardware qualification and production signing trust together with the source-controlled deployment/support policies.
+
+The Stable-readiness verifier does not mutate `RtaimeProductVersion`, `RtaimeReleaseStage`, release evidence, candidate manifests or trust stores. It reports `PASS`, `FAIL`, `UNVERIFIED` or `NOT_APPLICABLE` only.
+
+A valid release-evidence bundle is therefore necessary but not sufficient for Stable readiness. Missing approved support duration, supported platform evidence, known-issues PASS, physical qualification or production signing trust remains `UNVERIFIED` and cannot be inferred from managed CI.
+

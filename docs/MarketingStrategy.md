@@ -379,9 +379,9 @@ The repository does not yet establish a production support-period declaration.
 
 Marketing priority:
 
-- define supported Windows/reference configurations;
-- define support lifecycle and update expectations;
-- define escalation/support ownership before commercial launch;
+- use the source-controlled support lifecycle, escalation categories and deployment baseline as the commercial-readiness framework;
+- publish only evidence-backed Windows/reference configurations from the generated support matrix;
+- keep Stable support duration, security remediation targets and deprecation notice explicitly UNVERIFIED until approved;
 - keep community/project availability separate from a commercial support promise.
 
 ### 7. Customer proof

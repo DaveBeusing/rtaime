@@ -94,6 +94,8 @@ The source-controlled product version is currently **0.1.0-dev** in the **DEV** 
 
 Hardware and production-readiness claims remain limited to evidence explicitly recorded by the qualification system.
 
+Production-support policy and Stable-readiness governance are source-controlled in [Production Support and Stable Readiness](docs/ProductionSupport.md), with the generated [Support and Compatibility Matrix](docs/SupportCompatibilityMatrix.md) and [Production Deployment Baseline](docs/ProductionDeploymentBaseline.md). The current DEV source remains Stable-readiness `UNVERIFIED`; the readiness verifier does not promote release stage.
+
 ## Architecture
 
 The canonical product entry point is:

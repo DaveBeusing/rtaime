@@ -150,9 +150,11 @@ Rules:
 - `EXTERNAL_CONTROLLED` signing only,
 - signing-key fingerprint must be active `SOFTWARE_RELEASE` trust,
 - offline bundle verification must pass with `-RequireTrustedProductionKey`,
-- Stable candidate publication readiness is `PASS` only after those gates pass.
+- Stable candidate publication readiness is `PASS` only after those gates pass,
+- the Stable-readiness verifier must independently return `PASS`,
+- Stable readiness must bind the repository HEAD, supplied release evidence and candidate Release Evidence SHA-256 to the same exact source/build identity.
 
-A CI-generated `TEST_EPHEMERAL` key can never create a Stable candidate.
+A CI-generated `TEST_EPHEMERAL` key can never create a Stable candidate. Candidate trust from one release cannot be combined with qualification or known-issues evidence from another release bundle.
 
 ## Release Candidate artifact
 
@@ -328,3 +330,28 @@ The release pipeline and publication foundation do not claim:
 - formal CRA conformity.
 
 `UNVERIFIED` remains distinct from `PASS`.
+
+## Known-issues input for release candidates
+
+The authoritative release orchestrator accepts an optional KnownIssuesAssessmentPath beside the existing product-security assessment input.
+
+The known-issues assessment is exact-source/build-bound and is applied before release attestation. A STABLE candidate cannot reach Stable-readiness PASS while KNOWN_ISSUES remains UNVERIFIED.
+
+This input is evidence, not a source-code declaration of quality. The assessment must independently pass its verifier and cannot hide unresolved BLOCKER/CRITICAL issues.
+
+## Stable support/readiness boundary
+
+The STABLE channel remains a release-channel mechanism, not an automatic commercial support promise.
+
+A future Stable publication must continue to satisfy the existing exact version/tag/source identity and production-signing requirements. In addition, `build/release/Test-StableReadiness.ps1` provides a separate fail-closed operational/commercial readiness view over:
+
+- approved support lifecycle and supported-version policy;
+- evidence-backed platform compatibility;
+- security/support commitments;
+- exact release and known-issues evidence;
+- required physical qualification;
+- production signing trust;
+- deployment/update readiness.
+
+The readiness verifier never changes release stage or channel policy. Current `0.1.0-dev / DEV` source remains non-Stable even though the readiness framework exists.
+

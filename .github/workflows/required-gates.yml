@@ -200,6 +200,10 @@ jobs:
         shell: pwsh
         run: ./build/quality/Test-ReferencePlatformQualificationPolicy.ps1
 
+      - name: Verify production support and Stable readiness policy
+        shell: pwsh
+        run: ./build/governance/Test-ProductionSupportReadinessPolicy.ps1
+
       - name: Restore
         run: dotnet restore rtaime.slnx
 

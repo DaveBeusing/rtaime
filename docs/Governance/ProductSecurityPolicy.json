@@ -5,7 +5,8 @@
 	"vulnerabilityContact": "david.beusing@gmail.com",
 	"supportPeriod": {
 		"status": "UNVERIFIED",
-		"details": "A production support-period declaration has not yet been approved."
+		"policy": "docs/Governance/ProductSupportPolicy.json",
+		"details": "The support-policy framework is source-controlled, but Stable maintenance/security durations and security remediation targets have not yet been explicitly approved."
 	},
 	"vulnerabilityLifecycle": [
 		"RECEIVED",

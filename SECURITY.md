@@ -81,4 +81,17 @@ See `docs/ExternalControlDeployment.md`.
 
 ## Supported versions
 
-The project has not yet established a production support-period declaration. Until such a declaration is approved and release evidence is updated, support-period status remains `UNVERIFIED`.
+Supported-version and support-lifecycle policy is source-controlled in `docs/Governance/ProductSupportPolicy.json`.
+
+The human-readable version/platform projection is generated from policy and published at `docs/SupportCompatibilityMatrix.md`.
+
+Current policy intentionally declares:
+
+- no supported Stable version line;
+- Preview support status `UNVERIFIED`;
+- Stable support duration `UNVERIFIED`;
+- security remediation/SLA targets `UNVERIFIED`.
+
+A release, branch, CI result or successful installation is not treated as supported merely because it exists or builds successfully. Stable support requires an explicitly approved lifecycle commitment plus the normal release, trust and qualification evidence.
+
+EOL and unsupported-version behavior is governed by the same policy. Routine maintenance is not promised after EOL; security handling after EOL remains case-by-case until a separate approved exception policy or applicable external obligation is established.

@@ -13,6 +13,7 @@ param(
 	[string]$PrivateKeyPath = "",
 	[string]$SignerId = "",
 	[string]$SecurityAssessmentPath = "",
+	[string]$KnownIssuesAssessmentPath = "",
 	[string]$OutputRoot = "artifacts/release-pipeline"
 )
 
@@ -104,6 +105,11 @@ try {
 	if (-not [string]::IsNullOrWhiteSpace($SecurityAssessmentPath)) {
 		& (Join-Path $repositoryRoot "build/security/Bind-ProductSecurityAssessment.ps1") `
 			-AssessmentPath $SecurityAssessmentPath `
+			-OutputPath $evidenceRoot
+	}
+	if (-not [string]::IsNullOrWhiteSpace($KnownIssuesAssessmentPath)) {
+		& (Join-Path $PSScriptRoot "Bind-KnownIssuesAssessment.ps1") `
+			-AssessmentPath $KnownIssuesAssessmentPath `
 			-OutputPath $evidenceRoot
 	}
 	& (Join-Path $PSScriptRoot "Test-ReleaseEvidence.ps1") -OutputPath $evidenceRoot
@@ -267,11 +273,24 @@ try {
 	& (Join-Path $PSScriptRoot "Test-ReleaseCandidate.ps1") -CandidatePath $candidateRoot
 	& (Join-Path $PSScriptRoot "Test-ReleasePipelineFailureCases.ps1") -CandidatePath $candidateRoot
 
+	if ([string]$identity.channel -eq "STABLE") {
+		$stableReadinessPath = Join-Path $outputFullRoot "stable-readiness.json"
+		$stableReadiness = & (Join-Path $PSScriptRoot "Test-StableReadiness.ps1") `
+			-ReleaseEvidencePath $evidenceRoot `
+			-ReleaseCandidatePath $candidateRoot `
+			-ExpectedSourceCommit ([string]$identity.sourceCommit) `
+			-OutputPath $stableReadinessPath
+		if ([string]$stableReadiness.overallStatus -ne "PASS") {
+			throw "STABLE release candidate failed Stable readiness with status '$($stableReadiness.overallStatus)'."
+		}
+	}
+
 	Write-Host "Single release pipeline PASS"
 	Write-Host "Channel: $($identity.channel)"
 	Write-Host "Candidate: $candidateRoot"
 	Write-Host "Candidate id: $candidateId"
 	Write-Host "Product security assessment: $(if ([string]::IsNullOrWhiteSpace($SecurityAssessmentPath)) { 'UNVERIFIED' } else { 'BOUND' })"
+	Write-Host "Known-issues assessment: $(if ([string]::IsNullOrWhiteSpace($KnownIssuesAssessmentPath)) { 'UNVERIFIED' } else { 'BOUND' })"
 	Write-Host "Production signing trust: $productionTrust"
 	Write-Host "Publication readiness: $publicationStatus"
 } finally {

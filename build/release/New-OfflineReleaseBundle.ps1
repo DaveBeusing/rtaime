@@ -169,6 +169,17 @@ if (@($releaseEvidence.PSObject.Properties.Name) -contains "securityAssessment")
 	}
 	Copy-Item -LiteralPath $securityAssessmentSource -Destination (Join-Path $releaseDirectory $securityAssessmentRelativePath) -Force
 }
+if (@($releaseEvidence.PSObject.Properties.Name) -contains "knownIssuesAssessment") {
+	$knownIssuesRelativePath = [string]$releaseEvidence.knownIssuesAssessment.path
+	if ($knownIssuesRelativePath -ne "known-issues-assessment.json") {
+		throw "Unexpected known-issues assessment release path '$knownIssuesRelativePath'."
+	}
+	$knownIssuesSource = Join-Path $evidenceRoot $knownIssuesRelativePath
+	if (-not (Test-Path -LiteralPath $knownIssuesSource -PathType Leaf)) {
+		throw "Bound known-issues assessment '$knownIssuesRelativePath' is missing."
+	}
+	Copy-Item -LiteralPath $knownIssuesSource -Destination (Join-Path $releaseDirectory $knownIssuesRelativePath) -Force
+}
 $qualificationSource = Join-Path $evidenceRoot "qualification"
 if (Test-Path -LiteralPath $qualificationSource -PathType Container) {
 	Copy-DirectoryContent -Source $qualificationSource -Destination (Join-Path $releaseDirectory "qualification")

@@ -277,3 +277,12 @@ Release Publication & Discovery does not implement or claim:
 - formal CRA conformity.
 
 `UNVERIFIED` remains distinct from `PASS`.
+
+## Stable readiness before publication
+
+A STABLE publication candidate must now originate from the authoritative release pipeline after `Test-StableReadiness.ps1` returns `PASS`.
+
+Production signing trust remains mandatory, but signing trust alone is not sufficient. Stable readiness also requires approved support commitments, exact known-issues/release evidence, evidence-backed platform compatibility, required physical qualification and the production deployment policy.
+
+The publication step does not calculate a second readiness opinion and does not promote DEV/PREVIEW source. It consumes only a candidate that has already passed the release pipeline's STABLE readiness gate.
+

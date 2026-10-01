@@ -1,0 +1,80 @@
+{
+  "copyright": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+  "schemaVersion": "1.0",
+  "policyStatus": "DEFINED",
+  "evidenceSemantics": "Checklist completion records deployment evidence only. It does not create hardware qualification, production signing trust, or release-stage promotion.",
+  "requiredChecks": [
+    {
+      "id": "WINDOWS_PLATFORM",
+      "category": "PLATFORM",
+      "requirement": "Windows edition/version/build and x64 architecture must match a source-controlled support-matrix entry.",
+      "evidence": "platform identity plus support-matrix entry id"
+    },
+    {
+      "id": "SERVICE_ACCOUNT",
+      "category": "IDENTITY",
+      "requirement": "Persistent engine service identity must be explicitly recorded and its required access verified.",
+      "evidence": "service identity and deployment qualification record"
+    },
+    {
+      "id": "FILESYSTEM_ACLS",
+      "category": "SECURITY",
+      "requirement": "Application, state, log, certificate and update paths must have reviewed ACLs appropriate to the selected service identity.",
+      "evidence": "ACL review result"
+    },
+    {
+      "id": "STORAGE",
+      "category": "STORAGE",
+      "requirement": "Application, persistent state, diagnostics and recording storage locations must be declared and capacity/recovery expectations reviewed.",
+      "evidence": "storage layout and rollback/state-backup evidence"
+    },
+    {
+      "id": "GPU_DRIVER",
+      "category": "GPU",
+      "requirement": "GPU identity and driver must match an evidence-backed support-matrix tuple before being called supported.",
+      "evidence": "GPU identity, driver version and qualification evidence reference"
+    },
+    {
+      "id": "MEDIA_IO",
+      "category": "MEDIA_IO",
+      "requirement": "Media I/O provider, device, driver and firmware must match an evidence-backed support-matrix tuple before being called supported.",
+      "evidence": "provider/device/driver/firmware identity and qualification evidence reference"
+    },
+    {
+      "id": "NETWORK_FIREWALL",
+      "category": "NETWORK",
+      "requirement": "Required management, integration and output listeners must be explicitly allowed; undeclared public exposure is not accepted by default.",
+      "evidence": "listener inventory and firewall review"
+    },
+    {
+      "id": "CERTIFICATE_TRUST",
+      "category": "SECURITY",
+      "requirement": "External-control and release/update trust must use the documented production trust paths; test-only trust is not accepted.",
+      "evidence": "certificate/key trust identity without private key material"
+    },
+    {
+      "id": "DIAGNOSTICS_EVENT_LOG",
+      "category": "OPERATIONS",
+      "requirement": "Structured diagnostics, support-bundle export and relevant Windows event-log visibility must be verified.",
+      "evidence": "diagnostic path and support-bundle check"
+    },
+    {
+      "id": "UPDATE_SOURCE",
+      "category": "UPDATE",
+      "requirement": "Update discovery must point only to the governed release source and require published production-trusted candidates.",
+      "evidence": "verified update-source configuration"
+    },
+    {
+      "id": "ROLLBACK_STATE",
+      "category": "UPDATE",
+      "requirement": "Rollback slot/state snapshot prerequisites must be satisfied before production replacement.",
+      "evidence": "rollback/state-maintenance qualification"
+    },
+    {
+      "id": "TIME_REFERENCE",
+      "category": "TIMING",
+      "requirement": "External timing/reference prerequisites must be recorded when required by the selected production configuration.",
+      "evidence": "timing/reference configuration and qualification evidence or NOT_APPLICABLE rationale"
+    }
+  ]
+}
