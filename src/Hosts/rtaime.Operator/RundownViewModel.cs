@@ -24,13 +24,19 @@ public sealed class RundownViewModel : INotifyPropertyChanged
 	private string _detail = "No rundown loaded.";
 	private string _failure = "NONE";
 	private bool _isBusy;
-	private bool _autoAdvanceMedia = true;
 	private bool _useDissolve;
 	private uint _transitionFrames = 12;
 	private uint _holdFrames = 50;
-	private bool _repeatItem;
+	private RundownFollowActionKind _selectedFollowAction = RundownFollowActionKind.Manual;
+	private uint _followDelayFrames = 25;
+	private RundownRepeatMode _selectedRepeatMode = RundownRepeatMode.None;
 	private ushort _repeatCount = 1;
 	private bool _requiresAcknowledgement;
+	private string _automationState = "HOLD";
+	private string _followStatus = "MANUAL";
+	private string _pendingNext = "NONE";
+	private string _followCountdown = "—";
+	private string _repeatStatus = "NONE";
 
 	public RundownViewModel(
 		OperatorControlClient client,
@@ -41,6 +47,8 @@ public sealed class RundownViewModel : INotifyPropertyChanged
 		_operator = operatorViewModel ?? throw new ArgumentNullException(nameof(operatorViewModel));
 		_mediaPool = mediaPool ?? throw new ArgumentNullException(nameof(mediaPool));
 		Items = [];
+		FollowActions = Enum.GetValues<RundownFollowActionKind>();
+		RepeatModes = Enum.GetValues<RundownRepeatMode>();
 		RefreshCommand = new AsyncRelayCommand(RefreshAsync, () => !IsBusy);
 		SaveCommand = new AsyncRelayCommand(SaveAsync, CanSave);
 		AddMediaCommand = new AsyncRelayCommand(AddMediaAsync, CanAddMedia);
@@ -64,6 +72,8 @@ public sealed class RundownViewModel : INotifyPropertyChanged
 	public event PropertyChangedEventHandler? PropertyChanged;
 
 	public ObservableCollection<RundownOperatorItemViewModel> Items { get; }
+	public IReadOnlyList<RundownFollowActionKind> FollowActions { get; }
+	public IReadOnlyList<RundownRepeatMode> RepeatModes { get; }
 	public ICommand RefreshCommand { get; }
 	public ICommand SaveCommand { get; }
 	public ICommand AddMediaCommand { get; }
@@ -88,13 +98,27 @@ public sealed class RundownViewModel : INotifyPropertyChanged
 	public string Detail { get => _detail; private set => Set(ref _detail, value); }
 	public string Failure { get => _failure; private set => Set(ref _failure, value); }
 	public bool IsBusy { get => _isBusy; private set => Set(ref _isBusy, value); }
-	public bool AutoAdvanceMedia { get => _autoAdvanceMedia; set => Set(ref _autoAdvanceMedia, value); }
 	public bool UseDissolve { get => _useDissolve; set => Set(ref _useDissolve, value); }
 	public uint TransitionFrames { get => _transitionFrames; set => Set(ref _transitionFrames, Math.Clamp(value, 2, RundownTransition.MaximumDissolveFrames)); }
 	public uint HoldFrames { get => _holdFrames; set => Set(ref _holdFrames, Math.Clamp(value, 1, RundownHoldItem.MaximumHoldFrames)); }
-	public bool RepeatItem { get => _repeatItem; set => Set(ref _repeatItem, value); }
+	public RundownFollowActionKind SelectedFollowAction
+	{
+		get => _selectedFollowAction;
+		set
+		{
+			if (Set(ref _selectedFollowAction, value))
+				RaiseCommandState();
+		}
+	}
+	public uint FollowDelayFrames { get => _followDelayFrames; set => Set(ref _followDelayFrames, Math.Clamp(value, 1, RundownFollowAction.MaximumDelayFrames)); }
+	public RundownRepeatMode SelectedRepeatMode { get => _selectedRepeatMode; set => Set(ref _selectedRepeatMode, value); }
 	public ushort RepeatCount { get => _repeatCount; set => Set(ref _repeatCount, Math.Clamp(value, (ushort)1, RundownRepeatPolicy.MaximumRepeatCount)); }
 	public bool RequiresAcknowledgement { get => _requiresAcknowledgement; private set { if (Set(ref _requiresAcknowledgement, value)) RaiseCommandState(); } }
+	public string AutomationState { get => _automationState; private set => Set(ref _automationState, value); }
+	public string FollowStatus { get => _followStatus; private set => Set(ref _followStatus, value); }
+	public string PendingNext { get => _pendingNext; private set => Set(ref _pendingNext, value); }
+	public string FollowCountdown { get => _followCountdown; private set => Set(ref _followCountdown, value); }
+	public string RepeatStatus { get => _repeatStatus; private set => Set(ref _repeatStatus, value); }
 	public bool HasItems => Items.Count > 0;
 	public string StorageLabel => $"SAVED V{_storageVersion}";
 
@@ -130,8 +154,9 @@ public sealed class RundownViewModel : INotifyPropertyChanged
 			Identity.Parse(asset.ReferenceId!),
 			new ProductionSourceId(Identity.Parse(source.Id)),
 			transition,
-			AutoAdvanceMedia ? RundownAdvanceMode.AutoOnMediaEnd : RundownAdvanceMode.Manual,
-			CurrentRepeatPolicy());
+			RundownAdvanceMode.Manual,
+			CurrentRepeatPolicy(),
+			CurrentFollowAction(mediaItem: true));
 		AddDraft(item);
 		return Task.CompletedTask;
 	}
@@ -143,7 +168,8 @@ public sealed class RundownViewModel : INotifyPropertyChanged
 			RundownItemId.New(),
 			scene.Name,
 			new SceneId(Identity.Parse(scene.Id)),
-			repeat: CurrentRepeatPolicy()));
+			repeat: CurrentRepeatPolicy(),
+			followAction: CurrentFollowAction(mediaItem: false)));
 		return Task.CompletedTask;
 	}
 
@@ -155,7 +181,8 @@ public sealed class RundownViewModel : INotifyPropertyChanged
 			$"Audio · {input.SourceName}",
 			RundownAudioRoutingItem.BreakawayMode,
 			new ProductionSourceId(Identity.Parse(input.SourceId)),
-			CurrentRepeatPolicy()));
+			CurrentRepeatPolicy(),
+			CurrentFollowAction(mediaItem: false)));
 		return Task.CompletedTask;
 	}
 
@@ -165,7 +192,8 @@ public sealed class RundownViewModel : INotifyPropertyChanged
 			RundownItemId.New(),
 			"Audio · Follow Video",
 			RundownAudioRoutingItem.FollowVideoMode,
-			repeat: CurrentRepeatPolicy()));
+			repeat: CurrentRepeatPolicy(),
+			followAction: CurrentFollowAction(mediaItem: false)));
 		return Task.CompletedTask;
 	}
 
@@ -176,13 +204,19 @@ public sealed class RundownViewModel : INotifyPropertyChanged
 			"Graphics · Bitmap",
 			"bitmap-graphics",
 			visible: true,
-			CurrentRepeatPolicy()));
+			CurrentRepeatPolicy(),
+			CurrentFollowAction(mediaItem: false)));
 		return Task.CompletedTask;
 	}
 
 	private Task AddHoldAsync()
 	{
-		AddDraft(new RundownHoldItem(RundownItemId.New(), $"Hold · {HoldFrames}f", HoldFrames, CurrentRepeatPolicy()));
+		AddDraft(new RundownHoldItem(
+			RundownItemId.New(),
+			$"Hold · {HoldFrames}f",
+			HoldFrames,
+			CurrentRepeatPolicy(),
+			CurrentFollowAction(mediaItem: false)));
 		return Task.CompletedTask;
 	}
 
@@ -233,10 +267,26 @@ public sealed class RundownViewModel : INotifyPropertyChanged
 	private async Task AcknowledgeRecoveryAsync(bool resume) =>
 		await RunAsync(async () => ApplySnapshot(await _client.AcknowledgeRundownRecoveryAsync(resume)));
 
+	private RundownFollowAction CurrentFollowAction(bool mediaItem)
+	{
+		if (SelectedFollowAction == RundownFollowActionKind.AutoOnMediaEnd && !mediaItem)
+			throw new InvalidOperationException("AutoOnMediaEnd is valid only for media rundown items.");
+		return SelectedFollowAction switch
+		{
+			RundownFollowActionKind.Manual => RundownFollowAction.Manual,
+			RundownFollowActionKind.PrepareNext => RundownFollowAction.PrepareNext,
+			RundownFollowActionKind.AutoGoNext => RundownFollowAction.AutoGoNext,
+			RundownFollowActionKind.AutoGoNextAfterFrames => RundownFollowAction.AutoGoNextAfterFrames(FollowDelayFrames),
+			RundownFollowActionKind.AutoOnMediaEnd => RundownFollowAction.AutoOnMediaEnd,
+			RundownFollowActionKind.Hold => RundownFollowAction.Hold,
+			_ => throw new InvalidOperationException($"Unsupported follow action '{SelectedFollowAction}'.")
+		};
+	}
+
 	private RundownRepeatPolicy CurrentRepeatPolicy() =>
-		RepeatItem
-			? new RundownRepeatPolicy(RundownRepeatMode.RepeatItem, RepeatCount)
-			: RundownRepeatPolicy.None;
+		SelectedRepeatMode == RundownRepeatMode.None
+			? RundownRepeatPolicy.None
+			: new RundownRepeatPolicy(SelectedRepeatMode, RepeatCount);
 
 	private void AddDraft(RundownItem item)
 	{
@@ -293,11 +343,26 @@ public sealed class RundownViewModel : INotifyPropertyChanged
 		State = execution.State.ToString().ToUpperInvariant();
 		RequiresAcknowledgement = execution.RequiresAcknowledgement;
 		Failure = execution.Failure?.Message ?? "NONE";
+		AutomationState = execution.AutoAdvanceArmed ? "AUTO" : "HOLD";
+		FollowStatus = execution.FollowActionKind.ToString().ToUpperInvariant();
+		PendingNext = execution.PendingNextItemId is { } pendingId
+			? Items.FirstOrDefault(item => item.Item.ItemId == pendingId)?.Name ?? pendingId.ToString()
+			: "NONE";
+		FollowCountdown = execution.FollowTargetFrameSequence is { } target
+			? execution.RemainingFollowFrames is { } remaining
+				? $"{remaining}f remaining · target {target}"
+				: $"target frame {target}"
+			: "—";
+		RepeatStatus = execution.RemainingItemRepeats > 0
+			? $"ITEM ×{execution.RemainingItemRepeats}"
+			: execution.RemainingRundownRepeats > 0
+				? $"RUNDOWN ×{execution.RemainingRundownRepeats}"
+				: "NONE";
 		Detail = execution.State switch
 		{
 			RundownExecutionState.Prepared => "Selected item is prepared through authoritative Show Control.",
 			RundownExecutionState.Executing => execution.AutoAdvanceArmed
-				? "Executing · auto-advance armed from confirmed media completion."
+				? $"Executing · {execution.FollowActionKind} armed from confirmed completion evidence."
 				: "Executing through authoritative Show Control.",
 			RundownExecutionState.Held => "Rundown is held. Program state remains authoritative.",
 			RundownExecutionState.Completed => "Rundown reached its bounded end.",
@@ -345,13 +410,14 @@ public sealed class RundownViewModel : INotifyPropertyChanged
 		_mediaPool.SelectedItem?.Kind == MediaPoolItemKind.Clip &&
 		!string.IsNullOrWhiteSpace(_mediaPool.SelectedItem.ReferenceId) &&
 		_operator.SelectedSource is not null;
-	private bool CanAddScene() => !IsBusy && _operator.SelectedScene is not null;
-	private bool CanAddAudio() => !IsBusy && _operator.SelectedAudioInput is not null;
-	private bool CanAddGraphics() => !IsBusy &&
+	private bool CanAddScene() => !IsBusy && _operator.SelectedScene is not null && CanUseSelectedFollowForNonMedia();
+	private bool CanAddAudio() => !IsBusy && _operator.SelectedAudioInput is not null && CanUseSelectedFollowForNonMedia();
+	private bool CanAddGraphics() => !IsBusy && CanUseSelectedFollowForNonMedia() &&
 		!string.IsNullOrWhiteSpace(_operator.GraphicsAssetName) &&
 		!string.Equals(_operator.GraphicsAssetName, "No graphics asset loaded", StringComparison.Ordinal);
-	private bool CanPrepare() => !IsBusy && SelectedItem is not null && State is not "DRAFT" and not "EXECUTING" and not "RECOVERYREQUIRED";
-	private bool CanNavigate() => !IsBusy && Items.Count > 0 && State is not "DRAFT" and not "EXECUTING" and not "RECOVERYREQUIRED";
+	private bool CanPrepare() => !IsBusy && SelectedItem is not null && State is not "DRAFT" and not "RECOVERYREQUIRED";
+	private bool CanNavigate() => !IsBusy && Items.Count > 0 && State is not "DRAFT" and not "RECOVERYREQUIRED";
+	private bool CanUseSelectedFollowForNonMedia() => SelectedFollowAction != RundownFollowActionKind.AutoOnMediaEnd;
 
 	private bool CanMove(int offset)
 	{
@@ -413,13 +479,13 @@ public sealed class RundownOperatorItemViewModel : INotifyPropertyChanged
 	}
 	public string Detail => Item switch
 	{
-		RundownMediaItem media => $"{media.Transition!.Kind.ToString().ToUpperInvariant()} · {(media.AdvanceMode == RundownAdvanceMode.AutoOnMediaEnd ? "AUTO" : "MANUAL")} · {media.AssetId}",
-		RundownSceneItem scene => $"SCENE · {scene.SceneId}",
-		RundownGraphicsItem graphics => $"{graphics.LayerId} · {(graphics.Visible ? "SHOW" : "HIDE")}",
+		RundownMediaItem media => $"{media.Transition!.Kind.ToString().ToUpperInvariant()} · {media.FollowAction.Kind.ToString().ToUpperInvariant()} · {media.AssetId}",
+		RundownSceneItem scene => $"SCENE · {scene.SceneId} · {scene.FollowAction.Kind.ToString().ToUpperInvariant()}",
+		RundownGraphicsItem graphics => $"{graphics.LayerId} · {(graphics.Visible ? "SHOW" : "HIDE")} · {graphics.FollowAction.Kind.ToString().ToUpperInvariant()}",
 		RundownAudioRoutingItem audio => audio.RoutingMode == RundownAudioRoutingItem.BreakawayMode
-			? $"BREAKAWAY · {audio.BreakawaySourceId}"
-			: "FOLLOW_VIDEO",
-		RundownHoldItem hold => $"HOLD · {hold.Frames}f",
+			? $"BREAKAWAY · {audio.BreakawaySourceId} · {audio.FollowAction.Kind.ToString().ToUpperInvariant()}"
+			: $"FOLLOW_VIDEO · {audio.FollowAction.Kind.ToString().ToUpperInvariant()}",
+		RundownHoldItem hold => $"HOLD · {hold.Frames}f · {hold.FollowAction.Kind.ToString().ToUpperInvariant()}",
 		_ => Item.Kind.ToString()
 	};
 
