@@ -236,6 +236,39 @@ public sealed class ProductionIntegrationGatewayTests
 	}
 
 	[Fact]
+	public async Task Gateway_invokes_macro_by_identity_without_copying_macro_actions_into_mapping()
+	{
+		var transport = new ProbeTransport();
+		var client = new OperatorControlClient(transport);
+		var adapter = new PassiveAdapter("macro");
+		var macroId = "9a000000-0000-0000-0000-000000000099";
+		var options = GatewayOptions(
+			new[] { Adapter("macro") },
+			new[]
+			{
+				new IntegrationMappingOptions
+				{
+					Id = "macro-open",
+					AdapterId = "macro",
+					TriggerKey = "macro",
+					Action = new IntegrationActionOptions
+					{
+						Kind = IntegrationActionKind.ProductionMacroExecute,
+						TargetId = macroId
+					}
+				}
+			});
+		await using var gateway = new IntegrationGateway(options, client);
+		gateway.RegisterAdapter(adapter);
+		await gateway.StartAsync();
+
+		Assert.True(gateway.TryEnqueue(new IntegrationTrigger("macro", "macro")));
+		await WaitUntilAsync(() => transport.MacroCalls > 0);
+
+		Assert.Equal(macroId, transport.LastMacroId);
+	}
+
+	[Fact]
 	public async Task Gateway_serializes_client_snapshot_refresh_with_production_commands()
 	{
 		var transport = new ProbeTransport(delayMilliseconds: 80);
@@ -463,6 +496,8 @@ public sealed class ProductionIntegrationGatewayTests
 
 		public int GetSnapshotCalls { get; private set; }
 		public int CutCalls { get; private set; }
+		public int MacroCalls { get; private set; }
+		public string? LastMacroId { get; private set; }
 		public int MaxConcurrentCalls { get; private set; }
 
 		public async ValueTask<OperatorStatusSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default)
@@ -522,6 +557,18 @@ public sealed class ProductionIntegrationGatewayTests
 			DissolveProgramCommand command,
 			CancellationToken cancellationToken = default) =>
 			ValueTask.FromException<OperatorMutationResponse>(new NotSupportedException());
+
+		public ValueTask<ProductionMacroWorkspaceSnapshot> ExecuteProductionMacroAsync(
+			ProductionMacroId macroId,
+			CancellationToken cancellationToken = default)
+		{
+			MacroCalls++;
+			LastMacroId = macroId.ToString();
+			return ValueTask.FromResult(new ProductionMacroWorkspaceSnapshot(
+				Array.Empty<ProductionMacroDefinition>(),
+				0,
+				ProductionMacroExecutionSnapshot.Idle));
+		}
 
 		private async ValueTask EnterAsync(CancellationToken cancellationToken)
 		{
