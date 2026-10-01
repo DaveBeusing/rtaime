@@ -54,6 +54,9 @@ function Get-SupportPolicyErrors {
 	if (-not [bool]$stable.approvalRequired) { $errors.Add("stable.approvalRequired") }
 
 	$preview = $Policy.lifecycle.preview
+	if ([string]$preview.status -notin @("PASS", "FAIL", "UNVERIFIED")) {
+		$errors.Add("preview.status")
+	}
 
 	$security = $Policy.securitySupport
 	if ([string]$security.remediationTargetsStatus -eq "PASS") {
@@ -65,6 +68,8 @@ function Get-SupportPolicyErrors {
 		foreach ($severity in @("CRITICAL", "HIGH", "MEDIUM", "LOW")) {
 			if ($null -ne $security.severityTargetsDays.$severity) { $errors.Add("unapproved-security.$severity") }
 		}
+	} elseif ([string]$security.remediationTargetsStatus -ne "FAIL") {
+		$errors.Add("security.remediationTargetsStatus")
 	}
 
 	$deprecation = $Policy.upgradeDeprecation.contractDeprecation
@@ -74,6 +79,8 @@ function Get-SupportPolicyErrors {
 		}
 	} elseif ([string]$deprecation.status -eq "UNVERIFIED" -and $null -ne $deprecation.minimumNoticeDays) {
 		$errors.Add("unapproved-deprecation.minimumNoticeDays")
+	} elseif ([string]$deprecation.status -notin @("FAIL", "UNVERIFIED")) {
+		$errors.Add("deprecation.status")
 	}
 
 	$stableLines = @($Policy.supportedVersions.stableLines)
@@ -117,6 +124,8 @@ function Get-SupportPolicyErrors {
 			foreach ($property in $dateProperties) {
 				if ($null -ne $line.$property) { $errors.Add("stableLine.unverified.$property") }
 			}
+		} else {
+			$errors.Add("stableLine.status")
 		}
 	}
 
@@ -134,6 +143,8 @@ function Get-SupportPolicyErrors {
 		}
 	} elseif ([string]$previewVersion.status -eq "UNVERIFIED" -and [string]$previewVersion.supportMode -ne "UNVERIFIED") {
 		$errors.Add("preview.unverifiedSupportMode")
+	} elseif ([string]$previewVersion.status -notin @("FAIL", "UNVERIFIED")) {
+		$errors.Add("preview.versionStatus")
 	}
 	if ([string]$preview.status -eq "PASS" -and [string]$previewVersion.status -ne "PASS") {
 		$errors.Add("preview.lifecycleWithoutVersionPolicy")
@@ -150,6 +161,7 @@ function Get-PlatformMatrixErrors {
 	$errors = [System.Collections.Generic.List[string]]::new()
 
 	if ([string]$Matrix.schemaVersion -ne "1.0") { $errors.Add("schemaVersion") }
+	if ([string]$Matrix.matrixStatus -notin @("PASS", "FAIL", "UNVERIFIED")) { $errors.Add("matrixStatus") }
 	if (-not [bool]$Matrix.evidencePolicy.supportedRequiresEvidence) { $errors.Add("supportedRequiresEvidence") }
 	if (-not [bool]$Matrix.evidencePolicy.materialChangeInvalidatesEvidence) { $errors.Add("materialChangeInvalidatesEvidence") }
 	if ([string]$Matrix.compatibilityRules.materialChangePolicy -ne "REQUALIFY") { $errors.Add("materialChangePolicy") }
@@ -164,6 +176,15 @@ function Get-PlatformMatrixErrors {
 	}
 
 	foreach ($configuration in $configurations) {
+		if ([string]$configuration.supportStatus -notin @("SUPPORTED", "UNVERIFIED", "UNSUPPORTED")) {
+			$errors.Add("configuration.supportStatus")
+		}
+		if ([string]$configuration.gpu.qualificationStatus -notin @("PASS", "FAIL", "UNVERIFIED")) {
+			$errors.Add("configuration.gpu.qualificationStatus")
+		}
+		if ([string]$configuration.mediaIo.qualificationStatus -notin @("PASS", "FAIL", "UNVERIFIED")) {
+			$errors.Add("configuration.mediaIo.qualificationStatus")
+		}
 		$evidencePaths = @($configuration.qualificationEvidence)
 		foreach ($evidence in $evidencePaths) {
 			if (-not (Test-Path -LiteralPath (Repository-Path ([string]$evidence)) -PathType Leaf)) {
@@ -219,6 +240,10 @@ function Get-PlatformMatrixErrors {
 		}
 
 		foreach ($networkProvider in @($configuration.networkProviders)) {
+			if ([string]$networkProvider.supportStatus -notin @("SUPPORTED", "UNVERIFIED", "UNSUPPORTED")) {
+				$errors.Add("networkProvider.supportStatus:$($networkProvider.provider)")
+				continue
+			}
 			if ([string]$networkProvider.supportStatus -ne "SUPPORTED") { continue }
 			$networkEvidence = @($networkProvider.qualificationEvidence)
 			if ($networkEvidence.Count -eq 0) {
@@ -380,6 +405,9 @@ Assert-Condition ($deploymentDocumentationText -match 'does not create hardware 
 & (Repository-Path "build/governance/New-SupportCompatibilityMatrix.ps1") -Verify
 
 Assert-Condition ($stableVerifierText -match 'releasePromotionPerformed = \$false') "Stable readiness verifier must never promote release stage."
+Assert-Condition ($stableVerifierText -match 'Test-PositiveInteger' -and $stableVerifierText -match 'maintenanceMonths' -and $stableVerifierText -match 'severityTargetsDays') "Stable readiness must independently validate approved duration commitments."
+Assert-Condition ($stableVerifierText -match 'Get-StableVersionLine' -and $stableVerifierText -match 'matchingSupportedLines') "Stable readiness must require the current Stable version line to be explicitly SUPPORTED."
+Assert-Condition ($stableVerifierText -match 'Test-PassedQualificationEvidence' -and $stableVerifierText -match 'Test-SupportedPlatformConfiguration') "Stable readiness must independently validate evidence-backed supported platform tuples."
 Assert-Condition ($stableVerifierText -match 'productionSigningTrust' -and $stableVerifierText -match 'requiredHardwareEvidence') "Stable readiness verifier must evaluate production trust and hardware evidence."
 Assert-Condition ($stableVerifierText -match 'KNOWN_ISSUES') "Stable readiness verifier must evaluate known-issues evidence."
 Assert-Condition ($stableVerifierText -match 'Test-ReleaseEvidence\.ps1') "Stable readiness verifier must validate supplied release evidence."
@@ -427,6 +455,18 @@ Assert-Condition (@(Get-SupportPolicyErrors $invalidCommitment).Count -gt 0) "Su
 $invalidPreview = Clone-JsonObject $supportPolicy
 $invalidPreview.lifecycle.preview.status = "PASS"
 Assert-Condition (@(Get-SupportPolicyErrors $invalidPreview).Count -gt 0) "Preview PASS without explicit commitments must fail validation."
+
+$invalidPreviewStatus = Clone-JsonObject $supportPolicy
+$invalidPreviewStatus.lifecycle.preview.status = "UNKNOWN"
+Assert-Condition (@(Get-SupportPolicyErrors $invalidPreviewStatus).Count -gt 0) "Unknown Preview lifecycle status must fail closed."
+
+$invalidSecurityStatus = Clone-JsonObject $supportPolicy
+$invalidSecurityStatus.securitySupport.remediationTargetsStatus = "UNKNOWN"
+Assert-Condition (@(Get-SupportPolicyErrors $invalidSecurityStatus).Count -gt 0) "Unknown security-support status must fail closed."
+
+$invalidDeprecationStatus = Clone-JsonObject $supportPolicy
+$invalidDeprecationStatus.upgradeDeprecation.contractDeprecation.status = "UNKNOWN"
+Assert-Condition (@(Get-SupportPolicyErrors $invalidDeprecationStatus).Count -gt 0) "Unknown deprecation status must fail closed."
 
 $invalidDates = Clone-JsonObject $supportPolicy
 $invalidDates.lifecycle.stableRelease.status = "PASS"
@@ -483,6 +523,14 @@ Assert-Condition (@(Get-PlatformMatrixErrors $staleEvidence).Count -gt 0) "Stale
 $matrixPassWithoutSupport = Clone-JsonObject $platformMatrix
 $matrixPassWithoutSupport.matrixStatus = "PASS"
 Assert-Condition (@(Get-PlatformMatrixErrors $matrixPassWithoutSupport).Count -gt 0) "Matrix PASS without a SUPPORTED tuple must fail validation."
+
+$invalidMatrixStatus = Clone-JsonObject $platformMatrix
+$invalidMatrixStatus.matrixStatus = "UNKNOWN"
+Assert-Condition (@(Get-PlatformMatrixErrors $invalidMatrixStatus).Count -gt 0) "Unknown matrix status must fail closed."
+
+$invalidConfigurationStatus = Clone-JsonObject $platformMatrix
+$invalidConfigurationStatus.configurations[0].supportStatus = "UNKNOWN"
+Assert-Condition (@(Get-PlatformMatrixErrors $invalidConfigurationStatus).Count -gt 0) "Unknown platform support status must fail closed."
 
 $nonMachineReadableEvidence = Clone-JsonObject $platformMatrix
 $nonMachineReadableEvidence.matrixStatus = "PASS"
