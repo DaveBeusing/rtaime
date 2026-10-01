@@ -462,7 +462,7 @@ public sealed class RundownCoordinatorIntegrationTests
 				{
 					ExecutedActions.Add(action.Kind);
 					ActionExecutionCount++;
-					return ValueTask.FromResult(
+					return ValueTask.FromResult<Failure?>(
 						FailActionExecutionNumber == ActionExecutionCount
 							? new Failure("test.rundown.action_failed", "Injected rundown action failure.")
 							: null);
