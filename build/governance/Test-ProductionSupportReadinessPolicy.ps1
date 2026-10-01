@@ -412,6 +412,13 @@ try {
 	if (Test-Path -LiteralPath $tempReadiness) { Remove-Item -LiteralPath $tempReadiness -Force }
 }
 
+$wrongSource = "1111111111111111111111111111111111111111"
+if ($wrongSource -eq $expectedSource) { $wrongSource = "2222222222222222222222222222222222222222" }
+$sourceMismatchReadiness = & (Repository-Path "build/release/Test-StableReadiness.ps1") -ExpectedSourceCommit $wrongSource
+$sourceMismatchDomain = @($sourceMismatchReadiness.domains | Where-Object { [string]$_.name -eq "sourceIdentity" })
+Assert-Condition ([string]$sourceMismatchReadiness.overallStatus -eq "FAIL") "Mismatched expected source commit must fail Stable readiness."
+Assert-Condition ($sourceMismatchDomain.Count -eq 1 -and [string]$sourceMismatchDomain[0].status -eq "FAIL") "Source-identity domain must fail on an expected-source mismatch."
+
 $invalidCommitment = Clone-JsonObject $supportPolicy
 $invalidCommitment.lifecycle.stableRelease.status = "PASS"
 Assert-Condition (@(Get-SupportPolicyErrors $invalidCommitment).Count -gt 0) "Support PASS without required durations must fail validation."
@@ -488,6 +495,11 @@ $nonMachineReadableEvidence.configurations[0].mediaIo.driverRange = "example"
 $nonMachineReadableEvidence.configurations[0].mediaIo.qualificationStatus = "PASS"
 $nonMachineReadableEvidence.configurations[0].qualificationEvidence = @("docs/QualificationEvidenceProvenance.md")
 Assert-Condition (@(Get-PlatformMatrixErrors $nonMachineReadableEvidence).Count -gt 0) "SUPPORTED platform must reject non-machine-readable qualification evidence."
+
+$networkWithoutEvidence = Clone-JsonObject $platformMatrix
+$networkWithoutEvidence.configurations[0].networkProviders[0].supportStatus = "SUPPORTED"
+$networkWithoutEvidence.configurations[0].networkProviders[0].qualificationEvidence = @()
+Assert-Condition (@(Get-PlatformMatrixErrors $networkWithoutEvidence).Count -gt 0) "SUPPORTED network provider without qualification evidence must fail validation."
 
 Assert-Condition ($buildPropsText -match '<RtaimeProductVersion>0\.1\.0-dev</RtaimeProductVersion>') "Current source version must remain 0.1.0-dev."
 Assert-Condition ($buildPropsText -match '<RtaimeReleaseStage>DEV</RtaimeReleaseStage>') "Current source release stage must remain DEV."
