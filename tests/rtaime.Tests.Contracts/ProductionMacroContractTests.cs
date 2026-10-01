@@ -91,6 +91,33 @@ public sealed class ProductionMacroContractTests
 	}
 
 	[Fact]
+	public void Reorder_preserves_macro_action_identity_and_payload()
+	{
+		var first = new ProductionMacroAction(ProductionMacroActionId.New(), ShowControlActionKind.Cut);
+		var second = new ProductionMacroAction(ProductionMacroActionId.New(), ShowControlActionKind.WaitFrames, waitFrames: 10);
+		var macro = new ProductionMacroDefinition(
+			ProductionMacroContractVersion.Current,
+			ProductionMacroId.New(),
+			"Reorder",
+			[first, second]);
+
+		var reordered = macro.Reorder([second.ActionId, first.ActionId]);
+
+		Assert.Equal([second.ActionId, first.ActionId], reordered.Actions.Select(action => action.ActionId));
+		Assert.Equal(ShowControlActionKind.WaitFrames, reordered.Actions[0].Kind);
+		Assert.Equal(10U, reordered.Actions[0].Command.WaitFrames);
+	}
+
+	[Fact]
+	public void Closed_action_union_has_no_macro_nesting_or_generic_script_action()
+	{
+		var names = Enum.GetNames<ShowControlActionKind>();
+		Assert.DoesNotContain(names, name => name.Contains("Macro", StringComparison.OrdinalIgnoreCase));
+		Assert.DoesNotContain(names, name => name.Contains("Script", StringComparison.OrdinalIgnoreCase));
+		Assert.DoesNotContain(names, name => name.Contains("Execute", StringComparison.OrdinalIgnoreCase));
+	}
+
+	[Fact]
 	public void Execution_snapshot_round_trips_recovery_evidence()
 	{
 		var snapshot = new ProductionMacroExecutionSnapshot(
