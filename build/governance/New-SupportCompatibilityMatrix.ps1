@@ -93,8 +93,8 @@ if ($Verify) {
 		throw "Generated support/compatibility projection is missing: '$OutputPath'."
 	}
 	$existing = Get-Content -LiteralPath $resolvedOutput -Raw
-	$normalizedExisting = $existing.Replace([string][char]13, "")
-	$normalizedRendered = $rendered.Replace([string][char]13, "")
+	$normalizedExisting = $existing.Replace([string][char]13, "").TrimEnd()
+	$normalizedRendered = $rendered.Replace([string][char]13, "").TrimEnd()
 	if ($normalizedExisting -ne $normalizedRendered) {
 		throw "Support/compatibility projection drifted from its source-controlled policies. Regenerate with New-SupportCompatibilityMatrix.ps1."
 	}
