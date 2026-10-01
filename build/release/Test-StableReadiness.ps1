@@ -4,6 +4,7 @@
 param(
 	[string]$ReleaseEvidencePath = "",
 	[string]$ReleaseCandidatePath = "",
+	[string]$ExpectedSourceCommit = "",
 	[string]$OutputPath = ""
 )
 
@@ -32,6 +33,29 @@ function Read-Json {
 	return Get-Content -LiteralPath $fullPath -Raw | ConvertFrom-Json
 }
 
+function Get-Sha256 {
+	param([Parameter(Mandatory)][string]$Path)
+	return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+}
+
+function Resolve-SourceCommit {
+	param([string]$ExplicitCommit)
+	if (-not [string]::IsNullOrWhiteSpace($ExplicitCommit)) {
+		$normalized = $ExplicitCommit.Trim().ToLowerInvariant()
+		Assert-Condition ($normalized -match '^[0-9a-f]{40,64}$') "Expected source commit is invalid."
+		return $normalized
+	}
+	try {
+		$resolved = (& git -C $repositoryRoot rev-parse HEAD 2>$null | Select-Object -First 1)
+		if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace([string]$resolved)) {
+			$normalized = ([string]$resolved).Trim().ToLowerInvariant()
+			if ($normalized -match '^[0-9a-f]{40,64}$') { return $normalized }
+		}
+	} catch {
+	}
+	return $null
+}
+
 function Add-Domain {
 	param(
 		[Parameter(Mandatory)][AllowEmptyCollection()][System.Collections.Generic.List[object]]$Domains,
@@ -54,6 +78,7 @@ Assert-Condition (Test-Path -LiteralPath $buildPropsPath -PathType Leaf) "Direct
 $productVersion = $buildProps.SelectSingleNode("//RtaimeProductVersion").InnerText.Trim()
 $releaseStage = $buildProps.SelectSingleNode("//RtaimeReleaseStage").InnerText.Trim().ToUpperInvariant()
 Assert-Condition ($releaseStage -in @("DEV", "PREVIEW", "STABLE")) "Unsupported source release stage '$releaseStage'."
+$expectedSourceCommit = Resolve-SourceCommit $ExpectedSourceCommit
 
 $supportPolicy = Read-Json "docs/Governance/ProductSupportPolicy.json"
 $platformMatrix = Read-Json "docs/Governance/PlatformSupportMatrix.json"
@@ -63,6 +88,15 @@ $releasePolicy = Read-Json "build/release/release-policy.json"
 $updatePolicy = Read-Json "build/update/update-policy.json"
 
 $domains = [System.Collections.Generic.List[object]]::new()
+
+$sourceIdentityStatus = if ($null -eq $expectedSourceCommit) { "UNVERIFIED" } else { "PASS" }
+Add-Domain $domains "sourceIdentity" $sourceIdentityStatus "repository HEAD / ExpectedSourceCommit" $(
+	if ($sourceIdentityStatus -eq "PASS") {
+		"Exact source commit '$expectedSourceCommit' is available for readiness correlation."
+	} else {
+		"Exact source commit could not be established; Stable readiness cannot become PASS."
+	}
+)
 
 $stableLifecycle = $supportPolicy.lifecycle.stableRelease
 $supportPeriodStatus = if ([string]$stableLifecycle.status -eq "PASS" -and
@@ -159,6 +193,7 @@ $updateRollbackStatus = if (
 Add-Domain $domains "updateRollback" $updateRollbackStatus "build/update/update-policy.json" "Managed updates require production trust, retain rollback state and use coordinated persistent-state migration."
 
 $releaseEvidence = $null
+$releaseEvidenceFile = $null
 $evidenceRoot = $null
 if (-not [string]::IsNullOrWhiteSpace($ReleaseEvidencePath)) {
 	$evidenceRoot = Resolve-RepositoryPath $ReleaseEvidencePath
@@ -174,15 +209,22 @@ if (-not [string]::IsNullOrWhiteSpace($ReleaseEvidencePath)) {
 
 $releaseEvidenceStatus = if ($null -eq $releaseEvidence) {
 	"UNVERIFIED"
-} elseif ([string]$releaseEvidence.productVersion -ne $productVersion -or [string]$releaseEvidence.releaseStage -ne $releaseStage) {
+} elseif ($null -eq $expectedSourceCommit) {
+	"UNVERIFIED"
+} elseif (
+	[string]$releaseEvidence.productVersion -ne $productVersion -or
+	[string]$releaseEvidence.releaseStage -ne $releaseStage -or
+	[string]$releaseEvidence.sourceCommit -ne $expectedSourceCommit -or
+	[string]$releaseEvidence.buildCommit -ne $expectedSourceCommit
+) {
 	"FAIL"
 } else {
 	"PASS"
 }
 Add-Domain $domains "releaseEvidence" $releaseEvidenceStatus "release-evidence.json" $(
-	if ($releaseEvidenceStatus -eq "PASS") { "Release evidence verifies and matches the current product identity." }
-	elseif ($releaseEvidenceStatus -eq "FAIL") { "Release evidence does not match the current product identity." }
-	else { "No exact current-source release-evidence bundle was supplied to the Stable-readiness verifier." }
+	if ($releaseEvidenceStatus -eq "PASS") { "Release evidence verifies and matches the exact current product/source identity." }
+	elseif ($releaseEvidenceStatus -eq "FAIL") { "Release evidence does not match the exact current product/source identity." }
+	else { "No exact current-source release-evidence bundle was supplied or source identity could not be established." }
 )
 
 $knownIssuesStatus = "UNVERIFIED"
@@ -234,6 +276,8 @@ Add-Domain $domains "requiredHardwareEvidence" $hardwareStatus "compatibility-ma
 	}
 )
 
+$candidate = $null
+$candidateFile = $null
 $productionTrustStatus = "UNVERIFIED"
 if (-not [string]::IsNullOrWhiteSpace($ReleaseCandidatePath)) {
 	$candidateRoot = Resolve-RepositoryPath $ReleaseCandidatePath
@@ -260,6 +304,29 @@ Add-Domain $domains "productionSigningTrust" $productionTrustStatus "release-can
 		"Supplied release candidate is not an acceptable Stable production-trust candidate."
 	} else {
 		"No qualifying Stable production-trust candidate was supplied."
+	}
+)
+
+$candidateEvidenceCorrelationStatus = "UNVERIFIED"
+if ($null -ne $candidate -and $null -ne $releaseEvidence -and $null -ne $releaseEvidenceFile) {
+	$releaseEvidenceHash = Get-Sha256 $releaseEvidenceFile
+	$candidateEvidenceCorrelationStatus = if (
+		[string]$candidate.product.version -eq [string]$releaseEvidence.productVersion -and
+		[string]$candidate.product.releaseStage -eq [string]$releaseEvidence.releaseStage -and
+		[string]$candidate.source.sourceCommit -eq [string]$releaseEvidence.sourceCommit -and
+		[string]$candidate.source.buildCommit -eq [string]$releaseEvidence.buildCommit -and
+		[string]$candidate.source.buildId -eq [string]$releaseEvidence.buildId -and
+		[string]$candidate.releaseRecord.releaseEvidenceSha256 -eq $releaseEvidenceHash -and
+		($null -eq $expectedSourceCommit -or [string]$candidate.source.sourceCommit -eq $expectedSourceCommit)
+	) { "PASS" } else { "FAIL" }
+}
+Add-Domain $domains "candidateEvidenceCorrelation" $candidateEvidenceCorrelationStatus "release-candidate.json + release-evidence.json" $(
+	if ($candidateEvidenceCorrelationStatus -eq "PASS") {
+		"Release candidate and supplied release evidence are hash- and identity-bound to the same exact source/build."
+	} elseif ($candidateEvidenceCorrelationStatus -eq "FAIL") {
+		"Release candidate and supplied release evidence do not describe the same exact source/build/evidence bytes."
+	} else {
+		"A release candidate and exact release evidence were not both supplied for correlation."
 	}
 )
 
