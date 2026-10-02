@@ -54,6 +54,25 @@ public sealed record ReplayControlSnapshot(
 	ulong Discontinuities,
 	Failure? Failure)
 {
+	public static ReplayControlSnapshot Unavailable { get; } = new(
+		ReplayControlContractVersion.Current,
+		ReplayControlCaptureState.Disabled,
+		ReplayControlClipState.Idle,
+		TimeSpan.Zero,
+		TimeSpan.Zero,
+		0,
+		0,
+		TimeSpan.Zero,
+		0,
+		null,
+		null,
+		0,
+		0,
+		0,
+		0,
+		0,
+		new Failure("replay.unavailable", "Replay capture is unavailable."));
+
 	public bool HasSelection => MarkIn is not null && MarkOut is not null && MarkOut > MarkIn;
 	public TimeSpan? SelectedDuration => HasSelection ? MarkOut - MarkIn : null;
 }
