@@ -337,7 +337,8 @@ The Windows recording path now implements MP4 delivery with H.264/AVC video and 
 Marketing priority:
 
 - describe MP4/H.264/AAC only within the tested Windows/software qualification boundary;
-- do not imply MOV/MXF support, hardware-encoder guarantees, sustained professional storage throughput or long-duration physical-platform qualification;
+- describe managed MOV only as uncompressed `2vuy` video plus `sowt` PCM16 audio within retained software interoperability evidence;
+- do not imply MXF, ProRes, DNxHR, AVC-Intra, hardware-encoder guarantees, sustained professional storage throughput or long-duration physical-platform qualification;
 - publish codec/container compatibility only from retained passing evidence.
 
 ### 3. Output, streaming and scene-control breadth
