@@ -18,6 +18,7 @@ public sealed class RuntimeReplayService : IAsyncDisposable
 	private ReplayClipState _clipState = ReplayClipState.Idle;
 	private Failure? _clipFailure;
 	private ReplayClipResult? _lastClip;
+	private ReplayBufferSnapshot? _finalSnapshot;
 	private bool _disposed;
 
 	public RuntimeReplayService(
@@ -171,6 +172,29 @@ public sealed class RuntimeReplayService : IAsyncDisposable
 				return;
 			_disposed = true;
 		}
+
+		await _capture.StopAsync(CancellationToken.None).ConfigureAwait(false);
+		var finalCapture = _capture.Snapshot;
+		lock (_gate)
+			_finalSnapshot = ProjectSnapshotUnsafe(finalCapture);
 		await _capture.DisposeAsync().ConfigureAwait(false);
+	}
+
+	private ReplayBufferSnapshot ProjectSnapshot(ReplayBufferSnapshot capture)
+	{
+		lock (_gate)
+			return ProjectSnapshotUnsafe(capture);
+	}
+
+	private ReplayBufferSnapshot ProjectSnapshotUnsafe(ReplayBufferSnapshot capture)
+	{
+		var state = capture.Selection is null && _clipState == ReplayClipState.Marked
+			? ReplayClipState.Idle
+			: _clipState;
+		return capture with
+		{
+			ClipState = state,
+			Failure = _clipFailure ?? capture.Failure
+		};
 	}
 }
