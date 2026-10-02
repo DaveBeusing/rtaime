@@ -13,8 +13,7 @@ namespace rtaime.Recording;
 /// </summary>
 public sealed class WindowsMediaFoundationMp4RecordingWriter :
 	IProgramRecordingPayloadWriter,
-	IReplaySegmentWriter,
-	IProgramRecordingFormatCapabilityProvider
+	IReplaySegmentWriter
 {
 	private readonly object _gate = new();
 	private readonly string _defaultRootDirectory;
@@ -54,9 +53,6 @@ public sealed class WindowsMediaFoundationMp4RecordingWriter :
 		_maximumPayloadBytes = maximumPayloadBytes;
 	}
 
-	public ProgramRecordingFormatAvailability FormatAvailability =>
-		ProfessionalRecordingFormats.GetMp4H264AacAvailability();
-
 	public string? FinalPath => _finalPath;
 
 	public string ConfigureTarget(string destinationDirectory, string fileName)
@@ -83,6 +79,8 @@ public sealed class WindowsMediaFoundationMp4RecordingWriter :
 	{
 		ArgumentNullException.ThrowIfNull(request);
 		cancellationToken.ThrowIfCancellationRequested();
+		if (request.ProfileId is { } requestedProfile && requestedProfile != ProfessionalRecordingFormats.Mp4H264AacProfileId)
+			throw new RecordingOutputUnavailableException($"MP4 writer does not support recording profile '{requestedProfile}'.");
 
 		if (!OperatingSystem.IsWindows())
 			throw new RecordingOutputUnavailableException("MP4 H.264/AAC recording requires Windows Media Foundation.");
