@@ -1,5 +1,8 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
+using System;
+using System.IO;
+using System.Linq;
 using rtaime.Recording;
 using Xunit;
 
@@ -17,7 +20,7 @@ public sealed class ReplaySegmentStoreTests
 
 		var retained = fixture.Store.Snapshot();
 
-		Assert.Equal([second.SegmentId, third.SegmentId], retained.Select(segment => segment.SegmentId));
+		Assert.Equal(new[] { second.SegmentId, third.SegmentId }, retained.Select(segment => segment.SegmentId));
 		Assert.False(File.Exists(first.Path));
 		Assert.Equal(1UL, fixture.Store.EvictedSegments);
 	}
