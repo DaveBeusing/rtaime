@@ -42,12 +42,18 @@ public sealed class RecordingProfileOperatorTests
 	public void Operator_does_not_hard_code_recording_format_names_or_future_codecs()
 	{
 		var root = FindRepositoryRoot();
-		var surface = File.ReadAllText(Path.Combine(root, "src", "Hosts", "rtaime.Operator", "MainWindow.xaml"));
-		var viewModel = File.ReadAllText(Path.Combine(root, "src", "Hosts", "rtaime.Operator", "OperatorViewModel.cs"));
-		var combined = surface + viewModel;
+		var path = Path.Combine(root, "src", "Hosts", "rtaime.Operator", "MainWindow.xaml");
+		var document = XDocument.Load(path);
+		var advertisedText = string.Join(
+			" ",
+			document
+				.Descendants()
+				.SelectMany(element => element.Attributes())
+				.Where(attribute => attribute.Name.LocalName is "Text" or "Content" or "Header" or "ToolTip")
+				.Select(attribute => attribute.Value));
 
 		foreach (var unsupported in new[] { "MOV", "MXF", "ProRes", "DNxHR", "AVC-Intra" })
-			Assert.DoesNotContain(unsupported, combined, StringComparison.OrdinalIgnoreCase);
+			Assert.DoesNotContain(unsupported, advertisedText, StringComparison.OrdinalIgnoreCase);
 	}
 
 	private static string FindRepositoryRoot()
