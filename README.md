@@ -46,7 +46,7 @@ The V1 path brings together:
 - timeline, IN/OUT, markers and Cue points;
 - graphics and compositing, including Production CG text rendering;
 - Audio Follow Video and deterministic generated audio diagnostics;
-- failure-isolated Program Recording with a Windows MP4 H.264/AAC software-interoperability path;
+- failure-isolated Program Recording with a provider-neutral profile catalog and a qualified Windows MP4 H.264/AAC software-interoperability path;
 - governed Program/Aux output roles plus monitoring;
 - system health and performance visibility.
 
@@ -81,7 +81,7 @@ The current V1 development repository implements production-shaped software path
 | Switching | authoritative Preview/Program, CUT, DISSOLVE and governed Scene activation |
 | Compositing | RuntimeHost-owned bitmap overlays, dynamic Production CG lower thirds, layers and compositing workspace |
 | Audio | Audio Follow Video, explicit breakaway, bounded multi-source Program mixing, deterministic crossfade/ducking, Runtime metering and generated test signals |
-| Recording | failure-isolated Program Recording plus Windows MP4 H.264/AAC software interoperability and bounded encoded Program replay/clip production |
+| Recording | provider-neutral recording profile catalog, qualified Windows MP4 H.264/AAC software interoperability, and bounded encoded Program replay/clip production |
 | Output | governed Program/Aux output roles, Clean Program monitoring, output health and bounded SRT network-output foundation |
 | AI | governed inference showcase with bounded fallback |
 | Health | CPU/GPU/memory telemetry, Runtime performance, alerts and health center |
@@ -363,3 +363,6 @@ Use the source-controlled brand assets rather than recreating the mark for docum
 
 
 Replay retains bounded encoded Program history and materializes normal-speed selections as ordinary Media Library clips that reuse Media Deck and normal Preview/Program routing. See [Replay and Clip Production](docs/ReplayClipProduction.md).
+
+
+Recording profiles are Runtime-confirmed capabilities rather than UI codec presets. The current default is `mp4-h264-aac`; future MOV/MXF or hardware-encoder profiles require concrete providers and qualification before they can be advertised. See [Recording Profile Catalog](docs/RecordingProfileCatalog.md).
