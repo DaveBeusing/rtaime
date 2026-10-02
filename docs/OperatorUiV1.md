@@ -851,3 +851,12 @@ The RUN surface exposes confirmed execution state, current action, last confirme
 The surface uses only rtaime custom interaction controls and does not provide a code editor, scripts, nested Macros or arbitrary executable actions. Runtime-frame waits and restart recovery are presented from confirmed ControlHost state rather than WPF timers.
 
 See `docs/ProductionMacros.md`.
+
+
+## Replay and Clip Production
+
+The Operator exposes a bounded REPLAY surface for retained-duration/storage evidence, discontinuity/backpressure state, MARK IN, MARK OUT, selected duration, CREATE CLIP, OPEN IN MEDIA DECK and SEND TO PREVIEW.
+
+The surface is presentation-only. Capture and materialization are RuntimeHost-owned, Media Library adoption is confirmed through ControlHost, and playback reuses Media Deck plus the normal Preview/Program command path. The Operator does not retain raw Program media, run a replay encoder, or route replay pixels directly to Program.
+
+See [Replay and Clip Production](ReplayClipProduction.md).
