@@ -51,18 +51,13 @@ public sealed class RuntimeReplayService : IAsyncDisposable
 	{
 		get
 		{
-			var capture = _capture.Snapshot;
 			lock (_gate)
 			{
-				var state = capture.Selection is null && _clipState == ReplayClipState.Marked
-					? ReplayClipState.Idle
-					: _clipState;
-				return capture with
-				{
-					ClipState = state,
-					Failure = _clipFailure ?? capture.Failure
-				};
+				if (_finalSnapshot is not null)
+					return _finalSnapshot;
 			}
+
+			return ProjectSnapshot(_capture.Snapshot);
 		}
 	}
 
