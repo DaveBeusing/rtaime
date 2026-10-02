@@ -78,7 +78,7 @@ public sealed record RecordingProfileDescriptor
 	{
 		if (string.IsNullOrWhiteSpace(displayName)) throw new ArgumentException("Recording profile display name is required.", nameof(displayName));
 		if (string.IsNullOrWhiteSpace(container)) throw new ArgumentException("Recording profile container is required.", nameof(container));
-		if (string.IsNullOrWhiteSpace(fileExtension) || !fileExtension.StartsWith('.', StringComparison.Ordinal) || fileExtension.Length < 2)
+		if (string.IsNullOrWhiteSpace(fileExtension) || !fileExtension.StartsWith(".", StringComparison.Ordinal) || fileExtension.Length < 2)
 			throw new ArgumentException("Recording profile file extension must begin with '.'.", nameof(fileExtension));
 		if (string.IsNullOrWhiteSpace(videoCodec)) throw new ArgumentException("Recording profile video codec is required.", nameof(videoCodec));
 		if (string.IsNullOrWhiteSpace(videoProfile)) throw new ArgumentException("Recording profile video profile is required.", nameof(videoProfile));
