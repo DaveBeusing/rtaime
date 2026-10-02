@@ -1,5 +1,6 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using rtaime.Core;
@@ -39,7 +40,7 @@ public sealed class ReplayClipMaterializer
 		ArgumentNullException.ThrowIfNull(request);
 		return await Task.Run(
 			() => MaterializeCoreAsync(request, cancellationToken),
-			cancellationToken).Unwrap().ConfigureAwait(false);
+			cancellationToken).ConfigureAwait(false);
 	}
 
 	private async Task<ReplayClipResult> MaterializeCoreAsync(
