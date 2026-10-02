@@ -179,10 +179,15 @@
 							<TextBlock Text="Clean Program" Style="{StaticResource OperatorLabel}" />
 							<TextBlock Grid.Column="1" Text="{Binding ProgramOutput.RunState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" HorizontalAlignment="Right" FontWeight="SemiBold" />
 						</Grid>
-						<Grid Margin="0,0,0,8">
+						<Grid Margin="0,0,0,5">
 							<Grid.ColumnDefinitions><ColumnDefinition Width="120" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
 							<TextBlock Text="Recording" Style="{StaticResource OperatorLabel}" />
 							<controls:RtaimeTimecode Grid.Column="1" Content="{Binding RecordingElapsed}" HorizontalContentAlignment="Right" />
+						</Grid>
+						<Grid Margin="0,0,0,8">
+							<Grid.ColumnDefinitions><ColumnDefinition Width="120" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+							<TextBlock Text="Profile" Style="{StaticResource OperatorLabel}" />
+							<TextBlock Grid.Column="1" Text="{Binding RecordingActiveProfile}" HorizontalAlignment="Right" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
 						</Grid>
 
 						<Grid Margin="0,0,0,5">
