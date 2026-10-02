@@ -35,6 +35,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	private readonly RundownCoordinator? _rundown;
 	private readonly ProductionMacroCoordinator? _productionMacros;
 	private readonly MediaAssetCatalogService? _mediaAssetCatalog;
+	private readonly ReplayControlService? _replay;
 	private readonly ShowProjectPersistenceStore? _showProjectStore;
 	private PersistedShowProject? _showProject;
 	private readonly CancellationTokenSource _stop = new();
@@ -80,6 +81,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		if (_sessionDrainTimeout <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(sessionDrainTimeout));
 		_mediaDeck = mediaDeck;
 		_mediaAssetCatalog = mediaAssetCatalog;
+		_replay = mediaAssetCatalog is null ? null : new ReplayControlService(runtimeTransport, mediaAssetCatalog);
 		if ((showProjectStore is null) != (showProject is null))
 			throw new ArgumentException("Durable show-project store and snapshot must be configured together.");
 		_showProjectStore = showProjectStore;
@@ -531,6 +533,11 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			"control.test_pattern.set" => await SetBroadcastTestPatternAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.recording.start" => await StartRecordingAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.recording.stop" => await StopRecordingAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.replay.snapshot.get" => await GetReplaySnapshotAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.replay.mark_in" => await MarkReplayInAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.replay.mark_out" => await MarkReplayOutAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.replay.range.set" => await SetReplayRangeAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.replay.clip.create" => await CreateReplayClipAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.ai_showcase.set" => await SetAIShowcaseAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.media_asset_catalog.snapshot.get" => await GetMediaAssetCatalogAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.media_asset_catalog.import" => await ImportMediaAssetsAsync(request, cancellationToken).ConfigureAwait(false),
@@ -844,6 +851,38 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			throw new InvalidDataException("A Production Macro command must carry exactly one Macro definition.");
 		return macros[0];
 	}
+
+	private static WireReplaySnapshot ToWire(ReplayControlSnapshot snapshot) =>
+		new(
+			snapshot.Version.ToString(),
+			(int)snapshot.CaptureState,
+			(int)snapshot.ClipState,
+			snapshot.Retention.Ticks,
+			snapshot.RetainedDuration.Ticks,
+			snapshot.MaximumStorageBytes,
+			snapshot.RetainedBytes,
+			snapshot.SegmentDuration.Ticks,
+			snapshot.RetainedSegmentCount,
+			snapshot.MarkIn?.Ticks,
+			snapshot.MarkOut?.Ticks,
+			snapshot.AcceptedSamples,
+			snapshot.DroppedSamples,
+			snapshot.FinalizedSegments,
+			snapshot.EvictedSegments,
+			snapshot.Discontinuities,
+			snapshot.Failure is { } failure ? new WireFailure(failure.Code, failure.Message) : null);
+
+	private static WireReplayClipAssetResult ToWire(ReplayClipAssetResult result) =>
+		new(
+			result.Version.ToString(),
+			result.Succeeded,
+			result.ClipId,
+			result.AssetId?.ToString(),
+			result.SourceLocation,
+			result.SourceIn.Ticks,
+			result.SourceOut.Ticks,
+			result.Sha256,
+			result.Failure is { } failure ? new WireFailure(failure.Code, failure.Message) : null);
 
 	private static WireProductionMacroWorkspace ToWire(ProductionMacroWorkspaceSnapshot snapshot) =>
 		new(
@@ -1887,6 +1926,96 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	}
 
 
+	private async ValueTask<WireEnvelope> GetReplaySnapshotAsync(WireEnvelope request, CancellationToken cancellationToken)
+	{
+		if (_replay is null)
+			return Error(request, "control.replay.unavailable", "Replay control requires the Runtime replay service and Media Library.");
+		try
+		{
+			return Success(request, "control.replay.snapshot.response", ToWire(await _replay.GetSnapshotAsync(cancellationToken).ConfigureAwait(false)));
+		}
+		catch (Exception exception) when (exception is IOException or InvalidOperationException or InvalidDataException or NotSupportedException)
+		{
+			return Error(request, "control.replay.snapshot.rejected", exception.Message);
+		}
+	}
+
+	private async ValueTask<WireEnvelope> MarkReplayInAsync(WireEnvelope request, CancellationToken cancellationToken)
+	{
+		if (_replay is null)
+			return Error(request, "control.replay.unavailable", "Replay control is not configured.");
+		var wire = request.Payload.Deserialize<WireReplayMarkIn>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Replay MARK IN payload is required.");
+		try
+		{
+			var snapshot = await _replay.MarkInAsync(
+				wire.LookbackTicks is { } ticks ? TimeSpan.FromTicks(ticks) : null,
+				cancellationToken).ConfigureAwait(false);
+			NotifyObservableStateChanged();
+			return Success(request, "control.replay.snapshot.response", ToWire(snapshot));
+		}
+		catch (Exception exception) when (exception is IOException or InvalidOperationException or InvalidDataException or ArgumentException or NotSupportedException)
+		{
+			return Error(request, "control.replay.mark_in.rejected", exception.Message);
+		}
+	}
+
+	private async ValueTask<WireEnvelope> MarkReplayOutAsync(WireEnvelope request, CancellationToken cancellationToken)
+	{
+		if (_replay is null)
+			return Error(request, "control.replay.unavailable", "Replay control is not configured.");
+		try
+		{
+			var snapshot = await _replay.MarkOutAsync(cancellationToken).ConfigureAwait(false);
+			NotifyObservableStateChanged();
+			return Success(request, "control.replay.snapshot.response", ToWire(snapshot));
+		}
+		catch (Exception exception) when (exception is IOException or InvalidOperationException or InvalidDataException or ArgumentException or NotSupportedException)
+		{
+			return Error(request, "control.replay.mark_out.rejected", exception.Message);
+		}
+	}
+
+	private async ValueTask<WireEnvelope> SetReplayRangeAsync(WireEnvelope request, CancellationToken cancellationToken)
+	{
+		if (_replay is null)
+			return Error(request, "control.replay.unavailable", "Replay control is not configured.");
+		var wire = request.Payload.Deserialize<WireReplayRange>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Replay range payload is required.");
+		try
+		{
+			var snapshot = await _replay.SetRangeAsync(
+				TimeSpan.FromTicks(wire.InTicks),
+				TimeSpan.FromTicks(wire.OutTicks),
+				cancellationToken).ConfigureAwait(false);
+			NotifyObservableStateChanged();
+			return Success(request, "control.replay.snapshot.response", ToWire(snapshot));
+		}
+		catch (Exception exception) when (exception is IOException or InvalidOperationException or InvalidDataException or ArgumentException or NotSupportedException)
+		{
+			return Error(request, "control.replay.range.rejected", exception.Message);
+		}
+	}
+
+	private async ValueTask<WireEnvelope> CreateReplayClipAsync(WireEnvelope request, CancellationToken cancellationToken)
+	{
+		if (_replay is null)
+			return Error(request, "control.replay.unavailable", "Replay control is not configured.");
+		var wire = request.Payload.Deserialize<WireReplayClipCreate>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Replay clip-create payload is required.");
+		try
+		{
+			var result = await _replay.CreateClipAsync(wire.Name, cancellationToken).ConfigureAwait(false);
+			NotifyObservableStateChanged();
+			return Success(request, "control.replay.clip.response", ToWire(result));
+		}
+		catch (Exception exception) when (exception is IOException or InvalidOperationException or InvalidDataException or ArgumentException or UnauthorizedAccessException or NotSupportedException)
+		{
+			return Error(request, "control.replay.clip.rejected", exception.Message);
+		}
+	}
+
+
 	private async ValueTask<WireEnvelope> GetMediaAssetCatalogAsync(WireEnvelope request, CancellationToken cancellationToken)
 	{
 		if (_mediaAssetCatalog is null)
@@ -2478,6 +2607,13 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		var aiShowcase = runtime?.AIShowcase is { } runtimeAI
 			? ToWire(runtimeAI)
 			: WireAIShowcase.Unavailable;
+		ReplayControlSnapshot? replay = null;
+		if (_replay is not null)
+		{
+			try { replay = await _replay.GetSnapshotAsync(cancellationToken).ConfigureAwait(false); }
+			catch { replay = ReplayControlSnapshot.Unavailable; }
+		}
+
 		WireShowControlWorkspace? showControl = null;
 		if (_showControl is not null)
 		{
@@ -2531,7 +2667,8 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 				_showProject?.Name ?? "Unavailable",
 				_showProjectState,
 				_showProjectDetail),
-			runtime?.AudioProduction is null ? null : ToWire(runtime.AudioProduction));
+			runtime?.AudioProduction is null ? null : ToWire(runtime.AudioProduction),
+			ToWire(replay ?? ReplayControlSnapshot.Unavailable));
 		return Success(request, "control.snapshot.response", payload);
 	}
 
@@ -3387,6 +3524,11 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	{
 		public static WireAudioProgram Empty { get; } = new(string.Empty, string.Empty, 1, false, 0, 0, 0, false, "UNKNOWN");
 	}
+	private sealed record WireReplayMarkIn(long? LookbackTicks);
+	private sealed record WireReplayRange(long InTicks, long OutTicks);
+	private sealed record WireReplayClipCreate(string Name);
+	private sealed record WireReplaySnapshot(string Version, int CaptureState, int ClipState, long RetentionTicks, long RetainedDurationTicks, long MaximumStorageBytes, long RetainedBytes, long SegmentDurationTicks, int RetainedSegmentCount, long? MarkInTicks, long? MarkOutTicks, ulong AcceptedSamples, ulong DroppedSamples, ulong FinalizedSegments, ulong EvictedSegments, ulong Discontinuities, WireFailure? Failure);
+	private sealed record WireReplayClipAssetResult(string Version, bool Succeeded, string ClipId, string? AssetId, string? SourceLocation, long SourceInTicks, long SourceOutTicks, string? Sha256, WireFailure? Failure);
 	private sealed record WireRecordingStart(string DestinationDirectory, string FileName);
 	private sealed record WireRecordingSnapshot(string State, long ElapsedTicks, string? Destination, string? FileName, string? FinalPath, ulong Accepted, ulong Written, ulong Dropped, ulong Rejected, ulong WriterFailures, WireFailure? Failure)
 	{
@@ -3425,7 +3567,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		string AvSyncSubmitOffset = "UNAVAILABLE",
 		string AvSyncDrift = "UNAVAILABLE",
 		string AvSyncDetail = "A/V sync diagnostics are unavailable.");
-	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, WireRecordingSnapshot Recording, WireHealthSnapshot Health, WireAIShowcase AIShowcase, WireMediaDeckSnapshot MediaDeck, ulong StateVersion, WireProductionCgTextSnapshot? ProductionCgText = null, WireScene[]? Scenes = null, WireOutputRole[]? OutputRoles = null, WireCompositingLayer[]? CompositingLayers = null, WireShowControlWorkspace? ShowControl = null, WireShowProject? ShowProject = null, WireAudioProductionSnapshot? AudioProduction = null);
+	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, WireRecordingSnapshot Recording, WireHealthSnapshot Health, WireAIShowcase AIShowcase, WireMediaDeckSnapshot MediaDeck, ulong StateVersion, WireProductionCgTextSnapshot? ProductionCgText = null, WireScene[]? Scenes = null, WireOutputRole[]? OutputRoles = null, WireCompositingLayer[]? CompositingLayers = null, WireShowControlWorkspace? ShowControl = null, WireShowProject? ShowProject = null, WireAudioProductionSnapshot? AudioProduction = null, WireReplaySnapshot? Replay = null);
 	private sealed record WireShowProject(string ProjectId, string Name, string State, string Detail);
 	private sealed record WireShowControlCueList(string CueListJson);
 	private sealed record WireShowControlSelection(string CueListId);

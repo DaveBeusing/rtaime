@@ -209,6 +209,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	public event PropertyChangedEventHandler? PropertyChanged;
 	internal event Action<MediaDeckSnapshot>? ConfirmedMediaDeckSnapshot;
 	internal event Action<ShowControlWorkspaceSnapshot>? ConfirmedShowControlSnapshot;
+	internal event Action<ReplayControlSnapshot>? ConfirmedReplaySnapshot;
 
 	public ObservableCollection<OperatorSourceTileViewModel> Sources { get; }
 	public ObservableCollection<OperatorSceneViewModel> Scenes { get; }
@@ -649,6 +650,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 						CompositingLayers = snapshot.CompositingLayers;
 						ApplyAI(snapshot.AIShowcase);
 						ApplyEmbeddedMediaDeckSnapshot(snapshot.MediaDeck);
+						ConfirmedReplaySnapshot?.Invoke(snapshot.Replay);
 						ApplyLifecycle(snapshot);
 						UpdateViewerStates(snapshot);
 					}
@@ -1525,6 +1527,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		}
 		ApplyAudio(snapshot, preserveSelectedGainEdit: false);
 		ApplyEmbeddedMediaDeckSnapshot(snapshot.MediaDeck);
+		ConfirmedReplaySnapshot?.Invoke(snapshot.Replay);
 		ConfirmedShowControlSnapshot?.Invoke(snapshot.ShowControl);
 		ShowProjectName = snapshot.ShowProject.Name;
 		ShowProjectState = snapshot.ShowProject.State;

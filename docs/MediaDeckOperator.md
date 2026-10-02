@@ -169,3 +169,10 @@ Media Autoplay & End Behavior qualification covers:
 - client round-trip of confirmed playback policy.
 
 Playlist auto-advance, rundown automation and macros remain out of scope.
+
+
+## Replay clip reuse
+
+Replay clips do not use a replay-specific playback engine. After RuntimeHost materializes and ControlHost adopts a valid clip into the Media Library, the Operator opens that asset through the existing Media Deck path. Preview selection and subsequent CUT/DISSOLVE remain the established governed production commands.
+
+A replay clip is not presented as ready until finalization, media probing and Media Library adoption succeed. See [Replay and Clip Production](ReplayClipProduction.md).

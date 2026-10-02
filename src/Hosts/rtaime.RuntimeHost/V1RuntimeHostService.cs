@@ -315,7 +315,8 @@ public sealed record V1RuntimeHostSnapshot(
 	V1ProductionCgTextSnapshot? ProductionCgText = null,
 	IReadOnlyList<RuntimeOutputRoleSnapshot>? OutputRoles = null,
 	IReadOnlyList<V1CompositingLayerSnapshot>? CompositingLayers = null,
-	V1AudioProductionSnapshot? AudioProduction = null);
+	V1AudioProductionSnapshot? AudioProduction = null,
+	ReplayBufferSnapshot? Replay = null);
 
 /// <summary>
 /// Windows V1 reference composition root for committed execution, timed media, GPU composition,
@@ -378,6 +379,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private readonly RuntimeMonitoringHub _monitoringHub;
 	private readonly RuntimeMonitoringTap _monitoringTap;
 	private readonly RuntimeNetworkOutputBridge _networkOutputBridge;
+	private readonly RuntimeReplayService? _replay;
 	private readonly Stopwatch _uptimeClock = Stopwatch.StartNew();
 	private readonly SystemHardwareTelemetry _hardwareTelemetry = new();
 	private readonly BoundedDiagnosticHistory<string> _observations = new(RetainedObservationCapacity);
@@ -450,7 +452,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		VideoFormat format,
 		IProgramRecordingWriter recordingWriter,
 		IGpuProcessingBackend? gpuBackend = null,
-		IReadOnlyList<RuntimeNetworkOutputTarget>? networkOutputs = null)
+		IReadOnlyList<RuntimeNetworkOutputTarget>? networkOutputs = null,
+		RuntimeReplayService? replayService = null)
 	{
 		_format = format;
 		var configuredNetworkOutputs = networkOutputs ?? Array.Empty<RuntimeNetworkOutputTarget>();
@@ -460,7 +463,9 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		_gpuBackend = gpuBackend ?? new ManagedReferenceGpuBackend();
 		var networkReadbackCapacity = configuredNetworkOutputs
 			.Sum(target => target.Configuration.QueueCapacity);
-		_gpu = new GpuProcessingProvider(_gpuBackend, checked(ProgramReadbackBufferCapacity + networkReadbackCapacity));
+		_gpu = new GpuProcessingProvider(
+			_gpuBackend,
+			checked(ProgramReadbackBufferCapacity + networkReadbackCapacity + (replayService?.QueueCapacity ?? 0)));
 		_gpu.Start();
 		_runtime = new TransactionalRuntime(new InMemoryRuntimeResourceReservationManager());
 
@@ -534,6 +539,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		_recorder = new ProgramRecorder(recordingWriter);
 		_recordingBridge = new RuntimeRecordingBridge(_recorder);
 		_networkOutputBridge = new RuntimeNetworkOutputBridge(configuredNetworkOutputs);
+		_replay = replayService;
 		_monitoringHub = new RuntimeMonitoringHub();
 		_monitoringTap = new RuntimeMonitoringTap(
 			_monitoringHub,
@@ -696,7 +702,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 					_productionCgText,
 					OutputRoleSnapshotsUnsafe(),
 					CompositingLayerSnapshotsUnsafe(),
-					AudioProductionSnapshotUnsafe());
+					AudioProductionSnapshotUnsafe(),
+					_replay?.Snapshot);
 			}
 		}
 	}
@@ -881,6 +888,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				MediaSourceId committedSource;
 				MediaSourceId committedPreviewSource;
 				MediaSourceId routedAudioSource;
+				MediaSinkId programSinkId;
 				ulong sequence;
 				FrameDescriptor frameA;
 				FrameDescriptor frameB;
@@ -915,6 +923,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 						ThrowIfDisposed();
 						execution = _runtime.ActiveExecution ?? throw new InvalidOperationException("RuntimeHost requires a committed execution before processing media.");
 						var programSink = _programSinkId ?? throw new InvalidOperationException("RuntimeHost has no committed Program sink.");
+						programSinkId = programSink;
 						var programBinding = execution.PreparedExecution.Bindings.SingleOrDefault(binding => binding.MediaSinkId == programSink)
 							?? throw new InvalidOperationException("Committed execution must contain exactly one Program binding.");
 						committedSource = programBinding.MediaSourceId
@@ -1168,6 +1177,32 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 
 						if (payloadStaged && recording is { Accepted: false })
 							_recordingPayloadWriter?.DiscardPayload(sequence);
+					}
+
+					if (_replay is not null)
+					{
+						GpuRecordingPayloadLease? replayPayload = null;
+						try
+						{
+							replayPayload = new GpuRecordingPayloadLease(pixels.Retain());
+							var replay = _replay.TryCapture(
+								programSinkId,
+								output.Descriptor,
+								programAudioBuffer,
+								replayPayload,
+								programAudioPayload);
+							replayPayload = null;
+							if (!replay.Accepted)
+								Observe($"replay.capture:{replay.Status}:{replay.Failure?.Code}");
+						}
+						catch (Exception exception)
+						{
+							Observe($"replay.capture.enqueue_failed:{exception.GetType().Name}");
+						}
+						finally
+						{
+							replayPayload?.Dispose();
+						}
 					}
 
 					try
@@ -2236,6 +2271,33 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		return result;
 	}
 
+	public ReplayBufferSnapshot GetReplaySnapshot() =>
+		_replay?.Snapshot ?? new ReplayBufferSnapshot(
+			ReplayContractVersion.Current,
+			ReplayCaptureState.Disabled,
+			ReplayClipState.Idle,
+			ReplayBufferPolicy.Default,
+			Array.Empty<ReplaySegmentDescriptor>(),
+			null,
+			new ReplayStatistics(0, 0, 0, 0, 0, 0),
+			new Failure("replay.runtime.unavailable", "Replay capture is not configured for this RuntimeHost."));
+
+	public ReplayRange MarkReplayIn(TimeSpan? lookback = null) =>
+		(_replay ?? throw new InvalidOperationException("Replay capture is not configured.")).MarkIn(lookback);
+
+	public ReplayRange MarkReplayOut() =>
+		(_replay ?? throw new InvalidOperationException("Replay capture is not configured.")).MarkOut();
+
+	public ReplayRange SelectReplayRange(ReplayRange range) =>
+		(_replay ?? throw new InvalidOperationException("Replay capture is not configured.")).SelectRange(range);
+
+	public async ValueTask<ReplayClipResult> CreateReplayClipAsync(
+		string name,
+		CancellationToken cancellationToken = default) =>
+		await (_replay ?? throw new InvalidOperationException("Replay capture is not configured."))
+			.CreateClipAsync(name, cancellationToken)
+			.ConfigureAwait(false);
+
 	public async ValueTask DisposeAsync()
 	{
 		bool dispose;
@@ -2249,6 +2311,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		await _monitoringTap.DisposeAsync().ConfigureAwait(false);
 		_monitoringHub.Dispose();
 		await _networkOutputBridge.DisposeAsync().ConfigureAwait(false);
+		if (_replay is not null)
+			await _replay.DisposeAsync().ConfigureAwait(false);
 		await _recorder.DisposeAsync().ConfigureAwait(false);
 		_sourceAPipeline.Dispose();
 		_sourceBPipeline.Dispose();

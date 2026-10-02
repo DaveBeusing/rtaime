@@ -411,13 +411,20 @@ public sealed class RuntimeHostProcess
 			? new CudaGpuProcessingBackend()
 			: new ManagedReferenceGpuBackend();
 
+		var replayRoot = Path.Combine(
+			Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+			"rtaime",
+			"replay");
+		var replay = new RuntimeReplayService(replayRoot, processOptions.Format);
+
 		return new V1RuntimeHostService(
 			processOptions.SourceAId,
 			processOptions.SourceBId,
 			processOptions.Format,
 			writer,
 			backend,
-			processOptions.NetworkOutputs);
+			processOptions.NetworkOutputs,
+			replay);
 	}
 
 	private async Task RunMediaLoopAsync(

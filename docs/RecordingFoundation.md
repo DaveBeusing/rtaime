@@ -290,3 +290,12 @@ The Recording Operator Workflow result is externally readable through `Reference
 - controlled storage failure propagated back to the Operator while Runtime Program remains committed.
 
 The `.rtaime-recording` artifact remains an uncompressed architectural-proof container and is still validated by the deterministic reader. The production Windows recording path now publishes MP4/H.264/AAC and is independently reopened through the existing Media Foundation local-media decoder in integration qualification. MOV/MXF delivery, ISO input recording, replay, segment recording, cloud upload, hardware-encoder guarantees and physical storage-throughput guarantees remain outside this capability.
+
+
+## Replay capture relationship
+
+Replay reuses the Recording subsystem's payload-lifetime and Windows Media Foundation encoding primitives without changing Program Recording authority or lifecycle. RuntimeHost owns a separate bounded `ReplayCaptureEngine` queue and encoded rolling segment store; replay saturation or storage/encoder failure is isolated from both Program continuity and the independent Program Recording session.
+
+Replay never retains an unbounded full-resolution raw Program history. It retains only a small bounded set of leased Program payloads while asynchronous encoding is active, then keeps finalized encoded segments under explicit duration and storage caps. Clip materialization pins the required encoded segments, finalizes a normal MP4, and releases the pins afterward.
+
+See [Replay and Clip Production](ReplayClipProduction.md) for retention, marking, materialization, Media Library adoption and playback boundaries.

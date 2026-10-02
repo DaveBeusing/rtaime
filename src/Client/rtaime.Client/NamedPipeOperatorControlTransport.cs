@@ -341,6 +341,51 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		return ReadRecordingCommandResult(response);
 	}
 
+	public async ValueTask<ReplayControlSnapshot> GetReplaySnapshotAsync(CancellationToken cancellationToken = default) =>
+		ReadReplaySnapshot(await ExchangeAsync("control.replay.snapshot.get", new { }, cancellationToken).ConfigureAwait(false));
+
+	public async ValueTask<ReplayControlSnapshot> MarkReplayInAsync(
+		TimeSpan? lookback = null,
+		CancellationToken cancellationToken = default) =>
+		ReadReplaySnapshot(await ExchangeAsync(
+			"control.replay.mark_in",
+			new WireReplayMarkIn(lookback?.Ticks),
+			cancellationToken).ConfigureAwait(false));
+
+	public async ValueTask<ReplayControlSnapshot> MarkReplayOutAsync(CancellationToken cancellationToken = default) =>
+		ReadReplaySnapshot(await ExchangeAsync("control.replay.mark_out", new { }, cancellationToken).ConfigureAwait(false));
+
+	public async ValueTask<ReplayControlSnapshot> SetReplayRangeAsync(
+		TimeSpan @in,
+		TimeSpan @out,
+		CancellationToken cancellationToken = default) =>
+		ReadReplaySnapshot(await ExchangeAsync(
+			"control.replay.range.set",
+			new WireReplayRange(@in.Ticks, @out.Ticks),
+			cancellationToken).ConfigureAwait(false));
+
+	public async ValueTask<ReplayClipAssetResult> CreateReplayClipAsync(
+		string name,
+		CancellationToken cancellationToken = default)
+	{
+		var response = await ExchangeAsync(
+			"control.replay.clip.create",
+			new WireReplayClipCreate(name),
+			cancellationToken).ConfigureAwait(false);
+		var wire = response.Payload.Deserialize<WireReplayClipAssetResult>(Wire.JsonOptions)
+			?? throw new InvalidDataException("ControlHost replay clip response is required.");
+		return new ReplayClipAssetResult(
+			CompatibilityVersion.Parse(wire.Version),
+			wire.Succeeded,
+			wire.ClipId,
+			string.IsNullOrWhiteSpace(wire.AssetId) ? null : wire.AssetId.Trim(),
+			wire.SourceLocation,
+			TimeSpan.FromTicks(wire.SourceInTicks),
+			TimeSpan.FromTicks(wire.SourceOutTicks),
+			wire.Sha256,
+			wire.Failure is null ? null : new Failure(wire.Failure.Code, wire.Failure.Message));
+	}
+
 	public async ValueTask<OperatorAIShowcaseDescriptor> SetAIShowcaseEnabledAsync(
 		bool enabled,
 		CancellationToken cancellationToken = default)
@@ -1036,6 +1081,38 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		}
 	}
 
+	private static ReplayControlSnapshot ReadReplaySnapshot(WireEnvelope response)
+	{
+		var wire = response.Payload.Deserialize<WireReplaySnapshot>(Wire.JsonOptions)
+			?? throw new InvalidDataException("ControlHost replay snapshot response is required.");
+		return FromWire(wire);
+	}
+
+	private static ReplayControlSnapshot FromWire(WireReplaySnapshot wire)
+	{
+		if (!Enum.IsDefined(typeof(ReplayControlCaptureState), wire.CaptureState) ||
+			!Enum.IsDefined(typeof(ReplayControlClipState), wire.ClipState))
+			throw new InvalidDataException("ControlHost replay state is invalid.");
+		return new ReplayControlSnapshot(
+			CompatibilityVersion.Parse(wire.Version),
+			(ReplayControlCaptureState)wire.CaptureState,
+			(ReplayControlClipState)wire.ClipState,
+			TimeSpan.FromTicks(wire.RetentionTicks),
+			TimeSpan.FromTicks(wire.RetainedDurationTicks),
+			wire.MaximumStorageBytes,
+			wire.RetainedBytes,
+			TimeSpan.FromTicks(wire.SegmentDurationTicks),
+			wire.RetainedSegmentCount,
+			wire.MarkInTicks is { } markIn ? TimeSpan.FromTicks(markIn) : null,
+			wire.MarkOutTicks is { } markOut ? TimeSpan.FromTicks(markOut) : null,
+			wire.AcceptedSamples,
+			wire.DroppedSamples,
+			wire.FinalizedSegments,
+			wire.EvictedSegments,
+			wire.Discontinuities,
+			wire.Failure is null ? null : new Failure(wire.Failure.Code, wire.Failure.Message));
+	}
+
 	private static OperatorRecordingCommandResult ReadRecordingCommandResult(WireEnvelope response)
 	{
 		var wire = response.Payload.Deserialize<WireRecordingCommandResult>(Wire.JsonOptions)
@@ -1396,7 +1473,8 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 				wire.ShowProject.Name,
 				wire.ShowProject.State,
 				wire.ShowProject.Detail),
-		wire.AudioProduction is null ? null : FromWire(wire.AudioProduction));
+		wire.AudioProduction is null ? null : FromWire(wire.AudioProduction),
+		wire.Replay is null ? ReplayControlSnapshot.Unavailable : FromWire(wire.Replay));
 
 
 
@@ -1869,6 +1947,11 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		double? TestSignalFrequencyHz = null,
 		double? TestSignalPeakLevel = null);
 	private sealed record WireAudioProgram(string ActiveVideoSourceId, string ActiveStreamId, double Gain, bool Muted, double LeftPeak, double RightPeak, double MasterPeak, bool Clipping, string Health, int RoutingMode = 1, ulong RoutingRevision = 0, string? ActiveAudioSourceId = null);
+	private sealed record WireReplayMarkIn(long? LookbackTicks);
+	private sealed record WireReplayRange(long InTicks, long OutTicks);
+	private sealed record WireReplayClipCreate(string Name);
+	private sealed record WireReplaySnapshot(string Version, int CaptureState, int ClipState, long RetentionTicks, long RetainedDurationTicks, long MaximumStorageBytes, long RetainedBytes, long SegmentDurationTicks, int RetainedSegmentCount, long? MarkInTicks, long? MarkOutTicks, ulong AcceptedSamples, ulong DroppedSamples, ulong FinalizedSegments, ulong EvictedSegments, ulong Discontinuities, WireFailure? Failure);
+	private sealed record WireReplayClipAssetResult(string Version, bool Succeeded, string ClipId, string? AssetId, string? SourceLocation, long SourceInTicks, long SourceOutTicks, string? Sha256, WireFailure? Failure);
 	private sealed record WireRecordingStart(string DestinationDirectory, string FileName);
 	private sealed record WireRecordingSnapshot(string State, long ElapsedTicks, string? Destination, string? FileName, string? FinalPath, ulong Accepted, ulong Written, ulong Dropped, ulong Rejected, ulong WriterFailures, WireFailure? Failure);
 	private sealed record WireRecordingCommandResult(bool Succeeded, WireRecordingSnapshot Snapshot, WireFailure? Failure);
@@ -1901,7 +1984,7 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		string AvSyncSubmitOffset = "UNAVAILABLE",
 		string AvSyncDrift = "UNAVAILABLE",
 		string AvSyncDetail = "A/V sync diagnostics are unavailable.");
-	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, WireRecordingSnapshot Recording, WireHealthSnapshot Health, WireAIShowcase AIShowcase, WireMediaDeckSnapshot? MediaDeck, ulong StateVersion, WireProductionCgTextSnapshot? ProductionCgText = null, WireScene[]? Scenes = null, WireOutputRole[]? OutputRoles = null, WireCompositingLayer[]? CompositingLayers = null, WireShowControlWorkspace? ShowControl = null, WireShowProject? ShowProject = null, WireAudioProductionSnapshot? AudioProduction = null);
+	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, WireRecordingSnapshot Recording, WireHealthSnapshot Health, WireAIShowcase AIShowcase, WireMediaDeckSnapshot? MediaDeck, ulong StateVersion, WireProductionCgTextSnapshot? ProductionCgText = null, WireScene[]? Scenes = null, WireOutputRole[]? OutputRoles = null, WireCompositingLayer[]? CompositingLayers = null, WireShowControlWorkspace? ShowControl = null, WireShowProject? ShowProject = null, WireAudioProductionSnapshot? AudioProduction = null, WireReplaySnapshot? Replay = null);
 	private sealed record WireShowProject(string ProjectId, string Name, string State, string Detail);
 	private sealed record WireShowControlCueList(string CueListJson);
 	private sealed record WireShowControlSelection(string CueListId);
