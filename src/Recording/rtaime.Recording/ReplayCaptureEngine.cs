@@ -60,6 +60,7 @@ public sealed class ReplayCaptureEngine : IAsyncDisposable
 	}
 
 	public RollingReplaySegmentStore Store => _store;
+	public int QueueCapacity => _queueCapacity;
 	public IReadOnlyList<ReplayObservation> Observations => _observations.Snapshot();
 	public ulong OverwrittenObservationCount => _observations.OverwrittenCount;
 
