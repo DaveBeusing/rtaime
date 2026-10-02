@@ -919,6 +919,28 @@ public interface IOperatorControlTransport
     ValueTask<OperatorRecordingCommandResult> StopRecordingAsync(CancellationToken cancellationToken = default) =>
         ValueTask.FromException<OperatorRecordingCommandResult>(new NotSupportedException("Operator transport does not expose recording control."));
 
+    ValueTask<ReplayControlSnapshot> GetReplaySnapshotAsync(CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<ReplayControlSnapshot>(new NotSupportedException("Operator transport does not expose replay state."));
+
+    ValueTask<ReplayControlSnapshot> MarkReplayInAsync(
+        TimeSpan? lookback = null,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<ReplayControlSnapshot>(new NotSupportedException("Operator transport does not expose replay MARK IN."));
+
+    ValueTask<ReplayControlSnapshot> MarkReplayOutAsync(CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<ReplayControlSnapshot>(new NotSupportedException("Operator transport does not expose replay MARK OUT."));
+
+    ValueTask<ReplayControlSnapshot> SetReplayRangeAsync(
+        TimeSpan @in,
+        TimeSpan @out,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<ReplayControlSnapshot>(new NotSupportedException("Operator transport does not expose replay range control."));
+
+    ValueTask<ReplayClipAssetResult> CreateReplayClipAsync(
+        string name,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<ReplayClipAssetResult>(new NotSupportedException("Operator transport does not expose replay clip creation."));
+
     ValueTask<OperatorAIShowcaseDescriptor> SetAIShowcaseEnabledAsync(
         bool enabled,
         CancellationToken cancellationToken = default) =>
@@ -1427,6 +1449,35 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
     {
         RequireSnapshot();
         var result = await _transport.StopRecordingAsync(cancellationToken).ConfigureAwait(false);
+        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+
+    public ValueTask<ReplayControlSnapshot> GetReplaySnapshotAsync(CancellationToken cancellationToken = default) =>
+        _transport.GetReplaySnapshotAsync(cancellationToken);
+
+    public ValueTask<ReplayControlSnapshot> MarkReplayInAsync(
+        TimeSpan? lookback = null,
+        CancellationToken cancellationToken = default) =>
+        _transport.MarkReplayInAsync(lookback, cancellationToken);
+
+    public ValueTask<ReplayControlSnapshot> MarkReplayOutAsync(CancellationToken cancellationToken = default) =>
+        _transport.MarkReplayOutAsync(cancellationToken);
+
+    public ValueTask<ReplayControlSnapshot> SetReplayRangeAsync(
+        TimeSpan @in,
+        TimeSpan @out,
+        CancellationToken cancellationToken = default) =>
+        _transport.SetReplayRangeAsync(@in, @out, cancellationToken);
+
+    public async ValueTask<ReplayClipAssetResult> CreateReplayClipAsync(
+        string name,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Replay clip name is required.", nameof(name));
+        RequireSnapshot();
+        var result = await _transport.CreateReplayClipAsync(name.Trim(), cancellationToken).ConfigureAwait(false);
         await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
