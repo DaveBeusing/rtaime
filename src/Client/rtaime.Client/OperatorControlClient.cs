@@ -730,7 +730,8 @@ public sealed record OperatorStatusSnapshot
         IReadOnlyList<OperatorCompositingLayerDescriptor>? compositingLayers = null,
         ShowControlWorkspaceSnapshot? showControl = null,
         OperatorShowProjectDescriptor? showProject = null,
-        OperatorAudioProductionDescriptor? audioProduction = null)
+        OperatorAudioProductionDescriptor? audioProduction = null,
+        ReplayControlSnapshot? replay = null)
     {
         Production = production ?? throw new ArgumentNullException(nameof(production));
         ArgumentNullException.ThrowIfNull(sources);
@@ -769,6 +770,7 @@ public sealed record OperatorStatusSnapshot
         ShowControl = showControl ?? new ShowControlWorkspaceSnapshot(Array.Empty<ShowControlCueList>(), null, ShowControlExecutionSnapshot.Idle);
         ShowProject = showProject ?? OperatorShowProjectDescriptor.Unavailable;
         AudioProduction = audioProduction;
+        Replay = replay ?? ReplayControlSnapshot.Unavailable;
     }
 
     public AuthoritativeProductionState Production { get; }
@@ -794,6 +796,7 @@ public sealed record OperatorStatusSnapshot
     public ShowControlWorkspaceSnapshot ShowControl { get; }
     public OperatorShowProjectDescriptor ShowProject { get; }
     public OperatorAudioProductionDescriptor? AudioProduction { get; }
+    public ReplayControlSnapshot Replay { get; }
 }
 
 /// <summary>
