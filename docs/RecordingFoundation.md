@@ -272,9 +272,9 @@ RuntimeHost remains the recording execution owner. The normal Program boundary s
 
 ### Destination and naming
 
-Recording writers implement the optional `IConfigurableProgramRecordingWriter` capability. The writer owns target normalization and returns the authoritative file name to RuntimeHost. The production MP4 writer accepts only a single safe file-name component and appends `.mp4` when no extension is supplied; the deterministic reference writer independently retains `.rtaime-recording`. Existing output-id naming remains the fallback for callers that do not configure a target.
+Recording writers implement the optional `IConfigurableProgramRecordingWriter` capability. The selected writer owns target normalization and returns the authoritative file name to RuntimeHost. The MP4 provider accepts only a single safe file-name component and appends `.mp4` when no extension is supplied; the managed QuickTime provider applies the equivalent rule for `.mov`; the deterministic reference writer independently retains `.rtaime-recording`. Existing output-id naming remains the fallback for callers that do not configure a target.
 
-The default RuntimeHost process composes `WindowsMediaFoundationMp4RecordingWriter` under the current user's local application-data `rtaime/recordings` directory. Operator-selected destinations override that default per recording. Tests and deterministic evidence workflows may explicitly inject `ReferenceRecordingPayloadWriter`.
+The default RuntimeHost process composes a `RecordingWriterProviderRegistry` under the current user's local application-data `rtaime/recordings` directory. It registers Windows Media Foundation MP4 plus managed QuickTime MOV while retaining `mp4-h264-aac` as the default. Operator-selected destinations override the default root per recording. Tests and deterministic evidence workflows may explicitly inject `ReferenceRecordingPayloadWriter`.
 
 Final publication retains create-new semantics. An existing target is rejected rather than overwritten. The professional writer promotes `.partial.mp4` only after Media Foundation finalization succeeds; the reference writer independently retains its deterministic footer/hash finalization.
 
