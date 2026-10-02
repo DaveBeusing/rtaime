@@ -272,9 +272,9 @@ RuntimeHost remains the recording execution owner. The normal Program boundary s
 
 ### Destination and naming
 
-Recording writers implement the optional `IConfigurableProgramRecordingWriter` capability. The writer owns target normalization and returns the authoritative file name to RuntimeHost. The production MP4 writer accepts only a single safe file-name component and appends `.mp4` when no extension is supplied; the deterministic reference writer independently retains `.rtaime-recording`. Existing output-id naming remains the fallback for callers that do not configure a target.
+Recording writers implement the optional `IConfigurableProgramRecordingWriter` capability. The selected writer owns target normalization and returns the authoritative file name to RuntimeHost. The MP4 provider accepts only a single safe file-name component and appends `.mp4` when no extension is supplied; the managed QuickTime provider applies the equivalent rule for `.mov`; the deterministic reference writer independently retains `.rtaime-recording`. Existing output-id naming remains the fallback for callers that do not configure a target.
 
-The default RuntimeHost process composes `WindowsMediaFoundationMp4RecordingWriter` under the current user's local application-data `rtaime/recordings` directory. Operator-selected destinations override that default per recording. Tests and deterministic evidence workflows may explicitly inject `ReferenceRecordingPayloadWriter`.
+The default RuntimeHost process composes a `RecordingWriterProviderRegistry` under the current user's local application-data `rtaime/recordings` directory. It registers Windows Media Foundation MP4 plus managed QuickTime MOV while retaining `mp4-h264-aac` as the default. Operator-selected destinations override the default root per recording. Tests and deterministic evidence workflows may explicitly inject `ReferenceRecordingPayloadWriter`.
 
 Final publication retains create-new semantics. An existing target is rejected rather than overwritten. The professional writer promotes `.partial.mp4` only after Media Foundation finalization succeeds; the reference writer independently retains its deterministic footer/hash finalization.
 
@@ -289,7 +289,7 @@ The Recording Operator Workflow result is externally readable through `Reference
 - repeated recordings with distinct names in one RuntimeHost lifecycle;
 - controlled storage failure propagated back to the Operator while Runtime Program remains committed.
 
-The `.rtaime-recording` artifact remains an uncompressed architectural-proof container and is still validated by the deterministic reader. The production Windows recording path now publishes MP4/H.264/AAC and is independently reopened through the existing Media Foundation local-media decoder in integration qualification. MOV/MXF delivery, ISO input recording, replay, segment recording, cloud upload, hardware-encoder guarantees and physical storage-throughput guarantees remain outside this capability.
+The `.rtaime-recording` artifact remains an uncompressed architectural-proof container and is still validated by the deterministic reader. The default production Windows recording path publishes MP4/H.264/AAC and is independently reopened through the existing Media Foundation local-media decoder. A second managed provider publishes QuickTime MOV with uncompressed `2vuy` 8-bit YUV 4:2:2 video and `sowt` PCM16 audio; its finalized atom/sample-table structure is independently validated by `QuickTimeMovProbe` before publication. MXF delivery, ISO input recording, cloud upload, hardware-encoder guarantees and physical storage-throughput guarantees remain outside this capability.
 
 
 ## Replay capture relationship
@@ -309,6 +309,6 @@ An optional `RecordingProfileId` on `RecordingStartRequest` preserves the 1.0 co
 
 Runtime snapshots carry the confirmed profile catalog, default profile, active profile and active provider through provider-neutral Control/Client data. The deterministic reference writer remains test/evidence injection and is not advertised as a delivery profile.
 
-The current MP4 profile is explicitly classified as software. No hardware acceleration is inferred from H.264/AAC codec names. MOV, MXF, ProRes, DNxHR and AVC-Intra remain unavailable until separate writer providers and evidence exist.
+Both current production profiles are explicitly classified as software. No hardware acceleration is inferred from codec/container names. MOV is implemented only as the exact managed `2vuy`/`sowt` profile; MXF, ProRes, DNxHR and AVC-Intra remain unavailable until separate writer providers and evidence exist.
 
 See [Recording Profile Catalog and Provider Boundary](RecordingProfileCatalog.md) and the machine-readable [Recording Capability Catalog](qualification/RecordingCapabilityCatalog.json).

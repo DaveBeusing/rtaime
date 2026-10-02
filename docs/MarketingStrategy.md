@@ -332,12 +332,13 @@ Marketing priority:
 
 ### 2. Professional recording and delivery formats
 
-The Windows recording path now implements MP4 delivery with H.264/AVC video and AAC-LC stereo 48 kHz audio while retaining the deterministic rtaime reference artifact as a separate evidence backend. The delivery capability is exposed through a provider-neutral recording profile catalog, with `mp4-h264-aac` as the current default profile and Windows Media Foundation as its confirmed software provider. Repository qualification independently reopens finalized MP4 output through the existing Media Foundation decoder and verifies both supported 1080p development frame rates, repeated recording, A/V timestamp alignment and controlled failure isolation.
+The recording path exposes provider-neutral production profiles while retaining the deterministic rtaime reference artifact as a separate evidence backend. `mp4-h264-aac` remains the default Windows profile through Windows Media Foundation. `mov-2vuy-pcm` adds managed QuickTime delivery with uncompressed 8-bit YUV 4:2:2 (`2vuy`) and stereo 48 kHz PCM16 (`sowt`) without an external codec runtime. Repository qualification independently reopens MP4 through the existing decoder and independently parses finalized MOV atom/sample-table structure for both supported 1080p development frame rates.
 
 Marketing priority:
 
 - describe MP4/H.264/AAC only within the tested Windows/software qualification boundary;
-- do not imply MOV/MXF support, hardware-encoder guarantees, sustained professional storage throughput or long-duration physical-platform qualification;
+- describe managed MOV only as uncompressed `2vuy` video plus `sowt` PCM16 audio within retained software interoperability evidence;
+- do not imply MXF, ProRes, DNxHR, AVC-Intra, hardware-encoder guarantees, sustained professional storage throughput or long-duration physical-platform qualification;
 - publish codec/container compatibility only from retained passing evidence.
 
 ### 3. Output, streaming and scene-control breadth

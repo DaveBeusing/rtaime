@@ -236,9 +236,10 @@ public sealed class RuntimeHostProcess
 				Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
 				"rtaime",
 				"recordings");
-			var provider = new WindowsMediaFoundationRecordingWriterProvider(recordingRoot);
+			var mediaFoundationProvider = new WindowsMediaFoundationRecordingWriterProvider(recordingRoot);
+			var quickTimeProvider = new ManagedQuickTimeRecordingWriterProvider(recordingRoot);
 			var registry = new RecordingWriterProviderRegistry(
-				[provider],
+				[mediaFoundationProvider, quickTimeProvider],
 				ProfessionalRecordingFormats.Mp4H264AacProfileId);
 			return new ProfileSelectingProgramRecordingWriter(registry);
 		});

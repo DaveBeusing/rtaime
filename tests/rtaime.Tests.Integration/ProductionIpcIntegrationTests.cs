@@ -42,11 +42,16 @@ public sealed class ProductionIpcIntegrationTests
 		Assert.Equal(Revision.Initial, snapshot.Runtime.ExecutionRevision);
 		var recording = Assert.IsType<RuntimeRecordingSnapshot>(snapshot.Recording);
 		Assert.Equal("mp4-h264-aac", recording.DefaultProfileId);
-		var profile = Assert.Single(recording.Profiles ?? Array.Empty<RuntimeRecordingProfileSnapshot>());
-		Assert.Equal("mp4-h264-aac", profile.ProfileId);
+		var profiles = recording.Profiles ?? Array.Empty<RuntimeRecordingProfileSnapshot>();
+		Assert.Equal(2, profiles.Count);
+		var profile = Assert.Single(profiles, candidate => candidate.ProfileId == "mp4-h264-aac");
 		Assert.Equal("windows-media-foundation", profile.ProviderId);
 		Assert.Equal("SOFTWARE", profile.AccelerationClass);
 		Assert.Equal(OperatingSystem.IsWindows(), profile.Available);
+		var movProfile = Assert.Single(profiles, candidate => candidate.ProfileId == "mov-2vuy-pcm");
+		Assert.Equal("managed-quicktime", movProfile.ProviderId);
+		Assert.Equal("SOFTWARE", movProfile.AccelerationClass);
+		Assert.True(movProfile.Available);
 
 		stop.Cancel();
 		Assert.Equal(RuntimeHostExitCode.Success, await run);
@@ -78,9 +83,13 @@ public sealed class ProductionIpcIntegrationTests
 		var sourceA = initial.Sources[0];
 		var sourceB = initial.Sources[1];
 		Assert.Equal("mp4-h264-aac", initial.Recording.DefaultProfileId);
-		var operatorRecordingProfile = Assert.Single(initial.Recording.Profiles);
+		Assert.Equal(2, initial.Recording.Profiles.Count);
+		var operatorRecordingProfile = Assert.Single(initial.Recording.Profiles, candidate => candidate.ProfileId == "mp4-h264-aac");
 		Assert.Equal("windows-media-foundation", operatorRecordingProfile.ProviderId);
 		Assert.Equal("SOFTWARE", operatorRecordingProfile.AccelerationClass);
+		var operatorMovProfile = Assert.Single(initial.Recording.Profiles, candidate => candidate.ProfileId == "mov-2vuy-pcm");
+		Assert.Equal("managed-quicktime", operatorMovProfile.ProviderId);
+		Assert.True(operatorMovProfile.Available);
 
 		Assert.Equal(2, initial.Production.OutputRoles.Count);
 		Assert.Equal(sourceA.Id, Assert.Single(initial.Production.OutputRoles, role => role.RoleId == OutputRoleIds.Program).SourceId.ToString());

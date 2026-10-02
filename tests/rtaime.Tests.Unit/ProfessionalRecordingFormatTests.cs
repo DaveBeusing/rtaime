@@ -31,6 +31,30 @@ public sealed class ProfessionalRecordingFormatTests
 	}
 
 	[Fact]
+	public void Mov_profile_defines_the_managed_uncompressed_delivery_contract()
+	{
+		var profile = ProfessionalRecordingFormats.Mov2VuyPcm;
+
+		Assert.Equal("mov-2vuy-pcm", profile.ProfileId.ToString());
+		Assert.Equal("managed-quicktime", profile.ProviderId.ToString());
+		Assert.Equal("QuickTime Movie (MOV)", profile.Container);
+		Assert.Equal("Uncompressed YUV 4:2:2", profile.VideoCodec);
+		Assert.Equal("2vuy 8-bit", profile.VideoProfile);
+		Assert.Equal("PCM S16LE", profile.AudioCodec);
+		Assert.Equal(".mov", profile.FileExtension);
+		Assert.Equal(1_988_667_333U, profile.VideoBitRate);
+		Assert.Equal(1_536_000U, profile.AudioBitRate);
+		Assert.Equal(AudioFormat.Stereo48kFloat32, profile.RequiredInputAudioFormat);
+		Assert.Equal(
+			new[] { VideoFormat.Hd1080p50Rgba8, VideoFormat.Hd1080p59_94Rgba8 },
+			profile.SupportedInputVideoFormats);
+		Assert.Equal(RecordingAccelerationClass.Software, profile.AccelerationClass);
+		Assert.Equal(RecordingProfileEvidenceState.Implemented, profile.EvidenceState);
+		Assert.True(profile.Available);
+		Assert.Null(profile.UnavailableReason);
+	}
+
+	[Fact]
 	public void Mp4_availability_is_fail_closed_outside_Windows()
 	{
 		var profile = ProfessionalRecordingFormats.Mp4H264Aac;
@@ -147,6 +171,30 @@ public sealed class ProfessionalRecordingFormatTests
 	}
 
 	[Fact]
+	public void Mov_writer_normalizes_only_the_mov_target_extension()
+	{
+		var root = Path.Combine(Path.GetTempPath(), "rtaime-mov-target", Guid.NewGuid().ToString("N"));
+		var writer = new ManagedQuickTimeMovRecordingWriter(root);
+
+		Assert.Equal("program.mov", writer.ConfigureTarget(root, "program"));
+		Assert.Equal("program.mov", writer.ConfigureTarget(root, "program.mov"));
+		Assert.Throws<ArgumentException>(() => writer.ConfigureTarget(root, "program.mxf"));
+		Assert.Throws<ArgumentException>(() => writer.ConfigureTarget(root, Path.Combine("nested", "program.mov")));
+	}
+
+	[Fact]
+	public void Mov_rgba_to_2vuy_conversion_is_deterministic_and_bounded()
+	{
+		byte[] rgba = [255, 0, 0, 255, 0, 255, 0, 255];
+		var output = new byte[4];
+
+		ManagedQuickTimeMovRecordingWriter.ConvertRgbaTo2Vuy(rgba, output, 2, 1);
+
+		Assert.Equal(new byte[] { 72, 63, 133, 172 }, output);
+		Assert.Throws<ArgumentException>(() => ManagedQuickTimeMovRecordingWriter.ConvertRgbaTo2Vuy(rgba, new byte[3], 2, 1));
+	}
+
+	[Fact]
 	public void Reference_writer_keeps_the_deterministic_reference_extension_without_becoming_a_profile()
 	{
 		var root = Path.Combine(Path.GetTempPath(), "rtaime-reference-target", Guid.NewGuid().ToString("N"));
@@ -154,6 +202,14 @@ public sealed class ProfessionalRecordingFormatTests
 
 		Assert.Equal("evidence.rtaime-recording", writer.ConfigureTarget(root, "evidence"));
 		Assert.DoesNotContain(typeof(IProgramRecordingProfileCatalogProvider), writer.GetType().GetInterfaces());
+	}
+
+	[Fact]
+	public void Mov_writer_rejects_invalid_failure_quota()
+	{
+		var root = Path.Combine(Path.GetTempPath(), "rtaime-mov-quota", Guid.NewGuid().ToString("N"));
+
+		Assert.Throws<ArgumentOutOfRangeException>(() => new ManagedQuickTimeMovRecordingWriter(root, 0));
 	}
 
 	[Fact]

@@ -365,4 +365,4 @@ Use the source-controlled brand assets rather than recreating the mark for docum
 Replay retains bounded encoded Program history and materializes normal-speed selections as ordinary Media Library clips that reuse Media Deck and normal Preview/Program routing. See [Replay and Clip Production](docs/ReplayClipProduction.md).
 
 
-Recording profiles are Runtime-confirmed capabilities rather than UI codec presets. The current default is `mp4-h264-aac`; future MOV/MXF or hardware-encoder profiles require concrete providers and qualification before they can be advertised. See [Recording Profile Catalog](docs/RecordingProfileCatalog.md).
+Recording profiles are Runtime-confirmed capabilities rather than UI codec presets. The current default remains `mp4-h264-aac`; the catalog also exposes the managed `mov-2vuy-pcm` QuickTime profile with uncompressed 8-bit 4:2:2 video and PCM16 audio. MXF, proprietary professional codecs and hardware-encoder claims still require separate concrete providers and qualification. See [Recording Profile Catalog](docs/RecordingProfileCatalog.md).

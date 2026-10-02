@@ -22,6 +22,27 @@
       "availabilityRule": "available when Windows Media Foundation is available on the supported Windows runtime",
       "evidenceState": "qualified",
       "evidence": "Windows Media Foundation MP4 H.264/AAC software-interoperability path with independent reopen/decode qualification"
+    },
+    {
+      "profileId": "mov-2vuy-pcm",
+      "displayName": "MOV · Uncompressed 4:2:2 · PCM",
+      "providerId": "managed-quicktime",
+      "container": "QuickTime Movie (MOV)",
+      "fileExtension": ".mov",
+      "videoCodec": "Uncompressed YUV 4:2:2",
+      "videoProfile": "2vuy 8-bit",
+      "audioCodec": "PCM S16LE",
+      "supportedProgramVideoFormats": [
+        "1920x1080p50 RGBA8",
+        "1920x1080p60000/1001 RGBA8"
+      ],
+      "requiredProgramAudioFormat": "Stereo 48000 Hz Float32",
+      "maximumVideoBitRate": 1988667333,
+      "audioBitRate": 1536000,
+      "accelerationClass": "software",
+      "availabilityRule": "available from the managed Recording provider without an external media runtime",
+      "evidenceState": "implemented",
+      "evidence": "Managed QuickTime writer with 2vuy uncompressed video, sowt PCM16 audio and independent bounded MOV probe validation"
     }
   ],
   "physicalAcceleration": {
@@ -30,7 +51,6 @@
     "reason": "No hardware recording encoder provider is implemented or qualified."
   },
   "futureFormats": {
-    "mov": "not-implemented",
     "mxf": "not-implemented",
     "prores": "not-implemented",
     "dnxhr": "not-implemented",
