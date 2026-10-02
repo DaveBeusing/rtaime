@@ -1085,6 +1085,11 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 	{
 		var wire = response.Payload.Deserialize<WireReplaySnapshot>(Wire.JsonOptions)
 			?? throw new InvalidDataException("ControlHost replay snapshot response is required.");
+		return FromWire(wire);
+	}
+
+	private static ReplayControlSnapshot FromWire(WireReplaySnapshot wire)
+	{
 		if (!Enum.IsDefined(typeof(ReplayControlCaptureState), wire.CaptureState) ||
 			!Enum.IsDefined(typeof(ReplayControlClipState), wire.ClipState))
 			throw new InvalidDataException("ControlHost replay state is invalid.");
@@ -1468,7 +1473,8 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 				wire.ShowProject.Name,
 				wire.ShowProject.State,
 				wire.ShowProject.Detail),
-		wire.AudioProduction is null ? null : FromWire(wire.AudioProduction));
+		wire.AudioProduction is null ? null : FromWire(wire.AudioProduction),
+		wire.Replay is null ? ReplayControlSnapshot.Unavailable : FromWire(wire.Replay));
 
 
 
@@ -1978,7 +1984,7 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		string AvSyncSubmitOffset = "UNAVAILABLE",
 		string AvSyncDrift = "UNAVAILABLE",
 		string AvSyncDetail = "A/V sync diagnostics are unavailable.");
-	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, WireRecordingSnapshot Recording, WireHealthSnapshot Health, WireAIShowcase AIShowcase, WireMediaDeckSnapshot? MediaDeck, ulong StateVersion, WireProductionCgTextSnapshot? ProductionCgText = null, WireScene[]? Scenes = null, WireOutputRole[]? OutputRoles = null, WireCompositingLayer[]? CompositingLayers = null, WireShowControlWorkspace? ShowControl = null, WireShowProject? ShowProject = null, WireAudioProductionSnapshot? AudioProduction = null);
+	private sealed record WireOperatorSnapshot(WireProductionState Production, WireSource[] Sources, string RuntimeStatus, string TimingStatus, string InputStatus, string AIStatus, string RecordingStatus, bool VisualLayerEnabled, double AudioPeakLevel, WireGraphicsOverlay GraphicsOverlay, WireAudioInput[] AudioInputs, WireAudioProgram AudioProgram, WireRecordingSnapshot Recording, WireHealthSnapshot Health, WireAIShowcase AIShowcase, WireMediaDeckSnapshot? MediaDeck, ulong StateVersion, WireProductionCgTextSnapshot? ProductionCgText = null, WireScene[]? Scenes = null, WireOutputRole[]? OutputRoles = null, WireCompositingLayer[]? CompositingLayers = null, WireShowControlWorkspace? ShowControl = null, WireShowProject? ShowProject = null, WireAudioProductionSnapshot? AudioProduction = null, WireReplaySnapshot? Replay = null);
 	private sealed record WireShowProject(string ProjectId, string Name, string State, string Detail);
 	private sealed record WireShowControlCueList(string CueListJson);
 	private sealed record WireShowControlSelection(string CueListId);
