@@ -289,7 +289,7 @@ The Recording Operator Workflow result is externally readable through `Reference
 - repeated recordings with distinct names in one RuntimeHost lifecycle;
 - controlled storage failure propagated back to the Operator while Runtime Program remains committed.
 
-The `.rtaime-recording` artifact remains an uncompressed architectural-proof container and is still validated by the deterministic reader. The production Windows recording path now publishes MP4/H.264/AAC and is independently reopened through the existing Media Foundation local-media decoder in integration qualification. MOV/MXF delivery, ISO input recording, replay, segment recording, cloud upload, hardware-encoder guarantees and physical storage-throughput guarantees remain outside this capability.
+The `.rtaime-recording` artifact remains an uncompressed architectural-proof container and is still validated by the deterministic reader. The default production Windows recording path publishes MP4/H.264/AAC and is independently reopened through the existing Media Foundation local-media decoder. A second managed provider publishes QuickTime MOV with uncompressed `2vuy` 8-bit YUV 4:2:2 video and `sowt` PCM16 audio; its finalized atom/sample-table structure is independently validated by `QuickTimeMovProbe` before publication. MXF delivery, ISO input recording, cloud upload, hardware-encoder guarantees and physical storage-throughput guarantees remain outside this capability.
 
 
 ## Replay capture relationship
@@ -309,6 +309,6 @@ An optional `RecordingProfileId` on `RecordingStartRequest` preserves the 1.0 co
 
 Runtime snapshots carry the confirmed profile catalog, default profile, active profile and active provider through provider-neutral Control/Client data. The deterministic reference writer remains test/evidence injection and is not advertised as a delivery profile.
 
-The current MP4 profile is explicitly classified as software. No hardware acceleration is inferred from H.264/AAC codec names. MOV, MXF, ProRes, DNxHR and AVC-Intra remain unavailable until separate writer providers and evidence exist.
+Both current production profiles are explicitly classified as software. No hardware acceleration is inferred from codec/container names. MOV is implemented only as the exact managed `2vuy`/`sowt` profile; MXF, ProRes, DNxHR and AVC-Intra remain unavailable until separate writer providers and evidence exist.
 
 See [Recording Profile Catalog and Provider Boundary](RecordingProfileCatalog.md) and the machine-readable [Recording Capability Catalog](qualification/RecordingCapabilityCatalog.json).
