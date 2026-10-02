@@ -789,7 +789,7 @@ internal sealed class ExternalControlGrpcService : ExternalControl.ExternalContr
 			case ExternalControlRequest.OperationOneofCase.TransformCompositingLayer: return Raw("control.compositing.layer.transform", request.TransformCompositingLayer);
 			case ExternalControlRequest.OperationOneofCase.SetCompositingProcessing: return Raw("control.compositing.layer.processing", request.SetCompositingProcessing);
 			case ExternalControlRequest.OperationOneofCase.ReorderCompositingLayers: return Raw("control.compositing.layers.reorder", request.ReorderCompositingLayers);
-			case ExternalControlRequest.OperationOneofCase.StartRecording: operation = "control.recording.start"; payload = new { request.StartRecording.DestinationDirectory, request.StartRecording.FileName }; break;
+			case ExternalControlRequest.OperationOneofCase.StartRecording: operation = "control.recording.start"; payload = new { request.StartRecording.DestinationDirectory, request.StartRecording.FileName, ProfileId = NullIfEmpty(request.StartRecording.ProfileId) }; break;
 			case ExternalControlRequest.OperationOneofCase.StopRecording: operation = "control.recording.stop"; payload = new { }; break;
 			case ExternalControlRequest.OperationOneofCase.SetAiShowcase: return Raw("control.ai_showcase.set", request.SetAiShowcase);
 			case ExternalControlRequest.OperationOneofCase.GetMediaAssetCatalog: operation = "control.media_asset_catalog.snapshot.get"; payload = new { request.GetMediaAssetCatalog.Offset, request.GetMediaAssetCatalog.Limit }; break;
