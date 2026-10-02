@@ -63,6 +63,8 @@ public partial class MainWindow : Window
 		MediaDeck = CreateMediaDeck(viewModel, client);
 		MediaDeck.SnapshotChanged += viewModel.ApplyMediaDeckSnapshot;
 		viewModel.ConfirmedMediaDeckSnapshot += MediaDeck.ApplyConfirmedSnapshot;
+		Replay = new ReplayViewModel(client, MediaDeck);
+		viewModel.ConfirmedReplaySnapshot += Replay.ApplyConfirmedSnapshot;
 		DemoProduction = new DemoProductionPackageController(client, viewModel, MediaDeck);
 		Monitoring = new OperatorMonitoringViewModel(
 			viewModel,
@@ -224,6 +226,7 @@ public partial class MainWindow : Window
 	public HealthCenterViewModel HealthCenter { get; }
 	public OperatorShellViewModel Shell { get; }
 	public MediaDeckViewModel MediaDeck { get; }
+	public ReplayViewModel Replay { get; }
 	public DemoProductionPackageController DemoProduction { get; }
 	public MediaPoolInspectorViewModel MediaPool { get; }
 	public RundownViewModel Rundown { get; }
@@ -475,6 +478,7 @@ public partial class MainWindow : Window
 			{
 				MediaDeck.SnapshotChanged -= viewModel.ApplyMediaDeckSnapshot;
 				viewModel.ConfirmedMediaDeckSnapshot -= MediaDeck.ApplyConfirmedSnapshot;
+				viewModel.ConfirmedReplaySnapshot -= Replay.ApplyConfirmedSnapshot;
 				Timeline.SelectionChanged -= OnTimelineSelectionChanged;
 				QuickControls.Dispose();
 				CompositingGraph.Dispose();
