@@ -314,10 +314,22 @@ public sealed class GrpcOperatorControlTransport : IOperatorControlTransport, IA
 		return NamedPipeOperatorControlTransport.DecodeExternalCompositingLayers((await ExecuteAsync(request, false, cancellationToken).ConfigureAwait(false)).PayloadJson.Span);
 	}
 
-	public async ValueTask<OperatorRecordingCommandResult> StartRecordingAsync(string destinationDirectory, string fileName, CancellationToken cancellationToken = default)
+	public ValueTask<OperatorRecordingCommandResult> StartRecordingAsync(string destinationDirectory, string fileName, CancellationToken cancellationToken = default) =>
+		StartRecordingAsync(destinationDirectory, fileName, null, cancellationToken);
+
+	public async ValueTask<OperatorRecordingCommandResult> StartRecordingAsync(
+		string destinationDirectory,
+		string fileName,
+		string? profileId,
+		CancellationToken cancellationToken = default)
 	{
 		var request = Request();
-		request.StartRecording = new RecordingStartRequest { DestinationDirectory = destinationDirectory, FileName = fileName };
+		request.StartRecording = new RecordingStartRequest
+		{
+			DestinationDirectory = destinationDirectory,
+			FileName = fileName,
+			ProfileId = profileId ?? string.Empty
+		};
 		return NamedPipeOperatorControlTransport.DecodeExternalRecording((await ExecuteAsync(request, false, cancellationToken).ConfigureAwait(false)).PayloadJson.Span);
 	}
 

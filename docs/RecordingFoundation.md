@@ -299,3 +299,16 @@ Replay reuses the Recording subsystem's payload-lifetime and Windows Media Found
 Replay never retains an unbounded full-resolution raw Program history. It retains only a small bounded set of leased Program payloads while asynchronous encoding is active, then keeps finalized encoded segments under explicit duration and storage caps. Clip materialization pins the required encoded segments, finalizes a normal MP4, and releases the pins afterward.
 
 See [Replay and Clip Production](ReplayClipProduction.md) for retention, marking, materialization, Media Library adoption and playback boundaries.
+
+
+## Recording profile catalog and provider selection
+
+Production recording now places a provider-neutral profile catalog and writer-provider selection seam in front of the existing writer boundary. The stable default profile is `mp4-h264-aac`, provided by `windows-media-foundation`; its container, codecs, bitrates, accepted Program formats, finalization behavior and software-interoperability evidence remain unchanged.
+
+An optional `RecordingProfileId` on `RecordingStartRequest` preserves the 1.0 contract's existing default behavior while allowing an explicit catalog profile to be selected. RuntimeHost rejects unknown or unavailable profiles before the recorder session starts. The selected writer owns filename-extension normalization and container/codec details.
+
+Runtime snapshots carry the confirmed profile catalog, default profile, active profile and active provider through provider-neutral Control/Client data. The deterministic reference writer remains test/evidence injection and is not advertised as a delivery profile.
+
+The current MP4 profile is explicitly classified as software. No hardware acceleration is inferred from H.264/AAC codec names. MOV, MXF, ProRes, DNxHR and AVC-Intra remain unavailable until separate writer providers and evidence exist.
+
+See [Recording Profile Catalog and Provider Boundary](RecordingProfileCatalog.md) and the machine-readable [Recording Capability Catalog](qualification/RecordingCapabilityCatalog.json).

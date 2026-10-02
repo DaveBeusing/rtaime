@@ -62,6 +62,10 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	private string _recordingFinalPath = "—";
 	private string _recordingStatistics = "0 written · 0 dropped";
 	private string? _recordingError;
+	private OperatorRecordingProfileDescriptor? _selectedRecordingProfile;
+	private string _recordingActiveProfile = "UNVERIFIED";
+	private string _recordingActiveProvider = "UNVERIFIED";
+	private string _recordingProfileDetail = "No confirmed recording profile capability.";
 	private string _engineHealth = "UNVERIFIED";
 	private string _engineHealthDetail = "Health snapshot unavailable.";
 	private string _controlHealth = "UNVERIFIED";
@@ -175,6 +179,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		Sources = new ObservableCollection<OperatorSourceTileViewModel>();
 		Scenes = new ObservableCollection<OperatorSceneViewModel>();
 		AudioInputs = new ObservableCollection<OperatorAudioInputViewModel>();
+		RecordingProfiles = new ObservableCollection<OperatorRecordingProfileDescriptor>();
 		SynchronizeCommand = new AsyncRelayCommand(SynchronizeAsync, () => _client is not null && !IsBusy);
 		SetPreviewCommand = new AsyncRelayCommand(SetPreviewAsync, CanSetPreview);
 		ActivateSceneCommand = new AsyncRelayCommand(ActivateSceneAsync, CanActivateScene);
@@ -214,6 +219,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	public ObservableCollection<OperatorSourceTileViewModel> Sources { get; }
 	public ObservableCollection<OperatorSceneViewModel> Scenes { get; }
 	public ObservableCollection<OperatorAudioInputViewModel> AudioInputs { get; }
+	public ObservableCollection<OperatorRecordingProfileDescriptor> RecordingProfiles { get; }
 	public ICommand SynchronizeCommand { get; }
 	public ICommand SetPreviewCommand { get; }
 	public ICommand ActivateSceneCommand { get; }
@@ -318,6 +324,24 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	public string RecordingFinalPath { get => _recordingFinalPath; private set => Set(ref _recordingFinalPath, value); }
 	public string RecordingStatistics { get => _recordingStatistics; private set => Set(ref _recordingStatistics, value); }
 	public string? RecordingError { get => _recordingError; private set => Set(ref _recordingError, value); }
+	public OperatorRecordingProfileDescriptor? SelectedRecordingProfile
+	{
+		get => _selectedRecordingProfile;
+		set
+		{
+			if (!Set(ref _selectedRecordingProfile, value))
+				return;
+			RecordingProfileDetail = value is null
+				? "No confirmed available recording profile."
+				: value.Available
+					? $"{value.Container} · {value.CodecSummary} · {value.ProviderId} · {value.AccelerationClass} · {value.EvidenceState}"
+					: $"{value.DisplayName} unavailable · {value.UnavailableReason ?? "No availability reason provided."}";
+			RaiseCommandState();
+		}
+	}
+	public string RecordingActiveProfile { get => _recordingActiveProfile; private set => Set(ref _recordingActiveProfile, value); }
+	public string RecordingActiveProvider { get => _recordingActiveProvider; private set => Set(ref _recordingActiveProvider, value); }
+	public string RecordingProfileDetail { get => _recordingProfileDetail; private set => Set(ref _recordingProfileDetail, value); }
 	public string EngineHealth { get => _engineHealth; private set => Set(ref _engineHealth, value); }
 	public string EngineHealthDetail { get => _engineHealthDetail; private set => Set(ref _engineHealthDetail, value); }
 	public string ControlHealth { get => _controlHealth; private set => Set(ref _controlHealth, value); }
@@ -579,6 +603,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		CanControl() &&
 		!string.IsNullOrWhiteSpace(RecordingDestination) &&
 		!string.IsNullOrWhiteSpace(RecordingFileName) &&
+		(RecordingProfiles.Count == 0 || SelectedRecordingProfile is { Available: true }) &&
 		RecordingStatus is not ("RECORDING" or "FINALIZING");
 
 	private bool CanStopRecording() =>
@@ -860,7 +885,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 
 		await ExecuteAsync("START RECORDING", async () =>
 		{
-			var result = await _client.StartRecordingAsync(destination, fileName);
+			var result = await _client.StartRecordingAsync(destination, fileName, SelectedRecordingProfile?.ProfileId);
 			Apply(_client.Snapshot!);
 			if (!result.Succeeded)
 			{
@@ -1673,6 +1698,25 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		RecordingFinalPath = string.IsNullOrWhiteSpace(recording.FinalPath) ? "—" : recording.FinalPath;
 		RecordingStatistics = $"{recording.Written} written · {recording.Dropped} dropped · {recording.WriterFailures} writer failures";
 		RecordingError = recording.Failure?.Message;
+
+		var previousSelection = SelectedRecordingProfile?.ProfileId;
+		RecordingProfiles.Clear();
+		foreach (var profile in recording.Profiles.OrderBy(profile => profile.DisplayName, StringComparer.Ordinal))
+			RecordingProfiles.Add(profile);
+
+		var selectedProfileId = recording.State is "RECORDING" or "FINALIZING"
+			? recording.ActiveProfileId
+			: previousSelection ?? recording.DefaultProfileId;
+		SelectedRecordingProfile = RecordingProfiles.FirstOrDefault(profile =>
+				profile.Available &&
+				string.Equals(profile.ProfileId, selectedProfileId, StringComparison.Ordinal))
+			?? RecordingProfiles.FirstOrDefault(profile => profile.Available);
+		RecordingActiveProfile = recording.ActiveProfileId is { Length: > 0 } activeProfileId
+			? recording.Profiles.FirstOrDefault(profile => string.Equals(profile.ProfileId, activeProfileId, StringComparison.Ordinal))?.DisplayName ?? activeProfileId
+			: "UNVERIFIED";
+		RecordingActiveProvider = string.IsNullOrWhiteSpace(recording.ActiveProviderId)
+			? "UNVERIFIED"
+			: recording.ActiveProviderId;
 
 		if (!preserveTargetEdit || recording.State is "RECORDING" or "FINALIZING")
 		{

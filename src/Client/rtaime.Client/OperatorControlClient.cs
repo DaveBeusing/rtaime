@@ -497,6 +497,30 @@ public sealed record OperatorAudioProductionDescriptor(
 }
 
 
+public sealed record OperatorRecordingProfileDescriptor(
+    string ProfileId,
+    string DisplayName,
+    string Container,
+    string FileExtension,
+    string VideoCodec,
+    string VideoProfile,
+    string? VideoLevel,
+    string AudioCodec,
+    IReadOnlyList<VideoFormat> SupportedInputVideoFormats,
+    AudioFormat RequiredInputAudioFormat,
+    uint VideoBitRate,
+    uint AudioBitRate,
+    string AccelerationClass,
+    string ProviderId,
+    bool Available,
+    string? UnavailableReason,
+    string EvidenceState,
+    string Evidence)
+{
+    public string Label => $"{DisplayName} · {AccelerationClass}";
+    public string CodecSummary => $"{VideoCodec} {VideoProfile} / {AudioCodec}";
+}
+
 public sealed record OperatorRecordingDescriptor
 {
     public OperatorRecordingDescriptor(
@@ -510,7 +534,11 @@ public sealed record OperatorRecordingDescriptor
         ulong dropped,
         ulong rejected,
         ulong writerFailures,
-        Failure? failure)
+        Failure? failure,
+        string? activeProfileId = null,
+        string? activeProviderId = null,
+        string? defaultProfileId = null,
+        IReadOnlyList<OperatorRecordingProfileDescriptor>? profiles = null)
     {
         if (string.IsNullOrWhiteSpace(state))
             throw new ArgumentException("Recording state is required.", nameof(state));
@@ -528,6 +556,10 @@ public sealed record OperatorRecordingDescriptor
         Rejected = rejected;
         WriterFailures = writerFailures;
         Failure = failure;
+        ActiveProfileId = string.IsNullOrWhiteSpace(activeProfileId) ? null : activeProfileId.Trim();
+        ActiveProviderId = string.IsNullOrWhiteSpace(activeProviderId) ? null : activeProviderId.Trim();
+        DefaultProfileId = string.IsNullOrWhiteSpace(defaultProfileId) ? null : defaultProfileId.Trim();
+        Profiles = Array.AsReadOnly((profiles ?? Array.Empty<OperatorRecordingProfileDescriptor>()).ToArray());
     }
 
     public string State { get; }
@@ -541,6 +573,10 @@ public sealed record OperatorRecordingDescriptor
     public ulong Rejected { get; }
     public ulong WriterFailures { get; }
     public Failure? Failure { get; }
+    public string? ActiveProfileId { get; }
+    public string? ActiveProviderId { get; }
+    public string? DefaultProfileId { get; }
+    public IReadOnlyList<OperatorRecordingProfileDescriptor> Profiles { get; }
 
     public static OperatorRecordingDescriptor Unavailable { get; } =
         new("UNAVAILABLE", TimeSpan.Zero, null, null, null, 0, 0, 0, 0, 0, null);
@@ -918,6 +954,13 @@ public interface IOperatorControlTransport
         string fileName,
         CancellationToken cancellationToken = default) =>
         ValueTask.FromException<OperatorRecordingCommandResult>(new NotSupportedException("Operator transport does not expose recording control."));
+
+    ValueTask<OperatorRecordingCommandResult> StartRecordingAsync(
+        string destinationDirectory,
+        string fileName,
+        string? profileId,
+        CancellationToken cancellationToken = default) =>
+        StartRecordingAsync(destinationDirectory, fileName, cancellationToken);
 
     ValueTask<OperatorRecordingCommandResult> StopRecordingAsync(CancellationToken cancellationToken = default) =>
         ValueTask.FromException<OperatorRecordingCommandResult>(new NotSupportedException("Operator transport does not expose recording control."));
@@ -1430,9 +1473,16 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
         return result;
     }
 
+    public ValueTask<OperatorRecordingCommandResult> StartRecordingAsync(
+        string destinationDirectory,
+        string fileName,
+        CancellationToken cancellationToken = default) =>
+        StartRecordingAsync(destinationDirectory, fileName, null, cancellationToken);
+
     public async ValueTask<OperatorRecordingCommandResult> StartRecordingAsync(
         string destinationDirectory,
         string fileName,
+        string? profileId,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(destinationDirectory))
@@ -1442,7 +1492,11 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
 
         RequireSnapshot();
         var result = await _transport
-            .StartRecordingAsync(destinationDirectory.Trim(), fileName.Trim(), cancellationToken)
+            .StartRecordingAsync(
+                destinationDirectory.Trim(),
+                fileName.Trim(),
+                string.IsNullOrWhiteSpace(profileId) ? null : profileId.Trim(),
+                cancellationToken)
             .ConfigureAwait(false);
         await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
         return result;

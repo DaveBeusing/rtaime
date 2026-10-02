@@ -40,6 +40,23 @@ public sealed class RecordingContractTests
     }
 
     [Fact]
+    public void Recording_start_request_preserves_optional_provider_neutral_profile_identity()
+    {
+        var profileId = new RecordingProfileId("mp4-h264-aac");
+        var request = new RecordingStartRequest(
+            RecordingContractVersion.Current,
+            RecordingSessionId.New(),
+            new RecordingOutputDescriptor(RecordingOutputId.New(), MediaSinkId.New(), "Program"),
+            profileId);
+
+        Assert.Equal(profileId, request.ProfileId);
+        Assert.Null(new RecordingStartRequest(
+            RecordingContractVersion.Current,
+            RecordingSessionId.New(),
+            new RecordingOutputDescriptor(RecordingOutputId.New(), MediaSinkId.New(), "Legacy Program")).ProfileId);
+    }
+
+    [Fact]
     public void Recording_program_sample_carries_descriptors_not_bulk_media_payload()
     {
         var frame = Frame(7);

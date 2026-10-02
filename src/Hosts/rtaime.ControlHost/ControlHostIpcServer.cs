@@ -1881,7 +1881,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			try
 			{
 				var result = await _runtimeTransport
-					.StartRecordingAsync(wire.DestinationDirectory, wire.FileName, cancellationToken)
+					.StartRecordingAsync(wire.DestinationDirectory, wire.FileName, wire.ProfileId, cancellationToken)
 					.ConfigureAwait(false);
 				NotifyObservableStateChanged();
 				return Success(request, "control.recording.command.response", ToWire(result));
@@ -3194,7 +3194,39 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		snapshot.Dropped,
 		snapshot.Rejected,
 		snapshot.WriterFailures,
-		snapshot.Failure is { } failure ? new WireFailure(failure.Code, failure.Message) : null);
+		snapshot.Failure is { } failure ? new WireFailure(failure.Code, failure.Message) : null,
+		snapshot.ActiveProfileId,
+		snapshot.ActiveProviderId,
+		snapshot.DefaultProfileId,
+		(snapshot.Profiles ?? Array.Empty<RuntimeRecordingProfileSnapshot>()).Select(ToWire).ToArray());
+
+	private static WireRecordingProfile ToWire(RuntimeRecordingProfileSnapshot profile) => new(
+		profile.ProfileId,
+		profile.DisplayName,
+		profile.Container,
+		profile.FileExtension,
+		profile.VideoCodec,
+		profile.VideoProfile,
+		profile.VideoLevel,
+		profile.AudioCodec,
+		profile.SupportedInputVideoFormats.Select(format => new WireVideoFormat(
+			format.Width,
+			format.Height,
+			format.FrameRate.ToString(),
+			(int)format.PixelFormat,
+			(int)format.ScanMode)).ToArray(),
+		profile.RequiredInputAudioFormat.SampleRate,
+		(int)profile.RequiredInputAudioFormat.ChannelLayout,
+		(int)profile.RequiredInputAudioFormat.SampleFormat,
+		profile.RequiredInputAudioFormat.ChannelCount,
+		profile.VideoBitRate,
+		profile.AudioBitRate,
+		profile.AccelerationClass,
+		profile.ProviderId,
+		profile.Available,
+		profile.UnavailableReason,
+		profile.EvidenceState,
+		profile.Evidence);
 
 	private static WireAIShowcase ToWire(RuntimeAIShowcaseRemoteSnapshot snapshot) => new(
 		snapshot.Enabled,
@@ -3529,8 +3561,46 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	private sealed record WireReplayClipCreate(string Name);
 	private sealed record WireReplaySnapshot(string Version, int CaptureState, int ClipState, long RetentionTicks, long RetainedDurationTicks, long MaximumStorageBytes, long RetainedBytes, long SegmentDurationTicks, int RetainedSegmentCount, long? MarkInTicks, long? MarkOutTicks, ulong AcceptedSamples, ulong DroppedSamples, ulong FinalizedSegments, ulong EvictedSegments, ulong Discontinuities, WireFailure? Failure);
 	private sealed record WireReplayClipAssetResult(string Version, bool Succeeded, string ClipId, string? AssetId, string? SourceLocation, long SourceInTicks, long SourceOutTicks, string? Sha256, WireFailure? Failure);
-	private sealed record WireRecordingStart(string DestinationDirectory, string FileName);
-	private sealed record WireRecordingSnapshot(string State, long ElapsedTicks, string? Destination, string? FileName, string? FinalPath, ulong Accepted, ulong Written, ulong Dropped, ulong Rejected, ulong WriterFailures, WireFailure? Failure)
+	private sealed record WireRecordingStart(string DestinationDirectory, string FileName, string? ProfileId = null);
+	private sealed record WireVideoFormat(uint Width, uint Height, string FrameRate, int PixelFormat, int ScanMode);
+	private sealed record WireRecordingProfile(
+		string ProfileId,
+		string DisplayName,
+		string Container,
+		string FileExtension,
+		string VideoCodec,
+		string VideoProfile,
+		string? VideoLevel,
+		string AudioCodec,
+		WireVideoFormat[] SupportedInputVideoFormats,
+		uint RequiredAudioSampleRate,
+		int RequiredAudioChannelLayout,
+		int RequiredAudioSampleFormat,
+		uint RequiredAudioChannelCount,
+		uint VideoBitRate,
+		uint AudioBitRate,
+		string AccelerationClass,
+		string ProviderId,
+		bool Available,
+		string? UnavailableReason,
+		string EvidenceState,
+		string Evidence);
+	private sealed record WireRecordingSnapshot(
+		string State,
+		long ElapsedTicks,
+		string? Destination,
+		string? FileName,
+		string? FinalPath,
+		ulong Accepted,
+		ulong Written,
+		ulong Dropped,
+		ulong Rejected,
+		ulong WriterFailures,
+		WireFailure? Failure,
+		string? ActiveProfileId = null,
+		string? ActiveProviderId = null,
+		string? DefaultProfileId = null,
+		WireRecordingProfile[]? Profiles = null)
 	{
 		public static WireRecordingSnapshot Unavailable { get; } = new("UNAVAILABLE", 0, null, null, null, 0, 0, 0, 0, 0, null);
 	}

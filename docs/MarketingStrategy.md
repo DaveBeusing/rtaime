@@ -332,7 +332,7 @@ Marketing priority:
 
 ### 2. Professional recording and delivery formats
 
-The Windows recording path now implements MP4 delivery with H.264/AVC video and AAC-LC stereo 48 kHz audio while retaining the deterministic rtaime reference artifact as a separate evidence backend. Repository qualification independently reopens finalized MP4 output through the existing Media Foundation decoder and verifies both supported 1080p development frame rates, repeated recording, A/V timestamp alignment and controlled failure isolation.
+The Windows recording path now implements MP4 delivery with H.264/AVC video and AAC-LC stereo 48 kHz audio while retaining the deterministic rtaime reference artifact as a separate evidence backend. The delivery capability is exposed through a provider-neutral recording profile catalog, with `mp4-h264-aac` as the current default profile and Windows Media Foundation as its confirmed software provider. Repository qualification independently reopens finalized MP4 output through the existing Media Foundation decoder and verifies both supported 1080p development frame rates, repeated recording, A/V timestamp alignment and controlled failure isolation.
 
 Marketing priority:
 

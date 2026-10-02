@@ -71,17 +71,20 @@ public sealed record RecordingStartRequest
     public RecordingStartRequest(
         CompatibilityVersion version,
         RecordingSessionId sessionId,
-        RecordingOutputDescriptor output)
+        RecordingOutputDescriptor output,
+        RecordingProfileId? profileId = null)
     {
         RecordingContractVersion.EnsureSupported(version);
         Version = version;
         SessionId = sessionId;
         Output = output ?? throw new ArgumentNullException(nameof(output));
+        ProfileId = profileId;
     }
 
     public CompatibilityVersion Version { get; }
     public RecordingSessionId SessionId { get; }
     public RecordingOutputDescriptor Output { get; }
+    public RecordingProfileId? ProfileId { get; }
 }
 
 public sealed record RecordingProgramSample

@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "defaultProfileId": "mp4-h264-aac",
+  "profiles": [
+    {
+      "profileId": "mp4-h264-aac",
+      "displayName": "MP4 · H.264 Main · AAC-LC",
+      "providerId": "windows-media-foundation",
+      "container": "ISO Base Media File Format (MP4)",
+      "fileExtension": ".mp4",
+      "videoCodec": "H.264/AVC",
+      "videoProfile": "Main",
+      "audioCodec": "AAC-LC",
+      "supportedProgramVideoFormats": [
+        "1920x1080p50 RGBA8",
+        "1920x1080p60000/1001 RGBA8"
+      ],
+      "requiredProgramAudioFormat": "Stereo 48000 Hz Float32",
+      "videoBitRate": 20000000,
+      "audioBitRate": 192000,
+      "accelerationClass": "software",
+      "availabilityRule": "available when Windows Media Foundation is available on the supported Windows runtime",
+      "evidenceState": "qualified",
+      "evidence": "Windows Media Foundation MP4 H.264/AAC software-interoperability path with independent reopen/decode qualification"
+    }
+  ],
+  "physicalAcceleration": {
+    "state": "unverified",
+    "supported": false,
+    "reason": "No hardware recording encoder provider is implemented or qualified."
+  },
+  "futureFormats": {
+    "mov": "not-implemented",
+    "mxf": "not-implemented",
+    "prores": "not-implemented",
+    "dnxhr": "not-implemented",
+    "avc-intra": "not-implemented"
+  }
+}

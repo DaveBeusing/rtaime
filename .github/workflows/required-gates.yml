@@ -148,6 +148,10 @@ jobs:
         shell: pwsh
         run: ./build/quality/Test-ReplayClipPolicy.ps1
 
+      - name: Verify recording profile catalog policy
+        shell: pwsh
+        run: ./build/quality/Test-RecordingProfilePolicy.ps1
+
       - name: Verify operator UI policy
         shell: pwsh
         run: ./build/quality/Test-OperatorUiPolicy.ps1

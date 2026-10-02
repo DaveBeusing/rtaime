@@ -860,3 +860,14 @@ The Operator exposes a bounded REPLAY surface for retained-duration/storage evid
 The surface is presentation-only. Capture and materialization are RuntimeHost-owned, Media Library adoption is confirmed through ControlHost, and playback reuses Media Deck plus the normal Preview/Program command path. The Operator does not retain raw Program media, run a replay encoder, or route replay pixels directly to Program.
 
 See [Replay and Clip Production](ReplayClipProduction.md).
+
+
+## Recording profile selection
+
+PROGRAM RECORDING builds its profile selector from the confirmed Runtime recording capability catalog. The Operator does not maintain a local codec/container list and does not infer availability from filenames or platform names.
+
+The selected profile is submitted by stable profile identity with START REC. RuntimeHost confirms the active profile and provider in the returned snapshot. The Operator shows container, video/audio codec, acceleration classification, provider and qualification state from that confirmed data.
+
+The filename field may remain extensionless. Extension normalization belongs to the selected writer/provider; an explicit incompatible extension is rejected before recording starts. The current catalog advertises only the qualified `mp4-h264-aac` production profile. MOV/MXF and hardware recording are not presented as available capabilities.
+
+See [Recording Profile Catalog and Provider Boundary](RecordingProfileCatalog.md).

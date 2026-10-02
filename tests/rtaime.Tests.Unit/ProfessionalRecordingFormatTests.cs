@@ -1,5 +1,6 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
+using rtaime.Core;
 using rtaime.Media.Contracts;
 using rtaime.Recording;
 
@@ -8,33 +9,129 @@ namespace rtaime.Tests.Unit;
 public sealed class ProfessionalRecordingFormatTests
 {
 	[Fact]
-	public void Mp4_capability_defines_the_qualified_delivery_contract()
+	public void Mp4_profile_preserves_the_qualified_delivery_contract()
 	{
-		var capability = ProfessionalRecordingFormats.Mp4H264Aac;
+		var profile = ProfessionalRecordingFormats.Mp4H264Aac;
 
-		Assert.Equal("mp4-h264-aac", capability.Id);
-		Assert.Equal("ISO Base Media File Format (MP4)", capability.Container);
-		Assert.Equal("H.264/AVC", capability.VideoCodec);
-		Assert.Equal("Main", capability.VideoProfile);
-		Assert.Equal("AAC-LC", capability.AudioCodec);
-		Assert.Equal(".mp4", capability.FileExtension);
-		Assert.Equal(20_000_000U, capability.VideoBitRate);
-		Assert.Equal(192_000U, capability.AudioBitRate);
-		Assert.Equal(AudioFormat.Stereo48kFloat32, capability.RequiredInputAudioFormat);
+		Assert.Equal("mp4-h264-aac", profile.ProfileId.ToString());
+		Assert.Equal("windows-media-foundation", profile.ProviderId.ToString());
+		Assert.Equal("ISO Base Media File Format (MP4)", profile.Container);
+		Assert.Equal("H.264/AVC", profile.VideoCodec);
+		Assert.Equal("Main", profile.VideoProfile);
+		Assert.Equal("AAC-LC", profile.AudioCodec);
+		Assert.Equal(".mp4", profile.FileExtension);
+		Assert.Equal(20_000_000U, profile.VideoBitRate);
+		Assert.Equal(192_000U, profile.AudioBitRate);
+		Assert.Equal(AudioFormat.Stereo48kFloat32, profile.RequiredInputAudioFormat);
 		Assert.Equal(
 			new[] { VideoFormat.Hd1080p50Rgba8, VideoFormat.Hd1080p59_94Rgba8 },
-			capability.SupportedInputVideoFormats);
+			profile.SupportedInputVideoFormats);
+		Assert.Equal(RecordingAccelerationClass.Software, profile.AccelerationClass);
+		Assert.Equal(RecordingProfileEvidenceState.Qualified, profile.EvidenceState);
 	}
 
 	[Fact]
 	public void Mp4_availability_is_fail_closed_outside_Windows()
 	{
-		var availability = ProfessionalRecordingFormats.GetMp4H264AacAvailability();
+		var profile = ProfessionalRecordingFormats.Mp4H264Aac;
 
-		Assert.Equal(ProfessionalRecordingFormats.Mp4H264Aac, availability.Capability);
-		Assert.Equal(OperatingSystem.IsWindows(), availability.Available);
+		Assert.Equal(OperatingSystem.IsWindows(), profile.Available);
 		if (!OperatingSystem.IsWindows())
-			Assert.NotNull(availability.UnavailableReason);
+			Assert.NotNull(profile.UnavailableReason);
+		else
+			Assert.Null(profile.UnavailableReason);
+	}
+
+	[Fact]
+	public void Profile_catalog_rejects_duplicate_stable_ids()
+	{
+		var profile = CreateProfile("test-profile", "provider-a", available: true);
+
+		Assert.Throws<ArgumentException>(() => new RecordingProfileCatalog(
+			new[] { profile, profile },
+			profile.ProfileId));
+	}
+
+	[Fact]
+	public void Provider_registry_supports_multiple_profiles_and_selects_default()
+	{
+		var a = CreateProfile("profile-a", "provider-a", available: true);
+		var b = CreateProfile("profile-b", "provider-b", available: true);
+		var registry = new RecordingWriterProviderRegistry(
+			new IProgramRecordingWriterProvider[]
+			{
+				new TestProvider(a),
+				new TestProvider(b)
+			},
+			b.ProfileId);
+
+		Assert.Equal(2, registry.ProfileCatalog.Profiles.Count);
+		Assert.Equal(b.ProfileId, registry.Resolve().Profile.ProfileId);
+		Assert.Equal(a.ProfileId, registry.Resolve(a.ProfileId).Profile.ProfileId);
+	}
+
+	[Fact]
+	public void Provider_registry_rejects_unknown_and_unavailable_profiles()
+	{
+		var available = CreateProfile("profile-a", "provider-a", available: true);
+		var unavailable = CreateProfile("profile-b", "provider-b", available: false);
+		var registry = new RecordingWriterProviderRegistry(
+			new IProgramRecordingWriterProvider[]
+			{
+				new TestProvider(available),
+				new TestProvider(unavailable)
+			},
+			available.ProfileId);
+
+		Assert.Throws<RecordingOutputUnavailableException>(() => registry.Resolve(new RecordingProfileId("missing")));
+		Assert.Throws<RecordingOutputUnavailableException>(() => registry.Resolve(unavailable.ProfileId));
+	}
+
+	[Fact]
+	public void Profile_selecting_writer_uses_requested_provider_and_normalizes_target()
+	{
+		var a = CreateProfile("profile-a", "provider-a", available: true, extension: ".aaa");
+		var b = CreateProfile("profile-b", "provider-b", available: true, extension: ".bbb");
+		var providerA = new TestProvider(a);
+		var providerB = new TestProvider(b);
+		var registry = new RecordingWriterProviderRegistry(
+			new IProgramRecordingWriterProvider[] { providerA, providerB },
+			a.ProfileId);
+		var writer = new ProfileSelectingProgramRecordingWriter(registry);
+		var root = Path.Combine(Path.GetTempPath(), "rtaime-profile-selection", Guid.NewGuid().ToString("N"));
+
+		var normalized = writer.ConfigureTarget(b.ProfileId, root, "program");
+
+		Assert.Equal("program.bbb", normalized);
+		Assert.Equal(b.ProfileId, providerB.LastCreatedProfileId);
+		Assert.Null(providerA.LastCreatedProfileId);
+	}
+
+	[Fact]
+	public async Task Profile_selecting_writer_creates_one_concrete_writer_per_session()
+	{
+		var profile = CreateProfile("profile-a", "provider-a", available: true);
+		var provider = new TestProvider(profile);
+		var writer = new ProfileSelectingProgramRecordingWriter(
+			new RecordingWriterProviderRegistry(new[] { provider }, profile.ProfileId));
+		var output = new RecordingOutputDescriptor(RecordingOutputId.New(), MediaSinkId.New(), "Program");
+
+		await writer.OpenAsync(new RecordingStartRequest(
+			RecordingContractVersion.Current,
+			RecordingSessionId.New(),
+			output), CancellationToken.None);
+		await writer.AbortAsync(CancellationToken.None);
+		await writer.OpenAsync(new RecordingStartRequest(
+			RecordingContractVersion.Current,
+			RecordingSessionId.New(),
+			output), CancellationToken.None);
+		await writer.AbortAsync(CancellationToken.None);
+
+		Assert.Equal(2, provider.CreatedCount);
+		Assert.NotNull(writer.ActiveProfile);
+		Assert.Equal(profile.ProfileId, writer.ActiveProfile!.ProfileId);
+		Assert.True(writer.ActiveProviderId.HasValue);
+		Assert.Equal(profile.ProviderId, writer.ActiveProviderId.Value);
 	}
 
 	[Fact]
@@ -50,12 +147,13 @@ public sealed class ProfessionalRecordingFormatTests
 	}
 
 	[Fact]
-	public void Reference_writer_keeps_the_deterministic_reference_extension()
+	public void Reference_writer_keeps_the_deterministic_reference_extension_without_becoming_a_profile()
 	{
 		var root = Path.Combine(Path.GetTempPath(), "rtaime-reference-target", Guid.NewGuid().ToString("N"));
 		var writer = new ReferenceRecordingPayloadWriter(root);
 
 		Assert.Equal("evidence.rtaime-recording", writer.ConfigureTarget(root, "evidence"));
+		Assert.DoesNotContain(typeof(IProgramRecordingProfileCatalogProvider), writer.GetType().GetInterfaces());
 	}
 
 	[Fact]
@@ -64,5 +162,75 @@ public sealed class ProfessionalRecordingFormatTests
 		var root = Path.Combine(Path.GetTempPath(), "rtaime-mp4-quota", Guid.NewGuid().ToString("N"));
 
 		Assert.Throws<ArgumentOutOfRangeException>(() => new WindowsMediaFoundationMp4RecordingWriter(root, 0));
+	}
+
+	private static RecordingProfileDescriptor CreateProfile(
+		string profileId,
+		string providerId,
+		bool available,
+		string extension = ".test") =>
+		new(
+			new RecordingProfileId(profileId),
+			$"Test {profileId}",
+			"Test Container",
+			extension,
+			"Test Video",
+			"Test Profile",
+			null,
+			"Test Audio",
+			new[] { VideoFormat.Hd1080p50Rgba8 },
+			AudioFormat.Stereo48kFloat32,
+			1_000_000,
+			128_000,
+			RecordingAccelerationClass.Software,
+			new RecordingWriterProviderId(providerId),
+			available,
+			available ? null : "Synthetic provider unavailable.",
+			RecordingProfileEvidenceState.Unverified,
+			"Synthetic test-only evidence.");
+
+	private sealed class TestProvider : IProgramRecordingWriterProvider
+	{
+		private readonly RecordingProfileDescriptor _profile;
+
+		public TestProvider(RecordingProfileDescriptor profile) => _profile = profile;
+		public RecordingWriterProviderId ProviderId => _profile.ProviderId;
+		public string DisplayName => $"Test {ProviderId}";
+		public IReadOnlyList<RecordingProfileDescriptor> Profiles => new[] { _profile };
+		public RecordingProfileId? LastCreatedProfileId { get; private set; }
+		public int CreatedCount { get; private set; }
+
+		public IProgramRecordingPayloadWriter CreateWriter(RecordingProfileId profileId)
+		{
+			if (profileId != _profile.ProfileId)
+				throw new RecordingOutputUnavailableException("Unknown synthetic profile.");
+			LastCreatedProfileId = profileId;
+			CreatedCount++;
+			return new TestWriter(_profile.FileExtension);
+		}
+	}
+
+	private sealed class TestWriter : IProgramRecordingPayloadWriter, IConfigurableProgramRecordingWriter
+	{
+		private readonly string _extension;
+		public TestWriter(string extension) => _extension = extension;
+		public string? FinalPath { get; private set; }
+
+		public string ConfigureTarget(string destinationDirectory, string fileName)
+		{
+			var extension = Path.GetExtension(fileName);
+			if (string.IsNullOrEmpty(extension))
+				return fileName + _extension;
+			if (!string.Equals(extension, _extension, StringComparison.OrdinalIgnoreCase))
+				throw new ArgumentException("Synthetic writer extension mismatch.", nameof(fileName));
+			return fileName;
+		}
+
+		public ValueTask OpenAsync(RecordingStartRequest request, CancellationToken cancellationToken) => ValueTask.CompletedTask;
+		public void StagePayload(ulong sequenceNumber, IProgramRecordingPayloadLease videoPayload, ReadOnlyMemory<byte> audioPayload) => videoPayload.Dispose();
+		public void DiscardPayload(ulong sequenceNumber) { }
+		public ValueTask WriteAsync(RecordingProgramSample sample, CancellationToken cancellationToken) => ValueTask.CompletedTask;
+		public ValueTask FinalizeAsync(CancellationToken cancellationToken) => ValueTask.CompletedTask;
+		public ValueTask AbortAsync(CancellationToken cancellationToken) => ValueTask.CompletedTask;
 	}
 }
