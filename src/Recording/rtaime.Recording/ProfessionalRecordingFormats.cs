@@ -184,7 +184,9 @@ public interface IProgramRecordingProfileCatalogProvider
 public static class ProfessionalRecordingFormats
 {
 	public static RecordingProfileId Mp4H264AacProfileId { get; } = new("mp4-h264-aac");
+	public static RecordingProfileId Mov2VuyPcmProfileId { get; } = new("mov-2vuy-pcm");
 	public static RecordingWriterProviderId WindowsMediaFoundationProviderId { get; } = new("windows-media-foundation");
+	public static RecordingWriterProviderId ManagedQuickTimeProviderId { get; } = new("managed-quicktime");
 
 	private static readonly ReadOnlyCollection<VideoFormat> Mp4InputFormats =
 		Array.AsReadOnly(new[]
@@ -194,6 +196,7 @@ public static class ProfessionalRecordingFormats
 		});
 
 	public static RecordingProfileDescriptor Mp4H264Aac => CreateMp4H264AacDescriptor();
+	public static RecordingProfileDescriptor Mov2VuyPcm => CreateMov2VuyPcmDescriptor();
 
 	public static RecordingProfileDescriptor CreateMp4H264AacDescriptor()
 	{
@@ -218,4 +221,25 @@ public static class ProfessionalRecordingFormats
 			RecordingProfileEvidenceState.Qualified,
 			"Windows Media Foundation MP4 H.264/AAC software-interoperability path with independent reopen/decode qualification.");
 	}
+
+	public static RecordingProfileDescriptor CreateMov2VuyPcmDescriptor() =>
+		new(
+			Mov2VuyPcmProfileId,
+			"MOV · Uncompressed 4:2:2 · PCM",
+			"QuickTime Movie (MOV)",
+			".mov",
+			"Uncompressed YUV 4:2:2",
+			"2vuy 8-bit",
+			null,
+			"PCM S16LE",
+			Mp4InputFormats,
+			AudioFormat.Stereo48kFloat32,
+			1_988_667_333,
+			1_536_000,
+			RecordingAccelerationClass.Software,
+			ManagedQuickTimeProviderId,
+			true,
+			null,
+			RecordingProfileEvidenceState.Implemented,
+			"Managed QuickTime MOV writer with 2vuy uncompressed video, sowt PCM16 audio and independent structural/sample-table probe validation.");
 }
