@@ -1050,6 +1050,8 @@
 					</Grid>
 					<local:MediaDeckControl DataContext="{Binding MediaDeck, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Margin="0,0,0,14"
 						Visibility="{Binding Shell.MediaDeckVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
+					<local:ReplayControl DataContext="{Binding Replay, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Margin="0,0,0,14"
+						Visibility="{Binding Shell.MediaDeckVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
 
 					<Border Style="{StaticResource OperatorPanel}" Margin="0,0,0,14"
 						Visibility="{Binding Shell.SourceBinVisibility, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
