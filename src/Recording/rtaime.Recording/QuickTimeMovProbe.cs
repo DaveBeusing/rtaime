@@ -108,7 +108,7 @@ public static class QuickTimeMovProbe
 	{
 		var trackChildren = ReadChildren(stream, track.DataOffset, track.End);
 		var trackHeaderDuration = ReadTrackHeaderDuration(stream, Single(trackChildren, "tkhd"));
-		var presentationDelay = ReadPresentationDelay(stream, trackChildren);
+		var presentationEdit = ReadPresentationEdit(stream, trackChildren);
 		var mdia = Single(trackChildren, "mdia");
 		var mediaChildren = ReadChildren(stream, mdia.DataOffset, mdia.End);
 		var handler = Single(mediaChildren, "hdlr");
@@ -135,12 +135,19 @@ public static class QuickTimeMovProbe
 			throw new InvalidDataException("MOV timing and sample-size tables disagree on sample count.");
 		if (timing.Duration != duration)
 			throw new InvalidDataException("MOV media duration does not equal its time-to-sample table duration.");
+		if (handlerType == "vide" && sizes.SampleSize != checked(description.Width * description.Height * 2))
+			throw new InvalidDataException("MOV 2vuy sample size does not match 16 bits per video pixel.");
+		if (handlerType == "soun" && sizes.SampleSize != 4)
+			throw new InvalidDataException("MOV sowt sample size does not match stereo PCM16.");
 
 		var offsets = ReadChunkOffsets(stream, chunkOffsets, uses64BitOffsets);
 		var mappings = ReadSampleToChunk(stream, stsc);
 		ValidateChunks(offsets, mappings, sizes.SampleSize, sizes.SampleCount, mdat);
 
-		var presentedDuration = checked(presentationDelay + ScaleDuration(duration, timescale, movieTimescale));
+		var scaledMediaDuration = ScaleDuration(duration, timescale, movieTimescale);
+		if (presentationEdit.MediaDurationMovieUnits is { } editMediaDuration && editMediaDuration != scaledMediaDuration)
+			throw new InvalidDataException("MOV media edit duration does not match the media-header duration.");
+		var presentedDuration = checked(presentationEdit.DelayMovieUnits + scaledMediaDuration);
 		if (trackHeaderDuration != presentedDuration)
 			throw new InvalidDataException("MOV track-header duration does not match its edit/media duration.");
 
@@ -154,7 +161,7 @@ public static class QuickTimeMovProbe
 			timescale,
 			duration,
 			sizes.SampleCount,
-			presentationDelay);
+			presentationEdit.DelayMovieUnits);
 	}
 
 	private static void ValidateFileType(Stream stream, AtomInfo atom)
@@ -221,11 +228,11 @@ public static class QuickTimeMovProbe
 		throw new InvalidDataException($"Unsupported MOV track-header version '{version}'.");
 	}
 
-	private static ulong ReadPresentationDelay(Stream stream, IReadOnlyList<AtomInfo> trackChildren)
+	private static PresentationEdit ReadPresentationEdit(Stream stream, IReadOnlyList<AtomInfo> trackChildren)
 	{
 		var editContainers = trackChildren.Where(atom => atom.Type == "edts").ToArray();
 		if (editContainers.Length == 0)
-			return 0;
+			return new PresentationEdit(0, null);
 		if (editContainers.Length != 1)
 			throw new InvalidDataException("MOV track contains multiple edit containers.");
 
@@ -245,16 +252,18 @@ public static class QuickTimeMovProbe
 		var emptyMediaTime = ReadInt64(stream);
 		var emptyRateInteger = ReadInt16(stream);
 		var emptyRateFraction = ReadInt16(stream);
-		_ = ReadUInt64(stream);
+		var mediaDuration = ReadUInt64(stream);
 		var mediaTime = ReadInt64(stream);
 		var mediaRateInteger = ReadInt16(stream);
 		var mediaRateFraction = ReadInt16(stream);
-		if (delay == 0 || emptyMediaTime != -1 || emptyRateInteger != 1 || emptyRateFraction != 0 ||
+		if (stream.Position != elst.End)
+			throw new InvalidDataException("MOV edit-list payload contains unexpected trailing data.");
+		if (delay == 0 || mediaDuration == 0 || emptyMediaTime != -1 || emptyRateInteger != 1 || emptyRateFraction != 0 ||
 			mediaTime != 0 || mediaRateInteger != 1 || mediaRateFraction != 0)
 		{
 			throw new InvalidDataException("MOV edit list does not match the bounded A/V-delay pattern.");
 		}
-		return delay;
+		return new PresentationEdit(delay, mediaDuration);
 	}
 
 	private static string ReadHandler(Stream stream, AtomInfo atom)
@@ -305,6 +314,11 @@ public static class QuickTimeMovProbe
 		if (entrySize < 16 || entryStart + entrySize > atom.End)
 			throw new InvalidDataException("MOV sample-description entry has an invalid size.");
 		var dataOffset = entryStart + 8;
+		var entryEnd = checked(entryStart + entrySize);
+
+		stream.Position = dataOffset + 6;
+		if (ReadUInt16(stream) != 1)
+			throw new InvalidDataException("MOV sample entry must reference the self-contained media data reference.");
 
 		if (handlerType == "vide")
 		{
@@ -315,25 +329,55 @@ public static class QuickTimeMovProbe
 			var height = ReadUInt16(stream);
 			if (width == 0 || height == 0)
 				throw new InvalidDataException("MOV video dimensions must be positive.");
+			stream.Position = dataOffset + 66;
+			var depth = ReadUInt16(stream);
+			var colorTableId = ReadInt16(stream);
+			if (depth != 24 || colorTableId != -1)
+				throw new InvalidDataException("MOV 2vuy visual sample entry must use the qualified 24-bit/no-color-table declaration.");
+			ValidateVideoExtensions(stream, checked(dataOffset + 78), entryEnd);
 			return new SampleDescription(entryType, width, height, 0, 0);
 		}
 
 		if (handlerType == "soun")
 		{
-			if (entrySize < 36)
-				throw new InvalidDataException("MOV audio sample entry is incomplete.");
+			if (entrySize != 36)
+				throw new InvalidDataException("MOV qualified sowt audio sample entry must use the bounded version-0 layout.");
 			stream.Position = dataOffset + 16;
 			var channels = ReadUInt16(stream);
 			var bits = ReadUInt16(stream);
-			stream.Position = dataOffset + 24;
+			var compressionId = ReadUInt16(stream);
+			var packetSize = ReadUInt16(stream);
 			var fixedRate = ReadUInt32(stream);
 			var sampleRate = fixedRate >> 16;
-			if (sampleRate != 48_000)
-				throw new InvalidDataException($"MOV audio sample-entry rate '{sampleRate}' is not 48 kHz.");
+			if (channels != 2 || bits != 16 || compressionId != 0 || packetSize != 0 || sampleRate != 48_000)
+				throw new InvalidDataException("MOV sowt sample entry is not stereo 48 kHz uncompressed PCM16.");
 			return new SampleDescription(entryType, 0, 0, channels, bits);
 		}
 
 		throw new InvalidDataException($"Unsupported MOV handler type '{handlerType}'.");
+	}
+
+	private static void ValidateVideoExtensions(Stream stream, long start, long end)
+	{
+		if (start >= end)
+			throw new InvalidDataException("MOV 2vuy sample entry is missing required field/color extensions.");
+		var extensions = ReadChildren(stream, start, end);
+		var field = Single(extensions, "fiel");
+		var color = Single(extensions, "colr");
+		if (extensions.Count != 2)
+			throw new InvalidDataException("MOV 2vuy sample entry contains unsupported visual extensions.");
+
+		RequirePayload(field, 2);
+		stream.Position = field.DataOffset;
+		var fieldCount = stream.ReadByte();
+		var fieldDetail = stream.ReadByte();
+		if (fieldCount != 1 || fieldDetail != 0 || stream.Position != field.End)
+			throw new InvalidDataException("MOV video field-order metadata is not progressive.");
+
+		RequirePayload(color, 10);
+		stream.Position = color.DataOffset;
+		if (ReadFourCc(stream) != "nclc" || ReadUInt16(stream) != 1 || ReadUInt16(stream) != 1 || ReadUInt16(stream) != 1 || stream.Position != color.End)
+			throw new InvalidDataException("MOV 2vuy color metadata is not the qualified BT.709 nclc 1/1/1 declaration.");
 	}
 
 	private static TimingTable ReadTimeToSample(Stream stream, AtomInfo atom)
@@ -600,6 +644,7 @@ public static class QuickTimeMovProbe
 	private readonly record struct TimingTable(uint SampleCount, ulong Duration);
 	private readonly record struct SampleSizeTable(uint SampleSize, uint SampleCount);
 	private readonly record struct SampleToChunkEntry(uint FirstChunk, uint SamplesPerChunk);
+	private readonly record struct PresentationEdit(ulong DelayMovieUnits, ulong? MediaDurationMovieUnits);
 
 	private sealed record TrackProbe(
 		string HandlerType,
