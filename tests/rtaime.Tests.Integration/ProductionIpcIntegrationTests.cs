@@ -77,6 +77,10 @@ public sealed class ProductionIpcIntegrationTests
 		var initial = await client.SynchronizeAsync();
 		var sourceA = initial.Sources[0];
 		var sourceB = initial.Sources[1];
+		Assert.Equal("mp4-h264-aac", initial.Recording.DefaultProfileId);
+		var operatorRecordingProfile = Assert.Single(initial.Recording.Profiles);
+		Assert.Equal("windows-media-foundation", operatorRecordingProfile.ProviderId);
+		Assert.Equal("SOFTWARE", operatorRecordingProfile.AccelerationClass);
 
 		Assert.Equal(2, initial.Production.OutputRoles.Count);
 		Assert.Equal(sourceA.Id, Assert.Single(initial.Production.OutputRoles, role => role.RoleId == OutputRoleIds.Program).SourceId.ToString());
