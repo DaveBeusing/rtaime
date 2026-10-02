@@ -191,6 +191,46 @@ public sealed record RuntimeRecordingCommandResult(
 	RuntimeRecordingSnapshot Snapshot,
 	Failure? Failure);
 
+public sealed record RuntimeReplaySegmentSnapshot(
+	string SegmentId,
+	ulong FirstProgramSequence,
+	ulong LastProgramSequence,
+	TimeSpan Start,
+	TimeSpan End,
+	long Bytes,
+	bool HasAudio,
+	bool DiscontinuityBefore);
+
+public sealed record RuntimeReplaySnapshot(
+	int CaptureState,
+	int ClipState,
+	TimeSpan Retention,
+	long MaximumStorageBytes,
+	TimeSpan SegmentDuration,
+	IReadOnlyList<RuntimeReplaySegmentSnapshot> Segments,
+	TimeSpan? MarkIn,
+	TimeSpan? MarkOut,
+	ulong AcceptedSamples,
+	ulong DroppedSamples,
+	ulong FinalizedSegments,
+	ulong EvictedSegments,
+	ulong Discontinuities,
+	long RetainedBytes,
+	Failure? Failure)
+{
+	public TimeSpan RetainedDuration =>
+		Segments.Count == 0 ? TimeSpan.Zero : Segments[^1].End - Segments[0].Start;
+}
+
+public sealed record RuntimeReplayClipResult(
+	bool Succeeded,
+	string ClipId,
+	string? FinalPath,
+	TimeSpan SourceIn,
+	TimeSpan SourceOut,
+	string? Sha256,
+	Failure? Failure);
+
 public sealed record RuntimeRemoteSnapshot(
 	string HostInstanceId,
 	RuntimeExecutionState Runtime,
@@ -616,6 +656,67 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 		return ReadRecordingCommandResult(response);
 	}
 
+	public async ValueTask<RuntimeReplaySnapshot> GetReplaySnapshotAsync(CancellationToken cancellationToken = default)
+	{
+		var response = await ExchangeAsync("runtime.replay.snapshot.get", new { }, cancellationToken).ConfigureAwait(false);
+		return ReadReplaySnapshot(response);
+	}
+
+	public async ValueTask<RuntimeReplaySnapshot> MarkReplayInAsync(
+		TimeSpan? lookback = null,
+		CancellationToken cancellationToken = default)
+	{
+		if (lookback is { } value && value <= TimeSpan.Zero)
+			throw new ArgumentOutOfRangeException(nameof(lookback));
+		var response = await ExchangeAsync(
+			"runtime.replay.mark_in",
+			new WireReplayMarkIn(lookback?.Ticks),
+			cancellationToken).ConfigureAwait(false);
+		return ReadReplaySnapshot(response);
+	}
+
+	public async ValueTask<RuntimeReplaySnapshot> MarkReplayOutAsync(CancellationToken cancellationToken = default)
+	{
+		var response = await ExchangeAsync("runtime.replay.mark_out", new { }, cancellationToken).ConfigureAwait(false);
+		return ReadReplaySnapshot(response);
+	}
+
+	public async ValueTask<RuntimeReplaySnapshot> SetReplayRangeAsync(
+		TimeSpan @in,
+		TimeSpan @out,
+		CancellationToken cancellationToken = default)
+	{
+		if (@in < TimeSpan.Zero || @out <= @in)
+			throw new ArgumentOutOfRangeException(nameof(@out), "Replay OUT must be later than IN.");
+		var response = await ExchangeAsync(
+			"runtime.replay.range.set",
+			new WireReplayRange(@in.Ticks, @out.Ticks),
+			cancellationToken).ConfigureAwait(false);
+		return ReadReplaySnapshot(response);
+	}
+
+	public async ValueTask<RuntimeReplayClipResult> CreateReplayClipAsync(
+		string name,
+		CancellationToken cancellationToken = default)
+	{
+		if (string.IsNullOrWhiteSpace(name))
+			throw new ArgumentException("Replay clip name is required.", nameof(name));
+		var response = await ExchangeAsync(
+			"runtime.replay.clip.create",
+			new WireReplayClipCreate(name.Trim()),
+			cancellationToken).ConfigureAwait(false);
+		var wire = response.Payload.Deserialize<WireReplayClipResult>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Runtime replay clip response is required.");
+		return new RuntimeReplayClipResult(
+			wire.Succeeded,
+			wire.ClipId,
+			wire.FinalPath,
+			TimeSpan.FromTicks(wire.SourceInTicks),
+			TimeSpan.FromTicks(wire.SourceOutTicks),
+			wire.Sha256,
+			wire.Failure is null ? null : new Failure(wire.Failure.Code, wire.Failure.Message));
+	}
+
 	public async ValueTask<RuntimeAIShowcaseRemoteSnapshot> SetAIShowcaseEnabledAsync(
 		bool enabled,
 		CancellationToken cancellationToken = default)
@@ -1035,6 +1136,41 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 		snapshot.Failure is null ? null : new Failure(snapshot.Failure.Code, snapshot.Failure.Message),
 		snapshot.UpdatedAtUtc);
 
+	private static RuntimeReplaySnapshot ReadReplaySnapshot(WireEnvelope response)
+	{
+		var wire = response.Payload.Deserialize<WireReplaySnapshot>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Runtime replay snapshot response is required.");
+		if (wire.RetentionTicks <= 0 || wire.MaximumStorageBytes <= 0 || wire.SegmentDurationTicks <= 0)
+			throw new InvalidDataException("Runtime replay bounds are invalid.");
+		var segments = (wire.Segments ?? Array.Empty<WireReplaySegment>())
+			.Select(segment => new RuntimeReplaySegmentSnapshot(
+				segment.SegmentId,
+				segment.FirstProgramSequence,
+				segment.LastProgramSequence,
+				TimeSpan.FromTicks(segment.StartTicks),
+				TimeSpan.FromTicks(segment.EndTicks),
+				segment.Bytes,
+				segment.HasAudio,
+				segment.DiscontinuityBefore))
+			.ToArray();
+		return new RuntimeReplaySnapshot(
+			wire.CaptureState,
+			wire.ClipState,
+			TimeSpan.FromTicks(wire.RetentionTicks),
+			wire.MaximumStorageBytes,
+			TimeSpan.FromTicks(wire.SegmentDurationTicks),
+			Array.AsReadOnly(segments),
+			wire.Selection is null ? null : TimeSpan.FromTicks(wire.Selection.InTicks),
+			wire.Selection is null ? null : TimeSpan.FromTicks(wire.Selection.OutTicks),
+			wire.AcceptedSamples,
+			wire.DroppedSamples,
+			wire.FinalizedSegments,
+			wire.EvictedSegments,
+			wire.Discontinuities,
+			wire.RetainedBytes,
+			wire.Failure is null ? null : new Failure(wire.Failure.Code, wire.Failure.Message));
+	}
+
 	private static RuntimeRecordingCommandResult ReadRecordingCommandResult(WireEnvelope response)
 	{
 		var wire = response.Payload.Deserialize<WireRecordingCommandResult>(Wire.JsonOptions)
@@ -1405,6 +1541,12 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 	private sealed record WireCommitResult(string Version, int Status, string? ExecutionInstanceId, ulong ExecutionRevision, WireFailure? Failure);
 	private sealed record WireApplyResponse(WirePrepareResult Prepare, WireCommitResult? Commit, ulong? ActivationSequence);
 	private sealed record WireRecordingStart(string SessionId, string OutputId, string DestinationDirectory, string FileName);
+	private sealed record WireReplayMarkIn(long? LookbackTicks);
+	private sealed record WireReplayRange(long InTicks, long OutTicks);
+	private sealed record WireReplayClipCreate(string Name);
+	private sealed record WireReplaySegment(string SegmentId, ulong FirstProgramSequence, ulong LastProgramSequence, long StartTicks, long EndTicks, long Bytes, bool HasAudio, bool DiscontinuityBefore);
+	private sealed record WireReplaySnapshot(int CaptureState, int ClipState, long RetentionTicks, long MaximumStorageBytes, long SegmentDurationTicks, WireReplaySegment[]? Segments, WireReplayRange? Selection, ulong AcceptedSamples, ulong DroppedSamples, ulong FinalizedSegments, ulong EvictedSegments, ulong Discontinuities, long RetainedBytes, WireFailure? Failure);
+	private sealed record WireReplayClipResult(bool Succeeded, string ClipId, string? FinalPath, long SourceInTicks, long SourceOutTicks, string? Sha256, WireFailure? Failure);
 	private sealed record WireRecordingSnapshot(string State, long ElapsedTicks, string? Destination, string? FileName, string? FinalPath, ulong Accepted, ulong Written, ulong Dropped, ulong Rejected, ulong WriterFailures, WireFailure? Failure);
 	private sealed record WireRuntimePerformance(long UptimeTicks, long FrameBudgetTicks, long LastFrameProcessingTicks, ulong DroppedFrames, string GpuDeviceName, bool GpuHardwareAccelerated, double? GpuUtilizationPercent, ulong? GpuVramUsedBytes, ulong? GpuVramTotalBytes, string GpuTelemetryEvidence, string CpuDeviceName, int CpuLogicalProcessorCount, double? CpuUtilizationPercent, ulong? SystemMemoryUsedBytes, ulong? SystemMemoryTotalBytes, string SystemTelemetryEvidence, string PhysicalGpuDeviceName, double? OutputFramesPerSecond, long LastCompositionDurationTicks = 0, int ActiveCompositingLayerCount = 0);
 	private sealed record WireAIShowcaseState(bool Enabled);
