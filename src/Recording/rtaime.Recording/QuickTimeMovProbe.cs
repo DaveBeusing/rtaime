@@ -329,7 +329,7 @@ public static class QuickTimeMovProbe
 			var height = ReadUInt16(stream);
 			if (width == 0 || height == 0)
 				throw new InvalidDataException("MOV video dimensions must be positive.");
-			stream.Position = dataOffset + 66;
+			stream.Position = dataOffset + 74;
 			var depth = ReadUInt16(stream);
 			var colorTableId = ReadInt16(stream);
 			if (depth != 24 || colorTableId != -1)
