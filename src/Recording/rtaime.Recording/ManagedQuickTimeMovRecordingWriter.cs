@@ -40,6 +40,8 @@ public sealed class ManagedQuickTimeMovRecordingWriter :
 	private AudioFormat? _audioFormat;
 	private long? _videoOrigin;
 	private long? _audioOrigin;
+	private ulong _videoPresentationDelayMovieTicks;
+	private ulong _audioPresentationDelayMovieTicks;
 	private long _lastVideoPresentationTime = -1;
 	private ulong? _expectedAudioSamplePosition;
 	private ulong _audioSampleFrames;
@@ -147,6 +149,8 @@ public sealed class ManagedQuickTimeMovRecordingWriter :
 				_audioFormat = null;
 				_videoOrigin = null;
 				_audioOrigin = null;
+				_videoPresentationDelayMovieTicks = 0;
+				_audioPresentationDelayMovieTicks = 0;
 				_lastVideoPresentationTime = -1;
 				_expectedAudioSamplePosition = null;
 				_audioSampleFrames = 0;
@@ -392,10 +396,12 @@ public sealed class ManagedQuickTimeMovRecordingWriter :
 		{
 			_videoFormat = videoFormat;
 			_audioFormat = audio.Format;
-			_videoOrigin = ToTimescale(sample.Video.Timing.PresentationTimestamp, sample.Video.Timing.Timebase, MovieTimescale);
+			var firstVideoAtMovieScale = ToTimescale(sample.Video.Timing.PresentationTimestamp, sample.Video.Timing.Timebase, MovieTimescale);
 			var firstAudioAtMovieScale = ToTimescale(audio.Timing.PresentationTimestamp, audio.Timing.Timebase, MovieTimescale);
-			if (_videoOrigin.Value != firstAudioAtMovieScale)
-				throw new InvalidDataException("Program video and audio must share the same A/V origin for MOV recording.");
+			var commonMovieOrigin = Math.Min(firstVideoAtMovieScale, firstAudioAtMovieScale);
+			_videoPresentationDelayMovieTicks = checked((ulong)(firstVideoAtMovieScale - commonMovieOrigin));
+			_audioPresentationDelayMovieTicks = checked((ulong)(firstAudioAtMovieScale - commonMovieOrigin));
+			_videoOrigin = firstVideoAtMovieScale;
 			_audioOrigin = ToTimescale(audio.Timing.PresentationTimestamp, audio.Timing.Timebase, AudioTimescale);
 			_expectedAudioSamplePosition = audio.Timing.SamplePosition;
 			_uyvyBuffer = new byte[checked((int)((long)videoFormat.Width * videoFormat.Height * 2))];
@@ -410,7 +416,6 @@ public sealed class ManagedQuickTimeMovRecordingWriter :
 			throw new InvalidDataException("Program audio sample positions are not contiguous for MOV recording.");
 		var audioAbsolute = ToTimescale(audio.Timing.PresentationTimestamp, audio.Timing.Timebase, AudioTimescale);
 		var audioPresentationTime = checked(audioAbsolute - _audioOrigin!.Value);
-		var expectedRelativeAudioPosition = checked((long)(audio.Timing.SamplePosition - (_audioSampleFrames == 0 ? audio.Timing.SamplePosition : 0)));
 		if (_audioSampleFrames == 0)
 		{
 			if (audioPresentationTime != 0)
@@ -420,7 +425,6 @@ public sealed class ManagedQuickTimeMovRecordingWriter :
 		{
 			throw new InvalidDataException("Program audio timestamp does not match its contiguous 48 kHz sample position.");
 		}
-		_ = expectedRelativeAudioPosition;
 
 		var uyvy = _uyvyBuffer!;
 		ConvertRgbaTo2Vuy(rgba, uyvy, checked((int)videoFormat.Width), checked((int)videoFormat.Height));
@@ -450,14 +454,16 @@ public sealed class ManagedQuickTimeMovRecordingWriter :
 		var videoDurations = BuildVideoDurations(format);
 		var videoDuration = Sum(videoDurations);
 		var audioDuration = _audioSampleFrames;
-		var audioDurationAtMovieScale = checked(audioDuration * MovieTimescale / AudioTimescale);
-		var movieDuration = Math.Max(videoDuration, audioDurationAtMovieScale);
+		var audioDurationAtMovieScale = ToMovieDuration(audioDuration, AudioTimescale);
+		var presentedVideoDuration = checked(_videoPresentationDelayMovieTicks + videoDuration);
+		var presentedAudioDuration = checked(_audioPresentationDelayMovieTicks + audioDurationAtMovieScale);
+		var movieDuration = Math.Max(presentedVideoDuration, presentedAudioDuration);
 
 		return Atom("moov", stream =>
 		{
 			WriteAtom(stream, BuildMovieHeader(movieDuration));
-			WriteAtom(stream, BuildVideoTrack(format, videoDurations, videoDuration));
-			WriteAtom(stream, BuildAudioTrack(audioDuration));
+			WriteAtom(stream, BuildVideoTrack(format, videoDurations, videoDuration, _videoPresentationDelayMovieTicks));
+			WriteAtom(stream, BuildAudioTrack(audioDuration, audioDurationAtMovieScale, _audioPresentationDelayMovieTicks));
 		});
 	}
 
@@ -479,13 +485,19 @@ public sealed class ManagedQuickTimeMovRecordingWriter :
 			WriteUInt32(stream, 3);
 		});
 
-	private byte[] BuildVideoTrack(VideoFormat format, IReadOnlyList<uint> durations, ulong duration) =>
+	private byte[] BuildVideoTrack(
+		VideoFormat format,
+		IReadOnlyList<uint> durations,
+		ulong mediaDuration,
+		ulong presentationDelay) =>
 		Atom("trak", stream =>
 		{
-			WriteAtom(stream, BuildTrackHeader(1, duration, format.Width, format.Height, audio: false));
+			WriteAtom(stream, BuildTrackHeader(1, checked(presentationDelay + mediaDuration), format.Width, format.Height, audio: false));
+			if (presentationDelay != 0)
+				WriteAtom(stream, BuildEditList(presentationDelay, mediaDuration));
 			WriteAtom(stream, Atom("mdia", media =>
 			{
-				WriteAtom(media, BuildMediaHeader(MovieTimescale, duration));
+				WriteAtom(media, BuildMediaHeader(MovieTimescale, mediaDuration));
 				WriteAtom(media, BuildHandler("vide", "VideoHandler"));
 				WriteAtom(media, Atom("minf", minf =>
 				{
@@ -503,14 +515,18 @@ public sealed class ManagedQuickTimeMovRecordingWriter :
 			}));
 		});
 
-	private byte[] BuildAudioTrack(ulong duration) =>
+	private byte[] BuildAudioTrack(
+		ulong mediaDuration,
+		ulong mediaDurationAtMovieScale,
+		ulong presentationDelay) =>
 		Atom("trak", stream =>
 		{
-			var movieDuration = checked(duration * MovieTimescale / AudioTimescale);
-			WriteAtom(stream, BuildTrackHeader(2, movieDuration, 0, 0, audio: true));
+			WriteAtom(stream, BuildTrackHeader(2, checked(presentationDelay + mediaDurationAtMovieScale), 0, 0, audio: true));
+			if (presentationDelay != 0)
+				WriteAtom(stream, BuildEditList(presentationDelay, mediaDurationAtMovieScale));
 			WriteAtom(stream, Atom("mdia", media =>
 			{
-				WriteAtom(media, BuildMediaHeader(AudioTimescale, duration));
+				WriteAtom(media, BuildMediaHeader(AudioTimescale, mediaDuration));
 				WriteAtom(media, BuildHandler("soun", "SoundHandler"));
 				WriteAtom(media, Atom("minf", minf =>
 				{
@@ -523,6 +539,24 @@ public sealed class ManagedQuickTimeMovRecordingWriter :
 					WriteAtom(minf, BuildDataInformation());
 					WriteAtom(minf, BuildAudioSampleTable());
 				}));
+			}));
+		});
+
+	private static byte[] BuildEditList(ulong presentationDelay, ulong mediaDurationAtMovieScale) =>
+		Atom("edts", stream =>
+		{
+			WriteAtom(stream, Atom("elst", elst =>
+			{
+				WriteVersionFlags(elst, 1, 0);
+				WriteUInt32(elst, 2);
+				WriteUInt64(elst, presentationDelay);
+				WriteInt64(elst, -1);
+				WriteUInt16(elst, 1);
+				WriteUInt16(elst, 0);
+				WriteUInt64(elst, mediaDurationAtMovieScale);
+				WriteInt64(elst, 0);
+				WriteUInt16(elst, 1);
+				WriteUInt16(elst, 0);
 			}));
 		});
 
@@ -841,6 +875,11 @@ public sealed class ManagedQuickTimeMovRecordingWriter :
 		}
 	}
 
+	private static ulong ToMovieDuration(ulong duration, uint sourceTimescale) =>
+		checked((ulong)DivideRound(
+			checked((Int128)duration * MovieTimescale),
+			sourceTimescale));
+
 	private static long ToTimescale(long timestamp, Timebase timebase, uint timescale)
 	{
 		if (timestamp < 0)
@@ -936,6 +975,13 @@ public sealed class ManagedQuickTimeMovRecordingWriter :
 	{
 		Span<byte> buffer = stackalloc byte[2];
 		BinaryPrimitives.WriteInt16BigEndian(buffer, value);
+		stream.Write(buffer);
+	}
+
+	private static void WriteInt64(Stream stream, long value)
+	{
+		Span<byte> buffer = stackalloc byte[8];
+		BinaryPrimitives.WriteInt64BigEndian(buffer, value);
 		stream.Write(buffer);
 	}
 
