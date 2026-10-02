@@ -477,6 +477,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 			new RecordingOutputId(Identity.Parse(wire.OutputId)),
 			wire.DestinationDirectory,
 			wire.FileName,
+			string.IsNullOrWhiteSpace(wire.ProfileId) ? null : new RecordingProfileId(wire.ProfileId),
 			cancellationToken).ConfigureAwait(false);
 		AdvanceStateVersion();
 		return Success(
@@ -944,7 +945,36 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		snapshot.Statistics.Dropped,
 		snapshot.Statistics.Rejected,
 		snapshot.Statistics.WriterFailures,
-		snapshot.Failure is { } failure ? new WireFailure(failure.Code, failure.Message) : null);
+		snapshot.Failure is { } failure ? new WireFailure(failure.Code, failure.Message) : null,
+		snapshot.ActiveProfileId?.ToString(),
+		snapshot.ActiveProviderId?.ToString(),
+		snapshot.DefaultProfileId?.ToString(),
+		(snapshot.Profiles ?? Array.Empty<RecordingProfileDescriptor>()).Select(ToWire).ToArray());
+
+	private static WireRecordingProfile ToWire(RecordingProfileDescriptor profile) => new(
+		profile.ProfileId.ToString(),
+		profile.DisplayName,
+		profile.Container,
+		profile.FileExtension,
+		profile.VideoCodec,
+		profile.VideoProfile,
+		profile.VideoLevel,
+		profile.AudioCodec,
+		profile.SupportedInputVideoFormats
+			.Select(format => new WireVideoFormat(format.Width, format.Height, format.FrameRate.ToString(), (int)format.PixelFormat, (int)format.ScanMode))
+			.ToArray(),
+		profile.RequiredInputAudioFormat.SampleRate,
+		(int)profile.RequiredInputAudioFormat.ChannelLayout,
+		(int)profile.RequiredInputAudioFormat.SampleFormat,
+		profile.RequiredInputAudioFormat.ChannelCount,
+		profile.VideoBitRate,
+		profile.AudioBitRate,
+		(int)profile.AccelerationClass,
+		profile.ProviderId.ToString(),
+		profile.Available,
+		profile.UnavailableReason,
+		(int)profile.EvidenceState,
+		profile.Evidence);
 
 	private static WireRuntimePerformance ToWire(V1RuntimePerformanceSnapshot snapshot) => new(
 		snapshot.Uptime.Ticks,
@@ -1164,14 +1194,51 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 	private sealed record WirePrepareResult(string Version, string PreparedExecutionId, int Status, string? ReservationId, WireFailure? Failure);
 	private sealed record WireCommitResult(string Version, int Status, string? ExecutionInstanceId, ulong ExecutionRevision, WireFailure? Failure);
 	private sealed record WireApplyResponse(WirePrepareResult Prepare, WireCommitResult? Commit, ulong? ActivationSequence);
-	private sealed record WireRecordingStart(string SessionId, string OutputId, string DestinationDirectory, string FileName);
+	private sealed record WireRecordingStart(string SessionId, string OutputId, string DestinationDirectory, string FileName, string? ProfileId = null);
 	private sealed record WireReplayMarkIn(long? LookbackTicks);
 	private sealed record WireReplayRange(long InTicks, long OutTicks);
 	private sealed record WireReplayClipCreate(string Name);
 	private sealed record WireReplaySegment(string SegmentId, ulong FirstProgramSequence, ulong LastProgramSequence, long StartTicks, long EndTicks, long Bytes, bool HasAudio, bool DiscontinuityBefore);
 	private sealed record WireReplaySnapshot(int CaptureState, int ClipState, long RetentionTicks, long MaximumStorageBytes, long SegmentDurationTicks, WireReplaySegment[] Segments, WireReplayRange? Selection, ulong AcceptedSamples, ulong DroppedSamples, ulong FinalizedSegments, ulong EvictedSegments, ulong Discontinuities, long RetainedBytes, WireFailure? Failure);
 	private sealed record WireReplayClipResult(bool Succeeded, string ClipId, string? FinalPath, long SourceInTicks, long SourceOutTicks, string? Sha256, WireFailure? Failure);
-	private sealed record WireRecordingSnapshot(string State, long ElapsedTicks, string? Destination, string? FileName, string? FinalPath, ulong Accepted, ulong Written, ulong Dropped, ulong Rejected, ulong WriterFailures, WireFailure? Failure);
+	private sealed record WireRecordingProfile(
+		string ProfileId,
+		string DisplayName,
+		string Container,
+		string FileExtension,
+		string VideoCodec,
+		string VideoProfile,
+		string? VideoLevel,
+		string AudioCodec,
+		WireVideoFormat[] SupportedInputVideoFormats,
+		uint RequiredAudioSampleRate,
+		int RequiredAudioChannelLayout,
+		int RequiredAudioSampleFormat,
+		uint RequiredAudioChannelCount,
+		uint VideoBitRate,
+		uint AudioBitRate,
+		int AccelerationClass,
+		string ProviderId,
+		bool Available,
+		string? UnavailableReason,
+		int EvidenceState,
+		string Evidence);
+	private sealed record WireRecordingSnapshot(
+		string State,
+		long ElapsedTicks,
+		string? Destination,
+		string? FileName,
+		string? FinalPath,
+		ulong Accepted,
+		ulong Written,
+		ulong Dropped,
+		ulong Rejected,
+		ulong WriterFailures,
+		WireFailure? Failure,
+		string? ActiveProfileId = null,
+		string? ActiveProviderId = null,
+		string? DefaultProfileId = null,
+		WireRecordingProfile[]? Profiles = null);
 	private sealed record WireRuntimePerformance(long UptimeTicks, long FrameBudgetTicks, long LastFrameProcessingTicks, ulong DroppedFrames, string GpuDeviceName, bool GpuHardwareAccelerated, double? GpuUtilizationPercent, ulong? GpuVramUsedBytes, ulong? GpuVramTotalBytes, string GpuTelemetryEvidence, string CpuDeviceName, int CpuLogicalProcessorCount, double? CpuUtilizationPercent, ulong? SystemMemoryUsedBytes, ulong? SystemMemoryTotalBytes, string SystemTelemetryEvidence, string PhysicalGpuDeviceName, double? OutputFramesPerSecond, long LastCompositionDurationTicks = 0, int ActiveCompositingLayerCount = 0);
 	private sealed record WireAIShowcaseState(bool Enabled);
 	private sealed record WireAIShowcase(bool Enabled, string Feature, string Status, string Provider, long InferenceTimeTicks, uint PersonRegionCount, ulong? SourceSequence, ulong? AppliedSequence, double? Confidence, bool EffectVisible, WireFailure? Failure, DateTimeOffset? UpdatedAtUtc);
