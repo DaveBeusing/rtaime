@@ -145,6 +145,8 @@ public partial class MainWindow : Window
 		MediaDeck = CreateMediaDeck(viewModel, client);
 		MediaDeck.SnapshotChanged += viewModel.ApplyMediaDeckSnapshot;
 		viewModel.ConfirmedMediaDeckSnapshot += MediaDeck.ApplyConfirmedSnapshot;
+		Replay = new ReplayViewModel(client, MediaDeck);
+		viewModel.ConfirmedReplaySnapshot += Replay.ApplyConfirmedSnapshot;
 		DemoProduction = new DemoProductionPackageController(client, viewModel, MediaDeck);
 		Monitoring = new OperatorMonitoringViewModel(
 			viewModel,
