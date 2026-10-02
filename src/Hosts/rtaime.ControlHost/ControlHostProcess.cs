@@ -182,6 +182,13 @@ public interface IControlRuntimeTransportSeam
 		ValueTask.FromException<RuntimeRecordingCommandResult>(
 			new NotSupportedException("Runtime transport does not expose recording control."));
 
+	ValueTask<RuntimeRecordingCommandResult> StartRecordingAsync(
+		string destinationDirectory,
+		string fileName,
+		string? profileId,
+		CancellationToken cancellationToken = default) =>
+		StartRecordingAsync(destinationDirectory, fileName, cancellationToken);
+
 	ValueTask<RuntimeRecordingCommandResult> StopRecordingAsync(CancellationToken cancellationToken = default) =>
 		ValueTask.FromException<RuntimeRecordingCommandResult>(
 			new NotSupportedException("Runtime transport does not expose recording control."));
