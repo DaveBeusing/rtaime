@@ -97,7 +97,7 @@ public sealed record ReplaySegmentDescriptor
 			throw new ArgumentOutOfRangeException(nameof(bytes));
 
 		SegmentId = segmentId;
-		Path = Path.GetFullPath(path);
+		Path = System.IO.Path.GetFullPath(path);
 		FirstProgramSequence = firstProgramSequence;
 		LastProgramSequence = lastProgramSequence;
 		Start = start;
