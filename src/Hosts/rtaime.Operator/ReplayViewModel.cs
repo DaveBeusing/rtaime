@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using rtaime.Client;
+using rtaime.Core;
 using rtaime.Control.Contracts;
 using rtaime.Media.Contracts;
 
@@ -169,7 +170,7 @@ public sealed class ReplayViewModel : INotifyPropertyChanged
 		await RunAsync(async () =>
 		{
 			var clip = RequireReadyClip();
-			var opened = await _mediaDeck.OpenCatalogAssetAsync(clip.SourceLocation!, clip.AssetId!.Value).ConfigureAwait(false);
+			var opened = await _mediaDeck.OpenCatalogAssetAsync(clip.SourceLocation!, new MediaAssetId(Identity.Parse(clip.AssetId!))).ConfigureAwait(false);
 			if (!opened)
 				throw new InvalidOperationException("Replay clip could not be opened through the existing Media Deck.");
 		});
