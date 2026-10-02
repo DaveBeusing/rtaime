@@ -126,6 +126,40 @@ public sealed class WindowsMediaFoundationRecordingWriterProvider : IProgramReco
 	}
 }
 
+public sealed class ManagedQuickTimeRecordingWriterProvider : IProgramRecordingWriterProvider
+{
+	private readonly string _rootDirectory;
+	private readonly long? _maximumPayloadBytes;
+	private readonly RecordingProfileDescriptor[] _profiles;
+
+	public ManagedQuickTimeRecordingWriterProvider(
+		string rootDirectory,
+		long? maximumPayloadBytes = null)
+	{
+		if (string.IsNullOrWhiteSpace(rootDirectory))
+			throw new ArgumentException("Recording root directory is required.", nameof(rootDirectory));
+		if (maximumPayloadBytes is <= 0)
+			throw new ArgumentOutOfRangeException(nameof(maximumPayloadBytes));
+
+		_rootDirectory = Path.GetFullPath(rootDirectory);
+		_maximumPayloadBytes = maximumPayloadBytes;
+		_profiles = [ProfessionalRecordingFormats.CreateMov2VuyPcmDescriptor()];
+	}
+
+	public RecordingWriterProviderId ProviderId => ProfessionalRecordingFormats.ManagedQuickTimeProviderId;
+	public string DisplayName => "Managed QuickTime";
+	public IReadOnlyList<RecordingProfileDescriptor> Profiles => _profiles;
+
+	public IProgramRecordingPayloadWriter CreateWriter(RecordingProfileId profileId)
+	{
+		var profile = _profiles.SingleOrDefault(candidate => candidate.ProfileId == profileId)
+			?? throw new RecordingOutputUnavailableException($"Managed QuickTime does not provide recording profile '{profileId}'.");
+		if (!profile.Available)
+			throw new RecordingOutputUnavailableException(profile.UnavailableReason ?? "Managed QuickTime recording is unavailable.");
+		return new ManagedQuickTimeMovRecordingWriter(_rootDirectory, _maximumPayloadBytes);
+	}
+}
+
 public sealed class ProfileSelectingProgramRecordingWriter :
 	IProgramRecordingPayloadWriter,
 	IProfileConfigurableProgramRecordingWriter,
