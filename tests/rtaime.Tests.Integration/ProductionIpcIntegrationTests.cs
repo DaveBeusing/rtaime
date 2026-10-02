@@ -40,6 +40,13 @@ public sealed class ProductionIpcIntegrationTests
 		Assert.NotEmpty(providers);
 		Assert.Equal(RuntimeExecutionStatus.Idle, snapshot.Runtime.Status);
 		Assert.Equal(Revision.Initial, snapshot.Runtime.ExecutionRevision);
+		var recording = Assert.IsType<RuntimeRecordingSnapshot>(snapshot.Recording);
+		Assert.Equal("mp4-h264-aac", recording.DefaultProfileId);
+		var profile = Assert.Single(recording.Profiles ?? Array.Empty<RuntimeRecordingProfileSnapshot>());
+		Assert.Equal("mp4-h264-aac", profile.ProfileId);
+		Assert.Equal("windows-media-foundation", profile.ProviderId);
+		Assert.Equal("SOFTWARE", profile.AccelerationClass);
+		Assert.Equal(OperatingSystem.IsWindows(), profile.Available);
 
 		stop.Cancel();
 		Assert.Equal(RuntimeHostExitCode.Success, await run);
