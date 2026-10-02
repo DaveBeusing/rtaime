@@ -39,7 +39,7 @@ public sealed class RecordingProfileOperatorTests
 	}
 
 	[Fact]
-	public void Operator_does_not_advertise_future_professional_formats()
+	public void Operator_does_not_hard_code_recording_format_names_or_future_codecs()
 	{
 		var root = FindRepositoryRoot();
 		var surface = File.ReadAllText(Path.Combine(root, "src", "Hosts", "rtaime.Operator", "MainWindow.xaml"));
