@@ -40,7 +40,7 @@ public sealed class RuntimeReplayService : IAsyncDisposable
 		_materializer = new ReplayClipMaterializer(_capture.Store, clips, format);
 	}
 
-	public int QueueCapacity => ReplayCaptureEngine.DefaultQueueCapacity;
+	public int QueueCapacity => _capture.QueueCapacity;
 	public ReplayClipResult? LastClip
 	{
 		get { lock (_gate) return _lastClip; }
