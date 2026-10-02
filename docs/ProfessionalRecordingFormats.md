@@ -21,7 +21,7 @@ The selected production profile is:
 | Acceleration | Software |
 | Finalization | `<name>.partial.mov` is promoted atomically to `<name>.mov` only after a complete `moov` atom is written and independently probed |
 
-RGBA-to-2vuy conversion and Float32-to-PCM16 conversion execute on the asynchronous Recording writer path. Program execution does not perform file I/O or recording-specific pixel conversion.
+RGBA-to-2vuy conversion and Float32-to-PCM16 conversion execute on the asynchronous Recording writer path. The video conversion is the bounded BT.709 limited-range mapping declared by the MOV `nclc` 1/1/1 color atom. Program execution does not perform file I/O or recording-specific pixel conversion.
 
 ## Dependency and licensing assessment
 
@@ -58,9 +58,10 @@ A dedicated MOV probe is independent from the writer and validates the finalized
 - resolution;
 - frame rate/edit rate;
 - 48 kHz stereo PCM16 audio;
-- sample counts and durations;
+- sample counts, fixed essence sizes and durations;
+- progressive field metadata and BT.709 `nclc` 1/1/1 color metadata;
 - monotonic chunk/sample layout;
-- A/V duration alignment;
+- A/V start offsets and duration alignment, including 60000/1001 edit-list offsets;
 - complete finalization with no partial artifact published as valid.
 
 This repository qualification is software evidence. Sustained storage throughput, long-duration capture and physical hardware behavior remain separate qualification obligations.
