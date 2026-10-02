@@ -136,6 +136,22 @@ public sealed record ReplayRange
 	public TimeSpan Duration => Out - In;
 }
 
+public enum ReplayEnqueueStatus
+{
+	Accepted = 1,
+	Dropped = 2,
+	Rejected = 3
+}
+
+public sealed record ReplayEnqueueResult(ReplayEnqueueStatus Status, Failure? Failure)
+{
+	public bool Accepted => Status == ReplayEnqueueStatus.Accepted;
+
+	public static ReplayEnqueueResult AcceptedSample() => new(ReplayEnqueueStatus.Accepted, null);
+	public static ReplayEnqueueResult Dropped(Failure failure) => new(ReplayEnqueueStatus.Dropped, failure);
+	public static ReplayEnqueueResult Rejected(Failure failure) => new(ReplayEnqueueStatus.Rejected, failure);
+}
+
 public enum ReplayCaptureState
 {
 	Disabled = 1,
