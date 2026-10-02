@@ -62,6 +62,7 @@ message JsonPayloadRequest {
 message RecordingStartRequest {
   string destination_directory = 1;
   string file_name = 2;
+  string profile_id = 3;
 }
 
 message MediaAssetCatalogRequest {
