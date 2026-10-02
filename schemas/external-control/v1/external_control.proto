@@ -130,6 +130,24 @@ message RundownItemRequest {
   string item_id = 1;
 }
 
+message ProductionMacroSaveRequest {
+  string canonical_json = 1;
+  uint64 expected_storage_version = 2;
+}
+
+message ProductionMacroDeleteRequest {
+  string macro_id = 1;
+  uint64 expected_storage_version = 2;
+}
+
+message ProductionMacroIdRequest {
+  string macro_id = 1;
+}
+
+message ProductionMacroValidationRequest {
+  string canonical_json = 1;
+}
+
 message ExternalControlRequest {
   RequestContext context = 1;
 
@@ -188,6 +206,15 @@ message ExternalControlRequest {
     EmptyRequest previous_rundown = 85;
     EmptyRequest hold_rundown = 86;
     RecoveryAcknowledgementRequest acknowledge_rundown_recovery = 87;
+
+    EmptyRequest get_production_macros = 90;
+    ProductionMacroSaveRequest save_production_macro = 91;
+    ProductionMacroDeleteRequest delete_production_macro = 92;
+    ProductionMacroValidationRequest validate_production_macro = 93;
+    ProductionMacroIdRequest execute_production_macro = 94;
+    EmptyRequest cancel_production_macro = 95;
+    RecoveryAcknowledgementRequest acknowledge_production_macro_recovery = 96;
+    ProductionMacroIdRequest get_production_macro = 97;
   }
 }
 

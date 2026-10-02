@@ -88,6 +88,7 @@ public partial class MainWindow : Window
 			new DispatcherSynchronizationContext(Dispatcher));
 		QuickControls = new OperatorQuickControlsViewModel(viewModel, MediaDeck, MediaPool, new OperatorQuickControlStore());
 		ShowControl = new ShowControlViewModel(client);
+		ProductionMacros = new ProductionMacroViewModel(client);
 		viewModel.ConfirmedShowControlSnapshot += ShowControl.ApplyConfirmedSnapshot;
 		Shortcuts = OperatorKeyboardCommandRegistry.Create(
 			viewModel,
@@ -167,6 +168,7 @@ public partial class MainWindow : Window
 			new DispatcherSynchronizationContext(Dispatcher));
 		QuickControls = new OperatorQuickControlsViewModel(viewModel, MediaDeck, MediaPool, new OperatorQuickControlStore());
 		ShowControl = new ShowControlViewModel(client);
+		ProductionMacros = new ProductionMacroViewModel(client);
 		viewModel.ConfirmedShowControlSnapshot += ShowControl.ApplyConfirmedSnapshot;
 		Shortcuts = OperatorKeyboardCommandRegistry.Create(
 			viewModel,
@@ -228,6 +230,7 @@ public partial class MainWindow : Window
 	public CompositingGraphViewModel CompositingGraph { get; }
 	public OperatorQuickControlsViewModel QuickControls { get; }
 	public ShowControlViewModel ShowControl { get; }
+	public ProductionMacroViewModel ProductionMacros { get; }
 	public OperatorKeyboardCommandRegistry Shortcuts { get; }
 	public MediaTimelineViewModel Timeline => MediaDeck.Timeline;
 

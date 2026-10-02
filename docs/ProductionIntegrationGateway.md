@@ -40,6 +40,7 @@ Physical GPIO device matrices, device-specific MIDI quirks and NMOS conformance 
 ## Command model
 
 Mappings are versioned configuration, not Production state. Trigger keys resolve only to the bounded action set:
+- Production Macro execute by stable Macro identity;
 
 - Preview select, CUT and DISSOLVE;
 - Scene activation;
@@ -101,3 +102,12 @@ Bearer tokens and certificate passwords are referenced by environment-variable n
 ## NMOS path
 
 Future NMOS work belongs in the same outer adapter boundary. IS-04 discovery/registry and IS-05 connection management may translate qualified external state into bounded gateway triggers or observational feedback, but they must not introduce a second Production Authority. Until a dedicated adapter and conformance evidence exist, NMOS remains **UNVERIFIED**.
+
+
+## Production Macro trigger mapping
+
+`ProductionMacroExecute` is a bounded IntegrationHost mapping action. Its `targetId` is a stable Production Macro identity.
+
+Adapters do not receive, store or expand the Macro action list. When a trigger is admitted, IntegrationHost calls `OperatorControlClient.ExecuteProductionMacroAsync(targetId)`; ControlHost resolves and validates the durable Macro and owns all sequential execution, failure handling, frame timing and recovery.
+
+The existing bounded gateway queue, mapping debounce/rate limits, adapter authentication and upstream gRPC/TLS authorization apply unchanged. See `docs/ProductionMacros.md`.

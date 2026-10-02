@@ -127,3 +127,10 @@ Existing V1/A1 Media Deck semantics remain authoritative. Additional graphics/au
 ## Non-goals
 
 The rundown does not provide blade editing, arbitrary clip movement, destructive source editing, nested timelines, an advanced waveform editor, generic scripting, unbounded loops, collaborative editing or a comprehensive undo/redo system.
+
+
+## Relationship to Production Macros
+
+Production Rundown and Production Macros are complementary bounded orchestration surfaces. A rundown expresses ordered show/planning progression and follow behavior; a Macro expresses one explicitly triggered reusable sequence of existing governed production actions.
+
+Neither surface embeds the other in the current contract. Rundown items cannot invoke Macros and Macro actions cannot invoke rundowns or nested Macros. This keeps execution bounded and prevents recursive orchestration. Both remain ControlHost-owned and reuse established Show Control/production command paths. See `docs/ProductionMacros.md`.

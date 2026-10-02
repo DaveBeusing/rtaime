@@ -480,6 +480,55 @@ public sealed class GrpcOperatorControlTransport : IOperatorControlTransport, IA
 	public async ValueTask<RundownWorkspaceSnapshot> AcknowledgeRundownRecoveryAsync(bool resume, CancellationToken cancellationToken = default) =>
 		NamedPipeOperatorControlTransport.DecodeExternalRundown((await ExecuteRundownRequestAsync(request => request.AcknowledgeRundownRecovery = new RecoveryAcknowledgementRequest { Resume = resume }, cancellationToken).ConfigureAwait(false)).PayloadJson.Span);
 
+	public async ValueTask<ProductionMacroWorkspaceSnapshot> GetProductionMacroSnapshotAsync(CancellationToken cancellationToken = default) =>
+		NamedPipeOperatorControlTransport.DecodeExternalProductionMacro((await ExecuteProductionMacroRequestAsync(request => request.GetProductionMacros = new EmptyRequest(), cancellationToken).ConfigureAwait(false)).PayloadJson.Span);
+
+	public async ValueTask<ProductionMacroDefinition> GetProductionMacroAsync(ProductionMacroId macroId, CancellationToken cancellationToken = default) =>
+		NamedPipeOperatorControlTransport.DecodeExternalProductionMacroDefinition((await ExecuteProductionMacroRequestAsync(
+			request => request.GetProductionMacro = new ProductionMacroIdRequest { MacroId = macroId.ToString() },
+			cancellationToken).ConfigureAwait(false)).PayloadJson.Span);
+
+	public async ValueTask<ProductionMacroWorkspaceSnapshot> SaveProductionMacroAsync(ProductionMacroDefinition macro, ulong expectedStorageVersion, CancellationToken cancellationToken = default) =>
+		NamedPipeOperatorControlTransport.DecodeExternalProductionMacro((await ExecuteProductionMacroRequestAsync(
+			request => request.SaveProductionMacro = new ProductionMacroSaveRequest
+			{
+				CanonicalJson = ProductionMacroCanonicalSerializer.Serialize([macro]),
+				ExpectedStorageVersion = expectedStorageVersion
+			},
+			cancellationToken).ConfigureAwait(false)).PayloadJson.Span);
+
+	public async ValueTask<ProductionMacroWorkspaceSnapshot> DeleteProductionMacroAsync(ProductionMacroId macroId, ulong expectedStorageVersion, CancellationToken cancellationToken = default) =>
+		NamedPipeOperatorControlTransport.DecodeExternalProductionMacro((await ExecuteProductionMacroRequestAsync(
+			request => request.DeleteProductionMacro = new ProductionMacroDeleteRequest
+			{
+				MacroId = macroId.ToString(),
+				ExpectedStorageVersion = expectedStorageVersion
+			},
+			cancellationToken).ConfigureAwait(false)).PayloadJson.Span);
+
+	public async ValueTask<ProductionMacroValidationResult> ValidateProductionMacroAsync(ProductionMacroDefinition macro, CancellationToken cancellationToken = default) =>
+		NamedPipeOperatorControlTransport.DecodeExternalProductionMacroValidation((await ExecuteProductionMacroRequestAsync(
+			request => request.ValidateProductionMacro = new ProductionMacroValidationRequest
+			{
+				CanonicalJson = ProductionMacroCanonicalSerializer.Serialize([macro])
+			},
+			cancellationToken).ConfigureAwait(false)).PayloadJson.Span);
+
+	public async ValueTask<ProductionMacroWorkspaceSnapshot> ExecuteProductionMacroAsync(ProductionMacroId macroId, CancellationToken cancellationToken = default) =>
+		NamedPipeOperatorControlTransport.DecodeExternalProductionMacro((await ExecuteProductionMacroRequestAsync(
+			request => request.ExecuteProductionMacro = new ProductionMacroIdRequest { MacroId = macroId.ToString() },
+			cancellationToken).ConfigureAwait(false)).PayloadJson.Span);
+
+	public async ValueTask<ProductionMacroWorkspaceSnapshot> CancelProductionMacroAsync(CancellationToken cancellationToken = default) =>
+		NamedPipeOperatorControlTransport.DecodeExternalProductionMacro((await ExecuteProductionMacroRequestAsync(
+			request => request.CancelProductionMacro = new EmptyRequest(),
+			cancellationToken).ConfigureAwait(false)).PayloadJson.Span);
+
+	public async ValueTask<ProductionMacroWorkspaceSnapshot> AcknowledgeProductionMacroRecoveryAsync(bool resume, CancellationToken cancellationToken = default) =>
+		NamedPipeOperatorControlTransport.DecodeExternalProductionMacro((await ExecuteProductionMacroRequestAsync(
+			request => request.AcknowledgeProductionMacroRecovery = new RecoveryAcknowledgementRequest { Resume = resume },
+			cancellationToken).ConfigureAwait(false)).PayloadJson.Span);
+
 	public async IAsyncEnumerable<ExternalControlStateNotification> WatchStateAsync(
 		TimeSpan? minimumInterval = null,
 		[EnumeratorCancellation] CancellationToken cancellationToken = default)
@@ -542,6 +591,12 @@ public sealed class GrpcOperatorControlTransport : IOperatorControlTransport, IA
 	}
 
 	private async ValueTask<ExternalControlReply> ExecuteRundownRequestAsync(Action<ExternalControlRequest> configure, CancellationToken cancellationToken)
+	{
+		var request = Request(); configure(request);
+		return await ExecuteAsync(request, false, cancellationToken).ConfigureAwait(false);
+	}
+
+	private async ValueTask<ExternalControlReply> ExecuteProductionMacroRequestAsync(Action<ExternalControlRequest> configure, CancellationToken cancellationToken)
 	{
 		var request = Request(); configure(request);
 		return await ExecuteAsync(request, false, cancellationToken).ConfigureAwait(false);

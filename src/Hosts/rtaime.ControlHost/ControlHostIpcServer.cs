@@ -33,6 +33,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	private readonly MediaDeckControlService? _mediaDeck;
 	private readonly ShowControlCoordinator? _showControl;
 	private readonly RundownCoordinator? _rundown;
+	private readonly ProductionMacroCoordinator? _productionMacros;
 	private readonly MediaAssetCatalogService? _mediaAssetCatalog;
 	private readonly ShowProjectPersistenceStore? _showProjectStore;
 	private PersistedShowProject? _showProject;
@@ -122,6 +123,15 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 				_mediaDeck,
 				NotifyObservableStateChanged)
 			: null;
+		_productionMacros = _showProjectStore is null
+			? null
+			: new ProductionMacroCoordinator(
+				_controlAccessor,
+				_showProjectStore,
+				ExecuteShowControlActionAsync,
+				ObserveShowControlFrameAsync,
+				_mediaAssetCatalog,
+				NotifyObservableStateChanged);
 	}
 
 	public string Endpoint => _endpoint;
@@ -301,6 +311,8 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		if (drain.Status == HostIpcSessionDrainStatus.TimedOut)
 			throw new TimeoutException($"ControlHost IPC did not drain {drain.Snapshot.ActiveSessions} active session(s) within {_sessionDrainTimeout}.");
 
+		if (_productionMacros is not null)
+			await _productionMacros.DisposeAsync().ConfigureAwait(false);
 		if (_rundown is not null)
 			await _rundown.DisposeAsync().ConfigureAwait(false);
 		if (_showControl is not null)
@@ -545,6 +557,14 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			"control.rundown.previous" => await PreviousRundownAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.rundown.hold" => await HoldRundownAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.rundown.recovery.acknowledge" => await AcknowledgeRundownRecoveryAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.production_macro.snapshot.get" => await GetProductionMacroSnapshotAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.production_macro.get" => await GetProductionMacroAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.production_macro.save" => await SaveProductionMacroAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.production_macro.delete" => await DeleteProductionMacroAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.production_macro.validate" => await ValidateProductionMacroAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.production_macro.execute" => await ExecuteProductionMacroAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.production_macro.cancel" => await CancelProductionMacroAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.production_macro.recovery.acknowledge" => await AcknowledgeProductionMacroRecoveryAsync(request, cancellationToken).ConfigureAwait(false),
 			_ => Error(request, "ipc.message.unknown", $"Unknown ControlHost message type '{request.MessageType}'.")
 		};
 	}
@@ -670,6 +690,177 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		snapshot.Execution.RemainingFollowFrames,
 		snapshot.Execution.RemainingItemRepeats,
 		snapshot.Execution.RemainingRundownRepeats);
+
+	private async ValueTask<WireEnvelope> GetProductionMacroSnapshotAsync(WireEnvelope request, CancellationToken cancellationToken)
+	{
+		if (_productionMacros is null)
+			return Error(request, "control.production_macro.unavailable", "Production Macro persistence is not configured.");
+		try
+		{
+			return Success(request, "control.production_macro.snapshot.response", ToWire(await _productionMacros.GetSnapshotAsync(cancellationToken).ConfigureAwait(false)));
+		}
+		catch (Exception exception) when (exception is InvalidOperationException or InvalidDataException or IOException or FormatException or NotSupportedException)
+		{
+			return Error(request, "control.production_macro.snapshot.rejected", exception.Message);
+		}
+	}
+
+	private async ValueTask<WireEnvelope> GetProductionMacroAsync(WireEnvelope request, CancellationToken cancellationToken)
+	{
+		if (_productionMacros is null)
+			return Error(request, "control.production_macro.unavailable", "Production Macro persistence is not configured.");
+		var wire = request.Payload.Deserialize<WireProductionMacroIdRequest>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Production Macro identity payload is required.");
+		try
+		{
+			var macro = await _productionMacros.GetAsync(
+				new ProductionMacroId(Identity.Parse(wire.MacroId)),
+				cancellationToken).ConfigureAwait(false);
+			return Success(
+				request,
+				"control.production_macro.definition.response",
+				new WireProductionMacroDefinition(ProductionMacroCanonicalSerializer.Serialize([macro])));
+		}
+		catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or InvalidDataException or IOException or FormatException or KeyNotFoundException or NotSupportedException)
+		{
+			return Error(request, "control.production_macro.get.rejected", exception.Message);
+		}
+	}
+
+	private async ValueTask<WireEnvelope> SaveProductionMacroAsync(WireEnvelope request, CancellationToken cancellationToken)
+	{
+		if (_productionMacros is null)
+			return Error(request, "control.production_macro.unavailable", "Production Macro persistence is not configured.");
+		var wire = request.Payload.Deserialize<WireProductionMacroSave>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Production Macro save payload is required.");
+		try
+		{
+			var macro = ReadSingleProductionMacro(wire.MacroJson);
+			var snapshot = await _productionMacros.SaveAsync(macro, wire.ExpectedStorageVersion, cancellationToken).ConfigureAwait(false);
+			return Success(request, "control.production_macro.snapshot.response", ToWire(snapshot));
+		}
+		catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or InvalidDataException or IOException or FormatException or KeyNotFoundException or NotSupportedException)
+		{
+			return Error(request, "control.production_macro.save.rejected", exception.Message);
+		}
+	}
+
+	private async ValueTask<WireEnvelope> DeleteProductionMacroAsync(WireEnvelope request, CancellationToken cancellationToken)
+	{
+		if (_productionMacros is null)
+			return Error(request, "control.production_macro.unavailable", "Production Macro persistence is not configured.");
+		var wire = request.Payload.Deserialize<WireProductionMacroDelete>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Production Macro delete payload is required.");
+		try
+		{
+			var macroId = new ProductionMacroId(Identity.Parse(wire.MacroId));
+			var snapshot = await _productionMacros.DeleteAsync(macroId, wire.ExpectedStorageVersion, cancellationToken).ConfigureAwait(false);
+			return Success(request, "control.production_macro.snapshot.response", ToWire(snapshot));
+		}
+		catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or InvalidDataException or IOException or FormatException or KeyNotFoundException or NotSupportedException)
+		{
+			return Error(request, "control.production_macro.delete.rejected", exception.Message);
+		}
+	}
+
+	private async ValueTask<WireEnvelope> ValidateProductionMacroAsync(WireEnvelope request, CancellationToken cancellationToken)
+	{
+		if (_productionMacros is null)
+			return Error(request, "control.production_macro.unavailable", "Production Macro persistence is not configured.");
+		var wire = request.Payload.Deserialize<WireProductionMacroValidationRequest>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Production Macro validation payload is required.");
+		try
+		{
+			var macro = ReadSingleProductionMacro(wire.MacroJson);
+			var result = await _productionMacros.ValidateAsync(macro, cancellationToken).ConfigureAwait(false);
+			return Success(
+				request,
+				"control.production_macro.validation.response",
+				new WireProductionMacroValidation(
+					result.IsValid,
+					result.Issues.Select(issue => new WireProductionMacroValidationIssue(issue.Code, issue.Message, issue.ActionId?.ToString())).ToArray()));
+		}
+		catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or InvalidDataException or IOException or FormatException or NotSupportedException)
+		{
+			return Error(request, "control.production_macro.validate.rejected", exception.Message);
+		}
+	}
+
+	private async ValueTask<WireEnvelope> ExecuteProductionMacroAsync(WireEnvelope request, CancellationToken cancellationToken)
+	{
+		if (_productionMacros is null)
+			return Error(request, "control.production_macro.unavailable", "Production Macro persistence is not configured.");
+		var wire = request.Payload.Deserialize<WireProductionMacroIdRequest>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Production Macro identity payload is required.");
+		try
+		{
+			var macroId = new ProductionMacroId(Identity.Parse(wire.MacroId));
+			var snapshot = await _productionMacros.ExecuteAsync(macroId, cancellationToken).ConfigureAwait(false);
+			return Success(request, "control.production_macro.snapshot.response", ToWire(snapshot));
+		}
+		catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or InvalidDataException or IOException or FormatException or KeyNotFoundException or NotSupportedException)
+		{
+			return Error(request, "control.production_macro.execute.rejected", exception.Message);
+		}
+	}
+
+	private async ValueTask<WireEnvelope> CancelProductionMacroAsync(WireEnvelope request, CancellationToken cancellationToken)
+	{
+		if (_productionMacros is null)
+			return Error(request, "control.production_macro.unavailable", "Production Macro persistence is not configured.");
+		try
+		{
+			return Success(request, "control.production_macro.snapshot.response", ToWire(await _productionMacros.CancelAsync(cancellationToken).ConfigureAwait(false)));
+		}
+		catch (Exception exception) when (exception is InvalidOperationException or InvalidDataException or IOException or FormatException or NotSupportedException)
+		{
+			return Error(request, "control.production_macro.cancel.rejected", exception.Message);
+		}
+	}
+
+	private async ValueTask<WireEnvelope> AcknowledgeProductionMacroRecoveryAsync(WireEnvelope request, CancellationToken cancellationToken)
+	{
+		if (_productionMacros is null)
+			return Error(request, "control.production_macro.unavailable", "Production Macro persistence is not configured.");
+		var wire = request.Payload.Deserialize<WireProductionMacroRecoveryAcknowledge>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Production Macro recovery acknowledgement payload is required.");
+		try
+		{
+			return Success(
+				request,
+				"control.production_macro.snapshot.response",
+				ToWire(await _productionMacros.AcknowledgeRecoveryAsync(wire.Resume, cancellationToken).ConfigureAwait(false)));
+		}
+		catch (Exception exception) when (exception is InvalidOperationException or InvalidDataException or IOException or FormatException or NotSupportedException)
+		{
+			return Error(request, "control.production_macro.recovery.rejected", exception.Message);
+		}
+	}
+
+	private static ProductionMacroDefinition ReadSingleProductionMacro(string json)
+	{
+		var macros = ProductionMacroCanonicalSerializer.Deserialize(json);
+		if (macros.Count != 1)
+			throw new InvalidDataException("A Production Macro command must carry exactly one Macro definition.");
+		return macros[0];
+	}
+
+	private static WireProductionMacroWorkspace ToWire(ProductionMacroWorkspaceSnapshot snapshot) =>
+		new(
+			ProductionMacroCanonicalSerializer.Serialize(snapshot.Macros),
+			snapshot.StorageVersion,
+			(int)snapshot.Execution.State,
+			snapshot.Execution.ExecutionId?.ToString(),
+			snapshot.Execution.MacroId?.ToString(),
+			snapshot.Execution.ActionIndex,
+			snapshot.Execution.CurrentActionId?.ToString(),
+			snapshot.Execution.LastCompletedActionId?.ToString(),
+			snapshot.Execution.Revision,
+			snapshot.Execution.WaitTargetFrameSequence,
+			snapshot.Execution.RuntimeHostInstanceId,
+			snapshot.Execution.RequiresAcknowledgement,
+			snapshot.Execution.Failure?.Code,
+			snapshot.Execution.Failure?.Message);
 
 	private async ValueTask<WireEnvelope> SetBroadcastTestPatternAsync(WireEnvelope request, CancellationToken cancellationToken)
 	{
@@ -2001,6 +2192,16 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 				return await ExecuteShowControlLayerVisibilityAsync(action, cancellationToken).ConfigureAwait(false);
 			case ShowControlActionKind.SetAudioRouting:
 				return await ExecuteShowControlAudioRoutingAsync(action, cancellationToken).ConfigureAwait(false);
+			case ShowControlActionKind.SetAudioInputState:
+				return await ExecuteShowControlAudioInputStateAsync(action, cancellationToken).ConfigureAwait(false);
+			case ShowControlActionKind.RouteOutputRole:
+				return await ExecuteShowControlMutationAsync(
+					MutationKind.RouteOutputRole,
+					action.SourceId,
+					null,
+					null,
+					cancellationToken,
+					action.OutputRoleId).ConfigureAwait(false);
 			case ShowControlActionKind.StartRecording:
 			{
 				var response = await StartRecordingAsync(
@@ -2027,7 +2228,8 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		string? sourceId,
 		string? sceneId,
 		uint? durationFrames,
-		CancellationToken cancellationToken)
+		CancellationToken cancellationToken,
+		string? outputRoleId = null)
 	{
 		var control = _controlAccessor();
 		if (control is null || !control.HasAuthoritativeState)
@@ -2040,7 +2242,8 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			state.Revision.Value,
 			sourceId,
 			durationFrames,
-			sceneId);
+			sceneId,
+			outputRoleId);
 		var response = await MutateAsync(
 			InternalRequest("control.show_control.production_action", command),
 			kind,
@@ -2075,6 +2278,21 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			cancellationToken).ConfigureAwait(false);
 		NotifyObservableStateChanged();
 		return MediaDeckFailure(snapshot);
+	}
+
+	private async ValueTask<Failure?> ExecuteShowControlAudioInputStateAsync(
+		ShowControlAction action,
+		CancellationToken cancellationToken)
+	{
+		var response = await SetAudioInputStateAsync(
+			InternalRequest(
+				"control.audio.input.set",
+				new WireAudioInputState(
+					action.SourceId!,
+					action.AudioGain!.Value,
+					action.AudioMuted!.Value)),
+			cancellationToken).ConfigureAwait(false);
+		return ReadErrorFailure(response);
 	}
 
 	private async ValueTask<Failure?> ExecuteShowControlAudioRoutingAsync(
@@ -3116,6 +3334,29 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		uint? RemainingFollowFrames = null,
 		ushort RemainingItemRepeats = 0,
 		ushort RemainingRundownRepeats = 0);
+	private sealed record WireProductionMacroDefinition(string MacroJson);
+	private sealed record WireProductionMacroSave(string MacroJson, ulong ExpectedStorageVersion);
+	private sealed record WireProductionMacroDelete(string MacroId, ulong ExpectedStorageVersion);
+	private sealed record WireProductionMacroIdRequest(string MacroId);
+	private sealed record WireProductionMacroValidationRequest(string MacroJson);
+	private sealed record WireProductionMacroRecoveryAcknowledge(bool Resume);
+	private sealed record WireProductionMacroValidationIssue(string Code, string Message, string? ActionId);
+	private sealed record WireProductionMacroValidation(bool IsValid, WireProductionMacroValidationIssue[] Issues);
+	private sealed record WireProductionMacroWorkspace(
+		string MacrosJson,
+		ulong StorageVersion,
+		int State,
+		string? ExecutionId,
+		string? MacroId,
+		int? ActionIndex,
+		string? CurrentActionId,
+		string? LastCompletedActionId,
+		ulong Revision,
+		ulong? WaitTargetFrameSequence,
+		string? RuntimeHostInstanceId,
+		bool RequiresAcknowledgement,
+		string? FailureCode,
+		string? FailureMessage);
 	private sealed record WireAudioInputState(string SourceId, double Gain, bool Muted);
 	private sealed record WireAudioRoutingState(int Mode, string? BreakawaySourceId, ulong ExpectedRoutingRevision);
 	private sealed record WireAudioTestSignalState(string SourceId, bool Enabled, int Mode, double FrequencyHz, double PeakLevel);

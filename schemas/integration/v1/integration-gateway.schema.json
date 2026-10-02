@@ -106,7 +106,7 @@
             "additionalProperties": false,
             "required": ["kind"],
             "properties": {
-              "kind": { "enum": ["previewSelect", "cut", "dissolve", "sceneActivate", "showControlGo", "showControlArm", "showControlCancel", "recordingStart", "recordingStop", "outputRoute", "mediaPlay", "mediaPause", "mediaStop", "mediaCueFrame", "audioInputSet"] },
+              "kind": { "enum": ["previewSelect", "cut", "dissolve", "sceneActivate", "showControlGo", "showControlArm", "showControlCancel", "recordingStart", "recordingStop", "outputRoute", "mediaPlay", "mediaPause", "mediaStop", "mediaCueFrame", "audioInputSet", "productionMacroExecute"] },
               "targetId": { "type": ["string", "null"], "maxLength": 256 },
               "secondaryTargetId": { "type": ["string", "null"], "maxLength": 256 },
               "durationFrames": { "type": "integer", "minimum": 1, "maximum": 10000 },

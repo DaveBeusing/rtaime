@@ -484,43 +484,7 @@ public sealed class ShowControlCoordinator : IAsyncDisposable
 	{
 		var control = RequireControl();
 		foreach (var action in cueList.Cues.SelectMany(cue => cue.Actions))
-		{
-			switch (action.Kind)
-			{
-				case ShowControlActionKind.ActivateScene:
-				var sceneId = new SceneId(Identity.Parse(action.SceneId!));
-				if (!control.Specification.Scenes.Any(scene => scene.SceneId == sceneId))
-					throw new InvalidDataException($"Show-control action references unknown Scene '{sceneId}'.");
-				break;
-			case ShowControlActionKind.SetPreview:
-				var sourceId = new ProductionSourceId(Identity.Parse(action.SourceId!));
-				if (!control.Specification.Sources.Any(source => source.SourceId == sourceId))
-					throw new InvalidDataException($"Show-control action references unknown production source '{sourceId}'.");
-				break;
-			case ShowControlActionKind.JumpMediaCue:
-			case ShowControlActionKind.MediaPlay:
-			case ShowControlActionKind.MediaPause:
-			case ShowControlActionKind.MediaStop:
-				_ = Identity.Parse(action.MediaAssetId!);
-				if (action.Kind == ShowControlActionKind.JumpMediaCue)
-					_ = Identity.Parse(action.MediaCuePointId!);
-				break;
-			case ShowControlActionKind.MediaOpen:
-				_ = Identity.Parse(action.MediaAssetId!);
-				var mediaSourceId = new ProductionSourceId(Identity.Parse(action.SourceId!));
-				if (!control.Specification.Sources.Any(source => source.SourceId == mediaSourceId))
-					throw new InvalidDataException($"Show-control media-open action references unknown production source '{mediaSourceId}'.");
-				break;
-			case ShowControlActionKind.SetAudioRouting:
-				if (action.SourceId is { } audioSource)
-				{
-					var audioSourceId = new ProductionSourceId(Identity.Parse(audioSource));
-					if (!control.Specification.Sources.Any(source => source.SourceId == audioSourceId))
-						throw new InvalidDataException($"Show-control audio-routing action references unknown production source '{audioSourceId}'.");
-				}
-				break;
-			}
-		}
+			GovernedProductionActionValidator.ValidateReferenceShape(control, action);
 	}
 
 	private ShowControlCueList SelectedCueList()
