@@ -21,7 +21,6 @@ public sealed class ReplayCaptureEngine : IAsyncDisposable
 	private readonly RollingReplaySegmentStore _store;
 	private readonly Func<IReplaySegmentWriter> _writerFactory;
 	private readonly string _rootDirectory;
-	private readonly MediaSinkId _programSinkId;
 	private readonly IRecordingClock _clock;
 	private readonly int _queueCapacity;
 	private readonly BoundedDiagnosticHistory<ReplayObservation> _observations = new(RetainedObservationCapacity);
@@ -42,7 +41,6 @@ public sealed class ReplayCaptureEngine : IAsyncDisposable
 
 	public ReplayCaptureEngine(
 		string rootDirectory,
-		MediaSinkId programSinkId,
 		Func<IReplaySegmentWriter> writerFactory,
 		ReplayBufferPolicy? policy = null,
 		int queueCapacity = DefaultQueueCapacity,
@@ -54,7 +52,6 @@ public sealed class ReplayCaptureEngine : IAsyncDisposable
 			throw new ArgumentOutOfRangeException(nameof(queueCapacity), "Replay capture queue must remain bounded to 1..64 samples.");
 
 		_rootDirectory = Path.GetFullPath(rootDirectory);
-		_programSinkId = programSinkId;
 		_writerFactory = writerFactory ?? throw new ArgumentNullException(nameof(writerFactory));
 		_store = new RollingReplaySegmentStore(policy);
 		_queueCapacity = queueCapacity;
@@ -76,6 +73,7 @@ public sealed class ReplayCaptureEngine : IAsyncDisposable
 	}
 
 	public ReplayEnqueueResult TryEnqueue(
+		MediaSinkId programSinkId,
 		FrameDescriptor video,
 		AudioBufferDescriptor audio,
 		IProgramRecordingPayloadLease videoPayload,
@@ -121,7 +119,7 @@ public sealed class ReplayCaptureEngine : IAsyncDisposable
 					"Replay encoder queue is full; sample was dropped without blocking Program."));
 			}
 
-			_queue.Enqueue(new QueuedSample(video, audio, videoPayload, audioPayload));
+			_queue.Enqueue(new QueuedSample(programSinkId, video, audio, videoPayload, audioPayload));
 			_accepted++;
 			_signal.Release();
 			return ReplayEnqueueResult.AcceptedSample();
@@ -328,7 +326,7 @@ public sealed class ReplayCaptureEngine : IAsyncDisposable
 		var request = new RecordingStartRequest(
 			RecordingContractVersion.Current,
 			RecordingSessionId.New(),
-			new RecordingOutputDescriptor(outputId, _programSinkId, $"Replay {id}"));
+			new RecordingOutputDescriptor(outputId, first.ProgramSinkId, $"Replay {id}"));
 		await writer.OpenAsync(request, CancellationToken.None).ConfigureAwait(false);
 
 		bool discontinuity;
@@ -408,6 +406,7 @@ public sealed class ReplayCaptureEngine : IAsyncDisposable
 		_observations.Add(new ReplayObservation(_clock.GetUtcNow(), code, message, sequence, segmentId));
 
 	private sealed record QueuedSample(
+		MediaSinkId ProgramSinkId,
 		FrameDescriptor Video,
 		AudioBufferDescriptor Audio,
 		IProgramRecordingPayloadLease VideoPayload,
