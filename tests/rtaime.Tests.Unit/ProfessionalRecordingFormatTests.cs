@@ -128,8 +128,10 @@ public sealed class ProfessionalRecordingFormatTests
 		await writer.AbortAsync(CancellationToken.None);
 
 		Assert.Equal(2, provider.CreatedCount);
-		Assert.Equal(profile.ProfileId, writer.ActiveProfile?.ProfileId);
-		Assert.Equal(profile.ProviderId, writer.ActiveProviderId);
+		Assert.NotNull(writer.ActiveProfile);
+		Assert.Equal(profile.ProfileId, writer.ActiveProfile!.ProfileId);
+		Assert.True(writer.ActiveProviderId.HasValue);
+		Assert.Equal(profile.ProviderId, writer.ActiveProviderId.Value);
 	}
 
 	[Fact]
