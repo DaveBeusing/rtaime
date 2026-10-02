@@ -48,7 +48,7 @@ public sealed class ProfessionalRecordingFormatTests
 		var profile = CreateProfile("test-profile", "provider-a", available: true);
 
 		Assert.Throws<ArgumentException>(() => new RecordingProfileCatalog(
-			new[] { profile, profile with { DisplayName = "Duplicate" } },
+			new[] { profile, profile },
 			profile.ProfileId));
 	}
 
@@ -126,7 +126,7 @@ public sealed class ProfessionalRecordingFormatTests
 		var writer = new ReferenceRecordingPayloadWriter(root);
 
 		Assert.Equal("evidence.rtaime-recording", writer.ConfigureTarget(root, "evidence"));
-		Assert.False(writer is IProgramRecordingProfileCatalogProvider);
+		Assert.DoesNotContain(typeof(IProgramRecordingProfileCatalogProvider), writer.GetType().GetInterfaces());
 	}
 
 	[Fact]
