@@ -81,7 +81,7 @@ The current V1 development repository implements production-shaped software path
 | Switching | authoritative Preview/Program, CUT, DISSOLVE and governed Scene activation |
 | Compositing | RuntimeHost-owned bitmap overlays, dynamic Production CG lower thirds, layers and compositing workspace |
 | Audio | Audio Follow Video, explicit breakaway, bounded multi-source Program mixing, deterministic crossfade/ducking, Runtime metering and generated test signals |
-| Recording | failure-isolated Program Recording plus Windows MP4 H.264/AAC software interoperability |
+| Recording | failure-isolated Program Recording plus Windows MP4 H.264/AAC software interoperability and bounded encoded Program replay/clip production |
 | Output | governed Program/Aux output roles, Clean Program monitoring, output health and bounded SRT network-output foundation |
 | AI | governed inference showcase with bounded fallback |
 | Health | CPU/GPU/memory telemetry, Runtime performance, alerts and health center |
@@ -360,3 +360,6 @@ src/Hosts/rtaime.Operator/Assets/Brand/
 ~~~
 
 Use the source-controlled brand assets rather than recreating the mark for documentation, presentations or product surfaces.
+
+
+Replay retains bounded encoded Program history and materializes normal-speed selections as ordinary Media Library clips that reuse Media Deck and normal Preview/Program routing. See [Replay and Clip Production](docs/ReplayClipProduction.md).
