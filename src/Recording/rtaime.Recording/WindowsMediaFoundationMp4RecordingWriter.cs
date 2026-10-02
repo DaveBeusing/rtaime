@@ -13,7 +13,7 @@ namespace rtaime.Recording;
 /// </summary>
 public sealed class WindowsMediaFoundationMp4RecordingWriter :
 	IProgramRecordingPayloadWriter,
-	IConfigurableProgramRecordingWriter,
+	IReplaySegmentWriter,
 	IProgramRecordingFormatCapabilityProvider
 {
 	private readonly object _gate = new();
