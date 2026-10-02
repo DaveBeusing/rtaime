@@ -28,6 +28,10 @@ public interface IConfigurableProgramRecordingWriter
 	string? FinalPath { get; }
 }
 
+public interface IReplaySegmentWriter : IProgramRecordingPayloadWriter, IConfigurableProgramRecordingWriter
+{
+}
+
 public sealed record ReferenceRecordingPayloadSample(
 	ulong SequenceNumber,
 	string SourceId,
