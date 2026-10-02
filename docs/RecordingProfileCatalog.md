@@ -54,10 +54,11 @@ The existing MP4 writer retains its target reservation, partial-file finalizatio
 - `ftyp` with QuickTime brand;
 - 64-bit-size `mdat`;
 - `moov` with one video and one audio track;
-- `2vuy` visual sample description;
+- `2vuy` visual sample description with progressive `fiel` metadata and BT.709 `nclc` 1/1/1 color declaration;
 - `sowt` audio sample description;
 - exact `stts`, `stsc`, `stsz` and `co64` sample tables;
-- version-1 movie/media headers for 64-bit durations.
+- version-1 movie/media headers for 64-bit durations;
+- bounded edit lists when fractional-rate audio/video origins differ by a sub-frame amount.
 
 No external encoder executable, codec SDK, native media library or new Recording NuGet package is required.
 
@@ -69,9 +70,10 @@ Finalization is partial-first: `<name>.partial.mov` is closed and independently 
 
 - QuickTime brand and atom boundaries;
 - exactly one video and one audio track;
-- `2vuy` and `sowt` sample entries;
+- `2vuy` and `sowt` sample entries and exact fixed sample sizes;
+- progressive field metadata plus BT.709 `nclc` 1/1/1 color metadata;
 - width/height and 48 kHz stereo PCM16 audio;
-- media timescales and durations;
+- media timescales, edit-list start offsets and durations;
 - sample counts and time-to-sample totals;
 - sample-to-chunk coverage;
 - monotonically increasing chunk offsets;
