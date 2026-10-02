@@ -1691,6 +1691,24 @@
 								</Border>
 							</DockPanel>
 							<TextBlock Text="{Binding RecordingElapsed}" Style="{StaticResource OperatorTimecode}" FontSize="{StaticResource OperatorFontSizeTitle}" FontWeight="Bold" Margin="0,0,0,12" />
+							<TextBlock Text="PROFILE" Style="{StaticResource OperatorLabel}" />
+							<controls:RtaimeComboBox
+								ItemsSource="{Binding RecordingProfiles}"
+								SelectedItem="{Binding SelectedRecordingProfile, Mode=TwoWay}"
+								DisplayMemberPath="Label"
+								Margin="0,4,0,4" />
+							<TextBlock Text="{Binding RecordingProfileDetail}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,0,0,8" />
+							<Grid Margin="0,0,0,8">
+								<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+								<StackPanel>
+									<TextBlock Text="ACTIVE PROFILE" Style="{StaticResource OperatorLabel}" />
+									<TextBlock Text="{Binding RecordingActiveProfile}" Style="{StaticResource OperatorValue}" TextTrimming="CharacterEllipsis" />
+								</StackPanel>
+								<StackPanel Grid.Column="1">
+									<TextBlock Text="PROVIDER" Style="{StaticResource OperatorLabel}" />
+									<TextBlock Text="{Binding RecordingActiveProvider}" Style="{StaticResource OperatorValue}" TextTrimming="CharacterEllipsis" />
+								</StackPanel>
+							</Grid>
 							<TextBlock Text="DESTINATION" Style="{StaticResource OperatorLabel}" />
 							<controls:RtaimeTextBox Text="{Binding RecordingDestination, UpdateSourceTrigger=PropertyChanged}"  Margin="0,4,0,10" />
 							<TextBlock Text="FILE NAME" Style="{StaticResource OperatorLabel}" />
