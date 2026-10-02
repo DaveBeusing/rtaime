@@ -139,7 +139,7 @@ public sealed class ReplayControlService
 					ReplayControlContractVersion.Current,
 					false,
 					materialized.ClipId,
-					item.AssetId,
+					item.AssetId.Value.ToString(),
 					materialized.FinalPath,
 					materialized.SourceIn,
 					materialized.SourceOut,
