@@ -1,7 +1,6 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 using rtaime.Core;
-using rtaime.Media.Contracts;
 
 namespace rtaime.Control.Contracts;
 
@@ -81,7 +80,7 @@ public sealed record ReplayClipAssetResult(
 	CompatibilityVersion Version,
 	bool Succeeded,
 	string ClipId,
-	MediaAssetId? AssetId,
+	string? AssetId,
 	string? SourceLocation,
 	TimeSpan SourceIn,
 	TimeSpan SourceOut,
