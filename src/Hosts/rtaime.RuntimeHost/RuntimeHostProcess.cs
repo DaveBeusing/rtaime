@@ -230,11 +230,18 @@ public sealed class RuntimeHostProcess
 		RuntimeHostIpcServerFactory? ipcServerFactory)
 	{
 		_options = options ?? throw new ArgumentNullException(nameof(options));
-		_recordingWriterFactory = recordingWriterFactory ?? (() => new WindowsMediaFoundationMp4RecordingWriter(
-			Path.Combine(
+		_recordingWriterFactory = recordingWriterFactory ?? (() =>
+		{
+			var recordingRoot = Path.Combine(
 				Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
 				"rtaime",
-				"recordings")));
+				"recordings");
+			var provider = new WindowsMediaFoundationRecordingWriterProvider(recordingRoot);
+			var registry = new RecordingWriterProviderRegistry(
+				[provider],
+				ProfessionalRecordingFormats.Mp4H264AacProfileId);
+			return new ProfileSelectingProgramRecordingWriter(registry);
+		});
 		_runtimeFactory = runtimeFactory ?? CreateProductionRuntime;
 		_aiShowcaseFactory = aiShowcaseFactory ?? ((runtime, processOptions) => new RuntimeAIShowcaseService(
 			runtime,
