@@ -1,0 +1,118 @@
+<!-- Copyright (c) Dave Beusing <david.beusing@gmail.com>. -->
+<UserControl x:Class="rtaime.Operator.ReplayControl"
+	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	xmlns:controls="clr-namespace:rtaime.Operator.Controls"
+	Focusable="False">
+	<Border Style="{StaticResource OperatorPanel}">
+		<Grid>
+			<Grid.RowDefinitions>
+				<RowDefinition Height="Auto" />
+				<RowDefinition Height="Auto" />
+				<RowDefinition Height="Auto" />
+				<RowDefinition Height="Auto" />
+				<RowDefinition Height="Auto" />
+			</Grid.RowDefinitions>
+
+			<DockPanel Grid.Row="0" Margin="0,0,0,12">
+				<StackPanel>
+					<TextBlock Text="REPLAY" Style="{StaticResource OperatorSectionTitle}" />
+					<TextBlock Text="{Binding StatusDetail}" Style="{StaticResource OperatorLabel}" Margin="0,3,0,0" />
+				</StackPanel>
+				<StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+					<TextBlock Text="{Binding CaptureState}" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" Margin="0,0,12,0" />
+					<controls:RtaimeButton Content="REFRESH" Command="{Binding RefreshCommand}" IsCompact="True"
+						ToolTip="Refresh confirmed replay state through ControlHost." />
+				</StackPanel>
+			</DockPanel>
+
+			<Grid Grid.Row="1" Margin="0,0,0,12">
+				<Grid.ColumnDefinitions>
+					<ColumnDefinition Width="*" />
+					<ColumnDefinition Width="16" />
+					<ColumnDefinition Width="*" />
+					<ColumnDefinition Width="16" />
+					<ColumnDefinition Width="*" />
+				</Grid.ColumnDefinitions>
+				<Border Grid.Column="0" Style="{StaticResource OperatorInsetPanel}">
+					<StackPanel>
+						<TextBlock Text="RETAINED" Style="{StaticResource OperatorLabel}" />
+						<TextBlock Text="{Binding RetainedDuration}" FontSize="18" FontWeight="SemiBold" Margin="0,4,0,0" />
+						<TextBlock Text="{Binding RetentionLimit, StringFormat=Limit {0}}" Style="{StaticResource OperatorLabel}" Margin="0,2,0,0" />
+					</StackPanel>
+				</Border>
+				<Border Grid.Column="2" Style="{StaticResource OperatorInsetPanel}">
+					<StackPanel>
+						<TextBlock Text="STORAGE" Style="{StaticResource OperatorLabel}" />
+						<TextBlock Text="{Binding StorageUsage}" FontSize="15" FontWeight="SemiBold" Margin="0,4,0,4" />
+						<controls:RtaimeMetricBar Minimum="0" Maximum="100" Value="{Binding StoragePercent}" HasValue="True" />
+					</StackPanel>
+				</Border>
+				<Border Grid.Column="4" Style="{StaticResource OperatorInsetPanel}">
+					<StackPanel>
+						<TextBlock Text="CONTINUITY" Style="{StaticResource OperatorLabel}" />
+						<TextBlock Text="{Binding BackpressureStatus}" FontSize="15" FontWeight="SemiBold" Margin="0,4,0,0" />
+						<TextBlock Text="{Binding SegmentStatus}" Style="{StaticResource OperatorLabel}" Margin="0,2,0,0" />
+					</StackPanel>
+				</Border>
+			</Grid>
+
+			<Grid Grid.Row="2" Margin="0,0,0,12">
+				<Grid.ColumnDefinitions>
+					<ColumnDefinition Width="Auto" />
+					<ColumnDefinition Width="110" />
+					<ColumnDefinition Width="12" />
+					<ColumnDefinition Width="Auto" />
+					<ColumnDefinition Width="12" />
+					<ColumnDefinition Width="Auto" />
+					<ColumnDefinition Width="*" />
+					<ColumnDefinition Width="Auto" />
+				</Grid.ColumnDefinitions>
+				<StackPanel Grid.Column="0" Margin="0,0,10,0">
+					<TextBlock Text="LOOKBACK (s)" Style="{StaticResource OperatorLabel}" />
+					<controls:RtaimeTextBox Width="96" Text="{Binding LookbackSeconds, UpdateSourceTrigger=LostFocus}" />
+				</StackPanel>
+				<controls:RtaimeButton Grid.Column="1" Content="MARK IN" Command="{Binding MarkInCommand}" VerticalAlignment="Bottom"
+					ToolTip="Set IN against retained Program history using the configured lookback." />
+				<controls:RtaimeButton Grid.Column="3" Content="MARK OUT" Command="{Binding MarkOutCommand}" VerticalAlignment="Bottom"
+					ToolTip="Set OUT at the latest confirmed retained Program history." />
+				<StackPanel Grid.Column="5" Orientation="Horizontal" VerticalAlignment="Bottom">
+					<TextBlock Text="IN " Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" />
+					<TextBlock Text="{Binding MarkIn}" FontWeight="SemiBold" VerticalAlignment="Center" />
+					<TextBlock Text="   OUT " Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" />
+					<TextBlock Text="{Binding MarkOut}" FontWeight="SemiBold" VerticalAlignment="Center" />
+					<TextBlock Text="   DURATION " Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" />
+					<TextBlock Text="{Binding SelectedDuration}" FontWeight="SemiBold" VerticalAlignment="Center" />
+				</StackPanel>
+				<TextBlock Grid.Column="7" Text="{Binding ClipState}" Style="{StaticResource OperatorLabel}" VerticalAlignment="Bottom" />
+			</Grid>
+
+			<Grid Grid.Row="3" Margin="0,0,0,10">
+				<Grid.ColumnDefinitions>
+					<ColumnDefinition Width="*" />
+					<ColumnDefinition Width="12" />
+					<ColumnDefinition Width="Auto" />
+					<ColumnDefinition Width="12" />
+					<ColumnDefinition Width="Auto" />
+					<ColumnDefinition Width="12" />
+					<ColumnDefinition Width="Auto" />
+				</Grid.ColumnDefinitions>
+				<StackPanel Grid.Column="0">
+					<TextBlock Text="CLIP NAME" Style="{StaticResource OperatorLabel}" />
+					<controls:RtaimeTextBox Text="{Binding ClipName, UpdateSourceTrigger=PropertyChanged}" />
+				</StackPanel>
+				<controls:RtaimeButton Grid.Column="2" Content="CREATE CLIP" Command="{Binding CreateClipCommand}" VerticalAlignment="Bottom"
+					ToolTip="Materialize the selected range and adopt it into the Media Library." />
+				<controls:RtaimeButton Grid.Column="4" Content="OPEN IN MEDIA DECK" Command="{Binding OpenInMediaDeckCommand}" VerticalAlignment="Bottom"
+					ToolTip="Open the confirmed replay asset through the existing Media Deck." />
+				<controls:RtaimeButton Grid.Column="6" Content="SEND TO PREVIEW" Command="{Binding SendToPreviewCommand}" VerticalAlignment="Bottom"
+					ToolTip="Open the replay asset in Media Deck and select that normal production source as Preview." />
+			</Grid>
+
+			<DockPanel Grid.Row="4">
+				<TextBlock Text="{Binding ClipResult}" Style="{StaticResource OperatorLabel}" />
+				<TextBlock DockPanel.Dock="Right" Text="{Binding LastError}" Style="{StaticResource OperatorLabel}" />
+			</DockPanel>
+		</Grid>
+	</Border>
+</UserControl>
