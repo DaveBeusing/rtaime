@@ -190,11 +190,7 @@ public sealed class ProfessionalRecordingFormatTests
 
 		ManagedQuickTimeMovRecordingWriter.ConvertRgbaTo2Vuy(rgba, output, 2, 1);
 
-		Assert.Equal(4, output.Length);
-		Assert.InRange(output[0], (byte)16, (byte)240);
-		Assert.InRange(output[1], (byte)16, (byte)235);
-		Assert.InRange(output[2], (byte)16, (byte)240);
-		Assert.InRange(output[3], (byte)16, (byte)235);
+		Assert.Equal(new byte[] { 72, 63, 133, 172 }, output);
 		Assert.Throws<ArgumentException>(() => ManagedQuickTimeMovRecordingWriter.ConvertRgbaTo2Vuy(rgba, new byte[3], 2, 1));
 	}
 
