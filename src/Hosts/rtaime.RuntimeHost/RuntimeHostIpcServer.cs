@@ -199,6 +199,11 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 				"runtime.test_pattern.set" => ValueTask.FromResult(SetBroadcastTestPattern(request, runtime)),
 				"runtime.recording.start" => StartRecordingAsync(request, runtime, cancellationToken),
 				"runtime.recording.stop" => StopRecordingAsync(request, runtime, cancellationToken),
+				"runtime.replay.snapshot.get" => ValueTask.FromResult(ReplaySnapshot(request, runtime)),
+				"runtime.replay.mark_in" => ValueTask.FromResult(MarkReplayIn(request, runtime)),
+				"runtime.replay.mark_out" => ValueTask.FromResult(MarkReplayOut(request, runtime)),
+				"runtime.replay.range.set" => ValueTask.FromResult(SetReplayRange(request, runtime)),
+				"runtime.replay.clip.create" => CreateReplayClipAsync(request, runtime, cancellationToken),
 				"runtime.media_asset.probe" => ValueTask.FromResult(ProbeMediaAsset(request)),
 				"runtime.media_deck.snapshot.get" => ValueTask.FromResult(MediaDeckSnapshot(request)),
 				"runtime.media_deck.open" => ValueTask.FromResult(OpenMediaDeck(request)),
@@ -499,6 +504,56 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 				result.Failure is { } failure ? new WireFailure(failure.Code, failure.Message) : null));
 	}
 
+	private WireEnvelope ReplaySnapshot(WireEnvelope request, V1RuntimeHostService runtime) =>
+		Success(request, "runtime.replay.snapshot.response", ToWire(runtime.GetReplaySnapshot()));
+
+	private WireEnvelope MarkReplayIn(WireEnvelope request, V1RuntimeHostService runtime)
+	{
+		var wire = request.Payload.Deserialize<WireReplayMarkIn>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Replay MARK IN payload is required.");
+		runtime.MarkReplayIn(wire.LookbackTicks is { } ticks ? TimeSpan.FromTicks(ticks) : null);
+		AdvanceStateVersion();
+		return Success(request, "runtime.replay.snapshot.response", ToWire(runtime.GetReplaySnapshot()));
+	}
+
+	private WireEnvelope MarkReplayOut(WireEnvelope request, V1RuntimeHostService runtime)
+	{
+		runtime.MarkReplayOut();
+		AdvanceStateVersion();
+		return Success(request, "runtime.replay.snapshot.response", ToWire(runtime.GetReplaySnapshot()));
+	}
+
+	private WireEnvelope SetReplayRange(WireEnvelope request, V1RuntimeHostService runtime)
+	{
+		var wire = request.Payload.Deserialize<WireReplayRange>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Replay range payload is required.");
+		runtime.SelectReplayRange(new ReplayRange(TimeSpan.FromTicks(wire.InTicks), TimeSpan.FromTicks(wire.OutTicks)));
+		AdvanceStateVersion();
+		return Success(request, "runtime.replay.snapshot.response", ToWire(runtime.GetReplaySnapshot()));
+	}
+
+	private async ValueTask<WireEnvelope> CreateReplayClipAsync(
+		WireEnvelope request,
+		V1RuntimeHostService runtime,
+		CancellationToken cancellationToken)
+	{
+		var wire = request.Payload.Deserialize<WireReplayClipCreate>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Replay clip-create payload is required.");
+		var result = await runtime.CreateReplayClipAsync(wire.Name, cancellationToken).ConfigureAwait(false);
+		AdvanceStateVersion();
+		return Success(
+			request,
+			"runtime.replay.clip.response",
+			new WireReplayClipResult(
+				result.Succeeded,
+				result.ClipId.ToString(),
+				string.IsNullOrWhiteSpace(result.FinalPath) ? null : result.FinalPath,
+				result.SourceRange.In.Ticks,
+				result.SourceRange.Out.Ticks,
+				string.IsNullOrWhiteSpace(result.Sha256) ? null : result.Sha256,
+				result.Failure is { } failure ? new WireFailure(failure.Code, failure.Message) : null));
+	}
+
 	private WireEnvelope ProbeMediaAsset(WireEnvelope request)
 	{
 		var deck = _mediaDeckAccessor();
@@ -681,6 +736,30 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		(snapshot.OutputRoles ?? Array.Empty<RuntimeOutputRoleSnapshot>()).Select(ToWire).ToArray(),
 		(snapshot.CompositingLayers ?? Array.Empty<V1CompositingLayerSnapshot>()).Select(ToWire).ToArray(),
 		snapshot.AudioProduction is null ? null : ToWire(snapshot.AudioProduction));
+
+	private static WireReplaySnapshot ToWire(ReplayBufferSnapshot snapshot) => new(
+		(int)snapshot.CaptureState,
+		(int)snapshot.ClipState,
+		snapshot.Policy.RetentionDuration.Ticks,
+		snapshot.Policy.MaximumStorageBytes,
+		snapshot.Policy.SegmentDuration.Ticks,
+		snapshot.Segments.Select(segment => new WireReplaySegment(
+			segment.SegmentId.ToString(),
+			segment.FirstProgramSequence,
+			segment.LastProgramSequence,
+			segment.Start.Ticks,
+			segment.End.Ticks,
+			segment.Bytes,
+			segment.HasAudio,
+			segment.DiscontinuityBefore)).ToArray(),
+		snapshot.Selection is null ? null : new WireReplayRange(snapshot.Selection.In.Ticks, snapshot.Selection.Out.Ticks),
+		snapshot.Statistics.AcceptedSamples,
+		snapshot.Statistics.DroppedSamples,
+		snapshot.Statistics.FinalizedSegments,
+		snapshot.Statistics.EvictedSegments,
+		snapshot.Statistics.Discontinuities,
+		snapshot.Statistics.RetainedBytes,
+		snapshot.Failure is { } failure ? new WireFailure(failure.Code, failure.Message) : null);
 
 	private static WireAvSyncDiagnostics ToWire(V1AvSyncDiagnosticsSnapshot snapshot) => new(
 		snapshot.Enabled,
@@ -1086,6 +1165,12 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 	private sealed record WireCommitResult(string Version, int Status, string? ExecutionInstanceId, ulong ExecutionRevision, WireFailure? Failure);
 	private sealed record WireApplyResponse(WirePrepareResult Prepare, WireCommitResult? Commit, ulong? ActivationSequence);
 	private sealed record WireRecordingStart(string SessionId, string OutputId, string DestinationDirectory, string FileName);
+	private sealed record WireReplayMarkIn(long? LookbackTicks);
+	private sealed record WireReplayRange(long InTicks, long OutTicks);
+	private sealed record WireReplayClipCreate(string Name);
+	private sealed record WireReplaySegment(string SegmentId, ulong FirstProgramSequence, ulong LastProgramSequence, long StartTicks, long EndTicks, long Bytes, bool HasAudio, bool DiscontinuityBefore);
+	private sealed record WireReplaySnapshot(int CaptureState, int ClipState, long RetentionTicks, long MaximumStorageBytes, long SegmentDurationTicks, WireReplaySegment[] Segments, WireReplayRange? Selection, ulong AcceptedSamples, ulong DroppedSamples, ulong FinalizedSegments, ulong EvictedSegments, ulong Discontinuities, long RetainedBytes, WireFailure? Failure);
+	private sealed record WireReplayClipResult(bool Succeeded, string ClipId, string? FinalPath, long SourceInTicks, long SourceOutTicks, string? Sha256, WireFailure? Failure);
 	private sealed record WireRecordingSnapshot(string State, long ElapsedTicks, string? Destination, string? FileName, string? FinalPath, ulong Accepted, ulong Written, ulong Dropped, ulong Rejected, ulong WriterFailures, WireFailure? Failure);
 	private sealed record WireRuntimePerformance(long UptimeTicks, long FrameBudgetTicks, long LastFrameProcessingTicks, ulong DroppedFrames, string GpuDeviceName, bool GpuHardwareAccelerated, double? GpuUtilizationPercent, ulong? GpuVramUsedBytes, ulong? GpuVramTotalBytes, string GpuTelemetryEvidence, string CpuDeviceName, int CpuLogicalProcessorCount, double? CpuUtilizationPercent, ulong? SystemMemoryUsedBytes, ulong? SystemMemoryTotalBytes, string SystemTelemetryEvidence, string PhysicalGpuDeviceName, double? OutputFramesPerSecond, long LastCompositionDurationTicks = 0, int ActiveCompositingLayerCount = 0);
 	private sealed record WireAIShowcaseState(bool Enabled);
