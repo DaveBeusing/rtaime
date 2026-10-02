@@ -114,7 +114,7 @@ public sealed class ReplayControlService
 			var import = await _catalog
 				.ImportAsync([materialized.FinalPath], cancellationToken)
 				.ConfigureAwait(false);
-			var item = import.Results.SingleOrDefault();
+			var item = import.Items.SingleOrDefault();
 			if (item is null || item.AssetId is null || item.Failure is not null)
 			{
 				var failure = item?.Failure ?? new Failure(
