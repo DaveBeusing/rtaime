@@ -1,6 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 using System.IO;
+using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Xunit;
 
@@ -53,7 +54,14 @@ public sealed class RecordingProfileOperatorTests
 				.Select(attribute => attribute.Value));
 
 		foreach (var unsupported in new[] { "MOV", "MXF", "ProRes", "DNxHR", "AVC-Intra" })
-			Assert.DoesNotContain(unsupported, advertisedText, StringComparison.OrdinalIgnoreCase);
+		{
+			Assert.False(
+				Regex.IsMatch(
+					advertisedText,
+					$@"(?<![A-Za-z0-9]){Regex.Escape(unsupported)}(?![A-Za-z0-9])",
+					RegexOptions.IgnoreCase | RegexOptions.CultureInvariant),
+				$"Operator must not hard-code recording format/codec token '{unsupported}' in visible UI metadata.");
+		}
 	}
 
 	private static string FindRepositoryRoot()
