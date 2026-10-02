@@ -1996,6 +1996,7 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 	private sealed record WireReplaySnapshot(string Version, int CaptureState, int ClipState, long RetentionTicks, long RetainedDurationTicks, long MaximumStorageBytes, long RetainedBytes, long SegmentDurationTicks, int RetainedSegmentCount, long? MarkInTicks, long? MarkOutTicks, ulong AcceptedSamples, ulong DroppedSamples, ulong FinalizedSegments, ulong EvictedSegments, ulong Discontinuities, WireFailure? Failure);
 	private sealed record WireReplayClipAssetResult(string Version, bool Succeeded, string ClipId, string? AssetId, string? SourceLocation, long SourceInTicks, long SourceOutTicks, string? Sha256, WireFailure? Failure);
 	private sealed record WireRecordingStart(string DestinationDirectory, string FileName, string? ProfileId = null);
+	private sealed record WireVideoFormat(uint Width, uint Height, string FrameRate, int PixelFormat, int ScanMode);
 	private sealed record WireRecordingProfile(
 		string ProfileId,
 		string DisplayName,
