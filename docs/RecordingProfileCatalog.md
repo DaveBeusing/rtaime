@@ -16,11 +16,11 @@ A `RecordingProfileDescriptor` publishes:
 
 - stable profile identity and display name;
 - container and file extension;
-- video codec, codec profile and optional level;
-- audio codec;
+- video codec/essence, profile and optional level;
+- audio codec/essence;
 - supported Program input video formats;
 - required Program audio format;
-- nominal video and audio bitrates;
+- nominal or maximum encoded/payload rate metadata;
 - acceleration classification;
 - provider identity;
 - current availability and an explicit unavailable reason;
@@ -28,27 +28,57 @@ A `RecordingProfileDescriptor` publishes:
 
 The profile catalog rejects duplicate profile identities. The writer-provider registry additionally rejects duplicate provider identities, profile/provider mismatches and duplicate profiles across providers.
 
-## Current production profile
+## Current production profiles
 
-The current default profile remains `mp4-h264-aac`.
+The backward-compatible default remains `mp4-h264-aac`.
 
-| Field | Confirmed value |
-| --- | --- |
-| Provider | `windows-media-foundation` |
-| Container | ISO Base Media File Format (MP4) |
-| Extension | `.mp4` |
-| Video | H.264/AVC Main |
-| Audio | AAC-LC |
-| Program video input | 1920×1080 progressive RGBA8 at 50 fps or 60000/1001 fps |
-| Program audio input | Stereo 48 kHz Float32 |
-| Video bitrate | 20 Mbit/s |
-| Audio bitrate | 192 kbit/s |
-| Acceleration class | Software |
-| Evidence | Qualified software-interoperability path with independent reopen/decode regression |
+| Profile | Provider | Container | Video | Audio | Acceleration | Availability |
+| --- | --- | --- | --- | --- | --- | --- |
+| `mp4-h264-aac` | `windows-media-foundation` | MP4 | H.264/AVC Main, 20 Mbit/s | AAC-LC, 192 kbit/s | Software | Windows Media Foundation |
+| `mov-2vuy-pcm` | `managed-quicktime` | QuickTime MOV | Uncompressed 8-bit YUV 4:2:2 (`2vuy`) | Stereo 48 kHz signed PCM16 LE (`sowt`) | Software | Managed provider |
 
-Availability is platform-confirmed. The Windows Media Foundation profile is available only when the required Windows platform capability exists. The codec name does not imply hardware acceleration.
+Both profiles accept 1920x1080 progressive RGBA8 Program input at 50 fps or 60000/1001 fps and Stereo 48 kHz Float32 Program audio.
 
-The existing MP4 writer behavior, target reservation, partial-file finalization, A/V timestamp mapping, codec settings and reopen/decode qualification remain unchanged.
+The MOV profile converts RGBA8 to packed `2vuy` and Float32 audio to PCM16 on the asynchronous Recording worker. It is intentionally high-bandwidth and must not be interpreted as physical-storage-throughput qualification.
+
+## Provider implementations
+
+### Windows Media Foundation
+
+The existing MP4 writer retains its target reservation, partial-file finalization, A/V timestamp mapping, codec settings and independent reopen/decode qualification. It remains the default profile.
+
+### Managed QuickTime
+
+`ManagedQuickTimeMovRecordingWriter` writes a bounded QuickTime structure directly from managed code:
+
+- `ftyp` with QuickTime brand;
+- 64-bit-size `mdat`;
+- `moov` with one video and one audio track;
+- `2vuy` visual sample description;
+- `sowt` audio sample description;
+- exact `stts`, `stsc`, `stsz` and `co64` sample tables;
+- version-1 movie/media headers for 64-bit durations.
+
+No external encoder executable, codec SDK, native media library or new Recording NuGet package is required.
+
+Finalization is partial-first: `<name>.partial.mov` is closed and independently parsed before it may be atomically promoted to `<name>.mov`.
+
+## Independent MOV probe
+
+`QuickTimeMovProbe` is separate from the writer and reconstructs the finalized container state from bytes on disk. It validates:
+
+- QuickTime brand and atom boundaries;
+- exactly one video and one audio track;
+- `2vuy` and `sowt` sample entries;
+- width/height and 48 kHz stereo PCM16 audio;
+- media timescales and durations;
+- sample counts and time-to-sample totals;
+- sample-to-chunk coverage;
+- monotonically increasing chunk offsets;
+- every media chunk remaining inside `mdat`;
+- A/V duration alignment within one video-frame tolerance.
+
+The probe is qualification evidence for the recording artifact. It does not imply that Media Deck/local playback supports `2vuy` MOV.
 
 ## Writer-provider selection
 
@@ -69,7 +99,10 @@ No arbitrary assembly loading, reflection-based plugin discovery, external encod
 
 The Operator supplies a destination and a filename stem or an explicitly compatible filename. It does not infer a container extension.
 
-The selected writer normalizes the target. For `mp4-h264-aac`, no extension becomes `.mp4`; an explicit incompatible extension is rejected. This preserves the current MP4 target-safety behavior while allowing future providers to own their own extension rules.
+The selected writer normalizes the target:
+
+- `mp4-h264-aac`: no extension becomes `.mp4`; another explicit extension is rejected.
+- `mov-2vuy-pcm`: no extension becomes `.mov`; another explicit extension is rejected.
 
 ## Confirmed state and Operator behavior
 
@@ -81,21 +114,31 @@ RuntimeHost publishes:
 - active provider identity;
 - availability, acceleration and evidence for every advertised profile.
 
-ControlHost and Client carry only provider-neutral data. They do not expose Windows Media Foundation writer types.
+ControlHost and Client carry only provider-neutral data. They do not expose concrete writer types.
 
 The Operator builds its recording profile selector only from this confirmed catalog. START REC submits the selected stable profile identity. The active profile/provider shown during or after a session comes from Runtime-confirmed state.
+
+## Dependency, packaging and licensing boundary
+
+The MOV provider adds no third-party runtime component. Therefore:
+
+- there is no new bundled native binary;
+- there is no new external process to discover or trust;
+- there is no new codec redistribution grant to track;
+- the existing release package/SBOM pipeline remains authoritative for the shipped managed assembly;
+- no new third-party notice is required for the MOV provider itself.
+
+The detailed decision and rejected dependency classes are recorded in [Professional Recording Formats](ProfessionalRecordingFormats.md).
 
 ## Test/evidence writer boundary
 
 `ReferenceRecordingPayloadWriter` remains a deterministic test/evidence injection. It is not registered as a professional delivery profile and is not advertised to the Operator.
 
-This preserves existing automated Recording tests without falsely presenting the `.rtaime-recording` artifact as a delivery format.
+## MXF and proprietary codec boundary
 
-## Future formats and providers
+MXF, ProRes, DNxHR and AVC-Intra remain unavailable. In particular, no vague “broadcast MXF” capability is advertised. MXF requires a concrete operational pattern/essence implementation and independent validation before it can enter the catalog.
 
-MOV, MXF, ProRes, DNxHR, AVC-Intra and hardware encoding are **not available** in this package. They require separate concrete writer/provider implementations and evidence before they may appear as available catalog profiles.
-
-Hardware acceleration remains unverified and unsupported by the current production catalog. The current H.264/AAC profile remains explicitly classified as software.
+Hardware acceleration also remains unverified and unsupported by the production catalog. Both current profiles are explicitly classified as software.
 
 ## Capability evidence
 
