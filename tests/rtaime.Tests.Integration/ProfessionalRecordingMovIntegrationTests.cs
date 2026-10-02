@@ -111,6 +111,77 @@ public sealed class ProfessionalRecordingMovIntegrationTests
 	}
 
 	[Fact]
+	public async Task Managed_mov_rejects_an_unsupported_profile_before_creating_output()
+	{
+		var root = CreateTemporaryRoot();
+		try
+		{
+			var writer = new ManagedQuickTimeMovRecordingWriter(root);
+			var outputId = RecordingOutputId.New();
+			var request = new RecordingStartRequest(
+				RecordingContractVersion.Current,
+				RecordingSessionId.New(),
+				new RecordingOutputDescriptor(outputId, MediaSinkId.New(), "Program"),
+				ProfessionalRecordingFormats.Mp4H264AacProfileId);
+
+			await Assert.ThrowsAsync<RecordingOutputUnavailableException>(async () =>
+				await writer.OpenAsync(request, CancellationToken.None).AsTask());
+			Assert.Empty(Directory.EnumerateFileSystemEntries(root));
+		}
+		finally
+		{
+			DeleteTemporaryRoot(root);
+		}
+	}
+
+	[Fact]
+	public async Task Managed_mov_finalize_collision_is_atomic_and_later_session_recovers()
+	{
+		var root = CreateTemporaryRoot();
+		try
+		{
+			var writer = new ManagedQuickTimeMovRecordingWriter(root);
+			writer.ConfigureTarget(root, "collision");
+			var outputId = RecordingOutputId.New();
+			await writer.OpenAsync(Request(outputId), CancellationToken.None);
+
+			var format = VideoFormat.Hd1080p50Rgba8;
+			var sample = Sample(outputId, 0, format, out var audioPayload);
+			var videoPayload = new byte[checked((int)((long)format.Width * format.Height * 4))];
+			writer.StagePayload(0, new TestPayloadLease(videoPayload), audioPayload);
+			await writer.WriteAsync(sample, CancellationToken.None);
+
+			var collidingFinal = Path.Combine(root, "collision.mov");
+			await File.WriteAllBytesAsync(collidingFinal, new byte[] { 0x52, 0x54 });
+			await Assert.ThrowsAsync<IOException>(async () =>
+				await writer.FinalizeAsync(CancellationToken.None).AsTask());
+
+			Assert.Equal(new byte[] { 0x52, 0x54 }, await File.ReadAllBytesAsync(collidingFinal));
+			Assert.False(File.Exists(Path.Combine(root, "collision.partial.mov")));
+			Assert.False(File.Exists(collidingFinal + ".lock"));
+
+			File.Delete(collidingFinal);
+			writer.ConfigureTarget(root, "recovered");
+			var recoveredOutputId = RecordingOutputId.New();
+			await writer.OpenAsync(Request(recoveredOutputId), CancellationToken.None);
+			var recoveredSample = Sample(recoveredOutputId, 0, format, out var recoveredAudioPayload);
+			writer.StagePayload(0, new TestPayloadLease(videoPayload), recoveredAudioPayload);
+			await writer.WriteAsync(recoveredSample, CancellationToken.None);
+			await writer.FinalizeAsync(CancellationToken.None);
+
+			var recoveredPath = Path.Combine(root, "recovered.mov");
+			Assert.True(File.Exists(recoveredPath));
+			var probe = QuickTimeMovProbe.Probe(recoveredPath);
+			Assert.Equal("2vuy", probe.VideoSampleEntry);
+			Assert.Equal("sowt", probe.AudioSampleEntry);
+		}
+		finally
+		{
+			DeleteTemporaryRoot(root);
+		}
+	}
+
+	[Fact]
 	public async Task Independent_probe_rejects_a_truncated_mov()
 	{
 		var root = CreateTemporaryRoot();
