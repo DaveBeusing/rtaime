@@ -18,7 +18,9 @@ public sealed record QuickTimeMovProbeResult(
 	uint VideoSampleCount,
 	ulong AudioSampleFrameCount,
 	TimeSpan VideoDuration,
-	TimeSpan AudioDuration);
+	TimeSpan AudioDuration,
+	TimeSpan VideoStartOffset,
+	TimeSpan AudioStartOffset);
 
 /// <summary>
 /// Independent bounded parser for the concrete MOV profile emitted by the managed QuickTime writer.
@@ -40,9 +42,11 @@ public static class QuickTimeMovProbe
 		var moov = Single(topLevel, "moov");
 		ValidateFileType(stream, ftyp);
 
-		var tracks = ReadChildren(stream, moov.DataOffset, moov.End)
+		var movieChildren = ReadChildren(stream, moov.DataOffset, moov.End);
+		var (movieTimescale, movieDuration) = ReadMovieHeader(stream, Single(movieChildren, "mvhd"));
+		var tracks = movieChildren
 			.Where(atom => atom.Type == "trak")
-			.Select(track => ReadTrack(stream, track, mdat))
+			.Select(track => ReadTrack(stream, track, mdat, movieTimescale))
 			.ToArray();
 		var video = tracks.SingleOrDefault(track => track.HandlerType == "vide")
 			?? throw new InvalidDataException("MOV contains no video track.");
@@ -68,9 +72,19 @@ public static class QuickTimeMovProbe
 			checked((long)video.DurationUnits));
 		var videoSeconds = (double)video.DurationUnits / video.Timescale;
 		var audioSeconds = (double)audio.DurationUnits / audio.Timescale;
+		var videoStartSeconds = (double)video.PresentationDelayMovieUnits / movieTimescale;
+		var audioStartSeconds = (double)audio.PresentationDelayMovieUnits / movieTimescale;
 		var frameTolerance = 1.0 / frameRate.FramesPerSecond;
-		if (Math.Abs(videoSeconds - audioSeconds) > frameTolerance)
-			throw new InvalidDataException("MOV video/audio durations exceed one video-frame alignment tolerance.");
+		if (Math.Abs(videoStartSeconds - audioStartSeconds) > frameTolerance)
+			throw new InvalidDataException("MOV video/audio start offsets exceed one video-frame alignment tolerance.");
+		if (Math.Abs((videoStartSeconds + videoSeconds) - (audioStartSeconds + audioSeconds)) > frameTolerance)
+			throw new InvalidDataException("MOV video/audio presentation ends exceed one video-frame alignment tolerance.");
+
+		var expectedMovieDuration = Math.Max(
+			checked(video.PresentationDelayMovieUnits + ScaleDuration(video.DurationUnits, video.Timescale, movieTimescale)),
+			checked(audio.PresentationDelayMovieUnits + ScaleDuration(audio.DurationUnits, audio.Timescale, movieTimescale)));
+		if (movieDuration != expectedMovieDuration)
+			throw new InvalidDataException("MOV movie duration does not match the presented track durations.");
 
 		return new QuickTimeMovProbeResult(
 			"QuickTime Movie (MOV)",
@@ -85,12 +99,16 @@ public static class QuickTimeMovProbe
 			video.SampleCount,
 			audio.SampleCount,
 			TimeSpan.FromSeconds(videoSeconds),
-			TimeSpan.FromSeconds(audioSeconds));
+			TimeSpan.FromSeconds(audioSeconds),
+			TimeSpan.FromSeconds(videoStartSeconds),
+			TimeSpan.FromSeconds(audioStartSeconds));
 	}
 
-	private static TrackProbe ReadTrack(Stream stream, AtomInfo track, AtomInfo mdat)
+	private static TrackProbe ReadTrack(Stream stream, AtomInfo track, AtomInfo mdat, uint movieTimescale)
 	{
 		var trackChildren = ReadChildren(stream, track.DataOffset, track.End);
+		var trackHeaderDuration = ReadTrackHeaderDuration(stream, Single(trackChildren, "tkhd"));
+		var presentationDelay = ReadPresentationDelay(stream, trackChildren);
 		var mdia = Single(trackChildren, "mdia");
 		var mediaChildren = ReadChildren(stream, mdia.DataOffset, mdia.End);
 		var handler = Single(mediaChildren, "hdlr");
@@ -122,6 +140,10 @@ public static class QuickTimeMovProbe
 		var mappings = ReadSampleToChunk(stream, stsc);
 		ValidateChunks(offsets, mappings, sizes.SampleSize, sizes.SampleCount, mdat);
 
+		var presentedDuration = checked(presentationDelay + ScaleDuration(duration, timescale, movieTimescale));
+		if (trackHeaderDuration != presentedDuration)
+			throw new InvalidDataException("MOV track-header duration does not match its edit/media duration.");
+
 		return new TrackProbe(
 			handlerType,
 			description.SampleEntry,
@@ -131,7 +153,8 @@ public static class QuickTimeMovProbe
 			description.AudioBitsPerSample,
 			timescale,
 			duration,
-			sizes.SampleCount);
+			sizes.SampleCount,
+			presentationDelay);
 	}
 
 	private static void ValidateFileType(Stream stream, AtomInfo atom)
@@ -146,6 +169,92 @@ public static class QuickTimeMovProbe
 			brands.Add(ReadFourCc(stream));
 		if (!brands.Contains("qt  ", StringComparer.Ordinal))
 			throw new InvalidDataException("MOV file does not declare the QuickTime brand.");
+	}
+
+	private static (uint Timescale, ulong Duration) ReadMovieHeader(Stream stream, AtomInfo atom)
+	{
+		RequirePayload(atom, 32);
+		stream.Position = atom.DataOffset;
+		var version = checked((byte)stream.ReadByte());
+		stream.Position += 3;
+		if (version == 1)
+		{
+			stream.Position += 16;
+			var timescale = ReadUInt32(stream);
+			var duration = ReadUInt64(stream);
+			if (timescale == 0)
+				throw new InvalidDataException("MOV movie timescale must be positive.");
+			return (timescale, duration);
+		}
+		if (version == 0)
+		{
+			stream.Position += 8;
+			var timescale = ReadUInt32(stream);
+			var duration = ReadUInt32(stream);
+			if (timescale == 0)
+				throw new InvalidDataException("MOV movie timescale must be positive.");
+			return (timescale, duration);
+		}
+		throw new InvalidDataException($"Unsupported MOV movie-header version '{version}'.");
+	}
+
+	private static ulong ReadTrackHeaderDuration(Stream stream, AtomInfo atom)
+	{
+		RequirePayload(atom, 36);
+		stream.Position = atom.DataOffset;
+		var version = checked((byte)stream.ReadByte());
+		stream.Position += 3;
+		if (version == 1)
+		{
+			stream.Position += 16;
+			_ = ReadUInt32(stream);
+			stream.Position += 4;
+			return ReadUInt64(stream);
+		}
+		if (version == 0)
+		{
+			stream.Position += 8;
+			_ = ReadUInt32(stream);
+			stream.Position += 4;
+			return ReadUInt32(stream);
+		}
+		throw new InvalidDataException($"Unsupported MOV track-header version '{version}'.");
+	}
+
+	private static ulong ReadPresentationDelay(Stream stream, IReadOnlyList<AtomInfo> trackChildren)
+	{
+		var editContainers = trackChildren.Where(atom => atom.Type == "edts").ToArray();
+		if (editContainers.Length == 0)
+			return 0;
+		if (editContainers.Length != 1)
+			throw new InvalidDataException("MOV track contains multiple edit containers.");
+
+		var elst = Single(ReadChildren(stream, editContainers[0].DataOffset, editContainers[0].End), "elst");
+		RequirePayload(elst, 8);
+		stream.Position = elst.DataOffset;
+		var version = checked((byte)stream.ReadByte());
+		stream.Position += 3;
+		if (version != 1)
+			throw new InvalidDataException("Qualified MOV edit lists must use 64-bit version 1 entries.");
+		var entryCount = ReadUInt32(stream);
+		if (entryCount != 2)
+			throw new InvalidDataException("Qualified MOV delay edit list must contain exactly two entries.");
+
+		RequireRemaining(stream, elst.End, 40);
+		var delay = ReadUInt64(stream);
+		var emptyMediaTime = ReadInt64(stream);
+		var emptyRateInteger = ReadInt16(stream);
+		var emptyRateFraction = ReadInt16(stream);
+		_ = ReadUInt64(stream);
+		var mediaTime = ReadInt64(stream);
+		var mediaRateInteger = ReadInt16(stream);
+		var mediaRateFraction = ReadInt16(stream);
+		if (delay == 0 || emptyMediaTime != -1 || emptyRateInteger != 1 || emptyRateFraction != 0 ||
+			mediaTime != 0 || mediaRateInteger != 1 || mediaRateFraction != 0)
+		{
+			throw new InvalidDataException("MOV edit list does not match the bounded A/V-delay pattern.");
+		}
+		return delay;
 	}
 
 	private static string ReadHandler(Stream stream, AtomInfo atom)
@@ -333,6 +442,17 @@ public static class QuickTimeMovProbe
 			throw new InvalidDataException("MOV chunk mapping does not cover the declared sample count exactly.");
 	}
 
+	private static ulong ScaleDuration(ulong duration, uint sourceTimescale, uint targetTimescale)
+	{
+		if (sourceTimescale == 0 || targetTimescale == 0)
+			throw new InvalidDataException("MOV duration scaling requires positive timescales.");
+		var numerator = checked((UInt128)duration * targetTimescale);
+		var scaled = (numerator + (sourceTimescale / 2U)) / sourceTimescale;
+		if (scaled > ulong.MaxValue)
+			throw new InvalidDataException("MOV scaled duration exceeds UInt64 range.");
+		return (ulong)scaled;
+	}
+
 	private static IReadOnlyList<AtomInfo> ReadChildren(Stream stream, long start, long end)
 	{
 		if (start < 0 || end < start || end > stream.Length)
@@ -425,6 +545,20 @@ public static class QuickTimeMovProbe
 		return BinaryPrimitives.ReadUInt16BigEndian(buffer);
 	}
 
+	private static short ReadInt16(Stream stream)
+	{
+		Span<byte> buffer = stackalloc byte[2];
+		ReadExactly(stream, buffer);
+		return BinaryPrimitives.ReadInt16BigEndian(buffer);
+	}
+
+	private static long ReadInt64(Stream stream)
+	{
+		Span<byte> buffer = stackalloc byte[8];
+		ReadExactly(stream, buffer);
+		return BinaryPrimitives.ReadInt64BigEndian(buffer);
+	}
+
 	private static uint ReadUInt32(Stream stream)
 	{
 		Span<byte> buffer = stackalloc byte[4];
@@ -476,5 +610,6 @@ public static class QuickTimeMovProbe
 		ushort AudioBitsPerSample,
 		uint Timescale,
 		ulong DurationUnits,
-		uint SampleCount);
+		uint SampleCount,
+		ulong PresentationDelayMovieUnits);
 }
