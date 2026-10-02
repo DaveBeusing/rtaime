@@ -186,6 +186,33 @@ public interface IControlRuntimeTransportSeam
 		ValueTask.FromException<RuntimeRecordingCommandResult>(
 			new NotSupportedException("Runtime transport does not expose recording control."));
 
+	ValueTask<RuntimeReplaySnapshot> GetReplaySnapshotAsync(CancellationToken cancellationToken = default) =>
+		ValueTask.FromException<RuntimeReplaySnapshot>(
+			new NotSupportedException("Runtime transport does not expose replay control."));
+
+	ValueTask<RuntimeReplaySnapshot> MarkReplayInAsync(
+		TimeSpan? lookback = null,
+		CancellationToken cancellationToken = default) =>
+		ValueTask.FromException<RuntimeReplaySnapshot>(
+			new NotSupportedException("Runtime transport does not expose replay control."));
+
+	ValueTask<RuntimeReplaySnapshot> MarkReplayOutAsync(CancellationToken cancellationToken = default) =>
+		ValueTask.FromException<RuntimeReplaySnapshot>(
+			new NotSupportedException("Runtime transport does not expose replay control."));
+
+	ValueTask<RuntimeReplaySnapshot> SetReplayRangeAsync(
+		TimeSpan @in,
+		TimeSpan @out,
+		CancellationToken cancellationToken = default) =>
+		ValueTask.FromException<RuntimeReplaySnapshot>(
+			new NotSupportedException("Runtime transport does not expose replay control."));
+
+	ValueTask<RuntimeReplayClipResult> CreateReplayClipAsync(
+		string name,
+		CancellationToken cancellationToken = default) =>
+		ValueTask.FromException<RuntimeReplayClipResult>(
+			new NotSupportedException("Runtime transport does not expose replay control."));
+
 	ValueTask<RuntimeAIShowcaseRemoteSnapshot> SetAIShowcaseEnabledAsync(
 		bool enabled,
 		CancellationToken cancellationToken = default) =>
