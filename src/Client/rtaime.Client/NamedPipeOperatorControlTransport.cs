@@ -318,9 +318,16 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		return ReadCompositingLayers(response);
 	}
 
+	public ValueTask<OperatorRecordingCommandResult> StartRecordingAsync(
+		string destinationDirectory,
+		string fileName,
+		CancellationToken cancellationToken = default) =>
+		StartRecordingAsync(destinationDirectory, fileName, null, cancellationToken);
+
 	public async ValueTask<OperatorRecordingCommandResult> StartRecordingAsync(
 		string destinationDirectory,
 		string fileName,
+		string? profileId,
 		CancellationToken cancellationToken = default)
 	{
 		if (string.IsNullOrWhiteSpace(destinationDirectory))
@@ -330,7 +337,10 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 
 		var response = await ExchangeAsync(
 			"control.recording.start",
-			new WireRecordingStart(destinationDirectory.Trim(), fileName.Trim()),
+			new WireRecordingStart(
+				destinationDirectory.Trim(),
+				fileName.Trim(),
+				string.IsNullOrWhiteSpace(profileId) ? null : profileId.Trim()),
 			cancellationToken).ConfigureAwait(false);
 		return ReadRecordingCommandResult(response);
 	}
@@ -1655,7 +1665,40 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		recording.Dropped,
 		recording.Rejected,
 		recording.WriterFailures,
-		recording.Failure is null ? null : new Failure(recording.Failure.Code, recording.Failure.Message));
+		recording.Failure is null ? null : new Failure(recording.Failure.Code, recording.Failure.Message),
+		recording.ActiveProfileId,
+		recording.ActiveProviderId,
+		recording.DefaultProfileId,
+		Array.AsReadOnly((recording.Profiles ?? Array.Empty<WireRecordingProfile>()).Select(FromWire).ToArray()));
+
+	private static OperatorRecordingProfileDescriptor FromWire(WireRecordingProfile profile) => new(
+		profile.ProfileId,
+		profile.DisplayName,
+		profile.Container,
+		profile.FileExtension,
+		profile.VideoCodec,
+		profile.VideoProfile,
+		profile.VideoLevel,
+		profile.AudioCodec,
+		Array.AsReadOnly(profile.SupportedInputVideoFormats.Select(format => new VideoFormat(
+			format.Width,
+			format.Height,
+			FrameRate.Parse(format.FrameRate),
+			Enum.IsDefined(typeof(PixelFormat), format.PixelFormat) ? (PixelFormat)format.PixelFormat : throw new InvalidDataException("Recording profile pixel format is invalid."),
+			Enum.IsDefined(typeof(ScanMode), format.ScanMode) ? (ScanMode)format.ScanMode : throw new InvalidDataException("Recording profile scan mode is invalid."))).ToArray()),
+		new AudioFormat(
+			profile.RequiredAudioSampleRate,
+			Enum.IsDefined(typeof(AudioChannelLayout), profile.RequiredAudioChannelLayout) ? (AudioChannelLayout)profile.RequiredAudioChannelLayout : throw new InvalidDataException("Recording profile audio channel layout is invalid."),
+			Enum.IsDefined(typeof(AudioSampleFormat), profile.RequiredAudioSampleFormat) ? (AudioSampleFormat)profile.RequiredAudioSampleFormat : throw new InvalidDataException("Recording profile audio sample format is invalid."),
+			profile.RequiredAudioChannelCount),
+		profile.VideoBitRate,
+		profile.AudioBitRate,
+		profile.AccelerationClass,
+		profile.ProviderId,
+		profile.Available,
+		profile.UnavailableReason,
+		profile.EvidenceState,
+		profile.Evidence);
 
 	private static OperatorAIShowcaseDescriptor FromWire(WireAIShowcase showcase) => new(
 		showcase.Enabled,
@@ -1952,8 +1995,45 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 	private sealed record WireReplayClipCreate(string Name);
 	private sealed record WireReplaySnapshot(string Version, int CaptureState, int ClipState, long RetentionTicks, long RetainedDurationTicks, long MaximumStorageBytes, long RetainedBytes, long SegmentDurationTicks, int RetainedSegmentCount, long? MarkInTicks, long? MarkOutTicks, ulong AcceptedSamples, ulong DroppedSamples, ulong FinalizedSegments, ulong EvictedSegments, ulong Discontinuities, WireFailure? Failure);
 	private sealed record WireReplayClipAssetResult(string Version, bool Succeeded, string ClipId, string? AssetId, string? SourceLocation, long SourceInTicks, long SourceOutTicks, string? Sha256, WireFailure? Failure);
-	private sealed record WireRecordingStart(string DestinationDirectory, string FileName);
-	private sealed record WireRecordingSnapshot(string State, long ElapsedTicks, string? Destination, string? FileName, string? FinalPath, ulong Accepted, ulong Written, ulong Dropped, ulong Rejected, ulong WriterFailures, WireFailure? Failure);
+	private sealed record WireRecordingStart(string DestinationDirectory, string FileName, string? ProfileId = null);
+	private sealed record WireRecordingProfile(
+		string ProfileId,
+		string DisplayName,
+		string Container,
+		string FileExtension,
+		string VideoCodec,
+		string VideoProfile,
+		string? VideoLevel,
+		string AudioCodec,
+		WireVideoFormat[] SupportedInputVideoFormats,
+		uint RequiredAudioSampleRate,
+		int RequiredAudioChannelLayout,
+		int RequiredAudioSampleFormat,
+		uint RequiredAudioChannelCount,
+		uint VideoBitRate,
+		uint AudioBitRate,
+		string AccelerationClass,
+		string ProviderId,
+		bool Available,
+		string? UnavailableReason,
+		string EvidenceState,
+		string Evidence);
+	private sealed record WireRecordingSnapshot(
+		string State,
+		long ElapsedTicks,
+		string? Destination,
+		string? FileName,
+		string? FinalPath,
+		ulong Accepted,
+		ulong Written,
+		ulong Dropped,
+		ulong Rejected,
+		ulong WriterFailures,
+		WireFailure? Failure,
+		string? ActiveProfileId = null,
+		string? ActiveProviderId = null,
+		string? DefaultProfileId = null,
+		WireRecordingProfile[]? Profiles = null);
 	private sealed record WireRecordingCommandResult(bool Succeeded, WireRecordingSnapshot Snapshot, WireFailure? Failure);
 	private sealed record WireAIShowcaseState(bool Enabled);
 	private sealed record WireAIShowcase(bool Enabled, string Feature, string Status, string Provider, long InferenceTimeTicks, uint PersonRegionCount, ulong? SourceSequence, ulong? AppliedSequence, double? Confidence, bool EffectVisible, WireFailure? Failure, DateTimeOffset? UpdatedAtUtc);
