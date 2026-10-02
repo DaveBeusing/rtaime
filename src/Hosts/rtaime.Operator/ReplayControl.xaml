@@ -51,7 +51,7 @@
 				<Border Grid.Column="4" Style="{StaticResource OperatorInsetPanel}">
 					<StackPanel>
 						<TextBlock Text="CONTINUITY" Style="{StaticResource OperatorLabel}" />
-						<TextBlock Text="{Binding BackpressureStatus}" FontSize="15" FontWeight="SemiBold" Margin="0,4,0,0" />
+						<TextBlock Text="{Binding BackpressureStatus}" FontSize="{StaticResource OperatorFontSizeBody}" FontWeight="SemiBold" Margin="0,4,0,0" />
 						<TextBlock Text="{Binding SegmentStatus}" Style="{StaticResource OperatorLabel}" Margin="0,2,0,0" />
 					</StackPanel>
 				</Border>
