@@ -24,6 +24,7 @@ $monitoringPath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/Runtim
 $mediaIoPath = Join-Path $repositoryRoot "src/Media/rtaime.Media/MediaIoVerticalSlice.cs"
 $recordingPath = Join-Path $repositoryRoot "src/Recording/rtaime.Recording/ReferenceRecordingPayloadWriter.cs"
 $mp4Path = Join-Path $repositoryRoot "src/Recording/rtaime.Recording/WindowsMediaFoundationMp4RecordingWriter.cs"
+$movPath = Join-Path $repositoryRoot "src/Recording/rtaime.Recording/ManagedQuickTimeMovRecordingWriter.cs"
 $gpuTestsPath = Join-Path $repositoryRoot "tests/rtaime.Tests.Unit/GpuProcessingTests.cs"
 $integrationTestsPath = Join-Path $repositoryRoot "tests/rtaime.Tests.Integration/ProgramFrameMemoryOwnershipTests.cs"
 $monitoringTestsPath = Join-Path $repositoryRoot "tests/rtaime.Tests.Integration/OperatorMonitoringPlaneTests.cs"
@@ -39,6 +40,7 @@ foreach ($path in @(
 	$mediaIoPath,
 	$recordingPath,
 	$mp4Path,
+	$movPath,
 	$gpuTestsPath,
 	$integrationTestsPath,
 	$monitoringTestsPath,
@@ -55,6 +57,7 @@ $monitoring = Get-Content -LiteralPath $monitoringPath -Raw
 $mediaIo = Get-Content -LiteralPath $mediaIoPath -Raw
 $recording = Get-Content -LiteralPath $recordingPath -Raw
 $mp4 = Get-Content -LiteralPath $mp4Path -Raw
+$mov = Get-Content -LiteralPath $movPath -Raw
 $gpuTests = Get-Content -LiteralPath $gpuTestsPath -Raw
 $integrationTests = Get-Content -LiteralPath $integrationTestsPath -Raw
 $monitoringTests = Get-Content -LiteralPath $monitoringTestsPath -Raw
@@ -87,6 +90,7 @@ Assert-Condition ($recording -match 'public interface IProgramRecordingPayloadLe
 Assert-Condition ($recording -match 'StagePayload\(ulong sequenceNumber, IProgramRecordingPayloadLease videoPayload') "Recording payload writer must accept owned Program video leases."
 Assert-Condition ($recording -match 'payload\.VideoLease\.Dispose\(\)' -and $recording -match 'ReleaseStagedPayloadsUnsafe') "Reference recording writer must release payload ownership on write and cleanup."
 Assert-Condition ($mp4 -match 'payload\.VideoLease\.Dispose\(\)' -and $mp4 -match 'ReleaseStagedPayloadsUnsafe') "MP4 recording writer must release payload ownership on write and cleanup."
+Assert-Condition ($mov -match 'payload\.VideoLease\.Dispose\(\)' -and $mov -match 'ReleaseStagedPayloadsUnsafe') "MOV recording writer must release payload ownership on write and cleanup."
 
 Assert-Condition ($gpuTests -match 'Readback_lease_reuses_a_bounded_buffer_after_release') "GPU lease reuse regression coverage is required."
 Assert-Condition ($gpuTests -match 'Retained_readback_memory_is_not_reused_or_mutated_by_a_later_frame') "GPU retained-memory aliasing regression coverage is required."
