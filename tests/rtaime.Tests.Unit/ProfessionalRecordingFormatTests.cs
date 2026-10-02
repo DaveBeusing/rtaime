@@ -108,6 +108,31 @@ public sealed class ProfessionalRecordingFormatTests
 	}
 
 	[Fact]
+	public async Task Profile_selecting_writer_creates_one_concrete_writer_per_session()
+	{
+		var profile = CreateProfile("profile-a", "provider-a", available: true);
+		var provider = new TestProvider(profile);
+		var writer = new ProfileSelectingProgramRecordingWriter(
+			new RecordingWriterProviderRegistry(new[] { provider }, profile.ProfileId));
+		var output = new RecordingOutputDescriptor(RecordingOutputId.New(), MediaSinkId.New(), "Program");
+
+		await writer.OpenAsync(new RecordingStartRequest(
+			RecordingContractVersion.Current,
+			RecordingSessionId.New(),
+			output), CancellationToken.None);
+		await writer.AbortAsync(CancellationToken.None);
+		await writer.OpenAsync(new RecordingStartRequest(
+			RecordingContractVersion.Current,
+			RecordingSessionId.New(),
+			output), CancellationToken.None);
+		await writer.AbortAsync(CancellationToken.None);
+
+		Assert.Equal(2, provider.CreatedCount);
+		Assert.Equal(profile.ProfileId, writer.ActiveProfile?.ProfileId);
+		Assert.Equal(profile.ProviderId, writer.ActiveProviderId);
+	}
+
+	[Fact]
 	public void Mp4_writer_normalizes_only_the_mp4_target_extension()
 	{
 		var root = Path.Combine(Path.GetTempPath(), "rtaime-mp4-target", Guid.NewGuid().ToString("N"));
@@ -171,12 +196,14 @@ public sealed class ProfessionalRecordingFormatTests
 		public string DisplayName => $"Test {ProviderId}";
 		public IReadOnlyList<RecordingProfileDescriptor> Profiles => new[] { _profile };
 		public RecordingProfileId? LastCreatedProfileId { get; private set; }
+		public int CreatedCount { get; private set; }
 
 		public IProgramRecordingPayloadWriter CreateWriter(RecordingProfileId profileId)
 		{
 			if (profileId != _profile.ProfileId)
 				throw new RecordingOutputUnavailableException("Unknown synthetic profile.");
 			LastCreatedProfileId = profileId;
+			CreatedCount++;
 			return new TestWriter(_profile.FileExtension);
 		}
 	}
