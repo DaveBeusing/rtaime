@@ -23,8 +23,10 @@ public sealed class ProfessionalRecordingMovIntegrationTests
 			await writer.OpenAsync(Request(outputId), CancellationToken.None);
 
 			var videoPayload = new byte[checked((int)((long)format.Width * format.Height * 4))];
-			for (ulong sequence = 0; sequence < 2; sequence++)
+			var firstSequence = fractionalRate ? 1UL : 3UL;
+			for (var offset = 0UL; offset < 2; offset++)
 			{
+				var sequence = checked(firstSequence + offset);
 				var sample = Sample(outputId, sequence, format, out var audioPayload);
 				var lease = new TestPayloadLease(videoPayload);
 				writer.StagePayload(sequence, lease, audioPayload);
@@ -52,8 +54,20 @@ public sealed class ProfessionalRecordingMovIntegrationTests
 			Assert.Equal((ushort)16, probe.AudioBitsPerSample);
 			Assert.Equal(2U, probe.VideoSampleCount);
 			Assert.True(probe.AudioSampleFrameCount > 0);
+			if (fractionalRate)
+			{
+				Assert.Equal(TimeSpan.FromSeconds(1.0 / 60_000), probe.VideoStartOffset);
+				Assert.Equal(TimeSpan.Zero, probe.AudioStartOffset);
+			}
+			else
+			{
+				Assert.Equal(TimeSpan.Zero, probe.VideoStartOffset);
+				Assert.Equal(TimeSpan.Zero, probe.AudioStartOffset);
+			}
 			Assert.InRange(
-				Math.Abs((probe.VideoDuration - probe.AudioDuration).TotalSeconds),
+				Math.Abs(
+					(probe.VideoStartOffset + probe.VideoDuration -
+					 probe.AudioStartOffset - probe.AudioDuration).TotalSeconds),
 				0,
 				1.0 / format.FrameRate.FramesPerSecond);
 		}
