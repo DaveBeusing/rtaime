@@ -516,7 +516,7 @@ The panel is a Client-SDK projection only. `OperatorViewModel` calls `OperatorCo
 
 Recording commands are serialized through ControlHost and delegated to RuntimeHost. They do not alter Preview/Program routing or advance Production revision. The recorded media is the same post-transition/post-graphics Program video and post-routing Program audio already owned by RuntimeHost.
 
-The default Windows RuntimeHost output is now `.mp4` with H.264/AVC video and AAC-LC stereo 48 kHz audio. RuntimeHost remains authoritative for the normalized target name and final path, so the Operator does not infer container or codec state. The deterministic `.rtaime-recording` artifact remains a separate injected test/evidence backend and is not presented as a delivery format. MOV/MXF are not supported recording outputs.
+The default Windows RuntimeHost output remains `.mp4` with H.264/AVC video and AAC-LC stereo 48 kHz audio. The confirmed profile catalog also exposes managed `.mov` delivery with uncompressed `2vuy` 8-bit YUV 4:2:2 video and `sowt` PCM16 stereo 48 kHz audio. RuntimeHost remains authoritative for the normalized target name and final path, so the Operator does not infer container or codec state. The deterministic `.rtaime-recording` artifact remains a separate injected test/evidence backend and is not presented as a delivery format. MXF remains unsupported.
 
 
 ## Runtime Performance Status Bar
@@ -868,6 +868,6 @@ PROGRAM RECORDING builds its profile selector from the confirmed Runtime recordi
 
 The selected profile is submitted by stable profile identity with START REC. RuntimeHost confirms the active profile and provider in the returned snapshot. The Operator shows container, video/audio codec, acceleration classification, provider and qualification state from that confirmed data.
 
-The filename field may remain extensionless. Extension normalization belongs to the selected writer/provider; an explicit incompatible extension is rejected before recording starts. The current catalog advertises only the qualified `mp4-h264-aac` production profile. MOV/MXF and hardware recording are not presented as available capabilities.
+The filename field may remain extensionless. Extension normalization belongs to the selected writer/provider; an explicit incompatible extension is rejected before recording starts. The current catalog advertises `mp4-h264-aac` and `mov-2vuy-pcm`; hardware recording and MXF are not presented as available capabilities.
 
 See [Recording Profile Catalog and Provider Boundary](RecordingProfileCatalog.md).
