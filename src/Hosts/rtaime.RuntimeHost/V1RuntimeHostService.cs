@@ -259,7 +259,11 @@ public sealed record V1RecordingOperatorSnapshot(
 	string? FileName,
 	string? FinalPath,
 	RecordingStatistics Statistics,
-	Failure? Failure);
+	Failure? Failure,
+	RecordingProfileId? ActiveProfileId = null,
+	RecordingWriterProviderId? ActiveProviderId = null,
+	RecordingProfileId? DefaultProfileId = null,
+	IReadOnlyList<RecordingProfileDescriptor>? Profiles = null);
 
 public sealed record V1RuntimePerformanceSnapshot(
 	TimeSpan Uptime,
@@ -376,6 +380,9 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private readonly RuntimeRecordingBridge _recordingBridge;
 	private readonly IProgramRecordingPayloadWriter? _recordingPayloadWriter;
 	private readonly IConfigurableProgramRecordingWriter? _recordingTargetWriter;
+	private readonly IProfileConfigurableProgramRecordingWriter? _profileRecordingTargetWriter;
+	private readonly IProgramRecordingProfileCatalogProvider? _recordingProfileCatalogProvider;
+	private readonly IProgramRecordingProfileStateProvider? _recordingProfileStateProvider;
 	private readonly RuntimeMonitoringHub _monitoringHub;
 	private readonly RuntimeMonitoringTap _monitoringTap;
 	private readonly RuntimeNetworkOutputBridge _networkOutputBridge;
@@ -536,6 +543,9 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			throw new ArgumentNullException(nameof(recordingWriter));
 		_recordingPayloadWriter = recordingWriter as IProgramRecordingPayloadWriter;
 		_recordingTargetWriter = recordingWriter as IConfigurableProgramRecordingWriter;
+		_profileRecordingTargetWriter = recordingWriter as IProfileConfigurableProgramRecordingWriter;
+		_recordingProfileCatalogProvider = recordingWriter as IProgramRecordingProfileCatalogProvider;
+		_recordingProfileStateProvider = recordingWriter as IProgramRecordingProfileStateProvider;
 		_recorder = new ProgramRecorder(recordingWriter);
 		_recordingBridge = new RuntimeRecordingBridge(_recorder);
 		_networkOutputBridge = new RuntimeNetworkOutputBridge(configuredNetworkOutputs);
@@ -2201,13 +2211,22 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		RecordingSessionId sessionId,
 		RecordingOutputId outputId,
 		CancellationToken cancellationToken = default) =>
-		StartRecordingCoreAsync(sessionId, outputId, null, null, cancellationToken);
+		StartRecordingCoreAsync(sessionId, outputId, null, null, null, cancellationToken);
+
+	public ValueTask<RecordingStartResult> StartRecordingAsync(
+		RecordingSessionId sessionId,
+		RecordingOutputId outputId,
+		string destinationDirectory,
+		string fileName,
+		CancellationToken cancellationToken = default) =>
+		StartRecordingAsync(sessionId, outputId, destinationDirectory, fileName, null, cancellationToken);
 
 	public async ValueTask<RecordingStartResult> StartRecordingAsync(
 		RecordingSessionId sessionId,
 		RecordingOutputId outputId,
 		string destinationDirectory,
 		string fileName,
+		RecordingProfileId? profileId,
 		CancellationToken cancellationToken = default)
 	{
 		if (_recordingTargetWriter is null)
@@ -2217,12 +2236,28 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				"Configured RuntimeHost recording writer does not support operator-selected destinations."));
 		}
 
-		var normalizedFileName = _recordingTargetWriter.ConfigureTarget(destinationDirectory, fileName);
+		var resolvedProfile = ResolveRecordingProfile(profileId, out var profileFailure);
+		if (profileFailure is not null)
+			return RecordingStartResult.Rejected(profileFailure.Value);
+
+		string normalizedFileName;
+		try
+		{
+			normalizedFileName = _profileRecordingTargetWriter is not null
+				? _profileRecordingTargetWriter.ConfigureTarget(resolvedProfile?.ProfileId, destinationDirectory, fileName)
+				: _recordingTargetWriter.ConfigureTarget(destinationDirectory, fileName);
+		}
+		catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or RecordingOutputUnavailableException)
+		{
+			return RecordingStartResult.Rejected(new Failure("recording.profile.target_rejected", exception.Message));
+		}
+
 		return await StartRecordingCoreAsync(
 			sessionId,
 			outputId,
 			Path.GetFullPath(destinationDirectory.Trim()),
 			normalizedFileName,
+			resolvedProfile?.ProfileId,
 			cancellationToken).ConfigureAwait(false);
 	}
 
@@ -2231,8 +2266,13 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		RecordingOutputId outputId,
 		string? destinationDirectory,
 		string? fileName,
+		RecordingProfileId? profileId,
 		CancellationToken cancellationToken)
 	{
+		var resolvedProfile = ResolveRecordingProfile(profileId, out var profileFailure);
+		if (profileFailure is not null)
+			return RecordingStartResult.Rejected(profileFailure.Value);
+
 		MediaSinkId sink;
 		lock (_gate)
 		{
@@ -2248,7 +2288,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			new RecordingStartRequest(
 				RecordingContractVersion.Current,
 				sessionId,
-				new RecordingOutputDescriptor(outputId, sink, fileName ?? "V1 Program")),
+				new RecordingOutputDescriptor(outputId, sink, fileName ?? "V1 Program"),
+				resolvedProfile?.ProfileId),
 			cancellationToken).ConfigureAwait(false);
 		lock (_gate)
 		{
@@ -2638,6 +2679,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			elapsed = end > started ? end - started : TimeSpan.Zero;
 		}
 
+		var profileCatalog = _recordingProfileCatalogProvider?.ProfileCatalog;
 		return new V1RecordingOperatorSnapshot(
 			snapshot.State,
 			elapsed,
@@ -2645,7 +2687,47 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			_recordingFileName,
 			_recordingTargetWriter?.FinalPath,
 			snapshot.Statistics,
-			snapshot.Failure);
+			snapshot.Failure,
+			_recordingProfileStateProvider?.ActiveProfile?.ProfileId,
+			_recordingProfileStateProvider?.ActiveProviderId,
+			profileCatalog?.DefaultProfileId,
+			profileCatalog?.Profiles ?? Array.Empty<RecordingProfileDescriptor>());
+	}
+
+	private RecordingProfileDescriptor? ResolveRecordingProfile(
+		RecordingProfileId? requestedProfileId,
+		out Failure? failure)
+	{
+		failure = null;
+		var catalog = _recordingProfileCatalogProvider?.ProfileCatalog;
+		if (catalog is null)
+		{
+			if (requestedProfileId is not null)
+			{
+				failure = new Failure(
+					"recording.profile.unsupported",
+					"Configured RuntimeHost recording writer does not expose selectable production profiles.");
+			}
+			return null;
+		}
+
+		var profileId = requestedProfileId ?? catalog.DefaultProfileId;
+		if (!catalog.TryGet(profileId, out var profile))
+		{
+			failure = new Failure(
+				"recording.profile.unknown",
+				$"Recording profile '{profileId}' is not registered.");
+			return null;
+		}
+		if (!profile.Available)
+		{
+			failure = new Failure(
+				"recording.profile.unavailable",
+				profile.UnavailableReason ?? $"Recording profile '{profileId}' is unavailable.");
+			return null;
+		}
+
+		return profile;
 	}
 
 	private IReadOnlyDictionary<MediaSourceId, V1AudioInputSnapshot> AudioInputSnapshotsUnsafe() =>
