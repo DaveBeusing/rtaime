@@ -64,7 +64,12 @@ public sealed class RollingReplaySegmentStore : IDisposable
 			EvictUnsafe(segment.End);
 
 			if (_retainedBytes > _policy.MaximumStorageBytes)
-				throw new IOException("Replay storage quota is exhausted because retained segments are currently pinned.");
+			{
+				_segments.Remove(segment);
+				_retainedBytes -= segment.Bytes;
+				TryDelete(segment.Path);
+				throw new IOException("Replay storage quota is exhausted because older retained segments are currently pinned.");
+			}
 		}
 	}
 
