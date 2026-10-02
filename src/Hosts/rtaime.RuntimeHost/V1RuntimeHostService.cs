@@ -315,7 +315,8 @@ public sealed record V1RuntimeHostSnapshot(
 	V1ProductionCgTextSnapshot? ProductionCgText = null,
 	IReadOnlyList<RuntimeOutputRoleSnapshot>? OutputRoles = null,
 	IReadOnlyList<V1CompositingLayerSnapshot>? CompositingLayers = null,
-	V1AudioProductionSnapshot? AudioProduction = null);
+	V1AudioProductionSnapshot? AudioProduction = null,
+	ReplayBufferSnapshot? Replay = null);
 
 /// <summary>
 /// Windows V1 reference composition root for committed execution, timed media, GPU composition,
