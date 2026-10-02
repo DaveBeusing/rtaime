@@ -378,7 +378,7 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 			CompatibilityVersion.Parse(wire.Version),
 			wire.Succeeded,
 			wire.ClipId,
-			string.IsNullOrWhiteSpace(wire.AssetId) ? null : new MediaAssetId(Identity.Parse(wire.AssetId)),
+			string.IsNullOrWhiteSpace(wire.AssetId) ? null : wire.AssetId.Trim(),
 			wire.SourceLocation,
 			TimeSpan.FromTicks(wire.SourceInTicks),
 			TimeSpan.FromTicks(wire.SourceOutTicks),
