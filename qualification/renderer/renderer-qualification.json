@@ -1,0 +1,71 @@
+{
+  "copyright": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+  "schemaVersion": "1.0",
+  "qualification": "rtaime-renderer-reference",
+  "description": "Renderer and production-path hardware qualification profiles. Hosted CI verifies structure only; physical results require the dedicated Windows NVIDIA self-hosted runner.",
+  "artifactRetentionDays": 90,
+  "formats": [
+    "1080p50",
+    "1080p59.94"
+  ],
+  "compositorLayerCounts": [
+    0,
+    1,
+    2,
+    4,
+    8
+  ],
+  "profiles": [
+    {
+      "name": "smoke",
+      "durationSecondsPerFormat": 30,
+      "warmupBoundaries": 12,
+      "compositorSamplesPerCase": 20,
+      "recordingBackpressureBoundaries": 16
+    },
+    {
+      "name": "stress",
+      "durationSecondsPerFormat": 300,
+      "warmupBoundaries": 30,
+      "compositorSamplesPerCase": 60,
+      "recordingBackpressureBoundaries": 32
+    },
+    {
+      "name": "soak",
+      "durationSecondsPerFormat": 3600,
+      "warmupBoundaries": 60,
+      "compositorSamplesPerCase": 120,
+      "recordingBackpressureBoundaries": 64
+    }
+  ],
+  "performancePolicy": {
+    "frameBudgetAssessment": "P99_REPORTED",
+    "baselineComparison": "REQUIRED_FOR_REGRESSION_CLAIM",
+    "maximumP99RegressionPercent": 20.0,
+    "cudaReferenceQualificationRequired": true
+  },
+  "physicalScenarios": [
+    "CUDA_COMPOSITOR_LAYER_MATRIX",
+    "RUNTIME_PROGRAM_BOUNDARY",
+    "CUDA_D3D11_MONITORING",
+    "PROGRAM_RECORDING",
+    "PROGRAM_OUTPUT",
+    "RESOURCE_PRESSURE",
+    "MONITOR_DISCONNECT_RECONNECT",
+    "ORDERLY_SHUTDOWN_CLEANUP"
+  ],
+  "softwareFaultScenarios": [
+    "CLIP_SEEK",
+    "RENDERER_BACKEND_RECOVERY",
+    "RECORDING_BACKPRESSURE",
+    "RESIZE_DPI_CHURN",
+    "MONITORING_TRANSPORT_RECONNECT",
+    "PROCESS_RESTART"
+  ],
+  "externalPhysicalRequirements": [
+    "PROFESSIONAL_MEDIA_IO",
+    "TIMING_REFERENCE_LOCK",
+    "PHYSICAL_END_TO_END_LATENCY",
+    "AUDIO_VIDEO_SYNCHRONIZATION"
+  ]
+}
