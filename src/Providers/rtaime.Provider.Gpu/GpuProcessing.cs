@@ -237,6 +237,7 @@ public readonly record struct GpuSharedMonitoringResourceStatistics(
 
 public sealed class GpuSharedMonitoringResourceLease : IDisposable
 {
+    private readonly object _gate = new();
     private Action<MonitoringResourceId>? _release;
 
     internal GpuSharedMonitoringResourceLease(
@@ -248,11 +249,27 @@ public sealed class GpuSharedMonitoringResourceLease : IDisposable
     }
 
     public MonitoringSharedResourceDescriptor Descriptor { get; }
-    public bool IsDisposed => Volatile.Read(ref _release) is null;
+
+    public bool IsDisposed
+    {
+        get
+        {
+            lock (_gate)
+                return _release is null;
+        }
+    }
 
     public void Dispose()
     {
-        Interlocked.Exchange(ref _release, null)?.Invoke(Descriptor.ResourceId);
+        lock (_gate)
+        {
+            var release = _release;
+            if (release is null)
+                return;
+
+            release(Descriptor.ResourceId);
+            _release = null;
+        }
     }
 }
 
