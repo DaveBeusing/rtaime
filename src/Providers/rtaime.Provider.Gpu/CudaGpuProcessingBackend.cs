@@ -369,20 +369,41 @@ public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend, IGpuShared
         return allocation;
     }
 
-    private void CleanupContext()
+    private Exception? CleanupContext()
     {
+        Exception? failure = null;
+
         if (_module != IntPtr.Zero)
         {
-            CudaNative.cuModuleUnload(_module);
-            _module = IntPtr.Zero;
-            _compositeFunction = IntPtr.Zero;
+            var result = CudaNative.cuModuleUnload(_module);
+            if (result == CudaResult.Success)
+            {
+                _module = IntPtr.Zero;
+                _compositeFunction = IntPtr.Zero;
+            }
+            else
+            {
+                failure = new InvalidOperationException($"CUDA operation 'cuModuleUnload' failed with '{result}' ({(int)result}).");
+            }
         }
 
         if (_context != IntPtr.Zero)
         {
-            CudaNative.cuCtxDestroy_v2(_context);
-            _context = IntPtr.Zero;
+            var result = CudaNative.cuCtxDestroy_v2(_context);
+            if (result == CudaResult.Success)
+            {
+                _context = IntPtr.Zero;
+                _module = IntPtr.Zero;
+                _compositeFunction = IntPtr.Zero;
+                failure = null;
+            }
+            else if (failure is null)
+            {
+                failure = new InvalidOperationException($"CUDA operation 'cuCtxDestroy_v2' failed with '{result}' ({(int)result}).");
+            }
         }
+
+        return failure;
     }
 
     private void SetCurrentContext()
