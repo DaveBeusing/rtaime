@@ -156,23 +156,28 @@ public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend, IGpuShared
 
             if (_context != IntPtr.Zero)
             {
-                try
+                SetCurrentContext();
+
+                foreach (var pair in _surfaces.ToArray())
                 {
-                    SetCurrentContext();
-                    foreach (var allocation in _surfaces.Values)
-                        CudaNative.cuMemFree_v2(allocation.DevicePointer);
-                    _surfaces.Clear();
-                    foreach (var pool in _freeAllocations.Values)
+                    Check(CudaNative.cuMemFree_v2(pair.Value.DevicePointer), "cuMemFree_v2");
+                    _surfaces.Remove(pair.Key);
+                }
+
+                foreach (var pair in _freeAllocations.ToArray())
+                {
+                    while (pair.Value.TryPeek(out var pointer))
                     {
-                        while (pool.TryPop(out var pointer))
-                            CudaNative.cuMemFree_v2(pointer);
+                        Check(CudaNative.cuMemFree_v2(pointer), "cuMemFree_v2");
+                        pair.Value.Pop();
                     }
-                    _freeAllocations.Clear();
+
+                    _freeAllocations.Remove(pair.Key);
                 }
-                finally
-                {
-                    CleanupContext();
-                }
+
+                var cleanupFailure = CleanupContext();
+                if (cleanupFailure is not null)
+                    throw cleanupFailure;
             }
 
             _running = false;
