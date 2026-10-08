@@ -316,39 +316,17 @@ DISSOLVE and ordered RGBA layers remain GPU-provider processing primitives. Gove
 
 ## Failure and recovery
 
-The provider fails closed for:
+GPU provider lifecycle and recovery are defined in `docs/GpuLifecycleRecovery.md`.
 
-- unavailable backend,
-- disposed/foreign surfaces,
-- format mismatch,
-- timing mismatch,
-- more than eight active layers,
-- duplicate layer surfaces in one request,
-- backend exceptions.
+The provider now distinguishes production-critical CUDA failures from isolated degraded conditions. CUDA upload, composite and Program readback failures fail closed until controlled recovery. Monitoring export/release failures and bounded lease pressure remain explicitly degraded when Program correctness is not affected.
 
-A backend exception is observed as:
+Failed surface/allocation releases remain tracked until cleanup succeeds; a failed cleanup cannot be reported as a clean Stop. Successful Start or Recover rotates lifecycle generation and monitoring instance identity so stale resources cannot be reused.
 
-```text
-gpu.composite.backend_failure
-```
+Managed-reference execution remains software evidence only and is never a silent live-production fallback for a failed CUDA path.
 
-The failed output allocation is released when possible. Existing input surfaces remain owned by the caller.
+## Repeated start/stop and recovery
 
-## Repeated start/stop
-
-The provider supports repeated:
-
-```text
-Start
-→ process
-→ Stop
-→ Start
-→ process
-```
-
-Stop releases active provider surfaces before the backend is stopped.
-
-This is required groundwork for host restart, recovery, and controlled shutdown behaviour.
+The provider supports deterministic repeated Start/Stop cycles plus explicit Recover from Degraded/Failed state. Stop and Recover drain tracked surfaces and monitoring resources before backend restart. If cleanup cannot complete, the provider remains Failed with reason evidence instead of claiming Ready or Stopped.
 
 ## Performance evidence
 
