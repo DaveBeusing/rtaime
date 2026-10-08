@@ -172,11 +172,13 @@ Hosted CI qualifies contract, lifetime, fallback and software presentation polic
 
 ## Static RGBA source
 
-`StaticRgbaSource` owns immutable RGBA source content.
+`StaticRgbaSource` owns RGBA source content with generation `0`.
 
-Materialization uploads the same content with production frame timing and generation `0`.
+Normal `Materialize` retains the original one-upload-per-materialization behavior for short-lived/ad-hoc callers. `MaterializeReusable` is an explicit opt-in for long-lived sources: the provider retains one bounded backend surface while source identity, format, generation and tracked RGBA content version remain unchanged, while each returned frame descriptor still carries the current production timing.
 
-The source is independent from the compositor and may later be backed by a more efficient persistent upload/cache without changing Control or Provider contracts.
+Direct buffer mutation advances the RGBA content version and therefore invalidates the reusable entry before the next materialization.
+
+RuntimeHost uses the reusable path for its long-lived compositing layers only. See [GpuMemoryTransferOptimization.md](GpuMemoryTransferOptimization.md) for transfer accounting and cache bounds.
 
 ## Dynamic RGBA source
 
@@ -187,6 +189,8 @@ Each successful update:
 - keeps the video format stable,
 - advances generation exactly once,
 - changes only future materializations.
+
+Normal `Materialize` remains non-retaining. `MaterializeReusable` reuses the device surface only while both generation and RGBA content version remain unchanged. A generation/content change retires cache retention without freeing a surface that still has an outstanding frame or monitoring owner.
 
 Dynamic source generation remains separate from frame timing and surface identity.
 
