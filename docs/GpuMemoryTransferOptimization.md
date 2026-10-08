@@ -49,6 +49,8 @@ RuntimeHost opts in only for its long-lived compositing resources:
 
 The provider maintains at most `GpuProcessingProvider.ReusableUploadSurfaceCapacity` retained reusable surfaces. The V1 capacity is 16. Capacity pressure evicts the least-recently-used cache retention; a still-live frame or monitoring lease keeps the underlying surface valid until its final owner releases it.
 
+`ActiveSurfaceCount` remains an active ownership signal: cache-only retained surfaces are not counted after their last frame/monitoring owner is released. Reusable retention is reported separately through `MemoryTransferStatistics.ReusableUploadSurfaces`. This preserves the existing Runtime boundary invariant that completed boundaries leave zero active GPU surfaces while still allowing bounded backend allocations to remain retained for reuse.
+
 Each reused materialization still receives a new `FrameDescriptor` with current boundary timing. The underlying `SurfaceDescriptor`, `SurfaceId`, generation and backend allocation are reused only while the source generation, format and tracked RGBA content version remain identical.
 
 This preserves the existing compositor requirement that all frame descriptors in one request carry current matching timing without re-uploading identical pixels.
@@ -141,6 +143,7 @@ Software regression coverage proves:
 - content mutation/generation change replaces the cache entry and preserves exact pixels;
 - an old surface remains valid until its final frame reference is released;
 - cache retention is bounded and eviction is deterministic;
+- cache-only retention is reported separately from active frame/monitoring ownership;
 - provider stop drains reusable surfaces to zero;
 - transfer counters record readback and avoided-upload byte counts;
 - the default non-reusable source path retains its previous ownership behavior.
