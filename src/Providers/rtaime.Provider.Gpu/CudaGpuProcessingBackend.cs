@@ -317,14 +317,14 @@ public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend, IGpuShared
     {
         lock (_gate)
         {
-            if (_disposed || !_surfaces.Remove(surfaceId, out var allocation))
+            if (_disposed || !_surfaces.TryGetValue(surfaceId, out var allocation))
                 return;
+            if (_context == IntPtr.Zero)
+                throw new InvalidOperationException("CUDA surface cannot be released because the owning context is unavailable.");
 
-            if (_context != IntPtr.Zero)
-            {
-                SetCurrentContext();
-                ReturnAllocation(allocation.DevicePointer, allocation.ByteLength);
-            }
+            SetCurrentContext();
+            ReturnAllocation(allocation.DevicePointer, allocation.ByteLength);
+            _surfaces.Remove(surfaceId);
         }
     }
 
