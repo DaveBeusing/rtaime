@@ -20,8 +20,8 @@ public sealed class GpuMemoryTransferOptimizationTests
             MediaSourceId.New(),
             RgbaFrameBuffer.Solid(TestFormat, 10, 20, 30));
 
-        using var first = source.Materialize(provider, Timing(1));
-        using var second = source.Materialize(provider, Timing(2));
+        using var first = source.MaterializeReusable(provider, Timing(1));
+        using var second = source.MaterializeReusable(provider, Timing(2));
 
         Assert.Equal(first.SurfaceId, second.SurfaceId);
         Assert.NotEqual(first.Descriptor.Timing, second.Descriptor.Timing);
@@ -47,12 +47,12 @@ public sealed class GpuMemoryTransferOptimizationTests
         var source = new StaticRgbaSource(
             MediaSourceId.New(),
             RgbaFrameBuffer.Solid(TestFormat, 1, 2, 3));
-        using var first = source.Materialize(provider, Timing(1));
+        using var first = source.MaterializeReusable(provider, Timing(1));
 
         source.Content.CopyPixelsFrom(
             RgbaFrameBuffer.Solid(TestFormat, 90, 80, 70).Pixels.Span);
 
-        using var second = source.Materialize(provider, Timing(2));
+        using var second = source.MaterializeReusable(provider, Timing(2));
 
         Assert.NotEqual(first.SurfaceId, second.SurfaceId);
         Assert.Equal((byte)90, provider.Readback(second)[0]);
@@ -78,12 +78,12 @@ public sealed class GpuMemoryTransferOptimizationTests
             MediaSourceId.New(),
             RgbaFrameBuffer.Solid(TestFormat, 4, 5, 6));
 
-        using var first = source.Materialize(provider, Timing(1));
-        using var second = source.Materialize(provider, Timing(2));
+        using var first = source.MaterializeReusable(provider, Timing(1));
+        using var second = source.MaterializeReusable(provider, Timing(2));
         Assert.Equal(first.SurfaceId, second.SurfaceId);
 
         source.Update(RgbaFrameBuffer.Solid(TestFormat, 40, 50, 60));
-        using var third = source.Materialize(provider, Timing(3));
+        using var third = source.MaterializeReusable(provider, Timing(3));
 
         Assert.NotEqual(first.SurfaceId, third.SurfaceId);
         Assert.Equal(new Generation(1), third.Descriptor.Surface.Lifetime.Generation);
@@ -110,7 +110,7 @@ public sealed class GpuMemoryTransferOptimizationTests
             var source = new StaticRgbaSource(
                 MediaSourceId.New(),
                 RgbaFrameBuffer.Solid(TestFormat, (byte)index, 0, 0));
-            using var frame = source.Materialize(provider, Timing((ulong)index));
+            using var frame = source.MaterializeReusable(provider, Timing((ulong)index));
         }
 
         var transfers = provider.MemoryTransferStatistics;
@@ -137,9 +137,9 @@ public sealed class GpuMemoryTransferOptimizationTests
             MediaSourceId.New(),
             RgbaFrameBuffer.Solid(TestFormat, 7, 8, 9));
 
-        var oldFrame = source.Materialize(provider, Timing(1));
+        var oldFrame = source.MaterializeReusable(provider, Timing(1));
         source.Update(RgbaFrameBuffer.Solid(TestFormat, 70, 80, 90));
-        using var currentFrame = source.Materialize(provider, Timing(2));
+        using var currentFrame = source.MaterializeReusable(provider, Timing(2));
 
         Assert.Equal(2, backend.ActiveAllocationCount);
 
