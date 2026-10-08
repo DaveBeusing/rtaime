@@ -989,7 +989,8 @@ public sealed class GpuProcessingProvider : IDisposable
                 var failure = new Failure(
                     GpuProviderLifecycleReasonCodes.UploadFailed,
                     $"GPU upload failed: {exception.GetType().Name}.");
-                TransitionStateUnsafe(GpuProviderState.Failed, GpuProviderLifecycleReasonCodes.UploadFailed, failure);
+                if (_backend.Info.Kind == GpuBackendKind.NvidiaCuda)
+                    TransitionStateUnsafe(GpuProviderState.Failed, GpuProviderLifecycleReasonCodes.UploadFailed, failure);
                 Observe("gpu.upload.failed", timing.SequenceNumber, failure);
                 throw;
             }
