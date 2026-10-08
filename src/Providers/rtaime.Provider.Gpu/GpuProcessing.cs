@@ -1561,7 +1561,7 @@ public sealed class GpuProcessingProvider : IDisposable
                     GpuProviderLifecycleReasonCodes.BackendUnavailable,
                     "GPU backend is unavailable."));
         }
-        else if (state is GpuProviderState.Failed or GpuProviderState.Stopped or GpuProviderState.Disposed)
+        else if (state is GpuProviderState.Failed or GpuProviderState.Disposed)
         {
             availability = new ProviderAvailability(
                 ProviderAvailabilityState.Unavailable,
