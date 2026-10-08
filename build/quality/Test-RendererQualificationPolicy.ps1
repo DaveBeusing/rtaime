@@ -27,6 +27,13 @@ foreach ($path in @($profilePath, $manifestPath, $runnerPath, $verifierPath, $ha
     Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required renderer qualification artifact is missing: '$path'."
 }
 
+foreach ($scriptPath in @($manifestPath, $runnerPath, $verifierPath)) {
+    $tokens = $null
+    $parseErrors = $null
+    [void][System.Management.Automation.Language.Parser]::ParseFile($scriptPath, [ref]$tokens, [ref]$parseErrors)
+    Assert-Condition (@($parseErrors).Count -eq 0) "Renderer qualification script '$scriptPath' contains PowerShell syntax errors: $(@($parseErrors) -join ' | ')"
+}
+
 $profile = Get-Content -LiteralPath $profilePath -Raw | ConvertFrom-Json
 Assert-Condition ([string]$profile.schemaVersion -eq "1.0") "Renderer qualification profile schema must be 1.0."
 Assert-Condition ([string]$profile.qualification -eq "rtaime-renderer-reference") "Renderer qualification identity changed."
