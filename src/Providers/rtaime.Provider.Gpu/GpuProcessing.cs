@@ -1267,7 +1267,7 @@ public sealed class GpuProcessingProvider : IDisposable
 
         lock (_gate)
         {
-            if (_state != GpuProviderState.Running ||
+            if (_state is not (GpuProviderState.Ready or GpuProviderState.Degraded) ||
                 descriptor.ProviderInstanceId != _monitoringProviderInstanceId ||
                 !_sharedMonitoringResources.TryGetValue(descriptor.ResourceId, out var entry))
             {
