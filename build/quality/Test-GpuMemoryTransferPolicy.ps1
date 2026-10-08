@@ -38,7 +38,7 @@ $requiredGates = Get-Content -LiteralPath $requiredGatesPath -Raw
 
 Assert-Condition ($gpu -match 'ReusableUploadSurfaceCapacity\s*=\s*16') "Reusable GPU upload retention must remain explicitly bounded."
 Assert-Condition ($gpu -match 'GpuMemoryTransferStatistics') "GPU provider must expose bounded transfer and pool-pressure evidence."
-Assert-Condition ($gpu -match 'HostToDeviceOperations' -and $gpu -match 'DeviceToHostOperations' -and $gpu -match 'AvoidedHostToDeviceBytes') "GPU transfer evidence must retain HtoD, DtoH and avoided-upload counters."
+Assert-Condition ($gpu -match 'UploadOperations' -and $gpu -match 'ReadbackOperations' -and $gpu -match 'HostToDeviceOperations' -and $gpu -match 'DeviceToHostOperations' -and $gpu -match 'AvoidedUploadBytes' -and $gpu -match 'AvoidedHostToDeviceBytes') "GPU transfer evidence must distinguish logical operations from device-transfer counters."
 Assert-Condition ($gpu -match 'public GpuFrame Materialize\(' -and $gpu -match '\.Upload\(SourceId, Content, timing, Generation\.Initial, "static"\)') "Default static materialization must remain non-retaining."
 Assert-Condition ($gpu -match 'MaterializeReusable' -and $gpu -match 'UploadReusable') "Reusable GPU materialization must remain an explicit opt-in."
 Assert-Condition ($gpu -match 'ReferenceEquals\(cached\.Content, content\)' -and $gpu -match 'ContentVersion' -and $gpu -match 'ContentGeneration') "Reusable uploads must bind source-buffer identity and invalidate on content or generation changes."
@@ -48,7 +48,7 @@ Assert-Condition ($gpu -match '_reusableUploads\.Clear\(\)') "Provider stop/reco
 
 Assert-Condition ([Regex]::Matches($runtime, 'MaterializeReusable\(_gpu, timing\)').Count -ge 4) "RuntimeHost long-lived compositing layers must opt into reusable uploads."
 Assert-Condition ($runtime -match 'GpuMemoryTransfers\s*=>\s*_gpu\.MemoryTransferStatistics') "RuntimeHost must expose GPU transfer/pool evidence."
-Assert-Condition ($runtimeDiagnostics -match 'gpu\.transfer\.hostToDeviceBytes' -and $runtimeDiagnostics -match 'gpu\.uploadReuse\.surfaces' -and $runtimeDiagnostics -match 'gpu\.readback\.active' -and $runtimeDiagnostics -match 'gpu\.monitoringResources\.active') "Runtime support health diagnostics must publish transfer and pool-pressure evidence."
+Assert-Condition ($runtimeDiagnostics -match 'gpu\.transfer\.uploadBytes' -and $runtimeDiagnostics -match 'gpu\.transfer\.hostToDeviceBytes' -and $runtimeDiagnostics -match 'gpu\.transfer\.readbackBytes' -and $runtimeDiagnostics -match 'gpu\.uploadReuse\.surfaces' -and $runtimeDiagnostics -match 'gpu\.readback\.active' -and $runtimeDiagnostics -match 'gpu\.monitoringResources\.active') "Runtime support health diagnostics must publish logical/device transfer and pool-pressure evidence."
 Assert-Condition ($runtime -match '_gpu\.RentReadback\(output\)' -and $runtime -notmatch '_gpu\.Readback\(output\)') "Program hot path must retain the reusable host-readback path."
 
 foreach ($testName in @(
@@ -62,7 +62,7 @@ foreach ($testName in @(
 }
 
 Assert-Condition ($performanceTests -match 'Reusable_static_1080p_source_avoids_repeated_full_frame_uploads') "1080p reusable-upload transfer-count regression is required."
-Assert-Condition ($performanceTests -match 'HostToDeviceOperations' -and $performanceTests -match 'AvoidedHostToDeviceBytes') "Performance regression must assert measured logical transfer reduction."
+Assert-Condition ($performanceTests -match 'UploadOperations' -and $performanceTests -match 'AvoidedUploadBytes' -and $performanceTests -match 'HostToDeviceOperations') "Performance regression must assert logical transfer reduction without misclassifying managed-reference work as HtoD."
 
 Assert-Condition ($documentation -match 'Full-frame transfer inventory') "GPU transfer documentation must retain the full-frame transfer inventory."
 Assert-Condition ($documentation -match 'backend-native Program-output path is introduced') "GPU transfer documentation must explicitly record the low-copy output decision."
