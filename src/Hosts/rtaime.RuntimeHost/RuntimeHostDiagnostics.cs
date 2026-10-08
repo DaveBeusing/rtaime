@@ -125,6 +125,8 @@ public static class RuntimeHostDiagnostics
 				.Counter("gpu.transfer.uploadBytes", ToCounter(gpuTransfers.UploadBytes))
 				.Counter("gpu.transfer.hostToDeviceOperations", ToCounter(gpuTransfers.HostToDeviceOperations))
 				.Counter("gpu.transfer.hostToDeviceBytes", ToCounter(gpuTransfers.HostToDeviceBytes))
+				.Counter("gpu.transfer.readbackOperations", ToCounter(gpuTransfers.ReadbackOperations))
+				.Counter("gpu.transfer.readbackBytes", ToCounter(gpuTransfers.ReadbackBytes))
 				.Counter("gpu.transfer.deviceToHostOperations", ToCounter(gpuTransfers.DeviceToHostOperations))
 				.Counter("gpu.transfer.deviceToHostBytes", ToCounter(gpuTransfers.DeviceToHostBytes))
 				.Counter("gpu.transfer.monitoringDeviceCopyOperations", ToCounter(gpuTransfers.MonitoringDeviceCopyOperations))
