@@ -170,4 +170,49 @@ public sealed class GpuProcessingPerformanceTests
 
         Assert.Equal(0, provider.ActiveSurfaceCount);
     }
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Reusable_static_1080p_source_avoids_repeated_full_frame_uploads(bool use5994)
+    {
+        var format = use5994 ? VideoFormat.Hd1080p59_94Rgba8 : VideoFormat.Hd1080p50Rgba8;
+        using var provider = new GpuProcessingProvider(new ManagedReferenceGpuBackend());
+        provider.Start();
+
+        var source = new StaticRgbaSource(
+            LayerSource,
+            RgbaFrameBuffer.Solid(format, 48, 96, 144, 192));
+        var timebase = new Timebase(format.FrameRate.Denominator, format.FrameRate.Numerator);
+        const int iterations = 60;
+
+        SurfaceId? surfaceId = null;
+        for (var index = 0; index < iterations; index++)
+        {
+            using var frame = source.MaterializeReusable(
+                provider,
+                new FrameTiming(
+                    checked((ulong)index),
+                    index,
+                    timebase));
+            surfaceId ??= frame.SurfaceId;
+            Assert.Equal(surfaceId.Value, frame.SurfaceId);
+        }
+
+        var transfers = provider.MemoryTransferStatistics;
+        var frameBytes = checked((ulong)RgbaFrameBuffer.RequiredByteLength(format));
+
+        Assert.Equal((ulong)1, transfers.HostToDeviceOperations);
+        Assert.Equal(frameBytes, transfers.HostToDeviceBytes);
+        Assert.Equal((ulong)(iterations - 1), transfers.ReusableUploadHits);
+        Assert.Equal((ulong)1, transfers.ReusableUploadMisses);
+        Assert.Equal(frameBytes * (iterations - 1), transfers.AvoidedHostToDeviceBytes);
+        Assert.Equal(1, transfers.ReusableUploadSurfaces);
+        Assert.Equal(1, provider.ActiveSurfaceCount);
+
+        provider.Stop();
+
+        Assert.Equal(0, provider.ActiveSurfaceCount);
+        Assert.Equal(0, provider.MemoryTransferStatistics.ReusableUploadSurfaces);
+    }
+
 }
