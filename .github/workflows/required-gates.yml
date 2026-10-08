@@ -188,6 +188,10 @@ jobs:
         shell: pwsh
         run: ./build/quality/Test-CudaQualificationPolicy.ps1
 
+      - name: Verify renderer qualification policy
+        shell: pwsh
+        run: ./build/quality/Test-RendererQualificationPolicy.ps1
+
       - name: Verify GPU lifecycle recovery policy
         shell: pwsh
         run: ./build/quality/Test-GpuLifecycleRecoveryPolicy.ps1

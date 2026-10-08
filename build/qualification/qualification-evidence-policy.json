@@ -5,7 +5,7 @@
 	"bindings": [
 		{
 			"qualificationType": "CUDA_REFERENCE",
-			"payloadSchemaVersion": "1.0",
+			"payloadSchemaVersion": "1.1",
 			"releaseRequirements": [
 				"CUDA_GPU_EXECUTION",
 				"GPU_FRAME_LATENCY",
