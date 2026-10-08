@@ -29,8 +29,10 @@ public sealed record CudaQualificationProfile
 			throw new ArgumentOutOfRangeException(nameof(deviceOrdinal));
 		if (warmupIterations < 0)
 			throw new ArgumentOutOfRangeException(nameof(warmupIterations));
-		if (sampleIterations < 10)
-			throw new ArgumentOutOfRangeException(nameof(sampleIterations), "CUDA reference qualification requires at least ten measured samples.");
+		if (sampleIterations < 10 || sampleIterations > 10_000)
+			throw new ArgumentOutOfRangeException(
+				nameof(sampleIterations),
+				"CUDA reference qualification requires between ten and 10,000 measured samples.");
 
 		ExpectedDeviceName = expectedDeviceName.Trim();
 		DeviceOrdinal = deviceOrdinal;
@@ -117,7 +119,10 @@ public static class CudaReferenceHardwareQualification
 
 		try
 		{
-			var timingCapacity = Math.Clamp(profile.SampleIterations * 8, 256, 65_536);
+			var timingCapacity = checked((int)Math.Clamp(
+				((long)profile.SampleIterations * 4L) + 16L,
+				256L,
+				65_536L));
 			var timingCollector = new CudaGpuTimingCollector(timingCapacity);
 			using var provider = new GpuProcessingProvider(
 				new CudaGpuProcessingBackend(profile.DeviceOrdinal, timingCollector));
