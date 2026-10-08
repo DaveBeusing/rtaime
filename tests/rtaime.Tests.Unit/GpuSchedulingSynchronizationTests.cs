@@ -41,7 +41,8 @@ public sealed class GpuSchedulingSynchronizationTests
         Assert.True(backend.CompositeStarted.Wait(TimeSpan.FromSeconds(5)));
 
         var stopTask = Task.Run(provider.Stop);
-        Assert.False(stopTask.Wait(TimeSpan.FromMilliseconds(100)));
+        var earlyCompletion = await Task.WhenAny(stopTask, Task.Delay(TimeSpan.FromMilliseconds(100)));
+        Assert.NotSame(stopTask, earlyCompletion);
 
         backend.AllowCompositeToComplete.Set();
 
