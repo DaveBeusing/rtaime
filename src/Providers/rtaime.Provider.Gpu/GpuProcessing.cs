@@ -1570,7 +1570,8 @@ public sealed class GpuProcessingProvider : IDisposable
                 ProviderAvailabilityState.Unavailable,
                 lifecycleFailure ?? new Failure(lifecycleReasonCode, $"GPU provider lifecycle state is {state}."));
         }
-        else if (state is GpuProviderState.Starting or GpuProviderState.Recovering or GpuProviderState.Degraded)
+        else if (state is GpuProviderState.Starting or GpuProviderState.Recovering or GpuProviderState.Degraded ||
+            state == GpuProviderState.Stopped && info.HardwareAccelerated)
         {
             availability = new ProviderAvailability(
                 ProviderAvailabilityState.Degraded,
