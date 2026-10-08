@@ -1617,9 +1617,14 @@ public sealed class GpuProcessingProvider : IDisposable
                 firstFailure = new InvalidOperationException("One or more GPU monitoring resources could not be released.");
         }
 
+        foreach (var surfaceId in _unreleasedBackendSurfaces.ToArray())
+        {
+            if (!TryReleaseBackendSurface(surfaceId) && firstFailure is null)
+                firstFailure = new InvalidOperationException("One or more previously failed GPU surface releases could not be retried.");
+        }
+
         var surfaces = new HashSet<SurfaceId>(_activeFrames.Keys);
         surfaces.UnionWith(_deferredMonitoringSurfaceReleases);
-        surfaces.UnionWith(_unreleasedBackendSurfaces);
 
         foreach (var frame in _activeFrames.Values)
             frame.MarkReleased();
