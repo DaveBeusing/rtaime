@@ -27,7 +27,7 @@ The runner requires an explicit expected GPU name substring and CUDA device ordi
 - the detected device name does not match the declared reference target;
 - the backend is not `NvidiaCuda` and hardware accelerated;
 - any functional, lifetime or timing case fails;
-- evidence is missing, malformed, not schema `1.0`, or does not report `PASSED`.
+- evidence is missing, malformed, not schema `1.1`, or does not report `PASSED`.
 
 There is no silent fallback from the hardware qualification path to `ManagedReferenceGpuBackend`.
 
@@ -55,13 +55,22 @@ This validates provider-visible allocation/release lifetime. CUDA Reference Hard
 
 ## Timing evidence
 
-Qualification measures synchronous `Composite + Readback`, matching the current V1 boundary behavior rather than kernel launch time alone.
+Qualification continues to measure synchronous `Composite + Readback`, matching the current V1 boundary behavior. It now also enables a bounded qualification-only CUDA timing collector so CPU driver-call wall time and GPU kernel elapsed time are not conflated.
 
-For every case:
+For every case the report records:
 
-- P50, P95 and maximum elapsed milliseconds are recorded;
-- P95 must be at or below 5 ms;
-- maximum synchronous Composite + Readback latency must be at or below 10 ms.
+- synchronous Composite + Readback P50, P95, P99 and maximum elapsed milliseconds;
+- `UploadHostToDevice` CPU wall time around `cuMemcpyHtoD_v2`;
+- `KernelLaunch` CPU wall time around `cuLaunchKernel`;
+- `ContextSynchronize` CPU wait time around `cuCtxSynchronize`;
+- `KernelGpuElapsed` from CUDA events recorded around the kernel on the default stream;
+- `ReadbackDeviceToHost` CPU wall time around `cuMemcpyDtoH_v2`.
+
+The CUDA-event elapsed value and the CPU `ContextSynchronize` wait overlap in meaning and must not be summed. The former is device-side kernel elapsed evidence; the latter is how long the CPU waits for context completion.
+
+P95 must be at or below 5 ms and maximum synchronous Composite + Readback latency must be at or below 10 ms. P99 is retained as tail evidence but has no independent pass/fail ceiling yet; the existing maximum ceiling is stricter while reference-hardware history is established.
+
+The collector is not enabled by RuntimeHost production construction. No CUDA event, extra wait, queue, stream or scheduling policy is introduced into the default production path solely for diagnostics.
 
 The engineering target for the qualified production path is approximately 3 ms core render latency, with 5 ms treated as the hard P95 qualification ceiling. These limits qualify the current synchronous compositor/readback path; media I/O, scheduling and true end-to-end signal latency remain separate timing domains.
 
@@ -76,7 +85,7 @@ On the intended Windows x64 reference machine:
 	-SampleIterations 30
 ```
 
-Evidence is written to `artifacts/qualification/cuda-reference.json` by default. The script exits unsuccessfully unless the evidence status is exactly `PASSED` and all eight cases pass pixel, surface-lifetime and timing checks.
+Evidence is written to `artifacts/qualification/cuda-reference.json` by default. The script exits unsuccessfully unless the evidence status is exactly `PASSED`, all eight cases pass pixel/surface-lifetime/timing checks, P50/P95/P99/maximum ordering is valid, and every case contains the required HtoD, launch, synchronization, GPU-kernel and DtoH timing metrics.
 
 ## GitHub workflow
 
