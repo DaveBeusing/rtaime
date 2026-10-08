@@ -255,6 +255,25 @@ public sealed class GpuLifecycleRecoveryTests
         }
     }
 
+    private sealed class FailFirstReadbackHardwareBackend : HardwareFacadeBackend
+    {
+        private bool _first = true;
+
+        public override void ReadbackInto(
+            SurfaceId surfaceId,
+            VideoFormat format,
+            Span<byte> destination)
+        {
+            if (_first)
+            {
+                _first = false;
+                throw new InvalidOperationException("Injected CUDA readback failure.");
+            }
+
+            base.ReadbackInto(surfaceId, format, destination);
+        }
+    }
+
     private sealed class FailFirstCompositeHardwareBackend : HardwareFacadeBackend
     {
         private bool _first = true;
