@@ -221,6 +221,25 @@ public sealed class GpuLifecycleRecoveryTests
         }
     }
 
+    private sealed class FailFirstAllocateHardwareBackend : HardwareFacadeBackend
+    {
+        private bool _first = true;
+
+        public override void Allocate(
+            SurfaceId surfaceId,
+            VideoFormat format,
+            ReadOnlySpan<byte> rgbaPixels)
+        {
+            if (_first)
+            {
+                _first = false;
+                throw new InvalidOperationException("Injected CUDA upload failure.");
+            }
+
+            base.Allocate(surfaceId, format, rgbaPixels);
+        }
+    }
+
     private sealed class FailFirstCompositeHardwareBackend : HardwareFacadeBackend
     {
         private bool _first = true;
