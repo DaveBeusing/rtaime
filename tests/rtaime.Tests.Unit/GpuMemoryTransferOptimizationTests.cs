@@ -68,6 +68,35 @@ public sealed class GpuMemoryTransferOptimizationTests
     }
 
     [Fact]
+    public void Recreated_static_source_with_same_identity_does_not_reuse_different_buffer_content()
+    {
+        var backend = new ManagedReferenceGpuBackend();
+        using var provider = new GpuProcessingProvider(backend);
+        provider.Start();
+
+        var sourceId = MediaSourceId.New();
+        var firstSource = new StaticRgbaSource(
+            sourceId,
+            RgbaFrameBuffer.Solid(TestFormat, 11, 12, 13));
+        using var first = firstSource.MaterializeReusable(provider, Timing(1));
+
+        var replacementSource = new StaticRgbaSource(
+            sourceId,
+            RgbaFrameBuffer.Solid(TestFormat, 91, 92, 93));
+        using var replacement = replacementSource.MaterializeReusable(provider, Timing(2));
+
+        Assert.NotEqual(first.SurfaceId, replacement.SurfaceId);
+        Assert.Equal((byte)91, provider.Readback(replacement)[0]);
+        Assert.Equal(2, backend.ActiveAllocationCount);
+
+        var transfers = provider.MemoryTransferStatistics;
+        Assert.Equal((ulong)2, transfers.HostToDeviceOperations);
+        Assert.Equal((ulong)2, transfers.ReusableUploadMisses);
+        Assert.Equal((ulong)1, transfers.ReusableUploadEvictions);
+        Assert.Equal((ulong)0, transfers.ReusableUploadHits);
+    }
+
+    [Fact]
     public void Dynamic_source_reuses_unchanged_generation_and_replaces_after_update()
     {
         var backend = new ManagedReferenceGpuBackend();
