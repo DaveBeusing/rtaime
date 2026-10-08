@@ -63,6 +63,7 @@ public sealed record GpuBackendInfo
 public sealed class RgbaFrameBuffer
 {
     private readonly byte[] _pixels;
+    private ulong _contentVersion;
 
     public RgbaFrameBuffer(VideoFormat format, ReadOnlySpan<byte> pixels)
     {
@@ -84,13 +85,16 @@ public sealed class RgbaFrameBuffer
     public VideoFormat Format { get; }
     public ReadOnlyMemory<byte> Pixels => _pixels;
     public int ByteLength => _pixels.Length;
+    internal ulong ContentVersion => _contentVersion;
 
     public void CopyPixelsFrom(ReadOnlySpan<byte> pixels)
     {
         if (pixels.Length != _pixels.Length)
             throw new ArgumentException("RGBA update payload length does not match the existing frame buffer.", nameof(pixels));
+        EnsureContentVersionCanAdvance();
 
         pixels.CopyTo(_pixels);
+        _contentVersion++;
     }
 
     public void CopyRegionFrom(
@@ -112,6 +116,7 @@ public sealed class RgbaFrameBuffer
         if (rgbaPixels.Length != expectedLength)
             throw new ArgumentException("RGBA region payload length does not match the requested region.", nameof(rgbaPixels));
 
+        EnsureContentVersionCanAdvance();
         var frameWidth = checked((int)Format.Width);
         for (var row = 0; row < height; row++)
         {
@@ -119,6 +124,13 @@ public sealed class RgbaFrameBuffer
             var destinationOffset = checked((((y + row) * frameWidth) + x) * 4);
             source.CopyTo(_pixels.AsSpan(destinationOffset, rowBytes));
         }
+        _contentVersion++;
+    }
+
+    private void EnsureContentVersionCanAdvance()
+    {
+        if (_contentVersion == ulong.MaxValue)
+            throw new InvalidOperationException("RGBA frame buffer content version is exhausted.");
     }
 
     public static RgbaFrameBuffer Solid(VideoFormat format, byte red, byte green, byte blue, byte alpha = byte.MaxValue)
