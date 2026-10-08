@@ -160,7 +160,7 @@ try {
 		}
 	)
 	Write-JsonFile -Value ([ordered]@{
-		schemaVersion = "1.0"
+		schemaVersion = "1.1"
 		status = "PASSED"
 		expectedDeviceName = "Synthetic Reference GPU"
 		deviceOrdinal = 0
