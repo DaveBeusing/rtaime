@@ -1142,7 +1142,8 @@ public sealed class GpuProcessingProvider : IDisposable
                 var failure = new Failure(
                     GpuProviderLifecycleReasonCodes.CompositeFailed,
                     $"GPU composite operation failed: {exception.GetType().Name}.");
-                TransitionStateUnsafe(GpuProviderState.Failed, GpuProviderLifecycleReasonCodes.CompositeFailed, failure);
+                if (_backend.Info.Kind == GpuBackendKind.NvidiaCuda)
+                    TransitionStateUnsafe(GpuProviderState.Failed, GpuProviderLifecycleReasonCodes.CompositeFailed, failure);
                 Observe("gpu.composite.failed", timing.SequenceNumber, failure);
                 return GpuProcessingResult.Rejected(failure, stopwatch.Elapsed, request.Layers.Count);
             }
