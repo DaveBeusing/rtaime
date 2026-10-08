@@ -16,7 +16,7 @@ if (-not $IsWindows) { throw "CUDA reference qualification requires the Windows 
 if (-not [Environment]::Is64BitProcess) { throw "CUDA reference qualification requires an x64 process." }
 if ([string]::IsNullOrWhiteSpace($ExpectedDeviceName)) { throw "ExpectedDeviceName is required." }
 if ($DeviceOrdinal -lt 0) { throw "DeviceOrdinal must be non-negative." }
-if ($SampleIterations -lt 10) { throw "SampleIterations must be at least 10." }
+if ($SampleIterations -lt 10 -or $SampleIterations -gt 10000) { throw "SampleIterations must be between 10 and 10000." }
 if ($WarmupIterations -lt 0) { throw "WarmupIterations must be non-negative." }
 
 $repositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "../.."))
