@@ -644,6 +644,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	public ulong OverwrittenObservationCount => _observations.OverwrittenCount;
 	public IReadOnlyList<string> RecentObservations(int maximumCount) => _observations.SnapshotNewest(maximumCount);
 	public GpuReadbackPoolStatistics ProgramReadbackPoolStatistics => _gpu.ReadbackPoolStatistics;
+	public GpuMemoryTransferStatistics GpuMemoryTransfers => _gpu.MemoryTransferStatistics;
 
 	public ulong ProgramFramesWritten
 	{
