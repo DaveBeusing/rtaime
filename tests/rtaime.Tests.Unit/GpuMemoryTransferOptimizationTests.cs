@@ -156,7 +156,7 @@ public sealed class GpuMemoryTransferOptimizationTests
         var transfers = provider.MemoryTransferStatistics;
         Assert.Equal(GpuProcessingProvider.ReusableUploadSurfaceCapacity, transfers.ReusableUploadSurfaces);
         Assert.Equal((ulong)1, transfers.ReusableUploadEvictions);
-        Assert.Equal(GpuProcessingProvider.ReusableUploadSurfaceCapacity, provider.ActiveSurfaceCount);
+        Assert.Equal(0, provider.ActiveSurfaceCount);
         Assert.Equal(GpuProcessingProvider.ReusableUploadSurfaceCapacity, backend.ActiveAllocationCount);
 
         provider.Stop();
@@ -187,6 +187,34 @@ public sealed class GpuMemoryTransferOptimizationTests
 
         Assert.Equal(1, backend.ActiveAllocationCount);
         Assert.Equal((byte)70, provider.Readback(currentFrame)[0]);
+    }
+
+    [Fact]
+    public void Reusable_retention_is_not_reported_as_active_frame_ownership()
+    {
+        var backend = new ManagedReferenceGpuBackend();
+        using var provider = new GpuProcessingProvider(backend);
+        provider.Start();
+
+        var source = new StaticRgbaSource(
+            MediaSourceId.New(),
+            RgbaFrameBuffer.Solid(TestFormat, 12, 34, 56));
+
+        var frame = source.MaterializeReusable(provider, Timing(1));
+        Assert.Equal(1, provider.ActiveSurfaceCount);
+        Assert.Equal(1, provider.MemoryTransferStatistics.ReusableUploadSurfaces);
+
+        frame.Dispose();
+
+        Assert.Equal(0, provider.ActiveSurfaceCount);
+        Assert.Equal(1, provider.MemoryTransferStatistics.ReusableUploadSurfaces);
+        Assert.Equal(1, backend.ActiveAllocationCount);
+
+        provider.Stop();
+
+        Assert.Equal(0, provider.ActiveSurfaceCount);
+        Assert.Equal(0, provider.MemoryTransferStatistics.ReusableUploadSurfaces);
+        Assert.Equal(0, backend.ActiveAllocationCount);
     }
 
     private const int TestFormatBytes = 2 * 1 * 4;
