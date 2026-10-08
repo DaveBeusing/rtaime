@@ -323,7 +323,9 @@ public sealed class RendererReferenceHardwareQualificationTests
         var initialState = Assert.IsType<ControlStateSnapshot>(ControlDomainEngine.Initialize(specification).State).Authoritative;
         var initialPlan = CapabilityPlanningEngine.Plan(specification, initialState, registry);
         if (!initialPlan.Succeeded)
-            throw new InvalidOperationException(initialPlan.Failure?.Message ?? "Initial renderer qualification plan failed.");
+            throw new InvalidOperationException(
+                "Initial renderer qualification plan failed: " +
+                string.Join(" | ", initialPlan.Validation.Issues.Select(issue => $"{issue.Code}: {issue.Message}")));
         var programSink = initialPlan.Graph!.Nodes
             .Single(node => node.Kind == LogicalProductionNodeKind.ProgramSink)
             .MediaSinkId!.Value;
@@ -438,7 +440,9 @@ public sealed class RendererReferenceHardwareQualificationTests
                         new ProductionRoutingState(sourceA, sourceB));
                     var replacementPlan = CapabilityPlanningEngine.Plan(specification, replacement, registry);
                     if (!replacementPlan.Succeeded)
-                        throw new InvalidOperationException(replacementPlan.Failure?.Message ?? "Renderer qualification transition plan failed.");
+                        throw new InvalidOperationException(
+                            "Renderer qualification transition plan failed: " +
+                            string.Join(" | ", replacementPlan.Validation.Issues.Select(issue => $"{issue.Code}: {issue.Message}")));
                     var applied = runtime.ApplyExecution(
                         replacementPlan.PreparedExecution!,
                         programSink,
@@ -687,7 +691,7 @@ public sealed class RendererReferenceHardwareQualificationTests
 
     private sealed class BackpressureQualificationWriter : IProgramRecordingWriter
     {
-        private readonly TaskCompletionSource _released =
+        private readonly TaskCompletionSource<bool> _released =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
         private int _blocked = 1;
         private long _writes;
@@ -711,7 +715,7 @@ public sealed class RendererReferenceHardwareQualificationTests
         public void Release()
         {
             if (Interlocked.Exchange(ref _blocked, 0) == 0) return;
-            _released.TrySetResult();
+            _released.TrySetResult(true);
         }
     }
 }
