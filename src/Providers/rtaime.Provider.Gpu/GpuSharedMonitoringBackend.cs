@@ -17,6 +17,7 @@ public interface IGpuSharedMonitoringBackend
 
 public sealed class GpuBackendMonitoringResource : IDisposable
 {
+    private readonly object _gate = new();
     private Action? _release;
 
     public GpuBackendMonitoringResource(
@@ -31,7 +32,26 @@ public sealed class GpuBackendMonitoringResource : IDisposable
     }
 
     public MonitoringSharedResourceInteropDescriptor Interop { get; }
-    public bool IsDisposed => Volatile.Read(ref _release) is null;
 
-    public void Dispose() => Interlocked.Exchange(ref _release, null)?.Invoke();
+    public bool IsDisposed
+    {
+        get
+        {
+            lock (_gate)
+                return _release is null;
+        }
+    }
+
+    public void Dispose()
+    {
+        lock (_gate)
+        {
+            var release = _release;
+            if (release is null)
+                return;
+
+            release();
+            _release = null;
+        }
+    }
 }
