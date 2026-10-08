@@ -45,7 +45,7 @@ public sealed class GpuCompositorPerformanceProfileTests
                         if (!noopHeavy)
                             return new GpuKeyLayer(frame, checked((byte)(255 - index * 9)), visible: true);
 
-                        return index % 3 switch
+                        return (index % 3) switch
                         {
                             0 => new GpuKeyLayer(frame, byte.MaxValue, visible: true),
                             1 => new GpuKeyLayer(frame, byte.MaxValue, visible: false),
