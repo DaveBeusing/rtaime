@@ -129,6 +129,24 @@ public sealed class GpuLifecycleRecoveryTests
     }
 
     [Fact]
+    public void Stop_failure_is_explicit_and_retryable()
+    {
+        using var backend = new FailFirstStopHardwareBackend();
+        using var provider = new GpuProcessingProvider(backend);
+        provider.Start();
+        using var frame = Upload(provider, SourceA, 1, 2, 3, 0);
+
+        Assert.Throws<InvalidOperationException>(() => provider.Stop());
+        Assert.Equal(GpuProviderState.Failed, provider.State);
+        Assert.Equal(GpuProviderLifecycleReasonCodes.StopFailed, provider.Lifecycle.ReasonCode);
+
+        provider.Stop();
+
+        Assert.Equal(GpuProviderState.Stopped, provider.State);
+        Assert.Equal(0, provider.ActiveSurfaceCount);
+    }
+
+    [Fact]
     public void Monitoring_export_failure_is_isolated_from_program_and_can_recover()
     {
         using var backend = new FailFirstMonitoringExportHardwareBackend();
