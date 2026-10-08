@@ -41,7 +41,7 @@ Assert-Condition ($gpu -match 'GpuMemoryTransferStatistics') "GPU provider must 
 Assert-Condition ($gpu -match 'HostToDeviceOperations' -and $gpu -match 'DeviceToHostOperations' -and $gpu -match 'AvoidedHostToDeviceBytes') "GPU transfer evidence must retain HtoD, DtoH and avoided-upload counters."
 Assert-Condition ($gpu -match 'public GpuFrame Materialize\(' -and $gpu -match '\.Upload\(SourceId, Content, timing, Generation\.Initial, "static"\)') "Default static materialization must remain non-retaining."
 Assert-Condition ($gpu -match 'MaterializeReusable' -and $gpu -match 'UploadReusable') "Reusable GPU materialization must remain an explicit opt-in."
-Assert-Condition ($gpu -match 'ContentVersion' -and $gpu -match 'ContentGeneration') "Reusable uploads must invalidate on content or generation changes."
+Assert-Condition ($gpu -match 'ReferenceEquals\(cached\.Content, content\)' -and $gpu -match 'ContentVersion' -and $gpu -match 'ContentGeneration') "Reusable uploads must bind source-buffer identity and invalidate on content or generation changes."
 Assert-Condition ($gpu -match 'RetainedForReuse' -and $gpu -match 'Frames\.Count') "Reusable backend surfaces must remain reference/lifetime tracked."
 Assert-Condition ($gpu -match 'EnsureReusableUploadCapacityUnsafe' -and $gpu -match 'OrderBy\(pair => pair\.Value\.LastUseOrdinal\)') "Reusable upload cache must retain deterministic bounded eviction."
 Assert-Condition ($gpu -match '_reusableUploads\.Clear\(\)') "Provider stop/recovery must clear reusable upload retention."
@@ -54,6 +54,7 @@ Assert-Condition ($runtime -match '_gpu\.RentReadback\(output\)' -and $runtime -
 foreach ($testName in @(
 	'Static_source_reuses_one_uploaded_surface_across_frame_timings',
 	'Static_source_content_mutation_replaces_cached_surface_without_stale_pixels',
+	'Recreated_static_source_with_same_identity_does_not_reuse_different_buffer_content',
 	'Dynamic_source_reuses_unchanged_generation_and_replaces_after_update',
 	'Reusable_upload_cache_is_bounded_and_evicts_oldest_retention',
 	'Reusable_surface_is_not_released_until_last_frame_reference_is_disposed')) {
