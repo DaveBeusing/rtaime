@@ -184,12 +184,13 @@ public sealed class GpuCompositorOptimizationTests
         using var frameA = new StaticRgbaSource(MediaSourceId.New(), a).Materialize(provider, timing);
         using var frameB = new StaticRgbaSource(MediaSourceId.New(), b).Materialize(provider, timing);
         using var transparentFrame = new StaticRgbaSource(MediaSourceId.New(), transparent).Materialize(provider, timing);
+        using var zeroOpacityFrame = new StaticRgbaSource(MediaSourceId.New(), opaque).Materialize(provider, timing);
         using var opaqueFrame = new StaticRgbaSource(MediaSourceId.New(), opaque).Materialize(provider, timing);
 
         var layers = new[]
         {
             new GpuKeyLayer(transparentFrame, byte.MaxValue, visible: true),
-            new GpuKeyLayer(opaqueFrame, 0, visible: true),
+            new GpuKeyLayer(zeroOpacityFrame, 0, visible: true),
             new GpuKeyLayer(opaqueFrame, byte.MaxValue, visible: true)
         };
 
