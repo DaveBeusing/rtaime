@@ -61,10 +61,13 @@ Reusable lookup requires all of the following to match:
 
 - logical source identity;
 - reusable source kind;
+- the same RGBA buffer instance;
 - video format;
 - source generation;
 - RGBA content version;
 - live provider-owned surface.
+
+Buffer identity prevents a newly constructed static source with the same logical identity and initial generation/version from reusing stale pixels from an older source instance.
 
 A dynamic source update advances its existing `Generation`. Direct mutation of a reusable RGBA buffer advances the content version. Either condition invalidates the retained cache entry and causes one new upload.
 
