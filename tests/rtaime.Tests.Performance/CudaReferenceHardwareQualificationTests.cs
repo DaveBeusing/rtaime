@@ -44,6 +44,58 @@ public sealed class CudaReferenceHardwareQualificationTests
 		Assert.DoesNotContain("\"status\": \"PASSED\"", json, StringComparison.Ordinal);
 	}
 
+	[Fact]
+	public void Qualification_serialization_carries_p99_and_backend_timing_breakdown()
+	{
+		var caseResult = new CudaQualificationCaseResult(
+			"1080p50",
+			"CUT_A",
+			30,
+			20.0,
+			1.0,
+			2.0,
+			2.5,
+			3.0,
+			new[]
+			{
+				new CudaQualificationTimingMetric(
+					CudaGpuTimingOperation.KernelGpuElapsed.ToString(),
+					30,
+					0.2,
+					0.3,
+					0.4,
+					0.5),
+				new CudaQualificationTimingMetric(
+					CudaGpuTimingOperation.ContextSynchronize.ToString(),
+					30,
+					0.3,
+					0.4,
+					0.5,
+					0.6)
+			},
+			true,
+			true,
+			true);
+		var report = new CudaQualificationReport(
+			CudaQualificationReport.CurrentSchemaVersion,
+			DateTimeOffset.Parse("2026-10-08T09:00:00Z"),
+			CudaQualificationStatus.Passed,
+			"NVIDIA Reference GPU",
+			0,
+			"NVIDIA Reference GPU",
+			48UL * 1024 * 1024 * 1024,
+			new[] { caseResult },
+			Array.Empty<string>());
+
+		var json = CudaReferenceHardwareQualification.Serialize(report);
+
+		Assert.Equal("1.1", CudaQualificationReport.CurrentSchemaVersion);
+		Assert.Contains("\"p99Milliseconds\": 2.5", json, StringComparison.Ordinal);
+		Assert.Contains("\"backendTimings\":", json, StringComparison.Ordinal);
+		Assert.Contains(CudaGpuTimingOperation.KernelGpuElapsed.ToString(), json, StringComparison.Ordinal);
+		Assert.Contains(CudaGpuTimingOperation.ContextSynchronize.ToString(), json, StringComparison.Ordinal);
+	}
+
 	private static int ParsePositiveInt(string name, int defaultValue)
 	{
 		var value = Environment.GetEnvironmentVariable(name);
