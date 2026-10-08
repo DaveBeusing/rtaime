@@ -362,7 +362,12 @@ public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend, IGpuShared
             return;
         }
 
-        Check(CudaNative.cuMemFree_v2(pointer), "cuMemFree_v2");
+        var result = CudaNative.cuMemFree_v2(pointer);
+        if (result == CudaResult.Success)
+            return;
+
+        pool.Push(pointer);
+        Check(result, "cuMemFree_v2");
     }
 
     private CudaAllocation Get(SurfaceId surfaceId, VideoFormat format)
