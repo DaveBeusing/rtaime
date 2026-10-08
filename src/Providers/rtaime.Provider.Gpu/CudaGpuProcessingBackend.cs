@@ -287,6 +287,17 @@ public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend, IGpuShared
 
             var allocation = Get(surfaceId, format);
             SetCurrentContext();
+            if (_monitoringInterop.TryExport(allocation.DevicePointer, format, out resource))
+                return true;
+
+            _monitoringInterop.Dispose();
+            _monitoringInterop = null;
+
+            Check(CudaNative.cuDeviceGet(out var device, _deviceOrdinal), "cuDeviceGet");
+            if (!CudaD3D11MonitoringInterop.TryCreate(device, out var recreated) || recreated is null)
+                return false;
+
+            _monitoringInterop = recreated;
             return _monitoringInterop.TryExport(allocation.DevicePointer, format, out resource);
         }
     }
