@@ -263,7 +263,7 @@ public sealed class GpuProcessingTests
     }
 
     [Fact]
-    public void Backend_failure_requires_explicit_recovery_before_next_composite()
+    public void Backend_failure_is_observed_and_next_composite_can_recover()
     {
         using var backend = new FailOnceCompositeBackend(new ManagedReferenceGpuBackend());
         using var provider = new GpuProcessingProvider(backend);
