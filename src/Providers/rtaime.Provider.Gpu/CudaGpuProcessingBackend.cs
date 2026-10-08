@@ -134,9 +134,11 @@ public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend, IGpuShared
                 _ = CudaD3D11MonitoringInterop.TryCreate(device, out _monitoringInterop);
                 _running = true;
             }
-            catch
+            catch (Exception exception)
             {
-                CleanupContext();
+                var cleanupFailure = CleanupContext();
+                if (cleanupFailure is not null)
+                    throw new AggregateException("CUDA backend start failed and partial context cleanup also failed.", exception, cleanupFailure);
                 throw;
             }
         }
