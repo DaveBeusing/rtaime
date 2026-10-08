@@ -44,6 +44,14 @@ public sealed record CudaQualificationProfile
 	public int SampleIterations { get; }
 }
 
+public sealed record CudaQualificationTimingMetric(
+	string Operation,
+	int Samples,
+	double P50Milliseconds,
+	double P95Milliseconds,
+	double P99Milliseconds,
+	double MaximumMilliseconds);
+
 public sealed record CudaQualificationCaseResult(
 	string Format,
 	string Operation,
@@ -51,7 +59,9 @@ public sealed record CudaQualificationCaseResult(
 	double FrameBudgetMilliseconds,
 	double P50Milliseconds,
 	double P95Milliseconds,
+	double P99Milliseconds,
 	double MaximumMilliseconds,
+	IReadOnlyList<CudaQualificationTimingMetric> BackendTimings,
 	bool PixelCorrect,
 	bool SurfaceLifetimeCorrect,
 	bool TimingBudgetMet);
@@ -67,7 +77,7 @@ public sealed record CudaQualificationReport(
 	IReadOnlyList<CudaQualificationCaseResult> Cases,
 	IReadOnlyList<string> Failures)
 {
-	public const string CurrentSchemaVersion = "1.0";
+	public const string CurrentSchemaVersion = "1.1";
 }
 
 public static class CudaReferenceHardwareQualification
@@ -107,14 +117,17 @@ public static class CudaReferenceHardwareQualification
 
 		try
 		{
-			using var provider = new GpuProcessingProvider(new CudaGpuProcessingBackend(profile.DeviceOrdinal));
+			var timingCapacity = Math.Clamp(profile.SampleIterations * 8, 256, 65_536);
+			var timingCollector = new CudaGpuTimingCollector(timingCapacity);
+			using var provider = new GpuProcessingProvider(
+				new CudaGpuProcessingBackend(profile.DeviceOrdinal, timingCollector));
 			provider.Start();
 			foreach (var format in new[] { VideoFormat.Hd1080p50Rgba8, VideoFormat.Hd1080p59_94Rgba8 })
 			{
-				cases.Add(RunCase(provider, format, "CUT_A", GpuTransition.CutToA, includeLayer: false, profile));
-				cases.Add(RunCase(provider, format, "CUT_B", GpuTransition.CutToB, includeLayer: false, profile));
-				cases.Add(RunCase(provider, format, "DISSOLVE_50", GpuTransition.Dissolve(128), includeLayer: false, profile));
-				cases.Add(RunCase(provider, format, "DISSOLVE_LAYER", GpuTransition.Dissolve(128), includeLayer: true, profile));
+				cases.Add(RunCase(provider, timingCollector, format, "CUT_A", GpuTransition.CutToA, includeLayer: false, profile));
+				cases.Add(RunCase(provider, timingCollector, format, "CUT_B", GpuTransition.CutToB, includeLayer: false, profile));
+				cases.Add(RunCase(provider, timingCollector, format, "DISSOLVE_50", GpuTransition.Dissolve(128), includeLayer: false, profile));
+				cases.Add(RunCase(provider, timingCollector, format, "DISSOLVE_LAYER", GpuTransition.Dissolve(128), includeLayer: true, profile));
 			}
 		}
 		catch (Exception exception)
@@ -180,7 +193,21 @@ public static class CudaReferenceHardwareQualification
 				writer.WriteNumber("frameBudgetMilliseconds", item.FrameBudgetMilliseconds);
 				writer.WriteNumber("p50Milliseconds", item.P50Milliseconds);
 				writer.WriteNumber("p95Milliseconds", item.P95Milliseconds);
+				writer.WriteNumber("p99Milliseconds", item.P99Milliseconds);
 				writer.WriteNumber("maximumMilliseconds", item.MaximumMilliseconds);
+				writer.WriteStartArray("backendTimings");
+				foreach (var timing in item.BackendTimings.OrderBy(metric => metric.Operation, StringComparer.Ordinal))
+				{
+					writer.WriteStartObject();
+					writer.WriteString("operation", timing.Operation);
+					writer.WriteNumber("samples", timing.Samples);
+					writer.WriteNumber("p50Milliseconds", timing.P50Milliseconds);
+					writer.WriteNumber("p95Milliseconds", timing.P95Milliseconds);
+					writer.WriteNumber("p99Milliseconds", timing.P99Milliseconds);
+					writer.WriteNumber("maximumMilliseconds", timing.MaximumMilliseconds);
+					writer.WriteEndObject();
+				}
+				writer.WriteEndArray();
 				writer.WriteBoolean("pixelCorrect", item.PixelCorrect);
 				writer.WriteBoolean("surfaceLifetimeCorrect", item.SurfaceLifetimeCorrect);
 				writer.WriteBoolean("timingBudgetMet", item.TimingBudgetMet);
@@ -197,6 +224,7 @@ public static class CudaReferenceHardwareQualification
 
 	private static CudaQualificationCaseResult RunCase(
 		GpuProcessingProvider provider,
+		CudaGpuTimingCollector timingCollector,
 		VideoFormat format,
 		string operation,
 		GpuTransition transition,
@@ -209,9 +237,13 @@ public static class CudaReferenceHardwareQualification
 		var sourceB = new StaticRgbaSource(SourceB, RgbaFrameBuffer.Solid(format, 192, 128, 64));
 		var layerSource = new StaticRgbaSource(LayerSource, RgbaFrameBuffer.Solid(format, 255, 255, 255, 96));
 
+		timingCollector.Reset();
 		using var a = sourceA.Materialize(provider, timing);
 		using var b = sourceB.Materialize(provider, timing);
 		using var layer = layerSource.Materialize(provider, timing);
+		var uploadTimings = timingCollector.Snapshot()
+			.Where(sample => sample.Operation == CudaGpuTimingOperation.UploadHostToDevice)
+			.ToArray();
 		var baseline = provider.ActiveSurfaceCount;
 		if (baseline != 3) throw new InvalidOperationException($"CUDA qualification expected three persistent input surfaces, found {baseline}.");
 
@@ -226,6 +258,7 @@ public static class CudaReferenceHardwareQualification
 		}
 		surfaceLifetimeCorrect &= provider.ActiveSurfaceCount == baseline;
 
+		timingCollector.Reset();
 		var samples = new double[profile.SampleIterations];
 		for (var index = 0; index < samples.Length; index++)
 		{
@@ -239,9 +272,13 @@ public static class CudaReferenceHardwareQualification
 			surfaceLifetimeCorrect &= provider.ActiveSurfaceCount == baseline;
 		}
 
+		var measuredTimings = timingCollector.Snapshot();
+		var backendTimings = BuildTimingMetrics(uploadTimings.Concat(measuredTimings));
+
 		Array.Sort(samples);
 		var p50 = Percentile(samples, 0.50);
 		var p95 = Percentile(samples, 0.95);
+		var p99 = Percentile(samples, 0.99);
 		var maximum = samples[^1];
 		var frameBudget = 1000.0 * format.FrameRate.Denominator / format.FrameRate.Numerator;
 		var timingBudgetMet =
@@ -255,7 +292,9 @@ public static class CudaReferenceHardwareQualification
 			frameBudget,
 			p50,
 			p95,
+			p99,
 			maximum,
+			backendTimings,
 			pixelCorrect,
 			surfaceLifetimeCorrect,
 			timingBudgetMet);
@@ -303,6 +342,33 @@ public static class CudaReferenceHardwareQualification
 		var height = checked((int)format.Height);
 		var offset = checked(((height / 2) * width + width / 2) * 4);
 		return new RgbaPixel(pixels[offset], pixels[offset + 1], pixels[offset + 2], pixels[offset + 3]);
+	}
+
+	private static IReadOnlyList<CudaQualificationTimingMetric> BuildTimingMetrics(
+		IEnumerable<CudaGpuTimingSample> samples)
+	{
+		var materialized = samples.ToArray();
+		var metrics = new List<CudaQualificationTimingMetric>();
+		foreach (var operation in Enum.GetValues<CudaGpuTimingOperation>())
+		{
+			var values = materialized
+				.Where(sample => sample.Operation == operation)
+				.Select(sample => sample.Milliseconds)
+				.OrderBy(value => value)
+				.ToArray();
+			if (values.Length == 0)
+				continue;
+
+			metrics.Add(new CudaQualificationTimingMetric(
+				operation.ToString(),
+				values.Length,
+				Percentile(values, 0.50),
+				Percentile(values, 0.95),
+				Percentile(values, 0.99),
+				values[^1]));
+		}
+
+		return metrics;
 	}
 
 	private static double Percentile(double[] sorted, double percentile)
