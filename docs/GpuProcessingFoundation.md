@@ -253,7 +253,9 @@ Each layer has:
 
 The request order is authoritative for provider execution. CUT/DISSOLVE resolves the background first; visible layers are then composed in declared order, so later layers are visually above earlier layers. Effective alpha is source alpha multiplied by layer opacity, followed by deterministic straight-alpha composition.
 
-The provider reuses the established backend primitive for every layer. Managed-reference and CUDA therefore share the same ordered execution model without introducing a second compositor or exposing vendor types outside the provider boundary. Intermediate surfaces are bounded to the active request and released after each pass or on failure.
+The provider reuses the established backend primitive for every contributing layer. Managed-reference and CUDA therefore share the same ordered execution model without introducing a second compositor or exposing vendor types outside the provider boundary. Intermediate surfaces are bounded to the active request and released after each pass or on failure.
+
+A layer that is explicitly hidden or has opacity `0` is an exact semantic no-op and is not submitted as a backend pass. All requested layers are still validated before this reduction, request ordering remains authoritative, and at least one transition pass is retained when no layer contributes. See [CompositorPipelineOptimization.md](CompositorPipelineOptimization.md) for golden parity, pass-count profiling and the evidence boundary that currently blocks a fused multi-layer CUDA kernel.
 
 GPU Processing Foundation does not introduce a graphics authoring system, arbitrary scene graph, browser graphics, or UI-timer animation.
 
