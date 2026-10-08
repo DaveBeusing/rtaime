@@ -176,6 +176,10 @@ jobs:
         shell: pwsh
         run: ./build/quality/Test-GpuMemoryTransferPolicy.ps1
 
+      - name: Verify compositor optimization policy
+        shell: pwsh
+        run: ./build/quality/Test-CompositorOptimizationPolicy.ps1
+
       - name: Verify deterministic Runtime boundary policy
         shell: pwsh
         run: ./build/quality/Test-DeterministicRuntimeBoundaryPolicy.ps1

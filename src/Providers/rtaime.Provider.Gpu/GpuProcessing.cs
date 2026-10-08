@@ -1243,11 +1243,18 @@ public sealed class GpuProcessingProvider : IDisposable
                 request.Layers.Count.ToString(),
                 ordinal.ToString()));
 
+            var contributingLayerCount = 0;
+            for (var index = 0; index < request.Layers.Count; index++)
+            {
+                if (LayerContributesToComposite(request.Layers[index]))
+                    contributingLayerCount++;
+            }
+
             SurfaceId? intermediateSurfaceId = null;
             SurfaceId? pendingSurfaceId = null;
             try
             {
-                if (request.Layers.Count == 0)
+                if (contributingLayerCount == 0)
                 {
                     pendingSurfaceId = outputSurfaceId;
                     _backend.Composite(
@@ -1264,11 +1271,15 @@ public sealed class GpuProcessingProvider : IDisposable
                 }
                 else
                 {
+                    var contributingIndex = 0;
                     for (var index = 0; index < request.Layers.Count; index++)
                     {
                         var layer = request.Layers[index];
-                        var isFirst = index == 0;
-                        var isFinal = index == request.Layers.Count - 1;
+                        if (!LayerContributesToComposite(layer))
+                            continue;
+
+                        var isFirst = contributingIndex == 0;
+                        var isFinal = contributingIndex == contributingLayerCount - 1;
                         var targetSurfaceId = isFinal
                             ? outputSurfaceId
                             : new SurfaceId(GpuIdentity.Create(
@@ -1276,7 +1287,7 @@ public sealed class GpuProcessingProvider : IDisposable
                                 _backend.Info.Kind.ToString(),
                                 timing.SequenceNumber.ToString(),
                                 ordinal.ToString(),
-                                index.ToString()));
+                                contributingIndex.ToString()));
 
                         var previousSurfaceId = intermediateSurfaceId;
                         pendingSurfaceId = targetSurfaceId;
@@ -1296,6 +1307,7 @@ public sealed class GpuProcessingProvider : IDisposable
                             TryReleaseBackendSurface(previous);
 
                         intermediateSurfaceId = isFinal ? null : targetSurfaceId;
+                        contributingIndex++;
                     }
                 }
 
@@ -1325,6 +1337,10 @@ public sealed class GpuProcessingProvider : IDisposable
                     timing.SequenceNumber,
                     null);
                 Observe($"gpu.composite.layers:{request.Layers.Count}", timing.SequenceNumber, null);
+                Observe(
+                    $"gpu.composite.passes:{Math.Max(1, contributingLayerCount)}:skipped:{request.Layers.Count - contributingLayerCount}",
+                    timing.SequenceNumber,
+                    null);
                 return GpuProcessingResult.Success(frame, stopwatch.Elapsed, request.Layers.Count);
             }
             catch (Exception exception)
@@ -1601,6 +1617,9 @@ public sealed class GpuProcessingProvider : IDisposable
 
         return null;
     }
+
+    private static bool LayerContributesToComposite(GpuKeyLayer layer) =>
+        layer.Visible && layer.Opacity != 0;
 
     private static void EnsureV1Compatible(VideoFormat format)
     {
