@@ -54,7 +54,10 @@ Assert-Condition ($monitoring -match "release\(\);[\s\S]*_release = null") "Moni
 
 foreach ($name in @(
     "Start_failure_is_explicit_and_recovery_rotates_generation",
+    "Cuda_classified_upload_failure_fails_closed",
     "Cuda_classified_composite_failure_fails_closed_until_recovery",
+    "Cuda_classified_readback_failure_returns_host_lease_and_fails_closed",
+    "Stop_failure_is_explicit_and_retryable",
     "Readback_pool_exhaustion_degrades_without_losing_the_active_lease",
     "Monitoring_export_failure_is_isolated_from_program_and_can_recover",
     "Monitoring_release_failure_remains_tracked_and_is_retryable")) {
