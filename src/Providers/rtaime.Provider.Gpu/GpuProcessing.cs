@@ -838,6 +838,7 @@ public sealed class GpuProcessingProvider : IDisposable
                     GpuProviderLifecycleReasonCodes.Ready,
                     null,
                     advanceGeneration: true);
+                Observe("gpu.provider.started", null, null);
             }
             catch (Exception exception)
             {
@@ -949,6 +950,7 @@ public sealed class GpuProcessingProvider : IDisposable
             }
 
             TransitionStateUnsafe(GpuProviderState.Stopped, GpuProviderLifecycleReasonCodes.Stopped, null);
+            Observe("gpu.provider.stopped", null, null);
         }
     }
 
