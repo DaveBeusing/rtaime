@@ -1318,7 +1318,8 @@ public sealed class GpuProcessingProvider : IDisposable
                 var failure = new Failure(
                     GpuProviderLifecycleReasonCodes.ReadbackFailed,
                     $"GPU readback failed: {exception.GetType().Name}.");
-                TransitionStateUnsafe(GpuProviderState.Failed, GpuProviderLifecycleReasonCodes.ReadbackFailed, failure);
+                if (_backend.Info.Kind == GpuBackendKind.NvidiaCuda)
+                    TransitionStateUnsafe(GpuProviderState.Failed, GpuProviderLifecycleReasonCodes.ReadbackFailed, failure);
                 Observe("gpu.readback.failed", frame.Descriptor.Timing.SequenceNumber, failure);
                 throw;
             }
