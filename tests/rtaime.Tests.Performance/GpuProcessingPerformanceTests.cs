@@ -210,7 +210,7 @@ public sealed class GpuProcessingPerformanceTests
         Assert.Equal(frameBytes * (iterations - 1), transfers.AvoidedUploadBytes);
         Assert.Equal((ulong)0, transfers.AvoidedHostToDeviceBytes);
         Assert.Equal(1, transfers.ReusableUploadSurfaces);
-        Assert.Equal(1, provider.ActiveSurfaceCount);
+        Assert.Equal(0, provider.ActiveSurfaceCount);
 
         provider.Stop();
 
