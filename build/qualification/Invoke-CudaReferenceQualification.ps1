@@ -16,7 +16,7 @@ if (-not $IsWindows) { throw "CUDA reference qualification requires the Windows 
 if (-not [Environment]::Is64BitProcess) { throw "CUDA reference qualification requires an x64 process." }
 if ([string]::IsNullOrWhiteSpace($ExpectedDeviceName)) { throw "ExpectedDeviceName is required." }
 if ($DeviceOrdinal -lt 0) { throw "DeviceOrdinal must be non-negative." }
-if ($SampleIterations -lt 10) { throw "SampleIterations must be at least 10." }
+if ($SampleIterations -lt 10 -or $SampleIterations -gt 10000) { throw "SampleIterations must be between 10 and 10000." }
 if ($WarmupIterations -lt 0) { throw "WarmupIterations must be non-negative." }
 
 $repositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "../.."))
@@ -58,12 +58,31 @@ try {
 	}
 
 	$evidence = Get-Content -LiteralPath $resolvedEvidence -Raw | ConvertFrom-Json
-	if ($evidence.schemaVersion -ne "1.0") { throw "Unsupported CUDA qualification evidence schema '$($evidence.schemaVersion)'." }
+	if ($evidence.schemaVersion -ne "1.1") { throw "Unsupported CUDA qualification evidence schema '$($evidence.schemaVersion)'." }
 	if ($evidence.status -ne "PASSED") { throw "CUDA qualification evidence status is '$($evidence.status)', expected 'PASSED'." }
 	if ($evidence.expectedDeviceName -ne $ExpectedDeviceName.Trim()) { throw "CUDA qualification evidence device expectation changed during execution." }
 	if (@($evidence.cases).Count -ne 8) { throw "CUDA qualification evidence must contain exactly eight V1 cases." }
 	if (@($evidence.cases | Where-Object { -not $_.pixelCorrect -or -not $_.surfaceLifetimeCorrect -or -not $_.timingBudgetMet }).Count -ne 0) {
 		throw "CUDA qualification evidence contains a failed functional, lifetime, or timing case."
+	}
+	foreach ($case in @($evidence.cases)) {
+		if ($case.p50Milliseconds -gt $case.p95Milliseconds -or
+			$case.p95Milliseconds -gt $case.p99Milliseconds -or
+			$case.p99Milliseconds -gt $case.maximumMilliseconds) {
+			throw "CUDA qualification evidence contains non-monotonic latency percentiles for '$($case.format)/$($case.operation)'."
+		}
+
+		$timingOperations = @($case.backendTimings | ForEach-Object { $_.operation })
+		foreach ($requiredOperation in @(
+			"UploadHostToDevice",
+			"KernelLaunch",
+			"ContextSynchronize",
+			"KernelGpuElapsed",
+			"ReadbackDeviceToHost")) {
+			if ($timingOperations -notcontains $requiredOperation) {
+				throw "CUDA qualification evidence is missing '$requiredOperation' timing for '$($case.format)/$($case.operation)'."
+			}
+		}
 	}
 
 	Write-Host "CUDA reference hardware qualification PASS"

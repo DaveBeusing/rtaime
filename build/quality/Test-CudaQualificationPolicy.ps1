@@ -50,6 +50,8 @@ Assert-Condition ($source -match 'cases\.Count == 8') "Qualification must requir
 Assert-Condition ($source -match 'PixelCorrect') "Qualification must verify deterministic output pixels."
 Assert-Condition ($source -match 'SurfaceLifetimeCorrect') "Qualification must verify GPU surface lifetime."
 Assert-Condition ($source -match 'P95Milliseconds') "Qualification must record P95 latency."
+Assert-Condition ($source -match 'P99Milliseconds') "Qualification must record P99 latency."
+Assert-Condition ($source -match 'BackendTimings') "Qualification must retain backend timing breakdown evidence."
 Assert-Condition ($source -match 'ProductionP95LatencyCeilingMilliseconds\s*=\s*5\.0') "CUDA qualification must enforce the 5 ms P95 production ceiling."
 Assert-Condition ($source -match 'ProductionMaximumLatencyCeilingMilliseconds\s*=\s*10\.0') "CUDA qualification must enforce the 10 ms maximum production ceiling."
 Assert-Condition ($source -match 'p95 <= ProductionP95LatencyCeilingMilliseconds') "CUDA qualification must apply the production P95 latency ceiling."
@@ -58,6 +60,11 @@ Assert-Condition ($runtimeHost -match 'new ManagedReferenceGpuBackend\(\)') "Pro
 Assert-Condition ($cudaBackend -match 'MaxPooledAllocationsPerSize' -and $cudaBackend -match 'RentAllocation' -and $cudaBackend -match 'ReturnAllocation') "CUDA frame processing must reuse bounded device allocations instead of allocating every frame."
 Assert-Condition ($cudaBackend -notmatch 'rgbaPixels\.ToArray\(\)') "CUDA upload must not allocate a second full managed frame before HtoD transfer."
 Assert-Condition ($cudaBackend -match 'cuMemcpyHtoD_v2\(ulong destination, ref byte source') "CUDA upload must pass the existing managed frame buffer directly to the driver boundary."
+Assert-Condition ($cudaBackend -match 'CudaGpuTimingCollector\? timingCollector = null') "CUDA timing instrumentation must remain optional and disabled by default."
+Assert-Condition ($cudaBackend -match 'cuEventRecord' -and $cudaBackend -match 'cuEventElapsedTime') "CUDA qualification timing must use CUDA events for kernel elapsed evidence."
+Assert-Condition ($cudaBackend -match 'CudaGpuTimingOperation\.ContextSynchronize') "CUDA timing must isolate context synchronization wait."
+Assert-Condition ($cudaBackend -match 'CudaGpuTimingOperation\.UploadHostToDevice' -and $cudaBackend -match 'CudaGpuTimingOperation\.ReadbackDeviceToHost') "CUDA timing must isolate HtoD and DtoH transfer calls."
+Assert-Condition ($runtimeHost -notmatch 'CudaGpuTimingCollector') "Production RuntimeHost must not enable qualification-only CUDA timing instrumentation by default."
 
 Assert-Condition ($tests -match 'RTAIME_CUDA_REFERENCE_QUALIFICATION') "Hardware test must require explicit qualification opt-in."
 Assert-Condition ($tests -match 'RTAIME_CUDA_REFERENCE_DEVICE') "Hardware test must require an expected device identity."
@@ -65,6 +72,12 @@ Assert-Condition ($tests -match 'RTAIME_CUDA_REFERENCE_EVIDENCE') "Hardware test
 Assert-Condition ($tests -match 'Unverified_report_can_never_be_serialized_as_passed') "Regression coverage must ensure UNVERIFIED cannot be represented as PASSED."
 
 Assert-Condition ($runner -match '\$evidence\.status -ne "PASSED"') "Qualification wrapper must reject non-PASSED evidence."
+Assert-Condition ($runner -match 'schemaVersion -ne "1\.1"') "Qualification wrapper must require CUDA evidence schema 1.1."
+Assert-Condition ($runner -match 'p99Milliseconds') "Qualification wrapper must validate P99 latency evidence."
+Assert-Condition ($runner -match 'backendTimings') "Qualification wrapper must validate backend timing breakdown evidence."
+foreach ($operation in @('UploadHostToDevice', 'KernelLaunch', 'ContextSynchronize', 'KernelGpuElapsed', 'ReadbackDeviceToHost')) {
+	Assert-Condition ($runner -match [Regex]::Escape($operation)) "Qualification wrapper must require backend timing operation '$operation'."
+}
 Assert-Condition ($runner -match 'cases\)\.Count -ne 8') "Qualification wrapper must require exactly eight cases."
 Assert-Condition ($runner -match 'pixelCorrect') "Qualification wrapper must inspect pixel correctness."
 Assert-Condition ($runner -match 'surfaceLifetimeCorrect') "Qualification wrapper must inspect surface lifetime."
@@ -80,6 +93,8 @@ Assert-Condition ($workflow -match 'upload-artifact@v4') "CUDA workflow must ret
 Assert-Condition ($documentation -match 'Current qualification state[\s\S]*UNVERIFIED') "Documentation must explicitly retain UNVERIFIED state until physical evidence exists."
 Assert-Condition ($documentation -match 'There is no silent fallback') "Documentation must prohibit silent hardware-to-managed fallback."
 Assert-Condition ($documentation -match 'P95 must be at or below 5 ms') "Documentation must state the production P95 latency ceiling."
+Assert-Condition ($documentation -match 'P99') "Documentation must describe P99 latency evidence."
+Assert-Condition ($documentation -match 'KernelGpuElapsed' -and $documentation -match 'ContextSynchronize') "Documentation must distinguish kernel GPU elapsed time from CPU synchronization wait."
 Assert-Condition ($requiredGates -notmatch 'Invoke-CudaReferenceQualification\.ps1') "Generic Required Gates must not masquerade as physical CUDA qualification."
 
 Write-Host "CUDA qualification policy verification PASS"

@@ -193,6 +193,35 @@ public sealed class GpuLifecycleRecoveryTests
         Assert.Equal(GpuProviderState.Ready, provider.State);
     }
 
+    [Fact]
+    public void Shared_monitoring_descriptor_expires_across_stop_and_restart_generation()
+    {
+        using var backend = new MonitoringHardwareBackend();
+        using var provider = new GpuProcessingProvider(backend);
+        provider.Start();
+        var firstProviderInstance = provider.MonitoringProviderInstanceId;
+
+        using var frame = Upload(provider, SourceA, 1, 2, 3, 0);
+        Assert.True(provider.TryExportMonitoringResource(frame, out var lease));
+        Assert.NotNull(lease);
+        var descriptor = lease!.Descriptor;
+
+        Assert.True(provider.IsMonitoringResourceActive(descriptor));
+
+        provider.Stop();
+
+        Assert.False(provider.IsMonitoringResourceActive(descriptor));
+        Assert.Equal(0, provider.SharedMonitoringResourceStatistics.ActiveResources);
+
+        provider.Start();
+
+        Assert.NotEqual(firstProviderInstance, provider.MonitoringProviderInstanceId);
+        Assert.False(provider.IsMonitoringResourceActive(descriptor));
+
+        lease.Dispose();
+        Assert.True(lease.IsDisposed);
+    }
+
     private static GpuFrame Upload(
         GpuProcessingProvider provider,
         MediaSourceId sourceId,

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
 using rtaime.Core;
@@ -18,19 +19,23 @@ public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend, IGpuShared
     private readonly Dictionary<SurfaceId, CudaAllocation> _surfaces = new();
     private readonly Dictionary<nuint, Stack<ulong>> _freeAllocations = new();
     private readonly int _deviceOrdinal;
+    private readonly CudaGpuTimingCollector? _timingCollector;
     private IntPtr _context;
     private IntPtr _module;
     private IntPtr _compositeFunction;
+    private IntPtr _kernelStartEvent;
+    private IntPtr _kernelStopEvent;
     private CudaD3D11MonitoringInterop? _monitoringInterop;
     private bool _running;
     private bool _disposed;
 
-    public CudaGpuProcessingBackend(int deviceOrdinal = 0)
+    public CudaGpuProcessingBackend(int deviceOrdinal = 0, CudaGpuTimingCollector? timingCollector = null)
     {
         if (deviceOrdinal < 0)
             throw new ArgumentOutOfRangeException(nameof(deviceOrdinal));
 
         _deviceOrdinal = deviceOrdinal;
+        _timingCollector = timingCollector;
         Info = Detect(deviceOrdinal);
     }
 
@@ -131,6 +136,7 @@ public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend, IGpuShared
                 Check(
                     CudaNative.cuModuleGetFunction(out _compositeFunction, _module, "composite_rgba"),
                     "cuModuleGetFunction");
+                CreateTimingEvents();
                 _ = CudaD3D11MonitoringInterop.TryCreate(device, out _monitoringInterop);
                 _running = true;
             }
@@ -214,7 +220,10 @@ public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend, IGpuShared
             try
             {
                 ref var source = ref MemoryMarshal.GetReference(rgbaPixels);
-                Check(CudaNative.cuMemcpyHtoD_v2(pointer, ref source, allocationLength), "cuMemcpyHtoD_v2");
+                var uploadStarted = StartTiming();
+                var uploadResult = CudaNative.cuMemcpyHtoD_v2(pointer, ref source, allocationLength);
+                RecordCpuTiming(CudaGpuTimingOperation.UploadHostToDevice, allocationLength, uploadStarted);
+                Check(uploadResult, "cuMemcpyHtoD_v2");
                 _surfaces.Add(surfaceId, new CudaAllocation(format, pointer, allocationLength));
             }
             catch
@@ -257,21 +266,44 @@ public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend, IGpuShared
 
                 const uint blockSize = 256;
                 var gridSize = (pixelCount + blockSize - 1) / blockSize;
-                Check(
-                    CudaNative.cuLaunchKernel(
-                        _compositeFunction,
-                        gridSize,
-                        1,
-                        1,
-                        blockSize,
-                        1,
-                        1,
-                        0,
-                        IntPtr.Zero,
-                        arguments.PointerArray,
-                        IntPtr.Zero),
-                    "cuLaunchKernel");
-                Check(CudaNative.cuCtxSynchronize(), "cuCtxSynchronize");
+
+                if (_timingCollector is not null)
+                    Check(CudaNative.cuEventRecord(_kernelStartEvent, IntPtr.Zero), "cuEventRecord(start)");
+
+                var launchStarted = StartTiming();
+                var launchResult = CudaNative.cuLaunchKernel(
+                    _compositeFunction,
+                    gridSize,
+                    1,
+                    1,
+                    blockSize,
+                    1,
+                    1,
+                    0,
+                    IntPtr.Zero,
+                    arguments.PointerArray,
+                    IntPtr.Zero);
+                RecordCpuTiming(CudaGpuTimingOperation.KernelLaunch, byteLength, launchStarted);
+                Check(launchResult, "cuLaunchKernel");
+
+                if (_timingCollector is not null)
+                    Check(CudaNative.cuEventRecord(_kernelStopEvent, IntPtr.Zero), "cuEventRecord(stop)");
+
+                var synchronizeStarted = StartTiming();
+                var synchronizeResult = CudaNative.cuCtxSynchronize();
+                RecordCpuTiming(CudaGpuTimingOperation.ContextSynchronize, byteLength, synchronizeStarted);
+                Check(synchronizeResult, "cuCtxSynchronize");
+
+                if (_timingCollector is not null)
+                {
+                    Check(
+                        CudaNative.cuEventElapsedTime(out var kernelMilliseconds, _kernelStartEvent, _kernelStopEvent),
+                        "cuEventElapsedTime");
+                    _timingCollector.RecordGpuMilliseconds(
+                        CudaGpuTimingOperation.KernelGpuElapsed,
+                        byteLength,
+                        kernelMilliseconds);
+                }
 
                 _surfaces.Add(outputSurfaceId, new CudaAllocation(format, outputPointer, byteLength));
             }
@@ -297,18 +329,29 @@ public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend, IGpuShared
 
             var allocation = Get(surfaceId, format);
             SetCurrentContext();
-            if (_monitoringInterop.TryExport(allocation.DevicePointer, format, out resource))
-                return true;
+            var exportStarted = StartTiming();
+            try
+            {
+                if (_monitoringInterop.TryExport(allocation.DevicePointer, format, out resource))
+                    return true;
 
-            _monitoringInterop.Dispose();
-            _monitoringInterop = null;
+                _monitoringInterop.Dispose();
+                _monitoringInterop = null;
 
-            Check(CudaNative.cuDeviceGet(out var device, _deviceOrdinal), "cuDeviceGet");
-            if (!CudaD3D11MonitoringInterop.TryCreate(device, out var recreated) || recreated is null)
-                return false;
+                Check(CudaNative.cuDeviceGet(out var device, _deviceOrdinal), "cuDeviceGet");
+                if (!CudaD3D11MonitoringInterop.TryCreate(device, out var recreated) || recreated is null)
+                    return false;
 
-            _monitoringInterop = recreated;
-            return _monitoringInterop.TryExport(allocation.DevicePointer, format, out resource);
+                _monitoringInterop = recreated;
+                return _monitoringInterop.TryExport(allocation.DevicePointer, format, out resource);
+            }
+            finally
+            {
+                RecordCpuTiming(
+                    CudaGpuTimingOperation.MonitoringExport,
+                    allocation.ByteLength,
+                    exportStarted);
+            }
         }
     }
 
@@ -330,7 +373,16 @@ public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend, IGpuShared
 
             SetCurrentContext();
             ref var destinationReference = ref MemoryMarshal.GetReference(destination);
-            Check(CudaNative.cuMemcpyDtoH_v2(ref destinationReference, allocation.DevicePointer, allocation.ByteLength), "cuMemcpyDtoH_v2");
+            var readbackStarted = StartTiming();
+            var readbackResult = CudaNative.cuMemcpyDtoH_v2(
+                ref destinationReference,
+                allocation.DevicePointer,
+                allocation.ByteLength);
+            RecordCpuTiming(
+                CudaGpuTimingOperation.ReadbackDeviceToHost,
+                allocation.ByteLength,
+                readbackStarted);
+            Check(readbackResult, "cuMemcpyDtoH_v2");
         }
     }
 
@@ -404,6 +456,18 @@ public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend, IGpuShared
     {
         Exception? failure = null;
 
+        foreach (var timingEvent in new[] { _kernelStopEvent, _kernelStartEvent })
+        {
+            if (timingEvent == IntPtr.Zero)
+                continue;
+
+            var result = CudaNative.cuEventDestroy_v2(timingEvent);
+            if (result != CudaResult.Success && failure is null)
+                failure = new InvalidOperationException($"CUDA operation 'cuEventDestroy_v2' failed with '{result}' ({(int)result}).");
+        }
+        _kernelStartEvent = IntPtr.Zero;
+        _kernelStopEvent = IntPtr.Zero;
+
         if (_module != IntPtr.Zero)
         {
             var result = CudaNative.cuModuleUnload(_module);
@@ -435,6 +499,37 @@ public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend, IGpuShared
         }
 
         return failure;
+    }
+
+    private void CreateTimingEvents()
+    {
+        if (_timingCollector is null)
+            return;
+
+        Check(CudaNative.cuEventCreate(out _kernelStartEvent, 0), "cuEventCreate(start)");
+        try
+        {
+            Check(CudaNative.cuEventCreate(out _kernelStopEvent, 0), "cuEventCreate(stop)");
+        }
+        catch
+        {
+            _ = CudaNative.cuEventDestroy_v2(_kernelStartEvent);
+            _kernelStartEvent = IntPtr.Zero;
+            throw;
+        }
+    }
+
+    private long StartTiming() => _timingCollector is null ? 0 : Stopwatch.GetTimestamp();
+
+    private void RecordCpuTiming(
+        CudaGpuTimingOperation operation,
+        nuint byteLength,
+        long started)
+    {
+        if (_timingCollector is null)
+            return;
+
+        _timingCollector.Record(operation, byteLength, Stopwatch.GetElapsedTime(started));
     }
 
     private void SetCurrentContext()
@@ -566,6 +661,21 @@ public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend, IGpuShared
 
         [DllImport(Library, CallingConvention = CallingConvention.Winapi)]
         internal static extern CudaResult cuCtxSynchronize();
+
+        [DllImport(Library, CallingConvention = CallingConvention.Winapi)]
+        internal static extern CudaResult cuEventCreate(out IntPtr cudaEvent, uint flags);
+
+        [DllImport(Library, CallingConvention = CallingConvention.Winapi)]
+        internal static extern CudaResult cuEventRecord(IntPtr cudaEvent, IntPtr stream);
+
+        [DllImport(Library, CallingConvention = CallingConvention.Winapi)]
+        internal static extern CudaResult cuEventElapsedTime(
+            out float milliseconds,
+            IntPtr startEvent,
+            IntPtr endEvent);
+
+        [DllImport(Library, EntryPoint = "cuEventDestroy_v2", CallingConvention = CallingConvention.Winapi)]
+        internal static extern CudaResult cuEventDestroy_v2(IntPtr cudaEvent);
 
         [DllImport(Library, CallingConvention = CallingConvention.Winapi)]
         internal static extern CudaResult cuModuleLoadData(out IntPtr module, IntPtr image);
