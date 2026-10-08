@@ -1784,9 +1784,13 @@ public sealed class GpuProcessingProvider : IDisposable
 
     private void PublishResourceCountsUnsafe()
     {
+        var activelyOwnedSurfaceCount = _activeFrames.Count(pair =>
+            pair.Value.Frames.Count != 0 ||
+            _sharedMonitoringSurfaceReferences.ContainsKey(pair.Key));
+
         Volatile.Write(
             ref _observableActiveSurfaceCount,
-            checked(_activeFrames.Count + _deferredMonitoringSurfaceReleases.Count + _unreleasedBackendSurfaces.Count));
+            checked(activelyOwnedSurfaceCount + _deferredMonitoringSurfaceReleases.Count + _unreleasedBackendSurfaces.Count));
         Volatile.Write(
             ref _observableUnreleasedBackendSurfaceCount,
             _unreleasedBackendSurfaces.Count);
