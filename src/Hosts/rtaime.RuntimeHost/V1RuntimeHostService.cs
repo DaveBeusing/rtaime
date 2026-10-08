@@ -2597,8 +2597,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			{
 				var frame = _visualLayerMode switch
 				{
-					V1VisualLayerMode.Static => _staticLayer.Materialize(_gpu, timing),
-					V1VisualLayerMode.Dynamic => _dynamicLayer.Materialize(_gpu, timing),
+					V1VisualLayerMode.Static => _staticLayer.MaterializeReusable(_gpu, timing),
+					V1VisualLayerMode.Dynamic => _dynamicLayer.MaterializeReusable(_gpu, timing),
 					_ => throw new InvalidOperationException($"Unsupported visual layer mode '{_visualLayerMode}'.")
 				};
 				layers.Add(new MaterializedCompositingLayer(
@@ -2610,7 +2610,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 
 			if (_operatorGraphicsVisible && _operatorGraphicsAsset is not null)
 			{
-				var frame = _operatorGraphicsLayer.Materialize(_gpu, timing);
+				var frame = _operatorGraphicsLayer.MaterializeReusable(_gpu, timing);
 				layers.Add(new MaterializedCompositingLayer(
 					BitmapGraphicsLayerId,
 					_operatorGraphicsLayerOrder,
@@ -2620,7 +2620,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 
 			if (_productionCgText.Visible && _productionCgAsset is not null)
 			{
-				var frame = _productionCgLayer.Materialize(_gpu, timing);
+				var frame = _productionCgLayer.MaterializeReusable(_gpu, timing);
 				layers.Add(new MaterializedCompositingLayer(
 					ProductionCgLayerId,
 					_productionCgLayerOrder,
