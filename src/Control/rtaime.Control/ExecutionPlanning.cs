@@ -296,7 +296,7 @@ public static class CapabilityRequirementMatcher
         if (capability.VideoFormats.Count == 0)
             return false;
 
-        return requirement.AcceptedVideoFormats.Any(required => capability.VideoFormats.Contains(required));
+        return requirement.AcceptedVideoFormats.Any(capability.SupportsVideoFormat);
     }
 }
 

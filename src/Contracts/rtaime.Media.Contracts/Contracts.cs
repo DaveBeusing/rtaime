@@ -139,6 +139,11 @@ public readonly record struct SurfaceLifetimeDescriptor
     public Identity? LeaseId { get; }
 }
 
+public enum SurfaceCompletionSemantics
+{
+    ProducerCompletedBeforePublication = 1
+}
+
 public sealed record OpaqueSurfaceHandle
 {
     public OpaqueSurfaceHandle(string kind, string value)
@@ -185,6 +190,47 @@ public sealed record SurfaceDescriptor
     public SurfaceOwnership Ownership { get; }
     public SurfaceLifetimeDescriptor Lifetime { get; }
     public OpaqueSurfaceHandle? Handle { get; }
+}
+
+public static class SurfaceContractSemantics
+{
+    public const SurfaceCompletionSemantics Completion =
+        SurfaceCompletionSemantics.ProducerCompletedBeforePublication;
+
+    public static bool HasValidOwnershipLifetime(SurfaceDescriptor surface)
+    {
+        ArgumentNullException.ThrowIfNull(surface);
+
+        return surface.Ownership != SurfaceOwnership.SharedLease ||
+            surface.Lifetime.LeaseId is { } leaseId && !leaseId.IsEmpty;
+    }
+
+    public static bool IsCompatibleForRead(
+        SurfaceDescriptor surface,
+        VideoFormat requiredFormat,
+        Generation requiredGeneration)
+    {
+        ArgumentNullException.ThrowIfNull(surface);
+
+        return surface.Format == requiredFormat &&
+            surface.Lifetime.Generation == requiredGeneration &&
+            HasValidOwnershipLifetime(surface);
+    }
+
+    public static void EnsureCompatibleForRead(
+        SurfaceDescriptor surface,
+        VideoFormat requiredFormat,
+        Generation requiredGeneration)
+    {
+        ArgumentNullException.ThrowIfNull(surface);
+
+        if (surface.Format != requiredFormat)
+            throw new NotSupportedException("Surface format is not compatible with the requested consumer format.");
+        if (surface.Lifetime.Generation != requiredGeneration)
+            throw new InvalidOperationException("Surface generation is stale for the requested consumer generation.");
+        if (!HasValidOwnershipLifetime(surface))
+            throw new InvalidOperationException("Shared-lease surfaces require an explicit non-empty lease identity.");
+    }
 }
 
 public sealed record FrameDescriptor
