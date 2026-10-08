@@ -18,17 +18,19 @@ function Assert-Condition {
 
 $gpuPath = Join-Path $repositoryRoot "src/Providers/rtaime.Provider.Gpu/GpuProcessing.cs"
 $runtimePath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/V1RuntimeHostService.cs"
+$runtimeDiagnosticsPath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/RuntimeHostDiagnostics.cs"
 $unitTestsPath = Join-Path $repositoryRoot "tests/rtaime.Tests.Unit/GpuMemoryTransferOptimizationTests.cs"
 $performanceTestsPath = Join-Path $repositoryRoot "tests/rtaime.Tests.Performance/GpuProcessingPerformanceTests.cs"
 $documentationPath = Join-Path $repositoryRoot "docs/GpuMemoryTransferOptimization.md"
 $requiredGatesPath = Join-Path $repositoryRoot ".github/workflows/required-gates.yml"
 
-foreach ($path in @($gpuPath, $runtimePath, $unitTestsPath, $performanceTestsPath, $documentationPath, $requiredGatesPath)) {
+foreach ($path in @($gpuPath, $runtimePath, $runtimeDiagnosticsPath, $unitTestsPath, $performanceTestsPath, $documentationPath, $requiredGatesPath)) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required GPU transfer optimization artifact is missing: '$path'."
 }
 
 $gpu = Get-Content -LiteralPath $gpuPath -Raw
 $runtime = Get-Content -LiteralPath $runtimePath -Raw
+$runtimeDiagnostics = Get-Content -LiteralPath $runtimeDiagnosticsPath -Raw
 $unitTests = Get-Content -LiteralPath $unitTestsPath -Raw
 $performanceTests = Get-Content -LiteralPath $performanceTestsPath -Raw
 $documentation = Get-Content -LiteralPath $documentationPath -Raw
@@ -46,6 +48,7 @@ Assert-Condition ($gpu -match '_reusableUploads\.Clear\(\)') "Provider stop/reco
 
 Assert-Condition ([Regex]::Matches($runtime, 'MaterializeReusable\(_gpu, timing\)').Count -ge 4) "RuntimeHost long-lived compositing layers must opt into reusable uploads."
 Assert-Condition ($runtime -match 'GpuMemoryTransfers\s*=>\s*_gpu\.MemoryTransferStatistics') "RuntimeHost must expose GPU transfer/pool evidence."
+Assert-Condition ($runtimeDiagnostics -match 'gpu\.transfer\.hostToDeviceBytes' -and $runtimeDiagnostics -match 'gpu\.uploadReuse\.surfaces' -and $runtimeDiagnostics -match 'gpu\.readback\.active' -and $runtimeDiagnostics -match 'gpu\.monitoringResources\.active') "Runtime support health diagnostics must publish transfer and pool-pressure evidence."
 Assert-Condition ($runtime -match '_gpu\.RentReadback\(output\)' -and $runtime -notmatch '_gpu\.Readback\(output\)') "Program hot path must retain the reusable host-readback path."
 
 foreach ($testName in @(
