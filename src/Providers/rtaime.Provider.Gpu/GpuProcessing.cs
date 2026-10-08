@@ -235,6 +235,16 @@ public readonly record struct GpuSharedMonitoringResourceStatistics(
     ulong TotalExports,
     ulong RejectedExports);
 
+public readonly record struct GpuMemoryTransferStatistics(
+    ulong HostToDeviceOperations,
+    ulong HostToDeviceBytes,
+    ulong DeviceToHostOperations,
+    ulong DeviceToHostBytes,
+    ulong MonitoringDeviceCopyOperations,
+    ulong MonitoringDeviceCopyBytes,
+    GpuReadbackPoolStatistics ReadbackPool,
+    GpuSharedMonitoringResourceStatistics MonitoringResources);
+
 public sealed class GpuSharedMonitoringResourceLease : IDisposable
 {
     private readonly object _gate = new();
@@ -707,6 +717,12 @@ public sealed class GpuProcessingProvider : IDisposable
     private ulong _sharedMonitoringResourceOrdinal;
     private ulong _totalSharedMonitoringExports;
     private ulong _rejectedSharedMonitoringExports;
+    private ulong _hostToDeviceOperations;
+    private ulong _hostToDeviceBytes;
+    private ulong _deviceToHostOperations;
+    private ulong _deviceToHostBytes;
+    private ulong _monitoringDeviceCopyOperations;
+    private ulong _monitoringDeviceCopyBytes;
     private Identity _monitoringProviderInstanceId = Identity.New();
     private GpuProviderState _state;
     private string _lifecycleReasonCode;
@@ -778,6 +794,29 @@ public sealed class GpuProcessingProvider : IDisposable
     public IReadOnlyList<GpuObservation> Observations => _observations.Snapshot();
     public ulong OverwrittenObservationCount => _observations.OverwrittenCount;
     public GpuReadbackPoolStatistics ReadbackPoolStatistics => _readbackPool.Statistics;
+    public GpuMemoryTransferStatistics MemoryTransferStatistics
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return new GpuMemoryTransferStatistics(
+                    _hostToDeviceOperations,
+                    _hostToDeviceBytes,
+                    _deviceToHostOperations,
+                    _deviceToHostBytes,
+                    _monitoringDeviceCopyOperations,
+                    _monitoringDeviceCopyBytes,
+                    _readbackPool.Statistics,
+                    new GpuSharedMonitoringResourceStatistics(
+                        SharedMonitoringResourceCapacity,
+                        _sharedMonitoringResources.Count,
+                        _totalSharedMonitoringExports,
+                        _rejectedSharedMonitoringExports));
+            }
+        }
+    }
+
     public bool CanExportSharedMonitoringResources
     {
         get
@@ -983,6 +1022,8 @@ public sealed class GpuProcessingProvider : IDisposable
             try
             {
                 _backend.Allocate(surfaceId, content.Format, content.Pixels.Span);
+                IncrementSaturating(ref _hostToDeviceOperations);
+                AddSaturating(ref _hostToDeviceBytes, checked((ulong)content.ByteLength));
             }
             catch (Exception exception)
             {
@@ -1253,6 +1294,10 @@ public sealed class GpuProcessingProvider : IDisposable
                 _sharedMonitoringSurfaceReferences.GetValueOrDefault(frame.SurfaceId) + 1;
             if (_totalSharedMonitoringExports < ulong.MaxValue)
                 _totalSharedMonitoringExports++;
+            IncrementSaturating(ref _monitoringDeviceCopyOperations);
+            AddSaturating(
+                ref _monitoringDeviceCopyBytes,
+                checked((ulong)RgbaFrameBuffer.RequiredByteLength(frame.Descriptor.Surface.Format)));
             Volatile.Write(ref _observableActiveSharedMonitoringResourceCount, _sharedMonitoringResources.Count);
             Observe("gpu.monitoring.resource.exported", frame.Descriptor.Timing.SequenceNumber, null);
 
@@ -1309,6 +1354,8 @@ public sealed class GpuProcessingProvider : IDisposable
             try
             {
                 _backend.ReadbackInto(frame.SurfaceId, frame.Descriptor.Surface.Format, lease.WritableSpan);
+                IncrementSaturating(ref _deviceToHostOperations);
+                AddSaturating(ref _deviceToHostBytes, checked((ulong)byteLength));
                 RestoreReadyFromDegradationUnsafe(GpuProviderLifecycleReasonCodes.ReadbackPoolExhausted);
                 return lease;
             }
@@ -1399,6 +1446,19 @@ public sealed class GpuProcessingProvider : IDisposable
     {
         if (format.PixelFormat != PixelFormat.Rgba8)
             throw new NotSupportedException("GPU processing foundation supports RGBA8 only.");
+    }
+
+    private static void IncrementSaturating(ref ulong value)
+    {
+        if (value < ulong.MaxValue)
+            value++;
+    }
+
+    private static void AddSaturating(ref ulong value, ulong increment)
+    {
+        value = ulong.MaxValue - value < increment
+            ? ulong.MaxValue
+            : value + increment;
     }
 
     private ulong NextSurfaceOrdinal()
