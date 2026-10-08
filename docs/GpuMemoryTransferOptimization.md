@@ -77,16 +77,20 @@ The old surface is not freed early. Cache retention is removed first; backend re
 
 `GpuProcessingProvider.MemoryTransferStatistics` exposes bounded cumulative counters for:
 
-- Host-to-Device upload operations and bytes;
-- Device-to-Host readback operations and bytes;
+- logical provider upload operations and bytes;
+- physical-domain Host-to-Device operations and bytes only when the backend surface domain is `Device`;
+- logical provider readback operations and bytes;
+- physical-domain Device-to-Host operations and bytes only when the backend surface domain is `Device`;
 - successful monitoring device-copy operations and bytes;
 - reusable-upload cache capacity and retained surface count;
-- reusable-upload hits, misses and evictions;
-- Host-to-Device bytes avoided through reusable materialization;
+- reusable-upload hits, misses, content/source invalidations and capacity evictions;
+- logical upload bytes avoided through reusable materialization plus the HtoD subset when the backend is device-resident;
 - readback pool capacity / allocated / available / active / exhausted state;
 - shared monitoring resource capacity / active / total / rejected state.
 
-RuntimeHost exposes the same provider snapshot through `GpuMemoryTransfers` for runtime health/qualification inspection. No per-frame history, file I/O, network I/O or new hot-path allocation is introduced by these counters.
+This distinction is deliberate: managed-reference execution can prove that a logical full-frame provider upload/readback was eliminated, but it must report zero HtoD/DtoH traffic because it is host-resident software. CUDA/device-resident qualification can populate the physical-domain counters, but actual PCIe bus behavior still requires hardware evidence.
+
+RuntimeHost exposes the provider snapshot through `GpuMemoryTransfers`, and `RuntimeHostDiagnostics` publishes the transfer/reuse/readback/monitoring pressure counters into the existing bounded support-health snapshot. No per-frame history, file I/O, network I/O or new hot-path allocation is introduced by these counters.
 
 Counters are saturating. They are diagnostic evidence, not production authority.
 
