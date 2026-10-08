@@ -172,6 +172,10 @@ jobs:
         shell: pwsh
         run: ./build/quality/Test-ProgramFrameMemoryOwnershipPolicy.ps1
 
+      - name: Verify GPU memory transfer policy
+        shell: pwsh
+        run: ./build/quality/Test-GpuMemoryTransferPolicy.ps1
+
       - name: Verify deterministic Runtime boundary policy
         shell: pwsh
         run: ./build/quality/Test-DeterministicRuntimeBoundaryPolicy.ps1

@@ -63,6 +63,7 @@ public sealed record GpuBackendInfo
 public sealed class RgbaFrameBuffer
 {
     private readonly byte[] _pixels;
+    private ulong _contentVersion;
 
     public RgbaFrameBuffer(VideoFormat format, ReadOnlySpan<byte> pixels)
     {
@@ -84,13 +85,16 @@ public sealed class RgbaFrameBuffer
     public VideoFormat Format { get; }
     public ReadOnlyMemory<byte> Pixels => _pixels;
     public int ByteLength => _pixels.Length;
+    internal ulong ContentVersion => _contentVersion;
 
     public void CopyPixelsFrom(ReadOnlySpan<byte> pixels)
     {
         if (pixels.Length != _pixels.Length)
             throw new ArgumentException("RGBA update payload length does not match the existing frame buffer.", nameof(pixels));
+        EnsureContentVersionCanAdvance();
 
         pixels.CopyTo(_pixels);
+        _contentVersion++;
     }
 
     public void CopyRegionFrom(
@@ -112,6 +116,7 @@ public sealed class RgbaFrameBuffer
         if (rgbaPixels.Length != expectedLength)
             throw new ArgumentException("RGBA region payload length does not match the requested region.", nameof(rgbaPixels));
 
+        EnsureContentVersionCanAdvance();
         var frameWidth = checked((int)Format.Width);
         for (var row = 0; row < height; row++)
         {
@@ -119,6 +124,13 @@ public sealed class RgbaFrameBuffer
             var destinationOffset = checked((((y + row) * frameWidth) + x) * 4);
             source.CopyTo(_pixels.AsSpan(destinationOffset, rowBytes));
         }
+        _contentVersion++;
+    }
+
+    private void EnsureContentVersionCanAdvance()
+    {
+        if (_contentVersion == ulong.MaxValue)
+            throw new InvalidOperationException("RGBA frame buffer content version is exhausted.");
     }
 
     public static RgbaFrameBuffer Solid(VideoFormat format, byte red, byte green, byte blue, byte alpha = byte.MaxValue)
@@ -234,6 +246,28 @@ public readonly record struct GpuSharedMonitoringResourceStatistics(
     int ActiveResources,
     ulong TotalExports,
     ulong RejectedExports);
+
+public readonly record struct GpuMemoryTransferStatistics(
+    ulong UploadOperations,
+    ulong UploadBytes,
+    ulong HostToDeviceOperations,
+    ulong HostToDeviceBytes,
+    ulong ReadbackOperations,
+    ulong ReadbackBytes,
+    ulong DeviceToHostOperations,
+    ulong DeviceToHostBytes,
+    ulong MonitoringDeviceCopyOperations,
+    ulong MonitoringDeviceCopyBytes,
+    int ReusableUploadCapacity,
+    int ReusableUploadSurfaces,
+    ulong ReusableUploadHits,
+    ulong ReusableUploadMisses,
+    ulong ReusableUploadInvalidations,
+    ulong ReusableUploadEvictions,
+    ulong AvoidedUploadBytes,
+    ulong AvoidedHostToDeviceBytes,
+    GpuReadbackPoolStatistics ReadbackPool,
+    GpuSharedMonitoringResourceStatistics MonitoringResources);
 
 public sealed class GpuSharedMonitoringResourceLease : IDisposable
 {
@@ -480,6 +514,10 @@ public sealed class StaticRgbaSource
     public GpuFrame Materialize(GpuProcessingProvider provider, FrameTiming timing) =>
         (provider ?? throw new ArgumentNullException(nameof(provider)))
             .Upload(SourceId, Content, timing, Generation.Initial, "static");
+
+    public GpuFrame MaterializeReusable(GpuProcessingProvider provider, FrameTiming timing) =>
+        (provider ?? throw new ArgumentNullException(nameof(provider)))
+            .UploadReusable(SourceId, Content, timing, Generation.Initial, "static");
 }
 
 public sealed class DynamicRgbaSource
@@ -525,6 +563,14 @@ public sealed class DynamicRgbaSource
 
         lock (_gate)
             return provider.Upload(SourceId, _content, timing, _generation, "dynamic");
+    }
+
+    public GpuFrame MaterializeReusable(GpuProcessingProvider provider, FrameTiming timing)
+    {
+        ArgumentNullException.ThrowIfNull(provider);
+
+        lock (_gate)
+            return provider.UploadReusable(SourceId, _content, timing, _generation, "dynamic");
     }
 }
 
@@ -685,6 +731,7 @@ public sealed class GpuProcessingProvider : IDisposable
     public const int RetainedObservationCapacity = 512;
     public const int PublishedMonitoringResourceSetSize = 2;
     public const int SharedMonitoringResourceCapacity = PublishedMonitoringResourceSetSize * 2;
+    public const int ReusableUploadSurfaceCapacity = 16;
 
     private static readonly VideoFormat[] V1Formats =
     {
@@ -695,7 +742,8 @@ public sealed class GpuProcessingProvider : IDisposable
     private readonly object _gate = new();
     private readonly IGpuProcessingBackend _backend;
     private readonly GpuReadbackBufferPool _readbackPool;
-    private readonly Dictionary<SurfaceId, GpuFrame> _activeFrames = new();
+    private readonly Dictionary<SurfaceId, ActiveSurfaceEntry> _activeFrames = new();
+    private readonly Dictionary<ReusableUploadKey, ReusableUploadEntry> _reusableUploads = new();
     private readonly HashSet<SurfaceId> _unreleasedBackendSurfaces = new();
     private readonly Dictionary<MonitoringResourceId, SharedMonitoringResourceEntry> _sharedMonitoringResources = new();
     private readonly Dictionary<SurfaceId, int> _sharedMonitoringSurfaceReferences = new();
@@ -707,6 +755,23 @@ public sealed class GpuProcessingProvider : IDisposable
     private ulong _sharedMonitoringResourceOrdinal;
     private ulong _totalSharedMonitoringExports;
     private ulong _rejectedSharedMonitoringExports;
+    private ulong _uploadOperations;
+    private ulong _uploadBytes;
+    private ulong _hostToDeviceOperations;
+    private ulong _hostToDeviceBytes;
+    private ulong _readbackOperations;
+    private ulong _readbackBytes;
+    private ulong _deviceToHostOperations;
+    private ulong _deviceToHostBytes;
+    private ulong _monitoringDeviceCopyOperations;
+    private ulong _monitoringDeviceCopyBytes;
+    private ulong _reusableUploadHits;
+    private ulong _reusableUploadMisses;
+    private ulong _reusableUploadInvalidations;
+    private ulong _reusableUploadEvictions;
+    private ulong _avoidedUploadBytes;
+    private ulong _avoidedHostToDeviceBytes;
+    private ulong _reusableUploadUseOrdinal;
     private Identity _monitoringProviderInstanceId = Identity.New();
     private GpuProviderState _state;
     private string _lifecycleReasonCode;
@@ -778,6 +843,41 @@ public sealed class GpuProcessingProvider : IDisposable
     public IReadOnlyList<GpuObservation> Observations => _observations.Snapshot();
     public ulong OverwrittenObservationCount => _observations.OverwrittenCount;
     public GpuReadbackPoolStatistics ReadbackPoolStatistics => _readbackPool.Statistics;
+    public GpuMemoryTransferStatistics MemoryTransferStatistics
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return new GpuMemoryTransferStatistics(
+                    _uploadOperations,
+                    _uploadBytes,
+                    _hostToDeviceOperations,
+                    _hostToDeviceBytes,
+                    _readbackOperations,
+                    _readbackBytes,
+                    _deviceToHostOperations,
+                    _deviceToHostBytes,
+                    _monitoringDeviceCopyOperations,
+                    _monitoringDeviceCopyBytes,
+                    ReusableUploadSurfaceCapacity,
+                    _reusableUploads.Count,
+                    _reusableUploadHits,
+                    _reusableUploadMisses,
+                    _reusableUploadInvalidations,
+                    _reusableUploadEvictions,
+                    _avoidedUploadBytes,
+                    _avoidedHostToDeviceBytes,
+                    _readbackPool.Statistics,
+                    new GpuSharedMonitoringResourceStatistics(
+                        SharedMonitoringResourceCapacity,
+                        _sharedMonitoringResources.Count,
+                        _totalSharedMonitoringExports,
+                        _rejectedSharedMonitoringExports));
+            }
+        }
+    }
+
     public bool CanExportSharedMonitoringResources
     {
         get
@@ -969,54 +1069,149 @@ public sealed class GpuProcessingProvider : IDisposable
         {
             EnsureRunning();
             EnsureV1Compatible(content.Format);
-
-            var ordinal = NextSurfaceOrdinal();
-            var surfaceId = new SurfaceId(GpuIdentity.Create(
-                "gpu-surface",
-                _backend.Info.Kind.ToString(),
-                sourceKind.Trim(),
-                sourceId.ToString(),
-                timing.SequenceNumber.ToString(),
-                contentGeneration.ToString(),
-                ordinal.ToString()));
-
-            try
-            {
-                _backend.Allocate(surfaceId, content.Format, content.Pixels.Span);
-            }
-            catch (Exception exception)
-            {
-                var failure = new Failure(
-                    GpuProviderLifecycleReasonCodes.UploadFailed,
-                    $"GPU upload failed: {exception.GetType().Name}.");
-                if (_backend.Info.Kind == GpuBackendKind.NvidiaCuda)
-                    TransitionStateUnsafe(GpuProviderState.Failed, GpuProviderLifecycleReasonCodes.UploadFailed, failure);
-                Observe("gpu.upload.failed", timing.SequenceNumber, failure);
-                throw;
-            }
-
-            var surface = new SurfaceDescriptor(
-                surfaceId,
-                content.Format,
-                _backend.StorageDomain,
-                SurfaceOwnership.ProducerOwned,
-                new SurfaceLifetimeDescriptor(contentGeneration, surfaceId.Value),
-                new OpaqueSurfaceHandle(
-                    _backend.Info.HardwareAccelerated ? "rtaime.gpu.hardware.surface" : "rtaime.gpu.reference.surface",
-                    surfaceId.ToString()));
-
-            var descriptor = new FrameDescriptor(
-                MediaContractVersion.Current,
+            return AllocateUploadedFrameUnsafe(
                 sourceId,
-                surface,
-                timing);
+                content,
+                timing,
+                contentGeneration,
+                sourceKind.Trim(),
+                retainedForReuse: false);
+        }
+    }
 
-            var frame = new GpuFrame(descriptor, ReleaseFrame);
-            _activeFrames.Add(surfaceId, frame);
-            PublishResourceCountsUnsafe();
-            Observe("gpu.surface.allocated", timing.SequenceNumber, null);
+    internal GpuFrame UploadReusable(
+        MediaSourceId sourceId,
+        RgbaFrameBuffer content,
+        FrameTiming timing,
+        Generation contentGeneration,
+        string sourceKind)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        if (string.IsNullOrWhiteSpace(sourceKind))
+            throw new ArgumentException("GPU source kind is required.", nameof(sourceKind));
+
+        lock (_gate)
+        {
+            EnsureRunning();
+            EnsureV1Compatible(content.Format);
+
+            var normalizedSourceKind = sourceKind.Trim();
+            var key = new ReusableUploadKey(sourceId, normalizedSourceKind);
+            if (_reusableUploads.TryGetValue(key, out var cached) &&
+                ReferenceEquals(cached.Content, content) &&
+                cached.ContentGeneration == contentGeneration &&
+                cached.ContentVersion == content.ContentVersion &&
+                cached.Format == content.Format &&
+                _activeFrames.TryGetValue(cached.SurfaceId, out var active))
+            {
+                IncrementSaturating(ref _reusableUploadHits);
+                AddSaturating(ref _avoidedUploadBytes, checked((ulong)content.ByteLength));
+                if (_backend.StorageDomain == SurfaceStorageDomain.Device)
+                    AddSaturating(ref _avoidedHostToDeviceBytes, checked((ulong)content.ByteLength));
+                cached.LastUseOrdinal = NextReusableUploadUseOrdinal();
+                Observe("gpu.upload.reused", timing.SequenceNumber, null);
+                return CreateFrameReferenceUnsafe(active, sourceId, timing);
+            }
+
+            IncrementSaturating(ref _reusableUploadMisses);
+            if (_reusableUploads.ContainsKey(key))
+            {
+                IncrementSaturating(ref _reusableUploadInvalidations);
+                RemoveReusableUploadUnsafe(key, countEviction: false);
+            }
+
+            EnsureReusableUploadCapacityUnsafe();
+
+            var frame = AllocateUploadedFrameUnsafe(
+                sourceId,
+                content,
+                timing,
+                contentGeneration,
+                normalizedSourceKind,
+                retainedForReuse: true);
+            _reusableUploads[key] = new ReusableUploadEntry(
+                frame.SurfaceId,
+                content,
+                contentGeneration,
+                content.ContentVersion,
+                content.Format,
+                NextReusableUploadUseOrdinal());
+            Observe("gpu.upload.cache_miss", timing.SequenceNumber, null);
             return frame;
         }
+    }
+
+    private GpuFrame AllocateUploadedFrameUnsafe(
+        MediaSourceId sourceId,
+        RgbaFrameBuffer content,
+        FrameTiming timing,
+        Generation contentGeneration,
+        string sourceKind,
+        bool retainedForReuse)
+    {
+        var ordinal = NextSurfaceOrdinal();
+        var surfaceId = new SurfaceId(GpuIdentity.Create(
+            "gpu-surface",
+            _backend.Info.Kind.ToString(),
+            sourceKind,
+            sourceId.ToString(),
+            timing.SequenceNumber.ToString(),
+            contentGeneration.ToString(),
+            ordinal.ToString()));
+
+        try
+        {
+            _backend.Allocate(surfaceId, content.Format, content.Pixels.Span);
+            IncrementSaturating(ref _uploadOperations);
+            AddSaturating(ref _uploadBytes, checked((ulong)content.ByteLength));
+            if (_backend.StorageDomain == SurfaceStorageDomain.Device)
+            {
+                IncrementSaturating(ref _hostToDeviceOperations);
+                AddSaturating(ref _hostToDeviceBytes, checked((ulong)content.ByteLength));
+            }
+        }
+        catch (Exception exception)
+        {
+            var failure = new Failure(
+                GpuProviderLifecycleReasonCodes.UploadFailed,
+                $"GPU upload failed: {exception.GetType().Name}.");
+            if (_backend.Info.Kind == GpuBackendKind.NvidiaCuda)
+                TransitionStateUnsafe(GpuProviderState.Failed, GpuProviderLifecycleReasonCodes.UploadFailed, failure);
+            Observe("gpu.upload.failed", timing.SequenceNumber, failure);
+            throw;
+        }
+
+        var surface = new SurfaceDescriptor(
+            surfaceId,
+            content.Format,
+            _backend.StorageDomain,
+            SurfaceOwnership.ProducerOwned,
+            new SurfaceLifetimeDescriptor(contentGeneration, surfaceId.Value),
+            new OpaqueSurfaceHandle(
+                _backend.Info.HardwareAccelerated ? "rtaime.gpu.hardware.surface" : "rtaime.gpu.reference.surface",
+                surfaceId.ToString()));
+
+        var entry = new ActiveSurfaceEntry(surface, retainedForReuse);
+        var frame = CreateFrameReferenceUnsafe(entry, sourceId, timing);
+        _activeFrames.Add(surfaceId, entry);
+        PublishResourceCountsUnsafe();
+        Observe("gpu.surface.allocated", timing.SequenceNumber, null);
+        return frame;
+    }
+
+    private GpuFrame CreateFrameReferenceUnsafe(
+        ActiveSurfaceEntry entry,
+        MediaSourceId sourceId,
+        FrameTiming timing)
+    {
+        var descriptor = new FrameDescriptor(
+            MediaContractVersion.Current,
+            sourceId,
+            entry.Surface,
+            timing);
+        var frame = new GpuFrame(descriptor, ReleaseFrame);
+        entry.Frames.Add(frame);
+        return frame;
     }
 
     public GpuProcessingResult Composite(GpuCompositeRequest request)
@@ -1121,8 +1316,9 @@ public sealed class GpuProcessingProvider : IDisposable
                     surface,
                     timing);
 
-                var frame = new GpuFrame(descriptor, ReleaseFrame);
-                _activeFrames.Add(outputSurfaceId, frame);
+                var entry = new ActiveSurfaceEntry(surface, retainedForReuse: false);
+                var frame = CreateFrameReferenceUnsafe(entry, request.OutputSourceId, timing);
+                _activeFrames.Add(outputSurfaceId, entry);
                 PublishResourceCountsUnsafe();
                 Observe(
                     request.Transition.Kind == GpuTransitionKind.Cut ? "gpu.composite.cut" : "gpu.composite.dissolve",
@@ -1253,6 +1449,10 @@ public sealed class GpuProcessingProvider : IDisposable
                 _sharedMonitoringSurfaceReferences.GetValueOrDefault(frame.SurfaceId) + 1;
             if (_totalSharedMonitoringExports < ulong.MaxValue)
                 _totalSharedMonitoringExports++;
+            IncrementSaturating(ref _monitoringDeviceCopyOperations);
+            AddSaturating(
+                ref _monitoringDeviceCopyBytes,
+                checked((ulong)RgbaFrameBuffer.RequiredByteLength(frame.Descriptor.Surface.Format)));
             Volatile.Write(ref _observableActiveSharedMonitoringResourceCount, _sharedMonitoringResources.Count);
             Observe("gpu.monitoring.resource.exported", frame.Descriptor.Timing.SequenceNumber, null);
 
@@ -1309,6 +1509,13 @@ public sealed class GpuProcessingProvider : IDisposable
             try
             {
                 _backend.ReadbackInto(frame.SurfaceId, frame.Descriptor.Surface.Format, lease.WritableSpan);
+                IncrementSaturating(ref _readbackOperations);
+                AddSaturating(ref _readbackBytes, checked((ulong)byteLength));
+                if (_backend.StorageDomain == SurfaceStorageDomain.Device)
+                {
+                    IncrementSaturating(ref _deviceToHostOperations);
+                    AddSaturating(ref _deviceToHostBytes, checked((ulong)byteLength));
+                }
                 RestoreReadyFromDegradationUnsafe(GpuProviderLifecycleReasonCodes.ReadbackPoolExhausted);
                 return lease;
             }
@@ -1401,6 +1608,19 @@ public sealed class GpuProcessingProvider : IDisposable
             throw new NotSupportedException("GPU processing foundation supports RGBA8 only.");
     }
 
+    private static void IncrementSaturating(ref ulong value)
+    {
+        if (value < ulong.MaxValue)
+            value++;
+    }
+
+    private static void AddSaturating(ref ulong value, ulong increment)
+    {
+        value = ulong.MaxValue - value < increment
+            ? ulong.MaxValue
+            : value + increment;
+    }
+
     private ulong NextSurfaceOrdinal()
     {
         if (_surfaceOrdinal == ulong.MaxValue)
@@ -1412,22 +1632,42 @@ public sealed class GpuProcessingProvider : IDisposable
     {
         lock (_gate)
         {
-            if (_activeFrames.Remove(frame.SurfaceId))
+            if (!_activeFrames.TryGetValue(frame.SurfaceId, out var entry) ||
+                !entry.Frames.Remove(frame))
             {
-                if (_sharedMonitoringSurfaceReferences.ContainsKey(frame.SurfaceId))
-                {
-                    _deferredMonitoringSurfaceReleases.Add(frame.SurfaceId);
-                    PublishResourceCountsUnsafe();
-                    Observe("gpu.surface.monitoring_retained", frame.Descriptor.Timing.SequenceNumber, null);
-                }
-                else
-                {
-                    PublishResourceCountsUnsafe();
-                    TryReleaseBackendSurface(frame.SurfaceId);
-                    Observe("gpu.surface.released", frame.Descriptor.Timing.SequenceNumber, null);
-                }
+                return;
             }
+
+            ReleaseSurfaceIfUnreferencedUnsafe(
+                frame.SurfaceId,
+                entry,
+                frame.Descriptor.Timing.SequenceNumber);
         }
+    }
+
+    private void ReleaseSurfaceIfUnreferencedUnsafe(
+        SurfaceId surfaceId,
+        ActiveSurfaceEntry entry,
+        ulong? sequenceNumber)
+    {
+        if (entry.RetainedForReuse || entry.Frames.Count != 0)
+        {
+            PublishResourceCountsUnsafe();
+            return;
+        }
+
+        _activeFrames.Remove(surfaceId);
+        if (_sharedMonitoringSurfaceReferences.ContainsKey(surfaceId))
+        {
+            _deferredMonitoringSurfaceReleases.Add(surfaceId);
+            PublishResourceCountsUnsafe();
+            Observe("gpu.surface.monitoring_retained", sequenceNumber, null);
+            return;
+        }
+
+        PublishResourceCountsUnsafe();
+        TryReleaseBackendSurface(surfaceId);
+        Observe("gpu.surface.released", sequenceNumber, null);
     }
 
     private void ReleaseMonitoringResource(MonitoringResourceId resourceId)
@@ -1485,6 +1725,41 @@ public sealed class GpuProcessingProvider : IDisposable
         return true;
     }
 
+    private void EnsureReusableUploadCapacityUnsafe()
+    {
+        if (_reusableUploads.Count < ReusableUploadSurfaceCapacity)
+            return;
+
+        var oldest = _reusableUploads
+            .OrderBy(pair => pair.Value.LastUseOrdinal)
+            .First();
+        RemoveReusableUploadUnsafe(oldest.Key, countEviction: true);
+    }
+
+    private void RemoveReusableUploadUnsafe(
+        ReusableUploadKey key,
+        bool countEviction)
+    {
+        if (!_reusableUploads.Remove(key, out var cached))
+            return;
+
+        if (countEviction)
+            IncrementSaturating(ref _reusableUploadEvictions);
+
+        if (_activeFrames.TryGetValue(cached.SurfaceId, out var entry))
+        {
+            entry.RetainedForReuse = false;
+            ReleaseSurfaceIfUnreferencedUnsafe(cached.SurfaceId, entry, sequenceNumber: null);
+        }
+    }
+
+    private ulong NextReusableUploadUseOrdinal()
+    {
+        if (_reusableUploadUseOrdinal == ulong.MaxValue)
+            throw new InvalidOperationException("GPU reusable upload cache use ordinal is exhausted.");
+        return _reusableUploadUseOrdinal++;
+    }
+
     private bool TryReleaseBackendSurface(SurfaceId surfaceId)
     {
         try
@@ -1509,9 +1784,13 @@ public sealed class GpuProcessingProvider : IDisposable
 
     private void PublishResourceCountsUnsafe()
     {
+        var activelyOwnedSurfaceCount = _activeFrames.Count(pair =>
+            pair.Value.Frames.Count != 0 ||
+            _sharedMonitoringSurfaceReferences.ContainsKey(pair.Key));
+
         Volatile.Write(
             ref _observableActiveSurfaceCount,
-            checked(_activeFrames.Count + _deferredMonitoringSurfaceReleases.Count + _unreleasedBackendSurfaces.Count));
+            checked(activelyOwnedSurfaceCount + _deferredMonitoringSurfaceReleases.Count + _unreleasedBackendSurfaces.Count));
         Volatile.Write(
             ref _observableUnreleasedBackendSurfaceCount,
             _unreleasedBackendSurfaces.Count);
@@ -1627,8 +1906,14 @@ public sealed class GpuProcessingProvider : IDisposable
         var surfaces = new HashSet<SurfaceId>(_activeFrames.Keys);
         surfaces.UnionWith(_deferredMonitoringSurfaceReleases);
 
-        foreach (var frame in _activeFrames.Values)
-            frame.MarkReleased();
+        foreach (var entry in _activeFrames.Values)
+        {
+            foreach (var frame in entry.Frames)
+                frame.MarkReleased();
+            entry.Frames.Clear();
+            entry.RetainedForReuse = false;
+        }
+        _reusableUploads.Clear();
         _activeFrames.Clear();
         _deferredMonitoringSurfaceReleases.Clear();
 
@@ -1733,6 +2018,51 @@ public sealed class GpuProcessingProvider : IDisposable
         MonitoringSharedResourceDescriptor Descriptor,
         ulong SequenceNumber,
         GpuBackendMonitoringResource BackendResource);
+
+    private readonly record struct ReusableUploadKey(
+        MediaSourceId SourceId,
+        string SourceKind);
+
+    private sealed class ReusableUploadEntry
+    {
+        public ReusableUploadEntry(
+            SurfaceId surfaceId,
+            RgbaFrameBuffer content,
+            Generation contentGeneration,
+            ulong contentVersion,
+            VideoFormat format,
+            ulong lastUseOrdinal)
+        {
+            SurfaceId = surfaceId;
+            Content = content ?? throw new ArgumentNullException(nameof(content));
+            ContentGeneration = contentGeneration;
+            ContentVersion = contentVersion;
+            Format = format;
+            LastUseOrdinal = lastUseOrdinal;
+        }
+
+        public SurfaceId SurfaceId { get; }
+        public RgbaFrameBuffer Content { get; }
+        public Generation ContentGeneration { get; }
+        public ulong ContentVersion { get; }
+        public VideoFormat Format { get; }
+        public ulong LastUseOrdinal { get; set; }
+    }
+
+    private sealed class ActiveSurfaceEntry
+    {
+        public ActiveSurfaceEntry(
+            SurfaceDescriptor surface,
+            bool retainedForReuse)
+        {
+            Surface = surface ?? throw new ArgumentNullException(nameof(surface));
+            RetainedForReuse = retainedForReuse;
+        }
+
+        public SurfaceDescriptor Surface { get; }
+        public HashSet<GpuFrame> Frames { get; } = new();
+        public bool RetainedForReuse { get; set; }
+    }
 
     private void EnsureRunning()
     {
