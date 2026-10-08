@@ -1624,7 +1624,6 @@ public sealed class GpuProcessingProvider : IDisposable
     }
 
     private void ReleaseMonitoringResource(MonitoringResourceId resourceId)
-MonitoringResourceId resourceId)
     {
         lock (_gate)
         {
