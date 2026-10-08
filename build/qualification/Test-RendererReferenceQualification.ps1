@@ -89,7 +89,14 @@ foreach ($format in @("1080p50", "1080p59.94")) {
     if ($matches.Count -ne 1) { throw "Renderer runtime evidence is missing '$format'." }
     $result = $matches[0]
     if ([int]$result.boundaries -le 0) { throw "Renderer runtime evidence has no boundaries for '$format'." }
-    if ([ulong]$result.continuity.sequenceDiscontinuities -ne 0) { throw "Renderer runtime sequence discontinuity detected for '$format'." }
+    if ([ulong]$result.continuity.sequenceDiscontinuities -ne 0 -or
+        [ulong]$result.continuity.duplicateSequenceFrames -ne 0 -or
+        [ulong]$result.continuity.missingSequenceFrames -ne 0) {
+        throw "Renderer runtime duplicate/missing sequence evidence detected for '$format'."
+    }
+    if ($null -eq $result.deviceFaults -or [int]$result.deviceFaults.observed -lt 0) {
+        throw "Renderer runtime device-fault evidence is missing for '$format'."
+    }
     if (-not [bool]$result.recording.recoveredAfterPressure) { throw "Renderer recording did not recover after controlled backpressure for '$format'." }
     if ([ulong]$result.recording.rejectedDuringPressure -eq 0) { throw "Renderer recording pressure was not observed for '$format'." }
     if (-not [bool]$result.monitoring.disconnected -or -not [bool]$result.monitoring.reconnected) {
@@ -133,7 +140,7 @@ if ([string]$software.schemaVersion -ne "1.0" -or [string]$software.sourceCommit
 }
 if ([string]$software.status -ne "PASS") { throw "Renderer software-scenario evidence must be PASS." }
 $softwareIds = @($software.scenarios | ForEach-Object { [string]$_.id })
-foreach ($required in @("CLIP_SEEK", "RENDERER_BACKEND_RECOVERY", "RESIZE_DPI_CHURN", "MONITORING_TRANSPORT_RECONNECT", "PROCESS_RESTART")) {
+foreach ($required in @("CLIP_SEEK", "RENDERER_BACKEND_RECOVERY", "RESOURCE_PRESSURE", "INTEROP_FAILURE_RECOVERY", "RESIZE_DPI_CHURN", "MONITORING_TRANSPORT_RECONNECT", "PROCESS_RESTART")) {
     if ($softwareIds -notcontains $required) { throw "Renderer software evidence is missing '$required'." }
 }
 if (@($software.scenarios | Where-Object { [string]$_.status -ne "PASS" }).Count -ne 0) {
