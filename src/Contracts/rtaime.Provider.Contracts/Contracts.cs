@@ -107,6 +107,8 @@ public sealed record ProviderCapabilityDescriptor
     public CapabilityId CapabilityId { get; }
     public string Kind { get; }
     public IReadOnlyList<VideoFormat> VideoFormats => _videoFormats;
+
+    public bool SupportsVideoFormat(VideoFormat format) => _videoFormats.Contains(format);
 }
 
 public sealed record ProviderResourceDescriptor
