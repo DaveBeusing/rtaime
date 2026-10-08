@@ -311,6 +311,22 @@ public sealed class GpuLifecycleRecoveryTests
         }
     }
 
+    private sealed class FailFirstStopHardwareBackend : HardwareFacadeBackend
+    {
+        private bool _first = true;
+
+        public override void Stop()
+        {
+            if (_first)
+            {
+                _first = false;
+                throw new InvalidOperationException("Injected CUDA stop failure.");
+            }
+
+            base.Stop();
+        }
+    }
+
     private class MonitoringHardwareBackend : HardwareFacadeBackend, IGpuSharedMonitoringBackend
     {
         public bool SupportsSharedMonitoringResources => true;
