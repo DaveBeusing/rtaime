@@ -92,6 +92,21 @@ public sealed class GpuLifecycleRecoveryTests
     }
 
     [Fact]
+    public void Cuda_classified_readback_failure_returns_host_lease_and_fails_closed()
+    {
+        using var backend = new FailFirstReadbackHardwareBackend();
+        using var provider = new GpuProcessingProvider(backend, readbackBufferCapacity: 1);
+        provider.Start();
+        using var frame = Upload(provider, SourceA, 1, 2, 3, 0);
+
+        Assert.Throws<InvalidOperationException>(() => provider.RentReadback(frame));
+        Assert.Equal(GpuProviderState.Failed, provider.State);
+        Assert.Equal(GpuProviderLifecycleReasonCodes.ReadbackFailed, provider.Lifecycle.ReasonCode);
+        Assert.Equal(0, provider.ReadbackPoolStatistics.ActiveBuffers);
+        Assert.Equal(1, provider.ReadbackPoolStatistics.AvailableBuffers);
+    }
+
+    [Fact]
     public void Readback_pool_exhaustion_degrades_without_losing_the_active_lease()
     {
         using var backend = new HardwareFacadeBackend();
