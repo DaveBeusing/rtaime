@@ -237,6 +237,7 @@ public readonly record struct GpuSharedMonitoringResourceStatistics(
 
 public sealed class GpuSharedMonitoringResourceLease : IDisposable
 {
+    private readonly object _gate = new();
     private Action<MonitoringResourceId>? _release;
 
     internal GpuSharedMonitoringResourceLease(
@@ -248,11 +249,27 @@ public sealed class GpuSharedMonitoringResourceLease : IDisposable
     }
 
     public MonitoringSharedResourceDescriptor Descriptor { get; }
-    public bool IsDisposed => Volatile.Read(ref _release) is null;
+
+    public bool IsDisposed
+    {
+        get
+        {
+            lock (_gate)
+                return _release is null;
+        }
+    }
 
     public void Dispose()
     {
-        Interlocked.Exchange(ref _release, null)?.Invoke(Descriptor.ResourceId);
+        lock (_gate)
+        {
+            var release = _release;
+            if (release is null)
+                return;
+
+            release(Descriptor.ResourceId);
+            _release = null;
+        }
     }
 }
 
@@ -590,10 +607,42 @@ public sealed record GpuCompositeRequest
 
 public enum GpuProviderState
 {
-    Stopped = 1,
-    Running = 2,
-    Disposed = 3
+    Unavailable = 1,
+    Stopped = 2,
+    Starting = 3,
+    Ready = 4,
+    Degraded = 5,
+    Failed = 6,
+    Recovering = 7,
+    Disposed = 8
 }
+
+public static class GpuProviderLifecycleReasonCodes
+{
+    public const string BackendUnavailable = "gpu.provider.backend_unavailable";
+    public const string Stopped = "gpu.provider.stopped";
+    public const string Starting = "gpu.provider.starting";
+    public const string Ready = "gpu.provider.ready";
+    public const string StartFailed = "gpu.provider.start_failed";
+    public const string Recovering = "gpu.provider.recovering";
+    public const string RecoveryFailed = "gpu.provider.recovery_failed";
+    public const string MonitoringUnavailable = "gpu.monitoring.resource.export_unavailable";
+    public const string MonitoringCapacityExhausted = "gpu.monitoring.resource.capacity_exhausted";
+    public const string MonitoringReleaseFailed = "gpu.monitoring.resource.release_failed";
+    public const string SurfaceReleaseFailed = "gpu.surface.release_failed";
+    public const string ReadbackPoolExhausted = "gpu.readback.pool_exhausted";
+    public const string UploadFailed = "gpu.upload.backend_failure";
+    public const string CompositeFailed = "gpu.composite.backend_failure";
+    public const string ReadbackFailed = "gpu.readback.backend_failure";
+    public const string StopFailed = "gpu.provider.stop_failed";
+    public const string Disposed = "gpu.provider.disposed";
+}
+
+public sealed record GpuProviderLifecycleSnapshot(
+    GpuProviderState State,
+    string ReasonCode,
+    Failure? Failure,
+    ulong Generation);
 
 public sealed record GpuObservation(
     ulong Ordinal,
@@ -659,7 +708,10 @@ public sealed class GpuProcessingProvider : IDisposable
     private ulong _totalSharedMonitoringExports;
     private ulong _rejectedSharedMonitoringExports;
     private Identity _monitoringProviderInstanceId = Identity.New();
-    private GpuProviderState _state = GpuProviderState.Stopped;
+    private GpuProviderState _state;
+    private string _lifecycleReasonCode;
+    private Failure? _lifecycleFailure;
+    private ulong _lifecycleGeneration;
     private ulong _surfaceOrdinal;
     private ulong _observationOrdinal;
 
@@ -667,10 +719,22 @@ public sealed class GpuProcessingProvider : IDisposable
     {
         _backend = backend ?? throw new ArgumentNullException(nameof(backend));
         _readbackPool = new GpuReadbackBufferPool(readbackBufferCapacity);
-        Descriptor = CreateDescriptor(backend);
+        _state = backend.Info.Available ? GpuProviderState.Stopped : GpuProviderState.Unavailable;
+        _lifecycleReasonCode = backend.Info.Available
+            ? GpuProviderLifecycleReasonCodes.Stopped
+            : GpuProviderLifecycleReasonCodes.BackendUnavailable;
+        _lifecycleFailure = backend.Info.Available ? null : backend.Info.Failure;
     }
 
-    public ProviderDescriptor Descriptor { get; }
+    public ProviderDescriptor Descriptor
+    {
+        get
+        {
+            lock (_gate)
+                return CreateDescriptor(_backend, _state, _lifecycleReasonCode, _lifecycleFailure);
+        }
+    }
+
     public GpuBackendInfo BackendInfo => _backend.Info;
     public Identity MonitoringProviderInstanceId
     {
@@ -690,6 +754,19 @@ public sealed class GpuProcessingProvider : IDisposable
         }
     }
 
+    public GpuProviderLifecycleSnapshot Lifecycle
+    {
+        get
+        {
+            lock (_gate)
+                return new GpuProviderLifecycleSnapshot(
+                    _state,
+                    _lifecycleReasonCode,
+                    _lifecycleFailure,
+                    _lifecycleGeneration);
+        }
+    }
+
     public int ActiveSurfaceCount => Volatile.Read(ref _observableActiveSurfaceCount);
 
     public int UnreleasedBackendSurfaceCount =>
@@ -701,15 +778,24 @@ public sealed class GpuProcessingProvider : IDisposable
     public IReadOnlyList<GpuObservation> Observations => _observations.Snapshot();
     public ulong OverwrittenObservationCount => _observations.OverwrittenCount;
     public GpuReadbackPoolStatistics ReadbackPoolStatistics => _readbackPool.Statistics;
-    public bool CanExportSharedMonitoringResources =>
-        _backend.Info.Available &&
-        _backend.Info.HardwareAccelerated &&
-        _backend.StorageDomain == SurfaceStorageDomain.Device &&
-        _backend is IGpuSharedMonitoringBackend
+    public bool CanExportSharedMonitoringResources
+    {
+        get
         {
-            SupportsSharedMonitoringResources: true,
-            IsSharedMonitoringExportAvailable: true
-        };
+            lock (_gate)
+            {
+                return _state is GpuProviderState.Ready or GpuProviderState.Degraded &&
+                    _backend.Info.Available &&
+                    _backend.Info.HardwareAccelerated &&
+                    _backend.StorageDomain == SurfaceStorageDomain.Device &&
+                    _backend is IGpuSharedMonitoringBackend
+                    {
+                        SupportsSharedMonitoringResources: true,
+                        IsSharedMonitoringExportAvailable: true
+                    };
+            }
+        }
+    }
     public GpuSharedMonitoringResourceStatistics SharedMonitoringResourceStatistics
     {
         get
@@ -730,24 +816,112 @@ public sealed class GpuProcessingProvider : IDisposable
         lock (_gate)
         {
             ThrowIfDisposed();
-            if (_state == GpuProviderState.Running)
+            if (_state is GpuProviderState.Ready or GpuProviderState.Degraded)
                 return;
-            if (!_backend.Info.Available)
-                throw new InvalidOperationException(_backend.Info.Failure?.Message ?? "GPU backend is unavailable.");
+            if (_state == GpuProviderState.Failed)
+                throw new InvalidOperationException("GPU provider is failed; use Recover before resuming production work.");
+
+            TransitionStateUnsafe(
+                GpuProviderState.Starting,
+                GpuProviderLifecycleReasonCodes.Starting,
+                null);
+
+            try
+            {
+                if (!_backend.Info.Available)
+                    throw new InvalidOperationException(_backend.Info.Failure?.Message ?? "GPU backend is unavailable.");
+
+                _backend.Start();
+                _monitoringProviderInstanceId = Identity.New();
+                TransitionStateUnsafe(
+                    GpuProviderState.Ready,
+                    GpuProviderLifecycleReasonCodes.Ready,
+                    null,
+                    advanceGeneration: true);
+                Observe("gpu.provider.started", null, null);
+            }
+            catch (Exception exception)
+            {
+                Exception? cleanupFailure = null;
+                try
+                {
+                    _backend.Stop();
+                }
+                catch (Exception cleanupException)
+                {
+                    cleanupFailure = cleanupException;
+                }
+
+                var detail = cleanupFailure is null
+                    ? $"GPU backend start failed: {exception.GetType().Name}."
+                    : $"GPU backend start failed: {exception.GetType().Name}; cleanup also failed: {cleanupFailure.GetType().Name}.";
+                var failure = new Failure(GpuProviderLifecycleReasonCodes.StartFailed, detail);
+                TransitionStateUnsafe(GpuProviderState.Failed, GpuProviderLifecycleReasonCodes.StartFailed, failure);
+                throw;
+            }
+        }
+    }
+
+    public void Recover()
+    {
+        lock (_gate)
+        {
+            ThrowIfDisposed();
+            if (_state == GpuProviderState.Ready)
+                return;
+            if (_state is GpuProviderState.Stopped or GpuProviderState.Unavailable)
+            {
+                Start();
+                return;
+            }
+            if (_state is not (GpuProviderState.Degraded or GpuProviderState.Failed))
+                throw new InvalidOperationException($"GPU provider cannot recover from state '{_state}'.");
+
+            TransitionStateUnsafe(
+                GpuProviderState.Recovering,
+                GpuProviderLifecycleReasonCodes.Recovering,
+                _lifecycleFailure);
+
+            var cleanupFailure = DrainResourcesAndStopBackendUnsafe();
+            if (cleanupFailure is not null)
+            {
+                var failure = new Failure(
+                    GpuProviderLifecycleReasonCodes.RecoveryFailed,
+                    $"GPU provider recovery cleanup failed: {cleanupFailure.GetType().Name}.");
+                TransitionStateUnsafe(GpuProviderState.Failed, GpuProviderLifecycleReasonCodes.RecoveryFailed, failure);
+                throw new InvalidOperationException(failure.Message, cleanupFailure);
+            }
 
             try
             {
                 _backend.Start();
                 _monitoringProviderInstanceId = Identity.New();
-                _state = GpuProviderState.Running;
-                Observe("gpu.provider.started", null, null);
+                TransitionStateUnsafe(
+                    GpuProviderState.Ready,
+                    GpuProviderLifecycleReasonCodes.Ready,
+                    null,
+                    advanceGeneration: true);
             }
             catch (Exception exception)
             {
+                try
+                {
+                    _backend.Stop();
+                }
+                catch (Exception cleanupException)
+                {
+                    Observe(
+                        "gpu.provider.recovery_cleanup_failed",
+                        null,
+                        new Failure(
+                            "gpu.provider.recovery_cleanup_failed",
+                            $"GPU recovery cleanup failed: {cleanupException.GetType().Name}."));
+                }
+
                 var failure = new Failure(
-                    "gpu.provider.start_failed",
-                    $"GPU backend start failed: {exception.GetType().Name}.");
-                Observe("gpu.provider.start_failed", null, failure);
+                    GpuProviderLifecycleReasonCodes.RecoveryFailed,
+                    $"GPU backend recovery failed: {exception.GetType().Name}.");
+                TransitionStateUnsafe(GpuProviderState.Failed, GpuProviderLifecycleReasonCodes.RecoveryFailed, failure);
                 throw;
             }
         }
@@ -759,30 +933,23 @@ public sealed class GpuProcessingProvider : IDisposable
         {
             if (_state is GpuProviderState.Stopped or GpuProviderState.Disposed)
                 return;
-
-            foreach (var frame in _activeFrames.Values.ToArray())
+            if (_state == GpuProviderState.Unavailable)
             {
-                TryReleaseBackendSurface(frame.SurfaceId);
-                frame.MarkReleased();
+                TransitionStateUnsafe(GpuProviderState.Stopped, GpuProviderLifecycleReasonCodes.Stopped, null);
+                return;
             }
 
-            _activeFrames.Clear();
-            foreach (var entry in _sharedMonitoringResources.Values)
-                entry.BackendResource.Dispose();
-            _sharedMonitoringResources.Clear();
-            _sharedMonitoringSurfaceReferences.Clear();
-            foreach (var surfaceId in _deferredMonitoringSurfaceReleases.ToArray())
-                TryReleaseBackendSurface(surfaceId);
-            _deferredMonitoringSurfaceReleases.Clear();
-            Volatile.Write(ref _observableActiveSharedMonitoringResourceCount, 0);
-            PublishResourceCountsUnsafe();
-            foreach (var surfaceId in _unreleasedBackendSurfaces.ToArray())
-                TryReleaseBackendSurface(surfaceId);
+            var failure = DrainResourcesAndStopBackendUnsafe();
+            if (failure is not null)
+            {
+                var lifecycleFailure = new Failure(
+                    GpuProviderLifecycleReasonCodes.StopFailed,
+                    $"GPU provider stop failed: {failure.GetType().Name}.");
+                TransitionStateUnsafe(GpuProviderState.Failed, GpuProviderLifecycleReasonCodes.StopFailed, lifecycleFailure);
+                throw new InvalidOperationException(lifecycleFailure.Message, failure);
+            }
 
-            _backend.Stop();
-            _unreleasedBackendSurfaces.Clear();
-            PublishResourceCountsUnsafe();
-            _state = GpuProviderState.Stopped;
+            TransitionStateUnsafe(GpuProviderState.Stopped, GpuProviderLifecycleReasonCodes.Stopped, null);
             Observe("gpu.provider.stopped", null, null);
         }
     }
@@ -813,7 +980,20 @@ public sealed class GpuProcessingProvider : IDisposable
                 contentGeneration.ToString(),
                 ordinal.ToString()));
 
-            _backend.Allocate(surfaceId, content.Format, content.Pixels.Span);
+            try
+            {
+                _backend.Allocate(surfaceId, content.Format, content.Pixels.Span);
+            }
+            catch (Exception exception)
+            {
+                var failure = new Failure(
+                    GpuProviderLifecycleReasonCodes.UploadFailed,
+                    $"GPU upload failed: {exception.GetType().Name}.");
+                if (_backend.Info.Kind == GpuBackendKind.NvidiaCuda)
+                    TransitionStateUnsafe(GpuProviderState.Failed, GpuProviderLifecycleReasonCodes.UploadFailed, failure);
+                Observe("gpu.upload.failed", timing.SequenceNumber, failure);
+                throw;
+            }
 
             var surface = new SurfaceDescriptor(
                 surfaceId,
@@ -961,8 +1141,10 @@ public sealed class GpuProcessingProvider : IDisposable
                 if (outputSurfaceId != pendingSurfaceId && outputSurfaceId != intermediateSurfaceId)
                     TryReleaseBackendSurface(outputSurfaceId);
                 var failure = new Failure(
-                    "gpu.composite.backend_failure",
+                    GpuProviderLifecycleReasonCodes.CompositeFailed,
                     $"GPU composite operation failed: {exception.GetType().Name}.");
+                if (_backend.Info.Kind == GpuBackendKind.NvidiaCuda)
+                    TransitionStateUnsafe(GpuProviderState.Failed, GpuProviderLifecycleReasonCodes.CompositeFailed, failure);
                 Observe("gpu.composite.failed", timing.SequenceNumber, failure);
                 return GpuProcessingResult.Rejected(failure, stopwatch.Elapsed, request.Layers.Count);
             }
@@ -981,7 +1163,18 @@ public sealed class GpuProcessingProvider : IDisposable
             lease = null;
 
             if (!CanExportSharedMonitoringResources)
+            {
+                if (_backend.Info.HardwareAccelerated &&
+                    _backend is IGpuSharedMonitoringBackend { SupportsSharedMonitoringResources: true })
+                {
+                    var failure = new Failure(
+                        GpuProviderLifecycleReasonCodes.MonitoringUnavailable,
+                        "GPU shared monitoring export is unavailable; Program execution remains isolated.");
+                    MarkDegradedUnsafe(GpuProviderLifecycleReasonCodes.MonitoringUnavailable, failure);
+                    Observe("gpu.monitoring.resource.export_unavailable", frame.Descriptor.Timing.SequenceNumber, failure);
+                }
                 return false;
+            }
             if (frame.IsDisposed || !_activeFrames.ContainsKey(frame.SurfaceId))
                 throw new ObjectDisposedException(nameof(frame));
 
@@ -989,7 +1182,11 @@ public sealed class GpuProcessingProvider : IDisposable
             {
                 if (_rejectedSharedMonitoringExports < ulong.MaxValue)
                     _rejectedSharedMonitoringExports++;
-                Observe("gpu.monitoring.resource.capacity_exhausted", frame.Descriptor.Timing.SequenceNumber, null);
+                var failure = new Failure(
+                    GpuProviderLifecycleReasonCodes.MonitoringCapacityExhausted,
+                    "GPU shared monitoring resource capacity is exhausted; Program execution remains available.");
+                MarkDegradedUnsafe(GpuProviderLifecycleReasonCodes.MonitoringCapacityExhausted, failure);
+                Observe("gpu.monitoring.resource.capacity_exhausted", frame.Descriptor.Timing.SequenceNumber, failure);
                 return false;
             }
 
@@ -997,15 +1194,37 @@ public sealed class GpuProcessingProvider : IDisposable
                 throw new InvalidOperationException("GPU monitoring resource ordinal is exhausted.");
 
             var sharingBackend = (IGpuSharedMonitoringBackend)_backend;
-            if (!sharingBackend.TryExportMonitoringResource(
-                    frame.SurfaceId,
-                    frame.Descriptor.Surface.Format,
-                    out var backendResource) ||
-                backendResource is null)
+            GpuBackendMonitoringResource? backendResource;
+            try
             {
-                Observe("gpu.monitoring.resource.export_unavailable", frame.Descriptor.Timing.SequenceNumber, null);
+                if (!sharingBackend.TryExportMonitoringResource(
+                        frame.SurfaceId,
+                        frame.Descriptor.Surface.Format,
+                        out backendResource) ||
+                    backendResource is null)
+                {
+                    var failure = new Failure(
+                        GpuProviderLifecycleReasonCodes.MonitoringUnavailable,
+                        "GPU shared monitoring export failed; Program execution remains isolated.");
+                    MarkDegradedUnsafe(GpuProviderLifecycleReasonCodes.MonitoringUnavailable, failure);
+                    Observe("gpu.monitoring.resource.export_unavailable", frame.Descriptor.Timing.SequenceNumber, failure);
+                    return false;
+                }
+            }
+            catch (Exception exception)
+            {
+                var failure = new Failure(
+                    GpuProviderLifecycleReasonCodes.MonitoringUnavailable,
+                    $"GPU shared monitoring export failed: {exception.GetType().Name}; Program execution remains isolated.");
+                MarkDegradedUnsafe(GpuProviderLifecycleReasonCodes.MonitoringUnavailable, failure);
+                Observe("gpu.monitoring.resource.export_failed", frame.Descriptor.Timing.SequenceNumber, failure);
                 return false;
             }
+
+            RestoreReadyFromDegradationUnsafe(
+                GpuProviderLifecycleReasonCodes.MonitoringUnavailable,
+                GpuProviderLifecycleReasonCodes.MonitoringCapacityExhausted,
+                GpuProviderLifecycleReasonCodes.MonitoringReleaseFailed);
 
             var resourceId = new MonitoringResourceId(GpuIdentity.Create(
                 "gpu-monitoring-resource",
@@ -1048,7 +1267,7 @@ public sealed class GpuProcessingProvider : IDisposable
 
         lock (_gate)
         {
-            if (_state != GpuProviderState.Running ||
+            if (_state is not (GpuProviderState.Ready or GpuProviderState.Degraded) ||
                 descriptor.ProviderInstanceId != _monitoringProviderInstanceId ||
                 !_sharedMonitoringResources.TryGetValue(descriptor.ResourceId, out var entry))
             {
@@ -1072,15 +1291,36 @@ public sealed class GpuProcessingProvider : IDisposable
                 throw new ObjectDisposedException(nameof(frame));
 
             var byteLength = RgbaFrameBuffer.RequiredByteLength(frame.Descriptor.Surface.Format);
-            var lease = _readbackPool.Rent(byteLength);
+            GpuReadbackLease lease;
+            try
+            {
+                lease = _readbackPool.Rent(byteLength);
+            }
+            catch (Exception exception)
+            {
+                var failure = new Failure(
+                    GpuProviderLifecycleReasonCodes.ReadbackPoolExhausted,
+                    $"GPU readback lease acquisition failed: {exception.GetType().Name}.");
+                MarkDegradedUnsafe(GpuProviderLifecycleReasonCodes.ReadbackPoolExhausted, failure);
+                Observe("gpu.readback.pool_exhausted", frame.Descriptor.Timing.SequenceNumber, failure);
+                throw;
+            }
+
             try
             {
                 _backend.ReadbackInto(frame.SurfaceId, frame.Descriptor.Surface.Format, lease.WritableSpan);
+                RestoreReadyFromDegradationUnsafe(GpuProviderLifecycleReasonCodes.ReadbackPoolExhausted);
                 return lease;
             }
-            catch
+            catch (Exception exception)
             {
                 lease.Dispose();
+                var failure = new Failure(
+                    GpuProviderLifecycleReasonCodes.ReadbackFailed,
+                    $"GPU readback failed: {exception.GetType().Name}.");
+                if (_backend.Info.Kind == GpuBackendKind.NvidiaCuda)
+                    TransitionStateUnsafe(GpuProviderState.Failed, GpuProviderLifecycleReasonCodes.ReadbackFailed, failure);
+                Observe("gpu.readback.failed", frame.Descriptor.Timing.SequenceNumber, failure);
                 throw;
             }
         }
@@ -1099,12 +1339,12 @@ public sealed class GpuProcessingProvider : IDisposable
             if (_state == GpuProviderState.Disposed)
                 return;
 
-            if (_state == GpuProviderState.Running)
+            if (_state is not (GpuProviderState.Stopped or GpuProviderState.Unavailable))
                 Stop();
 
             _backend.Dispose();
             _readbackPool.Dispose();
-            _state = GpuProviderState.Disposed;
+            TransitionStateUnsafe(GpuProviderState.Disposed, GpuProviderLifecycleReasonCodes.Disposed, null);
         }
     }
 
@@ -1194,30 +1434,55 @@ public sealed class GpuProcessingProvider : IDisposable
     {
         lock (_gate)
         {
-            if (!_sharedMonitoringResources.Remove(resourceId, out var entry))
+            if (TryReleaseMonitoringResourceUnsafe(resourceId))
                 return;
 
-            entry.BackendResource.Dispose();
-
-            var surfaceId = entry.Descriptor.SurfaceId;
-            if (_sharedMonitoringSurfaceReferences.TryGetValue(surfaceId, out var references))
-            {
-                if (references <= 1)
-                {
-                    _sharedMonitoringSurfaceReferences.Remove(surfaceId);
-                    if (_deferredMonitoringSurfaceReleases.Remove(surfaceId))
-                        TryReleaseBackendSurface(surfaceId);
-                }
-                else
-                {
-                    _sharedMonitoringSurfaceReferences[surfaceId] = references - 1;
-                }
-            }
-
-            Volatile.Write(ref _observableActiveSharedMonitoringResourceCount, _sharedMonitoringResources.Count);
-            PublishResourceCountsUnsafe();
-            Observe("gpu.monitoring.resource.released", entry.SequenceNumber, null);
+            throw new InvalidOperationException("GPU monitoring resource release failed and remains tracked for retry.");
         }
+    }
+
+    private bool TryReleaseMonitoringResourceUnsafe(MonitoringResourceId resourceId)
+    {
+        if (!_sharedMonitoringResources.TryGetValue(resourceId, out var entry))
+            return true;
+
+        try
+        {
+            entry.BackendResource.Dispose();
+        }
+        catch (Exception exception)
+        {
+            var failure = new Failure(
+                GpuProviderLifecycleReasonCodes.MonitoringReleaseFailed,
+                $"GPU monitoring resource release failed: {exception.GetType().Name}.");
+            MarkDegradedUnsafe(GpuProviderLifecycleReasonCodes.MonitoringReleaseFailed, failure);
+            Observe("gpu.monitoring.resource.release_failed", entry.SequenceNumber, failure);
+            return false;
+        }
+
+        _sharedMonitoringResources.Remove(resourceId);
+        var surfaceId = entry.Descriptor.SurfaceId;
+        if (_sharedMonitoringSurfaceReferences.TryGetValue(surfaceId, out var references))
+        {
+            if (references <= 1)
+            {
+                _sharedMonitoringSurfaceReferences.Remove(surfaceId);
+                if (_deferredMonitoringSurfaceReleases.Remove(surfaceId))
+                    TryReleaseBackendSurface(surfaceId);
+            }
+            else
+            {
+                _sharedMonitoringSurfaceReferences[surfaceId] = references - 1;
+            }
+        }
+
+        Volatile.Write(ref _observableActiveSharedMonitoringResourceCount, _sharedMonitoringResources.Count);
+        PublishResourceCountsUnsafe();
+        Observe("gpu.monitoring.resource.released", entry.SequenceNumber, null);
+        RestoreReadyFromDegradationUnsafe(
+            GpuProviderLifecycleReasonCodes.MonitoringReleaseFailed,
+            GpuProviderLifecycleReasonCodes.MonitoringCapacityExhausted);
+        return true;
     }
 
     private bool TryReleaseBackendSurface(SurfaceId surfaceId)
@@ -1233,10 +1498,11 @@ public sealed class GpuProcessingProvider : IDisposable
         {
             _unreleasedBackendSurfaces.Add(surfaceId);
             PublishResourceCountsUnsafe();
-            Observe(
-                "gpu.surface.release_failed",
-                null,
-                new Failure("gpu.surface.release_failed", $"GPU surface release failed: {exception.GetType().Name}."));
+            var failure = new Failure(
+                GpuProviderLifecycleReasonCodes.SurfaceReleaseFailed,
+                $"GPU surface release failed: {exception.GetType().Name}.");
+            MarkDegradedUnsafe(GpuProviderLifecycleReasonCodes.SurfaceReleaseFailed, failure);
+            Observe("gpu.surface.release_failed", null, failure);
             return false;
         }
     }
@@ -1251,7 +1517,11 @@ public sealed class GpuProcessingProvider : IDisposable
             _unreleasedBackendSurfaces.Count);
     }
 
-    private static ProviderDescriptor CreateDescriptor(IGpuProcessingBackend backend)
+    private static ProviderDescriptor CreateDescriptor(
+        IGpuProcessingBackend backend,
+        GpuProviderState state,
+        string lifecycleReasonCode,
+        Failure? lifecycleFailure)
     {
         var info = backend.Info;
         var providerId = new ProviderId(GpuIdentity.Create("gpu-provider", info.Kind.ToString(), info.DeviceName));
@@ -1286,11 +1556,26 @@ public sealed class GpuProcessingProvider : IDisposable
             : Array.Empty<ProviderResourceDescriptor>();
 
         ProviderAvailability availability;
-        if (!info.Available)
+        if (!info.Available || state == GpuProviderState.Unavailable)
         {
             availability = new ProviderAvailability(
                 ProviderAvailabilityState.Unavailable,
-                info.Failure ?? new Failure("gpu.backend.unavailable", "GPU backend is unavailable."));
+                lifecycleFailure ?? info.Failure ?? new Failure(
+                    GpuProviderLifecycleReasonCodes.BackendUnavailable,
+                    "GPU backend is unavailable."));
+        }
+        else if (state is GpuProviderState.Failed or GpuProviderState.Disposed)
+        {
+            availability = new ProviderAvailability(
+                ProviderAvailabilityState.Unavailable,
+                lifecycleFailure ?? new Failure(lifecycleReasonCode, $"GPU provider lifecycle state is {state}."));
+        }
+        else if (state is GpuProviderState.Starting or GpuProviderState.Recovering or GpuProviderState.Degraded ||
+            state == GpuProviderState.Stopped && info.HardwareAccelerated)
+        {
+            availability = new ProviderAvailability(
+                ProviderAvailabilityState.Degraded,
+                lifecycleFailure ?? new Failure(lifecycleReasonCode, $"GPU provider lifecycle state is {state}."));
         }
         else if (!info.HardwareAccelerated)
         {
@@ -1323,6 +1608,124 @@ public sealed class GpuProcessingProvider : IDisposable
             kind,
             formats);
 
+    private Exception? DrainResourcesAndStopBackendUnsafe()
+    {
+        Exception? firstFailure = null;
+
+        foreach (var resourceId in _sharedMonitoringResources.Keys.ToArray())
+        {
+            if (!TryReleaseMonitoringResourceUnsafe(resourceId) && firstFailure is null)
+                firstFailure = new InvalidOperationException("One or more GPU monitoring resources could not be released.");
+        }
+
+        foreach (var surfaceId in _unreleasedBackendSurfaces.ToArray())
+        {
+            if (!TryReleaseBackendSurface(surfaceId) && firstFailure is null)
+                firstFailure = new InvalidOperationException("One or more previously failed GPU surface releases could not be retried.");
+        }
+
+        var surfaces = new HashSet<SurfaceId>(_activeFrames.Keys);
+        surfaces.UnionWith(_deferredMonitoringSurfaceReleases);
+
+        foreach (var frame in _activeFrames.Values)
+            frame.MarkReleased();
+        _activeFrames.Clear();
+        _deferredMonitoringSurfaceReleases.Clear();
+
+        foreach (var surfaceId in surfaces)
+        {
+            if (!TryReleaseBackendSurface(surfaceId) && firstFailure is null)
+                firstFailure = new InvalidOperationException("One or more GPU surfaces could not be released.");
+        }
+
+        try
+        {
+            _backend.Stop();
+            _unreleasedBackendSurfaces.Clear();
+        }
+        catch (Exception exception)
+        {
+            firstFailure ??= exception;
+        }
+
+        Volatile.Write(ref _observableActiveSharedMonitoringResourceCount, _sharedMonitoringResources.Count);
+        PublishResourceCountsUnsafe();
+        return firstFailure;
+    }
+
+    private void MarkDegradedUnsafe(string reasonCode, Failure failure)
+    {
+        if (_state is GpuProviderState.Ready or GpuProviderState.Degraded)
+            TransitionStateUnsafe(GpuProviderState.Degraded, reasonCode, failure);
+    }
+
+    private void RestoreReadyFromDegradationUnsafe(params string[] recoverableReasons)
+    {
+        if (_state != GpuProviderState.Degraded ||
+            !recoverableReasons.Contains(_lifecycleReasonCode, StringComparer.Ordinal))
+        {
+            return;
+        }
+
+        TransitionStateUnsafe(
+            GpuProviderState.Ready,
+            GpuProviderLifecycleReasonCodes.Ready,
+            null);
+    }
+
+    private void TransitionStateUnsafe(
+        GpuProviderState next,
+        string reasonCode,
+        Failure? failure,
+        bool advanceGeneration = false)
+    {
+        if (string.IsNullOrWhiteSpace(reasonCode))
+            throw new ArgumentException("GPU provider lifecycle reason code is required.", nameof(reasonCode));
+
+        if (_state != next && !IsAllowedTransition(_state, next))
+            throw new InvalidOperationException($"GPU provider lifecycle transition '{_state}' -> '{next}' is not allowed.");
+
+        _state = next;
+        _lifecycleReasonCode = reasonCode.Trim();
+        _lifecycleFailure = failure;
+        if (advanceGeneration)
+        {
+            if (_lifecycleGeneration == ulong.MaxValue)
+                throw new InvalidOperationException("GPU provider lifecycle generation is exhausted.");
+            _lifecycleGeneration++;
+        }
+
+        Observe($"gpu.provider.state.{next.ToString().ToLowerInvariant()}", null, failure);
+    }
+
+    private static bool IsAllowedTransition(GpuProviderState current, GpuProviderState next) =>
+        (current, next) switch
+        {
+            (GpuProviderState.Unavailable, GpuProviderState.Starting) => true,
+            (GpuProviderState.Unavailable, GpuProviderState.Stopped) => true,
+            (GpuProviderState.Unavailable, GpuProviderState.Disposed) => true,
+            (GpuProviderState.Stopped, GpuProviderState.Starting) => true,
+            (GpuProviderState.Stopped, GpuProviderState.Disposed) => true,
+            (GpuProviderState.Starting, GpuProviderState.Ready) => true,
+            (GpuProviderState.Starting, GpuProviderState.Failed) => true,
+            (GpuProviderState.Starting, GpuProviderState.Stopped) => true,
+            (GpuProviderState.Ready, GpuProviderState.Degraded) => true,
+            (GpuProviderState.Ready, GpuProviderState.Failed) => true,
+            (GpuProviderState.Ready, GpuProviderState.Stopped) => true,
+            (GpuProviderState.Degraded, GpuProviderState.Ready) => true,
+            (GpuProviderState.Degraded, GpuProviderState.Failed) => true,
+            (GpuProviderState.Degraded, GpuProviderState.Recovering) => true,
+            (GpuProviderState.Degraded, GpuProviderState.Stopped) => true,
+            (GpuProviderState.Failed, GpuProviderState.Recovering) => true,
+            (GpuProviderState.Failed, GpuProviderState.Stopped) => true,
+            (GpuProviderState.Recovering, GpuProviderState.Ready) => true,
+            (GpuProviderState.Recovering, GpuProviderState.Failed) => true,
+            (GpuProviderState.Recovering, GpuProviderState.Stopped) => true,
+            (GpuProviderState.Stopped, GpuProviderState.Stopped) => true,
+            (_, GpuProviderState.Disposed) when current != GpuProviderState.Disposed => true,
+            _ => false
+        };
+
     private void Observe(string code, ulong? sequenceNumber, Failure? failure) =>
         _observations.Add(new GpuObservation(_observationOrdinal++, code, sequenceNumber, failure));
 
@@ -1334,8 +1737,8 @@ public sealed class GpuProcessingProvider : IDisposable
     private void EnsureRunning()
     {
         ThrowIfDisposed();
-        if (_state != GpuProviderState.Running)
-            throw new InvalidOperationException("GPU processing provider must be started before use.");
+        if (_state is not (GpuProviderState.Ready or GpuProviderState.Degraded))
+            throw new InvalidOperationException($"GPU processing provider is not available for production work while state is '{_state}'.");
     }
 
     private void ThrowIfDisposed()

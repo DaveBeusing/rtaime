@@ -126,6 +126,8 @@ The transport carries frame observations only. It exposes no Set Preview, CUT, D
 
 Monitoring health remains separate from ControlHost connection health. Loss of the monitoring pipe can mark monitoring `STALE` without changing authoritative control state.
 
+CUDA/D3D11 shared-resource export failure is also contained to this observational plane. The provider performs one bounded same-device interop recreation attempt; persistent failure is projected through the existing GPU Provider health evidence as degraded while Program authority remains unchanged. Monitoring resource release failures remain tracked and retryable rather than being silently discarded. See `docs/GpuLifecycleRecovery.md`.
+
 ## Clean Program
 
 Program Output / Clean Feed reuses the same `OperatorMonitoringViewModel.ProgramGpuFrame` and `ProgramImage` as the in-workspace Program monitor. It does not create a second monitoring subscriber, decoder, compositor or frame transport.

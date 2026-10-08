@@ -134,9 +134,11 @@ public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend, IGpuShared
                 _ = CudaD3D11MonitoringInterop.TryCreate(device, out _monitoringInterop);
                 _running = true;
             }
-            catch
+            catch (Exception exception)
             {
-                CleanupContext();
+                var cleanupFailure = CleanupContext();
+                if (cleanupFailure is not null)
+                    throw new AggregateException("CUDA backend start failed and partial context cleanup also failed.", exception, cleanupFailure);
                 throw;
             }
         }
@@ -146,34 +148,49 @@ public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend, IGpuShared
     {
         lock (_gate)
         {
-            if (_disposed || !_running && _context == IntPtr.Zero)
+            if (_disposed || !_running && _context == IntPtr.Zero && _monitoringInterop is null)
                 return;
 
-            _monitoringInterop?.Dispose();
-            _monitoringInterop = null;
+            Exception? monitoringCleanupFailure = null;
+            try
+            {
+                _monitoringInterop?.Dispose();
+                _monitoringInterop = null;
+            }
+            catch (Exception exception)
+            {
+                monitoringCleanupFailure = exception;
+            }
 
             if (_context != IntPtr.Zero)
             {
-                try
+                SetCurrentContext();
+
+                foreach (var pair in _surfaces.ToArray())
                 {
-                    SetCurrentContext();
-                    foreach (var allocation in _surfaces.Values)
-                        CudaNative.cuMemFree_v2(allocation.DevicePointer);
-                    _surfaces.Clear();
-                    foreach (var pool in _freeAllocations.Values)
+                    Check(CudaNative.cuMemFree_v2(pair.Value.DevicePointer), "cuMemFree_v2");
+                    _surfaces.Remove(pair.Key);
+                }
+
+                foreach (var pair in _freeAllocations.ToArray())
+                {
+                    while (pair.Value.TryPeek(out var pointer))
                     {
-                        while (pool.TryPop(out var pointer))
-                            CudaNative.cuMemFree_v2(pointer);
+                        Check(CudaNative.cuMemFree_v2(pointer), "cuMemFree_v2");
+                        pair.Value.Pop();
                     }
-                    _freeAllocations.Clear();
+
+                    _freeAllocations.Remove(pair.Key);
                 }
-                finally
-                {
-                    CleanupContext();
-                }
+
+                var cleanupFailure = CleanupContext();
+                if (cleanupFailure is not null)
+                    throw cleanupFailure;
             }
 
             _running = false;
+            if (monitoringCleanupFailure is not null)
+                throw new InvalidOperationException("CUDA monitoring interop cleanup failed after Program resources were released.", monitoringCleanupFailure);
         }
     }
 
@@ -280,6 +297,17 @@ public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend, IGpuShared
 
             var allocation = Get(surfaceId, format);
             SetCurrentContext();
+            if (_monitoringInterop.TryExport(allocation.DevicePointer, format, out resource))
+                return true;
+
+            _monitoringInterop.Dispose();
+            _monitoringInterop = null;
+
+            Check(CudaNative.cuDeviceGet(out var device, _deviceOrdinal), "cuDeviceGet");
+            if (!CudaD3D11MonitoringInterop.TryCreate(device, out var recreated) || recreated is null)
+                return false;
+
+            _monitoringInterop = recreated;
             return _monitoringInterop.TryExport(allocation.DevicePointer, format, out resource);
         }
     }
@@ -310,14 +338,14 @@ public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend, IGpuShared
     {
         lock (_gate)
         {
-            if (_disposed || !_surfaces.Remove(surfaceId, out var allocation))
+            if (_disposed || !_surfaces.TryGetValue(surfaceId, out var allocation))
                 return;
+            if (_context == IntPtr.Zero)
+                throw new InvalidOperationException("CUDA surface cannot be released because the owning context is unavailable.");
 
-            if (_context != IntPtr.Zero)
-            {
-                SetCurrentContext();
-                ReturnAllocation(allocation.DevicePointer, allocation.ByteLength);
-            }
+            SetCurrentContext();
+            ReturnAllocation(allocation.DevicePointer, allocation.ByteLength);
+            _surfaces.Remove(surfaceId);
         }
     }
 
@@ -355,7 +383,12 @@ public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend, IGpuShared
             return;
         }
 
-        Check(CudaNative.cuMemFree_v2(pointer), "cuMemFree_v2");
+        var result = CudaNative.cuMemFree_v2(pointer);
+        if (result == CudaResult.Success)
+            return;
+
+        pool.Push(pointer);
+        Check(result, "cuMemFree_v2");
     }
 
     private CudaAllocation Get(SurfaceId surfaceId, VideoFormat format)
@@ -367,20 +400,41 @@ public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend, IGpuShared
         return allocation;
     }
 
-    private void CleanupContext()
+    private Exception? CleanupContext()
     {
+        Exception? failure = null;
+
         if (_module != IntPtr.Zero)
         {
-            CudaNative.cuModuleUnload(_module);
-            _module = IntPtr.Zero;
-            _compositeFunction = IntPtr.Zero;
+            var result = CudaNative.cuModuleUnload(_module);
+            if (result == CudaResult.Success)
+            {
+                _module = IntPtr.Zero;
+                _compositeFunction = IntPtr.Zero;
+            }
+            else
+            {
+                failure = new InvalidOperationException($"CUDA operation 'cuModuleUnload' failed with '{result}' ({(int)result}).");
+            }
         }
 
         if (_context != IntPtr.Zero)
         {
-            CudaNative.cuCtxDestroy_v2(_context);
-            _context = IntPtr.Zero;
+            var result = CudaNative.cuCtxDestroy_v2(_context);
+            if (result == CudaResult.Success)
+            {
+                _context = IntPtr.Zero;
+                _module = IntPtr.Zero;
+                _compositeFunction = IntPtr.Zero;
+                failure = null;
+            }
+            else if (failure is null)
+            {
+                failure = new InvalidOperationException($"CUDA operation 'cuCtxDestroy_v2' failed with '{result}' ({(int)result}).");
+            }
         }
+
+        return failure;
     }
 
     private void SetCurrentContext()
