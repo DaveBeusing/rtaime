@@ -248,6 +248,8 @@ public readonly record struct GpuSharedMonitoringResourceStatistics(
     ulong RejectedExports);
 
 public readonly record struct GpuMemoryTransferStatistics(
+    ulong UploadOperations,
+    ulong UploadBytes,
     ulong HostToDeviceOperations,
     ulong HostToDeviceBytes,
     ulong DeviceToHostOperations,
@@ -258,7 +260,9 @@ public readonly record struct GpuMemoryTransferStatistics(
     int ReusableUploadSurfaces,
     ulong ReusableUploadHits,
     ulong ReusableUploadMisses,
+    ulong ReusableUploadInvalidations,
     ulong ReusableUploadEvictions,
+    ulong AvoidedUploadBytes,
     ulong AvoidedHostToDeviceBytes,
     GpuReadbackPoolStatistics ReadbackPool,
     GpuSharedMonitoringResourceStatistics MonitoringResources);
@@ -749,6 +753,8 @@ public sealed class GpuProcessingProvider : IDisposable
     private ulong _sharedMonitoringResourceOrdinal;
     private ulong _totalSharedMonitoringExports;
     private ulong _rejectedSharedMonitoringExports;
+    private ulong _uploadOperations;
+    private ulong _uploadBytes;
     private ulong _hostToDeviceOperations;
     private ulong _hostToDeviceBytes;
     private ulong _deviceToHostOperations;
@@ -757,7 +763,9 @@ public sealed class GpuProcessingProvider : IDisposable
     private ulong _monitoringDeviceCopyBytes;
     private ulong _reusableUploadHits;
     private ulong _reusableUploadMisses;
+    private ulong _reusableUploadInvalidations;
     private ulong _reusableUploadEvictions;
+    private ulong _avoidedUploadBytes;
     private ulong _avoidedHostToDeviceBytes;
     private ulong _reusableUploadUseOrdinal;
     private Identity _monitoringProviderInstanceId = Identity.New();
@@ -838,6 +846,8 @@ public sealed class GpuProcessingProvider : IDisposable
             lock (_gate)
             {
                 return new GpuMemoryTransferStatistics(
+                    _uploadOperations,
+                    _uploadBytes,
                     _hostToDeviceOperations,
                     _hostToDeviceBytes,
                     _deviceToHostOperations,
@@ -848,7 +858,9 @@ public sealed class GpuProcessingProvider : IDisposable
                     _reusableUploads.Count,
                     _reusableUploadHits,
                     _reusableUploadMisses,
+                    _reusableUploadInvalidations,
                     _reusableUploadEvictions,
+                    _avoidedUploadBytes,
                     _avoidedHostToDeviceBytes,
                     _readbackPool.Statistics,
                     new GpuSharedMonitoringResourceStatistics(
@@ -1087,7 +1099,9 @@ public sealed class GpuProcessingProvider : IDisposable
                 _activeFrames.TryGetValue(cached.SurfaceId, out var active))
             {
                 IncrementSaturating(ref _reusableUploadHits);
-                AddSaturating(ref _avoidedHostToDeviceBytes, checked((ulong)content.ByteLength));
+                AddSaturating(ref _avoidedUploadBytes, checked((ulong)content.ByteLength));
+                if (_backend.StorageDomain == SurfaceStorageDomain.Device)
+                    AddSaturating(ref _avoidedHostToDeviceBytes, checked((ulong)content.ByteLength));
                 cached.LastUseOrdinal = NextReusableUploadUseOrdinal();
                 Observe("gpu.upload.reused", timing.SequenceNumber, null);
                 return CreateFrameReferenceUnsafe(active, sourceId, timing);
@@ -1095,7 +1109,10 @@ public sealed class GpuProcessingProvider : IDisposable
 
             IncrementSaturating(ref _reusableUploadMisses);
             if (_reusableUploads.ContainsKey(key))
-                RemoveReusableUploadUnsafe(key, countEviction: true);
+            {
+                IncrementSaturating(ref _reusableUploadInvalidations);
+                RemoveReusableUploadUnsafe(key, countEviction: false);
+            }
 
             EnsureReusableUploadCapacityUnsafe();
 
@@ -1139,8 +1156,13 @@ public sealed class GpuProcessingProvider : IDisposable
         try
         {
             _backend.Allocate(surfaceId, content.Format, content.Pixels.Span);
-            IncrementSaturating(ref _hostToDeviceOperations);
-            AddSaturating(ref _hostToDeviceBytes, checked((ulong)content.ByteLength));
+            IncrementSaturating(ref _uploadOperations);
+            AddSaturating(ref _uploadBytes, checked((ulong)content.ByteLength));
+            if (_backend.StorageDomain == SurfaceStorageDomain.Device)
+            {
+                IncrementSaturating(ref _hostToDeviceOperations);
+                AddSaturating(ref _hostToDeviceBytes, checked((ulong)content.ByteLength));
+            }
         }
         catch (Exception exception)
         {
