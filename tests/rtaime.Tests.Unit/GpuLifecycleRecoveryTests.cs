@@ -79,6 +79,19 @@ public sealed class GpuLifecycleRecoveryTests
     }
 
     [Fact]
+    public void Cuda_classified_upload_failure_fails_closed()
+    {
+        using var backend = new FailFirstAllocateHardwareBackend();
+        using var provider = new GpuProcessingProvider(backend);
+        provider.Start();
+
+        Assert.Throws<InvalidOperationException>(() => Upload(provider, SourceA, 1, 2, 3, 0));
+        Assert.Equal(GpuProviderState.Failed, provider.State);
+        Assert.Equal(GpuProviderLifecycleReasonCodes.UploadFailed, provider.Lifecycle.ReasonCode);
+        Assert.Equal(0, provider.ActiveSurfaceCount);
+    }
+
+    [Fact]
     public void Readback_pool_exhaustion_degrades_without_losing_the_active_lease()
     {
         using var backend = new HardwareFacadeBackend();
