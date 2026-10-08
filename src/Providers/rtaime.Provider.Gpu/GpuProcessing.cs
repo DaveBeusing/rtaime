@@ -1080,6 +1080,7 @@ public sealed class GpuProcessingProvider : IDisposable
             var normalizedSourceKind = sourceKind.Trim();
             var key = new ReusableUploadKey(sourceId, normalizedSourceKind);
             if (_reusableUploads.TryGetValue(key, out var cached) &&
+                ReferenceEquals(cached.Content, content) &&
                 cached.ContentGeneration == contentGeneration &&
                 cached.ContentVersion == content.ContentVersion &&
                 cached.Format == content.Format &&
@@ -1107,6 +1108,7 @@ public sealed class GpuProcessingProvider : IDisposable
                 retainedForReuse: true);
             _reusableUploads[key] = new ReusableUploadEntry(
                 frame.SurfaceId,
+                content,
                 contentGeneration,
                 content.ContentVersion,
                 content.Format,
@@ -1988,12 +1990,14 @@ public sealed class GpuProcessingProvider : IDisposable
     {
         public ReusableUploadEntry(
             SurfaceId surfaceId,
+            RgbaFrameBuffer content,
             Generation contentGeneration,
             ulong contentVersion,
             VideoFormat format,
             ulong lastUseOrdinal)
         {
             SurfaceId = surfaceId;
+            Content = content ?? throw new ArgumentNullException(nameof(content));
             ContentGeneration = contentGeneration;
             ContentVersion = contentVersion;
             Format = format;
@@ -2001,6 +2005,7 @@ public sealed class GpuProcessingProvider : IDisposable
         }
 
         public SurfaceId SurfaceId { get; }
+        public RgbaFrameBuffer Content { get; }
         public Generation ContentGeneration { get; }
         public ulong ContentVersion { get; }
         public VideoFormat Format { get; }
