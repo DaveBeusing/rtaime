@@ -70,7 +70,7 @@ Assert-Condition ($hardwareTest -match 'physicalExternalOutput[\s\S]*UNVERIFIED'
 Assert-Condition ($hardwareTest -match 'physicalDeviceFaultInjection[\s\S]*UNVERIFIED') "Renderer qualification must not fabricate destructive GPU fault evidence."
 
 $runner = Get-Content -LiteralPath $runnerPath -Raw
-foreach ($scenario in @("CLIP_SEEK", "RENDERER_BACKEND_RECOVERY", "RESIZE_DPI_CHURN", "MONITORING_TRANSPORT_RECONNECT", "PROCESS_RESTART")) {
+foreach ($scenario in @("CLIP_SEEK", "RENDERER_BACKEND_RECOVERY", "RESOURCE_PRESSURE", "INTEROP_FAILURE_RECOVERY", "RESIZE_DPI_CHURN", "MONITORING_TRANSPORT_RECONNECT", "PROCESS_RESTART")) {
     Assert-Condition ($runner -match [Regex]::Escape($scenario)) "Renderer qualification runner must retain software scenario '$scenario'."
 }
 Assert-Condition ($runner -match 'BaselineEvidencePath') "Renderer qualification runner must support approved baseline comparison."
