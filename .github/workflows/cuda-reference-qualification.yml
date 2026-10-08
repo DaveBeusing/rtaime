@@ -116,6 +116,7 @@ jobs:
           ./build/qualification/Invoke-RendererReferenceQualification.ps1 @parameters
 
       - name: Upload immutable qualification evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: cuda-reference-qualification-${{ github.run_id }}-${{ github.run_attempt }}
