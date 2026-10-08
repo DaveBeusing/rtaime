@@ -362,6 +362,8 @@ public sealed class RendererReferenceHardwareQualificationTests
         var vramUsedMiB = new List<double>();
         var expectedSequence = runtime.Snapshot.NextSequenceNumber;
         ulong sequenceDiscontinuities = 0;
+        ulong duplicateSequenceFrames = 0;
+        ulong missingSequenceFrames = 0;
         ulong recordingAccepted = 0;
         ulong recordingRejected = 0;
         var acceptedAfterBackpressure = false;
@@ -388,7 +390,13 @@ public sealed class RendererReferenceHardwareQualificationTests
                     durations.Add(elapsedMilliseconds);
 
                     if (boundary.SequenceNumber != expectedSequence)
+                    {
                         sequenceDiscontinuities++;
+                        if (boundary.SequenceNumber < expectedSequence)
+                            duplicateSequenceFrames++;
+                        else
+                            missingSequenceFrames += boundary.SequenceNumber - expectedSequence;
+                    }
                     expectedSequence = boundary.SequenceNumber + 1;
 
                     if (boundary.Recording is { Accepted: true })
@@ -510,6 +518,13 @@ public sealed class RendererReferenceHardwareQualificationTests
         var deadlineViolations = checked((ulong)durations.Count(value => value > frameBudgetMilliseconds));
         var gpuTiming = BuildGpuTiming(timingCollector.Snapshot());
         var runtimeDroppedFrames = finalSnapshot.Performance.DroppedFrames;
+        var deviceFaultObservations = runtime.RecentObservations(V1RuntimeHostService.RetainedObservationCapacity)
+            .Where(observation =>
+                observation.Contains("gpu.", StringComparison.OrdinalIgnoreCase) &&
+                (observation.Contains("failed", StringComparison.OrdinalIgnoreCase) ||
+                 observation.Contains("fault", StringComparison.OrdinalIgnoreCase) ||
+                 observation.Contains("device", StringComparison.OrdinalIgnoreCase)))
+            .ToArray();
 
         return new
         {
@@ -535,8 +550,15 @@ public sealed class RendererReferenceHardwareQualificationTests
             continuity = new
             {
                 sequenceDiscontinuities,
+                duplicateSequenceFrames,
+                missingSequenceFrames,
                 runtimeDroppedFrames,
                 programFramesWritten = runtime.ProgramFramesWritten
+            },
+            deviceFaults = new
+            {
+                observed = deviceFaultObservations.Length,
+                observations = deviceFaultObservations
             },
             recording = new
             {
