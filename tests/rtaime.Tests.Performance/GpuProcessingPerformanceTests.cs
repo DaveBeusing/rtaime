@@ -201,11 +201,14 @@ public sealed class GpuProcessingPerformanceTests
         var transfers = provider.MemoryTransferStatistics;
         var frameBytes = checked((ulong)RgbaFrameBuffer.RequiredByteLength(format));
 
-        Assert.Equal((ulong)1, transfers.HostToDeviceOperations);
-        Assert.Equal(frameBytes, transfers.HostToDeviceBytes);
+        Assert.Equal((ulong)1, transfers.UploadOperations);
+        Assert.Equal(frameBytes, transfers.UploadBytes);
+        Assert.Equal((ulong)0, transfers.HostToDeviceOperations);
+        Assert.Equal((ulong)0, transfers.HostToDeviceBytes);
         Assert.Equal((ulong)(iterations - 1), transfers.ReusableUploadHits);
         Assert.Equal((ulong)1, transfers.ReusableUploadMisses);
-        Assert.Equal(frameBytes * (iterations - 1), transfers.AvoidedHostToDeviceBytes);
+        Assert.Equal(frameBytes * (iterations - 1), transfers.AvoidedUploadBytes);
+        Assert.Equal((ulong)0, transfers.AvoidedHostToDeviceBytes);
         Assert.Equal(1, transfers.ReusableUploadSurfaces);
         Assert.Equal(1, provider.ActiveSurfaceCount);
 
