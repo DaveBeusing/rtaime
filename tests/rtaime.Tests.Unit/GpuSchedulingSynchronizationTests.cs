@@ -29,7 +29,7 @@ public sealed class GpuSchedulingSynchronizationTests
     [Fact]
     public async Task Stop_serializes_behind_inflight_composite_and_releases_all_surfaces()
     {
-        using var backend = new BlockingCompositeBackend();
+        var backend = new BlockingCompositeBackend();
         using var provider = new GpuProcessingProvider(backend);
         provider.Start();
 
