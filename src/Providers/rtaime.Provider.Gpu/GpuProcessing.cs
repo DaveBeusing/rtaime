@@ -252,6 +252,8 @@ public readonly record struct GpuMemoryTransferStatistics(
     ulong UploadBytes,
     ulong HostToDeviceOperations,
     ulong HostToDeviceBytes,
+    ulong ReadbackOperations,
+    ulong ReadbackBytes,
     ulong DeviceToHostOperations,
     ulong DeviceToHostBytes,
     ulong MonitoringDeviceCopyOperations,
@@ -757,6 +759,8 @@ public sealed class GpuProcessingProvider : IDisposable
     private ulong _uploadBytes;
     private ulong _hostToDeviceOperations;
     private ulong _hostToDeviceBytes;
+    private ulong _readbackOperations;
+    private ulong _readbackBytes;
     private ulong _deviceToHostOperations;
     private ulong _deviceToHostBytes;
     private ulong _monitoringDeviceCopyOperations;
@@ -850,6 +854,8 @@ public sealed class GpuProcessingProvider : IDisposable
                     _uploadBytes,
                     _hostToDeviceOperations,
                     _hostToDeviceBytes,
+                    _readbackOperations,
+                    _readbackBytes,
                     _deviceToHostOperations,
                     _deviceToHostBytes,
                     _monitoringDeviceCopyOperations,
@@ -1503,8 +1509,13 @@ public sealed class GpuProcessingProvider : IDisposable
             try
             {
                 _backend.ReadbackInto(frame.SurfaceId, frame.Descriptor.Surface.Format, lease.WritableSpan);
-                IncrementSaturating(ref _deviceToHostOperations);
-                AddSaturating(ref _deviceToHostBytes, checked((ulong)byteLength));
+                IncrementSaturating(ref _readbackOperations);
+                AddSaturating(ref _readbackBytes, checked((ulong)byteLength));
+                if (_backend.StorageDomain == SurfaceStorageDomain.Device)
+                {
+                    IncrementSaturating(ref _deviceToHostOperations);
+                    AddSaturating(ref _deviceToHostBytes, checked((ulong)byteLength));
+                }
                 RestoreReadyFromDegradationUnsafe(GpuProviderLifecycleReasonCodes.ReadbackPoolExhausted);
                 return lease;
             }
