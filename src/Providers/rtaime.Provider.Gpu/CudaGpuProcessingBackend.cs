@@ -148,21 +148,18 @@ public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend, IGpuShared
     {
         lock (_gate)
         {
-            if (_disposed || !_running && _context == IntPtr.Zero)
+            if (_disposed || !_running && _context == IntPtr.Zero && _monitoringInterop is null)
                 return;
 
             Exception? monitoringCleanupFailure = null;
             try
             {
                 _monitoringInterop?.Dispose();
+                _monitoringInterop = null;
             }
             catch (Exception exception)
             {
                 monitoringCleanupFailure = exception;
-            }
-            finally
-            {
-                _monitoringInterop = null;
             }
 
             if (_context != IntPtr.Zero)
