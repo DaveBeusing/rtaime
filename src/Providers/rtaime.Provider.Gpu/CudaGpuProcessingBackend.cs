@@ -151,8 +151,19 @@ public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend, IGpuShared
             if (_disposed || !_running && _context == IntPtr.Zero)
                 return;
 
-            _monitoringInterop?.Dispose();
-            _monitoringInterop = null;
+            Exception? monitoringCleanupFailure = null;
+            try
+            {
+                _monitoringInterop?.Dispose();
+            }
+            catch (Exception exception)
+            {
+                monitoringCleanupFailure = exception;
+            }
+            finally
+            {
+                _monitoringInterop = null;
+            }
 
             if (_context != IntPtr.Zero)
             {
@@ -181,6 +192,8 @@ public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend, IGpuShared
             }
 
             _running = false;
+            if (monitoringCleanupFailure is not null)
+                throw new InvalidOperationException("CUDA monitoring interop cleanup failed after Program resources were released.", monitoringCleanupFailure);
         }
     }
 
