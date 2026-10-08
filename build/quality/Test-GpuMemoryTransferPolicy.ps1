@@ -57,7 +57,8 @@ foreach ($testName in @(
 	'Recreated_static_source_with_same_identity_does_not_reuse_different_buffer_content',
 	'Dynamic_source_reuses_unchanged_generation_and_replaces_after_update',
 	'Reusable_upload_cache_is_bounded_and_evicts_oldest_retention',
-	'Reusable_surface_is_not_released_until_last_frame_reference_is_disposed')) {
+	'Reusable_surface_is_not_released_until_last_frame_reference_is_disposed',
+	'Reusable_retention_is_not_reported_as_active_frame_ownership')) {
 	Assert-Condition ($unitTests -match [Regex]::Escape($testName)) "GPU transfer regression '$testName' is required."
 }
 
