@@ -507,6 +507,10 @@ public sealed class StaticRgbaSource
 
     public GpuFrame Materialize(GpuProcessingProvider provider, FrameTiming timing) =>
         (provider ?? throw new ArgumentNullException(nameof(provider)))
+            .Upload(SourceId, Content, timing, Generation.Initial, "static");
+
+    public GpuFrame MaterializeReusable(GpuProcessingProvider provider, FrameTiming timing) =>
+        (provider ?? throw new ArgumentNullException(nameof(provider)))
             .UploadReusable(SourceId, Content, timing, Generation.Initial, "static");
 }
 
@@ -548,6 +552,14 @@ public sealed class DynamicRgbaSource
     }
 
     public GpuFrame Materialize(GpuProcessingProvider provider, FrameTiming timing)
+    {
+        ArgumentNullException.ThrowIfNull(provider);
+
+        lock (_gate)
+            return provider.Upload(SourceId, _content, timing, _generation, "dynamic");
+    }
+
+    public GpuFrame MaterializeReusable(GpuProcessingProvider provider, FrameTiming timing)
     {
         ArgumentNullException.ThrowIfNull(provider);
 
