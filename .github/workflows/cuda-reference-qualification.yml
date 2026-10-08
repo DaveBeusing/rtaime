@@ -19,6 +19,20 @@ on:
         required: true
         default: "30"
         type: string
+      renderer_profile:
+        description: Renderer production-path qualification profile
+        required: true
+        default: "smoke"
+        type: choice
+        options:
+          - "smoke"
+          - "stress"
+          - "soak"
+      renderer_baseline_evidence_path:
+        description: Optional runner-local previous PASSED renderer evidence for calibrated P99 regression comparison
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
@@ -31,7 +45,7 @@ jobs:
       - windows
       - x64
       - rtaime-cuda-reference
-    timeout-minutes: 45
+    timeout-minutes: 210
 
     steps:
       - name: Checkout exact source
@@ -81,6 +95,26 @@ jobs:
             -ExpectedSourceCommit $sourceCommit `
             -ExpectedQualificationType "CUDA_REFERENCE"
 
+      - name: Run renderer production-path qualification
+        shell: pwsh
+        run: |
+          $sourceCommit = (git rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0 -or $sourceCommit -notmatch '^[0-9a-f]{40}$') {
+            throw "Unable to resolve exact renderer qualification source commit."
+          }
+          $parameters = @{
+            Profile = "${{ inputs.renderer_profile }}"
+            ExpectedDeviceName = "${{ inputs.expected_device_name }}"
+            DeviceOrdinal = [int]"${{ inputs.device_ordinal }}"
+            SourceCommit = $sourceCommit
+            OutputRoot = "artifacts/qualification/renderer"
+          }
+          $baseline = "${{ inputs.renderer_baseline_evidence_path }}"
+          if (-not [string]::IsNullOrWhiteSpace($baseline)) {
+            $parameters.BaselineEvidencePath = $baseline
+          }
+          ./build/qualification/Invoke-RendererReferenceQualification.ps1 @parameters
+
       - name: Upload immutable qualification evidence
         uses: actions/upload-artifact@v4
         with:
@@ -89,3 +123,13 @@ jobs:
             artifacts/qualification/cuda-reference.json
             artifacts/qualification/bindings/cuda-reference.binding.json
           if-no-files-found: error
+          retention-days: 90
+
+      - name: Upload renderer qualification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: renderer-reference-qualification-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/qualification/renderer
+          if-no-files-found: error
+          retention-days: 90
