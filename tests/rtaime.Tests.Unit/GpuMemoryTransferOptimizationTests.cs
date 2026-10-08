@@ -29,11 +29,14 @@ public sealed class GpuMemoryTransferOptimizationTests
         Assert.Equal(1, provider.ActiveSurfaceCount);
 
         var transfers = provider.MemoryTransferStatistics;
-        Assert.Equal((ulong)1, transfers.HostToDeviceOperations);
-        Assert.Equal((ulong)TestFormatBytes, transfers.HostToDeviceBytes);
+        Assert.Equal((ulong)1, transfers.UploadOperations);
+        Assert.Equal((ulong)TestFormatBytes, transfers.UploadBytes);
+        Assert.Equal((ulong)0, transfers.HostToDeviceOperations);
+        Assert.Equal((ulong)0, transfers.HostToDeviceBytes);
         Assert.Equal((ulong)1, transfers.ReusableUploadHits);
         Assert.Equal((ulong)1, transfers.ReusableUploadMisses);
-        Assert.Equal((ulong)TestFormatBytes, transfers.AvoidedHostToDeviceBytes);
+        Assert.Equal((ulong)TestFormatBytes, transfers.AvoidedUploadBytes);
+        Assert.Equal((ulong)0, transfers.AvoidedHostToDeviceBytes);
         Assert.Equal(1, transfers.ReusableUploadSurfaces);
     }
 
@@ -62,9 +65,11 @@ public sealed class GpuMemoryTransferOptimizationTests
         Assert.Equal(1, backend.ActiveAllocationCount);
 
         var transfers = provider.MemoryTransferStatistics;
-        Assert.Equal((ulong)2, transfers.HostToDeviceOperations);
+        Assert.Equal((ulong)2, transfers.UploadOperations);
+        Assert.Equal((ulong)0, transfers.HostToDeviceOperations);
         Assert.Equal((ulong)2, transfers.ReusableUploadMisses);
-        Assert.Equal((ulong)1, transfers.ReusableUploadEvictions);
+        Assert.Equal((ulong)1, transfers.ReusableUploadInvalidations);
+        Assert.Equal((ulong)0, transfers.ReusableUploadEvictions);
     }
 
     [Fact]
@@ -90,9 +95,11 @@ public sealed class GpuMemoryTransferOptimizationTests
         Assert.Equal(2, backend.ActiveAllocationCount);
 
         var transfers = provider.MemoryTransferStatistics;
-        Assert.Equal((ulong)2, transfers.HostToDeviceOperations);
+        Assert.Equal((ulong)2, transfers.UploadOperations);
+        Assert.Equal((ulong)0, transfers.HostToDeviceOperations);
         Assert.Equal((ulong)2, transfers.ReusableUploadMisses);
-        Assert.Equal((ulong)1, transfers.ReusableUploadEvictions);
+        Assert.Equal((ulong)1, transfers.ReusableUploadInvalidations);
+        Assert.Equal((ulong)0, transfers.ReusableUploadEvictions);
         Assert.Equal((ulong)0, transfers.ReusableUploadHits);
     }
 
@@ -119,12 +126,16 @@ public sealed class GpuMemoryTransferOptimizationTests
         Assert.Equal((byte)40, provider.Readback(third)[0]);
 
         var transfers = provider.MemoryTransferStatistics;
-        Assert.Equal((ulong)2, transfers.HostToDeviceOperations);
+        Assert.Equal((ulong)2, transfers.UploadOperations);
+        Assert.Equal((ulong)0, transfers.HostToDeviceOperations);
         Assert.Equal((ulong)1, transfers.ReusableUploadHits);
         Assert.Equal((ulong)2, transfers.ReusableUploadMisses);
-        Assert.Equal((ulong)1, transfers.ReusableUploadEvictions);
-        Assert.Equal((ulong)1, transfers.DeviceToHostOperations);
-        Assert.Equal((ulong)TestFormatBytes, transfers.DeviceToHostBytes);
+        Assert.Equal((ulong)1, transfers.ReusableUploadInvalidations);
+        Assert.Equal((ulong)0, transfers.ReusableUploadEvictions);
+        Assert.Equal((ulong)1, transfers.ReadbackOperations);
+        Assert.Equal((ulong)TestFormatBytes, transfers.ReadbackBytes);
+        Assert.Equal((ulong)0, transfers.DeviceToHostOperations);
+        Assert.Equal((ulong)0, transfers.DeviceToHostBytes);
     }
 
     [Fact]
