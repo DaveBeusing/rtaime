@@ -69,7 +69,7 @@ Assert-Condition ($gpu -match 'class GpuReadbackBufferPool : IDisposable' -and $
 Assert-Condition ($gpu -match 'void ReadbackInto\(SurfaceId surfaceId, VideoFormat format, Span<byte> destination\)') "GPU backend contract must support caller-supplied readback memory."
 Assert-Condition ($gpu -match 'RentReadback\(GpuFrame frame\)' -and $gpu -match 'ReadbackPoolStatistics') "GPU provider must expose leased readback and bounded pool statistics."
 
-Assert-Condition ($cuda -match 'public void ReadbackInto' -and $cuda -match 'cuMemcpyDtoH_v2\(ref destinationReference') "CUDA readback must copy directly into caller-supplied host memory."
+Assert-Condition ($cuda -match 'public void ReadbackInto' -and $cuda -match 'cuMemcpyDtoH_v2\(\s*ref destinationReference') "CUDA readback must copy directly into caller-supplied host memory."
 Assert-Condition ($cuda -match 'cuMemcpyDtoH_v2\(ref byte destination') "CUDA P/Invoke must use a call-lifetime managed by-reference rather than requiring a fresh managed array."
 
 Assert-Condition ($runtime -match 'public sealed class V1ProgramBoundaryResult : IDisposable') "Runtime Program boundaries must own disposable Program readback memory."
