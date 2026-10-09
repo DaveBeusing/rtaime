@@ -23,6 +23,51 @@ public sealed class NetworkOutputArchitectureTests
 	}
 
 	[Fact]
+	public void Ndi_provider_does_not_reference_Control_or_host_projects()
+	{
+		var root = FindRepositoryRoot();
+		var project = XDocument.Load(Path.Combine(root, "src", "Providers", "rtaime.Provider.Ndi", "rtaime.Provider.Ndi.csproj"));
+		var references = project.Descendants("ProjectReference")
+			.Select(reference => (string?)reference.Attribute("Include"))
+			.Where(reference => !string.IsNullOrWhiteSpace(reference))
+			.ToArray();
+
+		Assert.DoesNotContain(references, reference => reference!.Contains("rtaime.Control", StringComparison.Ordinal));
+		Assert.DoesNotContain(references, reference => reference!.Contains("rtaime.RuntimeHost", StringComparison.Ordinal));
+		Assert.DoesNotContain(references, reference => reference!.Contains("rtaime.ControlHost", StringComparison.Ordinal));
+		Assert.DoesNotContain(references, reference => reference!.Contains("rtaime.Operator", StringComparison.Ordinal));
+	}
+
+	[Fact]
+	public void Stable_network_output_contracts_do_not_leak_NDI_runtime_types()
+	{
+		var root = FindRepositoryRoot();
+		var providerContract = File.ReadAllText(Path.Combine(root, "src", "Contracts", "rtaime.Provider.Contracts", "NetworkOutput.cs"));
+
+		Assert.DoesNotContain("Processing.NDI", providerContract, StringComparison.OrdinalIgnoreCase);
+		Assert.DoesNotContain("NDIlib_", providerContract, StringComparison.Ordinal);
+		Assert.DoesNotContain("NativeLibrary", providerContract, StringComparison.Ordinal);
+		Assert.DoesNotContain("NdiVideoFrame", providerContract, StringComparison.Ordinal);
+	}
+
+	[Fact]
+	public void Runtime_bridge_uses_provider_registry_instead_of_hard_coded_sessions()
+	{
+		var root = FindRepositoryRoot();
+		var bridge = File.ReadAllText(Path.Combine(root, "src", "Hosts", "rtaime.RuntimeHost", "RuntimeNetworkOutputBridge.cs"));
+		var registry = File.ReadAllText(Path.Combine(root, "src", "Hosts", "rtaime.RuntimeHost", "RuntimeNetworkOutputProviderRegistry.cs"));
+
+		Assert.Contains("IRuntimeNetworkOutputProviderRegistry", bridge, StringComparison.Ordinal);
+		Assert.Contains("INetworkOutputSession", bridge, StringComparison.Ordinal);
+		Assert.DoesNotContain("SrtNetworkOutputSession", bridge, StringComparison.Ordinal);
+		Assert.DoesNotContain("NdiNetworkOutputSession", bridge, StringComparison.Ordinal);
+		Assert.DoesNotContain("rtaime.Provider.Srt", bridge, StringComparison.Ordinal);
+		Assert.DoesNotContain("rtaime.Provider.Ndi", bridge, StringComparison.Ordinal);
+		Assert.Contains("NetworkOutputProtocolFamily.Srt", registry, StringComparison.Ordinal);
+		Assert.Contains("NetworkOutputProtocolFamily.Ndi", registry, StringComparison.Ordinal);
+	}
+
+	[Fact]
 	public void Network_media_handoff_stays_out_of_management_ipc_contracts()
 	{
 		var root = FindRepositoryRoot();
