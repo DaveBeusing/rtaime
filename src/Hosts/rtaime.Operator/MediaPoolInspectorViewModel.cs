@@ -351,17 +351,16 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 	public bool HasSelectedProcessingNode => SelectedProcessingNode is not null;
 	public bool IsSelectedColorGradeProcessingNode => SelectedProcessingNode is { Kind: 1, ColorGrade: not null };
 	public bool IsSelectedChromaKeyProcessingNode => SelectedProcessingNode is { Kind: 2, ChromaKey: not null };
-	public bool CanAddProcessingNodeToSelection =>
-		HasAuthoritativeCompositingSelection &&
-		SelectedCompositingLayer!.ProcessingStack.Count < OperatorCompositingLayerDescriptor.MaximumProcessingNodeCount &&
-		_operator.CanManageCompositingLayers();
+	public bool CanAddProcessingNodeToSelection => CanAddProcessingNode();
 	public string ProcessingStateLabel => _operator.IsBusy
 		? "PENDING · awaiting authoritative confirmation"
 		: _operator.IsStale
 			? "STALE · resynchronize before editing"
 			: !_operator.IsConnected
 				? "DISCONNECTED"
-				: HasSelectedProcessingNode ? "CONFIRMED NODE · draft edits require APPLY" : "CONFIRMED STACK";
+				: !string.Equals(_operator.RuntimeStatus, "READY", StringComparison.OrdinalIgnoreCase)
+					? "NOT READY · processing mutations are disabled"
+					: HasSelectedProcessingNode ? "CONFIRMED NODE · draft edits require APPLY" : "CONFIRMED STACK";
 	public string UnsupportedTransformCapabilityText => HasAuthoritativeCompositingSelection
 		? "Transform values are committed through authoritative Control and confirmed by Runtime state."
 		: "Rotation, Anchor and Crop require an authoritative bitmap or Production CG compositing layer selection.";
