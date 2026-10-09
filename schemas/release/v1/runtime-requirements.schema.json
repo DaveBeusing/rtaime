@@ -12,6 +12,7 @@
 		"productVersion",
 		"platform",
 		"dotnetRuntimes",
+		"externalProviderRuntimes",
 		"continuousInternetRequired"
 	],
 	"properties": {
@@ -40,6 +41,37 @@
 					"name": { "type": "string", "minLength": 1 },
 					"majorMinor": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+$" },
 					"minimumVersion": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" }
+				}
+			}
+		},
+		"externalProviderRuntimes": {
+			"type": "array",
+			"items": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"provider",
+					"requiredWhenConfigured",
+					"bundled",
+					"libraryFileName",
+					"directLibraryEnvironmentVariable",
+					"runtimeDirectoryEnvironmentVariables",
+					"redistributionStatus",
+					"interoperabilityStatus"
+				],
+				"properties": {
+					"provider": { "const": "NDI" },
+					"requiredWhenConfigured": { "const": true },
+					"bundled": { "const": false },
+					"libraryFileName": { "const": "Processing.NDI.Lib.x64.dll" },
+					"directLibraryEnvironmentVariable": { "const": "RTAIME_NDI_LIBRARY_PATH" },
+					"runtimeDirectoryEnvironmentVariables": {
+						"type": "array",
+						"minItems": 1,
+						"items": { "type": "string", "minLength": 1 }
+					},
+					"redistributionStatus": { "const": "EXTERNAL_RUNTIME_NOT_BUNDLED" },
+					"interoperabilityStatus": { "const": "UNVERIFIED" }
 				}
 			}
 		},
