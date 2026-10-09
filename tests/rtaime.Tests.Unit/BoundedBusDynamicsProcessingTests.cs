@@ -28,8 +28,8 @@ public sealed class BoundedBusDynamicsProcessingTests
 
 		Assert.Equal(expected, actual);
 		Assert.Equal(plainResult.PreClipPeak, disabledResult.PreClipPeak);
-		Assert.Equal(0, disabledResult.CompressorGainReductionDb);
-		Assert.Equal(0, disabledResult.LimiterGainReductionDb);
+		Assert.Equal(0d, disabledResult.CompressorGainReductionDb);
+		Assert.Equal(0d, disabledResult.LimiterGainReductionDb);
 		Assert.Equal(0UL, disabledResult.LimiterHitCount);
 	}
 
@@ -147,7 +147,7 @@ public sealed class BoundedBusDynamicsProcessingTests
 			output);
 
 		Assert.All(output, sample => Assert.InRange(Math.Abs((double)sample), 0, ceiling + 1e-6));
-		Assert.Equal(0, result.SafetyClippedSampleValues);
+		Assert.Equal(0UL, result.SafetyClippedSampleValues);
 		Assert.Equal(100UL, result.LimiterHitCount);
 		Assert.True(result.LimiterGainReductionDb > 0);
 		Assert.Equal(0.1 / 0.9, output[1] / output[0], 5);
