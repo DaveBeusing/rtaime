@@ -413,7 +413,8 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 				source.Gain,
 				source.Muted,
 				source.FollowRoutedSource,
-				(source.BusAssignments ?? Array.Empty<string>()).Select(bus => new AudioBusId(bus)).ToArray()))
+				(source.BusAssignments ?? Array.Empty<string>()).Select(bus => new AudioBusId(bus)).ToArray(),
+				FromWire(source.Equalizer)))
 			.ToArray();
 		var crossfade = wire.Crossfade is null
 			? null
