@@ -301,6 +301,8 @@ public sealed class GraphicsOverlayIntegrationTests
 		using var gradeThenKey = fixture.Runtime.ProcessNextBoundary();
 		var gradeThenKeyPixel = Pixel(gradeThenKey.ProgramPixels, fixture.Format, 0, 0);
 
+		Assert.Equal(new PixelValue(73, 131, 171, 255), keyThenGradePixel);
+		Assert.Equal(new PixelValue(94, 190, 133, 255), gradeThenKeyPixel);
 		Assert.NotEqual(keyThenGradePixel, gradeThenKeyPixel);
 		Assert.Equal(
 			new[] { "grade-primary", "key-primary" },
