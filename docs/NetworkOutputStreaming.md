@@ -162,3 +162,12 @@ Software-only 1080p50/59.94 measurements must not be presented as physical-netwo
 Network output consumes the final Runtime-owned audio payload selected by its governed output role. Program defaults to the `program` bus; Aux may select another configured authoritative bus. The SRT/provider layer receives that already mixed stereo 48 kHz payload and does not perform an independent remix.
 
 Legacy output-role configurations without an explicit audio-bus mapping preserve Program-audio behavior. Missing or invalid configured bus references fail closed before confirmed execution. Recording remains bound to the Program bus independently of Aux/network bus selection.
+
+## Advanced-audio selected-bus qualification
+
+Advanced Audio Processing qualification treats Program/Aux audio-bus selection as part of the final authoritative Runtime bus materialization path. A governed output role consumes the selected already-processed bus payload; the network provider does not perform an independent remix.
+
+The retained network-output backpressure/failure tests remain part of the qualification boundary: transport pressure may drop bounded output work or surface failure evidence, but it must not redefine Program production authority or create an unbounded queue.
+
+See [Advanced Audio Processing Qualification](AdvancedAudioProcessingQualification.md). Network transport evidence does not qualify physical embedded-audio hardware, device-driver latency, hardware clocks/genlock or certified audio performance; those remain **UNVERIFIED**.
+
