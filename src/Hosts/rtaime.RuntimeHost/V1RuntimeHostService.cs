@@ -833,6 +833,21 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 					null);
 			}
 
+			var audioMappingFailure = ValidatePreparedOutputAudioMappingsUnsafe(preparedExecution, _audioProduction.Configuration);
+			if (audioMappingFailure is not null)
+			{
+				Observe($"runtime.prepare.rejected:{audioMappingFailure.Value.Code}");
+				return new RuntimeHostApplyResult(
+					new RuntimePrepareResult(
+						RuntimeContractVersion.Current,
+						preparedExecution.PreparedExecutionId,
+						RuntimePrepareStatus.Rejected,
+						null,
+						audioMappingFailure),
+					null,
+					null);
+			}
+
 			var compositingFailure = ValidatePreparedCompositingStateUnsafe(preparedExecution.CompositingState);
 			if (compositingFailure is not null)
 			{
@@ -1837,6 +1852,34 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		}
 	}
 
+	private static Failure? ValidatePreparedOutputAudioMappingsUnsafe(
+		PreparedExecutionContract preparedExecution,
+		AudioProductionConfiguration configuration)
+	{
+		var configured = configuration.Buses.Select(bus => bus.BusId).ToHashSet();
+		foreach (var binding in preparedExecution.Bindings.Where(binding => binding.OutputRoleId is not null))
+		{
+			AudioBusId busId;
+			try
+			{
+				busId = new AudioBusId(binding.AudioBusId ?? AudioBusId.Program.Value);
+			}
+			catch (ArgumentException exception)
+			{
+				return new Failure("runtime.output.audio_bus_invalid", exception.Message);
+			}
+
+			if (!configured.Contains(busId))
+			{
+				return new Failure(
+					"runtime.output.audio_bus_missing",
+					$"Output role '{binding.OutputRoleId}' references audio bus '{busId}' which is not present in the confirmed audio production configuration.");
+			}
+		}
+
+		return null;
+	}
+
 	private Failure? ValidatePreparedCompositingStateUnsafe(PreparedCompositingState? state)
 	{
 		if (state is null)
@@ -2103,6 +2146,12 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		{
 			ThrowIfDisposed();
 			ValidateAudioProductionConfigurationUnsafe(configuration);
+			if (_runtime.ActiveExecution?.PreparedExecution is { } activePrepared)
+			{
+				var mappingFailure = ValidatePreparedOutputAudioMappingsUnsafe(activePrepared, configuration);
+				if (mappingFailure is not null)
+					throw new InvalidOperationException(mappingFailure.Value.Message);
+			}
 			EnsureAudioBusBuffersUnsafe(configuration);
 			_audioProduction.ApplyConfiguration(configuration);
 			foreach (var source in configuration.Sources)
