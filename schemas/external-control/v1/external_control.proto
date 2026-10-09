@@ -27,6 +27,7 @@ message ProductionCommand {
   optional uint32 duration_frames = 6;
   string scene_id = 7;
   string output_role_id = 8;
+  string audio_bus_id = 9;
 }
 
 message AudioInputRequest {
