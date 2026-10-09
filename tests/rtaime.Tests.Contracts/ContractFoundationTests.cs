@@ -34,15 +34,20 @@ public sealed class ContractFoundationTests
     }
 
     [Fact]
-    public void Contract_versions_are_explicitly_v1_0()
+    public void Contract_versions_are_explicit_and_processing_union_is_versioned()
     {
-        var expected = new CompatibilityVersion(1, 0);
+        var v1 = new CompatibilityVersion(1, 0);
+        var processingV1_1 = new CompatibilityVersion(1, 1);
 
-        Assert.Equal(expected, ControlContractVersion.Current);
-        Assert.Equal(expected, RuntimeContractVersion.Current);
-        Assert.Equal(expected, MediaContractVersion.Current);
-        Assert.Equal(expected, ProviderContractVersion.Current);
-        Assert.Equal(expected, AIContractVersion.Current);
+        Assert.Equal(processingV1_1, ControlContractVersion.Current);
+        Assert.Equal(processingV1_1, RuntimeContractVersion.Current);
+        Assert.Equal(v1, MediaContractVersion.Current);
+        Assert.Equal(v1, ProviderContractVersion.Current);
+        Assert.Equal(v1, AIContractVersion.Current);
+        Assert.False(ControlContractVersion.IsSupported(v1));
+        Assert.False(RuntimeContractVersion.IsSupported(v1));
+        Assert.Throws<NotSupportedException>(() => ControlContractVersion.EnsureSupported(v1));
+        Assert.Throws<NotSupportedException>(() => RuntimeContractVersion.EnsureSupported(v1));
     }
 
     [Fact]
