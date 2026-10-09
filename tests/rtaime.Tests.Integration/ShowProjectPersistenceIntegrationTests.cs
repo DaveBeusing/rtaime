@@ -259,7 +259,8 @@ public sealed class ShowProjectPersistenceIntegrationTests
 			{
 				await management.InitializeAsync();
 				var store = new ShowProjectPersistenceStore(management);
-				var initial = await store.LoadOrCreateAsync(specification);
+				await store.LoadOrCreateAsync(specification);
+				var initial = await store.LoadAsync(specification);
 				Assert.NotNull(initial.AudioProduction);
 				Assert.Null(initial.AudioProduction!.GetBus(AudioBusId.Program).Dynamics);
 
@@ -279,8 +280,8 @@ public sealed class ShowProjectPersistenceIntegrationTests
 				var persisted = await store.UpdateAudioProductionAsync(specification, configuration);
 				var confirmed = Assert.IsType<AudioBusDynamicsConfiguration>(
 					persisted.AudioProduction!.GetBus(AudioBusId.Program).Dynamics);
-				Assert.Equal(-18, confirmed.Compressor.ThresholdDbFs);
-				Assert.Equal(-1, confirmed.Limiter.CeilingDbFs);
+				Assert.Equal(-18d, confirmed.Compressor.ThresholdDbFs);
+				Assert.Equal(-1d, confirmed.Limiter.CeilingDbFs);
 			}
 
 			await using (var reopenedManagement = new SqliteManagementStore(databasePath))
@@ -291,14 +292,14 @@ public sealed class ShowProjectPersistenceIntegrationTests
 				var restored = Assert.IsType<AudioBusDynamicsConfiguration>(
 					reopened.AudioProduction!.GetBus(AudioBusId.Program).Dynamics);
 				Assert.True(restored.Compressor.Enabled);
-				Assert.Equal(-18, restored.Compressor.ThresholdDbFs);
-				Assert.Equal(4, restored.Compressor.Ratio);
-				Assert.Equal(8, restored.Compressor.AttackMilliseconds);
-				Assert.Equal(140, restored.Compressor.ReleaseMilliseconds);
-				Assert.Equal(2, restored.Compressor.MakeupGainDb);
+				Assert.Equal(-18d, restored.Compressor.ThresholdDbFs);
+				Assert.Equal(4d, restored.Compressor.Ratio);
+				Assert.Equal(8d, restored.Compressor.AttackMilliseconds);
+				Assert.Equal(140d, restored.Compressor.ReleaseMilliseconds);
+				Assert.Equal(2d, restored.Compressor.MakeupGainDb);
 				Assert.True(restored.Limiter.Enabled);
-				Assert.Equal(-1, restored.Limiter.CeilingDbFs);
-				Assert.Equal(120, restored.Limiter.ReleaseMilliseconds);
+				Assert.Equal(-1d, restored.Limiter.CeilingDbFs);
+				Assert.Equal(120d, restored.Limiter.ReleaseMilliseconds);
 			}
 		}
 		finally
