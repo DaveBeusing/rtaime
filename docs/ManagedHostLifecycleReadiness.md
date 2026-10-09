@@ -223,6 +223,8 @@ maintenance PASS
 
 The Coordinated Software State Upgrade receipt is historical evidence and is not rewritten in place.
 
+For persistent Windows service-managed updates, the outer maintenance wrapper performs this transition directly: it stops the service, runs the coordinated software/state transaction, starts the service only after maintenance succeeds and calls `Qualify`. If readiness is `PASS`, the separately retained recovery lifecycle is marked `RUNTIME_QUALIFIED`; the original coordinator receipt remains unchanged. If maintenance fails, the wrapper does not restart the uncertain service state.
+
 ## Packaged E2E
 
 Required Gates install the generated qualification bundle into a clean temporary target and execute:
@@ -237,6 +239,8 @@ Start
 ```
 
 The qualification uses unique Named Pipe endpoint names and the same lifecycle script shipped in the offline bundle.
+
+The coordinated state-upgrade Packaged E2E additionally exercises the Windows service-managed wrapper with disposable migration state. That path proves post-maintenance runtime readiness after a real state migration and proves that an injected post-migration failure leaves the service stopped after coordinated software/state recovery.
 
 ## Scope boundary / non-claims
 
