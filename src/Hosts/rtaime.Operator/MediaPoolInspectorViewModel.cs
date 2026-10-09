@@ -121,6 +121,15 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 	private double _selectedColorGradeBrightness;
 	private double _selectedColorGradeContrast = 1.0;
 	private double _selectedColorGradeSaturation = 1.0;
+	private bool _selectedChromaKeyEnabled;
+	private int _selectedChromaKeyRed;
+	private int _selectedChromaKeyGreen = 255;
+	private int _selectedChromaKeyBlue;
+	private double _selectedChromaKeyTolerance = 0.1;
+	private double _selectedChromaKeySoftness = 0.1;
+	private double _selectedChromaKeySpillSuppression;
+	private bool _processingDraftDirty;
+	private string? _confirmedProcessingSignature;
 	private string _emptyState = "No assets are available.";
 	private MediaAssetCatalogSnapshot _catalogSnapshot = MediaAssetCatalogSnapshot.Empty;
 	private bool _catalogBusy;
@@ -183,11 +192,25 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 		}, () => HasAuthoritativeCompositingSelection);
 		ApplyColorGradeCommand = new AsyncRelayCommand(
 			ApplySelectedColorGradeAsync,
-			CanEditAuthoritativeCompositingSelection);
+			() => CanEditAuthoritativeCompositingSelection() && IsSelectedColorGradeProcessingNode);
+		ApplyChromaKeyCommand = new AsyncRelayCommand(
+			ApplySelectedChromaKeyAsync,
+			() => CanEditAuthoritativeCompositingSelection() && IsSelectedChromaKeyProcessingNode);
+		AddColorGradeProcessingNodeCommand = new AsyncRelayCommand(
+			() => AddProcessingNodeAsync(1),
+			CanAddProcessingNode);
+		AddChromaKeyProcessingNodeCommand = new AsyncRelayCommand(
+			() => AddProcessingNodeAsync(2),
+			CanAddProcessingNode);
+		MoveProcessingNodeEarlierCommand = new AsyncRelayCommand(
+			() => MoveSelectedProcessingNodeAsync(-1),
+			() => CanMoveSelectedProcessingNode(-1));
+		MoveProcessingNodeLaterCommand = new AsyncRelayCommand(
+			() => MoveSelectedProcessingNodeAsync(1),
+			() => CanMoveSelectedProcessingNode(1));
 		RemoveProcessingNodeCommand = new AsyncRelayCommand(
 			RemoveSelectedProcessingNodeAsync,
-			() => CanEditAuthoritativeCompositingSelection() &&
-				SelectedCompositingLayer?.ProcessingStack.Any(node => node.Kind == 1 && node.ColorGrade is not null) == true);
+			() => CanEditAuthoritativeCompositingSelection() && SelectedProcessingNode is not null);
 		GridViewCommand = new AsyncRelayCommand(() =>
 		{
 			IsGridView = true;
@@ -234,6 +257,11 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 	public ICommand ApplyCompositingTransformCommand { get; }
 	public ICommand ResetCompositingTransformCommand { get; }
 	public ICommand ApplyColorGradeCommand { get; }
+	public ICommand ApplyChromaKeyCommand { get; }
+	public ICommand AddColorGradeProcessingNodeCommand { get; }
+	public ICommand AddChromaKeyProcessingNodeCommand { get; }
+	public ICommand MoveProcessingNodeEarlierCommand { get; }
+	public ICommand MoveProcessingNodeLaterCommand { get; }
 	public ICommand RemoveProcessingNodeCommand { get; }
 	public ICommand ImportCommand { get; }
 	public ICommand RefreshCatalogCommand { get; }
@@ -319,13 +347,27 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 	public bool SupportsTransformRotation => HasAuthoritativeCompositingSelection;
 	public bool SupportsTransformAnchor => HasAuthoritativeCompositingSelection;
 	public bool SupportsTransformCrop => HasAuthoritativeCompositingSelection;
-	public bool SupportsEffectOrdering => false;
+	public bool SupportsEffectOrdering => HasAuthoritativeCompositingSelection;
+	public bool HasSelectedProcessingNode => SelectedProcessingNode is not null;
+	public bool IsSelectedColorGradeProcessingNode => SelectedProcessingNode is { Kind: 1, ColorGrade: not null };
+	public bool IsSelectedChromaKeyProcessingNode => SelectedProcessingNode is { Kind: 2, ChromaKey: not null };
+	public bool CanAddProcessingNodeToSelection =>
+		HasAuthoritativeCompositingSelection &&
+		SelectedCompositingLayer!.ProcessingStack.Count < OperatorCompositingLayerDescriptor.MaximumProcessingNodeCount &&
+		_operator.CanManageCompositingLayers();
+	public string ProcessingStateLabel => _operator.IsBusy
+		? "PENDING · awaiting authoritative confirmation"
+		: _operator.IsStale
+			? "STALE · resynchronize before editing"
+			: !_operator.IsConnected
+				? "DISCONNECTED"
+				: HasSelectedProcessingNode ? "CONFIRMED NODE · draft edits require APPLY" : "CONFIRMED STACK";
 	public string UnsupportedTransformCapabilityText => HasAuthoritativeCompositingSelection
 		? "Transform values are committed through authoritative Control and confirmed by Runtime state."
 		: "Rotation, Anchor and Crop require an authoritative bitmap or Production CG compositing layer selection.";
 	public string UnsupportedEffectOrderingText => HasAuthoritativeCompositingSelection
-		? "V1 supports one bounded authoritative Color Grade node per layer; effect stacking and reordering remain out of scope."
-		: "Effect ordering is not exposed by the current processing capability.";
+		? "Processing order is authoritative. Select a processing node to edit, move or remove it; add operations append a validated node to the confirmed stack."
+		: "Processing-stack controls require an authoritative bitmap or Production CG compositing layer selection.";
 	public bool IsSourceSelection => _timelineItems.Count <= 1 && _timelineItem is null && _timelineCue is null && SelectedItem?.Kind == MediaPoolItemKind.Source;
 	public bool IsTestSignalSelection => SelectedTestSignalSource?.IsTestPattern == true;
 	public string TestSignalPresetLabel
@@ -428,22 +470,57 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 	public bool SelectedColorGradeEnabled
 	{
 		get => _selectedColorGradeEnabled;
-		set => Set(ref _selectedColorGradeEnabled, value);
+		set { if (Set(ref _selectedColorGradeEnabled, value)) _processingDraftDirty = true; }
 	}
 	public double SelectedColorGradeBrightness
 	{
 		get => _selectedColorGradeBrightness;
-		set => SetValidated(ref _selectedColorGradeBrightness, value, -1, 1);
+		set { if (SetValidated(ref _selectedColorGradeBrightness, value, -1, 1)) _processingDraftDirty = true; }
 	}
 	public double SelectedColorGradeContrast
 	{
 		get => _selectedColorGradeContrast;
-		set => SetValidated(ref _selectedColorGradeContrast, value, 0, 2);
+		set { if (SetValidated(ref _selectedColorGradeContrast, value, 0, 2)) _processingDraftDirty = true; }
 	}
 	public double SelectedColorGradeSaturation
 	{
 		get => _selectedColorGradeSaturation;
-		set => SetValidated(ref _selectedColorGradeSaturation, value, 0, 2);
+		set { if (SetValidated(ref _selectedColorGradeSaturation, value, 0, 2)) _processingDraftDirty = true; }
+	}
+	public bool SelectedChromaKeyEnabled
+	{
+		get => _selectedChromaKeyEnabled;
+		set { if (Set(ref _selectedChromaKeyEnabled, value)) _processingDraftDirty = true; }
+	}
+	public int SelectedChromaKeyRed
+	{
+		get => _selectedChromaKeyRed;
+		set { if (SetValidated(ref _selectedChromaKeyRed, value, 0, 255)) _processingDraftDirty = true; }
+	}
+	public int SelectedChromaKeyGreen
+	{
+		get => _selectedChromaKeyGreen;
+		set { if (SetValidated(ref _selectedChromaKeyGreen, value, 0, 255)) _processingDraftDirty = true; }
+	}
+	public int SelectedChromaKeyBlue
+	{
+		get => _selectedChromaKeyBlue;
+		set { if (SetValidated(ref _selectedChromaKeyBlue, value, 0, 255)) _processingDraftDirty = true; }
+	}
+	public double SelectedChromaKeyTolerance
+	{
+		get => _selectedChromaKeyTolerance;
+		set { if (SetValidated(ref _selectedChromaKeyTolerance, value, 0, 1)) _processingDraftDirty = true; }
+	}
+	public double SelectedChromaKeySoftness
+	{
+		get => _selectedChromaKeySoftness;
+		set { if (SetValidated(ref _selectedChromaKeySoftness, value, 0, 1)) _processingDraftDirty = true; }
+	}
+	public double SelectedChromaKeySpillSuppression
+	{
+		get => _selectedChromaKeySpillSuppression;
+		set { if (SetValidated(ref _selectedChromaKeySpillSuppression, value, 0, 1)) _processingDraftDirty = true; }
 	}
 
 	public bool IsCompositionSelection => _timelineItems.Count <= 1 && _timelineItem is null && _timelineCue is null && SelectedItem?.Kind == MediaPoolItemKind.Composition;
@@ -784,7 +861,7 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 		}
 
 		OnPropertyChanged(nameof(SelectedItem));
-		SynchronizeCompositingDraft();
+		SynchronizeCompositingDraft(force: true);
 		BuildInspector();
 		RaiseSelectionState();
 	}
@@ -1452,6 +1529,12 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 		OnPropertyChanged(nameof(SupportsTransformRotation));
 		OnPropertyChanged(nameof(SupportsTransformAnchor));
 		OnPropertyChanged(nameof(SupportsTransformCrop));
+		OnPropertyChanged(nameof(SupportsEffectOrdering));
+		OnPropertyChanged(nameof(HasSelectedProcessingNode));
+		OnPropertyChanged(nameof(IsSelectedColorGradeProcessingNode));
+		OnPropertyChanged(nameof(IsSelectedChromaKeyProcessingNode));
+		OnPropertyChanged(nameof(CanAddProcessingNodeToSelection));
+		OnPropertyChanged(nameof(ProcessingStateLabel));
 		OnPropertyChanged(nameof(UnsupportedTransformCapabilityText));
 		OnPropertyChanged(nameof(UnsupportedEffectOrderingText));
 		OnPropertyChanged(nameof(HasMetadata));
@@ -1459,6 +1542,11 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 		(ApplyCompositingTransformCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 		(ResetCompositingTransformCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 		(ApplyColorGradeCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+		(ApplyChromaKeyCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+		(AddColorGradeProcessingNodeCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+		(AddChromaKeyProcessingNodeCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+		(MoveProcessingNodeEarlierCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+		(MoveProcessingNodeLaterCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 		(RemoveProcessingNodeCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 		RaiseGroupExpansionState();
 	}
@@ -1473,6 +1561,28 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 				: _operator.CompositingLayers.FirstOrDefault(layer =>
 					string.Equals(layer.LayerId, layerId, StringComparison.Ordinal));
 		}
+	}
+
+	private OperatorCompositingProcessingNodeDescriptor? SelectedProcessingNode
+	{
+		get
+		{
+			var layer = SelectedCompositingLayer;
+			var nodeId = ResolveSelectedProcessingNodeId();
+			return layer is null || nodeId is null
+				? null
+				: layer.ProcessingStack.FirstOrDefault(node => string.Equals(node.NodeId, nodeId, StringComparison.Ordinal));
+		}
+	}
+
+	private string? ResolveSelectedProcessingNodeId()
+	{
+		var nodeId = _compositingNode?.Id;
+		if (string.IsNullOrWhiteSpace(nodeId) || !nodeId.StartsWith("processing:", StringComparison.Ordinal))
+			return null;
+		var remainder = nodeId["processing:".Length..];
+		var separator = remainder.IndexOf(':');
+		return separator > 0 && separator < remainder.Length - 1 ? remainder[(separator + 1)..] : null;
 	}
 
 	private string? ResolveSelectedCompositingLayerId()
@@ -1540,50 +1650,154 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 	private async Task ApplySelectedColorGradeAsync()
 	{
 		var layer = SelectedCompositingLayer;
-		if (layer is null || !CanEditAuthoritativeCompositingSelection())
+		var selected = SelectedProcessingNode;
+		if (layer is null || selected is not { Kind: 1 } || !CanEditAuthoritativeCompositingSelection())
 			return;
 
+		await ReplaceProcessingNodeAsync(
+			layer,
+			selected.NodeId,
+			new OperatorCompositingProcessingNodeDescriptor(
+				selected.NodeId,
+				1,
+				SelectedColorGradeEnabled,
+				colorGrade: new OperatorColorGradeDescriptor(
+					SelectedColorGradeBrightness,
+					SelectedColorGradeContrast,
+					SelectedColorGradeSaturation)));
+	}
+
+	private async Task ApplySelectedChromaKeyAsync()
+	{
+		var layer = SelectedCompositingLayer;
+		var selected = SelectedProcessingNode;
+		if (layer is null || selected is not { Kind: 2 } || !CanEditAuthoritativeCompositingSelection())
+			return;
+
+		await ReplaceProcessingNodeAsync(
+			layer,
+			selected.NodeId,
+			new OperatorCompositingProcessingNodeDescriptor(
+				selected.NodeId,
+				2,
+				SelectedChromaKeyEnabled,
+				chromaKey: new OperatorChromaKeyDescriptor(
+					checked((byte)SelectedChromaKeyRed),
+					checked((byte)SelectedChromaKeyGreen),
+					checked((byte)SelectedChromaKeyBlue),
+					SelectedChromaKeyTolerance,
+					SelectedChromaKeySoftness,
+					SelectedChromaKeySpillSuppression)));
+	}
+
+	private bool CanAddProcessingNode() =>
+		CanEditAuthoritativeCompositingSelection() &&
+		SelectedCompositingLayer is { ProcessingStack.Count: < OperatorCompositingLayerDescriptor.MaximumProcessingNodeCount };
+
+	private async Task AddProcessingNodeAsync(int kind)
+	{
+		var layer = SelectedCompositingLayer;
+		if (layer is null || !CanAddProcessingNode())
+			return;
+
+		var nodeId = CreateUniqueProcessingNodeId(layer, kind == 1 ? "color-grade" : "chroma-key");
+		var node = kind switch
+		{
+			1 => new OperatorCompositingProcessingNodeDescriptor(
+				nodeId,
+				1,
+				true,
+				colorGrade: new OperatorColorGradeDescriptor(0, 1, 1)),
+			2 => new OperatorCompositingProcessingNodeDescriptor(
+				nodeId,
+				2,
+				true,
+				chromaKey: new OperatorChromaKeyDescriptor(0, 255, 0, 0.1, 0.1, 0)),
+			_ => throw new ArgumentOutOfRangeException(nameof(kind))
+		};
+		await _operator.SetCompositingLayerProcessingStackAsync(layer.LayerId, layer.ProcessingStack.Append(node).ToArray());
+		_processingDraftDirty = false;
+		SynchronizeCompositingDraft(force: true);
+		BuildInspector();
+	}
+
+	private async Task ReplaceProcessingNodeAsync(
+		OperatorCompositingLayerDescriptor layer,
+		string nodeId,
+		OperatorCompositingProcessingNodeDescriptor replacement)
+	{
 		var stack = layer.ProcessingStack.ToArray();
-		var gradeIndex = Array.FindIndex(stack, candidate => candidate.Kind == 1 && candidate.ColorGrade is not null);
-		var node = new OperatorCompositingProcessingNodeDescriptor(
-			gradeIndex >= 0 ? stack[gradeIndex].NodeId : "color-grade",
-			1,
-			SelectedColorGradeEnabled,
-			new OperatorColorGradeDescriptor(
-				SelectedColorGradeBrightness,
-				SelectedColorGradeContrast,
-				SelectedColorGradeSaturation));
-		if (gradeIndex >= 0)
-		{
-			stack[gradeIndex] = node;
-		}
-		else
-		{
-			if (stack.Length >= OperatorCompositingLayerDescriptor.MaximumProcessingNodeCount)
-				return;
-			stack = stack.Append(node).ToArray();
-		}
+		var index = Array.FindIndex(stack, node => string.Equals(node.NodeId, nodeId, StringComparison.Ordinal));
+		if (index < 0)
+			return;
+		stack[index] = replacement;
 		await _operator.SetCompositingLayerProcessingStackAsync(layer.LayerId, stack);
-		SynchronizeCompositingDraft();
+		_processingDraftDirty = false;
+		SynchronizeCompositingDraft(force: true);
+		BuildInspector();
+	}
+
+	private bool CanMoveSelectedProcessingNode(int delta)
+	{
+		if (!CanEditAuthoritativeCompositingSelection())
+			return false;
+		var layer = SelectedCompositingLayer;
+		var selected = SelectedProcessingNode;
+		if (layer is null || selected is null)
+			return false;
+		var index = layer.ProcessingStack.ToList().FindIndex(node => string.Equals(node.NodeId, selected.NodeId, StringComparison.Ordinal));
+		var target = index + delta;
+		return index >= 0 && target >= 0 && target < layer.ProcessingStack.Count;
+	}
+
+	private async Task MoveSelectedProcessingNodeAsync(int delta)
+	{
+		var layer = SelectedCompositingLayer;
+		var selected = SelectedProcessingNode;
+		if (layer is null || selected is null || !CanMoveSelectedProcessingNode(delta))
+			return;
+		var stack = layer.ProcessingStack.ToList();
+		var index = stack.FindIndex(node => string.Equals(node.NodeId, selected.NodeId, StringComparison.Ordinal));
+		var target = index + delta;
+		(stack[index], stack[target]) = (stack[target], stack[index]);
+		await _operator.SetCompositingLayerProcessingStackAsync(layer.LayerId, stack.ToArray());
+		_processingDraftDirty = false;
+		SynchronizeCompositingDraft(force: true);
 		BuildInspector();
 	}
 
 	private async Task RemoveSelectedProcessingNodeAsync()
 	{
 		var layer = SelectedCompositingLayer;
-		if (layer is null || !CanEditAuthoritativeCompositingSelection())
+		var selected = SelectedProcessingNode;
+		if (layer is null || selected is null || !CanEditAuthoritativeCompositingSelection())
 			return;
-		var stack = layer.ProcessingStack.ToList();
-		var gradeIndex = stack.FindIndex(node => node.Kind == 1 && node.ColorGrade is not null);
-		if (gradeIndex < 0)
+		var stack = layer.ProcessingStack
+			.Where(node => !string.Equals(node.NodeId, selected.NodeId, StringComparison.Ordinal))
+			.ToArray();
+		if (stack.Length == layer.ProcessingStack.Count)
 			return;
-		stack.RemoveAt(gradeIndex);
-		await _operator.SetCompositingLayerProcessingStackAsync(layer.LayerId, stack.ToArray());
-		SynchronizeCompositingDraft();
+		await _operator.SetCompositingLayerProcessingStackAsync(layer.LayerId, stack);
+		_processingDraftDirty = false;
+		_confirmedProcessingSignature = null;
 		BuildInspector();
 	}
 
-	private void SynchronizeCompositingDraft()
+	private static string CreateUniqueProcessingNodeId(OperatorCompositingLayerDescriptor layer, string baseId)
+	{
+		var identities = layer.ProcessingStack.Select(node => node.NodeId).ToHashSet(StringComparer.Ordinal);
+		if (!identities.Contains(baseId))
+			return baseId;
+		for (var suffix = 2; suffix <= OperatorCompositingLayerDescriptor.MaximumProcessingNodeCount + 1; suffix++)
+		{
+			var candidate = $"{baseId}-{suffix}";
+			if (!identities.Contains(candidate))
+				return candidate;
+		}
+		throw new InvalidOperationException("No unique processing-node identity is available within the bounded stack.");
+	}
+
+	private void SynchronizeCompositingDraft(bool force = false)
 	{
 		var layer = SelectedCompositingLayer;
 		if (layer is null)
@@ -1599,11 +1813,32 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 		_selectedLayerCropTop = layer.CropTop;
 		_selectedLayerCropRight = layer.CropRight;
 		_selectedLayerCropBottom = layer.CropBottom;
-		var colorGrade = layer.ProcessingStack.FirstOrDefault(node => node.Kind == 1 && node.ColorGrade is not null);
-		_selectedColorGradeEnabled = colorGrade?.Enabled ?? false;
-		_selectedColorGradeBrightness = colorGrade?.ColorGrade?.Brightness ?? 0;
-		_selectedColorGradeContrast = colorGrade?.ColorGrade?.Contrast ?? 1;
-		_selectedColorGradeSaturation = colorGrade?.ColorGrade?.Saturation ?? 1;
+		var selectedProcessing = SelectedProcessingNode;
+		var signature = selectedProcessing is null
+			? null
+			: $"{selectedProcessing.NodeId}|{selectedProcessing.Kind}|{selectedProcessing.Enabled}|{selectedProcessing.ColorGrade?.Brightness}|{selectedProcessing.ColorGrade?.Contrast}|{selectedProcessing.ColorGrade?.Saturation}|{selectedProcessing.ChromaKey?.KeyRed}|{selectedProcessing.ChromaKey?.KeyGreen}|{selectedProcessing.ChromaKey?.KeyBlue}|{selectedProcessing.ChromaKey?.Tolerance}|{selectedProcessing.ChromaKey?.Softness}|{selectedProcessing.ChromaKey?.SpillSuppression}";
+		if (force || !_processingDraftDirty || !string.Equals(signature, _confirmedProcessingSignature, StringComparison.Ordinal))
+		{
+			if (selectedProcessing is { Kind: 1, ColorGrade: { } grade })
+			{
+				_selectedColorGradeEnabled = selectedProcessing.Enabled;
+				_selectedColorGradeBrightness = grade.Brightness;
+				_selectedColorGradeContrast = grade.Contrast;
+				_selectedColorGradeSaturation = grade.Saturation;
+			}
+			else if (selectedProcessing is { Kind: 2, ChromaKey: { } key })
+			{
+				_selectedChromaKeyEnabled = selectedProcessing.Enabled;
+				_selectedChromaKeyRed = key.KeyRed;
+				_selectedChromaKeyGreen = key.KeyGreen;
+				_selectedChromaKeyBlue = key.KeyBlue;
+				_selectedChromaKeyTolerance = key.Tolerance;
+				_selectedChromaKeySoftness = key.Softness;
+				_selectedChromaKeySpillSuppression = key.SpillSuppression;
+			}
+			_processingDraftDirty = false;
+			_confirmedProcessingSignature = signature;
+		}
 
 		foreach (var propertyName in new[]
 		{
@@ -1621,11 +1856,29 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 			nameof(SelectedColorGradeBrightness),
 			nameof(SelectedColorGradeContrast),
 			nameof(SelectedColorGradeSaturation),
+			nameof(SelectedChromaKeyEnabled),
+			nameof(SelectedChromaKeyRed),
+			nameof(SelectedChromaKeyGreen),
+			nameof(SelectedChromaKeyBlue),
+			nameof(SelectedChromaKeyTolerance),
+			nameof(SelectedChromaKeySoftness),
+			nameof(SelectedChromaKeySpillSuppression),
+			nameof(HasSelectedProcessingNode),
+			nameof(IsSelectedColorGradeProcessingNode),
+			nameof(IsSelectedChromaKeyProcessingNode),
+			nameof(ProcessingStateLabel),
 			nameof(HasAuthoritativeCompositingSelection)
 		})
 		{
 			OnPropertyChanged(propertyName);
 		}
+	}
+
+	private bool SetValidated(ref int field, int value, int minimum, int maximum, [CallerMemberName] string? propertyName = null)
+	{
+		if (value < minimum || value > maximum)
+			throw new ArgumentOutOfRangeException(propertyName, $"Value must be in the inclusive range {minimum}..{maximum}.");
+		return Set(ref field, value, propertyName);
 	}
 
 	private bool SetValidated(ref double field, double value, double minimum, double maximum, [CallerMemberName] string? propertyName = null)
