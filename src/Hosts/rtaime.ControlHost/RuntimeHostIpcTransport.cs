@@ -1651,7 +1651,8 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 			new WireResource(binding.Resource.ResourceId.ToString(), binding.Resource.ProviderId.ToString(), binding.Resource.Kind, binding.Resource.CapacityUnits, binding.Resource.Reservable),
 			binding.MediaSourceId?.ToString(),
 			binding.MediaSinkId?.ToString(),
-			binding.OutputRoleId)).ToArray(),
+			binding.OutputRoleId,
+			binding.AudioBusId)).ToArray(),
 		prepared.CompositingState is null
 			? null
 			: new WirePreparedCompositingState(
@@ -1727,7 +1728,7 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 	private sealed record WireCapability(string CapabilityId, string Kind, WireVideoFormat[] VideoFormats);
 	private sealed record WireResource(string ResourceId, string ProviderId, string Kind, uint CapacityUnits, bool Reservable);
 	private sealed record WireProvider(string Version, string ProviderId, string Name, int AvailabilityState, WireFailure? Failure, WireCapability[] Capabilities, WireResource[] Resources);
-	private sealed record WirePreparedBinding(string LogicalNodeId, string CapabilityId, WireResource Resource, string? MediaSourceId, string? MediaSinkId, string? OutputRoleId = null);
+	private sealed record WirePreparedBinding(string LogicalNodeId, string CapabilityId, WireResource Resource, string? MediaSourceId, string? MediaSinkId, string? OutputRoleId = null, string? AudioBusId = null);
 	private sealed record WirePreparedCompositingLayer(string LayerId, int Kind, int Order, bool Visible, byte Opacity, double PositionX, double PositionY, double Scale, string ContentIdentity, double RotationDegrees = 0, double AnchorX = 0, double AnchorY = 0, double CropLeft = 0, double CropTop = 0, double CropRight = 0, double CropBottom = 0, WireProcessingNode[]? ProcessingStack = null, WireProcessingNode? ProcessingNode = null);
 	private sealed record WirePreparedCompositingState(string Version, WirePreparedCompositingLayer[] Layers);
 	private sealed record WirePreparedExecution(string Version, string PreparedExecutionId, string AuthorityStateId, ulong AuthorityRevision, ulong PlanGeneration, WirePreparedBinding[] Bindings, WirePreparedCompositingState? CompositingState = null);
