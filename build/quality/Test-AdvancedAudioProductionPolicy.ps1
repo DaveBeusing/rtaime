@@ -52,7 +52,7 @@ Assert-Condition ($engine -notmatch 'new float\[') "The steady-state mix engine 
 Assert-Condition ($engine -match 'StartSamplePosition' -or $engine -match 'startSamplePosition') "Crossfade progression must remain sample-position based."
 
 Assert-Condition ($runtime -match 'AudioProductionEngine') "RuntimeHost must own advanced audio processing."
-Assert-Condition ($runtime -match '_programAudioMixSamples') "RuntimeHost must reuse a Program audio mix buffer."
+Assert-Condition ($runtime -match '_audioBusMixSamples' -and $runtime -match 'ProcessConfiguredAudioBusesUnsafe') "RuntimeHost must reuse bounded per-bus audio mix buffers through one processing engine."
 Assert-Condition ($runtime -match 'TryRecordCommittedProgram\(execution, output\.Descriptor, programAudioBuffer\)') "Recording must consume the final Program audio descriptor."
 Assert-Condition ($runtime -match 'programAudioBuffer,\s*programAudioPayload') "Output paths must consume the same final Program audio payload."
 Assert-Condition ($runtime -notmatch 'ControlHost') "Runtime audio processing must not depend on ControlHost implementation."
@@ -65,6 +65,8 @@ Assert-Condition ($unit -match 'Steady_state_processing_does_not_allocate_per_bl
 Assert-Condition ($unit -match 'Equal_power_crossfade_has_exact_endpoints_and_expected_midpoint') "Crossfade deterministic sample tests are required."
 Assert-Condition ($unit -match 'Ducking_attack_hold_release_and_sidechain_loss_are_sample_deterministic') "Ducking deterministic sample tests are required."
 Assert-Condition ($performance -match 'Maximum_input_mix_with_crossfade_and_ducking_is_bounded_and_allocation_free_after_warmup') "Maximum-input performance qualification is required."
+Assert-Condition ($unit -match 'Multiple_buses_mix_independently_and_allow_zero_or_multiple_assignments' -and $unit -match 'More_than_four_buses_are_rejected') "Bounded multi-bus semantics and the four-bus limit require explicit regression coverage."
+Assert-Condition ($performance -match 'Maximum_eight_source_four_bus_processing_is_allocation_free_after_warmup') "Maximum 8-source x 4-bus allocation qualification is required."
 Assert-Condition ($documentation -match 'ControlHost owns authoritative configuration' -and $documentation -match 'No wall-clock or UI timer') "Advanced-audio documentation must retain authority and timing boundaries."
 
 Write-Host "Advanced audio production policy PASS"
