@@ -190,7 +190,8 @@ public sealed record OperatorOutputRoleDescriptor
         string healthState,
         string evidence,
         Failure? error,
-        OperatorNetworkOutputDescriptor? networkOutput = null)
+        OperatorNetworkOutputDescriptor? networkOutput = null,
+        string audioBusId = "program")
     {
         if (string.IsNullOrWhiteSpace(roleId)) throw new ArgumentException("Output role id is required.", nameof(roleId));
         if (string.IsNullOrWhiteSpace(roleKind)) throw new ArgumentException("Output role kind is required.", nameof(roleKind));
@@ -201,6 +202,7 @@ public sealed record OperatorOutputRoleDescriptor
         if (healthState is not ("PASS" or "FAIL" or "UNVERIFIED")) throw new ArgumentException("Output role health must be PASS, FAIL or UNVERIFIED.", nameof(healthState));
         if (string.IsNullOrWhiteSpace(evidence)) throw new ArgumentException("Output role evidence is required.", nameof(evidence));
         if (healthState == "FAIL" && error is null) throw new ArgumentException("Failed output roles require an error reason.", nameof(error));
+        if (string.IsNullOrWhiteSpace(audioBusId)) throw new ArgumentException("Output role audio bus id is required.", nameof(audioBusId));
         RoleId = roleId.Trim().ToLowerInvariant();
         RoleKind = roleKind.Trim().ToUpperInvariant();
         SourceId = sourceId.Trim();
@@ -217,6 +219,7 @@ public sealed record OperatorOutputRoleDescriptor
         Evidence = evidence.Trim();
         Error = error;
         NetworkOutput = networkOutput;
+        AudioBusId = audioBusId.Trim().ToLowerInvariant();
     }
     public string RoleId { get; }
     public string RoleKind { get; }
@@ -234,6 +237,7 @@ public sealed record OperatorOutputRoleDescriptor
     public string Evidence { get; }
     public Failure? Error { get; }
     public OperatorNetworkOutputDescriptor? NetworkOutput { get; }
+    public string AudioBusId { get; }
 }
 
 public sealed record OperatorGraphicsAsset
@@ -1242,15 +1246,29 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
     }
 
     public ValueTask<OperatorMutationResponse> RouteOutputRoleAsync(string roleId, string sourceId, CancellationToken cancellationToken = default) =>
-        RouteOutputRoleAsync(new OutputRoleId(roleId), ParseSourceId(sourceId), cancellationToken);
+        RouteOutputRoleAsync(new OutputRoleId(roleId), ParseSourceId(sourceId), null, cancellationToken);
+
+    public ValueTask<OperatorMutationResponse> RouteOutputRoleAsync(
+        string roleId,
+        string sourceId,
+        string audioBusId,
+        CancellationToken cancellationToken = default) =>
+        RouteOutputRoleAsync(new OutputRoleId(roleId), ParseSourceId(sourceId), audioBusId, cancellationToken);
+
+    public ValueTask<OperatorMutationResponse> RouteOutputRoleAsync(
+        OutputRoleId roleId,
+        ProductionSourceId sourceId,
+        CancellationToken cancellationToken = default) =>
+        RouteOutputRoleAsync(roleId, sourceId, null, cancellationToken);
 
     public async ValueTask<OperatorMutationResponse> RouteOutputRoleAsync(
         OutputRoleId roleId,
         ProductionSourceId sourceId,
+        string? audioBusId,
         CancellationToken cancellationToken = default)
     {
         var current = RequireSnapshot();
-        var command = new RouteOutputRoleCommand(Metadata(current.Production), roleId, sourceId);
+        var command = new RouteOutputRoleCommand(Metadata(current.Production), roleId, sourceId, audioBusId);
         var result = await _transport.RouteOutputRoleAsync(command, cancellationToken).ConfigureAwait(false);
         if (result.Accepted)
             await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
