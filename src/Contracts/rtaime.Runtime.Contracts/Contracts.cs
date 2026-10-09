@@ -280,8 +280,11 @@ public sealed record PreparedCompositingLayerState
         ValidateNormalized(anchorY, nameof(anchorY));
         ValidateCrop(cropLeft, cropTop, cropRight, cropBottom);
 
-        if (processingNode is not null && processingStack is not null)
+        if (processingNode is not null && processingStack is not null &&
+            (processingStack.Count == 0 || !Equals(processingNode, processingStack[0])))
+        {
             throw new ArgumentException("Specify either the legacy prepared processing node or the canonical prepared processing stack, not both.", nameof(processingStack));
+        }
 
         var canonicalProcessingStack = processingStack is null
             ? processingNode is null

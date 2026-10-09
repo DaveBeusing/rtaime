@@ -1,6 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 using System.Buffers.Binary;
+using System.Collections.ObjectModel;
 using System.IO.Pipes;
 using System.Text.Json;
 using rtaime.Core;
@@ -44,8 +45,11 @@ public sealed record RuntimeCompositingLayerSnapshot
 		PreparedCompositingProcessingNodeState? processingNode = null,
 		IReadOnlyList<PreparedCompositingProcessingNodeState>? processingStack = null)
 	{
-		if (processingNode is not null && processingStack is not null)
-			throw new ArgumentException("Specify either the legacy processing node or the canonical processing stack, not both.", nameof(processingStack));
+		if (processingNode is not null && processingStack is not null &&
+			(processingStack.Count == 0 || !Equals(processingNode, processingStack[0])))
+		{
+			throw new ArgumentException("Legacy processing-node projection must match the first canonical processing-stack node.", nameof(processingStack));
+		}
 		var canonical = processingStack is null
 			? processingNode is null ? Array.Empty<PreparedCompositingProcessingNodeState>() : new[] { processingNode }
 			: processingStack.ToArray();

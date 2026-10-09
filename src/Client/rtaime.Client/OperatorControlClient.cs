@@ -355,8 +355,11 @@ public sealed record OperatorCompositingLayerDescriptor
         if (cropLeft + cropRight >= 1) throw new ArgumentOutOfRangeException(nameof(cropRight));
         if (cropTop + cropBottom >= 1) throw new ArgumentOutOfRangeException(nameof(cropBottom));
         if (string.IsNullOrWhiteSpace(contentIdentity)) throw new ArgumentException("Compositing layer content identity is required.", nameof(contentIdentity));
-        if (processingNode is not null && processingStack is not null)
-            throw new ArgumentException("Specify either the legacy processing node or the canonical processing stack, not both.", nameof(processingStack));
+        if (processingNode is not null && processingStack is not null &&
+            (processingStack.Count == 0 || !Equals(processingNode, processingStack[0])))
+        {
+            throw new ArgumentException("Legacy processing-node projection must match the first canonical processing-stack node.", nameof(processingStack));
+        }
 
         var canonical = processingStack is null
             ? processingNode is null ? Array.Empty<OperatorCompositingProcessingNodeDescriptor>() : new[] { processingNode }
