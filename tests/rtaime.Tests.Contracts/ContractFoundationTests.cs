@@ -44,10 +44,12 @@ public sealed class ContractFoundationTests
         Assert.Equal(v1, MediaContractVersion.Current);
         Assert.Equal(v1, ProviderContractVersion.Current);
         Assert.Equal(v1, AIContractVersion.Current);
-        Assert.False(ControlContractVersion.IsSupported(v1));
-        Assert.False(RuntimeContractVersion.IsSupported(v1));
-        Assert.Throws<NotSupportedException>(() => ControlContractVersion.EnsureSupported(v1));
-        Assert.Throws<NotSupportedException>(() => RuntimeContractVersion.EnsureSupported(v1));
+        Assert.True(ControlContractVersion.IsSupported(v1));
+        Assert.True(RuntimeContractVersion.IsSupported(v1));
+        Assert.Equal(v1, ControlContractVersion.LegacyV1_0);
+        Assert.Equal(v1, RuntimeContractVersion.LegacyV1_0);
+        ControlContractVersion.EnsureSupported(v1);
+        RuntimeContractVersion.EnsureSupported(v1);
     }
 
     [Fact]
