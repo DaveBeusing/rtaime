@@ -212,7 +212,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 				_ => ValueTask.FromResult(Error(request, "ipc.message.unknown", $"Unknown RuntimeHost message type '{request.MessageType}'."))
 			};
 		}
-		catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or NotSupportedException or FormatException)
+		catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or NotSupportedException or FormatException or InvalidDataException or JsonException)
 		{
 			return ValueTask.FromResult(Error(request, "runtime.request.rejected", exception.Message));
 		}
