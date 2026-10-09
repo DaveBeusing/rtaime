@@ -89,7 +89,7 @@ function Invoke-StateMaintenance {
 		if ($hasNativePreference) { $PSNativeCommandUseErrorActionPreference = $previousNativePreference }
 	}
 	if ($exitCode -ne 0) {
-		throw "ControlHost state-maintenance command failed with exit code $exitCode: $($Arguments -join ' ')"
+		throw "ControlHost state-maintenance command failed with exit code ${exitCode}: $($Arguments -join ' ')"
 	}
 }
 
