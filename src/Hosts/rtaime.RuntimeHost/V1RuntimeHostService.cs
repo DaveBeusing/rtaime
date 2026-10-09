@@ -1719,8 +1719,11 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			throw new ArgumentException("Compositing processing node identities must be unique within a layer.", nameof(processingStack));
 		foreach (var node in canonical)
 		{
-			if (node.Kind != PreparedCompositingProcessingNodeKind.ColorGrade)
+			if (node.Kind is not PreparedCompositingProcessingNodeKind.ColorGrade and
+				not PreparedCompositingProcessingNodeKind.ChromaKey)
+			{
 				throw new NotSupportedException($"Processing node kind '{node.Kind}' is not supported.");
+			}
 		}
 
 		var normalizedLayerId = layerId.Trim();
@@ -3328,12 +3331,13 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				var red = sourcePixels[sourceOffset];
 				var green = sourcePixels[sourceOffset + 1];
 				var blue = sourcePixels[sourceOffset + 2];
+				var alpha = sourcePixels[sourceOffset + 3];
 				for (var processingIndex = 0; processingIndex < processingStack.Count; processingIndex++)
-					ApplyColorGrade(processingStack[processingIndex], ref red, ref green, ref blue);
+					ApplyProcessingNode(processingStack[processingIndex], ref red, ref green, ref blue, ref alpha);
 				targetPixels[destinationOffset] = red;
 				targetPixels[destinationOffset + 1] = green;
 				targetPixels[destinationOffset + 2] = blue;
-				targetPixels[destinationOffset + 3] = sourcePixels[sourceOffset + 3];
+				targetPixels[destinationOffset + 3] = alpha;
 			}
 		}
 
@@ -3341,18 +3345,35 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		targetSource.Update(targetBuffer);
 	}
 
-	private static void ApplyColorGrade(
+	private static void ApplyProcessingNode(
 		PreparedCompositingProcessingNodeState processingNode,
+		ref byte red,
+		ref byte green,
+		ref byte blue,
+		ref byte alpha)
+	{
+		if (!processingNode.Enabled)
+			return;
+
+		switch (processingNode.Kind)
+		{
+			case PreparedCompositingProcessingNodeKind.ColorGrade:
+				ApplyColorGrade(processingNode.ColorGrade ?? throw new InvalidOperationException("Color Grade settings are required."), ref red, ref green, ref blue);
+				break;
+			case PreparedCompositingProcessingNodeKind.ChromaKey:
+				ApplyChromaKey(processingNode.ChromaKey ?? throw new InvalidOperationException("Chroma Key settings are required."), ref red, ref green, ref blue, ref alpha);
+				break;
+			default:
+				throw new NotSupportedException($"Processing node kind '{processingNode.Kind}' is not supported.");
+		}
+	}
+
+	private static void ApplyColorGrade(
+		PreparedColorGradeSettings grade,
 		ref byte red,
 		ref byte green,
 		ref byte blue)
 	{
-		if (!processingNode.Enabled)
-			return;
-		if (processingNode.Kind != PreparedCompositingProcessingNodeKind.ColorGrade)
-			throw new NotSupportedException($"Processing node kind '{processingNode.Kind}' is not supported.");
-
-		var grade = processingNode.ColorGrade;
 		var r = ((red - 127.5) * grade.Contrast) + 127.5 + (grade.Brightness * 255.0);
 		var g = ((green - 127.5) * grade.Contrast) + 127.5 + (grade.Brightness * 255.0);
 		var b = ((blue - 127.5) * grade.Contrast) + 127.5 + (grade.Brightness * 255.0);
@@ -3363,6 +3384,61 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		red = ClampByte(r);
 		green = ClampByte(g);
 		blue = ClampByte(b);
+	}
+
+	private static void ApplyChromaKey(
+		PreparedChromaKeySettings key,
+		ref byte red,
+		ref byte green,
+		ref byte blue,
+		ref byte alpha)
+	{
+		var source = ToBt709Chroma(red, green, blue);
+		var selected = ToBt709Chroma(key.KeyRed, key.KeyGreen, key.KeyBlue);
+		var deltaCb = source.Cb - selected.Cb;
+		var deltaCr = source.Cr - selected.Cr;
+		var distance = Math.Min(1.0, Math.Sqrt((deltaCb * deltaCb) + (deltaCr * deltaCr)) * Math.Sqrt(2.0));
+
+		double matte;
+		if (key.Softness <= 0.0)
+		{
+			matte = distance <= key.Tolerance ? 0.0 : 1.0;
+		}
+		else
+		{
+			var edge = Math.Clamp((distance - key.Tolerance) / key.Softness, 0.0, 1.0);
+			matte = edge * edge * (3.0 - (2.0 * edge));
+		}
+
+		alpha = ClampByte(alpha * matte);
+
+		if (key.SpillSuppression <= 0.0 || matte >= 1.0)
+			return;
+
+		var keyMagnitudeSquared = (selected.Cb * selected.Cb) + (selected.Cr * selected.Cr);
+		if (keyMagnitudeSquared <= double.Epsilon)
+			return;
+
+		var projection = Math.Max(0.0, ((source.Cb * selected.Cb) + (source.Cr * selected.Cr)) / keyMagnitudeSquared);
+		var suppression = key.SpillSuppression * (1.0 - matte);
+		var cb = source.Cb - (selected.Cb * projection * suppression);
+		var cr = source.Cr - (selected.Cr * projection * suppression);
+
+		var r = source.Luma + (1.5748 * cr);
+		var b = source.Luma + (1.8556 * cb);
+		var g = (source.Luma - (0.2126 * r) - (0.0722 * b)) / 0.7152;
+		red = ClampByte(r * 255.0);
+		green = ClampByte(g * 255.0);
+		blue = ClampByte(b * 255.0);
+	}
+
+	private static (double Luma, double Cb, double Cr) ToBt709Chroma(byte red, byte green, byte blue)
+	{
+		var r = red / 255.0;
+		var g = green / 255.0;
+		var b = blue / 255.0;
+		var luma = (0.2126 * r) + (0.7152 * g) + (0.0722 * b);
+		return (luma, (b - luma) / 1.8556, (r - luma) / 1.5748);
 	}
 
 	private static byte ClampByte(double value) =>
