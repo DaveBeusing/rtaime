@@ -996,7 +996,8 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 							wire.Gain,
 							wire.Muted,
 							source.FollowRoutedSource,
-							source.BusAssignments)
+							source.BusAssignments,
+							source.Equalizer)
 						: source)
 					.ToArray();
 				var requested = new AudioProductionConfiguration(
