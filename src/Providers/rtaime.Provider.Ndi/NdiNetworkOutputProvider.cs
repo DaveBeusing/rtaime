@@ -76,7 +76,7 @@ public sealed class NdiNetworkOutputProvider
 		{
 			var libraryPath = _runtimeLibraryPath
 				?? throw new DllNotFoundException("NDI runtime is unavailable.");
-			return new NativeNdiSender(settings.SourceName, libraryPath);
+			return new NativeNdiSender(configuration, libraryPath);
 		};
 
 		return new NdiNetworkOutputSession(configuration, senderFactory);
