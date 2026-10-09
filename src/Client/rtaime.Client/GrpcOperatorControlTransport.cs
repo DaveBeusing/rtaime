@@ -316,7 +316,20 @@ public sealed class GrpcOperatorControlTransport : IOperatorControlTransport, IA
 				node.NodeId,
 				node.Kind,
 				node.Enabled,
-				ColorGrade = new { node.ColorGrade.Brightness, node.ColorGrade.Contrast, node.ColorGrade.Saturation }
+				ColorGrade = node.ColorGrade is null
+					? null
+					: new { node.ColorGrade.Brightness, node.ColorGrade.Contrast, node.ColorGrade.Saturation },
+				ChromaKey = node.ChromaKey is null
+					? null
+					: new
+					{
+						node.ChromaKey.KeyRed,
+						node.ChromaKey.KeyGreen,
+						node.ChromaKey.KeyBlue,
+						node.ChromaKey.Tolerance,
+						node.ChromaKey.Softness,
+						node.ChromaKey.SpillSuppression
+					}
 			}).ToArray()
 		});
 		return NamedPipeOperatorControlTransport.DecodeExternalCompositingLayers((await ExecuteAsync(request, false, cancellationToken).ConfigureAwait(false)).PayloadJson.Span);
