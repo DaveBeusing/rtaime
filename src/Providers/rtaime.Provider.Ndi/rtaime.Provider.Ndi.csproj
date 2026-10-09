@@ -4,4 +4,8 @@
     <ProjectReference Include="..\..\Contracts\rtaime.Media.Contracts\rtaime.Media.Contracts.csproj" />
     <ProjectReference Include="..\..\Contracts\rtaime.Provider.Contracts\rtaime.Provider.Contracts.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="rtaime.Tests.Unit" />
+  </ItemGroup>
 </Project>
