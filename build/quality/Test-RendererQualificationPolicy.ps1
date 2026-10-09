@@ -76,6 +76,7 @@ Assert-Condition ($hardwareTest -match 'GpuVramUsedBytes') "Renderer hardware qu
 Assert-Condition ($hardwareTest -match 'ActiveGpuSurfaces' -and $hardwareTest -match 'ActiveBuffers' -and $hardwareTest -match 'ActiveResources') "Renderer hardware qualification must fail on leaked GPU/readback/monitoring ownership."
 Assert-Condition ($hardwareTest -match 'physicalExternalOutput[\s\S]*UNVERIFIED') "Renderer qualification must keep professional external output UNVERIFIED."
 Assert-Condition ($hardwareTest -match 'physicalDeviceFaultInjection[\s\S]*UNVERIFIED') "Renderer qualification must not fabricate destructive GPU fault evidence."
+Assert-Condition ($hardwareTest -match 'typedProcessingAcceleration[\s\S]*UNVERIFIED') "Renderer qualification evidence must keep managed typed-processing acceleration explicitly UNVERIFIED."
 
 $processingPerformance = Get-Content -LiteralPath $processingPerformanceTestPath -Raw
 foreach ($scenario in @("none", "color-grade", "chroma-key", "chroma-key-color-grade", "color-grade-chroma-key")) {
