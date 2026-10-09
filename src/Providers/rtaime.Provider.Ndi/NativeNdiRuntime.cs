@@ -1,6 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 using System.Runtime.InteropServices;
+using rtaime.Core;
 using rtaime.Media.Contracts;
 using rtaime.Provider.Contracts;
 
