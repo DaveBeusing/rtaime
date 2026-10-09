@@ -451,6 +451,22 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 				: throw new InvalidDataException("Audio clipping strategy is invalid."));
 	}
 
+	private static AudioSourceEqualizerConfiguration? FromWire(WireAudioEqualizer? wire) =>
+		wire is null
+			? null
+			: new AudioSourceEqualizerConfiguration(
+				new AudioLowShelfEqualizerBand(wire.LowShelf.Enabled, wire.LowShelf.FrequencyHz, wire.LowShelf.GainDb),
+				new AudioBellEqualizerBand(wire.Mid.Enabled, wire.Mid.FrequencyHz, wire.Mid.GainDb, wire.Mid.Q),
+				new AudioHighShelfEqualizerBand(wire.HighShelf.Enabled, wire.HighShelf.FrequencyHz, wire.HighShelf.GainDb));
+
+	private static WireAudioEqualizer? ToWire(AudioSourceEqualizerConfiguration? equalizer) =>
+		equalizer is null
+			? null
+			: new WireAudioEqualizer(
+				new WireAudioShelfEqualizerBand(equalizer.LowShelf.Enabled, equalizer.LowShelf.FrequencyHz, equalizer.LowShelf.GainDb),
+				new WireAudioBellEqualizerBand(equalizer.Mid.Enabled, equalizer.Mid.FrequencyHz, equalizer.Mid.GainDb, equalizer.Mid.Q),
+				new WireAudioShelfEqualizerBand(equalizer.HighShelf.Enabled, equalizer.HighShelf.FrequencyHz, equalizer.HighShelf.GainDb));
+
 	private WireEnvelope SetAudioTestSignal(WireEnvelope request, V1RuntimeHostService runtime)
 	{
 		var wire = request.Payload.Deserialize<WireAudioTestSignalState>(Wire.JsonOptions)
@@ -917,7 +933,8 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 				source.Gain,
 				source.Muted,
 				source.FollowRoutedSource,
-				source.BusAssignments.ToArray())).ToArray(),
+				source.BusAssignments.ToArray(),
+				ToWire(source.Equalizer))).ToArray(),
 			snapshot.Crossfade is null ? null : new WireAudioCrossfade(
 				snapshot.Crossfade.BusId,
 				snapshot.Crossfade.FromSourceId.ToString(),
