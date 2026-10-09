@@ -1536,7 +1536,12 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 				SelectedColorGradeBrightness,
 				SelectedColorGradeContrast,
 				SelectedColorGradeSaturation));
-		await _operator.SetCompositingLayerProcessingNodeAsync(layer.LayerId, node);
+		var stack = layer.ProcessingStack.ToArray();
+		if (stack.Length == 0)
+			stack = new[] { node };
+		else
+			stack[0] = node;
+		await _operator.SetCompositingLayerProcessingStackAsync(layer.LayerId, stack);
 		SynchronizeCompositingDraft();
 		BuildInspector();
 	}
@@ -1546,7 +1551,9 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 		var layer = SelectedCompositingLayer;
 		if (layer is null || !CanEditAuthoritativeCompositingSelection())
 			return;
-		await _operator.SetCompositingLayerProcessingNodeAsync(layer.LayerId, null);
+		await _operator.SetCompositingLayerProcessingStackAsync(
+			layer.LayerId,
+			layer.ProcessingStack.Skip(1).ToArray());
 		SynchronizeCompositingDraft();
 		BuildInspector();
 	}
