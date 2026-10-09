@@ -353,6 +353,80 @@ public sealed class ShowProjectPersistenceIntegrationTests
 		}
 	}
 
+
+	[Fact]
+	public async Task Corrupt_typed_processing_settings_fail_closed_without_rewriting_show_project()
+	{
+		var root = Path.Combine(Path.GetTempPath(), "rtaime-show-project-invalid-processing-" + Guid.NewGuid().ToString("N"));
+		Directory.CreateDirectory(root);
+		var specification = CreateSpecification();
+
+		try
+		{
+			await using var management = new SqliteManagementStore(Path.Combine(root, "management.db"));
+			await management.InitializeAsync();
+			var store = new ShowProjectPersistenceStore(management);
+			await store.LoadOrCreateAsync(specification);
+
+			var compositing = new ProductionCompositingState(
+				ProductionCompositingState.CurrentVersion,
+				[
+					new ProductionCompositingLayerState(
+						ProductionCompositingLayerIds.BitmapGraphics,
+						ProductionCompositingLayerKind.BitmapGraphics,
+						0,
+						true,
+						255,
+						0,
+						0,
+						1,
+						"corrupt-processing.rgba",
+						processingStack:
+						[
+							new ProductionCompositingProcessingNodeState(
+								"key-primary",
+								ProductionCompositingProcessingNodeKind.ChromaKey,
+								true,
+								chromaKey: new ProductionChromaKeySettings(0, 255, 0, 0.15, 0.25, 0.5))
+						])
+				]);
+
+			await store.UpdateGraphicsAsync(
+				specification,
+				new DurableGraphicsState(null, null, compositing));
+
+			var persisted = await management.GetDocumentAsync("show.project", specification.ProductionId.ToString());
+			Assert.NotNull(persisted);
+			var json = JsonNode.Parse(persisted!.Json)!.AsObject();
+			var layer = json["graphics"]!["compositingState"]!["layers"]!.AsArray().Single()!.AsObject();
+			var node = layer["processingStack"]!.AsArray().Single()!.AsObject();
+			var chromaKey = node["chromaKey"]!.AsObject();
+			chromaKey["tolerance"] = 1.25;
+
+			var corruptWrite = await management.PutDocumentAsync(
+				"show.project",
+				specification.ProductionId.ToString(),
+				json.ToJsonString(),
+				persisted.Version);
+			Assert.True(corruptWrite.Written, corruptWrite.Failure?.Message);
+
+			var corrupted = await management.GetDocumentAsync("show.project", specification.ProductionId.ToString());
+			Assert.NotNull(corrupted);
+			var exception = await Assert.ThrowsAsync<InvalidDataException>(async () => await store.LoadAsync(specification));
+			Assert.Contains("invalid typed settings", exception.Message, StringComparison.OrdinalIgnoreCase);
+
+			var afterRejectedLoad = await management.GetDocumentAsync("show.project", specification.ProductionId.ToString());
+			Assert.NotNull(afterRejectedLoad);
+			Assert.Equal(corrupted!.Version, afterRejectedLoad!.Version);
+			Assert.Equal(corrupted.Json, afterRejectedLoad.Json);
+		}
+		finally
+		{
+			try { Directory.Delete(root, recursive: true); } catch { }
+		}
+	}
+
+
 	private static ProductionSpecification CreateSpecification()
 	{
 		var sourceA = new ProductionSourceId(Identity.Parse("6a000000-0000-0000-0000-00000000000a"));
