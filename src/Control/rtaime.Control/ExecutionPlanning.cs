@@ -902,7 +902,7 @@ public static class CapabilityPlanningEngine
                                 node.ChromaKey?.KeyBlue.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "-",
                                 node.ChromaKey?.Tolerance.ToString("R", System.Globalization.CultureInfo.InvariantCulture) ?? "-",
                                 node.ChromaKey?.Softness.ToString("R", System.Globalization.CultureInfo.InvariantCulture) ?? "-",
-                                node.ChromaKey?.SpillSuppression.ToString("R", System.Globalization.CultureInfo.InvariantCulture) ?? "-")))),
+                                node.ChromaKey?.SpillSuppression.ToString("R", System.Globalization.CultureInfo.InvariantCulture) ?? "-"))),
                     layer.ContentIdentity)));
 
         var preparedExecutionId = new PreparedExecutionId(PlanningIdentity.Create(
