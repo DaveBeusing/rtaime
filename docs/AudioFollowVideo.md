@@ -36,21 +36,24 @@ Implemented:
 
 Advanced production extension:
 
-- bounded multi-source Program mix;
-- explicit Program bus master gain/mute;
+- bounded multi-source Program mix and governed multi-bus routing;
+- explicit per-bus master gain/mute;
+- bounded three-band per-source EQ;
 - deterministic equal-power or linear crossfade;
 - bounded ducking with attack/hold/release;
-- Runtime-owned advanced metering and clipping evidence;
-- final mixed Program-bus reuse by recording/output.
+- one bounded stereo-linked compressor and one sample-peak limiter per configured bus;
+- Runtime-owned advanced metering, dynamics and final safety-clipping evidence;
+- final materialized bus reuse by recording/output.
 
 See [Advanced Audio Production](AdvancedAudioProduction.md).
 
 Still not implemented:
 
 - arbitrary routing graph or bus matrix;
-- arbitrary dynamics/DSP chains;
-- EQ/reverb/plugin hosting;
-- network audio;
+- arbitrary dynamics/DSP chains or processor ordering;
+- dynamic/linear-phase EQ, reverb or plugin hosting;
+- multiband compression, gates/expanders, true-peak oversampling and loudness normalization;
+- network-audio transport;
 - physical embedded-audio hardware qualification.
 
 ## Audio is an independent timed media domain
@@ -166,7 +169,7 @@ The actual audio packet, external sample queue, generated test signal, gain/mute
 
 A/V sync diagnostics remain qualified for `FOLLOW_VIDEO`. While explicit breakaway is active the diagnostic is reported unavailable rather than attributing the independent audio source to the Program video timing relationship.
 
-Multi-source mix, crossfade and ducking remain deferred. They are not exposed as partial controls because the current implementation does not yet carry fully qualified bounded mix math, transition timing and sustained real-time evidence.
+Advanced Audio Production builds on this routed source/sample window with bounded multi-source mixing, crossfade, ducking, per-source EQ, governed buses and bounded per-bus compressor/sample-peak limiter processing. AFV itself remains the routing decision and does not become a second mixer or dynamics engine.
 
 ## Gain and mute
 
@@ -318,7 +321,7 @@ AFV still follows only the committed Program video source. CUT/DISSOLVE routing 
 
 ### Scope boundary
 
-The basic Audio Operator Workflow does not expose equalizer controls. Bounded per-source three-band EQ is implemented by Advanced Audio Production and remains governed through the advanced-audio configuration path. Compression, limiter configuration, a generic routing matrix, multichannel mixing, loudness normalization and a loudness-compliance suite remain outside this workflow.
+The basic Audio Operator Workflow does not expose equalizer, compressor or limiter controls. Bounded per-source three-band EQ plus the bounded per-bus compressor and sample-peak limiter are implemented by Advanced Audio Production and remain governed through the advanced-audio configuration path. Arbitrary dynamics chains, a generic routing matrix, multichannel mixing, true-peak processing, loudness normalization and a loudness-compliance suite remain outside this workflow.
 ## Evidence boundary
 
 Virtual/synthetic evidence proves deterministic contract and architecture behaviour.
