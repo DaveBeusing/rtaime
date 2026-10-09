@@ -59,9 +59,7 @@ public sealed class OperatorAudioMixerViewModel : INotifyPropertyChanged
 	internal void Apply(OperatorStatusSnapshot snapshot, bool refreshDrafts)
 	{
 		ArgumentNullException.ThrowIfNull(snapshot);
-		var previousSelectedId = SelectedSource?.SourceId;
-		var production = snapshot.AudioProduction;
-		if (production is null)
+		if (snapshot.AudioProduction is not { } production)
 		{
 			Sources.Clear();
 			Buses.Clear();
@@ -72,14 +70,35 @@ public sealed class OperatorAudioMixerViewModel : INotifyPropertyChanged
 			return;
 		}
 
+		ApplyProjection(
+			production,
+			snapshot.Sources,
+			snapshot.AudioInputs,
+			snapshot.OutputRoles,
+			refreshDrafts);
+	}
+
+	internal void ApplyProjection(
+		OperatorAudioProductionDescriptor production,
+		IReadOnlyList<OperatorSourceDescriptor> sourceDescriptors,
+		IReadOnlyList<OperatorAudioInputDescriptor> audioInputs,
+		IReadOnlyList<OperatorOutputRoleDescriptor> outputRoles,
+		bool refreshDrafts)
+	{
+		ArgumentNullException.ThrowIfNull(production);
+		ArgumentNullException.ThrowIfNull(sourceDescriptors);
+		ArgumentNullException.ThrowIfNull(audioInputs);
+		ArgumentNullException.ThrowIfNull(outputRoles);
+
+		var previousSelectedId = SelectedSource?.SourceId;
 		var busIds = production.Configuration.Buses.Select(bus => bus.BusId).ToArray();
-		var inputs = snapshot.AudioInputs.ToDictionary(input => input.SourceId, StringComparer.Ordinal);
+		var inputs = audioInputs.ToDictionary(input => input.SourceId, StringComparer.Ordinal);
 		var existingSources = Sources.ToDictionary(source => source.SourceId, StringComparer.Ordinal);
 		Sources.Clear();
 		foreach (var source in production.Configuration.Sources.Take(AudioProductionLimits.MaximumSources))
 		{
 			var sourceId = source.SourceId.ToString();
-			var descriptor = snapshot.Sources.FirstOrDefault(candidate =>
+			var descriptor = sourceDescriptors.FirstOrDefault(candidate =>
 				string.Equals(candidate.Id, sourceId, StringComparison.Ordinal));
 			inputs.TryGetValue(sourceId, out var input);
 			if (!existingSources.TryGetValue(sourceId, out var strip))
@@ -111,9 +130,9 @@ public sealed class OperatorAudioMixerViewModel : INotifyPropertyChanged
 		{
 			evidence.TryGetValue(bus.BusId.Value, out var busEvidence);
 			if (!existingBuses.TryGetValue(bus.BusId.Value, out var strip))
-				strip = new OperatorAudioBusStripViewModel(this, bus, busEvidence, snapshot.OutputRoles);
+				strip = new OperatorAudioBusStripViewModel(this, bus, busEvidence, outputRoles);
 			else
-				strip.Apply(bus, busEvidence, snapshot.OutputRoles, refreshDrafts);
+				strip.Apply(bus, busEvidence, outputRoles, refreshDrafts);
 			Buses.Add(strip);
 		}
 
