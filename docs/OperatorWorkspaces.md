@@ -117,13 +117,13 @@ COMPOSITING emphasizes composition using the existing Runtime-owned graphics pat
 - bounded selected-layer reorder, visibility and opacity controls;
 - one authoritative Transform node per supported bitmap graphics or Production CG layer;
 - Rotation, Anchor/Pivot and Crop in addition to Position and Scale;
-- an ordered bounded processing stack of 0..4 typed Color Grade nodes per supported layer;
+- an ordered bounded processing stack of 0..4 typed Color Grade or Chroma Key nodes per supported layer;
 - selection-driven Inspector that edits the selected Layer, Transform or Processing node through the same authority path;
 - current AI composition control where independently supported.
 
-Source/routing topology remains read-only. Local selection, pan, zoom, editable Inspector drafts and layout are presentation state only. Layer reorder/visibility/opacity, transform and Color Grade mutations travel through rtaime.Client → ControlHost → RuntimeHost and remain pending until confirmed state returns. The Operator disables these mutations when state is stale/unready and never treats the draft values as production truth.
+Source/routing topology remains read-only. Local selection, pan, zoom, editable Inspector drafts and layout are presentation state only. Layer reorder/visibility/opacity, transform, and processing-stack add/update/enable/reorder/remove mutations travel through rtaime.Client → ControlHost → RuntimeHost and remain pending until confirmed state returns. The Operator disables these mutations when state is stale, disconnected, busy or Runtime is not ready and never treats draft values as production truth.
 
-The graph projects the actual chain as Layer → Transform → [0..4 ordered Color Grade nodes] → Composite. The current Inspector intentionally exposes first-slot Color Grade editing only and preserves the rest of the confirmed stack. Keying, unbounded/plugin-defined processing graphs and arbitrary shaders are not exposed as production features. The Operator never renders authoritative Production pixels and no second graphics renderer, compositor or production-state store is introduced by the shell.
+The graph projects the actual chain as Layer → Transform → [0..4 ordered typed processing nodes] → Composite. Processing-node selection is stable by node identity across ordinary status refreshes. The shared Inspector exposes Color Grade Brightness/Contrast/Saturation and Chroma Key RGB/Tolerance/Softness/Spill Suppression, plus bounded add, move and remove controls. Each action submits a complete validated next stack rather than creating a second mutation authority. Program-pixel color picking, unbounded/plugin-defined processing graphs, arbitrary shaders and free topology rewiring remain unsupported. The Operator never renders authoritative Production pixels and no second graphics renderer, compositor or production-state store is introduced by the shell.
 
 ## OUTPUTS
 
