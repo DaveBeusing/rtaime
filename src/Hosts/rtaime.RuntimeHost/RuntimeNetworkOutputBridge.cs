@@ -3,35 +3,42 @@
 using rtaime.Media.Contracts;
 using rtaime.Provider.Contracts;
 using rtaime.Provider.Gpu;
-using rtaime.Provider.Srt;
 
 namespace rtaime.RuntimeHost;
 
 internal sealed class RuntimeNetworkOutputBridge : IAsyncDisposable
 {
-	private readonly IReadOnlyDictionary<string, SrtNetworkOutputSession> _sessions;
-	private readonly SrtNetworkOutputProvider _provider;
+	private readonly IReadOnlyDictionary<string, INetworkOutputSession> _sessions;
+	private readonly IReadOnlyList<ProviderDescriptor> _providerDescriptors;
 
 	public RuntimeNetworkOutputBridge(
 		IReadOnlyList<RuntimeNetworkOutputTarget> targets,
-		Func<RuntimeNetworkOutputTarget, SrtNetworkOutputSession>? sessionFactory = null)
+		IRuntimeNetworkOutputProviderRegistry? providerRegistry = null)
 	{
 		ArgumentNullException.ThrowIfNull(targets);
-		_provider = new SrtNetworkOutputProvider();
-		sessionFactory ??= target => _provider.CreateSession(
-			target.Configuration,
-			Environment.GetEnvironmentVariable("RTAIME_SRT_LIBRARY_PATH"));
+		providerRegistry ??= new RuntimeNetworkOutputProviderRegistry();
 
-		var sessions = new Dictionary<string, SrtNetworkOutputSession>(StringComparer.OrdinalIgnoreCase);
-		foreach (var target in targets)
+		var sessions = new Dictionary<string, INetworkOutputSession>(StringComparer.OrdinalIgnoreCase);
+		try
 		{
-			if (!sessions.TryAdd(target.RoleId, sessionFactory(target)))
-				throw new ArgumentException($"Network output role '{target.RoleId}' is configured more than once.", nameof(targets));
+			foreach (var target in targets)
+			{
+				if (!sessions.TryAdd(target.RoleId, providerRegistry.CreateSession(target)))
+					throw new ArgumentException($"Network output role '{target.RoleId}' is configured more than once.", nameof(targets));
+			}
 		}
+		catch
+		{
+			foreach (var session in sessions.Values)
+				session.DisposeAsync().AsTask().GetAwaiter().GetResult();
+			throw;
+		}
+
 		_sessions = sessions;
+		_providerDescriptors = providerRegistry.ProviderDescriptorsFor(targets);
 	}
 
-	public ProviderDescriptor ProviderDescriptor => _provider.Descriptor;
+	public IReadOnlyList<ProviderDescriptor> ProviderDescriptors => _providerDescriptors;
 	public bool Enabled => _sessions.Count > 0;
 	public bool HasRole(string roleId) => _sessions.ContainsKey(roleId);
 
