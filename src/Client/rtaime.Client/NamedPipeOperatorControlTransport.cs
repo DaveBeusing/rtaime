@@ -88,7 +88,7 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 	public ValueTask<OperatorMutationResponse> RouteOutputRoleAsync(RouteOutputRoleCommand command, CancellationToken cancellationToken = default)
 	{
 		ArgumentNullException.ThrowIfNull(command);
-		return MutateOutputRoleAsync(command.Metadata, command.RoleId, command.SourceId, cancellationToken);
+		return MutateOutputRoleAsync(command.Metadata, command.RoleId, command.SourceId, command.AudioBusId, cancellationToken);
 	}
 
 	public async ValueTask<OperatorAudioInputDescriptor> SetAudioInputStateAsync(
@@ -983,6 +983,7 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		ControlCommandMetadata metadata,
 		OutputRoleId roleId,
 		ProductionSourceId sourceId,
+		string? audioBusId,
 		CancellationToken cancellationToken)
 	{
 		ArgumentNullException.ThrowIfNull(metadata);
@@ -996,7 +997,8 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 				sourceId.ToString(),
 				null,
 				null,
-				roleId.ToString()),
+				roleId.ToString(),
+				audioBusId),
 			cancellationToken);
 	}
 
@@ -1477,7 +1479,8 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 				output.Width, output.Height, output.FrameRate, output.PixelFormat, output.Timing,
 				output.LifecycleState, output.AuthoritativeActive, output.HealthState, output.Evidence,
 				output.Error is null ? null : new Failure(output.Error.Code, output.Error.Message),
-				output.NetworkOutput is null ? null : FromWire(output.NetworkOutput)))
+				output.NetworkOutput is null ? null : FromWire(output.NetworkOutput),
+				output.AudioBusId ?? AudioBusId.Program.Value))
 			.ToArray(),
 		(wire.CompositingLayers ?? Array.Empty<WireCompositingLayer>())
 			.Select(FromWire)
@@ -1856,7 +1859,7 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 				new OutputRoleId(role.RoleId),
 				Enum.IsDefined(typeof(OutputRoleKind), role.Kind) ? (OutputRoleKind)role.Kind : throw new InvalidDataException("Output role kind is invalid."),
 				new ProductionSourceId(Identity.Parse(role.SourceId)),
-				role.ProviderSelector, role.TargetId, role.FormatPolicy, role.TimingPolicy, role.Enabled))
+				role.ProviderSelector, role.TargetId, role.FormatPolicy, role.TimingPolicy, role.Enabled, role.AudioBusId ?? AudioBusId.Program.Value))
 			.ToArray(),
 		state.CompositingState is null
 			? null
@@ -1940,7 +1943,7 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 	private sealed record WireFailure(string Code, string Message);
 	private sealed record WireSource(string Id, string Name, string Type, string Format, string Health, string MediaState, long? RemainingTicks, string? MediaFileName);
 	private sealed record WireScene(string Id, string Name, string PreviewSourceId, string ProgramSourceId, WireCompositingState? CompositingState = null);
-	private sealed record WireOutputRoleAuthority(string RoleId, int Kind, string SourceId, string ProviderSelector, string TargetId, string FormatPolicy, string TimingPolicy, bool Enabled);
+	private sealed record WireOutputRoleAuthority(string RoleId, int Kind, string SourceId, string ProviderSelector, string TargetId, string FormatPolicy, string TimingPolicy, bool Enabled, string? AudioBusId = null);
 	private sealed record WireNetworkOutput(
 		string TargetId,
 		string Provider,
@@ -1966,7 +1969,7 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		int QueueDepth,
 		DateTimeOffset? LastSuccessfulSendUtc,
 		WireFailure? Failure);
-	private sealed record WireOutputRole(string RoleId, string RoleKind, string SourceId, string TargetId, string ProviderId, uint? Width, uint? Height, string? FrameRate, string? PixelFormat, string? Timing, string LifecycleState, bool AuthoritativeActive, string HealthState, string Evidence, WireFailure? Error, WireNetworkOutput? NetworkOutput = null);
+	private sealed record WireOutputRole(string RoleId, string RoleKind, string SourceId, string TargetId, string ProviderId, uint? Width, uint? Height, string? FrameRate, string? PixelFormat, string? Timing, string LifecycleState, bool AuthoritativeActive, string HealthState, string Evidence, WireFailure? Error, WireNetworkOutput? NetworkOutput = null, string? AudioBusId = null);
 	private sealed record WireProductionState(string Version, string ProductionId, ulong Revision, string PreviewSourceId, string ProgramSourceId, string? ActiveSceneId = null, WireOutputRoleAuthority[]? OutputRoles = null, WireCompositingState? CompositingState = null);
 	private sealed record WireGraphicsAsset(string Name, uint Width, uint Height, byte[] RgbaPixels);
 	private sealed record WireCgColor(byte Red, byte Green, byte Blue, byte Alpha);
@@ -2203,7 +2206,7 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 	private sealed record WireCuePoint(string Id, string Name, long PositionFrame);
 	private sealed record WireMediaMarkerSnapshot(string Version, string AssetId, long TotalFrames, long? InPointFrame, long? OutPointFrame, WireCuePoint[] CuePoints);
 	private sealed record WireMediaDeckSnapshot(int State, string? SourceId, WireLocalMediaProbe? Probe, WireMediaTransportSnapshot? Transport, WireMediaMarkerSnapshot? Markers, WireFailure? Failure);
-	private sealed record WireControlCommand(string Version, string CommandId, string ProductionId, ulong ExpectedRevision, string? SourceId, uint? DurationFrames, string? SceneId = null, string? OutputRoleId = null);
+	private sealed record WireControlCommand(string Version, string CommandId, string ProductionId, ulong ExpectedRevision, string? SourceId, uint? DurationFrames, string? SceneId = null, string? OutputRoleId = null, string? AudioBusId = null);
 	private sealed record WireMutationResponse(bool Accepted, WireProductionState State, WireFailure? Failure, ulong StateVersion);
 
 	private static class Wire
