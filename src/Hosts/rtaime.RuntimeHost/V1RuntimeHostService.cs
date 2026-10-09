@@ -3361,7 +3361,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				ApplyColorGrade(processingNode.ColorGrade ?? throw new InvalidOperationException("Color Grade settings are required."), ref red, ref green, ref blue);
 				break;
 			case PreparedCompositingProcessingNodeKind.ChromaKey:
-				ApplyChromaKey(processingNode.ChromaKey ?? throw new InvalidOperationException("Chroma Key settings are required."), ref red, ref green, ref blue, ref alpha);
+				ApplyChromaKeyReference(processingNode.ChromaKey ?? throw new InvalidOperationException("Chroma Key settings are required."), ref red, ref green, ref blue, ref alpha);
 				break;
 			default:
 				throw new NotSupportedException($"Processing node kind '{processingNode.Kind}' is not supported.");
@@ -3386,7 +3386,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		blue = ClampByte(b);
 	}
 
-	private static void ApplyChromaKey(
+	internal static void ApplyChromaKeyReference(
 		PreparedChromaKeySettings key,
 		ref byte red,
 		ref byte green,
