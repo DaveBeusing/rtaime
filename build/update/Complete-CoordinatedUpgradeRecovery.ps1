@@ -64,6 +64,11 @@ Assert-Condition (Test-Path -LiteralPath $recoveryRoot -PathType Container) "Coo
 $lifecyclePath = Join-Path $recoveryRoot 'recovery-lifecycle.json'
 Assert-Condition (Test-Path -LiteralPath $lifecyclePath -PathType Leaf) "Coordinated recovery lifecycle evidence is missing."
 $lifecycle = Get-Content -LiteralPath $lifecyclePath -Raw | ConvertFrom-Json
+Assert-Condition ([System.IO.Path]::GetFullPath([string]$lifecycle.installPath) -eq $installRoot) "Recovery lifecycle evidence belongs to a different installation."
+Assert-Condition ([System.IO.Path]::GetFullPath([string]$lifecycle.stateRoot) -eq $stateRootFull) "Recovery lifecycle evidence belongs to a different persistent-state root."
+
+$transactionEvidencePath = $null
+$transactionEvidenceSha256 = $null
 
 $runtimeQualified = [string]$lifecycle.status -eq [string]$coordinatorPolicy.recoveryEvidenceLifecycle.runtimeQualifiedStatus -and
 	[string]$lifecycle.runtimeReadiness -eq 'PASS' -and
@@ -74,12 +79,18 @@ $recoveredFailure = [string]$lifecycle.status -eq 'RECOVERY_COMPLETE' -and
 
 Assert-Condition ($runtimeQualified -or $recoveredFailure) "Recovery evidence cannot be retired before runtime readiness is qualified, unless an explicitly acknowledged fully recovered failed upgrade is being closed."
 
-if ($recoveredFailure) {
-	$failurePath = Join-Path $recoveryRoot 'coordinated-upgrade-failure.json'
-	Assert-Condition (Test-Path -LiteralPath $failurePath -PathType Leaf) "Recovered-failure evidence is missing."
-	$failure = Get-Content -LiteralPath $failurePath -Raw | ConvertFrom-Json
+if ($runtimeQualified) {
+	$transactionEvidencePath = Join-Path $recoveryRoot 'coordinated-upgrade-receipt.json'
+	Assert-Condition (Test-Path -LiteralPath $transactionEvidencePath -PathType Leaf) "Successful coordinated-upgrade receipt is missing."
+	$receipt = Get-Content -LiteralPath $transactionEvidencePath -Raw | ConvertFrom-Json
+	Assert-Condition ([string]$receipt.status -eq 'PASS' -and [string]$receipt.runtimeReadiness -eq 'UNVERIFIED') "Coordinator receipt does not represent a successful maintenance transaction with separately qualified runtime readiness."
+} elseif ($recoveredFailure) {
+	$transactionEvidencePath = Join-Path $recoveryRoot 'coordinated-upgrade-failure.json'
+	Assert-Condition (Test-Path -LiteralPath $transactionEvidencePath -PathType Leaf) "Recovered-failure evidence is missing."
+	$failure = Get-Content -LiteralPath $transactionEvidencePath -Raw | ConvertFrom-Json
 	Assert-Condition ([string]$failure.status -eq 'FAIL' -and [string]$failure.recoveryStatus -eq 'PASS' -and $failure.processesRemainStopped -eq $true) "Recovered-failure evidence does not prove a fully successful recovery with processes stopped."
 }
+$transactionEvidenceSha256 = (Get-FileHash -LiteralPath $transactionEvidencePath -Algorithm SHA256).Hash.ToLowerInvariant()
 
 Verify-Install -Path $installRoot -Qualification $QualificationMode
 
@@ -109,6 +120,7 @@ $closure = [ordered]@{
 	stateRoot = $stateRootFull
 	closureReason = if ($runtimeQualified) { 'RUNTIME_QUALIFIED' } else { 'RECOVERED_FAILED_UPGRADE' }
 	recoveryLifecycleSha256 = $recoveryLifecycleSha256
+	transactionEvidenceSha256 = $transactionEvidenceSha256
 	rollbackManifestSha256 = $rollbackManifestSha256
 	rollbackRetired = $false
 	recoveryEvidenceRetired = $false
