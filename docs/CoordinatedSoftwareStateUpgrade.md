@@ -138,11 +138,15 @@ A state-changing successful upgrade retains evidence below:
 <InstallPath>.upgrade-recovery
 ```
 
-including the pre-upgrade snapshots and migration receipts.
+including the pre-upgrade snapshots, migration receipts, failure/recovery evidence and `recovery-lifecycle.json`.
 
 While coordinated recovery evidence exists, direct software-only rollback is blocked. The `Invoke-SoftwareRollback.ps1` bypass switch exists only for the coordinator after it has assumed responsibility for state recovery.
 
-This prevents the old software tree from being activated independently against a schema that may already have advanced.
+A successful maintenance transaction leaves the lifecycle at `MAINTENANCE_COMPLETE` with runtime readiness still `UNVERIFIED`. The service-managed update wrapper changes that lifecycle to `RUNTIME_QUALIFIED` only after the Windows service has restarted and both Start and Qualify report runtime readiness `PASS`.
+
+Recovery evidence is not deleted implicitly. `Complete-CoordinatedUpgradeRecovery.ps1` requires explicit acknowledgement that the retained rollback slot is being retired, verifies the active and rollback installations, writes a closure receipt below the persistent-state maintenance root, deletes the rollback slot first and only then removes `<InstallPath>.upgrade-recovery`. A fully recovered failed upgrade can be closed only through a separate explicit acknowledgement path.
+
+This prevents the old software tree from being activated independently against a schema that may already have advanced and prevents recovery evidence from disappearing before the maintenance transaction is conclusively closed.
 
 ## Compatibility entrypoint
 
@@ -152,15 +156,15 @@ There is no longer a separate production software-only verified-update path.
 
 ## Qualification
 
-The package adds three layers of evidence:
+Qualification is layered:
 
-1. normal solution build/tests compile the new ControlHost maintenance mode;
-2. integration tests launch the built `rtaime.ControlHost.dll` as a real process and qualify inspect/backup plus acknowledgement rejection;
-3. Packaged E2E verifies that the signed offline bundle contains the coordinator, policy, state catalog, rollback guard and ControlHost executable assembly.
+1. normal solution build/tests compile the ControlHost maintenance boundary;
+2. integration tests qualify verified backup/restore, transactional forward migration, tampered-backup rejection and the real ControlHost maintenance executable;
+3. packaging checks require both the unchanged production catalog and the signed qualification-only catalog plus coordinator, rollback guard and recovery-retirement tooling;
+4. Packaged E2E installs the generated bundle, creates disposable schema-v1 qualification state, proves missing and ambiguous migration chains fail before activation, executes a real `1 -> 2` migration, restarts the Windows service and requires runtime readiness `PASS`;
+5. a second packaged run injects failure after the real migration, requires exact previous software manifest restoration, reverse-order verified state restore, retained original upgrade `FAIL`, recovery `PASS` and a stopped service.
 
-The existing Persistent State Backup, Migration & Recovery integration suite remains the executable qualification for transactional migration and automatic SQLite snapshot restoration.
-
-The current production state catalog has no migrations, so CI does not fabricate a production schema upgrade merely to create positive evidence.
+The disposable migration is defined only in `state-upgrade-qualification-catalog.json`, which is itself packaged and signed but can be selected only through `QualificationMode`. The production `state-upgrade-catalog.json` remains at schema v1 for both known stores and carries no migration merely to manufacture evidence.
 
 ## Operational boundary
 
@@ -173,7 +177,7 @@ Coordinated Software State Upgrade does not automatically:
 - perform Production Package activation;
 - perform schema downgrades;
 - consume unsigned production migration SQL;
-- delete retained coordinated recovery evidence;
+- delete retained coordinated recovery evidence implicitly or before explicit rollback retirement;
 - claim Reference Platform validation or certification.
 
 Runtime readiness therefore remains `UNVERIFIED` after a successful coordinated maintenance transaction until a later operational lifecycle step starts and qualifies the product processes.

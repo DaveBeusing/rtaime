@@ -14,7 +14,9 @@ param(
 	[switch]$AcknowledgeProcessesStopped,
 	[switch]$QualificationMode,
 	[string]$QualificationBundlePath = '',
-	[string]$QualificationStateCatalogPath = ''
+	[string]$QualificationStateCatalogPath = '',
+	[ValidateSet('NONE', 'AFTER_SOFTWARE_ACTIVATION', 'AFTER_STATE_MIGRATION')]
+	[string]$QualificationFailurePoint = 'NONE'
 )
 
 Set-StrictMode -Version Latest
@@ -23,6 +25,41 @@ $ErrorActionPreference = 'Stop'
 function Assert-Condition {
 	param([Parameter(Mandatory)][bool]$Condition, [Parameter(Mandatory)][string]$Message)
 	if (-not $Condition) { throw $Message }
+}
+
+function Write-JsonFile {
+	param(
+		[Parameter(Mandatory)]$Value,
+		[Parameter(Mandatory)][string]$Path
+	)
+	$directory = Split-Path -Parent $Path
+	if (-not [string]::IsNullOrWhiteSpace($directory)) {
+		New-Item -ItemType Directory -Path $directory -Force | Out-Null
+	}
+	[System.IO.File]::WriteAllText($Path, ($Value | ConvertTo-Json -Depth 64) + [Environment]::NewLine, [System.Text.UTF8Encoding]::new($false))
+}
+
+function Write-RecoveryLifecycle {
+	param(
+		[Parameter(Mandatory)][string]$Root,
+		[Parameter(Mandatory)][string]$Status,
+		[Parameter(Mandatory)][string]$RuntimeReadiness,
+		[Parameter(Mandatory)][bool]$CleanupEligible,
+		[Parameter(Mandatory)][string]$Detail
+	)
+	New-Item -ItemType Directory -Path $Root -Force | Out-Null
+	$document = [ordered]@{
+		copyright = 'Copyright (c) Dave Beusing <david.beusing@gmail.com>.'
+		schemaVersion = '1.0'
+		installPath = $installRoot
+		stateRoot = $stateRootFull
+		status = $Status
+		runtimeReadiness = $RuntimeReadiness
+		cleanupEligible = $CleanupEligible
+		detail = $Detail
+		updatedAtUtc = [DateTimeOffset]::UtcNow.ToString('O')
+	}
+	Write-JsonFile -Value $document -Path (Join-Path $Root 'recovery-lifecycle.json')
 }
 
 function Resolve-ControlHostDll {
@@ -52,7 +89,7 @@ function Invoke-StateMaintenance {
 		if ($hasNativePreference) { $PSNativeCommandUseErrorActionPreference = $previousNativePreference }
 	}
 	if ($exitCode -ne 0) {
-		throw "ControlHost state-maintenance command failed with exit code $exitCode: $($Arguments -join ' ')"
+		throw "ControlHost state-maintenance command failed with exit code ${exitCode}: $($Arguments -join ' ')"
 	}
 }
 
@@ -127,6 +164,7 @@ $updatePolicyPath = $updatePolicyPathCandidates | Where-Object { Test-Path -Lite
 Assert-Condition (-not [string]::IsNullOrWhiteSpace($updatePolicyPath)) "Update policy is unavailable."
 $updatePolicy = Get-Content -LiteralPath $updatePolicyPath -Raw | ConvertFrom-Json
 Assert-Condition ([string]$updatePolicy.replacement.persistentStateMigration -eq 'COORDINATED_ONLY') "Update policy does not permit coordinated persistent-state migration."
+Assert-Condition ($QualificationMode -or $QualificationFailurePoint -eq 'NONE') "Qualification failure injection is permitted only in QualificationMode."
 
 if ([string]::IsNullOrWhiteSpace($WorkPath)) { $WorkPath = "$installRoot$([string]$coordinatorPolicy.workStateSuffix)" }
 $workRoot = [System.IO.Path]::GetFullPath($WorkPath)
@@ -139,6 +177,9 @@ $currentControlHost = Resolve-ControlHostDll -Root $installRoot
 $currentControlHostRelative = [System.IO.Path]::GetRelativePath($installRoot, $currentControlHost)
 $currentVerifier = Join-Path $installRoot 'tools/Test-OfflineReleaseBundle.ps1'
 Assert-Condition (Test-Path -LiteralPath $currentVerifier -PathType Leaf) "Current installation does not contain its offline verifier."
+$currentManifestPath = Join-Path $installRoot 'bundle-manifest.json'
+Assert-Condition (Test-Path -LiteralPath $currentManifestPath -PathType Leaf) "Current installation does not contain its bundle manifest."
+$preUpgradeManifestSha256 = (Get-FileHash -LiteralPath $currentManifestPath -Algorithm SHA256).Hash.ToLowerInvariant()
 
 $bundlePath = ''
 $updatePlan = $null
@@ -195,6 +236,7 @@ foreach ($kind in $databaseKinds) {
 			$backupPath = Join-Path $preRoot ("state-{0:D4}.db" -f $index)
 			$snapshotPath = Join-Path $preRoot ("state-{0:D4}.snapshot.json" -f $index)
 			Invoke-StateMaintenance -ControlHostDll $currentControlHost -Arguments @('backup', "--database=$($database.FullName)", "--backup=$backupPath", "--output=$snapshotPath")
+			$snapshot = Get-Content -LiteralPath $snapshotPath -Raw | ConvertFrom-Json
 			$stateChanges += [pscustomobject]@{
 				index = $index
 				databasePath = $database.FullName
@@ -204,10 +246,16 @@ foreach ($kind in $databaseKinds) {
 				targetVersion = [int]$kind.targetSchemaVersion
 				migrations = $chain
 				preSnapshotPath = $snapshotPath
+				preBackupPath = [string]$snapshot.backupPath
+				preBackupSha256 = ([string]$snapshot.backupSha256).ToLowerInvariant()
 			}
 		}
 		$index++
 	}
+}
+
+if ($stateChanges.Count -gt 0) {
+	Write-RecoveryLifecycle -Root $recoveryRoot -Status 'PRE_UPGRADE_BACKUP_COMPLETE' -RuntimeReadiness 'NOT_APPLICABLE' -CleanupEligible $false -Detail 'Verified pre-upgrade state snapshots exist before software activation.'
 }
 
 $softwareActivated = $false
@@ -219,6 +267,12 @@ try {
 	if ($QualificationMode) { $replacementArguments.QualificationMode = $true }
 	& (Join-Path $PSScriptRoot 'Invoke-AtomicSoftwareReplacement.ps1') @replacementArguments
 	$softwareActivated = $true
+	if ($stateChanges.Count -gt 0) {
+		Write-RecoveryLifecycle -Root $recoveryRoot -Status 'SOFTWARE_ACTIVATED' -RuntimeReadiness 'NOT_APPLICABLE' -CleanupEligible $false -Detail 'Target software is active; coordinated state migration remains in progress.'
+	}
+	if ($QualificationFailurePoint -eq 'AFTER_SOFTWARE_ACTIVATION') {
+		throw 'Qualification failure injected after software activation.'
+	}
 
 	$newControlHost = Resolve-ControlHostDll -Root $installRoot
 	foreach ($change in $stateChanges) {
@@ -250,6 +304,12 @@ try {
 		$postVersion = Get-ComponentVersion -Inspection $postInspection -Component ([string]$change.component)
 		Assert-Condition ($postVersion -eq [int]$change.targetVersion) "Post-upgrade state schema for '$($change.databasePath)' is $postVersion, expected $($change.targetVersion)."
 	}
+	if ($stateChanges.Count -gt 0) {
+		Write-RecoveryLifecycle -Root $recoveryRoot -Status 'STATE_MIGRATION_COMPLETE' -RuntimeReadiness 'UNVERIFIED' -CleanupEligible $false -Detail 'State migration and post-migration inspection passed; runtime readiness remains unverified.'
+	}
+	if ($QualificationFailurePoint -eq 'AFTER_STATE_MIGRATION') {
+		throw 'Qualification failure injected after state migration.'
+	}
 
 	$receiptRoot = if ($stateChanges.Count -gt 0) { $recoveryRoot } else { $workRoot }
 	$receipt = [ordered]@{
@@ -271,13 +331,17 @@ try {
 			}
 		})
 		softwarePlan = $updatePlan
+		preUpgradeManifestSha256 = $preUpgradeManifestSha256
 		runtimeReadiness = 'UNVERIFIED'
 		processesRemainStopped = $true
 		productionPackageActivation = 'NOT_PERFORMED'
 		completedAtUtc = [DateTimeOffset]::UtcNow.ToString('O')
 	}
 	$receiptPath = Join-Path $receiptRoot 'coordinated-upgrade-receipt.json'
-	[System.IO.File]::WriteAllText($receiptPath, ($receipt | ConvertTo-Json -Depth 64) + [Environment]::NewLine, [System.Text.UTF8Encoding]::new($false))
+	Write-JsonFile -Value $receipt -Path $receiptPath
+	if ($stateChanges.Count -gt 0) {
+		Write-RecoveryLifecycle -Root $recoveryRoot -Status 'MAINTENANCE_COMPLETE' -RuntimeReadiness 'UNVERIFIED' -CleanupEligible $false -Detail 'Coordinated maintenance passed. Retain recovery evidence until post-maintenance runtime readiness is qualified.'
+	}
 
 	Write-Host "Coordinated software/state upgrade PASS"
 	Write-Host "State migrations: $($stateChanges.Count)"
@@ -287,6 +351,10 @@ try {
 } catch {
 	$originalError = $_
 	$recoveryErrors = [System.Collections.Generic.List[string]]::new()
+	$softwareRecoveryStatus = if ($softwareActivated) { 'PENDING' } else { 'NOT_REQUIRED' }
+	$stateRecoveryStatus = if ($softwareActivated -and $stateChanges.Count -gt 0) { 'PENDING' } else { 'NOT_REQUIRED' }
+	$restoredManifestSha256 = $null
+
 	if ($softwareActivated) {
 		try {
 			$rollbackArguments = @{
@@ -296,7 +364,12 @@ try {
 			}
 			if ($QualificationMode) { $rollbackArguments.QualificationMode = $true }
 			& (Join-Path $PSScriptRoot 'Invoke-SoftwareRollback.ps1') @rollbackArguments
+			$restoredManifestPath = Join-Path $installRoot 'bundle-manifest.json'
+			$restoredManifestSha256 = (Get-FileHash -LiteralPath $restoredManifestPath -Algorithm SHA256).Hash.ToLowerInvariant()
+			Assert-Condition ($restoredManifestSha256 -eq $preUpgradeManifestSha256) "Software rollback restored a different installation manifest."
+			$softwareRecoveryStatus = 'PASS'
 		} catch {
+			$softwareRecoveryStatus = 'FAIL'
 			$recoveryErrors.Add("Software rollback failed: $($_.Exception.Message)")
 		}
 
@@ -304,6 +377,8 @@ try {
 			try {
 				$restoredControlHost = Resolve-ControlHostDll -Root $installRoot
 				foreach ($change in @($stateChanges | Sort-Object index -Descending)) {
+					$currentBackupSha256 = (Get-FileHash -LiteralPath ([string]$change.preBackupPath) -Algorithm SHA256).Hash.ToLowerInvariant()
+					Assert-Condition ($currentBackupSha256 -eq [string]$change.preBackupSha256) "Pre-upgrade backup hash changed before recovery for '$($change.databasePath)'."
 					Invoke-StateMaintenance -ControlHostDll $restoredControlHost -Arguments @('restore', "--snapshot=$($change.preSnapshotPath)", "--database=$($change.databasePath)", '--acknowledge-exclusive-access')
 					$verifyPath = Join-Path $workRoot ("recovery-state-{0:D4}.json" -f $change.index)
 					Invoke-StateMaintenance -ControlHostDll $restoredControlHost -Arguments @('inspect', "--database=$($change.databasePath)", "--output=$verifyPath")
@@ -311,10 +386,35 @@ try {
 					$restoredVersion = Get-ComponentVersion -Inspection $inspection -Component ([string]$change.component)
 					Assert-Condition ($restoredVersion -eq [int]$change.fromVersion) "Recovered state schema for '$($change.databasePath)' is $restoredVersion, expected $($change.fromVersion)."
 				}
+				$stateRecoveryStatus = 'PASS'
 			} catch {
+				$stateRecoveryStatus = 'FAIL'
 				$recoveryErrors.Add("Persistent-state recovery failed: $($_.Exception.Message)")
 			}
+		} elseif ($stateRecoveryStatus -eq 'PENDING') {
+			$stateRecoveryStatus = 'SKIPPED'
 		}
+	}
+
+	$recoveryStatus = if ($recoveryErrors.Count -eq 0) { 'PASS' } else { 'FAIL' }
+	if ($softwareActivated -or $stateChanges.Count -gt 0) {
+		New-Item -ItemType Directory -Path $recoveryRoot -Force | Out-Null
+		$failureEvidence = [ordered]@{
+			copyright = 'Copyright (c) Dave Beusing <david.beusing@gmail.com>.'
+			schemaVersion = '1.0'
+			status = 'FAIL'
+			originalFailure = $originalError.Exception.Message
+			softwareActivated = $softwareActivated
+			softwareRecovery = $softwareRecoveryStatus
+			stateRecovery = $stateRecoveryStatus
+			recoveryStatus = $recoveryStatus
+			preUpgradeManifestSha256 = $preUpgradeManifestSha256
+			restoredManifestSha256 = $restoredManifestSha256
+			processesRemainStopped = $true
+			completedAtUtc = [DateTimeOffset]::UtcNow.ToString('O')
+		}
+		Write-JsonFile -Value $failureEvidence -Path (Join-Path $recoveryRoot 'coordinated-upgrade-failure.json')
+		Write-RecoveryLifecycle -Root $recoveryRoot -Status $(if ($recoveryStatus -eq 'PASS') { 'RECOVERY_COMPLETE' } else { 'RECOVERY_INCOMPLETE' }) -RuntimeReadiness 'NOT_APPLICABLE' -CleanupEligible ($recoveryStatus -eq 'PASS') -Detail $(if ($recoveryStatus -eq 'PASS') { 'Original upgrade failed and coordinated recovery completed. Processes remain stopped.' } else { 'Original upgrade failed and recovery is incomplete. Processes must remain stopped.' })
 	}
 
 	if ($recoveryErrors.Count -gt 0) {

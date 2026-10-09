@@ -13,7 +13,12 @@ param(
 	[string]$WorkPath = '',
 	[string]$InstanceId = 'default',
 	[string]$ServiceName = 'rtaime-engine',
-	[switch]$AcknowledgeExternalProcessesStopped
+	[switch]$AcknowledgeExternalProcessesStopped,
+	[switch]$QualificationMode,
+	[string]$QualificationBundlePath = '',
+	[string]$QualificationStateCatalogPath = '',
+	[ValidateSet('NONE', 'AFTER_SOFTWARE_ACTIVATION', 'AFTER_STATE_MIGRATION')]
+	[string]$QualificationFailurePoint = 'NONE'
 )
 
 Set-StrictMode -Version Latest
@@ -22,6 +27,28 @@ $ErrorActionPreference = 'Stop'
 function Assert-Condition {
 	param([Parameter(Mandatory)][bool]$Condition, [Parameter(Mandatory)][string]$Message)
 	if (-not $Condition) { throw $Message }
+}
+
+function Write-RecoveryReadiness {
+	param([Parameter(Mandatory)][string]$InstallRoot)
+	$policyPath = Join-Path $InstallRoot 'tools/coordinated-upgrade-policy.json'
+	Assert-Condition (Test-Path -LiteralPath $policyPath -PathType Leaf) "Updated installation does not contain coordinated-upgrade policy."
+	$policy = Get-Content -LiteralPath $policyPath -Raw | ConvertFrom-Json
+	$recoveryRoot = "$InstallRoot$([string]$policy.recoveryStateSuffix)"
+	if (-not (Test-Path -LiteralPath $recoveryRoot -PathType Container)) {
+		return
+	}
+
+	$lifecyclePath = Join-Path $recoveryRoot 'recovery-lifecycle.json'
+	Assert-Condition (Test-Path -LiteralPath $lifecyclePath -PathType Leaf) "Coordinated recovery lifecycle evidence is missing after state-changing update."
+	$lifecycle = Get-Content -LiteralPath $lifecyclePath -Raw | ConvertFrom-Json
+	Assert-Condition ([string]$lifecycle.status -eq 'MAINTENANCE_COMPLETE') "Coordinated recovery lifecycle is not at the maintenance-complete boundary."
+	$lifecycle.status = [string]$policy.recoveryEvidenceLifecycle.runtimeQualifiedStatus
+	$lifecycle.runtimeReadiness = 'PASS'
+	$lifecycle.cleanupEligible = $true
+	$lifecycle.detail = 'Service-managed restart and Runtime readiness qualification passed. Recovery evidence remains retained until explicit rollback retirement.'
+	$lifecycle.updatedAtUtc = [DateTimeOffset]::UtcNow.ToString('O')
+	[System.IO.File]::WriteAllText($lifecyclePath, ($lifecycle | ConvertTo-Json -Depth 32) + [Environment]::NewLine, [System.Text.UTF8Encoding]::new($false))
 }
 
 function Write-Receipt {
@@ -84,6 +111,14 @@ try {
 		AcknowledgeProcessesStopped = $true
 	}
 	if (-not [string]::IsNullOrWhiteSpace($PinnedVersion)) { $updateArguments.PinnedVersion = $PinnedVersion }
+	if ($QualificationMode) {
+		$updateArguments.QualificationMode = $true
+		$updateArguments.QualificationBundlePath = $QualificationBundlePath
+		$updateArguments.QualificationStateCatalogPath = $QualificationStateCatalogPath
+		$updateArguments.QualificationFailurePoint = $QualificationFailurePoint
+	} elseif ($QualificationFailurePoint -ne 'NONE') {
+		throw 'Qualification failure injection is permitted only in QualificationMode.'
+	}
 	& $updateTool @updateArguments | Out-Null
 
 	$serviceTool = Join-Path $installRoot 'tools/Invoke-WindowsServiceLifecycle.ps1'
@@ -92,8 +127,9 @@ try {
 	Assert-Condition ([string]$started.runtimeReadiness -eq 'PASS') "Updated persistent engine did not return to qualified readiness."
 	$qualified = & $serviceTool -Action Qualify @serviceArguments
 	Assert-Condition ([string]$qualified.runtimeReadiness -eq 'PASS') "Post-update engine readiness qualification failed."
+	Write-RecoveryReadiness -InstallRoot $installRoot
 
-	return (Write-Receipt -Status 'PASS' -RuntimeReadiness 'PASS' -Detail 'Verified update completed and persistent engine returned to qualified readiness.')
+	return (Write-Receipt -Status 'PASS' -RuntimeReadiness 'PASS' -Detail 'Verified coordinated update completed and persistent engine returned to qualified readiness.')
 } catch {
 	$failure = $_
 	Write-Receipt -Status 'FAIL' -RuntimeReadiness 'FAIL' -Detail $failure.Exception.Message | Out-Null

@@ -169,6 +169,7 @@ It evaluates:
 - upgrade/deprecation policy;
 - deployment policy;
 - update/rollback policy;
+- exact-source packaged coordinated state-upgrade qualification evidence;
 - exact release evidence;
 - known-issues evidence;
 - required hardware evidence;
@@ -190,4 +191,4 @@ The current repository identity remains 0.1.0-dev in release stage DEV.
 
 Production support governance does not change that identity.
 
-A future Stable publication still requires the normal release-channel rules, production signing trust, exact release evidence, known-issues evidence, required physical qualification, approved support commitments and deployment readiness.
+A future Stable publication still requires the normal release-channel rules, production signing trust, exact release evidence, known-issues evidence, exact-source coordinated state-upgrade qualification evidence, required physical qualification, approved support commitments and deployment readiness. Missing state-upgrade qualification remains `UNVERIFIED`; inconsistent or source-mismatched evidence is `FAIL`.

@@ -43,7 +43,7 @@
 			"properties": {
 				"mode": { "const": "SIDE_BY_SIDE_STAGE_THEN_RENAME" },
 				"retainRollbackAfterSuccess": { "const": true },
-				"persistentStateMigration": { "const": "NOT_IMPLEMENTED" },
+				"persistentStateMigration": { "const": "COORDINATED_ONLY" },
 				"requireExplicitQuiescenceAcknowledgement": { "const": true }
 			}
 		},

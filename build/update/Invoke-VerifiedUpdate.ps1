@@ -11,7 +11,12 @@ param(
 	[string]$Repository = 'DaveBeusing/rtaime',
 	[string]$PinnedVersion = '',
 	[string]$WorkPath = '',
-	[switch]$AcknowledgeProcessesStopped
+	[switch]$AcknowledgeProcessesStopped,
+	[switch]$QualificationMode,
+	[string]$QualificationBundlePath = '',
+	[string]$QualificationStateCatalogPath = '',
+	[ValidateSet('NONE', 'AFTER_SOFTWARE_ACTIVATION', 'AFTER_STATE_MIGRATION')]
+	[string]$QualificationFailurePoint = 'NONE'
 )
 
 Set-StrictMode -Version Latest
@@ -31,5 +36,13 @@ $arguments = @{
 }
 if (-not [string]::IsNullOrWhiteSpace($WorkPath)) { $arguments.WorkPath = $WorkPath }
 if ($AcknowledgeProcessesStopped) { $arguments.AcknowledgeProcessesStopped = $true }
+if ($QualificationMode) {
+	$arguments.QualificationMode = $true
+	$arguments.QualificationBundlePath = $QualificationBundlePath
+	$arguments.QualificationStateCatalogPath = $QualificationStateCatalogPath
+	$arguments.QualificationFailurePoint = $QualificationFailurePoint
+} elseif ($QualificationFailurePoint -ne 'NONE') {
+	throw 'Qualification failure injection is permitted only in QualificationMode.'
+}
 
 return & $coordinator @arguments

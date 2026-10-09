@@ -283,17 +283,17 @@ This allows an operator to reverse the rollback if required while preserving exa
 
 ## Persistent application state boundary
 
-Update Discovery & Rollback does **not** migrate, back up, restore, or claim successful protection of persisted operational/application data.
+The atomic software replacement primitive still covers the software installation root only. Persistent operational/application state is handled by the separate coordinated maintenance transaction rather than by the atomic filesystem swap itself.
 
 Policy explicitly records:
 
 ```text
-persistentStateMigration = NOT_IMPLEMENTED
+persistentStateMigration = COORDINATED_ONLY
 ```
 
-The atomic mechanism covers the software installation root only.
+When the signed target catalog requires a schema change, `Invoke-CoordinatedUpgrade.ps1` performs pre-activation verified snapshots, software activation, forward-only state migration, post-migration verification and coordinated recovery. The current production catalog still targets schema v1 for the known stores and therefore carries no real production migration step.
 
-Before a future package permits state/schema migrations, persistent data locations, backup semantics, restore validation, migration ordering, and compatibility rules must be explicit.
+Schema downgrade, startup-time automatic migration and unsigned production migration authority remain unsupported.
 
 ## Qualification strategy
 
@@ -314,6 +314,17 @@ Instead `Test-UpdateFoundation.ps1` uses the existing QUALIFICATION offline bund
 
 This qualifies mechanics without promoting TEST_EPHEMERAL trust to production trust.
 
+`Test-CoordinatedStateUpgradeQualification.ps1` then qualifies the composed software/state path from the same generated bundle. It uses only disposable qualification state and a separately signed qualification-only catalog to prove:
+
+- missing and ambiguous migration chains fail before activation;
+- a real temporary schema `1 -> 2` migration succeeds;
+- service-managed restart reaches runtime readiness `PASS`;
+- direct software-only rollback remains blocked while recovery evidence is active;
+- an injected post-migration failure restores the previous software manifest and v1 state while keeping the service stopped;
+- explicit recovery retirement removes the rollback slot before active recovery evidence and preserves a closure receipt.
+
+The production state catalog itself remains on schema v1 with no manufactured migration.
+
 ## Production command
 
 From an installed bundle carrying the Update Discovery & Rollback tools:
@@ -321,6 +332,7 @@ From an installed bundle carrying the Update Discovery & Rollback tools:
 ```powershell
 ./tools/Invoke-VerifiedUpdate.ps1 `
     -InstallPath C:\rtaime `
+    -StateRoot C:\ProgramData\rtaime `
     -Channel STABLE `
     -AcknowledgeProcessesStopped
 ```
@@ -339,9 +351,9 @@ Update Discovery & Rollback does not implement or claim:
 
 - background or scheduled auto-update,
 - automatic host/service quiescence,
-- persistent database/state backup,
-- schema migration,
-- persistent-state rollback,
+- background or startup-time automatic persistent-state migration,
+- schema downgrade,
+- software-only rollback while coordinated recovery evidence is active,
 - Production Package activation,
 - downgrade support,
 - emergency release-key recovery,

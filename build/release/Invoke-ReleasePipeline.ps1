@@ -14,6 +14,7 @@ param(
 	[string]$SignerId = "",
 	[string]$SecurityAssessmentPath = "",
 	[string]$KnownIssuesAssessmentPath = "",
+	[string]$CoordinatedUpgradeQualificationPath = "",
 	[string]$OutputRoot = "artifacts/release-pipeline"
 )
 
@@ -279,6 +280,7 @@ try {
 			-ReleaseEvidencePath $evidenceRoot `
 			-ReleaseCandidatePath $candidateRoot `
 			-ExpectedSourceCommit ([string]$identity.sourceCommit) `
+			-CoordinatedUpgradeQualificationPath $CoordinatedUpgradeQualificationPath `
 			-OutputPath $stableReadinessPath
 		if ([string]$stableReadiness.overallStatus -ne "PASS") {
 			throw "STABLE release candidate failed Stable readiness with status '$($stableReadiness.overallStatus)'."
@@ -291,6 +293,7 @@ try {
 	Write-Host "Candidate id: $candidateId"
 	Write-Host "Product security assessment: $(if ([string]::IsNullOrWhiteSpace($SecurityAssessmentPath)) { 'UNVERIFIED' } else { 'BOUND' })"
 	Write-Host "Known-issues assessment: $(if ([string]::IsNullOrWhiteSpace($KnownIssuesAssessmentPath)) { 'UNVERIFIED' } else { 'BOUND' })"
+	Write-Host "Coordinated state-upgrade qualification: $(if ([string]::IsNullOrWhiteSpace($CoordinatedUpgradeQualificationPath)) { 'UNVERIFIED' } else { 'SUPPLIED' })"
 	Write-Host "Production signing trust: $productionTrust"
 	Write-Host "Publication readiness: $publicationStatus"
 } finally {

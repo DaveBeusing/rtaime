@@ -316,6 +316,14 @@ Service-managed rollback:
 
 The service-managed maintenance paths stop the persistent engine, delegate to the existing verified update or rollback controls, restart the engine only after successful maintenance, and require qualified readiness before reporting PASS.
 
+When a state-changing coordinated update leaves `<InstallPath>.upgrade-recovery`, keep that evidence and the rollback slot until the rollback window is intentionally closed. After runtime readiness has been qualified, retire the transaction explicitly:
+
+```powershell
+./tools/Complete-CoordinatedUpgradeRecovery.ps1 -InstallPath C:\rtaime -StateRoot C:\ProgramData\rtaime -AcknowledgeRollbackRetirement
+```
+
+The completion tool preserves a closure receipt under the persistent-state maintenance root, retires the rollback slot first, and only then removes active coordinated recovery evidence.
+
 Investor funding showcase:
 
 Double-click `Start-rtaime-Showcase.cmd` in the installed bundle root. The launcher uses the managed host lifecycle, opens the Operator with the qualified endpoints, and stops only the lifecycle it started when the Operator closes.

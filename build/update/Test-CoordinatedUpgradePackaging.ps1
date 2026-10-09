@@ -23,7 +23,9 @@ try {
 	foreach ($required in @(
 		'tools/coordinated-upgrade-policy.json',
 		'tools/state-upgrade-catalog.json',
+		'tools/state-upgrade-qualification-catalog.json',
 		'tools/Invoke-CoordinatedUpgrade.ps1',
+		'tools/Complete-CoordinatedUpgradeRecovery.ps1',
 		'tools/Invoke-VerifiedUpdate.ps1',
 		'tools/Invoke-SoftwareRollback.ps1'
 	)) {
@@ -41,11 +43,22 @@ try {
 	$journal = @($catalog.databaseKinds | Where-Object { [string]$_.id -eq 'production-journal' })
 	Assert-Condition ($management.Count -eq 1 -and [int]$management[0].targetSchemaVersion -eq 1) "Packaged management target schema is not v1."
 	Assert-Condition ($journal.Count -eq 1 -and [int]$journal[0].targetSchemaVersion -eq 1) "Packaged production-journal target schema is not v1."
+	Assert-Condition (@($management[0].migrations).Count -eq 0 -and @($journal[0].migrations).Count -eq 0) "Production state catalog must not contain manufactured qualification migrations."
+
+	$qualificationCatalogEntry = $archive.GetEntry('tools/state-upgrade-qualification-catalog.json')
+	Assert-Condition ($null -ne $qualificationCatalogEntry) "Qualification-only state-upgrade catalog entry is missing."
+	$reader = [System.IO.StreamReader]::new($qualificationCatalogEntry.Open(), [System.Text.Encoding]::UTF8, $true)
+	try { $qualificationCatalog = $reader.ReadToEnd() | ConvertFrom-Json } finally { $reader.Dispose() }
+	Assert-Condition ($qualificationCatalog.qualificationOnly -eq $true) "Packaged qualification catalog must be explicitly qualification-only."
+	$qualificationKind = @($qualificationCatalog.databaseKinds | Where-Object { [string]$_.id -eq 'qualification-state' })
+	Assert-Condition ($qualificationKind.Count -eq 1 -and [int]$qualificationKind[0].targetSchemaVersion -eq 2) "Qualification catalog must contain the disposable v1 -> v2 target."
+	$migration = @($qualificationKind[0].migrations)
+	Assert-Condition ($migration.Count -eq 1 -and [int]$migration[0].fromVersion -eq 1 -and [int]$migration[0].toVersion -eq 2) "Qualification catalog must contain exactly one v1 -> v2 migration step."
 } finally {
 	$archive.Dispose()
 }
 
 Write-Host 'Coordinated upgrade packaging qualification PASS'
-Write-Host 'Signed state-upgrade catalog: present'
-Write-Host 'Coordinator and rollback guard: present'
+Write-Host 'Signed production and qualification state-upgrade catalogs: present'
+Write-Host 'Coordinator, recovery retirement and rollback guard: present'
 Write-Host 'ControlHost maintenance executable assembly: present'

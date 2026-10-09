@@ -11,6 +11,12 @@
 	"migrationAfterSoftwareActivation": true,
 	"retainPreUpgradeSnapshotsAfterSuccess": true,
 	"directSoftwareRollbackWhenStateChanged": "BLOCKED",
+	"recoveryEvidenceLifecycle": {
+		"activeUntilRuntimeReadiness": true,
+		"runtimeQualifiedStatus": "RUNTIME_QUALIFIED",
+		"cleanupMode": "EXPLICIT_ROLLBACK_RETIREMENT",
+		"preserveClosureReceiptOutsideRecoveryRoot": true
+	},
 	"failureRecoveryOrder": [
 		"SOFTWARE_ROLLBACK",
 		"VERIFY_RESTORED_SOFTWARE",

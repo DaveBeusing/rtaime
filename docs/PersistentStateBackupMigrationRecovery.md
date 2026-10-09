@@ -165,6 +165,8 @@ because state mutation must remain an explicit maintenance action, not a side ef
 
 `StateMaintenanceCliIntegrationTests` additionally launches the built ControlHost process and qualifies the operational CLI bridge used by coordinated updates.
 
+Packaged release qualification adds a signed, explicitly qualification-only catalog for a disposable `qualification-state.db`. It performs a real `1 -> 2` migration without changing the production management or production-journal schema versions. The packaged failure path then forces a post-migration failure and verifies coordinated software rollback plus state restoration through the same ControlHost maintenance boundary.
+
 ## Scope boundary / non-claims
 
 This persistence foundation does not itself implement or claim:

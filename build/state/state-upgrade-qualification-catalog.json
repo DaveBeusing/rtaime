@@ -1,0 +1,21 @@
+{
+	"copyright": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+	"schemaVersion": "1.0",
+	"catalogVersion": 1,
+	"qualificationOnly": true,
+	"databaseKinds": [
+		{
+			"id": "qualification-state",
+			"fileName": "qualification-state.db",
+			"component": "qualification",
+			"targetSchemaVersion": 2,
+			"migrations": [
+				{
+					"fromVersion": 1,
+					"toVersion": 2,
+					"sql": "CREATE TABLE qualification_upgrade_marker(id INTEGER PRIMARY KEY, value TEXT NOT NULL); INSERT INTO qualification_upgrade_marker(id, value) VALUES(1, 'migrated');"
+				}
+			]
+		}
+	]
+}

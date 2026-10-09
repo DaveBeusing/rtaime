@@ -246,6 +246,8 @@ The wrapper does not bypass the existing release-trust, state-migration or rollb
 
 If update or post-update readiness fails, the operation remains failed. The wrapper does not automatically restart an uncertain engine state.
 
+When a coordinated update actually migrates persistent state, the coordinator retains `<InstallPath>.upgrade-recovery`. After service restart and `Qualify` both succeed, the service-managed wrapper marks that recovery lifecycle `RUNTIME_QUALIFIED`; it does not delete the recovery data or rollback slot. An operator may later retire both through `Complete-CoordinatedUpgradeRecovery.ps1`, which requires explicit rollback-retirement acknowledgement and preserves a closure receipt outside the recovery root.
+
 Verified service-managed rollback uses:
 
 ```text
@@ -310,7 +312,8 @@ Reference qualification procedure:
 6. Force the top-level service process to fail; verify configured Service Control Manager recovery and new qualified readiness.
 7. Reboot Windows; verify automatic service start and new qualified readiness.
 8. Execute a service-managed update; verify post-update readiness before reconnecting Operator.
-9. Record observed results and keep any unproven item UNVERIFIED.
+9. When the update migrates persistent state, verify retained recovery evidence is `RUNTIME_QUALIFIED`, then explicitly retire the rollback/recovery transaction only when the rollback window is intentionally closed.
+10. Record observed results and keep any unproven item UNVERIFIED.
 ```
 
 ## Non-goals

@@ -18,6 +18,7 @@
 		"migrationAfterSoftwareActivation",
 		"retainPreUpgradeSnapshotsAfterSuccess",
 		"directSoftwareRollbackWhenStateChanged",
+		"recoveryEvidenceLifecycle",
 		"failureRecoveryOrder",
 		"processLifecycle",
 		"productionPackageActivation"
@@ -35,6 +36,17 @@
 		"migrationAfterSoftwareActivation": { "const": true },
 		"retainPreUpgradeSnapshotsAfterSuccess": { "const": true },
 		"directSoftwareRollbackWhenStateChanged": { "const": "BLOCKED" },
+		"recoveryEvidenceLifecycle": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["activeUntilRuntimeReadiness", "runtimeQualifiedStatus", "cleanupMode", "preserveClosureReceiptOutsideRecoveryRoot"],
+			"properties": {
+				"activeUntilRuntimeReadiness": { "const": true },
+				"runtimeQualifiedStatus": { "const": "RUNTIME_QUALIFIED" },
+				"cleanupMode": { "const": "EXPLICIT_ROLLBACK_RETIREMENT" },
+				"preserveClosureReceiptOutsideRecoveryRoot": { "const": true }
+			}
+		},
 		"failureRecoveryOrder": {
 			"type": "array",
 			"prefixItems": [
