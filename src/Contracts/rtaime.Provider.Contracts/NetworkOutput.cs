@@ -12,7 +12,8 @@ public static class NetworkOutputCapabilityKinds
 
 public enum NetworkOutputProtocolFamily
 {
-	Srt = 1
+	Srt = 1,
+	Ndi = 2
 }
 
 public enum NetworkOutputConnectionMode
@@ -24,12 +25,14 @@ public enum NetworkOutputConnectionMode
 
 public enum NetworkOutputVideoCodec
 {
-	H264 = 1
+	H264 = 1,
+	NdiHighBandwidth = 2
 }
 
 public enum NetworkOutputAudioCodec
 {
-	AacLc = 1
+	AacLc = 1,
+	Float32 = 2
 }
 
 public enum NetworkOutputLatencyMode
@@ -49,8 +52,137 @@ public enum NetworkOutputLifecycleState
 	Faulted = 6
 }
 
+public abstract record NetworkOutputProtocolSettings
+{
+	public abstract NetworkOutputProtocolFamily Protocol { get; }
+	public abstract string SafeTargetIdentity { get; }
+}
+
+public sealed record SrtNetworkOutputSettings : NetworkOutputProtocolSettings
+{
+	public SrtNetworkOutputSettings(
+		Uri endpoint,
+		NetworkOutputConnectionMode mode,
+		NetworkOutputVideoCodec videoCodec,
+		NetworkOutputAudioCodec audioCodec,
+		uint videoBitRate,
+		uint audioBitRate,
+		int latencyMilliseconds,
+		NetworkOutputLatencyMode latencyMode = NetworkOutputLatencyMode.Normal,
+		string? passphraseEnvironmentVariable = null)
+	{
+		if (endpoint is null || !endpoint.IsAbsoluteUri || !string.Equals(endpoint.Scheme, "srt", StringComparison.OrdinalIgnoreCase))
+			throw new ArgumentException("SRT network output endpoint must be an absolute srt:// URI.", nameof(endpoint));
+		if (!string.IsNullOrEmpty(endpoint.UserInfo))
+			throw new ArgumentException("SRT network output endpoint must not contain credentials.", nameof(endpoint));
+		if (endpoint.Port is <= 0 or > 65535)
+			throw new ArgumentException("SRT network output endpoint requires a valid port.", nameof(endpoint));
+		if (!Enum.IsDefined(mode))
+			throw new ArgumentOutOfRangeException(nameof(mode));
+		if (!Enum.IsDefined(latencyMode))
+			throw new ArgumentOutOfRangeException(nameof(latencyMode));
+		if (!Enum.IsDefined(videoCodec) || videoCodec != NetworkOutputVideoCodec.H264)
+			throw new ArgumentOutOfRangeException(nameof(videoCodec), "The SRT reference output supports H.264 video only.");
+		if (!Enum.IsDefined(audioCodec) || audioCodec != NetworkOutputAudioCodec.AacLc)
+			throw new ArgumentOutOfRangeException(nameof(audioCodec), "The SRT reference output supports AAC-LC audio only.");
+		if (videoBitRate is < 500_000 or > 100_000_000)
+			throw new ArgumentOutOfRangeException(nameof(videoBitRate));
+		if (audioBitRate is < 64_000 or > 512_000)
+			throw new ArgumentOutOfRangeException(nameof(audioBitRate));
+		if (latencyMilliseconds is < 20 or > 8000)
+			throw new ArgumentOutOfRangeException(nameof(latencyMilliseconds));
+		if (!string.IsNullOrWhiteSpace(passphraseEnvironmentVariable) &&
+			(passphraseEnvironmentVariable.Length > 128 ||
+			 passphraseEnvironmentVariable.Any(character => !(char.IsAsciiLetterOrDigit(character) || character == '_'))))
+		{
+			throw new ArgumentException("Secret reference must be an environment-variable name containing only ASCII letters, digits and underscore.", nameof(passphraseEnvironmentVariable));
+		}
+
+		Endpoint = endpoint;
+		Mode = mode;
+		VideoCodec = videoCodec;
+		AudioCodec = audioCodec;
+		VideoBitRate = videoBitRate;
+		AudioBitRate = audioBitRate;
+		LatencyMilliseconds = latencyMilliseconds;
+		LatencyMode = latencyMode;
+		PassphraseEnvironmentVariable = string.IsNullOrWhiteSpace(passphraseEnvironmentVariable) ? null : passphraseEnvironmentVariable.Trim();
+	}
+
+	public override NetworkOutputProtocolFamily Protocol => NetworkOutputProtocolFamily.Srt;
+	public Uri Endpoint { get; }
+	public NetworkOutputConnectionMode Mode { get; }
+	public NetworkOutputVideoCodec VideoCodec { get; }
+	public NetworkOutputAudioCodec AudioCodec { get; }
+	public uint VideoBitRate { get; }
+	public uint AudioBitRate { get; }
+	public int LatencyMilliseconds { get; }
+	public NetworkOutputLatencyMode LatencyMode { get; }
+	public string? PassphraseEnvironmentVariable { get; }
+	public override string SafeTargetIdentity => $"{Endpoint.Scheme}://{Endpoint.Host}:{Endpoint.Port}{Endpoint.AbsolutePath}";
+}
+
+public sealed record NdiNetworkOutputSettings : NetworkOutputProtocolSettings
+{
+	public NdiNetworkOutputSettings(string sourceName)
+	{
+		if (string.IsNullOrWhiteSpace(sourceName) || sourceName.Length > 128)
+			throw new ArgumentException("NDI source name is required and must not exceed 128 characters.", nameof(sourceName));
+		if (sourceName.Any(character => char.IsControl(character)))
+			throw new ArgumentException("NDI source name must not contain control characters.", nameof(sourceName));
+
+		SourceName = sourceName.Trim();
+	}
+
+	public override NetworkOutputProtocolFamily Protocol => NetworkOutputProtocolFamily.Ndi;
+	public string SourceName { get; }
+	public override string SafeTargetIdentity => $"ndi://{SourceName}";
+}
+
 public sealed record NetworkOutputConfiguration
 {
+	public NetworkOutputConfiguration(
+		string targetId,
+		NetworkOutputProtocolFamily protocol,
+		VideoFormat videoFormat,
+		AudioFormat audioFormat,
+		NetworkOutputProtocolSettings settings,
+		int queueCapacity = 8,
+		int reconnectInitialDelayMilliseconds = 250,
+		int reconnectMaximumDelayMilliseconds = 5000,
+		int reconnectMaximumAttempts = 0)
+	{
+		if (string.IsNullOrWhiteSpace(targetId) || targetId.Length > 128)
+			throw new ArgumentException("Network output target identity is required and must not exceed 128 characters.", nameof(targetId));
+		if (!Enum.IsDefined(protocol))
+			throw new ArgumentOutOfRangeException(nameof(protocol));
+		ArgumentNullException.ThrowIfNull(settings);
+		if (settings.Protocol != protocol)
+			throw new ArgumentException("Network output protocol must match the typed protocol settings.", nameof(settings));
+		if (videoFormat.PixelFormat != PixelFormat.Rgba8 || videoFormat.ScanMode != ScanMode.Progressive)
+			throw new ArgumentException("Network output currently accepts progressive RGBA8 Runtime video.", nameof(videoFormat));
+		if (audioFormat != AudioFormat.Stereo48kFloat32)
+			throw new ArgumentException("Network output currently requires 48 kHz stereo Float32 Runtime audio.", nameof(audioFormat));
+		if (queueCapacity is < 1 or > 16)
+			throw new ArgumentOutOfRangeException(nameof(queueCapacity));
+		if (reconnectInitialDelayMilliseconds is < 50 or > 60_000)
+			throw new ArgumentOutOfRangeException(nameof(reconnectInitialDelayMilliseconds));
+		if (reconnectMaximumDelayMilliseconds < reconnectInitialDelayMilliseconds || reconnectMaximumDelayMilliseconds > 120_000)
+			throw new ArgumentOutOfRangeException(nameof(reconnectMaximumDelayMilliseconds));
+		if (reconnectMaximumAttempts is < 0 or > 10_000)
+			throw new ArgumentOutOfRangeException(nameof(reconnectMaximumAttempts));
+
+		TargetId = targetId.Trim().ToLowerInvariant();
+		Protocol = protocol;
+		VideoFormat = videoFormat;
+		AudioFormat = audioFormat;
+		Settings = settings;
+		QueueCapacity = queueCapacity;
+		ReconnectInitialDelayMilliseconds = reconnectInitialDelayMilliseconds;
+		ReconnectMaximumDelayMilliseconds = reconnectMaximumDelayMilliseconds;
+		ReconnectMaximumAttempts = reconnectMaximumAttempts;
+	}
+
 	public NetworkOutputConfiguration(
 		string targetId,
 		Uri endpoint,
@@ -69,89 +201,65 @@ public sealed record NetworkOutputConfiguration
 		int reconnectInitialDelayMilliseconds = 250,
 		int reconnectMaximumDelayMilliseconds = 5000,
 		int reconnectMaximumAttempts = 0)
+		: this(
+			targetId,
+			protocol,
+			videoFormat,
+			audioFormat,
+			protocol == NetworkOutputProtocolFamily.Srt
+				? new SrtNetworkOutputSettings(
+					endpoint,
+					mode,
+					videoCodec,
+					audioCodec,
+					videoBitRate,
+					audioBitRate,
+					latencyMilliseconds,
+					latencyMode,
+					passphraseEnvironmentVariable)
+				: throw new ArgumentOutOfRangeException(nameof(protocol), "The compatibility constructor supports SRT only; use typed protocol settings for other providers."),
+			queueCapacity,
+			reconnectInitialDelayMilliseconds,
+			reconnectMaximumDelayMilliseconds,
+			reconnectMaximumAttempts)
 	{
-		if (string.IsNullOrWhiteSpace(targetId) || targetId.Length > 128)
-			throw new ArgumentException("Network output target identity is required and must not exceed 128 characters.", nameof(targetId));
-		if (endpoint is null || !endpoint.IsAbsoluteUri || !string.Equals(endpoint.Scheme, "srt", StringComparison.OrdinalIgnoreCase))
-			throw new ArgumentException("Network output endpoint must be an absolute srt:// URI.", nameof(endpoint));
-		if (!string.IsNullOrEmpty(endpoint.UserInfo))
-			throw new ArgumentException("Network output endpoint must not contain credentials.", nameof(endpoint));
-		if (endpoint.Port is <= 0 or > 65535)
-			throw new ArgumentException("Network output endpoint requires a valid port.", nameof(endpoint));
-		if (!Enum.IsDefined(protocol) || protocol != NetworkOutputProtocolFamily.Srt)
-			throw new ArgumentOutOfRangeException(nameof(protocol));
-		if (!Enum.IsDefined(mode))
-			throw new ArgumentOutOfRangeException(nameof(mode));
-		if (!Enum.IsDefined(latencyMode))
-			throw new ArgumentOutOfRangeException(nameof(latencyMode));
-		if (videoFormat.PixelFormat != PixelFormat.Rgba8 || videoFormat.ScanMode != ScanMode.Progressive)
-			throw new ArgumentException("Network output currently accepts progressive RGBA8 Runtime video.", nameof(videoFormat));
-		if (audioFormat != AudioFormat.Stereo48kFloat32)
-			throw new ArgumentException("Network output currently requires 48 kHz stereo Float32 Program audio.", nameof(audioFormat));
-		if (!Enum.IsDefined(videoCodec) || videoCodec != NetworkOutputVideoCodec.H264)
-			throw new ArgumentOutOfRangeException(nameof(videoCodec), "The reference network output currently supports H.264 video only.");
-		if (!Enum.IsDefined(audioCodec) || audioCodec != NetworkOutputAudioCodec.AacLc)
-			throw new ArgumentOutOfRangeException(nameof(audioCodec), "The reference network output currently supports AAC-LC audio only.");
-		if (videoBitRate is < 500_000 or > 100_000_000)
-			throw new ArgumentOutOfRangeException(nameof(videoBitRate));
-		if (audioBitRate is < 64_000 or > 512_000)
-			throw new ArgumentOutOfRangeException(nameof(audioBitRate));
-		if (latencyMilliseconds is < 20 or > 8000)
-			throw new ArgumentOutOfRangeException(nameof(latencyMilliseconds));
-		if (queueCapacity is < 1 or > 16)
-			throw new ArgumentOutOfRangeException(nameof(queueCapacity));
-		if (reconnectInitialDelayMilliseconds is < 50 or > 60_000)
-			throw new ArgumentOutOfRangeException(nameof(reconnectInitialDelayMilliseconds));
-		if (reconnectMaximumDelayMilliseconds < reconnectInitialDelayMilliseconds || reconnectMaximumDelayMilliseconds > 120_000)
-			throw new ArgumentOutOfRangeException(nameof(reconnectMaximumDelayMilliseconds));
-		if (reconnectMaximumAttempts is < 0 or > 10_000)
-			throw new ArgumentOutOfRangeException(nameof(reconnectMaximumAttempts));
-		if (!string.IsNullOrWhiteSpace(passphraseEnvironmentVariable) &&
-			(passphraseEnvironmentVariable.Length > 128 ||
-			 passphraseEnvironmentVariable.Any(character => !(char.IsAsciiLetterOrDigit(character) || character == '_'))))
-		{
-			throw new ArgumentException("Secret reference must be an environment-variable name containing only ASCII letters, digits and underscore.", nameof(passphraseEnvironmentVariable));
-		}
-
-		TargetId = targetId.Trim().ToLowerInvariant();
-		Endpoint = endpoint;
-		Protocol = protocol;
-		Mode = mode;
-		VideoFormat = videoFormat;
-		AudioFormat = audioFormat;
-		VideoCodec = videoCodec;
-		AudioCodec = audioCodec;
-		VideoBitRate = videoBitRate;
-		AudioBitRate = audioBitRate;
-		LatencyMilliseconds = latencyMilliseconds;
-		QueueCapacity = queueCapacity;
-		LatencyMode = latencyMode;
-		PassphraseEnvironmentVariable = string.IsNullOrWhiteSpace(passphraseEnvironmentVariable) ? null : passphraseEnvironmentVariable.Trim();
-		ReconnectInitialDelayMilliseconds = reconnectInitialDelayMilliseconds;
-		ReconnectMaximumDelayMilliseconds = reconnectMaximumDelayMilliseconds;
-		ReconnectMaximumAttempts = reconnectMaximumAttempts;
 	}
 
 	public string TargetId { get; }
-	public Uri Endpoint { get; }
 	public NetworkOutputProtocolFamily Protocol { get; }
-	public NetworkOutputConnectionMode Mode { get; }
 	public VideoFormat VideoFormat { get; }
 	public AudioFormat AudioFormat { get; }
-	public NetworkOutputVideoCodec VideoCodec { get; }
-	public NetworkOutputAudioCodec AudioCodec { get; }
-	public uint VideoBitRate { get; }
-	public uint AudioBitRate { get; }
-	public int LatencyMilliseconds { get; }
+	public NetworkOutputProtocolSettings Settings { get; }
 	public int QueueCapacity { get; }
-	public NetworkOutputLatencyMode LatencyMode { get; }
-	public string? PassphraseEnvironmentVariable { get; }
 	public int ReconnectInitialDelayMilliseconds { get; }
 	public int ReconnectMaximumDelayMilliseconds { get; }
 	public int ReconnectMaximumAttempts { get; }
+	public SrtNetworkOutputSettings? SrtSettings => Settings as SrtNetworkOutputSettings;
+	public NdiNetworkOutputSettings? NdiSettings => Settings as NdiNetworkOutputSettings;
+	public string SafeTargetIdentity => Settings.SafeTargetIdentity;
 
-	public string SafeTargetIdentity =>
-		$"{Endpoint.Scheme}://{Endpoint.Host}:{Endpoint.Port}{Endpoint.AbsolutePath}";
+	public Uri Endpoint => RequireSrt().Endpoint;
+	public NetworkOutputConnectionMode Mode => RequireSrt().Mode;
+	public NetworkOutputVideoCodec VideoCodec => Settings switch
+	{
+		SrtNetworkOutputSettings value => value.VideoCodec,
+		NdiNetworkOutputSettings => NetworkOutputVideoCodec.NdiHighBandwidth,
+		_ => throw new InvalidOperationException("Unknown network-output protocol settings.")
+	};
+	public NetworkOutputAudioCodec AudioCodec => Settings switch
+	{
+		SrtNetworkOutputSettings value => value.AudioCodec,
+		NdiNetworkOutputSettings => NetworkOutputAudioCodec.Float32,
+		_ => throw new InvalidOperationException("Unknown network-output protocol settings.")
+	};
+	public uint VideoBitRate => SrtSettings?.VideoBitRate ?? 0;
+	public uint AudioBitRate => SrtSettings?.AudioBitRate ?? 0;
+	public int LatencyMilliseconds => SrtSettings?.LatencyMilliseconds ?? 0;
+	public NetworkOutputLatencyMode LatencyMode => RequireSrt().LatencyMode;
+	public string? PassphraseEnvironmentVariable => SrtSettings?.PassphraseEnvironmentVariable;
+
+	private SrtNetworkOutputSettings RequireSrt() =>
+		SrtSettings ?? throw new InvalidOperationException("SRT-specific settings are unavailable for this network-output provider.");
 }
 
 public interface INetworkOutputPayloadLease : IDisposable
@@ -245,6 +353,7 @@ public sealed record NetworkOutputHealthSnapshot
 		if (string.IsNullOrWhiteSpace(targetId)) throw new ArgumentException("Target identity is required.", nameof(targetId));
 		if (string.IsNullOrWhiteSpace(provider)) throw new ArgumentException("Provider identity is required.", nameof(provider));
 		if (string.IsNullOrWhiteSpace(safeTargetIdentity)) throw new ArgumentException("Safe target identity is required.", nameof(safeTargetIdentity));
+		if (!Enum.IsDefined(protocol)) throw new ArgumentOutOfRangeException(nameof(protocol));
 		if (!Enum.IsDefined(lifecycle)) throw new ArgumentOutOfRangeException(nameof(lifecycle));
 		if (!Enum.IsDefined(videoCodec)) throw new ArgumentOutOfRangeException(nameof(videoCodec));
 		if (!Enum.IsDefined(audioCodec)) throw new ArgumentOutOfRangeException(nameof(audioCodec));
@@ -287,4 +396,11 @@ public sealed record NetworkOutputHealthSnapshot
 	public NetworkOutputStatistics Statistics { get; }
 	public DateTimeOffset? LastSuccessfulSendUtc { get; }
 	public Failure? Failure { get; }
+}
+
+public interface INetworkOutputSession : IAsyncDisposable
+{
+	NetworkOutputConfiguration Configuration { get; }
+	NetworkOutputHealthSnapshot Snapshot { get; }
+	NetworkOutputEnqueueResult TrySubmit(NetworkOutputProgramSample sample);
 }
