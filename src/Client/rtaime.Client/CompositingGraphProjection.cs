@@ -235,12 +235,25 @@ public static class CompositingGraphProjector
 				{
 					var processingNode = layer.ProcessingStack[processingIndex];
 					var processingNodeId = $"processing:{layer.LayerId}:{processingNode.NodeId}";
-					var grade = processingNode.ColorGrade;
+					var title = processingNode.Kind switch
+					{
+						1 => "Color Grade",
+						2 => "Chroma Key",
+						_ => "Processing"
+					};
+					var detail = processingNode switch
+					{
+						{ Kind: 1, ColorGrade: { } grade } =>
+							$"{processingIndex + 1}/{layer.ProcessingStack.Count} · Brightness {grade.Brightness:0.##} · Contrast {grade.Contrast:0.##} · Saturation {grade.Saturation:0.##}",
+						{ Kind: 2, ChromaKey: { } key } =>
+							$"{processingIndex + 1}/{layer.ProcessingStack.Count} · Key {key.KeyRed},{key.KeyGreen},{key.KeyBlue} · Tolerance {key.Tolerance:0.##} · Softness {key.Softness:0.##} · Spill {key.SpillSuppression:0.##}",
+						_ => $"{processingIndex + 1}/{layer.ProcessingStack.Count}"
+					};
 					nodes.Add(new CompositingGraphNodeProjection(
 						processingNodeId,
 						CompositingGraphNodeKind.Processing,
-						"Color Grade",
-						$"{processingIndex + 1}/{layer.ProcessingStack.Count} · Brightness {grade.Brightness:0.##} · Contrast {grade.Contrast:0.##} · Saturation {grade.Saturation:0.##}",
+						title,
+						detail,
 						processingNode.Enabled ? "CONFIRMED ENABLED" : "CONFIRMED DISABLED",
 						CompositingGraphHealth.Normal,
 						[
