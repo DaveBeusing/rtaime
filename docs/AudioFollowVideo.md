@@ -321,7 +321,9 @@ AFV still follows only the committed Program video source. CUT/DISSOLVE routing 
 
 ### Scope boundary
 
-The basic Audio Operator Workflow does not expose equalizer, compressor or limiter controls. Bounded per-source three-band EQ plus the bounded per-bus compressor and sample-peak limiter are implemented by Advanced Audio Production and remain governed through the advanced-audio configuration path. Arbitrary dynamics chains, a generic routing matrix, multichannel mixing, true-peak processing, loudness normalization and a loudness-compliance suite remain outside this workflow.
+The professional Audio Mixer surface now exposes the bounded three-band per-source EQ, bounded source→bus matrix, and one bounded compressor plus sample-peak limiter per configured bus through the existing Advanced Audio Production configuration path. These controls remain Operator drafts until ControlHost/RuntimeHost confirms the requested revision; WPF does not execute or analyze the audio.
+
+Arbitrary dynamics chains, an unbounded/generic routing graph, multichannel/surround mixing, plugin hosting, true-peak oversampling, loudness normalization and a loudness-compliance suite remain outside this workflow. Runtime currently does not expose a bounded per-bus RMS value, so the Operator does not synthesize RMS locally.
 ## Evidence boundary
 
 Virtual/synthetic evidence proves deterministic contract and architecture behaviour.
