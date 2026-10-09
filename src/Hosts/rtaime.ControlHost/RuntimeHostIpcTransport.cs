@@ -168,6 +168,18 @@ public sealed record RuntimeAudioProgramSnapshot(
 	ulong RoutingRevision = 0,
 	MediaSourceId? ActiveAudioSourceId = null);
 
+public sealed record RuntimeAudioProductionBusSnapshot(
+	string BusId,
+	double MasterGain,
+	bool Muted,
+	double LeftPeak,
+	double RightPeak,
+	double PreClipPeak,
+	bool Clipping,
+	ulong ClippedSampleValues,
+	int ActiveSourceCount,
+	int MissingSourceCount);
+
 public sealed record RuntimeAudioProductionSnapshot(
 	AudioProductionConfiguration Configuration,
 	double LeftPeak,
@@ -180,7 +192,8 @@ public sealed record RuntimeAudioProductionSnapshot(
 	bool SidechainAvailable,
 	double? CrossfadeProgress,
 	int ActiveSourceCount,
-	int MissingSourceCount);
+	int MissingSourceCount,
+	IReadOnlyList<RuntimeAudioProductionBusSnapshot>? Buses = null);
 
 public sealed record RuntimeRecordingProfileSnapshot(
 	string ProfileId,
@@ -1106,7 +1119,20 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 			snapshot.SidechainAvailable,
 			snapshot.CrossfadeProgress,
 			snapshot.ActiveSourceCount,
-			snapshot.MissingSourceCount);
+			snapshot.MissingSourceCount,
+			Array.AsReadOnly((snapshot.Configuration.Buses ?? Array.Empty<WireAudioProductionBus>())
+				.Select(bus => new RuntimeAudioProductionBusSnapshot(
+					bus.BusId,
+					bus.MasterGain,
+					bus.Muted,
+					bus.LeftPeak,
+					bus.RightPeak,
+					bus.PreClipPeak,
+					bus.Clipping,
+					bus.ClippedSampleValues,
+					bus.ActiveSourceCount,
+					bus.MissingSourceCount))
+				.ToArray()));
 	}
 
 	private static AudioProductionConfiguration FromWire(WireAudioProductionConfiguration wire)
@@ -1704,7 +1730,17 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 	private sealed record WireAudioInputState(string SourceId, double Gain, bool Muted);
 	private sealed record WireAudioRoutingState(int Mode, string? BreakawaySourceId);
 	private sealed record WireAudioTestSignalState(string SourceId, bool Enabled, int Mode, double FrequencyHz, double PeakLevel);
-	private sealed record WireAudioProductionBus(string BusId, double MasterGain, bool Muted);
+	private sealed record WireAudioProductionBus(
+		string BusId,
+		double MasterGain,
+		bool Muted,
+		double LeftPeak = 0,
+		double RightPeak = 0,
+		double PreClipPeak = 0,
+		bool Clipping = false,
+		ulong ClippedSampleValues = 0,
+		int ActiveSourceCount = 0,
+		int MissingSourceCount = 0);
 	private sealed record WireAudioProductionSource(string SourceId, double Gain, bool Muted, bool FollowRoutedSource, string[]? BusAssignments);
 	private sealed record WireAudioCrossfade(string BusId, string FromSourceId, string ToSourceId, ulong StartSamplePosition, uint DurationSamples, int Law);
 	private sealed record WireAudioDucking(string BusId, bool Enabled, string SidechainSourceId, string[]? TargetSourceIds, double Threshold, double Attenuation, uint AttackSamples, uint HoldSamples, uint ReleaseSamples);
