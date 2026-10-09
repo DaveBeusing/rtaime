@@ -79,7 +79,7 @@ Assert-Condition ($hardwareTest -match 'physicalDeviceFaultInjection[\s\S]*UNVER
 Assert-Condition ($hardwareTest -match 'typedProcessingAcceleration[\s\S]*UNVERIFIED') "Renderer qualification evidence must keep managed typed-processing acceleration explicitly UNVERIFIED."
 
 $processingPerformance = Get-Content -LiteralPath $processingPerformanceTestPath -Raw
-foreach ($scenario in @("none", "color-grade", "chroma-key", "chroma-key-color-grade", "color-grade-chroma-key")) {
+foreach ($scenario in @("none", "color-grade", "chroma-key", "chroma-key-color-grade", "color-grade-chroma-key", "maximum-mixed-stack")) {
     Assert-Condition ($processingPerformance -match [Regex]::Escape($scenario)) "Managed compositing qualification must retain processing scenario '$scenario'."
 }
 Assert-Condition ($processingPerformance -match 'Hd1080p50Rgba8' -and $processingPerformance -match 'Hd1080p59_94Rgba8') "Managed compositing processing qualification must retain both V1 formats."
