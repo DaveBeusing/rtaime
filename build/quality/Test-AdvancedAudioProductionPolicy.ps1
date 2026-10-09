@@ -97,7 +97,7 @@ Assert-Condition ($runtime -notmatch 'ControlHost') "Runtime audio processing mu
 
 Assert-Condition ($operator -match 'SetAudioProductionAsync') "Operator advanced-audio mutations must use the governed client/control path."
 Assert-Condition ($operatorUi -match '<local:AudioMixerControl' -and $operatorMixerUi -match 'AUDIO MIXER' -and $operatorMixerUi -match 'Owner.StartAudioCrossfadeCommand' -and $operatorMixerUi -match 'Owner.ToggleAudioDuckingCommand') "Operator must expose the confirmed bounded advanced mixer through established custom controls."
-Assert-Condition ($operatorMixerViewModel -match 'AudioSourceEqualizerConfiguration' -and $operatorMixerViewModel -match 'AudioBusDynamicsConfiguration' -and $operatorMixerViewModel -match 'SetAudioProductionAsync' -or $operator -match 'ApplyAudioMixerConfigurationAsync[\s\S]+SetAudioProductionAsync') "Operator mixer must edit typed EQ/dynamics only through the governed production configuration seam."
+Assert-Condition (($operatorMixerViewModel -match 'AudioSourceEqualizerConfiguration' -and $operatorMixerViewModel -match 'AudioBusDynamicsConfiguration') -and (($operatorMixerViewModel -match 'SetAudioProductionAsync') -or ($operator -match 'ApplyAudioMixerConfigurationAsync[\s\S]+SetAudioProductionAsync'))) "Operator mixer must edit typed EQ/dynamics only through the governed production configuration seam."
 Assert-Condition ($operatorMixerUi -notmatch '<Slider|<Button\b|<TextBox\b') "Advanced audio mixer UI must not introduce WPF default Button/TextBox/Slider controls."
 
 Assert-Condition ($unit -match 'Steady_state_processing_does_not_allocate_per_block') "Advanced audio unit coverage must retain an allocation regression guard."
