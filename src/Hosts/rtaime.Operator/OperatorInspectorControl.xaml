@@ -272,6 +272,42 @@
 				</Grid>
 			</Border>
 		</DataTemplate>
+		<DataTemplate x:Key="CompositingProcessingEditorTemplate">
+			<StackPanel>
+				<TextBlock Text="{Binding ProcessingStateLabel}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,4,0,6" />
+				<Grid Margin="0,0,0,6">
+					<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="4" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+					<controls:RtaimeButton Grid.Column="0" Content="+ COLOR GRADE" Command="{Binding AddColorGradeProcessingNodeCommand}" IsCompact="True" AutomationProperties.Name="Add Color Grade processing node" />
+					<controls:RtaimeButton Grid.Column="2" Content="+ CHROMA KEY" Command="{Binding AddChromaKeyProcessingNodeCommand}" IsCompact="True" AutomationProperties.Name="Add Chroma Key processing node" />
+				</Grid>
+				<StackPanel>
+					<StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding IsSelectedColorGradeProcessingNode}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></StackPanel.Style>
+					<controls:RtaimeToggleButton Content="COLOR GRADE ENABLED" IsChecked="{Binding SelectedColorGradeEnabled, Mode=TwoWay}" Margin="0,4,0,6" />
+					<Grid Height="32"><Grid.ColumnDefinitions><ColumnDefinition Width="96" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><TextBlock Text="Brightness" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" /><controls:RtaimeTextBox Grid.Column="1" Text="{Binding SelectedColorGradeBrightness, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}" Style="{StaticResource InspectorNumericTextBox}" /></Grid>
+					<Grid Height="32"><Grid.ColumnDefinitions><ColumnDefinition Width="96" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><TextBlock Text="Contrast" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" /><controls:RtaimeTextBox Grid.Column="1" Text="{Binding SelectedColorGradeContrast, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}" Style="{StaticResource InspectorNumericTextBox}" /></Grid>
+					<Grid Height="32"><Grid.ColumnDefinitions><ColumnDefinition Width="96" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><TextBlock Text="Saturation" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" /><controls:RtaimeTextBox Grid.Column="1" Text="{Binding SelectedColorGradeSaturation, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}" Style="{StaticResource InspectorNumericTextBox}" /></Grid>
+					<controls:RtaimeButton Content="APPLY COLOR GRADE" Command="{Binding ApplyColorGradeCommand}" IsCompact="True" Margin="0,6,0,0" />
+				</StackPanel>
+				<StackPanel>
+					<StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding IsSelectedChromaKeyProcessingNode}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></StackPanel.Style>
+					<controls:RtaimeToggleButton Content="CHROMA KEY ENABLED" IsChecked="{Binding SelectedChromaKeyEnabled, Mode=TwoWay}" Margin="0,4,0,6" />
+					<Grid Height="32"><Grid.ColumnDefinitions><ColumnDefinition Width="96" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><TextBlock Text="Key Red" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" /><controls:RtaimeTextBox Grid.Column="1" Text="{Binding SelectedChromaKeyRed, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}" Style="{StaticResource InspectorNumericTextBox}" /></Grid>
+					<Grid Height="32"><Grid.ColumnDefinitions><ColumnDefinition Width="96" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><TextBlock Text="Key Green" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" /><controls:RtaimeTextBox Grid.Column="1" Text="{Binding SelectedChromaKeyGreen, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}" Style="{StaticResource InspectorNumericTextBox}" /></Grid>
+					<Grid Height="32"><Grid.ColumnDefinitions><ColumnDefinition Width="96" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><TextBlock Text="Key Blue" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" /><controls:RtaimeTextBox Grid.Column="1" Text="{Binding SelectedChromaKeyBlue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}" Style="{StaticResource InspectorNumericTextBox}" /></Grid>
+					<Grid Height="32"><Grid.ColumnDefinitions><ColumnDefinition Width="96" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><TextBlock Text="Tolerance" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" /><controls:RtaimeTextBox Grid.Column="1" Text="{Binding SelectedChromaKeyTolerance, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}" Style="{StaticResource InspectorNumericTextBox}" /></Grid>
+					<Grid Height="32"><Grid.ColumnDefinitions><ColumnDefinition Width="96" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><TextBlock Text="Softness" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" /><controls:RtaimeTextBox Grid.Column="1" Text="{Binding SelectedChromaKeySoftness, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}" Style="{StaticResource InspectorNumericTextBox}" /></Grid>
+					<Grid Height="32"><Grid.ColumnDefinitions><ColumnDefinition Width="96" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><TextBlock Text="Spill" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" /><controls:RtaimeTextBox Grid.Column="1" Text="{Binding SelectedChromaKeySpillSuppression, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}" Style="{StaticResource InspectorNumericTextBox}" /></Grid>
+					<controls:RtaimeButton Content="APPLY CHROMA KEY" Command="{Binding ApplyChromaKeyCommand}" IsCompact="True" Margin="0,6,0,0" />
+				</StackPanel>
+				<Grid Margin="0,6,0,0">
+					<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="4" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+					<controls:RtaimeButton Grid.Column="0" Content="MOVE EARLIER" Command="{Binding MoveProcessingNodeEarlierCommand}" IsCompact="True" />
+					<controls:RtaimeButton Grid.Column="2" Content="MOVE LATER" Command="{Binding MoveProcessingNodeLaterCommand}" IsCompact="True" />
+				</Grid>
+				<controls:RtaimeButton Content="REMOVE SELECTED NODE" Command="{Binding RemoveProcessingNodeCommand}" IsCompact="True" Margin="0,6,0,0" />
+				<TextBlock Text="{Binding UnsupportedEffectOrderingText}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,6,0,0" />
+			</StackPanel>
+		</DataTemplate>
 	</UserControl.Resources>
 
 	<Border
@@ -816,15 +852,7 @@
 															</Style.Triggers>
 														</Style>
 													</StackPanel.Style>
-													<controls:RtaimeToggleButton Content="COLOR GRADE ENABLED" IsChecked="{Binding Inspector.SelectedColorGradeEnabled, ElementName=Root, Mode=TwoWay}" Margin="0,6,0,6" />
-													<Grid Height="32"><Grid.ColumnDefinitions><ColumnDefinition Width="96" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><TextBlock Text="Brightness" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" /><controls:RtaimeTextBox Grid.Column="1" Text="{Binding Inspector.SelectedColorGradeBrightness, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}" Style="{StaticResource InspectorNumericTextBox}" /></Grid>
-													<Grid Height="32"><Grid.ColumnDefinitions><ColumnDefinition Width="96" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><TextBlock Text="Contrast" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" /><controls:RtaimeTextBox Grid.Column="1" Text="{Binding Inspector.SelectedColorGradeContrast, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}" Style="{StaticResource InspectorNumericTextBox}" /></Grid>
-													<Grid Height="32"><Grid.ColumnDefinitions><ColumnDefinition Width="96" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><TextBlock Text="Saturation" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" /><controls:RtaimeTextBox Grid.Column="1" Text="{Binding Inspector.SelectedColorGradeSaturation, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}" Style="{StaticResource InspectorNumericTextBox}" /></Grid>
-													<Grid Margin="0,6,0,0">
-														<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="4" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-														<controls:RtaimeButton Grid.Column="0" Content="APPLY COLOR GRADE" Command="{Binding Inspector.ApplyColorGradeCommand, ElementName=Root}" IsCompact="True" />
-														<controls:RtaimeButton Grid.Column="2" Content="REMOVE" Command="{Binding Inspector.RemoveProcessingNodeCommand, ElementName=Root}" IsCompact="True" />
-													</Grid>
+													<ContentControl Content="{Binding Inspector, ElementName=Root}" ContentTemplate="{StaticResource CompositingProcessingEditorTemplate}" />
 												</StackPanel>
 												<StackPanel>
 													<StackPanel.Style>
@@ -842,7 +870,6 @@
 													</Grid>
 													<controls:RtaimeButton Content="+ Add Effect" IsCompact="True" IsEnabled="False" HorizontalAlignment="Left" Margin="0,6,0,0" ToolTip="Effect insertion is not exposed by the current V1 processing capability." />
 												</StackPanel>
-												<TextBlock Text="{Binding Inspector.UnsupportedEffectOrderingText, ElementName=Root}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,6,0,0" />
 											</StackPanel>
 										</Border>
 									</StackPanel>
@@ -871,17 +898,8 @@
 													</Style.Triggers>
 												</Style>
 											</StackPanel.Style>
-											<controls:RtaimeToggleButton Content="COLOR GRADE ENABLED" IsChecked="{Binding Inspector.SelectedColorGradeEnabled, ElementName=Root, Mode=TwoWay}" Margin="0,6,0,6" />
-											<Grid Height="32"><Grid.ColumnDefinitions><ColumnDefinition Width="96" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><TextBlock Text="Brightness" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" /><controls:RtaimeTextBox Grid.Column="1" Text="{Binding Inspector.SelectedColorGradeBrightness, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}" Style="{StaticResource InspectorNumericTextBox}" /></Grid>
-											<Grid Height="32"><Grid.ColumnDefinitions><ColumnDefinition Width="96" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><TextBlock Text="Contrast" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" /><controls:RtaimeTextBox Grid.Column="1" Text="{Binding Inspector.SelectedColorGradeContrast, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}" Style="{StaticResource InspectorNumericTextBox}" /></Grid>
-											<Grid Height="32"><Grid.ColumnDefinitions><ColumnDefinition Width="96" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><TextBlock Text="Saturation" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" /><controls:RtaimeTextBox Grid.Column="1" Text="{Binding Inspector.SelectedColorGradeSaturation, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}" Style="{StaticResource InspectorNumericTextBox}" /></Grid>
-											<Grid Margin="0,6,0,0">
-												<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="4" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-												<controls:RtaimeButton Grid.Column="0" Content="APPLY COLOR GRADE" Command="{Binding Inspector.ApplyColorGradeCommand, ElementName=Root}" IsCompact="True" />
-												<controls:RtaimeButton Grid.Column="2" Content="REMOVE" Command="{Binding Inspector.RemoveProcessingNodeCommand, ElementName=Root}" IsCompact="True" />
-											</Grid>
+											<ContentControl Content="{Binding Inspector, ElementName=Root}" ContentTemplate="{StaticResource CompositingProcessingEditorTemplate}" />
 										</StackPanel>
-										<TextBlock Text="{Binding Inspector.UnsupportedEffectOrderingText, ElementName=Root}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,6,0,0" />
 									</StackPanel>
 								</Border>
 							</StackPanel>

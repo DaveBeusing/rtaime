@@ -115,6 +115,76 @@ public sealed class CompositingGraphProjectionTests
 	}
 
 	[Fact]
+	public void Projection_connects_empty_processing_stack_directly_to_composite()
+	{
+		var input = CreateInput() with
+		{
+			CompositingLayers =
+			[
+				new OperatorCompositingLayerDescriptor(
+					"bitmap-graphics",
+					2,
+					0,
+					true,
+					255,
+					0,
+					0,
+					1,
+					"Graphic",
+					processingStack: Array.Empty<OperatorCompositingProcessingNodeDescriptor>())
+			]
+		};
+
+		var graph = CompositingGraphProjector.Project(input);
+
+		Assert.DoesNotContain(graph.Nodes, node => node.Kind == CompositingGraphNodeKind.Processing);
+		Assert.Contains(graph.Connections, connection =>
+			connection.FromNodeId == "transform:bitmap-graphics" &&
+			connection.ToNodeId == "composite" &&
+			connection.IsActive);
+	}
+
+	[Fact]
+	public void Projection_preserves_one_processing_node_identity_and_edge_order()
+	{
+		var input = CreateInput() with
+		{
+			CompositingLayers =
+			[
+				new OperatorCompositingLayerDescriptor(
+					"bitmap-graphics",
+					2,
+					0,
+					true,
+					255,
+					0,
+					0,
+					1,
+					"Graphic",
+					processingStack:
+					[
+						new OperatorCompositingProcessingNodeDescriptor(
+							"key-stable",
+							2,
+							true,
+							chromaKey: new OperatorChromaKeyDescriptor(0, 255, 0, 0.1, 0.2, 0.3))
+					])
+			]
+		};
+
+		var graph = CompositingGraphProjector.Project(input);
+		var key = Assert.Single(graph.Nodes, node => node.Kind == CompositingGraphNodeKind.Processing);
+
+		Assert.Equal("processing:bitmap-graphics:key-stable", key.Id);
+		Assert.Contains(graph.Connections, connection =>
+			connection.FromNodeId == "transform:bitmap-graphics" &&
+			connection.ToNodeId == key.Id);
+		Assert.Contains(graph.Connections, connection =>
+			connection.FromNodeId == key.Id &&
+			connection.ToNodeId == "composite");
+	}
+
+	[Fact]
 	public void Projection_preserves_stable_ids_across_status_updates()
 	{
 		var first = CompositingGraphProjector.Project(CreateInput());

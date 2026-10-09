@@ -405,21 +405,28 @@ public sealed class CompositingGraphViewModel : INotifyPropertyChanged, IDisposa
 			layer.Y = rowY;
 			var layerId = layer.Id["layer:".Length..];
 			Position($"transform:{layerId}", 620, rowY);
-			var processing = Nodes.FirstOrDefault(node =>
-				node.Projection.Kind == CompositingGraphNodeKind.Processing &&
-				node.Id.StartsWith($"processing:{layerId}:", StringComparison.Ordinal));
-			if (processing is not null)
+			var confirmedLayer = _operator.CompositingLayers.FirstOrDefault(candidate =>
+				string.Equals(candidate.LayerId, layerId, StringComparison.Ordinal));
+			if (confirmedLayer is not null)
 			{
-				processing.X = 910;
-				processing.Y = rowY;
+				for (var processingIndex = 0; processingIndex < confirmedLayer.ProcessingStack.Count; processingIndex++)
+				{
+					var processingNode = confirmedLayer.ProcessingStack[processingIndex];
+					Position(
+						$"processing:{layerId}:{processingNode.NodeId}",
+						910 + (processingIndex * 290),
+						rowY);
+				}
 			}
 		}
 		Position("preview-output", 620, 60);
 		var compositeY = layerNodes.Length == 0
 			? Math.Max(250, graphicsY - 40)
 			: Math.Max(250, Math.Max(280, graphicsY) + ((layerNodes.Length - 1) * 66));
-		var hasProcessing = Nodes.Any(node => node.Projection.Kind == CompositingGraphNodeKind.Processing);
-		var compositeX = layerNodes.Length == 0 ? 620 : hasProcessing ? 1200 : 910;
+		var maximumProcessingDepth = _operator.CompositingLayers.Count == 0
+			? 0
+			: _operator.CompositingLayers.Max(layer => layer.ProcessingStack.Count);
+		var compositeX = layerNodes.Length == 0 ? 620 : 910 + (maximumProcessingDepth * 290);
 		Position("composite", compositeX, compositeY);
 		Position("program-output", compositeX + 290, compositeY);
 		Position("recorder", compositeX + 580, compositeY);
@@ -431,6 +438,7 @@ public sealed class CompositingGraphViewModel : INotifyPropertyChanged, IDisposa
 
 	public void Refresh()
 	{
+		var selectedLayerId = SelectedNode is null ? null : ResolveLayerId(SelectedNode.Id);
 		var graph = CompositingGraphProjector.Project(CreateProjectionInput());
 		var incomingIds = graph.Nodes.Select(node => node.Id).ToHashSet(StringComparer.Ordinal);
 
@@ -486,6 +494,17 @@ public sealed class CompositingGraphViewModel : INotifyPropertyChanged, IDisposa
 				current.IsSelected = true;
 				SelectedNode = current;
 				_inspector.SelectCompositingNode(current.Projection);
+			}
+		}
+		else if (selectedLayerId is not null)
+		{
+			var fallback = Nodes.FirstOrDefault(node => string.Equals(node.Id, $"layer:{selectedLayerId}", StringComparison.Ordinal)) ??
+				Nodes.FirstOrDefault(node => string.Equals(node.Id, $"transform:{selectedLayerId}", StringComparison.Ordinal));
+			if (fallback is not null)
+			{
+				fallback.IsSelected = true;
+				SelectedNode = fallback;
+				_inspector.SelectCompositingNode(fallback.Projection);
 			}
 		}
 
