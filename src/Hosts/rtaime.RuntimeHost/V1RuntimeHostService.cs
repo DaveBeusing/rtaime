@@ -260,7 +260,14 @@ public sealed record V1AudioProgramSnapshot(
 public sealed record V1AudioProductionBusSnapshot(
 	string BusId,
 	double MasterGain,
-	bool Muted);
+	bool Muted,
+	double LeftPeak = 0,
+	double RightPeak = 0,
+	double PreClipPeak = 0,
+	bool Clipping = false,
+	ulong ClippedSampleValues = 0,
+	int ActiveSourceCount = 0,
+	int MissingSourceCount = 0);
 
 public sealed record V1AudioProductionSourceSnapshot(
 	MediaSourceId SourceId,
@@ -410,7 +417,9 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private readonly MediaSourceId[] _audioProductionSourceOrder;
 	private readonly float[][] _audioProductionSourceSamples;
 	private readonly AudioProductionSourceBuffer[] _audioProductionSourceBuffers;
-	private readonly float[] _programAudioMixSamples;
+	private readonly Dictionary<AudioBusId, float[]> _audioBusMixSamples = [];
+	private readonly Dictionary<AudioBusId, AudioProductionBlockResult> _lastAudioProductionResults = [];
+	private readonly int _maximumAudioValuesPerBoundary;
 	private readonly AudioStreamId _programAudioStreamId;
 	private readonly Dictionary<MediaSourceId, GeneratedAudioTestSignalGenerator> _audioTestSignals = [];
 	private readonly Dictionary<MediaSourceId, GeneratedAudioTestSignalFrameInfo> _audioTestSignalFrames = [];
@@ -554,12 +563,12 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		var maximumAudioFramesPerBoundary = checked((int)(
 			((long)productionAudioFormat.SampleRate * format.FrameRate.Denominator + format.FrameRate.Numerator - 1) /
 			format.FrameRate.Numerator));
-		var maximumAudioValuesPerBoundary = checked(maximumAudioFramesPerBoundary * (int)productionAudioFormat.ChannelCount);
+		_maximumAudioValuesPerBoundary = checked(maximumAudioFramesPerBoundary * (int)productionAudioFormat.ChannelCount);
 		_audioProductionSourceSamples = _audioProductionSourceOrder
-			.Select(_ => new float[maximumAudioValuesPerBoundary])
+			.Select(_ => new float[_maximumAudioValuesPerBoundary])
 			.ToArray();
 		_audioProductionSourceBuffers = new AudioProductionSourceBuffer[_audioProductionSourceOrder.Length];
-		_programAudioMixSamples = new float[maximumAudioValuesPerBoundary];
+		EnsureAudioBusBuffersUnsafe(_audioProduction.Configuration);
 		_programAudioStreamId = new AudioStreamId(HostIdentity.Create("audio-bus", AudioBusId.Program.Value));
 
 		_backgrounds = new Dictionary<MediaSourceId, RgbaFrameBuffer>
@@ -2066,6 +2075,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		{
 			ThrowIfDisposed();
 			ValidateAudioProductionConfigurationUnsafe(configuration);
+			EnsureAudioBusBuffersUnsafe(configuration);
 			_audioProduction.ApplyConfiguration(configuration);
 			foreach (var source in configuration.Sources)
 			{
@@ -2929,12 +2939,77 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		_audioTestSignals.TryGetValue(sourceId, out var audioSignal) &&
 		audioSignal.Configuration.Mode == GeneratedAudioTestSignalMode.Pulse;
 
+	private void EnsureAudioBusBuffersUnsafe(AudioProductionConfiguration configuration)
+	{
+		var configured = configuration.Buses.Select(bus => bus.BusId).ToHashSet();
+		foreach (var stale in _audioBusMixSamples.Keys.Where(busId => !configured.Contains(busId)).ToArray())
+		{
+			_audioBusMixSamples.Remove(stale);
+			_lastAudioProductionResults.Remove(stale);
+		}
+		foreach (var bus in configuration.Buses)
+		{
+			if (!_audioBusMixSamples.ContainsKey(bus.BusId))
+				_audioBusMixSamples.Add(bus.BusId, new float[_maximumAudioValuesPerBoundary]);
+			if (!_lastAudioProductionResults.ContainsKey(bus.BusId))
+				_lastAudioProductionResults.Add(
+					bus.BusId,
+					new AudioProductionBlockResult(bus.BusId, configuration.Revision, 0, 0, 0, 0, 1, 0, true, null, 0, 0));
+		}
+	}
+
+	private void ProcessConfiguredAudioBusesUnsafe(
+		AudioBufferDescriptor timingReference,
+		MediaSourceId routedAudioSource)
+	{
+		var configuration = _audioProduction.Configuration;
+		var requiredValues = checked((int)(timingReference.Timing.SampleCount * timingReference.Format.ChannelCount));
+		foreach (var bus in configuration.Buses)
+		{
+			var result = _audioProduction.ProcessBus(
+				bus.BusId,
+				timingReference.Timing.SamplePosition,
+				timingReference.Timing.SampleCount,
+				routedAudioSource,
+				_audioProductionSourceBuffers,
+				_audioBusMixSamples[bus.BusId].AsSpan(0, requiredValues));
+			_lastAudioProductionResults[bus.BusId] = result;
+		}
+		_lastAudioProductionResult = _lastAudioProductionResults[AudioBusId.Program];
+	}
+
+	private AudioBusId ResolveOutputAudioBusUnsafe(PreparedExecutionContract preparedExecution, string roleId)
+	{
+		var binding = preparedExecution.Bindings.SingleOrDefault(candidate =>
+			string.Equals(candidate.OutputRoleId, roleId, StringComparison.Ordinal));
+		return new AudioBusId(binding?.AudioBusId ?? AudioBusId.Program.Value);
+	}
+
+	private ReadOnlySpan<float> AudioBusSamplesUnsafe(AudioBusId busId, int requiredValues) =>
+		_audioBusMixSamples.TryGetValue(busId, out var samples)
+			? samples.AsSpan(0, requiredValues)
+			: throw new InvalidOperationException($"Configured output audio bus '{busId}' has no Runtime mix buffer.");
+
 	private V1AudioProductionSnapshot AudioProductionSnapshotUnsafe()
 	{
 		var configuration = _audioProduction.Configuration;
 		var program = configuration.GetBus(AudioBusId.Program);
 		var buses = configuration.Buses
-			.Select(bus => new V1AudioProductionBusSnapshot(bus.BusId.Value, bus.MasterGain, bus.Muted))
+			.Select(bus =>
+			{
+				_lastAudioProductionResults.TryGetValue(bus.BusId, out var result);
+				return new V1AudioProductionBusSnapshot(
+					bus.BusId.Value,
+					bus.MasterGain,
+					bus.Muted,
+					result.LeftPeak,
+					result.RightPeak,
+					result.PreClipPeak,
+					result.Clipping,
+					result.ClippedSampleValues,
+					result.ActiveSourceCount,
+					result.MissingSourceCount);
+			})
 			.ToArray();
 		var sources = configuration.Sources
 			.Select(source => new V1AudioProductionSourceSnapshot(
