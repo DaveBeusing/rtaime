@@ -121,12 +121,14 @@ function Test-PreActivationCatalogFailure {
 	Write-JsonFile -Value $catalog -Path $catalogPath
 
 	$failedBeforeActivation = $false
+	$observedFailure = ''
 	try {
 		& (Join-Path $install 'tools/Invoke-CoordinatedUpgrade.ps1') -InstallPath $install -StateRoot $state -WorkPath $work -AcknowledgeProcessesStopped -QualificationMode -QualificationBundlePath $Bundle -QualificationStateCatalogPath $catalogPath | Out-Null
 	} catch {
-		$failedBeforeActivation = $_.Exception.Message -match 'Exactly one signed migration is required'
+		$observedFailure = $_.Exception.Message
+		$failedBeforeActivation = $observedFailure -match 'Exactly one signed migration is required'
 	}
-	Assert-Condition $failedBeforeActivation "Qualification $Mode migration-chain case did not fail before software activation."
+	Assert-Condition $failedBeforeActivation "Qualification $Mode migration-chain case did not fail with the expected pre-activation chain validation. Observed: $observedFailure"
 	Assert-Condition (-not (Test-Path -LiteralPath "$install.rollback")) "Qualification $Mode migration-chain failure activated software."
 	Assert-Condition (-not (Test-Path -LiteralPath "$install.upgrade-recovery")) "Qualification $Mode migration-chain failure created recovery state before a validated migration chain existed."
 	$manifestAfter = (Get-FileHash -LiteralPath (Join-Path $install 'bundle-manifest.json') -Algorithm SHA256).Hash.ToLowerInvariant()
