@@ -870,7 +870,6 @@
 													</Grid>
 													<controls:RtaimeButton Content="+ Add Effect" IsCompact="True" IsEnabled="False" HorizontalAlignment="Left" Margin="0,6,0,0" ToolTip="Effect insertion is not exposed by the current V1 processing capability." />
 												</StackPanel>
-												<TextBlock Text="{Binding Inspector.UnsupportedEffectOrderingText, ElementName=Root}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,6,0,0" />
 											</StackPanel>
 										</Border>
 									</StackPanel>
@@ -901,7 +900,6 @@
 											</StackPanel.Style>
 											<ContentControl Content="{Binding Inspector, ElementName=Root}" ContentTemplate="{StaticResource CompositingProcessingEditorTemplate}" />
 										</StackPanel>
-										<TextBlock Text="{Binding Inspector.UnsupportedEffectOrderingText, ElementName=Root}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" Margin="0,6,0,0" />
 									</StackPanel>
 								</Border>
 							</StackPanel>
