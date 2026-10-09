@@ -543,7 +543,12 @@ public sealed record OperatorAudioProductionBusDescriptor(
     bool Clipping,
     ulong ClippedSampleValues,
     int ActiveSourceCount,
-    int MissingSourceCount);
+    int MissingSourceCount,
+    double PreDynamicsPeak = 0,
+    double CompressorGainReductionDb = 0,
+    double LimiterGainReductionDb = 0,
+    ulong LimiterHitCount = 0,
+    AudioBusDynamicsConfiguration? Dynamics = null);
 
 public sealed record OperatorAudioProductionDescriptor(
     AudioProductionConfiguration Configuration,
@@ -558,7 +563,11 @@ public sealed record OperatorAudioProductionDescriptor(
     double? CrossfadeProgress,
     int ActiveSourceCount,
     int MissingSourceCount,
-    IReadOnlyList<OperatorAudioProductionBusDescriptor>? Buses = null)
+    IReadOnlyList<OperatorAudioProductionBusDescriptor>? Buses = null,
+    double PreDynamicsPeak = 0,
+    double CompressorGainReductionDb = 0,
+    double LimiterGainReductionDb = 0,
+    ulong LimiterHitCount = 0)
 {
     public static OperatorAudioProductionDescriptor? Unavailable => null;
 }
