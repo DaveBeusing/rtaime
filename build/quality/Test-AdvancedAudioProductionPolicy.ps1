@@ -66,7 +66,7 @@ Assert-Condition ($equalizer -notmatch 'DateTime|Stopwatch|Task\.Delay') "Equali
 
 Assert-Condition ($runtime -match 'AudioProductionEngine') "RuntimeHost must own advanced audio processing."
 Assert-Condition ($runtime -match '_audioBusMixSamples' -and $runtime -match 'ProcessConfiguredAudioBusesUnsafe') "RuntimeHost must reuse bounded per-bus audio mix buffers through one processing engine."
-Assert-Condition ($runtime -match 'TryRecordCommittedProgram\(execution, output\.Descriptor, programAudioBuffer\)') "Recording must consume the final Program audio descriptor."
+Assert-Condition ($runtime -match 'TryRecordCommittedProgram\(execution, output\.Descriptor, programRecordingAudioBuffer\)') "Recording must consume the final Program audio descriptor."
 Assert-Condition ($runtime -match 'programAudioBuffer,\s*programAudioPayload') "Output paths must consume the same final Program audio payload."
 Assert-Condition ($runtime -notmatch 'ControlHost') "Runtime audio processing must not depend on ControlHost implementation."
 
