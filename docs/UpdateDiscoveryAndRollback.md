@@ -314,6 +314,17 @@ Instead `Test-UpdateFoundation.ps1` uses the existing QUALIFICATION offline bund
 
 This qualifies mechanics without promoting TEST_EPHEMERAL trust to production trust.
 
+`Test-CoordinatedStateUpgradeQualification.ps1` then qualifies the composed software/state path from the same generated bundle. It uses only disposable qualification state and a separately signed qualification-only catalog to prove:
+
+- missing and ambiguous migration chains fail before activation;
+- a real temporary schema `1 -> 2` migration succeeds;
+- service-managed restart reaches runtime readiness `PASS`;
+- direct software-only rollback remains blocked while recovery evidence is active;
+- an injected post-migration failure restores the previous software manifest and v1 state while keeping the service stopped;
+- explicit recovery retirement removes the rollback slot before active recovery evidence and preserves a closure receipt.
+
+The production state catalog itself remains on schema v1 with no manufactured migration.
+
 ## Production command
 
 From an installed bundle carrying the Update Discovery & Rollback tools:
