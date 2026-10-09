@@ -78,13 +78,13 @@
 									<Grid Margin="0,0,0,5">
 										<Grid.ColumnDefinitions><ColumnDefinition Width="18" /><ColumnDefinition Width="*" /><ColumnDefinition Width="42" /></Grid.ColumnDefinitions>
 										<TextBlock Text="L" Style="{StaticResource OperatorLabel}" />
-										<controls:RtaimeMetricBar Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding LeftPeak}" Height="4" Foreground="{DynamicResource OperatorAudioBrush}" />
+										<controls:RtaimeMetricBar Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding LeftPeak, Mode=OneWay}" Height="4" Foreground="{DynamicResource OperatorAudioBrush}" />
 										<TextBlock Grid.Column="2" Text="{Binding LeftPeak, StringFormat={}{0:P0}}" Style="{StaticResource OperatorLabel}" HorizontalAlignment="Right" />
 									</Grid>
 									<Grid Margin="0,0,0,7">
 										<Grid.ColumnDefinitions><ColumnDefinition Width="18" /><ColumnDefinition Width="*" /><ColumnDefinition Width="42" /></Grid.ColumnDefinitions>
 										<TextBlock Text="R" Style="{StaticResource OperatorLabel}" />
-										<controls:RtaimeMetricBar Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding RightPeak}" Height="4" Foreground="{DynamicResource OperatorAudioBrush}" />
+										<controls:RtaimeMetricBar Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding RightPeak, Mode=OneWay}" Height="4" Foreground="{DynamicResource OperatorAudioBrush}" />
 										<TextBlock Grid.Column="2" Text="{Binding RightPeak, StringFormat={}{0:P0}}" Style="{StaticResource OperatorLabel}" HorizontalAlignment="Right" />
 									</Grid>
 
@@ -198,13 +198,13 @@
 									<Grid Margin="0,0,0,4">
 										<Grid.ColumnDefinitions><ColumnDefinition Width="18" /><ColumnDefinition Width="*" /><ColumnDefinition Width="42" /></Grid.ColumnDefinitions>
 										<TextBlock Text="L" Style="{StaticResource OperatorLabel}" />
-										<controls:RtaimeMetricBar Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding LeftPeak}" Height="4" Foreground="{DynamicResource OperatorAudioBrush}" />
+										<controls:RtaimeMetricBar Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding LeftPeak, Mode=OneWay}" Height="4" Foreground="{DynamicResource OperatorAudioBrush}" />
 										<TextBlock Grid.Column="2" Text="{Binding LeftPeak, StringFormat={}{0:P0}}" Style="{StaticResource OperatorLabel}" HorizontalAlignment="Right" />
 									</Grid>
 									<Grid Margin="0,0,0,7">
 										<Grid.ColumnDefinitions><ColumnDefinition Width="18" /><ColumnDefinition Width="*" /><ColumnDefinition Width="42" /></Grid.ColumnDefinitions>
 										<TextBlock Text="R" Style="{StaticResource OperatorLabel}" />
-										<controls:RtaimeMetricBar Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding RightPeak}" Height="4" Foreground="{DynamicResource OperatorAudioBrush}" />
+										<controls:RtaimeMetricBar Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding RightPeak, Mode=OneWay}" Height="4" Foreground="{DynamicResource OperatorAudioBrush}" />
 										<TextBlock Grid.Column="2" Text="{Binding RightPeak, StringFormat={}{0:P0}}" Style="{StaticResource OperatorLabel}" HorizontalAlignment="Right" />
 									</Grid>
 									<Grid Margin="0,0,0,6">
