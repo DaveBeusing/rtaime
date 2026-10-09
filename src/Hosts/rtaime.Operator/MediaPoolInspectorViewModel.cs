@@ -186,7 +186,8 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 			CanEditAuthoritativeCompositingSelection);
 		RemoveProcessingNodeCommand = new AsyncRelayCommand(
 			RemoveSelectedProcessingNodeAsync,
-			() => CanEditAuthoritativeCompositingSelection() && SelectedCompositingLayer?.ProcessingNode is not null);
+			() => CanEditAuthoritativeCompositingSelection() &&
+				SelectedCompositingLayer?.ProcessingStack.Any(node => node.Kind == 1 && node.ColorGrade is not null) == true);
 		GridViewCommand = new AsyncRelayCommand(() =>
 		{
 			IsGridView = true;
@@ -1068,13 +1069,27 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 				Add("compositor.transform.rotation", "Rotation", $"{layer.RotationDegrees:0.###}°", "COMMITTED", true);
 				Add("compositor.transform.anchor", "Anchor", $"{layer.AnchorX:0.###}, {layer.AnchorY:0.###}", "COMMITTED", true);
 				Add("compositor.transform.crop", "Crop L/T/R/B", $"{layer.CropLeft:0.###} / {layer.CropTop:0.###} / {layer.CropRight:0.###} / {layer.CropBottom:0.###}", "COMMITTED", true);
-				if (layer.ProcessingNode is { } processing)
+				for (var processingIndex = 0; processingIndex < layer.ProcessingStack.Count; processingIndex++)
 				{
-					Add("processing.node", "Processing", "Color Grade", "COMMITTED", true);
-					Add("processing.enabled", "Enabled", processing.Enabled ? "ON" : "OFF", "COMMITTED", true);
-					Add("processing.brightness", "Brightness", processing.ColorGrade.Brightness.ToString("0.###"), "COMMITTED", true);
-					Add("processing.contrast", "Contrast", processing.ColorGrade.Contrast.ToString("0.###"), "COMMITTED", true);
-					Add("processing.saturation", "Saturation", processing.ColorGrade.Saturation.ToString("0.###"), "COMMITTED", true);
+					var processing = layer.ProcessingStack[processingIndex];
+					var prefix = $"processing.{processingIndex}";
+					if (processing.Kind == 1 && processing.ColorGrade is { } grade)
+					{
+						Add($"{prefix}.node", "Processing", "Color Grade", "COMMITTED", true);
+						Add($"{prefix}.enabled", "Enabled", processing.Enabled ? "ON" : "OFF", "COMMITTED", true);
+						Add($"{prefix}.brightness", "Brightness", grade.Brightness.ToString("0.###"), "COMMITTED", true);
+						Add($"{prefix}.contrast", "Contrast", grade.Contrast.ToString("0.###"), "COMMITTED", true);
+						Add($"{prefix}.saturation", "Saturation", grade.Saturation.ToString("0.###"), "COMMITTED", true);
+					}
+					else if (processing.Kind == 2 && processing.ChromaKey is { } key)
+					{
+						Add($"{prefix}.node", "Processing", "Chroma Key", "COMMITTED", true);
+						Add($"{prefix}.enabled", "Enabled", processing.Enabled ? "ON" : "OFF", "COMMITTED", true);
+						Add($"{prefix}.key", "Key RGB", $"{key.KeyRed}, {key.KeyGreen}, {key.KeyBlue}", "COMMITTED", true);
+						Add($"{prefix}.tolerance", "Tolerance", key.Tolerance.ToString("0.###"), "COMMITTED", true);
+						Add($"{prefix}.softness", "Softness", key.Softness.ToString("0.###"), "COMMITTED", true);
+						Add($"{prefix}.spill", "Spill Suppression", key.SpillSuppression.ToString("0.###"), "COMMITTED", true);
+					}
 				}
 			}
 			RaiseInspectorProjectionState();
@@ -1528,19 +1543,26 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 		if (layer is null || !CanEditAuthoritativeCompositingSelection())
 			return;
 
+		var stack = layer.ProcessingStack.ToArray();
+		var gradeIndex = Array.FindIndex(stack, candidate => candidate.Kind == 1 && candidate.ColorGrade is not null);
 		var node = new OperatorCompositingProcessingNodeDescriptor(
-			layer.ProcessingNode?.NodeId ?? "color-grade",
+			gradeIndex >= 0 ? stack[gradeIndex].NodeId : "color-grade",
 			1,
 			SelectedColorGradeEnabled,
 			new OperatorColorGradeDescriptor(
 				SelectedColorGradeBrightness,
 				SelectedColorGradeContrast,
 				SelectedColorGradeSaturation));
-		var stack = layer.ProcessingStack.ToArray();
-		if (stack.Length == 0)
-			stack = new[] { node };
+		if (gradeIndex >= 0)
+		{
+			stack[gradeIndex] = node;
+		}
 		else
-			stack[0] = node;
+		{
+			if (stack.Length >= OperatorCompositingLayerDescriptor.MaximumProcessingNodeCount)
+				return;
+			stack = stack.Append(node).ToArray();
+		}
 		await _operator.SetCompositingLayerProcessingStackAsync(layer.LayerId, stack);
 		SynchronizeCompositingDraft();
 		BuildInspector();
@@ -1553,7 +1575,7 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 			return;
 		await _operator.SetCompositingLayerProcessingStackAsync(
 			layer.LayerId,
-			layer.ProcessingStack.Skip(1).ToArray());
+			layer.ProcessingStack.Where(node => node.Kind != 1 || node.ColorGrade is null).ToArray());
 		SynchronizeCompositingDraft();
 		BuildInspector();
 	}
@@ -1574,10 +1596,11 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 		_selectedLayerCropTop = layer.CropTop;
 		_selectedLayerCropRight = layer.CropRight;
 		_selectedLayerCropBottom = layer.CropBottom;
-		_selectedColorGradeEnabled = layer.ProcessingNode?.Enabled ?? false;
-		_selectedColorGradeBrightness = layer.ProcessingNode?.ColorGrade.Brightness ?? 0;
-		_selectedColorGradeContrast = layer.ProcessingNode?.ColorGrade.Contrast ?? 1;
-		_selectedColorGradeSaturation = layer.ProcessingNode?.ColorGrade.Saturation ?? 1;
+		var colorGrade = layer.ProcessingStack.FirstOrDefault(node => node.Kind == 1 && node.ColorGrade is not null);
+		_selectedColorGradeEnabled = colorGrade?.Enabled ?? false;
+		_selectedColorGradeBrightness = colorGrade?.ColorGrade?.Brightness ?? 0;
+		_selectedColorGradeContrast = colorGrade?.ColorGrade?.Contrast ?? 1;
+		_selectedColorGradeSaturation = colorGrade?.ColorGrade?.Saturation ?? 1;
 
 		foreach (var propertyName in new[]
 		{
