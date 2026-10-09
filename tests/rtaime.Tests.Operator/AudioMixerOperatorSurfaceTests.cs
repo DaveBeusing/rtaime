@@ -118,7 +118,19 @@ public sealed class AudioMixerOperatorSurfaceTests
 				evidence[0] with { LeftPeak = 0.42, CompressorGainReductionDb = 4.0 }
 			}),
 			sources,
-			new[] { inputs[0] with { LeftPeak = 0.42 } },
+			new[]
+			{
+				new OperatorAudioInputDescriptor(
+					inputs[0].SourceId,
+					inputs[0].StreamId,
+					inputs[0].Gain,
+					inputs[0].Muted,
+					0.42,
+					inputs[0].RightPeak,
+					0.42,
+					inputs[0].Clipping,
+					inputs[0].Health)
+			},
 			Array.Empty<OperatorOutputRoleDescriptor>(),
 			refreshDrafts: false);
 
