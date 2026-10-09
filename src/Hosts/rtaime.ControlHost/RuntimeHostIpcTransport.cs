@@ -78,7 +78,7 @@ public sealed record RuntimeCompositingLayerSnapshot
 
 	public string LayerId { get; }
 	public int Kind { get; }
-	public int Order { get; }
+	public int Order { get; init; }
 	public bool Visible { get; }
 	public byte Opacity { get; }
 	public double PositionX { get; }
