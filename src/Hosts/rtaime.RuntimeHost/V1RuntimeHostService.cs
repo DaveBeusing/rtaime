@@ -640,7 +640,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		{
 			var providers = new List<ProviderDescriptor> { _virtualMedia.Descriptor, _gpu.Descriptor };
 			if (_networkOutputBridge.Enabled)
-				providers.Add(_networkOutputBridge.ProviderDescriptor);
+				providers.AddRange(_networkOutputBridge.ProviderDescriptors);
 			return Array.AsReadOnly(providers.ToArray());
 		}
 	}
