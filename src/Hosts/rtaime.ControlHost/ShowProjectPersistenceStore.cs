@@ -1006,10 +1006,21 @@ public sealed class ShowProjectPersistenceStore
 		node.NodeId,
 		(int)node.Kind,
 		node.Enabled,
-		new ColorGradeDocument(
-			node.ColorGrade.Brightness,
-			node.ColorGrade.Contrast,
-			node.ColorGrade.Saturation));
+		node.ColorGrade is null
+			? null
+			: new ColorGradeDocument(
+				node.ColorGrade.Brightness,
+				node.ColorGrade.Contrast,
+				node.ColorGrade.Saturation),
+		node.ChromaKey is null
+			? null
+			: new ChromaKeyDocument(
+				node.ChromaKey.KeyRed,
+				node.ChromaKey.KeyGreen,
+				node.ChromaKey.KeyBlue,
+				node.ChromaKey.Tolerance,
+				node.ChromaKey.Softness,
+				node.ChromaKey.SpillSuppression));
 
 	private static ProductionCompositingProcessingNodeState FromDocument(ProcessingNodeDocument node)
 	{
@@ -1019,10 +1030,21 @@ public sealed class ShowProjectPersistenceStore
 			node.NodeId,
 			(ProductionCompositingProcessingNodeKind)node.Kind,
 			node.Enabled,
-			new ProductionColorGradeSettings(
-				node.ColorGrade.Brightness,
-				node.ColorGrade.Contrast,
-				node.ColorGrade.Saturation));
+			colorGrade: node.ColorGrade is null
+				? null
+				: new ProductionColorGradeSettings(
+					node.ColorGrade.Brightness,
+					node.ColorGrade.Contrast,
+					node.ColorGrade.Saturation),
+			chromaKey: node.ChromaKey is null
+				? null
+				: new ProductionChromaKeySettings(
+					node.ChromaKey.KeyRed,
+					node.ChromaKey.KeyGreen,
+					node.ChromaKey.KeyBlue,
+					node.ChromaKey.Tolerance,
+					node.ChromaKey.Softness,
+					node.ChromaKey.SpillSuppression));
 	}
 
 	private static ProcessingNodeDocument[] CanonicalProcessingStack(
@@ -1218,10 +1240,19 @@ public sealed class ShowProjectPersistenceStore
 		string NodeId,
 		int Kind,
 		bool Enabled,
-		ColorGradeDocument ColorGrade);
+		ColorGradeDocument? ColorGrade = null,
+		ChromaKeyDocument? ChromaKey = null);
 
 	private sealed record ColorGradeDocument(
 		double Brightness,
 		double Contrast,
 		double Saturation);
+
+	private sealed record ChromaKeyDocument(
+		byte KeyRed,
+		byte KeyGreen,
+		byte KeyBlue,
+		double Tolerance,
+		double Softness,
+		double SpillSuppression);
 }
