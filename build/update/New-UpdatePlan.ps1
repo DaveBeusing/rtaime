@@ -122,6 +122,6 @@ Write-Host "Update plan PASS"
 Write-Host "Current: $($current.productVersion) / $($current.channel)"
 Write-Host "Target: $($candidate.product.version) / $($candidate.channel)"
 Write-Host "Target key enrolled by current installation: true"
-Write-Host "Persistent state migration: NOT_IMPLEMENTED"
+Write-Host "Persistent state migration: $($policy.replacement.persistentStateMigration)"
 
 return $plan
