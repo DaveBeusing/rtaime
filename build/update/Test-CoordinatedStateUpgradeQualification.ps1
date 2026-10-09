@@ -204,6 +204,11 @@ $failureInstalled = $false
 
 try {
 	New-Item -ItemType Directory -Path $root -Force | Out-Null
+	$verifiedTargetRoot = Join-Path $root 'verified-target-bundle'
+	Expand-Archive -LiteralPath $bundle -DestinationPath $verifiedTargetRoot -Force
+	& (Join-Path $repositoryRoot 'build/release/Test-OfflineReleaseBundle.ps1') -BundlePath $verifiedTargetRoot | Out-Null
+	$signedQualificationCatalog = Join-Path $verifiedTargetRoot 'tools/state-upgrade-qualification-catalog.json'
+	Assert-Condition (Test-Path -LiteralPath $signedQualificationCatalog -PathType Leaf) 'Verified target bundle does not contain the signed qualification-only state catalog.'
 
 	Test-PreActivationCatalogFailure -Python $python -Bundle $bundle -CaseRoot (Join-Path $root 'missing-chain') -Mode MISSING
 	Test-PreActivationCatalogFailure -Python $python -Bundle $bundle -CaseRoot (Join-Path $root 'ambiguous-chain') -Mode AMBIGUOUS
@@ -219,8 +224,7 @@ try {
 	$successBefore = Get-QualificationDatabaseState -Python $python -Path $successDatabase
 	Assert-Condition ([int]$successBefore.version -eq 1 -and [string]$successBefore.integrity -eq 'ok') 'Disposable success database did not start as valid schema v1.'
 
-	$qualificationCatalog = Join-Path $successInstall 'tools/state-upgrade-qualification-catalog.json'
-	Assert-Condition (Test-Path -LiteralPath $qualificationCatalog -PathType Leaf) 'Signed qualification-only state catalog is missing from the installed target bundle.'
+	$qualificationCatalog = $signedQualificationCatalog
 	$qualificationCatalogDocument = Get-Content -LiteralPath $qualificationCatalog -Raw | ConvertFrom-Json
 	Assert-Condition ($qualificationCatalogDocument.qualificationOnly -eq $true) 'Qualification state catalog is not explicitly qualification-only.'
 	Assert-Condition ([int](@($qualificationCatalogDocument.databaseKinds)[0].targetSchemaVersion) -eq 2) 'Qualification state catalog must exercise target schema v2.'
@@ -257,7 +261,7 @@ try {
 	New-QualificationDatabase -Python $python -Path $failureDatabase
 	$failureBefore = Get-QualificationDatabaseState -Python $python -Path $failureDatabase
 	$failureManifestBefore = (Get-FileHash -LiteralPath (Join-Path $failureInstall 'bundle-manifest.json') -Algorithm SHA256).Hash.ToLowerInvariant()
-	$failureCatalog = Join-Path $failureInstall 'tools/state-upgrade-qualification-catalog.json'
+	$failureCatalog = $signedQualificationCatalog
 
 	Install-QualificationService -InstallPath $failureInstall -StateRoot $failureState -WorkRoot $failureWork -ServiceName $failureServiceName -InstanceId $failureInstance
 	$failureInstalled = $true
