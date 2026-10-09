@@ -246,6 +246,68 @@ public sealed class ShowProjectPersistenceIntegrationTests
 	}
 
 	[Fact]
+	public async Task Audio_bus_dynamics_round_trip_through_durable_show_project()
+	{
+		var root = Path.Combine(Path.GetTempPath(), "rtaime-show-project-audio-dynamics-" + Guid.NewGuid().ToString("N"));
+		Directory.CreateDirectory(root);
+		var databasePath = Path.Combine(root, "management.db");
+		var specification = CreateSpecification();
+
+		try
+		{
+			await using (var management = new SqliteManagementStore(databasePath))
+			{
+				await management.InitializeAsync();
+				var store = new ShowProjectPersistenceStore(management);
+				var initial = await store.LoadOrCreateAsync(specification);
+				Assert.NotNull(initial.AudioProduction);
+				Assert.Null(initial.AudioProduction!.GetBus(AudioBusId.Program).Dynamics);
+
+				var dynamics = new AudioBusDynamicsConfiguration(
+					new AudioBusCompressorConfiguration(true, -18, 4, 8, 140, 2),
+					new AudioBusSamplePeakLimiterConfiguration(true, -1, 120));
+				var configuration = new AudioProductionConfiguration(
+					checked(initial.AudioProduction.Revision + 1),
+					[new AudioProductionBusConfiguration(AudioBusId.Program, 0.75, false, dynamics)],
+					specification.Sources.Select(source => new AudioProductionSourceConfiguration(
+						new MediaSourceId(source.SourceId.Value),
+						1,
+						false,
+						true,
+						[AudioBusId.Program])).ToArray());
+
+				var persisted = await store.UpdateAudioProductionAsync(specification, configuration);
+				var confirmed = Assert.IsType<AudioBusDynamicsConfiguration>(
+					persisted.AudioProduction!.GetBus(AudioBusId.Program).Dynamics);
+				Assert.Equal(-18, confirmed.Compressor.ThresholdDbFs);
+				Assert.Equal(-1, confirmed.Limiter.CeilingDbFs);
+			}
+
+			await using (var reopenedManagement = new SqliteManagementStore(databasePath))
+			{
+				await reopenedManagement.InitializeAsync();
+				var reopenedStore = new ShowProjectPersistenceStore(reopenedManagement);
+				var reopened = await reopenedStore.LoadAsync(specification);
+				var restored = Assert.IsType<AudioBusDynamicsConfiguration>(
+					reopened.AudioProduction!.GetBus(AudioBusId.Program).Dynamics);
+				Assert.True(restored.Compressor.Enabled);
+				Assert.Equal(-18, restored.Compressor.ThresholdDbFs);
+				Assert.Equal(4, restored.Compressor.Ratio);
+				Assert.Equal(8, restored.Compressor.AttackMilliseconds);
+				Assert.Equal(140, restored.Compressor.ReleaseMilliseconds);
+				Assert.Equal(2, restored.Compressor.MakeupGainDb);
+				Assert.True(restored.Limiter.Enabled);
+				Assert.Equal(-1, restored.Limiter.CeilingDbFs);
+				Assert.Equal(120, restored.Limiter.ReleaseMilliseconds);
+			}
+		}
+		finally
+		{
+			try { Directory.Delete(root, recursive: true); } catch { }
+		}
+	}
+
+	[Fact]
 	public async Task Unsupported_show_project_format_fails_closed()
 	{
 		var root = Path.Combine(Path.GetTempPath(), "rtaime-show-project-format-" + Guid.NewGuid().ToString("N"));
