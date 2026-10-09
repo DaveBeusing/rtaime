@@ -204,11 +204,7 @@ public sealed class AudioProductionEngine
 		int frame)
 	{
 		if (ducking is null)
-		{
-			_duckingGain = 1;
-			_duckingHoldRemaining = 0;
 			return 1;
-		}
 
 		var active = false;
 		if (sidechainAvailable)
