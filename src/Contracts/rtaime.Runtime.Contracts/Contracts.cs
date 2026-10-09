@@ -184,7 +184,8 @@ public enum PreparedCompositingLayerKind
 
 public enum PreparedCompositingProcessingNodeKind
 {
-    ColorGrade = 1
+    ColorGrade = 1,
+    ChromaKey = 2
 }
 
 public sealed record PreparedColorGradeSettings
@@ -208,31 +209,67 @@ public sealed record PreparedColorGradeSettings
     public double Saturation { get; }
 }
 
+public sealed record PreparedChromaKeySettings
+{
+    public PreparedChromaKeySettings(byte keyRed, byte keyGreen, byte keyBlue, double tolerance, double softness, double spillSuppression)
+    {
+        if (!double.IsFinite(tolerance) || tolerance is < 0.0 or > 1.0)
+            throw new ArgumentOutOfRangeException(nameof(tolerance));
+        if (!double.IsFinite(softness) || softness is < 0.0 or > 1.0)
+            throw new ArgumentOutOfRangeException(nameof(softness));
+        if (!double.IsFinite(spillSuppression) || spillSuppression is < 0.0 or > 1.0)
+            throw new ArgumentOutOfRangeException(nameof(spillSuppression));
+
+        KeyRed = keyRed;
+        KeyGreen = keyGreen;
+        KeyBlue = keyBlue;
+        Tolerance = tolerance;
+        Softness = softness;
+        SpillSuppression = spillSuppression;
+    }
+
+    public byte KeyRed { get; }
+    public byte KeyGreen { get; }
+    public byte KeyBlue { get; }
+    public double Tolerance { get; }
+    public double Softness { get; }
+    public double SpillSuppression { get; }
+}
+
 public sealed record PreparedCompositingProcessingNodeState
 {
     public PreparedCompositingProcessingNodeState(
         string nodeId,
         PreparedCompositingProcessingNodeKind kind,
         bool enabled,
-        PreparedColorGradeSettings colorGrade)
+        PreparedColorGradeSettings? colorGrade = null,
+        PreparedChromaKeySettings? chromaKey = null)
     {
         if (string.IsNullOrWhiteSpace(nodeId) || nodeId.Length > 64)
             throw new ArgumentException("Prepared processing node identity is required and must not exceed 64 characters.", nameof(nodeId));
         if (!Enum.IsDefined(kind))
             throw new ArgumentOutOfRangeException(nameof(kind));
-        if (kind != PreparedCompositingProcessingNodeKind.ColorGrade)
-            throw new NotSupportedException($"Prepared processing node kind '{kind}' is not supported.");
+
+        switch (kind)
+        {
+            case PreparedCompositingProcessingNodeKind.ColorGrade when colorGrade is null || chromaKey is not null:
+                throw new ArgumentException("Prepared Color Grade nodes require only Color Grade settings.");
+            case PreparedCompositingProcessingNodeKind.ChromaKey when chromaKey is null || colorGrade is not null:
+                throw new ArgumentException("Prepared Chroma Key nodes require only Chroma Key settings.");
+        }
 
         NodeId = nodeId.Trim();
         Kind = kind;
         Enabled = enabled;
-        ColorGrade = colorGrade ?? throw new ArgumentNullException(nameof(colorGrade));
+        ColorGrade = colorGrade;
+        ChromaKey = chromaKey;
     }
 
     public string NodeId { get; }
     public PreparedCompositingProcessingNodeKind Kind { get; }
     public bool Enabled { get; }
-    public PreparedColorGradeSettings ColorGrade { get; }
+    public PreparedColorGradeSettings? ColorGrade { get; }
+    public PreparedChromaKeySettings? ChromaKey { get; }
 }
 
 public static class PreparedCompositingProcessingStackLimits
