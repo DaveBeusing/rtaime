@@ -16,15 +16,36 @@ public sealed class BoundedParametricEqualizerProcessingTests
 	{
 		var lowBaseline = MeasureToneRms(Equalizer(), 100);
 		var lowBoost = MeasureToneRms(Equalizer(lowGainDb: 6), 100);
+		var lowCut = MeasureToneRms(Equalizer(lowGainDb: -6), 100);
 		Assert.True(lowBoost > lowBaseline * 1.5, $"Low-shelf boost was too small: baseline={lowBaseline}, boosted={lowBoost}.");
+		Assert.True(lowCut < lowBaseline * 0.75, $"Low-shelf cut was too small: baseline={lowBaseline}, cut={lowCut}.");
 
 		var midBaseline = MeasureToneRms(Equalizer(), 1_000);
+		var midBoost = MeasureToneRms(Equalizer(midGainDb: 6), 1_000);
 		var midCut = MeasureToneRms(Equalizer(midGainDb: -6), 1_000);
+		Assert.True(midBoost > midBaseline * 1.5, $"Bell boost was too small: baseline={midBaseline}, boosted={midBoost}.");
 		Assert.True(midCut < midBaseline * 0.75, $"Bell cut was too small: baseline={midBaseline}, cut={midCut}.");
 
 		var highBaseline = MeasureToneRms(Equalizer(), 10_000);
 		var highBoost = MeasureToneRms(Equalizer(highGainDb: 6), 10_000);
+		var highCut = MeasureToneRms(Equalizer(highGainDb: -6), 10_000);
 		Assert.True(highBoost > highBaseline * 1.5, $"High-shelf boost was too small: baseline={highBaseline}, boosted={highBoost}.");
+		Assert.True(highCut < highBaseline * 0.75, $"High-shelf cut was too small: baseline={highBaseline}, cut={highCut}.");
+	}
+
+	[Fact]
+	public void Constant_signal_reaches_finite_low_shelf_gain_direction()
+	{
+		const int frames = 4_096;
+		var unity = MeasureConstantTail(Equalizer(), frames);
+		var boosted = MeasureConstantTail(Equalizer(lowGainDb: 6), frames);
+		var cut = MeasureConstantTail(Equalizer(lowGainDb: -6), frames);
+
+		Assert.True(double.IsFinite(unity));
+		Assert.True(double.IsFinite(boosted));
+		Assert.True(double.IsFinite(cut));
+		Assert.True(boosted > unity * 1.5, $"Low-shelf DC boost was too small: unity={unity}, boosted={boosted}.");
+		Assert.True(cut < unity * 0.75, $"Low-shelf DC cut was too small: unity={unity}, cut={cut}.");
 	}
 
 	[Fact]
@@ -221,6 +242,22 @@ public sealed class BoundedParametricEqualizerProcessingTests
 			new AudioLowShelfEqualizerBand(true, 200, lowGainDb),
 			new AudioBellEqualizerBand(true, 1_000, midGainDb, 1),
 			new AudioHighShelfEqualizerBand(true, 6_000, highGainDb));
+
+	private static double MeasureConstantTail(AudioSourceEqualizerConfiguration equalizer, int frames)
+	{
+		var engine = CreateSingleSourceEngine(equalizer, 0.25);
+		var input = new float[frames * 2];
+		Array.Fill(input, 0.2f);
+		var output = new float[input.Length];
+		engine.ProcessBus(
+			AudioBusId.Program,
+			0,
+			(uint)frames,
+			SourceA,
+			new[] { new AudioProductionSourceBuffer(SourceA, input) },
+			output);
+		return Math.Abs(output[^2]);
+	}
 
 	private static double MeasureToneRms(AudioSourceEqualizerConfiguration equalizer, double frequencyHz)
 	{
