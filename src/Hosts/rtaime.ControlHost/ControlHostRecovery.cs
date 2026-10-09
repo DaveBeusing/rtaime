@@ -5,6 +5,7 @@ using System.Text.Json.Serialization;
 using rtaime.Control;
 using rtaime.Control.Contracts;
 using rtaime.Core;
+using rtaime.Media.Contracts;
 using rtaime.Persistence;
 
 namespace rtaime.ControlHost;
