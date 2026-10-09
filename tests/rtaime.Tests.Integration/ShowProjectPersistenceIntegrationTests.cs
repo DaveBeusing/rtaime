@@ -1,5 +1,6 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
+using System.Text.Json.Nodes;
 using rtaime.Control.Contracts;
 using rtaime.ControlHost;
 using rtaime.Core;
@@ -268,6 +269,80 @@ public sealed class ShowProjectPersistenceIntegrationTests
 			catch (IOException)
 			{
 			}
+		}
+	}
+
+	[Fact]
+	public async Task Legacy_single_processing_node_migrates_to_canonical_stack_and_rewrites_canonically()
+	{
+		var root = Path.Combine(Path.GetTempPath(), "rtaime-show-project-legacy-processing-" + Guid.NewGuid().ToString("N"));
+		Directory.CreateDirectory(root);
+		var databasePath = Path.Combine(root, "management.db");
+		var specification = CreateSpecification();
+
+		try
+		{
+			await using var management = new SqliteManagementStore(databasePath);
+			await management.InitializeAsync();
+			var store = new ShowProjectPersistenceStore(management);
+			var project = await store.LoadOrCreateAsync(specification);
+			var compositing = new ProductionCompositingState(
+				ProductionCompositingState.CurrentVersion,
+				[
+					new ProductionCompositingLayerState(
+						ProductionCompositingLayerIds.BitmapGraphics,
+						ProductionCompositingLayerKind.BitmapGraphics,
+						0,
+						true,
+						255,
+						0,
+						0,
+						1,
+						"legacy-processing.rgba",
+						processingStack:
+						[
+							new ProductionCompositingProcessingNodeState(
+								"legacy-grade",
+								ProductionCompositingProcessingNodeKind.ColorGrade,
+								true,
+								new ProductionColorGradeSettings(0.1, 1.1, 0.9))
+						])
+				]);
+			project = await store.UpdateGraphicsAsync(
+				specification,
+				new DurableGraphicsState(null, null, compositing));
+
+			var document = await management.GetDocumentAsync("show.project", specification.ProductionId.ToString());
+			Assert.NotNull(document);
+			var json = JsonNode.Parse(document!.Json)!.AsObject();
+			var layers = json["graphics"]!["compositingState"]!["layers"]!.AsArray();
+			var layer = layers.Single()!.AsObject();
+			var stack = layer["processingStack"]!.AsArray();
+			layer["processingNode"] = stack[0]!.DeepClone();
+			layer.Remove("processingStack");
+			var legacyWrite = await management.PutDocumentAsync(
+				"show.project",
+				specification.ProductionId.ToString(),
+				json.ToJsonString(),
+				document.Version);
+			Assert.True(legacyWrite.Written, legacyWrite.Failure?.Message);
+
+			var migrated = await store.LoadAsync(specification);
+			var migratedLayer = Assert.Single(migrated.Graphics.CompositingState!.Layers);
+			Assert.Single(migratedLayer.ProcessingStack);
+			Assert.Equal("legacy-grade", migratedLayer.ProcessingStack[0].NodeId);
+
+			await store.UpdateGraphicsAsync(specification, migrated.Graphics);
+			var rewritten = await management.GetDocumentAsync("show.project", specification.ProductionId.ToString());
+			Assert.NotNull(rewritten);
+			var rewrittenJson = JsonNode.Parse(rewritten!.Json)!.AsObject();
+			var rewrittenLayer = rewrittenJson["graphics"]!["compositingState"]!["layers"]!.AsArray().Single()!.AsObject();
+			Assert.NotNull(rewrittenLayer["processingStack"]);
+			Assert.Null(rewrittenLayer["processingNode"]);
+		}
+		finally
+		{
+			try { Directory.Delete(root, recursive: true); } catch { }
 		}
 	}
 

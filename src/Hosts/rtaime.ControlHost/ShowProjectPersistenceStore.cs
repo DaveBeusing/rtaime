@@ -2,6 +2,7 @@
 
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using rtaime.Control.Contracts;
 using rtaime.Core;
 using rtaime.Media.Contracts;
@@ -1210,6 +1211,7 @@ public sealed class ShowProjectPersistenceStore
 		double CropRight = 0,
 		double CropBottom = 0,
 		ProcessingNodeDocument[]? ProcessingStack = null,
+		[property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
 		ProcessingNodeDocument? ProcessingNode = null);
 
 	private sealed record ProcessingNodeDocument(

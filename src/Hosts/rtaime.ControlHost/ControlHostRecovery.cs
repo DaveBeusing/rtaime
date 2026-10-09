@@ -1,6 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using rtaime.Control;
 using rtaime.Control.Contracts;
 using rtaime.Core;
@@ -273,6 +274,7 @@ internal static class ControlHostRecovery
 		double CropRight = 0,
 		double CropBottom = 0,
 		PersistedProcessingNode[]? ProcessingStack = null,
+		[property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
 		PersistedProcessingNode? ProcessingNode = null);
 
 	private sealed record PersistedProcessingNode(
