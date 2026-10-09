@@ -111,6 +111,14 @@ public sealed class NetworkOutputFoundationTests
 	}
 
 	[Fact]
+	public void Ndi_planar_float_audio_FourCC_matches_the_NDI_runtime_ABI()
+	{
+		Assert.Equal(
+			'F' | ('L' << 8) | ('T' << 16) | ('p' << 24),
+			NdiFourCc.Fltp);
+	}
+
+	[Fact]
 	public void Ndi_provider_declares_only_the_qualified_1080p_formats()
 	{
 		Assert.Equal(
