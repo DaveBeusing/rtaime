@@ -117,13 +117,13 @@ COMPOSITING emphasizes composition using the existing Runtime-owned graphics pat
 - bounded selected-layer reorder, visibility and opacity controls;
 - one authoritative Transform node per supported bitmap graphics or Production CG layer;
 - Rotation, Anchor/Pivot and Crop in addition to Position and Scale;
-- one optional bounded typed Color Grade processing node per supported layer;
+- an ordered bounded processing stack of 0..4 typed Color Grade nodes per supported layer;
 - selection-driven Inspector that edits the selected Layer, Transform or Processing node through the same authority path;
 - current AI composition control where independently supported.
 
 Source/routing topology remains read-only. Local selection, pan, zoom, editable Inspector drafts and layout are presentation state only. Layer reorder/visibility/opacity, transform and Color Grade mutations travel through rtaime.Client → ControlHost → RuntimeHost and remain pending until confirmed state returns. The Operator disables these mutations when state is stale/unready and never treats the draft values as production truth.
 
-The graph projects the actual chain as Layer → Transform → Composite or Layer → Transform → Color Grade → Composite. Keying, arbitrary processing stacks and arbitrary shaders are not exposed as production features. The Operator never renders authoritative Production pixels and no second graphics renderer, compositor or production-state store is introduced by the shell.
+The graph projects the actual chain as Layer → Transform → [0..4 ordered Color Grade nodes] → Composite. The current Inspector intentionally exposes first-slot Color Grade editing only and preserves the rest of the confirmed stack. Keying, unbounded/plugin-defined processing graphs and arbitrary shaders are not exposed as production features. The Operator never renders authoritative Production pixels and no second graphics renderer, compositor or production-state store is introduced by the shell.
 
 ## OUTPUTS
 
