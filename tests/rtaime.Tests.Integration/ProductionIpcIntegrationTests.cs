@@ -640,8 +640,8 @@ public sealed class ProductionIpcIntegrationTests
 		Assert.Equal(-16, recoveredDynamics.Compressor.ThresholdDbFs);
 		Assert.Equal(3, recoveredDynamics.Compressor.Ratio);
 		Assert.Equal(-2, recoveredDynamics.Limiter.CeilingDbFs);
-		Assert.Equal(0, restoredAudio.CompressorGainReductionDb);
-		Assert.Equal(0, restoredAudio.LimiterGainReductionDb);
+		Assert.Equal(0d, restoredAudio.CompressorGainReductionDb);
+		Assert.Equal(0d, restoredAudio.LimiterGainReductionDb);
 		Assert.Equal(0UL, restoredAudio.LimiterHitCount);
 		Assert.All(restoredAudio.Sources, source => Assert.False(source.FollowRoutedSource));
 		var restoredEqualizer = Assert.IsType<AudioSourceEqualizerConfiguration>(
