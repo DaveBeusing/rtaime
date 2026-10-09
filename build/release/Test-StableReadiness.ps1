@@ -5,6 +5,7 @@ param(
 	[string]$ReleaseEvidencePath = "",
 	[string]$ReleaseCandidatePath = "",
 	[string]$ExpectedSourceCommit = "",
+	[string]$CoordinatedUpgradeQualificationPath = "",
 	[string]$OutputPath = ""
 )
 
@@ -399,6 +400,50 @@ $updateRollbackStatus = if (
 	[string]$updatePolicy.replacement.persistentStateMigration -eq "COORDINATED_ONLY"
 ) { "PASS" } else { "FAIL" }
 Add-Domain $domains "updateRollback" $updateRollbackStatus "build/update/update-policy.json" "Managed updates require production trust, retain rollback state and use coordinated persistent-state migration."
+
+$coordinatedUpgradeQualificationStatus = "UNVERIFIED"
+$coordinatedUpgradeQualificationDetail = "No exact-source packaged coordinated state-upgrade qualification evidence was supplied."
+if (-not [string]::IsNullOrWhiteSpace($CoordinatedUpgradeQualificationPath)) {
+	$qualificationFullPath = Resolve-RepositoryPath $CoordinatedUpgradeQualificationPath
+	if (-not (Test-Path -LiteralPath $qualificationFullPath -PathType Leaf)) {
+		$coordinatedUpgradeQualificationStatus = "FAIL"
+		$coordinatedUpgradeQualificationDetail = "Supplied coordinated state-upgrade qualification evidence is missing."
+	} else {
+		try {
+			$qualification = Get-Content -LiteralPath $qualificationFullPath -Raw | ConvertFrom-Json
+			$qualificationSourceCommit = ([string]$qualification.sourceCommit).Trim().ToLowerInvariant()
+			$success = $qualification.successPath
+			$failure = $qualification.failureRecoveryPath
+			$valid =
+				[string]$qualification.schemaVersion -eq "1.0" -and
+				$qualificationSourceCommit -eq $expectedSourceCommit -and
+				[string]$qualification.overallStatus -eq "PASS" -and
+				$qualification.productionSchemaCatalogUnchanged -eq $true -and
+				[string]$success.status -eq "PASS" -and
+				[int]$success.fromSchemaVersion -eq 1 -and
+				[int]$success.toSchemaVersion -eq 2 -and
+				[string]$success.runtimeReadiness -eq "PASS" -and
+				$success.directSoftwareRollbackBlockedWhileRecoveryActive -eq $true -and
+				[string]$success.recoveryEvidenceRetirement -eq "PASS" -and
+				[string]$failure.status -eq "PASS" -and
+				[string]$failure.originalUpgradeStatus -eq "FAIL" -and
+				[string]$failure.softwareRecovery -eq "PASS" -and
+				[string]$failure.stateRecovery -eq "PASS" -and
+				$failure.serviceRestarted -eq $false -and
+				$failure.directSoftwareRollbackBlockedWhileRecoveryActive -eq $true
+			$coordinatedUpgradeQualificationStatus = if ($valid) { "PASS" } else { "FAIL" }
+			$coordinatedUpgradeQualificationDetail = if ($valid) {
+				"Exact-source packaged evidence proves disposable v1 -> v2 migration, post-maintenance runtime readiness, fail-closed recovery and recovery-evidence retirement."
+			} else {
+				"Coordinated state-upgrade qualification evidence is inconsistent, incomplete or bound to another source commit."
+			}
+		} catch {
+			$coordinatedUpgradeQualificationStatus = "FAIL"
+			$coordinatedUpgradeQualificationDetail = "Coordinated state-upgrade qualification evidence could not be parsed or validated."
+		}
+	}
+}
+Add-Domain $domains "coordinatedStateUpgradeQualification" $coordinatedUpgradeQualificationStatus "coordinated-state-upgrade-qualification.json" $coordinatedUpgradeQualificationDetail
 
 $releaseEvidence = $null
 $releaseEvidenceFile = $null
