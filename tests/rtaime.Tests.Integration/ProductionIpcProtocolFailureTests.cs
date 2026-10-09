@@ -103,6 +103,57 @@ public sealed class ProductionIpcProtocolFailureTests
 	}
 
 	[Fact]
+	public async Task Malformed_processing_stack_payloads_fail_closed()
+	{
+		var endpoint = Endpoint();
+		using var stop = new CancellationTokenSource();
+		var runtime = new RuntimeHostProcess(RuntimeHostProcessOptions.Default with { ListenEndpoint = endpoint });
+		var run = runtime.RunAsync(stop.Token);
+		await using var pipe = await ConnectRuntimeAsync(endpoint);
+
+		static object Node(string id, int kind = 1) => new
+		{
+			nodeId = id,
+			kind,
+			enabled = true,
+			colorGrade = new { brightness = 0.0, contrast = 1.0, saturation = 1.0 }
+		};
+
+		await WriteEnvelopeAsync(
+			pipe,
+			"runtime.compositing.layer.processing",
+			Identity.New().ToString(),
+			Identity.New().ToString(),
+			new
+			{
+				layerId = "bitmap-graphics",
+				processingStack = Enumerable.Range(0, PreparedCompositingProcessingStackLimits.MaximumNodeCount + 1)
+					.Select(index => Node($"grade-{index}"))
+					.ToArray()
+			});
+		using var oversized = await ReadEnvelopeAsync(pipe);
+		Assert.Equal("error", oversized.RootElement.GetProperty("messageType").GetString());
+		Assert.Equal("runtime.request.rejected", oversized.RootElement.GetProperty("payload").GetProperty("code").GetString());
+
+		await WriteEnvelopeAsync(
+			pipe,
+			"runtime.compositing.layer.processing",
+			Identity.New().ToString(),
+			Identity.New().ToString(),
+			new
+			{
+				layerId = "bitmap-graphics",
+				processingStack = new[] { Node("unknown-kind", 999) }
+			});
+		using var unknown = await ReadEnvelopeAsync(pipe);
+		Assert.Equal("error", unknown.RootElement.GetProperty("messageType").GetString());
+		Assert.Equal("runtime.request.rejected", unknown.RootElement.GetProperty("payload").GetProperty("code").GetString());
+
+		stop.Cancel();
+		Assert.Equal(RuntimeHostExitCode.Success, await run);
+	}
+
+	[Fact]
 	public async Task Oversize_frame_is_rejected_before_payload_allocation()
 	{
 		var endpoint = Endpoint();

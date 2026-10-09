@@ -844,16 +844,15 @@ public static class CapabilityPlanningEngine
                     layer.CropTop,
                     layer.CropRight,
                     layer.CropBottom,
-                    layer.ProcessingNode is null
-                        ? null
-                        : new PreparedCompositingProcessingNodeState(
-                            layer.ProcessingNode.NodeId,
-                            (PreparedCompositingProcessingNodeKind)(int)layer.ProcessingNode.Kind,
-                            layer.ProcessingNode.Enabled,
+                    processingStack: layer.ProcessingStack.Select(node =>
+                        new PreparedCompositingProcessingNodeState(
+                            node.NodeId,
+                            (PreparedCompositingProcessingNodeKind)(int)node.Kind,
+                            node.Enabled,
                             new PreparedColorGradeSettings(
-                                layer.ProcessingNode.ColorGrade.Brightness,
-                                layer.ProcessingNode.ColorGrade.Contrast,
-                                layer.ProcessingNode.ColorGrade.Saturation)))).ToArray());
+                                node.ColorGrade.Brightness,
+                                node.ColorGrade.Contrast,
+                                node.ColorGrade.Saturation))).ToArray())).ToArray());
         var canonicalCompositing = preparedCompositing is null
             ? "-"
             : string.Join(
@@ -875,16 +874,18 @@ public static class CapabilityPlanningEngine
                     layer.CropTop.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
                     layer.CropRight.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
                     layer.CropBottom.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
-                    layer.ProcessingNode is null
+                    layer.ProcessingStack.Count == 0
                         ? "-"
                         : string.Join(
-                            ",",
-                            layer.ProcessingNode.NodeId,
-                            (int)layer.ProcessingNode.Kind,
-                            layer.ProcessingNode.Enabled ? "1" : "0",
-                            layer.ProcessingNode.ColorGrade.Brightness.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
-                            layer.ProcessingNode.ColorGrade.Contrast.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
-                            layer.ProcessingNode.ColorGrade.Saturation.ToString("R", System.Globalization.CultureInfo.InvariantCulture)),
+                            ">",
+                            layer.ProcessingStack.Select(node => string.Join(
+                                ",",
+                                node.NodeId,
+                                (int)node.Kind,
+                                node.Enabled ? "1" : "0",
+                                node.ColorGrade.Brightness.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
+                                node.ColorGrade.Contrast.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
+                                node.ColorGrade.Saturation.ToString("R", System.Globalization.CultureInfo.InvariantCulture)))),
                     layer.ContentIdentity)));
 
         var preparedExecutionId = new PreparedExecutionId(PlanningIdentity.Create(

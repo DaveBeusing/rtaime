@@ -290,19 +290,34 @@ public sealed class GrpcOperatorControlTransport : IOperatorControlTransport, IA
 		return NamedPipeOperatorControlTransport.DecodeExternalCompositingLayers((await ExecuteAsync(request, false, cancellationToken).ConfigureAwait(false)).PayloadJson.Span);
 	}
 
-	public async ValueTask<IReadOnlyList<OperatorCompositingLayerDescriptor>> SetCompositingLayerProcessingNodeAsync(string layerId, OperatorCompositingProcessingNodeDescriptor? processingNode, CancellationToken cancellationToken = default)
+	public ValueTask<IReadOnlyList<OperatorCompositingLayerDescriptor>> SetCompositingLayerProcessingNodeAsync(
+		string layerId,
+		OperatorCompositingProcessingNodeDescriptor? processingNode,
+		CancellationToken cancellationToken = default) =>
+		SetCompositingLayerProcessingStackAsync(
+			layerId,
+			processingNode is null
+				? Array.Empty<OperatorCompositingProcessingNodeDescriptor>()
+				: new[] { processingNode },
+			cancellationToken);
+
+	public async ValueTask<IReadOnlyList<OperatorCompositingLayerDescriptor>> SetCompositingLayerProcessingStackAsync(
+		string layerId,
+		IReadOnlyList<OperatorCompositingProcessingNodeDescriptor> processingStack,
+		CancellationToken cancellationToken = default)
 	{
+		ArgumentNullException.ThrowIfNull(processingStack);
 		var request = Request();
 		request.SetCompositingProcessing = Raw(new
 		{
 			LayerId = layerId,
-			ProcessingNode = processingNode is null ? null : new
+			ProcessingStack = processingStack.Select(node => new
 			{
-				processingNode.NodeId,
-				processingNode.Kind,
-				processingNode.Enabled,
-				ColorGrade = new { processingNode.ColorGrade.Brightness, processingNode.ColorGrade.Contrast, processingNode.ColorGrade.Saturation }
-			}
+				node.NodeId,
+				node.Kind,
+				node.Enabled,
+				ColorGrade = new { node.ColorGrade.Brightness, node.ColorGrade.Contrast, node.ColorGrade.Saturation }
+			}).ToArray()
 		});
 		return NamedPipeOperatorControlTransport.DecodeExternalCompositingLayers((await ExecuteAsync(request, false, cancellationToken).ConfigureAwait(false)).PayloadJson.Span);
 	}

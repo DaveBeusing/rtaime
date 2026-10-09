@@ -2,6 +2,7 @@
 
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using rtaime.Control.Contracts;
 using rtaime.Core;
 using rtaime.Media.Contracts;
@@ -968,16 +969,7 @@ public sealed class ShowProjectPersistenceStore
 			layer.CropTop,
 			layer.CropRight,
 			layer.CropBottom,
-			layer.ProcessingNode is null
-				? null
-				: new ProcessingNodeDocument(
-					layer.ProcessingNode.NodeId,
-					(int)layer.ProcessingNode.Kind,
-					layer.ProcessingNode.Enabled,
-					new ColorGradeDocument(
-						layer.ProcessingNode.ColorGrade.Brightness,
-						layer.ProcessingNode.ColorGrade.Contrast,
-						layer.ProcessingNode.ColorGrade.Saturation)))).ToArray());
+			layer.ProcessingStack.Select(ToDocument).ToArray())).ToArray());
 
 	private static ProductionCompositingState FromDocument(CompositingDocument state)
 	{
@@ -1005,18 +997,49 @@ public sealed class ShowProjectPersistenceStore
 				layer.CropTop,
 				layer.CropRight,
 				layer.CropBottom,
-				layer.ProcessingNode is null
-					? null
-					: new ProductionCompositingProcessingNodeState(
-						layer.ProcessingNode.NodeId,
-						Enum.IsDefined(typeof(ProductionCompositingProcessingNodeKind), layer.ProcessingNode.Kind)
-							? (ProductionCompositingProcessingNodeKind)layer.ProcessingNode.Kind
-							: throw new InvalidDataException($"Persisted processing node kind '{layer.ProcessingNode.Kind}' is invalid."),
-						layer.ProcessingNode.Enabled,
-						new ProductionColorGradeSettings(
-							layer.ProcessingNode.ColorGrade.Brightness,
-							layer.ProcessingNode.ColorGrade.Contrast,
-							layer.ProcessingNode.ColorGrade.Saturation)))).ToArray());
+				processingStack: CanonicalProcessingStack(layer.ProcessingStack, layer.ProcessingNode)
+					.Select(FromDocument)
+					.ToArray())).ToArray());
+	}
+
+	private static ProcessingNodeDocument ToDocument(ProductionCompositingProcessingNodeState node) => new(
+		node.NodeId,
+		(int)node.Kind,
+		node.Enabled,
+		new ColorGradeDocument(
+			node.ColorGrade.Brightness,
+			node.ColorGrade.Contrast,
+			node.ColorGrade.Saturation));
+
+	private static ProductionCompositingProcessingNodeState FromDocument(ProcessingNodeDocument node)
+	{
+		if (!Enum.IsDefined(typeof(ProductionCompositingProcessingNodeKind), node.Kind))
+			throw new InvalidDataException($"Persisted processing node kind '{node.Kind}' is invalid.");
+		return new ProductionCompositingProcessingNodeState(
+			node.NodeId,
+			(ProductionCompositingProcessingNodeKind)node.Kind,
+			node.Enabled,
+			new ProductionColorGradeSettings(
+				node.ColorGrade.Brightness,
+				node.ColorGrade.Contrast,
+				node.ColorGrade.Saturation));
+	}
+
+	private static ProcessingNodeDocument[] CanonicalProcessingStack(
+		ProcessingNodeDocument[]? processingStack,
+		ProcessingNodeDocument? legacyProcessingNode)
+	{
+		if (processingStack is not null && legacyProcessingNode is not null)
+			throw new InvalidDataException("Persisted compositing layer contains both legacy processing-node and processing-stack state.");
+		var canonical = processingStack ??
+			(legacyProcessingNode is null ? Array.Empty<ProcessingNodeDocument>() : new[] { legacyProcessingNode });
+		if (canonical.Length > ProductionCompositingProcessingStackLimits.MaximumNodeCount)
+			throw new InvalidDataException($"Persisted processing stack exceeds the maximum of {ProductionCompositingProcessingStackLimits.MaximumNodeCount} nodes.");
+		if (canonical.Any(node => node is null))
+			throw new InvalidDataException("Persisted processing stack must not contain null nodes.");
+		if (canonical.Select(node => node.NodeId).Distinct(StringComparer.Ordinal).Count() != canonical.Length)
+			throw new InvalidDataException("Persisted processing stack contains duplicate node identities.");
+		return canonical;
 	}
 
 	private static GraphicsDocument ToDocument(DurableGraphicsState graphics) => new(
@@ -1187,6 +1210,8 @@ public sealed class ShowProjectPersistenceStore
 		double CropTop = 0,
 		double CropRight = 0,
 		double CropBottom = 0,
+		ProcessingNodeDocument[]? ProcessingStack = null,
+		[property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
 		ProcessingNodeDocument? ProcessingNode = null);
 
 	private sealed record ProcessingNodeDocument(

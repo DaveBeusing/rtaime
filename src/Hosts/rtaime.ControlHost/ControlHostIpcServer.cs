@@ -265,9 +265,9 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 					layer.CropRight,
 					layer.CropBottom,
 					cancellationToken).ConfigureAwait(false);
-				await _runtimeTransport.SetCompositingLayerProcessingNodeAsync(
+				await _runtimeTransport.SetCompositingLayerProcessingStackAsync(
 					layer.LayerId,
-					layer.ProcessingNode,
+					layer.ProcessingStack,
 					cancellationToken).ConfigureAwait(false);
 			}
 			var current = await _runtimeTransport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
@@ -1492,21 +1492,12 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			if (!await EnsureRuntimeConnectedAsync(cancellationToken).ConfigureAwait(false))
 				return Error(request, "runtime.unavailable", "RuntimeHost is not connected.");
 
-			PreparedCompositingProcessingNodeState? node = wire.ProcessingNode is null
-				? null
-				: new PreparedCompositingProcessingNodeState(
-					wire.ProcessingNode.NodeId,
-					Enum.IsDefined(typeof(PreparedCompositingProcessingNodeKind), wire.ProcessingNode.Kind)
-						? (PreparedCompositingProcessingNodeKind)wire.ProcessingNode.Kind
-						: throw new InvalidDataException("Compositing processing node kind is invalid."),
-					wire.ProcessingNode.Enabled,
-					new PreparedColorGradeSettings(
-						wire.ProcessingNode.ColorGrade.Brightness,
-						wire.ProcessingNode.ColorGrade.Contrast,
-						wire.ProcessingNode.ColorGrade.Saturation));
+			var processingStack = CanonicalProcessingStack(wire.ProcessingStack, wire.ProcessingNode)
+				.Select(ToPreparedProcessingNode)
+				.ToArray();
 
 			var layers = await _runtimeTransport
-				.SetCompositingLayerProcessingNodeAsync(wire.LayerId, node, cancellationToken)
+				.SetCompositingLayerProcessingStackAsync(wire.LayerId, processingStack, cancellationToken)
 				.ConfigureAwait(false);
 			_compositingLayers = layers;
 			await SynchronizeCompositingAuthorityAsync(control, layers, cancellationToken).ConfigureAwait(false);
@@ -1581,16 +1572,16 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 					layer.CropTop,
 					layer.CropRight,
 					layer.CropBottom,
-					layer.ProcessingNode is null
-						? null
-						: new ProductionCompositingProcessingNodeState(
-							layer.ProcessingNode.NodeId,
-							(ProductionCompositingProcessingNodeKind)(int)layer.ProcessingNode.Kind,
-							layer.ProcessingNode.Enabled,
+					processingStack: layer.ProcessingStack
+						.Select(node => new ProductionCompositingProcessingNodeState(
+							node.NodeId,
+							(ProductionCompositingProcessingNodeKind)(int)node.Kind,
+							node.Enabled,
 							new ProductionColorGradeSettings(
-								layer.ProcessingNode.ColorGrade.Brightness,
-								layer.ProcessingNode.ColorGrade.Contrast,
-								layer.ProcessingNode.ColorGrade.Saturation))))
+								node.ColorGrade.Brightness,
+								node.ColorGrade.Contrast,
+								node.ColorGrade.Saturation)))
+						.ToArray()))
 				.ToArray());
 	}
 
@@ -1715,16 +1706,16 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 					layer.CropTop,
 					layer.CropRight,
 					layer.CropBottom,
-					layer.ProcessingNode is null
-						? null
-						: new PreparedCompositingProcessingNodeState(
-							layer.ProcessingNode.NodeId,
-							(PreparedCompositingProcessingNodeKind)(int)layer.ProcessingNode.Kind,
-							layer.ProcessingNode.Enabled,
+					processingStack: layer.ProcessingStack
+						.Select(node => new PreparedCompositingProcessingNodeState(
+							node.NodeId,
+							(PreparedCompositingProcessingNodeKind)(int)node.Kind,
+							node.Enabled,
 							new PreparedColorGradeSettings(
-								layer.ProcessingNode.ColorGrade.Brightness,
-								layer.ProcessingNode.ColorGrade.Contrast,
-								layer.ProcessingNode.ColorGrade.Saturation))))
+								node.ColorGrade.Brightness,
+								node.ColorGrade.Contrast,
+								node.ColorGrade.Saturation)))
+						.ToArray()))
 				.ToArray());
 
 	private async ValueTask<AuthoritativeProductionState> SynchronizeCompositingAuthorityAsync(
@@ -2879,7 +2870,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 						layer.CropTop,
 						layer.CropRight,
 						layer.CropBottom,
-						layer.ProcessingNode))
+						processingStack: layer.ProcessingStack))
 					.ToArray();
 			}
 
@@ -3068,16 +3059,47 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		snapshot.CropTop,
 		snapshot.CropRight,
 		snapshot.CropBottom,
-		snapshot.ProcessingNode is null
-			? null
-			: new WireProcessingNode(
-				snapshot.ProcessingNode.NodeId,
-				(int)snapshot.ProcessingNode.Kind,
-				snapshot.ProcessingNode.Enabled,
-				new WireColorGrade(
-					snapshot.ProcessingNode.ColorGrade.Brightness,
-					snapshot.ProcessingNode.ColorGrade.Contrast,
-					snapshot.ProcessingNode.ColorGrade.Saturation)));
+		snapshot.ProcessingStack.Select(ToWireProcessingNode).ToArray());
+
+	private static PreparedCompositingProcessingNodeState ToPreparedProcessingNode(WireProcessingNode node)
+	{
+		if (!Enum.IsDefined(typeof(PreparedCompositingProcessingNodeKind), node.Kind))
+			throw new InvalidDataException("Compositing processing node kind is invalid.");
+		return new PreparedCompositingProcessingNodeState(
+			node.NodeId,
+			(PreparedCompositingProcessingNodeKind)node.Kind,
+			node.Enabled,
+			new PreparedColorGradeSettings(
+				node.ColorGrade.Brightness,
+				node.ColorGrade.Contrast,
+				node.ColorGrade.Saturation));
+	}
+
+	private static WireProcessingNode ToWireProcessingNode(PreparedCompositingProcessingNodeState node) => new(
+		node.NodeId,
+		(int)node.Kind,
+		node.Enabled,
+		new WireColorGrade(
+			node.ColorGrade.Brightness,
+			node.ColorGrade.Contrast,
+			node.ColorGrade.Saturation));
+
+	private static WireProcessingNode[] CanonicalProcessingStack(
+		WireProcessingNode[]? processingStack,
+		WireProcessingNode? legacyProcessingNode)
+	{
+		if (processingStack is not null && legacyProcessingNode is not null)
+			throw new InvalidDataException("Processing payload must not contain both legacy processing-node and processing-stack representations.");
+		var canonical = processingStack ??
+			(legacyProcessingNode is null ? Array.Empty<WireProcessingNode>() : new[] { legacyProcessingNode });
+		if (canonical.Length > PreparedCompositingProcessingStackLimits.MaximumNodeCount)
+			throw new InvalidDataException($"Processing stack exceeds the maximum of {PreparedCompositingProcessingStackLimits.MaximumNodeCount} nodes.");
+		if (canonical.Any(node => node is null))
+			throw new InvalidDataException("Processing stack must not contain null nodes.");
+		if (canonical.Select(node => node.NodeId).Distinct(StringComparer.Ordinal).Count() != canonical.Length)
+			throw new InvalidDataException("Processing stack contains duplicate node identities.");
+		return canonical;
+	}
 
 	private static WireGraphicsOverlay ToWire(RuntimeGraphicsOverlaySnapshot snapshot) => new(
 		snapshot.AssetLoaded,
@@ -3317,16 +3339,16 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 					layer.CropTop,
 					layer.CropRight,
 					layer.CropBottom,
-					layer.ProcessingNode is null
-						? null
-						: new WireProcessingNode(
-							layer.ProcessingNode.NodeId,
-							(int)layer.ProcessingNode.Kind,
-							layer.ProcessingNode.Enabled,
+					layer.ProcessingStack
+						.Select(node => new WireProcessingNode(
+							node.NodeId,
+							(int)node.Kind,
+							node.Enabled,
 							new WireColorGrade(
-								layer.ProcessingNode.ColorGrade.Brightness,
-								layer.ProcessingNode.ColorGrade.Contrast,
-								layer.ProcessingNode.ColorGrade.Saturation)))).ToArray());
+								node.ColorGrade.Brightness,
+								node.ColorGrade.Contrast,
+								node.ColorGrade.Saturation)))
+						.ToArray())).ToArray());
 
 	private static WireOutputRole[] ProjectOutputRoles(
 		AuthoritativeProductionState state,
@@ -3468,9 +3490,12 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	private sealed record WireCompositingLayerTransform(string LayerId, double PositionX, double PositionY, double Scale, double RotationDegrees, double AnchorX, double AnchorY, double CropLeft, double CropTop, double CropRight, double CropBottom);
 	private sealed record WireColorGrade(double Brightness, double Contrast, double Saturation);
 	private sealed record WireProcessingNode(string NodeId, int Kind, bool Enabled, WireColorGrade ColorGrade);
-	private sealed record WireCompositingLayerProcessing(string LayerId, WireProcessingNode? ProcessingNode);
+	private sealed record WireCompositingLayerProcessing(
+		string LayerId,
+		WireProcessingNode[]? ProcessingStack = null,
+		WireProcessingNode? ProcessingNode = null);
 	private sealed record WireCompositingLayerOrder(string[] LayerIds);
-	private sealed record WireCompositingLayer(string LayerId, int Kind, int Order, bool Visible, byte Opacity, double PositionX, double PositionY, double Scale, string ContentIdentity, double RotationDegrees = 0, double AnchorX = 0, double AnchorY = 0, double CropLeft = 0, double CropTop = 0, double CropRight = 0, double CropBottom = 0, WireProcessingNode? ProcessingNode = null);
+	private sealed record WireCompositingLayer(string LayerId, int Kind, int Order, bool Visible, byte Opacity, double PositionX, double PositionY, double Scale, string ContentIdentity, double RotationDegrees = 0, double AnchorX = 0, double AnchorY = 0, double CropLeft = 0, double CropTop = 0, double CropRight = 0, double CropBottom = 0, WireProcessingNode[]? ProcessingStack = null, WireProcessingNode? ProcessingNode = null);
 	private sealed record WireCompositingState(string Version, WireCompositingLayer[] Layers);
 	private sealed record WireGraphicsOverlay(bool AssetLoaded, string? AssetName, uint AssetWidth, uint AssetHeight, bool Visible, double PositionX, double PositionY, double Scale)
 	{

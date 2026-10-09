@@ -235,8 +235,15 @@ public sealed record PreparedCompositingProcessingNodeState
     public PreparedColorGradeSettings ColorGrade { get; }
 }
 
+public static class PreparedCompositingProcessingStackLimits
+{
+    public const int MaximumNodeCount = 4;
+}
+
 public sealed record PreparedCompositingLayerState
 {
+    private readonly ReadOnlyCollection<PreparedCompositingProcessingNodeState> _processingStack;
+
     public PreparedCompositingLayerState(
         string layerId,
         PreparedCompositingLayerKind kind,
@@ -254,7 +261,8 @@ public sealed record PreparedCompositingLayerState
         double cropTop = 0.0,
         double cropRight = 0.0,
         double cropBottom = 0.0,
-        PreparedCompositingProcessingNodeState? processingNode = null)
+        PreparedCompositingProcessingNodeState? processingNode = null,
+        IReadOnlyList<PreparedCompositingProcessingNodeState>? processingStack = null)
     {
         if (string.IsNullOrWhiteSpace(layerId))
             throw new ArgumentException("Prepared compositing layer identity is required.", nameof(layerId));
@@ -271,10 +279,29 @@ public sealed record PreparedCompositingLayerState
         ValidateNormalized(anchorX, nameof(anchorX));
         ValidateNormalized(anchorY, nameof(anchorY));
         ValidateCrop(cropLeft, cropTop, cropRight, cropBottom);
+
+        if (processingNode is not null && processingStack is not null &&
+            (processingStack.Count == 0 || !Equals(processingNode, processingStack[0])))
+        {
+            throw new ArgumentException("Specify either the legacy prepared processing node or the canonical prepared processing stack, not both.", nameof(processingStack));
+        }
+
+        var canonicalProcessingStack = processingStack is null
+            ? processingNode is null
+                ? Array.Empty<PreparedCompositingProcessingNodeState>()
+                : new[] { processingNode }
+            : processingStack.ToArray();
+        if (canonicalProcessingStack.Length > PreparedCompositingProcessingStackLimits.MaximumNodeCount)
+            throw new ArgumentException($"Prepared compositing processing stack supports at most {PreparedCompositingProcessingStackLimits.MaximumNodeCount} nodes.", nameof(processingStack));
+        if (canonicalProcessingStack.Any(node => node is null))
+            throw new ArgumentException("Prepared compositing processing stack must not contain null nodes.", nameof(processingStack));
+        if (canonicalProcessingStack.Select(node => node.NodeId).Distinct(StringComparer.Ordinal).Count() != canonicalProcessingStack.Length)
+            throw new ArgumentException("Prepared compositing processing node identities must be unique within a layer.", nameof(processingStack));
+
         if (kind == PreparedCompositingLayerKind.LegacyVisual &&
             (rotationDegrees != 0.0 || anchorX != 0.0 || anchorY != 0.0 ||
              cropLeft != 0.0 || cropTop != 0.0 || cropRight != 0.0 || cropBottom != 0.0 ||
-             processingNode is not null))
+             canonicalProcessingStack.Length != 0))
         {
             throw new ArgumentException("Legacy visual layers do not expose transform extensions or processing nodes.");
         }
@@ -297,7 +324,7 @@ public sealed record PreparedCompositingLayerState
         CropRight = cropRight;
         CropBottom = cropBottom;
         ContentIdentity = contentIdentity.Trim();
-        ProcessingNode = processingNode;
+        _processingStack = Array.AsReadOnly(canonicalProcessingStack);
     }
 
     public string LayerId { get; }
@@ -316,7 +343,55 @@ public sealed record PreparedCompositingLayerState
     public double CropRight { get; }
     public double CropBottom { get; }
     public string ContentIdentity { get; }
-    public PreparedCompositingProcessingNodeState? ProcessingNode { get; }
+    public IReadOnlyList<PreparedCompositingProcessingNodeState> ProcessingStack => _processingStack;
+
+    // Compatibility projection for existing single-node callers. Canonical state is ProcessingStack.
+    public PreparedCompositingProcessingNodeState? ProcessingNode =>
+        _processingStack.Count == 0 ? null : _processingStack[0];
+
+    public bool Equals(PreparedCompositingLayerState? other) =>
+        other is not null &&
+        StringComparer.Ordinal.Equals(LayerId, other.LayerId) &&
+        Kind == other.Kind &&
+        Order == other.Order &&
+        Visible == other.Visible &&
+        Opacity == other.Opacity &&
+        PositionX == other.PositionX &&
+        PositionY == other.PositionY &&
+        Scale == other.Scale &&
+        RotationDegrees == other.RotationDegrees &&
+        AnchorX == other.AnchorX &&
+        AnchorY == other.AnchorY &&
+        CropLeft == other.CropLeft &&
+        CropTop == other.CropTop &&
+        CropRight == other.CropRight &&
+        CropBottom == other.CropBottom &&
+        StringComparer.Ordinal.Equals(ContentIdentity, other.ContentIdentity) &&
+        _processingStack.SequenceEqual(other._processingStack);
+
+    public override int GetHashCode()
+    {
+        var hash = new HashCode();
+        hash.Add(LayerId, StringComparer.Ordinal);
+        hash.Add(Kind);
+        hash.Add(Order);
+        hash.Add(Visible);
+        hash.Add(Opacity);
+        hash.Add(PositionX);
+        hash.Add(PositionY);
+        hash.Add(Scale);
+        hash.Add(RotationDegrees);
+        hash.Add(AnchorX);
+        hash.Add(AnchorY);
+        hash.Add(CropLeft);
+        hash.Add(CropTop);
+        hash.Add(CropRight);
+        hash.Add(CropBottom);
+        hash.Add(ContentIdentity, StringComparer.Ordinal);
+        foreach (var node in _processingStack)
+            hash.Add(node);
+        return hash.ToHashCode();
+    }
 
     private static void ValidateNormalized(double value, string parameterName)
     {

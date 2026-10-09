@@ -169,6 +169,13 @@ public interface IControlRuntimeTransportSeam
 		ValueTask.FromException<IReadOnlyList<RuntimeCompositingLayerSnapshot>>(
 			new NotSupportedException("Runtime transport does not expose compositing layer processing control."));
 
+	ValueTask<IReadOnlyList<RuntimeCompositingLayerSnapshot>> SetCompositingLayerProcessingStackAsync(
+		string layerId,
+		IReadOnlyList<PreparedCompositingProcessingNodeState> processingStack,
+		CancellationToken cancellationToken = default) =>
+		ValueTask.FromException<IReadOnlyList<RuntimeCompositingLayerSnapshot>>(
+			new NotSupportedException("Runtime transport does not expose compositing layer processing-stack control."));
+
 	ValueTask<IReadOnlyList<RuntimeCompositingLayerSnapshot>> ReorderCompositingLayersAsync(
 		IReadOnlyList<string> orderedLayerIds,
 		CancellationToken cancellationToken = default) =>
@@ -856,7 +863,7 @@ public sealed class ControlHostProcess
 				expected.CropTop != actual.CropTop ||
 				expected.CropRight != actual.CropRight ||
 				expected.CropBottom != actual.CropBottom ||
-				!ProcessingNodeMatches(expected.ProcessingNode, actual.ProcessingNode) ||
+				!ProcessingStackMatches(expected.ProcessingStack, actual.ProcessingStack) ||
 				!string.Equals(expected.ContentIdentity, actual.ContentIdentity, StringComparison.Ordinal))
 			{
 				return false;
@@ -866,20 +873,29 @@ public sealed class ControlHostProcess
 		return true;
 	}
 
-	private static bool ProcessingNodeMatches(
-		ProductionCompositingProcessingNodeState? expected,
-		PreparedCompositingProcessingNodeState? actual)
+	private static bool ProcessingStackMatches(
+		IReadOnlyList<ProductionCompositingProcessingNodeState> expected,
+		IReadOnlyList<PreparedCompositingProcessingNodeState> actual)
 	{
-		if (expected is null || actual is null)
-			return expected is null && actual is null;
-
-		return expected.NodeId == actual.NodeId &&
-			(int)expected.Kind == (int)actual.Kind &&
-			expected.Enabled == actual.Enabled &&
-			expected.ColorGrade.Brightness == actual.ColorGrade.Brightness &&
-			expected.ColorGrade.Contrast == actual.ColorGrade.Contrast &&
-			expected.ColorGrade.Saturation == actual.ColorGrade.Saturation;
+		if (expected.Count != actual.Count)
+			return false;
+		for (var index = 0; index < expected.Count; index++)
+		{
+			if (!ProcessingNodeMatches(expected[index], actual[index]))
+				return false;
+		}
+		return true;
 	}
+
+	private static bool ProcessingNodeMatches(
+		ProductionCompositingProcessingNodeState expected,
+		PreparedCompositingProcessingNodeState actual) =>
+		expected.NodeId == actual.NodeId &&
+		(int)expected.Kind == (int)actual.Kind &&
+		expected.Enabled == actual.Enabled &&
+		expected.ColorGrade.Brightness == actual.ColorGrade.Brightness &&
+		expected.ColorGrade.Contrast == actual.ColorGrade.Contrast &&
+		expected.ColorGrade.Saturation == actual.ColorGrade.Saturation;
 
 	private string ResolveDurabilityDirectory()
 	{

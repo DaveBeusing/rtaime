@@ -233,6 +233,106 @@ public sealed class ContractFoundationTests
     }
 
     [Fact]
+    public void Compositing_processing_stack_is_ordered_bounded_and_rejects_invalid_identity()
+    {
+        var nodes = Enumerable.Range(0, ProductionCompositingProcessingStackLimits.MaximumNodeCount)
+            .Select(index => new ProductionCompositingProcessingNodeState(
+                $"grade-{index}",
+                ProductionCompositingProcessingNodeKind.ColorGrade,
+                index != 2,
+                new ProductionColorGradeSettings(index * 0.05, 1.0 + (index * 0.1), 1.0)))
+            .ToArray();
+
+        var layer = new ProductionCompositingLayerState(
+            ProductionCompositingLayerIds.BitmapGraphics,
+            ProductionCompositingLayerKind.BitmapGraphics,
+            0,
+            true,
+            255,
+            0,
+            0,
+            1,
+            "stack.rgba",
+            processingStack: nodes);
+
+        Assert.Equal(nodes.Select(node => node.NodeId), layer.ProcessingStack.Select(node => node.NodeId));
+        Assert.Equal(nodes[0], layer.ProcessingNode);
+        Assert.False(layer.ProcessingStack[2].Enabled);
+
+        var copy = RoundTrip(new ProductionCompositingState(
+            ProductionCompositingState.CurrentVersion,
+            new[] { layer }));
+        Assert.Equal(nodes.Select(node => node.NodeId), copy.Layers[0].ProcessingStack.Select(node => node.NodeId));
+
+        Assert.Throws<ArgumentException>(() => new ProductionCompositingLayerState(
+            ProductionCompositingLayerIds.BitmapGraphics,
+            ProductionCompositingLayerKind.BitmapGraphics,
+            0,
+            true,
+            255,
+            0,
+            0,
+            1,
+            "duplicate.rgba",
+            processingStack: new[] { nodes[0], nodes[0] }));
+
+        var oversized = nodes.Append(new ProductionCompositingProcessingNodeState(
+            "grade-overflow",
+            ProductionCompositingProcessingNodeKind.ColorGrade,
+            true,
+            new ProductionColorGradeSettings(0, 1, 1))).ToArray();
+        Assert.Throws<ArgumentException>(() => new ProductionCompositingLayerState(
+            ProductionCompositingLayerIds.BitmapGraphics,
+            ProductionCompositingLayerKind.BitmapGraphics,
+            0,
+            true,
+            255,
+            0,
+            0,
+            1,
+            "overflow.rgba",
+            processingStack: oversized));
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => new ProductionCompositingProcessingNodeState(
+            "unknown",
+            (ProductionCompositingProcessingNodeKind)999,
+            true,
+            new ProductionColorGradeSettings(0, 1, 1)));
+
+        var preparedNodes = nodes.Select(node => new PreparedCompositingProcessingNodeState(
+            node.NodeId,
+            PreparedCompositingProcessingNodeKind.ColorGrade,
+            node.Enabled,
+            new PreparedColorGradeSettings(
+                node.ColorGrade.Brightness,
+                node.ColorGrade.Contrast,
+                node.ColorGrade.Saturation))).ToArray();
+        var preparedLayer = new PreparedCompositingLayerState(
+            ProductionCompositingLayerIds.BitmapGraphics,
+            PreparedCompositingLayerKind.BitmapGraphics,
+            0,
+            true,
+            255,
+            0,
+            0,
+            1,
+            "stack.rgba",
+            processingStack: preparedNodes);
+        Assert.Equal(preparedNodes.Select(node => node.NodeId), preparedLayer.ProcessingStack.Select(node => node.NodeId));
+        Assert.Throws<ArgumentException>(() => new PreparedCompositingLayerState(
+            ProductionCompositingLayerIds.BitmapGraphics,
+            PreparedCompositingLayerKind.BitmapGraphics,
+            0,
+            true,
+            255,
+            0,
+            0,
+            1,
+            "overflow.rgba",
+            processingStack: preparedNodes.Append(preparedNodes[0]).ToArray()));
+    }
+
+    [Fact]
     public void Control_validation_report_is_immutable_and_transportable()
     {
         var issues = new List<ValidationIssue> { new("control.invalid", "Invalid state", "routing.program") };

@@ -1,6 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using rtaime.Control;
 using rtaime.Control.Contracts;
 using rtaime.Core;
@@ -64,16 +65,7 @@ internal static class ControlHostRecovery
 						layer.CropTop,
 						layer.CropRight,
 						layer.CropBottom,
-						layer.ProcessingNode is null
-							? null
-							: new PersistedProcessingNode(
-								layer.ProcessingNode.NodeId,
-								(int)layer.ProcessingNode.Kind,
-								layer.ProcessingNode.Enabled,
-								new PersistedColorGrade(
-									layer.ProcessingNode.ColorGrade.Brightness,
-									layer.ProcessingNode.ColorGrade.Contrast,
-									layer.ProcessingNode.ColorGrade.Saturation)))).ToArray())));
+						layer.ProcessingStack.Select(ToPersistedProcessingNode).ToArray())).ToArray())));
 	}
 
 	public static async ValueTask<AuthoritativeProductionState?> LoadAsync(
@@ -156,18 +148,9 @@ internal static class ControlHostRecovery
 					layer.CropTop,
 					layer.CropRight,
 					layer.CropBottom,
-					layer.ProcessingNode is null
-						? null
-						: new ProductionCompositingProcessingNodeState(
-							layer.ProcessingNode.NodeId,
-							Enum.IsDefined(typeof(ProductionCompositingProcessingNodeKind), layer.ProcessingNode.Kind)
-								? (ProductionCompositingProcessingNodeKind)layer.ProcessingNode.Kind
-								: throw new InvalidDataException($"Recovered processing node kind '{layer.ProcessingNode.Kind}' is invalid."),
-							layer.ProcessingNode.Enabled,
-							new ProductionColorGradeSettings(
-								layer.ProcessingNode.ColorGrade.Brightness,
-								layer.ProcessingNode.ColorGrade.Contrast,
-								layer.ProcessingNode.ColorGrade.Saturation)))).ToArray());
+					processingStack: CanonicalProcessingStack(layer.ProcessingStack, layer.ProcessingNode)
+						.Select(FromPersistedProcessingNode)
+						.ToArray())).ToArray());
 		}
 
 		if (activeSceneId is { } recoveredActiveSceneId)
@@ -233,6 +216,46 @@ internal static class ControlHostRecovery
 		string Version,
 		PersistedCompositingLayer[] Layers);
 
+	private static PersistedProcessingNode ToPersistedProcessingNode(ProductionCompositingProcessingNodeState node) => new(
+		node.NodeId,
+		(int)node.Kind,
+		node.Enabled,
+		new PersistedColorGrade(
+			node.ColorGrade.Brightness,
+			node.ColorGrade.Contrast,
+			node.ColorGrade.Saturation));
+
+	private static ProductionCompositingProcessingNodeState FromPersistedProcessingNode(PersistedProcessingNode node)
+	{
+		if (!Enum.IsDefined(typeof(ProductionCompositingProcessingNodeKind), node.Kind))
+			throw new InvalidDataException($"Recovered processing node kind '{node.Kind}' is invalid.");
+		return new ProductionCompositingProcessingNodeState(
+			node.NodeId,
+			(ProductionCompositingProcessingNodeKind)node.Kind,
+			node.Enabled,
+			new ProductionColorGradeSettings(
+				node.ColorGrade.Brightness,
+				node.ColorGrade.Contrast,
+				node.ColorGrade.Saturation));
+	}
+
+	private static PersistedProcessingNode[] CanonicalProcessingStack(
+		PersistedProcessingNode[]? processingStack,
+		PersistedProcessingNode? legacyProcessingNode)
+	{
+		if (processingStack is not null && legacyProcessingNode is not null)
+			throw new InvalidDataException("Recovered compositing layer contains both legacy processing-node and processing-stack state.");
+		var canonical = processingStack ??
+			(legacyProcessingNode is null ? Array.Empty<PersistedProcessingNode>() : new[] { legacyProcessingNode });
+		if (canonical.Length > ProductionCompositingProcessingStackLimits.MaximumNodeCount)
+			throw new InvalidDataException($"Recovered processing stack exceeds the maximum of {ProductionCompositingProcessingStackLimits.MaximumNodeCount} nodes.");
+		if (canonical.Any(node => node is null))
+			throw new InvalidDataException("Recovered processing stack must not contain null nodes.");
+		if (canonical.Select(node => node.NodeId).Distinct(StringComparer.Ordinal).Count() != canonical.Length)
+			throw new InvalidDataException("Recovered processing stack contains duplicate node identities.");
+		return canonical;
+	}
+
 	private sealed record PersistedCompositingLayer(
 		string LayerId,
 		int Kind,
@@ -250,6 +273,8 @@ internal static class ControlHostRecovery
 		double CropTop = 0,
 		double CropRight = 0,
 		double CropBottom = 0,
+		PersistedProcessingNode[]? ProcessingStack = null,
+		[property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
 		PersistedProcessingNode? ProcessingNode = null);
 
 	private sealed record PersistedProcessingNode(

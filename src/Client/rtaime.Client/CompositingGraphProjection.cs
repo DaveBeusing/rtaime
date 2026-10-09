@@ -231,25 +231,26 @@ public static class CompositingGraphProjector
 
 				var tailNodeId = transformNodeId;
 				var tailPortId = "output";
-				if (layer.ProcessingNode is { } processingNode)
+				for (var processingIndex = 0; processingIndex < layer.ProcessingStack.Count; processingIndex++)
 				{
+					var processingNode = layer.ProcessingStack[processingIndex];
 					var processingNodeId = $"processing:{layer.LayerId}:{processingNode.NodeId}";
 					var grade = processingNode.ColorGrade;
 					nodes.Add(new CompositingGraphNodeProjection(
 						processingNodeId,
 						CompositingGraphNodeKind.Processing,
 						"Color Grade",
-						$"Brightness {grade.Brightness:0.##} · Contrast {grade.Contrast:0.##} · Saturation {grade.Saturation:0.##}",
+						$"{processingIndex + 1}/{layer.ProcessingStack.Count} · Brightness {grade.Brightness:0.##} · Contrast {grade.Contrast:0.##} · Saturation {grade.Saturation:0.##}",
 						processingNode.Enabled ? "CONFIRMED ENABLED" : "CONFIRMED DISABLED",
 						CompositingGraphHealth.Normal,
 						[
-							new("input", "Transformed", CompositingGraphPortDirection.Input),
+							new("input", processingIndex == 0 ? "Transformed" : "Processed", CompositingGraphPortDirection.Input),
 							new("output", "Processed", CompositingGraphPortDirection.Output)
 						]));
 					connections.Add(new CompositingGraphConnectionProjection(
-						$"{transformNodeId}->{processingNodeId}",
-						transformNodeId,
-						"output",
+						$"{tailNodeId}->{processingNodeId}",
+						tailNodeId,
+						tailPortId,
 						processingNodeId,
 						"input",
 						layer.Visible));

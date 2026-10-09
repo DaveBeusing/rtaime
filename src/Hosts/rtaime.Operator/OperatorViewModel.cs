@@ -1097,21 +1097,31 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		});
 	}
 
-	internal async Task SetCompositingLayerProcessingNodeAsync(
+	internal Task SetCompositingLayerProcessingNodeAsync(
 		string layerId,
-		OperatorCompositingProcessingNodeDescriptor? processingNode)
+		OperatorCompositingProcessingNodeDescriptor? processingNode) =>
+		SetCompositingLayerProcessingStackAsync(
+			layerId,
+			processingNode is null
+				? Array.Empty<OperatorCompositingProcessingNodeDescriptor>()
+				: new[] { processingNode });
+
+	internal async Task SetCompositingLayerProcessingStackAsync(
+		string layerId,
+		IReadOnlyList<OperatorCompositingProcessingNodeDescriptor> processingStack)
 	{
 		if (_client is null || !CanManageCompositingLayers()) return;
 		if (string.IsNullOrWhiteSpace(layerId)) throw new ArgumentException("Compositing layer identity is required.", nameof(layerId));
+		ArgumentNullException.ThrowIfNull(processingStack);
 
 		await ExecuteAsync("LAYER PROCESSING", async () =>
 		{
-			await _client.SetCompositingLayerProcessingNodeAsync(layerId.Trim(), processingNode);
+			await _client.SetCompositingLayerProcessingStackAsync(layerId.Trim(), processingStack);
 			Apply(_client.Snapshot!);
 			CommandStatus = "LAYER PROCESSING CONFIRMED";
-			LastEvent = processingNode is null
-				? $"Compositing layer {layerId.Trim()} processing node was removed and confirmed by RuntimeHost."
-				: $"Compositing layer {layerId.Trim()} processing node {processingNode.NodeId} was confirmed by RuntimeHost.";
+			LastEvent = processingStack.Count == 0
+				? $"Compositing layer {layerId.Trim()} processing stack was cleared and confirmed by RuntimeHost."
+				: $"Compositing layer {layerId.Trim()} processing stack ({processingStack.Count} node(s)) was confirmed by RuntimeHost.";
 		});
 	}
 
