@@ -1356,7 +1356,8 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 		Enum.IsDefined(typeof(RuntimeOutputRoleHealthState), snapshot.HealthState) ? (RuntimeOutputRoleHealthState)snapshot.HealthState : throw new InvalidDataException("Output role health state is invalid."),
 		snapshot.Evidence,
 		snapshot.Error is null ? null : new Failure(snapshot.Error.Code, snapshot.Error.Message),
-		snapshot.NetworkOutput is null ? null : FromWire(snapshot.NetworkOutput, snapshot.Format));
+		snapshot.NetworkOutput is null ? null : FromWire(snapshot.NetworkOutput, snapshot.Format),
+		snapshot.AudioBusId ?? AudioBusId.Program.Value);
 
 	private static NetworkOutputHealthSnapshot FromWire(WireNetworkOutput snapshot, WireVideoFormat videoFormat)
 	{
@@ -1812,7 +1813,7 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 		int QueueDepth,
 		DateTimeOffset? LastSuccessfulSendUtc,
 		WireFailure? Failure);
-	private sealed record WireOutputRole(string RoleId, string RoleKind, string SourceId, string TargetId, WireVideoFormat Format, long TimingNumerator, long TimingDenominator, string ProviderId, int LifecycleState, bool AuthoritativeActive, int HealthState, string Evidence, WireFailure? Error, WireNetworkOutput? NetworkOutput = null);
+	private sealed record WireOutputRole(string RoleId, string RoleKind, string SourceId, string TargetId, WireVideoFormat Format, long TimingNumerator, long TimingDenominator, string ProviderId, int LifecycleState, bool AuthoritativeActive, int HealthState, string Evidence, WireFailure? Error, WireNetworkOutput? NetworkOutput = null, string? AudioBusId = null);
 	private sealed record WireRecordingCommandResult(bool Succeeded, WireRecordingSnapshot Snapshot, WireFailure? Failure);
 	private sealed record WireMediaAssetProbe(string Path, string AssetId);
 	private sealed record WireMediaAssetProbeResult(WireLocalMediaProbe? Probe, WireFailure? Failure);
