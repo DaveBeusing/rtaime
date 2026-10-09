@@ -266,6 +266,49 @@ public sealed class BoundedBusDynamicsProcessingTests
 	}
 
 	[Fact]
+	public void Reconstructed_engine_resets_runtime_dynamics_envelope_state()
+	{
+		var dynamics = Dynamics(
+			thresholdDbFs: -30,
+			ratio: 10,
+			attackMilliseconds: 50,
+			releaseMilliseconds: 1_000,
+			limiterEnabled: false);
+		var continuedEngine = new AudioProductionEngine(Configuration(dynamics));
+		var loud = Stereo(4_800, 0.8f, 0.8f);
+		var warm = new float[loud.Length];
+		continuedEngine.ProcessBus(
+			AudioBusId.Program,
+			0,
+			4_800,
+			Source,
+			new[] { new AudioProductionSourceBuffer(Source, loud) },
+			warm);
+
+		var continued = new float[2];
+		continuedEngine.ProcessBus(
+			AudioBusId.Program,
+			4_800,
+			1,
+			Source,
+			new[] { new AudioProductionSourceBuffer(Source, new float[] { 0.8f, 0.8f }) },
+			continued);
+
+		var reconstructedEngine = new AudioProductionEngine(Configuration(dynamics, revision: 1));
+		var reconstructed = new float[2];
+		reconstructedEngine.ProcessBus(
+			AudioBusId.Program,
+			4_800,
+			1,
+			Source,
+			new[] { new AudioProductionSourceBuffer(Source, new float[] { 0.8f, 0.8f }) },
+			reconstructed);
+
+		Assert.True(reconstructed[0] > continued[0]);
+		Assert.InRange(reconstructed[0], 0.79f, 0.8f);
+	}
+
+	[Fact]
 	public void Multiple_buses_keep_independent_dynamics_envelopes()
 	{
 		var dynamics = Dynamics(
