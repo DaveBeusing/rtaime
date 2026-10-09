@@ -745,7 +745,7 @@ Extended Media Library selection is represented explicitly. When multiple assets
 
 Reset actions restore the established local desired defaults for playback, audio gain and graphics transform values. Resetting remains a presentation-side edit only; the existing APPLY/command path is still required before authoritative state can change.
 
-The current graphics capability exposes Position X, Position Y and Scale. Rotation, Anchor and Crop are therefore shown as unavailable capability fields rather than being implemented as parallel UI-only domain state. Likewise, the current processing capability exposes the existing governed AI effect enable/disable path but no effect-stack reordering; the Inspector states that limitation explicitly.
+The current governed compositing capability exposes Position X/Y, Scale, Rotation, Anchor/Pivot and Crop through the existing authoritative Client → ControlHost → RuntimeHost path. Processing uses the same bounded ordered 0..4-node stack: Color Grade remains editable through the existing Inspector workflow, while confirmed typed Chroma Key nodes are shown with key RGB, Tolerance, Softness and Spill Suppression. This capability does not add a color picker, a dedicated keyer mutation workflow, arbitrary effect-stack rewiring, or UI-owned pixel processing. The typed Chroma Key node is a bounded production baseline rather than a certified full broadcast keyer.
 
 No local edit is presented as committed before the corresponding existing command path has been applied and authoritative state is observed again. Empty selection, no-assets, filtered-empty, loading, error and offline states use concise production-facing messages.
 
