@@ -1205,7 +1205,8 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 					source.Gain,
 					source.Muted,
 					!source.FollowRoutedSource,
-					source.BusAssignments)
+					source.BusAssignments,
+					source.Equalizer)
 				: source)
 			.ToArray();
 		var next = NextAudioProductionConfiguration(production.Configuration, sources: sources);

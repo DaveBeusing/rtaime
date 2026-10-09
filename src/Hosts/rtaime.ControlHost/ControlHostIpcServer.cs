@@ -996,7 +996,8 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 							wire.Gain,
 							wire.Muted,
 							source.FollowRoutedSource,
-							source.BusAssignments)
+							source.BusAssignments,
+							source.Equalizer)
 						: source)
 					.ToArray();
 				var requested = new AudioProductionConfiguration(
@@ -3026,7 +3027,8 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			source.Gain,
 			source.Muted,
 			source.FollowRoutedSource,
-			source.BusAssignments.Select(bus => bus.Value).ToArray())).ToArray(),
+			source.BusAssignments.Select(bus => bus.Value).ToArray(),
+			ToWire(source.Equalizer))).ToArray(),
 		configuration.Crossfade is null ? null : new WireAudioCrossfade(
 			configuration.Crossfade.BusId.Value,
 			configuration.Crossfade.FromSourceId.ToString(),
@@ -3056,7 +3058,8 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 				source.Gain,
 				source.Muted,
 				source.FollowRoutedSource,
-				(source.BusAssignments ?? Array.Empty<string>()).Select(bus => new AudioBusId(bus)).ToArray())).ToArray();
+				(source.BusAssignments ?? Array.Empty<string>()).Select(bus => new AudioBusId(bus)).ToArray(),
+				FromWire(source.Equalizer))).ToArray();
 		var crossfade = wire.Crossfade is null ? null : new AudioCrossfadeConfiguration(
 			new AudioBusId(wire.Crossfade.BusId),
 			new MediaSourceId(Identity.Parse(wire.Crossfade.FromSourceId)),
@@ -3086,6 +3089,22 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 				? (AudioClipStrategy)wire.ClipStrategy
 				: throw new InvalidDataException("Audio clipping strategy is invalid."));
 	}
+
+	private static AudioSourceEqualizerConfiguration? FromWire(WireAudioEqualizer? wire) =>
+		wire is null
+			? null
+			: new AudioSourceEqualizerConfiguration(
+				new AudioLowShelfEqualizerBand(wire.LowShelf.Enabled, wire.LowShelf.FrequencyHz, wire.LowShelf.GainDb),
+				new AudioBellEqualizerBand(wire.Mid.Enabled, wire.Mid.FrequencyHz, wire.Mid.GainDb, wire.Mid.Q),
+				new AudioHighShelfEqualizerBand(wire.HighShelf.Enabled, wire.HighShelf.FrequencyHz, wire.HighShelf.GainDb));
+
+	private static WireAudioEqualizer? ToWire(AudioSourceEqualizerConfiguration? equalizer) =>
+		equalizer is null
+			? null
+			: new WireAudioEqualizer(
+				new WireAudioShelfEqualizerBand(equalizer.LowShelf.Enabled, equalizer.LowShelf.FrequencyHz, equalizer.LowShelf.GainDb),
+				new WireAudioBellEqualizerBand(equalizer.Mid.Enabled, equalizer.Mid.FrequencyHz, equalizer.Mid.GainDb, equalizer.Mid.Q),
+				new WireAudioShelfEqualizerBand(equalizer.HighShelf.Enabled, equalizer.HighShelf.FrequencyHz, equalizer.HighShelf.GainDb));
 
 	private static WireProductionCgTextSnapshot ToWire(RuntimeProductionCgTextSnapshot snapshot) => new(
 		snapshot.Active,
@@ -3668,7 +3687,10 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		ulong ClippedSampleValues = 0,
 		int ActiveSourceCount = 0,
 		int MissingSourceCount = 0);
-	private sealed record WireAudioProductionSource(string SourceId, double Gain, bool Muted, bool FollowRoutedSource, string[]? BusAssignments);
+	private sealed record WireAudioShelfEqualizerBand(bool Enabled, double FrequencyHz, double GainDb);
+	private sealed record WireAudioBellEqualizerBand(bool Enabled, double FrequencyHz, double GainDb, double Q);
+	private sealed record WireAudioEqualizer(WireAudioShelfEqualizerBand LowShelf, WireAudioBellEqualizerBand Mid, WireAudioShelfEqualizerBand HighShelf);
+	private sealed record WireAudioProductionSource(string SourceId, double Gain, bool Muted, bool FollowRoutedSource, string[]? BusAssignments, WireAudioEqualizer? Equalizer = null);
 	private sealed record WireAudioCrossfade(string BusId, string FromSourceId, string ToSourceId, ulong StartSamplePosition, uint DurationSamples, int Law);
 	private sealed record WireAudioDucking(string BusId, bool Enabled, string SidechainSourceId, string[]? TargetSourceIds, double Threshold, double Attenuation, uint AttackSamples, uint HoldSamples, uint ReleaseSamples);
 	private sealed record WireAudioProductionConfiguration(ulong Revision, WireAudioProductionBus[]? Buses, WireAudioProductionSource[]? Sources, WireAudioCrossfade? Crossfade, WireAudioDucking? Ducking, int ClipStrategy);

@@ -31,12 +31,17 @@ public sealed class AudioProductionEngine
 {
 	private readonly object _gate = new();
 	private AudioProductionConfiguration _configuration;
+	private BoundedParametricEqualizerState[] _equalizerStates;
 	private double _duckingGain = 1;
 	private uint _duckingHoldRemaining;
+	private bool _equalizerBlockInitialized;
+	private ulong _equalizerBlockSamplePosition;
+	private uint _equalizerBlockSampleCount;
 
 	public AudioProductionEngine(AudioProductionConfiguration configuration)
 	{
 		_configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
+		_equalizerStates = CreateEqualizerStates(configuration);
 	}
 
 	public AudioProductionConfiguration Configuration
@@ -57,8 +62,12 @@ public sealed class AudioProductionEngine
 				throw new InvalidOperationException(
 					$"Audio production revision cannot move backwards from '{_configuration.Revision}' to '{configuration.Revision}'.");
 
-			var oldDucking = _configuration.Ducking;
+			var oldConfiguration = _configuration;
+			var oldStates = _equalizerStates;
+			var oldDucking = oldConfiguration.Ducking;
+			_equalizerStates = ReconcileEqualizerStates(oldConfiguration, oldStates, configuration);
 			_configuration = configuration;
+			_equalizerBlockInitialized = false;
 			if (configuration.Ducking is null ||
 				oldDucking is null ||
 				configuration.Ducking.SidechainSourceId != oldDucking.SidechainSourceId ||
@@ -89,6 +98,7 @@ public sealed class AudioProductionEngine
 			var configuration = _configuration;
 			var bus = FindBus(configuration.Buses, busId);
 			destination.Clear();
+			BeginEqualizerBlock(samplePosition, sampleCount);
 
 			var sidechainIndex = -1;
 			var ducking = configuration.Ducking is { Enabled: true } configuredDucking &&
@@ -105,13 +115,23 @@ public sealed class AudioProductionEngine
 				var source = configuration.Sources[sourceIndex];
 				if (!source.IsAssignedTo(busId))
 					continue;
+
+				if (_equalizerStates[sourceIndex].IsActive)
+					_equalizerStates[sourceIndex].BeginPass();
+
 				if (source.FollowRoutedSource && source.SourceId != routedSourceId)
 					continue;
 				var bufferIndex = FindBuffer(sourceBuffers, source.SourceId);
 				if (bufferIndex >= 0 && sourceBuffers[bufferIndex].Available)
+				{
+					if (sourceBuffers[bufferIndex].Samples.Length < requiredValues)
+						throw new ArgumentException($"Audio source '{source.SourceId}' payload is shorter than the requested stereo block.", nameof(sourceBuffers));
 					activeSources++;
+				}
 				else
+				{
 					missingSources++;
+				}
 			}
 
 			double leftPeak = 0;
@@ -134,37 +154,51 @@ public sealed class AudioProductionEngine
 					var source = configuration.Sources[sourceIndex];
 					if (!source.IsAssignedTo(busId))
 						continue;
-					if (source.FollowRoutedSource && source.SourceId != routedSourceId)
-						continue;
 
 					var bufferIndex = FindBuffer(sourceBuffers, source.SourceId);
-					if (bufferIndex < 0)
-						continue;
-					ref readonly var buffer = ref sourceBuffers[bufferIndex];
-					if (!buffer.Available)
-						continue;
-					if (buffer.Samples.Length < requiredValues)
-						throw new ArgumentException($"Audio source '{source.SourceId}' payload is shorter than the requested stereo block.", nameof(sourceBuffers));
+					var available = bufferIndex >= 0 && sourceBuffers[bufferIndex].Available;
+					float sourceLeft = 0;
+					float sourceRight = 0;
+					if (available)
+					{
+						ref readonly var buffer = ref sourceBuffers[bufferIndex];
+						var samples = buffer.Samples.Span;
+						var offset = frame * 2;
+						sourceLeft = float.IsFinite(samples[offset]) ? samples[offset] : 0f;
+						sourceRight = float.IsFinite(samples[offset + 1]) ? samples[offset + 1] : 0f;
+					}
 
-					var gain = source.Muted ? 0d : source.Gain;
+					var equalizer = _equalizerStates[sourceIndex];
+					double equalizedLeft = sourceLeft;
+					double equalizedRight = sourceRight;
+					if (equalizer.IsActive)
+					{
+						var sourceGain = source.Muted ? 0d : source.Gain;
+						(equalizedLeft, equalizedRight) = equalizer.Process(
+							sourceLeft * sourceGain,
+							sourceRight * sourceGain);
+					}
+
+					if (!available || (source.FollowRoutedSource && source.SourceId != routedSourceId))
+						continue;
+
+					var contributionGain = equalizer.IsActive
+						? 1d
+						: source.Muted ? 0d : source.Gain;
 					if (configuration.Crossfade is { } crossfade && crossfade.BusId == busId)
 					{
 						var (fromGain, toGain, progress) = ResolveCrossfade(crossfade, absoluteSample);
 						if (source.SourceId == crossfade.FromSourceId)
-							gain *= fromGain;
+							contributionGain *= fromGain;
 						else if (source.SourceId == crossfade.ToSourceId)
-							gain *= toGain;
+							contributionGain *= toGain;
 						finalCrossfadeProgress = progress;
 					}
 					if (ducking is not null && ducking.Targets(source.SourceId))
-						gain *= duckGain;
+						contributionGain *= duckGain;
 
-					var samples = buffer.Samples.Span;
-					var offset = frame * 2;
-					var sourceLeft = float.IsFinite(samples[offset]) ? samples[offset] : 0f;
-					var sourceRight = float.IsFinite(samples[offset + 1]) ? samples[offset + 1] : 0f;
-					left += sourceLeft * gain;
-					right += sourceRight * gain;
+					left += equalizedLeft * contributionGain;
+					right += equalizedRight * contributionGain;
 				}
 
 				left *= masterGain;
@@ -178,6 +212,12 @@ public sealed class AudioProductionEngine
 				destination[outputOffset + 1] = clippedRight;
 				leftPeak = Math.Max(leftPeak, Math.Abs((double)clippedLeft));
 				rightPeak = Math.Max(rightPeak, Math.Abs((double)clippedRight));
+			}
+
+			for (var sourceIndex = 0; sourceIndex < configuration.Sources.Count; sourceIndex++)
+			{
+				if (configuration.Sources[sourceIndex].IsAssignedTo(busId) && _equalizerStates[sourceIndex].IsActive)
+					_equalizerStates[sourceIndex].CommitPass();
 			}
 
 			return new AudioProductionBlockResult(
@@ -194,6 +234,22 @@ public sealed class AudioProductionEngine
 				activeSources,
 				missingSources);
 		}
+	}
+
+	private void BeginEqualizerBlock(ulong samplePosition, uint sampleCount)
+	{
+		if (_equalizerBlockInitialized &&
+			_equalizerBlockSamplePosition == samplePosition &&
+			_equalizerBlockSampleCount == sampleCount)
+		{
+			return;
+		}
+
+		for (var index = 0; index < _equalizerStates.Length; index++)
+			_equalizerStates[index].CaptureBlockStart();
+		_equalizerBlockSamplePosition = samplePosition;
+		_equalizerBlockSampleCount = sampleCount;
+		_equalizerBlockInitialized = true;
 	}
 
 	private double AdvanceDucking(
@@ -307,5 +363,44 @@ public sealed class AudioProductionEngine
 				return index;
 		}
 		return -1;
+	}
+
+	private static BoundedParametricEqualizerState[] CreateEqualizerStates(AudioProductionConfiguration configuration)
+	{
+		var states = new BoundedParametricEqualizerState[configuration.Sources.Count];
+		for (var index = 0; index < configuration.Sources.Count; index++)
+		{
+			var source = configuration.Sources[index];
+			states[index] = new BoundedParametricEqualizerState(source.SourceId, source.Equalizer);
+		}
+		return states;
+	}
+
+	private static BoundedParametricEqualizerState[] ReconcileEqualizerStates(
+		AudioProductionConfiguration oldConfiguration,
+		BoundedParametricEqualizerState[] oldStates,
+		AudioProductionConfiguration newConfiguration)
+	{
+		var states = new BoundedParametricEqualizerState[newConfiguration.Sources.Count];
+		for (var newIndex = 0; newIndex < newConfiguration.Sources.Count; newIndex++)
+		{
+			var source = newConfiguration.Sources[newIndex];
+			var reused = false;
+			for (var oldIndex = 0; oldIndex < oldConfiguration.Sources.Count; oldIndex++)
+			{
+				var oldSource = oldConfiguration.Sources[oldIndex];
+				if (oldSource.SourceId != source.SourceId)
+					continue;
+				if (Equals(oldSource.Equalizer, source.Equalizer))
+				{
+					states[newIndex] = oldStates[oldIndex];
+					reused = true;
+				}
+				break;
+			}
+			if (!reused)
+				states[newIndex] = new BoundedParametricEqualizerState(source.SourceId, source.Equalizer);
+		}
+		return states;
 	}
 }
