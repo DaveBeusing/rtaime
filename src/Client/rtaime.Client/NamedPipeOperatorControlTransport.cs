@@ -282,26 +282,35 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		return ReadCompositingLayers(response);
 	}
 
-	public async ValueTask<IReadOnlyList<OperatorCompositingLayerDescriptor>> SetCompositingLayerProcessingNodeAsync(
+	public ValueTask<IReadOnlyList<OperatorCompositingLayerDescriptor>> SetCompositingLayerProcessingNodeAsync(
 		string layerId,
 		OperatorCompositingProcessingNodeDescriptor? processingNode,
+		CancellationToken cancellationToken = default) =>
+		SetCompositingLayerProcessingStackAsync(
+			layerId,
+			processingNode is null
+				? Array.Empty<OperatorCompositingProcessingNodeDescriptor>()
+				: new[] { processingNode },
+			cancellationToken);
+
+	public async ValueTask<IReadOnlyList<OperatorCompositingLayerDescriptor>> SetCompositingLayerProcessingStackAsync(
+		string layerId,
+		IReadOnlyList<OperatorCompositingProcessingNodeDescriptor> processingStack,
 		CancellationToken cancellationToken = default)
 	{
 		if (string.IsNullOrWhiteSpace(layerId)) throw new ArgumentException("Compositing layer identity is required.", nameof(layerId));
+		ArgumentNullException.ThrowIfNull(processingStack);
+		var canonical = processingStack.ToArray();
+		if (canonical.Length > OperatorCompositingLayerDescriptor.MaximumProcessingNodeCount)
+			throw new ArgumentException($"Compositing processing stack supports at most {OperatorCompositingLayerDescriptor.MaximumProcessingNodeCount} nodes.", nameof(processingStack));
+		if (canonical.Select(node => node.NodeId).Distinct(StringComparer.Ordinal).Count() != canonical.Length)
+			throw new ArgumentException("Compositing processing stack contains duplicate node identities.", nameof(processingStack));
+
 		var response = await ExchangeAsync(
 			"control.compositing.layer.processing",
 			new WireCompositingLayerProcessing(
 				layerId.Trim(),
-				processingNode is null
-					? null
-					: new WireProcessingNode(
-						processingNode.NodeId,
-						processingNode.Kind,
-						processingNode.Enabled,
-						new WireColorGrade(
-							processingNode.ColorGrade.Brightness,
-							processingNode.ColorGrade.Contrast,
-							processingNode.ColorGrade.Saturation))),
+				canonical.Select(ToWire).ToArray()),
 			cancellationToken).ConfigureAwait(false);
 		return ReadCompositingLayers(response);
 	}
@@ -1761,7 +1770,9 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		layer.CropTop,
 		layer.CropRight,
 		layer.CropBottom,
-		layer.ProcessingNode is null ? null : FromWire(layer.ProcessingNode));
+		processingStack: CanonicalProcessingStack(layer.ProcessingStack, layer.ProcessingNode)
+			.Select(FromWire)
+			.ToArray());
 
 	private static OperatorCompositingProcessingNodeDescriptor FromWire(WireProcessingNode node) => new(
 		node.NodeId,
@@ -1771,6 +1782,32 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 			node.ColorGrade.Brightness,
 			node.ColorGrade.Contrast,
 			node.ColorGrade.Saturation));
+
+	private static WireProcessingNode ToWire(OperatorCompositingProcessingNodeDescriptor node) => new(
+		node.NodeId,
+		node.Kind,
+		node.Enabled,
+		new WireColorGrade(
+			node.ColorGrade.Brightness,
+			node.ColorGrade.Contrast,
+			node.ColorGrade.Saturation));
+
+	private static WireProcessingNode[] CanonicalProcessingStack(
+		WireProcessingNode[]? processingStack,
+		WireProcessingNode? legacyProcessingNode)
+	{
+		if (processingStack is not null && legacyProcessingNode is not null)
+			throw new InvalidDataException("Processing payload must not contain both legacy processing-node and processing-stack representations.");
+		var canonical = processingStack ??
+			(legacyProcessingNode is null ? Array.Empty<WireProcessingNode>() : new[] { legacyProcessingNode });
+		if (canonical.Length > OperatorCompositingLayerDescriptor.MaximumProcessingNodeCount)
+			throw new InvalidDataException($"Processing stack exceeds the maximum of {OperatorCompositingLayerDescriptor.MaximumProcessingNodeCount} nodes.");
+		if (canonical.Any(node => node is null))
+			throw new InvalidDataException("Processing stack must not contain null nodes.");
+		if (canonical.Select(node => node.NodeId).Distinct(StringComparer.Ordinal).Count() != canonical.Length)
+			throw new InvalidDataException("Processing stack contains duplicate node identities.");
+		return canonical;
+	}
 
 	private static OperatorGraphicsOverlayDescriptor FromWire(WireGraphicsOverlay overlay) => new(
 		overlay.AssetLoaded,
@@ -1822,18 +1859,18 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 					layer.CropTop,
 					layer.CropRight,
 					layer.CropBottom,
-					layer.ProcessingNode is null
-						? null
-						: new ProductionCompositingProcessingNodeState(
-							layer.ProcessingNode.NodeId,
-							Enum.IsDefined(typeof(ProductionCompositingProcessingNodeKind), layer.ProcessingNode.Kind)
-								? (ProductionCompositingProcessingNodeKind)layer.ProcessingNode.Kind
+					processingStack: CanonicalProcessingStack(layer.ProcessingStack, layer.ProcessingNode)
+						.Select(node => new ProductionCompositingProcessingNodeState(
+							node.NodeId,
+							Enum.IsDefined(typeof(ProductionCompositingProcessingNodeKind), node.Kind)
+								? (ProductionCompositingProcessingNodeKind)node.Kind
 								: throw new InvalidDataException("Compositing processing node kind is invalid."),
-							layer.ProcessingNode.Enabled,
+							node.Enabled,
 							new ProductionColorGradeSettings(
-								layer.ProcessingNode.ColorGrade.Brightness,
-								layer.ProcessingNode.ColorGrade.Contrast,
-								layer.ProcessingNode.ColorGrade.Saturation)))).ToArray()));
+								node.ColorGrade.Brightness,
+								node.ColorGrade.Contrast,
+								node.ColorGrade.Saturation)))
+						.ToArray())).ToArray()));
 
 	private static void EnsureNotError(WireEnvelope envelope)
 	{
@@ -1908,10 +1945,13 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 	private sealed record WireCompositingLayerTransform(string LayerId, double PositionX, double PositionY, double Scale, double RotationDegrees, double AnchorX, double AnchorY, double CropLeft, double CropTop, double CropRight, double CropBottom);
 	private sealed record WireColorGrade(double Brightness, double Contrast, double Saturation);
 	private sealed record WireProcessingNode(string NodeId, int Kind, bool Enabled, WireColorGrade ColorGrade);
-	private sealed record WireCompositingLayerProcessing(string LayerId, WireProcessingNode? ProcessingNode);
+	private sealed record WireCompositingLayerProcessing(
+		string LayerId,
+		WireProcessingNode[]? ProcessingStack = null,
+		WireProcessingNode? ProcessingNode = null);
 	private sealed record WireCompositingLayerOrder(string[] LayerIds);
 	private sealed record WireGraphicsOverlay(bool AssetLoaded, string? AssetName, uint AssetWidth, uint AssetHeight, bool Visible, double PositionX, double PositionY, double Scale);
-	private sealed record WireCompositingLayer(string LayerId, int Kind, int Order, bool Visible, byte Opacity, double PositionX, double PositionY, double Scale, string ContentIdentity, double RotationDegrees = 0, double AnchorX = 0, double AnchorY = 0, double CropLeft = 0, double CropTop = 0, double CropRight = 0, double CropBottom = 0, WireProcessingNode? ProcessingNode = null);
+	private sealed record WireCompositingLayer(string LayerId, int Kind, int Order, bool Visible, byte Opacity, double PositionX, double PositionY, double Scale, string ContentIdentity, double RotationDegrees = 0, double AnchorX = 0, double AnchorY = 0, double CropLeft = 0, double CropTop = 0, double CropRight = 0, double CropBottom = 0, WireProcessingNode[]? ProcessingStack = null, WireProcessingNode? ProcessingNode = null);
 	private sealed record WireCompositingState(string Version, WireCompositingLayer[] Layers);
 	private sealed record WireRundownSave(string RundownJson, ulong ExpectedStorageVersion);
 	private sealed record WireRundownItemRequest(string ItemId);

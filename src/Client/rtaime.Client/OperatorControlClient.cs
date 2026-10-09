@@ -316,6 +316,9 @@ public sealed record OperatorCompositingProcessingNodeDescriptor
 
 public sealed record OperatorCompositingLayerDescriptor
 {
+    public const int MaximumProcessingNodeCount = 4;
+    private readonly ReadOnlyCollection<OperatorCompositingProcessingNodeDescriptor> _processingStack;
+
     public OperatorCompositingLayerDescriptor(
         string layerId,
         int kind,
@@ -333,7 +336,8 @@ public sealed record OperatorCompositingLayerDescriptor
         double cropTop = 0,
         double cropRight = 0,
         double cropBottom = 0,
-        OperatorCompositingProcessingNodeDescriptor? processingNode = null)
+        OperatorCompositingProcessingNodeDescriptor? processingNode = null,
+        IReadOnlyList<OperatorCompositingProcessingNodeDescriptor>? processingStack = null)
     {
         if (string.IsNullOrWhiteSpace(layerId)) throw new ArgumentException("Compositing layer identity is required.", nameof(layerId));
         if (kind is < 1 or > 3) throw new ArgumentOutOfRangeException(nameof(kind));
@@ -351,6 +355,18 @@ public sealed record OperatorCompositingLayerDescriptor
         if (cropLeft + cropRight >= 1) throw new ArgumentOutOfRangeException(nameof(cropRight));
         if (cropTop + cropBottom >= 1) throw new ArgumentOutOfRangeException(nameof(cropBottom));
         if (string.IsNullOrWhiteSpace(contentIdentity)) throw new ArgumentException("Compositing layer content identity is required.", nameof(contentIdentity));
+        if (processingNode is not null && processingStack is not null)
+            throw new ArgumentException("Specify either the legacy processing node or the canonical processing stack, not both.", nameof(processingStack));
+
+        var canonical = processingStack is null
+            ? processingNode is null ? Array.Empty<OperatorCompositingProcessingNodeDescriptor>() : new[] { processingNode }
+            : processingStack.ToArray();
+        if (canonical.Length > MaximumProcessingNodeCount)
+            throw new ArgumentException($"Compositing processing stack supports at most {MaximumProcessingNodeCount} nodes.", nameof(processingStack));
+        if (canonical.Any(node => node is null))
+            throw new ArgumentException("Compositing processing stack must not contain null nodes.", nameof(processingStack));
+        if (canonical.Select(node => node.NodeId).Distinct(StringComparer.Ordinal).Count() != canonical.Length)
+            throw new ArgumentException("Compositing processing node identities must be unique within a layer.", nameof(processingStack));
 
         LayerId = layerId.Trim();
         Kind = kind;
@@ -368,7 +384,7 @@ public sealed record OperatorCompositingLayerDescriptor
         CropTop = cropTop;
         CropRight = cropRight;
         CropBottom = cropBottom;
-        ProcessingNode = processingNode;
+        _processingStack = Array.AsReadOnly(canonical);
     }
 
     public string LayerId { get; }
@@ -387,7 +403,8 @@ public sealed record OperatorCompositingLayerDescriptor
     public double CropTop { get; }
     public double CropRight { get; }
     public double CropBottom { get; }
-    public OperatorCompositingProcessingNodeDescriptor? ProcessingNode { get; }
+    public IReadOnlyList<OperatorCompositingProcessingNodeDescriptor> ProcessingStack => _processingStack;
+    public OperatorCompositingProcessingNodeDescriptor? ProcessingNode => _processingStack.Count == 0 ? null : _processingStack[0];
 }
 
 public sealed record OperatorAudioInputDescriptor
@@ -944,6 +961,12 @@ public interface IOperatorControlTransport
         CancellationToken cancellationToken = default) =>
         ValueTask.FromException<IReadOnlyList<OperatorCompositingLayerDescriptor>>(new NotSupportedException("Operator transport does not expose compositing layer processing control."));
 
+    ValueTask<IReadOnlyList<OperatorCompositingLayerDescriptor>> SetCompositingLayerProcessingStackAsync(
+        string layerId,
+        IReadOnlyList<OperatorCompositingProcessingNodeDescriptor> processingStack,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<IReadOnlyList<OperatorCompositingLayerDescriptor>>(new NotSupportedException("Operator transport does not expose compositing processing-stack control."));
+
     ValueTask<IReadOnlyList<OperatorCompositingLayerDescriptor>> ReorderCompositingLayersAsync(
         IReadOnlyList<string> orderedLayerIds,
         CancellationToken cancellationToken = default) =>
@@ -1445,16 +1468,30 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
         return result;
     }
 
-    public async ValueTask<IReadOnlyList<OperatorCompositingLayerDescriptor>> SetCompositingLayerProcessingNodeAsync(
+    public ValueTask<IReadOnlyList<OperatorCompositingLayerDescriptor>> SetCompositingLayerProcessingNodeAsync(
         string layerId,
         OperatorCompositingProcessingNodeDescriptor? processingNode,
+        CancellationToken cancellationToken = default) =>
+        SetCompositingLayerProcessingStackAsync(
+            layerId,
+            processingNode is null
+                ? Array.Empty<OperatorCompositingProcessingNodeDescriptor>()
+                : new[] { processingNode },
+            cancellationToken);
+
+    public async ValueTask<IReadOnlyList<OperatorCompositingLayerDescriptor>> SetCompositingLayerProcessingStackAsync(
+        string layerId,
+        IReadOnlyList<OperatorCompositingProcessingNodeDescriptor> processingStack,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(layerId))
             throw new ArgumentException("Compositing layer identity is required.", nameof(layerId));
+        ArgumentNullException.ThrowIfNull(processingStack);
+        if (processingStack.Count > OperatorCompositingLayerDescriptor.MaximumProcessingNodeCount)
+            throw new ArgumentException($"Compositing processing stack supports at most {OperatorCompositingLayerDescriptor.MaximumProcessingNodeCount} nodes.", nameof(processingStack));
         RequireSnapshot();
         var result = await _transport
-            .SetCompositingLayerProcessingNodeAsync(layerId.Trim(), processingNode, cancellationToken)
+            .SetCompositingLayerProcessingStackAsync(layerId.Trim(), processingStack, cancellationToken)
             .ConfigureAwait(false);
         await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
         return result;
