@@ -23,6 +23,8 @@ $dynamicsPath = Join-Path $repositoryRoot "src/Media/rtaime.Media/BoundedBusDyna
 $runtimePath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/V1RuntimeHostService.cs"
 $operatorPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorViewModel.cs"
 $operatorUiPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MainWindow.xaml"
+$operatorMixerUiPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/AudioMixerControl.xaml"
+$operatorMixerViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorAudioMixerViewModel.cs"
 $unitPath = Join-Path $repositoryRoot "tests/rtaime.Tests.Unit/AudioProductionEngineTests.cs"
 $performancePath = Join-Path $repositoryRoot "tests/rtaime.Tests.Performance/AudioProductionPerformanceTests.cs"
 $equalizerUnitContractPath = Join-Path $repositoryRoot "tests/rtaime.Tests.Unit/BoundedParametricEqualizerContractTests.cs"
@@ -36,7 +38,7 @@ $productionIpcIntegrationPath = Join-Path $repositoryRoot "tests/rtaime.Tests.In
 $showProjectPersistenceIntegrationPath = Join-Path $repositoryRoot "tests/rtaime.Tests.Integration/ShowProjectPersistenceIntegrationTests.cs"
 $documentationPath = Join-Path $repositoryRoot "docs/AdvancedAudioProduction.md"
 
-foreach ($path in @($contractsPath, $enginePath, $equalizerPath, $dynamicsPath, $runtimePath, $operatorPath, $operatorUiPath, $unitPath, $performancePath, $equalizerUnitContractPath, $equalizerUnitProcessingPath, $equalizerPerformancePath, $dynamicsUnitContractPath, $dynamicsUnitProcessingPath, $dynamicsPerformancePath, $recordingIntegrationPath, $productionIpcIntegrationPath, $showProjectPersistenceIntegrationPath, $documentationPath)) {
+foreach ($path in @($contractsPath, $enginePath, $equalizerPath, $dynamicsPath, $runtimePath, $operatorPath, $operatorUiPath, $operatorMixerUiPath, $operatorMixerViewModelPath, $unitPath, $performancePath, $equalizerUnitContractPath, $equalizerUnitProcessingPath, $equalizerPerformancePath, $dynamicsUnitContractPath, $dynamicsUnitProcessingPath, $dynamicsPerformancePath, $recordingIntegrationPath, $productionIpcIntegrationPath, $showProjectPersistenceIntegrationPath, $documentationPath)) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required advanced-audio artifact is missing: '$path'."
 }
 
@@ -47,6 +49,8 @@ $dynamics = Get-Content -LiteralPath $dynamicsPath -Raw
 $runtime = Get-Content -LiteralPath $runtimePath -Raw
 $operator = Get-Content -LiteralPath $operatorPath -Raw
 $operatorUi = Get-Content -LiteralPath $operatorUiPath -Raw
+$operatorMixerUi = Get-Content -LiteralPath $operatorMixerUiPath -Raw
+$operatorMixerViewModel = Get-Content -LiteralPath $operatorMixerViewModelPath -Raw
 $unit = Get-Content -LiteralPath $unitPath -Raw
 $performance = Get-Content -LiteralPath $performancePath -Raw
 $equalizerUnitContract = Get-Content -LiteralPath $equalizerUnitContractPath -Raw
@@ -92,8 +96,9 @@ Assert-Condition ($runtime -match 'programAudioBuffer,\s*programAudioPayload') "
 Assert-Condition ($runtime -notmatch 'ControlHost') "Runtime audio processing must not depend on ControlHost implementation."
 
 Assert-Condition ($operator -match 'SetAudioProductionAsync') "Operator advanced-audio mutations must use the governed client/control path."
-Assert-Condition ($operatorUi -match 'ADVANCED PROGRAM MIX' -and $operatorUi -match 'StartAudioCrossfadeCommand' -and $operatorUi -match 'ToggleAudioDuckingCommand') "Operator must expose the confirmed advanced mixer through established custom controls."
-Assert-Condition ($operatorUi -notmatch '<Slider|<Button\b|<TextBox\b') "Advanced audio UI must not introduce WPF default Button/TextBox/Slider controls."
+Assert-Condition ($operatorUi -match '<local:AudioMixerControl' -and $operatorMixerUi -match 'AUDIO MIXER' -and $operatorMixerUi -match 'Owner.StartAudioCrossfadeCommand' -and $operatorMixerUi -match 'Owner.ToggleAudioDuckingCommand') "Operator must expose the confirmed bounded advanced mixer through established custom controls."
+Assert-Condition ($operatorMixerViewModel -match 'AudioSourceEqualizerConfiguration' -and $operatorMixerViewModel -match 'AudioBusDynamicsConfiguration' -and $operatorMixerViewModel -match 'SetAudioProductionAsync' -or $operator -match 'ApplyAudioMixerConfigurationAsync[\s\S]+SetAudioProductionAsync') "Operator mixer must edit typed EQ/dynamics only through the governed production configuration seam."
+Assert-Condition ($operatorMixerUi -notmatch '<Slider|<Button\b|<TextBox\b') "Advanced audio mixer UI must not introduce WPF default Button/TextBox/Slider controls."
 
 Assert-Condition ($unit -match 'Steady_state_processing_does_not_allocate_per_block') "Advanced audio unit coverage must retain an allocation regression guard."
 Assert-Condition ($unit -match 'Equal_power_crossfade_has_exact_endpoints_and_expected_midpoint') "Crossfade deterministic sample tests are required."
