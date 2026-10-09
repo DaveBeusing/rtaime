@@ -98,7 +98,8 @@ public enum ProductionCompositingLayerKind
 
 public enum ProductionCompositingProcessingNodeKind
 {
-    ColorGrade = 1
+    ColorGrade = 1,
+    ChromaKey = 2
 }
 
 public sealed record ProductionColorGradeSettings
@@ -122,31 +123,67 @@ public sealed record ProductionColorGradeSettings
     public double Saturation { get; }
 }
 
+public sealed record ProductionChromaKeySettings
+{
+    public ProductionChromaKeySettings(byte keyRed, byte keyGreen, byte keyBlue, double tolerance, double softness, double spillSuppression)
+    {
+        if (!double.IsFinite(tolerance) || tolerance is < 0.0 or > 1.0)
+            throw new ArgumentOutOfRangeException(nameof(tolerance), "Tolerance must be finite and in the inclusive range 0..1.");
+        if (!double.IsFinite(softness) || softness is < 0.0 or > 1.0)
+            throw new ArgumentOutOfRangeException(nameof(softness), "Softness must be finite and in the inclusive range 0..1.");
+        if (!double.IsFinite(spillSuppression) || spillSuppression is < 0.0 or > 1.0)
+            throw new ArgumentOutOfRangeException(nameof(spillSuppression), "Spill suppression must be finite and in the inclusive range 0..1.");
+
+        KeyRed = keyRed;
+        KeyGreen = keyGreen;
+        KeyBlue = keyBlue;
+        Tolerance = tolerance;
+        Softness = softness;
+        SpillSuppression = spillSuppression;
+    }
+
+    public byte KeyRed { get; }
+    public byte KeyGreen { get; }
+    public byte KeyBlue { get; }
+    public double Tolerance { get; }
+    public double Softness { get; }
+    public double SpillSuppression { get; }
+}
+
 public sealed record ProductionCompositingProcessingNodeState
 {
     public ProductionCompositingProcessingNodeState(
         string nodeId,
         ProductionCompositingProcessingNodeKind kind,
         bool enabled,
-        ProductionColorGradeSettings colorGrade)
+        ProductionColorGradeSettings? colorGrade = null,
+        ProductionChromaKeySettings? chromaKey = null)
     {
         if (string.IsNullOrWhiteSpace(nodeId) || nodeId.Length > 64)
             throw new ArgumentException("Processing node identity is required and must not exceed 64 characters.", nameof(nodeId));
         if (!Enum.IsDefined(kind))
             throw new ArgumentOutOfRangeException(nameof(kind));
-        if (kind != ProductionCompositingProcessingNodeKind.ColorGrade)
-            throw new NotSupportedException($"Processing node kind '{kind}' is not supported.");
+
+        switch (kind)
+        {
+            case ProductionCompositingProcessingNodeKind.ColorGrade when colorGrade is null || chromaKey is not null:
+                throw new ArgumentException("Color Grade nodes require only Color Grade settings.");
+            case ProductionCompositingProcessingNodeKind.ChromaKey when chromaKey is null || colorGrade is not null:
+                throw new ArgumentException("Chroma Key nodes require only Chroma Key settings.");
+        }
 
         NodeId = nodeId.Trim();
         Kind = kind;
         Enabled = enabled;
-        ColorGrade = colorGrade ?? throw new ArgumentNullException(nameof(colorGrade));
+        ColorGrade = colorGrade;
+        ChromaKey = chromaKey;
     }
 
     public string NodeId { get; }
     public ProductionCompositingProcessingNodeKind Kind { get; }
     public bool Enabled { get; }
-    public ProductionColorGradeSettings ColorGrade { get; }
+    public ProductionColorGradeSettings? ColorGrade { get; }
+    public ProductionChromaKeySettings? ChromaKey { get; }
 }
 
 public static class ProductionCompositingLayerIds
