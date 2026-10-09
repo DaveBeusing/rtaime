@@ -664,7 +664,7 @@ public sealed class GraphicsOverlayIntegrationTests
 	}
 
 	[Fact]
-	public async Task Recording_payload_uses_the_same_post_graphics_program_pixels()
+	public async Task Recording_and_monitoring_use_the_same_post_processing_program_pixels()
 	{
 		var root = Path.Combine(Path.GetTempPath(), "rtaime-graphics-recording", Guid.NewGuid().ToString("N"));
 		Directory.CreateDirectory(root);
@@ -672,15 +672,44 @@ public sealed class GraphicsOverlayIntegrationTests
 		{
 			var writer = new ReferenceRecordingPayloadWriter(root);
 			await using var fixture = await Fixture.CreateAsync(writer);
-			fixture.Runtime.LoadGraphicsOverlay("record-logo.rgba", 1, 1, new byte[] { 255, 0, 0, 255 });
+			await using var monitoring = fixture.Runtime.MonitoringHub.Subscribe(capacity: 4, requiresCpuFallback: true);
+			fixture.Runtime.LoadGraphicsOverlay("record-logo.rgba", 1, 1, new byte[] { 0, 200, 80, 255 });
 			fixture.Runtime.SetGraphicsOverlay(true, 0.0, 0.0, 1.0);
+			fixture.Runtime.SetCompositingLayerProcessingStack(
+				V1RuntimeHostService.BitmapGraphicsLayerId,
+				[
+					new PreparedCompositingProcessingNodeState(
+						"record-key",
+						PreparedCompositingProcessingNodeKind.ChromaKey,
+						true,
+						chromaKey: new PreparedChromaKeySettings(0, 255, 0, 0.1, 0.5, 0.6)),
+					new PreparedCompositingProcessingNodeState(
+						"record-grade",
+						PreparedCompositingProcessingNodeKind.ColorGrade,
+						true,
+						colorGrade: new PreparedColorGradeSettings(0.05, 1.2, 0.4))
+				]);
 
 			var outputId = RecordingOutputId.New();
 			var start = await fixture.Runtime.StartRecordingAsync(RecordingSessionId.New(), outputId);
 			Assert.True(start.Succeeded, start.Failure?.ToString());
 
 			using var program = fixture.Runtime.ProcessNextBoundary();
-			AssertPixel(program.ProgramPixels, fixture.Format, 0, 0, 255, 0, 0, 255);
+			AssertPixel(program.ProgramPixels, fixture.Format, 0, 0, 73, 131, 171, 255);
+
+			using var monitorTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+			MonitoringFrame? programMonitoring = null;
+			for (var index = 0; index < 3 && programMonitoring is null; index++)
+			{
+				var frame = await monitoring.ReadAsync(monitorTimeout.Token);
+				if (frame.Descriptor.StreamKind == MonitoringStreamKind.Program)
+					programMonitoring = frame;
+			}
+			Assert.NotNull(programMonitoring);
+			Assert.True(programMonitoring!.HasFallbackPayload);
+			Assert.Equal(
+				program.ProgramPixels.Span[..4].ToArray(),
+				programMonitoring.Pixels.Span[..4].ToArray());
 
 			var stop = await fixture.Runtime.StopRecordingAsync();
 			Assert.Equal(RecordingStopStatus.Stopped, stop.Status);
@@ -689,7 +718,7 @@ public sealed class GraphicsOverlayIntegrationTests
 			var artifact = ReferenceRecordingPayloadReader.Read(writer.FinalPath!);
 			var sample = Assert.Single(artifact.Samples);
 			Assert.True(program.ProgramPixels.Span.SequenceEqual(sample.VideoPayload));
-			AssertPixel(sample.VideoPayload, fixture.Format, 0, 0, 255, 0, 0, 255);
+			AssertPixel(sample.VideoPayload, fixture.Format, 0, 0, 73, 131, 171, 255);
 		}
 		finally
 		{
