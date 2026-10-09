@@ -61,7 +61,7 @@ Assert-Condition ($engine -notmatch 'DateTime|Stopwatch|Task\.Delay') "Audio DSP
 Assert-Condition ($engine -notmatch 'new float\[') "The steady-state mix engine must not allocate sample buffers."
 Assert-Condition ($engine -match 'StartSamplePosition' -or $engine -match 'startSamplePosition') "Crossfade progression must remain sample-position based."
 Assert-Condition ($engine -match 'BoundedParametricEqualizerState' -and $engine -match 'BeginEqualizerBlock') "AudioProductionEngine must own per-source equalizer execution and multi-bus state replay."
-Assert-Condition ($equalizer -match 'ProcessSample' -and $equalizer -match 'transposed' -or $equalizer -match 'z1') "Equalizer DSP must retain deterministic biquad state processing."
+Assert-Condition (($equalizer -match 'ProcessSample') -and (($equalizer -match 'transposed') -or ($equalizer -match 'z1'))) "Equalizer DSP must retain deterministic biquad state processing."
 Assert-Condition ($equalizer -notmatch 'DateTime|Stopwatch|Task\.Delay') "Equalizer DSP must not depend on wall clock or asynchronous timers."
 
 Assert-Condition ($runtime -match 'AudioProductionEngine') "RuntimeHost must own advanced audio processing."
