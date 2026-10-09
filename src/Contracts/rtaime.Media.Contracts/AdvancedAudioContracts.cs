@@ -60,8 +60,8 @@ public sealed record AudioProductionSourceConfiguration
 		IReadOnlyList<AudioBusId> busAssignments)
 	{
 		ArgumentNullException.ThrowIfNull(busAssignments);
-		if (busAssignments.Count is 0 or > AudioProductionLimits.MaximumBuses)
-			throw new ArgumentException("An audio source must be assigned to between one and the maximum supported audio buses.", nameof(busAssignments));
+		if (busAssignments.Count > AudioProductionLimits.MaximumBuses)
+			throw new ArgumentException("An audio source may be assigned to at most the maximum supported audio buses.", nameof(busAssignments));
 		if (busAssignments.Distinct().Count() != busAssignments.Count)
 			throw new ArgumentException("Audio source bus assignments must be unique.", nameof(busAssignments));
 
