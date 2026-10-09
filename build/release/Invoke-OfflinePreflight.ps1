@@ -81,7 +81,7 @@ function Resolve-NdiRuntimePath {
 		$directory = [Environment]::GetEnvironmentVariable([string]$directoryVariable)
 		if ([string]::IsNullOrWhiteSpace($directory)) { continue }
 		try {
-			$candidate = [System.IO.Path]::GetFullPath((Join-Path $directory ([string]$Requirement.libraryFileName))
+			$candidate = [System.IO.Path]::GetFullPath((Join-Path $directory ([string]$Requirement.libraryFileName)))
 			if (Test-Path -LiteralPath $candidate -PathType Leaf) { return $candidate }
 		} catch { }
 	}
