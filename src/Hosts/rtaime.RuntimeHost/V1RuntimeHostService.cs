@@ -2121,7 +2121,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 						gain.Linear,
 						muted,
 						source.FollowRoutedSource,
-						source.BusAssignments)
+						source.BusAssignments,
+						source.Equalizer)
 					: source)
 				.ToArray();
 			var updated = new AudioProductionConfiguration(
