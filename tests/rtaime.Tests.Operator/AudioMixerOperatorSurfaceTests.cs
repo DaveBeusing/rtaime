@@ -78,10 +78,10 @@ public sealed class AudioMixerOperatorSurfaceTests
 		Assert.All(owner.AudioMixer.Sources, source => Assert.Equal(4, source.Assignments.Count));
 		Assert.All(owner.AudioMixer.Sources, source => Assert.All(source.Assignments, assignment => Assert.True(assignment.IsAssigned)));
 		Assert.Equal("MISSING / UNDERRUN", owner.AudioMixer.Sources[^1].RuntimeState);
-		var program = Assert.Single(owner.AudioMixer.Buses.Where(bus => bus.BusId == "program"));
+		var program = Assert.Single(owner.AudioMixer.Buses, bus => bus.BusId == "program");
 		Assert.Equal(0.1, program.LeftPeak, 6);
 		Assert.Contains("PROGRAM", program.OutputRoles, StringComparison.Ordinal);
-		var aux = Assert.Single(owner.AudioMixer.Buses.Where(bus => bus.BusId == "aux"));
+		var aux = Assert.Single(owner.AudioMixer.Buses, bus => bus.BusId == "aux");
 		Assert.Contains("AUX", aux.OutputRoles, StringComparison.Ordinal);
 		Assert.Contains("RMS NOT EXPOSED", owner.AudioMixer.MeteringLabel, StringComparison.Ordinal);
 	}
@@ -186,7 +186,7 @@ public sealed class AudioMixerOperatorSurfaceTests
 			refreshDrafts: true);
 
 		var source = Assert.Single(owner.AudioMixer.Sources);
-		var cell = Assert.Single(source.Assignments.Where(item => item.BusId == "aux"));
+		var cell = Assert.Single(source.Assignments, item => item.BusId == "aux");
 		Assert.False(cell.IsAssigned);
 		Assert.Equal("CONFIRMED", cell.State);
 
