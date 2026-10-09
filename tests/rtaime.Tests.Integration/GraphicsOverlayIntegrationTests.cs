@@ -246,6 +246,13 @@ public sealed class GraphicsOverlayIntegrationTests
 		var spillGreen = new PreparedChromaKeySettings(0, 255, 0, 0.1, 0.5, 1);
 		Assert.Equal(((byte)54, (byte)178, (byte)134, (byte)68), Apply(0, 200, 80, 128, spillGreen));
 
+		var maximumSoftness = new PreparedChromaKeySettings(0, 255, 0, 0.1, 1, 0);
+		Assert.Equal(((byte)0, (byte)200, (byte)80, (byte)21), Apply(0, 200, 80, 128, maximumSoftness));
+
+		var customBlue = new PreparedChromaKeySettings(16, 32, 240, 0, 0, 0);
+		Assert.Equal(((byte)16, (byte)32, (byte)240, (byte)0), Apply(16, 32, 240, 255, customBlue));
+		Assert.Equal(((byte)255, (byte)0, (byte)0, (byte)0), Apply(255, 0, 0, 0, hardGreen));
+
 		var fullTolerance = new PreparedChromaKeySettings(0, 255, 0, 1, 0, 0);
 		Assert.Equal(((byte)255, (byte)0, (byte)0, (byte)0), Apply(255, 0, 0, 255, fullTolerance));
 	}
