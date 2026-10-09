@@ -63,7 +63,7 @@ public sealed class SrtNetworkOutputProvider
 			() => new WindowsMediaFoundationSrtEncoder());
 }
 
-public sealed class SrtNetworkOutputSession : IAsyncDisposable
+public sealed class SrtNetworkOutputSession : INetworkOutputSession
 {
 	private readonly object _gate = new();
 	private readonly NetworkOutputConfiguration _configuration;
@@ -95,6 +95,8 @@ public sealed class SrtNetworkOutputSession : IAsyncDisposable
 		Func<ISrtPayloadEncoder> encoderFactory)
 	{
 		_configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
+		if (_configuration.Protocol != NetworkOutputProtocolFamily.Srt || _configuration.SrtSettings is null)
+			throw new ArgumentException("SRT session requires typed SRT network-output settings.", nameof(configuration));
 		_transportFactory = transportFactory ?? throw new ArgumentNullException(nameof(transportFactory));
 		_encoderFactory = encoderFactory ?? throw new ArgumentNullException(nameof(encoderFactory));
 		_worker = Task.Run(WorkerAsync);
