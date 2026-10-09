@@ -790,7 +790,8 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		(int)snapshot.HealthState,
 		snapshot.Evidence,
 		snapshot.Error is { } error ? new WireFailure(error.Code, error.Message) : null,
-		snapshot.NetworkOutput is null ? null : ToWire(snapshot.NetworkOutput));
+		snapshot.NetworkOutput is null ? null : ToWire(snapshot.NetworkOutput),
+		snapshot.AudioBusId);
 
 	private static WireNetworkOutput ToWire(NetworkOutputHealthSnapshot snapshot) => new(
 		snapshot.TargetId,
@@ -1318,7 +1319,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		int QueueDepth,
 		DateTimeOffset? LastSuccessfulSendUtc,
 		WireFailure? Failure);
-	private sealed record WireOutputRole(string RoleId, string RoleKind, string SourceId, string TargetId, WireVideoFormat Format, long TimingNumerator, long TimingDenominator, string ProviderId, int LifecycleState, bool AuthoritativeActive, int HealthState, string Evidence, WireFailure? Error, WireNetworkOutput? NetworkOutput = null);
+	private sealed record WireOutputRole(string RoleId, string RoleKind, string SourceId, string TargetId, WireVideoFormat Format, long TimingNumerator, long TimingDenominator, string ProviderId, int LifecycleState, bool AuthoritativeActive, int HealthState, string Evidence, WireFailure? Error, WireNetworkOutput? NetworkOutput = null, string? AudioBusId = null);
 	private sealed record WireRecordingCommandResult(bool Succeeded, WireRecordingSnapshot Snapshot, WireFailure? Failure);
 	private sealed record WireMediaAssetProbe(string Path, string AssetId);
 	private sealed record WireMediaAssetProbeResult(WireLocalMediaProbe? Probe, WireFailure? Failure);
