@@ -1231,7 +1231,10 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		ulong ClippedSampleValues = 0,
 		int ActiveSourceCount = 0,
 		int MissingSourceCount = 0);
-	private sealed record WireAudioProductionSource(string SourceId, double Gain, bool Muted, bool FollowRoutedSource, string[] BusAssignments);
+	private sealed record WireAudioShelfEqualizerBand(bool Enabled, double FrequencyHz, double GainDb);
+	private sealed record WireAudioBellEqualizerBand(bool Enabled, double FrequencyHz, double GainDb, double Q);
+	private sealed record WireAudioEqualizer(WireAudioShelfEqualizerBand LowShelf, WireAudioBellEqualizerBand Mid, WireAudioShelfEqualizerBand HighShelf);
+	private sealed record WireAudioProductionSource(string SourceId, double Gain, bool Muted, bool FollowRoutedSource, string[] BusAssignments, WireAudioEqualizer? Equalizer = null);
 	private sealed record WireAudioCrossfade(string BusId, string FromSourceId, string ToSourceId, ulong StartSamplePosition, uint DurationSamples, int Law);
 	private sealed record WireAudioDucking(string BusId, bool Enabled, string SidechainSourceId, string[] TargetSourceIds, double Threshold, double Attenuation, uint AttackSamples, uint HoldSamples, uint ReleaseSamples);
 	private sealed record WireAudioProductionConfiguration(ulong Revision, WireAudioProductionBus[] Buses, WireAudioProductionSource[] Sources, WireAudioCrossfade? Crossfade, WireAudioDucking? Ducking, int ClipStrategy);
