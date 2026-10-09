@@ -171,6 +171,22 @@ public sealed class NetworkOutputFoundationTests
 	}
 
 	[Fact]
+	public async Task Unsupported_NDI_runtime_fails_closed()
+	{
+		await using var session = new NdiNetworkOutputSession(
+			NdiConfiguration("rtaime Program", reconnectMaximumAttempts: 1),
+			_ => throw new PlatformNotSupportedException("Synthetic unsupported NDI runtime."));
+
+		Assert.True(session.TrySubmit(Sample(1)).Accepted);
+		await WaitUntilAsync(
+			() => session.Snapshot.Lifecycle == NetworkOutputLifecycleState.Faulted,
+			TimeSpan.FromSeconds(2));
+
+		Assert.False(session.Snapshot.Connected);
+		Assert.Equal("network.output.ndi_runtime_unavailable", session.Snapshot.Failure?.Code);
+	}
+
+	[Fact]
 	public async Task Ndi_send_failure_recovers_on_a_later_sample_and_remains_observational()
 	{
 		var first = new FailingNdiSender();
