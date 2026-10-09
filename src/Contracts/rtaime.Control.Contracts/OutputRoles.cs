@@ -41,7 +41,8 @@ public sealed record ProductionOutputRoleState
 		string targetId,
 		string formatPolicy = "production",
 		string timingPolicy = "production",
-		bool enabled = true)
+		bool enabled = true,
+		string audioBusId = "program")
 	{
 		if (!Enum.IsDefined(typeof(OutputRoleKind), kind))
 			throw new ArgumentOutOfRangeException(nameof(kind), "Output role kind must be a defined contract value.");
@@ -53,6 +54,11 @@ public sealed record ProductionOutputRoleState
 			throw new ArgumentException("Output format policy is required.", nameof(formatPolicy));
 		if (string.IsNullOrWhiteSpace(timingPolicy))
 			throw new ArgumentException("Output timing policy is required.", nameof(timingPolicy));
+		if (string.IsNullOrWhiteSpace(audioBusId) || audioBusId.Length > 64)
+			throw new ArgumentException("Output audio bus identity is required and must not exceed 64 characters.", nameof(audioBusId));
+		var normalizedAudioBusId = audioBusId.Trim().ToLowerInvariant();
+		if (normalizedAudioBusId.Any(character => !(char.IsAsciiLetterOrDigit(character) || character is '-' or '_' or '.')))
+			throw new ArgumentException("Output audio bus identity may contain only ASCII letters, digits, dash, underscore and dot.", nameof(audioBusId));
 
 		RoleId = roleId;
 		Kind = kind;
@@ -62,6 +68,7 @@ public sealed record ProductionOutputRoleState
 		FormatPolicy = formatPolicy.Trim();
 		TimingPolicy = timingPolicy.Trim();
 		Enabled = enabled;
+		AudioBusId = normalizedAudioBusId;
 	}
 
 	public OutputRoleId RoleId { get; }
@@ -72,9 +79,16 @@ public sealed record ProductionOutputRoleState
 	public string FormatPolicy { get; }
 	public string TimingPolicy { get; }
 	public bool Enabled { get; }
+	public string AudioBusId { get; }
 
 	public ProductionOutputRoleState WithSource(ProductionSourceId sourceId) =>
-		new(RoleId, Kind, sourceId, ProviderSelector, TargetId, FormatPolicy, TimingPolicy, Enabled);
+		new(RoleId, Kind, sourceId, ProviderSelector, TargetId, FormatPolicy, TimingPolicy, Enabled, AudioBusId);
+
+	public ProductionOutputRoleState WithAudioBus(string audioBusId) =>
+		new(RoleId, Kind, SourceId, ProviderSelector, TargetId, FormatPolicy, TimingPolicy, Enabled, audioBusId);
+
+	public ProductionOutputRoleState WithRouting(ProductionSourceId sourceId, string? audioBusId = null) =>
+		new(RoleId, Kind, sourceId, ProviderSelector, TargetId, FormatPolicy, TimingPolicy, Enabled, audioBusId ?? AudioBusId);
 
 	public static ProductionOutputRoleState Program(ProductionSourceId sourceId) =>
 		new(OutputRoleIds.Program, OutputRoleKind.Program, sourceId, "auto", "program");
@@ -131,14 +145,28 @@ internal sealed class OutputRoleStateCollection : IReadOnlyList<ProductionOutput
 
 public sealed record RouteOutputRoleCommand
 {
-	public RouteOutputRoleCommand(ControlCommandMetadata metadata, OutputRoleId roleId, ProductionSourceId sourceId)
+	public RouteOutputRoleCommand(
+		ControlCommandMetadata metadata,
+		OutputRoleId roleId,
+		ProductionSourceId sourceId,
+		string? audioBusId = null)
 	{
 		Metadata = metadata ?? throw new ArgumentNullException(nameof(metadata));
 		RoleId = roleId;
 		SourceId = sourceId;
+		if (audioBusId is not null)
+		{
+			if (string.IsNullOrWhiteSpace(audioBusId) || audioBusId.Length > 64)
+				throw new ArgumentException("Output audio bus identity must not be empty and must not exceed 64 characters.", nameof(audioBusId));
+			var normalized = audioBusId.Trim().ToLowerInvariant();
+			if (normalized.Any(character => !(char.IsAsciiLetterOrDigit(character) || character is '-' or '_' or '.')))
+				throw new ArgumentException("Output audio bus identity may contain only ASCII letters, digits, dash, underscore and dot.", nameof(audioBusId));
+			AudioBusId = normalized;
+		}
 	}
 
 	public ControlCommandMetadata Metadata { get; }
 	public OutputRoleId RoleId { get; }
 	public ProductionSourceId SourceId { get; }
+	public string? AudioBusId { get; }
 }
