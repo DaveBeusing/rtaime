@@ -184,6 +184,7 @@ public sealed class GrpcOperatorControlTransport : IOperatorControlTransport, IA
 		{
 			production.SourceId = command.SourceId.ToString();
 			production.OutputRoleId = command.RoleId.ToString();
+			production.AudioBusId = command.AudioBusId ?? string.Empty;
 		}, (request, production) => request.RouteOutputRole = production, cancellationToken);
 
 	public async ValueTask<OperatorAudioInputDescriptor> SetAudioInputStateAsync(string sourceId, double gain, bool muted, CancellationToken cancellationToken = default)
