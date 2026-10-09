@@ -21,6 +21,7 @@ $enginePath = Join-Path $repositoryRoot "src/Media/rtaime.Media/AudioProduction.
 $equalizerPath = Join-Path $repositoryRoot "src/Media/rtaime.Media/BoundedParametricEqualizer.cs"
 $dynamicsPath = Join-Path $repositoryRoot "src/Media/rtaime.Media/BoundedBusDynamics.cs"
 $runtimePath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/V1RuntimeHostService.cs"
+$mediaIoVerticalSlicePath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/RuntimeMediaIoVerticalSlice.cs"
 $operatorPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorViewModel.cs"
 $operatorUiPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MainWindow.xaml"
 $operatorMixerUiPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/AudioMixerControl.xaml"
@@ -46,7 +47,7 @@ $recordingFailurePath = Join-Path $repositoryRoot "tests/rtaime.Tests.Failure/Re
 $audioMixerOperatorTestsPath = Join-Path $repositoryRoot "tests/rtaime.Tests.Operator/AudioMixerOperatorSurfaceTests.cs"
 $qualificationDocumentationPath = Join-Path $repositoryRoot "docs/AdvancedAudioProcessingQualification.md"
 
-foreach ($path in @($contractsPath, $enginePath, $equalizerPath, $dynamicsPath, $runtimePath, $operatorPath, $operatorUiPath, $operatorMixerUiPath, $operatorMixerViewModelPath, $unitPath, $performancePath, $equalizerUnitContractPath, $equalizerUnitProcessingPath, $equalizerPerformancePath, $dynamicsUnitContractPath, $dynamicsUnitProcessingPath, $dynamicsPerformancePath, $recordingIntegrationPath, $productionIpcIntegrationPath, $showProjectPersistenceIntegrationPath, $documentationPath, $qualificationUnitPath, $qualificationIntegrationPath, $qualificationPerformancePath, $timingPerformancePath, $networkOutputTestsPath, $recordingFailurePath, $audioMixerOperatorTestsPath, $qualificationDocumentationPath)) {
+foreach ($path in @($contractsPath, $enginePath, $equalizerPath, $dynamicsPath, $runtimePath, $mediaIoVerticalSlicePath, $operatorPath, $operatorUiPath, $operatorMixerUiPath, $operatorMixerViewModelPath, $unitPath, $performancePath, $equalizerUnitContractPath, $equalizerUnitProcessingPath, $equalizerPerformancePath, $dynamicsUnitContractPath, $dynamicsUnitProcessingPath, $dynamicsPerformancePath, $recordingIntegrationPath, $productionIpcIntegrationPath, $showProjectPersistenceIntegrationPath, $documentationPath, $qualificationUnitPath, $qualificationIntegrationPath, $qualificationPerformancePath, $timingPerformancePath, $networkOutputTestsPath, $recordingFailurePath, $audioMixerOperatorTestsPath, $qualificationDocumentationPath)) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required advanced-audio artifact is missing: '$path'."
 }
 
@@ -55,6 +56,7 @@ $engine = Get-Content -LiteralPath $enginePath -Raw
 $equalizer = Get-Content -LiteralPath $equalizerPath -Raw
 $dynamics = Get-Content -LiteralPath $dynamicsPath -Raw
 $runtime = Get-Content -LiteralPath $runtimePath -Raw
+$mediaIoVerticalSlice = Get-Content -LiteralPath $mediaIoVerticalSlicePath -Raw
 $operator = Get-Content -LiteralPath $operatorPath -Raw
 $operatorUi = Get-Content -LiteralPath $operatorUiPath -Raw
 $operatorMixerUi = Get-Content -LiteralPath $operatorMixerUiPath -Raw
@@ -110,6 +112,7 @@ Assert-Condition ($runtime -match 'AudioProductionEngine') "RuntimeHost must own
 Assert-Condition ($runtime -match '_audioBusMixSamples' -and $runtime -match 'ProcessConfiguredAudioBusesUnsafe') "RuntimeHost must reuse bounded per-bus audio mix buffers through one processing engine."
 Assert-Condition ($runtime -match 'TryRecordCommittedProgram\(execution, output\.Descriptor, programRecordingAudioBuffer\)') "Recording must consume the final Program audio descriptor."
 Assert-Condition ($runtime -match 'programAudioBuffer,\s*programAudioPayload') "Output paths must consume the same final Program audio payload."
+Assert-Condition ($mediaIoVerticalSlice -match 'boundary\.ProgramAudioPayload' -and $mediaIoVerticalSlice -match 'boundary\.ProgramAudioBuffer\.Timing' -and $mediaIoVerticalSlice -match 'TrySubmitProgram') "Physical Media I/O Program output must consume the final Runtime-owned Program audio payload without an independent remix."
 Assert-Condition ($runtime -notmatch 'ControlHost') "Runtime audio processing must not depend on ControlHost implementation."
 
 Assert-Condition ($operator -match 'SetAudioProductionAsync') "Operator advanced-audio mutations must use the governed client/control path."
