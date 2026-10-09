@@ -1573,9 +1573,12 @@ public sealed class MediaPoolInspectorViewModel : INotifyPropertyChanged, IDispo
 		var layer = SelectedCompositingLayer;
 		if (layer is null || !CanEditAuthoritativeCompositingSelection())
 			return;
-		await _operator.SetCompositingLayerProcessingStackAsync(
-			layer.LayerId,
-			layer.ProcessingStack.Where(node => node.Kind != 1 || node.ColorGrade is null).ToArray());
+		var stack = layer.ProcessingStack.ToList();
+		var gradeIndex = stack.FindIndex(node => node.Kind == 1 && node.ColorGrade is not null);
+		if (gradeIndex < 0)
+			return;
+		stack.RemoveAt(gradeIndex);
+		await _operator.SetCompositingLayerProcessingStackAsync(layer.LayerId, stack.ToArray());
 		SynchronizeCompositingDraft();
 		BuildInspector();
 	}
