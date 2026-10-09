@@ -21,9 +21,15 @@ public readonly record struct AudioProductionBlockResult(
 	bool SidechainAvailable,
 	double? CrossfadeProgress,
 	int ActiveSourceCount,
-	int MissingSourceCount)
+	int MissingSourceCount,
+	double PreDynamicsPeak = 0,
+	double CompressorGainReductionDb = 0,
+	double LimiterGainReductionDb = 0,
+	ulong LimiterHitCount = 0)
 {
 	public double MasterPeak => Math.Max(LeftPeak, RightPeak);
+	public double OutputPeak => MasterPeak;
+	public ulong SafetyClippedSampleValues => ClippedSampleValues;
 	public bool Clipping => ClippedSampleValues > 0;
 }
 
@@ -32,6 +38,7 @@ public sealed class AudioProductionEngine
 	private readonly object _gate = new();
 	private AudioProductionConfiguration _configuration;
 	private BoundedParametricEqualizerState[] _equalizerStates;
+	private BoundedBusDynamicsState[] _dynamicsStates;
 	private double _duckingGain = 1;
 	private uint _duckingHoldRemaining;
 	private bool _equalizerBlockInitialized;
@@ -42,6 +49,7 @@ public sealed class AudioProductionEngine
 	{
 		_configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
 		_equalizerStates = CreateEqualizerStates(configuration);
+		_dynamicsStates = CreateDynamicsStates(configuration);
 	}
 
 	public AudioProductionConfiguration Configuration
@@ -64,8 +72,10 @@ public sealed class AudioProductionEngine
 
 			var oldConfiguration = _configuration;
 			var oldStates = _equalizerStates;
+			var oldDynamicsStates = _dynamicsStates;
 			var oldDucking = oldConfiguration.Ducking;
 			_equalizerStates = ReconcileEqualizerStates(oldConfiguration, oldStates, configuration);
+			_dynamicsStates = ReconcileDynamicsStates(oldConfiguration, oldDynamicsStates, configuration);
 			_configuration = configuration;
 			_equalizerBlockInitialized = false;
 			if (configuration.Ducking is null ||
@@ -96,9 +106,12 @@ public sealed class AudioProductionEngine
 		lock (_gate)
 		{
 			var configuration = _configuration;
-			var bus = FindBus(configuration.Buses, busId);
+			var busIndex = FindBusIndex(configuration.Buses, busId);
+			var bus = configuration.Buses[busIndex];
+			var dynamics = _dynamicsStates[busIndex];
 			destination.Clear();
 			BeginEqualizerBlock(samplePosition, sampleCount);
+			dynamics.BeginBlock(samplePosition, sampleCount);
 
 			var sidechainIndex = -1;
 			var ducking = configuration.Ducking is { Enabled: true } configuredDucking &&
@@ -136,7 +149,11 @@ public sealed class AudioProductionEngine
 
 			double leftPeak = 0;
 			double rightPeak = 0;
+			double preDynamicsPeak = 0;
 			double preClipPeak = 0;
+			double compressorGainReductionDb = 0;
+			double limiterGainReductionDb = 0;
+			ulong limiterHitCount = 0;
 			ulong clippedValues = 0;
 			double? finalCrossfadeProgress = null;
 			var sidechainAvailable = ducking is null || (sidechainIndex >= 0 && sourceBuffers[sidechainIndex].Available);
@@ -203,8 +220,20 @@ public sealed class AudioProductionEngine
 
 				left *= masterGain;
 				right *= masterGain;
-				preClipPeak = Math.Max(preClipPeak, Math.Max(Math.Abs(left), Math.Abs(right)));
+				preDynamicsPeak = Math.Max(preDynamicsPeak, Math.Max(Math.Abs(left), Math.Abs(right)));
 
+				if (dynamics.IsActive)
+				{
+					var processed = dynamics.Process(left, right);
+					left = processed.Left;
+					right = processed.Right;
+					compressorGainReductionDb = Math.Max(compressorGainReductionDb, processed.CompressorGainReductionDb);
+					limiterGainReductionDb = Math.Max(limiterGainReductionDb, processed.LimiterGainReductionDb);
+					if (processed.LimiterHit)
+						limiterHitCount++;
+				}
+
+				preClipPeak = Math.Max(preClipPeak, Math.Max(Math.Abs(left), Math.Abs(right)));
 				var clippedLeft = Clip(left, configuration.ClipStrategy, ref clippedValues);
 				var clippedRight = Clip(right, configuration.ClipStrategy, ref clippedValues);
 				var outputOffset = frame * 2;
@@ -219,6 +248,7 @@ public sealed class AudioProductionEngine
 				if (configuration.Sources[sourceIndex].IsAssignedTo(busId) && _equalizerStates[sourceIndex].IsActive)
 					_equalizerStates[sourceIndex].CommitPass();
 			}
+			dynamics.CommitBlock(samplePosition, sampleCount);
 
 			return new AudioProductionBlockResult(
 				busId,
@@ -232,7 +262,11 @@ public sealed class AudioProductionEngine
 				sidechainAvailable,
 				finalCrossfadeProgress,
 				activeSources,
-				missingSources);
+				missingSources,
+				preDynamicsPeak,
+				compressorGainReductionDb,
+				limiterGainReductionDb,
+				limiterHitCount);
 		}
 	}
 
@@ -342,15 +376,14 @@ public sealed class AudioProductionEngine
 		return (float)value;
 	}
 
-	private static AudioProductionBusConfiguration FindBus(
+	private static int FindBusIndex(
 		IReadOnlyList<AudioProductionBusConfiguration> buses,
 		AudioBusId busId)
 	{
 		for (var index = 0; index < buses.Count; index++)
 		{
-			var bus = buses[index];
-			if (bus.BusId == busId)
-				return bus;
+			if (buses[index].BusId == busId)
+				return index;
 		}
 		throw new KeyNotFoundException($"Unknown audio bus '{busId}'.");
 	}
@@ -403,4 +436,43 @@ public sealed class AudioProductionEngine
 		}
 		return states;
 	}
+	private static BoundedBusDynamicsState[] CreateDynamicsStates(AudioProductionConfiguration configuration)
+	{
+		var states = new BoundedBusDynamicsState[configuration.Buses.Count];
+		for (var index = 0; index < configuration.Buses.Count; index++)
+		{
+			var bus = configuration.Buses[index];
+			states[index] = new BoundedBusDynamicsState(bus.BusId, bus.Dynamics);
+		}
+		return states;
+	}
+
+	private static BoundedBusDynamicsState[] ReconcileDynamicsStates(
+		AudioProductionConfiguration oldConfiguration,
+		BoundedBusDynamicsState[] oldStates,
+		AudioProductionConfiguration newConfiguration)
+	{
+		var states = new BoundedBusDynamicsState[newConfiguration.Buses.Count];
+		for (var newIndex = 0; newIndex < newConfiguration.Buses.Count; newIndex++)
+		{
+			var bus = newConfiguration.Buses[newIndex];
+			var reused = false;
+			for (var oldIndex = 0; oldIndex < oldConfiguration.Buses.Count; oldIndex++)
+			{
+				var oldBus = oldConfiguration.Buses[oldIndex];
+				if (oldBus.BusId != bus.BusId)
+					continue;
+				if (Equals(oldBus.Dynamics, bus.Dynamics))
+				{
+					states[newIndex] = oldStates[oldIndex];
+					reused = true;
+				}
+				break;
+			}
+			if (!reused)
+				states[newIndex] = new BoundedBusDynamicsState(bus.BusId, bus.Dynamics);
+		}
+		return states;
+	}
+
 }

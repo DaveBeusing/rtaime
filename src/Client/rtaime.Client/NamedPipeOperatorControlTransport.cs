@@ -1605,13 +1605,22 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 				bus.Clipping,
 				bus.ClippedSampleValues,
 				bus.ActiveSourceCount,
-				bus.MissingSourceCount))
-			.ToArray()));
+				bus.MissingSourceCount,
+				bus.PreDynamicsPeak,
+				bus.CompressorGainReductionDb,
+				bus.LimiterGainReductionDb,
+				bus.LimiterHitCount,
+				FromWire(bus.Dynamics)))
+			.ToArray()),
+		snapshot.PreDynamicsPeak,
+		snapshot.CompressorGainReductionDb,
+		snapshot.LimiterGainReductionDb,
+		snapshot.LimiterHitCount);
 
 	private static AudioProductionConfiguration FromWire(WireAudioProductionConfiguration wire)
 	{
 		var buses = (wire.Buses ?? Array.Empty<WireAudioProductionBus>())
-			.Select(bus => new AudioProductionBusConfiguration(new AudioBusId(bus.BusId), bus.MasterGain, bus.Muted))
+			.Select(bus => new AudioProductionBusConfiguration(new AudioBusId(bus.BusId), bus.MasterGain, bus.Muted, FromWire(bus.Dynamics)))
 			.ToArray();
 		var sources = (wire.Sources ?? Array.Empty<WireAudioProductionSource>())
 			.Select(source => new AudioProductionSourceConfiguration(
@@ -1654,7 +1663,7 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 
 	private static WireAudioProductionConfiguration ToWire(AudioProductionConfiguration configuration) => new(
 		configuration.Revision,
-		configuration.Buses.Select(bus => new WireAudioProductionBus(bus.BusId.Value, bus.MasterGain, bus.Muted)).ToArray(),
+		configuration.Buses.Select(bus => new WireAudioProductionBus(bus.BusId.Value, bus.MasterGain, bus.Muted, Dynamics: ToWire(bus.Dynamics))).ToArray(),
 		configuration.Sources.Select(source => new WireAudioProductionSource(
 			source.SourceId.ToString(),
 			source.Gain,
@@ -1680,6 +1689,38 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 			configuration.Ducking.HoldSamples,
 			configuration.Ducking.ReleaseSamples),
 		(int)configuration.ClipStrategy);
+
+	private static AudioBusDynamicsConfiguration? FromWire(WireAudioBusDynamics? wire) =>
+		wire is null
+			? null
+			: new AudioBusDynamicsConfiguration(
+				new AudioBusCompressorConfiguration(
+					wire.Compressor.Enabled,
+					wire.Compressor.ThresholdDbFs,
+					wire.Compressor.Ratio,
+					wire.Compressor.AttackMilliseconds,
+					wire.Compressor.ReleaseMilliseconds,
+					wire.Compressor.MakeupGainDb),
+				new AudioBusSamplePeakLimiterConfiguration(
+					wire.Limiter.Enabled,
+					wire.Limiter.CeilingDbFs,
+					wire.Limiter.ReleaseMilliseconds));
+
+	private static WireAudioBusDynamics? ToWire(AudioBusDynamicsConfiguration? dynamics) =>
+		dynamics is null
+			? null
+			: new WireAudioBusDynamics(
+				new WireAudioBusCompressor(
+					dynamics.Compressor.Enabled,
+					dynamics.Compressor.ThresholdDbFs,
+					dynamics.Compressor.Ratio,
+					dynamics.Compressor.AttackMilliseconds,
+					dynamics.Compressor.ReleaseMilliseconds,
+					dynamics.Compressor.MakeupGainDb),
+				new WireAudioSamplePeakLimiter(
+					dynamics.Limiter.Enabled,
+					dynamics.Limiter.CeilingDbFs,
+					dynamics.Limiter.ReleaseMilliseconds));
 
 	private static AudioSourceEqualizerConfiguration? FromWire(WireAudioEqualizer? wire) =>
 		wire is null
@@ -2084,7 +2125,15 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		bool Clipping = false,
 		ulong ClippedSampleValues = 0,
 		int ActiveSourceCount = 0,
-		int MissingSourceCount = 0);
+		int MissingSourceCount = 0,
+		double PreDynamicsPeak = 0,
+		double CompressorGainReductionDb = 0,
+		double LimiterGainReductionDb = 0,
+		ulong LimiterHitCount = 0,
+		WireAudioBusDynamics? Dynamics = null);
+	private sealed record WireAudioBusCompressor(bool Enabled, double ThresholdDbFs, double Ratio, double AttackMilliseconds, double ReleaseMilliseconds, double MakeupGainDb);
+	private sealed record WireAudioSamplePeakLimiter(bool Enabled, double CeilingDbFs, double ReleaseMilliseconds);
+	private sealed record WireAudioBusDynamics(WireAudioBusCompressor Compressor, WireAudioSamplePeakLimiter Limiter);
 	private sealed record WireAudioShelfEqualizerBand(bool Enabled, double FrequencyHz, double GainDb);
 	private sealed record WireAudioBellEqualizerBand(bool Enabled, double FrequencyHz, double GainDb, double Q);
 	private sealed record WireAudioEqualizer(WireAudioShelfEqualizerBand LowShelf, WireAudioBellEqualizerBand Mid, WireAudioShelfEqualizerBand HighShelf);
@@ -2093,7 +2142,7 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 	private sealed record WireAudioDucking(string BusId, bool Enabled, string SidechainSourceId, string[]? TargetSourceIds, double Threshold, double Attenuation, uint AttackSamples, uint HoldSamples, uint ReleaseSamples);
 	private sealed record WireAudioProductionConfiguration(ulong Revision, WireAudioProductionBus[]? Buses, WireAudioProductionSource[]? Sources, WireAudioCrossfade? Crossfade, WireAudioDucking? Ducking, int ClipStrategy);
 	private sealed record WireAudioProductionMutation(ulong ExpectedRevision, WireAudioProductionConfiguration Configuration);
-	private sealed record WireAudioProductionSnapshot(WireAudioProductionConfiguration Configuration, double LeftPeak, double RightPeak, double PreClipPeak, bool Clipping, ulong ClippedSampleValues, double DuckingGain, double DuckingReduction, bool SidechainAvailable, double? CrossfadeProgress, int ActiveSourceCount, int MissingSourceCount);
+	private sealed record WireAudioProductionSnapshot(WireAudioProductionConfiguration Configuration, double LeftPeak, double RightPeak, double PreClipPeak, bool Clipping, ulong ClippedSampleValues, double DuckingGain, double DuckingReduction, bool SidechainAvailable, double? CrossfadeProgress, int ActiveSourceCount, int MissingSourceCount, double PreDynamicsPeak = 0, double CompressorGainReductionDb = 0, double LimiterGainReductionDb = 0, ulong LimiterHitCount = 0);
 	private sealed record WireTestPatternState(string SourceId, bool Enabled, bool MotionTiming = false);
 	private sealed record WireAudioInput(
 		string SourceId,

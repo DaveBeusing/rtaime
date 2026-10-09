@@ -116,9 +116,12 @@ public sealed class ReferenceRecordingPayloadTests
 			CommitInitialization(control, runtime);
 
 			var current = runtime.Snapshot.AudioProduction!;
+			var dynamics = new AudioBusDynamicsConfiguration(
+				new AudioBusCompressorConfiguration(false, -18, 4, 5, 100, 0),
+				new AudioBusSamplePeakLimiterConfiguration(true, -9, 100));
 			runtime.SetAudioProductionConfiguration(new AudioProductionConfiguration(
 				checked(current.Revision + 1),
-				new[] { new AudioProductionBusConfiguration(AudioBusId.Program, 1d, muted: false) },
+				new[] { new AudioProductionBusConfiguration(AudioBusId.Program, 1d, muted: false, dynamics) },
 				new[]
 				{
 					new AudioProductionSourceConfiguration(mediaA, 1d, muted: false, followRoutedSource: false, new[] { AudioBusId.Program }),
@@ -133,9 +136,15 @@ public sealed class ReferenceRecordingPayloadTests
 			Assert.True(start.Succeeded, start.Failure?.ToString());
 
 			using var boundary = runtime.ProcessNextBoundary();
-			Assert.Equal(0.50f, ReadFloat(boundary.ProgramAudioPayload, 0), 5);
-			Assert.Equal(-0.30f, ReadFloat(boundary.ProgramAudioPayload, 1), 5);
-			Assert.Equal(2, runtime.Snapshot.AudioProduction!.ActiveSourceCount);
+			var limiterCeiling = (float)Math.Pow(10d, -9d / 20d);
+			Assert.Equal(limiterCeiling, ReadFloat(boundary.ProgramAudioPayload, 0), 5);
+			Assert.Equal(limiterCeiling * (-0.30f / 0.50f), ReadFloat(boundary.ProgramAudioPayload, 1), 5);
+			var audioProduction = runtime.Snapshot.AudioProduction!;
+			Assert.Equal(2, audioProduction.ActiveSourceCount);
+			var programBus = Assert.Single(audioProduction.Buses);
+			Assert.True(programBus.LimiterHitCount > 0);
+			Assert.True(programBus.LimiterGainReductionDb > 0);
+			Assert.Equal(0UL, programBus.ClippedSampleValues);
 
 			var stop = await runtime.StopRecordingAsync();
 			Assert.Equal(RecordingStopStatus.Stopped, stop.Status);
@@ -143,8 +152,8 @@ public sealed class ReferenceRecordingPayloadTests
 			var artifact = ReferenceRecordingPayloadReader.Read(writer.FinalPath!);
 			var sample = Assert.Single(artifact.Samples);
 			Assert.Equal(boundary.ProgramAudioPayload, sample.AudioPayload);
-			Assert.Equal(0.50f, ReadFloat(sample.AudioPayload, 0), 5);
-			Assert.Equal(-0.30f, ReadFloat(sample.AudioPayload, 1), 5);
+			Assert.Equal(limiterCeiling, ReadFloat(sample.AudioPayload, 0), 5);
+			Assert.Equal(limiterCeiling * (-0.30f / 0.50f), ReadFloat(sample.AudioPayload, 1), 5);
 		}
 		finally
 		{

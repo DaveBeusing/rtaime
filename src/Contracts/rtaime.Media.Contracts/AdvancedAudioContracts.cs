@@ -132,20 +132,120 @@ public sealed record AudioSourceEqualizerConfiguration
 		(HighShelf.Enabled && HighShelf.GainDb != 0d);
 }
 
+public static class AudioDynamicsLimits
+{
+	public const double MinimumCompressorThresholdDbFs = -60d;
+	public const double MaximumCompressorThresholdDbFs = 0d;
+	public const double MinimumCompressorRatio = 1d;
+	public const double MaximumCompressorRatio = 20d;
+	public const double MinimumAttackMilliseconds = 0.1d;
+	public const double MaximumAttackMilliseconds = 200d;
+	public const double MinimumReleaseMilliseconds = 5d;
+	public const double MaximumReleaseMilliseconds = 5_000d;
+	public const double MinimumMakeupGainDb = 0d;
+	public const double MaximumMakeupGainDb = 24d;
+	public const double MinimumLimiterCeilingDbFs = -24d;
+	public const double MaximumLimiterCeilingDbFs = 0d;
+}
+
+public sealed record AudioBusCompressorConfiguration
+{
+	public AudioBusCompressorConfiguration(
+		bool enabled,
+		double thresholdDbFs,
+		double ratio,
+		double attackMilliseconds,
+		double releaseMilliseconds,
+		double makeupGainDb)
+	{
+		if (!double.IsFinite(thresholdDbFs) ||
+			thresholdDbFs is < AudioDynamicsLimits.MinimumCompressorThresholdDbFs or > AudioDynamicsLimits.MaximumCompressorThresholdDbFs)
+			throw new ArgumentOutOfRangeException(nameof(thresholdDbFs), $"Compressor threshold must be finite and in the inclusive range {AudioDynamicsLimits.MinimumCompressorThresholdDbFs}..{AudioDynamicsLimits.MaximumCompressorThresholdDbFs} dBFS.");
+		if (!double.IsFinite(ratio) ||
+			ratio is < AudioDynamicsLimits.MinimumCompressorRatio or > AudioDynamicsLimits.MaximumCompressorRatio)
+			throw new ArgumentOutOfRangeException(nameof(ratio), $"Compressor ratio must be finite and in the inclusive range {AudioDynamicsLimits.MinimumCompressorRatio}..{AudioDynamicsLimits.MaximumCompressorRatio}.");
+		if (!double.IsFinite(attackMilliseconds) ||
+			attackMilliseconds is < AudioDynamicsLimits.MinimumAttackMilliseconds or > AudioDynamicsLimits.MaximumAttackMilliseconds)
+			throw new ArgumentOutOfRangeException(nameof(attackMilliseconds), $"Compressor attack must be finite and in the inclusive range {AudioDynamicsLimits.MinimumAttackMilliseconds}..{AudioDynamicsLimits.MaximumAttackMilliseconds} ms.");
+		if (!double.IsFinite(releaseMilliseconds) ||
+			releaseMilliseconds is < AudioDynamicsLimits.MinimumReleaseMilliseconds or > AudioDynamicsLimits.MaximumReleaseMilliseconds)
+			throw new ArgumentOutOfRangeException(nameof(releaseMilliseconds), $"Compressor release must be finite and in the inclusive range {AudioDynamicsLimits.MinimumReleaseMilliseconds}..{AudioDynamicsLimits.MaximumReleaseMilliseconds} ms.");
+		if (!double.IsFinite(makeupGainDb) ||
+			makeupGainDb is < AudioDynamicsLimits.MinimumMakeupGainDb or > AudioDynamicsLimits.MaximumMakeupGainDb)
+			throw new ArgumentOutOfRangeException(nameof(makeupGainDb), $"Compressor makeup gain must be finite and in the inclusive range {AudioDynamicsLimits.MinimumMakeupGainDb}..{AudioDynamicsLimits.MaximumMakeupGainDb} dB.");
+
+		Enabled = enabled;
+		ThresholdDbFs = thresholdDbFs;
+		Ratio = ratio;
+		AttackMilliseconds = attackMilliseconds;
+		ReleaseMilliseconds = releaseMilliseconds;
+		MakeupGainDb = makeupGainDb;
+	}
+
+	public bool Enabled { get; }
+	public double ThresholdDbFs { get; }
+	public double Ratio { get; }
+	public double AttackMilliseconds { get; }
+	public double ReleaseMilliseconds { get; }
+	public double MakeupGainDb { get; }
+}
+
+public sealed record AudioBusSamplePeakLimiterConfiguration
+{
+	public AudioBusSamplePeakLimiterConfiguration(bool enabled, double ceilingDbFs, double releaseMilliseconds)
+	{
+		if (!double.IsFinite(ceilingDbFs) ||
+			ceilingDbFs is < AudioDynamicsLimits.MinimumLimiterCeilingDbFs or > AudioDynamicsLimits.MaximumLimiterCeilingDbFs)
+			throw new ArgumentOutOfRangeException(nameof(ceilingDbFs), $"Sample-peak limiter ceiling must be finite and in the inclusive range {AudioDynamicsLimits.MinimumLimiterCeilingDbFs}..{AudioDynamicsLimits.MaximumLimiterCeilingDbFs} dBFS.");
+		if (!double.IsFinite(releaseMilliseconds) ||
+			releaseMilliseconds is < AudioDynamicsLimits.MinimumReleaseMilliseconds or > AudioDynamicsLimits.MaximumReleaseMilliseconds)
+			throw new ArgumentOutOfRangeException(nameof(releaseMilliseconds), $"Sample-peak limiter release must be finite and in the inclusive range {AudioDynamicsLimits.MinimumReleaseMilliseconds}..{AudioDynamicsLimits.MaximumReleaseMilliseconds} ms.");
+
+		Enabled = enabled;
+		CeilingDbFs = ceilingDbFs;
+		ReleaseMilliseconds = releaseMilliseconds;
+	}
+
+	public bool Enabled { get; }
+	public double CeilingDbFs { get; }
+	public double ReleaseMilliseconds { get; }
+}
+
+public sealed record AudioBusDynamicsConfiguration
+{
+	public AudioBusDynamicsConfiguration(
+		AudioBusCompressorConfiguration compressor,
+		AudioBusSamplePeakLimiterConfiguration limiter)
+	{
+		Compressor = compressor ?? throw new ArgumentNullException(nameof(compressor));
+		Limiter = limiter ?? throw new ArgumentNullException(nameof(limiter));
+	}
+
+	public AudioBusCompressorConfiguration Compressor { get; }
+	public AudioBusSamplePeakLimiterConfiguration Limiter { get; }
+	public bool HasActiveProcessing => Compressor.Enabled || Limiter.Enabled;
+}
+
 public sealed record AudioProductionBusConfiguration
 {
-	public AudioProductionBusConfiguration(AudioBusId busId, double masterGain, bool muted)
+	public AudioProductionBusConfiguration(
+		AudioBusId busId,
+		double masterGain,
+		bool muted,
+		AudioBusDynamicsConfiguration? dynamics = null)
 	{
 		if (!double.IsFinite(masterGain) || masterGain is < 0 or > 4)
 			throw new ArgumentOutOfRangeException(nameof(masterGain), "Audio bus master gain must be finite and in the inclusive range 0..4.");
 		BusId = busId;
 		MasterGain = masterGain;
 		Muted = muted;
+		Dynamics = dynamics;
 	}
 
 	public AudioBusId BusId { get; }
 	public double MasterGain { get; }
 	public bool Muted { get; }
+	public AudioBusDynamicsConfiguration? Dynamics { get; }
 }
 
 public sealed record AudioProductionSourceConfiguration

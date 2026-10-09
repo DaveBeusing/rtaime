@@ -790,7 +790,7 @@ public sealed class ShowProjectPersistenceStore
 
 	private static AudioProductionDocument ToDocument(AudioProductionConfiguration configuration) => new(
 		configuration.Revision,
-		configuration.Buses.Select(bus => new AudioBusDocument(bus.BusId.Value, bus.MasterGain, bus.Muted)).ToArray(),
+		configuration.Buses.Select(bus => new AudioBusDocument(bus.BusId.Value, bus.MasterGain, bus.Muted, ToDocument(bus.Dynamics))).ToArray(),
 		configuration.Sources.Select(source => new AudioSourceMixDocument(
 			source.SourceId.ToString(),
 			source.Gain,
@@ -817,6 +817,38 @@ public sealed class ShowProjectPersistenceStore
 			configuration.Ducking.ReleaseSamples),
 		(int)configuration.ClipStrategy);
 
+	private static AudioBusDynamicsDocument? ToDocument(AudioBusDynamicsConfiguration? dynamics) =>
+		dynamics is null
+			? null
+			: new AudioBusDynamicsDocument(
+				new AudioBusCompressorDocument(
+					dynamics.Compressor.Enabled,
+					dynamics.Compressor.ThresholdDbFs,
+					dynamics.Compressor.Ratio,
+					dynamics.Compressor.AttackMilliseconds,
+					dynamics.Compressor.ReleaseMilliseconds,
+					dynamics.Compressor.MakeupGainDb),
+				new AudioSamplePeakLimiterDocument(
+					dynamics.Limiter.Enabled,
+					dynamics.Limiter.CeilingDbFs,
+					dynamics.Limiter.ReleaseMilliseconds));
+
+	private static AudioBusDynamicsConfiguration? FromDocument(AudioBusDynamicsDocument? dynamics) =>
+		dynamics is null
+			? null
+			: new AudioBusDynamicsConfiguration(
+				new AudioBusCompressorConfiguration(
+					dynamics.Compressor.Enabled,
+					dynamics.Compressor.ThresholdDbFs,
+					dynamics.Compressor.Ratio,
+					dynamics.Compressor.AttackMilliseconds,
+					dynamics.Compressor.ReleaseMilliseconds,
+					dynamics.Compressor.MakeupGainDb),
+				new AudioBusSamplePeakLimiterConfiguration(
+					dynamics.Limiter.Enabled,
+					dynamics.Limiter.CeilingDbFs,
+					dynamics.Limiter.ReleaseMilliseconds));
+
 	private static AudioEqualizerDocument? ToDocument(AudioSourceEqualizerConfiguration? equalizer) =>
 		equalizer is null
 			? null
@@ -842,7 +874,7 @@ public sealed class ShowProjectPersistenceStore
 		try
 		{
 			var buses = (document.Buses ?? Array.Empty<AudioBusDocument>())
-				.Select(bus => new AudioProductionBusConfiguration(new AudioBusId(bus.BusId), bus.MasterGain, bus.Muted))
+				.Select(bus => new AudioProductionBusConfiguration(new AudioBusId(bus.BusId), bus.MasterGain, bus.Muted, FromDocument(bus.Dynamics)))
 				.ToArray();
 			var sources = (document.Sources ?? Array.Empty<AudioSourceMixDocument>())
 				.Select(source => new AudioProductionSourceConfiguration(
@@ -1191,7 +1223,10 @@ public sealed class ShowProjectPersistenceStore
 		ulong ProductionMacroExecutionVersion = 0);
 
 	private sealed record AudioRoutingDocument(int Mode, string? BreakawaySourceId);
-	private sealed record AudioBusDocument(string BusId, double MasterGain, bool Muted);
+	private sealed record AudioBusCompressorDocument(bool Enabled, double ThresholdDbFs, double Ratio, double AttackMilliseconds, double ReleaseMilliseconds, double MakeupGainDb);
+	private sealed record AudioSamplePeakLimiterDocument(bool Enabled, double CeilingDbFs, double ReleaseMilliseconds);
+	private sealed record AudioBusDynamicsDocument(AudioBusCompressorDocument Compressor, AudioSamplePeakLimiterDocument Limiter);
+	private sealed record AudioBusDocument(string BusId, double MasterGain, bool Muted, AudioBusDynamicsDocument? Dynamics = null);
 	private sealed record AudioShelfEqualizerBandDocument(bool Enabled, double FrequencyHz, double GainDb);
 	private sealed record AudioBellEqualizerBandDocument(bool Enabled, double FrequencyHz, double GainDb, double Q);
 	private sealed record AudioEqualizerDocument(AudioShelfEqualizerBandDocument LowShelf, AudioBellEqualizerBandDocument Mid, AudioShelfEqualizerBandDocument HighShelf);

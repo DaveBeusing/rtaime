@@ -39,7 +39,7 @@ The initial advanced-audio baseline remains:
 - hard clipping at [-1, +1];
 - no steady-state per-block allocation in the mix engine.
 
-Surround, immersive audio, arbitrary DSP graphs, plugin hosting, dynamic/linear-phase EQ, compression/reverb suites, network audio and sample-rate conversion are outside this capability. The bounded three-band per-source parametric EQ described below is part of the qualified baseline.
+Surround, immersive audio, arbitrary DSP graphs, plugin hosting, dynamic/linear-phase EQ, multiband dynamics, gates/expanders, reverb suites, true-peak oversampling, loudness normalization, network-audio transport and sample-rate conversion are outside this capability. The bounded three-band per-source parametric EQ and bounded per-bus compressor/sample-peak limiter described below are part of the qualified baseline.
 
 ## Source and bus model
 
@@ -58,7 +58,8 @@ Every bus contains:
 
 - stable `AudioBusId`;
 - master gain in the range 0..4;
-- master mute state.
+- master mute state;
+- optional bounded dynamics: exactly one compressor followed by exactly one sample-peak limiter.
 
 `program` is mandatory.
 
@@ -84,12 +85,15 @@ source sample
   -> optional low-shelf -> bell-mid -> high-shelf EQ
   * crossfade contribution
   * ducking gain when targeted
-  -> deterministic sum
+  -> deterministic source sum
   * bus master gain/mute
-  -> hard clip to [-1, +1]
+  -> optional bounded compressor
+  -> optional sample-peak limiter
+  -> final hard-clamp safety to [-1, +1]
+  -> bus output
 ```
 
-The engine also records pre-clip peak and clipped sample-value count so overload is observable rather than accidental.
+Ducking remains source-contribution control before bus accumulation. Runtime records both the pre-dynamics peak and the post-dynamics/pre-safety-clamp peak. `SafetyClippedSampleValues` aliases the existing clipped-sample counter so final safety clipping cannot be confused with compressor or limiter action.
 
 Non-finite source values are treated as zero for accumulation and are never propagated as healthy audio output.
 
@@ -144,6 +148,48 @@ z2 = b2*x - a2*y
 Filter history is Runtime execution state keyed by stable source identity. It is retained when unrelated source settings change and the equalizer configuration is unchanged. Changing the equalizer configuration resets that source's filter history deterministically. Multiple buses rendering the same absolute sample window replay the same source block from the same pre-block filter state, so a source assigned to several buses does not advance its IIR history multiple times.
 
 After Runtime process loss, ControlHost and durable show-project state reconstruct the authoritative equalizer configuration. Filter delay/history is not persisted and is explicitly restarted from zero state. The system does not claim that historical filter memory survived process loss.
+
+## Bounded per-bus dynamics
+
+Each configured bus may carry exactly one typed compressor followed by one typed sample-peak limiter. This is a fixed production path, not an arbitrary processor order or plugin chain.
+
+Qualified compressor bounds are:
+
+- threshold: -60..0 dBFS inclusive;
+- ratio: 1..20 inclusive;
+- attack: 0.1..200 ms inclusive;
+- release: 5..5,000 ms inclusive;
+- makeup gain: 0..24 dB inclusive;
+- explicit enabled/bypass state.
+
+Qualified sample-peak limiter bounds are:
+
+- ceiling: -24..0 dBFS inclusive;
+- release: 5..5,000 ms inclusive;
+- explicit enabled/bypass state.
+
+All values must be finite. dB gain conversion uses `10^(dB/20)`. Compressor detection is stereo-linked: the larger absolute left/right sample drives one gain value applied identically to both channels, preserving stereo balance. Above threshold, the target compression reduction is:
+
+```text
+overDb = inputDb - thresholdDbFs
+reductionDb = overDb * (1 - 1/ratio)
+targetGain = 10^(-reductionDb/20)
+```
+
+Attack and release use deterministic one-pole per-sample smoothing. For a configured time in milliseconds at the fixed 48 kHz baseline:
+
+```text
+coefficient = exp(-1 / (timeMs * 0.001 * 48000))
+gain = targetGain + coefficient * (previousGain - targetGain)
+```
+
+Makeup gain is applied after compressor gain reduction.
+
+The limiter operates after compressor makeup. It is a **sample-peak limiter**: when the stereo-linked instantaneous sample peak exceeds the configured ceiling, gain is reduced immediately so the current sample does not exceed that ceiling; release returns toward unity with the same sample-domain one-pole form. There is no look-ahead, oversampling or true-peak claim.
+
+Per-bus compressor and limiter envelopes are Runtime execution state keyed by stable `AudioBusId`. Contiguous sample blocks retain state. Re-applying an equivalent dynamics configuration preserves state, while changing that bus's dynamics configuration, removing the bus, a discontinuous sample-position jump, or Runtime process restart resets its envelope state deterministically to unity. Authoritative configuration is reconstructed after Runtime restart; historical envelope memory is intentionally not persisted.
+
+Confirmed dynamics evidence includes pre-dynamics peak, compressor gain reduction, limiter gain reduction, limiter hit count, post-dynamics/pre-safety-clamp peak, final output peak and final safety-clipped sample count.
 
 ## Crossfade
 
@@ -206,25 +252,20 @@ This means:
 
 ## Program media truth
 
-Runtime creates one final Program audio buffer per boundary.
+Runtime materializes each configured bus once per boundary after its complete master/dynamics/safety path.
 
-The final mixed Program bus is reused by:
-
-- Program metering;
-- Program recording descriptor/payload staging;
-- Program network output;
-- Aux network output where the current output contract intentionally reuses Program audio.
-
-Recording and output do not implement independent audio mixing logic.
+The final Program bus is reused by Program metering and Program recording descriptor/payload staging. Governed physical/network output roles consume their selected final materialized bus. No recording or output path branches from a pre-dynamics signal and no output provider implements independent audio mixing logic.
 
 ## Metering and diagnostics
 
 Runtime publishes confirmed advanced-audio evidence including:
 
-- Program left/right peak;
-- pre-clip peak;
-- clipping state;
-- clipped sample-value count;
+- Program and per-bus left/right output peak;
+- pre-dynamics peak;
+- post-dynamics/pre-safety-clamp peak;
+- compressor gain reduction;
+- sample-peak limiter gain reduction and hit count;
+- final safety-clipping state and clipped sample-value count;
 - ducking gain/reduction;
 - sidechain availability;
 - crossfade progress;
@@ -283,15 +324,19 @@ Hosted qualification covers:
 - deterministic EQ reset/retention behavior;
 - block-splitting invariance;
 - multi-bus EQ state replay;
-- zero steady-state mix-engine allocations with active EQ;
-- repeated maximum-input 48 kHz stereo blocks with crossfade, ducking and bounded EQ enabled.
+- compressor threshold/ratio, attack/release and makeup behavior;
+- sample-peak limiter ceiling and stereo-linked behavior;
+- per-bus dynamics continuity, reset and bus isolation;
+- dynamics-processed recording/output payload reuse;
+- zero steady-state mix-engine allocations with active EQ and active dynamics;
+- repeated maximum-input 48 kHz stereo blocks across up to four buses.
 
 Hosted elapsed-time guards are regression evidence only. They are not physical audio-hardware latency or certification claims.
 
 ## Governed multi-bus output routing
 
-The production audio model executes between one and four configured buses through the single `AudioProductionEngine`. `program` remains mandatory. Sources may be assigned to multiple buses or to no bus, and every configured bus is processed against the same absolute 48 kHz sample window. Runtime retains bounded per-bus mix buffers and per-bus peak, pre-clip, clipping, active-source, missing-source and master-state evidence.
+The production audio model executes between one and four configured buses through the single `AudioProductionEngine`. `program` remains mandatory. Sources may be assigned to multiple buses or to no bus, and every configured bus is processed against the same absolute 48 kHz sample window. Runtime retains bounded per-bus mix buffers plus master, pre-dynamics, dynamics-reduction, post-dynamics/pre-safety-clamp, output-peak, safety-clipping, active-source and missing-source evidence.
 
 Governed Program/Aux output roles carry an authoritative audio-bus identity. Legacy roles without an explicit mapping resolve to `program`. Aux may select another confirmed bus; an invalid or missing bus reference fails closed before committed Runtime state changes. Providers consume the selected final bus payload and never remix it.
 
-Recording remains intentionally bound to the `program` bus even when a Program or Aux output role selects another bus. This does not add another mixer, wall-clock scheduler, unbounded queue, surround layout, generic DSP/plugin host, compression or limiting.
+Recording remains intentionally bound to the `program` bus even when a Program or Aux output role selects another bus. This does not add another mixer, wall-clock scheduler, unbounded queue, surround layout, generic DSP/plugin host, arbitrary dynamics ordering, multiband compression or true-peak processing.

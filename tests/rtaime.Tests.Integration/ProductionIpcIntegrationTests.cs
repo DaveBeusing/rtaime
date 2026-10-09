@@ -203,11 +203,14 @@ public sealed class ProductionIpcIntegrationTests
 
 		var confirmedAudioProduction = Assert.IsType<OperatorAudioProductionDescriptor>(client.Snapshot.AudioProduction);
 		var audioProductionRevisionBefore = confirmedAudioProduction.Configuration.Revision;
+		var programDynamics = new AudioBusDynamicsConfiguration(
+			new AudioBusCompressorConfiguration(true, -18, 4, 5, 120, 2),
+			new AudioBusSamplePeakLimiterConfiguration(true, -1, 100));
 		var advancedConfiguration = new AudioProductionConfiguration(
 			checked(audioProductionRevisionBefore + 1),
 			new[]
 			{
-				new AudioProductionBusConfiguration(AudioBusId.Program, 0.75, muted: false),
+				new AudioProductionBusConfiguration(AudioBusId.Program, 0.75, muted: false, programDynamics),
 				new AudioProductionBusConfiguration(new AudioBusId("aux"), 0.5, muted: false)
 			},
 			new[]
@@ -250,6 +253,11 @@ public sealed class ProductionIpcIntegrationTests
 		var advancedAudio = await client.SetAudioProductionAsync(advancedConfiguration);
 		Assert.Equal(advancedConfiguration.Revision, advancedAudio.Configuration.Revision);
 		Assert.Equal(0.75, advancedAudio.Configuration.GetBus(AudioBusId.Program).MasterGain, 6);
+		var confirmedDynamics = Assert.IsType<AudioBusDynamicsConfiguration>(
+			advancedAudio.Configuration.GetBus(AudioBusId.Program).Dynamics);
+		Assert.Equal(-18, confirmedDynamics.Compressor.ThresholdDbFs);
+		Assert.Equal(4, confirmedDynamics.Compressor.Ratio);
+		Assert.Equal(-1, confirmedDynamics.Limiter.CeilingDbFs);
 		Assert.False(advancedAudio.Configuration.GetSource(new MediaSourceId(Identity.Parse(sourceA.Id))).FollowRoutedSource);
 		var confirmedEqualizer = Assert.IsType<AudioSourceEqualizerConfiguration>(
 			advancedAudio.Configuration.GetSource(new MediaSourceId(Identity.Parse(sourceA.Id))).Equalizer);
@@ -587,9 +595,12 @@ public sealed class ProductionIpcIntegrationTests
 		var initialAudio = Assert.IsType<OperatorAudioProductionDescriptor>(client.Snapshot!.AudioProduction);
 		var sourceA = new MediaSourceId(Identity.Parse(initial.Sources[0].Id));
 		var sourceB = new MediaSourceId(Identity.Parse(initial.Sources[1].Id));
+		var restoredDynamics = new AudioBusDynamicsConfiguration(
+			new AudioBusCompressorConfiguration(true, -16, 3, 7, 150, 1),
+			new AudioBusSamplePeakLimiterConfiguration(true, -2, 120));
 		var restoredAudioConfiguration = new AudioProductionConfiguration(
 			checked(initialAudio.Configuration.Revision + 1),
-			new[] { new AudioProductionBusConfiguration(AudioBusId.Program, 0.6, muted: false) },
+			new[] { new AudioProductionBusConfiguration(AudioBusId.Program, 0.6, muted: false, restoredDynamics) },
 			new[]
 			{
 				new AudioProductionSourceConfiguration(
@@ -625,6 +636,14 @@ public sealed class ProductionIpcIntegrationTests
 			secondRuntime.Runtime.Snapshot.AudioProduction?.Revision == restoredAudioConfiguration.Revision);
 		var restoredAudio = Assert.IsType<V1AudioProductionSnapshot>(secondRuntime.Runtime.Snapshot.AudioProduction);
 		Assert.Equal(0.6, restoredAudio.ProgramMasterGain, 6);
+		var recoveredDynamics = Assert.IsType<AudioBusDynamicsConfiguration>(Assert.Single(restoredAudio.Buses).Dynamics);
+		Assert.Equal(-16, recoveredDynamics.Compressor.ThresholdDbFs);
+		Assert.Equal(3, recoveredDynamics.Compressor.Ratio);
+		Assert.Equal(-2, recoveredDynamics.Limiter.CeilingDbFs);
+		Assert.True(double.IsFinite(restoredAudio.CompressorGainReductionDb));
+		Assert.True(double.IsFinite(restoredAudio.LimiterGainReductionDb));
+		Assert.True(restoredAudio.CompressorGainReductionDb >= 0);
+		Assert.True(restoredAudio.LimiterGainReductionDb >= 0);
 		Assert.All(restoredAudio.Sources, source => Assert.False(source.FollowRoutedSource));
 		var restoredEqualizer = Assert.IsType<AudioSourceEqualizerConfiguration>(
 			Assert.Single(restoredAudio.Sources, source => source.SourceId == sourceA).Equalizer);

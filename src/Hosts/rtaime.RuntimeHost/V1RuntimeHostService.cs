@@ -267,7 +267,12 @@ public sealed record V1AudioProductionBusSnapshot(
 	bool Clipping = false,
 	ulong ClippedSampleValues = 0,
 	int ActiveSourceCount = 0,
-	int MissingSourceCount = 0);
+	int MissingSourceCount = 0,
+	double PreDynamicsPeak = 0,
+	double CompressorGainReductionDb = 0,
+	double LimiterGainReductionDb = 0,
+	ulong LimiterHitCount = 0,
+	AudioBusDynamicsConfiguration? Dynamics = null);
 
 public sealed record V1AudioProductionSourceSnapshot(
 	MediaSourceId SourceId,
@@ -315,7 +320,11 @@ public sealed record V1AudioProductionSnapshot(
 	bool SidechainAvailable,
 	double? CrossfadeProgress,
 	int ActiveSourceCount,
-	int MissingSourceCount);
+	int MissingSourceCount,
+	double PreDynamicsPeak = 0,
+	double CompressorGainReductionDb = 0,
+	double LimiterGainReductionDb = 0,
+	ulong LimiterHitCount = 0);
 
 public sealed record V1RecordingOperatorSnapshot(
 	RecordingLifecycleState State,
@@ -3089,7 +3098,12 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 					result.Clipping,
 					result.ClippedSampleValues,
 					result.ActiveSourceCount,
-					result.MissingSourceCount);
+					result.MissingSourceCount,
+					result.PreDynamicsPeak,
+					result.CompressorGainReductionDb,
+					result.LimiterGainReductionDb,
+					result.LimiterHitCount,
+					bus.Dynamics);
 			})
 			.ToArray();
 		var sources = configuration.Sources
@@ -3142,7 +3156,11 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			result.SidechainAvailable,
 			result.CrossfadeProgress,
 			result.ActiveSourceCount,
-			result.MissingSourceCount);
+			result.MissingSourceCount,
+			result.PreDynamicsPeak,
+			result.CompressorGainReductionDb,
+			result.LimiterGainReductionDb,
+			result.LimiterHitCount);
 	}
 
 	private void ValidateAudioProductionConfigurationUnsafe(AudioProductionConfiguration configuration)
