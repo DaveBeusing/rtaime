@@ -222,7 +222,7 @@ public sealed class NativeNdiSender : INdiSender
 internal static class NdiFourCc
 {
 	public static readonly int Rgba = Make('R', 'G', 'B', 'A');
-	public static readonly int Fltp = Make('F', 'L', 'T', 'P');
+	public static readonly int Fltp = Make('F', 'L', 'T', 'p');
 
 	private static int Make(char a, char b, char c, char d) =>
 		a | (b << 8) | (c << 16) | (d << 24);
