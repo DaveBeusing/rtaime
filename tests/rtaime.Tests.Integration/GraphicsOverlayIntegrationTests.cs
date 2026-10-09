@@ -223,6 +223,56 @@ public sealed class GraphicsOverlayIntegrationTests
 	}
 
 	[Fact]
+	public async Task Ordered_processing_stack_executes_in_sequence_and_skips_disabled_nodes()
+	{
+		await using var fixture = await Fixture.CreateAsync(new CollectingRecordingWriter());
+		fixture.Runtime.LoadGraphicsOverlay("stack.rgba", 1, 1, new byte[] { 255, 0, 0, 255 });
+		fixture.Runtime.SetGraphicsOverlay(true, 0, 0, 1);
+
+		var stack = new[]
+		{
+			new PreparedCompositingProcessingNodeState(
+				"desaturate",
+				PreparedCompositingProcessingNodeKind.ColorGrade,
+				true,
+				new PreparedColorGradeSettings(0, 1, 0)),
+			new PreparedCompositingProcessingNodeState(
+				"disabled-brightness",
+				PreparedCompositingProcessingNodeKind.ColorGrade,
+				false,
+				new PreparedColorGradeSettings(1, 1, 1)),
+			new PreparedCompositingProcessingNodeState(
+				"lift",
+				PreparedCompositingProcessingNodeKind.ColorGrade,
+				true,
+				new PreparedColorGradeSettings(0.1, 1, 1))
+		};
+
+		var layers = fixture.Runtime.SetCompositingLayerProcessingStack(
+			V1RuntimeHostService.BitmapGraphicsLayerId,
+			stack);
+		var bitmap = Assert.Single(layers, layer => layer.LayerId == V1RuntimeHostService.BitmapGraphicsLayerId);
+		Assert.Equal(new[] { "desaturate", "disabled-brightness", "lift" }, bitmap.ProcessingStack.Select(node => node.NodeId));
+
+		using var program = fixture.Runtime.ProcessNextBoundary();
+		AssertPixel(program.ProgramPixels, fixture.Format, 0, 0, 80, 80, 80, 255);
+
+		fixture.Runtime.SetCompositingLayerProcessingStack(
+			V1RuntimeHostService.BitmapGraphicsLayerId,
+			new[] { stack[2], stack[1], stack[0] });
+		using var reversed = fixture.Runtime.ProcessNextBoundary();
+		Assert.NotEqual(
+			Pixel(program.ProgramPixels, fixture.Format, 0, 0),
+			Pixel(reversed.ProgramPixels, fixture.Format, 0, 0));
+
+		fixture.Runtime.SetCompositingLayerProcessingStack(
+			V1RuntimeHostService.BitmapGraphicsLayerId,
+			Array.Empty<PreparedCompositingProcessingNodeState>());
+		using var restored = fixture.Runtime.ProcessNextBoundary();
+		AssertPixel(restored.ProgramPixels, fixture.Format, 0, 0, 255, 0, 0, 255);
+	}
+
+	[Fact]
 	public async Task Prepared_scene_compositing_is_applied_with_the_runtime_commit()
 	{
 		await using var fixture = await Fixture.CreateAsync(new CollectingRecordingWriter());

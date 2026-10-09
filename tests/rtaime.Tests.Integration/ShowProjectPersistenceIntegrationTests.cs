@@ -110,11 +110,19 @@ public sealed class ShowProjectPersistenceIntegrationTests
 							cropTop: 0.10,
 							cropRight: 0.15,
 							cropBottom: 0.20,
-							processingNode: new ProductionCompositingProcessingNodeState(
-								"grade-primary",
-								ProductionCompositingProcessingNodeKind.ColorGrade,
-								true,
-								new ProductionColorGradeSettings(0.1, 1.2, 0.8))),
+							processingStack:
+							[
+								new ProductionCompositingProcessingNodeState(
+									"grade-primary",
+									ProductionCompositingProcessingNodeKind.ColorGrade,
+									true,
+									new ProductionColorGradeSettings(0.1, 1.2, 0.8)),
+								new ProductionCompositingProcessingNodeState(
+									"grade-secondary",
+									ProductionCompositingProcessingNodeKind.ColorGrade,
+									false,
+									new ProductionColorGradeSettings(-0.1, 0.9, 1.1))
+							]),
 						new ProductionCompositingLayerState(
 							ProductionCompositingLayerIds.ProductionCg,
 							ProductionCompositingLayerKind.ProductionCg,
@@ -191,11 +199,14 @@ public sealed class ShowProjectPersistenceIntegrationTests
 				Assert.Equal(0.10, reopenedBitmapLayer.CropTop, 6);
 				Assert.Equal(0.15, reopenedBitmapLayer.CropRight, 6);
 				Assert.Equal(0.20, reopenedBitmapLayer.CropBottom, 6);
-				Assert.NotNull(reopenedBitmapLayer.ProcessingNode);
-				Assert.Equal("grade-primary", reopenedBitmapLayer.ProcessingNode!.NodeId);
-				Assert.Equal(0.1, reopenedBitmapLayer.ProcessingNode.ColorGrade.Brightness, 6);
-				Assert.Equal(1.2, reopenedBitmapLayer.ProcessingNode.ColorGrade.Contrast, 6);
-				Assert.Equal(0.8, reopenedBitmapLayer.ProcessingNode.ColorGrade.Saturation, 6);
+				Assert.Equal(2, reopenedBitmapLayer.ProcessingStack.Count);
+				Assert.Equal("grade-primary", reopenedBitmapLayer.ProcessingStack[0].NodeId);
+				Assert.Equal("grade-secondary", reopenedBitmapLayer.ProcessingStack[1].NodeId);
+				Assert.True(reopenedBitmapLayer.ProcessingStack[0].Enabled);
+				Assert.False(reopenedBitmapLayer.ProcessingStack[1].Enabled);
+				Assert.Equal(0.1, reopenedBitmapLayer.ProcessingStack[0].ColorGrade.Brightness, 6);
+				Assert.Equal(1.2, reopenedBitmapLayer.ProcessingStack[0].ColorGrade.Contrast, 6);
+				Assert.Equal(0.8, reopenedBitmapLayer.ProcessingStack[0].ColorGrade.Saturation, 6);
 				Assert.NotNull(reopened.AudioRouting);
 				Assert.Equal(DurableAudioRoutingState.BreakawayMode, reopened.AudioRouting!.Mode);
 				Assert.Equal(new MediaSourceId(specification.Sources[1].SourceId.Value), reopened.AudioRouting.BreakawaySourceId);

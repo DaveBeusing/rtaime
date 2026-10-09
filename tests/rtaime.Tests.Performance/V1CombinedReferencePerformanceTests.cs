@@ -142,13 +142,15 @@ public sealed class V1CombinedReferencePerformanceTests
         Array.Fill(pixels, (byte)128);
         runtime.LoadGraphicsOverlay("performance-transform.rgba", assetWidth, assetHeight, pixels);
         runtime.SetGraphicsOverlay(true, 0, 0, 1);
-        runtime.SetCompositingLayerProcessingNode(
+        runtime.SetCompositingLayerProcessingStack(
             V1RuntimeHostService.BitmapGraphicsLayerId,
-            new PreparedCompositingProcessingNodeState(
-                "performance-grade",
-                PreparedCompositingProcessingNodeKind.ColorGrade,
-                true,
-                new PreparedColorGradeSettings(0.05, 1.05, 0.95)));
+            Enumerable.Range(0, PreparedCompositingProcessingStackLimits.MaximumNodeCount)
+                .Select(index => new PreparedCompositingProcessingNodeState(
+                    $"performance-grade-{index}",
+                    PreparedCompositingProcessingNodeKind.ColorGrade,
+                    true,
+                    new PreparedColorGradeSettings(0.01, 1.01, 0.99)))
+                .ToArray());
 
         const int iterations = 4;
         var stopwatch = Stopwatch.StartNew();
@@ -174,7 +176,7 @@ public sealed class V1CombinedReferencePerformanceTests
             runtime.Snapshot.CompositingLayers!,
             layer => layer.LayerId == V1RuntimeHostService.BitmapGraphicsLayerId);
         Assert.Equal(-2.5, bitmapLayer.RotationDegrees, 6);
-        Assert.NotNull(bitmapLayer.ProcessingNode);
+        Assert.Equal(PreparedCompositingProcessingStackLimits.MaximumNodeCount, bitmapLayer.ProcessingStack.Count);
         Assert.Equal(0, runtime.Snapshot.ActiveGpuSurfaces);
         Assert.True(
             stopwatch.Elapsed < TimeSpan.FromSeconds(15),

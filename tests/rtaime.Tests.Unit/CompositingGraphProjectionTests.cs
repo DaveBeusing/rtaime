@@ -47,11 +47,19 @@ public sealed class CompositingGraphProjectionTests
 					anchorX: 0.5,
 					anchorY: 0.5,
 					cropLeft: 0.1,
-					processingNode: new OperatorCompositingProcessingNodeDescriptor(
-						"grade-primary",
-						1,
-						true,
-						new OperatorColorGradeDescriptor(0.1, 1.1, 0.9))),
+					processingStack:
+					[
+						new OperatorCompositingProcessingNodeDescriptor(
+							"grade-primary",
+							1,
+							true,
+							new OperatorColorGradeDescriptor(0.1, 1.1, 0.9)),
+						new OperatorCompositingProcessingNodeDescriptor(
+							"grade-secondary",
+							1,
+							false,
+							new OperatorColorGradeDescriptor(-0.1, 0.9, 1.2))
+					]),
 				new OperatorCompositingLayerDescriptor("production-cg", 3, 1, false, 255, 0.05, 0.90, 1.0, "LOWER THIRD")
 			]
 		};
@@ -73,9 +81,13 @@ public sealed class CompositingGraphProjectionTests
 		Assert.Contains("A 0.5,0.5", bitmapTransform.Detail, StringComparison.Ordinal);
 
 		var grade = Assert.Single(graph.Nodes, node => node.Id == "processing:bitmap-graphics:grade-primary");
+		var secondaryGrade = Assert.Single(graph.Nodes, node => node.Id == "processing:bitmap-graphics:grade-secondary");
 		Assert.Equal(CompositingGraphNodeKind.Processing, grade.Kind);
 		Assert.Equal("CONFIRMED ENABLED", grade.Status);
+		Assert.Contains("1/2", grade.Detail, StringComparison.Ordinal);
 		Assert.Contains("Contrast 1.1", grade.Detail, StringComparison.Ordinal);
+		Assert.Equal("CONFIRMED DISABLED", secondaryGrade.Status);
+		Assert.Contains("2/2", secondaryGrade.Detail, StringComparison.Ordinal);
 
 		Assert.Contains(graph.Connections, connection =>
 			connection.FromNodeId == "layer:bitmap-graphics" &&
@@ -87,6 +99,10 @@ public sealed class CompositingGraphProjectionTests
 			connection.IsActive);
 		Assert.Contains(graph.Connections, connection =>
 			connection.FromNodeId == "processing:bitmap-graphics:grade-primary" &&
+			connection.ToNodeId == "processing:bitmap-graphics:grade-secondary" &&
+			connection.IsActive);
+		Assert.Contains(graph.Connections, connection =>
+			connection.FromNodeId == "processing:bitmap-graphics:grade-secondary" &&
 			connection.ToNodeId == "composite" &&
 			connection.IsActive);
 		Assert.Contains(graph.Connections, connection =>
