@@ -56,7 +56,9 @@ Before replacement:
 4. satisfy coordinated state-maintenance prerequisites;
 5. confirm rollback/state recovery prerequisites.
 
-A failed or uncertain update remains failed. The deployment process must not silently reinterpret failure as readiness.
+For a state-changing upgrade, `<InstallPath>.upgrade-recovery` remains an active rollback guard after maintenance. It may become cleanup-eligible only after service-managed runtime readiness reaches `PASS`, or after an explicitly acknowledged failed upgrade has completed full software/state recovery. Retirement requires the packaged completion tool, which deletes the rollback slot before removing active recovery evidence and preserves a closure receipt below the persistent-state maintenance root.
+
+A failed or uncertain update remains failed. Successful recovery is recorded separately and must not silently reinterpret the original failure as readiness.
 
 ## Diagnostics
 
