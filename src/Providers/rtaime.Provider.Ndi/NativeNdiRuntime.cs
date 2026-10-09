@@ -69,7 +69,7 @@ public sealed class NativeNdiSender : INdiSender
 		try
 		{
 			if (!_api.Initialize())
-				throw new InvalidOperationException("NDI runtime initialization failed.");
+				throw new PlatformNotSupportedException("NDI runtime initialization rejected the current CPU/platform.");
 
 			_sender = _api.CreateSender(_configuration.NdiSettings.SourceName);
 			if (_sender == IntPtr.Zero)
