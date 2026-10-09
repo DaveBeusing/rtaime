@@ -113,11 +113,13 @@ public sealed class V1CombinedReferencePerformanceTests
     [InlineData(false, "chroma-key")]
     [InlineData(false, "chroma-key-color-grade")]
     [InlineData(false, "color-grade-chroma-key")]
+    [InlineData(false, "maximum-mixed-stack")]
     [InlineData(true, "none")]
     [InlineData(true, "color-grade")]
     [InlineData(true, "chroma-key")]
     [InlineData(true, "chroma-key-color-grade")]
     [InlineData(true, "color-grade-chroma-key")]
+    [InlineData(true, "maximum-mixed-stack")]
     public async Task Authoritative_transform_and_typed_processing_materialization_has_bounded_1080p_regression_guard(
         bool fractionalRate,
         string processingScenario)
@@ -230,6 +232,21 @@ public sealed class V1CombinedReferencePerformanceTests
             "chroma-key" => [key],
             "chroma-key-color-grade" => [key, grade],
             "color-grade-chroma-key" => [grade, key],
+            "maximum-mixed-stack" =>
+            [
+                grade,
+                key,
+                new PreparedCompositingProcessingNodeState(
+                    "qualification-grade-secondary",
+                    PreparedCompositingProcessingNodeKind.ColorGrade,
+                    true,
+                    colorGrade: new PreparedColorGradeSettings(-0.01, 0.95, 1.05)),
+                new PreparedCompositingProcessingNodeState(
+                    "qualification-key-secondary",
+                    PreparedCompositingProcessingNodeKind.ChromaKey,
+                    true,
+                    chromaKey: new PreparedChromaKeySettings(0, 255, 0, 0.05, 0.1, 0.5))
+            ],
             _ => throw new ArgumentOutOfRangeException(nameof(scenario), scenario, "Unknown processing qualification scenario.")
         };
     }
