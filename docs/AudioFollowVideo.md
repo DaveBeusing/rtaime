@@ -318,7 +318,7 @@ AFV still follows only the committed Program video source. CUT/DISSOLVE routing 
 
 ### Scope boundary
 
-Audio Operator Workflow does not add EQ, compression, limiter configuration, aux buses, a routing matrix, multichannel mixing, loudness normalization or a loudness-compliance suite. Those remain outside the V1 showcase audio workflow.
+The basic Audio Operator Workflow does not expose equalizer controls. Bounded per-source three-band EQ is implemented by Advanced Audio Production and remains governed through the advanced-audio configuration path. Compression, limiter configuration, a generic routing matrix, multichannel mixing, loudness normalization and a loudness-compliance suite remain outside this workflow.
 ## Evidence boundary
 
 Virtual/synthetic evidence proves deterministic contract and architecture behaviour.
