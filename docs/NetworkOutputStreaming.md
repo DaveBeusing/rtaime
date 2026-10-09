@@ -156,3 +156,9 @@ Repository tests and CI can verify contract validation, bounded queue behavior, 
 Native SRT availability, real network path quality, sustained physical-network throughput, WAN behavior and deployment-specific firewall/NAT behavior require separate environment evidence.
 
 Software-only 1080p50/59.94 measurements must not be presented as physical-network certification.
+
+## Output-role audio bus selection
+
+Network output consumes the final Runtime-owned audio payload selected by its governed output role. Program defaults to the `program` bus; Aux may select another configured authoritative bus. The SRT/provider layer receives that already mixed stereo 48 kHz payload and does not perform an independent remix.
+
+Legacy output-role configurations without an explicit audio-bus mapping preserve Program-audio behavior. Missing or invalid configured bus references fail closed before confirmed execution. Recording remains bound to the Program bus independently of Aux/network bus selection.

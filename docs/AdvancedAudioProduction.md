@@ -226,3 +226,11 @@ Hosted qualification covers:
 - repeated maximum-input 48 kHz stereo blocks with crossfade and ducking enabled.
 
 Hosted elapsed-time guards are regression evidence only. They are not physical audio-hardware latency or certification claims.
+
+## Governed multi-bus output routing
+
+The production audio model executes between one and four configured buses through the single `AudioProductionEngine`. `program` remains mandatory. Sources may be assigned to multiple buses or to no bus, and every configured bus is processed against the same absolute 48 kHz sample window. Runtime retains bounded per-bus mix buffers and per-bus peak, pre-clip, clipping, active-source, missing-source and master-state evidence.
+
+Governed Program/Aux output roles carry an authoritative audio-bus identity. Legacy roles without an explicit mapping resolve to `program`. Aux may select another confirmed bus; an invalid or missing bus reference fails closed before committed Runtime state changes. Providers consume the selected final bus payload and never remix it.
+
+Recording remains intentionally bound to the `program` bus even when a Program or Aux output role selects another bus. This package does not add another mixer, wall-clock scheduler, unbounded queue, surround layout, DSP plugin host, EQ, compression or limiting.

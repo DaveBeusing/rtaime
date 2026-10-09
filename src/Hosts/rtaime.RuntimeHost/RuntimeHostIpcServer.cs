@@ -790,7 +790,8 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		(int)snapshot.HealthState,
 		snapshot.Evidence,
 		snapshot.Error is { } error ? new WireFailure(error.Code, error.Message) : null,
-		snapshot.NetworkOutput is null ? null : ToWire(snapshot.NetworkOutput));
+		snapshot.NetworkOutput is null ? null : ToWire(snapshot.NetworkOutput),
+		snapshot.AudioBusId);
 
 	private static WireNetworkOutput ToWire(NetworkOutputHealthSnapshot snapshot) => new(
 		snapshot.TargetId,
@@ -899,7 +900,17 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 	private static WireAudioProductionSnapshot ToWire(V1AudioProductionSnapshot snapshot) => new(
 		new WireAudioProductionConfiguration(
 			snapshot.Revision,
-			snapshot.Buses.Select(bus => new WireAudioProductionBus(bus.BusId, bus.MasterGain, bus.Muted)).ToArray(),
+			snapshot.Buses.Select(bus => new WireAudioProductionBus(
+				bus.BusId,
+				bus.MasterGain,
+				bus.Muted,
+				bus.LeftPeak,
+				bus.RightPeak,
+				bus.PreClipPeak,
+				bus.Clipping,
+				bus.ClippedSampleValues,
+				bus.ActiveSourceCount,
+				bus.MissingSourceCount)).ToArray(),
 			snapshot.Sources.Select(source => new WireAudioProductionSource(
 				source.SourceId.ToString(),
 				source.Gain,
@@ -1153,7 +1164,8 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 				binding.Resource.Reservable),
 			string.IsNullOrWhiteSpace(binding.MediaSourceId) ? null : new MediaSourceId(Identity.Parse(binding.MediaSourceId)),
 			string.IsNullOrWhiteSpace(binding.MediaSinkId) ? null : new MediaSinkId(Identity.Parse(binding.MediaSinkId)),
-			binding.OutputRoleId)).ToArray(),
+			binding.OutputRoleId,
+			binding.AudioBusId)).ToArray(),
 		prepared.CompositingState is null
 			? null
 			: new PreparedCompositingState(
@@ -1208,7 +1220,17 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 	private sealed record WireAudioInputState(string SourceId, double Gain, bool Muted);
 	private sealed record WireAudioRoutingState(int Mode, string? BreakawaySourceId);
 	private sealed record WireAudioTestSignalState(string SourceId, bool Enabled, int Mode, double FrequencyHz, double PeakLevel);
-	private sealed record WireAudioProductionBus(string BusId, double MasterGain, bool Muted);
+	private sealed record WireAudioProductionBus(
+		string BusId,
+		double MasterGain,
+		bool Muted,
+		double LeftPeak = 0,
+		double RightPeak = 0,
+		double PreClipPeak = 0,
+		bool Clipping = false,
+		ulong ClippedSampleValues = 0,
+		int ActiveSourceCount = 0,
+		int MissingSourceCount = 0);
 	private sealed record WireAudioProductionSource(string SourceId, double Gain, bool Muted, bool FollowRoutedSource, string[] BusAssignments);
 	private sealed record WireAudioCrossfade(string BusId, string FromSourceId, string ToSourceId, ulong StartSamplePosition, uint DurationSamples, int Law);
 	private sealed record WireAudioDucking(string BusId, bool Enabled, string SidechainSourceId, string[] TargetSourceIds, double Threshold, double Attenuation, uint AttackSamples, uint HoldSamples, uint ReleaseSamples);
@@ -1233,7 +1255,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 	private sealed record WireCapability(string CapabilityId, string Kind, WireVideoFormat[] VideoFormats);
 	private sealed record WireResource(string ResourceId, string ProviderId, string Kind, uint CapacityUnits, bool Reservable);
 	private sealed record WireProvider(string Version, string ProviderId, string Name, int AvailabilityState, WireFailure? Failure, WireCapability[] Capabilities, WireResource[] Resources);
-	private sealed record WirePreparedBinding(string LogicalNodeId, string CapabilityId, WireResource Resource, string? MediaSourceId, string? MediaSinkId, string? OutputRoleId = null);
+	private sealed record WirePreparedBinding(string LogicalNodeId, string CapabilityId, WireResource Resource, string? MediaSourceId, string? MediaSinkId, string? OutputRoleId = null, string? AudioBusId = null);
 	private sealed record WirePreparedCompositingLayer(string LayerId, int Kind, int Order, bool Visible, byte Opacity, double PositionX, double PositionY, double Scale, string ContentIdentity, double RotationDegrees = 0, double AnchorX = 0, double AnchorY = 0, double CropLeft = 0, double CropTop = 0, double CropRight = 0, double CropBottom = 0, WireProcessingNode[]? ProcessingStack = null, WireProcessingNode? ProcessingNode = null);
 	private sealed record WirePreparedCompositingState(string Version, WirePreparedCompositingLayer[] Layers);
 	private sealed record WirePreparedExecution(string Version, string PreparedExecutionId, string AuthorityStateId, ulong AuthorityRevision, ulong PlanGeneration, WirePreparedBinding[] Bindings, WirePreparedCompositingState? CompositingState = null);
@@ -1317,7 +1339,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		int QueueDepth,
 		DateTimeOffset? LastSuccessfulSendUtc,
 		WireFailure? Failure);
-	private sealed record WireOutputRole(string RoleId, string RoleKind, string SourceId, string TargetId, WireVideoFormat Format, long TimingNumerator, long TimingDenominator, string ProviderId, int LifecycleState, bool AuthoritativeActive, int HealthState, string Evidence, WireFailure? Error, WireNetworkOutput? NetworkOutput = null);
+	private sealed record WireOutputRole(string RoleId, string RoleKind, string SourceId, string TargetId, WireVideoFormat Format, long TimingNumerator, long TimingDenominator, string ProviderId, int LifecycleState, bool AuthoritativeActive, int HealthState, string Evidence, WireFailure? Error, WireNetworkOutput? NetworkOutput = null, string? AudioBusId = null);
 	private sealed record WireRecordingCommandResult(bool Succeeded, WireRecordingSnapshot Snapshot, WireFailure? Failure);
 	private sealed record WireMediaAssetProbe(string Path, string AssetId);
 	private sealed record WireMediaAssetProbeResult(WireLocalMediaProbe? Probe, WireFailure? Failure);

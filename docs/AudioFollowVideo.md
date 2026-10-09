@@ -333,3 +333,9 @@ It does not prove:
 - certified audio performance
 
 Those remain `UNVERIFIED` until produced on the declared Reference Platform and professional I/O provider.
+
+## Multi-bus production boundary
+
+Audio Follow Video continues to resolve the routed source and sample window once per production boundary. The Advanced Audio engine then processes every configured authoritative bus for that same absolute 48 kHz window. Output-role bus selection occurs after the bounded mixes have been materialized; it does not create an additional AFV engine, clock or mixer.
+
+Legacy output roles default to the `program` bus. Recording remains Program-bus only.

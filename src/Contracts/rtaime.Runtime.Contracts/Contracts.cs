@@ -80,7 +80,8 @@ public sealed record PreparedExecutionBinding
         ProviderResourceDescriptor resource,
         MediaSourceId? mediaSourceId,
         MediaSinkId? mediaSinkId,
-        string? outputRoleId = null)
+        string? outputRoleId = null,
+        string? audioBusId = null)
     {
         if (logicalNodeId.IsEmpty)
             throw new ArgumentException("Logical node identity must not be empty.", nameof(logicalNodeId));
@@ -91,6 +92,7 @@ public sealed record PreparedExecutionBinding
         MediaSourceId = mediaSourceId;
         MediaSinkId = mediaSinkId;
         OutputRoleId = string.IsNullOrWhiteSpace(outputRoleId) ? null : outputRoleId.Trim().ToLowerInvariant();
+        AudioBusId = string.IsNullOrWhiteSpace(audioBusId) ? null : new AudioBusId(audioBusId).Value;
     }
 
     public Identity LogicalNodeId { get; }
@@ -99,6 +101,7 @@ public sealed record PreparedExecutionBinding
     public MediaSourceId? MediaSourceId { get; }
     public MediaSinkId? MediaSinkId { get; }
     public string? OutputRoleId { get; }
+    public string? AudioBusId { get; }
 }
 
 public enum RuntimeOutputRoleLifecycleState
@@ -130,7 +133,8 @@ public sealed record RuntimeOutputRoleSnapshot
         RuntimeOutputRoleHealthState healthState,
         string evidence,
         Failure? error = null,
-        NetworkOutputHealthSnapshot? networkOutput = null)
+        NetworkOutputHealthSnapshot? networkOutput = null,
+        string audioBusId = "program")
     {
         if (string.IsNullOrWhiteSpace(roleId))
             throw new ArgumentException("Output role identity is required.", nameof(roleId));
@@ -142,6 +146,7 @@ public sealed record RuntimeOutputRoleSnapshot
             throw new ArgumentOutOfRangeException(nameof(healthState));
         if (string.IsNullOrWhiteSpace(evidence))
             throw new ArgumentException("Output role evidence is required.", nameof(evidence));
+        var normalizedAudioBusId = new AudioBusId(audioBusId).Value;
         if (healthState == RuntimeOutputRoleHealthState.Faulted && error is null)
             throw new ArgumentException("Faulted output roles require an error reason.", nameof(error));
         if (healthState != RuntimeOutputRoleHealthState.Faulted && error is not null)
@@ -160,6 +165,7 @@ public sealed record RuntimeOutputRoleSnapshot
         Evidence = evidence.Trim();
         Error = error;
         NetworkOutput = networkOutput;
+        AudioBusId = normalizedAudioBusId;
     }
 
     public string RoleId { get; }
@@ -175,6 +181,7 @@ public sealed record RuntimeOutputRoleSnapshot
     public string Evidence { get; }
     public Failure? Error { get; }
     public NetworkOutputHealthSnapshot? NetworkOutput { get; }
+    public string AudioBusId { get; }
 }
 
 public enum PreparedCompositingLayerKind

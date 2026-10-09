@@ -863,7 +863,8 @@ internal sealed class ExternalControlGrpcService : ExternalControl.ExternalContr
 		SourceId = NullIfEmpty(command.SourceId),
 		DurationFrames = command.HasDurationFrames ? command.DurationFrames : (uint?)null,
 		SceneId = NullIfEmpty(command.SceneId),
-		OutputRoleId = NullIfEmpty(command.OutputRoleId)
+		OutputRoleId = NullIfEmpty(command.OutputRoleId),
+		AudioBusId = NullIfEmpty(command.AudioBusId)
 	};
 
 	private static (string Operation, string Payload) Raw(string operation, JsonPayloadRequest request)

@@ -1176,6 +1176,15 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 					.ToHashSet();
 				if (!expectedSources.SetEquals(requested.Sources.Select(source => source.SourceId)))
 					return Error(request, "control.audio.production.sources.invalid", "Audio production configuration must contain every authoritative production source exactly once.");
+				var configuredBusIds = requested.Buses.Select(bus => bus.BusId.Value).ToHashSet(StringComparer.Ordinal);
+				var missingMappedRole = control.State.OutputRoles.FirstOrDefault(role => !configuredBusIds.Contains(role.AudioBusId));
+				if (missingMappedRole is not null)
+				{
+					return Error(
+						request,
+						"control.audio.production.output_bus_in_use",
+						$"Audio bus '{missingMappedRole.AudioBusId}' is still assigned to output role '{missingMappedRole.RoleId}'.");
+				}
 			}
 			catch (Exception exception) when (exception is ArgumentException or FormatException or InvalidDataException)
 			{
@@ -2815,6 +2824,20 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 				new CommandId(Identity.Parse(command.CommandId)),
 				new ProductionId(Identity.Parse(command.ProductionId)),
 				new Revision(command.ExpectedRevision));
+			if (kind == MutationKind.RouteOutputRole && !string.IsNullOrWhiteSpace(command.AudioBusId))
+			{
+				var requestedBus = new AudioBusId(command.AudioBusId);
+				var runtimeSnapshot = await _runtimeTransport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
+				if (runtimeSnapshot.AudioProduction is null ||
+					!runtimeSnapshot.AudioProduction.Configuration.Buses.Any(bus => bus.BusId == requestedBus))
+				{
+					return MutationResponse(
+						request,
+						false,
+						control.State,
+						new Failure("control.output_role.audio_bus_unknown", $"Output audio bus '{requestedBus}' is not present in confirmed Runtime audio production state."));
+				}
+			}
 			ControlHostOperationResult staged;
 			if (kind == MutationKind.ActivateScene)
 			{
@@ -2837,7 +2860,8 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 					MutationKind.RouteOutputRole => control.RouteOutputRole(new RouteOutputRoleCommand(
 						metadata,
 						new OutputRoleId(command.OutputRoleId ?? throw new InvalidDataException("Output routing requires outputRoleId.")),
-						sourceId)),
+						sourceId,
+						command.AudioBusId)),
 					_ => throw new InvalidOperationException("Unknown mutation kind.")
 				};
 			}
@@ -2965,7 +2989,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		snapshot.ActiveAudioSourceId?.ToString());
 
 	private static WireAudioProductionSnapshot ToWire(RuntimeAudioProductionSnapshot snapshot) => new(
-		ToWire(snapshot.Configuration),
+		ToWire(snapshot.Configuration, snapshot.Buses),
 		snapshot.LeftPeak,
 		snapshot.RightPeak,
 		snapshot.PreClipPeak,
@@ -2978,9 +3002,25 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		snapshot.ActiveSourceCount,
 		snapshot.MissingSourceCount);
 
-	private static WireAudioProductionConfiguration ToWire(AudioProductionConfiguration configuration) => new(
+	private static WireAudioProductionConfiguration ToWire(
+		AudioProductionConfiguration configuration,
+		IReadOnlyList<RuntimeAudioProductionBusSnapshot>? busEvidence = null) => new(
 		configuration.Revision,
-		configuration.Buses.Select(bus => new WireAudioProductionBus(bus.BusId.Value, bus.MasterGain, bus.Muted)).ToArray(),
+		configuration.Buses.Select(bus =>
+		{
+			var evidence = busEvidence?.FirstOrDefault(candidate => string.Equals(candidate.BusId, bus.BusId.Value, StringComparison.Ordinal));
+			return new WireAudioProductionBus(
+				bus.BusId.Value,
+				bus.MasterGain,
+				bus.Muted,
+				evidence?.LeftPeak ?? 0,
+				evidence?.RightPeak ?? 0,
+				evidence?.PreClipPeak ?? 0,
+				evidence?.Clipping ?? false,
+				evidence?.ClippedSampleValues ?? 0,
+				evidence?.ActiveSourceCount ?? 0,
+				evidence?.MissingSourceCount ?? 0);
+		}).ToArray(),
 		configuration.Sources.Select(source => new WireAudioProductionSource(
 			source.SourceId.ToString(),
 			source.Gain,
@@ -3358,7 +3398,8 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			role.TargetId,
 			role.FormatPolicy,
 			role.TimingPolicy,
-			role.Enabled)).ToArray(),
+			role.Enabled,
+			role.AudioBusId)).ToArray(),
 		ToWire(state.CompositingState));
 
 	private static WireCompositingState? ToWire(ProductionCompositingState? state) =>
@@ -3419,10 +3460,11 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 						string.Equals(candidate.RoleId, role.RoleId.ToString(), StringComparison.OrdinalIgnoreCase))
 					: null;
 				var sourceMatches = runtimeRole is not null && runtimeRole.SourceId.Value == role.SourceId.Value;
-				var confirmed = runtimeRole is not null && runtimeRole.AuthoritativeActive && sourceMatches;
+				var audioBusMatches = runtimeRole is not null && string.Equals(runtimeRole.AudioBusId, role.AudioBusId, StringComparison.Ordinal);
+				var confirmed = runtimeRole is not null && runtimeRole.AuthoritativeActive && sourceMatches && audioBusMatches;
 				var health = !runtimeFresh || runtimeRole is null
 					? "UNVERIFIED"
-					: !sourceMatches
+					: !sourceMatches || !audioBusMatches
 						? "FAIL"
 						: runtimeRole.HealthState switch
 						{
@@ -3436,10 +3478,14 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 						? "Runtime has not confirmed the configured output role."
 						: !sourceMatches
 							? "Runtime output source does not match authoritative Control configuration."
-							: runtimeRole.Evidence;
+							: !audioBusMatches
+								? "Runtime output audio bus does not match authoritative Control configuration."
+								: runtimeRole.Evidence;
 				var error = runtimeRole?.Error;
 				if (runtimeFresh && runtimeRole is not null && !sourceMatches)
 					error = new Failure("control.output_role.source_mismatch", "Runtime output source does not match authoritative Control configuration.");
+				else if (runtimeFresh && runtimeRole is not null && !audioBusMatches)
+					error = new Failure("control.output_role.audio_bus_mismatch", "Runtime output audio bus does not match authoritative Control configuration.");
 
 				return new WireOutputRole(
 					role.RoleId.ToString(),
@@ -3457,7 +3503,8 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 					health,
 					evidence,
 					error is { } failure ? new WireFailure(failure.Code, failure.Message) : null,
-					runtimeRole?.NetworkOutput is null ? null : ToWire(runtimeRole.NetworkOutput));
+					runtimeRole?.NetworkOutput is null ? null : ToWire(runtimeRole.NetworkOutput),
+					role.AudioBusId);
 			})
 			.ToArray();
 	}
@@ -3507,7 +3554,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	private sealed record WireFailure(string Code, string Message);
 	private sealed record WireSource(string Id, string Name, string Type, string Format, string Health, string MediaState, long? RemainingTicks, string? MediaFileName);
 	private sealed record WireScene(string Id, string Name, string PreviewSourceId, string ProgramSourceId, WireCompositingState? CompositingState = null);
-	private sealed record WireOutputRoleAuthority(string RoleId, int Kind, string SourceId, string ProviderSelector, string TargetId, string FormatPolicy, string TimingPolicy, bool Enabled);
+	private sealed record WireOutputRoleAuthority(string RoleId, int Kind, string SourceId, string ProviderSelector, string TargetId, string FormatPolicy, string TimingPolicy, bool Enabled, string? AudioBusId = null);
 	private sealed record WireNetworkOutput(
 		string TargetId,
 		string Provider,
@@ -3533,7 +3580,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		int QueueDepth,
 		DateTimeOffset? LastSuccessfulSendUtc,
 		WireFailure? Failure);
-	private sealed record WireOutputRole(string RoleId, string RoleKind, string SourceId, string TargetId, string ProviderId, uint? Width, uint? Height, string? FrameRate, string? PixelFormat, string? Timing, string LifecycleState, bool AuthoritativeActive, string HealthState, string Evidence, WireFailure? Error, WireNetworkOutput? NetworkOutput = null);
+	private sealed record WireOutputRole(string RoleId, string RoleKind, string SourceId, string TargetId, string ProviderId, uint? Width, uint? Height, string? FrameRate, string? PixelFormat, string? Timing, string LifecycleState, bool AuthoritativeActive, string HealthState, string Evidence, WireFailure? Error, WireNetworkOutput? NetworkOutput = null, string? AudioBusId = null);
 	private sealed record WireProductionState(string Version, string ProductionId, ulong Revision, string PreviewSourceId, string ProgramSourceId, string? ActiveSceneId = null, WireOutputRoleAuthority[]? OutputRoles = null, WireCompositingState? CompositingState = null);
 	private sealed record WireGraphicsAsset(string Name, uint Width, uint Height, byte[] RgbaPixels);
 	private sealed record WireCgColor(byte Red, byte Green, byte Blue, byte Alpha);
@@ -3610,7 +3657,17 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	private sealed record WireAudioInputState(string SourceId, double Gain, bool Muted);
 	private sealed record WireAudioRoutingState(int Mode, string? BreakawaySourceId, ulong ExpectedRoutingRevision);
 	private sealed record WireAudioTestSignalState(string SourceId, bool Enabled, int Mode, double FrequencyHz, double PeakLevel);
-	private sealed record WireAudioProductionBus(string BusId, double MasterGain, bool Muted);
+	private sealed record WireAudioProductionBus(
+		string BusId,
+		double MasterGain,
+		bool Muted,
+		double LeftPeak = 0,
+		double RightPeak = 0,
+		double PreClipPeak = 0,
+		bool Clipping = false,
+		ulong ClippedSampleValues = 0,
+		int ActiveSourceCount = 0,
+		int MissingSourceCount = 0);
 	private sealed record WireAudioProductionSource(string SourceId, double Gain, bool Muted, bool FollowRoutedSource, string[]? BusAssignments);
 	private sealed record WireAudioCrossfade(string BusId, string FromSourceId, string ToSourceId, ulong StartSamplePosition, uint DurationSamples, int Law);
 	private sealed record WireAudioDucking(string BusId, bool Enabled, string SidechainSourceId, string[]? TargetSourceIds, double Threshold, double Attenuation, uint AttackSamples, uint HoldSamples, uint ReleaseSamples);
@@ -3777,7 +3834,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	private sealed record WireCuePoint(string Id, string Name, long PositionFrame);
 	private sealed record WireMediaMarkerSnapshot(string Version, string AssetId, long TotalFrames, long? InPointFrame, long? OutPointFrame, WireCuePoint[] CuePoints);
 	private sealed record WireMediaDeckSnapshot(int State, string? SourceId, WireLocalMediaProbe? Probe, WireMediaTransportSnapshot? Transport, WireMediaMarkerSnapshot? Markers, WireFailure? Failure);
-	private sealed record WireControlCommand(string Version, string CommandId, string ProductionId, ulong ExpectedRevision, string? SourceId, uint? DurationFrames, string? SceneId = null, string? OutputRoleId = null);
+	private sealed record WireControlCommand(string Version, string CommandId, string ProductionId, ulong ExpectedRevision, string? SourceId, uint? DurationFrames, string? SceneId = null, string? OutputRoleId = null, string? AudioBusId = null);
 	private sealed record WireMutationResponse(bool Accepted, WireProductionState State, WireFailure? Failure, ulong StateVersion);
 	private sealed record RetainedGraphicsAsset(string Name, uint Width, uint Height, byte[] RgbaPixels);
 

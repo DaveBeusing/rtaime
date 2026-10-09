@@ -5,6 +5,7 @@ using System.Text.Json.Serialization;
 using rtaime.Control;
 using rtaime.Control.Contracts;
 using rtaime.Core;
+using rtaime.Media.Contracts;
 using rtaime.Persistence;
 
 namespace rtaime.ControlHost;
@@ -43,7 +44,8 @@ internal static class ControlHostRecovery
 				role.TargetId,
 				role.FormatPolicy,
 				role.TimingPolicy,
-				role.Enabled)).ToArray(),
+				role.Enabled,
+				role.AudioBusId)).ToArray(),
 			state.CompositingState is null
 				? null
 				: new PersistedCompositingState(
@@ -180,7 +182,8 @@ internal static class ControlHostRecovery
 				role.TargetId,
 				role.FormatPolicy,
 				role.TimingPolicy,
-				role.Enabled)).ToArray()
+				role.Enabled,
+				role.AudioBusId ?? AudioBusId.Program.Value)).ToArray()
 			: specification.InitialOutputRoles
 				.Select(role => role.Kind == OutputRoleKind.Program ? role.WithSource(program) : role)
 				.ToArray();
@@ -337,5 +340,6 @@ internal static class ControlHostRecovery
 		string TargetId,
 		string FormatPolicy,
 		string TimingPolicy,
-		bool Enabled);
+		bool Enabled,
+		string? AudioBusId = null);
 }

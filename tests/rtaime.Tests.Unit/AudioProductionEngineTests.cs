@@ -266,6 +266,65 @@ public sealed class AudioProductionEngineTests
 		Assert.Equal(0, allocated);
 	}
 
+
+	[Fact]
+	public void Multiple_buses_mix_independently_and_allow_zero_or_multiple_assignments()
+	{
+		var aux = new AudioBusId("aux");
+		var clean = new AudioBusId("clean");
+		var engine = new AudioProductionEngine(new AudioProductionConfiguration(
+			1,
+			new[]
+			{
+				new AudioProductionBusConfiguration(AudioBusId.Program, 1d, false),
+				new AudioProductionBusConfiguration(aux, 0.5d, false),
+				new AudioProductionBusConfiguration(clean, 1d, true)
+			},
+			new[]
+			{
+				new AudioProductionSourceConfiguration(SourceA, 1d, false, false, new[] { AudioBusId.Program, aux }),
+				new AudioProductionSourceConfiguration(SourceB, 1d, false, false, Array.Empty<AudioBusId>())
+			}));
+
+		var buffers = new[]
+		{
+			Buffer(SourceA, 2, 0.8f, -0.4f),
+			Buffer(SourceB, 2, 0.7f, 0.7f)
+		};
+		var program = new float[4];
+		var auxMix = new float[4];
+		var cleanMix = new float[4];
+
+		var programResult = engine.ProcessBus(AudioBusId.Program, 0, 2, SourceA, buffers, program);
+		var auxResult = engine.ProcessBus(aux, 0, 2, SourceA, buffers, auxMix);
+		var cleanResult = engine.ProcessBus(clean, 0, 2, SourceA, buffers, cleanMix);
+
+		Assert.Equal(new[] { 0.8f, -0.4f, 0.8f, -0.4f }, program);
+		Assert.Equal(new[] { 0.4f, -0.2f, 0.4f, -0.2f }, auxMix);
+		Assert.All(cleanMix, sample => Assert.Equal(0f, sample));
+		Assert.Equal(1, programResult.ActiveSourceCount);
+		Assert.Equal(1, auxResult.ActiveSourceCount);
+		Assert.Equal(0, cleanResult.ActiveSourceCount);
+	}
+
+	[Fact]
+	public void More_than_four_buses_are_rejected()
+	{
+		var buses = new[]
+		{
+			new AudioProductionBusConfiguration(AudioBusId.Program, 1d, false),
+			new AudioProductionBusConfiguration(new AudioBusId("aux"), 1d, false),
+			new AudioProductionBusConfiguration(new AudioBusId("clean"), 1d, false),
+			new AudioProductionBusConfiguration(new AudioBusId("iso"), 1d, false),
+			new AudioProductionBusConfiguration(new AudioBusId("monitor"), 1d, false)
+		};
+
+		Assert.Throws<ArgumentException>(() => new AudioProductionConfiguration(
+			1,
+			buses,
+			new[] { new AudioProductionSourceConfiguration(SourceA, 1d, false, false, new[] { AudioBusId.Program }) }));
+	}
+
 	private static AudioProductionConfiguration Configuration(
 		AudioProductionSourceConfiguration first,
 		AudioProductionSourceConfiguration second,

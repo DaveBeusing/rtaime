@@ -163,8 +163,14 @@ public static partial class ControlDomainEngine
 			issues.Add(new ValidationIssue("control.command.output_role_unknown", $"Output role '{command.RoleId}' is not configured.", "command.roleId"));
 		else if (!role.Enabled)
 			issues.Add(new ValidationIssue("control.command.output_role_disabled", $"Output role '{command.RoleId}' is disabled.", "command.roleId"));
-		else if (role.Kind == OutputRoleKind.Program)
-			issues.Add(new ValidationIssue("control.command.program_requires_transition", "Program routing must use the governed CUT/DISSOLVE transition path.", "command.roleId"));
+		else if (role.Kind == OutputRoleKind.Program &&
+			(command.SourceId != current.Routing.ProgramSourceId || command.AudioBusId is null))
+		{
+			issues.Add(new ValidationIssue(
+				"control.command.program_requires_transition",
+				"Program source routing must use the governed CUT/DISSOLVE transition path; audio-bus-only changes may retain the confirmed Program source.",
+				"command.roleId"));
+		}
 
 		if (current.Revision.Value == ulong.MaxValue)
 			issues.Add(new ValidationIssue("control.state.revision_exhausted", "Authoritative revision cannot advance beyond UInt64.MaxValue.", "authoritative.revision"));
@@ -173,7 +179,9 @@ public static partial class ControlDomainEngine
 			return ControlCommandResult.Rejected(current, new ControlValidationReport(issues));
 
 		var outputRoles = current.OutputRoles
-			.Select(candidate => candidate.RoleId == command.RoleId ? candidate.WithSource(command.SourceId) : candidate)
+			.Select(candidate => candidate.RoleId == command.RoleId
+				? candidate.WithRouting(command.SourceId, command.AudioBusId)
+				: candidate)
 			.ToArray();
 		var outputValidation = ProductionOutputRoleValidator.Validate(
 			specification,

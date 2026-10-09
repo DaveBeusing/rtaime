@@ -205,7 +205,11 @@ public sealed class ProductionIpcIntegrationTests
 		var audioProductionRevisionBefore = confirmedAudioProduction.Configuration.Revision;
 		var advancedConfiguration = new AudioProductionConfiguration(
 			checked(audioProductionRevisionBefore + 1),
-			new[] { new AudioProductionBusConfiguration(AudioBusId.Program, 0.75, muted: false) },
+			new[]
+			{
+				new AudioProductionBusConfiguration(AudioBusId.Program, 0.75, muted: false),
+				new AudioProductionBusConfiguration(new AudioBusId("aux"), 0.5, muted: false)
+			},
 			new[]
 			{
 				new AudioProductionSourceConfiguration(
@@ -219,7 +223,7 @@ public sealed class ProductionIpcIntegrationTests
 					0.25,
 					muted: false,
 					followRoutedSource: false,
-					new[] { AudioBusId.Program })
+					new[] { AudioBusId.Program, new AudioBusId("aux") })
 			},
 			new AudioCrossfadeConfiguration(
 				AudioBusId.Program,
@@ -246,6 +250,11 @@ public sealed class ProductionIpcIntegrationTests
 		Assert.Equal(advancedConfiguration.Revision, runtime.Runtime!.Snapshot.AudioProduction!.Revision);
 		Assert.Equal(advancedConfiguration.Revision, client.Snapshot!.AudioProduction!.Configuration.Revision);
 		Assert.Equal(revisionBeforeAudio, client.Snapshot.Production.Revision);
+
+		var auxAudioRoute = await client.RouteOutputRoleAsync("aux", sourceB.Id, "aux");
+		Assert.True(auxAudioRoute.Accepted);
+		Assert.Equal("aux", Assert.Single(client.Snapshot!.OutputRoles, role => role.RoleId == "aux").AudioBusId);
+		Assert.Equal("aux", Assert.Single(runtime.Runtime!.Snapshot.OutputRoles!, role => role.RoleId == "aux").AudioBusId);
 
 		var staleAudioProduction = Assert.IsType<OperatorAudioProductionDescriptor>(staleAudioClient.Snapshot!.AudioProduction);
 		var staleConfiguration = new AudioProductionConfiguration(
