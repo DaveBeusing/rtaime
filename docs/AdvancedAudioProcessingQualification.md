@@ -35,7 +35,7 @@ ControlHost remains authoritative for configuration. RuntimeHost remains authori
 | EQ semantics and restart state | `BoundedParametricEqualizerContractTests`, `BoundedParametricEqualizerProcessingTests`, `BoundedParametricEqualizerPerformanceTests` | Bounded typed parameters, finite coefficients, deterministic response/state isolation, block invariance, multi-bus replay and zero-allocation hot path. Reconstructed Runtime execution starts filter history from zero state. |
 | Compressor / limiter semantics and restart state | `BoundedBusDynamicsContractTests`, `BoundedBusDynamicsProcessingTests`, `BoundedBusDynamicsPerformanceTests` | Bounded typed parameters, deterministic stereo-linked envelope behavior, sample-peak ceiling, state continuity/reset semantics, bus isolation and zero-allocation hot path. |
 | Program recording parity | `ReferenceRecordingPayloadTests.Recording_persists_the_final_multi_source_Program_mix` | Recorded audio bytes are exactly the final dynamics-processed Program bus payload. |
-| Selected output bus | `ProductionIpcIntegrationTests` plus Runtime final-bus materialization policy | Program/Aux roles carry confirmed `AudioBusId` selection; Runtime submits the selected already-materialized final bus payload and providers do not remix it. |
+| Selected output bus | `ProductionIpcIntegrationTests`, Runtime final-bus materialization policy and `RuntimeMediaIoVerticalSlice.SubmitProgram` | Program/Aux roles carry confirmed `AudioBusId` selection. Network output receives the selected already-materialized bus payload, while physical Program Media I/O consumes the exact `V1ProgramBoundaryResult.ProgramAudioPayload`; neither provider path performs an independent remix. |
 | Runtime restart / recovery | `ProductionIpcIntegrationTests.RuntimeHost_restart_resynchronizes_without_advancing_authoritative_revision` plus EQ/dynamics reconstruction tests | Authoritative configuration is restored after Runtime process replacement while filter/envelope history is deliberately reconstructed from safe initial execution state. No previous-process DSP history is fabricated. |
 | Missing source / sidechain loss | `AudioProductionEngineTests` | Missing source contribution remains bounded silence/evidence; unavailable sidechain reports unavailable and releases ducking toward unity. |
 | Invalid EQ / dynamics | `BoundedParametricEqualizerContractTests`, `BoundedBusDynamicsContractTests` | Non-finite and out-of-range processing configuration is rejected before execution. |
@@ -90,6 +90,12 @@ The retained long-run evidence covers:
 ```
 
 This proves software sample-position continuity for the reference timing model. It does not prove external hardware clock lock.
+
+## Final-bus output bridge evidence
+
+The governed Program/Aux selection is resolved before provider submission. Network output receives the selected final bus payload from RuntimeHost. The physical Media I/O Program bridge reads `V1ProgramBoundaryResult.ProgramAudioPayload` and the matching `ProgramAudioBuffer.Timing` produced by the same Runtime boundary, converts only representation for the adapter, and submits it through `TrySubmitProgram`. It does not run another mixer, EQ, dynamics stage or routing decision.
+
+This is software path evidence only. It does not qualify physical embedded-audio continuity, DMA/device-driver latency, hardware clock/genlock behavior or analog performance.
 
 ## Recovery semantics
 
