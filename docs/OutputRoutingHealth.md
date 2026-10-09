@@ -87,3 +87,9 @@ No presentation component increases the Runtime health observation cadence. Metr
 `OutputRoutingHealthViewModel` subscribes only to the existing `OperatorViewModel` and `ProgramOutputController` presentation state. Governed Aux rows are derived from the synchronized output-role evidence already carried by `OperatorViewModel`; the view model does not probe providers or create production truth. `MainWindow` owns and disposes the projection together with the other Operator presentation components.
 
 Output-role configuration is persisted with the authoritative Control checkpoint. On ControlHost restart the configured Program/Aux roles are reconstructed, validated against the current production specification and reconciled with Runtime. Legacy checkpoints without the optional role payload recover through the specification defaults, preserving the existing V1 checkpoint format while remaining fail-closed for invalid recovered role state.
+
+## Audio-bus assignment
+
+Governed Program and Aux output roles include the confirmed audio-bus identity used by Runtime. Existing configurations without an explicit mapping remain backward compatible by selecting `program`. Aux may select another configured bus.
+
+A role that references a bus absent from the confirmed `AudioProductionConfiguration` fails closed and is surfaced as output/audio health evidence; Runtime does not silently fall back to another mix. Bus routing remains ControlHost authority, while RuntimeHost owns sample processing and timing.
