@@ -980,8 +980,14 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				bool avSyncEnabled;
 				AudioBufferDescriptor routedAudioBuffer;
 				AudioBufferDescriptor programAudioBuffer;
+				AudioBufferDescriptor programRecordingAudioBuffer;
+				AudioBufferDescriptor? auxAudioBuffer = null;
+				AudioBusId programOutputBusId;
+				AudioBusId? auxOutputBusId = null;
 				AudioFollowVideoResult audio;
 				byte[] programAudioPayload;
+				byte[] programRecordingAudioPayload;
+				byte[]? auxAudioPayload = null;
 				AudioStereoMeter measuredAudio;
 				AudioBufferDescriptor? afvBuffer;
 				AvSyncAudioEventObservation? audioSyncEvent;
@@ -1095,7 +1101,16 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 							out routedAudioBuffer,
 							out measuredAudio,
 							out afvBuffer);
-						programAudioBuffer = CreateProgramAudioBuffer(sequence);
+						programRecordingAudioBuffer = CreateAudioBusBuffer(sequence, AudioBusId.Program);
+						ProcessConfiguredAudioBusesUnsafe(programRecordingAudioBuffer, routedAudioSource);
+						programOutputBusId = ResolveOutputAudioBusUnsafe(execution.PreparedExecution, "program");
+						programAudioBuffer = CreateAudioBusBuffer(sequence, programOutputBusId);
+						if (execution.PreparedExecution.Bindings.Any(binding =>
+							string.Equals(binding.OutputRoleId, "aux", StringComparison.Ordinal)))
+						{
+							auxOutputBusId = ResolveOutputAudioBusUnsafe(execution.PreparedExecution, "aux");
+							auxAudioBuffer = CreateAudioBusBuffer(sequence, auxOutputBusId.Value);
+						}
 						visualLayerMode = (_operatorGraphicsVisible || _productionCgText.Visible)
 							? V1VisualLayerMode.Static
 							: _visualLayerMode;
@@ -1143,20 +1158,31 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 						afvBuffer,
 						measuredAudio);
 					var requiredProgramAudioValues = checked((int)(
-						programAudioBuffer.Timing.SampleCount * programAudioBuffer.Format.ChannelCount));
-					_lastAudioProductionResult = _audioProduction.ProcessBus(
-						AudioBusId.Program,
-						programAudioBuffer.Timing.SamplePosition,
-						programAudioBuffer.Timing.SampleCount,
-						routedAudioSource,
-						_audioProductionSourceBuffers,
-						_programAudioMixSamples.AsSpan(0, requiredProgramAudioValues));
-					programAudioPayload =
+						programRecordingAudioBuffer.Timing.SampleCount * programRecordingAudioBuffer.Format.ChannelCount));
+					var recordingBusResult = _lastAudioProductionResults[AudioBusId.Program];
+					programRecordingAudioPayload =
 						audio.Status == AudioFollowVideoStatus.Underrun &&
-						_lastAudioProductionResult.ActiveSourceCount == 0
+						recordingBusResult.ActiveSourceCount == 0
 							? Array.Empty<byte>()
 							: MemoryMarshal.AsBytes(
-								_programAudioMixSamples.AsSpan(0, requiredProgramAudioValues)).ToArray();
+								AudioBusSamplesUnsafe(AudioBusId.Program, requiredProgramAudioValues)).ToArray();
+					var programOutputResult = _lastAudioProductionResults[programOutputBusId];
+					programAudioPayload =
+						audio.Status == AudioFollowVideoStatus.Underrun &&
+						programOutputResult.ActiveSourceCount == 0
+							? Array.Empty<byte>()
+							: MemoryMarshal.AsBytes(
+								AudioBusSamplesUnsafe(programOutputBusId, requiredProgramAudioValues)).ToArray();
+					if (auxOutputBusId is { } selectedAuxBus && auxAudioBuffer is not null)
+					{
+						var auxResult = _lastAudioProductionResults[selectedAuxBus];
+						auxAudioPayload =
+							audio.Status == AudioFollowVideoStatus.Underrun &&
+							auxResult.ActiveSourceCount == 0
+								? Array.Empty<byte>()
+								: MemoryMarshal.AsBytes(
+									AudioBusSamplesUnsafe(selectedAuxBus, requiredProgramAudioValues)).ToArray();
+					}
 					var videoSyncEvent = avSyncEnabled
 						? _motionTimingTestSignal.InspectSyncEvent(output.Descriptor.Timing)
 						: default;
@@ -1222,7 +1248,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 									_recordingPayloadWriter.StagePayload(
 										sequence,
 										recordingPayload,
-										programAudioPayload);
+										programRecordingAudioPayload);
 									recordingPayload = null;
 									payloadStaged = true;
 								}
@@ -1239,7 +1265,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 
 						try
 						{
-							recording = _recordingBridge.TryRecordCommittedProgram(execution, output.Descriptor, programAudioBuffer);
+							recording = _recordingBridge.TryRecordCommittedProgram(execution, output.Descriptor, programRecordingAudioBuffer);
 						}
 						catch (Exception exception)
 						{
@@ -1265,9 +1291,9 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 							var replay = _replay.TryCapture(
 								programSinkId,
 								output.Descriptor,
-								programAudioBuffer,
+								programRecordingAudioBuffer,
 								replayPayload,
-								programAudioPayload);
+								programRecordingAudioPayload);
 							replayPayload = null;
 							if (!replay.Accepted)
 								Observe($"replay.capture:{replay.Status}:{replay.Failure?.Code}");
@@ -1305,12 +1331,14 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 						try
 						{
 							var auxPixels = _gpu.RentReadback(networkAuxGpuFrame);
+							if (auxAudioBuffer is null || auxAudioPayload is null)
+								throw new InvalidOperationException("Committed Aux output has no confirmed audio bus buffer.");
 							var networkOutput = _networkOutputBridge.TrySubmit(
 								"aux",
 								auxPixels,
 								networkAuxFrame.Timing,
-								programAudioBuffer,
-								programAudioPayload);
+								auxAudioBuffer,
+								auxAudioPayload);
 							if (networkOutput is { Status: not NetworkOutputEnqueueStatus.Accepted })
 								Observe($"network.output.aux:{networkOutput.Status}:{networkOutput.Failure?.Code}");
 						}
@@ -2575,7 +2603,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 						? $"Program provider confirmed frame sequence {programEvidence!.Frame.Timing.SequenceNumber} for sink '{programSink}'."
 						: $"Program output is committed to sink '{programSink}'; matching source/frame evidence is pending.",
 				fault,
-				_networkOutputBridge.SnapshotForRole("program")));
+				_networkOutputBridge.SnapshotForRole("program"),
+				programBinding.AudioBusId ?? AudioBusId.Program.Value));
 		}
 
 		var auxBinding = execution.PreparedExecution.Bindings.SingleOrDefault(binding =>
@@ -2628,7 +2657,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 						? $"Aux provider confirmed frame sequence {auxEvidence!.Frame.Timing.SequenceNumber} for sink '{auxSink}'."
 						: $"Aux output is committed to sink '{auxSink}'; matching source/frame evidence is pending.",
 				fault,
-				_networkOutputBridge.SnapshotForRole("aux")));
+				_networkOutputBridge.SnapshotForRole("aux"),
+				auxBinding.AudioBusId ?? AudioBusId.Program.Value));
 		}
 		return snapshots.AsReadOnly();
 	}
@@ -3665,16 +3695,22 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		afvBuffer = routedAvailable ? routedAudioBuffer : null;
 	}
 
-	private AudioBufferDescriptor CreateProgramAudioBuffer(ulong sequence)
+	private AudioBufferDescriptor CreateProgramAudioBuffer(ulong sequence) =>
+		CreateAudioBusBuffer(sequence, AudioBusId.Program);
+
+	private AudioBufferDescriptor CreateAudioBusBuffer(ulong sequence, AudioBusId busId)
 	{
 		var referenceStream = _audioStreams.Values.First();
 		var window = AudioVideoTimingRelationship.GetSampleWindow(
 			_format.FrameRate,
 			referenceStream.Format.SampleRate,
 			sequence);
+		var streamId = busId == AudioBusId.Program
+			? _programAudioStreamId
+			: new AudioStreamId(HostIdentity.Create("audio-bus", busId.Value));
 		return new AudioBufferDescriptor(
 			MediaContractVersion.Current,
-			_programAudioStreamId,
+			streamId,
 			referenceStream.Format,
 			referenceStream.TimingDomainId,
 			new AudioBufferTiming(
@@ -3682,7 +3718,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				window.SampleCount,
 				window.PresentationTimestamp,
 				window.Timebase),
-			new OpaqueAudioHandle("runtime.audio.program.bus", $"{_programAudioStreamId}:{sequence}"));
+			new OpaqueAudioHandle("runtime.audio.bus", $"{busId.Value}:{streamId}:{sequence}"));
 	}
 
 	private bool TryConsumeExternalAudioSamplesUnsafe(MediaSourceId sourceId, Span<float> destination)
