@@ -217,7 +217,11 @@ public sealed class ProductionIpcIntegrationTests
 					0.5,
 					muted: false,
 					followRoutedSource: false,
-					new[] { AudioBusId.Program }),
+					new[] { AudioBusId.Program },
+					new AudioSourceEqualizerConfiguration(
+						new AudioLowShelfEqualizerBand(true, 180, 3),
+						new AudioBellEqualizerBand(true, 1_200, -2, 1.25),
+						new AudioHighShelfEqualizerBand(true, 7_500, 1))),
 				new AudioProductionSourceConfiguration(
 					new MediaSourceId(Identity.Parse(sourceB.Id)),
 					0.25,
@@ -247,6 +251,12 @@ public sealed class ProductionIpcIntegrationTests
 		Assert.Equal(advancedConfiguration.Revision, advancedAudio.Configuration.Revision);
 		Assert.Equal(0.75, advancedAudio.Configuration.GetBus(AudioBusId.Program).MasterGain, 6);
 		Assert.False(advancedAudio.Configuration.GetSource(new MediaSourceId(Identity.Parse(sourceA.Id))).FollowRoutedSource);
+		var confirmedEqualizer = Assert.IsType<AudioSourceEqualizerConfiguration>(
+			advancedAudio.Configuration.GetSource(new MediaSourceId(Identity.Parse(sourceA.Id))).Equalizer);
+		Assert.Equal(180, confirmedEqualizer.LowShelf.FrequencyHz);
+		Assert.Equal(-2, confirmedEqualizer.Mid.GainDb);
+		Assert.Equal(1.25, confirmedEqualizer.Mid.Q);
+		Assert.Equal(7_500, confirmedEqualizer.HighShelf.FrequencyHz);
 		Assert.Equal(advancedConfiguration.Revision, runtime.Runtime!.Snapshot.AudioProduction!.Revision);
 		Assert.Equal(advancedConfiguration.Revision, client.Snapshot!.AudioProduction!.Configuration.Revision);
 		Assert.Equal(revisionBeforeAudio, client.Snapshot.Production.Revision);
@@ -582,7 +592,16 @@ public sealed class ProductionIpcIntegrationTests
 			new[] { new AudioProductionBusConfiguration(AudioBusId.Program, 0.6, muted: false) },
 			new[]
 			{
-				new AudioProductionSourceConfiguration(sourceA, 0.8, muted: false, followRoutedSource: false, new[] { AudioBusId.Program }),
+				new AudioProductionSourceConfiguration(
+					sourceA,
+					0.8,
+					muted: false,
+					followRoutedSource: false,
+					new[] { AudioBusId.Program },
+					new AudioSourceEqualizerConfiguration(
+						new AudioLowShelfEqualizerBand(true, 220, 4),
+						new AudioBellEqualizerBand(true, 1_000, -3, 1),
+						new AudioHighShelfEqualizerBand(true, 8_000, 2))),
 				new AudioProductionSourceConfiguration(sourceB, 0.4, muted: false, followRoutedSource: false, new[] { AudioBusId.Program })
 			});
 		await client.SetAudioProductionAsync(restoredAudioConfiguration);
@@ -607,6 +626,11 @@ public sealed class ProductionIpcIntegrationTests
 		var restoredAudio = Assert.IsType<V1AudioProductionSnapshot>(secondRuntime.Runtime.Snapshot.AudioProduction);
 		Assert.Equal(0.6, restoredAudio.ProgramMasterGain, 6);
 		Assert.All(restoredAudio.Sources, source => Assert.False(source.FollowRoutedSource));
+		var restoredEqualizer = Assert.IsType<AudioSourceEqualizerConfiguration>(
+			Assert.Single(restoredAudio.Sources, source => source.SourceId == sourceA).Equalizer);
+		Assert.Equal(220, restoredEqualizer.LowShelf.FrequencyHz);
+		Assert.Equal(-3, restoredEqualizer.Mid.GainDb);
+		Assert.Equal(8_000, restoredEqualizer.HighShelf.FrequencyHz);
 
 		controlStop.Cancel();
 		secondRuntimeStop.Cancel();
