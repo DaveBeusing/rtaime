@@ -33,9 +33,10 @@ $dynamicsUnitProcessingPath = Join-Path $repositoryRoot "tests/rtaime.Tests.Unit
 $dynamicsPerformancePath = Join-Path $repositoryRoot "tests/rtaime.Tests.Performance/BoundedBusDynamicsPerformanceTests.cs"
 $recordingIntegrationPath = Join-Path $repositoryRoot "tests/rtaime.Tests.Integration/ReferenceRecordingPayloadTests.cs"
 $productionIpcIntegrationPath = Join-Path $repositoryRoot "tests/rtaime.Tests.Integration/ProductionIpcIntegrationTests.cs"
+$showProjectPersistenceIntegrationPath = Join-Path $repositoryRoot "tests/rtaime.Tests.Integration/ShowProjectPersistenceIntegrationTests.cs"
 $documentationPath = Join-Path $repositoryRoot "docs/AdvancedAudioProduction.md"
 
-foreach ($path in @($contractsPath, $enginePath, $equalizerPath, $dynamicsPath, $runtimePath, $operatorPath, $operatorUiPath, $unitPath, $performancePath, $equalizerUnitContractPath, $equalizerUnitProcessingPath, $equalizerPerformancePath, $dynamicsUnitContractPath, $dynamicsUnitProcessingPath, $dynamicsPerformancePath, $recordingIntegrationPath, $productionIpcIntegrationPath, $documentationPath)) {
+foreach ($path in @($contractsPath, $enginePath, $equalizerPath, $dynamicsPath, $runtimePath, $operatorPath, $operatorUiPath, $unitPath, $performancePath, $equalizerUnitContractPath, $equalizerUnitProcessingPath, $equalizerPerformancePath, $dynamicsUnitContractPath, $dynamicsUnitProcessingPath, $dynamicsPerformancePath, $recordingIntegrationPath, $productionIpcIntegrationPath, $showProjectPersistenceIntegrationPath, $documentationPath)) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required advanced-audio artifact is missing: '$path'."
 }
 
@@ -56,6 +57,7 @@ $dynamicsUnitProcessing = Get-Content -LiteralPath $dynamicsUnitProcessingPath -
 $dynamicsPerformance = Get-Content -LiteralPath $dynamicsPerformancePath -Raw
 $recordingIntegration = Get-Content -LiteralPath $recordingIntegrationPath -Raw
 $productionIpcIntegration = Get-Content -LiteralPath $productionIpcIntegrationPath -Raw
+$showProjectPersistenceIntegration = Get-Content -LiteralPath $showProjectPersistenceIntegrationPath -Raw
 $documentation = Get-Content -LiteralPath $documentationPath -Raw
 
 Assert-Condition ($contracts -match 'MaximumSources\s*=\s*8') "Advanced audio source count must remain explicitly bounded."
@@ -108,6 +110,7 @@ Assert-Condition ($dynamicsUnitProcessing -match 'Dynamics_state_is_invariant_to
 Assert-Condition ($dynamicsPerformance -match 'Maximum_eight_source_four_bus_dynamics_processing_is_allocation_free_after_warmup') "Maximum 8-source x 4-bus bounded dynamics allocation qualification is required."
 Assert-Condition ($recordingIntegration -match 'Recording_persists_the_final_multi_source_Program_mix' -and $recordingIntegration -match 'LimiterHitCount') "Recording integration must prove reuse of final dynamics-processed Program audio."
 Assert-Condition ($productionIpcIntegration -match 'programDynamics' -and $productionIpcIntegration -match 'recoveredDynamics') "Client/Control/Runtime transport and Runtime restart must retain bounded dynamics configuration."
+Assert-Condition ($showProjectPersistenceIntegration -match 'Audio_bus_dynamics_round_trip_through_durable_show_project') "Durable show-project persistence must round-trip bounded bus dynamics configuration."
 Assert-Condition ($documentation -match 'ControlHost owns authoritative configuration' -and $documentation -match 'No wall-clock or UI timer') "Advanced-audio documentation must retain authority and timing boundaries."
 Assert-Condition ($documentation -match 'Bounded per-source equalizer' -and $documentation -match '20\.\.20,000 Hz' -and $documentation -match 'transposed direct form II') "Advanced-audio documentation must describe the bounded equalizer topology, limits and processing form."
 Assert-Condition ($documentation -match 'Bounded per-bus dynamics' -and $documentation -match 'sample-peak limiter' -and $documentation -match 'There is no look-ahead, oversampling or true-peak claim') "Advanced-audio documentation must retain bounded compressor/sample-peak semantics without a true-peak claim."
