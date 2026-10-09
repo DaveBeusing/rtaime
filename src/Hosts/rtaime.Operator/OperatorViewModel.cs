@@ -1227,7 +1227,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 
 		var buses = production.Configuration.Buses
 			.Select(bus => bus.BusId == AudioBusId.Program
-				? new AudioProductionBusConfiguration(bus.BusId, AudioMixMasterGain, bus.Muted)
+				? new AudioProductionBusConfiguration(bus.BusId, AudioMixMasterGain, bus.Muted, bus.Dynamics)
 				: bus)
 			.ToArray();
 		var next = NextAudioProductionConfiguration(production.Configuration, buses: buses);
