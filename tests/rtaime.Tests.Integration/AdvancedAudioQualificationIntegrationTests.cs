@@ -147,7 +147,7 @@ public sealed class AdvancedAudioQualificationIntegrationTests
 				staleProduction.Configuration.Ducking,
 				staleProduction.Configuration.ClipStrategy);
 			var conflict = await Assert.ThrowsAsync<InvalidOperationException>(
-				() => staleClient.SetAudioProductionAsync(staleConfiguration));
+				async () => await staleClient.SetAudioProductionAsync(staleConfiguration));
 			Assert.Contains("control.audio.production.revision_conflict", conflict.Message, StringComparison.Ordinal);
 			Assert.Equal(requested.Revision, client.Snapshot.AudioProduction!.Configuration.Revision);
 		}
