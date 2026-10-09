@@ -125,6 +125,30 @@ public sealed class NetworkOutputConfigurationIntegrationTests
 	}
 
 	[Fact]
+	public void Duplicate_target_id_is_rejected_across_roles_and_protocols()
+	{
+		const string json = """
+		[
+		  {
+		    "roleId": "program",
+		    "targetId": "shared-output",
+		    "protocol": "ndi",
+		    "sourceName": "rtaime Program"
+		  },
+		  {
+		    "roleId": "aux",
+		    "targetId": "shared-output",
+		    "protocol": "srt",
+		    "endpoint": "srt://127.0.0.1:9001/aux"
+		  }
+		]
+		""";
+
+		var exception = Assert.Throws<ArgumentException>(() => Load(json));
+		Assert.Contains("configured more than once", exception.Message, StringComparison.Ordinal);
+	}
+
+	[Fact]
 	public void Duplicate_output_role_is_rejected_across_protocols()
 	{
 		const string json = """
