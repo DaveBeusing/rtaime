@@ -381,6 +381,17 @@ jobs:
           }
           ./build/update/Test-CoordinatedUpgradePackaging.ps1 -BundlePath $bundles[0].FullName
 
+      - name: Qualify coordinated state upgrade and recovery
+        shell: pwsh
+        env:
+          RTAIME_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          $bundles = @(Get-ChildItem -LiteralPath ./artifacts/release-pipeline -Filter *.zip -File -Recurse)
+          if ($bundles.Count -ne 1) {
+            throw "Expected exactly one qualification bundle, found $($bundles.Count)."
+          }
+          ./build/update/Test-CoordinatedStateUpgradeQualification.ps1 -BundlePath $bundles[0].FullName
+
       - name: Qualify managed host lifecycle and restart
         shell: pwsh
         run: |
