@@ -151,24 +151,78 @@ public enum V1CompositingLayerKind
 	ProductionCg = 3
 }
 
-public sealed record V1CompositingLayerSnapshot(
-	string LayerId,
-	V1CompositingLayerKind Kind,
-	int Order,
-	bool Visible,
-	byte Opacity,
-	double PositionX,
-	double PositionY,
-	double Scale,
-	string ContentIdentity,
-	double RotationDegrees = 0.0,
-	double AnchorX = 0.0,
-	double AnchorY = 0.0,
-	double CropLeft = 0.0,
-	double CropTop = 0.0,
-	double CropRight = 0.0,
-	double CropBottom = 0.0,
-	PreparedCompositingProcessingNodeState? ProcessingNode = null);
+public sealed record V1CompositingLayerSnapshot
+{
+	private readonly ReadOnlyCollection<PreparedCompositingProcessingNodeState> _processingStack;
+
+	public V1CompositingLayerSnapshot(
+		string layerId,
+		V1CompositingLayerKind kind,
+		int order,
+		bool visible,
+		byte opacity,
+		double positionX,
+		double positionY,
+		double scale,
+		string contentIdentity,
+		double rotationDegrees = 0.0,
+		double anchorX = 0.0,
+		double anchorY = 0.0,
+		double cropLeft = 0.0,
+		double cropTop = 0.0,
+		double cropRight = 0.0,
+		double cropBottom = 0.0,
+		PreparedCompositingProcessingNodeState? processingNode = null,
+		IReadOnlyList<PreparedCompositingProcessingNodeState>? processingStack = null)
+	{
+		if (processingNode is not null && processingStack is not null)
+			throw new ArgumentException("Specify either the legacy processing node or the canonical processing stack, not both.", nameof(processingStack));
+		var canonical = processingStack is null
+			? processingNode is null ? Array.Empty<PreparedCompositingProcessingNodeState>() : new[] { processingNode }
+			: processingStack.ToArray();
+		if (canonical.Length > PreparedCompositingProcessingStackLimits.MaximumNodeCount)
+			throw new ArgumentException($"Runtime compositing processing stack supports at most {PreparedCompositingProcessingStackLimits.MaximumNodeCount} nodes.", nameof(processingStack));
+		if (canonical.Select(node => node.NodeId).Distinct(StringComparer.Ordinal).Count() != canonical.Length)
+			throw new ArgumentException("Runtime compositing processing node identities must be unique.", nameof(processingStack));
+
+		LayerId = layerId;
+		Kind = kind;
+		Order = order;
+		Visible = visible;
+		Opacity = opacity;
+		PositionX = positionX;
+		PositionY = positionY;
+		Scale = scale;
+		ContentIdentity = contentIdentity;
+		RotationDegrees = rotationDegrees;
+		AnchorX = anchorX;
+		AnchorY = anchorY;
+		CropLeft = cropLeft;
+		CropTop = cropTop;
+		CropRight = cropRight;
+		CropBottom = cropBottom;
+		_processingStack = Array.AsReadOnly(canonical);
+	}
+
+	public string LayerId { get; }
+	public V1CompositingLayerKind Kind { get; }
+	public int Order { get; }
+	public bool Visible { get; }
+	public byte Opacity { get; }
+	public double PositionX { get; }
+	public double PositionY { get; }
+	public double Scale { get; }
+	public string ContentIdentity { get; }
+	public double RotationDegrees { get; }
+	public double AnchorX { get; }
+	public double AnchorY { get; }
+	public double CropLeft { get; }
+	public double CropTop { get; }
+	public double CropRight { get; }
+	public double CropBottom { get; }
+	public IReadOnlyList<PreparedCompositingProcessingNodeState> ProcessingStack => _processingStack;
+	public PreparedCompositingProcessingNodeState? ProcessingNode => _processingStack.Count == 0 ? null : _processingStack[0];
+}
 
 public sealed record V1AudioInputSnapshot(
 	MediaSourceId SourceId,
@@ -413,7 +467,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private double _operatorGraphicsCropTop;
 	private double _operatorGraphicsCropRight;
 	private double _operatorGraphicsCropBottom;
-	private PreparedCompositingProcessingNodeState? _operatorGraphicsProcessingNode;
+	private IReadOnlyList<PreparedCompositingProcessingNodeState> _operatorGraphicsProcessingStack = Array.Empty<PreparedCompositingProcessingNodeState>();
 	private byte _operatorGraphicsOpacity = byte.MaxValue;
 	private int _operatorGraphicsLayerOrder = 1;
 	private byte[]? _productionCgAsset;
@@ -429,7 +483,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private double _productionCgCropTop;
 	private double _productionCgCropRight;
 	private double _productionCgCropBottom;
-	private PreparedCompositingProcessingNodeState? _productionCgProcessingNode;
+	private IReadOnlyList<PreparedCompositingProcessingNodeState> _productionCgProcessingStack = Array.Empty<PreparedCompositingProcessingNodeState>();
 	private byte _productionCgOpacity = byte.MaxValue;
 	private int _productionCgLayerOrder = 2;
 	private int _legacyVisualLayerOrder;
@@ -1358,7 +1412,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			_operatorGraphicsCropTop = 0;
 			_operatorGraphicsCropRight = 0;
 			_operatorGraphicsCropBottom = 0;
-			_operatorGraphicsProcessingNode = null;
+			_operatorGraphicsProcessingStack = Array.Empty<PreparedCompositingProcessingNodeState>();
 			RebuildOperatorGraphicsLayerUnsafe();
 			Observe($"graphics.overlay.asset.loaded:{_operatorGraphicsAssetName}:{width}x{height}");
 			return GraphicsOverlaySnapshotUnsafe();
@@ -1394,7 +1448,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				_productionCgCropTop = 0;
 				_productionCgCropRight = 0;
 				_productionCgCropBottom = 0;
-				_productionCgProcessingNode = null;
+				_productionCgProcessingStack = Array.Empty<PreparedCompositingProcessingNodeState>();
 				_productionCgDefinition = definition;
 				_productionCgText = new V1ProductionCgTextSnapshot(
 					true,
@@ -1482,7 +1536,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			_operatorGraphicsCropTop = 0;
 			_operatorGraphicsCropRight = 0;
 			_operatorGraphicsCropBottom = 0;
-			_operatorGraphicsProcessingNode = null;
+			_operatorGraphicsProcessingStack = Array.Empty<PreparedCompositingProcessingNodeState>();
 			_operatorGraphicsLayerScratch.AsSpan().Clear();
 			_operatorGraphicsLayerBuffer.CopyPixelsFrom(_operatorGraphicsLayerScratch);
 			_operatorGraphicsLayer.Update(_operatorGraphicsLayerBuffer);
@@ -1500,7 +1554,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			_productionCgCropTop = 0;
 			_productionCgCropRight = 0;
 			_productionCgCropBottom = 0;
-			_productionCgProcessingNode = null;
+			_productionCgProcessingStack = Array.Empty<PreparedCompositingProcessingNodeState>();
 			_productionCgOpacity = byte.MaxValue;
 			_productionCgDefinition = null;
 			_productionCgText = V1ProductionCgTextSnapshot.Empty;
@@ -1638,15 +1692,35 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 
 	public IReadOnlyList<V1CompositingLayerSnapshot> SetCompositingLayerProcessingNode(
 		string layerId,
-		PreparedCompositingProcessingNodeState? processingNode)
+		PreparedCompositingProcessingNodeState? processingNode) =>
+		SetCompositingLayerProcessingStack(
+			layerId,
+			processingNode is null
+				? Array.Empty<PreparedCompositingProcessingNodeState>()
+				: new[] { processingNode });
+
+	public IReadOnlyList<V1CompositingLayerSnapshot> SetCompositingLayerProcessingStack(
+		string layerId,
+		IReadOnlyList<PreparedCompositingProcessingNodeState> processingStack)
 	{
 		if (string.IsNullOrWhiteSpace(layerId))
 			throw new ArgumentException("Compositing layer identity is required.", nameof(layerId));
+		ArgumentNullException.ThrowIfNull(processingStack);
+		if (processingStack.Count > PreparedCompositingProcessingStackLimits.MaximumNodeCount)
+			throw new ArgumentException($"Compositing processing stack supports at most {PreparedCompositingProcessingStackLimits.MaximumNodeCount} nodes.", nameof(processingStack));
+
+		var canonical = processingStack.ToArray();
+		if (canonical.Any(node => node is null))
+			throw new ArgumentException("Compositing processing stack must not contain null nodes.", nameof(processingStack));
+		if (canonical.Select(node => node.NodeId).Distinct(StringComparer.Ordinal).Count() != canonical.Length)
+			throw new ArgumentException("Compositing processing node identities must be unique within a layer.", nameof(processingStack));
+		foreach (var node in canonical)
+		{
+			if (node.Kind != PreparedCompositingProcessingNodeKind.ColorGrade)
+				throw new NotSupportedException($"Processing node kind '{node.Kind}' is not supported.");
+		}
 
 		var normalizedLayerId = layerId.Trim();
-		if (processingNode is not null && processingNode.Kind != PreparedCompositingProcessingNodeKind.ColorGrade)
-			throw new NotSupportedException($"Processing node kind '{processingNode.Kind}' is not supported.");
-
 		lock (_boundaryCaptureGate)
 		lock (_gate)
 		{
@@ -1656,13 +1730,13 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				case BitmapGraphicsLayerId:
 					if (_operatorGraphicsAsset is null)
 						throw new InvalidOperationException("Bitmap graphics layer is not loaded.");
-					_operatorGraphicsProcessingNode = processingNode;
+					_operatorGraphicsProcessingStack = canonical;
 					RebuildOperatorGraphicsLayerUnsafe();
 					break;
 				case ProductionCgLayerId:
 					if (_productionCgDefinition is null || _productionCgAsset is null)
 						throw new InvalidOperationException("Production CG layer is not active.");
-					_productionCgProcessingNode = processingNode;
+					_productionCgProcessingStack = canonical;
 					RebuildProductionCgLayerUnsafe();
 					break;
 				case LegacyVisualLayerId:
@@ -1671,7 +1745,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 					throw new ArgumentOutOfRangeException(nameof(layerId), "Unknown compositing layer identity.");
 			}
 
-			Observe($"compositing.layer.processing:{normalizedLayerId}:{processingNode?.NodeId ?? "none"}");
+			Observe($"compositing.layer.processing:{normalizedLayerId}:{string.Join(",", canonical.Select(node => node.NodeId))}");
 			return CompositingLayerSnapshotsUnsafe();
 		}
 	}
@@ -1757,7 +1831,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 						layer.CropTop != 0 ||
 						layer.CropRight != 0 ||
 						layer.CropBottom != 0 ||
-						layer.ProcessingNode is not null)
+						layer.ProcessingStack.Count != 0)
 					{
 						return new Failure("runtime.compositing.legacy_state_unsupported", "Legacy visual layer Scene recall supports order and opacity only.");
 					}
@@ -1800,7 +1874,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 						layer.CropTop,
 						layer.CropRight,
 						layer.CropBottom,
-						layer.ProcessingNode))
+						processingStack: layer.ProcessingStack))
 					.ToArray()),
 			_legacyVisualLayerOrder,
 			_operatorGraphicsLayerOrder,
@@ -1844,7 +1918,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 					_operatorGraphicsCropTop = layer.CropTop;
 					_operatorGraphicsCropRight = layer.CropRight;
 					_operatorGraphicsCropBottom = layer.CropBottom;
-					_operatorGraphicsProcessingNode = layer.ProcessingNode;
+					_operatorGraphicsProcessingStack = layer.ProcessingStack.ToArray();
 					RebuildOperatorGraphicsLayerUnsafe();
 					break;
 				case ProductionCgLayerId:
@@ -1862,7 +1936,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 					_productionCgCropTop = layer.CropTop;
 					_productionCgCropRight = layer.CropRight;
 					_productionCgCropBottom = layer.CropBottom;
-					_productionCgProcessingNode = layer.ProcessingNode;
+					_productionCgProcessingStack = layer.ProcessingStack.ToArray();
 					RebuildProductionCgLayerUnsafe();
 					break;
 			}
@@ -3090,7 +3164,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				_operatorGraphicsCropTop,
 				_operatorGraphicsCropRight,
 				_operatorGraphicsCropBottom,
-				_operatorGraphicsProcessingNode));
+				processingStack: _operatorGraphicsProcessingStack));
 		}
 		if (_productionCgAsset is not null)
 		{
@@ -3111,7 +3185,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				_productionCgCropTop,
 				_productionCgCropRight,
 				_productionCgCropBottom,
-				_productionCgProcessingNode));
+				processingStack: _productionCgProcessingStack));
 		}
 		return snapshots
 			.OrderBy(layer => layer.Order)
@@ -3138,7 +3212,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			_operatorGraphicsCropTop,
 			_operatorGraphicsCropRight,
 			_operatorGraphicsCropBottom,
-			_operatorGraphicsProcessingNode);
+			_operatorGraphicsProcessingStack);
 	}
 
 	private void RebuildProductionCgLayerUnsafe()
@@ -3160,7 +3234,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			_productionCgCropTop,
 			_productionCgCropRight,
 			_productionCgCropBottom,
-			_productionCgProcessingNode);
+			_productionCgProcessingStack);
 	}
 
 	private void RebuildCompositingLayerUnsafe(
@@ -3180,7 +3254,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		double cropTop,
 		double cropRight,
 		double cropBottom,
-		PreparedCompositingProcessingNodeState? processingNode)
+		IReadOnlyList<PreparedCompositingProcessingNodeState> processingStack)
 	{
 		targetPixels.AsSpan().Clear();
 		if (sourcePixels is null)
@@ -3251,7 +3325,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				var red = sourcePixels[sourceOffset];
 				var green = sourcePixels[sourceOffset + 1];
 				var blue = sourcePixels[sourceOffset + 2];
-				ApplyColorGrade(processingNode, ref red, ref green, ref blue);
+				for (var processingIndex = 0; processingIndex < processingStack.Count; processingIndex++)
+					ApplyColorGrade(processingStack[processingIndex], ref red, ref green, ref blue);
 				targetPixels[destinationOffset] = red;
 				targetPixels[destinationOffset + 1] = green;
 				targetPixels[destinationOffset + 2] = blue;
@@ -3264,13 +3339,15 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	}
 
 	private static void ApplyColorGrade(
-		PreparedCompositingProcessingNodeState? processingNode,
+		PreparedCompositingProcessingNodeState processingNode,
 		ref byte red,
 		ref byte green,
 		ref byte blue)
 	{
-		if (processingNode is null || !processingNode.Enabled)
+		if (!processingNode.Enabled)
 			return;
+		if (processingNode.Kind != PreparedCompositingProcessingNodeKind.ColorGrade)
+			throw new NotSupportedException($"Processing node kind '{processingNode.Kind}' is not supported.");
 
 		var grade = processingNode.ColorGrade;
 		var r = ((red - 127.5) * grade.Contrast) + 127.5 + (grade.Brightness * 255.0);

@@ -20,24 +20,77 @@ public sealed record RuntimeGraphicsOverlaySnapshot(
 	double PositionY,
 	double Scale);
 
-public sealed record RuntimeCompositingLayerSnapshot(
-	string LayerId,
-	int Kind,
-	int Order,
-	bool Visible,
-	byte Opacity,
-	double PositionX,
-	double PositionY,
-	double Scale,
-	string ContentIdentity,
-	double RotationDegrees = 0.0,
-	double AnchorX = 0.0,
-	double AnchorY = 0.0,
-	double CropLeft = 0.0,
-	double CropTop = 0.0,
-	double CropRight = 0.0,
-	double CropBottom = 0.0,
-	PreparedCompositingProcessingNodeState? ProcessingNode = null);
+public sealed record RuntimeCompositingLayerSnapshot
+{
+	private readonly ReadOnlyCollection<PreparedCompositingProcessingNodeState> _processingStack;
+
+	public RuntimeCompositingLayerSnapshot(
+		string layerId,
+		int kind,
+		int order,
+		bool visible,
+		byte opacity,
+		double positionX,
+		double positionY,
+		double scale,
+		string contentIdentity,
+		double rotationDegrees = 0.0,
+		double anchorX = 0.0,
+		double anchorY = 0.0,
+		double cropLeft = 0.0,
+		double cropTop = 0.0,
+		double cropRight = 0.0,
+		double cropBottom = 0.0,
+		PreparedCompositingProcessingNodeState? processingNode = null,
+		IReadOnlyList<PreparedCompositingProcessingNodeState>? processingStack = null)
+	{
+		if (processingNode is not null && processingStack is not null)
+			throw new ArgumentException("Specify either the legacy processing node or the canonical processing stack, not both.", nameof(processingStack));
+		var canonical = processingStack is null
+			? processingNode is null ? Array.Empty<PreparedCompositingProcessingNodeState>() : new[] { processingNode }
+			: processingStack.ToArray();
+		if (canonical.Length > PreparedCompositingProcessingStackLimits.MaximumNodeCount)
+			throw new ArgumentException($"Runtime processing stack supports at most {PreparedCompositingProcessingStackLimits.MaximumNodeCount} nodes.", nameof(processingStack));
+		if (canonical.Select(node => node.NodeId).Distinct(StringComparer.Ordinal).Count() != canonical.Length)
+			throw new ArgumentException("Runtime processing node identities must be unique.", nameof(processingStack));
+		LayerId = layerId;
+		Kind = kind;
+		Order = order;
+		Visible = visible;
+		Opacity = opacity;
+		PositionX = positionX;
+		PositionY = positionY;
+		Scale = scale;
+		ContentIdentity = contentIdentity;
+		RotationDegrees = rotationDegrees;
+		AnchorX = anchorX;
+		AnchorY = anchorY;
+		CropLeft = cropLeft;
+		CropTop = cropTop;
+		CropRight = cropRight;
+		CropBottom = cropBottom;
+		_processingStack = Array.AsReadOnly(canonical);
+	}
+
+	public string LayerId { get; }
+	public int Kind { get; }
+	public int Order { get; }
+	public bool Visible { get; }
+	public byte Opacity { get; }
+	public double PositionX { get; }
+	public double PositionY { get; }
+	public double Scale { get; }
+	public string ContentIdentity { get; }
+	public double RotationDegrees { get; }
+	public double AnchorX { get; }
+	public double AnchorY { get; }
+	public double CropLeft { get; }
+	public double CropTop { get; }
+	public double CropRight { get; }
+	public double CropBottom { get; }
+	public IReadOnlyList<PreparedCompositingProcessingNodeState> ProcessingStack => _processingStack;
+	public PreparedCompositingProcessingNodeState? ProcessingNode => _processingStack.Count == 0 ? null : _processingStack[0];
+}
 
 public readonly record struct RuntimeCgColor(byte Red, byte Green, byte Blue, byte Alpha);
 
