@@ -48,7 +48,7 @@ Assert-Condition ([string]$policy.recoveryEvidenceLifecycle.runtimeQualifiedStat
 Assert-Condition ([string]$policy.recoveryEvidenceLifecycle.cleanupMode -eq 'EXPLICIT_ROLLBACK_RETIREMENT') "Recovery cleanup must require explicit rollback retirement."
 Assert-Condition ($policy.recoveryEvidenceLifecycle.preserveClosureReceiptOutsideRecoveryRoot -eq $true) "Recovery cleanup must preserve closure evidence outside the retired recovery root."
 Assert-Condition ([string]$policy.processLifecycle.runtimeReadiness -eq 'UNVERIFIED_AFTER_COORDINATED_COMMIT') "Runtime readiness must remain explicitly UNVERIFIED after the maintenance commit."
-Assert-Condition ($policy.processLifecycle.automaticStop -eq $false -and $policy.processLifecycle.automaticStart -eq $false) "AP-25 must not silently add automatic process lifecycle control."
+Assert-Condition ($policy.processLifecycle.automaticStop -eq $false -and $policy.processLifecycle.automaticStart -eq $false) "Coordinated maintenance must not silently add automatic process lifecycle control."
 Assert-Condition ([string]$policy.productionPackageActivation -eq 'OUT_OF_SCOPE') "Production Package activation must remain out of AP-25 scope."
 
 $recoveryOrder = @($policy.failureRecoveryOrder)
@@ -64,7 +64,7 @@ $kinds = @($catalog.databaseKinds)
 Assert-Condition ($kinds.Count -eq 2) "Current V1 state-upgrade catalog must contain management and production-journal kinds."
 $management = @($kinds | Where-Object { [string]$_.id -eq 'management' })
 $journal = @($kinds | Where-Object { [string]$_.id -eq 'production-journal' })
-Assert-Condition ($management.Count -eq 1 -and [int]$management[0].targetSchemaVersion -eq 1 -and @($management[0].migrations).Count -eq 0) "Management production schema must remain v1 with no migration in AP-25."
+Assert-Condition ($management.Count -eq 1 -and [int]$management[0].targetSchemaVersion -eq 1 -and @($management[0].migrations).Count -eq 0) "Management production schema must remain v1 with no qualification-only migration."
 Assert-Condition ($journal.Count -eq 1 -and [int]$journal[0].targetSchemaVersion -eq 1 -and @($journal[0].migrations).Count -eq 0) "Production-journal production schema must remain v1 with no migration."
 Assert-Condition (@($kinds | Where-Object { [int]$_.targetSchemaVersion -ne 1 -or @($_.migrations).Count -ne 0 }).Count -eq 0) "Qualification work must not manufacture a production schema migration."
 
