@@ -274,7 +274,8 @@ public sealed record V1AudioProductionSourceSnapshot(
 	double Gain,
 	bool Muted,
 	bool FollowRoutedSource,
-	IReadOnlyList<string> BusAssignments);
+	IReadOnlyList<string> BusAssignments,
+	AudioSourceEqualizerConfiguration? Equalizer = null);
 
 public sealed record V1AudioCrossfadeSnapshot(
 	string BusId,
@@ -3097,7 +3098,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				source.Gain,
 				source.Muted,
 				source.FollowRoutedSource,
-				Array.AsReadOnly(source.BusAssignments.Select(bus => bus.Value).ToArray())))
+				Array.AsReadOnly(source.BusAssignments.Select(bus => bus.Value).ToArray()),
+				source.Equalizer))
 			.ToArray();
 		var crossfade = configuration.Crossfade is { } activeCrossfade
 			? new V1AudioCrossfadeSnapshot(
