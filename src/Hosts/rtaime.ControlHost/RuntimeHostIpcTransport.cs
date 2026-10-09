@@ -675,17 +675,35 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 		return Array.AsReadOnly(wire.Select(FromWire).ToArray());
 	}
 
-	public async ValueTask<IReadOnlyList<RuntimeCompositingLayerSnapshot>> SetCompositingLayerProcessingNodeAsync(
+	public ValueTask<IReadOnlyList<RuntimeCompositingLayerSnapshot>> SetCompositingLayerProcessingNodeAsync(
 		string layerId,
 		PreparedCompositingProcessingNodeState? processingNode,
+		CancellationToken cancellationToken = default) =>
+		SetCompositingLayerProcessingStackAsync(
+			layerId,
+			processingNode is null
+				? Array.Empty<PreparedCompositingProcessingNodeState>()
+				: new[] { processingNode },
+			cancellationToken);
+
+	public async ValueTask<IReadOnlyList<RuntimeCompositingLayerSnapshot>> SetCompositingLayerProcessingStackAsync(
+		string layerId,
+		IReadOnlyList<PreparedCompositingProcessingNodeState> processingStack,
 		CancellationToken cancellationToken = default)
 	{
 		if (string.IsNullOrWhiteSpace(layerId)) throw new ArgumentException("Compositing layer identity is required.", nameof(layerId));
+		ArgumentNullException.ThrowIfNull(processingStack);
+		var canonical = processingStack.ToArray();
+		if (canonical.Length > PreparedCompositingProcessingStackLimits.MaximumNodeCount)
+			throw new ArgumentException($"Processing stack supports at most {PreparedCompositingProcessingStackLimits.MaximumNodeCount} nodes.", nameof(processingStack));
+		if (canonical.Select(node => node.NodeId).Distinct(StringComparer.Ordinal).Count() != canonical.Length)
+			throw new ArgumentException("Processing stack contains duplicate node identities.", nameof(processingStack));
+
 		var response = await ExchangeAsync(
 			"runtime.compositing.layer.processing",
 			new WireCompositingLayerProcessing(
 				layerId.Trim(),
-				processingNode is null ? null : ToWire(processingNode)),
+				canonical.Select(ToWire).ToArray()),
 			cancellationToken).ConfigureAwait(false);
 		var wire = response.Payload.Deserialize<WireCompositingLayer[]>(Wire.JsonOptions)
 			?? throw new InvalidDataException("Runtime compositing layer response is required.");
@@ -1451,7 +1469,9 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 			snapshot.CropTop,
 			snapshot.CropRight,
 			snapshot.CropBottom,
-			snapshot.ProcessingNode is null ? null : FromWire(snapshot.ProcessingNode));
+			processingStack: CanonicalProcessingStack(snapshot.ProcessingStack, snapshot.ProcessingNode)
+				.Select(FromWire)
+				.ToArray());
 	}
 
 	private static PreparedCompositingProcessingNodeState FromWire(WireProcessingNode node) => new(
@@ -1473,6 +1493,23 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 			node.ColorGrade.Brightness,
 			node.ColorGrade.Contrast,
 			node.ColorGrade.Saturation));
+
+	private static WireProcessingNode[] CanonicalProcessingStack(
+		WireProcessingNode[]? processingStack,
+		WireProcessingNode? legacyProcessingNode)
+	{
+		if (processingStack is not null && legacyProcessingNode is not null)
+			throw new InvalidDataException("Processing payload must not contain both legacy processing-node and processing-stack representations.");
+		var canonical = processingStack ??
+			(legacyProcessingNode is null ? Array.Empty<WireProcessingNode>() : new[] { legacyProcessingNode });
+		if (canonical.Length > PreparedCompositingProcessingStackLimits.MaximumNodeCount)
+			throw new InvalidDataException($"Processing stack exceeds the maximum of {PreparedCompositingProcessingStackLimits.MaximumNodeCount} nodes.");
+		if (canonical.Any(node => node is null))
+			throw new InvalidDataException("Processing stack must not contain null nodes.");
+		if (canonical.Select(node => node.NodeId).Distinct(StringComparer.Ordinal).Count() != canonical.Length)
+			throw new InvalidDataException("Processing stack contains duplicate node identities.");
+		return canonical;
+	}
 
 	private static RuntimeGraphicsOverlaySnapshot FromWire(WireGraphicsOverlay snapshot) => new(
 		snapshot.AssetLoaded,
@@ -1610,7 +1647,7 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 					layer.CropTop,
 					layer.CropRight,
 					layer.CropBottom,
-					layer.ProcessingNode is null ? null : ToWire(layer.ProcessingNode))).ToArray()));
+					layer.ProcessingStack.Select(ToWire).ToArray())).ToArray()));
 
 	private sealed record ClientHello(string ProtocolVersion, string Role, string HostInstanceId, Dictionary<string, string> ContractVersions);
 	private sealed record ServerHello(string ProtocolVersion, string Role, string HostInstanceId, Dictionary<string, string> ContractVersions);
@@ -1628,10 +1665,13 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 	private sealed record WireCompositingLayerTransform(string LayerId, double PositionX, double PositionY, double Scale, double RotationDegrees, double AnchorX, double AnchorY, double CropLeft, double CropTop, double CropRight, double CropBottom);
 	private sealed record WireColorGrade(double Brightness, double Contrast, double Saturation);
 	private sealed record WireProcessingNode(string NodeId, int Kind, bool Enabled, WireColorGrade ColorGrade);
-	private sealed record WireCompositingLayerProcessing(string LayerId, WireProcessingNode? ProcessingNode);
+	private sealed record WireCompositingLayerProcessing(
+		string LayerId,
+		WireProcessingNode[]? ProcessingStack = null,
+		WireProcessingNode? ProcessingNode = null);
 	private sealed record WireCompositingLayerOrder(string[] LayerIds);
 	private sealed record WireGraphicsOverlay(bool AssetLoaded, string? AssetName, uint AssetWidth, uint AssetHeight, bool Visible, double PositionX, double PositionY, double Scale);
-	private sealed record WireCompositingLayer(string LayerId, int Kind, int Order, bool Visible, byte Opacity, double PositionX, double PositionY, double Scale, string ContentIdentity, double RotationDegrees = 0, double AnchorX = 0, double AnchorY = 0, double CropLeft = 0, double CropTop = 0, double CropRight = 0, double CropBottom = 0, WireProcessingNode? ProcessingNode = null);
+	private sealed record WireCompositingLayer(string LayerId, int Kind, int Order, bool Visible, byte Opacity, double PositionX, double PositionY, double Scale, string ContentIdentity, double RotationDegrees = 0, double AnchorX = 0, double AnchorY = 0, double CropLeft = 0, double CropTop = 0, double CropRight = 0, double CropBottom = 0, WireProcessingNode[]? ProcessingStack = null, WireProcessingNode? ProcessingNode = null);
 	private sealed record WireAudioInputState(string SourceId, double Gain, bool Muted);
 	private sealed record WireAudioRoutingState(int Mode, string? BreakawaySourceId);
 	private sealed record WireAudioTestSignalState(string SourceId, bool Enabled, int Mode, double FrequencyHz, double PeakLevel);
@@ -1661,7 +1701,7 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 	private sealed record WireResource(string ResourceId, string ProviderId, string Kind, uint CapacityUnits, bool Reservable);
 	private sealed record WireProvider(string Version, string ProviderId, string Name, int AvailabilityState, WireFailure? Failure, WireCapability[] Capabilities, WireResource[] Resources);
 	private sealed record WirePreparedBinding(string LogicalNodeId, string CapabilityId, WireResource Resource, string? MediaSourceId, string? MediaSinkId, string? OutputRoleId = null);
-	private sealed record WirePreparedCompositingLayer(string LayerId, int Kind, int Order, bool Visible, byte Opacity, double PositionX, double PositionY, double Scale, string ContentIdentity, double RotationDegrees = 0, double AnchorX = 0, double AnchorY = 0, double CropLeft = 0, double CropTop = 0, double CropRight = 0, double CropBottom = 0, WireProcessingNode? ProcessingNode = null);
+	private sealed record WirePreparedCompositingLayer(string LayerId, int Kind, int Order, bool Visible, byte Opacity, double PositionX, double PositionY, double Scale, string ContentIdentity, double RotationDegrees = 0, double AnchorX = 0, double AnchorY = 0, double CropLeft = 0, double CropTop = 0, double CropRight = 0, double CropBottom = 0, WireProcessingNode[]? ProcessingStack = null, WireProcessingNode? ProcessingNode = null);
 	private sealed record WirePreparedCompositingState(string Version, WirePreparedCompositingLayer[] Layers);
 	private sealed record WirePreparedExecution(string Version, string PreparedExecutionId, string AuthorityStateId, ulong AuthorityRevision, ulong PlanGeneration, WirePreparedBinding[] Bindings, WirePreparedCompositingState? CompositingState = null);
 	private sealed record WireTransition(int Kind, string FromSourceId, string ToSourceId, uint DurationFrames);
