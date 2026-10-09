@@ -50,6 +50,9 @@ $rundownPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/RundownContr
 $rundownViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/RundownViewModel.cs"
 $rundownDocumentationPath = Join-Path $repositoryRoot "docs/ProductionRundown.md"
 $viewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorViewModel.cs"
+$audioMixerPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/AudioMixerControl.xaml"
+$audioMixerViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorAudioMixerViewModel.cs"
+$audioMixerTestsPath = Join-Path $repositoryRoot "tests/rtaime.Tests.Operator/AudioMixerOperatorSurfaceTests.cs"
 $runtimeReadinessPath = Join-Path $repositoryRoot "src/Client/rtaime.Client/RuntimeReadinessService.cs"
 $startupViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/StartupLifecycleViewModel.cs"
 $workspaceStateViewModelPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorWorkspaceStateViewModel.cs"
@@ -106,7 +109,7 @@ $mediaLibraryDocumentationPath = Join-Path $repositoryRoot "docs/MediaLibraryAss
 $visualQualificationDocumentationPath = Join-Path $repositoryRoot "docs/OperatorVisualQualification.md"
 $visualQualificationTestsPath = Join-Path $repositoryRoot "tests/rtaime.Tests.Operator/OperatorVisualQualificationTests.cs"
 
-foreach ($path in @($appPath, $appCodePath, $windowPath, $windowCodePath, $shellPath, $keyboardPath, $quickControlsPath, $multiviewPath, $multiviewCodePath, $liveSceneCuePath, $showControlPath, $showControlViewModelPath, $showControlDocumentationPath, $liveControlsPath, $liveDocumentationPath, $compositingGraphPath, $compositingGraphCodePath, $compositingGraphViewModelPath, $compositingGraphProjectionPath, $compositingGraphDocumentationPath, $mediaPoolPath, $inspectorHostPath, $virtualizingWrapPanelPath, $deckPath, $deckViewModelPath, $timelinePath, $timelineCodePath, $timelineViewModelPath, $markerControllerPath, $timelineDocumentationPath, $rundownPath, $rundownViewModelPath, $rundownDocumentationPath, $viewModelPath, $runtimeReadinessPath, $startupViewModelPath, $monitorViewModelPath, $programOutputControllerPath, $programOutputWindowPath, $outputHealthControlPath, $outputHealthViewModelPath, $runtimeStatusBarPath, $runtimeStatusBarCodePath, $runtimeStatusBarViewModelPath, $runtimeStatusBarDocumentationPath, $healthContractPath, $healthProviderPath, $healthViewModelPath, $healthControlPath, $healthControlCodePath, $healthDocumentationPath, $previewViewerPath, $previewViewerCodePath, $programViewerPath, $programViewerCodePath, $monitorViewPath, $monitorPresentationControlPath, $sourceTileViewModelPath, $audioInputViewModelPath, $graphicsLoaderPath, $demoControllerPath, $demoManifestPath, $demoProductPath, $demoGraphicsPath, $demoDocumentationPath, $tokensPath, $themePath, $customControlsPath, $outputHealthControlsPath, $customInputControlsPath, $customMediaControlsPath, $customControlThemePath, $outputHealthControlThemePath, $customInputThemePath, $customMediaThemePath, $monitorWorkspaceThemePath, $customIconThemePath, $manifestPath, $projectPath, $documentationPath, $workspaceDocumentationPath, $outputHealthDocumentationPath, $mediaLibraryDocumentationPath, $visualQualificationDocumentationPath, $visualQualificationTestsPath)) {
+foreach ($path in @($appPath, $appCodePath, $windowPath, $windowCodePath, $shellPath, $keyboardPath, $quickControlsPath, $multiviewPath, $multiviewCodePath, $liveSceneCuePath, $showControlPath, $showControlViewModelPath, $showControlDocumentationPath, $liveControlsPath, $liveDocumentationPath, $compositingGraphPath, $compositingGraphCodePath, $compositingGraphViewModelPath, $compositingGraphProjectionPath, $compositingGraphDocumentationPath, $mediaPoolPath, $inspectorHostPath, $virtualizingWrapPanelPath, $deckPath, $deckViewModelPath, $timelinePath, $timelineCodePath, $timelineViewModelPath, $markerControllerPath, $timelineDocumentationPath, $rundownPath, $rundownViewModelPath, $rundownDocumentationPath, $viewModelPath, $audioMixerPath, $audioMixerViewModelPath, $audioMixerTestsPath, $runtimeReadinessPath, $startupViewModelPath, $monitorViewModelPath, $programOutputControllerPath, $programOutputWindowPath, $outputHealthControlPath, $outputHealthViewModelPath, $runtimeStatusBarPath, $runtimeStatusBarCodePath, $runtimeStatusBarViewModelPath, $runtimeStatusBarDocumentationPath, $healthContractPath, $healthProviderPath, $healthViewModelPath, $healthControlPath, $healthControlCodePath, $healthDocumentationPath, $previewViewerPath, $previewViewerCodePath, $programViewerPath, $programViewerCodePath, $monitorViewPath, $monitorPresentationControlPath, $sourceTileViewModelPath, $audioInputViewModelPath, $graphicsLoaderPath, $demoControllerPath, $demoManifestPath, $demoProductPath, $demoGraphicsPath, $demoDocumentationPath, $tokensPath, $themePath, $customControlsPath, $outputHealthControlsPath, $customInputControlsPath, $customMediaControlsPath, $customControlThemePath, $outputHealthControlThemePath, $customInputThemePath, $customMediaThemePath, $monitorWorkspaceThemePath, $customIconThemePath, $manifestPath, $projectPath, $documentationPath, $workspaceDocumentationPath, $outputHealthDocumentationPath, $mediaLibraryDocumentationPath, $visualQualificationDocumentationPath, $visualQualificationTestsPath)) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required Operator UI artifact is missing: '$path'."
 }
 
@@ -159,6 +162,9 @@ $rundownViewModel = Get-Content -LiteralPath $rundownViewModelPath -Raw
 $rundownDocumentation = Get-Content -LiteralPath $rundownDocumentationPath -Raw
 $inputSurface = "$window`n$inspectorHost`n$deck`n$timeline`n$rundown`n$liveControls`n$liveSceneCue`n$showControl`n$multiview`n$outputHealthControl"
 $viewModel = Get-Content -LiteralPath $viewModelPath -Raw
+$audioMixer = Get-Content -LiteralPath $audioMixerPath -Raw
+$audioMixerViewModel = Get-Content -LiteralPath $audioMixerViewModelPath -Raw
+$audioMixerTests = Get-Content -LiteralPath $audioMixerTestsPath -Raw
 $runtimeReadiness = Get-Content -LiteralPath $runtimeReadinessPath -Raw
 $startupViewModel = Get-Content -LiteralPath $startupViewModelPath -Raw
 $workspaceStateViewModel = Get-Content -LiteralPath $workspaceStateViewModelPath -Raw
@@ -683,31 +689,28 @@ Assert-Condition ($viewModel -match 'ClearGraphicsOverlayAsync') "Operator graph
 Assert-Condition ($graphicsLoader -match 'PngBitmapDecoder') "Graphics asset loader must use the bounded PNG decode path."
 Assert-Condition ($graphicsLoader -match 'PixelFormats\.Bgra32') "Graphics asset loader must normalize PNG pixels before RGBA conversion."
 Assert-Condition ($graphicsLoader -match 'rgba\[offset\] = bgra\[offset \+ 2\]') "Graphics asset loader must preserve RGBA channel order for RuntimeHost."
-Assert-Condition ($window -match 'Text="AUDIO / ROUTING"') "Operator must expose the governed Program audio-routing workflow."
-Assert-Condition ($window -match 'ItemsSource="\{Binding AudioInputs\}"') "Audio workflow must expose Runtime-observed inputs."
-Assert-Condition ($window -match 'Binding AudioLeftPeak') "Audio workflow must expose left Program meter."
-Assert-Condition ($window -match 'Binding AudioRightPeak') "Audio workflow must expose right Program meter."
-Assert-Condition ($window -match 'Binding AudioMasterPeak') "Audio workflow must expose master Program meter."
-foreach ($readOnlyMeter in @("AudioLeftPeak", "AudioRightPeak", "AudioMasterPeak", "LeftPeak", "RightPeak")) {
-	$pattern = 'Value="\{Binding ' + [Regex]::Escape($readOnlyMeter) + ', Mode=OneWay\}"'
-	Assert-Condition ($window -match $pattern) "Read-only audio meter '$readOnlyMeter' must bind OneWay to avoid WPF source-write failures."
-}
-Assert-Condition ($window -match 'Binding AudioAfvSourceName') "Audio workflow must identify the Program-followed AFV source."
-Assert-Condition ($window -match 'Binding AudioRoutingMode' -and $window -match 'Binding AudioRoutingSourceName') "Audio workflow must expose confirmed routing mode and Program audio source."
-Assert-Condition ($window -match 'Binding SetAudioFollowVideoCommand' -and $window -match 'Binding SetAudioBreakawayCommand') "Audio workflow must expose explicit FOLLOW_VIDEO and selected-source BREAKAWAY controls."
+Assert-Condition ($window -match '<local:AudioMixerControl' -and $window -match 'DataContext="{Binding AudioMixer}"') "OUTPUTS must host the bounded audio mixer projection."
+Assert-Condition ($audioMixer -match 'Text="AUDIO MIXER"' -and $audioMixer -match 'ItemsSource="{Binding Sources}"' -and $audioMixer -match 'ItemsSource="{Binding Buses}"') "Audio mixer must expose bounded source and bus strips."
+Assert-Condition ($audioMixer -match 'SOURCE → BUS' -and $audioMixer -match 'ItemsSource="{Binding Assignments}"') "Audio mixer must expose the bounded source-to-bus routing matrix."
+Assert-Condition ($audioMixer -match 'TYPED 3-BAND SOURCE EQ' -and $audioMixer -match 'LowFrequencyHz' -and $audioMixer -match 'MidQ' -and $audioMixer -match 'HighFrequencyHz') "Audio mixer must expose the typed bounded source equalizer."
+Assert-Condition ($audioMixer -match 'COMPRESSOR' -and $audioMixer -match 'SAMPLE-PEAK LIMITER' -and $audioMixer -match 'CompressorThresholdDbFs' -and $audioMixer -match 'LimiterCeilingDbFs') "Audio mixer must expose bounded typed bus dynamics without generic plugin affordances."
+Assert-Condition ($audioMixer -match 'CompressorActivity' -and $audioMixer -match 'LimiterActivity' -and $audioMixer -match 'LeftPeak' -and $audioMixer -match 'RightPeak' -and $audioMixerViewModel -match 'Clipping') "Audio mixer must present Runtime-owned peak, reduction, limiter and clipping evidence."
+Assert-Condition ($audioMixer -match 'OutputRoles' -and $audioMixerViewModel -match 'AudioBusId') "Audio mixer must show confirmed output-role to bus assignments."
+Assert-Condition ($audioMixerViewModel -match 'RMS NOT EXPOSED' -and $audioMixerViewModel -notmatch 'Math\.Sqrt|RootMeanSquare|ComputeRms|CalculateRms') "Operator must explicitly present RMS as unavailable and must not synthesize it locally when Runtime exposes no bounded RMS evidence."
+Assert-Condition ($audioMixerViewModel -match 'AudioProductionLimits\.MaximumSources' -and $audioMixerViewModel -match 'AudioProductionLimits\.MaximumBuses') "Audio mixer projection must retain the 8-source / 4-bus contract bounds."
+Assert-Condition ($audioMixerViewModel -match 'SetAudioProductionAsync' -or $viewModel -match 'ApplyAudioMixerConfigurationAsync[\s\S]+SetAudioProductionAsync') "Audio mixer processing mutations must cross the governed Client/Control seam."
+Assert-Condition ($audioMixerViewModel -match 'PENDING' -and $audioMixerViewModel -match 'REJECTED' -and $audioMixerViewModel -match 'refreshDrafts') "Audio mixer must distinguish draft, pending, confirmed and rejected state."
+Assert-Condition ($viewModel -match 'ApplyAudioMixerConfigurationAsync[\s\S]+SynchronizeAsync') "Rejected or stale mixer mutations must refresh authoritative state rather than retry blindly."
+Assert-Condition ($viewModel -match 'PeriodicTimer\(TimeSpan\.FromMilliseconds\(200\)\)' -and $audioMixerViewModel -notmatch 'PeriodicTimer|DispatcherTimer|Task\.Delay') "Audio mixer must reuse the existing bounded 200 ms management cadence and add no duplicate polling loop."
+Assert-Condition ($audioMixer -notmatch '<(Button|ToggleButton|CheckBox|RadioButton|TextBox|ComboBox|TabControl|TabItem|ListBox|ListView|TreeView|DataGrid|Slider|ProgressBar|ScrollBar|ScrollViewer|GridSplitter|Menu|MenuItem|ContextMenu|ToolBar)(\s|/|>)') "Audio mixer must use only rtaime custom interactive controls."
+Assert-Condition ($audioMixer -notmatch 'PLUGIN|SPECTRUM|LUFS|TRUE-PEAK') "Audio mixer must not present unsupported generic DSP, spectrum or standards-qualified loudness/true-peak affordances."
+Assert-Condition ($audioMixer -match 'Binding Owner\.SetAudioFollowVideoCommand' -and $audioMixer -match 'Binding Owner\.SetAudioBreakawayCommand') "Audio mixer must retain governed FOLLOW_VIDEO and BREAKAWAY routing controls."
 Assert-Condition ($viewModel -match '_client\.SetAudioRoutingAsync') "Audio routing mutations must cross the Client SDK seam."
-Assert-Condition ($window -match 'Binding AudioHealth') "Audio workflow must expose audio health/clipping state."
-Assert-Condition ($window -match 'Binding ClipAudioStatus') "Audio workflow must expose local clip audio metadata/state."
-Assert-Condition ($window -match 'Binding ApplyAudioGainCommand') "Audio workflow must expose gain control."
-Assert-Condition ($window -match 'Binding ToggleAudioMuteCommand') "Audio workflow must expose mute control."
-Assert-Condition ($window -match 'Binding CycleAudioTestSignalCommand' -and $window -match 'Binding SelectedAudioInput.TestSignalStatus') "Audio workflow must expose generated test-signal selection and confirmed status."
+Assert-Condition ($audioMixer -match 'Binding Owner\.CycleAudioTestSignalCommand') "Audio mixer must retain generated test-signal access for the selected source."
 Assert-Condition ($audioInputViewModel -match 'TestSignalActiveChannel' -and $audioInputViewModel -match 'TestSignalModeLabel') "Generated audio presentation must expose the Runtime-confirmed mode and active channel."
-Assert-Condition ($viewModel -match '_client\.SetAudioTestSignalAsync') "Generated audio test-signal mutations must cross the Client SDK seam."
-Assert-Condition ($viewModel -match 'SetAudioInputStateAsync') "Audio mutations must cross the Client SDK seam."
-Assert-Condition ($viewModel -match 'PeriodicTimer\(TimeSpan\.FromMilliseconds\(200\)\)') "Audio meters must poll confirmed Runtime observations on a bounded management cadence."
+Assert-Condition ($viewModel -match '_client\.SetAudioTestSignalAsync' -and $viewModel -match 'SetAudioInputStateAsync') "Existing audio input and test-signal mutations must remain on the Client SDK seam."
 Assert-Condition ($viewModel -notmatch 'DispatcherTimer|DoubleAnimation') "Audio meters must not be locally animated or synthesized by WPF."
-Assert-Condition ($audioInputViewModel -match 'OperatorAudioInputDescriptor') "Audio input presentation must project Client SDK descriptors."
-Assert-Condition ($audioInputViewModel -match 'LeftPeak' -and $audioInputViewModel -match 'RightPeak') "Audio input presentation must retain stereo meter values."
+Assert-Condition ($audioMixerTests -match 'Mixer_projects_maximum_eight_sources_and_four_buses' -and $audioMixerTests -match 'drafts_preserve_during_meter_refresh' -and $audioMixerTests -match 'Routing_cell_exposes_pending_and_rejected') "Operator tests must cover bounded presentation, draft refresh and routing mutation state."
 Assert-Condition ($window -match 'Text="PROGRAM RECORDING"') "Program Recording Workflow must expose a dedicated Program recording workflow."
 Assert-Condition ($window -match 'Binding RecordingStatus') "Program Recording Workflow must expose confirmed REC state."
 Assert-Condition ($window -match 'Binding RecordingElapsed') "Program Recording Workflow must expose recording elapsed time."

@@ -22,6 +22,10 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<InternalsVisibleTo Include="rtaime.Tests.Operator" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<None Update="DemoAssets\**\*">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 			<CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>

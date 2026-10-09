@@ -307,45 +307,52 @@ See [ProductionCgTextRendering.md](ProductionCgTextRendering.md) for the complet
 
 ## Audio Operator Workflow
 
-Audio Operator Workflow adds a production-facing audio panel while preserving the existing authority boundary. The Operator does not own audio routing, meter generation or Program truth.
+The OUTPUTS workspace exposes a bounded professional Audio Mixer while preserving the existing authority boundary. The Operator owns only selection and editable draft presentation; it does not own routing truth, DSP execution, meter generation or Program audio.
 
-The panel exposes:
+The mixer projects up to eight source strips and four bus strips from the synchronized Client/Runtime snapshot. Each source strip includes:
 
-- the confirmed `FOLLOW_VIDEO` source that follows Program video;
-- the confirmed Program audio routing mode and actual routed audio source;
-- explicit FOLLOW VIDEO and BREAKAWAY SELECTED actions;
-- Runtime-owned stereo L/R Program meters and a master peak meter;
-- per-input Runtime health and AFV/PGM indication;
-- per-input linear gain from 0.0x to 4.0x;
-- confirmed mute/unmute;
-- generated audio diagnostic state with the Runtime-confirmed mode and active identification channel;
-- cycle control for Silence, Tone, Stereo ID, Channel ID and Pulse without a UI audio timer;
-- clipping, silence, underrun and error state;
-- local clip audio codec/channel/sample-rate/transport state.
+- stable source identity and Runtime health;
+- routed-only versus always-in-mix contribution state;
+- production gain and mute;
+- confirmed source→bus assignment indicators;
+- Runtime-owned L/R peaks plus missing/underrun state;
+- the typed bounded low-shelf, bell-mid and high-shelf EQ editor.
 
-Audio control follows **Operator → rtaime.Client → ControlHost → RuntimeHost**. ControlHost accepts audio commands only for authoritative production sources and serializes them through the management mutation gate. RuntimeHost remains the execution owner and the Operator refreshes the confirmed snapshot after each command.
+Each bus strip includes:
 
-Audio state changes do not advance the authoritative Preview/Program production revision. `FOLLOW_VIDEO` follows the confirmed Program video source only after Runtime execution has switched to that source. `BREAKAWAY` pins audio to the explicitly confirmed selected source and survives later video CUT/DISSOLVE operations until the operator explicitly returns to `FOLLOW_VIDEO`. The panel never presents the local selection as confirmed Program audio before the synchronized Runtime snapshot arrives.
+- stable bus identity;
+- master gain and mute;
+- Runtime-owned L/R output peaks and final clipping/overload evidence;
+- compressor gain reduction;
+- sample-peak limiter reduction/hit evidence;
+- active/missing-source counts;
+- confirmed output-role summary showing which bus feeds Program/Aux;
+- the typed bounded compressor and sample-peak limiter editor.
 
-### Live meters and hot-path isolation
+The compact routing matrix is bounded to 8×4. Routing, source processing and bus processing all submit a complete next revision through Operator → rtaime.Client → ControlHost → RuntimeHost. Draft values are labeled as draft, in-flight mutations are labeled PENDING, and a rejected mutation remains distinguishable until authoritative state is refreshed. Stale-revision failures trigger synchronization rather than an automatic retry.
 
-The Runtime media paths measure actual Float32 stereo samples. Physical Media I/O uses captured audio samples; local media uses the decoded Media Deck Float32 payload; the virtual reference provider supplies deterministic stereo observations when no external media source is active.
+Existing FOLLOW_VIDEO and BREAKAWAY actions remain explicit. The selected mixer source is synchronized with the established audio selection so equal-power crossfade, bounded ducking and generated diagnostic-signal controls continue to use the same governed command paths.
 
-The WPF client refreshes audio observations through the management snapshot at a bounded 200 ms cadence. There is no locally generated meter animation and no raw audio payload crosses Operator/ControlHost management IPC.
+### Runtime-owned metering and hot-path isolation
 
-RuntimeHost keeps external sample buffering bounded and consumes one exact Program audio window per boundary. The same post-gain/mute Program payload is used by recording and physical Program output.
+Runtime media paths remain the only place where samples are measured or processed. The mixer reuses the existing 200 ms management snapshot cadence; no second polling loop, Dispatcher timer or WPF audio-analysis path is added.
+
+Runtime currently supplies source/bus L/R peak, clipping, compressor reduction, limiter reduction/hits, missing-source and related advanced-audio evidence. A bounded per-bus RMS value is not part of the current Runtime snapshot. The Operator therefore labels RMS as not exposed instead of deriving it from local data. It makes no LUFS or true-peak standards claim.
+
+Dirty source-EQ and bus-dynamics drafts survive ordinary meter refreshes so a user can edit while live evidence continues to update. After a successful or rejected authoritative mutation, drafts are refreshed from the confirmed configuration so the UI never promotes desired values to production truth.
 
 ### Audio Operator Workflow acceptance evidence
 
-- unit tests cover stereo metering, gain and clipping;
-- Runtime integration covers actual external/clip-style Float32 Program payload, gain, mute, silence, clipping and underrun;
-- process-boundary integration covers Operator audio commands and generated test-signal control without changing production revision;
-- generated-audio tests cover phase continuity, safe level bounds, channel identification, pulse timing and hot-path allocations;
-- AFV integration verifies that the Runtime audio source follows confirmed Program after source changes;
-- governed-routing integration verifies breakaway survives Program video changes and explicit return to `FOLLOW_VIDEO` is boundary exact;
-- recovery integration verifies durable breakaway state is restored only after Runtime reconfirmation;
-- Operator UI policy verifies routing mode/source, FOLLOW VIDEO/BREAKAWAY controls, stereo/master meters, health, clip-audio state, gain/mute/test-signal commands, active-channel projection and the absence of WPF meter synthesis;
-- Operator remains dependent only on `rtaime.Client`.
+- Operator projection tests cover the maximum eight-source/four-bus presentation;
+- projection tests cover Runtime meter/dynamics evidence and Program/Aux bus summaries;
+- draft tests cover typed source EQ and typed bus dynamics plus preservation during meter refresh and authoritative reset;
+- routing-cell tests distinguish confirmed, pending and rejected state without changing confirmed assignment locally;
+- existing Client/Control/Runtime integration continues to qualify authoritative audio configuration and routing mutations;
+- Operator UI policy requires rtaime custom controls and rejects generic plugin/DSP, LUFS, true-peak or local meter-analysis affordances;
+- the one existing 200 ms audio synchronization cadence remains the only Operator meter update loop;
+- visual/DPI qualification continues across the established viewport/DPI matrix.
+
+The Operator remains dependent only on rtaime.Client; RuntimeHost remains signal-processing and metering authority.
 
 ## Program Output / Clean Feed
 

@@ -277,19 +277,19 @@ Operator updates these values from synchronized Runtime/Control snapshots. No sa
 
 ## Operator mixer
 
-The Audio workspace uses the existing custom rtaime control system.
+The OUTPUTS workspace hosts one bounded professional audio mixer projection using only the existing rtaime custom-control system. It does not create another audio workspace, mixer engine, sample-analysis path or production-state store.
 
-The operator can:
+The mixer projects at most eight confirmed source strips and four confirmed bus strips from the synchronized Client/Runtime snapshot. Source strips show identity, routed-only versus always-in-mix contribution, production gain/mute, confirmed bus assignments, Runtime-owned L/R source peaks and missing/underrun health. They also expose the fixed typed low-shelf → bell-mid → high-shelf EQ as validated draft values.
 
-- retain FOLLOW VIDEO or explicit BREAKAWAY;
-- edit selected source gain/mute;
-- switch a source between routed-only and always-in-mix contribution;
-- edit Program master gain/mute;
-- start an equal-power crossfade using absolute sample start and duration;
-- configure and enable bounded ducking with the selected source as sidechain;
-- observe mix status, reduction, missing sources and clipping evidence.
+Bus strips show stable bus identity, master gain/mute, Runtime-owned L/R output peaks, missing-source and final safety-clipping evidence, compressor gain reduction, sample-peak limiter reduction/hits and the confirmed Program/Aux output roles consuming that bus. Each bus exposes the one typed bounded compressor followed by the one typed sample-peak limiter; there is no arbitrary processor order or plugin surface.
 
-UI changes are requests only. Confirmed Runtime state remains authoritative.
+The source-to-bus matrix is bounded by the same 8×4 contract maximum. A routing cell changes presentation to PENDING while the complete next AudioProductionConfiguration crosses Operator → rtaime.Client → ControlHost → RuntimeHost. The cell becomes confirmed only after the authoritative snapshot returns. A rejected or stale revision is not retried blindly: the Operator refreshes authoritative state and restores drafts from the confirmed configuration.
+
+Editable EQ/dynamics values are UI drafts only. Ordinary 200 ms meter refreshes preserve dirty drafts while updating Runtime evidence. Successful or rejected mutations explicitly refresh the draft from authoritative state so desired values cannot silently become production truth.
+
+The mixer reuses the existing bounded 200 ms management snapshot cadence. WPF performs no sample analysis and runs no additional audio polling or animation loop. Runtime currently exposes peak/reduction/clipping evidence but no bounded per-bus RMS field, so RMS is deliberately shown as not exposed rather than synthesized locally. No LUFS, true-peak, loudness-standard or other certification claim is made.
+
+Existing FOLLOW VIDEO/BREAKAWAY, equal-power crossfade, bounded ducking and generated diagnostic-signal controls remain available from the same surface. UI changes are requests only; ControlHost remains configuration authority and RuntimeHost remains signal-processing and metering authority.
 
 ## Failure semantics
 

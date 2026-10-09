@@ -179,6 +179,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		Sources = new ObservableCollection<OperatorSourceTileViewModel>();
 		Scenes = new ObservableCollection<OperatorSceneViewModel>();
 		AudioInputs = new ObservableCollection<OperatorAudioInputViewModel>();
+		AudioMixer = new OperatorAudioMixerViewModel(this);
 		RecordingProfiles = new ObservableCollection<OperatorRecordingProfileDescriptor>();
 		SynchronizeCommand = new AsyncRelayCommand(SynchronizeAsync, () => _client is not null && !IsBusy);
 		SetPreviewCommand = new AsyncRelayCommand(SetPreviewAsync, CanSetPreview);
@@ -219,6 +220,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	public ObservableCollection<OperatorSourceTileViewModel> Sources { get; }
 	public ObservableCollection<OperatorSceneViewModel> Scenes { get; }
 	public ObservableCollection<OperatorAudioInputViewModel> AudioInputs { get; }
+	public OperatorAudioMixerViewModel AudioMixer { get; }
 	public ObservableCollection<OperatorRecordingProfileDescriptor> RecordingProfiles { get; }
 	public ICommand SynchronizeCommand { get; }
 	public ICommand SetPreviewCommand { get; }
@@ -588,6 +590,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		GraphicsFontSize is >= 8 and <= 256;
 
 	private bool CanApplyAudio() => CanControl() && SelectedAudioInput is not null;
+	internal bool CanEditAudioMixer() => CanControl() && _client?.Snapshot?.AudioProduction is not null;
 	private bool CanApplyAdvancedAudio() => CanApplyAudio() && _client?.Snapshot?.AudioProduction is not null;
 	private bool CanStartAudioCrossfade() =>
 		CanApplyAdvancedAudio() &&
@@ -669,6 +672,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 					else
 					{
 						ApplyAudio(snapshot, preserveSelectedGainEdit: true);
+						AudioMixer.Apply(snapshot, refreshDrafts: false);
 						ApplyRecording(snapshot.Recording, preserveTargetEdit: true);
 						ApplyHealth(snapshot.Health);
 						ApplyOutputRoles(snapshot.OutputRoles);
@@ -1250,7 +1254,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		var muted = !programBus.Muted;
 		var buses = production.Configuration.Buses
 			.Select(bus => bus.BusId == AudioBusId.Program
-				? new AudioProductionBusConfiguration(bus.BusId, bus.MasterGain, muted)
+				? new AudioProductionBusConfiguration(bus.BusId, bus.MasterGain, muted, bus.Dynamics)
 				: bus)
 			.ToArray();
 		var next = NextAudioProductionConfiguration(production.Configuration, buses: buses);
@@ -1362,6 +1366,48 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 			replaceCrossfade ? crossfade : current.Crossfade,
 			replaceDucking ? ducking : current.Ducking,
 			current.ClipStrategy);
+
+	internal async Task<bool> ApplyAudioMixerConfigurationAsync(
+		string operation,
+		AudioProductionConfiguration configuration,
+		string confirmedMessage)
+	{
+		if (_client is null || !CanEditAudioMixer())
+			return false;
+
+		var confirmed = false;
+		await ExecuteAsync(operation, async () =>
+		{
+			try
+			{
+				await _client.SetAudioProductionAsync(configuration);
+			}
+			catch (InvalidOperationException)
+			{
+				try
+				{
+					Apply(await _client.SynchronizeAsync());
+				}
+				catch
+				{
+					// ExecuteAsync owns connection/stale presentation if authoritative refresh is also unavailable.
+				}
+				throw;
+			}
+
+			var snapshot = _client.Snapshot
+				?? throw new InvalidOperationException("Confirmed audio mixer mutation did not return an authoritative snapshot.");
+			ApplyAudio(snapshot, preserveSelectedGainEdit: false);
+			AudioMixer.Apply(snapshot, refreshDrafts: true);
+			CommandStatus = "AUDIO MIXER CONFIRMED";
+			LastEvent = confirmedMessage;
+			confirmed = true;
+		});
+
+		if (!confirmed && _client.Snapshot is { } authoritative)
+			AudioMixer.Apply(authoritative, refreshDrafts: true);
+		return confirmed;
+	}
 
 	private async Task CycleAudioTestSignalAsync()
 	{
@@ -1562,6 +1608,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 			GraphicsCgStatus = graphics.AssetLoaded ? "BITMAP" : "EMPTY";
 		}
 		ApplyAudio(snapshot, preserveSelectedGainEdit: false);
+		AudioMixer.Apply(snapshot, refreshDrafts: false);
 		ApplyEmbeddedMediaDeckSnapshot(snapshot.MediaDeck);
 		ConfirmedReplaySnapshot?.Invoke(snapshot.Replay);
 		ConfirmedShowControlSnapshot?.Invoke(snapshot.ShowControl);
@@ -2116,6 +2163,12 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		(SetAudioBreakawayCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 		(ToggleAudioMuteCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 		(CycleAudioTestSignalCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+		(ToggleAudioMixSourceCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+		(ApplyAudioMasterCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+		(ToggleAudioMasterMuteCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+		(StartAudioCrossfadeCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+		(ToggleAudioDuckingCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+		AudioMixer.RaiseCanExecuteChanged();
 		(StartRecordingCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 		(StopRecordingCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 		(EnableAIShowcaseCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
