@@ -255,6 +255,7 @@ $runtimeRequirements = [ordered]@{
 		rid = [string]$policy.platform.rid
 	}
 	dotnetRuntimes = @($policy.runtimeRequirements)
+	externalProviderRuntimes = @($policy.externalProviderRuntimes)
 	continuousInternetRequired = $false
 }
 $metadataDirectory = Join-Path $bundleRoot "metadata"
@@ -287,6 +288,14 @@ Offline preflight:
 ```powershell
 ./tools/Invoke-OfflinePreflight.ps1 -BundlePath . -InstallPath C:\rtaime
 ```
+
+When NDI output is configured, require the separately installed NDI runtime explicitly:
+
+```powershell
+./tools/Invoke-OfflinePreflight.ps1 -BundlePath . -InstallPath C:\rtaime -RequireNdiRuntime
+```
+
+The NDI runtime is not bundled by rtaime.
 
 Clean installation into a new or empty directory:
 
