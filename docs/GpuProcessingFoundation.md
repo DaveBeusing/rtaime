@@ -405,3 +405,11 @@ GPU Processing Foundation does not implement:
 - Audio Follow Video,
 - recording,
 - AI inference.
+
+## Typed compositing processing qualification boundary
+
+Color Grade and Chroma Key remain authoritative Runtime-side layer-materialization work executed before the existing GPU composite consumes the prepared layer surface. The processing stack is bounded to 0..4 typed nodes and does not create a second renderer, provider contract, or GPU synchronization path.
+
+Hosted qualification covers both V1 frame rates with representative processing scenarios: no processing, Color Grade only, Chroma Key only, Chroma Key → Color Grade, and Color Grade → Chroma Key. Repeated transform/materialization mutations verify stable stack order, bounded managed allocation growth and return of active GPU-surface ownership to baseline.
+
+The existing renderer qualification separately retains its 0 / 1 / 2 / 4 / 8 GPU-layer matrix. These matrices are intentionally factored: current typed processing is materialized in managed Runtime code before GPU composition, so hosted CI and the CUDA renderer workflow must not label Color Grade or Chroma Key execution itself as a CUDA PASS. Physical processing-performance evidence remains **UNVERIFIED** until a provider-accelerated implementation exists and is qualified on exact-source reference hardware.

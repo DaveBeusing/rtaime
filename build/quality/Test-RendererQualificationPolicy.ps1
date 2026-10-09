@@ -18,12 +18,13 @@ $manifestPath = Join-Path $repositoryRoot "build/qualification/New-RendererQuali
 $runnerPath = Join-Path $repositoryRoot "build/qualification/Invoke-RendererReferenceQualification.ps1"
 $verifierPath = Join-Path $repositoryRoot "build/qualification/Test-RendererReferenceQualification.ps1"
 $hardwareTestPath = Join-Path $repositoryRoot "tests/rtaime.Tests.Performance/RendererReferenceHardwareQualificationTests.cs"
+$processingPerformanceTestPath = Join-Path $repositoryRoot "tests/rtaime.Tests.Performance/V1CombinedReferencePerformanceTests.cs"
 $cudaWorkflowPath = Join-Path $repositoryRoot ".github/workflows/cuda-reference-qualification.yml"
 $requiredGatesPath = Join-Path $repositoryRoot ".github/workflows/required-gates.yml"
 $documentationPath = Join-Path $repositoryRoot "docs/RendererQualificationAndSoakTesting.md"
 $cudaPolicyPath = Join-Path $repositoryRoot "build/qualification/qualification-evidence-policy.json"
 
-foreach ($path in @($profilePath, $manifestPath, $runnerPath, $verifierPath, $hardwareTestPath, $cudaWorkflowPath, $requiredGatesPath, $documentationPath, $cudaPolicyPath)) {
+foreach ($path in @($profilePath, $manifestPath, $runnerPath, $verifierPath, $hardwareTestPath, $processingPerformanceTestPath, $cudaWorkflowPath, $requiredGatesPath, $documentationPath, $cudaPolicyPath)) {
     Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required renderer qualification artifact is missing: '$path'."
 }
 
@@ -75,6 +76,15 @@ Assert-Condition ($hardwareTest -match 'GpuVramUsedBytes') "Renderer hardware qu
 Assert-Condition ($hardwareTest -match 'ActiveGpuSurfaces' -and $hardwareTest -match 'ActiveBuffers' -and $hardwareTest -match 'ActiveResources') "Renderer hardware qualification must fail on leaked GPU/readback/monitoring ownership."
 Assert-Condition ($hardwareTest -match 'physicalExternalOutput[\s\S]*UNVERIFIED') "Renderer qualification must keep professional external output UNVERIFIED."
 Assert-Condition ($hardwareTest -match 'physicalDeviceFaultInjection[\s\S]*UNVERIFIED') "Renderer qualification must not fabricate destructive GPU fault evidence."
+Assert-Condition ($hardwareTest -match 'typedProcessingAcceleration[\s\S]*UNVERIFIED') "Renderer qualification evidence must keep managed typed-processing acceleration explicitly UNVERIFIED."
+
+$processingPerformance = Get-Content -LiteralPath $processingPerformanceTestPath -Raw
+foreach ($scenario in @("none", "color-grade", "chroma-key", "chroma-key-color-grade", "color-grade-chroma-key", "maximum-mixed-stack")) {
+    Assert-Condition ($processingPerformance -match [Regex]::Escape($scenario)) "Managed compositing qualification must retain processing scenario '$scenario'."
+}
+Assert-Condition ($processingPerformance -match 'Hd1080p50Rgba8' -and $processingPerformance -match 'Hd1080p59_94Rgba8') "Managed compositing processing qualification must retain both V1 formats."
+Assert-Condition ($processingPerformance -match 'GC\.GetAllocatedBytesForCurrentThread') "Managed compositing processing qualification must retain allocation-growth evidence."
+Assert-Condition ($processingPerformance -match 'ActiveGpuSurfaces') "Managed compositing processing qualification must prove GPU surface ownership returns to baseline."
 
 $runner = Get-Content -LiteralPath $runnerPath -Raw
 foreach ($scenario in @("CLIP_SEEK", "RENDERER_BACKEND_RECOVERY", "RESOURCE_PRESSURE", "INTEROP_FAILURE_RECOVERY", "RESIZE_DPI_CHURN", "MONITORING_TRANSPORT_RECONNECT", "PROCESS_RESTART")) {
@@ -112,6 +122,9 @@ Assert-Condition ($documentation -match 'smoke' -and $documentation -match 'stre
 Assert-Condition ($documentation -match 'UNVERIFIED') "Renderer qualification documentation must retain explicit physical evidence boundaries."
 Assert-Condition ($documentation -match 'P99') "Renderer qualification documentation must describe P99 and baseline comparison semantics."
 Assert-Condition ($documentation -match '0 / 1 / 2 / 4 / 8') "Renderer qualification documentation must retain the hardware layer matrix."
+Assert-Condition ($documentation -match 'managed Runtime layer-materialization path') "Renderer qualification documentation must state the current typed-processing execution boundary."
+Assert-Condition ($documentation -match 'does \*\*not\*\* promote managed Color Grade or Chroma Key processing to a CUDA PASS') "Renderer qualification documentation must not fabricate CUDA typed-processing evidence."
+Assert-Condition ($documentation -match 'Physical typed-processing acceleration/performance remains \*\*UNVERIFIED\*\*') "Physical typed-processing performance must remain explicitly UNVERIFIED."
 
 Write-Host "Renderer qualification policy verification PASS"
 Write-Host "Hosted CI validates structure only; physical CUDA/D3D11/long-run evidence remains UNVERIFIED until the self-hosted workflow runs."

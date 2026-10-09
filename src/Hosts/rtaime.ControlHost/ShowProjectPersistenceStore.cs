@@ -1026,25 +1026,35 @@ public sealed class ShowProjectPersistenceStore
 	{
 		if (!Enum.IsDefined(typeof(ProductionCompositingProcessingNodeKind), node.Kind))
 			throw new InvalidDataException($"Persisted processing node kind '{node.Kind}' is invalid.");
-		return new ProductionCompositingProcessingNodeState(
-			node.NodeId,
-			(ProductionCompositingProcessingNodeKind)node.Kind,
-			node.Enabled,
-			colorGrade: node.ColorGrade is null
-				? null
-				: new ProductionColorGradeSettings(
-					node.ColorGrade.Brightness,
-					node.ColorGrade.Contrast,
-					node.ColorGrade.Saturation),
-			chromaKey: node.ChromaKey is null
-				? null
-				: new ProductionChromaKeySettings(
-					node.ChromaKey.KeyRed,
-					node.ChromaKey.KeyGreen,
-					node.ChromaKey.KeyBlue,
-					node.ChromaKey.Tolerance,
-					node.ChromaKey.Softness,
-					node.ChromaKey.SpillSuppression));
+
+		try
+		{
+			return new ProductionCompositingProcessingNodeState(
+				node.NodeId,
+				(ProductionCompositingProcessingNodeKind)node.Kind,
+				node.Enabled,
+				colorGrade: node.ColorGrade is null
+					? null
+					: new ProductionColorGradeSettings(
+						node.ColorGrade.Brightness,
+						node.ColorGrade.Contrast,
+						node.ColorGrade.Saturation),
+				chromaKey: node.ChromaKey is null
+					? null
+					: new ProductionChromaKeySettings(
+						node.ChromaKey.KeyRed,
+						node.ChromaKey.KeyGreen,
+						node.ChromaKey.KeyBlue,
+						node.ChromaKey.Tolerance,
+						node.ChromaKey.Softness,
+						node.ChromaKey.SpillSuppression));
+		}
+		catch (ArgumentException exception)
+		{
+			throw new InvalidDataException(
+				$"Persisted processing node '{node.NodeId}' contains invalid typed settings.",
+				exception);
+		}
 	}
 
 	private static ProcessingNodeDocument[] CanonicalProcessingStack(

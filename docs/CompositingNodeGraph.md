@@ -117,3 +117,11 @@ The Inspector keeps editable processing values only as interaction state. Ordina
 - reuse of the established Preview monitor and the Preview / 6 px gap / System & Performance right stack;
 - real-only CPU/GPU/Memory evidence, VRAM/Render values and bounded GPU history;
 - no second telemetry poller or host-level authority dependency.
+
+## Processing durability and qualification
+
+The graph continues to project only confirmed ordered processing state. Qualification now treats the ordered processing chain as one end-to-end semantic unit: mixed Color Grade/Chroma Key order has byte-exact golden coverage, disabled nodes retain no-processing parity, and persistence/recovery fixtures preserve stable node identity and order.
+
+Recording and CPU-fallback monitoring are verified against the same final post-processing Program payload rather than separately reconstructed pixels. Operator visual/DPI qualification continues through Required Gates after the processing workflow integration; no second Preview, local renderer, or monitoring poller is introduced.
+
+The hosted processing matrix covers both V1 frame rates and the representative none, Color Grade, Chroma Key, Chroma Key → Color Grade, and Color Grade → Chroma Key cases. The renderer's existing 0 / 1 / 2 / 4 / 8 layer matrix remains a separate GPU-compositor qualification dimension.

@@ -106,6 +106,11 @@ public sealed class RendererReferenceHardwareQualificationTests
             compositorLayerCounts = new[] { 0, 1, 2, 4, 8 },
             compositor = compositorResults,
             runtime = runtimeResults,
+            typedProcessingAcceleration = new
+            {
+                status = "UNVERIFIED",
+                reason = "Color Grade and Chroma Key currently execute in managed Runtime layer materialization before the CUDA compositor; this workflow does not claim provider-accelerated typed-processing performance."
+            },
             physicalExternalOutput = new
             {
                 status = "UNVERIFIED",

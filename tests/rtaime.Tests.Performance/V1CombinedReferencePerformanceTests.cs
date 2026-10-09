@@ -108,9 +108,21 @@ public sealed class V1CombinedReferencePerformanceTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task Authoritative_transform_and_typed_processing_materialization_has_bounded_1080p_regression_guard(bool fractionalRate)
+    [InlineData(false, "none")]
+    [InlineData(false, "color-grade")]
+    [InlineData(false, "chroma-key")]
+    [InlineData(false, "chroma-key-color-grade")]
+    [InlineData(false, "color-grade-chroma-key")]
+    [InlineData(false, "maximum-mixed-stack")]
+    [InlineData(true, "none")]
+    [InlineData(true, "color-grade")]
+    [InlineData(true, "chroma-key")]
+    [InlineData(true, "chroma-key-color-grade")]
+    [InlineData(true, "color-grade-chroma-key")]
+    [InlineData(true, "maximum-mixed-stack")]
+    public async Task Authoritative_transform_and_typed_processing_materialization_has_bounded_1080p_regression_guard(
+        bool fractionalRate,
+        string processingScenario)
     {
         var format = fractionalRate ? VideoFormat.Hd1080p59_94Rgba8 : VideoFormat.Hd1080p50Rgba8;
         var sourceA = new ProductionSourceId(Identity.Parse("94000000-0000-0000-0000-00000000000a"));
@@ -142,48 +154,39 @@ public sealed class V1CombinedReferencePerformanceTests
         Array.Fill(pixels, (byte)128);
         runtime.LoadGraphicsOverlay("performance-transform.rgba", assetWidth, assetHeight, pixels);
         runtime.SetGraphicsOverlay(true, 0, 0, 1);
+        var processingStack = CreateProcessingQualificationStack(processingScenario);
         runtime.SetCompositingLayerProcessingStack(
             V1RuntimeHostService.BitmapGraphicsLayerId,
-            [
-                new PreparedCompositingProcessingNodeState(
-                    "performance-grade-a",
-                    PreparedCompositingProcessingNodeKind.ColorGrade,
-                    true,
-                    colorGrade: new PreparedColorGradeSettings(0.01, 1.01, 0.99)),
-                new PreparedCompositingProcessingNodeState(
-                    "performance-key-a",
-                    PreparedCompositingProcessingNodeKind.ChromaKey,
-                    true,
-                    chromaKey: new PreparedChromaKeySettings(0, 255, 0, 0.1, 0.25, 0.25)),
-                new PreparedCompositingProcessingNodeState(
-                    "performance-grade-b",
-                    PreparedCompositingProcessingNodeKind.ColorGrade,
-                    true,
-                    colorGrade: new PreparedColorGradeSettings(-0.01, 0.99, 1.01)),
-                new PreparedCompositingProcessingNodeState(
-                    "performance-key-b",
-                    PreparedCompositingProcessingNodeKind.ChromaKey,
-                    true,
-                    chromaKey: new PreparedChromaKeySettings(0, 255, 0, 0.05, 0.1, 0.5))
-            ]);
+            processingStack);
 
-        const int iterations = 4;
-        var stopwatch = Stopwatch.StartNew();
-        for (var index = 0; index < iterations; index++)
+        const int mutationsPerBatch = 4;
+        long RunMutationBatch(int startIndex)
         {
-            runtime.SetCompositingLayerTransform(
-                V1RuntimeHostService.BitmapGraphicsLayerId,
-                0,
-                0,
-                1,
-                index % 2 == 0 ? 2.5 : -2.5,
-                0.5,
-                0.5,
-                0,
-                0,
-                0,
-                0);
+            var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+            for (var index = 0; index < mutationsPerBatch; index++)
+            {
+                runtime.SetCompositingLayerTransform(
+                    V1RuntimeHostService.BitmapGraphicsLayerId,
+                    0,
+                    0,
+                    1,
+                    (startIndex + index) % 2 == 0 ? 2.5 : -2.5,
+                    0.5,
+                    0.5,
+                    0,
+                    0,
+                    0,
+                    0);
+                Assert.Equal(0, runtime.Snapshot.ActiveGpuSurfaces);
+            }
+
+            return GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
         }
+
+        _ = RunMutationBatch(0);
+        var stopwatch = Stopwatch.StartNew();
+        var firstMeasuredBatchBytes = RunMutationBatch(mutationsPerBatch);
+        var secondMeasuredBatchBytes = RunMutationBatch(mutationsPerBatch * 2);
         stopwatch.Stop();
 
         Assert.NotNull(runtime.Snapshot.CompositingLayers);
@@ -191,15 +194,61 @@ public sealed class V1CombinedReferencePerformanceTests
             runtime.Snapshot.CompositingLayers!,
             layer => layer.LayerId == V1RuntimeHostService.BitmapGraphicsLayerId);
         Assert.Equal(-2.5, bitmapLayer.RotationDegrees, 6);
-        Assert.Equal(PreparedCompositingProcessingStackLimits.MaximumNodeCount, bitmapLayer.ProcessingStack.Count);
+        Assert.Equal(processingStack.Length, bitmapLayer.ProcessingStack.Count);
+        Assert.Equal(processingStack.Select(node => node.NodeId), bitmapLayer.ProcessingStack.Select(node => node.NodeId));
         Assert.Equal(0, runtime.Snapshot.ActiveGpuSurfaces);
+
+        var allocationAllowance = checked(pixels.LongLength * 2L);
+        Assert.True(
+            secondMeasuredBatchBytes <= firstMeasuredBatchBytes + allocationAllowance,
+            $"Managed typed-processing allocation growth was not bounded for '{processingScenario}': " +
+            $"first={firstMeasuredBatchBytes} bytes, second={secondMeasuredBatchBytes} bytes, allowance={allocationAllowance} bytes.");
         Assert.True(
             stopwatch.Elapsed < TimeSpan.FromSeconds(15),
             $"Managed 1080p transform/typed-processing materialization exceeded regression guard: {stopwatch.Elapsed}.");
         Console.WriteLine(
             $"Managed {format.Width}x{format.Height} {format.FrameRate} transform+typed-processing " +
-            $"iterations={iterations} total={stopwatch.Elapsed.TotalMilliseconds:0.###}ms " +
-            $"perMutation={stopwatch.Elapsed.TotalMilliseconds / iterations:0.###}ms");
+            $"scenario={processingScenario} mutations={mutationsPerBatch * 2} total={stopwatch.Elapsed.TotalMilliseconds:0.###}ms " +
+            $"firstBatchAllocated={firstMeasuredBatchBytes} secondBatchAllocated={secondMeasuredBatchBytes}");
+    }
+
+    private static PreparedCompositingProcessingNodeState[] CreateProcessingQualificationStack(string scenario)
+    {
+        var grade = new PreparedCompositingProcessingNodeState(
+            "qualification-grade",
+            PreparedCompositingProcessingNodeKind.ColorGrade,
+            true,
+            colorGrade: new PreparedColorGradeSettings(0.02, 1.05, 0.9));
+        var key = new PreparedCompositingProcessingNodeState(
+            "qualification-key",
+            PreparedCompositingProcessingNodeKind.ChromaKey,
+            true,
+            chromaKey: new PreparedChromaKeySettings(0, 255, 0, 0.1, 0.25, 0.4));
+
+        return scenario switch
+        {
+            "none" => [],
+            "color-grade" => [grade],
+            "chroma-key" => [key],
+            "chroma-key-color-grade" => [key, grade],
+            "color-grade-chroma-key" => [grade, key],
+            "maximum-mixed-stack" =>
+            [
+                grade,
+                key,
+                new PreparedCompositingProcessingNodeState(
+                    "qualification-grade-secondary",
+                    PreparedCompositingProcessingNodeKind.ColorGrade,
+                    true,
+                    colorGrade: new PreparedColorGradeSettings(-0.01, 0.95, 1.05)),
+                new PreparedCompositingProcessingNodeState(
+                    "qualification-key-secondary",
+                    PreparedCompositingProcessingNodeKind.ChromaKey,
+                    true,
+                    chromaKey: new PreparedChromaKeySettings(0, 255, 0, 0.05, 0.1, 0.5))
+            ],
+            _ => throw new ArgumentOutOfRangeException(nameof(scenario), scenario, "Unknown processing qualification scenario.")
+        };
     }
 
     private static GovernedInferenceExecutionRequest CreateInferenceRequest(FrameDescriptor frame)

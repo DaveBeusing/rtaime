@@ -142,3 +142,11 @@ This decision does not add:
 - bulk media embedding in the project document;
 - Operator-local production truth;
 - a second Runtime or production authority.
+
+## Processing-stack persistence qualification
+
+Durability qualification explicitly covers canonical multi-node stacks containing both Color Grade and Chroma Key, deterministic legacy single-Color-Grade migration, restart/recovery with stable node order, and Scene recall through the existing prepared-execution boundary.
+
+Corrupted typed processing parameters fail closed as invalid persisted data. A rejected load does not rewrite or normalize the stored document behind the operator's back; recovery must succeed through the normal validated path before any state becomes authoritative.
+
+The qualification boundary intentionally distinguishes durable authored state from live confirmation: persistence and checkpoint recovery prove reconstruction semantics, while only ControlHost → RuntimeHost prepare/commit establishes current production truth.

@@ -96,3 +96,21 @@ Renderer artifacts are retained for 90 days and include `manifest.json`, `render
 Until the dedicated workflow executes on approved NVIDIA hardware for the exact source SHA, the following remain **UNVERIFIED**: physical CUDA/D3D11 production-path results; long-duration renderer soak; physical GPU/VRAM P50/P95/P99; physical monitoring-export timing; professional Media I/O/AJA; external reference/genlock; physical end-to-end latency and A/V synchronization; destructive device-reset/TDR behavior.
 
 A missing hardware run is never represented as a pass.
+
+## Typed compositing processing qualification
+
+Typed Color Grade and Chroma Key processing currently execute in the managed Runtime layer-materialization path before the resulting surface enters the existing GPU compositor. There is no CUDA implementation of these processing nodes in this baseline.
+
+Hosted software qualification therefore uses a factored representative matrix:
+
+- 1080p50 and 1080p59.94;
+- no processing;
+- Color Grade only;
+- Chroma Key only;
+- Chroma Key → Color Grade;
+- Color Grade → Chroma Key;
+- repeated authoritative mutations with resource-baseline and managed-allocation-growth checks.
+
+The direct renderer qualification retains its independent **0 / 1 / 2 / 4 / 8** ordered GPU-layer matrix for both V1 formats. Combining the processing-scenario matrix with the GPU layer-count matrix as separate dimensions avoids an artificial combinatorial expansion while still protecting both semantic order and compositor scaling.
+
+Byte-exact mixed-order vectors, persistence/recovery, Scene recall, recording parity and CPU-fallback monitoring parity are hosted software evidence. The exact-source CUDA workflow still qualifies only the GPU compositor, readback, monitoring export and production-path lifecycle that it actually executes. It does **not** promote managed Color Grade or Chroma Key processing to a CUDA PASS. Physical typed-processing acceleration/performance remains **UNVERIFIED**.
