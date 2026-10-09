@@ -220,10 +220,21 @@ internal static class ControlHostRecovery
 		node.NodeId,
 		(int)node.Kind,
 		node.Enabled,
-		new PersistedColorGrade(
-			node.ColorGrade.Brightness,
-			node.ColorGrade.Contrast,
-			node.ColorGrade.Saturation));
+		node.ColorGrade is null
+			? null
+			: new PersistedColorGrade(
+				node.ColorGrade.Brightness,
+				node.ColorGrade.Contrast,
+				node.ColorGrade.Saturation),
+		node.ChromaKey is null
+			? null
+			: new PersistedChromaKey(
+				node.ChromaKey.KeyRed,
+				node.ChromaKey.KeyGreen,
+				node.ChromaKey.KeyBlue,
+				node.ChromaKey.Tolerance,
+				node.ChromaKey.Softness,
+				node.ChromaKey.SpillSuppression));
 
 	private static ProductionCompositingProcessingNodeState FromPersistedProcessingNode(PersistedProcessingNode node)
 	{
@@ -233,10 +244,21 @@ internal static class ControlHostRecovery
 			node.NodeId,
 			(ProductionCompositingProcessingNodeKind)node.Kind,
 			node.Enabled,
-			new ProductionColorGradeSettings(
-				node.ColorGrade.Brightness,
-				node.ColorGrade.Contrast,
-				node.ColorGrade.Saturation));
+			colorGrade: node.ColorGrade is null
+				? null
+				: new ProductionColorGradeSettings(
+					node.ColorGrade.Brightness,
+					node.ColorGrade.Contrast,
+					node.ColorGrade.Saturation),
+			chromaKey: node.ChromaKey is null
+				? null
+				: new ProductionChromaKeySettings(
+					node.ChromaKey.KeyRed,
+					node.ChromaKey.KeyGreen,
+					node.ChromaKey.KeyBlue,
+					node.ChromaKey.Tolerance,
+					node.ChromaKey.Softness,
+					node.ChromaKey.SpillSuppression));
 	}
 
 	private static PersistedProcessingNode[] CanonicalProcessingStack(
@@ -281,12 +303,21 @@ internal static class ControlHostRecovery
 		string NodeId,
 		int Kind,
 		bool Enabled,
-		PersistedColorGrade ColorGrade);
+		PersistedColorGrade? ColorGrade = null,
+		PersistedChromaKey? ChromaKey = null);
 
 	private sealed record PersistedColorGrade(
 		double Brightness,
 		double Contrast,
 		double Saturation);
+
+	private sealed record PersistedChromaKey(
+		byte KeyRed,
+		byte KeyGreen,
+		byte KeyBlue,
+		double Tolerance,
+		double Softness,
+		double SpillSuppression);
 
 	private sealed record PersistedOutputRole(
 		string RoleId,

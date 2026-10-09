@@ -180,10 +180,10 @@ public sealed class ControlHostRecoveryIntegrationTests
 							true,
 							new OperatorColorGradeDescriptor(0.1, 1.1, 0.9)),
 						new OperatorCompositingProcessingNodeDescriptor(
-							"grade-secondary",
-							1,
+							"key-primary",
+							2,
 							false,
-							new OperatorColorGradeDescriptor(-0.1, 0.9, 1.2))
+							chromaKey: new OperatorChromaKeyDescriptor(0, 255, 0, 0.15, 0.25, 0.5))
 					]);
 				var processedBitmap = Assert.Single(processedLayers, layer => layer.LayerId == "bitmap-graphics");
 				Assert.Equal(22.5, processedBitmap.RotationDegrees, 6);
@@ -193,7 +193,7 @@ public sealed class ControlHostRecoveryIntegrationTests
 					client.Snapshot!.CompositingLayers,
 					layer => layer.LayerId == "bitmap-graphics");
 				Assert.Equal(22.5, synchronizedProcessedBitmap.RotationDegrees, 6);
-				Assert.Equal(new[] { "grade-primary", "grade-secondary" }, synchronizedProcessedBitmap.ProcessingStack.Select(node => node.NodeId));
+				Assert.Equal(new[] { "grade-primary", "key-primary" }, synchronizedProcessedBitmap.ProcessingStack.Select(node => node.NodeId));
 
 				var beforeRestart = await client.SynchronizeAsync();
 				var requestedOrder = beforeRestart.CompositingLayers
@@ -216,8 +216,9 @@ public sealed class ControlHostRecoveryIntegrationTests
 				Assert.Equal(0.15, beforeBitmap.CropRight, 6);
 				Assert.Equal(2, beforeBitmap.ProcessingStack.Count);
 				Assert.Equal("grade-primary", beforeBitmap.ProcessingStack[0].NodeId);
-				Assert.Equal("grade-secondary", beforeBitmap.ProcessingStack[1].NodeId);
-				Assert.Equal(0.1, beforeBitmap.ProcessingStack[0].ColorGrade.Brightness, 6);
+				Assert.Equal("key-primary", beforeBitmap.ProcessingStack[1].NodeId);
+				Assert.Equal(0.1, beforeBitmap.ProcessingStack[0].ColorGrade!.Brightness, 6);
+				Assert.Equal(0.15, beforeBitmap.ProcessingStack[1].ChromaKey!.Tolerance, 6);
 				Assert.Equal(OperatorAudioRoutingMode.Breakaway, beforeRestart.AudioProgram.RoutingMode);
 				Assert.Equal(breakawaySourceId, beforeRestart.AudioProgram.ActiveAudioSourceId);
 				Assert.Equal("SAVED", beforeRestart.ShowProject.State);
@@ -261,12 +262,16 @@ public sealed class ControlHostRecoveryIntegrationTests
 			Assert.Equal(0.20, restoredBitmap.CropBottom, 6);
 			Assert.Equal(2, restoredBitmap.ProcessingStack.Count);
 			Assert.Equal("grade-primary", restoredBitmap.ProcessingStack[0].NodeId);
-			Assert.Equal("grade-secondary", restoredBitmap.ProcessingStack[1].NodeId);
+			Assert.Equal("key-primary", restoredBitmap.ProcessingStack[1].NodeId);
 			Assert.True(restoredBitmap.ProcessingStack[0].Enabled);
 			Assert.False(restoredBitmap.ProcessingStack[1].Enabled);
-			Assert.Equal(0.1, restoredBitmap.ProcessingStack[0].ColorGrade.Brightness, 6);
-			Assert.Equal(1.1, restoredBitmap.ProcessingStack[0].ColorGrade.Contrast, 6);
-			Assert.Equal(0.9, restoredBitmap.ProcessingStack[0].ColorGrade.Saturation, 6);
+			Assert.Equal(0.1, restoredBitmap.ProcessingStack[0].ColorGrade!.Brightness, 6);
+			Assert.Equal(1.1, restoredBitmap.ProcessingStack[0].ColorGrade!.Contrast, 6);
+			Assert.Equal(0.9, restoredBitmap.ProcessingStack[0].ColorGrade!.Saturation, 6);
+			Assert.Equal((byte)255, restoredBitmap.ProcessingStack[1].ChromaKey!.KeyGreen);
+			Assert.Equal(0.15, restoredBitmap.ProcessingStack[1].ChromaKey!.Tolerance, 6);
+			Assert.Equal(0.25, restoredBitmap.ProcessingStack[1].ChromaKey!.Softness, 6);
+			Assert.Equal(0.5, restoredBitmap.ProcessingStack[1].ChromaKey!.SpillSuppression, 6);
 			Assert.Contains(restored.CompositingLayers, layer => layer.LayerId == "production-cg" && layer.Visible && layer.Opacity == 224);
 			Assert.Equal("RESTORED", restored.ShowProject.State);
 

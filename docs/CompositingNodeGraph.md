@@ -43,12 +43,12 @@ The current product data supports these mockup-facing roles:
 - **Media Input** — current source and graphics-source projections;
 - **Output Router** — current Preview / Program routing;
 - **Transform** — one authoritative transform node per confirmed bitmap or Production CG layer, including Position, Scale, Rotation, Anchor/Pivot and Crop;
-- **Processing** — zero to four ordered typed Color Grade nodes when that authoritative layer owns processing state;
+- **Processing** — zero to four ordered closed-kind processing nodes (Color Grade or Chroma Key) when that authoritative layer owns processing state;
 - **Merge** — the current GPU composite stage;
 - **Output** — Preview and Program output projections;
 - **Recorder** — the current Program recorder.
 
-The authoritative layer chain is projected as `Layer → Transform → [ordered Processing nodes] → Composite`. Every configured node is shown with stable identity and execution order; an empty stack connects Transform directly to Composite. A processing node is never shown merely as a placeholder. Keying is not currently implemented and is therefore not presented as a production capability.
+The authoritative layer chain is projected as `Layer → Transform → [ordered Processing nodes] → Composite`. Every configured node is shown with stable identity and execution order; an empty stack connects Transform directly to Composite. A processing node is never shown merely as a placeholder. Color Grade and the bounded typed Chroma Key baseline are projected from confirmed authoritative state; the graph does not imply arbitrary shader/plugin support or broadcast-keyer certification.
 
 ## Stable topology and interaction
 
@@ -64,7 +64,7 @@ Arbitrary source/routing topology rewiring is not exposed by the current contrac
 
 Layer selection remains presentation-only. A toolbar or Inspector mutation sends an explicit client command through ControlHost to RuntimeHost, displays the existing in-flight state and refreshes the graph only from confirmed authoritative state. Bitmap graphics and Production CG layers expose the bounded transform model: normalized Position X/Y, Scale, Rotation in degrees, normalized Anchor/Pivot and normalized Crop edges. The transform is deterministic and defaults reproduce the previous output exactly.
 
-The authoritative model supports an ordered stack of 0..4 typed processing nodes per supported layer. The current Inspector intentionally edits only the first Color Grade compatibility slot while preserving any remaining confirmed nodes. Brightness is bounded to -1..1 and Contrast/Saturation to 0..2. APPLY COLOR GRADE and REMOVE travel through the same Client → ControlHost → RuntimeHost authority path. Disabled, missing or rejected state is never replaced by local-only production truth. Arbitrary shader/plugin configuration, Keying and direct Inspector reordering of processing nodes remain unsupported.
+The authoritative model supports an ordered stack of 0..4 typed processing nodes per supported layer. The current Inspector can edit the governed Color Grade node while preserving other confirmed nodes and their order; Brightness is bounded to -1..1 and Contrast/Saturation to 0..2. Confirmed Chroma Key nodes are projected with key RGB, Tolerance, Softness and Spill Suppression, while dedicated key-color picking and keyer mutation controls remain outside this capability package. APPLY COLOR GRADE and REMOVE travel through the same Client → ControlHost → RuntimeHost authority path. Disabled, missing or rejected state is never replaced by local-only production truth. Arbitrary shader/plugin configuration and direct Inspector reordering of processing nodes remain unsupported.
 
 Legacy visual/test-layer state remains governed by its existing command and does not acquire unsupported transform or processing semantics.
 

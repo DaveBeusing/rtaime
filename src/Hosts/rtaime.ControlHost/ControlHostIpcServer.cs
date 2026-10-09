@@ -1577,10 +1577,21 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 							node.NodeId,
 							(ProductionCompositingProcessingNodeKind)(int)node.Kind,
 							node.Enabled,
-							new ProductionColorGradeSettings(
-								node.ColorGrade.Brightness,
-								node.ColorGrade.Contrast,
-								node.ColorGrade.Saturation)))
+							colorGrade: node.ColorGrade is null
+								? null
+								: new ProductionColorGradeSettings(
+									node.ColorGrade.Brightness,
+									node.ColorGrade.Contrast,
+									node.ColorGrade.Saturation),
+							chromaKey: node.ChromaKey is null
+								? null
+								: new ProductionChromaKeySettings(
+									node.ChromaKey.KeyRed,
+									node.ChromaKey.KeyGreen,
+									node.ChromaKey.KeyBlue,
+									node.ChromaKey.Tolerance,
+									node.ChromaKey.Softness,
+									node.ChromaKey.SpillSuppression)))
 						.ToArray()))
 				.ToArray());
 	}
@@ -1711,10 +1722,21 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 							node.NodeId,
 							(PreparedCompositingProcessingNodeKind)(int)node.Kind,
 							node.Enabled,
-							new PreparedColorGradeSettings(
-								node.ColorGrade.Brightness,
-								node.ColorGrade.Contrast,
-								node.ColorGrade.Saturation)))
+							colorGrade: node.ColorGrade is null
+								? null
+								: new PreparedColorGradeSettings(
+									node.ColorGrade.Brightness,
+									node.ColorGrade.Contrast,
+									node.ColorGrade.Saturation),
+							chromaKey: node.ChromaKey is null
+								? null
+								: new PreparedChromaKeySettings(
+									node.ChromaKey.KeyRed,
+									node.ChromaKey.KeyGreen,
+									node.ChromaKey.KeyBlue,
+									node.ChromaKey.Tolerance,
+									node.ChromaKey.Softness,
+									node.ChromaKey.SpillSuppression)))
 						.ToArray()))
 				.ToArray());
 
@@ -3069,20 +3091,42 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			node.NodeId,
 			(PreparedCompositingProcessingNodeKind)node.Kind,
 			node.Enabled,
-			new PreparedColorGradeSettings(
-				node.ColorGrade.Brightness,
-				node.ColorGrade.Contrast,
-				node.ColorGrade.Saturation));
+			colorGrade: node.ColorGrade is null
+				? null
+				: new PreparedColorGradeSettings(
+					node.ColorGrade.Brightness,
+					node.ColorGrade.Contrast,
+					node.ColorGrade.Saturation),
+			chromaKey: node.ChromaKey is null
+				? null
+				: new PreparedChromaKeySettings(
+					node.ChromaKey.KeyRed,
+					node.ChromaKey.KeyGreen,
+					node.ChromaKey.KeyBlue,
+					node.ChromaKey.Tolerance,
+					node.ChromaKey.Softness,
+					node.ChromaKey.SpillSuppression));
 	}
 
 	private static WireProcessingNode ToWireProcessingNode(PreparedCompositingProcessingNodeState node) => new(
 		node.NodeId,
 		(int)node.Kind,
 		node.Enabled,
-		new WireColorGrade(
-			node.ColorGrade.Brightness,
-			node.ColorGrade.Contrast,
-			node.ColorGrade.Saturation));
+		node.ColorGrade is null
+			? null
+			: new WireColorGrade(
+				node.ColorGrade.Brightness,
+				node.ColorGrade.Contrast,
+				node.ColorGrade.Saturation),
+		node.ChromaKey is null
+			? null
+			: new WireChromaKey(
+				node.ChromaKey.KeyRed,
+				node.ChromaKey.KeyGreen,
+				node.ChromaKey.KeyBlue,
+				node.ChromaKey.Tolerance,
+				node.ChromaKey.Softness,
+				node.ChromaKey.SpillSuppression));
 
 	private static WireProcessingNode[] CanonicalProcessingStack(
 		WireProcessingNode[]? processingStack,
@@ -3344,10 +3388,21 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 							node.NodeId,
 							(int)node.Kind,
 							node.Enabled,
-							new WireColorGrade(
-								node.ColorGrade.Brightness,
-								node.ColorGrade.Contrast,
-								node.ColorGrade.Saturation)))
+							node.ColorGrade is null
+								? null
+								: new WireColorGrade(
+									node.ColorGrade.Brightness,
+									node.ColorGrade.Contrast,
+									node.ColorGrade.Saturation),
+							node.ChromaKey is null
+								? null
+								: new WireChromaKey(
+									node.ChromaKey.KeyRed,
+									node.ChromaKey.KeyGreen,
+									node.ChromaKey.KeyBlue,
+									node.ChromaKey.Tolerance,
+									node.ChromaKey.Softness,
+									node.ChromaKey.SpillSuppression)))
 						.ToArray())).ToArray());
 
 	private static WireOutputRole[] ProjectOutputRoles(
@@ -3489,7 +3544,8 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	private sealed record WireCompositingLayerState(string LayerId, bool Visible, byte Opacity);
 	private sealed record WireCompositingLayerTransform(string LayerId, double PositionX, double PositionY, double Scale, double RotationDegrees, double AnchorX, double AnchorY, double CropLeft, double CropTop, double CropRight, double CropBottom);
 	private sealed record WireColorGrade(double Brightness, double Contrast, double Saturation);
-	private sealed record WireProcessingNode(string NodeId, int Kind, bool Enabled, WireColorGrade ColorGrade);
+	private sealed record WireChromaKey(byte KeyRed, byte KeyGreen, byte KeyBlue, double Tolerance, double Softness, double SpillSuppression);
+	private sealed record WireProcessingNode(string NodeId, int Kind, bool Enabled, WireColorGrade? ColorGrade = null, WireChromaKey? ChromaKey = null);
 	private sealed record WireCompositingLayerProcessing(
 		string LayerId,
 		WireProcessingNode[]? ProcessingStack = null,

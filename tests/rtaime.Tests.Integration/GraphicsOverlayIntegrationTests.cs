@@ -223,6 +223,94 @@ public sealed class GraphicsOverlayIntegrationTests
 	}
 
 	[Fact]
+	public void Chroma_key_reference_semantics_match_byte_exact_golden_vectors()
+	{
+		static (byte Red, byte Green, byte Blue, byte Alpha) Apply(
+			byte red,
+			byte green,
+			byte blue,
+			byte alpha,
+			PreparedChromaKeySettings settings)
+		{
+			V1RuntimeHostService.ApplyChromaKeyReference(settings, ref red, ref green, ref blue, ref alpha);
+			return (red, green, blue, alpha);
+		}
+
+		var hardGreen = new PreparedChromaKeySettings(0, 255, 0, 0, 0, 0);
+		Assert.Equal(((byte)0, (byte)255, (byte)0, (byte)0), Apply(0, 255, 0, 255, hardGreen));
+		Assert.Equal(((byte)255, (byte)0, (byte)0, (byte)128), Apply(255, 0, 0, 128, hardGreen));
+
+		var softGreen = new PreparedChromaKeySettings(0, 255, 0, 0.1, 0.5, 0);
+		Assert.Equal(((byte)0, (byte)200, (byte)80, (byte)68), Apply(0, 200, 80, 128, softGreen));
+
+		var spillGreen = new PreparedChromaKeySettings(0, 255, 0, 0.1, 0.5, 1);
+		Assert.Equal(((byte)54, (byte)178, (byte)134, (byte)68), Apply(0, 200, 80, 128, spillGreen));
+
+		var maximumSoftness = new PreparedChromaKeySettings(0, 255, 0, 0.1, 1, 0);
+		Assert.Equal(((byte)0, (byte)200, (byte)80, (byte)21), Apply(0, 200, 80, 128, maximumSoftness));
+
+		var customBlue = new PreparedChromaKeySettings(16, 32, 240, 0, 0, 0);
+		Assert.Equal(((byte)16, (byte)32, (byte)240, (byte)0), Apply(16, 32, 240, 255, customBlue));
+		Assert.Equal(((byte)255, (byte)0, (byte)0, (byte)0), Apply(255, 0, 0, 0, hardGreen));
+
+		var fullTolerance = new PreparedChromaKeySettings(0, 255, 0, 1, 0, 0);
+		Assert.Equal(((byte)255, (byte)0, (byte)0, (byte)0), Apply(255, 0, 0, 255, fullTolerance));
+	}
+
+	[Fact]
+	public async Task Chroma_key_disabled_node_is_byte_equivalent_and_order_with_color_grade_is_significant()
+	{
+		await using var fixture = await Fixture.CreateAsync(new CollectingRecordingWriter());
+		fixture.Runtime.LoadGraphicsOverlay("key-order.rgba", 1, 1, new byte[] { 0, 200, 80, 255 });
+		fixture.Runtime.SetGraphicsOverlay(true, 0, 0, 1);
+
+		using var baseline = fixture.Runtime.ProcessNextBoundary();
+		var baselinePixel = Pixel(baseline.ProgramPixels, fixture.Format, 0, 0);
+
+		var disabledKey = new PreparedCompositingProcessingNodeState(
+			"key-disabled",
+			PreparedCompositingProcessingNodeKind.ChromaKey,
+			false,
+			chromaKey: new PreparedChromaKeySettings(0, 255, 0, 0.1, 0.5, 1));
+		fixture.Runtime.SetCompositingLayerProcessingStack(
+			V1RuntimeHostService.BitmapGraphicsLayerId,
+			[disabledKey]);
+		using var disabled = fixture.Runtime.ProcessNextBoundary();
+		Assert.Equal(baselinePixel, Pixel(disabled.ProgramPixels, fixture.Format, 0, 0));
+
+		var key = new PreparedCompositingProcessingNodeState(
+			"key-primary",
+			PreparedCompositingProcessingNodeKind.ChromaKey,
+			true,
+			chromaKey: new PreparedChromaKeySettings(0, 255, 0, 0.1, 0.5, 0.6));
+		var grade = new PreparedCompositingProcessingNodeState(
+			"grade-primary",
+			PreparedCompositingProcessingNodeKind.ColorGrade,
+			true,
+			colorGrade: new PreparedColorGradeSettings(0.05, 1.2, 0.4));
+
+		fixture.Runtime.SetCompositingLayerProcessingStack(
+			V1RuntimeHostService.BitmapGraphicsLayerId,
+			[key, grade]);
+		using var keyThenGrade = fixture.Runtime.ProcessNextBoundary();
+		var keyThenGradePixel = Pixel(keyThenGrade.ProgramPixels, fixture.Format, 0, 0);
+
+		fixture.Runtime.SetCompositingLayerProcessingStack(
+			V1RuntimeHostService.BitmapGraphicsLayerId,
+			[grade, key]);
+		using var gradeThenKey = fixture.Runtime.ProcessNextBoundary();
+		var gradeThenKeyPixel = Pixel(gradeThenKey.ProgramPixels, fixture.Format, 0, 0);
+
+		Assert.NotEqual(keyThenGradePixel, gradeThenKeyPixel);
+		Assert.Equal(
+			new[] { "grade-primary", "key-primary" },
+			Assert.Single(
+				fixture.Runtime.Snapshot.CompositingLayers!,
+				layer => layer.LayerId == V1RuntimeHostService.BitmapGraphicsLayerId)
+				.ProcessingStack.Select(node => node.NodeId));
+	}
+
+	[Fact]
 	public async Task Ordered_processing_stack_executes_in_sequence_and_skips_disabled_nodes()
 	{
 		await using var fixture = await Fixture.CreateAsync(new CollectingRecordingWriter());

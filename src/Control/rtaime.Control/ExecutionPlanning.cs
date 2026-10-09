@@ -849,10 +849,21 @@ public static class CapabilityPlanningEngine
                             node.NodeId,
                             (PreparedCompositingProcessingNodeKind)(int)node.Kind,
                             node.Enabled,
-                            new PreparedColorGradeSettings(
-                                node.ColorGrade.Brightness,
-                                node.ColorGrade.Contrast,
-                                node.ColorGrade.Saturation))).ToArray())).ToArray());
+                            colorGrade: node.ColorGrade is null
+                                ? null
+                                : new PreparedColorGradeSettings(
+                                    node.ColorGrade.Brightness,
+                                    node.ColorGrade.Contrast,
+                                    node.ColorGrade.Saturation),
+                            chromaKey: node.ChromaKey is null
+                                ? null
+                                : new PreparedChromaKeySettings(
+                                    node.ChromaKey.KeyRed,
+                                    node.ChromaKey.KeyGreen,
+                                    node.ChromaKey.KeyBlue,
+                                    node.ChromaKey.Tolerance,
+                                    node.ChromaKey.Softness,
+                                    node.ChromaKey.SpillSuppression))).ToArray())).ToArray());
         var canonicalCompositing = preparedCompositing is null
             ? "-"
             : string.Join(
@@ -883,9 +894,15 @@ public static class CapabilityPlanningEngine
                                 node.NodeId,
                                 (int)node.Kind,
                                 node.Enabled ? "1" : "0",
-                                node.ColorGrade.Brightness.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
-                                node.ColorGrade.Contrast.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
-                                node.ColorGrade.Saturation.ToString("R", System.Globalization.CultureInfo.InvariantCulture)))),
+                                node.ColorGrade?.Brightness.ToString("R", System.Globalization.CultureInfo.InvariantCulture) ?? "-",
+                                node.ColorGrade?.Contrast.ToString("R", System.Globalization.CultureInfo.InvariantCulture) ?? "-",
+                                node.ColorGrade?.Saturation.ToString("R", System.Globalization.CultureInfo.InvariantCulture) ?? "-",
+                                node.ChromaKey?.KeyRed.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "-",
+                                node.ChromaKey?.KeyGreen.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "-",
+                                node.ChromaKey?.KeyBlue.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "-",
+                                node.ChromaKey?.Tolerance.ToString("R", System.Globalization.CultureInfo.InvariantCulture) ?? "-",
+                                node.ChromaKey?.Softness.ToString("R", System.Globalization.CultureInfo.InvariantCulture) ?? "-",
+                                node.ChromaKey?.SpillSuppression.ToString("R", System.Globalization.CultureInfo.InvariantCulture) ?? "-"))),
                     layer.ContentIdentity)));
 
         var preparedExecutionId = new PreparedExecutionId(PlanningIdentity.Create(

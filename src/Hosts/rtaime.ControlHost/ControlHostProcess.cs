@@ -893,9 +893,27 @@ public sealed class ControlHostProcess
 		expected.NodeId == actual.NodeId &&
 		(int)expected.Kind == (int)actual.Kind &&
 		expected.Enabled == actual.Enabled &&
-		expected.ColorGrade.Brightness == actual.ColorGrade.Brightness &&
-		expected.ColorGrade.Contrast == actual.ColorGrade.Contrast &&
-		expected.ColorGrade.Saturation == actual.ColorGrade.Saturation;
+		ColorGradeMatches(expected.ColorGrade, actual.ColorGrade) &&
+		ChromaKeyMatches(expected.ChromaKey, actual.ChromaKey);
+
+	private static bool ColorGradeMatches(ProductionColorGradeSettings? expected, PreparedColorGradeSettings? actual) =>
+		expected is null
+			? actual is null
+			: actual is not null &&
+				expected.Brightness == actual.Brightness &&
+				expected.Contrast == actual.Contrast &&
+				expected.Saturation == actual.Saturation;
+
+	private static bool ChromaKeyMatches(ProductionChromaKeySettings? expected, PreparedChromaKeySettings? actual) =>
+		expected is null
+			? actual is null
+			: actual is not null &&
+				expected.KeyRed == actual.KeyRed &&
+				expected.KeyGreen == actual.KeyGreen &&
+				expected.KeyBlue == actual.KeyBlue &&
+				expected.Tolerance == actual.Tolerance &&
+				expected.Softness == actual.Softness &&
+				expected.SpillSuppression == actual.SpillSuppression;
 
 	private string ResolveDurabilityDirectory()
 	{

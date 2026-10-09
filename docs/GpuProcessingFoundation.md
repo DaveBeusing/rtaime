@@ -268,13 +268,13 @@ source crop
 → scale
 → rotation around explicit anchor/pivot
 → translation
-→ bounded ordered Color Grade stack when configured
+→ bounded ordered typed processing stack (Color Grade and Chroma Key) when configured
 → existing GPU ordered RGBA composite
 ```
 
-Crop, transform and Color Grade do not create a second Program renderer. They prepare the same Runtime-owned dynamic layer surface that the existing `GpuProcessingProvider` consumes. Program, monitoring and recording therefore continue to observe the same post-composite Program pixels.
+Crop, transform, Color Grade and Chroma Key do not create a second Program renderer. They prepare the same Runtime-owned dynamic layer surface that the existing `GpuProcessingProvider` consumes. Program, monitoring and recording therefore continue to observe the same post-composite Program pixels.
 
-The processing model is deliberately bounded to an ordered stack of 0..4 typed nodes per supported layer. V1 currently defines only Color Grade, exposing Brightness, Contrast and Saturation. Stable node identities and explicit list order cross authoritative Control state, prepared execution, IPC, Runtime confirmation, Scene state and recovery. Disabled nodes remain configured but are skipped during execution. Duplicate identities, oversized stacks and unknown kinds fail closed. Arbitrary shader blobs, plugin-defined nodes, unbounded stacks and Keying are not implemented.
+The processing model is deliberately bounded to an ordered stack of 0..4 typed nodes per supported layer. The closed node-kind union defines Color Grade (Brightness, Contrast and Saturation) and a deterministic Chroma Key baseline (8-bit RGB key color plus normalized Tolerance, Softness and Spill Suppression). Stable node identities and explicit list order cross authoritative Control state, prepared execution, IPC, Runtime confirmation, Scene state and recovery. Disabled nodes remain configured but are skipped during execution. Chroma Key uses BT.709-derived normalized chroma distance, multiplies its matte with source alpha, and suppresses spill only in RGB. Duplicate identities, oversized stacks, unknown kinds and invalid kind-specific settings fail closed. Arbitrary shader blobs, plugin-defined nodes and unbounded stacks remain unsupported. The Chroma Key capability is a bounded typed production baseline, not a certified full broadcast keyer; HDR/wide-gamut keying and external key/fill qualification remain out of scope.
 
 A confirmed direct graphics or compositing mutation is not acknowledged as synchronized while Runtime still carries an older Control `AuthoritySnapshot`. ControlHost reapplies the current prepared execution within the same serialized mutation boundary when the authoritative Production Revision advances, then verifies that Runtime reports the same Production identity and revision. This prevents routine Inspector/graphics edits from being mistaken for recovery drift by the Runtime binding loop.
 
@@ -364,7 +364,7 @@ Hardware performance remains `UNVERIFIED` until measured on the qualified refere
 
 The Operator monitoring stack has a separate consolidated software qualification matrix in `docs/MonitoringVisualPerformanceQualification.md`. That matrix covers shared-resource lifetime, GPU/WPF geometry parity, bounded scope/ROI analysis, reconnect and sustained resource replacement, but it does not promote hosted-CI measurements into CUDA, driver, display or scan-out qualification.
 
-The Performance test project also measures authoritative transform plus Color Grade materialization at both supported 1080p50 and 1080p59.94 development formats. The regression guard uses a full-frame RGBA bitmap, retains the maximum four-node typed Color Grade stack, alternates bounded rotation updates, records total/per-mutation wall-clock cost and verifies that reconfiguration leaves the GPU active-surface baseline unchanged. The threshold is deliberately broad and protects against runaway managed materialization cost rather than asserting a real-time hardware budget. Reference-platform execution is still required before any hardware latency claim is made; no new hardware PASS claim is inferred from hosted CI.
+The Performance test project also measures authoritative transform plus typed processing materialization at both supported 1080p50 and 1080p59.94 development formats. The regression guard uses a full-frame RGBA bitmap, retains the maximum four-node mixed Color Grade/Chroma Key stack, alternates bounded rotation updates, records total/per-mutation wall-clock cost and verifies that reconfiguration leaves the GPU active-surface baseline unchanged. The threshold is deliberately broad and protects against runaway managed materialization cost rather than asserting a real-time hardware budget. Reference-platform execution is still required before any hardware latency claim is made; no new hardware PASS claim is inferred from hosted CI.
 
 ## Explicit evidence boundary
 

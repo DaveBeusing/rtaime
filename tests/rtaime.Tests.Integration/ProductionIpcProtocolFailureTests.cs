@@ -149,6 +149,37 @@ public sealed class ProductionIpcProtocolFailureTests
 		Assert.Equal("error", unknown.RootElement.GetProperty("messageType").GetString());
 		Assert.Equal("runtime.request.rejected", unknown.RootElement.GetProperty("payload").GetProperty("code").GetString());
 
+		await WriteEnvelopeAsync(
+			pipe,
+			"runtime.compositing.layer.processing",
+			Identity.New().ToString(),
+			Identity.New().ToString(),
+			new
+			{
+				layerId = "bitmap-graphics",
+				processingStack = new[]
+				{
+					new
+					{
+						nodeId = "invalid-key",
+						kind = 2,
+						enabled = true,
+						chromaKey = new
+						{
+							keyRed = 0,
+							keyGreen = 255,
+							keyBlue = 0,
+							tolerance = 1.01,
+							softness = 0.2,
+							spillSuppression = 0.5
+						}
+					}
+				}
+			});
+		using var invalidKey = await ReadEnvelopeAsync(pipe);
+		Assert.Equal("error", invalidKey.RootElement.GetProperty("messageType").GetString());
+		Assert.Equal("runtime.request.rejected", invalidKey.RootElement.GetProperty("payload").GetProperty("code").GetString());
+
 		stop.Cancel();
 		Assert.Equal(RuntimeHostExitCode.Success, await run);
 	}

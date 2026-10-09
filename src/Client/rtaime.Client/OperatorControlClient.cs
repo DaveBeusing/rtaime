@@ -291,27 +291,57 @@ public sealed record OperatorColorGradeDescriptor
     public double Saturation { get; }
 }
 
+public sealed record OperatorChromaKeyDescriptor
+{
+    public OperatorChromaKeyDescriptor(byte keyRed, byte keyGreen, byte keyBlue, double tolerance, double softness, double spillSuppression)
+    {
+        if (!double.IsFinite(tolerance) || tolerance is < 0 or > 1) throw new ArgumentOutOfRangeException(nameof(tolerance));
+        if (!double.IsFinite(softness) || softness is < 0 or > 1) throw new ArgumentOutOfRangeException(nameof(softness));
+        if (!double.IsFinite(spillSuppression) || spillSuppression is < 0 or > 1) throw new ArgumentOutOfRangeException(nameof(spillSuppression));
+        KeyRed = keyRed;
+        KeyGreen = keyGreen;
+        KeyBlue = keyBlue;
+        Tolerance = tolerance;
+        Softness = softness;
+        SpillSuppression = spillSuppression;
+    }
+
+    public byte KeyRed { get; }
+    public byte KeyGreen { get; }
+    public byte KeyBlue { get; }
+    public double Tolerance { get; }
+    public double Softness { get; }
+    public double SpillSuppression { get; }
+}
+
 public sealed record OperatorCompositingProcessingNodeDescriptor
 {
     public OperatorCompositingProcessingNodeDescriptor(
         string nodeId,
         int kind,
         bool enabled,
-        OperatorColorGradeDescriptor colorGrade)
+        OperatorColorGradeDescriptor? colorGrade = null,
+        OperatorChromaKeyDescriptor? chromaKey = null)
     {
         if (string.IsNullOrWhiteSpace(nodeId) || nodeId.Length > 64)
             throw new ArgumentException("Processing node identity is required and must not exceed 64 characters.", nameof(nodeId));
-        if (kind != 1) throw new ArgumentOutOfRangeException(nameof(kind));
+        if (kind is not 1 and not 2) throw new ArgumentOutOfRangeException(nameof(kind));
+        if (kind == 1 && (colorGrade is null || chromaKey is not null))
+            throw new ArgumentException("Color Grade nodes require only Color Grade settings.");
+        if (kind == 2 && (chromaKey is null || colorGrade is not null))
+            throw new ArgumentException("Chroma Key nodes require only Chroma Key settings.");
         NodeId = nodeId.Trim();
         Kind = kind;
         Enabled = enabled;
-        ColorGrade = colorGrade ?? throw new ArgumentNullException(nameof(colorGrade));
+        ColorGrade = colorGrade;
+        ChromaKey = chromaKey;
     }
 
     public string NodeId { get; }
     public int Kind { get; }
     public bool Enabled { get; }
-    public OperatorColorGradeDescriptor ColorGrade { get; }
+    public OperatorColorGradeDescriptor? ColorGrade { get; }
+    public OperatorChromaKeyDescriptor? ChromaKey { get; }
 }
 
 public sealed record OperatorCompositingLayerDescriptor

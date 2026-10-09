@@ -34,15 +34,22 @@ public sealed class ContractFoundationTests
     }
 
     [Fact]
-    public void Contract_versions_are_explicitly_v1_0()
+    public void Contract_versions_are_explicit_and_processing_union_is_versioned()
     {
-        var expected = new CompatibilityVersion(1, 0);
+        var v1 = new CompatibilityVersion(1, 0);
+        var processingV1_1 = new CompatibilityVersion(1, 1);
 
-        Assert.Equal(expected, ControlContractVersion.Current);
-        Assert.Equal(expected, RuntimeContractVersion.Current);
-        Assert.Equal(expected, MediaContractVersion.Current);
-        Assert.Equal(expected, ProviderContractVersion.Current);
-        Assert.Equal(expected, AIContractVersion.Current);
+        Assert.Equal(processingV1_1, ControlContractVersion.Current);
+        Assert.Equal(processingV1_1, RuntimeContractVersion.Current);
+        Assert.Equal(v1, MediaContractVersion.Current);
+        Assert.Equal(v1, ProviderContractVersion.Current);
+        Assert.Equal(v1, AIContractVersion.Current);
+        Assert.True(ControlContractVersion.IsSupported(v1));
+        Assert.True(RuntimeContractVersion.IsSupported(v1));
+        Assert.Equal(v1, ControlContractVersion.LegacyV1_0);
+        Assert.Equal(v1, RuntimeContractVersion.LegacyV1_0);
+        ControlContractVersion.EnsureSupported(v1);
+        RuntimeContractVersion.EnsureSupported(v1);
     }
 
     [Fact]
@@ -233,6 +240,63 @@ public sealed class ContractFoundationTests
     }
 
     [Fact]
+    public void Chroma_key_processing_contracts_validate_kind_specific_settings_and_round_trip()
+    {
+        var key = new ProductionChromaKeySettings(0, 255, 0, 0.15, 0.25, 0.5);
+        var node = new ProductionCompositingProcessingNodeState(
+            "key-primary",
+            ProductionCompositingProcessingNodeKind.ChromaKey,
+            true,
+            chromaKey: key);
+        var state = new ProductionCompositingState(
+            ProductionCompositingState.CurrentVersion,
+            [
+                new ProductionCompositingLayerState(
+                    ProductionCompositingLayerIds.BitmapGraphics,
+                    ProductionCompositingLayerKind.BitmapGraphics,
+                    0,
+                    true,
+                    255,
+                    0,
+                    0,
+                    1,
+                    "keyed.rgba",
+                    processingNode: node)
+            ]);
+
+        var copy = RoundTrip(state);
+        var restored = Assert.Single(copy.Layers).ProcessingNode;
+        Assert.NotNull(restored);
+        Assert.Equal(ProductionCompositingProcessingNodeKind.ChromaKey, restored.Kind);
+        Assert.Equal(key, restored.ChromaKey);
+        Assert.Null(restored.ColorGrade);
+
+        var prepared = new PreparedCompositingProcessingNodeState(
+            "key-primary",
+            PreparedCompositingProcessingNodeKind.ChromaKey,
+            true,
+            chromaKey: new PreparedChromaKeySettings(0, 255, 0, 0.15, 0.25, 0.5));
+        Assert.Equal(PreparedCompositingProcessingNodeKind.ChromaKey, prepared.Kind);
+        Assert.Null(prepared.ColorGrade);
+        Assert.NotNull(prepared.ChromaKey);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => new ProductionChromaKeySettings(0, 255, 0, -0.01, 0, 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new ProductionChromaKeySettings(0, 255, 0, 0, 1.01, 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new ProductionChromaKeySettings(0, 255, 0, 0, 0, 1.01));
+        Assert.Throws<ArgumentException>(() => new ProductionCompositingProcessingNodeState(
+            "invalid-key",
+            ProductionCompositingProcessingNodeKind.ChromaKey,
+            true,
+            colorGrade: new ProductionColorGradeSettings(0, 1, 1)));
+        Assert.Throws<ArgumentException>(() => new ProductionCompositingProcessingNodeState(
+            "mixed",
+            ProductionCompositingProcessingNodeKind.ColorGrade,
+            true,
+            colorGrade: new ProductionColorGradeSettings(0, 1, 1),
+            chromaKey: key));
+    }
+
+    [Fact]
     public void Compositing_processing_stack_is_ordered_bounded_and_rejects_invalid_identity()
     {
         var nodes = Enumerable.Range(0, ProductionCompositingProcessingStackLimits.MaximumNodeCount)
@@ -304,9 +368,9 @@ public sealed class ContractFoundationTests
             PreparedCompositingProcessingNodeKind.ColorGrade,
             node.Enabled,
             new PreparedColorGradeSettings(
-                node.ColorGrade.Brightness,
-                node.ColorGrade.Contrast,
-                node.ColorGrade.Saturation))).ToArray();
+                node.ColorGrade!.Brightness,
+                node.ColorGrade!.Contrast,
+                node.ColorGrade!.Saturation))).ToArray();
         var preparedLayer = new PreparedCompositingLayerState(
             ProductionCompositingLayerIds.BitmapGraphics,
             PreparedCompositingLayerKind.BitmapGraphics,
