@@ -237,17 +237,17 @@ public sealed class GraphicsOverlayIntegrationTests
 		}
 
 		var hardGreen = new PreparedChromaKeySettings(0, 255, 0, 0, 0, 0);
-		Assert.Equal((0, 255, 0, 0), Apply(0, 255, 0, 255, hardGreen));
-		Assert.Equal((255, 0, 0, 128), Apply(255, 0, 0, 128, hardGreen));
+		Assert.Equal(((byte)0, (byte)255, (byte)0, (byte)0), Apply(0, 255, 0, 255, hardGreen));
+		Assert.Equal(((byte)255, (byte)0, (byte)0, (byte)128), Apply(255, 0, 0, 128, hardGreen));
 
 		var softGreen = new PreparedChromaKeySettings(0, 255, 0, 0.1, 0.5, 0);
-		Assert.Equal((0, 200, 80, 68), Apply(0, 200, 80, 128, softGreen));
+		Assert.Equal(((byte)0, (byte)200, (byte)80, (byte)68), Apply(0, 200, 80, 128, softGreen));
 
 		var spillGreen = new PreparedChromaKeySettings(0, 255, 0, 0.1, 0.5, 1);
-		Assert.Equal((54, 178, 134, 68), Apply(0, 200, 80, 128, spillGreen));
+		Assert.Equal(((byte)54, (byte)178, (byte)134, (byte)68), Apply(0, 200, 80, 128, spillGreen));
 
 		var fullTolerance = new PreparedChromaKeySettings(0, 255, 0, 1, 0, 0);
-		Assert.Equal((255, 0, 0, 0), Apply(255, 0, 0, 255, fullTolerance));
+		Assert.Equal(((byte)255, (byte)0, (byte)0, (byte)0), Apply(255, 0, 0, 255, fullTolerance));
 	}
 
 	[Fact]
