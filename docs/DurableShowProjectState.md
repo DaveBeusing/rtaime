@@ -75,7 +75,7 @@ This ordering is important. A checkpoint containing an `ActiveSceneId` is valida
 
 When authoritative compositing state is recovered against a fresh RuntimeHost, retained graphics resources are restored before the authoritative execution is prepared and committed. Rotation, Anchor/Pivot, Crop and the complete ordered 0..4 processing stack are carried in that same versioned compositing state and are reapplied before confirmed layer order is restored. This preserves normal Runtime admission rules and avoids bypassing the existing commit boundary.
 
-The project document keeps these fields additive within `rtaime.show-project.v1`. New writes persist only the canonical `ProcessingStack` array. Older documents with one legacy `ProcessingNode` migrate deterministically to a one-element stack; documents that omit processing state deserialize to an empty stack, reproducing the previous rendering defaults. Persisted stacks larger than four nodes, duplicate node identities, unknown kinds, or documents carrying both representations fail closed.
+The project document keeps these fields additive within `rtaime.show-project.v1`. New writes persist only the canonical `ProcessingStack` array, including the kind-specific settings for Color Grade or Chroma Key. Older documents with one legacy Color Grade `ProcessingNode` migrate deterministically to a one-element stack; documents that omit processing state deserialize to an empty stack, reproducing the previous rendering defaults. Persisted stacks larger than four nodes, duplicate node identities, unknown kinds, invalid kind/settings combinations, or documents carrying both legacy and canonical representations fail closed.
 
 ## Authored state versus live state
 
@@ -119,7 +119,7 @@ The implementation fails closed for:
 - duplicate or invalid Scene identity;
 - Scene references to unavailable production sources;
 - invalid compositing schema or non-finite/out-of-range transform values;
-- invalid processing-node kind or Color Grade parameters;
+- invalid processing-node kind, Color Grade parameters, or Chroma Key parameters;
 - processing stacks larger than four nodes or with duplicate identities;
 - invalid retained bitmap metadata;
 - missing bitmap sidecar during required recovery;
