@@ -95,6 +95,46 @@ finally:
 	return $json | ConvertFrom-Json
 }
 
+function Test-PreActivationCatalogFailure {
+	param(
+		[Parameter(Mandatory)][string]$Python,
+		[Parameter(Mandatory)][string]$Bundle,
+		[Parameter(Mandatory)][string]$CaseRoot,
+		[Parameter(Mandatory)][ValidateSet('MISSING', 'AMBIGUOUS')][string]$Mode
+	)
+	$install = Join-Path $CaseRoot 'install'
+	$state = Join-Path $CaseRoot 'state'
+	$work = Join-Path $CaseRoot 'work'
+	& (Join-Path $repositoryRoot 'build/release/Install-OfflineRelease.ps1') -BundlePath $Bundle -InstallPath $install | Out-Null
+	$database = Join-Path $state 'qualification-state.db'
+	New-QualificationDatabase -Python $Python -Path $database
+	$manifestBefore = (Get-FileHash -LiteralPath (Join-Path $install 'bundle-manifest.json') -Algorithm SHA256).Hash.ToLowerInvariant()
+
+	$catalog = Get-Content -LiteralPath (Join-Path $install 'tools/state-upgrade-qualification-catalog.json') -Raw | ConvertFrom-Json
+	if ($Mode -eq 'MISSING') {
+		$catalog.databaseKinds[0].migrations = @()
+	} else {
+		$step = $catalog.databaseKinds[0].migrations[0]
+		$catalog.databaseKinds[0].migrations = @($step, $step)
+	}
+	$catalogPath = Join-Path $CaseRoot ("{0}-catalog.json" -f $Mode.ToLowerInvariant())
+	Write-JsonFile -Value $catalog -Path $catalogPath
+
+	$failedBeforeActivation = $false
+	try {
+		& (Join-Path $install 'tools/Invoke-CoordinatedUpgrade.ps1') -InstallPath $install -StateRoot $state -WorkPath $work -AcknowledgeProcessesStopped -QualificationMode -QualificationBundlePath $Bundle -QualificationStateCatalogPath $catalogPath | Out-Null
+	} catch {
+		$failedBeforeActivation = $_.Exception.Message -match 'Exactly one signed migration is required'
+	}
+	Assert-Condition $failedBeforeActivation "Qualification $Mode migration-chain case did not fail before software activation."
+	Assert-Condition (-not (Test-Path -LiteralPath "$install.rollback")) "Qualification $Mode migration-chain failure activated software."
+	Assert-Condition (-not (Test-Path -LiteralPath "$install.upgrade-recovery")) "Qualification $Mode migration-chain failure created recovery state before a validated migration chain existed."
+	$manifestAfter = (Get-FileHash -LiteralPath (Join-Path $install 'bundle-manifest.json') -Algorithm SHA256).Hash.ToLowerInvariant()
+	Assert-Condition ($manifestAfter -eq $manifestBefore) "Qualification $Mode migration-chain failure changed the installed software."
+	$databaseState = Get-QualificationDatabaseState -Python $Python -Path $database
+	Assert-Condition ([int]$databaseState.version -eq 1 -and $databaseState.markerTable -eq $false -and [string]$databaseState.integrity -eq 'ok') "Qualification $Mode migration-chain failure changed disposable state."
+}
+
 function Assert-RollbackGuard {
 	param([Parameter(Mandatory)][string]$InstallPath)
 	$rollback = Join-Path $InstallPath 'tools/Invoke-SoftwareRollback.ps1'
@@ -164,6 +204,9 @@ $failureInstalled = $false
 
 try {
 	New-Item -ItemType Directory -Path $root -Force | Out-Null
+
+	Test-PreActivationCatalogFailure -Python $python -Bundle $bundle -CaseRoot (Join-Path $root 'missing-chain') -Mode MISSING
+	Test-PreActivationCatalogFailure -Python $python -Bundle $bundle -CaseRoot (Join-Path $root 'ambiguous-chain') -Mode AMBIGUOUS
 
 	# Success path: clean install -> v1 state -> service-managed coordinated update -> v2 -> runtime readiness.
 	$successInstall = Join-Path $successRoot 'install'
@@ -251,6 +294,12 @@ try {
 		sourceCommit = $SourceCommit
 		overallStatus = 'PASS'
 		productionSchemaCatalogUnchanged = $true
+		preActivationValidation = [ordered]@{
+			missingMigrationChain = 'PASS'
+			ambiguousMigrationChain = 'PASS'
+			softwareActivationPrevented = $true
+			stateMutationPrevented = $true
+		}
 		successPath = [ordered]@{
 			status = 'PASS'
 			fromSchemaVersion = 1
@@ -276,6 +325,7 @@ try {
 	Write-JsonFile -Value $evidence -Path $evidenceFullPath
 
 	Write-Host 'Coordinated state upgrade release qualification PASS'
+	Write-Host 'Pre-activation missing/ambiguous migration rejection: PASS'
 	Write-Host 'Disposable migration: v1 -> v2 PASS'
 	Write-Host 'Service-managed post-maintenance runtime readiness: PASS'
 	Write-Host 'Injected post-migration failure recovery: PASS'
