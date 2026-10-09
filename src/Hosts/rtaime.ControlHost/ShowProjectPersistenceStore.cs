@@ -796,7 +796,8 @@ public sealed class ShowProjectPersistenceStore
 			source.Gain,
 			source.Muted,
 			source.FollowRoutedSource,
-			source.BusAssignments.Select(bus => bus.Value).ToArray())).ToArray(),
+			source.BusAssignments.Select(bus => bus.Value).ToArray(),
+			ToDocument(source.Equalizer))).ToArray(),
 		configuration.Crossfade is null ? null : new AudioCrossfadeDocument(
 			configuration.Crossfade.BusId.Value,
 			configuration.Crossfade.FromSourceId.ToString(),
@@ -816,6 +817,22 @@ public sealed class ShowProjectPersistenceStore
 			configuration.Ducking.ReleaseSamples),
 		(int)configuration.ClipStrategy);
 
+	private static AudioEqualizerDocument? ToDocument(AudioSourceEqualizerConfiguration? equalizer) =>
+		equalizer is null
+			? null
+			: new AudioEqualizerDocument(
+				new AudioShelfEqualizerBandDocument(equalizer.LowShelf.Enabled, equalizer.LowShelf.FrequencyHz, equalizer.LowShelf.GainDb),
+				new AudioBellEqualizerBandDocument(equalizer.Mid.Enabled, equalizer.Mid.FrequencyHz, equalizer.Mid.GainDb, equalizer.Mid.Q),
+				new AudioShelfEqualizerBandDocument(equalizer.HighShelf.Enabled, equalizer.HighShelf.FrequencyHz, equalizer.HighShelf.GainDb));
+
+	private static AudioSourceEqualizerConfiguration? FromDocument(AudioEqualizerDocument? equalizer) =>
+		equalizer is null
+			? null
+			: new AudioSourceEqualizerConfiguration(
+				new AudioLowShelfEqualizerBand(equalizer.LowShelf.Enabled, equalizer.LowShelf.FrequencyHz, equalizer.LowShelf.GainDb),
+				new AudioBellEqualizerBand(equalizer.Mid.Enabled, equalizer.Mid.FrequencyHz, equalizer.Mid.GainDb, equalizer.Mid.Q),
+				new AudioHighShelfEqualizerBand(equalizer.HighShelf.Enabled, equalizer.HighShelf.FrequencyHz, equalizer.HighShelf.GainDb));
+
 	private static AudioProductionConfiguration FromDocument(
 		AudioProductionDocument? document,
 		ProductionSpecification baseline)
@@ -833,7 +850,8 @@ public sealed class ShowProjectPersistenceStore
 					source.Gain,
 					source.Muted,
 					source.FollowRoutedSource,
-					(source.BusAssignments ?? Array.Empty<string>()).Select(bus => new AudioBusId(bus)).ToArray()))
+					(source.BusAssignments ?? Array.Empty<string>()).Select(bus => new AudioBusId(bus)).ToArray(),
+					FromDocument(source.Equalizer)))
 				.ToArray();
 			var crossfade = document.Crossfade is null ? null : new AudioCrossfadeConfiguration(
 				new AudioBusId(document.Crossfade.BusId),
@@ -1174,7 +1192,10 @@ public sealed class ShowProjectPersistenceStore
 
 	private sealed record AudioRoutingDocument(int Mode, string? BreakawaySourceId);
 	private sealed record AudioBusDocument(string BusId, double MasterGain, bool Muted);
-	private sealed record AudioSourceMixDocument(string SourceId, double Gain, bool Muted, bool FollowRoutedSource, string[]? BusAssignments);
+	private sealed record AudioShelfEqualizerBandDocument(bool Enabled, double FrequencyHz, double GainDb);
+	private sealed record AudioBellEqualizerBandDocument(bool Enabled, double FrequencyHz, double GainDb, double Q);
+	private sealed record AudioEqualizerDocument(AudioShelfEqualizerBandDocument LowShelf, AudioBellEqualizerBandDocument Mid, AudioShelfEqualizerBandDocument HighShelf);
+	private sealed record AudioSourceMixDocument(string SourceId, double Gain, bool Muted, bool FollowRoutedSource, string[]? BusAssignments, AudioEqualizerDocument? Equalizer = null);
 	private sealed record AudioCrossfadeDocument(string BusId, string FromSourceId, string ToSourceId, ulong StartSamplePosition, uint DurationSamples, int Law);
 	private sealed record AudioDuckingDocument(string BusId, bool Enabled, string SidechainSourceId, string[]? TargetSourceIds, double Threshold, double Attenuation, uint AttackSamples, uint HoldSamples, uint ReleaseSamples);
 	private sealed record AudioProductionDocument(ulong Revision, AudioBusDocument[]? Buses, AudioSourceMixDocument[]? Sources, AudioCrossfadeDocument? Crossfade, AudioDuckingDocument? Ducking, int ClipStrategy);
