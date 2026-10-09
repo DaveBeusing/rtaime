@@ -51,6 +51,8 @@ function Write-RecoveryLifecycle {
 	$document = [ordered]@{
 		copyright = 'Copyright (c) Dave Beusing <david.beusing@gmail.com>.'
 		schemaVersion = '1.0'
+		installPath = $installRoot
+		stateRoot = $stateRootFull
 		status = $Status
 		runtimeReadiness = $RuntimeReadiness
 		cleanupEligible = $CleanupEligible
