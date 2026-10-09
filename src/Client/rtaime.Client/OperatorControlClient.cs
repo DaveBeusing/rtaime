@@ -533,6 +533,18 @@ public sealed record OperatorAudioProgramDescriptor(
         new("—", "—", 1, false, 0, 0, 0, false, "UNKNOWN");
 }
 
+public sealed record OperatorAudioProductionBusDescriptor(
+    string BusId,
+    double MasterGain,
+    bool Muted,
+    double LeftPeak,
+    double RightPeak,
+    double PreClipPeak,
+    bool Clipping,
+    ulong ClippedSampleValues,
+    int ActiveSourceCount,
+    int MissingSourceCount);
+
 public sealed record OperatorAudioProductionDescriptor(
     AudioProductionConfiguration Configuration,
     double LeftPeak,
@@ -545,7 +557,8 @@ public sealed record OperatorAudioProductionDescriptor(
     bool SidechainAvailable,
     double? CrossfadeProgress,
     int ActiveSourceCount,
-    int MissingSourceCount)
+    int MissingSourceCount,
+    IReadOnlyList<OperatorAudioProductionBusDescriptor>? Buses = null)
 {
     public static OperatorAudioProductionDescriptor? Unavailable => null;
 }
