@@ -415,6 +415,8 @@ Assert-Condition ($stableVerifierText -match 'Test-PositiveInteger' -and $stable
 Assert-Condition ($stableVerifierText -match 'Get-StableVersionLine' -and $stableVerifierText -match 'matchingSupportedLines') "Stable readiness must require the current Stable version line to be explicitly SUPPORTED."
 Assert-Condition ($stableVerifierText -match 'Test-PassedQualificationEvidence' -and $stableVerifierText -match 'Test-SupportedPlatformConfiguration') "Stable readiness must independently validate evidence-backed supported platform tuples."
 Assert-Condition ($stableVerifierText -match 'productionSigningTrust' -and $stableVerifierText -match 'requiredHardwareEvidence') "Stable readiness verifier must evaluate production trust and hardware evidence."
+Assert-Condition ($stableVerifierText -match 'coordinatedStateUpgradeQualification' -and $stableVerifierText -match 'CoordinatedUpgradeQualificationPath') "Stable readiness must consume exact-source packaged coordinated state-upgrade qualification evidence."
+Assert-Condition ($stableVerifierText -match 'productionSchemaCatalogUnchanged' -and $stableVerifierText -match 'originalUpgradeStatus') "Stable readiness must validate migration qualification and original-failure recovery semantics."
 Assert-Condition ($stableVerifierText -match 'KNOWN_ISSUES') "Stable readiness verifier must evaluate known-issues evidence."
 Assert-Condition ($stableVerifierText -match 'Test-ReleaseEvidence\.ps1') "Stable readiness verifier must validate supplied release evidence."
 Assert-Condition ($stableVerifierText -match 'ExpectedSourceCommit' -and $stableVerifierText -match 'sourceIdentity' -and $stableVerifierText -match 'git -C \$repositoryRoot rev-parse HEAD') "Stable readiness must bind to the exact checked-out Git source identity."
@@ -441,8 +443,10 @@ try {
 	Assert-Condition ($correlation.Count -eq 1 -and [string]$correlation[0].status -eq "UNVERIFIED") "Candidate/evidence correlation must remain UNVERIFIED when no release artifacts are supplied."
 	$trust = @($readiness.domains | Where-Object { [string]$_.name -eq "productionSigningTrust" })
 	$hardware = @($readiness.domains | Where-Object { [string]$_.name -eq "requiredHardwareEvidence" })
+	$stateUpgrade = @($readiness.domains | Where-Object { [string]$_.name -eq "coordinatedStateUpgradeQualification" })
 	Assert-Condition ($trust.Count -eq 1 -and [string]$trust[0].status -eq "UNVERIFIED") "Missing production trust must keep readiness UNVERIFIED."
 	Assert-Condition ($hardware.Count -eq 1 -and [string]$hardware[0].status -eq "UNVERIFIED") "Missing physical evidence must keep readiness UNVERIFIED."
+	Assert-Condition ($stateUpgrade.Count -eq 1 -and [string]$stateUpgrade[0].status -eq "UNVERIFIED") "Missing packaged coordinated state-upgrade evidence must keep readiness UNVERIFIED."
 } finally {
 	if (Test-Path -LiteralPath $tempReadiness) { Remove-Item -LiteralPath $tempReadiness -Force }
 }
