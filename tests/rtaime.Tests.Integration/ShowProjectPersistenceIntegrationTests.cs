@@ -119,10 +119,10 @@ public sealed class ShowProjectPersistenceIntegrationTests
 									true,
 									new ProductionColorGradeSettings(0.1, 1.2, 0.8)),
 								new ProductionCompositingProcessingNodeState(
-									"grade-secondary",
-									ProductionCompositingProcessingNodeKind.ColorGrade,
+									"key-primary",
+									ProductionCompositingProcessingNodeKind.ChromaKey,
 									false,
-									new ProductionColorGradeSettings(-0.1, 0.9, 1.1))
+									chromaKey: new ProductionChromaKeySettings(0, 255, 0, 0.15, 0.25, 0.5))
 							]),
 						new ProductionCompositingLayerState(
 							ProductionCompositingLayerIds.ProductionCg,
@@ -202,12 +202,19 @@ public sealed class ShowProjectPersistenceIntegrationTests
 				Assert.Equal(0.20, reopenedBitmapLayer.CropBottom, 6);
 				Assert.Equal(2, reopenedBitmapLayer.ProcessingStack.Count);
 				Assert.Equal("grade-primary", reopenedBitmapLayer.ProcessingStack[0].NodeId);
-				Assert.Equal("grade-secondary", reopenedBitmapLayer.ProcessingStack[1].NodeId);
+				Assert.Equal("key-primary", reopenedBitmapLayer.ProcessingStack[1].NodeId);
 				Assert.True(reopenedBitmapLayer.ProcessingStack[0].Enabled);
 				Assert.False(reopenedBitmapLayer.ProcessingStack[1].Enabled);
-				Assert.Equal(0.1, reopenedBitmapLayer.ProcessingStack[0].ColorGrade.Brightness, 6);
-				Assert.Equal(1.2, reopenedBitmapLayer.ProcessingStack[0].ColorGrade.Contrast, 6);
-				Assert.Equal(0.8, reopenedBitmapLayer.ProcessingStack[0].ColorGrade.Saturation, 6);
+				Assert.Equal(0.1, reopenedBitmapLayer.ProcessingStack[0].ColorGrade!.Brightness, 6);
+				Assert.Equal(1.2, reopenedBitmapLayer.ProcessingStack[0].ColorGrade!.Contrast, 6);
+				Assert.Equal(0.8, reopenedBitmapLayer.ProcessingStack[0].ColorGrade!.Saturation, 6);
+				Assert.Equal(ProductionCompositingProcessingNodeKind.ChromaKey, reopenedBitmapLayer.ProcessingStack[1].Kind);
+				Assert.Equal((byte)0, reopenedBitmapLayer.ProcessingStack[1].ChromaKey!.KeyRed);
+				Assert.Equal((byte)255, reopenedBitmapLayer.ProcessingStack[1].ChromaKey!.KeyGreen);
+				Assert.Equal((byte)0, reopenedBitmapLayer.ProcessingStack[1].ChromaKey!.KeyBlue);
+				Assert.Equal(0.15, reopenedBitmapLayer.ProcessingStack[1].ChromaKey!.Tolerance, 6);
+				Assert.Equal(0.25, reopenedBitmapLayer.ProcessingStack[1].ChromaKey!.Softness, 6);
+				Assert.Equal(0.5, reopenedBitmapLayer.ProcessingStack[1].ChromaKey!.SpillSuppression, 6);
 				Assert.NotNull(reopened.AudioRouting);
 				Assert.Equal(DurableAudioRoutingState.BreakawayMode, reopened.AudioRouting!.Mode);
 				Assert.Equal(new MediaSourceId(specification.Sources[1].SourceId.Value), reopened.AudioRouting.BreakawaySourceId);
