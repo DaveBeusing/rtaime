@@ -7,14 +7,16 @@ namespace rtaime.Runtime.Contracts;
 
 public static class RuntimeContractVersion
 {
+    public static CompatibilityVersion LegacyV1_0 { get; } = new(1, 0);
     public static CompatibilityVersion Current { get; } = new(1, 1);
 
-    public static bool IsSupported(CompatibilityVersion version) => version == Current;
+    public static bool IsSupported(CompatibilityVersion version) =>
+        version == LegacyV1_0 || version == Current;
 
     public static void EnsureSupported(CompatibilityVersion version)
     {
         if (!IsSupported(version))
-            throw new NotSupportedException($"Unsupported Runtime contract version '{version}'. Supported version is '{Current}'.");
+            throw new NotSupportedException($"Unsupported Runtime contract version '{version}'. Supported versions are '{LegacyV1_0}' and '{Current}'.");
     }
 }
 
