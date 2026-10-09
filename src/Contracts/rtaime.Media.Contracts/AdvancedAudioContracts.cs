@@ -32,6 +32,106 @@ public enum AudioClipStrategy
 	HardClip = 1
 }
 
+public static class AudioEqualizerLimits
+{
+	public const double MinimumFrequencyHz = 20d;
+	public const double MaximumFrequencyHz = 20_000d;
+	public const double MinimumGainDb = -18d;
+	public const double MaximumGainDb = 18d;
+	public const double MinimumBellQ = 0.1d;
+	public const double MaximumBellQ = 10d;
+}
+
+public sealed record AudioLowShelfEqualizerBand
+{
+	public AudioLowShelfEqualizerBand(bool enabled, double frequencyHz, double gainDb)
+	{
+		ValidateFrequency(frequencyHz);
+		ValidateGain(gainDb);
+		Enabled = enabled;
+		FrequencyHz = frequencyHz;
+		GainDb = gainDb;
+	}
+
+	public bool Enabled { get; }
+	public double FrequencyHz { get; }
+	public double GainDb { get; }
+
+	private static void ValidateFrequency(double value)
+	{
+		if (!double.IsFinite(value) || value is < AudioEqualizerLimits.MinimumFrequencyHz or > AudioEqualizerLimits.MaximumFrequencyHz)
+			throw new ArgumentOutOfRangeException(nameof(value), $"EQ frequency must be finite and in the inclusive range {AudioEqualizerLimits.MinimumFrequencyHz}..{AudioEqualizerLimits.MaximumFrequencyHz} Hz.");
+	}
+
+	private static void ValidateGain(double value)
+	{
+		if (!double.IsFinite(value) || value is < AudioEqualizerLimits.MinimumGainDb or > AudioEqualizerLimits.MaximumGainDb)
+			throw new ArgumentOutOfRangeException(nameof(value), $"EQ gain must be finite and in the inclusive range {AudioEqualizerLimits.MinimumGainDb}..{AudioEqualizerLimits.MaximumGainDb} dB.");
+	}
+}
+
+public sealed record AudioBellEqualizerBand
+{
+	public AudioBellEqualizerBand(bool enabled, double frequencyHz, double gainDb, double q)
+	{
+		if (!double.IsFinite(frequencyHz) || frequencyHz is < AudioEqualizerLimits.MinimumFrequencyHz or > AudioEqualizerLimits.MaximumFrequencyHz)
+			throw new ArgumentOutOfRangeException(nameof(frequencyHz), $"EQ frequency must be finite and in the inclusive range {AudioEqualizerLimits.MinimumFrequencyHz}..{AudioEqualizerLimits.MaximumFrequencyHz} Hz.");
+		if (!double.IsFinite(gainDb) || gainDb is < AudioEqualizerLimits.MinimumGainDb or > AudioEqualizerLimits.MaximumGainDb)
+			throw new ArgumentOutOfRangeException(nameof(gainDb), $"EQ gain must be finite and in the inclusive range {AudioEqualizerLimits.MinimumGainDb}..{AudioEqualizerLimits.MaximumGainDb} dB.");
+		if (!double.IsFinite(q) || q is < AudioEqualizerLimits.MinimumBellQ or > AudioEqualizerLimits.MaximumBellQ)
+			throw new ArgumentOutOfRangeException(nameof(q), $"EQ Q must be finite and in the inclusive range {AudioEqualizerLimits.MinimumBellQ}..{AudioEqualizerLimits.MaximumBellQ}.");
+		Enabled = enabled;
+		FrequencyHz = frequencyHz;
+		GainDb = gainDb;
+		Q = q;
+	}
+
+	public bool Enabled { get; }
+	public double FrequencyHz { get; }
+	public double GainDb { get; }
+	public double Q { get; }
+}
+
+public sealed record AudioHighShelfEqualizerBand
+{
+	public AudioHighShelfEqualizerBand(bool enabled, double frequencyHz, double gainDb)
+	{
+		if (!double.IsFinite(frequencyHz) || frequencyHz is < AudioEqualizerLimits.MinimumFrequencyHz or > AudioEqualizerLimits.MaximumFrequencyHz)
+			throw new ArgumentOutOfRangeException(nameof(frequencyHz), $"EQ frequency must be finite and in the inclusive range {AudioEqualizerLimits.MinimumFrequencyHz}..{AudioEqualizerLimits.MaximumFrequencyHz} Hz.");
+		if (!double.IsFinite(gainDb) || gainDb is < AudioEqualizerLimits.MinimumGainDb or > AudioEqualizerLimits.MaximumGainDb)
+			throw new ArgumentOutOfRangeException(nameof(gainDb), $"EQ gain must be finite and in the inclusive range {AudioEqualizerLimits.MinimumGainDb}..{AudioEqualizerLimits.MaximumGainDb} dB.");
+		Enabled = enabled;
+		FrequencyHz = frequencyHz;
+		GainDb = gainDb;
+	}
+
+	public bool Enabled { get; }
+	public double FrequencyHz { get; }
+	public double GainDb { get; }
+}
+
+public sealed record AudioSourceEqualizerConfiguration
+{
+	public AudioSourceEqualizerConfiguration(
+		AudioLowShelfEqualizerBand lowShelf,
+		AudioBellEqualizerBand mid,
+		AudioHighShelfEqualizerBand highShelf)
+	{
+		LowShelf = lowShelf ?? throw new ArgumentNullException(nameof(lowShelf));
+		Mid = mid ?? throw new ArgumentNullException(nameof(mid));
+		HighShelf = highShelf ?? throw new ArgumentNullException(nameof(highShelf));
+	}
+
+	public AudioLowShelfEqualizerBand LowShelf { get; }
+	public AudioBellEqualizerBand Mid { get; }
+	public AudioHighShelfEqualizerBand HighShelf { get; }
+
+	public bool HasActiveProcessing =>
+		(LowShelf.Enabled && LowShelf.GainDb != 0d) ||
+		(Mid.Enabled && Mid.GainDb != 0d) ||
+		(HighShelf.Enabled && HighShelf.GainDb != 0d);
+}
+
 public sealed record AudioProductionBusConfiguration
 {
 	public AudioProductionBusConfiguration(AudioBusId busId, double masterGain, bool muted)
@@ -57,7 +157,8 @@ public sealed record AudioProductionSourceConfiguration
 		double gain,
 		bool muted,
 		bool followRoutedSource,
-		IReadOnlyList<AudioBusId> busAssignments)
+		IReadOnlyList<AudioBusId> busAssignments,
+		AudioSourceEqualizerConfiguration? equalizer = null)
 	{
 		ArgumentNullException.ThrowIfNull(busAssignments);
 		if (busAssignments.Count > AudioProductionLimits.MaximumBuses)
@@ -73,6 +174,7 @@ public sealed record AudioProductionSourceConfiguration
 		Muted = muted;
 		FollowRoutedSource = followRoutedSource;
 		_busAssignments = busAssignments.ToArray();
+		Equalizer = equalizer;
 	}
 
 	public MediaSourceId SourceId { get; }
@@ -80,6 +182,7 @@ public sealed record AudioProductionSourceConfiguration
 	public bool Muted { get; }
 	public bool FollowRoutedSource { get; }
 	public IReadOnlyList<AudioBusId> BusAssignments => _busAssignments;
+	public AudioSourceEqualizerConfiguration? Equalizer { get; }
 
 	public bool IsAssignedTo(AudioBusId busId) => Array.IndexOf(_busAssignments, busId) >= 0;
 }
