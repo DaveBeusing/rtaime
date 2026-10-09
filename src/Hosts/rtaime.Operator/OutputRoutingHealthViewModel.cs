@@ -430,10 +430,14 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 		return output.Failure is not null ? "FAULTED" : output.Lifecycle;
 	}
 
-	private static string FormatNetworkBitrate(OperatorNetworkOutputDescriptor? output) =>
-		output is null
-			? Unavailable
-			: $"{output.VideoBitRate / 1_000_000d:0.##} Mb/s H.264 + {output.AudioBitRate / 1_000d:0} kb/s AAC";
+	private static string FormatNetworkBitrate(OperatorNetworkOutputDescriptor? output)
+	{
+		if (output is null)
+			return Unavailable;
+		if (string.Equals(output.Protocol, "NDI", StringComparison.OrdinalIgnoreCase))
+			return "NDI High Bandwidth · 48 kHz Float32";
+		return $"{output.VideoBitRate / 1_000_000d:0.##} Mb/s H.264 + {output.AudioBitRate / 1_000d:0} kb/s AAC";
+	}
 
 	private static string FormatNetworkQueue(OperatorNetworkOutputDescriptor? output) =>
 		output is null ? Unavailable : $"{output.QueueDepth} queued";
