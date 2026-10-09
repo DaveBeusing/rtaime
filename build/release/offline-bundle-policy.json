@@ -38,6 +38,7 @@
 		"build/update/update-policy.json",
 		"build/update/coordinated-upgrade-policy.json",
 		"build/state/state-upgrade-catalog.json",
+		"build/state/state-upgrade-qualification-catalog.json",
 		"build/operations/host-lifecycle-policy.json",
 		"build/update/Get-InstalledReleaseState.ps1",
 		"build/update/Resolve-UpdateDiscovery.ps1",
