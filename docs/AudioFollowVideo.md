@@ -344,3 +344,10 @@ Those remain `UNVERIFIED` until produced on the declared Reference Platform and 
 Audio Follow Video continues to resolve the routed source and sample window once per production boundary. The Advanced Audio engine then processes every configured authoritative bus for that same absolute 48 kHz window. Output-role bus selection occurs after the bounded mixes have been materialized; it does not create an additional AFV engine, clock or mixer.
 
 Legacy output roles default to the `program` bus. Recording remains Program-bus only.
+
+## Advanced-audio qualification linkage
+
+Audio Follow Video remains the routing/timing foundation used by the integrated qualification in [Advanced Audio Processing Qualification](AdvancedAudioProcessingQualification.md). The retained long-run evidence verifies exact 48 kHz sample-position continuity for both 50/1 and 60000/1001 production cadence while the expanded mixer/DSP qualification verifies that advanced processing does not introduce a second timing authority.
+
+This remains software timing evidence. Physical embedded-audio continuity, external device/driver latency and hardware clock/genlock behavior remain **UNVERIFIED** without dedicated reference-platform evidence.
+

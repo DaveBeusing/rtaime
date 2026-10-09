@@ -340,3 +340,12 @@ The production audio model executes between one and four configured buses throug
 Governed Program/Aux output roles carry an authoritative audio-bus identity. Legacy roles without an explicit mapping resolve to `program`. Aux may select another confirmed bus; an invalid or missing bus reference fails closed before committed Runtime state changes. Providers consume the selected final bus payload and never remix it.
 
 Recording remains intentionally bound to the `program` bus even when a Program or Aux output role selects another bus. This does not add another mixer, wall-clock scheduler, unbounded queue, surround layout, generic DSP/plugin host, arbitrary dynamics ordering, multiband compression or true-peak processing.
+
+## Integrated qualification
+
+The complete advanced-audio path is qualified as one bounded Runtime-owned system in [Advanced Audio Processing Qualification](AdvancedAudioProcessingQualification.md).
+
+That retained software-evidence matrix covers the canonical processing-order golden vector, governed Client/Control/Runtime configuration, 8-source/4-bus sustained processing, exact 50/59.94 sample continuity, recording/output final-bus reuse, restart semantics and failure isolation.
+
+Hosted software qualification does not convert physical embedded-audio continuity, driver/DMA latency, hardware clock/genlock behavior, analog performance, loudness compliance or oversampled true-peak behavior into verified claims. Those properties remain **UNVERIFIED** until dedicated reference-platform evidence exists.
+

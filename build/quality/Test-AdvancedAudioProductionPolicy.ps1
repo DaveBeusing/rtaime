@@ -21,6 +21,7 @@ $enginePath = Join-Path $repositoryRoot "src/Media/rtaime.Media/AudioProduction.
 $equalizerPath = Join-Path $repositoryRoot "src/Media/rtaime.Media/BoundedParametricEqualizer.cs"
 $dynamicsPath = Join-Path $repositoryRoot "src/Media/rtaime.Media/BoundedBusDynamics.cs"
 $runtimePath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/V1RuntimeHostService.cs"
+$mediaIoVerticalSlicePath = Join-Path $repositoryRoot "src/Hosts/rtaime.RuntimeHost/RuntimeMediaIoVerticalSlice.cs"
 $operatorPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/OperatorViewModel.cs"
 $operatorUiPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/MainWindow.xaml"
 $operatorMixerUiPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/AudioMixerControl.xaml"
@@ -37,8 +38,16 @@ $recordingIntegrationPath = Join-Path $repositoryRoot "tests/rtaime.Tests.Integr
 $productionIpcIntegrationPath = Join-Path $repositoryRoot "tests/rtaime.Tests.Integration/ProductionIpcIntegrationTests.cs"
 $showProjectPersistenceIntegrationPath = Join-Path $repositoryRoot "tests/rtaime.Tests.Integration/ShowProjectPersistenceIntegrationTests.cs"
 $documentationPath = Join-Path $repositoryRoot "docs/AdvancedAudioProduction.md"
+$qualificationUnitPath = Join-Path $repositoryRoot "tests/rtaime.Tests.Unit/AdvancedAudioProcessingQualificationTests.cs"
+$qualificationIntegrationPath = Join-Path $repositoryRoot "tests/rtaime.Tests.Integration/AdvancedAudioQualificationIntegrationTests.cs"
+$qualificationPerformancePath = Join-Path $repositoryRoot "tests/rtaime.Tests.Performance/AdvancedAudioProcessingQualificationPerformanceTests.cs"
+$timingPerformancePath = Join-Path $repositoryRoot "tests/rtaime.Tests.Performance/AudioFollowVideoPerformanceTests.cs"
+$networkOutputTestsPath = Join-Path $repositoryRoot "tests/rtaime.Tests.Unit/NetworkOutputFoundationTests.cs"
+$recordingFailurePath = Join-Path $repositoryRoot "tests/rtaime.Tests.Failure/RecordingFailureIsolationTests.cs"
+$audioMixerOperatorTestsPath = Join-Path $repositoryRoot "tests/rtaime.Tests.Operator/AudioMixerOperatorSurfaceTests.cs"
+$qualificationDocumentationPath = Join-Path $repositoryRoot "docs/AdvancedAudioProcessingQualification.md"
 
-foreach ($path in @($contractsPath, $enginePath, $equalizerPath, $dynamicsPath, $runtimePath, $operatorPath, $operatorUiPath, $operatorMixerUiPath, $operatorMixerViewModelPath, $unitPath, $performancePath, $equalizerUnitContractPath, $equalizerUnitProcessingPath, $equalizerPerformancePath, $dynamicsUnitContractPath, $dynamicsUnitProcessingPath, $dynamicsPerformancePath, $recordingIntegrationPath, $productionIpcIntegrationPath, $showProjectPersistenceIntegrationPath, $documentationPath)) {
+foreach ($path in @($contractsPath, $enginePath, $equalizerPath, $dynamicsPath, $runtimePath, $mediaIoVerticalSlicePath, $operatorPath, $operatorUiPath, $operatorMixerUiPath, $operatorMixerViewModelPath, $unitPath, $performancePath, $equalizerUnitContractPath, $equalizerUnitProcessingPath, $equalizerPerformancePath, $dynamicsUnitContractPath, $dynamicsUnitProcessingPath, $dynamicsPerformancePath, $recordingIntegrationPath, $productionIpcIntegrationPath, $showProjectPersistenceIntegrationPath, $documentationPath, $qualificationUnitPath, $qualificationIntegrationPath, $qualificationPerformancePath, $timingPerformancePath, $networkOutputTestsPath, $recordingFailurePath, $audioMixerOperatorTestsPath, $qualificationDocumentationPath)) {
 	Assert-Condition (Test-Path -LiteralPath $path -PathType Leaf) "Required advanced-audio artifact is missing: '$path'."
 }
 
@@ -47,6 +56,7 @@ $engine = Get-Content -LiteralPath $enginePath -Raw
 $equalizer = Get-Content -LiteralPath $equalizerPath -Raw
 $dynamics = Get-Content -LiteralPath $dynamicsPath -Raw
 $runtime = Get-Content -LiteralPath $runtimePath -Raw
+$mediaIoVerticalSlice = Get-Content -LiteralPath $mediaIoVerticalSlicePath -Raw
 $operator = Get-Content -LiteralPath $operatorPath -Raw
 $operatorUi = Get-Content -LiteralPath $operatorUiPath -Raw
 $operatorMixerUi = Get-Content -LiteralPath $operatorMixerUiPath -Raw
@@ -63,6 +73,14 @@ $recordingIntegration = Get-Content -LiteralPath $recordingIntegrationPath -Raw
 $productionIpcIntegration = Get-Content -LiteralPath $productionIpcIntegrationPath -Raw
 $showProjectPersistenceIntegration = Get-Content -LiteralPath $showProjectPersistenceIntegrationPath -Raw
 $documentation = Get-Content -LiteralPath $documentationPath -Raw
+$qualificationUnit = Get-Content -LiteralPath $qualificationUnitPath -Raw
+$qualificationIntegration = Get-Content -LiteralPath $qualificationIntegrationPath -Raw
+$qualificationPerformance = Get-Content -LiteralPath $qualificationPerformancePath -Raw
+$timingPerformance = Get-Content -LiteralPath $timingPerformancePath -Raw
+$networkOutputTests = Get-Content -LiteralPath $networkOutputTestsPath -Raw
+$recordingFailure = Get-Content -LiteralPath $recordingFailurePath -Raw
+$audioMixerOperatorTests = Get-Content -LiteralPath $audioMixerOperatorTestsPath -Raw
+$qualificationDocumentation = Get-Content -LiteralPath $qualificationDocumentationPath -Raw
 
 Assert-Condition ($contracts -match 'MaximumSources\s*=\s*8') "Advanced audio source count must remain explicitly bounded."
 Assert-Condition ($contracts -match 'MaximumBuses\s*=\s*4') "Advanced audio bus count must remain explicitly bounded."
@@ -74,6 +92,7 @@ Assert-Condition ($contracts -match 'AudioSourceEqualizerConfiguration' -and $co
 Assert-Condition ($contracts -match 'MinimumFrequencyHz\s*=\s*20' -and $contracts -match 'MaximumFrequencyHz\s*=\s*20_000' -and $contracts -match 'MinimumGainDb\s*=\s*-18' -and $contracts -match 'MaximumGainDb\s*=\s*18') "Equalizer frequency and gain limits must remain explicitly bounded."
 Assert-Condition ($contracts -match 'AudioBusCompressorConfiguration' -and $contracts -match 'AudioBusSamplePeakLimiterConfiguration' -and $contracts -match 'AudioBusDynamicsConfiguration') "Bus dynamics topology must remain typed and fixed to compressor then sample-peak limiter."
 Assert-Condition ($contracts -match 'MinimumCompressorThresholdDbFs\s*=\s*-60' -and $contracts -match 'MaximumCompressorRatio\s*=\s*20' -and $contracts -match 'MinimumAttackMilliseconds\s*=\s*0\.1' -and $contracts -match 'MaximumReleaseMilliseconds\s*=\s*5_000' -and $contracts -match 'MinimumLimiterCeilingDbFs\s*=\s*-24') "Bus dynamics parameters must remain explicitly bounded."
+Assert-Condition ($contracts -notmatch 'AJA|NTV2|DeckLink|Blackmagic|MediaFoundation|SrtNetwork') "Stable advanced-audio contracts must remain provider-neutral."
 
 Assert-Condition ($engine -match 'ProcessBus' -and $engine -match 'ReadOnlySpan<AudioProductionSourceBuffer>' -and $engine -match 'Span<float> destination') "Mixer hot path must retain span-based bounded processing."
 Assert-Condition ($engine -match 'Math\.Cos\(progress \* Math\.PI \* 0\.5\)' -and $engine -match 'Math\.Sin\(progress \* Math\.PI \* 0\.5\)') "Equal-power crossfade law must remain deterministic."
@@ -93,6 +112,7 @@ Assert-Condition ($runtime -match 'AudioProductionEngine') "RuntimeHost must own
 Assert-Condition ($runtime -match '_audioBusMixSamples' -and $runtime -match 'ProcessConfiguredAudioBusesUnsafe') "RuntimeHost must reuse bounded per-bus audio mix buffers through one processing engine."
 Assert-Condition ($runtime -match 'TryRecordCommittedProgram\(execution, output\.Descriptor, programRecordingAudioBuffer\)') "Recording must consume the final Program audio descriptor."
 Assert-Condition ($runtime -match 'programAudioBuffer,\s*programAudioPayload') "Output paths must consume the same final Program audio payload."
+Assert-Condition ($mediaIoVerticalSlice -match 'boundary\.ProgramAudioPayload' -and $mediaIoVerticalSlice -match 'boundary\.ProgramAudioBuffer\.Timing' -and $mediaIoVerticalSlice -match 'TrySubmitProgram') "Physical Media I/O Program output must consume the final Runtime-owned Program audio payload without an independent remix."
 Assert-Condition ($runtime -notmatch 'ControlHost') "Runtime audio processing must not depend on ControlHost implementation."
 
 Assert-Condition ($operator -match 'SetAudioProductionAsync') "Operator advanced-audio mutations must use the governed client/control path."
@@ -119,5 +139,15 @@ Assert-Condition ($showProjectPersistenceIntegration -match 'Audio_bus_dynamics_
 Assert-Condition ($documentation -match 'ControlHost owns authoritative configuration' -and $documentation -match 'No wall-clock or UI timer') "Advanced-audio documentation must retain authority and timing boundaries."
 Assert-Condition ($documentation -match 'Bounded per-source equalizer' -and $documentation -match '20\.\.20,000 Hz' -and $documentation -match 'transposed direct form II') "Advanced-audio documentation must describe the bounded equalizer topology, limits and processing form."
 Assert-Condition ($documentation -match 'Bounded per-bus dynamics' -and $documentation -match 'sample-peak limiter' -and $documentation -match 'There is no look-ahead, oversampling or true-peak claim') "Advanced-audio documentation must retain bounded compressor/sample-peak semantics without a true-peak claim."
+Assert-Condition ($qualificationUnit -match 'Complete_processing_order_matches_golden_vector' -and $qualificationUnit -match '0\.5011872f' -and $qualificationUnit -match 'LimiterHitCount' -and $qualificationUnit -match 'SafetyClippedSampleValues') "Integrated advanced-audio qualification must retain an independent complete-order golden sample vector."
+Assert-Condition ($qualificationIntegration -match 'Full_authoritative_configuration_crosses_Client_Control_and_Runtime' -and $qualificationIntegration -match 'AudioProductionLimits\.MaximumBuses' -and $qualificationIntegration -match 'RouteOutputRoleAsync' -and $qualificationIntegration -match 'control\.audio\.production\.revision_conflict') "Integrated qualification must cross Client/Control/Runtime with four buses, selected output routing and stale-revision rejection."
+Assert-Condition ($qualificationPerformance -match 'Full_eight_source_four_bus_processing_remains_bounded_allocation_free_and_finite' -and $qualificationPerformance -match 'AudioProductionLimits\.MaximumSources' -and $qualificationPerformance -match 'AudioProductionLimits\.MaximumBuses' -and $qualificationPerformance -match 'GC\.GetAllocatedBytesForCurrentThread' -and $qualificationPerformance -match 'block < 500') "Integrated maximum-load qualification must exercise 8 sources x 4 buses with zero steady-state allocation."
+Assert-Condition ($qualificationPerformance -match 'AudioSourceEqualizerConfiguration' -and $qualificationPerformance -match 'AudioCrossfadeConfiguration' -and $qualificationPerformance -match 'AudioDuckingConfiguration' -and $qualificationPerformance -match 'AudioBusDynamicsConfiguration') "Integrated maximum-load qualification must keep EQ, crossfade, ducking and bus dynamics active together."
+Assert-Condition ($timingPerformance -match 'InlineData\(false, 30_000\)' -and $timingPerformance -match 'InlineData\(true, 36_000\)' -and $timingPerformance -match '28_800_000' -and $timingPerformance -match '28_828_800') "Advanced-audio qualification must retain exact long-run 50 fps and 60000/1001 sample-position evidence."
+Assert-Condition ($networkOutputTests -match 'Saturated_queue_drops_oldest_complete_sample_without_blocking_submitter' -and $networkOutputTests -match 'Transport_failure_is_observational_and_does_not_reject_future_submission_synchronously') "Advanced-audio qualification must retain bounded output-backpressure and failure-isolation evidence."
+Assert-Condition ($recordingFailure -match 'Recording_writer_failure_does_not_change_committed_runtime_or_stop_program_frames') "Advanced-audio qualification must retain recording failure isolation from committed Program execution."
+Assert-Condition ($audioMixerOperatorTests -match 'Mixer_projects_maximum_eight_sources_and_four_buses_from_confirmed_Runtime_evidence' -and $audioMixerOperatorTests -match 'RMS NOT EXPOSED') "Operator qualification must retain bounded mixer projection and must not synthesize unsupported RMS evidence."
+Assert-Condition ($qualificationDocumentation -match 'software qualification' -and $qualificationDocumentation -match 'physical embedded-audio continuity' -and $qualificationDocumentation -match 'DMA/device-driver latency' -and $qualificationDocumentation -match 'hardware clock/genlock' -and $qualificationDocumentation -match 'UNVERIFIED') "Qualification documentation must distinguish software evidence from unverified physical audio claims."
+Assert-Condition ($documentation -match 'Advanced Audio Processing Qualification' -and $documentation -match 'UNVERIFIED') "Advanced-audio documentation must link the integrated qualification and preserve physical-evidence boundaries."
 
 Write-Host "Advanced audio production policy PASS"
