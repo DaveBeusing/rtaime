@@ -66,11 +66,11 @@ public sealed class NativeNdiSender : INdiSender
 			throw new PlatformNotSupportedException("NDI output currently requires Windows x64.");
 
 		_api = NdiNativeApi.Load(runtimeLibraryPath);
-		if (!_api.Initialize())
-			throw new InvalidOperationException("NDI runtime initialization failed.");
-
 		try
 		{
+			if (!_api.Initialize())
+				throw new InvalidOperationException("NDI runtime initialization failed.");
+
 			_sender = _api.CreateSender(_configuration.NdiSettings.SourceName);
 			if (_sender == IntPtr.Zero)
 				throw new InvalidOperationException("NDI sender creation failed.");
