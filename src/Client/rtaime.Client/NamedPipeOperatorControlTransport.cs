@@ -1593,7 +1593,20 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		snapshot.SidechainAvailable,
 		snapshot.CrossfadeProgress,
 		snapshot.ActiveSourceCount,
-		snapshot.MissingSourceCount);
+		snapshot.MissingSourceCount,
+		Array.AsReadOnly((snapshot.Configuration.Buses ?? Array.Empty<WireAudioProductionBus>())
+			.Select(bus => new OperatorAudioProductionBusDescriptor(
+				bus.BusId,
+				bus.MasterGain,
+				bus.Muted,
+				bus.LeftPeak,
+				bus.RightPeak,
+				bus.PreClipPeak,
+				bus.Clipping,
+				bus.ClippedSampleValues,
+				bus.ActiveSourceCount,
+				bus.MissingSourceCount))
+			.ToArray()));
 
 	private static AudioProductionConfiguration FromWire(WireAudioProductionConfiguration wire)
 	{
@@ -2043,7 +2056,17 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 	private sealed record WireAudioInputState(string SourceId, double Gain, bool Muted);
 	private sealed record WireAudioRoutingState(int Mode, string? BreakawaySourceId, ulong ExpectedRoutingRevision);
 	private sealed record WireAudioTestSignalState(string SourceId, bool Enabled, int Mode, double FrequencyHz, double PeakLevel);
-	private sealed record WireAudioProductionBus(string BusId, double MasterGain, bool Muted);
+	private sealed record WireAudioProductionBus(
+		string BusId,
+		double MasterGain,
+		bool Muted,
+		double LeftPeak = 0,
+		double RightPeak = 0,
+		double PreClipPeak = 0,
+		bool Clipping = false,
+		ulong ClippedSampleValues = 0,
+		int ActiveSourceCount = 0,
+		int MissingSourceCount = 0);
 	private sealed record WireAudioProductionSource(string SourceId, double Gain, bool Muted, bool FollowRoutedSource, string[]? BusAssignments);
 	private sealed record WireAudioCrossfade(string BusId, string FromSourceId, string ToSourceId, ulong StartSamplePosition, uint DurationSamples, int Law);
 	private sealed record WireAudioDucking(string BusId, bool Enabled, string SidechainSourceId, string[]? TargetSourceIds, double Threshold, double Attenuation, uint AttackSamples, uint HoldSamples, uint ReleaseSamples);
