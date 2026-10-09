@@ -7,7 +7,7 @@ namespace rtaime.Runtime.Contracts;
 
 public static class RuntimeContractVersion
 {
-    public static CompatibilityVersion Current { get; } = new(1, 0);
+    public static CompatibilityVersion Current { get; } = new(1, 1);
 
     public static bool IsSupported(CompatibilityVersion version) => version == Current;
 
