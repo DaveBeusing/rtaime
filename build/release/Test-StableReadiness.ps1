@@ -412,6 +412,7 @@ if (-not [string]::IsNullOrWhiteSpace($CoordinatedUpgradeQualificationPath)) {
 		try {
 			$qualification = Get-Content -LiteralPath $qualificationFullPath -Raw | ConvertFrom-Json
 			$qualificationSourceCommit = ([string]$qualification.sourceCommit).Trim().ToLowerInvariant()
+			$preActivation = $qualification.preActivationValidation
 			$success = $qualification.successPath
 			$failure = $qualification.failureRecoveryPath
 			$valid =
@@ -419,6 +420,10 @@ if (-not [string]::IsNullOrWhiteSpace($CoordinatedUpgradeQualificationPath)) {
 				$qualificationSourceCommit -eq $expectedSourceCommit -and
 				[string]$qualification.overallStatus -eq "PASS" -and
 				$qualification.productionSchemaCatalogUnchanged -eq $true -and
+				[string]$preActivation.missingMigrationChain -eq "PASS" -and
+				[string]$preActivation.ambiguousMigrationChain -eq "PASS" -and
+				$preActivation.softwareActivationPrevented -eq $true -and
+				$preActivation.stateMutationPrevented -eq $true -and
 				[string]$success.status -eq "PASS" -and
 				[int]$success.fromSchemaVersion -eq 1 -and
 				[int]$success.toSchemaVersion -eq 2 -and
