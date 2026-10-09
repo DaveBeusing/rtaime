@@ -110,7 +110,7 @@ public sealed class V1CombinedReferencePerformanceTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task Authoritative_transform_and_color_grade_materialization_has_bounded_1080p_regression_guard(bool fractionalRate)
+    public async Task Authoritative_transform_and_typed_processing_materialization_has_bounded_1080p_regression_guard(bool fractionalRate)
     {
         var format = fractionalRate ? VideoFormat.Hd1080p59_94Rgba8 : VideoFormat.Hd1080p50Rgba8;
         var sourceA = new ProductionSourceId(Identity.Parse("94000000-0000-0000-0000-00000000000a"));
@@ -144,13 +144,28 @@ public sealed class V1CombinedReferencePerformanceTests
         runtime.SetGraphicsOverlay(true, 0, 0, 1);
         runtime.SetCompositingLayerProcessingStack(
             V1RuntimeHostService.BitmapGraphicsLayerId,
-            Enumerable.Range(0, PreparedCompositingProcessingStackLimits.MaximumNodeCount)
-                .Select(index => new PreparedCompositingProcessingNodeState(
-                    $"performance-grade-{index}",
+            [
+                new PreparedCompositingProcessingNodeState(
+                    "performance-grade-a",
                     PreparedCompositingProcessingNodeKind.ColorGrade,
                     true,
-                    new PreparedColorGradeSettings(0.01, 1.01, 0.99)))
-                .ToArray());
+                    colorGrade: new PreparedColorGradeSettings(0.01, 1.01, 0.99)),
+                new PreparedCompositingProcessingNodeState(
+                    "performance-key-a",
+                    PreparedCompositingProcessingNodeKind.ChromaKey,
+                    true,
+                    chromaKey: new PreparedChromaKeySettings(0, 255, 0, 0.1, 0.25, 0.25)),
+                new PreparedCompositingProcessingNodeState(
+                    "performance-grade-b",
+                    PreparedCompositingProcessingNodeKind.ColorGrade,
+                    true,
+                    colorGrade: new PreparedColorGradeSettings(-0.01, 0.99, 1.01)),
+                new PreparedCompositingProcessingNodeState(
+                    "performance-key-b",
+                    PreparedCompositingProcessingNodeKind.ChromaKey,
+                    true,
+                    chromaKey: new PreparedChromaKeySettings(0, 255, 0, 0.05, 0.1, 0.5))
+            ]);
 
         const int iterations = 4;
         var stopwatch = Stopwatch.StartNew();
@@ -180,9 +195,9 @@ public sealed class V1CombinedReferencePerformanceTests
         Assert.Equal(0, runtime.Snapshot.ActiveGpuSurfaces);
         Assert.True(
             stopwatch.Elapsed < TimeSpan.FromSeconds(15),
-            $"Managed 1080p transform/Color Grade materialization exceeded regression guard: {stopwatch.Elapsed}.");
+            $"Managed 1080p transform/typed-processing materialization exceeded regression guard: {stopwatch.Elapsed}.");
         Console.WriteLine(
-            $"Managed {format.Width}x{format.Height} {format.FrameRate} transform+grade " +
+            $"Managed {format.Width}x{format.Height} {format.FrameRate} transform+typed-processing " +
             $"iterations={iterations} total={stopwatch.Elapsed.TotalMilliseconds:0.###}ms " +
             $"perMutation={stopwatch.Elapsed.TotalMilliseconds / iterations:0.###}ms");
     }
