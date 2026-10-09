@@ -103,6 +103,67 @@ public sealed class ControlDomainTests
     }
 
     [Fact]
+    public void Activate_scene_recalls_typed_chroma_key_processing_state_atomically()
+    {
+        var source = new ProductionSourceSpecification(ProductionSourceId.New(), "Camera A");
+        var compositing = new ProductionCompositingState(
+            ProductionCompositingState.CurrentVersion,
+            [
+                new ProductionCompositingLayerState(
+                    ProductionCompositingLayerIds.BitmapGraphics,
+                    ProductionCompositingLayerKind.BitmapGraphics,
+                    0,
+                    true,
+                    255,
+                    0,
+                    0,
+                    1,
+                    "scene-key.rgba",
+                    processingStack:
+                    [
+                        new ProductionCompositingProcessingNodeState(
+                            "key-primary",
+                            ProductionCompositingProcessingNodeKind.ChromaKey,
+                            true,
+                            chromaKey: new ProductionChromaKeySettings(0, 255, 0, 0.2, 0.3, 0.4)),
+                        new ProductionCompositingProcessingNodeState(
+                            "grade-primary",
+                            ProductionCompositingProcessingNodeKind.ColorGrade,
+                            true,
+                            colorGrade: new ProductionColorGradeSettings(0.05, 1.1, 0.9))
+                    ])
+            ]);
+        var scene = new ProductionSceneSpecification(
+            SceneId.New(),
+            "Keyed scene",
+            new ProductionRoutingState(source.SourceId, source.SourceId),
+            compositing);
+        var specification = new ProductionSpecification(
+            ControlContractVersion.Current,
+            ProductionId.New(),
+            "Scene key recall",
+            [source],
+            scene.Routing,
+            [scene]);
+        var initial = InitializedState(specification);
+
+        var result = ControlDomainEngine.Apply(
+            specification,
+            initial.Authoritative,
+            new ActivateSceneCommand(
+                Metadata(specification, initial.Authoritative.Revision),
+                scene.SceneId));
+
+        Assert.True(result.Committed);
+        Assert.Equal(compositing, result.AuthoritativeState.CompositingState);
+        Assert.Equal(compositing, result.DesiredState?.CompositingState);
+        var recalled = Assert.Single(result.AuthoritativeState.CompositingState!.Layers).ProcessingStack;
+        Assert.Equal(new[] { "key-primary", "grade-primary" }, recalled.Select(node => node.NodeId));
+        Assert.Equal(0.2, recalled[0].ChromaKey!.Tolerance, 6);
+        Assert.Equal(0.9, recalled[1].ColorGrade!.Saturation, 6);
+    }
+
+    [Fact]
     public void Unknown_scene_is_rejected_without_partial_authoritative_mutation()
     {
         var fixture = CreateFixture();
