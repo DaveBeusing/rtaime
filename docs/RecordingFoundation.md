@@ -312,3 +312,10 @@ Runtime snapshots carry the confirmed profile catalog, default profile, active p
 Both current production profiles are explicitly classified as software. No hardware acceleration is inferred from codec/container names. MOV is implemented only as the exact managed `2vuy`/`sowt` profile; MXF, ProRes, DNxHR and AVC-Intra remain unavailable until separate writer providers and evidence exist.
 
 See [Recording Profile Catalog and Provider Boundary](RecordingProfileCatalog.md) and the machine-readable [Recording Capability Catalog](qualification/RecordingCapabilityCatalog.json).
+
+## Advanced-audio final-bus evidence
+
+Advanced Audio Processing qualification explicitly retains byte/sample parity evidence between the final authoritative Program bus and recording payload staging. Recording consumes the already-materialized Program bus after source processing, bus master, compressor, sample-peak limiter and final safety clamp; it does not create a separate recording mix.
+
+See [Advanced Audio Processing Qualification](AdvancedAudioProcessingQualification.md) for the integrated software evidence matrix. Physical embedded-audio continuity, storage/device latency and certified audio performance remain **UNVERIFIED** unless dedicated reference-platform evidence states otherwise.
+
