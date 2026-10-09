@@ -438,6 +438,7 @@ public sealed class CompositingGraphViewModel : INotifyPropertyChanged, IDisposa
 
 	public void Refresh()
 	{
+		var selectedLayerId = SelectedNode is null ? null : ResolveLayerId(SelectedNode.Id);
 		var graph = CompositingGraphProjector.Project(CreateProjectionInput());
 		var incomingIds = graph.Nodes.Select(node => node.Id).ToHashSet(StringComparer.Ordinal);
 
@@ -493,6 +494,17 @@ public sealed class CompositingGraphViewModel : INotifyPropertyChanged, IDisposa
 				current.IsSelected = true;
 				SelectedNode = current;
 				_inspector.SelectCompositingNode(current.Projection);
+			}
+		}
+		else if (selectedLayerId is not null)
+		{
+			var fallback = Nodes.FirstOrDefault(node => string.Equals(node.Id, $"layer:{selectedLayerId}", StringComparison.Ordinal)) ??
+				Nodes.FirstOrDefault(node => string.Equals(node.Id, $"transform:{selectedLayerId}", StringComparison.Ordinal));
+			if (fallback is not null)
+			{
+				fallback.IsSelected = true;
+				SelectedNode = fallback;
+				_inspector.SelectCompositingNode(fallback.Projection);
 			}
 		}
 
