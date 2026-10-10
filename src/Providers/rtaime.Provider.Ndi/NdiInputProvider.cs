@@ -109,6 +109,7 @@ public sealed class NdiInputSession : IAsyncDisposable
     private ulong _rejected;
     private ulong _reconnects;
     private int _maximumDepth;
+    private readonly DateTimeOffset _startedAt;
     private DateTimeOffset? _lastMediaAt;
     private Failure? _failure;
     private bool _disposed;
@@ -121,6 +122,7 @@ public sealed class NdiInputSession : IAsyncDisposable
         _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
         _backendFactory = backendFactory ?? throw new ArgumentNullException(nameof(backendFactory));
         _clock = clock ?? (() => DateTimeOffset.UtcNow);
+        _startedAt = _clock();
         _worker = Task.Run(WorkerAsync);
     }
 
@@ -238,8 +240,7 @@ public sealed class NdiInputSession : IAsyncDisposable
                 }
 
                 if (_backend.ConnectionCount <= 0 &&
-                    _lastMediaAt is { } last &&
-                    _clock() - last >= _configuration.SourceLossTimeout)
+                    _clock() - (_lastMediaAt ?? _startedAt) >= _configuration.SourceLossTimeout)
                 {
                     MarkLost(
                         "network.input.ndi_source_lost",
@@ -302,8 +303,6 @@ public sealed class NdiInputSession : IAsyncDisposable
     {
         lock (_gate)
         {
-            if (_lifecycle is not MediaInputLifecycleState.Lost and not MediaInputLifecycleState.Reconnecting)
-                _reconnects++;
             _connected = false;
             _lifecycle = MediaInputLifecycleState.Lost;
             _failure = new Failure(code, message);
