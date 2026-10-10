@@ -42,13 +42,19 @@ public sealed class MxfKlvReaderTests
         Assert.Throws<InvalidDataException>(() => MxfKlvReader.Scan(stream));
     }
 
-    [Fact]
-    public void Scan_rejects_noncanonical_long_form()
+    [Theory]
+    [InlineData(new byte[] { 0x81, 0x01 })]
+    [InlineData(new byte[] { 0x84, 0x00, 0x00, 0x00, 0x01 })]
+    [InlineData(new byte[] { 0x88, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01 })]
+    public void Scan_accepts_valid_fixed_width_MXF_BER_lengths(byte[] encoding)
     {
         using var stream = new MemoryStream();
         stream.Write(Key);
-        stream.Write([0x81, 0x01, 0xff]);
-        Assert.Throws<InvalidDataException>(() => MxfKlvReader.Scan(stream));
+        stream.Write(encoding);
+        stream.WriteByte(0xff);
+        var element = Assert.Single(MxfKlvReader.Scan(stream));
+        Assert.Equal(1L, element.Length);
+        Assert.Equal(stream.Length, element.EndOffset);
     }
 
     [Fact]
