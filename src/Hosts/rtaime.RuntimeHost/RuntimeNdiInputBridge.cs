@@ -57,37 +57,52 @@ internal sealed class RuntimeNdiInputBridge : IAsyncDisposable
 
         var requiredIds = required.Select(binding => binding.MediaSourceId!.Value).ToHashSet();
         foreach (var state in SnapshotSessions().Where(pair => !requiredIds.Contains(pair.Key)))
-            RemoveSession(state.Key, state.Value);
+            TryRemoveSession(state.Key, state.Value);
 
         if (required.Length == 0)
             return;
 
-        _ = RefreshDiscovery();
+        try
+        {
+            _ = RefreshDiscovery();
+        }
+        catch
+        {
+            // Discovery is observational. A provider/discovery failure after Runtime commit must not
+            // invalidate already committed production authority.
+        }
+
         foreach (var binding in required)
         {
             var sourceId = binding.MediaSourceId!.Value;
             if (HasSession(sourceId))
                 continue;
 
-            _runtime.RegisterExternalSource(sourceId);
-            var discoveredId = new DiscoveredMediaSourceId(binding.ExternalSourceId!.Value);
-            if (!_discovery.TryResolve(discoveredId, out var endpoint) || endpoint is null)
+            try
             {
-                _runtime.SetInputSignalState(sourceId, V1InputSignalState.Lost);
-                _runtime.ClearExternalAudioMeter(sourceId);
-                continue;
-            }
+                _runtime.RegisterExternalSource(sourceId);
+                var discoveredId = new DiscoveredMediaSourceId(binding.ExternalSourceId!.Value);
+                if (!_discovery.TryResolve(discoveredId, out var endpoint) || endpoint is null)
+                {
+                    MarkUnavailable(sourceId);
+                    continue;
+                }
 
-            var configuration = new NdiInputConfiguration(
-                sourceId,
-                discoveredId,
-                binding.SafeSourceIdentity ?? $"ndi://{endpoint.NdiName}",
-                endpoint);
-            var session = _provider.CreateInputSession(configuration);
-            var stop = new CancellationTokenSource();
-            var pump = Task.Run(() => PumpAsync(session, sourceId, stop.Token));
-            lock (_gate)
-                _sessions.Add(sourceId, new SessionState(session, stop, pump));
+                var configuration = new NdiInputConfiguration(
+                    sourceId,
+                    discoveredId,
+                    binding.SafeSourceIdentity!,
+                    endpoint);
+                var session = _provider.CreateInputSession(configuration);
+                var stop = new CancellationTokenSource();
+                var pump = Task.Run(() => PumpAsync(session, sourceId, stop.Token));
+                lock (_gate)
+                    _sessions.Add(sourceId, new SessionState(session, stop, pump));
+            }
+            catch
+            {
+                MarkUnavailable(sourceId);
+            }
         }
     }
 
@@ -146,17 +161,42 @@ internal sealed class RuntimeNdiInputBridge : IAsyncDisposable
             return _sessions.ToArray();
     }
 
-    private void RemoveSession(MediaSourceId sourceId, SessionState state)
+    private void MarkUnavailable(MediaSourceId sourceId)
+    {
+        try
+        {
+            _runtime.RegisterExternalSource(sourceId);
+            _runtime.SetInputSignalState(sourceId, V1InputSignalState.Lost);
+            _runtime.ClearExternalAudioMeter(sourceId);
+        }
+        catch
+        {
+            // Input/provider failures remain observational after the committed Runtime transition.
+        }
+    }
+
+    private void TryRemoveSession(MediaSourceId sourceId, SessionState state)
     {
         lock (_gate)
         {
             if (!_sessions.Remove(sourceId))
                 return;
         }
-        state.Stop.Cancel();
-        try { state.Pump.GetAwaiter().GetResult(); } catch (OperationCanceledException) { }
-        state.Session.DisposeAsync().AsTask().GetAwaiter().GetResult();
-        state.Stop.Dispose();
+
+        try
+        {
+            state.Stop.Cancel();
+            try { state.Pump.GetAwaiter().GetResult(); } catch (OperationCanceledException) { }
+            state.Session.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        }
+        catch
+        {
+            // Session retirement cannot invalidate production authority or reroute a committed source.
+        }
+        finally
+        {
+            state.Stop.Dispose();
+        }
     }
 
     public async ValueTask DisposeAsync()
