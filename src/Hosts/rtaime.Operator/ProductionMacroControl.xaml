@@ -67,7 +67,7 @@
 							</DockPanel>
 							<TextBlock Text="{Binding Status}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextWrapping="Wrap" Margin="0,3,0,0" />
 							<TextBlock FontSize="{StaticResource OperatorFontSizeMicro}" Margin="0,2,0,0">
-								<Run Text="CURRENT · " /><Run Text="{Binding CurrentAction}" />
+								<Run Text="CURRENT · " /><Run Text="{Binding CurrentAction, Mode=OneWay}" />
 							</TextBlock>
 							<TextBlock FontSize="{StaticResource OperatorFontSizeMicro}">
 								<Run Text="LAST CONFIRMED · " /><Run Text="{Binding LastCompletedAction}" />
