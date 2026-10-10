@@ -43,7 +43,11 @@ public sealed class ProductionIpcIntegrationTests
 		var recording = Assert.IsType<RuntimeRecordingSnapshot>(snapshot.Recording);
 		Assert.Equal("mp4-h264-aac", recording.DefaultProfileId);
 		var profiles = recording.Profiles ?? Array.Empty<RuntimeRecordingProfileSnapshot>();
-		Assert.Equal(2, profiles.Count);
+		Assert.Equal(3, profiles.Count);
+		var mxfProfile = Assert.Single(profiles, candidate => candidate.ProfileId == "mxf-op1a-uncompressed-pcm");
+		Assert.Equal("managed-mxf-op1a", mxfProfile.ProviderId);
+		Assert.Equal("SOFTWARE", mxfProfile.AccelerationClass);
+		Assert.False(mxfProfile.Available);
 		var profile = Assert.Single(profiles, candidate => candidate.ProfileId == "mp4-h264-aac");
 		Assert.Equal("windows-media-foundation", profile.ProviderId);
 		Assert.Equal("SOFTWARE", profile.AccelerationClass);
@@ -83,7 +87,10 @@ public sealed class ProductionIpcIntegrationTests
 		var sourceA = initial.Sources[0];
 		var sourceB = initial.Sources[1];
 		Assert.Equal("mp4-h264-aac", initial.Recording.DefaultProfileId);
-		Assert.Equal(2, initial.Recording.Profiles.Count);
+		Assert.Equal(3, initial.Recording.Profiles.Count);
+		var operatorMxfProfile = Assert.Single(initial.Recording.Profiles, candidate => candidate.ProfileId == "mxf-op1a-uncompressed-pcm");
+		Assert.Equal("managed-mxf-op1a", operatorMxfProfile.ProviderId);
+		Assert.False(operatorMxfProfile.Available);
 		var operatorRecordingProfile = Assert.Single(initial.Recording.Profiles, candidate => candidate.ProfileId == "mp4-h264-aac");
 		Assert.Equal("windows-media-foundation", operatorRecordingProfile.ProviderId);
 		Assert.Equal("SOFTWARE", operatorRecordingProfile.AccelerationClass);
