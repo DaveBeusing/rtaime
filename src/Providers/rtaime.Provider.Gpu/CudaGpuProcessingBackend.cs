@@ -11,6 +11,8 @@ namespace rtaime.Provider.Gpu;
 /// no native adapter is required for the AP-08 foundation. Hardware qualification is evidence-driven and is not
 /// implied merely by the presence of this implementation.
 /// </summary>
+public readonly record struct CudaGpuResourceStatistics(int ActiveSurfaces, int PooledAllocations, int QuarantinedAllocations, ulong SynchronizationFailures);
+
 public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend, IGpuSharedMonitoringBackend
 {
     private readonly object _gate = new();
@@ -30,6 +32,7 @@ public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend, IGpuShared
     private CudaD3D11MonitoringInterop? _monitoringInterop;
     private bool _running;
     private bool _disposed;
+    private ulong _synchronizationFailures;
 
     public CudaGpuProcessingBackend(int deviceOrdinal = 0, CudaGpuTimingCollector? timingCollector = null)
     {
@@ -45,6 +48,19 @@ public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend, IGpuShared
     public SurfaceStorageDomain StorageDomain => SurfaceStorageDomain.Device;
     public bool SupportsSharedMonitoringResources => OperatingSystem.IsWindows() && Info.Available;
     public bool IsSharedMonitoringExportAvailable => _monitoringInterop is not null;
+
+    public CudaGpuResourceStatistics ResourceStatistics
+    {
+        get
+        {
+            lock (_gate)
+                return new CudaGpuResourceStatistics(
+                    _surfaces.Count,
+                    _freeAllocations.Values.Sum(pool => pool.Count),
+                    _quarantinedAllocations.Count,
+                    _synchronizationFailures);
+        }
+    }
 
     public static GpuBackendInfo Detect(int deviceOrdinal = 0)
     {
@@ -562,10 +578,18 @@ public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend, IGpuShared
 
     private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(_disposed, this);
 
-    private static void Check(CudaResult result, string operation)
+    private void Check(CudaResult result, string operation)
     {
         if (result != CudaResult.Success)
+        {
+            if (operation.StartsWith("cuCtxSynchronize", StringComparison.Ordinal) ||
+                operation.StartsWith("cuEvent", StringComparison.Ordinal))
+            {
+                if (_synchronizationFailures < ulong.MaxValue)
+                    _synchronizationFailures++;
+            }
             throw new InvalidOperationException($"CUDA operation '{operation}' failed with '{result}' ({(int)result}).");
+        }
     }
 
     private static GpuBackendInfo Unavailable(string message) =>
