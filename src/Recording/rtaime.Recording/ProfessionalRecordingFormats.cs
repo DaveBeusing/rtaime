@@ -185,8 +185,10 @@ public static class ProfessionalRecordingFormats
 {
 	public static RecordingProfileId Mp4H264AacProfileId { get; } = new("mp4-h264-aac");
 	public static RecordingProfileId Mov2VuyPcmProfileId { get; } = new("mov-2vuy-pcm");
+	public static RecordingProfileId MxfOp1aUncompressedPcmProfileId { get; } = new("mxf-op1a-uncompressed-pcm");
 	public static RecordingWriterProviderId WindowsMediaFoundationProviderId { get; } = new("windows-media-foundation");
 	public static RecordingWriterProviderId ManagedQuickTimeProviderId { get; } = new("managed-quicktime");
+	public static RecordingWriterProviderId ManagedMxfOp1aProviderId { get; } = new("managed-mxf-op1a");
 
 	private static readonly ReadOnlyCollection<VideoFormat> Mp4InputFormats =
 		Array.AsReadOnly(new[]
@@ -197,6 +199,33 @@ public static class ProfessionalRecordingFormats
 
 	public static RecordingProfileDescriptor Mp4H264Aac => CreateMp4H264AacDescriptor();
 	public static RecordingProfileDescriptor Mov2VuyPcm => CreateMov2VuyPcmDescriptor();
+	public static RecordingProfileDescriptor MxfOp1aUncompressedPcm => CreateMxfOp1aUncompressedPcmDescriptor();
+
+	/// <summary>
+	/// Precise requested MXF profile identity; deliberately unavailable until the
+	/// complete OP1a writer and independent semantic interoperability probe pass.
+	/// </summary>
+	public static RecordingProfileDescriptor CreateMxfOp1aUncompressedPcmDescriptor() =>
+		new(
+			MxfOp1aUncompressedPcmProfileId,
+			"MXF OP1a · Uncompressed 4:2:2 · PCM",
+			"Material eXchange Format OP1a",
+			".mxf",
+			"Uncompressed YUV 4:2:2",
+			"8-bit 4:2:2 (mapping pending conformance)",
+			null,
+			"PCM S16LE 48 kHz Stereo",
+			Mp4InputFormats,
+			AudioFormat.Stereo48kFloat32,
+			1_988_667_333,
+			1_536_000,
+			RecordingAccelerationClass.Software,
+			ManagedMxfOp1aProviderId,
+			false,
+			"OP1a metadata, essence ULs, complete writer and independent conformance probe are not yet qualified.",
+			RecordingProfileEvidenceState.Unverified,
+			"Profile specification and KLV/partition/timing primitives exist; no valid completed OP1a recording or independent essence verification is available.");
+
 
 	public static RecordingProfileDescriptor CreateMp4H264AacDescriptor()
 	{
