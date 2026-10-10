@@ -140,8 +140,17 @@ if ([string]$software.schemaVersion -ne "1.0" -or [string]$software.sourceCommit
 }
 if ([string]$software.status -ne "PASS") { throw "Renderer software-scenario evidence must be PASS." }
 $softwareIds = @($software.scenarios | ForEach-Object { [string]$_.id })
-foreach ($required in @("CLIP_SEEK", "RENDERER_BACKEND_RECOVERY", "RESOURCE_PRESSURE", "INTEROP_FAILURE_RECOVERY", "RESIZE_DPI_CHURN", "MONITORING_TRANSPORT_RECONNECT", "PROCESS_RESTART")) {
-    if ($softwareIds -notcontains $required) { throw "Renderer software evidence is missing '$required'." }
+$expectedSoftwareIds = @("CLIP_SEEK", "RENDERER_BACKEND_RECOVERY", "RESOURCE_PRESSURE", "INTEROP_FAILURE_RECOVERY", "RESIZE_DPI_CHURN", "MONITORING_TRANSPORT_RECONNECT", "PROCESS_RESTART")
+if (($softwareIds -join ",") -ne ($expectedSoftwareIds -join ",")) {
+    throw "Renderer software evidence must contain exactly the ordered qualified scenario matrix without duplicates or unknown scenarios."
+}
+foreach ($scenario in @($software.scenarios)) {
+    if ([string]$scenario.status -ne "PASS" -or [int]$scenario.exitCode -ne 0) {
+        throw "Renderer software scenario '$($scenario.id)' did not complete successfully."
+    }
+    if ([string]::IsNullOrWhiteSpace([string]$scenario.log)) {
+        throw "Renderer software scenario '$($scenario.id)' lacks its retained log reference."
+    }
 }
 if (@($software.scenarios | Where-Object { [string]$_.status -ne "PASS" }).Count -ne 0) {
     throw "Renderer software evidence contains a failed scenario."

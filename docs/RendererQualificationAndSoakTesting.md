@@ -75,6 +75,9 @@ The self-hosted run also executes deterministic software evidence:
 
 These scenarios do not imply that a physical NVIDIA reset, Windows TDR, cable failure, AJA failure or external-reference loss occurred.
 
+The authoritative software scenario identifiers in `qualification/renderer/renderer-qualification.json` must exactly match the executable fault matrix in `Invoke-RendererReferenceQualification.ps1`. Qualification aborts before running scenarios if they diverge; the repository quality policy also checks this alignment. The evidence verifier also rejects duplicate, missing, unknown or reordered scenario identifiers, nonzero scenario exit codes and missing per-scenario log references; a top-level `PASS` flag alone is insufficient. Recording backpressure remains a separately required part of each physical production-path workload and is not mislabeled as an independent targeted software scenario.
+
+
 ## Running on the reference NVIDIA machine
 
 The dedicated `.github/workflows/cuda-reference-qualification.yml` remains manual `workflow_dispatch` and requires the `self-hosted`, `windows`, `x64`, `rtaime-cuda-reference` runner labels. It executes strict CUDA reference qualification first and then the selected renderer profile.

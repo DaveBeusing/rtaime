@@ -54,6 +54,18 @@ Assert-Condition ([string]$profile.performancePolicy.baselineComparison -eq "REQ
 Assert-Condition ([double]$profile.performancePolicy.maximumP99RegressionPercent -eq 20.0) "Renderer calibrated P99 regression policy changed."
 Assert-Condition ([bool]$profile.performancePolicy.cudaReferenceQualificationRequired) "Renderer qualification must remain layered on the strict CUDA reference qualification."
 
+$expectedSoftwareScenarios = @(
+    "CLIP_SEEK",
+    "RENDERER_BACKEND_RECOVERY",
+    "RESOURCE_PRESSURE",
+    "INTEROP_FAILURE_RECOVERY",
+    "RESIZE_DPI_CHURN",
+    "MONITORING_TRANSPORT_RECONNECT",
+    "PROCESS_RESTART"
+)
+Assert-Condition ((@($profile.softwareFaultScenarios) -join ",") -eq ($expectedSoftwareScenarios -join ",")) "Renderer qualification software fault matrix must match the executed scenario set."
+
+
 $manifest = Get-Content -LiteralPath $manifestPath -Raw
 Assert-Condition ($manifest -match '10\.0\.401') "Renderer manifest must bind the pinned SDK."
 Assert-Condition ($manifest -match 'nvidia-smi') "Renderer manifest must capture NVIDIA GPU and driver identity."

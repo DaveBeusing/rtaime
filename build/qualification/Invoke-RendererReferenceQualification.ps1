@@ -163,6 +163,12 @@ $scenarioDefinitions = @(
     @{ Id = "MONITORING_TRANSPORT_RECONNECT"; Project = "tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj"; Filter = "FullyQualifiedName~OperatorMonitoringPlaneTests.Dedicated_named_pipe_monitoring_transport_reconnects_after_server_restart|FullyQualifiedName~OperatorMonitoringPlaneTests.Sustained_shared_monitoring_replacement_remains_bounded_and_returns_to_baseline" },
     @{ Id = "PROCESS_RESTART"; Project = "tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj"; Filter = "FullyQualifiedName~ProcessSupervisionRecoveryTests.Killed_RuntimeHost_is_restarted_and_Control_reapplies_same_authority_revision" }
 )
+$declaredScenarioIds = @($profileDocument.softwareFaultScenarios | ForEach-Object { [string]$_ })
+$executedScenarioIds = @($scenarioDefinitions | ForEach-Object { [string]$_.Id })
+if (($declaredScenarioIds -join ",") -ne ($executedScenarioIds -join ",")) {
+    throw "Renderer software fault scenarios differ between the authoritative profile and the executable qualification matrix."
+}
+
 $softwareScenarios = [System.Collections.Generic.List[object]]::new()
 Push-Location $repositoryRoot
 try {
