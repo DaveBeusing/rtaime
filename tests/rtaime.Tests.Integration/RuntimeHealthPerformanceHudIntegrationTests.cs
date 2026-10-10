@@ -300,6 +300,27 @@ public sealed class RuntimeHealthPerformanceHudIntegrationTests
 		Assert.Equal(46, counter.OutputFramesPerSecond.Value, 6);
 	}
 
+	[Fact]
+	public void Rational_slot_loss_is_counted_once_despite_jitter_and_cumulative_output_counters()
+	{
+		var counter = new RuntimeFrameDropCounter();
+		Assert.Equal(0UL, counter.ObserveScheduled(TimeSpan.FromMilliseconds(21), 0));
+		Assert.Equal(1UL, counter.ObserveScheduled(TimeSpan.FromMilliseconds(60), 1));
+		Assert.Equal(4UL, counter.ObserveScheduled(TimeSpan.FromMilliseconds(80), 1, 2, 1));
+		Assert.Equal(4UL, counter.ObserveScheduled(TimeSpan.FromMilliseconds(100), 1, 2, 1));
+		Assert.Throws<ArgumentException>(() => counter.ObserveScheduled(TimeSpan.FromMilliseconds(100), 1));
+		Assert.Throws<ArgumentException>(() => counter.ObserveScheduled(TimeSpan.FromMilliseconds(120), 0));
+		Assert.Equal(4UL, counter.ObserveScheduled(TimeSpan.FromMilliseconds(120), 1, 2, 1));
+	}
+
+	[Fact]
+	public void Rational_slot_and_output_loss_saturate_without_wrapping()
+	{
+		var counter = new RuntimeFrameDropCounter();
+		Assert.Equal(ulong.MaxValue, counter.ObserveScheduled(TimeSpan.Zero, ulong.MaxValue, 1, 1));
+		Assert.Equal(ulong.MaxValue, counter.ObserveScheduled(TimeSpan.FromMilliseconds(20), ulong.MaxValue, ulong.MaxValue, 1));
+	}
+
 	private static RuntimeRemoteSnapshot CreateRuntimeSnapshot()
 	{
 		var sourceId = new MediaSourceId(Identity.Parse("74000000-0000-0000-0000-00000000000a"));

@@ -293,6 +293,57 @@ public sealed class NetworkOutputFoundationTests
 			100,
 			reconnectMaximumAttempts);
 
+	[Theory]
+	[InlineData(false, 50, 1)]
+	[InlineData(false, 60_000, 1_001)]
+	[InlineData(true, 50, 1)]
+	[InlineData(true, 60_000, 1_001)]
+	public async Task Stalled_consumer_burst_bounds_queue_and_wakeups_and_recovers(bool ndi, long numerator, long denominator)
+	{
+		var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+		var transport = new BlockingTransport(gate.Task);
+		var sender = new BlockingNdiSender(gate.Task);
+		await using INetworkOutputSession session = ndi
+			? new NdiNetworkOutputSession(NdiConfiguration("Bounded Program", queueCapacity: 1), _ => sender)
+			: new SrtNetworkOutputSession(
+				Configuration(new Uri("srt://127.0.0.1:9000/live"), queueCapacity: 1),
+				() => transport, () => new PassThroughEncoder());
+		var timebase = new Timebase(denominator, numerator);
+		try
+		{
+			Assert.True(session.TrySubmit(Sample(1, timebase, 0, 800)).Accepted);
+			await (ndi ? sender.SendStarted.Task : transport.ConnectStarted.Task).WaitAsync(TimeSpan.FromSeconds(2));
+			TestSample? previous = null;
+			for (ulong sequence = 2; sequence <= 10_002; sequence++)
+			{
+				var sample = Sample(sequence, timebase, sequence * 800, 800);
+				Assert.True(session.TrySubmit(sample).Accepted);
+				if (previous is not null)
+					Assert.True(previous.VideoLease.IsDisposed);
+				previous = sample;
+			}
+			var saturated = session.Snapshot.Statistics;
+			Assert.Equal(1, saturated.QueueDepth);
+			Assert.Equal(1, saturated.MaximumQueueDepth);
+			Assert.Equal(1, saturated.QueueCapacity);
+			Assert.True(saturated.Backpressured);
+			Assert.Equal(10_000UL, saturated.DroppedSamples);
+			var field = session.GetType().GetField("_queueSignal",
+				System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+			Assert.Equal(1, Assert.IsType<SemaphoreSlim>(field.GetValue(session)).CurrentCount);
+			gate.TrySetResult();
+			await WaitUntilAsync(() => session.Snapshot.Statistics.SentSamples == 2, TimeSpan.FromSeconds(2));
+			var recovered = session.Snapshot.Statistics;
+			Assert.Equal(0, recovered.QueueDepth);
+			Assert.Equal(1, recovered.MaximumQueueDepth);
+			Assert.False(recovered.Backpressured);
+		}
+		finally
+		{
+			gate.TrySetResult();
+		}
+	}
+
 	private static TestSample Sample(ulong sequence) =>
 		Sample(sequence, new Timebase(1, 50), sequence * 960, 960);
 
