@@ -207,10 +207,26 @@ public sealed class BmxOp1aRecordingWriter :
             if (_staged.Count != 0 || _frames == 0 || _audioFrames == 0 || _format is null)
                 throw new InvalidDataException("MXF finalization requires complete video and audio samples.");
             rate = _format == VideoFormat.Hd1080p50Rgba8 ? "50" : "5994";
-            var expectedSamples = MxfAudioCadence.SampleBoundary((long)_frames,
-                rate == "50" ? 50U : 60000U, rate == "50" ? 1U : 1001U);
-            if (Math.Abs((long)_audioFrames - expectedSamples) > 1)
+            var sampleDuration = (decimal)_frames * 48_000 *
+                (rate == "50" ? 1 : 1001) / (rate == "50" ? 50 : 60_000);
+            var lower = checked((ulong)decimal.Floor(sampleDuration));
+            var upper = checked((ulong)decimal.Ceiling(sampleDuration));
+            if (_audioFrames < lower || _audioFrames > upper)
                 throw new InvalidDataException("MXF Program video/audio duration is not aligned.");
+            // Frame boundaries at 60000/1001 can end between PCM sample
+            // frames. Write at most one terminal stereo silence sample frame
+            // to cover that fractional final frame; never stretch or trim
+            // already committed Program audio.
+            var terminalPad = checked((int)(upper - _audioFrames));
+            if (terminalPad != 0)
+            {
+                if (_quota is { } maximum &&
+                    checked(_payloadBytes + terminalPad * 4L) > maximum)
+                    throw new IOException("MXF recording quota cannot accommodate terminal PCM alignment.");
+                _audioStream!.Write(new byte[checked(terminalPad * 4)]);
+                _audioFrames = upper;
+                _payloadBytes = checked(_payloadBytes + terminalPad * 4L);
+            }
             work = _workingDirectory!;
             partial = _partialPath!;
             final = _finalPath!;
