@@ -73,4 +73,10 @@ Assert-Condition ($formatDecision -match 'managed QuickTime/MOV' -and $formatDec
 Assert-Condition ($capability -match '"profileId": "mp4-h264-aac"' -and $capability -match '"profileId": "mov-2vuy-pcm"' -and $capability -match '"providerId": "managed-quicktime"' -and $capability -notmatch '"profileId": "mxf') "Machine-readable capability evidence must publish implemented MP4/MOV profiles without claiming MXF."
 Assert-Condition ($capability -match '"accelerationClass": "software"' -and $capability -match '"supported": false') "Recording capability evidence must not infer hardware acceleration from codec/container support."
 
+# Prevent a catalog-only MXF descriptor from being accidentally promoted to a usable profile.
+Assert-Condition ($catalog -match 'mxf-op1a-uncompressed-pcm' -and $catalog -match 'CreateMxfOp1aUncompressedPcmDescriptor') "MXF capability must retain its explicit constrained profile identity."
+Assert-Condition ($providers -match 'ManagedMxfOp1aRecordingWriterProvider' -and $providers -match 'RecordingOutputUnavailableException') "Unqualified MXF provider must reject output creation."
+$mxfDescriptor = [regex]::Match($catalog, '(?s)public static RecordingProfileDescriptor CreateMxfOp1aUncompressedPcmDescriptor\(\) =>\s*new\((.*?)\);')
+Assert-Condition ($mxfDescriptor.Success -and $mxfDescriptor.Groups[1].Value -match 'RecordingProfileEvidenceState.Unverified' -and $mxfDescriptor.Groups[1].Value -match '(?m)^\s*false,') "MXF must remain unavailable/unverified until an independently qualified writer is added."
+
 Write-Host "Recording Profile Catalog and Provider Boundary policy PASS"
