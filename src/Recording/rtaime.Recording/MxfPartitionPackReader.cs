@@ -36,7 +36,7 @@ internal static class MxfPartitionPackReader
         var count = BinaryPrimitives.ReadUInt32BigEndian(payload[80..]);
         var itemLength = BinaryPrimitives.ReadUInt32BigEndian(payload[84..]);
         if (major == 0 || kag == 0 || current != expectedPartitionOffset)
-            throw new InvalidDataException("Invalid MXF partition version, alignment or offset.");
+            throw new InvalidDataException($"Invalid MXF partition pack: major={major}, KAG={kag}, ThisPartition={current}, expected file offset={expectedPartitionOffset}.");
         if (previous > current || (footer != 0 && footer < current))
             throw new InvalidDataException("MXF partition references an invalid offset.");
         if (count > 4096 || itemLength != 16 || 88L + (long)count * 16 != payload.Length)
