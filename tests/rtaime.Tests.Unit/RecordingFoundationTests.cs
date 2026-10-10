@@ -31,6 +31,73 @@ public sealed class RecordingFoundationTests
     }
 
     [Fact]
+    public async Task Stop_waits_for_admitted_payload_staging_before_finalizing()
+    {
+        var writer = new TestWriter();
+        await using var recorder = new ProgramRecorder(writer, capacity: 4);
+        Assert.True((await recorder.StartAsync(Request())).Succeeded);
+
+        using var entered = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        var staged = false;
+        var enqueue = Task.Run(() => recorder.TryEnqueue(Frame(0), stagePayload: () =>
+        {
+            entered.Set();
+            if (!release.Wait(TimeSpan.FromSeconds(5)))
+                throw new TimeoutException("Payload stage was not released.");
+            staged = true;
+        }));
+
+        Assert.True(entered.Wait(TimeSpan.FromSeconds(5)));
+        var stop = Task.Run(async () => await recorder.StopAsync());
+        try
+        {
+            Assert.False(stop.IsCompleted);
+        }
+        finally
+        {
+            release.Set();
+        }
+
+        Assert.True((await enqueue).Accepted);
+        Assert.Equal(RecordingStopStatus.Stopped, (await stop).Status);
+        Assert.True(staged);
+        Assert.Single(writer.Samples);
+        Assert.Equal(1, writer.FinalizeCount);
+    }
+
+    [Fact]
+    public async Task Rejected_enqueue_does_not_stage_payload_after_stop()
+    {
+        var writer = new TestWriter();
+        await using var recorder = new ProgramRecorder(writer);
+        Assert.True((await recorder.StartAsync(Request())).Succeeded);
+        Assert.Equal(RecordingStopStatus.Stopped, (await recorder.StopAsync()).Status);
+
+        var stagingCalls = 0;
+        var enqueue = recorder.TryEnqueue(Frame(1), stagePayload: () => stagingCalls++);
+
+        Assert.False(enqueue.Accepted);
+        Assert.Equal(0, stagingCalls);
+        Assert.Empty(writer.Samples);
+    }
+
+    [Fact]
+    public async Task Failed_payload_stage_is_rejected_without_enqueuing()
+    {
+        var writer = new TestWriter();
+        await using var recorder = new ProgramRecorder(writer);
+        Assert.True((await recorder.StartAsync(Request())).Succeeded);
+
+        var enqueue = recorder.TryEnqueue(Frame(0), stagePayload: () => throw new IOException("Staging failed."));
+
+        Assert.False(enqueue.Accepted);
+        Assert.Equal("recording.payload.stage_failed", enqueue.Failure?.Code);
+        Assert.Equal(RecordingStopStatus.Stopped, (await recorder.StopAsync()).Status);
+        Assert.Empty(writer.Samples);
+    }
+
+    [Fact]
     public async Task Repeated_recording_sessions_reopen_writer_with_new_output_identity()
     {
         var writer = new TestWriter();

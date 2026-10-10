@@ -157,7 +157,8 @@ public sealed class ProgramRecorder : IAsyncDisposable
 
     public RecordingEnqueueResult TryEnqueue(
         FrameDescriptor video,
-        AudioBufferDescriptor? audio = null)
+        AudioBufferDescriptor? audio = null,
+        Action? stagePayload = null)
     {
         ArgumentNullException.ThrowIfNull(video);
         ThrowIfDisposed();
@@ -200,6 +201,24 @@ public sealed class ProgramRecorder : IAsyncDisposable
                 return RecordingEnqueueResult.Dropped(new Failure(
                     "recording.backpressure.queue_full",
                     "Recording queue is full; sample was dropped without blocking Program."));
+            }
+
+            // Stage only for an admitted sample while stop/finalize is excluded by _gate.
+            // The callback must remain bounded, in-memory and free of storage I/O.
+            if (stagePayload is not null)
+            {
+                try
+                {
+                    stagePayload();
+                }
+                catch (Exception exception)
+                {
+                    _rejected++;
+                    ObserveUnsafe("recording.payload.stage.failed", exception.GetType().Name, sequence);
+                    return RecordingEnqueueResult.Rejected(new Failure(
+                        "recording.payload.stage_failed",
+                        $"Recording payload staging failed: {exception.GetType().Name}."));
+                }
             }
 
             var sample = new RecordingProgramSample(

@@ -20,7 +20,8 @@ public sealed class RuntimeRecordingBridge
     public RecordingEnqueueResult TryRecordCommittedProgram(
         CommittedRuntimeExecution execution,
         FrameDescriptor video,
-        AudioBufferDescriptor? audio = null)
+        AudioBufferDescriptor? audio = null,
+        Action? stagePayload = null)
     {
         ArgumentNullException.ThrowIfNull(execution);
         ArgumentNullException.ThrowIfNull(video);
@@ -59,6 +60,6 @@ public sealed class RuntimeRecordingBridge
                 "Program frame source does not match the committed Program binding."));
         }
 
-        return _recorder.TryEnqueue(video, audio);
+        return _recorder.TryEnqueue(video, audio, stagePayload);
     }
 }

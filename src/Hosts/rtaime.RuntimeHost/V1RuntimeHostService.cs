@@ -1294,49 +1294,36 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 					RecordingEnqueueResult? recording = null;
 					if (recordingActive)
 					{
-						var payloadStaged = false;
-						if (_recordingPayloadWriter is not null)
-						{
-							try
-							{
-								GpuRecordingPayloadLease? recordingPayload = new GpuRecordingPayloadLease(pixels.Retain());
-								try
-								{
-									_recordingPayloadWriter.StagePayload(
-										sequence,
-										recordingPayload,
-										programRecordingAudioPayload);
-									recordingPayload = null;
-									payloadStaged = true;
-								}
-								finally
-								{
-									recordingPayload?.Dispose();
-								}
-							}
-							catch (Exception exception)
-							{
-								Observe($"recording.payload.stage.failed:{exception.GetType().Name}");
-							}
-						}
-
 						try
 						{
-							recording = _recordingBridge.TryRecordCommittedProgram(execution, output.Descriptor, programRecordingAudioBuffer);
+							recording = _recordingBridge.TryRecordCommittedProgram(
+								execution,
+								output.Descriptor,
+								programRecordingAudioBuffer,
+								_recordingPayloadWriter is null
+									? null
+									: () =>
+									{
+										GpuRecordingPayloadLease? lease = new(pixels.Retain());
+										try
+										{
+											_recordingPayloadWriter.StagePayload(sequence, lease, programRecordingAudioPayload);
+											lease = null;
+										}
+										finally
+										{
+											lease?.Dispose();
+										}
+									});
 						}
 						catch (Exception exception)
 						{
-							if (payloadStaged)
-								_recordingPayloadWriter?.DiscardPayload(sequence);
 							var failure = new Failure(
 								"recording.runtime.enqueue_failed",
 								$"Recording enqueue failed without interrupting Program execution: {exception.GetType().Name}.");
 							recording = RecordingEnqueueResult.Rejected(failure);
 							Observe($"recording.runtime.enqueue_failed:{exception.GetType().Name}");
 						}
-
-						if (payloadStaged && recording is { Accepted: false })
-							_recordingPayloadWriter?.DiscardPayload(sequence);
 					}
 
 					if (_replay is not null)
