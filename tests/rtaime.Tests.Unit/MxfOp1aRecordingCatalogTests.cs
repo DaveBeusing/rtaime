@@ -41,6 +41,35 @@ public sealed class MxfOp1aRecordingCatalogTests
     }
 
     [Fact]
+    public void Explicitly_provisioned_backend_advertises_and_creates_MXF_writer()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "rtaime-mxf-provider-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var muxer = Path.Combine(directory, "raw2bmx.exe");
+            var probe = Path.Combine(directory, "ffprobe.exe");
+            File.WriteAllBytes(muxer, [1]);
+            File.WriteAllBytes(probe, [1]);
+            var disabled = new ManagedMxfOp1aRecordingWriterProvider(directory, muxer, probe);
+            Assert.False(Assert.Single(disabled.Profiles).Available);
+
+            var enabled = new ManagedMxfOp1aRecordingWriterProvider(
+                directory, muxer, probe, explicitlyEnabled: true);
+            var descriptor = Assert.Single(enabled.Profiles);
+            Assert.True(descriptor.Available);
+            Assert.Equal(RecordingProfileEvidenceState.Implemented, descriptor.EvidenceState);
+            Assert.Null(descriptor.UnavailableReason);
+            Assert.IsType<BmxOp1aRecordingWriter>(
+                enabled.CreateWriter(ProfessionalRecordingFormats.MxfOp1aUncompressedPcmProfileId));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
     public void Mxf_provider_does_not_create_unverified_writer()
     {
         var provider = new ManagedMxfOp1aRecordingWriterProvider();
