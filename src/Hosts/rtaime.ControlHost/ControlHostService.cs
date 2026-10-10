@@ -48,7 +48,7 @@ public sealed record ControlHostCommitConfirmation(
 public sealed class ControlHostService
 {
 	private readonly object _gate = new();
-	private readonly ProductionSpecification _specification;
+	private ProductionSpecification _specification;
 	private readonly UpdatableProviderRegistry _providers;
 	private readonly BoundedProductionJournal _journal;
 	private readonly IControlHostClock _clock;
@@ -235,6 +235,37 @@ public sealed class ControlHostService
 			Journal(proposed.Revision, "control", "control.initialize.staged", "Initial authoritative state is staged pending Runtime commit.", null, null);
 			Journal(proposed.Revision, "planning", "planning.prepared", execution.PreparedExecution.PreparedExecutionId.ToString(), null, null);
 			return ControlHostOperationResult.Staged(execution);
+		}
+	}
+
+	public ProductionSourceSpecification AdoptSource(ProductionSourceSpecification source)
+	{
+		ArgumentNullException.ThrowIfNull(source);
+		if (source.ProviderBinding is null)
+			throw new ArgumentException("Adopted external sources require a provider binding.", nameof(source));
+
+		lock (_gate)
+		{
+			EnsureNoPending();
+			var existing = _specification.Sources.FirstOrDefault(candidate =>
+				candidate.ProviderBinding is { } binding &&
+				binding.ProviderId == source.ProviderBinding.ProviderId &&
+				binding.ExternalSourceId == source.ProviderBinding.ExternalSourceId);
+			if (existing is not null)
+				return existing;
+			if (_specification.Sources.Any(candidate => candidate.SourceId == source.SourceId))
+				throw new InvalidOperationException($"Production source identity '{source.SourceId}' already exists.");
+
+			_specification = new ProductionSpecification(
+				_specification.Version,
+				_specification.ProductionId,
+				_specification.Name,
+				_specification.Sources.Concat(new[] { source }).ToArray(),
+				_specification.InitialRouting,
+				_specification.Scenes,
+				_specification.InitialOutputRoles);
+			Journal(_authoritative?.Revision ?? Revision.Initial, "control", "control.source.adopted", $"External source '{source.SourceId}' was added to the authoritative source catalog without changing routing.", source.SourceId.Value, null);
+			return source;
 		}
 	}
 
