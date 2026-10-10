@@ -55,13 +55,14 @@ internal static class MxfKlvReader
             throw new InvalidDataException("MXF BER lengths must use one to eight definite-length bytes.");
         Span<byte> bytes = stackalloc byte[8];
         stream.ReadExactly(bytes[..count]);
-        if (bytes[0] == 0)
-            throw new InvalidDataException("Non-canonical MXF BER length.");
+        // MXF permits fixed-width long-form BER lengths so the writer can
+        // reserve space for a final essence or partition size. Do not require
+        // minimal BER encoding when reading existing MXF containers.
         ulong value = 0;
         for (var i = 0; i < count; i++)
             value = checked((value << 8) | bytes[i]);
-        if (value > long.MaxValue || value < 0x80)
-            throw new InvalidDataException("Invalid MXF BER length encoding.");
+        if (value > long.MaxValue)
+            throw new InvalidDataException("MXF BER length exceeds supported stream range.");
         return (long)value;
     }
 }
