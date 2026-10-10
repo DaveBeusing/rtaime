@@ -45,6 +45,72 @@ public sealed class GpuReadbackOwnershipConcurrencyTests
     }
 
     [Fact]
+    public void Provider_shutdown_does_not_invalidate_a_retained_host_readback()
+    {
+        using var provider = new GpuProcessingProvider(new ManagedReferenceGpuBackend(), readbackBufferCapacity: 1);
+        provider.Start();
+        using var frame = provider.Upload(
+            Source,
+            RgbaFrameBuffer.Solid(Format, 11, 22, 33),
+            new FrameTiming(0, 0, new Timebase(1, 50)),
+            Generation.Initial,
+            "ownership-test");
+
+        var boundary = provider.RentReadback(frame);
+        using var consumer = boundary.Retain();
+        boundary.Dispose();
+
+        provider.Stop();
+
+        Assert.Equal((byte)11, consumer.Memory.Span[0]);
+        Assert.Equal(1, provider.ReadbackPoolStatistics.ActiveBuffers);
+        consumer.Dispose();
+        Assert.Equal(0, provider.ReadbackPoolStatistics.ActiveBuffers);
+    }
+
+    [Fact]
+    public void Concurrent_disposal_and_retention_never_revives_released_storage()
+    {
+        using var provider = new GpuProcessingProvider(new ManagedReferenceGpuBackend(), readbackBufferCapacity: 1);
+        provider.Start();
+        using var frame = provider.Upload(
+            Source,
+            RgbaFrameBuffer.Solid(Format, 17, 18, 19),
+            new FrameTiming(0, 0, new Timebase(1, 50)),
+            Generation.Initial,
+            "ownership-test");
+
+        for (var cycle = 0; cycle < 32; cycle++)
+        {
+            var primary = provider.RentReadback(frame);
+            using var barrier = new Barrier(2);
+            var retained = Task.Run(() =>
+            {
+                barrier.SignalAndWait();
+                try
+                {
+                    return primary.Retain();
+                }
+                catch (ObjectDisposedException)
+                {
+                    return null;
+                }
+            });
+
+            barrier.SignalAndWait();
+            primary.Dispose();
+            using var reader = retained.GetAwaiter().GetResult();
+            if (reader is not null)
+                Assert.Equal((byte)17, reader.Memory.Span[0]);
+
+            Assert.Equal(reader is null ? 0 : 1, provider.ReadbackPoolStatistics.ActiveBuffers);
+        }
+
+        Assert.Equal(0, provider.ReadbackPoolStatistics.ActiveBuffers);
+        Assert.Equal(1, provider.ReadbackPoolStatistics.AllocatedBuffers);
+    }
+
+    [Fact]
     public void Concurrent_disposal_of_retained_readers_releases_buffer_once()
     {
         using var provider = new GpuProcessingProvider(new ManagedReferenceGpuBackend(), readbackBufferCapacity: 1);
