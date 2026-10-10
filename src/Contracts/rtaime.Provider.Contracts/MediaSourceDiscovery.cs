@@ -105,3 +105,74 @@ public sealed class MediaSourceDiscoverySnapshot
     public int MaximumRetainedResults { get; }
     public IReadOnlyList<DiscoveredMediaSourceDescriptor> Sources => _sources;
 }
+
+
+public enum MediaInputLifecycleState
+{
+    Disabled = 1,
+    Connecting = 2,
+    Connected = 3,
+    Reconnecting = 4,
+    Lost = 5,
+    Faulted = 6,
+    Stopping = 7
+}
+
+public readonly record struct MediaInputStatistics(
+    ulong VideoFramesReceived,
+    ulong AudioFramesReceived,
+    ulong DroppedFrames,
+    ulong RejectedFrames,
+    ulong ReconnectCount,
+    int QueueDepth,
+    int MaximumQueueDepth);
+
+public sealed record MediaInputHealthSnapshot
+{
+    public MediaInputHealthSnapshot(
+        MediaSourceId sourceId,
+        ProviderId providerId,
+        DiscoveredMediaSourceId discoveredSourceId,
+        string safeSourceIdentity,
+        MediaInputLifecycleState lifecycle,
+        bool connected,
+        VideoFormat? videoFormat,
+        AudioFormat? audioFormat,
+        MediaInputStatistics statistics,
+        UtcTimestamp? lastMediaAt,
+        Failure? failure)
+    {
+        if (string.IsNullOrWhiteSpace(safeSourceIdentity))
+            throw new ArgumentException("Safe source identity is required.", nameof(safeSourceIdentity));
+        if (!Enum.IsDefined(lifecycle))
+            throw new ArgumentOutOfRangeException(nameof(lifecycle));
+        if (lifecycle == MediaInputLifecycleState.Connected && !connected)
+            throw new ArgumentException("Connected lifecycle requires connected input state.", nameof(connected));
+        if (lifecycle == MediaInputLifecycleState.Faulted && failure is null)
+            throw new ArgumentException("Faulted media input requires failure evidence.", nameof(failure));
+
+        SourceId = sourceId;
+        ProviderId = providerId;
+        DiscoveredSourceId = discoveredSourceId;
+        SafeSourceIdentity = safeSourceIdentity.Trim();
+        Lifecycle = lifecycle;
+        Connected = connected;
+        VideoFormat = videoFormat;
+        AudioFormat = audioFormat;
+        Statistics = statistics;
+        LastMediaAt = lastMediaAt;
+        Failure = failure;
+    }
+
+    public MediaSourceId SourceId { get; }
+    public ProviderId ProviderId { get; }
+    public DiscoveredMediaSourceId DiscoveredSourceId { get; }
+    public string SafeSourceIdentity { get; }
+    public MediaInputLifecycleState Lifecycle { get; }
+    public bool Connected { get; }
+    public VideoFormat? VideoFormat { get; }
+    public AudioFormat? AudioFormat { get; }
+    public MediaInputStatistics Statistics { get; }
+    public UtcTimestamp? LastMediaAt { get; }
+    public Failure? Failure { get; }
+}
