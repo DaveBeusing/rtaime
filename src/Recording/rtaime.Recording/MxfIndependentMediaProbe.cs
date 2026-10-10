@@ -59,9 +59,19 @@ internal static class MxfIndependentMediaProbe
             v.GetProperty("height").GetInt32() != 1080 ||
             Get(v, "pix_fmt") is not ("uyvy422" or "yuv422p"))
             throw new InvalidDataException("MXF must contain uncompressed 1920x1080 8-bit YUV 422 video.");
-        var frameRate = Get(v, "avg_frame_rate");
-        if (!EquivalentRatio(frameRate, expectedFrameRate))
-            throw new InvalidDataException($"MXF edit rate {frameRate} does not match {expectedFrameRate}.");
+        // MXF demuxers may report avg_frame_rate=0/0 for uncompressed
+        // frame-wrapped essence while preserving the true stream timebase.
+        var averageRate = Get(v, "avg_frame_rate");
+        var nominalRate = Get(v, "r_frame_rate");
+        var videoTimebase = Get(v, "time_base");
+        var timebaseMatches = TryRatio(videoTimebase, out var timeNum, out var timeDen) &&
+            TryRatio(expectedFrameRate, out var expectedNum, out var expectedDen) &&
+            (decimal)timeDen * expectedDen == (decimal)expectedNum * timeNum;
+        if (!EquivalentRatio(averageRate, expectedFrameRate) &&
+            !EquivalentRatio(nominalRate, expectedFrameRate) &&
+            !timebaseMatches)
+            throw new InvalidDataException(
+                $"MXF edit rate does not match {expectedFrameRate}: avg={averageRate}, nominal={nominalRate}, timebase={videoTimebase}.");
         if (!ulong.TryParse(Get(v, "nb_read_frames"), NumberStyles.None,
             CultureInfo.InvariantCulture, out var frames) || frames != expectedVideoFrames)
             throw new InvalidDataException("Independent MXF decoded frame count does not match the recording.");
