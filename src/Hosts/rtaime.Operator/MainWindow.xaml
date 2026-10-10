@@ -122,10 +122,10 @@
 					Status="{x:Static controls:RtaimeStatusKind.Warning}"
 					Margin="8,0"
 					VerticalAlignment="Center"
-					ToolTip="External transmission/on-air state is not authoritative in the current V1 contract.">
+					ToolTip="{Binding OutputHealth.ProgramTransmissionDetail, RelativeSource={RelativeSource AncestorType={x:Type Window}}}">
 					<StackPanel HorizontalAlignment="Center">
 						<TextBlock Text="LIVE" FontSize="{StaticResource OperatorFontSizeCompact}" FontWeight="Bold" HorizontalAlignment="Center" />
-						<TextBlock Text="UNVERIFIED" FontSize="{StaticResource OperatorFontSizeFinePrint}" HorizontalAlignment="Center" />
+						<TextBlock Text="{Binding OutputHealth.ProgramTransmissionState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" FontSize="{StaticResource OperatorFontSizeFinePrint}" HorizontalAlignment="Center" />
 					</StackPanel>
 				</controls:RtaimeStatusBadge>
 				<controls:RtaimeStatusBadge Grid.Column="8"
