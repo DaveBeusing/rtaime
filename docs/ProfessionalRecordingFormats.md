@@ -44,9 +44,11 @@ The profile is useful for:
 
 ## MXF boundary
 
-MXF is not advertised by this implementation.
+MXF is not advertised by this implementation **by default**. The new `mxf-op1a-uncompressed-pcm` profile becomes visible as an executable software implementation only when RuntimeHost is explicitly enabled and supplied with fixed paths to BMX `raw2bmx` and an independent FFprobe executable. This addition does not change the managed QuickTime/MOV decision above: **No new native library or external executable is introduced for MOV.**
 
-A production MXF profile requires an explicit operational pattern and essence mapping, including KLV partition/index behavior, timecode/edit-rate semantics and independent conformance evidence. OP1a or a named professional codec must not be claimed until that implementation exists and is validated independently.
+The MXF writer uses BBC BMX v1.6 for the actual ST 377-1/378 OP1a container, metadata, essence and index serialization, while Runtime's recording worker feeds uncompressed UYVY 4:2:2 and stereo 48 kHz PCM16. Independent rtaime KLV/partition/RIP structural checks and FFprobe codec/frame/sample inspection run before an atomic promotion from `.partial.mxf` to `.mxf`. Real 1080p50 and 1080p59.94 software qualification passed in the dedicated MXF Actions run 38042667329. See [MXF OP1a Recording Qualification](MxfOp1aRecordingQualification.md).
+
+BBC BMX upstream is BSD-3-Clause; FFprobe licensing depends on the distributed build. These executables are **not packaged** by this change, and explicit release bundling requires licensing, security provenance and software bill-of-materials review. The software qualification does not certify storage throughput, generic MXF features or vendor/broadcast interchange.
 
 ## Validation boundary
 
