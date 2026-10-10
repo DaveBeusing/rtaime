@@ -12,7 +12,7 @@ public sealed class BmxOp1aRecordingWriterTests
     {
         var root = Path.Combine(Path.GetTempPath(), "rtaime-bmx-" + Guid.NewGuid().ToString("N"));
         var executable = Path.Combine(root, "missing-raw2bmx.exe");
-        var writer = new BmxOp1aRecordingWriter(root, executable);
+        var writer = new BmxOp1aRecordingWriter(root, executable, Path.Combine(root, "missing-ffprobe.exe"));
         var output = new RecordingOutputDescriptor(RecordingOutputId.New(), MediaSinkId.New(), "Program");
         var start = new RecordingStartRequest(
             RecordingContractVersion.Current,
@@ -27,7 +27,7 @@ public sealed class BmxOp1aRecordingWriterTests
     [Fact]
     public void MXF_target_rejects_non_mxf_and_path_traversal()
     {
-        var writer = new BmxOp1aRecordingWriter(Path.GetTempPath(), "missing-raw2bmx.exe");
+        var writer = new BmxOp1aRecordingWriter(Path.GetTempPath(), "missing-raw2bmx.exe", "missing-ffprobe.exe");
         Assert.Throws<ArgumentException>(() => writer.ConfigureTarget(Path.GetTempPath(), "../take.mxf"));
         Assert.Throws<ArgumentException>(() => writer.ConfigureTarget(Path.GetTempPath(), "take.mov"));
         Assert.Equal("take.mxf", writer.ConfigureTarget(Path.GetTempPath(), "take"));
