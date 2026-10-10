@@ -469,7 +469,9 @@ public sealed class ProductionIpcIntegrationTests
 		Assert.Equal(RuntimeExecutionStatus.Committed, runtime.Runtime!.Snapshot.Runtime.Status);
 
 		controlStop.Cancel();
-		Assert.Equal(ControlHostExitCode.Success, await controlRun);
+		var controlExit = await controlRun;
+		Assert.True(controlExit == ControlHostExitCode.Success,
+			$"ControlHost exited with {controlExit}: {control.Lifecycle.Detail}");
 		runtimeStop.Cancel();
 		Assert.Equal(RuntimeHostExitCode.Success, await runtimeRun);
 	}
