@@ -202,17 +202,20 @@ public static class ProfessionalRecordingFormats
 	public static RecordingProfileDescriptor MxfOp1aUncompressedPcm => CreateMxfOp1aUncompressedPcmDescriptor();
 
 	/// <summary>
-	/// Precise requested MXF profile identity; deliberately unavailable until the
-	/// complete OP1a writer and independent semantic interoperability probe pass.
+	/// A constrained OP1a profile. The default descriptor remains unavailable.
+	/// RuntimeHost may explicitly provision a verified BMX/FFprobe backend.
 	/// </summary>
 	public static RecordingProfileDescriptor CreateMxfOp1aUncompressedPcmDescriptor() =>
+		CreateMxfOp1aUncompressedPcmDescriptor(false);
+
+	public static RecordingProfileDescriptor CreateMxfOp1aUncompressedPcmDescriptor(bool available) =>
 		new(
 			MxfOp1aUncompressedPcmProfileId,
 			"MXF OP1a · Uncompressed 4:2:2 · PCM",
 			"Material eXchange Format OP1a",
 			".mxf",
 			"Uncompressed YUV 4:2:2",
-			"8-bit 4:2:2 (mapping pending conformance)",
+			"8-bit UYVY 4:2:2 progressive",
 			null,
 			"PCM S16LE 48 kHz Stereo",
 			Mp4InputFormats,
@@ -221,10 +224,12 @@ public static class ProfessionalRecordingFormats
 			1_536_000,
 			RecordingAccelerationClass.Software,
 			ManagedMxfOp1aProviderId,
-			false,
-			"OP1a metadata, essence ULs, complete writer and independent conformance probe are not yet qualified.",
-			RecordingProfileEvidenceState.Unverified,
-			"Profile specification and KLV/partition/timing primitives exist; no valid completed OP1a recording or independent essence verification is available.");
+			available,
+			available ? null : "MXF OP1a requires explicitly provisioned BMX and FFprobe binaries.",
+			available ? RecordingProfileEvidenceState.Implemented : RecordingProfileEvidenceState.Unverified,
+			available
+				? "External BMX muxer with independently executed FFprobe media inspection, structural validation and validated atomic publication; physical storage throughput and external vendor interchange are unverified."
+				: "Backend disabled until MXF OP1a binaries are provisioned and the profile is explicitly enabled.");
 
 
 	public static RecordingProfileDescriptor CreateMp4H264AacDescriptor()
