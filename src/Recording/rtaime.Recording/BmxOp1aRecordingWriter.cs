@@ -32,6 +32,8 @@ public sealed class BmxOp1aRecordingWriter :
     private ulong _frames;
     private ulong _audioFrames;
     private ulong? _nextAudioPosition;
+    private ulong? _nextSequence;
+    private FileStream? _reservation;
     private long _payloadBytes;
     private byte[]? _videoBuffer;
     private byte[]? _audioBuffer;
@@ -86,16 +88,26 @@ public sealed class BmxOp1aRecordingWriter :
             var name = _configuredName ?? request.Output.OutputId + ".mxf";
             _finalPath = Path.Combine(directory, name);
             _partialPath = Path.Combine(directory, Path.GetFileNameWithoutExtension(name) + ".partial.mxf");
-            if (File.Exists(_finalPath) || File.Exists(_partialPath))
+            if (File.Exists(_finalPath) || File.Exists(_partialPath) || File.Exists(_finalPath + ".lock"))
                 throw new RecordingOutputUnavailableException("Recording output path is already reserved.");
             _workingDirectory = Path.Combine(directory, "." + Guid.NewGuid().ToString("N") + ".mxf-work");
             Directory.CreateDirectory(_workingDirectory);
+            try
+            {
+                _reservation = new FileStream(_finalPath + ".lock", FileMode.CreateNew, FileAccess.Write, FileShare.None);
+            }
+            catch
+            {
+                Directory.Delete(_workingDirectory, recursive: true);
+                throw;
+            }
             try
             {
                 _videoStream = new FileStream(Path.Combine(_workingDirectory, "video.uyvy"), FileMode.CreateNew, FileAccess.Write, FileShare.None);
                 _audioStream = new FileStream(Path.Combine(_workingDirectory, "audio.pcm"), FileMode.CreateNew, FileAccess.Write, FileShare.None);
                 _open = true;
                 _frames = _audioFrames = 0;
+                _nextSequence = null;
                 _nextAudioPosition = null;
                 _format = null;
                 _payloadBytes = 0;
@@ -105,6 +117,7 @@ public sealed class BmxOp1aRecordingWriter :
             {
                 _videoStream?.Dispose();
                 _audioStream?.Dispose();
+                ReleaseReservation();
                 Directory.Delete(_workingDirectory, recursive: true);
                 throw;
             }
@@ -154,6 +167,8 @@ public sealed class BmxOp1aRecordingWriter :
             var audioSize = checked((int)sample.Audio.Timing.SampleCount * 2 * sizeof(float));
             if (payload.Video.Memory.Length != videoSize || payload.Audio.Length != audioSize)
                 throw new InvalidDataException("MXF staged Program payload dimensions do not match metadata.");
+            if (_nextSequence is { } nextSequence && sample.SequenceNumber != nextSequence)
+                throw new InvalidDataException("MXF Program video sequence is discontinuous.");
             if (_nextAudioPosition is { } expected && sample.Audio.Timing.SamplePosition != expected)
                 throw new InvalidDataException("MXF audio positions are not contiguous.");
             var required = checked(_payloadBytes + (long)videoSize + audioSize);
@@ -170,6 +185,7 @@ public sealed class BmxOp1aRecordingWriter :
             _frames++;
             _audioFrames = checked(_audioFrames + sample.Audio.Timing.SampleCount);
             _nextAudioPosition = checked(sample.Audio.Timing.SamplePosition + sample.Audio.Timing.SampleCount);
+            _nextSequence = checked(sample.SequenceNumber + 1);
             _payloadBytes = required;
             return ValueTask.CompletedTask;
         }
@@ -191,6 +207,10 @@ public sealed class BmxOp1aRecordingWriter :
             if (_staged.Count != 0 || _frames == 0 || _audioFrames == 0 || _format is null)
                 throw new InvalidDataException("MXF finalization requires complete video and audio samples.");
             rate = _format == VideoFormat.Hd1080p50Rgba8 ? "50" : "5994";
+            var expectedSamples = MxfAudioCadence.SampleBoundary((long)_frames,
+                rate == "50" ? 50U : 60000U, rate == "50" ? 1U : 1001U);
+            if (Math.Abs((long)_audioFrames - expectedSamples) > 1)
+                throw new InvalidDataException("MXF Program video/audio duration is not aligned.");
             work = _workingDirectory!;
             partial = _partialPath!;
             final = _finalPath!;
@@ -241,6 +261,7 @@ public sealed class BmxOp1aRecordingWriter :
         {
             lock (_gate)
                 _open = false;
+            ReleaseReservation();
             if (Directory.Exists(work))
                 Directory.Delete(work, recursive: true);
         }
@@ -258,10 +279,21 @@ public sealed class BmxOp1aRecordingWriter :
             _audioStream?.Dispose();
             _videoStream = _audioStream = null;
             _open = false;
+            ReleaseReservation();
             if (_workingDirectory is { } work && Directory.Exists(work))
                 Directory.Delete(work, recursive: true);
         }
         return ValueTask.CompletedTask;
+    }
+
+    private void ReleaseReservation()
+    {
+        _reservation?.Dispose();
+        _reservation = null;
+        if (_finalPath is { } path)
+        {
+            try { File.Delete(path + ".lock"); } catch (IOException) { }
+        }
     }
 
     private void EnsureOpen()
