@@ -27,7 +27,7 @@ $bundlePolicy = Get-Content -LiteralPath (Join-Path $root "build/release/offline
 Assert-Condition ($contracts -match 'MaximumRetainedResults' -and $contracts -match 'MediaInputLifecycleState') "Discovery/input contracts must remain bounded and expose lifecycle evidence."
 Assert-Condition ($provider -match 'MediaSourceCapabilityKinds\.Discovery' -and $provider -match 'MediaSourceCapabilityKinds\.Input') "The shared NDI provider must expose discovery and input capabilities."
 Assert-Condition ($discovery -match 'maximumRetainedResults' -and $discovery -match 'expiry' -and $discovery -match 'Take\(') "NDI discovery must retain bounded refresh/expiry semantics."
-Assert-Condition ($input -match 'drop_oldest' -and $input -match 'MediaInputLifecycleState\.Lost' -and $input -match 'MediaInputLifecycleState\.Reconnecting') "NDI input must retain bounded live buffering and source-loss/reconnect evidence."
+Assert-Condition ($input -match 'QueueCapacity' -and $input -match '_queue\.Dequeue' -and $input -match '_dropped\+\+' -and $input -match 'MarkLost' -and $input -match '_reconnects\+\+') "NDI input must retain bounded live buffering and source-loss/reconnect evidence."
 Assert-Condition ($bridge -match 'RegisterExternalSource' -and $bridge -match 'SetExternalInputContent' -and $bridge -match 'SetExternalAudioInput') "Runtime NDI input must feed the existing Runtime source/audio seams."
 Assert-Condition ($bridge -notmatch 'SelectPreview|CutProgram|DissolveProgram|RouteOutputRole') "Runtime NDI input must never mutate production routing."
 Assert-Condition ($control -match 'AdoptAsync' -and $control -match 'AdoptSourceAsync' -and $control -match 'routingBefore') "External-source adoption must remain explicit, durable and routing-neutral."
