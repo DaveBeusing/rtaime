@@ -158,6 +158,9 @@ Required Gates enforce the lifecycle policy and unit fault-injection coverage fo
 
 Existing Program-memory ownership, deterministic Runtime boundary and monitoring tests continue to protect bounded leases, one Program cadence and isolation from Operator presentation.
 
+Additional deterministic regressions verify repeated monitoring-export failure leaves Program readback functional without provider restarts or generation rotation, and Stop racing a blocked recovery is serialized by the established provider gate. A completed Stop rejects further GPU uploads rather than allowing a stale Ready state. These software concurrency tests do not establish GPU driver/TDR recovery safety.
+
+
 ## Physical qualification boundary
 
 Physical NVIDIA device removal, CUDA context loss, TDR/reset behavior, CUDA/D3D11 device-loss recreation and long-duration recovery on the approved reference platform are **UNVERIFIED** until immutable evidence is captured for the exact source revision on approved hardware.
