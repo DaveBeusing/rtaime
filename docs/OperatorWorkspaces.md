@@ -92,6 +92,7 @@ Viewer maximize/restore and fullscreen remain presentation-only. All seeking, IN
 MEDIA emphasizes preparation:
 
 - expanded Media Pool;
+- governed NDI source discovery and explicit source adoption;
 - Preview-focused viewer presentation;
 - Media Deck;
 - metadata and Context Inspector;
@@ -99,6 +100,8 @@ MEDIA emphasizes preparation:
 - existing IN/OUT and playback-policy preparation.
 
 It does not introduce another ingest or media-management subsystem.
+
+The MEDIA NDI SOURCES panel projects bounded Runtime/provider discovery through Client and ControlHost. REFRESH is observational. ADOPT is an explicit ControlHost mutation that adds a stable source identity to the durable production source catalog without changing Preview or Program. Source selection never routes or takes. Input lifecycle states are confirmed Runtime/provider evidence; the Operator does not host an NDI finder, receiver, decoder or audio path.
 
 ## SCENES
 
