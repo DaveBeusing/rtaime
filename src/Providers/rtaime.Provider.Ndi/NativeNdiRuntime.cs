@@ -222,6 +222,7 @@ public sealed class NativeNdiSender : INdiSender
 internal static class NdiFourCc
 {
 	public static readonly int Rgba = Make('R', 'G', 'B', 'A');
+	public static readonly int Rgbx = Make('R', 'G', 'B', 'X');
 	public static readonly int Fltp = Make('F', 'L', 'T', 'p');
 
 	private static int Make(char a, char b, char c, char d) =>
@@ -273,6 +274,16 @@ internal sealed class NdiNativeApi : IDisposable
 	private readonly NdiSendDestroy _sendDestroy;
 	private readonly NdiSendVideoV2 _sendVideo;
 	private readonly NdiSendAudioV3 _sendAudio;
+	private readonly NdiFindCreateV2 _findCreate;
+	private readonly NdiFindDestroy _findDestroy;
+	private readonly NdiFindGetCurrentSources _findGetCurrentSources;
+	private readonly NdiFindWaitForSources _findWaitForSources;
+	private readonly NdiRecvCreateV3 _recvCreate;
+	private readonly NdiRecvDestroy _recvDestroy;
+	private readonly NdiRecvCaptureV3 _recvCapture;
+	private readonly NdiRecvFreeVideoV2 _recvFreeVideo;
+	private readonly NdiRecvFreeAudioV3 _recvFreeAudio;
+	private readonly NdiRecvGetNoConnections _recvGetNoConnections;
 	private bool _initialized;
 	private bool _disposed;
 
@@ -285,6 +296,16 @@ internal sealed class NdiNativeApi : IDisposable
 		_sendDestroy = Load<NdiSendDestroy>("NDIlib_send_destroy");
 		_sendVideo = Load<NdiSendVideoV2>("NDIlib_send_send_video_v2");
 		_sendAudio = Load<NdiSendAudioV3>("NDIlib_send_send_audio_v3");
+		_findCreate = Load<NdiFindCreateV2>("NDIlib_find_create_v2");
+		_findDestroy = Load<NdiFindDestroy>("NDIlib_find_destroy");
+		_findGetCurrentSources = Load<NdiFindGetCurrentSources>("NDIlib_find_get_current_sources");
+		_findWaitForSources = Load<NdiFindWaitForSources>("NDIlib_find_wait_for_sources");
+		_recvCreate = Load<NdiRecvCreateV3>("NDIlib_recv_create_v3");
+		_recvDestroy = Load<NdiRecvDestroy>("NDIlib_recv_destroy");
+		_recvCapture = Load<NdiRecvCaptureV3>("NDIlib_recv_capture_v3");
+		_recvFreeVideo = Load<NdiRecvFreeVideoV2>("NDIlib_recv_free_video_v2");
+		_recvFreeAudio = Load<NdiRecvFreeAudioV3>("NDIlib_recv_free_audio_v3");
+		_recvGetNoConnections = Load<NdiRecvGetNoConnections>("NDIlib_recv_get_no_connections");
 	}
 
 	public static NdiNativeApi Load(string libraryPath)
@@ -347,6 +368,105 @@ internal sealed class NdiNativeApi : IDisposable
 	public void SendVideo(IntPtr sender, ref NdiVideoFrameV2 frame) => _sendVideo(sender, ref frame);
 	public void SendAudio(IntPtr sender, ref NdiAudioFrameV3 frame) => _sendAudio(sender, ref frame);
 
+	public IntPtr CreateFinder()
+	{
+		ObjectDisposedException.ThrowIf(_disposed, this);
+		if (!_initialized)
+			throw new InvalidOperationException("NDI runtime is not initialized.");
+		var settings = new NdiFindCreateDescriptor
+		{
+			ShowLocalSources = true,
+			Groups = IntPtr.Zero,
+			ExtraIps = IntPtr.Zero
+		};
+		return _findCreate(ref settings);
+	}
+
+	public void DestroyFinder(IntPtr finder)
+	{
+		if (finder != IntPtr.Zero)
+			_findDestroy(finder);
+	}
+
+	public bool WaitForSources(IntPtr finder, uint timeoutMilliseconds) =>
+		_findWaitForSources(finder, timeoutMilliseconds);
+
+	public IReadOnlyList<NdiDiscoveredSourceEndpoint> GetCurrentSources(IntPtr finder)
+	{
+		var baseAddress = _findGetCurrentSources(finder, out var count);
+		if (baseAddress == IntPtr.Zero || count == 0)
+			return Array.Empty<NdiDiscoveredSourceEndpoint>();
+		if (count > 4096)
+			throw new InvalidDataException("NDI discovery returned an unreasonable source count.");
+
+		var size = Marshal.SizeOf<NdiSourceDescriptorNative>();
+		var result = new List<NdiDiscoveredSourceEndpoint>(checked((int)count));
+		for (var index = 0; index < count; index++)
+		{
+			var source = Marshal.PtrToStructure<NdiSourceDescriptorNative>(
+				IntPtr.Add(baseAddress, checked((int)index * size)));
+			var name = Marshal.PtrToStringUTF8(source.NdiName);
+			var url = Marshal.PtrToStringUTF8(source.UrlAddress);
+			if (!string.IsNullOrWhiteSpace(name) && !string.IsNullOrWhiteSpace(url))
+				result.Add(new NdiDiscoveredSourceEndpoint(name, url));
+		}
+		return result;
+	}
+
+	public IntPtr CreateReceiver(NdiDiscoveredSourceEndpoint endpoint, string receiverName)
+	{
+		ArgumentNullException.ThrowIfNull(endpoint);
+		if (string.IsNullOrWhiteSpace(receiverName))
+			throw new ArgumentException("NDI receiver name is required.", nameof(receiverName));
+		ObjectDisposedException.ThrowIf(_disposed, this);
+		if (!_initialized)
+			throw new InvalidOperationException("NDI runtime is not initialized.");
+
+		var name = Marshal.StringToCoTaskMemUTF8(endpoint.NdiName);
+		var url = Marshal.StringToCoTaskMemUTF8(endpoint.UrlAddress);
+		var receiver = Marshal.StringToCoTaskMemUTF8(receiverName.Trim());
+		try
+		{
+			var settings = new NdiRecvCreateDescriptor
+			{
+				Source = new NdiSourceDescriptorNative { NdiName = name, UrlAddress = url },
+				ColorFormat = NdiRecvColorFormat.RgbxRgba,
+				Bandwidth = NdiRecvBandwidth.Highest,
+				AllowVideoFields = false,
+				ReceiverName = receiver
+			};
+			return _recvCreate(ref settings);
+		}
+		finally
+		{
+			Marshal.FreeCoTaskMem(receiver);
+			Marshal.FreeCoTaskMem(url);
+			Marshal.FreeCoTaskMem(name);
+		}
+	}
+
+	public void DestroyReceiver(IntPtr receiver)
+	{
+		if (receiver != IntPtr.Zero)
+			_recvDestroy(receiver);
+	}
+
+	public NdiFrameType Capture(
+		IntPtr receiver,
+		out NdiVideoFrameV2 video,
+		out NdiAudioFrameV3 audio,
+		uint timeoutMilliseconds) =>
+		(NdiFrameType)_recvCapture(receiver, out video, out audio, IntPtr.Zero, timeoutMilliseconds);
+
+	public void FreeVideo(IntPtr receiver, ref NdiVideoFrameV2 frame) =>
+		_recvFreeVideo(receiver, ref frame);
+
+	public void FreeAudio(IntPtr receiver, ref NdiAudioFrameV3 frame) =>
+		_recvFreeAudio(receiver, ref frame);
+
+	public int GetReceiverConnectionCount(IntPtr receiver, uint timeoutMilliseconds) =>
+		_recvGetNoConnections(receiver, timeoutMilliseconds);
+
 	private T Load<T>(string export) where T : Delegate
 	{
 		if (!NativeLibrary.TryGetExport(_library, export, out var address))
@@ -385,6 +505,91 @@ internal sealed class NdiNativeApi : IDisposable
 
 	[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
 	private delegate void NdiSendAudioV3(IntPtr sender, ref NdiAudioFrameV3 audioFrame);
+
+	[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+	private delegate IntPtr NdiFindCreateV2(ref NdiFindCreateDescriptor settings);
+
+	[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+	private delegate void NdiFindDestroy(IntPtr finder);
+
+	[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+	private delegate IntPtr NdiFindGetCurrentSources(IntPtr finder, out uint count);
+
+	[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+	[return: MarshalAs(UnmanagedType.I1)]
+	private delegate bool NdiFindWaitForSources(IntPtr finder, uint timeoutMilliseconds);
+
+	[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+	private delegate IntPtr NdiRecvCreateV3(ref NdiRecvCreateDescriptor settings);
+
+	[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+	private delegate void NdiRecvDestroy(IntPtr receiver);
+
+	[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+	private delegate int NdiRecvCaptureV3(
+		IntPtr receiver,
+		out NdiVideoFrameV2 video,
+		out NdiAudioFrameV3 audio,
+		IntPtr metadata,
+		uint timeoutMilliseconds);
+
+	[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+	private delegate void NdiRecvFreeVideoV2(IntPtr receiver, ref NdiVideoFrameV2 video);
+
+	[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+	private delegate void NdiRecvFreeAudioV3(IntPtr receiver, ref NdiAudioFrameV3 audio);
+
+	[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+	private delegate int NdiRecvGetNoConnections(IntPtr receiver, uint timeoutMilliseconds);
+}
+
+
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct NdiSourceDescriptorNative
+{
+	public IntPtr NdiName;
+	public IntPtr UrlAddress;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct NdiFindCreateDescriptor
+{
+	[MarshalAs(UnmanagedType.I1)]
+	public bool ShowLocalSources;
+	public IntPtr Groups;
+	public IntPtr ExtraIps;
+}
+
+internal static class NdiRecvColorFormat
+{
+	public const int RgbxRgba = 2;
+}
+
+internal static class NdiRecvBandwidth
+{
+	public const int Highest = 100;
+}
+
+internal enum NdiFrameType
+{
+	None = 0,
+	Video = 1,
+	Audio = 2,
+	Metadata = 3,
+	Error = 4,
+	StatusChange = 100
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct NdiRecvCreateDescriptor
+{
+	public NdiSourceDescriptorNative Source;
+	public int ColorFormat;
+	public int Bandwidth;
+	[MarshalAs(UnmanagedType.I1)]
+	public bool AllowVideoFields;
+	public IntPtr ReceiverName;
 }
 
 [StructLayout(LayoutKind.Sequential)]
