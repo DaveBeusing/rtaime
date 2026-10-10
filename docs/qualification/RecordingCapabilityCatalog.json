@@ -43,6 +43,27 @@
       "availabilityRule": "available from the managed Recording provider without an external media runtime",
       "evidenceState": "implemented",
       "evidence": "Managed QuickTime writer with 2vuy uncompressed video, sowt PCM16 audio and independent bounded MOV probe validation"
+    },
+    {
+      "profileId": "mxf-op1a-uncompressed-pcm",
+      "displayName": "MXF OP1a · Uncompressed 4:2:2 · PCM",
+      "providerId": "managed-mxf-op1a",
+      "container": "Material eXchange Format OP1a",
+      "fileExtension": ".mxf",
+      "videoCodec": "Uncompressed YUV 4:2:2",
+      "videoProfile": "8-bit UYVY 4:2:2 progressive",
+      "audioCodec": "PCM S16LE 48 kHz Stereo",
+      "supportedProgramVideoFormats": [
+        "1920x1080p50 RGBA8",
+        "1920x1080p60000/1001 RGBA8"
+      ],
+      "requiredProgramAudioFormat": "Stereo 48000 Hz Float32",
+      "maximumVideoBitRate": 1988667333,
+      "audioBitRate": 1536000,
+      "accelerationClass": "software",
+      "availabilityRule": "unavailable by default; explicitly enabled with RTAIME_MXF_OP1A_ENABLED=1 and existing provisioned RTAIME_MXF_RAW2BMX and RTAIME_MXF_FFPROBE executable paths",
+      "evidenceState": "implemented",
+      "evidence": "BMX v1.6 OP1a muxing from committed UYVY/PCM16 Program samples and independent MXF structure plus FFprobe audio/video validation; 1080p50 and 1080p60000/1001 Actions qualification run 38042667329 passed. Not vendor-certified or physical-throughput qualified."
     }
   ],
   "physicalAcceleration": {
@@ -51,7 +72,7 @@
     "reason": "No hardware recording encoder provider is implemented or qualified."
   },
   "futureFormats": {
-    "mxf": "not-implemented",
+    "mxf": "constrained-op1a-opt-in",
     "prores": "not-implemented",
     "dnxhr": "not-implemented",
     "avc-intra": "not-implemented"

@@ -70,7 +70,13 @@ Assert-Condition ($operator -match 'recording\.Profiles' -and $operator -match '
 Assert-Condition ($operatorSurface -notmatch '(?i)>[^<]*(MOV|MXF|ProRes|DNxHR|AVC-Intra)[^<]*<') "Operator must not advertise future professional formats without concrete providers."
 Assert-Condition ($documentation -match 'MP4' -and $documentation -match 'MOV' -and $documentation -match 'MXF') "Recording profile documentation must distinguish implemented MP4/MOV profiles from unavailable MXF."
 Assert-Condition ($formatDecision -match 'managed QuickTime/MOV' -and $formatDecision -match 'No new native library' -and $formatDecision -match 'MXF is not advertised') "The MOV provider dependency/licensing decision and MXF boundary must remain explicit."
-Assert-Condition ($capability -match '"profileId": "mp4-h264-aac"' -and $capability -match '"profileId": "mov-2vuy-pcm"' -and $capability -match '"providerId": "managed-quicktime"' -and $capability -notmatch '"profileId": "mxf') "Machine-readable capability evidence must publish implemented MP4/MOV profiles without claiming MXF."
+Assert-Condition ($capability -match '"profileId": "mp4-h264-aac"' -and $capability -match '"profileId": "mov-2vuy-pcm"' -and $capability -match '"providerId": "managed-quicktime"' -and $capability -match '"profileId": "mxf-op1a-uncompressed-pcm"' -and $capability -match '"availabilityRule": "unavailable by default') "Machine-readable capability evidence must publish implemented MP4/MOV profiles with MXF explicitly opt-in and unavailable by default."
 Assert-Condition ($capability -match '"accelerationClass": "software"' -and $capability -match '"supported": false') "Recording capability evidence must not infer hardware acceleration from codec/container support."
+
+# Prevent a catalog-only MXF descriptor from being accidentally promoted to a usable profile.
+Assert-Condition ($catalog -match 'mxf-op1a-uncompressed-pcm' -and $catalog -match 'CreateMxfOp1aUncompressedPcmDescriptor') "MXF capability must retain its explicit constrained profile identity."
+Assert-Condition ($providers -match 'ManagedMxfOp1aRecordingWriterProvider' -and $providers -match 'RecordingOutputUnavailableException') "Unqualified MXF provider must reject output creation."
+Assert-Condition ($catalog -match 'CreateMxfOp1aUncompressedPcmDescriptor\(\) =>\s*CreateMxfOp1aUncompressedPcmDescriptor\(false\)' -and $catalog -match 'available \? RecordingProfileEvidenceState.Implemented : RecordingProfileEvidenceState.Unverified') "MXF must be unavailable by default and distinguish provisioned implementation evidence."
+Assert-Condition ($providers -match 'explicitlyEnabled' -and $providers -match 'File.Exists\(raw2bmxPath\)' -and $providers -match 'File.Exists\(ffprobePath\)' -and $providers -match 'BmxOp1aRecordingWriter') "MXF requires explicit Runtime-owned provisioning and both independent executables."
 
 Write-Host "Recording Profile Catalog and Provider Boundary policy PASS"

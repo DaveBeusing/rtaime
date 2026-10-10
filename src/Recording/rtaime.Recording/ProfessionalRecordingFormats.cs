@@ -185,8 +185,10 @@ public static class ProfessionalRecordingFormats
 {
 	public static RecordingProfileId Mp4H264AacProfileId { get; } = new("mp4-h264-aac");
 	public static RecordingProfileId Mov2VuyPcmProfileId { get; } = new("mov-2vuy-pcm");
+	public static RecordingProfileId MxfOp1aUncompressedPcmProfileId { get; } = new("mxf-op1a-uncompressed-pcm");
 	public static RecordingWriterProviderId WindowsMediaFoundationProviderId { get; } = new("windows-media-foundation");
 	public static RecordingWriterProviderId ManagedQuickTimeProviderId { get; } = new("managed-quicktime");
+	public static RecordingWriterProviderId ManagedMxfOp1aProviderId { get; } = new("managed-mxf-op1a");
 
 	private static readonly ReadOnlyCollection<VideoFormat> Mp4InputFormats =
 		Array.AsReadOnly(new[]
@@ -197,6 +199,38 @@ public static class ProfessionalRecordingFormats
 
 	public static RecordingProfileDescriptor Mp4H264Aac => CreateMp4H264AacDescriptor();
 	public static RecordingProfileDescriptor Mov2VuyPcm => CreateMov2VuyPcmDescriptor();
+	public static RecordingProfileDescriptor MxfOp1aUncompressedPcm => CreateMxfOp1aUncompressedPcmDescriptor();
+
+	/// <summary>
+	/// A constrained OP1a profile. The default descriptor remains unavailable.
+	/// RuntimeHost may explicitly provision a verified BMX/FFprobe backend.
+	/// </summary>
+	public static RecordingProfileDescriptor CreateMxfOp1aUncompressedPcmDescriptor() =>
+		CreateMxfOp1aUncompressedPcmDescriptor(false);
+
+	public static RecordingProfileDescriptor CreateMxfOp1aUncompressedPcmDescriptor(bool available) =>
+		new(
+			MxfOp1aUncompressedPcmProfileId,
+			"MXF OP1a · Uncompressed 4:2:2 · PCM",
+			"Material eXchange Format OP1a",
+			".mxf",
+			"Uncompressed YUV 4:2:2",
+			"8-bit UYVY 4:2:2 progressive",
+			null,
+			"PCM S16LE 48 kHz Stereo",
+			Mp4InputFormats,
+			AudioFormat.Stereo48kFloat32,
+			1_988_667_333,
+			1_536_000,
+			RecordingAccelerationClass.Software,
+			ManagedMxfOp1aProviderId,
+			available,
+			available ? null : "MXF OP1a requires explicitly provisioned BMX and FFprobe binaries.",
+			available ? RecordingProfileEvidenceState.Implemented : RecordingProfileEvidenceState.Unverified,
+			available
+				? "External BMX muxer with independently executed FFprobe media inspection, structural validation and validated atomic publication; physical storage throughput and external vendor interchange are unverified."
+				: "Backend disabled until MXF OP1a binaries are provisioned and the profile is explicitly enabled.");
+
 
 	public static RecordingProfileDescriptor CreateMp4H264AacDescriptor()
 	{
