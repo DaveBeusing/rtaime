@@ -33,8 +33,8 @@ $policy = Get-Content -LiteralPath $policyPath -Raw | ConvertFrom-Json
 Assert-Condition ([string]$policy.schemaVersion -eq "1.0") "Unsupported release channel policy schema version."
 
 $channelNames = @($policy.channels.PSObject.Properties.Name)
-$expectedChannels = @("QUALIFICATION", "PREVIEW", "STABLE")
-Assert-Condition ($channelNames.Count -eq $expectedChannels.Count) "Release channel policy must define exactly QUALIFICATION, PREVIEW and STABLE."
+$expectedChannels = @("QUALIFICATION", "PREVIEW", "RC", "STABLE")
+Assert-Condition ($channelNames.Count -eq $expectedChannels.Count) "Release channel policy must define exactly QUALIFICATION, PREVIEW, RC and STABLE."
 foreach ($channelName in $expectedChannels) {
 	Assert-Condition ($channelNames -contains $channelName) "Release channel policy is missing '$channelName'."
 }
@@ -55,6 +55,10 @@ Assert-Condition ($preview.requireTrustedProductionKey -eq $false) "PREVIEW cand
 Assert-Condition ($preview.publicationEligible -eq $true) "PREVIEW must be publication-eligible when production trust PASS is established."
 
 $stable = $policy.channels.STABLE
+$rc = $policy.channels.RC
+Assert-Condition ([string]$rc.releaseStage -eq 'RELEASE_CANDIDATE' -and $rc.tagRequired -eq $true) 'RC must require an annotated tag and the candidate readiness stage.'
+Assert-Condition ($rc.requireTrustedProductionKey -eq $true -and @($rc.allowedSignerClasses).Count -eq 1 -and $rc.allowedSignerClasses[0] -eq 'EXTERNAL_CONTROLLED') 'RC must retain production signing trust.'
+Assert-Condition ($rc.publicationEligible -eq $false) 'RC distribution must remain limited to candidate artifacts.'
 Assert-Condition ([string]$stable.releaseStage -eq "STABLE") "STABLE channel must map to STABLE stage."
 Assert-Condition ($stable.tagRequired -eq $true) "STABLE channel must require a tag."
 Assert-Condition (@($stable.allowedSignerClasses).Count -eq 1 -and [string]$stable.allowedSignerClasses[0] -eq "EXTERNAL_CONTROLLED") "STABLE must allow EXTERNAL_CONTROLLED signing only."
@@ -63,10 +67,11 @@ Assert-Condition ($stable.publicationEligible -eq $true) "STABLE candidate readi
 
 [xml]$buildProps = Get-Content -LiteralPath $buildPropsPath -Raw
 $productVersion = $buildProps.SelectSingleNode("//RtaimeProductVersion").InnerText.Trim()
+$productVersion = $productVersion.Replace('$(VersionPrefix)', $buildProps.SelectSingleNode('//VersionPrefix').InnerText.Trim())
 $releaseStage = $buildProps.SelectSingleNode("//RtaimeReleaseStage").InnerText.Trim().ToUpperInvariant()
 Assert-Condition ($releaseStage -in @("DEV", "PREVIEW", "STABLE")) "Source release stage '$releaseStage' is not supported by the release-channel pipeline."
 if ($releaseStage -eq "DEV") {
-	Assert-Condition ($productVersion -match [string]$qualification.versionPattern) "DEV source version '$productVersion' does not match QUALIFICATION policy."
+	Assert-Condition ($productVersion -eq "$($buildProps.SelectSingleNode("//VersionPrefix").InnerText)-dev") "DEV source version '$productVersion' does not match QUALIFICATION policy."
 } elseif ($releaseStage -eq "PREVIEW") {
 	Assert-Condition ($productVersion -match [string]$preview.versionPattern) "PREVIEW source version '$productVersion' does not match PREVIEW policy."
 } elseif ($releaseStage -eq "STABLE") {
@@ -100,7 +105,7 @@ Assert-Condition ($releaseWorkflow -match '(?m)^\s+publish-release:\s*$') "Relea
 & (Join-Path $PSScriptRoot "Test-ReleasePublicationPolicy.ps1")
 
 Write-Host "Release channel policy verification PASS"
-Write-Host "Channels: QUALIFICATION, PREVIEW, STABLE"
+Write-Host "Channels: QUALIFICATION, PREVIEW, RC, STABLE"
 Write-Host "Current source: $productVersion / $releaseStage"
 Write-Host "Single release orchestrator: enforced"
 Write-Host "Trusted Preview/Stable publication: enabled through separate publication policy"

@@ -131,7 +131,9 @@ public sealed class SupportBundleExporter : ISupportBundleExporter
 					{
 						name = "rtaime",
 						version = build.ProductVersion,
-						releaseStage = build.ReleaseStage
+						releaseStage = build.ReleaseStage,
+						sourceRevision = build.SourceRevision,
+						buildId = build.BuildId
 					},
 					process = new
 					{

@@ -2,7 +2,7 @@
 
 [CmdletBinding()]
 param(
-	[ValidateSet("AUTO", "QUALIFICATION", "PREVIEW", "STABLE")]
+	[ValidateSet("AUTO", "QUALIFICATION", "PREVIEW", "RC", "STABLE")]
 	[string]$Channel = "QUALIFICATION",
 	[string]$Tag = "",
 	[string]$SourceCommit = $env:RTAIME_SOURCE_COMMIT,
@@ -92,16 +92,26 @@ if ([string]::IsNullOrWhiteSpace($BuildId)) {
 	$BuildId = "local-$($BuildCommit.Substring(0, [Math]::Min(12, $BuildCommit.Length)))"
 }
 
-if ($Channel -eq "AUTO") {
-	if ([string]::IsNullOrWhiteSpace($Tag)) {
-		$Channel = "QUALIFICATION"
-	} elseif ($releaseStage -eq "PREVIEW") {
-		$Channel = "PREVIEW"
-	} elseif ($releaseStage -eq "STABLE") {
-		$Channel = "STABLE"
-	} else {
-		throw "AUTO channel cannot map release stage '$releaseStage' with tag '$Tag'. Tagged releases must declare PREVIEW or STABLE in Directory.Build.props."
-	}
+$baseVersion = $buildProps.SelectSingleNode('//VersionPrefix').InnerText.Trim()
+if ($baseVersion -notmatch '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$') { throw 'Invalid target VersionPrefix.' }
+if ($Channel -eq 'AUTO') {
+    if ([string]::IsNullOrWhiteSpace($Tag)) { $Channel = 'QUALIFICATION' }
+    elseif ($Tag -match '-preview\.') { $Channel = 'PREVIEW' }
+    elseif ($Tag -match '-rc\.') { $Channel = 'RC' }
+    else { $Channel = 'STABLE' }
+}
+if ($Channel -eq 'QUALIFICATION') {
+    $productVersion = if ($env:RTAIME_PR_NUMBER) {
+        "$baseVersion-pr.$env:RTAIME_PR_NUMBER.$env:RTAIME_VALIDATION_SEQUENCE"
+    } else { "$baseVersion-dev.g$SourceCommit" }
+    $releaseStage = 'DEV'
+} else {
+    if ([string]::IsNullOrWhiteSpace($Tag)) { throw "Channel '$Channel' requires a reserved annotated tag." }
+    $productVersion = $Tag.Trim() -replace '^v', ''
+    if (($productVersion -split '-')[0] -ne $baseVersion) { throw 'Tag does not match the source target VersionPrefix.' }
+    $releaseStage = if ($Channel -eq 'RC') { 'RELEASE_CANDIDATE' } else { $Channel }
+    $dirty = @(& git -C $repositoryRoot status --porcelain)
+    if ($LASTEXITCODE -ne 0 -or $dirty.Count -ne 0) { throw 'Published builds require a clean source tree.' }
 }
 
 $channelProperty = $policy.channels.PSObject.Properties[$Channel]
@@ -131,6 +141,13 @@ if ($channelPolicy.tagRequired -eq $true) {
 		throw "Release tag version '$tagVersion' does not equal source product version '$productVersion'."
 	}
 	$tagCommit = Resolve-TagCommit -TagName $normalizedTag
+	$tagType = (& git -C $repositoryRoot cat-file -t "refs/tags/$normalizedTag").Trim()
+	if ($LASTEXITCODE -ne 0 -or $tagType -ne 'tag') { throw 'Release tags must be annotated.' }
+	$annotation = (& git -C $repositoryRoot for-each-ref '--format=%(contents)' "refs/tags/$normalizedTag") -join "`n"
+	$reservation = [regex]::Match($annotation, '(?m)^BuildId: ([A-Za-z0-9._-]+)\s*$')
+	if ($reservation.Success -and $reservation.Groups[1].Value -ne $BuildId) {
+		throw 'Reserved version belongs to another build. Allocate a new version instead of rebuilding it.'
+	}
 	if ($tagCommit -ne $SourceCommit) {
 		throw "Release tag '$normalizedTag' resolves to '$tagCommit', not source commit '$SourceCommit'."
 	}

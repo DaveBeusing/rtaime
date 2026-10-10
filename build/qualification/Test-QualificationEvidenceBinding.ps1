@@ -61,6 +61,9 @@ $bindingPolicy = $bindingPolicy[0]
 [xml]$buildProps = Get-Content -LiteralPath $buildPropsPath -Raw
 $productVersion = $buildProps.SelectSingleNode("//RtaimeProductVersion")?.InnerText
 $releaseStage = $buildProps.SelectSingleNode("//RtaimeReleaseStage")?.InnerText
+$productVersion = $productVersion.Replace('$(VersionPrefix)', $buildProps.SelectSingleNode('//VersionPrefix').InnerText.Trim())
+if ($env:RTAIME_PRODUCT_VERSION) { $productVersion = $env:RTAIME_PRODUCT_VERSION }
+if ($env:RTAIME_RELEASE_STAGE) { $releaseStage = $env:RTAIME_RELEASE_STAGE }
 Assert-Condition (-not [string]::IsNullOrWhiteSpace($productVersion)) "RtaimeProductVersion is missing."
 Assert-Condition (-not [string]::IsNullOrWhiteSpace($releaseStage)) "RtaimeReleaseStage is missing."
 Assert-Condition ([string]$binding.product.version -eq $productVersion) "Qualification binding product version does not match the source tree."

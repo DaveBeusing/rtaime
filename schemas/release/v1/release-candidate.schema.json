@@ -22,7 +22,7 @@
 		"copyright": { "type": "string", "minLength": 1 },
 		"schemaVersion": { "const": "1.0" },
 		"candidateId": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
-		"channel": { "enum": ["QUALIFICATION", "PREVIEW", "STABLE"] },
+		"channel": { "enum": ["QUALIFICATION", "PREVIEW", "RC", "STABLE"] },
 		"product": {
 			"type": "object",
 			"additionalProperties": false,
@@ -30,7 +30,7 @@
 			"properties": {
 				"name": { "const": "rtaime" },
 				"version": { "type": "string", "minLength": 1 },
-				"releaseStage": { "enum": ["DEV", "PREVIEW", "STABLE"] }
+				"releaseStage": { "enum": ["DEV", "PREVIEW", "RELEASE_CANDIDATE", "STABLE"] }
 			}
 		},
 		"source": {

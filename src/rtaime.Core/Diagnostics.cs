@@ -216,6 +216,10 @@ public static class DiagnosticRedactor
 
 public sealed record ProductBuildInfo(string ProductVersion, string ReleaseStage)
 {
+	public string SourceRevision { get; init; } = "unknown";
+	public string BuildId { get; init; } = "local";
+	public string ShortRevision => SourceRevision.Length > 12 ? SourceRevision[..12] : SourceRevision;
+	public string DisplayIdentity => $"{ProductVersion} / {ReleaseStage} / {ShortRevision}";
 	public static ProductBuildInfo FromAssembly(Assembly assembly)
 	{
 		ArgumentNullException.ThrowIfNull(assembly);
@@ -224,8 +228,22 @@ public sealed record ProductBuildInfo(string ProductVersion, string ReleaseStage
 			? assembly.GetName().Version?.ToString() ?? "unknown"
 			: informational.Split('+', 2)[0];
 		var separator = version.IndexOf("-", StringComparison.Ordinal);
-		var stage = separator < 0 ? "STABLE" : version[(separator + 1)..].ToUpperInvariant();
-		return new ProductBuildInfo(version, stage);
+		var suffix = separator < 0 ? "" : version[(separator + 1)..].Split('.')[0];
+		var stage = suffix.ToLowerInvariant() switch
+		{
+			"preview" => "PREVIEW",
+			"rc" => "RELEASE_CANDIDATE",
+			"dev" or "pr" => "DEV",
+			"" => "STABLE",
+			_ => suffix.ToUpperInvariant()
+		};
+		var metadata = assembly.GetCustomAttributes<AssemblyMetadataAttribute>().ToArray();
+		var revision = metadata.FirstOrDefault(item => item.Key == "RtaimeSourceRevision")?.Value;
+		return new ProductBuildInfo(version, stage)
+		{
+			SourceRevision = revision ?? informational?.Split('+', 2).ElementAtOrDefault(1)?.TrimStart('g') ?? "unknown",
+			BuildId = metadata.FirstOrDefault(item => item.Key == "RtaimeBuildId")?.Value ?? "local"
+		};
 	}
 }
 
@@ -271,6 +289,8 @@ public sealed class SupportSnapshotBuilder
 		if (processId < 0) throw new ArgumentOutOfRangeException(nameof(processId));
 		_productVersion = build.ProductVersion;
 		_releaseStage = build.ReleaseStage;
+		_identity["sourceRevision"] = build.SourceRevision;
+		_identity["buildId"] = build.BuildId;
 		_host = host.Trim();
 		_processId = processId;
 		_lifecycleState = lifecycleState?.Trim() ?? string.Empty;

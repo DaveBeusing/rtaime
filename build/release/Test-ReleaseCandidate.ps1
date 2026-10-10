@@ -64,7 +64,7 @@ Assert-Condition (Test-Path -LiteralPath $sidecarPath -PathType Leaf) "Release c
 $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
 Assert-Condition ([string]$manifest.schemaVersion -eq "1.0") "Unsupported release candidate manifest schema version."
 Assert-Condition ([string]$manifest.product.name -eq "rtaime") "Unexpected release candidate product identity."
-Assert-Condition ([string]$manifest.channel -in @("QUALIFICATION", "PREVIEW", "STABLE")) "Unexpected release channel '$($manifest.channel)'."
+Assert-Condition ([string]$manifest.channel -in @("QUALIFICATION", "PREVIEW", "RC", "STABLE")) "Unexpected release channel '$($manifest.channel)'."
 Assert-Condition ([string]$manifest.trust.signerClass -in @("TEST_EPHEMERAL", "EXTERNAL_CONTROLLED")) "Unexpected release candidate signer class."
 Assert-Condition ([string]$manifest.trust.productionTrust -in @("PASS", "UNVERIFIED")) "Unexpected production trust status."
 Assert-Condition ([string]$manifest.publicationReadiness.status -in @("PASS", "NOT_APPLICABLE", "UNVERIFIED")) "Unexpected publication-readiness status."
@@ -106,6 +106,12 @@ if ([string]$manifest.channel -eq "QUALIFICATION") {
 	} else {
 		Assert-Condition ([string]$manifest.publicationReadiness.status -eq "UNVERIFIED") "Preview candidate must be PASS or UNVERIFIED for publication readiness."
 	}
+} elseif ([string]$manifest.channel -eq "RC") {
+    Assert-Condition ([string]$manifest.product.releaseStage -eq "RELEASE_CANDIDATE") "RC requires RELEASE_CANDIDATE stage."
+    Assert-Condition ([string]$manifest.source.tag -match '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-rc\.[1-9][0-9]*$') "RC has invalid tag."
+    Assert-Condition ([string]$manifest.source.tag -eq "v$($manifest.product.version)") "RC tag/version mismatch."
+    Assert-Condition ([string]$manifest.trust.signerClass -eq "EXTERNAL_CONTROLLED" -and [string]$manifest.trust.productionTrust -eq "PASS") "RC requires production signing trust."
+    Assert-Condition ([string]$manifest.publicationReadiness.status -eq "UNVERIFIED") "RC distribution is limited to candidate artifacts."
 } elseif ([string]$manifest.channel -eq "STABLE") {
 	Assert-Condition ([string]$manifest.product.releaseStage -eq "STABLE") "Stable release candidate must use STABLE stage."
 	Assert-Condition ([string]$manifest.source.tag -match '^v[0-9]+\.[0-9]+\.[0-9]+$') "Stable release candidate has invalid tag."

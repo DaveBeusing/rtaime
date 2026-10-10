@@ -1,4 +1,24 @@
 <Project>
+  <Target Name="RtaimeResolveBuildVersion" BeforeTargets="PrepareForBuild;GetAssemblyVersion">
+    <Exec Command="git rev-parse HEAD" WorkingDirectory="$(MSBuildThisFileDirectory)" ConsoleToMSBuild="true" StandardOutputImportance="Low" IgnoreExitCode="true">
+      <Output TaskParameter="ConsoleOutput" PropertyName="RtaimeSourceRevision" />
+      <Output TaskParameter="ExitCode" PropertyName="_RtaimeGitExitCode" />
+    </Exec>
+    <PropertyGroup>
+      <RtaimeSourceRevision Condition="'$(_RtaimeGitExitCode)' != '0' or '$(RtaimeSourceRevision)' == ''">unknown</RtaimeSourceRevision>
+      <RtaimeBuildId Condition="'$(RtaimeBuildId)' == ''">$(RTAIME_BUILD_ID)</RtaimeBuildId>
+      <RtaimeBuildId Condition="'$(RtaimeBuildId)' == ''">local</RtaimeBuildId>
+      <Version Condition="'$(RTAIME_PR_NUMBER)' != '' and '$(RtaimeProductVersion)' == '$(VersionPrefix)-dev'">$(VersionPrefix)-pr.$(RTAIME_PR_NUMBER).$(RTAIME_VALIDATION_SEQUENCE)</Version>
+      <Version Condition="'$(RTAIME_PR_NUMBER)' == '' and '$(RtaimeProductVersion)' == '$(VersionPrefix)-dev'">$(VersionPrefix)-dev.g$(RtaimeSourceRevision)</Version>
+      <PackageVersion>$(Version)</PackageVersion>
+      <InformationalVersion>$(Version)+g$(RtaimeSourceRevision)</InformationalVersion>
+    </PropertyGroup>
+    <ItemGroup>
+      <AssemblyMetadata Include="RtaimeSourceRevision" Value="$(RtaimeSourceRevision)" />
+      <AssemblyMetadata Include="RtaimeBuildId" Value="$(RtaimeBuildId)" />
+      <AssemblyMetadata Include="RtaimeReleaseStage" Value="$(RtaimeReleaseStage)" />
+    </ItemGroup>
+  </Target>
   <Target Name="RtaimeValidateArchitectureReferences" BeforeTargets="PrepareForBuild">
     <ItemGroup>
       <_RtaimeProductionToTests Include="@(ProjectReference)" Condition="'$(RtaimeIsTestProject)' != 'true' and ('%(ProjectReference.Filename)' == 'rtaime.TestInfrastructure' or '%(ProjectReference.Filename)' == 'rtaime.Tests.Unit' or '%(ProjectReference.Filename)' == 'rtaime.Tests.Contracts' or '%(ProjectReference.Filename)' == 'rtaime.Tests.Architecture' or '%(ProjectReference.Filename)' == 'rtaime.Tests.Integration' or '%(ProjectReference.Filename)' == 'rtaime.Tests.Behavioral' or '%(ProjectReference.Filename)' == 'rtaime.Tests.Failure' or '%(ProjectReference.Filename)' == 'rtaime.Tests.Performance')" />

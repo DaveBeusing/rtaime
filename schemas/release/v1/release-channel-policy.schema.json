@@ -12,10 +12,11 @@
 		"channels": {
 			"type": "object",
 			"additionalProperties": false,
-			"required": ["QUALIFICATION", "PREVIEW", "STABLE"],
+			"required": ["QUALIFICATION", "PREVIEW", "RC", "STABLE"],
 			"properties": {
 				"QUALIFICATION": { "$ref": "#/$defs/channel" },
 				"PREVIEW": { "$ref": "#/$defs/channel" },
+                "RC": { "$ref": "#/$defs/channel" },
 				"STABLE": { "$ref": "#/$defs/channel" }
 			}
 		},
@@ -43,7 +44,7 @@
 				"publicationEligible"
 			],
 			"properties": {
-				"releaseStage": { "enum": ["DEV", "PREVIEW", "STABLE"] },
+				"releaseStage": { "enum": ["DEV", "PREVIEW", "RELEASE_CANDIDATE", "STABLE"] },
 				"tagRequired": { "type": "boolean" },
 				"versionPattern": { "type": "string", "minLength": 1 },
 				"tagPattern": { "type": ["string", "null"] },

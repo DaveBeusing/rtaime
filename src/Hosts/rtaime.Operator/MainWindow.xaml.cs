@@ -20,6 +20,7 @@ namespace rtaime.Operator;
 
 public partial class MainWindow : Window
 {
+	public string ProductBuildIdentity { get; } = rtaime.Core.ProductBuildInfo.FromAssembly(typeof(MainWindow).Assembly).DisplayIdentity;
 	private const int DwmwaUseImmersiveDarkMode = 20;
 	private const int DwmwaUseImmersiveDarkModeLegacy = 19;
 	private const int DwmwaBorderColor = 34;

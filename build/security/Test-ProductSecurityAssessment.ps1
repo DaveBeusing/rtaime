@@ -58,7 +58,7 @@ Assert-Condition (-not [string]::IsNullOrWhiteSpace([string]$assessment.reviewer
 Assert-Condition (-not [string]::IsNullOrWhiteSpace([string]$assessment.reviewer.role)) "Product-security assessment reviewer role is required."
 
 $assessedAt = [DateTimeOffset]::MinValue
-Assert-Condition ([DateTimeOffset]::TryParse([string]$assessment.assessedAtUtc, [ref]$assessedAt)) "Product-security assessment assessedAtUtc is invalid."
+Assert-Condition ([DateTimeOffset]::TryParse([string]$assessment.assessedAtUtc, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::None, [ref]$assessedAt)) "Product-security assessment assessedAtUtc is invalid."
 
 $checkNames = @("sourceReview", "dependencyReview", "vulnerabilityTriage", "securityUpdatePath")
 foreach ($checkName in $checkNames) {

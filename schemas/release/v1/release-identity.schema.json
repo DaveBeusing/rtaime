@@ -21,10 +21,10 @@
 	"properties": {
 		"copyright": { "type": "string", "minLength": 1 },
 		"schemaVersion": { "const": "1.0" },
-		"channel": { "enum": ["QUALIFICATION", "PREVIEW", "STABLE"] },
+		"channel": { "enum": ["QUALIFICATION", "PREVIEW", "RC", "STABLE"] },
 		"productName": { "const": "rtaime" },
 		"productVersion": { "type": "string", "minLength": 1 },
-		"releaseStage": { "enum": ["DEV", "PREVIEW", "STABLE"] },
+		"releaseStage": { "enum": ["DEV", "PREVIEW", "RELEASE_CANDIDATE", "STABLE"] },
 		"tag": { "type": ["string", "null"] },
 		"sourceCommit": { "type": "string", "pattern": "^[0-9a-f]{40,64}$" },
 		"buildCommit": { "type": "string", "pattern": "^[0-9a-f]{40,64}$" },

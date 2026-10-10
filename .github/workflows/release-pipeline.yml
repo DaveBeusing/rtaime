@@ -3,6 +3,10 @@
 name: Release pipeline
 
 on:
+  workflow_run:
+    workflows: ['Required gates']
+    types: [completed]
+    branches: [master]
   push:
     tags:
       - 'v*'
@@ -16,9 +20,10 @@ on:
         options:
           - QUALIFICATION
           - PREVIEW
+          - RC
           - STABLE
       tag:
-        description: Existing Git tag for PREVIEW/STABLE; leave empty for QUALIFICATION
+        description: Existing annotated tag for STABLE; empty tag allocates a new PREVIEW or RC
         required: false
         type: string
 
@@ -26,12 +31,48 @@ permissions:
   contents: read
 
 concurrency:
-  group: release-pipeline-${{ github.ref }}
+  group: release-pipeline-${{ github.event_name == 'workflow_run' && 'PREVIEW' || github.event_name == 'workflow_dispatch' && inputs.channel || github.ref }}
   cancel-in-progress: false
 
 jobs:
+  reserve-version:
+    name: Reserve prerelease version
+    if: >-
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'master' &&
+       github.event.workflow_run.head_repository.full_name == github.repository) ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master' &&
+       (inputs.channel == 'PREVIEW' || inputs.channel == 'RC') && inputs.tag == '')
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.reserve.outputs.tag }}
+    steps:
+      - name: Checkout eligible integration source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Reserve immutable annotated tag
+        id: reserve
+        shell: pwsh
+        env:
+          RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'PREVIEW' || inputs.channel }}
+          RTAIME_BUILD_ID: release-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          if ($env:GITHUB_RUN_ATTEMPT -ne '1') { throw 'Start a new run to reserve a prerelease version.' }
+          ./build/release/Reserve-PrereleaseVersion.ps1 -Channel $env:RELEASE_CHANNEL
+
   release-candidate:
     name: Release Candidate
+    needs: [reserve-version]
+    if: >-
+      always() && !cancelled() &&
+      (needs.reserve-version.result == 'success' ||
+       (needs.reserve-version.result == 'skipped' && github.event_name != 'workflow_run' &&
+        (github.event_name == 'push' || inputs.channel == 'QUALIFICATION' || inputs.tag != '')))
     runs-on: windows-latest
     timeout-minutes: 60
 
@@ -39,6 +80,7 @@ jobs:
       - name: Checkout exact source
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           fetch-depth: 0
           fetch-tags: true
 
@@ -52,9 +94,20 @@ jobs:
         env:
           RTAIME_RELEASE_SIGNING_KEY_PEM: ${{ secrets.RTAIME_RELEASE_SIGNING_KEY_PEM }}
           RTAIME_RELEASE_SIGNER_ID: ${{ vars.RTAIME_RELEASE_SIGNER_ID }}
+          RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'PREVIEW' || github.event_name == 'push' && 'AUTO' || inputs.channel }}
+          RELEASE_TAG: ${{ needs.reserve-version.outputs.tag || inputs.tag || (github.event_name == 'push' && github.ref_name) || '' }}
+          RELEASE_SOURCE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
         run: |
-          $channel = if ("${{ github.event_name }}" -eq "push") { "AUTO" } else { "${{ inputs.channel }}" }
-          $tag = if ("${{ github.event_name }}" -eq "push") { "${{ github.ref_name }}" } else { "${{ inputs.tag }}" }
+          $channel = $env:RELEASE_CHANNEL
+          $tag = $env:RELEASE_TAG
+          $sourceCommit = (& git rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot resolve the checked-out source commit.' }
+          if ($env:GITHUB_EVENT_NAME -eq 'workflow_run' -and $sourceCommit -ne $env:RELEASE_SOURCE_SHA) {
+            throw 'Preview checkout does not match the successful integration source.'
+          }
+          if ($channel -ne 'QUALIFICATION' -and $env:GITHUB_RUN_ATTEMPT -ne '1') {
+            throw 'Release reruns must reserve a new version; use a new workflow run.'
+          }
           $keyPath = ""
           $signerClass = "TEST_EPHEMERAL"
           $signerId = "github-actions-release-pipeline"
@@ -76,8 +129,8 @@ jobs:
             ./build/release/Invoke-ReleasePipeline.ps1 `
               -Channel $channel `
               -Tag $tag `
-              -SourceCommit "${{ github.sha }}" `
-              -BuildCommit "${{ github.sha }}" `
+              -SourceCommit $sourceCommit `
+              -BuildCommit $sourceCommit `
               -BuildId "release-${{ github.run_id }}-${{ github.run_attempt }}" `
               -SignerClass $signerClass `
               -PrivateKeyPath $keyPath `
@@ -98,7 +151,9 @@ jobs:
 
   publish-release:
     name: Publish Release
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    if: >-
+      always() && !cancelled() && needs.release-candidate.result == 'success' &&
+      github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     needs:
       - release-candidate
     runs-on: windows-latest
