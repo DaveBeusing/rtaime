@@ -1004,14 +1004,14 @@ public sealed class GpuProcessingProvider : IDisposable
             }
             catch (Exception exception)
             {
-                Exception? cleanupFailure = null;
+                Exception? reinitializationCleanupFailure = null;
                 try
                 {
                     _backend.Stop();
                 }
                 catch (Exception cleanupException)
                 {
-                    cleanupFailure = cleanupException;
+                    reinitializationCleanupFailure = cleanupException;
                     Observe(
                         "gpu.provider.recovery_cleanup_failed",
                         null,
@@ -1020,13 +1020,13 @@ public sealed class GpuProcessingProvider : IDisposable
                             $"GPU recovery cleanup failed: {cleanupException.GetType().Name}."));
                 }
 
-                var detail = cleanupFailure is null
+                var detail = reinitializationCleanupFailure is null
                     ? $"GPU backend recovery failed: {exception.GetType().Name}."
-                    : $"GPU backend recovery failed: {exception.GetType().Name}; cleanup also failed: {cleanupFailure.GetType().Name}.";
+                    : $"GPU backend recovery failed: {exception.GetType().Name}; cleanup also failed: {reinitializationCleanupFailure.GetType().Name}.";
                 var failure = new Failure(GpuProviderLifecycleReasonCodes.RecoveryFailed, detail);
                 TransitionStateUnsafe(GpuProviderState.Failed, GpuProviderLifecycleReasonCodes.RecoveryFailed, failure);
-                if (cleanupFailure is not null)
-                    throw new AggregateException("GPU recovery and cleanup both failed.", exception, cleanupFailure);
+                if (reinitializationCleanupFailure is not null)
+                    throw new AggregateException("GPU recovery and cleanup both failed.", exception, reinitializationCleanupFailure);
                 throw;
             }
         }
