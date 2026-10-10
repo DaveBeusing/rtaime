@@ -465,6 +465,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private readonly RuntimeMonitoringTap _monitoringTap;
 	private readonly RuntimeNetworkOutputBridge _networkOutputBridge;
 	private readonly NdiNetworkOutputProvider _ndiProvider;
+	private readonly RuntimeNdiInputBridge _ndiInputBridge;
 	private readonly RuntimeReplayService? _replay;
 	private readonly Stopwatch _uptimeClock = Stopwatch.StartNew();
 	private readonly SystemHardwareTelemetry _hardwareTelemetry = new();
@@ -631,6 +632,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		_networkOutputBridge = new RuntimeNetworkOutputBridge(
 			configuredNetworkOutputs,
 			new RuntimeNetworkOutputProviderRegistry(ndi: _ndiProvider));
+		_ndiInputBridge = new RuntimeNdiInputBridge(_ndiProvider, this);
 		_replay = replayService;
 		_monitoringHub = new RuntimeMonitoringHub();
 		_monitoringTap = new RuntimeMonitoringTap(
@@ -657,6 +659,10 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 				.ToArray());
 		}
 	}
+
+	public MediaSourceDiscoverySnapshot RefreshNdiDiscovery() => _ndiInputBridge.RefreshDiscovery();
+
+	public IReadOnlyList<MediaInputHealthSnapshot> NdiInputHealth => _ndiInputBridge.InputHealth;
 
 	public IReadOnlyList<VirtualOutputFrame> ProgramFrames =>
 		_programOutput?.Frames ?? Array.Empty<VirtualOutputFrame>();
@@ -980,6 +986,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 			_transition = transition is null ? null : new AnchoredTransition(transition, _nextSequenceNumber);
 			if (compositingStaged)
 				Observe($"compositing.scene.applied:{string.Join(",", preparedExecution.CompositingState!.Layers.Select(layer => layer.LayerId))}");
+			_ndiInputBridge.SynchronizeCommittedBindings(preparedExecution.Bindings);
 			Observe($"runtime.commit.committed:{commit.ExecutionRevision}");
 			if (transition is not null)
 				Observe($"runtime.transition.anchored:{transition.Kind}:{_nextSequenceNumber}:{transition.DurationFrames}");
@@ -2597,6 +2604,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 
 		await _monitoringTap.DisposeAsync().ConfigureAwait(false);
 		_monitoringHub.Dispose();
+		await _ndiInputBridge.DisposeAsync().ConfigureAwait(false);
 		await _networkOutputBridge.DisposeAsync().ConfigureAwait(false);
 		if (_replay is not null)
 			await _replay.DisposeAsync().ConfigureAwait(false);
