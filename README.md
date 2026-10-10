@@ -47,7 +47,7 @@ The V1 path brings together:
 - graphics and compositing, including Production CG text rendering;
 - Audio Follow Video and deterministic generated audio diagnostics;
 - failure-isolated Program Recording with a provider-neutral profile catalog and a qualified Windows MP4 H.264/AAC software-interoperability path;
-- governed Program/Aux output roles plus monitoring, bounded SRT output and external-runtime NDI output;
+- governed Program/Aux output roles plus monitoring, bounded SRT output, external-runtime NDI output, and governed NDI source discovery/input;
 - system health and performance visibility.
 
 ### AI without surrendering control
@@ -77,7 +77,7 @@ The current V1 development repository implements production-shaped software path
 | --- | --- |
 | Application lifecycle | unified rtaime.exe AppHost, managed ControlHost/RuntimeHost/AIHost lifecycle |
 | Operator | full-screen production shell, workspaces, progressive readiness and recovery states |
-| Media | local media files, Media Pool, transport, timeline, IN/OUT, markers and Cue points |
+| Media | local media files, Media Pool, governed NDI source discovery/adoption and input, transport, timeline, IN/OUT, markers and Cue points |
 | Switching | authoritative Preview/Program, CUT, DISSOLVE and governed Scene activation |
 | Compositing | RuntimeHost-owned bitmap overlays, dynamic Production CG lower thirds, layers and compositing workspace |
 | Audio | Audio Follow Video, explicit breakaway, bounded multi-source Program mixing, deterministic crossfade/ducking, Runtime metering and generated test signals |
@@ -361,6 +361,8 @@ src/Hosts/rtaime.Operator/Assets/Brand/
 
 Use the source-controlled brand assets rather than recreating the mark for documentation, presentations or product surfaces.
 
+
+NDI discovery and input reuse the shared external-runtime NDI provider boundary. Discovery is observational until explicit ControlHost adoption, input execution remains Runtime-owned, and real peer/network interoperability remains UNVERIFIED. See [NDI Discovery and Input](docs/NdiDiscoveryAndInput.md).
 
 Replay retains bounded encoded Program history and materializes normal-speed selections as ordinary Media Library clips that reuse Media Deck and normal Preview/Program routing. See [Replay and Clip Production](docs/ReplayClipProduction.md).
 
