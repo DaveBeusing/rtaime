@@ -600,7 +600,8 @@ public sealed class ControlHostProcess
 				_mediaAssetCatalog,
 				showProjectStore,
 				showProject,
-				HostIpcSessionTracker.DrainIntervalForHost(_options.ShutdownTimeout));
+				HostIpcSessionTracker.DrainIntervalForHost(_options.ShutdownTimeout),
+				baselineSpecification);
 			_externalControlServer = new ExternalControlServer(_options.ExternalControl, _ipcServer);
 		}
 		catch
