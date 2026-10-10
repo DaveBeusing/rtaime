@@ -710,26 +710,9 @@ public sealed class OperatorShellViewModel : INotifyPropertyChanged
 		if (string.Equals(normalized, SelectedWorkspace, StringComparison.Ordinal))
 			return;
 
-		var stableLeftPanelWidth = LeftPanelWidth;
-		var stableRightPanelWidth = RightPanelWidth;
-		var stableLowerPanelHeight = LowerPanelHeight;
-		var stableLeftCollapsed = IsLeftCollapsed;
-		var stableRightCollapsed = IsRightCollapsed;
-		var stableCenterMaximized = IsCenterMaximized;
-
 		CaptureCurrentWorkspace();
 		SelectedWorkspace = normalized;
-		var target = _workspaceLayouts[SelectedWorkspace] with
-		{
-			LeftPanelWidth = stableLeftPanelWidth,
-			RightPanelWidth = stableRightPanelWidth,
-			LowerPanelHeight = stableLowerPanelHeight,
-			IsLeftCollapsed = stableLeftCollapsed,
-			IsRightCollapsed = stableRightCollapsed,
-			IsCenterMaximized = stableCenterMaximized
-		};
-		_workspaceLayouts[SelectedWorkspace] = target.Normalize();
-		ApplyWorkspaceLayout(target);
+		ApplyWorkspaceLayout(_workspaceLayouts[SelectedWorkspace]);
 		Save();
 	}
 
