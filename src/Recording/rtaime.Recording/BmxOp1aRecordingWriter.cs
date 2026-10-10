@@ -17,6 +17,7 @@ public sealed class BmxOp1aRecordingWriter :
     private readonly object _gate = new();
     private readonly string _root;
     private readonly string _raw2bmxPath;
+    private readonly string _ffprobePath;
     private readonly long? _quota;
     private readonly Dictionary<ulong, (IProgramRecordingPayloadLease Video, ReadOnlyMemory<byte> Audio)> _staged = new();
     private string? _configuredName;
@@ -35,14 +36,15 @@ public sealed class BmxOp1aRecordingWriter :
     private byte[]? _videoBuffer;
     private byte[]? _audioBuffer;
 
-    public BmxOp1aRecordingWriter(string rootDirectory, string raw2bmxPath, long? maximumPayloadBytes = null)
+    public BmxOp1aRecordingWriter(string rootDirectory, string raw2bmxPath, string ffprobePath, long? maximumPayloadBytes = null)
     {
-        if (string.IsNullOrWhiteSpace(rootDirectory) || string.IsNullOrWhiteSpace(raw2bmxPath))
+        if (string.IsNullOrWhiteSpace(rootDirectory) || string.IsNullOrWhiteSpace(raw2bmxPath) || string.IsNullOrWhiteSpace(ffprobePath))
             throw new ArgumentException("MXF recording requires a root and an explicitly configured BMX executable.");
         if (maximumPayloadBytes is <= 0)
             throw new ArgumentOutOfRangeException(nameof(maximumPayloadBytes));
         _root = Path.GetFullPath(rootDirectory);
         _raw2bmxPath = Path.GetFullPath(raw2bmxPath);
+        _ffprobePath = Path.GetFullPath(ffprobePath);
         _quota = maximumPayloadBytes;
     }
 
@@ -73,7 +75,7 @@ public sealed class BmxOp1aRecordingWriter :
         cancellationToken.ThrowIfCancellationRequested();
         if (request.ProfileId is { } id && id != ProfessionalRecordingFormats.MxfOp1aUncompressedPcmProfileId)
             throw new RecordingOutputUnavailableException($"BMX writer does not support profile '{id}'.");
-        if (!File.Exists(_raw2bmxPath))
+        if (!File.Exists(_raw2bmxPath) || !File.Exists(_ffprobePath))
             throw new RecordingOutputUnavailableException("The explicitly configured BMX raw2bmx executable is unavailable.");
         lock (_gate)
         {
@@ -230,6 +232,9 @@ public sealed class BmxOp1aRecordingWriter :
             // Structural acceptance is only a preliminary guard. A complete semantic
             // decoder/third-party interoperability qualification is still required.
             MxfOp1aStructureProbe.Probe(partial);
+            await MxfIndependentMediaProbe.ValidateAsync(_ffprobePath, partial,
+                rate == "50" ? "50/1" : "60000/1001", _frames, _audioFrames,
+                cancellationToken).ConfigureAwait(false);
             MxfVerifiedFilePublisher.Publish(partial, final, path => { _ = MxfOp1aStructureProbe.Probe(path); });
         }
         finally
