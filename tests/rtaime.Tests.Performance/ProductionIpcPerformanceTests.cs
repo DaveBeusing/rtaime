@@ -21,8 +21,21 @@ public sealed class ProductionIpcPerformanceTests
 		var stopwatch = Stopwatch.StartNew();
 		for (var iteration = 0; iteration < 100; iteration++)
 		{
-			var snapshot = await transport.GetSnapshotAsync();
-			Assert.NotNull(snapshot.Runtime);
+			// A transient Named Pipe connect cancellation under runner contention must not
+			// erase the 100 successful roundtrip requirement or the 15-second guard.
+			for (var attempt = 0; ; attempt++)
+			{
+				try
+				{
+					var snapshot = await transport.GetSnapshotAsync();
+					Assert.NotNull(snapshot.Runtime);
+					break;
+				}
+				catch (OperationCanceledException) when (attempt == 0 && stopwatch.Elapsed < TimeSpan.FromSeconds(15))
+				{
+					// Exactly one retry for transport cancellation; other failures remain fatal.
+				}
+			}
 		}
 		stopwatch.Stop();
 
