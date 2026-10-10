@@ -21,6 +21,8 @@ $control = Get-Content -LiteralPath (Join-Path $root "src/Hosts/rtaime.ControlHo
 $operator = Get-Content -LiteralPath (Join-Path $root "src/Hosts/rtaime.Operator/NdiSourceDiscoveryViewModel.cs") -Raw
 $operatorControl = Get-Content -LiteralPath (Join-Path $root "src/Hosts/rtaime.Operator/NdiSourceDiscoveryControl.xaml") -Raw
 $tests = Get-Content -LiteralPath (Join-Path $root "tests/rtaime.Tests.Unit/NdiDiscoveryInputTests.cs") -Raw
+$preflight = Get-Content -LiteralPath (Join-Path $root "build/release/Invoke-OfflinePreflight.ps1") -Raw
+$bundlePolicy = Get-Content -LiteralPath (Join-Path $root "build/release/offline-bundle-policy.json") -Raw | ConvertFrom-Json
 
 Assert-Condition ($contracts -match 'MaximumRetainedResults' -and $contracts -match 'MediaInputLifecycleState') "Discovery/input contracts must remain bounded and expose lifecycle evidence."
 Assert-Condition ($provider -match 'MediaSourceCapabilityKinds\.Discovery' -and $provider -match 'MediaSourceCapabilityKinds\.Input') "The shared NDI provider must expose discovery and input capabilities."
@@ -32,6 +34,9 @@ Assert-Condition ($control -match 'AdoptAsync' -and $control -match 'AdoptSource
 Assert-Condition ($operator -match 'OperatorControlClient' -and $operator -notmatch 'rtaime\.Provider\.Ndi|NativeNdi|NDIlib_') "Operator discovery must consume management evidence and never host NDI provider/native code."
 Assert-Condition ($operatorControl -match 'ADOPT' -and $operatorControl -match 'RefreshCommand' -and $operatorControl -match 'Discovery is observational') "Operator UI must expose explicit refresh/adoption without route side effects."
 Assert-Condition ($tests -match 'bounded' -and $tests -match 'expires' -and $tests -match 'same_source' -and $tests -match 'unsupported') "NDI discovery/input regression coverage is incomplete."
+Assert-Condition ($preflight -match 'RequireNdiRuntime' -and $preflight -match 'external NDI runtime') "NDI discovery/input deployments must reuse the shared external-runtime preflight."
+$ndiRuntime = @($bundlePolicy.externalProviderRuntimes | Where-Object { [string]$_.provider -eq 'NDI' })
+Assert-Condition ($ndiRuntime.Count -eq 1 -and $ndiRuntime[0].bundled -eq $false -and [string]$ndiRuntime[0].interoperabilityStatus -eq 'UNVERIFIED') "NDI runtime must remain external and interoperability UNVERIFIED."
 
 $forbiddenRoots = @(
     "src/Client/rtaime.Client",
