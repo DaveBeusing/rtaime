@@ -160,6 +160,23 @@ public sealed class ManagedQuickTimeRecordingWriterProvider : IProgramRecordingW
 	}
 }
 
+/// <summary>
+/// Catalog-only MXF provider. It exposes the exact constrained profile but
+/// refuses writer creation until a completed OP1a implementation is qualified.
+/// </summary>
+public sealed class ManagedMxfOp1aRecordingWriterProvider : IProgramRecordingWriterProvider
+{
+	private readonly RecordingProfileDescriptor[] _profiles = [ProfessionalRecordingFormats.CreateMxfOp1aUncompressedPcmDescriptor()];
+
+	public RecordingWriterProviderId ProviderId => ProfessionalRecordingFormats.ManagedMxfOp1aProviderId;
+	public string DisplayName => "Managed MXF OP1a (unavailable)";
+	public IReadOnlyList<RecordingProfileDescriptor> Profiles => _profiles;
+
+	public IProgramRecordingPayloadWriter CreateWriter(RecordingProfileId profileId) =>
+		throw new RecordingOutputUnavailableException(
+			$"MXF OP1a recording profile '{profileId}' is not qualified; no MXF output can be created.");
+}
+
 public sealed class ProfileSelectingProgramRecordingWriter :
 	IProgramRecordingPayloadWriter,
 	IProfileConfigurableProgramRecordingWriter,
