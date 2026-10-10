@@ -147,6 +147,30 @@ public sealed class GpuLifecycleRecoveryTests
     }
 
     [Fact]
+    public void Recovery_start_and_cleanup_failures_are_both_reported_without_false_readiness()
+    {
+        using var backend = new RecoveryStartCleanupFailureBackend();
+        using var provider = new GpuProcessingProvider(backend);
+        provider.Start();
+        using var frame = Upload(provider, SourceA, 1, 2, 3, 0);
+
+        Assert.False(provider.TryExportMonitoringResource(frame, out var resource));
+        Assert.Null(resource);
+        Assert.Equal(GpuProviderState.Degraded, provider.State);
+
+        var failure = Assert.Throws<AggregateException>(() => provider.Recover());
+        Assert.Equal(2, failure.InnerExceptions.Count);
+        Assert.Equal(GpuProviderState.Failed, provider.State);
+        Assert.Equal(GpuProviderLifecycleReasonCodes.RecoveryFailed, provider.Lifecycle.ReasonCode);
+        Assert.Contains("cleanup also failed", provider.Lifecycle.Failure!.Value.Message);
+        Assert.Throws<InvalidOperationException>(() => Upload(provider, SourceB, 4, 5, 6, 1));
+
+        provider.Stop();
+        Assert.Equal(GpuProviderState.Stopped, provider.State);
+        Assert.Equal(0, provider.ActiveSurfaceCount);
+    }
+
+    [Fact]
     public void Monitoring_export_failure_is_isolated_from_program_and_can_recover()
     {
         using var backend = new FailFirstMonitoringExportHardwareBackend();
@@ -276,6 +300,42 @@ public sealed class GpuLifecycleRecoveryTests
             Inner.ReadbackInto(surfaceId, format, destination);
         public virtual void Release(SurfaceId surfaceId) => Inner.Release(surfaceId);
         public virtual void Dispose() => Inner.Dispose();
+    }
+
+    private sealed class RecoveryStartCleanupFailureBackend : HardwareFacadeBackend, IGpuSharedMonitoringBackend
+    {
+        private int _starts;
+        private bool _failCleanup = true;
+
+        public bool SupportsSharedMonitoringResources => true;
+        public bool IsSharedMonitoringExportAvailable => true;
+
+        public override void Start()
+        {
+            _starts++;
+            if (_starts == 2)
+                throw new InvalidOperationException("Injected recovery startup failure.");
+            base.Start();
+        }
+
+        public override void Stop()
+        {
+            if (_starts == 2 && _failCleanup)
+            {
+                _failCleanup = false;
+                throw new InvalidOperationException("Injected recovery cleanup failure.");
+            }
+            base.Stop();
+        }
+
+        public bool TryExportMonitoringResource(
+            SurfaceId surfaceId,
+            VideoFormat format,
+            out GpuBackendMonitoringResource? resource)
+        {
+            resource = null;
+            return false;
+        }
     }
 
     private sealed class FailFirstStartHardwareBackend : HardwareFacadeBackend
