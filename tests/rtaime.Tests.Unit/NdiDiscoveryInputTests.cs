@@ -180,8 +180,8 @@ public sealed class NdiDiscoveryInputTests
         Assert.Contains(provider.Descriptor.Capabilities, item => item.Kind == NetworkOutputCapabilityKinds.Output);
         Assert.Contains(provider.Descriptor.Capabilities, item => item.Kind == MediaSourceCapabilityKinds.Discovery);
         Assert.Contains(provider.Descriptor.Capabilities, item => item.Kind == MediaSourceCapabilityKinds.Input);
-        Assert.Single(provider.Descriptor.Resources.Where(item => item.Kind == MediaSourceCapabilityKinds.Discovery));
-        Assert.Single(provider.Descriptor.Resources.Where(item => item.Kind == MediaSourceCapabilityKinds.Input));
+        Assert.Single(provider.Descriptor.Resources, item => item.Kind == MediaSourceCapabilityKinds.Discovery);
+        Assert.Single(provider.Descriptor.Resources, item => item.Kind == MediaSourceCapabilityKinds.Input);
     }
 
     private static NdiInputConfiguration Configuration(
