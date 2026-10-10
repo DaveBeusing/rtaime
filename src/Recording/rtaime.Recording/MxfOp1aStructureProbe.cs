@@ -44,7 +44,7 @@ internal static class MxfOp1aStructureProbe
 
         foreach (var element in elements)
         {
-            if (element.Key.AsSpan(0, 13).SequenceEqual(PartitionPrefix))
+            if (element.Key.AsSpan(0, 13).SequenceEqual(PartitionPrefix) && element.Key[13] is 2 or 3 or 4)
             {
                 if (element.Length is < 88 or > 65536)
                     throw new InvalidDataException("MXF partition pack length is unsupported.");
