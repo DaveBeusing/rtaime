@@ -99,11 +99,14 @@ public sealed class GpuReadbackOwnershipConcurrencyTests
 
             barrier.SignalAndWait();
             primary.Dispose();
-            using var reader = retained.GetAwaiter().GetResult();
+            var reader = retained.GetAwaiter().GetResult();
             if (reader is not null)
+            {
                 Assert.Equal((byte)17, reader.Memory.Span[0]);
-
-            Assert.Equal(reader is null ? 0 : 1, provider.ReadbackPoolStatistics.ActiveBuffers);
+                Assert.Equal(1, provider.ReadbackPoolStatistics.ActiveBuffers);
+                reader.Dispose();
+            }
+            Assert.Equal(0, provider.ReadbackPoolStatistics.ActiveBuffers);
         }
 
         Assert.Equal(0, provider.ReadbackPoolStatistics.ActiveBuffers);
