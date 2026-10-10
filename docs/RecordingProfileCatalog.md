@@ -138,7 +138,7 @@ The detailed decision and rejected dependency classes are recorded in [Professio
 
 ## MXF and proprietary codec boundary
 
-MXF, ProRes, DNxHR and AVC-Intra remain unavailable. In particular, no vague “broadcast MXF” capability is advertised. MXF requires a concrete operational pattern/essence implementation and independent validation before it can enter the catalog.
+The exact `mxf-op1a-uncompressed-pcm` OP1a uncompressed 8-bit 4:2:2 / stereo 48 kHz PCM16 descriptor is now projected from the Runtime registry with `Available=false`, `Unverified` evidence and a specific unavailable reason. Recording start fails closed before writer creation. There is no completed `.mxf` file writer yet.\n\nMXF, ProRes, DNxHR and AVC-Intra remain unavailable. In particular, no vague “broadcast MXF” capability is advertised. MXF requires a concrete operational pattern/essence implementation and independent validation before it can enter the catalog.
 
 Hardware acceleration also remains unverified and unsupported by the production catalog. Both current profiles are explicitly classified as software.
 
