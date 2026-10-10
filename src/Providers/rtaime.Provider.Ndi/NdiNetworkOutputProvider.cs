@@ -16,7 +16,7 @@ public interface INdiSender : IAsyncDisposable
 
 public sealed class NdiNetworkOutputProvider
 {
-	private static readonly ProviderId ProviderIdentity =
+	internal static readonly ProviderId ProviderIdentity =
 		new(new Identity(new Guid("cf78d139-f89e-43dc-b44c-0fb48874c2ad")));
 	private static readonly CapabilityId CapabilityIdentity =
 		new(new Identity(new Guid("55e56775-2d57-4ab5-8c78-86395ca2d711")));
