@@ -196,6 +196,7 @@ public sealed class RuntimeHostProcess
 	private readonly Stopwatch _timingClock = Stopwatch.StartNew();
 	private readonly RuntimeTimingQualificationProbe _timingProbe;
 	private readonly RuntimeFrameDropCounter _frameDropCounter = new();
+	private RuntimeScheduleStatistics _scheduleStatistics;
 	private RuntimeHostLifecycleSnapshot _lifecycle = new(
 		RuntimeHostProcessState.Created,
 		RuntimeHostHealthState.Unknown,
@@ -277,6 +278,11 @@ public sealed class RuntimeHostProcess
 			lock (_gate)
 				return _lifecycle;
 		}
+	}
+
+	public RuntimeScheduleStatistics ScheduleStatistics
+	{
+		get { lock (_gate) return _scheduleStatistics; }
 	}
 
 	public V1RuntimeHostService? Runtime => _runtime;
@@ -447,35 +453,66 @@ public sealed class RuntimeHostProcess
 		RuntimeAIShowcaseService aiShowcase,
 		CancellationToken cancellationToken)
 	{
-		var framePeriod = TimeSpan.FromSeconds(runtime.Format.FrameRate.Denominator / (double)runtime.Format.FrameRate.Numerator);
-		using var timer = new PeriodicTimer(framePeriod);
-		while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
+		var schedule = new RationalFrameSchedule(runtime.Format.FrameRate, _timingClock.Elapsed);
+		ulong missedSlots = 0;
+		var hasCommittedObservation = false;
+		while (!cancellationToken.IsCancellationRequested)
 		{
+			// Delay is only a wake-up hint: the monotonic epoch decides when a slot is due.
+			var remaining = schedule.NextDeadline - _timingClock.Elapsed;
+			if (remaining > TimeSpan.Zero)
+				await Task.Delay(remaining < TimeSpan.FromMilliseconds(1) ? TimeSpan.FromMilliseconds(1) : remaining, cancellationToken).ConfigureAwait(false);
 			var boundaryObservedAt = _timingClock.Elapsed;
+			if (!schedule.TryTake(boundaryObservedAt, out var opportunity))
+				continue;
 			mediaIo?.PumpInputs();
 			AdmitMediaDeckBoundary(runtime, mediaDeck);
-			if (!runtime.HasCommittedExecution) continue;
+			if (!runtime.HasCommittedExecution)
+			{
+				hasCommittedObservation = false;
+				continue;
+			}
 
 			var processingStartedAt = _timingClock.Elapsed;
 			using var boundary = runtime.ProcessNextBoundary();
 			var renderDuration = _timingClock.Elapsed - processingStartedAt;
 			mediaIo?.SubmitProgram(boundary);
 			aiShowcase.ObserveProgramBoundary(boundary.ProgramFrame);
-			var pipelineDuration = _timingClock.Elapsed - processingStartedAt;
-			var timing = _timingProbe.RecordBoundary(boundary.SequenceNumber, boundaryObservedAt, pipelineDuration);
+			var completedAt = _timingClock.Elapsed;
+			var pipelineDuration = completedAt - boundaryObservedAt;
+			var timing = _timingProbe.ObserveBoundary(boundary.SequenceNumber, boundaryObservedAt, pipelineDuration);
 			var mediaIoStatistics = mediaIo?.Statistics;
-			var droppedFrames = _frameDropCounter.Observe(
+			if (hasCommittedObservation)
+				missedSlots = SaturatingAdd(missedSlots, opportunity.MissedSlots);
+			hasCommittedObservation = true;
+			var presentationLateness = completedAt > opportunity.PresentationDeadline
+				? completedAt - opportunity.PresentationDeadline : TimeSpan.Zero;
+			lock (_gate)
+			{
+				_scheduleStatistics = new RuntimeScheduleStatistics(
+					SaturatingAdd(_scheduleStatistics.CommittedBoundaries, 1),
+					missedSlots,
+					SaturatingAdd(_scheduleStatistics.ScheduleDeadlineMisses,
+						opportunity.StartLateness > _timingProbe.Thresholds.MaximumAbsoluteJitter ? 1UL : 0UL),
+					SaturatingAdd(_scheduleStatistics.PresentationLateBoundaries, presentationLateness > TimeSpan.Zero ? 1UL : 0UL),
+					opportunity.StartLateness,
+					presentationLateness);
+			}
+			var droppedFrames = _frameDropCounter.ObserveScheduled(
 				boundaryObservedAt,
-				framePeriod,
+				missedSlots,
 				mediaIoStatistics?.OutputBackpressure ?? 0,
 				mediaIoStatistics?.OutputRejected ?? 0);
 			runtime.SetPerformanceObservations(
 				renderDuration,
 				droppedFrames,
 				_frameDropCounter.OutputFramesPerSecond);
-			runtime.SetTimingHealth(MapTimingHealth(timing.State));
+			runtime.SetTimingHealth(MapTimingHealth(timing));
 		}
 	}
+
+	private static ulong SaturatingAdd(ulong left, ulong right) =>
+		ulong.MaxValue - left < right ? ulong.MaxValue : left + right;
 
 	private void AdmitMediaDeckBoundary(
 		V1RuntimeHostService runtime,
@@ -688,3 +725,11 @@ public sealed class RuntimeHostProcess
 		public ValueTask AbortAsync(CancellationToken cancellationToken) => ValueTask.CompletedTask;
 	}
 }
+
+public readonly record struct RuntimeScheduleStatistics(
+	ulong CommittedBoundaries,
+	ulong MissedSlots,
+	ulong ScheduleDeadlineMisses,
+	ulong PresentationLateBoundaries,
+	TimeSpan LastStartLateness,
+	TimeSpan LastPresentationLateness);
