@@ -73,7 +73,7 @@
         "No production GPU driver range is yet declared SUPPORTED.",
         "No physical Media I/O device/driver/firmware tuple is yet declared SUPPORTED.",
         "Hosted CI and software-profile qualification do not promote this configuration to SUPPORTED.",
-        "NDI runtime and peer interoperability are not yet declared SUPPORTED."
+        "NDI output, discovery and input runtime/peer interoperability are not yet declared SUPPORTED."
       ]
     }
   ]
