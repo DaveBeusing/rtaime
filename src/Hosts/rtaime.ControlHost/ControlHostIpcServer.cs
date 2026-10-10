@@ -2083,6 +2083,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			return Error(request, "control.media_source.adoption.unavailable", "Media-source adoption is not configured.");
 		var wire = request.Payload.Deserialize<WireMediaSourceAdoptRequest>(Wire.JsonOptions)
 			?? throw new InvalidDataException("Media-source adoption payload is required.");
+		await _mutationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
 		try
 		{
 			var result = await _mediaSourceDiscovery
@@ -2107,6 +2108,10 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		catch (Exception exception) when (exception is IOException or InvalidOperationException or InvalidDataException or ArgumentException or NotSupportedException)
 		{
 			return Error(request, "control.media_source.adoption.rejected", exception.Message);
+		}
+		finally
+		{
+			_mutationGate.Release();
 		}
 	}
 
