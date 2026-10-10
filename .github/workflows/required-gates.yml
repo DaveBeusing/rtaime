@@ -212,6 +212,10 @@ jobs:
         shell: pwsh
         run: ./build/quality/Test-NetworkOutputPolicy.ps1
 
+      - name: Verify NDI discovery and input policy
+        shell: pwsh
+        run: ./build/quality/Test-NdiDiscoveryInputPolicy.ps1
+
       - name: Verify advanced audio production policy
         shell: pwsh
         run: ./build/quality/Test-AdvancedAudioProductionPolicy.ps1
