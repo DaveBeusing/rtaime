@@ -110,7 +110,7 @@ Assert-Condition ($engine -match 'ReconcileDynamicsStates' -and $engine -match '
 
 Assert-Condition ($runtime -match 'AudioProductionEngine') "RuntimeHost must own advanced audio processing."
 Assert-Condition ($runtime -match '_audioBusMixSamples' -and $runtime -match 'ProcessConfiguredAudioBusesUnsafe') "RuntimeHost must reuse bounded per-bus audio mix buffers through one processing engine."
-Assert-Condition ($runtime -match 'TryRecordCommittedProgram\(execution, output\.Descriptor, programRecordingAudioBuffer\)') "Recording must consume the final Program audio descriptor."
+Assert-Condition ($runtime -match '(?s)TryRecordCommittedProgram\(\s*execution\s*,\s*output\.Descriptor\s*,\s*programRecordingAudioBuffer\s*[,)]') "Recording must consume the final Program audio descriptor."
 Assert-Condition ($runtime -match 'programAudioBuffer,\s*programAudioPayload') "Output paths must consume the same final Program audio payload."
 Assert-Condition ($mediaIoVerticalSlice -match 'boundary\.ProgramAudioPayload' -and $mediaIoVerticalSlice -match 'boundary\.ProgramAudioBuffer\.Timing' -and $mediaIoVerticalSlice -match 'TrySubmitProgram') "Physical Media I/O Program output must consume the final Runtime-owned Program audio payload without an independent remix."
 Assert-Condition ($runtime -notmatch 'ControlHost') "Runtime audio processing must not depend on ControlHost implementation."
