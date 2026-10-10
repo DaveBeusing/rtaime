@@ -678,9 +678,17 @@ public static class CapabilityPlanningEngine
         ProductionSpecification specification)
     {
         var requirements = new List<LogicalCapabilityRequirement>();
+        var activeSourceIds = graph.Nodes
+            .Where(node => node.Kind is LogicalProductionNodeKind.PreviewRoute or LogicalProductionNodeKind.ProgramRoute or LogicalProductionNodeKind.AuxRoute)
+            .Where(node => node.MediaSourceId is not null)
+            .Select(node => node.MediaSourceId!.Value)
+            .ToHashSet();
 
         foreach (var node in graph.Nodes
-                     .Where(node => node.Kind == LogicalProductionNodeKind.SourceEndpoint)
+                     .Where(node =>
+                         node.Kind == LogicalProductionNodeKind.SourceEndpoint &&
+                         node.MediaSourceId is { } mediaSourceId &&
+                         activeSourceIds.Contains(mediaSourceId))
                      .OrderBy(node => node.NodeId.ToString(), StringComparer.Ordinal))
         {
             var source = specification.Sources.Single(candidate => candidate.SourceId == node.ProductionSourceId);
