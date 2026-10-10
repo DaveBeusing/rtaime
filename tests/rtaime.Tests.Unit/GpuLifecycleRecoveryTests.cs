@@ -193,6 +193,27 @@ public sealed class GpuLifecycleRecoveryTests
     }
 
     [Fact]
+    public async Task Stop_during_blocked_recovery_cannot_publish_stale_ready_state()
+    {
+        using var backend = new BlockingRecoveryHardwareBackend();
+        using var provider = new GpuProcessingProvider(backend);
+        provider.Start();
+        using var frame = Upload(provider, SourceA, 1, 2, 3, 0);
+        Assert.False(provider.TryExportMonitoringResource(frame, out _));
+        Assert.Equal(GpuProviderState.Degraded, provider.State);
+
+        var recovery = Task.Run(provider.Recover);
+        Assert.True(backend.RecoveryStarted.Wait(TimeSpan.FromSeconds(5)));
+        var stop = Task.Run(provider.Stop);
+        backend.AllowRecovery.Set();
+        await Task.WhenAll(recovery, stop).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(GpuProviderState.Stopped, provider.State);
+        Assert.Equal(0, provider.ActiveSurfaceCount);
+        Assert.Throws<InvalidOperationException>(() => Upload(provider, SourceB, 4, 5, 6, 1));
+    }
+
+    [Fact]
     public void Repeated_monitoring_failures_do_not_restart_program_or_rotate_generation()
     {
         using var backend = new RepeatedMonitoringFailureBackend();
@@ -494,6 +515,40 @@ public sealed class GpuLifecycleRecoveryTests
         {
             resource = CreateMonitoringResource(() => Interlocked.Increment(ref _releaseCount));
             return true;
+        }
+    }
+
+    private sealed class BlockingRecoveryHardwareBackend : MonitoringHardwareBackend
+    {
+        private int _starts;
+        public ManualResetEventSlim RecoveryStarted { get; } = new(false);
+        public ManualResetEventSlim AllowRecovery { get; } = new(false);
+
+        public override void Start()
+        {
+            if (Interlocked.Increment(ref _starts) == 2)
+            {
+                RecoveryStarted.Set();
+                if (!AllowRecovery.Wait(TimeSpan.FromSeconds(10)))
+                    throw new TimeoutException("Recovery start synchronization expired.");
+            }
+            base.Start();
+        }
+
+        public override bool TryExportMonitoringResource(
+            SurfaceId surfaceId,
+            VideoFormat format,
+            out GpuBackendMonitoringResource? resource)
+        {
+            resource = null;
+            return false;
+        }
+
+        public override void Dispose()
+        {
+            RecoveryStarted.Dispose();
+            AllowRecovery.Dispose();
+            base.Dispose();
         }
     }
 
