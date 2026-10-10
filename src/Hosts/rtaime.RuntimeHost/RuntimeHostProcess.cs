@@ -239,7 +239,7 @@ public sealed class RuntimeHostProcess
 			var mediaFoundationProvider = new WindowsMediaFoundationRecordingWriterProvider(recordingRoot);
 			var quickTimeProvider = new ManagedQuickTimeRecordingWriterProvider(recordingRoot);
 			var registry = new RecordingWriterProviderRegistry(
-				[mediaFoundationProvider, quickTimeProvider],
+				[mediaFoundationProvider, quickTimeProvider, new ManagedMxfOp1aRecordingWriterProvider()],
 				ProfessionalRecordingFormats.Mp4H264AacProfileId);
 			return new ProfileSelectingProgramRecordingWriter(registry);
 		});
