@@ -3,7 +3,8 @@
 [CmdletBinding()]
 param(
 	[string]$BundlePath = "",
-	[string]$InstallPath = ""
+	[string]$InstallPath = "",
+	[switch]$RequireNdiRuntime
 )
 
 Set-StrictMode -Version Latest
@@ -62,6 +63,30 @@ function Get-ExistingParent {
 		$current = $parent.FullName
 	}
 	return $current
+}
+
+function Resolve-NdiRuntimePath {
+	param([Parameter(Mandatory)]$Requirement)
+
+	$directVariable = [string]$Requirement.directLibraryEnvironmentVariable
+	$directPath = [Environment]::GetEnvironmentVariable($directVariable)
+	if (-not [string]::IsNullOrWhiteSpace($directPath)) {
+		try {
+			$fullPath = [System.IO.Path]::GetFullPath($directPath)
+			if (Test-Path -LiteralPath $fullPath -PathType Leaf) { return $fullPath }
+		} catch { }
+	}
+
+	foreach ($directoryVariable in @($Requirement.runtimeDirectoryEnvironmentVariables)) {
+		$directory = [Environment]::GetEnvironmentVariable([string]$directoryVariable)
+		if ([string]::IsNullOrWhiteSpace($directory)) { continue }
+		try {
+			$candidate = [System.IO.Path]::GetFullPath((Join-Path $directory ([string]$Requirement.libraryFileName)))
+			if (Test-Path -LiteralPath $candidate -PathType Leaf) { return $candidate }
+		} catch { }
+	}
+
+	return $null
 }
 
 if ([string]::IsNullOrWhiteSpace($BundlePath)) {
@@ -123,6 +148,20 @@ foreach ($requirement in @($requirements.dotnetRuntimes)) {
 	Assert-Condition ($candidates.Count -gt 0) "Required runtime '$($requirement.name)' $majorMinor >= $minimum is not installed."
 	$selected = $candidates | Sort-Object Version -Descending | Select-Object -First 1
 	Write-Host "Runtime PASS: $($requirement.name) $($selected.RawVersion)"
+}
+
+$ndiRequirements = @($requirements.externalProviderRuntimes | Where-Object { [string]$_.provider -eq "NDI" })
+Assert-Condition ($ndiRequirements.Count -eq 1) "Offline runtime requirements must declare exactly one NDI external-runtime boundary."
+$ndiRequirement = $ndiRequirements[0]
+Assert-Condition ($ndiRequirement.requiredWhenConfigured -eq $true) "NDI runtime must be required when NDI output is configured."
+Assert-Condition ($ndiRequirement.bundled -eq $false) "NDI runtime must remain external to the rtaime offline bundle."
+Assert-Condition ([string]$ndiRequirement.redistributionStatus -eq "EXTERNAL_RUNTIME_NOT_BUNDLED") "NDI redistribution boundary is invalid."
+Assert-Condition ([string]$ndiRequirement.interoperabilityStatus -eq "UNVERIFIED") "NDI interoperability must remain UNVERIFIED without declared environment evidence."
+
+if ($RequireNdiRuntime) {
+	$ndiRuntimePath = Resolve-NdiRuntimePath -Requirement $ndiRequirement
+	Assert-Condition (-not [string]::IsNullOrWhiteSpace($ndiRuntimePath)) "NDI output was requested but a compatible external NDI runtime was not found through the declared runtime environment variables."
+	Write-Host "NDI runtime PASS: external runtime discovered"
 }
 
 if (-not [string]::IsNullOrWhiteSpace($InstallPath)) {

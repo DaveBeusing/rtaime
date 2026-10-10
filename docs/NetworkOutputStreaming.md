@@ -4,83 +4,131 @@
 	<img src="../src/Hosts/rtaime.Operator/Assets/Brand/RtaimeLogoHorizontal.svg" alt="rtaime — Real Time AI Media Engine" width="180" />
 </p>
 
-# Network Output and SRT Streaming
+# Network Output: SRT and NDI
 
 ## Purpose
 
-Network output extends the existing governed Program/Aux output-role model. It is not a separate Program path, renderer, compositor or authority surface.
+Network output extends the existing governed Program/Aux output-role model. It is not a separate Program path, renderer, compositor, mixer or authority surface.
 
-The implemented reference path is:
+The implemented path is:
 
 ```text
 ControlHost authoritative output-role state
   -> prepared Runtime execution
   -> committed Program/Aux media result
   -> RuntimeNetworkOutputBridge
-  -> provider-neutral NetworkOutputProgramSample
-  -> SrtNetworkOutputSession
-  -> H.264/AAC MPEG-TS encoder
-  -> SRT transport
+  -> provider-neutral INetworkOutputSession
+  -> RuntimeNetworkOutputProviderRegistry
+     -> SRT provider
+     -> NDI provider
 ```
 
-ControlHost remains Production Authority. RuntimeHost owns execution and lifecycle. The SRT provider owns protocol and transport details.
+ControlHost remains Production Authority. RuntimeHost owns output execution and lifecycle. Individual providers own only protocol/runtime-specific submission behavior.
 
-## Implemented capability
+## Provider-neutral configuration
 
-The reference provider implements:
+Common network-output configuration owns:
+
+- stable target identity;
+- governed Program/Aux role association;
+- Runtime video/audio format;
+- bounded queue capacity;
+- reconnect delay/attempt policy;
+- protocol family;
+- typed provider-specific settings.
+
+SRT-only settings are represented by `SrtNetworkOutputSettings`. NDI-only settings are represented by `NdiNetworkOutputSettings`. A configuration whose protocol does not match its typed settings is rejected.
+
+Stable Provider Contracts contain no NDI SDK/native types and no SRT transport implementation types.
+
+## SRT reference path
+
+The existing SRT path remains compatible and implements:
 
 - SRT caller-mode output;
 - H.264 video;
 - AAC-LC stereo 48 kHz audio;
-- 1920x1080 progressive RGBA8 Runtime video at 50 fps and 60000/1001 fps;
+- 1920x1080 progressive at 50 fps and 60000/1001 fps;
 - bounded sample queues;
 - drop-oldest live backpressure;
 - reconnect with bounded exponential delay and optional maximum attempts;
-- optional SRT passphrase loaded through an environment-variable reference;
-- Runtime/provider health evidence including connection state, bitrate, queue depth, sent bytes/packets, dropped/rejected samples and reconnect count.
+- optional passphrase loaded through an environment-variable reference;
+- provider-confirmed connection/backpressure/statistics evidence.
 
-Listener and rendezvous values exist in the provider-neutral configuration model but are not qualified by the first native reference transport. They fail closed rather than silently behaving as caller mode.
+Legacy Runtime descriptors that omit `protocol` continue to resolve as SRT.
 
-NDI, RIST, RTMP/RTMPS, WebRTC, SMPTE ST 2110, network ingest, adaptive bitrate and CDN management are not implemented by this foundation.
+Listener and rendezvous configuration values remain explicit but are not qualified by the first native SRT reference transport.
+
+## NDI software path
+
+`rtaime.Provider.Ndi` adds an NDI High Bandwidth software-output boundary for the current qualified software baseline:
+
+- Windows x64;
+- 1920x1080 progressive RGBA8 Runtime video;
+- 50 fps;
+- 60000/1001 fps;
+- Program and Aux roles;
+- final Runtime-owned stereo 48 kHz Float32 audio;
+- stable NDI source name;
+- bounded asynchronous submission;
+- drop-oldest backpressure;
+- explicit lifecycle/failure/statistics evidence.
+
+The provider consumes the existing committed Program/Aux sample. It does not invoke a compositor, perform an independent GPU render/readback, choose a different source, or create an audio mix.
+
+At the native representation boundary the provider converts the already selected interleaved Float32 stereo payload to planar Float32 required by the NDI send ABI. RGBA video is submitted from the retained Runtime payload. These are representation operations only; production routing/mixing authority remains upstream.
+
+NDI HX is not claimed by this implementation.
+
+## Runtime dependency
+
+The NDI runtime is external and is not bundled with rtaime.
+
+Runtime discovery is explicit:
+
+- `RTAIME_NDI_LIBRARY_PATH` may identify the exact `Processing.NDI.Lib.x64.dll`;
+- `NDI_RUNTIME_DIR_V6` may identify an NDI runtime directory;
+- `NDI_RUNTIME_DIR_V5` may identify an NDI runtime directory.
+
+If a compatible runtime cannot be located or required exports are unavailable, NDI becomes unavailable/faulted with bounded failure evidence. rtaime does not download the runtime and does not automatically fall back to SRT.
+
+For licensing, redistribution and qualification boundaries see [NDI Runtime Dependency](NdiRuntimeDependency.md).
 
 ## Authority and routing
 
-Network output is associated with existing governed Program or Aux role identity.
+Network output is associated with an existing governed Program or Aux role identity.
 
 Provider failure does not mutate authoritative routing and does not create a replacement source. ControlHost state remains authoritative while Runtime reports observational provider/output evidence.
 
-Program and Aux use the same output-role model. The Operator consumes synchronized Runtime evidence and must not infer LIVE state from configuration or button intent.
+Program and Aux may use different network-output providers. Each role currently admits at most one configured network-output target.
+
+The Operator consumes synchronized Runtime evidence and must not infer LIVE state from configuration or operator intent.
 
 ## Media boundary
 
-Network output consumes the already committed Runtime media result.
+Video is handed to the network path through the existing owned Runtime readback lease. The bounded queue owns that lease until the sample is sent, dropped, rejected or the session shuts down. No network payload is transferred through management IPC.
 
-Video is handed to the network path through an owned Runtime readback lease. The queue owns the lease until the sample is sent, dropped, rejected or the session shuts down. No network payload is transferred through management IPC.
+Audio uses the final Runtime-owned governed audio bus selected by the output role as stereo 48 kHz Float32. That bus already contains the authoritative routing and processing result. Neither SRT nor NDI implements an independent mixer.
 
-Audio uses the final Runtime-owned governed Program audio bus as stereo 48 kHz Float32. That bus already includes AFV/breakaway routing plus any confirmed advanced source mix, crossfade, ducking and Program master state. Network output does not implement a separate mix. If the Runtime bridge has no materialized audio payload for a valid descriptor, it supplies bounded silence matching the descriptor timing rather than blocking Program continuity.
-
-The reference encoder converts:
-
-- RGBA8 -> NV12 for Media Foundation H.264 input;
-- Float32 -> signed PCM16 for Media Foundation AAC input.
-
-The encoder writes H.264/AAC into an in-memory MPEG-2 transport stream. Network transport is not coupled to recording-file naming or publication semantics.
+If the Runtime bridge has no materialized audio payload for a valid descriptor, it supplies bounded silence matching the descriptor timing rather than blocking Program continuity.
 
 ## Timing
 
 Video and audio timestamps derive from Runtime media timing.
 
-The Media Foundation encoder converts the existing timebase into 100 ns units and establishes one shared A/V origin from the first sample. Video and audio timestamps must remain non-negative and strictly monotonic.
+SRT converts that timing into the Media Foundation encoder timeline. NDI converts the same Runtime presentation timestamps into 100 ns timecode units at the native send boundary.
 
-Wall-clock time is used only for observational fields such as last successful send; it does not generate media presentation timestamps.
+The provider never generates media presentation timing from wall clock. Wall clock is used only for observational fields such as last successful send.
+
+At 50 fps, the authoritative Runtime audio cadence is preserved as supplied by the final audio bus. At 60000/1001, alternating sample-count cadence is likewise forwarded unchanged; the NDI provider does not resample or synthesize its own cadence.
 
 ## Backpressure
 
 Runtime submission is synchronous, bounded and free of network I/O.
 
-Each SRT session has a bounded queue. When the queue is full, the oldest complete A/V sample is dropped and its owned video lease is released before the current live sample is admitted.
+Each SRT or NDI session has a bounded complete-A/V queue. When a queue is full, the oldest complete sample is dropped and its owned video lease is released before the current live sample is admitted.
 
-This policy intentionally favors current live output over unbounded latency growth.
+Network output must never indefinitely block Program execution.
 
 Backpressure is represented through:
 
@@ -91,83 +139,128 @@ Backpressure is represented through:
 - current queue depth;
 - structured failure evidence.
 
-Network output must never indefinitely block Program execution.
-
 ## Reconnect and failure isolation
 
-Connection and send failures move the provider through connecting, reconnecting or faulted observational lifecycle states.
+Connection/runtime/send failures move the provider through connecting, reconnecting or faulted observational lifecycle states.
 
-Reconnect uses configured initial and maximum delays. A maximum-attempt value of zero means retry until shutdown; a positive value bounds attempts and produces explicit fault evidence when exhausted.
+Reconnect uses configured initial and maximum delays. A maximum-attempt value of zero means retry until shutdown where retry is meaningful; a positive value bounds attempts.
 
-A provider, encoder, secret or endpoint failure affects only the network output session. It does not roll back Runtime committed execution and does not mutate Control authority.
+Runtime-unavailable failures such as a missing/incompatible NDI native library fail closed rather than spinning indefinitely.
 
-Shutdown cancels connection/reconnect work, disposes queued payload leases and drains/releases provider resources.
+A provider/runtime/encoder/secret/endpoint failure affects only its network-output session. It does not roll back Runtime committed execution and does not mutate Control authority.
+
+Shutdown cancels reconnect work, disposes queued payload leases and releases provider/native resources.
 
 ## Configuration
 
 RuntimeHost reads network targets from `--network-outputs=<json>` or `RTAIME_NETWORK_OUTPUTS`.
 
-The value is a JSON array. Each entry supports:
+Common fields are:
 
 - `roleId`: `program` or `aux`;
 - `targetId`: stable local target identity;
-- `endpoint`: absolute `srt://` URI with host and port;
+- `protocol`: `srt` or `ndi`;
+- `queueCapacity`;
+- `reconnectInitialDelayMilliseconds`;
+- `reconnectMaximumDelayMilliseconds`;
+- `reconnectMaximumAttempts`.
+
+SRT additionally accepts:
+
+- `endpoint`: absolute `srt://` URI;
 - `mode`: `caller`, `listener` or `rendezvous`;
 - `latencyMode`: `low`, `normal` or `reliable`;
 - `videoBitRate`;
 - `audioBitRate`;
 - `latencyMilliseconds`;
-- `queueCapacity`;
-- `passphraseEnvironmentVariable`;
-- `reconnectInitialDelayMilliseconds`;
-- `reconnectMaximumDelayMilliseconds`;
-- `reconnectMaximumAttempts`.
+- `passphraseEnvironmentVariable`.
 
-The current reference codec configuration is H.264 + AAC-LC.
+Example:
 
-A target URI must not contain user-info credentials. Secret values are not stored in source-controlled configuration. When encryption is used, `passphraseEnvironmentVariable` names the environment variable containing the SRT passphrase.
+```json
+[
+  {
+    "roleId": "program",
+    "targetId": "program-srt",
+    "protocol": "srt",
+    "endpoint": "srt://127.0.0.1:9000/live"
+  }
+]
+```
 
-The native library can be resolved through `RTAIME_SRT_LIBRARY_PATH`. The reference transport requires SRT 1.5.7 or newer.
+NDI accepts `sourceName` instead of SRT endpoint/codec/bitrate/latency fields:
+
+```json
+[
+  {
+    "roleId": "program",
+    "targetId": "program-ndi",
+    "protocol": "ndi",
+    "sourceName": "rtaime Program",
+    "queueCapacity": 8
+  }
+]
+```
+
+Mixed SRT/NDI fields are rejected. A configured NDI target never falls back to an SRT target.
+
+## Offline preflight
+
+Normal offline preflight remains independent of optional NDI:
+
+```powershell
+./tools/Invoke-OfflinePreflight.ps1 -BundlePath . -InstallPath C:\rtaime
+```
+
+For a deployment that will configure NDI:
+
+```powershell
+./tools/Invoke-OfflinePreflight.ps1 -BundlePath . -InstallPath C:\rtaime -RequireNdiRuntime
+```
+
+The offline bundle verifier rejects an accidentally bundled NDI runtime binary. Runtime presence is a prerequisite check, not interoperability certification.
 
 ## Health and Operator presentation
 
-Runtime exposes network output evidence with the governed output role.
+Runtime exposes network-output evidence with the governed output role.
 
-The Operator presents a network stream as live only when Runtime/provider evidence confirms the connected state. Configuration without provider confirmation remains unverified.
+The Operator presents a stream as live only when Runtime/provider evidence confirms the connected state.
 
-Relevant evidence includes:
+Common evidence includes:
 
 - provider and protocol;
-- safe target identity without secret material;
+- safe target identity;
 - lifecycle and connected state;
-- video/audio format and codec;
-- encoded bitrate;
+- video/audio format;
+- provider-specific codec/transport summary;
 - queue depth;
 - dropped/rejected samples;
-- packets/bytes sent;
+- sent media/byte counters;
 - reconnect count;
 - last successful send;
 - structured failure detail.
 
+For SRT the Operator may show H.264/AAC bitrate. For NDI it shows NDI High Bandwidth / Float32 semantics rather than fabricating an encoded bitrate.
+
+No SDK path, native library path or secret is projected into output snapshots.
+
 ## Qualification boundary
 
-Repository tests and CI can verify contract validation, bounded queue behavior, failure isolation, deterministic timestamp conversion, Runtime/Operator projection and fake/reference provider behavior.
+Repository tests and CI qualify:
 
-Native SRT availability, real network path quality, sustained physical-network throughput, WAN behavior and deployment-specific firewall/NAT behavior require separate environment evidence.
+- SRT configuration compatibility;
+- typed NDI configuration validation;
+- mixed-field rejection;
+- Program/Aux provider selection;
+- 1080p50 and 1080p59.94 software format admission;
+- Runtime audio cadence preservation;
+- bounded queue saturation/drop behavior;
+- missing NDI runtime failure;
+- send failure/recovery;
+- clean shutdown/resource disposal;
+- provider-neutral architecture;
+- package/runtime/licensing guardrails.
 
-Software-only 1080p50/59.94 measurements must not be presented as physical-network certification.
+Real NDI interoperability against a declared NDI runtime/peer environment remains **UNVERIFIED**. Physical-network throughput, switch behavior, multicast configuration, WAN behavior and external receiver compatibility require separate environment evidence.
 
-## Output-role audio bus selection
-
-Network output consumes the final Runtime-owned audio payload selected by its governed output role. Program defaults to the `program` bus; Aux may select another configured authoritative bus. The SRT/provider layer receives that already mixed stereo 48 kHz payload and does not perform an independent remix.
-
-Legacy output-role configurations without an explicit audio-bus mapping preserve Program-audio behavior. Missing or invalid configured bus references fail closed before confirmed execution. Recording remains bound to the Program bus independently of Aux/network bus selection.
-
-## Advanced-audio selected-bus qualification
-
-Advanced Audio Processing qualification treats Program/Aux audio-bus selection as part of the final authoritative Runtime bus materialization path. A governed output role consumes the selected already-processed bus payload; the network provider does not perform an independent remix.
-
-The retained network-output backpressure/failure tests remain part of the qualification boundary: transport pressure may drop bounded output work or surface failure evidence, but it must not redefine Program production authority or create an unbounded queue.
-
-See [Advanced Audio Processing Qualification](AdvancedAudioProcessingQualification.md). Network transport evidence does not qualify physical embedded-audio hardware, device-driver latency, hardware clocks/genlock or certified audio performance; those remain **UNVERIFIED**.
-
+The software implementation does not promote NDI connectivity into production authority and does not constitute NDI certification.

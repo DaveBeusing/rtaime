@@ -343,7 +343,7 @@ Marketing priority:
 
 ### 3. Output, streaming and scene-control breadth
 
-Program and Aux have governed backend output-role contracts with Runtime/provider evidence. A post-V1 SRT network-output foundation now provides a bounded Runtime-owned reference path using H.264/AAC and provider-confirmed connection/backpressure evidence. This is a software implementation claim, not physical-network or WAN certification; NDI, RIST, RTMP/RTMPS, WebRTC, SMPTE ST 2110 and additional network providers remain roadmap capabilities.
+Program and Aux have governed backend output-role contracts with Runtime/provider evidence. SRT and NDI now share one bounded Runtime-owned network-output boundary: SRT provides the H.264/AAC reference path, while NDI adds an external-runtime NDI High Bandwidth software path that consumes the same committed Program/Aux media. Repository automation qualifies configuration, bounded submission and failure isolation; real NDI peer interoperability, physical-network behavior and WAN deployment remain UNVERIFIED. RIST, RTMP/RTMPS, WebRTC, SMPTE ST 2110 and additional network providers remain roadmap capabilities.
 
 Marketing priority:
 

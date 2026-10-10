@@ -20,6 +20,18 @@
 			"minimumVersion": "10.0.0"
 		}
 	],
+	"externalProviderRuntimes": [
+		{
+			"provider": "NDI",
+			"requiredWhenConfigured": true,
+			"bundled": false,
+			"libraryFileName": "Processing.NDI.Lib.x64.dll",
+			"directLibraryEnvironmentVariable": "RTAIME_NDI_LIBRARY_PATH",
+			"runtimeDirectoryEnvironmentVariables": ["NDI_RUNTIME_DIR_V6", "NDI_RUNTIME_DIR_V5"],
+			"redistributionStatus": "EXTERNAL_RUNTIME_NOT_BUNDLED",
+			"interoperabilityStatus": "UNVERIFIED"
+		}
+	],
 	"releaseEvidenceFiles": [
 		"artifact-manifest.json",
 		"sbom.cdx.json",

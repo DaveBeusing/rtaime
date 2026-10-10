@@ -47,7 +47,7 @@ The V1 path brings together:
 - graphics and compositing, including Production CG text rendering;
 - Audio Follow Video and deterministic generated audio diagnostics;
 - failure-isolated Program Recording with a provider-neutral profile catalog and a qualified Windows MP4 H.264/AAC software-interoperability path;
-- governed Program/Aux output roles plus monitoring;
+- governed Program/Aux output roles plus monitoring, bounded SRT output and external-runtime NDI output;
 - system health and performance visibility.
 
 ### AI without surrendering control
@@ -82,7 +82,7 @@ The current V1 development repository implements production-shaped software path
 | Compositing | RuntimeHost-owned bitmap overlays, dynamic Production CG lower thirds, layers and compositing workspace |
 | Audio | Audio Follow Video, explicit breakaway, bounded multi-source Program mixing, deterministic crossfade/ducking, Runtime metering and generated test signals |
 | Recording | provider-neutral recording profile catalog, qualified Windows MP4 H.264/AAC software interoperability, and bounded encoded Program replay/clip production |
-| Output | governed Program/Aux output roles, Clean Program monitoring, output health and bounded SRT network-output foundation |
+| Output | governed Program/Aux output roles, Clean Program monitoring, output health, bounded SRT output and external-runtime NDI High Bandwidth software output |
 | AI | governed inference showcase with bounded fallback |
 | Health | CPU/GPU/memory telemetry, Runtime performance, alerts and health center |
 | Recovery | process supervision, Runtime resynchronization and safe session recovery |

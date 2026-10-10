@@ -13,6 +13,7 @@
     <ProjectReference Include="..\..\Providers\rtaime.Provider.VirtualMedia\rtaime.Provider.VirtualMedia.csproj" />
     <ProjectReference Include="..\..\Providers\rtaime.Provider.Gpu\rtaime.Provider.Gpu.csproj" />
     <ProjectReference Include="..\..\Providers\rtaime.Provider.Srt\rtaime.Provider.Srt.csproj" />
+    <ProjectReference Include="..\..\Providers\rtaime.Provider.Ndi\rtaime.Provider.Ndi.csproj" />
     <ProjectReference Include="..\..\Contracts\rtaime.Runtime.Contracts\rtaime.Runtime.Contracts.csproj" />
   </ItemGroup>
   <ItemGroup>

@@ -281,6 +281,16 @@ try {
 	Assert-Condition ([string]$runtimeRequirements.platform.rid -eq [string]$manifest.platform.rid) "Runtime requirements RID mismatch."
 	Assert-Condition ($runtimeRequirements.continuousInternetRequired -eq $false) "Offline bundle must not require continuous Internet connectivity."
 	Assert-Condition (@($runtimeRequirements.dotnetRuntimes).Count -gt 0) "Offline bundle must declare required .NET runtimes."
+	$ndiRuntimeRequirements = @($runtimeRequirements.externalProviderRuntimes | Where-Object { [string]$_.provider -eq "NDI" })
+	Assert-Condition ($ndiRuntimeRequirements.Count -eq 1) "Offline bundle must declare exactly one external NDI runtime requirement."
+	$ndiRuntimeRequirement = $ndiRuntimeRequirements[0]
+	Assert-Condition ($ndiRuntimeRequirement.requiredWhenConfigured -eq $true) "NDI runtime must be required when NDI output is configured."
+	Assert-Condition ($ndiRuntimeRequirement.bundled -eq $false) "NDI runtime must remain external to the offline bundle."
+	Assert-Condition ([string]$ndiRuntimeRequirement.libraryFileName -eq "Processing.NDI.Lib.x64.dll") "Unexpected NDI runtime library identity."
+	Assert-Condition ([string]$ndiRuntimeRequirement.redistributionStatus -eq "EXTERNAL_RUNTIME_NOT_BUNDLED") "NDI runtime redistribution status must remain external."
+	Assert-Condition ([string]$ndiRuntimeRequirement.interoperabilityStatus -eq "UNVERIFIED") "NDI interoperability must remain UNVERIFIED without external evidence."
+	$bundledNdiRuntime = @(Get-ChildItem -LiteralPath $bundleRoot -File -Recurse | Where-Object { $_.Name -eq [string]$ndiRuntimeRequirement.libraryFileName })
+	Assert-Condition ($bundledNdiRuntime.Count -eq 0) "Offline bundle must not carry the external NDI runtime binary."
 
 	$releaseDirectory = Join-Path $bundleRoot "release"
 	$releaseEvidencePath = Join-Path $releaseDirectory "release-evidence.json"
