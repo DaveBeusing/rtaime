@@ -30,6 +30,8 @@ internal sealed class CudaD3D11MonitoringInterop : IDisposable
         if (!OperatingSystem.IsWindows())
             return false;
 
+        ID3D11Device? createdDevice = null;
+        ID3D11DeviceContext? createdContext = null;
         try
         {
             var luidBytes = new byte[8];
@@ -48,14 +50,19 @@ internal sealed class CudaD3D11MonitoringInterop : IDisposable
                 DriverType.Unknown,
                 DeviceCreationFlags.BgraSupport,
                 new[] { FeatureLevel.Level_11_0 },
-                out ID3D11Device device,
-                out ID3D11DeviceContext context).CheckError();
+                out createdDevice,
+                out createdContext).CheckError();
 
-            interop = new CudaD3D11MonitoringInterop(device, context, adapterLuid);
+            interop = new CudaD3D11MonitoringInterop(createdDevice, createdContext, adapterLuid);
+            createdDevice = null;
+            createdContext = null;
             return true;
         }
         catch
         {
+            // Device creation can yield resources even when the HRESULT fails.
+            createdContext?.Dispose();
+            createdDevice?.Dispose();
             interop?.Dispose();
             interop = null;
             return false;
