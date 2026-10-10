@@ -54,7 +54,7 @@ The right 420-pixel LIVE region is divided into four compact sections:
 
 - **Transitions** — selected source versus confirmed NEXT/Preview versus confirmed LIVE/Program, explicit SET NEXT, TAKE and AUTO/DISSOLVE plus the existing transition duration.
 - **Layer Stack (PGM)** — compact approximately 38-pixel layer rows and the existing governed graphics Show/Hide path.
-- **Stream & Record** — Program recording and Clean Program monitoring through the existing command paths. External streaming/on-air transmission remains UNVERIFIED.
+- **Stream & Record** — Program recording and Clean Program monitoring retain their governed command paths. Program/Aux network transmission is presented from Runtime/provider lifecycle and recent successful send evidence (SRT or NDI); unconfigured or stale outputs are never labeled LIVE.
 - **Alerts & Notifications** — existing lifecycle, health, Operator error and recording-failure evidence using severity-dot presentation and concise two-line messages.
 
 TAKE uses the cyan primary action treatment because it is an operator action, not a Program-state indicator. Red remains reserved for critical/live-state presentation such as confirmed PGM/LIVE or stop/critical conditions.
@@ -111,7 +111,7 @@ build/quality/Test-OperatorUiPolicy.ps1 verifies:
 - explicit Scene selection versus governed Scene activation;
 - confirmed active-Scene evidence plus cue selection versus cue execution;
 - reuse of CUT/AUTO, graphics, recording and Clean Program commands;
-- external transmission remains explicitly unverified;
+- external transmission is confirmed only by connected provider evidence with a recent successful send; physical-network interoperability remains unverified;
 - LIVE region isolation from duplicate panels;
 - reuse of existing monitoring and audio update paths.
 

@@ -129,6 +129,12 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 	public PerformanceMetricViewModel NetworkMetric => _metrics["network"];
 	public PerformanceMetricViewModel TemperatureMetric => _metrics["temperature"];
 	public ICommand RoutePreviewToProgramCommand => _control.CutCommand;
+	// Network transmission is a Runtime observation, never an Operator command state.
+	public string ProgramTransmissionState => TransmissionState(_control.OutputRoles.FirstOrDefault(role => role.RoleId == "program")?.NetworkOutput);
+	public string AuxTransmissionState => TransmissionState(_control.OutputRoles.FirstOrDefault(role => role.RoleId == "aux")?.NetworkOutput);
+	public string ProgramTransmissionDetail => TransmissionDetail(_control.OutputRoles.FirstOrDefault(role => role.RoleId == "program")?.NetworkOutput);
+	public string AuxTransmissionDetail => TransmissionDetail(_control.OutputRoles.FirstOrDefault(role => role.RoleId == "aux")?.NetworkOutput);
+
 
 	public OutputStatusViewModel? SelectedOutput
 	{
@@ -413,6 +419,10 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 			null,
 			sampleHistory);
 
+		OnPropertyChanged(nameof(ProgramTransmissionState));
+		OnPropertyChanged(nameof(AuxTransmissionState));
+		OnPropertyChanged(nameof(ProgramTransmissionDetail));
+		OnPropertyChanged(nameof(AuxTransmissionDetail));
 		OnPropertyChanged(nameof(CpuDeviceName));
 		OnPropertyChanged(nameof(GpuDeviceName));
 		OnPropertyChanged(nameof(IsReadOnly));
@@ -421,14 +431,46 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 		OnPropertyChanged(nameof(AccessDetail));
 	}
 
-	private static string ResolveStreamingStatus(OperatorNetworkOutputDescriptor? output)
+	private static readonly TimeSpan SendFreshnessLimit = TimeSpan.FromSeconds(5);
+
+	private string TransmissionState(OperatorNetworkOutputDescriptor? output)
+	{
+		if (!_control.IsConnected || _control.IsStale)
+			return "OFFLINE";
+		if (output is null)
+			return "OFFLINE";
+		if (output.Failure is not null)
+			return "FAILED";
+		var lifecycle = output.Lifecycle.ToUpperInvariant();
+		if (lifecycle is "STOPPING" or "STOPPED" or "DISPOSING")
+			return lifecycle == "STOPPED" ? "OFFLINE" : "STOPPING";
+		if (lifecycle is "RECONNECTING" or "RETRYING")
+			return "RECONNECTING";
+		if (lifecycle is "CONNECTING" or "STARTING" or "INITIALIZING")
+			return "CONNECTING";
+		if (!output.Connected || lifecycle != "CONNECTED")
+			return "OFFLINE";
+		var send = output.LastSuccessfulSendUtc;
+		var age = send is null ? TimeSpan.MaxValue : DateTimeOffset.UtcNow - send.Value;
+		if (age < TimeSpan.Zero || age > SendFreshnessLimit)
+			return "DEGRADED";
+		return output.DroppedSamples > 0 || output.RejectedSamples > 0
+			? "DEGRADED"
+			: "LIVE";
+	}
+
+	private string TransmissionDetail(OperatorNetworkOutputDescriptor? output)
 	{
 		if (output is null)
-			return Unavailable;
-		if (output.Connected && string.Equals(output.Lifecycle, "CONNECTED", StringComparison.OrdinalIgnoreCase))
-			return "LIVE";
-		return output.Failure is not null ? "FAULTED" : output.Lifecycle;
+			return "No network output configured.";
+		var lastSend = output.LastSuccessfulSendUtc?.ToString("O", CultureInfo.InvariantCulture) ?? "never";
+		var failure = output.Failure is { } error ? $" {error.Code}: {error.Message}" : string.Empty;
+		return $"{output.Protocol} · {output.SafeTargetIdentity} · {TransmissionState(output)} · " +
+			$"{output.QueueDepth} queued · {output.DroppedSamples} dropped · {output.RejectedSamples} rejected · " +
+			$"{output.ReconnectCount} reconnects · {output.BytesSent} bytes sent · last send {lastSend}.{failure}";
 	}
+
+	private string ResolveStreamingStatus(OperatorNetworkOutputDescriptor? output) => TransmissionState(output);
 
 	private static string FormatNetworkBitrate(OperatorNetworkOutputDescriptor? output)
 	{
