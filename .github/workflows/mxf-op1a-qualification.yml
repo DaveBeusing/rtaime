@@ -59,11 +59,12 @@ jobs:
           Invoke-WebRequest -Uri $asset[0].browser_download_url -OutFile $archive
           $actual = (Get-FileHash -Path $archive -Algorithm SHA256).Hash.ToLowerInvariant()
           Write-Host "BMX v1.6 artifact SHA256: $actual"
-          if ($asset[0].digest -notmatch '^sha256:[0-9a-fA-F]{64}$') {
-            throw "Legacy BMX asset has no GitHub digest; review and pin its SHA256 before execution."
+          $expected = "e36096e8a02a5a767e27a4c9794b03f11dbd7af3ccd9679104489b89dca4f9ce"
+          if ($actual -ne $expected) { throw "Pinned BMX v1.6 archive SHA256 mismatch." }
+          if ($asset[0].digest -match '^sha256:[0-9a-fA-F]{64}$' -and
+              $asset[0].digest.Substring(7).ToLowerInvariant() -ne $expected) {
+            throw "Pinned BMX SHA256 disagrees with GitHub asset digest."
           }
-          $expected = $asset[0].digest.Substring(7).ToLowerInvariant()
-          if ($actual -ne $expected) { throw "BMX release SHA256 digest verification failed." }
           $unpacked = Join-Path $env:RUNNER_TEMP "rtaime-bmx"
           Expand-Archive -Path $archive -DestinationPath $unpacked -Force
           $candidates = @(Get-ChildItem -Path $unpacked -Recurse -File -Filter raw2bmx.exe)
