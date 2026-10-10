@@ -161,20 +161,46 @@ public sealed class ManagedQuickTimeRecordingWriterProvider : IProgramRecordingW
 }
 
 /// <summary>
-/// Catalog-only MXF provider. It exposes the exact constrained profile but
-/// refuses writer creation until a completed OP1a implementation is qualified.
+/// Exposes the constrained MXF OP1a profile only when explicitly provisioned
+/// with both a native BMX muxer and an independent FFprobe executable.
+/// The unprovisioned default never advertises an executable capability.
 /// </summary>
 public sealed class ManagedMxfOp1aRecordingWriterProvider : IProgramRecordingWriterProvider
 {
-	private readonly RecordingProfileDescriptor[] _profiles = [ProfessionalRecordingFormats.CreateMxfOp1aUncompressedPcmDescriptor()];
+	private readonly string? _rootDirectory;
+	private readonly string? _raw2bmxPath;
+	private readonly string? _ffprobePath;
+	private readonly RecordingProfileDescriptor[] _profiles;
+
+	public ManagedMxfOp1aRecordingWriterProvider(
+		string? rootDirectory = null,
+		string? raw2bmxPath = null,
+		string? ffprobePath = null,
+		bool explicitlyEnabled = false)
+	{
+		var configured = explicitlyEnabled &&
+			!string.IsNullOrWhiteSpace(rootDirectory) &&
+			!string.IsNullOrWhiteSpace(raw2bmxPath) &&
+			!string.IsNullOrWhiteSpace(ffprobePath) &&
+			File.Exists(raw2bmxPath) && File.Exists(ffprobePath);
+		_rootDirectory = configured ? Path.GetFullPath(rootDirectory!) : null;
+		_raw2bmxPath = configured ? Path.GetFullPath(raw2bmxPath!) : null;
+		_ffprobePath = configured ? Path.GetFullPath(ffprobePath!) : null;
+		_profiles = [ProfessionalRecordingFormats.CreateMxfOp1aUncompressedPcmDescriptor(configured)];
+	}
 
 	public RecordingWriterProviderId ProviderId => ProfessionalRecordingFormats.ManagedMxfOp1aProviderId;
-	public string DisplayName => "Managed MXF OP1a (unavailable)";
+	public string DisplayName => _profiles[0].Available ? "BMX MXF OP1a" : "MXF OP1a (unavailable)";
 	public IReadOnlyList<RecordingProfileDescriptor> Profiles => _profiles;
 
-	public IProgramRecordingPayloadWriter CreateWriter(RecordingProfileId profileId) =>
-		throw new RecordingOutputUnavailableException(
-			$"MXF OP1a recording profile '{profileId}' is not qualified; no MXF output can be created.");
+	public IProgramRecordingPayloadWriter CreateWriter(RecordingProfileId profileId)
+	{
+		if (profileId != ProfessionalRecordingFormats.MxfOp1aUncompressedPcmProfileId)
+			throw new RecordingOutputUnavailableException($"MXF writer does not support profile '{profileId}'.");
+		if (!_profiles[0].Available)
+			throw new RecordingOutputUnavailableException(_profiles[0].UnavailableReason ?? "MXF OP1a is unavailable.");
+		return new BmxOp1aRecordingWriter(_rootDirectory!, _raw2bmxPath!, _ffprobePath!);
+	}
 }
 
 public sealed class ProfileSelectingProgramRecordingWriter :
