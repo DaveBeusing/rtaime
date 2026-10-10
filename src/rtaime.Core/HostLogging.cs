@@ -74,6 +74,8 @@ public sealed class HostLog : IDisposable
 			{
 				["productVersion"] = build.ProductVersion,
 				["releaseStage"] = build.ReleaseStage,
+				["sourceRevision"] = build.SourceRevision,
+				["buildId"] = build.BuildId,
 				["runtime"] = Environment.Version.ToString(),
 				["os"] = Environment.OSVersion.VersionString
 			});

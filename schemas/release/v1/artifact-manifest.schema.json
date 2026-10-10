@@ -18,6 +18,21 @@
 		"artifacts"
 	],
 	"properties": {
+		"provenance": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["repository", "baseVersion", "configuration", "sdkVersion", "targetFrameworks", "runtimeIdentifier", "createdAtUtc", "sourceTreeClean"],
+			"properties": {
+				"repository": { "type": "string", "minLength": 1 },
+				"baseVersion": { "type": "string", "minLength": 1 },
+				"configuration": { "type": "string", "minLength": 1 },
+				"sdkVersion": { "type": "string", "minLength": 1 },
+				"targetFrameworks": { "type": "array", "items": { "type": "string" } },
+				"runtimeIdentifier": { "const": "win-x64" },
+				"createdAtUtc": { "type": "string", "format": "date-time" },
+				"sourceTreeClean": { "type": "boolean" }
+			}
+		},
 		"copyright": { "type": "string", "minLength": 1 },
 		"schemaVersion": { "const": "1.0" },
 		"productName": { "const": "rtaime" },

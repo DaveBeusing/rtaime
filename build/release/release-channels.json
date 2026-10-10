@@ -1,44 +1,55 @@
 {
-	"copyright": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
-	"schemaVersion": "1.0",
-	"channels": {
-		"QUALIFICATION": {
-			"releaseStage": "DEV",
-			"tagRequired": false,
-			"versionPattern": "^[0-9]+\\.[0-9]+\\.[0-9]+-dev$",
-			"tagPattern": null,
-			"allowedSignerClasses": [
-				"TEST_EPHEMERAL"
-			],
-			"requireTrustedProductionKey": false,
-			"publicationEligible": false
-		},
-		"PREVIEW": {
-			"releaseStage": "PREVIEW",
-			"tagRequired": true,
-			"versionPattern": "^[0-9]+\\.[0-9]+\\.[0-9]+-preview\\.[0-9]+$",
-			"tagPattern": "^v(?<version>[0-9]+\\.[0-9]+\\.[0-9]+-preview\\.[0-9]+)$",
-			"allowedSignerClasses": [
-				"TEST_EPHEMERAL",
-				"EXTERNAL_CONTROLLED"
-			],
-			"requireTrustedProductionKey": false,
-			"publicationEligible": true
-		},
-		"STABLE": {
-			"releaseStage": "STABLE",
-			"tagRequired": true,
-			"versionPattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
-			"tagPattern": "^v(?<version>[0-9]+\\.[0-9]+\\.[0-9]+)$",
-			"allowedSignerClasses": [
-				"EXTERNAL_CONTROLLED"
-			],
-			"requireTrustedProductionKey": true,
-			"publicationEligible": true
-		}
-	},
-	"candidate": {
-		"hashAlgorithm": "SHA256",
-		"manifestSchemaVersion": "1.0"
-	}
+  "copyright": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+  "schemaVersion": "1.0",
+  "channels": {
+    "QUALIFICATION": {
+      "releaseStage": "DEV",
+      "tagRequired": false,
+      "versionPattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)-(dev\\.g[0-9a-f]{40,64}|pr\\.[1-9][0-9]*\\.[1-9][0-9]*\\.[1-9][0-9]*)$",
+      "tagPattern": null,
+      "allowedSignerClasses": [
+        "TEST_EPHEMERAL"
+      ],
+      "requireTrustedProductionKey": false,
+      "publicationEligible": false
+    },
+    "PREVIEW": {
+      "releaseStage": "PREVIEW",
+      "tagRequired": true,
+      "versionPattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)-preview\\.[1-9][0-9]*$",
+      "tagPattern": "^v(?<version>(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)-preview\\.[1-9][0-9]*)$",
+      "allowedSignerClasses": [
+        "TEST_EPHEMERAL",
+        "EXTERNAL_CONTROLLED"
+      ],
+      "requireTrustedProductionKey": false,
+      "publicationEligible": true
+    },
+    "STABLE": {
+      "releaseStage": "STABLE",
+      "tagRequired": true,
+      "versionPattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$",
+      "tagPattern": "^v(?<version>(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*))$",
+      "allowedSignerClasses": [
+        "EXTERNAL_CONTROLLED"
+      ],
+      "requireTrustedProductionKey": true,
+      "publicationEligible": true
+    },
+    "RC": {
+      "releaseStage": "RELEASE_CANDIDATE",
+      "tagRequired": true,
+      "versionPattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)-rc\\.[1-9][0-9]*$",
+      "tagPattern": "^v(?<version>(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)-rc\\.[1-9][0-9]*)$",
+      "allowedSignerClasses": [
+        "EXTERNAL_CONTROLLED"
+      ],
+      "requireTrustedProductionKey": true,
+      "publicationEligible": false
+    }
+  },
+  "candidate": {
+    "hashAlgorithm": "SHA256",
+    "manifestSchemaVersion": "1.0"
+  }
 }

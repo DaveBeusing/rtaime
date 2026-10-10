@@ -213,7 +213,7 @@ If live state differs from the version-controlled specification, live enforcemen
 contents: read
 ```
 
-`.github/workflows/release-pipeline.yml` also remains read-only during Release Pipeline & Channels.
+`.github/workflows/release-pipeline.yml` defaults to read-only contents permission. Its prerelease reservation and verified publication jobs have separate, scoped contents-write grants; validation and candidate compilation remain read-only.
 
 Release Candidate creation therefore does not imply GitHub Release publication authority.
 

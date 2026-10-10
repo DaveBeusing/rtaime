@@ -3,11 +3,15 @@
 	<PropertyGroup>
 		<RtaimeTargetFramework>net10.0</RtaimeTargetFramework>
 		<RtaimeWindowsTargetFramework>net10.0-windows</RtaimeWindowsTargetFramework>
-		<RtaimeProductVersion>0.1.0-dev</RtaimeProductVersion>
-		<RtaimeReleaseStage>DEV</RtaimeReleaseStage>
+		<VersionPrefix>0.1.0</VersionPrefix>
+		<RtaimeProductVersion Condition="'$(RtaimeProductVersion)' == ''">$(VersionPrefix)-dev</RtaimeProductVersion>
+		<RtaimeReleaseStage Condition="'$(RtaimeReleaseStage)' == ''">DEV</RtaimeReleaseStage>
+		<AssemblyVersion>0.1.0.0</AssemblyVersion>
+		<FileVersion>0.1.0.0</FileVersion>
+		<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
 
 		<TargetFramework Condition="'$(TargetFramework)' == ''">$(RtaimeTargetFramework)</TargetFramework>
-		<Version>$(RtaimeProductVersion)</Version>
+		<Version Condition="'$(Version)' == ''">$(RtaimeProductVersion)</Version>
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<PlatformTarget>x64</PlatformTarget>

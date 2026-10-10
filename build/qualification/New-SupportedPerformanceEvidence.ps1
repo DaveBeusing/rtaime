@@ -70,7 +70,10 @@ if (-not (Test-Path -LiteralPath $buildPropsPath -PathType Leaf)) { throw "Direc
 
 [xml]$buildProps = Get-Content -LiteralPath $buildPropsPath -Raw
 $productVersion = $buildProps.SelectSingleNode("//RtaimeProductVersion")?.InnerText
+$productVersion = $productVersion.Replace('$(VersionPrefix)', $buildProps.SelectSingleNode('//VersionPrefix').InnerText.Trim())
+if ($env:RTAIME_PRODUCT_VERSION) { $productVersion = $env:RTAIME_PRODUCT_VERSION }
 $releaseStage = $buildProps.SelectSingleNode("//RtaimeReleaseStage")?.InnerText
+if ($env:RTAIME_RELEASE_STAGE) { $releaseStage = $env:RTAIME_RELEASE_STAGE }
 if ([string]::IsNullOrWhiteSpace($productVersion) -or [string]::IsNullOrWhiteSpace($releaseStage)) {
 	throw "Product version and release stage must be declared in Directory.Build.props."
 }

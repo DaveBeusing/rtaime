@@ -2,7 +2,7 @@
 
 [CmdletBinding()]
 param(
-	[ValidateSet("AUTO", "QUALIFICATION", "PREVIEW", "STABLE")]
+	[ValidateSet("AUTO", "QUALIFICATION", "PREVIEW", "RC", "STABLE")]
 	[string]$Channel = "QUALIFICATION",
 	[string]$Tag = "",
 	[string]$SourceCommit = $env:RTAIME_SOURCE_COMMIT,
@@ -56,6 +56,9 @@ function Write-JsonFile {
 }
 
 $outputFullRoot = Resolve-RepositoryPath $OutputRoot
+if (-not $outputFullRoot.StartsWith($repositoryRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+	throw 'Release output must be inside the repository.'
+}
 if (Test-Path -LiteralPath $outputFullRoot) {
 	Remove-Item -LiteralPath $outputFullRoot -Recurse -Force
 }
@@ -82,13 +85,17 @@ Push-Location $repositoryRoot
 $generatedTestKey = $false
 $effectiveKeyPath = $PrivateKeyPath
 $installPath = Join-Path ([System.IO.Path]::GetTempPath()) ("rtaime-release-install-{0}" -f [Guid]::NewGuid().ToString("N"))
+$previousVersion = $env:RTAIME_PRODUCT_VERSION
+$previousStage = $env:RTAIME_RELEASE_STAGE
+$env:RTAIME_PRODUCT_VERSION = [string]$identity.productVersion
+$env:RTAIME_RELEASE_STAGE = [string]$identity.releaseStage
 try {
 	Write-Host "Release pipeline: restore"
 	& dotnet restore rtaime.slnx
 	if ($LASTEXITCODE -ne 0) { throw "dotnet restore failed." }
 
 	Write-Host "Release pipeline: build"
-	& dotnet build rtaime.slnx --configuration Release --no-restore
+	& dotnet build rtaime.slnx --configuration Release --no-restore "-p:RtaimeProductVersion=$($identity.productVersion)" "-p:RtaimeReleaseStage=$($identity.releaseStage)" "-p:RtaimeBuildId=$($identity.buildId)"
 	if ($LASTEXITCODE -ne 0) { throw "dotnet build failed." }
 
 	Write-Host "Release pipeline: test exact build"
@@ -297,6 +304,8 @@ try {
 	Write-Host "Production signing trust: $productionTrust"
 	Write-Host "Publication readiness: $publicationStatus"
 } finally {
+	$env:RTAIME_PRODUCT_VERSION = $previousVersion
+	$env:RTAIME_RELEASE_STAGE = $previousStage
 	Pop-Location
 	if (Test-Path -LiteralPath $installPath) {
 		Remove-Item -LiteralPath $installPath -Recurse -Force

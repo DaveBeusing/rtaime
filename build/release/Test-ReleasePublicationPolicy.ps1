@@ -51,7 +51,7 @@ Assert-Condition ($publicationIndex -ge 0) "Publication job definition was not f
 $publishBody = $workflow.Substring($publicationIndex)
 Assert-Condition ($publishBody -match '(?m)^\s{4}permissions:\s*\r?\n\s{6}contents:\s+write\s*$') "Publication job must request contents: write."
 $writePermissionMatches = [Regex]::Matches($workflow, '(?m)^\s+contents:\s+write\s*$')
-Assert-Condition ($writePermissionMatches.Count -eq 1) "Release Pipeline workflow must contain exactly one contents: write grant."
+Assert-Condition ($writePermissionMatches.Count -eq 2) "Release Pipeline workflow must isolate write grants to version reservation and publication."
 
 Assert-Condition ($publishBody -match 'New-ReleasePublication\.ps1') "Publication job must run New-ReleasePublication.ps1."
 Assert-Condition ($publishBody -match 'Test-ReleasePublication\.ps1') "Publication job must verify publication metadata before GitHub mutation."

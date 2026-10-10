@@ -86,7 +86,16 @@ if ($null -eq $releaseStageNode -or [string]::IsNullOrWhiteSpace($releaseStageNo
 }
 
 $productVersion = $productVersionNode.InnerText.Trim()
+$productVersion = $productVersion.Replace('$(VersionPrefix)', $buildProps.SelectSingleNode('//VersionPrefix').InnerText.Trim())
 $releaseStage = $releaseStageNode.InnerText.Trim().ToUpperInvariant()
+if ($env:RTAIME_PRODUCT_VERSION) { $productVersion = $env:RTAIME_PRODUCT_VERSION }
+if ($env:RTAIME_RELEASE_STAGE) { $releaseStage = $env:RTAIME_RELEASE_STAGE }
+if (-not $env:RTAIME_PRODUCT_VERSION) {
+	$corePath = Join-Path $script:RepositoryRoot "src/rtaime.Core/bin/$Configuration/net10.0/rtaime.Core.dll"
+	if (Test-Path -LiteralPath $corePath) {
+		$productVersion = ([Diagnostics.FileVersionInfo]::GetVersionInfo($corePath).ProductVersion -split '\+')[0]
+	}
+}
 $allowedReleaseStages = @("DEV", "PREVIEW", "RELEASE_CANDIDATE", "STABLE", "VALIDATED", "CERTIFIED")
 if ($releaseStage -notin $allowedReleaseStages) {
 	throw "Unsupported release stage '$releaseStage'."
@@ -125,6 +134,12 @@ foreach ($hostPolicy in $policy.hosts) {
 	}
 
 	$destinationDirectory = Join-Path $productRoot ([string]$hostPolicy.name)
+	$assemblyName = [string]$hostPolicy.name
+	$hostAssembly = Join-Path $sourceDirectory "$assemblyName.dll"
+	$builtVersion = [Diagnostics.FileVersionInfo]::GetVersionInfo($hostAssembly).ProductVersion
+	if ($builtVersion -ne "$productVersion+g$($SourceCommit.ToLowerInvariant())") {
+		throw "Built host '$assemblyName' has identity '$builtVersion', expected '$productVersion+g$SourceCommit'. Rebuild the exact source with the resolved version."
+	}
 	New-Item -ItemType Directory -Path $destinationDirectory -Force | Out-Null
 
 	$sourceFiles = @(Get-ChildItem -LiteralPath $sourceDirectory -File -Recurse | Where-Object Extension -ne ".pdb")
@@ -168,6 +183,16 @@ $artifactManifest = [ordered]@{
 	buildCommit = $BuildCommit.ToLowerInvariant()
 	buildId = $BuildId
 	hashAlgorithm = "SHA256"
+	provenance = [ordered]@{
+		repository = (& git -C $script:RepositoryRoot remote get-url origin).Trim()
+		baseVersion = $buildProps.SelectSingleNode('//VersionPrefix').InnerText.Trim()
+		configuration = $Configuration
+		sdkVersion = (& dotnet --version).Trim()
+		targetFrameworks = @($policy.targetFrameworks)
+		runtimeIdentifier = 'win-x64'
+		createdAtUtc = $generatedAtUtc
+		sourceTreeClean = @(& git -C $script:RepositoryRoot status --porcelain).Count -eq 0
+	}
 	artifacts = $artifactRecords
 }
 $artifactManifestPath = Join-Path $outputRoot "artifact-manifest.json"

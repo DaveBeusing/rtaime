@@ -206,8 +206,10 @@ function Test-SupportedPlatformConfiguration {
 $buildPropsPath = Join-Path $repositoryRoot "Directory.Build.props"
 Assert-Condition (Test-Path -LiteralPath $buildPropsPath -PathType Leaf) "Directory.Build.props is missing."
 [xml]$buildProps = Get-Content -LiteralPath $buildPropsPath -Raw
-$productVersion = $buildProps.SelectSingleNode("//RtaimeProductVersion").InnerText.Trim()
+$productVersion = $buildProps.SelectSingleNode('//RtaimeProductVersion').InnerText.Trim().Replace('$(VersionPrefix)', $buildProps.SelectSingleNode('//VersionPrefix').InnerText.Trim())
+if ($env:RTAIME_PRODUCT_VERSION) { $productVersion = $env:RTAIME_PRODUCT_VERSION }
 $releaseStage = $buildProps.SelectSingleNode("//RtaimeReleaseStage").InnerText.Trim().ToUpperInvariant()
+if ($env:RTAIME_RELEASE_STAGE) { $releaseStage = $env:RTAIME_RELEASE_STAGE }
 Assert-Condition ($releaseStage -in @("DEV", "PREVIEW", "STABLE")) "Unsupported source release stage '$releaseStage'."
 $repositorySourceCommit = Get-RepositorySourceCommit
 $explicitSourceCommit = Normalize-SourceCommit $ExpectedSourceCommit

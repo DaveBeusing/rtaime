@@ -66,13 +66,13 @@ The pipeline therefore rejects a build where the claimed source commit differs f
 
 ## Version source
 
-The product version and release stage remain source-controlled in:
+The target base version and default development stage are source-controlled in:
 
 ```text
 Directory.Build.props
 ```
 
-The release pipeline does not silently override the source version through CI parameters.
+`VersionPrefix` is changed for release scope, never per commit. The release pipeline resolves the build SemVer/stage from validation context or an immutable annotated tag and passes it to compilation and evidence without editing source. See [Versioning.md](Versioning.md) for allocation, PR isolation, .NET mappings and provenance.
 
 ## Channels
 
@@ -84,11 +84,11 @@ build/release/release-channels.json
 
 ### QUALIFICATION
 
-Required source state:
+Default development state (the build label also includes source revision or PR identity):
 
 ```text
 RtaimeReleaseStage = DEV
-RtaimeProductVersion = <major>.<minor>.<patch>-dev
+RtaimeProductVersion = $(VersionPrefix)-dev
 ```
 
 Rules:
@@ -102,7 +102,7 @@ This is the channel used by the required `Packaged E2E` status check.
 
 ### PREVIEW
 
-Required source state:
+Resolved build state, passed by the release pipeline:
 
 ```text
 RtaimeReleaseStage = PREVIEW
@@ -118,7 +118,7 @@ v<major>.<minor>.<patch>-preview.<n>
 Rules:
 
 - tag must exist,
-- tag version must exactly equal the source-controlled product version,
+- tag base version must equal the source-controlled `VersionPrefix`, and its full version becomes the build product version,
 - tag commit must equal the checked-out source commit,
 - `TEST_EPHEMERAL` may qualify the Preview mechanism,
 - `EXTERNAL_CONTROLLED` signing is supported,
@@ -128,9 +128,17 @@ A Preview candidate signed by a CI test key remains useful qualification evidenc
 
 An externally controlled Preview Candidate whose key is active `SOFTWARE_RELEASE` trust may reach publication readiness `PASS` and can then cross the Release Publication & Discovery publication boundary.
 
+### RC
+
+An explicit RC dispatch reserves `vX.Y.Z-rc.N`, resolves `RELEASE_CANDIDATE`, and requires production signing trust and the existing explicit release-readiness PASS gate. RC output is retained as candidate artifacts; it does not enter automated Preview/Stable update discovery.
+
+### RC
+
+An explicit RC dispatch reserves vX.Y.Z-rc.N and uses RELEASE_CANDIDATE stage. It requires production signing trust and the existing explicit release-readiness PASS gate. RC output is retained as candidate artifacts and does not enter Preview/Stable update discovery.
+
 ### STABLE
 
-Required source state:
+Resolved build state, passed by the release pipeline:
 
 ```text
 RtaimeReleaseStage = STABLE
@@ -256,6 +264,7 @@ Provider Smoke
 ```text
 push tag v*
 workflow_dispatch
+successful master-push Required gates completion
 ```
 
 The `release-candidate` job owns Release Candidate creation.
@@ -267,6 +276,7 @@ For manual runs the operator selects:
 ```text
 QUALIFICATION
 PREVIEW
+RC
 STABLE
 ```
 
@@ -289,7 +299,7 @@ It is never transferred to the publication job, repository or release assets.
 
 Candidate creation defaults to read-only repository permission.
 
-Only the downstream publication job receives:
+The version reservation job and downstream publication job receive isolated grants of:
 
 ```text
 contents: write

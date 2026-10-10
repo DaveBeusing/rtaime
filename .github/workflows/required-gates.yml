@@ -13,6 +13,11 @@ on:
 permissions:
   contents: read
 
+env:
+  RTAIME_PR_NUMBER: ${{ github.event.pull_request.number || '' }}
+  RTAIME_VALIDATION_SEQUENCE: ${{ github.run_id }}.${{ github.run_attempt }}
+  RTAIME_BUILD_ID: validation-${{ github.run_id }}-${{ github.run_attempt }}
+
 concurrency:
   group: required-gates-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -125,6 +130,10 @@ jobs:
       - name: Verify update policy
         shell: pwsh
         run: ./build/update/Test-UpdatePolicy.ps1
+
+      - name: Qualify unified versioning
+        shell: pwsh
+        run: ./build/release/Test-UnifiedVersioning.ps1
 
       - name: Verify persistent-state maintenance policy
         shell: pwsh
