@@ -52,6 +52,7 @@ public sealed class ProgramRecorder : IAsyncDisposable
     private ulong _dropped;
     private ulong _rejected;
     private ulong _writerFailures;
+    private int _maximumQueueDepth;
     private Failure? _failure;
     private bool _disposed;
 
@@ -227,6 +228,7 @@ public sealed class ProgramRecorder : IAsyncDisposable
                 video,
                 audio);
             _queue.Enqueue(sample);
+            _maximumQueueDepth = Math.Max(_maximumQueueDepth, _queue.Count);
             _accepted++;
             releaseSignal = true;
             result = RecordingEnqueueResult.AcceptedSample();
@@ -413,13 +415,14 @@ public sealed class ProgramRecorder : IAsyncDisposable
         _dropped = 0;
         _rejected = 0;
         _writerFailures = 0;
+        _maximumQueueDepth = 0;
     }
 
     private RecordingSnapshot SnapshotUnsafe() => new(
         _state,
         _activeRequest?.SessionId,
         _activeRequest?.Output,
-        new RecordingStatistics(_accepted, _written, _dropped, _rejected, _writerFailures),
+        new RecordingStatistics(_accepted, _written, _dropped, _rejected, _writerFailures, _queue.Count, _maximumQueueDepth, _capacity),
         _failure);
 
     private void ObserveUnsafe(string code, string message, ulong? sequence)

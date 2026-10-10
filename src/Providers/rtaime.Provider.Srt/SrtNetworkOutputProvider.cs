@@ -85,6 +85,7 @@ public sealed class SrtNetworkOutputSession : INetworkOutputSession
 	private ulong _reconnects;
 	private ulong _packetsSent;
 	private ulong _bytesSent;
+	private int _maximumQueueDepth;
 	private DateTimeOffset? _lastSuccessfulSendUtc;
 	private Failure? _failure;
 	private bool _disposed;
@@ -132,7 +133,9 @@ public sealed class SrtNetworkOutputSession : INetworkOutputSession
 						_reconnects,
 						_packetsSent,
 						_bytesSent,
-						_queue.Count),
+						_queue.Count,
+						_maximumQueueDepth,
+						_configuration.QueueCapacity),
 					_lastSuccessfulSendUtc,
 					_failure);
 			}
@@ -172,8 +175,11 @@ public sealed class SrtNetworkOutputSession : INetworkOutputSession
 			}
 
 			_queue.Enqueue(sample);
+			_maximumQueueDepth = Math.Max(_maximumQueueDepth, _queue.Count);
 			_accepted++;
-			_queueSignal.Release();
+			// Replacing an already signaled queued sample must not accumulate empty wakeups.
+			if (drop is null)
+				_queueSignal.Release();
 			return drop is null
 				? NetworkOutputEnqueueResult.AcceptedSample()
 				: NetworkOutputEnqueueResult.AcceptedAfterDroppingOldest(drop.Value);
