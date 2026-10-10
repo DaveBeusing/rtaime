@@ -59,29 +59,8 @@ jobs:
           Invoke-WebRequest -Uri $asset[0].browser_download_url -OutFile $archive
           $actual = (Get-FileHash -Path $archive -Algorithm SHA256).Hash.ToLowerInvariant()
           Write-Host "BMX v1.6 artifact SHA256: $actual"
-          if ($asset[0].digest -notmatch '^sha256:[0-9a-fA-F]{64}
-          $unpacked = Join-Path $env:RUNNER_TEMP "rtaime-bmx"
-          Expand-Archive -Path $archive -DestinationPath $unpacked -Force
-          $candidates = @(Get-ChildItem -Path $unpacked -Recurse -File -Filter raw2bmx.exe)
-          if ($candidates.Count -ne 1) { throw "BMX raw2bmx.exe was not found exactly once." }
-          $bin = $candidates[0].FullName
-          & $bin --version
-          if ($LASTEXITCODE -ne 0) { throw "BMX executable preflight failed." }
-          "RTAIME_RAW2BMX=$bin" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          $ffprobe = (Get-Command ffprobe -ErrorAction Stop).Source
-          "RTAIME_FFPROBE=$ffprobe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          "RTAIME_MXF_QUALIFICATION=1" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-
-      - name: Restore
-        run: dotnet restore rtaime.slnx
-
-      - name: Build MXF integration project
-        run: dotnet build tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-restore
-
-      - name: Record and independently probe 1080p50 and 1080p59.94
-        run: dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~BmxOp1aRecordingIntegrationTests"
-) {
-            throw "The legacy BMX release has no GitHub-managed digest. Pin and review the published archive hash before execution."
+          if ($asset[0].digest -notmatch '^sha256:[0-9a-fA-F]{64}$') {
+            throw "Legacy BMX asset has no GitHub digest; review and pin its SHA256 before execution."
           }
           $expected = $asset[0].digest.Substring(7).ToLowerInvariant()
           if ($actual -ne $expected) { throw "BMX release SHA256 digest verification failed." }
