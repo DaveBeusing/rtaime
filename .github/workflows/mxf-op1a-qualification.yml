@@ -3,6 +3,9 @@
 name: MXF OP1a qualification
 
 on:
+  push:
+    branches:
+      - feature/mxf-op1a-recording
   pull_request:
     branches:
       - master
