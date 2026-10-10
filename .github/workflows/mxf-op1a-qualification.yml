@@ -48,23 +48,12 @@ jobs:
       - name: Obtain and SHA256 verify pinned BMX release
         shell: pwsh
         run: |
-          $release = Invoke-RestMethod -Uri "https://api.github.com/repos/bbc/bmx/releases/tags/v1.6" -Headers @{
-            "User-Agent" = "rtaime-mxf-qualification"
-            "Accept" = "application/vnd.github+json"
-          }
-          $asset = @($release.assets | Where-Object { $_.name -eq "bmx-win64-binary-1.6.zip" })
-          Write-Host "BMX release assets: $($release.assets.name -join ', ')"
-          if ($asset.Count -ne 1) { throw "The pinned BMX v1.6 Windows binary release asset is missing." }
           $archive = Join-Path $env:RUNNER_TEMP "bmx-win64-binary-1.6.zip"
-          Invoke-WebRequest -Uri $asset[0].browser_download_url -OutFile $archive
+          Invoke-WebRequest -Uri "https://github.com/bbc/bmx/releases/download/v1.6/bmx-win64-binary-1.6.zip" -OutFile $archive
           $actual = (Get-FileHash -Path $archive -Algorithm SHA256).Hash.ToLowerInvariant()
           Write-Host "BMX v1.6 artifact SHA256: $actual"
           $expected = "e36096e8a02a5a767e27a4c9794b03f11dbd7af3ccd9679104489b89dca4f9ce"
           if ($actual -ne $expected) { throw "Pinned BMX v1.6 archive SHA256 mismatch." }
-          if ($asset[0].digest -match '^sha256:[0-9a-fA-F]{64}$' -and
-              $asset[0].digest.Substring(7).ToLowerInvariant() -ne $expected) {
-            throw "Pinned BMX SHA256 disagrees with GitHub asset digest."
-          }
           $unpacked = Join-Path $env:RUNNER_TEMP "rtaime-bmx"
           Expand-Archive -Path $archive -DestinationPath $unpacked -Force
           $candidates = @(Get-ChildItem -Path $unpacked -Recurse -File -Filter raw2bmx.exe)
