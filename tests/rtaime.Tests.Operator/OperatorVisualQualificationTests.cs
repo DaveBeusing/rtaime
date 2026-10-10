@@ -173,6 +173,50 @@ public sealed class OperatorVisualQualificationTests : IDisposable
 	}
 
 	[Fact]
+	public async Task Switching_workspaces_restores_independent_saved_layouts_across_restart()
+	{
+		var shell = CreateShell();
+		shell.UpdateViewportSize(1920, 1080);
+		shell.SelectWorkspace(OperatorWorkspaceNames.Edit);
+		shell.LeftColumnWidth = new GridLength(500);
+		shell.RightColumnWidth = new GridLength(420);
+		shell.LowerRowHeight = new GridLength(380);
+		shell.ToggleLeftPanelCommand.Execute(null);
+		shell.MaximizePreviewCommand.Execute(null);
+		await shell.SaveAsync();
+
+		shell.SelectWorkspace(OperatorWorkspaceNames.Compositing);
+		Assert.Equal(400, shell.LeftPanelWidth);
+		Assert.Equal(340, shell.RightPanelWidth);
+		Assert.Equal(320, shell.LowerPanelHeight);
+		Assert.False(shell.IsLeftCollapsed);
+		Assert.Equal("DUAL", shell.ViewerMode);
+
+		shell.LeftColumnWidth = new GridLength(460);
+		await shell.SaveAsync();
+		shell.SelectWorkspace(OperatorWorkspaceNames.Edit);
+		Assert.Equal(500, shell.LeftPanelWidth);
+		Assert.Equal(420, shell.RightPanelWidth);
+		Assert.Equal(380, shell.LowerPanelHeight);
+		Assert.True(shell.IsLeftCollapsed);
+		Assert.Equal("PREVIEW", shell.ViewerMode);
+
+		shell.ResetLayoutCommand.Execute(null);
+		Assert.Equal(400, shell.LeftPanelWidth);
+		Assert.False(shell.IsLeftCollapsed);
+		shell.SelectWorkspace(OperatorWorkspaceNames.Compositing);
+		Assert.Equal(460, shell.LeftPanelWidth);
+		await shell.SaveAsync();
+
+		var restored = CreateShell();
+		Assert.Equal(OperatorWorkspaceNames.Compositing, restored.SelectedWorkspace);
+		Assert.Equal(460, restored.LeftPanelWidth);
+		restored.SelectWorkspace(OperatorWorkspaceNames.Edit);
+		Assert.Equal(400, restored.LeftPanelWidth);
+		Assert.Equal("DUAL", restored.ViewerMode);
+	}
+
+	[Fact]
 	public void Viewer_and_fullscreen_modes_restore_without_changing_authoritative_layout()
 	{
 		var fullscreenRequests = new List<bool>();

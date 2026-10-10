@@ -223,7 +223,7 @@ Operator layout storage uses schema version 6. Each canonical workspace persists
 
 Fullscreen preference, selected workspace and normalized window placement remain top-level Operator UI preferences. Legacy workspace names migrate to the canonical presentation destinations without carrying production state. Pre-v4 persisted geometry is reset to the binding 400 / 340 / 320 reference shell dimensions while fullscreen preference, selected workspace and normalized window placement are retained. Version-4 and version-5 layouts migrate in place; their stored reference widths, heights, viewer modes and window placement are retained while schema version 6 adds viewport-dependent presentation scaling only at render time.
 
-SAVE LAYOUT persists the active workspace presentation. LAYOUT RESET restores only that workspace's canonical defaults. Missing, corrupt, non-finite, out-of-range or incompatible persisted data recovers to safe canonical layouts.
+SAVE LAYOUT persists the active workspace presentation. Switching destinations captures the outgoing workspace and restores the target workspace's own saved widths, collapsed state, center state and viewer mode without copying geometry from the previous workspace. LAYOUT RESET restores only that workspace's canonical defaults. Missing, corrupt, non-finite, out-of-range or incompatible persisted data recovers to safe canonical layouts.
 
 The layout file remains rtaime/operator-layout.json below the current user's local application data. Persistence writes first use a temporary sibling file and then replace the target path so an interrupted write cannot leave partially serialized layout JSON as the preferred state.
 
