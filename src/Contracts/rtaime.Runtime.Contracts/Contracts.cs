@@ -81,7 +81,9 @@ public sealed record PreparedExecutionBinding
         MediaSourceId? mediaSourceId,
         MediaSinkId? mediaSinkId,
         string? outputRoleId = null,
-        string? audioBusId = null)
+        string? audioBusId = null,
+        Identity? externalSourceId = null,
+        string? safeSourceIdentity = null)
     {
         if (logicalNodeId.IsEmpty)
             throw new ArgumentException("Logical node identity must not be empty.", nameof(logicalNodeId));
@@ -93,6 +95,10 @@ public sealed record PreparedExecutionBinding
         MediaSinkId = mediaSinkId;
         OutputRoleId = string.IsNullOrWhiteSpace(outputRoleId) ? null : outputRoleId.Trim().ToLowerInvariant();
         AudioBusId = string.IsNullOrWhiteSpace(audioBusId) ? null : new AudioBusId(audioBusId).Value;
+        if ((externalSourceId is null) != string.IsNullOrWhiteSpace(safeSourceIdentity))
+            throw new ArgumentException("External source identity and safe source identity must be supplied together.");
+        ExternalSourceId = externalSourceId;
+        SafeSourceIdentity = string.IsNullOrWhiteSpace(safeSourceIdentity) ? null : safeSourceIdentity.Trim();
     }
 
     public Identity LogicalNodeId { get; }
@@ -102,6 +108,8 @@ public sealed record PreparedExecutionBinding
     public MediaSinkId? MediaSinkId { get; }
     public string? OutputRoleId { get; }
     public string? AudioBusId { get; }
+    public Identity? ExternalSourceId { get; }
+    public string? SafeSourceIdentity { get; }
 }
 
 public enum RuntimeOutputRoleLifecycleState
