@@ -15,6 +15,7 @@ public static class RuntimeHostDiagnostics
 		var captured = (capturedAtUtc ?? DateTimeOffset.UtcNow).ToUniversalTime();
 		var lifecycle = process.Lifecycle;
 		var timing = process.TimingQualification;
+		var schedule = process.ScheduleStatistics;
 		var build = ProductBuildInfo.FromAssembly(typeof(RuntimeHostProcess).Assembly);
 		var builder = new SupportSnapshotBuilder(
 			build,
@@ -29,6 +30,12 @@ public static class RuntimeHostDiagnostics
 			.Status("monitoring.running", (process.MonitoringServer?.Running ?? false).ToString())
 			.Status("monitoring.listenerState", process.MonitoringServer?.Listener.State.ToString() ?? "UNAVAILABLE")
 			.Status("monitoring.listenerFailure", process.MonitoringServer?.Listener.FailureDetail ?? "none")
+			.Status("timing.scheduleEvidence", schedule.CommittedBoundaries == 0 ? "UNVERIFIED" : "MEASURED_SOFTWARE")
+			.Status("timing.lastScheduleLatenessMs", schedule.LastStartLateness.TotalMilliseconds.ToString("F6", CultureInfo.InvariantCulture))
+			.Status("timing.lastPresentationLatenessMs", schedule.LastPresentationLateness.TotalMilliseconds.ToString("F6", CultureInfo.InvariantCulture))
+			.Counter("timing.missedSchedulerSlots", ToCounter(schedule.MissedSlots))
+			.Counter("timing.scheduleDeadlineMisses", ToCounter(schedule.ScheduleDeadlineMisses))
+			.Counter("timing.presentationLateBoundaries", ToCounter(schedule.PresentationLateBoundaries))
 			.Status("timing.qualificationState", timing.State.ToString())
 			.Status("timing.maximumObservedJitterMs", timing.MaximumObservedJitter.TotalMilliseconds.ToString("F6", CultureInfo.InvariantCulture))
 			.Status("timing.maximumObservedProcessingMs", timing.MaximumObservedProcessingDuration.TotalMilliseconds.ToString("F6", CultureInfo.InvariantCulture))
@@ -158,11 +165,28 @@ public static class RuntimeHostDiagnostics
 				.Counter("recording.dropped", ToCounter(recording.Statistics.Dropped))
 				.Counter("recording.rejected", ToCounter(recording.Statistics.Rejected))
 				.Counter("recording.writerFailures", ToCounter(recording.Statistics.WriterFailures))
+				.Counter("recording.queueDepth", recording.Statistics.QueueDepth)
+				.Counter("recording.maximumQueueDepth", recording.Statistics.MaximumQueueDepth)
+				.Counter("recording.queueCapacity", recording.Statistics.QueueCapacity)
+				.Status("recording.backpressured", recording.Statistics.Backpressured.ToString())
 				.Counter("runtime.observationsOverwritten", ToCounter(runtime.OverwrittenObservationCount))
 				.Counter("output.program.framesWritten", ToCounter(runtime.ProgramFramesWritten))
 				.Counter("output.program.framesOverwritten", ToCounter(runtime.ProgramFramesOverwritten))
 				.Counter("output.aux.framesWritten", ToCounter(runtime.AuxFramesWritten))
 				.Counter("output.aux.framesOverwritten", ToCounter(runtime.AuxFramesOverwritten));
+
+			foreach (var role in snapshot.OutputRoles ?? Array.Empty<rtaime.Runtime.Contracts.RuntimeOutputRoleSnapshot>())
+			{
+				if (role.NetworkOutput is { } output)
+				{
+					builder.Counter($"network.{role.RoleId}.queueDepth", output.Statistics.QueueDepth)
+						.Counter($"network.{role.RoleId}.maximumQueueDepth", output.Statistics.MaximumQueueDepth)
+						.Counter($"network.{role.RoleId}.queueCapacity", output.Statistics.QueueCapacity)
+						.Counter($"network.{role.RoleId}.droppedSamples", ToCounter(output.Statistics.DroppedSamples))
+						.Counter($"network.{role.RoleId}.rejectedSamples", ToCounter(output.Statistics.RejectedSamples))
+						.Status($"network.{role.RoleId}.backpressured", output.Statistics.Backpressured.ToString());
+				}
+			}
 
 			if (snapshot.AvSyncDiagnostics is { } avSync)
 			{

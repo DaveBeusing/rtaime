@@ -328,7 +328,12 @@ public sealed record NetworkOutputStatistics(
 	ulong ReconnectCount,
 	ulong PacketsSent,
 	ulong BytesSent,
-	int QueueDepth);
+	int QueueDepth,
+	int MaximumQueueDepth = 0,
+	int QueueCapacity = 0)
+{
+	public bool Backpressured => QueueCapacity > 0 && QueueDepth >= QueueCapacity;
+}
 
 public sealed record NetworkOutputHealthSnapshot
 {

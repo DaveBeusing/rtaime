@@ -93,59 +93,83 @@ public sealed class RuntimeTimingQualificationProbe
 		TimeSpan observedAt,
 		TimeSpan processingDuration)
 	{
+		ValidateObservation(observedAt, processingDuration);
+		lock (_gate)
+		{
+			RecordBoundaryUnsafe(sequenceNumber, observedAt, processingDuration);
+			return CreateSnapshot(observedAt);
+		}
+	}
+
+	/// <summary>Records the same evidence without materializing retained samples on the Program path.</summary>
+	public TimingQualificationState ObserveBoundary(
+		ulong sequenceNumber,
+		TimeSpan observedAt,
+		TimeSpan processingDuration)
+	{
+		ValidateObservation(observedAt, processingDuration);
+		lock (_gate)
+		{
+			RecordBoundaryUnsafe(sequenceNumber, observedAt, processingDuration);
+			return EvaluateState(observedAt);
+		}
+	}
+
+	private static void ValidateObservation(TimeSpan observedAt, TimeSpan processingDuration)
+	{
 		if (observedAt < TimeSpan.Zero)
 			throw new ArgumentOutOfRangeException(nameof(observedAt));
 		if (processingDuration < TimeSpan.Zero)
 			throw new ArgumentOutOfRangeException(nameof(processingDuration));
 
-		lock (_gate)
-		{
-			if (_lastObservedAt is { } previousObservedAt && observedAt < previousObservedAt)
-				throw new ArgumentException("Timing observations must be monotonic.", nameof(observedAt));
+	}
 
-			var interval = _lastObservedAt is { } previous
-				? observedAt - previous
-				: TimeSpan.Zero;
-			var absoluteJitter = _lastObservedAt is null
-				? TimeSpan.Zero
-				: Absolute(interval - _thresholds.ExpectedFramePeriod);
-			var sequenceContinuous = _lastSequenceNumber is null ||
-				(_lastSequenceNumber.Value != ulong.MaxValue && sequenceNumber == _lastSequenceNumber.Value + 1);
-			var withinJitterBudget = _lastObservedAt is null || absoluteJitter <= _thresholds.MaximumAbsoluteJitter;
-			var withinProcessingBudget = processingDuration <= _thresholds.MaximumProcessingDuration;
+	private void RecordBoundaryUnsafe(ulong sequenceNumber, TimeSpan observedAt, TimeSpan processingDuration)
+	{
+		if (_lastObservedAt is { } previousObservedAt && observedAt < previousObservedAt)
+			throw new ArgumentException("Timing observations must be monotonic.", nameof(observedAt));
 
-			if (!sequenceContinuous)
-				_sequenceDiscontinuities++;
-			if (!withinJitterBudget)
-				_jitterViolations++;
-			if (!withinProcessingBudget)
-				_processingViolations++;
+		var interval = _lastObservedAt is { } previous
+			? observedAt - previous
+			: TimeSpan.Zero;
+		var absoluteJitter = _lastObservedAt is null
+			? TimeSpan.Zero
+			: Absolute(interval - _thresholds.ExpectedFramePeriod);
+		var sequenceContinuous = _lastSequenceNumber is null ||
+			(_lastSequenceNumber.Value != ulong.MaxValue && sequenceNumber == _lastSequenceNumber.Value + 1);
+		var withinJitterBudget = _lastObservedAt is null || absoluteJitter <= _thresholds.MaximumAbsoluteJitter;
+		var withinProcessingBudget = processingDuration <= _thresholds.MaximumProcessingDuration;
 
-			var violated = !sequenceContinuous || !withinJitterBudget || !withinProcessingBudget;
-			_consecutiveViolations = violated ? _consecutiveViolations + 1 : 0;
-			if (absoluteJitter > _maximumObservedJitter)
-				_maximumObservedJitter = absoluteJitter;
-			if (processingDuration > _maximumObservedProcessingDuration)
-				_maximumObservedProcessingDuration = processingDuration;
+		if (!sequenceContinuous)
+			_sequenceDiscontinuities++;
+		if (!withinJitterBudget)
+			_jitterViolations++;
+		if (!withinProcessingBudget)
+			_processingViolations++;
 
-			var observation = new TimingBoundaryObservation(
-				sequenceNumber,
-				observedAt,
-				interval,
-				absoluteJitter,
-				processingDuration,
-				sequenceContinuous,
-				withinJitterBudget,
-				withinProcessingBudget);
-			_samples[_nextSampleIndex] = observation;
-			_nextSampleIndex = (_nextSampleIndex + 1) % _samples.Length;
-			_sampleCount = Math.Min(_sampleCount + 1, _samples.Length);
-			_totalBoundaries++;
-			_lastSequenceNumber = sequenceNumber;
-			_lastObservedAt = observedAt;
+		var violated = !sequenceContinuous || !withinJitterBudget || !withinProcessingBudget;
+		_consecutiveViolations = violated ? _consecutiveViolations + 1 : 0;
+		if (absoluteJitter > _maximumObservedJitter)
+			_maximumObservedJitter = absoluteJitter;
+		if (processingDuration > _maximumObservedProcessingDuration)
+			_maximumObservedProcessingDuration = processingDuration;
 
-			return CreateSnapshot(observedAt);
-		}
+		var observation = new TimingBoundaryObservation(
+			sequenceNumber,
+			observedAt,
+			interval,
+			absoluteJitter,
+			processingDuration,
+			sequenceContinuous,
+			withinJitterBudget,
+			withinProcessingBudget);
+		_samples[_nextSampleIndex] = observation;
+		_nextSampleIndex = (_nextSampleIndex + 1) % _samples.Length;
+		_sampleCount = Math.Min(_sampleCount + 1, _samples.Length);
+		_totalBoundaries++;
+		_lastSequenceNumber = sequenceNumber;
+		_lastObservedAt = observedAt;
+
 	}
 
 	public TimingQualificationSnapshot Snapshot(TimeSpan observedAt)

@@ -51,6 +51,26 @@ public sealed class RuntimeFrameDropCounter
 			SaturatingAdd(outputBackpressure, outputRejected));
 	}
 
+	/// <summary>Uses cumulative skipped scheduler slots; lateness and output reasons remain separate.</summary>
+	public ulong ObserveScheduled(
+		TimeSpan boundaryObservedAt,
+		ulong missedSchedulerSlots,
+		ulong outputBackpressure = 0,
+		ulong outputRejected = 0)
+	{
+		if (boundaryObservedAt < TimeSpan.Zero)
+			throw new ArgumentOutOfRangeException(nameof(boundaryObservedAt));
+		if (missedSchedulerSlots < _schedulerDroppedFrames)
+			throw new ArgumentException("Missed-slot evidence must be cumulative.", nameof(missedSchedulerSlots));
+		if (_lastBoundaryObservedAt is { } previous && boundaryObservedAt <= previous)
+			throw new ArgumentException("Scheduled boundaries must be strictly increasing.", nameof(boundaryObservedAt));
+
+		// Reuse only the cadence estimator; the schedule supplies loss rather than interval division.
+		Observe(boundaryObservedAt, TimeSpan.MaxValue);
+		_schedulerDroppedFrames = missedSchedulerSlots;
+		return SaturatingAdd(missedSchedulerSlots, SaturatingAdd(outputBackpressure, outputRejected));
+	}
+
 	private static ulong SaturatingAdd(ulong left, ulong right) =>
 		ulong.MaxValue - left < right ? ulong.MaxValue : left + right;
 }

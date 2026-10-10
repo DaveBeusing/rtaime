@@ -210,6 +210,54 @@ public sealed class RecordingFoundationTests
         Assert.Equal("recording.finalized", observations[^1].Code);
     }
 
+    [Fact]
+    public async Task Stalled_recording_writer_keeps_depth_bounded_and_resets_high_water_on_new_session()
+    {
+        var writer = new BlockingWriter();
+        await using var recorder = new ProgramRecorder(writer, capacity: 2);
+        Assert.True((await recorder.StartAsync(Request())).Succeeded);
+        try
+        {
+            Assert.True(recorder.TryEnqueue(Frame(1)).Accepted);
+            await writer.Started.Task.WaitAsync(TimeSpan.FromSeconds(2));
+            Assert.True(recorder.TryEnqueue(Frame(2)).Accepted);
+            Assert.True(recorder.TryEnqueue(Frame(3)).Accepted);
+            for (ulong sequence = 4; sequence <= 10_003; sequence++)
+                Assert.Equal(RecordingEnqueueStatus.Dropped, recorder.TryEnqueue(Frame(sequence)).Status);
+            var statistics = recorder.Snapshot.Statistics;
+            Assert.Equal(2, statistics.QueueDepth);
+            Assert.Equal(2, statistics.MaximumQueueDepth);
+            Assert.Equal(2, statistics.QueueCapacity);
+            Assert.True(statistics.Backpressured);
+            Assert.Equal(10_000UL, statistics.Dropped);
+        }
+        finally
+        {
+            writer.Release.TrySetResult();
+        }
+        Assert.Equal(RecordingStopStatus.Stopped, (await recorder.StopAsync()).Status);
+        Assert.Equal(0, recorder.Snapshot.Statistics.QueueDepth);
+        Assert.False(recorder.Snapshot.Statistics.Backpressured);
+        Assert.Equal(3UL, recorder.Snapshot.Statistics.Written);
+        Assert.True((await recorder.StartAsync(Request())).Succeeded);
+        Assert.Equal(0, recorder.Snapshot.Statistics.MaximumQueueDepth);
+        await recorder.StopAsync();
+    }
+
+    private sealed class BlockingWriter : IProgramRecordingWriter
+    {
+        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public ValueTask OpenAsync(RecordingStartRequest request, CancellationToken cancellationToken) => ValueTask.CompletedTask;
+        public async ValueTask WriteAsync(RecordingProgramSample sample, CancellationToken cancellationToken)
+        {
+            Started.TrySetResult();
+            await Release.Task.WaitAsync(cancellationToken);
+        }
+        public ValueTask FinalizeAsync(CancellationToken cancellationToken) => ValueTask.CompletedTask;
+        public ValueTask AbortAsync(CancellationToken cancellationToken) => ValueTask.CompletedTask;
+    }
+
     private static RecordingStartRequest Request() => new(
         RecordingContractVersion.Current,
         RecordingSessionId.New(),

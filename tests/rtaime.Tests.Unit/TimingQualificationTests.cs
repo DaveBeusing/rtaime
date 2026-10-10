@@ -100,4 +100,25 @@ public sealed class TimingQualificationTests
 		Assert.Throws<ArgumentException>(() =>
 			probe.RecordBoundary(1, TimeSpan.FromMilliseconds(19), TimeSpan.FromMilliseconds(2)));
 	}
+	[Fact]
+	public void Scalar_hot_path_preserves_full_probe_evidence_and_health()
+	{
+		var scalar = new RuntimeTimingQualificationProbe(Thresholds);
+		var full = new RuntimeTimingQualificationProbe(Thresholds);
+		for (ulong sequence = 0; sequence < 20; sequence++)
+		{
+			var at = TimeSpan.FromMilliseconds(sequence * 21);
+			var duration = TimeSpan.FromMilliseconds(sequence % 4 == 0 ? 18 : 4);
+			Assert.Equal(full.RecordBoundary(sequence, at, duration).State,
+				scalar.ObserveBoundary(sequence, at, duration));
+		}
+		var observed = scalar.Snapshot(TimeSpan.FromMilliseconds(399));
+		var expected = full.Snapshot(TimeSpan.FromMilliseconds(399));
+		Assert.Equal(expected.TotalBoundaries, observed.TotalBoundaries);
+		Assert.Equal(expected.JitterViolations, observed.JitterViolations);
+		Assert.Equal(expected.ProcessingViolations, observed.ProcessingViolations);
+		Assert.Equal(expected.MaximumObservedProcessingDuration, observed.MaximumObservedProcessingDuration);
+		Assert.Equal(expected.Samples, observed.Samples);
+	}
+
 }

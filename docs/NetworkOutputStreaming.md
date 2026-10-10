@@ -264,3 +264,11 @@ Repository tests and CI qualify:
 Real NDI interoperability against a declared NDI runtime/peer environment remains **UNVERIFIED**. Physical-network throughput, switch behavior, multicast configuration, WAN behavior and external receiver compatibility require separate environment evidence.
 
 The software implementation does not promote NDI connectivity into production authority and does not constitute NDI certification.
+
+## Bounded wakeups and saturation observations
+
+SRT and NDI signal the worker only when queue depth grows. Replacing an already queued oldest sample reuses its existing wakeup; it does not accumulate semaphore permits while a consumer is stalled. Both video lease and paired audio belong to one dropped A/V sample.
+
+NetworkOutputStatistics additionally exposes MaximumQueueDepth and QueueCapacity; Backpressured means current depth is at capacity. The same observations are available in Runtime support snapshots per role. High-water marks are retained for the session. Optional constructor defaults keep older software observations representable without inventing capacity evidence.
+
+Deterministic overload regressions stall each consumer, submit 10,002 samples at both supported media timebases, require a depth/high-water/wakeup bound of one, verify old leases are disposed, and release the consumer to verify drainage and resumed sends. This is software failure-isolation evidence, not NDI/SRT peer interoperability or hardware timing qualification.

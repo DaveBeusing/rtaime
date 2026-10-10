@@ -215,7 +215,13 @@ public sealed record RecordingStatistics(
     ulong Written,
     ulong Dropped,
     ulong Rejected,
-    ulong WriterFailures);
+    ulong WriterFailures,
+    int QueueDepth = 0,
+    int MaximumQueueDepth = 0,
+    int QueueCapacity = 0)
+{
+    public bool Backpressured => QueueCapacity > 0 && QueueDepth >= QueueCapacity;
+}
 
 public sealed record RecordingObservation(
     UtcTimestamp Timestamp,

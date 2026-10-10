@@ -303,3 +303,17 @@ See [Product Showcase Scenario](InvestorDemoScenario.md) for the deterministic d
 ## Optional IntegrationHost
 
 `rtaime.IntegrationHost` is built with the primary solution and packaged as an optional host, but AppHost does not start it and ControlHost readiness does not depend on it. Configure and start it separately with `--config=<path>` or `RTAIME_INTEGRATION_CONFIG`. See [ProductionIntegrationGateway.md](ProductionIntegrationGateway.md).
+
+## Rational cadence and backpressure regressions
+
+Target the timing arithmetic, unchanged probe evidence, bounded network wakeups and recording saturation with:
+
+```powershell
+dotnet test tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj --configuration Release --filter "FullyQualifiedName~RationalFrameScheduleTests|FullyQualifiedName~TimingQualificationTests|FullyQualifiedName~NetworkOutputFoundationTests|FullyQualifiedName~RecordingFoundationTests"
+dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --filter "FullyQualifiedName~RuntimeHealthPerformanceHudIntegrationTests|FullyQualifiedName~DeterministicRuntimeBoundaryTests|FullyQualifiedName~OperatorMonitoringPlaneTests|FullyQualifiedName~ProgramFrameMemoryOwnershipTests|FullyQualifiedName~RecordingRuntimeIntegrationTests"
+dotnet test tests/rtaime.Tests.Performance/rtaime.Tests.Performance.csproj --configuration Release --filter "FullyQualifiedName~RuntimePerformanceStatusBarPerformanceTests"
+```
+
+Cadence tests simulate approximately 24 hours at 50/1 and 60000/1001, with every deadline checked against independent rational arithmetic. Early/repeated wakes, long overruns, recovery, explicit resync/format epochs, clock regression and overflow have deterministic coverage. The targeted allocation guard requires zero allocation over 100,000 warmed schedule/probe/drop observations and retains a broad 15-second software regression limit.
+
+These targeted commands supplement the complete Release build, existing CUT/DISSOLVE, output health, audio alignment, recording, quality policies and five Required Gates. Passing software tests does not qualify physical GPU, external clocks, device latency or physical presentation.

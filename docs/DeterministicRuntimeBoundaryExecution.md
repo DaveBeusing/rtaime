@@ -4,12 +4,12 @@
 
 ## Runtime production authority
 
-RuntimeHost has one production cadence authority for V1 Program execution: the `PeriodicTimer` owned by `RuntimeHostProcess.RunMediaLoopAsync`.
+RuntimeHost has one production cadence authority for V1 Program execution: the epoch-based `RationalFrameSchedule` owned by `RuntimeHostProcess.RunMediaLoopAsync`.
 
-One timer tick defines one opportunity to execute a production boundary. The ordered process path is:
+One due rational deadline defines one opportunity to execute a production boundary. The ordered process path is:
 
 ```text
-Program cadence tick
+Program cadence deadline
 	→ pump physical Media I/O inputs
 	→ admit one local-media deck boundary, when available
 	→ execute one committed Runtime Program boundary
@@ -80,6 +80,10 @@ If a backend surface release throws, the surface identity remains in explicit un
 RuntimeHost never starts a second concurrent Program boundary. A slow boundary therefore causes lateness rather than an unbounded boundary queue.
 
 `RuntimeTimingQualificationProbe` records scheduler interval jitter and complete boundary processing duration. Processing beyond one frame period is a violation and maps through the established timing-health state model. `RuntimeFrameDropCounter` and physical Media I/O backpressure/rejection observations remain the bounded dropped/output evidence surfaces.
+
+The scheduler coalesces late wakeups into the latest due slot and counts skipped opportunities once. It computes absolute deadlines from one monotonic epoch rather than accumulating rounded frame intervals. The first committed observation does not count startup gaps. Media sequence and audio advancement remain tied to completed boundaries; skipped opportunities are observational loss, not independent command/audio progression.
+
+Schedule start lateness, internal completion lateness and output backpressure are separate evidence. Completion timing now includes input pumping and media-deck admission. See [RenderSchedulingSynchronization.md](RenderSchedulingSynchronization.md) for arithmetic, thresholds, reset semantics and measurement limits.
 
 The architecture deliberately does not compensate for overrun by launching overlapping frame work.
 

@@ -35,7 +35,7 @@ CPU, RAM, GPU and VRAM originate in `SystemHardwareTelemetry`. Hardware sampling
 
 Frame processing time and the active frame budget originate in the existing `V1RuntimePerformanceSnapshot`.
 
-Dropped-frame evidence continues to use `RuntimeFrameDropCounter`, combining scheduler cadence misses with cumulative native-output backpressure/rejection evidence.
+Dropped-frame evidence continues to use `RuntimeFrameDropCounter`, combining cumulative skipped rational scheduler slots with cumulative native-output backpressure/rejection evidence.
 
 Measured Output FPS is derived from the same Program scheduler-boundary timestamps already used by `RuntimeFrameDropCounter`. The estimator retains only the previous boundary timestamp and one exponentially smoothed FPS value. It allocates no per-frame history and performs no I/O.
 
@@ -78,3 +78,11 @@ The implementation must not:
 - perform file or network I/O from Program cadence measurement.
 
 The allocation smoke test verifies that repeated cadence observations allocate no per-frame managed history after warmup.
+
+## Deadline and consumer diagnostics
+
+The status bar retains its existing aggregate dropped count and scheduler-observed FPS. It does not claim physical output acceptance or physical display cadence. Schedule start lateness and internal Program completion lateness are separately available in Runtime support diagnostics and do not add duplicate drops.
+
+Runtime support diagnostics also expose recording and network queue depth, capacity, high-water mark and current saturation status. Network drops and rejections remain per-role evidence; recording drops remain recorder evidence. They are not summed across consumers into the status bar, because several consumers can discard the same Program sequence independently.
+
+Current saturation clears when the queue drains; the high-water mark remains for the session (recording resets it on a new recording session). A historic nonzero dropped count is distinct from current backpressure.
