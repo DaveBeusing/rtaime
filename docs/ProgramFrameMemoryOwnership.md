@@ -62,6 +62,11 @@ The legacy allocating Readback method remains for compatibility and focused call
 
 CUDA device-surface pooling remains independent from host readback pooling. Surface release failures keep their existing explicit observation path.
 
+CUDA allocations that were rented for an upload or composite but encounter a native-operation failure are quarantined instead of immediately returned to the size-class free pool. A failed CUDA operation does not establish safe GPU completion or safe reuse of its destination pointer. Stop releases tracked quarantined allocations before releasing pooled allocations and destroying the owning CUDA context. Cleanup failures are propagated and retain their tracked allocation for a subsequent Stop/recovery attempt. A successful upload or composite still uses the existing synchronous completion and normal pool ownership semantics. This is a source-level fail-closed safety measure, not evidence that driver reset or CUDA device-loss cleanup succeeds on physical hardware.
+
+Quarantined allocations can temporarily increase retained device memory until controlled shutdown; the GPU provider already treats CUDA-classified upload and composite failures as failed state requiring recovery. Physical device-loss and driver behavior remain UNVERIFIED.
+
+
 ## Managed reference backend
 
 The managed reference backend also implements ReadbackInto.
