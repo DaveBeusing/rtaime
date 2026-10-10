@@ -36,8 +36,9 @@ The backward-compatible default remains `mp4-h264-aac`.
 | --- | --- | --- | --- | --- | --- | --- |
 | `mp4-h264-aac` | `windows-media-foundation` | MP4 | H.264/AVC Main, 20 Mbit/s | AAC-LC, 192 kbit/s | Software | Windows Media Foundation |
 | `mov-2vuy-pcm` | `managed-quicktime` | QuickTime MOV | Uncompressed 8-bit YUV 4:2:2 (`2vuy`) | Stereo 48 kHz signed PCM16 LE (`sowt`) | Software | Managed provider |
+| `mxf-op1a-uncompressed-pcm` | `managed-mxf-op1a` | MXF OP1a | Uncompressed 8-bit UYVY 4:2:2 | Stereo 48 kHz PCM16 LE | Software | **Opt-in:** explicitly provisioned BMX/FFprobe; unavailable by default |
 
-Both profiles accept 1920x1080 progressive RGBA8 Program input at 50 fps or 60000/1001 fps and Stereo 48 kHz Float32 Program audio.
+All three profiles accept 1920x1080 progressive RGBA8 Program input at 50 fps or 60000/1001 fps and Stereo 48 kHz Float32 Program audio.
 
 The MOV profile converts RGBA8 to packed `2vuy` and Float32 audio to PCM16 on the asynchronous Recording worker. It is intentionally high-bandwidth and must not be interpreted as physical-storage-throughput qualification.
 
@@ -95,7 +96,7 @@ Selection rules are:
 5. the concrete writer owns target normalization and container/codec behavior;
 6. provider/writer failure is reported through the existing failure-isolated Recording lifecycle and cannot mutate Program.
 
-No arbitrary assembly loading, reflection-based plugin discovery, external encoder command lines or process spawning is part of this boundary.
+No arbitrary assembly loading or reflection-based plugin discovery occurs in the provider-neutral boundary. The explicitly opted-in BMX writer launches a fixed, configured native muxer executable from the recording worker; no arbitrary command strings, executables or runtime download are accepted.
 
 ## Target normalization
 
@@ -136,11 +137,15 @@ The detailed decision and rejected dependency classes are recorded in [Professio
 
 `ReferenceRecordingPayloadWriter` remains a deterministic test/evidence injection. It is not registered as a professional delivery profile and is not advertised to the Operator.
 
-## MXF and proprietary codec boundary
+## MXF OP1a backend and proprietary codec boundary
 
-The exact `mxf-op1a-uncompressed-pcm` OP1a uncompressed 8-bit 4:2:2 / stereo 48 kHz PCM16 descriptor is now projected from the Runtime registry with `Available=false`, `Unverified` evidence and a specific unavailable reason. Recording start fails closed before writer creation. There is no completed `.mxf` file writer yet.\n\nMXF, ProRes, DNxHR and AVC-Intra remain unavailable. In particular, no vague “broadcast MXF” capability is advertised. MXF requires a concrete operational pattern/essence implementation and independent validation before it can enter the catalog.
+`mxf-op1a-uncompressed-pcm` is an **opt-in implemented** recording capability backed by the explicitly provisioned native BBC BMX `raw2bmx` muxer and an independently configured FFprobe executable. The default descriptor is `Available=false`; RuntimeHost makes it available only if `RTAIME_MXF_OP1A_ENABLED=1` and `RTAIME_MXF_RAW2BMX` and `RTAIME_MXF_FFPROBE` point to existing executables. No binaries are automatically discovered or downloaded during production use.
 
-Hardware acceleration also remains unverified and unsupported by the production catalog. Both current profiles are explicitly classified as software.
+The asynchronous Program recording worker converts committed RGBA8 video to UYVY and Float32 stereo audio to PCM16, spools raw essence, asks BMX to mux OP1a, then checks the complete MXF structural/index/RIP data and uses FFprobe to independently verify video and audio codecs, exact edit rate, frame count, channels, sample rate and audio duration before atomic `.partial.mxf` to `.mxf` publication. The independent 1080p50 and 1080p60000/1001 CI recording tests passed on commit `5f0eebba`; later commits need the same targeted gates before release.
+
+The selected writer normalizes a missing file extension to `.mxf`, and rejects incompatible extensions. Generic MXF, ProRes, DNxHR and AVC-Intra are **not** supported. BMX and FFprobe are user-provisioned external programs, unlike the managed QuickTime provider. Redistribution requires a separate licensing, security and package/SBOM decision; no third-party native binaries are included by this change.
+
+Hardware acceleration and sustained storage throughput remain unverified. A completed short software recording is not certification for long-form venue production or third-party vendor ingest.
 
 ## Capability evidence
 
