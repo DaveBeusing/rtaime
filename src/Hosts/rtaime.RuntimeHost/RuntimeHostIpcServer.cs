@@ -1224,7 +1224,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 			(int)source.Availability.State,
 			source.Availability.Failure is null ? null : new WireFailure(source.Availability.Failure.Value.Code, source.Availability.Failure.Value.Message),
 			source.VideoFormats.Select(ToWire).ToArray(),
-			source.AudioFormat is null ? null : new WireAudioFormat(source.AudioFormat.SampleRate, source.AudioFormat.ChannelCount, source.AudioFormat.SampleFormat.ToString()),
+			source.AudioFormat is null ? null : new WireAudioFormat(source.AudioFormat.Value.SampleRate, (int)source.AudioFormat.Value.ChannelLayout, (int)source.AudioFormat.Value.SampleFormat, source.AudioFormat.Value.ChannelCount),
 			source.LastSeenAt.Value)).ToArray());
 
 	private static WireMediaInputHealth ToWire(MediaInputHealthSnapshot snapshot) => new(
@@ -1235,7 +1235,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		(int)snapshot.Lifecycle,
 		snapshot.Connected,
 		snapshot.VideoFormat is null ? null : ToWire(snapshot.VideoFormat),
-		snapshot.AudioFormat is null ? null : new WireAudioFormat(snapshot.AudioFormat.SampleRate, snapshot.AudioFormat.ChannelCount, snapshot.AudioFormat.SampleFormat.ToString()),
+		snapshot.AudioFormat is null ? null : new WireAudioFormat(snapshot.AudioFormat.Value.SampleRate, (int)snapshot.AudioFormat.Value.ChannelLayout, (int)snapshot.AudioFormat.Value.SampleFormat, snapshot.AudioFormat.Value.ChannelCount),
 		snapshot.Statistics.VideoFramesReceived,
 		snapshot.Statistics.AudioFramesReceived,
 		snapshot.Statistics.DroppedFrames,
@@ -1362,7 +1362,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		string? TestSignalActiveChannel = null,
 		double? TestSignalFrequencyHz = null,
 		double? TestSignalPeakLevel = null);
-	private sealed record WireAudioFormat(uint SampleRate, uint ChannelCount, string SampleFormat);
+	private sealed record WireAudioFormat(uint SampleRate, int ChannelLayout, int SampleFormat, uint ChannelCount);
 	private sealed record WireDiscoveredMediaSource(string SourceId, string ProviderId, string DisplayName, string SafeSourceIdentity, int AvailabilityState, WireFailure? Failure, WireVideoFormat[] VideoFormats, WireAudioFormat? AudioFormat, DateTimeOffset LastSeenAt);
 	private sealed record WireMediaSourceDiscoverySnapshot(string ProviderId, int AvailabilityState, WireFailure? Failure, DateTimeOffset ObservedAt, int MaximumRetainedResults, WireDiscoveredMediaSource[] Sources);
 	private sealed record WireMediaInputHealth(string SourceId, string ProviderId, string DiscoveredSourceId, string SafeSourceIdentity, int Lifecycle, bool Connected, WireVideoFormat? VideoFormat, WireAudioFormat? AudioFormat, ulong VideoFramesReceived, ulong AudioFramesReceived, ulong DroppedFrames, ulong RejectedFrames, ulong ReconnectCount, int QueueDepth, int MaximumQueueDepth, DateTimeOffset? LastMediaAt, WireFailure? Failure);
