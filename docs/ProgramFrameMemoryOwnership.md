@@ -66,6 +66,9 @@ CUDA allocations that were rented for an upload or composite but encounter a nat
 
 Quarantined allocations can temporarily increase retained device memory until controlled shutdown; the GPU provider already treats CUDA-classified upload and composite failures as failed state requiring recovery. Physical device-loss and driver behavior remain UNVERIFIED.
 
+`CudaGpuProcessingBackend.ResourceStatistics` exposes lock-consistent active surface, pooled allocation and quarantined allocation counts plus a saturating cumulative CUDA context/event synchronization failure count. These counts are diagnostic snapshots, not per-frame event logs. They do not imply that the device allocation pool has a global byte budget; physical peak device memory remains UNVERIFIED.
+
+
 
 ## Managed reference backend
 
