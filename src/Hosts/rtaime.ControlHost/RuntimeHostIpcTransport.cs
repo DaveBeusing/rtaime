@@ -481,6 +481,22 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 			snapshot.AudioProduction is null ? null : FromWire(snapshot.AudioProduction));
 	}
 
+	public async ValueTask<MediaSourceDiscoverySnapshot> GetMediaSourceDiscoveryAsync(CancellationToken cancellationToken = default)
+	{
+		var response = await ExchangeAsync("runtime.media_source.discovery.get", new { }, cancellationToken).ConfigureAwait(false);
+		var wire = response.Payload.Deserialize<WireMediaSourceDiscoverySnapshot>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Runtime media-source discovery response is required.");
+		return FromWire(wire);
+	}
+
+	public async ValueTask<IReadOnlyList<MediaInputHealthSnapshot>> GetMediaInputHealthAsync(CancellationToken cancellationToken = default)
+	{
+		var response = await ExchangeAsync("runtime.media_input.health.get", new { }, cancellationToken).ConfigureAwait(false);
+		var wire = response.Payload.Deserialize<WireMediaInputHealth[]>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Runtime media-input health response is required.");
+		return Array.AsReadOnly(wire.Select(FromWire).ToArray());
+	}
+
 	public async ValueTask<RuntimeRemoteApplyResult> ApplyExecutionAsync(
 		PreparedExecutionContract preparedExecution,
 		MediaSinkId programSinkId,
@@ -1055,6 +1071,72 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 			_providers = Array.Empty<ProviderDescriptor>();
 		}
 	}
+
+	private static MediaSourceDiscoverySnapshot FromWire(WireMediaSourceDiscoverySnapshot snapshot) => new(
+		new ProviderId(Identity.Parse(snapshot.ProviderId)),
+		new ProviderAvailability(
+			Enum.IsDefined(typeof(ProviderAvailabilityState), snapshot.AvailabilityState)
+				? (ProviderAvailabilityState)snapshot.AvailabilityState
+				: throw new InvalidDataException("Discovery provider availability state is invalid."),
+			snapshot.Failure is null ? null : new Failure(snapshot.Failure.Code, snapshot.Failure.Message)),
+		new UtcTimestamp(snapshot.ObservedAt),
+		snapshot.Sources.Select(source => new DiscoveredMediaSourceDescriptor(
+			new DiscoveredMediaSourceId(Identity.Parse(source.SourceId)),
+			new ProviderId(Identity.Parse(source.ProviderId)),
+			source.DisplayName,
+			source.SafeSourceIdentity,
+			new ProviderAvailability(
+				Enum.IsDefined(typeof(ProviderAvailabilityState), source.AvailabilityState)
+					? (ProviderAvailabilityState)source.AvailabilityState
+					: throw new InvalidDataException("Discovered source availability state is invalid."),
+				source.Failure is null ? null : new Failure(source.Failure.Code, source.Failure.Message)),
+			source.VideoFormats.Select(FromWireVideoFormat).ToArray(),
+			source.AudioFormat is null ? null : FromWireAudioFormat(source.AudioFormat),
+			new UtcTimestamp(source.LastSeenAt))).ToArray(),
+		snapshot.MaximumRetainedResults);
+
+	private static MediaInputHealthSnapshot FromWire(WireMediaInputHealth snapshot) => new(
+		new MediaSourceId(Identity.Parse(snapshot.SourceId)),
+		new ProviderId(Identity.Parse(snapshot.ProviderId)),
+		new DiscoveredMediaSourceId(Identity.Parse(snapshot.DiscoveredSourceId)),
+		snapshot.SafeSourceIdentity,
+		Enum.IsDefined(typeof(MediaInputLifecycleState), snapshot.Lifecycle)
+			? (MediaInputLifecycleState)snapshot.Lifecycle
+			: throw new InvalidDataException("Media-input lifecycle state is invalid."),
+		snapshot.Connected,
+		snapshot.VideoFormat is null ? null : FromWireVideoFormat(snapshot.VideoFormat),
+		snapshot.AudioFormat is null ? null : FromWireAudioFormat(snapshot.AudioFormat),
+		new MediaInputStatistics(
+			snapshot.VideoFramesReceived,
+			snapshot.AudioFramesReceived,
+			snapshot.DroppedFrames,
+			snapshot.RejectedFrames,
+			snapshot.ReconnectCount,
+			snapshot.QueueDepth,
+			snapshot.MaximumQueueDepth),
+		snapshot.LastMediaAt is null ? null : new UtcTimestamp(snapshot.LastMediaAt.Value),
+		snapshot.Failure is null ? null : new Failure(snapshot.Failure.Code, snapshot.Failure.Message));
+
+	private static VideoFormat FromWireVideoFormat(WireVideoFormat format) => new(
+		format.Width,
+		format.Height,
+		FrameRate.Parse(format.FrameRate),
+		Enum.IsDefined(typeof(PixelFormat), format.PixelFormat)
+			? (PixelFormat)format.PixelFormat
+			: throw new InvalidDataException("Discovery video pixel format is invalid."),
+		Enum.IsDefined(typeof(ScanMode), format.ScanMode)
+			? (ScanMode)format.ScanMode
+			: throw new InvalidDataException("Discovery video scan mode is invalid."));
+
+	private static AudioFormat FromWireAudioFormat(WireAudioFormat format) => new(
+		format.SampleRate,
+		Enum.IsDefined(typeof(AudioChannelLayout), format.ChannelLayout)
+			? (AudioChannelLayout)format.ChannelLayout
+			: throw new InvalidDataException("Discovery audio channel layout is invalid."),
+		Enum.IsDefined(typeof(AudioSampleFormat), format.SampleFormat)
+			? (AudioSampleFormat)format.SampleFormat
+			: throw new InvalidDataException("Discovery audio sample format is invalid."),
+		format.ChannelCount);
 
 	private static ProviderDescriptor FromWire(WireProvider provider) => new(
 		CompatibilityVersion.Parse(provider.Version),
@@ -1775,6 +1857,10 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 
 	private sealed record ClientHello(string ProtocolVersion, string Role, string HostInstanceId, Dictionary<string, string> ContractVersions);
 	private sealed record ServerHello(string ProtocolVersion, string Role, string HostInstanceId, Dictionary<string, string> ContractVersions);
+	private sealed record WireAudioFormat(uint SampleRate, int ChannelLayout, int SampleFormat, uint ChannelCount);
+	private sealed record WireDiscoveredMediaSource(string SourceId, string ProviderId, string DisplayName, string SafeSourceIdentity, int AvailabilityState, WireFailure? Failure, WireVideoFormat[] VideoFormats, WireAudioFormat? AudioFormat, DateTimeOffset LastSeenAt);
+	private sealed record WireMediaSourceDiscoverySnapshot(string ProviderId, int AvailabilityState, WireFailure? Failure, DateTimeOffset ObservedAt, int MaximumRetainedResults, WireDiscoveredMediaSource[] Sources);
+	private sealed record WireMediaInputHealth(string SourceId, string ProviderId, string DiscoveredSourceId, string SafeSourceIdentity, int Lifecycle, bool Connected, WireVideoFormat? VideoFormat, WireAudioFormat? AudioFormat, ulong VideoFramesReceived, ulong AudioFramesReceived, ulong DroppedFrames, ulong RejectedFrames, ulong ReconnectCount, int QueueDepth, int MaximumQueueDepth, DateTimeOffset? LastMediaAt, WireFailure? Failure);
 	private sealed record WireFailure(string Code, string Message);
 	private sealed record WireVideoFormat(uint Width, uint Height, string FrameRate, int PixelFormat, int ScanMode);
 	private sealed record WireInputSignal(string SourceId, string Health);
