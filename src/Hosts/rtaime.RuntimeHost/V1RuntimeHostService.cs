@@ -11,6 +11,7 @@ using rtaime.Media;
 using rtaime.Media.Contracts;
 using rtaime.Provider.Contracts;
 using rtaime.Provider.Gpu;
+using rtaime.Provider.Ndi;
 using rtaime.Provider.VirtualMedia;
 using rtaime.Recording;
 using rtaime.Runtime;
@@ -462,6 +463,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private readonly RuntimeMonitoringHub _monitoringHub;
 	private readonly RuntimeMonitoringTap _monitoringTap;
 	private readonly RuntimeNetworkOutputBridge _networkOutputBridge;
+	private readonly NdiNetworkOutputProvider _ndiProvider;
 	private readonly RuntimeReplayService? _replay;
 	private readonly Stopwatch _uptimeClock = Stopwatch.StartNew();
 	private readonly SystemHardwareTelemetry _hardwareTelemetry = new();
@@ -624,7 +626,10 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		_recordingProfileStateProvider = recordingWriter as IProgramRecordingProfileStateProvider;
 		_recorder = new ProgramRecorder(recordingWriter);
 		_recordingBridge = new RuntimeRecordingBridge(_recorder);
-		_networkOutputBridge = new RuntimeNetworkOutputBridge(configuredNetworkOutputs);
+		_ndiProvider = new NdiNetworkOutputProvider();
+		_networkOutputBridge = new RuntimeNetworkOutputBridge(
+			configuredNetworkOutputs,
+			new RuntimeNetworkOutputProviderRegistry(ndi: _ndiProvider));
 		_replay = replayService;
 		_monitoringHub = new RuntimeMonitoringHub();
 		_monitoringTap = new RuntimeMonitoringTap(
@@ -638,10 +643,17 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	{
 		get
 		{
-			var providers = new List<ProviderDescriptor> { _virtualMedia.Descriptor, _gpu.Descriptor };
+			var providers = new List<ProviderDescriptor> { _virtualMedia.Descriptor, _gpu.Descriptor, _ndiProvider.Descriptor };
 			if (_networkOutputBridge.Enabled)
-				providers.AddRange(_networkOutputBridge.ProviderDescriptors);
-			return Array.AsReadOnly(providers.ToArray());
+			{
+				providers.AddRange(_networkOutputBridge.ProviderDescriptors
+					.Where(provider => provider.ProviderId != _ndiProvider.Descriptor.ProviderId));
+			}
+			return Array.AsReadOnly(providers
+				.GroupBy(provider => provider.ProviderId)
+				.Select(group => group.Single())
+				.OrderBy(provider => provider.ProviderId.ToString(), StringComparer.Ordinal)
+				.ToArray());
 		}
 	}
 
