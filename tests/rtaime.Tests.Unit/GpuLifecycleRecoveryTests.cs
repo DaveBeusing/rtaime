@@ -147,6 +147,30 @@ public sealed class GpuLifecycleRecoveryTests
     }
 
     [Fact]
+    public void Recovery_start_and_cleanup_failures_are_both_reported_without_false_readiness()
+    {
+        using var backend = new RecoveryStartCleanupFailureBackend();
+        using var provider = new GpuProcessingProvider(backend);
+        provider.Start();
+        using var frame = Upload(provider, SourceA, 1, 2, 3, 0);
+
+        Assert.False(provider.TryExportMonitoringResource(frame, out var resource));
+        Assert.Null(resource);
+        Assert.Equal(GpuProviderState.Degraded, provider.State);
+
+        var failure = Assert.Throws<AggregateException>(() => provider.Recover());
+        Assert.Equal(2, failure.InnerExceptions.Count);
+        Assert.Equal(GpuProviderState.Failed, provider.State);
+        Assert.Equal(GpuProviderLifecycleReasonCodes.RecoveryFailed, provider.Lifecycle.ReasonCode);
+        Assert.Contains("cleanup also failed", provider.Lifecycle.Failure!.Value.Message);
+        Assert.Throws<InvalidOperationException>(() => Upload(provider, SourceB, 4, 5, 6, 1));
+
+        provider.Stop();
+        Assert.Equal(GpuProviderState.Stopped, provider.State);
+        Assert.Equal(0, provider.ActiveSurfaceCount);
+    }
+
+    [Fact]
     public void Monitoring_export_failure_is_isolated_from_program_and_can_recover()
     {
         using var backend = new FailFirstMonitoringExportHardwareBackend();
@@ -166,6 +190,53 @@ public sealed class GpuLifecycleRecoveryTests
         Assert.True(provider.TryExportMonitoringResource(frame, out var recovered));
         Assert.Equal(GpuProviderState.Ready, provider.State);
         recovered!.Dispose();
+    }
+
+    [Fact]
+    public async Task Stop_during_blocked_recovery_cannot_publish_stale_ready_state()
+    {
+        using var backend = new BlockingRecoveryHardwareBackend();
+        using var provider = new GpuProcessingProvider(backend);
+        provider.Start();
+        using var frame = Upload(provider, SourceA, 1, 2, 3, 0);
+        Assert.False(provider.TryExportMonitoringResource(frame, out _));
+        Assert.Equal(GpuProviderState.Degraded, provider.State);
+
+        var recovery = Task.Run(provider.Recover);
+        Assert.True(backend.RecoveryStarted.Wait(TimeSpan.FromSeconds(5)));
+        var stop = Task.Run(provider.Stop);
+        backend.AllowRecovery.Set();
+        await Task.WhenAll(recovery, stop).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(GpuProviderState.Stopped, provider.State);
+        Assert.Equal(0, provider.ActiveSurfaceCount);
+        Assert.Throws<InvalidOperationException>(() => Upload(provider, SourceB, 4, 5, 6, 1));
+    }
+
+    [Fact]
+    public void Repeated_monitoring_failures_do_not_restart_program_or_rotate_generation()
+    {
+        using var backend = new RepeatedMonitoringFailureBackend();
+        using var provider = new GpuProcessingProvider(backend);
+        provider.Start();
+        var generation = provider.Lifecycle.Generation;
+        using var frame = Upload(provider, SourceA, 9, 8, 7, 0);
+
+        for (var attempt = 0; attempt < 8; attempt++)
+        {
+            Assert.False(provider.TryExportMonitoringResource(frame, out var lease));
+            Assert.Null(lease);
+            Assert.Equal(GpuProviderState.Degraded, provider.State);
+            Assert.Equal(GpuProviderLifecycleReasonCodes.MonitoringUnavailable, provider.Lifecycle.ReasonCode);
+            Assert.Equal(generation, provider.Lifecycle.Generation);
+            using var program = provider.RentReadback(frame);
+            Assert.Equal((byte)9, program.Memory.Span[0]);
+        }
+
+        Assert.Equal(1, backend.StartCount);
+        Assert.Equal(0, provider.SharedMonitoringResourceStatistics.ActiveResources);
+        provider.Stop();
+        Assert.Equal(0, provider.ActiveSurfaceCount);
     }
 
     [Fact]
@@ -276,6 +347,42 @@ public sealed class GpuLifecycleRecoveryTests
             Inner.ReadbackInto(surfaceId, format, destination);
         public virtual void Release(SurfaceId surfaceId) => Inner.Release(surfaceId);
         public virtual void Dispose() => Inner.Dispose();
+    }
+
+    private sealed class RecoveryStartCleanupFailureBackend : HardwareFacadeBackend, IGpuSharedMonitoringBackend
+    {
+        private int _starts;
+        private bool _failCleanup = true;
+
+        public bool SupportsSharedMonitoringResources => true;
+        public bool IsSharedMonitoringExportAvailable => true;
+
+        public override void Start()
+        {
+            _starts++;
+            if (_starts == 2)
+                throw new InvalidOperationException("Injected recovery startup failure.");
+            base.Start();
+        }
+
+        public override void Stop()
+        {
+            if (_starts == 2 && _failCleanup)
+            {
+                _failCleanup = false;
+                throw new InvalidOperationException("Injected recovery cleanup failure.");
+            }
+            base.Stop();
+        }
+
+        public bool TryExportMonitoringResource(
+            SurfaceId surfaceId,
+            VideoFormat format,
+            out GpuBackendMonitoringResource? resource)
+        {
+            resource = null;
+            return false;
+        }
     }
 
     private sealed class FailFirstStartHardwareBackend : HardwareFacadeBackend
@@ -408,6 +515,60 @@ public sealed class GpuLifecycleRecoveryTests
         {
             resource = CreateMonitoringResource(() => Interlocked.Increment(ref _releaseCount));
             return true;
+        }
+    }
+
+    private sealed class BlockingRecoveryHardwareBackend : MonitoringHardwareBackend
+    {
+        private int _starts;
+        public ManualResetEventSlim RecoveryStarted { get; } = new(false);
+        public ManualResetEventSlim AllowRecovery { get; } = new(false);
+
+        public override void Start()
+        {
+            if (Interlocked.Increment(ref _starts) == 2)
+            {
+                RecoveryStarted.Set();
+                if (!AllowRecovery.Wait(TimeSpan.FromSeconds(10)))
+                    throw new TimeoutException("Recovery start synchronization expired.");
+            }
+            base.Start();
+        }
+
+        public override bool TryExportMonitoringResource(
+            SurfaceId surfaceId,
+            VideoFormat format,
+            out GpuBackendMonitoringResource? resource)
+        {
+            resource = null;
+            return false;
+        }
+
+        public override void Dispose()
+        {
+            RecoveryStarted.Dispose();
+            AllowRecovery.Dispose();
+            base.Dispose();
+        }
+    }
+
+    private sealed class RepeatedMonitoringFailureBackend : MonitoringHardwareBackend
+    {
+        public int StartCount { get; private set; }
+
+        public override void Start()
+        {
+            StartCount++;
+            base.Start();
+        }
+
+        public override bool TryExportMonitoringResource(
+            SurfaceId surfaceId,
+            VideoFormat format,
+            out GpuBackendMonitoringResource? resource)
+        {
+            resource = null;
+            return false;
         }
     }
 

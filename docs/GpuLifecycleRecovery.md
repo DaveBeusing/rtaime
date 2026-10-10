@@ -131,6 +131,9 @@ If monitoring does not recover, continue only according to the established opera
 
 If cleanup cannot release all tracked resources, retain Failed evidence and restart the owning process/device environment as required. Do not label the provider Stopped or Ready while cleanup is incomplete.
 
+If backend reinitialization fails during Recover and subsequent cleanup also throws, the provider retains Failed with a reason naming both failures. The thrown aggregate carries startup and cleanup exceptions without losing either cause. A later explicit Stop may retry backend cleanup, but no Ready state or lifecycle generation advancement is permitted from the failed attempt. Software fault injection verifies this ordering; physical GPU device-loss cleanup remains UNVERIFIED.
+
+
 ## Operator evidence
 
 No new Operator authority or UI polling loop is introduced. RuntimeHost already publishes provider descriptors; ControlHost already projects provider availability and failure detail into the Operator GPU Provider health indicator.
@@ -154,6 +157,9 @@ Required Gates enforce the lifecycle policy and unit fault-injection coverage fo
 - tracked surface/allocation cleanup semantics.
 
 Existing Program-memory ownership, deterministic Runtime boundary and monitoring tests continue to protect bounded leases, one Program cadence and isolation from Operator presentation.
+
+Additional deterministic regressions verify repeated monitoring-export failure leaves Program readback functional without provider restarts or generation rotation, and Stop racing a blocked recovery is serialized by the established provider gate. A completed Stop rejects further GPU uploads rather than allowing a stale Ready state. These software concurrency tests do not establish GPU driver/TDR recovery safety.
+
 
 ## Physical qualification boundary
 
