@@ -1729,8 +1729,7 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
         var result = await _transport.AdoptMediaSourceAsync(discoveredSourceId.Trim(), cancellationToken).ConfigureAwait(false);
         await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
         var after = RequireSnapshot();
-        if (!string.Equals(before.Production.PreviewSourceId, after.Production.PreviewSourceId, StringComparison.Ordinal) ||
-            !string.Equals(before.Production.ProgramSourceId, after.Production.ProgramSourceId, StringComparison.Ordinal))
+        if (before.Production.Routing != after.Production.Routing)
         {
             throw new InvalidDataException("Media-source adoption unexpectedly changed Preview or Program routing.");
         }
