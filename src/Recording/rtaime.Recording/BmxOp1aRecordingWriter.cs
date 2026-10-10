@@ -230,7 +230,7 @@ public sealed class BmxOp1aRecordingWriter :
             // Structural acceptance is only a preliminary guard. A complete semantic
             // decoder/third-party interoperability qualification is still required.
             MxfOp1aStructureProbe.Probe(partial);
-            MxfVerifiedFilePublisher.Publish(partial, final, MxfOp1aStructureProbe.Probe);
+            MxfVerifiedFilePublisher.Publish(partial, final, path => { _ = MxfOp1aStructureProbe.Probe(path); });
         }
         finally
         {
