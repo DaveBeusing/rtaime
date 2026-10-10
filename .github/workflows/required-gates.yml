@@ -74,12 +74,26 @@ jobs:
         shell: pwsh
         run: ./build/qualification/Invoke-ReferencePlatformQualification.ps1 -NoBuild
 
+      - name: Preserve reference platform qualification status
+        if: always()
+        shell: pwsh
+        run: |
+          $evidence = "artifacts/qualification/reference-platform"
+          if (-not (Test-Path -LiteralPath $evidence -PathType Container) -or
+              -not (Get-ChildItem -LiteralPath $evidence -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1)) {
+            New-Item -ItemType Directory -Path "artifacts/ci-diagnostics" -Force | Out-Null
+            "UNVERIFIED: Reference platform qualification evidence was not produced. Inspect preceding CI steps; this is not a qualification PASS." |
+              Set-Content -LiteralPath "artifacts/ci-diagnostics/reference-platform-not-run.txt"
+          }
+
       - name: Upload reference platform qualification evidence
         if: always()
         uses: actions/upload-artifact@v6
         with:
           name: rtaime-reference-platform-qualification-${{ github.run_id }}-${{ github.run_attempt }}
-          path: artifacts/qualification/reference-platform
+          path: |
+            artifacts/qualification/reference-platform
+            artifacts/ci-diagnostics/reference-platform-not-run.txt
           if-no-files-found: error
 
   quality:

@@ -956,17 +956,24 @@ public sealed class ControlHostProcess
 		Update(ControlHostProcessState.Draining, ControlHostHealthState.Degraded, "Draining ControlHost IPC, runtime transport and durability resources.");
 		_ipcServer?.NotifyObservableStateChanged();
 		using var timeout = new CancellationTokenSource(_options.ShutdownTimeout);
+		var phase = "external-control-server";
 		try
 		{
 			if (_externalControlServer is not null) await _externalControlServer.DisposeAsync().AsTask().WaitAsync(timeout.Token).ConfigureAwait(false);
+			phase = "operator-ipc-server";
 			if (_ipcServer is not null) await _ipcServer.DisposeAsync().AsTask().WaitAsync(timeout.Token).ConfigureAwait(false);
-			if (_runtimeTransport is not null) await _runtimeTransport.DisconnectAsync().AsTask().WaitAsync(timeout.Token).ConfigureAwait(false);
+			// The binding loop owns ongoing Runtime transport requests. Join it before
+			// disconnecting the transport so shutdown does not race those requests.
+			phase = "runtime-binding-worker";
 			if (_runtimeBindingTask is not null)
 			{
 				try { await _runtimeBindingTask.WaitAsync(timeout.Token).ConfigureAwait(false); }
 				catch (OperationCanceledException) when (timeout.IsCancellationRequested) { throw; }
 				catch (OperationCanceledException) { }
 			}
+			phase = "runtime-transport";
+			if (_runtimeTransport is not null) await _runtimeTransport.DisconnectAsync().AsTask().WaitAsync(timeout.Token).ConfigureAwait(false);
+			phase = "durability";
 
 			Exception? durabilityFailure = null;
 			if (_checkpointWriter is not null)
@@ -990,12 +997,12 @@ public sealed class ControlHostProcess
 		}
 		catch (Exception exception) when (exception is OperationCanceledException or TimeoutException)
 		{
-			Update(ControlHostProcessState.Failed, ControlHostHealthState.Unhealthy, "ControlHost shutdown exceeded the configured timeout.");
+			Update(ControlHostProcessState.Failed, ControlHostHealthState.Unhealthy, $"ControlHost shutdown exceeded the configured timeout during {phase}.");
 			return ControlHostExitCode.ShutdownFailure;
 		}
 		catch (Exception exception)
 		{
-			Update(ControlHostProcessState.Failed, ControlHostHealthState.Unhealthy, $"ControlHost shutdown failed: {exception.Message}");
+			Update(ControlHostProcessState.Failed, ControlHostHealthState.Unhealthy, $"ControlHost shutdown failed during {phase}: {exception.Message}");
 			return ControlHostExitCode.ShutdownFailure;
 		}
 	}
