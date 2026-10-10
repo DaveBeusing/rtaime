@@ -69,7 +69,7 @@ The source bank adapts from 2 to 3 to 4 columns and is bounded to 16 displayed s
 
 Selection is deliberately separate from production mutation. Selecting a source changes only SelectedSource; Set Preview, CUT and AUTO remain explicit existing commands. Media cue selection is likewise separate from Jump Selected Cue. Scene selection is presentation-only; TAKE SCENE invokes the governed `ActivateSceneCommand` through the existing Client/ControlHost/Runtime path, and confirmed active-Scene or failure evidence is projected back to the Operator. The LIVE workspace does not create local Scene authority.
 
-The right Live Controls surface reuses existing transition, graphics/layer, recording and Clean Program commands and projects compact existing health/error evidence. External stream/on-air state remains UNVERIFIED until an authoritative contract exists.
+The right Live Controls surface reuses existing transition, graphics/layer, recording and Clean Program commands and projects compact existing health/error evidence. Program/Aux SRT or NDI network transmission uses the existing authoritative Runtime/provider output-role observations. Its LIVE indication requires CONNECTED plus a successful send no older than five seconds; missing, stale or faulted evidence never indicates confirmed LIVE.
 
 The multiview does not subscribe to another monitoring transport, decode media or render a second Program path.
 
@@ -285,7 +285,7 @@ Preview is the only monitor that exposes Media Deck transport controls. The cont
 
 Both monitors support Fit, 50 percent and 100 percent presentation plus Safe Area, Center Mark and Grid overlays. These are local presentation controls over the independent monitoring bitmap. The header uses the authoritative Runtime video-format projection for resolution/frame-rate/pixel-format evidence. Color space remains `N/A` until a governed contract exposes it.
 
-The Program monitor shows `ON AIR` while the existing Program monitor state reports `LIVE`. The local Clean Program Output state remains a separate indicator, and external transmission is not inferred from either state.
+The Program monitor's `ON AIR` indication refers to the local Program monitor only. Clean Program Output is separate. External transmission is independently derived from provider send evidence and is not inferred from either local presentation state.
 
 The monitor-specific FULL action uses transient Shell state: it selects the requested viewer, maximizes the center region and enters the existing fullscreen window presentation. Escape or the fullscreen toggle restores the previous viewer mode and center-layout state without restarting media decoding, monitoring or Runtime execution.
 ## Show Control workflow
