@@ -238,8 +238,13 @@ public sealed class RuntimeHostProcess
 				"recordings");
 			var mediaFoundationProvider = new WindowsMediaFoundationRecordingWriterProvider(recordingRoot);
 			var quickTimeProvider = new ManagedQuickTimeRecordingWriterProvider(recordingRoot);
+			var mxfProvider = new ManagedMxfOp1aRecordingWriterProvider(
+				recordingRoot,
+				Environment.GetEnvironmentVariable("RTAIME_MXF_RAW2BMX"),
+				Environment.GetEnvironmentVariable("RTAIME_MXF_FFPROBE"),
+				explicitlyEnabled: Environment.GetEnvironmentVariable("RTAIME_MXF_OP1A_ENABLED") == "1");
 			var registry = new RecordingWriterProviderRegistry(
-				[mediaFoundationProvider, quickTimeProvider, new ManagedMxfOp1aRecordingWriterProvider()],
+				[mediaFoundationProvider, quickTimeProvider, mxfProvider],
 				ProfessionalRecordingFormats.Mp4H264AacProfileId);
 			return new ProfileSelectingProgramRecordingWriter(registry);
 		});
