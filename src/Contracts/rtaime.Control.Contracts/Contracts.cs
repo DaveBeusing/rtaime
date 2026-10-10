@@ -74,19 +74,53 @@ public readonly record struct CommandId
     public override string ToString() => Value.ToString();
 }
 
+public sealed record ProductionSourceProviderBinding
+{
+    public ProductionSourceProviderBinding(
+        Identity providerId,
+        string capabilityKind,
+        Identity externalSourceId,
+        string safeSourceIdentity)
+    {
+        if (providerId.IsEmpty)
+            throw new ArgumentException("Source provider identity must not be empty.", nameof(providerId));
+        if (string.IsNullOrWhiteSpace(capabilityKind) || capabilityKind.Length > 128)
+            throw new ArgumentException("Source provider capability kind is required and must not exceed 128 characters.", nameof(capabilityKind));
+        if (externalSourceId.IsEmpty)
+            throw new ArgumentException("External source identity must not be empty.", nameof(externalSourceId));
+        if (string.IsNullOrWhiteSpace(safeSourceIdentity) || safeSourceIdentity.Length > 512)
+            throw new ArgumentException("Safe external source identity is required and must not exceed 512 characters.", nameof(safeSourceIdentity));
+
+        ProviderId = providerId;
+        CapabilityKind = capabilityKind.Trim();
+        ExternalSourceId = externalSourceId;
+        SafeSourceIdentity = safeSourceIdentity.Trim();
+    }
+
+    public Identity ProviderId { get; }
+    public string CapabilityKind { get; }
+    public Identity ExternalSourceId { get; }
+    public string SafeSourceIdentity { get; }
+}
+
 public sealed record ProductionSourceSpecification
 {
-    public ProductionSourceSpecification(ProductionSourceId sourceId, string name)
+    public ProductionSourceSpecification(
+        ProductionSourceId sourceId,
+        string name,
+        ProductionSourceProviderBinding? providerBinding = null)
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Production source name is required.", nameof(name));
 
         SourceId = sourceId;
         Name = name.Trim();
+        ProviderBinding = providerBinding;
     }
 
     public ProductionSourceId SourceId { get; }
     public string Name { get; }
+    public ProductionSourceProviderBinding? ProviderBinding { get; }
 }
 
 public sealed record ProductionRoutingState(ProductionSourceId PreviewSourceId, ProductionSourceId ProgramSourceId);
