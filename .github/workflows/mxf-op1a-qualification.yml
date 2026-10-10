@@ -1,0 +1,80 @@
+# Copyright (c) Dave Beusing <david.beusing@gmail.com>.
+
+name: MXF OP1a qualification
+
+on:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - "src/Recording/**"
+      - "tests/rtaime.Tests.Integration/BmxOp1aRecordingIntegrationTests.cs"
+      - "tests/rtaime.Tests.Unit/BmxOp1aRecordingWriterTests.cs"
+      - ".github/workflows/mxf-op1a-qualification.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mxf-op1a-qualification-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mxf-op1a:
+    name: Independent 50 and 59.94 MXF qualification
+    runs-on: windows-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - name: Install pinned FFprobe
+        shell: pwsh
+        run: |
+          choco install ffmpeg --version=7.1.1 --yes --no-progress
+          if ($LASTEXITCODE -notin @(0, 1641, 3010)) { throw "FFprobe installation failed." }
+          ffprobe -version | Select-Object -First 1
+
+      - name: Obtain and SHA256 verify pinned BMX release
+        shell: pwsh
+        run: |
+          $release = Invoke-RestMethod -Uri "https://api.github.com/repos/bbc/bmx/releases/tags/v1.6" -Headers @{
+            "User-Agent" = "rtaime-mxf-qualification"
+            "Accept" = "application/vnd.github+json"
+          }
+          $asset = @($release.assets | Where-Object { $_.name -eq "bmx-win64-binary-1.6.zip" })
+          if ($asset.Count -ne 1 -or $asset[0].digest -notmatch '^sha256:[0-9a-fA-F]{64}$') {
+            throw "The BMX v1.6 release asset or signed digest is missing."
+          }
+          $archive = Join-Path $env:RUNNER_TEMP "bmx-win64-binary-1.6.zip"
+          Invoke-WebRequest -Uri $asset[0].browser_download_url -OutFile $archive
+          $actual = (Get-FileHash -Path $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          $expected = $asset[0].digest.Substring(7).ToLowerInvariant()
+          if ($actual -ne $expected) { throw "BMX release SHA256 digest verification failed." }
+          $unpacked = Join-Path $env:RUNNER_TEMP "rtaime-bmx"
+          Expand-Archive -Path $archive -DestinationPath $unpacked -Force
+          $candidates = @(Get-ChildItem -Path $unpacked -Recurse -File -Filter raw2bmx.exe)
+          if ($candidates.Count -ne 1) { throw "BMX raw2bmx.exe was not found exactly once." }
+          $bin = $candidates[0].FullName
+          & $bin --version
+          if ($LASTEXITCODE -ne 0) { throw "BMX executable preflight failed." }
+          "RTAIME_RAW2BMX=$bin" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          $ffprobe = (Get-Command ffprobe -ErrorAction Stop).Source
+          "RTAIME_FFPROBE=$ffprobe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "RTAIME_MXF_QUALIFICATION=1" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Restore
+        run: dotnet restore rtaime.slnx
+
+      - name: Build MXF integration project
+        run: dotnet build tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-restore
+
+      - name: Record and independently probe 1080p50 and 1080p59.94
+        run: dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~BmxOp1aRecordingIntegrationTests"
