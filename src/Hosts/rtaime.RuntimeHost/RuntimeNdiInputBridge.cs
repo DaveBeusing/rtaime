@@ -52,7 +52,7 @@ internal sealed class RuntimeNdiInputBridge : IAsyncDisposable
                 binding.Resource.ProviderId == _provider.Descriptor.ProviderId &&
                 string.Equals(binding.Resource.Kind, MediaSourceCapabilityKinds.Input, StringComparison.Ordinal))
             .GroupBy(binding => binding.MediaSourceId!.Value)
-            .Select(group => group.Single())
+            .Select(group => group.First())
             .ToArray();
 
         var requiredIds = required.Select(binding => binding.MediaSourceId!.Value).ToHashSet();
@@ -146,6 +146,10 @@ internal sealed class RuntimeNdiInputBridge : IAsyncDisposable
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+        }
+        catch
+        {
+            MarkUnavailable(sourceId);
         }
     }
 
