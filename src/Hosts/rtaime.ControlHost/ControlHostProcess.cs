@@ -57,6 +57,12 @@ public interface IControlRuntimeTransportSeam
 	ValueTask ConnectAsync(CancellationToken cancellationToken = default);
 	ValueTask<IReadOnlyList<ProviderDescriptor>> GetProviderDescriptorsAsync(CancellationToken cancellationToken = default);
 	ValueTask<RuntimeRemoteSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default);
+	ValueTask<MediaSourceDiscoverySnapshot> GetMediaSourceDiscoveryAsync(CancellationToken cancellationToken = default) =>
+		ValueTask.FromException<MediaSourceDiscoverySnapshot>(
+			new NotSupportedException("Runtime transport does not expose media-source discovery."));
+	ValueTask<IReadOnlyList<MediaInputHealthSnapshot>> GetMediaInputHealthAsync(CancellationToken cancellationToken = default) =>
+		ValueTask.FromException<IReadOnlyList<MediaInputHealthSnapshot>>(
+			new NotSupportedException("Runtime transport does not expose media-input health."));
 	ValueTask<RuntimeRemoteApplyResult> ApplyExecutionAsync(
 		PreparedExecutionContract preparedExecution,
 		MediaSinkId programSinkId,
