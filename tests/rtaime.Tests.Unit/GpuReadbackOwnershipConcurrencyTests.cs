@@ -69,7 +69,7 @@ public sealed class GpuReadbackOwnershipConcurrencyTests
     }
 
     [Fact]
-    public void Concurrent_disposal_and_retention_never_revives_released_storage()
+    public async Task Concurrent_disposal_and_retention_never_revives_released_storage()
     {
         using var provider = new GpuProcessingProvider(new ManagedReferenceGpuBackend(), readbackBufferCapacity: 1);
         provider.Start();
@@ -99,7 +99,7 @@ public sealed class GpuReadbackOwnershipConcurrencyTests
 
             barrier.SignalAndWait();
             primary.Dispose();
-            var reader = retained.GetAwaiter().GetResult();
+            var reader = await retained;
             if (reader is not null)
             {
                 Assert.Equal((byte)17, reader.Memory.Span[0]);
