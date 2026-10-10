@@ -28,7 +28,7 @@ Future remediation must preserve one RuntimeHost-owned Program cadence and commi
 
 | Stage | Current implementation | Copy / synchronization | Evidence |
 | --- | --- | --- | --- |
-| Cadence | RuntimeHostProcess.RunMediaLoopAsync owns the single PeriodicTimer | No overlapping Program boundary; lateness becomes timing evidence instead of an unbounded frame queue | VERIFIED |
+| Cadence | RuntimeHostProcess.RunMediaLoopAsync owns the single epoch-based rational schedule | No overlapping Program boundary; lateness becomes timing evidence instead of an unbounded frame queue | VERIFIED |
 | Media admission | Local Media Deck / Media I/O input is admitted before the Program boundary | Physical Media I/O copies the current capture lease into Runtime working memory | VERIFIED |
 | Boundary capture | V1RuntimeHostService captures committed execution, Program binding, inputs, layers, monitoring state and audio inputs | Boundary execution, capture and short metadata synchronization are separated | VERIFIED |
 | GPU upload | CudaGpuProcessingBackend.Allocate | Backend-wide gate; synchronous cuMemcpyHtoD_v2 per allocated/materialized RGBA surface | VERIFIED |

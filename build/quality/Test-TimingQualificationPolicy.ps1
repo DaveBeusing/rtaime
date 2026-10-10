@@ -70,7 +70,7 @@ Assert-Condition ($tests -match 'Retained_samples_are_bounded_and_chronological'
 
 Assert-Condition ($runtimeHost -match 'RuntimeTimingQualificationProbe') "RuntimeHost must own the live timing qualification probe."
 Assert-Condition ($runtimeHost -match 'Stopwatch\.StartNew\(\)') "RuntimeHost timing evidence must use a monotonic stopwatch."
-Assert-Condition ($runtimeHost -match '_timingProbe\.RecordBoundary') "RuntimeHost must record committed Program boundaries."
+Assert-Condition ($runtimeHost -match '_timingProbe\.ObserveBoundary') "RuntimeHost must record committed Program boundaries."
 Assert-Condition ($runtimeHost -match 'runtime\.SetTimingHealth\(MapTimingHealth') "Measured timing state must feed the RuntimeHost snapshot health."
 Assert-Condition ($runtimeHost -match 'framePeriod\.Ticks / 4') "RuntimeHost must retain the explicit 25-percent jitter baseline."
 Assert-Condition ($runtimeHost -match '2048') "RuntimeHost live timing retention must remain bounded."

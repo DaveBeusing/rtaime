@@ -56,7 +56,9 @@ $timingDocumentation = Get-Content -LiteralPath $timingDocumentationPath -Raw
 $qualificationDocumentation = Get-Content -LiteralPath $qualificationDocumentationPath -Raw
 
 Assert-Condition (-not ($runtimeProcess -match "RunMediaDeckLoopAsync")) "RuntimeHost must not retain an independent media-deck production loop."
-Assert-Condition ([regex]::Matches($runtimeProcess, "new PeriodicTimer").Count -eq 1) "RuntimeHost process must have exactly one PeriodicTimer production cadence."
+Assert-Condition ([regex]::Matches($runtimeProcess, "new RationalFrameSchedule").Count -eq 1) "RuntimeHost process must have exactly one rational Program cadence."
+Assert-Condition ($runtimeProcess -notmatch "new PeriodicTimer") "RuntimeHost must not accumulate a rounded periodic frame interval."
+Assert-Condition ($runtimeProcess -match "schedule.TryTake" -and $runtimeProcess -match "schedule.NextDeadline") "The monotonic schedule must gate wakeups and coalesce missed slots."
 Assert-Condition ($runtimeProcess -match "AdmitMediaDeckBoundary\(runtime, mediaDeck\)") "Media-deck admission must execute from the Program cadence."
 Assert-Condition ($runtimeProcess -match "RunMediaLoopAsync\(_runtime, _mediaDeck, _mediaIo, _aiShowcase") "The single Program loop must own media-deck admission."
 

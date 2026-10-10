@@ -14,7 +14,7 @@ This document records the scheduling/synchronization evidence added before any a
 
 ## Preserved authority model
 
-RuntimeHost still owns one committed Program cadence through its existing `PeriodicTimer`. Program boundaries do not overlap. A slow boundary becomes timing/deadline evidence rather than a second in-flight authoritative boundary or an unbounded queue.
+RuntimeHost still owns one committed Program cadence through the epoch-based `RationalFrameSchedule` in `RunMediaLoopAsync`. Program boundaries do not overlap. A slow boundary becomes timing/deadline evidence rather than a second in-flight authoritative boundary or an unbounded queue.
 
 ControlHost remains production authority. RuntimeHost owns committed execution, timing and production surfaces. Operator remains observational.
 
@@ -71,7 +71,7 @@ Existing Runtime evidence remains authoritative for complete Program-boundary be
 
 - `RuntimeTimingQualificationProbe` records scheduler jitter, processing duration and processing-budget violations;
 - processing beyond the configured frame budget is explicit timing degradation;
-- `RuntimeFrameDropCounter` converts missed scheduler periods into dropped-frame evidence;
+- `RationalFrameSchedule` identifies skipped slots once; `RuntimeFrameDropCounter.ObserveScheduled` combines those cumulative slots with disjoint physical-output losses;
 - native Program-output backpressure/rejection counters are included in the same bounded drop evidence.
 
 These mechanisms remain observational and do not launch compensating concurrent Program work.
@@ -134,3 +134,19 @@ Any optimization candidate must be compared against the synchronous baseline on 
 Software CI can prove code structure, bounded instrumentation, serialization, ownership and deterministic synchronization regressions. It cannot prove that a stream/event or lock change would improve a physical NVIDIA workload.
 
 Until an exact-SHA reference-hardware run is captured, the performance impact of `cuCtxSynchronize`, HtoD, DtoH and monitoring interop remains **UNVERIFIED**.
+
+## Rational scheduling and deadline accounting
+
+The Program scheduler computes deadline slot k as epoch + ceil(k × denominator × 10,000,000 / numerator) TimeSpan ticks. It uses Int128 arithmetic for both 50/1 and 60000/1001. The process's existing monotonic Stopwatch supplies observations; Task.Delay is only a cancellable wakeup hint and is rechecked before admission. Sub-millisecond remaining waits use a minimum 1 ms delay to avoid busy polling.
+
+A delayed wake executes only the latest due slot. Earlier unexecuted slots are counted once; repeated observations cannot admit a second boundary. The first committed observation establishes a baseline, so pre-commit startup delays do not manufacture Program drops. Slot identities are scheduling opportunities, separate from committed media sequence and audio positions. Missed opportunities do not silently advance transitions, Control commands or audio independently of committed video.
+
+Start lateness beyond the existing 25% jitter budget is a schedule deadline miss. Completion beyond the next rational slot deadline is internal Program presentation lateness. These overlap as timing evidence and are not added again to dropped-frame totals. Presentation lateness measures completion through input/deck admission, render/readback, physical submission and AI observation; it is not physical display presentation latency.
+
+The scheduler has no pending-frame queue and never overlaps authoritative boundaries. At process restart a new epoch and fresh observations are created. RationalFrameSchedule.Reset supports an explicit format/resync epoch in deterministic qualification; live V1 formats remain immutable for a process.
+
+Support snapshots expose missedSchedulerSlots, scheduleDeadlineMisses, presentationLateBoundaries and last lateness values under timing. Before any committed boundary, timing.scheduleEvidence is UNVERIFIED. Thereafter it is MEASURED_SOFTWARE, independently of physical readiness.
+
+RuntimeTimingQualificationProbe.ObserveBoundary updates the existing fixed ring and health without allocating a retained-sample snapshot on each frame. On-demand snapshots still contain the same chronological observations.
+
+The synchronous CUDA completion/readback chain described above remains a current limitation. This scheduling repair does not create asynchronous GPU ownership, a backend-native output path or hardware performance evidence.

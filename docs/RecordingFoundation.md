@@ -319,3 +319,11 @@ Advanced Audio Processing qualification explicitly retains byte/sample parity ev
 
 See [Advanced Audio Processing Qualification](AdvancedAudioProcessingQualification.md) for the integrated software evidence matrix. Physical embedded-audio continuity, storage/device latency and certified audio performance remain **UNVERIFIED** unless dedicated reference-platform evidence states otherwise.
 
+
+## Queue saturation evidence
+
+RecordingStatistics exposes current queue depth, capacity, maximum queue depth and current Backpressured status. The high-water mark resets with each recording session. Depth excludes the single sample already owned by the asynchronous writer.
+
+A stalled writer regression holds one in-flight sample, fills a capacity-two queue, offers another 10,000 samples, and verifies all excess samples are dropped without queue growth or writer I/O on the submit path. After release, the three admitted samples drain before finalization. The next recording session starts with a fresh high-water mark.
+
+These fields are exposed by the recorder snapshot and Runtime support diagnostics; they do not introduce a new recording control authority or a new Operator polling flow.
