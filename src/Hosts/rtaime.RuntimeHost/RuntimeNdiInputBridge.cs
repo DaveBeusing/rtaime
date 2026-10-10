@@ -49,7 +49,7 @@ internal sealed class RuntimeNdiInputBridge : IAsyncDisposable
             .Where(binding =>
                 binding.MediaSourceId is not null &&
                 binding.ExternalSourceId is not null &&
-                binding.Resource.ProviderId == NdiNetworkOutputProvider.ProviderIdentity &&
+                binding.Resource.ProviderId == _provider.Descriptor.ProviderId &&
                 string.Equals(binding.Resource.Kind, MediaSourceCapabilityKinds.Input, StringComparison.Ordinal))
             .GroupBy(binding => binding.MediaSourceId!.Value)
             .Select(group => group.Single())
@@ -81,7 +81,7 @@ internal sealed class RuntimeNdiInputBridge : IAsyncDisposable
             var configuration = new NdiInputConfiguration(
                 sourceId,
                 discoveredId,
-                binding.SafeSourceIdentity ?? NdiDiscoveryService.SafeIdentity(endpoint.NdiName),
+                binding.SafeSourceIdentity ?? $"ndi://{endpoint.NdiName}",
                 endpoint);
             var session = _provider.CreateInputSession(configuration);
             var stop = new CancellationTokenSource();
