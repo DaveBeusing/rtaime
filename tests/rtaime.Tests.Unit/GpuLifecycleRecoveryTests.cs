@@ -194,6 +194,23 @@ public sealed class GpuLifecycleRecoveryTests
     }
 
     [Fact]
+    public void Concurrent_monitoring_lease_disposal_releases_backend_exactly_once()
+    {
+        using var backend = new CountingMonitoringBackend();
+        using var provider = new GpuProcessingProvider(backend);
+        provider.Start();
+        using var frame = Upload(provider, SourceA, 3, 4, 5, 0);
+        Assert.True(provider.TryExportMonitoringResource(frame, out var lease));
+        Assert.NotNull(lease);
+
+        Parallel.For(0, 32, _ => lease!.Dispose());
+
+        Assert.True(lease!.IsDisposed);
+        Assert.Equal(1, backend.ReleaseCount);
+        Assert.Equal(0, provider.SharedMonitoringResourceStatistics.ActiveResources);
+    }
+
+    [Fact]
     public void Shared_monitoring_descriptor_expires_across_stop_and_restart_generation()
     {
         using var backend = new MonitoringHardwareBackend();
@@ -377,6 +394,21 @@ public sealed class GpuLifecycleRecoveryTests
                     adapterLuid: 1,
                     sharedHandle: 0xCAFE),
                 release);
+    }
+
+    private sealed class CountingMonitoringBackend : MonitoringHardwareBackend
+    {
+        private int _releaseCount;
+        public int ReleaseCount => Volatile.Read(ref _releaseCount);
+
+        public override bool TryExportMonitoringResource(
+            SurfaceId surfaceId,
+            VideoFormat format,
+            out GpuBackendMonitoringResource? resource)
+        {
+            resource = CreateMonitoringResource(() => Interlocked.Increment(ref _releaseCount));
+            return true;
+        }
     }
 
     private sealed class FailFirstMonitoringExportHardwareBackend : MonitoringHardwareBackend
