@@ -1223,7 +1223,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 			source.SafeSourceIdentity,
 			(int)source.Availability.State,
 			source.Availability.Failure is null ? null : new WireFailure(source.Availability.Failure.Value.Code, source.Availability.Failure.Value.Message),
-			source.VideoFormats.Select(ToWire).ToArray(),
+			source.VideoFormats.Select(format => ToWire(format)).ToArray(),
 			source.AudioFormat is null ? null : new WireAudioFormat(source.AudioFormat.Value.SampleRate, (int)source.AudioFormat.Value.ChannelLayout, (int)source.AudioFormat.Value.SampleFormat, source.AudioFormat.Value.ChannelCount),
 			source.LastSeenAt.Value)).ToArray());
 
@@ -1234,7 +1234,7 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		snapshot.SafeSourceIdentity,
 		(int)snapshot.Lifecycle,
 		snapshot.Connected,
-		snapshot.VideoFormat is null ? null : ToWire(snapshot.VideoFormat),
+		snapshot.VideoFormat is null ? null : ToWire(snapshot.VideoFormat.Value),
 		snapshot.AudioFormat is null ? null : new WireAudioFormat(snapshot.AudioFormat.Value.SampleRate, (int)snapshot.AudioFormat.Value.ChannelLayout, (int)snapshot.AudioFormat.Value.SampleFormat, snapshot.AudioFormat.Value.ChannelCount),
 		snapshot.Statistics.VideoFramesReceived,
 		snapshot.Statistics.AudioFramesReceived,
