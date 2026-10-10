@@ -95,11 +95,13 @@ public sealed class NdiNetworkOutputProvider
 	public NdiDiscoveryService CreateDiscoveryService(
 		INdiDiscoveryBackend? backend = null,
 		int maximumRetainedResults = NdiDiscoveryService.DefaultMaximumRetainedResults,
-		TimeSpan? expiry = null) =>
-		new(
-			backend ?? new NativeNdiDiscoveryBackend(_runtimeLibraryPath),
-			maximumRetainedResults,
-			expiry);
+		TimeSpan? expiry = null)
+	{
+		backend ??= _runtimeLibraryPath is null
+			? new UnavailableNdiDiscoveryBackend()
+			: new NativeNdiDiscoveryBackend(_runtimeLibraryPath);
+		return new NdiDiscoveryService(backend, maximumRetainedResults, expiry);
+	}
 
 	public NdiInputSession CreateInputSession(
 		NdiInputConfiguration configuration,
