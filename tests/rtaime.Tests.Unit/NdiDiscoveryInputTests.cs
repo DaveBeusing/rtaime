@@ -19,17 +19,32 @@ public sealed class NdiDiscoveryInputTests
             new NdiDiscoveredSourceEndpoint("Machine A (Camera)", "ndi://10.0.0.1/camera"),
             new NdiDiscoveredSourceEndpoint("Machine B (Camera)", "ndi://10.0.0.2/camera"),
             new NdiDiscoveredSourceEndpoint("Machine C (Other)", "ndi://10.0.0.3/other"));
+        using var discovery = new NdiDiscoveryService(backend, maximumRetainedResults: 3);
+
+        var snapshot = discovery.Refresh(new UtcTimestamp(DateTimeOffset.Parse("2026-10-10T08:00:00Z")));
+
+        Assert.Equal(3, snapshot.Sources.Count);
+        Assert.Equal(3, snapshot.MaximumRetainedResults);
+        Assert.All(snapshot.Sources, source => Assert.Equal(ProviderAvailabilityState.Available, source.Availability.State));
+        var cameras = snapshot.Sources.Where(source => source.DisplayName == "Camera").ToArray();
+        Assert.Equal(2, cameras.Length);
+        Assert.NotEqual(cameras[0].SourceId, cameras[1].SourceId);
+        Assert.All(cameras, source => Assert.DoesNotContain("10.0.0.", source.SafeSourceIdentity, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Discovery_never_retains_more_than_the_configured_bound()
+    {
+        using var backend = new MutableDiscoveryBackend(
+            new NdiDiscoveredSourceEndpoint("Machine A (One)", "ndi://10.0.0.1/one"),
+            new NdiDiscoveredSourceEndpoint("Machine B (Two)", "ndi://10.0.0.2/two"),
+            new NdiDiscoveredSourceEndpoint("Machine C (Three)", "ndi://10.0.0.3/three"));
         using var discovery = new NdiDiscoveryService(backend, maximumRetainedResults: 2);
 
         var snapshot = discovery.Refresh(new UtcTimestamp(DateTimeOffset.Parse("2026-10-10T08:00:00Z")));
 
         Assert.Equal(2, snapshot.Sources.Count);
         Assert.Equal(2, snapshot.MaximumRetainedResults);
-        Assert.All(snapshot.Sources, source => Assert.Equal(ProviderAvailabilityState.Available, source.Availability.State));
-        var cameras = snapshot.Sources.Where(source => source.DisplayName == "Camera").ToArray();
-        Assert.Equal(2, cameras.Length);
-        Assert.NotEqual(cameras[0].SourceId, cameras[1].SourceId);
-        Assert.All(cameras, source => Assert.DoesNotContain("10.0.0.", source.SafeSourceIdentity, StringComparison.Ordinal));
     }
 
     [Fact]
