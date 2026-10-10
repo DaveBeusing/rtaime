@@ -425,9 +425,9 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private readonly Dictionary<MediaSourceId, AudioMeterObservation> _audioMeters;
 	private readonly Dictionary<MediaSourceId, Queue<float>> _externalAudioQueues;
 	private readonly AudioProductionEngine _audioProduction;
-	private readonly MediaSourceId[] _audioProductionSourceOrder;
-	private readonly float[][] _audioProductionSourceSamples;
-	private readonly AudioProductionSourceBuffer[] _audioProductionSourceBuffers;
+	private MediaSourceId[] _audioProductionSourceOrder;
+	private float[][] _audioProductionSourceSamples;
+	private AudioProductionSourceBuffer[] _audioProductionSourceBuffers;
 	private readonly Dictionary<AudioBusId, float[]> _audioBusMixSamples = [];
 	private readonly Dictionary<AudioBusId, AudioProductionBlockResult> _lastAudioProductionResults = [];
 	private readonly int _maximumAudioValuesPerBoundary;
@@ -444,6 +444,7 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	private readonly HashSet<MediaSourceId> _broadcastTestPatternSources = [];
 	private readonly Dictionary<MediaSourceId, V1BroadcastTestPatternMode> _broadcastTestPatternModes = [];
 	private readonly Dictionary<MediaSourceId, V1InputSignalState> _inputSignals;
+	private readonly Dictionary<MediaSourceId, MediaFramePipeline> _externalSourcePipelines = [];
 	private readonly StaticRgbaSource _staticLayer;
 	private readonly DynamicRgbaSource _dynamicLayer;
 	private readonly DynamicRgbaSource _operatorGraphicsLayer;
@@ -1083,6 +1084,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 						[frameA.SourceId] = frameA,
 						[frameB.SourceId] = frameB
 					};
+					foreach (var external in _externalSourcePipelines)
+						frames[external.Key] = ProcessExternalTimedInput(external.Key, external.Value, sequence);
 					auxFailure = WriteAuxFrame(execution.PreparedExecution, frames);
 					if (_networkOutputBridge.HasRole("aux"))
 					{
@@ -1120,6 +1123,16 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 						gpuFrames.Add(frameA.SourceId, gpuA);
 					if (gpuB is not null)
 						gpuFrames.Add(frameB.SourceId, gpuB);
+					foreach (var externalFrame in frames.Values.Where(frame =>
+						frame.SourceId != frameA.SourceId && frame.SourceId != frameB.SourceId))
+					{
+						if (RequiresGpuSourceUnsafe(externalFrame.SourceId, committedSource) ||
+							externalFrame.SourceId == committedPreviewSource ||
+							(auxNetworkSource is { } configuredExternalAux && externalFrame.SourceId == configuredExternalAux))
+						{
+							gpuFrames.Add(externalFrame.SourceId, MaterializeInput(externalFrame, ResolveInputContent(externalFrame)));
+						}
+					}
 					if (monitoringSources is not null)
 						gpuFrames.TryGetValue(committedPreviewSource, out previewMonitoringFrame);
 
@@ -1386,9 +1399,13 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 					}
 
 					output.Dispose();
-					gpuB?.Dispose();
+					if (gpuFrames is not null)
+					{
+						foreach (var inputFrame in gpuFrames.Values)
+							inputFrame.Dispose();
+						gpuFrames = null;
+					}
 					gpuB = null;
-					gpuA?.Dispose();
 					gpuA = null;
 					var activeGpuSurfacesAfterBoundary = _gpu.ActiveSurfaceCount;
 
@@ -2176,6 +2193,14 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 					throw new InvalidOperationException(mappingFailure.Value.Message);
 			}
 			EnsureAudioBusBuffersUnsafe(configuration);
+			_audioProductionSourceOrder = configuration.Sources
+				.Select(source => source.SourceId)
+				.OrderBy(sourceId => sourceId.ToString(), StringComparer.Ordinal)
+				.ToArray();
+			_audioProductionSourceSamples = _audioProductionSourceOrder
+				.Select(_ => new float[_maximumAudioValuesPerBoundary])
+				.ToArray();
+			_audioProductionSourceBuffers = new AudioProductionSourceBuffer[_audioProductionSourceOrder.Length];
 			_audioProduction.ApplyConfiguration(configuration);
 			foreach (var source in configuration.Sources)
 			{
@@ -2362,6 +2387,36 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 	/// Replaces the current V1 working-frame content for one logical input without changing runtime authority or
 	/// timing. Physical Media I/O uses this seam after copying an adapter lease into the bounded runtime frame.
 	/// </summary>
+	public void RegisterExternalSource(MediaSourceId sourceId)
+	{
+		lock (_boundaryCaptureGate)
+		lock (_gate)
+		{
+			ThrowIfDisposed();
+			if (_backgrounds.ContainsKey(sourceId))
+				return;
+			if (_audioStreams.Count >= AudioProductionLimits.MaximumSources)
+				throw new InvalidOperationException($"Runtime source registry cannot exceed {AudioProductionLimits.MaximumSources} sources.");
+
+			var referenceStream = _audioStreams.Values.First();
+			var stream = new AudioStreamDescriptor(
+				MediaContractVersion.Current,
+				new AudioStreamId(HostIdentity.Create("external-audio-stream", sourceId.ToString())),
+				sourceId,
+				referenceStream.Format,
+				referenceStream.TimingDomainId);
+
+			_backgrounds.Add(sourceId, RgbaFrameBuffer.Solid(_format, 0, 0, 0));
+			_inputSignals.Add(sourceId, V1InputSignalState.Recovering);
+			_externalSourcePipelines.Add(sourceId, CreatePipeline());
+			_audioStreams.Add(sourceId, stream);
+			_audioMeters.Add(sourceId, new AudioMeterObservation(new AudioStereoMeter(0, 0), Available: false, External: true));
+			_externalAudioQueues.Add(sourceId, new Queue<float>());
+			_audio.RegisterStream(stream);
+			Observe($"runtime.source.registered:{sourceId}");
+		}
+	}
+
 	public void SetExternalInputContent(MediaSourceId sourceId, RgbaFrameBuffer content, V1InputSignalState state = V1InputSignalState.Valid)
 	{
 		ArgumentNullException.ThrowIfNull(content);
@@ -2548,6 +2603,8 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		await _recorder.DisposeAsync().ConfigureAwait(false);
 		_sourceAPipeline.Dispose();
 		_sourceBPipeline.Dispose();
+		foreach (var pipeline in _externalSourcePipelines.Values)
+			pipeline.Dispose();
 		var readback = _gpu.ReadbackPoolStatistics;
 		if (readback.ActiveBuffers != 0)
 			throw new InvalidOperationException($"RuntimeHost shutdown retained '{readback.ActiveBuffers}' active Program readback buffer lease(s).");
@@ -2576,6 +2633,40 @@ public sealed class V1RuntimeHostService : IAsyncDisposable
 		var result = pipeline.ConsumeNext(clock, descriptor => consumed = descriptor);
 		if (!result.Consumed || consumed is null)
 			throw new InvalidOperationException(result.Failure?.Message ?? "Timed media input was not consumed.");
+		return consumed;
+	}
+
+	private FrameDescriptor ProcessExternalTimedInput(
+		MediaSourceId sourceId,
+		MediaFramePipeline pipeline,
+		ulong sequence)
+	{
+		var timing = _virtualMedia.Timing.GetFrameTiming(sequence);
+		var surfaceId = new SurfaceId(HostIdentity.Create(
+			"runtime-external-surface",
+			sourceId.ToString(),
+			sequence.ToString()));
+		var surface = new SurfaceDescriptor(
+			surfaceId,
+			_format,
+			SurfaceStorageDomain.Host,
+			SurfaceOwnership.ProducerOwned,
+			new SurfaceLifetimeDescriptor(new Generation(sequence), null),
+			new OpaqueSurfaceHandle("runtime.external.frame", surfaceId.ToString()));
+		var frame = new FrameDescriptor(
+			MediaContractVersion.Current,
+			sourceId,
+			surface,
+			timing);
+		var clock = new MediaClockPosition(timing.PresentationTimestamp, timing.Timebase);
+		var submitted = pipeline.Submit(frame, clock);
+		if (!submitted.Accepted)
+			throw new InvalidOperationException(submitted.Failure?.Message ?? "External timed media input was rejected.");
+
+		FrameDescriptor? consumed = null;
+		var result = pipeline.ConsumeNext(clock, descriptor => consumed = descriptor);
+		if (!result.Consumed || consumed is null)
+			throw new InvalidOperationException(result.Failure?.Message ?? "External timed media input was not consumed.");
 		return consumed;
 	}
 
