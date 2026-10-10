@@ -18,6 +18,8 @@ public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend, IGpuShared
 
     private readonly Dictionary<SurfaceId, CudaAllocation> _surfaces = new();
     private readonly Dictionary<nuint, Stack<ulong>> _freeAllocations = new();
+    // Failed native operations may still own in-flight device work. Never re-pool these allocations.
+    private readonly List<CudaAllocation> _quarantinedAllocations = new();
     private readonly int _deviceOrdinal;
     private readonly CudaGpuTimingCollector? _timingCollector;
     private IntPtr _context;
@@ -178,6 +180,12 @@ public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend, IGpuShared
                     _surfaces.Remove(pair.Key);
                 }
 
+                foreach (var allocation in _quarantinedAllocations.ToArray())
+                {
+                    Check(CudaNative.cuMemFree_v2(allocation.DevicePointer), "cuMemFree_v2(quarantined)");
+                    _quarantinedAllocations.Remove(allocation);
+                }
+
                 foreach (var pair in _freeAllocations.ToArray())
                 {
                     while (pair.Value.TryPeek(out var pointer))
@@ -228,7 +236,7 @@ public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend, IGpuShared
             }
             catch
             {
-                ReturnAllocation(pointer, allocationLength);
+                _quarantinedAllocations.Add(new CudaAllocation(format, pointer, allocationLength));
                 throw;
             }
         }
@@ -309,7 +317,7 @@ public sealed class CudaGpuProcessingBackend : IGpuProcessingBackend, IGpuShared
             }
             catch
             {
-                ReturnAllocation(outputPointer, byteLength);
+                _quarantinedAllocations.Add(new CudaAllocation(format, outputPointer, byteLength));
                 throw;
             }
         }
