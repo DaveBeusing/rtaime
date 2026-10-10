@@ -76,7 +76,7 @@ Assert-Condition ($capability -match '"accelerationClass": "software"' -and $cap
 # Prevent a catalog-only MXF descriptor from being accidentally promoted to a usable profile.
 Assert-Condition ($catalog -match 'mxf-op1a-uncompressed-pcm' -and $catalog -match 'CreateMxfOp1aUncompressedPcmDescriptor') "MXF capability must retain its explicit constrained profile identity."
 Assert-Condition ($providers -match 'ManagedMxfOp1aRecordingWriterProvider' -and $providers -match 'RecordingOutputUnavailableException') "Unqualified MXF provider must reject output creation."
-$mxfDescriptor = [regex]::Match($catalog, '(?s)public static RecordingProfileDescriptor CreateMxfOp1aUncompressedPcmDescriptor\(\) =>\s*new\((.*?)\);')
-Assert-Condition ($mxfDescriptor.Success -and $mxfDescriptor.Groups[1].Value -match 'RecordingProfileEvidenceState.Unverified' -and $mxfDescriptor.Groups[1].Value -match '(?m)^\s*false,') "MXF must remain unavailable/unverified until an independently qualified writer is added."
+Assert-Condition ($catalog -match 'CreateMxfOp1aUncompressedPcmDescriptor\(\) =>\s*CreateMxfOp1aUncompressedPcmDescriptor\(false\)' -and $catalog -match 'available \? RecordingProfileEvidenceState.Implemented : RecordingProfileEvidenceState.Unverified') "MXF must be unavailable by default and distinguish provisioned implementation evidence."
+Assert-Condition ($providers -match 'explicitlyEnabled' -and $providers -match 'File.Exists\(raw2bmxPath\)' -and $providers -match 'File.Exists\(ffprobePath\)' -and $providers -match 'BmxOp1aRecordingWriter') "MXF requires explicit Runtime-owned provisioning and both independent executables."
 
 Write-Host "Recording Profile Catalog and Provider Boundary policy PASS"
