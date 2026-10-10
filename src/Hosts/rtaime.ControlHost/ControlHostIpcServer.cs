@@ -36,6 +36,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	private readonly ProductionMacroCoordinator? _productionMacros;
 	private readonly MediaAssetCatalogService? _mediaAssetCatalog;
 	private readonly ReplayControlService? _replay;
+	private readonly MediaSourceDiscoveryAdoptionService? _mediaSourceDiscovery;
 	private readonly ShowProjectPersistenceStore? _showProjectStore;
 	private PersistedShowProject? _showProject;
 	private readonly CancellationTokenSource _stop = new();
@@ -71,7 +72,8 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		MediaAssetCatalogService? mediaAssetCatalog = null,
 		ShowProjectPersistenceStore? showProjectStore = null,
 		PersistedShowProject? showProject = null,
-		TimeSpan? sessionDrainTimeout = null)
+		TimeSpan? sessionDrainTimeout = null,
+		ProductionSpecification? baselineSpecification = null)
 	{
 		if (string.IsNullOrWhiteSpace(endpoint)) throw new ArgumentException("ControlHost IPC endpoint is required.", nameof(endpoint));
 		_endpoint = endpoint.Trim();
@@ -86,6 +88,9 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			throw new ArgumentException("Durable show-project store and snapshot must be configured together.");
 		_showProjectStore = showProjectStore;
 		_showProject = showProject;
+		_mediaSourceDiscovery = showProjectStore is not null && baselineSpecification is not null
+			? new MediaSourceDiscoveryAdoptionService(_controlAccessor, _runtimeTransport, showProjectStore, baselineSpecification)
+			: null;
 		if (showProject is not null)
 		{
 			_productionCgText = showProject.Graphics.ProductionCgText;
@@ -539,6 +544,9 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			"control.replay.range.set" => await SetReplayRangeAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.replay.clip.create" => await CreateReplayClipAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.ai_showcase.set" => await SetAIShowcaseAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.media_source.discovery.get" => await GetMediaSourceDiscoveryAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.media_source.adopt" => await AdoptMediaSourceAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.media_input.health.get" => await GetMediaInputHealthAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.media_asset_catalog.snapshot.get" => await GetMediaAssetCatalogAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.media_asset_catalog.import" => await ImportMediaAssetsAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.media_asset_catalog.relink" => await RelinkMediaAssetAsync(request, cancellationToken).ConfigureAwait(false),
@@ -2039,6 +2047,74 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	}
 
 
+	private async ValueTask<WireEnvelope> GetMediaSourceDiscoveryAsync(WireEnvelope request, CancellationToken cancellationToken)
+	{
+		if (_mediaSourceDiscovery is null)
+			return Error(request, "control.media_source.discovery.unavailable", "Media-source discovery is not configured.");
+		try
+		{
+			var snapshot = await _mediaSourceDiscovery.RefreshAsync(cancellationToken).ConfigureAwait(false);
+			return Success(request, "control.media_source.discovery.response", ToWire(snapshot));
+		}
+		catch (Exception exception) when (exception is IOException or InvalidOperationException or InvalidDataException or NotSupportedException)
+		{
+			return Error(request, "control.media_source.discovery.failed", exception.Message);
+		}
+	}
+
+	private async ValueTask<WireEnvelope> GetMediaInputHealthAsync(WireEnvelope request, CancellationToken cancellationToken)
+	{
+		if (_mediaSourceDiscovery is null)
+			return Error(request, "control.media_input.health.unavailable", "Media-input health is not configured.");
+		try
+		{
+			var health = await _mediaSourceDiscovery.GetInputHealthAsync(cancellationToken).ConfigureAwait(false);
+			return Success(request, "control.media_input.health.response", health.Select(ToWire).ToArray());
+		}
+		catch (Exception exception) when (exception is IOException or InvalidOperationException or InvalidDataException or NotSupportedException)
+		{
+			return Error(request, "control.media_input.health.failed", exception.Message);
+		}
+	}
+
+	private async ValueTask<WireEnvelope> AdoptMediaSourceAsync(WireEnvelope request, CancellationToken cancellationToken)
+	{
+		if (_mediaSourceDiscovery is null)
+			return Error(request, "control.media_source.adoption.unavailable", "Media-source adoption is not configured.");
+		var wire = request.Payload.Deserialize<WireMediaSourceAdoptRequest>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Media-source adoption payload is required.");
+		await _mutationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+		try
+		{
+			var result = await _mediaSourceDiscovery
+				.AdoptAsync(new DiscoveredMediaSourceId(Identity.Parse(wire.DiscoveredSourceId)), cancellationToken)
+				.ConfigureAwait(false);
+			_showProject = result.Project;
+			_durableAudioProduction = result.Project.AudioProduction;
+			NotifyObservableStateChanged();
+			return Success(
+				request,
+				"control.media_source.adoption.response",
+				new WireMediaSourceAdoption(
+					result.Source.SourceId.ToString(),
+					result.Source.Name,
+					result.Source.ProviderBinding!.ProviderId.ToString(),
+					result.Source.ProviderBinding.ExternalSourceId.ToString(),
+					result.Source.ProviderBinding.SafeSourceIdentity,
+					result.AlreadyAdopted,
+					result.Routing.PreviewSourceId.ToString(),
+					result.Routing.ProgramSourceId.ToString()));
+		}
+		catch (Exception exception) when (exception is IOException or InvalidOperationException or InvalidDataException or ArgumentException or NotSupportedException)
+		{
+			return Error(request, "control.media_source.adoption.rejected", exception.Message);
+		}
+		finally
+		{
+			_mutationGate.Release();
+		}
+	}
+
 	private async ValueTask<WireEnvelope> GetMediaAssetCatalogAsync(WireEnvelope request, CancellationToken cancellationToken)
 	{
 		if (_mediaAssetCatalog is null)
@@ -2735,6 +2811,42 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		}
 		return observedAtUtc;
 	}
+
+	private static WireMediaSourceDiscoverySnapshot ToWire(MediaSourceDiscoverySnapshot snapshot) => new(
+		snapshot.ProviderId.ToString(),
+		(int)snapshot.Availability.State,
+		snapshot.Availability.Failure is null ? null : new WireFailure(snapshot.Availability.Failure.Value.Code, snapshot.Availability.Failure.Value.Message),
+		snapshot.ObservedAt.Value,
+		snapshot.MaximumRetainedResults,
+		snapshot.Sources.Select(source => new WireDiscoveredMediaSource(
+			source.SourceId.ToString(),
+			source.ProviderId.ToString(),
+			source.DisplayName,
+			source.SafeSourceIdentity,
+			(int)source.Availability.State,
+			source.Availability.Failure is null ? null : new WireFailure(source.Availability.Failure.Value.Code, source.Availability.Failure.Value.Message),
+			source.VideoFormats.Select(format => new WireVideoFormat(format.Width, format.Height, format.FrameRate.ToString(), (int)format.PixelFormat, (int)format.ScanMode)).ToArray(),
+			source.AudioFormat is null ? null : new WireDiscoveryAudioFormat(source.AudioFormat.Value.SampleRate, (int)source.AudioFormat.Value.ChannelLayout, (int)source.AudioFormat.Value.SampleFormat, source.AudioFormat.Value.ChannelCount),
+			source.LastSeenAt.Value)).ToArray());
+
+	private static WireMediaInputHealth ToWire(MediaInputHealthSnapshot snapshot) => new(
+		snapshot.SourceId.ToString(),
+		snapshot.ProviderId.ToString(),
+		snapshot.DiscoveredSourceId.ToString(),
+		snapshot.SafeSourceIdentity,
+		(int)snapshot.Lifecycle,
+		snapshot.Connected,
+		snapshot.VideoFormat is null ? null : new WireVideoFormat(snapshot.VideoFormat.Value.Width, snapshot.VideoFormat.Value.Height, snapshot.VideoFormat.Value.FrameRate.ToString(), (int)snapshot.VideoFormat.Value.PixelFormat, (int)snapshot.VideoFormat.Value.ScanMode),
+		snapshot.AudioFormat is null ? null : new WireDiscoveryAudioFormat(snapshot.AudioFormat.Value.SampleRate, (int)snapshot.AudioFormat.Value.ChannelLayout, (int)snapshot.AudioFormat.Value.SampleFormat, snapshot.AudioFormat.Value.ChannelCount),
+		snapshot.Statistics.VideoFramesReceived,
+		snapshot.Statistics.AudioFramesReceived,
+		snapshot.Statistics.DroppedFrames,
+		snapshot.Statistics.RejectedFrames,
+		snapshot.Statistics.ReconnectCount,
+		snapshot.Statistics.QueueDepth,
+		snapshot.Statistics.MaximumQueueDepth,
+		snapshot.LastMediaAt?.Value,
+		snapshot.Failure is null ? null : new WireFailure(snapshot.Failure.Value.Code, snapshot.Failure.Value.Message));
 
 	private static WireSource ToWireSource(
 		ProductionSourceSpecification source,
@@ -3770,6 +3882,12 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 	private sealed record WireReplayClipCreate(string Name);
 	private sealed record WireReplaySnapshot(string Version, int CaptureState, int ClipState, long RetentionTicks, long RetainedDurationTicks, long MaximumStorageBytes, long RetainedBytes, long SegmentDurationTicks, int RetainedSegmentCount, long? MarkInTicks, long? MarkOutTicks, ulong AcceptedSamples, ulong DroppedSamples, ulong FinalizedSegments, ulong EvictedSegments, ulong Discontinuities, WireFailure? Failure);
 	private sealed record WireReplayClipAssetResult(string Version, bool Succeeded, string ClipId, string? AssetId, string? SourceLocation, long SourceInTicks, long SourceOutTicks, string? Sha256, WireFailure? Failure);
+	private sealed record WireDiscoveryAudioFormat(uint SampleRate, int ChannelLayout, int SampleFormat, uint ChannelCount);
+	private sealed record WireDiscoveredMediaSource(string SourceId, string ProviderId, string DisplayName, string SafeSourceIdentity, int AvailabilityState, WireFailure? Failure, WireVideoFormat[] VideoFormats, WireDiscoveryAudioFormat? AudioFormat, DateTimeOffset LastSeenAt);
+	private sealed record WireMediaSourceDiscoverySnapshot(string ProviderId, int AvailabilityState, WireFailure? Failure, DateTimeOffset ObservedAt, int MaximumRetainedResults, WireDiscoveredMediaSource[] Sources);
+	private sealed record WireMediaSourceAdoptRequest(string DiscoveredSourceId);
+	private sealed record WireMediaSourceAdoption(string SourceId, string Name, string ProviderId, string ExternalSourceId, string SafeSourceIdentity, bool AlreadyAdopted, string PreviewSourceId, string ProgramSourceId);
+	private sealed record WireMediaInputHealth(string SourceId, string ProviderId, string DiscoveredSourceId, string SafeSourceIdentity, int Lifecycle, bool Connected, WireVideoFormat? VideoFormat, WireDiscoveryAudioFormat? AudioFormat, ulong VideoFramesReceived, ulong AudioFramesReceived, ulong DroppedFrames, ulong RejectedFrames, ulong ReconnectCount, int QueueDepth, int MaximumQueueDepth, DateTimeOffset? LastMediaAt, WireFailure? Failure);
 	private sealed record WireRecordingStart(string DestinationDirectory, string FileName, string? ProfileId = null);
 	private sealed record WireVideoFormat(uint Width, uint Height, string FrameRate, int PixelFormat, int ScanMode);
 	private sealed record WireRecordingProfile(

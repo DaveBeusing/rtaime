@@ -1,0 +1,84 @@
+<!-- Copyright (c) Dave Beusing <david.beusing@gmail.com>. -->
+<UserControl x:Class="rtaime.Operator.NdiSourceDiscoveryControl"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="clr-namespace:rtaime.Operator.Controls"
+    AutomationProperties.Name="NDI source discovery and adoption">
+    <Grid Margin="0,10,0,0">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="32" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="32" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Grid>
+            <TextBlock Text="NDI SOURCES" Style="{StaticResource OperatorSectionTitle}" VerticalAlignment="Center" />
+            <controls:RtaimeButton
+                Content="REFRESH"
+                Command="{Binding RefreshCommand}"
+                IsCompact="True"
+                HorizontalAlignment="Right"
+                MinHeight="24"
+                Padding="8,2"
+                AutomationProperties.Name="Refresh NDI source discovery" />
+        </Grid>
+
+        <controls:RtaimeListBox
+            Grid.Row="1"
+            ItemsSource="{Binding Sources}"
+            SelectedItem="{Binding SelectedSource, Mode=TwoWay}"
+            Background="Transparent"
+            BorderThickness="0"
+            ScrollViewer.VerticalScrollBarVisibility="Auto"
+            AutomationProperties.Name="Discovered NDI sources">
+            <controls:RtaimeListBox.ItemTemplate>
+                <DataTemplate>
+                    <Grid Margin="4,5">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding SafeSourceIdentity}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding Format}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                        <controls:RtaimeStatusBadge
+                            Grid.Column="1"
+                            Content="{Binding Availability}"
+                            ShowIndicator="True"
+                            VerticalAlignment="Center" />
+                    </Grid>
+                </DataTemplate>
+            </controls:RtaimeListBox.ItemTemplate>
+        </controls:RtaimeListBox>
+
+        <Grid Grid.Row="2" Margin="0,4,0,0">
+            <TextBlock Text="Discovery is observational · ADOPT does not route" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" VerticalAlignment="Center" />
+            <controls:RtaimeButton
+                Content="ADOPT"
+                Command="{Binding AdoptCommand}"
+                IsCompact="True"
+                HorizontalAlignment="Right"
+                MinHeight="24"
+                Padding="10,2"
+                AutomationProperties.Name="Adopt selected NDI source" />
+        </Grid>
+
+        <StackPanel Grid.Row="3" Margin="0,5,0,0">
+            <TextBlock Text="{Binding Status}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextWrapping="Wrap" />
+            <ItemsControl ItemsSource="{Binding InputHealth}" Margin="0,4,0,0">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock
+                            Text="{Binding Lifecycle, StringFormat=INPUT HEALTH · {0}}"
+                            Style="{StaticResource OperatorLabel}"
+                            FontSize="{StaticResource OperatorFontSizeMicro}"
+                            TextTrimming="CharacterEllipsis" />
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+    </Grid>
+</UserControl>

@@ -55,7 +55,8 @@ public sealed record PersistedShowProject(
 	string? ProductionMacrosJson = null,
 	ulong ProductionMacrosStorageVersion = 0,
 	string? ProductionMacroExecutionJson = null,
-	ulong ProductionMacroExecutionVersion = 0)
+	ulong ProductionMacroExecutionVersion = 0,
+	IReadOnlyList<ProductionSourceSpecification>? AdoptedSources = null)
 {
 	public ProductionSpecification ApplyTo(ProductionSpecification baseline)
 	{
@@ -63,11 +64,18 @@ public sealed record PersistedShowProject(
 		if (baseline.ProductionId != ProductionId)
 			throw new InvalidOperationException("Durable show project belongs to a different production.");
 
+		var adopted = AdoptedSources ?? Array.Empty<ProductionSourceSpecification>();
+		if (adopted.Any(source => source is null))
+			throw new InvalidDataException("Durable adopted source catalog contains a null source.");
+		var sources = baseline.Sources.Concat(adopted).ToArray();
+		if (sources.Select(source => source.SourceId).Distinct().Count() != sources.Length)
+			throw new InvalidDataException("Durable adopted source catalog conflicts with an existing production source identity.");
+
 		return new ProductionSpecification(
 			baseline.Version,
 			baseline.ProductionId,
 			baseline.Name,
-			baseline.Sources,
+			sources,
 			baseline.InitialRouting,
 			Scenes,
 			baseline.InitialOutputRoles);
@@ -170,6 +178,65 @@ public sealed class ShowProjectPersistenceStore
 				.ConfigureAwait(false)
 				?? throw new InvalidDataException("Durable show project does not exist.");
 			return Deserialize(document, baseline);
+		}
+		finally
+		{
+			_gate.Release();
+		}
+	}
+
+	public async ValueTask<PersistedShowProject> AdoptSourceAsync(
+		ProductionSpecification baseline,
+		ProductionSourceSpecification source,
+		CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(baseline);
+		ArgumentNullException.ThrowIfNull(source);
+		if (source.ProviderBinding is null)
+			throw new ArgumentException("Adopted external sources require an explicit provider binding.", nameof(source));
+
+		await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+		try
+		{
+			var current = await RequireDocumentAsync(baseline.ProductionId, cancellationToken).ConfigureAwait(false);
+			var project = Deserialize(current, baseline);
+			var adopted = (project.AdoptedSources ?? Array.Empty<ProductionSourceSpecification>()).ToList();
+			if (baseline.Sources.Any(existing => existing.SourceId == source.SourceId) ||
+				adopted.Any(existing => existing.SourceId == source.SourceId))
+			{
+				throw new InvalidOperationException($"Production source '{source.SourceId}' is already present in the authoritative source catalog.");
+			}
+			if (baseline.Sources.Count + adopted.Count >= AudioProductionLimits.MaximumSources)
+				throw new InvalidOperationException($"Production source catalog cannot exceed {AudioProductionLimits.MaximumSources} sources in V1.");
+
+			adopted.Add(source);
+			var effectiveSourceId = new MediaSourceId(source.SourceId.Value);
+			var previousAudio = project.AudioProduction ?? CreateDefaultAudioProduction(project.ApplyTo(baseline));
+			var nextRevision = checked(previousAudio.Revision + 1);
+			var updatedAudio = new AudioProductionConfiguration(
+				nextRevision,
+				previousAudio.Buses,
+				previousAudio.Sources
+					.Concat(new[]
+					{
+						new AudioProductionSourceConfiguration(
+							effectiveSourceId,
+							1d,
+							muted: false,
+							followRoutedSource: true,
+							previousAudio.Buses.Select(bus => bus.BusId).ToArray())
+					})
+					.ToArray(),
+				previousAudio.Crossfade,
+				previousAudio.Ducking,
+				previousAudio.ClipStrategy);
+
+			var updated = project with
+			{
+				AdoptedSources = adopted.ToArray(),
+				AudioProduction = updatedAudio
+			};
+			return await WriteAsync(updated, current.Version, baseline, cancellationToken).ConfigureAwait(false);
 		}
 		finally
 		{
@@ -618,6 +685,7 @@ public sealed class ShowProjectPersistenceStore
 
 	private static string Serialize(PersistedShowProject project, ProductionSpecification baseline)
 	{
+		var effective = project.ApplyTo(baseline);
 		var document = new ProjectDocument(
 			DocumentFormat,
 			project.ProjectId.ToString(),
@@ -630,11 +698,12 @@ public sealed class ShowProjectPersistenceStore
 			ToDocument(project.AudioRouting ?? DurableAudioRoutingState.FollowVideo),
 			project.RundownJson,
 			project.RundownStorageVersion,
-			ToDocument(project.AudioProduction ?? CreateDefaultAudioProduction(baseline)),
+			ToDocument(project.AudioProduction ?? CreateDefaultAudioProduction(effective)),
 			project.ProductionMacrosJson,
 			project.ProductionMacrosStorageVersion,
 			project.ProductionMacroExecutionJson,
-			project.ProductionMacroExecutionVersion);
+			project.ProductionMacroExecutionVersion,
+			(project.AdoptedSources ?? Array.Empty<ProductionSourceSpecification>()).Select(ToDocument).ToArray());
 		return JsonSerializer.Serialize(document, JsonOptions);
 	}
 
@@ -651,8 +720,12 @@ public sealed class ShowProjectPersistenceStore
 
 		var scenes = document.Scenes.Select(FromDocument).ToArray();
 		var graphics = FromDocument(document.Graphics);
-		var audioRouting = FromDocument(document.AudioRouting, baseline);
-		var audioProduction = FromDocument(document.AudioProduction, baseline);
+		var adoptedSources = (document.AdoptedSources ?? Array.Empty<SourceDocument>())
+			.Select(FromDocument)
+			.ToArray();
+		var effective = BuildEffectiveSpecification(baseline, adoptedSources, scenes);
+		var audioRouting = FromDocument(document.AudioRouting, effective);
+		var audioProduction = FromDocument(document.AudioProduction, effective);
 		var project = new PersistedShowProject(
 			Identity.Parse(document.ProjectId),
 			baseline.ProductionId,
@@ -669,7 +742,8 @@ public sealed class ShowProjectPersistenceStore
 			document.ProductionMacrosJson,
 			document.ProductionMacrosStorageVersion,
 			document.ProductionMacroExecutionJson,
-			document.ProductionMacroExecutionVersion);
+			document.ProductionMacroExecutionVersion,
+			adoptedSources);
 		ValidateProject(project, baseline);
 		return project;
 	}
@@ -682,10 +756,12 @@ public sealed class ShowProjectPersistenceStore
 			throw new InvalidDataException("Durable show project production identity does not match the active production.");
 		if (string.IsNullOrWhiteSpace(project.Name) || project.Name.Length > MaximumProjectNameLength)
 			throw new InvalidDataException($"Durable show project name must contain 1-{MaximumProjectNameLength} characters.");
-		ValidateScenes(baseline, project.Scenes);
+		var effective = project.ApplyTo(baseline);
+		ValidateAdoptedSources(baseline, project.AdoptedSources ?? Array.Empty<ProductionSourceSpecification>());
+		ValidateScenes(effective, project.Scenes);
 		ValidateGraphics(project.Graphics);
-		ValidateAudioRouting(project.AudioRouting ?? DurableAudioRoutingState.FollowVideo, baseline);
-		ValidateAudioProduction(project.AudioProduction ?? CreateDefaultAudioProduction(baseline), baseline);
+		ValidateAudioRouting(project.AudioRouting ?? DurableAudioRoutingState.FollowVideo, effective);
+		ValidateAudioProduction(project.AudioProduction ?? CreateDefaultAudioProduction(effective), effective);
 		if (project.ShowControlWorkspaceJson is null && project.ShowControlStorageVersion != 0)
 			throw new InvalidDataException("Durable show project has a show-control version without a show-control payload.");
 		if (project.ShowControlWorkspaceJson is { } json &&
@@ -718,6 +794,67 @@ public sealed class ShowProjectPersistenceStore
 				throw new InvalidDataException($"Persisted Production Macro execution exceeds {MaximumProductionMacroExecutionJsonBytes} bytes.");
 			_ = ProductionMacroExecutionSerializer.Deserialize(macroExecutionJson);
 		}
+	}
+
+	private static ProductionSpecification BuildEffectiveSpecification(
+		ProductionSpecification baseline,
+		IReadOnlyList<ProductionSourceSpecification> adoptedSources,
+		IReadOnlyList<ProductionSceneSpecification>? scenes = null)
+	{
+		var project = new PersistedShowProject(
+			Identity.New(),
+			baseline.ProductionId,
+			baseline.Name,
+			scenes ?? baseline.Scenes,
+			DurableGraphicsState.Empty,
+			null,
+			0,
+			0,
+			AdoptedSources: adoptedSources);
+		return project.ApplyTo(baseline);
+	}
+
+	private static void ValidateAdoptedSources(
+		ProductionSpecification baseline,
+		IReadOnlyList<ProductionSourceSpecification> adoptedSources)
+	{
+		if (adoptedSources.Count > AudioProductionLimits.MaximumSources - baseline.Sources.Count)
+			throw new InvalidDataException($"Durable adopted source catalog exceeds the V1 source limit of {AudioProductionLimits.MaximumSources}.");
+		if (adoptedSources.Any(source => source.ProviderBinding is null))
+			throw new InvalidDataException("Every durable adopted source requires an explicit provider binding.");
+		if (adoptedSources.Select(source => source.SourceId).Distinct().Count() != adoptedSources.Count)
+			throw new InvalidDataException("Durable adopted source identities must be unique.");
+		if (adoptedSources.Any(source => baseline.Sources.Any(existing => existing.SourceId == source.SourceId)))
+			throw new InvalidDataException("Durable adopted source identity conflicts with a baseline source.");
+	}
+
+	private static SourceDocument ToDocument(ProductionSourceSpecification source) =>
+		new(
+			source.SourceId.ToString(),
+			source.Name,
+			source.ProviderBinding is null
+				? null
+				: new SourceProviderBindingDocument(
+					source.ProviderBinding.ProviderId.ToString(),
+					source.ProviderBinding.CapabilityKind,
+					source.ProviderBinding.ExternalSourceId.ToString(),
+					source.ProviderBinding.SafeSourceIdentity));
+
+	private static ProductionSourceSpecification FromDocument(SourceDocument source)
+	{
+		ProductionSourceProviderBinding? binding = null;
+		if (source.ProviderBinding is not null)
+		{
+			binding = new ProductionSourceProviderBinding(
+				Identity.Parse(source.ProviderBinding.ProviderId),
+				source.ProviderBinding.CapabilityKind,
+				Identity.Parse(source.ProviderBinding.ExternalSourceId),
+				source.ProviderBinding.SafeSourceIdentity);
+		}
+		return new ProductionSourceSpecification(
+			new ProductionSourceId(Identity.Parse(source.SourceId)),
+			source.Name,
+			binding);
 	}
 
 	private static void ValidateScenes(
@@ -1220,7 +1357,15 @@ public sealed class ShowProjectPersistenceStore
 		string? ProductionMacrosJson = null,
 		ulong ProductionMacrosStorageVersion = 0,
 		string? ProductionMacroExecutionJson = null,
-		ulong ProductionMacroExecutionVersion = 0);
+		ulong ProductionMacroExecutionVersion = 0,
+		SourceDocument[]? AdoptedSources = null);
+
+	private sealed record SourceProviderBindingDocument(
+		string ProviderId,
+		string CapabilityKind,
+		string ExternalSourceId,
+		string SafeSourceIdentity);
+	private sealed record SourceDocument(string SourceId, string Name, SourceProviderBindingDocument? ProviderBinding);
 
 	private sealed record AudioRoutingDocument(int Mode, string? BreakawaySourceId);
 	private sealed record AudioBusCompressorDocument(bool Enabled, double ThresholdDbFs, double Ratio, double AttackMilliseconds, double ReleaseMilliseconds, double MakeupGainDb);

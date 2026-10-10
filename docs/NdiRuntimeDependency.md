@@ -4,9 +4,9 @@
 
 ## Boundary
 
-`rtaime.Provider.Ndi` implements the rtaime NDI network-output adapter and compiles without an NDI SDK package or native binary in the repository.
+`rtaime.Provider.Ndi` implements the shared rtaime NDI output, discovery and input adapter boundary and compiles without an NDI SDK package or native binary in the repository.
 
-The native NDI runtime is **not bundled** with rtaime. An installation that configures NDI output must provide a compatible Windows x64 NDI runtime separately.
+The native NDI runtime is **not bundled** with rtaime. An installation that configures NDI output, discovery or input must provide a compatible Windows x64 NDI runtime separately.
 
 Runtime discovery is explicit and limited to:
 
@@ -30,18 +30,19 @@ The provider adapter uses a narrow native boundary for:
 
 - runtime initialization/shutdown;
 - sender creation/destruction;
-- NDI video v2 submission;
-- NDI audio v3 submission.
+- NDI video v2 submission and receive;
+- NDI audio v3 submission and receive;
+- bounded NDI source discovery.
 
 NDI native types remain inside `rtaime.Provider.Ndi`. Stable Provider Contracts contain only rtaime protocol/settings/media semantics.
 
-Repository CI uses deterministic sender test doubles for bounded queueing, timing, failure isolation and recovery. Real NDI interoperability against a declared runtime and peer environment is **UNVERIFIED** until separate environment evidence is captured.
+Repository CI uses deterministic sender, discovery and receive test doubles for bounded queueing, expiry, timing, failure isolation and recovery. Real NDI interoperability against a declared runtime and peer environment is **UNVERIFIED** until separate environment evidence is captured.
 
 ## Preflight
 
 Normal offline preflight does not require NDI because NDI is optional.
 
-For a deployment that configures NDI output:
+For a deployment that configures any NDI capability:
 
 ```powershell
 ./tools/Invoke-OfflinePreflight.ps1 -BundlePath . -InstallPath C:\rtaime -RequireNdiRuntime

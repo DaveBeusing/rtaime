@@ -45,6 +45,54 @@ public sealed record OperatorSourceDescriptor
     public string? MediaFileName { get; }
 }
 
+public sealed record OperatorDiscoveredSourceDescriptor(
+    string DiscoveredSourceId,
+    string ProviderId,
+    string DisplayName,
+    string SafeSourceIdentity,
+    string Availability,
+    string Format,
+    string Audio,
+    DateTimeOffset LastSeenAt,
+    Failure? Failure);
+
+public sealed record OperatorMediaSourceDiscoverySnapshot(
+    string ProviderId,
+    string Availability,
+    DateTimeOffset ObservedAt,
+    int MaximumRetainedResults,
+    IReadOnlyList<OperatorDiscoveredSourceDescriptor> Sources,
+    Failure? Failure);
+
+public sealed record OperatorMediaInputHealthDescriptor(
+    string SourceId,
+    string ProviderId,
+    string DiscoveredSourceId,
+    string SafeSourceIdentity,
+    string Lifecycle,
+    bool Connected,
+    string Format,
+    string Audio,
+    ulong VideoFramesReceived,
+    ulong AudioFramesReceived,
+    ulong DroppedFrames,
+    ulong RejectedFrames,
+    ulong ReconnectCount,
+    int QueueDepth,
+    int MaximumQueueDepth,
+    DateTimeOffset? LastMediaAt,
+    Failure? Failure);
+
+public sealed record OperatorMediaSourceAdoptionResult(
+    string SourceId,
+    string Name,
+    string ProviderId,
+    string ExternalSourceId,
+    string SafeSourceIdentity,
+    bool AlreadyAdopted,
+    string PreviewSourceId,
+    string ProgramSourceId);
+
 public sealed record OperatorSceneDescriptor
 {
     private readonly ReadOnlyCollection<OperatorCompositingLayerDescriptor> _compositingLayers;
@@ -918,6 +966,12 @@ public sealed record OperatorStatusSnapshot
 public interface IOperatorControlTransport
 {
     ValueTask<OperatorStatusSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default);
+    ValueTask<OperatorMediaSourceDiscoverySnapshot> GetMediaSourceDiscoveryAsync(CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<OperatorMediaSourceDiscoverySnapshot>(new NotSupportedException("Operator transport does not expose media-source discovery."));
+    ValueTask<IReadOnlyList<OperatorMediaInputHealthDescriptor>> GetMediaInputHealthAsync(CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<IReadOnlyList<OperatorMediaInputHealthDescriptor>>(new NotSupportedException("Operator transport does not expose media-input health."));
+    ValueTask<OperatorMediaSourceAdoptionResult> AdoptMediaSourceAsync(string discoveredSourceId, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<OperatorMediaSourceAdoptionResult>(new NotSupportedException("Operator transport does not expose media-source adoption."));
     ValueTask<OperatorMutationResponse> SelectPreviewAsync(SelectPreviewCommand command, CancellationToken cancellationToken = default);
     ValueTask<OperatorMutationResponse> CutProgramAsync(CutProgramCommand command, CancellationToken cancellationToken = default);
     ValueTask<OperatorMutationResponse> DissolveProgramAsync(DissolveProgramCommand command, CancellationToken cancellationToken = default);
@@ -1656,6 +1710,29 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
         RequireSnapshot();
         var result = await _transport.SetAIShowcaseEnabledAsync(enabled, cancellationToken).ConfigureAwait(false);
         await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+
+    public ValueTask<OperatorMediaSourceDiscoverySnapshot> GetMediaSourceDiscoveryAsync(CancellationToken cancellationToken = default) =>
+        _transport.GetMediaSourceDiscoveryAsync(cancellationToken);
+
+    public ValueTask<IReadOnlyList<OperatorMediaInputHealthDescriptor>> GetMediaInputHealthAsync(CancellationToken cancellationToken = default) =>
+        _transport.GetMediaInputHealthAsync(cancellationToken);
+
+    public async ValueTask<OperatorMediaSourceAdoptionResult> AdoptMediaSourceAsync(
+        string discoveredSourceId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(discoveredSourceId))
+            throw new ArgumentException("Discovered source identity is required.", nameof(discoveredSourceId));
+        var before = RequireSnapshot();
+        var result = await _transport.AdoptMediaSourceAsync(discoveredSourceId.Trim(), cancellationToken).ConfigureAwait(false);
+        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        var after = RequireSnapshot();
+        if (before.Production.Routing != after.Production.Routing)
+        {
+            throw new InvalidDataException("Media-source adoption unexpectedly changed Preview or Program routing.");
+        }
         return result;
     }
 

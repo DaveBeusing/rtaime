@@ -257,7 +257,10 @@ public sealed record LogicalCapabilityRequirement
         MediaSourceId? mediaSourceId,
         MediaSinkId? mediaSinkId,
         string? outputRoleId = null,
-        string? audioBusId = null)
+        string? audioBusId = null,
+        ProviderId? requiredProviderId = null,
+        Identity? externalSourceId = null,
+        string? safeSourceIdentity = null)
     {
         if (logicalNodeId.IsEmpty)
             throw new ArgumentException("Logical node identity must not be empty.", nameof(logicalNodeId));
@@ -268,6 +271,11 @@ public sealed record LogicalCapabilityRequirement
         MediaSinkId = mediaSinkId;
         OutputRoleId = string.IsNullOrWhiteSpace(outputRoleId) ? null : outputRoleId.Trim().ToLowerInvariant();
         AudioBusId = string.IsNullOrWhiteSpace(audioBusId) ? null : new AudioBusId(audioBusId).Value;
+        RequiredProviderId = requiredProviderId;
+        if ((externalSourceId is null) != string.IsNullOrWhiteSpace(safeSourceIdentity))
+            throw new ArgumentException("External source identity and safe source identity must be supplied together.");
+        ExternalSourceId = externalSourceId;
+        SafeSourceIdentity = string.IsNullOrWhiteSpace(safeSourceIdentity) ? null : safeSourceIdentity.Trim();
     }
 
     public Identity LogicalNodeId { get; }
@@ -276,6 +284,9 @@ public sealed record LogicalCapabilityRequirement
     public MediaSinkId? MediaSinkId { get; }
     public string? OutputRoleId { get; }
     public string? AudioBusId { get; }
+    public ProviderId? RequiredProviderId { get; }
+    public Identity? ExternalSourceId { get; }
+    public string? SafeSourceIdentity { get; }
 }
 
 public interface IProviderCapabilityRegistry
@@ -363,7 +374,9 @@ public sealed record ExecutionPlanBinding
         MediaSourceId? mediaSourceId,
         MediaSinkId? mediaSinkId,
         string? outputRoleId = null,
-        string? audioBusId = null)
+        string? audioBusId = null,
+        Identity? externalSourceId = null,
+        string? safeSourceIdentity = null)
     {
         if (logicalNodeId.IsEmpty)
             throw new ArgumentException("Logical node identity must not be empty.", nameof(logicalNodeId));
@@ -375,6 +388,10 @@ public sealed record ExecutionPlanBinding
         MediaSinkId = mediaSinkId;
         OutputRoleId = string.IsNullOrWhiteSpace(outputRoleId) ? null : outputRoleId.Trim().ToLowerInvariant();
         AudioBusId = string.IsNullOrWhiteSpace(audioBusId) ? null : new AudioBusId(audioBusId).Value;
+        if ((externalSourceId is null) != string.IsNullOrWhiteSpace(safeSourceIdentity))
+            throw new ArgumentException("External source identity and safe source identity must be supplied together.");
+        ExternalSourceId = externalSourceId;
+        SafeSourceIdentity = string.IsNullOrWhiteSpace(safeSourceIdentity) ? null : safeSourceIdentity.Trim();
     }
 
     public Identity LogicalNodeId { get; }
@@ -384,6 +401,8 @@ public sealed record ExecutionPlanBinding
     public MediaSinkId? MediaSinkId { get; }
     public string? OutputRoleId { get; }
     public string? AudioBusId { get; }
+    public Identity? ExternalSourceId { get; }
+    public string? SafeSourceIdentity { get; }
 }
 
 public sealed class ExecutionPlan
@@ -481,7 +500,7 @@ public static class CapabilityPlanningEngine
         if (!graphValidation.IsValid)
             return ExecutionPlanningResult.Rejected(graphValidation, graph);
 
-        var logicalRequirements = CompileRequirements(graph, authoritativeState.OutputRoles);
+        var logicalRequirements = CompileRequirements(graph, authoritativeState.OutputRoles, specification);
         var providers = providerRegistry.GetProviders();
         var registryValidation = ValidateProviderSnapshot(providers);
         if (!registryValidation.IsValid)
@@ -506,7 +525,9 @@ public static class CapabilityPlanningEngine
                     binding.LogicalRequirement.MediaSourceId,
                     binding.LogicalRequirement.MediaSinkId,
                     binding.LogicalRequirement.OutputRoleId,
-                    binding.LogicalRequirement.AudioBusId))
+                    binding.LogicalRequirement.AudioBusId,
+                    binding.LogicalRequirement.ExternalSourceId,
+                    binding.LogicalRequirement.SafeSourceIdentity))
                 .ToArray());
 
         var preparedExecution = CreatePreparedExecution(plan, authoritativeState.CompositingState);
@@ -671,8 +692,44 @@ public static class CapabilityPlanningEngine
 
     private static IReadOnlyList<LogicalCapabilityRequirement> CompileRequirements(
         LogicalProductionGraph graph,
-        IReadOnlyList<ProductionOutputRoleState> outputRoles) =>
-        graph.Nodes
+        IReadOnlyList<ProductionOutputRoleState> outputRoles,
+        ProductionSpecification specification)
+    {
+        var requirements = new List<LogicalCapabilityRequirement>();
+        var activeSourceIds = graph.Nodes
+            .Where(node => node.Kind is LogicalProductionNodeKind.PreviewRoute or LogicalProductionNodeKind.ProgramRoute or LogicalProductionNodeKind.AuxRoute)
+            .Where(node => node.MediaSourceId is not null)
+            .Select(node => node.MediaSourceId!.Value)
+            .ToHashSet();
+
+        foreach (var node in graph.Nodes
+                     .Where(node =>
+                         node.Kind == LogicalProductionNodeKind.SourceEndpoint &&
+                         node.MediaSourceId is { } mediaSourceId &&
+                         activeSourceIds.Contains(mediaSourceId))
+                     .OrderBy(node => node.NodeId.ToString(), StringComparer.Ordinal))
+        {
+            var source = specification.Sources.Single(candidate => candidate.SourceId == node.ProductionSourceId);
+            if (source.ProviderBinding is null)
+                continue;
+
+            var binding = source.ProviderBinding;
+            requirements.Add(new LogicalCapabilityRequirement(
+                node.NodeId,
+                new CapabilityRequirement(
+                    ProviderContractVersion.Current,
+                    PlanningIdentity.Create("capability-requirement", node.NodeId.ToString(), binding.CapabilityKind),
+                    binding.CapabilityKind,
+                    1,
+                    Array.Empty<VideoFormat>()),
+                node.MediaSourceId,
+                null,
+                requiredProviderId: new ProviderId(binding.ProviderId),
+                externalSourceId: binding.ExternalSourceId,
+                safeSourceIdentity: binding.SafeSourceIdentity));
+        }
+
+        requirements.AddRange(graph.Nodes
             .Where(node => node.Kind is LogicalProductionNodeKind.PreviewRoute or LogicalProductionNodeKind.ProgramRoute or LogicalProductionNodeKind.AuxRoute)
             .OrderBy(node => node.NodeId.ToString(), StringComparer.Ordinal)
             .Select(node =>
@@ -698,8 +755,12 @@ public static class CapabilityPlanningEngine
                     node.MediaSinkId,
                     outputRoleId,
                     audioBusId);
-            })
+            }));
+
+        return requirements
+            .OrderBy(item => item.Requirement.RequirementId.ToString(), StringComparer.Ordinal)
             .ToArray();
+    }
 
     private static ControlValidationReport ValidateProviderSnapshot(IReadOnlyList<ProviderDescriptor>? providers)
     {
@@ -766,7 +827,10 @@ public static class CapabilityPlanningEngine
                      .OrderBy(item => item.Requirement.RequirementId.ToString(), StringComparer.Ordinal))
         {
             var requirement = logicalRequirement.Requirement;
-            var sameKindCapabilities = eligibleProviders
+            var candidateProviders = logicalRequirement.RequiredProviderId is { } requiredProviderId
+                ? eligibleProviders.Where(provider => provider.ProviderId == requiredProviderId)
+                : eligibleProviders;
+            var sameKindCapabilities = candidateProviders
                 .SelectMany(provider => provider.Capabilities.Select(capability => (provider, capability)))
                 .Where(candidate => string.Equals(candidate.capability.Kind, requirement.Kind, StringComparison.Ordinal))
                 .ToArray();
@@ -838,7 +902,9 @@ public static class CapabilityPlanningEngine
                 binding.MediaSourceId?.ToString() ?? "-",
                 binding.MediaSinkId?.ToString() ?? "-",
                 binding.OutputRoleId ?? "-",
-                binding.AudioBusId ?? "-"))
+                binding.AudioBusId ?? "-",
+                binding.ExternalSourceId?.ToString() ?? "-",
+                binding.SafeSourceIdentity ?? "-"))
             .ToArray();
 
         var preparedCompositing = compositingState is null
@@ -944,7 +1010,9 @@ public static class CapabilityPlanningEngine
                     binding.MediaSourceId,
                     binding.MediaSinkId,
                     binding.OutputRoleId,
-                    binding.AudioBusId))
+                    binding.AudioBusId,
+                    binding.ExternalSourceId,
+                    binding.SafeSourceIdentity))
                 .ToArray(),
             preparedCompositing);
     }

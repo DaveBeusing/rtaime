@@ -80,6 +80,7 @@ public partial class MainWindow : Window
 		if (_sessionRecovery.PreviousSessionEndedUnexpectedly)
 			Shell.SelectWorkspace(_sessionRecovery.SafeState.SelectedWorkspace);
 		MediaPool = new MediaPoolInspectorViewModel(viewModel, MediaDeck, client, PickLocalMediaFiles);
+		NdiSources = new NdiSourceDiscoveryViewModel(client);
 		Rundown = new RundownViewModel(client, viewModel, MediaPool);
 		CompositingGraph = new CompositingGraphViewModel(viewModel, MediaPool);
 		HealthProvider = new OperatorHealthSnapshotProvider(viewModel, MediaDeck, Monitoring, ProgramOutput, CompositingGraph);
@@ -162,6 +163,7 @@ public partial class MainWindow : Window
 		if (_sessionRecovery.PreviousSessionEndedUnexpectedly)
 			Shell.SelectWorkspace(_sessionRecovery.SafeState.SelectedWorkspace);
 		MediaPool = new MediaPoolInspectorViewModel(viewModel, MediaDeck);
+		NdiSources = new NdiSourceDiscoveryViewModel(client);
 		Rundown = new RundownViewModel(client, viewModel, MediaPool);
 		CompositingGraph = new CompositingGraphViewModel(viewModel, MediaPool);
 		HealthProvider = new OperatorHealthSnapshotProvider(viewModel, MediaDeck, Monitoring, ProgramOutput, CompositingGraph);
@@ -231,6 +233,7 @@ public partial class MainWindow : Window
 	public ReplayViewModel Replay { get; }
 	public DemoProductionPackageController DemoProduction { get; }
 	public MediaPoolInspectorViewModel MediaPool { get; }
+	public NdiSourceDiscoveryViewModel NdiSources { get; }
 	public RundownViewModel Rundown { get; }
 	public CompositingGraphViewModel CompositingGraph { get; }
 	public OperatorQuickControlsViewModel QuickControls { get; }
@@ -441,6 +444,7 @@ public partial class MainWindow : Window
 		ContentRendered -= OnContentRendered;
 		SynchronizeButton.Focus();
 		_ = MediaPool.LoadCatalogAsync();
+		_ = NdiSources.RefreshAsync();
 		_ = Rundown.RefreshAsync();
 		if (DataContext is OperatorViewModel viewModel &&
 			viewModel.SynchronizeCommand.CanExecute(null))

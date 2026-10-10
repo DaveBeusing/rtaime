@@ -293,6 +293,28 @@ public sealed class AudioFollowVideoEngine
     public IReadOnlyList<AudioFollowVideoObservation> Observations => _observations.Snapshot();
     public ulong OverwrittenObservationCount => _observations.OverwrittenCount;
 
+    public void RegisterStream(AudioStreamDescriptor stream)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+        lock (_gate)
+        {
+            if (_streamByVideoSource.ContainsKey(stream.FollowedVideoSourceId))
+                throw new InvalidOperationException($"Video source '{stream.FollowedVideoSourceId}' already has a FOLLOW_VIDEO audio stream.");
+            if (_inputStateByStream.ContainsKey(stream.StreamId))
+                throw new InvalidOperationException($"Audio stream '{stream.StreamId}' is already registered.");
+
+            var reference = _streamByVideoSource.Values.First();
+            if (stream.Format != reference.Format)
+                throw new ArgumentException("Registered FOLLOW_VIDEO audio stream must use the existing production audio format.", nameof(stream));
+            if (stream.TimingDomainId != reference.TimingDomainId)
+                throw new ArgumentException("Registered FOLLOW_VIDEO audio stream must use the existing production timing domain.", nameof(stream));
+
+            _streamByVideoSource.Add(stream.FollowedVideoSourceId, stream);
+            _inputStateByStream.Add(stream.StreamId, new AudioInputState(stream.StreamId, AudioGain.Unity, false));
+            Observe("audio.afv.stream_registered", null, stream.StreamId, null);
+        }
+    }
+
     public AudioInputState GetInputState(AudioStreamId streamId)
     {
         lock (_gate)

@@ -153,14 +153,14 @@ foreach ($requirement in @($requirements.dotnetRuntimes)) {
 $ndiRequirements = @($requirements.externalProviderRuntimes | Where-Object { [string]$_.provider -eq "NDI" })
 Assert-Condition ($ndiRequirements.Count -eq 1) "Offline runtime requirements must declare exactly one NDI external-runtime boundary."
 $ndiRequirement = $ndiRequirements[0]
-Assert-Condition ($ndiRequirement.requiredWhenConfigured -eq $true) "NDI runtime must be required when NDI output is configured."
+Assert-Condition ($ndiRequirement.requiredWhenConfigured -eq $true) "NDI runtime must be required when NDI output, discovery or input is configured."
 Assert-Condition ($ndiRequirement.bundled -eq $false) "NDI runtime must remain external to the rtaime offline bundle."
 Assert-Condition ([string]$ndiRequirement.redistributionStatus -eq "EXTERNAL_RUNTIME_NOT_BUNDLED") "NDI redistribution boundary is invalid."
 Assert-Condition ([string]$ndiRequirement.interoperabilityStatus -eq "UNVERIFIED") "NDI interoperability must remain UNVERIFIED without declared environment evidence."
 
 if ($RequireNdiRuntime) {
 	$ndiRuntimePath = Resolve-NdiRuntimePath -Requirement $ndiRequirement
-	Assert-Condition (-not [string]::IsNullOrWhiteSpace($ndiRuntimePath)) "NDI output was requested but a compatible external NDI runtime was not found through the declared runtime environment variables."
+	Assert-Condition (-not [string]::IsNullOrWhiteSpace($ndiRuntimePath)) "NDI capability was requested but a compatible external NDI runtime was not found through the declared runtime environment variables."
 	Write-Host "NDI runtime PASS: external runtime discovered"
 }
 

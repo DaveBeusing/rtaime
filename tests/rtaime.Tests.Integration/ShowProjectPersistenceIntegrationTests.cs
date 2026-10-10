@@ -12,6 +12,60 @@ namespace rtaime.Tests.Integration;
 public sealed class ShowProjectPersistenceIntegrationTests
 {
 	[Fact]
+	public async Task Adopted_external_source_persists_without_changing_production_routing()
+	{
+		var root = Path.Combine(Path.GetTempPath(), "rtaime-adopted-source-" + Guid.NewGuid().ToString("N"));
+		Directory.CreateDirectory(root);
+		var databasePath = Path.Combine(root, "management.db");
+		var specification = CreateSpecification();
+		var routingBefore = specification.InitialRouting;
+		var adopted = new ProductionSourceSpecification(
+			ProductionSourceId.New(),
+			"NDI Camera",
+			new ProductionSourceProviderBinding(
+				Identity.Parse("cf78d139-f89e-43dc-b44c-0fb48874c2ad"),
+				"media.input",
+				Identity.Parse("7b000000-0000-0000-0000-000000000099"),
+				"ndi://Camera"));
+
+		try
+		{
+			await using (var management = new SqliteManagementStore(databasePath))
+			{
+				await management.InitializeAsync();
+				var store = new ShowProjectPersistenceStore(management);
+				await store.LoadOrCreateAsync(specification);
+				var project = await store.AdoptSourceAsync(specification, adopted);
+				var effective = project.ApplyTo(specification);
+
+				Assert.Equal(routingBefore, effective.InitialRouting);
+				Assert.Contains(effective.Sources, source => source.SourceId == adopted.SourceId);
+				Assert.NotNull(project.AudioProduction);
+				Assert.Contains(
+					project.AudioProduction!.Sources,
+					source => source.SourceId.Value == adopted.SourceId.Value);
+			}
+
+			await using (var reopenedManagement = new SqliteManagementStore(databasePath))
+			{
+				await reopenedManagement.InitializeAsync();
+				var reopenedStore = new ShowProjectPersistenceStore(reopenedManagement);
+				var reopened = await reopenedStore.LoadAsync(specification);
+				var effective = reopened.ApplyTo(specification);
+
+				Assert.Equal(routingBefore, effective.InitialRouting);
+				var source = Assert.Single(effective.Sources, source => source.SourceId == adopted.SourceId);
+				Assert.Equal("NDI Camera", source.Name);
+				Assert.Equal("ndi://Camera", source.ProviderBinding?.SafeSourceIdentity);
+			}
+		}
+		finally
+		{
+			try { Directory.Delete(root, recursive: true); } catch { }
+		}
+	}
+
+	[Fact]
 	public async Task Show_project_migrates_legacy_show_control_and_preserves_stable_authored_state()
 	{
 		var root = Path.Combine(Path.GetTempPath(), "rtaime-show-project-" + Guid.NewGuid().ToString("N"));

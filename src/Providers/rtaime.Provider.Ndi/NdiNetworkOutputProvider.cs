@@ -16,12 +16,20 @@ public interface INdiSender : IAsyncDisposable
 
 public sealed class NdiNetworkOutputProvider
 {
-	private static readonly ProviderId ProviderIdentity =
+	internal static readonly ProviderId ProviderIdentity =
 		new(new Identity(new Guid("cf78d139-f89e-43dc-b44c-0fb48874c2ad")));
-	private static readonly CapabilityId CapabilityIdentity =
+	private static readonly CapabilityId OutputCapabilityIdentity =
 		new(new Identity(new Guid("55e56775-2d57-4ab5-8c78-86395ca2d711")));
-	private static readonly ProviderResourceId ResourceIdentity =
+	private static readonly CapabilityId DiscoveryCapabilityIdentity =
+		new(new Identity(new Guid("2d8995f1-62e5-4a08-9250-0438679f81cd")));
+	private static readonly CapabilityId InputCapabilityIdentity =
+		new(new Identity(new Guid("696b82d4-b118-44a2-82f6-d60f09770619")));
+	private static readonly ProviderResourceId OutputResourceIdentity =
 		new(new Identity(new Guid("21b8b9e2-89b3-43fb-bdc9-c94183982a9d")));
+	private static readonly ProviderResourceId DiscoveryResourceIdentity =
+		new(new Identity(new Guid("1c133a24-b999-42b6-ac58-42ac51b8058c")));
+	private static readonly ProviderResourceId InputResourceIdentity =
+		new(new Identity(new Guid("9189a29a-0394-4aca-9ec8-335a9e2dc8d8")));
 
 	private readonly string? _runtimeLibraryPath;
 
@@ -47,22 +55,66 @@ public sealed class NdiNetworkOutputProvider
 			new[]
 			{
 				new ProviderCapabilityDescriptor(
-					CapabilityIdentity,
+					OutputCapabilityIdentity,
 					NetworkOutputCapabilityKinds.Output,
+					SupportedFormats),
+				new ProviderCapabilityDescriptor(
+					DiscoveryCapabilityIdentity,
+					MediaSourceCapabilityKinds.Discovery,
+					SupportedFormats),
+				new ProviderCapabilityDescriptor(
+					InputCapabilityIdentity,
+					MediaSourceCapabilityKinds.Input,
 					SupportedFormats)
 			},
 			new[]
 			{
 				new ProviderResourceDescriptor(
-					ResourceIdentity,
+					OutputResourceIdentity,
 					ProviderIdentity,
 					NetworkOutputCapabilityKinds.Output,
 					2,
+					true),
+				new ProviderResourceDescriptor(
+					DiscoveryResourceIdentity,
+					ProviderIdentity,
+					MediaSourceCapabilityKinds.Discovery,
+					1,
+					false),
+				new ProviderResourceDescriptor(
+					InputResourceIdentity,
+					ProviderIdentity,
+					MediaSourceCapabilityKinds.Input,
+					8,
 					true)
 			});
 	}
 
 	public ProviderDescriptor Descriptor { get; }
+
+	public NdiDiscoveryService CreateDiscoveryService(
+		INdiDiscoveryBackend? backend = null,
+		int maximumRetainedResults = NdiDiscoveryService.DefaultMaximumRetainedResults,
+		TimeSpan? expiry = null)
+	{
+		backend ??= _runtimeLibraryPath is null
+			? new UnavailableNdiDiscoveryBackend()
+			: new NativeNdiDiscoveryBackend(_runtimeLibraryPath);
+		return new NdiDiscoveryService(backend, maximumRetainedResults, expiry);
+	}
+
+	public NdiInputSession CreateInputSession(
+		NdiInputConfiguration configuration,
+		Func<INdiReceiveBackend>? backendFactory = null,
+		Func<DateTimeOffset>? clock = null)
+	{
+		ArgumentNullException.ThrowIfNull(configuration);
+		backendFactory ??= () => new NativeNdiReceiveBackend(
+			configuration.Endpoint,
+			$"rtaime {configuration.SourceId}",
+			_runtimeLibraryPath);
+		return new NdiInputSession(configuration, backendFactory, clock);
+	}
 
 	public NdiNetworkOutputSession CreateSession(
 		NetworkOutputConfiguration configuration,
