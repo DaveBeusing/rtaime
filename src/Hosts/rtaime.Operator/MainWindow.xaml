@@ -224,6 +224,7 @@
 							<RowDefinition Height="34" />
 							<RowDefinition Height="32" />
 							<RowDefinition Height="*" />
+							<RowDefinition Height="220" />
 						</Grid.RowDefinitions>
 
 						<Grid Grid.Row="0">
@@ -518,6 +519,10 @@
 								<TextBlock Text="{Binding MediaPool.ErrorState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" TextWrapping="Wrap" />
 							</Border>
 						</Grid>
+
+						<local:NdiSourceDiscoveryControl
+							Grid.Row="4"
+							DataContext="{Binding NdiSources, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
 					</Grid>
 
 					<local:LiveSceneCueControl
