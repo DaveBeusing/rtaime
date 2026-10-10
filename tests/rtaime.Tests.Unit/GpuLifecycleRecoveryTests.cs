@@ -193,6 +193,32 @@ public sealed class GpuLifecycleRecoveryTests
     }
 
     [Fact]
+    public void Repeated_monitoring_failures_do_not_restart_program_or_rotate_generation()
+    {
+        using var backend = new RepeatedMonitoringFailureBackend();
+        using var provider = new GpuProcessingProvider(backend);
+        provider.Start();
+        var generation = provider.Lifecycle.Generation;
+        using var frame = Upload(provider, SourceA, 9, 8, 7, 0);
+
+        for (var attempt = 0; attempt < 8; attempt++)
+        {
+            Assert.False(provider.TryExportMonitoringResource(frame, out var lease));
+            Assert.Null(lease);
+            Assert.Equal(GpuProviderState.Degraded, provider.State);
+            Assert.Equal(GpuProviderLifecycleReasonCodes.MonitoringUnavailable, provider.Lifecycle.ReasonCode);
+            Assert.Equal(generation, provider.Lifecycle.Generation);
+            using var program = provider.RentReadback(frame);
+            Assert.Equal((byte)9, program.Memory.Span[0]);
+        }
+
+        Assert.Equal(1, backend.StartCount);
+        Assert.Equal(0, provider.SharedMonitoringResourceStatistics.ActiveResources);
+        provider.Stop();
+        Assert.Equal(0, provider.ActiveSurfaceCount);
+    }
+
+    [Fact]
     public void Monitoring_release_failure_remains_tracked_and_is_retryable()
     {
         using var backend = new FailFirstMonitoringReleaseHardwareBackend();
@@ -468,6 +494,26 @@ public sealed class GpuLifecycleRecoveryTests
         {
             resource = CreateMonitoringResource(() => Interlocked.Increment(ref _releaseCount));
             return true;
+        }
+    }
+
+    private sealed class RepeatedMonitoringFailureBackend : MonitoringHardwareBackend
+    {
+        public int StartCount { get; private set; }
+
+        public override void Start()
+        {
+            StartCount++;
+            base.Start();
+        }
+
+        public override bool TryExportMonitoringResource(
+            SurfaceId surfaceId,
+            VideoFormat format,
+            out GpuBackendMonitoringResource? resource)
+        {
+            resource = null;
+            return false;
         }
     }
 
