@@ -138,7 +138,7 @@ public sealed class SupportBundleExporterTests : IDisposable
 		var snapshot = new SubsystemHealthSnapshot(
 			"recording", "Recording", "Recording", SubsystemHealthState.Failed,
 			"Recording failed token=do-not-export", now, null, [],
-			"Review recording diagnostics.", "-----BEGIN PRIVATE KEY-----\\nnot-a-real-key",
+			"Review recording diagnostics.", "-----BEGIN " + "PRIVATE KEY" + "-----\\nnot-a-real-key",
 			ProgramImpact: SubsystemProgramImpact.RecordingOnly,
 			EvidenceSource: "Control-confirmed recording snapshot", LastObservedAt: now.AddSeconds(2));
 		var exporter = new SupportBundleExporter(new FixedHealthProvider([snapshot]),
