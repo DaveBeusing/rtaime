@@ -76,6 +76,19 @@ public sealed class RundownAutomationUiTests
 		Assert.Contains("AutoOnMediaEnd is valid only for media rundown items.", viewModel, StringComparison.Ordinal);
 	}
 
+	[Fact]
+	public void Rundown_draft_commands_are_disabled_during_execution_and_recovery()
+	{
+		var root = FindRepositoryRoot();
+		var source = File.ReadAllText(Path.Combine(root, "src", "Hosts", "rtaime.Operator", "RundownViewModel.cs"));
+
+		Assert.Contains("private bool CanEditDraft()", source, StringComparison.Ordinal);
+		Assert.Contains("State is not (\"EXECUTING\" or \"RECOVERYREQUIRED\")", source, StringComparison.Ordinal);
+		Assert.Contains("() => CanEditDraft() && SelectedItem is not null && Items.Count > 1", source, StringComparison.Ordinal);
+		Assert.Contains("if (!CanEditDraft() || SelectedItem is null)", source, StringComparison.Ordinal);
+		Assert.Contains("if (!CanEditDraft())", source, StringComparison.Ordinal);
+	}
+
 	private static string FindRepositoryRoot()
 	{
 		DirectoryInfo? directory = new(AppContext.BaseDirectory);

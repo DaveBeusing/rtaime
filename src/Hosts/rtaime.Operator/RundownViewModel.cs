@@ -54,10 +54,10 @@ public sealed class RundownViewModel : INotifyPropertyChanged
 		AddMediaCommand = new AsyncRelayCommand(AddMediaAsync, CanAddMedia);
 		AddSceneCommand = new AsyncRelayCommand(AddSceneAsync, CanAddScene);
 		AddAudioBreakawayCommand = new AsyncRelayCommand(AddAudioBreakawayAsync, CanAddAudio);
-		AddFollowVideoCommand = new AsyncRelayCommand(AddFollowVideoAsync, () => !IsBusy && CanUseSelectedFollowForNonMedia());
+		AddFollowVideoCommand = new AsyncRelayCommand(AddFollowVideoAsync, () => CanEditDraft() && CanUseSelectedFollowForNonMedia());
 		AddGraphicsCommand = new AsyncRelayCommand(AddGraphicsAsync, CanAddGraphics);
 		AddHoldCommand = new AsyncRelayCommand(AddHoldAsync, () => !IsBusy && CanUseSelectedFollowForNonMedia());
-		RemoveCommand = new AsyncRelayCommand(RemoveAsync, () => !IsBusy && SelectedItem is not null && Items.Count > 1);
+		RemoveCommand = new AsyncRelayCommand(RemoveAsync, () => CanEditDraft() && SelectedItem is not null && Items.Count > 1);
 		MoveUpCommand = new AsyncRelayCommand(() => MoveAsync(-1), () => CanMove(-1));
 		MoveDownCommand = new AsyncRelayCommand(() => MoveAsync(1), () => CanMove(1));
 		PrepareCommand = new AsyncRelayCommand(PrepareAsync, CanPrepare);
@@ -222,7 +222,7 @@ public sealed class RundownViewModel : INotifyPropertyChanged
 
 	private Task RemoveAsync()
 	{
-		if (SelectedItem is null || Items.Count <= 1)
+		if (!CanEditDraft() || SelectedItem is null || Items.Count <= 1)
 			return Task.CompletedTask;
 		var index = Items.IndexOf(SelectedItem);
 		Items.Remove(SelectedItem);
@@ -233,7 +233,7 @@ public sealed class RundownViewModel : INotifyPropertyChanged
 
 	private Task MoveAsync(int offset)
 	{
-		if (SelectedItem is null)
+		if (!CanEditDraft() || SelectedItem is null)
 			return Task.CompletedTask;
 		var from = Items.IndexOf(SelectedItem);
 		var to = from + offset;
@@ -294,6 +294,8 @@ public sealed class RundownViewModel : INotifyPropertyChanged
 
 	private void AddDraft(RundownItem item)
 	{
+		if (!CanEditDraft())
+			return;
 		var viewModel = new RundownOperatorItemViewModel(item);
 		Items.Add(viewModel);
 		SelectedItem = viewModel;
@@ -409,14 +411,15 @@ public sealed class RundownViewModel : INotifyPropertyChanged
 		}
 	}
 
-	private bool CanSave() => !IsBusy && Items.Count > 0 && State is not "EXECUTING" and not "RECOVERYREQUIRED";
-	private bool CanAddMedia() => !IsBusy &&
+	private bool CanSave() => CanEditDraft() && Items.Count > 0;
+	private bool CanEditDraft() => !IsBusy && State is not ("EXECUTING" or "RECOVERYREQUIRED");
+	private bool CanAddMedia() => CanEditDraft() &&
 		_mediaPool.SelectedItem?.Kind == MediaPoolItemKind.Clip &&
 		!string.IsNullOrWhiteSpace(_mediaPool.SelectedItem.ReferenceId) &&
 		_operator.SelectedSource is not null;
-	private bool CanAddScene() => !IsBusy && _operator.SelectedScene is not null && CanUseSelectedFollowForNonMedia();
-	private bool CanAddAudio() => !IsBusy && _operator.SelectedAudioInput is not null && CanUseSelectedFollowForNonMedia();
-	private bool CanAddGraphics() => !IsBusy && CanUseSelectedFollowForNonMedia() &&
+	private bool CanAddScene() => CanEditDraft() && _operator.SelectedScene is not null && CanUseSelectedFollowForNonMedia();
+	private bool CanAddAudio() => CanEditDraft() && _operator.SelectedAudioInput is not null && CanUseSelectedFollowForNonMedia();
+	private bool CanAddGraphics() => CanEditDraft() && CanUseSelectedFollowForNonMedia() &&
 		!string.IsNullOrWhiteSpace(_operator.GraphicsAssetName) &&
 		!string.Equals(_operator.GraphicsAssetName, "No graphics asset loaded", StringComparison.Ordinal);
 	private bool CanPrepare() => !IsBusy && SelectedItem is not null && State is not "DRAFT" and not "RECOVERYREQUIRED";
@@ -425,7 +428,7 @@ public sealed class RundownViewModel : INotifyPropertyChanged
 
 	private bool CanMove(int offset)
 	{
-		if (IsBusy || SelectedItem is null || State is "EXECUTING" or "RECOVERYREQUIRED")
+		if (!CanEditDraft() || SelectedItem is null)
 			return false;
 		var index = Items.IndexOf(SelectedItem);
 		return index >= 0 && index + offset >= 0 && index + offset < Items.Count;
