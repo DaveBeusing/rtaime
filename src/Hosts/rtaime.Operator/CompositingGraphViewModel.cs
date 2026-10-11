@@ -420,6 +420,7 @@ public sealed class CompositingGraphViewModel : INotifyPropertyChanged, IDisposa
 			}
 		}
 		Position("preview-output", 620, 60);
+		Position("aux-output", 620, 200);
 		var compositeY = layerNodes.Length == 0
 			? Math.Max(250, graphicsY - 40)
 			: Math.Max(250, Math.Max(280, graphicsY) + ((layerNodes.Length - 1) * 66));
@@ -655,7 +656,15 @@ public sealed class CompositingGraphViewModel : INotifyPropertyChanged, IDisposa
 			_operator.GraphicsScale,
 			_operator.RecordingStatus,
 			_operator.RecordingError,
-			_operator.CompositingLayers);
+			_operator.CompositingLayers,
+			_operator.OutputRoles.Select(role => new CompositingGraphOutputRoleProjection(
+				role.RoleId,
+				role.SourceId,
+				role.ProviderId,
+				role.TargetId,
+				role.HealthState,
+				role.AuthoritativeActive,
+				role.Evidence)).ToArray());
 
 	private void SelectNode(CompositingGraphNodeViewModel node)
 	{
@@ -719,6 +728,7 @@ public sealed class CompositingGraphViewModel : INotifyPropertyChanged, IDisposa
 			nameof(OperatorViewModel.IsConnected) or
 			nameof(OperatorViewModel.IsStale) or
 			nameof(OperatorViewModel.IsBusy) or
+			nameof(OperatorViewModel.OutputRoles) or
 			nameof(OperatorViewModel.RecordingStatus) or
 			nameof(OperatorViewModel.RecordingError))
 		{
