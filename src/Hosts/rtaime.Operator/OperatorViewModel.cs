@@ -28,6 +28,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	private readonly IRuntimeReadinessService _runtimeReadiness;
 	private readonly bool _ownsRuntimeReadiness;
 	private SynchronizationContext? _synchronizationContext;
+	private readonly LatestAudioRefreshDelivery _audioRefreshDelivery;
 	private readonly CancellationTokenSource _audioPollingStop = new();
 	private Func<OperatorGraphicsAsset?>? _graphicsAssetPicker;
 	private Task? _audioPollingTask;
@@ -173,6 +174,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		_client = client;
 		_graphicsAssetPicker = graphicsAssetPicker;
 		_synchronizationContext = synchronizationContext ?? SynchronizationContext.Current;
+		_audioRefreshDelivery = new LatestAudioRefreshDelivery(Post);
 		_runtimeReadiness = runtimeReadiness ?? new RuntimeReadinessService();
 		_ownsRuntimeReadiness = runtimeReadiness is null;
 		_runtimeReadiness.Changed += OnRuntimeReadinessChanged;
@@ -628,6 +630,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		if (Interlocked.Exchange(ref _disposeState, 1) != 0)
 			return;
 
+		_audioRefreshDelivery.Dispose();
 		_runtimeReadiness.Changed -= OnRuntimeReadinessChanged;
 		_audioPollingStop.Cancel();
 		try
@@ -653,11 +656,13 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		{
 			if (_client is null || IsBusy)
 				continue;
+			var refreshVersion = _audioRefreshDelivery.Version;
 			try
 			{
 				var snapshot = await _client.SynchronizeAsync(cancellationToken).ConfigureAwait(false);
-				Post(() =>
+				_audioRefreshDelivery.Enqueue(refreshVersion, () =>
 				{
+					if (IsBusy) return;
 					var recovered = _hasSynchronized && (IsStale || !IsConnected);
 					if (!_hasSynchronized || recovered)
 					{
@@ -692,7 +697,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 			}
 			catch (Exception exception) when (exception is IOException or TimeoutException or InvalidOperationException)
 			{
-				Post(() =>
+				_audioRefreshDelivery.Enqueue(refreshVersion, () =>
 				{
 					AudioMeterStatus = "STALE";
 					if (_hasSynchronized)
@@ -1398,14 +1403,14 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 			var snapshot = _client.Snapshot
 				?? throw new InvalidOperationException("Confirmed audio mixer mutation did not return an authoritative snapshot.");
 			ApplyAudio(snapshot, preserveSelectedGainEdit: false);
-			AudioMixer.Apply(snapshot, refreshDrafts: true);
+			AudioMixer.Apply(snapshot, refreshDrafts: false);
 			CommandStatus = "AUDIO MIXER CONFIRMED";
 			LastEvent = confirmedMessage;
 			confirmed = true;
 		});
 
 		if (!confirmed && _client.Snapshot is { } authoritative)
-			AudioMixer.Apply(authoritative, refreshDrafts: true);
+			AudioMixer.Apply(authoritative, refreshDrafts: false);
 		return confirmed;
 	}
 
@@ -1448,6 +1453,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	{
 		if (IsBusy) return;
 
+		_audioRefreshDelivery.Invalidate();
 		IsBusy = true;
 		CommandStatus = $"{operation} IN FLIGHT";
 		CommitStatus = string.Equals(operation, "SYNCHRONIZE", StringComparison.Ordinal)
@@ -1640,7 +1646,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	{
 		var previousSelectedId = SelectedAudioInput?.SourceId;
 		var existing = AudioInputs.ToDictionary(input => input.SourceId, StringComparer.Ordinal);
-		AudioInputs.Clear();
+		var nextInputs = new List<OperatorAudioInputViewModel>();
 		foreach (var descriptor in snapshot.AudioInputs)
 		{
 			var source = snapshot.Sources.FirstOrDefault(candidate => string.Equals(candidate.Id, descriptor.SourceId, StringComparison.Ordinal));
@@ -1665,8 +1671,10 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 					isAfv,
 					preserveSelectedGainEdit && string.Equals(previousSelectedId, descriptor.SourceId, StringComparison.Ordinal));
 			}
-			AudioInputs.Add(input);
+			nextInputs.Add(input);
 		}
+
+		OperatorAudioMixerViewModel.Reconcile(AudioInputs, nextInputs);
 
 		SelectedAudioInput = AudioInputs.FirstOrDefault(input => string.Equals(input.SourceId, previousSelectedId, StringComparison.Ordinal))
 			?? AudioInputs.FirstOrDefault(input => input.IsAfv)
