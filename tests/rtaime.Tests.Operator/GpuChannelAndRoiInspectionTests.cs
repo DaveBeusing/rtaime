@@ -18,9 +18,9 @@ public sealed class GpuChannelAndRoiInspectionTests
 		Assert.Contains("InspectionMode == 3", source, StringComparison.Ordinal);
 		Assert.Contains("InspectionMode == 4", source, StringComparison.Ordinal);
 		Assert.Contains("InspectionMode == 5", source, StringComparison.Ordinal);
-		Assert.Contains("return float4(sample.a, sample.a, sample.a, sample.a)", source, StringComparison.Ordinal);
+		Assert.Contains("return float4(sampleColor.a, sampleColor.a, sampleColor.a, sampleColor.a)", source, StringComparison.Ordinal);
 		Assert.Contains("float3(0.2126, 0.7152, 0.0722)", source, StringComparison.Ordinal);
-		Assert.Contains("sample.rgb *= sample.a", source, StringComparison.Ordinal);
+		Assert.Contains("sampleColor.rgb *= sampleColor.a", source, StringComparison.Ordinal);
 	}
 
 	[Fact]
