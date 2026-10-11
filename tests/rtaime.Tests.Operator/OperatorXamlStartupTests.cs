@@ -101,6 +101,7 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 					Console.WriteLine("COMPOSITION PASS [MainWindow] compiled resource dictionaries and full window tree.");
 					var rendered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 					window.ContentRendered += (_, _) => rendered.TrySetResult();
+					window.Shell.ExitFullscreenCommand.Execute(null);
 					window.Width = 1600;
 					window.Height = 900;
 					Console.WriteLine("WINDOW SHOW BEGIN [MainWindow]");
