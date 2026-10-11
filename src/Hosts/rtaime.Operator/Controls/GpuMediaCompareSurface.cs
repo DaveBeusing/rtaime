@@ -371,24 +371,24 @@ float TransformComponent(float value)
     if (LimitedRange != 0)
         value = saturate((value - (16.0 / 255.0)) / (219.0 / 255.0));
 
-    float linear = value;
+    float linearValue = value;
     if (TransferMode == 2)
-        linear = SrgbToLinear(value);
+        linearValue = SrgbToLinear(value);
     else if (TransferMode == 3)
-        linear = Rec709ToLinear(value);
+        linearValue = Rec709ToLinear(value);
 
-    return saturate(LinearToSrgb(linear));
+    return saturate(LinearToSrgb(linearValue));
 }
 
-float4 TransformSample(float4 sample)
+float4 TransformSample(float4 sampleColor)
 {
     if (CompleteColor != 0)
     {
-        sample.r = TransformComponent(sample.r);
-        sample.g = TransformComponent(sample.g);
-        sample.b = TransformComponent(sample.b);
+        sampleColor.r = TransformComponent(sampleColor.r);
+        sampleColor.g = TransformComponent(sampleColor.g);
+        sampleColor.b = TransformComponent(sampleColor.b);
     }
-    return sample;
+    return sampleColor;
 }
 
 float4 PSMain(PSInput input) : SV_TARGET
@@ -411,9 +411,9 @@ float4 PSMain(PSInput input) : SV_TARGET
     else if (CompareMode == 4)
         useB = input.Texture.y >= WipePosition;
 
-    float4 sample = useB ? b : a;
-    sample.rgb *= sample.a;
-    return sample;
+    float4 sampleColor = useB ? b : a;
+    sampleColor.rgb *= sampleColor.a;
+    return sampleColor;
 }
 """;
 }

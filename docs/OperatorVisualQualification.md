@@ -83,7 +83,7 @@ The window is shown, waits for `ContentRendered`, switches through all eight wor
 
 A separate process test launches the built Windows Operator executable against unique unavailable endpoints, requires its `operator.window-shown` log event, rejects crash/XAML error evidence and requests normal window close. The process must log exit and return zero. No headless flag or substituted visual tree qualifies this launch.
 
-A source guard scans all productive XAML (including dictionaries and inactive templates) for non-whitespace text directly in panel children. It accepts real whitespace and intended text inside `TextBlock`. WPF runtime construction remains the authority for markup-extension, resource-type and compiled-tree errors.
+A source guard scans all productive XAML (including dictionaries and inactive templates) for non-whitespace text directly in panel children. It accepts real whitespace and intended text inside `TextBlock`. WPF runtime construction remains the authority for markup-extension, resource-type and compiled-tree errors. The suite also compiles the productive monitor, comparison and scope shader constants with their existing VS/PS 4.0 and CS 5.0 entry points before window startup, so a syntax error in a surface loaded by WPF cannot remain hidden behind a successful managed build. This is shader compilation evidence, not a rendering-quality or hardware qualification.
 
 Required Gates run this focused suite in CI before template/AI integration subsets and in Quality alongside existing startup, visual/DPI and media viewport checks:
 

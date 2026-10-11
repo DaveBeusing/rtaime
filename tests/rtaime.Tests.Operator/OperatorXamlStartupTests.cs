@@ -5,6 +5,7 @@ using System.IO;
 using System.Xml;
 using System.Xml.Linq;
 using System.Runtime.ExceptionServices;
+using System.Reflection;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Markup;
@@ -12,6 +13,8 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using rtaime.Client;
 using rtaime.Operator;
+using rtaime.Operator.Controls;
+using Vortice.D3DCompiler;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -54,7 +57,9 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 			{
 				// Preserve the failure without crashing the test host before diagnostics/teardown.
 				failures.Add(args.Exception);
-				diagnostics.Add($"DISPATCHER FAILURE [{target}] {args.Exception}");
+				var detail = $"DISPATCHER FAILURE [{target}] {args.Exception}";
+				diagnostics.Add(detail);
+				Console.WriteLine(detail);
 				args.Handled = true;
 			}
 			dispatcher.UnhandledException += CaptureDispatcherFailure;
@@ -301,6 +306,24 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 			if (File.Exists(Path.Combine(directory.FullName, "rtaime.slnx")))
 				return directory.FullName;
 		throw new InvalidOperationException("Repository root containing rtaime.slnx could not be located.");
+	}
+
+
+	[Theory]
+	[InlineData(typeof(GpuMonitorPresentationSurface), "ShaderSource", "VSMain", "vs_4_0")]
+	[InlineData(typeof(GpuMonitorPresentationSurface), "ShaderSource", "PSMain", "ps_4_0")]
+	[InlineData(typeof(GpuMonitorPresentationSurface), "AnalysisShaderSource", "CSMain", "cs_5_0")]
+	[InlineData(typeof(GpuMediaCompareSurface), "ShaderSource", "VSMain", "vs_4_0")]
+	[InlineData(typeof(GpuMediaCompareSurface), "ShaderSource", "PSMain", "ps_4_0")]
+	[InlineData(typeof(GpuScopeAnalysisSurface), "ShaderSource", "CSMain", "cs_5_0")]
+	public void Productive_surface_shaders_compile_before_window_startup(
+		Type surfaceType, string fieldName, string entryPoint, string profile)
+	{
+		var field = surfaceType.GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Static);
+		Assert.NotNull(field);
+		var source = Assert.IsType<string>(field.GetValue(null));
+		var bytecode = Compiler.Compile(source, entryPoint, $"{surfaceType.Name}.hlsl", profile);
+		Assert.True(bytecode.Span.Length > 0, $"{surfaceType.Name}/{entryPoint}/{profile}: empty shader bytecode.");
 	}
 
 	private static bool SessionClosedCleanly(string path)
