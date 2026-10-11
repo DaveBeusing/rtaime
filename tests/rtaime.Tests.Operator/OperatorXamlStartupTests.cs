@@ -39,9 +39,21 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 			{
 				if (Environment.CurrentManagedThreadId == threadId &&
 					args.Exception is XamlParseException or ArgumentException)
-					diagnostics.Add($"FIRST CHANCE [{target}] {args.Exception}");
+					{
+					var detail = $"FIRST CHANCE [{target}] {args.Exception}";
+					diagnostics.Add(detail);
+					Console.WriteLine(detail);
+				}
 			}
 
+			void CaptureDispatcherFailure(object sender, DispatcherUnhandledExceptionEventArgs args)
+			{
+				// Preserve the failure without crashing the test host before diagnostics/teardown.
+				failures.Add(args.Exception);
+				diagnostics.Add($"DISPATCHER FAILURE [{target}] {args.Exception}");
+				args.Handled = true;
+			}
+			dispatcher.UnhandledException += CaptureDispatcherFailure;
 			AppDomain.CurrentDomain.FirstChanceException += Capture;
 			App? app = null;
 			MainWindow? window = null;
@@ -135,6 +147,7 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 					}
 					catch (Exception exception) { failures.Add(exception); }
 					AppDomain.CurrentDomain.FirstChanceException -= Capture;
+					dispatcher.UnhandledException -= CaptureDispatcherFailure;
 					if (failures.Count == 0)
 						completed.TrySetResult();
 					else
