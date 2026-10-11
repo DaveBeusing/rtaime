@@ -59,6 +59,9 @@ jobs:
       - name: Operator real XAML startup qualification
         run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~OperatorXamlStartupTests" --logger "console;verbosity=detailed"
 
+      - name: Operator UI regressions
+        run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build
+
       - name: Governed AI workflow regressions
         run: dotnet test rtaime.slnx --configuration Release --no-build -m:1 --filter "FullyQualifiedName~AIShowcase|FullyQualifiedName~AIEffectBrowser|FullyQualifiedName~AIResultUsePolicy|FullyQualifiedName~AIFailureIsolation|FullyQualifiedName~AIFallbackBehavior|FullyQualifiedName~GovernedAIContract"
 

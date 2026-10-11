@@ -1,6 +1,9 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
+using System.Diagnostics;
 using System.IO;
+using System.Xml;
+using System.Xml.Linq;
 using System.Runtime.ExceptionServices;
 using System.Windows;
 using System.Windows.Markup;
@@ -39,7 +42,7 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 			{
 				if (Environment.CurrentManagedThreadId == threadId &&
 					args.Exception is XamlParseException or ArgumentException)
-					{
+				{
 					var detail = $"FIRST CHANCE [{target}] {args.Exception}";
 					diagnostics.Add(detail);
 					Console.WriteLine(detail);
@@ -146,16 +149,20 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 						app?.Shutdown();
 					}
 					catch (Exception exception) { failures.Add(exception); }
-					AppDomain.CurrentDomain.FirstChanceException -= Capture;
-					dispatcher.UnhandledException -= CaptureDispatcherFailure;
-					if (failures.Count == 0)
-						completed.TrySetResult();
-					else
-						completed.TrySetException(new AggregateException(failures));
 					dispatcher.BeginInvokeShutdown(DispatcherPriority.Background);
 				}
 			}));
-			Dispatcher.Run();
+			try { Dispatcher.Run(); }
+			catch (Exception exception) { failures.Add(exception); }
+			finally
+			{
+				AppDomain.CurrentDomain.FirstChanceException -= Capture;
+				dispatcher.UnhandledException -= CaptureDispatcherFailure;
+				if (failures.Count == 0)
+					completed.TrySetResult();
+				else
+					completed.TrySetException(new AggregateException(failures));
+			}
 		}) { IsBackground = true, Name = "Operator XAML qualification" };
 		thread.SetApartmentState(ApartmentState.STA);
 		thread.Start();
@@ -174,6 +181,113 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 			}
 			Assert.True(joined, "The Operator qualification STA dispatcher did not terminate.");
 		}
+	}
+
+	[Fact]
+	public async Task Windows_Operator_executable_shows_its_real_window_and_exits_cleanly()
+	{
+		var root = Path.Combine(Path.GetTempPath(), "rtaime-operator-launch", Guid.NewGuid().ToString("N"));
+		Directory.CreateDirectory(root);
+		var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
+		var executable = Path.Combine(FindRepositoryRoot(), "src", "Hosts", "rtaime.Operator",
+			"bin", configuration, "net10.0-windows", "rtaime.Operator.exe");
+		Assert.True(File.Exists(executable), $"Build the Operator before qualification: {executable}");
+		var start = new ProcessStartInfo(executable)
+		{
+			UseShellExecute = false,
+			CreateNoWindow = true,
+			WindowStyle = ProcessWindowStyle.Hidden
+		};
+		start.ArgumentList.Add($"--log-root={root}");
+		start.Environment["RTAIME_CONTROL_ENDPOINT"] = $"rtaime.qualification.{Guid.NewGuid():N}";
+		start.Environment["RTAIME_RUNTIME_ENDPOINT"] = $"rtaime.qualification.{Guid.NewGuid():N}";
+		start.Environment["RTAIME_OPERATOR_MONITOR_ENDPOINT"] = $"rtaime.qualification.{Guid.NewGuid():N}";
+		start.Environment.Remove("RTAIME_APPHOST_LIFECYCLE_FILE");
+		start.Environment.Remove("RTAIME_LOG_SESSION_ID");
+		using var process = Process.Start(start)!;
+		try
+		{
+			var deadline = Stopwatch.StartNew();
+			string logs = string.Empty;
+			while (deadline.Elapsed < TimeSpan.FromSeconds(15))
+			{
+				logs = ReadLogs(root);
+				Assert.DoesNotContain("operator.dispatcher-unhandled-exception", logs, StringComparison.Ordinal);
+				Assert.DoesNotContain("XamlParseException", logs, StringComparison.Ordinal);
+				Assert.False(process.HasExited, $"Operator exited before showing its real window. {logs}");
+				if (logs.Contains("operator.window-shown", StringComparison.Ordinal))
+					break;
+				await Task.Delay(100);
+			}
+			Assert.Contains("operator.window-shown", logs, StringComparison.Ordinal);
+			Assert.True(process.CloseMainWindow(), "The shown Operator window did not accept a close request.");
+			await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(15));
+			Assert.Equal(0, process.ExitCode);
+			logs = ReadLogs(root);
+			Assert.Contains("operator.exit", logs, StringComparison.Ordinal);
+			Assert.DoesNotContain("operator.dispatcher-unhandled-exception", logs, StringComparison.Ordinal);
+			output.WriteLine("WINDOWS LAUNCH PASS: productive Operator executable showed MainWindow and exited cleanly.");
+		}
+		finally
+		{
+			if (!process.HasExited)
+			{
+				process.Kill(entireProcessTree: true);
+				await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
+			}
+			Directory.Delete(root, recursive: true);
+		}
+	}
+
+	[Fact]
+	public void Productive_panel_children_contain_only_elements_or_real_whitespace()
+	{
+		var root = Path.Combine(FindRepositoryRoot(), "src", "Hosts", "rtaime.Operator");
+		var violations = Directory.EnumerateFiles(root, "*.xaml", SearchOption.AllDirectories)
+			.Where(path => !Path.GetRelativePath(root, path).StartsWith("obj" + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+			.SelectMany(path => InvalidPanelText(XDocument.Load(path, LoadOptions.SetLineInfo))
+				.Select(node => $"{Path.GetRelativePath(root, path)}:{((IXmlLineInfo)node).LineNumber}: {node.Value}"))
+			.ToArray();
+		Assert.True(violations.Length == 0, string.Join(Environment.NewLine, violations));
+	}
+
+	[Fact]
+	public void Panel_text_guard_detects_escaped_whitespace_but_allows_TextBlock_content()
+	{
+		var bad = XDocument.Parse(@"<StackPanel>\n\t<TextBlock>Title</TextBlock></StackPanel>");
+		Assert.Single(InvalidPanelText(bad));
+		var good = XDocument.Parse("<StackPanel>\n\t<TextBlock>Title</TextBlock></StackPanel>");
+		Assert.Empty(InvalidPanelText(good));
+	}
+
+	private static IEnumerable<XText> InvalidPanelText(XDocument document) =>
+		document.Descendants()
+			.Where(element => element.Name.LocalName is "Grid" or "StackPanel" or "WrapPanel" or
+				"DockPanel" or "Canvas" or "UniformGrid" or "VirtualizingStackPanel" or
+				"VirtualizingWrapPanel" || element.Name.LocalName.EndsWith(".Children", StringComparison.Ordinal))
+			.SelectMany(element => element.Nodes().OfType<XText>())
+			.Where(node => !string.IsNullOrWhiteSpace(node.Value));
+
+	private static string ReadLogs(string root)
+	{
+		var contents = new List<string>();
+		foreach (var path in Directory.EnumerateFiles(root, "*.jsonl", SearchOption.AllDirectories))
+		{
+			using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+			using var reader = new StreamReader(stream);
+			contents.Add(reader.ReadToEnd());
+		}
+		foreach (var path in Directory.EnumerateFiles(root, "operator-crash-*.log", SearchOption.AllDirectories))
+			contents.Add(File.ReadAllText(path));
+		return string.Join(Environment.NewLine, contents);
+	}
+
+	private static string FindRepositoryRoot()
+	{
+		for (DirectoryInfo? directory = new(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
+			if (File.Exists(Path.Combine(directory.FullName, "rtaime.slnx")))
+				return directory.FullName;
+		throw new InvalidOperationException("Repository root containing rtaime.slnx could not be located.");
 	}
 
 	private static IEnumerable<DependencyObject> VisualDescendants(DependencyObject root)

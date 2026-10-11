@@ -75,6 +75,22 @@ The visual qualification additionally parses the productive MainWindow.xaml and 
 
 The test does not manipulate AppHost, RuntimeHost, ControlHost or production state to construct a visual fixture.
 
+## Real XAML tree startup qualification
+
+`OperatorXamlStartupTests` runs the productive `App.InitializeComponent()` resource dictionaries, both compiled Preview/Program views and real `MainWindow` on a dedicated STA thread with a running WPF Dispatcher. It records first-chance `XamlParseException` and `ArgumentException` with the active composition target. BAML's outer `MainWindow.xaml:line 1` is not a reliable source location; independent compiled child-view construction identifies the nested failing view.
+
+The window is shown, waits for `ContentRendered`, switches through all eight workspaces and verifies that named shell panes remain loaded and visible panes have positive geometry. Both monitor trees must remain present. The fixture uses the existing view-model composition and productive controls; it only redirects UI layout/session persistence to temporary stores. Closing awaits the real asynchronous window teardown before shutting down the application and Dispatcher.
+
+A separate process test launches the built Windows Operator executable against unique unavailable endpoints, requires its `operator.window-shown` log event, rejects crash/XAML error evidence and requests normal window close. The process must log exit and return zero. No headless flag or substituted visual tree qualifies this launch.
+
+A source guard scans all productive XAML (including dictionaries and inactive templates) for non-whitespace text directly in panel children. It accepts real whitespace and intended text inside `TextBlock`. WPF runtime construction remains the authority for markup-extension, resource-type and compiled-tree errors.
+
+Required Gates run this focused suite in CI before template/AI integration subsets and in Quality alongside existing startup, visual/DPI and media viewport checks:
+
+    dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~OperatorXamlStartupTests" --logger "console;verbosity=detailed"
+
+This proves real Windows composition, layout presence and application/window lifetime. It does not certify production media, hardware availability, pixel output or physical mixed-monitor DPI.
+
 ## Structural workspace qualification
 
 The productive MainWindow must continue to bind shell geometry through the centralized OperatorShellViewModel properties, including navigation, left/right regions, lower row, center minimums, auxiliary layout and the Preview/Program production workspace height.
