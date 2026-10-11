@@ -130,13 +130,22 @@ public static class CompositingGraphProjector
 				source.IsProgram || source.IsPreview));
 		}
 
+		var missingPreview = !input.Sources.Any(source => source is not null &&
+			string.Equals(source.Id, input.PreviewSourceId, StringComparison.Ordinal));
+		var missingProgram = !input.Sources.Any(source => source is not null &&
+			string.Equals(source.Id, input.ProgramSourceId, StringComparison.Ordinal));
+		var missingRoutingSources = missingPreview || missingProgram;
+		var routingEvidence = missingRoutingSources
+			? $"MISSING SOURCE · {(missingPreview ? "PREVIEW " : string.Empty)}{(missingProgram ? "PROGRAM" : string.Empty)}".Trim()
+			: ValueOrDash(input.TransitionStatus);
+
 		nodes.Add(new CompositingGraphNodeProjection(
 			"routing",
 			CompositingGraphNodeKind.Routing,
 			"Preview / Program Routing",
 			$"PVW {ValueOrDash(input.PreviewSourceId)} · PGM {ValueOrDash(input.ProgramSourceId)}",
-			ValueOrDash(input.TransitionStatus),
-			EvaluateHealth(input.RuntimeStatus, input.RuntimeHealth),
+			routingEvidence,
+			missingRoutingSources ? CompositingGraphHealth.Error : EvaluateHealth(input.RuntimeStatus, input.RuntimeHealth),
 			[
 				new("sources", "Sources", CompositingGraphPortDirection.Input),
 				new("preview", "Preview", CompositingGraphPortDirection.Output),
