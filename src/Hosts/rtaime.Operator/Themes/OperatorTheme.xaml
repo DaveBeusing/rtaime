@@ -129,6 +129,8 @@
 		<Setter Property="SnapsToDevicePixels" Value="True" />
 	</Style>
 
+	<Style x:Key="OperatorInsetPanel" TargetType="Border" BasedOn="{StaticResource OperatorPanel}" />
+
 	<Style x:Key="OperatorEmptyState" TargetType="Border" BasedOn="{StaticResource OperatorPanel}">
 		<Setter Property="Background" Value="{DynamicResource OperatorRaisedSurfaceBrush}" />
 		<Setter Property="BorderBrush" Value="{DynamicResource OperatorBorderBrush}" />

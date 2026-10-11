@@ -65,7 +65,7 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 			{
 				try
 				{
-					app = new App { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+					app = new QualificationApp { ShutdownMode = ShutdownMode.OnExplicitShutdown };
 					app.InitializeComponent();
 
 					// Load both productive BAML views independently: MainWindow's outer line 1
@@ -228,6 +228,11 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 			Assert.DoesNotContain("operator.dispatcher-unhandled-exception", logs, StringComparison.Ordinal);
 			output.WriteLine("WINDOWS LAUNCH PASS: productive Operator executable showed MainWindow and exited cleanly.");
 		}
+		catch
+		{
+			output.WriteLine(ReadLogs(root));
+			throw;
+		}
 		finally
 		{
 			if (!process.HasExited)
@@ -235,7 +240,8 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 				process.Kill(entireProcessTree: true);
 				await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
 			}
-			Directory.Delete(root, recursive: true);
+			try { Directory.Delete(root, recursive: true); }
+			catch (IOException exception) { output.WriteLine($"Launch evidence retained at {root}: {exception.Message}"); }
 		}
 	}
 
@@ -288,6 +294,15 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 			if (File.Exists(Path.Combine(directory.FullName, "rtaime.slnx")))
 				return directory.FullName;
 		throw new InvalidOperationException("Repository root containing rtaime.slnx could not be located.");
+	}
+
+	private sealed class QualificationApp : App
+	{
+		// App's constructor queues OnStartup on the Dispatcher. Keep its real resource
+		// initialization, but let the fixture own exactly one window and its lifetime.
+		protected override void OnStartup(StartupEventArgs e)
+		{
+		}
 	}
 
 	private static IEnumerable<DependencyObject> VisualDescendants(DependencyObject root)
