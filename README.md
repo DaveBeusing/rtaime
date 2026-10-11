@@ -84,7 +84,7 @@ The current V1 development repository implements production-shaped software path
 | Recording | provider-neutral recording profile catalog, qualified Windows MP4 H.264/AAC software interoperability, and bounded encoded Program replay/clip production |
 | Output | governed Program/Aux output roles, Clean Program monitoring, output health, bounded SRT output and external-runtime NDI High Bandwidth software output |
 | AI | governed inference showcase with bounded fallback |
-| Health | CPU/GPU/memory telemetry, Runtime performance, alerts and health center |
+| Health | CPU/GPU/memory telemetry, Runtime performance, evidence-aware active incidents, safe diagnostic copy/export and health center |
 | Recovery | process supervision, Runtime resynchronization and safe session recovery |
 | External control | optional ControlHost gRPC/TLS boundary with authentication, RBAC, bounded requests and resynchronization; local Named Pipe remains the default |
 | Production integrations | optional IntegrationHost gateway for OSC, Windows MIDI, virtual GPIO/GPI reference control and authenticated Companion-style HTTP/WebSocket feedback |
