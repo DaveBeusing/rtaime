@@ -465,9 +465,6 @@ public partial class MainWindow : Window
 
 	private async void OnClosingAsync(object? sender, CancelEventArgs e)
 	{
-		if (!_fullscreenApplied)
-			CaptureWindowPlacement();
-		await Shell.SaveAsync();
 		if (_shutdownComplete)
 			return;
 
@@ -480,6 +477,9 @@ public partial class MainWindow : Window
 		var completedNormally = false;
 		try
 		{
+			if (!_fullscreenApplied)
+				CaptureWindowPlacement();
+			await Shell.SaveAsync();
 			Shell.PropertyChanged -= OnShellPropertyChanged;
 			Startup.PropertyChanged -= OnStartupPropertyChanged;
 			WorkspaceStates.Dispose();

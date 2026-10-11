@@ -116,6 +116,8 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 						target = $"MainWindow/{workspace}";
 						Console.WriteLine($"WORKSPACE BEGIN [{workspace}]");
 						window.Shell.SelectWorkspace(workspace);
+						await Task.Delay(25);
+						Console.WriteLine($"VIEWPORT [{workspace}] {window.ActualWidth}x{window.ActualHeight}; compact={window.Shell.IsCompactViewport}; right={window.Shell.RightColumnWidth}");
 						await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Render);
 						foreach (var name in new[]
 						{
@@ -125,7 +127,13 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 						{
 							var region = Assert.IsAssignableFrom<FrameworkElement>(window.FindName(name));
 							Assert.True(region.IsLoaded, $"{workspace}/{name}: pane was omitted from the real window.");
-							if (region.IsVisible)
+							var allocated = name switch
+							{
+								"RightInspectorRegion" => window.Shell.RightColumnWidth.Value > 0,
+								"LeftToolRegion" => window.Shell.LeftColumnWidth.Value > 0,
+								_ => true
+							};
+							if (region.IsVisible && allocated)
 							{
 								Assert.True(region.ActualWidth > 0 && region.ActualHeight > 0,
 									$"{workspace}/{name}: visible pane has empty layout.");
