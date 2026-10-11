@@ -13,6 +13,9 @@ public sealed class OperatorHealthSnapshotProvider : IHealthSnapshotProvider, ID
 		nameof(OperatorViewModel.HealthObserved),
 		nameof(OperatorViewModel.GlobalReadinessState),
 		nameof(OperatorViewModel.StartupComplete),
+		nameof(OperatorViewModel.IsConnected),
+		nameof(OperatorViewModel.IsStale),
+		nameof(OperatorViewModel.OutputRoles),
 		nameof(OperatorViewModel.AvSyncState),
 		nameof(OperatorViewModel.AvSyncEvent),
 		nameof(OperatorViewModel.AvSyncScheduledOffset),
@@ -346,6 +349,10 @@ public sealed class OperatorHealthSnapshotProvider : IHealthSnapshotProvider, ID
 			CreateMonitoring(existing, now)
 		};
 
+		snapshots.AddRange(_operator.OutputRoles
+			.Where(role => role.RoleId is "program" or "aux")
+			.Select(role => CreateTransport(existing, role, now)));
+
 		return snapshots;
 	}
 
@@ -430,6 +437,52 @@ public sealed class OperatorHealthSnapshotProvider : IHealthSnapshotProvider, ID
 			"Authoritative Control recording snapshot");
 	}
 
+	private SubsystemHealthSnapshot CreateTransport(
+		IReadOnlyDictionary<string, SubsystemHealthSnapshot> existing,
+		OperatorOutputRoleDescriptor role,
+		DateTimeOffset now)
+	{
+		var transport = role.NetworkOutput;
+
+		var transmission = OutputRoutingHealthViewModel.TransmissionState(
+			transport, _operator.IsConnected, _operator.IsStale, now);
+		var state = !role.AuthoritativeActive || transport is null
+			? SubsystemHealthState.Unknown
+			: transmission switch
+			{
+				"LIVE" => SubsystemHealthState.Healthy,
+				"FAILED" => SubsystemHealthState.Failed,
+				"DEGRADED" => SubsystemHealthState.Degraded,
+				"CONNECTING" or "RECONNECTING" => SubsystemHealthState.Recovering,
+				_ => SubsystemHealthState.Warning
+			};
+		return Create(
+			existing,
+			$"transport-{role.RoleId}",
+			$"{role.RoleId.ToUpperInvariant()} Transport",
+			"Output",
+			state,
+			transport is null
+				? "No network transport evidence is published for this output role."
+				: $"Transmission={transmission}; Lifecycle={transport.Lifecycle}; Connected={transport.Connected}; {transport.Failure?.Message ?? "No current transport failure published."}",
+			now,
+			transport is null ? [] :
+			[
+				new("Provider", transport.Provider),
+				new("Protocol", transport.Protocol),
+				new("Sent samples", transport.SentSamples.ToString(CultureInfo.InvariantCulture)),
+				new("Dropped samples (cumulative)", transport.DroppedSamples.ToString(CultureInfo.InvariantCulture)),
+				new("Queue depth", transport.QueueDepth.ToString(CultureInfo.InvariantCulture)),
+				new("Reconnects", transport.ReconnectCount.ToString(CultureInfo.InvariantCulture)),
+				new("Last successful send UTC", transport.LastSuccessfulSendUtc?.ToString("O") ?? "UNAVAILABLE")
+			],
+			"Review the existing Outputs workspace. Connection is transport evidence; it does not qualify physical delivery or permit a Program restart.",
+			$"Role={role.RoleId}; RoleHealth={role.HealthState}; Active={role.AuthoritativeActive}; Lifecycle={transport?.Lifecycle ?? "UNAVAILABLE"}",
+			state == SubsystemHealthState.Healthy ? SubsystemProgramImpact.None :
+				state == SubsystemHealthState.Unknown ? SubsystemProgramImpact.Unknown : SubsystemProgramImpact.OutputTransportOnly,
+			"Control-confirmed output role / Runtime network transport snapshot");
+	}
+
 	private SubsystemHealthSnapshot CreateDecoder(
 		IReadOnlyDictionary<string, SubsystemHealthSnapshot> existing,
 		DateTimeOffset now)
@@ -499,7 +552,7 @@ public sealed class OperatorHealthSnapshotProvider : IHealthSnapshotProvider, ID
 			state switch
 			{
 				SubsystemHealthState.Healthy => SubsystemProgramImpact.None,
-				SubsystemHealthState.Failed or SubsystemHealthState.Degraded => SubsystemProgramImpact.Degraded,
+				SubsystemHealthState.Failed or SubsystemHealthState.Degraded => SubsystemProgramImpact.Unknown,
 				_ => SubsystemProgramImpact.Unknown
 			},
 			"Compositing graph projection");
@@ -524,7 +577,7 @@ public sealed class OperatorHealthSnapshotProvider : IHealthSnapshotProvider, ID
 				: "Authoritative Runtime Program execution is healthy."
 			: _operator.EngineHealthDetail;
 		var impact = _operator.RuntimeHealth == "FAIL"
-			? SubsystemProgramImpact.Unavailable
+			? SubsystemProgramImpact.Unknown
 			: _output.Health is "ERROR" or "FALLBACK"
 				? SubsystemProgramImpact.MonitoringOnly
 				: state == SubsystemHealthState.Healthy
@@ -590,8 +643,10 @@ public sealed class OperatorHealthSnapshotProvider : IHealthSnapshotProvider, ID
 
 	private SubsystemHealthState GpuState()
 	{
-		if (_operator.GpuProviderHealth == "FAIL" || _operator.RuntimeHealth == "FAIL")
-			return SubsystemHealthState.Failed;
+		if (_operator.GpuProviderHealth == "FAIL")
+			return SubsystemHealthState.Degraded;
+		if (_operator.RuntimeHealth != "PASS")
+			return SubsystemHealthState.Unknown;
 		if (IsUnavailable(_operator.GpuUtilization) || IsUnavailable(_operator.GpuDeviceName))
 			return SubsystemHealthState.Unknown;
 		return _operator.PerformanceVerificationState == "VERIFIED"
@@ -601,8 +656,8 @@ public sealed class OperatorHealthSnapshotProvider : IHealthSnapshotProvider, ID
 
 	private SubsystemHealthState AudioState()
 	{
-		if (_operator.RuntimeHealth == "FAIL")
-			return SubsystemHealthState.Failed;
+		if (_operator.AudioMeterStatus == "STALE")
+			return SubsystemHealthState.Unknown;
 		if (_operator.AudioClipping)
 			return SubsystemHealthState.Degraded;
 		return _operator.AudioHealth.Trim().ToUpperInvariant() switch
@@ -660,16 +715,16 @@ public sealed class OperatorHealthSnapshotProvider : IHealthSnapshotProvider, ID
 
 	private static SubsystemHealthState HardwareState(string value, string runtimeHealth)
 	{
-		if (runtimeHealth == "FAIL")
-			return SubsystemHealthState.Failed;
+		if (runtimeHealth != "PASS")
+			return SubsystemHealthState.Unknown;
 		return IsUnavailable(value) ? SubsystemHealthState.Unknown : SubsystemHealthState.Healthy;
 	}
 
 	private static SubsystemProgramImpact ExecutionImpact(SubsystemHealthState state) => state switch
 	{
 		SubsystemHealthState.Healthy => SubsystemProgramImpact.None,
-		SubsystemHealthState.Degraded or SubsystemHealthState.Recovering => SubsystemProgramImpact.Degraded,
-		SubsystemHealthState.Failed => SubsystemProgramImpact.Unavailable,
+		// Aggregated health failure does not prove that Program execution stopped.
+		SubsystemHealthState.Degraded or SubsystemHealthState.Recovering or SubsystemHealthState.Failed => SubsystemProgramImpact.Unknown,
 		_ => SubsystemProgramImpact.Unknown
 	};
 
@@ -683,7 +738,7 @@ public sealed class OperatorHealthSnapshotProvider : IHealthSnapshotProvider, ID
 	private static SubsystemProgramImpact RecordingImpact(SubsystemHealthState state) => state switch
 	{
 		SubsystemHealthState.Healthy => SubsystemProgramImpact.None,
-		SubsystemHealthState.Failed => SubsystemProgramImpact.Degraded,
+		SubsystemHealthState.Failed => SubsystemProgramImpact.RecordingOnly,
 		_ => SubsystemProgramImpact.Unknown
 	};
 
@@ -706,7 +761,7 @@ public sealed class OperatorHealthSnapshotProvider : IHealthSnapshotProvider, ID
 		string.IsNullOrWhiteSpace(value) ||
 		value.Trim() is "UNVERIFIED" or "UNKNOWN" or "UNAVAILABLE" or "—";
 
-	private static SubsystemHealthSnapshot Create(
+	private SubsystemHealthSnapshot Create(
 		IReadOnlyDictionary<string, SubsystemHealthSnapshot> existing,
 		string id,
 		string displayName,
@@ -722,6 +777,7 @@ public sealed class OperatorHealthSnapshotProvider : IHealthSnapshotProvider, ID
 		bool canRecover = false,
 		string? recoveryActionLabel = null)
 	{
+
 		existing.TryGetValue(id, out var previous);
 		var candidate = new SubsystemHealthSnapshot(
 			id,
@@ -739,6 +795,25 @@ public sealed class OperatorHealthSnapshotProvider : IHealthSnapshotProvider, ID
 			programImpact,
 			evidenceSource,
 			now);
+		candidate = ApplyEvidenceFreshness(candidate, _operator.IsConnected, _operator.IsStale, _operator.RuntimeHealth);
 		return HealthSnapshotHistory.Retain(candidate, previous, now);
 	}
+	internal static SubsystemHealthSnapshot ApplyEvidenceFreshness(
+		SubsystemHealthSnapshot candidate, bool connected, bool stale, string runtimeHealth)
+	{
+		var reliesOnControl = candidate.Id is not ("control" or "decoder" or "monitoring");
+		if (!reliesOnControl)
+			return candidate;
+		if (!connected || stale || runtimeHealth == "UNVERIFIED")
+			return candidate with
+			{
+				State = SubsystemHealthState.Unknown,
+				ProgramImpact = SubsystemProgramImpact.Unknown,
+				Detail = "Evidence is unavailable or stale; retained measurements do not establish current Program health. " +
+					$"Last projection: {candidate.Detail}",
+				RecoveryStatus = "Wait for authoritative full-snapshot synchronization; review Control Service for the existing recovery action."
+			};
+		return candidate;
+	}
+
 }

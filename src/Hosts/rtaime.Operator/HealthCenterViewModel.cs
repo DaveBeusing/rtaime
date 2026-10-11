@@ -104,6 +104,8 @@ public sealed class HealthCenterSubsystemViewModel : INotifyPropertyChanged
 
 	private static string FormatProgramImpact(SubsystemProgramImpact impact) => impact switch
 	{
+		SubsystemProgramImpact.RecordingOnly => "RECORDING ONLY",
+		SubsystemProgramImpact.OutputTransportOnly => "OUTPUT TRANSPORT ONLY",
 		SubsystemProgramImpact.None => "NO KNOWN IMPACT",
 		SubsystemProgramImpact.MonitoringOnly => "MONITORING ONLY",
 		SubsystemProgramImpact.ControlLimited => "CONTROL LIMITED",
@@ -136,6 +138,9 @@ public sealed class HealthCenterViewModel : INotifyPropertyChanged, IDisposable
 	private HealthCenterSubsystemViewModel? _selectedSubsystem;
 	private bool _technicalDetailsVisible;
 	private string _diagnosticActionStatus = string.Empty;
+	private readonly object _updateGate = new();
+	private IReadOnlyList<SubsystemHealthSnapshot>? _pendingSnapshots;
+	private bool _updateQueued;
 	private bool _disposed;
 
 	public HealthCenterViewModel(
@@ -166,6 +171,7 @@ public sealed class HealthCenterViewModel : INotifyPropertyChanged, IDisposable
 
 		_provider.Changed += ProviderChanged;
 		_readiness.Changed += ReadinessChanged;
+		_synchronizeCommand.CanExecuteChanged += SynchronizeCanExecuteChanged;
 		ApplySnapshots(_provider.GetCurrent());
 	}
 
@@ -223,39 +229,58 @@ public sealed class HealthCenterViewModel : INotifyPropertyChanged, IDisposable
 	{
 		if (_disposed)
 			return;
-		_disposed = true;
+		lock (_updateGate)
+		{
+			_disposed = true;
+			_pendingSnapshots = null;
+		}
 		_provider.Changed -= ProviderChanged;
 		_readiness.Changed -= ReadinessChanged;
+		_synchronizeCommand.CanExecuteChanged -= SynchronizeCanExecuteChanged;
 	}
 
-	private void ProviderChanged(object? sender, HealthSnapshotChangedEventArgs e)
+
+	private void ProviderChanged(object? sender, HealthSnapshotChangedEventArgs e) =>
+		QueueUpdate(e.Current.ToArray());
+
+	private void ReadinessChanged(object? sender, RuntimeReadinessChangedEventArgs e) =>
+		QueueUpdate(null);
+
+	private void SynchronizeCanExecuteChanged(object? sender, EventArgs e) =>
+		QueueUpdate(null);
+
+	private void QueueUpdate(IReadOnlyList<SubsystemHealthSnapshot>? snapshots)
 	{
-		if (_disposed)
-			return;
-		var snapshots = e.Current.ToArray();
-		_uiContext.Post(
-			_ =>
-			{
-				if (!_disposed)
-					ApplySnapshots(snapshots);
-			},
-			null);
+		lock (_updateGate)
+		{
+			if (_disposed)
+				return;
+			if (snapshots is not null)
+				_pendingSnapshots = snapshots;
+			if (_updateQueued)
+				return;
+			_updateQueued = true;
+		}
+		_uiContext.Post(_ => DrainUpdate(), null);
 	}
 
-	private void ReadinessChanged(object? sender, RuntimeReadinessChangedEventArgs e)
+	private void DrainUpdate()
 	{
-		if (_disposed)
-			return;
-		_uiContext.Post(
-			_ =>
-			{
-				if (_disposed)
-					return;
-				OnPropertyChanged(nameof(OverallState));
-				OnPropertyChanged(nameof(OverallSummary));
-				OnPropertyChanged(nameof(ProductionReadiness));
-			},
-			null);
+		IReadOnlyList<SubsystemHealthSnapshot>? snapshots;
+		lock (_updateGate)
+		{
+			_updateQueued = false;
+			if (_disposed)
+				return;
+			snapshots = _pendingSnapshots;
+			_pendingSnapshots = null;
+		}
+		if (snapshots is not null)
+			ApplySnapshots(snapshots);
+		OnPropertyChanged(nameof(OverallState));
+		OnPropertyChanged(nameof(OverallSummary));
+		OnPropertyChanged(nameof(ProductionReadiness));
+		(RecoverCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 	}
 
 	private void ApplySnapshots(IReadOnlyList<SubsystemHealthSnapshot> snapshots)
@@ -297,11 +322,12 @@ public sealed class HealthCenterViewModel : INotifyPropertyChanged, IDisposable
 		OnPropertyChanged(nameof(HealthyCount));
 		OnPropertyChanged(nameof(AttentionCount));
 		OnPropertyChanged(nameof(FailedCount));
+		(RecoverCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 	}
 
 	private Task RecoverSelectedAsync()
 	{
-		if (SelectedSubsystem?.Id == "control" && _synchronizeCommand.CanExecute(null))
+		if (CanRecoverSelected())
 			_synchronizeCommand.Execute(null);
 		return Task.CompletedTask;
 	}
@@ -332,19 +358,21 @@ public sealed class HealthCenterViewModel : INotifyPropertyChanged, IDisposable
 	internal static string BuildIncidentSummary(HealthCenterSubsystemViewModel incident)
 	{
 		ArgumentNullException.ThrowIfNull(incident);
-		var summary = string.Join(
-			Environment.NewLine,
-			[
-				$"Component: {incident.DisplayName}",
-				$"Severity: {incident.State}",
-				$"Program impact: {incident.ProgramImpact}",
-				$"First observed: {incident.FirstObserved}",
-				$"Last observed: {incident.LastObserved}",
-				$"Evidence source: {incident.EvidenceSource}",
-				$"Current evidence: {incident.Detail}",
-				$"Recommended safe next action: {incident.RecommendedAction}"
-			]);
-		return DiagnosticRedactor.RedactText(summary);
+
+		var fields = new (string Label, string Value)[]
+		{
+			("Component", incident.DisplayName),
+			("Severity", incident.State),
+			("Program impact", incident.ProgramImpact),
+			("State first projected", incident.FirstObserved),
+			("Last projected", incident.LastObserved),
+			("Evidence source", incident.EvidenceSource),
+			("Current evidence", incident.Detail),
+			("Recommended safe next action", incident.RecommendedAction)
+		};
+		var summary = string.Join(Environment.NewLine,
+			fields.Select(field => $"{field.Label}: {DiagnosticRedactor.RedactText(field.Value)}"));
+		return summary;
 	}
 
 	private static string FormatReadiness(RuntimeReadinessState state) => state switch

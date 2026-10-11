@@ -19,7 +19,9 @@ public enum SubsystemProgramImpact
 	ControlLimited,
 	Degraded,
 	Unavailable,
-	Unknown
+	Unknown,
+	RecordingOnly,
+	OutputTransportOnly
 }
 
 public static class HealthStateMapping
@@ -81,6 +83,7 @@ public static class HealthSnapshotAnalysis
 		SubsystemProgramImpact.Unavailable => 5,
 		SubsystemProgramImpact.Degraded => 4,
 		SubsystemProgramImpact.ControlLimited => 3,
+		SubsystemProgramImpact.RecordingOnly or SubsystemProgramImpact.OutputTransportOnly => 2,
 		SubsystemProgramImpact.MonitoringOnly => 2,
 		SubsystemProgramImpact.Unknown => 1,
 		_ => 0
