@@ -38,6 +38,8 @@ The graph follows the compositing mockup palette and density:
 
 Category identity is shown by a narrow node accent rather than coloring every node outline. Inputs are presented on the left and outputs on the right.
 
+The routing graph additionally projects an authoritative Aux output role when one is present in the synchronized Control snapshot. Its provider and target identity are observational metadata; a missing source marks the output faulted, absent execution confirmation remains degraded, and an inactive route is not drawn as live. Network SRT/NDI health remains in the established OUTPUTS workspace until the signal graph has a validated dedicated network-output projection. The graph does not infer physical device certification.
+
 The current product data supports these mockup-facing roles:
 
 - **Media Input** — current source and graphics-source projections;
