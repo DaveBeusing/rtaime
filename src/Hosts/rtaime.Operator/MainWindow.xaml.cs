@@ -139,7 +139,16 @@ public partial class MainWindow : Window
 	}
 
 	public MainWindow(OperatorViewModel viewModel)
+		: this(viewModel, new OperatorLayoutStore(), new OperatorSessionRecoveryStore())
 	{
+	}
+
+	internal MainWindow(
+		OperatorViewModel viewModel,
+		OperatorLayoutStore layoutStore,
+		OperatorSessionRecoveryStore sessionRecoveryStore)
+	{
+		_sessionRecoveryStore = sessionRecoveryStore;
 		ArgumentNullException.ThrowIfNull(viewModel);
 		viewModel.SetGraphicsAssetPicker(PickGraphicsAsset);
 		viewModel.SetSynchronizationContext(new DispatcherSynchronizationContext(Dispatcher));
@@ -159,7 +168,7 @@ public partial class MainWindow : Window
 			new DispatcherSynchronizationContext(Dispatcher));
 		OutputHealth = new OutputRoutingHealthViewModel(viewModel, ProgramOutput);
 		RuntimePerformanceStatus = new RuntimePerformanceStatusBarViewModel(viewModel, OutputHealth);
-		Shell = new OperatorShellViewModel(new OperatorLayoutStore(), SetProductionFullscreen);
+		Shell = new OperatorShellViewModel(layoutStore, SetProductionFullscreen);
 		_sessionRecovery = _sessionRecoveryStore.BeginSession(new OperatorSafeSessionState(Shell.SelectedWorkspace));
 		if (_sessionRecovery.PreviousSessionEndedUnexpectedly)
 			Shell.SelectWorkspace(_sessionRecovery.SafeState.SelectedWorkspace);

@@ -56,6 +56,9 @@ jobs:
         shell: pwsh
         run: ./build/operations/Test-WindowsApplicationBootstrap.ps1 -Configuration Release -QualifySingleFile
 
+      - name: Operator real XAML startup qualification
+        run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~OperatorXamlStartupTests" --logger "console;verbosity=detailed"
+
       - name: Governed AI workflow regressions
         run: dotnet test rtaime.slnx --configuration Release --no-build -m:1 --filter "FullyQualifiedName~AIShowcase|FullyQualifiedName~AIEffectBrowser|FullyQualifiedName~AIResultUsePolicy|FullyQualifiedName~AIFailureIsolation|FullyQualifiedName~AIFallbackBehavior|FullyQualifiedName~GovernedAIContract"
 
@@ -283,6 +286,9 @@ jobs:
 
       - name: Unit tests
         run: dotnet test tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj --configuration Release --no-build
+
+      - name: Operator real XAML startup qualification
+        run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~OperatorXamlStartupTests" --logger "console;verbosity=detailed"
 
       - name: Operator startup tests
         run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~StartupLifecycleViewModelTests"
