@@ -5,6 +5,7 @@ using System.IO;
 using System.Xml;
 using System.Xml.Linq;
 using System.Runtime.ExceptionServices;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Markup;
 using System.Windows.Media;
@@ -140,6 +141,12 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 							window.Closed += (_, _) => closed.TrySetResult();
 							window.Close();
 							await closed.Task.WaitAsync(TimeSpan.FromSeconds(10));
+							var teardown = Stopwatch.StartNew();
+							while (!SessionClosedCleanly(Path.Combine(root, "session.json")) &&
+								teardown.Elapsed < TimeSpan.FromSeconds(10))
+								await Task.Delay(25);
+							Assert.True(SessionClosedCleanly(Path.Combine(root, "session.json")),
+								"Closed fired before the real asynchronous service/session teardown completed.");
 							Assert.False(window.IsVisible);
 						}
 						else if (owner is not null)
@@ -294,6 +301,12 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 			if (File.Exists(Path.Combine(directory.FullName, "rtaime.slnx")))
 				return directory.FullName;
 		throw new InvalidOperationException("Repository root containing rtaime.slnx could not be located.");
+	}
+
+	private static bool SessionClosedCleanly(string path)
+	{
+		using var document = JsonDocument.Parse(File.ReadAllText(path));
+		return document.RootElement.GetProperty("CleanShutdown").GetBoolean();
 	}
 
 	private sealed class QualificationApp : App
