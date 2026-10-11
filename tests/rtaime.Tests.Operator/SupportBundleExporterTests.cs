@@ -131,6 +131,45 @@ public sealed class SupportBundleExporterTests : IDisposable
 		Assert.Contains(archive.Entries, entry => entry.FullName == "health/OperatorHealth.json");
 	}
 
+	[Fact]
+	public async Task Incident_export_preserves_provenance_and_rejects_private_key_material()
+	{
+		var now = new DateTimeOffset(2026, 10, 11, 12, 0, 0, TimeSpan.Zero);
+		var snapshot = new SubsystemHealthSnapshot(
+			"recording", "Recording", "Recording", SubsystemHealthState.Failed,
+			"Recording failed token=do-not-export", now, null, [],
+			"Review recording diagnostics.", "-----BEGIN PRIVATE KEY-----\\nnot-a-real-key",
+			ProgramImpact: SubsystemProgramImpact.RecordingOnly,
+			EvidenceSource: "Control-confirmed recording snapshot", LastObservedAt: now.AddSeconds(2));
+		var exporter = new SupportBundleExporter(new FixedHealthProvider([snapshot]),
+			sessionIdProvider: () => null, logRootProvider: () => _root);
+		var destination = Path.Combine(_root, "incident.zip");
+		await exporter.ExportAsync(destination, null);
+		using var archive = ZipFile.OpenRead(destination);
+		var json = await ReadEntryAsync(archive, "health/OperatorHealth.json");
+		Assert.DoesNotContain("do-not-export", json, StringComparison.Ordinal);
+		Assert.DoesNotContain("not-a-real-key", json, StringComparison.Ordinal);
+		using var document = JsonDocument.Parse(json);
+		var incident = document.RootElement[0];
+		Assert.Equal("RecordingOnly", incident.GetProperty("programImpact").GetString());
+		Assert.Equal(snapshot.EvidenceSource, incident.GetProperty("evidenceSource").GetString());
+		Assert.Equal(now.AddSeconds(2), incident.GetProperty("lastProjectedAtUtc").GetDateTimeOffset());
+		Assert.DoesNotContain(archive.Entries, entry => entry.FullName.Contains("media", StringComparison.OrdinalIgnoreCase));
+	}
+
+	[Fact]
+	public async Task Cancelled_export_does_not_leave_a_final_or_temporary_bundle()
+	{
+		var exporter = new SupportBundleExporter(new FixedHealthProvider([]),
+			sessionIdProvider: () => null, logRootProvider: () => _root);
+		var destination = Path.Combine(_root, "cancelled.zip");
+		using var cancellation = new CancellationTokenSource();
+		cancellation.Cancel();
+		await Assert.ThrowsAnyAsync<OperationCanceledException>(() => exporter.ExportAsync(destination, null, cancellation.Token));
+		Assert.False(File.Exists(destination));
+		Assert.Empty(Directory.EnumerateFiles(_root, "*.tmp"));
+	}
+
 	public void Dispose()
 	{
 		try

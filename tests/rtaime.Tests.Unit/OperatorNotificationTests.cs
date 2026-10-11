@@ -198,6 +198,27 @@ public sealed class OperatorNotificationTests
 		}
 	}
 
+	[Fact]
+	public void Repeated_fault_and_reconnect_keep_one_persistent_notification_per_condition()
+	{
+		var service = new NotificationService();
+		for (var index = 0; index < 5000; index++)
+			service.Publish(State(OperatorNotificationCategory.Recovery, OperatorNotificationCondition.Active,
+				"Control reconnecting", persistent: true));
+		var active = Assert.Single(service.Current);
+		Assert.Equal(5000, active.OccurrenceCount);
+		Assert.True(active.Persistent);
+		service.RemoveExpired(DateTimeOffset.UtcNow.AddDays(1));
+		Assert.Single(service.Current);
+		service.Publish(State(OperatorNotificationCategory.Success, OperatorNotificationCondition.Resolved,
+			"Control synchronized", persistent: false));
+		service.Publish(State(OperatorNotificationCategory.Error, OperatorNotificationCondition.Active,
+			"Control reconnect failed", persistent: true));
+		active = Assert.Single(service.Current);
+		Assert.True(active.Persistent);
+		Assert.Equal(OperatorNotificationCondition.Active, active.Condition);
+	}
+
 	private static OperatorNotification State(
 		OperatorNotificationCategory category,
 		OperatorNotificationCondition condition,
