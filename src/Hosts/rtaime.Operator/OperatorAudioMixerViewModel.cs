@@ -489,6 +489,7 @@ public sealed class OperatorAudioSourceStripViewModel : INotifyPropertyChanged
 	public string RuntimeState => !_owner.EvidenceIsCurrent ? _owner.Availability :
 		Health is "UNDERRUN" or "ERROR" ? "MISSING / UNDERRUN" : InputClipping ? "INPUT OVERLOAD" : Health;
 	public string ConfirmedGainLabel => OperatorAudioMixerViewModel.FormatGain(_confirmed.Gain);
+	public bool CanEditDraft => MutationState != "PENDING";
 	public string DraftGainLabel => OperatorAudioMixerViewModel.FormatGain(Gain);
 	public string RoutingEvidence => !_owner.EvidenceIsCurrent ? $"{_owner.Availability} · RETAINED ROUTING" :
 		$"{(_confirmed.Muted ? "MUTED" : _confirmed.Gain == 0 ? "ZERO GAIN" : _confirmed.BusAssignments.Count == 0 ? "NO BUS" : _confirmed.FollowRoutedSource ? "ROUTED SOURCE ONLY" : "ALWAYS ELIGIBLE")} · {BusSummary}";
@@ -497,9 +498,11 @@ public sealed class OperatorAudioSourceStripViewModel : INotifyPropertyChanged
 	
 	internal void RefreshEvidenceState()
 	{
-		foreach (var property in new[] { nameof(HasMeterEvidence), nameof(RuntimeState), nameof(RoutingEvidence), nameof(ProcessingEvidence) })
+		foreach (var property in new[] { nameof(LeftPeakLabel), nameof(RightPeakLabel), nameof(HasMeterEvidence), nameof(RuntimeState), nameof(RoutingEvidence), nameof(ProcessingEvidence) })
 			OnPropertyChanged(property);
 	}
+	public string LeftPeakLabel => HasMeterEvidence ? (_leftPeak <= 0 ? "−∞" : $"{20 * Math.Log10(_leftPeak):0.0}") : "—";
+	public string RightPeakLabel => HasMeterEvidence ? (_rightPeak <= 0 ? "−∞" : $"{20 * Math.Log10(_rightPeak):0.0}") : "—";
 	public double LeftPeak { get => _leftPeak; private set => Set(ref _leftPeak, value); }
 	public double RightPeak { get => _rightPeak; private set => Set(ref _rightPeak, value); }
 	public bool InputClipping { get => _inputClipping; private set { if (Set(ref _inputClipping, value)) OnPropertyChanged(nameof(RuntimeState)); } }
@@ -662,6 +665,7 @@ public sealed class OperatorAudioSourceStripViewModel : INotifyPropertyChanged
 	private void DraftChanged()
 	{
 		OnPropertyChanged(nameof(HasDraftChanges));
+		OnPropertyChanged(nameof(CanEditDraft));
 		OnPropertyChanged(nameof(DraftState));
 		OnPropertyChanged(nameof(ContributionLabel));
 		OnPropertyChanged(nameof(DraftGainLabel));
@@ -798,6 +802,8 @@ public sealed class OperatorAudioBusStripViewModel : INotifyPropertyChanged
 	public event PropertyChangedEventHandler? PropertyChanged;
 	public string BusId => _confirmed.BusId.Value;
 	public string BusLabel => BusId.ToUpperInvariant();
+	public string LeftPeakLabel => HasMeterEvidence ? (_leftPeak <= 0 ? "−∞" : $"{20 * Math.Log10(_leftPeak):0.0}") : "—";
+	public string RightPeakLabel => HasMeterEvidence ? (_rightPeak <= 0 ? "−∞" : $"{20 * Math.Log10(_rightPeak):0.0}") : "—";
 	public double LeftPeak { get => _leftPeak; private set => Set(ref _leftPeak, value); }
 	public double RightPeak { get => _rightPeak; private set => Set(ref _rightPeak, value); }
 	public bool Clipping { get => _clipping; private set => Set(ref _clipping, value); }
@@ -807,18 +813,20 @@ public sealed class OperatorAudioBusStripViewModel : INotifyPropertyChanged
 	public ulong LimiterHitCount { get => _limiterHitCount; private set => Set(ref _limiterHitCount, value); }
 	public int ActiveSources { get => _activeSources; private set => Set(ref _activeSources, value); }
 	public int MissingSources { get => _missingSources; private set => Set(ref _missingSources, value); }
+	public string CountsEvidence => HasMeterEvidence ? $"ACTIVE {ActiveSources} · MISSING {MissingSources}" : "SOURCE COUNTS UNAVAILABLE";
 	public string OutputRoles { get => _outputRoles; private set => Set(ref _outputRoles, value); }
 	public bool HasMeterEvidence => _hasMeterEvidence && _owner.EvidenceIsCurrent;
 	public string EvidenceState => !_owner.EvidenceIsCurrent ? _owner.Availability :
 		!_hasMeterEvidence ? "UNAVAILABLE" : Clipping ? "CLIPPING" : MissingSources > 0 ? "MISSING SOURCE" : "CONFIRMED";
 	public string ConfirmedGainLabel => OperatorAudioMixerViewModel.FormatGain(_confirmed.MasterGain);
+	public bool CanEditDraft => MutationState != "PENDING";
 	public string DraftGainLabel => OperatorAudioMixerViewModel.FormatGain(MasterGain);
 	public string ProcessingEvidence => $"COMP {(_confirmed.Dynamics?.Compressor.Enabled == true ? "ENABLED" : "BYPASS")} · " +
 		$"LIMIT {(_confirmed.Dynamics?.Limiter.Enabled == true ? "ENABLED" : "BYPASS")} · CONFIRMED CONFIGURATION";
 
 	internal void RefreshEvidenceState()
 	{
-		foreach (var property in new[] { nameof(HasMeterEvidence), nameof(EvidenceState), nameof(LimiterActivity), nameof(CompressorActivity) })
+		foreach (var property in new[] { nameof(LeftPeakLabel), nameof(RightPeakLabel), nameof(HasMeterEvidence), nameof(EvidenceState), nameof(CountsEvidence), nameof(LimiterActivity), nameof(CompressorActivity) })
 			OnPropertyChanged(property);
 	}
 	public string LimiterActivity => !HasMeterEvidence ? "UNAVAILABLE" : LimiterHitCount > 0 ? $"{LimiterHitCount} HIT" : LimiterReductionDb > 0 ? $"{LimiterReductionDb:0.0} dB" : "IDLE";
@@ -920,6 +928,7 @@ public sealed class OperatorAudioBusStripViewModel : INotifyPropertyChanged
 		(ToggleMuteCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 		(DiscardDraftCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 		OnPropertyChanged(nameof(HasDraftChanges));
+		OnPropertyChanged(nameof(CanEditDraft));
 		OnPropertyChanged(nameof(DraftState));
 	}
 
@@ -970,6 +979,7 @@ public sealed class OperatorAudioBusStripViewModel : INotifyPropertyChanged
 	private void DraftChanged()
 	{
 		OnPropertyChanged(nameof(HasDraftChanges));
+		OnPropertyChanged(nameof(CanEditDraft));
 		OnPropertyChanged(nameof(DraftState));
 		OnPropertyChanged(nameof(DraftGainLabel));
 		RaiseCanExecuteChanged();
