@@ -1,5 +1,6 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO;
 using System.Xml;
@@ -34,7 +35,7 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 		var root = Path.Combine(Path.GetTempPath(), "rtaime-xaml-startup", Guid.NewGuid().ToString("N"));
 		Directory.CreateDirectory(root);
 		var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-		var diagnostics = new List<string>();
+		var diagnostics = new ConcurrentQueue<string>();
 		var thread = new Thread(() =>
 		{
 			var dispatcher = Dispatcher.CurrentDispatcher;
@@ -48,7 +49,7 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 					args.Exception is XamlParseException or ArgumentException)
 				{
 					var detail = $"FIRST CHANCE [{target}] {args.Exception}";
-					diagnostics.Add(detail);
+					diagnostics.Enqueue(detail);
 					Console.WriteLine(detail);
 				}
 			}
@@ -58,7 +59,7 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 				// Preserve the failure without crashing the test host before diagnostics/teardown.
 				failures.Add(args.Exception);
 				var detail = $"DISPATCHER FAILURE [{target}] {args.Exception}";
-				diagnostics.Add(detail);
+				diagnostics.Enqueue(detail);
 				Console.WriteLine(detail);
 				args.Handled = true;
 			}
@@ -97,11 +98,14 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 						throw new AggregateException("Productive WPF composition failed.", failures);
 
 					Assert.NotNull(window);
+					Console.WriteLine("COMPOSITION PASS [MainWindow] compiled resource dictionaries and full window tree.");
 					var rendered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 					window.ContentRendered += (_, _) => rendered.TrySetResult();
 					window.Width = 1600;
 					window.Height = 900;
+					Console.WriteLine("WINDOW SHOW BEGIN [MainWindow]");
 					window.Show();
+					Console.WriteLine("WINDOW SHOW RETURN [MainWindow]");
 					await rendered.Task.WaitAsync(TimeSpan.FromSeconds(10));
 					Assert.True(window.IsLoaded && window.IsVisible);
 
@@ -127,7 +131,7 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 						}
 						Assert.NotEmpty(VisualDescendants(window).OfType<PreviewViewer>());
 						Assert.NotEmpty(VisualDescendants(window).OfType<ProgramViewer>());
-						diagnostics.Add($"RENDER PASS [{workspace}] real MainWindow and monitor trees.");
+						diagnostics.Enqueue($"RENDER PASS [{workspace}] real MainWindow and monitor trees.");
 					}
 					Assert.DoesNotContain(diagnostics, entry => entry.StartsWith("FIRST CHANCE", StringComparison.Ordinal));
 				}
@@ -185,12 +189,10 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 		finally
 		{
 			var joined = thread.Join(TimeSpan.FromSeconds(5));
+			foreach (var diagnostic in diagnostics.ToArray())
+				output.WriteLine(diagnostic);
 			if (joined)
-			{
-				foreach (var diagnostic in diagnostics)
-					output.WriteLine(diagnostic);
 				Directory.Delete(root, recursive: true);
-			}
 			Assert.True(joined, "The Operator qualification STA dispatcher did not terminate.");
 		}
 	}
