@@ -158,6 +158,7 @@ public sealed class ShowControlCoordinatorIntegrationTests
 		var request = new ShowTemplateRequest(json, "Imported", bindings);
 		var preview = await service.PreflightAsync(request, default);
 		Assert.True(preview.CanCommit);
+		Assert.Contains(preview.Changes, change => change.Contains("SetAudioRouting", StringComparison.Ordinal));
 		Assert.Empty((await coordinator.GetSnapshotAsync()).CueLists);
 		Assert.Equal(state, fixture.Control.State);
 		var result = await service.InstantiateAsync(request with {
@@ -171,7 +172,7 @@ public sealed class ShowControlCoordinatorIntegrationTests
 		Assert.Equal(4, saved.Scenes.Count);
 		Assert.Equal(4, fixture.Control.Specification.Scenes.Count);
 		Assert.DoesNotContain(saved.Scenes.Skip(2), scene => document.Content.ScenesJson.Contains(scene.SceneId.ToString(), StringComparison.Ordinal));
-		var repeated = await service.PreflightAsync(request, default);
+		var repeated = await service.PreflightAsync(request with { InstanceName = "IMPORTED" }, default);
 		Assert.False(repeated.CanCommit);
 		Assert.Contains(repeated.Conflicts, conflict => conflict.Contains("NAME", StringComparison.Ordinal));
 		await using var restoredJournal = new BoundedProductionJournal(128);

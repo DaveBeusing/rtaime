@@ -126,7 +126,8 @@ public sealed class ShowTemplateService
 		if (workspace.CueLists.Count >= 32 || workspace.CueLists.Any(list =>
 			string.Equals(list.Name, request.InstanceName.Trim(), StringComparison.OrdinalIgnoreCase)))
 			conflicts.Add("NAME: Choose a new show name; existing shows are never overwritten. The limit is 32 cue lists.");
-		if (project.Scenes.Count + prepared.Scenes.Count > 128 || prepared.Scenes.Any(scene =>
+		if (project.Scenes.Count + prepared.Scenes.Count > 128 ||
+			prepared.Scenes.Select(scene => scene.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() != prepared.Scenes.Count || prepared.Scenes.Any(scene =>
 			project.Scenes.Any(existing => string.Equals(existing.Name, scene.Name, StringComparison.OrdinalIgnoreCase))))
 			conflicts.Add("SCENES: Duplicate scene name or the 128-scene limit would be exceeded.");
 		foreach (var dependency in prepared.Document.Content.Dependencies)
@@ -135,10 +136,19 @@ public sealed class ShowTemplateService
 			var failure = await _availability(dependency, target, cancellationToken).ConfigureAwait(false);
 			if (failure is not null) conflicts.Add($"{dependency.Kind.ToUpperInvariant()} · {dependency.Name}: {failure}");
 		}
-		return new(conflicts.Count == 0, project.StorageVersion, version,
-			prepared.Scenes.Select(scene => $"ADD SCENE · {scene.Name} · Preview {scene.Routing.PreviewSourceId} / Program {scene.Routing.ProgramSourceId}")
-				.Append($"ADD CUE LIST · {prepared.CueList.Name} · {prepared.CueList.Cues.Count} cues")
-				.Append("Save authored definitions only. Program, selected cue list and execution remain unchanged.").ToArray(), conflicts.ToArray());
+		var changes = new List<string>();
+		foreach (var scene in prepared.Scenes)
+		{
+			changes.Add($"ADD SCENE · {scene.Name} · Preview {scene.Routing.PreviewSourceId} / Program {scene.Routing.ProgramSourceId}");
+			foreach (var layer in scene.CompositingState?.Layers ?? [])
+				changes.Add($"LAYER · {layer.LayerId} · visible {layer.Visible} · opacity {layer.Opacity} · position {layer.PositionX},{layer.PositionY} · scale {layer.Scale} · rotation {layer.RotationDegrees} · crop {layer.CropLeft},{layer.CropTop},{layer.CropRight},{layer.CropBottom} · processing {JsonSerializer.Serialize(layer.ProcessingStack, ShowTemplateSerializer.Options)}");
+		}
+		changes.Add($"ADD CUE LIST · {prepared.CueList.Name} · {prepared.CueList.Cues.Count} cues");
+		foreach (var cue in prepared.CueList.Cues)
+			foreach (var action in cue.Actions)
+				changes.Add($"CUE · {cue.Name} · {action.Kind} · scene {action.SceneId ?? "-"} · source {action.SourceId ?? "-"} · output {action.OutputRoleId ?? "-"} · media {action.MediaAssetId ?? "-"} / {action.MediaCuePointId ?? "-"} · layer {action.LayerId ?? "-"} · visible {action.Visible?.ToString() ?? "-"} · frames {action.DurationFrames ?? action.WaitFrames} · audio mode {action.AudioRoutingMode} / gain {action.AudioGain} / mute {action.AudioMuted}");
+		changes.Add("Save authored definitions only. Program, selected cue list and execution remain unchanged.");
+		return new(conflicts.Count == 0, project.StorageVersion, version, changes.ToArray(), conflicts.ToArray());
 	}
 
 	public async ValueTask<ShowControlWorkspaceSnapshot> InstantiateAsync(ShowTemplateRequest request, CancellationToken cancellationToken)

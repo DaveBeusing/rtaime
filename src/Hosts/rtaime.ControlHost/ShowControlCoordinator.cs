@@ -120,6 +120,7 @@ public sealed class ShowControlCoordinator : IAsyncDisposable
 				_cueLists.Values.Any(list => string.Equals(list.Name, cueList.Name, StringComparison.OrdinalIgnoreCase)))
 				throw new InvalidOperationException("Template instance conflicts with an existing show name or the 32-list limit.");
 			if (control.Specification.Scenes.Count + scenes.Count > 128 ||
+				scenes.Select(scene => scene.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() != scenes.Count ||
 				scenes.Any(scene => control.Specification.Scenes.Any(existing => existing.SceneId == scene.SceneId ||
 					string.Equals(existing.Name, scene.Name, StringComparison.OrdinalIgnoreCase))))
 				throw new InvalidOperationException("Template scenes conflict with existing scenes or the 128-scene limit.");
