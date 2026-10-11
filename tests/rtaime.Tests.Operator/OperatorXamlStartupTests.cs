@@ -66,7 +66,7 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 			{
 				try
 				{
-					app = new QualificationApp { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+					app = new OperatorResourceApplication { ShutdownMode = ShutdownMode.OnExplicitShutdown };
 					app.InitializeComponent();
 
 					// Load both productive BAML views independently: MainWindow's outer line 1
@@ -307,15 +307,6 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 	{
 		using var document = JsonDocument.Parse(File.ReadAllText(path));
 		return document.RootElement.GetProperty("CleanShutdown").GetBoolean();
-	}
-
-	private sealed class QualificationApp : App
-	{
-		// App's constructor queues OnStartup on the Dispatcher. Keep its real resource
-		// initialization, but let the fixture own exactly one window and its lifetime.
-		protected override void OnStartup(StartupEventArgs e)
-		{
-		}
 	}
 
 	private static IEnumerable<DependencyObject> VisualDescendants(DependencyObject root)

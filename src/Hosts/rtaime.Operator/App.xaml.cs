@@ -191,3 +191,12 @@ public partial class App : Application
 		string RuntimeStatus,
 		DateTimeOffset ObservedAtUtc);
 }
+
+// Resource-only application owner for in-process visual composition. Keep this
+// in the Operator assembly so WPF can load App's compiled resource component.
+internal sealed class OperatorResourceApplication : App
+{
+	protected override void OnStartup(StartupEventArgs e)
+	{
+	}
+}

@@ -45,7 +45,7 @@
 					<StackPanel>
 						<TextBlock Text="STORAGE" Style="{StaticResource OperatorLabel}" />
 						<TextBlock Text="{Binding StorageUsage}" FontSize="{StaticResource OperatorFontSizeBody}" FontWeight="SemiBold" Margin="0,4,0,4" />
-						<controls:RtaimeMetricBar Minimum="0" Maximum="100" Value="{Binding StoragePercent}" HasValue="True" />
+						<controls:RtaimeMetricBar Minimum="0" Maximum="100" Value="{Binding StoragePercent, Mode=OneWay}" HasValue="True" />
 					</StackPanel>
 				</Border>
 				<Border Grid.Column="4" Style="{StaticResource OperatorInsetPanel}">
