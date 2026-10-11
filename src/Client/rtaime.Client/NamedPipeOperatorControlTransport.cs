@@ -636,6 +636,25 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		return ReadMediaDeckSnapshot(response);
 	}
 
+	public async ValueTask<string> CreateShowTemplateAsync(string name, string? cueListId, CancellationToken cancellationToken = default)
+	{
+		var response = await ExchangeAsync("control.show_template.create", new { Name = name, CueListId = cueListId }, cancellationToken).ConfigureAwait(false);
+		return response.Payload.GetProperty("templateJson").GetString() ?? throw new InvalidDataException("Template response is empty.");
+	}
+
+	public async ValueTask<ShowTemplatePreflight> PreflightShowTemplateAsync(ShowTemplateRequest request, CancellationToken cancellationToken = default)
+	{
+		var response = await ExchangeAsync("control.show_template.preflight", request, cancellationToken).ConfigureAwait(false);
+		return response.Payload.Deserialize<ShowTemplatePreflight>(ShowTemplateSerializer.Options)
+			?? throw new InvalidDataException("Template preflight response is empty.");
+	}
+
+	public async ValueTask<ShowControlWorkspaceSnapshot> InstantiateShowTemplateAsync(ShowTemplateRequest request, CancellationToken cancellationToken = default)
+	{
+		var response = await ExchangeAsync("control.show_template.instantiate", request, cancellationToken).ConfigureAwait(false);
+		return ReadShowControlWorkspace(response);
+	}
+
 	public async ValueTask<ShowControlWorkspaceSnapshot> GetShowControlSnapshotAsync(CancellationToken cancellationToken = default)
 	{
 		var response = await ExchangeAsync("control.show_control.snapshot.get", new { }, cancellationToken).ConfigureAwait(false);

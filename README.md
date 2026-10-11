@@ -368,3 +368,5 @@ Replay retains bounded encoded Program history and materializes normal-speed sel
 
 
 Recording profiles are Runtime-confirmed capabilities rather than UI codec presets. The current default remains `mp4-h264-aac`; the catalog also exposes the managed `mov-2vuy-pcm` QuickTime profile with uncompressed 8-bit 4:2:2 video and PCM16 audio. MXF, proprietary professional codecs and hardware-encoder claims still require separate concrete providers and qualification. See [Recording Profile Catalog](docs/RecordingProfileCatalog.md).
+
+Portable production setup templates add reviewed scene/cue definitions through the canonical show project without executing them. See [Production Show Templates](docs/ProductionShowTemplates.md) for dependency binding, preview and compatibility limits.

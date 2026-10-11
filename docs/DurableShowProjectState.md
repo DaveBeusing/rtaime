@@ -150,3 +150,7 @@ Durability qualification explicitly covers canonical multi-node stacks containin
 Corrupted typed processing parameters fail closed as invalid persisted data. A rejected load does not rewrite or normalize the stored document behind the operator's back; recovery must succeed through the normal validated path before any state becomes authoritative.
 
 The qualification boundary intentionally distinguishes durable authored state from live confirmation: persistence and checkpoint recovery prove reconstruction semantics, while only ControlHost → RuntimeHost prepare/commit establishes current production truth.
+
+## Portable template authoring
+
+[Production Show Templates](ProductionShowTemplates.md) reuse the existing scene codec and Show Control subdocument. Add-only instantiation compares both project and workspace versions and writes appended scenes plus a fresh cue list atomically. It preserves live authority, current execution and presentation settings. Templates are authored recipes; they do not replace this durable project or its recovery policy.

@@ -7,7 +7,8 @@ namespace rtaime.ControlHost;
 
 internal static class GovernedProductionActionValidator
 {
-	public static void ValidateReferenceShape(ControlHostService control, ShowControlAction action)
+	public static void ValidateReferenceShape(ControlHostService control, ShowControlAction action,
+		IReadOnlyList<ProductionSceneSpecification>? templateScenes = null)
 	{
 		ArgumentNullException.ThrowIfNull(control);
 		ArgumentNullException.ThrowIfNull(action);
@@ -17,7 +18,7 @@ internal static class GovernedProductionActionValidator
 			case ShowControlActionKind.ActivateScene:
 			{
 				var sceneId = new SceneId(Identity.Parse(action.SceneId!));
-				if (!control.Specification.Scenes.Any(scene => scene.SceneId == sceneId))
+				if (!(templateScenes ?? control.Specification.Scenes).Any(scene => scene.SceneId == sceneId))
 					throw new InvalidDataException($"Governed action references unknown Scene '{sceneId}'.");
 				break;
 			}

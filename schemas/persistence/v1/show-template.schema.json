@@ -1,0 +1,94 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$comment": "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
+	"title": "Portable scene and cue setup template v1",
+	"type": "object",
+	"additionalProperties": false,
+	"required": [
+		"format",
+		"templateId",
+		"name",
+		"controlVersion",
+		"content",
+		"checksumSha256"
+	],
+	"properties": {
+		"format": {
+			"const": "rtaime.show-template.v1"
+		},
+		"templateId": {
+			"type": "string",
+			"format": "uuid"
+		},
+		"name": {
+			"type": "string",
+			"minLength": 1,
+			"maxLength": 100
+		},
+		"controlVersion": {
+			"enum": ["1.0", "1.1"]
+		},
+		"checksumSha256": {
+			"type": "string",
+			"pattern": "^[0-9A-F]{64}$"
+		},
+		"content": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": [
+				"scenesJson",
+				"cueListJson",
+				"dependencies"
+			],
+			"properties": {
+				"scenesJson": {
+					"type": "string",
+					"minLength": 2
+				},
+				"cueListJson": {
+					"type": "string",
+					"minLength": 2
+				},
+				"dependencies": {
+					"type": "array",
+					"maxItems": 512,
+					"items": {
+						"type": "object",
+						"additionalProperties": false,
+						"required": [
+							"kind",
+							"referenceId",
+							"name",
+							"compatibility"
+						],
+						"properties": {
+							"kind": {
+								"enum": [
+									"source",
+									"output",
+									"media",
+									"mediaCue",
+									"layer"
+								]
+							},
+							"referenceId": {
+								"type": "string",
+								"minLength": 1,
+								"maxLength": 512
+							},
+							"name": {
+								"type": "string",
+								"minLength": 1,
+								"maxLength": 200
+							},
+							"compatibility": {
+								"type": "string",
+								"maxLength": 512
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}

@@ -558,6 +558,9 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			"control.media_deck.marker" => await ApplyMediaDeckMarkerAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.media_deck.close" => await CloseMediaDeckAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.show_control.snapshot.get" => await GetShowControlSnapshotAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.show_template.create" => await RunShowTemplateAsync(request, "create", cancellationToken).ConfigureAwait(false),
+			"control.show_template.preflight" => await RunShowTemplateAsync(request, "preflight", cancellationToken).ConfigureAwait(false),
+			"control.show_template.instantiate" => await RunShowTemplateAsync(request, "instantiate", cancellationToken).ConfigureAwait(false),
 			"control.show_control.cue_list.save" => await SaveShowControlCueListAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.show_control.cue_list.select" => await SelectShowControlCueListAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.show_control.arm" => await ArmShowControlAsync(request, cancellationToken).ConfigureAwait(false),
@@ -2308,6 +2311,96 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		NotifyObservableStateChanged();
 		return Success(request, "control.media_deck.snapshot.response", ToWire(snapshot));
 	}
+
+	private async ValueTask<WireEnvelope> RunShowTemplateAsync(WireEnvelope request, string operation, CancellationToken cancellationToken)
+	{
+		if (_showProjectStore is null || _showControl is null || _controlAccessor() is not { HasAuthoritativeState: true } control)
+			return Error(request, "control.show_template.unavailable", "Canonical show project and Show Control must be available.");
+		await _mutationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+		try
+		{
+			if (operation == "create")
+			{
+				var create = request.Payload.Deserialize<WireShowTemplateCreate>(Wire.JsonOptions)
+					?? throw new InvalidDataException("Template creation request is required.");
+				var exporter = new ShowTemplateService(_controlAccessor, _showProjectStore, _showControl,
+					(_, _, _) => ValueTask.FromResult<string?>(null));
+				return Success(request, "control.show_template.create.response",
+					new WireShowTemplateJson(await exporter.CreateAsync(create.Name, create.CueListId, cancellationToken).ConfigureAwait(false)));
+			}
+			var import = request.Payload.Deserialize<ShowTemplateRequest>(ShowTemplateSerializer.Options)
+				?? throw new InvalidDataException("Template import request is required.");
+			var document = ShowTemplateSerializer.Deserialize(import.TemplateJson);
+			var observation = await ObserveRuntimeAsync(cancellationToken).ConfigureAwait(false);
+			var runtime = observation.Fresh ? observation.Snapshot : null;
+			var needsMedia = document.Content.Dependencies.Any(d => d.Kind is "media" or "mediaCue");
+			var catalog = needsMedia && _mediaAssetCatalog is not null
+				? await _mediaAssetCatalog.GetSnapshotAsync(refreshAvailability: true, cancellationToken).ConfigureAwait(false) : null;
+			var deck = needsMedia && _mediaDeck is not null
+				? await _mediaDeck.GetSnapshotAsync(cancellationToken).ConfigureAwait(false) : null;
+			var outputs = ProjectOutputRoles(control.State, runtime, observation.Fresh);
+			ValueTask<string?> Check(ShowTemplateDependency dependency, string target, CancellationToken token)
+			{
+				token.ThrowIfCancellationRequested();
+				string? conflict = dependency.Kind switch
+				{
+					"source" => CheckSource(dependency, target),
+					"output" => outputs.FirstOrDefault(role => role.RoleId == target) is not { } output
+						? "Output role is absent."
+						: !string.IsNullOrEmpty(dependency.Compatibility) && !string.Equals(output.RoleKind, dependency.Compatibility, StringComparison.OrdinalIgnoreCase)
+							? "Output role kind is incompatible."
+							: output.HealthState != "PASS" || !output.AuthoritativeActive
+								? "Output provider has no fresh healthy active confirmation." : null,
+					"media" => catalog?.Assets.FirstOrDefault(asset => asset.AssetId.ToString() == target) is not { } asset
+						? "Media is absent; import or relink it in the local Media Library."
+						: asset.Availability != MediaAssetAvailability.Online ? "Media is offline or missing." : null,
+					"mediaCue" => deck?.Markers?.CuePoints.Any(cue => cue.Id.ToString() == target) != true ||
+						ShowControlCanonicalSerializer.Deserialize(document.Content.CueListJson).Cues.SelectMany(cue => cue.Actions)
+							.Where(action => action.MediaCuePointId == dependency.ReferenceId)
+							.Any(action => import.Bindings.FirstOrDefault(binding => binding.Kind == "media" && binding.ReferenceId == action.MediaAssetId)?.TargetId != deck?.Markers?.AssetId.ToString())
+						? "Media cue is unavailable in the locally loaded Media Deck." : null,
+					"layer" => control.State.CompositingState?.Layers.FirstOrDefault(layer => layer.LayerId == target) is not { } layer
+						? "Prepare the matching local graphics layer first."
+						: !string.IsNullOrEmpty(dependency.Compatibility) && ShowTemplateService.Digest(layer.ContentIdentity) != dependency.Compatibility
+							? "Local graphics content does not match this template." : null,
+					_ => "Unsupported dependency."
+				};
+				return ValueTask.FromResult(conflict);
+			}
+			string? CheckSource(ShowTemplateDependency dependency, string target)
+			{
+				var source = control.Specification.Sources.FirstOrDefault(source => source.SourceId.ToString() == target);
+				if (source is null) return "Adopt the local source before import.";
+				if (dependency.Compatibility != (source.ProviderBinding?.CapabilityKind ?? ""))
+					return "Source provider capability is incompatible.";
+				if (runtime is null) return "Runtime source availability is stale or unavailable.";
+				var health = ToWireSource(source, runtime, deck).Health;
+				if (health is not ("VALID" or "READY")) return "Source hardware/input is not ready: " + health;
+				if (source.ProviderBinding is not null &&
+					!runtime.InputSignals.ContainsKey(new MediaSourceId(source.SourceId.Value)))
+					return "Adopted hardware/input has no fresh Runtime signal evidence.";
+				return null;
+			}
+			var service = new ShowTemplateService(_controlAccessor, _showProjectStore, _showControl, Check);
+			if (operation == "preflight")
+				return Success(request, "control.show_template.preflight.response",
+					await service.PreflightAsync(import, cancellationToken).ConfigureAwait(false));
+			var snapshot = await service.InstantiateAsync(import, cancellationToken).ConfigureAwait(false);
+			_showProject = await _showProjectStore.LoadAsync(control.Specification, CancellationToken.None).ConfigureAwait(false);
+			SetShowProjectState("SAVED", $"Template '{import.InstanceName}' committed as authored definitions; Program was not activated.");
+			NotifyObservableStateChanged();
+			return Success(request, "control.show_control.snapshot.response", ToWire(snapshot));
+		}
+		catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or InvalidDataException or
+			NotSupportedException or FormatException or JsonException or IOException)
+		{
+			return Error(request, "control.show_template.rejected", exception.Message);
+		}
+		finally { _mutationGate.Release(); }
+	}
+
+	private sealed record WireShowTemplateCreate(string Name, string? CueListId);
+	private sealed record WireShowTemplateJson(string TemplateJson);
 
 	private ValueTask<WireEnvelope> GetShowControlSnapshotAsync(WireEnvelope request, CancellationToken cancellationToken) =>
 		RunShowControlAsync(request, coordinator => coordinator.GetSnapshotAsync(cancellationToken), cancellationToken);

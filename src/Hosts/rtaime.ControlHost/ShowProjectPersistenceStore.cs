@@ -267,6 +267,48 @@ public sealed class ShowProjectPersistenceStore
 		}
 	}
 
+	public static string SerializeTemplateScenes(IReadOnlyList<ProductionSceneSpecification> scenes) =>
+		JsonSerializer.Serialize(scenes.Select(ToDocument).ToArray(), JsonOptions);
+
+	public static IReadOnlyList<ProductionSceneSpecification> DeserializeTemplateScenes(string json)
+	{
+		var documents = JsonSerializer.Deserialize<SceneDocument[]>(json, JsonOptions)
+			?? throw new InvalidDataException("Template scenes are required.");
+		if (documents.Length is 0 or > MaximumScenes || documents.Any(scene => scene is null))
+			throw new InvalidDataException("Template requires 1-128 scenes.");
+		var scenes = documents.Select(FromDocument).ToArray();
+		if (SerializeTemplateScenes(scenes) != json)
+			throw new InvalidDataException("Template scenes must use the supported canonical format.");
+		if (scenes.Select(scene => scene.SceneId).Distinct().Count() != scenes.Length ||
+			scenes.Any(scene => scene.SceneId.Value.IsEmpty || scene.Name.Length > 200))
+			throw new InvalidDataException("Template scene identities and names are invalid.");
+		return scenes;
+	}
+
+	public async ValueTask<ShowProjectSubdocumentWriteResult> ImportTemplateAsync(
+		ProductionSpecification baseline, IReadOnlyList<ProductionSceneSpecification> scenes,
+		string workspaceJson, ulong expectedProjectVersion, ulong expectedWorkspaceVersion,
+		CancellationToken cancellationToken = default)
+	{
+		if (System.Text.Encoding.UTF8.GetByteCount(workspaceJson) > MaximumShowControlJsonBytes)
+			throw new InvalidDataException("Imported workspace exceeds the durable definition limit.");
+		await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+		try
+		{
+			var current = await RequireDocumentAsync(baseline.ProductionId, cancellationToken).ConfigureAwait(false);
+			var project = Deserialize(current, baseline);
+			if (current.Version != expectedProjectVersion || project.ShowControlStorageVersion != expectedWorkspaceVersion)
+				return new(false, new(project.ShowControlWorkspaceJson, project.ShowControlStorageVersion),
+					new Failure("persistence.version_conflict", "Show project changed after template preflight. Preview again."));
+			ValidateScenes(project.ApplyTo(baseline), scenes);
+			var updated = project with { Scenes = scenes, ShowControlWorkspaceJson = workspaceJson,
+				ShowControlStorageVersion = checked(project.ShowControlStorageVersion + 1) };
+			var saved = await WriteAsync(updated, current.Version, baseline, cancellationToken).ConfigureAwait(false);
+			return new(true, new(saved.ShowControlWorkspaceJson, saved.ShowControlStorageVersion), null);
+		}
+		finally { _gate.Release(); }
+	}
+
 	public async ValueTask<PersistedShowProject> UpdateGraphicsAsync(
 		ProductionSpecification baseline,
 		DurableGraphicsState graphics,

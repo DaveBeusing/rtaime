@@ -269,6 +269,19 @@ public sealed class ControlHostService
 		}
 	}
 
+	public void AppendAuthoredScenes(IReadOnlyList<ProductionSceneSpecification> scenes)
+	{
+		lock (_gate)
+		{
+			EnsureNoPending();
+			_specification = new ProductionSpecification(_specification.Version, _specification.ProductionId,
+				_specification.Name, _specification.Sources, _specification.InitialRouting,
+				_specification.Scenes.Concat(scenes).ToArray(), _specification.InitialOutputRoles);
+			Journal(_authoritative?.Revision ?? Revision.Initial, "control", "control.scenes.authored",
+				$"{scenes.Count} template scenes added without activating Program.", null, null);
+		}
+	}
+
 	public void RefreshProviderSnapshot(IReadOnlyList<ProviderDescriptor> providers)
 	{
 		ArgumentNullException.ThrowIfNull(providers);
