@@ -1165,6 +1165,13 @@ public interface IOperatorControlTransport
     ValueTask<MediaDeckSnapshot> CloseMediaDeckAsync(CancellationToken cancellationToken = default) =>
         ValueTask.FromException<MediaDeckSnapshot>(new NotSupportedException("Operator transport does not expose media-deck control."));
 
+    ValueTask<string> CreateShowTemplateAsync(string name, string? cueListId, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<string>(new NotSupportedException("Show templates are unavailable on this transport."));
+    ValueTask<ShowTemplatePreflight> PreflightShowTemplateAsync(ShowTemplateRequest request, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<ShowTemplatePreflight>(new NotSupportedException("Show templates are unavailable on this transport."));
+    ValueTask<ShowControlWorkspaceSnapshot> InstantiateShowTemplateAsync(ShowTemplateRequest request, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<ShowControlWorkspaceSnapshot>(new NotSupportedException("Show templates are unavailable on this transport."));
+
     ValueTask<ShowControlWorkspaceSnapshot> GetShowControlSnapshotAsync(CancellationToken cancellationToken = default) =>
         ValueTask.FromException<ShowControlWorkspaceSnapshot>(new NotSupportedException("Operator transport does not expose show-control state."));
 
@@ -1795,6 +1802,17 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
 
     public ValueTask<MediaDeckSnapshot> CloseMediaDeckAsync(CancellationToken cancellationToken = default) =>
         _transport.CloseMediaDeckAsync(cancellationToken);
+
+    public ValueTask<string> CreateShowTemplateAsync(string name, string? cueListId, CancellationToken cancellationToken = default) =>
+        _transport.CreateShowTemplateAsync(name, cueListId, cancellationToken);
+    public ValueTask<ShowTemplatePreflight> PreflightShowTemplateAsync(ShowTemplateRequest request, CancellationToken cancellationToken = default) =>
+        _transport.PreflightShowTemplateAsync(request, cancellationToken);
+    public async ValueTask<ShowControlWorkspaceSnapshot> InstantiateShowTemplateAsync(ShowTemplateRequest request, CancellationToken cancellationToken = default)
+    {
+        var result = await _transport.InstantiateShowTemplateAsync(request, cancellationToken).ConfigureAwait(false);
+        await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
+        return result;
+    }
 
     public ValueTask<ShowControlWorkspaceSnapshot> GetShowControlSnapshotAsync(CancellationToken cancellationToken = default) =>
         _transport.GetShowControlSnapshotAsync(cancellationToken);

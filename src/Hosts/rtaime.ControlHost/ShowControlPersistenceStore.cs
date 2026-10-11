@@ -110,7 +110,9 @@ public sealed class ShowControlPersistenceStore
 		ShowControlCueListId? selectedCueListId,
 		ShowControlExecutionSnapshot execution,
 		ulong expectedStorageVersion,
-		CancellationToken cancellationToken = default)
+		CancellationToken cancellationToken = default,
+		IReadOnlyList<ProductionSceneSpecification>? templateScenes = null,
+		ulong? expectedProjectVersion = null)
 	{
 		ArgumentNullException.ThrowIfNull(cueLists);
 		ArgumentNullException.ThrowIfNull(execution);
@@ -135,9 +137,11 @@ public sealed class ShowControlPersistenceStore
 		if (_showProjectStore is not null)
 		{
 			var specification = RequireProjectSpecification(productionId);
-			var write = await _showProjectStore
-				.UpdateShowControlAsync(specification, json, expectedStorageVersion, cancellationToken)
-				.ConfigureAwait(false);
+			var write = templateScenes is null
+				? await _showProjectStore.UpdateShowControlAsync(specification, json, expectedStorageVersion, cancellationToken).ConfigureAwait(false)
+				: await _showProjectStore.ImportTemplateAsync(specification, templateScenes, json,
+					expectedProjectVersion ?? throw new InvalidOperationException("Template preflight project version is required."),
+					expectedStorageVersion, cancellationToken).ConfigureAwait(false);
 			if (!write.Written || write.Snapshot is null)
 				return new ShowControlPersistenceWriteResult(false, null, write.Failure);
 			nextStorageVersion = write.Snapshot.Version;
@@ -145,6 +149,8 @@ public sealed class ShowControlPersistenceStore
 		}
 		else
 		{
+			if (templateScenes is not null)
+				throw new InvalidOperationException("Template import requires canonical show-project persistence.");
 			var write = await _managementStore
 				.PutDocumentAsync(
 					Area,

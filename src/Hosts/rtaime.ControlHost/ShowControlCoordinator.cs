@@ -94,6 +94,54 @@ public sealed class ShowControlCoordinator : IAsyncDisposable
 		}
 	}
 
+	public async ValueTask<ulong> GetStorageVersionAsync(CancellationToken cancellationToken = default)
+	{
+		await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+		try { await EnsureRestoredAsync(cancellationToken).ConfigureAwait(false); return _storageVersion; }
+		finally { _gate.Release(); }
+	}
+
+	public async ValueTask<ShowControlWorkspaceSnapshot> ImportTemplateAsync(
+		ShowControlCueList cueList, IReadOnlyList<ProductionSceneSpecification> scenes,
+		ulong expectedProjectVersion, ulong expectedWorkspaceVersion,
+		CancellationToken cancellationToken = default)
+	{
+		await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+		try
+		{
+			await EnsureRestoredAsync(cancellationToken).ConfigureAwait(false);
+			var control = RequireControl();
+			if (_storageVersion != expectedWorkspaceVersion)
+				throw new InvalidOperationException("Cue workspace changed after preflight. Preview again.");
+			if (_machine.Snapshot.State is ShowControlExecutionState.Armed or ShowControlExecutionState.Executing or
+				ShowControlExecutionState.Waiting or ShowControlExecutionState.RecoveryRequired)
+				throw new InvalidOperationException("Disarm or acknowledge Show Control before importing a template.");
+			if (_cueLists.Count >= 32 || _cueLists.ContainsKey(cueList.CueListId) ||
+				_cueLists.Values.Any(list => string.Equals(list.Name, cueList.Name, StringComparison.OrdinalIgnoreCase)))
+				throw new InvalidOperationException("Template instance conflicts with an existing show name or the 32-list limit.");
+			if (control.Specification.Scenes.Count + scenes.Count > 128 ||
+				scenes.Any(scene => control.Specification.Scenes.Any(existing => existing.SceneId == scene.SceneId ||
+					string.Equals(existing.Name, scene.Name, StringComparison.OrdinalIgnoreCase))))
+				throw new InvalidOperationException("Template scenes conflict with existing scenes or the 128-scene limit.");
+			foreach (var action in cueList.Cues.SelectMany(cue => cue.Actions))
+				GovernedProductionActionValidator.ValidateReferenceShape(control, action, scenes);
+			var lists = _cueLists.Values.Append(cueList).OrderBy(list => list.Name, StringComparer.Ordinal).ToArray();
+			var write = await _persistence.SaveAsync(control.Specification.ProductionId, lists,
+				_selectedCueListId, _machine.Snapshot, expectedWorkspaceVersion, cancellationToken,
+				control.Specification.Scenes.Concat(scenes).ToArray(), expectedProjectVersion).ConfigureAwait(false);
+			if (!write.Written || write.Persisted is null)
+				throw new InvalidOperationException(write.Failure?.Message ?? "Template could not be persisted.");
+			// Publish authored catalogs only after the atomic durable write; execution stays unchanged.
+			control.AppendAuthoredScenes(scenes);
+			_cueLists.Add(cueList.CueListId, cueList);
+			_storageVersion = write.Persisted.StorageVersion;
+			Journal("show_control.template.imported", $"Template '{cueList.Name}' committed without selection or execution.", cueList.CueListId.Value);
+			_stateChanged();
+			return WorkspaceSnapshot();
+		}
+		finally { _gate.Release(); }
+	}
+
 	public async ValueTask<ShowControlWorkspaceSnapshot> SelectCueListAsync(
 		ShowControlCueListId cueListId,
 		CancellationToken cancellationToken = default)

@@ -138,6 +138,74 @@ public sealed class ShowControlCoordinatorIntegrationTests
 		Assert.Equal("show_control.recovery.uncertain_action", snapshot.Execution.Failure?.Code);
 	}
 
+	[Fact]
+	public async Task Template_dry_run_and_commit_preserve_Program_and_create_new_authored_identities()
+	{
+		await using var fixture = await Fixture.CreateAsync();
+		var projects = new ShowProjectPersistenceStore(fixture.Management);
+		await projects.LoadOrCreateAsync(fixture.Control.Specification);
+		var persistence = new ShowControlPersistenceStore(fixture.Management, projects, fixture.Control.Specification);
+		var executed = 0;
+		await using var coordinator = new ShowControlCoordinator(() => fixture.Control, persistence,
+			(_, _) => { executed++; return ValueTask.FromResult<Failure?>(null); },
+			_ => ValueTask.FromResult(new ShowControlFrameObservation("runtime", 1, TimeSpan.FromMilliseconds(20))), () => { });
+		var service = new ShowTemplateService(() => fixture.Control, projects, coordinator,
+			(_, _, _) => ValueTask.FromResult<string?>(null));
+		var state = fixture.Control.State;
+		var json = await service.CreateAsync("Setup", null, default);
+		var document = ShowTemplateSerializer.Deserialize(json);
+		var bindings = document.Content.Dependencies.Select(d => new ShowTemplateBinding(d.Kind, d.ReferenceId, d.ReferenceId)).ToArray();
+		var request = new ShowTemplateRequest(json, "Imported", bindings);
+		var preview = await service.PreflightAsync(request, default);
+		Assert.True(preview.CanCommit);
+		Assert.Empty((await coordinator.GetSnapshotAsync()).CueLists);
+		Assert.Equal(state, fixture.Control.State);
+		var result = await service.InstantiateAsync(request with {
+			ExpectedProjectVersion = preview.ProjectVersion, ExpectedWorkspaceVersion = preview.WorkspaceVersion }, default);
+		Assert.Single(result.CueLists);
+		Assert.Null(result.SelectedCueListId);
+		Assert.Equal(ShowControlExecutionState.Idle, result.Execution.State);
+		Assert.Equal(state, fixture.Control.State);
+		Assert.Equal(0, executed);
+		var saved = await projects.LoadAsync(fixture.Control.Specification);
+		Assert.Equal(4, saved.Scenes.Count);
+		Assert.Equal(4, fixture.Control.Specification.Scenes.Count);
+		Assert.DoesNotContain(saved.Scenes.Skip(2), scene => document.Content.ScenesJson.Contains(scene.SceneId.ToString(), StringComparison.Ordinal));
+		var repeated = await service.PreflightAsync(request, default);
+		Assert.False(repeated.CanCommit);
+		Assert.Contains(repeated.Conflicts, conflict => conflict.Contains("NAME", StringComparison.Ordinal));
+	}
+
+	[Fact]
+	public async Task Template_conflicts_and_concurrent_edits_leave_no_partial_import()
+	{
+		await using var fixture = await Fixture.CreateAsync();
+		var projects = new ShowProjectPersistenceStore(fixture.Management);
+		await projects.LoadOrCreateAsync(fixture.Control.Specification);
+		await using var coordinator = new ShowControlCoordinator(() => fixture.Control,
+			new ShowControlPersistenceStore(fixture.Management, projects, fixture.Control.Specification),
+			(_, _) => throw new InvalidOperationException("Import must not execute an action."),
+			_ => ValueTask.FromResult(new ShowControlFrameObservation("runtime", 1, TimeSpan.FromMilliseconds(20))), () => { });
+		var unavailable = true;
+		var service = new ShowTemplateService(() => fixture.Control, projects, coordinator,
+			(_, _, _) => ValueTask.FromResult<string?>(unavailable ? "Provider absent" : null));
+		var json = await service.CreateAsync("Setup", null, default);
+		var document = ShowTemplateSerializer.Deserialize(json);
+		var request = new ShowTemplateRequest(json, "Imported",
+			document.Content.Dependencies.Select(d => new ShowTemplateBinding(d.Kind, d.ReferenceId, d.ReferenceId)).ToArray());
+		Assert.False((await service.PreflightAsync(request, default)).CanCommit);
+		Assert.Empty((await coordinator.GetSnapshotAsync()).CueLists);
+		unavailable = false;
+		var preview = await service.PreflightAsync(request, default);
+		await projects.UpdateScenesAsync(fixture.Control.Specification, fixture.Control.Specification.Scenes);
+		await Assert.ThrowsAsync<InvalidOperationException>(() => service.InstantiateAsync(request with {
+			ExpectedProjectVersion = preview.ProjectVersion, ExpectedWorkspaceVersion = preview.WorkspaceVersion }, default).AsTask());
+		Assert.Empty((await coordinator.GetSnapshotAsync()).CueLists);
+		Assert.Equal(2, (await projects.LoadAsync(fixture.Control.Specification)).Scenes.Count);
+		var unbound = request with { Bindings = [] };
+		Assert.False((await service.PreflightAsync(unbound, default)).CanCommit);
+	}
+
 	private sealed class Fixture : IAsyncDisposable
 	{
 		private readonly string _root;
@@ -160,6 +228,7 @@ public sealed class ShowControlCoordinatorIntegrationTests
 			_showControlStore = new ShowControlPersistenceStore(management);
 		}
 
+		public SqliteManagementStore Management => _management;
 		public ProductionSourceId SourceB { get; }
 		public ControlHostService Control { get; }
 
