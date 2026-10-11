@@ -306,3 +306,8 @@ Macro definitions cross the transport as versioned canonical JSON containing onl
 Local Named Pipe behavior and external gRPC/TLS map into the same ControlHost operations. External snapshot/validation follows Observer admission; definition mutation and execution require Operator authorization. No media pixels, audio samples, arbitrary code or direct Runtime/provider command surface is introduced.
 
 See `docs/ProductionMacros.md`.
+
+
+## Governed AI capability workflow
+
+The reference showcase now has provider-advertised capability selection, descriptor-only tests, explicit Program approval, revision-bound activation and separate accepted/executed/fallback evidence. See [Governed AI operator workflow](GovernedAIOperatorWorkflow.md) for the current inventory, private command compatibility, transport limitations, freshness bounds and qualification scope.

@@ -206,7 +206,8 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		ToggleAudioDuckingCommand = new AsyncRelayCommand(ToggleAudioDuckingAsync, CanApplyAdvancedAudio);
 		StartRecordingCommand = new AsyncRelayCommand(StartRecordingAsync, CanStartRecording);
 		StopRecordingCommand = new AsyncRelayCommand(StopRecordingAsync, CanStopRecording);
-		AIEffects = _client is null ? null : new AIEffectBrowserViewModel(_client, CanControl, () => AIEnabled);
+		AIEffects = _client is null ? null : new AIEffectBrowserViewModel(_client, CanControl, () => AIEnabled,
+			() => IsConnected && !IsStale && string.Equals(RuntimeStatus, "READY", StringComparison.OrdinalIgnoreCase));
 		if (AIEffects is not null) AIEffects.PropertyChanged += (_, _) => (EnableAIShowcaseCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 		EnableAIShowcaseCommand = new AsyncRelayCommand(() => SetAIShowcaseAsync(true), () => CanControl() && !AIEnabled && AIEffects?.CanActivate == true);
 		DisableAIShowcaseCommand = new AsyncRelayCommand(() => SetAIShowcaseAsync(false), () => CanControl() && AIEnabled);

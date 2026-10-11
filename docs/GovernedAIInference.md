@@ -263,3 +263,8 @@ Only after those checks does RuntimeHost update its existing dynamic RGBA layer.
 The private AIHost IPC result metadata now includes the selected provider display name in addition to its stable provider ID. This is observational metadata for the Operator showcase and does not change the public AI contract.
 
 Provider unavailable, timeout, invalid synchronization, low confidence and transport failures remove the showcase effect and leave committed Program execution running. The current managed reference person-segmentation provider remains deterministic architecture/CI evidence and is not a production-quality model claim.
+
+
+## Governed AI capability workflow
+
+The reference showcase now has provider-advertised capability selection, descriptor-only tests, explicit Program approval, revision-bound activation and separate accepted/executed/fallback evidence. See [Governed AI operator workflow](GovernedAIOperatorWorkflow.md) for the current inventory, private command compatibility, transport limitations, freshness bounds and qualification scope.

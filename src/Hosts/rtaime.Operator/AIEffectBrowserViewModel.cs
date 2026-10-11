@@ -13,6 +13,7 @@ public sealed class AIEffectBrowserViewModel : INotifyPropertyChanged
     private readonly OperatorControlClient _client;
     private readonly Func<bool> _canControl;
     private readonly Func<bool> _enabled;
+    private readonly Func<bool> _hasEvidence;
     private OperatorAICapabilityDescriptor? _selected;
     private bool _approved;
     private bool _busy;
@@ -21,9 +22,9 @@ public sealed class AIEffectBrowserViewModel : INotifyPropertyChanged
     private string _status = "UNVERIFIED";
     private string _testStatus = "NOT TESTED";
     private string _execution = "BYPASS · no confirmed effect";
-    public AIEffectBrowserViewModel(OperatorControlClient client, Func<bool> canControl, Func<bool> enabled)
+    public AIEffectBrowserViewModel(OperatorControlClient client, Func<bool> canControl, Func<bool> enabled, Func<bool>? hasEvidence = null)
     {
-        _client = client; _canControl = canControl; _enabled = enabled;
+        _client = client; _canControl = canControl; _enabled = enabled; _hasEvidence = hasEvidence ?? canControl;
         RefreshCommand = new AsyncRelayCommand(RefreshAsync, () => !_busy && _canControl());
         TestCommand = new AsyncRelayCommand(TestAsync, () => !_busy && _canControl() && !_enabled() && Selected?.Available == true && Fresh);
     }
@@ -89,7 +90,7 @@ public sealed class AIEffectBrowserViewModel : INotifyPropertyChanged
     }
     public void Observe(OperatorAIShowcaseDescriptor result)
     {
-        if (!_canControl())
+        if (!_hasEvidence())
         {
             InvalidateApproval(); Execution = "STALE / UNAVAILABLE · refresh before operating"; return;
         }
@@ -114,7 +115,8 @@ public sealed class AIEffectBrowserViewModel : INotifyPropertyChanged
     }
     public void RaiseCommandState()
     {
-        if (!Fresh || !_canControl()) { _approved = false; Changed(nameof(Approved)); }
+        if (!Fresh || !_hasEvidence()) { _approved = false; Changed(nameof(Approved)); }
+        if (!_hasEvidence()) Execution = "STALE / UNAVAILABLE · refresh before operating";
         Changed(nameof(CanApprove)); Changed(nameof(CanActivate));
         (RefreshCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (TestCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();

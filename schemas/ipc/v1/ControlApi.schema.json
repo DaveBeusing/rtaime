@@ -18,6 +18,8 @@
 					"control.show_template.preflight",
 					"control.show_template.instantiate",
 					"control.ai_showcase.set",
+					"control.ai_effects.catalog.get",
+					"control.ai_effects.test",
 					"control.preview.select",
 					"control.scene.activate",
 					"control.program.cut",
