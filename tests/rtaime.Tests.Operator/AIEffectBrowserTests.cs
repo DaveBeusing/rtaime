@@ -3,6 +3,10 @@ using rtaime.Client;
 using rtaime.Control.Contracts;
 using rtaime.Core;
 using rtaime.Operator;
+using rtaime.Operator.Controls;
+using System.Windows.Controls;
+using System.IO;
+using System.Xml.Linq;
 using Xunit;
 
 namespace rtaime.Tests.Operator;
@@ -88,6 +92,39 @@ public sealed class AIEffectBrowserTests
         Assert.DoesNotContain("QUALIFIED", evidence.Status);
         if (available) Assert.Contains("UNVERIFIED", evidence.Status);
         Assert.False((evidence with { Kind = "future.effect" }).Supported);
+    }
+
+    [Fact]
+    public void Capability_controls_preserve_keyboard_entry_and_accessible_names()
+    {
+        Exception? failure = null;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                foreach (var control in new Control[] { new RtaimeButton(), new RtaimeComboBox(), new RtaimeCheckBox() })
+                {
+                    Assert.True(control.Focusable);
+                    Assert.True(control.IsTabStop);
+                }
+                var directory = new DirectoryInfo(AppContext.BaseDirectory);
+                while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "rtaime.slnx")))
+                    directory = directory.Parent;
+                Assert.NotNull(directory);
+                var document = XDocument.Load(Path.Combine(directory.FullName, "src", "Hosts", "rtaime.Operator", "MainWindow.xaml"));
+                var controls = document.Descendants().Where(element => element.Attributes().Any(attribute =>
+                    attribute.Value.Contains("AIEffects.", StringComparison.Ordinal))).ToArray();
+                foreach (var control in controls.Where(element => element.Name.LocalName is "RtaimeButton" or "RtaimeComboBox" or "RtaimeCheckBox"))
+                    Assert.Contains(control.Attributes(), attribute => attribute.Name.LocalName == "Name" && !string.IsNullOrWhiteSpace(attribute.Value));
+                Assert.Contains(document.Descendants(), element => element.Name.LocalName == "RtaimeCheckBox" &&
+                    element.Descendants().Any(child => child.Attributes().Any(attribute => attribute.Name.LocalName == "TextWrapping" && attribute.Value == "Wrap")));
+            }
+            catch (Exception exception) { failure = exception; }
+        });
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        Assert.True(thread.Join(TimeSpan.FromSeconds(10)), "Keyboard control qualification exceeded its bounded wait.");
+        if (failure is not null) throw failure;
     }
 
     private static OperatorAICapabilityDescriptor Capability(int state = 1) => new(

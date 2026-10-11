@@ -1634,6 +1634,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 			: $"RUNTIME {snapshot.RuntimeStatus} · REV {snapshot.Production.Revision.Value}";
 		IsConnected = true;
 		IsStale = false;
+		AIEffects?.Observe(snapshot.AIShowcase);
 		ConnectionState = string.Equals(snapshot.RuntimeStatus, "READY", StringComparison.OrdinalIgnoreCase)
 			? "CONNECTED"
 			: "DEGRADED";
