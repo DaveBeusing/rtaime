@@ -59,6 +59,15 @@ public sealed record CompositingGraphSourceProjection(
 	bool IsPreview,
 	bool IsProgram);
 
+public sealed record CompositingGraphOutputRoleProjection(
+	string RoleId,
+	string SourceId,
+	string ProviderId,
+	string TargetId,
+	string Health,
+	bool AuthoritativeActive,
+	string Evidence);
+
 public sealed record CompositingGraphProjectionInput(
 	IReadOnlyList<CompositingGraphSourceProjection> Sources,
 	string PreviewSourceId,
@@ -79,7 +88,8 @@ public sealed record CompositingGraphProjectionInput(
 	double GraphicsScale,
 	string RecordingStatus,
 	string? RecordingError,
-	IReadOnlyList<OperatorCompositingLayerDescriptor>? CompositingLayers = null);
+	IReadOnlyList<OperatorCompositingLayerDescriptor>? CompositingLayers = null,
+	IReadOnlyList<CompositingGraphOutputRoleProjection>? OutputRoles = null);
 
 public sealed record CompositingGraphProjection(
 	IReadOnlyList<CompositingGraphNodeProjection> Nodes,
@@ -140,7 +150,8 @@ public static class CompositingGraphProjector
 			[
 				new("sources", "Sources", CompositingGraphPortDirection.Input),
 				new("preview", "Preview", CompositingGraphPortDirection.Output),
-				new("program", "Program", CompositingGraphPortDirection.Output)
+				new("program", "Program", CompositingGraphPortDirection.Output),
+				new("aux", "Aux", CompositingGraphPortDirection.Output)
 			]));
 
 		nodes.Add(new CompositingGraphNodeProjection(
@@ -327,6 +338,34 @@ public static class CompositingGraphProjector
 			"program",
 			"program-output",
 			"program"));
+
+		foreach (var role in (input.OutputRoles ?? Array.Empty<CompositingGraphOutputRoleProjection>())
+			.Where(role => string.Equals(role.RoleId, "aux", StringComparison.OrdinalIgnoreCase)))
+		{
+			var sourceExists = input.Sources.Any(source => source is not null &&
+				string.Equals(source.Id, role.SourceId, StringComparison.Ordinal));
+			var healthy = sourceExists && role.AuthoritativeActive && string.Equals(role.Health, "PASS", StringComparison.OrdinalIgnoreCase);
+			var status = !sourceExists ? "MISSING SOURCE" :
+				!role.AuthoritativeActive ? "UNVERIFIED" : role.Health;
+			nodes.Add(new CompositingGraphNodeProjection(
+				"aux-output",
+				CompositingGraphNodeKind.Output,
+				"Aux Output",
+				$"Source {ValueOrDash(role.SourceId)} · {ValueOrDash(role.ProviderId)} / {ValueOrDash(role.TargetId)}",
+				status,
+				!sourceExists || string.Equals(role.Health, "FAIL", StringComparison.OrdinalIgnoreCase)
+					? CompositingGraphHealth.Error
+					: healthy ? CompositingGraphHealth.Normal : CompositingGraphHealth.Degraded,
+				[new("video", "Aux Video", CompositingGraphPortDirection.Input)]));
+			if (sourceExists)
+				connections.Add(new CompositingGraphConnectionProjection(
+					"routing->aux",
+					"routing",
+					"aux",
+					"aux-output",
+					"video",
+					role.AuthoritativeActive));
+		}
 
 		nodes.Add(new CompositingGraphNodeProjection(
 			"recorder",
