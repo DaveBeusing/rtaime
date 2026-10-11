@@ -174,6 +174,17 @@ public sealed class ShowControlCoordinatorIntegrationTests
 		var repeated = await service.PreflightAsync(request, default);
 		Assert.False(repeated.CanCommit);
 		Assert.Contains(repeated.Conflicts, conflict => conflict.Contains("NAME", StringComparison.Ordinal));
+		await using var restoredJournal = new BoundedProductionJournal(128);
+		var restoredControl = new ControlHostService(saved.ApplyTo(fixture.Control.Specification), [], restoredJournal);
+		restoredControl.RestoreAuthoritativeState(state);
+		await using var restoredCoordinator = new ShowControlCoordinator(() => restoredControl, persistence,
+			(_, _) => throw new InvalidOperationException("Restore must not replay template actions."),
+			_ => ValueTask.FromResult(new ShowControlFrameObservation("runtime", 1, TimeSpan.FromMilliseconds(20))), () => { });
+		var restored = await restoredCoordinator.GetSnapshotAsync();
+		Assert.Equal(result.CueLists[0].CueListId, Assert.Single(restored.CueLists).CueListId);
+		Assert.Equal(ShowControlExecutionState.Idle, restored.Execution.State);
+		Assert.Null(restored.SelectedCueListId);
+		Assert.Equal(state, restoredControl.State);
 	}
 
 	[Fact]
@@ -204,6 +215,16 @@ public sealed class ShowControlCoordinatorIntegrationTests
 		Assert.Equal(2, (await projects.LoadAsync(fixture.Control.Specification)).Scenes.Count);
 		var unbound = request with { Bindings = [] };
 		Assert.False((await service.PreflightAsync(unbound, default)).CanCommit);
+		var missing = request with { Bindings = request.Bindings.Select(binding =>
+			binding.Kind == "source" ? binding with { TargetId = Identity.New().ToString() } : binding).ToArray() };
+		var missingPreview = await service.PreflightAsync(missing, default);
+		Assert.False(missingPreview.CanCommit);
+		Assert.Contains(missingPreview.Conflicts, conflict => conflict.Contains("SOURCE", StringComparison.Ordinal));
+		using var cancelled = new CancellationTokenSource();
+		cancelled.Cancel();
+		await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.InstantiateAsync(request with {
+			ExpectedProjectVersion = preview.ProjectVersion, ExpectedWorkspaceVersion = preview.WorkspaceVersion }, cancelled.Token).AsTask());
+		Assert.Equal(2, fixture.Control.Specification.Scenes.Count);
 	}
 
 	private sealed class Fixture : IAsyncDisposable

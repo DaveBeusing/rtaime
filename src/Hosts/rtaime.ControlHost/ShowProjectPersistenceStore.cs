@@ -303,7 +303,7 @@ public sealed class ShowProjectPersistenceStore
 			ValidateScenes(project.ApplyTo(baseline), scenes);
 			var updated = project with { Scenes = scenes, ShowControlWorkspaceJson = workspaceJson,
 				ShowControlStorageVersion = checked(project.ShowControlStorageVersion + 1) };
-			var saved = await WriteAsync(baseline, updated, current.Version, cancellationToken).ConfigureAwait(false);
+			var saved = await WriteAsync(updated, current.Version, baseline, cancellationToken).ConfigureAwait(false);
 			return new(true, new(saved.ShowControlWorkspaceJson, saved.ShowControlStorageVersion), null);
 		}
 		finally { _gate.Release(); }
