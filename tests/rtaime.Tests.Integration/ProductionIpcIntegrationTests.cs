@@ -63,7 +63,7 @@ public sealed class ProductionIpcIntegrationTests
 			var incompatibleSourcePreview = await client.PreflightShowTemplateAsync(request with { TemplateJson = incompatibleSourceJson });
 			Assert.False(incompatibleSourcePreview.CanCommit);
 			Assert.Contains(incompatibleSourcePreview.Conflicts, conflict => conflict.Contains("capability is incompatible", StringComparison.Ordinal));
-			var outputDependency = Assert.Single(document.Content.Dependencies.Where(dependency => dependency.Kind == "output"));
+			var outputDependency = Assert.Single(document.Content.Dependencies, dependency => dependency.Kind == "output");
 			var incompatibleOutputs = document.Content.Dependencies.Select(dependency =>
 				dependency == outputDependency ? dependency with { Compatibility = "Program" } : dependency).ToArray();
 			var incompatibleOutputJson = ShowTemplateSerializer.Serialize(ShowTemplateSerializer.Create(document.Name,

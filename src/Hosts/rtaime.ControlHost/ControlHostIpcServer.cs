@@ -2347,10 +2347,10 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 					"source" => CheckSource(dependency, target),
 					"output" => outputs.FirstOrDefault(role => role.RoleId == target) is not { } output
 						? "Output role is absent."
-						: output.HealthState != "PASS" || !output.AuthoritativeActive
-							? "Output provider has no fresh healthy active confirmation."
-							: !string.IsNullOrEmpty(dependency.Compatibility) && !string.Equals(output.RoleKind, dependency.Compatibility, StringComparison.OrdinalIgnoreCase)
-								? "Output role kind is incompatible." : null,
+						: !string.IsNullOrEmpty(dependency.Compatibility) && !string.Equals(output.RoleKind, dependency.Compatibility, StringComparison.OrdinalIgnoreCase)
+							? "Output role kind is incompatible."
+							: output.HealthState != "PASS" || !output.AuthoritativeActive
+								? "Output provider has no fresh healthy active confirmation." : null,
 					"media" => catalog?.Assets.FirstOrDefault(asset => asset.AssetId.ToString() == target) is not { } asset
 						? "Media is absent; import or relink it in the local Media Library."
 						: asset.Availability != MediaAssetAvailability.Online ? "Media is offline or missing." : null,
