@@ -1572,6 +1572,16 @@
 									<TextBlock Text="{Binding AIStatus}" FontWeight="Bold" />
 								</Border>
 							</DockPanel>
+							<controls:RtaimeButton Content="Refresh installed capabilities" Command="{Binding AIEffects.RefreshCommand}" AutomationProperties.Name="Refresh AI provider evidence" Margin="0,0,0,8" />
+							<controls:RtaimeComboBox ItemsSource="{Binding AIEffects.Capabilities}" SelectedItem="{Binding AIEffects.Selected}" DisplayMemberPath="Label" AutomationProperties.Name="Select AI effect capability" Margin="0,0,0,8" />
+							<TextBlock Text="{Binding AIEffects.Status}" TextWrapping="Wrap" Style="{StaticResource OperatorLabel}" />
+							<TextBlock Text="{Binding AIEffects.Freshness}" TextWrapping="Wrap" Style="{StaticResource OperatorLabel}" />
+							<TextBlock Text="{Binding AIEffects.Detail}" TextWrapping="Wrap" Style="{StaticResource OperatorLabel}" Margin="0,4,0,8" />
+							<controls:RtaimeButton Content="TEST · no visual output" Command="{Binding AIEffects.TestCommand}" AutomationProperties.Name="Test AI inference without applying an effect" ToolTip="Tests a descriptor of the current committed Program sample. Preview and Program pictures remain unchanged." />
+							<TextBlock Text="{Binding AIEffects.TestStatus}" TextWrapping="Wrap" Style="{StaticResource OperatorLabel}" Margin="0,4,0,8" />
+							<controls:RtaimeCheckBox IsChecked="{Binding AIEffects.Approved}" IsEnabled="{Binding AIEffects.CanApprove}" AutomationProperties.Name="Approve reference AI effect for Program" ToolTip="Explicit opt-in for the tested reference showcase at the current Program revision. Trained-model quality and GPU inference remain unverified." Margin="0,0,0,8"><TextBlock Text="Approve reference effect on Program" TextWrapping="Wrap" /></controls:RtaimeCheckBox>
+							<TextBlock Text="{Binding AIEffects.Execution}" TextWrapping="Wrap" Style="{StaticResource OperatorLabel}" Margin="0,0,0,8" />
+							<TextBlock Text="Reference demo · production model UNVERIFIED. One request at a time, inference at most 5 times per second during activation; 500 ms request budget. Invalid or late results use clean Program." TextWrapping="Wrap" Style="{StaticResource OperatorLabel}" Margin="0,0,0,8" />
 							<TextBlock Text="{Binding AIFeature}" FontSize="{StaticResource OperatorFontSizeSubheading}" FontWeight="SemiBold" Margin="0,0,0,10" />
 							<DockPanel Margin="0,0,0,6"><TextBlock Text="Enabled" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding AIEnabled}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
 							<DockPanel Margin="0,0,0,6"><TextBlock Text="Provider" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding AIProvider}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" TextTrimming="CharacterEllipsis" MaxWidth="230" /></DockPanel>
@@ -1581,7 +1591,7 @@
 							<DockPanel Margin="0,0,0,10"><TextBlock Text="Synchronization" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding AISynchronization}" Style="{StaticResource OperatorLabel}" DockPanel.Dock="Right" /></DockPanel>
 							<Grid>
 								<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="6" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-								<controls:RtaimeButton Grid.Column="0" Content="AI ON" Command="{Binding EnableAIShowcaseCommand}" Background="{DynamicResource OperatorAccentSurfaceBrush}" BorderBrush="{DynamicResource OperatorAccentBrush}" ToolTip="Enable the governed Person Segmentation Highlight through AIHost." />
+								<controls:RtaimeButton Grid.Column="0" Content="AI ON" Command="{Binding EnableAIShowcaseCommand}" Background="{DynamicResource OperatorAccentSurfaceBrush}" BorderBrush="{DynamicResource OperatorAccentBrush}" ToolTip="Activate the selected and tested reference effect after explicit Program approval. Acceptance and visible execution are shown separately." />
 								<controls:RtaimeButton Grid.Column="2" Content="AI OFF" Command="{Binding DisableAIShowcaseCommand}"  ToolTip="Disable the AI showcase effect without interrupting Program." />
 							</Grid>
 							<TextBlock Text="{Binding AIError}" Foreground="{DynamicResource OperatorWarningBrush}" TextWrapping="Wrap" Margin="0,8,0,0" />

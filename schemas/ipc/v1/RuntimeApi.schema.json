@@ -13,6 +13,8 @@
 					"runtime.providers.get",
 					"runtime.snapshot.get",
 					"runtime.ai_showcase.set",
+					"runtime.ai_effects.catalog.get",
+					"runtime.ai_effects.test",
 					"runtime.execution.apply",
 					"runtime.audio.input.set",
 					"runtime.audio.routing.set",

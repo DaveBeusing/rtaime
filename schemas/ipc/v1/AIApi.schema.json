@@ -11,6 +11,7 @@
 				"enum": [
 					"ai.ping",
 					"ai.capabilities.get",
+					"ai.effects.catalog.get",
 					"ai.snapshot.get",
 					"ai.inference.execute"
 				]

@@ -474,6 +474,27 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 			wire.Failure is null ? null : new Failure(wire.Failure.Code, wire.Failure.Message));
 	}
 
+	public async ValueTask<IReadOnlyList<OperatorAICapabilityDescriptor>> GetAIEffectCatalogAsync(CancellationToken cancellationToken = default)
+	{
+		var response = await ExchangeAsync("control.ai_effects.catalog.get", new { }, cancellationToken).ConfigureAwait(false);
+		var catalog = response.Payload.Deserialize<OperatorAICapabilityDescriptor[]>(Wire.JsonOptions)
+			?? throw new InvalidDataException("AI capability evidence is required.");
+		if (catalog.Length > 64) throw new InvalidDataException("AI catalogue exceeds the bounded limit.");
+		return Array.AsReadOnly(catalog);
+	}
+	public async ValueTask<OperatorAIShowcaseDescriptor> TestAIEffectAsync(CancellationToken cancellationToken = default)
+	{
+		var response = await ExchangeAsync("control.ai_effects.test", new { }, cancellationToken).ConfigureAwait(false);
+		return FromWire(response.Payload.Deserialize<WireAIShowcase>(Wire.JsonOptions)
+			?? throw new InvalidDataException("AI test evidence is required."));
+	}
+	public async ValueTask<OperatorAIShowcaseDescriptor> SetAIShowcaseApprovedAsync(bool enabled, ulong expectedRevision, CancellationToken cancellationToken = default)
+	{
+		var response = await ExchangeAsync("control.ai_showcase.set", new WireAIShowcaseState(enabled, expectedRevision), cancellationToken).ConfigureAwait(false);
+		return FromWire(response.Payload.Deserialize<WireAIShowcase>(Wire.JsonOptions)
+			?? throw new InvalidDataException("AI activation response is required."));
+	}
+
 	public async ValueTask<OperatorAIShowcaseDescriptor> SetAIShowcaseEnabledAsync(
 		bool enabled,
 		CancellationToken cancellationToken = default)
@@ -2330,7 +2351,7 @@ public sealed class NamedPipeOperatorControlTransport : IOperatorControlTranspor
 		string? DefaultProfileId = null,
 		WireRecordingProfile[]? Profiles = null);
 	private sealed record WireRecordingCommandResult(bool Succeeded, WireRecordingSnapshot Snapshot, WireFailure? Failure);
-	private sealed record WireAIShowcaseState(bool Enabled);
+	private sealed record WireAIShowcaseState(bool Enabled, ulong? ExpectedRevision = null);
 	private sealed record WireAIShowcase(bool Enabled, string Feature, string Status, string Provider, long InferenceTimeTicks, uint PersonRegionCount, ulong? SourceSequence, ulong? AppliedSequence, double? Confidence, bool EffectVisible, WireFailure? Failure, DateTimeOffset? UpdatedAtUtc);
 	private sealed record WireHealthMetric(string State, string Detail);
 	private sealed record WireHealthSnapshot(

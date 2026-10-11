@@ -878,3 +878,8 @@ The selected profile is submitted by stable profile identity with START REC. Run
 The filename field may remain extensionless. Extension normalization belongs to the selected writer/provider; an explicit incompatible extension is rejected before recording starts. The current catalog advertises `mp4-h264-aac` and `mov-2vuy-pcm`; hardware recording and MXF are not presented as available capabilities.
 
 See [Recording Profile Catalog and Provider Boundary](RecordingProfileCatalog.md).
+
+
+## Governed AI capability workflow
+
+The reference showcase now has provider-advertised capability selection, descriptor-only tests, explicit Program approval, revision-bound activation and separate accepted/executed/fallback evidence. See [Governed AI operator workflow](GovernedAIOperatorWorkflow.md) for the current inventory, private command compatibility, transport limitations, freshness bounds and qualification scope.

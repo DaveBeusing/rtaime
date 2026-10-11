@@ -206,7 +206,10 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		ToggleAudioDuckingCommand = new AsyncRelayCommand(ToggleAudioDuckingAsync, CanApplyAdvancedAudio);
 		StartRecordingCommand = new AsyncRelayCommand(StartRecordingAsync, CanStartRecording);
 		StopRecordingCommand = new AsyncRelayCommand(StopRecordingAsync, CanStopRecording);
-		EnableAIShowcaseCommand = new AsyncRelayCommand(() => SetAIShowcaseAsync(true), () => CanControl() && !AIEnabled);
+		AIEffects = _client is null ? null : new AIEffectBrowserViewModel(_client, CanControl, () => AIEnabled,
+			() => IsConnected && !IsStale && string.Equals(RuntimeStatus, "READY", StringComparison.OrdinalIgnoreCase));
+		if (AIEffects is not null) AIEffects.PropertyChanged += (_, _) => (EnableAIShowcaseCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+		EnableAIShowcaseCommand = new AsyncRelayCommand(() => SetAIShowcaseAsync(true), () => CanControl() && !AIEnabled && AIEffects?.CanActivate == true);
 		DisableAIShowcaseCommand = new AsyncRelayCommand(() => SetAIShowcaseAsync(false), () => CanControl() && AIEnabled);
 		ApplyRuntimeReadiness(_runtimeReadiness.Current);
 	}
@@ -247,6 +250,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 	public ICommand ToggleAudioDuckingCommand { get; }
 	public ICommand StartRecordingCommand { get; }
 	public ICommand StopRecordingCommand { get; }
+	public AIEffectBrowserViewModel? AIEffects { get; }
 	public ICommand EnableAIShowcaseCommand { get; }
 	public ICommand DisableAIShowcaseCommand { get; }
 
@@ -913,16 +917,17 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 
 	private async Task SetAIShowcaseAsync(bool enabled)
 	{
-		if (_client is null) return;
+		if (_client is null || (enabled && AIEffects?.CanActivate != true)) return;
 		await ExecuteAsync(enabled ? "ENABLE AI SHOWCASE" : "DISABLE AI SHOWCASE", async () =>
 		{
 			await _client.SetAIShowcaseEnabledAsync(enabled);
 			Apply(_client.Snapshot!);
-			CommandStatus = enabled ? "AI ENABLED" : "AI DISABLED";
+			CommandStatus = enabled ? "AI ACCEPTED · EXECUTION PENDING" : "AI BYPASS";
 			LastEvent = enabled
 				? "Person Segmentation Highlight enabled through ControlHost and RuntimeHost; AIHost inference remains failure-isolated."
 				: "Person Segmentation Highlight disabled and Runtime visual fallback restored.";
 		});
+		AIEffects?.InvalidateApproval();
 	}
 
 	private async Task StopRecordingAsync()
@@ -1629,6 +1634,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 			: $"RUNTIME {snapshot.RuntimeStatus} · REV {snapshot.Production.Revision.Value}";
 		IsConnected = true;
 		IsStale = false;
+		AIEffects?.Observe(snapshot.AIShowcase);
 		ConnectionState = string.Equals(snapshot.RuntimeStatus, "READY", StringComparison.OrdinalIgnoreCase)
 			? "CONNECTED"
 			: "DEGRADED";
@@ -1814,6 +1820,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 			? confidence.ToString("P0", CultureInfo.InvariantCulture)
 			: "—";
 		AIError = showcase.Failure?.Message;
+		AIEffects?.Observe(showcase);
 		RaiseCommandState();
 	}
 
@@ -2181,6 +2188,7 @@ public sealed class OperatorViewModel : INotifyPropertyChanged, IAsyncDisposable
 		(StopRecordingCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 		(EnableAIShowcaseCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 		(DisableAIShowcaseCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+		AIEffects?.RaiseCommandState();
 	}
 
 	private bool Set<T>(ref T field, T value, [CallerMemberName] string? name = null)

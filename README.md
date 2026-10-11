@@ -83,7 +83,7 @@ The current V1 development repository implements production-shaped software path
 | Audio | Audio Follow Video, explicit breakaway, bounded multi-source/bus mixing, evidence-aware mixer routing and draft gain controls, deterministic crossfade/ducking, Runtime metering and generated test signals |
 | Recording | provider-neutral recording profile catalog, qualified Windows MP4 H.264/AAC software interoperability, and bounded encoded Program replay/clip production |
 | Output | governed Program/Aux output roles, Clean Program monitoring, output health, bounded SRT output and external-runtime NDI High Bandwidth software output |
-| AI | governed inference showcase with bounded fallback |
+| AI | provider-evidence capability browser, descriptor tests, explicit reference-effect approval and bounded inference fallback |
 | Health | CPU/GPU/memory telemetry, Runtime performance, evidence-aware active incidents, safe diagnostic copy/export and health center |
 | Recovery | process supervision, Runtime resynchronization and safe session recovery |
 | External control | optional ControlHost gRPC/TLS boundary with authentication, RBAC, bounded requests and resynchronization; local Named Pipe remains the default |

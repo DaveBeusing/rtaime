@@ -66,6 +66,8 @@ public sealed record RuntimePersonSegmentationResult(
 
 public interface IRuntimeAIHostTransport : IAsyncDisposable
 {
+	ValueTask<string> GetCatalogJsonAsync(CancellationToken cancellationToken = default) =>
+		ValueTask.FromException<string>(new NotSupportedException("AI capability discovery is unsupported."));
 	ValueTask<RuntimePersonSegmentationResult> ExecutePersonSegmentationAsync(
 		FrameDescriptor frame,
 		CancellationToken cancellationToken = default);
@@ -86,10 +88,13 @@ public sealed class RuntimeAIShowcaseService : IAsyncDisposable
 	private readonly CancellationTokenSource _stop = new();
 	private RuntimeAIShowcaseSnapshot _snapshot = RuntimeAIShowcaseSnapshot.Disabled;
 	private TimeSpan _lastSubmission = TimeSpan.MinValue;
+	private TimeSpan _lastApplied = TimeSpan.MinValue;
 	private Task? _inFlight;
 	private ulong _generation;
 	private V1VisualLayerMode _previousVisualMode = V1VisualLayerMode.Disabled;
 	private bool _disposed;
+	private FrameDescriptor? _lastProgramFrame;
+	private bool _testActive;
 
 	public RuntimeAIShowcaseService(V1RuntimeHostService runtime, IRuntimeAIHostTransport transport)
 	{
@@ -106,11 +111,50 @@ public sealed class RuntimeAIShowcaseService : IAsyncDisposable
 		}
 	}
 
+	public ValueTask<string> GetCatalogJsonAsync(CancellationToken cancellationToken = default) =>
+		_transport.GetCatalogJsonAsync(cancellationToken);
+
+	/// <summary>Descriptor-only test of the current Program sample; it never changes the visual layer.</summary>
+	public async ValueTask<RuntimeAIShowcaseSnapshot> TestAsync(CancellationToken cancellationToken = default)
+	{
+		FrameDescriptor frame;
+		using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _stop.Token);
+		Task<RuntimePersonSegmentationResult> test;
+		lock (_gate)
+		{
+			ObjectDisposedException.ThrowIf(_disposed, this);
+			if (_snapshot.Enabled || _testActive || _inFlight is { IsCompleted: false })
+				throw new InvalidOperationException("Bypass the effect and wait for the current request before testing.");
+			frame = _lastProgramFrame ?? throw new InvalidOperationException("No committed Program sample is available.");
+			_testActive = true;
+			try { test = _transport.ExecutePersonSegmentationAsync(frame, linked.Token).AsTask(); _inFlight = test; }
+			catch { _testActive = false; throw; }
+		}
+		try
+		{
+			var result = await test.ConfigureAwait(false);
+			if (result.Succeeded && (result.SourceSequence != frame.Timing.SequenceNumber ||
+				result.Confidence is not { } confidence || !double.IsFinite(confidence) || confidence < 0.90))
+				result = FailureResult(RuntimeAIShowcaseStates.Failed, frame, "Test result failed source or confidence validation.");
+			return RuntimeAIShowcaseSnapshot.Disabled with
+			{
+				Status = result.Succeeded ? "TESTED" : result.Status,
+				Provider = result.Provider, InferenceTime = result.InferenceTime,
+				SourceSequence = result.SourceSequence, Confidence = result.Confidence,
+				PersonRegionCount = result.PersonRegionCount, Failure = result.Failure,
+				UpdatedAtUtc = DateTimeOffset.UtcNow
+			};
+		}
+		finally { lock (_gate) _testActive = false; }
+	}
+
 	public RuntimeAIShowcaseSnapshot SetEnabled(bool enabled)
 	{
 		lock (_gate)
 		{
 			ObjectDisposedException.ThrowIf(_disposed, this);
+			if (enabled && _testActive)
+				throw new InvalidOperationException("Wait for the descriptor test to finish before activation.");
 			if (_snapshot.Enabled == enabled)
 				return _snapshot;
 
@@ -122,6 +166,8 @@ public sealed class RuntimeAIShowcaseService : IAsyncDisposable
 				return _snapshot;
 			}
 
+			if (_runtime.Snapshot.VisualLayerMode == V1VisualLayerMode.Dynamic)
+				throw new InvalidOperationException("The dynamic visual layer is already in use. Bypass it before activating the AI reference effect.");
 			_previousVisualMode = _runtime.Snapshot.VisualLayerMode;
 			_snapshot = RuntimeAIShowcaseSnapshot.Disabled with
 			{
@@ -139,7 +185,15 @@ public sealed class RuntimeAIShowcaseService : IAsyncDisposable
 		ArgumentNullException.ThrowIfNull(programFrame);
 		lock (_gate)
 		{
-			if (_disposed || !_snapshot.Enabled || _inFlight is { IsCompleted: false })
+			_lastProgramFrame = programFrame;
+			if (_snapshot.Enabled && _snapshot.EffectVisible &&
+				_clock.Elapsed - _lastApplied > TimeSpan.FromMilliseconds(500))
+			{
+				RestoreVisualModeUnsafe();
+				_snapshot = _snapshot with { Status = "STALE", EffectVisible = false, AppliedSequence = null,
+					Failure = new Failure("ai.showcase.stale", "Inference evidence expired; clean Program continues.") };
+			}
+			if (_disposed || !_snapshot.Enabled || _testActive || _inFlight is { IsCompleted: false })
 				return;
 
 			var now = _clock.Elapsed;
@@ -200,7 +254,8 @@ public sealed class RuntimeAIShowcaseService : IAsyncDisposable
 				return;
 			}
 
-			if (result.SourceSequence != frame.Timing.SequenceNumber)
+			if (result.SourceSequence != frame.Timing.SequenceNumber ||
+				_lastProgramFrame?.SourceId != frame.SourceId)
 			{
 				RestoreVisualModeUnsafe();
 				_snapshot = new RuntimeAIShowcaseSnapshot(
@@ -219,7 +274,7 @@ public sealed class RuntimeAIShowcaseService : IAsyncDisposable
 				return;
 			}
 
-			if (result.Confidence is not { } confidence || confidence < 0.90)
+			if (result.Confidence is not { } confidence || !double.IsFinite(confidence) || confidence < 0.90)
 			{
 				RestoreVisualModeUnsafe();
 				_snapshot = new RuntimeAIShowcaseSnapshot(
@@ -260,6 +315,7 @@ public sealed class RuntimeAIShowcaseService : IAsyncDisposable
 			_runtime.UpdateDynamicLayerRegion(result.Left, result.Top, result.Right, result.Bottom);
 			_runtime.SetVisualLayerMode(V1VisualLayerMode.Dynamic);
 			var appliedSequence = _runtime.Snapshot.NextSequenceNumber;
+			_lastApplied = _clock.Elapsed;
 			_snapshot = new RuntimeAIShowcaseSnapshot(
 				true,
 				"Person Segmentation Highlight",
@@ -351,6 +407,21 @@ public sealed class NamedPipeRuntimeAIHostTransport : IRuntimeAIHostTransport
 		if (_requestTimeout <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(requestTimeout));
 	}
 
+	public async ValueTask<string> GetCatalogJsonAsync(CancellationToken cancellationToken = default)
+	{
+		using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+		timeout.CancelAfter(_requestTimeout);
+		await using var pipe = new NamedPipeClientStream(".", _endpoint, PipeDirection.InOut,
+			PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+		await pipe.ConnectAsync(timeout.Token).ConfigureAwait(false);
+		var correlationId = Identity.New().ToString();
+		await HandshakeAsync(pipe, correlationId, timeout.Token).ConfigureAwait(false);
+		var response = await ExchangeAsync(pipe, "ai.effects.catalog.get", new { }, correlationId, timeout.Token).ConfigureAwait(false);
+		if (response.Payload.ValueKind != JsonValueKind.Array || response.Payload.GetArrayLength() > 64)
+			throw new InvalidDataException("AI capability evidence must be a bounded array.");
+		return response.Payload.GetRawText();
+	}
+
 	public async ValueTask<RuntimePersonSegmentationResult> ExecutePersonSegmentationAsync(
 		FrameDescriptor frame,
 		CancellationToken cancellationToken = default)
@@ -431,6 +502,14 @@ public sealed class NamedPipeRuntimeAIHostTransport : IRuntimeAIHostTransport
 				?? throw new InvalidDataException("Successful AIHost result requires metadata.");
 			if (!string.Equals(metadata.SourceFrameId, frame.Surface.SurfaceId.ToString(), StringComparison.Ordinal))
 				throw new InvalidDataException("AIHost result references a different source frame.");
+
+			var observed = DateTimeOffset.Parse(metadata.ObservationTimeUtc, CultureInfo.InvariantCulture);
+			var age = DateTimeOffset.UtcNow - observed;
+			if (metadata.FreshnessTicks < 0 || metadata.FreshnessTicks > TimeSpan.FromMilliseconds(100).Ticks ||
+				age < TimeSpan.Zero || age > TimeSpan.FromMilliseconds(500) || stopwatch.Elapsed > _requestTimeout)
+				throw new InvalidDataException("AI result exceeded the freshness or request latency budget.");
+			if (!double.IsFinite(metadata.Confidence) || metadata.Confidence < 0.90)
+				throw new InvalidDataException("AI result confidence does not meet the reference effect threshold.");
 
 			var semantic = result.Result.Outputs.SingleOrDefault(output => string.Equals(output.Name, "mask.semantic", StringComparison.Ordinal));
 			if (semantic is null || !string.Equals(semantic.Value, "person", StringComparison.OrdinalIgnoreCase))
