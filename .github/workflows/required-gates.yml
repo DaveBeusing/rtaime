@@ -55,6 +55,9 @@ jobs:
         shell: pwsh
         run: ./build/operations/Test-WindowsApplicationBootstrap.ps1 -Configuration Release -QualifySingleFile
 
+      - name: Mixer interaction regressions
+        run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~AudioMixer"
+
       - name: Test
         run: dotnet test rtaime.slnx --configuration Release --no-build -m:1
 
