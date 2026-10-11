@@ -52,6 +52,8 @@ Rundown JSON and its storage version are stored inside the existing durable show
 
 Authoring supports bounded insert, delete and reorder. Optimistic storage-version checks reject stale saves rather than silently overwriting newer authored state.
 
+Draft add, remove, reorder and save actions are unavailable while authoritative rundown execution is `EXECUTING` or requires recovery acknowledgement. The Operator does not conceal an active execution state behind locally edited `DRAFT` presentation. Live execution remains governed by ControlHost; draft controls cannot initiate Program mutations.
+
 Persistent media entries reference Media Library asset identity rather than raw local paths. Scene, graphics and audio references are validated before execution.
 
 ## Prepare and execution
