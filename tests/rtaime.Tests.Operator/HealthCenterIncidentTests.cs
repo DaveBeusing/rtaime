@@ -154,6 +154,22 @@ public sealed class HealthCenterIncidentTests
 		Assert.Equal(fault, OperatorHealthSnapshotProvider.ApplyEvidenceFreshness(fault, false, true, "UNVERIFIED"));
 	}
 
+	[Theory]
+	[InlineData("CONNECTED", true, 0, "LIVE")]
+	[InlineData("CONNECTED", true, 10, "DEGRADED")]
+	[InlineData("RECONNECTING", false, 0, "RECONNECTING")]
+	[InlineData("STOPPED", false, 0, "OFFLINE")]
+	public void Transport_guidance_reuses_existing_send_freshness_and_lifecycle_semantics(
+		string lifecycle, bool connected, int ageSeconds, string expected)
+	{
+		var transport = new OperatorNetworkOutputDescriptor(
+			"program", "srt", "SRT", "safe-target", lifecycle, connected, "H264", "AAC",
+			48000, 2, "PCM16", 1000000, 128000, 100, 1, 1, 0, 0, 0, 1, 100, 0,
+			Start.AddSeconds(-ageSeconds), null);
+		Assert.Equal(expected, OutputRoutingHealthViewModel.TransmissionState(transport, true, false, Start));
+		Assert.Equal("OFFLINE", OutputRoutingHealthViewModel.TransmissionState(transport, false, true, Start));
+	}
+
 	private static SubsystemHealthSnapshot Snapshot(string id, SubsystemHealthState state, SubsystemProgramImpact impact) =>
 		new(id, id, "Diagnostics", state, "Published evidence.", Start, null, [],
 			"Review the owning workspace.", "metadata only", ProgramImpact: impact,

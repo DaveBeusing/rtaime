@@ -160,7 +160,7 @@ public sealed class HealthCenterViewModel : INotifyPropertyChanged, IDisposable
 		Overview = [];
 		Attention = [];
 		RecoverCommand = new AsyncRelayCommand(RecoverSelectedAsync, CanRecoverSelected);
-		CopyIncidentSummaryCommand = new AsyncRelayCommand(CopySelectedIncidentAsync, () => SelectedSubsystem is not null);
+		CopyIncidentSummaryCommand = new AsyncRelayCommand(CopySelectedIncidentAsync, () => !_disposed && SelectedSubsystem is not null);
 		ToggleTechnicalDetailsCommand = new AsyncRelayCommand(
 			() =>
 			{
@@ -315,7 +315,7 @@ public sealed class HealthCenterViewModel : INotifyPropertyChanged, IDisposable
 
 		var selectedId = SelectedSubsystem?.Id;
 		SelectedSubsystem = selectedId is null
-			? ordered.FirstOrDefault(item => item.RequiresAttention) ?? ordered.FirstOrDefault()
+			? Attention.FirstOrDefault() ?? ordered.FirstOrDefault()
 			: ordered.FirstOrDefault(item => string.Equals(item.Id, selectedId, StringComparison.Ordinal))
 				?? ordered.FirstOrDefault();
 
@@ -333,7 +333,7 @@ public sealed class HealthCenterViewModel : INotifyPropertyChanged, IDisposable
 	}
 
 	private bool CanRecoverSelected() =>
-		SelectedSubsystem is { CanRecover: true, Id: "control" } &&
+		!_disposed && SelectedSubsystem is { CanRecover: true, Id: "control" } &&
 		_synchronizeCommand.CanExecute(null);
 
 	private Task CopySelectedIncidentAsync()

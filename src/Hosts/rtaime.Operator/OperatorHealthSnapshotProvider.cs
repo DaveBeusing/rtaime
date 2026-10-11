@@ -731,7 +731,7 @@ public sealed class OperatorHealthSnapshotProvider : IHealthSnapshotProvider, ID
 	private static SubsystemProgramImpact AudioImpact(SubsystemHealthState state) => state switch
 	{
 		SubsystemHealthState.Healthy => SubsystemProgramImpact.None,
-		SubsystemHealthState.Warning or SubsystemHealthState.Degraded or SubsystemHealthState.Failed => SubsystemProgramImpact.Degraded,
+		SubsystemHealthState.Degraded or SubsystemHealthState.Failed => SubsystemProgramImpact.Degraded,
 		_ => SubsystemProgramImpact.Unknown
 	};
 
@@ -777,7 +777,6 @@ public sealed class OperatorHealthSnapshotProvider : IHealthSnapshotProvider, ID
 		bool canRecover = false,
 		string? recoveryActionLabel = null)
 	{
-
 		existing.TryGetValue(id, out var previous);
 		var candidate = new SubsystemHealthSnapshot(
 			id,
@@ -798,6 +797,7 @@ public sealed class OperatorHealthSnapshotProvider : IHealthSnapshotProvider, ID
 		candidate = ApplyEvidenceFreshness(candidate, _operator.IsConnected, _operator.IsStale, _operator.RuntimeHealth);
 		return HealthSnapshotHistory.Retain(candidate, previous, now);
 	}
+
 	internal static SubsystemHealthSnapshot ApplyEvidenceFreshness(
 		SubsystemHealthSnapshot candidate, bool connected, bool stale, string runtimeHealth)
 	{
@@ -815,5 +815,4 @@ public sealed class OperatorHealthSnapshotProvider : IHealthSnapshotProvider, ID
 			};
 		return candidate;
 	}
-
 }
