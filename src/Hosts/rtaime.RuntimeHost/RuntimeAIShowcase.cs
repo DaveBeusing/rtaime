@@ -129,6 +129,9 @@ public sealed class RuntimeAIShowcaseService : IAsyncDisposable
 		{
 			using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _stop.Token);
 			var result = await _transport.ExecutePersonSegmentationAsync(frame, linked.Token).ConfigureAwait(false);
+			if (result.Succeeded && (result.SourceSequence != frame.Timing.SequenceNumber ||
+				result.Confidence is not { } confidence || !double.IsFinite(confidence) || confidence < 0.90))
+				result = FailureResult(RuntimeAIShowcaseStates.Failed, frame, "Test result failed source or confidence validation.");
 			return RuntimeAIShowcaseSnapshot.Disabled with
 			{
 				Status = result.Succeeded ? "TESTED" : result.Status,
@@ -177,6 +180,13 @@ public sealed class RuntimeAIShowcaseService : IAsyncDisposable
 		lock (_gate)
 		{
 			_lastProgramFrame = programFrame;
+			if (_snapshot.Enabled && _snapshot.EffectVisible && _snapshot.UpdatedAtUtc is { } updated &&
+				DateTimeOffset.UtcNow - updated > TimeSpan.FromMilliseconds(500))
+			{
+				RestoreVisualModeUnsafe();
+				_snapshot = _snapshot with { Status = "STALE", EffectVisible = false, AppliedSequence = null,
+					Failure = new Failure("ai.showcase.stale", "Inference evidence expired; clean Program continues.") };
+			}
 			if (_disposed || !_snapshot.Enabled || _testActive || _inFlight is { IsCompleted: false })
 				return;
 
