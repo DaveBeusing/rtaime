@@ -30,6 +30,8 @@ No segmentation accuracy, trained-model quality, GPU inference latency or physic
 3. Successful test evidence must match the selected provider and the current Production revision. The browser requires fresh catalogue evidence (30 seconds) and explicit approval of the reference effect on Program.
 4. AI ON requests activation through ControlHost. ControlHost rejects a missing/stale expected Production revision, pending production execution, unavailable Runtime or a fresh Runtime authority mismatch.
 5. Acceptance arms Runtime execution. EXECUTED is shown only for Runtime RUNNING plus visible effect and separate source/applied sequences. Acceptance does not promise a visible result.
+Activation also rejects an already occupied dynamic visual layer, preserving its existing content instead of replacing an unrelated effect.
+
 6. AI OFF requests bypass. Timeout, unavailable provider, invalid result, low/non-finite confidence, source change or expired effect evidence removes the highlight and reports fallback. Inference never blocks the media loop.
 
 Refresh, selection changes, production revision changes, stale/disconnected control, failed test and activation attempts invalidate approval. There is no automatic activation/retry after reconnect. Test and activation cannot run concurrently within the showcase service. Runtime replacement starts with AI bypassed; activation is deliberately not persisted or replayed from a session.

@@ -179,6 +179,17 @@ public sealed class AIShowcaseIntegrationTests
 		Assert.True(fixture.Runtime.Runtime.Snapshot.NextSequenceNumber > sequence);
 	}
 
+	[Fact]
+	public async Task Existing_dynamic_layer_rejects_AI_activation_without_replacing_Program_content()
+	{
+		await using var fixture = await ProcessFixture.StartAsync();
+		await SynchronizeWithRetryAsync(fixture.Client);
+		fixture.Runtime.Runtime!.SetVisualLayerMode(V1VisualLayerMode.Dynamic);
+		await Assert.ThrowsAsync<InvalidOperationException>(async () => await fixture.Client.SetAIShowcaseEnabledAsync(true));
+		Assert.Equal(V1VisualLayerMode.Dynamic, fixture.Runtime.Runtime.Snapshot.VisualLayerMode);
+		Assert.False((await fixture.Client.SynchronizeAsync()).AIShowcase.Enabled);
+	}
+
 	private sealed class ExpiredProvider : IInferenceProvider
 	{
 		private readonly ManagedReferencePersonSegmentationProvider _reference = new();

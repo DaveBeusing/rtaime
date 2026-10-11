@@ -166,6 +166,8 @@ public sealed class RuntimeAIShowcaseService : IAsyncDisposable
 				return _snapshot;
 			}
 
+			if (_runtime.Snapshot.VisualLayerMode == V1VisualLayerMode.Dynamic)
+				throw new InvalidOperationException("The dynamic visual layer is already in use. Bypass it before activating the AI reference effect.");
 			_previousVisualMode = _runtime.Snapshot.VisualLayerMode;
 			_snapshot = RuntimeAIShowcaseSnapshot.Disabled with
 			{
