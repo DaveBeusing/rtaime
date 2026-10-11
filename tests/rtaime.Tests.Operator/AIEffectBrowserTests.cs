@@ -143,7 +143,7 @@ public sealed class AIEffectBrowserTests
         public ValueTask<OperatorStatusSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default) =>
             ValueTask.FromResult(new OperatorStatusSnapshot(
                 new AuthoritativeProductionState(ControlContractVersion.Current, _production, new Revision(Revision),
-                    new ProductionRoutingState(_source, _source)), [], "READY", "LOCKED", "HEALTHY", "OFF", "IDLE", false, 0));
+                    new ProductionRoutingState(_source, _source)), [new OperatorSourceDescriptor(_source.ToString(), "Program")], "READY", "LOCKED", "HEALTHY", "OFF", "IDLE", false, 0));
         public ValueTask<IReadOnlyList<OperatorAICapabilityDescriptor>> GetAIEffectCatalogAsync(CancellationToken cancellationToken = default) =>
             ValueTask.FromResult<IReadOnlyList<OperatorAICapabilityDescriptor>>([Capability()]);
         public ValueTask<OperatorAIShowcaseDescriptor> TestAIEffectAsync(CancellationToken cancellationToken = default) =>
