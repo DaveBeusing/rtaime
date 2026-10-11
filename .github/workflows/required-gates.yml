@@ -55,6 +55,9 @@ jobs:
         shell: pwsh
         run: ./build/operations/Test-WindowsApplicationBootstrap.ps1 -Configuration Release -QualifySingleFile
 
+      - name: Governed AI workflow regressions
+        run: dotnet test rtaime.slnx --configuration Release --no-build -m:1 --filter "FullyQualifiedName~AIShowcase|FullyQualifiedName~AIEffectBrowser|FullyQualifiedName~AIResultUsePolicy|FullyQualifiedName~AIFailureIsolation|FullyQualifiedName~AIFallbackBehavior|FullyQualifiedName~GovernedAIContract"
+
       - name: Show template compatibility and authoring regressions
         run: dotnet test rtaime.slnx --configuration Release --no-build -m:1 --filter "FullyQualifiedName~ShowTemplate|FullyQualifiedName~ShowControlCoordinatorIntegrationTests.Template_"
 

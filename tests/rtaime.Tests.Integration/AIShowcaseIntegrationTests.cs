@@ -112,6 +112,86 @@ public sealed class AIShowcaseIntegrationTests
 		Assert.True(fixture.Runtime.Runtime.Snapshot.NextSequenceNumber > before);
 	}
 
+	[Fact]
+	public async Task Capability_evidence_and_descriptor_test_cross_IPC_without_changing_Program()
+	{
+		await using var fixture = await ProcessFixture.StartAsync();
+		var before = await SynchronizeWithRetryAsync(fixture.Client);
+		var catalog = await fixture.Client.GetAIEffectCatalogAsync();
+		var capability = Assert.Single(catalog);
+		Assert.True(capability.Available);
+		Assert.Contains("UNVERIFIED", capability.Status);
+		Assert.Contains("synthetic", Assert.Single(capability.Models).Provenance);
+		var test = await fixture.Client.TestAIEffectAsync();
+		Assert.Equal("TESTED", test.Status);
+		Assert.False(test.Enabled);
+		Assert.False(test.EffectVisible);
+		Assert.Null(test.AppliedSequence);
+		var after = await fixture.Client.SynchronizeAsync();
+		Assert.Equal(before.Production.Revision, after.Production.Revision);
+		Assert.Equal(before.Production.Routing, after.Production.Routing);
+		Assert.False(after.AIShowcase.Enabled);
+		Assert.NotEqual(V1VisualLayerMode.Dynamic, fixture.Runtime.Runtime!.Snapshot.VisualLayerMode);
+	}
+
+	[Fact]
+	public async Task Stale_activation_revision_is_rejected_before_Runtime_effect_changes()
+	{
+		await using var fixture = await ProcessFixture.StartAsync();
+		var before = await SynchronizeWithRetryAsync(fixture.Client);
+		var transport = new NamedPipeOperatorControlTransport(
+			fixture.ControlEndpoint, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(3));
+		await transport.GetSnapshotAsync();
+		await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+			await transport.SetAIShowcaseApprovedAsync(true, before.Production.Revision.Value + 1));
+		Assert.False((await fixture.Client.SynchronizeAsync()).AIShowcase.Enabled);
+	}
+
+	[Fact]
+	public async Task Expired_model_result_is_rejected_and_clean_Program_continues()
+	{
+		await using var fixture = await ProcessFixture.StartAsync(limits => new AIHostService(
+			new GovernedInferenceRuntime(new IInferenceProvider[] { new ExpiredProvider() }, limits)));
+		var before = await SynchronizeWithRetryAsync(fixture.Client);
+		await fixture.Client.SetAIShowcaseEnabledAsync(true);
+		var fallback = await WaitForAIAsync(fixture.Client,
+			result => result.Enabled && result.Failure is not null && !result.EffectVisible);
+		Assert.Contains("freshness", fallback.Failure!.Value.Message);
+		Assert.Equal(before.Production.Revision, (await fixture.Client.SynchronizeAsync()).Production.Revision);
+		var sequence = fixture.Runtime.Runtime!.Snapshot.NextSequenceNumber;
+		await Task.Delay(100);
+		Assert.True(fixture.Runtime.Runtime.Snapshot.NextSequenceNumber > sequence);
+	}
+
+	[Fact]
+	public async Task AIHost_transport_loss_removes_effect_while_committed_Program_continues()
+	{
+		await using var fixture = await ProcessFixture.StartAsync();
+		var before = await SynchronizeWithRetryAsync(fixture.Client);
+		await fixture.Client.SetAIShowcaseEnabledAsync(true);
+		await WaitForAIAsync(fixture.Client, result => result.EffectVisible);
+		await fixture.StopAIAsync();
+		await WaitForAIAsync(fixture.Client, result => result.Enabled && !result.EffectVisible && result.Failure is not null);
+		Assert.Equal(before.Production.Revision, (await fixture.Client.SynchronizeAsync()).Production.Revision);
+		var sequence = fixture.Runtime.Runtime!.Snapshot.NextSequenceNumber;
+		await Task.Delay(100);
+		Assert.True(fixture.Runtime.Runtime.Snapshot.NextSequenceNumber > sequence);
+	}
+
+	private sealed class ExpiredProvider : IInferenceProvider
+	{
+		private readonly ManagedReferencePersonSegmentationProvider _reference = new();
+		public InferenceProviderDescriptor Descriptor => _reference.Descriptor;
+		public async ValueTask<InferenceProviderExecutionResult> ExecuteAsync(
+			GovernedInferenceExecutionRequest request, CancellationToken cancellationToken)
+		{
+			var result = await _reference.ExecuteAsync(request, cancellationToken);
+			return new(result.Status, result.Outputs, result.ModelId, result.ModelVersion, result.Confidence,
+				result.Uncertainty, Duration.FromTimeSpan(TimeSpan.FromMilliseconds(200)),
+				result.PayloadDescriptor, result.ResourceHandle, result.Failure);
+		}
+	}
+
 	private static async Task<OperatorAIShowcaseDescriptor> WaitForAIAsync(
 		OperatorControlClient client,
 		Func<OperatorAIShowcaseDescriptor, bool> predicate,
@@ -176,6 +256,7 @@ public sealed class AIShowcaseIntegrationTests
 			_controlRun = controlRun;
 		}
 
+		public string ControlEndpoint { get; private init; } = string.Empty;
 		public AIHostProcess AI { get; }
 		public RuntimeHostProcess Runtime { get; }
 		public ControlHostProcess Control { get; }
@@ -221,7 +302,13 @@ public sealed class AIShowcaseIntegrationTests
 				controlEndpoint,
 				TimeSpan.FromSeconds(1),
 				TimeSpan.FromSeconds(3)));
-			return new ProcessFixture(ai, runtime, control, client, aiStop, runtimeStop, controlStop, aiRun, runtimeRun, controlRun);
+			return new ProcessFixture(ai, runtime, control, client, aiStop, runtimeStop, controlStop, aiRun, runtimeRun, controlRun) { ControlEndpoint = controlEndpoint };
+		}
+
+		public async Task StopAIAsync()
+		{
+			_aiStop.Cancel();
+			Assert.Equal(AIHostExitCode.Success, await _aiRun);
 		}
 
 		public async ValueTask DisposeAsync()
