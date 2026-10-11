@@ -213,7 +213,7 @@
 			</Border>
 
 			<Border Grid.Column="2" Style="{StaticResource OperatorPanel}" Padding="14">
-				<ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False" AutomationProperties.Name="Incident evidence and recovery">
+				<controls:RtaimeScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False" AutomationProperties.Name="Incident evidence and recovery">
 				<Grid>
 					<Grid.RowDefinitions>
 						<RowDefinition Height="Auto" />
@@ -254,6 +254,8 @@
 
 					<Border Grid.Row="2" Margin="0,14,0,0" Padding="10" BorderThickness="1" BorderBrush="{DynamicResource OperatorBorderBrush}">
 						<StackPanel>
+							<TextBlock Text="LAST SUCCESSFUL CHECK" Style="{StaticResource OperatorLabel}" Margin="0,0,0,5" />
+							<TextBlock Text="{Binding SelectedSubsystem.LastSuccessfulCheck}" TextWrapping="Wrap" Margin="0,0,0,12" />
 							<TextBlock Text="PROGRAM IMPACT" Style="{StaticResource OperatorLabel}" Margin="0,0,0,5" />
 							<TextBlock Text="{Binding SelectedSubsystem.ProgramImpact}" FontWeight="SemiBold" TextWrapping="Wrap" />
 							<TextBlock Text="EVIDENCE SOURCE" Style="{StaticResource OperatorLabel}" Margin="0,12,0,5" />
@@ -332,7 +334,7 @@
 						</Border>
 					</StackPanel>
 				</Grid>
-				</ScrollViewer>
+				</controls:RtaimeScrollViewer>
 			</Border>
 		</Grid>
 	</Grid>

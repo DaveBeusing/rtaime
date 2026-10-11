@@ -17,7 +17,7 @@ public sealed class HealthCenterSurfaceTests
 		Assert.NotNull(root);
 		var document = XDocument.Load(Path.Combine(root.FullName, "src", "Hosts", "rtaime.Operator", "HealthCenterControl.xaml"));
 		var evidence = Assert.Single(document.Descendants().Where(element =>
-			element.Name.LocalName == "ScrollViewer" &&
+			element.Name.LocalName == "RtaimeScrollViewer" &&
 			element.Attribute("AutomationProperties.Name")?.Value == "Incident evidence and recovery"));
 		Assert.Equal("Auto", evidence.Attribute("VerticalScrollBarVisibility")?.Value);
 		foreach (var command in new[] { "RecoverCommand", "CopyIncidentSummaryCommand", "Startup.ExportSupportBundleCommand" })
