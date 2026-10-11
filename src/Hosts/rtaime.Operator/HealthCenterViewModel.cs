@@ -3,8 +3,11 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using System.Windows;
 using System.Windows.Input;
 using rtaime.Client;
+using rtaime.Core;
 
 namespace rtaime.Operator;
 
@@ -25,16 +28,33 @@ public sealed class HealthCenterSubsystemViewModel : INotifyPropertyChanged
 	public SubsystemHealthState HealthState => _snapshot.State;
 	public string State => FormatState(_snapshot.State);
 	public string Detail => _snapshot.Detail;
-	public string StatusSince => _snapshot.StatusSince.ToLocalTime().ToString("HH:mm:ss");
-	public string LastSuccessfulCheck => _snapshot.LastSuccessfulCheck?.ToLocalTime().ToString("HH:mm:ss") ?? "—";
+	public string StatusSince => _snapshot.StatusSince.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
+	public string FirstObserved => StatusSince;
+	public string LastObserved
+	{
+		get
+		{
+			var observedAt = _snapshot.LastObservedAt == default
+				? _snapshot.StatusSince
+				: _snapshot.LastObservedAt;
+			return observedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
+		}
+	}
+	public string LastSuccessfulCheck => _snapshot.LastSuccessfulCheck?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") ?? "—";
 	public IReadOnlyList<HealthMetricSnapshot> Metrics => _snapshot.Metrics;
 	public string RecoveryStatus => _snapshot.RecoveryStatus;
+	public string RecommendedAction => _snapshot.RecoveryStatus;
 	public string TechnicalDetail => _snapshot.TechnicalDetail;
 	public bool CanRecover => _snapshot.CanRecover;
 	public string RecoveryActionLabel => _snapshot.RecoveryActionLabel ?? "RECOVER";
+	public SubsystemProgramImpact ProgramImpactValue => _snapshot.ProgramImpact;
+	public string ProgramImpact => FormatProgramImpact(_snapshot.ProgramImpact);
+	public string EvidenceSource => string.IsNullOrWhiteSpace(_snapshot.EvidenceSource)
+		? "UNSPECIFIED"
+		: _snapshot.EvidenceSource;
 	public bool IsHealthy => _snapshot.State == SubsystemHealthState.Healthy;
 	public bool RequiresAttention => HealthSnapshotAnalysis.RequiresAttention(_snapshot.State);
-	public bool IsOverview => Id is "cpu" or "memory" or "gpu" or "media" or "compositing" or "output" or "frame-timing";
+	public bool IsOverview => Id is "cpu" or "memory" or "gpu" or "media" or "audio" or "compositing" or "output" or "recording" or "frame-timing";
 
 	public void Apply(SubsystemHealthSnapshot snapshot)
 	{
@@ -51,12 +71,18 @@ public sealed class HealthCenterSubsystemViewModel : INotifyPropertyChanged
 			nameof(State),
 			nameof(Detail),
 			nameof(StatusSince),
+			nameof(FirstObserved),
+			nameof(LastObserved),
 			nameof(LastSuccessfulCheck),
 			nameof(Metrics),
 			nameof(RecoveryStatus),
+			nameof(RecommendedAction),
 			nameof(TechnicalDetail),
 			nameof(CanRecover),
 			nameof(RecoveryActionLabel),
+			nameof(ProgramImpactValue),
+			nameof(ProgramImpact),
+			nameof(EvidenceSource),
 			nameof(IsHealthy),
 			nameof(RequiresAttention),
 			nameof(IsOverview)
@@ -75,6 +101,16 @@ public sealed class HealthCenterSubsystemViewModel : INotifyPropertyChanged
 		SubsystemHealthState.Failed => "FAILED",
 		_ => "UNKNOWN"
 	};
+
+	private static string FormatProgramImpact(SubsystemProgramImpact impact) => impact switch
+	{
+		SubsystemProgramImpact.None => "NO KNOWN IMPACT",
+		SubsystemProgramImpact.MonitoringOnly => "MONITORING ONLY",
+		SubsystemProgramImpact.ControlLimited => "CONTROL LIMITED",
+		SubsystemProgramImpact.Degraded => "PROGRAM DEGRADED",
+		SubsystemProgramImpact.Unavailable => "PROGRAM UNAVAILABLE",
+		_ => "UNKNOWN"
+	};
 }
 
 public sealed class HealthCenterViewModel : INotifyPropertyChanged, IDisposable
@@ -85,8 +121,10 @@ public sealed class HealthCenterViewModel : INotifyPropertyChanged, IDisposable
 		"memory",
 		"gpu",
 		"media",
+		"audio",
 		"compositing",
 		"output",
+		"recording",
 		"frame-timing"
 	];
 
@@ -94,25 +132,30 @@ public sealed class HealthCenterViewModel : INotifyPropertyChanged, IDisposable
 	private readonly IRuntimeReadinessService _readiness;
 	private readonly ICommand _synchronizeCommand;
 	private readonly SynchronizationContext _uiContext;
+	private readonly Action<string> _copyText;
 	private HealthCenterSubsystemViewModel? _selectedSubsystem;
 	private bool _technicalDetailsVisible;
+	private string _diagnosticActionStatus = string.Empty;
 	private bool _disposed;
 
 	public HealthCenterViewModel(
 		IHealthSnapshotProvider provider,
 		IRuntimeReadinessService readiness,
 		ICommand synchronizeCommand,
-		SynchronizationContext? uiContext = null)
+		SynchronizationContext? uiContext = null,
+		Action<string>? copyText = null)
 	{
 		_provider = provider ?? throw new ArgumentNullException(nameof(provider));
 		_readiness = readiness ?? throw new ArgumentNullException(nameof(readiness));
 		_synchronizeCommand = synchronizeCommand ?? throw new ArgumentNullException(nameof(synchronizeCommand));
 		_uiContext = uiContext ?? SynchronizationContext.Current ?? new SynchronizationContext();
+		_copyText = copyText ?? Clipboard.SetText;
 
 		Subsystems = [];
 		Overview = [];
 		Attention = [];
 		RecoverCommand = new AsyncRelayCommand(RecoverSelectedAsync, CanRecoverSelected);
+		CopyIncidentSummaryCommand = new AsyncRelayCommand(CopySelectedIncidentAsync, () => SelectedSubsystem is not null);
 		ToggleTechnicalDetailsCommand = new AsyncRelayCommand(
 			() =>
 			{
@@ -132,6 +175,7 @@ public sealed class HealthCenterViewModel : INotifyPropertyChanged, IDisposable
 	public ObservableCollection<HealthCenterSubsystemViewModel> Overview { get; }
 	public ObservableCollection<HealthCenterSubsystemViewModel> Attention { get; }
 	public ICommand RecoverCommand { get; }
+	public ICommand CopyIncidentSummaryCommand { get; }
 	public ICommand ToggleTechnicalDetailsCommand { get; }
 
 	public HealthCenterSubsystemViewModel? SelectedSubsystem
@@ -142,8 +186,10 @@ public sealed class HealthCenterViewModel : INotifyPropertyChanged, IDisposable
 			if (!Set(ref _selectedSubsystem, value))
 				return;
 			TechnicalDetailsVisible = false;
+			DiagnosticActionStatus = string.Empty;
 			OnPropertyChanged(nameof(HasSelection));
 			(RecoverCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+			(CopyIncidentSummaryCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 			(ToggleTechnicalDetailsCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
 		}
 	}
@@ -160,6 +206,11 @@ public sealed class HealthCenterViewModel : INotifyPropertyChanged, IDisposable
 		}
 	}
 	public string TechnicalDetailsAction => TechnicalDetailsVisible ? "HIDE TECHNICAL DETAILS" : "TECHNICAL DETAILS";
+	public string DiagnosticActionStatus
+	{
+		get => _diagnosticActionStatus;
+		private set => Set(ref _diagnosticActionStatus, value);
+	}
 	public string OverallState => FormatReadiness(_readiness.Current.State);
 	public string OverallSummary => _readiness.Current.Reasons.FirstOrDefault()?.Detail ??
 		"All required production readiness evidence is qualified.";
@@ -233,6 +284,7 @@ public sealed class HealthCenterViewModel : INotifyPropertyChanged, IDisposable
 			ordered
 				.Where(item => item.RequiresAttention)
 				.OrderByDescending(item => HealthSnapshotAnalysis.Severity(item.HealthState))
+				.ThenByDescending(item => HealthSnapshotAnalysis.ImpactSeverity(item.ProgramImpactValue))
 				.ThenBy(item => item.DisplayName, StringComparer.Ordinal)
 				.ToArray());
 
@@ -257,6 +309,43 @@ public sealed class HealthCenterViewModel : INotifyPropertyChanged, IDisposable
 	private bool CanRecoverSelected() =>
 		SelectedSubsystem is { CanRecover: true, Id: "control" } &&
 		_synchronizeCommand.CanExecute(null);
+
+	private Task CopySelectedIncidentAsync()
+	{
+		var selected = SelectedSubsystem;
+		if (selected is null)
+			return Task.CompletedTask;
+
+		try
+		{
+			_copyText(BuildIncidentSummary(selected));
+			DiagnosticActionStatus = "Redacted incident summary copied to the clipboard.";
+		}
+		catch (Exception exception) when (exception is ExternalException or InvalidOperationException)
+		{
+			DiagnosticActionStatus = "The clipboard is currently unavailable.";
+		}
+
+		return Task.CompletedTask;
+	}
+
+	internal static string BuildIncidentSummary(HealthCenterSubsystemViewModel incident)
+	{
+		ArgumentNullException.ThrowIfNull(incident);
+		var summary = string.Join(
+			Environment.NewLine,
+			[
+				$"Component: {incident.DisplayName}",
+				$"Severity: {incident.State}",
+				$"Program impact: {incident.ProgramImpact}",
+				$"First observed: {incident.FirstObserved}",
+				$"Last observed: {incident.LastObserved}",
+				$"Evidence source: {incident.EvidenceSource}",
+				$"Current evidence: {incident.Detail}",
+				$"Recommended safe next action: {incident.RecommendedAction}"
+			]);
+		return DiagnosticRedactor.RedactText(summary);
+	}
 
 	private static string FormatReadiness(RuntimeReadinessState state) => state switch
 	{
