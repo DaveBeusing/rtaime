@@ -234,6 +234,23 @@ public sealed class MediaAssetCatalogService
 					probe.Failure ?? new Failure("media.catalog.probe_failed", "Media asset probing failed."));
 			}
 
+			// A probe can outlive the original file read. Reject a replacement modified
+			// during validation rather than binding an existing asset ID to new content.
+			var verifiedFile = TryOpenFile(normalized, out var verificationFailure);
+			if (verifiedFile is null)
+				return RejectedResult(normalized, assetId, verificationFailure!.Value);
+
+			string verifiedFingerprint;
+			await using (verifiedFile.ConfigureAwait(false))
+				verifiedFingerprint = await ComputeFingerprintAsync(verifiedFile, cancellationToken).ConfigureAwait(false);
+			if (!string.Equals(fingerprint, verifiedFingerprint, StringComparison.Ordinal))
+			{
+				return RejectedResult(
+					normalized,
+					assetId,
+					new Failure("media.catalog.relink_source_changed", "The selected file changed during validation. Retry relink with a stable source file."));
+			}
+
 			var fileInfo = new FileInfo(normalized);
 			assets[index] = new MediaAssetDescriptor(
 				current.AssetId,

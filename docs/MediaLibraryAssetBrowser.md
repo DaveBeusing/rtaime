@@ -60,7 +60,7 @@ Availability is evaluated only at controlled catalogue read/refresh points. No b
 
 Relink preserves `MediaAssetId`. The replacement must be readable, not already assigned as another asset source, not collide with another catalogue fingerprint, have the same SHA-256 fingerprint as the original asset, and still pass the existing Runtime media probe.
 
-The strict fingerprint requirement prevents a different or modified file from silently inheriting references intended for the original asset.
+The strict fingerprint requirement prevents a different or modified file from silently inheriting references intended for the original asset. After the Runtime probe, relink rechecks the source fingerprint to reject a file modified while the operation was in flight. The original catalogue identity and source location remain unchanged on rejection.
 
 ## Remove from Library
 

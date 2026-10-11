@@ -122,6 +122,43 @@ public sealed class MediaAssetCatalogIntegrationTests
 	}
 
 	[Fact]
+	public async Task Relink_rejects_source_modified_during_probe_and_preserves_catalogue_identity()
+	{
+		var root = Path.Combine(Path.GetTempPath(), "rtaime-media-catalog-tests", Guid.NewGuid().ToString("N"));
+		Directory.CreateDirectory(root);
+		try
+		{
+			var original = Path.Combine(root, "original.mp4");
+			var moved = Path.Combine(root, "moved.mp4");
+			await File.WriteAllBytesAsync(original, [1, 2, 3, 4]);
+			File.Copy(original, moved);
+			await using var management = new SqliteManagementStore(Path.Combine(root, "management.db"));
+			var runtime = new ProbeRuntimeTransport();
+			var service = new MediaAssetCatalogService(runtime, new MediaAssetCatalogPersistenceStore(management));
+			var imported = await service.ImportAsync([original]);
+			var existing = Assert.Single(imported.Snapshot.Assets);
+			File.Delete(original);
+			runtime.OnProbe = path =>
+			{
+				if (string.Equals(path, moved, StringComparison.OrdinalIgnoreCase))
+					File.WriteAllBytes(path, [5, 6, 7, 8]);
+			};
+			var rejected = await service.RelinkAsync(existing.AssetId, moved);
+			Assert.False(rejected.Succeeded);
+			Assert.Equal("media.catalog.relink_source_changed", Assert.Single(rejected.Items).Failure?.Code);
+			var unchanged = Assert.Single((await service.GetSnapshotAsync(refreshAvailability: false)).Assets);
+			Assert.Equal(existing.AssetId, unchanged.AssetId);
+			Assert.Equal(existing.SourceLocation, unchanged.SourceLocation);
+			Assert.Equal(existing.FingerprintSha256, unchanged.FingerprintSha256);
+		}
+		finally
+		{
+			if (Directory.Exists(root))
+				Directory.Delete(root, recursive: true);
+		}
+	}
+
+	[Fact]
 	public async Task Catalogue_import_batch_is_bounded_and_cancelled_import_leaves_no_partial_record()
 	{
 		var root = Path.Combine(Path.GetTempPath(), "rtaime-media-catalog-tests", Guid.NewGuid().ToString("N"));
@@ -278,6 +315,7 @@ public sealed class MediaAssetCatalogIntegrationTests
 
 	private sealed class ProbeRuntimeTransport : IControlRuntimeTransportSeam
 	{
+		public Action<string>? OnProbe { get; set; }
 		public bool IsConnected => true;
 		public string? HostInstanceId => "catalog-test-runtime";
 		public IReadOnlyList<ProviderDescriptor> ProviderDescriptors => Array.Empty<ProviderDescriptor>();
@@ -302,6 +340,7 @@ public sealed class MediaAssetCatalogIntegrationTests
 			MediaAssetId assetId,
 			CancellationToken cancellationToken = default)
 		{
+			OnProbe?.Invoke(path);
 			if (path.EndsWith(".bad", StringComparison.OrdinalIgnoreCase))
 			{
 				return ValueTask.FromResult(
