@@ -433,9 +433,13 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 
 	private static readonly TimeSpan SendFreshnessLimit = TimeSpan.FromSeconds(5);
 
-	private string TransmissionState(OperatorNetworkOutputDescriptor? output)
+	private string TransmissionState(OperatorNetworkOutputDescriptor? output) =>
+		TransmissionState(output, _control.IsConnected, _control.IsStale, DateTimeOffset.UtcNow);
+
+	internal static string TransmissionState(
+		OperatorNetworkOutputDescriptor? output, bool connected, bool stale, DateTimeOffset now)
 	{
-		if (!_control.IsConnected || _control.IsStale)
+		if (!connected || stale)
 			return "OFFLINE";
 		if (output is null)
 			return "OFFLINE";
@@ -451,7 +455,7 @@ public sealed class OutputRoutingHealthViewModel : INotifyPropertyChanged, IDisp
 		if (!output.Connected || lifecycle != "CONNECTED")
 			return "OFFLINE";
 		var send = output.LastSuccessfulSendUtc;
-		var age = send is null ? TimeSpan.MaxValue : DateTimeOffset.UtcNow - send.Value;
+		var age = send is null ? TimeSpan.MaxValue : now - send.Value;
 		if (age < TimeSpan.Zero || age > SendFreshnessLimit)
 			return "DEGRADED";
 		return output.DroppedSamples > 0 || output.RejectedSamples > 0

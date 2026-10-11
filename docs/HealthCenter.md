@@ -17,6 +17,8 @@ Health and readiness remain separate concepts. A subsystem can be `Healthy`, `Wa
 `OperatorHealthSnapshotProvider` implements `IHealthSnapshotProvider` and projects existing evidence from:
 
 - the authoritative Operator/Control health snapshot for Control, Runtime, Media, providers, CPU, system memory, GPU, VRAM and frame timing;
+- Control-confirmed Program audio and recording snapshots;
+- Control-confirmed Program/Aux network transport observations using the existing Outputs lifecycle and successful-send freshness rules;
 - the Media Deck for local decoder/session state and codec details;
 - the existing compositing graph projection for compositing-node health;
 - the existing Program Output controller for clean-output presentation health;
@@ -43,6 +45,8 @@ The overview shows:
 - Memory;
 - GPU and VRAM;
 - Media Engine;
+- Program Audio;
+- Recording;
 - Compositing;
 - Output;
 - Frame Timing / Performance.
@@ -72,3 +76,29 @@ Opening, closing or rebinding the Health Center does not alter Runtime Readiness
 Frame Timing consumes the centralized Runtime performance-verification snapshot. A UI refresh cannot reset a verified result. Hardware, pipeline, validity-window and Runtime faults continue to use the invalidation rules defined by `RuntimeReadinessService`.
 
 The Health Center never performs synchronous hardware discovery from the UI thread.
+
+## Active incidents and evidence limits
+
+The existing attention list is the active-incident view. It keeps one row per subsystem, sorted by severity, then impact and component name. Each selection exposes component, current evidence, evidence source, impact and a recommended safe next action. No separate incident authority, notification feed or historical telemetry database is created.
+
+Impact is conservative. A Clean Program or independent monitoring fault is **MONITORING ONLY**. An isolated recording failure is **RECORDING ONLY**; an active output transport fault is **OUTPUT TRANSPORT ONLY**. Neither establishes that Runtime Program stopped. Aggregated Runtime/provider/media failures and invalidated performance qualification cannot establish Program unavailability or a hardware cause. Their Program impact stays **UNKNOWN**. Audio clipping, underrun and explicit audio errors can indicate degraded Program audio; silence or mute intent remains unknown.
+
+Control disconnection, stale Control state or unverified Runtime observation marks retained Control-dependent evidence **UNKNOWN**, even when a retained meter or recording value appears healthy. The independent monitoring incident remains visible and the Control incident describes reconnect. Current evidence is shown with its own provenance; coincident drops, A/V offsets, GPU memory and transport faults are not presented as a causal diagnosis. Cumulative dropped samples are labeled as cumulative.
+
+**STATE FIRST PROJECTED** is the start of the current displayed subsystem state. **LAST PROJECTED** is the latest Health aggregation time, not a new device observation, physical failure timestamp or successful-send time. State changes reset the first projection time. Source timestamps, where available, remain in the measurements. No new hardware, network-peer, physical output, soak or mixed-monitor DPI qualification is claimed.
+
+## Diagnostic actions
+
+**COPY INCIDENT SUMMARY** copies only the selected metadata fields. Each value uses the shared bounded redactor independently, so a long evidence detail cannot truncate away the safe next action. Technical details, media frames and audio buffers are excluded. Clipboard failure is visible in the view.
+
+**EXPORT SUPPORT BUNDLE** reuses the System/startup exporter and destination workflow. The existing 256 MiB source-log limit, atomic publication, cancellation and redaction apply. Health metadata adds impact, evidence source and last projection time; this is an additive change to the existing support metadata, not an IPC or durable schema migration. Private-key material is rejected before diagnostic text truncation.
+
+Synchronization remains the only executable recovery operation in Health, and it rechecks the existing command's availability at execution. The existing Client command owns transport authorization, deadlines and resynchronization. All other suggestions lead the operator to existing owning workflows; the view never restarts a Program-critical component.
+
+## Bounded delivery and regression coverage
+
+Health retains current rows and state timestamps only. A slow UI has at most one queued update and one pending current snapshot; subsequent updates replace that snapshot. Collection reconciliation preserves row identity and selection. Closing the view removes provider, readiness and synchronization-command subscriptions and prevents queued delivery from changing it.
+
+Transient event history remains owned by the existing keyed notifications and structured logs. Health is a current-state projection: intermediate projections may be coalesced and are not a lossless event journal.
+
+Deterministic regressions cover simultaneous monitoring/audio/recording failures, 5,000 delayed UI updates, selection retention, stale evidence, reconnect, recovery gating, clipboard failure/redaction, transport send freshness, export metadata/cancellation and notification deduplication. Surface checks cover named custom keyboard controls and scrollable incident evidence. Existing shell geometry/DPI tests continue to apply; physical multi-monitor interaction remains separately UNVERIFIED.

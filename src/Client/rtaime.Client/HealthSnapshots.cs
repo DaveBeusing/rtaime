@@ -12,6 +12,18 @@ public enum SubsystemHealthState
 	Unknown
 }
 
+public enum SubsystemProgramImpact
+{
+	None,
+	MonitoringOnly,
+	ControlLimited,
+	Degraded,
+	Unavailable,
+	Unknown,
+	RecordingOnly,
+	OutputTransportOnly
+}
+
 public static class HealthStateMapping
 {
 	public static SubsystemHealthState FromEvidence(string? evidence) =>
@@ -43,7 +55,10 @@ public sealed record SubsystemHealthSnapshot(
 	string RecoveryStatus,
 	string TechnicalDetail,
 	bool CanRecover = false,
-	string? RecoveryActionLabel = null);
+	string? RecoveryActionLabel = null,
+	SubsystemProgramImpact ProgramImpact = SubsystemProgramImpact.Unknown,
+	string EvidenceSource = "UNSPECIFIED",
+	DateTimeOffset LastObservedAt = default);
 
 public static class HealthSnapshotAnalysis
 {
@@ -60,6 +75,17 @@ public static class HealthSnapshotAnalysis
 		SubsystemHealthState.Degraded => 3,
 		SubsystemHealthState.Warning => 2,
 		SubsystemHealthState.Unknown => 1,
+		_ => 0
+	};
+
+	public static int ImpactSeverity(SubsystemProgramImpact impact) => impact switch
+	{
+		SubsystemProgramImpact.Unavailable => 5,
+		SubsystemProgramImpact.Degraded => 4,
+		SubsystemProgramImpact.ControlLimited => 3,
+		SubsystemProgramImpact.RecordingOnly or SubsystemProgramImpact.OutputTransportOnly => 2,
+		SubsystemProgramImpact.MonitoringOnly => 2,
+		SubsystemProgramImpact.Unknown => 1,
 		_ => 0
 	};
 }
@@ -83,7 +109,8 @@ public static class HealthSnapshotHistory
 		return candidate with
 		{
 			StatusSince = statusSince,
-			LastSuccessfulCheck = lastSuccessfulCheck
+			LastSuccessfulCheck = lastSuccessfulCheck,
+			LastObservedAt = observedAt
 		};
 	}
 }

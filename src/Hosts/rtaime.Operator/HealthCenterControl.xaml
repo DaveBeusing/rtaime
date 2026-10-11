@@ -151,7 +151,7 @@
 						<TextBlock Text="  ·  Failed " Style="{StaticResource OperatorLabel}" />
 						<TextBlock Text="{Binding FailedCount}" FontWeight="SemiBold" />
 					</StackPanel>
-					<TextBlock Grid.Row="2" Text="ACTIVE ISSUES" Style="{StaticResource OperatorLabel}" Margin="0,2,0,5" />
+					<TextBlock Grid.Row="2" Text="ACTIVE INCIDENTS" Style="{StaticResource OperatorLabel}" Margin="0,2,0,5" />
 					<controls:RtaimeListBox
 						Grid.Row="3"
 						ItemsSource="{Binding Attention}"
@@ -162,7 +162,7 @@
 						Margin="0,0,0,10"
 						ScrollViewer.HorizontalScrollBarVisibility="Disabled"
 						ScrollViewer.VerticalScrollBarVisibility="Auto"
-						AutomationProperties.Name="Health Center active issues">
+						AutomationProperties.Name="Health Center active incidents">
 						<controls:RtaimeListBox.ItemTemplate>
 							<DataTemplate>
 								<Grid Margin="5,4">
@@ -172,7 +172,7 @@
 									</Grid.ColumnDefinitions>
 									<StackPanel>
 										<TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" />
-										<TextBlock Text="{Binding Detail}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextTrimming="CharacterEllipsis" MaxWidth="210" />
+										<TextBlock Text="{Binding ProgramImpact}" Style="{StaticResource OperatorLabel}" FontSize="{StaticResource OperatorFontSizeMicro}" TextWrapping="Wrap" />
 									</StackPanel>
 									<Border Grid.Column="1" Style="{StaticResource HealthCenterStateBadge}" Tag="{Binding State}" VerticalAlignment="Center">
 										<TextBlock Text="{Binding State}" FontSize="{StaticResource OperatorFontSizeFinePrint}" FontWeight="Bold" />
@@ -213,6 +213,7 @@
 			</Border>
 
 			<Border Grid.Column="2" Style="{StaticResource OperatorPanel}" Padding="14">
+				<controls:RtaimeScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False" AutomationProperties.Name="Incident evidence and recovery">
 				<Grid>
 					<Grid.RowDefinitions>
 						<RowDefinition Height="Auto" />
@@ -242,24 +243,31 @@
 							<ColumnDefinition Width="*" />
 						</Grid.ColumnDefinitions>
 						<StackPanel>
-							<TextBlock Text="STATUS SINCE" Style="{StaticResource OperatorLabel}" />
-							<TextBlock Text="{Binding SelectedSubsystem.StatusSince}" Style="{StaticResource OperatorValue}" Margin="0,3,0,0" />
+							<TextBlock Text="STATE FIRST PROJECTED" Style="{StaticResource OperatorLabel}" />
+							<TextBlock Text="{Binding SelectedSubsystem.FirstObserved}" TextWrapping="Wrap" Style="{StaticResource OperatorValue}" Margin="0,3,0,0" />
 						</StackPanel>
 						<StackPanel Grid.Column="1">
-							<TextBlock Text="LAST SUCCESSFUL CHECK" Style="{StaticResource OperatorLabel}" />
-							<TextBlock Text="{Binding SelectedSubsystem.LastSuccessfulCheck}" Style="{StaticResource OperatorValue}" Margin="0,3,0,0" />
+							<TextBlock Text="LAST PROJECTED" Style="{StaticResource OperatorLabel}" />
+							<TextBlock Text="{Binding SelectedSubsystem.LastObserved}" TextWrapping="Wrap" Style="{StaticResource OperatorValue}" Margin="0,3,0,0" />
 						</StackPanel>
 					</Grid>
 
 					<Border Grid.Row="2" Margin="0,14,0,0" Padding="10" BorderThickness="1" BorderBrush="{DynamicResource OperatorBorderBrush}">
 						<StackPanel>
-							<TextBlock Text="STATUS" Style="{StaticResource OperatorLabel}" Margin="0,0,0,5" />
+							<TextBlock Text="LAST SUCCESSFUL CHECK" Style="{StaticResource OperatorLabel}" Margin="0,0,0,5" />
+							<TextBlock Text="{Binding SelectedSubsystem.LastSuccessfulCheck}" TextWrapping="Wrap" Margin="0,0,0,12" />
+							<TextBlock Text="PROGRAM IMPACT" Style="{StaticResource OperatorLabel}" Margin="0,0,0,5" />
+							<TextBlock Text="{Binding SelectedSubsystem.ProgramImpact}" FontWeight="SemiBold" TextWrapping="Wrap" />
+							<TextBlock Text="EVIDENCE SOURCE" Style="{StaticResource OperatorLabel}" Margin="0,12,0,5" />
+							<TextBlock Text="{Binding SelectedSubsystem.EvidenceSource}" TextWrapping="Wrap" />
+							<TextBlock Text="CURRENT EVIDENCE" Style="{StaticResource OperatorLabel}" Margin="0,12,0,5" />
 							<TextBlock Text="{Binding SelectedSubsystem.Detail}" TextWrapping="Wrap" />
-							<TextBlock Text="RECOVERY" Style="{StaticResource OperatorLabel}" Margin="0,12,0,5" />
+							<TextBlock Text="RECOMMENDED SAFE NEXT ACTION" Style="{StaticResource OperatorLabel}" Margin="0,12,0,5" />
 							<TextBlock Text="{Binding SelectedSubsystem.RecoveryStatus}" TextWrapping="Wrap" />
 							<controls:RtaimeButton
 								Content="{Binding SelectedSubsystem.RecoveryActionLabel}"
 								Command="{Binding RecoverCommand}"
+								AutomationProperties.Name="Synchronize authoritative Control state"
 								HorizontalAlignment="Left"
 								Margin="0,10,0,0"
 								MinHeight="28"
@@ -299,6 +307,12 @@
 					</controls:RtaimeListBox>
 
 					<StackPanel Grid.Row="4" Margin="0,12,0,0">
+						<WrapPanel Margin="0,0,0,8">
+							<controls:RtaimeButton Content="COPY INCIDENT SUMMARY" Command="{Binding CopyIncidentSummaryCommand}" MinHeight="28" Padding="10,3" Margin="0,0,8,6" AutomationProperties.Name="Copy redacted incident summary" />
+							<controls:RtaimeButton Content="{Binding Startup.SupportBundleActionLabel, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Command="{Binding Startup.ExportSupportBundleCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" MinHeight="28" Padding="10,3" Margin="0,0,0,6" AutomationProperties.Name="Export diagnostics support bundle from Health Center" />
+						</WrapPanel>
+						<TextBlock Text="{Binding DiagnosticActionStatus}" TextWrapping="Wrap" Style="{StaticResource OperatorLabel}" AutomationProperties.LiveSetting="Polite" Margin="0,0,0,6" />
+						<TextBlock Text="{Binding Startup.DiagnosticActionStatus, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" TextWrapping="Wrap" Style="{StaticResource OperatorLabel}" Margin="0,0,0,6" />
 						<controls:RtaimeButton
 							Content="{Binding TechnicalDetailsAction}"
 							Command="{Binding ToggleTechnicalDetailsCommand}"
@@ -320,6 +334,7 @@
 						</Border>
 					</StackPanel>
 				</Grid>
+				</controls:RtaimeScrollViewer>
 			</Border>
 		</Grid>
 	</Grid>

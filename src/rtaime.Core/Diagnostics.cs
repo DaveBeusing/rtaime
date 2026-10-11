@@ -164,7 +164,7 @@ public static class DiagnosticRedactor
 		"authorization", "credential", "cookie", "connectionstring", "connection_string", "sas", "signature", "privatekey"
 	};
 	private static readonly Regex AssignmentPattern = new(
-		"(?i)(password|passwd|pwd|secret|token|api[-_]?key|authorization|credential|cookie|connection[-_]?string|sas|signature|private[-_]?key)\\s*[:=]\\s*(?:Bearer\\s+)?([^\\s;,]+)",
+		"""(?i)(password|passwd|pwd|secret|token|api[-_]?key|authorization|credential|cookie|connection[-_]?string|sas|signature|private[-_]?key)\s*["']?\s*[:=]\s*(?:Bearer\s+)?(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\s;,]+)""",
 		RegexOptions.CultureInvariant | RegexOptions.Compiled);
 	private static readonly Regex BearerPattern = new(
 		"(?i)bearer\\s+[A-Za-z0-9\\-._~+/]+=*",
@@ -188,6 +188,8 @@ public static class DiagnosticRedactor
 	public static string RedactText(string value)
 	{
 		if (string.IsNullOrEmpty(value)) return value;
+		// Reject the entire diagnostic value before truncation if it contains signing material.
+		if (value.Contains("PRIVATE KEY", StringComparison.OrdinalIgnoreCase)) return Redacted;
 		var redacted = AssignmentPattern.Replace(value, match => $"{match.Groups[1].Value}={Redacted}");
 		redacted = BearerPattern.Replace(redacted, $"Bearer {Redacted}");
 		return Truncate(redacted);

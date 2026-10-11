@@ -8,6 +8,29 @@ namespace rtaime.Tests.Unit;
 
 public sealed class DiagnosticsTests
 {
+	[Theory]
+	[InlineData("")]
+	[InlineData("RSA ")]
+	[InlineData("EC ")]
+	public void Private_key_material_is_rejected_before_diagnostic_truncation(string keyType)
+	{
+		var material = "-----BEGIN " + keyType + "PRIVATE KEY" + "-----\\nnot-a-real-key";
+		Assert.Equal("[REDACTED]", DiagnosticRedactor.RedactText(material));
+		Assert.Equal("[REDACTED]", DiagnosticRedactor.RedactText(new string('x', 600) + material));
+	}
+
+	[Theory]
+	[InlineData("password=\"two word secret\"")]
+	[InlineData("token='two word secret'")]
+	[InlineData("\"token\": \"two word secret\"")]
+	[InlineData("connectionString=\"server=local; password=two word secret\"")]
+	public void Quoted_credentials_are_redacted_as_complete_values(string evidence)
+	{
+		var sanitized = DiagnosticRedactor.RedactText(evidence);
+		Assert.DoesNotContain("two word secret", sanitized, StringComparison.Ordinal);
+		Assert.Contains("[REDACTED]", sanitized, StringComparison.Ordinal);
+	}
+
 	[Fact]
 	public void Bounded_buffer_retains_only_the_newest_events_in_sequence_order()
 	{

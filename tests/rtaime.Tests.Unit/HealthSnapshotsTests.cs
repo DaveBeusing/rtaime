@@ -84,6 +84,7 @@ public sealed class HealthSnapshotsTests
 		Assert.Equal(start, current.StatusSince);
 		Assert.Equal(start.AddMilliseconds(4990), current.LastSuccessfulCheck);
 		Assert.Equal("sample 499", current.Detail);
+		Assert.Equal(start.AddMilliseconds(4990), current.LastObservedAt);
 	}
 
 	[Fact]

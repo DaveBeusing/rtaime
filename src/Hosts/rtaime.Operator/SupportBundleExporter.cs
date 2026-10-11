@@ -198,6 +198,11 @@ public sealed class SupportBundleExporter : ISupportBundleExporter
 					displayName = DiagnosticRedactor.RedactText(snapshot.DisplayName),
 					category = DiagnosticRedactor.RedactText(snapshot.Category),
 					state = snapshot.State.ToString(),
+					programImpact = snapshot.ProgramImpact.ToString(),
+					evidenceSource = DiagnosticRedactor.RedactText(snapshot.EvidenceSource),
+					lastProjectedAtUtc = snapshot.LastObservedAt == default
+						? snapshot.StatusSince.ToUniversalTime()
+						: snapshot.LastObservedAt.ToUniversalTime(),
 					detail = DiagnosticRedactor.RedactText(snapshot.Detail),
 					statusSinceUtc = snapshot.StatusSince.ToUniversalTime(),
 					lastSuccessfulCheckUtc = snapshot.LastSuccessfulCheck?.ToUniversalTime(),
