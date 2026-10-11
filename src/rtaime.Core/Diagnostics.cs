@@ -188,6 +188,8 @@ public static class DiagnosticRedactor
 	public static string RedactText(string value)
 	{
 		if (string.IsNullOrEmpty(value)) return value;
+		// Reject the entire diagnostic value before truncation if it contains signing material.
+		if (value.Contains("PRIVATE KEY", StringComparison.OrdinalIgnoreCase)) return Redacted;
 		var redacted = AssignmentPattern.Replace(value, match => $"{match.Groups[1].Value}={Redacted}");
 		redacted = BearerPattern.Replace(redacted, $"Bearer {Redacted}");
 		return Truncate(redacted);

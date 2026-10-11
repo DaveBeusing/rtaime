@@ -8,6 +8,16 @@ namespace rtaime.Tests.Unit;
 
 public sealed class DiagnosticsTests
 {
+	[Theory]
+	[InlineData("-----BEGIN PRIVATE KEY-----\\nnot-a-real-key\\n-----END PRIVATE KEY-----")]
+	[InlineData("-----BEGIN RSA PRIVATE KEY-----\\nnot-a-real-key\\n-----END RSA PRIVATE KEY-----")]
+	[InlineData("-----BEGIN EC PRIVATE KEY-----\\nnot-a-real-key\\n-----END EC PRIVATE KEY-----")]
+	public void Private_key_material_is_rejected_before_diagnostic_truncation(string material)
+	{
+		Assert.Equal("[REDACTED]", DiagnosticRedactor.RedactText(material));
+		Assert.Equal("[REDACTED]", DiagnosticRedactor.RedactText(new string('x', 600) + material));
+	}
+
 	[Fact]
 	public void Bounded_buffer_retains_only_the_newest_events_in_sequence_order()
 	{
