@@ -232,6 +232,32 @@ public sealed class CompositingGraphProjectionTests
 	}
 
 	[Fact]
+	public void Projection_shows_confirmed_aux_role_and_degrades_missing_or_unverified_evidence()
+	{
+		var input = CreateInput() with
+		{
+			OutputRoles = [new CompositingGraphOutputRoleProjection("aux", "camera-b", "auto", "aux-target", "PASS", true, "provider confirmed")]
+		};
+		var confirmed = CompositingGraphProjector.Project(input);
+		Assert.Equal(CompositingGraphHealth.Normal, Assert.Single(confirmed.Nodes, node => node.Id == "aux-output").Health);
+		Assert.Contains(confirmed.Connections, edge => edge.Id == "routing->aux" && edge.IsActive);
+
+		var unverified = CompositingGraphProjector.Project(input with
+		{
+			OutputRoles = [new CompositingGraphOutputRoleProjection("aux", "camera-b", "auto", "aux-target", "UNVERIFIED", false, "awaiting provider")]
+		});
+		Assert.Equal(CompositingGraphHealth.Degraded, Assert.Single(unverified.Nodes, node => node.Id == "aux-output").Health);
+		Assert.Contains(unverified.Connections, edge => edge.Id == "routing->aux" && !edge.IsActive);
+
+		var missing = CompositingGraphProjector.Project(input with
+		{
+			OutputRoles = [new CompositingGraphOutputRoleProjection("aux", "missing", "auto", "aux-target", "PASS", true, "stale")]
+		});
+		Assert.Equal("MISSING SOURCE", Assert.Single(missing.Nodes, node => node.Id == "aux-output").Status);
+		Assert.DoesNotContain(missing.Connections, edge => edge.Id == "routing->aux");
+	}
+
+	[Fact]
 	public void Projection_keeps_unsupported_rewire_disabled()
 	{
 		var graph = CompositingGraphProjector.Project(CreateInput());
