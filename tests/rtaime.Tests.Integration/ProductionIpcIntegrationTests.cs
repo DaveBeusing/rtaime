@@ -23,6 +23,63 @@ public sealed class ProductionIpcIntegrationTests
 	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
 	[Fact]
+	public async Task ShowTemplate_create_preflight_and_import_cross_IPC_without_changing_Program()
+	{
+		var root = Path.Combine(Path.GetTempPath(), "rtaime-template-ipc-" + Guid.NewGuid().ToString("N"));
+		var runtimeEndpoint = Endpoint("template-runtime");
+		var controlEndpoint = Endpoint("template-control");
+		using var runtimeStop = new CancellationTokenSource();
+		using var controlStop = new CancellationTokenSource();
+		var runtime = new RuntimeHostProcess(RuntimeHostProcessOptions.Default with { ListenEndpoint = runtimeEndpoint });
+		var control = new ControlHostProcess(ControlHostProcessOptions.Default with {
+			ListenEndpoint = controlEndpoint, RuntimeEndpoint = runtimeEndpoint, DurabilityRoot = root,
+			RequestTimeout = TimeSpan.FromSeconds(10), RuntimeRetryInterval = TimeSpan.FromMilliseconds(25) });
+		var runtimeRun = runtime.RunAsync(runtimeStop.Token);
+		var controlRun = control.RunAsync(controlStop.Token);
+		try
+		{
+			await WaitUntilAsync(() => control.Lifecycle.State == ControlHostProcessState.Ready && control.Control?.HasAuthoritativeState == true);
+			var client = new OperatorControlClient(new NamedPipeOperatorControlTransport(controlEndpoint,
+				TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(12)));
+			var initial = await client.SynchronizeAsync();
+			var json = await client.CreateShowTemplateAsync("Portable setup", null);
+			var document = ShowTemplateSerializer.Deserialize(json);
+			var request = new ShowTemplateRequest(json, "Imported setup",
+				document.Content.Dependencies.Select(d => new ShowTemplateBinding(d.Kind, d.ReferenceId, d.ReferenceId)).ToArray());
+			ShowTemplatePreflight? preview = null;
+			var deadline = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(5);
+			do
+			{
+				preview = await client.PreflightShowTemplateAsync(request);
+				if (preview.CanCommit) break;
+				await Task.Delay(20);
+			} while (DateTimeOffset.UtcNow < deadline);
+			Assert.True(preview.CanCommit, string.Join("; ", preview.Conflicts));
+			Assert.Equal(initial.Production, (await client.SynchronizeAsync()).Production);
+			var imported = await client.InstantiateShowTemplateAsync(request with {
+				ExpectedProjectVersion = preview.ProjectVersion, ExpectedWorkspaceVersion = preview.WorkspaceVersion });
+			Assert.Single(imported.CueLists);
+			Assert.Null(imported.SelectedCueListId);
+			Assert.Equal(ShowControlExecutionState.Idle, imported.Execution.State);
+			var after = await client.SynchronizeAsync();
+			Assert.Equal(initial.Production, after.Production);
+			Assert.Equal(initial.Scenes.Count * 2, after.Scenes.Count);
+			Assert.Equal("SAVED", after.ShowProject.State);
+			var duplicate = await client.PreflightShowTemplateAsync(request);
+			Assert.False(duplicate.CanCommit);
+			Assert.Contains(duplicate.Conflicts, conflict => conflict.Contains("NAME", StringComparison.Ordinal));
+		}
+		finally
+		{
+			controlStop.Cancel();
+			await controlRun;
+			runtimeStop.Cancel();
+			await runtimeRun;
+			if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+		}
+	}
+
+	[Fact]
 	public async Task RuntimeHost_named_pipe_exposes_provider_and_runtime_snapshot()
 	{
 		var endpoint = Endpoint("runtime");
