@@ -295,7 +295,7 @@ public sealed class ShowProjectPersistenceStore
 		await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
 		try
 		{
-			var current = await RequireDocumentAsync(baseline, cancellationToken).ConfigureAwait(false);
+			var current = await RequireDocumentAsync(baseline.ProductionId, cancellationToken).ConfigureAwait(false);
 			var project = Deserialize(current, baseline);
 			if (current.Version != expectedProjectVersion || project.ShowControlStorageVersion != expectedWorkspaceVersion)
 				return new(false, new(project.ShowControlWorkspaceJson, project.ShowControlStorageVersion),

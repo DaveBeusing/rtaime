@@ -36,6 +36,7 @@ public sealed class ShowControlViewModel : INotifyPropertyChanged
 	{
 		_client = client ?? throw new ArgumentNullException(nameof(client));
 		CueLists = [];
+		Templates = new ShowTemplateViewModel(_client, () => SelectedCueList?.CueListId.ToString(), ApplyConfirmedSnapshot);
 		ActionKinds = Enum.GetValues<ShowControlActionKind>();
 		RefreshCommand = new AsyncRelayCommand(RefreshAsync, () => !IsBusy);
 		NewCueListCommand = new AsyncRelayCommand(NewCueListAsync, () => !IsBusy);
@@ -58,6 +59,7 @@ public sealed class ShowControlViewModel : INotifyPropertyChanged
 
 	public event PropertyChangedEventHandler? PropertyChanged;
 
+	public ShowTemplateViewModel Templates { get; }
 	public ObservableCollection<ShowControlCueListEditorItem> CueLists { get; }
 	public IReadOnlyList<ShowControlActionKind> ActionKinds { get; }
 
@@ -452,6 +454,7 @@ public sealed class ShowControlViewModel : INotifyPropertyChanged
 
 	private void RaiseCommandState()
 	{
+		Templates.RaiseCommandState();
 		foreach (var command in new[]
 		{
 			RefreshCommand, NewCueListCommand, SelectCueListCommand, SaveCueListCommand, AddCueCommand,

@@ -205,6 +205,54 @@
 					</StackPanel>
 				</controls:RtaimeScrollViewer>
 			</controls:RtaimeTabItem>
+			<controls:RtaimeTabItem Header="TEMPLATES">
+				<controls:RtaimeScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+					<StackPanel Margin="4,6" DataContext="{Binding Templates}" IsEnabled="{Binding IsIdle}">
+						<TextBlock Text="PORTABLE SHOW SETUP" Style="{StaticResource OperatorLabel}" />
+						<TextBlock Text="Create scenes and cues from this show. Imported content stays a draft until you preview and save."
+							TextWrapping="Wrap" FontSize="{StaticResource OperatorFontSizeCompact}" Margin="0,4" />
+						<controls:RtaimeTextBox Text="{Binding TemplateName, UpdateSourceTrigger=PropertyChanged}"
+							AutomationProperties.Name="Template name" Margin="0,3" />
+						<UniformGrid Columns="2">
+							<controls:RtaimeButton Content="CURRENT SETUP" Command="{Binding CreateCurrentCommand}" IsCompact="True" Margin="0,0,2,3"
+								ToolTip="Capture saved scenes and current routing, audio input levels and Aux routing as authored cues." />
+							<controls:RtaimeButton Content="SAVED CUES" Command="{Binding CreateSelectedCommand}" IsCompact="True" Margin="2,0,0,3"
+								ToolTip="Create a template from the selected saved cue list and saved scenes." />
+							<controls:RtaimeButton Content="IMPORT FILE" Command="{Binding ImportCommand}" IsCompact="True" Margin="0,0,2,3" />
+							<controls:RtaimeButton Content="EXPORT FILE" Command="{Binding ExportCommand}" IsCompact="True" Margin="2,0,0,3" />
+						</UniformGrid>
+						<TextBlock Text="NEW SHOW NAME" Style="{StaticResource OperatorLabel}" Margin="0,5,0,2" />
+						<controls:RtaimeTextBox Text="{Binding InstanceName, UpdateSourceTrigger=PropertyChanged}"
+							AutomationProperties.Name="New template instance name" />
+						<TextBlock Text="LOCAL DEPENDENCIES" Style="{StaticResource OperatorLabel}" Margin="0,8,0,3" />
+						<ItemsControl ItemsSource="{Binding Bindings}">
+							<ItemsControl.ItemTemplate>
+								<DataTemplate>
+									<StackPanel Margin="0,2">
+										<TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" FontSize="{StaticResource OperatorFontSizeMicro}" />
+										<controls:RtaimeComboBox ItemsSource="{Binding Choices}" DisplayMemberPath="Name" SelectedValuePath="Id"
+											SelectedValue="{Binding TargetId, Mode=TwoWay}" AutomationProperties.Name="{Binding Label}"
+											ToolTip="Choose an adopted local target. Missing dependencies require local preparation." />
+										<controls:RtaimeTextBox Text="{Binding TargetId, UpdateSourceTrigger=PropertyChanged}"
+											AutomationProperties.Name="Local dependency identity"
+											ToolTip="For media references, choose the asset identity from the local Media Library. No file paths are imported." />
+									</StackPanel>
+								</DataTemplate>
+							</ItemsControl.ItemTemplate>
+						</ItemsControl>
+						<controls:RtaimeButton Content="PREVIEW CHANGES" Command="{Binding PreviewCommand}" IsCompact="True" Margin="0,6,0,3" />
+						<Border Padding="6" Background="{DynamicResource OperatorAlternateSurfaceBrush}"
+							BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="1">
+							<StackPanel>
+								<TextBlock Text="{Binding Status}" FontWeight="SemiBold" AutomationProperties.Name="Template draft status" />
+								<TextBlock Text="{Binding Detail}" TextWrapping="Wrap" FontSize="{StaticResource OperatorFontSizeMicro}" Margin="0,3,0,0" />
+							</StackPanel>
+						</Border>
+						<controls:RtaimeButton Content="SAVE NEW SHOW DEFINITIONS" Command="{Binding CommitCommand}" IsCompact="True" Margin="0,6,0,0"
+							ToolTip="Revalidate and add the previewed scenes and cue list atomically. Does not select, arm, or execute cues." />
+					</StackPanel>
+				</controls:RtaimeScrollViewer>
+			</controls:RtaimeTabItem>
 		</controls:RtaimeTabControl>
 	</Grid>
 </UserControl>
