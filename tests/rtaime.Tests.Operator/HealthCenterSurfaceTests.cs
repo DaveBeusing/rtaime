@@ -16,15 +16,15 @@ public sealed class HealthCenterSurfaceTests
 			root = root.Parent;
 		Assert.NotNull(root);
 		var document = XDocument.Load(Path.Combine(root.FullName, "src", "Hosts", "rtaime.Operator", "HealthCenterControl.xaml"));
-		var evidence = Assert.Single(document.Descendants().Where(element =>
+		var evidence = Assert.Single(document.Descendants(), element =>
 			element.Name.LocalName == "RtaimeScrollViewer" &&
-			element.Attribute("AutomationProperties.Name")?.Value == "Incident evidence and recovery"));
+			element.Attribute("AutomationProperties.Name")?.Value == "Incident evidence and recovery");
 		Assert.Equal("Auto", evidence.Attribute("VerticalScrollBarVisibility")?.Value);
 		foreach (var command in new[] { "RecoverCommand", "CopyIncidentSummaryCommand", "Startup.ExportSupportBundleCommand" })
 		{
-			var action = Assert.Single(evidence.Descendants().Where(element =>
+			var action = Assert.Single(evidence.Descendants(), element =>
 				element.Name.LocalName == "RtaimeButton" &&
-				(element.Attribute("Command")?.Value.Contains(command, StringComparison.Ordinal) ?? false)));
+				(element.Attribute("Command")?.Value.Contains(command, StringComparison.Ordinal) ?? false));
 			Assert.False(string.IsNullOrWhiteSpace(action.Attribute("AutomationProperties.Name")?.Value));
 			Assert.NotEqual("False", action.Attribute("Focusable")?.Value);
 		}
