@@ -56,6 +56,33 @@ public sealed class ProductionIpcIntegrationTests
 			} while (DateTimeOffset.UtcNow < deadline);
 			Assert.True(preview.CanCommit, string.Join("; ", preview.Conflicts));
 			Assert.Equal(initial.Production, (await client.SynchronizeAsync()).Production);
+			var incompatibleSources = document.Content.Dependencies.Select(dependency =>
+				dependency.Kind == "source" ? dependency with { Compatibility = "unavailable.hardware.capability" } : dependency).ToArray();
+			var incompatibleSourceJson = ShowTemplateSerializer.Serialize(ShowTemplateSerializer.Create(document.Name,
+				document.Content with { Dependencies = incompatibleSources }));
+			var incompatibleSourcePreview = await client.PreflightShowTemplateAsync(request with { TemplateJson = incompatibleSourceJson });
+			Assert.False(incompatibleSourcePreview.CanCommit);
+			Assert.Contains(incompatibleSourcePreview.Conflicts, conflict => conflict.Contains("capability is incompatible", StringComparison.Ordinal));
+			var outputDependency = Assert.Single(document.Content.Dependencies.Where(dependency => dependency.Kind == "output"));
+			var incompatibleOutputs = document.Content.Dependencies.Select(dependency =>
+				dependency == outputDependency ? dependency with { Compatibility = "Program" } : dependency).ToArray();
+			var incompatibleOutputJson = ShowTemplateSerializer.Serialize(ShowTemplateSerializer.Create(document.Name,
+				document.Content with { Dependencies = incompatibleOutputs }));
+			var incompatibleOutputPreview = await client.PreflightShowTemplateAsync(request with { TemplateJson = incompatibleOutputJson });
+			Assert.False(incompatibleOutputPreview.CanCommit);
+			Assert.Contains(incompatibleOutputPreview.Conflicts, conflict => conflict.Contains("Output role kind is incompatible", StringComparison.Ordinal));
+			var absentMediaId = Identity.New().ToString();
+			var mediaList = new ShowControlCueList(ShowControlContractVersion.Current, ShowControlCueListId.New(), "Media",
+				[new(ShowControlCueId.New(), "Open media", [new(ShowControlActionId.New(), ShowControlActionKind.MediaOpen,
+					sourceId: initial.Sources[0].Id, mediaAssetId: absentMediaId)])]);
+			var mediaDependencies = document.Content.Dependencies.Append(new ShowTemplateDependency("media", absentMediaId, "Missing media", "")).ToArray();
+			var absentMediaJson = ShowTemplateSerializer.Serialize(ShowTemplateSerializer.Create(document.Name, document.Content with {
+				CueListJson = ShowControlCanonicalSerializer.Serialize(mediaList), Dependencies = mediaDependencies }));
+			var absentMediaPreview = await client.PreflightShowTemplateAsync(request with { TemplateJson = absentMediaJson,
+				Bindings = request.Bindings.Append(new ShowTemplateBinding("media", absentMediaId, absentMediaId)).ToArray() });
+			Assert.False(absentMediaPreview.CanCommit);
+			Assert.Contains(absentMediaPreview.Conflicts, conflict => conflict.Contains("Media is absent", StringComparison.Ordinal));
+			Assert.Equal(initial.Production, (await client.SynchronizeAsync()).Production);
 			var imported = await client.InstantiateShowTemplateAsync(request with {
 				ExpectedProjectVersion = preview.ProjectVersion, ExpectedWorkspaceVersion = preview.WorkspaceVersion });
 			Assert.Single(imported.CueLists);
