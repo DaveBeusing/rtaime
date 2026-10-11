@@ -38,6 +38,9 @@ public sealed class AIEffectBrowserViewModel : INotifyPropertyChanged
         set { if (_busy || _selected == value) return; _selected = value; InvalidateApproval(); Changed(); Changed(nameof(Detail)); RaiseCommandState(); }
     }
     public string Detail => Selected?.Detail ?? "Refresh provider evidence, then select an installed capability.";
+    public string Freshness => _catalogAt is not { } at ? "UNVERIFIED · no current provider evidence" :
+        !Fresh ? "STALE · provider evidence expired; refresh and test again" :
+        $"Provider evidence refreshed {Math.Max(0, (DateTimeOffset.UtcNow - at).TotalSeconds):0} s ago · expires after 30 s";
     public string Status { get => _status; private set { _status = value; Changed(); } }
     public string TestStatus { get => _testStatus; private set { _testStatus = value; Changed(); } }
     public string Execution { get => _execution; private set { _execution = value; Changed(); } }
@@ -117,7 +120,7 @@ public sealed class AIEffectBrowserViewModel : INotifyPropertyChanged
     {
         if (!Fresh || !_hasEvidence()) { _approved = false; Changed(nameof(Approved)); }
         if (!_hasEvidence()) Execution = "STALE / UNAVAILABLE · refresh before operating";
-        Changed(nameof(CanApprove)); Changed(nameof(CanActivate));
+        Changed(nameof(Freshness)); Changed(nameof(CanApprove)); Changed(nameof(CanActivate));
         (RefreshCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (TestCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
     }

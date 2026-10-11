@@ -102,7 +102,7 @@ public sealed class AIEffectBrowserTests
         {
             try
             {
-                foreach (var control in new Control[] { new RtaimeButton(), new RtaimeComboBox(), new RtaimeCheckBox() })
+                foreach (var control in new System.Windows.Controls.Control[] { new RtaimeButton(), new RtaimeComboBox(), new RtaimeCheckBox() })
                 {
                     Assert.True(control.Focusable);
                     Assert.True(control.IsTabStop);
@@ -115,7 +115,7 @@ public sealed class AIEffectBrowserTests
                 var controls = document.Descendants().Where(element => element.Attributes().Any(attribute =>
                     attribute.Value.Contains("AIEffects.", StringComparison.Ordinal))).ToArray();
                 foreach (var control in controls.Where(element => element.Name.LocalName is "RtaimeButton" or "RtaimeComboBox" or "RtaimeCheckBox"))
-                    Assert.Contains(control.Attributes(), attribute => attribute.Name.LocalName == "Name" && !string.IsNullOrWhiteSpace(attribute.Value));
+                    Assert.Contains(control.Attributes(), attribute => attribute.Name.LocalName == "AutomationProperties.Name" && !string.IsNullOrWhiteSpace(attribute.Value));
                 Assert.Contains(document.Descendants(), element => element.Name.LocalName == "RtaimeCheckBox" &&
                     element.Descendants().Any(child => child.Attributes().Any(attribute => attribute.Name.LocalName == "TextWrapping" && attribute.Value == "Wrap")));
             }
