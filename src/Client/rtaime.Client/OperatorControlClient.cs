@@ -1123,6 +1123,13 @@ public interface IOperatorControlTransport
         CancellationToken cancellationToken = default) =>
         ValueTask.FromException<ReplayClipAssetResult>(new NotSupportedException("Operator transport does not expose replay clip creation."));
 
+    ValueTask<IReadOnlyList<OperatorAICapabilityDescriptor>> GetAIEffectCatalogAsync(CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<IReadOnlyList<OperatorAICapabilityDescriptor>>(new NotSupportedException("AI capability evidence is unsupported by this transport."));
+    ValueTask<OperatorAIShowcaseDescriptor> TestAIEffectAsync(CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<OperatorAIShowcaseDescriptor>(new NotSupportedException("AI descriptor testing is unsupported by this transport."));
+    ValueTask<OperatorAIShowcaseDescriptor> SetAIShowcaseApprovedAsync(bool enabled, ulong expectedRevision, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<OperatorAIShowcaseDescriptor>(new NotSupportedException("Revision-bound AI approval is unsupported by this transport."));
+
     ValueTask<OperatorAIShowcaseDescriptor> SetAIShowcaseEnabledAsync(
         bool enabled,
         CancellationToken cancellationToken = default) =>
@@ -1710,12 +1717,19 @@ public sealed class OperatorControlClient : IMediaAssetCatalogClient
         return result;
     }
 
+    public ValueTask<IReadOnlyList<OperatorAICapabilityDescriptor>> GetAIEffectCatalogAsync(CancellationToken cancellationToken = default) =>
+        _transport.GetAIEffectCatalogAsync(cancellationToken);
+    public ValueTask<OperatorAIShowcaseDescriptor> TestAIEffectAsync(CancellationToken cancellationToken = default) =>
+        _transport.TestAIEffectAsync(cancellationToken);
+
     public async ValueTask<OperatorAIShowcaseDescriptor> SetAIShowcaseEnabledAsync(
         bool enabled,
         CancellationToken cancellationToken = default)
     {
-        RequireSnapshot();
-        var result = await _transport.SetAIShowcaseEnabledAsync(enabled, cancellationToken).ConfigureAwait(false);
+        var snapshot = RequireSnapshot();
+        var result = enabled
+            ? await _transport.SetAIShowcaseApprovedAsync(true, snapshot.Production.Revision.Value, cancellationToken).ConfigureAwait(false)
+            : await _transport.SetAIShowcaseEnabledAsync(false, cancellationToken).ConfigureAwait(false);
         await SynchronizeAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }

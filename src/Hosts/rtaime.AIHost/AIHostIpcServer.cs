@@ -189,6 +189,17 @@ public sealed class AIHostIpcServer : IAsyncDisposable
 					return Success(request, "ai.ping.response", new { status = service.Snapshot.State.ToString() });
 				case "ai.capabilities.get":
 					return Success(request, "ai.capabilities.response", service.Capabilities.Select(ToWire).ToArray());
+				case "ai.effects.catalog.get":
+					return Success(request, "ai.effects.catalog.response", service.Runtime.Providers
+						.SelectMany(provider => provider.Capabilities.Select(capability => new
+						{
+							CapabilityId = capability.CapabilityId.ToString(), capability.Kind,
+							capability.AcceptsVideoFrames, ProviderId = provider.ProviderId.ToString(),
+							Provider = provider.Name, ProviderState = (int)provider.State,
+							Models = provider.Models.Where(model => model.CapabilityId == capability.CapabilityId)
+								.Select(model => new { model.ModelVersion, model.InputContract, model.OutputContract,
+									model.ResourceRequirements, model.ArtifactHashSha256, model.Provenance }).ToArray()
+						})).ToArray());
 				case "ai.snapshot.get":
 					return Success(request, "ai.snapshot.response", ToWire(service.Snapshot));
 				case "ai.inference.execute":

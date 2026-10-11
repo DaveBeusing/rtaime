@@ -233,6 +233,11 @@ public interface IControlRuntimeTransportSeam
 		ValueTask.FromException<RuntimeReplayClipResult>(
 			new NotSupportedException("Runtime transport does not expose replay control."));
 
+	ValueTask<string> GetAIEffectCatalogJsonAsync(CancellationToken cancellationToken = default) =>
+		ValueTask.FromException<string>(new NotSupportedException("Runtime transport does not expose AI capability evidence."));
+	ValueTask<RuntimeAIShowcaseRemoteSnapshot> TestAIEffectAsync(CancellationToken cancellationToken = default) =>
+		ValueTask.FromException<RuntimeAIShowcaseRemoteSnapshot>(new NotSupportedException("Runtime transport does not expose descriptor-only AI testing."));
+
 	ValueTask<RuntimeAIShowcaseRemoteSnapshot> SetAIShowcaseEnabledAsync(
 		bool enabled,
 		CancellationToken cancellationToken = default) =>

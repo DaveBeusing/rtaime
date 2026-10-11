@@ -369,6 +369,13 @@ public sealed class GrpcOperatorControlTransport : IOperatorControlTransport, IA
 		return NamedPipeOperatorControlTransport.DecodeExternalRecording((await ExecuteAsync(request, false, cancellationToken).ConfigureAwait(false)).PayloadJson.Span);
 	}
 
+	public async ValueTask<OperatorAIShowcaseDescriptor> SetAIShowcaseApprovedAsync(bool enabled, ulong expectedRevision, CancellationToken cancellationToken = default)
+	{
+		var request = Request();
+		request.SetAiShowcase = Raw(new { Enabled = enabled, ExpectedRevision = expectedRevision });
+		return NamedPipeOperatorControlTransport.DecodeExternalAIShowcase((await ExecuteAsync(request, false, cancellationToken).ConfigureAwait(false)).PayloadJson.Span);
+	}
+
 	public async ValueTask<OperatorAIShowcaseDescriptor> SetAIShowcaseEnabledAsync(bool enabled, CancellationToken cancellationToken = default)
 	{
 		var request = Request();

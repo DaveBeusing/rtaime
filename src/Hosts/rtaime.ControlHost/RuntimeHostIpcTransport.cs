@@ -862,6 +862,18 @@ public sealed class NamedPipeRuntimeHostTransport : IControlRuntimeTransportSeam
 			wire.Failure is null ? null : new Failure(wire.Failure.Code, wire.Failure.Message));
 	}
 
+	public async ValueTask<string> GetAIEffectCatalogJsonAsync(CancellationToken cancellationToken = default)
+	{
+		var response = await ExchangeAsync("runtime.ai_effects.catalog.get", new { }, cancellationToken).ConfigureAwait(false);
+		return response.Payload.GetRawText();
+	}
+	public async ValueTask<RuntimeAIShowcaseRemoteSnapshot> TestAIEffectAsync(CancellationToken cancellationToken = default)
+	{
+		var response = await ExchangeAsync("runtime.ai_effects.test", new { }, cancellationToken).ConfigureAwait(false);
+		return FromWire(response.Payload.Deserialize<WireAIShowcase>(Wire.JsonOptions)
+			?? throw new InvalidDataException("Runtime AI test evidence is required."));
+	}
+
 	public async ValueTask<RuntimeAIShowcaseRemoteSnapshot> SetAIShowcaseEnabledAsync(
 		bool enabled,
 		CancellationToken cancellationToken = default)

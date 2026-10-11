@@ -543,6 +543,8 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			"control.replay.mark_out" => await MarkReplayOutAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.replay.range.set" => await SetReplayRangeAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.replay.clip.create" => await CreateReplayClipAsync(request, cancellationToken).ConfigureAwait(false),
+			"control.ai_effects.catalog.get" => await ReadAIEffectsAsync(request, false, cancellationToken).ConfigureAwait(false),
+			"control.ai_effects.test" => await ReadAIEffectsAsync(request, true, cancellationToken).ConfigureAwait(false),
 			"control.ai_showcase.set" => await SetAIShowcaseAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.media_source.discovery.get" => await GetMediaSourceDiscoveryAsync(request, cancellationToken).ConfigureAwait(false),
 			"control.media_source.adopt" => await AdoptMediaSourceAsync(request, cancellationToken).ConfigureAwait(false),
@@ -1863,6 +1865,25 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		}
 	}
 
+	private async ValueTask<WireEnvelope> ReadAIEffectsAsync(WireEnvelope request, bool test, CancellationToken cancellationToken)
+	{
+		await _mutationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+		try
+		{
+			if (!await EnsureRuntimeConnectedAsync(cancellationToken).ConfigureAwait(false))
+				return Error(request, "runtime.unavailable", "RuntimeHost is unavailable; capability evidence cannot be confirmed.");
+			if (test)
+				return Success(request, "control.ai_effects.test.response", ToWire(await _runtimeTransport.TestAIEffectAsync(cancellationToken).ConfigureAwait(false)));
+			using var catalog = JsonDocument.Parse(await _runtimeTransport.GetAIEffectCatalogJsonAsync(cancellationToken).ConfigureAwait(false));
+			return Success(request, "control.ai_effects.catalog.response", catalog.RootElement.Clone());
+		}
+		catch (Exception exception) when (exception is IOException or InvalidOperationException or NotSupportedException or TimeoutException or OperationCanceledException)
+		{
+			return Error(request, "control.ai_effects.unverified", "AI evidence is unavailable: " + exception.Message);
+		}
+		finally { _mutationGate.Release(); }
+	}
+
 	private async ValueTask<WireEnvelope> SetAIShowcaseAsync(WireEnvelope request, CancellationToken cancellationToken)
 	{
 		var wire = request.Payload.Deserialize<WireAIShowcaseState>(Wire.JsonOptions)
@@ -1874,8 +1895,18 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			var control = _controlAccessor();
 			if (control is null || !control.HasAuthoritativeState)
 				return Error(request, "control.not_ready", "ControlHost has no committed authoritative state yet.");
+			if (wire.Enabled && (wire.ExpectedRevision is null || wire.ExpectedRevision != control.State.Revision.Value || control.HasPendingExecution))
+				return Error(request, "control.ai_showcase.stale", "Program changed or activation has no confirmed revision. Refresh and approve again.");
 			if (!await EnsureRuntimeConnectedAsync(cancellationToken).ConfigureAwait(false))
 				return Error(request, "runtime.unavailable", "RuntimeHost is not connected.");
+
+			if (wire.Enabled)
+			{
+				var observation = await ObserveRuntimeAsync(cancellationToken).ConfigureAwait(false);
+				if (!observation.Fresh || observation.Snapshot is not { } runtime ||
+					runtime.AuthorityRevision != control.State.Revision || runtime.AuthorityStateId != control.State.ProductionId.Value)
+					return Error(request, "control.ai_showcase.unconfirmed", "Runtime has no fresh confirmation of the current Program. Refresh before activation.");
+			}
 
 			try
 			{
@@ -2796,7 +2827,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		var recording = runtime?.Recording is { } runtimeRecording
 			? ToWire(runtimeRecording)
 			: WireRecordingSnapshot.Unavailable;
-		var aiShowcase = runtime?.AIShowcase is { } runtimeAI
+		var aiShowcase = runtimeFresh && runtime?.AIShowcase is { } runtimeAI
 			? ToWire(runtimeAI)
 			: WireAIShowcase.Unavailable;
 		ReplayControlSnapshot? replay = null;
@@ -4025,7 +4056,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 		public static WireRecordingSnapshot Unavailable { get; } = new("UNAVAILABLE", 0, null, null, null, 0, 0, 0, 0, 0, null);
 	}
 	private sealed record WireRecordingCommandResult(bool Succeeded, WireRecordingSnapshot Snapshot, WireFailure? Failure);
-	private sealed record WireAIShowcaseState(bool Enabled);
+	private sealed record WireAIShowcaseState(bool Enabled, ulong? ExpectedRevision = null);
 	private sealed record WireAIShowcase(bool Enabled, string Feature, string Status, string Provider, long InferenceTimeTicks, uint PersonRegionCount, ulong? SourceSequence, ulong? AppliedSequence, double? Confidence, bool EffectVisible, WireFailure? Failure, DateTimeOffset? UpdatedAtUtc)
 	{
 		public static WireAIShowcase Unavailable { get; } = new(false, "Person Segmentation Highlight", "UNAVAILABLE", "UNVERIFIED", 0, 0, null, null, null, false, null, null);

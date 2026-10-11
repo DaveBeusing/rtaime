@@ -184,6 +184,8 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 				"runtime.snapshot.get" => ValueTask.FromResult(Success(request, "runtime.snapshot.response", ToWire(runtime.Snapshot, runtime.Format, _aiShowcaseAccessor()?.Snapshot ?? RuntimeAIShowcaseSnapshot.Disabled))),
 				"runtime.media_source.discovery.get" => ValueTask.FromResult(Success(request, "runtime.media_source.discovery.response", ToWire(runtime.RefreshNdiDiscovery()))),
 				"runtime.media_input.health.get" => ValueTask.FromResult(Success(request, "runtime.media_input.health.response", runtime.NdiInputHealth.Select(ToWire).ToArray())),
+				"runtime.ai_effects.catalog.get" => ReadAIEffectsAsync(request, false, cancellationToken),
+				"runtime.ai_effects.test" => ReadAIEffectsAsync(request, true, cancellationToken),
 				"runtime.ai_showcase.set" => ValueTask.FromResult(SetAIShowcase(request)),
 				"runtime.execution.apply" => ValueTask.FromResult(ApplyExecution(request, runtime)),
 				"runtime.graphics.overlay.load" => ValueTask.FromResult(LoadGraphicsOverlay(request, runtime)),
@@ -217,6 +219,22 @@ public sealed class RuntimeHostIpcServer : IAsyncDisposable
 		catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or NotSupportedException or FormatException or InvalidDataException or JsonException)
 		{
 			return ValueTask.FromResult(Error(request, "runtime.request.rejected", exception.Message));
+		}
+	}
+
+	private async ValueTask<WireEnvelope> ReadAIEffectsAsync(WireEnvelope request, bool test, CancellationToken cancellationToken)
+	{
+		try
+		{
+			var service = _aiShowcaseAccessor() ?? throw new InvalidOperationException("AI effect service is unavailable.");
+			if (test)
+				return Success(request, "runtime.ai_effects.test.response", ToWire(await service.TestAsync(cancellationToken).ConfigureAwait(false)));
+			using var catalog = JsonDocument.Parse(await service.GetCatalogJsonAsync(cancellationToken).ConfigureAwait(false));
+			return Success(request, "runtime.ai_effects.catalog.response", catalog.RootElement.Clone());
+		}
+		catch (Exception exception) when (exception is IOException or InvalidOperationException or NotSupportedException or TimeoutException or OperationCanceledException or JsonException)
+		{
+			return Error(request, "runtime.ai_effects.unavailable", exception.Message);
 		}
 	}
 
