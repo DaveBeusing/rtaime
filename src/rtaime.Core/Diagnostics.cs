@@ -164,7 +164,7 @@ public static class DiagnosticRedactor
 		"authorization", "credential", "cookie", "connectionstring", "connection_string", "sas", "signature", "privatekey"
 	};
 	private static readonly Regex AssignmentPattern = new(
-		"(?i)(password|passwd|pwd|secret|token|api[-_]?key|authorization|credential|cookie|connection[-_]?string|sas|signature|private[-_]?key)\\s*[:=]\\s*(?:Bearer\\s+)?([^\\s;,]+)",
+		"""(?i)(password|passwd|pwd|secret|token|api[-_]?key|authorization|credential|cookie|connection[-_]?string|sas|signature|private[-_]?key)\s*["']?\s*[:=]\s*(?:Bearer\s+)?(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\s;,]+)""",
 		RegexOptions.CultureInvariant | RegexOptions.Compiled);
 	private static readonly Regex BearerPattern = new(
 		"(?i)bearer\\s+[A-Za-z0-9\\-._~+/]+=*",

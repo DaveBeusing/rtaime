@@ -19,6 +19,18 @@ public sealed class DiagnosticsTests
 		Assert.Equal("[REDACTED]", DiagnosticRedactor.RedactText(new string('x', 600) + material));
 	}
 
+	[Theory]
+	[InlineData("password=\"two word secret\"")]
+	[InlineData("token='two word secret'")]
+	[InlineData("\"token\": \"two word secret\"")]
+	[InlineData("connectionString=\"server=local; password=two word secret\"")]
+	public void Quoted_credentials_are_redacted_as_complete_values(string evidence)
+	{
+		var sanitized = DiagnosticRedactor.RedactText(evidence);
+		Assert.DoesNotContain("two word secret", sanitized, StringComparison.Ordinal);
+		Assert.Contains("[REDACTED]", sanitized, StringComparison.Ordinal);
+	}
+
 	[Fact]
 	public void Bounded_buffer_retains_only_the_newest_events_in_sequence_order()
 	{
