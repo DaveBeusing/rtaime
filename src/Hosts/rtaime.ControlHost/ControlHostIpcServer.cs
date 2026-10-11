@@ -1904,6 +1904,7 @@ public sealed class ControlHostIpcServer : IAsyncDisposable
 			{
 				var observation = await ObserveRuntimeAsync(cancellationToken).ConfigureAwait(false);
 				if (!observation.Fresh || observation.Snapshot is not { } runtime ||
+					runtime.Runtime.Status != RuntimeExecutionStatus.Committed ||
 					runtime.AuthorityRevision != control.State.Revision || runtime.AuthorityStateId != control.State.ProductionId.Value)
 					return Error(request, "control.ai_showcase.unconfirmed", "Runtime has no fresh confirmation of the current Program. Refresh before activation.");
 			}

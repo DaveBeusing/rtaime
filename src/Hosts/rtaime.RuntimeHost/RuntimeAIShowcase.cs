@@ -88,6 +88,7 @@ public sealed class RuntimeAIShowcaseService : IAsyncDisposable
 	private readonly CancellationTokenSource _stop = new();
 	private RuntimeAIShowcaseSnapshot _snapshot = RuntimeAIShowcaseSnapshot.Disabled;
 	private TimeSpan _lastSubmission = TimeSpan.MinValue;
+	private TimeSpan _lastApplied = TimeSpan.MinValue;
 	private Task? _inFlight;
 	private ulong _generation;
 	private V1VisualLayerMode _previousVisualMode = V1VisualLayerMode.Disabled;
@@ -117,6 +118,8 @@ public sealed class RuntimeAIShowcaseService : IAsyncDisposable
 	public async ValueTask<RuntimeAIShowcaseSnapshot> TestAsync(CancellationToken cancellationToken = default)
 	{
 		FrameDescriptor frame;
+		using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _stop.Token);
+		Task<RuntimePersonSegmentationResult> test;
 		lock (_gate)
 		{
 			ObjectDisposedException.ThrowIf(_disposed, this);
@@ -124,11 +127,12 @@ public sealed class RuntimeAIShowcaseService : IAsyncDisposable
 				throw new InvalidOperationException("Bypass the effect and wait for the current request before testing.");
 			frame = _lastProgramFrame ?? throw new InvalidOperationException("No committed Program sample is available.");
 			_testActive = true;
+			try { test = _transport.ExecutePersonSegmentationAsync(frame, linked.Token).AsTask(); _inFlight = test; }
+			catch { _testActive = false; throw; }
 		}
 		try
 		{
-			using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _stop.Token);
-			var result = await _transport.ExecutePersonSegmentationAsync(frame, linked.Token).ConfigureAwait(false);
+			var result = await test.ConfigureAwait(false);
 			if (result.Succeeded && (result.SourceSequence != frame.Timing.SequenceNumber ||
 				result.Confidence is not { } confidence || !double.IsFinite(confidence) || confidence < 0.90))
 				result = FailureResult(RuntimeAIShowcaseStates.Failed, frame, "Test result failed source or confidence validation.");
@@ -180,8 +184,8 @@ public sealed class RuntimeAIShowcaseService : IAsyncDisposable
 		lock (_gate)
 		{
 			_lastProgramFrame = programFrame;
-			if (_snapshot.Enabled && _snapshot.EffectVisible && _snapshot.UpdatedAtUtc is { } updated &&
-				DateTimeOffset.UtcNow - updated > TimeSpan.FromMilliseconds(500))
+			if (_snapshot.Enabled && _snapshot.EffectVisible &&
+				_clock.Elapsed - _lastApplied > TimeSpan.FromMilliseconds(500))
 			{
 				RestoreVisualModeUnsafe();
 				_snapshot = _snapshot with { Status = "STALE", EffectVisible = false, AppliedSequence = null,
@@ -309,6 +313,7 @@ public sealed class RuntimeAIShowcaseService : IAsyncDisposable
 			_runtime.UpdateDynamicLayerRegion(result.Left, result.Top, result.Right, result.Bottom);
 			_runtime.SetVisualLayerMode(V1VisualLayerMode.Dynamic);
 			var appliedSequence = _runtime.Snapshot.NextSequenceNumber;
+			_lastApplied = _clock.Elapsed;
 			_snapshot = new RuntimeAIShowcaseSnapshot(
 				true,
 				"Person Segmentation Highlight",

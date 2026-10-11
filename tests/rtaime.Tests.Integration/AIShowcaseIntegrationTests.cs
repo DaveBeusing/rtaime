@@ -5,6 +5,7 @@ using rtaime.AI.Contracts;
 using rtaime.AIHost;
 using rtaime.Client;
 using rtaime.ControlHost;
+using rtaime.Core;
 using rtaime.Provider.Inference;
 using rtaime.Runtime.Contracts;
 using rtaime.RuntimeHost;
