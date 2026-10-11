@@ -72,7 +72,7 @@ public sealed class OperatorAudioMixerViewModel : INotifyPropertyChanged
 		return Task.CompletedTask;
 	}
 
-	private void SetEvidenceAvailability(string availability)
+	internal void SetEvidenceAvailability(string availability)
 	{
 		Availability = availability;
 		OnPropertyChanged(nameof(EvidenceIsCurrent));
@@ -191,10 +191,10 @@ public sealed class OperatorAudioMixerViewModel : INotifyPropertyChanged
 	internal void RaiseCanExecuteChanged()
 	{
 		UpdateAvailability();
-		if (_owner.IsStale)
-			SetEvidenceAvailability("STALE");
-		else if (_owner.Client is not null && !_owner.IsConnected)
-			SetEvidenceAvailability("OFFLINE");
+		if (_owner.Client is not null)
+			SetEvidenceAvailability(_owner.Client.Snapshot?.AudioProduction is null ? "UNAVAILABLE" :
+				_owner.IsStale ? "STALE" : !_owner.IsConnected ? "OFFLINE" :
+				_owner.RuntimeStatus != "READY" ? "UNVERIFIED" : "CONFIRMED");
 		foreach (var source in Sources)
 			source.RaiseCanExecuteChanged();
 		foreach (var bus in Buses)

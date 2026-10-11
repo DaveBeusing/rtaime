@@ -3,7 +3,16 @@
 	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
 	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 	xmlns:controls="clr-namespace:rtaime.Operator.Controls"
-	AutomationProperties.Name="Bounded audio mixer">
+	AutomationProperties.Name="Bounded audio mixer" KeyboardNavigation.TabNavigation="Continue">
+	<UserControl.Resources>
+		<Style x:Key="AudioProcessingPanel" TargetType="{x:Type Border}">
+			<Style.Triggers>
+				<DataTrigger Binding="{Binding DataContext.ShowProcessing, RelativeSource={RelativeSource AncestorType={x:Type UserControl}}}" Value="False">
+					<Setter Property="Visibility" Value="Collapsed" />
+				</DataTrigger>
+			</Style.Triggers>
+		</Style>
+	</UserControl.Resources>
 	<Border Style="{StaticResource OperatorPanel}">
 		<Grid>
 			<Grid.RowDefinitions>
@@ -23,6 +32,13 @@
 					<TextBlock Text="{Binding Availability}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" />
 				</DockPanel>
 				<TextBlock Text="{Binding DisabledReason}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+				<TextBlock Text="{Binding Owner.CommandStatus}" Style="{StaticResource OperatorLabel}" AutomationProperties.LiveSetting="Polite" />
+				<TextBlock Text="{Binding Owner.LastError}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+				<WrapPanel Margin="0,5,0,0">
+					<controls:RtaimeButton AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}" Content="COMPACT" Command="{Binding CompactPresentationCommand}" IsCompact="True" Margin="0,0,6,0" />
+					<controls:RtaimeButton AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}" Content="DETAILED" Command="{Binding DetailedPresentationCommand}" IsCompact="True" Margin="0,0,6,0" />
+					<TextBlock Text="{Binding PresentationLabel}" Style="{StaticResource OperatorLabel}" VerticalAlignment="Center" />
+				</WrapPanel>
 			</StackPanel>
 
 			<controls:RtaimeScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
@@ -43,8 +59,8 @@
 									<ColumnDefinition Width="6" />
 									<ColumnDefinition Width="*" />
 								</Grid.ColumnDefinitions>
-								<controls:RtaimeButton Grid.Column="0" Content="FOLLOW VIDEO" Command="{Binding Owner.SetAudioFollowVideoCommand}" IsCompact="True" />
-								<controls:RtaimeButton Grid.Column="2" Content="BREAKAWAY SELECTED" Command="{Binding Owner.SetAudioBreakawayCommand}" IsCompact="True"
+								<controls:RtaimeButton AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}" Grid.Column="0" Content="FOLLOW VIDEO" Command="{Binding Owner.SetAudioFollowVideoCommand}" IsCompact="True" />
+								<controls:RtaimeButton AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}" Grid.Column="2" Content="BREAKAWAY SELECTED" Command="{Binding Owner.SetAudioBreakawayCommand}" IsCompact="True"
 									Background="{DynamicResource OperatorAccentSurfaceBrush}" BorderBrush="{DynamicResource OperatorAccentBrush}" />
 							</Grid>
 						</StackPanel>
@@ -71,21 +87,21 @@
 										</StackPanel>
 										<StackPanel DockPanel.Dock="Right" HorizontalAlignment="Right">
 											<TextBlock Text="{Binding RuntimeState}" Style="{StaticResource OperatorLabel}" HorizontalAlignment="Right" />
-											<TextBlock Text="{Binding DraftState}" Style="{StaticResource OperatorValue}" HorizontalAlignment="Right" />
+											<TextBlock Text="{Binding DraftState}" AutomationProperties.LiveSetting="Polite" Style="{StaticResource OperatorValue}" HorizontalAlignment="Right" />
 										</StackPanel>
 									</DockPanel>
 
 									<Grid Margin="0,0,0,5">
 										<Grid.ColumnDefinitions><ColumnDefinition Width="18" /><ColumnDefinition Width="*" /><ColumnDefinition Width="42" /></Grid.ColumnDefinitions>
 										<TextBlock Text="L" Style="{StaticResource OperatorLabel}" />
-										<controls:RtaimeMetricBar Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding LeftPeak, Mode=OneWay}" Height="4" Foreground="{DynamicResource OperatorAudioBrush}" />
-										<TextBlock Grid.Column="2" Text="{Binding LeftPeak, StringFormat={}{0:P0}}" Style="{StaticResource OperatorLabel}" HorizontalAlignment="Right" />
+										<controls:RtaimeMetricBar Grid.Column="1" Minimum="0" Maximum="1" HasValue="{Binding HasMeterEvidence}" AutomationProperties.Name="Left Runtime peak" Value="{Binding LeftPeak, Mode=OneWay}" Height="4" Foreground="{DynamicResource OperatorAudioBrush}" />
+										<TextBlock Grid.Column="2" Text="PEAK" Style="{StaticResource OperatorLabel}" HorizontalAlignment="Right" />
 									</Grid>
 									<Grid Margin="0,0,0,7">
 										<Grid.ColumnDefinitions><ColumnDefinition Width="18" /><ColumnDefinition Width="*" /><ColumnDefinition Width="42" /></Grid.ColumnDefinitions>
 										<TextBlock Text="R" Style="{StaticResource OperatorLabel}" />
-										<controls:RtaimeMetricBar Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding RightPeak, Mode=OneWay}" Height="4" Foreground="{DynamicResource OperatorAudioBrush}" />
-										<TextBlock Grid.Column="2" Text="{Binding RightPeak, StringFormat={}{0:P0}}" Style="{StaticResource OperatorLabel}" HorizontalAlignment="Right" />
+										<controls:RtaimeMetricBar Grid.Column="1" Minimum="0" Maximum="1" HasValue="{Binding HasMeterEvidence}" AutomationProperties.Name="Right Runtime peak" Value="{Binding RightPeak, Mode=OneWay}" Height="4" Foreground="{DynamicResource OperatorAudioBrush}" />
+										<TextBlock Grid.Column="2" Text="PEAK" Style="{StaticResource OperatorLabel}" HorizontalAlignment="Right" />
 									</Grid>
 
 									<DockPanel Margin="0,0,0,6">
@@ -102,12 +118,18 @@
 										</Grid.ColumnDefinitions>
 										<StackPanel Grid.Column="0">
 											<TextBlock Text="GAIN 0–4x" Style="{StaticResource OperatorLabel}" />
-											<controls:RtaimeTextBox Text="{Binding Gain, UpdateSourceTrigger=PropertyChanged}" />
+											<controls:RtaimeTextBox AutomationProperties.Name="Gain draft" Text="{Binding Gain, UpdateSourceTrigger=PropertyChanged}" />
+											<controls:RtaimeSlider Minimum="0" Maximum="4" SmallChange="0.01" LargeChange="0.1" Value="{Binding Gain, Mode=TwoWay}"
+												AutomationProperties.Name="Source gain draft" ToolTip="Local gain draft: arrows 0.01x, Page Up/Down 0.1x; apply to commit" />
+											<TextBlock Text="{Binding DraftGainLabel}" Style="{StaticResource OperatorLabel}" />
 										</StackPanel>
-										<controls:RtaimeButton Grid.Column="2" Content="{Binding MuteActionLabel}" Command="{Binding ToggleMuteCommand}" IsCompact="True" VerticalAlignment="Bottom" />
-										<controls:RtaimeButton Grid.Column="4" Content="{Binding ContributionLabel}" Command="{Binding ToggleContributionCommand}" IsCompact="True" VerticalAlignment="Bottom" />
+										<controls:RtaimeButton AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}" Grid.Column="2" Content="{Binding MuteActionLabel}" Command="{Binding ToggleMuteCommand}" IsCompact="True" VerticalAlignment="Bottom" />
+										<controls:RtaimeButton AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}" Grid.Column="4" Content="{Binding ContributionLabel}" Command="{Binding ToggleContributionCommand}" IsCompact="True" VerticalAlignment="Bottom" />
 									</Grid>
 
+									<TextBlock Text="{Binding ConfirmedGainLabel}" Style="{StaticResource OperatorLabel}" />
+									<TextBlock Text="{Binding RoutingEvidence}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
+									<TextBlock Text="{Binding ProcessingEvidence}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
 									<TextBlock Text="SOURCE → BUS" Style="{StaticResource OperatorLabel}" FontWeight="SemiBold" Margin="0,1,0,4" />
 									<ItemsControl ItemsSource="{Binding Assignments}">
 										<ItemsControl.ItemsPanel>
@@ -118,7 +140,7 @@
 										<ItemsControl.ItemTemplate>
 											<DataTemplate>
 												<StackPanel Margin="0,0,6,5">
-													<controls:RtaimeToggleButton
+													<controls:RtaimeToggleButton AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}"
 														Content="{Binding BusLabel}"
 														IsChecked="{Binding IsAssigned, Mode=OneWay}"
 														Command="{Binding ToggleCommand}"
@@ -130,7 +152,7 @@
 										</ItemsControl.ItemTemplate>
 									</ItemsControl>
 
-									<Border BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="0,1,0,0" Padding="0,7,0,0" Margin="0,2,0,0">
+									<Border Style="{StaticResource AudioProcessingPanel}" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="0,1,0,0" Padding="0,7,0,0" Margin="0,2,0,0">
 										<StackPanel>
 											<TextBlock Text="TYPED 3-BAND SOURCE EQ" Style="{StaticResource OperatorLabel}" FontWeight="SemiBold" Margin="0,0,0,5" />
 											<Grid Margin="0,0,0,5">
@@ -140,9 +162,9 @@
 													<ColumnDefinition Width="6" />
 													<ColumnDefinition Width="*" />
 												</Grid.ColumnDefinitions>
-												<controls:RtaimeToggleButton Grid.Column="0" Content="LOW" IsChecked="{Binding LowEnabled, Mode=TwoWay}" IsCompact="True" />
-												<controls:RtaimeTextBox Grid.Column="1" Text="{Binding LowFrequencyHz, UpdateSourceTrigger=PropertyChanged}" ToolTip="Low shelf frequency 20–20000 Hz" />
-												<controls:RtaimeTextBox Grid.Column="3" Text="{Binding LowGainDb, UpdateSourceTrigger=PropertyChanged}" ToolTip="Low shelf gain -18..18 dB" />
+												<controls:RtaimeToggleButton AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}" Grid.Column="0" Content="LOW" IsChecked="{Binding LowEnabled, Mode=TwoWay}" IsCompact="True" />
+												<controls:RtaimeTextBox Grid.Column="1" AutomationProperties.Name="LowFrequencyHz draft" Text="{Binding LowFrequencyHz, UpdateSourceTrigger=PropertyChanged}" ToolTip="Low shelf frequency 20–20000 Hz" />
+												<controls:RtaimeTextBox Grid.Column="3" AutomationProperties.Name="LowGainDb draft" Text="{Binding LowGainDb, UpdateSourceTrigger=PropertyChanged}" ToolTip="Low shelf gain -18..18 dB" />
 											</Grid>
 											<Grid Margin="0,0,0,5">
 												<Grid.ColumnDefinitions>
@@ -153,10 +175,10 @@
 													<ColumnDefinition Width="6" />
 													<ColumnDefinition Width="*" />
 												</Grid.ColumnDefinitions>
-												<controls:RtaimeToggleButton Grid.Column="0" Content="MID" IsChecked="{Binding MidEnabled, Mode=TwoWay}" IsCompact="True" />
-												<controls:RtaimeTextBox Grid.Column="1" Text="{Binding MidFrequencyHz, UpdateSourceTrigger=PropertyChanged}" ToolTip="Bell frequency 20–20000 Hz" />
-												<controls:RtaimeTextBox Grid.Column="3" Text="{Binding MidGainDb, UpdateSourceTrigger=PropertyChanged}" ToolTip="Bell gain -18..18 dB" />
-												<controls:RtaimeTextBox Grid.Column="5" Text="{Binding MidQ, UpdateSourceTrigger=PropertyChanged}" ToolTip="Bell Q 0.1–10" />
+												<controls:RtaimeToggleButton AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}" Grid.Column="0" Content="MID" IsChecked="{Binding MidEnabled, Mode=TwoWay}" IsCompact="True" />
+												<controls:RtaimeTextBox Grid.Column="1" AutomationProperties.Name="MidFrequencyHz draft" Text="{Binding MidFrequencyHz, UpdateSourceTrigger=PropertyChanged}" ToolTip="Bell frequency 20–20000 Hz" />
+												<controls:RtaimeTextBox Grid.Column="3" AutomationProperties.Name="MidGainDb draft" Text="{Binding MidGainDb, UpdateSourceTrigger=PropertyChanged}" ToolTip="Bell gain -18..18 dB" />
+												<controls:RtaimeTextBox Grid.Column="5" AutomationProperties.Name="MidQ draft" Text="{Binding MidQ, UpdateSourceTrigger=PropertyChanged}" ToolTip="Bell Q 0.1–10" />
 											</Grid>
 											<Grid Margin="0,0,0,6">
 												<Grid.ColumnDefinitions>
@@ -165,14 +187,15 @@
 													<ColumnDefinition Width="6" />
 													<ColumnDefinition Width="*" />
 												</Grid.ColumnDefinitions>
-												<controls:RtaimeToggleButton Grid.Column="0" Content="HIGH" IsChecked="{Binding HighEnabled, Mode=TwoWay}" IsCompact="True" />
-												<controls:RtaimeTextBox Grid.Column="1" Text="{Binding HighFrequencyHz, UpdateSourceTrigger=PropertyChanged}" ToolTip="High shelf frequency 20–20000 Hz" />
-												<controls:RtaimeTextBox Grid.Column="3" Text="{Binding HighGainDb, UpdateSourceTrigger=PropertyChanged}" ToolTip="High shelf gain -18..18 dB" />
+												<controls:RtaimeToggleButton AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}" Grid.Column="0" Content="HIGH" IsChecked="{Binding HighEnabled, Mode=TwoWay}" IsCompact="True" />
+												<controls:RtaimeTextBox Grid.Column="1" AutomationProperties.Name="HighFrequencyHz draft" Text="{Binding HighFrequencyHz, UpdateSourceTrigger=PropertyChanged}" ToolTip="High shelf frequency 20–20000 Hz" />
+												<controls:RtaimeTextBox Grid.Column="3" AutomationProperties.Name="HighGainDb draft" Text="{Binding HighGainDb, UpdateSourceTrigger=PropertyChanged}" ToolTip="High shelf gain -18..18 dB" />
 											</Grid>
-											<controls:RtaimeButton Content="APPLY SOURCE / EQ DRAFT" Command="{Binding ApplyCommand}" IsCompact="True"
-												Background="{DynamicResource OperatorAccentSurfaceBrush}" BorderBrush="{DynamicResource OperatorAccentBrush}" />
 										</StackPanel>
 									</Border>
+											<controls:RtaimeButton AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}" Content="APPLY SOURCE / EQ DRAFT" Command="{Binding ApplyCommand}" IsCompact="True"
+												Background="{DynamicResource OperatorAccentSurfaceBrush}" BorderBrush="{DynamicResource OperatorAccentBrush}" />
+											<controls:RtaimeButton AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}" Content="DISCARD SOURCE DRAFT" Command="{Binding DiscardDraftCommand}" IsCompact="True" Margin="0,5,0,0" />
 								</StackPanel>
 							</DataTemplate>
 						</controls:RtaimeListBox.ItemTemplate>
@@ -198,14 +221,14 @@
 									<Grid Margin="0,0,0,4">
 										<Grid.ColumnDefinitions><ColumnDefinition Width="18" /><ColumnDefinition Width="*" /><ColumnDefinition Width="42" /></Grid.ColumnDefinitions>
 										<TextBlock Text="L" Style="{StaticResource OperatorLabel}" />
-										<controls:RtaimeMetricBar Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding LeftPeak, Mode=OneWay}" Height="4" Foreground="{DynamicResource OperatorAudioBrush}" />
-										<TextBlock Grid.Column="2" Text="{Binding LeftPeak, StringFormat={}{0:P0}}" Style="{StaticResource OperatorLabel}" HorizontalAlignment="Right" />
+										<controls:RtaimeMetricBar Grid.Column="1" Minimum="0" Maximum="1" HasValue="{Binding HasMeterEvidence}" AutomationProperties.Name="Left Runtime peak" Value="{Binding LeftPeak, Mode=OneWay}" Height="4" Foreground="{DynamicResource OperatorAudioBrush}" />
+										<TextBlock Grid.Column="2" Text="PEAK" Style="{StaticResource OperatorLabel}" HorizontalAlignment="Right" />
 									</Grid>
 									<Grid Margin="0,0,0,7">
 										<Grid.ColumnDefinitions><ColumnDefinition Width="18" /><ColumnDefinition Width="*" /><ColumnDefinition Width="42" /></Grid.ColumnDefinitions>
 										<TextBlock Text="R" Style="{StaticResource OperatorLabel}" />
-										<controls:RtaimeMetricBar Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding RightPeak, Mode=OneWay}" Height="4" Foreground="{DynamicResource OperatorAudioBrush}" />
-										<TextBlock Grid.Column="2" Text="{Binding RightPeak, StringFormat={}{0:P0}}" Style="{StaticResource OperatorLabel}" HorizontalAlignment="Right" />
+										<controls:RtaimeMetricBar Grid.Column="1" Minimum="0" Maximum="1" HasValue="{Binding HasMeterEvidence}" AutomationProperties.Name="Right Runtime peak" Value="{Binding RightPeak, Mode=OneWay}" Height="4" Foreground="{DynamicResource OperatorAudioBrush}" />
+										<TextBlock Grid.Column="2" Text="PEAK" Style="{StaticResource OperatorLabel}" HorizontalAlignment="Right" />
 									</Grid>
 									<Grid Margin="0,0,0,6">
 										<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="6" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
@@ -223,20 +246,25 @@
 										<TextBlock Text="{Binding MissingSources, StringFormat={}Missing {0}}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" />
 									</DockPanel>
 
+									<TextBlock Text="{Binding ConfirmedGainLabel}" Style="{StaticResource OperatorLabel}" />
+									<TextBlock Text="{Binding ProcessingEvidence}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
 									<Grid Margin="0,0,0,6">
 										<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="6" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
 										<StackPanel Grid.Column="0">
 											<TextBlock Text="MASTER 0–4x" Style="{StaticResource OperatorLabel}" />
-											<controls:RtaimeTextBox Text="{Binding MasterGain, UpdateSourceTrigger=PropertyChanged}" />
+											<controls:RtaimeTextBox AutomationProperties.Name="MasterGain draft" Text="{Binding MasterGain, UpdateSourceTrigger=PropertyChanged}" />
+											<controls:RtaimeSlider Minimum="0" Maximum="4" SmallChange="0.01" LargeChange="0.1" Value="{Binding MasterGain, Mode=TwoWay}"
+												AutomationProperties.Name="Bus gain draft" ToolTip="Local gain draft: arrows 0.01x, Page Up/Down 0.1x; apply to commit" />
+											<TextBlock Text="{Binding DraftGainLabel}" Style="{StaticResource OperatorLabel}" />
 										</StackPanel>
-										<controls:RtaimeButton Grid.Column="2" Content="{Binding MuteActionLabel}" Command="{Binding ToggleMuteCommand}" IsCompact="True" VerticalAlignment="Bottom" />
+										<controls:RtaimeButton AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}" Grid.Column="2" Content="{Binding MuteActionLabel}" Command="{Binding ToggleMuteCommand}" IsCompact="True" VerticalAlignment="Bottom" />
 									</Grid>
 
-									<Border BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="0,1,0,0" Padding="0,7,0,0">
+									<Border Style="{StaticResource AudioProcessingPanel}" BorderBrush="{DynamicResource OperatorBorderBrush}" BorderThickness="0,1,0,0" Padding="0,7,0,0">
 										<StackPanel>
 											<DockPanel Margin="0,0,0,5">
 												<TextBlock Text="COMPRESSOR" Style="{StaticResource OperatorLabel}" FontWeight="SemiBold" />
-												<controls:RtaimeToggleButton Content="ENABLED" IsChecked="{Binding CompressorEnabled, Mode=TwoWay}" IsCompact="True" DockPanel.Dock="Right" />
+												<controls:RtaimeToggleButton AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}" Content="ENABLED" IsChecked="{Binding CompressorEnabled, Mode=TwoWay}" IsCompact="True" DockPanel.Dock="Right" />
 											</DockPanel>
 											<Grid Margin="0,0,0,5">
 												<Grid.ColumnDefinitions>
@@ -244,28 +272,29 @@
 													<ColumnDefinition Width="*" /><ColumnDefinition Width="5" />
 													<ColumnDefinition Width="*" />
 												</Grid.ColumnDefinitions>
-												<StackPanel Grid.Column="0"><TextBlock Text="THRESH dBFS" Style="{StaticResource OperatorLabel}" /><controls:RtaimeTextBox Text="{Binding CompressorThresholdDbFs, UpdateSourceTrigger=PropertyChanged}" /></StackPanel>
-												<StackPanel Grid.Column="2"><TextBlock Text="RATIO" Style="{StaticResource OperatorLabel}" /><controls:RtaimeTextBox Text="{Binding CompressorRatio, UpdateSourceTrigger=PropertyChanged}" /></StackPanel>
-												<StackPanel Grid.Column="4"><TextBlock Text="MAKEUP dB" Style="{StaticResource OperatorLabel}" /><controls:RtaimeTextBox Text="{Binding CompressorMakeupGainDb, UpdateSourceTrigger=PropertyChanged}" /></StackPanel>
+												<StackPanel Grid.Column="0"><TextBlock Text="THRESH dBFS" Style="{StaticResource OperatorLabel}" /><controls:RtaimeTextBox AutomationProperties.Name="CompressorThresholdDbFs draft" Text="{Binding CompressorThresholdDbFs, UpdateSourceTrigger=PropertyChanged}" /></StackPanel>
+												<StackPanel Grid.Column="2"><TextBlock Text="RATIO" Style="{StaticResource OperatorLabel}" /><controls:RtaimeTextBox AutomationProperties.Name="CompressorRatio draft" Text="{Binding CompressorRatio, UpdateSourceTrigger=PropertyChanged}" /></StackPanel>
+												<StackPanel Grid.Column="4"><TextBlock Text="MAKEUP dB" Style="{StaticResource OperatorLabel}" /><controls:RtaimeTextBox AutomationProperties.Name="CompressorMakeupGainDb draft" Text="{Binding CompressorMakeupGainDb, UpdateSourceTrigger=PropertyChanged}" /></StackPanel>
 											</Grid>
 											<Grid Margin="0,0,0,7">
 												<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="6" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-												<StackPanel Grid.Column="0"><TextBlock Text="ATTACK ms" Style="{StaticResource OperatorLabel}" /><controls:RtaimeTextBox Text="{Binding CompressorAttackMilliseconds, UpdateSourceTrigger=PropertyChanged}" /></StackPanel>
-												<StackPanel Grid.Column="2"><TextBlock Text="RELEASE ms" Style="{StaticResource OperatorLabel}" /><controls:RtaimeTextBox Text="{Binding CompressorReleaseMilliseconds, UpdateSourceTrigger=PropertyChanged}" /></StackPanel>
+												<StackPanel Grid.Column="0"><TextBlock Text="ATTACK ms" Style="{StaticResource OperatorLabel}" /><controls:RtaimeTextBox AutomationProperties.Name="CompressorAttackMilliseconds draft" Text="{Binding CompressorAttackMilliseconds, UpdateSourceTrigger=PropertyChanged}" /></StackPanel>
+												<StackPanel Grid.Column="2"><TextBlock Text="RELEASE ms" Style="{StaticResource OperatorLabel}" /><controls:RtaimeTextBox AutomationProperties.Name="CompressorReleaseMilliseconds draft" Text="{Binding CompressorReleaseMilliseconds, UpdateSourceTrigger=PropertyChanged}" /></StackPanel>
 											</Grid>
 											<DockPanel Margin="0,0,0,5">
 												<TextBlock Text="SAMPLE-PEAK LIMITER" Style="{StaticResource OperatorLabel}" FontWeight="SemiBold" />
-												<controls:RtaimeToggleButton Content="ENABLED" IsChecked="{Binding LimiterEnabled, Mode=TwoWay}" IsCompact="True" DockPanel.Dock="Right" />
+												<controls:RtaimeToggleButton AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}" Content="ENABLED" IsChecked="{Binding LimiterEnabled, Mode=TwoWay}" IsCompact="True" DockPanel.Dock="Right" />
 											</DockPanel>
 											<Grid Margin="0,0,0,7">
 												<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="6" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-												<StackPanel Grid.Column="0"><TextBlock Text="CEILING dBFS" Style="{StaticResource OperatorLabel}" /><controls:RtaimeTextBox Text="{Binding LimiterCeilingDbFs, UpdateSourceTrigger=PropertyChanged}" /></StackPanel>
-												<StackPanel Grid.Column="2"><TextBlock Text="RELEASE ms" Style="{StaticResource OperatorLabel}" /><controls:RtaimeTextBox Text="{Binding LimiterReleaseMilliseconds, UpdateSourceTrigger=PropertyChanged}" /></StackPanel>
+												<StackPanel Grid.Column="0"><TextBlock Text="CEILING dBFS" Style="{StaticResource OperatorLabel}" /><controls:RtaimeTextBox AutomationProperties.Name="LimiterCeilingDbFs draft" Text="{Binding LimiterCeilingDbFs, UpdateSourceTrigger=PropertyChanged}" /></StackPanel>
+												<StackPanel Grid.Column="2"><TextBlock Text="RELEASE ms" Style="{StaticResource OperatorLabel}" /><controls:RtaimeTextBox AutomationProperties.Name="LimiterReleaseMilliseconds draft" Text="{Binding LimiterReleaseMilliseconds, UpdateSourceTrigger=PropertyChanged}" /></StackPanel>
 											</Grid>
-											<controls:RtaimeButton Content="APPLY BUS / DYNAMICS DRAFT" Command="{Binding ApplyCommand}" IsCompact="True"
-												Background="{DynamicResource OperatorAccentSurfaceBrush}" BorderBrush="{DynamicResource OperatorAccentBrush}" />
 										</StackPanel>
 									</Border>
+											<controls:RtaimeButton AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}" Content="APPLY BUS / DYNAMICS DRAFT" Command="{Binding ApplyCommand}" IsCompact="True"
+												Background="{DynamicResource OperatorAccentSurfaceBrush}" BorderBrush="{DynamicResource OperatorAccentBrush}" />
+											<controls:RtaimeButton AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}" Content="DISCARD BUS DRAFT" Command="{Binding DiscardDraftCommand}" IsCompact="True" Margin="0,5,0,0" />
 								</StackPanel>
 							</DataTemplate>
 						</controls:RtaimeListBox.ItemTemplate>
@@ -277,21 +306,22 @@
 							<DockPanel Margin="0,0,0,4"><TextBlock Text="Crossfade" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding Owner.AudioCrossfadeStatus}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
 							<Grid Margin="0,0,0,5">
 								<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="6" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-								<controls:RtaimeTextBox Grid.Column="0" Text="{Binding Owner.AudioCrossfadeStartSample, UpdateSourceTrigger=PropertyChanged}" ToolTip="Absolute 48 kHz start sample" />
-								<controls:RtaimeTextBox Grid.Column="2" Text="{Binding Owner.AudioCrossfadeDurationSamples, UpdateSourceTrigger=PropertyChanged}" ToolTip="Crossfade duration in samples" />
+								<controls:RtaimeTextBox Grid.Column="0" AutomationProperties.Name="Owner.AudioCrossfadeStartSample draft" Text="{Binding Owner.AudioCrossfadeStartSample, UpdateSourceTrigger=PropertyChanged}" ToolTip="Absolute 48 kHz start sample" />
+								<controls:RtaimeTextBox Grid.Column="2" AutomationProperties.Name="Owner.AudioCrossfadeDurationSamples draft" Text="{Binding Owner.AudioCrossfadeDurationSamples, UpdateSourceTrigger=PropertyChanged}" ToolTip="Crossfade duration in samples" />
 							</Grid>
-							<controls:RtaimeButton Content="START EQUAL-POWER CROSSFADE" Command="{Binding Owner.StartAudioCrossfadeCommand}" IsCompact="True" Margin="0,0,0,8" />
+							<controls:RtaimeButton AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}" Content="START EQUAL-POWER CROSSFADE" Command="{Binding Owner.StartAudioCrossfadeCommand}" IsCompact="True" Margin="0,0,0,8" />
 
+							<TextBlock Text="{Binding DuckingEvidence}" Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
 							<DockPanel Margin="0,0,0,4"><TextBlock Text="Ducking" Style="{StaticResource OperatorLabel}" /><TextBlock Text="{Binding Owner.AudioDuckingStatus}" Style="{StaticResource OperatorValue}" DockPanel.Dock="Right" /></DockPanel>
 							<Grid Margin="0,0,0,5">
 								<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="6" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-								<controls:RtaimeTextBox Grid.Column="0" Text="{Binding Owner.AudioDuckingThreshold, UpdateSourceTrigger=PropertyChanged}" ToolTip="Ducking threshold 0..1" />
-								<controls:RtaimeTextBox Grid.Column="2" Text="{Binding Owner.AudioDuckingAttenuation, UpdateSourceTrigger=PropertyChanged}" ToolTip="Ducking target gain 0..1" />
+								<controls:RtaimeTextBox Grid.Column="0" AutomationProperties.Name="Owner.AudioDuckingThreshold draft" Text="{Binding Owner.AudioDuckingThreshold, UpdateSourceTrigger=PropertyChanged}" ToolTip="Ducking threshold 0..1" />
+								<controls:RtaimeTextBox Grid.Column="2" AutomationProperties.Name="Owner.AudioDuckingAttenuation draft" Text="{Binding Owner.AudioDuckingAttenuation, UpdateSourceTrigger=PropertyChanged}" ToolTip="Ducking target gain 0..1" />
 							</Grid>
-							<controls:RtaimeButton Content="{Binding Owner.AudioDuckingActionLabel}" Command="{Binding Owner.ToggleAudioDuckingCommand}" IsCompact="True" Margin="0,0,0,8" />
+							<controls:RtaimeButton AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}" Content="{Binding Owner.AudioDuckingActionLabel}" Command="{Binding Owner.ToggleAudioDuckingCommand}" IsCompact="True" Margin="0,0,0,8" />
 							<Grid>
 								<Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="6" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-								<controls:RtaimeButton Grid.Column="0" Content="{Binding Owner.SelectedAudioInput.TestSignalActionLabel}" Command="{Binding Owner.CycleAudioTestSignalCommand}" IsCompact="True" />
+								<controls:RtaimeButton AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}" Grid.Column="0" Content="{Binding Owner.SelectedAudioInput.TestSignalActionLabel}" Command="{Binding Owner.CycleAudioTestSignalCommand}" IsCompact="True" />
 								<TextBlock Grid.Column="2" Text="Meters and dynamics evidence are synchronized RuntimeHost observations. No WPF audio analysis or meter animation is performed." Style="{StaticResource OperatorLabel}" TextWrapping="Wrap" />
 							</Grid>
 						</StackPanel>
