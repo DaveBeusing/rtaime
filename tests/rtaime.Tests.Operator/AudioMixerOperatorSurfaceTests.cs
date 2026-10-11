@@ -199,6 +199,152 @@ public sealed class AudioMixerOperatorSurfaceTests
 		Assert.False(cell.IsAssigned);
 	}
 
+
+	[Fact]
+	public async Task Meter_refresh_preserves_strip_assignment_identity_selection_and_rejected_feedback()
+	{
+		await using var owner = new OperatorViewModel(runtimeReadiness: new PassiveReadinessService());
+		var id = new MediaSourceId(Identity.Parse("ac300000-0000-0000-0000-000000000001"));
+		var config = new AudioProductionConfiguration(1,
+			new[] { new AudioProductionBusConfiguration(AudioBusId.Program, 1, false) },
+			new[] { new AudioProductionSourceConfiguration(id, 1, false, true, new[] { AudioBusId.Program }) });
+		var busEvidence = new[] { new OperatorAudioProductionBusDescriptor("program", 1, false, 0.2, 0.1, 0.2, false, 0, 1, 0) };
+		var descriptors = new[] { new OperatorSourceDescriptor(id.ToString(), "Camera") };
+		var inputs = new[] { new OperatorAudioInputDescriptor(id.ToString(), "stream", 1, false, 0.2, 0.1, 0.2, false, "HEALTHY") };
+		var mixer = owner.AudioMixer;
+		mixer.ApplyProjection(Descriptor(config, busEvidence), descriptors, inputs, Array.Empty<OperatorOutputRoleDescriptor>(), true);
+		var source = Assert.Single(mixer.Sources);
+		var bus = Assert.Single(mixer.Buses);
+		var assignment = Assert.Single(source.Assignments);
+		source.Gain = 1.75;
+		bus.MasterGain = 0.25;
+		source.BeginMutation();
+		source.CompleteMutation(false);
+		assignment.BeginMutation();
+		assignment.CompleteMutation(false);
+		var changes = 0;
+		mixer.Sources.CollectionChanged += (_, _) => changes++;
+		mixer.Buses.CollectionChanged += (_, _) => changes++;
+		source.Assignments.CollectionChanged += (_, _) => changes++;
+		for (var index = 0; index < 1_000; index++)
+			mixer.ApplyProjection(Descriptor(config, busEvidence), descriptors, inputs, Array.Empty<OperatorOutputRoleDescriptor>(), false);
+		Assert.Equal(0, changes);
+		Assert.Same(source, mixer.SelectedSource);
+		Assert.Same(bus, Assert.Single(mixer.Buses));
+		Assert.Same(assignment, Assert.Single(source.Assignments));
+		Assert.Equal("REJECTED", source.DraftState);
+		Assert.Equal("REJECTED", assignment.State);
+		Assert.Equal(1.75, source.Gain);
+		Assert.Equal(0.25, bus.MasterGain);
+		Assert.Contains("x ·", source.ConfirmedGainLabel, StringComparison.Ordinal);
+	}
+
+	[Fact]
+	public async Task Missing_bus_evidence_and_stale_state_never_render_live_zero_or_idle_processing()
+	{
+		await using var owner = new OperatorViewModel(runtimeReadiness: new PassiveReadinessService());
+		var id = new MediaSourceId(Identity.Parse("ac300000-0000-0000-0000-000000000002"));
+		var config = new AudioProductionConfiguration(1,
+			new[] { new AudioProductionBusConfiguration(AudioBusId.Program, 1, false), new AudioProductionBusConfiguration(new AudioBusId("aux"), 1, false) },
+			new[] { new AudioProductionSourceConfiguration(id, 1, false, true, new[] { AudioBusId.Program }) });
+		var evidence = new[] { new OperatorAudioProductionBusDescriptor("program", 1, false, 0.4, 0.3, 0.4, false, 0, 1, 0) };
+		var descriptors = new[] { new OperatorSourceDescriptor(id.ToString(), "Camera") };
+		owner.AudioMixer.ApplyProjection(Descriptor(config, evidence), descriptors, Array.Empty<OperatorAudioInputDescriptor>(), Array.Empty<OperatorOutputRoleDescriptor>(), true);
+		var source = Assert.Single(owner.AudioMixer.Sources);
+		var aux = Assert.Single(owner.AudioMixer.Buses, item => item.BusId == "aux");
+		var program = Assert.Single(owner.AudioMixer.Buses, item => item.BusId == "program");
+		Assert.False(source.HasMeterEvidence);
+		Assert.Equal("UNAVAILABLE", source.RuntimeState);
+		Assert.False(aux.HasMeterEvidence);
+		Assert.Equal("UNAVAILABLE", aux.EvidenceState);
+		Assert.Equal("UNAVAILABLE", aux.CompressorActivity);
+		Assert.Equal("SOURCE COUNTS UNAVAILABLE", aux.CountsEvidence);
+		Assert.Equal("—", aux.LeftPeakLabel);
+		Assert.True(program.HasMeterEvidence);
+		owner.AudioMixer.SetEvidenceAvailability("STALE");
+		Assert.False(program.HasMeterEvidence);
+		Assert.Equal("STALE", program.EvidenceState);
+		Assert.Equal("UNAVAILABLE", program.LimiterActivity);
+		Assert.Contains("RETAINED", source.RoutingEvidence, StringComparison.Ordinal);
+		owner.AudioMixer.SetEvidenceAvailability("CONFIRMED");
+		Assert.True(program.HasMeterEvidence);
+		Assert.Equal(0.4, program.LeftPeak);
+		Assert.False(aux.HasMeterEvidence);
+	}
+
+	[Fact]
+	public async Task Confirmed_processing_and_contribution_do_not_follow_unapplied_drafts()
+	{
+		await using var owner = new OperatorViewModel(runtimeReadiness: new PassiveReadinessService());
+		var id = new MediaSourceId(Identity.Parse("ac300000-0000-0000-0000-000000000003"));
+		var config = new AudioProductionConfiguration(1,
+			new[] { new AudioProductionBusConfiguration(AudioBusId.Program, 1, false) },
+			new[] { new AudioProductionSourceConfiguration(id, 1, false, true, new[] { AudioBusId.Program }) });
+		var evidence = new[] { new OperatorAudioProductionBusDescriptor("program", 1, false, 0, 0, 0, false, 0, 1, 0) };
+		owner.AudioMixer.ApplyProjection(Descriptor(config, evidence), new[] { new OperatorSourceDescriptor(id.ToString(), "Camera") },
+			Array.Empty<OperatorAudioInputDescriptor>(), Array.Empty<OperatorOutputRoleDescriptor>(), true);
+		var source = Assert.Single(owner.AudioMixer.Sources);
+		var bus = Assert.Single(owner.AudioMixer.Buses);
+		source.FollowRoutedSource = false;
+		source.LowEnabled = true;
+		source.LowGainDb = 3;
+		bus.CompressorEnabled = true;
+		Assert.Equal("ROUTED", source.ContributionLabel);
+		Assert.Contains("EQ BYPASS", source.ProcessingEvidence, StringComparison.Ordinal);
+		Assert.Contains("COMP BYPASS", bus.ProcessingEvidence, StringComparison.Ordinal);
+		Assert.Equal("DRAFT", source.DraftState);
+		source.BeginMutation();
+		Assert.False(source.CanEditDraft);
+		source.CompleteMutation(false);
+		Assert.True(source.CanEditDraft);
+		source.DiscardDraftCommand.Execute(null);
+		Assert.False(source.HasDraftChanges);
+		Assert.True(bus.HasDraftChanges);
+		Assert.Equal("CONFIRMED", source.DraftState);
+	}
+
+	[Fact]
+	public async Task Presentation_presets_change_only_local_visibility_and_keep_all_drafts()
+	{
+		await using var owner = new OperatorViewModel(runtimeReadiness: new PassiveReadinessService());
+		Assert.True(owner.AudioMixer.ShowProcessing);
+		owner.AudioMixer.CompactPresentationCommand.Execute(null);
+		Assert.False(owner.AudioMixer.ShowProcessing);
+		Assert.Contains("LOCAL VIEW ONLY", owner.AudioMixer.PresentationLabel, StringComparison.Ordinal);
+		Assert.Equal("UNAVAILABLE", owner.AudioMixer.Availability);
+		owner.AudioMixer.DetailedPresentationCommand.Execute(null);
+		Assert.True(owner.AudioMixer.ShowProcessing);
+	}
+
+	[Fact]
+	public void Slow_presentation_consumer_retains_one_latest_refresh_and_invalidation_rejects_old_poll_results()
+	{
+		var queue = new Queue<Action>();
+		using var delivery = new LatestAudioRefreshDelivery(queue.Enqueue);
+		var presented = -1;
+		for (var index = 0; index < 5_000; index++)
+		{
+			var latest = index;
+			delivery.Enqueue(delivery.Version, () => presented = latest);
+		}
+		Assert.Single(queue);
+		queue.Dequeue()();
+		Assert.Equal(4_999, presented);
+		var beforeMutation = delivery.Version;
+		delivery.Enqueue(beforeMutation, () => presented = 6_000);
+		delivery.Invalidate();
+		delivery.Enqueue(beforeMutation, () => presented = 7_000);
+		queue.Dequeue()();
+		Assert.Equal(4_999, presented);
+		delivery.Enqueue(delivery.Version, () => presented = 8_000);
+		queue.Dequeue()();
+		Assert.Equal(8_000, presented);
+		delivery.Enqueue(delivery.Version, () => presented = 9_000);
+		delivery.Dispose();
+		queue.Dequeue()();
+		Assert.Equal(8_000, presented);
+	}
+
 	private static OperatorAudioProductionDescriptor Descriptor(
 		AudioProductionConfiguration configuration,
 		IReadOnlyList<OperatorAudioProductionBusDescriptor> buses) =>
