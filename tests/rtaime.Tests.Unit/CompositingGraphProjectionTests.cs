@@ -258,6 +258,34 @@ public sealed class CompositingGraphProjectionTests
 	}
 
 	[Fact]
+	public void Projection_marks_missing_routed_source_as_failed_without_changing_routing()
+	{
+		var missingProgram = CompositingGraphProjector.Project(CreateInput() with
+		{
+			ProgramSourceId = "unavailable-program"
+		});
+		var routing = Assert.Single(missingProgram.Nodes, node => node.Id == "routing");
+		Assert.Equal(CompositingGraphHealth.Error, routing.Health);
+		Assert.Contains("PROGRAM", routing.Status, StringComparison.Ordinal);
+		Assert.Contains("MISSING SOURCE", routing.Status, StringComparison.Ordinal);
+
+		var missingBoth = CompositingGraphProjector.Project(CreateInput() with
+		{
+			PreviewSourceId = "unavailable-preview",
+			ProgramSourceId = "unavailable-program"
+		});
+		var both = Assert.Single(missingBoth.Nodes, node => node.Id == "routing");
+		Assert.Equal(CompositingGraphHealth.Error, both.Health);
+		Assert.Contains("PREVIEW", both.Status, StringComparison.Ordinal);
+		Assert.Contains("PROGRAM", both.Status, StringComparison.Ordinal);
+
+		var healthy = CompositingGraphProjector.Project(CreateInput());
+		Assert.Equal(CompositingGraphHealth.Normal,
+			Assert.Single(healthy.Nodes, node => node.Id == "routing").Health);
+	}
+
+
+	[Fact]
 	public void Projection_keeps_unsupported_rewire_disabled()
 	{
 		var graph = CompositingGraphProjector.Project(CreateInput());

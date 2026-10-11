@@ -54,6 +54,8 @@ The authoritative layer chain is projected as `Layer → Transform → [ordered 
 
 ## Stable topology and interaction
 
+If the authoritative Preview or Program source identifier is absent from the current source projection, the routing node displays `MISSING SOURCE` with the affected role and error health. This is read-only diagnostic evidence: it does not synthesize a replacement source, alter routing, or claim a successful Runtime commit.
+
 The graph uses stable node identities. Ordinary status refreshes update the existing node view models in place and do not reset node positions. Source collection or topology changes may invoke deterministic Auto Layout.
 
 SELECT projects the chosen node into the existing Inspector. PAN, mouse-wheel zoom, FIT, 100% reset and AUTO LAYOUT remain presentation-only operations. Middle-mouse panning remains available independently of the active interaction mode.
