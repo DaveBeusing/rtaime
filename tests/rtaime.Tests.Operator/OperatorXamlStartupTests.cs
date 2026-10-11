@@ -102,8 +102,8 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 					var rendered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 					window.ContentRendered += (_, _) => rendered.TrySetResult();
 					window.Shell.ExitFullscreenCommand.Execute(null);
-					window.Width = 1600;
-					window.Height = 900;
+					window.MinWidth = window.Width = 1600;
+					window.MinHeight = window.Height = 900;
 					Console.WriteLine("WINDOW SHOW BEGIN [MainWindow]");
 					window.Show();
 					Console.WriteLine("WINDOW SHOW RETURN [MainWindow]");
@@ -175,7 +175,7 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 						app?.Shutdown();
 					}
 					catch (Exception exception) { failures.Add(exception); }
-					dispatcher.BeginInvokeShutdown(DispatcherPriority.Background);
+					dispatcher.BeginInvokeShutdown(DispatcherPriority.Send);
 				}
 			}));
 			try { Dispatcher.Run(); }
