@@ -107,14 +107,15 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 					window.Show();
 					Console.WriteLine("WINDOW SHOW RETURN [MainWindow]");
 					await rendered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+					Console.WriteLine("CONTENT RENDERED PASS [MainWindow]");
 					Assert.True(window.IsLoaded && window.IsVisible);
 
 					foreach (var workspace in OperatorWorkspaceNames.All)
 					{
 						target = $"MainWindow/{workspace}";
+						Console.WriteLine($"WORKSPACE BEGIN [{workspace}]");
 						window.Shell.SelectWorkspace(workspace);
-						await dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
-						window.UpdateLayout();
+						await dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.Render);
 						foreach (var name in new[]
 						{
 							"TopBar", "WorkspaceNavigation", "LeftToolRegion", "CenterWorkspace",
