@@ -95,7 +95,8 @@ public sealed class ControlRuntimeBindingReadinessTests
 			runtimeStop.Cancel();
 			Assert.Equal(RuntimeHostExitCode.Success, await runtimeRun.WaitAsync(TimeSpan.FromSeconds(10)));
 			log.Flush();
-			// Read evidence while the log remains available; fixture cleanup is last.
+			log.Dispose();
+			// Read the closed log before fixture cleanup so Windows sharing cannot mask the regression.
 			var records = File.ReadAllLines(log.CurrentFilePath!).Select(line => JsonDocument.Parse(line)).ToArray();
 			try
 			{
