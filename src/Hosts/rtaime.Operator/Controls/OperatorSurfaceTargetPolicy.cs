@@ -25,7 +25,7 @@ internal static class OperatorSurfaceTargetPolicy
 		var width = Math.Ceiling(widthDip * scaleX);
 		var height = Math.Ceiling(heightDip * scaleY);
 		if (!double.IsFinite(width) || !double.IsFinite(height) ||
-			width > maximumWidth || height > maximumHeight || maximumWidth <= 0 || maximumHeight <= 0)
+			width < 1 || height < 1 || width > maximumWidth || height > maximumHeight || maximumWidth <= 0 || maximumHeight <= 0)
 		{
 			reason = "device-or-interop-limit";
 			return false;

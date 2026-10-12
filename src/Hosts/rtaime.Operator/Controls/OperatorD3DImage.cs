@@ -1,6 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 // WPF shared-surface interop follows Vortice.Windows (MIT); see docs/VorticeWpfInteropLicense.txt.
 
+using System.Collections.Concurrent;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Threading;
@@ -17,7 +18,7 @@ namespace rtaime.Operator.Controls;
 // texture is disposed. All leases and callbacks belong to one WPF Dispatcher.
 internal sealed class OperatorD3DImage : D3DImage, IDisposable
 {
-	private static readonly Dictionary<Dispatcher, DeviceLease> Leases = [];
+	private static readonly ConcurrentDictionary<Dispatcher, DeviceLease> Leases = [];
 	private readonly DeviceLease _lease;
 	private IDirect3DTexture9? _texture;
 	private bool _disposed;
@@ -31,7 +32,8 @@ internal sealed class OperatorD3DImage : D3DImage, IDisposable
 		if (!Leases.TryGetValue(Dispatcher, out var lease))
 		{
 			lease = new DeviceLease(window);
-			Leases.Add(Dispatcher, lease);
+			if (!Leases.TryAdd(Dispatcher, lease))
+				throw new InvalidOperationException("A dispatcher already owns the D3D9 interop lease.");
 		}
 		_lease = lease;
 		_lease.Users++;
@@ -97,7 +99,7 @@ internal sealed class OperatorD3DImage : D3DImage, IDisposable
 			_disposed = true;
 			if (--_lease.Users == 0)
 			{
-				Leases.Remove(Dispatcher);
+				Leases.TryRemove(Dispatcher, out _);
 				_lease.Dispose();
 			}
 		}

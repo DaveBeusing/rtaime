@@ -53,8 +53,7 @@ public class OperatorDrawingSurface : Image
 	private string _adapterLuid = "uninitialized";
 	private int _maximumWidth = 16384;
 	private int _maximumHeight = 16384;
-	private string? _lastDiagnosticCode;
-	private DateTimeOffset _lastDiagnosticAt;
+	private readonly Dictionary<string, DateTimeOffset> _diagnosticTimes = [];
 
 	public event EventHandler<DrawingSurfaceEventArgs>? LoadContent;
 	public event EventHandler<OperatorSurfaceDrawEventArgs>? Draw;
@@ -153,7 +152,7 @@ public class OperatorDrawingSurface : Image
 
 	private void ScheduleUpdate()
 	{
-		if (!IsLoaded || _closed || Dispatcher.HasShutdownStarted || _update is not null) return;
+		if (!IsLoaded || _closed || _disposing || _window is null || Dispatcher.HasShutdownStarted || _update is not null) return;
 		_update = Dispatcher.BeginInvoke(DispatcherPriority.Render, new Action(() =>
 		{
 			_update = null;
@@ -316,17 +315,22 @@ public class OperatorDrawingSurface : Image
 		if (SurfaceState != OperatorSurfaceState.Ready || _device is null || _context is null ||
 			ColorTextureView is null || _image is null || !FrontBufferAvailable || (!_refresh && !AlwaysRefresh))
 			return;
-		if (!_image.BeginDraw()) return;
-		var changed = false;
+		var image = _image;
 		try
 		{
-			_context.OMSetRenderTargets(ColorTextureView);
-			_context.RSSetViewport(0, 0, TextureWidth, TextureHeight);
-			_context.RSSetScissorRect(0, 0, TextureWidth, TextureHeight);
-			Draw?.Invoke(this, new OperatorSurfaceDrawEventArgs(this, _device, _context));
-			_context.Flush();
-			changed = true;
-			_refresh = false;
+			if (!image.BeginDraw()) return;
+			var changed = false;
+			try
+			{
+				_context.OMSetRenderTargets(ColorTextureView);
+				_context.RSSetViewport(0, 0, TextureWidth, TextureHeight);
+				_context.RSSetScissorRect(0, 0, TextureWidth, TextureHeight);
+				Draw?.Invoke(this, new OperatorSurfaceDrawEventArgs(this, _device, _context));
+				_context.Flush();
+				changed = true;
+				_refresh = false;
+			}
+			finally { image.EndDraw(changed); }
 		}
 		catch (Exception exception) when (IsGraphicsFailure(exception))
 		{
@@ -334,7 +338,6 @@ public class OperatorDrawingSurface : Image
 			Report("operator.surface.failure", DiagnosticSeverity.Error, "GPU draw failed; preview suspended.", exception);
 			SetState(OperatorSurfaceState.Faulted, "GPU preview unavailable: " + exception.Message);
 		}
-		finally { _image.EndDraw(changed); }
 		if (_faulted) DisposeDevice();
 	}
 
@@ -415,9 +418,9 @@ public class OperatorDrawingSurface : Image
 	private void Report(string code, DiagnosticSeverity severity, string message, Exception? exception = null)
 	{
 		var now = DateTimeOffset.UtcNow;
-		if (exception is null && _lastDiagnosticCode == code && now - _lastDiagnosticAt < TimeSpan.FromSeconds(1)) return;
-		_lastDiagnosticCode = code;
-		_lastDiagnosticAt = now;
+		if (exception is null && _diagnosticTimes.TryGetValue(code, out var previous) &&
+			now - previous < TimeSpan.FromSeconds(1)) return;
+		_diagnosticTimes[code] = now;
 		var dpi = VisualTreeHelper.GetDpi(this);
 		var scale = TargetScale;
 		var description = LastTargetDescription;
