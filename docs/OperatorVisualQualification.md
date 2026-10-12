@@ -159,3 +159,38 @@ Required Gates must fail before merge when a change unintentionally:
 - removes the bounded Startup overlay or real lifecycle presentation.
 
 Physical monitor movement and cross-GPU/font pixel identity are not inferred from these managed tests.
+
+
+## Shared GPU target resize and recovery qualification
+
+The focused Required Gates filter includes `GpuDrawingSurfaceTests` in both CI and Quality:
+
+    dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~OperatorXamlStartupTests|FullyQualifiedName~ProductionMacroOperatorTests|FullyQualifiedName~GpuDrawingSurfaceTests" --logger "console;verbosity=detailed"
+
+The productive STA fixture reuses its single Application/Dispatcher lifetime. It first creates a real Hardware D3D11 device and requires E_INVALIDARG (0x80070057) from a shared BGRA8 descriptor with width uint.MaxValue. Its log includes the actual Vortice.Wpf assembly informational version. This proves a native invalid-descriptor boundary; it does not reconstruct the missing production-session descriptor.
+
+Each of GpuMonitorPresentationSurface, GpuMediaCompareSurface and GpuScopeAnalysisSurface is shown in an actual Windows window. Qualification requires zero-size deferral with no allocation, one allocation for a burst of resize requests, unchanged-target reuse during redraw, collapse/restore, window hide/show, minimize/restore, front-buffer transition injection, injected device-removal HRESULT followed by successful new-device recovery, unload/reload and window-close cleanup. Every attempted shared target must satisfy the descriptor contract, graphics diagnostics other than the single injected device-removal failure fail the check, and created/released target counts must return to equality. A real GPU clear/copy/staging-map verifies red BGRA8 pixel output from the shared target; it does not certify the source-media shader or monitor scan-out.
+
+A scale-injection surface uses the same native target owner at 100/125/150/200%, verifies ceiling conversion for fractional bounds and defers a target above the conservative device limit. Allocation failure is injected before native creation, after descriptor validation. Qualification requires full failure/HRESULT diagnostics, no retries from resize/redraw, exactly three transition retries and no allocation storm after exhaustion. Injected front-buffer loss, scale changes and allocation failure are identified explicitly in logs; these are not physical display removal, actual per-monitor DPI messages or hardware device removal.
+
+Policy unit cases cover fractional/one-pixel/maximal targets; zero, negative, NaN, infinity, multiplication overflow/underflow and oversize bounds; and every incompatible descriptor field (mips, arrays, format, samples/quality, usage, binding, CPU access and sharing). Existing viewport tests remain responsible for Fit/Fill/100% source geometry and single-stage physical scaling.
+
+| Evidence | Automated boundary | Physical status |
+| --- | --- | --- |
+| Descriptor validation and DPI arithmetic | Deterministic unit matrix | Covered by software checks |
+| Productive controls, window resize/minimize/unload/close | Actual Windows WPF and Hardware D3D11/D3D9Ex interop | Runner adapter only |
+| BGRA8 target contents | Actual GPU pixel readback | Source-media crispness/scan-out UNVERIFIED |
+| Front-buffer loss/recovery, changed scale | Deterministic event/scale injection with real native targets | Display reconnect/mixed-monitor DPI UNVERIFIED |
+| Allocation failure and three-retry budget | Injected E_INVALIDARG with real device lifetime | Physical device removal/reset UNVERIFIED |
+| Original reported crash descriptor | Absent from original crash evidence | Original trigger UNVERIFIED |
+
+Reference-desktop procedure:
+
+1. Run the focused filter after the canonical Release developer build and retain its detailed log. Launch the normal Operator with existing host/session diagnostics enabled.
+2. Show deterministic native-resolution pixel-grid, thin-line, checkerboard and aspect markers through the existing monitoring path. Compare Fit, Fill and 100% inspection in Preview, Program and Clean Program; verify no stretching, duplicate DPI scaling, unintended crop or softened 100% lines.
+3. Rapidly resize and dock/undock panes, collapse/show scopes and comparison, minimize/restore repeatedly, and close/reopen Clean Program while the main window remains open. Require bounded create/release counts and stable fallback state.
+4. Move between physical 100/125/150/200% monitors, including non-integer viewport edges. Record actual adapter, DPI and descriptor; compare CPU/WPF and GPU aspect/100% behavior.
+5. Lock/unlock the desktop, disconnect/reconnect the display and exercise approved driver/device-reset qualification. Require explicit unavailable state, bounded transition recovery and no unhandled Dispatcher failure.
+6. Collect the Operator HostLog GPU events and crash evidence with session correlation. For an E_INVALIDARG, use the exact pre-allocation descriptor, requested bounds, adapter and HRESULT to classify the native rejection. A caught exception, a passing build or injected recovery alone does not establish the original crash cause.
+
+Physical matrix results must be recorded with Windows build, adapter/driver, monitor DPI, media format, presentation mode and observed events. Unavailable physical cases remain UNVERIFIED.
