@@ -258,3 +258,24 @@ The non-service Managed Host Lifecycle Readiness controller itself does not impl
 - formal CRA conformity.
 
 Those boundaries remain explicit for this controller rather than being inferred from `runtimeReadiness = PASS`. Persistent Windows service behavior is documented and qualified separately in [Windows Production Lifecycle](WindowsProductionLifecycle.md).
+
+
+## Control/Runtime binding qualification
+
+A connected pipe is the first prerequisite, not a qualified host binding. ControlHost loads durable authority, obtains provider descriptors, prepares and confirms fresh authority or reconciles retained authority, restores graphics and audio through the existing serialized mutation boundary, and verifies the Runtime committed authority snapshot before publishing its bound host identity and Ready/Healthy state. Retained reconciliation must not advance Control authority revision. Foreign, ahead or unreferenced committed Runtime authority remains a recovery conflict.
+
+An interrupted fresh apply rejects only the pending prepared execution owned by that initialization attempt. This includes request timeout, lifetime cancellation and a lost reply after a Runtime commit. The next attempt reads Runtime state and validates the candidate authority before retrying. Authority is published only by Runtime commit confirmation. A restoration failure keeps ControlHost degraded; an aligned execution snapshot cannot bypass the unfinished restoration on the next binding attempt.
+
+Each attempt retains the existing ConnectTimeout + RequestTimeout operation budget, linked to lifetime cancellation. Mutation-gate waits, transport requests and restoration use that operation token; retry delays use lifetime cancellation. AppHost's startup deadline remains 30 seconds. During shutdown, the cancelled binding worker is joined before its mutation gate and transport are disposed, under the existing shared shutdown deadline.
+
+Qualification commands after the canonical Release build:
+
+```powershell
+./build/development/Invoke-DeveloperBuild.ps1 -Configuration Release
+dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~ControlRuntimeBindingReadinessTests|FullyQualifiedName~ControlHostRecoveryIntegrationTests|FullyQualifiedName~ProductionIpcRecoveryTests|FullyQualifiedName~ExecutableHostLifecycleTests|FullyQualifiedName~ProcessSupervisionRecoveryTests" --logger "console;verbosity=detailed"
+./build/operations/Test-ManagedHostLifecycle.ps1 -BundlePath <verified-offline-bundle>
+```
+
+The first filter covers initial apply interruption, lost reply, request timeout, cancellation, restoration failure, late/unavailable Runtime, authority conflicts and process restart recovery. Real process cases qualify clean and retained profiles using ControlHost-supervised RuntimeHost and AIHost, and an Interactive AppHost launch including Operator. They retain the 30-second deadline and capture the correlated session, live PIDs, confirmed revision and readiness before shutdown. The AppHost case closes Operator normally and requires graceful shutdown evidence with no forced termination.
+
+The early Windows CI qualification step exports evidence to `artifacts/qualification/control-runtime-binding` and uploads it before unrelated later regressions can block collection. Evidence distinguishes a reproducible binding defect from attribution of a historical startup failure. An aggregate startup timeout and a later clean ControlHost shutdown do not establish a service crash or identify the phase that failed. The original October 12 startup's phase is unverified unless its correlated pre-shutdown evidence identifies the interrupted operation.
