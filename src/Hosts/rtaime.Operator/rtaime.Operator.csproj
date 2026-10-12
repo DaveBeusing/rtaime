@@ -27,7 +27,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<Content Include="..\..\..\..\docs\VorticeWpfInteropLicense.txt" Link="VorticeWpfInteropLicense.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+		<Content Include="..\..\..\docs\VorticeWpfInteropLicense.txt" Link="VorticeWpfInteropLicense.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
 	</ItemGroup>
 
 	<ItemGroup>
