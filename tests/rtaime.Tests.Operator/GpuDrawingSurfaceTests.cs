@@ -133,6 +133,7 @@ public sealed class GpuDrawingSurfaceTests
 		surface.Draw += (_, args) =>
 		{
 			if (pixelVerified) return;
+			Console.WriteLine($"GPU PIXEL READBACK BEGIN [{surface.GetType().Name}]");
 			args.Context.ClearRenderTargetView(surface.ColorTextureView!, new Color4(1, 0, 0, 1));
 			var description = surface.ColorTexture!.Description;
 			description.Usage = ResourceUsage.Staging;
@@ -151,6 +152,7 @@ public sealed class GpuDrawingSurfaceTests
 			}
 			finally { args.Context.Unmap(readback, 0); }
 			pixelVerified = true;
+			Console.WriteLine($"GPU PIXEL READBACK PASS [{surface.GetType().Name}]");
 		};
 		try
 		{

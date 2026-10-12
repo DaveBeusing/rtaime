@@ -13,8 +13,9 @@ using static Vortice.Direct3D9.D3D9;
 
 namespace rtaime.Operator.Controls;
 
-// D3DImage must be locked while the GPU writes, and detached before either API's
-// texture is disposed. All leases and callbacks belong to one WPF Dispatcher.
+// Flush D3D11 work before briefly locking D3DImage to publish damage. Holding
+// the WPF/D3D9 lock across D3D11 draw/readback can deadlock another active image.
+// Detach the image before either API's owned texture is disposed. All leases and callbacks belong to one WPF Dispatcher.
 internal sealed class OperatorD3DImage : D3DImage, IDisposable
 {
 	private static readonly ConcurrentDictionary<Dispatcher, DeviceLease> Leases = [];
@@ -69,19 +70,16 @@ internal sealed class OperatorD3DImage : D3DImage, IDisposable
 		finally { candidate?.Dispose(); }
 	}
 
-	public bool BeginDraw()
+	public bool PublishFrame()
 	{
 		Dispatcher.VerifyAccess();
-		return !_disposed && _texture is not null && IsFrontBufferAvailable &&
-			TryLock(new Duration(TimeSpan.Zero));
-	}
-
-	public void EndDraw(bool changed)
-	{
+		if (_disposed || _texture is null || !IsFrontBufferAvailable ||
+			!TryLock(new Duration(TimeSpan.Zero))) return false;
 		try
 		{
-			if (changed && PixelWidth > 0 && PixelHeight > 0)
+			if (PixelWidth > 0 && PixelHeight > 0)
 				AddDirtyRect(new Int32Rect(0, 0, PixelWidth, PixelHeight));
+			return true;
 		}
 		finally { Unlock(); }
 	}

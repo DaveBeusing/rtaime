@@ -248,6 +248,8 @@ public class OperatorDrawingSurface : Image
 				texture = _device!.CreateTexture2D(description);
 				TargetCreateCount++;
 				view = _device.CreateRenderTargetView(texture);
+				_operation = "interop-bind";
+				Report("operator.surface.bind", DiagnosticSeverity.Information, "Binding the validated preview target to WPF.");
 				_image!.Bind(texture);
 				ColorTextureView?.Dispose();
 				if (ColorTexture is not null) { ColorTexture.Dispose(); TargetReleaseCount++; }
@@ -332,20 +334,15 @@ public class OperatorDrawingSurface : Image
 		_operation = "draw";
 		try
 		{
-			if (!image.BeginDraw()) return;
-			var changed = false;
-			try
-			{
-				_context.OMSetRenderTargets(ColorTextureView);
-				_context.RSSetViewport(0, 0, TextureWidth, TextureHeight);
-				_context.RSSetScissorRect(0, 0, TextureWidth, TextureHeight);
-				Draw?.Invoke(this, new OperatorSurfaceDrawEventArgs(this, _device, _context));
-				_context.Flush();
-				_device.DeviceRemovedReason.CheckError();
-				changed = true;
-				_refresh = false;
-			}
-			finally { image.EndDraw(changed); }
+			_context.OMSetRenderTargets(ColorTextureView);
+			_context.RSSetViewport(0, 0, TextureWidth, TextureHeight);
+			_context.RSSetScissorRect(0, 0, TextureWidth, TextureHeight);
+			Draw?.Invoke(this, new OperatorSurfaceDrawEventArgs(this, _device, _context));
+			_context.Flush();
+			_device.DeviceRemovedReason.CheckError();
+			// Match the shared D3D11/D3D9Ex interop ordering: never hold the WPF
+			// image lock while Draw performs native work or reduced-result readback.
+			if (image.PublishFrame()) _refresh = false;
 		}
 		catch (Exception exception) when (IsGraphicsFailure(exception))
 		{
