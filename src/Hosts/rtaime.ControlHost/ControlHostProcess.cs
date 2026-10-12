@@ -931,7 +931,10 @@ public sealed class ControlHostProcess
 
 		if (RuntimeMatchesAuthority(runtimeSnapshot, authority))
 		{
-			await RestoreBindingStateAsync(cancellationToken).ConfigureAwait(false);
+			// A probe taken before a concurrent operator mutation may look stale.
+			// Once serialized, a still-qualified binding needs no restoration.
+			if (!string.Equals(_boundRuntimeHostInstanceId, runtimeHostInstanceId, StringComparison.Ordinal))
+				await RestoreBindingStateAsync(cancellationToken).ConfigureAwait(false);
 			await AcceptBindingAsync(control, transport, cancellationToken).ConfigureAwait(false);
 			control.RecordObservation("recovery", "recovery.runtime.aligned", $"RuntimeHost instance '{runtimeHostInstanceId}' is already committed against authoritative revision {authority.Revision}.");
 			SetRecovery(ControlHostRecoveryState.Recovered, authority.Revision, "Durable Control authority and Runtime committed authority snapshot are aligned.");

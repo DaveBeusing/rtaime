@@ -1,6 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
 using System.Text.Json;
+using rtaime.Client;
 using rtaime.ControlHost;
 using rtaime.Core;
 using rtaime.Media.Contracts;
@@ -29,6 +30,25 @@ public sealed class ControlRuntimeBindingReadinessTests
 			Assert.Equal(control.Control.State.Revision, snapshot.AuthorityRevision);
 			Assert.Equal(control.Control.State.ProductionId.Value, snapshot.AuthorityStateId);
 		}, fault);
+	}
+
+	[Fact]
+	public async Task Stale_probe_of_qualified_binding_does_not_restore_over_saved_show_state()
+	{
+		await WithRuntimeAsync(async (options, transport, control, run) =>
+		{
+			await WaitUntilAsync(() => control.Lifecycle.State == ControlHostProcessState.Ready, run);
+			var client = new OperatorControlClient(new NamedPipeOperatorControlTransport(options.ListenEndpoint, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(5)));
+			await client.SynchronizeAsync();
+			await client.LoadGraphicsOverlayAsync(new OperatorGraphicsAsset("probe-logo.rgba", 1, 1, new byte[] { 255, 32, 16, 255 }));
+			Assert.Equal("SAVED", (await client.SynchronizeAsync()).ShowProject.State);
+			var audioCalls = transport.AudioCalls;
+			var snapshotCalls = transport.SnapshotCalls;
+			transport.ForceStaleProbe = true;
+			await WaitUntilAsync(() => !transport.ForceStaleProbe && transport.SnapshotCalls >= snapshotCalls + 3 && control.Lifecycle.State == ControlHostProcessState.Ready, run);
+			Assert.Equal("SAVED", (await client.SynchronizeAsync()).ShowProject.State);
+			Assert.Equal(audioCalls, transport.AudioCalls);
+		}, "stale-probe");
 	}
 
 	[Fact]
@@ -150,6 +170,7 @@ public sealed class ControlRuntimeBindingReadinessTests
 		public int ApplyCalls { get; private set; }
 		public int AudioCalls { get; private set; }
 		public int SnapshotCalls { get; private set; }
+		public bool ForceStaleProbe { get; set; }
 		public TaskCompletionSource ApplyEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 		public TaskCompletionSource AudioRetryEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 		public TaskCompletionSource AllowAudioRestore { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -188,6 +209,11 @@ public sealed class ControlRuntimeBindingReadinessTests
 		{
 			SnapshotCalls++;
 			var snapshot = await _inner.GetSnapshotAsync(cancellationToken);
+			if (ForceStaleProbe)
+			{
+				ForceStaleProbe = false;
+				return snapshot with { Runtime = new RuntimeExecutionState(snapshot.Runtime.Version, null, snapshot.Runtime.ExecutionRevision, RuntimeExecutionStatus.Idle, null) };
+			}
 			return _fault == "lost-reply-output-mismatch" && ApplyCalls > 0
 				? snapshot with { OutputRoles = Array.Empty<RuntimeOutputRoleSnapshot>() }
 				: snapshot;
