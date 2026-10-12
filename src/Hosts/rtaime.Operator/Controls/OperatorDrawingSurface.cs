@@ -41,6 +41,7 @@ public class OperatorDrawingSurface : Image
 	private Window? _window;
 	private DispatcherOperation? _update;
 	private bool _contentLoaded;
+	private string _operation = "unloaded";
 	private bool _rendering;
 	private bool _refresh = true;
 	private bool _recreating;
@@ -97,6 +98,14 @@ public class OperatorDrawingSurface : Image
 	}
 
 	protected virtual DpiScale TargetScale => VisualTreeHelper.GetDpi(this);
+
+	protected override Size ArrangeOverride(Size finalSize)
+	{
+		// Image returns zero size while Source is absent. Preserve the parent's
+		// allocated viewport so deferred startup/recovery can create its first target.
+		base.ArrangeOverride(finalSize);
+		return finalSize;
+	}
 
 	protected override void OnRenderSizeChanged(SizeChangedInfo sizeInfo)
 	{
@@ -189,6 +198,7 @@ public class OperatorDrawingSurface : Image
 		Dispatcher.VerifyAccess();
 		if (_closed || !IsLoaded || _window is null || _recreating || _disposing || _faulted) return;
 		_recreating = true;
+		_operation = "measure";
 		try
 		{
 			if (!IsVisible || _window?.WindowState == WindowState.Minimized || !FrontBufferAvailable)
@@ -205,7 +215,9 @@ public class OperatorDrawingSurface : Image
 				SetState(OperatorSurfaceState.WaitingForSize, $"GPU preview deferred: {reason}");
 				return;
 			}
+			_operation = "device-initialization";
 			InitializeDevice();
+			_operation = "measure";
 			if (!OperatorSurfaceTargetPolicy.TryMeasure(ActualWidth, ActualHeight, scale.DpiScaleX, scale.DpiScaleY,
 				_maximumWidth, _maximumHeight, out target, out reason))
 			{
@@ -225,6 +237,7 @@ public class OperatorDrawingSurface : Image
 				!OperatorSurfaceTargetPolicy.IsValid(description, _maximumWidth, _maximumHeight))
 				throw new InvalidOperationException("Operator targets require validated single-sample shared BGRA8 color without depth.");
 
+			_operation = "target-allocation";
 			// Diagnostic descriptor is captured before the native allocation, including failure injection.
 			Report("operator.surface.create", DiagnosticSeverity.Information, "Creating a validated shared preview target.");
 			BeforeTargetCreation?.Invoke(description);
@@ -316,6 +329,7 @@ public class OperatorDrawingSurface : Image
 			ColorTextureView is null || _image is null || !FrontBufferAvailable || (!_refresh && !AlwaysRefresh))
 			return;
 		var image = _image;
+		_operation = "draw";
 		try
 		{
 			if (!image.BeginDraw()) return;
@@ -327,6 +341,7 @@ public class OperatorDrawingSurface : Image
 				_context.RSSetScissorRect(0, 0, TextureWidth, TextureHeight);
 				Draw?.Invoke(this, new OperatorSurfaceDrawEventArgs(this, _device, _context));
 				_context.Flush();
+				_device.DeviceRemovedReason.CheckError();
 				changed = true;
 				_refresh = false;
 			}
@@ -365,6 +380,7 @@ public class OperatorDrawingSurface : Image
 	{
 		if (_disposing) return;
 		_disposing = true;
+		_operation = "cleanup";
 		StopRendering();
 		try
 		{
@@ -427,6 +443,11 @@ public class OperatorDrawingSurface : Image
 		var dimensions = new Dictionary<string, string>
 		{
 			["surface"] = GetType().Name, ["phase"] = SurfaceState.ToString(),
+			["operationPhase"] = _operation, ["loaded"] = IsLoaded.ToString(),
+			["windowState"] = _window?.WindowState.ToString() ?? "detached",
+			["threadId"] = Environment.CurrentManagedThreadId.ToString(),
+			["recoveryAttempts"] = _recoveries.ToString(),
+			["deviceRemovedReason"] = _device is null ? "uninitialized" : $"0x{_device.DeviceRemovedReason.Code:X8}",
 			["widthDip"] = ActualWidth.ToString("R", CultureInfo.InvariantCulture),
 			["heightDip"] = ActualHeight.ToString("R", CultureInfo.InvariantCulture),
 			["requestedWidthPixels"] = Math.Ceiling(ActualWidth * scale.DpiScaleX).ToString("R", CultureInfo.InvariantCulture),

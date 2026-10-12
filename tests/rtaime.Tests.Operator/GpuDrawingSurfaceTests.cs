@@ -293,7 +293,7 @@ public sealed class GpuDrawingSurfaceTests
 				foreach (var field in new[] { "widthPixels", "heightPixels", "requestedWidthPixels", "requestedHeightPixels",
 					"widthDip", "heightDip", "dpiX", "dpiY", "targetScaleX", "targetScaleY", "visible", "frontBufferAvailable",
 					"format", "mipLevels", "arraySize", "sampleCount", "sampleQuality", "usage", "bindFlags",
-					"cpuAccessFlags", "miscFlags", "adapter", "adapterLuid", "featureLevel", "deviceGeneration", "phase" })
+					"cpuAccessFlags", "miscFlags", "adapter", "adapterLuid", "featureLevel", "deviceGeneration", "phase", "operationPhase", "windowState", "loaded", "threadId", "recoveryAttempts", "deviceRemovedReason" })
 					Assert.True(failure.Dimensions.ContainsKey(field), $"Missing GPU descriptor diagnostic field {field}.");
 			});
 			Console.WriteLine("GPU RECOVERY PASS: actual D3D11/D3D9Ex targets at injected 100/125/150/200% scales; oversized target deferred; injected E_INVALIDARG latched, three transition retries, no resize/render allocation storm; full descriptor/HRESULT diagnostics.");
