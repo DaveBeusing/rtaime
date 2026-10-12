@@ -416,6 +416,9 @@ public class OperatorDrawingSurface : Image
 					_context = null;
 					_device?.Dispose();
 					_device = null;
+					// A restored device must query its own interop limits, rather than
+					// rejecting new bounds against the previous generation's caps.
+					_maximumWidth = _maximumHeight = 16384;
 				}
 			}
 		}
