@@ -40,6 +40,10 @@ public class OperatorDrawingSurface : Image
 	private OperatorD3DImage? _image;
 	private Window? _window;
 	private DispatcherOperation? _update;
+	private readonly DispatcherTimer _targetRetry = new(DispatcherPriority.Background)
+	{
+		Interval = TimeSpan.FromMilliseconds(20)
+	};
 	private bool _contentLoaded;
 	private string _operation = "unloaded";
 	private bool _rendering;
@@ -82,6 +86,7 @@ public class OperatorDrawingSurface : Image
 
 	public OperatorDrawingSurface()
 	{
+		_targetRetry.Tick += (_, _) => { _targetRetry.Stop(); ScheduleUpdate(); };
 		Loaded += OnLoaded;
 		Unloaded += OnUnloaded;
 		IsVisibleChanged += (_, _) =>
@@ -147,6 +152,7 @@ public class OperatorDrawingSurface : Image
 	private void OnUnloaded(object sender, RoutedEventArgs args)
 	{
 		Dispatcher.VerifyAccess();
+		_targetRetry.Stop();
 		_update?.Abort();
 		_update = null;
 		if (_window is not null)
@@ -233,40 +239,51 @@ public class OperatorDrawingSurface : Image
 				StartRendering();
 				return;
 			}
-			var description = OperatorSurfaceTargetPolicy.Describe(target);
-			LastTargetDescription = description;
-			if (ColorFormat != Format.B8G8R8A8_UNorm || DepthStencilFormat != Format.Unknown ||
-				!OperatorSurfaceTargetPolicy.IsValid(description, _maximumWidth, _maximumHeight))
-				throw new InvalidOperationException("Operator targets require validated single-sample shared BGRA8 color without depth.");
-
-			_operation = "target-allocation";
-			// Diagnostic descriptor is captured before the native allocation, including failure injection.
-			Report("operator.surface.create", DiagnosticSeverity.Information, "Creating a validated shared preview target.");
-			BeforeTargetCreation?.Invoke(description);
-			ID3D11Texture2D? texture = null;
-			ID3D11RenderTargetView? view = null;
+			if (!_image!.TryBeginTargetUpdate())
+			{
+				_operation = "interop-wait";
+				Report("operator.surface.wait", DiagnosticSeverity.Information, "WPF is presenting the previous target; deferring recreation without allocating.");
+				_targetRetry.Start();
+				return;
+			}
 			try
 			{
-				texture = _device!.CreateTexture2D(description);
-				TargetCreateCount++;
-				view = _device.CreateRenderTargetView(texture);
-				_operation = "interop-bind";
-				Report("operator.surface.bind", DiagnosticSeverity.Information, "Binding the validated preview target to WPF.");
-				_image!.Bind(texture);
-				ColorTextureView?.Dispose();
-				if (ColorTexture is not null) { ColorTexture.Dispose(); TargetReleaseCount++; }
-				ColorTexture = texture;
-				ColorTextureView = view;
-				texture = null;
-				view = null;
-				TextureWidth = target.Width;
-				TextureHeight = target.Height;
+				var description = OperatorSurfaceTargetPolicy.Describe(target);
+				LastTargetDescription = description;
+				if (ColorFormat != Format.B8G8R8A8_UNorm || DepthStencilFormat != Format.Unknown ||
+					!OperatorSurfaceTargetPolicy.IsValid(description, _maximumWidth, _maximumHeight))
+					throw new InvalidOperationException("Operator targets require validated single-sample shared BGRA8 color without depth.");
+
+				_operation = "target-allocation";
+				// Diagnostic descriptor is captured before the native allocation, including failure injection.
+				Report("operator.surface.create", DiagnosticSeverity.Information, "Creating a validated shared preview target.");
+				BeforeTargetCreation?.Invoke(description);
+				ID3D11Texture2D? texture = null;
+				ID3D11RenderTargetView? view = null;
+				try
+				{
+					texture = _device!.CreateTexture2D(description);
+					TargetCreateCount++;
+					view = _device.CreateRenderTargetView(texture);
+					_operation = "interop-bind";
+					Report("operator.surface.bind", DiagnosticSeverity.Information, "Binding the validated preview target to WPF.");
+					_image!.BindLocked(texture);
+					ColorTextureView?.Dispose();
+					if (ColorTexture is not null) { ColorTexture.Dispose(); TargetReleaseCount++; }
+					ColorTexture = texture;
+					ColorTextureView = view;
+					texture = null;
+					view = null;
+					TextureWidth = target.Width;
+					TextureHeight = target.Height;
+				}
+				finally
+				{
+					view?.Dispose();
+					if (texture is not null) { texture.Dispose(); TargetReleaseCount++; }
+				}
 			}
-			finally
-			{
-				view?.Dispose();
-				if (texture is not null) { texture.Dispose(); TargetReleaseCount++; }
-			}
+			finally { _image.EndTargetUpdate(); }
 			Source = _image;
 			_refresh = true;
 			SetState(OperatorSurfaceState.Ready, "GPU preview ready");
@@ -285,7 +302,7 @@ public class OperatorDrawingSurface : Image
 
 	private void InitializeDevice()
 	{
-		if (_device is not null) return;
+		if (_device is not null) { InitializeImage(); return; }
 		D3D11CreateDevice(IntPtr.Zero, DriverType.Hardware, DeviceCreationFlags.BgraSupport,
 			FeatureLevel.Level_11_0, out ID3D11Device? device, out ID3D11DeviceContext? context).CheckError();
 		using (device)
@@ -304,13 +321,19 @@ public class OperatorDrawingSurface : Image
 		var required = FormatSupport.Texture2D | FormatSupport.RenderTarget | FormatSupport.ShaderSample;
 		if ((_device.CheckFeatureFormatSupport(Format.B8G8R8A8_UNorm) & required) != required)
 			throw new InvalidOperationException("Device does not support the BGRA8 preview target format.");
+		InitializeImage();
+		DeviceGeneration++;
+		_contentLoaded = true;
+		LoadContent?.Invoke(this, new DrawingSurfaceEventArgs(_device, _context!));
+	}
+
+	private void InitializeImage()
+	{
+		if (_image is not null) return;
 		_image = new OperatorD3DImage(_window!);
 		_maximumWidth = Math.Min(16384, _image.MaximumWidth);
 		_maximumHeight = Math.Min(16384, _image.MaximumHeight);
 		_image.IsFrontBufferAvailableChanged += OnFrontBufferChanged;
-		DeviceGeneration++;
-		_contentLoaded = true;
-		LoadContent?.Invoke(this, new DrawingSurfaceEventArgs(_device, _context!));
 	}
 
 	private void StartRendering()
@@ -358,22 +381,27 @@ public class OperatorDrawingSurface : Image
 	private void ReleaseTargets()
 	{
 		StopRendering();
+		_targetRetry.Stop();
+		// Retire an image instead of rebinding a bitmap whose pending present
+		// was cancelled when hidden/unloaded. Its wait event must not be reused.
+		if (_image is not null)
+		{
+			_image.IsFrontBufferAvailableChanged -= OnFrontBufferChanged;
+			try { _image.Dispose(); }
+			catch (Exception exception) when (IsGraphicsFailure(exception))
+			{
+				Report("operator.surface.dispose-failure", DiagnosticSeverity.Warning,
+					"Graphics interop rejected retired-image detachment during cleanup.", exception);
+			}
+			finally { _image = null; }
+		}
 		Source = null;
-		try { _image?.Bind(null); }
-		catch (Exception exception) when (IsGraphicsFailure(exception))
-		{
-			Report("operator.surface.dispose-failure", DiagnosticSeverity.Warning,
-				"Graphics interop rejected target detachment; releasing owned resources.", exception);
-		}
-		finally
-		{
-			Source = null;
-			ColorTextureView?.Dispose();
-			ColorTextureView = null;
-			if (ColorTexture is not null) { ColorTexture.Dispose(); TargetReleaseCount++; }
-			ColorTexture = null;
-			TextureWidth = TextureHeight = 0;
-		}
+		ColorTextureView?.Dispose();
+		ColorTextureView = null;
+		if (ColorTexture is not null) { ColorTexture.Dispose(); TargetReleaseCount++; }
+		ColorTexture = null;
+		TextureWidth = TextureHeight = 0;
+		_maximumWidth = _maximumHeight = 16384;
 	}
 
 	private void DisposeDevice()

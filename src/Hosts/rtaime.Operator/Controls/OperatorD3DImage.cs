@@ -39,7 +39,19 @@ internal sealed class OperatorD3DImage : D3DImage, IDisposable
 		_lease.Users++;
 	}
 
-	public void Bind(ID3D11Texture2D? texture)
+	public bool TryBeginTargetUpdate()
+	{
+		Dispatcher.VerifyAccess();
+		ObjectDisposedException.ThrowIf(_disposed, this);
+		var available = TryLock(new Duration(TimeSpan.Zero));
+		if (!available) Unlock();
+		return available;
+	}
+
+	public void EndTargetUpdate() => Unlock();
+
+	// Caller owns a successfully acquired WPF image lock.
+	public void BindLocked(ID3D11Texture2D? texture)
 	{
 		Dispatcher.VerifyAccess();
 		ObjectDisposedException.ThrowIf(_disposed, this);
@@ -55,13 +67,8 @@ internal sealed class OperatorD3DImage : D3DImage, IDisposable
 		}
 		try
 		{
-			Lock();
-			try
-			{
-				using var surface = candidate?.GetSurfaceLevel(0);
-				SetBackBuffer(D3DResourceType.IDirect3DSurface9, surface?.NativePointer ?? IntPtr.Zero);
-			}
-			finally { Unlock(); }
+			using var surface = candidate?.GetSurfaceLevel(0);
+			SetBackBuffer(D3DResourceType.IDirect3DSurface9, surface?.NativePointer ?? IntPtr.Zero);
 			var previous = _texture;
 			_texture = candidate;
 			candidate = null;
@@ -91,7 +98,14 @@ internal sealed class OperatorD3DImage : D3DImage, IDisposable
 	{
 		Dispatcher.VerifyAccess();
 		if (_disposed) return;
-		try { Bind(null); }
+		try
+		{
+			// WPF increments the managed lock on timeout. Only detach a retired
+			// bitmap here; never write/rebind its pixels after a failed TryLock.
+			TryLock(new Duration(TimeSpan.Zero));
+			try { BindLocked(null); }
+			finally { Unlock(); }
+		}
 		finally
 		{
 			_texture?.Dispose();
