@@ -9,6 +9,7 @@ namespace rtaime.AppHost;
 internal static class ApplicationStartupDiagnostics
 {
 	public const string FileName = "apphost-startup.log";
+	private static readonly object WriteGate = new();
 
 	public static string? TryPersistFailure(string[] args, Exception exception)
 	{
@@ -24,12 +25,19 @@ internal static class ApplicationStartupDiagnostics
 				copyright = "Copyright (c) Dave Beusing <david.beusing@gmail.com>.",
 				schemaVersion = "1.0",
 				observedAtUtc = DateTimeOffset.UtcNow,
+				sessionId = Environment.GetEnvironmentVariable("RTAIME_LOG_SESSION_ID"),
 				state = "FAILED",
 				exceptionType = exception.GetType().FullName,
 				message = DiagnosticRedactor.RedactText(exception.Message),
 				detail = DiagnosticRedactor.RedactExceptionDetail(exception.ToString())
 			});
-			File.AppendAllText(path, payload + Environment.NewLine, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+			lock (WriteGate)
+			{
+				if (File.Exists(path) && new FileInfo(path).Length + Encoding.UTF8.GetByteCount(payload) >
+					BoundedProcessDiagnosticLog.MaximumFileBytes)
+					File.Move(path, path + ".previous", overwrite: true);
+				File.AppendAllText(path, payload + Environment.NewLine, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+			}
 			return path;
 		}
 		catch

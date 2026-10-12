@@ -64,6 +64,9 @@ public sealed class ApplicationLifecycleStateProvider : IApplicationLifecycleSta
 	private readonly string _evidencePath;
 	private readonly string? _diagnosticPath;
 	private readonly bool _requireAI;
+	private readonly string? _sessionId;
+	private readonly string? _captureId;
+	private readonly string? _retainedEvidencePath;
 	private List<LifecycleStageSnapshot> _stages = [];
 	private ApplicationReadinessFailureSnapshot? _readinessFailure;
 	private DateTimeOffset? _shutdownInitiatedAtUtc;
@@ -74,7 +77,8 @@ public sealed class ApplicationLifecycleStateProvider : IApplicationLifecycleSta
 		string evidencePath,
 		bool requireAI,
 		IApplicationHostPlatform platform,
-		string? diagnosticPath = null)
+		string? diagnosticPath = null,
+		string? sessionId = null, string? captureId = null, string? retainedEvidencePath = null)
 	{
 		if (string.IsNullOrWhiteSpace(evidencePath))
 			throw new ArgumentException("Lifecycle evidence path is required.", nameof(evidencePath));
@@ -83,6 +87,9 @@ public sealed class ApplicationLifecycleStateProvider : IApplicationLifecycleSta
 		_evidencePath = Path.GetFullPath(evidencePath);
 		_diagnosticPath = string.IsNullOrWhiteSpace(diagnosticPath) ? null : Path.GetFullPath(diagnosticPath);
 		_requireAI = requireAI;
+		_sessionId = sessionId;
+		_captureId = captureId;
+		_retainedEvidencePath = retainedEvidencePath;
 		ResetStages();
 	}
 
@@ -389,6 +396,9 @@ public sealed class ApplicationLifecycleStateProvider : IApplicationLifecycleSta
 				schemaVersion = "1.0",
 				observedAtUtc = _platform.UtcNow,
 				diagnosticPath = _diagnosticPath,
+				sessionId = _sessionId,
+				captureId = _captureId,
+				retainedEvidencePath = _retainedEvidencePath,
 				readinessFailure = _readinessFailure,
 				shutdownInitiatedAtUtc = _shutdownInitiatedAtUtc,
 				shutdownFailureReason = _shutdownFailureReason,
@@ -410,6 +420,11 @@ public sealed class ApplicationLifecycleStateProvider : IApplicationLifecycleSta
 			new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
 
 		_platform.WriteAllTextAtomic(_evidencePath, payload + Environment.NewLine);
+		if (_retainedEvidencePath is not null)
+		{
+			try { _platform.WriteAllTextAtomic(_retainedEvidencePath, payload + Environment.NewLine); }
+			catch (Exception exception) when (exception is IOException or UnauthorizedAccessException) { }
+		}
 	}
 
 	private void RaiseStateChanged()
