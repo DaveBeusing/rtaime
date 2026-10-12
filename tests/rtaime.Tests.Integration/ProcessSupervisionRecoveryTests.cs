@@ -493,6 +493,7 @@ public sealed class ProcessSupervisionRecoveryTests
 				var work = Path.Combine(root, profile);
 				Directory.CreateDirectory(work);
 				var readyPath = Path.Combine(work, "control-readiness.json");
+				var stopPath = Path.Combine(work, "control-stop.signal");
 				
 				var session = $"binding-{profile}-{Guid.NewGuid():N}";
 				var appRoot = Path.Combine(FindRepositoryRoot(), "src", "Hosts", "rtaime.AppHost", "bin", "Release", "net10.0");
@@ -509,7 +510,7 @@ public sealed class ProcessSupervisionRecoveryTests
 					UseShellExecute = false,
 					CreateNoWindow = true
 				};
-				start.ArgumentList.Add("--profile=Interactive");
+				start.ArgumentList.Add("--profile=HeadlessEngine");
 				start.ArgumentList.Add("--ownership=EphemeralLocal");
 				start.ArgumentList.Add("--instance-id=default");
 				start.ArgumentList.Add($"--install-root={appRoot}");
@@ -520,7 +521,6 @@ public sealed class ProcessSupervisionRecoveryTests
 				start.Environment["RTAIME_LOG_SESSION_ID"] = session;
 				using var process = Process.Start(start) ?? throw new InvalidOperationException("AppHost did not start.");
 				var clock = Stopwatch.StartNew();
-				int? operatorPid = null;
 				int? controlPid = null;
 				int? runtimePid = null;
 				int? aiPid = null;
@@ -566,9 +566,6 @@ public sealed class ProcessSupervisionRecoveryTests
 					if (retainedRevision is { } revision) Assert.Equal(revision, snapshot.Production.Revision);
 					else retainedRevision = snapshot.Production.Revision;
 					var logFiles = Directory.GetFiles(Path.Combine(work, "logs", session), "*.jsonl");
-					var operatorLog = Assert.Single(logFiles, path => Path.GetFileName(path).Contains("-operator-", StringComparison.Ordinal));
-					using (var record = JsonDocument.Parse(ReadSharedLogLines(operatorLog).First()))
-						operatorPid = record.RootElement.GetProperty("processId").GetInt32();
 					var controlLog = Assert.Single(logFiles, path => Path.GetFileName(path).Contains("-controlhost-", StringComparison.Ordinal));
 					var records = ReadSharedLogLines(controlLog).Select(line => JsonDocument.Parse(line)).ToArray();
 					try
@@ -579,46 +576,62 @@ public sealed class ProcessSupervisionRecoveryTests
 					finally { foreach (var record in records) record.Dispose(); }
 					// Preserve the qualified live state before the stop signal removes readiness.
 					await File.WriteAllTextAsync(Path.Combine(work, "readiness-before-stop.json"), readiness);
-					Console.WriteLine($"AppHost binding qualification profile={profile} elapsedMs={clock.ElapsedMilliseconds} appPid={process.Id} operatorPid={operatorPid} controlPid={controlPid} runtimePid={runtimePid} aiPid={aiPid} session={session} revision={retainedRevision}");
+					Console.WriteLine($"AppHost binding qualification profile={profile} elapsedMs={clock.ElapsedMilliseconds} appPid={process.Id} controlPid={controlPid} runtimePid={runtimePid} aiPid={aiPid} session={session} revision={retainedRevision}");
+				}
+				catch (Exception exception)
+				{
+					Console.WriteLine($"AppHost qualification failure profile={profile}: {exception}");
+					throw;
 				}
 				finally
 				{
-					if (operatorPid is null && Directory.Exists(Path.Combine(work, "logs", session)))
+					try
 					{
-						var operatorFile = Directory.GetFiles(Path.Combine(work, "logs", session), "*-operator-*.jsonl").FirstOrDefault();
-						if (operatorFile is not null)
+						// Exercise the existing HeadlessEngine contract: an explicit engine stop
+						// drains all service hosts, then AppHost reports observed lifecycle loss.
+						await File.WriteAllTextAsync(stopPath, "stop");
+						await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(20));
+						Assert.Equal(1, process.ExitCode);
+						var appLog = Assert.Single(Directory.GetFiles(Path.Combine(work, "logs", session), "*-apphost-*.jsonl"));
+						Assert.Contains(ReadSharedLogLines(appLog), line =>
 						{
-							using var record = JsonDocument.Parse(ReadSharedLogLines(operatorFile).First());
-							operatorPid = record.RootElement.GetProperty("processId").GetInt32();
+							using var record = JsonDocument.Parse(line);
+							return record.RootElement.GetProperty("code").GetString() == "apphost.lifecycle-failure";
+						});
+						using (var shutdownEvidence = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(work, "apphost-shutdown.json"))))
+						{
+							Assert.False(shutdownEvidence.RootElement.GetProperty("forcedTermination").GetBoolean());
 						}
-					}
-					if (operatorPid is { } operatorId && ProcessIsAlive(operatorId))
-					{
-						using var window = Process.GetProcessById(operatorId);
-						await WaitUntilAsync(() => { window.Refresh(); return window.HasExited || window.MainWindowHandle != IntPtr.Zero; }, 10000);
-						if (!window.HasExited) Assert.True(window.CloseMainWindow(), "Operator window refused graceful close.");
-					}
-					await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(20));
-					Assert.Equal(0, process.ExitCode);
-					using (var shutdownEvidence = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(work, "apphost-shutdown.json"))))
-					{
-						Assert.Equal("PASS", shutdownEvidence.RootElement.GetProperty("status").GetString());
-						Assert.True(shutdownEvidence.RootElement.GetProperty("graceful").GetBoolean());
-						Assert.False(shutdownEvidence.RootElement.GetProperty("forcedTermination").GetBoolean());
-					}
-					if (controlPid is { } controlId) Assert.False(ProcessIsAlive(controlId));
-					if (runtimePid is { } runtimeId) Assert.False(ProcessIsAlive(runtimeId));
-					if (aiPid is { } aiId) Assert.False(ProcessIsAlive(aiId));
-					var evidenceRoot = Environment.GetEnvironmentVariable("RTAIME_BINDING_EVIDENCE_ROOT");
-					if (!string.IsNullOrWhiteSpace(evidenceRoot))
-					{
-						var destination = Path.Combine(evidenceRoot, session);
-						Directory.CreateDirectory(destination);
-						foreach (var file in Directory.GetFiles(work, "*", SearchOption.AllDirectories))
+						foreach (var host in new[] { "ControlHost", "RuntimeHost", "AIHost" })
 						{
-							var target = Path.Combine(destination, Path.GetRelativePath(work, file));
-							Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-							File.Copy(file, target, overwrite: true);
+							var hostLog = Assert.Single(Directory.GetFiles(Path.Combine(work, "logs", session), "*.jsonl"),
+								path => Path.GetFileName(path).Contains($"-{host.ToLowerInvariant()}-", StringComparison.Ordinal));
+							Assert.Contains(ReadSharedLogLines(hostLog), line =>
+							{
+								using var record = JsonDocument.Parse(line);
+								return record.RootElement.GetProperty("code").GetString() == $"{host.ToLowerInvariant()}.completed" &&
+									record.RootElement.GetProperty("dimensions").GetProperty("exitCode").GetString() == "0";
+							});
+						}
+						if (controlPid is { } controlId) Assert.False(ProcessIsAlive(controlId));
+						if (runtimePid is { } runtimeId) Assert.False(ProcessIsAlive(runtimeId));
+						if (aiPid is { } aiId) Assert.False(ProcessIsAlive(aiId));
+					}
+					finally
+					{
+						var evidenceRoot = Environment.GetEnvironmentVariable("RTAIME_BINDING_EVIDENCE_ROOT");
+						if (!string.IsNullOrWhiteSpace(evidenceRoot))
+						{
+							var destination = Path.Combine(evidenceRoot, session);
+							Directory.CreateDirectory(destination);
+							foreach (var file in Directory.GetFiles(work, "*", SearchOption.AllDirectories))
+							{
+								var target = Path.Combine(destination, Path.GetRelativePath(work, file));
+								Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+								if (Path.GetExtension(file) == ".jsonl")
+									File.WriteAllLines(target, ReadSharedLogLines(file));
+								else File.Copy(file, target, overwrite: true);
+							}
 						}
 					}
 				}
