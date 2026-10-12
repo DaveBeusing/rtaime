@@ -904,6 +904,20 @@ public sealed class UnifiedApplicationHostTests
 		Assert.False(observation.Dimensions.ContainsKey("password"));
 	}
 
+	[Fact]
+	public async Task Shutdown_failure_does_not_replace_original_startup_deadline()
+	{
+		var options = CreateOptions(ApplicationStartupProfile.Interactive, ApplicationLifecycleOwnership.EphemeralLocal);
+		var platform = new FakeApplicationHostPlatform(options) { RejectStopSignal = true };
+		var host = new UnifiedApplicationHost(options, platform);
+		await Assert.ThrowsAsync<TimeoutException>(() => host.RunAsync());
+		Assert.Equal(ApplicationLifecycleState.Failed, host.State);
+		using var document = JsonDocument.Parse(platform.ReadAllText(options.LifecycleEvidencePath));
+		Assert.Equal("startup.deadline.expired", document.RootElement.GetProperty("readinessFailure").GetProperty("reasonCode").GetString());
+		Assert.Equal("Stop signal storage unavailable.", document.RootElement.GetProperty("shutdownFailureReason").GetString());
+		Assert.False(platform.FileExists(options.ShutdownEvidencePath));
+	}
+
 	private static ApplicationHostOptions CreateOptions(
 		ApplicationStartupProfile profile,
 		ApplicationLifecycleOwnership? ownership = null,
@@ -970,6 +984,7 @@ public sealed class UnifiedApplicationHostTests
 		public HashSet<string> UnreachableEndpoints { get; } = new(StringComparer.Ordinal);
 		public bool StopSignalWritten { get; private set; }
 		public bool IgnoreStopSignal { get; set; }
+		public bool RejectStopSignal { get; init; }
 		public int OperatorDelayBudget { get; set; }
 		public int PipeProbeCount { get; private set; }
 		public int? LastControlProcessId { get; private set; }
@@ -1033,6 +1048,7 @@ public sealed class UnifiedApplicationHostTests
 			_files[Path.GetFullPath(path)] = content;
 			if (Path.GetFullPath(path) == Path.GetFullPath(_options.StopPath))
 			{
+				if (RejectStopSignal) throw new IOException("Stop signal storage unavailable.");
 				StopSignalWritten = true;
 				if (!IgnoreStopSignal && _alive.Count > 0) _alive.Remove(_alive.Min());
 			}

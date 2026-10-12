@@ -67,6 +67,8 @@ public sealed class ApplicationLifecycleStateProvider : IApplicationLifecycleSta
 	private List<LifecycleStageSnapshot> _stages = [];
 	private ApplicationReadinessFailureSnapshot? _readinessFailure;
 	private DateTimeOffset? _shutdownInitiatedAtUtc;
+	private string? _shutdownFailureReason;
+	private DateTimeOffset? _shutdownFailureAtUtc;
 
 	public ApplicationLifecycleStateProvider(
 		string evidencePath,
@@ -111,6 +113,8 @@ public sealed class ApplicationLifecycleStateProvider : IApplicationLifecycleSta
 			ResetStages();
 			_readinessFailure = null;
 			_shutdownInitiatedAtUtc = null;
+			_shutdownFailureReason = null;
+			_shutdownFailureAtUtc = null;
 			PublishLocked();
 		}
 		RaiseStateChanged();
@@ -261,7 +265,7 @@ public sealed class ApplicationLifecycleStateProvider : IApplicationLifecycleSta
 				FailureReason = $"{failure.ReasonCode}: {failure.OriginalFailure} Unmet criteria: {unmet}",
 				CanRetry = false
 			};
-			PublishLocked();
+			TryPublishFailureLocked();
 		}
 		RaiseStateChanged();
 	}
@@ -271,9 +275,29 @@ public sealed class ApplicationLifecycleStateProvider : IApplicationLifecycleSta
 		lock (_gate)
 		{
 			_shutdownInitiatedAtUtc ??= _platform.UtcNow;
-			PublishLocked();
+			TryPublishFailureLocked();
 		}
 		RaiseStateChanged();
+	}
+
+	public void RecordShutdownFailure(string reason)
+	{
+		lock (_gate)
+		{
+			_shutdownFailureReason ??= reason;
+			_shutdownFailureAtUtc ??= _platform.UtcNow;
+			TryPublishFailureLocked();
+		}
+		RaiseStateChanged();
+	}
+
+	private void TryPublishFailureLocked()
+	{
+		try { PublishLocked(); }
+		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+		{
+			// Retain the original failure in memory when diagnostic storage is unavailable.
+		}
 	}
 
 	private static string? HostStageId(string host) => host switch
@@ -367,6 +391,8 @@ public sealed class ApplicationLifecycleStateProvider : IApplicationLifecycleSta
 				diagnosticPath = _diagnosticPath,
 				readinessFailure = _readinessFailure,
 				shutdownInitiatedAtUtc = _shutdownInitiatedAtUtc,
+				shutdownFailureReason = _shutdownFailureReason,
+				shutdownFailureAtUtc = _shutdownFailureAtUtc,
 				activeStageId = activeStage?.Id,
 				stages = _stages.Select(stage => new
 				{

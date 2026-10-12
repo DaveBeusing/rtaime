@@ -767,7 +767,13 @@ public sealed class UnifiedApplicationHost
 			else
 				_lifecycle.FailActiveStages(DiagnosticRedactor.RedactText(classified.Message));
 			if (State == ApplicationLifecycleState.Starting || ShouldStopOwnedControlOnHostExit())
-				await StopOwnedControlAsync(CancellationToken.None).ConfigureAwait(false);
+			{
+				try { await StopOwnedControlAsync(CancellationToken.None).ConfigureAwait(false); }
+				catch (Exception shutdownException)
+				{
+					_lifecycle.RecordShutdownFailure(DiagnosticRedactor.RedactText(shutdownException.Message));
+				}
+			}
 			Transition(ApplicationLifecycleState.Failed);
 			if (ReferenceEquals(classified, exception))
 				throw;
