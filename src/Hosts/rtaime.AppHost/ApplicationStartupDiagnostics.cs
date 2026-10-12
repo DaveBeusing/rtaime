@@ -38,6 +38,22 @@ internal static class ApplicationStartupDiagnostics
 					File.Move(path, path + ".previous", overwrite: true);
 				File.AppendAllText(path, payload + Environment.NewLine, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
 			}
+			// Bootstrap failures occur before the lifecycle capture may be initialized.
+			// Keep a unique copy alongside the existing structured HostLog session.
+			var sessionId = Environment.GetEnvironmentVariable("RTAIME_LOG_SESSION_ID");
+			var logRoot = Environment.GetEnvironmentVariable("RTAIME_LOG_ROOT");
+			if (!string.IsNullOrWhiteSpace(logRoot) && sessionId is not null &&
+				System.Text.RegularExpressions.Regex.IsMatch(sessionId, "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"))
+			{
+				try
+				{
+					var directory = Path.Combine(Path.GetFullPath(logRoot), sessionId);
+					Directory.CreateDirectory(directory);
+					File.WriteAllText(Path.Combine(directory, $"apphost-startup-{Environment.ProcessId}-{Guid.NewGuid():N}.json"),
+						payload + Environment.NewLine, new UTF8Encoding(false));
+				}
+				catch (Exception storageException) when (storageException is IOException or UnauthorizedAccessException) { }
+			}
 			return path;
 		}
 		catch

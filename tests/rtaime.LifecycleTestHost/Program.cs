@@ -53,8 +53,8 @@ internal static class Program
 				{
 					lastState = state;
 					log.Information("lifecycle", role.ToLowerInvariant() + ".state-changed", "Synthetic lifecycle barrier changed.",
-						new Dictionary<string, string> { ["state"] = state == "ready" ? "Ready" : "Degraded",
-							["health"] = state == "ready" ? "Healthy" : "Degraded" });
+						new Dictionary<string, string> { ["state"] = state is "ready" or "unavailable" ? "Ready" : "Degraded",
+							["health"] = state is "ready" or "unavailable" ? "Healthy" : "Degraded" });
 					Console.WriteLine("barrier=" + state);
 					// These sentinels prove redaction at the parent stream boundary.
 					Console.Error.WriteLine("password=stream-secret token=stream-token");
@@ -123,7 +123,7 @@ internal static class Program
 		var path = Path.Combine(root, role + ".observed.json");
 		if (!File.Exists(path)) return "Starting";
 		using var document = JsonDocument.Parse(File.ReadAllText(path));
-		return document.RootElement.GetProperty("state").GetString() == "ready" ? "Healthy" : "Waiting";
+		return document.RootElement.GetProperty("state").GetString() is "ready" or "unavailable" ? "Healthy" : "Waiting";
 	}
 
 	private static Process StartChild(string role, string root, string endpoint)

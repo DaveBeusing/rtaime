@@ -15,13 +15,19 @@ public sealed class StartupEvidenceCaptureTests
 	public async Task Unqualified_hosts_retain_pending_history_and_separate_graceful_shutdown(string state)
 	{
 		await using var fixture = new Fixture();
-		fixture.Command("ControlHost", state);
+		fixture.Command("ControlHost", state == "pending" ? "pending" : "ready");
+		fixture.Command("RuntimeHost", state);
+		fixture.Command("AIHost", "ready");
 		var host = fixture.Host(TimeSpan.FromSeconds(8));
 		await Assert.ThrowsAsync<TimeoutException>(() => host.RunAsync());
 		using var before = fixture.ReadCapture("before-shutdown.json");
 		Assert.Equal("startup.deadline.expired", before.RootElement.GetProperty("lifecycle")
 			.GetProperty("readinessFailure").GetProperty("reasonCode").GetString());
 		Assert.False(File.Exists(fixture.Options.ReadinessPath));
+		if (state == "unavailable")
+			Assert.Contains(before.RootElement.GetProperty("lifecycle").GetProperty("readinessFailure")
+				.GetProperty("unmetCriteria").EnumerateArray(), item => item.GetProperty("host").GetString() == "RuntimeHost" &&
+					item.GetProperty("code").GetString() == "ipc.reachable");
 		Assert.Contains(before.RootElement.GetProperty("events").EnumerateArray(),
 			item => item.GetProperty("code").GetString() == "controlhost.binding.ipc-connect.started");
 		Assert.DoesNotContain(host.Lifecycle.Stages, stage => stage.Status == LifecycleStageStatus.Ready &&

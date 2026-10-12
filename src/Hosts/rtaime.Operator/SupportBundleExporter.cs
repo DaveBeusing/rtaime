@@ -245,7 +245,9 @@ public sealed class SupportBundleExporter : ISupportBundleExporter
 			files = Directory.EnumerateFiles(sessionDirectory, "*", SearchOption.TopDirectoryOnly)
 				.Where(path =>
 					path.EndsWith(".jsonl", StringComparison.OrdinalIgnoreCase) ||
-					Path.GetFileName(path).StartsWith("operator-crash-", StringComparison.OrdinalIgnoreCase))
+					Path.GetFileName(path).StartsWith("operator-crash-", StringComparison.OrdinalIgnoreCase) ||
+					(Path.GetFileName(path).StartsWith("apphost-startup-", StringComparison.OrdinalIgnoreCase) &&
+						path.EndsWith(".json", StringComparison.OrdinalIgnoreCase)))
 				.Select(path => new FileInfo(path))
 				.OrderByDescending(file => file.LastWriteTimeUtc)
 				.ThenBy(file => file.Name, StringComparer.Ordinal)
