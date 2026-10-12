@@ -54,7 +54,7 @@ public sealed class StartupEvidenceCaptureTests
 		Assert.True(before.RootElement.GetProperty("hosts").EnumerateArray()
 			.Single(item => item.GetProperty("host").GetString() == "ControlHost").GetProperty("processAlive").GetBoolean());
 		fixture.AssertRetainedAndStopped(expectGraceful: true);
-		Assert.Contains("exitCode=17", File.ReadAllText(fixture.CaptureFile("controlhost-process.log")));
+		Assert.Contains("exitCode=17", ReadShared(fixture.CaptureFile("controlhost-process.log")));
 	}
 
 	[Fact]
@@ -70,7 +70,7 @@ public sealed class StartupEvidenceCaptureTests
 		Assert.Equal("startup.process.exited", before.RootElement.GetProperty("lifecycle")
 			.GetProperty("readinessFailure").GetProperty("reasonCode").GetString());
 		fixture.AssertRetainedAndStopped(expectGraceful: false);
-		Assert.Contains("exitCode=17", File.ReadAllText(fixture.CaptureFile("controlhost-process.log")));
+		Assert.Contains("exitCode=17", ReadShared(fixture.CaptureFile("controlhost-process.log")));
 	}
 
 	[Fact]
@@ -118,7 +118,7 @@ public sealed class StartupEvidenceCaptureTests
 		Assert.True((await run.WaitAsync(TimeSpan.FromSeconds(20))).Success);
 		fixture.AssertRetainedAndStopped(expectGraceful: true);
 		var oldDirectory = fixture.CaptureDirectory;
-		var oldEvidence = File.ReadAllText(Path.Combine(oldDirectory, "before-shutdown.json"));
+		var oldEvidence = ReadShared(Path.Combine(oldDirectory, "before-shutdown.json"));
 		File.Delete(Path.Combine(fixture.Root, "children-stop.signal"));
 		foreach (var role in Fixture.Roles)
 		{
@@ -133,9 +133,16 @@ public sealed class StartupEvidenceCaptureTests
 		Assert.NotEqual(oldDirectory, fixture.CaptureDirectory);
 		restartStop.Cancel();
 		Assert.True((await run.WaitAsync(TimeSpan.FromSeconds(20))).Success);
-		Assert.Equal(oldEvidence, File.ReadAllText(Path.Combine(oldDirectory, "before-shutdown.json")));
+		Assert.Equal(oldEvidence, ReadShared(Path.Combine(oldDirectory, "before-shutdown.json")));
 		Assert.Equal(2, Directory.GetDirectories(Path.Combine(fixture.Options.WorkRoot, "startup-evidence")).Length);
 		fixture.AssertRetainedAndStopped(expectGraceful: true);
+	}
+
+	private static string ReadShared(string path)
+	{
+		using var input = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+		using var reader = new StreamReader(input);
+		return reader.ReadToEnd();
 	}
 
 	private sealed class Fixture : IApplicationHostPlatform, IAsyncDisposable
@@ -150,11 +157,11 @@ public sealed class StartupEvidenceCaptureTests
 		private readonly List<int> _processes = [];
 		public int ControlProcessId => _processes.Last();
 		public string CaptureDirectory {
-			get { using var doc = JsonDocument.Parse(File.ReadAllText(Options.LifecycleEvidencePath));
+			get { using var doc = JsonDocument.Parse(ReadShared(Options.LifecycleEvidencePath));
 				return Path.GetDirectoryName(doc.RootElement.GetProperty("retainedEvidencePath").GetString())!; }
 		}
 		public string CaptureFile(string name) => Path.Combine(CaptureDirectory, name);
-		public JsonDocument ReadCapture(string name) => JsonDocument.Parse(File.ReadAllText(CaptureFile(name)));
+		public JsonDocument ReadCapture(string name) => JsonDocument.Parse(ReadShared(CaptureFile(name)));
 
 		public Fixture()
 		{
@@ -180,7 +187,7 @@ public sealed class StartupEvidenceCaptureTests
 		public Task WaitObserved(string role, string state) => Wait(() => {
 			var path = Path.Combine(Root, role + ".observed.json");
 			if (!File.Exists(path)) return false;
-			using var doc = JsonDocument.Parse(File.ReadAllText(path));
+			using var doc = JsonDocument.Parse(ReadShared(path));
 			return doc.RootElement.GetProperty("state").GetString() == state;
 		});
 		public async Task Wait(Func<bool> condition)
@@ -205,10 +212,10 @@ public sealed class StartupEvidenceCaptureTests
 			Assert.All(_processes, pid => Assert.False(_system.IsProcessAlive(pid)));
 			foreach (var role in Roles)
 			{
-				using var pid = JsonDocument.Parse(File.ReadAllText(Path.Combine(Root, role + ".started.json")));
+				using var pid = JsonDocument.Parse(ReadShared(Path.Combine(Root, role + ".started.json")));
 				Assert.False(_system.IsProcessAlive(pid.RootElement.GetProperty("processId").GetInt32()));
 			}
-			var stream = File.ReadAllText(CaptureFile("controlhost-process.log"));
+			var stream = ReadShared(CaptureFile("controlhost-process.log"));
 			Assert.DoesNotContain("stream-secret", stream);
 			Assert.DoesNotContain("stream-token", stream);
 			Assert.Contains("[REDACTED]", stream);

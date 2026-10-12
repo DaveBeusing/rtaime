@@ -48,7 +48,7 @@ internal static class Program
 			while (!lifetime.IsCancellationRequested)
 			{
 				var commandPath = Path.Combine(root, role + ".command");
-				var state = File.Exists(commandPath) ? File.ReadAllText(commandPath).Trim() : "pending";
+				var state = File.Exists(commandPath) ? ReadShared(commandPath).Trim() : "pending";
 				if (state != lastState)
 				{
 					lastState = state;
@@ -83,7 +83,7 @@ internal static class Program
 								["state"] = childState, ["processId"] = child.Id.ToString() });
 					log.Information("binding", "controlhost.binding.ipc-connect.started", "Synthetic reconciliation pending.",
 						new Dictionary<string, string> { ["phase"] = "ipc-connect", ["outcome"] = "started" });
-					if (state == "ready" && runtimeState == "Healthy" && aiState == "Healthy")
+					if (!published && state == "ready" && runtimeState == "Healthy" && aiState == "Healthy")
 					{
 						WriteJson(Environment.GetEnvironmentVariable("RTAIME_HOST_READINESS_FILE")!, new {
 							processId = Environment.ProcessId, state = "READY", health = "HEALTHY",
@@ -91,6 +91,7 @@ internal static class Program
 							aiEndpoint = Environment.GetEnvironmentVariable("RTAIME_AI_ENDPOINT"), readyAtUtc = DateTimeOffset.UtcNow,
 							runtimeSupervision = new { state = "HEALTHY", processId = runtime.Id },
 							aiSupervision = new { state = "HEALTHY", processId = ai.Id } });
+						published = true;
 					}
 				}
 				await Task.Delay(25, lifetime.Token);
@@ -123,7 +124,7 @@ internal static class Program
 		if (child.HasExited) return "Failed";
 		var path = Path.Combine(root, role + ".observed.json");
 		if (!File.Exists(path)) return "Starting";
-		using var document = JsonDocument.Parse(File.ReadAllText(path));
+		using var document = JsonDocument.Parse(ReadShared(path));
 		return document.RootElement.GetProperty("state").GetString() is "ready" or "unavailable" ? "Healthy" : "Waiting";
 	}
 
@@ -154,6 +155,13 @@ internal static class Program
 	private static async Task WaitUntil(Func<bool> condition, CancellationToken token)
 	{
 		while (!condition()) await Task.Delay(25, token);
+	}
+
+	private static string ReadShared(string path)
+	{
+		using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+		using var reader = new StreamReader(stream);
+		return reader.ReadToEnd();
 	}
 
 	private static void WriteJson(string path, object payload)
