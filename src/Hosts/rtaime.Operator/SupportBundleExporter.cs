@@ -312,8 +312,11 @@ public sealed class SupportBundleExporter : ISupportBundleExporter
 			using var document = JsonDocument.Parse(await File.ReadAllTextAsync(lifecyclePath, token).ConfigureAwait(false));
 			if (!document.RootElement.TryGetProperty("captureId", out var value) ||
 				!Guid.TryParseExact(value.GetString(), "N", out var capture)) return 0;
-			var directory = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(lifecyclePath))!,
-				"startup-evidence", capture.ToString("N"));
+			var lifecycleDirectory = Path.GetDirectoryName(Path.GetFullPath(lifecyclePath))!;
+			var isRetainedLifecycle = string.Equals(Path.GetFileName(lifecycleDirectory), capture.ToString("N"), StringComparison.Ordinal) &&
+				string.Equals(Path.GetFileName(Path.GetDirectoryName(lifecycleDirectory)), "startup-evidence", StringComparison.Ordinal);
+			var directory = isRetainedLifecycle ? lifecycleDirectory :
+				Path.Combine(lifecycleDirectory, "startup-evidence", capture.ToString("N"));
 			if (!Directory.Exists(directory) ||
 				(File.GetAttributes(directory) & FileAttributes.ReparsePoint) != 0 ||
 				(File.GetAttributes(Path.GetDirectoryName(directory)!) & FileAttributes.ReparsePoint) != 0) return 0;

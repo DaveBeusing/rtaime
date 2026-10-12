@@ -199,6 +199,11 @@ public sealed class SupportBundleExporterTests : IDisposable
 			Assert.Contains("[REDACTED]", content);
 		}
 		Assert.DoesNotContain(archive.Entries, entry => entry.FullName.Contains("production-state", StringComparison.Ordinal));
+		archive.Dispose();
+		var historicalDestination = Path.Combine(_root, "historical.zip");
+		await exporter.ExportAsync(historicalDestination, Path.Combine(directory, "apphost-lifecycle.json"));
+		using var historical = ZipFile.OpenRead(historicalDestination);
+		Assert.Contains(historical.Entries, entry => entry.FullName == "startup/" + capture + "/before-shutdown.json");
 	}
 
 	[Fact]
