@@ -78,6 +78,8 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 
 					target = "GPU descriptor boundary";
 					GpuDrawingSurfaceTests.VerifyDescriptorBoundary(dispatcher);
+					target = "GPU surface lifetime";
+					await GpuDrawingSurfaceTests.VerifySurfaceLifetimeAsync(dispatcher);
 
 					target = "ProductionMacroControl";
 					await ProductionMacroOperatorTests.VerifyReadOnlyStatusBindingsAsync(dispatcher);
