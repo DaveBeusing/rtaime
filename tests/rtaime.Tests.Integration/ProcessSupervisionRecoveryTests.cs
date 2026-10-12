@@ -640,6 +640,101 @@ public sealed class ProcessSupervisionRecoveryTests
 		finally { DeleteDirectory(root); }
 	}
 
+	[Fact]
+	public async Task AppHost_deadline_freezes_pre_shutdown_evidence_without_fabricating_child_crashes()
+	{
+		var root = TempDirectory();
+		var work = Path.Combine(root, "deadline");
+		Directory.CreateDirectory(work);
+		var runtimeEndpoint = Endpoint("runtime-unqualified");
+		using var externalRuntimeLease = LocalEndpointLease.Acquire(runtimeEndpoint);
+		var session = $"readiness-deadline-{Guid.NewGuid():N}";
+		var appRoot = Path.Combine(FindRepositoryRoot(), "src", "Hosts", "rtaime.AppHost", "bin", "Release", "net10.0");
+		var policyPath = Path.Combine(work, "policy.json");
+		await File.WriteAllTextAsync(policyPath, JsonSerializer.Serialize(new
+		{
+			schemaVersion = "1.0",
+			endpoints = new { control = Endpoint("control-deadline"), runtime = runtimeEndpoint, ai = Endpoint("ai-deadline") },
+			startup = new { timeoutMs = 30000, probeTimeoutMs = 500, probeIntervalMs = 200, childRestartBackoffMs = 500, childMaxStartAttempts = 5 },
+			shutdown = new { timeoutMs = 15000 }
+		}));
+		var start = new ProcessStartInfo(Path.Combine(appRoot, "rtaime.exe"))
+		{
+			UseShellExecute = false,
+			CreateNoWindow = true
+		};
+		foreach (var argument in new[]
+		{
+			"--profile=HeadlessEngine", "--ownership=EphemeralLocal", "--instance-id=default",
+			$"--install-root={appRoot}", $"--state-root={Path.Combine(root, "state")}",
+			$"--work-root={work}", $"--policy={policyPath}"
+		}) start.ArgumentList.Add(argument);
+		start.Environment["RTAIME_LOG_ROOT"] = Path.Combine(work, "logs");
+		start.Environment["RTAIME_LOG_SESSION_ID"] = session;
+		using var process = Process.Start(start) ?? throw new InvalidOperationException("AppHost did not start.");
+		try
+		{
+			await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(55));
+			Assert.Equal(1, process.ExitCode);
+			using var document = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(work, "apphost-lifecycle.json")));
+			var evidence = document.RootElement;
+			var failure = evidence.GetProperty("readinessFailure");
+			Assert.Equal("startup.deadline.expired", failure.GetProperty("reasonCode").GetString());
+			Assert.True(failure.GetProperty("aggregateDeadlineExpired").GetBoolean());
+			var hosts = failure.GetProperty("hosts").EnumerateArray().ToArray();
+			var control = hosts.Single(host => host.GetProperty("host").GetString() == "ControlHost");
+			Assert.True(control.GetProperty("processAlive").GetBoolean());
+			Assert.NotNull(control.GetProperty("lifecycleState").GetString());
+			Assert.NotNull(control.GetProperty("lastProgressPhase").GetString());
+			Assert.NotEqual("Stopped", control.GetProperty("lifecycleState").GetString());
+			Assert.False(ProcessIsAlive(control.GetProperty("processId").GetInt32()));
+			var runtime = hosts.Single(host => host.GetProperty("host").GetString() == "RuntimeHost");
+			Assert.Equal(JsonValueKind.Null, runtime.GetProperty("processId").ValueKind);
+			Assert.NotEqual("Failed", runtime.GetProperty("qualification").GetString());
+			Assert.Contains(failure.GetProperty("unmetCriteria").EnumerateArray(),
+				item => item.GetProperty("host").GetString() == "RuntimeHost" && item.GetProperty("code").GetString() == "supervision.healthy");
+			Assert.Equal("Failed", evidence.GetProperty("stages").EnumerateArray()
+				.Single(stage => stage.GetProperty("id").GetString() == "production-readiness").GetProperty("status").GetString());
+			Assert.DoesNotContain(evidence.GetProperty("stages").EnumerateArray(),
+				stage => stage.GetProperty("id").GetString() is "control-host" or "runtime-host" or "ai-host" &&
+					stage.GetProperty("status").GetString() == "Failed");
+			using var shutdown = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(work, "apphost-shutdown.json")));
+			Assert.Equal("PASS", shutdown.RootElement.GetProperty("status").GetString());
+			Assert.False(shutdown.RootElement.GetProperty("forcedTermination").GetBoolean());
+			Assert.True(failure.GetProperty("capturedAtUtc").GetDateTimeOffset() <=
+				shutdown.RootElement.GetProperty("requestedAtUtc").GetDateTimeOffset());
+			Console.WriteLine($"AppHost deadline evidence session={session} controlPid={control.GetProperty("processId")} phase={control.GetProperty("lastProgressPhase")} shutdown=PASS");
+		}
+		finally
+		{
+			try
+			{
+				if (!process.HasExited)
+				{
+					await File.WriteAllTextAsync(Path.Combine(work, "control-stop.signal"), "stop");
+					try { await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(20)); }
+					catch (TimeoutException) { process.Kill(entireProcessTree: true); await process.WaitForExitAsync(); }
+				}
+			}
+			finally
+			{
+				var evidenceRoot = Environment.GetEnvironmentVariable("RTAIME_BINDING_EVIDENCE_ROOT");
+				if (!string.IsNullOrWhiteSpace(evidenceRoot))
+				{
+					var destination = Path.Combine(evidenceRoot, session);
+					foreach (var file in Directory.GetFiles(work, "*", SearchOption.AllDirectories))
+					{
+						var target = Path.Combine(destination, Path.GetRelativePath(work, file));
+						Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+						if (Path.GetExtension(file) == ".jsonl") File.WriteAllLines(target, ReadSharedLogLines(file));
+						else File.Copy(file, target, overwrite: true);
+					}
+				}
+				DeleteDirectory(root);
+			}
+		}
+	}
+
 	private static string[] ReadSharedLogLines(string path)
 	{
 		using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);

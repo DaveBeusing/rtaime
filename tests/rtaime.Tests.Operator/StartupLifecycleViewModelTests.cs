@@ -196,6 +196,34 @@ public sealed class StartupLifecycleViewModelTests : IDisposable
 		Assert.Equal("OPEN DIAGNOSTIC LOG", viewModel.DiagnosticActionLabel);
 	}
 
+	[Fact]
+	public void Aggregate_timeout_shows_blocking_phase_and_existing_diagnostic_actions_without_retry()
+	{
+		WriteEvidence(CreateStages(controlStatus: "DEGRADED", runtimeStatus: "PENDING",
+			productionReadinessStatus: "FAILED", productionReadinessFailure: "Startup deadline expired."),
+			ApplicationLifecycleStages.ProductionReadiness);
+		using var original = JsonDocument.Parse(File.ReadAllText(EvidencePath));
+		var fields = original.RootElement.EnumerateObject().ToDictionary(property => property.Name,
+			property => property.Value.Clone());
+		var failure = JsonSerializer.SerializeToElement(new
+		{
+			aggregateDeadlineExpired = true,
+			hosts = new[] { new { host = "ControlHost", lastProgressPhase = "restore-audio", phaseOutcome = "failed" } },
+			unmetCriteria = new[] { new { host = "ControlHost", code = "control.binding.qualified" } }
+		});
+		fields["readinessFailure"] = failure;
+		File.WriteAllText(EvidencePath, JsonSerializer.Serialize(fields));
+		using var viewModel = new StartupLifecycleViewModel(EvidencePath, new PassiveSynchronizationContext());
+		Assert.True(viewModel.HasStartupFailure);
+		Assert.False(viewModel.HasCompletedInitialStartup);
+		Assert.Contains("ControlHost: control.binding.qualified", viewModel.Summary);
+		Assert.Contains("restore-audio / failed", viewModel.Summary);
+		Assert.Contains(EvidencePath, viewModel.NextStep);
+		Assert.Contains("restart through the supported application lifecycle", viewModel.NextStep);
+		Assert.All(viewModel.Stages, stage => Assert.False(stage.CanRetry));
+		Assert.Equal("PENDING", viewModel.Stages.Single(stage => stage.Id == "runtime-host").Status);
+	}
+
 	public void Dispose()
 	{
 		try

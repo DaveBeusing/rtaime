@@ -52,6 +52,12 @@ jobs:
         shell: pwsh
         run: ./build/development/Invoke-DeveloperBuild.ps1 -Configuration Release
 
+      - name: AppHost readiness evidence and stage qualification
+        run: dotnet test tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj --configuration Release --no-build --filter "FullyQualifiedName~UnifiedApplicationHostTests" --logger "console;verbosity=detailed"
+
+      - name: Operator startup evidence projection qualification
+        run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~StartupLifecycleViewModelTests" --logger "console;verbosity=detailed"
+
       - name: Control runtime binding and readiness qualification
         env:
           RTAIME_BINDING_EVIDENCE_ROOT: ${{ github.workspace }}/artifacts/qualification/control-runtime-binding
