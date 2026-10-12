@@ -461,6 +461,11 @@ public sealed class ControlHostRecoveryIntegrationTests
 			return ValueTask.FromResult(CreateAudioProgramSnapshot());
 		}
 
+		public ValueTask<RuntimeAudioProductionSnapshot> SetAudioProductionAsync(
+			AudioProductionConfiguration configuration,
+			CancellationToken cancellationToken = default) =>
+			ValueTask.FromResult(new RuntimeAudioProductionSnapshot(configuration, 0, 0, 0, false, 0, 1, 0, false, null, 0, 0));
+
 		private RuntimeAudioProgramSnapshot CreateAudioProgramSnapshot()
 		{
 			var followedSource = new MediaSourceId(Identity.Parse("7f000000-0000-0000-0000-00000000000a"));
