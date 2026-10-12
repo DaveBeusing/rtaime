@@ -80,7 +80,7 @@ internal static class Program
 			{
 				await supervision.StartAsync(shutdown.Token).ConfigureAwait(false);
 				log.Information("supervision", "controlhost.supervision-started", "Managed child supervision started.");
-				var process = new ControlHostProcess(options);
+				var process = new ControlHostProcess(options, log: log);
 				using var monitorStop = new CancellationTokenSource();
 				var monitor = MonitorManagedLifecycleAsync(process, supervision, options, shutdown, log, monitorStop.Token);
 				try

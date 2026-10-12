@@ -1,5 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
+using System.Diagnostics;
+using System.Globalization;
 using rtaime.Control.Contracts;
 using rtaime.Core;
 using rtaime.Media.Contracts;
@@ -460,10 +462,13 @@ public sealed class ControlHostProcess
 	private ExternalControlServer? _externalControlServer;
 	private Task? _runtimeBindingTask;
 	private string? _boundRuntimeHostInstanceId;
+	private readonly HostLog? _log;
+	private string _bindingAttemptId = Guid.NewGuid().ToString("N");
 
-	public ControlHostProcess(ControlHostProcessOptions options, Func<IControlRuntimeTransportSeam>? transportFactory = null)
+	public ControlHostProcess(ControlHostProcessOptions options, Func<IControlRuntimeTransportSeam>? transportFactory = null, HostLog? log = null)
 	{
 		_options = options ?? throw new ArgumentNullException(nameof(options));
+		_log = log;
 		_transportFactory = transportFactory ?? (() => new NamedPipeRuntimeHostTransport(_options.RuntimeEndpoint, _options.ConnectTimeout, _options.RequestTimeout));
 	}
 
@@ -486,7 +491,7 @@ public sealed class ControlHostProcess
 		try
 		{
 			_options.Validate();
-			await ComposeAsync(cancellationToken).ConfigureAwait(false);
+			await BindingPhaseAsync("authority-load", () => new ValueTask(ComposeAsync(cancellationToken)), cancellationToken).ConfigureAwait(false);
 			await _ipcServer!.StartAsync(cancellationToken).ConfigureAwait(false);
 			if (_externalControlServer is not null)
 				await _externalControlServer.StartAsync(cancellationToken).ConfigureAwait(false);
@@ -622,13 +627,14 @@ public sealed class ControlHostProcess
 		{
 			try
 			{
+				_bindingAttemptId = Guid.NewGuid().ToString("N");
 				var transport = _runtimeTransport ?? throw new InvalidOperationException("Runtime transport was not composed.");
 				var control = _control ?? throw new InvalidOperationException("Control service was not composed.");
 				using var operationTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 				operationTimeout.CancelAfter(_options.ConnectTimeout + _options.RequestTimeout);
 				var operationToken = operationTimeout.Token;
 
-				await transport.ConnectAsync(operationToken).ConfigureAwait(false);
+				await BindingPhaseAsync("ipc-connect", () => transport.ConnectAsync(operationToken), cancellationToken).ConfigureAwait(false);
 				if (!transport.IsConnected) throw new IOException("Runtime transport did not report a connected state after a successful probe.");
 				if (control.HasPendingExecution)
 				{
@@ -643,7 +649,7 @@ public sealed class ControlHostProcess
 				}
 				else
 				{
-					var runtimeSnapshot = await transport.GetSnapshotAsync(operationToken).ConfigureAwait(false);
+					var runtimeSnapshot = await BindingPhaseAsync("runtime-snapshot", () => transport.GetSnapshotAsync(operationToken), cancellationToken).ConfigureAwait(false);
 					var hostChanged = !string.Equals(_boundRuntimeHostInstanceId, runtimeHostInstanceId, StringComparison.Ordinal);
 					var aligned = RuntimeMatchesAuthority(runtimeSnapshot, control.State);
 					if (hostChanged || !aligned)
@@ -681,6 +687,56 @@ public sealed class ControlHostProcess
 
 			await Task.Delay(_options.RuntimeRetryInterval, cancellationToken).ConfigureAwait(false);
 		}
+	}
+
+	private async ValueTask<T> BindingPhaseAsync<T>(string phase, Func<ValueTask<T>> operation, CancellationToken lifetimeToken)
+	{
+		var started = Stopwatch.GetTimestamp();
+		WriteBindingPhase(phase, "started", started);
+		try
+		{
+			var result = await operation().ConfigureAwait(false);
+			WriteBindingPhase(phase, "completed", started);
+			return result;
+		}
+		catch (Exception exception)
+		{
+			var reason = exception is OperationCanceledException
+				? lifetimeToken.IsCancellationRequested ? "cancelled" : "timeout"
+				: exception is RuntimeRecoveryConflictException ? "authority-conflict"
+				: exception is IOException ? "transport-failure" : "rejected";
+			WriteBindingPhase(phase, "failed", started, reason, exception);
+			throw;
+		}
+	}
+
+	private async ValueTask BindingPhaseAsync(string phase, Func<ValueTask> operation, CancellationToken lifetimeToken)
+	{
+		await BindingPhaseAsync(phase, async () =>
+		{
+			await operation().ConfigureAwait(false);
+			return true;
+		}, lifetimeToken).ConfigureAwait(false);
+	}
+
+	private void WriteBindingPhase(string phase, string outcome, long started, string reason = "none", Exception? exception = null)
+	{
+		_log?.Write(
+			exception is null ? DiagnosticSeverity.Information : DiagnosticSeverity.Warning,
+			"runtime-binding",
+			$"controlhost.binding.{phase}.{outcome}",
+			$"ControlHost runtime binding phase {phase} {outcome}.",
+			exception,
+			new Dictionary<string, string>
+			{
+				["attemptId"] = _bindingAttemptId,
+				["phase"] = phase,
+				["outcome"] = outcome,
+				["reason"] = reason,
+				["elapsedMilliseconds"] = Stopwatch.GetElapsedTime(started).TotalMilliseconds.ToString("F3", CultureInfo.InvariantCulture),
+				["runtimeHostInstanceId"] = _runtimeTransport?.HostInstanceId ?? "unbound",
+				["hasPendingExecution"] = (_control?.HasPendingExecution ?? false).ToString()
+			});
 	}
 
 	private async Task InitializeFreshAuthorityAsync(
