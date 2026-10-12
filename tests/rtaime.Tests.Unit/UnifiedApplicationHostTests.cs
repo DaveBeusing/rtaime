@@ -918,6 +918,29 @@ public sealed class UnifiedApplicationHostTests
 		Assert.False(platform.FileExists(options.ShutdownEvidencePath));
 	}
 
+	[Fact]
+	public void Endpoint_adoption_clears_old_owned_pid_and_ignores_unrelated_host_events()
+	{
+		var options = CreateOptions(ApplicationStartupProfile.Interactive);
+		var platform = new FakeApplicationHostPlatform(options);
+		platform.PublishReadiness(42);
+		Assert.True(ApplicationReadinessEvidence.TryParse(platform.ReadAllText(options.ReadinessPath), out var readiness));
+		var tracker = new ApplicationReadinessTracker(options, platform);
+		tracker.Observe(42, readiness, options.ReadinessPath, "readiness.evidence.observed");
+		tracker.ObservePipe("RuntimeHost", true);
+		platform.DiagnosticEvents.Add(new("ControlHost", 42, platform.UtcNow,
+			"controlhost.runtime-supervision-changed", new Dictionary<string, string> { ["state"] = "Healthy", ["processId"] = "none" }));
+		platform.DiagnosticEvents.Add(new("ControlHost", 99, platform.UtcNow,
+			"controlhost.runtime-supervision-changed", new Dictionary<string, string> { ["state"] = "Failed", ["processId"] = "9999" }));
+		tracker.RefreshDiagnosticEvents(42);
+		tracker.ObservePipe("RuntimeHost", true);
+		var runtime = tracker.GetHosts().Single(host => host.Host == "RuntimeHost");
+		Assert.Null(runtime.ProcessId);
+		Assert.Null(runtime.ProcessAlive);
+		Assert.Equal("Healthy", runtime.SupervisionState);
+		Assert.Equal("Ready", runtime.Qualification);
+	}
+
 	private static ApplicationHostOptions CreateOptions(
 		ApplicationStartupProfile profile,
 		ApplicationLifecycleOwnership? ownership = null,

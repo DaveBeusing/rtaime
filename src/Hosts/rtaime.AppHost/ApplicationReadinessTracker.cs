@@ -78,8 +78,7 @@ internal sealed class ApplicationReadinessTracker
 				if (child.SupervisionAt > observation.ObservedAtUtc) continue;
 				child.Supervision = values.GetValueOrDefault("state");
 				child.SupervisionAt = observation.ObservedAtUtc;
-				if (int.TryParse(values.GetValueOrDefault("processId"), out var pid))
-					SetIdentity(child, pid);
+				SetIdentity(child, int.TryParse(values.GetValueOrDefault("processId"), out var pid) ? pid : null, allowUnknown: true);
 			}
 			else ApplyEvent(control, observation);
 		}
@@ -163,8 +162,8 @@ internal sealed class ApplicationReadinessTracker
 			_readiness.ProcessId == control.ProcessId, _readinessObservedAt, "Readiness must describe the observed ControlHost process.");
 		foreach (var host in _hosts.Values.Where(item => item.Host != "AIHost" || _options.RequireAI))
 		{
-			Add(host.Host, "process.alive", host.Host == "ControlHost" ? host.Alive == true : host.Alive != false &&
-				host.Supervision is not null, host.ProcessAt, host.Alive is null
+			Add(host.Host, "process.alive", host.Host == "ControlHost" ? host.Alive == true : host.Alive == true ||
+				host.ProcessId is null && EqualsState(host.Supervision, "Healthy"), host.ProcessAt, host.Alive is null
 					? "No owned PID observed; endpoint-adopted children require healthy supervision." : $"Process alive: {host.Alive}.");
 			if (host.Host != "ControlHost")
 				Add(host.Host, "supervision.healthy", EqualsState(host.Supervision, "Healthy") &&
@@ -180,9 +179,9 @@ internal sealed class ApplicationReadinessTracker
 	private static bool EqualsState(string? actual, string expected) =>
 		string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase);
 
-	private static void SetIdentity(HostObservation host, int? pid)
+	private static void SetIdentity(HostObservation host, int? pid, bool allowUnknown = false)
 	{
-		if (pid is null || host.ProcessId == pid) return;
+		if ((!allowUnknown && pid is null) || host.ProcessId == pid) return;
 		host.ProcessId = pid;
 		host.Alive = null;
 		host.ProcessAt = null;
@@ -200,7 +199,7 @@ internal sealed class ApplicationReadinessTracker
 	private static void SetSupervision(HostObservation host, ApplicationSupervisionEvidence? evidence, DateTimeOffset? at)
 	{
 		if (evidence is null) return;
-		SetIdentity(host, evidence.ProcessId);
+		SetIdentity(host, evidence.ProcessId, allowUnknown: true);
 		host.Supervision = evidence.State;
 		host.SupervisionAt = at;
 	}
