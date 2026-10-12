@@ -73,10 +73,13 @@ internal sealed class OperatorD3DImage : D3DImage, IDisposable
 	public bool PublishFrame()
 	{
 		Dispatcher.VerifyAccess();
-		if (_disposed || _texture is null || !IsFrontBufferAvailable ||
-			!TryLock(new Duration(TimeSpan.Zero))) return false;
+		if (_disposed || _texture is null || !IsFrontBufferAvailable) return false;
+		// WPF LockImpl increments its lock count even when TryLock times out.
+		// Always balance that call so a pending present can be committed.
+		var available = TryLock(new Duration(TimeSpan.Zero));
 		try
 		{
+			if (!available) return false;
 			if (PixelWidth > 0 && PixelHeight > 0)
 				AddDirtyRect(new Int32Rect(0, 0, PixelWidth, PixelHeight));
 			return true;

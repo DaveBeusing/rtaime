@@ -162,7 +162,9 @@ public class OperatorDrawingSurface : Image
 	private void ScheduleUpdate()
 	{
 		if (!IsLoaded || _closed || _disposing || _window is null || Dispatcher.HasShutdownStarted || _update is not null) return;
-		_update = Dispatcher.BeginInvoke(DispatcherPriority.Render, new Action(() =>
+		// Rebind after WPF commits pending presents; Render priority can wait on
+		// a present packet that the same Dispatcher has not committed yet.
+		_update = Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
 		{
 			_update = null;
 			UpdateTarget();
@@ -356,6 +358,7 @@ public class OperatorDrawingSurface : Image
 	private void ReleaseTargets()
 	{
 		StopRendering();
+		Source = null;
 		try { _image?.Bind(null); }
 		catch (Exception exception) when (IsGraphicsFailure(exception))
 		{
