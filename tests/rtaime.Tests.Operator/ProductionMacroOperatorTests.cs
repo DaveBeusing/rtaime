@@ -132,8 +132,8 @@ public sealed class ProductionMacroOperatorTests
 
 			var texts = Descendants(view).OfType<TextBlock>().ToArray();
 			var runs = texts.SelectMany(text => text.Inlines.OfType<Run>()).ToArray();
-			Run StatusRun(string path) => Assert.Single(runs.Where(run =>
-				BindingOperations.GetBinding(run, Run.TextProperty)?.Path.Path == path));
+			Run StatusRun(string path) => Assert.Single(runs, run =>
+				BindingOperations.GetBinding(run, Run.TextProperty)?.Path?.Path == path);
 			var last = StatusRun(nameof(ProductionMacroViewModel.LastCompletedAction));
 			var current = StatusRun(nameof(ProductionMacroViewModel.CurrentAction));
 			foreach (var run in new[] { last, current })
@@ -152,10 +152,10 @@ public sealed class ProductionMacroOperatorTests
 			})
 			{
 				var target = name == nameof(ProductionMacroViewModel.State)
-					? Assert.Single(Descendants(view).OfType<ContentControl>().Where(control =>
-						BindingOperations.GetBinding(control, ContentControl.ContentProperty)?.Path.Path == name))
-					: (DependencyObject)Assert.Single(texts.Where(text =>
-						BindingOperations.GetBinding(text, TextBlock.TextProperty)?.Path.Path == name));
+					? Assert.Single(Descendants(view).OfType<ContentControl>(), control =>
+						BindingOperations.GetBinding(control, ContentControl.ContentProperty)?.Path?.Path == name)
+					: (DependencyObject)Assert.Single(texts, text =>
+						BindingOperations.GetBinding(text, TextBlock.TextProperty)?.Path?.Path == name);
 				var property = target is TextBlock ? TextBlock.TextProperty : ContentControl.ContentProperty;
 				var expression = BindingOperations.GetBindingExpression(target, property);
 				Assert.NotNull(expression);
