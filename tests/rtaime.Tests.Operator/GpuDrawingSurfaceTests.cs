@@ -105,6 +105,7 @@ public sealed class GpuDrawingSurfaceTests
 	internal static async Task VerifySurfaceLifetimeAsync(Dispatcher dispatcher)
 	{
 		dispatcher.VerifyAccess();
+		Console.WriteLine("GPU LIFETIME BEGIN: constructing productive surfaces");
 		foreach (var surface in new OperatorDrawingSurface[]
 		{
 			new GpuMonitorPresentationSurface(), new GpuMediaCompareSurface(), new GpuScopeAnalysisSurface()
@@ -115,6 +116,7 @@ public sealed class GpuDrawingSurfaceTests
 
 	private static async Task VerifyProductiveSurfaceAsync(OperatorDrawingSurface surface, Dispatcher dispatcher)
 	{
+		Console.WriteLine($"GPU LIFETIME SETUP [{surface.GetType().Name}]");
 		var diagnostics = new List<OperatorSurfaceDiagnostic>();
 		var descriptions = new List<Texture2DDescription>();
 		surface.DiagnosticEmitted += diagnostic =>
@@ -156,7 +158,9 @@ public sealed class GpuDrawingSurfaceTests
 		};
 		try
 		{
+			Console.WriteLine($"GPU WINDOW SHOW BEGIN [{surface.GetType().Name}]");
 			window.Show();
+			Console.WriteLine($"GPU WINDOW SHOW RETURN [{surface.GetType().Name}]");
 			await WaitForAsync(() => surface.SurfaceState == OperatorSurfaceState.WaitingForSize, dispatcher, "zero target deferred");
 			Assert.Equal(0, surface.TargetCreateCount);
 			surface.Width = 160; surface.Height = 90;
@@ -326,17 +330,24 @@ public sealed class GpuDrawingSurfaceTests
 
 	private static async Task WaitForAsync(Func<bool> condition, Dispatcher dispatcher, string phase)
 	{
+		Console.WriteLine($"GPU WAIT BEGIN [{phase}]");
 		var deadline = Stopwatch.StartNew();
 		while (!condition() && deadline.Elapsed < TimeSpan.FromSeconds(5))
 		{
 			await dispatcher.InvokeAsync(() =>
 			{
 				// Drive the real WPF layout pass in the resource-only Application fixture.
-				foreach (Window window in Application.Current.Windows) window.UpdateLayout();
+				foreach (Window window in Application.Current.Windows)
+				{
+					Console.WriteLine($"GPU LAYOUT BEGIN [{phase}] {window.GetType().Name} {window.ActualWidth}x{window.ActualHeight}");
+					window.UpdateLayout();
+					Console.WriteLine($"GPU LAYOUT RETURN [{phase}] {window.GetType().Name}");
+				}
 			}, DispatcherPriority.Render);
 			await Task.Delay(10);
 		}
 		Assert.True(condition(), $"GPU surface qualification timed out: {phase}.");
+		Console.WriteLine($"GPU WAIT PASS [{phase}]");
 	}
 
 }
