@@ -60,6 +60,13 @@ internal sealed class ApplicationReadinessTracker
 			SetSupervision(_hosts["AIHost"], readiness.AISupervision, readiness.ReadyAtUtc);
 		}
 
+		RefreshDiagnosticEvents(control.ProcessId);
+	}
+
+	public void RefreshDiagnosticEvents(int? controlProcessId)
+	{
+		var control = _hosts["ControlHost"];
+		SetIdentity(control, controlProcessId);
 		var events = _platform.ReadHostDiagnosticEvents();
 		foreach (var observation in events.Where(item =>
 			item.Host == "ControlHost" && item.ProcessId == control.ProcessId))
@@ -115,7 +122,8 @@ internal sealed class ApplicationReadinessTracker
 			EqualsState(host.State, "Failed") || EqualsState(host.Supervision, "Failed");
 		var healthy = host.Host == "ControlHost"
 			? EqualsState(host.State, "Ready") && EqualsState(host.Health, "Healthy") &&
-				_readiness is not null && _readiness.ProcessId == host.ProcessId
+				_readiness is not null && _readiness.ProcessId == host.ProcessId &&
+				_readiness.ControlEndpoint == _options.Endpoints.Control
 			: EqualsState(host.Supervision, "Healthy");
 		var privatePipeRequired = _options.Ownership != ApplicationLifecycleOwnership.ExternalManaged ||
 			host.Host == "ControlHost";

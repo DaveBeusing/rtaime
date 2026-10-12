@@ -755,6 +755,7 @@ public sealed class UnifiedApplicationHost
 			if (!_initialQualificationCompleted && _lifecycle.Stages.Any(stage =>
 				stage.Id == ApplicationLifecycleStages.ControlHost && stage.StartedAt is not null))
 			{
+				_readinessTracker.RefreshDiagnosticEvents(_controlProcessId);
 				var failure = _readinessTracker.CaptureFailure(
 					exception is TimeoutException ? "startup.deadline.expired" : "startup.process.failure",
 					DiagnosticRedactor.RedactText(classified.Message), exception is TimeoutException);
@@ -855,7 +856,7 @@ public sealed class UnifiedApplicationHost
 			await _platform.DelayAsync(_options.Policy.ProbeInterval, cancellationToken).ConfigureAwait(false);
 		}
 
-		throw new TimeoutException(
+		throw CreateStartupTimeout(
 			$"ControlHost endpoint '{endpoint}' remains owned by an existing process that did not publish qualified readiness before the configured startup timeout.");
 	}
 
@@ -895,7 +896,7 @@ public sealed class UnifiedApplicationHost
 			await _platform.DelayAsync(_options.Policy.ProbeInterval, cancellationToken).ConfigureAwait(false);
 		}
 
-		throw new TimeoutException("rtaime engine did not reach qualified readiness before the configured startup timeout.");
+		throw CreateStartupTimeout("rtaime engine did not reach qualified readiness before the configured startup timeout.");
 	}
 
 	private async Task<(string Path, ApplicationReadinessEvidence Evidence)> WaitForExternalReadinessAsync(CancellationToken cancellationToken)
@@ -910,7 +911,7 @@ public sealed class UnifiedApplicationHost
 			await _platform.DelayAsync(_options.Policy.ProbeInterval, cancellationToken).ConfigureAwait(false);
 		}
 
-		throw new TimeoutException("Externally managed rtaime engine did not reach qualified readiness before the configured startup timeout.");
+		throw CreateStartupTimeout("Externally managed rtaime engine did not reach qualified readiness before the configured startup timeout.");
 	}
 
 	private async Task<(string Path, ApplicationReadinessEvidence Evidence)?> FindQualifiedReadinessAsync(CancellationToken cancellationToken)
@@ -941,8 +942,24 @@ public sealed class UnifiedApplicationHost
 			}
 		}
 		_readinessTracker.Observe(_controlProcessId, lastEvidence, observedPath, reason);
-		_lifecycle.ProjectHostObservations(_readinessTracker.GetHosts());
+		var hosts = _readinessTracker.GetHosts();
+		_lifecycle.ProjectHostObservations(hosts);
+		var failedChild = hosts.FirstOrDefault(host =>
+			host.Host != "ControlHost" && string.Equals(host.SupervisionState, "Failed", StringComparison.OrdinalIgnoreCase));
+		if (failedChild is not null)
+			throw new InvalidOperationException($"{failedChild.Host} supervision failed before qualified readiness; process state {failedChild.ProcessAlive?.ToString() ?? "unknown"}.");
 		return null;
+	}
+
+	private TimeoutException CreateStartupTimeout(string message)
+	{
+		_readinessTracker.RefreshDiagnosticEvents(_controlProcessId);
+		var failure = _readinessTracker.CaptureFailure("startup.deadline.expired",
+			DiagnosticRedactor.RedactText(message), deadlineExpired: true);
+		_lifecycle.CaptureReadinessFailure(failure);
+		var criteria = string.Join("; ", failure.UnmetCriteria.Select(item => $"{item.Host}: {item.Code}"));
+		var phase = failure.Hosts.FirstOrDefault(host => host.Host == "ControlHost")?.LastProgressPhase ?? "unobserved";
+		return new TimeoutException($"{message} Unmet criteria: {criteria}. Last ControlHost phase: {phase}. Evidence: {_options.LifecycleEvidencePath}.");
 	}
 
 	private (string Path, ApplicationReadinessEvidence Evidence)? FindObservedReadiness()

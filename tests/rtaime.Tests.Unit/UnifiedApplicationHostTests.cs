@@ -761,6 +761,149 @@ public sealed class UnifiedApplicationHostTests
 		Assert.Equal(1, platform.PipeProbeCount);
 	}
 
+	[Fact]
+	public async Task Deadline_without_host_evidence_does_not_fabricate_child_failure_and_preserves_clean_shutdown()
+	{
+		var options = CreateOptions(ApplicationStartupProfile.Interactive, ApplicationLifecycleOwnership.EphemeralLocal);
+		var platform = new FakeApplicationHostPlatform(options);
+		var host = new UnifiedApplicationHost(options, platform);
+		var exception = await Assert.ThrowsAsync<TimeoutException>(() => host.RunAsync());
+		Assert.Contains("readiness.evidence.missing", exception.Message);
+		using var document = JsonDocument.Parse(platform.ReadAllText(options.LifecycleEvidencePath));
+		var failure = document.RootElement.GetProperty("readinessFailure");
+		Assert.Equal("startup.deadline.expired", failure.GetProperty("reasonCode").GetString());
+		Assert.True(failure.GetProperty("aggregateDeadlineExpired").GetBoolean());
+		var hosts = failure.GetProperty("hosts").EnumerateArray().ToArray();
+		var control = hosts.Single(item => item.GetProperty("host").GetString() == "ControlHost");
+		Assert.True(control.GetProperty("processAlive").GetBoolean());
+		Assert.Null(control.GetProperty("lifecycleState").GetString());
+		Assert.All(hosts.Where(item => item.GetProperty("host").GetString() != "ControlHost"),
+			item => Assert.Equal(JsonValueKind.Null, item.GetProperty("processId").ValueKind));
+		Assert.DoesNotContain(host.Lifecycle.Stages, stage =>
+			stage.Id is "control-host" or "runtime-host" or "ai-host" && stage.Status == LifecycleStageStatus.Failed);
+		Assert.Equal(LifecycleStageStatus.Failed, host.Lifecycle.Stages.Single(stage => stage.Id == "production-readiness").Status);
+		Assert.False(platform.IsProcessAlive(control.GetProperty("processId").GetInt32()));
+		Assert.True(failure.GetProperty("capturedAtUtc").GetDateTimeOffset() <=
+			document.RootElement.GetProperty("shutdownInitiatedAtUtc").GetDateTimeOffset());
+		using var shutdown = JsonDocument.Parse(platform.ReadAllText(options.ShutdownEvidencePath));
+		Assert.Equal("PASS", shutdown.RootElement.GetProperty("status").GetString());
+		Assert.False(shutdown.RootElement.GetProperty("forcedTermination").GetBoolean());
+	}
+
+	[Fact]
+	public async Task Mixed_ready_pending_degraded_evidence_is_frozen_with_last_binding_phase()
+	{
+		var options = CreateOptions(ApplicationStartupProfile.Interactive, ApplicationLifecycleOwnership.EphemeralLocal);
+		var platform = new FakeApplicationHostPlatform(options)
+		{
+			PublishReadinessOnControlStart = true,
+			PublishedControlState = "DEGRADED",
+			PublishedControlHealth = "DEGRADED",
+			PublishedAIState = "RECOVERING"
+		};
+		platform.OnDelay = () =>
+		{
+			var pid = platform.LastControlProcessId!.Value;
+			platform.DiagnosticEvents.Add(new("ControlHost", pid, platform.UtcNow, "controlhost.binding.restore-audio.failed",
+				new Dictionary<string, string> { ["phase"] = "restore-audio", ["outcome"] = "failed", ["reason"] = "operation.timeout" }));
+		};
+		var host = new UnifiedApplicationHost(options, platform);
+		await Assert.ThrowsAsync<TimeoutException>(() => host.RunAsync());
+		Assert.Equal(LifecycleStageStatus.Ready, host.Lifecycle.Stages.Single(stage => stage.Id == "runtime-host").Status);
+		Assert.Equal(LifecycleStageStatus.Degraded, host.Lifecycle.Stages.Single(stage => stage.Id == "control-host").Status);
+		Assert.Equal(LifecycleStageStatus.Degraded, host.Lifecycle.Stages.Single(stage => stage.Id == "ai-host").Status);
+		using var document = JsonDocument.Parse(platform.ReadAllText(options.LifecycleEvidencePath));
+		var failure = document.RootElement.GetProperty("readinessFailure");
+		var control = failure.GetProperty("hosts").EnumerateArray().Single(item => item.GetProperty("host").GetString() == "ControlHost");
+		Assert.Equal("restore-audio", control.GetProperty("lastProgressPhase").GetString());
+		Assert.Equal("failed", control.GetProperty("phaseOutcome").GetString());
+		Assert.Equal("DEGRADED", control.GetProperty("lifecycleState").GetString());
+		Assert.NotEqual(JsonValueKind.Null, control.GetProperty("phaseObservedAtUtc").ValueKind);
+		Assert.Contains(failure.GetProperty("unmetCriteria").EnumerateArray(),
+			item => item.GetProperty("host").GetString() == "AIHost" && item.GetProperty("code").GetString() == "supervision.healthy");
+	}
+
+	[Fact]
+	public async Task Unreachable_runtime_endpoint_names_only_the_failed_qualification_criterion()
+	{
+		var options = CreateOptions(ApplicationStartupProfile.Interactive);
+		var platform = new FakeApplicationHostPlatform(options) { PublishReadinessOnControlStart = true };
+		platform.UnreachableEndpoints.Add(options.Endpoints.Runtime);
+		var host = new UnifiedApplicationHost(options, platform);
+		var exception = await Assert.ThrowsAsync<TimeoutException>(() => host.RunAsync());
+		Assert.Contains("RuntimeHost: ipc.reachable", exception.Message);
+		Assert.Equal(LifecycleStageStatus.Ready, host.Lifecycle.Stages.Single(stage => stage.Id == "control-host").Status);
+		Assert.Equal(LifecycleStageStatus.Degraded, host.Lifecycle.Stages.Single(stage => stage.Id == "runtime-host").Status);
+		Assert.Equal(LifecycleStageStatus.Ready, host.Lifecycle.Stages.Single(stage => stage.Id == "ai-host").Status);
+		using var document = JsonDocument.Parse(platform.ReadAllText(options.LifecycleEvidencePath));
+		var unmet = document.RootElement.GetProperty("readinessFailure").GetProperty("unmetCriteria").EnumerateArray().ToArray();
+		Assert.Single(unmet);
+		Assert.Equal("RuntimeHost", unmet[0].GetProperty("host").GetString());
+		Assert.Equal("ipc.reachable", unmet[0].GetProperty("code").GetString());
+	}
+
+	[Fact]
+	public async Task Direct_control_exit_has_its_own_failure_instead_of_deadline_or_child_crash_claims()
+	{
+		var options = CreateOptions(ApplicationStartupProfile.Interactive);
+		var platform = new FakeApplicationHostPlatform(options) { ControlHostExitOnStart = true };
+		var host = new UnifiedApplicationHost(options, platform);
+		await Assert.ThrowsAsync<InvalidOperationException>(() => host.RunAsync());
+		Assert.Equal(LifecycleStageStatus.Failed, host.Lifecycle.Stages.Single(stage => stage.Id == "control-host").Status);
+		Assert.NotEqual(LifecycleStageStatus.Failed, host.Lifecycle.Stages.Single(stage => stage.Id == "runtime-host").Status);
+		using var document = JsonDocument.Parse(platform.ReadAllText(options.LifecycleEvidencePath));
+		var failure = document.RootElement.GetProperty("readinessFailure");
+		Assert.False(failure.GetProperty("aggregateDeadlineExpired").GetBoolean());
+		Assert.Equal("startup.process.failure", failure.GetProperty("reasonCode").GetString());
+		Assert.Contains("ControlHost exited", failure.GetProperty("originalFailure").GetString());
+	}
+
+	[Fact]
+	public async Task Terminal_child_supervision_failure_is_attributed_before_aggregate_timeout()
+	{
+		var options = CreateOptions(ApplicationStartupProfile.Interactive);
+		var platform = new FakeApplicationHostPlatform(options);
+		platform.OnDelay = () => platform.DiagnosticEvents.Add(new(
+			"ControlHost", platform.LastControlProcessId!.Value, platform.UtcNow,
+			"controlhost.ai-supervision-changed", new Dictionary<string, string> { ["state"] = "Failed", ["processId"] = "7002" }));
+		var host = new UnifiedApplicationHost(options, platform);
+		var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => host.RunAsync());
+		Assert.Contains("AIHost supervision failed", exception.Message);
+		Assert.Equal(LifecycleStageStatus.Failed, host.Lifecycle.Stages.Single(stage => stage.Id == "ai-host").Status);
+		Assert.NotEqual(LifecycleStageStatus.Failed, host.Lifecycle.Stages.Single(stage => stage.Id == "runtime-host").Status);
+		using var document = JsonDocument.Parse(platform.ReadAllText(options.LifecycleEvidencePath));
+		Assert.False(document.RootElement.GetProperty("readinessFailure").GetProperty("aggregateDeadlineExpired").GetBoolean());
+	}
+
+	[Fact]
+	public async Task Delayed_qualification_has_no_latched_failure_or_shutdown_snapshot()
+	{
+		var options = CreateOptions(ApplicationStartupProfile.Interactive);
+		var platform = new FakeApplicationHostPlatform(options) { PublishReadinessAfterDelay = true };
+		var host = new UnifiedApplicationHost(options, platform);
+		Assert.True((await host.RunAsync()).Success);
+		Assert.All(host.Lifecycle.Stages, stage => Assert.Equal(LifecycleStageStatus.Ready, stage.Status));
+		using var document = JsonDocument.Parse(platform.ReadAllText(options.LifecycleEvidencePath));
+		Assert.Equal(JsonValueKind.Null, document.RootElement.GetProperty("readinessFailure").ValueKind);
+	}
+
+	[Fact]
+	public void Live_host_log_parser_ignores_partial_foreign_and_sensitive_fields()
+	{
+		Assert.Null(ApplicationHostDiagnosticReader.ParseLine("{"));
+		Assert.Null(ApplicationHostDiagnosticReader.ParseLine("""{"host":"Operator","code":"operator.state-changed"}"""));
+		var line = JsonSerializer.Serialize(new
+		{
+			host = "ControlHost", processId = 42, timestampUtc = DateTimeOffset.UtcNow,
+			code = "controlhost.binding.restore-audio.failed",
+			dimensions = new { phase = "restore-audio", outcome = "failed", password = "secret" }
+		});
+		var observation = ApplicationHostDiagnosticReader.ParseLine(line);
+		Assert.NotNull(observation);
+		Assert.Equal("restore-audio", observation.Dimensions["phase"]);
+		Assert.False(observation.Dimensions.ContainsKey("password"));
+	}
+
 	private static ApplicationHostOptions CreateOptions(
 		ApplicationStartupProfile profile,
 		ApplicationLifecycleOwnership? ownership = null,
@@ -813,6 +956,11 @@ public sealed class UnifiedApplicationHostTests
 
 		public DateTimeOffset UtcNow { get; private set; }
 		public bool PublishReadinessOnControlStart { get; init; }
+		public string PublishedControlState { get; init; } = "READY";
+		public string PublishedControlHealth { get; init; } = "HEALTHY";
+		public string PublishedAIState { get; init; } = "HEALTHY";
+		public List<ApplicationHostDiagnosticEvent> DiagnosticEvents { get; } = new();
+		public IReadOnlyList<ApplicationHostDiagnosticEvent> ReadHostDiagnosticEvents() => DiagnosticEvents.ToArray();
 		public bool PublishReadinessAfterDelay { get; init; }
 		public bool PipeReachable { get; set; } = true;
 		public bool EndpointLeaseHeld { get; set; }
@@ -938,13 +1086,13 @@ public sealed class UnifiedApplicationHostTests
 			var payload = new
 			{
 				processId = controlProcessId,
-				state = "READY",
-				health = "HEALTHY",
+				state = PublishedControlState,
+				health = PublishedControlHealth,
 				controlEndpoint = endpoints.Control,
 				runtimeEndpoint = endpoints.Runtime,
 				aiEndpoint = endpoints.AI,
 				runtimeSupervision = new { state = "HEALTHY", processId = includeChildProcessIds ? 7001 : (int?)null },
-				aiSupervision = new { state = "HEALTHY", processId = includeChildProcessIds ? 7002 : (int?)null }
+				aiSupervision = new { state = PublishedAIState, processId = includeChildProcessIds ? 7002 : (int?)null }
 			};
 			_files[Path.GetFullPath(_options.ReadinessPath)] = JsonSerializer.Serialize(payload);
 		}
