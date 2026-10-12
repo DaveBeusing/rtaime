@@ -229,6 +229,7 @@ public sealed class GpuDrawingSurfaceTests
 		{
 			window.Close();
 			await dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
+			Console.WriteLine($"GPU LAYOUT [{surface.GetType().Name}]: requested={surface.Width}x{surface.Height}; actual={surface.ActualWidth}x{surface.ActualHeight}; desired={surface.DesiredSize}; render={surface.RenderSize}; grid={grid.ActualWidth}x{grid.ActualHeight}; state={surface.SurfaceState}; detail={surface.SurfaceDetail}.");
 			Assert.Null(surface.ColorTexture);
 			Assert.Null(surface.ColorTextureView);
 			Assert.Equal(OperatorSurfaceState.Unloaded, surface.SurfaceState);
@@ -326,7 +327,11 @@ public sealed class GpuDrawingSurfaceTests
 		var deadline = Stopwatch.StartNew();
 		while (!condition() && deadline.Elapsed < TimeSpan.FromSeconds(5))
 		{
-			await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Render);
+			await dispatcher.InvokeAsync(() =>
+			{
+				// Drive the real WPF layout pass in the resource-only Application fixture.
+				foreach (Window window in Application.Current.Windows) window.UpdateLayout();
+			}, DispatcherPriority.Render);
 			await Task.Delay(10);
 		}
 		Assert.True(condition(), $"GPU surface qualification timed out: {phase}.");
