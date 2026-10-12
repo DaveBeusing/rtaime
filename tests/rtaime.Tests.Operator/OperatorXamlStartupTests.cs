@@ -78,8 +78,6 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 
 					target = "GPU descriptor boundary";
 					GpuDrawingSurfaceTests.VerifyDescriptorBoundary(dispatcher);
-					target = "GPU surface lifetime";
-					await GpuDrawingSurfaceTests.VerifySurfaceLifetimeAsync(dispatcher);
 
 					target = "ProductionMacroControl";
 					await ProductionMacroOperatorTests.VerifyReadOnlyStatusBindingsAsync(dispatcher);
@@ -107,6 +105,7 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 						throw new AggregateException("Productive WPF composition failed.", failures);
 
 					Assert.NotNull(window);
+					app.MainWindow = window;
 					Console.WriteLine("COMPOSITION PASS [MainWindow] compiled resource dictionaries and full window tree.");
 					var rendered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 					window.ContentRendered += (_, _) => rendered.TrySetResult();
@@ -152,6 +151,21 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 						Assert.NotEmpty(VisualDescendants(window).OfType<ProgramViewer>());
 						diagnostics.Enqueue($"RENDER PASS [{workspace}] real MainWindow and monitor trees.");
 					}
+					// Qualify secondary GPU windows while the productive primary window owns
+					// the application lifetime, as in the real Clean Program workflow.
+					target = "GPU surface lifetime";
+					await GpuDrawingSurfaceTests.VerifySurfaceLifetimeAsync(dispatcher);
+					var resumedRender = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+					EventHandler rendering = (_, _) => resumedRender.TrySetResult();
+					CompositionTarget.Rendering += rendering;
+					try
+					{
+						window.InvalidateVisual();
+						await resumedRender.Task.WaitAsync(TimeSpan.FromSeconds(10));
+					}
+					finally { CompositionTarget.Rendering -= rendering; }
+					Assert.True(window.IsLoaded && window.IsVisible);
+					Console.WriteLine("GPU PRIMARY WINDOW PASS: productive MainWindow continues rendering after secondary surface teardown.");
 					Assert.DoesNotContain(diagnostics, entry => entry.StartsWith("FIRST CHANCE", StringComparison.Ordinal));
 				}
 				catch (Exception exception)
