@@ -7,7 +7,6 @@ using System.Windows.Interop;
 using System.Windows.Threading;
 using Vortice.Direct3D11;
 using Vortice.Direct3D9;
-using Vortice.DXGI;
 using Dx9Format = Vortice.Direct3D9.Format;
 using Dx9Usage = Vortice.Direct3D9.Usage;
 using static Vortice.Direct3D9.D3D9;
@@ -46,7 +45,7 @@ internal sealed class OperatorD3DImage : D3DImage, IDisposable
 		IDirect3DTexture9? candidate = null;
 		if (texture is not null)
 		{
-			using var resource = texture.QueryInterface<IDXGIResource>();
+			using var resource = texture.QueryInterface<Vortice.DXGI.IDXGIResource>();
 			var handle = resource.SharedHandle;
 			if (handle == IntPtr.Zero)
 				throw new InvalidOperationException("Shared BGRA target has no DXGI interop handle.");
