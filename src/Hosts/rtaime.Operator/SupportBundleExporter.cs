@@ -112,6 +112,9 @@ public sealed class SupportBundleExporter : ISupportBundleExporter
 					warnings,
 					cancellationToken).ConfigureAwait(false);
 
+				includedFileCount += await AddStartupCaptureFilesAsync(archive, lifecycleEvidencePath, warnings,
+					cancellationToken, bytes => includedSourceBytes += bytes, () => includedSourceBytes).ConfigureAwait(false);
+
 				if (sessionDirectory is not null && Directory.Exists(sessionDirectory))
 				includedFileCount += await AddSessionFilesAsync(
 					archive,
@@ -292,6 +295,70 @@ public sealed class SupportBundleExporter : ISupportBundleExporter
 		return included;
 	}
 
+	private async Task<int> AddStartupCaptureFilesAsync(
+		ZipArchive archive, string? lifecyclePath, List<string> warnings, CancellationToken token,
+		Action<long> addBytes, Func<long> currentBytes)
+	{
+		if (string.IsNullOrWhiteSpace(lifecyclePath) || !File.Exists(lifecyclePath)) return 0;
+		try
+		{
+			if (new FileInfo(lifecyclePath).Length > 2 * 1024 * 1024)
+			{
+				warnings.Add("Lifecycle evidence exceeds the bounded startup diagnostic size.");
+				return 0;
+			}
+			using var document = JsonDocument.Parse(await File.ReadAllTextAsync(lifecyclePath, token).ConfigureAwait(false));
+			if (!document.RootElement.TryGetProperty("captureId", out var value) ||
+				!Guid.TryParseExact(value.GetString(), "N", out var capture)) return 0;
+			var directory = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(lifecyclePath))!,
+				"startup-evidence", capture.ToString("N"));
+			if (!Directory.Exists(directory) ||
+				(File.GetAttributes(directory) & FileAttributes.ReparsePoint) != 0 ||
+				(File.GetAttributes(Path.GetDirectoryName(directory)!) & FileAttributes.ReparsePoint) != 0) return 0;
+			var included = 0;
+			foreach (var name in new[] { "manifest.json", "before-shutdown.json", "qualified.json",
+				"apphost-lifecycle.json", "apphost-shutdown.json", "controlhost-process.log", "controlhost-process.log.previous" })
+			{
+				token.ThrowIfCancellationRequested();
+				var path = Path.Combine(directory, name);
+				if (!File.Exists(path) || (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0) continue;
+				var length = new FileInfo(path).Length;
+				if (length > 2 * 1024 * 1024 || currentBytes() + length > _maximumSourceBytes)
+				{
+					warnings.Add($"Startup capture file '{name}' was omitted because the support bundle source limit was reached.");
+					continue;
+				}
+				var entryName = "startup/" + capture.ToString("N") + "/" + name;
+				if (name.EndsWith(".json", StringComparison.Ordinal))
+					included += await TryAddSanitizedJsonFileAsync(archive, path, entryName, warnings, token).ConfigureAwait(false);
+				else
+				{
+					var entry = archive.CreateEntry(entryName, CompressionLevel.Fastest);
+					await using var output = entry.Open();
+					using var writer = new StreamWriter(output, new UTF8Encoding(false), leaveOpen: true);
+					using var input = new StreamReader(new FileStream(path, FileMode.Open, FileAccess.Read,
+						FileShare.ReadWrite | FileShare.Delete));
+					long readBytes = 0;
+					while (await input.ReadLineAsync(token).ConfigureAwait(false) is { } line)
+					{
+						readBytes += Encoding.UTF8.GetByteCount(line) + 2;
+						if (readBytes > length) break;
+						await writer.WriteLineAsync(DiagnosticRedactor.RedactText(line).AsMemory(), token).ConfigureAwait(false);
+					}
+					await writer.FlushAsync(token).ConfigureAwait(false);
+					included++;
+				}
+				addBytes(length);
+			}
+			return included;
+		}
+		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException)
+		{
+			warnings.Add($"Unable to include retained startup capture: {exception.Message}");
+			return 0;
+		}
+	}
+
 	private static async Task<int> TryAddSanitizedJsonFileAsync(
 		ZipArchive archive,
 		string sourcePath,
@@ -304,6 +371,11 @@ public sealed class SupportBundleExporter : ISupportBundleExporter
 			var fullPath = Path.GetFullPath(sourcePath);
 			if (!File.Exists(fullPath))
 				return 0;
+			if (new FileInfo(fullPath).Length > 2 * 1024 * 1024)
+			{
+				warnings.Add("Lifecycle evidence exceeds the bounded startup diagnostic size.");
+				return 0;
+			}
 
 			await using var source = new FileStream(
 				fullPath,
