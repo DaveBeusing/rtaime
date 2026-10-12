@@ -1278,17 +1278,19 @@ public sealed class UnifiedApplicationHost
 		Transition(ApplicationLifecycleState.Stopping);
 		var requestedAtUtc = _platform.UtcNow;
 		var processAliveAtRequest = _platform.IsProcessAlive(processId);
+		var deadline = _platform.UtcNow + _options.Policy.ShutdownTimeout;
 		if (processAliveAtRequest)
 		{
 			_platform.WriteAllText(_options.StopPath, $"stopRequestedAtUtc={requestedAtUtc:O}{Environment.NewLine}");
-			var deadline = _platform.UtcNow + _options.Policy.ShutdownTimeout;
 			while (_platform.UtcNow < deadline && _platform.IsProcessAlive(processId))
 				await _platform.DelayAsync(TimeSpan.FromMilliseconds(100), cancellationToken).ConfigureAwait(false);
 		}
 
 		var forcedTermination = processAliveAtRequest && _platform.IsProcessAlive(processId);
 		if (forcedTermination) _platform.KillProcessTree(processId);
-		using var drainTimeout = new CancellationTokenSource(_options.Policy.ShutdownTimeout);
+		var remainingDrainBudget = deadline - _platform.UtcNow;
+		using var drainTimeout = new CancellationTokenSource(remainingDrainBudget > TimeSpan.Zero ?
+			remainingDrainBudget : TimeSpan.FromMilliseconds(1));
 		var diagnosticsDrained = false;
 		try
 		{

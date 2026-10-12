@@ -102,6 +102,14 @@ public sealed class StartupEvidenceCaptureTests
 		using var stop = new CancellationTokenSource();
 		var run = host.RunAsync(stop.Token);
 		await fixture.WaitObserved("ControlHost", "pending");
+		using (var cancelledDrain = new CancellationTokenSource())
+		{
+			cancelledDrain.Cancel();
+			var pid = fixture.ControlProcessId;
+			await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+				fixture.FlushProcessDiagnosticsAsync(pid, cancelledDrain.Token));
+			Assert.True(fixture.IsProcessAlive(pid));
+		}
 		stop.Cancel();
 		Assert.True((await run.WaitAsync(TimeSpan.FromSeconds(20))).Success);
 		fixture.AssertRetainedAndStopped(expectGraceful: true);
@@ -136,6 +144,7 @@ public sealed class StartupEvidenceCaptureTests
 		public ApplicationHostOptions Options { get; }
 		private readonly SystemApplicationHostPlatform _system;
 		private readonly List<int> _processes = [];
+		public int ControlProcessId => _processes.Last();
 		public string CaptureDirectory {
 			get { using var doc = JsonDocument.Parse(File.ReadAllText(Options.LifecycleEvidencePath));
 				return Path.GetDirectoryName(doc.RootElement.GetProperty("retainedEvidencePath").GetString())!; }
