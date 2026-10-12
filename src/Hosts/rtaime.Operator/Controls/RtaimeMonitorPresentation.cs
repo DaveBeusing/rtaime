@@ -177,6 +177,12 @@ public sealed class RtaimeMonitorPresentation : ContentControl
 		((RtaimeMonitorPresentation)dependencyObject).RefreshViewport();
 	}
 
+	protected override void OnDpiChanged(DpiScale oldDpi, DpiScale newDpi)
+	{
+		base.OnDpiChanged(oldDpi, newDpi);
+		RefreshViewport();
+	}
+
 	private void OnViewportSizeChanged(object sender, SizeChangedEventArgs e)
 	{
 		RefreshViewport();
