@@ -92,9 +92,38 @@ internal sealed class StartupEvidenceSession : IDisposable
 	});
 
 	private void Write(string name, object value) => Try(() =>
+	{
+		using var document = JsonDocument.Parse(JsonSerializer.Serialize(value, new JsonSerializerOptions {
+			PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
+		using var output = new MemoryStream();
+		using (var writer = new Utf8JsonWriter(output, new JsonWriterOptions { Indented = true }))
+			WriteSanitized(writer, document.RootElement, null);
 		_platform.WriteAllTextAtomic(Path.Combine(DirectoryPath, name),
-			JsonSerializer.Serialize(value, new JsonSerializerOptions {
-				WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase }) + Environment.NewLine));
+			System.Text.Encoding.UTF8.GetString(output.ToArray()) + Environment.NewLine);
+	});
+
+	private static void WriteSanitized(Utf8JsonWriter writer, JsonElement element, string? key)
+	{
+		if (element.ValueKind == JsonValueKind.Object)
+		{
+			writer.WriteStartObject();
+			foreach (var property in element.EnumerateObject())
+			{
+				writer.WritePropertyName(property.Name);
+				WriteSanitized(writer, property.Value, property.Name);
+			}
+			writer.WriteEndObject();
+		}
+		else if (element.ValueKind == JsonValueKind.Array)
+		{
+			writer.WriteStartArray();
+			foreach (var item in element.EnumerateArray()) WriteSanitized(writer, item, key);
+			writer.WriteEndArray();
+		}
+		else if (element.ValueKind == JsonValueKind.String)
+			writer.WriteStringValue(DiagnosticRedactor.SanitizeValue(key ?? "value", element.GetString()));
+		else element.WriteTo(writer);
+	}
 
 	private void Try(Action action)
 	{

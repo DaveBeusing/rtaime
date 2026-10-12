@@ -364,3 +364,31 @@ dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --con
 Required Gates run targeted model/presentation tests before multi-host qualification. Actual HeadlessEngine cases cover clean and retained success plus an intentionally leased, unqualified Runtime endpoint with the unchanged 30-second startup deadline. The negative case preserves pre-shutdown evidence and asserts graceful shutdown without fabricated Runtime/AI crashes; its logs/lifecycle/shutdown files are included in the existing control-runtime-binding artifact.
 
 The October 12 aggregate timeout at 18:57:39.720Z and subsequent exit 0 establish neither three service crashes nor a specific binding failure. Historical phase attribution remains unverified where the pre-shutdown host evidence was not recorded.
+
+## Retained startup captures
+
+The current `apphost-lifecycle.json` contains `sessionId`, `captureId` and `retainedEvidencePath`. Each launch creates a unique `<work-root>/startup-evidence/<captureId>/` directory, even if an explicit structured-log session ID is reused. Read `manifest.json` there for the exact lifecycle, qualified readiness, pre-shutdown snapshot, shutdown and process-log paths, plus the existing HostLog session directory.
+
+- `qualified.json` is captured only after the strict production readiness contract passes. It is diagnostic evidence; it never grants readiness.
+- `before-shutdown.json` captures the first pre-cleanup lifecycle snapshot, typed readiness if present, host observations and bounded phase/supervision history. Timeout, explicit exit and cancellation preserve this file before the stop signal. Subsequent shutdown cannot replace it.
+- `apphost-shutdown.json` is separate and shares both identifiers. `processAliveAtRequest`, `graceful`, `forcedTermination` and `diagnosticsDrained` describe the actual shutdown/stream outcome. An already exited process is not a graceful stop. A clean shutdown does not erase the startup failure.
+- `controlhost-process.log` records redacted stdout/stderr and exit code, UTC, PID and session. The fixed work-root process log remains available for existing Operator actions and is no longer deleted at launch; the capture copy belongs exclusively to that attempt.
+- A bootstrap failure before capture initialization also retains a unique `apphost-startup-<pid>-<unique-id>.json` in the existing HostLog session, alongside the bounded work-root `apphost-startup.log`.
+
+Process/startup logs have a 2 MiB current segment plus one `.previous` segment. Redaction precedes clipping; streams continue draining even if diagnostic storage fails. Completed capture directories expire after 14 days and at most 64 most recent captures are retained at the next launch. Active captures hold an exclusive lease and are skipped by pruning. Existing per-process HostLog rotation and retention remain in force. Capture manifest errors identify partial storage; unavailable diagnostic storage is never a readiness success.
+
+Use the existing Operator support-bundle export with the current lifecycle file. It includes the selected capture's allowlisted JSON and redacted process logs under `startup/<captureId>/`, plus the active structured-log session. Source limits apply; omitted files generate warnings. No production state, media, arbitrary manifest path or traversal is followed. To inspect an older attempt, select its retained lifecycle file and retain the matching structured-log session directory separately.
+
+Windows qualification after the canonical Release build:
+
+```powershell
+./build/development/Invoke-DeveloperBuild.ps1 -Configuration Release
+dotnet test tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj --configuration Release --no-build --filter "FullyQualifiedName~UnifiedApplicationHostTests"
+dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~StartupEvidenceCaptureTests|FullyQualifiedName~ProcessSupervisionRecoveryTests.AppHost_|FullyQualifiedName~ExecutableHostLifecycleTests" --logger "console;verbosity=detailed"
+dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~SupportBundleExporterTests"
+./build/operations/Test-ManagedHostLifecycle.ps1 -BundlePath <verified-offline-bundle>
+```
+
+Required Gates repeats the synthetic and real AppHost process scenarios twice before uploading startup evidence. Test-only Control/Runtime/AI processes use isolated state, endpoints and command/observation barriers for pending reconciliation, degraded hosts, unavailable IPC, child/control exit, delayed readiness, cancellation and restart. The unavailable-IPC fixture deliberately supplies Healthy metadata without its Runtime listener, proving that metadata alone cannot pass qualification. Synthetic 8-second deadlines apply only to negative fixtures; the real host cases retain the unchanged 30-second startup policy. Actual clean/retained service-host success is established by the real process tests, never by synthetic metadata.
+
+A missing October 12 pre-timeout record remains missing historical evidence. Aggregate timeout followed by Stopped/exit 0 identifies neither a crash nor the interrupted reconciliation operation. Use the new correlated pre-shutdown records for future attribution. A build or synthetic test pass alone does not qualify an offline bundle; packaged lifecycle evidence still requires the canonical bundle gate.
