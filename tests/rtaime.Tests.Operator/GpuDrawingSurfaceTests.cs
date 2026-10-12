@@ -188,15 +188,37 @@ public sealed class GpuDrawingSurfaceTests
 			await ReadyAsync(surface, dispatcher);
 			surface.SetFrontBufferForQualification(null);
 
+			var failNextAllocation = true;
+			surface.BeforeTargetCreation = description =>
+			{
+				descriptions.Add(description);
+				if (!failNextAllocation) return;
+				failNextAllocation = false;
+				throw new SharpGenException(new Result(unchecked((int)0x887A0005)));
+			};
+			surface.Width = 181;
+			await WaitForAsync(() => surface.SurfaceState == OperatorSurfaceState.Faulted, dispatcher, "injected device removal");
+			Assert.Null(surface.ColorTexture);
+			pixelVerified = false;
+			surface.SetFrontBufferForQualification(false);
+			surface.SetFrontBufferForQualification(true);
+			await ReadyAsync(surface, dispatcher);
+			await WaitForAsync(() => pixelVerified, dispatcher, "pixel readback after device restoration");
+			surface.SetFrontBufferForQualification(null);
+			surface.BeforeTargetCreation = descriptions.Add;
+
 			grid.Children.Remove(surface);
 			await WaitForAsync(() => surface.SurfaceState == OperatorSurfaceState.Unloaded, dispatcher, "unloaded surface");
 			Assert.Equal(surface.TargetCreateCount, surface.TargetReleaseCount);
 			grid.Children.Add(surface);
 			await ReadyAsync(surface, dispatcher);
-			Assert.Equal(2, surface.DeviceGeneration);
+			Assert.Equal(3, surface.DeviceGeneration);
 			Assert.All(descriptions, descriptor => Assert.True(OperatorSurfaceTargetPolicy.IsValid(descriptor, 16384, 16384)));
-			Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Exception is not null);
-			Console.WriteLine($"GPU LIFECYCLE PASS [{surface.GetType().Name}]: zero, coalesced resize, stable redraw, collapse, hide/show, minimize/restore, injected front-buffer loss, unload/reload; real shared BGRA8 red-pixel readback; device generations={surface.DeviceGeneration}.");
+			var graphicsFailures = diagnostics.Where(diagnostic => diagnostic.Exception is not null).ToArray();
+			Assert.Single(graphicsFailures);
+			Assert.Equal("operator.surface.failure", graphicsFailures[0].Code);
+			Assert.Equal("0x887A0005", graphicsFailures[0].Dimensions["hresult"]);
+			Console.WriteLine($"GPU LIFECYCLE PASS [{surface.GetType().Name}]: zero, coalesced resize, stable redraw, collapse, hide/show, minimize/restore, injected front-buffer loss, injected device removal and successful recovery, unload/reload; real shared BGRA8 red-pixel readback; device generations={surface.DeviceGeneration}.");
 		}
 		finally
 		{
