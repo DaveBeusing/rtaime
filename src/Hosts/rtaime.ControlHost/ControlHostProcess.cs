@@ -463,6 +463,9 @@ public sealed class ControlHostProcess
 	private Task? _runtimeBindingTask;
 	private string? _boundRuntimeHostInstanceId;
 	private readonly HostLog? _log;
+	private string? _interruptedInitialHostId;
+	private AuthoritativeProductionState? _interruptedInitialAuthority;
+	private long _bindingAttemptStarted = Stopwatch.GetTimestamp();
 	private CancellationToken _bindingLifetimeToken;
 	private string _bindingAttemptId = Guid.NewGuid().ToString("N");
 
@@ -630,6 +633,7 @@ public sealed class ControlHostProcess
 			try
 			{
 				_bindingAttemptId = Guid.NewGuid().ToString("N");
+				_bindingAttemptStarted = Stopwatch.GetTimestamp();
 				var transport = _runtimeTransport ?? throw new InvalidOperationException("Runtime transport was not composed.");
 				var control = _control ?? throw new InvalidOperationException("Control service was not composed.");
 				using var operationTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -669,7 +673,7 @@ public sealed class ControlHostProcess
 			}
 			catch (RuntimeRecoveryConflictException exception)
 			{
-				WriteBindingPhase("binding-attempt", "failed", Stopwatch.GetTimestamp(), "authority-conflict", exception);
+				WriteBindingPhase("binding-attempt", "failed", _bindingAttemptStarted, "authority-conflict", exception);
 				SetRecovery(ControlHostRecoveryState.Conflict, exception.RuntimeAuthorityRevision, exception.Message);
 				SetOperationalState(ControlHostProcessState.Degraded, ControlHostHealthState.Degraded, "Runtime recovery conflict requires operator intervention; authoritative mutation transport is paused.");
 				if (_runtimeTransport is not null)
@@ -702,6 +706,7 @@ public sealed class ControlHostProcess
 		WriteBindingPhase(phase, "started", started);
 		try
 		{
+			lifetimeToken.ThrowIfCancellationRequested();
 			var result = await operation().ConfigureAwait(false);
 			WriteBindingPhase(phase, "completed", started);
 			return result;
@@ -815,22 +820,53 @@ public sealed class ControlHostProcess
 
 		try
 		{
-			await BindingPhaseAsync("initial-runtime-acceptance", async () =>
+			var initialSnapshot = await BindingPhaseAsync("initial-runtime-acceptance", async () =>
 			{
 				var snapshot = await transport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
 				ValidateRuntimeAuthority(snapshot, staged.Execution.AuthoritativeState);
+				return snapshot;
 			}, cancellationToken).ConfigureAwait(false);
-			var remote = await BindingPhaseAsync("runtime-apply",
-				() => transport.ApplyExecutionAsync(staged.Execution.PreparedExecution, staged.Execution.ProgramSinkId, staged.Execution.ProgramTransition, cancellationToken),
-				cancellationToken).ConfigureAwait(false);
-			if (remote.Commit is null)
-				throw new InvalidOperationException(remote.Prepare.Failure?.Message ?? "Runtime rejected initial prepare without a commit result.");
 
-			var confirmation = await BindingPhaseAsync("authority-confirm",
-				() => ValueTask.FromResult(control.ConfirmRuntimeCommit(staged.Execution.PreparedExecution.PreparedExecutionId, remote.Commit)),
-				cancellationToken).ConfigureAwait(false);
-			if (!confirmation.Committed || confirmation.State is null)
-				throw new InvalidOperationException(confirmation.Failure?.Message ?? "Initial Runtime commit was not confirmed.");
+			if (RuntimeMatchesAuthority(initialSnapshot, staged.Execution.AuthoritativeState) &&
+				_interruptedInitialHostId == runtimeHostInstanceId &&
+				_interruptedInitialAuthority == staged.Execution.AuthoritativeState)
+			{
+				await BindingPhaseAsync("authority-snapshot-confirm", () =>
+				{
+					var confirmation = control.ConfirmInitialRuntimeSnapshot(staged.Execution.PreparedExecution.PreparedExecutionId, initialSnapshot);
+					if (!confirmation.Committed)
+						throw new InvalidDataException(confirmation.Failure?.Message ?? "Runtime snapshot did not confirm interrupted initialization.");
+					return ValueTask.CompletedTask;
+				}, cancellationToken).ConfigureAwait(false);
+			}
+			else
+			{
+				RuntimeRemoteApplyResult remote;
+				try
+				{
+					remote = await BindingPhaseAsync("runtime-apply",
+						() => transport.ApplyExecutionAsync(staged.Execution.PreparedExecution, staged.Execution.ProgramSinkId, staged.Execution.ProgramTransition, cancellationToken),
+						cancellationToken).ConfigureAwait(false);
+				}
+				catch (Exception exception) when (exception is IOException or TimeoutException or OperationCanceledException)
+				{
+					_interruptedInitialHostId = runtimeHostInstanceId;
+					_interruptedInitialAuthority = staged.Execution.AuthoritativeState;
+					throw;
+				}
+				if (remote.Commit is null)
+					throw new InvalidOperationException(remote.Prepare.Failure?.Message ?? "Runtime rejected initial prepare without a commit result.");
+
+				await BindingPhaseAsync("authority-confirm", () =>
+				{
+					var confirmation = control.ConfirmRuntimeCommit(staged.Execution.PreparedExecution.PreparedExecutionId, remote.Commit);
+					if (!confirmation.Committed || confirmation.State is null)
+						throw new InvalidOperationException(confirmation.Failure?.Message ?? "Initial Runtime commit was not confirmed.");
+					return ValueTask.CompletedTask;
+				}, cancellationToken).ConfigureAwait(false);
+			}
+			_interruptedInitialHostId = null;
+			_interruptedInitialAuthority = null;
 		}
 		catch (Exception exception)
 		{

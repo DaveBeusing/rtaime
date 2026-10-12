@@ -21,13 +21,26 @@ public sealed class ControlRuntimeBindingReadinessTests
 		await WithRuntimeAsync(async (options, transport, control, run) =>
 		{
 			await WaitUntilAsync(() => control.Lifecycle.State == ControlHostProcessState.Ready, run);
-			Assert.True(transport.ApplyCalls >= 2);
+			if (fault == "lost-reply") Assert.Equal(1, transport.ApplyCalls);
+			else Assert.True(transport.ApplyCalls >= 2);
 			Assert.False(control.Control!.HasPendingExecution);
 			Assert.True(control.Control.HasAuthoritativeState);
 			var snapshot = await transport.GetSnapshotAsync();
 			Assert.Equal(control.Control.State.Revision, snapshot.AuthorityRevision);
 			Assert.Equal(control.Control.State.ProductionId.Value, snapshot.AuthorityStateId);
 		}, fault);
+	}
+
+	[Fact]
+	public async Task Lost_reply_with_mismatched_committed_output_evidence_cannot_confirm_initial_authority()
+	{
+		await WithRuntimeAsync(async (options, transport, control, run) =>
+		{
+			await WaitUntilAsync(() => transport.SnapshotCalls >= 3, run);
+			Assert.False(control.Control!.HasAuthoritativeState);
+			Assert.NotEqual(ControlHostProcessState.Ready, control.Lifecycle.State);
+			Assert.Equal(1, transport.ApplyCalls);
+		}, "lost-reply-output-mismatch");
 	}
 
 	[Fact]
@@ -136,6 +149,7 @@ public sealed class ControlRuntimeBindingReadinessTests
 		public IReadOnlyList<ProviderDescriptor> ProviderDescriptors => _inner.ProviderDescriptors;
 		public int ApplyCalls { get; private set; }
 		public int AudioCalls { get; private set; }
+		public int SnapshotCalls { get; private set; }
 		public TaskCompletionSource ApplyEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 		public TaskCompletionSource AudioRetryEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 		public TaskCompletionSource AllowAudioRestore { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -148,7 +162,7 @@ public sealed class ControlRuntimeBindingReadinessTests
 				await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
 			if (ApplyCalls == 1 && _fault == "transport-failure") throw new IOException("Injected initial apply transport failure.");
 			var result = await _inner.ApplyExecutionAsync(preparedExecution, programSinkId, transition, cancellationToken);
-			if (ApplyCalls == 1 && _fault == "lost-reply") throw new IOException("Injected lost response after Runtime commit.");
+			if (ApplyCalls == 1 && _fault is "lost-reply" or "lost-reply-output-mismatch") throw new IOException("Injected lost response after Runtime commit.");
 			return result;
 		}
 
@@ -170,8 +184,14 @@ public sealed class ControlRuntimeBindingReadinessTests
 		public ValueTask<IReadOnlyList<ProviderDescriptor>> GetProviderDescriptorsAsync(CancellationToken cancellationToken = default) =>
 			_inner.GetProviderDescriptorsAsync(cancellationToken);
 
-		public ValueTask<RuntimeRemoteSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default) =>
-			_inner.GetSnapshotAsync(cancellationToken);
+		public async ValueTask<RuntimeRemoteSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default)
+		{
+			SnapshotCalls++;
+			var snapshot = await _inner.GetSnapshotAsync(cancellationToken);
+			return _fault == "lost-reply-output-mismatch" && ApplyCalls > 0
+				? snapshot with { OutputRoles = Array.Empty<RuntimeOutputRoleSnapshot>() }
+				: snapshot;
+		}
 
 		public ValueTask<MediaSourceDiscoverySnapshot> GetMediaSourceDiscoveryAsync(CancellationToken cancellationToken = default) =>
 			_inner.GetMediaSourceDiscoveryAsync(cancellationToken);

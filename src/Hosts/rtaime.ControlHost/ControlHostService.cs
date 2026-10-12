@@ -406,6 +406,41 @@ public sealed class ControlHostService
 		}
 	}
 
+	internal ControlHostCommitConfirmation ConfirmInitialRuntimeSnapshot(
+		PreparedExecutionId preparedExecutionId,
+		RuntimeRemoteSnapshot snapshot)
+	{
+		ArgumentNullException.ThrowIfNull(snapshot);
+		lock (_gate)
+		{
+			if (_authoritative is not null || _pending is null ||
+				_pending.Execution.PreparedExecution.PreparedExecutionId != preparedExecutionId)
+				return PendingMismatch("control.commit.pending_mismatch", "Initial Runtime snapshot does not match the owned pending initialization.");
+			var pending = _pending;
+			var authority = pending.Execution.AuthoritativeState;
+			var outputs = pending.Execution.PreparedExecution.Bindings.Where(binding => binding.OutputRoleId is { Length: > 0 }).ToArray();
+			var actualOutputs = snapshot.OutputRoles ?? Array.Empty<RuntimeOutputRoleSnapshot>();
+			if (snapshot.Runtime.Status != RuntimeExecutionStatus.Committed || snapshot.Runtime.ActiveExecutionId is null ||
+				snapshot.AuthorityStateId != authority.ProductionId.Value || snapshot.AuthorityRevision != authority.Revision ||
+				outputs.Length == 0 || outputs.Length != actualOutputs.Count ||
+				outputs.Any(binding => !actualOutputs.Any(actual =>
+					actual.RoleId == binding.OutputRoleId && actual.SourceId == binding.MediaSourceId &&
+					actual.TargetId == binding.MediaSinkId && actual.ProviderId == binding.Resource.ProviderId &&
+					actual.AudioBusId == (binding.AudioBusId ?? "program"))))
+				return PendingMismatch("control.commit.snapshot_mismatch", "Committed Runtime snapshot does not confirm the pending initial authority and output bindings.");
+
+			// This path observes the actual committed Runtime snapshot after a lost
+			// acknowledgement; it does not construct a successful commit result.
+			_pending = null;
+			_authoritative = authority;
+			Journal(authority.Revision, "runtime", "runtime.commit.snapshot_observed",
+				$"Committed Runtime execution {snapshot.Runtime.ActiveExecutionId} at revision {snapshot.Runtime.ExecutionRevision} confirmed initial authority after response loss.", pending.CausationId, null);
+			Journal(authority.Revision, "control", "control.authoritative.committed", "Initial authority was confirmed by committed Runtime snapshot.", pending.CausationId, null);
+			_authoritativeCommitted?.Invoke(authority);
+			return new ControlHostCommitConfirmation(true, authority, null);
+		}
+	}
+
 	public ControlHostCommitConfirmation RejectRuntimeCommit(PreparedExecutionId preparedExecutionId, Failure failure)
 	{
 		if (!failure.IsDefined) throw new ArgumentException("Runtime rejection failure must be defined.", nameof(failure));

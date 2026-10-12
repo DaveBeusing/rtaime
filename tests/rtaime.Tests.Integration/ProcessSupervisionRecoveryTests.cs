@@ -529,7 +529,17 @@ public sealed class ProcessSupervisionRecoveryTests
 					await WaitUntilAsync(() => File.Exists(readyPath) || process.HasExited, ProcessRecoveryTimeoutMilliseconds);
 					Assert.False(process.HasExited, $"AppHost exited before readiness for {profile}.");
 					Assert.True(clock.Elapsed < TimeSpan.FromSeconds(30));
-					await WaitUntilAsync(() => File.Exists(Path.Combine(work, "apphost-readiness.json")) || process.HasExited, ProcessRecoveryTimeoutMilliseconds);
+					await WaitUntilAsync(() =>
+					{
+						if (process.HasExited) return true;
+						var files = Directory.GetFiles(Path.Combine(work, "logs", session), "*-apphost-*.jsonl");
+						return files.Any(path => ReadSharedLogLines(path).Any(line =>
+						{
+							using var record = JsonDocument.Parse(line);
+							return record.RootElement.GetProperty("code").GetString() == "apphost.state-changed" &&
+								record.RootElement.GetProperty("dimensions").GetProperty("state").GetString() == "Healthy";
+						}));
+					}, ProcessRecoveryTimeoutMilliseconds);
 					Assert.False(process.HasExited);
 					Assert.True(clock.Elapsed < TimeSpan.FromSeconds(30));
 					var readiness = await File.ReadAllTextAsync(readyPath);
