@@ -172,7 +172,7 @@ public sealed class GpuDrawingSurfaceTests
 			Assert.Equal(initial + 1, surface.TargetCreateCount);
 			var stable = surface.TargetCreateCount;
 			for (var index = 0; index < 30; index++) surface.Invalidate();
-			await dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
+			await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Loaded);
 			Assert.Equal(stable, surface.TargetCreateCount);
 
 			surface.Visibility = Visibility.Collapsed;
@@ -234,7 +234,7 @@ public sealed class GpuDrawingSurfaceTests
 		finally
 		{
 			window.Close();
-			await dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
+			await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Loaded);
 			Console.WriteLine($"GPU LAYOUT [{surface.GetType().Name}]: requested={surface.Width}x{surface.Height}; actual={surface.ActualWidth}x{surface.ActualHeight}; desired={surface.DesiredSize}; render={surface.RenderSize}; grid={grid.ActualWidth}x{grid.ActualHeight}; state={surface.SurfaceState}; detail={surface.SurfaceDetail}.");
 			Assert.Null(surface.ColorTexture);
 			Assert.Null(surface.ColorTextureView);
@@ -278,7 +278,7 @@ public sealed class GpuDrawingSurfaceTests
 			await WaitForAsync(() => surface.SurfaceState == OperatorSurfaceState.Faulted, dispatcher, "injected allocation failure");
 			Assert.Null(surface.ColorTexture);
 			for (var index = 0; index < 10; index++) { surface.Width = 103 + index; surface.Invalidate(); }
-			await dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
+			await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Loaded);
 			Assert.Equal(1, calls);
 			for (var index = 0; index < 3; index++)
 			{
@@ -289,7 +289,7 @@ public sealed class GpuDrawingSurfaceTests
 			}
 			surface.SetFrontBufferForQualification(false);
 			surface.SetFrontBufferForQualification(true);
-			await dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
+			await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Loaded);
 			Assert.Equal(4, calls);
 			var failures = diagnostics.Where(diagnostic => diagnostic.Code == "operator.surface.failure").ToArray();
 			Assert.Equal(4, failures.Length);
@@ -307,7 +307,7 @@ public sealed class GpuDrawingSurfaceTests
 		finally
 		{
 			window.Close();
-			await dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
+			await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Loaded);
 			Assert.Equal(surface.TargetCreateCount, surface.TargetReleaseCount);
 		}
 	}
@@ -337,12 +337,7 @@ public sealed class GpuDrawingSurfaceTests
 			await dispatcher.InvokeAsync(() =>
 			{
 				// Drive the real WPF layout pass in the resource-only Application fixture.
-				foreach (Window window in Application.Current.Windows)
-				{
-					Console.WriteLine($"GPU LAYOUT BEGIN [{phase}] {window.GetType().Name} {window.ActualWidth}x{window.ActualHeight}");
-					window.UpdateLayout();
-					Console.WriteLine($"GPU LAYOUT RETURN [{phase}] {window.GetType().Name}");
-				}
+				foreach (Window window in Application.Current.Windows) window.UpdateLayout();
 			}, DispatcherPriority.Render);
 			await Task.Delay(10);
 		}

@@ -40,7 +40,7 @@ public class OperatorDrawingSurface : Image
 	private OperatorD3DImage? _image;
 	private Window? _window;
 	private DispatcherOperation? _update;
-	private readonly DispatcherTimer _targetRetry = new(DispatcherPriority.Background)
+	private readonly DispatcherTimer _targetRetry = new(DispatcherPriority.Loaded)
 	{
 		Interval = TimeSpan.FromMilliseconds(20)
 	};
@@ -168,9 +168,9 @@ public class OperatorDrawingSurface : Image
 	private void ScheduleUpdate()
 	{
 		if (!IsLoaded || _closed || _disposing || _window is null || Dispatcher.HasShutdownStarted || _update is not null) return;
-		// Rebind after WPF commits pending presents; Render priority can wait on
-		// a present packet that the same Dispatcher has not committed yet.
-		_update = Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+		// Rebind below Render after WPF commits pending presents, but above Input.
+		// Background work can starve while an active window keeps native input pending.
+		_update = Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
 		{
 			_update = null;
 			UpdateTarget();

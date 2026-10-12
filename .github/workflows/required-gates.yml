@@ -57,7 +57,13 @@ jobs:
         run: ./build/operations/Test-WindowsApplicationBootstrap.ps1 -Configuration Release -QualifySingleFile
 
       - name: Operator real XAML startup qualification
-        run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~OperatorXamlStartupTests|FullyQualifiedName~ProductionMacroOperatorTests|FullyQualifiedName~GpuDrawingSurfaceTests" --logger "console;verbosity=detailed"
+        shell: pwsh
+        run: |
+          $diagnosticsPath = Join-Path $env:RUNNER_TEMP "operator-diagnostics"
+          dotnet tool install dotnet-stack --tool-path $diagnosticsPath --version 10.0.750501
+          if ($LASTEXITCODE -ne 0) { throw "Unable to install pinned STA diagnostic tool." }
+          $env:RTAIME_STACK_TOOL = Join-Path $diagnosticsPath "dotnet-stack.exe"
+          dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~OperatorXamlStartupTests|FullyQualifiedName~ProductionMacroOperatorTests|FullyQualifiedName~GpuDrawingSurfaceTests" --logger "console;verbosity=detailed"
 
       - name: Operator UI regressions
         run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build
@@ -291,7 +297,13 @@ jobs:
         run: dotnet test tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj --configuration Release --no-build
 
       - name: Operator real XAML startup qualification
-        run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~OperatorXamlStartupTests|FullyQualifiedName~ProductionMacroOperatorTests|FullyQualifiedName~GpuDrawingSurfaceTests" --logger "console;verbosity=detailed"
+        shell: pwsh
+        run: |
+          $diagnosticsPath = Join-Path $env:RUNNER_TEMP "operator-diagnostics"
+          dotnet tool install dotnet-stack --tool-path $diagnosticsPath --version 10.0.750501
+          if ($LASTEXITCODE -ne 0) { throw "Unable to install pinned STA diagnostic tool." }
+          $env:RTAIME_STACK_TOOL = Join-Path $diagnosticsPath "dotnet-stack.exe"
+          dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~OperatorXamlStartupTests|FullyQualifiedName~ProductionMacroOperatorTests|FullyQualifiedName~GpuDrawingSurfaceTests" --logger "console;verbosity=detailed"
 
       - name: Operator startup tests
         run: dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~StartupLifecycleViewModelTests"

@@ -242,6 +242,11 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 		{
 			await completed.Task.WaitAsync(TimeSpan.FromSeconds(45));
 		}
+		catch (TimeoutException)
+		{
+			await CaptureQualificationStacksAsync();
+			throw;
+		}
 		finally
 		{
 			var joined = thread.Join(TimeSpan.FromSeconds(5));
@@ -382,6 +387,39 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 		var source = Assert.IsType<string>(field.GetValue(null));
 		var bytecode = Compiler.Compile(source, entryPoint, $"{surfaceType.Name}.hlsl", profile);
 		Assert.True(bytecode.Span.Length > 0, $"{surfaceType.Name}/{entryPoint}/{profile}: empty shader bytecode.");
+	}
+
+
+	private static async Task CaptureQualificationStacksAsync()
+	{
+		var executable = Environment.GetEnvironmentVariable("RTAIME_STACK_TOOL");
+		if (string.IsNullOrWhiteSpace(executable)) return;
+		var start = new ProcessStartInfo(executable)
+		{
+			UseShellExecute = false, CreateNoWindow = true, WindowStyle = ProcessWindowStyle.Hidden,
+			RedirectStandardOutput = true, RedirectStandardError = true
+		};
+		start.ArgumentList.Add("report");
+		start.ArgumentList.Add("--process-id");
+		start.ArgumentList.Add(Environment.ProcessId.ToString());
+		try
+		{
+			using var process = Process.Start(start)!;
+			var stdout = process.StandardOutput.ReadToEndAsync();
+			var stderr = process.StandardError.ReadToEndAsync();
+			try { await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(10)); }
+			catch (TimeoutException)
+			{
+				process.Kill(entireProcessTree: true);
+				Console.WriteLine("GPU STA stack collection exceeded its diagnostic deadline.");
+				return;
+			}
+			Console.WriteLine($"GPU STA MANAGED STACKS (diagnostic exit {process.ExitCode}):\n{await stdout}\n{await stderr}");
+		}
+		catch (Exception exception)
+		{
+			Console.WriteLine($"GPU STA stack collection unavailable: {exception.Message}");
+		}
 	}
 
 	private static bool SessionClosedCleanly(string path)
