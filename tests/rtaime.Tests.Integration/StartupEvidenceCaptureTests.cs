@@ -36,7 +36,7 @@ public sealed class StartupEvidenceCaptureTests
 	}
 
 	[Fact]
-	public async Task Child_exit_before_readiness_preserves_explicit_supervision_failure_and_drains_streams()
+	public async Task Child_exit_before_readiness_preserves_observed_process_failure_and_drains_streams()
 	{
 		await using var fixture = new Fixture();
 		fixture.Command("RuntimeHost", "crash");
@@ -44,11 +44,15 @@ public sealed class StartupEvidenceCaptureTests
 		var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => host.RunAsync());
 		Assert.Contains("RuntimeHost", failure.Message);
 		using var before = fixture.ReadCapture("before-shutdown.json");
-		Assert.Equal("startup.supervision.failed", before.RootElement.GetProperty("lifecycle")
+		Assert.Equal("startup.process.exited", before.RootElement.GetProperty("lifecycle")
 			.GetProperty("readinessFailure").GetProperty("reasonCode").GetString());
 		var runtime = before.RootElement.GetProperty("hosts").EnumerateArray()
 			.Single(item => item.GetProperty("host").GetString() == "RuntimeHost");
 		Assert.Equal("Failed", runtime.GetProperty("qualification").GetString());
+		Assert.False(runtime.GetProperty("processAlive").GetBoolean());
+		Assert.Equal("Failed", runtime.GetProperty("supervisionState").GetString());
+		Assert.True(before.RootElement.GetProperty("hosts").EnumerateArray()
+			.Single(item => item.GetProperty("host").GetString() == "ControlHost").GetProperty("processAlive").GetBoolean());
 		fixture.AssertRetainedAndStopped(expectGraceful: true);
 		Assert.Contains("exitCode=17", File.ReadAllText(fixture.CaptureFile("controlhost-process.log")));
 	}

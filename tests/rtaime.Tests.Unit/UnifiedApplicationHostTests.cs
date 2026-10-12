@@ -948,8 +948,12 @@ public sealed class UnifiedApplicationHostTests
 		var path = Path.Combine(root, "controlhost-process.log");
 		try
 		{
+			Directory.CreateDirectory(root);
+			const string seed = "entry=seed password=[REDACTED] ";
+			File.WriteAllText(path, seed + new string('x',
+				(int)BoundedProcessDiagnosticLog.MaximumFileBytes - seed.Length - Environment.NewLine.Length) + Environment.NewLine);
 			var log = new BoundedProcessDiagnosticLog(path);
-			Parallel.For(0, 12000, index => log.Append($"entry={index} password=never-export token=never-token " + new string('x', 600)));
+			Parallel.For(0, 128, index => log.Append($"entry={index} password=never-export token=never-token " + new string('x', 600)));
 			Assert.True(new FileInfo(path).Length <= BoundedProcessDiagnosticLog.MaximumFileBytes);
 			Assert.True(new FileInfo(path + ".previous").Length <= BoundedProcessDiagnosticLog.MaximumFileBytes);
 			Assert.Equal(2, Directory.GetFiles(root).Length);

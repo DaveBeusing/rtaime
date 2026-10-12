@@ -104,9 +104,10 @@ internal static class Program
 			{
 				try { await child.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(10)); }
 				catch (TimeoutException) { child.Kill(entireProcessTree: true); await child.WaitForExitAsync(); exit = 18; }
-				child.Dispose();
+
 			}
 			await Task.WhenAll(streams);
+			foreach (var child in children) child.Dispose();
 			stop.Cancel();
 			try { await Task.WhenAll(listeners); } catch (OperationCanceledException) { }
 			log.Information("lifecycle", role.ToLowerInvariant() + ".completed", "Synthetic process completed.",
