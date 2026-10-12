@@ -37,6 +37,8 @@ public sealed class StartupLifecycleViewModel : INotifyPropertyChanged, IDisposa
 	private string _nextStep = "Waiting for authoritative AppHost lifecycle evidence.";
 	private string _observedAt = "—";
 	private string? _diagnosticPath;
+	private string? _readinessFailureGuidance;
+	private string? _readinessFailureSummary;
 	private string _diagnosticActionStatus = string.Empty;
 	private string? _latchedFailureStageId;
 	private string? _latchedFailureStageName;
@@ -377,10 +379,41 @@ public sealed class StartupLifecycleViewModel : INotifyPropertyChanged, IDisposa
 						? activeStage.StatusText ?? $"{activeStage.DisplayName} is starting."
 						: "All published startup stages are complete.";
 		ObservedAt = observedAt?.ToLocalTime().ToString("HH:mm:ss.fff") ?? "—";
-		NextStep = ResolveNextStep(activeStage, degradedStage, latchedStage);
+		ReadReadinessFailure(root);
+		if (_readinessFailureSummary is not null && HasStartupFailure)
+			Summary = _readinessFailureSummary;
+		NextStep = _readinessFailureGuidance ?? ResolveNextStep(activeStage, degradedStage, latchedStage);
 		DiagnosticActionStatus = string.Empty;
 
 		RaiseProgressiveStateProperties();
+	}
+
+	private void ReadReadinessFailure(JsonElement root)
+	{
+		_readinessFailureSummary = null;
+		_readinessFailureGuidance = null;
+		if (!root.TryGetProperty("readinessFailure", out var failure) || failure.ValueKind != JsonValueKind.Object)
+			return;
+		var blockers = new List<string>();
+		if (failure.TryGetProperty("unmetCriteria", out var criteria) && criteria.ValueKind == JsonValueKind.Array)
+			foreach (var criterion in criteria.EnumerateArray())
+				blockers.Add($"{ReadString(criterion, "host", "Engine")}: {ReadString(criterion, "code", "qualification.pending")}");
+		var phases = new List<string>();
+		if (failure.TryGetProperty("hosts", out var hosts) && hosts.ValueKind == JsonValueKind.Array)
+			foreach (var host in hosts.EnumerateArray())
+			{
+				var phase = ReadNullableString(host, "lastProgressPhase");
+				if (phase is not null)
+					phases.Add($"{ReadString(host, "host", "Engine")} {phase} / {ReadString(host, "phaseOutcome", "unknown")}");
+			}
+		var deadlineExpired = failure.TryGetProperty("aggregateDeadlineExpired", out var expired) &&
+			expired.ValueKind == JsonValueKind.True;
+		_readinessFailureSummary = $"{(deadlineExpired ? "Startup deadline expired" : "Startup qualification failed")}. " +
+			$"Blocking criteria: {string.Join("; ", blockers.Take(4))}." +
+			(phases.Count > 0 ? $" Last progress: {string.Join("; ", phases)}." : " No binding phase was observed.");
+		_readinessFailureGuidance =
+			"Open diagnostics and review the recorded host/phase evidence. Correct the reported cause, then restart through the supported application lifecycle. " +
+			$"Pre-shutdown evidence: {EvidencePath}. No automatic retry is available.";
 	}
 
 	private void ApplyFallback()

@@ -753,7 +753,7 @@ public sealed class UnifiedApplicationHost
 		{
 			var classified = ClassifyFailure(exception);
 			if (!_initialQualificationCompleted && _lifecycle.Stages.Any(stage =>
-				stage.Id == ApplicationLifecycleStages.ControlHost && stage.Status != LifecycleStageStatus.Pending))
+				stage.Id == ApplicationLifecycleStages.ControlHost && stage.StartedAt is not null))
 			{
 				var failure = _readinessTracker.CaptureFailure(
 					exception is TimeoutException ? "startup.deadline.expired" : "startup.process.failure",
