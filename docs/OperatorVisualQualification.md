@@ -75,6 +75,22 @@ The visual qualification additionally parses the productive MainWindow.xaml and 
 
 The test does not manipulate AppHost, RuntimeHost, ControlHost or production state to construct a visual fixture.
 
+## Real XAML tree startup qualification
+
+`OperatorXamlStartupTests` runs the productive `App.InitializeComponent()` resource dictionaries, both compiled Preview/Program views and real `MainWindow` on a dedicated STA thread with a running WPF Dispatcher. It records first-chance `XamlParseException` and `ArgumentException` with the active composition target. BAML's outer `MainWindow.xaml:line 1` is not a reliable source location; independent compiled child-view construction identifies the nested failing view.
+
+The window is shown, waits for `ContentRendered`, switches through all eight workspaces and verifies that named shell panes remain loaded and visible panes allocated by the shell have positive geometry. The fixture requests a 1600 × 900 minimum windowed viewport; diagnostics record the actual runner viewport and compact-layout state. Intentional zero-width shell allocations remain governed by the existing responsive layout contract. Both monitor trees must remain present. The fixture uses the existing view-model composition and productive controls; it only redirects UI layout/session persistence to temporary stores. Closing is cancelled synchronously before any asynchronous layout save; the fixture awaits the real window teardown, including its clean-session persistence marker, before shutting down the application and Dispatcher. Dispatcher shutdown uses Send priority after application teardown, matching application exit instead of continuing graphics callbacks after the window lifetime ends. The resource fixture overrides App's queued startup callback so it owns exactly one window; the separate process test exercises the unmodified application startup.
+
+A separate process test launches the built Windows Operator executable against unique unavailable endpoints, requires its `operator.window-shown` log event, rejects crash/XAML error evidence and requests normal window close. The process must log exit and return zero. No headless flag or substituted visual tree qualifies this launch.
+
+A source guard scans all productive XAML (including dictionaries and inactive templates) for non-whitespace text directly in panel children. It accepts real whitespace and intended text inside `TextBlock`. WPF runtime construction remains the authority for markup-extension, resource-type and compiled-tree errors. The suite also compiles the productive monitor, comparison and scope shader constants with their existing VS/PS 4.0 and CS 5.0 entry points before window startup, so a syntax error in a surface loaded by WPF cannot remain hidden behind a successful managed build. This is shader compilation evidence, not a rendering-quality or hardware qualification.
+
+Required Gates run this focused suite in CI before template/AI integration subsets and in Quality alongside existing startup, visual/DPI and media viewport checks:
+
+    dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~OperatorXamlStartupTests" --logger "console;verbosity=detailed"
+
+This proves real Windows composition, layout presence and application/window lifetime. It does not certify production media, hardware availability, pixel output or physical mixed-monitor DPI.
+
 ## Structural workspace qualification
 
 The productive MainWindow must continue to bind shell geometry through the centralized OperatorShellViewModel properties, including navigation, left/right regions, lower row, center minimums, auxiliary layout and the Preview/Program production workspace height.

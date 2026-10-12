@@ -70,7 +70,7 @@
 								<Run Text="CURRENT · " /><Run Text="{Binding CurrentAction, Mode=OneWay}" />
 							</TextBlock>
 							<TextBlock FontSize="{StaticResource OperatorFontSizeMicro}">
-								<Run Text="LAST CONFIRMED · " /><Run Text="{Binding LastCompletedAction}" />
+								<Run Text="LAST CONFIRMED · " /><Run Text="{Binding LastCompletedAction, Mode=OneWay}" />
 							</TextBlock>
 							<TextBlock Text="{Binding Failure}" Foreground="{DynamicResource OperatorWarningBrush}" FontSize="{StaticResource OperatorFontSizeMicro}" TextWrapping="Wrap" />
 							<StackPanel Orientation="Horizontal" Margin="0,4,0,0">

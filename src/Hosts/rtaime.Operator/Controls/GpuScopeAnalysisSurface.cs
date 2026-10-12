@@ -394,13 +394,13 @@ float TransformComponent(float value)
     if (LimitedRange != 0)
         value = saturate((value - (16.0 / 255.0)) / (219.0 / 255.0));
 
-    float linear = value;
+    float linearValue = value;
     if (TransferMode == 2)
-        linear = SrgbToLinear(value);
+        linearValue = SrgbToLinear(value);
     else if (TransferMode == 3)
-        linear = Rec709ToLinear(value);
+        linearValue = Rec709ToLinear(value);
 
-    return saturate(LinearToSrgb(linear));
+    return saturate(LinearToSrgb(linearValue));
 }
 
 [numthreads(8, 8, 1)]
@@ -411,17 +411,17 @@ void CSMain(uint3 threadId : SV_DispatchThreadID)
     if (x >= SourceWidth || y >= SourceHeight)
         return;
 
-    float4 sample = SourceTexture.Load(int3(x, y, 0));
+    float4 sampleColor = SourceTexture.Load(int3(x, y, 0));
     if (CompleteColor != 0)
     {
-        sample.r = TransformComponent(sample.r);
-        sample.g = TransformComponent(sample.g);
-        sample.b = TransformComponent(sample.b);
+        sampleColor.r = TransformComponent(sampleColor.r);
+        sampleColor.g = TransformComponent(sampleColor.g);
+        sampleColor.b = TransformComponent(sampleColor.b);
     }
 
-    uint r = (uint)round(saturate(sample.r) * 255.0);
-    uint g = (uint)round(saturate(sample.g) * 255.0);
-    uint b = (uint)round(saturate(sample.b) * 255.0);
+    uint r = (uint)round(saturate(sampleColor.r) * 255.0);
+    uint g = (uint)round(saturate(sampleColor.g) * 255.0);
+    uint b = (uint)round(saturate(sampleColor.b) * 255.0);
     uint y8 = (77 * r + 150 * g + 29 * b + 128) >> 8;
 
     InterlockedAdd(Results[LumaHistogramOffset + y8], 1);

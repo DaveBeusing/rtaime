@@ -649,45 +649,45 @@ float TransformComponent(float value)
     if (LimitedRange != 0)
         value = saturate((value - (16.0 / 255.0)) / (219.0 / 255.0));
 
-    float linear = value;
+    float linearValue = value;
     if (TransferMode == 2)
-        linear = SrgbToLinear(value);
+        linearValue = SrgbToLinear(value);
     else if (TransferMode == 3)
-        linear = Rec709ToLinear(value);
+        linearValue = Rec709ToLinear(value);
 
-    return saturate(LinearToSrgb(linear));
+    return saturate(LinearToSrgb(linearValue));
 }
 
-float4 TransformSample(float4 sample)
+float4 TransformSample(float4 sampleColor)
 {
     if (CompleteColor != 0)
     {
-        sample.r = TransformComponent(sample.r);
-        sample.g = TransformComponent(sample.g);
-        sample.b = TransformComponent(sample.b);
+        sampleColor.r = TransformComponent(sampleColor.r);
+        sampleColor.g = TransformComponent(sampleColor.g);
+        sampleColor.b = TransformComponent(sampleColor.b);
     }
-    return sample;
+    return sampleColor;
 }
 
 float4 PSMain(PSInput input) : SV_TARGET
 {
-    float4 sample = TransformSample(SourceTexture.Sample(SourceSampler, input.Texture));
+    float4 sampleColor = TransformSample(SourceTexture.Sample(SourceSampler, input.Texture));
     if (InspectionMode == 1)
-        return float4(sample.r, 0.0, 0.0, 1.0);
+        return float4(sampleColor.r, 0.0, 0.0, 1.0);
     if (InspectionMode == 2)
-        return float4(0.0, sample.g, 0.0, 1.0);
+        return float4(0.0, sampleColor.g, 0.0, 1.0);
     if (InspectionMode == 3)
-        return float4(0.0, 0.0, sample.b, 1.0);
+        return float4(0.0, 0.0, sampleColor.b, 1.0);
     if (InspectionMode == 4)
-        return float4(sample.a, sample.a, sample.a, sample.a);
+        return float4(sampleColor.a, sampleColor.a, sampleColor.a, sampleColor.a);
     if (InspectionMode == 5)
     {
-        float luma = dot(sample.rgb, float3(0.2126, 0.7152, 0.0722));
+        float luma = dot(sampleColor.rgb, float3(0.2126, 0.7152, 0.0722));
         return float4(luma, luma, luma, 1.0);
     }
 
-    sample.rgb *= sample.a;
-    return sample;
+    sampleColor.rgb *= sampleColor.a;
+    return sampleColor;
 }
 """;
 
@@ -736,24 +736,24 @@ float TransformComponent(float value)
     if (LimitedRange != 0)
         value = saturate((value - (16.0 / 255.0)) / (219.0 / 255.0));
 
-    float linear = value;
+    float linearValue = value;
     if (TransferMode == 2)
-        linear = SrgbToLinear(value);
+        linearValue = SrgbToLinear(value);
     else if (TransferMode == 3)
-        linear = Rec709ToLinear(value);
+        linearValue = Rec709ToLinear(value);
 
-    return saturate(LinearToSrgb(linear));
+    return saturate(LinearToSrgb(linearValue));
 }
 
-float4 TransformSample(float4 sample)
+float4 TransformSample(float4 sampleColor)
 {
     if (CompleteColor != 0)
     {
-        sample.r = TransformComponent(sample.r);
-        sample.g = TransformComponent(sample.g);
-        sample.b = TransformComponent(sample.b);
+        sampleColor.r = TransformComponent(sampleColor.r);
+        sampleColor.g = TransformComponent(sampleColor.g);
+        sampleColor.b = TransformComponent(sampleColor.b);
     }
-    return sample;
+    return sampleColor;
 }
 
 [numthreads(8, 8, 1)]
@@ -764,11 +764,11 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
     if (x >= RoiX + RoiWidth || y >= RoiY + RoiHeight || x >= SourceWidth || y >= SourceHeight)
         return;
 
-    float4 sample = TransformSample(SourceTexture.Load(int3(x, y, 0)));
-    uint r = (uint)round(saturate(sample.r) * 255.0);
-    uint g = (uint)round(saturate(sample.g) * 255.0);
-    uint b = (uint)round(saturate(sample.b) * 255.0);
-    uint a = (uint)round(saturate(sample.a) * 255.0);
+    float4 sampleColor = TransformSample(SourceTexture.Load(int3(x, y, 0)));
+    uint r = (uint)round(saturate(sampleColor.r) * 255.0);
+    uint g = (uint)round(saturate(sampleColor.g) * 255.0);
+    uint b = (uint)round(saturate(sampleColor.b) * 255.0);
+    uint a = (uint)round(saturate(sampleColor.a) * 255.0);
     uint luma = (uint)round(0.2126 * r + 0.7152 * g + 0.0722 * b);
 
     InterlockedAdd(AnalysisResults[0], 1);
