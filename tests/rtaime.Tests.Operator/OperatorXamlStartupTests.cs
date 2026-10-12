@@ -76,6 +76,9 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 					app = new OperatorResourceApplication { ShutdownMode = ShutdownMode.OnExplicitShutdown };
 					app.InitializeComponent();
 
+					target = "GPU descriptor boundary";
+					GpuDrawingSurfaceTests.VerifyDescriptorBoundary(dispatcher);
+
 					target = "ProductionMacroControl";
 					await ProductionMacroOperatorTests.VerifyReadOnlyStatusBindingsAsync(dispatcher);
 
