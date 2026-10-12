@@ -7,6 +7,7 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+		<PackageReference Include="Vortice.Direct3D9" />
 		<PackageReference Include="Vortice.Direct3D11" />
 		<PackageReference Include="Vortice.DXGI" />
 		<PackageReference Include="Vortice.Wpf" />
@@ -23,6 +24,10 @@
 
 	<ItemGroup>
 		<InternalsVisibleTo Include="rtaime.Tests.Operator" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<Content Include="..\..\..\..\docs\VorticeWpfInteropLicense.txt" Link="VorticeWpfInteropLicense.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
 	</ItemGroup>
 
 	<ItemGroup>
