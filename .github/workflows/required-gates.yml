@@ -53,7 +53,17 @@ jobs:
         run: ./build/development/Invoke-DeveloperBuild.ps1 -Configuration Release
 
       - name: Control runtime binding and readiness qualification
+        env:
+          RTAIME_BINDING_EVIDENCE_ROOT: ${{ github.workspace }}/artifacts/qualification/control-runtime-binding
         run: dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~ControlRuntimeBindingReadinessTests|FullyQualifiedName~ControlHostRecoveryIntegrationTests|FullyQualifiedName~ProductionIpcRecoveryTests|FullyQualifiedName~ExecutableHostLifecycleTests|FullyQualifiedName~ProcessSupervisionRecoveryTests" --logger "console;verbosity=detailed"
+
+      - name: Preserve Control runtime binding evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: rtaime-control-runtime-binding-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/qualification/control-runtime-binding
+          if-no-files-found: warn
 
       - name: Qualify Windows application bootstrap
         shell: pwsh

@@ -87,6 +87,11 @@ public sealed class ControlRuntimeBindingReadinessTests
 		{
 			await body(options, transport, control, run);
 		}
+		catch
+		{
+			Console.WriteLine($"Binding regression fault={fault} state={control.Lifecycle.State} pending={control.Control?.HasPendingExecution} authority={control.Control?.HasAuthoritativeState} applyCalls={transport.ApplyCalls} audioCalls={transport.AudioCalls}");
+			throw;
+		}
 		finally
 		{
 			controlStop.Cancel();
