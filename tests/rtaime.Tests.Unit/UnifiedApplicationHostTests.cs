@@ -854,7 +854,7 @@ public sealed class UnifiedApplicationHostTests
 		using var document = JsonDocument.Parse(platform.ReadAllText(options.LifecycleEvidencePath));
 		var failure = document.RootElement.GetProperty("readinessFailure");
 		Assert.False(failure.GetProperty("aggregateDeadlineExpired").GetBoolean());
-		Assert.Equal("startup.process.failure", failure.GetProperty("reasonCode").GetString());
+		Assert.Equal("startup.process.exited", failure.GetProperty("reasonCode").GetString());
 		Assert.Contains("ControlHost exited", failure.GetProperty("originalFailure").GetString());
 	}
 

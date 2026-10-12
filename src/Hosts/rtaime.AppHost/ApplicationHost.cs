@@ -757,7 +757,10 @@ public sealed class UnifiedApplicationHost
 			{
 				_readinessTracker.RefreshDiagnosticEvents(_controlProcessId);
 				var failure = _readinessTracker.CaptureFailure(
-					exception is TimeoutException ? "startup.deadline.expired" : "startup.process.failure",
+					exception is TimeoutException ? "startup.deadline.expired" :
+						_readinessTracker.GetHosts().Any(host => host.ProcessAlive == false) ? "startup.process.exited" :
+						_readinessTracker.GetHosts().Any(host => string.Equals(host.SupervisionState, "Failed", StringComparison.OrdinalIgnoreCase)) ? "startup.supervision.failed" :
+						"startup.qualification.failed",
 					DiagnosticRedactor.RedactText(classified.Message), exception is TimeoutException);
 				_lifecycle.CaptureReadinessFailure(failure);
 			}

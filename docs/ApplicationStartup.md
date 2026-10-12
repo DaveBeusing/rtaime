@@ -336,3 +336,31 @@ The product entry point qualifies ControlHost, RuntimeHost and the required AIHo
 During that synchronization the Operator shows a lightweight startup surface driven only by real connection, health and lifecycle evidence. There are no fake progress timers and no optimistic completion. The surface reports Control, Runtime, AI and Operator state and remains present until the first authoritative snapshot proves the UI is ready.
 
 Direct launches of `rtaime.Operator` use the same behavior: the bounded management refresh keeps attempting the normal full-snapshot path until ControlHost is available. Once initial readiness has completed, the startup surface is latched off; later outages are presented as in-place recovery rather than hiding the production workspace.
+
+
+## Startup qualification evidence and stage attribution
+
+An aggregate startup timeout terminates **Production Readiness** with Failed. It does not assign the same timeout to every service host. Each host stage reflects its own last observed qualification: Ready, Pending when unobserved/unqualified, Degraded for observed degraded state or an unreachable required pipe, and Failed for directly observed process exit or terminal host/supervision failure. An absent PID or absent diagnostic event is unknown, not a process crash.
+
+The existing apphost-lifecycle.json schema version remains 1.0; consumers can continue reading stages, activeStageId, and diagnosticPath. Additive readinessFailure records the frozen pre-shutdown snapshot: capture time, structured reason code, original failure, whether the aggregate deadline expired, every host's observed PID/liveness, lifecycle/health, supervision, required-pipe probe, and last published ControlHost binding phase/outcome. Source observation timestamps are separate from AppHost's process/probe observation timestamps; unavailable host timestamps remain null. unmetCriteria lists all failed or unobserved required predicates. These observations cannot grant production readiness.
+
+AppHost reads bounded tails of existing structured logs in the current log session, selects the observed ControlHost PID and its supervised child identities, and ignores incomplete live-writer lines. Older sessions and unrelated PIDs cannot qualify or diagnose this binding. Adopted/external hosts without accessible session evidence remain unknown except for their existing readiness document and live probes. No host dependency or second supervision/IPC implementation is introduced.
+
+Initial pipe qualification still requires the existing authoritative readiness document, matching endpoints, live ControlHost, healthy required supervision/live owned children, and all profile-required pipes. ExternalManaged continues to require only the Operator-facing Control pipe. Diagnostics do not relax acceptance. Successful delayed qualification completes the existing stages without a failure snapshot.
+
+At deadline or a directly observed terminal startup failure, the snapshot is published atomically before managed stop is requested. shutdownInitiatedAtUtc is a separate lifecycle field; apphost-shutdown.json independently records graceful/forced termination. Clean shutdown cannot rewrite the prior host observations to Stopped or change the original failure into success. The existing early ControlHost process-exit path retains its process diagnostic detail and is distinct from startup.deadline.expired; a terminal child supervision failure is identified by host before an aggregate timeout.
+
+The Operator presents blocking host/criterion and the last available binding phase in the existing startup summary. Technical details retain the evidence and process diagnostic paths; copy/open diagnostics remain the supported actions. Correct the observed cause and restart through the supported application lifecycle. No in-place retry command is introduced.
+
+Windows qualification after the canonical Release build:
+
+```powershell
+./build/development/Invoke-DeveloperBuild.ps1 -Configuration Release
+dotnet test tests/rtaime.Tests.Unit/rtaime.Tests.Unit.csproj --configuration Release --no-build --filter "FullyQualifiedName~UnifiedApplicationHostTests" --logger "console;verbosity=detailed"
+dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~StartupLifecycleViewModelTests" --logger "console;verbosity=detailed"
+dotnet test tests/rtaime.Tests.Integration/rtaime.Tests.Integration.csproj --configuration Release --no-build --filter "FullyQualifiedName~ProcessSupervisionRecoveryTests.AppHost_" --logger "console;verbosity=detailed"
+```
+
+Required Gates run targeted model/presentation tests before multi-host qualification. Actual HeadlessEngine cases cover clean and retained success plus an intentionally leased, unqualified Runtime endpoint with the unchanged 30-second startup deadline. The negative case preserves pre-shutdown evidence and asserts graceful shutdown without fabricated Runtime/AI crashes; its logs/lifecycle/shutdown files are included in the existing control-runtime-binding artifact.
+
+The October 12 aggregate timeout at 18:57:39.720Z and subsequent exit 0 establish neither three service crashes nor a specific binding failure. Historical phase attribution remains unverified where the pre-shutdown host evidence was not recorded.
