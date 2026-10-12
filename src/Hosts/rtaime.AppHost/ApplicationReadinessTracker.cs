@@ -122,7 +122,8 @@ internal sealed class ApplicationReadinessTracker
 			EqualsState(host.State, "Failed") || EqualsState(host.Supervision, "Failed");
 		var healthy = host.Host == "ControlHost"
 			? EqualsState(host.State, "Ready") && EqualsState(host.Health, "Healthy") &&
-				_readiness is not null && _readiness.ProcessId == host.ProcessId &&
+				_readiness is not null && EqualsState(_readiness.State, "Ready") && EqualsState(_readiness.Health, "Healthy") &&
+				_readiness.ProcessId == host.ProcessId &&
 				_readiness.ControlEndpoint == _options.Endpoints.Control
 			: EqualsState(host.Supervision, "Healthy");
 		var privatePipeRequired = _options.Ownership != ApplicationLifecycleOwnership.ExternalManaged ||
@@ -166,7 +167,8 @@ internal sealed class ApplicationReadinessTracker
 				host.Supervision is not null, host.ProcessAt, host.Alive is null
 					? "No owned PID observed; endpoint-adopted children require healthy supervision." : $"Process alive: {host.Alive}.");
 			if (host.Host != "ControlHost")
-				Add(host.Host, "supervision.healthy", EqualsState(host.Supervision, "Healthy"), host.SupervisionAt,
+				Add(host.Host, "supervision.healthy", EqualsState(host.Supervision, "Healthy") &&
+					EqualsState(host.Host == "RuntimeHost" ? _readiness?.RuntimeSupervision?.State : _readiness?.AISupervision?.State, "Healthy"), host.SupervisionAt,
 					$"Observed supervision: {host.Supervision ?? "unknown"}.");
 			if (_options.Ownership != ApplicationLifecycleOwnership.ExternalManaged || host.Host == "ControlHost")
 				Add(host.Host, "ipc.reachable", host.Ipc == true, host.IpcAt,
