@@ -3,6 +3,7 @@
 using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -116,7 +117,11 @@ public sealed class GpuDrawingSurfaceTests
 	{
 		var diagnostics = new List<OperatorSurfaceDiagnostic>();
 		var descriptions = new List<Texture2DDescription>();
-		surface.DiagnosticEmitted += diagnostics.Add;
+		surface.DiagnosticEmitted += diagnostic =>
+		{
+			diagnostics.Add(diagnostic);
+			Console.WriteLine($"GPU DIAGNOSTIC [{surface.GetType().Name}] {diagnostic.Code}: {diagnostic.Message}; {JsonSerializer.Serialize(diagnostic.Dimensions)}; {diagnostic.Exception}");
+		};
 		surface.BeforeTargetCreation = descriptions.Add;
 		surface.Width = surface.Height = 0;
 		surface.HorizontalAlignment = HorizontalAlignment.Left;
@@ -236,7 +241,11 @@ public sealed class GpuDrawingSurfaceTests
 	{
 		var surface = new QualifiedDpiSurface { Width = 101, Height = 51 };
 		var diagnostics = new List<OperatorSurfaceDiagnostic>();
-		surface.DiagnosticEmitted += diagnostics.Add;
+		surface.DiagnosticEmitted += diagnostic =>
+		{
+			diagnostics.Add(diagnostic);
+			Console.WriteLine($"GPU DIAGNOSTIC [{surface.GetType().Name}] {diagnostic.Code}: {diagnostic.Message}; {JsonSerializer.Serialize(diagnostic.Dimensions)}; {diagnostic.Exception}");
+		};
 		var window = new Window { Width = 400, Height = 300, Content = surface, ShowInTaskbar = false };
 		try
 		{

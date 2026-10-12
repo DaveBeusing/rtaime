@@ -1,5 +1,5 @@
 OperatorD3DImage adapts the shared D3D11/D3D9Ex WPF interop pattern from
-https://github.com/amerkoleci/Vortice.Windows/tree/883be567eb492766c6f5a23bb90398e28eb44341/src/Vortice.Wpf
+https://github.com/amerkoleci/Vortice.Windows/tree/9e609cb9439c9872aa1b339f177e40ec96f77239/src/Vortice.Wpf
 
 The MIT License (MIT)
 
