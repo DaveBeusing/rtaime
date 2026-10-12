@@ -13,7 +13,7 @@ using Vortice.Wpf;
 
 namespace rtaime.Operator.Controls;
 
-public sealed class GpuScopeAnalysisSurface : DrawingSurface
+public sealed class GpuScopeAnalysisSurface : OperatorDrawingSurface
 {
 	private ID3D11ComputeShader? _shader;
 	private ID3D11Buffer? _colorBuffer;
@@ -55,6 +55,11 @@ public sealed class GpuScopeAnalysisSurface : DrawingSurface
 		DepthStencilFormat = Format.Unknown;
 		ColorFormat = Format.B8G8R8A8_UNorm;
 		IsHitTestVisible = false;
+		SurfaceStateChanged += (_, _) =>
+		{
+			if (SurfaceState != OperatorSurfaceState.Ready)
+				Monitoring?.SetGpuScopesUnavailable(SurfaceDetail);
+		};
 		LoadContent += OnLoadContent;
 		Draw += OnDraw;
 		UnloadContent += OnUnloadContent;
@@ -153,7 +158,7 @@ public sealed class GpuScopeAnalysisSurface : DrawingSurface
 		DisposeAnalysisResources();
 	}
 
-	private void OnDraw(object? sender, DrawEventArgs e)
+	private void OnDraw(object? sender, OperatorSurfaceDrawEventArgs e)
 	{
 		e.Context.ClearRenderTargetView(e.Surface.ColorTextureView!, new Color4(0, 0, 0, 0));
 		if (!AnalysisEnabled)

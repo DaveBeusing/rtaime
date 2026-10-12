@@ -159,3 +159,41 @@ Required Gates must fail before merge when a change unintentionally:
 - removes the bounded Startup overlay or real lifecycle presentation.
 
 Physical monitor movement and cross-GPU/font pixel identity are not inferred from these managed tests.
+
+
+## Shared GPU target resize and recovery qualification
+
+The focused Required Gates filter includes `GpuDrawingSurfaceTests` in both CI and Quality:
+
+    dotnet test tests/rtaime.Tests.Operator/rtaime.Tests.Operator.csproj --configuration Release --no-build --filter "FullyQualifiedName~OperatorXamlStartupTests|FullyQualifiedName~ProductionMacroOperatorTests|FullyQualifiedName~GpuDrawingSurfaceTests" --logger "console;verbosity=detailed"
+
+The productive STA fixture reuses its single Application/Dispatcher lifetime and assigns the productive MainWindow as the application's primary window. Secondary GPU windows are exercised after that window has rendered all workspaces; a final CompositionTarget render pulse proves the primary window continues rendering after their teardown. It first creates a real Hardware D3D11 device and requires E_INVALIDARG (0x80070057) from a shared BGRA8 descriptor with width uint.MaxValue. Its log includes the actual Vortice.Wpf assembly informational version. Qualification checkpoints run below Render at Loaded priority; waiting for ContextIdle is inappropriate while another window intentionally keeps rendering. CI/Quality install the pinned Microsoft dotnet-stack 10.0.750501 tool only in the runner's temporary directory and print managed stacks on an unchanged STA deadline failure; no diagnostic tool is added to the shipped application. This proves a native invalid-descriptor boundary; it does not reconstruct the missing production-session descriptor.
+
+Each of GpuMonitorPresentationSurface, GpuMediaCompareSurface and GpuScopeAnalysisSurface is shown in an actual Windows window. Qualification requires zero-size deferral with no allocation, one allocation for a burst of resize requests, unchanged-target reuse during redraw, collapse/restore, window hide/show, minimize/restore, front-buffer transition injection, injected device-removal HRESULT followed by successful new-device recovery, unload/reload and window-close cleanup. Every attempted shared target must satisfy the descriptor contract, graphics diagnostics other than the single injected device-removal failure fail the check, and created/released target counts must return to equality. The Windows runner's Microsoft Basic Render Driver executes the real D3D11/D3D9Ex resource APIs; it is software adapter evidence, not qualification of a physical GPU. A native clear/copy/staging-map verifies red BGRA8 pixel output from the shared target; it does not certify the source-media shader or monitor scan-out.
+
+A scale-injection surface uses the same native target owner at 100/125/150/200%, verifies ceiling conversion for fractional bounds and defers a target above the conservative device limit. Allocation failure is injected before native creation, after descriptor validation. Qualification requires full failure/HRESULT diagnostics, no retries from resize/redraw, exactly three transition retries and no allocation storm after exhaustion. Injected front-buffer loss, scale changes and allocation failure are identified explicitly in logs; these are not physical display removal, actual per-monitor DPI messages or hardware device removal.
+
+Policy unit cases cover fractional/one-pixel/maximal targets; zero, negative, NaN, infinity, multiplication overflow/underflow and oversize bounds; and every incompatible descriptor field (mips, arrays, format, samples/quality, usage, binding, CPU access and sharing). Existing viewport tests remain responsible for Fit/Fill/100% source geometry and single-stage physical scaling.
+
+| Evidence | Automated boundary | Physical status |
+| --- | --- | --- |
+| Descriptor validation and DPI arithmetic | Deterministic unit matrix | Covered by software checks |
+| Productive controls, window resize/minimize/unload/close | Actual Windows WPF and Hardware D3D11/D3D9Ex interop | Runner adapter only |
+| BGRA8 target contents | Actual GPU pixel readback | Source-media crispness/scan-out UNVERIFIED |
+| Front-buffer loss/recovery, changed scale | Deterministic event/scale injection with real native targets | Display reconnect/mixed-monitor DPI UNVERIFIED |
+| Allocation failure and three-retry budget | Injected E_INVALIDARG with real device lifetime | Physical device removal/reset UNVERIFIED |
+| Original reported crash descriptor | Absent from original crash evidence | Original trigger UNVERIFIED |
+
+Reference-desktop procedure:
+
+1. Run the focused filter after the canonical Release developer build and retain its detailed log. Launch the normal Operator with existing host/session diagnostics enabled.
+2. Show deterministic native-resolution pixel-grid, thin-line, checkerboard and aspect markers through the existing monitoring path. Compare Fit, Fill and 100% inspection in Preview, Program and Clean Program; verify no stretching, duplicate DPI scaling, unintended crop or softened 100% lines.
+3. Rapidly resize and dock/undock panes, collapse/show scopes and comparison, minimize/restore repeatedly, and close/reopen Clean Program while the main window remains open. Require bounded create/release counts and stable fallback state.
+4. Move between physical 100/125/150/200% monitors, including non-integer viewport edges. Record actual adapter, DPI and descriptor; compare CPU/WPF and GPU aspect/100% behavior.
+5. Lock/unlock the desktop, disconnect/reconnect the display and exercise approved driver/device-reset qualification. Require explicit unavailable state, bounded transition recovery and no unhandled Dispatcher failure.
+6. Collect the Operator HostLog GPU events and crash evidence with session correlation. For an E_INVALIDARG, use the exact pre-allocation descriptor, requested bounds, adapter and HRESULT to classify the native rejection. A caught exception, a passing build or injected recovery alone does not establish the original crash cause.
+
+Physical matrix results must be recorded with Windows build, adapter/driver, monitor DPI, media format, presentation mode and observed events. Unavailable physical cases remain UNVERIFIED.
+
+
+Windows software-adapter evidence: [Required gates run 38292301980](https://github.com/DaveBeusing/rtaime/actions/runs/38292301980), source `fcc4f0db23c70558e3ce3bc9286ad0403109d659`, SDK 10.0.401. CI's focused qualification passed 34/34, including the real primary/secondary-window lifetime; the complete Operator suite passed 229/229. All three productive control windows reported eight targets created/eight released, three device generations, and successful native BGRA8 red-pixel readback both initially and after injected device restoration. The injected 100/125/150/200% target matrix and exact three-retry exhaustion also passed. The later show-template integration step failed the separate AUX active-confirmation prerequisite; these results do not constitute a complete Required Gates pass. Final candidate status is recorded on the relevant pull request's exact head.

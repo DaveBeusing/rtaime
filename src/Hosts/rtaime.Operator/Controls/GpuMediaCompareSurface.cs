@@ -13,7 +13,7 @@ using Vortice.Wpf;
 
 namespace rtaime.Operator.Controls;
 
-public sealed class GpuMediaCompareSurface : DrawingSurface
+public sealed class GpuMediaCompareSurface : OperatorDrawingSurface
 {
 	private ID3D11VertexShader? _vertexShader;
 	private ID3D11PixelShader? _pixelShader;
@@ -51,6 +51,11 @@ public sealed class GpuMediaCompareSurface : DrawingSurface
 
 	public GpuMediaCompareSurface()
 	{
+		SurfaceStateChanged += (_, _) =>
+		{
+			if (SurfaceState != OperatorSurfaceState.Ready)
+				Monitoring?.SetGpuComparisonState(false, SurfaceDetail);
+		};
 		DepthStencilFormat = Format.Unknown;
 		ColorFormat = Format.B8G8R8A8_UNorm;
 		IsHitTestVisible = false;
@@ -155,7 +160,7 @@ public sealed class GpuMediaCompareSurface : DrawingSurface
 		_vertexShader = null;
 	}
 
-	private void OnDraw(object? sender, DrawEventArgs e)
+	private void OnDraw(object? sender, OperatorSurfaceDrawEventArgs e)
 	{
 		e.Context.ClearRenderTargetView(e.Surface.ColorTextureView!, new Color4(0, 0, 0, 0));
 		if (CompareMode == MediaCompareMode.Off)

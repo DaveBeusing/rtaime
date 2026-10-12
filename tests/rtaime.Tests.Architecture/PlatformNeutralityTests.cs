@@ -42,6 +42,8 @@ public sealed class PlatformNeutralityTests
 			},
 			["rtaime.Operator"] = new HashSet<string>(StringComparer.Ordinal)
 			{
+				// Existing WPF shared-image interop, now explicitly owned/pinned by Operator.
+				"Vortice.Direct3D9",
 				"Vortice.Direct3D11",
 				"Vortice.DXGI",
 				"Vortice.Wpf",

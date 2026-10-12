@@ -68,6 +68,10 @@ public partial class App : Application
 		base.OnExit(e);
 	}
 
+	internal void ReportSurfaceDiagnostic(Controls.OperatorSurfaceDiagnostic diagnostic) =>
+		_log?.Write(diagnostic.Severity, "gpu-surface", diagnostic.Code,
+			diagnostic.Message, diagnostic.Exception, diagnostic.Dimensions);
+
 	private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
 	{
 		UnexpectedFailureDetected = true;

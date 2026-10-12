@@ -76,6 +76,9 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 					app = new OperatorResourceApplication { ShutdownMode = ShutdownMode.OnExplicitShutdown };
 					app.InitializeComponent();
 
+					target = "GPU descriptor boundary";
+					GpuDrawingSurfaceTests.VerifyDescriptorBoundary(dispatcher);
+
 					target = "ProductionMacroControl";
 					await ProductionMacroOperatorTests.VerifyReadOnlyStatusBindingsAsync(dispatcher);
 
@@ -102,16 +105,40 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 						throw new AggregateException("Productive WPF composition failed.", failures);
 
 					Assert.NotNull(window);
+					app.MainWindow = window;
 					Console.WriteLine("COMPOSITION PASS [MainWindow] compiled resource dictionaries and full window tree.");
 					var rendered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-					window.ContentRendered += (_, _) => rendered.TrySetResult();
+					window.ContentRendered += (_, _) =>
+					{
+						Console.WriteLine("MAIN CONTENT RENDERED EVENT");
+						rendered.TrySetResult();
+					};
+					window.Loaded += (_, _) =>
+					{
+						foreach (var surface in VisualDescendants(window).OfType<OperatorDrawingSurface>())
+						{
+							surface.DiagnosticEmitted += diagnostic =>
+								Console.WriteLine($"PRIMARY GPU [{surface.GetType().Name}] {diagnostic.Code}: {diagnostic.Message}; {JsonSerializer.Serialize(diagnostic.Dimensions)}; {diagnostic.Exception}");
+						}
+					};
+					var mainRenderCount = 0;
+					EventHandler mainRendering = (_, _) => mainRenderCount++;
+					CompositionTarget.Rendering += mainRendering;
+					window.Closed += (_, _) => CompositionTarget.Rendering -= mainRendering;
 					window.Shell.ExitFullscreenCommand.Execute(null);
 					window.MinWidth = window.Width = 1600;
 					window.MinHeight = window.Height = 900;
 					Console.WriteLine("WINDOW SHOW BEGIN [MainWindow]");
 					window.Show();
 					Console.WriteLine("WINDOW SHOW RETURN [MainWindow]");
-					await rendered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+					try { await rendered.Task.WaitAsync(TimeSpan.FromSeconds(10)); }
+					catch (TimeoutException)
+					{
+						Console.WriteLine($"MAIN RENDER TIMEOUT: composition frames={mainRenderCount}; window={window.ActualWidth}x{window.ActualHeight}; measure={window.IsMeasureValid}; arrange={window.IsArrangeValid}.");
+						foreach (var surface in VisualDescendants(window).OfType<OperatorDrawingSurface>())
+							Console.WriteLine($"PRIMARY GPU LAYOUT [{surface.GetType().Name}]: requested={surface.Width}x{surface.Height}; actual={surface.ActualWidth}x{surface.ActualHeight}; desired={surface.DesiredSize}; render={surface.RenderSize}; measure={surface.IsMeasureValid}; arrange={surface.IsArrangeValid}; state={surface.SurfaceState}; creates={surface.TargetCreateCount}; releases={surface.TargetReleaseCount}; detail={surface.SurfaceDetail}.");
+						throw;
+					}
 					Console.WriteLine("CONTENT RENDERED PASS [MainWindow]");
 					Assert.True(window.IsLoaded && window.IsVisible);
 
@@ -147,6 +174,21 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 						Assert.NotEmpty(VisualDescendants(window).OfType<ProgramViewer>());
 						diagnostics.Enqueue($"RENDER PASS [{workspace}] real MainWindow and monitor trees.");
 					}
+					// Qualify secondary GPU windows while the productive primary window owns
+					// the application lifetime, as in the real Clean Program workflow.
+					target = "GPU surface lifetime";
+					await GpuDrawingSurfaceTests.VerifySurfaceLifetimeAsync(dispatcher);
+					var resumedRender = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+					EventHandler rendering = (_, _) => resumedRender.TrySetResult();
+					CompositionTarget.Rendering += rendering;
+					try
+					{
+						window.InvalidateVisual();
+						await resumedRender.Task.WaitAsync(TimeSpan.FromSeconds(10));
+					}
+					finally { CompositionTarget.Rendering -= rendering; }
+					Assert.True(window.IsLoaded && window.IsVisible);
+					Console.WriteLine("GPU PRIMARY WINDOW PASS: productive MainWindow continues rendering after secondary surface teardown.");
 					Assert.DoesNotContain(diagnostics, entry => entry.StartsWith("FIRST CHANCE", StringComparison.Ordinal));
 				}
 				catch (Exception exception)
@@ -199,6 +241,11 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 		try
 		{
 			await completed.Task.WaitAsync(TimeSpan.FromSeconds(45));
+		}
+		catch (TimeoutException)
+		{
+			await CaptureQualificationStacksAsync();
+			throw;
 		}
 		finally
 		{
@@ -340,6 +387,39 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 		var source = Assert.IsType<string>(field.GetValue(null));
 		var bytecode = Compiler.Compile(source, entryPoint, $"{surfaceType.Name}.hlsl", profile);
 		Assert.True(bytecode.Span.Length > 0, $"{surfaceType.Name}/{entryPoint}/{profile}: empty shader bytecode.");
+	}
+
+
+	private static async Task CaptureQualificationStacksAsync()
+	{
+		var executable = Environment.GetEnvironmentVariable("RTAIME_STACK_TOOL");
+		if (string.IsNullOrWhiteSpace(executable)) return;
+		var start = new ProcessStartInfo(executable)
+		{
+			UseShellExecute = false, CreateNoWindow = true, WindowStyle = ProcessWindowStyle.Hidden,
+			RedirectStandardOutput = true, RedirectStandardError = true
+		};
+		start.ArgumentList.Add("report");
+		start.ArgumentList.Add("--process-id");
+		start.ArgumentList.Add(Environment.ProcessId.ToString());
+		try
+		{
+			using var process = Process.Start(start)!;
+			var stdout = process.StandardOutput.ReadToEndAsync();
+			var stderr = process.StandardError.ReadToEndAsync();
+			try { await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(10)); }
+			catch (TimeoutException)
+			{
+				process.Kill(entireProcessTree: true);
+				Console.WriteLine("GPU STA stack collection exceeded its diagnostic deadline.");
+				return;
+			}
+			Console.WriteLine($"GPU STA MANAGED STACKS (diagnostic exit {process.ExitCode}):\n{await stdout}\n{await stderr}");
+		}
+		catch (Exception exception)
+		{
+			Console.WriteLine($"GPU STA stack collection unavailable: {exception.Message}");
+		}
 	}
 
 	private static bool SessionClosedCleanly(string path)

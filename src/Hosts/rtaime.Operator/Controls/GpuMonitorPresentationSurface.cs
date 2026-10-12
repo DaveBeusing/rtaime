@@ -16,7 +16,7 @@ using Vortice.Wpf;
 
 namespace rtaime.Operator.Controls;
 
-public sealed class GpuMonitorPresentationSurface : DrawingSurface
+public sealed class GpuMonitorPresentationSurface : OperatorDrawingSurface
 {
 	private ID3D11VertexShader? _vertexShader;
 	private ID3D11PixelShader? _pixelShader;
@@ -78,6 +78,11 @@ public sealed class GpuMonitorPresentationSurface : DrawingSurface
 
 	public GpuMonitorPresentationSurface()
 	{
+		SurfaceStateChanged += (_, _) =>
+		{
+			if (SurfaceState != OperatorSurfaceState.Ready)
+				Monitor?.SetGpuPresentationState(false, SurfaceDetail);
+		};
 		DepthStencilFormat = Format.Unknown;
 		ColorFormat = Format.B8G8R8A8_UNorm;
 		IsHitTestVisible = false;
@@ -163,10 +168,23 @@ public sealed class GpuMonitorPresentationSurface : DrawingSurface
 
 	private void OnStandaloneViewportChanged(object sender, SizeChangedEventArgs e) => UpdateStandalonePhysicalSize();
 
+	protected override DpiScale TargetScale => Monitor is not null || StandaloneFit
+		? new DpiScale(1, 1) : base.TargetScale;
+
+	protected override void OnDpiChanged(DpiScale oldDpi, DpiScale newDpi)
+	{
+		base.OnDpiChanged(oldDpi, newDpi);
+		UpdateStandalonePhysicalSize();
+	}
+
 	private void UpdateStandalonePhysicalSize()
 	{
-		if (_standaloneViewport is null || _standaloneViewport.ActualWidth <= 0 || _standaloneViewport.ActualHeight <= 0)
+		if (_standaloneViewport is null) return;
+		if (_standaloneViewport.ActualWidth <= 0 || _standaloneViewport.ActualHeight <= 0)
+		{
+			Width = Height = 0;
 			return;
+		}
 
 		var dpi = VisualTreeHelper.GetDpi(_standaloneViewport);
 		Width = Math.Max(1, Math.Round(_standaloneViewport.ActualWidth * dpi.DpiScaleX));
@@ -226,7 +244,7 @@ public sealed class GpuMonitorPresentationSurface : DrawingSurface
 		_vertexShader = null;
 	}
 
-	private void OnDraw(object? sender, DrawEventArgs e)
+	private void OnDraw(object? sender, OperatorSurfaceDrawEventArgs e)
 	{
 		e.Context.ClearRenderTargetView(e.Surface.ColorTextureView!, new Color4(0, 0, 0, 0));
 		var frame = GpuFrame;
