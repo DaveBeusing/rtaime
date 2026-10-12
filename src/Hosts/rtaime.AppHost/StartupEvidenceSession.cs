@@ -27,11 +27,11 @@ internal sealed class StartupEvidenceSession : IDisposable
 		_options = options;
 		_platform = platform;
 		_startedAtUtc = platform.UtcNow;
-		var supplied = Environment.GetEnvironmentVariable("RTAIME_LOG_SESSION_ID");
+		var supplied = platform.DiagnosticSessionId;
 		SessionId = supplied is not null && Regex.IsMatch(supplied, "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 			? supplied : Guid.NewGuid().ToString("N");
 		DirectoryPath = Path.Combine(options.WorkRoot, "startup-evidence", CaptureId);
-		var logRoot = Environment.GetEnvironmentVariable("RTAIME_LOG_ROOT");
+		var logRoot = platform.DiagnosticLogRoot;
 		if (!string.IsNullOrWhiteSpace(logRoot))
 			LogSessionDirectory = Path.Combine(Path.GetFullPath(logRoot), SessionId);
 	}

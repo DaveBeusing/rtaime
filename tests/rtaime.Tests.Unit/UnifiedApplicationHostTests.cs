@@ -941,6 +941,58 @@ public sealed class UnifiedApplicationHostTests
 		Assert.Equal("Ready", runtime.Qualification);
 	}
 
+	[Fact]
+	public void Bounded_process_log_redacts_concurrent_writes_and_retains_only_two_segments()
+	{
+		var root = Path.Combine(Path.GetTempPath(), "rtaime-process-log-tests", Guid.NewGuid().ToString("N"));
+		var path = Path.Combine(root, "controlhost-process.log");
+		try
+		{
+			var log = new BoundedProcessDiagnosticLog(path);
+			Parallel.For(0, 12000, index => log.Append($"entry={index} password=never-export token=never-token " + new string('x', 600)));
+			Assert.True(new FileInfo(path).Length <= BoundedProcessDiagnosticLog.MaximumFileBytes);
+			Assert.True(new FileInfo(path + ".previous").Length <= BoundedProcessDiagnosticLog.MaximumFileBytes);
+			Assert.Equal(2, Directory.GetFiles(root).Length);
+			foreach (var file in Directory.GetFiles(root))
+			{
+				var text = File.ReadAllText(file);
+				Assert.DoesNotContain("never-export", text);
+				Assert.DoesNotContain("never-token", text);
+				Assert.Contains("[REDACTED]", text);
+				Assert.All(File.ReadAllLines(file), line => Assert.StartsWith("entry=", line));
+			}
+		}
+		finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+	}
+
+	[Fact]
+	public void Evidence_retention_prunes_expired_completed_sessions_but_preserves_an_active_lease()
+	{
+		var root = Path.Combine(Path.GetTempPath(), "rtaime-evidence-retention-tests", Guid.NewGuid().ToString("N"));
+		string MakeSession()
+		{
+			var directory = Path.Combine(root, Guid.NewGuid().ToString("N"));
+			Directory.CreateDirectory(directory);
+			File.WriteAllText(Path.Combine(directory, "manifest.json"), "{}");
+			File.SetLastWriteTimeUtc(Path.Combine(directory, "manifest.json"), DateTime.UtcNow.AddDays(-30));
+			return directory;
+		}
+		try
+		{
+			var active = MakeSession();
+			using (var lease = StartupEvidenceSession.OpenDirectory(active))
+			{
+				var expired = MakeSession();
+				var current = Path.Combine(root, Guid.NewGuid().ToString("N"));
+				Directory.CreateDirectory(current);
+				using var currentLease = StartupEvidenceSession.OpenDirectory(current);
+				Assert.True(Directory.Exists(active));
+				Assert.False(Directory.Exists(expired));
+			}
+		}
+		finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+	}
+
 	private static ApplicationHostOptions CreateOptions(
 		ApplicationStartupProfile profile,
 		ApplicationLifecycleOwnership? ownership = null,

@@ -244,6 +244,8 @@ public sealed record ApplicationProcessSpec(
 public interface IApplicationHostPlatform
 {
 	DateTimeOffset UtcNow { get; }
+	string? DiagnosticSessionId => Environment.GetEnvironmentVariable("RTAIME_LOG_SESSION_ID");
+	string? DiagnosticLogRoot => Environment.GetEnvironmentVariable("RTAIME_LOG_ROOT");
 	string FindProductArtifact(string installRoot, string baseName);
 	int StartProcess(ApplicationProcessSpec spec);
 	bool IsProcessAlive(int processId);
@@ -264,6 +266,15 @@ public interface IApplicationHostPlatform
 
 public sealed class SystemApplicationHostPlatform : IApplicationHostPlatform
 {
+	private readonly string? _logRoot;
+	private readonly string? _sessionId;
+	public SystemApplicationHostPlatform(string? logRoot = null, string? sessionId = null)
+	{
+		_logRoot = logRoot;
+		_sessionId = sessionId;
+	}
+	public string? DiagnosticSessionId => _sessionId ?? Environment.GetEnvironmentVariable("RTAIME_LOG_SESSION_ID");
+	public string? DiagnosticLogRoot => _logRoot ?? Environment.GetEnvironmentVariable("RTAIME_LOG_ROOT");
 	private readonly ConcurrentDictionary<int, Process> _diagnosticProcesses = new();
 	private readonly ConcurrentDictionary<int, TaskCompletionSource<bool>> _diagnosticCompletions = new();
 
@@ -494,8 +505,7 @@ public sealed class SystemApplicationHostPlatform : IApplicationHostPlatform
 
 	public IReadOnlyList<ApplicationHostDiagnosticEvent> ReadHostDiagnosticEvents() =>
 		ApplicationHostDiagnosticReader.ReadSession(
-			Environment.GetEnvironmentVariable("RTAIME_LOG_ROOT"),
-			Environment.GetEnvironmentVariable("RTAIME_LOG_SESSION_ID"));
+			DiagnosticLogRoot, DiagnosticSessionId);
 
 	public void WriteAllTextAtomic(string path, string content)
 	{
