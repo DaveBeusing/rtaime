@@ -118,6 +118,7 @@ $appCode = Get-Content -LiteralPath $appCodePath -Raw
 $productionMacroPath = Join-Path $repositoryRoot "src/Hosts/rtaime.Operator/ProductionMacroControl.xaml"
 $productionMacro = Get-Content -LiteralPath $productionMacroPath -Raw
 Assert-Condition ($productionMacro -match 'Text="\{Binding CurrentAction, Mode=OneWay\}"') "CurrentAction must use OneWay binding because it has no public setter."
+Assert-Condition ($productionMacro -match 'Text="\{Binding LastCompletedAction, Mode=OneWay\}"') "LastCompletedAction must use OneWay binding because it has no public setter."
 $window = Get-Content -LiteralPath $windowPath -Raw
 $windowCode = Get-Content -LiteralPath $windowCodePath -Raw
 $outputHealthControl = Get-Content -LiteralPath $outputHealthControlPath -Raw

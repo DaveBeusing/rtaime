@@ -46,7 +46,8 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 			void Capture(object? sender, FirstChanceExceptionEventArgs args)
 			{
 				if (Environment.CurrentManagedThreadId == threadId &&
-					args.Exception is XamlParseException or ArgumentException)
+					(args.Exception is XamlParseException or ArgumentException ||
+					(target == "ProductionMacroControl" && args.Exception is InvalidOperationException)))
 				{
 					var detail = $"FIRST CHANCE [{target}] {args.Exception}";
 					diagnostics.Enqueue(detail);
@@ -74,6 +75,9 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 				{
 					app = new OperatorResourceApplication { ShutdownMode = ShutdownMode.OnExplicitShutdown };
 					app.InitializeComponent();
+
+					target = "ProductionMacroControl";
+					await ProductionMacroOperatorTests.VerifyReadOnlyStatusBindingsAsync(dispatcher);
 
 					// Load both productive BAML views independently: MainWindow's outer line 1
 					// cannot identify which nested view supplied an invalid panel child.
