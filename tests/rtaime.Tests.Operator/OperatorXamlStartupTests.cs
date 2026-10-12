@@ -108,14 +108,37 @@ public sealed class OperatorXamlStartupTests(ITestOutputHelper output)
 					app.MainWindow = window;
 					Console.WriteLine("COMPOSITION PASS [MainWindow] compiled resource dictionaries and full window tree.");
 					var rendered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-					window.ContentRendered += (_, _) => rendered.TrySetResult();
+					window.ContentRendered += (_, _) =>
+					{
+						Console.WriteLine("MAIN CONTENT RENDERED EVENT");
+						rendered.TrySetResult();
+					};
+					window.Loaded += (_, _) =>
+					{
+						foreach (var surface in VisualDescendants(window).OfType<OperatorDrawingSurface>())
+						{
+							surface.DiagnosticEmitted += diagnostic =>
+								Console.WriteLine($"PRIMARY GPU [{surface.GetType().Name}] {diagnostic.Code}: {diagnostic.Message}; {JsonSerializer.Serialize(diagnostic.Dimensions)}; {diagnostic.Exception}");
+						}
+					};
+					var mainRenderCount = 0;
+					EventHandler mainRendering = (_, _) => mainRenderCount++;
+					CompositionTarget.Rendering += mainRendering;
+					window.Closed += (_, _) => CompositionTarget.Rendering -= mainRendering;
 					window.Shell.ExitFullscreenCommand.Execute(null);
 					window.MinWidth = window.Width = 1600;
 					window.MinHeight = window.Height = 900;
 					Console.WriteLine("WINDOW SHOW BEGIN [MainWindow]");
 					window.Show();
 					Console.WriteLine("WINDOW SHOW RETURN [MainWindow]");
-					await rendered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+					try { await rendered.Task.WaitAsync(TimeSpan.FromSeconds(10)); }
+					catch (TimeoutException)
+					{
+						Console.WriteLine($"MAIN RENDER TIMEOUT: composition frames={mainRenderCount}; window={window.ActualWidth}x{window.ActualHeight}; measure={window.IsMeasureValid}; arrange={window.IsArrangeValid}.");
+						foreach (var surface in VisualDescendants(window).OfType<OperatorDrawingSurface>())
+							Console.WriteLine($"PRIMARY GPU LAYOUT [{surface.GetType().Name}]: requested={surface.Width}x{surface.Height}; actual={surface.ActualWidth}x{surface.ActualHeight}; desired={surface.DesiredSize}; render={surface.RenderSize}; measure={surface.IsMeasureValid}; arrange={surface.IsArrangeValid}; state={surface.SurfaceState}; creates={surface.TargetCreateCount}; releases={surface.TargetReleaseCount}; detail={surface.SurfaceDetail}.");
+						throw;
+					}
 					Console.WriteLine("CONTENT RENDERED PASS [MainWindow]");
 					Assert.True(window.IsLoaded && window.IsVisible);
 
