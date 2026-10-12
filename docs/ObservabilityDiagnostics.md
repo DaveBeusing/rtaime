@@ -202,3 +202,14 @@ The Operator derives its compact engine lifecycle and Program-safety presentatio
 The projection uses the existing Control, Runtime, Media, Provider and GPU Provider `PASS / FAIL / UNVERIFIED` evidence together with Runtime readiness, connection freshness and the existing AI showcase state. Unknown evidence remains unverified and is never converted to healthy.
 
 The existing bounded 200 ms management refresh is also the reconnect mechanism. When Control synchronization becomes stale, mutations are blocked while the same refresh continues requesting a full snapshot. Recovery is complete only after a new authoritative snapshot is accepted. Repeated failures update one bounded status/error presentation rather than accumulating modal errors or an unbounded event list.
+
+
+## ControlHost runtime binding phases
+
+ControlHost writes `controlhost.binding.<phase>.<outcome>` records in the existing redacted HostLog session. Phases include authority-load, ipc-connect, provider-snapshot, authority-prepare, initial-runtime-acceptance, runtime-apply, authority-confirm, authority-snapshot-confirm, runtime-snapshot, mutation-gate, reconcile-prepare, reconcile-commit, restore-graphics, restore-audio, runtime-acceptance, host-binding and qualified-ready. Async operations emit started/completed/failed records; mutation-gate completion means the gate was acquired. Pending operator execution is observable as pending-execution.waiting.
+
+Records contain attemptId, phase, outcome, bounded reason code, elapsedMilliseconds from a monotonic Stopwatch, Runtime host identity and pending-execution state. The common envelope supplies UTC time, session ID, PID, sequence and sanitized exception type/detail. Lifetime cancellation is distinguished from an operation timeout. A reconcile failure also emits a binding-attempt.failed correlate. Routine probes after Ready are Trace; startup/recovery phases and qualified readiness remain visible at Information, and failures at Warning.
+
+When investigating a timeout, collect the session directory and readiness/lifecycle documents while the hosts are still running. Match start and completion/failure by attemptId and phase, then compare child-supervision PIDs and qualified-ready with the top-level readiness record. A mutation-gate start without acquisition identifies a wait; runtime-apply failure followed by pending-execution.waiting identifies a stranded preparation in an older build; restore-audio failure requires a successful restoration and final acceptance before a replacement binding can qualify. Use the actual exception and bounded reason code to distinguish transport failure, timeout, cancellation, authority conflict and rejection.
+
+These records are observation only. Logging does not accept a commit, reset authority, extend a deadline or qualify readiness. No payload, raw media, credentials or new IPC contract is added.

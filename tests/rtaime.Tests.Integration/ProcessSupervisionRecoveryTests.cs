@@ -376,6 +376,279 @@ public sealed class ProcessSupervisionRecoveryTests
 		Assert.Null(supervisor.Snapshot.OwnedProcessId);
 	}
 
+	[Fact]
+	public async Task Clean_and_retained_profiles_qualify_real_Control_Runtime_and_AI_processes_within_startup_deadline()
+	{
+		var root = TempDirectory();
+		var controlEndpoint = Endpoint("control-binding-profile");
+		var runtimeEndpoint = Endpoint("runtime-binding-profile");
+		var aiEndpoint = Endpoint("ai-binding-profile");
+		Revision? retainedRevision = null;
+		var processIds = new HashSet<int>();
+		try
+		{
+			foreach (var profile in new[] { "clean", "retained" })
+			{
+				var work = Path.Combine(root, profile);
+				Directory.CreateDirectory(work);
+				var readyPath = Path.Combine(work, "control-readiness.json");
+				var stopPath = Path.Combine(work, "control-stop.signal");
+				var session = $"binding-{profile}-{Guid.NewGuid():N}";
+				var start = new ProcessStartInfo("dotnet")
+				{
+					UseShellExecute = false,
+					CreateNoWindow = true
+				};
+				start.ArgumentList.Add(HostAssembly("rtaime.ControlHost"));
+				start.ArgumentList.Add($"--listen-endpoint={controlEndpoint}");
+				start.ArgumentList.Add($"--runtime-endpoint={runtimeEndpoint}");
+				start.ArgumentList.Add($"--durability-root={Path.Combine(root, "state")}");
+				start.Environment["RTAIME_RUNTIME_EXECUTABLE"] = HostAssembly("rtaime.RuntimeHost");
+				start.Environment["RTAIME_AI_EXECUTABLE"] = HostAssembly("rtaime.AIHost");
+				start.Environment["RTAIME_AI_ENDPOINT"] = aiEndpoint;
+				start.Environment["RTAIME_HOST_READINESS_FILE"] = readyPath;
+				start.Environment["RTAIME_HOST_STOP_FILE"] = stopPath;
+				start.Environment["RTAIME_LOG_ROOT"] = Path.Combine(work, "logs");
+				start.Environment["RTAIME_LOG_SESSION_ID"] = session;
+				using var process = Process.Start(start) ?? throw new InvalidOperationException("ControlHost did not start.");
+				var clock = Stopwatch.StartNew();
+				int? runtimePid = null;
+				int? aiPid = null;
+				try
+				{
+					await WaitUntilAsync(() => File.Exists(readyPath) || process.HasExited, ProcessRecoveryTimeoutMilliseconds);
+					Assert.False(process.HasExited, $"ControlHost exited before readiness for {profile}.");
+					Assert.True(clock.Elapsed < TimeSpan.FromSeconds(30));
+					var readiness = await File.ReadAllTextAsync(readyPath);
+					using var document = JsonDocument.Parse(readiness);
+					var evidence = document.RootElement;
+					Assert.Equal("READY", evidence.GetProperty("state").GetString());
+					Assert.Equal("HEALTHY", evidence.GetProperty("health").GetString());
+					Assert.Equal(process.Id, evidence.GetProperty("processId").GetInt32());
+					Assert.Equal("HEALTHY", evidence.GetProperty("runtimeSupervision").GetProperty("state").GetString());
+					Assert.Equal("HEALTHY", evidence.GetProperty("aiSupervision").GetProperty("state").GetString());
+					runtimePid = evidence.GetProperty("runtimeSupervision").GetProperty("processId").GetInt32();
+					aiPid = evidence.GetProperty("aiSupervision").GetProperty("processId").GetInt32();
+					Assert.True(processIds.Add(process.Id));
+					Assert.True(processIds.Add(runtimePid.Value));
+					Assert.True(processIds.Add(aiPid.Value));
+					Assert.True(ProcessIsAlive(runtimePid.Value));
+					Assert.True(ProcessIsAlive(aiPid.Value));
+
+					var client = new OperatorControlClient(new NamedPipeOperatorControlTransport(controlEndpoint, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(5)));
+					var snapshot = await client.SynchronizeAsync();
+					if (retainedRevision is { } revision) Assert.Equal(revision, snapshot.Production.Revision);
+					else retainedRevision = snapshot.Production.Revision;
+					var logFiles = Directory.GetFiles(Path.Combine(work, "logs", session), "*.jsonl");
+					var controlLog = Assert.Single(logFiles, path => Path.GetFileName(path).Contains("-controlhost-", StringComparison.Ordinal));
+					var records = ReadSharedLogLines(controlLog).Select(line => JsonDocument.Parse(line)).ToArray();
+					try
+					{
+						Assert.Contains(records, record => record.RootElement.GetProperty("code").GetString() == "controlhost.binding.qualified-ready.completed");
+						Assert.All(records, record => Assert.Equal(session, record.RootElement.GetProperty("sessionId").GetString()));
+					}
+					finally { foreach (var record in records) record.Dispose(); }
+					// Preserve the qualified live state before the stop signal removes readiness.
+					await File.WriteAllTextAsync(Path.Combine(work, "readiness-before-stop.json"), readiness);
+					Console.WriteLine($"Binding qualification profile={profile} elapsedMs={clock.ElapsedMilliseconds} controlPid={process.Id} runtimePid={runtimePid} aiPid={aiPid} session={session} revision={retainedRevision}");
+				}
+				finally
+				{
+					await File.WriteAllTextAsync(stopPath, "stop");
+					await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(20));
+					Assert.Equal(0, process.ExitCode);
+					if (runtimePid is { } runtimeId) Assert.False(ProcessIsAlive(runtimeId));
+					if (aiPid is { } aiId) Assert.False(ProcessIsAlive(aiId));
+					var evidenceRoot = Environment.GetEnvironmentVariable("RTAIME_BINDING_EVIDENCE_ROOT");
+					if (!string.IsNullOrWhiteSpace(evidenceRoot))
+					{
+						var destination = Path.Combine(evidenceRoot, session);
+						Directory.CreateDirectory(destination);
+						foreach (var file in Directory.GetFiles(work, "*", SearchOption.AllDirectories))
+						{
+							var target = Path.Combine(destination, Path.GetRelativePath(work, file));
+							Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+							File.Copy(file, target, overwrite: true);
+						}
+					}
+				}
+			}
+		}
+		finally { DeleteDirectory(root); }
+	}
+
+	[Fact]
+	public async Task AppHost_clean_and_retained_launches_qualify_all_hosts_before_thirty_second_deadline()
+	{
+		var root = TempDirectory();
+		var controlEndpoint = Endpoint("control-binding-profile");
+		var runtimeEndpoint = Endpoint("runtime-binding-profile");
+		var aiEndpoint = Endpoint("ai-binding-profile");
+		Revision? retainedRevision = null;
+		var processIds = new HashSet<int>();
+		try
+		{
+			foreach (var profile in new[] { "clean", "retained" })
+			{
+				var work = Path.Combine(root, profile);
+				Directory.CreateDirectory(work);
+				var readyPath = Path.Combine(work, "control-readiness.json");
+				var stopPath = Path.Combine(work, "control-stop.signal");
+				
+				var session = $"binding-{profile}-{Guid.NewGuid():N}";
+				var appRoot = Path.Combine(FindRepositoryRoot(), "src", "Hosts", "rtaime.AppHost", "bin", "Release", "net10.0");
+				var policyPath = Path.Combine(work, "policy.json");
+				await File.WriteAllTextAsync(policyPath, JsonSerializer.Serialize(new
+				{
+					schemaVersion = "1.0",
+					endpoints = new { control = controlEndpoint, runtime = runtimeEndpoint, ai = aiEndpoint },
+					startup = new { timeoutMs = 30000, probeTimeoutMs = 500, probeIntervalMs = 200, childRestartBackoffMs = 500, childMaxStartAttempts = 5 },
+					shutdown = new { timeoutMs = 15000 }
+				}));
+				var start = new ProcessStartInfo(Path.Combine(appRoot, "rtaime.exe"))
+				{
+					UseShellExecute = false,
+					CreateNoWindow = true
+				};
+				start.ArgumentList.Add("--profile=HeadlessEngine");
+				start.ArgumentList.Add("--ownership=EphemeralLocal");
+				start.ArgumentList.Add("--instance-id=default");
+				start.ArgumentList.Add($"--install-root={appRoot}");
+				start.ArgumentList.Add($"--state-root={Path.Combine(root, "state")}");
+				start.ArgumentList.Add($"--work-root={work}");
+				start.ArgumentList.Add($"--policy={policyPath}");
+				start.Environment["RTAIME_LOG_ROOT"] = Path.Combine(work, "logs");
+				start.Environment["RTAIME_LOG_SESSION_ID"] = session;
+				using var process = Process.Start(start) ?? throw new InvalidOperationException("AppHost did not start.");
+				var clock = Stopwatch.StartNew();
+				int? controlPid = null;
+				int? runtimePid = null;
+				int? aiPid = null;
+				try
+				{
+					await WaitUntilAsync(() => File.Exists(readyPath) || process.HasExited, ProcessRecoveryTimeoutMilliseconds);
+					Assert.False(process.HasExited, $"AppHost exited before readiness for {profile}.");
+					Assert.True(clock.Elapsed < TimeSpan.FromSeconds(30));
+					await WaitUntilAsync(() =>
+					{
+						if (process.HasExited) return true;
+						var files = Directory.GetFiles(Path.Combine(work, "logs", session), "*-apphost-*.jsonl");
+						return files.Any(path => ReadSharedLogLines(path).Any(line =>
+						{
+							using var record = JsonDocument.Parse(line);
+							return record.RootElement.GetProperty("code").GetString() == "apphost.state-changed" &&
+								record.RootElement.GetProperty("dimensions").GetProperty("state").GetString() == "Healthy";
+						}));
+					}, ProcessRecoveryTimeoutMilliseconds);
+					Assert.False(process.HasExited);
+					Assert.True(clock.Elapsed < TimeSpan.FromSeconds(30));
+					var readiness = await File.ReadAllTextAsync(readyPath);
+					using var document = JsonDocument.Parse(readiness);
+					var evidence = document.RootElement;
+					Assert.Equal("READY", evidence.GetProperty("state").GetString());
+					Assert.Equal("HEALTHY", evidence.GetProperty("health").GetString());
+					controlPid = evidence.GetProperty("processId").GetInt32();
+					Assert.NotEqual(process.Id, controlPid.Value);
+					Assert.True(ProcessIsAlive(controlPid.Value));
+					Assert.Equal("HEALTHY", evidence.GetProperty("runtimeSupervision").GetProperty("state").GetString());
+					Assert.Equal("HEALTHY", evidence.GetProperty("aiSupervision").GetProperty("state").GetString());
+					runtimePid = evidence.GetProperty("runtimeSupervision").GetProperty("processId").GetInt32();
+					aiPid = evidence.GetProperty("aiSupervision").GetProperty("processId").GetInt32();
+					Assert.True(processIds.Add(process.Id));
+					Assert.True(processIds.Add(controlPid!.Value));
+					Assert.True(processIds.Add(runtimePid.Value));
+					Assert.True(processIds.Add(aiPid.Value));
+					Assert.True(ProcessIsAlive(runtimePid.Value));
+					Assert.True(ProcessIsAlive(aiPid.Value));
+
+					var client = new OperatorControlClient(new NamedPipeOperatorControlTransport(controlEndpoint, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(5)));
+					var snapshot = await client.SynchronizeAsync();
+					if (retainedRevision is { } revision) Assert.Equal(revision, snapshot.Production.Revision);
+					else retainedRevision = snapshot.Production.Revision;
+					var logFiles = Directory.GetFiles(Path.Combine(work, "logs", session), "*.jsonl");
+					var controlLog = Assert.Single(logFiles, path => Path.GetFileName(path).Contains("-controlhost-", StringComparison.Ordinal));
+					var records = ReadSharedLogLines(controlLog).Select(line => JsonDocument.Parse(line)).ToArray();
+					try
+					{
+						Assert.Contains(records, record => record.RootElement.GetProperty("code").GetString() == "controlhost.binding.qualified-ready.completed");
+						Assert.All(records, record => Assert.Equal(session, record.RootElement.GetProperty("sessionId").GetString()));
+					}
+					finally { foreach (var record in records) record.Dispose(); }
+					// Preserve the qualified live state before the stop signal removes readiness.
+					await File.WriteAllTextAsync(Path.Combine(work, "readiness-before-stop.json"), readiness);
+					Console.WriteLine($"AppHost binding qualification profile={profile} elapsedMs={clock.ElapsedMilliseconds} appPid={process.Id} controlPid={controlPid} runtimePid={runtimePid} aiPid={aiPid} session={session} revision={retainedRevision}");
+				}
+				catch (Exception exception)
+				{
+					Console.WriteLine($"AppHost qualification failure profile={profile}: {exception}");
+					throw;
+				}
+				finally
+				{
+					try
+					{
+						// Exercise the existing HeadlessEngine contract: an explicit engine stop
+						// drains all service hosts, then AppHost reports observed lifecycle loss.
+						await File.WriteAllTextAsync(stopPath, "stop");
+						await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(20));
+						Assert.Equal(1, process.ExitCode);
+						var appLog = Assert.Single(Directory.GetFiles(Path.Combine(work, "logs", session), "*-apphost-*.jsonl"));
+						Assert.Contains(ReadSharedLogLines(appLog), line =>
+						{
+							using var record = JsonDocument.Parse(line);
+							return record.RootElement.GetProperty("code").GetString() == "apphost.lifecycle-failure";
+						});
+						using (var shutdownEvidence = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(work, "apphost-shutdown.json"))))
+						{
+							Assert.False(shutdownEvidence.RootElement.GetProperty("forcedTermination").GetBoolean());
+						}
+						foreach (var host in new[] { "ControlHost", "RuntimeHost", "AIHost" })
+						{
+							var hostLog = Assert.Single(Directory.GetFiles(Path.Combine(work, "logs", session), "*.jsonl"),
+								path => Path.GetFileName(path).Contains($"-{host.ToLowerInvariant()}-", StringComparison.Ordinal));
+							Assert.Contains(ReadSharedLogLines(hostLog), line =>
+							{
+								using var record = JsonDocument.Parse(line);
+								return record.RootElement.GetProperty("code").GetString() == $"{host.ToLowerInvariant()}.completed" &&
+									record.RootElement.GetProperty("dimensions").GetProperty("exitCode").GetString() == "0";
+							});
+						}
+						if (controlPid is { } controlId) Assert.False(ProcessIsAlive(controlId));
+						if (runtimePid is { } runtimeId) Assert.False(ProcessIsAlive(runtimeId));
+						if (aiPid is { } aiId) Assert.False(ProcessIsAlive(aiId));
+					}
+					finally
+					{
+						var evidenceRoot = Environment.GetEnvironmentVariable("RTAIME_BINDING_EVIDENCE_ROOT");
+						if (!string.IsNullOrWhiteSpace(evidenceRoot))
+						{
+							var destination = Path.Combine(evidenceRoot, session);
+							Directory.CreateDirectory(destination);
+							foreach (var file in Directory.GetFiles(work, "*", SearchOption.AllDirectories))
+							{
+								var target = Path.Combine(destination, Path.GetRelativePath(work, file));
+								Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+								if (Path.GetExtension(file) == ".jsonl")
+									File.WriteAllLines(target, ReadSharedLogLines(file));
+								else File.Copy(file, target, overwrite: true);
+							}
+						}
+					}
+				}
+			}
+		}
+		finally { DeleteDirectory(root); }
+	}
+
+	private static string[] ReadSharedLogLines(string path)
+	{
+		using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+		using var reader = new StreamReader(stream);
+		var content = reader.ReadToEnd();
+		var completeLength = content.LastIndexOf('\n') + 1;
+		return content[..completeLength].Split('\n', StringSplitOptions.RemoveEmptyEntries);
+	}
+
 	private static LocalProcessSupervisionOptions ReadinessRecoverySupervisorOptions(
 		string name,
 		string endpoint,

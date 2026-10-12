@@ -1,5 +1,7 @@
 // Copyright (c) Dave Beusing <david.beusing@gmail.com>.
 
+using System.Diagnostics;
+using System.Globalization;
 using rtaime.Control.Contracts;
 using rtaime.Core;
 using rtaime.Media.Contracts;
@@ -460,10 +462,17 @@ public sealed class ControlHostProcess
 	private ExternalControlServer? _externalControlServer;
 	private Task? _runtimeBindingTask;
 	private string? _boundRuntimeHostInstanceId;
+	private readonly HostLog? _log;
+	private string? _interruptedInitialHostId;
+	private AuthoritativeProductionState? _interruptedInitialAuthority;
+	private long _bindingAttemptStarted = Stopwatch.GetTimestamp();
+	private CancellationToken _bindingLifetimeToken;
+	private string _bindingAttemptId = Guid.NewGuid().ToString("N");
 
-	public ControlHostProcess(ControlHostProcessOptions options, Func<IControlRuntimeTransportSeam>? transportFactory = null)
+	public ControlHostProcess(ControlHostProcessOptions options, Func<IControlRuntimeTransportSeam>? transportFactory = null, HostLog? log = null)
 	{
 		_options = options ?? throw new ArgumentNullException(nameof(options));
+		_log = log;
 		_transportFactory = transportFactory ?? (() => new NamedPipeRuntimeHostTransport(_options.RuntimeEndpoint, _options.ConnectTimeout, _options.RequestTimeout));
 	}
 
@@ -482,11 +491,12 @@ public sealed class ControlHostProcess
 	public async Task<ControlHostExitCode> RunAsync(CancellationToken cancellationToken)
 	{
 		if (Interlocked.Exchange(ref _runStarted, 1) != 0) throw new InvalidOperationException("A ControlHostProcess instance can be run only once.");
+		_bindingLifetimeToken = cancellationToken;
 		Update(ControlHostProcessState.Starting, ControlHostHealthState.Unknown, "Composing ControlHost dependencies and evaluating durable recovery state.");
 		try
 		{
 			_options.Validate();
-			await ComposeAsync(cancellationToken).ConfigureAwait(false);
+			await BindingPhaseAsync("authority-load", () => new ValueTask(ComposeAsync(cancellationToken)), cancellationToken).ConfigureAwait(false);
 			await _ipcServer!.StartAsync(cancellationToken).ConfigureAwait(false);
 			if (_externalControlServer is not null)
 				await _externalControlServer.StartAsync(cancellationToken).ConfigureAwait(false);
@@ -622,16 +632,19 @@ public sealed class ControlHostProcess
 		{
 			try
 			{
+				_bindingAttemptId = Guid.NewGuid().ToString("N");
+				_bindingAttemptStarted = Stopwatch.GetTimestamp();
 				var transport = _runtimeTransport ?? throw new InvalidOperationException("Runtime transport was not composed.");
 				var control = _control ?? throw new InvalidOperationException("Control service was not composed.");
 				using var operationTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 				operationTimeout.CancelAfter(_options.ConnectTimeout + _options.RequestTimeout);
 				var operationToken = operationTimeout.Token;
 
-				await transport.ConnectAsync(operationToken).ConfigureAwait(false);
+				await BindingPhaseAsync("ipc-connect", () => transport.ConnectAsync(operationToken), cancellationToken).ConfigureAwait(false);
 				if (!transport.IsConnected) throw new IOException("Runtime transport did not report a connected state after a successful probe.");
 				if (control.HasPendingExecution)
 				{
+					WriteBindingPhase("pending-execution", "waiting", Stopwatch.GetTimestamp(), "mutation-in-flight");
 					await Task.Delay(_options.RuntimeRetryInterval, cancellationToken).ConfigureAwait(false);
 					continue;
 				}
@@ -639,15 +652,17 @@ public sealed class ControlHostProcess
 				var runtimeHostInstanceId = transport.HostInstanceId ?? throw new InvalidDataException("Connected RuntimeHost did not expose a host instance identity.");
 				if (!control.HasAuthoritativeState)
 				{
-					await InitializeFreshAuthorityAsync(control, transport, runtimeHostInstanceId, operationToken).ConfigureAwait(false);
+					await RunBindingMutationAsync(
+						 token => new ValueTask(InitializeFreshAuthorityAsync(control, transport, runtimeHostInstanceId, token)),
+						 operationToken).ConfigureAwait(false);
 				}
 				else
 				{
-					var runtimeSnapshot = await transport.GetSnapshotAsync(operationToken).ConfigureAwait(false);
+					var runtimeSnapshot = await BindingPhaseAsync("runtime-snapshot", () => transport.GetSnapshotAsync(operationToken), cancellationToken).ConfigureAwait(false);
 					var hostChanged = !string.Equals(_boundRuntimeHostInstanceId, runtimeHostInstanceId, StringComparison.Ordinal);
 					var aligned = RuntimeMatchesAuthority(runtimeSnapshot, control.State);
 					if (hostChanged || !aligned)
-						await ReconcileRuntimeAsync(control, transport, runtimeHostInstanceId, runtimeSnapshot, operationToken).ConfigureAwait(false);
+						await BindingPhaseAsync("reconcile", () => new ValueTask(ReconcileRuntimeAsync(control, transport, runtimeHostInstanceId, runtimeSnapshot, operationToken)), cancellationToken).ConfigureAwait(false);
 					else
 						SetOperationalState(ControlHostProcessState.Ready, ControlHostHealthState.Healthy, $"ControlHost is connected to RuntimeHost instance '{runtimeHostInstanceId}'.");
 				}
@@ -658,6 +673,7 @@ public sealed class ControlHostProcess
 			}
 			catch (RuntimeRecoveryConflictException exception)
 			{
+				WriteBindingPhase("binding-attempt", "failed", _bindingAttemptStarted, "authority-conflict", exception);
 				SetRecovery(ControlHostRecoveryState.Conflict, exception.RuntimeAuthorityRevision, exception.Message);
 				SetOperationalState(ControlHostProcessState.Degraded, ControlHostHealthState.Degraded, "Runtime recovery conflict requires operator intervention; authoritative mutation transport is paused.");
 				if (_runtimeTransport is not null)
@@ -668,6 +684,7 @@ public sealed class ControlHostProcess
 			}
 			catch (Exception exception)
 			{
+				WriteBindingPhase("binding-attempt", "failed", Stopwatch.GetTimestamp(), exception is OperationCanceledException ? "timeout" : "rejected", exception);
 				SetOperationalState(ControlHostProcessState.Degraded, ControlHostHealthState.Degraded, "RuntimeHost is unavailable; authoritative mutation transport is paused.");
 				if (_runtimeTransport is not null)
 				{
@@ -683,36 +700,188 @@ public sealed class ControlHostProcess
 		}
 	}
 
+	private async ValueTask<T> BindingPhaseAsync<T>(string phase, Func<ValueTask<T>> operation, CancellationToken lifetimeToken)
+	{
+		var started = Stopwatch.GetTimestamp();
+		WriteBindingPhase(phase, "started", started);
+		try
+		{
+			lifetimeToken.ThrowIfCancellationRequested();
+			var result = await operation().ConfigureAwait(false);
+			WriteBindingPhase(phase, "completed", started);
+			return result;
+		}
+		catch (Exception exception)
+		{
+			var reason = exception is OperationCanceledException
+				? _bindingLifetimeToken.IsCancellationRequested ? "cancelled" : "timeout"
+				: exception is RuntimeRecoveryConflictException ? "authority-conflict"
+				: exception is IOException ? "transport-failure" : "rejected";
+			WriteBindingPhase(phase, "failed", started, reason, exception);
+			throw;
+		}
+	}
+
+	private async ValueTask BindingPhaseAsync(string phase, Func<ValueTask> operation, CancellationToken lifetimeToken)
+	{
+		await BindingPhaseAsync(phase, async () =>
+		{
+			await operation().ConfigureAwait(false);
+			return true;
+		}, lifetimeToken).ConfigureAwait(false);
+	}
+
+	private void WriteBindingPhase(string phase, string outcome, long started, string reason = "none", Exception? exception = null)
+	{
+		_log?.Write(
+			exception is not null ? DiagnosticSeverity.Warning : Lifecycle.State == ControlHostProcessState.Ready && phase != "qualified-ready" ? DiagnosticSeverity.Trace : DiagnosticSeverity.Information,
+			"runtime-binding",
+			$"controlhost.binding.{phase}.{outcome}",
+			$"ControlHost runtime binding phase {phase} {outcome}.",
+			exception,
+			new Dictionary<string, string>
+			{
+				["attemptId"] = _bindingAttemptId,
+				["phase"] = phase,
+				["outcome"] = outcome,
+				["reason"] = reason,
+				["elapsedMilliseconds"] = Stopwatch.GetElapsedTime(started).TotalMilliseconds.ToString("F3", CultureInfo.InvariantCulture),
+				["runtimeHostInstanceId"] = _runtimeTransport?.HostInstanceId ?? "unbound",
+				["hasPendingExecution"] = (_control?.HasPendingExecution ?? false).ToString()
+			});
+	}
+
+	private async ValueTask RunBindingMutationAsync(Func<CancellationToken, ValueTask> operation, CancellationToken cancellationToken)
+	{
+		if (_ipcServer is null)
+		{
+			await operation(cancellationToken).ConfigureAwait(false);
+			return;
+		}
+		var started = Stopwatch.GetTimestamp();
+		var acquired = false;
+		WriteBindingPhase("mutation-gate", "started", started);
+		try
+		{
+			await _ipcServer.RunSerializedMutationAsync(async token =>
+			{
+				acquired = true;
+				WriteBindingPhase("mutation-gate", "completed", started);
+				await operation(token).ConfigureAwait(false);
+			}, cancellationToken).ConfigureAwait(false);
+		}
+		catch (Exception exception) when (!acquired)
+		{
+			WriteBindingPhase("mutation-gate", "failed", started,
+				exception is OperationCanceledException ? _bindingLifetimeToken.IsCancellationRequested ? "cancelled" : "timeout" : "rejected", exception);
+			throw;
+		}
+	}
+
+	private async ValueTask RestoreBindingStateAsync(CancellationToken cancellationToken)
+	{
+		if (_ipcServer is null) return;
+		await BindingPhaseAsync("restore-graphics", () => _ipcServer.RestoreGraphicsStateWithinMutationAsync(cancellationToken), cancellationToken).ConfigureAwait(false);
+		await BindingPhaseAsync("restore-audio", () => _ipcServer.RestoreAudioRoutingStateWithinMutationAsync(cancellationToken), cancellationToken).ConfigureAwait(false);
+	}
+
+	private async ValueTask AcceptBindingAsync(ControlHostService control, IControlRuntimeTransportSeam transport, CancellationToken cancellationToken)
+	{
+		await BindingPhaseAsync("runtime-acceptance", async () =>
+		{
+			var snapshot = await transport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
+			ValidateRuntimeAuthority(snapshot, control.State);
+			if (!RuntimeMatchesAuthority(snapshot, control.State))
+				throw new InvalidDataException("Runtime execution does not match current authoritative Control state.");
+		}, cancellationToken).ConfigureAwait(false);
+	}
+
+	private void PublishBinding(string runtimeHostInstanceId, string detail)
+	{
+		var started = Stopwatch.GetTimestamp();
+		WriteBindingPhase("host-binding", "started", started);
+		_boundRuntimeHostInstanceId = runtimeHostInstanceId;
+		WriteBindingPhase("host-binding", "completed", started);
+		WriteBindingPhase("qualified-ready", "started", started);
+		SetOperationalState(ControlHostProcessState.Ready, ControlHostHealthState.Healthy, detail);
+		WriteBindingPhase("qualified-ready", "completed", started);
+	}
+
 	private async Task InitializeFreshAuthorityAsync(
 		ControlHostService control,
 		IControlRuntimeTransportSeam transport,
 		string runtimeHostInstanceId,
 		CancellationToken cancellationToken)
 	{
-		var providers = await transport.GetProviderDescriptorsAsync(cancellationToken).ConfigureAwait(false);
+		var providers = await BindingPhaseAsync("provider-snapshot", () => transport.GetProviderDescriptorsAsync(cancellationToken), cancellationToken).ConfigureAwait(false);
 		control.RefreshProviderSnapshot(providers);
-		var staged = control.Initialize();
+		var staged = await BindingPhaseAsync("authority-prepare", () => ValueTask.FromResult(control.Initialize()), cancellationToken).ConfigureAwait(false);
 		if (staged.Execution is null) throw new InvalidOperationException("Control initialization did not produce a prepared execution.");
 
-		var remote = await transport.ApplyExecutionAsync(staged.Execution.PreparedExecution, staged.Execution.ProgramSinkId, staged.Execution.ProgramTransition, cancellationToken).ConfigureAwait(false);
-		if (remote.Commit is null)
+		try
 		{
-			var failure = remote.Prepare.Failure ?? new Failure("runtime.prepare.rejected", "Runtime rejected initial prepare without a commit result.");
-			control.RejectRuntimeCommit(staged.Execution.PreparedExecution.PreparedExecutionId, failure);
-			throw new InvalidOperationException(failure.Message);
+			var initialSnapshot = await BindingPhaseAsync("initial-runtime-acceptance", async () =>
+			{
+				var snapshot = await transport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
+				ValidateRuntimeAuthority(snapshot, staged.Execution.AuthoritativeState);
+				return snapshot;
+			}, cancellationToken).ConfigureAwait(false);
+
+			if (RuntimeMatchesAuthority(initialSnapshot, staged.Execution.AuthoritativeState) &&
+				_interruptedInitialHostId == runtimeHostInstanceId &&
+				_interruptedInitialAuthority == staged.Execution.AuthoritativeState)
+			{
+				await BindingPhaseAsync("authority-snapshot-confirm", () =>
+				{
+					var confirmation = control.ConfirmInitialRuntimeSnapshot(staged.Execution.PreparedExecution.PreparedExecutionId, initialSnapshot);
+					if (!confirmation.Committed)
+						throw new InvalidDataException(confirmation.Failure?.Message ?? "Runtime snapshot did not confirm interrupted initialization.");
+					return ValueTask.CompletedTask;
+				}, cancellationToken).ConfigureAwait(false);
+			}
+			else
+			{
+				RuntimeRemoteApplyResult remote;
+				try
+				{
+					remote = await BindingPhaseAsync("runtime-apply",
+						() => transport.ApplyExecutionAsync(staged.Execution.PreparedExecution, staged.Execution.ProgramSinkId, staged.Execution.ProgramTransition, cancellationToken),
+						cancellationToken).ConfigureAwait(false);
+				}
+				catch (Exception exception) when (exception is IOException or TimeoutException or OperationCanceledException)
+				{
+					_interruptedInitialHostId = runtimeHostInstanceId;
+					_interruptedInitialAuthority = staged.Execution.AuthoritativeState;
+					throw;
+				}
+				if (remote.Commit is null)
+					throw new InvalidOperationException(remote.Prepare.Failure?.Message ?? "Runtime rejected initial prepare without a commit result.");
+
+				await BindingPhaseAsync("authority-confirm", () =>
+				{
+					var confirmation = control.ConfirmRuntimeCommit(staged.Execution.PreparedExecution.PreparedExecutionId, remote.Commit);
+					if (!confirmation.Committed || confirmation.State is null)
+						throw new InvalidOperationException(confirmation.Failure?.Message ?? "Initial Runtime commit was not confirmed.");
+					return ValueTask.CompletedTask;
+				}, cancellationToken).ConfigureAwait(false);
+			}
+			_interruptedInitialHostId = null;
+			_interruptedInitialAuthority = null;
+		}
+		catch (Exception exception)
+		{
+			// Only this staged execution is owned by initialization. A response loss may
+			// leave Runtime committed; the next attempt must probe it before qualifying.
+			control.RejectRuntimeCommit(staged.Execution.PreparedExecution.PreparedExecutionId,
+				new Failure("runtime.initialization.interrupted", exception.Message));
+			throw;
 		}
 
-		var confirmation = control.ConfirmRuntimeCommit(staged.Execution.PreparedExecution.PreparedExecutionId, remote.Commit);
-		if (!confirmation.Committed || confirmation.State is null) throw new InvalidOperationException(confirmation.Failure?.Message ?? "Initial Runtime commit was not confirmed.");
-
-		_boundRuntimeHostInstanceId = runtimeHostInstanceId;
-		if (_ipcServer is not null)
-		{
-			await _ipcServer.RestoreGraphicsStateAsync(cancellationToken).ConfigureAwait(false);
-			await _ipcServer.RestoreAudioRoutingStateAsync(cancellationToken).ConfigureAwait(false);
-		}
-		SetRecovery(ControlHostRecoveryState.Fresh, confirmation.State.Revision, "Fresh authority was initialized and committed by RuntimeHost.");
-		SetOperationalState(ControlHostProcessState.Ready, ControlHostHealthState.Healthy, $"ControlHost is bound to RuntimeHost instance '{runtimeHostInstanceId}'.");
+		await RestoreBindingStateAsync(cancellationToken).ConfigureAwait(false);
+		await AcceptBindingAsync(control, transport, cancellationToken).ConfigureAwait(false);
+		SetRecovery(ControlHostRecoveryState.Fresh, control.State.Revision, "Fresh authority was initialized and committed by RuntimeHost.");
+		cancellationToken.ThrowIfCancellationRequested();
+		PublishBinding(runtimeHostInstanceId, $"ControlHost is bound to RuntimeHost instance '{runtimeHostInstanceId}'.");
 	}
 
 	private async Task ReconcileRuntimeAsync(
@@ -734,10 +903,10 @@ public sealed class ControlHostProcess
 			return;
 		}
 
-		await _ipcServer.RunSerializedMutationAsync(
+		await RunBindingMutationAsync(
 			async token =>
 			{
-				var currentSnapshot = await transport.GetSnapshotAsync(token).ConfigureAwait(false);
+				var currentSnapshot = await BindingPhaseAsync("runtime-snapshot", () => transport.GetSnapshotAsync(token), token).ConfigureAwait(false);
 				await ReconcileRuntimeCoreAsync(
 					control,
 					transport,
@@ -762,45 +931,48 @@ public sealed class ControlHostProcess
 
 		if (RuntimeMatchesAuthority(runtimeSnapshot, authority))
 		{
-			_boundRuntimeHostInstanceId = runtimeHostInstanceId;
+			// A probe taken before a concurrent operator mutation may look stale.
+			// Once serialized, a still-qualified binding needs no restoration.
+			if (!string.Equals(_boundRuntimeHostInstanceId, runtimeHostInstanceId, StringComparison.Ordinal))
+				await RestoreBindingStateAsync(cancellationToken).ConfigureAwait(false);
+			await AcceptBindingAsync(control, transport, cancellationToken).ConfigureAwait(false);
 			control.RecordObservation("recovery", "recovery.runtime.aligned", $"RuntimeHost instance '{runtimeHostInstanceId}' is already committed against authoritative revision {authority.Revision}.");
 			SetRecovery(ControlHostRecoveryState.Recovered, authority.Revision, "Durable Control authority and Runtime committed authority snapshot are aligned.");
-			SetOperationalState(ControlHostProcessState.Ready, ControlHostHealthState.Healthy, $"ControlHost reconciled with RuntimeHost instance '{runtimeHostInstanceId}' without execution replacement.");
+			cancellationToken.ThrowIfCancellationRequested();
+			PublishBinding(runtimeHostInstanceId, $"ControlHost reconciled with RuntimeHost instance '{runtimeHostInstanceId}' without execution replacement.");
 			return;
 		}
 
 		SetOperationalState(ControlHostProcessState.Degraded, ControlHostHealthState.Degraded, "Runtime execution is behind or not committed; durable authority is being reapplied.");
-		var providers = await transport.GetProviderDescriptorsAsync(cancellationToken).ConfigureAwait(false);
+		var providers = await BindingPhaseAsync("provider-snapshot", () => transport.GetProviderDescriptorsAsync(cancellationToken), cancellationToken).ConfigureAwait(false);
 		control.RefreshProviderSnapshot(providers);
 		var revisionBefore = authority.Revision;
 		if (_ipcServer is not null && authority.CompositingState is not null)
 		{
 			if (restoreWithinMutationGate)
-				await _ipcServer.RestoreGraphicsStateWithinMutationAsync(cancellationToken).ConfigureAwait(false);
+				await BindingPhaseAsync("restore-graphics", () => _ipcServer.RestoreGraphicsStateWithinMutationAsync(cancellationToken), cancellationToken).ConfigureAwait(false);
 			else
 				await _ipcServer.RestoreGraphicsStateAsync(cancellationToken).ConfigureAwait(false);
 		}
-		var execution = control.PrepareCurrentExecution();
-		var remote = await transport.ApplyExecutionAsync(execution.PreparedExecution, execution.ProgramSinkId, null, cancellationToken).ConfigureAwait(false);
+		var execution = await BindingPhaseAsync("reconcile-prepare", () => ValueTask.FromResult(control.PrepareCurrentExecution()), cancellationToken).ConfigureAwait(false);
+		var remote = await BindingPhaseAsync("reconcile-commit", () => transport.ApplyExecutionAsync(execution.PreparedExecution, execution.ProgramSinkId, null, cancellationToken), cancellationToken).ConfigureAwait(false);
 		if (!remote.Committed || remote.Commit is null) throw new InvalidOperationException(remote.Commit?.Failure?.Message ?? remote.Prepare.Failure?.Message ?? "Runtime reconciliation was rejected.");
 		if (control.State.Revision != revisionBefore) throw new InvalidOperationException("Runtime reconciliation must not advance authoritative revision.");
 
 		if (_ipcServer is not null)
 		{
 			if (restoreWithinMutationGate)
-				await _ipcServer.RestoreAudioRoutingStateWithinMutationAsync(cancellationToken).ConfigureAwait(false);
+				await BindingPhaseAsync("restore-audio", () => _ipcServer.RestoreAudioRoutingStateWithinMutationAsync(cancellationToken), cancellationToken).ConfigureAwait(false);
 			else
 				await _ipcServer.RestoreAudioRoutingStateAsync(cancellationToken).ConfigureAwait(false);
 		}
 
-		var reconciledSnapshot = await transport.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
-		if (!RuntimeMatchesAuthority(reconciledSnapshot, control.State))
-			throw new InvalidDataException("Runtime reconciliation committed an execution that is not bound to the current authoritative Control snapshot.");
+		await AcceptBindingAsync(control, transport, cancellationToken).ConfigureAwait(false);
 
 		control.RecordObservation("recovery", "recovery.runtime.reapplied", $"Authoritative revision {revisionBefore} was reapplied to RuntimeHost instance '{runtimeHostInstanceId}' at Runtime execution revision {remote.Commit.ExecutionRevision}.");
-		_boundRuntimeHostInstanceId = runtimeHostInstanceId;
 		SetRecovery(ControlHostRecoveryState.Recovered, revisionBefore, "Durable Control authority was reapplied to RuntimeHost without authority revision advancement.");
-		SetOperationalState(ControlHostProcessState.Ready, ControlHostHealthState.Healthy, $"ControlHost resynchronized RuntimeHost instance '{runtimeHostInstanceId}'.");
+		cancellationToken.ThrowIfCancellationRequested();
+		PublishBinding(runtimeHostInstanceId, $"ControlHost resynchronized RuntimeHost instance '{runtimeHostInstanceId}'.");
 	}
 
 	private static void ValidateRuntimeAuthority(RuntimeRemoteSnapshot runtimeSnapshot, AuthoritativeProductionState authority)
@@ -965,10 +1137,8 @@ public sealed class ControlHostProcess
 		try
 		{
 			if (_externalControlServer is not null) await _externalControlServer.DisposeAsync().AsTask().WaitAsync(timeout.Token).ConfigureAwait(false);
-			phase = "operator-ipc-server";
-			if (_ipcServer is not null) await _ipcServer.DisposeAsync().AsTask().WaitAsync(timeout.Token).ConfigureAwait(false);
-			// The binding loop owns ongoing Runtime transport requests. Join it before
-			// disconnecting the transport so shutdown does not race those requests.
+			// Binding owns the IPC mutation gate as well as Runtime requests. Join it
+			// after lifetime cancellation before disposing either dependency.
 			phase = "runtime-binding-worker";
 			if (_runtimeBindingTask is not null)
 			{
@@ -976,6 +1146,8 @@ public sealed class ControlHostProcess
 				catch (OperationCanceledException) when (timeout.IsCancellationRequested) { throw; }
 				catch (OperationCanceledException) { }
 			}
+			phase = "operator-ipc-server";
+			if (_ipcServer is not null) await _ipcServer.DisposeAsync().AsTask().WaitAsync(timeout.Token).ConfigureAwait(false);
 			phase = "runtime-transport";
 			if (_runtimeTransport is not null) await _runtimeTransport.DisconnectAsync().AsTask().WaitAsync(timeout.Token).ConfigureAwait(false);
 			phase = "durability";
