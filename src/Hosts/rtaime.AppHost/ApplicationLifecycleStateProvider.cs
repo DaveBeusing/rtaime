@@ -65,6 +65,8 @@ public sealed class ApplicationLifecycleStateProvider : IApplicationLifecycleSta
 	private readonly string? _diagnosticPath;
 	private readonly bool _requireAI;
 	private List<LifecycleStageSnapshot> _stages = [];
+	private ApplicationReadinessFailureSnapshot? _readinessFailure;
+	private DateTimeOffset? _shutdownInitiatedAtUtc;
 
 	public ApplicationLifecycleStateProvider(
 		string evidencePath,
@@ -107,6 +109,8 @@ public sealed class ApplicationLifecycleStateProvider : IApplicationLifecycleSta
 		lock (_gate)
 		{
 			ResetStages();
+			_readinessFailure = null;
+			_shutdownInitiatedAtUtc = null;
 			PublishLocked();
 		}
 		RaiseStateChanged();
@@ -185,6 +189,100 @@ public sealed class ApplicationLifecycleStateProvider : IApplicationLifecycleSta
 		}
 		RaiseStateChanged();
 	}
+
+	public void ProjectHostObservations(IReadOnlyList<ApplicationHostReadinessObservation> observations)
+	{
+		lock (_gate)
+		{
+			if (_readinessFailure is not null) return;
+			foreach (var observation in observations)
+			{
+				var id = HostStageId(observation.Host);
+				var index = _stages.FindIndex(stage => stage.Id == id);
+				if (index < 0 || observation.Qualification == "NotRequired") continue;
+				var status = observation.Qualification switch
+				{
+					"Ready" => LifecycleStageStatus.Ready,
+					"Failed" => LifecycleStageStatus.Failed,
+					"Degraded" => LifecycleStageStatus.Degraded,
+					_ => LifecycleStageStatus.Pending
+				};
+				var stage = _stages[index];
+				_stages[index] = stage with
+				{
+					Status = status,
+					StartedAt = stage.StartedAt ?? _platform.UtcNow,
+					CompletedAt = status is LifecycleStageStatus.Ready or LifecycleStageStatus.Failed ? _platform.UtcNow : null,
+					StatusText = $"{observation.Host}: {observation.Qualification}; lifecycle {observation.LifecycleState ?? "unknown"}, health {observation.HealthState ?? "unknown"}, IPC {observation.IpcReachable?.ToString() ?? "unobserved"}.",
+					FailureReason = status == LifecycleStageStatus.Failed ? observation.ReasonCode : null,
+					CanRetry = false
+				};
+			}
+			PublishLocked();
+		}
+		RaiseStateChanged();
+	}
+
+	public void CaptureReadinessFailure(ApplicationReadinessFailureSnapshot failure)
+	{
+		lock (_gate)
+		{
+			if (_readinessFailure is not null) return;
+			_readinessFailure = failure;
+			foreach (var observation in failure.Hosts)
+			{
+				var index = _stages.FindIndex(stage => stage.Id == HostStageId(observation.Host));
+				if (index < 0 || observation.Qualification == "NotRequired") continue;
+				var stage = _stages[index];
+				var status = observation.Qualification switch
+				{
+					"Failed" => LifecycleStageStatus.Failed,
+					"Ready" => LifecycleStageStatus.Ready,
+					"Degraded" => LifecycleStageStatus.Degraded,
+					_ => LifecycleStageStatus.Pending
+				};
+				_stages[index] = stage with
+				{
+					Status = status,
+					CompletedAt = status is LifecycleStageStatus.Failed or LifecycleStageStatus.Ready ? failure.CapturedAtUtc : null,
+					StatusText = $"Pre-shutdown observation: {observation.Host} {observation.Qualification}; phase {observation.LastProgressPhase ?? "unknown"} / {observation.PhaseOutcome ?? "unknown"}.",
+					FailureReason = status == LifecycleStageStatus.Failed ? observation.ReasonCode : null,
+					CanRetry = false
+				};
+			}
+			var production = _stages.FindIndex(stage => stage.Id == ApplicationLifecycleStages.ProductionReadiness);
+			var unmet = string.Join("; ", failure.UnmetCriteria.Select(item => $"{item.Host}: {item.Code} ({item.Detail})"));
+			_stages[production] = _stages[production] with
+			{
+				Status = LifecycleStageStatus.Failed,
+				StartedAt = _stages[production].StartedAt ?? failure.CapturedAtUtc,
+				CompletedAt = failure.CapturedAtUtc,
+				StatusText = failure.AggregateDeadlineExpired ? "Aggregate startup deadline expired." : "Production startup qualification failed.",
+				FailureReason = $"{failure.ReasonCode}: {failure.OriginalFailure} Unmet criteria: {unmet}",
+				CanRetry = false
+			};
+			PublishLocked();
+		}
+		RaiseStateChanged();
+	}
+
+	public void MarkShutdownInitiated()
+	{
+		lock (_gate)
+		{
+			_shutdownInitiatedAtUtc ??= _platform.UtcNow;
+			PublishLocked();
+		}
+		RaiseStateChanged();
+	}
+
+	private static string? HostStageId(string host) => host switch
+	{
+		"ControlHost" => ApplicationLifecycleStages.ControlHost,
+		"RuntimeHost" => ApplicationLifecycleStages.RuntimeHost,
+		"AIHost" => ApplicationLifecycleStages.AIHost,
+		_ => null
+	};
 
 	private void UpdateStage(
 		string id,
@@ -267,6 +365,8 @@ public sealed class ApplicationLifecycleStateProvider : IApplicationLifecycleSta
 				schemaVersion = "1.0",
 				observedAtUtc = _platform.UtcNow,
 				diagnosticPath = _diagnosticPath,
+				readinessFailure = _readinessFailure,
+				shutdownInitiatedAtUtc = _shutdownInitiatedAtUtc,
 				activeStageId = activeStage?.Id,
 				stages = _stages.Select(stage => new
 				{
@@ -281,9 +381,9 @@ public sealed class ApplicationLifecycleStateProvider : IApplicationLifecycleSta
 					canRetry = stage.CanRetry
 				})
 			},
-			new JsonSerializerOptions { WriteIndented = true });
+			new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
 
-		_platform.WriteAllText(_evidencePath, payload + Environment.NewLine);
+		_platform.WriteAllTextAtomic(_evidencePath, payload + Environment.NewLine);
 	}
 
 	private void RaiseStateChanged()

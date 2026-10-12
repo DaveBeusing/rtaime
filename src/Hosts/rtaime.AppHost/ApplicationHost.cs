@@ -6,6 +6,7 @@ using System.IO.Pipes;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using rtaime.Core;
 
 namespace rtaime.AppHost;
 
@@ -246,6 +247,8 @@ public interface IApplicationHostPlatform
 	bool IsProcessAlive(int processId);
 	bool IsEndpointLeaseHeld(string endpoint) => false;
 	Task FlushProcessDiagnosticsAsync(int processId, CancellationToken cancellationToken) => Task.CompletedTask;
+	IReadOnlyList<ApplicationHostDiagnosticEvent> ReadHostDiagnosticEvents() => Array.Empty<ApplicationHostDiagnosticEvent>();
+	void WriteAllTextAtomic(string path, string content) => WriteAllText(path, content);
 	void KillProcessTree(int processId);
 	bool FileExists(string path);
 	string ReadAllText(string path);
@@ -490,6 +493,27 @@ public sealed class SystemApplicationHostPlatform : IApplicationHostPlatform
 		}
 	}
 
+	public IReadOnlyList<ApplicationHostDiagnosticEvent> ReadHostDiagnosticEvents() =>
+		ApplicationHostDiagnosticReader.ReadSession(
+			Environment.GetEnvironmentVariable("RTAIME_LOG_ROOT"),
+			Environment.GetEnvironmentVariable("RTAIME_LOG_SESSION_ID"));
+
+	public void WriteAllTextAtomic(string path, string content)
+	{
+		var directory = Path.GetDirectoryName(path);
+		if (!string.IsNullOrWhiteSpace(directory)) Directory.CreateDirectory(directory);
+		var temporary = $"{path}.{Guid.NewGuid():N}.tmp";
+		try
+		{
+			File.WriteAllText(temporary, content);
+			File.Move(temporary, path, overwrite: true);
+		}
+		finally
+		{
+			if (File.Exists(temporary)) File.Delete(temporary);
+		}
+	}
+
 	public bool FileExists(string path) => File.Exists(path);
 	public string ReadAllText(string path) => File.ReadAllText(path);
 
@@ -542,6 +566,8 @@ public sealed record ApplicationReadinessEvidence(
 	ApplicationSupervisionEvidence? RuntimeSupervision,
 	ApplicationSupervisionEvidence? AISupervision)
 {
+	public DateTimeOffset? ReadyAtUtc { get; init; }
+
 	public static bool TryParse(string json, out ApplicationReadinessEvidence? evidence)
 	{
 		try
@@ -556,7 +582,10 @@ public sealed record ApplicationReadinessEvidence(
 				root.GetProperty("runtimeEndpoint").GetString() ?? string.Empty,
 				root.GetProperty("aiEndpoint").GetString() ?? string.Empty,
 				ReadSupervision(root, "runtimeSupervision"),
-				ReadSupervision(root, "aiSupervision"));
+				ReadSupervision(root, "aiSupervision"))
+			{
+				ReadyAtUtc = root.TryGetProperty("readyAtUtc", out var readyAt) && readyAt.TryGetDateTimeOffset(out var timestamp) ? timestamp : null
+			};
 			return true;
 		}
 		catch (Exception exception) when (exception is JsonException or InvalidOperationException or KeyNotFoundException)
@@ -591,11 +620,14 @@ public sealed class UnifiedApplicationHost
 	private string? _activeReadinessPath;
 	private bool _adopted;
 	private bool _initialQualificationCompleted;
+	private readonly ApplicationReadinessTracker _readinessTracker;
+	private DateTimeOffset? _qualificationDeadline;
 
 	public UnifiedApplicationHost(ApplicationHostOptions options, IApplicationHostPlatform platform)
 	{
 		_options = options ?? throw new ArgumentNullException(nameof(options));
 		_platform = platform ?? throw new ArgumentNullException(nameof(platform));
+		_readinessTracker = new ApplicationReadinessTracker(_options, _platform);
 		_lifecycle = new ApplicationLifecycleStateProvider(
 			_options.LifecycleEvidencePath,
 			_options.RequireAI,
@@ -720,7 +752,16 @@ public sealed class UnifiedApplicationHost
 		catch (Exception exception)
 		{
 			var classified = ClassifyFailure(exception);
-			_lifecycle.FailActiveStages(classified.Message);
+			if (!_initialQualificationCompleted && _lifecycle.Stages.Any(stage =>
+				stage.Id == ApplicationLifecycleStages.ControlHost && stage.Status != LifecycleStageStatus.Pending))
+			{
+				var failure = _readinessTracker.CaptureFailure(
+					exception is TimeoutException ? "startup.deadline.expired" : "startup.process.failure",
+					DiagnosticRedactor.RedactText(classified.Message), exception is TimeoutException);
+				_lifecycle.CaptureReadinessFailure(failure);
+			}
+			else
+				_lifecycle.FailActiveStages(DiagnosticRedactor.RedactText(classified.Message));
 			if (State == ApplicationLifecycleState.Starting || ShouldStopOwnedControlOnHostExit())
 				await StopOwnedControlAsync(CancellationToken.None).ConfigureAwait(false);
 			Transition(ApplicationLifecycleState.Failed);
@@ -804,6 +845,7 @@ public sealed class UnifiedApplicationHost
 			$"ControlHost endpoint '{endpoint}' is already owned; waiting for qualified readiness instead of starting a competing host.");
 
 		var deadline = _platform.UtcNow + _options.Policy.StartupTimeout;
+		_qualificationDeadline = deadline;
 		while (_platform.UtcNow < deadline)
 		{
 			cancellationToken.ThrowIfCancellationRequested();
@@ -820,6 +862,7 @@ public sealed class UnifiedApplicationHost
 	private async Task<(string Path, ApplicationReadinessEvidence Evidence)?> WaitForReadinessAsync(CancellationToken cancellationToken)
 	{
 		var deadline = _platform.UtcNow + _options.Policy.StartupTimeout;
+		_qualificationDeadline = deadline;
 		while (_platform.UtcNow < deadline)
 		{
 			cancellationToken.ThrowIfCancellationRequested();
@@ -858,6 +901,7 @@ public sealed class UnifiedApplicationHost
 	private async Task<(string Path, ApplicationReadinessEvidence Evidence)> WaitForExternalReadinessAsync(CancellationToken cancellationToken)
 	{
 		var deadline = _platform.UtcNow + _options.Policy.StartupTimeout;
+		_qualificationDeadline = deadline;
 		while (_platform.UtcNow < deadline)
 		{
 			cancellationToken.ThrowIfCancellationRequested();
@@ -871,12 +915,33 @@ public sealed class UnifiedApplicationHost
 
 	private async Task<(string Path, ApplicationReadinessEvidence Evidence)?> FindQualifiedReadinessAsync(CancellationToken cancellationToken)
 	{
+		ApplicationReadinessEvidence? lastEvidence = null;
+		string? observedPath = null;
+		var reason = "readiness.evidence.missing";
 		foreach (var path in GetReadinessCandidates())
 		{
 			if (!_platform.FileExists(path)) continue;
-			if (!ApplicationReadinessEvidence.TryParse(_platform.ReadAllText(path), out var evidence) || evidence is null) continue;
-			if (await IsInitiallyQualifiedAsync(evidence, cancellationToken).ConfigureAwait(false)) return (path, evidence);
+			observedPath = path;
+			try
+			{
+				if (!ApplicationReadinessEvidence.TryParse(_platform.ReadAllText(path), out var evidence) || evidence is null)
+				{
+					reason = "readiness.evidence.invalid";
+					continue;
+				}
+				lastEvidence = evidence;
+				reason = "readiness.evidence.observed";
+				_readinessTracker.Observe(_controlProcessId, evidence, path, reason);
+				if (await IsInitiallyQualifiedAsync(evidence, cancellationToken).ConfigureAwait(false))
+					return (path, evidence);
+			}
+			catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+			{
+				reason = "readiness.evidence.unreadable";
+			}
 		}
+		_readinessTracker.Observe(_controlProcessId, lastEvidence, observedPath, reason);
+		_lifecycle.ProjectHostObservations(_readinessTracker.GetHosts());
 		return null;
 	}
 
@@ -934,16 +999,28 @@ public sealed class UnifiedApplicationHost
 
 	private async Task<bool> IsInitiallyQualifiedAsync(ApplicationReadinessEvidence evidence, CancellationToken cancellationToken)
 	{
-		if (!IsAuthoritativeReadinessValid(evidence)) return false;
-
+		// Probe all required endpoints so a failed criterion does not hide the others.
 		var endpoints = _options.Endpoints;
-		if (!await _platform.ProbePipeAsync(endpoints.Control, _options.Policy.ProbeTimeout, cancellationToken).ConfigureAwait(false)) return false;
-		if (_options.Ownership == ApplicationLifecycleOwnership.ExternalManaged)
-			return true;
+		var controlPipe = await ObservePipeAsync("ControlHost", endpoints.Control, cancellationToken).ConfigureAwait(false);
+		var runtimePipe = true;
+		var aiPipe = true;
+		if (_options.Ownership != ApplicationLifecycleOwnership.ExternalManaged)
+		{
+			runtimePipe = await ObservePipeAsync("RuntimeHost", endpoints.Runtime, cancellationToken).ConfigureAwait(false);
+			if (_options.RequireAI)
+				aiPipe = await ObservePipeAsync("AIHost", endpoints.AI, cancellationToken).ConfigureAwait(false);
+		}
+		return IsAuthoritativeReadinessValid(evidence) && controlPipe && runtimePipe && aiPipe;
+	}
 
-		if (!await _platform.ProbePipeAsync(endpoints.Runtime, _options.Policy.ProbeTimeout, cancellationToken).ConfigureAwait(false)) return false;
-		return !_options.RequireAI ||
-			await _platform.ProbePipeAsync(endpoints.AI, _options.Policy.ProbeTimeout, cancellationToken).ConfigureAwait(false);
+	private async Task<bool> ObservePipeAsync(string host, string endpoint, CancellationToken cancellationToken)
+	{
+		var remaining = _qualificationDeadline is { } deadline ? deadline - _platform.UtcNow : _options.Policy.ProbeTimeout;
+		if (remaining <= TimeSpan.Zero) return false;
+		var timeout = remaining < _options.Policy.ProbeTimeout ? remaining : _options.Policy.ProbeTimeout;
+		var reachable = await _platform.ProbePipeAsync(endpoint, timeout, cancellationToken).ConfigureAwait(false);
+		_readinessTracker.ObservePipe(host, reachable);
+		return reachable;
 	}
 
 	private TimeSpan RuntimeReadinessLossGracePeriod =>
@@ -1147,6 +1224,7 @@ public sealed class UnifiedApplicationHost
 	private async Task StopOwnedControlAsync(CancellationToken cancellationToken)
 	{
 		if (_ownedControlProcessId is not { } processId) return;
+		_lifecycle.MarkShutdownInitiated();
 		Transition(ApplicationLifecycleState.Stopping);
 		var requestedAtUtc = _platform.UtcNow;
 		var processAliveAtRequest = _platform.IsProcessAlive(processId);
